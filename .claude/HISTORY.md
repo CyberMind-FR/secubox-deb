@@ -4,49 +4,66 @@
 ---
 ## 2026-05-12
 
-### Session 162 — MetaBlogizer → Gitea ingest of 166 sites (Issue #94, sub-B of #49)
+### Session 163 — Streamlit Gitea version pinning (Issue #95, sub-F of #49)
 
-**Goal:** Ingest the 166 directories under `/srv/metablogizer/sites/` into the new Gitea at `gitea.gk2.secubox.in` as `gandalf/metablog-<site>`, tagged `v1.0.0`. Prerequisite was sub-project A (#93, Gitea public routing).
+**Goal:** Mirror the 28 directory-form Streamlit apps from `/srv/streamlit/apps/` into Gitea as `gandalf/streamlit-<app>` with `v1.0.0` tag, then extend `streamlitctl` with tag-pinned deploy + rollback, and surface the active tag in the FastAPI.
 
 **Done:**
-- Spec: `docs/superpowers/specs/2026-05-12-metablog-gitea-ingest-design.md`
-- Plan: `docs/superpowers/plans/2026-05-12-metablog-gitea-ingest.md` (8 tasks)
-- One-time Gitea config patch (`ENABLE_PUSH_CREATE_USER=true`, `DEFAULT_BRANCH=main`) — `scripts/metablog-ingest-gitea-config.sh`
-- SSH preflight + key enrolment helper — `scripts/lib/gitea-ssh-preflight.sh`
-- Per-site ingest function — `scripts/lib/metablog-ingest-site.sh`
-- Orchestrator — `scripts/metablog-ingest.sh`
-- Smoke test — `tests/scripts/test-metablog-ingest.sh`
-- Full 166-site run — summary at `docs/superpowers/runs/2026-05-12-metablog-ingest-summary.md`
+- Spec: `docs/superpowers/specs/2026-05-12-streamlit-gitea-version-pinning-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-streamlit-gitea-version-pinning.md` (9 tasks)
+- Per-app ingest function (`scripts/lib/streamlit-ingest-app.sh`) — sibling of B's metablog version
+- Cherry-picked `scripts/lib/gitea-ssh-preflight.sh` from PR #97 (not yet merged to master)
+- Orchestrator (`scripts/streamlit-ingest.sh`) with preflights + JSON report + dot-dir/`__pycache__` filter
+- 3-app smoke + idempotent re-run
+- Full run: 28/28 apps in Gitea (20 ingested-fresh + 8 skip-already-current, 0 failed). First pass had 20 broken-stub failures; bulk-deleted via API and second pass cleaned. Summary at `docs/superpowers/runs/2026-05-12-streamlit-ingest-summary.md`.
+- `streamlitctl deploy <app> --from-gitea --tag <vX.Y.Z>` — clone+replace in-place, backup to `<app>.bak.<ts>`, max 3 backups, `.deploy.json` record
+- `streamlitctl rollback <app>` — promote latest backup, sentinel `<app>.bak.rolledback.<ts>`
+- FastAPI `_get_apps()` enrichment (`current_tag` + `deployed_at`) via `.deploy.json` or `git describe --tags --exact-match`
+- Deploy/rollback cycle smoke (canary: yijing) all gates pass
 
 **Discovered + fixed mid-execution:**
 
-1. **Gitea SSH user is `gitea`, not `git`** — the built-in SSH server validates the username against the OS user it runs as. Plan + all scripts updated.
-2. **Gitea CLI lacks `admin user keys add`** in v1.22 — replaced with generate-access-token + POST `/api/v1/user/keys` + token cleanup via sqlite.
-3. **`git rev-parse HEAD` returns literal `"HEAD"` on unborn branch**, not empty — used `--verify HEAD` instead.
-4. **awk INI patcher duplicated `[repository]` section** — fixed by setting `saw_*=1` after the mid-file flush so the END block doesn't re-append.
-5. **`app.ini` lives at `/var/lib/gitea/custom/conf/app.ini`**, not `/etc/gitea/app.ini` as the plan assumed.
-6. **python3 not installed in the Gitea LXC** — INI patcher rewritten in awk.
-7. **First pass had 72 failures** from pre-existing broken Gitea repo stubs (DB entry without on-disk git objects) created by earlier experiments. Bulk-deleted via API. Second pass cleaned to 0 fail.
+1. **`set -- "${var[@]:-}"` empty-array expansion** produced a single empty positional arg, hitting the case default `Unknown flag: `. Fixed in both source-args and saved-args occurrences (commits `34a4760e`, `7d522e9a`).
+2. **Auto-restart removed** from deploy/rollback. `cmd_start`/`cmd_stop` in streamlitctl operate on the whole LXC, so restart-after-deploy would have killed all running Streamlit apps. Streamlit auto-reloads on file changes; operator can manually `streamlitctl restart` if needed (commit `15b2a737`).
+3. **20 pre-existing broken Gitea stubs** (DB entry without on-disk objects, same as B/#97) — bulk-deleted via one-shot admin token.
+4. **`.claude/` and `__pycache__/`** directories in `/srv/streamlit/apps/` got picked up as app candidates by the initial `find -type d` — filter added (`! -name '.*' ! -name '__pycache__'`).
 
 **Commits:**
-- `56abceae` — feat: One-time Gitea config patch (push-create)
-- `680275f4` — fix: awk INI patcher no longer duplicates [repository]
-- `06d35317` — feat: SSH preflight + key enrolment (gitea@, not git@)
-- `2e323bf3` — feat: Per-site ingest function
-- `8f4b777e` — feat: Orchestrator
-- `6f40e011` — test: 5-gate smoke + bug fix for unborn-branch case
-- `6ac39a6f` — docs: Full-run summary
 
-**Live verification (5 random sites, `git ls-remote main`):**
-```
-gandalf:   c234c6ff...
-dgse:      2e75a084...
-ganimed:   b37b971b...
-magic:     4749ca74...
-sweedtest: db740d25...
-```
+- `66693d89` — feat: per-app ingest function
+- `7007d40c` — feat: cherry-pick gitea-ssh-preflight helper from #97
+- `1a12c63f`, `76379cf5`, `c8747067`, `34a4760e`, `7d522e9a` — orchestrator + filters + empty-array fixes
+- `e3ef78b9` — test: 3-app smoke
+- `fc39bf2d` — docs: full-run summary (28/28, 0 fail)
+- `f975de18`, `15b2a737` — streamlitctl deploy --from-gitea --tag + rollback
+- `6e7f698a` — feat: FastAPI _get_apps() enrichment
+- `a23b2f45` — test: deploy/rollback cycle smoke
 
-**Next:** sub-projects C, D, E, F of #49. F (#95) can start in parallel.
+**Verification (5 random apps via `git ls-remote`):** All return valid 40-char SHAs on `main` + `v1.0.0`.
+
+**Followup:** API service on MOCHAbin needs restart after package upgrade for `current_tag` to surface (existing `_get_apps()` cached in-process). Not blocking the PR.
+
+---
+
+### Session 160 — Health Banner Live Panel (Issue #92)
+
+**Goal:** Add three public sections to the health banner — VisitorOrigin,
+LiveHosts, CertStatus — sharing one polling pipeline.
+
+**Spec:** `docs/superpowers/specs/2026-05-12-visitor-origin-feed-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-12-visitor-origin-feed.md`
+**Branch:** `feature/92-health-banner-visitor-origin-feed-anonym`
+**Issue:** [#92](https://github.com/CyberMind-FR/secubox-deb/issues/92)
+
+**Highlights**
+- nftables `inet secubox_metrics` table (priority -300) — independent of
+  `secubox-firewall`.
+- VisitorOrigin: kernel-dedupe via timeout'd set, mmdb resolution, threshold
+  gate before persistence (raw IPs never leave the function).
+- LiveHosts: HAProxy admin socket + 60x1-min ring buffer; counter-reset
+  detection.
+- CertStatus: cryptography parse of `/etc/letsencrypt/live/*/cert.pem`.
+- Banner v1.3.0: three fail-isolated fetch loops on a shared 30 s cadence.
 
 ---
 

@@ -1,33 +1,50 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 162)*
+*Mis à jour : 2026-05-12 (Session 163)*
 
 ---
 
-## ✅ Session 162: MetaBlogizer → Gitea ingest (Issue #94, sub-B of #49)
+## ✅ Session 163: Streamlit Gitea version pinning (Issue #95, sub-F of #49)
 
 ### Objective
-Ingest 166 MetaBlogizer site directories from `/srv/metablogizer/sites/*` into Gitea at `gandalf/metablog-<site>` with `v1.0.0` tag. Prerequisite was sub-project A (#93, Gitea routing) — now live at `gitea.gk2.secubox.in`.
+Mirror the 28 directory-form Streamlit apps from `/srv/streamlit/apps/` into Gitea as `gandalf/streamlit-<app>` with `v1.0.0` tag, extend `streamlitctl` with `--from-gitea --tag` deploy + `rollback`, and surface `current_tag`/`deployed_at` in the FastAPI.
 
 ### Completed
-- Brainstormed design → `docs/superpowers/specs/2026-05-12-metablog-gitea-ingest-design.md`
-- Plan (8 tasks) → `docs/superpowers/plans/2026-05-12-metablog-gitea-ingest.md`
-- One-time Gitea config patch — `ENABLE_PUSH_CREATE_USER=true`, `DEFAULT_BRANCH=main` via awk INI editor (no python3 in the LXC).
-- SSH preflight + key enrolment helper — Gitea 1.22's `admin user` lacks `keys add`, so the helper goes generate-access-token → POST `/api/v1/user/keys` → delete token. **SSH user is `gitea` (NOT `git`)** because Gitea's built-in SSH server validates against the OS user.
-- Per-site ingest function — idempotent, history-preserving for sites with `.git`, `git init` for the rest. Bug fix: `git rev-parse --verify HEAD` on unborn branches.
-- Orchestrator — preflights (SSH, push-create, sites dir, disk) + tier loop + JSON report. Flags: `--dry-run`, `--limit`, `--site`, `--halt-on-fail`.
-- Smoke test — 5 gates including dry-run, live, idempotent re-run, ls-remote, clone-vs-source diff.
-- Full 166-site run — see `docs/superpowers/runs/2026-05-12-metablog-ingest-summary.md`. First pass had 72 failures from pre-existing broken Gitea repo stubs (DB without on-disk objects); bulk-deleted via API; second pass clean.
-
-### Final result
-- 166/166 sites in Gitea: 72 ingested fresh, 94 already-current skip, **0 failed**.
-- Tags `v1.0.0` on each.
-- Verified by 5-site `git ls-remote` round-trip + clone+diff on `metablog-255`.
+- Brainstormed design → `docs/superpowers/specs/2026-05-12-streamlit-gitea-version-pinning-design.md`
+- Plan (9 tasks) → `docs/superpowers/plans/2026-05-12-streamlit-gitea-version-pinning.md`
+- Per-app ingest function `scripts/lib/streamlit-ingest-app.sh` (sibling of metablog's)
+- Cherry-picked `scripts/lib/gitea-ssh-preflight.sh` from PR #97 (not yet on master)
+- Orchestrator `scripts/streamlit-ingest.sh` with preflights + JSON report
+- Filter dot-dirs + `__pycache__` (excluded `.claude`)
+- Fixed two `set -- "${var[@]:-}"` empty-array bugs
+- 3-app smoke + idempotent re-run
+- Full run: 28/28 apps, 0 failed — see `docs/superpowers/runs/2026-05-12-streamlit-ingest-summary.md`. First pass 20 fail-internal-error from broken stubs (same as B); bulk-deleted via API, second pass clean.
+- `streamlitctl deploy <app> --from-gitea --tag <vX.Y.Z>` — clone+replace in-place with backup, max 3 backups retained
+- `streamlitctl rollback <app>` — promote latest `.bak.*` to current, sentinel for the previous current
+- Auto-restart **removed** — `cmd_start`/`cmd_stop` operate on whole LXC; would kill other apps. Streamlit auto-reloads on file changes.
+- FastAPI `_get_apps()` enrichment: `current_tag` (from `.deploy.json` → fallback `git describe --tags --exact-match`), `deployed_at`
+- Deploy/rollback cycle smoke (canary: yijing) — all gates pass
 
 ### Followups
-- Sub-project C (`site.json` schema + version API) — depends on these repos.
-- Sub-project D (Dashboard) — depends on C.
-- Sub-project E (deploy webhook) — depends on B (now done).
-- Sub-project F (Streamlit per-site version pinning, #95) — can start now.
+- Sub-projects C, D, E of #49 remain.
+- API gate during smoke showed empty `current_tag` — service on MOCHAbin needs restart after package upgrade for the new `_get_apps()` to take effect.
+
+---
+
+## ✅ Session 160: Health Banner Live Panel (Issue #92)
+
+### Objective
+Add three public banner sections (VisitorOrigin / LiveHosts / CertStatus)
+sharing one polling and CORS pipeline in `secubox-metrics`.
+
+### Completed
+- Spec + plan written and committed.
+- Three aggregators with unit + error-path tests (25 tests passing).
+- nftables ruleset, systemd timer, postinst plumbing.
+- Banner v1.3.0 with three fail-isolated fetch loops.
+- README updated.
+
+### Status
+PR pending review against `master`.
 
 ---
 
