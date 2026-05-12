@@ -68,6 +68,26 @@ Per-run JSON report at `output/metablog-backfill-report.json`. The backfill
 auto-detects `streamlit_app` by probing the Gitea repo
 `gandalf/streamlit-<name>.git` (sub-F).
 
+## Version dashboard
+
+The Hub exposes a per-site dashboard at:
+
+- **List**: `https://admin.gk2.secubox.in/metablogizer/`
+  - 8 columns: Name · Domain · Version · Streamlit · Updated · Status · Size · Actions
+  - Inline filter (matches `name` and `domain`)
+  - Sortable headers (Name, Domain, Version, Updated)
+  - Auto-refresh every 60s; paused when the tab is hidden
+
+- **Per-site drill-in**: `https://admin.gk2.secubox.in/metablogizer/site.html?name=<sitename>`
+  - All `site.json` fields
+  - Three quick links: 🌐 live site, 🦊 Gitea repo, 🎨 Streamlit app (if any)
+  - Tag history is not shown inline; click the Gitea link and use its
+    **Releases** tab (auth required, handled by your Gitea session)
+
+Data comes from `/api/v1/metablogizer/sites` and
+`/api/v1/metablogizer/site/<name>` (sub-C, PR #102). The dashboard is
+pure vanilla JS — no framework, no router.
+
 ## Installation
 
 ```bash

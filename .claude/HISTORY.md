@@ -4,6 +4,24 @@
 ---
 ## 2026-05-12
 
+### Session 165 — MetaBlogizer version dashboard UI (Issue #103, sub-D of #49)
+
+**Goal:** Extend the existing /metablogizer/ list view with version-aware columns, filter, sort, and 60s polling — plus a per-site drill-in page. Consume sub-C's enriched API.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-12-metablog-version-dashboard-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-metablog-version-dashboard.md` (5 tasks)
+- `index.html` extended in place: 3 new columns (Version → Gitea releases, Streamlit 🎨 link, Updated relative time + ISO tooltip), filter input, sortable headers with ▲/▼, 60s auto-refresh paused via Page Visibility API, row-name drill-in link
+- New `site.html` drill-in (~220 lines): every site.json field + 3 external links (live, Gitea, Streamlit hidden when null), same CRT P31 phosphor theme as index
+- Smoke `tests/scripts/test-metablogizer-ui.sh` — 4 gates all green (file shape, drill-in anchors, HTML well-formedness, live reachability 200)
+- Fixed `localStorage` key bug discovered in code review: drill-in now uses canonical `sbx_token` (matches index.html and the rest of the Hub)
+- README updated with the dashboard + drill-in URLs
+
+**Followups:**
+- Sub-E (deploy webhook) is the last remaining sub-project of #49.
+
+---
+
 ### Session 164 — MetaBlogizer site.json schema + version metadata (Issue #101, sub-C of #49)
 
 **Goal:** Formal JSON Schema for site.json + Python validator/enricher (`version`/`last_updated` derived from git when absent) + backfill script + API extension. Unblocks sub-D (Dashboard).

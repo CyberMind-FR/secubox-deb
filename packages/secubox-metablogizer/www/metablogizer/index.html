@@ -77,6 +77,9 @@
         .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
         .badge.published { background: rgba(63,185,80,0.2); color: var(--green); }
         .badge.draft { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        th[data-sort] { cursor: pointer; user-select: none; }
+        th[data-sort]:hover { color: var(--primary); }
+        .sort-ind { font-size: 0.8em; color: var(--primary); }
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
         .modal.show { display: flex; }
         .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; }
@@ -366,9 +369,23 @@
             </div>
             <div class="card">
                 <h2>Sites</h2>
+                <div class="filter-row" style="margin-bottom:0.5rem">
+                    <input type="search" id="filter" placeholder="Filter by name or domain…"
+                           oninput="applyFilter()"
+                           style="width:100%;padding:0.5rem;background:var(--bg-dark);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:inherit">
+                </div>
                 <table>
-                    <thead><tr><th>Name</th><th>Domain</th><th>Status</th><th>Size</th><th>Actions</th></tr></thead>
-                    <tbody id="site-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+                    <thead><tr>
+                        <th data-sort="name" onclick="sortBy('name', this)">Name <span class="sort-ind"></span></th>
+                        <th data-sort="domain" onclick="sortBy('domain', this)">Domain <span class="sort-ind"></span></th>
+                        <th data-sort="version" onclick="sortBy('version', this)">Version <span class="sort-ind"></span></th>
+                        <th>Streamlit</th>
+                        <th data-sort="last_updated" onclick="sortBy('last_updated', this)">Updated <span class="sort-ind"></span></th>
+                        <th>Status</th>
+                        <th>Size</th>
+                        <th>Actions</th>
+                    </tr></thead>
+                    <tbody id="site-list"><tr><td colspan="8">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -440,24 +457,100 @@
             document.getElementById('nginx-status').style.color = d.running ? 'var(--green)' : 'var(--red)';
         }
 
+        // ─── Sort + filter + polling state ───
+        let currentSort = { field: null, dir: 'asc' };
+        let pollTimer = null;
+
+        function relativeTime(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            const diff = (Date.now() - d.getTime()) / 1000;
+            if (isNaN(diff)) return iso;
+            if (diff < 60) return `${Math.floor(diff)}s ago`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        }
+
+        function applyFilter() {
+            const q = (document.getElementById('filter')?.value || '').toLowerCase().trim();
+            document.querySelectorAll('.site-row').forEach(tr => {
+                const name = (tr.dataset.name || '').toLowerCase();
+                const domain = (tr.dataset.domain || '').toLowerCase();
+                const match = !q || name.includes(q) || domain.includes(q);
+                tr.style.display = match ? '' : 'none';
+            });
+        }
+
+        function sortBy(field, thEl) {
+            if (currentSort.field === field) {
+                currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort = { field, dir: 'asc' };
+            }
+            document.querySelectorAll('th[data-sort] .sort-ind').forEach(s => s.textContent = '');
+            const ind = thEl.querySelector('.sort-ind');
+            if (ind) ind.textContent = currentSort.dir === 'asc' ? ' ▲' : ' ▼';
+            applySortToDOM();
+        }
+
+        function applySortToDOM() {
+            const tbody = document.getElementById('site-list');
+            if (!tbody) return;
+            const rows = Array.from(tbody.querySelectorAll('tr.site-row'));
+            const field = currentSort.field;
+            const dir = currentSort.dir === 'asc' ? 1 : -1;
+            rows.sort((a, b) => {
+                const av = (a.dataset[field] || '') + '';
+                const bv = (b.dataset[field] || '') + '';
+                if (av === '' && bv !== '') return 1;
+                if (bv === '' && av !== '') return -1;
+                return av.localeCompare(bv, undefined, { numeric: true }) * dir;
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        function installPolling() {
+            if (pollTimer) return;
+            pollTimer = setInterval(() => {
+                if (!document.hidden) refresh();
+            }, 60000);
+        }
+
         async function loadSites() {
             const d = await api('/sites');
             const list = document.getElementById('site-list');
             const sites = d.sites || [];
-            if (!sites.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No sites</td></tr>'; return; }
-            list.innerHTML = sites.map(s => `<tr>
-                <td><strong>${s.name}</strong></td>
-                <td style="color:var(--text-dim)">${s.domain}</td>
-                <td><span class="badge ${s.published ? 'published' : 'draft'}">${s.published ? 'Published' : 'Draft'}</span></td>
-                <td>${s.size || '-'}</td>
-                <td>
-                    ${s.published ? 
-                        `<a href="http://${s.domain}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">View</a>
-                         <button class="btn" onclick="unpublishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Unpublish</button>` :
-                        `<button class="btn success" onclick="publishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Publish</button>`}
-                    <button class="btn danger" onclick="deleteSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
-                </td>
-            </tr>`).join('');
+            if (!sites.length) { list.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim)">No sites</td></tr>'; return; }
+            list.innerHTML = sites.map(s => {
+                const streamlitCell = s.streamlit_app
+                    ? `<a href="https://gitea.gk2.secubox.in/gandalf/${s.streamlit_app}" target="_blank" title="${s.streamlit_app}">🎨</a>`
+                    : '<span style="color:var(--text-dim)">—</span>';
+                const versionCell = s.version
+                    ? `<a href="https://gitea.gk2.secubox.in/gandalf/metablog-${s.name}/releases" target="_blank"><code style="color:var(--primary)">${s.version}</code></a>`
+                    : '<span style="color:var(--text-dim)">—</span>';
+                const updatedCell = s.last_updated
+                    ? `<span title="${s.last_updated}">${relativeTime(s.last_updated)}</span>`
+                    : '<span style="color:var(--text-dim)">—</span>';
+                return `<tr class="site-row" data-name="${s.name}" data-domain="${s.domain}" data-version="${s.version || ''}" data-last_updated="${s.last_updated || ''}">
+                    <td><strong><a href="site.html?name=${s.name}" style="color:var(--text)">${s.name}</a></strong></td>
+                    <td style="color:var(--text-dim)">${s.domain}</td>
+                    <td>${versionCell}</td>
+                    <td style="text-align:center">${streamlitCell}</td>
+                    <td>${updatedCell}</td>
+                    <td><span class="badge ${s.published ? 'published' : 'draft'}">${s.published ? 'Published' : 'Draft'}</span></td>
+                    <td>${s.size || '-'}</td>
+                    <td>
+                        ${s.published ?
+                            `<a href="http://${s.domain}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">View</a>
+                             <button class="btn" onclick="unpublishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Unpublish</button>` :
+                            `<button class="btn success" onclick="publishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Publish</button>`}
+                        <button class="btn danger" onclick="deleteSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
+                    </td>
+                </tr>`;
+            }).join('');
+            if (currentSort.field) applySortToDOM();
+            applyFilter();
         }
 
         async function loadAccess() {
@@ -527,6 +620,7 @@
 
         function refresh() { loadStatus(); loadSites(); loadAccess(); }
         refresh();
+        installPolling();
     </script>
     <script src="/shared/crt-engine.js"></script>
 </body>
