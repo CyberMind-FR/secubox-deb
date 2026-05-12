@@ -1531,14 +1531,38 @@ async def generate_config():
         "    mode http",
     ])
 
+    # WebUI Obfuscation (issue #44) — strict regex ACL at top of frontend
+    try:
+        _ident = _webui_identity.get_identity()
+        config_lines.extend([
+            "    # WebUI Obfuscation (issue #44)",
+            f"    acl is_webui_admin hdr(host) -m reg {_ident['regex']}",
+            "    use_backend webui_direct if is_webui_admin",
+        ])
+    except ValueError:
+        # SECUBOX_HOSTNAME not set — skip the strict ACL (legacy behaviour)
+        _ident = None
+
     # ACLs for vhosts
     for vh in vhosts:
         if vh.get("enabled"):
+            try:
+                _admin = _webui_identity.get_identity()["admin_domain"]
+                if vh.get("domain") == _admin:
+                    continue
+            except ValueError:
+                pass
             config_lines.append(f"    acl host_{vh['name']} hdr(host) -i {vh['domain']}")
 
     # Use backend rules (through WAF if enabled)
     for vh in vhosts:
         if vh.get("enabled"):
+            try:
+                _admin = _webui_identity.get_identity()["admin_domain"]
+                if vh.get("domain") == _admin:
+                    continue
+            except ValueError:
+                pass
             if cfg["waf_enabled"] and not vh.get("waf_bypass"):
                 config_lines.append(f"    use_backend mitmproxy_inspector if host_{vh['name']}")
             else:
@@ -1556,12 +1580,35 @@ async def generate_config():
         "    mode http",
     ])
 
+    # WebUI Obfuscation (issue #44) — strict regex ACL at top of frontend
+    try:
+        _ident = _webui_identity.get_identity()
+        config_lines.extend([
+            "    # WebUI Obfuscation (issue #44)",
+            f"    acl is_webui_admin hdr(host) -m reg {_ident['regex']}",
+            "    use_backend webui_direct if is_webui_admin",
+        ])
+    except ValueError:
+        _ident = None
+
     for vh in vhosts:
         if vh.get("enabled") and vh.get("ssl"):
+            try:
+                _admin = _webui_identity.get_identity()["admin_domain"]
+                if vh.get("domain") == _admin:
+                    continue
+            except ValueError:
+                pass
             config_lines.append(f"    acl host_{vh['name']} hdr(host) -i {vh['domain']}")
 
     for vh in vhosts:
         if vh.get("enabled") and vh.get("ssl"):
+            try:
+                _admin = _webui_identity.get_identity()["admin_domain"]
+                if vh.get("domain") == _admin:
+                    continue
+            except ValueError:
+                pass
             if cfg["waf_enabled"] and not vh.get("waf_bypass"):
                 config_lines.append(f"    use_backend mitmproxy_inspector if host_{vh['name']}")
             else:
@@ -1584,6 +1631,18 @@ async def generate_config():
             f"    server waf 127.0.0.1:{cfg['waf_backend_port']} check",
             "",
         ])
+
+    # WebUI direct backend (issue #44 — only emitted when strict ACL is in use)
+    try:
+        _webui_identity.get_identity()
+        config_lines.extend([
+            "",
+            "backend webui_direct",
+            "    mode http",
+            "    server srv0 127.0.0.1:9080 check",
+        ])
+    except ValueError:
+        pass
 
     # User backends
     for be in backends:

@@ -66,6 +66,48 @@ def test_nginx_config_returns_rendered_vhost(client, monkeypatch):
     assert "include /etc/nginx/secubox.d/*.conf;" in body
 
 
+def test_generate_includes_strict_webui_acl(client, tmp_path, monkeypatch):
+    """When /generate runs with a configured HOSTNAME, it emits the strict ACL + webui_direct backend."""
+    import api.main as _mn
+    from api.main import app
+    from secubox_core.auth import require_jwt
+
+    # Redirect HAProxy cfg writes to a temp file so we don't need root
+    cfg_tmp = tmp_path / "haproxy.cfg"
+    monkeypatch.setattr(_mn, "HAPROXY_CFG", str(cfg_tmp))
+
+    # Stub out haproxy validation and WAF sync so /generate completes
+    import subprocess
+    import unittest.mock as mock
+
+    fake_result = mock.MagicMock()
+    fake_result.returncode = 0
+    fake_result.stderr = ""
+    fake_result.stdout = "Configuration file is valid\n"
+
+    app.dependency_overrides[require_jwt] = lambda: {"sub": "tester"}
+    try:
+        with mock.patch("subprocess.run", return_value=fake_result), \
+             mock.patch.object(_mn, "sync_waf_routes", return_value=None):
+            r = client.post("/generate")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200, f"Unexpected status {r.status_code}: {r.text}"
+
+    # /generate writes the rendered config to HAPROXY_CFG — read it back
+    text = cfg_tmp.read_text()
+    assert r"acl is_webui_admin hdr(host) -m reg ^admin\.gk2\.secubox\.in$" in text, \
+        f"Strict ACL not found in generated config:\n{text}"
+    assert "use_backend webui_direct if is_webui_admin" in text, \
+        f"use_backend webui_direct directive missing:\n{text}"
+    assert "backend webui_direct" in text, \
+        f"backend webui_direct definition missing:\n{text}"
+    # Verify the ACL appears twice — once in http-in, once in https-in
+    assert text.count("acl is_webui_admin") == 2, \
+        f"Expected 2 occurrences of 'acl is_webui_admin', got {text.count('acl is_webui_admin')}"
+
+
 def test_refresh_invalidates_cache(client, tmp_path, monkeypatch):
     from api.main import app
     from secubox_core.auth import require_jwt
