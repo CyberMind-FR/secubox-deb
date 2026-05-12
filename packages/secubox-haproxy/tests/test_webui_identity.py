@@ -2,6 +2,7 @@
 SecuBox-Deb :: webui_identity tests
 Author: Gerald KERMA <devel@cybermind.fr>
 """
+import os
 import textwrap
 import pytest
 from pathlib import Path
@@ -80,3 +81,20 @@ def test_invalidate_cache(monkeypatch, tmp_path):
     wi.invalidate_cache()
     refreshed = wi.get_identity()
     assert refreshed["hostname"] == "changed"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses chmod 000")
+def test_unreadable_file_returns_empty_then_raises(monkeypatch, tmp_path):
+    """If the defaults file exists but is unreadable, get_identity raises ValueError."""
+    p = tmp_path / "secubox-unreadable"
+    p.write_text('SECUBOX_HOSTNAME="gk2"\n')
+    p.chmod(0o000)  # No read permission for anyone
+    monkeypatch.setattr(wi, "DEFAULTS_FILE", p)
+    try:
+        # Should NOT raise OSError/PermissionError directly;
+        # instead, get_identity raises ValueError because HOSTNAME is unset.
+        with pytest.raises(ValueError, match="SECUBOX_HOSTNAME"):
+            wi.get_identity()
+    finally:
+        # Restore permissions so the temp file can be cleaned up
+        p.chmod(0o644)
