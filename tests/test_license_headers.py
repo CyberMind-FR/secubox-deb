@@ -69,3 +69,47 @@ def test_render_header_block():
 
 def test_render_header_html():
     assert license_headers.render_header("html") == EXPECTED_HTML_HEADER
+
+
+def test_detect_existing_none_on_empty():
+    assert license_headers.detect_existing("") == "NONE"
+
+
+def test_detect_existing_none_on_plain_code():
+    assert license_headers.detect_existing("print('hello')\n") == "NONE"
+
+
+def test_detect_existing_match_hash():
+    text = EXPECTED_HASH_HEADER + "\nprint('hello')\n"
+    assert license_headers.detect_existing(text) == "MATCH"
+
+
+def test_detect_existing_match_slash():
+    text = EXPECTED_SLASH_HEADER + "\nconsole.log('hi');\n"
+    assert license_headers.detect_existing(text) == "MATCH"
+
+
+def test_detect_existing_match_block():
+    text = EXPECTED_BLOCK_HEADER + "\nint main(void) { return 0; }\n"
+    assert license_headers.detect_existing(text) == "MATCH"
+
+
+def test_detect_existing_match_html():
+    text = EXPECTED_HTML_HEADER + "\n<html></html>\n"
+    assert license_headers.detect_existing(text) == "MATCH"
+
+
+def test_detect_existing_foreign_mit():
+    text = "# SPDX-License-Identifier: MIT\nprint('hello')\n"
+    assert license_headers.detect_existing(text) == "FOREIGN"
+
+
+def test_detect_existing_foreign_gpl():
+    text = "// SPDX-License-Identifier: GPL-2.0-or-later\nint x;\n"
+    assert license_headers.detect_existing(text) == "FOREIGN"
+
+
+def test_detect_existing_only_checks_first_10_lines():
+    """A CMSD line buried deep in the file should NOT be treated as MATCH."""
+    text = "\n".join(["# unrelated"] * 20) + "\n# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
+    assert license_headers.detect_existing(text) == "NONE"

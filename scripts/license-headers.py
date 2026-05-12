@@ -6,6 +6,7 @@ on every first-party source file. See docs/superpowers/specs/2026-05-12-license-
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -16,6 +17,19 @@ HEADER_LINES = (
     "Source-Disclosed License — All rights reserved except as expressly granted.",
     "See LICENCE-CMSD-1.0.md for terms.",
 )
+
+
+_SPDX_RE = re.compile(r"SPDX-License-Identifier:\s*(\S+)")
+_CMSD_ID = "LicenseRef-CMSD-1.0"
+
+
+def detect_existing(text: str) -> str:
+    """Return 'MATCH', 'FOREIGN', or 'NONE' based on the first 10 lines."""
+    head = "\n".join(text.splitlines()[:10])
+    match = _SPDX_RE.search(head)
+    if not match:
+        return "NONE"
+    return "MATCH" if match.group(1) == _CMSD_ID else "FOREIGN"
 
 
 def render_header(style: str) -> str:
