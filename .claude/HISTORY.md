@@ -30,6 +30,37 @@ apt-cache search secubox # 15 packages
 
 ---
 
+### Session 159 — WebUI Obfuscation (#44)
+
+**Goal:** Lock the SecuBox WebUI to `https://admin.<HOSTNAME>.<DOMAIN_SUFFIX>/` only, enforced at HAProxy and nginx layers, driven by `/etc/default/secubox`.
+
+**Spec:** `docs/superpowers/specs/2026-05-12-webui-obfuscation-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-12-webui-obfuscation.md`
+
+**Changes:**
+
+- New package `secubox-defaults` ships `/etc/default/secubox` (`SECUBOX_HOSTNAME` + `SECUBOX_DOMAIN_SUFFIX`) as the single source of truth. Postinst autodetects from `hostname -s` if unset, then fires `dpkg-trigger secubox-defaults-changed`.
+- `secubox-haproxy` API extended with three endpoints in `api/main.py`:
+  - `GET /webui/admin-domain` — canonical identity + escaped regex (info, no auth)
+  - `GET /webui/nginx-config` — JWT-protected, rendered nginx vhost as `text/plain`
+  - `POST /webui/refresh` — JWT-protected LRU cache invalidation (204)
+- Helper module `api/webui_identity.py` parses `/etc/default/secubox` with `shlex`, caches via `lru_cache(maxsize=1)`, exposes `get_identity()`/`invalidate_cache()`. Defensive `OSError` handling so file-permission failures surface as `ValueError` (caught by endpoints → 503).
+- `sbin/secubox-render-nginx-webui` script: snapshot → fetch from API → atomic stage → `nginx -t` → reload, with rollback on validation failure. Includes early binary-availability check.
+- `sbin/haproxyctl` (bash generator) injects `acl is_webui_admin hdr(host) -m reg ^admin\.<HOST>\.<SUFFIX>$` + `use_backend webui_direct if is_webui_admin` at the top of `http-in` and `https-in` frontends. Emits the matching `backend webui_direct` (→ `127.0.0.1:9080`) only when the strict ACL is in use. Sources `/etc/default/secubox` once per frontend loop (hoisted from per-iteration).
+- Python `generate_config()` in `api/main.py` mirrors the bash generator (symmetric ACL + backend emission + per-vhost skip).
+- `debian/postinst` declares `interest-noawait secubox-defaults-changed` and on trigger runs (best-effort): `POST /webui/refresh`, `secubox-render-nginx-webui`, `secubox-haproxy-regen-safe`.
+- `secubox-haproxy-regen-safe` script now packaged into `secubox-haproxy` (installed to `/usr/local/bin/`).
+- `secubox-haproxy` `debian/control` declares `Depends: ..., secubox-defaults`.
+- Integration test `tests/integration/test_44_webui_obfuscation.sh` covers positive probe (`admin.gk2` = WebUI), negative probes (`gk2.secubox.in` and `admin.fake.secubox.in` NOT WebUI), LAN-direct preserved, and regression spot-checks on cpf, arm, lldh, pub, werdl, 3d.
+
+**Tests:** 12 pytest passing (6 in `tests/test_webui_identity.py`, 6 in `tests/test_webui_endpoints.py`). Includes a permission-denied test that confirms `OSError` is caught and surfaces as `ValueError`.
+
+**Implementation workflow:** Brainstorming → spec → plan → subagent-driven execution (15 tasks, each TDD with implementer + spec reviewer + code quality reviewer). 6 review cycles triggered fix subagents (`OSError` handling in `_parse_defaults`, missing `conftest.py` commit, `debian/install` conflict, missing binary check, missing `webui_direct` backend def, missing `regen-safe` packaging).
+
+**Closes:** #44 (pending PR merge)
+
+---
+
 ### Session 158 — SSL Health Banner Fixes & HAProxy Recovery
 
 **Goal:** Fix SSL display not working in banner + recover broken HAProxy config.
