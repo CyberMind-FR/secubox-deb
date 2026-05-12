@@ -87,7 +87,7 @@ class CertStatusAggregator:
         return out
 
     def _classify(self, days: int) -> str:
-        if days < 0:
+        if days <= 0:
             return "expired"
         if days <= self.cfg["critical_days"]:
             return "expiring_critical"
