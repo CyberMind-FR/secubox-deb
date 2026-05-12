@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Site details</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Cinzel:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933;
+            --p31-dim: #006622; --p31-decay: #ffb347; --p31-decay-dim: #cc7722;
+            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7;
+            --bg-dark: var(--tube-light); --bg-card: var(--tube-pale);
+            --border: var(--tube-soft); --text: #1b2c1b; --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak); --green: var(--p31-peak);
+            --red: #ff4466; --yellow: var(--p31-decay);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main {
+            flex: 1;
+            padding: 2rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.75rem;
+        }
+        .header h1 {
+            font-family: 'Cinzel', serif;
+            font-weight: 500;
+            color: var(--primary);
+            font-size: 2rem;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .badge.published { background: rgba(0,221,68,0.2); color: var(--green); border: 1px solid var(--green); }
+        .badge.draft { background: rgba(255,179,71,0.2); color: var(--yellow); border: 1px solid var(--yellow); }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1rem;
+        }
+        .card h2 {
+            font-family: 'Cinzel', serif;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+        dl { display: grid; grid-template-columns: 12rem 1fr; gap: 0.4rem 1rem; }
+        dt { color: var(--text-dim); }
+        dd { color: var(--text); word-break: break-word; }
+        dd code { background: var(--bg-dark); padding: 0.1rem 0.4rem; border-radius: 3px; color: var(--primary); }
+        .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .btn {
+            display: inline-block;
+            padding: 0.5rem 0.9rem;
+            background: var(--bg-dark);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            text-decoration: none;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .btn:hover { border-color: var(--primary); color: var(--primary); }
+        .btn.primary { background: var(--primary); color: var(--bg-dark); border-color: var(--primary); }
+        .btn.success { background: var(--green); color: var(--bg-dark); border-color: var(--green); }
+        .btn[hidden] { display: none !important; }
+        .hint { color: var(--text-dim); font-size: 0.9rem; }
+        .error { color: var(--red); }
+        a { color: var(--primary); }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <div id="error-box"></div>
+
+        <header class="header">
+            <h1 id="site-name">…</h1>
+            <span id="status-badge" class="badge"></span>
+            <a href="index.html" class="btn" style="margin-left:auto">← Back to list</a>
+        </header>
+
+        <div class="card">
+            <h2>Metadata</h2>
+            <dl id="meta-dl"></dl>
+        </div>
+
+        <div class="card">
+            <h2>Quick links</h2>
+            <div class="actions">
+                <a id="link-live" class="btn primary" target="_blank">🌐 Live site</a>
+                <a id="link-gitea" class="btn" target="_blank">🦊 Gitea repo</a>
+                <a id="link-streamlit" class="btn success" target="_blank" hidden>🎨 Streamlit app</a>
+            </div>
+        </div>
+
+        <div class="card hint">
+            <p>For tag history and deploys, see the <strong>Releases</strong> tab on the Gitea repo (auth required).</p>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/metablogizer';
+
+        function headers() {
+            const t = localStorage.getItem('jwt');
+            return t ? { 'Authorization': `Bearer ${t}` } : {};
+        }
+
+        async function api(path) {
+            try {
+                const res = await fetch(API + path, { headers: headers() });
+                if (res.status === 401) { window.location = '/login.html'; return null; }
+                if (!res.ok) return null;
+                return res.json();
+            } catch { return null; }
+        }
+
+        function relativeTime(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            const diff = (Date.now() - d.getTime()) / 1000;
+            if (isNaN(diff)) return iso;
+            if (diff < 60) return `${Math.floor(diff)}s ago`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        }
+
+        function row(label, value) {
+            const dt = document.createElement('dt'); dt.textContent = label;
+            const dd = document.createElement('dd'); dd.innerHTML = value;
+            return [dt, dd];
+        }
+
+        function render(d) {
+            document.getElementById('site-name').textContent = d.name;
+            const badge = document.getElementById('status-badge');
+            badge.textContent = d.published ? 'Published' : 'Draft';
+            badge.className = 'badge ' + (d.published ? 'published' : 'draft');
+
+            const dl = document.getElementById('meta-dl');
+            const versionCell = d.version
+                ? `<code>${d.version}</code>`
+                : '<span style="color:var(--text-dim)">—</span>';
+            const lastUpdatedCell = d.last_updated
+                ? `${d.last_updated} <span style="color:var(--text-dim)">(${relativeTime(d.last_updated)})</span>`
+                : '<span style="color:var(--text-dim)">—</span>';
+            const tagsCell = (d.tags && d.tags.length)
+                ? d.tags.map(t => `<code>${t}</code>`).join(' ')
+                : '<span style="color:var(--text-dim)">—</span>';
+
+            const fields = [
+                ['Domain',       d.domain || '—'],
+                ['Version',      versionCell],
+                ['Last updated', lastUpdatedCell],
+                ['Title',        d.title || '—'],
+                ['Description',  d.description || '—'],
+                ['Category',     d.category || '—'],
+                ['Tags',         tagsCell],
+            ];
+            for (const [k, v] of fields) {
+                row(k, v).forEach(el => dl.appendChild(el));
+            }
+
+            document.getElementById('link-live').href = `https://${d.domain}/`;
+            document.getElementById('link-gitea').href =
+                `https://gitea.gk2.secubox.in/gandalf/metablog-${d.name}`;
+            const streamlit = document.getElementById('link-streamlit');
+            if (d.streamlit_app) {
+                streamlit.href = `https://gitea.gk2.secubox.in/gandalf/${d.streamlit_app}`;
+                streamlit.hidden = false;
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('error-box').innerHTML =
+                `<div class="card error">${msg}</div>`;
+        }
+
+        async function loadSite() {
+            const name = new URLSearchParams(location.search).get('name');
+            if (!name) { showError('Missing <code>?name=…</code> parameter.'); return; }
+            const d = await api(`/site/${encodeURIComponent(name)}`);
+            if (!d || !d.name) { showError(`Site <strong>${name}</strong> not found.`); return; }
+            render(d);
+        }
+
+        loadSite();
+    </script>
+</body>
+</html>
