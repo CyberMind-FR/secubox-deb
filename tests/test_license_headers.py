@@ -258,3 +258,53 @@ def test_apply_markdown_idempotent_with_frontmatter():
     once = license_headers.apply(src, ".md")
     twice = license_headers.apply(once, ".md")
     assert once == twice
+
+
+def test_walk_finds_python(tmp_path):
+    (tmp_path / "a.py").write_text("x = 1\n")
+    (tmp_path / "b.txt").write_text("ignore me\n")
+    result = list(license_headers.walk([tmp_path], enrolled=["**"]))
+    assert tmp_path / "a.py" in result
+    assert tmp_path / "b.txt" not in result
+
+
+def test_walk_prunes_kernel_build(tmp_path):
+    (tmp_path / "kernel-build").mkdir()
+    (tmp_path / "kernel-build" / "a.c").write_text("int x;\n")
+    (tmp_path / "real.c").write_text("int y;\n")
+    result = list(license_headers.walk([tmp_path], enrolled=["**"]))
+    assert tmp_path / "real.c" in result
+    assert tmp_path / "kernel-build" / "a.c" not in result
+
+
+def test_walk_prunes_node_modules(tmp_path):
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "lib.js").write_text("// vendor\n")
+    (tmp_path / "src.js").write_text("// app\n")
+    result = list(license_headers.walk([tmp_path], enrolled=["**"]))
+    assert tmp_path / "src.js" in result
+    assert tmp_path / "node_modules" / "lib.js" not in result
+
+
+def test_walk_skips_minified(tmp_path):
+    (tmp_path / "app.min.js").write_text("// min\n")
+    (tmp_path / "app.js").write_text("// raw\n")
+    result = list(license_headers.walk([tmp_path], enrolled=["**"]))
+    assert tmp_path / "app.js" in result
+    assert tmp_path / "app.min.js" not in result
+
+
+def test_walk_respects_empty_allowlist(tmp_path):
+    (tmp_path / "a.py").write_text("x = 1\n")
+    result = list(license_headers.walk([tmp_path], enrolled=[]))
+    assert result == []
+
+
+def test_walk_respects_glob_allowlist(tmp_path):
+    (tmp_path / "common").mkdir()
+    (tmp_path / "common" / "a.py").write_text("x = 1\n")
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "b.py").write_text("y = 1\n")
+    result = list(license_headers.walk([tmp_path], enrolled=["common/**"]))
+    rel = sorted(p.relative_to(tmp_path).as_posix() for p in result)
+    assert rel == ["common/a.py"]
