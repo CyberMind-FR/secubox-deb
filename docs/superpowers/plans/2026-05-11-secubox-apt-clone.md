@@ -31,7 +31,7 @@
 - Create: `cmd/secubox/internal/apt/client.go`
 - Test: `cmd/secubox/internal/apt/client_test.go`
 
-- [ ] **Step 1: Write failing test for GPG key download**
+- [x] **Step 1: Write failing test for GPG key download**
 
 ```go
 // cmd/secubox/internal/apt/client_test.go
@@ -71,12 +71,12 @@ func TestDownloadGPGKey(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd cmd/secubox && go test -v ./internal/apt/... -run TestDownloadGPGKey`
 Expected: FAIL with "package apt is not in std"
 
-- [ ] **Step 3: Write Client struct and DownloadGPGKey**
+- [x] **Step 3: Write Client struct and DownloadGPGKey**
 
 ```go
 // cmd/secubox/internal/apt/client.go
@@ -165,12 +165,12 @@ func (c *Client) DownloadGPGKey() error {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd cmd/secubox && go test -v ./internal/apt/... -run TestDownloadGPGKey`
 Expected: PASS
 
-- [ ] **Step 5: Write failing test for sources.list generation**
+- [x] **Step 5: Write failing test for sources.list generation**
 
 ```go
 func TestWriteSourcesList(t *testing.T) {
@@ -201,12 +201,12 @@ func TestWriteSourcesList(t *testing.T) {
 }
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [x] **Step 6: Run test to verify it fails**
 
 Run: `cd cmd/secubox && go test -v ./internal/apt/... -run TestWriteSourcesList`
 Expected: FAIL with "WriteSourcesList undefined"
 
-- [ ] **Step 7: Implement WriteSourcesList**
+- [x] **Step 7: Implement WriteSourcesList**
 
 ```go
 // WriteSourcesList creates /etc/apt/sources.list.d/secubox.list
@@ -227,12 +227,12 @@ func (c *Client) WriteSourcesList() error {
 }
 ```
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `cd cmd/secubox && go test -v ./internal/apt/... -run TestWriteSourcesList`
 Expected: PASS
 
-- [ ] **Step 9: Add Setup method that combines operations**
+- [x] **Step 9: Add Setup method that combines operations**
 
 ```go
 // Setup configures the system to use the SecuBox APT repository
@@ -249,7 +249,7 @@ func (c *Client) Setup() error {
 }
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add cmd/secubox/internal/apt/client.go cmd/secubox/internal/apt/client_test.go
@@ -268,7 +268,7 @@ git commit -m "feat(cli): add APT client package for repository setup
 - Create: `cmd/secubox/internal/apt/packages.go`
 - Test: `cmd/secubox/internal/apt/packages_test.go`
 
-- [ ] **Step 1: Write failing test for tier resolution**
+- [x] **Step 1: Write failing test for tier resolution**
 
 ```go
 // cmd/secubox/internal/apt/packages_test.go
@@ -304,12 +304,12 @@ func TestTierPackages(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd cmd/secubox && go test -v ./internal/apt/... -run TestTierPackages`
 Expected: FAIL with "TierPackages undefined"
 
-- [ ] **Step 3: Implement TierPackages**
+- [x] **Step 3: Implement TierPackages**
 
 ```go
 // cmd/secubox/internal/apt/packages.go
@@ -386,12 +386,12 @@ func TierNames() []string {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd cmd/secubox && go test -v ./internal/apt/... -run TestTierPackages`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cmd/secubox/internal/apt/packages.go cmd/secubox/internal/apt/packages_test.go
@@ -409,7 +409,7 @@ git commit -m "feat(cli): add package tier resolution for clone wizard
 **Files:**
 - Create: `cmd/secubox/internal/apt/server.go`
 
-- [ ] **Step 1: Write Server struct with script paths**
+- [x] **Step 1: Write Server struct with script paths**
 
 ```go
 // cmd/secubox/internal/apt/server.go
@@ -548,12 +548,12 @@ func (s *Server) Check() error {
 }
 ```
 
-- [ ] **Step 2: Run existing tests to verify no regressions**
+- [x] **Step 2: Run existing tests to verify no regressions**
 
 Run: `cd cmd/secubox && go test -v ./internal/apt/...`
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add cmd/secubox/internal/apt/server.go
@@ -572,7 +572,7 @@ git commit -m "feat(cli): add APT server operations wrapper
 **Files:**
 - Create: `cmd/secubox/cmd/apt.go`
 
-- [ ] **Step 1: Write apt.go with parent command**
+- [x] **Step 1: Write apt.go with parent command**
 
 ```go
 // cmd/secubox/cmd/apt.go
@@ -705,12 +705,12 @@ func runAptSetup(cmd *cobra.Command, args []string) error {
 }
 ```
 
-- [ ] **Step 2: Run go build to verify compilation**
+- [x] **Step 2: Run go build to verify compilation**
 
 Run: `cd cmd/secubox && go build .`
 Expected: Success
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add cmd/secubox/cmd/apt.go
@@ -727,7 +727,7 @@ git commit -m "feat(cli): add secubox apt command with setup subcommand
 **Files:**
 - Create: `cmd/secubox/cmd/apt_server.go`
 
-- [ ] **Step 1: Write apt_server.go with all server subcommands**
+- [x] **Step 1: Write apt_server.go with all server subcommands**
 
 ```go
 // cmd/secubox/cmd/apt_server.go
@@ -903,12 +903,12 @@ func runAptCheck(cmd *cobra.Command, args []string) error {
 }
 ```
 
-- [ ] **Step 2: Run go build to verify compilation**
+- [x] **Step 2: Run go build to verify compilation**
 
 Run: `cd cmd/secubox && go build .`
 Expected: Success
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add cmd/secubox/cmd/apt_server.go
@@ -927,7 +927,7 @@ git commit -m "feat(cli): add secubox apt server subcommands
 **Files:**
 - Create: `cmd/secubox/cmd/clone.go`
 
-- [ ] **Step 1: Write clone.go with flags and command structure**
+- [x] **Step 1: Write clone.go with flags and command structure**
 
 ```go
 // cmd/secubox/cmd/clone.go
@@ -1188,12 +1188,12 @@ func selectCustomPackages() ([]string, error) {
 }
 ```
 
-- [ ] **Step 2: Run go build to verify compilation**
+- [x] **Step 2: Run go build to verify compilation**
 
 Run: `cd cmd/secubox && go build .`
 Expected: Success
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add cmd/secubox/cmd/clone.go
@@ -1213,7 +1213,7 @@ git commit -m "feat(cli): add secubox clone bootstrap wizard
 - Create: `cmd/secubox/cmd/apt_test.go`
 - Create: `cmd/secubox/cmd/clone_test.go`
 
-- [ ] **Step 1: Write apt command tests**
+- [x] **Step 1: Write apt command tests**
 
 ```go
 // cmd/secubox/cmd/apt_test.go
@@ -1261,7 +1261,7 @@ func TestAptSetupRequiresRoot(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Write clone command tests**
+- [x] **Step 2: Write clone command tests**
 
 ```go
 // cmd/secubox/cmd/clone_test.go
@@ -1310,16 +1310,16 @@ func TestCloneRequiresRoot(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Add missing import to apt_test.go**
+- [x] **Step 3: Add missing import to apt_test.go**
 
 Add `"os"` to imports in apt_test.go.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd cmd/secubox && go test -v ./cmd/... -run "TestApt|TestClone"`
 Expected: PASS (or SKIP for root tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cmd/secubox/cmd/apt_test.go cmd/secubox/cmd/clone_test.go
@@ -1336,27 +1336,27 @@ git commit -m "test(cli): add tests for apt and clone commands
 **Files:**
 - Modify: `cmd/secubox/go.mod` (if needed)
 
-- [ ] **Step 1: Ensure promptui is in go.mod**
+- [x] **Step 1: Ensure promptui is in go.mod**
 
 Run: `cd cmd/secubox && go mod tidy`
 Expected: Success (promptui should already be present from wizard.go)
 
-- [ ] **Step 2: Run all tests**
+- [x] **Step 2: Run all tests**
 
 Run: `cd cmd/secubox && go test -v ./...`
 Expected: PASS
 
-- [ ] **Step 3: Build binary**
+- [x] **Step 3: Build binary**
 
 Run: `cd cmd/secubox && go build -o secubox .`
 Expected: Success
 
-- [ ] **Step 4: Verify commands exist**
+- [x] **Step 4: Verify commands exist**
 
 Run: `./secubox apt --help && ./secubox clone --help`
 Expected: Help output for both commands
 
-- [ ] **Step 5: Commit go.mod changes if any**
+- [x] **Step 5: Commit go.mod changes if any**
 
 ```bash
 git add cmd/secubox/go.mod cmd/secubox/go.sum
@@ -1370,22 +1370,22 @@ git commit -m "chore(cli): update dependencies for apt/clone commands"
 **Files:**
 - None (manual testing)
 
-- [ ] **Step 1: Test apt help hierarchy**
+- [x] **Step 1: Test apt help hierarchy**
 
 Run: `cd cmd/secubox && go run . apt --help`
 Expected: Shows all subcommands (setup, init, publish, sync, list, remove, check)
 
-- [ ] **Step 2: Test clone help**
+- [x] **Step 2: Test clone help**
 
 Run: `cd cmd/secubox && go run . clone --help`
 Expected: Shows tier and package options
 
-- [ ] **Step 3: Test dry-run modes**
+- [x] **Step 3: Test dry-run modes**
 
 Run: `cd cmd/secubox && go run . apt publish --dry-run -c bookworm packages/secubox-core/*.deb 2>&1 || true`
 Expected: Shows dry-run output or "file not found" (acceptable)
 
-- [ ] **Step 4: Commit final changes**
+- [x] **Step 4: Commit final changes**
 
 ```bash
 git add -A
@@ -1410,10 +1410,10 @@ Closes the APT/Clone design spec."
 
 ## Success Criteria
 
-- [ ] `secubox apt setup` adds repository to fresh Debian system
-- [ ] `secubox apt publish *.deb` publishes packages with lintian check
-- [ ] `secubox apt sync` uploads to apt.secubox.in
-- [ ] `secubox clone` wizard completes full installation
-- [ ] `secubox clone --tier pro -y` works non-interactively
-- [ ] All commands show help with `--help`
-- [ ] All tests pass
+- [x] `secubox apt setup` adds repository to fresh Debian system
+- [x] `secubox apt publish *.deb` publishes packages with lintian check
+- [x] `secubox apt sync` uploads to apt.secubox.in
+- [x] `secubox clone` wizard completes full installation
+- [x] `secubox clone --tier pro -y` works non-interactively
+- [x] All commands show help with `--help`
+- [x] All tests pass
