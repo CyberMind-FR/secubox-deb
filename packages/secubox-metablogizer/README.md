@@ -37,6 +37,37 @@ Per-site outcome lands in `output/ingest-report.json`. Important: the SSH
 URL uses `gitea@` (NOT `git@`) because Gitea's built-in SSH server validates
 the username against the OS user it runs as.
 
+## Version metadata (site.json)
+
+Every site under `/srv/metablogizer/sites/` carries a `site.json` describing it.
+The formal schema lives at `packages/secubox-metablogizer/schema/site.json.schema.json`.
+
+Required fields: `name`, `domain`, `published`.
+Optional: `version`, `title`, `description`, `category`, `streamlit_app`,
+`tags`, `last_updated`.
+
+If `version` and/or `last_updated` are absent, the API derives them from the
+local git state (`git describe --tags --exact-match` and
+`git log -1 --format=%cI`).
+
+The `/api/v1/metablogizer/sites` endpoint returns the enriched form;
+consumers (e.g. the upcoming sub-D dashboard) see one consistent shape.
+
+### Backfill
+
+To create or merge `site.json` files in bulk:
+
+```bash
+bash scripts/metablog-site-backfill.sh --dry-run        # preview
+bash scripts/metablog-site-backfill.sh                  # create missing
+bash scripts/metablog-site-backfill.sh --force          # merge missing fields
+bash scripts/metablog-site-backfill.sh --site <name>    # one site only
+```
+
+Per-run JSON report at `output/metablog-backfill-report.json`. The backfill
+auto-detects `streamlit_app` by probing the Gitea repo
+`gandalf/streamlit-<name>.git` (sub-F).
+
 ## Installation
 
 ```bash

@@ -4,6 +4,40 @@
 ---
 ## 2026-05-12
 
+### Session 164 — MetaBlogizer site.json schema + version metadata (Issue #101, sub-C of #49)
+
+**Goal:** Formal JSON Schema for site.json + Python validator/enricher (`version`/`last_updated` derived from git when absent) + backfill script + API extension. Unblocks sub-D (Dashboard).
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-12-metablog-site-schema-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-metablog-site-schema.md` (8 tasks)
+- JSON Schema draft-07: `packages/secubox-metablogizer/schema/site.json.schema.json`
+- Python module: `packages/secubox-metablogizer/api/site_schema.py` (load_schema/validate/enrich) + 8 pytest cases, all passing
+- API wiring: `_load_site_json()` helper in `api/main.py` validates warn-only, enriches version/last_updated from git
+- `python3-jsonschema` added to `debian/control`
+- Backfill script: `scripts/metablog-site-backfill.sh` (creates missing, `--force` merges, auto-detects `streamlit_app` via Gitea probe)
+- 3-gate smoke: `tests/scripts/test-metablog-site-schema.sh`
+- Live run: **165 total, 104 created, 61 skipped (incl. 2 force-fixed), 0 failed**
+
+**Discovered + fixed mid-execution:**
+
+1. **2 pre-existing site.json files** (`money`, `evolution`) were missing the required `published` field — invalid under the new schema. Fixed via `bash scripts/metablog-site-backfill.sh --force --site <name>` which merged in the missing field while preserving the existing `title`/`description` values.
+2. **`python3-jsonschema` not on MOCHAbin** initially — installed via `apt-get install -y python3-jsonschema` to enable smoke gate 2 (which validates all 61+ live site.json against the schema).
+3. **Total is 165 not 166** — a site was removed since the audit in PR #97; orchestrator picks up whatever `find` returns.
+
+**Commits:**
+- `77f8feef` — feat: JSON Schema draft-07
+- `345e59be` — feat: site_schema module + 8 pytest cases
+- `58a80b8f` — feat: load_sites() schema-enriched output
+- `7ca8b468` — feat: python3-jsonschema in debian/control
+- `426b0b1f` — feat: backfill orchestrator
+- `d4b4160a` — test: 3-gate smoke
+- `a4ada6c2` — docs: backfill run summary
+
+**Followup:** Sub-D (Dashboard) can now consume `current_tag`/`streamlit_app`/etc.
+
+---
+
 ### Session 163 — Streamlit Gitea version pinning (Issue #95, sub-F of #49)
 
 **Goal:** Mirror the 28 directory-form Streamlit apps from `/srv/streamlit/apps/` into Gitea as `gandalf/streamlit-<app>` with `v1.0.0` tag, then extend `streamlitctl` with tag-pinned deploy + rollback, and surface the active tag in the FastAPI.
