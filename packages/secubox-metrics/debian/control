@@ -12,7 +12,11 @@ Depends: ${misc:Depends},
          secubox-core,
          python3,
          python3-fastapi | python3-pip,
-         python3-uvicorn | python3-pip
+         python3-uvicorn | python3-pip,
+         python3-maxminddb | python3-pip,
+         python3-cryptography,
+         nftables
+Recommends: geoipupdate
 Description: SecuBox Metrics Dashboard
  Real-time system metrics dashboard with caching.
  Provides overview stats, WAF metrics, connection counts,

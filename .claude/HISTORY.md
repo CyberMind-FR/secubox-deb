@@ -4,6 +4,28 @@
 ---
 ## 2026-05-12
 
+### Session 160 — Health Banner Live Panel (Issue #92)
+
+**Goal:** Add three public sections to the health banner — VisitorOrigin,
+LiveHosts, CertStatus — sharing one polling pipeline.
+
+**Spec:** `docs/superpowers/specs/2026-05-12-visitor-origin-feed-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-12-visitor-origin-feed.md`
+**Branch:** `feature/92-health-banner-visitor-origin-feed-anonym`
+**Issue:** [#92](https://github.com/CyberMind-FR/secubox-deb/issues/92)
+
+**Highlights**
+- nftables `inet secubox_metrics` table (priority -300) — independent of
+  `secubox-firewall`.
+- VisitorOrigin: kernel-dedupe via timeout'd set, mmdb resolution, threshold
+  gate before persistence (raw IPs never leave the function).
+- LiveHosts: HAProxy admin socket + 60x1-min ring buffer; counter-reset
+  detection.
+- CertStatus: cryptography parse of `/etc/letsencrypt/live/*/cert.pem`.
+- Banner v1.3.0: three fail-isolated fetch loops on a shared 30 s cadence.
+
+---
+
 ### Session 160 — secubox apt + clone: validate against live repo (Issue #89)
 
 **Goal:** Audit the 2026-05-11 plan vs the implemented Go CLI; close any genuine gap; end-to-end against `https://apt.secubox.in/` (commissioned in Session 152 / Issue #80).
