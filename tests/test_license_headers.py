@@ -308,3 +308,92 @@ def test_walk_respects_glob_allowlist(tmp_path):
     result = list(license_headers.walk([tmp_path], enrolled=["common/**"]))
     rel = sorted(p.relative_to(tmp_path).as_posix() for p in result)
     assert rel == ["common/a.py"]
+
+
+def _write_enrolled(tmp_path: Path, patterns: list[str]) -> Path:
+    f = tmp_path / "scripts" / "license-headers-enrolled.txt"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text("\n".join(patterns) + "\n")
+    return f
+
+
+def test_main_check_clean_repo(tmp_path, monkeypatch):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    _write_enrolled(tmp_path, ["**"])
+    (tmp_path / "a.py").write_text(EXPECTED_HASH_HEADER + "\nx = 1\n")
+    monkeypatch.chdir(tmp_path)
+    rc = license_headers.main(["--check"])
+    assert rc == 0
+
+
+def test_main_check_dirty_repo(tmp_path, monkeypatch, capsys):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    _write_enrolled(tmp_path, ["**"])
+    (tmp_path / "a.py").write_text("x = 1\n")
+    monkeypatch.chdir(tmp_path)
+    rc = license_headers.main(["--check"])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "a.py" in out
+
+
+def test_main_fix_writes_files(tmp_path, monkeypatch):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    _write_enrolled(tmp_path, ["**"])
+    f = tmp_path / "a.py"
+    f.write_text("x = 1\n")
+    monkeypatch.chdir(tmp_path)
+    rc = license_headers.main(["--fix"])
+    assert rc == 0
+    text = f.read_text()
+    assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in text
+
+
+def test_main_list(tmp_path, monkeypatch, capsys):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    _write_enrolled(tmp_path, ["**"])
+    (tmp_path / "a.py").write_text("x = 1\n")
+    monkeypatch.chdir(tmp_path)
+    rc = license_headers.main(["--list"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "a.py" in out
+
+
+def test_main_diff(tmp_path, monkeypatch, capsys):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    _write_enrolled(tmp_path, ["**"])
+    (tmp_path / "a.py").write_text("x = 1\n")
+    monkeypatch.chdir(tmp_path)
+    rc = license_headers.main(["--diff"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in out
+    # File was not modified by --diff
+    assert (tmp_path / "a.py").read_text() == "x = 1\n"
+
+
+def test_main_modes_mutually_exclusive():
+    rc = license_headers.main(["--check", "--fix"])
+    assert rc == 2
+
+
+def test_main_requires_a_mode():
+    rc = license_headers.main([])
+    assert rc == 2
+
+
+def test_main_empty_allowlist_passes_check(tmp_path, monkeypatch):
+    """An empty enrollment file means nothing is checked — Phase A initial state."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    _write_enrolled(tmp_path, [])
+    (tmp_path / "a.py").write_text("x = 1\n")  # no header, but not enrolled
+    monkeypatch.chdir(tmp_path)
+    rc = license_headers.main(["--check"])
+    assert rc == 0
