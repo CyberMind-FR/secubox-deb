@@ -6,6 +6,7 @@ on every first-party source file. See docs/superpowers/specs/2026-05-12-license-
 """
 from __future__ import annotations
 
+import fnmatch
 import re
 import sys
 from pathlib import Path
@@ -44,6 +45,20 @@ def render_header(style: str) -> str:
         body = "".join(f"  {line}\n" for line in HEADER_LINES)
         return f"<!--\n{body}-->\n"
     raise ValueError(f"unknown comment style: {style}")
+
+
+SKIP_DIRS = frozenset({
+    "kernel-build", "redroid", "Tow-Boot",
+    "output", "cache", "backups", "apt", "repo",
+    "node_modules", ".venv", ".git", "__pycache__", "dist", "build",
+})
+
+SKIP_GLOBS = (
+    "*.min.js",
+    "*.min.css",
+    "package-lock.json",
+    "*.lock",
+)
 
 
 LANG_TABLE: dict[str, tuple[str, str]] = {
@@ -132,6 +147,53 @@ def apply(text: str, ext: str) -> str:
     style, placer_name = LANG_TABLE[ext]
     header = render_header(style)
     return _PLACERS[placer_name](header, text)
+
+
+def _is_in_scope(path: Path) -> bool:
+    """True iff `path` has an extension in LANG_TABLE and matches no skip glob."""
+    if path.suffix not in LANG_TABLE:
+        return False
+    name = path.name
+    for pat in SKIP_GLOBS:
+        if fnmatch.fnmatch(name, pat):
+            return False
+    return True
+
+
+def _matches_allowlist(rel: Path, enrolled: list[str]) -> bool:
+    """True iff `rel` matches any glob in `enrolled`."""
+    rel_str = rel.as_posix()
+    for pat in enrolled:
+        if fnmatch.fnmatch(rel_str, pat):
+            return True
+        # Allow "common/**" to match "common/a.py"
+        if pat.endswith("/**") and (
+            rel_str == pat[:-3] or rel_str.startswith(pat[:-2])
+        ):
+            return True
+    return False
+
+
+def walk(paths: list[Path], enrolled: list[str]):
+    """Yield in-scope files under each path, honoring SKIP_DIRS, SKIP_GLOBS, allowlist."""
+    for root in paths:
+        root = Path(root)
+        if root.is_file():
+            if _is_in_scope(root):
+                yield root
+            continue
+        for p in root.rglob("*"):
+            # Prune skip-dirs
+            if any(part in SKIP_DIRS for part in p.relative_to(root).parts):
+                continue
+            if not p.is_file():
+                continue
+            if not _is_in_scope(p):
+                continue
+            rel = p.relative_to(root)
+            if not _matches_allowlist(rel, enrolled):
+                continue
+            yield p
 
 
 def main(argv: list[str] | None = None) -> int:
