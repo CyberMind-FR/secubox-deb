@@ -6,3 +6,4 @@
 scripts/license-headers.py
 tests/test_license_headers.py
 .github/workflows/license-check.yml
+packages/secubox-hub/**
