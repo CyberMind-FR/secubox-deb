@@ -4,6 +4,43 @@
 ---
 ## 2026-05-12
 
+### Session 161 — Gitea repair: public routing for gitea.gk2.secubox.in (Issue #49 sub-A)
+
+**Goal:** Expose the existing Gitea LXC at `https://gitea.gk2.secubox.in/` and `ssh://git@gitea.gk2.secubox.in:2222/` without touching the LXC or its `/data/volumes/gitea/` data. Sub-project A of #49; prerequisite for the MetaBlogizer ingest + Streamlit version-pinning work.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-12-gitea-repair-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-gitea-repair.md` (10 tasks, all green)
+- Versioned configs under `packages/secubox-gitea/conf/` (nginx vhost + HAProxy snippet)
+- Live MOCHAbin: manual edit of `/etc/haproxy/haproxy.cfg` (backup `bak.gitea-repair.1778582623`) — added ACLs for `gitea.gk2.secubox.in` in `http-in` + `https-in`, added `gitea-ssh` TCP frontend on `*:2222` → `gitea_ssh` backend → `10.100.0.40:2222`. NOT via `haproxyctl` (#91 still blocks that).
+- Live MOCHAbin: installed `/etc/nginx/sites-available/gitea.conf` + symlink in `sites-enabled/`. `nginx -t` clean.
+- `secubox-gitea` `postinst` reproduces all routing idempotently with rollback on `-c` / `-t` failure.
+- Smoke test `tests/scripts/test-gitea-routing.sh` — 4/4 mandatory gates pass.
+
+**Discovered + fixed mid-execution:**
+- Gitea's internal SSH listens on `:2222` inside the LXC, not `:22`. The initial HAProxy backend at `10.100.0.40:22` opened TCP fine but the LXC's host sshd refused. Patched both live `haproxy.cfg` and the versioned `haproxy.snippet` (commit `279a6bba`).
+
+**Commits:**
+- `cc54fdd5` — feat(gitea): Versioned nginx vhost config
+- `56ff3200` — feat(gitea): Versioned HAProxy snippet
+- `279a6bba` — fix(gitea): HAProxy backend points to Gitea internal SSH on :2222
+- `f4258291` — feat(gitea): postinst installs routing (idempotent, with rollback)
+- `0373579d` — test(gitea): Smoke test for the 5 validation gates
+
+**Live verification:**
+```
+$ curl -sI https://gitea.gk2.secubox.in/
+HTTP/1.1 200 OK
+$ curl -s https://gitea.gk2.secubox.in/api/v1/version
+{"version":"1.22.0"}
+$ ssh -p 2222 git@gitea.gk2.secubox.in
+git@gitea.gk2.secubox.in: Permission denied (publickey)   # expected — proves SSH server responded
+```
+
+**Next:** issue #49 sub-project B (MetaBlogizer → Gitea ingest, 166 sites).
+
+---
+
 ### Session 160 — secubox apt + clone: validate against live repo (Issue #89)
 
 **Goal:** Audit the 2026-05-11 plan vs the implemented Go CLI; close any genuine gap; end-to-end against `https://apt.secubox.in/` (commissioned in Session 152 / Issue #80).

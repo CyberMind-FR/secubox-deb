@@ -1,5 +1,29 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 160)*
+*Mis à jour : 2026-05-12 (Session 161)*
+
+---
+
+## ✅ Session 161: Gitea repair — public routing for gitea.gk2.secubox.in (Issue #49 sub-A)
+
+### Objective
+Expose the existing Gitea LXC at `https://gitea.gk2.secubox.in/` (web) and `ssh://git@gitea.gk2.secubox.in:2222/` (git SSH), reusing the wildcard cert and existing data volumes on `/data/volumes/gitea/`. Prerequisite for #49 sub-projects B–F (MetaBlogizer → Gitea ingest, Streamlit version pinning, version dashboard).
+
+### Completed
+- Brainstormed design → `docs/superpowers/specs/2026-05-12-gitea-repair-design.md`
+- Plan (10 tasks) → `docs/superpowers/plans/2026-05-12-gitea-repair.md`
+- Versioned nginx vhost (`packages/secubox-gitea/conf/gitea.nginx.conf`)
+- Versioned HAProxy snippet (`packages/secubox-gitea/conf/haproxy.snippet`)
+- Live: backup + manual edit of `/etc/haproxy/haproxy.cfg` (added `gitea.gk2.secubox.in` ACLs to `http-in` + `https-in`, new `gitea-ssh` TCP frontend on `*:2222` → `10.100.0.40:2222`). **No `haproxyctl`** — see #91.
+- Live: installed `/etc/nginx/sites-available/gitea.conf` + enabled symlink
+- Idempotent `postinst` reproduces all routing on fresh install with rollback on `nginx -t` / `haproxy -c` failure
+- Smoke test `tests/scripts/test-gitea-routing.sh` — 4/4 gates pass (1 optional skipped)
+
+### Bug discovered + fixed
+- HAProxy backend initially set to `:22`. Gitea's internal SSH actually listens on `:2222` inside the LXC. Fixed both live and in the versioned snippet (commit `279a6bba`).
+
+### Followups
+- #91 — `haproxyctl vhost add` regression (must be fixed before any `haproxyctl` use)
+- #49 sub-project B — MetaBlogizer → Gitea ingest (166 sites)
 
 ---
 
