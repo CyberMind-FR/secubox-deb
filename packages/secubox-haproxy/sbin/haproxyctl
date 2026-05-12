@@ -31,6 +31,32 @@ load_config() {
     fi
 }
 
+# Fetch the strict-regex pattern from the secubox-haproxy API.
+# Fallback: read /etc/default/secubox directly if the API socket is unreachable.
+_fetch_webui_regex() {
+    local sock=/run/secubox/haproxy.sock
+    local regex
+    if [[ -S "$sock" ]] && \
+       regex=$(curl -sf --max-time 2 --unix-socket "$sock" \
+                    http://localhost/webui/admin-domain 2>/dev/null \
+                | jq -r '.regex // empty' 2>/dev/null) && \
+       [[ -n "$regex" ]]; then
+        echo "$regex"; return 0
+    fi
+    if [[ -f /etc/default/secubox ]]; then
+        # shellcheck source=/dev/null
+        . /etc/default/secubox
+        if [[ -n "${SECUBOX_HOSTNAME:-}" ]]; then
+            local suffix="${SECUBOX_DOMAIN_SUFFIX:-secubox.in}"
+            local admin="admin.${SECUBOX_HOSTNAME}.${suffix}"
+            # Escape literal dots for HAProxy regex
+            echo "^${admin//./\\.}\$"
+            return 0
+        fi
+    fi
+    return 1
+}
+
 # Check container status
 lxc_running() { lxc-info -n "$LXC_NAME" -s 2>/dev/null | grep -q "RUNNING"; }
 lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
@@ -591,14 +617,33 @@ frontend http-in
     mode http
 EOF
 
+    if webui_regex=$(_fetch_webui_regex); then
+        cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+    # WebUI Obfuscation (issue #44) — strict regex from /etc/default/secubox
+    acl is_webui_admin hdr(host) -m reg $webui_regex
+    use_backend webui_direct if is_webui_admin
+EOF
+    fi
+
     # Add ACLs and use_backend rules for vhosts
     if [ -f "$CONF_PATH" ]; then
+        # Hoisted: source /etc/default/secubox once before the http-in loop
+        _admin_skip_domain=""
+        if [ -f /etc/default/secubox ]; then
+            # shellcheck source=/dev/null
+            . /etc/default/secubox
+            if [ -n "${SECUBOX_HOSTNAME:-}" ]; then
+                _admin_skip_domain="admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX:-secubox.in}"
+            fi
+        fi
         grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
             local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
             local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
             local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
+            # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
+            [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ] && continue
 
             [ "$enabled" = "1" ] && [ -n "$domain" ] && {
                 echo "    acl host_$name hdr(host) -i $domain"
@@ -619,8 +664,25 @@ frontend https-in
     mode http
 EOF
 
+    if webui_regex=$(_fetch_webui_regex); then
+        cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+    # WebUI Obfuscation (issue #44) — strict regex from /etc/default/secubox
+    acl is_webui_admin hdr(host) -m reg $webui_regex
+    use_backend webui_direct if is_webui_admin
+EOF
+    fi
+
     # HTTPS vhost rules (same pattern)
     if [ -f "$CONF_PATH" ]; then
+        # Hoisted: source /etc/default/secubox once before the https-in loop
+        _admin_skip_domain=""
+        if [ -f /etc/default/secubox ]; then
+            # shellcheck source=/dev/null
+            . /etc/default/secubox
+            if [ -n "${SECUBOX_HOSTNAME:-}" ]; then
+                _admin_skip_domain="admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX:-secubox.in}"
+            fi
+        fi
         grep '^\[vhosts\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[vhosts\.//;s/\]//')
             local section=$(sed -n "/^\[vhosts\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
@@ -628,6 +690,8 @@ EOF
             local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
             local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
+            # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
+            [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ] && continue
 
             [ "$enabled" = "1" ] && [ "$ssl" = "1" ] && [ -n "$domain" ] && {
                 echo "    acl host_$name hdr(host) -i $domain"
@@ -656,6 +720,16 @@ backend mitmproxy_inspector
     server waf ${waf_ip}:${waf_port} check
 
 EOF
+
+    # WebUI direct backend (issue #44 — for the strict-regex ACL above)
+    # Only emit if SECUBOX_HOSTNAME is set (i.e., the strict ACL was injected).
+    if _fetch_webui_regex >/dev/null 2>&1; then
+        cat >> "$CONFIG_DIR/haproxy.cfg" << 'EOF'
+backend webui_direct
+    mode http
+    server srv0 127.0.0.1:9080 check
+EOF
+    fi
 
     # User backends
     if [ -f "$CONF_PATH" ]; then

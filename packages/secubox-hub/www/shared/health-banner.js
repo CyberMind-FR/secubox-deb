@@ -15,7 +15,14 @@
 (function() {
     'use strict';
 
-    const VERSION = '1.2.1';
+    const VERSION = '1.3.0';
+    const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
+        || '/api/v1/metrics/visitor-origin';
+    const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
+        || '/api/v1/metrics/live-hosts';
+    const CERT_STATUS_API    = window.SECUBOX_CERT_STATUS_API
+        || '/api/v1/metrics/cert-status';
+    const LIVE_REFRESH_INTERVAL = 30000; // 30 s
     // Use global config if injected by CDN/WAF, otherwise use relative path
     const HEALTH_API = window.SECUBOX_HEALTH_API || '/api/v1/metrics/health/summary';
     const REFRESH_INTERVAL = 30000; // 30s
@@ -285,6 +292,93 @@
         `;
 
         return { banner, trigger };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LIVE PANEL — VisitorOrigin / LiveHosts / CertStatus (issue #92)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function sectionContainer(id) {
+        let el = document.getElementById(id);
+        if (!el) {
+            el = document.createElement('div');
+            el.id = id;
+            el.className = 'sbx-live-section';
+            const banner = document.getElementById('health-banner');
+            if (banner) banner.appendChild(el);
+        }
+        return el;
+    }
+
+    function hideSection(id) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    }
+
+    function showSection(id) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = '';
+    }
+
+    function renderVisitorOrigin(data) {
+        if (!data || !data.enabled || !data.entries || !data.entries.length) {
+            hideSection('sbx-visitor-origin');
+            return;
+        }
+        const el = sectionContainer('sbx-visitor-origin');
+        const rows = data.entries.map(e =>
+            `<div class="sbx-row"><span class="sbx-asn">AS${e.asn}</span> <span class="sbx-org">${e.org}</span><span class="sbx-count">${e.count}</span></div>`
+        ).join('');
+        el.innerHTML = `<div class="sbx-section-title">VisitorOrigin · ${data.window_minutes}min · top ${data.entries.length}</div>${rows}`;
+        showSection('sbx-visitor-origin');
+    }
+
+    function renderLiveHosts(data) {
+        if (!data || !data.enabled || !data.entries || !data.entries.length) {
+            hideSection('sbx-live-hosts');
+            return;
+        }
+        const el = sectionContainer('sbx-live-hosts');
+        const rows = data.entries.map(e =>
+            `<div class="sbx-row"><span class="sbx-host">${e.host}</span><span class="sbx-count">${e.count}</span></div>`
+        ).join('');
+        el.innerHTML = `<div class="sbx-section-title">LiveHosts · ${data.window_minutes}min · top ${data.entries.length}</div>${rows}`;
+        showSection('sbx-live-hosts');
+    }
+
+    function renderCertStatus(data) {
+        if (!data || !data.enabled || !data.summary || !data.summary.total) {
+            hideSection('sbx-cert-status');
+            return;
+        }
+        const el = sectionContainer('sbx-cert-status');
+        const s = data.summary;
+        const next = data.next_renewal
+            ? `<div class="sbx-row">next renewal: ${data.next_renewal.host} · ${data.next_renewal.days}d</div>`
+            : '';
+        el.innerHTML =
+            `<div class="sbx-section-title">CertStatus · ${s.total} total</div>` +
+            `<div class="sbx-row">✓ ${s.valid} valid · ⚠ ${s.expiring_soon} soon · ✗ ${s.expiring_critical + s.expired} critical</div>` +
+            next;
+        showSection('sbx-cert-status');
+    }
+
+    async function pollLivePanel() {
+        const fetchSafe = async (url) => {
+            try {
+                const r = await fetch(url, { credentials: 'omit' });
+                if (!r.ok) return null;
+                return await r.json();
+            } catch (e) { return null; }
+        };
+        const [vo, lh, cs] = await Promise.all([
+            fetchSafe(VISITOR_ORIGIN_API),
+            fetchSafe(LIVE_HOSTS_API),
+            fetchSafe(CERT_STATUS_API),
+        ]);
+        if (vo) renderVisitorOrigin(vo); else hideSection('sbx-visitor-origin');
+        if (lh) renderLiveHosts(lh);     else hideSection('sbx-live-hosts');
+        if (cs) renderCertStatus(cs);    else hideSection('sbx-cert-status');
     }
 
     function injectBannerStyles() {
@@ -653,6 +747,11 @@
                     margin-bottom: 60vh;
                 }
             }
+            .sbx-live-section { padding: 6px 10px; border-top: 1px solid var(--text-muted, #6b6b7a); font-size: 11px; line-height: 1.4; }
+            .sbx-section-title { font-weight: 600; color: var(--gold-hermetic, #c9a84c); margin-bottom: 2px; }
+            .sbx-row { display: flex; justify-content: space-between; gap: 8px; }
+            .sbx-row .sbx-count { color: var(--cyber-cyan, #00d4ff); font-variant-numeric: tabular-nums; }
+            .sbx-row .sbx-asn { color: var(--matrix-green, #00ff41); }
         `;
         document.head.appendChild(style);
     }
@@ -820,6 +919,8 @@
     function init() {
         // Inject styles
         injectBannerStyles();
+        pollLivePanel();
+        setInterval(pollLivePanel, LIVE_REFRESH_INTERVAL);
 
         // Create banner and trigger
         const { banner, trigger } = createBannerElement();
