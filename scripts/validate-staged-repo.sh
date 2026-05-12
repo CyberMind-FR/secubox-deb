@@ -52,13 +52,14 @@ if [[ -z "${SKIP_CHROOT:-}" ]]; then
         | sudo tee "$CHROOT/etc/apt/sources.list.d/secubox.list" >/dev/null
       sudo mkdir -p "$CHROOT$OUT"
       sudo mount --bind "$OUT" "$CHROOT$OUT"
-      local_ok=1
-      if ! sudo chroot "$CHROOT" apt-get update 2>&1 | tee "$REPO/output/chroot-update.log" \
-            | grep -qE "Get.*$SUITE|file:.*$SUITE"; then
-        local_ok=0
-      fi
+      # Capture log first; check separately so pipefail on apt-get's exit
+      # status (it may warn about file:// or unsigned packages) doesn't mask
+      # a successful repo-discovery check.
+      sudo chroot "$CHROOT" apt-get update 2>&1 | tee "$REPO/output/chroot-update.log" >/dev/null || true
       sudo umount "$CHROOT$OUT"
-      [[ $local_ok -eq 1 ]] || fail "chroot apt-get update did not see SecuBox repo (see output/chroot-update.log)"
+      if ! grep -qE "Get.*$SUITE|file:.*$SUITE" "$REPO/output/chroot-update.log"; then
+        fail "chroot apt-get update did not see SecuBox repo (see output/chroot-update.log)"
+      fi
       log "  chroot apt-get update OK"
     fi
   fi
