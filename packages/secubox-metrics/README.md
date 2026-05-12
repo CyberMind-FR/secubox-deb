@@ -34,6 +34,36 @@ Configuration file: `/etc/secubox/metrics.toml`
 - `GET /api/v1/metrics/status` - Module status
 - `GET /api/v1/metrics/health` - Health check
 
+## Endpoints — live panel (issue #92)
+
+Three public endpoints feed the health-banner live panel. All are
+unauthenticated, CORS-open, and `Cache-Control: public, max-age=300`.
+
+| Method | Path                              | Schema (high-level)                                  |
+|--------|-----------------------------------|------------------------------------------------------|
+| GET    | `/api/v1/metrics/visitor-origin`  | `{enabled, window_minutes, entries:[{asn,org,count}]}`|
+| GET    | `/api/v1/metrics/live-hosts`      | `{enabled, window_minutes, entries:[{host,count}]}`   |
+| GET    | `/api/v1/metrics/cert-status`     | `{enabled, summary, next_renewal, warnings}`          |
+
+Config blocks live in `/etc/secubox/secubox.conf`:
+
+```toml
+[visitor_origin]
+enabled = true
+min_count = 5
+
+[live_hosts]
+enabled = true
+
+[cert_status]
+enabled = true
+warn_days = 30
+```
+
+MaxMind GeoLite2-ASN refresh: drop a license file at
+`/etc/secubox/secrets/maxmind.conf` (mode 0600, owner `secubox`).
+The `secubox-geoipupdate.timer` runs weekly; no key => no-op.
+
 ## License
 
 MIT License - CyberMind © 2024-2026
