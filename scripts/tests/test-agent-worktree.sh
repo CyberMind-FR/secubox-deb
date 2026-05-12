@@ -248,6 +248,24 @@ test_list_shows_worktree() {
   assert_contains "$out" "$wt/3-l"
 }
 
+test_sync_clean_rebase() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_9_TITLE="Sync"; export GH_MOCK_ISSUE_9_LABELS=""
+  export WORKTREE_ROOT="$wt"
+  (cd "$repo" && bash "$SCRIPT" start --issue 9) >/dev/null
+  # Advance origin/master by one commit
+  (cd "$repo" && echo more >> README.md && git commit -aq -m "more" && \
+     git update-ref refs/remotes/origin/master HEAD~0)
+  # Move HEAD back so origin/master is "ahead" of the worktree branch
+  (cd "$repo" && git update-ref refs/remotes/origin/master HEAD)
+  local rc
+  (cd "$wt/9-sync" && bash "$SCRIPT" sync) >/dev/null 2>&1 ; rc=$?
+  if [[ $rc -ne 0 ]]; then echo "expected rc=0 got $rc" >&2; return 1; fi
+}
+
 # Auto-discover and run
 mapfile -t tests < <(declare -F | awk '{print $3}' | grep '^test_')
 for t in "${tests[@]}"; do run_test "$t"; done
