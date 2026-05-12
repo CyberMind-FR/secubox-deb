@@ -1,19 +1,18 @@
 """Tests for the three new config helpers in secubox_core.config."""
 from pathlib import Path
-from unittest.mock import patch
 
 import secubox_core.config as cfg
 
 
-def _reload_with(monkeypatch, toml_text: str):
+def _reload_with(monkeypatch, tmp_path: Path, toml_text: str):
     monkeypatch.setattr(cfg, "_CONFIG", None)
-    fake = Path("/tmp/_secubox_test_conf.toml")
+    fake = tmp_path / "_secubox_test_conf.toml"
     fake.write_text(toml_text)
     monkeypatch.setattr(cfg, "_CONF_PATHS", [fake])
 
 
-def test_visitor_origin_defaults_when_absent(monkeypatch):
-    _reload_with(monkeypatch, "[global]\nhostname='test'\n")
+def test_visitor_origin_defaults_when_absent(monkeypatch, tmp_path):
+    _reload_with(monkeypatch, tmp_path, "[global]\nhostname='test'\n")
     out = cfg.get_visitor_origin_config()
     assert out["enabled"] is False
     assert out["window_minutes"] == 60
@@ -25,21 +24,21 @@ def test_visitor_origin_defaults_when_absent(monkeypatch):
     assert out["nft_family"] == "inet"
 
 
-def test_visitor_origin_overrides(monkeypatch):
+def test_visitor_origin_overrides(monkeypatch, tmp_path):
     _reload_with(
         monkeypatch,
+        tmp_path,
         "[visitor_origin]\nenabled=true\nmin_count=2\ntop_n=3\n",
     )
     out = cfg.get_visitor_origin_config()
     assert out["enabled"] is True
     assert out["min_count"] == 2
     assert out["top_n"] == 3
-    # Other keys keep defaults
     assert out["window_minutes"] == 60
 
 
-def test_live_hosts_defaults(monkeypatch):
-    _reload_with(monkeypatch, "[global]\nhostname='test'\n")
+def test_live_hosts_defaults(monkeypatch, tmp_path):
+    _reload_with(monkeypatch, tmp_path, "[global]\nhostname='test'\n")
     out = cfg.get_live_hosts_config()
     assert out["enabled"] is False
     assert out["window_minutes"] == 60
@@ -48,8 +47,8 @@ def test_live_hosts_defaults(monkeypatch):
     assert out["frontend_filter"] == "*"
 
 
-def test_cert_status_defaults(monkeypatch):
-    _reload_with(monkeypatch, "[global]\nhostname='test'\n")
+def test_cert_status_defaults(monkeypatch, tmp_path):
+    _reload_with(monkeypatch, tmp_path, "[global]\nhostname='test'\n")
     out = cfg.get_cert_status_config()
     assert out["enabled"] is False
     assert out["letsencrypt_live_dir"] == "/etc/letsencrypt/live"
