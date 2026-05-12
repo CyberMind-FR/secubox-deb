@@ -10,8 +10,19 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 PACKAGES_DIR="${REPO_DIR}/packages"
 OUTPUT_DIR="${REPO_DIR}/output/debs"
 
-SUITE="${1:-bookworm}"
-ARCH="${2:-$(dpkg --print-architecture)}"
+# Parse positional + flags
+SUITE="${1:-bookworm}"; shift || true
+ARCH="${1:-$(dpkg --print-architecture)}"; shift || true
+
+FILTER=""
+DRY_RUN=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --filter)   FILTER="$2"; shift 2 ;;
+    --dry-run)  DRY_RUN=1; shift ;;
+    *)          err "Unknown flag: $1"; exit 2 ;;
+  esac
+done
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
