@@ -59,7 +59,7 @@ saved_args=( "$@" )
 set --
 log "Pre-flight 1: SSH path"
 ssh_preflight >>"$LOG" 2>&1 || fail_pre "SSH preflight failed (run scripts/lib/gitea-ssh-preflight.sh --enrol if needed)"
-set -- "${saved_args[@]:-}"
+set -- "${saved_args[@]}"
 
 log "Pre-flight 2: push-create probe"
 probe_out=$(ssh "root@$LXC_HOST" "$(cat <<'EOPROBE'
