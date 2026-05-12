@@ -139,9 +139,13 @@
             try {
                 const res = await fetch(API + path, { headers: headers() });
                 if (res.status === 401) { window.location = '/login.html'; return null; }
-                if (!res.ok) return null;
-                return res.json();
-            } catch { return null; }
+                const ct = res.headers.get('content-type') || '';
+                if (!res.ok || !ct.includes('application/json')) {
+                    console.warn('api()', path, 'status=' + res.status, 'content-type=' + ct);
+                    return null;
+                }
+                return await res.json();
+            } catch (e) { console.warn('api()', path, 'threw', e); return null; }
         }
 
         function relativeTime(iso) {
