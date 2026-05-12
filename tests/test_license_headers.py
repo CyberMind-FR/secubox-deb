@@ -31,3 +31,41 @@ EXPECTED_HASH_HEADER = (
 
 def test_render_header_hash():
     assert license_headers.render_header("hash") == EXPECTED_HASH_HEADER
+
+
+EXPECTED_SLASH_HEADER = (
+    "// SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
+    "// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>\n"
+    "// Source-Disclosed License — All rights reserved except as expressly granted.\n"
+    "// See LICENCE-CMSD-1.0.md for terms.\n"
+)
+
+EXPECTED_BLOCK_HEADER = (
+    "/*\n"
+    " * SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
+    " * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>\n"
+    " * Source-Disclosed License — All rights reserved except as expressly granted.\n"
+    " * See LICENCE-CMSD-1.0.md for terms.\n"
+    " */\n"
+)
+
+EXPECTED_HTML_HEADER = (
+    "<!--\n"
+    "  SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
+    "  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>\n"
+    "  Source-Disclosed License — All rights reserved except as expressly granted.\n"
+    "  See LICENCE-CMSD-1.0.md for terms.\n"
+    "-->\n"
+)
+
+
+def test_render_header_slash():
+    assert license_headers.render_header("slash") == EXPECTED_SLASH_HEADER
+
+
+def test_render_header_block():
+    assert license_headers.render_header("block") == EXPECTED_BLOCK_HEADER
+
+
+def test_render_header_html():
+    assert license_headers.render_header("html") == EXPECTED_HTML_HEADER
