@@ -234,6 +234,20 @@ test_start_dry_run_no_side_effects() {
   return 0
 }
 
+test_list_shows_worktree() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_3_TITLE="L"; export GH_MOCK_ISSUE_3_LABELS=""
+  export WORKTREE_ROOT="$wt"
+  (cd "$repo" && bash "$SCRIPT" start --issue 3) >/dev/null
+  local out
+  out=$(cd "$repo" && bash "$SCRIPT" list)
+  assert_contains "$out" "feature/3-l"
+  assert_contains "$out" "$wt/3-l"
+}
+
 # Auto-discover and run
 mapfile -t tests < <(declare -F | awk '{print $3}' | grep '^test_')
 for t in "${tests[@]}"; do run_test "$t"; done

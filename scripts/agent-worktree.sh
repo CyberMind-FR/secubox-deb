@@ -108,7 +108,37 @@ cmd_start() {
   echo "worktree: $dir"
   echo "next:     cd $dir"
 }
-cmd_list()   { echo "list: not implemented"  >&2 ; return 1; }
+cmd_list() {
+  local porcelain
+  porcelain=$("$GIT_BIN" worktree list --porcelain)
+  local path="" branch=""
+  while IFS= read -r line; do
+    case "$line" in
+      worktree\ *) path="${line#worktree }" ;;
+      branch\ refs/heads/*)
+        branch="${line#branch refs/heads/}"
+        _list_emit_row "$path" "$branch"
+        path=""; branch="" ;;
+      "") path=""; branch="" ;;
+    esac
+  done <<< "$porcelain"
+}
+
+_list_emit_row() {
+  local path="$1" branch="$2"
+  local tag=""
+  if [[ "$path" != "$WORKTREE_ROOT"* ]]; then tag="[primary] "; fi
+  local ahead=0 behind=0
+  if "$GIT_BIN" -C "$path" rev-parse --verify -q origin/master >/dev/null 2>&1; then
+    read -r behind ahead < <(
+      "$GIT_BIN" -C "$path" rev-list --left-right --count "origin/master...$branch" 2>/dev/null \
+        | awk '{print $1, $2}'
+    )
+  fi
+  local state="clean"
+  if ! "$GIT_BIN" -C "$path" diff --quiet HEAD -- 2>/dev/null; then state="dirty"; fi
+  printf '%s%s  %s  ahead:%s behind:%s %s\n' "$tag" "$branch" "$path" "${ahead:-0}" "${behind:-0}" "$state"
+}
 cmd_sync()   { echo "sync: not implemented"  >&2 ; return 1; }
 cmd_finish() { echo "finish: not implemented" >&2; return 1; }
 cmd_clean()  { echo "clean: not implemented" >&2 ; return 1; }
