@@ -148,10 +148,48 @@ def _lxc_exists() -> bool:
     return Path(f"/var/lib/lxc/{LXC_NAME}").exists()
 
 
+APPS_PATH = "/srv/streamlit/apps"
+
+
+def _read_deploy_metadata(app_name: str) -> dict:
+    """Read .deploy.json for an app; return empty dict if absent or invalid."""
+    path = Path(APPS_PATH) / app_name / ".deploy.json"
+    try:
+        with path.open() as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError, OSError):
+        return {}
+
+
+def _git_describe_tag(app_name: str) -> str | None:
+    """Fallback: read the current tag via `git describe --tags --exact-match`."""
+    app_dir = Path(APPS_PATH) / app_name
+    if not (app_dir / ".git").exists():
+        return None
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(app_dir), "describe", "--tags", "--exact-match"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if out.returncode == 0:
+            return out.stdout.strip() or None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
 def _get_apps() -> List[dict]:
-    """Get list of apps from streamlitctl."""
+    """Get list of apps from streamlitctl, enriched with current_tag + deployed_at."""
     result = _run_ctl("app", "list")
-    return result.get("apps", [])
+    apps = result.get("apps", [])
+    for app in apps:
+        name = app.get("name")
+        if not name:
+            continue
+        meta = _read_deploy_metadata(name)
+        app["current_tag"] = meta.get("tag") or _git_describe_tag(name)
+        app["deployed_at"] = meta.get("deployed_at")
+    return apps
 
 
 def _get_instances() -> List[dict]:
