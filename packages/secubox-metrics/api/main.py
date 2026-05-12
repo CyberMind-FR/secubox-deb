@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -32,6 +33,15 @@ app = FastAPI(
     title="SecuBox Metrics Dashboard",
     description="Real-time system metrics with caching",
     version="1.0.0"
+)
+
+# CORS middleware for cross-origin health banner requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Health banner injected on any domain
+    allow_credentials=False,
+    allow_methods=["GET"],
+    allow_headers=["*"],
 )
 
 # Cache configuration
