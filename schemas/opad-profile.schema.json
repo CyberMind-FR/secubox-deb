@@ -1,0 +1,365 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://secubox.in/schemas/opad-profile.schema.json",
+  "title": "OPAD Profile Configuration",
+  "description": "JSON Schema for SecuBox-Deb v2.4.0 OPAD (Observe-Perturb-Apply-Decide) 3-prong configuration profile",
+  "type": "object",
+  "required": ["version", "mode", "observation", "injection", "policy"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Schema version (semver)"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["observe", "enforce"],
+      "description": "Global operation mode: observe (passive) or enforce (active)"
+    },
+    "observation": {
+      "type": "object",
+      "description": "Broche 1: Observation configuration",
+      "required": ["interfaces", "protocols"],
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "description": "Network interfaces to observe",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+$"
+          },
+          "minItems": 1
+        },
+        "bpf_filter": {
+          "type": "string",
+          "description": "Optional BPF filter for packet capture",
+          "default": ""
+        },
+        "protocols": {
+          "type": "object",
+          "description": "Protocol observation configuration",
+          "properties": {
+            "dns": {
+              "type": "boolean",
+              "default": true
+            },
+            "dhcp": {
+              "type": "boolean",
+              "default": true
+            },
+            "arp": {
+              "type": "boolean",
+              "default": true
+            },
+            "tcp": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "fingerprinting": {
+          "type": "object",
+          "description": "Device fingerprinting configuration",
+          "properties": {
+            "dhcp_fingerprint": {
+              "type": "boolean",
+              "default": true
+            },
+            "ja3": {
+              "type": "boolean",
+              "description": "TLS JA3 fingerprinting",
+              "default": false
+            },
+            "ja4": {
+              "type": "boolean",
+              "description": "TLS JA4 fingerprinting",
+              "default": false
+            },
+            "user_agent": {
+              "type": "boolean",
+              "description": "HTTP User-Agent parsing",
+              "default": false
+            }
+          }
+        }
+      }
+    },
+    "injection": {
+      "type": "object",
+      "description": "Broche 2: Injection (perturbation) configuration",
+      "properties": {
+        "dns_race": {
+          "$ref": "#/definitions/dns_race_config"
+        },
+        "dhcp_race": {
+          "$ref": "#/definitions/dhcp_race_config"
+        },
+        "rst_inject": {
+          "$ref": "#/definitions/rst_inject_config"
+        },
+        "arp_redirect": {
+          "$ref": "#/definitions/arp_redirect_config"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "description": "Broche 3: Policy configuration",
+      "required": ["default_action"],
+      "properties": {
+        "default_action": {
+          "type": "string",
+          "enum": ["allow", "observe", "disrupt"],
+          "description": "Default action for unmatched traffic"
+        },
+        "rules": {
+          "type": "array",
+          "description": "Policy rules (processed by priority)",
+          "items": {
+            "$ref": "#/definitions/policy_rule"
+          }
+        },
+        "escalation": {
+          "$ref": "#/definitions/escalation_config"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "dns_race_config": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "target_success_rate": {
+          "type": "number",
+          "minimum": 0.9,
+          "maximum": 1.0,
+          "default": 0.99,
+          "description": "Target success rate for winning DNS race (0.9-1.0)"
+        },
+        "modes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["nxdomain", "sinkhole", "redirect_captive"]
+          },
+          "uniqueItems": true,
+          "description": "Enabled DNS race modes"
+        },
+        "sinkhole_ip": {
+          "type": "string",
+          "format": "ipv4",
+          "description": "IP address for sinkhole mode",
+          "default": "127.0.0.1"
+        },
+        "ttl": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600,
+          "default": 60,
+          "description": "TTL for injected DNS responses (seconds)"
+        }
+      }
+    },
+    "dhcp_race_config": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "target_success_rate": {
+          "type": "number",
+          "minimum": 0.9,
+          "maximum": 1.0,
+          "default": 0.95,
+          "description": "Target success rate for winning DHCP race"
+        },
+        "quarantine_pool": {
+          "type": "object",
+          "required": ["start", "end", "gateway"],
+          "properties": {
+            "start": {
+              "type": "string",
+              "format": "ipv4",
+              "description": "Start of quarantine IP pool"
+            },
+            "end": {
+              "type": "string",
+              "format": "ipv4",
+              "description": "End of quarantine IP pool"
+            },
+            "lease_time": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 86400,
+              "default": 300,
+              "description": "Lease time in seconds"
+            },
+            "gateway": {
+              "type": "string",
+              "format": "ipv4",
+              "description": "Gateway IP for quarantine network"
+            }
+          }
+        }
+      }
+    },
+    "rst_inject_config": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "target_success_rate": {
+          "type": "number",
+          "minimum": 0.85,
+          "maximum": 1.0,
+          "default": 0.90,
+          "description": "Target success rate for RST injection (min 0.85)"
+        },
+        "double_ended": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send RST to both client and server"
+        },
+        "timing_window_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10,
+          "description": "Timing window for RST injection (milliseconds)"
+        }
+      }
+    },
+    "arp_redirect_config": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "target_success_rate": {
+          "type": "number",
+          "minimum": 0.95,
+          "maximum": 1.0,
+          "default": 0.98,
+          "description": "Target success rate for ARP redirection (min 0.95)"
+        },
+        "refresh_interval_s": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 300,
+          "default": 60,
+          "description": "ARP table refresh interval (seconds)"
+        },
+        "captive_mac": {
+          "type": "string",
+          "pattern": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$",
+          "description": "MAC address for captive portal gateway"
+        }
+      }
+    },
+    "policy_rule": {
+      "type": "object",
+      "required": ["id", "priority", "action"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique rule identifier"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999,
+          "description": "Rule priority (0=highest, 9999=lowest)"
+        },
+        "match": {
+          "type": "object",
+          "description": "Match conditions (all conditions are AND-ed)",
+          "properties": {
+            "source_mac": {
+              "type": "string",
+              "pattern": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$",
+              "description": "Source MAC address"
+            },
+            "dest_domain": {
+              "type": "string",
+              "description": "Destination domain (supports wildcards: *.example.com)"
+            },
+            "dest_ip": {
+              "type": "string",
+              "description": "Destination IP address or CIDR"
+            },
+            "protocol": {
+              "type": "string",
+              "enum": ["tcp", "udp", "icmp", "any"],
+              "default": "any"
+            },
+            "mind_score_above": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Trigger if MIND adversarial score above threshold"
+            },
+            "device_authorized": {
+              "type": "boolean",
+              "description": "Match only authorized/unauthorized devices"
+            }
+          }
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "observe",
+            "dns_nxdomain",
+            "dns_sinkhole",
+            "dns_redirect",
+            "dhcp_quarantine",
+            "tcp_rst",
+            "arp_redirect"
+          ],
+          "description": "Action to take on match"
+        },
+        "log_level": {
+          "type": "string",
+          "enum": ["debug", "info", "warning", "error"],
+          "default": "info",
+          "description": "Logging level for this rule"
+        }
+      }
+    },
+    "escalation_config": {
+      "type": "object",
+      "description": "Policy escalation configuration",
+      "properties": {
+        "allow_in_path": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow temporary escalation to allow mode"
+        },
+        "require_explicit_consent": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require user consent for escalation"
+        },
+        "auto_revert_after_s": {
+          "type": "integer",
+          "minimum": 60,
+          "default": 300,
+          "description": "Auto-revert escalation after N seconds (min 60)"
+        },
+        "audit_all_escalations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Log all escalation events to audit log"
+        }
+      }
+    }
+  }
+}
