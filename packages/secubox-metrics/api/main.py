@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -668,13 +668,22 @@ def get_ssl_status(domain: str) -> dict:
 
 
 @app.get("/api/v1/metrics/health/summary")
-async def get_health_summary():
+async def get_health_summary(request: Request):
     """
     Health summary for the global health banner.
     Returns aggregated health score and module statuses.
     No auth required for banner display.
     """
-    return build_health_summary()
+    summary = build_health_summary()
+
+    # Add SSL certificate status for the current domain
+    host = request.headers.get("host", "").split(":")[0]  # Remove port if present
+    if host:
+        summary["ssl"] = get_ssl_status(host)
+    else:
+        summary["ssl"] = None
+
+    return summary
 
 if __name__ == "__main__":
     import uvicorn
