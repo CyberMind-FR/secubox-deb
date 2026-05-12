@@ -68,3 +68,9 @@ backups/*.img.xz
 /output/ingest-full-run.out
 /output/broken-repos.txt
 /output/test-ingest-*/
+
+# Streamlit ingest artifacts (regenerated each run)
+/output/streamlit-ingest-report.json
+/output/streamlit-ingest.log
+/output/streamlit-ingest-full.out
+/output/broken-streamlit-repos.txt
