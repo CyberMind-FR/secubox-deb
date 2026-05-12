@@ -146,10 +146,34 @@ def _load_site_json(site_dir):
     return doc
 
 
+# In-memory cache for load_sites(). 166 sites × (enrich+validate+du -sh)
+# is ~5-10s per call; the dashboard polls 3 endpoints every 60s and the
+# single uvicorn worker queues them. Cache for 30s, invalidated by
+# _invalidate_sites_cache() in every write path (POST/DELETE/publish).
+_SITES_CACHE: Optional[List[dict]] = None
+_SITES_CACHE_AT: float = 0.0
+_SITES_CACHE_TTL: float = 30.0
+
+
+def _invalidate_sites_cache() -> None:
+    """Drop the cached site list. Call after any site directory change."""
+    global _SITES_CACHE, _SITES_CACHE_AT
+    _SITES_CACHE = None
+    _SITES_CACHE_AT = 0.0
+
+
 def load_sites() -> List[dict]:
-    """Load all sites from directory"""
+    """Load all sites from directory (cached, 30s TTL)."""
+    global _SITES_CACHE, _SITES_CACHE_AT
+    import time
+    now = time.monotonic()
+    if _SITES_CACHE is not None and (now - _SITES_CACHE_AT) < _SITES_CACHE_TTL:
+        return _SITES_CACHE
+
     sites = []
     if not SITES_ROOT.exists():
+        _SITES_CACHE = sites
+        _SITES_CACHE_AT = now
         return sites
 
     for site_dir in SITES_ROOT.iterdir():
@@ -196,7 +220,10 @@ def load_sites() -> List[dict]:
                 entry[key] = cfg[key]
         sites.append(entry)
 
-    return sorted(sites, key=lambda x: x.get("port", BASE_PORT))
+    sites_sorted = sorted(sites, key=lambda x: x.get("port", BASE_PORT))
+    _SITES_CACHE = sites_sorted
+    _SITES_CACHE_AT = now
+    return sites_sorted
 
 
 def regenerate_nginx_config() -> tuple:
@@ -474,7 +501,8 @@ class SiteUpdate(BaseModel):
 @app.get("/sites", dependencies=[Depends(require_jwt)])
 async def list_sites():
     """List all sites"""
-    return {"sites": load_sites(), "count": len(load_sites())}
+    sites = load_sites()
+    return {"sites": sites, "count": len(sites)}
 
 
 @app.get("/site/{name}", dependencies=[Depends(require_jwt)])
@@ -556,6 +584,7 @@ async def create_site(site: SiteCreate):
         "template": site.template,
     }, indent=2))
 
+    _invalidate_sites_cache()
     return {"success": True, "name": site.name, "domain": domain}
 
 
@@ -576,6 +605,7 @@ async def delete_site(name: str):
     # restricted entries to 0700 and retries.
     _rmtree_force(site_dir)
 
+    _invalidate_sites_cache()
     return {"success": True, "name": name}
 
 
@@ -638,6 +668,7 @@ server {{
     run_cmd(["nginx", "-t"])
     run_cmd(["systemctl", "reload", "nginx"])
 
+    _invalidate_sites_cache()
     return {"success": True, "name": name, "domain": domain, "url": f"http://{domain}"}
 
 
@@ -647,6 +678,7 @@ async def unpublish_site(name: str):
     (NGINX_ENABLED_DIR / f"{name}.conf").unlink(missing_ok=True)
     run_cmd(["systemctl", "reload", "nginx"])
 
+    _invalidate_sites_cache()
     return {"success": True, "name": name}
 
 
@@ -654,6 +686,7 @@ async def unpublish_site(name: str):
 async def republish_all():
     """Republish all sites by regenerating nginx config"""
     success, count, message = regenerate_nginx_config()
+    _invalidate_sites_cache()
     return {
         "success": success,
         "sites_published": count,
