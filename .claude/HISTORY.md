@@ -4,6 +4,70 @@
 ---
 ## 2026-05-12
 
+### Session 153 — Mitmproxy Route Sync Stability Fix
+
+**Goal:** All `*.gk2.secubox.in` metablogizer sites (arm, zkp, 3d, …) returned "Wrong Domain" page on HTTPS. Investigate, restore service, and harden the auto-sync infrastructure.
+
+**Symptom chain:**
+
+1. User report: `https://arm.gk2.secubox.in/` → "Wrong Domain - SecuBox" landing page.
+2. `~160` metablogizer sites affected (all routed via mitmproxy WAF).
+3. Two systemd timers (`sync-mitmproxy-routes.timer` + `secubox-route-sync.timer`) firing at the same second on the same routes file.
+4. `sync-mitmproxy-routes.service` had been failing with exit code 30/4 for >30 minutes (chronic).
+
+**Root cause (deepest):**
+
+`log()` function in `/usr/local/bin/sync-mitmproxy-routes.sh` wrote to **stdout**. `fix_dead_container_routes()` calls `log "Fixing dead route: …"` and is itself captured via `routes_json=$(fix_dead_container_routes "$routes_json")` — every log line was concatenated into the JSON variable, producing `[date] Fixing dead route: …{"255.gk2..."`. jq then complained `Invalid numeric literal at line 1, column 12`, `set -e` killed the script, and the corrupted JSON got pushed to the mitmproxy container (`lxc-attach … tee /srv/mitmproxy/haproxy-routes.json`). mitmproxy restart-looped on `Failed to load routes: Expecting ',' delimiter`, HAProxy backend `mitmproxy_inspector` went DOWN, every public domain returned **HTTP 503**.
+
+**Additional contributing bugs:**
+
+- `fix_dead_container_routes` returned `$fixed` (a count) instead of `0` — non-zero return tripped `set -e` in the caller's command substitution.
+- `sync-all-routes.sh` step 2 wrote metablogizer routes to port **9080** (nginx default_server → "Wrong Domain") instead of **8900** (where nginx actually listens with `server_name` per metablog site).
+- jq read calls had no error tolerance — any malformed JSON fed in via `$routes_json` aborted the whole script via `set -euo pipefail`.
+- Two systemd services bound to the **same script** (`sync-mitmproxy-routes.service` + `secubox-route-sync.service`) racing on the same file.
+
+**Fixes applied:**
+
+| # | Fix | Cible | Mechanism |
+| --- | --- | --- | --- |
+| 1 | Routes patchées 9080→8900 (165 sites metablog) | `/srv/mitmproxy/haproxy-routes.json` (host + container) | Python script (extract `server_name` from nginx, rewrite port) |
+| 2 | `return $fixed` → `return 0` | `sync-mitmproxy-routes.sh:fix_dead_container_routes` | sed |
+| 3 | Port metablog 9080 → 8900 in step 2 | `sync-all-routes.sh:62` | sed |
+| 4 | **`log()` writes to stderr** (root-cause fix) | `sync-mitmproxy-routes.sh:log` | adds `>&2` so `$()` capture is clean |
+| 5 | Defensive `2>/dev/null \|\| true` on jq read | `sync-mitmproxy-routes.sh` (2 occurrences) | tolerate corrupted input |
+| 6 | Fallback preserving old `routes_json` on jq write failure | `sync-mitmproxy-routes.sh` (3 occurrences) | `new_rj=$(... \|\| true); [[ -n "$new_rj" ]] && routes_json="$new_rj"` |
+| 7 | `flock -n` guard prevents concurrent runs | `sync-mitmproxy-routes.sh` (head) | `/run/sync-mitmproxy-routes.lock` |
+| 8 | Disable duplicate timer | `systemctl disable --now secubox-route-sync.timer` | systemd |
+
+**Verification (post-fix):**
+
+- `sync-mitmproxy-routes.service` via systemd → exit 0/SUCCESS, "Sync complete".
+- Container routes JSON valid: 244 keys, all metablogizer domains → `[10.100.0.1, 8900]`.
+- mitmproxy: `active`, listening on `0.0.0.0:8080`.
+- HAProxy backend `mitmproxy_inspector srv0 10.100.0.60:8080` op_state=UP.
+- Live tests: `admin.gk2`, `arm.gk2`, `zkp.gk2`, `3d.gk2` all HTTP 200 with correct titles.
+
+**Files modified (versioned in repo):**
+
+- `scripts/sync-mitmproxy-routes.sh` (synced from board `/usr/local/bin/`)
+- `scripts/sync-all-routes.sh` (new in repo, synced from board)
+
+**Backups created on board (timestamped, kept for rollback):**
+
+- `/srv/mitmproxy/haproxy-routes.json.bak.<epoch>` (pre-patch JSON)
+- `/usr/local/bin/sync-mitmproxy-routes.sh.bak.<epoch>` and `.bak.<epoch>-preflock`
+- `/usr/local/bin/sync-all-routes.sh.bak.<epoch>`
+
+**Topology note discovered:**
+
+- Canonical Hub vhosts (nginx `sites-available/secubox-local`): `admin.gk2.secubox.in`, `gk2.secubox.in`, `secubox.maegia.tv`, `c3box.maegia.tv` + LAN aliases.
+- `~165` metablogizer sites listed in `/etc/nginx/sites-enabled/metablogizer`, each `listen 0.0.0.0:8900` with per-site `server_name`, `root /srv/metablogizer/sites/<name>/`.
+- Public flow: HAProxy `https-in` (443) → ACL host match → backend `mitmproxy_inspector` (LXC `10.100.0.60:8080`) → mitmproxy looks up host in `haproxy-routes.json` → upstream `[10.100.0.1, 8900]` → nginx vhost matches `server_name` → serves static site.
+
+**Open follow-up:** the `sync-streamlit-routes.timer` last fired 2026-05-10 (1d 15h ago) and didn't fire since — needs separate investigation. Not blocking metablog/Hub stability.
+
+---
+
 ### Session 152 — APT Public Repo Staging Pipeline (Issue #80)
 
 **Goal:** Stage a complete signed APT repo at `output/repo/` for `bookworm` × {arm64, amd64}, validated end-to-end. User pushes to `apt.secubox.in` out-of-band.

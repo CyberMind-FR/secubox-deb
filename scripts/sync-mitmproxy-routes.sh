@@ -1,4 +1,10 @@
 #!/bin/bash
+
+# Re-exec self under flock to prevent concurrent runs (added 2026-05-12)
+LOCK=/run/sync-mitmproxy-routes.lock
+exec 9>"$LOCK"
+flock -n 9 || { echo "[$(date "+%F %T")] another instance running, skipping"; exit 0; }
+
 # SecuBox Route Sync - Ensures HAProxy vhosts are synced to mitmproxy routes
 # Run periodically via cron or systemd timer
 #
@@ -23,7 +29,7 @@ BACKEND_IP="10.100.0.1"
 DEAD_CONTAINER_IPS="10.100.0.10 10.100.0.20 10.100.0.30 10.100.0.40 10.100.0.50"
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2
 }
 
 # Get current routes from container
@@ -71,13 +77,14 @@ fix_dead_container_routes() {
         for domain in $domains; do
             [[ -z "$domain" ]] && continue
             log "Fixing dead route: $domain ($dead_ip -> $BACKEND_IP:$WEBUI_PORT)"
-            routes_json=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$WEBUI_PORT" '.[$d] = [$ip, $p]')
+            new_rj=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$WEBUI_PORT" '.[$d] = [$ip, $p]' 2>/dev/null || true)
+            if [[ -n "$new_rj" ]]; then routes_json="$new_rj"; fi
             fixed=$((fixed + 1))
         done
     done
 
     echo "$routes_json"
-    return $fixed
+    return 0
 }
 
 # Main sync
@@ -101,11 +108,12 @@ main() {
         port=$(get_port_for_domain "$domain")
 
         # Check if route exists with correct port
-        existing=$(echo "$routes_json" | jq -r --arg d "$domain" '.[$d] // empty')
+        existing=$(echo "$routes_json" | jq -r --arg d "$domain" '.[$d] // empty' 2>/dev/null || true)
 
         if [[ -z "$existing" ]] || ! echo "$existing" | jq -e ".[1] == $port" >/dev/null 2>&1; then
             log "Updating route: $domain -> $BACKEND_IP:$port"
-            routes_json=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$port" '.[$d] = [$ip, $p]')
+            new_rj=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$port" '.[$d] = [$ip, $p]' 2>/dev/null || true)
+            if [[ -n "$new_rj" ]]; then routes_json="$new_rj"; fi
             updated=$((updated + 1))
         fi
     done < <(get_haproxy_domains)
@@ -114,11 +122,12 @@ main() {
     while IFS= read -r domain; do
         [[ -z "$domain" ]] && continue
 
-        existing=$(echo "$routes_json" | jq -r --arg d "$domain" '.[$d] // empty')
+        existing=$(echo "$routes_json" | jq -r --arg d "$domain" '.[$d] // empty' 2>/dev/null || true)
 
         if [[ -z "$existing" ]] || ! echo "$existing" | jq -e ".[1] == $METABLOG_PORT" >/dev/null 2>&1; then
             log "Updating metablog route: $domain -> $BACKEND_IP:$METABLOG_PORT"
-            routes_json=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$METABLOG_PORT" '.[$d] = [$ip, $p]')
+            new_rj=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$METABLOG_PORT" '.[$d] = [$ip, $p]' 2>/dev/null || true)
+            if [[ -n "$new_rj" ]]; then routes_json="$new_rj"; fi
             updated=$((updated + 1))
         fi
     done < <(get_metablog_domains)
