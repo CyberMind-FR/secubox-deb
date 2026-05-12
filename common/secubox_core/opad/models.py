@@ -4,7 +4,7 @@ CyberMind — https://cybermind.fr
 Author: Gérald Kerma <gandalf@gk2.net>
 License: Proprietary / ANSSI CSPN candidate
 
-Pydantic v1 models for OPAD v2.4.0 configuration profiles.
+Pydantic v2 models for OPAD v2.4.0 configuration profiles.
 """
 
 import re
@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict, Any
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 # ==================== ENUMS ====================
@@ -89,31 +89,31 @@ def validate_mac_address(mac: str) -> str:
 
 class ProtocolsConfig(BaseModel):
     """Protocol observation configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     dns: bool = True
     dhcp: bool = True
     arp: bool = True
     tcp: bool = False
 
-    class Config:
-        extra = "forbid"
-
 
 class FingerprintingConfig(BaseModel):
     """Device fingerprinting configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     dhcp_fingerprint: bool = True
     ja3: bool = Field(default=False, description="TLS JA3 fingerprinting")
     ja4: bool = Field(default=False, description="TLS JA4 fingerprinting")
     user_agent: bool = Field(default=False, description="HTTP User-Agent parsing")
 
-    class Config:
-        extra = "forbid"
-
 
 class ObservationConfig(BaseModel):
     """Broche 1: Observation configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     interfaces: List[str] = Field(
         ...,
-        min_items=1,
+        min_length=1,
         description="Network interfaces to observe"
     )
     bpf_filter: Optional[str] = Field(
@@ -123,7 +123,8 @@ class ObservationConfig(BaseModel):
     protocols: ProtocolsConfig = Field(default_factory=ProtocolsConfig)
     fingerprinting: FingerprintingConfig = Field(default_factory=FingerprintingConfig)
 
-    @validator("interfaces")
+    @field_validator("interfaces")
+    @classmethod
     def validate_interfaces(cls, v: List[str]) -> List[str]:
         """Validate interface names."""
         if not v:
@@ -134,14 +135,13 @@ class ObservationConfig(BaseModel):
                 raise ValueError(f"Invalid interface name: {iface}")
         return v
 
-    class Config:
-        extra = "forbid"
-
 
 # ==================== BROCHE 2: INJECTION ====================
 
 class DNSRaceConfig(BaseModel):
     """DNS race injection configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = False
     target_success_rate: float = Field(
         default=0.99,
@@ -164,12 +164,11 @@ class DNSRaceConfig(BaseModel):
         description="TTL for injected DNS responses (seconds)"
     )
 
-    class Config:
-        extra = "forbid"
-
 
 class QuarantinePool(BaseModel):
     """DHCP quarantine IP pool configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     start: str = Field(..., description="Start of quarantine IP pool")
     end: str = Field(..., description="End of quarantine IP pool")
     lease_time: int = Field(
@@ -180,12 +179,11 @@ class QuarantinePool(BaseModel):
     )
     gateway: str = Field(..., description="Gateway IP for quarantine network")
 
-    class Config:
-        extra = "forbid"
-
 
 class DHCPRaceConfig(BaseModel):
     """DHCP race injection configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = False
     target_success_rate: float = Field(
         default=0.95,
@@ -195,12 +193,11 @@ class DHCPRaceConfig(BaseModel):
     )
     quarantine_pool: Optional[QuarantinePool] = None
 
-    class Config:
-        extra = "forbid"
-
 
 class RSTInjectConfig(BaseModel):
     """TCP RST injection configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = False
     target_success_rate: float = Field(
         default=0.90,
@@ -219,12 +216,11 @@ class RSTInjectConfig(BaseModel):
         description="Timing window for RST injection (milliseconds)"
     )
 
-    class Config:
-        extra = "forbid"
-
 
 class ARPRedirectConfig(BaseModel):
     """ARP redirection configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = False
     target_success_rate: float = Field(
         default=0.98,
@@ -243,32 +239,31 @@ class ARPRedirectConfig(BaseModel):
         description="MAC address for captive portal gateway"
     )
 
-    @validator("captive_mac")
+    @field_validator("captive_mac")
+    @classmethod
     def validate_captive_mac(cls, v: Optional[str]) -> Optional[str]:
         """Validate MAC address format."""
         if v is not None:
             return validate_mac_address(v)
         return v
 
-    class Config:
-        extra = "forbid"
-
 
 class InjectionConfig(BaseModel):
     """Broche 2: Injection (perturbation) configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     dns_race: Optional[DNSRaceConfig] = None
     dhcp_race: Optional[DHCPRaceConfig] = None
     rst_inject: Optional[RSTInjectConfig] = None
     arp_redirect: Optional[ARPRedirectConfig] = None
-
-    class Config:
-        extra = "forbid"
 
 
 # ==================== BROCHE 3: POLICY ====================
 
 class RuleMatch(BaseModel):
     """Policy rule match conditions (all conditions are AND-ed)."""
+    model_config = ConfigDict(extra="forbid")
+
     source_mac: Optional[str] = Field(default=None, description="Source MAC address")
     dest_domain: Optional[str] = Field(
         default=None,
@@ -290,19 +285,19 @@ class RuleMatch(BaseModel):
         description="Match only authorized/unauthorized devices"
     )
 
-    @validator("source_mac")
+    @field_validator("source_mac")
+    @classmethod
     def validate_source_mac(cls, v: Optional[str]) -> Optional[str]:
         """Validate MAC address format."""
         if v is not None:
             return validate_mac_address(v)
         return v
 
-    class Config:
-        extra = "forbid"
-
 
 class PolicyRule(BaseModel):
     """Policy rule configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     id: str = Field(..., min_length=1, max_length=64, description="Unique rule identifier")
     priority: int = Field(
         ...,
@@ -314,12 +309,11 @@ class PolicyRule(BaseModel):
     action: PolicyAction
     log_level: LogLevel = LogLevel.INFO
 
-    class Config:
-        extra = "forbid"
-
 
 class EscalationConfig(BaseModel):
     """Policy escalation configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     allow_in_path: bool = Field(
         default=True,
         description="Allow temporary escalation to allow mode"
@@ -338,27 +332,25 @@ class EscalationConfig(BaseModel):
         description="Log all escalation events to audit log"
     )
 
-    class Config:
-        extra = "forbid"
-
 
 class PolicyConfig(BaseModel):
     """Broche 3: Policy configuration."""
+    model_config = ConfigDict(extra="forbid")
+
     default_action: DefaultAction
     rules: List[PolicyRule] = Field(default_factory=list)
     escalation: Optional[EscalationConfig] = None
-
-    class Config:
-        extra = "forbid"
 
 
 # ==================== MAIN PROFILE ====================
 
 class OPADProfile(BaseModel):
     """OPAD v2.4.0 complete configuration profile."""
+    model_config = ConfigDict(extra="forbid")
+
     version: str = Field(
         ...,
-        regex=r"^\d+\.\d+\.\d+$",
+        pattern=r"^\d+\.\d+\.\d+$",
         description="Schema version (semver)"
     )
     mode: OPADMode
@@ -366,14 +358,13 @@ class OPADProfile(BaseModel):
     injection: InjectionConfig
     policy: PolicyConfig
 
-    class Config:
-        extra = "forbid"
-
 
 # ==================== EVENT MODELS ====================
 
 class OPADEvent(BaseModel):
     """OPAD event record for logging and audit."""
+    model_config = ConfigDict(extra="forbid")
+
     timestamp: datetime
     event_type: str = Field(..., description="Event type (e.g., 'dns_race', 'policy_match')")
     primitive: Optional[str] = Field(
@@ -389,24 +380,21 @@ class OPADEvent(BaseModel):
     success: bool
     details: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
-    @validator("source_mac")
+    @field_validator("source_mac")
+    @classmethod
     def validate_source_mac(cls, v: Optional[str]) -> Optional[str]:
         """Validate MAC address format."""
         if v is not None:
             return validate_mac_address(v)
         return v
 
-    class Config:
-        extra = "forbid"
-
 
 class OPADInjectResult(BaseModel):
     """Result of an OPAD injection primitive."""
+    model_config = ConfigDict(extra="forbid")
+
     primitive: str = Field(..., description="Injection primitive name")
     target: str = Field(..., description="Target (domain, IP, MAC, etc.)")
     race_won: bool = Field(..., description="Whether the race was won")
     latency_ms: Optional[float] = Field(default=None, description="Latency in milliseconds")
     event_id: Optional[str] = Field(default=None, description="Reference to OPADEvent")
-
-    class Config:
-        extra = "forbid"
