@@ -37,7 +37,77 @@ Exit codes:
 USAGE
 }
 
-cmd_start()  { echo "start: not implemented" >&2 ; return 1; }
+cmd_start() {
+  local issue=""
+  local dry_run=0
+  local verbose=0
+  while (($#)); do
+    case "$1" in
+      --issue) issue="$2"; shift 2 ;;
+      --issue=*) issue="${1#--issue=}"; shift ;;
+      --dry-run) dry_run=1; shift ;;
+      --verbose|-v) verbose=1; shift ;;
+      *) echo "start: unexpected arg: $1" >&2 ; return 1 ;;
+    esac
+  done
+  if [[ -z "$issue" ]]; then
+    echo "start: --issue <N> required" >&2 ; return 1
+  fi
+
+  # Preconditions
+  if ! "$GH_BIN" auth status >/dev/null 2>&1; then
+    echo "start: gh not authenticated. Run: gh auth login" >&2 ; return 2
+  fi
+  if ! "$GIT_BIN" diff-index --quiet HEAD --; then
+    echo "start: working tree is dirty. Commit or stash first." >&2 ; return 3
+  fi
+
+  # Refuse if we are already inside the worktree root
+  local cwd ; cwd=$(pwd)
+  if [[ "$cwd" == "$WORKTREE_ROOT/"* ]]; then
+    echo "start: already inside a worktree under $WORKTREE_ROOT" >&2 ; return 3
+  fi
+
+  local json
+  if ! json=$("$GH_BIN" issue view "$issue" --json title,labels 2>/dev/null); then
+    echo "start: issue #$issue not found" >&2 ; return 2
+  fi
+
+  local branch dir slug
+  branch=$(branch_from_issue "$issue" "$json")
+  slug="${branch#*/}"   # strip prefix dir
+  slug="${slug#*-}"     # strip the issue number prefix
+  dir="$WORKTREE_ROOT/${issue}-${slug}"
+
+  if [[ -e "$dir" ]]; then
+    echo "start: worktree path already exists: $dir" >&2 ; return 3
+  fi
+  if "$GIT_BIN" show-ref --verify --quiet "refs/heads/$branch"; then
+    echo "start: branch already exists: $branch" >&2 ; return 3
+  fi
+
+  if (( dry_run )); then
+    echo "dry-run: would create branch=$branch dir=$dir"
+    return 0
+  fi
+
+  mkdir -p "$WORKTREE_ROOT"
+  "$GIT_BIN" fetch -q origin master 2>/dev/null || true
+  "$GIT_BIN" worktree add -b "$branch" "$dir" origin/master >/dev/null
+
+  # Copy local Claude settings, if present
+  if [[ -f .claude/settings.local.json ]]; then
+    mkdir -p "$dir/.claude"
+    cp .claude/settings.local.json "$dir/.claude/settings.local.json"
+  fi
+
+  "$GH_BIN" issue comment "$issue" \
+    --body "Worktree created at \`$dir\`, branch \`$branch\`." >/dev/null
+
+  echo "branch:   $branch"
+  echo "worktree: $dir"
+  echo "next:     cd $dir"
+}
 cmd_list()   { echo "list: not implemented"  >&2 ; return 1; }
 cmd_sync()   { echo "sync: not implemented"  >&2 ; return 1; }
 cmd_finish() { echo "finish: not implemented" >&2; return 1; }
