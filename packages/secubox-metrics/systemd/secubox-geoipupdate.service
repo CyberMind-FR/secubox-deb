@@ -6,6 +6,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+User=secubox
+Group=secubox
 ExecStart=/usr/bin/geoipupdate -f /etc/secubox/secrets/maxmind.conf -d /var/lib/GeoIP
 NoNewPrivileges=true
 ProtectSystem=full
