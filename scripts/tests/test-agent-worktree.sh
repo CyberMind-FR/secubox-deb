@@ -266,6 +266,33 @@ test_sync_clean_rebase() {
   if [[ $rc -ne 0 ]]; then echo "expected rc=0 got $rc" >&2; return 1; fi
 }
 
+test_finish_refuses_zero_commits() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_4_TITLE="F"; export GH_MOCK_ISSUE_4_LABELS=""
+  export WORKTREE_ROOT="$wt"
+  (cd "$repo" && bash "$SCRIPT" start --issue 4) >/dev/null
+  local rc
+  (cd "$wt/4-f" && bash "$SCRIPT" finish) >/dev/null 2>&1 ; rc=$?
+  if [[ $rc -ne 3 ]]; then echo "expected rc=3 got $rc" >&2; return 1; fi
+}
+
+test_finish_dirty_refuses() {
+  local repo wt
+  repo=$(make_sandbox_repo); wt=$(mktemp -d)
+  trap "rm -rf $repo $wt" RETURN
+  export GH_BIN="$GH_MOCK"; export GH_MOCK_AUTH=ok
+  export GH_MOCK_ISSUE_6_TITLE="F"; export GH_MOCK_ISSUE_6_LABELS=""
+  export WORKTREE_ROOT="$wt"
+  (cd "$repo" && bash "$SCRIPT" start --issue 6) >/dev/null
+  (cd "$wt/6-f" && echo dirty > new && git add new)
+  local rc
+  (cd "$wt/6-f" && bash "$SCRIPT" finish) >/dev/null 2>&1 ; rc=$?
+  if [[ $rc -ne 3 ]]; then echo "expected rc=3 got $rc" >&2; return 1; fi
+}
+
 # Auto-discover and run
 mapfile -t tests < <(declare -F | awk '{print $3}' | grep '^test_')
 for t in "${tests[@]}"; do run_test "$t"; done
