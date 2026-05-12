@@ -16,7 +16,14 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+
+# Setup logging early for import debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+_import_log = logging.getLogger("eye-agent.imports")
 
 # Add parent directory to path for package imports when run as script
 _agent_dir = Path(__file__).parent
@@ -26,52 +33,121 @@ if str(_parent_dir) not in sys.path:
 if str(_agent_dir) not in sys.path:
     sys.path.insert(0, str(_agent_dir))
 
-# Try relative imports first (when run as package), fallback to absolute
-try:
-    from agent.config import load_config, Config, DEFAULT_CONFIG_PATH, get_active_secubox
-    from agent.mode_manager import Mode, ModeManager
-    from agent.failover import FailoverMonitor, FailoverState
-    from agent.display import (
-        DashboardRenderer,
-        LocalRenderer,
-        FlashRenderer,
-        GatewayRenderer,
-        RenderContext,
-    )
-    from agent.system import WifiManager, BluetoothManager, DisplayController
-    from agent.secubox import DeviceManager, FleetAggregator
-    from agent.web import WebServer
-    from agent.device_manager import DeviceManager as LegacyDeviceManager
-    from agent.metrics_bridge import MetricsBridge
-    from agent.command_handler import create_command_client, WebSocketClient, CommandHandler
-    from agent.touch_handler import TouchHandler, create_touch_handler, Gesture
-    from agent.menu_navigator import MenuNavigator, MenuMode
-    from agent.radial_renderer import RadialRenderer
-    from agent.action_executor import ActionExecutor
-    from agent.local_api import LocalAPI
-except ImportError:
-    # Fallback to direct imports (when run from agent directory)
-    from config import load_config, Config, DEFAULT_CONFIG_PATH, get_active_secubox
-    from mode_manager import Mode, ModeManager
-    from failover import FailoverMonitor, FailoverState
-    from display import (
-        DashboardRenderer,
-        LocalRenderer,
-        FlashRenderer,
-        GatewayRenderer,
-        RenderContext,
-    )
-    from system import WifiManager, BluetoothManager, DisplayController
-    from secubox import DeviceManager, FleetAggregator
-    from web import WebServer
-    from device_manager import DeviceManager as LegacyDeviceManager
-    from metrics_bridge import MetricsBridge
-    from command_handler import create_command_client, WebSocketClient, CommandHandler
-    from touch_handler import TouchHandler, create_touch_handler, Gesture
-    from menu_navigator import MenuNavigator, MenuMode
-    from radial_renderer import RadialRenderer
-    from action_executor import ActionExecutor
-    from local_api import LocalAPI
+
+def _try_import(module_path: str, fallback_path: str, items: list) -> dict:
+    """
+    Try to import items from module_path, fallback to fallback_path.
+    Returns dict of item_name -> imported_object or None.
+    """
+    result = {item: None for item in items}
+
+    # Try agent.X path first
+    try:
+        mod = __import__(module_path, fromlist=items)
+        for item in items:
+            if hasattr(mod, item):
+                result[item] = getattr(mod, item)
+        _import_log.debug(f"Imported from {module_path}: {[k for k,v in result.items() if v]}")
+        return result
+    except ImportError as e:
+        _import_log.debug(f"Could not import {module_path}: {e}")
+
+    # Try direct path
+    try:
+        mod = __import__(fallback_path, fromlist=items)
+        for item in items:
+            if hasattr(mod, item):
+                result[item] = getattr(mod, item)
+        _import_log.debug(f"Imported from {fallback_path}: {[k for k,v in result.items() if v]}")
+        return result
+    except ImportError as e:
+        _import_log.warning(f"Could not import {fallback_path}: {e}")
+
+    return result
+
+
+# Core config - required
+_config = _try_import("agent.config", "config",
+                      ["load_config", "Config", "DEFAULT_CONFIG_PATH", "get_active_secubox"])
+load_config = _config["load_config"]
+Config = _config["Config"]
+DEFAULT_CONFIG_PATH = _config["DEFAULT_CONFIG_PATH"] or Path("/etc/secubox/eye-remote/config.toml")
+get_active_secubox = _config["get_active_secubox"]
+
+# Mode manager - required
+_mode = _try_import("agent.mode_manager", "mode_manager", ["Mode", "ModeManager"])
+Mode = _mode["Mode"]
+ModeManager = _mode["ModeManager"]
+
+# Failover - required
+_failover = _try_import("agent.failover", "failover", ["FailoverMonitor", "FailoverState"])
+FailoverMonitor = _failover["FailoverMonitor"]
+FailoverState = _failover["FailoverState"]
+
+# Display renderers - required
+_display = _try_import("agent.display", "display",
+                       ["DashboardRenderer", "LocalRenderer", "FlashRenderer",
+                        "GatewayRenderer", "RenderContext"])
+DashboardRenderer = _display["DashboardRenderer"]
+LocalRenderer = _display["LocalRenderer"]
+FlashRenderer = _display["FlashRenderer"]
+GatewayRenderer = _display["GatewayRenderer"]
+RenderContext = _display["RenderContext"]
+
+# System controllers - optional
+_system = _try_import("agent.system", "system",
+                      ["WifiManager", "BluetoothManager", "DisplayController"])
+WifiManager = _system["WifiManager"]
+BluetoothManager = _system["BluetoothManager"]
+DisplayController = _system["DisplayController"]
+
+# SecuBox device management - optional
+_secubox = _try_import("agent.secubox", "secubox", ["DeviceManager", "FleetAggregator"])
+DeviceManager = _secubox["DeviceManager"]
+FleetAggregator = _secubox["FleetAggregator"]
+
+# Web server - optional
+_web = _try_import("agent.web", "web", ["WebServer"])
+WebServer = _web["WebServer"]
+
+# Legacy device manager - optional (requires aiohttp)
+_legacy = _try_import("agent.device_manager", "device_manager", ["DeviceManager"])
+LegacyDeviceManager = _legacy.get("DeviceManager")
+
+# Metrics bridge - optional
+_metrics = _try_import("agent.metrics_bridge", "metrics_bridge", ["MetricsBridge"])
+MetricsBridge = _metrics["MetricsBridge"]
+
+# Command handler - optional
+_cmd = _try_import("agent.command_handler", "command_handler",
+                   ["create_command_client", "WebSocketClient", "CommandHandler"])
+create_command_client = _cmd["create_command_client"]
+WebSocketClient = _cmd["WebSocketClient"]
+CommandHandler = _cmd["CommandHandler"]
+
+# Touch handler - optional
+_touch = _try_import("agent.touch_handler", "touch_handler",
+                     ["TouchHandler", "create_touch_handler", "Gesture"])
+TouchHandler = _touch["TouchHandler"]
+create_touch_handler = _touch["create_touch_handler"]
+Gesture = _touch["Gesture"]
+
+# Menu system - optional
+_menu = _try_import("agent.menu_navigator", "menu_navigator", ["MenuNavigator", "MenuMode"])
+MenuNavigator = _menu["MenuNavigator"]
+MenuMode = _menu["MenuMode"]
+
+# Radial renderer - optional
+_radial = _try_import("agent.radial_renderer", "radial_renderer", ["RadialRenderer"])
+RadialRenderer = _radial["RadialRenderer"]
+
+# Action executor - optional
+_action = _try_import("agent.action_executor", "action_executor", ["ActionExecutor"])
+ActionExecutor = _action["ActionExecutor"]
+
+# Local API - optional
+_local = _try_import("agent.local_api", "local_api", ["LocalAPI"])
+LocalAPI = _local["LocalAPI"]
 
 log = logging.getLogger(__name__)
 
