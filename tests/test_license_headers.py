@@ -213,3 +213,48 @@ def test_apply_idempotent_all_styles():
         once = license_headers.apply(src, ext)
         twice = license_headers.apply(once, ext)
         assert once == twice, f"non-idempotent for {ext}"
+
+
+def test_apply_html_no_doctype():
+    src = '<html><body>hi</body></html>\n'
+    out = license_headers.apply(src, ".html")
+    assert out == EXPECTED_HTML_HEADER + "\n" + src
+
+
+def test_apply_html_with_doctype():
+    src = '<!DOCTYPE html>\n<html><body>hi</body></html>\n'
+    out = license_headers.apply(src, ".html")
+    lines = out.splitlines(keepends=True)
+    assert lines[0] == "<!DOCTYPE html>\n"
+    assert lines[1] == "<!--\n"
+    assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in lines[2]
+
+
+def test_apply_html_idempotent():
+    src = '<!DOCTYPE html>\n<html></html>\n'
+    once = license_headers.apply(src, ".html")
+    twice = license_headers.apply(once, ".html")
+    assert once == twice
+
+
+def test_apply_markdown_plain():
+    src = '# Title\n\nBody.\n'
+    out = license_headers.apply(src, ".md")
+    assert out == EXPECTED_HTML_HEADER + "\n" + src
+
+
+def test_apply_markdown_with_frontmatter():
+    src = '---\ntitle: Foo\n---\n\n# Body\n'
+    out = license_headers.apply(src, ".md")
+    lines = out.splitlines(keepends=True)
+    assert lines[0] == "---\n"
+    assert lines[1] == "title: Foo\n"
+    assert lines[2] == "---\n"
+    assert lines[3] == "<!--\n"
+
+
+def test_apply_markdown_idempotent_with_frontmatter():
+    src = '---\ntitle: Foo\n---\n\nBody.\n'
+    once = license_headers.apply(src, ".md")
+    twice = license_headers.apply(once, ".md")
+    assert once == twice
