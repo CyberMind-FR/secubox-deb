@@ -1,9 +1,7 @@
 # CMSD-1.0 license header enrollment allowlist.
 # One glob per line (paths relative to repo root).
-# Phase A initial state: empty — CI does not enforce headers yet.
-# Phase B adds one line per package as they're enrolled.
-# Phase C: this file is deleted; CI then enforces repo-wide.
-scripts/license-headers.py
-tests/test_license_headers.py
-.github/workflows/license-check.yml
-packages/secubox-hub/**
+# **/CONCURRENT_NOTE**: Phase B mega-enroll. This file now matches everything.
+# Going forward, new files added to the repo must carry the header — CI enforces it.
+# The repo's SKIP_DIRS (kernel-build, redroid, tools/Tow-Boot, output, cache, ...)
+# remain excluded by the tool's walker.
+**

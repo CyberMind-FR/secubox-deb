@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """
 SecuBox Eye Remote - Touch Gesture Handler (HyperPixel2r Edition)
 Gestionnaire de gestes tactiles utilisant la bibliotheque Pimoroni hyperpixel2r.

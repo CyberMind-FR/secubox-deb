@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Architecture
 
 SecuBox-Deb est structuré autour de six modules canoniques organisés en chemin hamiltonien. Chaque module expose une API REST FastAPI, le tout orchestré par un profile-generator hiérarchique YAML.

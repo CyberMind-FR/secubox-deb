@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # /etc/netplan/00-secubox.yaml — VM x64 — Mode Router (défaut)
 # Généré par build-image.sh · Modifié par secubox-netmodes lors du changement de mode
 # VirtualBox : 2 interfaces réseau (NAT/Bridge + Internal/HostOnly)
