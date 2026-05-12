@@ -4,6 +4,23 @@
 ---
 ## 2026-05-12
 
+### Session 155 — Multi-Agent Worktree Workflow
+
+**Goal:** Enable parallel multi-agent work via one-branch-per-issue isolated worktrees.
+
+**Delivered:**
+
+- `scripts/agent-worktree.sh` with sub-commands `start`, `list`, `sync`, `finish`, `clean`
+- `scripts/lib/agent-worktree-lib.sh` (slug + label→prefix helpers)
+- Test suite `scripts/tests/test-agent-worktree.sh` (26 cases, no bats dep)
+- `gh` CLI mock at `scripts/tests/fixtures/gh-mock.sh`
+- New section in `CLAUDE.md`: `## 🌿 Multi-Agent Worktree Workflow — Obligatoire`
+- `scripts/README.md` updated with usage
+
+**Issue:** #83. **Spec:** `docs/superpowers/specs/2026-05-12-multi-agent-worktree-workflow-design.md`. **Plan:** `docs/superpowers/plans/2026-05-12-multi-agent-worktree-workflow.md`.
+
+---
+
 ### Session 154 — Metablogizer Vhosts Audit & Regeneration
 
 **Goal:** User flagged `https://lldh.ganimed.fr/` returning 404. Apply the same diagnostic + fix workflow to all metablogizer vhosts, find every site with broken routing / missing content / port mismatch.
