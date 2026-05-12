@@ -131,7 +131,7 @@
         const API = '/api/v1/metablogizer';
 
         function headers() {
-            const t = localStorage.getItem('jwt');
+            const t = localStorage.getItem('sbx_token');
             return t ? { 'Authorization': `Bearer ${t}` } : {};
         }
 
