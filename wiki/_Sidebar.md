@@ -53,6 +53,10 @@
 * [[Device-Categories]]
 * [[Smart-Strip]]
 
+### 🤖 Workflow Agents
+
+* [[Multi-Agent-Worktree]] — un agent · une issue · une branche
+
 ---
 
 ### Liens
