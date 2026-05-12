@@ -3,6 +3,9 @@ set -e
 
 case "$1" in
     remove|upgrade|deconfigure)
+        systemctl stop secubox-geoipupdate.timer 2>/dev/null || true
+        systemctl stop secubox-geoipupdate.service 2>/dev/null || true
+        systemctl disable secubox-geoipupdate.timer 2>/dev/null || true
         systemctl stop secubox-metrics.service || true
         systemctl disable secubox-metrics.service || true
         ;;
