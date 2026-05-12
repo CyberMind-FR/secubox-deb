@@ -1,5 +1,25 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 164)*
+*Mis à jour : 2026-05-12 (Session 165)*
+
+---
+
+## ✅ Session 165: MetaBlogizer version dashboard (Issue #103, sub-D of #49)
+
+### Objective
+Extend the existing /metablogizer/ list view with version-aware columns + filter + sort + 60s polling, and add a per-site drill-in page at /metablogizer/site.html?name=<X>. Consumes the enriched API from sub-C (PR #102).
+
+### Completed
+- Brainstormed design → `docs/superpowers/specs/2026-05-12-metablog-version-dashboard-design.md`
+- Plan (5 tasks) → `docs/superpowers/plans/2026-05-12-metablog-version-dashboard.md`
+- Extended `index.html`: 3 new columns (version → Gitea releases link, streamlit_app icon link, last_updated as relative time + ISO tooltip), filter box, sortable headers with ▲/▼, 60s polling paused when tab hidden, row name links to drill-in
+- New `site.html`: single-fetch drill-in surfacing every site.json field + 3 external links (live, Gitea, Streamlit hidden when null), same CRT P31 phosphor theme as index
+- 4-gate smoke `tests/scripts/test-metablogizer-ui.sh` (file shape + drill-in anchors + HTML well-formedness + live reachability — all green at 200)
+- Fixed localStorage key bug: site.html now uses canonical `sbx_token` (matches index.html and shared/api-utils.js)
+- CRT P31 phosphor theme matched exactly with the existing module style
+
+### Followups
+- Sub-E (deploy webhook) — last open sub-project of #49.
+- Optional follow-up: server-side proxy for Gitea tag history (so the drill-in can show tag list inline, no browser-side Gitea auth). Out of MVP scope.
 
 ---
 
