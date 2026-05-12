@@ -120,6 +120,29 @@ def test_detect_existing_only_checks_first_10_lines():
     assert license_headers.detect_existing(text) == "NONE"
 
 
+def test_detect_existing_no_false_match_in_docstring():
+    """Prose mentions of SPDX inside docstrings/comments should NOT match.
+
+    Regression: previously the regex matched any 'SPDX-License-Identifier:'
+    token anywhere in the first 10 lines, including inside Python docstrings
+    that *describe* what an SPDX header looks like.
+    """
+    text = (
+        '"""License header tool.\n'
+        '\n'
+        'Adds the SPDX-License-Identifier: LicenseRef-CMSD-1.0 header.\n'
+        '"""\n'
+        'x = 1\n'
+    )
+    assert license_headers.detect_existing(text) == "NONE"
+
+
+def test_detect_existing_no_false_match_inline_comment_prose():
+    """`# Description mentioning SPDX-License-Identifier: ...` is NOT a license line."""
+    text = "# This module documents SPDX-License-Identifier: MIT compliance.\nx = 1\n"
+    assert license_headers.detect_existing(text) == "NONE"
+
+
 def test_apply_python_plain():
     src = '"""Docstring."""\nprint("hi")\n'
     out = license_headers.apply(src, ".py")
@@ -422,3 +445,19 @@ def test_main_empty_allowlist_passes_check(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     rc = license_headers.main(["--check"])
     assert rc == 0
+
+
+def test_read_enrollment_missing_file_means_repo_wide(tmp_path):
+    """Spec §5.2: missing allowlist file = repo-wide enforcement (Phase C final)."""
+    assert license_headers._read_enrollment(tmp_path) == ["**"]
+
+
+def test_main_check_missing_allowlist_enforces_repo_wide(tmp_path, monkeypatch):
+    """With no allowlist file present, --check should fail on any unheadered file."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "scripts").mkdir(exist_ok=True)
+    # No enrollment file written.
+    (tmp_path / "a.py").write_text("x = 1\n")  # no header
+    monkeypatch.chdir(tmp_path)
+    rc = license_headers.main(["--check"])
+    assert rc == 1

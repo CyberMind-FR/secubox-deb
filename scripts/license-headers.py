@@ -27,19 +27,29 @@ HEADER_LINES = (
 )
 
 
-_SPDX_RE = re.compile(r"SPDX-License-Identifier:\s*(\S+)")
 _CMSD_ID = "LicenseRef-CMSD-1.0"
+# Matches an SPDX line only when preceded by comment markers and/or
+# whitespace. Prevents false-matches when a docstring mentions the
+# token "SPDX-License-Identifier:" in prose.
+_SPDX_LINE_RE = re.compile(
+    r"^[\s/*#<!\->]*\s*SPDX-License-Identifier:\s*(\S+)"
+)
 
 ENROLLMENT_FILE = "scripts/license-headers-enrolled.txt"
 
 
 def detect_existing(text: str) -> str:
-    """Return 'MATCH', 'FOREIGN', or 'NONE' based on the first 10 lines."""
-    head = "\n".join(text.splitlines()[:10])
-    match = _SPDX_RE.search(head)
-    if not match:
-        return "NONE"
-    return "MATCH" if match.group(1) == _CMSD_ID else "FOREIGN"
+    """Return 'MATCH', 'FOREIGN', or 'NONE' based on the first 10 lines.
+
+    Only lines whose non-whitespace content begins with comment markers
+    (#, //, *, <!--, -->) and then an SPDX identifier count as a license
+    declaration. Prose mentions inside docstrings are ignored.
+    """
+    for line in text.splitlines()[:10]:
+        match = _SPDX_LINE_RE.match(line)
+        if match:
+            return "MATCH" if match.group(1) == _CMSD_ID else "FOREIGN"
+    return "NONE"
 
 
 def render_header(style: str) -> str:
@@ -235,9 +245,16 @@ def _find_repo_root(start: Path) -> Path:
 
 
 def _read_enrollment(repo_root: Path) -> list[str]:
+    """Return enrollment patterns from scripts/license-headers-enrolled.txt.
+
+    Phase semantics (per spec §5.2):
+      * Missing file → ["**"]  — repo-wide enforcement (Phase C final state)
+      * File exists, empty / only comments → []  — nothing enforced (Phase A initial)
+      * File with patterns → those patterns
+    """
     f = repo_root / ENROLLMENT_FILE
     if not f.exists():
-        return []
+        return ["**"]
     patterns: list[str] = []
     for raw in f.read_text().splitlines():
         line = raw.strip()
