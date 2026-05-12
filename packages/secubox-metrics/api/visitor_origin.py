@@ -17,7 +17,7 @@ import logging
 import subprocess
 from collections import Counter
 from datetime import datetime, timezone
-from ipaddress import IPv4Address, ip_address
+from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Optional
 
@@ -43,7 +43,7 @@ class VisitorOriginAggregator:
 
     def current(self) -> dict:
         if self._payload.get("entries"):
-            return self._payload
+            return dict(self._payload)
         if CACHE_PATH.exists():
             try:
                 return json.loads(CACHE_PATH.read_text())
@@ -99,10 +99,20 @@ class VisitorOriginAggregator:
     def _lookup_asn(self, ip: IPv4Address) -> Optional[tuple[int, str]]:
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
             return None
+        try:
+            current_mtime = Path(self.cfg["asn_db_path"]).stat().st_mtime
+        except OSError:
+            current_mtime = 0.0
+        if self._mmdb is not None and current_mtime != self._mmdb_mtime:
+            try:
+                self._mmdb.close()
+            except Exception:
+                pass
+            self._mmdb = None
         if self._mmdb is None:
             try:
                 self._mmdb = maxminddb.open_database(self.cfg["asn_db_path"])
-                self._mmdb_mtime = Path(self.cfg["asn_db_path"]).stat().st_mtime
+                self._mmdb_mtime = current_mtime
             except Exception as e:
                 log.warning("mmdb open failed: %s", e)
                 return None
@@ -137,7 +147,11 @@ class VisitorOriginAggregator:
                 continue
             for e in elem:
                 # nftables JSON can wrap addresses in dicts when flags are set
-                raw = e["elem"]["val"] if isinstance(e, dict) and "elem" in e else e
+                raw = (
+                    e["elem"]["val"]
+                    if isinstance(e, dict) and isinstance(e.get("elem"), dict)
+                    else e
+                )
                 if isinstance(raw, dict):
                     raw = raw.get("val", "")
                 try:
