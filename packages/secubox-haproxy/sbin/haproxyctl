@@ -612,7 +612,7 @@ EOF
     fi
 
     cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
-    default_backend fallback
+    default_backend mitmproxy_inspector
 
 frontend https-in
     bind *:${https_port} ssl crt $CERTS_DIR/
@@ -641,7 +641,7 @@ EOF
     fi
 
     cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
-    default_backend fallback
+    default_backend mitmproxy_inspector
 
 EOF
 
