@@ -1538,7 +1538,7 @@ async def generate_config():
     for vh in vhosts:
         if vh.get("enabled"):
             if cfg["waf_enabled"] and not vh.get("waf_bypass"):
-                config_lines.append(f"    use_backend waf_inspector if host_{vh['name']}")
+                config_lines.append(f"    use_backend mitmproxy_inspector if host_{vh['name']}")
             else:
                 config_lines.append(f"    use_backend {vh['backend']} if host_{vh['name']}")
 
@@ -1561,7 +1561,7 @@ async def generate_config():
     for vh in vhosts:
         if vh.get("enabled") and vh.get("ssl"):
             if cfg["waf_enabled"] and not vh.get("waf_bypass"):
-                config_lines.append(f"    use_backend waf_inspector if host_{vh['name']}")
+                config_lines.append(f"    use_backend mitmproxy_inspector if host_{vh['name']}")
             else:
                 config_lines.append(f"    use_backend {vh['backend']} if host_{vh['name']}")
 

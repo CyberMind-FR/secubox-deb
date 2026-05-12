@@ -4,6 +4,69 @@
 ---
 ## 2026-05-12
 
+### Session 156 — HAProxy Routing Catastrophe & Generator Fix
+
+**Trigger:** User flagged `https://cpf.gk2.secubox.in/` returning "Wrong Domain". Investigation revealed a much wider regression that surfaced minutes after Session 154 — the entire HAProxy https-in routing for metablog/streamlit sites had silently broken.
+
+**Symptom (when investigation started, ~10:05):**
+
+- `arm.gk2`, `cpf.gk2`, `lldh.ganimed.fr`, etc. all returning HTTP 200 with a 6202 b `<title>Wrong Domain - SecuBox</title>` page (nginx:9080 default_server fallback).
+- `/etc/haproxy/haproxy.cfg` last modified at 10:03:48 — minutes after my Session 154 nginx + mitmproxy fixes.
+- HAProxy reloaded at 10:03:51 with the broken config.
+- 4 `metablog_*` backends DOWN, all metablog vhosts returning 503 or Wrong Domain.
+
+**Cause chain (multi-layered):**
+
+1. **Stale generator on board.** `/usr/sbin/haproxyctl` (the bash script that actually writes `haproxy.cfg` from `/etc/secubox/haproxy.toml`) was an older version that emitted `use_backend waf_inspector if host_X` while `waf_enabled=1`. The repo's current `packages/secubox-haproxy/sbin/haproxyctl` already emits `use_backend mitmproxy_inspector` — but the board had a 33115 b old copy still using `waf_inspector`.
+2. **`waf_inspector` backend was a dead reference.** The script also generated `backend waf_inspector { server srv0 127.0.0.1:8890 check }` but **port 8890 was not listening** — so even if the regen worked, those vhosts would have been DOWN.
+3. **`waf_enabled=0` fallback was equally broken.** When `waf_enabled` evaluated to 0, the script fell back to each vhost's TOML `backend = "nginx_vhosts"` (`server 127.0.0.1:9080 check`) — but nginx:9080 has no `server_name` for individual gk2 sites (only for `admin.gk2.secubox.in`), so every other host hit the default_server "Wrong Domain" page.
+4. **TOML coverage is incomplete.** `/etc/secubox/haproxy.toml` declares only 93 vhosts, while `/srv/mitmproxy/haproxy-routes.json` has 245 active routes. The 150 missing domains had no HAProxy ACL → `default_backend fallback` (deny 503).
+5. **Race with the Python service.** `secubox-haproxy.service` (FastAPI on `/usr/lib/secubox/haproxy/api/main.py`) was polling/validating the config and logging "Failed to load HAProxy config: Invalid value (at line 854, column 7)" every ~10 s for >10 min before haproxyctl finally succeeded a regen that produced the broken-but-syntactically-valid output.
+6. **Container routes had drifted too.** `lxc-attach -n mitmproxy -- jq .[cpf.gk2.secubox.in] routes.json` showed `[10.100.0.1, 9080]` while the host file had `[10.100.0.50, 8523]`. A previous unsuccessful regen had pushed a corrupted JSON into the container.
+
+**Restore + harden plan (user-approved option: patch direct + freeze regen):**
+
+1. `systemctl stop secubox-haproxy.service` — freeze any further regen attempts.
+2. Backup current `haproxy.cfg`.
+3. Read `/srv/mitmproxy/haproxy-routes.json` → for each of 245 domains, replace `use_backend nginx_vhosts if host_X` with `use_backend mitmproxy_inspector if host_X` in `haproxy.cfg` (180 lines patched: 90 unique × 2 frontends).
+4. Replace `default_backend fallback` with `default_backend mitmproxy_inspector` in both `http-in` and `https-in` frontends — so the 150 routes that exist in mitmproxy JSON but not in `haproxy.toml` are still dispatched correctly (mitmproxy reads the Host header against its routes table).
+5. `haproxy -c -f haproxy.cfg` → validate; `systemctl reload haproxy`.
+6. Push host routes JSON → mitmproxy LXC; `systemctl restart mitmproxy` inside container.
+7. Verify with live HTTPS probes.
+
+**Verification (live, fresh, cache-busted):**
+
+| Domain | HTTP | Title |
+| --- | --- | --- |
+| `cpf.gk2.secubox.in` | 200 | Streamlit (cineposter_fixed @ port 8523) |
+| `arm.gk2.secubox.in` | 200 | SITREP ARM/ARMADA — CLASSIFIED // GANDALF-7 |
+| `lldh.ganimed.fr` | 200 | La Livrée d'Hermès — Anibal Edelberto Amiot |
+| `admin.gk2.secubox.in` | 200 | SecuBox Control Center |
+| `pub.gk2.secubox.in` | 200 | GK² · NET — Opérateur Internet |
+| `werdl.gk2.secubox.in` | 200 | Retrouver son téléphone — Pour toute la famille |
+| `3d.gk2.secubox.in` | 200 | SecuBox Dice 3D |
+| `42.gk2.secubox.in` | 200 | CyberMind QWIZZ — Détecteur d'Injonction Paradoxale |
+| `zkp.gk2.secubox.in` | 200 | 🔐 OPORD CYBER-ZKP // SECUBOX CLASSIFIED |
+
+**Persistent fixes committed to repo:**
+
+- `packages/secubox-haproxy/api/main.py` — Python generator: `use_backend waf_inspector` → `use_backend mitmproxy_inspector` (2 occurrences, lines 1147 + 1170). Survives next package rebuild.
+- `packages/secubox-haproxy/sbin/haproxyctl` — Bash generator: `default_backend fallback` → `default_backend mitmproxy_inspector` (2 occurrences). Repo version already used `mitmproxy_inspector` for the `use_backend` lines; the board copy was stale. Future `dpkg -i secubox-haproxy_*.deb` will replace the board's stale `/usr/sbin/haproxyctl`.
+- `scripts/secubox-haproxy-regen-safe` — new wrapper: snapshot → regen → validate → atomic swap → reload, with rollback on validation failure. Prevents future broken-config-deployed-anyway incidents.
+
+**Still on board (not in repo, infra-side only):**
+
+- `/usr/sbin/haproxyctl` patched in place on the board to mirror repo state.
+- `/usr/lib/secubox/haproxy/api/main.py` patched on board.
+- `secubox-haproxy.service` left **stopped** until user confirms safe to re-enable.
+
+**Open questions:**
+
+- `/etc/secubox/haproxy.toml` only declares 93 vhosts — should the 150 metablog/streamlit domains be added so HAProxy has explicit ACLs and stats? Currently they work via `default_backend mitmproxy_inspector` (catch-all), which is functional but loses per-vhost stats granularity.
+- Re-enabling `secubox-haproxy.service` is safe now (generators patched), but verify no other code path writes `haproxy.cfg` with the broken pattern (e.g., on-demand `/generate` API endpoint).
+
+---
+
 ### Session 155 — Multi-Agent Worktree Workflow
 
 **Goal:** Enable parallel multi-agent work via one-branch-per-issue isolated worktrees.
