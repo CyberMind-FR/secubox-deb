@@ -54,27 +54,48 @@ cd "\$SITE"
 remote_head=\$(git ls-remote "\$REPO_URL" main 2>/dev/null | awk '{print \$1}' || true)
 
 if [[ -d .git ]]; then
-  # Has local history
-  local_head=\$(git rev-parse HEAD 2>/dev/null || true)
+  # Determine if there are any commits (--verify exits non-zero on unborn branch)
+  local_head=\$(git rev-parse --verify HEAD 2>/dev/null || true)
   if [[ -n "\$remote_head" && "\$remote_head" == "\$local_head" ]]; then
     echo "skip-already-current"
     exit 0
   fi
-  # Retarget and push
+
+  if [[ -n "\$local_head" ]]; then
+    # Has commits — retarget and push existing history
+    git remote set-url origin "\$REPO_URL" 2>/dev/null \
+      || git remote add origin "\$REPO_URL"
+    # Source branch is whatever HEAD points at; rename to main on push
+    src_branch=\$(git symbolic-ref --short HEAD 2>/dev/null || echo HEAD)
+    # Use --force-with-lease only when remote already has a main branch;
+    # for first push (remote_head empty), use --force (bootstrapping case).
+    if [[ -n "\$remote_head" ]]; then
+      git push --quiet --force-with-lease origin "\$src_branch:main"
+    else
+      git push --quiet --force origin "\$src_branch:main"
+    fi
+    git tag -f v1.0.0
+    git push --quiet --force origin v1.0.0
+    echo "ingested-with-history"
+    exit 0
+  fi
+  # Falls through: .git exists but no commits (unborn branch) — treat as fresh.
+  # Rename branch to 'main' in-place (safe with no commits: just rewrite HEAD)
+  git config user.email "metablog-ingest@cybermind.fr"
+  git config user.name "MetaBlogizer Ingest"
+  git symbolic-ref HEAD refs/heads/main
   git remote set-url origin "\$REPO_URL" 2>/dev/null \
     || git remote add origin "\$REPO_URL"
-  # Source branch is whatever HEAD points at; rename to main on push
-  src_branch=\$(git symbolic-ref --short HEAD 2>/dev/null || echo HEAD)
-  # Use --force-with-lease only when remote already has a main branch;
-  # for first push (remote_head empty), use --force (bootstrapping case).
-  if [[ -n "\$remote_head" ]]; then
-    git push --quiet --force-with-lease origin "\$src_branch:main"
-  else
-    git push --quiet --force origin "\$src_branch:main"
+  git add -A
+  if git diff --cached --quiet; then
+    echo "fail-empty-dir"
+    exit 1
   fi
-  git tag -f v1.0.0
-  git push --quiet --force origin v1.0.0
-  echo "ingested-with-history"
+  git commit -q -m "feat: import from /srv/metablogizer/sites/\$NAME"
+  git push --quiet origin main
+  git tag v1.0.0
+  git push --quiet origin v1.0.0
+  echo "ingested-fresh"
   exit 0
 else
   # No local git — fresh init
