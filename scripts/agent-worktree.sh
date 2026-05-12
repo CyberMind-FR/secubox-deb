@@ -139,7 +139,36 @@ _list_emit_row() {
   if ! "$GIT_BIN" -C "$path" diff --quiet HEAD -- 2>/dev/null; then state="dirty"; fi
   printf '%s%s  %s  ahead:%s behind:%s %s\n' "$tag" "$branch" "$path" "${ahead:-0}" "${behind:-0}" "$state"
 }
-cmd_sync()   { echo "sync: not implemented"  >&2 ; return 1; }
+cmd_sync() {
+  local target_issue=""
+  if (($#)); then target_issue="$1"; fi
+
+  local wt_path
+  if [[ -n "$target_issue" ]]; then
+    wt_path=$(_resolve_worktree_path_by_issue "$target_issue") \
+      || { echo "sync: no worktree for issue #$target_issue" >&2; return 2; }
+  else
+    wt_path=$("$GIT_BIN" rev-parse --show-toplevel)
+  fi
+
+  ( cd "$wt_path"
+    "$GIT_BIN" fetch -q origin master 2>/dev/null || true
+    if ! "$GIT_BIN" rebase origin/master; then
+      "$GIT_BIN" rebase --abort 2>/dev/null || true
+      echo "sync: rebase conflict; aborted. Resolve manually." >&2
+      return 3
+    fi
+  )
+}
+
+_resolve_worktree_path_by_issue() {
+  local n="$1"
+  local d
+  for d in "$WORKTREE_ROOT"/"$n"-*; do
+    if [[ -d "$d" ]]; then printf '%s' "$d"; return 0; fi
+  done
+  return 1
+}
 cmd_finish() { echo "finish: not implemented" >&2; return 1; }
 cmd_clean()  { echo "clean: not implemented" >&2 ; return 1; }
 
