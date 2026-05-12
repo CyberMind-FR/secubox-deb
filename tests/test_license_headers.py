@@ -19,3 +19,15 @@ _spec.loader.exec_module(license_headers)
 
 def test_module_imports():
     assert hasattr(license_headers, "main")
+
+
+EXPECTED_HASH_HEADER = (
+    "# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
+    "# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>\n"
+    "# Source-Disclosed License — All rights reserved except as expressly granted.\n"
+    "# See LICENCE-CMSD-1.0.md for terms.\n"
+)
+
+
+def test_render_header_hash():
+    assert license_headers.render_header("hash") == EXPECTED_HASH_HEADER

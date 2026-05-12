@@ -10,6 +10,20 @@ import sys
 from pathlib import Path
 
 
+HEADER_LINES = (
+    "SPDX-License-Identifier: LicenseRef-CMSD-1.0",
+    "Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>",
+    "Source-Disclosed License — All rights reserved except as expressly granted.",
+    "See LICENCE-CMSD-1.0.md for terms.",
+)
+
+
+def render_header(style: str) -> str:
+    if style == "hash":
+        return "".join(f"# {line}\n" for line in HEADER_LINES)
+    raise ValueError(f"unknown comment style: {style}")
+
+
 def main(argv: list[str] | None = None) -> int:
     raise NotImplementedError("see Task 11")
 
