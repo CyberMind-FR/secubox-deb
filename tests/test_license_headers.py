@@ -175,3 +175,41 @@ def test_apply_bash_idempotent():
     once = license_headers.apply(src, ".sh")
     twice = license_headers.apply(once, ".sh")
     assert once == twice
+
+
+def test_apply_javascript():
+    src = 'console.log("hi");\n'
+    out = license_headers.apply(src, ".js")
+    assert out == EXPECTED_SLASH_HEADER + "\n" + src
+
+
+def test_apply_typescript():
+    src = 'const x: number = 1;\n'
+    out = license_headers.apply(src, ".ts")
+    assert out == EXPECTED_SLASH_HEADER + "\n" + src
+
+
+def test_apply_css():
+    src = 'body { color: red; }\n'
+    out = license_headers.apply(src, ".css")
+    assert out == EXPECTED_BLOCK_HEADER + "\n" + src
+
+
+def test_apply_c():
+    src = 'int main(void) { return 0; }\n'
+    out = license_headers.apply(src, ".c")
+    assert out == EXPECTED_BLOCK_HEADER + "\n" + src
+
+
+def test_apply_idempotent_all_styles():
+    cases = [
+        (".js", 'console.log("x");\n'),
+        (".ts", 'const x = 1;\n'),
+        (".css", 'a { color: red; }\n'),
+        (".c", 'int x;\n'),
+        (".h", '#pragma once\n'),
+    ]
+    for ext, src in cases:
+        once = license_headers.apply(src, ext)
+        twice = license_headers.apply(once, ext)
+        assert once == twice, f"non-idempotent for {ext}"
