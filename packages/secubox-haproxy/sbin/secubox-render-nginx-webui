@@ -31,11 +31,15 @@ log "Snapshot $TARGET → $SNAP"
 [[ -f "$TARGET" ]] && cp -p "$TARGET" "$SNAP"
 mv "$TMP" "$TARGET"
 
-if ! nginx -t 2>&1 | grep -q "syntax is ok"; then
+_nginx_t_out=$(mktemp /tmp/nginx-t.XXXXXX)
+if ! nginx -t >"$_nginx_t_out" 2>&1; then
     log "nginx -t FAILED — rolling back"
+    cat "$_nginx_t_out" >&2
+    rm -f "$_nginx_t_out"
     [[ -f "$SNAP" ]] && cp -p "$SNAP" "$TARGET"
     exit 5
 fi
+rm -f "$_nginx_t_out"
 
 log "Reload nginx"
 systemctl reload nginx && log "render OK (snapshot kept: $SNAP)"
