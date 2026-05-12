@@ -4,40 +4,49 @@
 ---
 ## 2026-05-12
 
-### Session 161 — Gitea repair: public routing for gitea.gk2.secubox.in (Issue #49 sub-A)
+### Session 162 — MetaBlogizer → Gitea ingest of 166 sites (Issue #94, sub-B of #49)
 
-**Goal:** Expose the existing Gitea LXC at `https://gitea.gk2.secubox.in/` and `ssh://git@gitea.gk2.secubox.in:2222/` without touching the LXC or its `/data/volumes/gitea/` data. Sub-project A of #49; prerequisite for the MetaBlogizer ingest + Streamlit version-pinning work.
+**Goal:** Ingest the 166 directories under `/srv/metablogizer/sites/` into the new Gitea at `gitea.gk2.secubox.in` as `gandalf/metablog-<site>`, tagged `v1.0.0`. Prerequisite was sub-project A (#93, Gitea public routing).
 
 **Done:**
-- Spec: `docs/superpowers/specs/2026-05-12-gitea-repair-design.md`
-- Plan: `docs/superpowers/plans/2026-05-12-gitea-repair.md` (10 tasks, all green)
-- Versioned configs under `packages/secubox-gitea/conf/` (nginx vhost + HAProxy snippet)
-- Live MOCHAbin: manual edit of `/etc/haproxy/haproxy.cfg` (backup `bak.gitea-repair.1778582623`) — added ACLs for `gitea.gk2.secubox.in` in `http-in` + `https-in`, added `gitea-ssh` TCP frontend on `*:2222` → `gitea_ssh` backend → `10.100.0.40:2222`. NOT via `haproxyctl` (#91 still blocks that).
-- Live MOCHAbin: installed `/etc/nginx/sites-available/gitea.conf` + symlink in `sites-enabled/`. `nginx -t` clean.
-- `secubox-gitea` `postinst` reproduces all routing idempotently with rollback on `-c` / `-t` failure.
-- Smoke test `tests/scripts/test-gitea-routing.sh` — 4/4 mandatory gates pass.
+- Spec: `docs/superpowers/specs/2026-05-12-metablog-gitea-ingest-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-metablog-gitea-ingest.md` (8 tasks)
+- One-time Gitea config patch (`ENABLE_PUSH_CREATE_USER=true`, `DEFAULT_BRANCH=main`) — `scripts/metablog-ingest-gitea-config.sh`
+- SSH preflight + key enrolment helper — `scripts/lib/gitea-ssh-preflight.sh`
+- Per-site ingest function — `scripts/lib/metablog-ingest-site.sh`
+- Orchestrator — `scripts/metablog-ingest.sh`
+- Smoke test — `tests/scripts/test-metablog-ingest.sh`
+- Full 166-site run — summary at `docs/superpowers/runs/2026-05-12-metablog-ingest-summary.md`
 
 **Discovered + fixed mid-execution:**
-- Gitea's internal SSH listens on `:2222` inside the LXC, not `:22`. The initial HAProxy backend at `10.100.0.40:22` opened TCP fine but the LXC's host sshd refused. Patched both live `haproxy.cfg` and the versioned `haproxy.snippet` (commit `279a6bba`).
+
+1. **Gitea SSH user is `gitea`, not `git`** — the built-in SSH server validates the username against the OS user it runs as. Plan + all scripts updated.
+2. **Gitea CLI lacks `admin user keys add`** in v1.22 — replaced with generate-access-token + POST `/api/v1/user/keys` + token cleanup via sqlite.
+3. **`git rev-parse HEAD` returns literal `"HEAD"` on unborn branch**, not empty — used `--verify HEAD` instead.
+4. **awk INI patcher duplicated `[repository]` section** — fixed by setting `saw_*=1` after the mid-file flush so the END block doesn't re-append.
+5. **`app.ini` lives at `/var/lib/gitea/custom/conf/app.ini`**, not `/etc/gitea/app.ini` as the plan assumed.
+6. **python3 not installed in the Gitea LXC** — INI patcher rewritten in awk.
+7. **First pass had 72 failures** from pre-existing broken Gitea repo stubs (DB entry without on-disk git objects) created by earlier experiments. Bulk-deleted via API. Second pass cleaned to 0 fail.
 
 **Commits:**
-- `cc54fdd5` — feat(gitea): Versioned nginx vhost config
-- `56ff3200` — feat(gitea): Versioned HAProxy snippet
-- `279a6bba` — fix(gitea): HAProxy backend points to Gitea internal SSH on :2222
-- `f4258291` — feat(gitea): postinst installs routing (idempotent, with rollback)
-- `0373579d` — test(gitea): Smoke test for the 5 validation gates
+- `56abceae` — feat: One-time Gitea config patch (push-create)
+- `680275f4` — fix: awk INI patcher no longer duplicates [repository]
+- `06d35317` — feat: SSH preflight + key enrolment (gitea@, not git@)
+- `2e323bf3` — feat: Per-site ingest function
+- `8f4b777e` — feat: Orchestrator
+- `6f40e011` — test: 5-gate smoke + bug fix for unborn-branch case
+- `6ac39a6f` — docs: Full-run summary
 
-**Live verification:**
+**Live verification (5 random sites, `git ls-remote main`):**
 ```
-$ curl -sI https://gitea.gk2.secubox.in/
-HTTP/1.1 200 OK
-$ curl -s https://gitea.gk2.secubox.in/api/v1/version
-{"version":"1.22.0"}
-$ ssh -p 2222 git@gitea.gk2.secubox.in
-git@gitea.gk2.secubox.in: Permission denied (publickey)   # expected — proves SSH server responded
+gandalf:   c234c6ff...
+dgse:      2e75a084...
+ganimed:   b37b971b...
+magic:     4749ca74...
+sweedtest: db740d25...
 ```
 
-**Next:** issue #49 sub-project B (MetaBlogizer → Gitea ingest, 166 sites).
+**Next:** sub-projects C, D, E, F of #49. F (#95) can start in parallel.
 
 ---
 
@@ -64,6 +73,37 @@ apt-cache search secubox # 15 packages
 
 **Follow-up (separate work):**
 - Add an E2E smoke job to CI that exercises `secubox apt setup` against a real or recorded `apt.secubox.in` (would have caught the URL bug). Out of scope here.
+
+---
+
+### Session 159 — WebUI Obfuscation (#44)
+
+**Goal:** Lock the SecuBox WebUI to `https://admin.<HOSTNAME>.<DOMAIN_SUFFIX>/` only, enforced at HAProxy and nginx layers, driven by `/etc/default/secubox`.
+
+**Spec:** `docs/superpowers/specs/2026-05-12-webui-obfuscation-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-12-webui-obfuscation.md`
+
+**Changes:**
+
+- New package `secubox-defaults` ships `/etc/default/secubox` (`SECUBOX_HOSTNAME` + `SECUBOX_DOMAIN_SUFFIX`) as the single source of truth. Postinst autodetects from `hostname -s` if unset, then fires `dpkg-trigger secubox-defaults-changed`.
+- `secubox-haproxy` API extended with three endpoints in `api/main.py`:
+  - `GET /webui/admin-domain` — canonical identity + escaped regex (info, no auth)
+  - `GET /webui/nginx-config` — JWT-protected, rendered nginx vhost as `text/plain`
+  - `POST /webui/refresh` — JWT-protected LRU cache invalidation (204)
+- Helper module `api/webui_identity.py` parses `/etc/default/secubox` with `shlex`, caches via `lru_cache(maxsize=1)`, exposes `get_identity()`/`invalidate_cache()`. Defensive `OSError` handling so file-permission failures surface as `ValueError` (caught by endpoints → 503).
+- `sbin/secubox-render-nginx-webui` script: snapshot → fetch from API → atomic stage → `nginx -t` → reload, with rollback on validation failure. Includes early binary-availability check.
+- `sbin/haproxyctl` (bash generator) injects `acl is_webui_admin hdr(host) -m reg ^admin\.<HOST>\.<SUFFIX>$` + `use_backend webui_direct if is_webui_admin` at the top of `http-in` and `https-in` frontends. Emits the matching `backend webui_direct` (→ `127.0.0.1:9080`) only when the strict ACL is in use. Sources `/etc/default/secubox` once per frontend loop (hoisted from per-iteration).
+- Python `generate_config()` in `api/main.py` mirrors the bash generator (symmetric ACL + backend emission + per-vhost skip).
+- `debian/postinst` declares `interest-noawait secubox-defaults-changed` and on trigger runs (best-effort): `POST /webui/refresh`, `secubox-render-nginx-webui`, `secubox-haproxy-regen-safe`.
+- `secubox-haproxy-regen-safe` script now packaged into `secubox-haproxy` (installed to `/usr/local/bin/`).
+- `secubox-haproxy` `debian/control` declares `Depends: ..., secubox-defaults`.
+- Integration test `tests/integration/test_44_webui_obfuscation.sh` covers positive probe (`admin.gk2` = WebUI), negative probes (`gk2.secubox.in` and `admin.fake.secubox.in` NOT WebUI), LAN-direct preserved, and regression spot-checks on cpf, arm, lldh, pub, werdl, 3d.
+
+**Tests:** 12 pytest passing (6 in `tests/test_webui_identity.py`, 6 in `tests/test_webui_endpoints.py`). Includes a permission-denied test that confirms `OSError` is caught and surfaces as `ValueError`.
+
+**Implementation workflow:** Brainstorming → spec → plan → subagent-driven execution (15 tasks, each TDD with implementer + spec reviewer + code quality reviewer). 6 review cycles triggered fix subagents (`OSError` handling in `_parse_defaults`, missing `conftest.py` commit, `debian/install` conflict, missing binary check, missing `webui_direct` backend def, missing `regen-safe` packaging).
+
+**Closes:** #44 (pending PR merge)
 
 ---
 

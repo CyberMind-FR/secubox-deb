@@ -61,3 +61,10 @@ backups/*.img.xz
 /output/manifests/
 /output/chroot-update.log
 /output/build.log
+
+# MetaBlogizer ingest artifacts (regenerated each run)
+/output/ingest-report.json
+/output/ingest-full.log
+/output/ingest-full-run.out
+/output/broken-repos.txt
+/output/test-ingest-*/

@@ -1,47 +1,33 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 161)*
+*Mis à jour : 2026-05-12 (Session 162)*
 
 ---
 
-## ✅ Session 161: Gitea repair — public routing for gitea.gk2.secubox.in (Issue #49 sub-A)
+## ✅ Session 162: MetaBlogizer → Gitea ingest (Issue #94, sub-B of #49)
 
 ### Objective
-Expose the existing Gitea LXC at `https://gitea.gk2.secubox.in/` (web) and `ssh://git@gitea.gk2.secubox.in:2222/` (git SSH), reusing the wildcard cert and existing data volumes on `/data/volumes/gitea/`. Prerequisite for #49 sub-projects B–F (MetaBlogizer → Gitea ingest, Streamlit version pinning, version dashboard).
+Ingest 166 MetaBlogizer site directories from `/srv/metablogizer/sites/*` into Gitea at `gandalf/metablog-<site>` with `v1.0.0` tag. Prerequisite was sub-project A (#93, Gitea routing) — now live at `gitea.gk2.secubox.in`.
 
 ### Completed
-- Brainstormed design → `docs/superpowers/specs/2026-05-12-gitea-repair-design.md`
-- Plan (10 tasks) → `docs/superpowers/plans/2026-05-12-gitea-repair.md`
-- Versioned nginx vhost (`packages/secubox-gitea/conf/gitea.nginx.conf`)
-- Versioned HAProxy snippet (`packages/secubox-gitea/conf/haproxy.snippet`)
-- Live: backup + manual edit of `/etc/haproxy/haproxy.cfg` (added `gitea.gk2.secubox.in` ACLs to `http-in` + `https-in`, new `gitea-ssh` TCP frontend on `*:2222` → `10.100.0.40:2222`). **No `haproxyctl`** — see #91.
-- Live: installed `/etc/nginx/sites-available/gitea.conf` + enabled symlink
-- Idempotent `postinst` reproduces all routing on fresh install with rollback on `nginx -t` / `haproxy -c` failure
-- Smoke test `tests/scripts/test-gitea-routing.sh` — 4/4 gates pass (1 optional skipped)
+- Brainstormed design → `docs/superpowers/specs/2026-05-12-metablog-gitea-ingest-design.md`
+- Plan (8 tasks) → `docs/superpowers/plans/2026-05-12-metablog-gitea-ingest.md`
+- One-time Gitea config patch — `ENABLE_PUSH_CREATE_USER=true`, `DEFAULT_BRANCH=main` via awk INI editor (no python3 in the LXC).
+- SSH preflight + key enrolment helper — Gitea 1.22's `admin user` lacks `keys add`, so the helper goes generate-access-token → POST `/api/v1/user/keys` → delete token. **SSH user is `gitea` (NOT `git`)** because Gitea's built-in SSH server validates against the OS user.
+- Per-site ingest function — idempotent, history-preserving for sites with `.git`, `git init` for the rest. Bug fix: `git rev-parse --verify HEAD` on unborn branches.
+- Orchestrator — preflights (SSH, push-create, sites dir, disk) + tier loop + JSON report. Flags: `--dry-run`, `--limit`, `--site`, `--halt-on-fail`.
+- Smoke test — 5 gates including dry-run, live, idempotent re-run, ls-remote, clone-vs-source diff.
+- Full 166-site run — see `docs/superpowers/runs/2026-05-12-metablog-ingest-summary.md`. First pass had 72 failures from pre-existing broken Gitea repo stubs (DB without on-disk objects); bulk-deleted via API; second pass clean.
 
-### Bug discovered + fixed
-- HAProxy backend initially set to `:22`. Gitea's internal SSH actually listens on `:2222` inside the LXC. Fixed both live and in the versioned snippet (commit `279a6bba`).
+### Final result
+- 166/166 sites in Gitea: 72 ingested fresh, 94 already-current skip, **0 failed**.
+- Tags `v1.0.0` on each.
+- Verified by 5-site `git ls-remote` round-trip + clone+diff on `metablog-255`.
 
 ### Followups
-- #91 — `haproxyctl vhost add` regression (must be fixed before any `haproxyctl` use)
-- #49 sub-project B — MetaBlogizer → Gitea ingest (166 sites)
-
----
-
-## ✅ Session 160: Health Banner Live Panel (Issue #92)
-
-### Objective
-Add three public banner sections (VisitorOrigin / LiveHosts / CertStatus)
-sharing one polling and CORS pipeline in `secubox-metrics`.
-
-### Completed
-- Spec + plan written and committed.
-- Three aggregators with unit + error-path tests (25 tests passing).
-- nftables ruleset, systemd timer, postinst plumbing.
-- Banner v1.3.0 with three fail-isolated fetch loops.
-- README updated.
-
-### Status
-PR pending review against `master`.
+- Sub-project C (`site.json` schema + version API) — depends on these repos.
+- Sub-project D (Dashboard) — depends on C.
+- Sub-project E (deploy webhook) — depends on B (now done).
+- Sub-project F (Streamlit per-site version pinning, #95) — can start now.
 
 ---
 
