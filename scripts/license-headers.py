@@ -21,6 +21,14 @@ HEADER_LINES = (
 def render_header(style: str) -> str:
     if style == "hash":
         return "".join(f"# {line}\n" for line in HEADER_LINES)
+    if style == "slash":
+        return "".join(f"// {line}\n" for line in HEADER_LINES)
+    if style == "block":
+        body = "".join(f" * {line}\n" for line in HEADER_LINES)
+        return f"/*\n{body} */\n"
+    if style == "html":
+        body = "".join(f"  {line}\n" for line in HEADER_LINES)
+        return f"<!--\n{body}-->\n"
     raise ValueError(f"unknown comment style: {style}")
 
 
