@@ -4,6 +4,42 @@
 ---
 ## 2026-05-12
 
+### Session 151 — Fix Sidebar Mobile Mode False-Positive on Touch Desktops
+
+**Goal:** Sidebar of secubox-hub forced mobile mode (hamburger + hidden sidebar) on Firefox PC because the detection logic used `isTouchDevice() || isNarrowViewport()` — any touch signal (touchscreen laptop, Firefox `pointer: coarse`, `maxTouchPoints > 0`) triggered mobile UX at desktop widths.
+
+**Root cause:** `packages/secubox-hub/www/shared/sidebar.js:2113-2116` — `OR` was too permissive. User console showed `Mobile mode: ON (touch: true, narrow: false)` on a 1080p+ Firefox.
+
+**Fix:** Changed to strict `AND` — both touch AND narrow viewport required.
+
+```js
+function shouldUseMobileMode() {
+    // Mobile = touch device AND narrow viewport.
+    // OR was too permissive: PCs with touchscreens (or Firefox advertising
+    // pointer:coarse) triggered mobile mode at desktop widths.
+    return isTouchDevice() && isNarrowViewport();
+}
+```
+
+**Files modified:**
+
+- `packages/secubox-hub/www/shared/sidebar.js:2113-2118`
+
+**Deploy:**
+
+- `bash scripts/deploy.sh secubox-hub root@192.168.1.200` (rsync `www/` → `/usr/share/secubox/www/`, no service restart needed for static JS)
+- Verified on canonical Hub vhost `https://admin.gk2.secubox.in/shared/sidebar.js` (line 2117 contains the new `&&` logic)
+
+**Topology note (discovered during validation):**
+
+- Canonical Hub vhosts (nginx `sites-available/secubox-local`): `admin.gk2.secubox.in`, `gk2.secubox.in`, `secubox.maegia.tv`, `c3box.maegia.tv` + LAN `secubox.local` / `192.168.1.200` / `192.168.255.1`
+- HAProxy `webui-lan` frontend → `default_backend webui_direct` (127.0.0.1:9080) — bypasses mitmproxy, ideal for LAN/test
+- All public `*.gk2.secubox.in` vhosts route via mitmproxy → same nginx:9080 → same `/usr/share/secubox/www/` (single source of truth for the Hub UI)
+
+**Build artefact note:** `packages/secubox-hub/debian/secubox-hub/usr/share/secubox/www/shared/sidebar.js` was not modified — it will be regenerated at next `dpkg-buildpackage`.
+
+---
+
 ### Session 150 — OPAD Doctrine Documents v2.4.0
 
 **Goal:** Create the 5 foundational OPAD (Off-Path Active Defense) doctrinal documents for SecuBox-Deb migration to passive observation + packet injection architecture.
