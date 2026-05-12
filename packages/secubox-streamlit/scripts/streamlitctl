@@ -276,14 +276,10 @@ deploy_from_gitea() {
 EOJ
     chown 1000:1000 "$app_dir/.deploy.json"
 
-    # 6. Restart LXC container if it was running (best-effort)
-    local was_running=0
-    lxc_running && was_running=1
-    if [[ $was_running -eq 1 ]]; then
-        log "Restarting Streamlit container"
-        cmd_stop || warn "stop returned non-zero"
-        cmd_start || warn "start returned non-zero"
-    fi
+    # 6. No automatic restart — Streamlit auto-reloads on file changes
+    # in the watched app dir. Restarting the whole LXC would kill all
+    # other running apps. Operator can run `streamlitctl restart` manually
+    # if a full-LXC restart is needed.
 
     # 7. Prune old backups, keep 3 most recent
     local backups
@@ -362,12 +358,8 @@ EOJ
         chown 1000:1000 "$app_dir/.deploy.json"
     fi
 
-    local was_running=0
-    lxc_running && was_running=1
-    if [[ $was_running -eq 1 ]]; then
-        cmd_stop || true
-        cmd_start || true
-    fi
+    # No automatic restart — same reasoning as deploy_from_gitea.
+    # Streamlit auto-reloads on file changes in the watched app dir.
 
     log "Rollback OK: ${app}"
     return 0
