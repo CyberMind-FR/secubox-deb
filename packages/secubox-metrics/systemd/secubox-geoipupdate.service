@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox — refresh GeoLite2 ASN database
+ConditionPathExists=/etc/secubox/secrets/maxmind.conf
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/geoipupdate -f /etc/secubox/secrets/maxmind.conf -d /var/lib/GeoIP
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/GeoIP
