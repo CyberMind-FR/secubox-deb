@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
@@ -2218,6 +2218,14 @@ async def webui_nginx_config():
     except ValueError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     return _render_nginx_vhost(ident)
+
+
+@app.post("/webui/refresh", status_code=204,
+          dependencies=[Depends(require_jwt)])
+async def webui_refresh():
+    """Invalidate the cached identity. Call after editing /etc/default/secubox."""
+    _webui_identity.invalidate_cache()
+    return Response(status_code=204)
 
 
 app.include_router(router)

@@ -64,3 +64,26 @@ def test_nginx_config_returns_rendered_vhost(client, monkeypatch):
     assert "listen 0.0.0.0:9080;" in body
     assert "root /usr/share/secubox/www;" in body
     assert "include /etc/nginx/secubox.d/*.conf;" in body
+
+
+def test_refresh_invalidates_cache(client, tmp_path, monkeypatch):
+    from api.main import app
+    from secubox_core.auth import require_jwt
+    app.dependency_overrides[require_jwt] = lambda: {"sub": "tester"}
+    try:
+        # First call seeds the cache via /admin-domain
+        r1 = client.get("/webui/admin-domain")
+        assert r1.json()["hostname"] == "gk2"
+        # Mutate the file under the API's feet
+        wi.DEFAULTS_FILE.write_text('SECUBOX_HOSTNAME="changed"\n')
+        # Without refresh, the API still sees old value
+        r2 = client.get("/webui/admin-domain")
+        assert r2.json()["hostname"] == "gk2"
+        # Refresh
+        r3 = client.post("/webui/refresh")
+        assert r3.status_code == 204
+        # Now the API sees the new value
+        r4 = client.get("/webui/admin-domain")
+        assert r4.json()["hostname"] == "changed"
+    finally:
+        app.dependency_overrides.clear()
