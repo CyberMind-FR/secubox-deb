@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -29,10 +30,46 @@ except ImportError:
     async def require_jwt():
         pass
 
+from visitor_origin import VisitorOriginAggregator
+from live_hosts import LiveHostsAggregator
+from cert_status import CertStatusAggregator
+
+try:
+    from secubox_core.config import (
+        get_visitor_origin_config,
+        get_live_hosts_config,
+        get_cert_status_config,
+    )
+except ImportError:  # dev fallback
+    def get_visitor_origin_config(): return {"enabled": False, "window_minutes": 60, "min_count": 5, "top_n": 5, "asn_db_path": "/var/lib/GeoIP/GeoLite2-ASN.mmdb", "nft_table": "secubox_metrics", "nft_set": "seen_src", "nft_family": "inet"}
+    def get_live_hosts_config():     return {"enabled": False, "window_minutes": 60, "top_n": 5, "haproxy_socket": "/run/haproxy/admin.sock", "frontend_filter": "*"}
+    def get_cert_status_config():    return {"enabled": False, "letsencrypt_live_dir": "/etc/letsencrypt/live", "warn_days": 30, "critical_days": 7}
+
+visitor_origin_agg = VisitorOriginAggregator(get_visitor_origin_config())
+live_hosts_agg     = LiveHostsAggregator(get_live_hosts_config())
+cert_status_agg    = CertStatusAggregator(get_cert_status_config())
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    tasks = [
+        asyncio.create_task(visitor_origin_agg.run_forever()),
+        asyncio.create_task(live_hosts_agg.run_forever()),
+        asyncio.create_task(cert_status_agg.run_forever()),
+    ]
+    try:
+        yield
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 app = FastAPI(
     title="SecuBox Metrics Dashboard",
     description="Real-time system metrics with caching",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware for cross-origin health banner requests
@@ -704,6 +741,30 @@ async def get_health_summary(request: Request, domain: Optional[str] = None):
         summary["ssl"] = None
 
     return summary
+
+@app.get("/api/v1/metrics/visitor-origin")
+async def visitor_origin_endpoint():
+    return JSONResponse(
+        content=visitor_origin_agg.current(),
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@app.get("/api/v1/metrics/live-hosts")
+async def live_hosts_endpoint():
+    return JSONResponse(
+        content=live_hosts_agg.current(),
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@app.get("/api/v1/metrics/cert-status")
+async def cert_status_endpoint():
+    return JSONResponse(
+        content=cert_status_agg.current(),
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
 
 if __name__ == "__main__":
     import uvicorn

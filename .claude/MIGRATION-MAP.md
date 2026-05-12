@@ -149,6 +149,12 @@ Légende : ✅ Terminé · 🔄 En cours · ⬜ À faire · ⏸ Bloqué
 
 ---
 
+## Addenda
+
+**2026-05-12 — Issue #92 extension:** `secubox-metrics` gains three public live-panel endpoints (`visitor-origin`, `live-hosts`, `cert-status`) consumed by the health banner.
+
+---
+
 ## Phases du projet
 
 ### Phase 1 — Hardware ✅
