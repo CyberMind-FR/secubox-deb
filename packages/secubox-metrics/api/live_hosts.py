@@ -32,11 +32,12 @@ class LiveHostsAggregator:
         self._buckets: collections.deque[dict[str, int]] = collections.deque(maxlen=60)
         self._prev_totals: dict[str, int] = {}
         self._payload: dict = {"enabled": False, "entries": []}
+        self._refreshed = False
 
     # -- public ---------------------------------------------
 
     def current(self) -> dict:
-        if self._payload.get("entries"):
+        if self._refreshed:
             return dict(self._payload)
         if CACHE_PATH.exists():
             try:
@@ -55,9 +56,11 @@ class LiveHostsAggregator:
 
     async def refresh_once(self) -> dict:
         if not self.cfg.get("enabled"):
+            self._refreshed = True
             return self._disabled_payload()
-        totals = self._read_haproxy_stats()
+        totals = await asyncio.to_thread(self._read_haproxy_stats)
         if totals is None:
+            self._refreshed = True
             return self._disabled_payload()
         kept = self._filter_frontends(totals)
         self._delta_and_buffer(kept)
@@ -69,6 +72,7 @@ class LiveHostsAggregator:
             "entries": entries,
         }
         self._persist(payload)
+        self._refreshed = True
         return payload
 
     # -- helpers --------------------------------------------
