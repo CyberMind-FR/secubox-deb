@@ -7,6 +7,6 @@ Standards-Version: 4.6.2
 
 Package: secubox-metablogizer
 Architecture: all
-Depends: ${misc:Depends}, secubox-core, python3, nginx
+Depends: ${misc:Depends}, secubox-core, python3, nginx, python3-jsonschema
 Description: SecuBox MetaBlogizer - Static Site Publisher
  Static site publishing and management for SecuBox.
