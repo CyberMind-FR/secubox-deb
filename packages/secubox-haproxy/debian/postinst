@@ -12,5 +12,25 @@ case "$1" in
     systemctl enable secubox-haproxy.service
     systemctl start secubox-haproxy.service || true
     ;;
+  triggered)
+    for trig in $2; do
+      case "$trig" in
+        secubox-defaults-changed)
+          echo "secubox-haproxy: refreshing for $trig"
+          # Best-effort refresh + render
+          curl -fsS -X POST --unix-socket /run/secubox/haproxy.sock \
+               http://localhost/webui/refresh 2>/dev/null || true
+          if [ -x /usr/local/bin/secubox-render-nginx-webui ]; then
+            /usr/local/bin/secubox-render-nginx-webui || \
+              echo "secubox-haproxy: render failed (non-fatal)" >&2
+          fi
+          if [ -x /usr/local/bin/secubox-haproxy-regen-safe ]; then
+            /usr/local/bin/secubox-haproxy-regen-safe || \
+              echo "secubox-haproxy: regen-safe failed (non-fatal)" >&2
+          fi
+          ;;
+      esac
+    done
+    ;;
 esac
 #DEBHELPER#

@@ -1,0 +1,58 @@
+#!/bin/bash
+# secubox-haproxy-regen-safe — Safe haproxy.cfg regeneration with validate + rollback
+#
+# Usage: secubox-haproxy-regen-safe [--no-reload]
+#
+# Flow:
+#   1. Snapshot /etc/haproxy/haproxy.cfg
+#   2. Run `haproxyctl generate` (writes new cfg in place)
+#   3. Validate with `haproxy -c -f` — if invalid, restore snapshot
+#   4. Reload haproxy on success (skip with --no-reload)
+#
+# CyberMind — 2026-05-12 (post Session 156 regression).
+set -euo pipefail
+
+CFG=/etc/haproxy/haproxy.cfg
+TS=$(date +%s)
+SNAP="$CFG.bak.$TS-pre-regen"
+RELOAD=1
+[[ "${1:-}" == "--no-reload" ]] && RELOAD=0
+
+log() { echo "[$(date "+%F %T")] $*" >&2; }
+
+[[ -x /usr/sbin/haproxyctl ]] || { log "FATAL: /usr/sbin/haproxyctl missing"; exit 2; }
+[[ -r "$CFG" ]] || { log "FATAL: $CFG missing or unreadable"; exit 2; }
+
+log "Snapshot $CFG → $SNAP"
+cp -p "$CFG" "$SNAP"
+
+log "Run: haproxyctl generate"
+if ! /usr/sbin/haproxyctl generate; then
+    log "haproxyctl generate failed; restoring snapshot"
+    cp -p "$SNAP" "$CFG"
+    exit 3
+fi
+
+log "Validate new $CFG"
+if ! haproxy -c -f "$CFG" >/dev/null 2>&1; then
+    log "validation FAILED; saving broken candidate and restoring snapshot"
+    cp -p "$CFG" "$CFG.broken.$TS"
+    cp -p "$SNAP" "$CFG"
+    log "broken candidate kept at $CFG.broken.$TS for forensics"
+    exit 5
+fi
+log "validation OK"
+
+if [[ $RELOAD -eq 1 ]]; then
+    log "Reload haproxy"
+    if systemctl reload haproxy; then
+        log "reload OK"
+    else
+        log "reload failed; rolling back to snapshot"
+        cp -p "$SNAP" "$CFG"
+        systemctl reload haproxy && log "rollback reload OK" || log "rollback reload ALSO failed — manual intervention needed"
+        exit 4
+    fi
+fi
+
+log "regen-safe complete (snapshot kept: $SNAP)"
