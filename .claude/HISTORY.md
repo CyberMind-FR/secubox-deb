@@ -4,6 +4,63 @@
 ---
 ## 2026-05-12
 
+### Session 154 — Metablogizer Vhosts Audit & Regeneration
+
+**Goal:** User flagged `https://lldh.ganimed.fr/` returning 404. Apply the same diagnostic + fix workflow to all metablogizer vhosts, find every site with broken routing / missing content / port mismatch.
+
+**Trigger case — `lldh.ganimed.fr`:**
+
+- nginx had `server_name lldh.gk2.secubox.in` only (no `.ganimed.fr` alias) → 404 from default_server.
+- mitmproxy route pointed to port `8000` instead of `8900` (where metablog nginx listens).
+- `/srv/metablogizer/sites/lldh/` contained only `La_Livree_dHermes_Galerie-1.zip` (31 MB) + `.git` — no `index.html` to serve.
+
+**Trigger fix (3 steps):**
+
+1. Extracted zip via `python3 -m zipfile` (84 files: `index.html` + `planches/*.jpg`).
+2. Added `lldh.ganimed.fr` to existing `server_name lldh.gk2.secubox.in` block in `/etc/nginx/sites-enabled/metablogizer`, `nginx -t && systemctl reload nginx`.
+3. Patched `/srv/mitmproxy/haproxy-routes.json`: `lldh.ganimed.fr` → `[192.168.1.200, 8900]`, pushed to LXC container, `systemctl restart mitmproxy` (SIGHUP alone wasn't enough — mitmproxy serving cached/wrong content until full restart).
+
+**Systematic audit of all metablog vhosts (Python script in `/tmp` on board):**
+
+Scanned `/etc/nginx/sites-enabled/metablogizer` for every `server_name` → root pair, cross-checked each domain against `/srv/mitmproxy/haproxy-routes.json` and the on-disk `index.html`.
+
+| Metric | Count |
+| --- | --- |
+| Sites scanned | 159 |
+| Server_names total | 162 |
+| OK after fixes | 162 (100%) |
+| `wrong_port` (route ≠ 8900) | 0 |
+| `missing_route` (in nginx, absent from routes) | 1 → `pub.gk2.secubox.in` |
+| `extract_zip` (zip not extracted) | 0 (after lldh) |
+| `no_index_no_zip` real cases | 1 → `werdl` |
+
+**Additional fixes applied:**
+
+- `pub.gk2.secubox.in` → added to mitmproxy routes `[10.100.0.1, 8900]`, mitmproxy restarted. Now HTTP 200 ("GK² · NET — Opérateur Internet & Services Numériques").
+- `werdl/index.html` → symlink to `famille_index.html` (3 HTML files existed: `famille_index`, `famille_bebe-enfant`, `famille_papy-mamy`; preserved originals, no destructive rename). Now HTTP 200 ("Retrouver son téléphone — Pour toute la famille").
+
+**False positive identified:**
+
+- Initial audit flagged `public` as a "site without index", but my regex over-captured: it was matching the trailing `public` in Laravel-style paths `/srv/metablogizer/sites/{money,live,evolution}/public/`. Those parent sites (`money`, `live`, `evolution`) serve fine via their normal `server_name` blocks. No action needed.
+
+**Backups on board:**
+
+- `/srv/mitmproxy/haproxy-routes.json.bak.<epoch>` (pre-patch)
+- `/etc/nginx/sites-enabled/metablogizer.bak.<epoch>` (pre-server_name-add)
+- Symlink for `werdl` is non-destructive (`famille_index.html` untouched).
+
+**Verification (live, fresh HTTPS, no cache):**
+
+- `lldh.ganimed.fr` → 200, 43959 b, "La Livrée d'Hermès"
+- `lldh.gk2.secubox.in` → 200, 43959 b, same content
+- `pub.gk2.secubox.in` → 200, 47584 b, "GK² · NET"
+- `werdl.gk2.secubox.in` → 200, 6017 b, "Retrouver son téléphone"
+- Spot-check `admin.gk2`, `arm.gk2`, `zkp.gk2`, `3d.gk2` from Session 153 still 200 ✅ (no regression).
+
+**Note:** all fixes were applied to live board state (routes JSON, nginx vhost config, site content). The metablogizer vhost config (`/etc/nginx/sites-enabled/metablogizer`) is auto-generated per site by the metablogizer service and is not tracked in the repo, so no repo file changed from this session beyond this HISTORY entry.
+
+---
+
 ### Session 153 — Mitmproxy Route Sync Stability Fix
 
 **Goal:** All `*.gk2.secubox.in` metablogizer sites (arm, zkp, 3d, …) returned "Wrong Domain" page on HTTPS. Investigate, restore service, and harden the auto-sync infrastructure.
