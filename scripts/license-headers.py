@@ -46,6 +46,44 @@ def render_header(style: str) -> str:
     raise ValueError(f"unknown comment style: {style}")
 
 
+LANG_TABLE: dict[str, tuple[str, str]] = {
+    ".py": ("hash", "python"),
+}
+
+
+def _place_python(header: str, text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    insert_at = 0
+    # Skip shebang
+    if lines and lines[0].startswith("#!"):
+        insert_at = 1
+    # Skip encoding declaration (PEP 263)
+    if insert_at < len(lines) and re.match(r"^#.*coding[:=]", lines[insert_at]):
+        insert_at += 1
+    return "".join(lines[:insert_at]) + header + "\n" + "".join(lines[insert_at:])
+
+
+_PLACERS = {
+    "python": _place_python,
+}
+
+
+def apply(text: str, ext: str) -> str:
+    """Insert the CMSD header into `text` for files with extension `ext`.
+
+    Returns `text` unchanged if a CMSD header is already present or if a
+    foreign SPDX header is detected.
+    """
+    if ext not in LANG_TABLE:
+        return text
+    status = detect_existing(text)
+    if status in ("MATCH", "FOREIGN"):
+        return text
+    style, placer_name = LANG_TABLE[ext]
+    header = render_header(style)
+    return _PLACERS[placer_name](header, text)
+
+
 def main(argv: list[str] | None = None) -> int:
     raise NotImplementedError("see Task 11")
 
