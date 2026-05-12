@@ -43,20 +43,16 @@ def test_admin_domain_503_when_unset(client, tmp_path, monkeypatch):
     assert "SECUBOX_HOSTNAME" in r.json()["detail"]
 
 
-def test_nginx_config_requires_jwt(client):
+def test_nginx_config_is_public(client):
+    """Endpoint is intentionally public — content is derivable from /webui/admin-domain
+    and the unix socket is root-only at the filesystem level."""
     r = client.get("/webui/nginx-config")
-    assert r.status_code in (401, 403)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/plain")
 
 
-def test_nginx_config_returns_rendered_vhost(client, monkeypatch):
-    # Bypass JWT for this test by overriding the dependency
-    from api.main import app
-    from secubox_core.auth import require_jwt
-    app.dependency_overrides[require_jwt] = lambda: {"sub": "tester"}
-    try:
-        r = client.get("/webui/nginx-config")
-    finally:
-        app.dependency_overrides.clear()
+def test_nginx_config_returns_rendered_vhost(client):
+    r = client.get("/webui/nginx-config")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/plain")
     body = r.text

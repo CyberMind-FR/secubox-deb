@@ -2268,10 +2268,13 @@ def _render_nginx_vhost(ident: dict) -> str:
     )
 
 
-@app.get("/webui/nginx-config", response_class=PlainTextResponse,
-         dependencies=[Depends(require_jwt)])
+@app.get("/webui/nginx-config", response_class=PlainTextResponse)
 async def webui_nginx_config():
-    """Return the rendered nginx vhost for the WebUI (text/plain)."""
+    """Return the rendered nginx vhost for the WebUI (text/plain).
+
+    Public — content is fully derivable from the public /webui/admin-domain.
+    Unix socket access is root-only (postinst trigger context).
+    """
     try:
         ident = _webui_identity.get_identity()
     except ValueError as e:
