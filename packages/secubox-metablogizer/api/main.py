@@ -9,9 +9,16 @@ SecuBox is an appliance and network model - distributed peer applications.
 """
 import subprocess
 import os
+import sys
 import json
 import shutil
 from pathlib import Path
+
+# Self-bootstrap api/ onto sys.path so `from site_schema import …` and
+# `from rmtree import …` resolve under `uvicorn api.main:app` (where only
+# the parent dir is auto-added). Tests use PYTHONPATH=api so the
+# insert is a no-op in that path. See #109.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel
