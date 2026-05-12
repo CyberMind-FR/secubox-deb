@@ -26,7 +26,7 @@ METABLOG_PORT=8900
 BACKEND_IP="10.100.0.1"
 
 # Dead container IPs to fix (not running LXC containers)
-DEAD_CONTAINER_IPS="10.100.0.10 10.100.0.20 10.100.0.30 10.100.0.40 10.100.0.50"
+DEAD_CONTAINER_IPS="10.100.0.10 10.100.0.20 10.100.0.30 10.100.0.40"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2
@@ -110,7 +110,7 @@ main() {
         # Check if route exists with correct port
         existing=$(echo "$routes_json" | jq -r --arg d "$domain" '.[$d] // empty' 2>/dev/null || true)
 
-        if [[ -z "$existing" ]] || ! echo "$existing" | jq -e ".[1] == $port" >/dev/null 2>&1; then
+        if [[ -z "$existing" ]]; then
             log "Updating route: $domain -> $BACKEND_IP:$port"
             new_rj=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$port" '.[$d] = [$ip, $p]' 2>/dev/null || true)
             if [[ -n "$new_rj" ]]; then routes_json="$new_rj"; fi
@@ -124,7 +124,7 @@ main() {
 
         existing=$(echo "$routes_json" | jq -r --arg d "$domain" '.[$d] // empty' 2>/dev/null || true)
 
-        if [[ -z "$existing" ]] || ! echo "$existing" | jq -e ".[1] == $METABLOG_PORT" >/dev/null 2>&1; then
+        if [[ -z "$existing" ]]; then
             log "Updating metablog route: $domain -> $BACKEND_IP:$METABLOG_PORT"
             new_rj=$(echo "$routes_json" | jq --arg d "$domain" --arg ip "$BACKEND_IP" --argjson p "$METABLOG_PORT" '.[$d] = [$ip, $p]' 2>/dev/null || true)
             if [[ -n "$new_rj" ]]; then routes_json="$new_rj"; fi
