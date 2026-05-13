@@ -1,0 +1,8 @@
+secubox-eye-square (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release. Phase 2 of issue #127.
+  * Dual-pane kiosk: Chromium left, PySide6 right.
+  * Helper FastAPI on Unix socket with SO_PEERCRED.
+  * Variant-aware USB gadget composite.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 13 May 2026 00:00:00 +0200

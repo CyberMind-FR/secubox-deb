@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Ensure system user exists
+        if ! id secubox-eye-square >/dev/null 2>&1; then
+            useradd --system --no-create-home --shell /usr/sbin/nologin secubox-eye-square
+        fi
+
+        # Ensure runtime + audit dirs
+        mkdir -p /run/secubox /var/log/secubox
+        chown secubox-eye-square:secubox-eye-square /run/secubox /var/log/secubox
+
+        # Activate AppArmor profile
+        if command -v apparmor_parser >/dev/null 2>&1; then
+            apparmor_parser -r /etc/apparmor.d/secubox-eye-square-helper || true
+        fi
+
+        # Reload systemd
+        systemctl daemon-reload || true
+        systemctl enable secubox-eye-square-helper.service || true
+        systemctl enable secubox-otg-gadget.service || true
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

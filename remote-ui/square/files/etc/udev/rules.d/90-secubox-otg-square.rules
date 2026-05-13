@@ -1,0 +1,9 @@
+# 90-secubox-otg-square.rules — host-side udev rule
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# When a square gadget appears on the SecuBox host (idVendor=1d6b, idProduct=0104 from
+# the configfs composite, serial number starting with "secubox-square-"), rename the
+# network interface to "secubox-square" and call secubox-otg-host-up.sh with INTERFACE=secubox-square.
+
+ACTION=="add", SUBSYSTEM=="net", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", ATTRS{serial}=="secubox-square-*", NAME="secubox-square", ENV{INTERFACE}="secubox-square", RUN+="/usr/local/sbin/secubox-otg-host-up.sh"
