@@ -24,9 +24,20 @@ import sys
 from pathlib import Path
 
 # Ensure the engine import resolves whether we're installed (/usr/lib/...) or in-tree.
+# In production, /usr/sbin/usersctl has only 2 parents; in-tree, parents[3] is the repo root.
 sys.path.insert(0, "/usr/lib/secubox/users")
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common"))
+_here = Path(__file__).resolve()
+try:
+    sys.path.insert(0, str(_here.parents[1]))
+except IndexError:
+    pass
+try:
+    _common = _here.parents[3] / "common"
+    if _common.exists():
+        sys.path.insert(0, str(_common))
+except IndexError:
+    pass
+# Production: secubox_core installed as a site-package, importable directly.
 
 from api import engine, password_policy, totp, migrate_v1_to_v2  # noqa: E402
 
