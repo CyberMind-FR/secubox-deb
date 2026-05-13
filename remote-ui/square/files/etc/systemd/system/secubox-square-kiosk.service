@@ -1,0 +1,32 @@
+# /etc/systemd/system/secubox-square-kiosk.service
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+[Unit]
+Description=SecuBox Eye Square — Pillow+framebuffer kiosk
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/127
+After=multi-user.target secubox-eye-square-helper.service
+Wants=multi-user.target secubox-eye-square-helper.service
+ConditionPathExists=/dev/fb0
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+SupplementaryGroups=video input
+ExecStart=/usr/bin/python3 -m secubox_eye_square_kiosk
+Restart=always
+RestartSec=3
+MemoryMax=128M
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+
+# Hardening
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/dev/fb0 /run/secubox
+
+[Install]
+WantedBy=multi-user.target
