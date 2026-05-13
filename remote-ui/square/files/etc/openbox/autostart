@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# /etc/openbox/autostart — runs after openbox starts
+# Disable screen blanking + DPMS so the kiosk stays awake
+xset s off -dpms s noblank
+
+# Hide cursor when idle, but keep visible on mouse/touchpad/touchscreen events
+unclutter -idle 99999 -root &
+
+# Chromium and right-panel services bring up their windows; Openbox places them per rc.xml
