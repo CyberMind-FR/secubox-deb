@@ -333,6 +333,10 @@ async def _set_password(req: _SetPasswordIn, request: _Request):
 
 # Mount v2 router FIRST so its /login overrides the legacy auth_router /login.
 # FastAPI uses the first matching route, so _login_router must come before auth_router.
+# Mounted under both prefixes: "" for the canonical URL (/api/v1/auth/login after nginx
+# strips the /api/v1/auth/ prefix) and "/auth" for the legacy doubled URL
+# (/api/v1/auth/auth/login), so existing frontend code keeps working during the cutover.
+app.include_router(_login_router, prefix="")
 app.include_router(_login_router, prefix="/auth")
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
