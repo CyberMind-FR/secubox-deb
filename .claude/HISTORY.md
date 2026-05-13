@@ -4,6 +4,24 @@
 ---
 ## 2026-05-13
 
+### MetaBlogizer deploy webhook (Issue #113, sub-E of #49)
+
+**Goal:** Close the umbrella #49. Auto-deploy on `git push` to metablog-* repos. HMAC-verified webhook + per-site lock + ring buffer + Gitea API installer.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-13-metablog-deploy-webhook-design.md`
+- Plan: `docs/superpowers/plans/2026-05-13-metablog-deploy-webhook.md` (8 tasks)
+- `api/webhook.py`: `verify_signature`, `load_secret` (cached), `classify_payload`, `site_lock` pool, `git_pull`, ring buffer (50 entries)
+- `main.py`: `POST /webhook` (public, HMAC), `GET /deploys` (JWT)
+- `scripts/metablog-webhook-{install,uninstall}.sh` — Gitea API, idempotent, --dry-run
+- Bash smoke `tests/scripts/test-metablog-webhook.sh` (3 gates)
+- 21 pytest cases (36 total in the api/tests/ suite, all green)
+
+**Followups:**
+- Streamlit auto-deploy webhook (separate scope)
+
+---
+
 ### Fix — Hub sidebar mobile-mode auto-detect (Issue #114, PR #115)
 
 **Symptom:** `[Sidebar] Mobile mode: ON (touch: true, narrow: false)` on a wide-window desktop with a touchscreen.
