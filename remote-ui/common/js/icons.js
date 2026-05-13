@@ -2,7 +2,7 @@
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 // SecuBox-Deb :: remote-ui/common/js/icons.js
 //
-// data: URIs PNG base64 for AUTH/WALL/BOOT/MIND/ROOT/MESH × {22, 48, 96, 128}.
+// data: URIs PNG base64 for AUTH/WALL/BOOT/MIND/ROOT/MESH × {22, 48, 96}.
 // Exposed as window.ICONS for legacy round/index.html callers that reference
 // bare ICONS.AUTH[22] without imports (no ES modules in round/).
 
