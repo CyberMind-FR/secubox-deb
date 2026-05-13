@@ -3,6 +3,29 @@
 
 ---
 
+## 🔄 2026-05-13: remote-ui Phase 1 — extract common/ shared core (Issue #127, PR #130)
+
+### Objective
+
+Refactor `remote-ui/round/` to consume a new `remote-ui/common/` directory (JS/CSS/icons/shell) without changing round/'s behaviour, plus add two additive deltas (TransportManager `onModuleTap`/`onTransportChange` hooks, and a `form_factor` field on `RemoteUIConnectedRequest`). Foundation for Phase 2's `remote-ui/square/` variant (Pi 4B/400 + 7" 800x480).
+
+### Completed
+
+- Brainstormed full design → [`docs/superpowers/specs/2026-05-13-eye-square-variant-design.md`](docs/superpowers/specs/2026-05-13-eye-square-variant-design.md)
+- Wrote Phase 1 implementation plan → [`docs/superpowers/plans/2026-05-13-eye-square-phase1-common-extraction.md`](docs/superpowers/plans/2026-05-13-eye-square-phase1-common-extraction.md) (20 tasks, ~80 steps)
+- Executed via superpowers:subagent-driven-development with two-stage review on every task (60+ subagent dispatches, multiple fix-loops landed)
+- 22 commits in [`feature/127-add-remote-ui-square-variant-for-pi-4b-7`](https://github.com/CyberMind-FR/secubox-deb/pull/130)
+- Green gates: Task 12 visual AE=0, Task 13 form_factor TDD 4/4 green, Task 17 pytest 80/80 green
+- Phase 1 PR opened: [#130](https://github.com/CyberMind-FR/secubox-deb/pull/130) — pending review
+
+### Followups
+
+- **Pending user-action regression gates** before PR merge: Task 18 `diffoscope` on round/ image build (blocked in subagent env by missing `hyperpixel2r.dtbo` prerequisite — structural verification in `docs/superpowers/specs/2026-05-13-task18-regression-gate-report.txt`); Task 19 manual Zero W bench (depends on Task 18).
+- Phase 2 plan to be drafted post-merge when `common/`'s API surface is stable.
+- Pre-existing `TM.jwt_otg` / `TM.jwt_wifi` references in round/'s inline JS (visible in code reviewer feedback) — orthogonal to Phase 1, track separately if rendering hits the path.
+
+---
+
 ## ✅ Session 167: Auth rework — secubox-users + TOTP 2FA (Issue #120, PR TBD)
 
 ### Objective
