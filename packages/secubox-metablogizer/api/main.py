@@ -20,7 +20,7 @@ from pathlib import Path
 # insert is a no-op in that path. See #109.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile, File, Request
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -44,6 +44,15 @@ NGINX_BACKEND_IP = "192.168.1.200"
 import logging
 from site_schema import enrich as _schema_enrich, validate as _schema_validate
 from rmtree import force_remove as _rmtree_force
+from webhook import (
+    classify_payload,
+    git_pull,
+    list_deploys as _list_deploys,
+    load_secret,
+    site_lock,
+    verify_signature,
+    _record_deploy,
+)
 
 logger = logging.getLogger("metablogizer")
 
@@ -692,6 +701,108 @@ async def republish_all():
         "sites_published": count,
         "message": message
     }
+
+
+# =============================================================================
+# DEPLOY WEBHOOK (Gitea push → site update)
+# =============================================================================
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    """Gitea push webhook. HMAC-verified; deploys metablog-* default-branch pushes."""
+    import asyncio
+    import time
+    from fastapi import HTTPException
+
+    body = await request.body()
+    sig = request.headers.get("X-Gitea-Signature", "")
+
+    try:
+        secret = load_secret()
+    except (FileNotFoundError, ValueError) as e:
+        logger.error(f"webhook secret unavailable: {e}")
+        raise HTTPException(503, "webhook secret not configured")
+
+    if not verify_signature(secret, body, sig):
+        raise HTTPException(401)
+
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "invalid-json")
+
+    decision, info = classify_payload(payload)
+    if decision == "malformed":
+        raise HTTPException(400, info.get("reason", "malformed"))
+    if decision == "skip":
+        logger.info(f"webhook skip {info}")
+        return {"skip": info["reason"], **{k: v for k, v in info.items() if k != "reason"}}
+
+    site_name = info["site"]
+    branch = info["branch"]
+    site_dir = SITES_ROOT / site_name
+
+    if not site_dir.exists():
+        logger.info(f"webhook unknown-site {site_name}")
+        return {"skip": "unknown-site", "site": site_name}
+    if not (site_dir / ".git").exists():
+        logger.info(f"webhook no-git-dir {site_name}")
+        return {"skip": "no-git-dir", "site": site_name}
+
+    lock = await site_lock(site_name)
+    loop = asyncio.get_running_loop()
+    t0 = time.monotonic()
+
+    try:
+        async with lock:
+            old_domain = _read_domain(site_dir)
+            old, new = await loop.run_in_executor(None, git_pull, site_dir, branch)
+            new_domain = _read_domain(site_dir)
+
+            _invalidate_sites_cache()
+
+            domain_changed = old_domain != new_domain
+            if domain_changed:
+                await loop.run_in_executor(None, regenerate_nginx_config)
+
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        entry = {
+            "site": site_name,
+            "from": old,
+            "to": new,
+            "duration_ms": duration_ms,
+            "timestamp": time.time(),
+            "domain_changed": domain_changed,
+            "source": "webhook",
+        }
+        _record_deploy(entry)
+        logger.info(
+            f"deploy site={site_name} from={old[:8]} to={new[:8]} "
+            f"duration_ms={duration_ms} domain_changed={domain_changed}"
+        )
+        return {"deployed": site_name, "from": old, "to": new,
+                "duration_ms": duration_ms, "domain_changed": domain_changed}
+
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"webhook git timeout site={site_name}: {e}")
+        raise HTTPException(504, "git-timeout")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"webhook git failed site={site_name}: {e.stderr}")
+        raise HTTPException(500, "git-failed")
+
+
+@app.get("/deploys", dependencies=[Depends(require_jwt)])
+async def deploys():
+    """Last 50 deploy records (newest first)."""
+    return _list_deploys()
+
+
+def _read_domain(site_dir: Path) -> str:
+    """Best-effort read of site.json:domain. Returns '' on any error."""
+    try:
+        return (_load_site_json(site_dir) or {}).get("domain", "") or ""
+    except Exception:
+        return ""
 
 
 @app.post("/site/{name}/upload", dependencies=[Depends(require_jwt)])
