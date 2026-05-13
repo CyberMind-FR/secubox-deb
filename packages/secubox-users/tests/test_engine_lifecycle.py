@@ -53,10 +53,10 @@ def test_enable_restores_flag(store: engine.Engine):
 
 
 def test_list_users_returns_all(store: engine.Engine):
-    store.create_user("a", email="a@x.y", role="viewer")
-    store.create_user("b", email="b@x.y", role="viewer")
+    store.create_user("ada", email="a@x.y", role="viewer")
+    store.create_user("bob", email="b@x.y", role="viewer")
     names = sorted(u["username"] for u in store.list_users())
-    assert names == ["a", "b"]
+    assert names == ["ada", "bob"]
 
 
 def test_atomic_write_does_not_corrupt_on_failure(tmp_path: Path, monkeypatch):

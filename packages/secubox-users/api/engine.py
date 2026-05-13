@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 log = logging.getLogger("secubox.users.engine")
 
-USERNAME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
+USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
 ALLOWED_ROLES = {"admin", "operator", "viewer"}
 
 
