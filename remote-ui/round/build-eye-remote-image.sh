@@ -879,6 +879,13 @@ server {
         proxy_read_timeout 30s;
     }
 
+    # /common/* → /var/www/common/* (forward-looking for square/, used by round/ index.html too)
+    location /common/ {
+        alias /var/www/common/;
+        access_log off;
+        expires 1d;
+    }
+
     location / {
         try_files $uri $uri/ =404;
     }
@@ -905,6 +912,17 @@ cp "$SCRIPT_DIR/index.html" "$ROOT_MNT/var/www/secubox-round/"
 if [[ -d "$SCRIPT_DIR/assets" ]]; then
     cp -r "$SCRIPT_DIR/assets" "$ROOT_MNT/var/www/secubox-round/"
 fi
+
+# Embed remote-ui/common/ at /var/www/common/ (sibling of /var/www/secubox-round/)
+# round/index.html references ../common/css/* and ../common/js/* — must resolve.
+COMMON_SRC="$(dirname "$SCRIPT_DIR")/common"
+if [[ ! -d "$COMMON_SRC" ]]; then
+    err "remote-ui/common/ not found at: $COMMON_SRC"
+    exit 1
+fi
+mkdir -p "$ROOT_MNT/var/www/common"
+cp -r "$COMMON_SRC/." "$ROOT_MNT/var/www/common/"
+log "Embedded common/ (css, js, assets/icons, shell) at /var/www/common/"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SSH KEY
