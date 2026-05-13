@@ -1,5 +1,20 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-12 (Session 165)*
+*Mis à jour : 2026-05-13*
+
+---
+
+## ✅ 2026-05-13: Hub sidebar mobile-mode auto-detect fix (Issue #114, PR #115)
+
+### Objective
+Stop the Hub sidebar from flipping to mobile mode on touchscreen laptops with a mouse. The log gave it away: `Mobile mode: ON (touch: true, narrow: false)` on a wide-window desktop.
+
+### Completed
+- `packages/secubox-hub/www/shared/sidebar.js` `isTouchDevice()` now checks `(hover: none) and (pointer: coarse)` — primary-input only, so hybrid devices with a mouse stay in normal mode.
+- Narrow-viewport (`≤768px`) fallback unchanged; still handles resized desktop windows and phones.
+- Commit `ce1f270c`, merged in PR #115.
+
+### Followups
+- None. Phones, tablets, and touchscreen laptops with mouse all behave correctly.
 
 ---
 
