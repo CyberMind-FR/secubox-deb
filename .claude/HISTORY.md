@@ -2,6 +2,19 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-13
+
+### Fix — Hub sidebar mobile-mode auto-detect (Issue #114, PR #115)
+
+**Symptom:** `[Sidebar] Mobile mode: ON (touch: true, narrow: false)` on a wide-window desktop with a touchscreen.
+
+**Root cause:** `packages/secubox-hub/www/shared/sidebar.js` `isTouchDevice()` ORed `'ontouchstart' in window`, `navigator.maxTouchPoints > 0`, and `matchMedia('(pointer: coarse)')`. The first two are true on hybrid touchscreen laptops where the mouse is the *primary* input, forcing mobile mode incorrectly.
+
+**Fix:** Use only `matchMedia('(hover: none) and (pointer: coarse)')` — a primary-input check. False on a laptop with a mouse, true on phones and tablets. The `≤768px` narrow-viewport fallback is unchanged.
+
+**Commit:** `ce1f270c` · merged via PR #115 (`9fbb784f`).
+
+---
 ## 2026-05-12
 
 ### Session 165 — MetaBlogizer version dashboard UI (Issue #103, sub-D of #49)
