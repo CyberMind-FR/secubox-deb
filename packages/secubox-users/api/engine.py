@@ -142,3 +142,43 @@ class Engine:
         u["enabled"] = True
         self._save(doc)
         self._audit("user_enabled", username, {})
+
+    # ── Passwords ────────────────────────────────────────────────────
+
+    def set_password(self, username: str, plaintext: str) -> None:
+        """Hash + store password. Validates policy. Clears must_change_password."""
+        from argon2 import PasswordHasher
+        from . import password_policy
+
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u:
+            raise EngineError(f"utilisateur inconnu : {username}")
+        password_policy.validate(plaintext, u)
+        u["password_hash"] = PasswordHasher().hash(plaintext)
+        u["must_change_password"] = False
+        self._save(doc)
+        self._audit("password_set", username, {})
+
+    def clear_password(self, username: str) -> None:
+        """Remove password hash and force re-set on next login."""
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u:
+            raise EngineError(f"utilisateur inconnu : {username}")
+        u["password_hash"] = None
+        u["must_change_password"] = True
+        self._save(doc)
+        self._audit("password_cleared", username, {})
+
+    def verify_password_for_user(self, username: str, plaintext: str) -> bool:
+        from argon2 import PasswordHasher
+        from argon2.exceptions import InvalidHash, VerifyMismatchError
+
+        u = self._find(self._load(), username)
+        if not u or not u.get("enabled") or not u.get("password_hash"):
+            return False
+        try:
+            return PasswordHasher().verify(u["password_hash"], plaintext)
+        except (VerifyMismatchError, InvalidHash):
+            return False
