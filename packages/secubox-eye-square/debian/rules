@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	# Helper package
+	mkdir -p debian/secubox-eye-square/usr/lib/python3/dist-packages/eye_square_helper
+	cp -r helper/eye_square_helper/. debian/secubox-eye-square/usr/lib/python3/dist-packages/eye_square_helper/
+	# Right-panel package
+	mkdir -p debian/secubox-eye-square/usr/lib/python3/dist-packages/secubox_eye_square_right_panel
+	cp -r right_panel/secubox_eye_square_right_panel/. debian/secubox-eye-square/usr/lib/python3/dist-packages/secubox_eye_square_right_panel/
+	# Config files (systemd units, nginx site, etc) from the sibling remote-ui/square/files/
+	cp -r ../../remote-ui/square/files/. debian/secubox-eye-square/
