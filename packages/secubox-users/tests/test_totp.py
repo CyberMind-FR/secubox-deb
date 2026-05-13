@@ -61,3 +61,28 @@ def test_hash_and_verify_backup_code():
     assert h.startswith("$argon2id$")
     assert totp.verify_backup_code(h, "ABCDEFGHIJ") is True
     assert totp.verify_backup_code(h, "OTHERCODE!") is False
+
+
+def test_qr_png_b64_returns_valid_png_base64():
+    uri = totp.provisioning_uri("alice", "JBSWY3DPEHPK3PXP", issuer="SecuBox")
+    b64 = totp.qr_png_b64(uri)
+    import base64
+    raw = base64.b64decode(b64)
+    # PNG signature: 89 50 4E 47 0D 0A 1A 0A
+    assert raw[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(raw) > 100  # non-trivial payload
+
+
+def test_qr_png_b64_is_self_contained(monkeypatch):
+    """Render must not require any network call — verified by failing socket."""
+    import socket
+    real_socket = socket.socket
+    def boom(*a, **kw):
+        raise OSError("network disabled")
+    monkeypatch.setattr(socket, "socket", boom)
+    try:
+        uri = totp.provisioning_uri("alice", "JBSWY3DPEHPK3PXP")
+        b64 = totp.qr_png_b64(uri)
+        assert b64
+    finally:
+        monkeypatch.setattr(socket, "socket", real_socket)
