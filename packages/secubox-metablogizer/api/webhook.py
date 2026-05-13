@@ -58,9 +58,14 @@ def git_pull(site_dir: Path, branch: str) -> tuple[str, str]:
 
     Raises subprocess.TimeoutExpired or CalledProcessError on git failure.
     """
+    # Per-invocation safe.directory: site dirs are owned by root (from sub-B
+    # ingest) but the service runs as secubox; without this, git 2.35+
+    # refuses with "fatal: detected dubious ownership".
+    safe_dir = f"safe.directory={site_dir}"
+
     def _git(*args: str, timeout: int = GIT_OP_TIMEOUT) -> str:
         result = subprocess.run(
-            ["git", "-C", str(site_dir), *args],
+            ["git", "-c", safe_dir, "-C", str(site_dir), *args],
             capture_output=True, text=True, timeout=timeout, check=True,
         )
         return result.stdout.strip()
