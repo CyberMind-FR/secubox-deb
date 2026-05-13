@@ -175,32 +175,9 @@ _users_engine.set_audit_callback(lambda evt, user, d: _append_audit(evt, user, d
 
 
 def _verify_totp_ntp_aware(username: str, code: str) -> bool:
-    """Verify TOTP with a window scaled by NTP health (offline-mode resilient)."""
-    u = user_store.get_user(username) or {}
-    block = (u.get("totp") or {})
-    if not block.get("enabled"):
-        return False
-    secret = block.get("secret")
-    last_step = block.get("last_step")
+    """Verify TOTP via the engine with a window scaled by NTP health."""
     window = ntp_health.recommended_totp_window()
-    step_size = 30
-    now = int(time.time())
-    current = now // step_size
-    import pyotp
-    for delta in range(-window, window + 1):
-        step = current + delta
-        if pyotp.TOTP(secret).at(step * step_size) == code:
-            if last_step is not None and step <= last_step:
-                return False
-            # Persist the consumed step
-            doc = json.loads(_USERS_FILE.read_text())
-            for entry in doc["users"]:
-                if entry["username"] == username and entry.get("totp"):
-                    entry["totp"]["last_step"] = step
-                    break
-            _USERS_FILE.write_text(json.dumps(doc, indent=2, sort_keys=True))
-            return True
-    return False
+    return _users_engine.verify_totp_for_user(username, code, window=window)
 
 
 # ─── Branching login router ────────────────────────────────────────────
@@ -362,15 +339,15 @@ async def _set_password(req: _SetPasswordIn, request: _Request):
     raise HTTPException(status_code=403, detail="Token hors scope")
 
 
-@_login_router.get("/status")
-async def _auth_status():
-    """Public-readable status surface for the UI banner.
+@_login_router.get("/preflight")
+async def _auth_preflight():
+    """Public-readable preflight surface for the UI banner.
 
     Returns NTP-health + identity-store source. UI uses this to render warnings
     like "Identity store in fallback mode" or "Clock not synced — TOTP may fail".
 
     Distinct from the legacy `/health` liveness check (sidebar consumer):
-    `/health` answers "is the service up?", `/status` answers "is auth healthy?".
+    `/health` answers "is the service up?", `/preflight` answers "is auth healthy?".
     """
     src = user_store.load_with_fallback()
     return {

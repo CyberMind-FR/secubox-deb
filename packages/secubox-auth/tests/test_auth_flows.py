@@ -120,13 +120,13 @@ def test_full_totp_enrollment_then_login(client):
     assert r5.json()["mfa_required"] is True
 
 
-def test_auth_health_endpoint(client, monkeypatch):
+def test_auth_preflight_endpoint(client, monkeypatch):
     c, *_ = client
     # Force unsynced
     from api import ntp_health
     monkeypatch.setattr(ntp_health, "probe", lambda: {"synced": False, "error": "no chronyc"})
     monkeypatch.setattr(ntp_health, "recommended_totp_window", lambda: 3)
-    r = c.get("/auth/status")
+    r = c.get("/auth/preflight")
     assert r.status_code == 200
     body = r.json()
     assert body["ntp"]["synced"] is False
@@ -159,3 +159,11 @@ def test_totp_widened_window_accepts_drifted_code(client, monkeypatch):
                 headers={"Authorization": f"Bearer {mfa_tok}"})
     assert r4.status_code == 200
     assert "access_token" in r4.json()
+
+    # Same drifted code resubmitted should be refused (replay protection).
+    # Re-login to get a fresh mfa_token (the previous one may be consumed).
+    r_replay_pw = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
+    mfa_tok2 = r_replay_pw.json()["mfa_token"]
+    r5 = c.post("/auth/login/mfa", json={"code": drifted_code},
+                headers={"Authorization": f"Bearer {mfa_tok2}"})
+    assert r5.status_code == 401
