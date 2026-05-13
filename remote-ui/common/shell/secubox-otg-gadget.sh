@@ -127,7 +127,7 @@ get_serial() {
     fi
     # Pi 4B / Pi 400 (BCM2711) — device-tree serial-number node (arm64)
     if [ -r /sys/firmware/devicetree/base/serial-number ]; then
-        s=$(tr -d '\0' < /sys/firmware/devicetree/base/serial-number)
+        s=$(tr -d '\0' < /sys/firmware/devicetree/base/serial-number | xargs)
         if [ -n "$s" ]; then
             echo "$s"
             return
