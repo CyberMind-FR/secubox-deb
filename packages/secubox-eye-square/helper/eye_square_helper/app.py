@@ -64,6 +64,9 @@ def create_app() -> FastAPI:
     app.include_router(service_router)
     app.include_router(lockdown_router)
 
+    from .routes.console import router as console_router
+    app.include_router(console_router)
+
     return app
 
 
