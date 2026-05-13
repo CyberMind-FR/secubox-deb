@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt, create_token, set_session_callback
 from secubox_core.config import get_config
 import json
+import os
 import secrets
 import time
 import threading
@@ -27,12 +28,317 @@ async def health_check():
     """Public health check endpoint for sidebar status."""
     return {"status": "ok", "module": "deb"}
 
+# ──────────────────────────────────────────────────────────────────────
+# Task 13: branching login, MFA, TOTP enroll/confirm, set-password
+# Inserted BEFORE the legacy auth_router mount so the overriding
+# _login_router (mounted AFTER) takes precedence on /auth/login.
+# ──────────────────────────────────────────────────────────────────────
+from secubox_core import user_store
+from secubox_core.auth import (
+    set_session_validator,
+    _emit_session_event,
+    _decode_token as _jwt_decode,
+)
+
+# Make secubox-users engine importable (in-process path, no IPC).
+# We cannot use `from api import engine` because Python resolves "api" to the
+# secubox-auth api package (the one we're inside).  Instead we register the
+# secubox-users api/ directory as a *separate* package named `_users_api` in
+# sys.modules so that the relative imports inside engine.py (`from . import totp`)
+# resolve correctly.
+import importlib.util as _ilu
+import sys as _sys
+import types as _types
+
+
+def _bootstrap_users_api_package() -> str:
+    """Register secubox-users/api as '_users_api' package; return its root dir."""
+    candidates = [
+        Path("/usr/lib/secubox/users/api"),
+        Path(__file__).resolve().parents[3] / "packages" / "secubox-users" / "api",
+    ]
+    pkg_root = next((p for p in candidates if (p / "engine.py").exists()), None)
+    if pkg_root is None:
+        raise ImportError("secubox-users api/ not found in any candidate path")
+
+    pkg_name = "_users_api"
+    if pkg_name not in _sys.modules:
+        # Create a package object pointing at the discovered directory.
+        pkg = _types.ModuleType(pkg_name)
+        pkg.__path__ = [str(pkg_root)]
+        pkg.__package__ = pkg_name
+        pkg.__spec__ = _ilu.spec_from_file_location(
+            pkg_name, str(pkg_root / "__init__.py"),
+            submodule_search_locations=[str(pkg_root)],
+        )
+        _sys.modules[pkg_name] = pkg
+        # Execute __init__.py if it exists.
+        init_py = pkg_root / "__init__.py"
+        if init_py.exists():
+            spec = _ilu.spec_from_file_location(pkg_name, str(init_py),
+                                                submodule_search_locations=[str(pkg_root)])
+            mod = _ilu.module_from_spec(spec)  # type: ignore[arg-type]
+            _sys.modules[pkg_name] = mod
+            spec.loader.exec_module(mod)       # type: ignore[union-attr]
+
+    return pkg_name
+
+
+def _load_users_submod(pkg_name: str, name: str) -> object:
+    full_name = f"{pkg_name}.{name}"
+    if full_name in _sys.modules:
+        return _sys.modules[full_name]
+    pkg_root = Path(_sys.modules[pkg_name].__path__[0])
+    spec = _ilu.spec_from_file_location(full_name, str(pkg_root / f"{name}.py"),
+                                        submodule_search_locations=[])
+    mod = _ilu.module_from_spec(spec)           # type: ignore[arg-type]
+    mod.__package__ = pkg_name
+    _sys.modules[full_name] = mod
+    spec.loader.exec_module(mod)                # type: ignore[union-attr]
+    return mod
+
+
+_users_api_pkg = _bootstrap_users_api_package()
+_users_engine_mod = _load_users_submod(_users_api_pkg, "engine")
+_users_totp_mod   = _load_users_submod(_users_api_pkg, "totp")
+from api.totp_pending import PendingStore
+
+_DATA_DIR = Path(os.environ.get("SECUBOX_AUTH_DATA_DIR", "/var/lib/secubox/auth"))
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
+_SESSIONS_FILE = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", str(_DATA_DIR / "sessions.json")))
+_AUDIT_FILE    = Path(os.environ.get("SECUBOX_AUTH_AUDIT",    str(_DATA_DIR / "audit.log")))
+_TOTP_PENDING_FILE = Path(os.environ.get("SECUBOX_AUTH_TOTP_PENDING", str(_DATA_DIR / "totp-pending.json")))
+_USERS_FILE    = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
+
+_pending      = PendingStore(_TOTP_PENDING_FILE, ttl_seconds=900)
+_users_engine = _users_engine_mod.Engine(users_path=_USERS_FILE)
+
+
+def _read_sessions() -> list:
+    if not _SESSIONS_FILE.exists():
+        return []
+    try:
+        return json.loads(_SESSIONS_FILE.read_text())
+    except Exception:
+        return []
+
+
+def _write_sessions(rows: list) -> None:
+    _SESSIONS_FILE.write_text(json.dumps(rows))
+
+
+def _append_audit(event: str, username: str, details: dict) -> None:
+    line = json.dumps({"ts": time.time(), "event": event, "user": username, **details}) + "\n"
+    with _AUDIT_FILE.open("a") as _f:
+        _f.write(line)
+
+
+def _session_validator(jti: str) -> bool:
+    return any(s.get("id") == jti for s in _read_sessions())
+
+
+def _on_session_event(event: str, username: str, details: dict) -> None:
+    _append_audit(event, username, details)
+    if event == "login_success":
+        rows = _read_sessions()
+        rows.append({
+            "id": details.get("jti", secrets.token_hex(8)),
+            "username": username,
+            "ip": details.get("ip", ""),
+            "user_agent": details.get("user_agent", ""),
+            "created": datetime.utcnow().isoformat(),
+            "expires": int(time.time()) + details.get("expires_in", 86400),
+            "type": "jwt",
+        })
+        _write_sessions(rows)
+
+
+def _revoke_sessions(username: str) -> int:
+    rows = _read_sessions()
+    keep = [r for r in rows if r.get("username") != username]
+    n = len(rows) - len(keep)
+    _write_sessions(keep)
+    _append_audit("sessions_revoked", username, {"count": n})
+    return n
+
+
+set_session_validator(_session_validator)
+# set_session_callback already called in startup(); _on_session_event replaces it.
+set_session_callback(_on_session_event)
+_users_engine.set_revoke_callback(_revoke_sessions)
+_users_engine.set_audit_callback(lambda evt, user, d: _append_audit(evt, user, d))
+
+
+# ─── Branching login router ────────────────────────────────────────────
+from fastapi import APIRouter as _APIRouter, Request as _Request
+
+_login_router = _APIRouter(tags=["auth-v2"])
+
+
+class _LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class _MfaIn(BaseModel):
+    code: str
+
+
+class _SetPasswordIn(BaseModel):
+    new_password: str
+    old_password: Optional[str] = None
+
+
+def _check_scope(authorization: Optional[str], expected_scope: str) -> dict:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Token Bearer manquant")
+    payload = _jwt_decode(authorization.split(" ", 1)[1])
+    if payload.get("scope") != expected_scope:
+        raise HTTPException(status_code=403, detail="Token hors scope")
+    return payload
+
+
+@_login_router.post("/login")
+async def _login_v2(req: _LoginIn, request: _Request):
+    """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
+    ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+          or request.headers.get("X-Real-IP", "")
+          or (request.client.host if request.client else ""))
+    ua = request.headers.get("User-Agent", "")[:100]
+    user = user_store.get_user(req.username)
+
+    if not user or not user.get("enabled"):
+        _emit_session_event("login_failed", req.username, {
+            "reason": "unknown_user" if not user else "disabled",
+            "ip": ip, "user_agent": ua,
+        })
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+
+    # Initial-setup branch (empty password + must_change_password flag)
+    if user.get("must_change_password") and req.password == "":
+        setup_tok = create_token(req.username, scope="set-password", expires_in=900)
+        _append_audit("setup_token_issued", req.username, {"ip": ip})
+        return {"setup_required": True, "setup_token": setup_tok}
+
+    if not user.get("password_hash"):
+        _emit_session_event("login_failed", req.username, {"reason": "no_local_password", "ip": ip})
+        raise HTTPException(status_code=401, detail="Aucun mot de passe local")
+
+    if not user_store.verify_password(req.username, req.password):
+        _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials", "ip": ip})
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+
+    totp_block = user.get("totp") or {}
+    if totp_block.get("enabled"):
+        mfa_tok = create_token(req.username, scope="mfa-challenge", expires_in=300)
+        _append_audit("mfa_challenge_issued", req.username, {"ip": ip})
+        return {"mfa_required": True, "mfa_token": mfa_tok}
+
+    # Admin without TOTP → force enrollment
+    if user.get("role") == "admin":
+        enroll_tok = create_token(req.username, scope="totp-enroll", expires_in=900)
+        _append_audit("totp_enrollment_required", req.username, {"ip": ip})
+        return {"enrollment_required": True, "enrollment_token": enroll_tok}
+
+    jti = secrets.token_hex(8)
+    tok = create_token(req.username, jti=jti)
+    _on_session_event("login_success", req.username, {
+        "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
+    })
+    _users_engine.touch_last_login(req.username)
+    return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
+
+
+@_login_router.post("/login/mfa")
+async def _login_mfa(req: _MfaIn, request: _Request):
+    payload = _check_scope(request.headers.get("Authorization"), "mfa-challenge")
+    username = payload["sub"]
+    if not user_store.is_enabled(username):
+        raise HTTPException(status_code=401, detail="Compte désactivé")
+    ok = (_users_engine.verify_totp_for_user(username, req.code)
+          or _users_engine.consume_backup_code(username, req.code))
+    if not ok:
+        _append_audit("mfa_failed", username, {})
+        raise HTTPException(status_code=401, detail="Code invalide")
+    jti = secrets.token_hex(8)
+    tok = create_token(username, jti=jti)
+    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
+    _users_engine.touch_last_login(username)
+    return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
+
+
+@_login_router.post("/totp/enroll")
+async def _totp_enroll(request: _Request):
+    payload = _check_scope(request.headers.get("Authorization"), "totp-enroll")
+    username = payload["sub"]
+    existing = user_store.get_user(username) or {}
+    if (existing.get("totp") or {}).get("enabled"):
+        raise HTTPException(status_code=409, detail="Déjà enrôlé")
+    secret = _users_totp_mod.generate_secret()
+    _pending.put(payload["jti"], secret)
+    import socket as _socket
+    issuer = f"SecuBox · {_socket.gethostname()}"
+    uri = _users_totp_mod.provisioning_uri(username, secret, issuer=issuer)
+    return {"secret": secret, "otpauth_uri": uri, "qr_png_b64": ""}
+
+
+@_login_router.post("/totp/confirm")
+async def _totp_confirm(req: _MfaIn, request: _Request):
+    payload = _check_scope(request.headers.get("Authorization"), "totp-enroll")
+    username = payload["sub"]
+    secret = _pending.get(payload["jti"])
+    if not secret:
+        raise HTTPException(status_code=410, detail="Enrôlement expiré")
+    import pyotp as _pyotp
+    if not _pyotp.TOTP(secret).verify(req.code, valid_window=1):
+        raise HTTPException(status_code=401, detail="Code invalide")
+    backup_plain = _users_engine.enroll_totp(username, secret)
+    _pending.delete(payload["jti"])
+    jti = secrets.token_hex(8)
+    tok = create_token(username, jti=jti)
+    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
+    return {
+        "access_token": tok, "token_type": "bearer", "expires_in": 86400,
+        "backup_codes": backup_plain,
+        "backup_codes_note": "Conservez ces codes. Affichés une seule fois.",
+    }
+
+
+@_login_router.post("/set-password")
+async def _set_password(req: _SetPasswordIn, request: _Request):
+    auth_h = request.headers.get("Authorization", "")
+    if not auth_h.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Token Bearer manquant")
+    payload = _jwt_decode(auth_h.split(" ", 1)[1])
+    scope = payload.get("scope")
+    username = payload["sub"]
+    if scope == "set-password":
+        _users_engine.set_password(username, req.new_password)
+        _users_engine.revoke_sessions(username)
+        return {"ok": True, "message": "Mot de passe défini, veuillez vous reconnecter"}
+    if scope is None:
+        # Change-my-password with full JWT
+        if not req.old_password:
+            raise HTTPException(status_code=400, detail="Ancien mot de passe requis")
+        if not user_store.verify_password(username, req.old_password):
+            raise HTTPException(status_code=401, detail="Ancien mot de passe incorrect")
+        _users_engine.set_password(username, req.new_password)
+        return {"ok": True, "message": "Mot de passe modifié"}
+    raise HTTPException(status_code=403, detail="Token hors scope")
+
+
+# Mount v2 router FIRST so its /login overrides the legacy auth_router /login.
+# FastAPI uses the first matching route, so _login_router must come before auth_router.
+app.include_router(_login_router, prefix="/auth")
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 
 # Configuration
 DATA_DIR = Path("/var/lib/secubox/auth")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except PermissionError:
+    pass  # dev/test environment without root — DATA_DIR fallback is unused
 VOUCHERS_FILE = DATA_DIR / "vouchers.json"
 SESSIONS_FILE = DATA_DIR / "sessions.json"
 HISTORY_FILE = DATA_DIR / "history.json"
