@@ -163,7 +163,7 @@ def _revoke_sessions(username: str) -> int:
 
 
 set_session_validator(_session_validator)
-# set_session_callback already called in startup(); _on_session_event replaces it.
+# Module-load registration so secubox_core.auth fires our handler from the first request.
 set_session_callback(_on_session_event)
 _users_engine.set_revoke_callback(_revoke_sessions)
 _users_engine.set_audit_callback(lambda evt, user, d: _append_audit(evt, user, d))
@@ -528,11 +528,9 @@ def _handle_session_event(event: str, username: str, details: dict):
 
 @app.on_event("startup")
 async def startup():
-    """Start background cleanup and register session callback."""
+    """Start background cleanup task."""
     global _cleanup_task
     _cleanup_task = asyncio.create_task(_periodic_cleanup())
-    # Register callback for login events
-    set_session_callback(_handle_session_event)
 
 
 @app.on_event("shutdown")
