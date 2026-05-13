@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "packages" / "secubox-users"))
 def auth_data_dir(tmp_path: Path) -> Path:
     """Stand-in for /var/lib/secubox/auth/."""
     d = tmp_path / "auth"
-    d.mkdir()
+    d.mkdir(exist_ok=True)
     (d / "sessions.json").write_text("[]")
     (d / "audit.log").write_text("")
     return d

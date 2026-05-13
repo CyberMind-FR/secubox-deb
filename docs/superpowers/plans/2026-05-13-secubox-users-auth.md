@@ -77,14 +77,15 @@ tests/scripts/
 - Create: `packages/secubox-auth/tests/__init__.py`
 - Create: `packages/secubox-auth/tests/conftest.py`
 
-- [ ] **Step 1: Create empty `__init__.py` files**
+- [ ] **Step 1: Create the test directories (no `__init__.py` — would cause cross-dir collection collision)**
 
 ```bash
 for d in common/secubox_core/tests packages/secubox-users/tests packages/secubox-auth/tests; do
   install -d "$d"
-  : > "$d/__init__.py"
 done
 ```
+
+Note: do NOT add `__init__.py` to these dirs. Pytest discovers `conftest.py` without it, and an `__init__.py` would make all three dirs register as a top-level package named `tests`, breaking cross-dir collection.
 
 - [ ] **Step 2: Write `common/secubox_core/tests/conftest.py`**
 
