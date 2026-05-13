@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <theme>
+    <name>Clearlooks</name>
+  </theme>
+  <applications>
+    <!-- Chromium kiosk: pin to (0,0,480,480) -->
+    <application class="Chromium-browser">
+      <decor>no</decor>
+      <position force="yes"><x>0</x><y>0</y></position>
+      <size><width>480</width><height>480</height></size>
+      <fullscreen>no</fullscreen>
+      <maximized>no</maximized>
+    </application>
+    <!-- Right panel: pin to (480,0,320,480) -->
+    <application name="SecuBox Eye Square">
+      <decor>no</decor>
+      <position force="yes"><x>480</x><y>0</y></position>
+      <size><width>320</width><height>480</height></size>
+      <fullscreen>no</fullscreen>
+      <maximized>no</maximized>
+      <layer>above</layer>
+    </application>
+  </applications>
+</openbox_config>
