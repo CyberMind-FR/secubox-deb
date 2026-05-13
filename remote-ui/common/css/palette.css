@@ -1,0 +1,33 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * SecuBox-Deb :: remote-ui/common/css/palette.css
+ */
+
+:root {
+  /* Module Colours */
+  --auth: #C04E24;
+  --wall: #9A6010;
+  --boot: #803018;
+  --mind: #3D35A0;
+  --root: #0A5840;
+  --mesh: #104A88;
+
+  /* Theme Tokens */
+  --cosmos-black: #080808;
+  --cosmic-dark: #0a0a0f;
+  --surface-dark: #141414;
+  --surface-light: #1a1a1a;
+  --border-dark: #181818;
+  --border-mid: #222;
+  --border-light: #252525;
+  --text-white: #fff;
+  --text-primary: #ccc;
+  --text-muted: #444;
+  --text-dim: #333;
+  --text-darker: #2a2a2a;
+  --text-darkest: #1a3a28;
+  --status-inactive: #4a4a4a;
+  --status-dim: #555;
+  --glow-auth: #C04E2460;
+  --spinner-color: #C04E24;
+}
