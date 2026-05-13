@@ -16,6 +16,7 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from api import ntp_health
 
 app = FastAPI(title="secubox-auth", version="2.0.0", root_path="/api/v1/auth")
 
@@ -173,6 +174,35 @@ _users_engine.set_revoke_callback(_revoke_sessions)
 _users_engine.set_audit_callback(lambda evt, user, d: _append_audit(evt, user, d))
 
 
+def _verify_totp_ntp_aware(username: str, code: str) -> bool:
+    """Verify TOTP with a window scaled by NTP health (offline-mode resilient)."""
+    u = user_store.get_user(username) or {}
+    block = (u.get("totp") or {})
+    if not block.get("enabled"):
+        return False
+    secret = block.get("secret")
+    last_step = block.get("last_step")
+    window = ntp_health.recommended_totp_window()
+    step_size = 30
+    now = int(time.time())
+    current = now // step_size
+    import pyotp
+    for delta in range(-window, window + 1):
+        step = current + delta
+        if pyotp.TOTP(secret).at(step * step_size) == code:
+            if last_step is not None and step <= last_step:
+                return False
+            # Persist the consumed step
+            doc = json.loads(_USERS_FILE.read_text())
+            for entry in doc["users"]:
+                if entry["username"] == username and entry.get("totp"):
+                    entry["totp"]["last_step"] = step
+                    break
+            _USERS_FILE.write_text(json.dumps(doc, indent=2, sort_keys=True))
+            return True
+    return False
+
+
 # ─── Branching login router ────────────────────────────────────────────
 from fastapi import APIRouter as _APIRouter, Request as _Request
 
@@ -259,7 +289,7 @@ async def _login_mfa(req: _MfaIn, request: _Request):
     username = payload["sub"]
     if not user_store.is_enabled(username):
         raise HTTPException(status_code=401, detail="Compte désactivé")
-    ok = (_users_engine.verify_totp_for_user(username, req.code)
+    ok = (_verify_totp_ntp_aware(username, req.code)
           or _users_engine.consume_backup_code(username, req.code))
     if not ok:
         _append_audit("mfa_failed", username, {})
@@ -283,7 +313,8 @@ async def _totp_enroll(request: _Request):
     import socket as _socket
     issuer = f"SecuBox · {_socket.gethostname()}"
     uri = _users_totp_mod.provisioning_uri(username, secret, issuer=issuer)
-    return {"secret": secret, "otpauth_uri": uri, "qr_png_b64": ""}
+    qr_png = _users_totp_mod.qr_png_b64(uri)
+    return {"secret": secret, "otpauth_uri": uri, "qr_png_b64": qr_png}
 
 
 @_login_router.post("/totp/confirm")
@@ -329,6 +360,22 @@ async def _set_password(req: _SetPasswordIn, request: _Request):
         _users_engine.set_password(username, req.new_password)
         return {"ok": True, "message": "Mot de passe modifié"}
     raise HTTPException(status_code=403, detail="Token hors scope")
+
+
+@_login_router.get("/health")
+async def _auth_health():
+    """Public-readable health surface for the UI banner.
+
+    Returns NTP-health + identity-store source. UI uses this to render warnings
+    like "Identity store in fallback mode" or "Clock not synced — TOTP may fail".
+    """
+    src = user_store.load_with_fallback()
+    return {
+        "ntp": ntp_health.probe(),
+        "totp_window": ntp_health.recommended_totp_window(),
+        "identity_source": src.get("source"),
+        "identity_fallback": src.get("source") == "auth.toml.fallback",
+    }
 
 
 # Mount v2 router FIRST so its /login overrides the legacy auth_router /login.

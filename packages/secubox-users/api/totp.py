@@ -1,6 +1,8 @@
 """RFC 6238 TOTP wrapper + backup-code generator (argon2id-hashed)."""
 from __future__ import annotations
 
+import base64
+import io
 import secrets
 from typing import List, Optional, Tuple
 
@@ -65,3 +67,22 @@ def verify_backup_code(hash_: str, code: str) -> bool:
         return False
     except Exception:
         return False
+
+
+import qrcode  # noqa: E402 — placed after stdlib/third-party block intentionally
+
+
+def qr_png_b64(otpauth_uri: str, *, box_size: int = 6, border: int = 2) -> str:
+    """Render the otpauth:// URI as a base64-encoded PNG (no external service)."""
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=box_size,
+        border=border,
+    )
+    qr.add_data(otpauth_uri)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")

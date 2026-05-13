@@ -118,3 +118,44 @@ def test_full_totp_enrollment_then_login(client):
     r5 = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
     assert r5.status_code == 200
     assert r5.json()["mfa_required"] is True
+
+
+def test_auth_health_endpoint(client, monkeypatch):
+    c, *_ = client
+    # Force unsynced
+    from api import ntp_health
+    monkeypatch.setattr(ntp_health, "probe", lambda: {"synced": False, "error": "no chronyc"})
+    monkeypatch.setattr(ntp_health, "recommended_totp_window", lambda: 3)
+    r = c.get("/auth/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ntp"]["synced"] is False
+    assert body["totp_window"] == 3
+    assert body["identity_fallback"] in (True, False)
+
+
+def test_totp_widened_window_accepts_drifted_code(client, monkeypatch):
+    """With NTP degraded (window=3), a code from a step ~60s in the past still validates."""
+    import time as _time
+    import pyotp
+    c, users_path, _ = client
+
+    # Enroll admin
+    r1 = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
+    enroll_tok = r1.json()["enrollment_token"]
+    r2 = c.post("/auth/totp/enroll", headers={"Authorization": f"Bearer {enroll_tok}"})
+    secret = r2.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    c.post("/auth/totp/confirm", json={"code": code},
+           headers={"Authorization": f"Bearer {enroll_tok}"})
+
+    # Degrade NTP and present a code from 60s ago
+    from api import ntp_health
+    monkeypatch.setattr(ntp_health, "recommended_totp_window", lambda: 3)
+    r3 = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
+    mfa_tok = r3.json()["mfa_token"]
+    drifted_code = pyotp.TOTP(secret).at(int(_time.time()) - 60)
+    r4 = c.post("/auth/login/mfa", json={"code": drifted_code},
+                headers={"Authorization": f"Bearer {mfa_tok}"})
+    assert r4.status_code == 200
+    assert "access_token" in r4.json()
