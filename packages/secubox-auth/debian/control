@@ -9,7 +9,16 @@ Rules-Requires-Root: no
 
 Package: secubox-auth
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-aiosqlite
+Depends: ${misc:Depends},
+ ${python3:Depends},
+ python3-aiosqlite,
+ python3-fastapi,
+ python3-uvicorn,
+ python3-argon2,
+ python3-pyotp,
+ python3-jose,
+ secubox-core (>= 1.0),
+ secubox-users (>= 1.4)
 Description: SecuBox Auth Guardian
  Authentification avancée : OAuth2 (Google/GitHub), vouchers, sessions, portail splash.
  .
