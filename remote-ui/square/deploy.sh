@@ -5,6 +5,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 # SecuBox-Deb :: remote-ui/square — deploy.sh (SSH hot-update)
+# Phase 3: pushes helper + kiosk Python packages, applies optional config
+# overrides, restarts secubox-eye-square-helper + secubox-square-kiosk.
 set -euo pipefail
 readonly MODULE="square-deploy"
 
@@ -46,45 +48,22 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
-COMMON_SRC="$(dirname "$SCRIPT_DIR")/common"
-ROUND_SRC="$(dirname "$SCRIPT_DIR")/round"
 
-echo "[$MODULE] Rsync remote-ui/common/ → ${USER}@${HOST}:/var/www/common/"
-rsync -avz --delete -e "ssh -p $PORT" "$COMMON_SRC/" "${USER}@${HOST}:/tmp/secubox-common/"
-
-echo "[$MODULE] Rsync remote-ui/round/index.html → ${USER}@${HOST}:/var/www/secubox-round/"
-scp -P "$PORT" "$ROUND_SRC/index.html" "${USER}@${HOST}:/tmp/index.html"
-
-echo "[$MODULE] Rsync remote-ui/square/square-bridge.js"
-scp -P "$PORT" "$SCRIPT_DIR/square-bridge.js" "${USER}@${HOST}:/tmp/square-bridge.js"
-
-echo "[$MODULE] Rsync helper + right_panel Python packages..."
+echo "[$MODULE] Rsync helper + kiosk Python packages..."
 rsync -avz --delete -e "ssh -p $PORT" \
     "$REPO_ROOT/packages/secubox-eye-square/helper/eye_square_helper/" \
     "${USER}@${HOST}:/tmp/eye_square_helper/"
 rsync -avz --delete -e "ssh -p $PORT" \
-    "$REPO_ROOT/packages/secubox-eye-square/right_panel/secubox_eye_square_right_panel/" \
-    "${USER}@${HOST}:/tmp/secubox_eye_square_right_panel/"
+    "$REPO_ROOT/packages/secubox-eye-square/kiosk/secubox_eye_square_kiosk/" \
+    "${USER}@${HOST}:/tmp/secubox_eye_square_kiosk/"
 
 ssh -p "$PORT" "${USER}@${HOST}" "bash -s" <<REMOTE_SCRIPT
 set -e
 
-sudo rm -rf /var/www/common
-sudo mv /tmp/secubox-common /var/www/common
-sudo chown -R www-data:www-data /var/www/common
-
-sudo cp /tmp/index.html /var/www/secubox-round/index.html
-sudo sed -i 's|</body>|<script src="/local/square-bridge.js"></script></body>|' /var/www/secubox-round/index.html
-sudo chown www-data:www-data /var/www/secubox-round/index.html
-
-sudo mkdir -p /var/www/secubox-square
-sudo mv /tmp/square-bridge.js /var/www/secubox-square/
-sudo chown www-data:www-data /var/www/secubox-square/square-bridge.js
-
 sudo rm -rf /usr/lib/python3/dist-packages/eye_square_helper
 sudo mv /tmp/eye_square_helper /usr/lib/python3/dist-packages/
-sudo rm -rf /usr/lib/python3/dist-packages/secubox_eye_square_right_panel
-sudo mv /tmp/secubox_eye_square_right_panel /usr/lib/python3/dist-packages/
+sudo rm -rf /usr/lib/python3/dist-packages/secubox_eye_square_kiosk
+sudo mv /tmp/secubox_eye_square_kiosk /usr/lib/python3/dist-packages/
 
 TOML=/etc/secubox/eye-square.toml
 [ -f "\$TOML" ] || { echo "ERROR: \$TOML missing"; exit 1; }
@@ -92,12 +71,10 @@ ${API_URL:+sudo sed -i "s|^api_otg_base.*|api_otg_base = \\\"$API_URL\\\"|" \$TO
 ${API_PASS:+sudo sed -i "s|^login_pass.*|login_pass = \\\"$API_PASS\\\"|" \$TOML}
 ${SIMULATE:+sudo sed -i "s|^simulate.*|simulate = $SIMULATE|" \$TOML}
 
-sudo systemctl reload nginx
 sudo systemctl restart secubox-eye-square-helper.service
-sudo systemctl restart secubox-square-chromium.service
-sudo systemctl restart secubox-square-right-panel.service
+sudo systemctl restart secubox-square-kiosk.service
 
-curl -fsS http://localhost/ | head -1
+systemctl is-active secubox-square-kiosk.service || true
 echo "[remote] deploy complete"
 REMOTE_SCRIPT
 
