@@ -37,20 +37,29 @@ The host-side `RemoteUIManager` adds a `form_factor: "round" | "square"` field t
 
 ### Phase 2 — add `remote-ui/square/` (purely additive)
 
-New sibling targeting:
+New sibling targeting two boards that share the same BCM2711 SoC and image:
+
+| | Pi 4 Model B (primary bench target) | Pi 400 (additional target) |
+|---|---|---|
+| SoC | BCM2711, arm64 | BCM2711, arm64 (identical silicon) |
+| DTB | `bcm2711-rpi-4-b.dtb` | `bcm2711-rpi-400.dtb` |
+| Display | Official Raspberry Pi 7" Touchscreen V1.1 (DSI, 800×480, 10-point capacitive) | DSI 7" panel via Pi 400's DSI connector, **or** micro-HDMI to external 800×480/1024×600 touchscreen (USB-touch device) |
+| Keyboard | External USB | Integrated keyboard |
+| Power | GPIO 5V (USB-C reserved for peripheral OTG) | GPIO 5V (USB-C reserved for peripheral OTG) |
+| USB peripheral | dwc3 via `dwc2,dr_mode=peripheral` overlay | dwc3 via `dwc2,dr_mode=peripheral` overlay (identical) |
+
+Shared across both:
 
 | | Value |
 |---|---|
-| Board | Raspberry Pi 4 Model B (BCM2711, arm64) |
-| Display | Official Raspberry Pi 7" Touchscreen V1.1 (DSI, 800×480, 10-point capacitive) |
 | Compositor | Openbox on X11 (xinit-launched) |
 | Renderer left | Chromium kiosk consuming `common/`+`round/index.html` at (0,0)+480×480 |
 | Renderer right | PySide6 (LGPL Qt for Python) QMainWindow at (480,0)+320×480 |
 | IPC | WebSocket on `ws://127.0.0.1:9090/eye-square` hosted by the PySide6 process |
 | Privileged ops | `secubox-eye-square-helper` FastAPI on Unix socket `/run/secubox/eye-square-helper.sock` |
-| Power | GPIO 5V (USB-C reserved for peripheral-mode OTG) |
-| USB peripheral | dwc3 in peripheral mode via the `dwc2,dr_mode=peripheral` overlay |
-| Input | Touchscreen + USB touchpad + USB mouse + USB keyboard |
+| Input | Touchscreen + USB touchpad + USB mouse + USB keyboard (Pi 400 adds integrated keyboard automatically via libinput) |
+
+A single `secubox-eye-square_VERSION_arm64.img.xz` image boots on either board — the kernel's DTB selection at boot picks the right `bcm2711-rpi-*.dtb` based on the EEPROM model ID. `firstboot.sh` reads `/proc/device-tree/model` to record the board flavour and may set `hostname` accordingly (`secubox-eye-square-<6 hex>` on Pi 4B, `secubox-eye-square-400-<6 hex>` on Pi 400). All other configuration is identical.
 
 ### Out of scope (separate issues + specs)
 
