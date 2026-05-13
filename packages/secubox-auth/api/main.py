@@ -104,8 +104,12 @@ _users_totp_mod   = _load_users_submod(_users_api_pkg, "totp")
 from api.totp_pending import PendingStore
 
 _DATA_DIR = Path(os.environ.get("SECUBOX_AUTH_DATA_DIR", "/var/lib/secubox/auth"))
-_DATA_DIR.mkdir(parents=True, exist_ok=True)
-_SESSIONS_FILE = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", str(_DATA_DIR / "sessions.json")))
+try:
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
+except PermissionError:
+    # Running as non-root in dev/test — caller is responsible for env-overriding to a writable path.
+    pass
+__SESSIONS_FILE = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", str(_DATA_DIR / "sessions.json")))
 _AUDIT_FILE    = Path(os.environ.get("SECUBOX_AUTH_AUDIT",    str(_DATA_DIR / "audit.log")))
 _TOTP_PENDING_FILE = Path(os.environ.get("SECUBOX_AUTH_TOTP_PENDING", str(_DATA_DIR / "totp-pending.json")))
 _USERS_FILE    = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
@@ -115,16 +119,16 @@ _users_engine = _users_engine_mod.Engine(users_path=_USERS_FILE)
 
 
 def _read_sessions() -> list:
-    if not _SESSIONS_FILE.exists():
+    if not __SESSIONS_FILE.exists():
         return []
     try:
-        return json.loads(_SESSIONS_FILE.read_text())
+        return json.loads(__SESSIONS_FILE.read_text())
     except Exception:
         return []
 
 
 def _write_sessions(rows: list) -> None:
-    _SESSIONS_FILE.write_text(json.dumps(rows))
+    __SESSIONS_FILE.write_text(json.dumps(rows))
 
 
 def _append_audit(event: str, username: str, details: dict) -> None:
@@ -333,17 +337,11 @@ app.include_router(_login_router, prefix="/auth")
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 
-# Configuration
-DATA_DIR = Path("/var/lib/secubox/auth")
-try:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-except PermissionError:
-    pass  # dev/test environment without root — DATA_DIR fallback is unused
-VOUCHERS_FILE = DATA_DIR / "vouchers.json"
-SESSIONS_FILE = DATA_DIR / "sessions.json"
-HISTORY_FILE = DATA_DIR / "history.json"
-WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
-STATS_FILE = DATA_DIR / "stats.json"
+# Configuration — all paths are env-overridable via _DATA_DIR (SECUBOX_AUTH_DATA_DIR)
+VOUCHERS_FILE = _DATA_DIR / "vouchers.json"
+HISTORY_FILE = _DATA_DIR / "history.json"
+WEBHOOKS_FILE = _DATA_DIR / "webhooks.json"
+STATS_FILE = _DATA_DIR / "stats.json"
 
 
 class StatsCache:
@@ -489,12 +487,12 @@ async def _notify_webhooks(event: str, data: Dict[str, Any]):
 def _cleanup_expired():
     """Remove expired sessions and update stats."""
     now = int(time.time())
-    sessions = _load(SESSIONS_FILE, [])
+    sessions = _load(_SESSIONS_FILE, [])
     active = [s for s in sessions if s.get("expires", 0) > now]
     expired_count = len(sessions) - len(active)
 
     if expired_count > 0:
-        _save(SESSIONS_FILE, active)
+        _save(_SESSIONS_FILE, active)
         _record_event("sessions_expired", {"count": expired_count})
 
     return expired_count
@@ -509,21 +507,6 @@ async def _periodic_cleanup():
             pass
         await asyncio.sleep(300)  # Every 5 minutes
 
-
-def _handle_session_event(event: str, username: str, details: dict):
-    """Handle session events from secubox_core.auth login."""
-    _record_event(event, {"username": username, **details})
-    # Also create session record for successful logins
-    if event == "login_success":
-        sessions = _load(SESSIONS_FILE, [])
-        sessions.append({
-            "id": secrets.token_hex(8),
-            "username": username,
-            "created": datetime.now().isoformat(),
-            "expires": int(time.time()) + details.get("expires_in", 86400),
-            "type": "jwt"
-        })
-        _save(SESSIONS_FILE, sessions)
 
 
 @app.on_event("startup")
@@ -556,7 +539,7 @@ async def status(user=Depends(require_jwt)):
 
     cfg = get_config("oauth")
     now = int(time.time())
-    sessions = _load(SESSIONS_FILE, [])
+    sessions = _load(_SESSIONS_FILE, [])
     active_sessions = [s for s in sessions if s.get("expires", 0) > now]
     vouchers = _load(VOUCHERS_FILE, [])
 
@@ -582,7 +565,7 @@ async def status(user=Depends(require_jwt)):
 async def sessions(user=Depends(require_jwt)):
     """Get active sessions."""
     now = int(time.time())
-    all_sessions = _load(SESSIONS_FILE, [])
+    all_sessions = _load(_SESSIONS_FILE, [])
     active = []
 
     for s in all_sessions:
@@ -602,7 +585,7 @@ async def sessions(user=Depends(require_jwt)):
 async def session_stats(user=Depends(require_jwt)):
     """Get session statistics."""
     now = int(time.time())
-    sessions = _load(SESSIONS_FILE, [])
+    sessions = _load(_SESSIONS_FILE, [])
     active = [s for s in sessions if s.get("expires", 0) > now]
 
     # Group by type
@@ -748,7 +731,7 @@ async def redeem_voucher(code: str, client_ip: Optional[str] = None):
             _save(VOUCHERS_FILE, vouchers_list)
 
             # Create session
-            sessions = _load(SESSIONS_FILE, [])
+            sessions = _load(_SESSIONS_FILE, [])
             session = {
                 "id": secrets.token_hex(8),
                 "type": "voucher",
@@ -759,7 +742,7 @@ async def redeem_voucher(code: str, client_ip: Optional[str] = None):
                 "bandwidth_mb": v.get("bandwidth_mb", 0)
             }
             sessions.append(session)
-            _save(SESSIONS_FILE, sessions)
+            _save(_SESSIONS_FILE, sessions)
 
             token = create_token(f"voucher:{code}", expires_in=v["duration_hours"] * 3600)
 
@@ -816,13 +799,13 @@ async def delete_voucher(code: str, user=Depends(require_jwt)):
 @router.post("/revoke_session")
 async def revoke_session(session_id: str, user=Depends(require_jwt)):
     """Revoke a session."""
-    sessions = _load(SESSIONS_FILE, [])
+    sessions = _load(_SESSIONS_FILE, [])
     original_count = len(sessions)
     revoked_session = next((s for s in sessions if s.get("id") == session_id), None)
     sessions = [s for s in sessions if s.get("id") != session_id]
 
     if len(sessions) < original_count:
-        _save(SESSIONS_FILE, sessions)
+        _save(_SESSIONS_FILE, sessions)
         _record_event("session_revoked", {
             "session_id": session_id,
             "by": user.get("sub"),
@@ -913,7 +896,7 @@ async def delete_webhook(webhook_id: str, user=Depends(require_jwt)):
 async def summary(user=Depends(require_jwt)):
     """Get auth module summary."""
     now = int(time.time())
-    sessions = _load(SESSIONS_FILE, [])
+    sessions = _load(_SESSIONS_FILE, [])
     vouchers_list = _load(VOUCHERS_FILE, [])
     cfg = get_config("oauth")
 
