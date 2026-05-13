@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://secubox.in/schemas/users-v2.json",
+  "title": "SecuBox Users v2",
+  "type": "object",
+  "required": ["version", "users", "groups"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {"type": "string"},
+    "version": {"const": 2},
+    "users": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/user"}
+    },
+    "groups": {"type": "array"}
+  },
+  "definitions": {
+    "user": {
+      "type": "object",
+      "required": [
+        "username", "role", "enabled", "must_change_password",
+        "services", "created"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "username": {"type": "string", "pattern": "^[a-z0-9_-]{2,32}$"},
+        "email":    {"type": ["string", "null"], "format": "email"},
+        "role":     {"enum": ["admin", "operator", "viewer"]},
+        "enabled":  {"type": "boolean"},
+        "password_hash":        {"type": ["string", "null"]},
+        "must_change_password": {"type": "boolean"},
+        "totp":     {"oneOf": [{"type": "null"}, {"$ref": "#/definitions/totp"}]},
+        "google":   {"oneOf": [{"type": "null"}, {"$ref": "#/definitions/google"}]},
+        "services": {"type": "array", "items": {"type": "string"}},
+        "created":  {"type": "string", "format": "date-time"},
+        "last_login": {"type": ["string", "null"], "format": "date-time"},
+        "provision_results": {"type": "object"}
+      }
+    },
+    "totp": {
+      "type": "object",
+      "required": ["secret", "enabled", "enrolled_at", "backup_codes"],
+      "additionalProperties": false,
+      "properties": {
+        "secret":      {"type": "string", "minLength": 16},
+        "enabled":     {"type": "boolean"},
+        "enrolled_at": {"type": "string", "format": "date-time"},
+        "last_step":   {"type": ["integer", "null"]},
+        "backup_codes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["hash", "used_at"],
+            "additionalProperties": false,
+            "properties": {
+              "hash":    {"type": "string"},
+              "used_at": {"type": ["string", "null"], "format": "date-time"}
+            }
+          }
+        }
+      }
+    },
+    "google": {
+      "type": "object",
+      "required": ["sub", "email", "linked_at"],
+      "additionalProperties": false,
+      "properties": {
+        "sub":       {"type": "string"},
+        "email":     {"type": "string", "format": "email"},
+        "linked_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

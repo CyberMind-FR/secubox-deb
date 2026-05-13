@@ -1,9 +1,59 @@
 #!/bin/sh
 set -e
-if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-users.service || true
-    systemctl start secubox-users.service || true
-fi
+
+case "$1" in
+    configure)
+        # Create secubox system user/group if missing (idempotent, matches sibling packages)
+        getent group secubox >/dev/null || groupadd --system secubox
+        getent passwd secubox >/dev/null || useradd --system --gid secubox \
+            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
+        install -d -m 0770 -o root -g secubox /etc/secubox
+
+        # Run v1 → v2 migration (idempotent)
+        python3 - <<'PYEOF' || echo 'WARN: migration step failed — investigate /etc/secubox/users.json'
+import sys
+sys.path.insert(0, '/usr/lib/secubox/users')
+from api.migrate_v1_to_v2 import migrate
+from pathlib import Path
+migrate(Path('/etc/secubox/users.json'), auth_toml_path=Path('/etc/secubox/auth.toml'))
+PYEOF
+
+        # Seed default users (admin + <hostname>) if missing
+        HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname)"
+        for U in admin "$HOSTNAME_SHORT"; do
+            [ -n "$U" ] || continue
+            SBX_SEED_USER="$U" python3 - <<'PYEOF' || echo "WARN: seed for $U failed"
+import json
+import os
+import sys
+from pathlib import Path
+
+username = os.environ['SBX_SEED_USER']
+p = Path('/etc/secubox/users.json')
+if not p.exists():
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"version": 2, "users": [], "groups": []}))
+doc = json.loads(p.read_text())
+if not any(u['username'] == username for u in doc['users']):
+    sys.path.insert(0, '/usr/lib/secubox/users')
+    from api.engine import Engine
+    Engine(users_path=p).create_user(username, email=None, role='admin')
+    print('seeded user:', username)
+PYEOF
+        done
+
+        # Ownership + permissions on users.json
+        if [ -f /etc/secubox/users.json ]; then
+            chmod 660 /etc/secubox/users.json
+            chown root:secubox /etc/secubox/users.json
+        fi
+
+        # Restart the service so it picks up the new users.json
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable secubox-users.service 2>/dev/null || true
+        systemctl restart secubox-users.service 2>/dev/null || true
+        ;;
+esac
+
 #DEBHELPER#
 exit 0
