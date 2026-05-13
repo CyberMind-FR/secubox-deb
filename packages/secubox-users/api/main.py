@@ -8,7 +8,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, validator
 from typing import Optional, List, Dict, Any
@@ -362,6 +362,28 @@ def user_has_permission(username: str, permission: str) -> bool:
     perms = get_user_permissions(username)
     return permission in perms or "admin" in perms
 
+
+def require_permission(permission: str, allow_self_for_param: str = ""):
+    """FastAPI dependency factory: requires the JWT subject to have `permission`,
+    OR — if `allow_self_for_param` is set — the URL path param of that name
+    to equal the JWT subject (`sub`)."""
+    async def _check(
+        request: Request,
+        creds=Depends(require_jwt),
+    ):
+        # creds is the decoded JWT payload (dict with 'sub' etc.)
+        subject = creds.get("sub", "") if isinstance(creds, dict) else "admin"
+        if allow_self_for_param:
+            # FastAPI provides path params via request.path_params
+            target = request.path_params.get(allow_self_for_param, "")
+            if target and target == subject:
+                return creds
+        if user_has_permission(subject, permission):
+            return creds
+        raise HTTPException(status_code=403, detail=f"Permission requise : {permission}")
+    return _check
+
+
 # ══════════════════════════════════════════════════════════════════
 # Public Endpoints
 # ══════════════════════════════════════════════════════════════════
@@ -535,7 +557,7 @@ async def update_user(username: str, update: UserUpdate):
     return {"success": True, "user": user_record}
 
 
-@app.post("/user/{username}/disable", dependencies=[Depends(require_jwt)])
+@app.post("/user/{username}/disable", dependencies=[Depends(require_permission("users.edit"))])
 async def disable_user(username: str):
     """Disable user and revoke their sessions."""
     try:
@@ -545,7 +567,7 @@ async def disable_user(username: str):
     return {"ok": True, "revoked_sessions": revoked}
 
 
-@app.post("/user/{username}/enable", dependencies=[Depends(require_jwt)])
+@app.post("/user/{username}/enable", dependencies=[Depends(require_permission("users.edit"))])
 async def enable_user(username: str):
     """Re-enable a previously disabled user."""
     try:
@@ -607,7 +629,7 @@ async def sync_user(username: str):
             return {"success": True, "sync_results": results}
     raise HTTPException(status_code=404, detail="User not found")
 
-@app.post("/user/{username}/password", dependencies=[Depends(require_jwt)])
+@app.post("/user/{username}/password", dependencies=[Depends(require_permission("users.password", allow_self_for_param="username"))])
 async def change_password(username: str, pwd: PasswordChange):
     """Change user password (admin path — caller holds users.password permission).
     Sets the internal password hash via engine and propagates to external services."""
@@ -654,7 +676,7 @@ async def change_password(username: str, pwd: PasswordChange):
 # TOTP Admin Endpoints
 # ══════════════════════════════════════════════════════════════════
 
-@app.post("/user/{username}/totp/disable", dependencies=[Depends(require_jwt)])
+@app.post("/user/{username}/totp/disable", dependencies=[Depends(require_permission("users.edit"))])
 async def disable_user_totp(username: str):
     """Admin: disable TOTP for a user (clears secret and backup codes)."""
     try:
@@ -664,7 +686,7 @@ async def disable_user_totp(username: str):
     return {"ok": True}
 
 
-@app.post("/user/{username}/totp/backup-codes", dependencies=[Depends(require_jwt)])
+@app.post("/user/{username}/totp/backup-codes", dependencies=[Depends(require_permission("users.edit", allow_self_for_param="username"))])
 async def regen_backup_codes(username: str):
     """Admin: regenerate TOTP backup codes for a user (returns plaintext — shown once)."""
     try:
@@ -678,7 +700,7 @@ async def regen_backup_codes(username: str):
 # Per-User Session Endpoints
 # ══════════════════════════════════════════════════════════════════
 
-@app.get("/user/{username}/sessions", dependencies=[Depends(require_jwt)])
+@app.get("/user/{username}/sessions", dependencies=[Depends(require_permission("users.view", allow_self_for_param="username"))])
 async def list_user_sessions(username: str):
     """List active sessions for a specific user."""
     rows: list = []
@@ -694,7 +716,7 @@ async def list_user_sessions(username: str):
     return [r for r in rows if r.get("username") == username or r.get("sub") == username]
 
 
-@app.post("/user/{username}/sessions/revoke", dependencies=[Depends(require_jwt)])
+@app.post("/user/{username}/sessions/revoke", dependencies=[Depends(require_permission("users.edit", allow_self_for_param="username"))])
 async def revoke_user_sessions(username: str):
     """Revoke all active sessions for a specific user."""
     revoked = _engine.revoke_sessions(username)
@@ -979,35 +1001,56 @@ async def export_users():
         export_data["users"].append(export_user)
     return export_data
 
-@app.post("/import", dependencies=[Depends(require_jwt)])
+@app.post("/import", dependencies=[Depends(require_permission("system.import"))])
 async def import_users(file: UploadFile = File(...)):
-    """Import users from JSON file."""
+    """Import users from JSON file. Each row goes through engine.create_user so
+    username regex, role enum, and must_change_password defaults are enforced."""
     try:
         content = await file.read()
         import_data = json.loads(content)
-
-        if "users" not in import_data:
-            raise HTTPException(status_code=400, detail="Invalid format: missing 'users' key")
-
-        doc = _engine._load()
-        existing_usernames = {u["username"] for u in doc.get("users", [])}
-
-        imported = 0
-        skipped = 0
-
-        for user in import_data.get("users", []):
-            if user.get("username") in existing_usernames:
-                skipped += 1
-                continue
-            user["imported"] = datetime.now().isoformat()
-            doc.setdefault("users", []).append(user)
-            imported += 1
-
-        _engine._save(doc)
-        return {"success": True, "imported": imported, "skipped": skipped}
-
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON file")
+
+    if "users" not in import_data:
+        raise HTTPException(status_code=400, detail="Invalid format: missing 'users' key")
+
+    created: list = []
+    skipped: list = []
+    errors: list = []
+
+    for row in import_data.get("users", []):
+        username = row.get("username")
+        if not username:
+            errors.append({"username": None, "error": "missing username"})
+            continue
+
+        # Reject raw password_hash injection — callers must use the engine policy
+        if "password_hash" in row:
+            errors.append({"username": username, "error": "password_hash injection not allowed; set password via engine"})
+            continue
+
+        email = row.get("email")
+        role = row.get("role", "viewer")
+
+        try:
+            _engine.create_user(username, email=email, role=role)
+            created.append(username)
+            # If a plaintext password is provided, hash it via engine (validates policy)
+            pw = row.get("password")
+            if pw:
+                _engine.set_password(username, pw)
+        except _engine_mod.EngineError as exc:
+            err_msg = str(exc)
+            # Distinguish "already exists" (skipped) from other engine errors
+            if "exists" in err_msg:
+                skipped.append(username)
+            else:
+                errors.append({"username": username, "error": err_msg})
+        except Exception as exc:
+            # Catch-all so one bad row doesn't break the import
+            errors.append({"username": username, "error": f"unexpected: {exc}"})
+
+    return {"created": created, "skipped": skipped, "errors": errors}
 
 # ══════════════════════════════════════════════════════════════════
 # Active Sessions
