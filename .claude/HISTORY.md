@@ -4,6 +4,42 @@
 ---
 ## 2026-05-13
 
+### Session 167 — Auth rework: secubox-users as identity source + TOTP 2FA (Issue #120, 19 tasks)
+
+**Goal:** Replace plaintext auth.toml admin login with secubox-users-backed argon2id auth + RFC 6238 TOTP 2FA, kill-on-disable session revocation, CLI↔API parity through a single engine module, feature-flagged cutover.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-13-secubox-users-auth-design.md`
+- Plan: `docs/superpowers/plans/2026-05-13-secubox-users-auth.md` (19 tasks)
+- `secubox_core.user_store` + tests (canonical reader, auth.toml fallback path)
+- `secubox_core.feature_flags` + tests
+- `secubox_core.auth` rewired (jti, scope, session validator, disabled-reject)
+- `secubox_users.engine` (single mutation entry) — lifecycle / passwords / TOTP / sessions methods + tests (21 tests)
+- `secubox_users.password_policy` + tests (argon2id, 6-rule policy)
+- `secubox_users.totp` (pyotp + argon2id-hashed backup codes) + tests
+- `secubox_users.migrate_v1_to_v2` (idempotent) + tests
+- `secubox-auth` branching `/auth/login` + `/auth/login/mfa` + `/auth/totp/{enroll,confirm,disable}` + `/auth/set-password` + integration tests
+- secubox-users API handlers refactored to delegate to engine; new endpoints with RBAC: `/user/<u>/disable`, `/enable`, `/password`, `/totp/disable`, `/totp/backup-codes`, `/sessions`, `/sessions/revoke`
+- `/import` now routes through `engine.create_user` (rejects `password_hash` injection)
+- `usersctl` rewritten in Python (13 subcommands, all delegate to engine) + CLI tests
+- CLI↔API parity test (3 mutation sequences diff-tested)
+- `debian/control` deps + `debian/postinst`: migration + seed admin + seed `<hostname>`, secubox user/group, env-var seed (no shell injection)
+- changelog: `secubox-users 1.4.0-1~bookworm1`
+- Live smoke script `tests/scripts/test-users-auth-live.sh` (callable post-deploy)
+- 70+ cumulative tests passing per package (run per-directory due to api/ namespace collision documented in `pytest.ini`)
+
+**Followups:**
+- Build + publish the .deb (via APT pipeline) so the board can `apt upgrade`.
+- After deploy: run `bash tests/scripts/test-users-auth-live.sh` to validate.
+- Phase 2 cutover: flip `[auth] enforce_v2 = true` in `/etc/secubox/users.feature_flags.toml` on the board.
+- Encryption-at-rest for TOTP secrets — revisit under PARAMETERS double-buffer hardening.
+- "Sign in with Google" OIDC stays deferred (schema reserves `google: null`).
+- Top-10k SecLists wordlist refresh (currently ~100-entry starter in `share/common-passwords.txt`).
+- Frontend banner when `/auth/health` reports fallback or NTP unsync.
+- Cross-package pytest collection: rename `api/` packages to break the namespace collision in a separate cleanup PR.
+
+---
+
 ### MetaBlogizer deploy webhook (Issue #113, sub-E of #49)
 
 **Goal:** Close the umbrella #49. Auto-deploy on `git push` to metablog-* repos. HMAC-verified webhook + per-site lock + ring buffer + Gitea API installer.
