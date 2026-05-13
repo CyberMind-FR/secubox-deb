@@ -3,24 +3,26 @@
 
 ---
 
-## 🔄 2026-05-13: remote-ui Phase 2 — square/ variant for Pi 4B/400 (Issue #127, PR #131)
+## 🔄 2026-05-13: remote-ui Phase 3 — Pillow+framebuffer kiosk for Pi 4B/400 (Issue #127, PR #132)
 
 ### Objective
 
-Add `remote-ui/square/` variant of the SecuBox Eye Remote targeting Pi 4B + Pi 400 + official Raspberry Pi 7" Touchscreen V1.1 (DSI, 800×480). Dual-pane kiosk: round UI in Chromium at (0,0)+480×480 + native PySide6 right column at (480,0)+320×480 with four tabs (Alerts / Module Detail / Console / Mode Controls). Privileged operations via `secubox-eye-square-helper` FastAPI on Unix socket with SO_PEERCRED auth.
+Replace Phase 2's Chromium+PySide6 dual-window stack with a single-process Python kiosk targeting Pi 4B + Pi 400 + official Raspberry Pi 7" Touchscreen V1.1 (DSI, 800×480). Pillow draws an 800×480 BGRA frame each tick and `mmap`s it to `/dev/fb0`. Touch input via python-evdev. No X, no Qt, no Chromium, no Openbox, no nginx. Carries forward the Phase 2 Helper FastAPI (Unix socket, SO_PEERCRED) for privileged operations.
 
 ### Completed
 
-- Brainstormed spec + plans done previously (specs/2026-05-13-eye-square-variant-design.md, plans/2026-05-13-eye-square-phase2-variant-build.md)
-- 30-task plan executed via subagent-driven-development (Phase 2): 27 tasks complete, 2 hardware-BLOCKED, 1 PR opened
-- 26 new commits in [`feature/127-phase2-square-variant`](https://github.com/CyberMind-FR/secubox-deb/pull/131) on top of Phase 1 (#130)
-- **135 tests passing** total (helper 23, right_panel 33, secubox-system 4, repo tests/ 76)
-- Phase 2 PR: [#131](https://github.com/CyberMind-FR/secubox-deb/pull/131) — base = Phase 1's branch (auto-updates to master once #130 merges)
+- Brainstormed spec → [`docs/superpowers/specs/2026-05-13-eye-square-phase3-python-kiosk-design.md`](../docs/superpowers/specs/2026-05-13-eye-square-phase3-python-kiosk-design.md)
+- Plan → [`docs/superpowers/plans/2026-05-13-eye-square-phase3-python-kiosk.md`](../docs/superpowers/plans/2026-05-13-eye-square-phase3-python-kiosk.md) (25 tasks)
+- Executed via superpowers:subagent-driven-development with two-stage review (spec compliance + code quality) on every task
+- 22 commits in [`feature/127-phase3-python-kiosk`](https://github.com/CyberMind-FR/secubox-deb/pull/132)
+- **82/82 pytest green** (21 helper + 61 kiosk) · `bash -n` + `shellcheck` clean on all modified/new shell scripts
+- Phase 3 PR: [#132](https://github.com/CyberMind-FR/secubox-deb/pull/132) — branched from master + cherry-picked Phase 2 helper carry-forward
+- Phase 2 PR #131 closed (superseded by Phase 3)
 
 ### Next up
 
-- Pending user-action gates before PR merge: Task 28 manual Pi 4B bench + Task 29 manual Pi 400 sanity (both hardware-dependent, BLOCKED in subagent execution).
-- Phase 1 PR #130 needs merge first (Phase 2 is based on it).
+- Pending user-action gates: Task 23 manual Pi 4B bench (build + flash + boot + kiosk visible + OTG link to MOCHAbin) + Task 24 manual Pi 400 sanity (same image, integrated keyboard) — both hardware-dependent, BLOCKED in subagent execution.
+- Phase 3 is independent of Phase 1 (#130 still open but not a prerequisite).
 
 ---
 
