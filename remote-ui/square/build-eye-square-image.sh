@@ -78,13 +78,17 @@ mount -o bind /dev "$ROOT_MNT/dev"
 mount -o bind /sys "$ROOT_MNT/sys"
 
 log "Installing apt packages in chroot..."
+# PySide6 + qasync are NOT in Debian Bookworm — only PySide2 is. To keep the
+# code identical to what we tested (PySide6 imports), install via pip inside
+# the chroot. arm64 PEP 668 enforces --break-system-packages.
 chroot "$ROOT_MNT" /bin/bash -c "
 DEBIAN_FRONTEND=noninteractive apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
     chromium openbox xserver-xorg xinit unclutter \
-    python3-pyside6.qtwidgets python3-pyside6.qtwebsockets \
-    python3-fastapi python3-uvicorn python3-websockets python3-qasync \
-    python3-httpx nginx-light apparmor-utils
+    python3-fastapi python3-uvicorn python3-websockets \
+    python3-httpx python3-pip \
+    nginx-light apparmor-utils
+pip install --break-system-packages pyside6 qasync
 "
 
 log "Installing remote-ui/common/ and remote-ui/round/ payloads..."

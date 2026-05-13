@@ -17,15 +17,16 @@ Depends:
  xserver-xorg,
  xinit,
  unclutter,
- python3-pyside6.qtwidgets,
- python3-pyside6.qtwebsockets,
  python3-fastapi,
  python3-uvicorn,
  python3-websockets,
- python3-qasync,
  python3-httpx,
+ python3-pip,
  nginx-light,
  apparmor-utils
+Recommends:
+ python3-pyside6,
+ python3-qasync
 Description: SecuBox Eye Remote — Square variant (Pi 4B / Pi 400 + 7" 800x480)
  Dual-pane kiosk for the SecuBox Eye Remote satellite: the round UI is rendered
  verbatim by Chromium at 480x480, with a native PySide6 right column at
