@@ -46,3 +46,20 @@ def test_help_is_zero_exit(env):
     r = _run(env, "--help")
     assert r.returncode == 0
     assert "usersctl" in r.stdout.lower() or "usage" in r.stdout.lower()
+
+
+def test_set_password_with_weak_pw_returns_exit_2_not_traceback(env):
+    """Bad password must produce a clean error message, not a Python traceback."""
+    _run(env, "add", "alice", "--email", "a@b.c", "--role", "viewer")
+
+    # Pass weak password via stdin (getpass falls back to stdin in non-TTY subprocess)
+    proc = subprocess.run(
+        [sys.executable, str(USERSCTL), "set-password", "alice"],
+        env=env, input="weak\nweak\n",
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 2
+    assert "Traceback" not in proc.stderr  # no Python stacktrace
+    # Expect either the error message or the policy reminder
+    error_text = (proc.stderr.lower())
+    assert "policy" in error_text or "minimum" in error_text or "caractères" in error_text
