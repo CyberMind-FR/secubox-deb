@@ -74,3 +74,78 @@ def test_load_secret_caches(tmp_path, monkeypatch):
     p.write_bytes(b"changed\n")
     s2 = webhook.load_secret(p)
     assert s1 == s2 == b"first"  # cache wins
+
+
+def test_record_deploy_appends():
+    import webhook
+    webhook._deploys.clear()
+    webhook._record_deploy({"site": "a", "from": "x", "to": "y"})
+    assert len(webhook._deploys) == 1
+    assert webhook._deploys[0]["site"] == "a"
+
+
+def test_record_deploy_evicts_oldest_at_50():
+    import webhook
+    webhook._deploys.clear()
+    for i in range(55):
+        webhook._record_deploy({"site": f"s{i}"})
+    assert len(webhook._deploys) == 50
+    # oldest 5 are gone; first remaining is s5
+    assert webhook._deploys[0]["site"] == "s5"
+    assert webhook._deploys[-1]["site"] == "s54"
+
+
+def test_list_deploys_returns_reversed():
+    import webhook
+    webhook._deploys.clear()
+    webhook._record_deploy({"site": "a"})
+    webhook._record_deploy({"site": "b"})
+    out = webhook.list_deploys()
+    assert out["count"] == 2
+    assert out["deploys"][0]["site"] == "b"  # newest first
+    assert out["deploys"][1]["site"] == "a"
+
+
+def test_git_pull_returns_old_and_new_sha(tmp_path, monkeypatch):
+    import webhook
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / ".git").mkdir()
+
+    calls = []
+    sha_iter = iter(["aaa1111", "bbb2222"])
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        class R:
+            stdout = next(sha_iter) + "\n" if "rev-parse" in cmd else ""
+            stderr = ""
+            returncode = 0
+        return R()
+
+    monkeypatch.setattr(webhook.subprocess, "run", fake_run)
+    old, new = webhook.git_pull(site, "main")
+    assert old == "aaa1111"
+    assert new == "bbb2222"
+    # ensure the 4 expected git commands happened in order
+    op_names = [c[3] for c in calls]
+    assert op_names == ["rev-parse", "fetch", "reset", "rev-parse"]
+
+
+def test_git_pull_timeout_propagates(tmp_path, monkeypatch):
+    import webhook
+    import subprocess
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / ".git").mkdir()
+
+    def fake_run(cmd, **kwargs):
+        if "fetch" in cmd:
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 60))
+        class R:
+            stdout = "abc\n"; stderr = ""; returncode = 0
+        return R()
+
+    monkeypatch.setattr(webhook.subprocess, "run", fake_run)
+    with pytest.raises(subprocess.TimeoutExpired):
+        webhook.git_pull(site, "main")
