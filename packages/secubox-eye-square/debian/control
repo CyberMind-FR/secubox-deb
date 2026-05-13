@@ -1,0 +1,34 @@
+Source: secubox-eye-square
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+
+Package: secubox-eye-square
+Architecture: arm64
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ secubox-core,
+ secubox-eye-remote,
+ chromium,
+ openbox,
+ xserver-xorg,
+ xinit,
+ unclutter,
+ python3-pyside6.qtwidgets,
+ python3-pyside6.qtwebsockets,
+ python3-fastapi,
+ python3-uvicorn,
+ python3-websockets,
+ python3-qasync,
+ python3-httpx,
+ nginx-light,
+ apparmor-utils
+Description: SecuBox Eye Remote — Square variant (Pi 4B / Pi 400 + 7" 800x480)
+ Dual-pane kiosk for the SecuBox Eye Remote satellite: the round UI is rendered
+ verbatim by Chromium at 480x480, with a native PySide6 right column at
+ 320x480 hosting Alerts / Module Detail / Console / Mode Controls tabs.
+ IPC between Chromium and PySide6 over a loopback WebSocket; privileged
+ operations via a small FastAPI helper on a Unix socket with SO_PEERCRED auth.
