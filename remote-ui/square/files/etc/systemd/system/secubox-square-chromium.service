@@ -1,0 +1,27 @@
+[Unit]
+Description=SecuBox Eye Square — Chromium kiosk (left pane, round UI)
+After=secubox-kiosk-x.service
+Wants=secubox-kiosk-x.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/chromium \
+    --kiosk \
+    --no-first-run \
+    --noerrdialogs \
+    --disable-translate \
+    --disable-features=Translate \
+    --disable-pinch \
+    --overscroll-history-navigation=0 \
+    --window-size=480,480 \
+    --window-position=0,0 \
+    --app=file:///var/www/secubox-round/index.html
+Restart=always
+RestartSec=5
+MemoryMax=512M
+
+[Install]
+WantedBy=graphical.target
