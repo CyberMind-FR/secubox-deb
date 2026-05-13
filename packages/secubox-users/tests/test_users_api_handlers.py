@@ -44,6 +44,11 @@ def _make_client(tmp_path: Path, monkeypatch):
     # object used in Depends()).
     users_main.app.dependency_overrides[users_main.require_jwt] = _noop_jwt
 
+    # Bypass RBAC: user_has_permission always returns True so require_permission
+    # passes for "admin" (the sub returned by _noop_jwt) regardless of the
+    # users.json content in tests focused on mutation behaviour, not access control.
+    monkeypatch.setattr(users_main, "user_has_permission", lambda *_a, **_kw: True)
+
     return TestClient(users_main.app), users_path, users_main
 
 
@@ -245,3 +250,32 @@ def test_revoke_user_sessions_endpoint(ctx_with_alice, monkeypatch):
     assert r.status_code == 200
     assert r.json()["revoked"] == 3
     assert "alice" in revoked_for
+
+
+# ---------------------------------------------------------------------------
+# POST /user/{username}/password — hashes locally via engine
+# ---------------------------------------------------------------------------
+
+def test_password_endpoint_writes_hash_and_returns_propagation_results(
+    tmp_path: Path, monkeypatch
+):
+    """POST /user/{u}/password hashes locally via engine AND attempts external
+    service propagation. Verifies the local argon2id hash is written."""
+    client, users_path, main_mod = _make_client(tmp_path, monkeypatch)
+
+    # Pre-create the target user via engine
+    from api import engine as _eng
+    e = _eng.Engine(users_path=users_path)
+    e.create_user("bob", email="b@b.c", role="viewer")
+
+    # No mocking of subprocess — external services may legitimately fail when
+    # not installed; we only assert on the local hash side-effect.
+    r = client.post("/user/bob/password", json={"password": "GoodPass!42xyz"})
+    assert r.status_code == 200
+
+    # Local password_hash must be set in users.json
+    doc = json.loads(users_path.read_text())
+    u = next(x for x in doc["users"] if x["username"] == "bob")
+    assert u["password_hash"] is not None
+    assert u["password_hash"].startswith("$argon2id$")
+    assert u["must_change_password"] is False
