@@ -307,4 +307,3 @@ sudo bash image/build-image.sh --board vm-x64 --vdi
 - [Developer Guide](CLAUDE.md)
 
 </details>
-<!-- sub-E probe 2026-05-13T07:40:11+02:00 -->
