@@ -12,24 +12,18 @@ Depends:
  ${python3:Depends},
  secubox-core,
  secubox-eye-remote,
- chromium,
- openbox,
- xserver-xorg,
- xinit,
- unclutter,
+ python3-pil,
+ python3-evdev,
  python3-fastapi,
  python3-uvicorn,
  python3-websockets,
  python3-httpx,
- python3-pip,
- nginx-light,
  apparmor-utils
-Recommends:
- python3-pyside6,
- python3-qasync
 Description: SecuBox Eye Remote — Square variant (Pi 4B / Pi 400 + 7" 800x480)
- Dual-pane kiosk for the SecuBox Eye Remote satellite: the round UI is rendered
- verbatim by Chromium at 480x480, with a native PySide6 right column at
- 320x480 hosting Alerts / Module Detail / Console / Mode Controls tabs.
- IPC between Chromium and PySide6 over a loopback WebSocket; privileged
- operations via a small FastAPI helper on a Unix socket with SO_PEERCRED auth.
+ Pillow-on-framebuffer single-process kiosk. Renders the SecuBox dashboard
+ directly to /dev/fb0 — no X server, no Qt, no Chromium. Companion to the
+ round/ Pi Zero W variant (also Pillow+fb).
+ .
+ Includes a privileged Helper FastAPI on a Unix socket (SO_PEERCRED) for
+ USB gadget mode switching, service restart, lockdown (nftables atomic
+ swap), and console streaming.
