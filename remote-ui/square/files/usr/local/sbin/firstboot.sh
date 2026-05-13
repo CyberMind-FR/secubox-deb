@@ -93,10 +93,7 @@ fi
 # ──────────────────────────────────────────────────────────────────────────────
 systemctl enable secubox-otg-gadget.service || true
 systemctl enable secubox-eye-square-helper.service || true
-systemctl enable secubox-kiosk-x.service || true
-systemctl enable secubox-square-chromium.service || true
-systemctl enable secubox-square-right-panel.service || true
-systemctl enable nginx || true
+systemctl enable secubox-square-kiosk.service || true
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 7. Mark done
