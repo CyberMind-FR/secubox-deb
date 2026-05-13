@@ -1,3 +1,17 @@
+secubox-users (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Auth rework (ref #120): users.json v2 schema (argon2id hashes + TOTP block)
+  * Migrate-v1-to-v2 script auto-runs in postinst (idempotent + .v1.bak backup)
+  * Seed admin + <hostname> users on fresh install, must_change_password=true
+  * usersctl rewritten in Python over the new secubox_users.engine module
+  * New endpoints: /user/{u}/disable, /enable, /password, /totp/disable,
+    /totp/backup-codes, /sessions, /sessions/revoke (RBAC-gated)
+  * /import routed through engine.create_user (rejects password_hash injection)
+  * Depends: python3-argon2, python3-pyotp, python3-qrcode, python3-jsonschema
+  * Align postinst with secubox user/group (fixes fresh-install permissions)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 13 May 2026 12:00:00 +0200
+
 secubox-users (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Add Role-Based Access Control (RBAC)
