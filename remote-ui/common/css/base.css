@@ -1,0 +1,79 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * SecuBox-Deb :: remote-ui/common/css/base.css
+ *
+ * Layout primitives extracted verbatim from round/index.html.
+ * Used by round/'s 480×480 circular kiosk; also loaded by square/'s
+ * Chromium left pane (round/index.html consumed at 480×480).
+ *
+ * Raw colour literals are preserved here. The companion palette.css
+ * declares forward-looking CSS custom properties for square/'s
+ * native right column to consume separately.
+ */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:480px;height:480px;overflow:hidden;background:#080808;
+  font-family:'JetBrains Mono','Fira Mono','Courier New',monospace;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+#screen{position:relative;width:480px;height:480px;border-radius:50%;
+  overflow:hidden;background:#080808;border:2px solid #181818}
+#ring-canvas{position:absolute;top:0;left:0;width:480px;height:480px;pointer-events:none}
+#center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none;z-index:1}
+#time{font-size:37px;font-weight:600;color:#fff;letter-spacing:3px;line-height:1}
+#date{font-size:10px;color:#4a4a4a;margin-top:5px;letter-spacing:1.5px}
+#hostname{font-size:9px;color:#2a2a2a;margin-top:3px;letter-spacing:1px}
+#uptime{font-size:9px;color:#1a3a28;margin-top:2px}
+.pod{position:absolute;display:flex;flex-direction:column;align-items:center;
+  gap:2px;cursor:pointer;transition:opacity .15s;z-index:2;
+  -webkit-tap-highlight-color:transparent}
+.pod:active{opacity:.45}
+.pod-val{font-size:18px;font-weight:700;line-height:1;transition:color .3s}
+.pod-unit{font-size:8px;opacity:.55;letter-spacing:.3px}
+.pod-name{font-size:8px;letter-spacing:1px;opacity:.65}
+#status{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  font-size:9px;letter-spacing:1.2px;white-space:nowrap;pointer-events:none;
+  transition:color .4s;z-index:2}
+#transport{position:absolute;top:15px;right:124px;font-size:8px;
+  letter-spacing:.8px;pointer-events:none;z-index:2}
+#temp-row{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:7px;pointer-events:none;z-index:2}
+.tbar-track{width:80px;height:3px;background:#181818;border-radius:2px;overflow:hidden}
+.tbar-fill{height:100%;border-radius:2px;transition:width 1s,background .5s}
+#auth-overlay{position:absolute;top:0;left:0;width:100%;height:100%;
+  border-radius:50%;background:#080808;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;z-index:99;transition:opacity .7s}
+#auth-overlay.hidden{opacity:0;pointer-events:none}
+#auth-logo{font-size:23px;font-weight:700;color:#fff;letter-spacing:5px}
+#auth-sub{font-size:9px;color:#444;letter-spacing:2px}
+#auth-spin{width:20px;height:20px;border:2px solid #181818;
+  border-top-color:#C04E24;border-radius:50%;animation:spin .8s linear infinite}
+#auth-msg{font-size:9px;color:#333;letter-spacing:1px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Mode selector styles - positioned for round display (top center arc) */
+#mode-badge{position:absolute;top:18px;left:50%;transform:translateX(-50%);
+  font-size:7px;padding:4px 10px;border-radius:10px;background:#101010;
+  cursor:pointer;z-index:10;border:1px solid #252525;transition:all .2s;
+  letter-spacing:.6px;text-transform:uppercase}
+#mode-badge:hover,#mode-badge:active{background:#1a1a1a;border-color:#383838}
+#mode-badge .dot{display:inline-block;width:5px;height:5px;border-radius:50%;
+  margin-right:4px;vertical-align:middle}
+#mode-panel{position:absolute;top:0;left:0;width:100%;height:100%;
+  border-radius:50%;background:rgba(8,8,8,.97);z-index:50;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;opacity:0;pointer-events:none;transition:opacity .3s}
+#mode-panel.visible{opacity:1;pointer-events:auto}
+#mode-panel h3{font-size:10px;color:#555;letter-spacing:2px;margin-bottom:6px}
+.mode-btn{width:160px;padding:8px 10px;background:#141414;border:1px solid #222;
+  border-radius:6px;display:flex;align-items:center;gap:8px;cursor:pointer;
+  transition:all .15s}
+.mode-btn:hover,.mode-btn:active{background:#1a1a1a;border-color:#333}
+.mode-btn.active{border-color:#0A5840;background:#0a1810}
+.mode-btn .icon{font-size:14px;width:20px;text-align:center}
+.mode-btn .info{flex:1;text-align:left}
+.mode-btn .name{font-size:9px;font-weight:600;color:#ccc;letter-spacing:.8px}
+.mode-btn .desc{font-size:7px;color:#444;margin-top:1px}
+#mode-close{position:absolute;bottom:35px;font-size:8px;color:#333;
+  letter-spacing:1px;cursor:pointer;padding:6px 12px;border-radius:4px;
+  background:#111;border:1px solid #222}
+#mode-close:hover{color:#555;border-color:#333}
+#mode-status{font-size:7px;color:#333;margin-top:4px}
