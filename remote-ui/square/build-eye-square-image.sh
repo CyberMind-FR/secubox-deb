@@ -81,12 +81,20 @@ log "Installing apt packages in chroot..."
 # PySide6 + qasync are NOT in Debian Bookworm — only PySide2 is. To keep the
 # code identical to what we tested (PySide6 imports), install via pip inside
 # the chroot. arm64 PEP 668 enforces --break-system-packages.
+#
+# libxcb-* system libraries are required by PySide6's bundled libqxcb.so
+# platform plugin. The pip wheel doesn't bundle them. Missing any of these
+# results in the right panel process starting silently but never opening a
+# window ("Could not load the Qt platform plugin xcb").
 chroot "$ROOT_MNT" /bin/bash -c "
 DEBIAN_FRONTEND=noninteractive apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
     chromium openbox xserver-xorg xinit unclutter \
     python3-fastapi python3-uvicorn python3-websockets \
     python3-httpx python3-pip \
+    libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+    libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 \
+    libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 \
     nginx-light apparmor-utils
 pip install --break-system-packages pyside6 qasync
 "
