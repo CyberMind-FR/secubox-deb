@@ -19,6 +19,7 @@ import argparse
 import getpass
 import json
 import os
+import socket
 import sys
 from pathlib import Path
 
@@ -27,9 +28,10 @@ sys.path.insert(0, "/usr/lib/secubox/users")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common"))
 
-from api import engine, totp, migrate_v1_to_v2  # noqa: E402
+from api import engine, password_policy, totp, migrate_v1_to_v2  # noqa: E402
 
 USERS_FILE = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
+AUTH_TOML_PATH = Path(os.environ.get("AUTH_TOML_PATH", "/etc/secubox/auth.toml"))
 
 
 def _engine() -> engine.Engine:
@@ -101,10 +103,11 @@ def cmd_totp_enroll(args):
     eng = _engine()
     secret = totp.generate_secret()
     backup = eng.enroll_totp(args.username, secret)
-    import socket
+    host = socket.gethostname().strip() or "secubox"
+    issuer = f"SecuBox · {host}"
     print("Scan this URI / secret with your authenticator app:")
     print(f"  Secret: {secret}")
-    print(f"  URI:    {totp.provisioning_uri(args.username, secret, issuer=f'SecuBox · {socket.gethostname()}')}")
+    print(f"  URI:    {totp.provisioning_uri(args.username, secret, issuer=issuer)}")
     print("Backup codes (save them now — shown only once):")
     for c in backup:
         print(f"  {c}")
@@ -140,7 +143,7 @@ def cmd_revoke(args):
 
 
 def cmd_migrate(args):
-    migrate_v1_to_v2.migrate(USERS_FILE, auth_toml_path=Path("/etc/secubox/auth.toml"))
+    migrate_v1_to_v2.migrate(USERS_FILE, auth_toml_path=AUTH_TOML_PATH)
     print("migration complete")
     return 0
 
@@ -209,6 +212,14 @@ def main(argv=None) -> int:
         return args.func(args)
     except engine.EngineError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except password_policy.PolicyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        print(
+            "Policy: 12-128 chars, ≥3 of {lower, upper, digit, symbol}, "
+            "no username substring, not in common-passwords list.",
+            file=sys.stderr,
+        )
         return 2
 
 
