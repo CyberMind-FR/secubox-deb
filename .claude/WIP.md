@@ -3,6 +3,26 @@
 
 ---
 
+## ✅ 2026-05-13: MetaBlogizer deploy webhook (Issue #113, sub-E of #49)
+
+### Objective
+Auto-deploy on `git push` to metablog-* repos. HMAC-verified Gitea webhook → per-site asyncio.Lock → git pull → cache invalidate → conditional nginx reload. Closes the umbrella #49.
+
+### Completed
+- Brainstormed design → `docs/superpowers/specs/2026-05-13-metablog-deploy-webhook-design.md`
+- Plan (8 tasks) → `docs/superpowers/plans/2026-05-13-metablog-deploy-webhook.md`
+- New module `api/webhook.py`: `verify_signature` (constant-time HMAC-SHA256), `load_secret` (cached), `classify_payload` (accept/skip/malformed), `site_lock` pool with master lock, `git_pull` helper with timeouts, 50-entry deploy ring buffer
+- `main.py` mounts `POST /webhook` (public, HMAC) and `GET /deploys` (JWT)
+- `scripts/metablog-webhook-install.sh` + `metablog-webhook-uninstall.sh` (Gitea API, idempotent, --dry-run)
+- 3-gate bash smoke `tests/scripts/test-metablog-webhook.sh`
+- 21 pytest cases (HMAC, secret loader, ring buffer, git_pull, classify_payload, lock semantics)
+
+### Followups
+- Streamlit auto-deploy via a parallel webhook (separate issue if needed)
+- Optional drill-in UI surfacing `GET /deploys` for ops review
+
+---
+
 ## ✅ 2026-05-13: Hub sidebar mobile-mode auto-detect fix (Issue #114, PR #115)
 
 ### Objective

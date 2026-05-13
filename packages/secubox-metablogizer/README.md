@@ -88,6 +88,41 @@ Data comes from `/api/v1/metablogizer/sites` and
 `/api/v1/metablogizer/site/<name>` (sub-C, PR #102). The dashboard is
 pure vanilla JS — no framework, no router.
 
+## Deploy webhook
+
+A push to the default branch of any `metablog-*` repo on Gitea
+triggers an automatic deploy of the live site.
+
+- **Endpoint**: `POST https://admin.gk2.secubox.in/api/v1/metablogizer/webhook`
+- **Auth**: HMAC-SHA256 in `X-Gitea-Signature` header, shared secret in
+  `/etc/secubox/metablogizer-webhook.secret` (chmod 600, owner `secubox`)
+- **Action**: `git fetch + git reset --hard origin/<default>` under a
+  per-site `asyncio.Lock`; invalidates the dashboard cache; reloads nginx
+  only if `site.json:domain` changed.
+
+### Provisioning the secret (one-shot on the MOCHAbin)
+
+```bash
+sudo install -o secubox -g secubox -m 600 /dev/stdin \
+  /etc/secubox/metablogizer-webhook.secret <<< "$(openssl rand -hex 32)"
+sudo systemctl restart secubox-metablogizer
+```
+
+### Registering the webhook on every Gitea repo
+
+```bash
+scripts/metablog-webhook-install.sh \
+  --gitea-token <admin-or-repo-token> \
+  --secret-file /etc/secubox/metablogizer-webhook.secret
+```
+
+The installer is idempotent — re-run after adding new sites.
+
+### Observability
+
+- `journalctl -u secubox-metablogizer | grep '^deploy '`
+- `GET /api/v1/metablogizer/deploys` (JWT-gated) returns the last 50 deploys
+
 ## Installation
 
 ```bash
