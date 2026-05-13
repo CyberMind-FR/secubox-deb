@@ -638,6 +638,8 @@ Options facultatives:
 
 ## Architecture
 
+Round's frontend code reuses `remote-ui/common/` (see [../common/README.md](../common/README.md)) for the TransportManager, JWT handling, simulation drift, module table, palette, base layout, and the 24 SecuBox module PNG icons. The shared `secubox-otg-gadget.sh` and `secubox-otg-host-up.sh` shell scripts also live there. round/ keeps its Pi-Zero-W-specific code: HyperPixel 2.1 Round display drivers, framebuffer fallback (`fb_dashboard.py`), and the round-shaped 480×480 layout. A sibling variant `remote-ui/square/` (Pi 4B/400 + 7" 800×480) is planned for Phase 2 (issue #127) and will consume the same `common/` core.
+
 ### Eye Remote as USB Gadget
 
 ```
