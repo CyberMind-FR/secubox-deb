@@ -7,6 +7,16 @@ Standards-Version: 4.6.2
 
 Package: secubox-users
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends},
+ ${python3:Depends},
+ python3-fastapi,
+ python3-uvicorn,
+ python3-argon2,
+ python3-pyotp,
+ python3-qrcode,
+ python3-jsonschema,
+ python3-tomli | python3 (>= 3.11),
+ secubox-core (>= 1.0),
+ jq
 Description: SecuBox Users Module
  SecuBox Users - Unified Identity
