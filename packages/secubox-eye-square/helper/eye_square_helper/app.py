@@ -56,6 +56,9 @@ def create_app() -> FastAPI:
     async def health():
         return {"status": "ok", "uid": os.getuid()}
 
+    from .routes.usb_gadget import router as usb_gadget_router
+    app.include_router(usb_gadget_router)
+
     return app
 
 
