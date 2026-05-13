@@ -209,18 +209,31 @@ class Engine:
         self._audit("totp_enrolled", username, {})
         return plain
 
-    def verify_totp_for_user(self, username: str, code: str) -> bool:
-        from . import totp as _totp
+    def verify_totp_for_user(self, username: str, code: str, window: int = 1) -> bool:
+        import pyotp
+        import time
 
         doc = self._load()
         u = self._find(doc, username)
         if not u or not u.get("enabled") or not (u.get("totp") and u["totp"].get("enabled")):
             return False
-        ok, step = _totp.verify(u["totp"]["secret"], code, u["totp"].get("last_step"))
-        if ok and step is not None:
-            u["totp"]["last_step"] = step
-            self._save(doc)
-        return ok
+
+        secret = u["totp"]["secret"]
+        last_step = u["totp"].get("last_step")
+        step_size = 30
+        now = int(time.time())
+        current = now // step_size
+
+        for delta in range(-window, window + 1):
+            step = current + delta
+            if pyotp.TOTP(secret).at(step * step_size) == code:
+                if last_step is not None and step <= last_step:
+                    return False
+                u["totp"]["last_step"] = step
+                self._save(doc)
+                self._audit("totp_verified", username, {"step": step, "window": window})
+                return True
+        return False
 
     def consume_backup_code(self, username: str, code: str) -> bool:
         from . import totp as _totp

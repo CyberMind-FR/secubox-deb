@@ -398,10 +398,10 @@
             $('totpCode').focus();
         }
 
-        // ── Operational status banner ────────────────────────────────────
-        async function loadStatus() {
+        // ── Operational preflight banner ─────────────────────────────────
+        async function loadPreflight() {
             try {
-                const { res, data } = await api('/api/v1/auth/status');
+                const { res, data } = await api('/api/v1/auth/preflight');
                 if (!res.ok) return;
                 const banner = $('statusBanner');
                 const msgs = [];
@@ -415,9 +415,9 @@
                     banner.innerHTML = msgs.join('<br>');
                     banner.style.display = 'block';
                 }
-            } catch (_) { /* status endpoint optional */ }
+            } catch (_) { /* preflight endpoint optional */ }
         }
-        loadStatus();
+        loadPreflight();
 
         $('confirmForm').addEventListener('submit', async (e) => {
             e.preventDefault();
