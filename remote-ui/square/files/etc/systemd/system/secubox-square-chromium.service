@@ -9,7 +9,6 @@ User=secubox
 Group=secubox
 Environment=DISPLAY=:0
 ExecStart=/usr/bin/chromium \
-    --kiosk \
     --no-first-run \
     --noerrdialogs \
     --disable-translate \
