@@ -2098,12 +2098,11 @@
     var _mobileInitialized = false;
 
     function isTouchDevice() {
-        // Check multiple signals for touch capability
-        return (
-            ('ontouchstart' in window) ||
-            (navigator.maxTouchPoints > 0) ||
-            (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
-        );
+        // Primary input must be touch (no hover + coarse pointer).
+        // Capability-only checks ('ontouchstart', maxTouchPoints) wrongly
+        // fire on touchscreen laptops where the mouse is the primary input.
+        return !!(window.matchMedia &&
+            window.matchMedia('(hover: none) and (pointer: coarse)').matches);
     }
 
     function isNarrowViewport() {
