@@ -126,6 +126,13 @@ fi
 # ── Checks ────────────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && err "This script must be run as root (sudo)"
 
+# Sanity: host /dev/null must be a character device. If a prior build was
+# killed mid-flight, the chroot's bind-mounted /dev could have left a
+# regular file in its place — and the rest of this script can't survive.
+if [[ ! -c /dev/null ]]; then
+  err "host /dev/null is not a character device — recover with: sudo rm -f /dev/null && sudo mknod -m 666 /dev/null c 1 3"
+fi
+
 # Required tools
 log "Checking dependencies..."
 apt-get install -y -qq debootstrap squashfs-tools grub-efi-amd64-bin grub-pc-bin \
@@ -169,7 +176,8 @@ cleanup() {
   umount -lf "${ROOTFS}/dev/pts" 2>/dev/null || true
   umount -lf "${ROOTFS}/proc" 2>/dev/null || true
   umount -lf "${ROOTFS}/sys"  2>/dev/null || true
-  # Wait and force umount /dev last (critical to not destroy host /dev)
+  # /dev is now a tmpfs (not a bind of the host's /dev) so its teardown
+  # is harmless. Still wait for in-flight writers before unmounting.
   sync
   sleep 1
   if mountpoint -q "${ROOTFS}/dev" 2>/dev/null; then
@@ -177,6 +185,14 @@ cleanup() {
   fi
   umount -lf "${WORK_DIR}/mnt/"* 2>/dev/null || true
   [[ -n "${LOOP:-}" ]] && losetup -d "${LOOP}" 2>/dev/null || true
+  # Final sanity: if the host's /dev/null got clobbered despite isolation,
+  # recreate the device node before exit so the caller's shell still works.
+  if [[ ! -c /dev/null ]]; then
+    log "WARNING: host /dev/null is not a char device — restoring"
+    rm -f /dev/null 2>/dev/null || true
+    mknod -m 666 /dev/null c 1 3 2>/dev/null || true
+    chown root:root /dev/null 2>/dev/null || true
+  fi
   # Only remove if no mounts are active
   if ! mount | grep -q "${WORK_DIR}"; then
     rm -rf "${WORK_DIR}" 2>/dev/null || true
@@ -184,7 +200,34 @@ cleanup() {
     log "WARNING: ${WORK_DIR} still has active mounts, not removing"
   fi
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
+
+# Mount an isolated tmpfs /dev on the chroot and populate minimal device
+# nodes the chroot needs. ROOTFS/dev never bind-mounts the host's /dev so
+# that interrupted apt/debootstrap postinst scripts can't damage host
+# device nodes (notably /dev/null). Idempotent.
+mount_chroot_dev() {
+  local root="$1"
+  if mountpoint -q "${root}/dev"; then
+    return 0
+  fi
+  mkdir -p "${root}/dev"
+  mount -t tmpfs -o mode=0755,nosuid tmpfs "${root}/dev"
+  mknod -m 666 "${root}/dev/null"    c 1 3
+  mknod -m 666 "${root}/dev/zero"    c 1 5
+  mknod -m 666 "${root}/dev/full"    c 1 7
+  mknod -m 666 "${root}/dev/random"  c 1 8
+  mknod -m 666 "${root}/dev/urandom" c 1 9
+  mknod -m 666 "${root}/dev/tty"     c 5 0
+  mknod -m 600 "${root}/dev/console" c 5 1
+  mknod -m 666 "${root}/dev/ptmx"    c 5 2
+  ln -sf /proc/self/fd "${root}/dev/fd"
+  ln -sf /proc/self/fd/0 "${root}/dev/stdin"
+  ln -sf /proc/self/fd/1 "${root}/dev/stdout"
+  ln -sf /proc/self/fd/2 "${root}/dev/stderr"
+  mkdir -p "${root}/dev/pts" "${root}/dev/shm"
+  mount -t devpts -o newinstance,ptmxmode=0666,mode=0620 devpts "${root}/dev/pts"
+}
 
 # ══════════════════════════════════════════════════════════════════
 # Step 1: Debootstrap
@@ -227,7 +270,7 @@ log "2/8 System configuration..."
 # Only mount if not already mounted
 mountpoint -q "${ROOTFS}/proc" || mount -t proc proc   "${ROOTFS}/proc"
 mountpoint -q "${ROOTFS}/sys"  || mount -t sysfs sysfs "${ROOTFS}/sys"
-mountpoint -q "${ROOTFS}/dev"  || mount --bind /dev    "${ROOTFS}/dev"
+mount_chroot_dev "${ROOTFS}"
 
 # Hostname (override via --hostname)
 EFFECTIVE_HOSTNAME="${STATIC_HOSTNAME:-secubox-live}"
@@ -1118,15 +1161,14 @@ ok "Base configuration complete"
 # ══════════════════════════════════════════════════════════════════
 log "3/8 Installing firmware..."
 
-# Mount special filesystems for chroot (required for apt)
-# Cleanup is handled by the cleanup() function at script exit
+# Mount special filesystems for chroot (required for apt). Uses the
+# isolated tmpfs /dev helper so the host's /dev is never bind-mounted.
+# Cleanup is handled by the cleanup() function at script exit.
 mount_chroot_fs() {
   log "Mounting special filesystems in chroot..."
-  # Only mount if not already mounted
-  mountpoint -q "${ROOTFS}/dev"     || mount --bind /dev "${ROOTFS}/dev"
-  mountpoint -q "${ROOTFS}/dev/pts" || mount --bind /dev/pts "${ROOTFS}/dev/pts" 2>/dev/null || true
-  mountpoint -q "${ROOTFS}/proc"    || mount -t proc proc "${ROOTFS}/proc"
-  mountpoint -q "${ROOTFS}/sys"     || mount -t sysfs sysfs "${ROOTFS}/sys"
+  mount_chroot_dev "${ROOTFS}"
+  mountpoint -q "${ROOTFS}/proc" || mount -t proc proc "${ROOTFS}/proc"
+  mountpoint -q "${ROOTFS}/sys"  || mount -t sysfs sysfs "${ROOTFS}/sys"
 }
 
 mount_chroot_fs
@@ -2046,12 +2088,17 @@ if [[ $INCLUDE_KIOSK -eq 1 ]]; then
     libinput10 xdg-utils \
     feh zenity 2>/dev/null || warn "Some X11 packages failed"
 
-  # Try to install VirtualBox guest additions (may not be in standard repos)
-  # These provide vboxvideo DRM and better integration
-  log "Installing VirtualBox guest additions (optional)..."
-  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-    virtualbox-guest-utils virtualbox-guest-x11 2>/dev/null || \
-    warn "VirtualBox guest additions not available - using vmware driver for VMSVGA"
+  # Install VirtualBox guest additions for VM-friendly kiosk operation.
+  # Packages live in Debian `contrib` which sources.list already enables
+  # (set at step 3). Mouse integration, dynamic resolution, time sync.
+  log "Installing VirtualBox guest additions..."
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get update -q
+  if chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+       virtualbox-guest-utils virtualbox-guest-x11; then
+    ok "VirtualBox guest additions installed"
+  else
+    warn "VirtualBox guest additions install failed (apt error above); falling back to vmware driver for VMSVGA"
+  fi
 
   # Explicitly install emoji/symbol fonts (critical for sidebar icons)
   log "Installing emoji and symbol font packages..."
