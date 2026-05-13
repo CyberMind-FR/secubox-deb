@@ -64,6 +64,7 @@ Zéro framework, zéro CDN, zéro dépendance externe
 Icônes PNG officiels SecuBox embarqués en base64 (assets/icons/)
 Mode simulation intégré (CFG.SIMULATE=true) si API absente
 Consume `../common/{css/palette.css, css/base.css, js/config.js, js/icons.js, js/modules-table.js, js/sim.js, js/transport-manager.js}` (ref #127)
+NOTE: palette.css is forward-looking — round/ keeps raw colour literals in base.css; square/ (Phase 2) consumes the vars.
 Round-specific inline: drawRings(), updateDOM(), updateClock(), podTap(), init()
 ```
 
