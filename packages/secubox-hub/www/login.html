@@ -225,12 +225,31 @@
         <!-- Step 3: role=admin without TOTP — enroll TOTP -->
         <div id="enrollPanel" style="display:none">
             <p style="color:#00ff41;font-size:12px;letter-spacing:2px;margin-bottom:10px">TOTP ENROLLMENT REQUIRED</p>
-            <p style="color:#e8e6d9;font-size:12px;margin-bottom:14px">Scan this QR with your authenticator app (Google Authenticator, Aegis, Authy):</p>
+            <p style="color:#e8e6d9;font-size:12px;margin-bottom:14px">Scan the QR with your authenticator app, or tap the button below on mobile:</p>
             <img id="totpQr" alt="TOTP QR" style="display:block;margin:0 auto 14px;background:white;padding:8px;border-radius:4px;width:200px;height:200px">
+
+            <!-- Primary action: deep-link to the user's default authenticator app -->
+            <a id="totpAppLink" href="#" style="display:block;text-align:center;padding:10px 14px;margin-bottom:10px;background:rgba(0,212,255,0.12);border:1px solid #00d4ff;border-radius:4px;color:#00d4ff;font-size:12px;text-decoration:none;letter-spacing:1px">
+                📱 Open in authenticator app
+            </a>
+
+            <!-- Fallback: copyable secret + app store hints -->
             <details style="margin-bottom:14px;color:#6b6b7a;font-size:11px">
-                <summary style="cursor:pointer;color:#00d4ff">Can't scan? Enter manually</summary>
-                <div id="totpSecretBox" style="background:rgba(0,0,0,0.5);border:1px solid #333;border-radius:4px;padding:10px;font-size:11px;word-break:break-all;margin-top:8px;color:#c9a84c"></div>
-                <a id="totpUriLink" href="#" style="display:block;color:#00d4ff;font-size:11px;margin-top:6px;text-decoration:underline">otpauth:// URI</a>
+                <summary style="cursor:pointer;color:#00d4ff">Can't scan / no app installed?</summary>
+                <div style="margin-top:10px">
+                    <p style="margin-bottom:6px;color:#e8e6d9">Manual entry — copy this secret into your authenticator:</p>
+                    <div id="totpSecretBox" style="background:rgba(0,0,0,0.5);border:1px solid #333;border-radius:4px;padding:10px;font-size:12px;word-break:break-all;color:#c9a84c;cursor:pointer" title="Click to copy"></div>
+                    <a id="totpUriLink" href="#" style="display:block;color:#00d4ff;font-size:10px;margin-top:6px;text-decoration:underline;word-break:break-all">(raw otpauth:// URI)</a>
+                </div>
+                <div style="margin-top:14px;padding-top:10px;border-top:1px solid #333">
+                    <p style="margin-bottom:6px;color:#e8e6d9">Install a TOTP app:</p>
+                    <ul style="list-style:none;padding:0;margin:0;font-size:11px;line-height:1.8">
+                        <li>• <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank" rel="noopener" style="color:#00d4ff">Google Authenticator</a> (Android · <a href="https://apps.apple.com/app/google-authenticator/id388497605" target="_blank" rel="noopener" style="color:#00d4ff">iOS</a>)</li>
+                        <li>• <a href="https://getaegis.app/" target="_blank" rel="noopener" style="color:#00d4ff">Aegis Authenticator</a> (Android, FOSS — recommended)</li>
+                        <li>• <a href="https://authy.com/download/" target="_blank" rel="noopener" style="color:#00d4ff">Authy</a> (all platforms, cloud sync)</li>
+                        <li>• <a href="https://2fas.com/" target="_blank" rel="noopener" style="color:#00d4ff">2FAS</a> (Android · iOS, FOSS)</li>
+                    </ul>
+                </div>
             </details>
             <form id="confirmForm">
                 <div class="form-group">
@@ -393,10 +412,29 @@
             $('totpSecretBox').textContent = data.secret;
             $('totpUriLink').href = data.otpauth_uri;
             $('totpUriLink').textContent = data.otpauth_uri;
-            hintBox.textContent = 'Scan the QR with Google Authenticator / Aegis / Authy.';
+            // The otpauth:// URI is the standard deep-link for every TOTP app —
+            // tapping it on Android/iOS opens the registered authenticator;
+            // on desktop, opens an installed handler (Authy Desktop, Aegis WebUI, etc.).
+            $('totpAppLink').href = data.otpauth_uri;
+            hintBox.textContent = 'Scan the QR or tap the button below on mobile.';
             showPanel('enrollPanel');
             $('totpCode').focus();
         }
+
+        // Click the secret box to copy it (handy for manual entry).
+        $('totpSecretBox').addEventListener('click', () => {
+            const secret = $('totpSecretBox').textContent;
+            if (!secret) return;
+            navigator.clipboard?.writeText(secret).then(() => {
+                const orig = $('totpSecretBox').style.borderColor;
+                $('totpSecretBox').style.borderColor = '#00ff41';
+                $('totpSecretBox').title = 'Copied!';
+                setTimeout(() => {
+                    $('totpSecretBox').style.borderColor = orig || '#333';
+                    $('totpSecretBox').title = 'Click to copy';
+                }, 1200);
+            }).catch(() => { /* clipboard unavailable, no-op */ });
+        });
 
         // ── Operational preflight banner ─────────────────────────────────
         async function loadPreflight() {
