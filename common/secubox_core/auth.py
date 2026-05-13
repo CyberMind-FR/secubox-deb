@@ -1,73 +1,90 @@
-"""
-secubox_core.auth — JWT HS256 authentication
-=============================================
-- create_token(username) → str
-- require_jwt            → FastAPI dependency
-- router                 → /auth/login endpoint
+"""SecuBox core auth — JWT HS256 over a `user_store`-backed identity.
+
+Compared to v1 (plaintext `auth.toml` lookup), this module:
+- delegates password verification to `secubox_core.user_store`
+- adds a `jti` claim to every issued token
+- validates the `jti` against an externally-injected session validator
+- carries an optional `scope` claim for short-lived setup / mfa / enroll tokens
+- defensively re-checks `is_enabled` on every authenticated request
 """
 from __future__ import annotations
-import os, time
-from typing import Optional
+
+import os
+import secrets
+import time
+from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
+from . import user_store
 from .config import get_config
 from .logger import get_logger
 
 log = get_logger("auth")
-
-# auto_error=False allows us to handle missing token gracefully
 _bearer = HTTPBearer(auto_error=False)
 
-# Session event callback (set by auth module to record sessions)
-_session_callback = None
+# Session callbacks ─────────────────────────────────────────────────────
+_session_callback: Optional[Callable[[str, str, Dict[str, Any]], None]] = None
+_session_validator: Callable[[str], bool] = lambda jti: True
 
-def set_session_callback(callback):
-    """Set callback function for session events: callback(event, username, details)"""
+
+def set_session_callback(cb: Callable[[str, str, Dict[str, Any]], None]) -> None:
+    """Set callback fired on login_success / login_failed / etc."""
     global _session_callback
-    _session_callback = callback
+    _session_callback = cb
 
-def _emit_session_event(event: str, username: str, details: dict = None):
-    """Emit session event to callback if set."""
+
+def set_session_validator(fn: Callable[[str], bool]) -> None:
+    """Inject the jti → bool checker used by require_jwt."""
+    global _session_validator
+    _session_validator = fn
+
+
+def _emit_session_event(event: str, username: str, details: Optional[Dict[str, Any]] = None) -> None:
     if _session_callback:
         try:
             _session_callback(event, username, details or {})
-        except Exception as e:
-            log.warning("Session callback error: %s", e)
+        except Exception as exc:
+            log.warning("session callback error: %s", exc)
 
-# ── JWT helpers ────────────────────────────────────────────────────
 
+# JWT helpers ────────────────────────────────────────────────────────────
 def _secret() -> str:
-    """Lit le secret JWT depuis la config (généré au firstboot)."""
     cfg = get_config("api")
     s = cfg.get("jwt_secret", "")
     if not s:
-        # Fallback : variable d'environnement (dev/test)
         s = os.environ.get("SECUBOX_JWT_SECRET", "CHANGEME_INSECURE")
     return s
 
 
-def create_token(username: str, expires_in: int = 86400) -> str:
-    """Crée un JWT HS256 valide `expires_in` secondes."""
-    payload = {
+def create_token(
+    username: str,
+    expires_in: int = 86400,
+    scope: Optional[str] = None,
+    jti: Optional[str] = None,
+) -> str:
+    """Mint a JWT. `scope` carries a short-lived intent ("set-password", "mfa-challenge", …)."""
+    payload: Dict[str, Any] = {
         "sub": username,
         "iat": int(time.time()),
         "exp": int(time.time()) + expires_in,
+        "jti": jti or secrets.token_hex(8),
     }
+    if scope:
+        payload["scope"] = scope
     return jwt.encode(payload, _secret(), algorithm="HS256")
 
 
-def _decode_token(token: str) -> dict:
-    """Décode et valide le JWT. Lève HTTPException si invalide."""
+def _decode_token(token: str) -> Dict[str, Any]:
     try:
         payload = jwt.decode(token, _secret(), algorithms=["HS256"])
-        if payload.get("sub") is None:
+        if not payload.get("sub"):
             raise ValueError("missing sub")
         return payload
-    except JWTError as exc:
+    except (JWTError, ValueError) as exc:
         log.warning("JWT invalide: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,21 +94,39 @@ def _decode_token(token: str) -> dict:
 
 
 async def require_jwt(
-    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer)
-) -> dict:
-    """Dependency FastAPI — injecter dans tous les endpoints protégés."""
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> Dict[str, Any]:
     if creds is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token Bearer manquant",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return _decode_token(creds.credentials)
+    payload = _decode_token(creds.credentials)
+    jti = payload.get("jti")
+    if not jti or not _session_validator(jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session révoquée",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user_store.is_enabled(payload["sub"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Compte désactivé",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return payload
 
 
-# ── Login endpoint ─────────────────────────────────────────────────
+# Password verification ─────────────────────────────────────────────────
+def _check_password(username: str, password: str) -> bool:
+    """Delegate to user_store. Replaces the old plaintext auth.toml lookup."""
+    return user_store.verify_password(username, password)
 
-router = APIRouter(tags=["auth"])  # No prefix - let the app decide
+
+# Legacy /auth/login endpoint kept for backwards compat ────────────────
+router = APIRouter(tags=["auth"])
 
 
 class LoginRequest(BaseModel):
@@ -105,50 +140,29 @@ class TokenResponse(BaseModel):
     expires_in: int = 86400
 
 
-def _check_password(username: str, password: str) -> bool:
-    """
-    Vérifie les credentials depuis /etc/secubox/users.toml.
-    Format :
-        [users.admin]
-        password_hash = "<bcrypt>"   # à implémenter
-    Pour l'instant : lecture d'un mot de passe en clair depuis la config.
-    TODO : remplacer par bcrypt + adduser secubox-admin.
-    """
-    cfg = get_config("auth")
-    users = cfg.get("users", {})
-    user = users.get(username, {})
-    expected = user.get("password", "")
-    # Comparaison simple — remplacer par bcrypt en production
-    return expected and password == expected
-
-
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest, request: Request):
-    """Endpoint de login — retourne un JWT."""
-    # Extract client info for session tracking
-    client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-    if not client_ip:
-        client_ip = request.headers.get("X-Real-IP", "")
-    if not client_ip and request.client:
-        client_ip = request.client.host
+    """Plain login endpoint — secubox-auth overrides this with the full branching flow."""
+    client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() \
+        or request.headers.get("X-Real-IP", "") \
+        or (request.client.host if request.client else "")
     user_agent = request.headers.get("User-Agent", "")
-
     if not _check_password(req.username, req.password):
-        log.warning("Échec login: %s from %s", req.username, client_ip)
         _emit_session_event("login_failed", req.username, {
             "reason": "invalid_credentials",
             "ip": client_ip,
-            "user_agent": user_agent[:100] if user_agent else ""
+            "user_agent": user_agent[:100] if user_agent else "",
         })
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Identifiants incorrects",
         )
-    token = create_token(req.username)
-    log.info("Login OK: %s from %s", req.username, client_ip)
+    jti = secrets.token_hex(8)
+    tok = create_token(req.username, jti=jti)
     _emit_session_event("login_success", req.username, {
+        "jti": jti,
         "expires_in": 86400,
         "ip": client_ip,
-        "user_agent": user_agent[:100] if user_agent else ""
+        "user_agent": user_agent[:100] if user_agent else "",
     })
-    return TokenResponse(access_token=token)
+    return TokenResponse(access_token=tok)
