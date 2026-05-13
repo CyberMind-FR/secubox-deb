@@ -262,3 +262,23 @@ class Engine:
         self._save(doc)
         self._audit("backup_codes_regenerated", username, {})
         return plain
+
+    # ── Sessions / audit helpers ─────────────────────────────────────
+
+    def touch_last_login(self, username: str) -> None:
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u:
+            return
+        u["last_login"] = _now_iso()
+        self._save(doc)
+
+    def revoke_sessions(self, username: str) -> int:
+        """Dispatch to the revoke callback. Returns count revoked."""
+        if not self._revoke_cb:
+            return 0
+        try:
+            return int(self._revoke_cb(username) or 0)
+        except Exception as exc:
+            log.warning("revoke_sessions(%s) failed: %s", username, exc)
+            return 0
