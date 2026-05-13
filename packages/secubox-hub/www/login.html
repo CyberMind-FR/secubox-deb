@@ -219,12 +219,19 @@
             <button type="submit" id="setupBtn">Set Password</button>
         </form>
 
+        <!-- Operational banner: NTP unsync / identity fallback warnings -->
+        <div id="statusBanner" style="display:none;background:rgba(230,57,70,0.15);border:1px solid #e63946;color:#e63946;border-radius:4px;padding:8px 12px;margin-bottom:14px;font-size:11px;line-height:1.5"></div>
+
         <!-- Step 3: role=admin without TOTP — enroll TOTP -->
         <div id="enrollPanel" style="display:none">
             <p style="color:#00ff41;font-size:12px;letter-spacing:2px;margin-bottom:10px">TOTP ENROLLMENT REQUIRED</p>
-            <p style="color:#e8e6d9;font-size:12px;margin-bottom:14px">Add this secret to your authenticator app, then enter the 6-digit code:</p>
-            <div id="totpSecretBox" style="background:rgba(0,0,0,0.5);border:1px solid #333;border-radius:4px;padding:10px;font-size:11px;word-break:break-all;margin-bottom:14px;color:#c9a84c"></div>
-            <a id="totpUriLink" href="#" style="display:block;color:#00d4ff;font-size:11px;margin-bottom:14px;text-decoration:underline">Open in authenticator app</a>
+            <p style="color:#e8e6d9;font-size:12px;margin-bottom:14px">Scan this QR with your authenticator app (Google Authenticator, Aegis, Authy):</p>
+            <img id="totpQr" alt="TOTP QR" style="display:block;margin:0 auto 14px;background:white;padding:8px;border-radius:4px;width:200px;height:200px">
+            <details style="margin-bottom:14px;color:#6b6b7a;font-size:11px">
+                <summary style="cursor:pointer;color:#00d4ff">Can't scan? Enter manually</summary>
+                <div id="totpSecretBox" style="background:rgba(0,0,0,0.5);border:1px solid #333;border-radius:4px;padding:10px;font-size:11px;word-break:break-all;margin-top:8px;color:#c9a84c"></div>
+                <a id="totpUriLink" href="#" style="display:block;color:#00d4ff;font-size:11px;margin-top:6px;text-decoration:underline">otpauth:// URI</a>
+            </details>
             <form id="confirmForm">
                 <div class="form-group">
                     <input type="text" id="totpCode" placeholder="6-digit code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code">
@@ -378,12 +385,39 @@
                 headers: { 'Authorization': 'Bearer ' + enrollToken },
             });
             if (!res.ok) { showError(data.detail || 'Enrollment failed'); showPanel('loginForm'); return; }
+            if (data.qr_png_b64) {
+                $('totpQr').src = 'data:image/png;base64,' + data.qr_png_b64;
+            } else {
+                $('totpQr').style.display = 'none';
+            }
             $('totpSecretBox').textContent = data.secret;
             $('totpUriLink').href = data.otpauth_uri;
-            hintBox.textContent = 'Scan the secret with Google Authenticator / Aegis / Authy.';
+            $('totpUriLink').textContent = data.otpauth_uri;
+            hintBox.textContent = 'Scan the QR with Google Authenticator / Aegis / Authy.';
             showPanel('enrollPanel');
             $('totpCode').focus();
         }
+
+        // ── Operational status banner ────────────────────────────────────
+        async function loadStatus() {
+            try {
+                const { res, data } = await api('/api/v1/auth/status');
+                if (!res.ok) return;
+                const banner = $('statusBanner');
+                const msgs = [];
+                if (data.ntp && data.ntp.synced === false) {
+                    msgs.push('⏰ Clock not synced (TOTP window widened to ±' + ((data.totp_window || 1) * 30) + 's)');
+                }
+                if (data.identity_fallback) {
+                    msgs.push('⚠ Identity store in fallback mode — see /etc/secubox/users.json');
+                }
+                if (msgs.length) {
+                    banner.innerHTML = msgs.join('<br>');
+                    banner.style.display = 'block';
+                }
+            } catch (_) { /* status endpoint optional */ }
+        }
+        loadStatus();
 
         $('confirmForm').addEventListener('submit', async (e) => {
             e.preventDefault();

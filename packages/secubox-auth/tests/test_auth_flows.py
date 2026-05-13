@@ -126,7 +126,7 @@ def test_auth_health_endpoint(client, monkeypatch):
     from api import ntp_health
     monkeypatch.setattr(ntp_health, "probe", lambda: {"synced": False, "error": "no chronyc"})
     monkeypatch.setattr(ntp_health, "recommended_totp_window", lambda: 3)
-    r = c.get("/auth/health")
+    r = c.get("/auth/status")
     assert r.status_code == 200
     body = r.json()
     assert body["ntp"]["synced"] is False
