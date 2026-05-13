@@ -59,6 +59,11 @@ def create_app() -> FastAPI:
     from .routes.usb_gadget import router as usb_gadget_router
     app.include_router(usb_gadget_router)
 
+    from .routes.service import router as service_router
+    from .routes.lockdown import router as lockdown_router
+    app.include_router(service_router)
+    app.include_router(lockdown_router)
+
     return app
 
 
