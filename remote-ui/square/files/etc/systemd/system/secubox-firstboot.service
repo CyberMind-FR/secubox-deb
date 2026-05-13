@@ -1,0 +1,19 @@
+# secubox-firstboot.service
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Runs /usr/local/sbin/firstboot.sh once on first boot. The script is idempotent
+# (guards on /etc/.secubox-eye-square-firstboot-done), so a second invocation is a no-op.
+
+[Unit]
+Description=SecuBox Eye Square — first-boot setup (hostname, SSH key, eye-square.toml, service enable)
+After=multi-user.target
+ConditionPathExists=!/etc/.secubox-eye-square-firstboot-done
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/usr/local/sbin/firstboot.sh
+
+[Install]
+WantedBy=multi-user.target
