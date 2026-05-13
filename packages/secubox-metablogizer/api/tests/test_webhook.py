@@ -127,9 +127,16 @@ def test_git_pull_returns_old_and_new_sha(tmp_path, monkeypatch):
     old, new = webhook.git_pull(site, "main")
     assert old == "aaa1111"
     assert new == "bbb2222"
-    # ensure the 4 expected git commands happened in order
-    op_names = [c[3] for c in calls]
+    # ensure the 4 expected git commands happened in order. The git arg
+    # layout is now [git, -c, safe.directory=..., -C, <site>, <op>, ...]
+    # so the op verb is at index 5.
+    op_names = [c[5] for c in calls]
     assert op_names == ["rev-parse", "fetch", "reset", "rev-parse"]
+    # every call must carry the safe.directory override (fixes dubious-ownership
+    # under the secubox service user on root-owned site dirs).
+    for c in calls:
+        assert c[1] == "-c"
+        assert c[2] == f"safe.directory={site}"
 
 
 def test_git_pull_timeout_propagates(tmp_path, monkeypatch):
