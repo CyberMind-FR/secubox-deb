@@ -3,7 +3,28 @@
 
 ---
 
-## 🔄 2026-05-13: remote-ui Phase 1 — extract common/ shared core (Issue #127, PR #130)
+## 🔄 2026-05-13: remote-ui Phase 2 — square/ variant for Pi 4B/400 (Issue #127, PR #131)
+
+### Objective
+
+Add `remote-ui/square/` variant of the SecuBox Eye Remote targeting Pi 4B + Pi 400 + official Raspberry Pi 7" Touchscreen V1.1 (DSI, 800×480). Dual-pane kiosk: round UI in Chromium at (0,0)+480×480 + native PySide6 right column at (480,0)+320×480 with four tabs (Alerts / Module Detail / Console / Mode Controls). Privileged operations via `secubox-eye-square-helper` FastAPI on Unix socket with SO_PEERCRED auth.
+
+### Completed
+
+- Brainstormed spec + plans done previously (specs/2026-05-13-eye-square-variant-design.md, plans/2026-05-13-eye-square-phase2-variant-build.md)
+- 30-task plan executed via subagent-driven-development (Phase 2): 27 tasks complete, 2 hardware-BLOCKED, 1 PR opened
+- 26 new commits in [`feature/127-phase2-square-variant`](https://github.com/CyberMind-FR/secubox-deb/pull/131) on top of Phase 1 (#130)
+- **135 tests passing** total (helper 23, right_panel 33, secubox-system 4, repo tests/ 76)
+- Phase 2 PR: [#131](https://github.com/CyberMind-FR/secubox-deb/pull/131) — base = Phase 1's branch (auto-updates to master once #130 merges)
+
+### Next up
+
+- Pending user-action gates before PR merge: Task 28 manual Pi 4B bench + Task 29 manual Pi 400 sanity (both hardware-dependent, BLOCKED in subagent execution).
+- Phase 1 PR #130 needs merge first (Phase 2 is based on it).
+
+---
+
+## ✅ 2026-05-13: remote-ui Phase 1 — extract common/ shared core (Issue #127, PR #130)
 
 ### Objective
 
