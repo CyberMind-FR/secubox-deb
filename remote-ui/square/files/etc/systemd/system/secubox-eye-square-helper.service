@@ -1,0 +1,32 @@
+# secubox-eye-square-helper.service
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+[Unit]
+Description=SecuBox Eye Square — Helper FastAPI on Unix socket
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/127
+After=multi-user.target sys-kernel-config.mount
+Wants=multi-user.target
+
+[Service]
+Type=simple
+User=secubox-eye-square
+Group=secubox-eye-square
+WorkingDirectory=/usr/lib/python3/dist-packages
+ExecStart=/usr/bin/python3 -m eye_square_helper
+Restart=on-failure
+RestartSec=3
+
+# Capabilities: configfs writes + nft ruleset swap
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/secubox /var/log/secubox /sys/kernel/config/usb_gadget
+
+[Install]
+WantedBy=multi-user.target
