@@ -182,3 +182,83 @@ class Engine:
             return PasswordHasher().verify(u["password_hash"], plaintext)
         except (VerifyMismatchError, InvalidHash):
             return False
+
+    # ── TOTP ─────────────────────────────────────────────────────────
+
+    def enroll_totp(self, username: str, secret: str) -> list:
+        """Persist secret + freshly generated backup codes. Returns the 10 plaintext codes (shown once)."""
+        from . import totp as _totp
+
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u:
+            raise EngineError(f"user not found: {username}")
+        if u.get("totp") and u["totp"].get("enabled"):
+            raise EngineError(f"TOTP already enrolled for {username}")
+        plain = _totp.generate_backup_codes(n=10, length=10)
+        u["totp"] = {
+            "secret": secret,
+            "enabled": True,
+            "enrolled_at": _now_iso(),
+            "last_step": None,
+            "backup_codes": [
+                {"hash": _totp.hash_backup_code(c), "used_at": None} for c in plain
+            ],
+        }
+        self._save(doc)
+        self._audit("totp_enrolled", username, {})
+        return plain
+
+    def verify_totp_for_user(self, username: str, code: str) -> bool:
+        from . import totp as _totp
+
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u or not u.get("enabled") or not (u.get("totp") and u["totp"].get("enabled")):
+            return False
+        ok, step = _totp.verify(u["totp"]["secret"], code, u["totp"].get("last_step"))
+        if ok and step is not None:
+            u["totp"]["last_step"] = step
+            self._save(doc)
+        return ok
+
+    def consume_backup_code(self, username: str, code: str) -> bool:
+        from . import totp as _totp
+
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u or not (u.get("totp") and u["totp"].get("enabled")):
+            return False
+        for bc in u["totp"]["backup_codes"]:
+            if bc["used_at"] is None and _totp.verify_backup_code(bc["hash"], code):
+                bc["used_at"] = _now_iso()
+                self._save(doc)
+                self._audit("backup_code_used", username, {
+                    "remaining": sum(1 for x in u["totp"]["backup_codes"] if x["used_at"] is None)
+                })
+                return True
+        return False
+
+    def disable_totp(self, username: str) -> None:
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u:
+            raise EngineError(f"user not found: {username}")
+        u["totp"] = None
+        self._save(doc)
+        self._audit("totp_disabled", username, {})
+
+    def regenerate_backup_codes(self, username: str) -> list:
+        from . import totp as _totp
+
+        doc = self._load()
+        u = self._find(doc, username)
+        if not u or not (u.get("totp") and u["totp"].get("enabled")):
+            raise EngineError(f"TOTP not enrolled for {username}")
+        plain = _totp.generate_backup_codes(n=10, length=10)
+        u["totp"]["backup_codes"] = [
+            {"hash": _totp.hash_backup_code(c), "used_at": None} for c in plain
+        ]
+        self._save(doc)
+        self._audit("backup_codes_regenerated", username, {})
+        return plain
