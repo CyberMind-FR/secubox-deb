@@ -115,11 +115,22 @@ cp -r "$REPO_ROOT/packages/secubox-eye-square/helper/eye_square_helper" \
 cp -r "$REPO_ROOT/packages/secubox-eye-square/right_panel/secubox_eye_square_right_panel" \
     "$ROOT_MNT/usr/lib/python3/dist-packages/"
 
-log "Creating secubox-eye-square system user + runtime dirs..."
+log "Creating secubox-eye-square system user + secubox login user + runtime dirs..."
 chroot "$ROOT_MNT" /bin/bash -c "
+# Helper service runs as this system user (privileged operations, capabilities)
 useradd --system --no-create-home --shell /usr/sbin/nologin secubox-eye-square || true
-mkdir -p /run/secubox /var/log/secubox
+
+# secubox is the LOGIN user that runs the kiosk: xinit, chromium, right-panel.
+# Default password 'secubox' (changed via the eye-square.toml login_pass field
+# downstream; this OS-level password is for tty/SSH access if anyone needs it).
+# firstboot.sh imports authorized_keys from /boot/firmware/secubox-key.pub.
+useradd --create-home --shell /bin/bash --groups sudo,video,audio,input secubox || true
+echo 'secubox:secubox' | chpasswd
+
+mkdir -p /run/secubox /var/log/secubox /home/secubox/.config/openbox /home/secubox/.ssh
 chown secubox-eye-square:secubox-eye-square /run/secubox /var/log/secubox
+chown -R secubox:secubox /home/secubox
+chmod 700 /home/secubox/.ssh
 "
 
 log "Patching /boot/firmware/config.txt..."
@@ -141,6 +152,9 @@ EOF
 
 log "Enabling systemd units + setting graphical.target..."
 chroot "$ROOT_MNT" /bin/bash -c "
+systemctl enable ssh.service || true
+systemctl enable nginx || true
+systemctl enable secubox-firstboot.service || true
 systemctl enable secubox-otg-gadget.service || true
 systemctl enable secubox-eye-square-helper.service || true
 systemctl enable secubox-kiosk-x.service || true
