@@ -8,6 +8,7 @@ HMAC-verified Gitea push webhook. On a metablog-* repo push to the default
 branch, pull the site dir, invalidate the load_sites cache, optionally
 reload nginx if site.json:domain changed, and log to a ring buffer.
 """
+import asyncio
 import hmac
 import hashlib
 import logging
@@ -86,3 +87,44 @@ def _record_deploy(entry: dict) -> None:
 def list_deploys() -> dict:
     """Return deploys newest-first."""
     return {"deploys": list(reversed(_deploys)), "count": len(_deploys)}
+
+
+# ─── Payload classifier ──────────────────────────────────────────
+METABLOG_PREFIX = "metablog-"
+
+
+def classify_payload(payload: dict) -> tuple[str, dict]:
+    """Decide what to do with a Gitea push payload.
+
+    Returns one of:
+      ("accept",     {site, branch})
+      ("skip",       {reason: ...})
+      ("malformed",  {reason: ...})
+    """
+    try:
+        ref = payload["ref"]
+        repo = payload["repository"]
+        name = repo["name"]
+        default = repo["default_branch"]
+    except (KeyError, TypeError):
+        return "malformed", {"reason": "missing-fields"}
+
+    if not name.startswith(METABLOG_PREFIX):
+        return "skip", {"reason": "non-metablog", "name": name}
+    if ref != f"refs/heads/{default}":
+        return "skip", {"reason": "non-default-ref", "ref": ref}
+    return "accept", {"site": name[len(METABLOG_PREFIX):], "branch": default}
+
+
+# ─── Per-site asyncio lock pool ──────────────────────────────────
+# Two pushes to the same site serialize; pushes to different sites run concurrently.
+_site_locks: dict[str, asyncio.Lock] = {}
+_locks_master = asyncio.Lock()
+
+
+async def site_lock(name: str) -> asyncio.Lock:
+    """Return (creating if needed) the asyncio.Lock keyed by site name."""
+    async with _locks_master:
+        if name not in _site_locks:
+            _site_locks[name] = asyncio.Lock()
+        return _site_locks[name]

@@ -149,3 +149,99 @@ def test_git_pull_timeout_propagates(tmp_path, monkeypatch):
     monkeypatch.setattr(webhook.subprocess, "run", fake_run)
     with pytest.raises(subprocess.TimeoutExpired):
         webhook.git_pull(site, "main")
+
+
+def _payload(name="metablog-zkp", ref="refs/heads/main", default_branch="main"):
+    return {
+        "ref": ref,
+        "repository": {"name": name, "default_branch": default_branch},
+        "after": "abc1234",
+    }
+
+
+def test_classify_payload_accepts_default_branch_push():
+    import webhook
+    decision, info = webhook.classify_payload(_payload())
+    assert decision == "accept"
+    assert info["site"] == "zkp"
+    assert info["branch"] == "main"
+
+
+def test_classify_payload_rejects_non_metablog():
+    import webhook
+    decision, info = webhook.classify_payload(_payload(name="streamlit-foo"))
+    assert decision == "skip"
+    assert info["reason"] == "non-metablog"
+
+
+def test_classify_payload_rejects_non_default_ref():
+    import webhook
+    decision, info = webhook.classify_payload(_payload(ref="refs/tags/v1.0.0"))
+    assert decision == "skip"
+    assert info["reason"] == "non-default-ref"
+
+
+def test_classify_payload_rejects_feature_branch():
+    import webhook
+    decision, info = webhook.classify_payload(
+        _payload(ref="refs/heads/feature/x", default_branch="main"))
+    assert decision == "skip"
+    assert info["reason"] == "non-default-ref"
+
+
+def test_classify_payload_handles_master_default():
+    import webhook
+    decision, info = webhook.classify_payload(
+        _payload(ref="refs/heads/master", default_branch="master"))
+    assert decision == "accept"
+    assert info["branch"] == "master"
+
+
+def test_classify_payload_malformed_missing_repo():
+    import webhook
+    decision, info = webhook.classify_payload({"ref": "refs/heads/main"})
+    assert decision == "malformed"
+
+
+import asyncio
+
+
+@pytest.mark.asyncio
+async def test_site_lock_serializes_same_name():
+    import webhook
+    webhook._site_locks.clear()
+    order = []
+
+    async def critical(name: str, marker: str):
+        lock = await webhook.site_lock(name)
+        async with lock:
+            order.append(f"{marker}-start")
+            await asyncio.sleep(0.05)
+            order.append(f"{marker}-end")
+
+    await asyncio.gather(critical("zkp", "A"), critical("zkp", "B"))
+    # whichever started first must finish before the other starts
+    if order[0] == "A-start":
+        assert order == ["A-start", "A-end", "B-start", "B-end"]
+    else:
+        assert order == ["B-start", "B-end", "A-start", "A-end"]
+
+
+@pytest.mark.asyncio
+async def test_site_lock_parallel_different_names():
+    import webhook
+    webhook._site_locks.clear()
+    order = []
+
+    async def critical(name: str, marker: str):
+        lock = await webhook.site_lock(name)
+        async with lock:
+            order.append(f"{marker}-start")
+            await asyncio.sleep(0.05)
+            order.append(f"{marker}-end")
+
+    await asyncio.gather(critical("zkp", "A"), critical("evolution", "B"))
+    # different sites can overlap: starts come before either end
+    assert order[:2] == sorted(order[:2])  # both starts first
+    assert "A-end" in order
+    assert "B-end" in order
