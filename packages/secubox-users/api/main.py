@@ -7,6 +7,7 @@ import subprocess
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, validator
@@ -23,6 +24,8 @@ except ImportError:
     def get_config(name):
         return {}
 
+from . import engine as _engine_mod
+
 app = FastAPI(
     title="SecuBox Users API",
     description="Unified Identity Management with RBAC",
@@ -36,6 +39,10 @@ USERSCTL = "/usr/sbin/usersctl"
 USERS_FILE = os.environ.get("USERS_FILE", "/etc/secubox/users.json")
 ROLES_FILE = os.environ.get("ROLES_FILE", "/etc/secubox/roles.json")
 SERVICES = ["nextcloud", "gitea", "email", "matrix", "jellyfin", "peertube", "jabber"]
+SESSIONS_FILE = os.environ.get("SECUBOX_AUTH_SESSIONS", "/var/lib/secubox/auth/sessions.json")
+
+# Single engine instance — all mutations go through here
+_engine = _engine_mod.Engine(users_path=Path(USERS_FILE))
 
 # ══════════════════════════════════════════════════════════════════
 # Default Permissions & Roles
@@ -294,20 +301,12 @@ def run_usersctl(*args, parse_json=False):
         return {"success": False, "error": str(e)}
 
 def load_users() -> dict:
-    """Load users from JSON file."""
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE) as f:
-                return json.load(f)
-        except:
-            pass
-    return {"users": [], "groups": []}
+    """Load users via engine (read-only helper for query endpoints)."""
+    return _engine._load()
 
 def save_users(data: dict):
-    """Save users to JSON file."""
-    os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
-    with open(USERS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    """Atomic save via engine. Mutations should use _engine.* methods directly."""
+    _engine._save(data)
 
 def check_service(name: str) -> bool:
     """Check if a service is running."""
@@ -444,14 +443,19 @@ async def get_user(username: str):
 @app.post("/user", dependencies=[Depends(require_jwt)])
 async def create_user(user: UserCreate):
     """Create a new user and provision to services."""
-    data = load_users()
+    # Delegate identity creation to engine.
+    # The legacy API role "user" maps to engine role "viewer" (least privilege).
+    engine_role = "viewer"
+    try:
+        new_user = _engine.create_user(
+            user.username,
+            email=user.email,
+            role=engine_role,
+        )
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    # Check if user exists
-    for u in data.get("users", []):
-        if u.get("username") == user.username:
-            raise HTTPException(status_code=400, detail="User already exists")
-
-    # Provision to services
+    # Provision to external services (password used for service setup only, not stored here)
     provision_results = {}
     for svc in user.services:
         if svc not in SERVICES:
@@ -477,89 +481,119 @@ async def create_user(user: UserCreate):
                         capture_output=True, text=True, timeout=30
                     )
                 provision_results[svc] = result.returncode == 0
-            except Exception as e:
+            except Exception:
                 provision_results[svc] = False
         else:
             provision_results[svc] = False
 
-    # Save user
-    new_user = {
-        "username": user.username,
-        "email": user.email,
-        "enabled": True,
-        "services": user.services,
-        "created": datetime.now().isoformat(),
-        "provision_results": provision_results
-    }
-    data.setdefault("users", []).append(new_user)
-    save_users(data)
+    # Persist services list via engine's atomic I/O
+    if user.services:
+        doc = _engine._load()
+        for u in doc.get("users", []):
+            if u.get("username") == user.username:
+                u["services"] = [s for s in user.services if s in SERVICES]
+                u["provision_results"] = provision_results
+                break
+        _engine._save(doc)
+        new_user = _engine.get_user(user.username) or new_user
 
     return {"success": True, "user": new_user, "provision_results": provision_results}
 
 @app.put("/user/{username}", dependencies=[Depends(require_jwt)])
 async def update_user(username: str, update: UserUpdate):
     """Update user."""
-    data = load_users()
-    for user in data.get("users", []):
-        if user.get("username") == username:
-            if update.email is not None:
-                user["email"] = update.email
-            if update.enabled is not None:
-                user["enabled"] = update.enabled
-            if update.services is not None:
-                # Handle service changes
-                old_services = set(user.get("services", []))
-                new_services = set(update.services)
+    # For the enabled flag, delegate to engine to get session revocation + audit
+    if update.enabled is not None:
+        try:
+            if update.enabled:
+                _engine.enable_user(username)
+            else:
+                _engine.disable_user(username)
+        except _engine_mod.EngineError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
 
-                # Provision to new services
-                for svc in new_services - old_services:
-                    ctl = get_service_ctl(svc)
-                    if ctl:
-                        # Note: Would need password for new service provisioning
-                        pass
+    # For email and services, update via engine's atomic I/O
+    if update.email is not None or update.services is not None:
+        doc = _engine._load()
+        found = False
+        for user in doc.get("users", []):
+            if user.get("username") == username:
+                found = True
+                if update.email is not None:
+                    user["email"] = update.email
+                if update.services is not None:
+                    user["services"] = update.services
+                    user["updated"] = datetime.now().isoformat()
+                break
+        if not found:
+            raise HTTPException(status_code=404, detail="User not found")
+        _engine._save(doc)
 
-                user["services"] = update.services
-                user["updated"] = datetime.now().isoformat()
+    user_record = _engine.get_user(username)
+    if not user_record:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "user": user_record}
 
-            save_users(data)
-            return {"success": True, "user": user}
-    raise HTTPException(status_code=404, detail="User not found")
+
+@app.post("/user/{username}/disable", dependencies=[Depends(require_jwt)])
+async def disable_user(username: str):
+    """Disable user and revoke their sessions."""
+    try:
+        revoked = _engine.disable_user(username)
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"ok": True, "revoked_sessions": revoked}
+
+
+@app.post("/user/{username}/enable", dependencies=[Depends(require_jwt)])
+async def enable_user(username: str):
+    """Re-enable a previously disabled user."""
+    try:
+        _engine.enable_user(username)
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"ok": True}
 
 @app.delete("/user/{username}", dependencies=[Depends(require_jwt)])
 async def delete_user(username: str):
     """Delete user and deprovision from services."""
-    data = load_users()
-    for i, user in enumerate(data.get("users", [])):
-        if user.get("username") == username:
-            # Deprovision from services
-            deprovision_results = {}
-            for svc in user.get("services", []):
-                ctl = get_service_ctl(svc)
-                if ctl:
-                    try:
-                        if svc == "nextcloud":
-                            result = subprocess.run(
-                                [ctl, "occ", "user:delete", username],
-                                capture_output=True, text=True, timeout=30
-                            )
-                        elif svc == "gitea":
-                            result = subprocess.run(
-                                [ctl, "user", "delete", "--username", username],
-                                capture_output=True, text=True, timeout=30
-                            )
-                        else:
-                            result = subprocess.run(
-                                [ctl, "user-del", username],
-                                capture_output=True, text=True, timeout=30
-                            )
-                        deprovision_results[svc] = result.returncode == 0
-                    except:
-                        deprovision_results[svc] = False
+    # Read services before deleting (engine will remove the record)
+    user_record = _engine.get_user(username)
+    if not user_record:
+        raise HTTPException(status_code=404, detail="User not found")
 
-            data["users"].pop(i)
-            save_users(data)
-            return {"success": True, "deprovision_results": deprovision_results}
-    raise HTTPException(status_code=404, detail="User not found")
+    # Deprovision from external services
+    deprovision_results = {}
+    for svc in user_record.get("services", []):
+        ctl = get_service_ctl(svc)
+        if ctl:
+            try:
+                if svc == "nextcloud":
+                    result = subprocess.run(
+                        [ctl, "occ", "user:delete", username],
+                        capture_output=True, text=True, timeout=30
+                    )
+                elif svc == "gitea":
+                    result = subprocess.run(
+                        [ctl, "user", "delete", "--username", username],
+                        capture_output=True, text=True, timeout=30
+                    )
+                else:
+                    result = subprocess.run(
+                        [ctl, "user-del", username],
+                        capture_output=True, text=True, timeout=30
+                    )
+                deprovision_results[svc] = result.returncode == 0
+            except Exception:
+                deprovision_results[svc] = False
+
+    # Delegate deletion to engine
+    try:
+        _engine.delete_user(username)
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return {"success": True, "deprovision_results": deprovision_results}
 
 @app.post("/user/{username}/sync", dependencies=[Depends(require_jwt)])
 async def sync_user(username: str):
@@ -575,37 +609,97 @@ async def sync_user(username: str):
 
 @app.post("/user/{username}/password", dependencies=[Depends(require_jwt)])
 async def change_password(username: str, pwd: PasswordChange):
-    """Change user password across all services."""
-    data = load_users()
-    for user in data.get("users", []):
-        if user.get("username") == username:
-            results = {}
-            for svc in user.get("services", []):
-                ctl = get_service_ctl(svc)
-                if ctl:
-                    try:
-                        if svc == "nextcloud":
-                            result = subprocess.run(
-                                [ctl, "occ", "user:resetpassword", "--password-from-env", username],
-                                input=pwd.password,
-                                capture_output=True, text=True, timeout=30
-                            )
-                        elif svc == "gitea":
-                            result = subprocess.run(
-                                [ctl, "admin", "user", "change-password",
-                                 "--username", username, "--password", pwd.password],
-                                capture_output=True, text=True, timeout=30
-                            )
-                        else:
-                            result = subprocess.run(
-                                [ctl, "user-passwd", username, pwd.password],
-                                capture_output=True, text=True, timeout=30
-                            )
-                        results[svc] = result.returncode == 0
-                    except:
-                        results[svc] = False
-            return {"success": True, "password_results": results}
-    raise HTTPException(status_code=404, detail="User not found")
+    """Change user password (admin path — caller holds users.password permission).
+    Sets the internal password hash via engine and propagates to external services."""
+    user_record = _engine.get_user(username)
+    if not user_record:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Delegate hash storage to engine
+    try:
+        _engine.set_password(username, pwd.password)
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # Propagate to external services
+    results = {}
+    for svc in user_record.get("services", []):
+        ctl = get_service_ctl(svc)
+        if ctl:
+            try:
+                if svc == "nextcloud":
+                    result = subprocess.run(
+                        [ctl, "occ", "user:resetpassword", "--password-from-env", username],
+                        input=pwd.password,
+                        capture_output=True, text=True, timeout=30
+                    )
+                elif svc == "gitea":
+                    result = subprocess.run(
+                        [ctl, "admin", "user", "change-password",
+                         "--username", username, "--password", pwd.password],
+                        capture_output=True, text=True, timeout=30
+                    )
+                else:
+                    result = subprocess.run(
+                        [ctl, "user-passwd", username, pwd.password],
+                        capture_output=True, text=True, timeout=30
+                    )
+                results[svc] = result.returncode == 0
+            except Exception:
+                results[svc] = False
+    return {"success": True, "password_results": results}
+
+
+# ══════════════════════════════════════════════════════════════════
+# TOTP Admin Endpoints
+# ══════════════════════════════════════════════════════════════════
+
+@app.post("/user/{username}/totp/disable", dependencies=[Depends(require_jwt)])
+async def disable_user_totp(username: str):
+    """Admin: disable TOTP for a user (clears secret and backup codes)."""
+    try:
+        _engine.disable_totp(username)
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"ok": True}
+
+
+@app.post("/user/{username}/totp/backup-codes", dependencies=[Depends(require_jwt)])
+async def regen_backup_codes(username: str):
+    """Admin: regenerate TOTP backup codes for a user (returns plaintext — shown once)."""
+    try:
+        codes = _engine.regenerate_backup_codes(username)
+    except _engine_mod.EngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"backup_codes": codes}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Per-User Session Endpoints
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/user/{username}/sessions", dependencies=[Depends(require_jwt)])
+async def list_user_sessions(username: str):
+    """List active sessions for a specific user."""
+    rows: list = []
+    sessions_path = Path(SESSIONS_FILE)
+    try:
+        data = json.loads(sessions_path.read_text())
+        if isinstance(data, list):
+            rows = data
+        else:
+            rows = data.get("sessions", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        rows = []
+    return [r for r in rows if r.get("username") == username or r.get("sub") == username]
+
+
+@app.post("/user/{username}/sessions/revoke", dependencies=[Depends(require_jwt)])
+async def revoke_user_sessions(username: str):
+    """Revoke all active sessions for a specific user."""
+    revoked = _engine.revoke_sessions(username)
+    return {"revoked": revoked}
+
 
 # ══════════════════════════════════════════════════════════════════
 # Group Endpoints
@@ -620,9 +714,9 @@ async def list_groups():
 @app.post("/group", dependencies=[Depends(require_jwt)])
 async def create_group(group: GroupCreate):
     """Create a new group."""
-    data = load_users()
+    doc = _engine._load()
 
-    for g in data.get("groups", []):
+    for g in doc.get("groups", []):
         if g.get("name") == group.name:
             raise HTTPException(status_code=400, detail="Group already exists")
 
@@ -633,19 +727,19 @@ async def create_group(group: GroupCreate):
         "members": [],
         "created": datetime.now().isoformat()
     }
-    data.setdefault("groups", []).append(new_group)
-    save_users(data)
+    doc.setdefault("groups", []).append(new_group)
+    _engine._save(doc)
 
     return {"success": True, "group": new_group}
 
 @app.delete("/group/{name}", dependencies=[Depends(require_jwt)])
 async def delete_group(name: str):
     """Delete a group."""
-    data = load_users()
-    for i, group in enumerate(data.get("groups", [])):
+    doc = _engine._load()
+    for i, group in enumerate(doc.get("groups", [])):
         if group.get("name") == name:
-            data["groups"].pop(i)
-            save_users(data)
+            doc["groups"].pop(i)
+            _engine._save(doc)
             return {"success": True}
     raise HTTPException(status_code=404, detail="Group not found")
 
@@ -779,7 +873,6 @@ async def get_user_roles(username: str):
 @app.put("/user/{username}/roles", dependencies=[Depends(require_jwt)])
 async def assign_user_roles(username: str, assignment: UserRoleAssign):
     """Assign roles to a user."""
-    data = load_users()
     roles = load_roles()
     valid_role_ids = {r["id"] for r in roles}
 
@@ -788,11 +881,13 @@ async def assign_user_roles(username: str, assignment: UserRoleAssign):
     if invalid_roles:
         raise HTTPException(status_code=400, detail=f"Invalid roles: {invalid_roles}")
 
-    for user in data.get("users", []):
+    # Use engine's atomic I/O
+    doc = _engine._load()
+    for user in doc.get("users", []):
         if user.get("username") == username:
             user["roles"] = assignment.roles
             user["roles_updated"] = datetime.now().isoformat()
-            save_users(data)
+            _engine._save(doc)
             return {"success": True, "roles": assignment.roles}
 
     raise HTTPException(status_code=404, detail="User not found")
@@ -894,8 +989,8 @@ async def import_users(file: UploadFile = File(...)):
         if "users" not in import_data:
             raise HTTPException(status_code=400, detail="Invalid format: missing 'users' key")
 
-        data = load_users()
-        existing_usernames = {u["username"] for u in data.get("users", [])}
+        doc = _engine._load()
+        existing_usernames = {u["username"] for u in doc.get("users", [])}
 
         imported = 0
         skipped = 0
@@ -905,10 +1000,10 @@ async def import_users(file: UploadFile = File(...)):
                 skipped += 1
                 continue
             user["imported"] = datetime.now().isoformat()
-            data.setdefault("users", []).append(user)
+            doc.setdefault("users", []).append(user)
             imported += 1
 
-        save_users(data)
+        _engine._save(doc)
         return {"success": True, "imported": imported, "skipped": skipped}
 
     except json.JSONDecodeError:
@@ -917,8 +1012,6 @@ async def import_users(file: UploadFile = File(...)):
 # ══════════════════════════════════════════════════════════════════
 # Active Sessions
 # ══════════════════════════════════════════════════════════════════
-
-SESSIONS_FILE = "/var/lib/secubox/auth/sessions.json"
 
 @app.get("/sessions", dependencies=[Depends(require_jwt)])
 async def get_sessions():

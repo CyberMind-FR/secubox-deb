@@ -265,6 +265,15 @@ class Engine:
 
     # ── Sessions / audit helpers ─────────────────────────────────────
 
+    def delete_user(self, username: str) -> None:
+        doc = self._load()
+        before = len(doc.get("users", []))
+        doc["users"] = [u for u in doc.get("users", []) if u.get("username") != username]
+        if len(doc["users"]) == before:
+            raise EngineError(f"user not found: {username}")
+        self._save(doc)
+        self._audit("user_deleted", username, {})
+
     def touch_last_login(self, username: str) -> None:
         doc = self._load()
         u = self._find(doc, username)
