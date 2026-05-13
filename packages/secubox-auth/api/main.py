@@ -362,12 +362,15 @@ async def _set_password(req: _SetPasswordIn, request: _Request):
     raise HTTPException(status_code=403, detail="Token hors scope")
 
 
-@_login_router.get("/health")
-async def _auth_health():
-    """Public-readable health surface for the UI banner.
+@_login_router.get("/status")
+async def _auth_status():
+    """Public-readable status surface for the UI banner.
 
     Returns NTP-health + identity-store source. UI uses this to render warnings
     like "Identity store in fallback mode" or "Clock not synced — TOTP may fail".
+
+    Distinct from the legacy `/health` liveness check (sidebar consumer):
+    `/health` answers "is the service up?", `/status` answers "is auth healthy?".
     """
     src = user_store.load_with_fallback()
     return {
