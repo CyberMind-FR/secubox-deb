@@ -3,6 +3,26 @@
 
 ---
 
+## ✅ Session 167: Auth rework — secubox-users + TOTP 2FA (Issue #120, PR TBD)
+
+### Objective
+Replace the plaintext `auth.toml` admin login with secubox-users-backed argon2id auth + TOTP 2FA, kill-on-disable session revocation, CLI↔API parity via a single engine, and a feature-flagged cutover.
+
+### Completed
+- Brainstormed spec → `docs/superpowers/specs/2026-05-13-secubox-users-auth-design.md`
+- Plan (19 tasks) → `docs/superpowers/plans/2026-05-13-secubox-users-auth.md`
+- All 19 tasks implemented in `feature/120-auth-rework-secubox-users-as-identity-so`
+- 70+ tests per package, all green
+- Live smoke script written (not run — pending deploy)
+
+### Followups
+- Build + publish .deb, then run smoke.
+- Cutover phase: flip feature flag on the canonical board.
+- Top-10k common-passwords list refresh.
+- Frontend: surface "fallback active" red banner when users.json is unhealthy.
+
+---
+
 ## ✅ 2026-05-13: MetaBlogizer deploy webhook (Issue #113, sub-E of #49)
 
 ### Objective
