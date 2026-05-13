@@ -6,9 +6,10 @@
 
 # SecuBox-Deb :: remote-ui/square — build-eye-square-image.sh
 # Builds a Raspberry Pi OS Bookworm arm64 image for the Pi 4B/400 Eye Square variant.
+# Phase 3: single-process Pillow + /dev/fb0 kiosk (no X, no Qt, no Chromium).
 set -euo pipefail
 readonly MODULE="build-eye-square-image"
-readonly VERSION="0.1.0"
+readonly VERSION="0.2.0"
 
 BASE_IMAGE="${BASE_IMAGE:-}"
 OUT_DIR="${OUT_DIR:-/tmp}"
@@ -78,49 +79,26 @@ mount -o bind /dev "$ROOT_MNT/dev"
 mount -o bind /sys "$ROOT_MNT/sys"
 
 log "Installing apt packages in chroot..."
-# PySide6 + qasync are NOT in Debian Bookworm — only PySide2 is. To keep the
-# code identical to what we tested (PySide6 imports), install via pip inside
-# the chroot. arm64 PEP 668 enforces --break-system-packages.
-#
-# libxcb-* system libraries are required by PySide6's bundled libqxcb.so
-# platform plugin. The pip wheel doesn't bundle them. Missing any of these
-# results in the right panel process starting silently but never opening a
-# window ("Could not load the Qt platform plugin xcb").
+# Phase 3: Pillow + python-evdev for the framebuffer kiosk, FastAPI for the
+# helper, AppArmor for the profile. No X server, no Qt, no Chromium.
 chroot "$ROOT_MNT" /bin/bash -c "
 DEBIAN_FRONTEND=noninteractive apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    chromium openbox xserver-xorg xinit unclutter \
+    python3-pil python3-evdev \
     python3-fastapi python3-uvicorn python3-websockets \
-    python3-httpx python3-pip \
-    libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
-    libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-sync1 \
-    libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 \
-    nginx-light apparmor-utils
-pip install --break-system-packages pyside6 qasync
+    python3-httpx \
+    apparmor-utils
 "
 
-log "Installing remote-ui/common/ and remote-ui/round/ payloads..."
-mkdir -p "$ROOT_MNT/var/www"
-cp -r "$REPO_ROOT/remote-ui/common" "$ROOT_MNT/var/www/common"
-mkdir -p "$ROOT_MNT/var/www/secubox-round"
-cp "$REPO_ROOT/remote-ui/round/index.html" "$ROOT_MNT/var/www/secubox-round/"
-# Inject square-bridge.js into the served index.html
-sed -i 's|</body>|<script src="/local/square-bridge.js"></script></body>|' \
-    "$ROOT_MNT/var/www/secubox-round/index.html"
-mkdir -p "$ROOT_MNT/var/www/secubox-square"
-cp "$REPO_ROOT/remote-ui/square/square-bridge.js" "$ROOT_MNT/var/www/secubox-square/"
-
-log "Installing config files (systemd, openbox, nginx, udev, apparmor, firstboot)..."
+log "Installing config files (systemd, udev, apparmor, firstboot)..."
 cp -r "$REPO_ROOT/remote-ui/square/files/." "$ROOT_MNT/"
 chmod +x "$ROOT_MNT/usr/local/sbin/firstboot.sh"
-chmod +x "$ROOT_MNT/home/secubox/.xinitrc"
-chmod +x "$ROOT_MNT/etc/openbox/autostart"
 
 log "Installing Python packages..."
 mkdir -p "$ROOT_MNT/usr/lib/python3/dist-packages"
 cp -r "$REPO_ROOT/packages/secubox-eye-square/helper/eye_square_helper" \
     "$ROOT_MNT/usr/lib/python3/dist-packages/"
-cp -r "$REPO_ROOT/packages/secubox-eye-square/right_panel/secubox_eye_square_right_panel" \
+cp -r "$REPO_ROOT/packages/secubox-eye-square/kiosk/secubox_eye_square_kiosk" \
     "$ROOT_MNT/usr/lib/python3/dist-packages/"
 
 log "Creating secubox-eye-square system user + secubox login user + runtime dirs..."
@@ -128,28 +106,17 @@ chroot "$ROOT_MNT" /bin/bash -c "
 # Helper service runs as this system user (privileged operations, capabilities)
 useradd --system --no-create-home --shell /usr/sbin/nologin secubox-eye-square || true
 
-# secubox is the LOGIN user that runs the kiosk: xinit, chromium, right-panel.
-# Default password 'secubox' (changed via the eye-square.toml login_pass field
-# downstream; this OS-level password is for tty/SSH access if anyone needs it).
-# firstboot.sh imports authorized_keys from /boot/firmware/secubox-key.pub.
-# render group needed for chromium /dev/dri access on Pi 4B.
-useradd --create-home --shell /bin/bash --groups sudo,video,audio,input,render,tty secubox || true
+# secubox is the LOGIN user that runs the kiosk Python process. video group
+# is required for /dev/fb0 mmap; input group for /dev/input/event* touchscreen.
+# Default password 'secubox' covers tty/SSH access; firstboot.sh imports
+# authorized_keys from /boot/firmware/secubox-key.pub.
+useradd --create-home --shell /bin/bash --groups sudo,video,audio,input,tty secubox || true
 echo 'secubox:secubox' | chpasswd
 
-mkdir -p /run/secubox /var/log/secubox /home/secubox/.config/openbox /home/secubox/.ssh
+mkdir -p /run/secubox /var/log/secubox /home/secubox/.ssh
 chown secubox-eye-square:secubox-eye-square /run/secubox /var/log/secubox
 chown -R secubox:secubox /home/secubox
 chmod 700 /home/secubox/.ssh
-"
-
-log "Installing /usr/local/sbin/ symlinks for shared OTG scripts..."
-# Phase 1's common/shell/secubox-otg-gadget.sh lands at /var/www/common/shell/
-# (via the nginx-aliased remote-ui/common deploy). The systemd unit
-# secubox-otg-gadget.service calls /usr/local/sbin/secubox-otg-gadget.sh —
-# bridge that path here. Same for host-up.sh (used by udev on SecuBox hosts).
-chroot "$ROOT_MNT" /bin/bash -c "
-ln -sf /var/www/common/shell/secubox-otg-gadget.sh /usr/local/sbin/secubox-otg-gadget.sh
-ln -sf /var/www/common/shell/secubox-otg-host-up.sh /usr/local/sbin/secubox-otg-host-up.sh
 "
 
 log "Patching /boot/firmware/config.txt..."
@@ -169,24 +136,21 @@ libcomposite
 configfs
 EOF
 
-log "Enabling systemd units + masking Pi OS userconfig/getty + setting graphical.target..."
+log "Enabling systemd units + masking Pi OS userconfig/getty + setting multi-user.target..."
 chroot "$ROOT_MNT" /bin/bash -c "
 # Mask the two Pi OS services that hijack tty1 and reset default.target.
 # userconfig.service prompts for user setup on first boot and, if it doesn't
 # find a desktop env, runs raspi-config to flip default.target → multi-user.target.
-# getty@tty1.service competes with secubox-kiosk-x.service for /dev/tty1.
+# getty@tty1.service competes with the kiosk for /dev/tty1.
 systemctl mask userconfig.service || true
 systemctl mask getty@tty1.service || true
 
 systemctl enable ssh.service || true
-systemctl enable nginx || true
 systemctl enable secubox-firstboot.service || true
 systemctl enable secubox-otg-gadget.service || true
 systemctl enable secubox-eye-square-helper.service || true
-systemctl enable secubox-kiosk-x.service || true
-systemctl enable secubox-square-chromium.service || true
-systemctl enable secubox-square-right-panel.service || true
-systemctl set-default graphical.target || true
+systemctl enable secubox-square-kiosk.service || true
+systemctl set-default multi-user.target || true
 "
 
 log "Activating AppArmor profile..."
