@@ -124,13 +124,24 @@ useradd --system --no-create-home --shell /usr/sbin/nologin secubox-eye-square |
 # Default password 'secubox' (changed via the eye-square.toml login_pass field
 # downstream; this OS-level password is for tty/SSH access if anyone needs it).
 # firstboot.sh imports authorized_keys from /boot/firmware/secubox-key.pub.
-useradd --create-home --shell /bin/bash --groups sudo,video,audio,input secubox || true
+# render group needed for chromium /dev/dri access on Pi 4B.
+useradd --create-home --shell /bin/bash --groups sudo,video,audio,input,render,tty secubox || true
 echo 'secubox:secubox' | chpasswd
 
 mkdir -p /run/secubox /var/log/secubox /home/secubox/.config/openbox /home/secubox/.ssh
 chown secubox-eye-square:secubox-eye-square /run/secubox /var/log/secubox
 chown -R secubox:secubox /home/secubox
 chmod 700 /home/secubox/.ssh
+"
+
+log "Installing /usr/local/sbin/ symlinks for shared OTG scripts..."
+# Phase 1's common/shell/secubox-otg-gadget.sh lands at /var/www/common/shell/
+# (via the nginx-aliased remote-ui/common deploy). The systemd unit
+# secubox-otg-gadget.service calls /usr/local/sbin/secubox-otg-gadget.sh —
+# bridge that path here. Same for host-up.sh (used by udev on SecuBox hosts).
+chroot "$ROOT_MNT" /bin/bash -c "
+ln -sf /var/www/common/shell/secubox-otg-gadget.sh /usr/local/sbin/secubox-otg-gadget.sh
+ln -sf /var/www/common/shell/secubox-otg-host-up.sh /usr/local/sbin/secubox-otg-host-up.sh
 "
 
 log "Patching /boot/firmware/config.txt..."
@@ -150,8 +161,15 @@ libcomposite
 configfs
 EOF
 
-log "Enabling systemd units + setting graphical.target..."
+log "Enabling systemd units + masking Pi OS userconfig/getty + setting graphical.target..."
 chroot "$ROOT_MNT" /bin/bash -c "
+# Mask the two Pi OS services that hijack tty1 and reset default.target.
+# userconfig.service prompts for user setup on first boot and, if it doesn't
+# find a desktop env, runs raspi-config to flip default.target → multi-user.target.
+# getty@tty1.service competes with secubox-kiosk-x.service for /dev/tty1.
+systemctl mask userconfig.service || true
+systemctl mask getty@tty1.service || true
+
 systemctl enable ssh.service || true
 systemctl enable nginx || true
 systemctl enable secubox-firstboot.service || true
