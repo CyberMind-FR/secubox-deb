@@ -1,9 +1,9 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-13*
+*Mis à jour : 2026-05-14*
 
 ---
 
-## 🔄 2026-05-13: remote-ui Phase 3 — Pillow+framebuffer kiosk for Pi 4B/400 (Issue #127, PR #132)
+## ✅ 2026-05-14: remote-ui Phase 3 — Pillow+framebuffer kiosk for Pi 4B/400 (Issue #127, PR #132 MERGED)
 
 ### Objective
 
@@ -18,15 +18,17 @@ Replace Phase 2's Chromium+PySide6 dual-window stack with a single-process Pytho
 - **82/82 pytest green** (21 helper + 61 kiosk) · `bash -n` + `shellcheck` clean on all modified/new shell scripts
 - Phase 3 PR: [#132](https://github.com/CyberMind-FR/secubox-deb/pull/132) — branched from master + cherry-picked Phase 2 helper carry-forward
 - Phase 2 PR #131 closed (superseded by Phase 3)
+- **Squash-merged 2026-05-14 as `dee8bf8b`** on master (after Phase 1 `7c37415f`)
 
-### Next up
+### Followups
 
-- Pending user-action gates: Task 23 manual Pi 4B bench (build + flash + boot + kiosk visible + OTG link to MOCHAbin) + Task 24 manual Pi 400 sanity (same image, integrated keyboard) — both hardware-dependent, BLOCKED in subagent execution.
-- Phase 3 is independent of Phase 1 (#130 still open but not a prerequisite).
+- **Task 24 (Pi 400 manual sanity) — IN PROGRESS** this session: building `secubox-eye-square_0.2.0_arm64.img.xz` locally for flash to uSD.
+- **Task 23 (Pi 4B manual bench)** — still pending hardware (build + flash + boot + kiosk visible + OTG link to MOCHAbin).
+- Issue #127 stays open until both Pi 4B and Pi 400 benches pass.
 
 ---
 
-## ✅ 2026-05-13: remote-ui Phase 1 — extract common/ shared core (Issue #127, PR #130)
+## ✅ 2026-05-14: remote-ui Phase 1 — extract common/ shared core (Issue #127, PR #130 MERGED)
 
 ### Objective
 
@@ -39,12 +41,13 @@ Refactor `remote-ui/round/` to consume a new `remote-ui/common/` directory (JS/C
 - Executed via superpowers:subagent-driven-development with two-stage review on every task (60+ subagent dispatches, multiple fix-loops landed)
 - 22 commits in [`feature/127-add-remote-ui-square-variant-for-pi-4b-7`](https://github.com/CyberMind-FR/secubox-deb/pull/130)
 - Green gates: Task 12 visual AE=0, Task 13 form_factor TDD 4/4 green, Task 17 pytest 80/80 green
-- Phase 1 PR opened: [#130](https://github.com/CyberMind-FR/secubox-deb/pull/130) — pending review
+- Phase 1 PR: [#130](https://github.com/CyberMind-FR/secubox-deb/pull/130) — **squash-merged 2026-05-14 as `7c37415f`**
+- CI fix shipped on the branch right before merge: `.github/workflows/build-eye-remote.yml` `VERSION: '2.2.0'` → `'2.2.1'` (Compress step was failing on a stale hardcoded version vs. `build-eye-remote-image.sh:16` `VERSION="2.2.1"`)
 
 ### Followups
 
-- **Pending user-action regression gates** before PR merge: Task 18 `diffoscope` on round/ image build (blocked in subagent env by missing `hyperpixel2r.dtbo` prerequisite — structural verification in `docs/superpowers/specs/2026-05-13-task18-regression-gate-report.txt`); Task 19 manual Zero W bench (depends on Task 18).
-- Phase 2 plan to be drafted post-merge when `common/`'s API surface is stable.
+- **Post-merge hardware gates** (issue #127 stays open until done): Task 18 `diffoscope` on round/ image build (blocked in subagent env by missing `hyperpixel2r.dtbo` prerequisite — structural verification in `docs/superpowers/specs/2026-05-13-task18-regression-gate-report.txt`); Task 19 manual Zero W bench (depends on Task 18).
+- Phase 2 plan no longer needed — superseded by Phase 3 (merged).
 - Pre-existing `TM.jwt_otg` / `TM.jwt_wifi` references in round/'s inline JS (visible in code reviewer feedback) — orthogonal to Phase 1, track separately if rendering hits the path.
 
 ---
