@@ -1,0 +1,4 @@
+# /etc/udev/rules.d/99-secubox-fb-access.rules
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Allow the `video` group to read/write /dev/fb0 (used by secubox-square-kiosk.service).
+KERNEL=="fb[0-9]*", GROUP="video", MODE="0660"

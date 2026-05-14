@@ -1,0 +1,24 @@
+# /etc/apparmor.d/secubox-eye-square-helper
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+#include <tunables/global>
+
+profile secubox-eye-square-helper /usr/bin/python3 {
+  #include <abstractions/base>
+  #include <abstractions/python>
+
+  /usr/bin/python3 ix,
+  /usr/lib/python3/dist-packages/eye_square_helper/** r,
+  /run/secubox/eye-square-helper.sock rwk,
+  /run/secubox/transport.state r,
+  /sys/kernel/config/usb_gadget/** rwk,
+  /sys/kernel/config/** r,
+  /usr/local/sbin/secubox-otg-gadget.sh ix,
+  /usr/bin/systemctl ix,
+  /usr/sbin/nft ix,
+  /etc/secubox/firewall/lockdown.nft r,
+  /var/log/secubox/audit.log rw,
+  /var/log/secubox/ rw,
+  /dev/ttyACM0 r,
+  /usr/bin/journalctl ix,
+  /usr/bin/cat ix,
+}

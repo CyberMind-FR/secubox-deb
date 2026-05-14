@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        systemctl stop secubox-square-chromium.service || true
+        systemctl stop secubox-square-right-panel.service || true
+        systemctl stop secubox-eye-square-helper.service || true
+        systemctl stop secubox-otg-gadget.service || true
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

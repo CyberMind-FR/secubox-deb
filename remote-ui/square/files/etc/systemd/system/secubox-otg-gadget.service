@@ -1,0 +1,20 @@
+# secubox-otg-gadget.service (square variant)
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+[Unit]
+Description=SecuBox Eye Square — USB OTG composite gadget (configfs)
+After=sys-kernel-config.mount
+Requires=sys-kernel-config.mount
+ConditionKernelCommandLine=!nogadget
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=VARIANT=square
+Environment=GADGET_NAME=secubox-square
+ExecStart=/usr/local/sbin/secubox-otg-gadget.sh start
+ExecStop=/usr/local/sbin/secubox-otg-gadget.sh stop
+
+[Install]
+WantedBy=multi-user.target
