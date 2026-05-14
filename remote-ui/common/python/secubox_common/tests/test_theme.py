@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Tests for secubox_common.theme — palette + DEFAULT_FONT loader."""
-from PIL import ImageDraw, ImageFont, Image
+from PIL import ImageDraw, Image
 
 from secubox_common import theme
 
