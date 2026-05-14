@@ -178,17 +178,19 @@ async def remote_ui_connected(
         manager.on_connected(
             transport=request.transport.value,
             peer=request.peer,
-            interface=request.interface
+            interface=request.interface,
+            form_factor=request.form_factor,
         )
 
-        log.info("Remote UI connecté: transport=%s, peer=%s",
-                 request.transport.value, request.peer)
+        log.info("Remote UI connecté: transport=%s, peer=%s, form_factor=%s",
+                 request.transport.value, request.peer, request.form_factor)
 
         return {
             "success": True,
             "message": f"Remote UI enregistré ({request.transport.value})",
             "transport": request.transport.value,
-            "peer": request.peer
+            "peer": request.peer,
+            "form_factor": request.form_factor,
         }
     except Exception as e:
         log.error("Erreur enregistrement connexion: %s", e)

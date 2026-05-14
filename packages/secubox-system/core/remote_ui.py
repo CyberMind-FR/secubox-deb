@@ -53,6 +53,7 @@ class RemoteUIState:
     serial_available: bool = False
     serial_device: str = ""
     error_count: int = 0
+    form_factor: str = "round"  # "round" or "square" (ref #127)
 
     def uptime_seconds(self) -> int:
         """Calcule l'uptime de la connexion."""
@@ -77,6 +78,7 @@ class RemoteUIState:
             "last_seen": self.last_seen_iso(),
             "serial_available": self.serial_available,
             "serial_device": self.serial_device,
+            "form_factor": self.form_factor,
         }
 
 
@@ -230,7 +232,7 @@ class RemoteUIManager:
     # API pour les événements udev
     # ─────────────────────────────────────────────────────────────────────────
 
-    def on_connected(self, transport: str, peer: str, interface: str = "") -> None:
+    def on_connected(self, transport: str, peer: str, interface: str = "", form_factor: str = "round") -> None:
         """
         Appelé lors d'une connexion (par l'API depuis le script udev).
 
@@ -238,11 +240,13 @@ class RemoteUIManager:
             transport: Type de transport ("otg" ou "wifi")
             peer: Adresse IP du peer
             interface: Nom de l'interface réseau
+            form_factor: Facteur de forme du Remote UI — "round" (Pi Zero W + HyperPixel 2.1 Round)
+                         ou "square" (Pi 4B/400 + écran 7"). Défaut "round" pour rétrocompat (ref #127).
         """
         now = time.time()
 
-        log.info("Remote UI connecté: transport=%s, peer=%s, interface=%s",
-                 transport, peer, interface)
+        log.info("Remote UI connecté: transport=%s, peer=%s, interface=%s, form_factor=%s",
+                 transport, peer, interface, form_factor)
 
         self._state.connected = True
         self._state.transport = transport
@@ -251,6 +255,7 @@ class RemoteUIManager:
         self._state.connected_at = now
         self._state.last_seen = now
         self._state.error_count = 0
+        self._state.form_factor = form_factor
 
         # Vérifier la console série si OTG
         if transport == "otg":

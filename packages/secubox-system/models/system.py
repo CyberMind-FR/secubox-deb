@@ -10,7 +10,7 @@ License: Proprietary / ANSSI CSPN candidate
 """
 from __future__ import annotations
 
-from typing import List
+from typing import List, Literal
 from pydantic import BaseModel, Field
 
 
@@ -356,6 +356,12 @@ class RemoteUIConnectedRequest(BaseModel):
         default="secubox-round",
         description="Nom de l'interface réseau",
         json_schema_extra={"example": "secubox-round"}
+    )
+
+    form_factor: Literal["round", "square"] = Field(
+        default="round",
+        description="Eye Remote form factor — 'round' (Pi Zero W + HyperPixel 2.1 Round) or 'square' (Pi 4B/400 + 7\" 800x480). Defaults to 'round' for backward compatibility with udev rules that pre-date Phase 1 (ref #127).",
+        json_schema_extra={"example": "square"},
     )
 
     class Config:
