@@ -46,10 +46,12 @@ class ConsoleTab:
         visible_rows = (h - 50) // LINE_HEIGHT
         for i, line in enumerate(self.lines[-visible_rows:]):
             y = TOP_MARGIN + i * LINE_HEIGHT
-            draw.text((4, y), line[:48], fill=theme.MATRIX_GREEN)
+            draw.text((4, y), line[:48], fill=theme.MATRIX_GREEN,
+                      font=theme.DEFAULT_FONT)
         # Freeze button
         btn_label = "Resume" if self.frozen else "Freeze"
         btn_fill = theme.GOLD_HERMETIC if self.frozen else theme.TEXT_MUTED
         draw.rectangle((BUTTON_X, BUTTON_Y, w - 4, BUTTON_Y + BUTTON_HEIGHT),
                        outline=btn_fill, width=1)
-        draw.text((BUTTON_X + 8, BUTTON_Y + 8), btn_label, fill=btn_fill)
+        draw.text((BUTTON_X + 8, BUTTON_Y + 8), btn_label, fill=btn_fill,
+                  font=theme.DEFAULT_FONT)

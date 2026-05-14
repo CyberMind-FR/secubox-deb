@@ -81,12 +81,21 @@ mount -o bind /sys "$ROOT_MNT/sys"
 log "Installing apt packages in chroot..."
 # Phase 3: Pillow + python-evdev for the framebuffer kiosk, FastAPI for the
 # helper, AppArmor for the profile. No X server, no Qt, no Chromium.
+#
+# python3-numpy is required for RGB565 packing — Pillow 9.4+ removed its
+# RGB->RGB565 raw packers (no "RGB;16" / "BGR;16" for RGB-mode images on
+# Bookworm). vc4drmfb on the Pi 4B 7" DSI is 16bpp. See issue #133.
+#
+# fonts-dejavu-core ships /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+# referenced by theme.DEFAULT_FONT. Without it Pillow falls back to its
+# legacy latin-1 bitmap default which crashes on Unicode glyphs.
 chroot "$ROOT_MNT" /bin/bash -c "
 DEBIAN_FRONTEND=noninteractive apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    python3-pil python3-evdev \
+    python3-pil python3-evdev python3-numpy \
     python3-fastapi python3-uvicorn python3-websockets \
     python3-httpx \
+    fonts-dejavu-core \
     apparmor-utils
 "
 

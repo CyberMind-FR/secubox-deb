@@ -82,7 +82,7 @@ class RightPanel:
             colour = theme.GOLD_HERMETIC if key == self.active_tab else theme.TEXT_MUTED
             draw.rectangle((x, 0, x + TAB_WIDTH, TAB_BAR_HEIGHT - 1),
                            outline=colour, width=1 if key != self.active_tab else 2)
-            draw.text((x + 8, 20), label, fill=colour)
+            draw.text((x + 8, 20), label, fill=colour, font=theme.DEFAULT_FONT)
         # Content area
         content_h = h - TAB_BAR_HEIGHT
         content = Image.new("RGBA", (w, content_h), (0, 0, 0, 255))
