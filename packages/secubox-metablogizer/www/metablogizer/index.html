@@ -357,8 +357,6 @@
 
         <div class="tabs">
             <div class="tab active" onclick="showTab('sites')">Sites</div>
-            <div class="tab" onclick="showTab('access')">Access</div>
-            <div class="tab" onclick="showTab('actions')">Actions</div>
         </div>
 
         <div class="tab-content active" id="tab-sites">
@@ -390,20 +388,6 @@
             </div>
         </div>
 
-        <div class="tab-content" id="tab-access">
-            <div class="card">
-                <h2>Published Sites</h2>
-                <div id="access-list">Loading...</div>
-            </div>
-        </div>
-
-        <div class="tab-content" id="tab-actions">
-            <div class="card">
-                <h2>Migration</h2>
-                <p style="margin-bottom:1rem;color:var(--text-dim)">Import sites from OpenWrt SecuBox.</p>
-                <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
-            </div>
-        </div>
     </main>
 
     <div class="modal" id="create-modal">
@@ -414,17 +398,6 @@
             <div class="form-actions">
                 <button class="btn" onclick="hideModal('create-modal')">Cancel</button>
                 <button class="btn success" onclick="createSite()">Create</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="migrate-modal">
-        <div class="modal-content">
-            <h3>Migrate from OpenWrt</h3>
-            <div class="form-group"><label>Source IP</label><input type="text" id="migrate-source" value="192.168.255.1"></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('migrate-modal')">Cancel</button>
-                <button class="btn" onclick="doMigrate()">Start Migration</button>
             </div>
         </div>
     </div>
@@ -522,12 +495,37 @@
             }, 60000);
         }
 
+        function escAttr(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function siteTooltip(s) {
+            const lines = [];
+            lines.push(`📛 Name: ${s.name}`);
+            lines.push(`🌐 Domain: ${s.domain}`);
+            lines.push(`🚦 Status: ${s.published ? '✅ Published' : '📝 Draft'}`);
+            if (s.version) lines.push(`🏷️ Version: ${s.version}`);
+            if (s.title) lines.push(`📰 Title: ${s.title}`);
+            if (s.description) lines.push(`📝 ${s.description}`);
+            if (s.category) lines.push(`📂 Category: ${s.category}`);
+            if (Array.isArray(s.tags) && s.tags.length) lines.push(`🏷️ Tags: ${s.tags.join(', ')}`);
+            if (s.streamlit_app) lines.push(`🎨 Streamlit: ${s.streamlit_app}`);
+            if (s.port) lines.push(`🔌 Port: ${s.port}`);
+            if (s.size) lines.push(`📦 Size: ${s.size}`);
+            if (s.last_updated) lines.push(`🕐 Updated: ${s.last_updated}`);
+            return escAttr(lines.join('\n'));
+        }
+
         async function loadSites() {
             const d = await api('/sites');
             const list = document.getElementById('site-list');
             const sites = d.sites || [];
             if (!sites.length) { list.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim)">No sites</td></tr>'; return; }
             list.innerHTML = sites.map(s => {
+                const tip = siteTooltip(s);
+                const url = `http://${s.domain}`;
                 const streamlitCell = s.streamlit_app
                     ? `<a href="https://gitea.gk2.secubox.in/gandalf/${s.streamlit_app}" target="_blank" title="${s.streamlit_app}">🎨</a>`
                     : '<span style="color:var(--text-dim)">—</span>';
@@ -537,17 +535,17 @@
                 const updatedCell = s.last_updated
                     ? `<span title="${s.last_updated}">${relativeTime(s.last_updated)}</span>`
                     : '<span style="color:var(--text-dim)">—</span>';
-                return `<tr class="site-row" data-name="${s.name}" data-domain="${s.domain}" data-version="${s.version || ''}" data-last_updated="${s.last_updated || ''}">
+                return `<tr class="site-row" title="${tip}" data-name="${s.name}" data-domain="${s.domain}" data-version="${s.version || ''}" data-last_updated="${s.last_updated || ''}">
                     <td><strong><a href="site.html?name=${s.name}" style="color:var(--text)">${s.name}</a></strong></td>
-                    <td style="color:var(--text-dim)">${s.domain}</td>
+                    <td><a href="${url}" target="_blank" rel="noopener" style="color:var(--p31-mid);text-decoration:none" title="${tip}">🌐 ${s.domain} ↗</a></td>
                     <td>${versionCell}</td>
                     <td style="text-align:center">${streamlitCell}</td>
                     <td>${updatedCell}</td>
-                    <td><span class="badge ${s.published ? 'published' : 'draft'}">${s.published ? 'Published' : 'Draft'}</span></td>
+                    <td><span class="badge ${s.published ? 'published' : 'draft'}">${s.published ? '✅ Published' : '📝 Draft'}</span></td>
                     <td>${s.size || '-'}</td>
                     <td>
                         ${s.published ?
-                            `<a href="http://${s.domain}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">View</a>
+                            `<a href="${url}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">View</a>
                              <button class="btn" onclick="unpublishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Unpublish</button>` :
                             `<button class="btn success" onclick="publishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Publish</button>`}
                         <button class="btn danger" onclick="deleteSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
@@ -558,20 +556,9 @@
             applyFilter();
         }
 
-        async function loadAccess() {
-            const d = await api('/access');
-            const list = document.getElementById('access-list');
-            const sites = (d.sites || []).filter(s => s.published);
-            if (!sites.length) { list.innerHTML = '<p style="color:var(--text-dim)">No published sites</p>'; return; }
-            list.innerHTML = sites.map(s => `<div style="background:var(--bg-dark);padding:0.75rem;border-radius:6px;margin-bottom:0.5rem">
-                <a href="${s.url}" target="_blank" style="color:var(--primary)">${s.url}</a>
-            </div>`).join('');
-        }
-
         function showModal(id) { document.getElementById(id).classList.add('show'); }
         function hideModal(id) { document.getElementById(id).classList.remove('show'); }
         function showCreateSite() { showModal('create-modal'); }
-        function showMigrate() { showModal('migrate-modal'); }
 
         async function createSite() {
             const name = document.getElementById('new-name').value.trim();
@@ -597,13 +584,6 @@
             if (r.success) refresh();
         }
 
-        async function doMigrate() {
-            const source = document.getElementById('migrate-source').value;
-            await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
-            hideModal('migrate-modal');
-            alert('Migration started');
-        }
-
         async function republishAll() {
             const btn = event.target;
             const origText = btn.textContent;
@@ -623,7 +603,7 @@
             }
         }
 
-        function refresh() { loadStatus(); loadSites(); loadAccess(); }
+        function refresh() { loadStatus(); loadSites(); }
         refresh();
         installPolling();
     </script>
