@@ -100,7 +100,8 @@ class ModeControlsTab:
         draw = ImageDraw.Draw(region)
         w, _ = region.size
         # USB buttons header
-        draw.text((10, 16), "USB GADGET MODE", fill=theme.GOLD_HERMETIC)
+        draw.text((10, 16), "USB GADGET MODE", fill=theme.GOLD_HERMETIC,
+                  font=theme.DEFAULT_FONT)
         for i, mode in enumerate(USB_BUTTONS):
             row = i // 3
             col = i % 3
@@ -109,10 +110,11 @@ class ModeControlsTab:
             colour = theme.CINNABAR if mode in DESTRUCTIVE else theme.TEXT_PRIMARY
             draw.rectangle((x, y, x + CELL_W - 5, y + CELL_H - 5),
                            outline=colour, width=1)
-            draw.text((x + 8, y + 24), mode.upper(), fill=colour)
+            draw.text((x + 8, y + 24), mode.upper(), fill=colour,
+                      font=theme.DEFAULT_FONT)
         # Service buttons
         draw.text((10, SERVICE_ROW_Y - 24), "SECUBOX SERVICE",
-                  fill=theme.GOLD_HERMETIC)
+                  fill=theme.GOLD_HERMETIC, font=theme.DEFAULT_FONT)
         for i, (_, label) in enumerate(SERVICE_BUTTONS):
             row = i // 2
             col = i % 2
@@ -121,18 +123,20 @@ class ModeControlsTab:
             colour = theme.CINNABAR if SERVICE_BUTTONS[i][0] in DESTRUCTIVE else theme.TEXT_PRIMARY
             draw.rectangle((x, y, x + w // 2 - 15, y + CELL_H - 5),
                            outline=colour, width=1)
-            draw.text((x + 8, y + 24), label, fill=colour)
+            draw.text((x + 8, y + 24), label, fill=colour,
+                      font=theme.DEFAULT_FONT)
         # Transport
         draw.text((10, TRANSPORT_ROW_Y - 24), "TRANSPORT",
-                  fill=theme.GOLD_HERMETIC)
+                  fill=theme.GOLD_HERMETIC, font=theme.DEFAULT_FONT)
         dot = "●" if self.transport_active in ("OTG", "WiFi") else "○"
         draw.text((10, TRANSPORT_ROW_Y), f"{dot} {self.transport_active}",
-                  fill=theme.MATRIX_GREEN if dot == "●" else theme.TEXT_MUTED)
+                  fill=theme.MATRIX_GREEN if dot == "●" else theme.TEXT_MUTED,
+                  font=theme.DEFAULT_FONT)
         # Confirm overlay
         if self.pending_confirm:
             draw.rectangle((10, 100, w - 10, 200), fill=theme.COSMOS_BLACK,
                            outline=theme.CINNABAR, width=2)
             draw.text((20, 120), f"Confirm {self.pending_confirm}?",
-                      fill=theme.CINNABAR)
+                      fill=theme.CINNABAR, font=theme.DEFAULT_FONT)
             draw.text((20, 150), "Tap again to confirm",
-                      fill=theme.TEXT_MUTED)
+                      fill=theme.TEXT_MUTED, font=theme.DEFAULT_FONT)

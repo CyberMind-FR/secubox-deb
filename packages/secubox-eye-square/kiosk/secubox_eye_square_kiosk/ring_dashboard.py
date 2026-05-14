@@ -122,20 +122,24 @@ class RingDashboard:
             # Coloured dot
             draw.ellipse((px - 5, py - 5, px + 5, py + 5), fill=m.colour + (255,))
             # Module name label below dot
-            draw.text((px - 16, py + 8), m.name, fill=theme.TEXT_PRIMARY)
+            draw.text((px - 16, py + 8), m.name, fill=theme.TEXT_PRIMARY,
+                      font=theme.DEFAULT_FONT)
 
         # Central clock + hostname
         now = datetime.now().strftime("%H:%M:%S")
         date = datetime.now().strftime("%a %d %b")
-        draw.text((CX - 50, CY - 18), now, fill=theme.TEXT_PRIMARY)
-        draw.text((CX - 30, CY + 4), date, fill=theme.TEXT_MUTED)
-        draw.text((CX - 70, CY + 22), self.hostname[:18], fill=theme.TEXT_MUTED)
+        draw.text((CX - 50, CY - 18), now, fill=theme.TEXT_PRIMARY,
+                  font=theme.DEFAULT_FONT)
+        draw.text((CX - 30, CY + 4), date, fill=theme.TEXT_MUTED,
+                  font=theme.DEFAULT_FONT)
+        draw.text((CX - 70, CY + 22), self.hostname[:18], fill=theme.TEXT_MUTED,
+                  font=theme.DEFAULT_FONT)
 
         # Transport badge top-right
         dot = "●" if self.transport in ("OTG", "WiFi") else "○"
         dot_colour = theme.MATRIX_GREEN if dot == "●" else theme.TEXT_MUTED
         draw.text((CX + 110, TRANSPORT_BADGE_Y), f"{dot} {self.transport}",
-                  fill=dot_colour)
+                  fill=dot_colour, font=theme.DEFAULT_FONT)
 
         # Alerts ribbon — overlay bottom 24px when alert is active
         if self._alert_text:
@@ -143,6 +147,7 @@ class RingDashboard:
             draw.rectangle((0, 480 - ALERT_RIBBON_HEIGHT, 480, 480),
                            fill=theme.COSMOS_BLACK + (200,))
             draw.text((10, 480 - ALERT_RIBBON_HEIGHT + 4),
-                      f"▲ {self._alert_text}"[:50], fill=ribbon_colour)
+                      f"▲ {self._alert_text}"[:50], fill=ribbon_colour,
+                      font=theme.DEFAULT_FONT)
 
         return img
