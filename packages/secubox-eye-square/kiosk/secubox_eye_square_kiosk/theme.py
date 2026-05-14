@@ -30,3 +30,17 @@ SEVERITY = {
     "warn": GOLD_HERMETIC,
     "crit": CINNABAR,
 }
+
+# Default font for all draw.text() calls in the kiosk. Pillow's
+# load_default() on Bookworm is a latin-1 bitmap font that crashes on
+# Unicode glyphs (○ ● ▶ ⚠). Loading DejaVuSans explicitly — apt
+# dep python3-pil + fonts-dejavu-core (added in the same fix). Falls
+# back to load_default() if the TTF isn't present (e.g. unit tests on
+# a host without fonts-dejavu-core).
+from PIL import ImageFont as _ImageFont  # noqa: E402
+
+_DEJAVU = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+try:
+    DEFAULT_FONT = _ImageFont.truetype(_DEJAVU, 12)
+except OSError:
+    DEFAULT_FONT = _ImageFont.load_default()

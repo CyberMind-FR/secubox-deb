@@ -43,13 +43,15 @@ class ModuleDetailTab:
         draw = ImageDraw.Draw(region)
         w, h = region.size
         if not self.module_name:
-            draw.text((w // 2 - 50, h // 2), "(no module)", fill=theme.TEXT_MUTED)
+            draw.text((w // 2 - 50, h // 2), "(no module)",
+                      fill=theme.TEXT_MUTED, font=theme.DEFAULT_FONT)
             return
 
         # Title bar
         draw.text((w // 2 - 30, TITLE_Y), self.module_name,
-                  fill=theme.GOLD_HERMETIC)
-        draw.text((10, METRIC_Y), self.metric, fill=theme.TEXT_PRIMARY)
+                  fill=theme.GOLD_HERMETIC, font=theme.DEFAULT_FONT)
+        draw.text((10, METRIC_Y), self.metric, fill=theme.TEXT_PRIMARY,
+                  font=theme.DEFAULT_FONT)
 
         # Gauge (clamped 0..100)
         clamped = max(0.0, min(100.0, self.value))
@@ -59,7 +61,7 @@ class ModuleDetailTab:
         draw.rectangle((10, GAUGE_Y, 10 + fill_w, GAUGE_Y + GAUGE_HEIGHT),
                        fill=theme.CYBER_CYAN)
         draw.text((10, GAUGE_Y + GAUGE_HEIGHT + 4), f"{self.value:.1f}",
-                  fill=theme.TEXT_PRIMARY)
+                  fill=theme.TEXT_PRIMARY, font=theme.DEFAULT_FONT)
 
         # Sparkline
         if len(self.history) >= 2:
@@ -76,4 +78,4 @@ class ModuleDetailTab:
 
         # Service status
         draw.text((10, SERVICE_Y), f"Service: {self.service_status}",
-                  fill=theme.TEXT_PRIMARY)
+                  fill=theme.TEXT_PRIMARY, font=theme.DEFAULT_FONT)
