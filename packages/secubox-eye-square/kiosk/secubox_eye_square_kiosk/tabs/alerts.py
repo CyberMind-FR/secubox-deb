@@ -59,7 +59,8 @@ class AlertsTab:
         """Render alerts into the region (320x424 RGBA image)."""
         draw = ImageDraw.Draw(region)
         if not self.items:
-            draw.text((10, 10), "● NOMINAL", fill=theme.MATRIX_GREEN)
+            draw.text((10, 10), "● NOMINAL", fill=theme.MATRIX_GREEN,
+                      font=theme.DEFAULT_FONT)
             return
         w, h = region.size
         for i, item in enumerate(self.items):
@@ -73,7 +74,7 @@ class AlertsTab:
             )
             txt = f"{item.time} {item.module}  {item.message}"
             draw.text((TEXT_PAD_LEFT, y + 8), txt[:38],
-                      fill=theme.TEXT_PRIMARY)
+                      fill=theme.TEXT_PRIMARY, font=theme.DEFAULT_FONT)
             # divider line
             draw.line((0, y + ROW_HEIGHT - 1, w, y + ROW_HEIGHT - 1),
                       fill=theme.TEXT_MUTED)
