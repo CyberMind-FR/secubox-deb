@@ -2,6 +2,29 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-14
+
+### remote-ui Phases 1 + 3 merged to master (Issue #127, PRs #130 + #132)
+
+**Context:** Closing out the `remote-ui/square/` variant for Pi 4B/400. Phase 1 (extract `remote-ui/common/`) and Phase 3 (Pillow + `/dev/fb0` kiosk) had both been implementation-complete with green tests/reviews but the PRs were still open pending hardware bench. Decision: squash-merge both now, drive Pi 400 manual bench (Task 24) live this session.
+
+**Done:**
+- Triaged the `build-eye-remote` CI failure on PR #130: traced to pre-existing version drift — workflow env `VERSION: '2.2.0'` vs. `build-eye-remote-image.sh:16` `VERSION="2.2.1"`. One-line fix `0ba80c31` on the branch (`.github/workflows/build-eye-remote.yml` 2.2.0 → 2.2.1). CI re-ran green end-to-end including Compress + Upload artifact.
+- Squash-merged PR #130 (Phase 1) → `7c37415f` on master.
+- Squash-merged PR #132 (Phase 3) → `dee8bf8b` on master.
+- Posted merge-complete comment on issue #127 enumerating remaining hardware gates (Tasks 18/19/23/24).
+- Rebased local-only docs commit `a4de42c8` onto merged master.
+
+**State:**
+- Issue #127 stays open per CLAUDE.md "Jamais de fermeture automatique" — Tasks 18 (round/ diffoscope), 19 (Zero W bench), 23 (Pi 4B bench), 24 (Pi 400 bench) all need user-driven hardware validation before close.
+- Phase 2 PR #131 remains closed (superseded by Phase 3 — kept on record for design rationale only).
+
+**Followups:**
+- Build + flash `secubox-eye-square_0.2.0_arm64.img.xz` for Pi 400 hardware bench (Task 24, in progress this session). Build script `remote-ui/square/build-eye-square-image.sh`; CI workflow for square/ does NOT exist yet — add as Phase 4 followup so future contributors don't have to local-build.
+- Same image will satisfy Task 23 (Pi 4B sanity).
+- Worktrees `127-add-remote-ui-square-variant-for-pi-4b-7`, `127-phase2-square-variant`, `127-phase3-python-kiosk` are now ready for `scripts/agent-worktree.sh clean <#>` — branches merged.
+
+---
 ## 2026-05-13
 
 ### Session 167 — Auth rework: secubox-users as identity source + TOTP 2FA (Issue #120, 19 tasks)
