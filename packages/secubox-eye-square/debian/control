@@ -1,0 +1,29 @@
+Source: secubox-eye-square
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+
+Package: secubox-eye-square
+Architecture: arm64
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ secubox-core,
+ secubox-eye-remote,
+ python3-pil,
+ python3-evdev,
+ python3-fastapi,
+ python3-uvicorn,
+ python3-websockets,
+ python3-httpx,
+ apparmor-utils
+Description: SecuBox Eye Remote — Square variant (Pi 4B / Pi 400 + 7" 800x480)
+ Pillow-on-framebuffer single-process kiosk. Renders the SecuBox dashboard
+ directly to /dev/fb0 — no X server, no Qt, no Chromium. Companion to the
+ round/ Pi Zero W variant (also Pillow+fb).
+ .
+ Includes a privileged Helper FastAPI on a Unix socket (SO_PEERCRED) for
+ USB gadget mode switching, service restart, lockdown (nftables atomic
+ swap), and console streaming.
