@@ -8,7 +8,9 @@ Interfaces utilisateur déportées pour SecuBox.
 
 | Module | Description | Hardware |
 |--------|-------------|----------|
+| **common/** | Shared core (JS/CSS/icons/shell) consumed by round/ + square/ | hardware-independent |
 | **round/** | Eye Remote Dashboard | HyperPixel 2.1 Round + Pi Zero W |
+| **square/** | Planned: dual-pane kiosk (round UI + native right column) | Pi 4B / Pi 400 + 7" 800×480 (issue #127) |
 
 ---
 

@@ -154,12 +154,28 @@ log "Connexion SSH OK"
 # DÉPLOIEMENT
 # ══════════════════════════════════════════════════════════════════════════════
 
+log "Copie de common/ (icons, css, js, shell)..."
+# Round/index.html references ../common/css/* and ../common/js/* (rel paths).
+# On the device: /var/www/common/ must be a sibling of /var/www/secubox-round/.
+COMMON_SRC="$(dirname "$SCRIPT_DIR")/common"
+if [ ! -d "$COMMON_SRC" ]; then
+    err "Répertoire common/ introuvable: $COMMON_SRC"
+    rm -f "$TEMP_HTML"
+    exit 1
+fi
+rsync -avz --delete -e "ssh -p $PORT" "$COMMON_SRC/" "${USER}@${HOST}:/tmp/secubox-common/"
+
 log "Copie du dashboard..."
 scp -P "$PORT" "$TEMP_HTML" "${USER}@${HOST}:/tmp/index.html"
 
 log "Installation..."
 ssh -p "$PORT" "${USER}@${HOST}" << 'REMOTE_SCRIPT'
 set -e
+
+# Move common/ payload into /var/www/common/
+sudo rm -rf /var/www/common
+sudo mv /tmp/secubox-common /var/www/common
+sudo chown -R www-data:www-data /var/www/common
 
 # Copier vers le répertoire web
 sudo cp /tmp/index.html /var/www/secubox-round/index.html

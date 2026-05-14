@@ -1,0 +1,30 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * SecuBox-Deb :: remote-ui/common/css/palette.css
+ *
+ * Forward-looking palette declared for consumption by remote-ui/square/
+ * (Phase 2). remote-ui/round/index.html currently uses raw colour literals
+ * inline and is NOT refactored to consume these vars in Phase 1 — that's
+ * a follow-up cleanup. Module-colour values are sourced from round/'s
+ * existing literals; C3BOX tokens are forward-looking for square/'s right
+ * column (see Section 4 of the spec).
+ */
+:root {
+  /* Module colours (match round/index.html literals) */
+  --auth: #C04E24;
+  --wall: #9A6010;
+  --boot: #803018;
+  --mind: #3D35A0;
+  --root: #0A5840;
+  --mesh: #104A88;
+
+  /* C3BOX core tokens (forward-looking, consumed by square/) */
+  --cosmos-black:   #080808;
+  --gold-hermetic:  #c9a84c;
+  --cinnabar:       #e63946;
+  --matrix-green:   #00ff41;
+  --cyber-cyan:     #00d4ff;
+  --void-purple:    #6e40c9;
+  --text-primary:   #ccc;
+  --text-muted:     #4a4a4a;
+}
