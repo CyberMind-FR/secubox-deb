@@ -988,154 +988,19 @@ def draw_auth_mode(auth: AuthState) -> Image.Image:
 
 
 def draw_dashboard(metrics, mode='SIM', host='', device_name=''):
-    """Draw the dashboard to an image
+    """Render the main dashboard view via RoundDashboard.
 
-    Args:
-        metrics: Dict with cpu, mem, disk, load, temp, wifi, uptime, hostname
-        mode: Transport mode - 'OTG', 'WiFi', or 'SIM'
-        host: SecuBox host IP/address
-        device_name: Name of connected SecuBox device
+    Mode/host/device_name are passed through to the dashboard via the
+    metrics dict (the canvas reads them under the keys "_mode", "_host",
+    "_device_name") — keeps the call-site backwards-compatible.
     """
-    img = Image.new('RGBA', (WIDTH, HEIGHT), BG_COLOR + (255,))
-    draw = ImageDraw.Draw(img)
-
-    cx, cy = WIDTH // 2, HEIGHT // 2
-
-    # Load fonts
-    try:
-        font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 42)
-        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 18)
-        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 14)
-        font_tiny = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 11)
-    except:
-        font_large = ImageFont.load_default()
-        font_medium = font_large
-        font_small = font_large
-        font_tiny = font_large
-
-    # Draw circular border
-    draw.ellipse([10, 10, WIDTH-10, HEIGHT-10], outline=(40, 40, 40), width=2)
-
-    # Draw module rings
-    for _, mod in MODULES.items():
-        r = mod['r']
-        color = mod['color']
-        metric_name = mod['metric']
-        value = metrics.get(metric_name, 0)
-
-        # Calculate percentage for arc
-        if metric_name == 'load':
-            pct = min(100, value * 25)  # 4.0 = 100%
-        elif metric_name == 'wifi':
-            pct = min(100, max(0, (value + 80) * 2))  # -80 to -30 dBm
-        elif metric_name == 'temp':
-            pct = min(100, max(0, (value - 30) * 2.5))  # 30-70°C
-        else:
-            pct = min(100, max(0, value))
-
-        # Draw background arc
-        for angle in range(0, 360, 2):
-            rad = math.radians(angle - 90)
-            x = cx + r * math.cos(rad)
-            y = cy + r * math.sin(rad)
-            draw.ellipse([x-2, y-2, x+2, y+2], fill=(30, 30, 30))
-
-        # Draw value arc
-        arc_end = int(pct * 3.6)
-        for angle in range(0, arc_end, 2):
-            rad = math.radians(angle - 90)
-            x = cx + r * math.cos(rad)
-            y = cy + r * math.sin(rad)
-            draw.ellipse([x-3, y-3, x+3, y+3], fill=color)
-
-        # Draw head dot
-        if arc_end > 0:
-            rad = math.radians(arc_end - 90)
-            x = cx + r * math.cos(rad)
-            y = cy + r * math.sin(rad)
-            draw.ellipse([x-5, y-5, x+5, y+5], fill=(255, 255, 255))
-
-    # Center info - Contextual icon + mode display
-    # Get the most critical module for contextual icon
-    critical_module, criticality = get_critical_module(metrics)
-    module_color = MODULES[critical_module]['color']
-
-    # Draw contextual icon (48px) centered above mode text
-    icon = load_module_icon(critical_module, 48)
-    if icon:
-        icon_x = cx - 24  # Center 48px icon
-        icon_y = cy - 75  # Above mode text
-        img.paste(icon, (icon_x, icon_y), icon)  # Use alpha mask
-
-    # OTG/WiFi/SIM status
-    if mode == 'OTG':
-        mode_text = 'USB OTG'
-        mode_color = STATUS_OK  # Neon green
-    elif mode == 'WIFI':
-        mode_text = 'WiFi'
-        mode_color = (0, 191, 255)  # Cyan
-    else:
-        mode_text = 'SIM'
-        mode_color = STATUS_SIM
-
-    # Mode indicator (smaller, below icon)
-    bbox = draw.textbbox((0, 0), mode_text, font=font_medium)
-    tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy - 20), mode_text, fill=mode_color, font=font_medium)
-
-    # Critical module indicator with value
-    metric_name = MODULES[critical_module]['metric']
-    metric_value = metrics.get(metric_name, 0)
-    metric_unit = MODULES[critical_module]['unit']
-    if metric_name == 'wifi':
-        value_text = f"{critical_module} {int(metric_value)}{metric_unit}"
-    elif metric_name == 'load':
-        value_text = f"{critical_module} {metric_value:.1f}{metric_unit}"
-    else:
-        value_text = f"{critical_module} {int(metric_value)}{metric_unit}"
-    bbox = draw.textbbox((0, 0), value_text, font=font_small)
-    tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy + 5), value_text, fill=module_color, font=font_small)
-
-    # Connection status
-    if mode in ['OTG', 'WIFI']:
-        status_text = 'CONNECTED'
-        bbox = draw.textbbox((0, 0), status_text, font=font_tiny)
-        tw = bbox[2] - bbox[0]
-        draw.text((cx - tw//2, cy + 25), status_text, fill=mode_color, font=font_tiny)
-
-    # Hostname below
-    hostname = metrics.get('hostname', 'secubox')
-    bbox = draw.textbbox((0, 0), hostname, font=font_small)
-    tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, cy + 42), hostname, fill=TEXT_MUTED, font=font_small)
-
-    # Rings only - no text labels on circles (clean design)
-
-    # Top: SecuBox branding + device name
-    brand = 'SECUBOX EYE'
-    bbox = draw.textbbox((0, 0), brand, font=font_tiny)
-    tw = bbox[2] - bbox[0]
-    draw.text((cx - tw//2, 20), brand, fill=(201, 168, 76), font=font_tiny)  # gold-hermetic
-
-    # Device name/host at top (if connected)
-    if device_name or host:
-        device_text = device_name if device_name else host
-        # Truncate if too long
-        if len(device_text) > 20:
-            device_text = device_text[:18] + '..'
-        bbox = draw.textbbox((0, 0), device_text, font=font_tiny)
-        tw = bbox[2] - bbox[0]
-        draw.text((cx - tw//2, 35), device_text, fill=TEXT_MUTED, font=font_tiny)
-
-    # Host address at bottom (minimal)
-    if host and mode != 'SIM':
-        host_display = host.replace('http://', '').replace('https://', '').split(':')[0]
-        bbox = draw.textbbox((0, 0), host_display, font=font_tiny)
-        tw = bbox[2] - bbox[0]
-        draw.text((cx - tw//2, HEIGHT - 30), host_display, fill=TEXT_MUTED, font=font_tiny)
-
-    return img
+    from round_dashboard import RoundDashboard
+    rd = RoundDashboard()
+    extended = dict(metrics)
+    extended.setdefault("_mode", mode)
+    extended.setdefault("_host", host)
+    extended.setdefault("_device_name", device_name)
+    return rd.layout(extended)
 
 
 def get_fb_info():

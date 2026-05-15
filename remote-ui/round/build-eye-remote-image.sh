@@ -923,6 +923,12 @@ fi
 mkdir -p "$ROOT_MNT/var/www/common"
 cp -r "$COMMON_SRC/." "$ROOT_MNT/var/www/common/"
 log "Embedded common/ (css, js, assets/icons, shell) at /var/www/common/"
+# secubox_common Python package needs to be importable from a directory
+# that's on sys.path. Ship at /var/www/common/python/ and put PYTHONPATH
+# on the relevant systemd units (see Environment="PYTHONPATH=..." lines).
+log "Embedded common/python/secubox_common/ at /var/www/common/python/secubox_common/"
+test -d "$ROOT_MNT/var/www/common/python/secubox_common" || \
+    { err "secubox_common not in /var/www/common/python — common/ source incomplete"; exit 2; }
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SSH KEY
