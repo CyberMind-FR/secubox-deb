@@ -103,6 +103,13 @@ log "Installing config files (systemd, udev, apparmor, firstboot)..."
 cp -r "$REPO_ROOT/remote-ui/square/files/." "$ROOT_MNT/"
 chmod +x "$ROOT_MNT/usr/local/sbin/firstboot.sh"
 
+# Ship the shared secubox_common package.
+log "Embedding remote-ui/common/python at /var/www/common/python/..."
+mkdir -p "$ROOT_MNT/var/www/common/python"
+cp -r "$REPO_ROOT/remote-ui/common/python/." "$ROOT_MNT/var/www/common/python/"
+test -d "$ROOT_MNT/var/www/common/python/secubox_common" || \
+    { err "secubox_common not in /var/www/common/python — common/ source incomplete"; exit 2; }
+
 log "Installing Python packages..."
 mkdir -p "$ROOT_MNT/usr/lib/python3/dist-packages"
 cp -r "$REPO_ROOT/packages/secubox-eye-square/helper/eye_square_helper" \
