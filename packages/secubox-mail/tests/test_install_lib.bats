@@ -6,9 +6,10 @@ setup() { load_libs; make_fake_lxc_env; }
 @test "install.sh sources cleanly" {
     [ "$(type -t bootstrap_debian)" = "function" ]
     [ "$(type -t install_mail_packages)" = "function" ]
+    [ "$(type -t install_webmail_packages)" = "function" ]
     [ "$(type -t configure_postfix)" = "function" ]
     [ "$(type -t configure_dovecot)" = "function" ]
-    [ "$(type -t configure_opendkim)" = "function" ]
+    [ "$(type -t configure_roundcube)" = "function" ]
 }
 
 @test "bootstrap_debian refuses to run if debootstrap missing" {
