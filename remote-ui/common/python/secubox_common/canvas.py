@@ -146,6 +146,25 @@ class DashboardCanvas:
             draw.text((cx - lw // 2, cy + size + 4),
                       label, fill=theme.TEXT_PRIMARY + (255,), font=font)
 
+    def paint_radar_concentric(self, img: Image.Image,
+                               center: tuple[int, int],
+                               modules: Iterable[Module],
+                               metrics: dict,
+                               radii: list[int] | None = None,
+                               phase: float = 0.0,
+                               draw_hub: bool = True,
+                               name_to_angle: dict[str, int] | None = None
+                               ) -> None:
+        """Phase-aware concentric radar (ring backgrounds + tube arcs +
+        rotating sweep + sweep head + optional hub). Delegates to
+        `secubox_common.painters.radar_concentric.paint`. Drives the
+        OFFLINE-state visual on both round/ and the square's left half.
+        """
+        from .painters import radar_concentric as _radar
+        _radar.paint(img, center, modules, metrics,
+                     radii=radii, phase=phase, draw_hub=draw_hub,
+                     name_to_angle=name_to_angle)
+
     def paint_alert_ribbon(self, img: Image.Image, region_y: int,
                            text: str, severity: str) -> None:
         """Bottom strip: solid dark fill + coloured severity text.
