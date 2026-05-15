@@ -77,15 +77,30 @@ Worktree `secubox-deb-license-wt` on branch `feature/license-phase-b-full` at `a
 
 ---
 
-## 🧹 2026-05-15: stale worktrees + local-state notes
+## 🧹 2026-05-15: worktree + local-state housekeeping
 
-After successful merges of Phases 1 + 3, three 127-* worktrees can be cleaned via `scripts/agent-worktree.sh clean ...`:
+### Cleaned 2026-05-15
 
-- `secubox-deb-worktrees/127-add-remote-ui-square-variant-for-pi-4b-7` (Phase 1, merged as `7c37415f`)
-- `secubox-deb-worktrees/127-phase2-square-variant` (Phase 2, closed/superseded)
-- `secubox-deb-worktrees/127-phase3-python-kiosk` (Phase 3, merged as `dee8bf8b`)
+- `secubox-deb-worktrees/127-add-remote-ui-square-variant-for-pi-4b-7` (Phase 1, PR #130 merged as `7c37415f`) — removed
+- `secubox-deb-worktrees/127-phase2-square-variant` (Phase 2, PR #131 closed/superseded) — removed
+- `secubox-deb-worktrees/127-phase3-python-kiosk` (Phase 3, PR #132 merged as `dee8bf8b`) — force-removed (had two stray untracked Signal Desktop apt-key files unrelated to the project, safe to discard)
 
-**Local master state:** `master` is currently **4 ahead / 1 behind `origin/master`** — needs `git pull --rebase` before next push (the 1 behind is likely the squash-merge artifact of #137). Untracked: `.claude/settings.json` (pre-existing).
+All three feature branches deleted locally. `agent-worktree.sh clean` resolves by issue number which collides for multi-worktree issues like #127; used direct `git worktree remove` + `git branch -D`.
+
+### Local master state
+
+- `master` synced with `origin/master` at `a313816e` (pushed `839bab94..a313816e`, 6 commits). Was 6 ahead / 1 behind earlier; rebased then pushed.
+- Untracked: `.claude/settings.json` (pre-existing, intentional)
+
+### Worktrees still active
+
+| Worktree | Branch | Backing PR |
+|---|---|---|
+| `135-converge-round-square-dashboards-into-re` | `feature/135-…` | #140 OPEN |
+| `136-mail-stack-phase-1-source-catch-up-legac` | `feature/136-…` | #141 OPEN |
+| `138-port-radar-concentric-into-secubox-commo` | `feature/138-…` | #142 OPEN |
+| `139-round-image-usb0-otg-networking-dead-ifu` | `fix/139-…` | #143 OPEN |
+| `secubox-deb-license-wt` | `feature/license-phase-b-full` | none (SPDX rollout #81) |
 
 ---
 
