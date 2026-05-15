@@ -3,7 +3,7 @@
 
 ---
 
-## 🔄 2026-05-15: Mail stack Phase 1 — LXC consolidation (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED `32190507` + follow-up PR [#144](https://github.com/CyberMind-FR/secubox-deb/pull/144) OPEN)
+## ✅ 2026-05-15: Mail stack Phase 1 — LXC consolidation (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED `32190507` + `35ba4c2c` replay; PR [#144](https://github.com/CyberMind-FR/secubox-deb/pull/144) SUPERSEDED)
 
 ### Objective
 
@@ -18,14 +18,20 @@ Catch the in-repo source up to the test board's `/data/lxc/mail` + `/data/volume
 - Test coverage shipped: 62-route endpoint-presence pytest + end-to-end acceptance smoke
 - **PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED** as `32190507`
 
-### Follow-up PR [#144](https://github.com/CyberMind-FR/secubox-deb/pull/144) (OPEN, post-merge fixes)
+### Follow-up PR [#144](https://github.com/CyberMind-FR/secubox-deb/pull/144) — SUPERSEDED, must NOT be merged as-is
 
-Two small fixes caught after #141 landed, on the same branch:
+Two small fixes caught after #141 landed, pushed to the existing `feature/136-…` branch:
 
 - `529f5ec7` `fix(mail): move lib/{lxc,install,migrate}.sh into lib/mail/` — debian/rules ships `lib/mail/*` to `/usr/lib/secubox/mail/lib/`; the Phase 1 commit landed helpers under `lib/` so they never reached the installed path.
-- `6f6f98a5` `fix(mail): mailctl cmd_install sources lib/mail/{lxc,install}.sh` — `cmd_install` was still shelling out to `mailserverctl install` / `roundcubectl install` (now deprecation shims per Phase 1). Rewritten to source the moved helpers and call `bootstrap_debian` + `lxc_create_config` + `lxc_start_safely` + `install_{mail,webmail}_packages` + `configure_{postfix,dovecot,…}` directly.
+- `6f6f98a5` `fix(mail): mailctl cmd_install sources lib/mail/{lxc,install}.sh` — `cmd_install` was still shelling out to `mailserverctl install` / `roundcubectl install` (now deprecation shims per Phase 1). Rewritten to source the moved helpers and call `bootstrap_debian` + `lxc_create_config` + …
 
-Both pair tightly — kept as a separate PR so Phase 1's squash boundary stays clean in `git log`.
+**Status — superseded by `35ba4c2c` on master:**
+
+A parallel session diagnosed the same Phase-1-squash-loss and added more fixes (`bd0053e4` test gate 11, `85394e10` post-mortem docs) to push the branch up to `85394e10`, then committed `35ba4c2c` directly to master — "replay Phase 1 fix commits lost in PR #141 squash-merge" — to unblock Phase 2. Master now has everything the branch carried.
+
+**Why #144 became dangerous:** the branch was forked from old master (pre-#140 / pre-#137 squash) and never rebased. Its diff against current master shows `697 inserts / 6483 deletes across 45 files` because the branch's stale history would *remove* the converged-dashboard work that landed via PR #140. Merging it would undo PR #140 and PR #143.
+
+**Action:** PR #144 should be closed (work already on master). To re-open as a true fix-followup if needed, re-fork from current master and cherry-pick only the missing commits.
 
 ---
 
