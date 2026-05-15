@@ -3,7 +3,7 @@
 
 ---
 
-## 🔄 2026-05-15: Mail stack Phase 1 — LXC consolidation + source catch-up (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) OPEN)
+## ✅ 2026-05-15: Mail stack Phase 1 — LXC consolidation + source catch-up (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED `32190507`)
 
 ### Objective
 
@@ -20,7 +20,7 @@ Catch the in-repo source up to the test board's `/data/lxc/mail` + `/data/volume
 
 ---
 
-## 🔄 2026-05-15: remote-ui converged dashboard (Issue [#135](https://github.com/CyberMind-FR/secubox-deb/issues/135), PR [#140](https://github.com/CyberMind-FR/secubox-deb/pull/140) OPEN)
+## ✅ 2026-05-15: remote-ui converged dashboard (Issue [#135](https://github.com/CyberMind-FR/secubox-deb/issues/135), PR [#140](https://github.com/CyberMind-FR/secubox-deb/pull/140) MERGED `b0b42e81`)
 
 ### Status
 
@@ -41,7 +41,7 @@ Catch the in-repo source up to the test board's `/data/lxc/mail` + `/data/volume
 
 ---
 
-## 🔄 2026-05-15: Port `radar_concentric` into `secubox_common` (Issue [#138](https://github.com/CyberMind-FR/secubox-deb/issues/138), PR [#142](https://github.com/CyberMind-FR/secubox-deb/pull/142) OPEN)
+## ✅ 2026-05-15: Port `radar_concentric` into `secubox_common` (Issue [#138](https://github.com/CyberMind-FR/secubox-deb/issues/138), PR [#142](https://github.com/CyberMind-FR/secubox-deb/pull/142) MERGED `d50aa52d`)
 
 ### Status
 
@@ -55,7 +55,7 @@ Catch the in-repo source up to the test board's `/data/lxc/mail` + `/data/volume
 
 ---
 
-## 🔄 2026-05-15: Round image cleanup — dead ifupdown + secubox sudo + OTG comment (Issue [#139](https://github.com/CyberMind-FR/secubox-deb/issues/139), PR [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143) OPEN)
+## ✅ 2026-05-15: Round image cleanup — dead ifupdown + secubox sudo + OTG comment (Issue [#139](https://github.com/CyberMind-FR/secubox-deb/issues/139), PR [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143) MERGED `35576793`)
 
 ### Original misdiagnosis → rescoped
 
@@ -90,28 +90,39 @@ Worktree `secubox-deb-license-wt` on branch `feature/license-phase-b-full` at `a
 
 ## 🧹 2026-05-15: worktree + local-state housekeeping
 
-### Cleaned 2026-05-15
+### Cleaned 2026-05-15 (morning)
 
 - `secubox-deb-worktrees/127-add-remote-ui-square-variant-for-pi-4b-7` (Phase 1, PR #130 merged as `7c37415f`) — removed
 - `secubox-deb-worktrees/127-phase2-square-variant` (Phase 2, PR #131 closed/superseded) — removed
 - `secubox-deb-worktrees/127-phase3-python-kiosk` (Phase 3, PR #132 merged as `dee8bf8b`) — force-removed (had two stray untracked Signal Desktop apt-key files unrelated to the project, safe to discard)
 
-All three feature branches deleted locally. `agent-worktree.sh clean` resolves by issue number which collides for multi-worktree issues like #127; used direct `git worktree remove` + `git branch -D`.
+`agent-worktree.sh clean` resolves by issue number which collides for multi-worktree issues like #127; used direct `git worktree remove` + `git branch -D`.
+
+### Cleaned 2026-05-15 (afternoon — post-merge sweep of #140/#142/#143)
+
+- `secubox-deb-worktrees/135-converge-round-square-dashboards-into-re` (PR #140 squash-merged `b0b42e81`) — removed
+- `secubox-deb-worktrees/138-port-radar-concentric-into-secubox-commo` (PR #142 squash-merged `d50aa52d`) — removed
+- `secubox-deb-worktrees/139-round-image-usb0-otg-networking-dead-ifu` (PR #143 squash-merged `35576793`) — removed
+
+Branches `feature/135-…`, `feature/138-…`, `fix/139-…` deleted locally. Worktree `136-mail-stack-…` left intact (has uncommitted real WIP: `mailctl` refactor +68 / −22 lines, not in PR #141).
+
+### Conflict resolution notes
+
+- PR #140 went DIRTY/CONFLICTING after #137's earlier squash-merge because the branch carried all 32 pre-squash commits. Resolved by `git reset --hard origin/master + cherry-pick 387fabb4 f4acd5a9 89968477 + force-push`, leaving 3 clean fixup commits.
+- PR #142 went DIRTY/CONFLICTING after #140 merged because it carried a merge commit from feature/135. Same fix: reset + cherry-pick `6d12af86` (the radar painter commit), with `--theirs` resolution on `square_dashboard.py` and `round_dashboard.py` (radar version was the canonical post-fixup state). Force-push, then merge.
+- `gh pr merge … --squash --delete-branch` raced once on the freshly-pushed PR #142 HEAD and auto-closed the PR; recovered with `gh pr reopen 142` then re-merge succeeded.
 
 ### Local master state
 
-- `master` synced with `origin/master` at `a313816e` (pushed `839bab94..a313816e`, 6 commits). Was 6 ahead / 1 behind earlier; rebased then pushed.
+- `master` synced with `origin/master` at `d50aa52d` after pulling the four merge commits. 
 - Untracked: `.claude/settings.json` (pre-existing, intentional)
 
 ### Worktrees still active
 
-| Worktree | Branch | Backing PR |
+| Worktree | Branch | Status |
 |---|---|---|
-| `135-converge-round-square-dashboards-into-re` | `feature/135-…` | #140 OPEN |
-| `136-mail-stack-phase-1-source-catch-up-legac` | `feature/136-…` | #141 OPEN |
-| `138-port-radar-concentric-into-secubox-commo` | `feature/138-…` | #142 OPEN |
-| `139-round-image-usb0-otg-networking-dead-ifu` | `fix/139-…` | #143 OPEN |
-| `secubox-deb-license-wt` | `feature/license-phase-b-full` | none (SPDX rollout #81) |
+| `136-mail-stack-phase-1-source-catch-up-legac` | `feature/136-…` | PR #141 MERGED; uncommitted real WIP retained (mailctl refactor) |
+| `secubox-deb-license-wt` | `feature/license-phase-b-full` | SPDX rollout #81, no PR yet |
 
 ---
 
