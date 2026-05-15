@@ -25,8 +25,19 @@ Catch the in-repo source up to the test board's `/data/lxc/mail` + `/data/volume
 ### Status
 
 - PR [#137](https://github.com/CyberMind-FR/secubox-deb/pull/137) (initial converge round/ + square/ dashboards into `secubox_common` + pointer input on Pi 4B/400) **squash-merged `839bab94`**
-- **PR [#140](https://github.com/CyberMind-FR/secubox-deb/pull/140) follow-on OPEN** today — 35 commits, +1544 / -599 on `feature/135-converge-round-square-dashboards-into-re`
+- **PR [#140](https://github.com/CyberMind-FR/secubox-deb/pull/140) OPEN** on `feature/135-converge-round-square-dashboards-into-re` — head `89968477`, 35 commits ahead of `origin/master`, net +35 / −2086 lines
 - Spec + plan landed on master (`b5e44e72`, `78316556`)
+
+### Fixups added in this session (2026-05-15)
+
+- `387fabb4` `fixup(common): pod_size=48 to match deployed icon sizes` — modules pods were rendering as letter placeholders on Pi 4B because `paint_pod_cluster(pod_size=40)` missed the deployed icon sizes (22/48/96/128); bumped to 48, radius 70→78 for clearance from the central button.
+- `f4acd5a9` `fixup(square): ship remote-ui/common/assets/icons` — the square build copied `common/python/` but skipped `common/assets/`; without the icons under `/var/www/common/assets/icons/`, `secubox_common.icons.load_module_icon` would fall back to first-letter placeholders.
+- `89968477` `fixup(square): install secubox-otg-gadget.sh to /usr/local/sbin` — the square `secubox-otg-gadget.service` ExecStarts that path; without the composer script the gadget never composed (zero USB enumeration events on the MOCHAbin, xHCI setup timeouts).
+
+### Hardware bench (2026-05-15)
+
+- **Pi 4B + 7" DSI (square):** converged dashboard renders ✓, icons ✓, all 4 right-panel tabs work (alerts/console/module_detail/mode_controls), USB-C OTG composes to MOCHAbin after the gadget-composer fixup landed.
+- **Pi Zero W + HyperPixel 2.1 (round):** boots clean, `fallback_manager.py` OFFLINE radar renders correctly on the existing image.
 
 ---
 
