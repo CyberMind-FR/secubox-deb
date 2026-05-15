@@ -13,6 +13,7 @@ ConditionPathExists=/dev/fb0
 Type=simple
 User=secubox
 Group=secubox
+Environment="PYTHONPATH=/var/www/common/python"
 SupplementaryGroups=video input
 ExecStart=/usr/bin/python3 -m secubox_eye_square_kiosk
 Restart=always
