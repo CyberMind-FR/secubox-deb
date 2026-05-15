@@ -1,0 +1,299 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: mail :: install + configure helpers for the single mail LXC.
+# Extracted in Phase 1 from packages/secubox-mail/sbin/{mailserverctl,roundcubectl}.
+# Sourced library — do not execute directly.
+#
+# All functions take the container name as $1. They read defaults from the
+# environment ($LXC_BASE, $DATA_PATH, $DOMAIN, $HOSTNAME, $WEBMAIL_PORT) so
+# the same helpers work from mailctl, mail-migrate-to-single-lxc.sh, and
+# the bats suite (which overrides $LXC_BASE/$DATA_PATH to a tmpdir).
+
+# Bootstrap a fresh Debian bookworm rootfs into ${LXC_BASE}/${container}/rootfs.
+# Idempotent: safe to skip if rootfs already exists.
+bootstrap_debian() {
+    local container="$1"
+    local base="${LXC_BASE:-/var/lib/lxc}"
+    local lxc_path="$base/$container"
+
+    mkdir -p "$lxc_path"
+    if [ -d "$lxc_path/rootfs/etc" ]; then
+        echo "[install] rootfs already present at $lxc_path/rootfs — skipping debootstrap"
+        return 0
+    fi
+
+    if ! command -v debootstrap >/dev/null 2>&1; then
+        echo "ERROR: debootstrap not installed. Run: apt install debootstrap" >&2
+        return 1
+    fi
+
+    echo "[install] running debootstrap (a few minutes)..."
+    debootstrap --variant=minbase --include=ca-certificates,curl,gnupg,locales \
+        bookworm "$lxc_path/rootfs" http://deb.debian.org/debian
+
+    echo "$container" > "$lxc_path/rootfs/etc/hostname"
+    cat > "$lxc_path/rootfs/etc/resolv.conf" <<'EOF'
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+EOF
+    echo "[install] Debian base system installed"
+}
+
+# Install Postfix + Dovecot + rsyslog inside the LXC rootfs. Run via chroot
+# so the container does not need to be running yet.
+install_mail_packages() {
+    local container="$1"
+    local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
+
+    echo "[install] installing Postfix + Dovecot inside $rootfs..."
+    chroot "$rootfs" /bin/bash <<'CHROOT_EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --no-install-recommends \
+    postfix postfix-lmdb \
+    dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd \
+    rsyslog ca-certificates openssl
+
+groupadd -g 5000 vmail 2>/dev/null || true
+useradd -u 5000 -g vmail -s /usr/sbin/nologin -d /var/mail -M vmail 2>/dev/null || true
+
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+CHROOT_EOF
+    echo "[install] mail packages installed"
+}
+
+# Install Apache+PHP+Roundcube inside the same LXC rootfs. Mirrors what the
+# legacy roundcubectl::install_roundcube_packages did, but the board reality
+# uses Apache+mod_php (not nginx+php-fpm). Phase 5 may reconcile.
+install_webmail_packages() {
+    local container="$1"
+    local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
+
+    echo "[install] installing Roundcube webmail stack inside $rootfs..."
+    chroot "$rootfs" /bin/bash <<'CHROOT_EOF'
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --no-install-recommends \
+    apache2 libapache2-mod-php8.2 \
+    php8.2-imap php8.2-ldap php8.2-curl php8.2-xml \
+    php8.2-mbstring php8.2-intl php8.2-sqlite3 \
+    php8.2-zip php8.2-gd \
+    roundcube roundcube-core roundcube-plugins roundcube-sqlite3 \
+    roundcube-skin-classic roundcube-skin-larry \
+    php-net-sieve \
+    ca-certificates curl
+
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+CHROOT_EOF
+    echo "[install] webmail packages installed"
+}
+
+# Write Postfix main.cf + master.cf into the LXC rootfs. Reads $HOSTNAME +
+# $DOMAIN from the environment; caller (mailctl) supplies them from
+# /etc/secubox/mail.toml.
+configure_postfix() {
+    local container="$1"
+    local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
+    local hostname="${HOSTNAME:-mail}"
+    local domain="${DOMAIN:-secubox.local}"
+    echo "[install] configuring Postfix in $rootfs..."
+
+    mkdir -p "$rootfs/etc/postfix"
+
+    cat > "$rootfs/etc/postfix/main.cf" <<EOF
+# SecuBox Postfix Configuration
+myhostname = ${hostname}.${domain}
+mydomain = ${domain}
+myorigin = \$mydomain
+mydestination = \$myhostname, localhost.\$mydomain, localhost
+mynetworks = 127.0.0.0/8 [::1]/128 10.100.0.0/16 192.168.0.0/16 10.0.0.0/8
+
+# Virtual mailbox
+virtual_mailbox_domains = ${domain}
+virtual_mailbox_base = /var/vmail
+virtual_mailbox_maps = lmdb:/etc/mail-config/vmailbox
+virtual_alias_maps = lmdb:/etc/mail-config/virtual
+virtual_uid_maps = static:5000
+virtual_gid_maps = static:5000
+virtual_transport = lmtp:unix:private/dovecot-lmtp
+
+# SASL auth via Dovecot
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = private/auth
+smtpd_sasl_security_options = noanonymous
+broken_sasl_auth_clients = yes
+
+# TLS
+smtpd_tls_cert_file = /etc/ssl/mail/fullchain.pem
+smtpd_tls_key_file = /etc/ssl/mail/privkey.pem
+smtpd_tls_security_level = may
+smtp_tls_security_level = may
+
+# Restrictions
+smtpd_recipient_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination
+smtpd_sender_restrictions = permit_sasl_authenticated, permit_mynetworks
+
+# Limits
+mailbox_size_limit = 0
+message_size_limit = 52428800
+inet_interfaces = all
+inet_protocols = ipv4
+EOF
+
+    cat > "$rootfs/etc/postfix/master.cf" <<'EOF'
+smtp      inet  n       -       y       -       -       smtpd
+submission inet n       -       y       -       -       smtpd
+  -o syslog_name=postfix/submission
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+smtps     inet  n       -       y       -       -       smtpd
+  -o syslog_name=postfix/smtps
+  -o smtpd_tls_wrappermode=yes
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+pickup    unix  n       -       y       60      1       pickup
+cleanup   unix  n       -       y       -       0       cleanup
+qmgr      unix  n       -       n       300     1       qmgr
+tlsmgr    unix  -       -       y       1000?   1       tlsmgr
+rewrite   unix  -       -       y       -       -       trivial-rewrite
+bounce    unix  -       -       y       -       0       bounce
+defer     unix  -       -       y       -       0       bounce
+trace     unix  -       -       y       -       0       bounce
+verify    unix  -       -       y       -       1       verify
+flush     unix  n       -       y       1000?   0       flush
+proxymap  unix  -       -       n       -       -       proxymap
+smtp      unix  -       -       y       -       -       smtp
+relay     unix  -       -       y       -       -       smtp
+showq     unix  n       -       y       -       -       showq
+error     unix  -       -       y       -       -       error
+retry     unix  -       -       y       -       -       error
+discard   unix  -       -       y       -       -       discard
+local     unix  -       n       n       -       -       local
+virtual   unix  -       n       n       -       -       virtual
+lmtp      unix  -       -       y       -       -       lmtp
+anvil     unix  -       -       y       -       1       anvil
+scache    unix  -       -       y       -       1       scache
+EOF
+
+    # Stamp empty lookup tables if not already provided via bind-mount.
+    [ -e "$rootfs/etc/mail-config/vmailbox" ] || touch "$rootfs/etc/mail-config/vmailbox" 2>/dev/null || true
+    [ -e "$rootfs/etc/mail-config/virtual" ] || touch "$rootfs/etc/mail-config/virtual" 2>/dev/null || true
+
+    echo "[install] Postfix configured"
+}
+
+# Write dovecot.conf into the LXC rootfs.
+configure_dovecot() {
+    local container="$1"
+    local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
+    echo "[install] configuring Dovecot in $rootfs..."
+
+    mkdir -p "$rootfs/etc/dovecot"
+
+    cat > "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+protocols = imap pop3 lmtp
+listen = *
+mail_location = maildir:/var/vmail/%d/%n
+mail_uid = 5000
+mail_gid = 5000
+first_valid_uid = 500
+last_valid_uid = 65534
+
+auth_mechanisms = plain login
+passdb {
+  driver = passwd-file
+  args = /etc/mail-config/users
+}
+userdb {
+  driver = static
+  args = uid=5000 gid=5000 home=/var/vmail/%d/%n
+}
+
+ssl = no
+
+service imap-login {
+  inet_listener imap  { port = 143 }
+  inet_listener imaps { port = 993; ssl = yes }
+}
+service pop3-login {
+  inet_listener pop3  { port = 110 }
+  inet_listener pop3s { port = 995; ssl = yes }
+}
+service lmtp {
+  unix_listener /var/spool/postfix/private/dovecot-lmtp {
+    mode = 0600
+    user = postfix
+    group = postfix
+  }
+}
+service auth {
+  unix_listener /var/spool/postfix/private/auth {
+    mode = 0660
+    user = postfix
+    group = postfix
+  }
+}
+
+namespace inbox {
+  inbox = yes
+  separator = /
+}
+
+log_path = /var/log/dovecot.log
+info_log_path = /var/log/dovecot.log
+EOF
+
+    [ -e "$rootfs/etc/mail-config/users" ] || touch "$rootfs/etc/mail-config/users" 2>/dev/null || true
+    chmod 644 "$rootfs/etc/mail-config/users" 2>/dev/null || true
+
+    echo "[install] Dovecot configured"
+}
+
+# Write Apache+Roundcube config inside the LXC rootfs. Phase 1 mirrors what
+# the board has today; Phase 5 may migrate to nginx+php-fpm.
+configure_roundcube() {
+    local container="$1"
+    local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
+    local domain="${DOMAIN:-secubox.local}"
+    echo "[install] configuring Roundcube (Apache) in $rootfs..."
+
+    mkdir -p "$rootfs/etc/apache2/sites-available" "$rootfs/etc/apache2/sites-enabled"
+
+    cat > "$rootfs/etc/apache2/sites-available/roundcube.conf" <<EOF
+<VirtualHost *:80>
+    ServerName webmail.${domain}
+    DocumentRoot /var/lib/roundcube/public_html
+    <Directory /var/lib/roundcube/public_html>
+        Options +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog \${APACHE_LOG_DIR}/roundcube_error.log
+    CustomLog \${APACHE_LOG_DIR}/roundcube_access.log combined
+</VirtualHost>
+EOF
+
+    chroot "$rootfs" /bin/bash <<'CHROOT_EOF'
+a2dissite 000-default 2>/dev/null || true
+a2ensite roundcube
+a2enmod php8.2 rewrite 2>/dev/null || true
+CHROOT_EOF
+
+    # Point Roundcube at the local Dovecot + Postfix
+    if [ -f "$rootfs/etc/roundcube/config.inc.php" ]; then
+        sed -i \
+            -e "s|^\$config\['default_host'\].*|\$config['default_host'] = 'tls://localhost';|" \
+            -e "s|^\$config\['smtp_server'\].*|\$config['smtp_server'] = 'tls://localhost';|" \
+            "$rootfs/etc/roundcube/config.inc.php" || true
+    fi
+
+    echo "[install] Roundcube (Apache) configured"
+}

@@ -1,14 +1,12 @@
 #!/usr/bin/make -f
+# Transitional package — ships no files. dh handles the metadata only.
 %:
 	dh $@
 
 override_dh_auto_install:
-	# API (used by secubox-mail for container management)
-	install -d debian/secubox-mail-lxc/usr/lib/secubox/mail-lxc
-	cp -r api debian/secubox-mail-lxc/usr/lib/secubox/mail-lxc/
-	# Control scripts
-	install -d debian/secubox-mail-lxc/usr/sbin
-	[ -d sbin ] && install -m 755 sbin/* debian/secubox-mail-lxc/usr/sbin/ || true
-	# Modular nginx config (API proxy only, no separate menu)
-	install -d debian/secubox-mail-lxc/etc/nginx/secubox.d
-	[ -f nginx/mail-lxc.conf ] && cp nginx/mail-lxc.conf debian/secubox-mail-lxc/etc/nginx/secubox.d/ || true
+	# intentionally empty — no payload in transitional package
+	:
+
+override_dh_installsystemd:
+	# do not install/enable the old secubox-mail-lxc.service
+	:
