@@ -787,8 +787,9 @@ if ! id secubox &>/dev/null; then
     echo "secubox:secubox2026" | chpasswd
 fi
 
-# Add to groups
-usermod -aG video,input,gpio,i2c,spi,audio secubox 2>/dev/null || true
+# Add to groups. `sudo` lets the kiosk user manually recover networking
+# from the ACM serial console (e.g. when /dev/ttyACM0 is the only path in).
+usermod -aG sudo,video,input,gpio,i2c,spi,audio secubox 2>/dev/null || true
 
 # Enable lightdm and nginx
 systemctl enable lightdm 2>/dev/null || true

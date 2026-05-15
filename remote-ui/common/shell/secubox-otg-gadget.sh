@@ -284,9 +284,14 @@ gadget_start() {
     log "Activation sur UDC: ${udc}"
     echo "$udc" > UDC
 
-    # Attendre que l'interface usb1 (ECM) apparaisse
-    # Note: Le gadget composite crée usb0 (RNDIS/Windows) et usb1 (ECM/Linux-Mac)
-    # On configure usb1 car les hôtes Linux utilisent le driver cdc_ether (ECM)
+    # Attendre que la deuxième interface réseau du gadget composé
+    # apparaisse côté kernel. Le composé crée rndis.usb0 puis ecm.usb0
+    # (dans cet ordre, cf. liens configfs ci-dessus) — le kernel les
+    # enregistre comme /sys/class/net/usb0 et /sys/class/net/usb1.
+    # Côté hôte, RNDIS et ECM partagent le même host_addr donc l'ARP
+    # remonte sur n'importe laquelle des deux interfaces UP du host;
+    # binder /usb1 ici suffit pour rendre 10.55.0.2 joignable depuis
+    # 10.55.0.1, peu importe le canal physique sélectionné par l'hôte.
     local retry=0
     while [[ ! -d /sys/class/net/usb1 ]] && [[ $retry -lt 10 ]]; do
         sleep 0.5
@@ -294,9 +299,9 @@ gadget_start() {
     done
 
     if [[ -d /sys/class/net/usb1 ]]; then
-        log "Interface usb1 (ECM) créée"
+        log "Interface usb1 (deuxième fonction réseau du gadget) créée"
 
-        # Configurer l'IP sur usb1 uniquement (évite le routage asymétrique)
+        # Configurer l'IP sur usb1 uniquement (évite le routage asymétrique).
         ip addr flush dev usb1 2>/dev/null || true
         ip addr add "${OTG_NETWORK_DEV}/30" dev usb1
         ip link set usb1 up
