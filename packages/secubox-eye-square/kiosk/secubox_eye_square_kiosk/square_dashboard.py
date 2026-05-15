@@ -28,6 +28,8 @@ class SquareDashboard(DashboardCanvas):
         self.right_panel = right_panel
 
     def layout(self, metrics: dict) -> Image.Image:
+        # Image.new() with COSMOS_BLACK+(255,) is equivalent to calling
+        # paint_background on a fresh canvas; skip the redundant fill.
         img = Image.new("RGBA", self.SIZE, theme.COSMOS_BLACK + (255,))
 
         # Left dashboard region.

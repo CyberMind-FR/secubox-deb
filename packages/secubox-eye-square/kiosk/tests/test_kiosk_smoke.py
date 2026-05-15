@@ -25,12 +25,8 @@ if str(_DEV) not in sys.path:
 from secubox_eye_square_kiosk.right_panel import RightPanel
 from secubox_eye_square_kiosk.sim import SimState, step
 from secubox_eye_square_kiosk.square_dashboard import SquareDashboard
-from secubox_eye_square_kiosk.transport_manager import TransportManager
-
-
 def test_compose_full_800x480_frame(tmp_path: Path):
     """End-to-end render: SquareDashboard composes dashboard + panel."""
-    tm = TransportManager(simulate=True)
     helper = MagicMock()
     sim = SimState()
     step(sim)
