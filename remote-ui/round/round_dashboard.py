@@ -22,7 +22,10 @@ class RoundDashboard(DashboardCanvas):
         self.paint_rainbow_ring(img, self.CENTER, 235, 220)
         self.paint_concentric_arcs(img, self.CENTER, MODULES, metrics,
                                     self.RING_RADII)
-        self.paint_pod_cluster(img, MODULES, self.CENTER, radius=70, pod_size=40)
+        # pod_size=48 matches the deployed icon sizes (22/48/96/128); 40 would
+        # miss and fall back to the first-letter placeholder. radius bumped
+        # to 78 so pod inner edge (54) stays clear of the central button (44).
+        self.paint_pod_cluster(img, MODULES, self.CENTER, radius=78, pod_size=48)
         self.paint_central_button(img, self.CENTER, size=44)
         return img
 
