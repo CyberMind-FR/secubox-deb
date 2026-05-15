@@ -15,16 +15,25 @@ from secubox_common.modules import MODULES
 class RoundDashboard(DashboardCanvas):
     SIZE = (480, 480)
     CENTER = (240, 240)
-    RING_RADII = [200, 185, 170, 155, 140, 125]
+    # Match the deployed fallback_manager.py radar geometry so the round
+    # rendering stays visually identical after migration.
+    RING_RADII = [214, 188, 162, 136, 110, 84]
 
-    def layout(self, metrics: dict) -> Image.Image:
+    def layout(self, metrics: dict, phase: float = 0.0) -> Image.Image:
+        """Render one frame at the given animation `phase` (0..1).
+
+        Phase advances the rotating sweep; callers pass `phase=0.0` for
+        a static still frame, or `(time.monotonic() * rpm / 60) % 1` for
+        an animated loop.
+        """
         img = Image.new("RGBA", self.SIZE, theme.COSMOS_BLACK + (255,))
-        self.paint_rainbow_ring(img, self.CENTER, 235, 220)
-        self.paint_concentric_arcs(img, self.CENTER, MODULES, metrics,
-                                    self.RING_RADII)
-        # pod_size=48 matches the deployed icon sizes (22/48/96/128); 40 would
-        # miss and fall back to the first-letter placeholder. radius bumped
-        # to 78 so pod inner edge (54) stays clear of the central button (44).
+        self.paint_radar_concentric(
+            img, self.CENTER, MODULES, metrics,
+            radii=self.RING_RADII, phase=phase, draw_hub=True,
+        )
+        # Pods sit on top of the hub; pod_size=48 matches deployed icon
+        # sizes (22/48/96/128). radius=78 keeps the pod inner edge (54)
+        # clear of the central button (44).
         self.paint_pod_cluster(img, MODULES, self.CENTER, radius=78, pod_size=48)
         self.paint_central_button(img, self.CENTER, size=44)
         return img
@@ -32,8 +41,6 @@ class RoundDashboard(DashboardCanvas):
     # Round-only additional view modes (called by fb_dashboard.py's main
     # loop when the user long-presses center → radial menu → terminal/flash/auth).
     def layout_terminal(self, term_state) -> Image.Image:
-        # Delegates to the existing draw_terminal() helper for now;
-        # extracted into a method to give the main loop a class-based API.
         from fb_dashboard import draw_terminal
         return draw_terminal(term_state)
 
