@@ -148,13 +148,17 @@ class DashboardCanvas:
 
     def paint_alert_ribbon(self, img: Image.Image, region_y: int,
                            text: str, severity: str) -> None:
-        """Bottom strip: dark semi-transparent fill + coloured text.
-        `region_y` is the top of the ribbon (typically img.height - 20)."""
+        """Bottom strip: solid dark fill + coloured severity text.
+        `region_y` is the top of the ribbon (typically img.height - 20).
+        Text is prefixed with `▲ ` and clipped to 50 chars total."""
         draw = ImageDraw.Draw(img)
         w = img.size[0]
         colour = theme.SEVERITY.get(severity, theme.TEXT_MUTED) + (255,)
+        # Framebuffer blit converts RGBA→RGB, so any alpha<255 here
+        # would still render as solid black. Keep alpha=255 to make the
+        # opaque-fill intent explicit (no compositing happens).
         draw.rectangle((0, region_y, w, region_y + self.ALERT_RIBBON_HEIGHT),
-                       fill=(0, 0, 0, 200))
+                       fill=(0, 0, 0, 255))
         font = theme.load_default_font(11)
         draw.text((10, region_y + 4),
                   f"▲ {text}"[:50], fill=colour, font=font)
