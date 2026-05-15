@@ -29,6 +29,21 @@ Both pair tightly — kept as a separate PR so Phase 1's squash boundary stays c
 
 ---
 
+## 🔄 2026-05-15: Mail stack Phase 2 — Rspamd migration (spec + plan landed on master, no PR yet)
+
+Brought in by a parallel session (`b78e2584` + `1f562593`). Replaces SpamAssassin + OpenDKIM with Rspamd; single-domain DKIM (`secubox.in`, selector `default`); ClamAV deferred to Phase 2.5.
+
+### Status
+
+- **Spec:** [`docs/superpowers/specs/2026-05-15-mail-phase2-rspamd-design.md`](../docs/superpowers/specs/2026-05-15-mail-phase2-rspamd-design.md) committed `b78e2584` — locked decisions D1 (Rspamd replaces SA + OpenDKIM, Phase 0 invariant I3), D2 (ClamAV deferred), D3 (single-domain DKIM, Phase 3 widens).
+- **Plan:** [`docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md`](../docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md) committed `1f562593` — 8 milestones, ~25 bite-sized TDD tasks (A worktree+scaffolding, B `lib/mail/rspamd.sh` + 9 config templates, C FastAPI rspamd router + deprecation shims for `/dkim/*` `/spam/*` `/grey/*`, …).
+- **Phase 1 deploy lessons absorbed:** bats `test_deb_paths.bats` verifies `dpkg-deb -c` ships every `lib/mail/*.sh`; `install_mail_packages` adds `systemctl enable postfix`; acceptance smoke uses `timeout` wrappers, never raw pipes.
+- **Acceptance:** 13-gate smoke covers Postfix milter wiring, DKIM signature on outbound, SPF/DMARC enforcement, greylist behaviour, web UI auth, SA+OpenDKIM purge, and Phase 1 regression checks.
+
+No implementation worktree opened yet.
+
+---
+
 ## ✅ 2026-05-15: remote-ui converged dashboard (Issue [#135](https://github.com/CyberMind-FR/secubox-deb/issues/135), PR [#140](https://github.com/CyberMind-FR/secubox-deb/pull/140) MERGED `b0b42e81`)
 
 ### Status
