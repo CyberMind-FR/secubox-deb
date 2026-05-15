@@ -87,8 +87,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Cache configuration
-CACHE_DIR = Path("/tmp/secubox")
+# Cache configuration. Was /tmp/secubox until #149 — /tmp clears on reboot,
+# breaking the systemd ReadWritePaths namespace and crash-looping the service.
+# /var/cache/secubox is persistent and owned by systemd CacheDirectory=secubox.
+CACHE_DIR = Path("/var/cache/secubox")
 CACHE_FILE = CACHE_DIR / "metrics-cache.json"
 CACHE_TTL = 30  # seconds
 

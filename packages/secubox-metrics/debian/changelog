@@ -1,3 +1,15 @@
+secubox-metrics (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Fix crash-loop after reboot (#149): CACHE_DIR moves from /tmp/secubox
+    to /var/cache/secubox. /tmp is cleared on reboot, breaking the systemd
+    ReadWritePaths namespace setup and producing status=226/NAMESPACE.
+  * Use systemd CacheDirectory=secubox so the directory is auto-managed
+    with the service user/group and survives reboots.
+  * Drop /tmp/secubox from postinst.
+  * Closes: #149
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 15 May 2026 17:30:00 +0200
+
 secubox-metrics (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release

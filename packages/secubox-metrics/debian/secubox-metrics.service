@@ -11,6 +11,12 @@ WorkingDirectory=/usr/lib/secubox/metrics
 RuntimeDirectory=secubox
 RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes
+# CacheDirectory auto-creates /var/cache/secubox with service user/group
+# and survives reboots (unlike /tmp). Fix for #149: was ReadWritePaths=
+# /tmp/secubox, which broke namespace setup after every reboot because
+# /tmp/secubox was cleared by systemd-tmpfiles before the unit started.
+CacheDirectory=secubox
+CacheDirectoryMode=0755
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/metrics.sock \
     --log-level warning
@@ -20,7 +26,7 @@ RestartSec=5
 # PrivateTmp=true
 # ProtectSystem=full
 NoNewPrivileges=true
-ReadWritePaths=/run/secubox /tmp/secubox /var/cache/secubox
+ReadWritePaths=/run/secubox /var/cache/secubox
 
 [Install]
 WantedBy=multi-user.target
