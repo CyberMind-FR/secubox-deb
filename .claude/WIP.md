@@ -3,7 +3,7 @@
 
 ---
 
-## ✅ 2026-05-15: Mail stack Phase 1 — LXC consolidation (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED `32190507` + `35ba4c2c` replay; PR [#144](https://github.com/CyberMind-FR/secubox-deb/pull/144) SUPERSEDED)
+## ✅ 2026-05-15: Mail stack Phase 1 — LXC consolidation (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED `32190507` + `35ba4c2c` replay; PR [#144](https://github.com/CyberMind-FR/secubox-deb/pull/144) CLOSED-as-superseded)
 
 ### Objective
 
@@ -134,7 +134,13 @@ Worktree `secubox-deb-license-wt` on branch `feature/license-phase-b-full` at `a
 - `secubox-deb-worktrees/138-port-radar-concentric-into-secubox-commo` (PR #142 squash-merged `d50aa52d`) — removed
 - `secubox-deb-worktrees/139-round-image-usb0-otg-networking-dead-ifu` (PR #143 squash-merged `35576793`) — removed
 
-Branches `feature/135-…`, `feature/138-…`, `fix/139-…` deleted locally. Worktree `136-mail-stack-…` left intact (has uncommitted real WIP: `mailctl` refactor +68 / −22 lines, not in PR #141).
+Branches `feature/135-…`, `feature/138-…`, `fix/139-…` deleted locally. Worktree `136-mail-stack-…` cleaned in the evening sweep (see below).
+
+### Cleaned 2026-05-15 (evening — after PR #144 closed-as-superseded)
+
+- `secubox-deb-worktrees/136-mail-stack-phase-1-source-catch-up-legac` (PR #144 CLOSED, work replayed via `35ba4c2c` on master) — removed
+- Local branch `feature/136-mail-stack-phase-1-source-catch-up-legac` deleted
+- A last unsaved `users.sh` path-default fix (canonical `/data/volumes/mail` + container `mail`) was preserved as `stash@{0}` "136-users-paths-canonical: users.sh defaults to /data/volumes/mail + container 'mail'" — recover via `git stash pop` or `git stash show -p stash@{0}` in the main checkout.
 
 ### Conflict resolution notes
 
@@ -144,15 +150,24 @@ Branches `feature/135-…`, `feature/138-…`, `fix/139-…` deleted locally. Wo
 
 ### Local master state
 
-- `master` synced with `origin/master` at `d50aa52d` after pulling the four merge commits. 
+- `master` synced with `origin/master` at `320bdb01` after parallel sessions added `35ba4c2c` (Phase 1 replay), `320bdb01` (CACHE_DIR fix closes #149), plus the Phase 2 Rspamd spec + plan (`b78e2584` + `1f562593`).
 - Untracked: `.claude/settings.json` (pre-existing, intentional)
+- Stash list carries `stash@{0}` (`136-users-paths-canonical`) plus older parallel-session WIP stashes.
 
 ### Worktrees still active
 
 | Worktree | Branch | Status |
 |---|---|---|
-| `136-mail-stack-phase-1-source-catch-up-legac` | `feature/136-…` | PR #141 MERGED + post-merge follow-up PR #144 OPEN (`529f5ec7` + `6f6f98a5`) |
+| `145-secubox-waf-apply-double-cache-pattern-o` | `fix/145-…` | PR [#146](https://github.com/CyberMind-FR/secubox-deb/pull/146) OPEN — parallel session, not this conversation's work |
+| `147-add-scripts-check-dashboard-cache-py-lin` | `feature/147-…` | PR [#148](https://github.com/CyberMind-FR/secubox-deb/pull/148) OPEN — parallel session, not this conversation's work |
 | `secubox-deb-license-wt` | `feature/license-phase-b-full` | SPDX rollout #81, no PR yet |
+
+### Parallel-session work landed today (not from this conversation)
+
+- `35ba4c2c` `fix(mail): replay Phase 1 fix commits lost in PR #141 squash-merge` — directly to master, unblocking Phase 2.
+- `320bdb01` `fix(metrics): CACHE_DIR /tmp/secubox → /var/cache/secubox (closes #149)` — directly to master.
+- PR [#146](https://github.com/CyberMind-FR/secubox-deb/pull/146) OPEN — `fix(secubox-waf): apply double-cache pattern on /stats + /alerts (closes #145)`.
+- PR [#148](https://github.com/CyberMind-FR/secubox-deb/pull/148) OPEN — `feat(scripts): check-dashboard-cache.py lint + CI (closes #147)`.
 
 ---
 
