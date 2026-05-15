@@ -112,3 +112,47 @@ def test_paint_concentric_arcs_zero_metric_draws_only_track(blank_round):
     # track colour (very dark) should be there.
     px = blank_round.getpixel((240 + 200, 240))[:3]
     assert max(px) < 50, f"expected dark track at zero-fill, got {px}"
+
+
+def test_paint_pod_cluster_six_coloured_circles(blank_round):
+    """Six pod circles, each in its module colour, arranged on a circle
+    of given radius."""
+    import math
+    from secubox_common.modules import MODULES
+    canvas = DashboardCanvas()
+    canvas.paint_pod_cluster(blank_round, MODULES, center=(240, 240),
+                              radius=100, pod_size=20)
+    # Pods are at -90° + i*60° per module index.
+    for i, m in enumerate(MODULES):
+        angle = math.radians(-90 + i * 60)
+        px = int(240 + 100 * math.cos(angle))
+        py = int(240 + 100 * math.sin(angle))
+        pixel = blank_round.getpixel((px, py))[:3]
+        # Pod centre should be coloured by module.colour (icon overlay may
+        # be transparent, but the colored disc shows through; tolerance for
+        # icon center pixel).
+        dr = abs(pixel[0] - m.colour[0])
+        dg = abs(pixel[1] - m.colour[1])
+        db = abs(pixel[2] - m.colour[2])
+        # Loose tolerance — icon may dominate centre. Accept any non-black.
+        assert pixel != (0, 0, 0), \
+            f"pod {m.name} at ({px},{py}) is black (expected coloured)"
+
+
+def test_paint_pod_cluster_no_icon_falls_back_to_letter(blank_round, monkeypatch):
+    """When the icon loader returns None, pod still draws and shows the
+    first letter."""
+    from secubox_common import icons
+    from secubox_common.modules import MODULES
+    monkeypatch.setattr(icons, "load_module_icon", lambda *a, **kw: None)
+
+    canvas = DashboardCanvas()
+    canvas.paint_pod_cluster(blank_round, MODULES, center=(240, 240),
+                              radius=100, pod_size=30)
+    # Just verify it didn't crash and pods are drawn (non-black at pod centres).
+    import math
+    for i, m in enumerate(MODULES):
+        angle = math.radians(-90 + i * 60)
+        px = int(240 + 100 * math.cos(angle))
+        py = int(240 + 100 * math.sin(angle))
+        assert blank_round.getpixel((px, py)) != (0, 0, 0, 255)

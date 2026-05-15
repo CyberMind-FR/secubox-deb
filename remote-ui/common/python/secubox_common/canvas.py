@@ -87,6 +87,48 @@ class DashboardCanvas:
                 draw.arc(bbox, start=-90, end=end_angle,
                          fill=m.colour + (255,), width=self.RING_WIDTH)
 
+    def paint_pod_cluster(self, img: Image.Image,
+                          modules: Iterable[Module],
+                          center: tuple[int, int],
+                          radius: int,
+                          pod_size: int = 48) -> None:
+        """Six pods arranged at angles 60° apart on a circle of the given
+        radius. Each pod is a filled circle of `module.colour`; if the
+        module's icon is present it's pasted on top, otherwise the first
+        letter of the module name is drawn centred in white.
+        """
+        from . import icons as _icons
+        import math
+
+        draw = ImageDraw.Draw(img)
+        cx, cy = center
+        half = pod_size // 2
+
+        for i, m in enumerate(modules):
+            angle = math.radians(-90 + i * 60)
+            px = int(cx + radius * math.cos(angle))
+            py = int(cy + radius * math.sin(angle))
+
+            # Colored disc background.
+            draw.ellipse((px - half, py - half, px + half, py + half),
+                         fill=m.colour + (255,))
+
+            icon = _icons.load_module_icon(m.icon_name, pod_size)
+            if icon is not None:
+                # Centre the icon on the pod, alpha-composited.
+                ix = px - icon.size[0] // 2
+                iy = py - icon.size[1] // 2
+                img.paste(icon, (ix, iy), icon)
+            else:
+                # Fallback: first letter in white.
+                font = theme.load_default_font(max(10, pod_size // 2))
+                letter = m.name[0]
+                bbox = font.getbbox(letter)
+                lw = bbox[2] - bbox[0]
+                lh = bbox[3] - bbox[1]
+                draw.text((px - lw // 2, py - lh // 2 - bbox[1]),
+                          letter, fill=(255, 255, 255, 255), font=font)
+
     def layout(self, metrics: dict) -> Image.Image:
         """Compose the form-factor-specific dashboard. Override in subclass."""
         raise NotImplementedError(
