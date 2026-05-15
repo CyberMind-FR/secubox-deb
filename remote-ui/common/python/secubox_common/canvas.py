@@ -24,6 +24,35 @@ class DashboardCanvas:
         draw = ImageDraw.Draw(img)
         draw.rectangle((0, 0, img.size[0], img.size[1]), fill=colour + (255,))
 
+    def paint_rainbow_ring(self, img: Image.Image,
+                           center: tuple[int, int],
+                           radius_outer: int,
+                           radius_inner: int,
+                           stops: int = 256) -> None:
+        """Annular rainbow gradient — HSV hue rotates 0..360° around the centre,
+        rendered as `stops` thin arc segments between radius_inner and radius_outer."""
+        import colorsys
+
+        draw = ImageDraw.Draw(img)
+        cx, cy = center
+        bbox = (cx - radius_outer, cy - radius_outer,
+                cx + radius_outer, cy + radius_outer)
+        step_deg = 360.0 / stops
+        # Pillow needs an outline at least 1px thick; use a filled pieslice
+        # for each step, then erase the inner disc once.
+        for i in range(stops):
+            hue = i / stops
+            r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            colour = (int(r * 255), int(g * 255), int(b * 255), 255)
+            start = i * step_deg - 90.0
+            end = (i + 1) * step_deg - 90.0
+            draw.pieslice(bbox, start=start, end=end, fill=colour)
+
+        # Erase the inner disc back to transparent / background.
+        inner_bbox = (cx - radius_inner, cy - radius_inner,
+                      cx + radius_inner, cy + radius_inner)
+        draw.ellipse(inner_bbox, fill=(0, 0, 0, 255))
+
     def layout(self, metrics: dict) -> Image.Image:
         """Compose the form-factor-specific dashboard. Override in subclass."""
         raise NotImplementedError(

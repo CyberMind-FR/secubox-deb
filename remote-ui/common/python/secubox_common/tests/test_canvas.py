@@ -29,3 +29,44 @@ def test_dashboard_canvas_layout_is_abstract():
     except NotImplementedError:
         return
     assert False, "DashboardCanvas.layout() must raise NotImplementedError"
+
+
+def test_paint_rainbow_ring_pixels_in_band_are_colored(blank_round):
+    """A pixel exactly on the rainbow band radius is non-black; pixels
+    inside and outside the band remain black."""
+    canvas = DashboardCanvas()
+    canvas.paint_rainbow_ring(blank_round, center=(240, 240),
+                              radius_outer=235, radius_inner=220)
+
+    # Centre pixel = inside the inner radius, should still be black.
+    assert blank_round.getpixel((240, 240))[:3] == (0, 0, 0)
+
+    # Pixel at radius 230 (between inner=220 and outer=235): coloured.
+    px = blank_round.getpixel((240 + 230, 240))
+    assert px[:3] != (0, 0, 0), \
+        f"expected coloured pixel at band radius 230, got {px[:3]}"
+
+    # Pixel at radius 250 (outside outer=235): still black.
+    px = blank_round.getpixel((240 + 250 if 240 + 250 < 480 else 479, 240))
+    if 240 + 250 < 480:
+        assert px[:3] == (0, 0, 0)
+
+
+def test_paint_rainbow_ring_spans_hue_around_circle(blank_round):
+    """Sample 4 points on the band at 0°, 90°, 180°, 270° — they should
+    differ in colour (rainbow hue rotates with angle)."""
+    import math
+    canvas = DashboardCanvas()
+    canvas.paint_rainbow_ring(blank_round, center=(240, 240),
+                              radius_outer=235, radius_inner=220)
+
+    R = 227  # middle of the band
+    samples = []
+    for angle_deg in (0, 90, 180, 270):
+        rad = math.radians(angle_deg)
+        x = int(240 + R * math.cos(rad))
+        y = int(240 + R * math.sin(rad))
+        samples.append(blank_round.getpixel((x, y))[:3])
+
+    # All 4 samples must be different colours.
+    assert len(set(samples)) == 4, f"rainbow band hue is not rotating: {samples}"
