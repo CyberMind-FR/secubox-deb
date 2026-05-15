@@ -19,17 +19,27 @@ from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox Mail", version="1.8.0")
+app = FastAPI(title="SecuBox Mail", version="2.2.0")
 config = get_config("mail")
 
-DATA_PATH = Path(config.get("data_path", "/srv/mail"))
-LXC_PATH = Path(config.get("lxc_path", "/srv/lxc"))
-MAIL_CONTAINER = config.get("mail_container", "mailserver")
-WEBMAIL_CONTAINER = config.get("webmail_container", "roundcube")
+# Canonical config keys (Phase 1 rev. 2). Legacy keys are accepted as
+# fallback for one release so deploys mid-upgrade don't break.
+DATA_PATH = Path(config.get("data_path", "/data/volumes/mail"))
+LXC_PATH = Path(config.get("lxc_path", "/var/lib/lxc"))
+CONTAINER = config.get("container", config.get("mail_container", "mail"))
+# Legacy alias retained for callers that still reference WEBMAIL_CONTAINER —
+# webmail is now in the same single LXC.
+MAIL_CONTAINER = CONTAINER
+WEBMAIL_CONTAINER = CONTAINER
 DOMAIN = config.get("domain", "secubox.local")
 HOSTNAME = config.get("hostname", "mail")
-MAIL_IP = config.get("mail_ip", "192.168.255.30")
-WEBMAIL_PORT = config.get("webmail_port", 8027)
+LXC_IP = config.get("lxc_ip", config.get("mail_ip", "10.100.0.10"))
+LXC_BRIDGE = config.get("lxc_bridge", "br-lxc")
+LXC_GATEWAY = config.get("lxc_gateway", "10.100.0.1")
+# Webmail is on standard HTTP inside the LXC; host nginx proxies via :443.
+WEBMAIL_PORT = 80
+# Back-compat alias for any caller still reading MAIL_IP.
+MAIL_IP = LXC_IP
 
 
 def run_cmd(cmd: list, timeout: int = 30) -> tuple:
@@ -901,21 +911,31 @@ async def fix_ports():
 class SettingsUpdate(BaseModel):
     domain: Optional[str] = None
     hostname: Optional[str] = None
+    # Canonical fields (Phase 1 rev. 2)
+    lxc_ip: Optional[str] = None
+    # Legacy aliases — accepted for back-compat, mapped to lxc_ip server-side.
     mail_ip: Optional[str] = None
     webmail_port: Optional[int] = None
 
 
 @app.get("/settings", dependencies=[Depends(require_jwt)])
 async def get_settings():
-    """Get mail configuration settings"""
+    """Get mail configuration settings."""
     return {
         "domain": DOMAIN,
         "hostname": HOSTNAME,
-        "mail_ip": MAIL_IP,
-        "webmail_port": WEBMAIL_PORT,
-        "mail_container": MAIL_CONTAINER,
-        "webmail_container": WEBMAIL_CONTAINER,
+        # Canonical
+        "container": CONTAINER,
+        "lxc_ip": LXC_IP,
+        "lxc_bridge": LXC_BRIDGE,
+        "lxc_gateway": LXC_GATEWAY,
         "data_path": str(DATA_PATH),
+        "lxc_path": str(LXC_PATH),
+        # Legacy aliases (kept until v3.0)
+        "mail_ip": LXC_IP,
+        "webmail_port": WEBMAIL_PORT,
+        "mail_container": CONTAINER,
+        "webmail_container": CONTAINER,
     }
 
 
@@ -932,14 +952,19 @@ async def update_settings(settings: SettingsUpdate):
                 key, val = line.split("=", 1)
                 current[key.strip()] = val.strip().strip('"')
 
-    # Update values
+    # Update values. Canonical keys take precedence; legacy fields are
+    # accepted for one release and mapped to canonical.
     if settings.domain:
         current["domain"] = settings.domain
     if settings.hostname:
         current["hostname"] = settings.hostname
-    if settings.mail_ip:
-        current["mail_ip"] = settings.mail_ip
+    if settings.lxc_ip:
+        current["lxc_ip"] = settings.lxc_ip
+    elif settings.mail_ip:
+        current["lxc_ip"] = settings.mail_ip
     if settings.webmail_port:
+        # webmail_port is no longer meaningful (Roundcube is on :80 inside LXC,
+        # proxied via host nginx :443). Recorded for audit only.
         current["webmail_port"] = str(settings.webmail_port)
 
     # Write config

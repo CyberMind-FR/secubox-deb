@@ -1,9 +1,18 @@
 #!/bin/sh
 set -e
+
+# Transitional package (secubox-webmail 2.2.0) — clean up the old
+# standalone service + www tree if they're still around from <2.2.
 if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-webmail.service || true
-    systemctl start secubox-webmail.service || true
+    if [ -e /lib/systemd/system/secubox-webmail.service ] \
+       || [ -e /etc/systemd/system/secubox-webmail.service ]; then
+        systemctl stop    secubox-webmail.service 2>/dev/null || true
+        systemctl disable secubox-webmail.service 2>/dev/null || true
+        rm -f /lib/systemd/system/secubox-webmail.service \
+              /etc/systemd/system/secubox-webmail.service
+        systemctl daemon-reload || true
+    fi
 fi
+
 #DEBHELPER#
 exit 0

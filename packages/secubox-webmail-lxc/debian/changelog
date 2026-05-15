@@ -1,3 +1,10 @@
+secubox-webmail-lxc (2.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Transitional package — all functionality moved to secubox-mail >= 2.2.
+  * Closes: #136
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 15 May 2026 12:00:00 +0200
+
 secubox-webmail-lxc (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Remove standalone menu entry (now integrated into secubox-mail UI)

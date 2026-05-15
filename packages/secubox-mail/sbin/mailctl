@@ -3,11 +3,11 @@
 # Unified mail + webmail management for Debian
 # Three-fold architecture: Components, Status, Access
 
-VERSION="1.3.0"
+VERSION="2.2.0"
 CONFIG_FILE="/etc/secubox/mail.toml"
 LIB_DIR="/usr/lib/secubox/mail/lib"
-DATA_PATH="/srv/mail"
-LXC_PATH="/srv/lxc"
+DATA_PATH="/data/volumes/mail"
+LXC_PATH="/var/lib/lxc"
 
 # Colors
 RED='\033[0;31m'
@@ -41,10 +41,12 @@ config_get() {
 
 DOMAIN=$(config_get "domain" "secubox.local")
 HOSTNAME=$(config_get "hostname" "mail")
-MAIL_CONTAINER=$(config_get "mail_container" "mailserver")
-WEBMAIL_CONTAINER=$(config_get "webmail_container" "roundcube")
-MAIL_IP=$(config_get "mail_ip" "192.168.255.30")
-WEBMAIL_PORT=$(config_get "webmail_port" "8027")
+CONTAINER=$(config_get "container" "mail")
+WEBMAIL_CONTAINER="$CONTAINER"  # legacy alias — webmail merged into single container
+LXC_IP=$(config_get "lxc_ip" "10.100.0.10")
+LXC_BRIDGE=$(config_get "lxc_bridge" "br-lxc")
+LXC_GATEWAY=$(config_get "lxc_gateway" "10.100.0.1")
+WEBMAIL_PORT=80  # Roundcube now on standard HTTP inside the LXC, proxied via host nginx :443
 
 # ============================================================================
 # LXC Helpers
@@ -77,8 +79,8 @@ cmd_components() {
     local webmail_installed=false
     local webmail_running=false
 
-    lxc_exists "$MAIL_CONTAINER" && mail_installed=true
-    lxc_running "$MAIL_CONTAINER" && mail_running=true
+    lxc_exists "$CONTAINER" && mail_installed=true
+    lxc_running "$CONTAINER" && mail_running=true
     lxc_exists "$WEBMAIL_CONTAINER" && webmail_installed=true
     lxc_running "$WEBMAIL_CONTAINER" && webmail_running=true
 
@@ -88,12 +90,12 @@ cmd_components() {
     {
       "name": "Mail Server",
       "type": "lxc",
-      "container": "$MAIL_CONTAINER",
+      "container": "$CONTAINER",
       "description": "Postfix + Dovecot mail server",
       "installed": $mail_installed,
       "running": $mail_running,
       "ports": [25, 587, 465, 143, 993, 110, 995],
-      "ip": "$MAIL_IP"
+      "ip": "$LXC_IP"
     },
     {
       "name": "Webmail",
@@ -209,13 +211,13 @@ cmd_user_repair() {
     local email="$1"
     [ -z "$email" ] && { echo "Usage: mailctl user-repair <email>"; return 1; }
 
-    if ! lxc_running "$MAIL_CONTAINER"; then
+    if ! lxc_running "$CONTAINER"; then
         error "Mail container not running"
         return 1
     fi
 
     log "Repairing mailbox for $email..."
-    lxc_attach "$MAIL_CONTAINER" doveadm force-resync -u "$email" '*'
+    lxc_attach "$CONTAINER" doveadm force-resync -u "$email" '*'
     log "Mailbox repair complete"
 }
 
@@ -224,13 +226,13 @@ cmd_user_repair() {
 # ============================================================================
 
 cmd_fix_ports() {
-    if ! lxc_running "$MAIL_CONTAINER"; then
+    if ! lxc_running "$CONTAINER"; then
         error "Mail container not running"
         return 1
     fi
 
     log "Checking mail ports..."
-    local ports=$(lxc_attach "$MAIL_CONTAINER" netstat -tln 2>/dev/null)
+    local ports=$(lxc_attach "$CONTAINER" netstat -tln 2>/dev/null)
     local all_ok=true
 
     for port in 25 587 465 143 993; do
@@ -244,7 +246,7 @@ cmd_fix_ports() {
 
     if [ "$all_ok" = "false" ]; then
         warn "Some ports are not listening. Attempting restart..."
-        lxc_attach "$MAIL_CONTAINER" /opt/start-mail.sh &
+        lxc_attach "$CONTAINER" /opt/start-mail.sh &
         sleep 3
         log "Services restarted"
     else
@@ -288,9 +290,9 @@ cmd_uninstall() {
     systemctl stop secubox-mail 2>/dev/null
 
     log "Removing containers..."
-    lxc-stop -n "$MAIL_CONTAINER" 2>/dev/null
+    lxc-stop -n "$CONTAINER" 2>/dev/null
     lxc-stop -n "$WEBMAIL_CONTAINER" 2>/dev/null
-    rm -rf "$LXC_PATH/$MAIL_CONTAINER"
+    rm -rf "$LXC_PATH/$CONTAINER"
     rm -rf "$LXC_PATH/$WEBMAIL_CONTAINER"
 
     log "Mail server removed. Data preserved in $DATA_PATH"
@@ -330,15 +332,15 @@ cmd_status() {
     echo "Configuration:"
     echo "  Domain:      $DOMAIN"
     echo "  Hostname:    $HOSTNAME.$DOMAIN"
-    echo "  Mail IP:     $MAIL_IP"
+    echo "  Mail IP:     $LXC_IP"
     echo ""
 
     # Mail server status
-    echo "Mail Server ($MAIL_CONTAINER):"
-    if lxc_running "$MAIL_CONTAINER"; then
+    echo "Mail Server ($CONTAINER):"
+    if lxc_running "$CONTAINER"; then
         echo -e "  Status:    ${GREEN}Running${NC}"
         # Check ports
-        local ports=$(lxc_attach "$MAIL_CONTAINER" netstat -tln 2>/dev/null)
+        local ports=$(lxc_attach "$CONTAINER" netstat -tln 2>/dev/null)
         for port in 25 587 465 993 995; do
             if echo "$ports" | grep -q ":$port "; then
                 echo -e "  Port $port:  ${GREEN}listening${NC}"
@@ -346,7 +348,7 @@ cmd_status() {
                 echo -e "  Port $port:  ${RED}closed${NC}"
             fi
         done
-    elif lxc_exists "$MAIL_CONTAINER"; then
+    elif lxc_exists "$CONTAINER"; then
         echo -e "  Status:    ${YELLOW}Stopped${NC}"
     else
         echo -e "  Status:    ${RED}Not installed${NC}"
@@ -655,8 +657,8 @@ cmd_dkim() {
 cmd_logs() {
     local lines="${1:-50}"
 
-    if lxc_running "$MAIL_CONTAINER"; then
-        lxc_attach "$MAIL_CONTAINER" tail -n "$lines" /var/log/mail.log 2>/dev/null
+    if lxc_running "$CONTAINER"; then
+        lxc_attach "$CONTAINER" tail -n "$lines" /var/log/mail.log 2>/dev/null
     else
         error "Mail container not running"
     fi
@@ -725,6 +727,57 @@ EOF
 }
 
 # ============================================================================
+# Phase 1 config migration (rev. 2)
+# ============================================================================
+
+cmd_migrate_config() {
+    [ "$(id -u)" -eq 0 ] || { error "Root required"; return 1; }
+    : "${LIB_DIR:=/usr/lib/secubox/mail/lib}"
+    [ -d "$LIB_DIR" ] || LIB_DIR="$(dirname "$0")/../lib"
+    # shellcheck source=/dev/null
+    source "$LIB_DIR/migrate.sh"
+
+    local cfg="${CONFIG_FILE:-/etc/secubox/mail.toml}"
+    [ -f "$cfg" ] || { warn "no config to migrate at $cfg"; return 0; }
+
+    if grep -q "^container *=" "$cfg" 2>/dev/null; then
+        log "config already migrated (has 'container =' key)"
+        return 0
+    fi
+
+    if ! detect_legacy_toml_keys "$cfg" >/dev/null; then
+        log "no legacy keys to migrate"
+        return 0
+    fi
+
+    local backup="${cfg}.pre-phase1.$(date +%s).bak"
+    cp "$cfg" "$backup"
+    log "backup written to $backup"
+
+    python3 - "$cfg" <<'PY'
+import sys, re
+path = sys.argv[1]
+src = open(path).read()
+inject = (
+    'container = "mail"\n'
+    'lxc_ip = "10.100.0.10"\n'
+    'lxc_bridge = "br-lxc"\n'
+    'lxc_gateway = "10.100.0.1"\n'
+    'data_path = "/data/volumes/mail"\n'
+    'lxc_path = "/var/lib/lxc"\n'
+)
+# Comment out legacy keys FIRST so we don't end up with duplicates of
+# data_path / lxc_path after injection.
+for k in ("mail_container", "webmail_container", "mail_ip", "webmail_ip",
+         "webmail_port", "data_path", "lxc_path"):
+    src = re.sub(rf"^({k} *=.*)$", r"# DEPRECATED Phase 1: \1", src, flags=re.MULTILINE)
+src = re.sub(r"(\[mail\]\n)", r"\1" + inject, src, count=1)
+open(path, "w").write(src)
+PY
+    log "config migrated to single-container schema"
+}
+
+# ============================================================================
 # Main
 # ============================================================================
 
@@ -737,6 +790,7 @@ case "${1:-}" in
     install)     shift; cmd_install "$@" ;;
     uninstall)   shift; cmd_uninstall "$@" ;;
     migrate)     shift; cmd_migrate "$@" ;;
+    migrate-config) shift; cmd_migrate_config "$@" ;;
     # Service control
     start)       shift; cmd_start "$@" ;;
     stop)        shift; cmd_stop "$@" ;;
