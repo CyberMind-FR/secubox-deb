@@ -12,9 +12,10 @@ case "$1" in
         mkdir -p /run/secubox
         chown secubox:secubox /run/secubox
 
-        # Create cache directory
-        mkdir -p /tmp/secubox
-        chown secubox:secubox /tmp/secubox
+        # Cache directory — was /tmp/secubox until #149. Now /var/cache/secubox,
+        # auto-managed by systemd's CacheDirectory=secubox at unit start.
+        mkdir -p /var/cache/secubox
+        chown secubox:secubox /var/cache/secubox
 
         # Add secubox to haproxy group for admin-socket access (issue #92)
         if getent group haproxy >/dev/null; then
