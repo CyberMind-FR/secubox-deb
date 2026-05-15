@@ -110,6 +110,17 @@ cp -r "$REPO_ROOT/remote-ui/common/python/." "$ROOT_MNT/var/www/common/python/"
 test -d "$ROOT_MNT/var/www/common/python/secubox_common" || \
     { err "secubox_common not in /var/www/common/python — common/ source incomplete"; exit 2; }
 
+# Ship the shared icon assets — secubox_common.icons.load_module_icon
+# resolves at /var/www/common/assets/icons/ first. Without these the pod
+# cluster falls back to first-letter placeholders.
+log "Embedding remote-ui/common/assets at /var/www/common/assets/..."
+mkdir -p "$ROOT_MNT/var/www/common/assets"
+cp -r "$REPO_ROOT/remote-ui/common/assets/." "$ROOT_MNT/var/www/common/assets/"
+ICON_COUNT=$(ls "$ROOT_MNT/var/www/common/assets/icons"/*-48.png 2>/dev/null | wc -l)
+test "$ICON_COUNT" -gt 0 || \
+    { err "no *-48.png icons in /var/www/common/assets/icons — common/ assets incomplete"; exit 2; }
+log "  → $ICON_COUNT module icons at size 48 shipped"
+
 log "Installing Python packages..."
 mkdir -p "$ROOT_MNT/usr/lib/python3/dist-packages"
 cp -r "$REPO_ROOT/packages/secubox-eye-square/helper/eye_square_helper" \
