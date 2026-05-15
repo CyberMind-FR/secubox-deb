@@ -1,9 +1,18 @@
 #!/bin/sh
 set -e
+
+# Transitional package (secubox-mail-lxc 2.2.0) — clean up the old
+# standalone service if it's still around from <2.2 installs.
 if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-mail-lxc.service || true
-    systemctl start secubox-mail-lxc.service || true
+    if [ -e /lib/systemd/system/secubox-mail-lxc.service ] \
+       || [ -e /etc/systemd/system/secubox-mail-lxc.service ]; then
+        systemctl stop    secubox-mail-lxc.service 2>/dev/null || true
+        systemctl disable secubox-mail-lxc.service 2>/dev/null || true
+        rm -f /lib/systemd/system/secubox-mail-lxc.service \
+              /etc/systemd/system/secubox-mail-lxc.service
+        systemctl daemon-reload || true
+    fi
 fi
+
 #DEBHELPER#
 exit 0

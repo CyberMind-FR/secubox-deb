@@ -1,5 +1,5 @@
 Source: secubox-mail-lxc
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
@@ -7,15 +7,8 @@ Standards-Version: 4.6.2
 
 Package: secubox-mail-lxc
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, wget
-Recommends: secubox-mail
-Description: SecuBox Mail LXC Container (Backend)
- LXC container management for Postfix/Dovecot mail server.
- Backend component consumed by secubox-mail (no standalone UI).
- .
- Provides Alpine Linux container with:
-  - Postfix MTA
-  - Dovecot IMAP/POP3
-  - OpenDKIM signing
- .
- Install secubox-mail for the management UI.
+Depends: ${misc:Depends}, secubox-mail (>= 2.2)
+Description: Transitional package — mail LXC functionality moved to secubox-mail
+ The single consolidated mail LXC is now installed and driven by
+ secubox-mail (>= 2.2). This package ships no files. Safe to
+ apt-get autoremove after upgrade.

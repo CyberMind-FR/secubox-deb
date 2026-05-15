@@ -1,5 +1,5 @@
 Source: secubox-webmail-lxc
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
@@ -7,15 +7,8 @@ Standards-Version: 4.6.2
 
 Package: secubox-webmail-lxc
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, wget
-Recommends: secubox-mail, secubox-mail-lxc
-Description: SecuBox Webmail LXC Container (Backend)
- LXC container management for Roundcube webmail.
- Backend component consumed by secubox-mail (no standalone UI).
- .
- Provides Alpine Linux container with:
-  - Roundcube webmail
-  - Nginx + PHP-FPM
-  - Auto-configuration for mail server
- .
- Install secubox-mail for the management UI.
+Depends: ${misc:Depends}, secubox-mail (>= 2.2)
+Description: Transitional package — webmail LXC functionality moved to secubox-mail
+ Roundcube webmail now lives inside the single 'mail' LXC managed by
+ secubox-mail (>= 2.2). This package ships no files. Safe to
+ apt-get autoremove after upgrade.

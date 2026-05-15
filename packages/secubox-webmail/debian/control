@@ -1,5 +1,5 @@
 Source: secubox-webmail
-Section: admin
+Section: oldlibs
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
@@ -7,15 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-webmail
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Recommends: secubox-webmail-lxc
-Description: SecuBox Webmail Module
- Webmail management API and dashboard.
- Layer 2 of the 2-layer webmail architecture.
- .
- Features:
-  - Auto-detect Roundcube/SOGo
-  - Service control
-  - Cache management
- .
- For containerized deployment, install secubox-webmail-lxc.
+Depends: ${misc:Depends}, secubox-mail (>= 2.2)
+Description: Transitional package — webmail admin folded into secubox-mail
+ The webmail admin API is now part of secubox-mail (>= 2.2). This
+ package ships no files. Safe to apt-get autoremove after upgrade.

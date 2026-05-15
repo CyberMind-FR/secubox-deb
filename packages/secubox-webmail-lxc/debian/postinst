@@ -1,9 +1,18 @@
 #!/bin/sh
 set -e
+
+# Transitional package (secubox-webmail-lxc 2.2.0) — clean up the old
+# standalone service if it's still around from <2.2 installs.
 if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-webmail-lxc.service || true
-    systemctl start secubox-webmail-lxc.service || true
+    if [ -e /lib/systemd/system/secubox-webmail-lxc.service ] \
+       || [ -e /etc/systemd/system/secubox-webmail-lxc.service ]; then
+        systemctl stop    secubox-webmail-lxc.service 2>/dev/null || true
+        systemctl disable secubox-webmail-lxc.service 2>/dev/null || true
+        rm -f /lib/systemd/system/secubox-webmail-lxc.service \
+              /etc/systemd/system/secubox-webmail-lxc.service
+        systemctl daemon-reload || true
+    fi
 fi
+
 #DEBHELPER#
 exit 0
