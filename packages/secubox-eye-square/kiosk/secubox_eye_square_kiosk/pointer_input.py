@@ -20,7 +20,9 @@ running and re-tries device discovery every 30 s.
 """
 from __future__ import annotations
 
+import fcntl
 import logging
+import os
 import time
 from dataclasses import dataclass
 
@@ -60,6 +62,7 @@ class PointerInput:
         self.fb_w, self.fb_h = fb_size
         self._x = fb_size[0] // 2
         self._y = fb_size[1] // 2
+        # Epoch-relative — cursor stays hidden until first motion.
         self._last_motion = 0.0
         self._last_rediscovery = 0.0
         self._test_queue: list[tuple] = []
@@ -116,13 +119,15 @@ class PointerInput:
                 key_caps = caps.get(ecodes.EV_KEY, [])
                 if ecodes.BTN_LEFT in key_caps or ecodes.BTN_TOUCH in key_caps:
                     # Make it non-blocking so poll() can drain without hanging.
-                    import os, fcntl
                     flags = fcntl.fcntl(dev.fd, fcntl.F_GETFL)
                     fcntl.fcntl(dev.fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
                     devices.append(dev)
-            except (OSError, PermissionError):
+            except OSError:
                 continue
-        log.warning("pointer devices found: %s", [d.path for d in devices])
+        if devices:
+            log.info("pointer devices found: %s", [d.path for d in devices])
+        else:
+            log.warning("no pointer devices found (mouse/touchpad/touchscreen)")
         return devices
 
     def _handle_evdev_event(self, ev) -> "InputEvent | None":
@@ -132,16 +137,20 @@ class PointerInput:
             if ev.code == ecodes.REL_X:
                 self._x = self._clamp_x(self._x + ev.value)
                 self._touch_motion()
+                return InputEvent("motion", self._x, self._y)
             elif ev.code == ecodes.REL_Y:
                 self._y = self._clamp_y(self._y + ev.value)
                 self._touch_motion()
+                return InputEvent("motion", self._x, self._y)
         elif ev.type == ecodes.EV_ABS:
             if ev.code == ecodes.ABS_X:
                 self._x = self._clamp_x(ev.value)
                 self._touch_motion()
+                return InputEvent("motion", self._x, self._y)
             elif ev.code == ecodes.ABS_Y:
                 self._y = self._clamp_y(ev.value)
                 self._touch_motion()
+                return InputEvent("motion", self._x, self._y)
         elif ev.type == ecodes.EV_KEY:
             if ev.code in (ecodes.BTN_LEFT, ecodes.BTN_TOUCH) and ev.value == 1:
                 return InputEvent("tap", self._x, self._y)
