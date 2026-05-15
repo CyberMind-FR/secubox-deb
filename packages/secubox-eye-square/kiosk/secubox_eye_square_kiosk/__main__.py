@@ -17,7 +17,6 @@ from .pointer_input import PointerInput
 from .right_panel import RightPanel
 from .sim import SimState, step
 from .square_dashboard import SquareDashboard
-from .touch_input import TouchEvent, classify, find_touch_devices, read_events
 from .transport_manager import TransportManager
 
 log = logging.getLogger("secubox_eye_square_kiosk")
@@ -54,11 +53,12 @@ def main() -> int:
         log.error("Cannot open framebuffer %s: %s", FB_PATH, e)
         return 1
 
-    touch_devices = find_touch_devices()
+    # PointerInput's _discover_devices picks up every /dev/input/event*
+    # that exposes BTN_LEFT or BTN_TOUCH — that covers USB mouse, USB
+    # touchpad, and the 7" DSI touchscreen in one place. The legacy
+    # touch_input.py free functions are kept on disk for now but not
+    # called from the loop to avoid duplicate reads on the same fds.
     pointer = PointerInput(fb_size=(fb.width, fb.height))
-
-    # Touch gesture state: track press so we can classify on release.
-    _pending_press: TouchEvent | None = None
 
     last_probe = 0.0
     last_metrics = 0.0
@@ -82,14 +82,9 @@ def main() -> int:
                     metrics = fetched
                 last_metrics = now
 
-            # Touch input poll + dispatch.
-            for raw in read_events(touch_devices, timeout_s=0.0):
-                # read_events yields raw evdev events; we reconstruct
-                # TouchEvent press/release from ABS_X/Y + BTN_TOUCH.
-                # Gesture classification is handled on release.
-                pass  # evdev decode handled at device level; taps via pointer
-
-            # Pointer input poll + dispatch.
+            # Input poll + dispatch — mouse/touchpad/touchscreen all go
+            # through PointerInput (T12) which discovers BTN_LEFT and
+            # BTN_TOUCH devices.
             for ev in pointer.poll():
                 if ev.kind == "tap":
                     _dispatch_tap(ev.x, ev.y, panel, dashboard)
