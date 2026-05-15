@@ -10,9 +10,12 @@ canvas's perspective, all state passed in via arguments.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from PIL import Image, ImageDraw
 
 from . import theme
+from .modules import Module
 
 
 class DashboardCanvas:
@@ -62,7 +65,7 @@ class DashboardCanvas:
 
     def paint_concentric_arcs(self, img: Image.Image,
                               center: tuple[int, int],
-                              modules,
+                              modules: Iterable[Module],
                               metrics: dict,
                               radii: list[int]) -> None:
         """One concentric arc per module at each radius. Each ring has a
