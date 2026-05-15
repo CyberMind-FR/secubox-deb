@@ -103,6 +103,17 @@ log "Installing config files (systemd, udev, apparmor, firstboot)..."
 cp -r "$REPO_ROOT/remote-ui/square/files/." "$ROOT_MNT/"
 chmod +x "$ROOT_MNT/usr/local/sbin/firstboot.sh"
 
+# Install the shared OTG gadget composer (round does this at line 618 of
+# build-eye-remote-image.sh). secubox-otg-gadget.service ExecStarts this path;
+# without it the gadget never composes and the Pi 4B's USB-C bus stays silent
+# → MOCHAbin/host enumeration fails (no descriptor events, xhci timeouts).
+log "Installing OTG gadget composer at /usr/local/sbin/secubox-otg-gadget.sh..."
+cp "$REPO_ROOT/remote-ui/common/shell/secubox-otg-gadget.sh" \
+    "$ROOT_MNT/usr/local/sbin/secubox-otg-gadget.sh"
+chmod +x "$ROOT_MNT/usr/local/sbin/secubox-otg-gadget.sh"
+test -x "$ROOT_MNT/usr/local/sbin/secubox-otg-gadget.sh" || \
+    { err "secubox-otg-gadget.sh not executable on rootfs"; exit 2; }
+
 # Ship the shared secubox_common package.
 log "Embedding remote-ui/common/python at /var/www/common/python/..."
 mkdir -p "$ROOT_MNT/var/www/common/python"
