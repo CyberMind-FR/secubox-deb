@@ -115,8 +115,10 @@ def test_paint_concentric_arcs_zero_metric_draws_only_track(blank_round):
 
 
 def test_paint_pod_cluster_six_coloured_circles(blank_round):
-    """Six pod circles, each in its module colour, arranged on a circle
-    of given radius."""
+    """Six pod circles arranged on a circle of given radius — each centre
+    is non-black after painting. Loose assertion: the icon overlay may
+    paint the centre pixel white/dark on top of the coloured disc, so we
+    only check the disc rendered at all."""
     import math
     from secubox_common.modules import MODULES
     canvas = DashboardCanvas()
@@ -128,15 +130,27 @@ def test_paint_pod_cluster_six_coloured_circles(blank_round):
         px = int(240 + 100 * math.cos(angle))
         py = int(240 + 100 * math.sin(angle))
         pixel = blank_round.getpixel((px, py))[:3]
-        # Pod centre should be coloured by module.colour (icon overlay may
-        # be transparent, but the colored disc shows through; tolerance for
-        # icon center pixel).
-        dr = abs(pixel[0] - m.colour[0])
-        dg = abs(pixel[1] - m.colour[1])
-        db = abs(pixel[2] - m.colour[2])
-        # Loose tolerance — icon may dominate centre. Accept any non-black.
         assert pixel != (0, 0, 0), \
             f"pod {m.name} at ({px},{py}) is black (expected coloured)"
+
+
+def test_paint_pod_cluster_uses_icon_when_available(blank_round):
+    """pod_size=48 matches an available icon file size, so the icon-paste
+    path runs (rather than the letter fallback). Verifies the path runs
+    without crashing and at least the first pod renders non-black."""
+    import math
+    from secubox_common import icons
+    from secubox_common.modules import MODULES
+    icons._cache_clear()  # avoid carry-over None caches from earlier tests
+
+    canvas = DashboardCanvas()
+    canvas.paint_pod_cluster(blank_round, MODULES, center=(240, 240),
+                              radius=100, pod_size=48)
+    # First pod at -90° (12 o'clock) maps to (240, 140).
+    angle = math.radians(-90)
+    px = int(240 + 100 * math.cos(angle))
+    py = int(240 + 100 * math.sin(angle))
+    assert blank_round.getpixel((px, py))[:3] != (0, 0, 0)
 
 
 def test_paint_pod_cluster_no_icon_falls_back_to_letter(blank_round, monkeypatch):
