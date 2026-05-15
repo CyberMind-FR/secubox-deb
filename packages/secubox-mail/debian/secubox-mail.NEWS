@@ -1,0 +1,38 @@
+secubox-mail (2.2.0-1~bookworm1) bookworm; urgency=medium
+
+  Phase 1 source-catch-up + WAF-compliant routing notes.
+
+  This release does not change the running mail LXC. It updates the host-
+  side controllers, packaging metadata, and config schema to match the
+  canonical paths used by the production board:
+
+    LXC:        /var/lib/lxc/mail  (symlink → /data/lxc/mail)
+    Data:       /data/volumes/mail/{vmail,config,ssl}
+    Network:    unprivileged veth on br-lxc, 10.100.0.10/24
+
+  WAF compliance (mandatory per CLAUDE.md):
+
+  * HTTPS surface (webmail.<domain>, mail-admin.<domain>) MUST route
+    via HAProxy → mitmproxy_inspector → backend. This release does not
+    change the HAProxy frontend ACLs (already in place for
+    webmail.gk2.secubox.in). The mitmproxy route map must be updated
+    once at deploy time:
+
+      /srv/mitmproxy/haproxy-routes.json
+      /srv/mitmproxy-in/haproxy-routes.json
+        "webmail.gk2.secubox.in": ["10.100.0.10", 80]
+
+    Then: systemctl restart mitmproxy
+
+  * Mail protocols (SMTP 25/587/465, IMAPS 993, ManageSieve 4190) are
+    TCP pass-through to the LXC via HAProxy. They do not transit
+    mitmproxy because mitmproxy inspects HTTP, not SMTP/IMAP. This is
+    not a WAF bypass — mail protocols are not in the WAF's protocol
+    scope.
+
+  Legacy companion packages (secubox-mail-lxc, secubox-webmail,
+  secubox-webmail-lxc) become transitional metadata-only stubs that
+  depend on secubox-mail (>= 2.2). Safe to apt-get autoremove after
+  upgrade.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 15 May 2026 12:00:00 +0200
