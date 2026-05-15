@@ -15,7 +15,9 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LIB_DIR="${LIB_DIR:-/usr/lib/secubox/mail/lib}"
-[ -d "$LIB_DIR" ] || LIB_DIR="$SCRIPT_DIR/../lib"
+# Installed layout flattens lib/mail/*.sh → /usr/lib/secubox/mail/lib/*.sh.
+# In-tree fallback keeps the lib/mail/ subdir.
+[ -f "$LIB_DIR/lxc.sh" ] || LIB_DIR="$SCRIPT_DIR/../lib/mail"
 
 # shellcheck source=/dev/null
 source "$LIB_DIR/lxc.sh"

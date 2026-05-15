@@ -259,26 +259,47 @@ cmd_fix_ports() {
 # ============================================================================
 
 cmd_install() {
-    log "Installing SecuBox Mail Server..."
+    [ "$(id -u)" -eq 0 ] || { error "Root required"; return 1; }
+    log "Installing SecuBox Mail Server (single LXC '$CONTAINER')..."
 
-    # Create directories
-    mkdir -p "$DATA_PATH"/{mail,config,ssl,backups}
+    : "${LIB_DIR:=/usr/lib/secubox/mail/lib}"
+    if [ ! -f "$LIB_DIR/install.sh" ]; then
+        local alt="$(dirname "$0")/../lib/mail"
+        [ -f "$alt/install.sh" ] && LIB_DIR="$alt"
+    fi
+    # shellcheck source=/dev/null
+    source "$LIB_DIR/lxc.sh"
+    # shellcheck source=/dev/null
+    source "$LIB_DIR/install.sh"
+
+    # Persistent data dirs (host-side, bind-mounted into the LXC)
+    mkdir -p "$DATA_PATH"/{vmail,config,ssl,backups}
     mkdir -p "$LXC_PATH"
 
-    # Install mail server container
-    log "Installing mail server container..."
-    /usr/sbin/mailserverctl install
+    # Bootstrap rootfs + render LXC config
+    if ! lxc_exists "$CONTAINER"; then
+        LXC_BASE="$LXC_PATH" bootstrap_debian "$CONTAINER"
+    fi
+    LXC_BASE="$LXC_PATH" lxc_create_config "$CONTAINER" "$LXC_IP" "$LXC_BRIDGE" "$LXC_GATEWAY"
 
-    # Install webmail container
-    log "Installing webmail container..."
-    /usr/sbin/roundcubectl install
+    # Bring the container up so install steps can chroot/apt
+    LXC_BASE="$LXC_PATH" lxc_start_safely "$CONTAINER" || {
+        error "container failed to start"; return 1; }
+
+    LXC_BASE="$LXC_PATH" install_mail_packages    "$CONTAINER"
+    LXC_BASE="$LXC_PATH" install_webmail_packages "$CONTAINER"
+    LXC_BASE="$LXC_PATH" DOMAIN="$DOMAIN" HOSTNAME="$HOSTNAME" \
+        configure_postfix   "$CONTAINER"
+    LXC_BASE="$LXC_PATH" configure_dovecot   "$CONTAINER"
+    LXC_BASE="$LXC_PATH" DOMAIN="$DOMAIN" \
+        configure_roundcube "$CONTAINER"
 
     log "Installation complete!"
     echo ""
     echo "Next steps:"
     echo "  1. Configure: edit $CONFIG_FILE"
     echo "  2. Add users: mailctl user add user@$DOMAIN"
-    echo "  3. Start: systemctl start secubox-mail"
+    echo "  3. Start: mailctl start"
 }
 
 cmd_uninstall() {
@@ -303,17 +324,33 @@ cmd_uninstall() {
 # ============================================================================
 
 cmd_start() {
-    log "Starting mail services..."
-    /usr/sbin/mailserverctl start
-    /usr/sbin/roundcubectl start
-    log "Mail services started"
+    log "Starting mail LXC '$CONTAINER'..."
+    if lxc_running "$CONTAINER"; then
+        log "already running"
+        return 0
+    fi
+    if ! lxc_exists "$CONTAINER"; then
+        error "container '$CONTAINER' not present at $LXC_PATH/$CONTAINER"
+        return 1
+    fi
+    lxc-start -n "$CONTAINER" -d
+    # Wait up to 10s for RUNNING state.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        lxc_running "$CONTAINER" && { log "mail LXC running"; return 0; }
+        sleep 1
+    done
+    error "mail LXC failed to start within 10s"
+    return 1
 }
 
 cmd_stop() {
-    log "Stopping mail services..."
-    /usr/sbin/roundcubectl stop
-    /usr/sbin/mailserverctl stop
-    log "Mail services stopped"
+    log "Stopping mail LXC '$CONTAINER'..."
+    if ! lxc_running "$CONTAINER"; then
+        log "already stopped"
+        return 0
+    fi
+    lxc-stop -n "$CONTAINER" -t 30 || true
+    log "mail LXC stopped"
 }
 
 cmd_restart() {
@@ -387,8 +424,15 @@ cmd_status() {
 # ============================================================================
 
 cmd_sync() {
-    # Sync config files to container
-    /usr/sbin/mailserverctl sync 2>/dev/null || true
+    # Phase 1 rev. 2: persistent config is bind-mounted from
+    # $DATA_PATH/config into $LXC_PATH/$CONTAINER/rootfs/etc/mail-config,
+    # so there is no copy step. Rebuild Postfix LMDB indexes if the
+    # container is running; otherwise it's a no-op until next start.
+    if lxc_running "$CONTAINER"; then
+        for map in vmailbox virtual; do
+            lxc_attach "$CONTAINER" postmap "lmdb:/etc/mail-config/$map" 2>/dev/null || true
+        done
+    fi
 }
 
 cmd_user() {
@@ -631,8 +675,10 @@ cmd_dkim() {
 
     case "$action" in
         setup|generate)
-            /usr/sbin/mailserverctl dkim
-            cmd_sync
+            # OpenDKIM setup is deferred to Phase 2 (Rspamd replaces it).
+            # Phase 1 stub: tell the user where to look.
+            warn "DKIM setup will move to Rspamd in Phase 2."
+            warn "Phase 1: configure DKIM manually inside the LXC if needed."
             ;;
         status)
             if [ -f "$DATA_PATH/dkim/default.txt" ]; then
@@ -733,7 +779,12 @@ EOF
 cmd_migrate_config() {
     [ "$(id -u)" -eq 0 ] || { error "Root required"; return 1; }
     : "${LIB_DIR:=/usr/lib/secubox/mail/lib}"
-    [ -d "$LIB_DIR" ] || LIB_DIR="$(dirname "$0")/../lib"
+    # Installed layout: /usr/lib/secubox/mail/lib/migrate.sh
+    # In-tree layout:   packages/secubox-mail/lib/mail/migrate.sh
+    if [ ! -f "$LIB_DIR/migrate.sh" ]; then
+        local alt="$(dirname "$0")/../lib/mail"
+        [ -f "$alt/migrate.sh" ] && LIB_DIR="$alt"
+    fi
     # shellcheck source=/dev/null
     source "$LIB_DIR/migrate.sh"
 
