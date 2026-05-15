@@ -35,21 +35,37 @@ Catch the in-repo source up to the test board's `/data/lxc/mail` + `/data/volume
 ### Status
 
 - Issue opened today; PR [#142](https://github.com/CyberMind-FR/secubox-deb/pull/142) opened the same day on `feature/138-port-radar-concentric-into-secubox-commo` with title "Port radar_concentric into secubox_common + phase-aware dashboards (closes #138)"
-- Round + square parity via animation phase
-- Awaiting review
+- New `secubox_common.painters.radar_concentric` module (phase-aware); module→arc-angle decoupled from list order via `DEFAULT_NAME_TO_ANGLE`
+- `RoundDashboard.layout(metrics, phase=0.0)` + `SquareDashboard.layout(metrics, phase=0.0)` — backward-compatible (phase=0 = still frame)
+- Square kiosk `__main__` drives `phase = (time.monotonic() * 12.0 / 60.0) % 1.0` at 12 RPM (matches deployed `fallback_manager._sweep_speed`)
+- 118 / 118 tests green (36 secubox_common incl. 8 new + 78 square kiosk + 4 round)
+- **Hardware bench (Pi 4B + 7" DSI, 2026-05-15):** rotating radar ✓ · icons ✓ · right panel ✓ — user-confirmed
+- `fallback_manager.py` migration deferred (visual-palette decision needed; follow-up)
 
 ---
 
-## 🔄 2026-05-15: Round image OTG networking bug (Issue [#139](https://github.com/CyberMind-FR/secubox-deb/issues/139), PR [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143) OPEN)
+## 🔄 2026-05-15: Round image cleanup — dead ifupdown + secubox sudo + OTG comment (Issue [#139](https://github.com/CyberMind-FR/secubox-deb/issues/139), PR [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143) OPEN)
 
-### Symptom
+### Original misdiagnosis → rescoped
 
-On `secubox-eye-remote-2.2.1` armhf rebuild the USB gadget composes fine (host sees `1d6b:0104` Multifunction Composite Gadget, ACM serial at `/dev/ttyACM0`) but the Pi Zero W's `usb0` stays DOWN — `10.55.0.2` never reachable, ONLINE-mode API path can never engage, eye-remote is stuck.
+Initial report claimed "OTG networking dead": `/etc/network/interfaces.d/usb0` was a static stanza for ifupdown, but `ifupdown` was missing → `usb0` stayed DOWN. Wrong conclusion. Live-system probe via ACM serial showed the actual binding is on `usb1` (10.55.0.2/30), set programmatically by `secubox-otg-gadget.sh`. The dead ifupdown stanza never did anything; OTG was always working.
+
+### Rescoped fix
+
+- Drop dead `/etc/network/interfaces.d/usb0` (file + the inline heredoc in `build-eye-remote-image.sh` that recreated it)
+- Add `secubox` user to `sudo` group (so ACM serial recovery is possible — previously the only-path-in had no path-to-fix)
+- Rewrite the misleading `usb1 = ECM` comment in `secubox-otg-gadget.sh` — RNDIS+ECM share host_addr so host reaches 10.55.0.2 via either function
 
 ### Status
 
-- Issue opened 2026-05-15 10:27 by gkerma; PR [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143) opened 2 minutes later on `fix/139-round-image-usb0-otg-networking-dead-ifu`: "Round image: drop dead ifupdown config, give secubox sudo, fix misleading OTG comment (closes #139)"
-- Three-pronged fix: drop dead ifupdown config; grant `secubox` sudo; fix misleading OTG comment
+- Issue opened 2026-05-15 10:27; PR [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143) opened 2 minutes later on `fix/139-round-image-usb0-otg-networking-dead-ifu`
+- Initial misdiagnosis annotated as a comment on issue #139 — diagnostic confusion came from the dead stanza being visible
+- **Hardware bench (Pi Zero W 1st gen, HyperPixel 2.1 Round, 2026-05-15):** all 3 fixes verified live:
+  - `/etc/network/interfaces.d/` directory absent ✓
+  - `secubox` in `sudo` group (`27(sudo)`) ✓
+  - Gadget composer comment rewritten ✓
+  - Bonus: ping `10.55.0.2` from host 3/3 received at 0.3 ms, SSH port 22 OPEN, both `usb0` + `usb1` UP @ 10.55.0.2/30 on the Pi
+- Mid-bench: caught a pre-existing Pi Zero W `dwc2` kernel panic under host xHCI reset hammering — unrelated to #143 (image was good, dwc2 driver instability on ARMv6 under USB stress); deferred to a separate investigation
 
 ---
 
