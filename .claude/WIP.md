@@ -1,5 +1,75 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-14*
+*Mis à jour : 2026-05-15*
+
+---
+
+## 🔄 2026-05-15: Mail stack Phase 1 — LXC consolidation + source catch-up (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) OPEN)
+
+### Objective
+
+Catch the in-repo source up to the test board's `/data/lxc/mail` + `/data/volumes/mail` + `10.100.0.10/24` reality (repo still references `/srv/lxc`, `/srv/mail`, `192.168.255.30`, separate `mail_container`/`webmail_container`). Phase 1 collapses the dual-container layout into a single mail LXC, deprecates legacy `secubox-mail-lxc` / `secubox-webmail` / `secubox-webmail-lxc` companion packages with `Breaks/Replaces`, and ships HAProxy mail-TCP snippets pointed at the new IP.
+
+### Status (worktree `136-mail-stack-phase-1-source-catch-up-legac`, branch `feature/136-mail-stack-phase-1-source-catch-up-legac`)
+
+- Phase 0 spec rev. 2 (`docs/superpowers/specs/2026-05-15-mail-stack-architecture-design.md`) + Phase 1 plan + rollback recipe committed to master
+- mailctl/mailser feature commits landed (latest `bade94f1`)
+- Versions bumped to 2.2.0 with `Breaks/Replaces` markers on the three legacy packages
+- HAProxy mail-TCP snippet targets new `10.100.0.10`
+- Test coverage shipped: 62-route endpoint-presence pytest + end-to-end acceptance smoke
+- **PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) opened** today — awaiting review + live deploy/cutover on test board
+
+---
+
+## 🔄 2026-05-15: remote-ui converged dashboard (Issue [#135](https://github.com/CyberMind-FR/secubox-deb/issues/135), PR [#140](https://github.com/CyberMind-FR/secubox-deb/pull/140) OPEN)
+
+### Status
+
+- PR [#137](https://github.com/CyberMind-FR/secubox-deb/pull/137) (initial converge round/ + square/ dashboards into `secubox_common` + pointer input on Pi 4B/400) **squash-merged `839bab94`**
+- **PR [#140](https://github.com/CyberMind-FR/secubox-deb/pull/140) follow-on OPEN** today — 35 commits, +1544 / -599 on `feature/135-converge-round-square-dashboards-into-re`
+- Spec + plan landed on master (`b5e44e72`, `78316556`)
+
+---
+
+## 🔄 2026-05-15: Port `radar_concentric` into `secubox_common` (Issue [#138](https://github.com/CyberMind-FR/secubox-deb/issues/138), PR [#142](https://github.com/CyberMind-FR/secubox-deb/pull/142) OPEN)
+
+### Status
+
+- Issue opened today; PR [#142](https://github.com/CyberMind-FR/secubox-deb/pull/142) opened the same day on `feature/138-port-radar-concentric-into-secubox-commo` with title "Port radar_concentric into secubox_common + phase-aware dashboards (closes #138)"
+- Round + square parity via animation phase
+- Awaiting review
+
+---
+
+## 🔄 2026-05-15: Round image OTG networking bug (Issue [#139](https://github.com/CyberMind-FR/secubox-deb/issues/139), PR [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143) OPEN)
+
+### Symptom
+
+On `secubox-eye-remote-2.2.1` armhf rebuild the USB gadget composes fine (host sees `1d6b:0104` Multifunction Composite Gadget, ACM serial at `/dev/ttyACM0`) but the Pi Zero W's `usb0` stays DOWN — `10.55.0.2` never reachable, ONLINE-mode API path can never engage, eye-remote is stuck.
+
+### Status
+
+- Issue opened 2026-05-15 10:27 by gkerma; PR [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143) opened 2 minutes later on `fix/139-round-image-usb0-otg-networking-dead-ifu`: "Round image: drop dead ifupdown config, give secubox sudo, fix misleading OTG comment (closes #139)"
+- Three-pronged fix: drop dead ifupdown config; grant `secubox` sudo; fix misleading OTG comment
+
+---
+
+## 🔄 2026-05-15: CMSD SPDX header rollout (Issue [#81](https://github.com/CyberMind-FR/secubox-deb/issues/81))
+
+### Status
+
+Worktree `secubox-deb-license-wt` on branch `feature/license-phase-b-full` at `aa1f7481` ("enroll all in-scope files via `**` allowlist (Phase B + C)"). Phase A + B + C work all on the branch but no PR opened yet.
+
+---
+
+## 🧹 2026-05-15: stale worktrees + local-state notes
+
+After successful merges of Phases 1 + 3, three 127-* worktrees can be cleaned via `scripts/agent-worktree.sh clean ...`:
+
+- `secubox-deb-worktrees/127-add-remote-ui-square-variant-for-pi-4b-7` (Phase 1, merged as `7c37415f`)
+- `secubox-deb-worktrees/127-phase2-square-variant` (Phase 2, closed/superseded)
+- `secubox-deb-worktrees/127-phase3-python-kiosk` (Phase 3, merged as `dee8bf8b`)
+
+**Local master state:** `master` is currently **4 ahead / 1 behind `origin/master`** — needs `git pull --rebase` before next push (the 1 behind is likely the squash-merge artifact of #137). Untracked: `.claude/settings.json` (pre-existing).
 
 ---
 
@@ -20,11 +90,24 @@ Replace Phase 2's Chromium+PySide6 dual-window stack with a single-process Pytho
 - Phase 2 PR #131 closed (superseded by Phase 3)
 - **Squash-merged 2026-05-14 as `dee8bf8b`** on master (after Phase 1 `7c37415f`)
 
-### Followups
+### Hardware gates — 3 of 4 closed (2026-05-15)
 
-- **Task 24 (Pi 400 manual sanity) — IN PROGRESS** this session: building `secubox-eye-square_0.2.0_arm64.img.xz` locally for flash to uSD.
-- **Task 23 (Pi 4B manual bench)** — still pending hardware (build + flash + boot + kiosk visible + OTG link to MOCHAbin).
-- Issue #127 stays open until both Pi 4B and Pi 400 benches pass.
+| Task | Hardware | Status |
+|------|----------|--------|
+| **Task 23** — Pi 4B square/ manual bench | Pi 4B + official 7" DSI 800×480 | ✅ kiosk renders correctly post-#134 fixes |
+| **Task 24** — Pi 400 square/ sanity | Pi 400 + HDMI 1920×1080 | ✅ same image, kiosk center-padded into letterbox (PR #134 second commit) |
+| **Task 19** — Pi Zero W round/ manual bench | Pi Zero W + HyperPixel 2.1 | ✅ booted from CI-built `secubox-eye-remote-2.2.1.img.xz`, rainbow ring dashboard clean post-`common/` |
+| Task 18 — round/ `diffoscope` regression gate | n/a (automated) | ⏳ still blocked on `hyperpixel2r.dtbo` prerequisite |
+
+### Bug haul from the bench (fixed in PR [#134](https://github.com/CyberMind-FR/secubox-deb/pull/134), merged `a3a918ed`)
+
+1. `/run/secubox` not recreated at boot (tmpfs wipe) → added `tmpfiles.d/secubox-eye-square.conf`
+2. `fonts-dejavu-core` missing from chroot apt-install → added
+3. `draw.text()` calls relied on Pillow legacy bitmap default (no Unicode) → `theme.DEFAULT_FONT` + `font=` kwarg on all 25 call sites
+4. `framebuffer.py` hardcoded 32bpp BGRA but `vc4drmfb` is 16bpp RGB565 → numpy RGB565 packer + `bits_per_pixel` auto-detect
+5. (followup) `framebuffer.py` hardcoded 800×480 → `virtual_size` auto-detect + center-pad for HDMI
+
+Issue #127 closure now gated only on Task 18. Bug #139 (round image OTG networking) and enhancement #138 (radar to common) were surfaced from the same bench session — see today's PRs above.
 
 ---
 
