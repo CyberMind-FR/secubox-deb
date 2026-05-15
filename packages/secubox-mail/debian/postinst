@@ -1,9 +1,23 @@
 #!/bin/sh
 set -e
+
 if [ "$1" = "configure" ]; then
+    # Phase 1 rev. 2: on upgrade from < 2.2, rewrite legacy toml + run
+    # the defensive scanner. Both are idempotent and refuse to touch
+    # /data/volumes/mail/vmail user data (spec invariant I13).
+    if dpkg --compare-versions "${2:-0}" lt-nl 2.2.0; then
+        if [ -x /usr/sbin/mailctl ]; then
+            /usr/sbin/mailctl migrate-config || true
+        fi
+        if [ -x /usr/sbin/mail-migrate-to-single-lxc.sh ]; then
+            /usr/sbin/mail-migrate-to-single-lxc.sh || true
+        fi
+    fi
+
     systemctl daemon-reload
     systemctl enable secubox-mail.service || true
     systemctl start secubox-mail.service || true
 fi
+
 #DEBHELPER#
 exit 0
