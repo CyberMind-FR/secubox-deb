@@ -1,9 +1,11 @@
-# Mail Stack Architecture — Phase 0 Design
+# Mail Stack Architecture — Phase 0 Design (rev. 2)
 
-**Date:** 2026-05-15
-**Status:** Approved (brainstorm complete, awaiting user review of this written spec)
+**Date:** 2026-05-15 (rev. 2 — reconciled with board reality)
+**Status:** Approved direction; revised invariants pending user re-confirmation
 **Author:** Gérald Kerma <devel@cybermind.fr>
 **Scope:** Architecture-only. Each implementation phase below gets its own spec → plan → PR cycle.
+
+> **Revision note (rev. 2, 2026-05-15):** Initial draft assumed a `/srv/lxc/` + `192.168.255.x` + `lxc.net.0.type = none` greenfield layout. Live board inspection on 2026-05-15 showed the actual single-`mail` LXC has already been hand-built on the test board with a modern unprivileged-veth layout under `/data/lxc/` + `/data/volumes/`. Invariants have been corrected; Phase 1 is reduced from "consolidate two LXCs" to "catch the repo source up to where the board already is, then deprecate the legacy package frame".
 
 ---
 
@@ -30,147 +32,145 @@ Deliver a "full-featured" multi-domain mail + collaboration stack inside a singl
 
 ## 3. Locked invariants
 
-These are the architectural decisions ratified during brainstorming on 2026-05-15. Each phase below MUST respect them. Changing one requires a new Phase 0 spec.
+Each phase below MUST respect these. Changing one requires a new Phase 0 revision.
 
 | # | Invariant |
 |---|---|
-| I1 | Exactly ONE LXC container named `mail` at `/srv/lxc/mail`. No separate `mailserver` and `roundcube` LXCs. |
-| I2 | Antispam stack is **Rspamd** (sole daemon for greylisting, spam scoring, DKIM signing+verify, SPF, DMARC, ARC). ClamAV remains as separate AV milter. SpamAssassin, Postgrey, OpenDKIM, opendmarc are removed. |
-| I3 | CardDAV + CalDAV are **not** served from the mail LXC. Roundcube plugins point at `https://nextcloud.gk2.secubox.in/remote.php/dav/`. |
-| I4 | Mail accounts are provisioned **by** `secubox-users`. The mail stack is a downstream consumer, not the authority. Local Dovecot user db is the materialized projection. |
-| I5 | Outbound delivery is **direct on port 25**. No smarthost relay. PTR/rDNS must be correct. |
-| I6 | Multi-domain virtual users. Mailbox path: `/srv/mail/<domain>/<user>/`. Per-domain DKIM key. |
-| I7 | Existing data is migrated from OpenWrt SecuBox via **imapsync** (Phase 7). Greenfield is acceptable for early phases. |
-| I8 | Webmail = Roundcube. SOGo / Cyrus / grommunio are explicitly rejected for this round. |
-| I9 | All container daemons listen on the LXC's IP only (`192.168.255.30`), exposed to the LAN/WAN via the host's HAProxy (TLS) and nginx (HTTP admin). |
-| I10 | Configuration source of truth: `/etc/secubox/mail.toml` on the host, rendered into the LXC by `mailctl`. No editing config inside the LXC. |
+| **I1** | Exactly ONE LXC named `mail` at `/data/lxc/mail` (symlinked from `/var/lib/lxc/mail`). No separate `mailserver` or `roundcube` LXCs. |
+| **I2** | LXC is **unprivileged** (`lxc.idmap = u 0 100000 65536`), veth on bridge `br-lxc`, IPv4 `10.100.0.10/24` with gateway `10.100.0.1`. AppArmor + `debian.common.conf` includes. |
+| **I3** | Antispam stack is **Rspamd** (single daemon: greylisting + spam scoring + DKIM sign+verify + SPF + DMARC + ARC). ClamAV remains as separate AV milter. SpamAssassin, Postgrey, OpenDKIM, opendmarc removed in Phase 2. |
+| **I4** | CardDAV + CalDAV are **not** served from the mail LXC. Roundcube plugins point at `https://nextcloud.gk2.secubox.in/remote.php/dav/`. |
+| **I5** | Mail accounts are provisioned **by** `secubox-users`. The mail stack is a downstream consumer. Local Dovecot is the materialized projection. |
+| **I6** | Outbound delivery is **direct on port 25**. No smarthost relay. |
+| **I7** | Multi-domain virtual users. Mailbox path: `/data/volumes/mail/vmail/<domain>/<user>/Maildir/`. Per-domain DKIM key (or Rspamd selector after Phase 2). |
+| **I8** | Existing data is migrated from OpenWrt SecuBox via **imapsync** (Phase 7). |
+| **I9** | Webmail = Roundcube. SOGo / Cyrus / grommunio rejected. |
+| **I10** | All container daemons listen on the LXC IP (`10.100.0.10`). Exposed to LAN/WAN via host's HAProxy (SMTP/IMAPS TCP pass-through) + nginx (admin + webmail HTTPS). |
+| **I11** | Configuration source of truth: `/etc/secubox/mail.toml` on the host. Rendered into the LXC by `mailctl`. No editing config inside the LXC. |
+| **I12** | **Persistent data lives on the host under `/data/volumes/mail/{vmail,config,ssl}`** and is bind-mounted into the LXC. Destroying the LXC rootfs MUST be safe — no production data lives in the rootfs. |
+| **I13** | **Existing mail data on the test board MUST be preserved.** As of 2026-05-15 the board hosts the `secubox.in` domain with five live mailboxes (`gk2`, `bat`, `bourdon`, `lemurien`, `ragondin`) under `/data/volumes/mail/vmail/secubox.in/`. Any upgrade path that touches the data directory MUST refuse to proceed if it cannot guarantee preservation. |
 
-## 4. Current state — what already exists
+## 4. Current state (test board 192.168.1.200, surveyed 2026-05-15)
 
-### 4.1 Packages (host-side)
-
-| Package | Lines | Role | Action |
-|---|---|---|---|
-| `secubox-mail` | ~3,200 (sbin) + 62 API endpoints | Admin UI + mailctl/mailserverctl/roundcubectl | **Refactor heavily** in phases 1–4 |
-| `secubox-webmail` | API + UI | Webmail admin (start/stop/config) | **Merge** into `secubox-mail` in Phase 1 |
-| `secubox-mail-lxc` | thin LXC wrapper | Standalone mail LXC controls | **Deprecate** in Phase 1 |
-| `secubox-webmail-lxc` | thin LXC wrapper | Standalone webmail LXC controls | **Deprecate** in Phase 1 |
-| `secubox-smtp-relay` | placeholder | SMTP relay/smarthost | Out of scope (invariant I5) |
-| `secubox-users` | full | Identity authority | **Integrate** in Phase 3 (provisioning hook) |
-| `secubox-dns` | full | DNS zone master | **Integrate** in Phase 3 (export MX/SPF/DKIM/DMARC records) |
-| `secubox-nextcloud` | full | CardDAV/CalDAV authority | **Integrate** in Phase 5 (Roundcube plugin target) |
-
-### 4.2 mailserverctl v2.6.0 capabilities (to be replaced/folded in)
-
-- LXC create/start/stop/restart/destroy
-- Postfix + Dovecot install via debootstrap
-- DKIM (OpenDKIM) — keygen, install, configure, sync ← **replaced by Rspamd in Phase 2**
-- SpamAssassin — setup, enable, disable, update ← **removed in Phase 2**
-- Postgrey — setup, enable, disable ← **removed in Phase 2**
-- ClamAV — setup, enable, disable, update ← **kept**
-- ACME — issue, renew, install ← **kept**
-- SSL — selfsigned, status ← **kept**
-
-### 4.3 Existing 62 API endpoints
-
-Inventory in `packages/secubox-mail/api/main.py`. Phase 1 keeps all paths stable; phases 2–8 add new ones. Removals (DKIM-via-OpenDKIM, spam-via-SA, grey-via-postgrey) are replaced by `/rspamd/*` in Phase 2 — the old paths become thin shims for one minor version, then disappear in v3.0.
+| Element | Reality |
+|---|---|
+| LXCs on board | `gitea`, `mail`, `matrix`, `mitmproxy`, `nextcloud`, `streamlit` |
+| `mail` LXC location | `/data/lxc/mail/` (symlinked from `/var/lib/lxc/mail`) |
+| `mail` LXC state | STOPPED (last touched 2026-05-08) |
+| `mail` LXC networking | unprivileged, veth `br-lxc`, `10.100.0.10/24`, gw `10.100.0.1` |
+| `mail` LXC bind mounts | `/data/volumes/mail/vmail` → `var/vmail`, `/data/volumes/mail/config` → `etc/mail-config`, `/data/volumes/mail/ssl` → `etc/ssl/mail` |
+| Inside-LXC software | Postfix, Dovecot (core+imapd+lmtpd+pop3d), Apache2+mod_php, nginx, OpenDKIM, SpamAssassin, Roundcube (core+plugins+classic+larry skins, mysql backend), php-net-sieve |
+| **NOT yet inside LXC** | Postgrey, ClamAV (planned by spec rev. 1 — never installed; rev. 2 drops Postgrey entirely and defers ClamAV to Phase 2) |
+| Persistent data | `/data/volumes/mail/vmail/{secubox.in/{gk2,bat,bourdon,lemurien,ragondin},gk2}`, `/data/volumes/mail/config/{main.cf,master.cf,vmailbox,virtual,vdomains,users,aliases,...}`, `/data/volumes/mail/ssl/{fullchain.pem,privkey.pem}` (Feb 2026 ACME issue) |
+| Host packages | `secubox-mail 2.1.0-1`, `secubox-mail-lxc 1.1.0-1`, `secubox-webmail 1.0.0-1`, `secubox-webmail-lxc 1.1.0-1` |
+| Host service | `secubox-mail.service` is `active` (FastAPI listens, but mail LXC isn't running) |
+| Postfix `main.cf` (in `/data/volumes/mail/config/`) | hostname `mail.secubox.in`, virtual mailbox domains via `/etc/postfix/vdomains`, SASL via Dovecot, TLS via `/etc/ssl/mail/`, Maildir layout |
+| Roundcube webserver | Apache2 + libapache2-mod-php8.2 (BOTH nginx and apache2 packages installed inside LXC; only one needed) |
+| Repo source layout (this tree) | Out of date: `mailctl` still references `/srv/lxc`, `/srv/mail`, `mail_container = "mailserver"`, `webmail_container = "roundcube"`, `192.168.255.30`. The single `mail` LXC was hand-built outside the repo. |
+| Host `mail.toml` | Out of date: still has `mail_container`, `webmail_container`, `mail_ip = "192.168.255.30"`, `webmail_ip = "192.168.255.31"` |
 
 ## 5. Target architecture
 
-### 5.1 LXC layout
+### 5.1 LXC layout (canonical)
 
 ```
-/srv/lxc/mail/                     # Single LXC root
-  rootfs/                          # Debian bookworm arm64
-    etc/postfix/
-    etc/dovecot/
-    etc/rspamd/
-    etc/clamav/
-    etc/apache2/  or  etc/nginx/   # Roundcube webserver
-    etc/roundcube/
-    etc/mlmmj/
-    opt/
-      start-mail.sh                # systemd-less init for the LXC
-      rspamd-hook.sh
-  config                           # LXC config (mounts, caps, cgroups)
+/var/lib/lxc/mail -> /data/lxc/mail   (symlink, host-side)
+/data/lxc/mail/
+    config                            # LXC config (unprivileged, veth, br-lxc, 10.100.0.10/24)
+    rootfs/                           # Debian bookworm arm64
+        etc/postfix/                  # rendered by mailctl (read-only at runtime)
+        etc/dovecot/
+        etc/rspamd/                   # Phase 2+
+        etc/clamav/                   # Phase 2+
+        etc/apache2/                  # Phase 1 keeps Apache; Phase 5 may revisit
+        etc/roundcube/
+        etc/mlmmj/                    # Phase 6+
+        opt/start-mail.sh             # init script run by lxc.init.cmd
 
-/srv/mail/                         # Persistent data, bind-mounted into LXC
-  vmail/<domain>/<user>/           # Maildir per virtual user
-  dkim/<domain>/                   # Per-domain RSA 2048 keys
-  ssl/                             # ACME-issued certs
-  rspamd/                          # Bayes corpus + history
-  clamav/                          # Virus signature DB
-  mlmmj/<list>/                    # Mailing list spools
-  sieve/<domain>/<user>/           # Per-user sieve scripts
-  roundcube/                       # Roundcube user data (logs, plugins state)
+/data/volumes/mail/                   # Persistent data (bind-mounted into LXC)
+    vmail/                            # Maildirs
+        secubox.in/<user>/Maildir/
+        <future-domain>/<user>/Maildir/
+    config/                           # Postfix/Dovecot lookup tables, owned by host
+        main.cf, master.cf
+        users, vmailbox, virtual, valias, vdomains, aliases
+        *.lmdb (rebuilt by postmap)
+    ssl/                              # ACME-issued certs (host renews, container reads)
+        fullchain.pem, privkey.pem
+    dkim/                             # per-domain keys (Phase 2 owned by Rspamd)
+    rspamd/                           # Phase 2 — bayes corpus, history
+    clamav/                           # Phase 2 — virus signature DB
+    sieve/                            # Phase 4 — per-user sieve scripts
+    mlmmj/                            # Phase 6 — mailing list spools
+    roundcube/                        # Phase 5 — user data, logs, plugin state
 ```
 
 ### 5.2 Network and ports
 
-LXC IP: `192.168.255.30` (LAN bridge). No NAT, no veth — uses host network namespace bridge.
+LXC IP: `10.100.0.10` (br-lxc). Gateway: `10.100.0.1` (host bridge).
 
 | Listener | Port | Protocol | Exposed how |
 |---|---|---|---|
-| Postfix smtpd | 25 | SMTP | LAN + WAN (DNAT from host) |
-| Postfix submission | 587 | SMTP+STARTTLS+SASL | LAN + WAN |
-| Postfix submissions | 465 | SMTPS+SASL | LAN + WAN |
+| Postfix smtpd | 25 | SMTP | HAProxy TCP pass-through, WAN |
+| Postfix submission | 587 | SMTP+STARTTLS+SASL | HAProxy TCP pass-through, WAN |
+| Postfix submissions | 465 | SMTPS+SASL | HAProxy TCP pass-through, WAN |
 | Dovecot imap | 143 | IMAP+STARTTLS | LAN only |
-| Dovecot imaps | 993 | IMAPS | LAN + WAN |
-| Dovecot ManageSieve | 4190 | sieve+STARTTLS | LAN + WAN |
-| Rspamd controller | 11334 | HTTP | LAN admin only, behind host nginx |
-| Rspamd worker | 11332 | milter | localhost-in-LXC only |
-| ClamAV milter | 8894 | milter | localhost-in-LXC only |
-| Roundcube HTTP | 80 / 443 | HTTP | Behind host HAProxy on `webmail.<domain>` |
-| mlmmj-receive | n/a | local pipe via Postfix transport | — |
+| Dovecot imaps | 993 | IMAPS | HAProxy TCP pass-through, WAN |
+| Dovecot ManageSieve | 4190 | sieve+STARTTLS | HAProxy TCP pass-through, WAN |
+| Rspamd controller | 11334 | HTTP | Behind host nginx admin auth (Phase 2+) |
+| Rspamd worker | 11332 | milter | Localhost-in-LXC only (Phase 2+) |
+| ClamAV milter | 8894 | milter | Localhost-in-LXC only (Phase 2+) |
+| Roundcube HTTP (Apache or nginx) | 80 / 443 | HTTP | Behind host nginx on `webmail.<domain>` |
 
 Host nginx publishes:
-- `https://mail-admin.gk2.secubox.in/` → SecuBox admin UI (this packages's `www/mail/`)
-- `https://webmail.gk2.secubox.in/` → Roundcube in LXC
-- `https://mail.gk2.secubox.in/.well-known/autoconfig/...` → autoconfig responses from FastAPI
-- `https://rspamd.gk2.secubox.in/` → Rspamd UI (admin auth)
+- `https://mail-admin.gk2.secubox.in/` → FastAPI on UNIX socket `/run/secubox/mail.sock`
+- `https://webmail.gk2.secubox.in/` → `http://10.100.0.10:80/` (Roundcube)
+- `https://mail.gk2.secubox.in/.well-known/autoconfig/...` → FastAPI autoconfig
+- `https://rspamd.gk2.secubox.in/` → `http://10.100.0.10:11334/` (Phase 2+, admin-auth gated)
 
-### 5.3 Daemon inventory (final state, end of Phase 8)
+### 5.3 Daemon inventory (end of Phase 8)
 
 Inside `mail` LXC:
 
-| Daemon | Source | Role |
-|---|---|---|
-| Postfix | Debian | MTA |
-| Dovecot | Debian | IMAP + LMTP + ManageSieve + SASL auth backend |
-| Rspamd | Debian | Greylist + spam + DKIM + SPF + DMARC + ARC + ratelimit |
-| ClamAV (clamd + clamav-milter) | Debian | Virus scan |
-| Roundcube | Debian | Webmail (PHP-FPM + Apache or nginx) |
-| mlmmj | Debian | Mailing lists |
-| acme.sh | upstream | TLS cert renewal |
-| imapsync | upstream | One-shot per migration job, not a long-running daemon |
+| Daemon | Source | Role | Phase added |
+|---|---|---|---|
+| Postfix | Debian | MTA | already on board |
+| Dovecot | Debian | IMAP + LMTP + ManageSieve + SASL auth | already on board |
+| Apache2 + mod_php | Debian | Roundcube webserver | already on board (Phase 5 may migrate to nginx+php-fpm) |
+| Roundcube | Debian | Webmail (with classic/larry skins, plugins) | already on board |
+| Rspamd | Debian | Greylist + spam + DKIM + SPF + DMARC + ARC + ratelimit | Phase 2 |
+| ClamAV (clamd + clamav-milter) | Debian | Virus scan | Phase 2 |
+| mlmmj | Debian | Mailing lists | Phase 6 |
+| acme.sh | upstream | TLS cert renewal | host-side, already wired |
+| imapsync | upstream | One-shot per migration job | Phase 7 |
 
-No SpamAssassin, no Postgrey, no OpenDKIM, no opendmarc.
+**Daemons removed by Phase 2:** SpamAssassin, OpenDKIM. (Postgrey was planned by rev. 1 but never installed; dropped from scope.)
 
-### 5.4 Identity / provisioning flow
+### 5.4 Identity / provisioning flow (Phase 3)
 
 ```
-secubox-users API  ──"user.created"──▶  mail provisioning webhook
-                                         │
-                                         ▼
-                                   mailctl provision <user@domain>
-                                         │
-                                         ├──▶ /srv/mail/vmail/<domain>/<user>/  (mkdir + perms)
-                                         ├──▶ Dovecot passwd-file: append entry (hashed password)
-                                         ├──▶ Postfix virtual_mailbox_maps: append
-                                         └──▶ Notify Rspamd (no-op for now, hook for per-user policies)
+secubox-users API ──"user.created"──▶ mail provisioning webhook
+                                       │
+                                       ▼
+                                 mailctl provision <user@domain>
+                                       │
+                                       ├──▶ /data/volumes/mail/vmail/<domain>/<user>/Maildir (mkdir + perms)
+                                       ├──▶ append /data/volumes/mail/config/users (Dovecot passwd-file, SHA512-CRYPT)
+                                       ├──▶ append /data/volumes/mail/config/vmailbox (Postfix virtual_mailbox_maps)
+                                       └──▶ postmap if needed; notify Rspamd
 ```
 
-Password sync: `secubox-users` POSTs `/internal/password` (mTLS or shared-secret over UNIX socket) on every password change. No password is stored in the mail LXC outside Dovecot's auth-passdb.
+Password sync: `secubox-users` POSTs `/internal/password` over UNIX socket on every change. No password ever leaves the host except as the SHA512-CRYPT hash already stored in Dovecot's `users` file.
 
 ### 5.5 DNS records owned by the mail stack
 
-For each managed domain, `mailctl dns-records <domain>` emits the records that `secubox-dns` must publish:
+For each managed domain, `mailctl dns-records <domain>` emits records `secubox-dns` must publish:
 
 ```
 mail.<domain>           A      <public IP>
 <domain>                MX 10  mail.<domain>.
 <domain>                TXT    "v=spf1 mx -all"
-default._domainkey.<domain>  TXT  "v=DKIM1; k=rsa; p=<pubkey>"
+default._domainkey.<domain>   TXT  "v=DKIM1; k=rsa; p=<pubkey>"
 _dmarc.<domain>         TXT    "v=DMARC1; p=quarantine; rua=mailto:postmaster@<domain>; ruf=mailto:postmaster@<domain>; adkim=s; aspf=s"
 _imaps._tcp.<domain>    SRV    "0 1 993 mail.<domain>."
 _submission._tcp.<domain> SRV  "0 1 587 mail.<domain>."
@@ -178,165 +178,114 @@ autoconfig.<domain>     CNAME  mail.<domain>.
 autodiscover.<domain>   CNAME  mail.<domain>.
 ```
 
-Phase 3 wires this to `secubox-dns` via API call instead of manual paste.
+Phase 3 wires this to `secubox-dns` via API.
 
 ### 5.6 `mail.toml` schema (target — end of Phase 3)
 
 ```toml
 [mail]
 enabled = true
-hostname = "mail.gk2.secubox.in"           # host of the mail LXC (used in HELO, certs)
-data_path = "/srv/mail"
-lxc_path = "/srv/lxc"
-container = "mail"                          # single LXC name
-lxc_ip = "192.168.255.30"
+hostname = "mail.gk2.secubox.in"
+container = "mail"
+lxc_path = "/var/lib/lxc"          # symlink to /data/lxc on this board
+data_path = "/data/volumes/mail"
+lxc_ip = "10.100.0.10"
+lxc_bridge = "br-lxc"
+lxc_gateway = "10.100.0.1"
 
 [[mail.domain]]
-name = "gk2.secubox.in"
-primary = true                              # one domain MUST be primary (postmaster, ACME)
-dkim_selector = "default"                   # selector for DKIM TXT record
-dmarc_policy = "quarantine"                 # none | quarantine | reject
-catchall = ""                               # optional catchall recipient
-
-[[mail.domain]]
-name = "cybermind.fr"
-primary = false
+name = "secubox.in"
+primary = true
 dkim_selector = "default"
 dmarc_policy = "quarantine"
+catchall = ""
 
 [mail.tls]
-provider = "acme"                           # acme | manual | selfsigned
-acme_email = "postmaster@gk2.secubox.in"
+provider = "acme"
+acme_email = "postmaster@secubox.in"
 
-[mail.rspamd]
+[mail.rspamd]                        # Phase 2+
 greylist = true
 bayes_autolearn = true
-ratelimit_outbound = "100/h/user"           # postfix-policyd-style rate limits
+ratelimit_outbound = "100/h/user"
 
-[mail.identity]
-source = "secubox-users"                    # secubox-users | local
-provisioning_url = "http://127.0.0.1:8093/api/v1/users"  # for pull-on-startup reconciliation
+[mail.identity]                      # Phase 3+
+source = "secubox-users"
+provisioning_url = "http://127.0.0.1:8093/api/v1/users"
 
-[mail.dav]
-provider = "secubox-nextcloud"              # secubox-nextcloud | radicale | none
+[mail.dav]                           # Phase 5+
+provider = "secubox-nextcloud"
 url = "https://nextcloud.gk2.secubox.in/remote.php/dav/"
 
-[mail.webmail]
+[mail.webmail]                       # Phase 5+
 enabled = true
 url = "https://webmail.gk2.secubox.in/"
 plugins = ["managesieve", "carddav", "calendar", "enigma", "twofactor"]
 
-[mail.lists]
-enabled = true
-default_domain = "lists.gk2.secubox.in"     # mlmmj base
+[mail.lists]                         # Phase 6+
+enabled = false
+default_domain = "lists.gk2.secubox.in"
 ```
 
-## 6. Phase plan
+## 6. Phase plan (revised)
 
-Each phase below produces its own design spec, plan, and PR. Phases 5–8 can interleave once Phase 3 is merged; phases 1→2→3→4 are strictly sequential.
+Phase 1 is now substantially smaller: most of the architectural bones are already on the board; the repo source just doesn't reflect them yet.
 
-### Phase 1 — LXC consolidation
-- **Goal:** Collapse `mailserver` + `roundcube` LXCs into single `mail` LXC.
-- **Deliverables:**
-  - New `mailctl` skeleton driving `/srv/lxc/mail`
-  - Data migration script: `/srv/lxc/mailserver/rootfs/var/mail/*` → `/srv/mail/vmail/`, similar for Roundcube state
-  - `secubox-mail-lxc` and `secubox-webmail-lxc` marked `Conflicts:` and removed via `postinst`
-  - Roundcube installed inside `mail` LXC (Apache or nginx; one webserver chosen here)
-  - Nginx host proxy updated: `webmail.<domain>` → LXC, `mail-admin.<domain>` → secubox-mail FastAPI
-  - All existing 62 API endpoints still answer (no contract break this phase)
-- **Acceptance:** old endpoints respond; one LXC running; `lxc-ls` shows only `mail`; smoke test sends + reads a message via IMAPS.
+| # | Phase | Effort | Critical-path? |
+|---|---|---|---|
+| **0** | Architecture spec (this doc, rev. 2) | done | — |
+| **1** | **Reconcile source ↔ board, deprecate legacy packages, lock the data contract** | 2–3 days | yes |
+| **2** | Rspamd migration (drops SA + OpenDKIM, adds ClamAV) | 1 wk | yes |
+| **3** | Multi-domain + `secubox-users` provisioning hook | 1.5 wk | yes |
+| **4** | ManageSieve + quotas + vacation | 1 wk | yes |
+| **5** | Roundcube polish + Nextcloud DAV bridge + (optional) Apache→nginx+php-fpm | 1 wk | no |
+| **6** | mlmmj mailing lists + shared mailboxes | 1 wk | no |
+| **7** | imapsync migration tooling | 1 wk | no |
+| **8** | Self-service portal + observability + outbound abuse policies | 1.5 wk | no |
 
-### Phase 2 — Rspamd migration
-- **Goal:** Replace SA + Postgrey + OpenDKIM + opendmarc with Rspamd.
-- **Deliverables:**
-  - Rspamd installed inside LXC, milter on `127.0.0.1:11332`
-  - `smtpd_milters = inet:127.0.0.1:11332` in Postfix
-  - Per-domain DKIM keys moved from `/etc/opendkim/keys/<domain>/` to `/srv/mail/dkim/<domain>/`; Rspamd `dkim_signing` module reads them
-  - SA / Postgrey / OpenDKIM / opendmarc removed (apt purge) inside LXC
-  - Rspamd web UI behind host nginx with admin JWT
-  - New endpoints: `/rspamd/{status,history,learn-spam,learn-ham,scores}`
-  - Old endpoints `/spam/*`, `/grey/*`, `/dkim/*` proxied to Rspamd-equivalent for one release, then dropped in v3.0
-- **Acceptance:** Postfix logs show milter wins through Rspamd; DKIM-Signature header present on outbound; spam test (GTUBE) blocked; greylist visible in Rspamd UI.
+**Total:** ~8 weeks. Phase 5–8 can interleave once Phase 3 is in.
 
-### Phase 3 — Multi-domain + identity wiring
-- **Goal:** Make the stack truly multi-domain and driven by `secubox-users`.
-- **Deliverables:**
-  - Dovecot vmail with `mail_location = maildir:/srv/mail/vmail/%d/%n`
-  - Postfix `virtual_mailbox_domains/maps/alias_maps` as flat files synced by `mailctl reconcile`
-  - Per-domain DKIM keygen + publish via `secubox-dns` API
-  - `secubox-users` provisioning hook: webhook handler in secubox-mail API that consumes user-lifecycle events
-  - `mailctl reconcile` command: pull full user list from `secubox-users`, diff against local state, apply
-  - `[[mail.domain]]` array in `mail.toml`; old single `domain=` value migrated automatically
-  - Autoconfig/autodiscover/mobileconfig respond per-domain
-- **Acceptance:** create user in secubox-users UI → mailbox auto-provisioned within 5s; second domain added via `mailctl domain add` produces DKIM record visible in DNS UI.
+### Phase 1 — revised goal: "source-catch-up + legacy package cleanup"
 
-### Phase 4 — ManageSieve + quotas + vacation
-- **Goal:** Per-user features expected by any modern mail client.
-- **Deliverables:**
-  - Dovecot ManageSieve listener on 4190
-  - Dovecot quota plugin (per-user, configurable default in `mail.toml`)
-  - Vacation/auto-reply via Sieve (`vacation` extension)
-  - Roundcube ManageSieve plugin enabled
-  - API: `/user/{email}/quota`, `/user/{email}/sieve`, `/user/{email}/vacation`
-- **Acceptance:** Roundcube Filters tab works; over-quota mail is rejected with 5.2.2; vacation reply throttle-once-per-day verified.
+**Deliverables**
+- Repo source updated to canonical paths/IP: `/var/lib/lxc/mail`, `/data/volumes/mail`, `10.100.0.10`, unprivileged veth br-lxc. (`mailctl`, `mailserverctl`, `roundcubectl`, `api/main.py`.)
+- `mail.toml` schema: single `container`, `lxc_ip`, `lxc_bridge`, `lxc_gateway`, `data_path`. Drop `mail_container`/`webmail_container`/`mail_ip`/`webmail_ip`/`webmail_port`.
+- `lib/install.sh` + `lib/lxc.sh` extracted from `mailserverctl` for re-use.
+- `mailctl migrate-config` rewrites a legacy `mail.toml` in place. Idempotent.
+- `mail-migrate-to-single-lxc.sh` becomes a defensive **scanner** that detects old `mailserver`/`roundcube` LXC directories (none expected on this board) and old toml keys, and applies safe migration. **Refuses to touch `/data/volumes/mail/` if data is present** (per I13).
+- Legacy `secubox-mail-lxc`, `secubox-webmail-lxc`, `secubox-webmail` packages → transitional metadata-only `2.2.0` packages that just `Depends: secubox-mail (>= 2.2)`.
+- `secubox-mail` bumps to `2.2.0` (one minor higher than current `2.1.0`) with `Breaks:`/`Replaces:` against the transitional packages.
+- Host nginx vhost: `mail-admin.<base>` → FastAPI socket; `webmail.<base>` → `http://10.100.0.10:80/`. Replaces both `packages/secubox-mail/nginx/mail.conf` and `packages/secubox-webmail/nginx/webmail.conf` with one `common/nginx/modules.d/mail.conf`.
+- HAProxy SMTP/submission/IMAPS/sieve backends targeting `10.100.0.10`.
+- API `main.py` updated to read new keys; all 62 endpoints respond non-5xx (presence test).
+- Acceptance: from clean checkout + deploy, `mailctl status` correctly reports the existing `mail` LXC; `mailctl start` brings it up; existing 5 `secubox.in` users can IMAP login; Roundcube responds via host proxy.
 
-### Phase 5 — Roundcube polish + groupware delegation
-- **Goal:** Make Roundcube feel like part of SecuBox and surface contacts/calendars from Nextcloud.
-- **Deliverables:**
-  - Roundcube CardDAV plugin (`kolab/carddav` or `larsneo/carddav`) pointed at `https://nextcloud.<domain>/remote.php/dav/addressbooks/users/<user>/contacts/`
-  - Roundcube CalDAV plugin similarly
-  - Enigma (PGP) plugin enabled with per-user keyrings under `/srv/mail/roundcube/pgp/<user>/`
-  - 2FA plugin (TOTP) enabled, sharing secret store with `secubox-users` if possible
-  - SecuBox CRT-light theme ported to Roundcube skin format
-- **Acceptance:** Roundcube address book lists Nextcloud contacts; calendar view shows Nextcloud events; PGP-signed test message verified end-to-end.
-
-### Phase 6 — Mailing lists + shared mailboxes
-- **Goal:** Collaboration features.
-- **Deliverables:**
-  - mlmmj installed in LXC
-  - Postfix transport map: `<list>@lists.<domain>` → `mlmmj:/srv/mail/mlmmj/<list>`
-  - Dovecot `acl` plugin for shared mailbox grants
-  - List admin UI under `/api/v1/mail/list/*`
-- **Acceptance:** create list, subscribe two users, post a message, both receive; share a folder from user A to user B, B sees it in Roundcube.
-
-### Phase 7 — Migration tooling (imapsync)
-- **Goal:** Import existing mail from OpenWrt SecuBox or any external IMAP.
-- **Deliverables:**
-  - `imapsync` packaged inside LXC (or invoked from host via lxc-attach)
-  - UI: add source credentials, map source-user → target-user@domain, schedule sync
-  - Progress tracker in API (`/migrate/job/{id}`)
-  - Bulk-import helper for OpenWrt SecuBox dump format
-- **Acceptance:** sync a 500-message mailbox from external IMAP, target receives all messages with flags preserved, UI shows job complete.
-
-### Phase 8 — Self-service portal + observability + abuse handling
-- **Goal:** End-user UX + ops hygiene.
-- **Deliverables:**
-  - Self-service portal (separate nginx vhost or sub-path under webmail): change password, vacation, aliases, app-passwords, sieve editor, quota gauge
-  - Postfix/Dovecot/Rspamd metrics exported to `secubox-metrics`
-  - Outbound rate-limit policy (Rspamd `ratelimit` module + Postfix policy delegation)
-  - Bounce/NDR parsing dashboard
-- **Acceptance:** end user logs in to portal with their normal mail credentials, changes password, sees change reflected next login; outbound burst above policy is throttled with 4xx; bounce summary visible in admin UI.
+**Explicitly out of Phase 1:**
+- Installing Postgrey / ClamAV inside the LXC — Phase 2 handles ClamAV; Postgrey is dropped entirely.
+- Multi-domain refactor — Phase 3.
+- Apache → nginx+php-fpm migration — Phase 5 if desired.
+- Roundcube CardDAV/CalDAV plugin wiring — Phase 5.
 
 ## 7. Deprecations and breaking changes
 
 | Item | Phase | Migration |
 |---|---|---|
-| `secubox-mail-lxc` package | 1 | `apt purge` on upgrade; postinst checks for old LXC and migrates data |
+| `secubox-mail-lxc` package | 1 | Transitional 2.2.0 stub depending on `secubox-mail (>= 2.2)`. Removed entirely in 3.0. |
 | `secubox-webmail-lxc` package | 1 | Same |
-| `secubox-webmail` package | 1 | Folded into `secubox-mail`; postinst migrates `/etc/secubox/webmail.toml` keys into `[mail.webmail]` table |
-| `mail_container` + `webmail_container` in `mail.toml` | 1 | Replaced by single `container` key |
-| `mail_ip` + `webmail_ip` | 1 | Replaced by single `lxc_ip` |
-| OpenDKIM (and `/dkim/*` API surface) | 2 | Rspamd DKIM module; old endpoints proxy for one minor version, removed in v3.0 |
-| SpamAssassin (`/spam/*`) | 2 | Same pattern |
-| Postgrey (`/grey/*`) | 2 | Same pattern |
-| opendmarc | 2 | Rspamd DMARC module |
-| `domain` (scalar) in `mail.toml` | 3 | Migrated to `[[mail.domain]]` array by `mailctl migrate-config` |
+| `secubox-webmail` package | 1 | Same — its API surface folded into `secubox-mail` API. |
+| `mail_container`, `webmail_container`, `mail_ip`, `webmail_ip`, `webmail_port` in `mail.toml` | 1 | `mailctl migrate-config` rewrites to single `container`/`lxc_ip` + comments the old keys for one release. |
+| `/srv/lxc/`, `/srv/mail/` paths in source | 1 | Replaced by `/var/lib/lxc/` and `/data/volumes/mail/` everywhere. |
+| `192.168.255.30/31` IP literals in source | 1 | Replaced by `10.100.0.10` (and `lxc_ip` lookup from toml). |
+| OpenDKIM (`/dkim/*` API) | 2 | Rspamd DKIM module; old endpoints proxy for one minor version, removed in 3.0. |
+| SpamAssassin (`/spam/*`) | 2 | Rspamd spam scoring; same pattern. |
+| Postgrey (`/grey/*`) | 2 | Rspamd greylist module; the `/grey/*` endpoints were stubbed but Postgrey was never installed — endpoints return informative deprecation responses. |
+| `domain` scalar in `mail.toml` | 3 | Migrated to `[[mail.domain]]` array. |
 
 ## 8. GitHub issue plan
 
 | # | Title | Label | Phase |
 |---|---|---|---|
-| TBD | Mail stack: Phase 1 — consolidate to single LXC | `migration,wip` | 1 |
+| TBD | Mail stack: Phase 1 — source-catch-up + legacy package cleanup | `migration,wip` | 1 |
 | TBD | Mail stack: Phase 2 — Rspamd migration | `migration,security` | 2 |
 | TBD | Mail stack: Phase 3 — multi-domain + secubox-users integration | `migration,api` | 3 |
 | TBD | Mail stack: Phase 4 — ManageSieve + quotas + vacation | `api,frontend` | 4 |
@@ -345,24 +294,23 @@ Each phase below produces its own design spec, plan, and PR. Phases 5–8 can in
 | TBD | Mail stack: Phase 7 — imapsync migration tooling | `migration` | 7 |
 | TBD | Mail stack: Phase 8 — self-service portal + metrics + abuse | `frontend,infra` | 8 |
 
-Issues are filed when each phase begins, not all at once. Each phase ref's its issue in commits per CLAUDE.md workflow.
+Issues filed at start of each phase.
 
 ## 9. Open questions (deferred to per-phase specs)
 
-- **Roundcube webserver:** Apache+mod_php vs nginx+php-fpm inside LXC — picked in Phase 1 spec.
-- **mlmmj vs Mailman 3:** Phase 6 picks. mlmmj is far lighter; Mailman 3 has a much richer UI.
-- **PGP key escrow:** does the self-service portal allow end users to upload/replace PGP keys, or read-only after import?
-- **Secret material in `secubox-users`:** can the mail provisioning hook receive plain passwords (forwarded to Dovecot SHA512-CRYPT), or only hash-on-arrival?
-- **HAProxy frontend for SMTP:** terminate TLS at HAProxy and forward to Postfix on plain socket, or pass-through to Postfix with its own cert? Phase 1 decides.
+- **Roundcube webserver (Phase 5):** Keep Apache+mod_php (current) or migrate to nginx+php-fpm? Decided in Phase 5 spec. Phase 1 does **not** touch this.
+- **PGP key escrow (Phase 5/8):** read-only after import vs. user-managed in self-service portal?
+- **HAProxy SMTP cert handling:** TCP pass-through (current direction) vs. terminate at HAProxy with shared cert. Phase 1 stays pass-through; revisit only if cert renewal proves painful.
+- **Mailing list tool (Phase 6):** mlmmj vs. Mailman 3?
 
-## 10. ANSSI / CSPN posture (CLAUDE.md §🛡️)
+## 10. ANSSI / CSPN posture
 
-- **Privilege separation:** every daemon under its dedicated user (`postfix`, `dovecot`, `rspamd`, `clamav`, `roundcube`, `mlmmj`). LXC adds a second layer.
-- **Audit logging:** all admin actions (provision, delete, password reset, sieve edit) appended to `/srv/mail/audit.log` and to `secubox-users` audit stream.
-- **Double-buffer config:** `mailctl` writes Postfix/Dovecot/Rspamd config under `/srv/mail/config/shadow/`, validates with `postfix check` / `doveconf -n`, then atomic-swap to `active/`. Rollback keeps R1..R4 snapshots.
-- **AppArmor profiles:** one per daemon, shipped by `secubox-mail` debian/, enforced in `postinst`.
-- **Secrets:** Dovecot SHA512-CRYPT only; DKIM private keys chmod 600 owned by `_rspamd`; ACME private keys chmod 600 owned by `root`. None ever leave the host.
+- **Privilege separation:** every daemon under its own user. LXC unprivileged adds a second layer (root inside LXC = uid 100000 outside).
+- **Audit logging:** all admin actions (provision, delete, password reset, sieve edit) appended to `/data/volumes/mail/audit.log` and to `secubox-users` audit stream.
+- **Double-buffer config:** `mailctl` writes Postfix/Dovecot/Rspamd config under `/data/volumes/mail/config/shadow/`, validates with `postfix check` / `doveconf -n`, atomic-swap to `active/`. Keeps R1..R4.
+- **AppArmor profiles:** one per daemon, shipped by `secubox-mail` debian/, enforced via `postinst`.
+- **Secrets:** Dovecot SHA512-CRYPT only; DKIM private keys 0600 owned by `_rspamd` (post-Phase-2); ACME private keys 0600 owned by root. Nothing leaves the host.
 
 ---
 
-**End of Phase 0 spec.** Next step: brainstorm Phase 1 (LXC consolidation) in its own session.
+**End of Phase 0 spec rev. 2.** Next: revised Phase 1 plan, then user re-confirmation, then execution.
