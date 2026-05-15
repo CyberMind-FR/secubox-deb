@@ -11,10 +11,16 @@ ratio for ring/arc fill.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Callable
 
 from . import theme
+
+# MIND extract divides load_avg by core count so the arc reads
+# 100% when the CPU is fully saturated regardless of board: Pi Zero W
+# (single-core), Pi 4B / Pi 400 (quad). Evaluated once at import time.
+_CPU_COUNT: float = float(os.cpu_count() or 4)
 
 
 def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -49,7 +55,7 @@ MODULES: list[Module] = [
     Module(
         name="MIND", colour=theme.MIND, icon_name="mind",
         metric="load_avg_1",
-        extract=lambda s: _clamp(s.get("load_avg_1", 0.0) / 4.0),
+        extract=lambda s: _clamp(s.get("load_avg_1", 0.0) / _CPU_COUNT),
     ),
     Module(
         name="ROOT", colour=theme.ROOT, icon_name="root",
