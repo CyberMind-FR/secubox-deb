@@ -3,7 +3,7 @@
 
 ---
 
-## ✅ 2026-05-15: Mail stack Phase 1 — LXC consolidation + source catch-up (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED `32190507`)
+## 🔄 2026-05-15: Mail stack Phase 1 — LXC consolidation (Issue [#136](https://github.com/CyberMind-FR/secubox-deb/issues/136), PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED `32190507` + follow-up PR [#144](https://github.com/CyberMind-FR/secubox-deb/pull/144) OPEN)
 
 ### Objective
 
@@ -12,11 +12,20 @@ Catch the in-repo source up to the test board's `/data/lxc/mail` + `/data/volume
 ### Status (worktree `136-mail-stack-phase-1-source-catch-up-legac`, branch `feature/136-mail-stack-phase-1-source-catch-up-legac`)
 
 - Phase 0 spec rev. 2 (`docs/superpowers/specs/2026-05-15-mail-stack-architecture-design.md`) + Phase 1 plan + rollback recipe committed to master
-- mailctl/mailser feature commits landed (latest `bade94f1`)
+- mailctl/mailser feature commits landed
 - Versions bumped to 2.2.0 with `Breaks/Replaces` markers on the three legacy packages
 - HAProxy mail-TCP snippet targets new `10.100.0.10`
 - Test coverage shipped: 62-route endpoint-presence pytest + end-to-end acceptance smoke
-- **PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) opened** today — awaiting review + live deploy/cutover on test board
+- **PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141) MERGED** as `32190507`
+
+### Follow-up PR [#144](https://github.com/CyberMind-FR/secubox-deb/pull/144) (OPEN, post-merge fixes)
+
+Two small fixes caught after #141 landed, on the same branch:
+
+- `529f5ec7` `fix(mail): move lib/{lxc,install,migrate}.sh into lib/mail/` — debian/rules ships `lib/mail/*` to `/usr/lib/secubox/mail/lib/`; the Phase 1 commit landed helpers under `lib/` so they never reached the installed path.
+- `6f6f98a5` `fix(mail): mailctl cmd_install sources lib/mail/{lxc,install}.sh` — `cmd_install` was still shelling out to `mailserverctl install` / `roundcubectl install` (now deprecation shims per Phase 1). Rewritten to source the moved helpers and call `bootstrap_debian` + `lxc_create_config` + `lxc_start_safely` + `install_{mail,webmail}_packages` + `configure_{postfix,dovecot,…}` directly.
+
+Both pair tightly — kept as a separate PR so Phase 1's squash boundary stays clean in `git log`.
 
 ---
 
@@ -121,7 +130,7 @@ Branches `feature/135-…`, `feature/138-…`, `fix/139-…` deleted locally. Wo
 
 | Worktree | Branch | Status |
 |---|---|---|
-| `136-mail-stack-phase-1-source-catch-up-legac` | `feature/136-…` | PR #141 MERGED; uncommitted real WIP retained (mailctl refactor) |
+| `136-mail-stack-phase-1-source-catch-up-legac` | `feature/136-…` | PR #141 MERGED + post-merge follow-up PR #144 OPEN (`529f5ec7` + `6f6f98a5`) |
 | `secubox-deb-license-wt` | `feature/license-phase-b-full` | SPDX rollout #81, no PR yet |
 
 ---
