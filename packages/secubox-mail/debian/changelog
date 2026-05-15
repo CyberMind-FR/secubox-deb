@@ -1,3 +1,20 @@
+secubox-mail (2.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 1 source-catch-up: canonical paths /var/lib/lxc/mail +
+    /data/volumes/mail, IP 10.100.0.10 (unprivileged veth br-lxc).
+  * Extract lib/install.sh + lib/lxc.sh + lib/migrate.sh from mailserverctl.
+  * mailctl gains migrate-config subcommand; mailserverctl + roundcubectl
+    reduced to deprecation shims (will be removed in 3.0).
+  * mail-migrate-to-single-lxc.sh added as defensive scanner — respects
+    spec invariant I13 (existing /data/volumes/mail/vmail data preserved).
+  * HAProxy mail-TCP snippet shipped at packages/secubox-mail/haproxy/
+    targeting 10.100.0.10.
+  * Breaks/Replaces transitional secubox-mail-lxc / secubox-webmail-lxc /
+    secubox-webmail packages (<< 2.2).
+  * Closes: #136
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 15 May 2026 12:00:00 +0200
+
 secubox-mail (2.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Enhanced frontend with security features dashboard
