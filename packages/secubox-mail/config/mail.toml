@@ -1,21 +1,21 @@
-# SecuBox Mail Server Configuration
+# SecuBox Mail Server Configuration — Phase 1 rev. 2 (single LXC, canonical paths)
 
 [mail]
 enabled = true
 domain = "secubox.local"
 hostname = "mail"
-data_path = "/srv/mail"
-lxc_path = "/srv/lxc"
 
-# Mail server container
-mail_container = "mailserver"
-mail_ip = "192.168.255.30"
+# Single consolidated LXC (Phase 1 rev. 2)
+container = "mail"
+lxc_ip = "10.100.0.10"
+lxc_bridge = "br-lxc"
+lxc_gateway = "10.100.0.1"
+lxc_path = "/var/lib/lxc"
+data_path = "/data/volumes/mail"
 
-# Webmail container
-webmail_container = "roundcube"
-webmail_ip = "192.168.255.31"
-webmail_port = 8027
+# Webmail is served by the same LXC; this URL is the host-side proxy target
+webmail_url = "https://webmail.gk2.secubox.in"
 
 # SSL settings
-ssl_provider = "acme"  # acme, manual, none
+ssl_provider = "acme"   # acme | manual | none
 acme_email = ""
