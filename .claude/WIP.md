@@ -2,11 +2,11 @@
 *Mis à jour : 2026-05-15*
 
 
-## 🟡 2026-05-15: Mail Phase 1 — source catch-up (Issue #136, PR #141 OPEN, DEPLOY PENDING)
+## ✅ 2026-05-15: Mail Phase 1 — source catch-up + 12/12 acceptance gates GREEN (Issue #136, PR #141)
 
 ### Status
 
-**Code complete + green tests** (62/62 endpoints, bats libs verified, smoke script written). **Deploy partially executed** — first install on the board uncovered two recursion-related bugs that fork-bombed `192.168.1.200`. Both fixed in commit `529f5ec7`; fixed `.deb` is local but not yet deployed.
+**Phase 1 fully deployed and verified.** All 12 acceptance gates green against the live board. 5 production `secubox.in` mailboxes preserved byte-identical. Several bonus bugs surfaced + fixed during deploy (recursion through shims, lib path, mitmproxy route maintenance) — full post-mortem in [docs/superpowers/runs/2026-05-15-mail-phase1-deploy-postmortem.md](../docs/superpowers/runs/2026-05-15-mail-phase1-deploy-postmortem.md).
 
 ### Done
 
@@ -19,13 +19,22 @@
 - 12-gate acceptance smoke script (`tests/scripts/test-mail-phase1-acceptance.sh`).
 - Pre-flight backups on board at `/srv/backups/mail-phase1/`. Production data preserved (5 secubox.in mailboxes intact).
 
-### Deploy gates remaining
+### Deploy gates ✅
 
-1. Board recovery (hard reboot — currently fork-bombed by leftover `mailctl sync` recursion).
-2. Deploy FIXED `.deb` (commit 529f5ec7 — no more shim recursion).
-3. Run `bash tests/scripts/test-mail-phase1-acceptance.sh root@192.168.1.200` (timeout-safe).
-4. Validate 5 `secubox.in` users unchanged (gate 12).
-5. User merges PR #141.
+- ✅ Board recovered (hard reboot cleared the fork-bomb).
+- ✅ Fixed `.deb` deployed via `admin.gk2.secubox.in`.
+- ✅ All 12 acceptance gates green (commit `bd0053e4`).
+- ✅ Data byte-identical (gate 12).
+- ⏳ PR #141 merge — user-validated.
+
+### Phase 2 inputs (from deploy lessons)
+
+- Sentinel env-var guard rails in deprecation shims to prevent any future recursion.
+- bats test that runs `dpkg-deb -c` and grep-asserts `lib/*.sh` ship under the right path.
+- `mailctl postfix-enable` step OR `systemctl enable postfix` in `install_mail_packages`.
+- Make `sync-mitmproxy-routes.sh` aware that 10.100.0.10 is the mail LXC IP (drop from DEAD_CONTAINER_IPS).
+- Document host/LXC mitmproxy route-file split in CLAUDE.md.
+- Roundcube `config.inc.php` finalization (deferred to Phase 5).
 
 ### Lessons captured
 

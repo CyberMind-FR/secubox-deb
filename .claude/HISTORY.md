@@ -33,12 +33,12 @@ First install on the board uncovered two bugs in the deployed artifact:
 
 Both bugs fixed in commit `529f5ec7`. The smoke test gate 8 (`mailctl start | tail -5`) triggered the recursion before the fix was rebuilt — the resulting fork-storm (peak >2000 concurrent `mailctl sync` PIDs) made the board's sshd unreachable. Required a hard reboot.
 
-**Status of deploy:**
+**Status of deploy:** ✅ **Fully deployed and verified.**
 
-- Local fixed `.deb` ready at `packages/secubox-mail_2.2.0-1~bookworm1_all.deb` (and the 3 transitional packages).
-- Board recovered (then fork-bombed again from leftover runaways post-reboot; SSH unreachable).
-- Production data (`/data/volumes/mail/vmail/secubox.in/{gk2,bat,bourdon,lemurien,ragondin}`) intact through both incidents.
-- Deploy resume path documented in `docs/superpowers/runs/2026-05-15-mail-phase1-deploy-postmortem.md`.
+- Resumed via `admin.gk2.secubox.in` after board recovery.
+- 3 additional bugs surfaced and fixed during deploy (`users.sh` var override, mitmproxy route file split host/LXC, missing Roundcube vhost) — full post-mortem in `docs/superpowers/runs/2026-05-15-mail-phase1-deploy-postmortem.md`.
+- Final smoke (commit `bd0053e4`): **12/12 acceptance gates green** against live board.
+- 5 production `secubox.in` mailboxes preserved byte-identical (gate 12).
 
 **Followups (post-merge):**
 

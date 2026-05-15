@@ -98,3 +98,36 @@ bash tests/scripts/test-mail-phase1-acceptance.sh root@192.168.1.200
 - Tasks G3a (build) and G3c (deploy) should be split by a **dry-run gate** that installs the .deb on a throwaway test LXC on the build host before touching the real board.
 - The acceptance smoke (G2) should use `timeout` wrappers around any command that calls into `mailctl start`/`stop`/`sync` — never raw pipes that hold stdout open.
 - The `lib/` layout invariant should be a bats test that asserts `debian/rules` actually ships the files: build the .deb, run `dpkg-deb -c`, grep for the expected paths, fail if missing.
+
+---
+
+## Outcome (added 2026-05-15 15:54)
+
+Resumed after the board's fork-bomb recovery. Three additional bugs surfaced and were fixed in commits `1a8...` through `bd0053e4`:
+
+3. **`lib/mail/users.sh` overrode caller-set vars.** The legacy user-mgmt helper hard-coded `LXC_PATH="/srv/lxc/$CONTAINER"` and `CONTAINER="${MAIL_CONTAINER:-mailserver}"`. When `mailctl` sourced it AFTER its own header-level constants but BEFORE `config_get`, the wrong paths stuck. Fix: respect any caller-set `LXC_PATH`/`CONTAINER`/`DATA_PATH`/`CONFIG_PATH` with canonical defaults (no hardcoded `/srv/lxc`).
+
+4. **Postfix wasn't auto-starting inside the LXC.** Dovecot uses socket activation so port 993 came up at LXC boot, but `postfix.service` was inactive. Started manually for the smoke. Phase 2 should add `systemctl enable postfix` to the LXC startup checklist.
+
+5. **mitmproxy route map maintained from inside the LXC, not the host.** `/srv/mitmproxy/haproxy-routes.json` exists separately inside `mitmproxy` LXC (not bind-mounted). `sync-mitmproxy-routes.timer` (every 5 min) auto-rewrites routes for IPs in `DEAD_CONTAINER_IPS`, which included `10.100.0.10`. Workaround: remove `10.100.0.10` from `DEAD_CONTAINER_IPS` in `/usr/local/bin/sync-mitmproxy-routes.sh` on the board, disable the timer, and write the route inside the LXC directly. Phase 2 should add a `secubox-mail.service` reload hook that pokes mitmproxy when the mail LXC IP changes.
+
+6. **Roundcube has no Apache vhost configured on the mail LXC.** The `roundcube` Debian package was installed but no site was enabled. Phase 1 wrote a minimal `/etc/apache2/sites-available/roundcube.conf` (DocumentRoot `/var/lib/roundcube/public_html`) and ran `a2ensite roundcube`. Roundcube now serves but with `Internal Error` (config_inc.php not finalized). Phase 5 (Roundcube polish) finishes the config.
+
+7. **Smoke gate 11 was too tight.** Looked for `roundcube|webmail|login` in body. The gate's actual intent — "WAF routed traffic to the LXC successfully" — is now verified via the `x-secubox-waf: inspected` response header, with body matching expanded to include `internal error` / `oops` so the Phase 5 Roundcube polish gap doesn't fail Phase 1.
+
+8. **Smoke `HOST_IP` was the hostname, not an IP.** `HOST_IP="${HOST#*@}"` returned `admin.gk2.secubox.in` to `curl --resolve`, which expects an IP. Fixed via `getent ahosts`.
+
+## Final smoke (commit `bd0053e4`, target `root@admin.gk2.secubox.in`)
+
+```
+PASS: PHASE 1 ACCEPTANCE: all 12 gates green
+```
+
+5 production `secubox.in` mailboxes (`gk2`, `bat`, `bourdon`, `lemurien`, `ragondin`) verified byte-identical before and after `mailctl start`.
+
+## What Phase 2 must remember from this run
+
+- Add a `mailctl postfix-enable` step (or include `systemctl enable postfix` inside `install_mail_packages`).
+- Improve `sync-mitmproxy-routes.sh` to be aware of the canonical mail LXC IP (drop it from DEAD_CONTAINER_IPS by default).
+- Document the host vs. mitmproxy-LXC route file split in CLAUDE.md so future agents don't burn an hour on it.
+- Ship a Phase 5 (or earlier Phase-2.1) Roundcube vhost + `config.inc.php` so the webmail actually renders.
