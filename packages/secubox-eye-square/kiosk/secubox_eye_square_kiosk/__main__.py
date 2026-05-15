@@ -28,6 +28,8 @@ HELPER_SOCK = os.environ.get(
 TARGET_FPS = 30
 PROBE_INTERVAL_S = 30
 METRICS_INTERVAL_S = 2
+# Radar sweep rotation speed (matches the deployed round fallback radar).
+RADAR_RPM = 12.0
 
 
 def main() -> int:
@@ -89,8 +91,10 @@ def main() -> int:
                 if ev.kind == "tap":
                     _dispatch_tap(ev.x, ev.y, panel, dashboard)
 
-            # Render.
-            full = dashboard.layout(metrics)
+            # Render. phase advances the radar sweep angle — monotonic
+            # so frame-to-frame motion is smooth across system clock jumps.
+            phase = (time.monotonic() * RADAR_RPM / 60.0) % 1.0
+            full = dashboard.layout(metrics, phase=phase)
             if pointer.cursor_visible:
                 draw_cursor(full, *pointer.cursor_xy)
             fb.blit(full)

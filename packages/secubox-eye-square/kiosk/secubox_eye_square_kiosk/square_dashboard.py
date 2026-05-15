@@ -22,30 +22,34 @@ class SquareDashboard(DashboardCanvas):
     DASHBOARD_REGION_SIZE = (480, 480)
     PANEL_REGION_SIZE = (320, 480)
     CENTER = (240, 240)
-    RING_RADII = [200, 185, 170, 155, 140, 125]
+    # Same radii as RoundDashboard so the left half is visually identical
+    # to the deployed Pi Zero W radar.
+    RING_RADII = [214, 188, 162, 136, 110, 84]
 
     def __init__(self, right_panel):
         self.right_panel = right_panel
 
-    def layout(self, metrics: dict) -> Image.Image:
-        # Image.new() with COSMOS_BLACK+(255,) is equivalent to calling
-        # paint_background on a fresh canvas; skip the redundant fill.
+    def layout(self, metrics: dict, phase: float = 0.0) -> Image.Image:
+        """Render one frame at animation `phase` (0..1).
+
+        Phase rotates the radar sweep on the left half; the right panel
+        is static. Pass `phase=0.0` for a still frame.
+        """
         img = Image.new("RGBA", self.SIZE, theme.COSMOS_BLACK + (255,))
 
-        # Left dashboard region.
+        # Left dashboard region — phase-aware radar.
         dash = Image.new("RGBA", self.DASHBOARD_REGION_SIZE,
                          theme.COSMOS_BLACK + (255,))
-        self.paint_rainbow_ring(dash, self.CENTER, 235, 220)
-        self.paint_concentric_arcs(dash, self.CENTER, MODULES, metrics,
-                                    self.RING_RADII)
-        # pod_size=48 matches the deployed icon sizes (22/48/96/128); 40 would
-        # miss and fall back to the first-letter placeholder. radius bumped
-        # to 78 so pod inner edge (54) stays clear of the central button (44).
+        self.paint_radar_concentric(
+            dash, self.CENTER, MODULES, metrics,
+            radii=self.RING_RADII, phase=phase, draw_hub=True,
+        )
+        # pod_size=48 matches deployed icon sizes (22/48/96/128).
         self.paint_pod_cluster(dash, MODULES, self.CENTER, radius=78, pod_size=48)
         self.paint_central_button(dash, self.CENTER, size=44)
         img.paste(dash, (0, 0))
 
-        # Right panel.
+        # Right panel (static).
         panel = Image.new("RGBA", self.PANEL_REGION_SIZE,
                           theme.COSMOS_BLACK + (255,))
         self.right_panel.draw(panel)
