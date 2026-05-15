@@ -32,7 +32,7 @@ setup() { load_libs; make_fake_lxc_env; }
     grep -q "lxc.net.0.ipv4.address = 10.100.0.10/24"   "$LXC_BASE/mail/config"
     grep -q "lxc.net.0.ipv4.gateway = 10.100.0.1"       "$LXC_BASE/mail/config"
     grep -q "lxc.idmap = u 0 100000 65536"              "$LXC_BASE/mail/config"
-    grep -q "/data/volumes/mail/vmail"                  "$LXC_BASE/mail/config"
+    grep -qE "vmail[[:space:]]+var/vmail[[:space:]]+none[[:space:]]+bind" "$LXC_BASE/mail/config"
 }
 
 @test "lxc_create_config accepts plain IP (no /CIDR) and defaults to /24" {
