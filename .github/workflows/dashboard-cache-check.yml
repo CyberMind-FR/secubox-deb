@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+name: Dashboard Cache Lint
+
+# Anti-regression for the double-cache pattern documented in CLAUDE.md
+# (« Performance Patterns — Double Caching »). Fails if a daemon adds a
+# hot dashboard endpoint (/stats, /alerts, /summary, /dashboard, /metrics,
+# /overview, /events, /history, /recent, /bans, /sessions, /connections)
+# that does per-request I/O without going through a cache, unless an
+# explicit justified entry is added to .cache-lint-allowlist.toml.
+#
+# See docs/CACHE-PATTERN.md for how to comply.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/**/api/main.py'
+      - 'scripts/check-dashboard-cache.py'
+      - '.cache-lint-allowlist.toml'
+      - '.github/workflows/dashboard-cache-check.yml'
+  push:
+    branches: [master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run cache-pattern lint
+        run: python3 scripts/check-dashboard-cache.py --check
+      - name: Run lint self-tests
+        run: |
+          pip install pytest
+          python3 -m pytest scripts/tests/test_check_dashboard_cache.py -v

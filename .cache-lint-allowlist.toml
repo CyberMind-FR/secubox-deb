@@ -1,0 +1,36 @@
+# .cache-lint-allowlist.toml
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+#
+# Exceptions for scripts/check-dashboard-cache.py — daemons whose dashboard
+# endpoints do per-request I/O without cache. Each entry is a TEMPORARY
+# admission: every line is a TODO that should be cleared by patching the
+# daemon to follow the pattern (see CLAUDE.md § Performance Patterns and
+# packages/secubox-crowdsec/api/main.py:106-138).
+#
+# Add an entry only with a justification AND an issue link.
+# Remove the entry when the corresponding daemon is patched.
+
+[[entries]]
+daemon = "secubox-waf"
+route = "/stats"
+justification = "PR #146 in flight — applies StatsCache pattern. Drop this entry once merged + deployed."
+
+[[entries]]
+daemon = "secubox-waf"
+route = "/alerts"
+justification = "Same as /stats — covered by PR #146."
+
+[[entries]]
+daemon = "secubox-config-advisor"
+route = "/history"
+justification = "Reads a config-snapshot file per request. Low-frequency endpoint (admin drill-in, not polled by SOC). Patch when touching the daemon for unrelated reasons. Track in follow-up issue."
+
+[[entries]]
+daemon = "secubox-netdiag"
+route = "/connections"
+justification = "subprocess.run('ss' / 'netstat'). The data is inherently per-request real-time (open TCP connections); caching for >2 s would mislead. Acceptable as long as the endpoint isn't dashboard-polled — verify usage before un-allowlisting."
+
+[[entries]]
+daemon = "secubox-tor"
+route = "/summary"
+justification = "Module has a cache instance but /summary doesn't use it. Small read_text() on a Tor status file. Patch in a follow-up to call the existing cache."
