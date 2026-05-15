@@ -23,6 +23,7 @@ class DashboardCanvas:
 
     RING_WIDTH = 5
     RING_TRACK_COLOUR = (0x14, 0x14, 0x14, 255)
+    ALERT_RIBBON_HEIGHT = 20
 
     def paint_background(self, img: Image.Image,
                          colour: tuple[int, int, int] = theme.COSMOS_BLACK) -> None:
@@ -128,6 +129,35 @@ class DashboardCanvas:
                 lh = bbox[3] - bbox[1]
                 draw.text((px - lw // 2, py - lh // 2 - bbox[1]),
                           letter, fill=(255, 255, 255, 255), font=font)
+
+    def paint_central_button(self, img: Image.Image,
+                             center: tuple[int, int], size: int,
+                             label: str = "") -> None:
+        """Hollow white circle at `center` of radius `size`. Optional
+        label drawn below in TEXT_PRIMARY."""
+        draw = ImageDraw.Draw(img)
+        cx, cy = center
+        draw.ellipse((cx - size, cy - size, cx + size, cy + size),
+                     outline=(255, 255, 255, 255), width=2)
+        if label:
+            font = theme.load_default_font(11)
+            bbox = font.getbbox(label)
+            lw = bbox[2] - bbox[0]
+            draw.text((cx - lw // 2, cy + size + 4),
+                      label, fill=theme.TEXT_PRIMARY + (255,), font=font)
+
+    def paint_alert_ribbon(self, img: Image.Image, region_y: int,
+                           text: str, severity: str) -> None:
+        """Bottom strip: dark semi-transparent fill + coloured text.
+        `region_y` is the top of the ribbon (typically img.height - 20)."""
+        draw = ImageDraw.Draw(img)
+        w = img.size[0]
+        colour = theme.SEVERITY.get(severity, theme.TEXT_MUTED) + (255,)
+        draw.rectangle((0, region_y, w, region_y + self.ALERT_RIBBON_HEIGHT),
+                       fill=(0, 0, 0, 200))
+        font = theme.load_default_font(11)
+        draw.text((10, region_y + 4),
+                  f"▲ {text}"[:50], fill=colour, font=font)
 
     def layout(self, metrics: dict) -> Image.Image:
         """Compose the form-factor-specific dashboard. Override in subclass."""

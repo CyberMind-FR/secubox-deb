@@ -170,3 +170,29 @@ def test_paint_pod_cluster_no_icon_falls_back_to_letter(blank_round, monkeypatch
         px = int(240 + 100 * math.cos(angle))
         py = int(240 + 100 * math.sin(angle))
         assert blank_round.getpixel((px, py)) != (0, 0, 0, 255)
+
+
+def test_paint_central_button_draws_hollow_white_circle(blank_round):
+    canvas = DashboardCanvas()
+    canvas.paint_central_button(blank_round, center=(240, 240), size=20)
+    # Centre of the button should be black (hollow).
+    assert blank_round.getpixel((240, 240))[:3] == (0, 0, 0)
+    # Edge of the button at radius=20 should be white.
+    px = blank_round.getpixel((240 + 20, 240))[:3]
+    assert max(px) > 200, f"button edge expected white-ish, got {px}"
+
+
+def test_paint_alert_ribbon_renders_text(blank_round):
+    canvas = DashboardCanvas()
+    canvas.paint_alert_ribbon(blank_round, region_y=460,
+                               text="TEST ALERT", severity="warn")
+    # Bottom region should be no longer fully black.
+    found_nonblack = False
+    for y in range(460, 480):
+        for x in range(0, 480, 10):
+            if blank_round.getpixel((x, y))[:3] != (0, 0, 0):
+                found_nonblack = True
+                break
+        if found_nonblack:
+            break
+    assert found_nonblack, "alert ribbon did not draw any non-black pixels"
