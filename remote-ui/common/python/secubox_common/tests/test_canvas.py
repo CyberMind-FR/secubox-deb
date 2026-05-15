@@ -71,3 +71,39 @@ def test_paint_rainbow_ring_spans_hue_around_circle(blank_round):
 
     # All 4 samples must be different colours.
     assert len(set(samples)) == 4, f"rainbow band hue is not rotating: {samples}"
+
+
+def test_paint_concentric_arcs_six_rings_present(blank_round):
+    """Six different ring colors must appear on the canvas after painting."""
+    from secubox_common.modules import MODULES
+    canvas = DashboardCanvas()
+    metrics = {
+        "cpu_percent": 100, "mem_percent": 100, "disk_percent": 100,
+        "load_avg_1": 4.0, "cpu_temp": 85, "wifi_rssi": -20,
+    }
+    radii = [200, 185, 170, 155, 140, 125]
+    canvas.paint_concentric_arcs(blank_round, center=(240, 240),
+                                  modules=MODULES, metrics=metrics, radii=radii)
+    # Sample on the right edge of each ring at angle 0° (3 o'clock).
+    for m, r in zip(MODULES, radii):
+        px = blank_round.getpixel((240 + r, 240))[:3]
+        # Pixel must match the module colour (or be very close — antialiasing).
+        dr = abs(px[0] - m.colour[0])
+        dg = abs(px[1] - m.colour[1])
+        db = abs(px[2] - m.colour[2])
+        assert dr + dg + db < 60, \
+            f"ring {m.name}: expected near {m.colour}, got {px}"
+
+
+def test_paint_concentric_arcs_zero_metric_draws_only_track(blank_round):
+    """With metric=0, no fill arc is drawn — only the dark track."""
+    from secubox_common.modules import MODULES
+    canvas = DashboardCanvas()
+    metrics = {}  # all metrics missing → extract returns 0 (after clamp)
+    radii = [200] * 6
+    canvas.paint_concentric_arcs(blank_round, center=(240, 240),
+                                  modules=MODULES, metrics=metrics, radii=radii)
+    # At 0° on the ring the fill arc starts but covers ~0°, so the
+    # track colour (very dark) should be there.
+    px = blank_round.getpixel((240 + 200, 240))[:3]
+    assert max(px) < 50, f"expected dark track at zero-fill, got {px}"

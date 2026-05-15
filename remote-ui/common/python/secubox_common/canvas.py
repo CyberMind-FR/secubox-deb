@@ -18,6 +18,9 @@ from . import theme
 class DashboardCanvas:
     """Drawing primitives + abstract layout."""
 
+    RING_WIDTH = 5
+    RING_TRACK_COLOUR = (0x14, 0x14, 0x14, 255)
+
     def paint_background(self, img: Image.Image,
                          colour: tuple[int, int, int] = theme.COSMOS_BLACK) -> None:
         """Fill the entire image with a solid colour (alpha=255)."""
@@ -56,6 +59,30 @@ class DashboardCanvas:
         inner_bbox = (cx - radius_inner, cy - radius_inner,
                       cx + radius_inner, cy + radius_inner)
         draw.ellipse(inner_bbox, fill=background + (255,))
+
+    def paint_concentric_arcs(self, img: Image.Image,
+                              center: tuple[int, int],
+                              modules,
+                              metrics: dict,
+                              radii: list[int]) -> None:
+        """One concentric arc per module at each radius. Each ring has a
+        very dark full-circle track and a coloured fill arc proportional
+        to `module.extract(metrics)` (0..1), starting at 12 o'clock and
+        sweeping clockwise."""
+        draw = ImageDraw.Draw(img)
+        cx, cy = center
+        for m, r in zip(modules, radii):
+            pct = m.extract(metrics)
+            bbox = (cx - r, cy - r, cx + r, cy + r)
+            # Dark track (full circle, slightly thicker for visual weight).
+            draw.arc(bbox, start=-90, end=270,
+                     fill=self.RING_TRACK_COLOUR,
+                     width=self.RING_WIDTH + 2)
+            # Coloured fill (only if > ~0.5%).
+            if pct > 0.005:
+                end_angle = -90 + 360 * pct
+                draw.arc(bbox, start=-90, end=end_angle,
+                         fill=m.colour + (255,), width=self.RING_WIDTH)
 
     def layout(self, metrics: dict) -> Image.Image:
         """Compose the form-factor-specific dashboard. Override in subclass."""
