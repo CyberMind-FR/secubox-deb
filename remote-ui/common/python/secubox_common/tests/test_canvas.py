@@ -33,23 +33,24 @@ def test_dashboard_canvas_layout_is_abstract():
 
 def test_paint_rainbow_ring_pixels_in_band_are_colored(blank_round):
     """A pixel exactly on the rainbow band radius is non-black; pixels
-    inside and outside the band remain black."""
+    inside the band are erased to COSMOS_BLACK, pixels outside the band
+    are untouched (still the fixture's initial (0, 0, 0))."""
     canvas = DashboardCanvas()
     canvas.paint_rainbow_ring(blank_round, center=(240, 240),
                               radius_outer=235, radius_inner=220)
 
-    # Centre pixel = inside the inner radius, should still be black.
-    assert blank_round.getpixel((240, 240))[:3] == (0, 0, 0)
+    # Centre pixel = inside the inner radius, erased to COSMOS_BLACK by default.
+    assert blank_round.getpixel((240, 240))[:3] == theme.COSMOS_BLACK
 
     # Pixel at radius 230 (between inner=220 and outer=235): coloured.
     px = blank_round.getpixel((240 + 230, 240))
-    assert px[:3] != (0, 0, 0), \
+    assert px[:3] != theme.COSMOS_BLACK and px[:3] != (0, 0, 0), \
         f"expected coloured pixel at band radius 230, got {px[:3]}"
 
-    # Pixel at radius 250 (outside outer=235): still black.
-    px = blank_round.getpixel((240 + 250 if 240 + 250 < 480 else 479, 240))
-    if 240 + 250 < 480:
-        assert px[:3] == (0, 0, 0)
+    # Pixel at radius 238 (just outside outer=235, x=478 is in-bounds for the
+    # 480-wide canvas): never touched by paint_rainbow_ring → stays at the
+    # fixture's initial (0, 0, 0).
+    assert blank_round.getpixel((240 + 238, 240))[:3] == (0, 0, 0)
 
 
 def test_paint_rainbow_ring_spans_hue_around_circle(blank_round):

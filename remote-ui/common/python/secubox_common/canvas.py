@@ -28,9 +28,13 @@ class DashboardCanvas:
                            center: tuple[int, int],
                            radius_outer: int,
                            radius_inner: int,
-                           stops: int = 256) -> None:
+                           stops: int = 256,
+                           background: tuple[int, int, int] = theme.COSMOS_BLACK
+                           ) -> None:
         """Annular rainbow gradient — HSV hue rotates 0..360° around the centre,
-        rendered as `stops` thin arc segments between radius_inner and radius_outer."""
+        rendered as `stops` thin arc segments between radius_inner and radius_outer.
+        The inner disc is filled with `background` so gaps between this ring and
+        downstream primitives blend with the dashboard's COSMOS_BLACK canvas."""
         import colorsys
 
         draw = ImageDraw.Draw(img)
@@ -48,10 +52,10 @@ class DashboardCanvas:
             end = (i + 1) * step_deg - 90.0
             draw.pieslice(bbox, start=start, end=end, fill=colour)
 
-        # Erase the inner disc back to transparent / background.
+        # Erase the inner disc back to the dashboard background colour.
         inner_bbox = (cx - radius_inner, cy - radius_inner,
                       cx + radius_inner, cy + radius_inner)
-        draw.ellipse(inner_bbox, fill=(0, 0, 0, 255))
+        draw.ellipse(inner_bbox, fill=background + (255,))
 
     def layout(self, metrics: dict) -> Image.Image:
         """Compose the form-factor-specific dashboard. Override in subclass."""
