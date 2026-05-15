@@ -1,6 +1,41 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-14*
+*Mis à jour : 2026-05-15*
 
+
+## 🟡 2026-05-15: Mail Phase 1 — source catch-up (Issue #136, PR #141 OPEN, DEPLOY PENDING)
+
+### Status
+
+**Code complete + green tests** (62/62 endpoints, bats libs verified, smoke script written). **Deploy partially executed** — first install on the board uncovered two recursion-related bugs that fork-bombed `192.168.1.200`. Both fixed in commit `529f5ec7`; fixed `.deb` is local but not yet deployed.
+
+### Done
+
+- Phase 0 architecture spec rev. 2 + Phase 1 plan rev. 2 (commit `265bda0e` on master).
+- Branch `feature/136-mail-stack-phase-1-source-catch-up-legac` (17 commits + post-mortem) — PR [#141](https://github.com/CyberMind-FR/secubox-deb/pull/141).
+- `lib/lxc.sh` + `lib/migrate.sh` + `lib/install.sh` extracted (unprivileged-veth + I13 data-guard aware).
+- `mailctl 2.2.0` with `migrate-config`; `mailserverctl` + `roundcubectl` → 10-line deprecation shims.
+- `secubox-mail 2.2.0` + 3 transitional 2.2.0 packages with `Breaks:`/`Replaces:`.
+- HAProxy mail-TCP snippet + WAF integration NEWS.
+- 12-gate acceptance smoke script (`tests/scripts/test-mail-phase1-acceptance.sh`).
+- Pre-flight backups on board at `/srv/backups/mail-phase1/`. Production data preserved (5 secubox.in mailboxes intact).
+
+### Deploy gates remaining
+
+1. Board recovery (hard reboot — currently fork-bombed by leftover `mailctl sync` recursion).
+2. Deploy FIXED `.deb` (commit 529f5ec7 — no more shim recursion).
+3. Run `bash tests/scripts/test-mail-phase1-acceptance.sh root@192.168.1.200` (timeout-safe).
+4. Validate 5 `secubox.in` users unchanged (gate 12).
+5. User merges PR #141.
+
+### Lessons captured
+
+- `debian/rules` is opaque to refactors — see post-mortem.
+- Deprecation shims that re-enter their replacement must never be called from within the replacement.
+- Acceptance tests must never pipe a command's stdout through `tail`/`head` if recursion is possible — use `timeout`.
+
+Full post-mortem: [docs/superpowers/runs/2026-05-15-mail-phase1-deploy-postmortem.md](../docs/superpowers/runs/2026-05-15-mail-phase1-deploy-postmortem.md)
+
+---
 ---
 
 ## ✅ 2026-05-14: remote-ui Phase 3 — Pillow+framebuffer kiosk for Pi 4B/400 (Issue #127, PR #132 MERGED)

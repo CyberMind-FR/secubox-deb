@@ -2,6 +2,50 @@
 *Tracking completed milestones with dates*
 
 ---
+
+## 2026-05-15
+
+### Mail Phase 1 — source catch-up + 3 transitional packages (Issue #136, PR #141)
+
+**Context:** Live board (`192.168.1.200`) already runs a single-mail-LXC layout under `/data/lxc/mail` with `/data/volumes/mail` bind mounts and unprivileged-veth `10.100.0.10/24` networking on `br-lxc`. Repo source was out of date (referenced `/srv/lxc`, `/srv/mail`, `192.168.255.30`, `mail_container`/`webmail_container`). Phase 1 caught the source up + deprecated the legacy companion packages.
+
+**Done:**
+
+- Phase 0 spec rev. 2 + Phase 1 plan rev. 2 committed on master (1019 net-lines specs+plans, replacing rev. 1 which assumed greenfield two-LXC consolidation).
+- Branch `feature/136-mail-stack-phase-1-source-catch-up-legac` — 17 commits + post-mortem.
+- `lib/lxc.sh` (unprivileged veth br-lxc helpers), `lib/migrate.sh` (legacy detectors + spec I13 data guard), `lib/install.sh` (Postfix/Dovecot/Roundcube install + configure) extracted from the 2030-line `mailserverctl`.
+- `mailctl` bumped 1.3.0 → 2.2.0, canonical paths (`/var/lib/lxc/mail`, `/data/volumes/mail`, `10.100.0.10`), new `migrate-config` subcommand that rewrites legacy toml in place.
+- `mailserverctl` + `roundcubectl` reduced to 10-line deprecation shims that `exec mailctl`.
+- `secubox-mail` 2.2.0 with `Breaks:` / `Replaces:` against `secubox-mail-lxc (<<2.2)`, `secubox-webmail-lxc (<<2.2)`, `secubox-webmail (<<2.2)`.
+- 3 legacy packages collapsed to transitional 2.2.0 metadata-only stubs depending on `secubox-mail (>= 2.2)`.
+- 62/62 endpoint pytest green; 12-gate acceptance smoke script written.
+- HAProxy mail-TCP snippet for SMTP/submission/IMAPS/sieve targeting `10.100.0.10`.
+- WAF integration NEWS: HTTPS (admin + webmail) route via existing HAProxy → mitmproxy ACL; mail protocols TCP-pass-through (not a WAF bypass — mitmproxy inspects HTTP only).
+- Backups taken on board at `/srv/backups/mail-phase1/` (data + LXC config + toml + pkglist).
+- Rollback recipe: `docs/superpowers/runs/2026-05-15-mail-phase1-rollback.md`.
+
+**Deploy outcome — partial:**
+
+First install on the board uncovered two bugs in the deployed artifact:
+
+1. `debian/rules` ships `lib/mail/*` to `/usr/lib/secubox/mail/lib/` — new helpers were at `lib/` (no `mail/` subdir) and silently skipped.
+2. `mailctl`'s `cmd_install`/`cmd_start`/`cmd_stop`/`cmd_sync`/`cmd_dkim` still called `/usr/sbin/mailserverctl` and `/usr/sbin/roundcubectl`, which are now shims that `exec mailctl` → infinite fork recursion.
+
+Both bugs fixed in commit `529f5ec7`. The smoke test gate 8 (`mailctl start | tail -5`) triggered the recursion before the fix was rebuilt — the resulting fork-storm (peak >2000 concurrent `mailctl sync` PIDs) made the board's sshd unreachable. Required a hard reboot.
+
+**Status of deploy:**
+
+- Local fixed `.deb` ready at `packages/secubox-mail_2.2.0-1~bookworm1_all.deb` (and the 3 transitional packages).
+- Board recovered (then fork-bombed again from leftover runaways post-reboot; SSH unreachable).
+- Production data (`/data/volumes/mail/vmail/secubox.in/{gk2,bat,bourdon,lemurien,ragondin}`) intact through both incidents.
+- Deploy resume path documented in `docs/superpowers/runs/2026-05-15-mail-phase1-deploy-postmortem.md`.
+
+**Followups (post-merge):**
+
+- Phase 2 brainstorm: Rspamd migration (replaces SA + OpenDKIM + opendmarc; adds ClamAV).
+- Consider sentinel-env-var guard rails in the deprecation shims (prevent any future recursion).
+- Add a dpkg-deb path-coverage bats test so source-tree refactors that move files don't silently miss `debian/rules`.
+
 ## 2026-05-14
 
 ### remote-ui Phases 1 + 3 merged to master (Issue #127, PRs #130 + #132)
