@@ -77,9 +77,14 @@ def test_paint_concentric_arcs_six_rings_present(blank_round):
     """Six different ring colors must appear on the canvas after painting."""
     from secubox_common.modules import MODULES
     canvas = DashboardCanvas()
+    # All metrics intentionally pushed past their clamp ceiling so every
+    # ring fills to 100% regardless of os.cpu_count() on the test host
+    # (MIND divides load_avg by core count — a 4.0 load on a 20-core box
+    # would only cover 20% of MIND's ring, leaving the 3 o'clock sample
+    # on the dark track instead of the module colour).
     metrics = {
-        "cpu_percent": 100, "mem_percent": 100, "disk_percent": 100,
-        "load_avg_1": 4.0, "cpu_temp": 85, "wifi_rssi": -20,
+        "cpu_percent": 999, "mem_percent": 999, "disk_percent": 999,
+        "load_avg_1": 999, "cpu_temp": 999, "wifi_rssi": 999,
     }
     radii = [200, 185, 170, 155, 140, 125]
     canvas.paint_concentric_arcs(blank_round, center=(240, 240),
