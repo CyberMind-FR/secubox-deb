@@ -4,11 +4,11 @@
 load_libs() {
     local pkg_root="${BATS_TEST_DIRNAME}/.."
     # shellcheck source=/dev/null
-    source "${pkg_root}/lib/lxc.sh"
+    source "${pkg_root}/lib/mail/lxc.sh"
     # shellcheck source=/dev/null
-    source "${pkg_root}/lib/install.sh"
+    source "${pkg_root}/lib/mail/install.sh"
     # shellcheck source=/dev/null
-    source "${pkg_root}/lib/migrate.sh"
+    source "${pkg_root}/lib/mail/migrate.sh"
 }
 
 make_fake_lxc_env() {

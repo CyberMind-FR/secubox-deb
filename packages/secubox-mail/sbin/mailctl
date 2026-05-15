@@ -733,7 +733,12 @@ EOF
 cmd_migrate_config() {
     [ "$(id -u)" -eq 0 ] || { error "Root required"; return 1; }
     : "${LIB_DIR:=/usr/lib/secubox/mail/lib}"
-    [ -d "$LIB_DIR" ] || LIB_DIR="$(dirname "$0")/../lib"
+    # Installed layout: /usr/lib/secubox/mail/lib/migrate.sh
+    # In-tree layout:   packages/secubox-mail/lib/mail/migrate.sh
+    if [ ! -f "$LIB_DIR/migrate.sh" ]; then
+        local alt="$(dirname "$0")/../lib/mail"
+        [ -f "$alt/migrate.sh" ] && LIB_DIR="$alt"
+    fi
     # shellcheck source=/dev/null
     source "$LIB_DIR/migrate.sh"
 
