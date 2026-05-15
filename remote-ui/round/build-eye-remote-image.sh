@@ -704,15 +704,12 @@ ln -sf /etc/systemd/system/secubox-serial-console.service \
 # NOTE: fb-dashboard is DEPRECATED - use fallback-display instead
 # The old dashboard is kept for reference but NOT enabled by default
 
-# Network config for usb0
-mkdir -p "$ROOT_MNT/etc/network/interfaces.d"
-cat > "$ROOT_MNT/etc/network/interfaces.d/usb0" << 'EOF'
-allow-hotplug usb0
-iface usb0 inet static
-    address 10.55.0.2
-    netmask 255.255.255.252
-    gateway 10.55.0.1
-EOF
+# IP binding for the gadget's usb1 interface is handled by
+# /usr/local/sbin/secubox-otg-gadget.sh (the same script that composes
+# the configfs gadget). The legacy /etc/network/interfaces.d/usb0
+# stanza was removed (closes #139) — it required `ifupdown` which the
+# image never installed, so it never did anything except confuse
+# diagnostics.
 
 # USB network script (handles both usb0 and usb1 - ECM may create either)
 mkdir -p "$ROOT_MNT/usr/local/bin"
@@ -787,8 +784,9 @@ if ! id secubox &>/dev/null; then
     echo "secubox:secubox2026" | chpasswd
 fi
 
-# Add to groups
-usermod -aG video,input,gpio,i2c,spi,audio secubox 2>/dev/null || true
+# Add to groups. `sudo` lets the kiosk user manually recover networking
+# from the ACM serial console (e.g. when /dev/ttyACM0 is the only path in).
+usermod -aG sudo,video,input,gpio,i2c,spi,audio secubox 2>/dev/null || true
 
 # Enable lightdm and nginx
 systemctl enable lightdm 2>/dev/null || true
