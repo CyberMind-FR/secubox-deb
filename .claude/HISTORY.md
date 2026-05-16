@@ -26,6 +26,35 @@
 - AppArmor profile for `usr.bin.mitmdump` needs `/var/log/secubox/cookie-audit/**` rw and `/var/lib/secubox/cookie-audit/**` rw (deferred until deployed).
 - Logrotate snippet for the JSONL ledger (deferred — first iteration aims at validating shape before hardening).
 
+### Mail stack Phase 2 (Rspamd) — live-deployed on admin.gk2.secubox.in, 13/13 gates green (Issue #153, branch `feature/153-mail-stack-phase-2-rspamd-migration-roun`)
+
+**Context:** Continuation of the Phase 2 deploy paused yesterday at DKIM keygen. Bind-mount entries were missing in `/var/lib/lxc/mail/config`, `rspamadm` only exists inside the LXC (not on host PATH), and the hardcoded `chown 100110:100110` in `configure_rspamd_controller` didn't match the actual `_rspamd` uid in the LXC's Debian image (107, not 110).
+
+**Done:**
+- Appended 4 bind-mount entries (`/etc/rspamd-keys`, `/var/lib/rspamd/{bayes,history,settings}`) to `/var/lib/lxc/mail/config`, restarted the mail LXC.
+- Generated DKIM keypair for `secubox.in/default` (2048-bit) via `lxc-attach -n mail -- rspamadm dkim_keygen`. DNS TXT recorded in `/data/volumes/mail/rspamd/dkim/secubox.in/default.txt` — awaiting publication.
+- Re-ran `configure_rspamd_milter` to deploy the 8 `local.d/*.{conf,inc}` templates into the LXC's `/etc/rspamd/local.d/`. Re-ran `configure_rspamd_controller` for `worker-controller.inc` + `secrets.inc`.
+- Fixed `secrets.inc` ownership via `lxc-attach -- chown _rspamd:_rspamd` (kernel idmap maps inside-LXC uid 107 to the right outside-LXC subuid regardless of image). Rspamd then started cleanly.
+- Added HAProxy vhost `rspamd.gk2.secubox.in → mitmproxy_inspector` via `haproxyctl vhost add`. Added matching entry to mitmproxy LXC's `/srv/mitmproxy/haproxy-routes.json` and restarted mitmproxy. End-to-end curl returned `HTTP 200`, `x-secubox-waf: inspected`, body `pong` from `rspamd/3.4`.
+- Ran `mailctl rspamd purge-legacy` on the board — D9 health gate verified rspamc-controller reachable, then purged `opendkim opendkim-tools spamassassin spamc spamd` cleanly. Postfix/Dovecot stayed active throughout.
+- All 13 acceptance gates green: ports, milter, DKIM, modules, WAF path, SA/OpenDKIM absent, Phase 1 regression (5 production mailboxes + webmail WAF path).
+
+**Live-deploy fixes pushed as `637b2221`:**
+- `packages/secubox-mail/lib/mail/rspamd.sh` — `configure_rspamd_controller` chowns via `lxc-attach` instead of hardcoded host uid.
+- `tests/scripts/test-mail-phase2-acceptance.sh` — gate 7 grep widened (`Messages scanned|Pools allocated`); gate 12 dpkg call wrapped with `|| true` so `set -e` doesn't silently abort the smoke when SA/OpenDKIM are correctly absent.
+
+**Pre-existing brokenness noted (unrelated to Phase 2):**
+- `/srv/haproxy/certs/` is missing on the board; the live haproxy still serves from in-memory config, but any reload would crash. Recorded as a follow-up to investigate before the next haproxy restart.
+
+**Followups before PR merge:**
+- Investigate why `mailctl rspamd install`'s first `configure_rspamd_milter` call didn't actually populate the LXC's `/etc/rspamd/local.d/` (manual re-invocation worked) — possibly an early-bail before `LXC_BASE`/`TEMPLATES_DIR` reached the function.
+- Move the `rspamadm dkim_keygen` call into `lxc-attach` inside `rspamd_keygen` so DKIM keygen is automated on next deploy (currently errors `rspamadm not on PATH`).
+- Re-run `rspamd-route-sync-patch.sh` ordering so the mitmproxy LXC copy of `haproxy-routes.json` is updated reliably (host copy was, LXC copy wasn't on this deploy).
+
+**State:**
+- Branch pushed, head `637b2221`. PR not opened (per memory: no unprompted PRs).
+- Phase 2.5 (ClamAV) and Phase 3 (multi-domain DKIM) deferred per the spec.
+
 ---
 ## 2026-05-14
 
