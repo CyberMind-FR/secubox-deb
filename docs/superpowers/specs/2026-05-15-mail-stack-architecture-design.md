@@ -1,11 +1,13 @@
-# Mail Stack Architecture — Phase 0 Design (rev. 2)
+# Mail Stack Architecture — Phase 0 Design (rev. 3)
 
-**Date:** 2026-05-15 (rev. 2 — reconciled with board reality)
-**Status:** Approved direction; revised invariants pending user re-confirmation
+**Date:** 2026-05-16 (rev. 3 — three-LXC topology: mail / roundcube / horde)
+**Status:** Approved direction; rev. 3 reflects live-board topology after the 2026-05-16 split
 **Author:** Gérald Kerma <devel@cybermind.fr>
 **Scope:** Architecture-only. Each implementation phase below gets its own spec → plan → PR cycle.
 
-> **Revision note (rev. 2, 2026-05-15):** Initial draft assumed a `/srv/lxc/` + `192.168.255.x` + `lxc.net.0.type = none` greenfield layout. Live board inspection on 2026-05-15 showed the actual single-`mail` LXC has already been hand-built on the test board with a modern unprivileged-veth layout under `/data/lxc/` + `/data/volumes/`. Invariants have been corrected; Phase 1 is reduced from "consolidate two LXCs" to "catch the repo source up to where the board already is, then deprecate the legacy package frame".
+> **Revision note (rev. 3, 2026-05-16):** Roundcube webmail and the new Horde Groupware Webmail are each extracted into their own LXC; the `mail` LXC keeps only Postfix + Dovecot (+ Rspamd + ClamAV after Phase 2). Invariant **I1** is rewritten from "exactly ONE LXC" to "three webmail-stack LXCs with clear single responsibilities". This change was driven by user request 2026-05-16 to add Horde as a second webmail option without conflating it with the SMTP/IMAP server.
+>
+> **Revision note (rev. 2, 2026-05-15):** Initial draft assumed a `/srv/lxc/` + `192.168.255.x` + `lxc.net.0.type = none` greenfield layout. Live board inspection on 2026-05-15 showed the actual single-`mail` LXC has already been hand-built on the test board with a modern unprivileged-veth layout under `/data/lxc/` + `/data/volumes/`. Invariants were corrected; Phase 1 reduced to "catch the repo source up to where the board already is, then deprecate the legacy package frame".
 
 ---
 
@@ -36,19 +38,20 @@ Each phase below MUST respect these. Changing one requires a new Phase 0 revisio
 
 | # | Invariant |
 |---|---|
-| **I1** | Exactly ONE LXC named `mail` at `/data/lxc/mail` (symlinked from `/var/lib/lxc/mail`). No separate `mailserver` or `roundcube` LXCs. |
-| **I2** | LXC is **unprivileged** (`lxc.idmap = u 0 100000 65536`), veth on bridge `br-lxc`, IPv4 `10.100.0.10/24` with gateway `10.100.0.1`. AppArmor + `debian.common.conf` includes. |
-| **I3** | Antispam stack is **Rspamd** (single daemon: greylisting + spam scoring + DKIM sign+verify + SPF + DMARC + ARC). ClamAV remains as separate AV milter. SpamAssassin, Postgrey, OpenDKIM, opendmarc removed in Phase 2. |
-| **I4** | CardDAV + CalDAV are **not** served from the mail LXC. Roundcube plugins point at `https://nextcloud.gk2.secubox.in/remote.php/dav/`. |
+| **I1** | Three webmail-stack LXCs, each with a single responsibility: `mail` (Postfix+Dovecot+Rspamd+ClamAV — MTA/MDA/spam), `roundcube` (Roundcube webmail), `horde` (Horde Groupware Webmail). No daemon overlap between containers. |
+| **I2** | All three LXCs are **unprivileged** (`lxc.idmap = u 0 100000 65536`), veth on bridge `br-lxc`, IPv4 in `10.100.0.0/24` with gateway `10.100.0.1`: `mail` = `.10`, `horde` = `.11`, `roundcube` = `.12`. AppArmor + `debian.common.conf` includes. |
+| **I3** | Antispam stack is **Rspamd** (single daemon on the `mail` LXC: greylisting + spam scoring + DKIM sign+verify + SPF + DMARC + ARC). ClamAV remains as separate AV milter on the `mail` LXC. SpamAssassin, Postgrey, OpenDKIM, opendmarc removed in Phase 2. |
+| **I4** | CardDAV + CalDAV are **not** served from any mail-stack LXC. Roundcube + Horde plugins point at `https://nextcloud.gk2.secubox.in/remote.php/dav/`. |
 | **I5** | Mail accounts are provisioned **by** `secubox-users`. The mail stack is a downstream consumer. Local Dovecot is the materialized projection. |
-| **I6** | Outbound delivery is **direct on port 25**. No smarthost relay. |
-| **I7** | Multi-domain virtual users. Mailbox path: `/data/volumes/mail/vmail/<domain>/<user>/Maildir/`. Per-domain DKIM key (or Rspamd selector after Phase 2). |
+| **I6** | Outbound delivery is **direct on port 25** from the `mail` LXC. No smarthost relay. |
+| **I7** | Multi-domain virtual users. Mailbox path: `/data/volumes/mail/vmail/<domain>/<user>/` (Maildir layout `cur/new/tmp` directly, no `Maildir/` subdir). Per-domain DKIM key (or Rspamd selector after Phase 2). |
 | **I8** | Existing data is migrated from OpenWrt SecuBox via **imapsync** (Phase 7). |
-| **I9** | Webmail = Roundcube. SOGo / Cyrus / grommunio rejected. |
-| **I10** | All container daemons listen on the LXC IP (`10.100.0.10`). Exposed to LAN/WAN via host's HAProxy (SMTP/IMAPS TCP pass-through) + nginx (admin + webmail HTTPS). |
-| **I11** | Configuration source of truth: `/etc/secubox/mail.toml` on the host. Rendered into the LXC by `mailctl`. No editing config inside the LXC. |
-| **I12** | **Persistent data lives on the host under `/data/volumes/mail/{vmail,config,ssl}`** and is bind-mounted into the LXC. Destroying the LXC rootfs MUST be safe — no production data lives in the rootfs. |
+| **I9** | Two webmails coexist: **Roundcube** (light, primary at `webmail.gk2.secubox.in`) and **Horde** (groupware, at `horde.gk2.secubox.in`). Both authenticate against the `mail` LXC's IMAP (`tls://10.100.0.10:143`). SOGo / Cyrus / grommunio remain rejected. |
+| **I10** | The `mail` LXC daemons listen on `10.100.0.10`. Webmail LXCs listen on their respective `10.100.0.11` (horde) / `10.100.0.12` (roundcube), port 80. Exposure: HAProxy TCP pass-through for SMTP/IMAPS to `.10`; HAProxy → mitmproxy → LXC for HTTPS webmail traffic. |
+| **I11** | Configuration source of truth: `/etc/secubox/mail.toml` on the host (mail-server side). Webmail-LXC configs (`/data/lxc/<webmail-name>/rootfs/etc/...`, one of `roundcube` or `horde`) are rendered by Phase-5-era `mailctl webmail …` subcommands. No editing config inside the LXC. |
+| **I12** | **Persistent data lives on the host under `/data/volumes/mail/{vmail,config,ssl}`** (mail-server) and inside each webmail LXC's filesystem (Roundcube SQLite, Horde MariaDB). Mail-server data is bind-mounted into the `mail` LXC. Destroying any LXC rootfs MUST NOT destroy mail data (the webmail rootfs may lose session state, which is acceptable). |
 | **I13** | **Existing mail data on the test board MUST be preserved.** As of 2026-05-15 the board hosts the `secubox.in` domain with five live mailboxes (`gk2`, `bat`, `bourdon`, `lemurien`, `ragondin`) under `/data/volumes/mail/vmail/secubox.in/`. Any upgrade path that touches the data directory MUST refuse to proceed if it cannot guarantee preservation. |
+| **I14** | Password policy is **disabled by admin opt-out** (rev. 3, 2026-05-16). `secubox-users` password validation rejects only empty/non-string values. Restoring the policy is a one-line revert in `password_policy.py`. |
 
 ## 4. Current state (test board 192.168.1.200, surveyed 2026-05-15)
 
@@ -71,80 +74,116 @@ Each phase below MUST respect these. Changing one requires a new Phase 0 revisio
 
 ## 5. Target architecture
 
-### 5.1 LXC layout (canonical)
+### 5.1 LXC layout (canonical, rev. 3)
+
+Three LXCs on `br-lxc` / `10.100.0.0/24`. Each has a single responsibility.
 
 ```
-/var/lib/lxc/mail -> /data/lxc/mail   (symlink, host-side)
-/data/lxc/mail/
-    config                            # LXC config (unprivileged, veth, br-lxc, 10.100.0.10/24)
-    rootfs/                           # Debian bookworm arm64
-        etc/postfix/                  # rendered by mailctl (read-only at runtime)
+/var/lib/lxc/mail      -> /data/lxc/mail        (10.100.0.10)
+/var/lib/lxc/horde     -> /data/lxc/horde       (10.100.0.11)
+/var/lib/lxc/roundcube -> /data/lxc/roundcube   (10.100.0.12)
+
+/data/lxc/mail/                       # MTA / MDA / spam / DKIM
+    config                            # unprivileged, veth br-lxc, 10.100.0.10/24
+    rootfs/
+        etc/postfix/                  # rendered by mailctl
         etc/dovecot/
         etc/rspamd/                   # Phase 2+
         etc/clamav/                   # Phase 2+
-        etc/apache2/                  # Phase 1 keeps Apache; Phase 5 may revisit
-        etc/roundcube/
         etc/mlmmj/                    # Phase 6+
         opt/start-mail.sh             # init script run by lxc.init.cmd
+        var/vmail/                    # bind-mounted from /data/volumes/mail/vmail/
 
-/data/volumes/mail/                   # Persistent data (bind-mounted into LXC)
-    vmail/                            # Maildirs
-        secubox.in/<user>/Maildir/
-        <future-domain>/<user>/Maildir/
+/data/lxc/roundcube/                  # Roundcube webmail (Apache + PHP + SQLite)
+    config                            # 10.100.0.12/24
+    rootfs/
+        etc/apache2/sites-available/roundcube.conf
+        etc/roundcube/{config.inc.php,config.inc.php.local}
+        var/lib/roundcube/db/sqlite.db   # local SQLite (sessions, prefs, cache)
+        var/lib/roundcube/public_html/   # docroot
+
+/data/lxc/horde/                      # Horde Groupware Webmail (Apache + PHP + MariaDB)
+    config                            # 10.100.0.11/24
+    rootfs/
+        etc/horde/horde/conf.php      # IMAP backend = tls://10.100.0.10:143
+        etc/apache2/sites-available/horde.conf
+        var/lib/mysql/                # local MariaDB (Horde tables)
+        usr/share/horde/              # the Horde tree (Debian packages)
+
+/data/volumes/mail/                   # Mail-server persistent data (bind into mail LXC)
+    vmail/                            # Maildirs at <domain>/<user>/{cur,new,tmp}
+        secubox.in/{bat,bourdon,gk2,lemurien,ragondin}/
+        <future-domain>/<user>/
     config/                           # Postfix/Dovecot lookup tables, owned by host
         main.cf, master.cf
         users, vmailbox, virtual, valias, vdomains, aliases
         *.lmdb (rebuilt by postmap)
     ssl/                              # ACME-issued certs (host renews, container reads)
-        fullchain.pem, privkey.pem
     dkim/                             # per-domain keys (Phase 2 owned by Rspamd)
     rspamd/                           # Phase 2 — bayes corpus, history
     clamav/                           # Phase 2 — virus signature DB
     sieve/                            # Phase 4 — per-user sieve scripts
     mlmmj/                            # Phase 6 — mailing list spools
-    roundcube/                        # Phase 5 — user data, logs, plugin state
 ```
+
+Webmail LXCs do **not** bind-mount mail data — they reach Dovecot via IMAP over `tls://10.100.0.10:143`. Each webmail LXC owns its own user-prefs / session store (SQLite for Roundcube, MariaDB for Horde).
 
 ### 5.2 Network and ports
 
-LXC IP: `10.100.0.10` (br-lxc). Gateway: `10.100.0.1` (host bridge).
+| LXC | IP | Listener | Port | Protocol | Exposed how |
+|---|---|---|---|---|---|
+| mail | 10.100.0.10 | Postfix smtpd | 25 | SMTP | HAProxy TCP pass-through, WAN |
+| mail | 10.100.0.10 | Postfix submission | 587 | SMTP+STARTTLS+SASL | HAProxy TCP pass-through, WAN |
+| mail | 10.100.0.10 | Postfix submissions | 465 | SMTPS+SASL | HAProxy TCP pass-through, WAN |
+| mail | 10.100.0.10 | Dovecot imap | 143 | IMAP+STARTTLS | LAN-internal (both webmail LXCs + host) |
+| mail | 10.100.0.10 | Dovecot imaps | 993 | IMAPS | HAProxy TCP pass-through, WAN |
+| mail | 10.100.0.10 | Dovecot ManageSieve | 4190 | sieve+STARTTLS | HAProxy TCP pass-through, WAN |
+| mail | 10.100.0.10 | Rspamd controller | 11334 | HTTP | host nginx admin auth (Phase 2+) |
+| mail | 10.100.0.10 | Rspamd worker-proxy | 11332 | milter | localhost-in-LXC only (Phase 2+) |
+| mail | 10.100.0.10 | ClamAV milter | 8894 | milter | localhost-in-LXC only (Phase 2+) |
+| horde | 10.100.0.11 | Apache (Horde) | 80 | HTTP | HAProxy → mitmproxy → LXC :80 |
+| roundcube | 10.100.0.12 | Apache (Roundcube) | 80 | HTTP | HAProxy → mitmproxy → LXC :80 |
 
-| Listener | Port | Protocol | Exposed how |
-|---|---|---|---|
-| Postfix smtpd | 25 | SMTP | HAProxy TCP pass-through, WAN |
-| Postfix submission | 587 | SMTP+STARTTLS+SASL | HAProxy TCP pass-through, WAN |
-| Postfix submissions | 465 | SMTPS+SASL | HAProxy TCP pass-through, WAN |
-| Dovecot imap | 143 | IMAP+STARTTLS | LAN only |
-| Dovecot imaps | 993 | IMAPS | HAProxy TCP pass-through, WAN |
-| Dovecot ManageSieve | 4190 | sieve+STARTTLS | HAProxy TCP pass-through, WAN |
-| Rspamd controller | 11334 | HTTP | Behind host nginx admin auth (Phase 2+) |
-| Rspamd worker | 11332 | milter | Localhost-in-LXC only (Phase 2+) |
-| ClamAV milter | 8894 | milter | Localhost-in-LXC only (Phase 2+) |
-| Roundcube HTTP (Apache or nginx) | 80 / 443 | HTTP | Behind host nginx on `webmail.<domain>` |
+Host nginx + HAProxy publish:
 
-Host nginx publishes:
 - `https://mail-admin.gk2.secubox.in/` → FastAPI on UNIX socket `/run/secubox/mail.sock`
-- `https://webmail.gk2.secubox.in/` → `http://10.100.0.10:80/` (Roundcube)
+- `https://webmail.gk2.secubox.in/` → `http://10.100.0.12:80/` (Roundcube LXC)
+- `https://horde.gk2.secubox.in/` → `http://10.100.0.11:80/` (Horde LXC)
 - `https://mail.gk2.secubox.in/.well-known/autoconfig/...` → FastAPI autoconfig
 - `https://rspamd.gk2.secubox.in/` → `http://10.100.0.10:11334/` (Phase 2+, admin-auth gated)
 
+The mitmproxy route map (`/srv/mitmproxy/haproxy-routes.json`, both host copy and LXC copy) MUST have entries for `webmail.gk2.secubox.in`, `horde.gk2.secubox.in`, and `rspamd.gk2.secubox.in` after Phase 2. The `sync-mitmproxy-routes.sh` `DEAD_CONTAINER_IPS` list MUST NOT include `10.100.0.10`, `.11`, or `.12`.
+
 ### 5.3 Daemon inventory (end of Phase 8)
 
-Inside `mail` LXC:
+**Inside `mail` LXC:**
 
 | Daemon | Source | Role | Phase added |
 |---|---|---|---|
 | Postfix | Debian | MTA | already on board |
 | Dovecot | Debian | IMAP + LMTP + ManageSieve + SASL auth | already on board |
-| Apache2 + mod_php | Debian | Roundcube webserver | already on board (Phase 5 may migrate to nginx+php-fpm) |
-| Roundcube | Debian | Webmail (with classic/larry skins, plugins) | already on board |
 | Rspamd | Debian | Greylist + spam + DKIM + SPF + DMARC + ARC + ratelimit | Phase 2 |
 | ClamAV (clamd + clamav-milter) | Debian | Virus scan | Phase 2 |
 | mlmmj | Debian | Mailing lists | Phase 6 |
 | acme.sh | upstream | TLS cert renewal | host-side, already wired |
 | imapsync | upstream | One-shot per migration job | Phase 7 |
 
-**Daemons removed by Phase 2:** SpamAssassin, OpenDKIM. (Postgrey was planned by rev. 1 but never installed; dropped from scope.)
+**Inside `roundcube` LXC:**
+
+| Daemon | Source | Role |
+|---|---|---|
+| Apache2 + libapache2-mod-php8.2 | Debian | Roundcube webserver |
+| Roundcube (1.6.x) | Debian | Webmail (classic/larry skins, plugins, SQLite backend) |
+
+**Inside `horde` LXC:**
+
+| Daemon | Source | Role |
+|---|---|---|
+| Apache2 + libapache2-mod-php8.2 | Debian | Horde webserver |
+| Horde Groupware Webmail (5.x) | Debian (`php-horde-webmail`) | IMP webmail + Kronolith cal + Turba contacts + Ingo filters + Nag tasks + Mnemo notes |
+| MariaDB | Debian | Horde tables (users prefs, sessions, calendars) |
+
+**Daemons removed by Phase 2** (from the `mail` LXC): SpamAssassin, OpenDKIM. Apache + Roundcube were already removed from `mail` LXC by the rev. 3 split (moved to `roundcube` LXC). (Postgrey was planned by rev. 1 but never installed; dropped from scope.)
 
 ### 5.4 Identity / provisioning flow (Phase 3)
 
