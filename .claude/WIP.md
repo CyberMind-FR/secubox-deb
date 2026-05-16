@@ -55,18 +55,33 @@ A parallel session diagnosed the same Phase-1-squash-loss and added more fixes (
 
 ---
 
-## 🔄 2026-05-15: Mail stack Phase 2 — Rspamd migration (spec + plan landed on master, no PR yet)
+## 🔄 2026-05-16: Mail stack Phase 2 — Rspamd migration (Issue [#153](https://github.com/CyberMind-FR/secubox-deb/issues/153), branch pushed, awaiting PR)
 
 Brought in by a parallel session (`b78e2584` + `1f562593`). Replaces SpamAssassin + OpenDKIM with Rspamd; single-domain DKIM (`secubox.in`, selector `default`); ClamAV deferred to Phase 2.5.
 
-### Status
+### Status — live-deployed on admin.gk2.secubox.in (192.168.1.200), 13/13 gates green
 
 - **Spec:** [`docs/superpowers/specs/2026-05-15-mail-phase2-rspamd-design.md`](../docs/superpowers/specs/2026-05-15-mail-phase2-rspamd-design.md) committed `b78e2584` — locked decisions D1 (Rspamd replaces SA + OpenDKIM, Phase 0 invariant I3), D2 (ClamAV deferred), D3 (single-domain DKIM, Phase 3 widens).
-- **Plan:** [`docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md`](../docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md) committed `1f562593` — 8 milestones, ~25 bite-sized TDD tasks (A worktree+scaffolding, B `lib/mail/rspamd.sh` + 9 config templates, C FastAPI rspamd router + deprecation shims for `/dkim/*` `/spam/*` `/grey/*`, …).
-- **Phase 1 deploy lessons absorbed:** bats `test_deb_paths.bats` verifies `dpkg-deb -c` ships every `lib/mail/*.sh`; `install_mail_packages` adds `systemctl enable postfix`; acceptance smoke uses `timeout` wrappers, never raw pipes.
-- **Acceptance:** 13-gate smoke covers Postfix milter wiring, DKIM signature on outbound, SPF/DMARC enforcement, greylist behaviour, web UI auth, SA+OpenDKIM purge, and Phase 1 regression checks.
+- **Plan:** [`docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md`](../docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md) committed `1f562593` — 8 milestones, ~25 bite-sized TDD tasks.
+- **Branch:** `feature/153-mail-stack-phase-2-rspamd-migration-roun` pushed to origin, head `637b2221`.
+- **Live deploy 2026-05-16 (admin.gk2.secubox.in):**
+  - `secubox-mail_2.3.0-1~bookworm1_all.deb` installed
+  - rspamd + redis-server provisioned in `mail` LXC
+  - DKIM keypair generated for `secubox.in` selector `default` (2048-bit) — DNS TXT awaiting publication
+  - Postfix milter wired: `smtpd_milters = inet:127.0.0.1:11332`
+  - Rspamd web UI reachable at `https://rspamd.gk2.secubox.in/` via HAProxy → mitmproxy → 10.100.0.10:11334 with `x-secubox-waf: inspected`
+  - `mailctl rspamd purge-legacy` removed OpenDKIM + SpamAssassin cleanly (D9 health gate honoured)
+- **Live-deploy fixes pushed as `637b2221`:**
+  - `configure_rspamd_controller` now chowns `secrets.inc` via `lxc-attach -- chown _rspamd:_rspamd` (kernel idmap) instead of hardcoded host `100110:100110` — `_rspamd` is uid 107 in this Debian image, not 110, so the hardcoded value crash-looped rspamd on `Permission denied`
+  - Acceptance gate 7 grep loosened to `Messages scanned|Pools allocated` (rspamc stat doesn't print the literal string "rspamd")
+  - Acceptance gate 12 `dpkg -l` call wrapped with `|| true` so the smoke doesn't silently abort under `set -e` when the named packages are absent (success case)
+- **Manual deploy steps NOT automated by `rspamd.sh` (carry-forward to a follow-up commit before PR merge):**
+  - LXC config bind-mount entries `/etc/rspamd-keys`, `/var/lib/rspamd/{bayes,history,settings}` need to be appended to `/var/lib/lxc/<name>/config` AND the LXC restarted (function adds the lines but skipped on first install — investigate)
+  - `rspamadm dkim_keygen` only exists inside the LXC, not on host PATH — `rspamd_keygen` should run via `lxc-attach`
+  - HAProxy vhost `rspamd.gk2.secubox.in → mitmproxy_inspector` + matching entry in `/srv/mitmproxy/haproxy-routes.json` (host + LXC copies) should be added by `rspamd-route-sync-patch.sh` — was only partially picked up
+- **Acceptance:** all 13 gates green on the live board (`/tmp/phase2-smoke-final.log` on host).
 
-No implementation worktree opened yet.
+⏭️ **Next:** open the PR for `feature/153-…` (awaiting user `go` per memory — no unprompted PRs).
 
 ---
 
