@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-mail
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, debootstrap, openssl
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, debootstrap, openssl, python3-httpx
 Breaks: secubox-mail-lxc (<< 2.2), secubox-webmail (<< 2.2), secubox-webmail-lxc (<< 2.2)
 Replaces: secubox-mail-lxc (<< 2.2), secubox-webmail (<< 2.2), secubox-webmail-lxc (<< 2.2)
 Suggests: acme.sh
