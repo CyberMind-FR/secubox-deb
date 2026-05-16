@@ -55,7 +55,7 @@ A parallel session diagnosed the same Phase-1-squash-loss and added more fixes (
 
 ---
 
-## 🔄 2026-05-16: Mail stack Phase 2 — Rspamd migration (Issue [#153](https://github.com/CyberMind-FR/secubox-deb/issues/153), branch pushed, awaiting PR)
+## 🔄 2026-05-16: Mail stack Phase 2 — Rspamd migration (Issue [#153](https://github.com/CyberMind-FR/secubox-deb/issues/153), PR [#160](https://github.com/CyberMind-FR/secubox-deb/pull/160) OPEN)
 
 Brought in by a parallel session (`b78e2584` + `1f562593`). Replaces SpamAssassin + OpenDKIM with Rspamd; single-domain DKIM (`secubox.in`, selector `default`); ClamAV deferred to Phase 2.5.
 
@@ -63,7 +63,7 @@ Brought in by a parallel session (`b78e2584` + `1f562593`). Replaces SpamAssassi
 
 - **Spec:** [`docs/superpowers/specs/2026-05-15-mail-phase2-rspamd-design.md`](../docs/superpowers/specs/2026-05-15-mail-phase2-rspamd-design.md) committed `b78e2584` — locked decisions D1 (Rspamd replaces SA + OpenDKIM, Phase 0 invariant I3), D2 (ClamAV deferred), D3 (single-domain DKIM, Phase 3 widens).
 - **Plan:** [`docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md`](../docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md) committed `1f562593` — 8 milestones, ~25 bite-sized TDD tasks.
-- **Branch:** `feature/153-mail-stack-phase-2-rspamd-migration-roun` pushed to origin, head `637b2221`.
+- **Branch:** `feature/153-mail-stack-phase-2-rspamd-migration-roun` pushed to origin, head `bc7545b1`. PR [#160](https://github.com/CyberMind-FR/secubox-deb/pull/160) opened 2026-05-16 — awaiting reviewer + merge.
 - **Live deploy 2026-05-16 (admin.gk2.secubox.in):**
   - `secubox-mail_2.3.0-1~bookworm1_all.deb` installed
   - rspamd + redis-server provisioned in `mail` LXC
@@ -84,7 +84,7 @@ Brought in by a parallel session (`b78e2584` + `1f562593`). Replaces SpamAssassi
 - **Acceptance:** all 13 gates green on the live board after both fix and refactor commits.
 - **HAProxy cert recovery (separate `master` commit `70176578`):** `/srv/haproxy/certs` symlinked to `/data/haproxy/certs` + `haproxy.cfg` rebuilt from baseline + intentional grafts; reload now safe. Full post-mortem in HISTORY.md.
 
-⏭️ **Next:** open the PR for `feature/153-…` (awaiting user `go` per memory — no unprompted PRs).
+⏭️ **Next:** user reviews PR [#160](https://github.com/CyberMind-FR/secubox-deb/pull/160), merges → `scripts/agent-worktree.sh clean 153`. DNS TXT for `default._domainkey.secubox.in` still needs zone-side publication (record content in `/data/volumes/mail/rspamd/dkim/secubox.in/default.txt` on the board).
 
 ---
 
