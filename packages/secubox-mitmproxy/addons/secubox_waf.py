@@ -831,12 +831,14 @@ class SecuBoxWAF:
                             api_url = cfg.get("banner_api_url", "https://admin.gk2.secubox.in/api/v1/metrics/health/summary")
                             inventory_url = cfg.get("cookie_inventory_url", "https://admin.gk2.secubox.in/shared/cookie-inventory.js")
                             ingest_url = cfg.get("cookie_audit_ingest_url", "https://admin.gk2.secubox.in/api/v1/cookie-audit/ingest")
+                            cookie_summary_url = cfg.get("cookie_audit_summary_url", "https://admin.gk2.secubox.in/api/v1/cookie-audit/summary")
                             banner_script = f'''
 <script>
 (function(){{
     if(document.getElementById('health-banner'))return;
     window.SECUBOX_HEALTH_API='{api_url}';
     window.SECUBOX_COOKIE_AUDIT_INGEST='{ingest_url}';
+    window.SECUBOX_COOKIE_AUDIT_SUMMARY='{cookie_summary_url}';
     var s=document.createElement('script');
     s.src='{banner_url}';
     s.crossOrigin='anonymous';
