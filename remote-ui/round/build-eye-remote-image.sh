@@ -634,10 +634,11 @@ chmod +x "$ROOT_MNT/etc/secubox/eye-remote/gadget-setup.sh"
 mkdir -p "$ROOT_MNT/etc/dnsmasq.d"
 cp "$SCRIPT_DIR/files/etc/dnsmasq.d/secubox-eye-tftp.conf" "$ROOT_MNT/etc/dnsmasq.d/"
 
-# Copy systemd-networkd unit: DHCP client on eye0 (USB OTG gadget ethernet)
+# Copy systemd-networkd units: rename usb0→eye0 (.link) + DHCP client on eye0 (.network)
 mkdir -p "$ROOT_MNT/etc/systemd/network"
+cp "$SCRIPT_DIR/files/etc/systemd/network/10-eye0.link" "$ROOT_MNT/etc/systemd/network/"
 cp "$SCRIPT_DIR/files/etc/systemd/network/10-eye0.network" "$ROOT_MNT/etc/systemd/network/"
-log "Installed 10-eye0.network (DHCP client on eye0)"
+log "Installed 10-eye0.link (rename usb0→eye0) and 10-eye0.network (DHCP client on eye0)"
 
 # First-boot hostname service
 cp "$SCRIPT_DIR/files/etc/systemd/system/eye-firstboot-hostname.service" "$ROOT_MNT/etc/systemd/system/"
@@ -730,10 +731,11 @@ mkdir -p "$ROOT_MNT/usr/local/bin"
 cp "$SCRIPT_DIR/files/usr/local/bin/usb-network-up.sh" "$ROOT_MNT/usr/local/bin/"
 chmod +x "$ROOT_MNT/usr/local/bin/usb-network-up.sh"
 
-# USB network service
+# USB network service (installed but NOT enabled — superseded by systemd-networkd)
+# The legacy static-IP usb-network.service competed for usb0/eye0 (issue #158).
+# DHCP on eye0 is now handled by systemd-networkd + 10-eye0.network.
 cp "$SCRIPT_DIR/files/etc/systemd/system/usb-network.service" "$ROOT_MNT/etc/systemd/system/"
-ln -sf /etc/systemd/system/usb-network.service \
-    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/usb-network.service"
+# NOTE: deliberately not creating the wants/ symlink for usb-network.service
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENABLE REQUIRED SERVICES
@@ -748,6 +750,15 @@ mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 ln -sf /lib/systemd/system/pigpiod.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 ln -sf /lib/systemd/system/ssh.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 
+# systemd-networkd handles DHCP on eye0 (USB OTG gadget) via 10-eye0.network.
+# dhcpcd is left enabled for optional WiFi but told to ignore usb0/eye0
+# so it does not race with networkd for the gadget interface (issue #158).
+ln -sf /lib/systemd/system/systemd-networkd.service \
+    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# denyinterfaces directive: dhcpcd must not touch usb0 or eye0
+echo "denyinterfaces eye0 usb0" >> "$ROOT_MNT/etc/dhcpcd.conf"
+log "Enabled systemd-networkd; dhcpcd denyinterfaces eye0 usb0"
+
 # First-boot hostname (must run before networkd so DHCP uses correct hostname)
 ln -sf /etc/systemd/system/eye-firstboot-hostname.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 
@@ -760,7 +771,7 @@ ln -sf /etc/systemd/system/secubox-eye-gadget.service "$ROOT_MNT/etc/systemd/sys
 ln -sf /etc/systemd/system/secubox-fallback-display.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 # NOTE: secubox-eye-agent is broken (import errors) - disabled pending fix
 # ln -sf /etc/systemd/system/secubox-eye-agent.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
-ln -sf /etc/systemd/system/usb-network.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# NOTE: usb-network.service NOT enabled — superseded by systemd-networkd (issue #158)
 
 # Create gadget data directory
 mkdir -p "$ROOT_MNT/var/lib/secubox-gadget"

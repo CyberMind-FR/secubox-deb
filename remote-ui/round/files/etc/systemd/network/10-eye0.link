@@ -1,0 +1,12 @@
+# remote-ui/round/files/etc/systemd/network/10-eye0.link
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: Round image — rename the USB OTG ECM gadget to eye0
+# so the .network file (10-eye0.network) and the host can refer to it
+# by a stable, semantic name (issue #158).
+
+[Match]
+Driver=ecm
+
+[Link]
+Name=eye0
+Description=SecuBox Eye Remote — USB OTG ECM gadget (Pi side)

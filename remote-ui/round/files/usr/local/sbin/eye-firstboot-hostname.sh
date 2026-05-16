@@ -13,6 +13,7 @@ serial=$(awk '/^Serial/ {print $3; exit}' /proc/cpuinfo)
 
 new_host="eye-${serial}"
 hostnamectl set-hostname "$new_host"
-sed -i -E "s/^127\.0\.1\.1.*/127.0.1.1\t${new_host}/" /etc/hosts || true
+tab=$'\t'
+sed -i -E "s/^127\.0\.1\.1.*/127.0.1.1${tab}${new_host}/" /etc/hosts || true
 
 touch "$MARKER"
