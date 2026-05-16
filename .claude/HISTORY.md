@@ -4,11 +4,11 @@
 ---
 ## 2026-05-16
 
-### Cookie audit pipeline — RGPD / ePrivacy reconciler (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), branch `feature/156-cookie-audit-pipeline-rgpd-eprivacy-comp`)
+### Cookie audit pipeline — RGPD / ePrivacy reconciler (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) MERGED `a19486c9`)
 
 **Context:** Operator wants a compliance audit on their own infrastructure: confirm that every cookie effectively present in visitors' browsers is either `Set-Cookie`-traceable (server-emitted) or strictly_necessary. JS-set non-essential cookies (GA, Hotjar, Matomo, FB pixel) must be flagged because LCEN art. 82 / ePrivacy requires prior consent. The WAF already injects `health-banner.js` into every HTML response in transit through mitmproxy — that injection point is the only place that can see both server cookies (via the addon hook) AND browser-effective cookies (via a sibling script that snapshots `document.cookie`).
 
-**Done in worktree `156-cookie-audit-pipeline-rgpd-eprivacy-comp`:**
+**Done:**
 - `packages/secubox-mitmproxy/addons/cookie_audit.py` — mitmproxy response hook that parses every Set-Cookie (full attrs: Domain/Path/Max-Age/Secure/HttpOnly/SameSite), sha256-hashes the value, and appends one JSONL record per cookie to `/var/log/secubox/cookie-audit/server.jsonl`. 7 unit tests.
 - `packages/secubox-hub/www/shared/cookie-inventory.js` — vanilla JS snapshotter that hashes `document.cookie` via SubtleCrypto sha256 and POSTs to `/api/v1/cookie-audit/ingest` at DOMContentLoaded, +2s, and on visibilitychange. Hard-capped at 8 snapshots/page.
 - `packages/secubox-mitmproxy/addons/secubox_waf.py` — extended the existing banner injection to load both scripts; two new CDN-config keys (`cookie_inventory_url`, `cookie_audit_ingest_url`).
@@ -20,7 +20,7 @@
 - All 34 metrics tests still green + 9 new = 43 passing; 7 new mitmproxy tests passing.
 
 **State:**
-- Branch ready to push; per repo policy no PR is opened automatically — awaiting operator validation.
+- PR #159 squash-merged to master as `a19486c9`. Issue #156 auto-closed via `Closes #156`.
 
 **Follow-ups:**
 - AppArmor profile for `usr.bin.mitmdump` needs `/var/log/secubox/cookie-audit/**` rw and `/var/lib/secubox/cookie-audit/**` rw (deferred until deployed).
