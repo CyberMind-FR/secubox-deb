@@ -865,12 +865,10 @@ cmd_rspamd() {
         dkim-keygen)
             local domain="${1:-$DOMAIN}"
             local sel="${2:-default}"
-            LXC_BASE="$LXC_PATH" lxc-attach -n "$CONTAINER" -- rspamadm dkim_keygen \
-                -d "$domain" -s "$sel" -b 2048 \
-                -k "/etc/rspamd-keys/$domain/$sel.key" \
-                > "$DATA_PATH/rspamd/dkim/$domain/$sel.txt"
-            chmod 0600 "$DATA_PATH/rspamd/dkim/$domain/$sel.key" 2>/dev/null || true
-            chown 100110:100110 "$DATA_PATH/rspamd/dkim/$domain/$sel".{key,txt} 2>/dev/null || true
+            # Delegate to the lib function — runs rspamadm inside the LXC and
+            # resolves _rspamd uid via kernel idmap (image-agnostic).
+            LXC_BASE="$LXC_PATH" DATA_PATH="$DATA_PATH" \
+                rspamd_keygen "$CONTAINER" "$domain" "$sel"
             log "DKIM keypair generated for $domain (selector $sel)"
             ;;
         dns-records)

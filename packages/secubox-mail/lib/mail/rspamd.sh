@@ -48,38 +48,60 @@ install_rspamd() {
 }
 
 # ─── configure_rspamd_milter ──────────────────────────────────────────────────
-# Copy 8 of the 9 local.d templates into the LXC (worker-controller.inc is
-# handled separately because it bind-mounts secrets.inc). Set up data dirs +
-# bind-mount entries.
+# Render 8 of the 9 local.d templates inside the live LXC via `lxc-attach`
+# (worker-controller.inc is handled separately because it bind-mounts
+# secrets.inc). Set up host-side data dirs + bind-mount entries.
+#
+# Phase 2 lesson (commit 637b2221): writing through the host-side rootfs path
+# `${LXC_BASE}/${container}/rootfs/etc/rspamd/local.d/` is brittle — on this
+# board the runtime rootfs lives at `/data/lxc/mail/rootfs/` per `lxc.rootfs.
+# path`, while `/var/lib/lxc/mail/rootfs/` is a stale shell that the running
+# LXC does not see. Streaming each file through `lxc-attach -- tee` avoids
+# guessing the rootfs path and lets the kernel resolve idmap on writes.
 configure_rspamd_milter() {
     local container="$1"
     [ -n "$container" ] || { echo "configure_rspamd_milter: container required" >&2; return 1; }
     local templates="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd"
-    local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
     local data="${DATA_PATH:-/data/volumes/mail}"
-    local local_d="$rootfs/etc/rspamd/local.d"
 
-    install -d -m 0755 "$local_d"
+    if ! lxc-info -n "$container" 2>/dev/null | grep -q "State:.*RUNNING"; then
+        echo "configure_rspamd_milter: LXC '$container' is not running" >&2
+        return 1
+    fi
+
+    lxc-attach -n "$container" -- install -d -m 0755 /etc/rspamd/local.d
     for f in options.inc worker-proxy.inc worker-normal.inc \
              dkim_signing.conf arc.conf dmarc.conf \
              greylist.conf ratelimit.conf; do
-        install -m 0644 "$templates/local.d/$f" "$local_d/$f"
+        [ -f "$templates/local.d/$f" ] || {
+            echo "configure_rspamd_milter: template $templates/local.d/$f missing" >&2
+            return 1
+        }
+        lxc-attach -n "$container" -- tee "/etc/rspamd/local.d/$f" >/dev/null < "$templates/local.d/$f"
+        lxc-attach -n "$container" -- chmod 0644 "/etc/rspamd/local.d/$f"
     done
 
-    # Persistent data dirs on host — owner 100110:100110 = _rspamd inside unprivileged LXC.
+    # Persistent data dirs on host — chown via lxc-attach so the kernel maps
+    # _rspamd uid (varies per image: 107 in Debian 12 default; 110 in some
+    # rspamd-only minimal builds) to the right outside-LXC subuid.
     install -d -m 0750 "$data/rspamd/dkim" "$data/rspamd/bayes" \
                        "$data/rspamd/history" "$data/rspamd/settings"
-    chown -R 100110:100110 "$data/rspamd" 2>/dev/null || true
 
-    # Add bind-mount entries to the LXC config (idempotent).
+    # Add bind-mount entries to the LXC config (idempotent). Note: requires
+    # a `lxc-stop && lxc-start` cycle of the container to activate — these
+    # entries are not pickup-on-the-fly. Caller (mailctl) is expected to do
+    # the restart before generating DKIM keys.
     local lxc_conf="${LXC_BASE:-/var/lib/lxc}/$container/config"
     if [ -f "$lxc_conf" ] && ! grep -q "/etc/rspamd-keys" "$lxc_conf"; then
         cat >> "$lxc_conf" <<EOF
+
+# Phase 2 Rspamd bind mounts (added by configure_rspamd_milter)
 lxc.mount.entry = $data/rspamd/dkim    etc/rspamd-keys              none bind,create=dir 0 0
 lxc.mount.entry = $data/rspamd/bayes   var/lib/rspamd/bayes         none bind,create=dir 0 0
 lxc.mount.entry = $data/rspamd/history var/lib/rspamd/history       none bind,create=dir 0 0
 lxc.mount.entry = $data/rspamd/settings var/lib/rspamd/settings     none bind,create=dir 0 0
 EOF
+        echo "[rspamd] bind-mount entries appended to $lxc_conf — restart $container to activate"
     fi
     echo "[rspamd] milter config rendered in $container"
 }
@@ -92,25 +114,35 @@ configure_rspamd_controller() {
     local container="$1"
     [ -n "$container" ] || { echo "configure_rspamd_controller: container required" >&2; return 1; }
     local templates="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd"
-    local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
-    local local_d="$rootfs/etc/rspamd/local.d"
     local secret_host="/etc/secubox/secrets/rspamd-controller.pw"
+
+    if ! lxc-info -n "$container" 2>/dev/null | grep -q "State:.*RUNNING"; then
+        echo "configure_rspamd_controller: LXC '$container' is not running" >&2
+        return 1
+    fi
 
     install -d -m 0700 /etc/secubox/secrets
     if [ ! -s "$secret_host" ]; then
         openssl rand -base64 24 > "$secret_host"
         chmod 0600 "$secret_host"
     fi
-    install -m 0644 "$templates/local.d/worker-controller.inc" "$local_d/worker-controller.inc"
+
+    [ -f "$templates/local.d/worker-controller.inc" ] || {
+        echo "configure_rspamd_controller: template worker-controller.inc missing" >&2
+        return 1
+    }
+    lxc-attach -n "$container" -- tee /etc/rspamd/local.d/worker-controller.inc >/dev/null \
+        < "$templates/local.d/worker-controller.inc"
+    lxc-attach -n "$container" -- chmod 0644 /etc/rspamd/local.d/worker-controller.inc
 
     local pw
     pw=$(tr -d '\n' < "$secret_host")
-    cat > "$local_d/secrets.inc" <<EOF_INC
+    lxc-attach -n "$container" -- tee /etc/rspamd/local.d/secrets.inc >/dev/null <<EOF_INC
 password = "$pw";
 enable_password = "$pw";
 EOF_INC
     # Resolve _rspamd uid/gid via the LXC itself — the host's 100110 ≠ _rspamd
-    # on all Debian images (varies with packages installed). Run chown from
+    # on all Debian images (107 on the Phase 2 deploy image). Run chown from
     # inside the container so the kernel applies idmap automatically.
     lxc-attach -n "$container" -- chown _rspamd:_rspamd /etc/rspamd/local.d/secrets.inc 2>/dev/null || true
     lxc-attach -n "$container" -- chmod 0640 /etc/rspamd/local.d/secrets.inc 2>/dev/null || true
@@ -139,32 +171,67 @@ configure_rspamd_dkim() {
     local selector="${3:-default}"
     local data="${DATA_PATH:-/data/volumes/mail}"
 
+    [ -n "$container" ] || { echo "configure_rspamd_dkim: container required" >&2; return 1; }
     install -d -m 0750 "$data/rspamd/dkim/$domain"
-    chown -R 100110:100110 "$data/rspamd/dkim" 2>/dev/null || true
 
     if [ ! -f "$data/rspamd/dkim/$domain/$selector.key" ]; then
-        rspamd_keygen "$domain" "$selector"
+        rspamd_keygen "$container" "$domain" "$selector"
     fi
 }
 
+# Generate a 2048-bit DKIM keypair via `rspamadm dkim_keygen` *inside* the
+# named LXC — rspamadm is shipped by the rspamd package and is only on PATH
+# inside the container. Phase 2 lesson (commit 637b2221): the previous host-
+# side variant errored out with "rspamadm not on PATH".
 rspamd_keygen() {
-    local domain="$1"
-    local selector="${2:-default}"
+    local container="$1"
+    local domain="$2"
+    local selector="${3:-default}"
     local data="${DATA_PATH:-/data/volumes/mail}"
-    local outdir="$data/rspamd/dkim/$domain"
-    install -d -m 0750 "$outdir"
-    local keyfile="$outdir/$selector.key"
-    local txtfile="$outdir/$selector.txt"
 
-    if ! command -v rspamadm >/dev/null 2>&1; then
-        echo "rspamd_keygen: rspamadm not on PATH (run install_rspamd first or run inside LXC)" >&2
+    [ -n "$container" ] || { echo "rspamd_keygen: container required" >&2; return 1; }
+    [ -n "$domain" ]    || { echo "rspamd_keygen: domain required" >&2; return 1; }
+    if ! lxc-info -n "$container" 2>/dev/null | grep -q "State:.*RUNNING"; then
+        echo "rspamd_keygen: LXC '$container' is not running" >&2
         return 1
     fi
 
-    rspamadm dkim_keygen -d "$domain" -s "$selector" -b 2048 -k "$keyfile" > "$txtfile"
-    chmod 0600 "$keyfile"
-    chown 100110:100110 "$keyfile" "$txtfile" 2>/dev/null || true
-    echo "[rspamd] DKIM keypair generated: $keyfile (+ DNS TXT in $txtfile)"
+    # Output dir inside the LXC — relies on the `/etc/rspamd-keys` bind mount
+    # added by configure_rspamd_milter. If that mount isn't active, fall back
+    # to writing into /var/lib/rspamd which is always present in the LXC.
+    local outdir="/etc/rspamd-keys/$domain"
+    if ! lxc-attach -n "$container" -- test -d /etc/rspamd-keys 2>/dev/null; then
+        outdir="/var/lib/rspamd/dkim/$domain"
+        echo "[rspamd] /etc/rspamd-keys bind mount not active — falling back to $outdir" >&2
+    fi
+
+    lxc-attach -n "$container" -- install -d -m 0750 "$outdir"
+    lxc-attach -n "$container" -- chown _rspamd:_rspamd "$outdir" 2>/dev/null || true
+
+    # rspamadm writes the key to -k <path> and prints the DNS TXT to stdout.
+    # Capture the TXT alongside the key.
+    lxc-attach -n "$container" -- bash -c "
+        set -euo pipefail
+        rspamadm dkim_keygen -d '$domain' -s '$selector' -b 2048 \
+            -k '$outdir/$selector.key' > '$outdir/$selector.txt'
+        chown _rspamd:_rspamd '$outdir/$selector.key' '$outdir/$selector.txt'
+        chmod 0600 '$outdir/$selector.key'
+        chmod 0644 '$outdir/$selector.txt'
+    "
+
+    # Mirror the public TXT to the host-side data dir so external tooling
+    # (e.g. DNS-publishing scripts on the orchestrator) can read it without
+    # entering the LXC.
+    local host_dir="$data/rspamd/dkim/$domain"
+    install -d -m 0750 "$host_dir"
+    if [ "$outdir" = "/etc/rspamd-keys/$domain" ]; then
+        # Bind-mount path — already visible at $host_dir on the host.
+        :
+    else
+        # Fallback path inside the LXC rootfs; copy out via lxc-attach.
+        lxc-attach -n "$container" -- cat "$outdir/$selector.txt" > "$host_dir/$selector.txt"
+    fi
+    echo "[rspamd] DKIM keypair generated: $outdir/$selector.key (DNS TXT in $host_dir/$selector.txt)"
 }
 
 rspamd_dns_records() {
