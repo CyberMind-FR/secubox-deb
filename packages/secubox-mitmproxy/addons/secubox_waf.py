@@ -826,19 +826,27 @@ class SecuBoxWAF:
                     try:
                         html = flow.response.content.decode("utf-8", errors="ignore")
                         if "</body>" in html.lower() and "health-banner.js" not in html:
-                            # Inject health banner script before </body>
+                            # Inject health banner + cookie inventory before </body>
                             banner_url = cfg.get("banner_url", "https://admin.gk2.secubox.in/shared/health-banner.js")
                             api_url = cfg.get("banner_api_url", "https://admin.gk2.secubox.in/api/v1/metrics/health/summary")
+                            inventory_url = cfg.get("cookie_inventory_url", "https://admin.gk2.secubox.in/shared/cookie-inventory.js")
+                            ingest_url = cfg.get("cookie_audit_ingest_url", "https://admin.gk2.secubox.in/api/v1/cookie-audit/ingest")
                             banner_script = f'''
 <script>
 (function(){{
     if(document.getElementById('health-banner'))return;
     window.SECUBOX_HEALTH_API='{api_url}';
+    window.SECUBOX_COOKIE_AUDIT_INGEST='{ingest_url}';
     var s=document.createElement('script');
     s.src='{banner_url}';
     s.crossOrigin='anonymous';
     s.onerror=function(){{console.warn('[SecuBox] Banner load failed')}};
     document.body.appendChild(s);
+    var c=document.createElement('script');
+    c.src='{inventory_url}';
+    c.crossOrigin='anonymous';
+    c.onerror=function(){{console.warn('[SecuBox] Cookie inventory load failed')}};
+    document.body.appendChild(c);
 }})();
 </script>
 '''
