@@ -20,6 +20,14 @@ case "$1" in
         # (we ship our own scoped instance instead).
         systemctl mask dnsmasq.service 2>/dev/null || true
 
+        # Load the nftables snippet right now so DHCP traffic on eye-br0
+        # is admitted without waiting for a reboot. The file lives under
+        # /etc/secubox/nftables.d/ and is also picked up at boot by
+        # secubox-firewall's loader.
+        if [ -x /usr/sbin/nft ] && [ -f /etc/secubox/nftables.d/secubox-eye-remote.nft ]; then
+            nft -f /etc/secubox/nftables.d/secubox-eye-remote.nft 2>/dev/null || true
+        fi
+
         # Reload + enable our scoped DHCP instance
         deb-systemd-helper unmask secubox-eye-remote-dhcp.service >/dev/null || true
         if deb-systemd-helper --quiet was-enabled secubox-eye-remote-dhcp.service; then

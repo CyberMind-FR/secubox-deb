@@ -55,3 +55,24 @@ def test_post_lease_event_rejects_bad_mac(client: TestClient):
         json={"action": "add", "mac": "not-a-mac", "ip": "10.55.0.11"},
     )
     assert r.status_code == 422
+
+
+def test_get_leases_resilient_to_malformed_reservations(monkeypatch, tmp_path):
+    leases = tmp_path / "leases"
+    leases.write_text(
+        f"{int(__import__('time').time()) + 3600} 02:fb:00:00:11:03 10.55.0.11 host id\n"
+    )
+    res = tmp_path / "reservations.conf"
+    res.write_text("not-a-valid-line\n")  # malformed → ValueError if not caught
+    monkeypatch.setenv("SECUBOX_EYE_LEASE_FILE", str(leases))
+    monkeypatch.setenv("SECUBOX_EYE_RESERVATIONS_FILE", str(res))
+
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    client = TestClient(app)
+    r = client.get("/api/v1/eye-remote/leases")
+    assert r.status_code == 200, r.text
+    # Lease still shown, just with no joined hostname from reservations
+    body = r.json()
+    assert any(row["mac"] == "02:fb:00:00:11:03" for row in body)

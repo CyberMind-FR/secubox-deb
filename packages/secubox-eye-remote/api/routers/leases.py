@@ -12,13 +12,23 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from ..lib.leasefile import parse_leases
 from ..lib.reservations import filter_active, parse_reservations
 from ..models.lease import LeaseEvent, LeaseRecord
 
 router = APIRouter(prefix="/eye-remote", tags=["eye-remote"])
+
+# JWT auth dependency - import from secubox_core
+try:
+    from secubox_core.auth import require_jwt
+except ImportError:
+    # Fallback for standalone eye-remote deployment on Pi Zero
+    def require_jwt():
+        """Fallback JWT auth when secubox_core not available."""
+        return None
+
 
 _DEFAULT_LEASE_FILE = "/var/lib/misc/dnsmasq-eye-remote.leases"
 _DEFAULT_RESERVATIONS_FILE = "/etc/secubox/eye-remote/reservations.conf"
@@ -34,11 +44,15 @@ def _read(path_env: str, default: str) -> str:
 
 
 @router.get("/leases", response_model=list[LeaseRecord])
-def list_leases() -> list[LeaseRecord]:
+def list_leases(_: None = Depends(require_jwt)) -> list[LeaseRecord]:
     leases = parse_leases(_read("SECUBOX_EYE_LEASE_FILE", _DEFAULT_LEASE_FILE))
-    reservations = parse_reservations(
-        _read("SECUBOX_EYE_RESERVATIONS_FILE", _DEFAULT_RESERVATIONS_FILE)
-    )
+    try:
+        reservations = parse_reservations(
+            _read("SECUBOX_EYE_RESERVATIONS_FILE", _DEFAULT_RESERVATIONS_FILE)
+        )
+    except ValueError as exc:
+        log.warning("reservations.conf parse error: %s", exc)
+        reservations = []
     active_macs = {l.mac.lower() for l in leases}
     by_mac = {r.mac.lower(): r for r in filter_active(reservations, active_macs)}
 
@@ -65,7 +79,7 @@ def list_leases() -> list[LeaseRecord]:
 
 
 @router.post("/lease-events")
-def lease_event(body: LeaseEvent) -> dict[str, str]:
+def lease_event(body: LeaseEvent, _: None = Depends(require_jwt)) -> dict[str, str]:
     log.info(
         "lease-event action=%s mac=%s ip=%s host=%s",
         body.action,
