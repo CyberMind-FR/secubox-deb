@@ -5,3 +5,7 @@ menu.d usr/share/secubox/
 www usr/share/secubox/
 nginx/eye-remote.conf etc/nginx/secubox.d/
 debian/secubox-eye-remote.service etc/systemd/system/
+dnsmasq.d/eye-remote.conf etc/dnsmasq.d/
+etc/secubox/eye-remote/reservations.conf etc/secubox/eye-remote/
+nftables/secubox-eye-remote.nft etc/secubox/nftables.d/
+systemd/secubox-eye-remote-dhcp.service etc/systemd/system/

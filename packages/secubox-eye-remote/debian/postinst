@@ -1,20 +1,43 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# packages/secubox-eye-remote/debian/postinst
 set -e
 
 case "$1" in
     configure)
         # Reload udev rules
         udevadm control --reload-rules || true
-        
+
         # Create runtime directory
         mkdir -p /run/secubox
         chown secubox:secubox /run/secubox 2>/dev/null || true
-        
-        # Enable and start service
+
+        # Ensure config dirs exist with correct ownership
+        install -d -m 0750 -o root -g root /etc/secubox/eye-remote
+        install -d -m 0755 -o root -g root /var/log/secubox
+
+        # Prevent Debian's system-wide dnsmasq from grabbing port 53
+        # (we ship our own scoped instance instead).
+        systemctl mask dnsmasq.service 2>/dev/null || true
+
+        # Reload + enable our scoped DHCP instance
+        deb-systemd-helper unmask secubox-eye-remote-dhcp.service >/dev/null || true
+        if deb-systemd-helper --quiet was-enabled secubox-eye-remote-dhcp.service; then
+            deb-systemd-helper enable secubox-eye-remote-dhcp.service >/dev/null || true
+        else
+            deb-systemd-helper update-state secubox-eye-remote-dhcp.service >/dev/null || true
+            deb-systemd-helper enable secubox-eye-remote-dhcp.service >/dev/null || true
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl --system daemon-reload >/dev/null || true
+            deb-systemd-invoke start secubox-eye-remote-dhcp.service >/dev/null || true
+        fi
+
+        # Enable and start main gadget service
         systemctl daemon-reload
         systemctl enable secubox-eye-remote.service || true
         systemctl start secubox-eye-remote.service || true
-        
+
         echo "SecuBox Eye Remote installed."
         echo "Connect Pi Zero W to USB port - auto-detection enabled."
         ;;
