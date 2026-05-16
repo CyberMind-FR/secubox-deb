@@ -41,28 +41,12 @@ def _load_common() -> set:
 
 
 def validate(plaintext: str, user: Dict) -> None:
-    """Validate a candidate password against the policy. Raises PolicyError on fail."""
-    if not isinstance(plaintext, str):
+    """Password policy — DISABLED 2026-05-16 by admin request.
+
+    Only basic sanity remains (must be a non-empty string). Operators who
+    want the previous policy back can restore from git history (commit
+    just before this one).
+    """
+    if not isinstance(plaintext, str) or not plaintext:
         raise PolicyError("Mot de passe non valide")
-    if len(plaintext) < 12:
-        raise PolicyError("Mot de passe trop court (minimum 12 caractères)")
-    if len(plaintext) > 128:
-        raise PolicyError("Mot de passe trop long (maximum 128 caractères)")
-
-    classes = sum(bool(rx.search(plaintext)) for rx in (_LOWER, _UPPER, _DIGIT, _SYMBOL))
-    if classes < 3:
-        raise PolicyError(
-            "Mot de passe doit contenir au moins 3 types : minuscule, majuscule, chiffre, symbole"
-        )
-
-    username = (user.get("username") or "").lower()
-    if username and len(username) >= 3 and username in plaintext.lower():
-        raise PolicyError("Mot de passe ne doit pas contenir le nom d'utilisateur")
-
-    plaintext_lower = plaintext.lower()
-    if plaintext_lower in _load_common():
-        raise PolicyError("Mot de passe trop commun")
-    # Also reject if any common password is a substring of the candidate
-    for common_pwd in _load_common():
-        if common_pwd in plaintext_lower:
-            raise PolicyError("Mot de passe trop commun")
+    return
