@@ -829,6 +829,86 @@ PY
 }
 
 # ============================================================================
+# Phase 2 — Rspamd subcommand
+# ============================================================================
+
+cmd_rspamd() {
+    [ "$(id -u)" -eq 0 ] || { error "Root required"; return 1; }
+    : "${LIB_DIR:=/usr/lib/secubox/mail/lib}"
+    [ -f "$LIB_DIR/rspamd.sh" ] || LIB_DIR="$(dirname "$0")/../lib/mail"
+    # shellcheck source=/dev/null
+    source "$LIB_DIR/rspamd.sh"
+
+    local sub="${1:-status}"
+    shift || true
+    case "$sub" in
+        install)
+            LXC_BASE="$LXC_PATH" install_rspamd "$CONTAINER"
+            LXC_BASE="$LXC_PATH" configure_rspamd_milter "$CONTAINER"
+            LXC_BASE="$LXC_PATH" configure_rspamd_controller "$CONTAINER"
+            LXC_BASE="$LXC_PATH" configure_rspamd_dkim "$CONTAINER" "$DOMAIN" "default"
+            LXC_BASE="$LXC_PATH" configure_rspamd_postfix_milter "$CONTAINER"
+            log "Rspamd installed. Start with: mailctl rspamd start"
+            ;;
+        start|restart)
+            lxc-attach -n "$CONTAINER" -- systemctl restart rspamd
+            ;;
+        stop)
+            lxc-attach -n "$CONTAINER" -- systemctl stop rspamd
+            ;;
+        reload)
+            lxc-attach -n "$CONTAINER" -- systemctl reload rspamd
+            ;;
+        status)
+            lxc-attach -n "$CONTAINER" -- rspamc stat 2>&1 | head -40
+            ;;
+        dkim-keygen)
+            local domain="${1:-$DOMAIN}"
+            local sel="${2:-default}"
+            LXC_BASE="$LXC_PATH" lxc-attach -n "$CONTAINER" -- rspamadm dkim_keygen \
+                -d "$domain" -s "$sel" -b 2048 \
+                -k "/etc/rspamd-keys/$domain/$sel.key" \
+                > "$DATA_PATH/rspamd/dkim/$domain/$sel.txt"
+            chmod 0600 "$DATA_PATH/rspamd/dkim/$domain/$sel.key" 2>/dev/null || true
+            chown 100110:100110 "$DATA_PATH/rspamd/dkim/$domain/$sel".{key,txt} 2>/dev/null || true
+            log "DKIM keypair generated for $domain (selector $sel)"
+            ;;
+        dns-records)
+            local domain="${1:-$DOMAIN}"
+            local sel="${2:-default}"
+            cat "$DATA_PATH/rspamd/dkim/$domain/$sel.txt" 2>/dev/null \
+                || error "no DNS record for $domain/$sel"
+            ;;
+        learn-spam)
+            local target="${1:-}"
+            [ -n "$target" ] || { echo "Usage: mailctl rspamd learn-spam <maildir-or-file>"; return 1; }
+            lxc-attach -n "$CONTAINER" -- rspamc learn_spam "$target"
+            ;;
+        learn-ham)
+            local target="${1:-}"
+            [ -n "$target" ] || { echo "Usage: mailctl rspamd learn-ham <maildir-or-file>"; return 1; }
+            lxc-attach -n "$CONTAINER" -- rspamc learn_ham "$target"
+            ;;
+        purge-legacy)
+            LXC_BASE="$LXC_PATH" rspamd_purge_legacy "$CONTAINER"
+            ;;
+        *)
+            cat <<USAGE
+Usage:
+  mailctl rspamd install
+  mailctl rspamd start | stop | restart | reload
+  mailctl rspamd status
+  mailctl rspamd dkim-keygen [<domain>] [<selector>]
+  mailctl rspamd dns-records [<domain>] [<selector>]
+  mailctl rspamd learn-spam <maildir-or-file>
+  mailctl rspamd learn-ham  <maildir-or-file>
+  mailctl rspamd purge-legacy            # purge SA/OpenDKIM after Rspamd verified
+USAGE
+            ;;
+    esac
+}
+
+# ============================================================================
 # Main
 # ============================================================================
 
@@ -842,6 +922,8 @@ case "${1:-}" in
     uninstall)   shift; cmd_uninstall "$@" ;;
     migrate)     shift; cmd_migrate "$@" ;;
     migrate-config) shift; cmd_migrate_config "$@" ;;
+    # Phase 2 — Rspamd
+    rspamd)      shift; cmd_rspamd "$@" ;;
     # Service control
     start)       shift; cmd_start "$@" ;;
     stop)        shift; cmd_stop "$@" ;;
