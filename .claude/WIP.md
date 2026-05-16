@@ -1,5 +1,25 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-15*
+*Mis à jour : 2026-05-16*
+
+---
+
+## 🔄 2026-05-16: Cookie audit pipeline (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), branch `feature/156-cookie-audit-pipeline-rgpd-eprivacy-comp` — implementation complete, awaiting validation)
+
+RGPD / ePrivacy compliance reconciler. The mitmproxy WAF already injects a banner script into every HTML response; that injection now also loads `cookie-inventory.js` which snapshots `document.cookie` (sha256-hashed). Server-side, a new mitmproxy addon (`cookie_audit.py`) ledger-writes every `Set-Cookie` it sees. Both streams are reconciled by a `CookieAuditAggregator` in secubox-metrics → per-cookie verdict `source ∈ {http, js, both}` + RGPD violation flag (`source == "js"` AND `category != "strictly_necessary"`).
+
+**Endpoints (CORS-open, credentials: omit):**
+- `POST /api/v1/cookie-audit/ingest`
+- `GET  /api/v1/cookie-audit/report?host=…`
+- `GET  /api/v1/cookie-audit/summary`
+
+**Tests:** 43 metrics tests green (34 pre-existing + 9 new), 7 new mitmproxy tests green.
+
+**Status:** All eight implementation tasks of the plan executed in worktree, branch ready to push. No PR opened (memory: `feedback_no_unprompted_prs`) — awaiting operator validation.
+
+**Next manual steps before merge:**
+- Operator review of classifier baseline regexes in `common/secubox_core/config.py`
+- AppArmor rule update for `/var/log/secubox/cookie-audit/`
+- Logrotate snippet for the JSONL ledger
 
 ---
 
