@@ -58,7 +58,34 @@ enabled = true
 [cert_status]
 enabled = true
 warn_days = 30
+
+[cookie_audit]
+enabled = true
 ```
+
+## Cookie Audit (RGPD / ePrivacy, issue #156)
+
+Reconciles two cookie streams to detect RGPD violations on
+operator-owned vhosts:
+
+| Method | Path                                  | Description                                          |
+|--------|---------------------------------------|------------------------------------------------------|
+| POST   | `/api/v1/cookie-audit/ingest`         | Browser snapshot ingest (credentials: omit, hashed)  |
+| GET    | `/api/v1/cookie-audit/report?host=…`  | Per-vhost reconciled report                          |
+| GET    | `/api/v1/cookie-audit/summary`        | Global rollup (counts + violations)                  |
+
+Each cookie's verdict carries a `source` flag — `http` (only server
+`Set-Cookie`), `js` (only `document.cookie`, set by client-side script), or
+`both`. A `js`-source cookie that is not `strictly_necessary` flips
+`rgpd_violation = true` (LCEN art. 82 / ePrivacy). The default classifier
+covers GA/Matomo/Hotjar/Facebook/Microsoft Clarity patterns; extend via
+`[cookie_audit.classifier]` in `secubox.conf`. Cookie values are
+sha256-hashed end-to-end — the API never receives raw values.
+
+Disabled by default. Requires the companion mitmproxy `cookie_audit` addon
+(see `packages/secubox-mitmproxy/README.md`) and the browser-side
+`shared/cookie-inventory.js` (loaded automatically via the WAF banner
+injection).
 
 MaxMind GeoLite2-ASN refresh: install `geoipupdate` (available in Debian
 bookworm's `contrib` repository; `secubox-metrics` lists it as a
