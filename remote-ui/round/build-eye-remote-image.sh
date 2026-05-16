@@ -619,6 +619,11 @@ cp "$SCRIPT_DIR/secubox-otg-gadget.sh" "$ROOT_MNT/usr/local/sbin/"
 cp "$SCRIPT_DIR/secubox-hid-keyboard.sh" "$ROOT_MNT/usr/local/sbin/"
 chmod +x "$ROOT_MNT/usr/local/sbin/secubox-"*.sh
 
+# First-boot hostname script (derives hostname from CPU serial)
+cp "$SCRIPT_DIR/files/usr/local/sbin/eye-firstboot-hostname.sh" "$ROOT_MNT/usr/local/sbin/"
+chmod +x "$ROOT_MNT/usr/local/sbin/eye-firstboot-hostname.sh"
+log "Installed eye-firstboot-hostname.sh"
+
 # Copy v2.1.0 gadget-setup.sh
 mkdir -p "$ROOT_MNT/etc/secubox/eye-remote"
 cp "$SCRIPT_DIR/files/etc/secubox/eye-remote/gadget-setup.sh" "$ROOT_MNT/etc/secubox/eye-remote/"
@@ -633,6 +638,10 @@ cp "$SCRIPT_DIR/files/etc/dnsmasq.d/secubox-eye-tftp.conf" "$ROOT_MNT/etc/dnsmas
 mkdir -p "$ROOT_MNT/etc/systemd/network"
 cp "$SCRIPT_DIR/files/etc/systemd/network/10-eye0.network" "$ROOT_MNT/etc/systemd/network/"
 log "Installed 10-eye0.network (DHCP client on eye0)"
+
+# First-boot hostname service
+cp "$SCRIPT_DIR/files/etc/systemd/system/eye-firstboot-hostname.service" "$ROOT_MNT/etc/systemd/system/"
+log "Installed eye-firstboot-hostname.service"
 
 # Copy systemd files
 cp "$SCRIPT_DIR/files/etc/systemd/system/secubox-eye-gadget.service" "$ROOT_MNT/etc/systemd/system/"
@@ -738,6 +747,9 @@ mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 # Core services
 ln -sf /lib/systemd/system/pigpiod.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 ln -sf /lib/systemd/system/ssh.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+
+# First-boot hostname (must run before networkd so DHCP uses correct hostname)
+ln -sf /etc/systemd/system/eye-firstboot-hostname.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 
 # HyperPixel display
 ln -sf /etc/systemd/system/hyperpixel2r-init.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true

@@ -1,0 +1,15 @@
+# remote-ui/round/files/etc/systemd/system/eye-firstboot-hostname.service
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox Eye Remote — first-boot hostname from CPU serial
+ConditionPathExists=!/var/lib/secubox/eye-firstboot-hostname.done
+After=local-fs.target
+Before=systemd-networkd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/eye-firstboot-hostname.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
