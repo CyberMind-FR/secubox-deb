@@ -1,0 +1,21 @@
+# remote-ui/round/files/etc/systemd/network/10-eye0.network
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: Round image — DHCP client on the USB OTG ethernet gadget.
+#
+# Replaces the legacy static peer config (10.55.0.2/30 with host 10.55.0.1).
+# The host (eye-br0) runs dnsmasq scoped to eye-br0 and hands out a
+# stable lease per MAC (issue #158).
+
+[Match]
+Name=eye0
+
+[Network]
+DHCP=yes
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+
+[DHCPv4]
+UseRoutes=true
+UseDNS=false
+UseNTP=false
+RouteMetric=2048

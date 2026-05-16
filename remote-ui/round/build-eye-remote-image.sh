@@ -629,6 +629,11 @@ chmod +x "$ROOT_MNT/etc/secubox/eye-remote/gadget-setup.sh"
 mkdir -p "$ROOT_MNT/etc/dnsmasq.d"
 cp "$SCRIPT_DIR/files/etc/dnsmasq.d/secubox-eye-tftp.conf" "$ROOT_MNT/etc/dnsmasq.d/"
 
+# Copy systemd-networkd unit: DHCP client on eye0 (USB OTG gadget ethernet)
+mkdir -p "$ROOT_MNT/etc/systemd/network"
+cp "$SCRIPT_DIR/files/etc/systemd/network/10-eye0.network" "$ROOT_MNT/etc/systemd/network/"
+log "Installed 10-eye0.network (DHCP client on eye0)"
+
 # Copy systemd files
 cp "$SCRIPT_DIR/files/etc/systemd/system/secubox-eye-gadget.service" "$ROOT_MNT/etc/systemd/system/"
 mkdir -p "$ROOT_MNT/etc/systemd/system/dnsmasq.service.d"
