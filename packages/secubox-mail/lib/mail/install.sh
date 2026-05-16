@@ -49,17 +49,26 @@ install_mail_packages() {
     local container="$1"
     local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
 
-    echo "[install] installing Postfix + Dovecot inside $rootfs..."
+    echo "[install] installing Postfix + Dovecot + Rspamd inside $rootfs..."
     chroot "$rootfs" /bin/bash <<'CHROOT_EOF'
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
+# Phase 2 (rev. 3): mail LXC = MTA + MDA + Rspamd only.
+# Apache/Roundcube live in the roundcube LXC; no webmail packages here.
 apt-get install -y --no-install-recommends \
     postfix postfix-lmdb \
     dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd \
+    rspamd redis-server \
     rsyslog ca-certificates openssl
 
+# Redis is the future bayes/ratelimit backend (Phase 8); keep it disabled.
+systemctl disable redis-server.service 2>/dev/null || true
+
 groupadd -g 5000 vmail 2>/dev/null || true
-useradd -u 5000 -g vmail -s /usr/sbin/nologin -d /var/mail -M vmail 2>/dev/null || true
+useradd -u 5000 -g vmail -s /usr/sbin/nologin -d /var/vmail -M vmail 2>/dev/null || true
+
+# Phase 1 follow-up: ensure Postfix + Dovecot autostart on LXC boot.
+systemctl enable postfix dovecot rspamd
 
 apt-get clean
 rm -rf /var/lib/apt/lists/*

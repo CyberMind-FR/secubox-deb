@@ -14,6 +14,22 @@ if [ "$1" = "configure" ]; then
         fi
     fi
 
+    # Phase 2: on upgrade from < 2.3, provision Rspamd secrets + data dirs.
+    if dpkg --compare-versions "${2:-0}" lt-nl 2.3.0; then
+        install -d -m 0700 /etc/secubox/secrets
+        if [ ! -s /etc/secubox/secrets/rspamd-controller.pw ]; then
+            openssl rand -base64 24 > /etc/secubox/secrets/rspamd-controller.pw
+            chmod 0600 /etc/secubox/secrets/rspamd-controller.pw
+        fi
+        install -d -m 0750 /data/volumes/mail/rspamd \
+                           /data/volumes/mail/rspamd/dkim \
+                           /data/volumes/mail/rspamd/bayes \
+                           /data/volumes/mail/rspamd/history \
+                           /data/volumes/mail/rspamd/settings
+        # _rspamd uid in unprivileged LXC = 100110 (5000 + 100000-ish; safe to chown blindly)
+        chown -R 100110:100110 /data/volumes/mail/rspamd 2>/dev/null || true
+    fi
+
     systemctl daemon-reload
     systemctl enable secubox-mail.service || true
     systemctl start secubox-mail.service || true
