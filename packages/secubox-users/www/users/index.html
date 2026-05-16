@@ -686,10 +686,14 @@
             });
 
             if (password) {
-                await api(`/user/${encodeURIComponent(username)}/password`, {
+                const pwResult = await api(`/user/${encodeURIComponent(username)}/password`, {
                     method: 'POST',
                     body: JSON.stringify({ password })
                 });
+                if (pwResult && pwResult.detail) {
+                    showToast('Password change failed: ' + pwResult.detail, 'error');
+                    return;
+                }
             }
 
             if (result?.success) {
