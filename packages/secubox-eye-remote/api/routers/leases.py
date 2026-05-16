@@ -48,11 +48,14 @@ def list_leases() -> list[LeaseRecord]:
         if lease.expiry < now:
             continue
         r = by_mac.get(lease.mac.lower())
+        # Phase 1: last_seen is the lease expiry (we have no separate last-seen
+        # store yet). When the lease-event POST notifier evolves into a small
+        # registry in Phase 2, this will become the actual observation epoch.
         out.append(
             LeaseRecord(
                 mac=lease.mac,
                 ip=lease.ip,
-                hostname=(r.hostname if r else lease.hostname),
+                hostname=((r.hostname or lease.hostname) if r else lease.hostname),
                 serial=None,
                 last_seen=lease.expiry,
                 approved=True,
@@ -66,8 +69,8 @@ def lease_event(body: LeaseEvent) -> dict[str, str]:
     log.info(
         "lease-event action=%s mac=%s ip=%s host=%s",
         body.action,
-        body.ip,
         body.mac,
+        body.ip,
         body.hostname,
     )
     return {"status": "recorded"}
