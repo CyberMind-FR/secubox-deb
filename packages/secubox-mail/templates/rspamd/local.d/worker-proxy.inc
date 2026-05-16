@@ -1,1 +1,6 @@
-# SecuBox-Deb :: Phase 2 Rspamd config — populated by Task B2
+bind_socket = "127.0.0.1:11332";
+milter = yes;
+upstream "local" {
+    default = yes;
+    self_scan = yes;
+}

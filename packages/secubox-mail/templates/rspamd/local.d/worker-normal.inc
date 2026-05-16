@@ -1,1 +1,1 @@
-# SecuBox-Deb :: Phase 2 Rspamd config — populated by Task B2
+bind_socket = "127.0.0.1:11333";

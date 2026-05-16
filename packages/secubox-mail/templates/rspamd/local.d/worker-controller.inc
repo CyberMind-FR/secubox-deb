@@ -1,1 +1,2 @@
-# SecuBox-Deb :: Phase 2 Rspamd config — populated by Task B2
+bind_socket = "*:11334";
+.include "$LOCAL_CONFDIR/local.d/secrets.inc"
