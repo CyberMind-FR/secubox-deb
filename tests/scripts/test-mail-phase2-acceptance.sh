@@ -72,8 +72,9 @@ pass "DKIM key + DNS TXT present"
 # ─── 7) Outbound mail carries DKIM-Signature header ──────────────────────
 step "7) DKIM-Signature on outbound mail (best-effort; needs swaks)"
 # We just spot-check via rspamc; full DKIM-on-Maildir test is Phase 2.5
-out=$(ssh "$HOST" 'lxc-attach -n mail -- rspamc stat 2>&1 | head -5' || true)
-echo "$out" | grep -qi "rspamd" || fail "rspamc stat did not return rspamd output"
+out=$(ssh "$HOST" 'lxc-attach -n mail -- rspamc stat 2>&1 | head -10' || true)
+echo "$out" | grep -qE "Messages scanned|Pools allocated" \
+    || fail "rspamc stat did not return rspamd stat output"
 pass "rspamc stat reachable"
 
 # ─── 8) SPF rule loaded ───────────────────────────────────────────────────
@@ -106,7 +107,10 @@ pass "rspamd.gk2.secubox.in routes via HAProxy → mitmproxy → 10.100.0.10:113
 
 # ─── 12) OpenDKIM + SpamAssassin purged ──────────────────────────────────
 step "12) OpenDKIM + SpamAssassin absent from mail LXC"
-ssh "$HOST" 'lxc-attach -n mail -- dpkg -l opendkim spamassassin 2>&1' > /tmp/phase2-dpkg
+# dpkg -l returns non-zero when the named package is unknown — that's the
+# success case here, so swallow it with `|| true`. The grep below still
+# detects an actually-installed (^ii ) row.
+ssh "$HOST" 'lxc-attach -n mail -- dpkg -l opendkim spamassassin 2>&1 || true' > /tmp/phase2-dpkg
 if grep -qE '^ii  (opendkim|spamassassin)' /tmp/phase2-dpkg; then
     fail "OpenDKIM or SpamAssassin still installed"
 fi

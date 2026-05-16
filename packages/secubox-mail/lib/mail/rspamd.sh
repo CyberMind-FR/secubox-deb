@@ -109,8 +109,11 @@ configure_rspamd_controller() {
 password = "$pw";
 enable_password = "$pw";
 EOF_INC
-    chmod 0600 "$local_d/secrets.inc"
-    chown 100110:100110 "$local_d/secrets.inc" 2>/dev/null || true
+    # Resolve _rspamd uid/gid via the LXC itself — the host's 100110 ≠ _rspamd
+    # on all Debian images (varies with packages installed). Run chown from
+    # inside the container so the kernel applies idmap automatically.
+    lxc-attach -n "$container" -- chown _rspamd:_rspamd /etc/rspamd/local.d/secrets.inc 2>/dev/null || true
+    lxc-attach -n "$container" -- chmod 0640 /etc/rspamd/local.d/secrets.inc 2>/dev/null || true
     echo "[rspamd] controller secret provisioned"
 }
 
