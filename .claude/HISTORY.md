@@ -2,6 +2,31 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-16
+
+### Cookie audit pipeline — RGPD / ePrivacy reconciler (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), branch `feature/156-cookie-audit-pipeline-rgpd-eprivacy-comp`)
+
+**Context:** Operator wants a compliance audit on their own infrastructure: confirm that every cookie effectively present in visitors' browsers is either `Set-Cookie`-traceable (server-emitted) or strictly_necessary. JS-set non-essential cookies (GA, Hotjar, Matomo, FB pixel) must be flagged because LCEN art. 82 / ePrivacy requires prior consent. The WAF already injects `health-banner.js` into every HTML response in transit through mitmproxy — that injection point is the only place that can see both server cookies (via the addon hook) AND browser-effective cookies (via a sibling script that snapshots `document.cookie`).
+
+**Done in worktree `156-cookie-audit-pipeline-rgpd-eprivacy-comp`:**
+- `packages/secubox-mitmproxy/addons/cookie_audit.py` — mitmproxy response hook that parses every Set-Cookie (full attrs: Domain/Path/Max-Age/Secure/HttpOnly/SameSite), sha256-hashes the value, and appends one JSONL record per cookie to `/var/log/secubox/cookie-audit/server.jsonl`. 7 unit tests.
+- `packages/secubox-hub/www/shared/cookie-inventory.js` — vanilla JS snapshotter that hashes `document.cookie` via SubtleCrypto sha256 and POSTs to `/api/v1/cookie-audit/ingest` at DOMContentLoaded, +2s, and on visibilitychange. Hard-capped at 8 snapshots/page.
+- `packages/secubox-mitmproxy/addons/secubox_waf.py` — extended the existing banner injection to load both scripts; two new CDN-config keys (`cookie_inventory_url`, `cookie_audit_ingest_url`).
+- `packages/secubox-metrics/api/cookie_audit.py` — `CookieAuditAggregator` + `Classifier` mirrors the cert_status pattern; joins server ledger ⨝ browser snapshots per (vhost, name), emits `source ∈ {http, js, both}`, flags `rgpd_violation` for `source == "js" AND category != "strictly_necessary"`. 9 unit tests.
+- `packages/secubox-metrics/api/main.py` — wires the aggregator into the lifespan loop, opens CORS to POST, adds three routes: `POST /ingest`, `GET /report?host=…`, `GET /summary`. Hard caps (200 cookies/snap, 128B names, 512B UA). Refuses ingest when `enabled = false`.
+- `common/secubox_core/config.py` — `get_cookie_audit_config()` with built-in RGPD baseline patterns (8 strictly_necessary, 5 functional, 9 analytics, 8 marketing). Operator patterns MERGED on top by default; `classifier_override = true` to replace.
+- `secubox.conf.example` — `[cookie_audit]` + `[cookie_audit.classifier]` documented.
+- READMEs of secubox-metrics + secubox-mitmproxy updated.
+- All 34 metrics tests still green + 9 new = 43 passing; 7 new mitmproxy tests passing.
+
+**State:**
+- Branch ready to push; per repo policy no PR is opened automatically — awaiting operator validation.
+
+**Follow-ups:**
+- AppArmor profile for `usr.bin.mitmdump` needs `/var/log/secubox/cookie-audit/**` rw and `/var/lib/secubox/cookie-audit/**` rw (deferred until deployed).
+- Logrotate snippet for the JSONL ledger (deferred — first iteration aims at validating shape before hardening).
+
+---
 ## 2026-05-14
 
 ### remote-ui Phases 1 + 3 merged to master (Issue #127, PRs #130 + #132)
