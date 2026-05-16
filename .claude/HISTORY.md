@@ -44,7 +44,27 @@
 - `tests/scripts/test-mail-phase2-acceptance.sh` — gate 7 grep widened (`Messages scanned|Pools allocated`); gate 12 dpkg call wrapped with `|| true` so `set -e` doesn't silently abort the smoke when SA/OpenDKIM are correctly absent.
 
 **Pre-existing brokenness noted (unrelated to Phase 2):**
-- `/srv/haproxy/certs/` is missing on the board; the live haproxy still serves from in-memory config, but any reload would crash. Recorded as a follow-up to investigate before the next haproxy restart.
+- `/srv/haproxy/certs/` is missing on the board; the live haproxy still serves from in-memory config, but any reload would crash. **Resolved this session — see "HAProxy cert recovery" below.**
+
+### HAProxy cert recovery (2026-05-16 13:41 board-local)
+
+Root cause: the running HAProxy was started 2026-05-15 17:37 from a config that pointed `bind *:443 ssl crt` at `/data/haproxy/certs/` (95 .pem files). Later in the day, a `haproxyctl` config regen (triggered when adding the rspamd.gk2 vhost) emitted a new `/etc/haproxy/haproxy.cfg` that:
+
+1. Changed the cert directory to `/srv/haproxy/certs/` (which didn't exist).
+2. Stripped **every** `backend {…}` block (9 backends dropped, including `mitmproxy_inspector`, `webui_direct`, `nginx_vhosts`, `fallback`, the metablog_* group, and `gitea_ssh`).
+3. Replaced the issue-#44 `is_webui_admin` regex routing of `admin.gk2.secubox.in` to `webui_direct` with a plain `hdr -i` ACL routing to `mitmproxy_inspector`.
+
+Result: any `systemctl reload haproxy` would crash. The live process held the old (correct) config in memory and kept serving 26k+ SSL connections, hiding the breakage.
+
+**Recovery applied:**
+- Symlinked `/srv/haproxy/certs -> /data/haproxy/certs` (so the haproxyctl-style path resolves to the real cert store, future regens stay valid).
+- Rebuilt `/etc/haproxy/haproxy.cfg` from `bak.20260515-1531-pre-503-fix` (latest known-good with 9 backends), grafted in the two intentional changes the regen had introduced:
+  - `acl is_webui_admin hdr(host) -m reg ^admin\.gk2\.secubox\.in$` + `use_backend webui_direct if is_webui_admin` (in both http-in + https-in).
+  - `acl host_rspamd_gk2_secubox_in hdr(host) -i rspamd.gk2.secubox.in` + `use_backend mitmproxy_inspector if host_rspamd_gk2_secubox_in` (in both frontends).
+- `haproxy -c` validated cleanly. `systemctl reload haproxy` forked a new worker; master process stayed up (`20h06m` etime preserved). New worker took over without dropping the SSL listener.
+- Verified: `rspamd.gk2.secubox.in` (WAF inspected), `admin.gk2.secubox.in` (direct webui_direct), `webmail.gk2.secubox.in` (WAF inspected) — all return 200/expected status. Full Phase 2 smoke re-ran 13/13 green post-reload.
+
+**Defensive backup retained:** `/etc/haproxy/haproxy.cfg.bak.20260516-broken-by-vhost-add` (the broken-by-haproxyctl-regen cfg, for forensic reference).
 
 **Followups before PR merge:**
 - Investigate why `mailctl rspamd install`'s first `configure_rspamd_milter` call didn't actually populate the LXC's `/etc/rspamd/local.d/` (manual re-invocation worked) — possibly an early-bail before `LXC_BASE`/`TEMPLATES_DIR` reached the function.
