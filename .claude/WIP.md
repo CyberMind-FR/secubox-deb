@@ -75,11 +75,14 @@ Brought in by a parallel session (`b78e2584` + `1f562593`). Replaces SpamAssassi
   - `configure_rspamd_controller` now chowns `secrets.inc` via `lxc-attach -- chown _rspamd:_rspamd` (kernel idmap) instead of hardcoded host `100110:100110` — `_rspamd` is uid 107 in this Debian image, not 110, so the hardcoded value crash-looped rspamd on `Permission denied`
   - Acceptance gate 7 grep loosened to `Messages scanned|Pools allocated` (rspamc stat doesn't print the literal string "rspamd")
   - Acceptance gate 12 `dpkg -l` call wrapped with `|| true` so the smoke doesn't silently abort under `set -e` when the named packages are absent (success case)
-- **Manual deploy steps NOT automated by `rspamd.sh` (carry-forward to a follow-up commit before PR merge):**
-  - LXC config bind-mount entries `/etc/rspamd-keys`, `/var/lib/rspamd/{bayes,history,settings}` need to be appended to `/var/lib/lxc/<name>/config` AND the LXC restarted (function adds the lines but skipped on first install — investigate)
-  - `rspamadm dkim_keygen` only exists inside the LXC, not on host PATH — `rspamd_keygen` should run via `lxc-attach`
-  - HAProxy vhost `rspamd.gk2.secubox.in → mitmproxy_inspector` + matching entry in `/srv/mitmproxy/haproxy-routes.json` (host + LXC copies) should be added by `rspamd-route-sync-patch.sh` — was only partially picked up
-- **Acceptance:** all 13 gates green on the live board (`/tmp/phase2-smoke-final.log` on host).
+- **Live-deploy follow-up refactor pushed as `bc7545b1`:**
+  - `configure_rspamd_milter` + `configure_rspamd_controller` now stream templates through the live LXC via `lxc-attach -- tee` instead of guessing the host-side rootfs path — fixes the Phase 2 first-pass skip (board's runtime rootfs is `/data/lxc/<name>/rootfs` per `lxc.rootfs.path`, not `/var/lib/lxc/<name>/rootfs`).
+  - `rspamd_keygen` now takes a `container` arg and runs `rspamadm dkim_keygen` inside the LXC; writes to `/etc/rspamd-keys/<domain>/` (bind-mounted) with `/var/lib/rspamd/dkim/` fallback; mirrors the DNS TXT to the host data dir.
+  - `mailctl rspamd dkim-keygen` delegates to the lib function (drops its own hardcoded `chown 100110:100110`).
+  - `rspamd-route-sync-patch.sh` verifies each JSON write via read-back and fails loudly on mismatch — Phase 2 deploy needed a manual second pass for the mitmproxy LXC copy.
+  - Smoke 13/13 still green post-refactor (`/tmp/phase2-smoke-post-refactor.log` on host).
+- **Acceptance:** all 13 gates green on the live board after both fix and refactor commits.
+- **HAProxy cert recovery (separate `master` commit `70176578`):** `/srv/haproxy/certs` symlinked to `/data/haproxy/certs` + `haproxy.cfg` rebuilt from baseline + intentional grafts; reload now safe. Full post-mortem in HISTORY.md.
 
 ⏭️ **Next:** open the PR for `feature/153-…` (awaiting user `go` per memory — no unprompted PRs).
 
