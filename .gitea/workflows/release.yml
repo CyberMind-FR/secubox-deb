@@ -1,0 +1,226 @@
+# SecuBox — Complete Release Workflow
+# Orchestrates package builds, image builds, and publishing
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+      build_images:
+        description: 'Build system images'
+        type: boolean
+        default: true
+      publish:
+        description: 'Publish to APT repo'
+        type: boolean
+        default: true
+
+jobs:
+  # Build all packages
+  build-packages:
+    uses: ./.github/workflows/build-packages.yml
+    secrets: inherit
+
+  # Build system images (optional).
+  # `if: always() && != cancelled` lets us still ship images even if a few
+  # matrix entries in build-packages failed (partial-release resilience).
+  build-images:
+    if: ${{ always() && needs.build-packages.result != 'cancelled' && github.event.inputs.build_images != 'false' }}
+    needs: build-packages
+    uses: ./.github/workflows/build-image.yml
+    with:
+      board: all
+      size: '8G'
+    secrets: inherit
+
+  # Build Live USB images (all platforms) — partial-release resilient.
+  build-live-usb:
+    if: ${{ always() && needs.build-packages.result != 'cancelled' }}
+    needs: build-packages
+    uses: ./.github/workflows/build-all-live-usb.yml
+    with:
+      platform: all
+    secrets: inherit
+
+  # Publish to APT repository — partial-release resilient.
+  publish:
+    if: ${{ always() && needs.build-packages.result != 'cancelled' && github.event.inputs.publish != 'false' }}
+    needs: build-packages
+    uses: ./.github/workflows/publish-packages.yml
+    secrets: inherit
+
+  # Create unified release. Ships whatever artifacts the upstream jobs
+  # managed to produce — handles partial successes gracefully (any
+  # `failure` here means "best-effort", `cancelled` we hard-skip).
+  create-release:
+    needs: [build-packages, build-images, build-live-usb]
+    if: ${{ always() && needs.build-packages.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-debs-all
+          path: release/packages/
+
+      - name: Download image artifacts
+        if: needs.build-images.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: secubox-*-bookworm
+          path: release/images/
+          merge-multiple: true
+
+      - name: Download Live USB artifacts
+        if: needs.build-live-usb.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: secubox-*-bookworm
+          path: release/live-usb/
+          merge-multiple: true
+
+      - name: Generate release notes
+        run: |
+          VERSION="${{ github.ref_name || github.event.inputs.version }}"
+
+          cat > release/RELEASE_NOTES.md << EOF
+          # SecuBox-DEB ${VERSION}
+
+          ## ⚡ CyberMind Security Platform
+
+          ### What's Included
+
+          **124 Packages** across all security domains:
+          - **Core:** hub, core, portal, system, console
+          - **Security:** crowdsec, waf, auth, nac, threats, ipblock, mac-guard
+          - **Networking:** wireguard, haproxy, dpi, qos, netmodes, vhost, cdn
+          - **Applications:** mail, gitea, nextcloud, ollama, jellyfin, matrix
+          - **SOC:** soc-agent, soc-gateway, soc-web (hierarchical security operations)
+          - **Intel:** device-intel, vortex-dns, vortex-firewall, ai-insights
+
+          ### System Images (Disk Install)
+          - MOCHAbin (Marvell Armada 7040) - arm64
+          - ESPRESSObin v7 (Marvell Armada 3720) - arm64
+          - ESPRESSObin Ultra (Marvell Armada 3720) - arm64
+          - Raspberry Pi 400 - arm64
+          - VM x64 (VirtualBox/QEMU) - amd64
+          - QEMU ARM64 emulation script (x86 hosts)
+
+          ### Live USB Images (Bootable + Flasher)
+          - x64 Live USB (GRUB UEFI/BIOS) - amd64
+          - EspressoBin V7 Live USB (U-Boot) - arm64
+          - Raspberry Pi 400 Live USB - arm64
+
+          ### Boot Options
+          - ⚡ **SecuBox Live** - Normal boot with persistence
+          - 🖼️ **Kiosk GUI** - Fullscreen browser (default)
+          - 📟 **Console TUI** - Text-based dashboard
+          - 🌉 **Bridge Mode** - Inline transparent bridge
+          - 💾 **Install to Disk** - Permanent installation
+          - 🚀 **To RAM** - Load entire system to memory
+
+          ## Quick Install
+
+          ### From APT Repository
+          \`\`\`bash
+          curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+          sudo apt install secubox-full
+          \`\`\`
+
+          ### From Live USB Image
+          \`\`\`bash
+          # Flash to USB
+          gunzip -c secubox-live-amd64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+
+          # VirtualBox VM
+          bash image/create-vbox-vm.sh --name SecuBox --memory 4096
+          \`\`\`
+
+          ### Default Credentials
+          - **Web UI:** https://<IP>:9443 (admin / secubox)
+          - **SSH:** root / secubox
+
+          ## Checksums
+
+          All files are signed with GPG key \`packages@secubox.in\`.
+
+          \`\`\`bash
+          gpg --verify SHA256SUMS.gpg
+          sha256sum -c SHA256SUMS
+          \`\`\`
+
+          ## Documentation
+
+          - [Wiki Home](https://github.com/CyberMind-FR/secubox-deb/wiki)
+          - [VirtualBox Quick Start](https://github.com/CyberMind-FR/secubox-deb/wiki/VirtualBox)
+          - [API Reference](https://github.com/CyberMind-FR/secubox-deb/wiki/API-Reference)
+
+          EOF
+
+      - name: Generate combined checksums
+        run: |
+          cd release/
+          find . -name "*.deb" -o -name "*.img.gz" -o -name "*.img.xz" -o -name "*.img" | \
+            xargs sha256sum 2>/dev/null | sort > SHA256SUMS || true
+
+      - name: Sign checksums
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            cd release/
+            gpg --clearsign SHA256SUMS
+            mv SHA256SUMS.asc SHA256SUMS.gpg
+          fi
+
+      - name: Copy VM scripts to release
+        run: |
+          cp image/create-qemu-arm64-vm.sh release/
+          cp image/create-vbox-vm.sh release/
+
+      - name: Delete existing release assets (for retry)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ github.ref_name || github.event.inputs.version }}"
+          # Check if release exists and delete conflicting assets
+          if gh release view "$VERSION" &>/dev/null; then
+            echo "Release exists, cleaning up for retry..."
+            # Get existing asset names
+            existing=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
+            for asset in release/packages/*.deb release/images/*.img.gz release/images/*.img.xz release/live-usb/*.img*; do
+              [ -f "$asset" ] || continue
+              name=$(basename "$asset")
+              if echo "$existing" | grep -qF "$name"; then
+                echo "Deleting existing asset: $name"
+                gh release delete-asset "$VERSION" "$name" --yes 2>/dev/null || true
+              fi
+            done
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SecuBox-DEB ${{ github.ref_name || github.event.inputs.version }}
+          body_path: release/RELEASE_NOTES.md
+          files: |
+            release/packages/*.deb
+            release/images/*.img.gz
+            release/images/*.img.xz
+            release/live-usb/*.img*
+            release/create-qemu-arm64-vm.sh
+            release/create-vbox-vm.sh
+            release/SHA256SUMS
+            release/SHA256SUMS.gpg
+          draft: false
+          fail_on_unmatched_files: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
