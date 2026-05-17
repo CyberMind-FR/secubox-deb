@@ -1,3 +1,14 @@
+secubox-droplet (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Forge dropletctl (issue #181) — third routing verb on the publishing
+    layer, parallel to giteactl repo mirror (#176) and mitmproxyctl route
+    (#173). Subcommands: lifecycle (start/stop/restart/status/logs),
+    Three-fold JSON (components/access), and file noun verbs (upload,
+    remove, rename, list, info) wrapping the /api/v1/droplet/* endpoints
+    over the Unix socket.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 17 May 2026 11:20:54 +0200
+
 secubox-droplet (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
