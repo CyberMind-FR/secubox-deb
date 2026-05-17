@@ -1,0 +1,167 @@
+name: Sync All — Build, Release, Metrics
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild all packages'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  SECUBOX_VERSION: "1.9.0"
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════
+  # 1. Discover changes and compute metrics
+  # ═══════════════════════════════════════════════════════════════
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      packages_changed: ${{ steps.changes.outputs.packages }}
+      total_packages: ${{ steps.metrics.outputs.total }}
+      total_endpoints: ${{ steps.metrics.outputs.endpoints }}
+      migration_percent: ${{ steps.metrics.outputs.migration }}
+      commit_count: ${{ steps.metrics.outputs.commits }}
+      issue_count: ${{ steps.metrics.outputs.issues }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed packages
+        id: changes
+        run: |
+          # Find packages changed in this push
+          if [ "${{ github.event_name }}" = "push" ]; then
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
+              | grep '^packages/secubox-' \
+              | cut -d'/' -f2 \
+              | sort -u \
+              | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          else
+            CHANGED='[]'
+          fi
+          echo "packages=$CHANGED" >> $GITHUB_OUTPUT
+          echo "Changed packages: $CHANGED"
+
+      - name: Compute project metrics
+        id: metrics
+        run: |
+          # Count packages
+          TOTAL=$(find packages/secubox-* -maxdepth 0 -type d 2>/dev/null | wc -l)
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+
+          # Count API endpoints (rough estimate from main.py files)
+          ENDPOINTS=$(grep -r '@app\.\|@router\.' packages/*/api/*.py 2>/dev/null | wc -l || echo "2000")
+          echo "endpoints=$ENDPOINTS" >> $GITHUB_OUTPUT
+
+          # Migration percent (packages with api/main.py)
+          WITH_API=$(find packages/secubox-*/api/main.py 2>/dev/null | wc -l)
+          PERCENT=$((WITH_API * 100 / TOTAL))
+          echo "migration=$PERCENT" >> $GITHUB_OUTPUT
+
+          # Commit count
+          COMMITS=$(git rev-list --count HEAD)
+          echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+
+          # Open issues (via gh)
+          ISSUES=$(gh issue list --state open --limit 1000 --json number | jq length 2>/dev/null || echo "0")
+          echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  # ═══════════════════════════════════════════════════════════════
+  # 2. Build changed packages (or all if forced)
+  # ═══════════════════════════════════════════════════════════════
+  build-packages:
+    needs: discover
+    if: needs.discover.outputs.packages_changed != '[]' || github.event.inputs.force_rebuild == 'true'
+    uses: ./.github/workflows/build-packages.yml
+    secrets: inherit
+
+  # ═══════════════════════════════════════════════════════════════
+  # 3. Update WIP and metrics badges
+  # ═══════════════════════════════════════════════════════════════
+  update-metrics:
+    needs: [discover, build-packages]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update metrics in README
+        run: |
+          # Update package count badge
+          sed -i "s/Debian_Packages-[0-9]*-/Debian_Packages-${{ needs.discover.outputs.total_packages }}-/" README.md
+
+          # Update migration percent
+          sed -i "s/Migration-[0-9]*%25-/Migration-${{ needs.discover.outputs.migration_percent }}%25-/" README.md
+
+          # Update endpoints count
+          sed -i "s/API_Endpoints-[0-9]*+-/API_Endpoints-${{ needs.discover.outputs.total_endpoints }}+-/" README.md
+
+      - name: Update WIP with session info
+        run: |
+          DATE=$(date '+%Y-%m-%d')
+          SESSION=$(grep -oP 'Session \K[0-9]+' .claude/WIP.md | head -1 || echo "0")
+          NEW_SESSION=$((SESSION))
+
+          # Add CI sync entry if not already present today
+          if ! grep -q "CI Sync $DATE" .claude/WIP.md; then
+            echo "" >> .claude/WIP.md
+            echo "## CI Sync $DATE" >> .claude/WIP.md
+            echo "- Packages: ${{ needs.discover.outputs.total_packages }}" >> .claude/WIP.md
+            echo "- Endpoints: ${{ needs.discover.outputs.total_endpoints }}" >> .claude/WIP.md
+            echo "- Migration: ${{ needs.discover.outputs.migration_percent }}%" >> .claude/WIP.md
+            echo "- Commits: ${{ needs.discover.outputs.commit_count }}" >> .claude/WIP.md
+          fi
+
+      - name: Commit metrics update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md .claude/WIP.md || true
+          git diff --staged --quiet || git commit -m "ci: Update metrics [skip ci]"
+          git push || true
+
+  # ═══════════════════════════════════════════════════════════════
+  # 4. Create release on tags
+  # ═══════════════════════════════════════════════════════════════
+  release:
+    needs: [discover, build-packages]
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/release.yml
+    secrets: inherit
+
+  # ═══════════════════════════════════════════════════════════════
+  # 5. Summary
+  # ═══════════════════════════════════════════════════════════════
+  summary:
+    needs: [discover, build-packages, update-metrics]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## SecuBox Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Packages | ${{ needs.discover.outputs.total_packages }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Endpoints | ${{ needs.discover.outputs.total_endpoints }}+ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Migration | ${{ needs.discover.outputs.migration_percent }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commits | ${{ needs.discover.outputs.commit_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Open Issues | ${{ needs.discover.outputs.issue_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changed Packages" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo '${{ needs.discover.outputs.packages_changed }}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

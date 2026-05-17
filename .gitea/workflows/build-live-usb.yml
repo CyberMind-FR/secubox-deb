@@ -1,0 +1,37 @@
+# DEPRECATED: Use build-all-live-usb.yml for all live USB builds
+# This workflow is maintained for backward compatibility only.
+# It calls the unified workflow with platform=x64.
+
+name: Build SecuBox Live USB (x64 only - DEPRECATED)
+
+on:
+  workflow_dispatch:
+    inputs:
+      compress:
+        description: 'Compress output (gzip)'
+        type: boolean
+        default: true
+
+jobs:
+  # Redirect to unified workflow
+  build-x64-live-usb:
+    uses: ./.github/workflows/build-all-live-usb.yml
+    with:
+      platform: x64
+    secrets: inherit
+
+  # Note about deprecation
+  deprecation-notice:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deprecation Warning
+        run: |
+          echo "::warning::This workflow is DEPRECATED. Use build-all-live-usb.yml instead."
+          echo ""
+          echo "The unified workflow supports all platforms:"
+          echo "  - x64 (amd64) - GRUB UEFI/BIOS"
+          echo "  - espressobin-v7 (arm64) - U-Boot"
+          echo "  - rpi400 (arm64) - Pi firmware"
+          echo ""
+          echo "To build all platforms:"
+          echo "  gh workflow run build-all-live-usb.yml -f platform=all"
