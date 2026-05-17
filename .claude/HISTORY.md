@@ -2,6 +2,37 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-17
+
+### amd64 VirtualBox test bundle + apt.secubox.in keyring fix
+
+**Context:** User asked for a fresh amd64 VirtualBox image suitable for non-expert testers. The build host has no `qemu-img`, `VBoxManage`, or passwordless sudo; the CI pipeline (`build-image.yml --board vm-x64`) is the canonical path.
+
+**Done:**
+
+- Downloaded the May-11 CI artifact (`25661033196`, tag `v2.2.1-eye-remote`) → decompressed → bundled with a pure-Python raw→VDI converter (`raw_to_vdi.py`, dynamic VDI, 1 MiB blocks, 33.3% sparse, signature `0xbeda107f` validated) so the bundle is self-contained without VBox/qemu tooling on the build host.
+- Wrote `verify.sh` — 6-check self-test (file presence, CI SHA, local hash table, VDI header, GPT layout, ESP boot files). Locale-safe (`LC_ALL=C sha256sum --quiet`), runs on any bash + python3.
+- Rewrote `README.md` for first-time testers (TL;DR 4-command launch, credentials table `root`/`secubox` + `admin`/`secubox`, network defaults, troubleshooting table, "how to get fresher build" recipe).
+- Wrote `FIX-PXE.md` documenting the VBox 7 EFI quirk (`\EFI\BOOT\BOOTX64.EFI` skipped on fresh VMs with empty NVRAM) — three workarounds, with the NIC-disconnect one-liner as the cleanest.
+- Triggered a fresh CI build on master (`25983400130`) → failed in 6 min at chroot apt-get update with `NO_PUBKEY F42E679EE3730EA1`.
+
+**Root cause:** `https://apt.secubox.in/secubox-keyring.gpg` was published ASCII-armored. `apt`'s `signed-by=` directive accepts only binary OpenPGP keyrings. The subkey `F42E679EE3730EA1` (rsa4096, signs the Release file dated 2026-05-12) was present in the armored file but unreadable to `apt`.
+
+**Fix on the server (192.168.1.200, hosts apt.secubox.in):**
+
+- Backed up the armored keyring: `/var/www/apt.secubox.in/secubox-keyring.gpg.armored.bak.<epoch>`
+- `gpg --dearmor` in place: 3947 B armored → 2855 B binary
+- `file` reports `OpenPGP Public Key Version 4, Created Tue May 12 07:25:56 2026, RSA (Encrypt or Sign, 4096 bits); User ID; Signature; OpenPGP Certificate`
+- Standalone `apt-get update` against apt.secubox.in: green, fetches InRelease + Packages with no GPG error
+- Re-triggered CI (`25983593168`) → green in 14 min → `secubox-vm-x64-bookworm.img.gz` 968 MB
+
+**Bundle in `output/ci-vm-x64-25983593168/`:** verified 6/6 (CI hash + local hashes + VDI header + GPT + ESP `/EFI/BOOT/BOOTX64.EFI`), 2.76 GiB VDI (34.5% sparse), `commit 2eff4045` on `master`, built 2026-05-17.
+
+**Followup:**
+
+- `publish-packages.yml` doesn't (re-)export the keyring — it's managed manually on the board, so the server-side fix should persist. If a future operator re-uploads as armored, the same dearmor step will be needed. Worth adding a `gpg --dearmor`-on-publish step to whichever script ships the key to `/var/www/apt.secubox.in/` (not in-repo today).
+
+---
 ## 2026-05-16
 
 ### eye-remote: Phase 1 multi-gadget DHCP — N Pi gadgets coexist at L3 on `eye-br0` (Issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158), branch `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o`)
