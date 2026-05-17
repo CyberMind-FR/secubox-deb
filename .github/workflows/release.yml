@@ -25,9 +25,11 @@ jobs:
     uses: ./.github/workflows/build-packages.yml
     secrets: inherit
 
-  # Build system images (optional)
+  # Build system images (optional).
+  # `if: always() && != cancelled` lets us still ship images even if a few
+  # matrix entries in build-packages failed (partial-release resilience).
   build-images:
-    if: ${{ github.event.inputs.build_images != 'false' }}
+    if: ${{ always() && needs.build-packages.result != 'cancelled' && github.event.inputs.build_images != 'false' }}
     needs: build-packages
     uses: ./.github/workflows/build-image.yml
     with:
@@ -35,25 +37,28 @@ jobs:
       size: '8G'
     secrets: inherit
 
-  # Build Live USB images (all platforms)
+  # Build Live USB images (all platforms) — partial-release resilient.
   build-live-usb:
+    if: ${{ always() && needs.build-packages.result != 'cancelled' }}
     needs: build-packages
     uses: ./.github/workflows/build-all-live-usb.yml
     with:
       platform: all
     secrets: inherit
 
-  # Publish to APT repository
+  # Publish to APT repository — partial-release resilient.
   publish:
-    if: ${{ github.event.inputs.publish != 'false' }}
+    if: ${{ always() && needs.build-packages.result != 'cancelled' && github.event.inputs.publish != 'false' }}
     needs: build-packages
     uses: ./.github/workflows/publish-packages.yml
     secrets: inherit
 
-  # Create unified release
+  # Create unified release. Ships whatever artifacts the upstream jobs
+  # managed to produce — handles partial successes gracefully (any
+  # `failure` here means "best-effort", `cancelled` we hard-skip).
   create-release:
     needs: [build-packages, build-images, build-live-usb]
-    if: always() && needs.build-packages.result == 'success'
+    if: ${{ always() && needs.build-packages.result != 'cancelled' }}
     runs-on: ubuntu-latest
 
     steps:
