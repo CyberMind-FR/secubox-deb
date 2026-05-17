@@ -39,8 +39,14 @@ get_current_routes() {
 
 # Get all domains from HAProxy that use mitmproxy_inspector
 get_haproxy_domains() {
+    # `use_backend mitmproxy_inspector if host_<dotted_domain>` lines end at
+    # the hostname (no trailing space, regex anchors on $). The previous
+    # `(?= )` lookahead required a space and silently matched zero domains —
+    # which is why sync never auto-populated routes for newly-added vhosts
+    # (caught 2026-05-17 when ckwa.gk2.secubox.in returned 502 because its
+    # route had never been written by sync).
     grep "use_backend mitmproxy_inspector" "$HAPROXY_CFG" | \
-        grep -oP 'host_\K[a-z0-9_]+(?= )' | \
+        grep -oP 'host_\K[a-z0-9_]+(?=\s|$)' | \
         sed 's/_/./g' | sort -u
 }
 
