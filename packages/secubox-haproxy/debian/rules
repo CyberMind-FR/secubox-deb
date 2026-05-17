@@ -2,6 +2,13 @@
 %:
 	dh $@
 
+# /usr/local/bin admin-only tools (issue #44): dh_usrlocal only knows how to
+# rehome directories (Policy 9.1.2), not individual files — it errors out
+# with "<file> is not a directory" on our regen-safe + render-nginx-webui
+# scripts. The deliberate placement under /usr/local/bin is the intended
+# behaviour; we just need debhelper to leave the path alone.
+override_dh_usrlocal:
+
 override_dh_auto_install:
 	install -d debian/secubox-haproxy/usr/lib/secubox/haproxy/
 	cp -r api debian/secubox-haproxy/usr/lib/secubox/haproxy/
