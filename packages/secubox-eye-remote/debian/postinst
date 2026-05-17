@@ -12,9 +12,21 @@ case "$1" in
         mkdir -p /run/secubox
         chown secubox:secubox /run/secubox 2>/dev/null || true
 
-        # Ensure config dirs exist with correct ownership
-        install -d -m 0750 -o root -g root /etc/secubox/eye-remote
+        # Ensure config dirs exist with correct ownership.
+        # 0755 on eye-remote/ so the dnsmasq daemon (running as dnsmasq:nogroup
+        # after --user/--group privilege drop) can read reservations.conf.
+        # The .conf file itself stays 0644, owner root:root.
+        install -d -m 0755 -o root -g root /etc/secubox/eye-remote
         install -d -m 0755 -o root -g root /var/log/secubox
+
+        # /etc/secubox/ may already exist owned secubox:secubox mode 0750
+        # (created by another package). dnsmasq:nogroup needs to traverse it
+        # to reach eye-remote/. 0751 keeps the listing private but allows
+        # traversal — the eye-remote subdir is the only thing the daemon
+        # actually opens.
+        if [ -d /etc/secubox ]; then
+            chmod 0751 /etc/secubox 2>/dev/null || true
+        fi
 
         # Prevent Debian's system-wide dnsmasq from grabbing port 53
         # (we ship our own scoped instance instead).
