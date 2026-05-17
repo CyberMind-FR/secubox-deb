@@ -27,6 +27,77 @@
 - Branch pushed to `origin/fix/155-eye-remote-link-rename-collision-when-mu`; PR opening deferred per user preference.
 - Round-image change for per-Pi peer IP (DHCP or MAC-derived static) — file as a separate issue when the Round image work resumes.
 
+### Cookie audit pipeline — RGPD / ePrivacy reconciler (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) MERGED `a19486c9`)
+
+**Context:** Operator wants a compliance audit on their own infrastructure: confirm that every cookie effectively present in visitors' browsers is either `Set-Cookie`-traceable (server-emitted) or strictly_necessary. JS-set non-essential cookies (GA, Hotjar, Matomo, FB pixel) must be flagged because LCEN art. 82 / ePrivacy requires prior consent. The WAF already injects `health-banner.js` into every HTML response in transit through mitmproxy — that injection point is the only place that can see both server cookies (via the addon hook) AND browser-effective cookies (via a sibling script that snapshots `document.cookie`).
+
+**Done:**
+- `packages/secubox-mitmproxy/addons/cookie_audit.py` — mitmproxy response hook that parses every Set-Cookie (full attrs: Domain/Path/Max-Age/Secure/HttpOnly/SameSite), sha256-hashes the value, and appends one JSONL record per cookie to `/var/log/secubox/cookie-audit/server.jsonl`. 7 unit tests.
+- `packages/secubox-hub/www/shared/cookie-inventory.js` — vanilla JS snapshotter that hashes `document.cookie` via SubtleCrypto sha256 and POSTs to `/api/v1/cookie-audit/ingest` at DOMContentLoaded, +2s, and on visibilitychange. Hard-capped at 8 snapshots/page.
+- `packages/secubox-mitmproxy/addons/secubox_waf.py` — extended the existing banner injection to load both scripts; two new CDN-config keys (`cookie_inventory_url`, `cookie_audit_ingest_url`).
+- `packages/secubox-metrics/api/cookie_audit.py` — `CookieAuditAggregator` + `Classifier` mirrors the cert_status pattern; joins server ledger ⨝ browser snapshots per (vhost, name), emits `source ∈ {http, js, both}`, flags `rgpd_violation` for `source == "js" AND category != "strictly_necessary"`. 9 unit tests.
+- `packages/secubox-metrics/api/main.py` — wires the aggregator into the lifespan loop, opens CORS to POST, adds three routes: `POST /ingest`, `GET /report?host=…`, `GET /summary`. Hard caps (200 cookies/snap, 128B names, 512B UA). Refuses ingest when `enabled = false`.
+- `common/secubox_core/config.py` — `get_cookie_audit_config()` with built-in RGPD baseline patterns (8 strictly_necessary, 5 functional, 9 analytics, 8 marketing). Operator patterns MERGED on top by default; `classifier_override = true` to replace.
+- `secubox.conf.example` — `[cookie_audit]` + `[cookie_audit.classifier]` documented.
+- READMEs of secubox-metrics + secubox-mitmproxy updated.
+- All 34 metrics tests still green + 9 new = 43 passing; 7 new mitmproxy tests passing.
+
+**State:**
+- PR #159 squash-merged to master as `a19486c9`. Issue #156 auto-closed via `Closes #156`.
+
+**Follow-ups:**
+- AppArmor profile for `usr.bin.mitmdump` needs `/var/log/secubox/cookie-audit/**` rw and `/var/lib/secubox/cookie-audit/**` rw (deferred until deployed).
+- Logrotate snippet for the JSONL ledger (deferred — first iteration aims at validating shape before hardening).
+
+### Mail stack Phase 2 (Rspamd) — live-deployed on admin.gk2.secubox.in, 13/13 gates green (Issue #153, branch `feature/153-mail-stack-phase-2-rspamd-migration-roun`)
+
+**Context:** Continuation of the Phase 2 deploy paused yesterday at DKIM keygen. Bind-mount entries were missing in `/var/lib/lxc/mail/config`, `rspamadm` only exists inside the LXC (not on host PATH), and the hardcoded `chown 100110:100110` in `configure_rspamd_controller` didn't match the actual `_rspamd` uid in the LXC's Debian image (107, not 110).
+
+**Done:**
+- Appended 4 bind-mount entries (`/etc/rspamd-keys`, `/var/lib/rspamd/{bayes,history,settings}`) to `/var/lib/lxc/mail/config`, restarted the mail LXC.
+- Generated DKIM keypair for `secubox.in/default` (2048-bit) via `lxc-attach -n mail -- rspamadm dkim_keygen`. DNS TXT recorded in `/data/volumes/mail/rspamd/dkim/secubox.in/default.txt` — awaiting publication.
+- Re-ran `configure_rspamd_milter` to deploy the 8 `local.d/*.{conf,inc}` templates into the LXC's `/etc/rspamd/local.d/`. Re-ran `configure_rspamd_controller` for `worker-controller.inc` + `secrets.inc`.
+- Fixed `secrets.inc` ownership via `lxc-attach -- chown _rspamd:_rspamd` (kernel idmap maps inside-LXC uid 107 to the right outside-LXC subuid regardless of image). Rspamd then started cleanly.
+- Added HAProxy vhost `rspamd.gk2.secubox.in → mitmproxy_inspector` via `haproxyctl vhost add`. Added matching entry to mitmproxy LXC's `/srv/mitmproxy/haproxy-routes.json` and restarted mitmproxy. End-to-end curl returned `HTTP 200`, `x-secubox-waf: inspected`, body `pong` from `rspamd/3.4`.
+- Ran `mailctl rspamd purge-legacy` on the board — D9 health gate verified rspamc-controller reachable, then purged `opendkim opendkim-tools spamassassin spamc spamd` cleanly. Postfix/Dovecot stayed active throughout.
+- All 13 acceptance gates green: ports, milter, DKIM, modules, WAF path, SA/OpenDKIM absent, Phase 1 regression (5 production mailboxes + webmail WAF path).
+
+**Live-deploy fixes pushed as `637b2221`:**
+- `packages/secubox-mail/lib/mail/rspamd.sh` — `configure_rspamd_controller` chowns via `lxc-attach` instead of hardcoded host uid.
+- `tests/scripts/test-mail-phase2-acceptance.sh` — gate 7 grep widened (`Messages scanned|Pools allocated`); gate 12 dpkg call wrapped with `|| true` so `set -e` doesn't silently abort the smoke when SA/OpenDKIM are correctly absent.
+
+**Pre-existing brokenness noted (unrelated to Phase 2):**
+- `/srv/haproxy/certs/` is missing on the board; the live haproxy still serves from in-memory config, but any reload would crash. **Resolved this session — see "HAProxy cert recovery" below.**
+
+### HAProxy cert recovery (2026-05-16 13:41 board-local)
+
+Root cause: the running HAProxy was started 2026-05-15 17:37 from a config that pointed `bind *:443 ssl crt` at `/data/haproxy/certs/` (95 .pem files). Later in the day, a `haproxyctl` config regen (triggered when adding the rspamd.gk2 vhost) emitted a new `/etc/haproxy/haproxy.cfg` that:
+
+1. Changed the cert directory to `/srv/haproxy/certs/` (which didn't exist).
+2. Stripped **every** `backend {…}` block (9 backends dropped, including `mitmproxy_inspector`, `webui_direct`, `nginx_vhosts`, `fallback`, the metablog_* group, and `gitea_ssh`).
+3. Replaced the issue-#44 `is_webui_admin` regex routing of `admin.gk2.secubox.in` to `webui_direct` with a plain `hdr -i` ACL routing to `mitmproxy_inspector`.
+
+Result: any `systemctl reload haproxy` would crash. The live process held the old (correct) config in memory and kept serving 26k+ SSL connections, hiding the breakage.
+
+**Recovery applied:**
+- Symlinked `/srv/haproxy/certs -> /data/haproxy/certs` (so the haproxyctl-style path resolves to the real cert store, future regens stay valid).
+- Rebuilt `/etc/haproxy/haproxy.cfg` from `bak.20260515-1531-pre-503-fix` (latest known-good with 9 backends), grafted in the two intentional changes the regen had introduced:
+  - `acl is_webui_admin hdr(host) -m reg ^admin\.gk2\.secubox\.in$` + `use_backend webui_direct if is_webui_admin` (in both http-in + https-in).
+  - `acl host_rspamd_gk2_secubox_in hdr(host) -i rspamd.gk2.secubox.in` + `use_backend mitmproxy_inspector if host_rspamd_gk2_secubox_in` (in both frontends).
+- `haproxy -c` validated cleanly. `systemctl reload haproxy` forked a new worker; master process stayed up (`20h06m` etime preserved). New worker took over without dropping the SSL listener.
+- Verified: `rspamd.gk2.secubox.in` (WAF inspected), `admin.gk2.secubox.in` (direct webui_direct), `webmail.gk2.secubox.in` (WAF inspected) — all return 200/expected status. Full Phase 2 smoke re-ran 13/13 green post-reload.
+
+**Defensive backup retained:** `/etc/haproxy/haproxy.cfg.bak.20260516-broken-by-vhost-add` (the broken-by-haproxyctl-regen cfg, for forensic reference).
+
+**Followups before PR merge:**
+- Investigate why `mailctl rspamd install`'s first `configure_rspamd_milter` call didn't actually populate the LXC's `/etc/rspamd/local.d/` (manual re-invocation worked) — possibly an early-bail before `LXC_BASE`/`TEMPLATES_DIR` reached the function.
+- Move the `rspamadm dkim_keygen` call into `lxc-attach` inside `rspamd_keygen` so DKIM keygen is automated on next deploy (currently errors `rspamadm not on PATH`).
+- Re-run `rspamd-route-sync-patch.sh` ordering so the mitmproxy LXC copy of `haproxy-routes.json` is updated reliably (host copy was, LXC copy wasn't on this deploy).
+
+**State:**
+- Branch pushed, head `637b2221`. PR not opened (per memory: no unprompted PRs).
+- Phase 2.5 (ClamAV) and Phase 3 (multi-domain DKIM) deferred per the spec.
+
 ---
 ## 2026-05-14
 
