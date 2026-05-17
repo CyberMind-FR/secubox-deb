@@ -1,3 +1,17 @@
+secubox-core (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * postinst: gate /etc/nginx/sites-available/secubox install on first install
+    only — preserve operator-tuned variants on upgrade.
+  * postinst: skip nginx reload when "nginx -t" fails (don't crash a running
+    nginx worker pool on a stale-but-working config).
+  * Fixes the regression where dpkg -i secubox-core on HAProxy-fronted
+    boards silently overwrote the working sites-available/secubox config
+    with the standalone-nginx variant (listen 80/443), then the next
+    systemctl restart nginx crashed with bind() EADDRINUSE.
+  * Closes: #162
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 17 May 2026 07:24:20 +0200
+
 secubox-core (1.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Add get_cookie_audit_config() helper with built-in RGPD/CNIL classifier

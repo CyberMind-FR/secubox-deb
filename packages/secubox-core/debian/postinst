@@ -26,21 +26,37 @@ case "$1" in
     fi
 
     # ── Nginx ──
+    # The /etc/nginx/sites-available/secubox file ships with three server
+    # blocks bound to 80/443 — fine for standalone-nginx topologies, fatal
+    # on HAProxy-fronted boards where HAProxy already owns 80/443.
+    # Only install it on first install (when the file doesn't exist).
+    # Subsequent installs/upgrades keep the operator-tuned variant intact.
+    # See issue #162.
     if [ -d /etc/nginx/sites-available ]; then
-      install -m 644 /usr/share/secubox-core/nginx/secubox.conf \
-        /etc/nginx/sites-available/secubox
+      if [ ! -f /etc/nginx/sites-available/secubox ]; then
+        install -m 644 /usr/share/secubox-core/nginx/secubox.conf \
+          /etc/nginx/sites-available/secubox
+      fi
       install -m 644 /usr/share/secubox-core/nginx/secubox-proxy.conf \
         /etc/nginx/snippets/secubox-proxy.conf
 
-      # Activer le site
+      # Symlink only on first install — never overwrite an existing one
+      # (which may point at an HAProxy-aware variant like secubox-local).
       if [ ! -e /etc/nginx/sites-enabled/secubox ]; then
         ln -s /etc/nginx/sites-available/secubox \
               /etc/nginx/sites-enabled/secubox
       fi
       rm -f /etc/nginx/sites-enabled/default
 
-      nginx -t && install -d -m 755 /etc/nginx/secubox.d
-    systemctl reload nginx 2>/dev/null || true
+      install -d -m 755 /etc/nginx/secubox.d
+      # Only reload nginx if the resulting config is valid. On HAProxy
+      # boards the operator-tuned file is preserved, so this passes; on
+      # standalone boards the freshly-installed file is also valid.
+      if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+      else
+        echo "secubox-core: nginx -t failed, skipping reload (preserving running config)" >&2
+      fi
     fi
 
     systemctl daemon-reload
