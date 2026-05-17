@@ -1,0 +1,143 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# streamforgectl — SecuBox StreamForge (Streamlit dev workbench) control (#183)
+#
+# Parallel to streamlitctl (the hosting side). The Forge ↔ Streamlit pair:
+#   streamforgectl project create <name> --template hello
+#   streamforgectl project export <name> <gitea_url>
+#   streamlitctl   app   deploy   <name> <gitea_url>
+# Three verbs, two layers (dev → hosting), one expressible workflow.
+
+set -euo pipefail
+VERSION="0.1.0"
+SOCKET="${STREAMFORGE_SOCKET:-/run/secubox/streamforge.sock}"
+API="http://localhost/api/v1/streamforge"
+SERVICE="secubox-streamforge.service"
+
+G='\033[0;32m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'
+log()   { printf "${G}[FORGE]${N} %s\n" "$*"; }
+warn()  { printf "${Y}[WARN]${N} %s\n" "$*"; }
+error() { printf "${R}[ERROR]${N} %s\n" "$*" >&2; }
+
+api() {
+    local m="$1" p="$2"; shift 2
+    [ -S "$SOCKET" ] || { error "socket $SOCKET absent — start $SERVICE"; exit 2; }
+    curl --unix-socket "$SOCKET" -sS -X "$m" -w "\nHTTP_CODE:%{http_code}\n" "${API}${p}" "$@"
+}
+api_code() { echo "$1" | grep '^HTTP_CODE:' | cut -d: -f2; }
+api_body() { echo "$1" | sed '/^HTTP_CODE:/d'; }
+
+# Lifecycle
+cmd_start()    { systemctl start   "$SERVICE" && log started; }
+cmd_stop()     { systemctl stop    "$SERVICE" && log stopped; }
+cmd_restart()  { systemctl restart "$SERVICE" && log restarted; }
+cmd_status()   { systemctl is-active "$SERVICE" >/dev/null && echo active || echo inactive; }
+cmd_logs()     { journalctl -u "$SERVICE" -n "${1:-50}" --no-pager; }
+
+cmd_components() {
+    cat <<EOF
+{"service":"$SERVICE","socket":"$SOCKET","api_base":"$API","ctl_version":"$VERSION"}
+EOF
+}
+cmd_access() {
+    cat <<EOF
+{"socket":"$SOCKET","endpoints":{
+ "apps":"GET /apps","templates":"GET /templates",
+ "create":"POST /app","get":"GET /app/{name}","remove":"DELETE /app/{name}",
+ "start":"POST /app/{name}/start","stop":"POST /app/{name}/stop","restart":"POST /app/{name}/restart",
+ "file_get":"GET /app/{name}/file/{path}","file_put":"PUT /app/{name}/file/{path}"
+}}
+EOF
+}
+
+# Project (the noun, #183)
+cmd_project() {
+    local act="${1:-}"; shift || true
+    case "$act" in
+        create)  project_create "$@" ;;
+        remove|rm|delete) project_remove "$@" ;;
+        list|ls) project_list "$@" ;;
+        start)   project_start "$@" ;;
+        stop)    project_stop "$@" ;;
+        restart) project_restart "$@" ;;
+        info)    project_info "$@" ;;
+        templates) project_templates ;;
+        *)
+            cat <<EOF
+Project commands:
+  project create <name> [--template hello] [--description "..."]
+  project remove <name>
+  project list
+  project start <name>          (start the project's streamlit dev server)
+  project stop <name>
+  project restart <name>
+  project info <name>
+  project templates             (list available templates)
+EOF
+            ;;
+    esac
+}
+
+project_create() {
+    local name="$1"; shift || { error "project create <name> required"; return 1; }
+    local template="hello" desc=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --template) template="$2"; shift ;;
+            --description) desc="$2"; shift ;;
+            *) error "unknown flag: $1"; return 1 ;;
+        esac; shift
+    done
+    log "creating project '$name' from template '$template'"
+    local body
+    body=$(printf '{"name":"%s","template":"%s","description":"%s"}' "$name" "$template" "$desc")
+    local out; out=$(api POST "/app" -H "Content-Type: application/json" -d "$body")
+    [ "$(api_code "$out")" = "200" ] || { error "create failed: $(api_body "$out" | head -2)"; return 1; }
+    log "created"; api_body "$out"
+}
+
+project_remove() {
+    local name="$1"; [ -z "$name" ] && { error "project remove <name>"; return 1; }
+    local out; out=$(api DELETE "/app/${name}")
+    case "$(api_code "$out")" in
+        200|204) log "removed $name" ;;
+        *) error "remove failed: $(api_body "$out")"; return 1 ;;
+    esac
+}
+
+project_list() { api_body "$(api GET "/apps")"; }
+
+project_start()   { local n="$1"; [ -z "$n" ] && return 1; api_body "$(api POST "/app/${n}/start")"; }
+project_stop()    { local n="$1"; [ -z "$n" ] && return 1; api_body "$(api POST "/app/${n}/stop")"; }
+project_restart() { local n="$1"; [ -z "$n" ] && return 1; api_body "$(api POST "/app/${n}/restart")"; }
+project_info()    { local n="$1"; [ -z "$n" ] && return 1; api_body "$(api GET "/app/${n}")"; }
+project_templates() { api_body "$(api GET "/templates")"; }
+
+show_help() {
+    cat <<EOF
+SecuBox StreamForge Controller v$VERSION (issue #183)
+Streamlit dev workbench CLI — paired with streamlitctl (hosting layer)
+
+Lifecycle:       start / stop / restart / status / logs
+Three-fold:      components / access (JSON)
+Project (#183):  project create / remove / list / start / stop / restart / info / templates
+
+Example workflow (forge → host):
+  streamforgectl project create dashboard --template basic
+  streamforgectl project start dashboard
+  # ...iterate via the webui at /streamforge/...
+  streamforgectl project export dashboard gitea://secubox/dashboard.git  # TODO
+  streamlitctl   app   deploy dashboard gitea://secubox/dashboard.git
+EOF
+}
+
+case "${1:-}" in
+    start|stop|restart|status) c="$1"; shift; cmd_$c "$@" ;;
+    logs)        shift; cmd_logs "$@" ;;
+    components)  cmd_components ;;
+    access)      cmd_access ;;
+    project)     shift; cmd_project "$@" ;;
+    help|--help|-h|'') show_help ;;
+    *) error "unknown: $1"; show_help; exit 1 ;;
+esac
