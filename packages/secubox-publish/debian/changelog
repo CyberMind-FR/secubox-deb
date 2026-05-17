@@ -1,3 +1,20 @@
+secubox-publish (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rename `metactl` -> `publishctl` for naming consistency with the rest
+    of the SecuBox ctl grammar (issue #180). The `metactl` name remains
+    as a symlink for backward compatibility — to drop in a future major.
+  * publishctl: add `post` noun dispatch so verbs are grouped under a
+    coherent <noun> <verb> schema parallel to giteactl/dropletctl/
+    metablogizerctl. Flat top-level verbs preserved as alias.
+
+      publishctl post upload <file.zip> [name] [--auto-publish]
+      publishctl post publish/unpublish <name>
+      publishctl post list/download/qrcode/health ...
+
+  * Bumped to 2.0.0 (CLI surface rename).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 17 May 2026 11:38:19 +0200
+
 secubox-publish (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
