@@ -3,12 +3,15 @@
 # Git server in Alpine LXC for Debian
 # Three-fold architecture: Components, Status, Access
 
-VERSION="1.4.0"
+VERSION="1.5.0"
 CONFIG_FILE="/etc/secubox/gitea.toml"
-LXC_PATH="/srv/lxc"
+LXC_PATH=""              # auto-detected below if blank, see resolve_lxc_path
 DATA_PATH="/srv/gitea"
 CONTAINER="gitea"
 GITEA_VERSION="1.22.6"
+
+# Gitea API hard floors
+MIRROR_MIN_INTERVAL="10m0s"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -32,7 +35,22 @@ HTTP_PORT=$(config_get "http_port" "3000")
 SSH_PORT=$(config_get "ssh_port" "2222")
 DOMAIN=$(config_get "domain" "git.local")
 APP_NAME=$(config_get "app_name" "SecuBox Git")
-LXC_IP=$(config_get "lxc_ip" "192.168.255.40")
+LXC_IP=$(config_get "lxc_ip" "10.100.0.40")
+GITEA_APP_INI=$(config_get "app_ini" "/var/lib/gitea/custom/conf/app.ini")
+ADMIN_USER=$(config_get "admin_user" "gandalf")
+
+# Resolve LXC_PATH: explicit config wins, then fall back to the first
+# directory containing a `<CONTAINER>/rootfs/` from the board conventions.
+resolve_lxc_path() {
+    local cfg
+    cfg=$(config_get "lxc_path" "")
+    if [ -n "$cfg" ]; then echo "$cfg"; return; fi
+    for p in /data/lxc /srv/lxc /var/lib/lxc; do
+        [ -d "$p/$CONTAINER/rootfs" ] && { echo "$p"; return; }
+    done
+    echo "/data/lxc"   # match modern board reality; install will create it
+}
+LXC_PATH=${LXC_PATH:-$(resolve_lxc_path)}
 
 require_root() {
     [ "$(id -u)" -eq 0 ] || { error "Root required"; exit 1; }
@@ -332,48 +350,326 @@ user_list() {
 # Mirror Management
 # ============================================================================
 
-mirror_add() {
-    local repo_url="$1"
-    local local_name="$2"
-    local owner="${3:-admin}"
+# ============================================================================
+# Repo / Mirror — the third routing verb (issue #176)
+# Forges `repo mirror add/remove/list/sync` parallel to mitmproxyctl route
+# (issue #173) and haproxyctl vhost. Wraps the 4 quirks of the Gitea
+# pull-mirror API into one atomic operation:
+#   1. No "convert existing repo to mirror" -> delete + migrate
+#   2. Minimum interval = 10m (enforced server-side, 500 below)
+#   3. Filesystem fetches don't trigger Gitea hooks -> DB stays "empty"
+#   4. Token generation needs to run inside the LXC as the gitea user
+# ============================================================================
 
-    if [ -z "$repo_url" ] || [ -z "$local_name" ]; then
-        echo "Usage: giteactl mirror add <repo_url> <local_name> [owner]"
-        return 1
-    fi
-
-    if ! lxc_running; then
-        error "Container not running"
-        return 1
-    fi
-
-    log "Creating mirror: $local_name from $repo_url"
-    # Use Gitea API for mirror creation
-    local api_token
-    api_token=$(get_admin_token)
-
-    if [ -n "$api_token" ]; then
-        lxc_attach "curl -s -X POST \
-            -H 'Authorization: token $api_token' \
-            -H 'Content-Type: application/json' \
-            -d '{
-                \"clone_addr\": \"$repo_url\",
-                \"repo_name\": \"$local_name\",
-                \"mirror\": true,
-                \"private\": false
-            }' \
-            http://localhost:${HTTP_PORT}/api/v1/repos/migrate"
-    else
-        warn "No admin token available. Create mirror manually via web interface."
-    fi
+# Generate a short-lived admin token via gitea CLI inside the LXC and echo
+# it. Token name embeds the PID so concurrent calls don't collide.
+gitea_token_gen() {
+    require_root
+    if ! lxc_running; then error "Container not running"; return 1; fi
+    local tname="giteactl-$$-$(date +%s)"
+    local out
+    out=$(lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- \
+        su -s /bin/bash gitea -c \
+        "gitea --config $GITEA_APP_INI admin user generate-access-token \
+            --username $ADMIN_USER --token-name $tname --scopes all 2>&1" \
+        | tail -1)
+    # output line ends with the actual token after the last ':'
+    local token
+    token=$(echo "$out" | awk -F: '{print $NF}' | tr -d ' ')
+    [ -z "$token" ] && { error "token gen failed: $out"; return 1; }
+    echo "$token" "$tname"
 }
 
-get_admin_token() {
-    # Get admin token from database
-    local db_file="$DATA_PATH/git/gitea.db"
-    if [ -f "$db_file" ]; then
-        sqlite3 "$db_file" "SELECT token_hash FROM access_token WHERE name='secubox-api' LIMIT 1" 2>/dev/null
+gitea_token_revoke() {
+    local tname="$1"
+    [ -z "$tname" ] && return 0
+    lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- \
+        su -s /bin/bash gitea -c \
+        "gitea --config $GITEA_APP_INI admin user delete-access-token \
+            --username $ADMIN_USER --token-name $tname 2>&1" \
+        >/dev/null 2>&1 || true
+}
+
+# Run a curl against the in-LXC Gitea API. Caller passes method + path
+# (without /api/v1 prefix) + body (or "" if none). Echo HTTP code on stderr,
+# body on stdout.
+gitea_api() {
+    local token="$1" method="$2" path="$3" body="$4"
+    local url="http://localhost:${HTTP_PORT}/api/v1${path}"
+    local args=("-s" "-X" "$method" "-H" "Authorization: token $token" "-H" "Content-Type: application/json")
+    [ -n "$body" ] && args+=("-d" "$body")
+    lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- \
+        curl "${args[@]}" -w "\nHTTP_CODE:%{http_code}\n" "$url"
+}
+
+# Normalize an interval string. Gitea requires ≥10m; coerce silently to the
+# floor so operators can ask for "5m" and get the closest legal value.
+_normalize_interval() {
+    local i="$1"
+    [ -z "$i" ] && { echo "$MIRROR_MIN_INTERVAL"; return; }
+    # Already in the canonical "Nm0s" form
+    case "$i" in
+        *h*|*d*) echo "$i"; return ;;
+        *m*)
+            local n
+            n=$(echo "$i" | sed 's/[^0-9].*//')
+            if [ -n "$n" ] && [ "$n" -lt 10 ]; then
+                warn "interval ${i} below Gitea floor ${MIRROR_MIN_INTERVAL}; coerced"
+                echo "$MIRROR_MIN_INTERVAL"
+            else
+                # ensure "NmXs" canonical
+                case "$i" in *s) echo "$i" ;; *) echo "${i}0s" ;; esac
+            fi
+            ;;
+        *) echo "$i" ;;
+    esac
+}
+
+# Parse "owner/name" or "name" (default owner = ADMIN_USER)
+_parse_repo_ref() {
+    local ref="$1"
+    case "$ref" in
+        */*) echo "${ref%/*}" "${ref#*/}" ;;
+        *)   echo "$ADMIN_USER" "$ref" ;;
+    esac
+}
+
+cmd_repo() {
+    local action="${1:-}"; shift || true
+    case "$action" in
+        create)      cmd_repo_create "$@" ;;
+        delete|del)  cmd_repo_delete "$@" ;;
+        mirror)      cmd_repo_mirror "$@" ;;
+        list|ls)     cmd_repo_list "$@" ;;
+        *)
+            cat <<EOF
+Repo commands:
+  repo create OWNER/NAME [--private] [--default-branch BR]
+  repo delete OWNER/NAME [--force]
+  repo list   [OWNER]
+  repo mirror add OWNER/NAME GITHUB_URL [--interval 10m] [--force]
+                                          (--force allows recreating an
+                                           existing non-mirror repo)
+  repo mirror remove OWNER/NAME            (turns off mirror, repo stays)
+  repo mirror sync   OWNER/NAME            (trigger an immediate pull)
+  repo mirror list                         (all mirror repos, JSON)
+EOF
+            ;;
+    esac
+}
+
+cmd_repo_create() {
+    local ref="$1"; shift || true
+    [ -z "$ref" ] && { error "repo create: OWNER/NAME required"; return 1; }
+    local owner name; read -r owner name <<<"$(_parse_repo_ref "$ref")"
+    local private=false default_branch="master"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --private) private=true ;;
+            --default-branch) default_branch="$2"; shift ;;
+            *) error "unknown flag: $1"; return 1 ;;
+        esac
+        shift
+    done
+    local tok tname; read -r tok tname <<<"$(gitea_token_gen)" || return 1
+    local body
+    body=$(printf '{"name":"%s","description":"Created by giteactl","private":%s,"default_branch":"%s"}' \
+        "$name" "$private" "$default_branch")
+    local out
+    out=$(gitea_api "$tok" POST "/admin/users/${owner}/repos" "$body")
+    gitea_token_revoke "$tname"
+    local code
+    code=$(echo "$out" | grep HTTP_CODE | cut -d: -f2)
+    case "$code" in
+        201) log "created ${owner}/${name}"; return 0 ;;
+        409) warn "${owner}/${name} already exists"; return 0 ;;
+        *)   error "create failed (HTTP $code): $(echo "$out" | head -1)"; return 1 ;;
+    esac
+}
+
+cmd_repo_delete() {
+    local ref="$1"; shift || true
+    [ -z "$ref" ] && { error "repo delete: OWNER/NAME required"; return 1; }
+    local force=false
+    [ "${1:-}" = "--force" ] && force=true
+    local owner name; read -r owner name <<<"$(_parse_repo_ref "$ref")"
+    if ! $force; then
+        warn "repo delete is destructive — pass --force to proceed (will delete ${owner}/${name})"
+        return 1
     fi
+    local tok tname; read -r tok tname <<<"$(gitea_token_gen)" || return 1
+    local out
+    out=$(gitea_api "$tok" DELETE "/repos/${owner}/${name}" "")
+    gitea_token_revoke "$tname"
+    local code
+    code=$(echo "$out" | grep HTTP_CODE | cut -d: -f2)
+    case "$code" in
+        204) log "deleted ${owner}/${name}"; return 0 ;;
+        404) warn "${owner}/${name} did not exist"; return 0 ;;
+        *)   error "delete failed (HTTP $code): $(echo "$out" | head -1)"; return 1 ;;
+    esac
+}
+
+cmd_repo_list() {
+    local owner="${1:-}"
+    local tok tname; read -r tok tname <<<"$(gitea_token_gen)" || return 1
+    local path
+    if [ -n "$owner" ]; then path="/users/${owner}/repos?limit=100"
+    else path="/repos/search?limit=100"; fi
+    local out
+    out=$(gitea_api "$tok" GET "$path" "")
+    gitea_token_revoke "$tname"
+    echo "$out" | sed '/^HTTP_CODE/d'
+}
+
+cmd_repo_mirror() {
+    local action="${1:-}"; shift || true
+    case "$action" in
+        add)    cmd_repo_mirror_add "$@" ;;
+        remove|rm) cmd_repo_mirror_remove "$@" ;;
+        sync)   cmd_repo_mirror_sync "$@" ;;
+        list|ls) cmd_repo_mirror_list "$@" ;;
+        *)
+            cat <<EOF
+Mirror commands:
+  repo mirror add OWNER/NAME GITHUB_URL [--interval 10m] [--force]
+  repo mirror remove OWNER/NAME
+  repo mirror sync OWNER/NAME
+  repo mirror list
+EOF
+            ;;
+    esac
+}
+
+cmd_repo_mirror_add() {
+    local ref="$1" url="$2"; shift 2 || { error "repo mirror add: OWNER/NAME URL required"; return 1; }
+    local interval="$MIRROR_MIN_INTERVAL" force=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --interval) interval="$2"; shift ;;
+            --force) force=true ;;
+            *) error "unknown flag: $1"; return 1 ;;
+        esac
+        shift
+    done
+    interval=$(_normalize_interval "$interval")
+    local owner name; read -r owner name <<<"$(_parse_repo_ref "$ref")"
+    local tok tname; read -r tok tname <<<"$(gitea_token_gen)" || return 1
+
+    # 1. Probe existing state
+    local probe
+    probe=$(gitea_api "$tok" GET "/repos/${owner}/${name}" "")
+    local probe_code
+    probe_code=$(echo "$probe" | grep HTTP_CODE | cut -d: -f2)
+    local is_mirror=false
+    if [ "$probe_code" = "200" ]; then
+        echo "$probe" | grep -q '"mirror":true' && is_mirror=true
+        if $is_mirror; then
+            log "${owner}/${name} is already a mirror; updating interval to ${interval}"
+            local body
+            body=$(printf '{"mirror_interval":"%s"}' "$interval")
+            gitea_api "$tok" PATCH "/repos/${owner}/${name}" "$body" >/dev/null
+            cmd_repo_mirror_sync_inner "$tok" "$owner" "$name"
+            gitea_token_revoke "$tname"; return 0
+        else
+            if ! $force; then
+                error "${owner}/${name} exists and is NOT a mirror; pass --force to delete+recreate"
+                gitea_token_revoke "$tname"; return 1
+            fi
+            log "deleting existing non-mirror ${owner}/${name} (force)"
+            gitea_api "$tok" DELETE "/repos/${owner}/${name}" "" >/dev/null
+            sleep 2
+        fi
+    fi
+
+    # 2. Migrate as mirror
+    log "creating pull mirror ${owner}/${name} <- ${url} (interval ${interval})"
+    local body
+    body=$(printf '{"clone_addr":"%s","repo_name":"%s","repo_owner":"%s","mirror":true,"mirror_interval":"%s","service":"github","private":false,"description":"Mirror of %s"}' \
+        "$url" "$name" "$owner" "$interval" "$url")
+    local out
+    out=$(gitea_api "$tok" POST "/repos/migrate" "$body")
+    local code
+    code=$(echo "$out" | grep HTTP_CODE | cut -d: -f2)
+    case "$code" in
+        201) log "mirror created" ;;
+        500)
+            # Gitea returns 500 for "interval below minimum" — surface message
+            local msg
+            msg=$(echo "$out" | grep -o '"message":"[^"]*"' | head -1)
+            error "migrate failed (500): $msg"
+            gitea_token_revoke "$tname"; return 1
+            ;;
+        *)   error "migrate failed (HTTP $code): $(echo "$out" | head -3)"
+             gitea_token_revoke "$tname"; return 1 ;;
+    esac
+
+    # 3. Wait for initial clone to settle (avoid race with DB rescan)
+    sleep 5
+    cmd_repo_mirror_sync_inner "$tok" "$owner" "$name"
+    gitea_token_revoke "$tname"
+    log "OK — ${owner}/${name} mirrors ${url} every ${interval}"
+    return 0
+}
+
+cmd_repo_mirror_remove() {
+    local ref="$1"
+    [ -z "$ref" ] && { error "repo mirror remove: OWNER/NAME required"; return 1; }
+    local owner name; read -r owner name <<<"$(_parse_repo_ref "$ref")"
+    local tok tname; read -r tok tname <<<"$(gitea_token_gen)" || return 1
+    # Setting mirror_interval="" disables auto-sync; repo stays as non-mirror.
+    # Per Gitea docs there is no true "demote-to-non-mirror" — the flag stays.
+    # Cleanest: just set interval to 0 which disables sync.
+    local out
+    out=$(gitea_api "$tok" PATCH "/repos/${owner}/${name}" '{"mirror_interval":"0s"}')
+    gitea_token_revoke "$tname"
+    local code
+    code=$(echo "$out" | grep HTTP_CODE | cut -d: -f2)
+    case "$code" in
+        200) log "${owner}/${name} mirror sync disabled (interval=0); repo content preserved" ;;
+        *)   error "remove failed (HTTP $code): $(echo "$out" | head -1)"; return 1 ;;
+    esac
+}
+
+cmd_repo_mirror_sync_inner() {
+    local tok="$1" owner="$2" name="$3"
+    log "triggering mirror-sync on ${owner}/${name}"
+    local out
+    out=$(gitea_api "$tok" POST "/repos/${owner}/${name}/mirror-sync" "")
+    local code
+    code=$(echo "$out" | grep HTTP_CODE | cut -d: -f2)
+    case "$code" in
+        200) log "sync triggered" ;;
+        400) warn "sync rejected (HTTP 400) — repo may still be in initial clone state" ;;
+        *)   warn "sync returned HTTP $code" ;;
+    esac
+}
+
+cmd_repo_mirror_sync() {
+    local ref="$1"
+    [ -z "$ref" ] && { error "repo mirror sync: OWNER/NAME required"; return 1; }
+    local owner name; read -r owner name <<<"$(_parse_repo_ref "$ref")"
+    local tok tname; read -r tok tname <<<"$(gitea_token_gen)" || return 1
+    cmd_repo_mirror_sync_inner "$tok" "$owner" "$name"
+    gitea_token_revoke "$tname"
+}
+
+cmd_repo_mirror_list() {
+    local tok tname; read -r tok tname <<<"$(gitea_token_gen)" || return 1
+    local out
+    out=$(gitea_api "$tok" GET "/repos/search?mirror=true&limit=100" "")
+    gitea_token_revoke "$tname"
+    echo "$out" | sed '/^HTTP_CODE/d' | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    for r in d.get('data', []):
+        print(f\"  {r['full_name']:40s}  <-  {r.get('original_url','?')}   (every {r.get('mirror_interval','?')})\")
+    if not d.get('data'):
+        print('(no mirror repos)')
+except Exception as e:
+    print(f'parse error: {e}', file=sys.stderr)
+" 2>&1
 }
 
 # ============================================================================
@@ -788,6 +1084,15 @@ Users:
   user passwd <n> <p>  Change password
   user list            List users
 
+Repos & Mirrors (issue #176, parallel to mitmproxyctl route):
+  repo create OWNER/NAME [--private] [--default-branch BR]
+  repo delete OWNER/NAME --force
+  repo list   [OWNER]
+  repo mirror add OWNER/NAME GITHUB_URL [--interval 10m] [--force]
+  repo mirror remove OWNER/NAME
+  repo mirror sync   OWNER/NAME
+  repo mirror list
+
 Backup:
   backup [name]        Create backup
   restore <file>       Restore from backup
@@ -823,6 +1128,7 @@ case "${1:-}" in
     stop)        shift; cmd_stop "$@" ;;
     restart)     shift; cmd_restart "$@" ;;
     user)        shift; cmd_user "$@" ;;
+    repo)        shift; cmd_repo "$@" ;;
     backup)      shift; cmd_backup "$@" ;;
     restore)     shift; cmd_restore "$@" ;;
     migrate)     shift; cmd_migrate "$@" ;;
