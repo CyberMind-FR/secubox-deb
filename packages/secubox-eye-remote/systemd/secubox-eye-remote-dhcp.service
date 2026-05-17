@@ -2,8 +2,8 @@
 [Unit]
 Description=SecuBox Eye Remote — DHCP server on eye-br0
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/158
-Requires=sys-subsystem-net-devices-eye_br0.device
-After=sys-subsystem-net-devices-eye_br0.device systemd-networkd.service
+Requires=sys-subsystem-net-devices-eye\x2dbr0.device
+After=sys-subsystem-net-devices-eye\x2dbr0.device systemd-networkd.service
 ConditionPathExists=/sys/class/net/eye-br0
 
 [Service]
