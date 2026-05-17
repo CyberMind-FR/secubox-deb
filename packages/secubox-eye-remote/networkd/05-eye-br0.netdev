@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# SecuBox Eye Remote — bridge for USB OTG gadgets
+#
+# All matching Pi RNDIS gadgets (MAC prefix 02:fb:00:00:*) are enslaved into
+# this bridge by udev (90-secubox-eye-remote.rules), so multiple gadgets can
+# coexist on a single broadcast domain without host-side IP collisions.
+#
+# The IP 10.55.0.1/24 lives on the bridge itself (see 10-eye-br0.network).
+
+[NetDev]
+Name=eye-br0
+Kind=bridge
+Description=SecuBox Eye Remote OTG bridge
+MACAddress=02:fb:00:00:00:01
+
+[Bridge]
+STP=no
+ForwardDelaySec=0

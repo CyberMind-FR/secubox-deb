@@ -3,6 +3,26 @@
 
 ---
 
+## ✅ 2026-05-16: eye-remote — link-rename collision fix for multi-gadget MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-deb/issues/155))
+
+### Status (worktree `155-eye-remote-link-rename-collision-when-mu`, branch `fix/155-eye-remote-link-rename-collision-when-mu`)
+
+- New canonical `eye-br0` bridge `.netdev` + `.network` shipped in `packages/secubox-eye-remote/networkd/`
+- `secubox-eye-remote.install` updated to deploy them to `/etc/systemd/network/`
+- udev rule + connect/disconnect handlers rewritten across `packages/secubox-system/` (and mirror in `packages/secubox-eye-remote/udev/`) — no per-iface IP assignment, just enslave into bridge
+- Idempotent `remote-ui/round/host-cleanup-dead-config.sh` runs locally on a host to:
+  - Drop the deployed netplan `eye-remote` ethernet stanza
+  - Remove the hand-installed `10-eye-remote.link` / `50-eye-remote.network` / `interfaces.d/usb0`
+  - Install the packaged bridge files, sync udev + handlers
+  - Reload networkd + udev
+- Multi-gadget L3 limitation documented in `remote-ui/round/MULTI-GADGET.md` (both Pis claim `10.55.0.2/30` — needs a Round-image change, not host-side)
+- **Hotfix applied live on `192.168.1.200`** — `eye-br0` UP with `10.55.0.1/24`, three rndis_host slaves attached, uvicorn binding succeeds, `curl http://10.55.0.1:8000/health` → HTTP 200
+- Branch pushed; PR open deferred per user preference
+
+### Followup (separate issue)
+
+- Round image: derive peer IP from MAC (or run DHCP client) so two gadgets can coexist at L3 — beyond #155 scope
+
 ## 🔄 2026-05-16: Cookie audit pipeline (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), branch `feature/156-cookie-audit-pipeline-rgpd-eprivacy-comp` — implementation complete, awaiting validation)
 
 RGPD / ePrivacy compliance reconciler. The mitmproxy WAF already injects a banner script into every HTML response; that injection now also loads `cookie-inventory.js` which snapshots `document.cookie` (sha256-hashed). Server-side, a new mitmproxy addon (`cookie_audit.py`) ledger-writes every `Set-Cookie` it sees. Both streams are reconciled by a `CookieAuditAggregator` in secubox-metrics → per-cookie verdict `source ∈ {http, js, both}` + RGPD violation flag (`source == "js"` AND `category != "strictly_necessary"`).

@@ -4,6 +4,29 @@
 ---
 ## 2026-05-16
 
+### eye-remote: fix link-rename collision when multiple Pi gadgets plug into MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-deb/issues/155))
+
+**Context:** Test board `192.168.1.200` had both a Pi Zero W (`rpiz`, MAC `02:fb:00:00:11:03`) and a Pi 4B (MAC `02:fb:00:00:d2:7f`) plugged into its USB hub. Both enumerated cleanly as `Linux Foundation Multifunction Composite Gadget` (1d6b:0104) but every `usb*` net iface stayed in `state DOWN` — `secubox-eye-remote.service` was running but uvicorn's `10.55.0.1:8000` had no interface to bind to.
+
+**Root cause:** Hand-installed `/etc/systemd/network/10-eye-remote.link` (not dpkg-owned) tried to rename every `02:fb:00:00:* + rndis_host` interface to the fixed name `eye-remote`. With two matching gadgets the rename collided and systemd-networkd silently left them as `usb0/usb1/usb2`. The companion `50-eye-remote.network` (and netplan's `eye-remote` ethernet stanza in `00-secubox.yaml`) then never matched anything live, so `10.55.0.1/30` was never applied. The `/etc/network/interfaces.d/usb0` ifupdown stanza was also dead (networkd is the active manager).
+
+**Fix (host-side, no Pi-side changes):**
+- New canonical `eye-br0` bridge owned by the package: [`packages/secubox-eye-remote/networkd/05-eye-br0.netdev`](../packages/secubox-eye-remote/networkd/05-eye-br0.netdev), [`packages/secubox-eye-remote/networkd/10-eye-br0.network`](../packages/secubox-eye-remote/networkd/10-eye-br0.network) (`10.55.0.1/24`, `ConfigureWithoutCarrier=yes`, `STP=off`).
+- udev rule rewritten in [`packages/secubox-system/etc/udev/rules.d/90-secubox-eye-remote.rules`](../packages/secubox-system/etc/udev/rules.d/90-secubox-eye-remote.rules): no per-iface IP, just call `eye-remote-connected.sh` which enslaves the netdev (`ip link set %k master eye-br0`). Mirror in [`packages/secubox-eye-remote/udev/90-secubox-eye-remote.rules`](../packages/secubox-eye-remote/udev/90-secubox-eye-remote.rules) kept identical.
+- Connect handler [`eye-remote-connected.sh`](../packages/secubox-system/usr/lib/secubox/eye-remote-connected.sh) rewritten to enslave into the bridge instead of assigning `10.55.0.1/30` on the gadget iface; falls back to point-to-point if bridge is missing.
+- Idempotent host hotfix [`remote-ui/round/host-cleanup-dead-config.sh`](../remote-ui/round/host-cleanup-dead-config.sh): rewrites netplan to drop the `eye-remote:` ethernet stanza (stateful YAML editor — regex approach was too greedy and over-matched), removes the dead `.link/.network/interfaces.d/usb0` files, installs the canonical bridge files, syncs udev rules, runs `netplan generate` + `systemctl restart systemd-networkd` + `udevadm trigger`.
+- Multi-gadget L3 limitation documented in [`remote-ui/round/MULTI-GADGET.md`](../remote-ui/round/MULTI-GADGET.md): every Round image currently statically claims `10.55.0.2/30` as its peer, so two Pis simultaneously plugged in race for the same L3 address even though the bridge keeps L2 clean. Proper fix needs a Round-image change (MAC-derived peer or DHCP client) — out of scope for #155.
+
+**Verification on `192.168.1.200`:**
+- `eye-br0` is UP with `10.55.0.1/24`
+- Three L2 slaves: `enx02fb00001103` (rpiz), `enx02fb0000d27f` (Pi 4B), plus a stale `eye-remote` (the rpiz's pre-fix rename; harmless leftover, will disappear on next hot-unplug)
+- `secubox-eye-remote.service` active, uvicorn listening on `10.55.0.1:8000`, `curl http://10.55.0.1:8000/health` → HTTP 200
+- udev journal shows the bridge enslavement firing on the `udevadm trigger` retrigger; `journalctl -t secubox-eye-remote` clean
+
+**Followups:**
+- Branch pushed to `origin/fix/155-eye-remote-link-rename-collision-when-mu`; PR opening deferred per user preference.
+- Round-image change for per-Pi peer IP (DHCP or MAC-derived static) — file as a separate issue when the Round image work resumes.
+
 ### Cookie audit pipeline — RGPD / ePrivacy reconciler (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) MERGED `a19486c9`)
 
 **Context:** Operator wants a compliance audit on their own infrastructure: confirm that every cookie effectively present in visitors' browsers is either `Set-Cookie`-traceable (server-emitted) or strictly_necessary. JS-set non-essential cookies (GA, Hotjar, Matomo, FB pixel) must be flagged because LCEN art. 82 / ePrivacy requires prior consent. The WAF already injects `health-banner.js` into every HTML response in transit through mitmproxy — that injection point is the only place that can see both server cookies (via the addon hook) AND browser-effective cookies (via a sibling script that snapshots `document.cookie`).
