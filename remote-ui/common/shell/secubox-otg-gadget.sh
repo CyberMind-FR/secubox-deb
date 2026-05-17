@@ -178,16 +178,30 @@ check_prerequisites() {
         fi
     fi
 
-    # Charger les modules nécessaires
+    # Charger les modules nécessaires. dwc2 must be loaded FIRST — it creates
+    # the UDC node that the gadget functions bind to. Historically dwc2 was
+    # loaded implicitly by secubox-eye-gadget.service's ExecStartPre; with
+    # that service disabled at boot (storage-only mode is opt-in), the
+    # gadget chain now owns its own dwc2 modprobe explicitly.
+    modprobe dwc2 2>/dev/null || true
     modprobe libcomposite 2>/dev/null || true
     modprobe usb_f_ecm 2>/dev/null || true
     modprobe usb_f_rndis 2>/dev/null || true
     modprobe usb_f_acm 2>/dev/null || true
     modprobe usb_f_mass_storage 2>/dev/null || true
 
+    # dwc2 binds asynchronously to the BCM USB controller — wait up to 5s
+    # for the UDC node to appear (typically <500ms on a Pi Zero W).
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        if [[ -d /sys/class/udc ]] && [[ -n "$(ls /sys/class/udc 2>/dev/null)" ]]; then
+            break
+        fi
+        sleep 0.5
+    done
+
     # Vérifier la présence d'un UDC (USB Device Controller)
     if [[ ! -d /sys/class/udc ]] || [[ -z "$(ls /sys/class/udc 2>/dev/null)" ]]; then
-        err "Aucun UDC trouvé — ce script doit être exécuté sur un RPi Zero W"
+        err "Aucun UDC trouvé — vérifier dtoverlay=dwc2 dans /boot/config.txt et module dwc2 dans /etc/modules"
         return 1
     fi
 

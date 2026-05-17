@@ -17,15 +17,19 @@ After=systemd-modules-load.service
 Before=network-pre.target
 Wants=network-pre.target
 
-# Conditions : seulement sur un périphérique avec UDC (RPi Zero W)
-ConditionPathIsDirectory=/sys/class/udc
+# Conditions : configfs disponible (UDC est crééable dynamiquement via dwc2,
+# voir ExecStartPre — pas de pré-condition stricte sur /sys/class/udc).
 ConditionPathExists=/sys/kernel/config
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 
-# Chargement des modules nécessaires
+# Chargement des modules nécessaires. dwc2 est chargé en premier pour créer
+# le UDC (sinon le gadget ne peut s'attacher). secubox-eye-gadget.service
+# le chargeait historiquement avant; depuis qu'il est désactivé au boot
+# (storage-only mode opt-in), on doit le charger ici.
+ExecStartPre=/sbin/modprobe dwc2
 ExecStartPre=/sbin/modprobe libcomposite
 ExecStartPre=/sbin/modprobe usb_f_ecm
 ExecStartPre=/sbin/modprobe usb_f_acm
