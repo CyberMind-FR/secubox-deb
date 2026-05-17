@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
-# SecuBox MetaCtl — ISP Home Publish CLI
-# CyberMind — https://cybermind.fr
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# publishctl — SecuBox ISP Home Publish CLI (issue #180)
+#
+# Renamed from `metactl` for naming consistency with the rest of the
+# SecuBox grammar (haproxyctl/giteactl/mitmproxyctl/metablogizerctl/
+# dropletctl/streamlitctl/streamforgectl). The old `metactl` name remains
+# as a symlink for backward compatibility — to drop in a future major.
+#
+# Flat verbs are now also reachable under the `post` noun dispatch
+# for grammar consistency (publishctl post upload <file>, etc). Flat
+# top-level verbs preserved for backward compatibility.
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 API_BASE="${SECUBOX_API_BASE:-http://127.0.0.1/api/v1/publish}"
 METABLOGIZER_API="${SECUBOX_METABLOGIZER_API:-http://127.0.0.1/api/v1/metablogizer}"
 TOKEN_FILE="${SECUBOX_TOKEN_FILE:-/etc/secubox/secrets/jwt-token}"
@@ -408,8 +419,39 @@ cmd_health() {
     fi
 }
 
+# post noun dispatch (issue #180 — grammar consistency, parallel to
+# `giteactl repo`, `mitmproxyctl route`, `dropletctl file`, etc).
+# Delegates to the existing flat cmd_* functions; both grammars supported.
+cmd_post() {
+    local act="${1:-}"; shift || true
+    case "$act" in
+        upload)              cmd_upload "$@" ;;
+        publish)             cmd_publish "$@" ;;
+        unpublish)           cmd_unpublish "$@" ;;
+        list|ls)             cmd_list ;;
+        download)            cmd_download "$@" ;;
+        qrcode|qr)           cmd_qrcode "$@" ;;
+        health)              cmd_health "$@" ;;
+        *)
+            cat <<EOF
+Post commands (issue #180):
+  post upload <file.zip> [name] [--domain=D] [--auto-publish]
+  post publish <name>
+  post unpublish <name>
+  post list
+  post download <name> [output.zip]
+  post qrcode <name>
+  post health <domain>
+EOF
+            ;;
+    esac
+}
+
 # Main
 case "${1:-help}" in
+    # noun-verb grammar (issue #180)
+    post)       shift; cmd_post "$@" ;;
+    # flat verbs (backward-compat — same callbacks)
     upload)     shift; cmd_upload "$@" ;;
     publish)    shift; cmd_publish "$@" ;;
     unpublish)  shift; cmd_unpublish "$@" ;;
@@ -419,10 +461,10 @@ case "${1:-help}" in
     status)     cmd_status ;;
     health)     shift; cmd_health "$@" ;;
     -h|--help|help) usage ;;
-    -v|--version) echo "metactl v${VERSION}" ;;
+    -v|--version) echo "publishctl v${VERSION}" ;;
     *)
         echo -e "${RED}Unknown command:${NC} $1"
-        echo "Run 'metactl --help' for usage"
+        echo "Run 'publishctl --help' for usage"
         exit 1
         ;;
 esac
