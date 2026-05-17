@@ -1,3 +1,13 @@
+secubox-core (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Add get_cookie_audit_config() helper with built-in RGPD/CNIL classifier
+    baseline patterns (strictly_necessary, functional, analytics, marketing).
+  * Operator patterns in [cookie_audit.classifier] are merged on top of the
+    baseline by default; set classifier_override = true to replace.
+  * Closes: #156
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 16 May 2026 16:12:28 +0200
+
 secubox-core (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add kiosk module (kiosk.py) for kiosk mode management

@@ -1,3 +1,15 @@
+secubox-metrics (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Add Cookie Audit (RGPD / ePrivacy) endpoints: POST /api/v1/cookie-audit/ingest,
+    GET /api/v1/cookie-audit/report?host=..., GET /api/v1/cookie-audit/summary.
+  * Add CookieAuditAggregator reconciler — joins mitmproxy Set-Cookie ledger
+    with browser document.cookie snapshots, flags rgpd_violation on JS-set
+    non-strictly-necessary cookies.
+  * Allow POST in CORS for the ingest endpoint.
+  * Closes: #156
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 16 May 2026 13:58:33 +0200
+
 secubox-metrics (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Fix crash-loop after reboot (#149): CACHE_DIR moves from /tmp/secubox

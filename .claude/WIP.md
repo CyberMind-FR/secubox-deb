@@ -58,23 +58,43 @@ stubbed and deferred to a follow-up issue.
 
 - Round image: derive peer IP from MAC (or run DHCP client) so two gadgets can coexist at L3 — beyond #155 scope
 
-## ✅ 2026-05-16: Cookie audit pipeline (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) MERGED `a19486c9`)
+## ✅ 2026-05-17: Cookie audit pipeline DEPLOYED + banner UX cleanup (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156) closed via PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) `a19486c9`)
 
-RGPD / ePrivacy compliance reconciler. The mitmproxy WAF already injects a banner script into every HTML response; that injection now also loads `cookie-inventory.js` which snapshots `document.cookie` (sha256-hashed). Server-side, a new mitmproxy addon (`cookie_audit.py`) ledger-writes every `Set-Cookie` it sees. Both streams are reconciled by a `CookieAuditAggregator` in secubox-metrics → per-cookie verdict `source ∈ {http, js, both}` + RGPD violation flag (`source == "js"` AND `category != "strictly_necessary"`).
+RGPD / ePrivacy compliance reconciler — server ledger (mitmproxy addon) ⨝ browser snapshots (`document.cookie` sha256-hashed) → per-cookie verdict `source ∈ {http, js, both}` + RGPD violation flag (`source == "js"` AND `category != "strictly_necessary"`).
 
-**Endpoints (CORS-open, credentials: omit):**
-- `POST /api/v1/cookie-audit/ingest`
-- `GET  /api/v1/cookie-audit/report?host=…`
-- `GET  /api/v1/cookie-audit/summary`
+**Live on board (gk2 / 192.168.1.200):**
+- mitmproxy LXC: `cookie_audit.py` addon active via systemd drop-in, ledger filling at `/var/log/secubox/cookie-audit/server.jsonl` (66+ entries captured)
+- secubox-metrics 1.0.2 + secubox-core 1.1.1 installed via `.deb`; secubox-hub 1.3.0 `.deb` install blocked by pre-existing `login.html` conflict with `secubox-portal` → `health-banner.js` + `cookie-inventory.js` scp'd directly as workaround
+- `[cookie_audit]` enabled in `/etc/secubox/secubox.conf` + operator classifier patterns for `Horde` / `roundcube_sessid` (otherwise they'd land in `unclassified`)
+- Endpoints accessible via nginx: `POST /api/v1/cookie-audit/ingest`, `GET /api/v1/cookie-audit/{report,summary}`
+- 6 vhosts captured, 0 RGPD violation as of 2026-05-17 04:00
+
+**Banner v1.4.4 in flight (post-merge polish, uncommitted on master):**
+- v1.4.0 — `CookieAudit` live tile (red/green RGPD verdict + per-category breakdown)
+- v1.4.1 — double-init guard (`window.__SBX_HEALTH_BANNER__`) — script was loaded twice (`index.html` + nginx `sub_filter` in `webui.conf:33`)
+- v1.4.2 — `sectionContainer()` now appends inside `.hb-content` instead of `#health-banner` — fixes latent #92 bug where live sections were positioned **outside** the visible scroll area
+- v1.4.3 — removed the 5 module tiles (waf/crowdsec/haproxy/nginx/system) — redundant with the persistent indicators top-right
+- v1.4.4 — dead-code cleanup: removed `MODULE_EMOJIS` / `STATUS_EMOJIS` constants + ~40 lines of `.hb-mod*` CSS
+- Also activated `[visitor_origin]` / `[live_hosts]` / `[cert_status]` in board conf (VisitorOrigin stays disabled at runtime — missing GeoLite mmdb)
 
 **Tests:** 43 metrics tests green (34 pre-existing + 9 new), 7 new mitmproxy tests green.
 
-**Status:** All eight implementation tasks of the plan executed in worktree, branch ready to push. No PR opened (memory: `feedback_no_unprompted_prs`) — awaiting operator validation.
+**Cascade incidents surfaced during deploy (separate tickets):**
+- [#162](https://github.com/CyberMind-FR/secubox-deb/issues/162) — `secubox-core` postinst overwrites `/etc/nginx/sites-available/secubox` with legacy `listen 80/443` → crashes nginx on HAProxy-fronted boards (caused 4-min prod outage)
+- [#163](https://github.com/CyberMind-FR/secubox-deb/issues/163) — Triple `/soc/` location duplicate (`webui.conf` inline + `secubox.d/soc.conf` + `secubox.d/soc-web.conf`) blocks every nginx reload
+- `secubox-hub` 1.3.0 packaging conflict with `secubox-portal` on `login.html` (needs `dpkg-divert` or split — to file)
+- nginx `systemctl reload` silently no-op'd for hours (workers from 16:09 never replaced until full restart)
 
-**Next manual steps before merge:**
-- Operator review of classifier baseline regexes in `common/secubox_core/config.py`
-- AppArmor rule update for `/var/log/secubox/cookie-audit/`
+**Workaround currently active on board (manual, not in packages):**
+- `/etc/nginx/sites-enabled/secubox → sites-available/secubox-local` (HAProxy-aware variant — reverts #162's regression)
+- `/etc/nginx/secubox.d/soc.conf.disabled-156` + `soc-web.conf.disabled-156` (dups removed — workaround for #163)
+- `/etc/nginx/secubox-routes.d/cookie-audit.conf` (new nginx route to metrics socket)
+- `mitmproxy.service.d/cookie-audit.conf` drop-in inside LXC (loads addon alongside WAF)
+
+**Follow-ups deferred:**
+- AppArmor rule update for `/var/log/secubox/cookie-audit/` + `/var/lib/secubox/cookie-audit/`
 - Logrotate snippet for the JSONL ledger
+- GeoLite ASN DB install to fire up VisitorOrigin
 
 ---
 

@@ -15,7 +15,13 @@
 (function() {
     'use strict';
 
-    const VERSION = '1.4.0';
+    // Prevent double-init if the script is loaded twice
+    // (e.g. once by index.html and once injected via nginx sub_filter
+    // or the mitmproxy WAF banner injection).
+    if (window.__SBX_HEALTH_BANNER__) return;
+    window.__SBX_HEALTH_BANNER__ = true;
+
+    const VERSION = '1.4.4';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
     const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
@@ -93,22 +99,6 @@
     // ═══════════════════════════════════════════════════════════════════════════
     // SMART DOCTOR ADVISOR
     // ═══════════════════════════════════════════════════════════════════════════
-
-    // Module emoji map for spunky display
-    const MODULE_EMOJIS = {
-        waf: ['🛡️', '⚔️', '🔰'],
-        crowdsec: ['👮', '🚔', '🚨'],
-        haproxy: ['🌐', '🔀', '🔄'],
-        nginx: ['🌍', '📡', '🚀'],
-        system: ['💻', '🖥️', '⚙️']
-    };
-
-    const STATUS_EMOJIS = {
-        ok: ['✅', '🟢', '💚', '🌟'],
-        warn: ['⚠️', '🟡', '🔶', '⏳'],
-        error: ['❌', '🔴', '💔', '🆘'],
-        off: ['⬜', '💤', '🔌']
-    };
 
     const DoctorRules = [
         {
@@ -283,7 +273,6 @@
                     <span class="hb-pct">--</span>
                 </div>
                 <div class="hb-ssl-container"></div>
-                <div class="hb-modules"></div>
                 <div class="hb-alerts"></div>
                 <div class="hb-sparkle">✨</div>
                 <div class="hb-details">
@@ -306,8 +295,18 @@
             el = document.createElement('div');
             el.id = id;
             el.className = 'sbx-live-section';
-            const banner = document.getElementById('health-banner');
-            if (banner) banner.appendChild(el);
+            // Append inside .hb-content (the scrollable area) instead of the
+            // outer banner element. Insert before .hb-details so live sections
+            // sit between alerts and the bottom stats grid.
+            const content = document.querySelector('#health-banner .hb-content');
+            if (content) {
+                const details = content.querySelector('.hb-details');
+                if (details) {
+                    content.insertBefore(el, details);
+                } else {
+                    content.appendChild(el);
+                }
+            }
         }
         return el;
     }
@@ -576,47 +575,6 @@
             .hb-ssl.ssl-unknown { border-color: rgba(107, 107, 122, 0.3); }
             .hb-ssl.ssl-unknown .hb-ssl-days { color: #6b6b7a; }
 
-            /* Modules grid */
-            .hb-modules {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 8px;
-            }
-            .hb-mod {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 4px;
-                padding: 8px;
-                border-radius: 6px;
-                background: rgba(255,255,255,0.05);
-                cursor: pointer;
-                transition: all 0.2s;
-                text-decoration: none;
-                position: relative;
-            }
-            .hb-mod:hover {
-                background: rgba(255,255,255,0.12);
-                transform: translateY(-2px);
-            }
-            .hb-mod.ok { border: 1px solid rgba(34,197,94,0.5); }
-            .hb-mod.warn { border: 1px solid rgba(234,179,8,0.5); }
-            .hb-mod.err { border: 1px solid rgba(239,68,68,0.5); }
-            .hb-mod.off { border: 1px solid rgba(102,102,102,0.5); opacity: 0.6; }
-            .hb-mod-emoji { font-size: 20px; }
-            .hb-mod-name {
-                font-size: 8px;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                color: var(--text-muted, #6b6b7a);
-            }
-            .hb-mod-status {
-                font-size: 10px;
-                position: absolute;
-                top: 2px;
-                right: 4px;
-            }
-
             /* Alerts */
             .hb-alerts {
                 display: flex;
@@ -775,9 +733,6 @@
                 .hb-content {
                     width: 100%;
                 }
-                .hb-modules {
-                    grid-template-columns: repeat(5, 1fr);
-                }
                 .hb-stats-grid {
                     grid-template-columns: repeat(3, 1fr);
                 }
@@ -840,26 +795,6 @@
         const sslContainer = banner.querySelector('.hb-ssl-container');
         if (sslContainer && health.ssl) {
             sslContainer.innerHTML = renderSslStatus(health.ssl);
-        }
-
-        // Render module cards
-        const modsEl = banner.querySelector('.hb-modules');
-        if (modsEl && health?.modules) {
-            const modules = ['waf', 'crowdsec', 'haproxy', 'nginx', 'system'];
-            modsEl.innerHTML = modules.map(m => {
-                const mod = health.modules[m] || {};
-                const status = mod.status || 'off';
-                const ledClass = status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : status === 'error' ? 'err' : 'off';
-                const emojis = MODULE_EMOJIS[m] || ['📦'];
-                const statusEmojis = STATUS_EMOJIS[status] || STATUS_EMOJIS.off;
-                const emoji = emojis[0];
-                const statusDot = statusEmojis[1] || statusEmojis[0];
-                return `<a href="/${m}/" class="hb-mod ${ledClass}" title="${m}: ${status}">
-                    <span class="hb-mod-emoji">${emoji}</span>
-                    <span class="hb-mod-name">${m}</span>
-                    <span class="hb-mod-status">${statusDot}</span>
-                </a>`;
-            }).join('');
         }
 
         // Render doctor alerts
