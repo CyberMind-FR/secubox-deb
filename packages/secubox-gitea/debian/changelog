@@ -1,3 +1,21 @@
+secubox-gitea (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * giteactl: forge `runner` noun verbs (issue #190) — the CI execution
+    layer of the SecuBox grammar, parallel to `repo mirror` (#176) and
+    `user`. Subcommands:
+      runner token gen
+      runner add NAME --labels L1,L2 [--arch arm64|amd64] [--memory 1G]
+      runner remove NAME [--keep-data]
+      runner list
+      runner logs NAME [--lines N]
+      runner restart NAME
+    Each runner lives in its own LXC `act-runner-<name>` (operator
+    decree: LXC only, no docker, no host-mode). `runner add` bootstraps
+    the LXC, downloads gitea-runner v1.0.3 from gitea.com, registers
+    against the local Gitea, installs a systemd unit, starts it.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 17 May 2026 11:51:30 +0200
+
 secubox-gitea (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Fix startup script: add PATH and HOME environment variables

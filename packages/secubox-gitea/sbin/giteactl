@@ -673,6 +673,277 @@ except Exception as e:
 }
 
 # ============================================================================
+# Runner — the CI execution verb (issue #190)
+#
+# Parallel to `repo mirror` (#176) and `user` (existing). Bootstraps a
+# dedicated LXC for each gitea-runner instance — operator decree: LXC only,
+# no docker on host, no insecure host-mode.
+#
+# Subcommands:
+#   runner token gen         Generate a one-shot registration token
+#   runner add NAME --labels L1,L2,... [--arch arm64|amd64] [--memory 1G]
+#   runner remove NAME [--keep-data]
+#   runner list
+#   runner logs NAME [--lines N]
+#   runner restart NAME
+# ============================================================================
+
+RUNNER_VERSION="${RUNNER_VERSION:-1.0.3}"
+RUNNER_DL_BASE="https://gitea.com/gitea/runner/releases/download/v${RUNNER_VERSION}"
+RUNNER_LXC_PREFIX="act-runner-"
+RUNNER_GITEA_URL="${RUNNER_GITEA_URL:-http://${LXC_IP}:${HTTP_PORT}}"
+RUNNER_BRIDGE="${RUNNER_BRIDGE:-br-lxc}"
+RUNNER_SUBNET="${RUNNER_SUBNET:-10.100.0.0/24}"
+RUNNER_GATEWAY="${RUNNER_GATEWAY:-10.100.0.1}"
+RUNNER_IP_POOL_START="${RUNNER_IP_POOL_START:-50}"   # 10.100.0.50..200
+RUNNER_IP_POOL_END="${RUNNER_IP_POOL_END:-200}"
+RUNNER_DNS="${RUNNER_DNS:-1.1.1.1 8.8.8.8}"
+
+# Find the next free IP in the runner pool (10.100.0.50..200), avoiding
+# IPs already declared in existing LXC configs.
+_runner_next_ip() {
+    local octet ip used
+    used=$(grep -h "lxc.net.0.ipv4.address" "$LXC_PATH"/*/config 2>/dev/null \
+           | sed 's|.*= *\([0-9.]*\)/.*|\1|' \
+           | grep "^10\.100\.0\." | sed 's|.*\.||' | sort -un)
+    for octet in $(seq "$RUNNER_IP_POOL_START" "$RUNNER_IP_POOL_END"); do
+        echo "$used" | grep -qx "$octet" || { echo "10.100.0.$octet"; return 0; }
+    done
+    return 1
+}
+
+_runner_lxc_name() { echo "${RUNNER_LXC_PREFIX}${1}"; }
+_runner_lxc_exists() { [ -d "$LXC_PATH/$(_runner_lxc_name "$1")/rootfs" ]; }
+_runner_lxc_running() {
+    lxc-info -n "$(_runner_lxc_name "$1")" -P "$LXC_PATH" 2>/dev/null | grep -q "State:.*RUNNING"
+}
+
+# Generate a runner registration token via gitea CLI inside the Gitea LXC.
+# Output is the raw token on the last line.
+cmd_runner_token_gen() {
+    require_root
+    if ! lxc_running; then error "gitea LXC not running"; return 1; fi
+    local out
+    out=$(lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- \
+        su -s /bin/bash gitea -c \
+        "gitea --config $GITEA_APP_INI actions generate-runner-token 2>&1" \
+        | tail -1)
+    [ -z "$out" ] && { error "token gen failed"; return 1; }
+    echo "$out"
+}
+
+cmd_runner_add() {
+    local name="$1"; shift || { error "runner add NAME required"; return 1; }
+    local labels="" arch="" memory="1G" ip=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --labels) labels="$2"; shift ;;
+            --arch)   arch="$2"; shift ;;
+            --memory) memory="$2"; shift ;;
+            --ip)     ip="$2"; shift ;;
+            *) error "unknown flag: $1"; return 1 ;;
+        esac; shift
+    done
+    [ -z "$labels" ] && { error "--labels L1,L2,... required"; return 1; }
+    [ -z "$arch" ] && arch=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+    [ -z "$ip" ] && ip=$(_runner_next_ip)
+    [ -z "$ip" ] && { error "no free IP in pool 10.100.0.${RUNNER_IP_POOL_START}..${RUNNER_IP_POOL_END}"; return 1; }
+
+    require_root
+    local lxc_name; lxc_name=$(_runner_lxc_name "$name")
+    if _runner_lxc_exists "$name"; then
+        error "LXC $lxc_name already exists (use 'runner remove $name' first)"
+        return 1
+    fi
+
+    log "creating LXC $lxc_name (arch $arch, memory $memory, ip $ip)"
+    lxc-create -n "$lxc_name" -P "$LXC_PATH" -t download -- \
+        -d debian -r bookworm -a "$arch"
+    # Static IP on br-lxc + memory limit (no DHCP on this bridge)
+    cat >> "$LXC_PATH/$lxc_name/config" <<EOF
+
+# act-runner LXC — set via giteactl runner add (#190)
+lxc.net.0.ipv4.address = ${ip}/24
+lxc.net.0.ipv4.gateway = ${RUNNER_GATEWAY}
+lxc.cgroup2.memory.max = $((${memory%[GgMm]} * (1024**$( [ "${memory: -1}" = "G" ] && echo 3 || echo 2 ))))
+EOF
+
+    log "starting $lxc_name for bootstrap"
+    lxc-start -n "$lxc_name" -P "$LXC_PATH"
+    sleep 4  # let networking settle
+
+    # Fix DNS — Debian template's resolv.conf symlinks systemd-resolved
+    # stub which is empty until configured; write static nameservers.
+    lxc-attach -n "$lxc_name" -P "$LXC_PATH" -- bash -c "
+for ns in $RUNNER_DNS; do echo \"nameserver \$ns\"; done > /etc/resolv.conf
+"
+
+    log "installing gitea-runner v$RUNNER_VERSION inside"
+    local dl_url="${RUNNER_DL_BASE}/gitea-runner-${RUNNER_VERSION}-linux-${arch}"
+    lxc-attach -n "$lxc_name" -P "$LXC_PATH" -- bash -c "
+set -e
+apt-get update -qq
+apt-get install -y -qq curl ca-certificates git
+curl -sL -o /usr/local/bin/act_runner '$dl_url'
+chmod 755 /usr/local/bin/act_runner
+useradd -r -s /usr/sbin/nologin -m -d /var/lib/act_runner act_runner 2>/dev/null || true
+mkdir -p /etc/act_runner /var/lib/act_runner
+chown -R act_runner:act_runner /var/lib/act_runner
+"
+
+    log "generating runner registration token"
+    local token
+    token=$(cmd_runner_token_gen | tail -1)
+    [ -z "$token" ] && { error "could not get registration token"; return 1; }
+
+    log "registering runner $name (labels: $labels) -> $RUNNER_GITEA_URL"
+    lxc-attach -n "$lxc_name" -P "$LXC_PATH" -- bash -c "
+cd /var/lib/act_runner
+su -s /bin/bash act_runner -c \"
+cd /var/lib/act_runner
+act_runner register \\
+  --no-interactive \\
+  --instance '$RUNNER_GITEA_URL' \\
+  --token '$token' \\
+  --name '$name' \\
+  --labels '$labels'
+\"
+"
+
+    log "installing systemd unit + starting"
+    lxc-attach -n "$lxc_name" -P "$LXC_PATH" -- bash -c "
+cat > /etc/systemd/system/act_runner.service <<UNIT
+[Unit]
+Description=Gitea act_runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=act_runner
+Group=act_runner
+WorkingDirectory=/var/lib/act_runner
+ExecStart=/usr/local/bin/act_runner daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now act_runner.service
+sleep 2
+systemctl is-active act_runner.service
+"
+    log "runner $name installed in $lxc_name"
+}
+
+cmd_runner_remove() {
+    local name="$1"; shift || { error "runner remove NAME required"; return 1; }
+    local keep_data=false
+    [ "${1:-}" = "--keep-data" ] && keep_data=true
+    require_root
+    local lxc_name; lxc_name=$(_runner_lxc_name "$name")
+    if ! _runner_lxc_exists "$name"; then
+        warn "LXC $lxc_name does not exist; nothing to remove"
+        return 0
+    fi
+    if _runner_lxc_running "$name"; then
+        log "stopping $lxc_name"
+        lxc-stop -n "$lxc_name" -P "$LXC_PATH"
+    fi
+    if $keep_data; then
+        log "keeping LXC rootfs (--keep-data); just stopped"
+    else
+        log "destroying $lxc_name"
+        lxc-destroy -n "$lxc_name" -P "$LXC_PATH"
+    fi
+    log "(note: runner remains registered in Gitea — visit Settings -> Actions -> Runners to delete the dead entry, or wait for it to expire)"
+}
+
+cmd_runner_list() {
+    require_root
+    echo "Local LXC runners:"
+    local any=0
+    for d in "$LXC_PATH"/${RUNNER_LXC_PREFIX}*; do
+        [ -d "$d/rootfs" ] || continue
+        any=1
+        local n; n=$(basename "$d" | sed "s|^${RUNNER_LXC_PREFIX}||")
+        local state="STOPPED"
+        _runner_lxc_running "$n" && state="RUNNING"
+        printf "  %-25s  %s\n" "$n" "$state"
+    done
+    [ $any = 0 ] && echo "  (none)"
+    echo
+    echo "Registered runners (gitea API):"
+    local tok tname; read -r tok tname <<<"$(gitea_token_gen)" || return 1
+    local out
+    out=$(gitea_api "$tok" GET "/admin/runners" "")
+    gitea_token_revoke "$tname"
+    api_body() { echo "$1" | sed '/^HTTP_CODE:/d'; }
+    echo "$out" | sed '/^HTTP_CODE:/d' | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    for r in d.get('runners', d if isinstance(d, list) else []):
+        print(f\"  {r.get('name','?'):25s} status={r.get('status','?')} labels={','.join(r.get('labels',[]))}\")
+    if not (d.get('runners') if isinstance(d, dict) else d):
+        print('  (none registered)')
+except Exception as e:
+    print(f'  parse error: {e}')
+" 2>&1
+}
+
+cmd_runner_logs() {
+    local name="$1"; [ -z "$name" ] && { error "runner logs NAME required"; return 1; }
+    local lines="${2:-100}"
+    [ "$1" = "--lines" ] && { lines="$2"; name="$3"; }
+    require_root
+    _runner_lxc_running "$name" || { error "LXC $(_runner_lxc_name "$name") not running"; return 1; }
+    lxc-attach -n "$(_runner_lxc_name "$name")" -P "$LXC_PATH" -- \
+        journalctl -u act_runner -n "$lines" --no-pager
+}
+
+cmd_runner_restart() {
+    local name="$1"; [ -z "$name" ] && { error "runner restart NAME required"; return 1; }
+    require_root
+    _runner_lxc_running "$name" || { error "LXC not running, start it first"; return 1; }
+    lxc-attach -n "$(_runner_lxc_name "$name")" -P "$LXC_PATH" -- \
+        systemctl restart act_runner
+    log "act_runner restarted in $(_runner_lxc_name "$name")"
+}
+
+cmd_runner() {
+    local act="${1:-}"; shift || true
+    case "$act" in
+        token)
+            local sub="${1:-}"
+            case "$sub" in
+                gen|generate) cmd_runner_token_gen ;;
+                *) echo "Usage: giteactl runner token gen" ;;
+            esac
+            ;;
+        add)         cmd_runner_add "$@" ;;
+        remove|rm|delete) cmd_runner_remove "$@" ;;
+        list|ls)     cmd_runner_list ;;
+        logs)        cmd_runner_logs "$@" ;;
+        restart)     cmd_runner_restart "$@" ;;
+        *)
+            cat <<EOF
+Runner commands (issue #190 — CI execution layer):
+  runner token gen                  Generate one-shot registration token
+  runner add NAME --labels L1,L2 [--arch arm64|amd64] [--memory 1G]
+                                    Bootstrap LXC, install gitea-runner, register, start
+  runner remove NAME [--keep-data]  Stop + destroy LXC (Gitea entry stays)
+  runner list                       Local LXCs + registered runners (JSON)
+  runner logs NAME [--lines N]      Tail in-LXC act_runner journal
+  runner restart NAME               systemctl restart act_runner in the LXC
+EOF
+            ;;
+    esac
+}
+
+# ============================================================================
 # Backup / Restore
 # ============================================================================
 
@@ -1093,6 +1364,14 @@ Repos & Mirrors (issue #176, parallel to mitmproxyctl route):
   repo mirror sync   OWNER/NAME
   repo mirror list
 
+Runners (issue #190 — LXC-only act_runner, CI execution layer):
+  runner token gen
+  runner add NAME --labels L1,L2 [--arch arm64|amd64] [--memory 1G]
+  runner remove NAME [--keep-data]
+  runner list
+  runner logs NAME [--lines N]
+  runner restart NAME
+
 Backup:
   backup [name]        Create backup
   restore <file>       Restore from backup
@@ -1129,6 +1408,7 @@ case "${1:-}" in
     restart)     shift; cmd_restart "$@" ;;
     user)        shift; cmd_user "$@" ;;
     repo)        shift; cmd_repo "$@" ;;
+    runner)      shift; cmd_runner "$@" ;;
     backup)      shift; cmd_backup "$@" ;;
     restore)     shift; cmd_restore "$@" ;;
     migrate)     shift; cmd_migrate "$@" ;;
