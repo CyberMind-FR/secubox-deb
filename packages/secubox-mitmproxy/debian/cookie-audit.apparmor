@@ -1,0 +1,18 @@
+# AppArmor abstraction for the cookie_audit addon (issue #156).
+# Include this from any /etc/apparmor.d/usr.bin.mitmdump profile that
+# enforces mitmproxy with the SecuBox cookie audit addon loaded.
+#
+# Usage in a profile:
+#   #include <abstractions/secubox-cookie-audit>
+#
+# Or paste these lines directly inside the profile body.
+
+  # JSONL ledger written by the addon — append + rotate
+  /var/log/secubox/cookie-audit/ rw,
+  /var/log/secubox/cookie-audit/server.jsonl rwk,
+  /var/log/secubox/cookie-audit/server.jsonl.* rwk,
+
+  # Optional ingest store mirror inside the LXC (kept for future
+  # cross-LXC aggregation; aggregator side actually lives on host)
+  /var/lib/secubox/cookie-audit/ rw,
+  /var/lib/secubox/cookie-audit/** rwk,
