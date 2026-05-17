@@ -3,6 +3,43 @@
 
 ---
 
+## ✅ 2026-05-16: eye-remote multi-gadget L3 DHCP — Phase 1 (Issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158), branch `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o`, PR not yet opened)
+
+### Objective
+
+Allow N Pi RNDIS gadgets to coexist at L3 on `eye-br0` with deterministic
+per-Pi addressing via a `dnsmasq` DHCP server scoped to the bridge. Round
+images switch from static `10.55.0.2/30` peer to a DHCP client so each Pi
+gets a unique `10.55.0.10–.250` lease. Phase 2 (explicit pairing approval)
+stubbed and deferred to a follow-up issue.
+
+### Tasks executed via subagent-driven development (17 tasks)
+
+- **Task 1** — Parser library: `reservations.conf` reader (per-MAC TOML-style entries, Pydantic model)
+- **Task 2** — Parser library: `dnsmasq.leases` reader (epoch + MAC + IP + hostname)
+- **Task 3** — Parser library: IP assignment logic (pool `10.55.0.10–.250`, first-fit, MAC stable)
+- **Task 4** — Pydantic models: `GadgetLease`, `GadgetReservation`, `LeaseState` + full pytest suite
+- **Task 5** — FastAPI router: `GET /api/v1/eye-remote/leases` (active leases joined with reservation table, JWT-gated)
+- **Task 6** — `api/main.py` registration of the leases router + lifespan wiring
+- **Task 7** — dnsmasq config: `eye-remote-dnsmasq.conf` scoped to `eye-br0`, pool `10.55.0.10–.250`, 24 h lease, `dhcp-script=leasewatch.sh`
+- **Task 8** — Dedicated systemd unit `secubox-eye-dnsmasq.service` (masked by `dnsmasq.service` on Debian, `PIDFile=/run/secubox/eye-dnsmasq.pid`)
+- **Task 9** — `find-usb-serial`: udev + sysfs helper that maps a USB gadget interface to the Pi's CPU serial (written to `/etc/secubox/eye-remote/serials/`)
+- **Task 10** — `leasewatch.sh` dhcp-script hook: on `add`/`old` events auto-appends new MAC to `reservations.conf`; logs JSONL audit entry
+- **Task 11** — nftables snippet: narrow DHCP allow on `eye-br0` only (`udp dport 67`) — default DROP preserved
+- **Task 12** — Debian packaging (`secubox-eye-remote`): ships dnsmasq config, systemd unit, nftables snippet, leasewatch.sh, postinst enables + starts `secubox-eye-dnsmasq.service`
+- **Task 13** — Debian packaging (`secubox-system`): ships `find-usb-serial` + `leasewatch.sh` to `/usr/lib/secubox/`; bumped version
+- **Task 14** — Round image: `usb0` → `eye0` rename via `.link` file (udev predictable names), updated all references in build script + gadget composer
+- **Task 15** — Round image: `eye0` switched to DHCP client via `systemd-networkd` `.network` file; firstboot derives hostname from CPU serial; build script enables `systemd-networkd`, disables competing `dhcpcd`/`usb-network.service`
+- **Task 16** — netns multi-gadget DHCP integration test (`tests/scripts/test-eye-remote-multi-gadget-netns.sh`): two veth pairs simulate two Pi gadgets; verifies distinct leases, lease renewal, and `find-usb-serial` path — skipped without root, ready for privileged CI runners
+- **Task 17** — Docs + tracking (this commit): `MULTI-GADGET.md` banner, WIP.md, HISTORY.md
+
+### Status
+
+- **Branch:** `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o` pushed to origin, head `f040fcff` (pre-Task-17 commit)
+- **Live-board deploy deferred:** `scripts/deploy.sh` only rsyncs Python API; full deploy requires `scp` of the .deb + `dpkg -i` on the board (installs `dnsmasq-base`, masks `dnsmasq.service`, loads nftables rules). User-initiated.
+- **Pi reflash deferred:** Round image side (Tasks 14+15) cannot be verified without flashing a Pi Zero W.
+- **PR not yet opened** — awaiting user decision on when to open PR and initiate hardware validation.
+- Phase 2 (pairing approval) is a separate follow-up issue, not part of this branch.
 ## ✅ 2026-05-16: eye-remote — link-rename collision fix for multi-gadget MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-deb/issues/155))
 
 ### Status (worktree `155-eye-remote-link-rename-collision-when-mu`, branch `fix/155-eye-remote-link-rename-collision-when-mu`)

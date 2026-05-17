@@ -4,6 +4,29 @@
 ---
 ## 2026-05-16
 
+### eye-remote: Phase 1 multi-gadget DHCP — N Pi gadgets coexist at L3 on `eye-br0` (Issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158), branch `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o`)
+
+**Context:** The L2 bridge (`eye-br0`) landed via #155 / PR #157 solved the hardware-level collision for N Pi RNDIS gadgets but left every Round image with the same static IP (`10.55.0.2/30`). With two gadgets attached the host ARP cache flapped between them; exactly one Pi was reachable at a time. Phase 1 adds L3 addressing: a `dnsmasq` instance scoped exclusively to `eye-br0` issues per-MAC leases from `10.55.0.10–.250`, and Round images switch from static peer to DHCP client.
+
+**Done:**
+
+- **Parser library** (Tasks 1–4): `reservations.conf` reader (per-MAC TOML-style), `dnsmasq.leases` reader (epoch + MAC + IP + hostname), IP assignment logic (pool `10.55.0.10–.250`, first-fit, MAC stable), Pydantic models `GadgetLease` / `GadgetReservation` / `LeaseState` — full pytest suite.
+- **FastAPI router** (Tasks 5–6): `GET /api/v1/eye-remote/leases` joins active lease file with reservation table, JWT-gated; wired into `api/main.py` lifespan.
+- **dnsmasq config + systemd unit** (Tasks 7–8): `eye-remote-dnsmasq.conf` bound to `eye-br0` only, 24 h lease, `dhcp-script=leasewatch.sh`; dedicated `secubox-eye-dnsmasq.service` (masks Debian's system-wide `dnsmasq.service`, `PIDFile=/run/secubox/eye-dnsmasq.pid`).
+- **Host helpers** (Tasks 9–10): `find-usb-serial` maps USB gadget interface → Pi CPU serial via udev + sysfs, writes to `/etc/secubox/eye-remote/serials/`; `leasewatch.sh` dhcp-script hook auto-appends new MACs to `reservations.conf` and writes JSONL audit entries.
+- **nftables** (Task 11): narrow DHCP allow on `eye-br0` only (`udp dport 67`); default DROP preserved.
+- **Debian packaging** (Tasks 12–13): `secubox-eye-remote` ships dnsmasq config, systemd unit, nftables snippet, `leasewatch.sh`; `postinst` enables + starts `secubox-eye-dnsmasq.service`. `secubox-system` ships `find-usb-serial` + `leasewatch.sh` to `/usr/lib/secubox/`; version bumped.
+- **Round image** (Tasks 14–15): `usb0` → `eye0` rename via `.link` udev predictable-name file; all references in build script + gadget composer updated. `eye0` switched to DHCP client via `systemd-networkd` `.network` file; firstboot derives hostname from CPU serial (`sbx-rnd-<serial_suffix>`); build script enables `systemd-networkd`, disables competing `dhcpcd` + `usb-network.service`.
+- **Integration test** (Task 16): `tests/scripts/test-eye-remote-multi-gadget-netns.sh` — netns + two veth pairs simulate two Pi gadgets; verifies distinct leases, lease renewal, and `find-usb-serial` mapping. Skipped without root (`EUID != 0`), ready for privileged CI runners.
+- **Docs + tracking** (Task 17): `remote-ui/round/MULTI-GADGET.md` created with "Resolved by #158" banner + historic limitation documentation; WIP.md + HISTORY.md updated.
+
+**State:**
+
+- Branch `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o` pushed to origin; head after Task 17 commit is the tracking commit.
+- Live-board deploy deferred to user: `scripts/deploy.sh` only rsyncs Python API; full install requires `.deb` transfer + `dpkg -i` on the board (installs `dnsmasq-base`, masks `dnsmasq.service`, loads nftables rules into kernel).
+- Pi reflash deferred: Round image changes (Tasks 14–15) need a fresh flash of a Pi Zero W to validate.
+- PR not yet opened — user decides when to open the review surface.
+- Phase 2 (explicit pairing approval before lease grant, NIZK handshake option) deferred to a separate follow-up issue.
 ### eye-remote: fix link-rename collision when multiple Pi gadgets plug into MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-deb/issues/155))
 
 **Context:** Test board `192.168.1.200` had both a Pi Zero W (`rpiz`, MAC `02:fb:00:00:11:03`) and a Pi 4B (MAC `02:fb:00:00:d2:7f`) plugged into its USB hub. Both enumerated cleanly as `Linux Foundation Multifunction Composite Gadget` (1d6b:0104) but every `usb*` net iface stayed in `state DOWN` — `secubox-eye-remote.service` was running but uvicorn's `10.55.0.1:8000` had no interface to bind to.

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Given a MAC address (arg 1), print the USB serial of the device that
+# backs the matching netdev. Exits 1 if no match.
+# Used by eye-remote-leasewatch.sh to encode a stable hostname.
+set -euo pipefail
+
+target_mac="${1:-}"
+if [[ -z "$target_mac" ]]; then
+    echo "usage: $0 <MAC>" >&2
+    exit 2
+fi
+target_mac=${target_mac,,}
+
+for iface in /sys/class/net/*; do
+    [[ -f "$iface/address" ]] || continue
+    mac=$(< "$iface/address")
+    [[ "${mac,,}" == "$target_mac" ]] || continue
+    p=$(readlink -f "$iface/device" 2>/dev/null) || continue
+    while [[ -n "$p" && "$p" != "/" ]]; do
+        if [[ -f "$p/serial" ]]; then
+            cat "$p/serial"
+            exit 0
+        fi
+        p=$(dirname "$p")
+    done
+done
+exit 1
