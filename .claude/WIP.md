@@ -1,9 +1,9 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-16*
+*Mis à jour : 2026-05-17*
 
 ---
 
-## ✅ 2026-05-16: eye-remote multi-gadget L3 DHCP — Phase 1 (Issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158), branch `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o`, PR not yet opened)
+## ✅ 2026-05-16/17: eye-remote multi-gadget L3 DHCP — Phase 1 (Issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158), PR [#161](https://github.com/CyberMind-FR/secubox-deb/pull/161) MERGED `e91b9e9e` + live-deploy fixes PR [#164](https://github.com/CyberMind-FR/secubox-deb/pull/164) MERGED `680734db`)
 
 ### Objective
 
@@ -35,12 +35,10 @@ stubbed and deferred to a follow-up issue.
 
 ### Status
 
-- **Branch:** `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o` pushed to origin, head `f040fcff` (pre-Task-17 commit)
-- **Live-board deploy deferred:** `scripts/deploy.sh` only rsyncs Python API; full deploy requires `scp` of the .deb + `dpkg -i` on the board (installs `dnsmasq-base`, masks `dnsmasq.service`, loads nftables rules). User-initiated.
-- **Pi reflash deferred:** Round image side (Tasks 14+15) cannot be verified without flashing a Pi Zero W.
-- **PR not yet opened** — awaiting user decision on when to open PR and initiate hardware validation.
-- Phase 2 (pairing approval) is a separate follow-up issue, not part of this branch.
-## ✅ 2026-05-16: eye-remote — link-rename collision fix for multi-gadget MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-deb/issues/155))
+- **PR [#161](https://github.com/CyberMind-FR/secubox-deb/pull/161) MERGED** as `e91b9e9e` (2026-05-16 21:32 UTC) — main DHCP work.
+- **PR [#164](https://github.com/CyberMind-FR/secubox-deb/pull/164) MERGED** as `680734db` (2026-05-17 04:17 UTC) — `fix(eye-remote): live-deploy regressions on 192.168.1.200`, caught after the MOCHAbin deploy.
+- Phase 2 (pairing approval) remains a separate follow-up issue, not on master.
+## ✅ 2026-05-16: eye-remote — link-rename collision fix for multi-gadget MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-deb/issues/155), PR [#157](https://github.com/CyberMind-FR/secubox-deb/pull/157) MERGED `e2a905ca`)
 
 ### Status (worktree `155-eye-remote-link-rename-collision-when-mu`, branch `fix/155-eye-remote-link-rename-collision-when-mu`)
 
@@ -54,13 +52,13 @@ stubbed and deferred to a follow-up issue.
   - Reload networkd + udev
 - Multi-gadget L3 limitation documented in `remote-ui/round/MULTI-GADGET.md` (both Pis claim `10.55.0.2/30` — needs a Round-image change, not host-side)
 - **Hotfix applied live on `192.168.1.200`** — `eye-br0` UP with `10.55.0.1/24`, three rndis_host slaves attached, uvicorn binding succeeds, `curl http://10.55.0.1:8000/health` → HTTP 200
-- Branch pushed; PR open deferred per user preference
+- **PR [#157](https://github.com/CyberMind-FR/secubox-deb/pull/157) MERGED** as `e2a905ca` (2026-05-16 11:43 UTC)
 
 ### Followup (separate issue)
 
 - Round image: derive peer IP from MAC (or run DHCP client) so two gadgets can coexist at L3 — beyond #155 scope
 
-## 🔄 2026-05-16: Cookie audit pipeline (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), branch `feature/156-cookie-audit-pipeline-rgpd-eprivacy-comp` — implementation complete, awaiting validation)
+## ✅ 2026-05-16: Cookie audit pipeline (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) MERGED `a19486c9`)
 
 RGPD / ePrivacy compliance reconciler. The mitmproxy WAF already injects a banner script into every HTML response; that injection now also loads `cookie-inventory.js` which snapshots `document.cookie` (sha256-hashed). Server-side, a new mitmproxy addon (`cookie_audit.py`) ledger-writes every `Set-Cookie` it sees. Both streams are reconciled by a `CookieAuditAggregator` in secubox-metrics → per-cookie verdict `source ∈ {http, js, both}` + RGPD violation flag (`source == "js"` AND `category != "strictly_necessary"`).
 
@@ -243,26 +241,42 @@ Branches `feature/135-…`, `feature/138-…`, `fix/139-…` deleted locally. Wo
 - PR #142 went DIRTY/CONFLICTING after #140 merged because it carried a merge commit from feature/135. Same fix: reset + cherry-pick `6d12af86` (the radar painter commit), with `--theirs` resolution on `square_dashboard.py` and `round_dashboard.py` (radar version was the canonical post-fixup state). Force-push, then merge.
 - `gh pr merge … --squash --delete-branch` raced once on the freshly-pushed PR #142 HEAD and auto-closed the PR; recovered with `gh pr reopen 142` then re-merge succeeded.
 
-### Local master state
+### Local master state (2026-05-17 sync)
 
-- `master` synced with `origin/master` at `320bdb01` after parallel sessions added `35ba4c2c` (Phase 1 replay), `320bdb01` (CACHE_DIR fix closes #149), plus the Phase 2 Rspamd spec + plan (`b78e2584` + `1f562593`).
+- `master` synced with `origin/master` at `680734db` (head was `320bdb01` on 2026-05-15 PM; 12 commits landed since).
+- Main checkout carries uncommitted parallel-session WIP at sync time (not committed by me):
+  - `packages/secubox-core/debian/changelog` (+10 lines, secubox-core 1.1.1-1~bookworm1 entry for cookie-audit helper baseline)
+  - `packages/secubox-hub/debian/changelog` (+13 lines, secubox-hub 1.3.0-1~bookworm1 entry for health-banner CookieAudit tile + cookie-inventory.js)
+  - `packages/secubox-hub/www/shared/health-banner.js` (modified)
+  - `packages/secubox-metrics/debian/changelog` (modified)
+  - These look like changelog/banner bumps for the merged #156/#159 cookie-audit work that didn't make it into the squash; intentionally left untouched.
 - Untracked: `.claude/settings.json` (pre-existing, intentional)
-- Stash list carries `stash@{0}` (`136-users-paths-canonical`) plus older parallel-session WIP stashes.
 
-### Worktrees still active
+### Worktrees still active (2026-05-17)
 
 | Worktree | Branch | Status |
 |---|---|---|
 | `145-secubox-waf-apply-double-cache-pattern-o` | `fix/145-…` | PR [#146](https://github.com/CyberMind-FR/secubox-deb/pull/146) OPEN — parallel session, not this conversation's work |
 | `147-add-scripts-check-dashboard-cache-py-lin` | `feature/147-…` | PR [#148](https://github.com/CyberMind-FR/secubox-deb/pull/148) OPEN — parallel session, not this conversation's work |
+| `153-mail-stack-phase-2-rspamd-migration-roun` | `feature/153-…` | PR [#160](https://github.com/CyberMind-FR/secubox-deb/pull/160) OPEN — mail Phase 2 Rspamd, hardware-validated 13/13 gates live |
+| `156-cookie-audit-pipeline-rgpd-eprivacy-comp` | `feature/156-…` | PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) MERGED `a19486c9`; worktree retained with WIP listed above |
 | `secubox-deb-license-wt` | `feature/license-phase-b-full` | SPDX rollout #81, no PR yet |
 
-### Parallel-session work landed today (not from this conversation)
+### Parallel-session work landed between 2026-05-15 PM and 2026-05-17 (not from this conversation)
 
-- `35ba4c2c` `fix(mail): replay Phase 1 fix commits lost in PR #141 squash-merge` — directly to master, unblocking Phase 2.
-- `320bdb01` `fix(metrics): CACHE_DIR /tmp/secubox → /var/cache/secubox (closes #149)` — directly to master.
-- PR [#146](https://github.com/CyberMind-FR/secubox-deb/pull/146) OPEN — `fix(secubox-waf): apply double-cache pattern on /stats + /alerts (closes #145)`.
-- PR [#148](https://github.com/CyberMind-FR/secubox-deb/pull/148) OPEN — `feat(scripts): check-dashboard-cache.py lint + CI (closes #147)`.
+- `a34c194d` `fix(users): surface password-change errors in edit-user form (closes #154)` — direct to master.
+- `d3ae2d57` `feat(users): disable password policy enforcement (admin opt-out)` — direct to master.
+- `18c85939` `docs: Phase 0 spec rev. 3 — three-LXC topology (mail / roundcube / horde)` — direct to master.
+- `b6947276` `docs: Mail Phase 2 Rspamd deployed live, 13/13 gates green (ref #153)` — direct to master.
+- `c203c3bc` `docs(history): HAProxy cert recovery — symlink /srv/haproxy/certs + rebuilt cfg (ref #153)` — direct to master.
+- `f95e0d9f` `docs(wip): mail Phase 2 follow-up refactor + HAProxy cert recovery (ref #153)` — direct to master.
+- `fccb51ca` `docs(wip): PR #160 opened for mail Phase 2 (ref #153)` — direct to master.
+- PR [#157](https://github.com/CyberMind-FR/secubox-deb/pull/157) MERGED `e2a905ca` — `fix(eye-remote): own the OTG bridge` (closes #155).
+- PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) MERGED `a19486c9` — cookie audit pipeline (closes #156).
+- PR [#160](https://github.com/CyberMind-FR/secubox-deb/pull/160) OPEN — mail Phase 2 Rspamd migration.
+- PR [#161](https://github.com/CyberMind-FR/secubox-deb/pull/161) MERGED `e91b9e9e` — eye-remote multi-gadget L3 DHCP Phase 1 (ref #158).
+- PR [#164](https://github.com/CyberMind-FR/secubox-deb/pull/164) MERGED `680734db` — `fix(eye-remote): live-deploy regressions on 192.168.1.200` (ref #158).
+- PR #146, PR #148 still open from 2026-05-15.
 
 ---
 
