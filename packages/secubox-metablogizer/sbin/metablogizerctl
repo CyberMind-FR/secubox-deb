@@ -194,6 +194,155 @@ site_unpublish() {
     log "Site unpublished: $name"
 }
 
+# ============================================================================
+# Tor — Emancipate verb (Punk Exposure Engine, issue #184)
+#
+# Per CLAUDE.md the Punk Exposure Engine has three verbs (Peek/Poke/Emancipate)
+# and Tor is one of the three exposure channels. `metablogizerctl tor expose`
+# is the Emancipate verb at the publishing layer for static sites.
+#
+# Implementation: write a per-site Tor HiddenService stanza, reload tor,
+# read the generated .onion hostname back. If secubox-exposure is installed,
+# delegate to it for consistency with other channels; otherwise fall back
+# to direct torrc manipulation.
+# ============================================================================
+
+TOR_DROPIN_DIR="${TOR_DROPIN_DIR:-/etc/tor/secubox-metablogizer.d}"
+TOR_DATA_DIR="${TOR_DATA_DIR:-/var/lib/tor/secubox-metablogizer}"
+
+_tor_drop_path() { echo "$TOR_DROPIN_DIR/${1}.conf"; }
+_tor_data_path() { echo "$TOR_DATA_DIR/${1}"; }
+
+_have_exposure() { command -v secubox-exposure >/dev/null 2>&1; }
+_have_tor() { command -v tor >/dev/null 2>&1; }
+
+tor_expose() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: metablogizerctl tor expose <site>"; return 1; }
+
+    local site_dir="$SITES_ROOT/$name"
+    [ -d "$site_dir" ] || { error "site not found: $name (run: metablogizerctl site create $name first)"; return 1; }
+
+    # Prefer secubox-exposure when available so all 3 exposure channels share
+    # the same orchestration (Tor / DNS+SSL / Mesh) and Peek shows it.
+    if _have_exposure; then
+        log "delegating to secubox-exposure emancipate (tor channel)"
+        # The static site is served via nginx on port 80 (per site_publish);
+        # secubox-exposure handles the HiddenService wiring and revocation.
+        secubox-exposure emancipate "metablogizer-${name}" 80 --tor
+        return $?
+    fi
+
+    # Fallback: write a tor drop-in directly.
+    _have_tor || { error "tor not installed and secubox-exposure unavailable"; return 1; }
+    mkdir -p "$TOR_DROPIN_DIR"
+    mkdir -p "$TOR_DATA_DIR"
+    local data; data=$(_tor_data_path "$name")
+    local drop; drop=$(_tor_drop_path "$name")
+    log "writing Tor HiddenService stanza for $name"
+    cat > "$drop" <<EOF
+# metablogizer site: $name (#184 — Emancipate via Tor)
+HiddenServiceDir $data
+HiddenServicePort 80 127.0.0.1:80
+EOF
+    chown -R debian-tor:debian-tor "$TOR_DATA_DIR" 2>/dev/null || true
+    chmod 700 "$data" 2>/dev/null || true
+    log "reloading tor"
+    systemctl reload tor 2>/dev/null || systemctl restart tor
+    # Wait briefly for tor to publish the hostname file
+    local i=0
+    while [ $i -lt 10 ] && [ ! -f "$data/hostname" ]; do sleep 1; i=$((i+1)); done
+    if [ -f "$data/hostname" ]; then
+        local onion; onion=$(cat "$data/hostname")
+        log "site emancipated via Tor: $onion"
+        # Persist the address back into site.json for future Peek calls
+        if [ -f "$site_dir/site.json" ] && command -v python3 >/dev/null 2>&1; then
+            python3 -c "
+import json, sys
+p='$site_dir/site.json'
+d=json.load(open(p))
+d.setdefault('exposure',{})['tor']='$onion'
+json.dump(d, open(p,'w'), indent=2)
+" 2>/dev/null || true
+        fi
+    else
+        warn "tor reload OK but hostname not yet written; check 'metablogizerctl tor status $name'"
+    fi
+}
+
+tor_revoke() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: metablogizerctl tor revoke <site>"; return 1; }
+    if _have_exposure; then
+        log "delegating to secubox-exposure revoke"
+        secubox-exposure revoke "metablogizer-${name}" --tor
+        return $?
+    fi
+    local drop; drop=$(_tor_drop_path "$name")
+    [ -f "$drop" ] || { warn "no Tor stanza for $name"; return 0; }
+    rm -f "$drop"
+    systemctl reload tor 2>/dev/null || systemctl restart tor
+    log "tor stanza removed for $name (data dir kept under $TOR_DATA_DIR/$name — delete manually if desired)"
+}
+
+tor_list() {
+    if _have_exposure; then
+        log "(delegate) secubox-exposure list --tor"
+        secubox-exposure list --tor 2>/dev/null && return
+    fi
+    if [ ! -d "$TOR_DROPIN_DIR" ]; then
+        echo "(no Tor-exposed sites)"
+        return
+    fi
+    local any=0
+    for d in "$TOR_DROPIN_DIR"/*.conf; do
+        [ -f "$d" ] || continue
+        any=1
+        local n; n=$(basename "$d" .conf)
+        local h="$TOR_DATA_DIR/$n/hostname"
+        if [ -f "$h" ]; then
+            printf "  %-30s  ->  %s\n" "$n" "$(cat "$h")"
+        else
+            printf "  %-30s  ->  (publishing...)\n" "$n"
+        fi
+    done
+    [ $any = 0 ] && echo "(no Tor-exposed sites)"
+}
+
+tor_status() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: metablogizerctl tor status <site>"; return 1; }
+    local data; data=$(_tor_data_path "$name")
+    local drop; drop=$(_tor_drop_path "$name")
+    echo "site:           $name"
+    echo "stanza present: $([ -f "$drop" ] && echo yes || echo no)"
+    if [ -f "$data/hostname" ]; then
+        echo "onion:          $(cat "$data/hostname")"
+    else
+        echo "onion:          (not yet published)"
+    fi
+    systemctl is-active tor >/dev/null 2>&1 && echo "tor service:    active" || echo "tor service:    inactive"
+}
+
+cmd_tor() {
+    local action="${1:-}"; shift || true
+    case "$action" in
+        expose)         tor_expose "$@" ;;
+        revoke|remove)  tor_revoke "$@" ;;
+        list|ls)        tor_list ;;
+        status)         tor_status "$@" ;;
+        *)
+            cat <<EOF
+Tor commands (Punk Exposure / Emancipate verb, issue #184):
+  tor expose <site>   - publish site via Tor hidden service
+  tor revoke <site>   - stop publishing via Tor
+  tor list            - list Tor-exposed sites + their onion addresses
+  tor status <site>   - show stanza presence + onion + tor service state
+EOF
+            ;;
+    esac
+}
+
 site_list() {
     echo "MetaBlogizer Sites:"
     echo "==================="
@@ -387,6 +536,12 @@ Sites:
   site unpublish <name>                    Unpublish site
   site list                                List all sites
 
+Tor (Punk Exposure / Emancipate, issue #184):
+  tor expose <site>                        Publish site via Tor hidden service
+  tor revoke <site>                        Stop publishing via Tor
+  tor list                                 List Tor-exposed sites + onions
+  tor status <site>                        Stanza + onion + tor service state
+
 Service:
   migrate [host]                           Migrate from OpenWrt
 
@@ -394,6 +549,7 @@ Examples:
   metablogizerctl components            # JSON components
   metablogizerctl site create myblog blog.example.com
   metablogizerctl site publish myblog
+  metablogizerctl tor expose myblog     # Emancipate via Tor
   metablogizerctl migrate 192.168.255.1
 
 EOF
@@ -422,6 +578,8 @@ case "${1:-}" in
             *) echo "Usage: metablogizerctl site create|delete|publish|unpublish|list" ;;
         esac
         ;;
+    # Tor (Emancipate, issue #184)
+    tor)        shift; cmd_tor "$@" ;;
     migrate) shift; cmd_migrate "$@" ;;
     help|--help|-h|'') show_help ;;
     *) error "Unknown: $1"; exit 1 ;;
