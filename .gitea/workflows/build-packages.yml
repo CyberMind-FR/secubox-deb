@@ -1,0 +1,341 @@
+name: Build SecuBox .deb packages
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_call:
+    secrets:
+      GPG_PRIVATE_KEY:
+        required: false
+      DEPLOY_SSH_KEY:
+        required: false
+      DEPLOY_KNOWN_HOSTS:
+        required: false
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to build (empty = all)'
+        required: false
+        default: ''
+      arch:
+        description: 'Architecture'
+        required: true
+        default: 'amd64'
+        type: choice
+        options:
+          - amd64
+          - arm64
+          - both
+
+jobs:
+  # Discover all packages dynamically.
+  #
+  # Emits a single flat matrix of {package, arch} objects pre-filtered to skip
+  # arch-all+arm64 combos. This avoids a cross-product expansion that would
+  # exceed GitHub Actions' hard 256-jobs-per-matrix cap once the package
+  # catalog grows past ~128 entries (we hit 134 in v2.9.0).
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.find.outputs.packages }}
+      matrix:   ${{ steps.find.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find packages + build flat matrix
+        id: find
+        env:
+          REQUESTED_ARCH: ${{ github.event.inputs.arch }}
+          REQUESTED_PKG:  ${{ github.event.inputs.package }}
+        run: |
+          set -euo pipefail
+          # Still emit the legacy `packages` output for backwards compat.
+          packages=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
+            | xargs dirname | xargs dirname | xargs -n1 basename \
+            | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "Found packages: $packages"
+
+          # Build the flat {package, arch} matrix. Honour the workflow_dispatch
+          # `arch` and `package` filters if set (empty on `push: tags` events).
+          requested_arch="${REQUESTED_ARCH:-}"
+          requested_pkg="${REQUESTED_PKG:-}"
+
+          combos=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
+            | sort | while read -r ctrl; do
+              pkg=$(basename "$(dirname "$(dirname "$ctrl")")")
+              if [ -n "$requested_pkg" ] && [ "$requested_pkg" != "$pkg" ]; then
+                continue
+              fi
+              is_all=0
+              if grep -q "^Architecture:[[:space:]]*all" "$ctrl"; then
+                is_all=1
+              fi
+              # amd64 always, unless arch=arm64 was requested explicitly.
+              if [ -z "$requested_arch" ] || [ "$requested_arch" = "amd64" ]; then
+                echo "{\"package\":\"$pkg\",\"arch\":\"amd64\"}"
+              fi
+              # arm64 only for arch-specific packages, unless arch=amd64 requested.
+              if [ "$is_all" = "0" ] && { [ -z "$requested_arch" ] || [ "$requested_arch" = "arm64" ]; }; then
+                echo "{\"package\":\"$pkg\",\"arch\":\"arm64\"}"
+              fi
+            done | jq -s -c .)
+          echo "matrix=$combos" >> "$GITHUB_OUTPUT"
+          # Print the size so over-cap regressions are visible in the log.
+          echo "Matrix size: $(echo "$combos" | jq 'length') combos"
+
+  # Build packages — one job per {package, arch} entry from discover.
+  build:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.discover.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if specific package requested
+        if: ${{ github.event.inputs.package != '' && github.event.inputs.package != matrix.package }}
+        run: echo "Skipping ${{ matrix.package }}" && exit 0
+
+      - name: Check if arch-all package
+        id: check-arch
+        run: |
+          if [ -f "packages/${{ matrix.package }}/debian/control" ]; then
+            if grep -q "Architecture: all" "packages/${{ matrix.package }}/debian/control"; then
+              echo "is_arch_all=true" >> $GITHUB_OUTPUT
+            else
+              echo "is_arch_all=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "is_arch_all=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip arm64 for arch-all packages
+        if: matrix.arch == 'arm64' && steps.check-arch.outputs.is_arch_all == 'true'
+        run: |
+          echo "⏭ Skipping arm64 build for Architecture: all package"
+          echo "  arch-all packages are architecture-independent"
+          exit 0
+
+      - name: Install build dependencies
+        if: "!(matrix.arch == 'arm64' && steps.check-arch.outputs.is_arch_all == 'true')"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential dpkg-dev debhelper devscripts fakeroot \
+            dh-python python3-all python3-setuptools
+
+      - name: Setup Node.js (for soc-web)
+        if: matrix.package == 'secubox-soc-web'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build React app (for soc-web)
+        if: matrix.package == 'secubox-soc-web'
+        run: |
+          cd packages/secubox-soc-web
+          npm ci --ignore-scripts || npm install --ignore-scripts
+          npm run build
+          ls -la dist/
+
+      - name: Setup Go (for daemon)
+        if: matrix.package == 'secubox-daemon'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build Go binaries (for daemon)
+        if: matrix.package == 'secubox-daemon'
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch == 'arm64' && 'arm64' || 'amd64' }}
+        run: |
+          cd daemon
+          mkdir -p build
+          go build -ldflags "-s -w" -o build/secuboxd ./cmd/secuboxd
+          go build -ldflags "-s -w" -o build/secuboxctl ./cmd/secuboxctl
+          go build -ldflags "-s -w" -o build/c3box ./c3box/backend
+          ls -la build/
+
+      - name: Build ${{ matrix.package }} (${{ matrix.arch }})
+        if: "!(matrix.arch == 'arm64' && steps.check-arch.outputs.is_arch_all == 'true')"
+        run: |
+          cd packages/${{ matrix.package }}
+
+          if [ ! -f debian/control ]; then
+            echo "⚠ debian/control missing — skip"
+            exit 0
+          fi
+
+          dpkg-buildpackage -us -uc -b
+
+          echo "✅ Build OK: ${{ matrix.package }} (${{ matrix.arch }})"
+
+      - name: Collect artifacts
+        if: "!(matrix.arch == 'arm64' && steps.check-arch.outputs.is_arch_all == 'true')"
+        run: |
+          mkdir -p artifacts
+          find packages/ -maxdepth 1 -name "*.deb" -exec cp {} artifacts/ \;
+          ls -lh artifacts/ || echo "No .deb files"
+
+      - name: Upload artifacts
+        if: "!(matrix.arch == 'arm64' && steps.check-arch.outputs.is_arch_all == 'true')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}-${{ matrix.arch }}
+          path: artifacts/*.deb
+          if-no-files-found: warn
+          retention-days: 7
+
+  # Combine all artifacts. `if: always() && != cancelled` so we still
+  # publish whatever .deb files the matrix succeeded on, even when a few
+  # entries failed (partial-release resilience).
+  collect:
+    needs: build
+    if: ${{ always() && needs.build.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-debs/
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd all-debs/
+          find . -name "*.deb" -exec mv {} . \; 2>/dev/null || true
+          sha256sum *.deb > SHA256SUMS 2>/dev/null || echo "No debs found"
+          cat SHA256SUMS
+
+      - name: Upload combined artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-debs-all
+          path: all-debs/
+          retention-days: 30
+
+  # Publish to APT repo (on tag) — partial-release resilient.
+  publish:
+    needs: collect
+    runs-on: ubuntu-latest
+    if: ${{ always() && needs.collect.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          name: secubox-debs-all
+          path: debs/
+
+      - name: Install reprepro
+        run: sudo apt-get install -y reprepro gnupg
+
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "⚠ GPG_PRIVATE_KEY secret not set - skipping signing"
+            echo "SKIP_SIGN=true" >> $GITHUB_ENV
+            exit 0
+          fi
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --list-keys
+
+      - name: Setup repository
+        if: env.SKIP_SIGN != 'true'
+        run: |
+          mkdir -p repo/conf
+          cp repo/conf/distributions repo/conf/ 2>/dev/null || true
+          cat > repo/conf/options << EOF
+          verbose
+          basedir $(pwd)/repo
+          EOF
+
+      - name: Add packages to repository
+        if: env.SKIP_SIGN != 'true'
+        run: |
+          for deb in debs/*.deb; do
+            [ -f "$deb" ] || continue
+            echo "Adding: $(basename $deb)"
+            reprepro -b repo includedeb bookworm "$deb" || true
+          done
+
+      - name: Export public key
+        if: env.SKIP_SIGN != 'true'
+        run: |
+          gpg --armor --export packages@secubox.in > repo/secubox-keyring.gpg
+
+      - name: Deploy to server
+        if: env.SKIP_SIGN != 'true'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "⚠ DEPLOY_SSH_KEY not set - skipping deploy"
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+          rsync -avz --delete \
+            repo/dists/ repo/pool/ repo/secubox-keyring.gpg \
+            deploy@apt.secubox.in:/var/www/apt.secubox.in/
+
+      - name: Delete existing release assets (if any)
+        run: |
+          VERSION="${{ github.ref_name }}"
+          if gh release view "$VERSION" &>/dev/null; then
+            echo "Release $VERSION exists, checking for duplicate assets..."
+            for file in debs/*.deb debs/SHA256SUMS; do
+              [ -f "$file" ] || continue
+              name=$(basename "$file")
+              gh release delete-asset "$VERSION" "$name" --yes 2>/dev/null || true
+            done
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            debs/*.deb
+            debs/SHA256SUMS
+          body: |
+            ## SecuBox-DEB ${{ github.ref_name }}
+
+            Debian bookworm packages for GlobalScale MOCHAbin / ESPRESSObin (arm64) and x86_64.
+
+            **33 packages** including:
+            - Core infrastructure (hub, core, portal)
+            - Security (crowdsec, waf, auth, nac)
+            - Networking (wireguard, netmodes, dpi, qos)
+            - Applications (mail, gitea, nextcloud, webmail)
+            - Publishing (droplet, streamlit, metablogizer)
+
+            **Installation:**
+            ```bash
+            curl -fsSL https://apt.secubox.in/secubox-keyring.gpg | \
+              sudo tee /usr/share/keyrings/secubox.gpg > /dev/null
+            echo "deb [signed-by=/usr/share/keyrings/secubox.gpg] https://apt.secubox.in bookworm main" | \
+              sudo tee /etc/apt/sources.list.d/secubox.list
+            sudo apt update && sudo apt install secubox-full
+            ```
