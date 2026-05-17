@@ -1,3 +1,15 @@
+secubox-streamforge (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Forge streamforgectl (issue #183). Subcommands: lifecycle (start/stop/
+    restart/status/logs), Three-fold JSON (components/access), project
+    noun (create/remove/list/start/stop/restart/info/templates) wrapping
+    the /api/v1/streamforge/app* endpoints over the Unix socket.
+  * Paired with streamlitctl on the hosting side — forge -> host workflow
+    expressible end-to-end (forge create/edit -> export to git -> stream
+    deploy).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 17 May 2026 11:34:28 +0200
+
 secubox-streamforge (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions

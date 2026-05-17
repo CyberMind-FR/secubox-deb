@@ -12,3 +12,6 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-streamforge/etc/nginx/secubox.d
 	[ -f nginx/streamforge.conf ] && cp nginx/streamforge.conf debian/secubox-streamforge/etc/nginx/secubox.d/ || true
+	# streamforgectl (#183)
+	install -d debian/secubox-streamforge/usr/sbin
+	install -m 755 sbin/streamforgectl debian/secubox-streamforge/usr/sbin/
