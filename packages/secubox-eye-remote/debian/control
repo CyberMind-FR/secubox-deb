@@ -9,6 +9,7 @@ Homepage: https://secubox.in
 Package: secubox-eye-remote
 Architecture: all
 Depends: ${misc:Depends},
+ dnsmasq-base,
  secubox-core,
  python3-fastapi,
  python3-uvicorn,

@@ -21,6 +21,8 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from .routers.leases import router as leases_router
+
 # Initialize
 app = FastAPI(
     title="SecuBox Eye Remote",
@@ -29,6 +31,9 @@ app = FastAPI(
 )
 
 logger = logging.getLogger("secubox.eye-remote")
+
+# Routers
+app.include_router(leases_router, prefix="/api/v1")
 
 # Constants
 INTERFACE_NAME = "usb0"

@@ -1,8 +1,13 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# packages/secubox-eye-remote/debian/prerm
 set -e
 
 case "$1" in
-    remove|upgrade)
+    remove|upgrade|deconfigure)
+        if [ -d /run/systemd/system ]; then
+            deb-systemd-invoke stop secubox-eye-remote-dhcp.service >/dev/null || true
+        fi
         systemctl stop secubox-eye-remote.service || true
         systemctl disable secubox-eye-remote.service || true
         ;;
