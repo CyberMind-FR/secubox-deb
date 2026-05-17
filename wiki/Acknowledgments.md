@@ -99,9 +99,9 @@ Mainteneur principal :
 
 ### Premier partenaire et client de la SecuBox
 
-<a href="https://reepost.fr"><img src="https://reepost.fr/logo.png" alt="reepost.fr" height="60" align="right"></a>
+<a href="https://reepoststudio.fr"><img src="https://reepoststudio.fr/logo.png" alt="reepoststudio.fr" height="60" align="right"></a>
 
-**[reepost.fr](https://reepost.fr)** est le **premier partenaire et client** de
+**[reepoststudio.fr](https://reepoststudio.fr)** est le **premier partenaire et client** de
 la SecuBox.
 
 * **Pré-2025** — Évaluations terrain, sponsoring matériel et financement de
