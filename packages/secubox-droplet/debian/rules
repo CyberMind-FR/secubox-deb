@@ -12,3 +12,6 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-droplet/etc/nginx/secubox.d
 	[ -f nginx/droplet.conf ] && cp nginx/droplet.conf debian/secubox-droplet/etc/nginx/secubox.d/ || true
+	# dropletctl (issue #181)
+	install -d debian/secubox-droplet/usr/sbin
+	install -m 755 sbin/dropletctl debian/secubox-droplet/usr/sbin/
