@@ -31,39 +31,68 @@ on:
           - both
 
 jobs:
-  # Discover all packages dynamically
+  # Discover all packages dynamically.
+  #
+  # Emits a single flat matrix of {package, arch} objects pre-filtered to skip
+  # arch-all+arm64 combos. This avoids a cross-product expansion that would
+  # exceed GitHub Actions' hard 256-jobs-per-matrix cap once the package
+  # catalog grows past ~128 entries (we hit 134 in v2.9.0).
   discover:
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.find.outputs.packages }}
+      matrix:   ${{ steps.find.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find packages
+      - name: Find packages + build flat matrix
         id: find
         run: |
-          # Find all packages with debian/control
+          set -euo pipefail
+          # Still emit the legacy `packages` output for backwards compat.
           packages=$(find packages/secubox-* -name "control" -path "*/debian/*" \
             | xargs dirname | xargs dirname | xargs -n1 basename \
             | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "packages=$packages" >> $GITHUB_OUTPUT
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
           echo "Found packages: $packages"
 
-  # Build packages for each architecture
+          # Build the flat {package, arch} matrix. Honour the workflow_dispatch
+          # `arch` and `package` filters if set.
+          requested_arch='${{ github.event.inputs.arch || '''' }}'
+          requested_pkg='${{ github.event.inputs.package || '''' }}'
+
+          combos=$(find packages/secubox-* -name "control" -path "*/debian/*" \
+            | sort | while read -r ctrl; do
+              pkg=$(basename "$(dirname "$(dirname "$ctrl")")")
+              if [ -n "$requested_pkg" ] && [ "$requested_pkg" != "$pkg" ]; then
+                continue
+              fi
+              is_all=0
+              if grep -q "^Architecture:[[:space:]]*all" "$ctrl"; then
+                is_all=1
+              fi
+              # amd64 always, unless arch=arm64 was requested explicitly.
+              if [ -z "$requested_arch" ] || [ "$requested_arch" = "amd64" ]; then
+                echo "{\"package\":\"$pkg\",\"arch\":\"amd64\"}"
+              fi
+              # arm64 only for arch-specific packages, unless arch=amd64 requested.
+              if [ "$is_all" = "0" ] && { [ -z "$requested_arch" ] || [ "$requested_arch" = "arm64" ]; }; then
+                echo "{\"package\":\"$pkg\",\"arch\":\"arm64\"}"
+              fi
+            done | jq -s -c .)
+          echo "matrix=$combos" >> "$GITHUB_OUTPUT"
+          # Print the size so over-cap regressions are visible in the log.
+          echo "Matrix size: $(echo "$combos" | jq 'length') combos"
+
+  # Build packages — one job per {package, arch} entry from discover.
   build:
     needs: discover
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        package: ${{ fromJson(needs.discover.outputs.packages) }}
-        arch: [amd64, arm64]
-        exclude:
-          # Exclude arm64 if only amd64 requested
-          - arch: ${{ github.event.inputs.arch == 'amd64' && 'arm64' || '' }}
-          # Exclude amd64 if only arm64 requested
-          - arch: ${{ github.event.inputs.arch == 'arm64' && 'amd64' || '' }}
+        include: ${{ fromJson(needs.discover.outputs.matrix) }}
 
     steps:
       - name: Checkout
