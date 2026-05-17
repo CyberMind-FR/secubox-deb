@@ -153,3 +153,30 @@ BOOT = "#803018"                     # Marron foncé
 MIND = "#3D35A0"                     # Violet/indigo
 ROOT = "#0A5840"                     # Vert foncé
 MESH = "#104A88"                     # Bleu marine
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cookie Audit (issue #156) — RGPD / ePrivacy compliance reconciler
+# ─────────────────────────────────────────────────────────────────────────────
+# When enabled, the mitmproxy cookie_audit addon writes a JSONL ledger of
+# every Set-Cookie observed in transit, and the secubox-metrics
+# CookieAuditAggregator reconciles it against browser snapshots posted to
+# /api/v1/cookie-audit/ingest.
+[cookie_audit]
+enabled = false
+ledger_path = "/var/log/secubox/cookie-audit/server.jsonl"
+ingest_dir = "/var/lib/secubox/cookie-audit/ingest"
+max_ingest_age_hours = 24
+# When true, the operator patterns below REPLACE the built-in RGPD baseline.
+# When false (default), they are merged on top — admins can extend but never
+# silently drop the baseline.
+classifier_override = false
+
+# Custom classification patterns. Each list is matched (re.search) against
+# the cookie name, in this order: strictly_necessary > functional > analytics
+# > marketing. First match wins. Unmatched names land in "unclassified" and
+# get flagged for review.
+[cookie_audit.classifier]
+# strictly_necessary = ["^app_session$"]
+# functional         = ["^app_theme$"]
+# analytics          = ["^my_analytics_"]
+# marketing          = ["^my_ad_id$"]

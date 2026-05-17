@@ -9,3 +9,5 @@ dnsmasq.d/eye-remote.conf etc/dnsmasq.d/
 etc/secubox/eye-remote/reservations.conf etc/secubox/eye-remote/
 nftables/secubox-eye-remote.nft etc/secubox/nftables.d/
 systemd/secubox-eye-remote-dhcp.service etc/systemd/system/
+networkd/05-eye-br0.netdev etc/systemd/network/
+networkd/10-eye-br0.network etc/systemd/network/

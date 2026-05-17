@@ -40,6 +40,43 @@ stubbed and deferred to a follow-up issue.
 - **Pi reflash deferred:** Round image side (Tasks 14+15) cannot be verified without flashing a Pi Zero W.
 - **PR not yet opened** — awaiting user decision on when to open PR and initiate hardware validation.
 - Phase 2 (pairing approval) is a separate follow-up issue, not part of this branch.
+## ✅ 2026-05-16: eye-remote — link-rename collision fix for multi-gadget MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-deb/issues/155))
+
+### Status (worktree `155-eye-remote-link-rename-collision-when-mu`, branch `fix/155-eye-remote-link-rename-collision-when-mu`)
+
+- New canonical `eye-br0` bridge `.netdev` + `.network` shipped in `packages/secubox-eye-remote/networkd/`
+- `secubox-eye-remote.install` updated to deploy them to `/etc/systemd/network/`
+- udev rule + connect/disconnect handlers rewritten across `packages/secubox-system/` (and mirror in `packages/secubox-eye-remote/udev/`) — no per-iface IP assignment, just enslave into bridge
+- Idempotent `remote-ui/round/host-cleanup-dead-config.sh` runs locally on a host to:
+  - Drop the deployed netplan `eye-remote` ethernet stanza
+  - Remove the hand-installed `10-eye-remote.link` / `50-eye-remote.network` / `interfaces.d/usb0`
+  - Install the packaged bridge files, sync udev + handlers
+  - Reload networkd + udev
+- Multi-gadget L3 limitation documented in `remote-ui/round/MULTI-GADGET.md` (both Pis claim `10.55.0.2/30` — needs a Round-image change, not host-side)
+- **Hotfix applied live on `192.168.1.200`** — `eye-br0` UP with `10.55.0.1/24`, three rndis_host slaves attached, uvicorn binding succeeds, `curl http://10.55.0.1:8000/health` → HTTP 200
+- Branch pushed; PR open deferred per user preference
+
+### Followup (separate issue)
+
+- Round image: derive peer IP from MAC (or run DHCP client) so two gadgets can coexist at L3 — beyond #155 scope
+
+## 🔄 2026-05-16: Cookie audit pipeline (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), branch `feature/156-cookie-audit-pipeline-rgpd-eprivacy-comp` — implementation complete, awaiting validation)
+
+RGPD / ePrivacy compliance reconciler. The mitmproxy WAF already injects a banner script into every HTML response; that injection now also loads `cookie-inventory.js` which snapshots `document.cookie` (sha256-hashed). Server-side, a new mitmproxy addon (`cookie_audit.py`) ledger-writes every `Set-Cookie` it sees. Both streams are reconciled by a `CookieAuditAggregator` in secubox-metrics → per-cookie verdict `source ∈ {http, js, both}` + RGPD violation flag (`source == "js"` AND `category != "strictly_necessary"`).
+
+**Endpoints (CORS-open, credentials: omit):**
+- `POST /api/v1/cookie-audit/ingest`
+- `GET  /api/v1/cookie-audit/report?host=…`
+- `GET  /api/v1/cookie-audit/summary`
+
+**Tests:** 43 metrics tests green (34 pre-existing + 9 new), 7 new mitmproxy tests green.
+
+**Status:** All eight implementation tasks of the plan executed in worktree, branch ready to push. No PR opened (memory: `feedback_no_unprompted_prs`) — awaiting operator validation.
+
+**Next manual steps before merge:**
+- Operator review of classifier baseline regexes in `common/secubox_core/config.py`
+- AppArmor rule update for `/var/log/secubox/cookie-audit/`
+- Logrotate snippet for the JSONL ledger
 
 ---
 
@@ -75,18 +112,36 @@ A parallel session diagnosed the same Phase-1-squash-loss and added more fixes (
 
 ---
 
-## 🔄 2026-05-15: Mail stack Phase 2 — Rspamd migration (spec + plan landed on master, no PR yet)
+## 🔄 2026-05-16: Mail stack Phase 2 — Rspamd migration (Issue [#153](https://github.com/CyberMind-FR/secubox-deb/issues/153), PR [#160](https://github.com/CyberMind-FR/secubox-deb/pull/160) OPEN)
 
 Brought in by a parallel session (`b78e2584` + `1f562593`). Replaces SpamAssassin + OpenDKIM with Rspamd; single-domain DKIM (`secubox.in`, selector `default`); ClamAV deferred to Phase 2.5.
 
-### Status
+### Status — live-deployed on admin.gk2.secubox.in (192.168.1.200), 13/13 gates green
 
 - **Spec:** [`docs/superpowers/specs/2026-05-15-mail-phase2-rspamd-design.md`](../docs/superpowers/specs/2026-05-15-mail-phase2-rspamd-design.md) committed `b78e2584` — locked decisions D1 (Rspamd replaces SA + OpenDKIM, Phase 0 invariant I3), D2 (ClamAV deferred), D3 (single-domain DKIM, Phase 3 widens).
-- **Plan:** [`docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md`](../docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md) committed `1f562593` — 8 milestones, ~25 bite-sized TDD tasks (A worktree+scaffolding, B `lib/mail/rspamd.sh` + 9 config templates, C FastAPI rspamd router + deprecation shims for `/dkim/*` `/spam/*` `/grey/*`, …).
-- **Phase 1 deploy lessons absorbed:** bats `test_deb_paths.bats` verifies `dpkg-deb -c` ships every `lib/mail/*.sh`; `install_mail_packages` adds `systemctl enable postfix`; acceptance smoke uses `timeout` wrappers, never raw pipes.
-- **Acceptance:** 13-gate smoke covers Postfix milter wiring, DKIM signature on outbound, SPF/DMARC enforcement, greylist behaviour, web UI auth, SA+OpenDKIM purge, and Phase 1 regression checks.
+- **Plan:** [`docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md`](../docs/superpowers/plans/2026-05-15-mail-phase2-rspamd.md) committed `1f562593` — 8 milestones, ~25 bite-sized TDD tasks.
+- **Branch:** `feature/153-mail-stack-phase-2-rspamd-migration-roun` pushed to origin, head `bc7545b1`. PR [#160](https://github.com/CyberMind-FR/secubox-deb/pull/160) opened 2026-05-16 — awaiting reviewer + merge.
+- **Live deploy 2026-05-16 (admin.gk2.secubox.in):**
+  - `secubox-mail_2.3.0-1~bookworm1_all.deb` installed
+  - rspamd + redis-server provisioned in `mail` LXC
+  - DKIM keypair generated for `secubox.in` selector `default` (2048-bit) — DNS TXT awaiting publication
+  - Postfix milter wired: `smtpd_milters = inet:127.0.0.1:11332`
+  - Rspamd web UI reachable at `https://rspamd.gk2.secubox.in/` via HAProxy → mitmproxy → 10.100.0.10:11334 with `x-secubox-waf: inspected`
+  - `mailctl rspamd purge-legacy` removed OpenDKIM + SpamAssassin cleanly (D9 health gate honoured)
+- **Live-deploy fixes pushed as `637b2221`:**
+  - `configure_rspamd_controller` now chowns `secrets.inc` via `lxc-attach -- chown _rspamd:_rspamd` (kernel idmap) instead of hardcoded host `100110:100110` — `_rspamd` is uid 107 in this Debian image, not 110, so the hardcoded value crash-looped rspamd on `Permission denied`
+  - Acceptance gate 7 grep loosened to `Messages scanned|Pools allocated` (rspamc stat doesn't print the literal string "rspamd")
+  - Acceptance gate 12 `dpkg -l` call wrapped with `|| true` so the smoke doesn't silently abort under `set -e` when the named packages are absent (success case)
+- **Live-deploy follow-up refactor pushed as `bc7545b1`:**
+  - `configure_rspamd_milter` + `configure_rspamd_controller` now stream templates through the live LXC via `lxc-attach -- tee` instead of guessing the host-side rootfs path — fixes the Phase 2 first-pass skip (board's runtime rootfs is `/data/lxc/<name>/rootfs` per `lxc.rootfs.path`, not `/var/lib/lxc/<name>/rootfs`).
+  - `rspamd_keygen` now takes a `container` arg and runs `rspamadm dkim_keygen` inside the LXC; writes to `/etc/rspamd-keys/<domain>/` (bind-mounted) with `/var/lib/rspamd/dkim/` fallback; mirrors the DNS TXT to the host data dir.
+  - `mailctl rspamd dkim-keygen` delegates to the lib function (drops its own hardcoded `chown 100110:100110`).
+  - `rspamd-route-sync-patch.sh` verifies each JSON write via read-back and fails loudly on mismatch — Phase 2 deploy needed a manual second pass for the mitmproxy LXC copy.
+  - Smoke 13/13 still green post-refactor (`/tmp/phase2-smoke-post-refactor.log` on host).
+- **Acceptance:** all 13 gates green on the live board after both fix and refactor commits.
+- **HAProxy cert recovery (separate `master` commit `70176578`):** `/srv/haproxy/certs` symlinked to `/data/haproxy/certs` + `haproxy.cfg` rebuilt from baseline + intentional grafts; reload now safe. Full post-mortem in HISTORY.md.
 
-No implementation worktree opened yet.
+⏭️ **Next:** user reviews PR [#160](https://github.com/CyberMind-FR/secubox-deb/pull/160), merges → `scripts/agent-worktree.sh clean 153`. DNS TXT for `default._domainkey.secubox.in` still needs zone-side publication (record content in `/data/volumes/mail/rspamd/dkim/secubox.in/default.txt` on the board).
 
 ---
 

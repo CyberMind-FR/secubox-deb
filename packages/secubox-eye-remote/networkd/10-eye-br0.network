@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# SecuBox Eye Remote — host gateway address on the OTG bridge.
+#
+# The /24 fits the existing Pi-side firmware that statically configures
+# 10.55.0.2 as its peer; ConfigureWithoutCarrier=yes keeps the address
+# live even when no gadget is currently attached, so uvicorn (bound to
+# 10.55.0.1:8000) survives device hot-plug.
+
+[Match]
+Name=eye-br0
+
+[Network]
+Description=SecuBox Eye Remote host gateway
+Address=10.55.0.1/24
+DHCP=no
+ConfigureWithoutCarrier=yes
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+
+[Link]
+RequiredForOnline=no

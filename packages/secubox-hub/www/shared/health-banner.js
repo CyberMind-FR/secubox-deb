@@ -15,13 +15,15 @@
 (function() {
     'use strict';
 
-    const VERSION = '1.3.0';
+    const VERSION = '1.4.0';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
     const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
         || '/api/v1/metrics/live-hosts';
     const CERT_STATUS_API    = window.SECUBOX_CERT_STATUS_API
         || '/api/v1/metrics/cert-status';
+    const COOKIE_AUDIT_API   = window.SECUBOX_COOKIE_AUDIT_SUMMARY
+        || '/api/v1/cookie-audit/summary';
     const LIVE_REFRESH_INTERVAL = 30000; // 30 s
     // Use global config if injected by CDN/WAF, otherwise use relative path
     const HEALTH_API = window.SECUBOX_HEALTH_API || '/api/v1/metrics/health/summary';
@@ -363,6 +365,41 @@
         showSection('sbx-cert-status');
     }
 
+    function renderCookieAudit(data) {
+        // Hidden until aggregator is enabled and has at least one host.
+        if (!data || !data.enabled || !data.summary || !data.summary.host_count) {
+            hideSection('sbx-cookie-audit');
+            return;
+        }
+        const el = sectionContainer('sbx-cookie-audit');
+        const s = data.summary;
+        const byCat = s.by_category || {};
+        const violationClass = s.violation_count > 0 ? 'sbx-rgpd-violation' : 'sbx-rgpd-ok';
+        const violationIcon  = s.violation_count > 0 ? '⚠' : '✓';
+        el.innerHTML =
+            `<div class="sbx-section-title">CookieAudit · ${s.host_count} vhost${s.host_count > 1 ? 's' : ''}</div>` +
+            `<div class="sbx-row ${violationClass}">` +
+                `<span>${violationIcon} RGPD</span>` +
+                `<span class="sbx-count">${s.violation_count} viol · ${s.hosts_with_violations} hosts</span>` +
+            `</div>` +
+            `<div class="sbx-row sbx-cookie-cat">` +
+                `<span>strict</span><span class="sbx-count">${byCat.strictly_necessary || 0}</span>` +
+            `</div>` +
+            `<div class="sbx-row sbx-cookie-cat">` +
+                `<span>func</span><span class="sbx-count">${byCat.functional || 0}</span>` +
+            `</div>` +
+            `<div class="sbx-row sbx-cookie-cat">` +
+                `<span>analytics</span><span class="sbx-count">${byCat.analytics || 0}</span>` +
+            `</div>` +
+            `<div class="sbx-row sbx-cookie-cat">` +
+                `<span>marketing</span><span class="sbx-count">${byCat.marketing || 0}</span>` +
+            `</div>` +
+            ((byCat.unclassified || 0) > 0
+                ? `<div class="sbx-row sbx-cookie-cat"><span>?? unclassified</span><span class="sbx-count">${byCat.unclassified}</span></div>`
+                : '');
+        showSection('sbx-cookie-audit');
+    }
+
     async function pollLivePanel() {
         const fetchSafe = async (url) => {
             try {
@@ -371,14 +408,16 @@
                 return await r.json();
             } catch (e) { return null; }
         };
-        const [vo, lh, cs] = await Promise.all([
+        const [vo, lh, cs, ca] = await Promise.all([
             fetchSafe(VISITOR_ORIGIN_API),
             fetchSafe(LIVE_HOSTS_API),
             fetchSafe(CERT_STATUS_API),
+            fetchSafe(COOKIE_AUDIT_API),
         ]);
         if (vo) renderVisitorOrigin(vo); else hideSection('sbx-visitor-origin');
         if (lh) renderLiveHosts(lh);     else hideSection('sbx-live-hosts');
         if (cs) renderCertStatus(cs);    else hideSection('sbx-cert-status');
+        if (ca) renderCookieAudit(ca);   else hideSection('sbx-cookie-audit');
     }
 
     function injectBannerStyles() {
@@ -752,6 +791,12 @@
             .sbx-row { display: flex; justify-content: space-between; gap: 8px; }
             .sbx-row .sbx-count { color: var(--cyber-cyan, #00d4ff); font-variant-numeric: tabular-nums; }
             .sbx-row .sbx-asn { color: var(--matrix-green, #00ff41); }
+            .sbx-rgpd-violation { color: #ef4444; font-weight: 600; }
+            .sbx-rgpd-violation .sbx-count { color: #ef4444; }
+            .sbx-rgpd-ok { color: var(--matrix-green, #00ff41); }
+            .sbx-rgpd-ok .sbx-count { color: var(--matrix-green, #00ff41); }
+            .sbx-cookie-cat { font-size: 10px; color: var(--text-muted, #6b6b7a); padding-left: 8px; }
+            .sbx-cookie-cat .sbx-count { color: var(--text-primary, #e8e6d9); }
         `;
         document.head.appendChild(style);
     }
