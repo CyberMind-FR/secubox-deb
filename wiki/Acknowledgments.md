@@ -96,7 +96,15 @@ Mainteneur principal :
   Notre-Dame-du-Cruet, Savoie
   https://cybermind.fr
 
-[Contributeurs additionnels seront listés ici]
+Premier contributeur :
+  reepost.fr
+  Contribution : Hardware bench (Pi 4B + DSI, Pi Zero W + HyperPixel),
+                 remote-ui converged dashboards (round/square) via
+                 secubox_common, radar_concentric painter with animation
+                 phase, round image cleanup (dead ifupdown, secubox sudo,
+                 OTG comment)
+  PRs          : #140, #142, #143
+  Période      : 2026-05
 
 Format d'entrée :
   [Nom/Pseudo]
@@ -148,4 +156,4 @@ Les crédits sont opt-in. Par défaut, les contributions sont anonymes.
 
 ---
 
-*Dernière mise à jour : 2026-05*
+*Dernière mise à jour : 2026-05-17*
