@@ -1,0 +1,13 @@
+# Rotate the cookie_audit JSONL ledger (issue #156).
+# Install path inside the mitmproxy LXC: /etc/logrotate.d/secubox-cookie-audit
+/var/log/secubox/cookie-audit/server.jsonl {
+    daily
+    rotate 14
+    maxsize 50M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    create 0644 mitmproxy mitmproxy
+}

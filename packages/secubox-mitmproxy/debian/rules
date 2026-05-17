@@ -21,3 +21,10 @@ override_dh_auto_install:
 	install -m 644 debian/secubox-mitmproxy.service $(CURDIR)/debian/secubox-mitmproxy/usr/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/nginx/secubox.d
 	install -m 644 nginx/mitmproxy.conf $(CURDIR)/debian/secubox-mitmproxy/etc/nginx/secubox.d/
+	# Cookie audit (issue #156) hardening — AppArmor abstraction + logrotate (issue #170)
+	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/apparmor.d/abstractions
+	install -m 644 debian/cookie-audit.apparmor \
+	  $(CURDIR)/debian/secubox-mitmproxy/etc/apparmor.d/abstractions/secubox-cookie-audit
+	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/logrotate.d
+	install -m 644 debian/cookie-audit.logrotate \
+	  $(CURDIR)/debian/secubox-mitmproxy/etc/logrotate.d/secubox-cookie-audit
