@@ -1,268 +1,410 @@
 #!/usr/bin/env python3
-"""mitmproxyctl — LXC container management for SecuBox WAF
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""mitmproxyctl — SecuBox WAF interception layer control (issue #173)
+
+The third verb of SecuBox's routing grammar, parallel to:
+  - haproxyctl vhost add/remove   (routing layer)
+  - giteactl   user add/remove    (identity layer)
+  - mitmproxyctl route add/remove (interception layer)  ← this tool
 
 Usage:
-    mitmproxyctl install   Create and configure LXC container
-    mitmproxyctl start     Start container and mitmproxy
-    mitmproxyctl stop      Stop container
-    mitmproxyctl restart   Restart container
-    mitmproxyctl status    Show container and process status
-    mitmproxyctl destroy   Remove container (requires --force)
-    mitmproxyctl logs      Show mitmproxy logs
+  Lifecycle:
+    mitmproxyctl install              Create + bootstrap the LXC container
+    mitmproxyctl start                Start the container
+    mitmproxyctl stop                 Stop the container
+    mitmproxyctl restart              Restart the container (= mitmdump reload)
+    mitmproxyctl status               Show container + mitmdump status
+    mitmproxyctl destroy --force      Remove the container
+    mitmproxyctl logs                 Tail mitmproxy logs
+
+  Routes (forge the missing verb, #173):
+    mitmproxyctl route list           List all (host, ip, port) entries
+    mitmproxyctl route add HOST IP PORT [--no-restart]
+                                      Add/replace a route (atomic, mirrors
+                                      to /srv/mitmproxy/ and the LXC rootfs
+                                      copy), then restart unless --no-restart
+    mitmproxyctl route remove HOST [--no-restart]
+                                      Remove a route, then restart
+
+Config (TOML, default /etc/secubox/mitmproxy.toml):
+  [container]
+  name      = "mitmproxy"          # board reality (not "mitmproxy-waf")
+  lxc_root  = "/data/lxc"          # board reality (not "/var/lib/lxc")
+  memory_limit = "512M"
+
+  [proxy]
+  listen_port = 8080
+  web_port    = 8091
+  host_routes_path     = "/srv/mitmproxy/haproxy-routes.json"
+  inbound_routes_path  = "/srv/mitmproxy-in/haproxy-routes.json"
 """
-import sys
-import os
-import subprocess
-import json
-import time
+from __future__ import annotations
+
 import argparse
+import json
+import os
 import platform
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
+from typing import Optional
 
 try:
-    import toml
+    import tomllib            # Python 3.11+
 except ImportError:
-    toml = None
+    try:
+        import tomli as tomllib
+    except ImportError:
+        tomllib = None
 
-CONTAINER_NAME = "mitmproxy-waf"
-CONFIG_FILE = Path("/etc/secubox/mitmproxy.toml")
-DATA_PATH = Path("/srv/mitmproxy-waf")
-LXC_PATH = Path("/var/lib/lxc") / CONTAINER_NAME
+# ── Defaults (match the live board convention) ─────────────────────────────
+DEFAULT_CONFIG_FILE = Path("/etc/secubox/mitmproxy.toml")
+DEFAULT_CONTAINER_NAME = "mitmproxy"
+DEFAULT_LXC_ROOT = Path("/data/lxc")
+DEFAULT_LISTEN_PORT = 8080
+DEFAULT_WEB_PORT = 8091
+DEFAULT_MEMORY_LIMIT = "512M"
+DEFAULT_HOST_ROUTES = Path("/srv/mitmproxy/haproxy-routes.json")
+DEFAULT_INBOUND_ROUTES = Path("/srv/mitmproxy-in/haproxy-routes.json")
 
 
-def load_config() -> dict:
-    """Load configuration from TOML file."""
-    if toml and CONFIG_FILE.exists():
-        return toml.load(CONFIG_FILE)
+# ── Config ─────────────────────────────────────────────────────────────────
+def load_config(path: Optional[Path] = None) -> dict:
+    """Read [container] + [proxy] from TOML with sensible defaults."""
+    p = path or DEFAULT_CONFIG_FILE
+    raw = {}
+    if tomllib and p.exists():
+        try:
+            with open(p, "rb") as f:
+                raw = tomllib.load(f)
+        except Exception as e:
+            print(f"  ! cannot parse {p}: {e}", file=sys.stderr)
+            raw = {}
+    container = raw.get("container") or {}
+    proxy = raw.get("proxy") or {}
     return {
-        "container": {"name": CONTAINER_NAME, "memory_limit": "256M"},
-        "proxy": {"listen_port": 8890, "web_port": 8091, "data_path": str(DATA_PATH)},
+        "container": {
+            "name": container.get("name", DEFAULT_CONTAINER_NAME),
+            "lxc_root": Path(container.get("lxc_root", str(DEFAULT_LXC_ROOT))),
+            "memory_limit": container.get("memory_limit", DEFAULT_MEMORY_LIMIT),
+        },
+        "proxy": {
+            "listen_port": proxy.get("listen_port", DEFAULT_LISTEN_PORT),
+            "web_port": proxy.get("web_port", DEFAULT_WEB_PORT),
+            "host_routes_path": Path(proxy.get("host_routes_path", str(DEFAULT_HOST_ROUTES))),
+            "inbound_routes_path": Path(proxy.get("inbound_routes_path", str(DEFAULT_INBOUND_ROUTES))),
+        },
     }
 
 
-def run(cmd: list, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
-    """Run a command with error handling."""
-    print(f"  → {' '.join(cmd)}")
+# ── Shell helpers ──────────────────────────────────────────────────────────
+def run(cmd: list, check: bool = True, capture: bool = False, quiet: bool = False) -> subprocess.CompletedProcess:
+    if not quiet:
+        print(f"  → {' '.join(cmd)}")
     return subprocess.run(cmd, check=check, capture_output=capture, text=True)
 
 
-def lxc_exists() -> bool:
-    """Check if LXC container exists."""
-    result = run(["lxc-ls"], capture=True, check=False)
-    return CONTAINER_NAME in result.stdout.split()
+def lxc_exists(name: str) -> bool:
+    r = run(["lxc-ls"], capture=True, check=False, quiet=True)
+    return name in r.stdout.split()
 
 
-def lxc_running() -> bool:
-    """Check if LXC container is running."""
-    result = run(["lxc-info", "-n", CONTAINER_NAME, "-s"], capture=True, check=False)
-    return "RUNNING" in result.stdout
+def lxc_running(name: str) -> bool:
+    r = run(["lxc-info", "-n", name, "-s"], capture=True, check=False, quiet=True)
+    return "RUNNING" in r.stdout
 
 
-def lxc_exec(cmd: list, check: bool = True) -> subprocess.CompletedProcess:
-    """Execute command inside LXC container."""
-    return run(["lxc-attach", "-n", CONTAINER_NAME, "--"] + cmd, check=check)
+def lxc_exec(name: str, cmd: list, check: bool = True) -> subprocess.CompletedProcess:
+    return run(["lxc-attach", "-n", name, "--"] + cmd, check=check)
 
 
-def cmd_install():
-    """Create and configure LXC container."""
-    print(f"Installing LXC container: {CONTAINER_NAME}")
-
-    if lxc_exists():
-        print(f"  Container {CONTAINER_NAME} already exists")
+# ── Lifecycle ──────────────────────────────────────────────────────────────
+def cmd_install(cfg: dict) -> int:
+    name = cfg["container"]["name"]
+    print(f"Installing LXC container: {name}")
+    if lxc_exists(name):
+        print(f"  Container {name} already exists")
         return 1
-
-    config = load_config()
-
-    # Create data directories
-    print("Creating data directories...")
-    DATA_PATH.mkdir(parents=True, exist_ok=True)
-    (DATA_PATH / "data").mkdir(exist_ok=True)
-    (DATA_PATH / "addons").mkdir(exist_ok=True)
-    (DATA_PATH / "config").mkdir(exist_ok=True)
-
-    # Create LXC container
-    print("Creating LXC container...")
-    # Detect architecture: aarch64 → arm64, x86_64 → amd64
     arch = "arm64" if platform.machine() == "aarch64" else "amd64"
-    run([
-        "lxc-create", "-n", CONTAINER_NAME,
-        "-t", "download",
-        "--",
-        "-d", "debian",
-        "-r", "bookworm",
-        "-a", arch
-    ])
-
-    # Configure container
-    print("Configuring container...")
-    lxc_config = LXC_PATH / "config"
-    with open(lxc_config, "a") as f:
-        f.write(f"\n# SecuBox WAF configuration\n")
-        f.write(f"lxc.mount.entry = {DATA_PATH}/data data none bind,create=dir 0 0\n")
-        f.write(f"lxc.mount.entry = {DATA_PATH}/addons addons none bind,create=dir 0 0\n")
-        memory_bytes = int(config["container"].get("memory_limit", "256M").rstrip("M")) * 1024 * 1024
-        f.write(f"lxc.cgroup2.memory.max = {memory_bytes}\n")
-
-    # Start container for setup
-    print("Starting container for initial setup...")
-    run(["lxc-start", "-n", CONTAINER_NAME])
-    time.sleep(5)  # Wait for container to boot
-
-    # Install mitmproxy inside container
-    print("Installing mitmproxy in container...")
-    lxc_exec(["apt-get", "update"])
-    lxc_exec(["apt-get", "install", "-y", "python3", "python3-pip"])
-    lxc_exec(["pip3", "install", "--break-system-packages", "mitmproxy"])
-
-    # Stop container
-    run(["lxc-stop", "-n", CONTAINER_NAME])
-
-    print(f"Container {CONTAINER_NAME} installed successfully")
+    run(["lxc-create", "-n", name, "-t", "download", "--",
+         "-d", "debian", "-r", "bookworm", "-a", arch])
+    # Memory limit
+    cfg_path = cfg["container"]["lxc_root"] / name / "config"
+    if cfg_path.exists():
+        with open(cfg_path, "a") as f:
+            f.write("\n# SecuBox WAF — set via mitmproxyctl\n")
+            mem = cfg["container"].get("memory_limit", DEFAULT_MEMORY_LIMIT)
+            try:
+                bytes_ = int(mem.rstrip("MmGg")) * (1024 ** (2 if mem[-1].lower() == "m" else 3))
+                f.write(f"lxc.cgroup2.memory.max = {bytes_}\n")
+            except Exception:
+                pass
+    run(["lxc-start", "-n", name])
+    time.sleep(5)
+    lxc_exec(name, ["apt-get", "update"])
+    lxc_exec(name, ["apt-get", "install", "-y", "python3", "python3-pip"])
+    lxc_exec(name, ["pip3", "install", "--break-system-packages", "mitmproxy"])
+    run(["lxc-stop", "-n", name])
+    print(f"Container {name} installed")
     return 0
 
 
-def cmd_start():
-    """Start container and mitmproxy."""
-    print(f"Starting {CONTAINER_NAME}...")
-
-    if not lxc_exists():
-        print(f"  Container does not exist. Run: mitmproxyctl install")
+def cmd_start(cfg: dict) -> int:
+    name = cfg["container"]["name"]
+    print(f"Starting {name}...")
+    if not lxc_exists(name):
+        print(f"  Container {name} does not exist (run: mitmproxyctl install)")
         return 1
-
-    if lxc_running():
-        print(f"  Container already running")
+    if lxc_running(name):
+        print(f"  Already running")
         return 0
-
-    config = load_config()
-    proxy_port = config["proxy"].get("listen_port", 8890)
-    web_port = config["proxy"].get("web_port", 8091)
-
-    # Start container
-    run(["lxc-start", "-n", CONTAINER_NAME])
+    run(["lxc-start", "-n", name])
     time.sleep(3)
-
-    # Start mitmproxy inside container (backgrounded)
-    print("Starting mitmproxy...")
-    lxc_exec([
-        "sh", "-c",
-        f"nohup mitmdump --mode upstream:http://127.0.0.1:80 "
-        f"--listen-port {proxy_port} "
-        f"--set web_open_browser=false "
-        f"-s /addons/secubox_waf.py "
-        f"> /var/log/mitmproxy.log 2>&1 &"
-    ])
-
-    print(f"Container {CONTAINER_NAME} started")
-    print(f"  Proxy port: {proxy_port}")
-    print(f"  Web port: {web_port}")
+    # Prefer the in-LXC systemd unit if present; otherwise direct mitmdump
+    r = lxc_exec(name, ["systemctl", "list-unit-files", "mitmproxy.service"], check=False)
+    if r.returncode == 0 and "mitmproxy.service" in r.stdout:
+        lxc_exec(name, ["systemctl", "start", "mitmproxy"])
+    else:
+        port = cfg["proxy"]["listen_port"]
+        lxc_exec(name, [
+            "sh", "-c",
+            f"nohup mitmdump --listen-port {port} -s /srv/mitmproxy/secubox_waf.py "
+            f"> /var/log/mitmproxy.log 2>&1 &",
+        ])
+    print(f"  Started")
     return 0
 
 
-def cmd_stop():
-    """Stop container."""
-    print(f"Stopping {CONTAINER_NAME}...")
-
-    if not lxc_exists():
-        print(f"  Container does not exist")
+def cmd_stop(cfg: dict) -> int:
+    name = cfg["container"]["name"]
+    print(f"Stopping {name}...")
+    if not lxc_exists(name):
+        print("  Container does not exist")
         return 1
-
-    if not lxc_running():
-        print(f"  Container not running")
+    if not lxc_running(name):
+        print("  Already stopped")
         return 0
-
-    run(["lxc-stop", "-n", CONTAINER_NAME])
-    print(f"Container {CONTAINER_NAME} stopped")
+    run(["lxc-stop", "-n", name])
+    print("  Stopped")
     return 0
 
 
-def cmd_restart():
-    """Restart container."""
-    cmd_stop()
+def cmd_restart(cfg: dict) -> int:
+    """Restart prefers an in-LXC systemd reload over a full container bounce."""
+    name = cfg["container"]["name"]
+    if lxc_running(name):
+        r = lxc_exec(name, ["systemctl", "list-unit-files", "mitmproxy.service"], check=False)
+        if r.returncode == 0 and "mitmproxy.service" in r.stdout:
+            lxc_exec(name, ["systemctl", "restart", "mitmproxy"])
+            print(f"  mitmproxy.service restarted inside {name}")
+            return 0
+    # Fallback: stop + start the container
+    cmd_stop(cfg)
     time.sleep(2)
-    return cmd_start()
+    return cmd_start(cfg)
 
 
-def cmd_status():
-    """Show container and process status."""
-    print(f"Status: {CONTAINER_NAME}")
-
-    if not lxc_exists():
+def cmd_status(cfg: dict) -> int:
+    name = cfg["container"]["name"]
+    print(f"Status: {name}")
+    if not lxc_exists(name):
         print("  Container: NOT INSTALLED")
         return 1
-
-    if lxc_running():
+    if lxc_running(name):
         print("  Container: RUNNING")
-
-        # Check mitmproxy process
-        result = lxc_exec(["pgrep", "-f", "mitmdump"], check=False)
-        if result.returncode == 0:
-            print("  Mitmproxy: RUNNING")
-        else:
-            print("  Mitmproxy: STOPPED")
-
-        # Get container IP
-        result = run(["lxc-info", "-n", CONTAINER_NAME, "-iH"], capture=True, check=False)
-        if result.stdout.strip():
-            print(f"  IP: {result.stdout.strip().split()[0]}")
+        r = lxc_exec(name, ["pgrep", "-f", "mitmdump"], check=False)
+        print(f"  mitmdump: {'RUNNING' if r.returncode == 0 else 'STOPPED'}")
+        r = run(["lxc-info", "-n", name, "-iH"], capture=True, check=False, quiet=True)
+        if r.stdout.strip():
+            print(f"  IP: {r.stdout.strip().split()[0]}")
     else:
         print("  Container: STOPPED")
-
-    # Check threat log
-    threats_log = DATA_PATH / "data" / "threats.log"
-    if threats_log.exists():
-        lines = threats_log.read_text().strip().split("\n")
-        print(f"  Threats logged: {len([l for l in lines if l])}")
-
+    routes = _read_routes(cfg["proxy"]["host_routes_path"])
+    print(f"  Routes: {len(routes)} hosts")
     return 0
 
 
-def cmd_destroy(force: bool = False):
-    """Remove container."""
+def cmd_destroy(cfg: dict, force: bool = False) -> int:
+    name = cfg["container"]["name"]
     if not force:
         print("Use --force to destroy container")
         return 1
-
-    print(f"Destroying {CONTAINER_NAME}...")
-
-    if not lxc_exists():
-        print(f"  Container does not exist")
+    print(f"Destroying {name}...")
+    if not lxc_exists(name):
+        print("  Container does not exist")
         return 0
-
-    if lxc_running():
-        run(["lxc-stop", "-n", CONTAINER_NAME])
-
-    run(["lxc-destroy", "-n", CONTAINER_NAME])
-    print(f"Container {CONTAINER_NAME} destroyed")
+    if lxc_running(name):
+        run(["lxc-stop", "-n", name])
+    run(["lxc-destroy", "-n", name])
+    print(f"  Destroyed")
     return 0
 
 
-def cmd_logs():
-    """Show mitmproxy logs."""
-    if not lxc_running():
-        print("Container not running")
+def cmd_logs(cfg: dict) -> int:
+    name = cfg["container"]["name"]
+    if not lxc_running(name):
+        print(f"Container {name} not running")
         return 1
-
-    lxc_exec(["tail", "-100", "/var/log/mitmproxy.log"], check=False)
+    lxc_exec(name, ["journalctl", "-u", "mitmproxy", "-n", "100", "--no-pager"], check=False)
     return 0
 
 
-def main():
-    parser = argparse.ArgumentParser(description="SecuBox WAF container management")
-    parser.add_argument("command", choices=["install", "start", "stop", "restart", "status", "destroy", "logs"])
-    parser.add_argument("--force", action="store_true", help="Force operation")
-    args = parser.parse_args()
+# ── Routes (the new verb, #173) ────────────────────────────────────────────
+def _route_files(cfg: dict) -> list:
+    """Return the route file paths that exist (host copy + LXC-rootfs mirror).
 
-    commands = {
-        "install": cmd_install,
-        "start": cmd_start,
-        "stop": cmd_stop,
-        "restart": cmd_restart,
-        "status": cmd_status,
-        "destroy": lambda: cmd_destroy(args.force),
-        "logs": cmd_logs,
-    }
+    The LXC-rootfs mirror is computed from container.lxc_root + container.name
+    + the in-LXC path of host_routes_path. Both must be kept in sync so that
+    the addon inside the LXC sees the same routes as the host-facing tooling.
+    """
+    out = []
+    host_path = cfg["proxy"]["host_routes_path"]
+    inbound_path = cfg["proxy"]["inbound_routes_path"]
+    lxc_root = cfg["container"]["lxc_root"]
+    name = cfg["container"]["name"]
+    # LXC-rootfs mirror of host_routes_path
+    lxc_mirror = lxc_root / name / "rootfs" / host_path.relative_to("/")
+    for p in (host_path, lxc_mirror, inbound_path):
+        out.append(p)
+    return out
 
-    return commands[args.command]()
+
+def _read_routes(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _write_routes(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2, sort_keys=True)
+        f.write("\n")
+    tmp.replace(path)
+
+
+def cmd_route_list(cfg: dict) -> int:
+    """Print the host-facing route map. The LXC mirror is assumed in sync."""
+    routes = _read_routes(cfg["proxy"]["host_routes_path"])
+    if not routes:
+        print("(no routes)")
+        return 0
+    width = max((len(h) for h in routes), default=0)
+    for host in sorted(routes):
+        v = routes[host]
+        ip, port = (v[0], v[1]) if isinstance(v, list) and len(v) >= 2 else (str(v), "")
+        print(f"  {host.ljust(width)}  ->  {ip}:{port}")
+    return 0
+
+
+def cmd_route_add(cfg: dict, host: str, ip: str, port: int, restart: bool = True) -> int:
+    """Add or replace a route in every existing route file, then optionally restart."""
+    if not host or not ip or not isinstance(port, int):
+        print("route add: host + ip + port required", file=sys.stderr)
+        return 2
+    updated = []
+    for p in _route_files(cfg):
+        if p.parent.exists() or p.exists():
+            d = _read_routes(p)
+            d[host] = [ip, int(port)]
+            _write_routes(p, d)
+            updated.append(str(p))
+    if not updated:
+        print("route add: no route file present (none of the configured paths exist)", file=sys.stderr)
+        return 3
+    for p in updated:
+        print(f"  + {host} -> {ip}:{port}   in {p}")
+    if restart:
+        return cmd_restart(cfg)
+    return 0
+
+
+def cmd_route_remove(cfg: dict, host: str, restart: bool = True) -> int:
+    updated = []
+    missing = []
+    for p in _route_files(cfg):
+        if not p.exists():
+            continue
+        d = _read_routes(p)
+        if host in d:
+            del d[host]
+            _write_routes(p, d)
+            updated.append(str(p))
+        else:
+            missing.append(str(p))
+    if not updated:
+        print(f"route remove: {host!r} not found in any route file", file=sys.stderr)
+        return 3
+    for p in updated:
+        print(f"  - {host}   from {p}")
+    for p in missing:
+        print(f"  · {host} already absent in {p}")
+    if restart:
+        return cmd_restart(cfg)
+    return 0
+
+
+# ── CLI ────────────────────────────────────────────────────────────────────
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="mitmproxyctl", description="SecuBox WAF interception control (#173)")
+    p.add_argument("--config", type=Path, default=None,
+                   help=f"path to TOML config (default: {DEFAULT_CONFIG_FILE})")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    for name in ("install", "start", "stop", "restart", "status", "logs"):
+        sub.add_parser(name)
+    destroy = sub.add_parser("destroy")
+    destroy.add_argument("--force", action="store_true")
+
+    route = sub.add_parser("route", help="manage intercepted routes")
+    rsub = route.add_subparsers(dest="route_cmd", required=True)
+    rsub.add_parser("list")
+    radd = rsub.add_parser("add")
+    radd.add_argument("host")
+    radd.add_argument("ip")
+    radd.add_argument("port", type=int)
+    radd.add_argument("--no-restart", action="store_true")
+    rrm = rsub.add_parser("remove")
+    rrm.add_argument("host")
+    rrm.add_argument("--no-restart", action="store_true")
+    return p
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    cfg = load_config(args.config)
+    if args.cmd == "install":
+        return cmd_install(cfg)
+    if args.cmd == "start":
+        return cmd_start(cfg)
+    if args.cmd == "stop":
+        return cmd_stop(cfg)
+    if args.cmd == "restart":
+        return cmd_restart(cfg)
+    if args.cmd == "status":
+        return cmd_status(cfg)
+    if args.cmd == "destroy":
+        return cmd_destroy(cfg, force=getattr(args, "force", False))
+    if args.cmd == "logs":
+        return cmd_logs(cfg)
+    if args.cmd == "route":
+        if args.route_cmd == "list":
+            return cmd_route_list(cfg)
+        if args.route_cmd == "add":
+            return cmd_route_add(cfg, args.host, args.ip, args.port, restart=not args.no_restart)
+        if args.route_cmd == "remove":
+            return cmd_route_remove(cfg, args.host, restart=not args.no_restart)
+    return 1
 
 
 if __name__ == "__main__":
