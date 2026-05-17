@@ -1,3 +1,18 @@
+secubox-metablogizer (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * metablogizerctl: forge tor noun verbs (issue #184) — the Emancipate
+    verb of the Punk Exposure Engine at the publishing layer.
+    Subcommands:
+      tor expose <site>   Publish site via Tor hidden service
+      tor revoke <site>   Stop publishing via Tor
+      tor list            List Tor-exposed sites with onion addresses
+      tor status <site>   Show stanza + onion + tor service state
+    When secubox-exposure is installed, delegates to it for consistency
+    with other exposure channels (DNS+SSL, Mesh). Otherwise falls back
+    to direct /etc/tor/secubox-metablogizer.d/ stanza management.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 17 May 2026 11:23:12 +0200
+
 secubox-metablogizer (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add metablogizerctl three-fold commands: components, access (JSON output)
