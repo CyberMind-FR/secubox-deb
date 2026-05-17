@@ -95,17 +95,28 @@ Mainteneur principal :
   Gérald Kerma (GK²) <devel@cybermind.fr>
   Notre-Dame-du-Cruet, Savoie
   https://cybermind.fr
+```
 
-Premier contributeur :
-  reepost.fr
-  Contribution : Hardware bench (Pi 4B + DSI, Pi Zero W + HyperPixel),
-                 remote-ui converged dashboards (round/square) via
-                 secubox_common, radar_concentric painter with animation
-                 phase, round image cleanup (dead ifupdown, secubox sudo,
-                 OTG comment)
-  PRs          : #140, #142, #143
-  Période      : 2026-05
+### Premier partenaire et client de la SecuBox
 
+<a href="https://reepost.fr"><img src="https://reepost.fr/logo.png" alt="reepost.fr" height="60" align="right"></a>
+
+**[reepost.fr](https://reepost.fr)** est le **premier partenaire et client** de
+la SecuBox.
+
+* **Pré-2025** — Évaluations terrain, sponsoring matériel et financement de
+  l'infrastructure de POC qui a permis la maturation de SecuBox-OpenWrt puis
+  la migration SecuBox-Deb.
+* **2026-05** — Contributions techniques : validation hardware Pi 4B + DSI,
+  Pi Zero W + HyperPixel ; co-design des dashboards remote-ui converged
+  (round/square) sur la base `secubox_common` ; radar concentric painter
+  avec animation phase ; cleanup d'image round (ifupdown, sudo secubox,
+  commentaire OTG).
+* **PRs techniques** : [#140](https://github.com/CyberMind-FR/secubox-deb/pull/140),
+  [#142](https://github.com/CyberMind-FR/secubox-deb/pull/142),
+  [#143](https://github.com/CyberMind-FR/secubox-deb/pull/143)
+
+```
 Format d'entrée :
   [Nom/Pseudo]
   Contribution : [description]
