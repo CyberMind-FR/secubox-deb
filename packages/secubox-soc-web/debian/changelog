@@ -1,3 +1,18 @@
+secubox-soc-web (1.1.1-1) bookworm; urgency=medium
+
+  * nginx snippet: remove duplicate `location /soc/` block (already defined
+    inline in secubox-hub's sites-enabled/webui.conf). The snippet now only
+    declares routes UNIQUE to soc-web (the /api/v1/soc-gateway/ proxy).
+  * Fixes "duplicate location /soc/" nginx test failure that silently
+    blocked every "systemctl reload nginx" on boards where webui.conf
+    inline + secubox.d/soc.conf + secubox.d/soc-web.conf overlapped.
+  * Operator note: if an orphan /etc/nginx/secubox.d/soc.conf still exists
+    on the board from a previous (now-removed) package, it must be cleaned
+    manually (no package owns it).
+  * Closes: #163
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 17 May 2026 07:26:00 +0200
+
 secubox-soc-web (1.1.0-1) bookworm; urgency=medium
 
   * Phase 5: Hierarchical Mode UI
