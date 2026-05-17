@@ -48,21 +48,24 @@ jobs:
 
       - name: Find packages + build flat matrix
         id: find
+        env:
+          REQUESTED_ARCH: ${{ github.event.inputs.arch }}
+          REQUESTED_PKG:  ${{ github.event.inputs.package }}
         run: |
           set -euo pipefail
           # Still emit the legacy `packages` output for backwards compat.
-          packages=$(find packages/secubox-* -name "control" -path "*/debian/*" \
+          packages=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
             | xargs dirname | xargs dirname | xargs -n1 basename \
             | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
           echo "Found packages: $packages"
 
           # Build the flat {package, arch} matrix. Honour the workflow_dispatch
-          # `arch` and `package` filters if set.
-          requested_arch='${{ github.event.inputs.arch || '''' }}'
-          requested_pkg='${{ github.event.inputs.package || '''' }}'
+          # `arch` and `package` filters if set (empty on `push: tags` events).
+          requested_arch="${REQUESTED_ARCH:-}"
+          requested_pkg="${REQUESTED_PKG:-}"
 
-          combos=$(find packages/secubox-* -name "control" -path "*/debian/*" \
+          combos=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
             | sort | while read -r ctrl; do
               pkg=$(basename "$(dirname "$(dirname "$ctrl")")")
               if [ -n "$requested_pkg" ] && [ "$requested_pkg" != "$pkg" ]; then
