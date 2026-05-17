@@ -3,6 +3,35 @@
 
 ---
 
+## 🔄 2026-05-17: Release v2.9.0 + matrix-cap fix + amd64 VBox tester bundle + README frontend
+
+### Status
+
+- **Tag `v2.9.0`** pushed on master `8d02cdc9` — first master-line minor release since `v2.8.0` (2026-05-10).
+- **`release.yml` run `25984244712`** in progress — builds packages (134 combos), system images (4 boards), Live USB, publishes to `apt.secubox.in`, creates GH Release.
+- **README front page** got a new "Latest Releases" section (commit `382f5902`) with download links per target + verification recipe + pointer to the turn-key VBox tester bundle.
+
+### What unblocked the release pipeline
+
+`release.yml` had been silently failing since the package catalog crossed 128 entries (last successful full release was `v2.7.x`). Diagnosis:
+
+- `build-packages.yml` matrix was `packages (134) × archs [amd64, arm64] = 268` — over GitHub Actions' hard **256-jobs-per-matrix cap**. The whole `build` step got skipped (zero matrix entries scheduled), cascading through collect → publish → build-images → build-live-usb → create-release.
+- Fix on master `8d02cdc9`: `discover` now emits a flat `[{package, arch}, …]` list, pre-filtering arch-all packages out of the arm64 set. `build` uses `matrix.include` instead of cross-product. Inputs moved to step `env:` to avoid YAML/shell quote hell. Find pattern tightened to `*/debian/control` -not `*/debian/*/DEBIAN/control` to ignore dpkg-build artifacts. Result: ~134 combos (132 amd64 + 2 arm64), ≈half the cap.
+
+### amd64 VirtualBox tester bundle ([`output/ci-vm-x64-25983593168/`](../output/ci-vm-x64-25983593168/))
+
+- Built via CI run `25983593168` (master `2eff4045`, 14 min).
+- Server-side fix to unblock CI: `apt.secubox.in/secubox-keyring.gpg` was ASCII-armored (apt's `signed-by=` needs binary). Dearmored in place on the board, sanity-checked with `apt-get update` from the board itself.
+- Bundle contents: `secubox-vm-x64-bookworm.{img.gz,img,vdi}` + pure-Python `raw_to_vdi.py` (no `qemu-img`/`VBoxManage` needed) + `verify.sh` (6 green checks: CI SHA + local hashes + VDI header + GPT layout + ESP `/EFI/BOOT/BOOTX64.EFI`) + tester-friendly `README.md` + `FIX-PXE.md` (NIC-off one-liner workaround for VBox 7 EFI quirk).
+
+### Followup
+
+- After release.yml completes, verify all 9 expected asset categories landed on the GH Release page (5 board images + Live USB + installer ISO + .deb bundle + SHA256SUMS).
+- Cross-check that `apt.secubox.in/dists/bookworm/main/binary-{amd64,arm64}/Packages` lists the v2.9.0 versions.
+- Bump the README's [Metric] table from 132 → actual final package count if the discover output differs.
+
+---
+
 ## ✅ 2026-05-16/17: eye-remote multi-gadget L3 DHCP — Phase 1 (Issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158), PR [#161](https://github.com/CyberMind-FR/secubox-deb/pull/161) MERGED `e91b9e9e` + live-deploy fixes PR [#164](https://github.com/CyberMind-FR/secubox-deb/pull/164) MERGED `680734db`)
 
 ### Objective
