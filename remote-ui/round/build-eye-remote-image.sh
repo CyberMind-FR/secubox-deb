@@ -650,9 +650,14 @@ mkdir -p "$ROOT_MNT/etc/systemd/system/dnsmasq.service.d"
 cp "$SCRIPT_DIR/files/etc/systemd/system/dnsmasq.service.d/secubox-eye.conf" \
     "$ROOT_MNT/etc/systemd/system/dnsmasq.service.d/"
 
-# Enable new gadget service
-ln -sf /etc/systemd/system/secubox-eye-gadget.service \
-    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+# secubox-eye-gadget is STORAGE-only mode for U-Boot rescue. Enabling it
+# at boot alongside secubox-otg-gadget.service (composite ECM+ACM) caused
+# UDC contention. Install the unit but DO NOT enable at boot.
+# Manual U-Boot rescue mode:
+#     systemctl disable secubox-otg-gadget.service
+#     systemctl enable --now secubox-eye-gadget.service
+# ln -sf /etc/systemd/system/secubox-eye-gadget.service \
+#     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
 
 # Copy framebuffer dashboard (Pi Zero W has no NEON, can't run Chromium)
 log "Installing framebuffer dashboard..."
@@ -684,10 +689,15 @@ if [[ -f "$SCRIPT_DIR/secubox-eye-agent.service" && -f "$SCRIPT_DIR/config.toml.
     # Install agent service
     cp "$SCRIPT_DIR/secubox-eye-agent.service" "$ROOT_MNT/etc/systemd/system/"
 
-    # Enable agent service via symlink (atomic, no chroot needed)
+    # The agent depends on Pydantic v2 (pydantic_core, Rust) which has no
+    # ARMv6 wheel — pip ships an ARMv7 wheel that crashes with SIGILL on
+    # the Pi Zero W BCM2835 (status=4/ILL). v2.2.1 design moved metrics
+    # rendering to secubox-fallback-display.service (pure-Python Pillow),
+    # so we install the unit but DO NOT enable at boot. ARMv7+ boards:
+    #     systemctl enable --now secubox-eye-agent.service
     mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
-    ln -sf /etc/systemd/system/secubox-eye-agent.service \
-        "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+    # ln -sf /etc/systemd/system/secubox-eye-agent.service \
+    #     "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
 
     # v2.2.0: Install menu system icons for radial menu
     if [[ -d "$SCRIPT_DIR/assets/icons" ]]; then
@@ -766,7 +776,10 @@ ln -sf /etc/systemd/system/eye-firstboot-hostname.service "$ROOT_MNT/etc/systemd
 ln -sf /etc/systemd/system/hyperpixel2r-init.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 
 # Eye Remote services
-ln -sf /etc/systemd/system/secubox-eye-gadget.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# secubox-eye-gadget (storage-only, U-Boot rescue) is NOT enabled at boot
+# to avoid UDC contention with secubox-otg-gadget.service. See comment at
+# line 653 for the manual rescue-mode recipe.
+# ln -sf /etc/systemd/system/secubox-eye-gadget.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 # v2.2.1: Use fallback-display instead of eye-agent (3D cube + rainbow rings, stable)
 ln -sf /etc/systemd/system/secubox-fallback-display.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
 # NOTE: secubox-eye-agent is broken (import errors) - disabled pending fix
