@@ -33,12 +33,56 @@ See [LICENCE-CMSD-1.0.md](LICENCE-CMSD-1.0.md) (French, authoritative) or [LICEN
 
 | Metric | Value |
 |--------|-------|
-| ![Packages](https://img.shields.io/badge/Debian_Packages-131-blue?logo=debian) | 131 `.deb` packages |
-| ![Migration](https://img.shields.io/badge/Migration-94%25-brightgreen) | 123/131 modules migrated |
+| ![Packages](https://img.shields.io/badge/Debian_Packages-132-blue?logo=debian) | 132 `.deb` packages |
+| ![Migration](https://img.shields.io/badge/Migration-94%25-brightgreen) | 124/132 modules migrated |
 | ![APIs](https://img.shields.io/badge/API_Endpoints-2000+-informational) | FastAPI + JWT auth |
 | ![Arch](https://img.shields.io/badge/Architecture-amd64_|_arm64-orange) | x86_64 + ARM64 |
 
 SecuBox transforms any compatible device into a complete network security appliance with VPN, firewall, intrusion detection, and web dashboard — all preconfigured and ready to use.
+
+---
+
+## Latest Releases
+
+[![Latest stable](https://img.shields.io/github/v/release/CyberMind-FR/secubox-deb?label=stable&logo=github&color=gold&include_prereleases=false)](https://github.com/CyberMind-FR/secubox-deb/releases/latest)
+[![All releases](https://img.shields.io/github/v/tag/CyberMind-FR/secubox-deb?label=latest%20tag&logo=git&color=cyan)](https://github.com/CyberMind-FR/secubox-deb/releases)
+[![Downloads](https://img.shields.io/github/downloads/CyberMind-FR/secubox-deb/total?label=downloads&color=brightgreen)](https://github.com/CyberMind-FR/secubox-deb/releases)
+
+### `v2.9.0` — Main system (2026-05-17)
+
+Full SecuBox-DEB platform: 132 `.deb` packages, system images for four boards, Live USB for amd64. See [release notes](https://github.com/CyberMind-FR/secubox-deb/releases/tag/v2.9.0).
+
+| Target | Download |
+|--------|----------|
+| **VirtualBox / QEMU / KVM** (amd64) | [`secubox-vm-x64-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-vm-x64-bookworm.img.gz) ·  [bundle with verifier + VDI](output/ci-vm-x64-25983593168/) |
+| **Live USB / amd64 PC** | [`secubox-live-amd64-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz) |
+| **MOCHAbin** (Marvell Armada 7040) | [`secubox-mochabin-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-mochabin-bookworm.img.gz) |
+| **Raspberry Pi 400** | [`secubox-rpi400-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-rpi400-bookworm.img.gz) |
+| **ESPRESSObin v7** (Marvell Armada 3720) | [`secubox-espressobin-v7-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-espressobin-v7-bookworm.img.gz) |
+| **Installer ISO** (any amd64 host) | [`secubox-installer-amd64-bookworm.iso.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-installer-amd64-bookworm.iso.gz) |
+| **All `.deb` packages** | attached to the [v2.9.0 release page](https://github.com/CyberMind-FR/secubox-deb/releases/tag/v2.9.0) |
+| **APT repository** | `https://apt.secubox.in/` ([install script](https://apt.secubox.in/install.sh)) |
+| **SHA256SUMS** | [`SHA256SUMS`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/SHA256SUMS) — verify every download |
+
+### `v2.2.1-eye-remote` — Round display (2026-05-11)
+
+Side-line image for the Pi Zero W round-display dashboard. Not part of the main `v2.x.y` line — refreshed independently when the kiosk stack moves.
+
+| Target | Download |
+|--------|----------|
+| **Pi Zero W + HyperPixel 2.1 Round** | [`secubox-eye-remote-2.2.1.img.xz`](https://github.com/CyberMind-FR/secubox-deb/releases/download/v2.2.1-eye-remote/secubox-eye-remote-2.2.1.img.xz) |
+
+### Verifying downloads
+
+Every release attaches a `SHA256SUMS` file alongside the artifacts. Verify before flashing:
+
+```bash
+sha256sum -c SHA256SUMS 2>&1 | grep -v 'OK$' || echo "all hashes match"
+```
+
+For the amd64 VirtualBox target there's a turn-key tester bundle under [`output/ci-vm-x64-25983593168/`](output/ci-vm-x64-25983593168/) — drop-in `verify.sh` + `raw_to_vdi.py` (no `qemu-img`/`VBoxManage` needed) + step-by-step `README.md`. Boot in 4 commands; see [`output/ci-vm-x64-25983593168/FIX-PXE.md`](output/ci-vm-x64-25983593168/FIX-PXE.md) if the VBox EFI ever lands on the PXE screen.
+
+[**→ See all releases on GitHub**](https://github.com/CyberMind-FR/secubox-deb/releases)
 
 ---
 
