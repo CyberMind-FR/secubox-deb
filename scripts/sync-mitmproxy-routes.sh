@@ -25,8 +25,11 @@ WEBUI_PORT=9080
 METABLOG_PORT=8900
 BACKEND_IP="10.100.0.1"
 
-# Dead container IPs to fix (not running LXC containers)
-DEAD_CONTAINER_IPS="10.100.0.10 10.100.0.20 10.100.0.30 10.100.0.40"
+# Dead container IPs to fix (not running LXC containers).
+# 10.100.0.10 was removed after the mail Phase 1 LXC went live there
+# (mail.gk2 / webmail.gk2 / rspamd.gk2 / autoconfig.gk2 must keep routing
+# to the live container, not be rewritten to 10.100.0.1:9080).
+DEAD_CONTAINER_IPS="10.100.0.20 10.100.0.30 10.100.0.40"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2
