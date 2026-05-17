@@ -318,6 +318,51 @@ EOF
     echo ']}'
 }
 
+# app info <name> — print metadata + runtime state from manifest + pid file (#182)
+cmd_app_info() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: streamlitctl app info <name>"; return 1; }
+    local d="$APPS_PATH/$name"
+    [ -d "$d" ] || { error "app not found: $name"; return 1; }
+    # Entry point detection (same logic as cmd_app_start)
+    local entry=""
+    for c in app.py main.py streamlit_app.py; do
+        [ -f "$d/$c" ] && entry="$c" && break
+    done
+    local port=""
+    [ -f "$d/.streamlit.toml" ] && port=$(grep -E "^port" "$d/.streamlit.toml" 2>/dev/null | cut -d= -f2 | tr -d ' ')
+    local pidf="/var/run/streamlit-${name}.pid"
+    local pid="" alive="no"
+    if lxc_running; then
+        pid=$(lxc-attach -n "$LXC_NAME" -- cat "$pidf" 2>/dev/null || true)
+        if [ -n "$pid" ]; then
+            lxc-attach -n "$LXC_NAME" -- kill -0 "$pid" >/dev/null 2>&1 && alive="yes"
+        fi
+    fi
+    cat <<EOF
+name:        $name
+path:        $d
+entrypoint:  ${entry:-(none)}
+port:        ${port:-(unset)}
+pid_file:    $pidf
+pid:         ${pid:-(none)}
+running:     $alive
+EOF
+}
+
+# app restart <name> — stop + start (#182)
+cmd_app_restart() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: streamlitctl app restart <name>"; return 1; }
+    cmd_app_stop "$name" || true
+    sleep 1
+    # Recover the previous port from .streamlit.toml so restart preserves it
+    local port=""
+    [ -f "$APPS_PATH/$name/.streamlit.toml" ] && \
+        port=$(grep -E "^port" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d= -f2 | tr -d ' ')
+    cmd_app_start "$name" "${port:-8501}"
+}
+
 cmd_app_start() {
     local name="$1"
     local port="${2:-8501}"
@@ -694,7 +739,9 @@ case "${1:-}" in
             deploy) cmd_app_deploy "$3" "$4" ;;
             remove) cmd_app_remove "$3" ;;
             logs)   cmd_app_logs "$3" "$4" ;;
-            *)      echo "Usage: streamlitctl app {list|start|stop|deploy|remove|logs} [args]" ;;
+            info)   cmd_app_info "$3" ;;
+            restart) cmd_app_restart "$3" ;;
+            *)      echo "Usage: streamlitctl app {list|start|stop|restart|deploy|remove|logs|info} [args]" ;;
         esac
         ;;
 
