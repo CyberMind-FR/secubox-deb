@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Portal</title>
+    <title>SecuBox · Portal</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/crt-light.css">
@@ -20,16 +21,13 @@
             --tube-pale: #c8e6c9;
             --tube-soft: #a5d6a7;
             --tube-dark: #1b1b1f;
-            --text-dim: var(--p31-dim);
             --primary: var(--p31-peak);
             --cyan: #00d4ff;
-            --green: var(--p31-peak);
             --red: #ff4466;
             --yellow: var(--p31-decay);
-            --purple: #a371f7;
             --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
             --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --bloom-red:   0 0 3px var(--red),       0 0 10px rgba(255,68,102,0.4);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -38,471 +36,462 @@
             background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
             color: var(--tube-dark);
             min-height: 100vh;
-            padding: 2rem;
+            padding-bottom: 3rem;
         }
         body::before {
             content: "";
-            position: fixed;
-            inset: 0;
+            position: fixed; inset: 0;
             background-image:
                 linear-gradient(rgba(0,221,68,0.02) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0,221,68,0.02) 1px, transparent 1px);
             background-size: 50px 50px;
-            pointer-events: none;
-            z-index: -1;
+            pointer-events: none; z-index: -1;
         }
-        .container { max-width: 1400px; margin: 0 auto; }
+        a { color: var(--p31-mid); text-decoration: none; }
+        a:hover { color: var(--p31-peak); text-shadow: var(--bloom-text); }
 
-        /* Header */
-        .header { text-align: center; margin-bottom: 3rem; }
-        .logo-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 100px;
-            height: 100px;
-            background: linear-gradient(135deg, var(--p31-peak), var(--p31-mid));
-            border-radius: 24px;
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 8px 32px rgba(0,221,68,0.3);
+        /* Navbar */
+        .navbar {
+            background: var(--tube-dark);
+            color: var(--p31-peak);
+            padding: 0.75rem 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 50;
+            border-bottom: 1px solid var(--p31-mid);
         }
-        .logo {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--p31-hot);
+        .navbar .brand {
+            font-weight: bold; font-size: 1.1rem; letter-spacing: 1px;
             text-shadow: var(--bloom-text);
-            letter-spacing: 0.05em;
         }
-        .tagline { color: var(--text-dim); font-size: 1.1rem; margin-top: 0.5rem; }
+        .navbar .brand a { color: var(--p31-peak); }
+        .navbar .nav-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+        .navbar .nav-links a {
+            color: var(--p31-mid); font-size: 0.9rem;
+            padding: 0.25rem 0.5rem; border-radius: 3px;
+            transition: all 0.15s;
+        }
+        .navbar .nav-links a:hover { color: var(--p31-peak); background: rgba(0,221,68,0.08); text-shadow: var(--bloom-text); }
+        .navbar .nav-meta { font-size: 0.75rem; color: var(--p31-dim); }
 
-        /* Quick Actions */
-        .quick-actions {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin-top: 1.5rem;
-            flex-wrap: wrap;
-        }
-        .quick-btn {
-            padding: 0.6rem 1.2rem;
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+        /* Hero */
+        .hero {
+            margin-bottom: 2rem;
+            padding: 1.5rem 2rem;
             background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 8px;
-            color: var(--p31-mid);
-            text-decoration: none;
-            font-size: 0.9rem;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .quick-btn:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .quick-btn.primary {
-            background: rgba(0,221,68,0.1);
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        /* Stats Bar */
-        .stats-bar {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            margin: 2rem 0;
-            flex-wrap: wrap;
-        }
-        .stat {
-            text-align: center;
-            padding: 1rem 1.5rem;
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 12px;
-        }
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--p31-peak);
-            text-shadow: 0 0 10px var(--p31-peak);
-        }
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        /* Sections */
-        .section { margin-bottom: 2.5rem; }
-        .section-title {
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            margin-bottom: 1rem;
-            padding-left: 0.5rem;
-            border-left: 3px solid var(--p31-decay);
-        }
-
-        /* Service Grid */
-        .services-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 1rem;
-        }
-        .service-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 12px;
-            padding: 1.25rem;
-            text-align: center;
-            text-decoration: none;
-            color: var(--tube-dark);
-            transition: all 0.2s ease;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .service-card:hover {
-            border-color: var(--p31-dim);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        }
-        .service-card .icon {
-            font-size: 2rem;
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .service-card .name { font-weight: 600; font-size: 0.95rem; }
-        .service-card .desc { font-size: 0.7rem; color: var(--text-dim); }
-        .service-card .status {
-            font-size: 0.65rem;
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-top: auto;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .status.online { background: rgba(0,221,68,0.15); color: var(--green); }
-        .status.offline { background: rgba(255,68,102,0.15); color: var(--red); }
-        .status.external { background: rgba(0,212,255,0.15); color: var(--cyan); }
-
-        /* Icon backgrounds */
-        .icon.security { background: rgba(255,68,102,0.1); }
-        .icon.network { background: rgba(0,212,255,0.1); }
-        .icon.monitoring { background: rgba(0,221,68,0.1); }
-        .icon.apps { background: rgba(163,113,247,0.1); }
-        .icon.comm { background: rgba(255,179,71,0.1); }
-
-        /* Published Sites */
-        .published-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1rem;
-        }
-        .published-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 12px;
-            padding: 1.25rem;
-            text-decoration: none;
-            color: var(--tube-dark);
-            transition: all 0.2s;
-        }
-        .published-card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-        }
-        .published-card .title {
-            font-weight: 600;
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .published-card .domain {
-            font-size: 0.8rem;
-            color: var(--cyan);
-            font-family: monospace;
-        }
-        .published-card .meta {
-            font-size: 0.7rem;
-            color: var(--text-dim);
-            margin-top: 0.5rem;
-        }
-        .published-card .badge {
-            display: inline-block;
-            padding: 2px 6px;
+            border: 1px solid var(--p31-mid);
             border-radius: 4px;
-            font-size: 0.65rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            box-shadow: 0 0 12px rgba(0,221,68,0.15);
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 2rem;
         }
-        .badge.ssl { background: rgba(0,221,68,0.15); color: var(--green); }
-        .badge.static { background: rgba(163,113,247,0.15); color: var(--purple); }
-        .badge.proxy { background: rgba(0,212,255,0.15); color: var(--cyan); }
-
-        /* Empty State */
-        .empty {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-dim);
-            font-style: italic;
+        .hero-score {
+            display: flex; flex-direction: column; align-items: center;
+            min-width: 140px;
         }
+        .hero-score .num {
+            font-size: 3.5rem; font-weight: bold; line-height: 1;
+            color: var(--p31-peak); text-shadow: var(--bloom-text);
+        }
+        .hero-score .label { font-size: 0.8rem; color: var(--p31-dim); margin-top: 0.25rem; letter-spacing: 1px; }
+        .hero-score.warn .num { color: var(--yellow); text-shadow: var(--bloom-amber); }
+        .hero-score.crit .num { color: var(--red); text-shadow: var(--bloom-red); }
+        .hero-info { font-size: 0.95rem; line-height: 1.6; }
+        .hero-info .kv { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+        .hero-info .k { color: var(--p31-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
+        .hero-info .v { color: var(--tube-dark); font-weight: bold; }
+        .hero-refresh { font-size: 0.75rem; color: var(--p31-dim); text-align: right; }
 
-        /* Footer */
+        /* Section grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card {
+            background: var(--tube-light);
+            border: 1px solid var(--p31-mid);
+            border-radius: 4px;
+            padding: 1.25rem;
+            position: relative;
+            box-shadow: 0 0 8px rgba(0,221,68,0.08);
+        }
+        .card h3 {
+            font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px;
+            color: var(--p31-mid); margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px dashed var(--p31-ghost);
+            text-shadow: var(--bloom-text);
+        }
+        .card .row { display: flex; justify-content: space-between; padding: 0.25rem 0; font-size: 0.9rem; }
+        .card .row .k { color: var(--p31-dim); }
+        .card .row .v { color: var(--tube-dark); font-weight: bold; }
+        .card .row .v.ok   { color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .card .row .v.warn { color: var(--yellow); text-shadow: var(--bloom-amber); }
+        .card .row .v.crit { color: var(--red); text-shadow: var(--bloom-red); }
+        .empty { color: var(--p31-dim); font-style: italic; font-size: 0.85rem; padding: 0.5rem 0; }
+
+        /* Bar */
+        .bar {
+            height: 4px; background: var(--p31-ghost); border-radius: 2px;
+            overflow: hidden; margin: 0.25rem 0;
+        }
+        .bar > span { display: block; height: 100%; background: var(--p31-peak); }
+        .bar.warn > span { background: var(--yellow); }
+        .bar.crit > span { background: var(--red); }
+
+        /* Modules LED grid */
+        .modules { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
+        .module {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 0.25rem; padding: 0.5rem; border-radius: 4px;
+            background: var(--tube-pale); border: 1px solid var(--p31-ghost);
+            font-size: 0.7rem;
+        }
+        .module .led {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--p31-dim);
+        }
+        .module.ok   .led { background: var(--p31-peak); box-shadow: 0 0 8px var(--p31-peak); }
+        .module.warn .led { background: var(--yellow);   box-shadow: 0 0 8px var(--yellow); }
+        .module.err  .led { background: var(--red);      box-shadow: 0 0 8px var(--red); }
+        .module .name { font-size: 0.65rem; text-transform: uppercase; color: var(--p31-dim); }
+
+        /* Tables — vhosts / ASNs */
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { text-align: left; padding: 0.25rem 0.5rem; }
+        th { font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px dashed var(--p31-ghost); }
+        td.num { text-align: right; color: var(--cyan); font-variant-numeric: tabular-nums; }
+        tr:hover td { background: rgba(0,221,68,0.04); }
+
+        /* Big number tiles */
+        .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; }
+        .tile {
+            background: var(--tube-pale); border: 1px solid var(--p31-ghost);
+            border-radius: 4px; padding: 0.75rem; text-align: center;
+        }
+        .tile .v { font-size: 1.75rem; font-weight: bold; color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .tile .v.warn { color: var(--yellow); text-shadow: var(--bloom-amber); }
+        .tile .v.crit { color: var(--red); text-shadow: var(--bloom-red); }
+        .tile .l { font-size: 0.7rem; text-transform: uppercase; color: var(--p31-dim); letter-spacing: 1px; }
+
         .footer {
-            text-align: center;
-            margin-top: 3rem;
-            padding-top: 2rem;
-            border-top: 1px solid var(--tube-soft);
-            color: var(--text-dim);
-            font-size: 0.8rem;
+            margin-top: 3rem; padding-top: 1.5rem;
+            border-top: 1px dashed var(--p31-ghost);
+            text-align: center; font-size: 0.8rem; color: var(--p31-dim);
         }
-        .footer a { color: var(--p31-mid); text-decoration: none; }
-        .footer a:hover { color: var(--p31-peak); }
-
-        /* Health Banner Space */
-        body { padding-top: 3rem; }
-
+        .footer a { color: var(--p31-mid); }
         @media (max-width: 768px) {
-            body { padding: 1rem; padding-top: 3rem; }
-            .stats-bar { gap: 1rem; }
-            .stat { padding: 0.75rem 1rem; }
-            .stat-value { font-size: 1.5rem; }
+            .hero { grid-template-columns: 1fr; }
+            .modules { grid-template-columns: repeat(3, 1fr); }
+            .navbar { padding: 0.75rem 1rem; flex-direction: column; gap: 0.5rem; }
+            .navbar .nav-links { font-size: 0.8rem; }
         }
     </style>
 </head>
-<body class="crt-light">
-    <div class="container">
-        <header class="header">
-            <div class="logo-icon">🔐</div>
-            <h1 class="logo" id="logo-text">SecuBox</h1>
-            <p class="tagline" id="tagline">Secure Network Appliance — Public Portal</p>
-            <div class="quick-actions">
-                <a href="/" class="quick-btn">📊 Dashboard</a>
-                <a href="/c3box/" class="quick-btn">🌐 Services</a>
-                <a href="/soc/" class="quick-btn">🛡️ SOC</a>
-                <a href="/login.html" class="quick-btn primary" id="auth-btn">🔑 Login</a>
-            </div>
-        </header>
+<body>
 
-        <div class="stats-bar">
-            <div class="stat">
-                <div class="stat-value" id="stat-services">-</div>
-                <div class="stat-label">Services Online</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" id="stat-sites">-</div>
-                <div class="stat-label">Published Sites</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" id="stat-health">-</div>
-                <div class="stat-label">Health Score</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" id="stat-threats">-</div>
-                <div class="stat-label">Threats Blocked</div>
-            </div>
+<nav class="navbar">
+    <div class="brand"><a href="/portal/">🛡️ SecuBox</a></div>
+    <div class="nav-links">
+        <a href="/portal/">PORTAL</a>
+        <a href="/soc/">SOC</a>
+        <a href="/metablogizer/">METABLOGS</a>
+        <a href="/publish/">PUBLISH</a>
+        <a href="/cookies/">COOKIES</a>
+        <a href="https://github.com/CyberMind-FR/secubox-deb" rel="noopener">REPO</a>
+    </div>
+    <div class="nav-meta" id="nav-hostname">—</div>
+</nav>
+
+<div class="container">
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero-score" id="hero-score">
+        <div class="num" id="hero-score-num">—</div>
+        <div class="label">HEALTH</div>
+    </div>
+    <div class="hero-info">
+        <div class="kv">
+            <div><div class="k">Hostname</div><div class="v" id="hero-hostname">—</div></div>
+            <div><div class="k">Uptime</div><div class="v" id="hero-uptime">—</div></div>
+            <div><div class="k">SSL</div><div class="v" id="hero-ssl">—</div></div>
+            <div><div class="k">VHosts</div><div class="v" id="hero-vhosts">—</div></div>
+            <div><div class="k">Certificates</div><div class="v" id="hero-certs">—</div></div>
+            <div><div class="k">Bans active</div><div class="v" id="hero-bans">—</div></div>
         </div>
+    </div>
+    <div class="hero-refresh">
+        <div>last refresh</div>
+        <div id="hero-refresh">—</div>
+    </div>
+</section>
 
-        <section class="section">
-            <h2 class="section-title">🛡️ Security Services</h2>
-            <div class="services-grid" id="security-services"></div>
-        </section>
+<!-- Module status LEDs -->
+<section class="card" style="margin-bottom: 1.5rem;">
+    <h3>SERVICES</h3>
+    <div class="modules" id="modules-grid">
+        <div class="empty" style="grid-column: 1/-1;">Loading…</div>
+    </div>
+</section>
 
-        <section class="section">
-            <h2 class="section-title">🌐 Network Services</h2>
-            <div class="services-grid" id="network-services"></div>
-        </section>
+<div class="grid">
 
-        <section class="section">
-            <h2 class="section-title">📦 Applications</h2>
-            <div class="services-grid" id="apps-services"></div>
-        </section>
-
-        <section class="section">
-            <h2 class="section-title">🚀 Published Sites</h2>
-            <div class="published-grid" id="published-sites">
-                <div class="empty">Loading published sites...</div>
-            </div>
-        </section>
-
-        <section class="section">
-            <h2 class="section-title">📡 External Services</h2>
-            <div class="services-grid" id="external-services"></div>
-        </section>
-
-        <footer class="footer">
-            <p>SecuBox © 2024-2026 <a href="https://cybermind.fr">CyberMind</a></p>
-            <p style="margin-top: 0.5rem;">Public Portal • <span id="hostname">-</span></p>
-        </footer>
+    <!-- System -->
+    <div class="card">
+        <h3>System</h3>
+        <div id="sys-rows"><div class="empty">Loading…</div></div>
     </div>
 
-    <script>
-        const services = {
-            security: [
-                { name: 'CrowdSec', icon: '🛡️', desc: 'IDS/IPS Protection', url: '/crowdsec/', iconClass: 'security' },
-                { name: 'WAF', icon: '🔥', desc: 'Web Application Firewall', url: '/waf/', iconClass: 'security' },
-                { name: 'WireGuard', icon: '🔒', desc: 'VPN Server', url: '/wireguard/', iconClass: 'security' },
-                { name: 'NAC', icon: '👁️', desc: 'Network Access Control', url: '/nac/', iconClass: 'security' },
-            ],
-            network: [
-                { name: 'HAProxy', icon: '⚡', desc: 'Load Balancer', url: '/haproxy/', iconClass: 'network' },
-                { name: 'VHosts', icon: '🌐', desc: 'Virtual Hosts', url: '/vhost/', iconClass: 'network' },
-                { name: 'DNS', icon: '🌍', desc: 'DNS Server', url: '/dns/', iconClass: 'network' },
-                { name: 'QoS', icon: '📶', desc: 'Bandwidth Manager', url: '/qos/', iconClass: 'network' },
-            ],
-            apps: [
-                { name: 'Publish', icon: '🚀', desc: 'Publishing Hub', url: '/publish/', iconClass: 'apps' },
-                { name: 'MetaBlogizer', icon: '📝', desc: 'Static Sites', url: '/metablogizer/', iconClass: 'apps' },
-                { name: 'Droplet', icon: '📁', desc: 'File Publisher', url: '/droplet/', iconClass: 'apps' },
-                { name: 'Streamlit', icon: '📊', desc: 'Python Apps', url: '/streamlit/', iconClass: 'apps' },
-            ],
-            external: [
-                { name: 'Netdata', icon: '📈', desc: 'Real-time Monitoring', url: '/netdata/', iconClass: 'monitoring', external: true },
-                { name: 'CDN', icon: '🌐', desc: 'Cache Server', url: '/cdn/', iconClass: 'network' },
-                { name: 'MediaFlow', icon: '🎬', desc: 'Media Streaming', url: '/mediaflow/', iconClass: 'apps' },
-            ]
+    <!-- Certs -->
+    <div class="card">
+        <h3>Certificates</h3>
+        <div id="cert-rows"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Cookie audit / RGPD -->
+    <div class="card">
+        <h3>Cookie Audit · RGPD</h3>
+        <div id="cookie-rows"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Bans (crowdsec decisions count + WAF %) -->
+    <div class="card">
+        <h3>Attacks &amp; Bans</h3>
+        <div class="tiles" id="bans-tiles">
+            <div class="tile"><div class="v" id="t-bans">—</div><div class="l">Active bans</div></div>
+            <div class="tile"><div class="v" id="t-waf">—</div><div class="l">WAF blocked %</div></div>
+            <div class="tile"><div class="v" id="t-alerts">—</div><div class="l">Today alerts</div></div>
+        </div>
+    </div>
+
+</div>
+
+<div class="grid">
+
+    <!-- Vhosts (live-hosts top) -->
+    <div class="card">
+        <h3>Top Vhosts (last 60 min)</h3>
+        <div id="vhosts-table"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Attackers (visitor-origin top ASNs) -->
+    <div class="card">
+        <h3>Top Visitor ASN</h3>
+        <div id="asn-table"><div class="empty">Loading…</div></div>
+    </div>
+
+</div>
+
+<footer class="footer">
+    <p>SecuBox © 2024-2026 · <a href="https://cybermind.fr">CyberMind</a> · <a href="https://github.com/CyberMind-FR/secubox-deb">source</a></p>
+    <p style="margin-top: 0.5rem;">Public Portal · <span id="footer-hostname">—</span> · auto-refresh 30 s</p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    const REFRESH_MS = 30000;
+    const ENDPOINTS = {
+        health:       '/api/v1/metrics/health/summary',
+        certs:        '/api/v1/metrics/cert-status',
+        vhosts:       '/api/v1/metrics/live-hosts',
+        asns:         '/api/v1/metrics/visitor-origin',
+        cookies:      '/api/v1/cookie-audit/summary',
+        decisions:    '/api/v1/crowdsec/decisions',
+    };
+
+    function $(id) { return document.getElementById(id); }
+    function txt(id, v) { const e = $(id); if (e) e.textContent = (v === undefined || v === null) ? '—' : v; }
+    function fmtUptime(s) {
+        if (!s) return '—';
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        return `${d}d ${String(h).padStart(2,'0')}h${String(m).padStart(2,'0')}`;
+    }
+    function fmtPct(v) {
+        if (v === null || v === undefined) return '—';
+        return Number(v).toFixed(0) + '%';
+    }
+    function fmtTime(ts) {
+        if (!ts) return '—';
+        try { return new Date(ts).toLocaleTimeString('fr-FR'); } catch (e) { return '—'; }
+    }
+
+    async function fetchSafe(url) {
+        try {
+            const r = await fetch(url, { credentials: 'omit' });
+            if (!r.ok) return null;
+            return await r.json();
+        } catch (e) { return null; }
+    }
+
+    function renderHero(h, c) {
+        if (!h) return;
+        const score = h.score || 0;
+        txt('hero-score-num', score + '%');
+        const sc = $('hero-score');
+        sc.classList.remove('warn', 'crit');
+        if (score < 70) sc.classList.add('crit');
+        else if (score < 85) sc.classList.add('warn');
+        txt('hero-hostname', location.hostname);
+        txt('nav-hostname', location.hostname);
+        txt('footer-hostname', location.hostname);
+        txt('hero-uptime', fmtUptime(h.system && h.system.uptime));
+        if (h.ssl) {
+            const d = h.ssl.days_remaining;
+            txt('hero-ssl', d == null ? '—' : `${d}j (${h.ssl.status || '?'})`);
+        }
+        txt('hero-vhosts', h.counts && h.counts.vhosts);
+        txt('hero-certs',  (c && c.summary && c.summary.total) || (h.counts && h.counts.certificates) || '—');
+        txt('hero-bans',   h.crowdsec && h.crowdsec.active_decisions);
+        txt('hero-refresh', fmtTime(h.timestamp || new Date().toISOString()));
+    }
+
+    function renderModules(h) {
+        if (!h || !h.modules) return;
+        const order = ['waf', 'crowdsec', 'haproxy', 'nginx', 'system'];
+        const icons = { waf: '🛡️', crowdsec: '👮', haproxy: '🌐', nginx: '📡', system: '💻' };
+        const el = $('modules-grid');
+        el.innerHTML = order.map(m => {
+            const mod = h.modules[m] || {};
+            const status = mod.status || 'off';
+            const cls = status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : status === 'error' ? 'err' : '';
+            return `<div class="module ${cls}">
+                <span class="led"></span>
+                <span style="font-size:1.4rem;line-height:1">${icons[m]||'📦'}</span>
+                <span class="name">${m}</span>
+            </div>`;
+        }).join('');
+    }
+
+    function renderSystem(h) {
+        if (!h || !h.system) return;
+        const s = h.system;
+        const row = (k, v, pct) => {
+            const cls = pct == null ? '' : (pct >= 85 ? 'crit' : pct >= 60 ? 'warn' : 'ok');
+            return `<div class="row"><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>` +
+                (pct != null ? `<div class="bar ${cls}"><span style="width:${Math.min(100, pct)}%"></span></div>` : '');
         };
+        $('sys-rows').innerHTML =
+            row('CPU',    fmtPct(s.cpu),    s.cpu) +
+            row('Memory', fmtPct(s.memory || s.mem_pct), (s.memory || s.mem_pct)) +
+            row('Disk',   fmtPct(s.disk),   s.disk) +
+            row('Load',   s.load || '—',   null) +
+            row('LXC',    (h.services && h.services.lxc_running) || 0, null);
+    }
 
-        function renderService(svc, status = null) {
-            const isOnline = status === null || status;
-            const statusClass = svc.external ? 'external' : (isOnline ? 'online' : 'offline');
-            const statusText = svc.external ? 'External' : (isOnline ? 'Online' : 'Offline');
-            return `
-                <a href="${svc.url}" class="service-card">
-                    <div class="icon ${svc.iconClass}">${svc.icon}</div>
-                    <div class="name">${svc.name}</div>
-                    <div class="desc">${svc.desc}</div>
-                    <div class="status ${statusClass}">${statusText}</div>
-                </a>
-            `;
+    function renderCerts(c) {
+        if (!c || !c.summary) {
+            $('cert-rows').innerHTML = '<div class="empty">cert-status disabled</div>';
+            return;
         }
+        const s = c.summary;
+        const next = c.next_renewal
+            ? `<div class="row"><span class="k">next renewal</span><span class="v">${c.next_renewal.host} · ${c.next_renewal.days}d</span></div>`
+            : '';
+        $('cert-rows').innerHTML = `
+            <div class="row"><span class="k">Total</span><span class="v">${s.total || 0}</span></div>
+            <div class="row"><span class="k">Valid</span><span class="v ok">${s.valid || 0}</span></div>
+            <div class="row"><span class="k">Expiring soon</span><span class="v ${s.expiring_soon ? 'warn' : ''}">${s.expiring_soon || 0}</span></div>
+            <div class="row"><span class="k">Critical</span><span class="v ${s.expiring_critical ? 'crit' : ''}">${s.expiring_critical || 0}</span></div>
+            <div class="row"><span class="k">Expired</span><span class="v ${s.expired ? 'crit' : ''}">${s.expired || 0}</span></div>
+            ${next}
+        `;
+    }
 
-        function renderPublishedSite(site) {
-            const icon = site.ssl ? '🔒' : '🌐';
-            const typeClass = site.type === 'static' ? 'static' : 'proxy';
-            return `
-                <a href="https://${site.domain}" target="_blank" class="published-card">
-                    <div class="title">${icon} ${site.name || site.domain}</div>
-                    <div class="domain">${site.domain}</div>
-                    <div class="meta">
-                        <span class="badge ${site.ssl ? 'ssl' : ''}">${site.ssl ? 'SSL' : 'HTTP'}</span>
-                        <span class="badge ${typeClass}">${site.type || 'site'}</span>
-                    </div>
-                </a>
-            `;
+    function renderCookies(d) {
+        if (!d || !d.enabled || !d.summary) {
+            $('cookie-rows').innerHTML = '<div class="empty">cookie audit disabled</div>';
+            return;
         }
+        const s = d.summary;
+        const byCat = s.by_category || {};
+        const violCls = s.violation_count > 0 ? 'crit' : 'ok';
+        $('cookie-rows').innerHTML = `
+            <div class="row"><span class="k">Vhosts surveillés</span><span class="v">${s.host_count || 0}</span></div>
+            <div class="row"><span class="k">RGPD violations</span><span class="v ${violCls}">${s.violation_count || 0}</span></div>
+            <div class="row"><span class="k">Strictly necessary</span><span class="v">${byCat.strictly_necessary || 0}</span></div>
+            <div class="row"><span class="k">Functional</span><span class="v">${byCat.functional || 0}</span></div>
+            <div class="row"><span class="k">Analytics</span><span class="v ${byCat.analytics ? 'warn' : ''}">${byCat.analytics || 0}</span></div>
+            <div class="row"><span class="k">Marketing</span><span class="v ${byCat.marketing ? 'warn' : ''}">${byCat.marketing || 0}</span></div>
+            <div class="row"><span class="k">Unclassified</span><span class="v ${byCat.unclassified ? 'warn' : ''}">${byCat.unclassified || 0}</span></div>
+        `;
+    }
 
-        async function loadStats() {
-            try {
-                // Health stats
-                const health = await fetch('/api/v1/metrics/health/summary').then(r => r.json()).catch(() => ({}));
-                document.getElementById('stat-health').textContent = health.score !== undefined ? health.score : '-';
+    function renderBans(h, decisions) {
+        const ban = h && h.crowdsec && h.crowdsec.active_decisions;
+        const alerts = h && h.crowdsec && h.crowdsec.alerts_today;
+        const wafPct = h && h.waf && h.waf.blocked_pct;
+        const wafCls = wafPct == null ? '' : (wafPct >= 25 ? 'crit' : wafPct >= 10 ? 'warn' : 'ok');
+        const banCls = ban == null ? '' : (ban >= 50 ? 'warn' : 'ok');
+        $('t-bans').textContent   = ban  != null ? ban  : '—';
+        $('t-bans').className     = 'v ' + banCls;
+        $('t-waf').textContent    = wafPct != null ? wafPct + '%' : '—';
+        $('t-waf').className      = 'v ' + wafCls;
+        $('t-alerts').textContent = alerts != null ? alerts : '—';
+    }
 
-                // Services count
-                const c3box = await fetch('/api/v1/c3box/services').then(r => r.json()).catch(() => ({}));
-                document.getElementById('stat-services').textContent = c3box.running !== undefined ? `${c3box.running}/${c3box.total}` : '-';
-
-                // CrowdSec threats
-                const crowdsec = await fetch('/api/v1/crowdsec/stats').then(r => r.json()).catch(() => ({}));
-                document.getElementById('stat-threats').textContent = crowdsec.alerts_24h !== undefined ? crowdsec.alerts_24h : '-';
-            } catch (e) {
-                console.log('Stats load error:', e);
-            }
+    function renderVhosts(d) {
+        if (!d || !d.enabled || !d.entries || !d.entries.length) {
+            $('vhosts-table').innerHTML = '<div class="empty">live-hosts disabled or no data</div>';
+            return;
         }
+        $('vhosts-table').innerHTML = `<table>
+            <thead><tr><th>Host</th><th style="text-align:right">Requests</th></tr></thead>
+            <tbody>${d.entries.map(e => `<tr><td>${escapeHtml(e.host)}</td><td class="num">${e.count}</td></tr>`).join('')}</tbody>
+        </table>`;
+    }
 
-        async function loadPublishedSites() {
-            const container = document.getElementById('published-sites');
-            try {
-                // Try vhost API
-                const vhosts = await fetch('/api/v1/vhost/list').then(r => r.json()).catch(() => ({ vhosts: [] }));
-
-                if (vhosts.vhosts && vhosts.vhosts.length > 0) {
-                    const sites = vhosts.vhosts.map(v => ({
-                        domain: v.domain || v.name,
-                        name: v.name || v.domain,
-                        ssl: v.ssl || v.https || false,
-                        type: v.type || 'proxy'
-                    }));
-                    document.getElementById('stat-sites').textContent = sites.length;
-                    container.innerHTML = sites.map(renderPublishedSite).join('');
-                } else {
-                    // Fallback: try publish API
-                    const publish = await fetch('/api/v1/publish/sites').then(r => r.json()).catch(() => ({ sites: [] }));
-                    if (publish.sites && publish.sites.length > 0) {
-                        document.getElementById('stat-sites').textContent = publish.sites.length;
-                        container.innerHTML = publish.sites.map(s => renderPublishedSite({
-                            domain: s.domain || s.url,
-                            name: s.name || s.title,
-                            ssl: true,
-                            type: s.type || 'static'
-                        })).join('');
-                    } else {
-                        document.getElementById('stat-sites').textContent = '0';
-                        container.innerHTML = '<div class="empty">No published sites yet</div>';
-                    }
-                }
-            } catch (e) {
-                document.getElementById('stat-sites').textContent = '-';
-                container.innerHTML = '<div class="empty">Could not load published sites</div>';
-            }
+    function renderAsns(d) {
+        if (!d || !d.enabled || !d.entries || !d.entries.length) {
+            $('asn-table').innerHTML = '<div class="empty">visitor-origin disabled (missing GeoLite2-ASN.mmdb)</div>';
+            return;
         }
+        $('asn-table').innerHTML = `<table>
+            <thead><tr><th>ASN</th><th>Org</th><th style="text-align:right">Hits</th></tr></thead>
+            <tbody>${d.entries.map(e => `<tr><td>AS${e.asn}</td><td>${escapeHtml(e.org)}</td><td class="num">${e.count}</td></tr>`).join('')}</tbody>
+        </table>`;
+    }
 
-        async function loadTheme() {
-            try {
-                const theme = await fetch('/api/v1/portal/theme').then(r => r.json()).catch(() => null);
-                if (theme && theme.theme) {
-                    document.getElementById('logo-text').textContent = theme.theme.logo_text || 'SecuBox';
-                    document.getElementById('tagline').textContent = theme.theme.logo_sub || 'Secure Network Appliance';
-                }
-            } catch (e) {}
-        }
+    function escapeHtml(s) {
+        const div = document.createElement('div');
+        div.textContent = s == null ? '' : String(s);
+        return div.innerHTML;
+    }
 
-        function checkAuth() {
-            const token = document.cookie.includes('secubox_token');
-            if (token) {
-                const btn = document.getElementById('auth-btn');
-                btn.textContent = '🚪 Logout';
-                btn.href = '#';
-                btn.onclick = async (e) => {
-                    e.preventDefault();
-                    await fetch('/api/v1/portal/logout', { method: 'POST', credentials: 'include' });
-                    location.reload();
-                };
-            }
-        }
+    async function refresh() {
+        const [h, c, v, a, k, dec] = await Promise.all([
+            fetchSafe(ENDPOINTS.health),
+            fetchSafe(ENDPOINTS.certs),
+            fetchSafe(ENDPOINTS.vhosts),
+            fetchSafe(ENDPOINTS.asns),
+            fetchSafe(ENDPOINTS.cookies),
+            fetchSafe(ENDPOINTS.decisions),
+        ]);
+        renderHero(h, c);
+        renderModules(h);
+        renderSystem(h);
+        renderCerts(c);
+        renderCookies(k);
+        renderBans(h, dec);
+        renderVhosts(v);
+        renderAsns(a);
+    }
 
-        function render() {
-            document.getElementById('security-services').innerHTML = services.security.map(s => renderService(s)).join('');
-            document.getElementById('network-services').innerHTML = services.network.map(s => renderService(s)).join('');
-            document.getElementById('apps-services').innerHTML = services.apps.map(s => renderService(s)).join('');
-            document.getElementById('external-services').innerHTML = services.external.map(s => renderService(s)).join('');
-            document.getElementById('hostname').textContent = location.hostname;
-        }
-
-        // Initialize
-        render();
-        loadStats();
-        loadPublishedSites();
-        loadTheme();
-        checkAuth();
-
-        // Refresh stats every 30s
-        setInterval(loadStats, 30000);
-    </script>
-    <script src="/shared/health-banner.js" defer></script>
+    refresh();
+    setInterval(refresh, REFRESH_MS);
+})();
+</script>
 </body>
 </html>
