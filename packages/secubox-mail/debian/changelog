@@ -1,3 +1,35 @@
+secubox-mail (2.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2 — Rspamd migration. Adds Rspamd as a single Postfix milter
+    handling greylisting + spam scoring + DKIM sign/verify + SPF + DMARC
+    + ARC + outbound rate-limit. SpamAssassin + OpenDKIM are purged from
+    the mail LXC after Rspamd is verified healthy (D9 gate in
+    rspamd_purge_legacy).
+  * New lib/mail/rspamd.sh + 9 Rspamd config templates + Postfix milter
+    snippet.
+  * mailctl gains the rspamd subcommand (install / start / stop / status
+    / dkim-keygen / dns-records / learn-spam / learn-ham / purge-legacy).
+  * FastAPI gains /api/v1/mail/rspamd/* under routers/rspamd.py
+    (status, history, scores, reload, learn-{spam,ham}, whitelist CRUD,
+    dkim/{domain}/{status,keygen}).
+  * Legacy /dkim/* /spam/* /grey/* endpoints (14 total) move from inline
+    main.py handlers to routers/legacy.py as deprecation shims emitting
+    X-Deprecated-Endpoint: rspamd. Removed in v3.0.
+  * install_mail_packages: adds rspamd + redis-server (Phase 8 backend);
+    enables postfix/dovecot/rspamd at LXC boot (Phase 1 follow-up).
+    Drops Apache+Roundcube — they now live in the roundcube LXC after
+    the rev. 3 topology split.
+  * mail.toml: new [mail.rspamd] section (greylist, bayes_autolearn,
+    ratelimit_outbound=200/h/user, web_ui_host=rspamd.gk2.secubox.in).
+    Adds horde_url next to webmail_url.
+  * postinst on upgrade <2.3: generates /etc/secubox/secrets/rspamd-
+    controller.pw, mkdir/chown /data/volumes/mail/rspamd/{dkim,bayes,
+    history,settings}.
+  * New python3-httpx dep for rspamd_client.py.
+  * Closes: #153
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 16 May 2026 11:00:00 +0200
+
 secubox-mail (2.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 1 source-catch-up: canonical paths /var/lib/lxc/mail +

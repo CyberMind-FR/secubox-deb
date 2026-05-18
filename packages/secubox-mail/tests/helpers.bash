@@ -9,6 +9,7 @@ load_libs() {
     source "${pkg_root}/lib/mail/install.sh"
     # shellcheck source=/dev/null
     source "${pkg_root}/lib/mail/migrate.sh"
+    source "${pkg_root}/lib/mail/rspamd.sh"
 }
 
 make_fake_lxc_env() {
