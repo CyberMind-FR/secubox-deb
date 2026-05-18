@@ -1,3 +1,18 @@
+secubox-droplet (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add dropletctl static-publisher CLI at /usr/sbin/dropletctl (port
+    from OpenWrt secubox-app-droplet 1.0.0). Replaces the API-wrapper
+    dropletctl shipped in 1.0.2 (issue #181). Subcommands: publish,
+    list, remove, rename. Static-only (HTML / ZIP / tarball /
+    directory). Delegates HTTP-facing work (nginx vhost, HAProxy
+    ACL, mitmproxy route) to metablogizerctl site publish.
+  * Depends: secubox-metablogizer (>= 1.1), rsync, unzip, python3 —
+    runtime dependencies for publish/unpublish/delete and TOML
+    manipulation.
+  * Closes: #196
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 18 May 2026 14:00:00 +0200
+
 secubox-droplet (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Forge dropletctl (issue #181) — third routing verb on the publishing
