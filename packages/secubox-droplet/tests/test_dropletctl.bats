@@ -187,3 +187,39 @@ load helpers
     [[ "$output" =~ "second" ]]
     [[ "$output" =~ "second.mydomain.test" ]]
 }
+
+@test "rename then list shows the renamed site at the correct vhost (not double-prefixed)" {
+    make_html "$TMP/page.html"
+    run "$DROPLETCTL" publish "$TMP/page.html" original mydomain.test
+    [ "$status" -eq 0 ]
+
+    : > "$STUB_LOG"
+    run "$DROPLETCTL" rename original renamed
+    [ "$status" -eq 0 ]
+
+    run "$DROPLETCTL" list
+    [ "$status" -eq 0 ]
+    # Must show "renamed.mydomain.test" — NOT "renamed.renamed.mydomain.test".
+    [[ "$output" =~ "renamed.mydomain.test" ]]
+    [[ ! "$output" =~ "renamed.renamed" ]]
+}
+
+@test "publish rejects domain with invalid characters" {
+    make_html "$TMP/page.html"
+
+    # Quote injection attempt.
+    run "$DROPLETCTL" publish "$TMP/page.html" mysite 'evil"injected'
+    [ "$status" -eq 2 ]
+    [[ "$output" =~ "Invalid domain" ]]
+
+    # Newline injection attempt.
+    run "$DROPLETCTL" publish "$TMP/page.html" mysite $'evil\nmalicious'
+    [ "$status" -eq 2 ]
+
+    # Space rejected.
+    run "$DROPLETCTL" publish "$TMP/page.html" mysite 'has space'
+    [ "$status" -eq 2 ]
+
+    # TOML is intact (no injected lines).
+    ! grep -q 'malicious' "$TOML_PATH"
+}

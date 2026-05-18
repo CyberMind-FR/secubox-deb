@@ -121,6 +121,14 @@ cmd_publish() {
         esac
     fi
 
+    # Validate domain syntactically. Allow ASCII letters/digits/dot/hyphen
+    # (RFC 1035 hostname plus dots). Reject anything else to keep the TOML
+    # writer safe from injection.
+    if [[ ! "$domain" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+        echo "[ERROR] Invalid domain '$domain'" >&2
+        exit 2
+    fi
+
     local name; name="$(sanitize_name "$name_raw")"
     if [[ -z "$name" ]]; then
         echo "[ERROR] Invalid name '$name_raw'" >&2
@@ -285,12 +293,16 @@ cmd_rename() {
 
     mv "$SITES_DIR/$old" "$SITES_DIR/$new"
     remove_toml_site "$old"
-    # Compute new domain by replacing the leading <old>. prefix if present, else use original.
-    local new_domain="$domain"
+    # Preserve the BARE BASE DOMAIN in TOML. If $domain happens to be a
+    # prefixed FQDN like "oldname.example.com" (from a legacy rename or
+    # hand-edit), strip the prefix to recover the base. cmd_publish stores
+    # the base; we maintain the same invariant here so cmd_list can always
+    # compute the vhost as "$name.$domain".
+    local base_domain="$domain"
     if [[ "$domain" == "${old}."* ]]; then
-        new_domain="${new}.${domain#*.}"
+        base_domain="${domain#*.}"
     fi
-    upsert_toml_site "$new" "$new_domain" "static"
+    upsert_toml_site "$new" "$base_domain" "static"
 
     # delete is tolerant: old vhost may never have been registered.
     metablogizerctl site delete "$old"  || true
