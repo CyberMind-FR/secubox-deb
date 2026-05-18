@@ -1,11 +1,11 @@
-# SecuBox Mail Server Configuration — Phase 1 rev. 2 (single LXC, canonical paths)
+# SecuBox Mail Server Configuration — Phase 2 rev. 3 (3-LXC topology)
 
 [mail]
 enabled = true
 domain = "secubox.local"
 hostname = "mail"
 
-# Single consolidated LXC (Phase 1 rev. 2)
+# Single mail (MTA/MDA) LXC; webmail lives in roundcube + horde LXCs (rev. 3)
 container = "mail"
 lxc_ip = "10.100.0.10"
 lxc_bridge = "br-lxc"
@@ -13,9 +13,19 @@ lxc_gateway = "10.100.0.1"
 lxc_path = "/var/lib/lxc"
 data_path = "/data/volumes/mail"
 
-# Webmail is served by the same LXC; this URL is the host-side proxy target
-webmail_url = "https://webmail.gk2.secubox.in"
+# Webmail URLs (separate LXCs from rev. 3)
+webmail_url = "https://webmail.gk2.secubox.in"   # roundcube LXC 10.100.0.12
+horde_url   = "https://horde.gk2.secubox.in"      # horde LXC 10.100.0.11
 
 # SSL settings
 ssl_provider = "acme"   # acme | manual | none
 acme_email = ""
+
+# Phase 2 — Rspamd config
+[mail.rspamd]
+# Single-domain DKIM (secubox.in / default). Phase 3 widens to multi-domain.
+greylist = true
+bayes_autolearn = true
+ratelimit_outbound = "200/h/user"
+web_ui = true
+web_ui_host = "rspamd.gk2.secubox.in"

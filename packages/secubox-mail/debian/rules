@@ -11,6 +11,10 @@ override_dh_auto_install:
 	install -d debian/secubox-mail/usr/lib/secubox/mail/lib
 	[ -d lib/mail ] && cp -r lib/mail/. debian/secubox-mail/usr/lib/secubox/mail/lib/ || true
 
+	# Rspamd config templates (Phase 2)
+	install -d debian/secubox-mail/usr/lib/secubox/mail/templates/rspamd/local.d
+	[ -d templates/rspamd ] && cp -r templates/rspamd/. debian/secubox-mail/usr/lib/secubox/mail/templates/rspamd/ || true
+
 	# Control scripts (sbin)
 	install -d debian/secubox-mail/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-mail/usr/sbin/ || true
