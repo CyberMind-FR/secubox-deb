@@ -106,3 +106,21 @@ load helpers
     count="$(grep -c '^\[sites\.rev\]' "$TOML_PATH")"
     [ "$count" = "1" ]
 }
+
+@test "remove deletes docroot, TOML entry, and calls metablogizerctl unpublish + delete" {
+    make_html "$TMP/page.html"
+    run "$DROPLETCTL" publish "$TMP/page.html" doomed mydomain.test
+    [ "$status" -eq 0 ]
+    [ -d "$SITES_DIR/doomed" ]
+    grep -q '^\[sites\.doomed\]' "$TOML_PATH"
+
+    # Reset stub log so we only see remove's calls.
+    : > "$STUB_LOG"
+    run "$DROPLETCTL" remove doomed
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "[OK]" ]]
+    [ ! -d "$SITES_DIR/doomed" ]
+    ! grep -q '^\[sites\.doomed\]' "$TOML_PATH"
+    grep -q "metablogizerctl site unpublish doomed" "$STUB_LOG"
+    grep -q "metablogizerctl site delete doomed" "$STUB_LOG"
+}

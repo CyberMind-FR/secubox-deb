@@ -197,6 +197,53 @@ os.replace(tmp, path)
 PY
 }
 
+cmd_remove() {
+    local name_raw="${1:-}"
+    if [[ -z "$name_raw" ]]; then
+        echo "[ERROR] Usage: dropletctl remove <name>" >&2
+        exit 1
+    fi
+    local name; name="$(sanitize_name "$name_raw")"
+    if [[ -z "$name" ]]; then
+        echo "[ERROR] Invalid name '$name_raw'" >&2
+        exit 2
+    fi
+
+    if ! command -v metablogizerctl >/dev/null 2>&1; then
+        log_error "metablogizerctl not found — install secubox-metablogizer"
+        exit 4
+    fi
+    metablogizerctl site unpublish "$name" || true
+    metablogizerctl site delete "$name"    || true
+
+    rm -rf "$SITES_DIR/$name"
+    remove_toml_site "$name"
+    log_ok "Removed: $name"
+}
+
+# Drop the [sites.<name>] block from droplet.toml. No-op if not present.
+remove_toml_site() {
+    local name="$1"
+    [[ -e "$TOML_PATH" ]] || return 0
+    python3 - "$TOML_PATH" "$name" <<'PY'
+import sys, re, os, tempfile
+path, name = sys.argv[1:]
+with open(path) as f:
+    content = f.read()
+pattern = re.compile(
+    rf'^\[sites\.{re.escape(name)}\]\s*\n(?:(?!^\[).*\n?)*',
+    flags=re.MULTILINE,
+)
+new = pattern.sub('', content)
+if new == content:
+    sys.exit(0)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or '.', prefix='.droplet.', suffix='.toml')
+os.write(fd, new.encode())
+os.close(fd)
+os.replace(tmp, path)
+PY
+}
+
 case "${1:-}" in
     "" | -h | --help)
         cat <<USAGE
@@ -214,6 +261,10 @@ USAGE
     publish)
         shift
         cmd_publish "$@"
+        ;;
+    remove)
+        shift
+        cmd_remove "$@"
         ;;
     *)
         echo "[ERROR] unknown subcommand: $1" >&2
