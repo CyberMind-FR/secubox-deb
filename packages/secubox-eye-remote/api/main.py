@@ -354,8 +354,15 @@ async def get_paired_devices():
 
 
 @app.get("/health")
+@app.get("/api/v1/health")
 async def health():
-    """Health check endpoint."""
+    """Health check endpoint.
+
+    Exposed at both /health (root) and /api/v1/health (versioned) — the
+    Round UI dashboard probes the versioned path on OTG connect and uses
+    a 200 reply as the "API reachable" signal that flips the badge from
+    offline / SIM → ● OTG (ref #197).
+    """
     return {"status": "ok", "service": "secubox-eye-remote"}
 
 
