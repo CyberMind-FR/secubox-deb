@@ -1,3 +1,24 @@
+secubox-metrics (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * VisitorOrigin: add AmbientCapabilities=CAP_NET_ADMIN to the systemd
+    unit (#194, latent since #92). Without this the aggregator runs as
+    secubox user, `nft -j list set inet secubox_metrics seen_src` returns
+    EPERM, _read_nft_set silently returns [] and entries stays empty
+    forever. Caps coexist with NoNewPrivileges=true.
+
+  * secubox-geoipupdate: drop the ConditionPathExists=/etc/secubox/
+    secrets/maxmind.conf gate. New helper `secubox-geoipupdate-fetch`
+    tries MaxMind first if a license is present, else falls back to
+    DB-IP free ASN lite (https://download.db-ip.com/free/dbip-asn-lite-
+    YYYY-MM.mmdb.gz). DB-IP releases mmdb in MaxMind-compatible format
+    so the visitor_origin aggregator reads it transparently.
+
+  * Operators get VisitorOrigin out of the box now (no MaxMind account
+    required); those with a license keep using MaxMind via the same
+    helper.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 18 May 2026 06:16:28 +0200
+
 secubox-metrics (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Add Cookie Audit (RGPD / ePrivacy) endpoints: POST /api/v1/cookie-audit/ingest,
