@@ -27,6 +27,13 @@ RestartSec=5
 # ProtectSystem=full
 NoNewPrivileges=true
 ReadWritePaths=/run/secubox /var/cache/secubox
+# VisitorOrigin reads the nft `seen_src` set via `nft -j list set ...` which
+# requires CAP_NET_ADMIN. Without it, _read_nft_set silently returns [] and
+# the aggregator emits empty entries forever (#194 fix, latent since #92).
+# Coexists with NoNewPrivileges=true because systemd sets the ambient set
+# before the User= drop.
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
 
 [Install]
 WantedBy=multi-user.target
