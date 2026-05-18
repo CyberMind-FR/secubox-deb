@@ -86,3 +86,23 @@ load helpers
     [ -f "$SITES_DIR/dirsite/style.css" ]
     grep -q "fixture" "$SITES_DIR/dirsite/index.html"
 }
+
+@test "publish twice for same name overwrites docroot, no TOML dupes" {
+    make_html "$TMP/v1.html"
+    make_html "$TMP/v2.html"
+    # Make v2 distinguishable.
+    printf '<!doctype html><html><body><h2>v2</h2></body></html>\n' > "$TMP/v2.html"
+
+    run "$DROPLETCTL" publish "$TMP/v1.html" rev mydomain.test
+    [ "$status" -eq 0 ]
+    grep -q "fixture" "$SITES_DIR/rev/index.html"
+
+    run "$DROPLETCTL" publish "$TMP/v2.html" rev mydomain.test
+    [ "$status" -eq 0 ]
+    # v2 overwrote v1.
+    grep -q "v2" "$SITES_DIR/rev/index.html"
+    ! grep -q "fixture" "$SITES_DIR/rev/index.html"
+    # Exactly one [sites.rev] block in the TOML.
+    count="$(grep -c '^\[sites\.rev\]' "$TOML_PATH")"
+    [ "$count" = "1" ]
+}
