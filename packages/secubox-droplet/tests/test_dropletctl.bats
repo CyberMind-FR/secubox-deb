@@ -52,3 +52,15 @@ load helpers
     [ "$last_line" = "mycool_site_.mydomain.test" ]
     [ -d "$SITES_DIR/mycool_site_" ]
 }
+
+@test "publish a zip with one nested top dir unwraps it" {
+    make_zip_nested "$TMP/site.zip"
+
+    run "$DROPLETCTL" publish "$TMP/site.zip" zipsite mydomain.test
+    [ "$status" -eq 0 ]
+    # Unwrapped: NOT $SITES_DIR/zipsite/site/index.html, but directly:
+    [ -f "$SITES_DIR/zipsite/index.html" ]
+    [ -f "$SITES_DIR/zipsite/style.css" ]
+    # Nested wrapper dir is gone.
+    [ ! -d "$SITES_DIR/zipsite/site" ]
+}

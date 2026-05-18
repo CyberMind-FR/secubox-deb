@@ -47,14 +47,37 @@ stage_content() {
         html|htm)
             cp "$src" "$staging/index.html"
             ;;
-        zip|tgz|tar.gz)
-            log_error "extraction not implemented yet"
+        zip)
+            if ! unzip -q "$src" -d "$staging"; then
+                log_error "Failed to extract zip: $src"
+                rm -rf "$staging"
+                exit 3
+            fi
+            unwrap_single_nested "$staging"
+            ;;
+        tgz|tar.gz)
+            log_error "tarball extraction not implemented yet"
             rm -rf "$staging"
             exit 3
             ;;
     esac
 
     echo "$staging"
+}
+
+# If $1 contains exactly one entry and it's a directory, move its contents up.
+unwrap_single_nested() {
+    local dir="$1"
+    local entries=("$dir"/*)
+    if [[ ${#entries[@]} -eq 1 ]] && [[ -d "${entries[0]}" ]]; then
+        local nested="${entries[0]}"
+        # Use a temp move to avoid name collision when nested basename matches dir.
+        local stash; stash="$(mktemp -d "$dir/.unwrap.XXXXXX")"
+        mv "$nested"/* "$nested"/.[!.]* "$stash"/ 2>/dev/null || true
+        rmdir "$nested"
+        mv "$stash"/* "$stash"/.[!.]* "$dir"/ 2>/dev/null || true
+        rmdir "$stash"
+    fi
 }
 
 cmd_publish() {
