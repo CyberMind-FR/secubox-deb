@@ -39,9 +39,13 @@ stage_content() {
     local staging
     staging="$(mktemp -d /tmp/droplet.XXXXXX)"
 
-    local ext="${src##*.}"
-    ext="${ext,,}"
-    if [[ "$src" == *.tar.gz ]]; then ext="tar.gz"; fi
+    local ext
+    if [[ -d "$src" ]]; then
+        ext="dir"
+    else
+        ext="${src##*.}"; ext="${ext,,}"
+        [[ "$src" == *.tar.gz ]] && ext="tar.gz"
+    fi
 
     case "$ext" in
         html|htm)
@@ -56,9 +60,16 @@ stage_content() {
             unwrap_single_nested "$staging"
             ;;
         tgz|tar.gz)
-            log_error "tarball extraction not implemented yet"
-            rm -rf "$staging"
-            exit 3
+            if ! tar -xzf "$src" -C "$staging"; then
+                log_error "Failed to extract tarball: $src"
+                rm -rf "$staging"
+                exit 3
+            fi
+            unwrap_single_nested "$staging"
+            ;;
+        dir)
+            # Caller passed a directory — rsync its contents verbatim.
+            rsync -a "$src"/ "$staging"/
             ;;
     esac
 
@@ -94,15 +105,21 @@ cmd_publish() {
         exit 1
     fi
 
-    local ext="${file##*.}"; ext="${ext,,}"
-    [[ "$file" == *.tar.gz ]] && ext="tar.gz"
-    case "$ext" in
-        html|htm|zip|tgz|tar.gz) : ;;
-        *)
-            echo "[ERROR] Unsupported file type: .$ext (expected .html .htm .zip .tar.gz .tgz)" >&2
-            exit 1
-            ;;
-    esac
+    # If the path is a directory, skip extension validation entirely.
+    local ext
+    if [[ -d "$file" ]]; then
+        ext="dir"
+    else
+        ext="${file##*.}"; ext="${ext,,}"
+        [[ "$file" == *.tar.gz ]] && ext="tar.gz"
+        case "$ext" in
+            html|htm|zip|tgz|tar.gz) : ;;
+            *)
+                echo "[ERROR] Unsupported file type: .$ext (expected .html .htm .zip .tar.gz .tgz or directory)" >&2
+                exit 1
+                ;;
+        esac
+    fi
 
     local name; name="$(sanitize_name "$name_raw")"
     if [[ -z "$name" ]]; then

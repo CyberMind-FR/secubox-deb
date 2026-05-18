@@ -64,3 +64,25 @@ load helpers
     # Nested wrapper dir is gone.
     [ ! -d "$SITES_DIR/zipsite/site" ]
 }
+
+@test "publish a tarball with one nested top dir unwraps it" {
+    make_tarball_nested "$TMP/site.tar.gz"
+
+    run "$DROPLETCTL" publish "$TMP/site.tar.gz" tarsite mydomain.test
+    [ "$status" -eq 0 ]
+    [ -f "$SITES_DIR/tarsite/index.html" ]
+    [ -f "$SITES_DIR/tarsite/style.css" ]
+    [ ! -d "$SITES_DIR/tarsite/site" ]
+}
+
+@test "publish a plain directory copies its tree verbatim" {
+    mkdir -p "$TMP/site_src"
+    make_html "$TMP/site_src/index.html"
+    printf 'body { color: blue; }\n' > "$TMP/site_src/style.css"
+
+    run "$DROPLETCTL" publish "$TMP/site_src" dirsite mydomain.test
+    [ "$status" -eq 0 ]
+    [ -f "$SITES_DIR/dirsite/index.html" ]
+    [ -f "$SITES_DIR/dirsite/style.css" ]
+    grep -q "fixture" "$SITES_DIR/dirsite/index.html"
+}
