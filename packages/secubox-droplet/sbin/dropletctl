@@ -10,12 +10,59 @@ set -euo pipefail
 readonly MODULE="dropletctl"
 readonly VERSION="1.1.0"
 
+# Environment overrides for tests (default to production paths if unset).
+: "${SITES_DIR:=/srv/metablogizer/sites}"
+: "${TOML_PATH:=/etc/secubox/droplet.toml}"
+: "${LOG_TAG:=droplet}"
+
+log_info()  { logger -t "$LOG_TAG" -p user.info  "$*" 2>/dev/null || true; echo "[INFO] $*"; }
+log_error() { logger -t "$LOG_TAG" -p user.error "$*" 2>/dev/null || true; echo "[ERROR] $*" >&2; }
+log_ok()    { echo "[OK] $*"; }
+
+# Lowercase + replace non-[a-z0-9_-] with '_'. Empty result -> caller errors.
+sanitize_name() {
+    printf '%s' "$1" | awk '{print tolower($0)}' | sed 's/[^a-z0-9_-]/_/g'
+}
+
+# Read default_domain from droplet.toml. Falls back to gk2.secubox.in.
+default_domain() {
+    [[ -r "$TOML_PATH" ]] || { echo "gk2.secubox.in"; return; }
+    local v
+    v=$(grep -E '^default_domain\s*=' "$TOML_PATH" 2>/dev/null \
+        | head -1 | sed -E 's/^default_domain\s*=\s*"?([^"]*)"?\s*$/\1/')
+    echo "${v:-gk2.secubox.in}"
+}
+
+# Stage <src> into a fresh temp dir. Echoes the staging dir path.
+stage_content() {
+    local src="$1"
+    local staging
+    staging="$(mktemp -d /tmp/droplet.XXXXXX)"
+
+    local ext="${src##*.}"
+    ext="${ext,,}"
+    if [[ "$src" == *.tar.gz ]]; then ext="tar.gz"; fi
+
+    case "$ext" in
+        html|htm)
+            cp "$src" "$staging/index.html"
+            ;;
+        zip|tgz|tar.gz)
+            log_error "extraction not implemented yet"
+            rm -rf "$staging"
+            exit 3
+            ;;
+    esac
+
+    echo "$staging"
+}
+
 cmd_publish() {
     local file="${1:-}"
-    local name="${2:-}"
-    local domain="${3:-}"
+    local name_raw="${2:-}"
+    local domain="${3:-$(default_domain)}"
 
-    if [[ -z "$file" ]] || [[ -z "$name" ]]; then
+    if [[ -z "$file" ]] || [[ -z "$name_raw" ]]; then
         echo "[ERROR] Usage: dropletctl publish <file> <name> [domain]" >&2
         exit 1
     fi
@@ -24,23 +71,90 @@ cmd_publish() {
         exit 1
     fi
 
-    local ext="${file##*.}"
-    ext="${ext,,}"  # bash 4 lowercase
-    # Handle .tar.gz double-extension
-    if [[ "$file" == *.tar.gz ]]; then ext="tar.gz"; fi
-
+    local ext="${file##*.}"; ext="${ext,,}"
+    [[ "$file" == *.tar.gz ]] && ext="tar.gz"
     case "$ext" in
-        html|htm|zip|tgz|tar.gz)
-            : ;;
+        html|htm|zip|tgz|tar.gz) : ;;
         *)
             echo "[ERROR] Unsupported file type: .$ext (expected .html .htm .zip .tar.gz .tgz)" >&2
             exit 1
             ;;
     esac
 
-    # Stub — actual staging arrives in later tasks.
-    echo "[OK] (stub) would publish $file as $name"
-    echo "${name}.${domain:-gk2.secubox.in}"
+    local name; name="$(sanitize_name "$name_raw")"
+    if [[ -z "$name" ]]; then
+        echo "[ERROR] Invalid name '$name_raw'" >&2
+        exit 2
+    fi
+
+    local vhost="${name}.${domain}"
+    # staging is intentionally not declared local so the EXIT trap can reference it.
+    staging="$(stage_content "$file")"
+    trap 'rm -rf "$staging"' EXIT
+
+    log_info "Publishing: $file as $vhost"
+
+    # Permissions: 644 files, 755 dirs.
+    find "$staging" -type f -exec chmod 644 {} +
+    find "$staging" -type d -exec chmod 755 {} +
+
+    # Deploy to /srv/metablogizer/sites/<name>/ (idempotent overwrite).
+    mkdir -p "$SITES_DIR/$name"
+    rsync -a --delete "$staging"/ "$SITES_DIR/$name"/
+
+    # Upsert TOML entry. Section format: [sites.<name>] domain="<d>" type="static".
+    upsert_toml_site "$name" "$domain" "static"
+
+    # Delegate the HTTP-facing work.
+    if ! command -v metablogizerctl >/dev/null 2>&1; then
+        log_error "metablogizerctl not found — install secubox-metablogizer"
+        exit 4
+    fi
+    if ! metablogizerctl site publish "$name"; then
+        log_error "metablogizerctl failed for $name"
+        exit 5
+    fi
+
+    log_ok "Published: https://$vhost/"
+    echo "$vhost"
+}
+
+# Upsert [sites.<name>] section. Uses python3 for safe TOML rewrite.
+upsert_toml_site() {
+    local name="$1" domain="$2" type="$3"
+    python3 - "$TOML_PATH" "$name" "$domain" "$type" <<'PY'
+import sys, re, os, tempfile
+
+path, name, domain, type_ = sys.argv[1:]
+section = f"[sites.{name}]"
+new_block = f'{section}\ndomain = "{domain}"\ntype = "{type_}"\n'
+
+if os.path.exists(path):
+    with open(path) as f:
+        content = f.read()
+else:
+    content = ""
+
+# Match the section + its body up to the next [section] or EOF.
+pattern = re.compile(
+    rf'^{re.escape(section)}\s*\n(?:(?!^\[).*\n?)*',
+    flags=re.MULTILINE,
+)
+if pattern.search(content):
+    new_content = pattern.sub(new_block, content)
+else:
+    if content and not content.endswith('\n'):
+        content += '\n'
+    if content and not content.endswith('\n\n'):
+        content += '\n'
+    new_content = content + new_block
+
+# Atomic write.
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or '.', prefix='.droplet.', suffix='.toml')
+os.write(fd, new_content.encode())
+os.close(fd)
+os.replace(tmp, path)
+PY
 }
 
 case "${1:-}" in
