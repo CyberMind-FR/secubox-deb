@@ -10,6 +10,39 @@ set -euo pipefail
 readonly MODULE="dropletctl"
 readonly VERSION="1.1.0"
 
+cmd_publish() {
+    local file="${1:-}"
+    local name="${2:-}"
+    local domain="${3:-}"
+
+    if [[ -z "$file" ]] || [[ -z "$name" ]]; then
+        echo "[ERROR] Usage: dropletctl publish <file> <name> [domain]" >&2
+        exit 1
+    fi
+    if [[ ! -e "$file" ]]; then
+        echo "[ERROR] not found: $file" >&2
+        exit 1
+    fi
+
+    local ext="${file##*.}"
+    ext="${ext,,}"  # bash 4 lowercase
+    # Handle .tar.gz double-extension
+    if [[ "$file" == *.tar.gz ]]; then ext="tar.gz"; fi
+
+    case "$ext" in
+        html|htm|zip|tgz|tar.gz)
+            : ;;
+        *)
+            echo "[ERROR] Unsupported file type: .$ext (expected .html .htm .zip .tar.gz .tgz)" >&2
+            exit 1
+            ;;
+    esac
+
+    # Stub — actual staging arrives in later tasks.
+    echo "[OK] (stub) would publish $file as $name"
+    echo "${name}.${domain:-gk2.secubox.in}"
+}
+
 case "${1:-}" in
     "" | -h | --help)
         cat <<USAGE
@@ -23,6 +56,10 @@ Commands:
   rename <old> <new>               Rename a droplet
 USAGE
         exit 0
+        ;;
+    publish)
+        shift
+        cmd_publish "$@"
         ;;
     *)
         echo "[ERROR] unknown subcommand: $1" >&2
