@@ -93,10 +93,15 @@ LOGO_PATHS = [
     Path("/etc/secubox/eye-remote/assets/phoenix_logo.png"),
 ]
 
-# Icon paths - module icons
+# Icon paths - module icons.
+# Order matters: first existing path wins per icon name. /var/www/common/
+# holds the real brand icons (auth, wall, boot, mind, root, mesh) installed
+# by build-eye-remote-image.sh; the local /usr/lib/secubox-eye/assets/icons/
+# fallback path holds the round-specific placeholder set.
 ICON_PATHS = [
     Path("/tmp/assets/icons"),
     Path("/etc/secubox/eye-remote/assets/icons"),
+    Path("/var/www/common/assets/icons"),
     Path(__file__).parent.parent.parent.parent / "assets" / "icons",
 ]
 
