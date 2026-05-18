@@ -1,3 +1,23 @@
+secubox-portal (2.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * portal: regenerate /portal/index.html as a public-facing operational
+    dashboard (issue #192). Consumes unauthenticated metrics endpoints
+    (cert-status, visitor-origin, live-hosts, health/summary, cookie-
+    audit/summary, crowdsec/decisions) and renders:
+      - Navbar (portal/soc/metablogs/publish/cookies/repo)
+      - Hero (overall health score + uptime/SSL/vhosts/certs/bans)
+      - Services LED grid (waf/crowdsec/haproxy/nginx/system)
+      - System metrics (CPU/RAM/Disk/Load/LXC) with progress bars
+      - Certificates summary (total/valid/expiring/critical/expired)
+      - Cookie Audit · RGPD breakdown
+      - Attacks & Bans tiles (active bans / WAF % / today alerts)
+      - Top vhosts (last 60 min traffic)
+      - Top visitor ASN (geographic attribution)
+    Auto-refresh 30s, graceful degradation on endpoint failure.
+    Style: P31 phosphor green CRT (preserved from previous version).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 18 May 2026 05:54:39 +0200
+
 secubox-portal (2.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add device-specific theming based on detected board
