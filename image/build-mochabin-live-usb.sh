@@ -90,6 +90,7 @@ while [[ $# -gt 0 ]]; do
         --size)           IMG_SIZE="$2";        shift 2 ;;
         --embed-image)    EMBED_IMAGE="$2";     shift 2 ;;
         --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
+        --slipstream)     SLIPSTREAM_DEBS=1;    shift   ;;
         --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
         --no-compress)    NO_COMPRESS=1;        shift   ;;
         --no-led)         INCLUDE_LED_KERNEL=0; shift   ;;
