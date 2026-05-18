@@ -704,8 +704,19 @@ if [[ -f "$SCRIPT_DIR/secubox-eye-agent.service" && -f "$SCRIPT_DIR/config.toml.
         log "Installing menu system icons..."
         mkdir -p "$ROOT_MNT/usr/lib/secubox-eye/assets/icons"
         cp "$SCRIPT_DIR/assets/icons"/*.png "$ROOT_MNT/usr/lib/secubox-eye/assets/icons/" 2>/dev/null || true
+        # Defense-in-depth: also drop the brand-icon PNGs (auth/wall/boot/
+        # mind/root/mesh) from remote-ui/common/assets/icons/ so any consumer
+        # that resolves icons via /usr/lib/secubox-eye/ finds them. The
+        # fallback_manager also searches /var/www/common/assets/icons/
+        # directly (where build copies common/ in another step) — this is
+        # redundant shipping for resilience.
+        _COMMON_ICONS="$(dirname "$SCRIPT_DIR")/common/assets/icons"
+        if [[ -d "$_COMMON_ICONS" ]]; then
+            cp -n "$_COMMON_ICONS"/*.png \
+                "$ROOT_MNT/usr/lib/secubox-eye/assets/icons/" 2>/dev/null || true
+        fi
         ICON_COUNT=$(ls "$ROOT_MNT/usr/lib/secubox-eye/assets/icons"/*.png 2>/dev/null | wc -l)
-        log "Installed $ICON_COUNT menu icons"
+        log "Installed $ICON_COUNT menu icons (round/ + common/ brand)"
     fi
 else
     warn "Eye Agent files not found, skipping installation"
