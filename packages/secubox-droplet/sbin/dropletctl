@@ -302,6 +302,25 @@ cmd_rename() {
     log_ok "Renamed: $old -> $new"
 }
 
+cmd_list() {
+    [[ -r "$TOML_PATH" ]] || { echo "(no droplets)"; return 0; }
+    python3 - "$TOML_PATH" <<'PY'
+import sys, re
+path = sys.argv[1]
+with open(path) as f:
+    content = f.read()
+# Capture [sites.<name>] then the immediate `domain = "..."` line in its block.
+section_re = re.compile(r'^\[sites\.([^\]]+)\]\s*\n((?:(?!^\[).*\n?)*)', re.MULTILINE)
+for m in section_re.finditer(content):
+    name = m.group(1)
+    body = m.group(2)
+    dm = re.search(r'^domain\s*=\s*"?([^"\n]+)"?', body, re.MULTILINE)
+    domain = dm.group(1).strip() if dm else "?"
+    vhost = f"{name}.{domain}"
+    print(f"{name:<30s} [ON]  https://{vhost}/")
+PY
+}
+
 case "${1:-}" in
     "" | -h | --help)
         cat <<USAGE
@@ -327,6 +346,9 @@ USAGE
     rename)
         shift
         cmd_rename "$@"
+        ;;
+    list)
+        cmd_list
         ;;
     *)
         echo "[ERROR] unknown subcommand: $1" >&2

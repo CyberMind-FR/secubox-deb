@@ -172,3 +172,18 @@ load helpers
     # Original still intact.
     [ -d "$SITES_DIR/same" ]
 }
+
+@test "list prints one row per [sites.<name>] in droplet.toml" {
+    make_html "$TMP/page.html"
+    run "$DROPLETCTL" publish "$TMP/page.html" first mydomain.test
+    [ "$status" -eq 0 ]
+    run "$DROPLETCTL" publish "$TMP/page.html" second mydomain.test
+    [ "$status" -eq 0 ]
+
+    run "$DROPLETCTL" list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first" ]]
+    [[ "$output" =~ "first.mydomain.test" ]]
+    [[ "$output" =~ "second" ]]
+    [[ "$output" =~ "second.mydomain.test" ]]
+}
