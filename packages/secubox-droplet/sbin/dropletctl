@@ -1,225 +1,31 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-#
-# dropletctl — SecuBox Droplet File Publisher control (issue #181)
-#
-# Third routing verb on the publishing layer, parallel to:
-#   haproxyctl   vhost  add/remove    (routing)
-#   mitmproxyctl route  add/remove    (interception, #173)
-#   giteactl     repo   mirror add    (replication, #176)
-#   dropletctl   file   upload/list   (publishing, this)
-#
-# The Droplet API exposes /upload, /list, /remove, /rename over a Unix
-# socket; this ctl wraps those endpoints under a coherent <noun> <verb>
-# grammar so operators don't have to curl by hand.
 
+# SecuBox-Deb :: dropletctl — droplet content publisher (port from OpenWrt)
 set -euo pipefail
 
-VERSION="0.1.0"
-SOCKET="${DROPLET_SOCKET:-/run/secubox/droplet.sock}"
-API_BASE="http://localhost/api/v1/droplet"
-SERVICE="secubox-droplet.service"
-
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-log()   { printf "${GREEN}[DROPLET]${NC} %s\n" "$*"; }
-warn()  { printf "${YELLOW}[WARN]${NC} %s\n" "$*"; }
-error() { printf "${RED}[ERROR]${NC} %s\n" "$*" >&2; }
-
-# ── Helpers ───────────────────────────────────────────────────────────────
-
-require_socket() {
-    if [ ! -S "$SOCKET" ]; then
-        error "API socket $SOCKET not present — start $SERVICE first"
-        exit 2
-    fi
-}
-
-api() {
-    local method="$1" path="$2"
-    shift 2
-    require_socket
-    curl --unix-socket "$SOCKET" -sS -X "$method" \
-        -w "\nHTTP_CODE:%{http_code}\n" \
-        "${API_BASE}${path}" "$@"
-}
-
-api_code() {
-    echo "$1" | grep '^HTTP_CODE:' | cut -d: -f2
-}
-
-api_body() {
-    echo "$1" | sed '/^HTTP_CODE:/d'
-}
-
-# ── Lifecycle (top-level, mirrors mitmproxyctl/giteactl) ──────────────────
-
-cmd_install()  { log "install via dpkg; this ctl assumes package already installed"; return 0; }
-cmd_start()    { systemctl start   "$SERVICE"   && log "started";  }
-cmd_stop()     { systemctl stop    "$SERVICE"   && log "stopped";  }
-cmd_restart()  { systemctl restart "$SERVICE"   && log "restarted";}
-cmd_status()   {
-    systemctl is-active "$SERVICE" >/dev/null 2>&1 \
-        && echo "active" || echo "inactive"
-}
-cmd_logs() {
-    journalctl -u "$SERVICE" -n "${1:-50}" --no-pager
-}
-
-# ── Three-fold (giteactl convention: components / status / access JSON) ───
-
-cmd_components() {
-    cat <<EOF
-{
-  "service": "$SERVICE",
-  "socket": "$SOCKET",
-  "api_base": "$API_BASE",
-  "ctl_version": "$VERSION"
-}
-EOF
-}
-
-cmd_access() {
-    cat <<EOF
-{
-  "socket": "$SOCKET",
-  "api_paths": {
-    "upload": "POST   /api/v1/droplet/upload",
-    "list":   "GET    /api/v1/droplet/list",
-    "remove": "POST   /api/v1/droplet/remove",
-    "rename": "POST   /api/v1/droplet/rename",
-    "info":   "GET    /api/v1/droplet/droplet/{name}",
-    "stats":  "GET    /api/v1/droplet/stats",
-    "storage":"GET    /api/v1/droplet/storage"
-  }
-}
-EOF
-}
-
-# ── file noun verbs (the missing grammar — issue #181) ────────────────────
-
-cmd_file() {
-    local action="${1:-}"; shift || true
-    case "$action" in
-        upload)  cmd_file_upload "$@" ;;
-        remove|rm|del) cmd_file_remove "$@" ;;
-        rename)  cmd_file_rename "$@" ;;
-        list|ls) cmd_file_list "$@" ;;
-        info)    cmd_file_info "$@" ;;
-        *)
-            cat <<EOF
-File commands:
-  file upload <path> [--public] [--ttl <e.g. 7d>]
-  file remove <name>
-  file rename <old> <new>
-  file list [--limit N]
-  file info <name>
-EOF
-            ;;
-    esac
-}
-
-cmd_file_upload() {
-    local path="$1"; shift || { error "file upload <path> required"; return 1; }
-    [ -f "$path" ] || { error "file not found: $path"; return 1; }
-    local public=false ttl=""
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            --public) public=true ;;
-            --ttl) ttl="$2"; shift ;;
-            *) error "unknown flag: $1"; return 1 ;;
-        esac; shift
-    done
-    log "uploading $path (public=$public ttl=${ttl:-default})"
-    local args=("-F" "file=@${path}")
-    $public && args+=("-F" "public=true")
-    [ -n "$ttl" ] && args+=("-F" "ttl=$ttl")
-    local out
-    out=$(api POST "/upload" "${args[@]}")
-    local code; code=$(api_code "$out")
-    case "$code" in
-        200|201) api_body "$out" ;;
-        *) error "upload failed (HTTP $code): $(api_body "$out" | head -3)"; return 1 ;;
-    esac
-}
-
-cmd_file_remove() {
-    local name="$1"
-    [ -z "$name" ] && { error "file remove <name> required"; return 1; }
-    log "removing $name"
-    local out
-    out=$(api POST "/remove" -H "Content-Type: application/json" \
-        -d "$(printf '{"name":"%s"}' "$name")")
-    local code; code=$(api_code "$out")
-    [ "$code" = "200" ] || { error "remove failed (HTTP $code): $(api_body "$out")"; return 1; }
-    log "removed $name"
-}
-
-cmd_file_rename() {
-    local old="$1" new="$2"
-    [ -z "$old" ] || [ -z "$new" ] && { error "file rename <old> <new> required"; return 1; }
-    log "renaming $old -> $new"
-    local out
-    out=$(api POST "/rename" -H "Content-Type: application/json" \
-        -d "$(printf '{"old":"%s","new":"%s"}' "$old" "$new")")
-    local code; code=$(api_code "$out")
-    [ "$code" = "200" ] || { error "rename failed (HTTP $code): $(api_body "$out")"; return 1; }
-    log "renamed"
-}
-
-cmd_file_list() {
-    local limit=""
-    [ "${1:-}" = "--limit" ] && { limit="?limit=$2"; }
-    local out
-    out=$(api GET "/list${limit}")
-    api_body "$out"
-}
-
-cmd_file_info() {
-    local name="$1"
-    [ -z "$name" ] && { error "file info <name> required"; return 1; }
-    local out
-    out=$(api GET "/droplet/${name}")
-    api_body "$out"
-}
-
-# ── Main dispatch ─────────────────────────────────────────────────────────
-
-show_help() {
-    cat <<EOF
-SecuBox Droplet Controller v$VERSION (issue #181)
-File publisher CLI — parallel to giteactl, mitmproxyctl
-
-Usage: dropletctl <command> [options]
-
-Lifecycle:
-  install / start / stop / restart / status / logs
-
-Three-fold (JSON):
-  components / access
-
-Files (issue #181):
-  file upload <path> [--public] [--ttl 7d]
-  file remove <name>
-  file rename <old> <new>
-  file list   [--limit N]
-  file info   <name>
-
-Examples:
-  dropletctl file upload /tmp/report.pdf --public --ttl 7d
-  dropletctl file list
-  dropletctl access | jq .api_paths
-EOF
-}
+readonly MODULE="dropletctl"
+readonly VERSION="1.1.0"
 
 case "${1:-}" in
-    install|start|stop|restart|status) cmd="$1"; shift; cmd_$cmd "$@" ;;
-    logs)        shift; cmd_logs "$@" ;;
-    components)  cmd_components ;;
-    access)      cmd_access ;;
-    file)        shift; cmd_file "$@" ;;
-    help|--help|-h|'') show_help ;;
-    *) error "unknown command: $1"; show_help; exit 1 ;;
+    "" | -h | --help)
+        cat <<USAGE
+Droplet Publisher — One-drop static-content publishing
+Usage: dropletctl <command> [args]
+
+Commands:
+  publish <file> <name> [domain]   Publish HTML/ZIP/tarball as a site
+  list                             List published droplets
+  remove <name>                    Remove a droplet
+  rename <old> <new>               Rename a droplet
+USAGE
+        exit 0
+        ;;
+    *)
+        echo "[ERROR] unknown subcommand: $1" >&2
+        exit 1
+        ;;
 esac
