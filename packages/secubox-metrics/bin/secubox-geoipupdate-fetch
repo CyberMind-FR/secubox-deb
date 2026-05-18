@@ -1,0 +1,49 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# secubox-geoipupdate-fetch — refresh /var/lib/GeoIP/GeoLite2-ASN.mmdb
+#
+# Two paths (#194):
+#   1. If /etc/secubox/secrets/maxmind.conf exists AND `geoipupdate` is
+#      installed, use the MaxMind GeoLite2 download (operator has a key).
+#   2. Otherwise fall back to DB-IP free ASN lite, no signup required.
+#      Format is MaxMind-compatible — the visitor_origin aggregator reads
+#      it with `maxminddb.open_database` transparently.
+#
+# Invoked by secubox-geoipupdate.service (weekly timer).
+set -euo pipefail
+
+MMDB_DEST="/var/lib/GeoIP/GeoLite2-ASN.mmdb"
+MAXMIND_CONF="/etc/secubox/secrets/maxmind.conf"
+DBIP_URL_BASE="https://download.db-ip.com/free"
+
+log() { echo "[geoipupdate-fetch] $*"; }
+err() { echo "[geoipupdate-fetch] ERROR: $*" >&2; }
+
+install -d -m 755 /var/lib/GeoIP
+
+if [ -f "$MAXMIND_CONF" ] && command -v geoipupdate >/dev/null 2>&1; then
+    log "MaxMind license + geoipupdate present — using MaxMind path"
+    exec geoipupdate -f "$MAXMIND_CONF" -d /var/lib/GeoIP
+fi
+
+log "no MaxMind license (or geoipupdate missing) — falling back to DB-IP free"
+MONTH=$(date +%Y-%m)
+URL="${DBIP_URL_BASE}/dbip-asn-lite-${MONTH}.mmdb.gz"
+TMP=$(mktemp)
+TMP_GZ="${TMP}.gz"
+trap 'rm -f "$TMP" "$TMP_GZ"' EXIT
+
+log "GET $URL"
+if ! curl -fsSL -o "$TMP_GZ" "$URL"; then
+    err "DB-IP download failed; trying previous month as fallback"
+    LAST_MONTH=$(date -d "${MONTH}-01 -1 day" +%Y-%m 2>/dev/null || date -v-1m +%Y-%m)
+    URL="${DBIP_URL_BASE}/dbip-asn-lite-${LAST_MONTH}.mmdb.gz"
+    log "GET $URL"
+    curl -fsSL -o "$TMP_GZ" "$URL"
+fi
+
+gunzip -f "$TMP_GZ"   # writes $TMP
+install -m 644 -o secubox -g secubox "$TMP" "$MMDB_DEST"
+log "installed $MMDB_DEST ($(stat -c %s "$MMDB_DEST") bytes)"
