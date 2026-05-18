@@ -124,3 +124,23 @@ load helpers
     grep -q "metablogizerctl site unpublish doomed" "$STUB_LOG"
     grep -q "metablogizerctl site delete doomed" "$STUB_LOG"
 }
+
+@test "rename moves docroot, swaps TOML entry, calls delete+publish on delegate" {
+    make_html "$TMP/page.html"
+    run "$DROPLETCTL" publish "$TMP/page.html" oldname mydomain.test
+    [ "$status" -eq 0 ]
+    [ -d "$SITES_DIR/oldname" ]
+
+    : > "$STUB_LOG"
+    run "$DROPLETCTL" rename oldname newname
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "[OK]" ]]
+    [ ! -d "$SITES_DIR/oldname" ]
+    [ -d "$SITES_DIR/newname" ]
+    [ -f "$SITES_DIR/newname/index.html" ]
+    ! grep -q '^\[sites\.oldname\]' "$TOML_PATH"
+    grep -q '^\[sites\.newname\]' "$TOML_PATH"
+    # Delegate called: delete old, then publish new.
+    grep -q "metablogizerctl site delete oldname" "$STUB_LOG"
+    grep -q "metablogizerctl site publish newname" "$STUB_LOG"
+}

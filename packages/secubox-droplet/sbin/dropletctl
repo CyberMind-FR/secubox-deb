@@ -244,6 +244,53 @@ os.replace(tmp, path)
 PY
 }
 
+cmd_rename() {
+    local old_raw="${1:-}" new_raw="${2:-}"
+    if [[ -z "$old_raw" ]] || [[ -z "$new_raw" ]]; then
+        echo "[ERROR] Usage: dropletctl rename <old> <new>" >&2
+        exit 1
+    fi
+    local old new
+    old="$(sanitize_name "$old_raw")"
+    new="$(sanitize_name "$new_raw")"
+    if [[ -z "$old" ]] || [[ -z "$new" ]]; then
+        echo "[ERROR] Invalid name(s): '$old_raw' or '$new_raw'" >&2
+        exit 2
+    fi
+    if [[ ! -d "$SITES_DIR/$old" ]]; then
+        echo "[ERROR] not found: $old" >&2
+        exit 1
+    fi
+
+    # Read old domain so the new site keeps the same default unless overridden.
+    local domain
+    domain=$(grep -A2 "^\[sites\.$old\]" "$TOML_PATH" 2>/dev/null \
+        | grep -E '^domain\s*=' | head -1 \
+        | sed -E 's/^domain\s*=\s*"?([^"]*)"?\s*$/\1/')
+    domain="${domain:-$(default_domain)}"
+
+    if ! command -v metablogizerctl >/dev/null 2>&1; then
+        log_error "metablogizerctl not found — install secubox-metablogizer"
+        exit 4
+    fi
+
+    mv "$SITES_DIR/$old" "$SITES_DIR/$new"
+    remove_toml_site "$old"
+    # Compute new domain by replacing the leading <old>. prefix if present, else use original.
+    local new_domain="$domain"
+    if [[ "$domain" == "${old}."* ]]; then
+        new_domain="${new}.${domain#*.}"
+    fi
+    upsert_toml_site "$new" "$new_domain" "static"
+
+    metablogizerctl site delete "$old"  || true
+    metablogizerctl site publish "$new" || {
+        log_error "metablogizerctl failed for $new"
+        exit 5
+    }
+    log_ok "Renamed: $old -> $new"
+}
+
 case "${1:-}" in
     "" | -h | --help)
         cat <<USAGE
@@ -265,6 +312,10 @@ USAGE
     remove)
         shift
         cmd_remove "$@"
+        ;;
+    rename)
+        shift
+        cmd_rename "$@"
         ;;
     *)
         echo "[ERROR] unknown subcommand: $1" >&2
