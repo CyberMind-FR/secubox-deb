@@ -257,6 +257,10 @@ cmd_rename() {
         echo "[ERROR] Invalid name(s): '$old_raw' or '$new_raw'" >&2
         exit 2
     fi
+    if [[ "$old" == "$new" ]]; then
+        echo "[ERROR] old and new names are identical after sanitization" >&2
+        exit 2
+    fi
     if [[ ! -d "$SITES_DIR/$old" ]]; then
         echo "[ERROR] not found: $old" >&2
         exit 1
@@ -274,6 +278,11 @@ cmd_rename() {
         exit 4
     fi
 
+    if [[ -e "$SITES_DIR/$new" ]]; then
+        echo "[ERROR] target already exists: $new" >&2
+        exit 1
+    fi
+
     mv "$SITES_DIR/$old" "$SITES_DIR/$new"
     remove_toml_site "$old"
     # Compute new domain by replacing the leading <old>. prefix if present, else use original.
@@ -283,7 +292,9 @@ cmd_rename() {
     fi
     upsert_toml_site "$new" "$new_domain" "static"
 
+    # delete is tolerant: old vhost may never have been registered.
     metablogizerctl site delete "$old"  || true
+    # publish must succeed: failure leaves site half-renamed and unreachable.
     metablogizerctl site publish "$new" || {
         log_error "metablogizerctl failed for $new"
         exit 5

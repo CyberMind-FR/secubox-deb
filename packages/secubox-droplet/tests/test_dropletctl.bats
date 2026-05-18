@@ -144,3 +144,31 @@ load helpers
     grep -q "metablogizerctl site delete oldname" "$STUB_LOG"
     grep -q "metablogizerctl site publish newname" "$STUB_LOG"
 }
+
+@test "rename fails when target name already exists" {
+    make_html "$TMP/page.html"
+    run "$DROPLETCTL" publish "$TMP/page.html" srcsite mydomain.test
+    [ "$status" -eq 0 ]
+    run "$DROPLETCTL" publish "$TMP/page.html" dstsite mydomain.test
+    [ "$status" -eq 0 ]
+
+    run "$DROPLETCTL" rename srcsite dstsite
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "already exists" ]]
+    # Both docroots still present — no half-renamed state.
+    [ -d "$SITES_DIR/srcsite" ]
+    [ -d "$SITES_DIR/dstsite" ]
+}
+
+@test "rename fails when old and new are identical after sanitization" {
+    make_html "$TMP/page.html"
+    run "$DROPLETCTL" publish "$TMP/page.html" same mydomain.test
+    [ "$status" -eq 0 ]
+
+    # 'Same' sanitizes to 'same' — same as the existing 'same'.
+    run "$DROPLETCTL" rename Same same
+    [ "$status" -eq 2 ]
+    [[ "$output" =~ "identical after sanitization" ]]
+    # Original still intact.
+    [ -d "$SITES_DIR/same" ]
+}
