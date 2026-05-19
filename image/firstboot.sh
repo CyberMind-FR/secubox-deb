@@ -310,21 +310,48 @@ chmod 640 "${SECUBOX_DIR}/secubox.conf"
 ok "/etc/secubox/secubox.conf créé"
 
 # ── 8. Portal users.json avec admin par défaut ───────────────────
-# Utilise le mot de passe de secubox.conf, hashé SHA256
-ADMIN_HASH=$(echo -n "${ADMIN_PASS}" | sha256sum | cut -d' ' -f1)
-cat > "${SECUBOX_DIR}/users.json" <<EOF
-{
-  "admin": {
-    "password_hash": "${ADMIN_HASH}",
-    "email": "admin@secubox.local",
-    "role": "admin",
-    "created": "$(date -Iseconds)"
-  }
+# Schema v2 + argon2 hash (issue #210 — old SHA256 + flat schema made
+# `admin` / `secubox` login fail on every fresh image).
+#
+# We bypass the engine.set_password path because password_policy would
+# reject "secubox" as too weak — that's correct for normal use but wrong
+# for a seed. Instead we write the v2 doc directly with
+# `must_change_password: true` so the very next login is gated on a
+# proper password change.
+USERS_JSON="${SECUBOX_DIR}/users.json"
+python3 - "$ADMIN_PASS" "$USERS_JSON" <<'PYEOF'
+import json, sys
+from datetime import datetime, timezone
+
+try:
+    from argon2 import PasswordHasher
+except ImportError:
+    sys.exit("firstboot: argon2 missing — install python3-argon2 (already a secubox-core dep)")
+
+pw, path = sys.argv[1], sys.argv[2]
+doc = {
+    "users": [
+        {
+            "username": "admin",
+            "email": "admin@secubox.local",
+            "role": "admin",
+            "enabled": True,
+            "password_hash": PasswordHasher().hash(pw),
+            "must_change_password": True,
+            "totp": None,
+            "google": None,
+            "services": [],
+            "created": datetime.now(timezone.utc).isoformat(),
+            "last_login": None,
+        }
+    ]
 }
-EOF
-chown secubox:secubox "${SECUBOX_DIR}/users.json"
-chmod 640 "${SECUBOX_DIR}/users.json"
-ok "Portal users.json créé (admin / ${ADMIN_PASS})"
+with open(path, "w") as f:
+    json.dump(doc, f, indent=2)
+PYEOF
+chown secubox:secubox "${USERS_JSON}"
+chmod 640 "${USERS_JSON}"
+ok "Portal users.json créé (admin / ${ADMIN_PASS}, doit changer au premier login)"
 
 # ── 9. Certificat TLS autosigné ───────────────────────────────────
 if [[ ! -f "${TLS_DIR}/cert.pem" ]]; then
