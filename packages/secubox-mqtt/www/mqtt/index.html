@@ -557,7 +557,7 @@
         // Check auth on page load
         function checkAuth() {
             if (!getToken()) {
-                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 return false;
             }
             return true;
@@ -573,7 +573,7 @@
             try {
                 const response = await fetch(url, { ...options, headers });
                 if (response.status === 401) {
-                    window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                     return null;
                 }
                 if (!response.ok) {
