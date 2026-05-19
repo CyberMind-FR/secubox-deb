@@ -168,6 +168,38 @@ Automatic threat detection and IP blocking with community threat intelligence.
 
 ---
 
+## CTL Grammar — modular tools box
+
+> *Copyright spiritual concept · Gérald Kerma · 1991*
+
+Each SecuBox module exposes its capability through three surfaces — a
+web UI, a FastAPI API, and a CTL command (`/usr/sbin/<module>ctl`). The
+CTL is the **grammar** of the system: each verb is a sentence addressed
+to a specific layer of the operator's expressive control over their own
+infrastructure.
+
+| Layer                | Verb                                              |
+|----------------------|---------------------------------------------------|
+| ROUTING              | `haproxyctl     vhost  add/remove`                |
+| INTERCEPTION         | `mitmproxyctl   route  add/remove/list`           |
+| REPLICATION          | `giteactl       repo   mirror add/remove`         |
+| IDENTITY             | `giteactl       user   add/remove`                |
+| CI EXECUTION         | `giteactl       runner add/remove/list`           |
+| PUBLISHING           | `publishctl post` / `dropletctl publish` / `metablogizerctl site` |
+| EMANCIPATE           | `metablogizerctl tor    expose/revoke`            |
+| HOSTING              | `streamlitctl   app    deploy/.../info`           |
+| DEV WORKBENCH        | `streamforgectl project create/.../templates`     |
+| OPS MONITORING       | `healthctl      check/list/status/alert`          |
+
+Composing the verbs expresses end-to-end workflows in three lines of
+shell. See [`docs/grammar.md`](docs/grammar.md) for the conceptual
+frame and the layered architecture map.
+
+To **add a 9th verb**, follow [`HOWTO-grammar.md`](HOWTO-grammar.md) —
+the six-step recipe takes about an hour for a Bash CTL.
+
+---
+
 ## Eye Remote — External Dashboard
 
 <p align="center">
