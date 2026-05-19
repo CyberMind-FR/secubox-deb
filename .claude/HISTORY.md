@@ -4,6 +4,30 @@
 ---
 ## 2026-05-19
 
+### v2.10.0 + v2.10.1 — fresh-image login chain end-to-end, VBox amd64 + bare-metal x86_64 (Issues #218, #220, #222, #224)
+
+**Context:** v2.10.0 closed the `admin / secubox` login chain from firstboot through image build (apt-get -f), web URL refactor (sed across 67 files), and Debian packaging (compat dup). v2.10.1 patched the kiosk for Debian 12 AppArmor on bare-metal. End state: fresh USB-booted x86_64 hardware reaches the SecuBox login form, accepts the default credentials, and presents the forced password-change UX — same path as VBox.
+
+**Done:**
+
+- **#218 / PR [#219](https://github.com/CyberMind-FR/secubox-deb/pull/219)** (`081d058d`): `image/build-image.sh` — `dpkg -i --force-depends` left ~15 Debian-only Python deps uninstalled (python3-argon2, python3-jose, python3-cryptography, python3-jsonschema, python3-maxminddb, python3-websockets, python3-evdev, python3-pyroute2, python3-zmq, python3-serial, python3-rich, python3-pyotp, python3-qrcode). Added `apt-get install -f -y --no-install-recommends` after the slipstream step. Three CI iterations to land the minimal diff: v1 (all 15 in `INCLUDE_PKGS`) → python3-zmq broke debootstrap second-stage; v2 (just argon2) → same C-ext postinst issue; v3 (zero new in `INCLUDE_PKGS`, only the apt-get -f step) → green. Comment line "skip apt-get -f as pip provides Python deps" was a myth — those deps don't exist on PyPI under matching names.
+- **#220 / PR [#221](https://github.com/CyberMind-FR/secubox-deb/pull/221)** (`95db06e7`): deleted `packages/secubox-health-doctor/debian/compat`. dh refused to clean because compat 13 was declared in both `debian/compat` and `Build-Depends: debhelper-compat (= 13)`. 132 other packages use the modern single-source pattern.
+- **#222 / PR [#223](https://github.com/CyberMind-FR/secubox-deb/pull/223)** (`99fc829b`): sed `/portal/login.html` → `/login.html` across 82 occurrences in 67 source files. PR #169 had moved `login.html` to the secubox-portal root (`/usr/share/secubox/www/login.html`) but missed updating the inverse links. nginx `try_files` was falling back to hub's `index.html`, whose `checkAuth()` redirected to `/portal/login.html` → infinite loop. Diagnosed via offline image dump (debugfs on dd-extracted ROOT, no sudo) when the access log showed identical `200`-served bytes for two different URLs.
+- **v2.10.0 tag** — bundles #218 + #220 + #222.
+- **#224 / PR [#225](https://github.com/CyberMind-FR/secubox-deb/pull/225)** (`e0e3a335`): `image/sbin/secubox-kiosk-launcher` — always pass `--no-sandbox` to chromium, not just in the VM branch. Debian 12 ships AppArmor with `unprivileged_userns` restriction, chromium's zygote needs unprivileged user namespaces, restart loop until `MAX_FAILURES=3` disabled the kiosk on bare-metal. The kiosk runs as a dedicated unprivileged `secubox-kiosk` user on an isolated VT in a closed-network appliance with AppArmor per-process chromium profile still applied — internal renderer sandbox provides marginal value vs. AppArmor while breaking the kiosk entirely. Diagnosed from `/tmp/kiosk-session.log` showing the literal `you can try using --no-sandbox` workaround text from chromium's own error message.
+- **v2.10.1 tag** — bundles #224.
+
+**Validation:**
+
+- VBox amd64 boot (CI run 26088128896 SHA `0da47bad`) — kiosk reaches login form, `admin / secubox` accepted, forced password-change UX appears.
+- Bare-metal USB boot (Kingston DataTraveler 28.8 GB, CI run 26091295653 SHA `e8784388`) — same path, plus working `secubox-kiosk-launcher` v3.3 with chromium fullscreen.
+
+**Non-obvious learning** (saved to memory as `reference_ci_artifact_source.md`): `build-image.yml` pulls `secubox-debs-all` from the latest SUCCESSFUL `build-packages.yml` run on ANY branch (via `dawidd6/action-download-artifact@v3`, default `workflow_conclusion: success`). Cost one CI cycle today when PR #223's sed fix was on the test branch but the .debs came from master's last successful build-packages run. Mitigation: always run build-packages.yml on the test branch first and ensure 0 failures; otherwise action-download-artifact silently falls back to master's previous artifact.
+
+**Follow-up filed:**
+
+- **#226 / PR [#227](https://github.com/CyberMind-FR/secubox-deb/pull/227)** — bare-metal x86_64 polish: `ConditionArchitecture=arm64` on three Pi-only services (healthbump, led-trigger, picobrew) that were [FAILED]-looping on x64; expand X11 driver coverage from fbdev-only to the standard xorg set (intel/amdgpu/radeon/nouveau/qxl/vmware/vesa/fbdev) for faster bare-metal cold-init.
+
 ### dropletctl static-publisher CLI — port from OpenWrt, supersedes PR #185 (Issue [#196](https://github.com/CyberMind-FR/secubox-deb/issues/196), PR [#199](https://github.com/CyberMind-FR/secubox-deb/pull/199) opened pending review)
 
 **Context:** The Droplet FastAPI consumer (`packages/secubox-droplet/api/main.py`, 839 lines) has long shelled out to `subprocess.run(["dropletctl", "publish", file, name, domain])` and parsed `[OK]`-bearing output — but the binary it expected (the OpenWrt-style static-content publisher) had never been ported to Debian. PR #185 / issue #181 had shipped a different `dropletctl` — a noun-verb wrapper over the running Droplet API socket (`file upload`, `file list`, `file rename`, etc.) — which solved a different problem. The user explicitly asked for the OpenWrt-style publisher, accepting that PR #185's wrapper would be superseded.
