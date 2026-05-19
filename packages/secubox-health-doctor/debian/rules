@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+%:
+	dh $@ --with python3
+
+override_dh_auto_install:
+	install -d debian/secubox-health-doctor/usr/lib/secubox/health-doctor/api
+	cp api/__init__.py api/checks.py api/runner.py api/main.py \
+	    debian/secubox-health-doctor/usr/lib/secubox/health-doctor/api/
+	# healthctl CLI (8th verb)
+	install -D -m 0755 sbin/healthctl \
+	    debian/secubox-health-doctor/usr/sbin/healthctl
+	# systemd
+	install -D -m 0644 systemd/secubox-health-doctor.service \
+	    debian/secubox-health-doctor/lib/systemd/system/secubox-health-doctor.service
+	install -D -m 0644 systemd/secubox-health-doctor-runner.service \
+	    debian/secubox-health-doctor/lib/systemd/system/secubox-health-doctor-runner.service
+	install -D -m 0644 systemd/secubox-health-doctor-runner.timer \
+	    debian/secubox-health-doctor/lib/systemd/system/secubox-health-doctor-runner.timer

@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox vital-services health monitor (#212)
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/health-doctor
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+CacheDirectory=secubox
+CacheDirectoryMode=0755
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/health-doctor.sock \
+    --log-level warning
+Restart=on-failure
+RestartSec=5
+ReadWritePaths=/run/secubox /var/cache/secubox /var/log
+# Needs to read lxc-info + systemctl is-active + connect to UDS sockets
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
