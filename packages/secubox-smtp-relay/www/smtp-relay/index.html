@@ -311,7 +311,7 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+                if (res.status === 401) { window.location = '/login.html'; return {}; }
                 return res.json();
             } catch { return {}; }
         }
@@ -321,7 +321,7 @@
             // health endpoint doesn't require auth, but other endpoints do
             const tok = token();
             if (!tok) {
-                window.location = '/portal/login.html';
+                window.location = '/login.html';
             }
         }
 

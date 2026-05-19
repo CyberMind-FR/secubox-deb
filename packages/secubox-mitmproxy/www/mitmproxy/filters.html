@@ -304,7 +304,7 @@
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
                 if (res.status === 401) {
-                    window.location = '/portal/login.html';
+                    window.location = '/login.html';
                     return null;
                 }
                 return res.json();
