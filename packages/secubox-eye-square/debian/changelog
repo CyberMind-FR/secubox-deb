@@ -1,3 +1,15 @@
+secubox-eye-square (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Fix debian/rules content drift: drop the install block for
+    right_panel/secubox_eye_square_right_panel/ (a PySide6 component
+    anticipated in Phase 2 but dropped during the Phase 3 rewrite
+    to Pillow+framebuffer; the directory has never existed on disk).
+    Add an install block for kiosk/secubox_eye_square_kiosk/ which
+    DOES exist and is the actual Phase 3 framebuffer kiosk payload.
+  * Closes #202.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 May 2026 06:45:00 +0200
+
 secubox-eye-square (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Switch Architecture: arm64 → all. The package is pure-Python
