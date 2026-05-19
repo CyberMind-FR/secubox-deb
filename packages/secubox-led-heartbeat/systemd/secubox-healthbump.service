@@ -2,6 +2,8 @@
 Description=SecuBox HealthBump LED Status Check (3-tier with I2C safety)
 After=network.target
 # Note: secubox-led-heartbeat removed - use secubox-led-health-bumper instead
+# Skip silently on non-arm64 (no Pi/MOCHAbin I2C hardware) — issue #226
+ConditionArchitecture=arm64
 
 [Service]
 Type=oneshot
