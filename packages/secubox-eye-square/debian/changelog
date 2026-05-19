@@ -1,3 +1,15 @@
+secubox-eye-square (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Relocate firstboot.sh from /usr/local/sbin/ to /usr/lib/secubox/
+    (Debian policy reserves /usr/local/ for the local admin; dh_usrlocal
+    was rejecting the staged tree). Update ExecStart in
+    secubox-firstboot.service to match the new path. The new location
+    is namespaced under /usr/lib/secubox/ consistent with sister
+    helpers (find-usb-serial, leasewatch.sh).
+  * Closes #207.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 May 2026 06:55:00 +0200
+
 secubox-eye-square (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Fix debian/rules content drift: drop the install block for

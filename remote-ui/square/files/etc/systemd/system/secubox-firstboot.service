@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 #
-# Runs /usr/local/sbin/firstboot.sh once on first boot. The script is idempotent
+# Runs /usr/lib/secubox/firstboot.sh once on first boot. The script is idempotent
 # (guards on /etc/.secubox-eye-square-firstboot-done), so a second invocation is a no-op.
 
 [Unit]
@@ -13,7 +13,7 @@ ConditionPathExists=!/etc/.secubox-eye-square-firstboot-done
 [Service]
 Type=oneshot
 RemainAfterExit=no
-ExecStart=/usr/local/sbin/firstboot.sh
+ExecStart=/usr/lib/secubox/firstboot.sh
 
 [Install]
 WantedBy=multi-user.target
