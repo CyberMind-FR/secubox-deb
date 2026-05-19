@@ -1,3 +1,20 @@
+secubox-droplet (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * dropletctl publish / rename: pass --public-domain <vhost> to
+    metablogizerctl so the full HAProxy → mitmproxy chain is wired
+    automatically. Closes the end-to-end gap reported by the gk2
+    smoke test of 1.1.0 (curl https://smoke.gk2.secubox.in/ → 502
+    because metablogizerctl publish only configured nginx, leaving
+    HAProxy + mitmproxy uninstalled — fixed in metablogizer 1.2.0).
+  * Bump Depends: secubox-metablogizer (>= 1.2) — required for the
+    --public-domain flag.
+  * Tests updated to assert dropletctl invokes metablogizerctl with
+    the new flag on both publish and rename paths.
+  * Closes #200 (the droplet side; metablogizer 1.2.0 ships the
+    receiving end).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 May 2026 07:15:00 +0200
+
 secubox-droplet (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add dropletctl static-publisher CLI at /usr/sbin/dropletctl (port

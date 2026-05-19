@@ -158,7 +158,10 @@ cmd_publish() {
         log_error "metablogizerctl not found — install secubox-metablogizer"
         exit 4
     fi
-    if ! metablogizerctl site publish "$name"; then
+    # Pass the public vhost so metablogizerctl wires HAProxy + mitmproxy.
+    # Falls back gracefully on older metablogizer (which ignores the flag
+    # and only configures nginx — same behavior as droplet 1.1.0).
+    if ! metablogizerctl site publish "$name" --public-domain "$vhost"; then
         log_error "metablogizerctl failed for $name"
         exit 5
     fi
@@ -304,10 +307,15 @@ cmd_rename() {
     fi
     upsert_toml_site "$new" "$base_domain" "static"
 
+    # Public vhost for the new name (constructed from sanitized name + base
+    # domain just like cmd_publish does — keeps invariant consistent across
+    # publish/rename and ensures HAProxy is wired for the renamed site).
+    local new_vhost="${new}.${base_domain}"
+
     # delete is tolerant: old vhost may never have been registered.
     metablogizerctl site delete "$old"  || true
     # publish must succeed: failure leaves site half-renamed and unreachable.
-    metablogizerctl site publish "$new" || {
+    metablogizerctl site publish "$new" --public-domain "$new_vhost" || {
         log_error "metablogizerctl failed for $new"
         exit 5
     }

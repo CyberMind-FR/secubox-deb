@@ -39,8 +39,9 @@ load helpers
     # Docroot has the staged file.
     [ -f "$SITES_DIR/mysite/index.html" ]
     grep -q "fixture" "$SITES_DIR/mysite/index.html"
-    # Delegate was called with the right args.
-    grep -q "metablogizerctl site publish mysite" "$STUB_LOG"
+    # Delegate was called with the right args, INCLUDING the --public-domain
+    # flag so metablogizerctl can wire HAProxy + mitmproxy (issue #200).
+    grep -q "metablogizerctl site publish mysite --public-domain mysite.mydomain.test" "$STUB_LOG"
 }
 
 @test "publish sanitizes uppercase + special chars in name" {
@@ -142,7 +143,8 @@ load helpers
     grep -q '^\[sites\.newname\]' "$TOML_PATH"
     # Delegate called: delete old, then publish new.
     grep -q "metablogizerctl site delete oldname" "$STUB_LOG"
-    grep -q "metablogizerctl site publish newname" "$STUB_LOG"
+    # Rename also passes --public-domain so the new HAProxy vhost is wired (#200).
+    grep -q "metablogizerctl site publish newname --public-domain newname.mydomain.test" "$STUB_LOG"
 }
 
 @test "rename fails when target name already exists" {
