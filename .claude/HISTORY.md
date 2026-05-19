@@ -2,6 +2,48 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-19
+
+### dropletctl static-publisher CLI — port from OpenWrt, supersedes PR #185 (Issue [#196](https://github.com/CyberMind-FR/secubox-deb/issues/196), PR [#199](https://github.com/CyberMind-FR/secubox-deb/pull/199) opened pending review)
+
+**Context:** The Droplet FastAPI consumer (`packages/secubox-droplet/api/main.py`, 839 lines) has long shelled out to `subprocess.run(["dropletctl", "publish", file, name, domain])` and parsed `[OK]`-bearing output — but the binary it expected (the OpenWrt-style static-content publisher) had never been ported to Debian. PR #185 / issue #181 had shipped a different `dropletctl` — a noun-verb wrapper over the running Droplet API socket (`file upload`, `file list`, `file rename`, etc.) — which solved a different problem. The user explicitly asked for the OpenWrt-style publisher, accepting that PR #185's wrapper would be superseded.
+
+**Workflow:** Full brainstorm → spec → plan → subagent-driven execution loop in worktree `feature/196-implement-secubox-droplet-cli-dropletctl`. 11-task TDD plan; two-stage review (spec compliance then code quality) per task; final whole-branch code review caught 2 latent bugs not seen in per-task reviews, both fixed before merge with red-on-old test coverage.
+
+**Done:**
+
+- **Spec** (commit `5e6e1d83`): static-only v1.1.0, delegates HTTP-facing work to `metablogizerctl site publish`, per-package bats convention with PATH-shimmed stubs, design rationale recorded in `docs/superpowers/specs/2026-05-18-dropletctl-design.md`.
+- **Plan** (commit `133c2c0e`): 11 tasks, 1230 lines, each with verbatim heredocs the subagents could follow without interpretation.
+- **T1 scaffold** (`b9c781ab`): bats harness, helpers.bash, 2 PATH-shimmed delegate stubs, dropletctl skeleton. Surfaced the PR #185 wrapper that this branch replaces; user-approved supersession.
+- **T2–T9** (`87b9623b` → `13ddc0a8`): TDD increments — publish arg validation → name sanitization + HTML staging → ZIP extraction with single-nested-dir unwrap → tarball + plain-directory input → idempotency pin → remove → rename → list. Each task: 1–3 new bats cases, minimum-diff implementation, full review loop.
+- **T8 hardening** (`0714d941`): code-reviewer caught `mv` data-corruption (nests source inside existing target dir); added collision guard + `old == new` short-circuit + 2 new bats cases.
+- **T10 packaging** (`5d490ea6`): `debian/changelog` bumped 1.0.2 → 1.1.0-1~bookworm1 (Closes #196); `debian/control` Depends extended with `secubox-metablogizer (>= 1.1), rsync, unzip, python3` (T5 reviewer caught the runtime-dep gap beyond the plan's metablogizer-only ask); `debian/rules` comment updated (install line was already present from PR #185, so no duplicate).
+- **T11 lint** (no commit needed): bash -n clean, bats 15/0, shellcheck not installed locally (deferred to CI).
+- **Final review fix** (`550403df`): `cmd_rename` switched from prefixed-FQDN to bare-base domain in TOML (Fix A — list was double-prefixing post-rename); `cmd_publish` now rejects domain values not matching `^[a-zA-Z0-9.-]+$` (Fix B — closes TOML injection via the API boundary).
+- **Test strengthening** (`0c08ae06`): test 16 rewritten to seed the legacy-FQDN scenario explicitly so it's genuinely red on the old buggy code (red-on-old verified by swapping the parent binary in).
+
+**Accepted plan deviations** (each is a fix to a plan bug, all surfaced + reviewed):
+
+- T3: dropped `local` from `local staging` in `cmd_publish` so the EXIT trap can reference `$staging` under `set -u` (function-scoped local would unwind before the trap fires at shell exit).
+- T8: added 3 minor hardening items not in plan (collision guard + same-name short-circuit + asymmetry comments) per code reviewer's CHANGES REQUESTED.
+- T9: `cmd_list` reconstructs vhost from `f"{name}.{domain}"`; plan's literal `https://{domain}/` would have rendered the bare base domain for every site, failing the test's `first.mydomain.test` assertion.
+
+**Final state:**
+
+- 17 bats tests, 0 failures
+- HEAD `0c08ae06` on `feature/196-implement-secubox-droplet-cli-dropletctl`
+- PR #199 opened with full commit series + supersession note for PR #185 + follow-up backlog
+- Hardware deploy on `gk2` (192.168.1.200) deferred per plan §"Hardware deploy" until PR merges
+
+**Followup (queued in PR body, not blocking):**
+
+- `flock` around TOML writers for concurrency safety
+- Dedupe the 3 hand-rolled TOML regexes (`upsert_toml_site`, `remove_toml_site`, `cmd_list`) into a shared python helper
+- `cmd_rename` rollback on metablogizerctl publish failure (currently exits 5 with half-renamed state)
+- Replace `[ON]` literal in `cmd_list` with real metablogizerctl state query
+- `packages/secubox-droplet/README.md` + `debian/dropletctl.8` man page
+
+---
 ## 2026-05-17
 
 ### amd64 VirtualBox test bundle + apt.secubox.in keyring fix
