@@ -2,6 +2,8 @@
 Description=SecuBox PicoBrew Fermentation Controller API
 After=network.target secubox-runtime.service
 Requires=secubox-runtime.service
+# Skip silently on non-arm64 (no Pi 1-Wire/I2C fermentation sensors) — issue #226
+ConditionArchitecture=arm64
 
 [Service]
 Type=simple

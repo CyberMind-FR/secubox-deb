@@ -1,6 +1,8 @@
 [Unit]
 Description=SecuBox LED Timer Triggers Setup
 After=local-fs.target
+# Skip silently on non-arm64 (no Pi/MOCHAbin LED hardware) — issue #226
+ConditionArchitecture=arm64
 
 [Service]
 Type=oneshot

@@ -601,10 +601,18 @@ fi
 
 # Install X11 packages for kiosk/UI mode (lighter xorg install)
 # Skip for lite profiles (ESPRESSObin with limited storage/RAM)
+# Driver coverage: include all common video drivers so bare-metal x86_64
+# (Intel/AMD/Nvidia/VESA) and VM targets (QXL/VMware) all get fast X11
+# init via modesetting + the matching userspace driver. ~15 MB extra over
+# the previous fbdev-only install. See issue #226.
 if [[ "${SECUBOX_LITE:-0}" != "1" ]]; then
   chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     kbd xinit xserver-xorg-core chromium unclutter x11-xserver-utils \
-    xserver-xorg-input-libinput xserver-xorg-video-fbdev 2>/dev/null" || warn "X11 packages partial"
+    xserver-xorg-input-libinput \
+    xserver-xorg-video-fbdev xserver-xorg-video-vesa \
+    xserver-xorg-video-intel xserver-xorg-video-amdgpu xserver-xorg-video-radeon \
+    xserver-xorg-video-nouveau xserver-xorg-video-qxl xserver-xorg-video-vmware \
+    2>/dev/null" || warn "X11 packages partial"
 else
   log "  Skipping X11/kiosk packages (lite profile)"
 fi
