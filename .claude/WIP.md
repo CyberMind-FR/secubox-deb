@@ -1,9 +1,53 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-17*
+*Mis à jour : 2026-05-19*
 
 ---
 
-## 🔄 2026-05-17: Release v2.9.0 + matrix-cap fix + amd64 VBox tester bundle + README frontend
+## 🔄 2026-05-18/19: dropletctl static-publisher CLI — port from OpenWrt (Issue [#196](https://github.com/CyberMind-FR/secubox-deb/issues/196), PR [#199](https://github.com/CyberMind-FR/secubox-deb/pull/199) opened pending review)
+
+### Objective
+
+Build `/usr/sbin/dropletctl` in the `secubox-droplet` Debian package — the OpenWrt-derived static-content publisher that the existing FastAPI consumer (`packages/secubox-droplet/api/main.py`) has long expected. Subcommands: `publish` / `list` / `remove` / `rename`. Static-only (HTML / ZIP / tarball / directory). Delegates all HTTP-facing work (nginx vhost, HAProxy ACL, mitmproxy route) to `metablogizerctl site publish`. The package replaces the API-socket noun-verb wrapper from PR #185 / issue #181 (user-approved supersession).
+
+### Workflow
+
+Full superpowers loop in worktree `feature/196-implement-secubox-droplet-cli-dropletctl`:
+
+1. **Brainstorm** → spec `docs/superpowers/specs/2026-05-18-dropletctl-design.md` (commit `5e6e1d83`)
+2. **Plan** → `docs/superpowers/plans/2026-05-18-dropletctl.md` (commit `133c2c0e`, 11 TDD tasks, 1230 lines)
+3. **Subagent-driven execution** with two-stage review (spec compliance + code quality) per task:
+   - T1 scaffold (replaced PR #185's 215-line wrapper, surfaced to user, approved)
+   - T2 publish arg validation (3 error cases)
+   - T3 sanitization + HTML staging + metablogizerctl delegation
+   - T4 ZIP extraction with single-nested-dir unwrap
+   - T5 tarball + plain-directory input
+   - T6 pinned idempotent re-publish
+   - T7 remove subcommand
+   - T8 rename subcommand + hardening fixes (collision/same-name guards)
+   - T9 list subcommand
+   - T10 Debian packaging — bumped 1.0.2 → 1.1.0, Depends: `secubox-metablogizer (>= 1.1), rsync, unzip, python3`
+   - T11 lint sweep (shellcheck not installed locally, bash -n clean, bats green)
+4. **Final whole-branch review** caught 2 bugs not seen in per-task reviews:
+   - **Fix A** (`550403df`): `cmd_rename` was storing prefixed FQDN; switched to bare base domain so `cmd_list` doesn't double-prefix.
+   - **Fix B** (`550403df`): `cmd_publish` now validates `domain` against `^[a-zA-Z0-9.-]+$` to block TOML injection via the API boundary.
+   - **Test strengthening** (`0c08ae06`): test 16 now seeds the legacy-FQDN scenario via explicit-domain publish, genuinely red on old code.
+5. **Final state:** 17 bats tests, 0 failures; debian/ packaged; spec/plan committed; PR opened.
+
+### Accepted plan deviations (all bug fixes)
+
+- **T3** — `local staging` → script-global so the EXIT trap can reference `$staging` after `cmd_publish` returns under `set -u`.
+- **T8 hardening** — added collision check on `$new` (`mv` would nest into existing dir, corrupting both sites) + `old == new` short-circuit + inline comments on the asymmetric metablogizerctl delete (tolerant) vs publish (hard-fail).
+- **T9** — `cmd_list`'s python heredoc now reconstructs `vhost = f"{name}.{domain}"`; plan's literal `https://{domain}/` would have printed the bare base domain for every site (test asserted the full vhost).
+
+### Status
+
+- **PR [#199](https://github.com/CyberMind-FR/secubox-deb/pull/199) opened** as `feature/196-implement-secubox-droplet-cli-dropletctl` head `0c08ae06`.
+- **Hardware deploy on gk2** (192.168.1.200) deferred to post-merge per plan §"Hardware deploy".
+- **Follow-up backlog** documented in the PR body: flock around TOML writers, shared python helper to dedupe the 3 regex copies, rename-on-publish-failure rollback, real metablogizerctl state in `cmd_list`, package README, man page.
+
+---
+
+## ✅ 2026-05-17: Release v2.9.0 + matrix-cap fix + amd64 VBox tester bundle + README frontend
 
 ### Status
 
