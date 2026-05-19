@@ -3,6 +3,33 @@
 
 ---
 
+## 🔄 2026-05-19: bare-metal x86_64 polish — Pi services + X11 drivers (Issue [#226](https://github.com/CyberMind-FR/secubox-deb/issues/226), PR [#227](https://github.com/CyberMind-FR/secubox-deb/pull/227) opened pending review)
+
+Follow-up to v2.10.1 bare-metal validation. Two ergonomic fixes; no functional change for arm64 Pi/MOCHAbin/ESPRESSObin targets.
+
+- **Part A** — `ConditionArchitecture=arm64` on the three services that crash-looped on x86_64 boot: `secubox-healthbump.service`, `secubox-led-trigger.service`, `secubox-picobrew.service`. Same pattern as the existing `secubox-led-heartbeat.service` `ConditionPathExists` gate. systemd marks the unit "condition failed" in the journal but no `[FAILED]` noise on the boot console.
+- **Part B** — `image/build-image.sh:606` expanded from `xserver-xorg-video-fbdev` only to the standard xorg driver set: `fbdev,vesa,intel,amdgpu,radeon,nouveau,qxl,vmware`. ~15 MB extra; KMS modesetting picks the right one at boot. Bare-metal Intel/AMD/Nvidia should hit X11 init under 15s vs. the 30-90s fbdev-fallback path observed during #224 validation.
+
+Branch `fix/226-bare-metal-x86-64-polish-gate-pi-hardwar` head `3f5a24dd`. Test plan in PR body: re-run build-packages.yml (for the two .deb), then build-image.yml, then VBox + bare-metal regression.
+
+---
+
+## ✅ 2026-05-19: v2.10.0 + v2.10.1 — firstboot → image build → web URL → kiosk chain, end-to-end validated
+
+Closed the chain that prevented `admin / secubox` login from working on a fresh appliance image — validated on both VBox amd64 and USB-booted bare-metal x86_64.
+
+- **#210 / #211** — firstboot users.json v2 + argon2 (landed pre-session).
+- **#218 / PR [#219](https://github.com/CyberMind-FR/secubox-deb/pull/219)** — `image/build-image.sh`: `dpkg -i --force-depends` left ~15 Debian-only Python deps uninstalled (python3-argon2, jose, cryptography, jsonschema, maxminddb, …). Added `apt-get install -f -y` after the slipstream step. Three CI iterations: first added all deps to `INCLUDE_PKGS` (python3-zmq broke debootstrap second-stage), second narrowed to argon2 only (same C-ext postinst issue), third dropped all `INCLUDE_PKGS` additions and relied solely on `apt-get install -f -y` post-debootstrap. Final minimal diff: 1 file, +17/-2.
+- **#220 / PR [#221](https://github.com/CyberMind-FR/secubox-deb/pull/221)** — `secubox-health-doctor` declared compat 13 in both `debian/compat` and `Build-Depends: debhelper-compat (= 13)`. dh refused both. 132 other packages use the modern single-source pattern; deleted the duplicate file.
+- **#222 / PR [#223](https://github.com/CyberMind-FR/secubox-deb/pull/223)** — discovered via offline image dump (debugfs on the dd-extracted ROOT partition, no sudo needed): nginx `try_files $uri $uri/ /index.html` fell back to hub `index.html` whose `checkAuth()` redirected to `/portal/login.html` which no longer exists since PR #169. Sed-replaced 67 source files, 82 occurrences → `/login.html`. The empty body in the offline `nginx-error.log` and the access log's identical `200`-serving the wrong file was the clincher.
+- **v2.10.0 tag** (`fa07088a...wait wrong sha — see HISTORY`) — bundles #218 / #220 / #222. Release workflow triggered.
+- **#224 / PR [#225](https://github.com/CyberMind-FR/secubox-deb/pull/225)** — bare-metal validation found chromium's zygote crashing in a restart loop with `disabled unprivileged user namespaces with AppArmor` on Debian 12. The kiosk-launcher only passed `--no-sandbox` in the VM branch. Added it to the bare-metal branch too (kiosk runs as a dedicated unprivileged user on a closed-network appliance with AppArmor per-process profile still applied — chromium renderer sandbox provides marginal value).
+- **v2.10.1 tag** — bundles #224.
+
+**Non-obvious learning** (saved to memory as `reference_ci_artifact_source.md`): `build-image.yml` uses `dawidd6/action-download-artifact@v3` to pull `secubox-debs-all` from the latest SUCCESSFUL `build-packages.yml` run **on any branch** (default `workflow_conclusion: success`). Cost one CI cycle today when PR #223's sed fix was on the test branch but the .debs came from master. Mitigation: always run `build-packages.yml` on the test branch **first**, then `build-image.yml`, and verify failure count = 0 (else action-download-artifact silently falls back to the previous successful master run).
+
+---
+
 ## 🔄 2026-05-18/19: dropletctl static-publisher CLI — port from OpenWrt (Issue [#196](https://github.com/CyberMind-FR/secubox-deb/issues/196), PR [#199](https://github.com/CyberMind-FR/secubox-deb/pull/199) opened pending review)
 
 ### Objective
