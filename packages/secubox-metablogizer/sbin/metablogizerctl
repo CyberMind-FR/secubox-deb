@@ -3,12 +3,20 @@
 # Static site publisher for Debian
 # Three-fold architecture: Components, Status, Access
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 CONFIG_FILE="/etc/secubox/metablogizer.toml"
 SITES_ROOT="/srv/metablogizer/sites"
 DATA_PATH="/srv/metablogizer"
 NGINX_VHOST_DIR="/etc/nginx/sites-available"
 NGINX_ENABLED_DIR="/etc/nginx/sites-enabled"
+
+# Public-vhost wiring. Set to "1" to inject HAProxy + mitmproxy route on publish.
+# Triggered automatically when site_publish is called with --public-domain.
+# The sync script + service may live at non-standard paths on different hosts;
+# we try systemctl first, fall back to `command -v`.
+HAPROXYCTL="${HAPROXYCTL:-haproxyctl}"
+SYNC_SCRIPT="${SYNC_SCRIPT:-sync-mitmproxy-routes.sh}"
+SYNC_SERVICE="${SYNC_SERVICE:-sync-mitmproxy-routes.service}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -124,11 +132,46 @@ site_delete() {
 }
 
 site_publish() {
-    local name="$1"
+    local name="" public_domain=""
+
+    # Parse args: positional <name> then optional --public-domain <fqdn>.
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --public-domain)
+                public_domain="$2"
+                shift 2
+                ;;
+            --public-domain=*)
+                public_domain="${1#--public-domain=}"
+                shift
+                ;;
+            -*)
+                error "Unknown option: $1"
+                return 1
+                ;;
+            *)
+                if [ -z "$name" ]; then
+                    name="$1"
+                else
+                    error "Unexpected argument: $1"
+                    return 1
+                fi
+                shift
+                ;;
+        esac
+    done
 
     if [ -z "$name" ]; then
-        echo "Usage: metablogizerctl site publish <name>"
+        echo "Usage: metablogizerctl site publish <name> [--public-domain <fqdn>]"
         return 1
+    fi
+
+    # Validate --public-domain syntactically (defence-in-depth: blocks shell/TOML injection).
+    if [ -n "$public_domain" ]; then
+        if ! printf '%s' "$public_domain" | grep -qE '^[a-zA-Z0-9.-]+$'; then
+            error "Invalid --public-domain '$public_domain'"
+            return 1
+        fi
     fi
 
     local site_dir="$SITES_ROOT/$name"
@@ -137,14 +180,22 @@ site_publish() {
         return 1
     fi
 
-    # Read site config
+    # Read existing internal domain from site.json (or fall back to <name>.<default>).
     local domain
     if [ -f "$site_dir/site.json" ]; then
         domain=$(grep '"domain"' "$site_dir/site.json" | cut -d'"' -f4)
     fi
     domain="${domain:-${name}.${DEFAULT_DOMAIN}}"
 
-    log "Publishing site: $name to $domain"
+    # The nginx vhost responds to BOTH the internal .secubox.local name and the
+    # public FQDN (so the same nginx instance answers Host: smoke.gk2.secubox.in
+    # coming back through HAProxy → mitmproxy).
+    local server_names="$domain"
+    if [ -n "$public_domain" ] && [ "$public_domain" != "$domain" ]; then
+        server_names="$domain $public_domain"
+    fi
+
+    log "Publishing site: $name to $domain${public_domain:+ (public: $public_domain)}"
 
     # Generate nginx config
     cat > "$NGINX_VHOST_DIR/${name}.conf" << EOF
@@ -153,7 +204,7 @@ site_publish() {
 
 server {
     listen 80;
-    server_name $domain;
+    server_name $server_names;
     root $site_dir/public;
     index index.html index.htm;
 
@@ -178,6 +229,115 @@ EOF
     nginx -t && systemctl reload nginx
 
     log "Site published: http://$domain"
+
+    # Public-vhost wiring (HAProxy + mitmproxy route sync).
+    # Only runs when --public-domain was passed AND the helper CLIs are present.
+    # Failures are tolerated so the nginx publish still counts as success.
+    if [ -n "$public_domain" ]; then
+        site_persist_public_domain "$name" "$public_domain"
+        site_wire_public_vhost "$public_domain"
+    fi
+}
+
+# Persist public_domain in site.json so site_unpublish can reverse the wiring.
+# Naïve TOML-style key/value: we keep the file as a flat JSON object with
+# "domain" + "public_domain" keys. Uses python3 if available for safe rewrite;
+# falls back to a grep/sed approach.
+site_persist_public_domain() {
+    local name="$1" public_domain="$2"
+    local site_dir="$SITES_ROOT/$name"
+    local site_json="$site_dir/site.json"
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$site_json" "$public_domain" <<'PY'
+import json, os, sys, tempfile
+path, public_domain = sys.argv[1:]
+data = {}
+if os.path.exists(path):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        data = {}
+data["public_domain"] = public_domain
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".site.", suffix=".json")
+os.write(fd, json.dumps(data, indent=2).encode() + b"\n")
+os.close(fd)
+os.replace(tmp, path)
+PY
+    else
+        # Minimal fallback: append/replace the "public_domain" line.
+        # Caller already validated the FQDN regex so quoting is safe.
+        if [ -f "$site_json" ] && grep -q '"public_domain"' "$site_json"; then
+            sed -i -E "s|\"public_domain\":[[:space:]]*\"[^\"]*\"|\"public_domain\": \"${public_domain}\"|" "$site_json"
+        elif [ -f "$site_json" ]; then
+            # Insert before the final }
+            sed -i -E "s|^}|  ,\"public_domain\": \"${public_domain}\"\n}|" "$site_json"
+        else
+            printf '{\n  "public_domain": "%s"\n}\n' "$public_domain" > "$site_json"
+        fi
+    fi
+}
+
+# Read public_domain from site.json. Echoes the value or empty string.
+site_read_public_domain() {
+    local name="$1"
+    local site_json="$SITES_ROOT/$name/site.json"
+    [ -f "$site_json" ] || return 0
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "
+import json, sys
+try:
+    print(json.load(open('$site_json')).get('public_domain', ''))
+except Exception:
+    pass
+"
+    else
+        grep '"public_domain"' "$site_json" 2>/dev/null | head -1 | cut -d'"' -f4 || true
+    fi
+}
+
+# Wire the HAProxy vhost + trigger mitmproxy route sync for <public_domain>.
+# Tolerant of missing tools (logs a warning and continues).
+site_wire_public_vhost() {
+    local public_domain="$1"
+    if ! command -v "$HAPROXYCTL" >/dev/null 2>&1; then
+        warn "$HAPROXYCTL not found — skipping HAProxy vhost add for $public_domain"
+        return 0
+    fi
+    if "$HAPROXYCTL" vhost add "$public_domain" mitmproxy_inspector true 2>&1; then
+        log "HAProxy vhost added: $public_domain → mitmproxy_inspector (ssl)"
+    else
+        warn "haproxyctl vhost add failed for $public_domain (continuing)"
+    fi
+    site_trigger_sync
+}
+
+# Trigger mitmproxy route sync. Prefer systemctl unit, fall back to direct script.
+site_trigger_sync() {
+    if command -v systemctl >/dev/null 2>&1 && \
+       systemctl list-unit-files "$SYNC_SERVICE" >/dev/null 2>&1; then
+        systemctl start "$SYNC_SERVICE" 2>/dev/null || warn "systemctl start $SYNC_SERVICE failed"
+    elif command -v "$SYNC_SCRIPT" >/dev/null 2>&1; then
+        "$SYNC_SCRIPT" 2>&1 || warn "$SYNC_SCRIPT exited non-zero"
+    else
+        warn "no sync mechanism found (neither $SYNC_SERVICE nor $SYNC_SCRIPT in PATH) — mitmproxy routes NOT updated"
+    fi
+}
+
+# Reverse of site_wire_public_vhost: remove the HAProxy vhost + re-sync.
+site_unwire_public_vhost() {
+    local public_domain="$1"
+    if ! command -v "$HAPROXYCTL" >/dev/null 2>&1; then
+        warn "$HAPROXYCTL not found — skipping HAProxy vhost remove for $public_domain"
+        return 0
+    fi
+    if "$HAPROXYCTL" vhost remove "$public_domain" 2>&1; then
+        log "HAProxy vhost removed: $public_domain"
+    else
+        warn "haproxyctl vhost remove failed for $public_domain (continuing)"
+    fi
+    site_trigger_sync
 }
 
 site_unpublish() {
@@ -188,10 +348,19 @@ site_unpublish() {
         return 1
     fi
 
+    # Read public_domain BEFORE removing the site files (site_delete may follow).
+    local public_domain
+    public_domain="$(site_read_public_domain "$name")"
+
     rm -f "$NGINX_ENABLED_DIR/${name}.conf"
     systemctl reload nginx
 
     log "Site unpublished: $name"
+
+    # Reverse the HAProxy + mitmproxy wiring if site was publicly published.
+    if [ -n "$public_domain" ]; then
+        site_unwire_public_vhost "$public_domain"
+    fi
 }
 
 # ============================================================================
@@ -532,8 +701,11 @@ Information (Three-fold):
 Sites:
   site create <name> [domain] [template]  Create new site
   site delete <name>                       Delete site
-  site publish <name>                      Publish site (create nginx vhost)
-  site unpublish <name>                    Unpublish site
+  site publish <name> [--public-domain <fqdn>]
+                                           Publish site (nginx vhost + optional
+                                           HAProxy + mitmproxy route sync)
+  site unpublish <name>                    Unpublish site (auto-reverses HAProxy
+                                           if site was published with --public-domain)
   site list                                List all sites
 
 Tor (Punk Exposure / Emancipate, issue #184):
