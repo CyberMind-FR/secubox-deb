@@ -1,3 +1,22 @@
+secubox-eye-square (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Switch Architecture: arm64 → all. The package is pure-Python
+    (helper FastAPI + Pillow framebuffer kiosk + tests, no C
+    extensions) and matches the round-eye sister (secubox-eye-remote
+    is also Architecture: all). CI was failing the amd64 build
+    because the discover step in build-packages.yml schedules amd64
+    for every non-arch-all package; with this change CI schedules
+    eye-square once as arch-all (built on amd64, deployable on the
+    arm64 Pi).
+  * Drop pybuild from debian/rules and dh-python/python3-all from
+    Build-Depends. The package has no setup.py/pyproject.toml so
+    pybuild had nothing to build; the override_dh_auto_install
+    target does all installation via plain cp. Aligns with the
+    sister secubox-eye-remote rules.
+  * Closes #201.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 May 2026 06:30:00 +0200
+
 secubox-eye-square (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release. Phase 2 of issue #127.
