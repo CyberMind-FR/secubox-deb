@@ -440,14 +440,20 @@ create_session() {
     local vm_type chromium_gpu_flags
     vm_type=$(systemd-detect-virt 2>/dev/null | tr -d '\n' || echo "none")
 
+    # --no-sandbox is always required on Debian 12: AppArmor restricts the
+    # unprivileged user namespaces that chromium's zygote needs, regardless
+    # of VM or bare-metal context. The kiosk runs as a dedicated unprivileged
+    # secubox-kiosk user on an isolated VT in a closed-network appliance, so
+    # the chromium sandbox provides marginal value vs. AppArmor's per-process
+    # profile (which still applies). See issue #224.
     if [[ "$vm_type" == "none" ]]; then
-        # Real hardware - enable GPU acceleration
-        chromium_gpu_flags="--enable-features=VaapiVideoDecoder"
-        log "Real hardware detected - GPU acceleration enabled"
+        # Real hardware - enable GPU acceleration, drop sandbox for AppArmor
+        chromium_gpu_flags="--no-sandbox --enable-features=VaapiVideoDecoder"
+        log "Real hardware detected - GPU acceleration enabled, sandbox disabled (AppArmor)"
     else
-        # VM - disable GPU to prevent crashes
-        chromium_gpu_flags="--disable-gpu --disable-gpu-compositing --disable-software-rasterizer --no-sandbox"
-        log "VM detected ($vm_type) - GPU disabled, sandbox disabled for VM"
+        # VM - disable GPU to prevent crashes, drop sandbox (same reason)
+        chromium_gpu_flags="--no-sandbox --disable-gpu --disable-gpu-compositing --disable-software-rasterizer"
+        log "VM detected ($vm_type) - GPU disabled, sandbox disabled"
     fi
 
     # Write GPU flags for session to read
