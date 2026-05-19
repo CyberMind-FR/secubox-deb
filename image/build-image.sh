@@ -197,20 +197,16 @@ INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq,cloud-guest-utils,parted,u-boot-tools,libubootenv-tool"
 
 # Python dependencies for SecuBox modules (apt packages)
-# All of these are real Debian-only deps declared in packages/secubox-*/debian/control.
-# They MUST be present before firstboot.sh runs and before the slipstreamed .deb files
-# are configured (dpkg -i --force-depends in step "Slipstream" alone won't pull them).
-# See issue #218 — missing python3-argon2 broke firstboot users.json generation.
+# Bootstrap-time critical only: firstboot.sh runs `from argon2 import PasswordHasher`
+# to generate users.json on first boot, so python3-argon2 MUST be in the rootfs.
+# Other Debian-only deps declared in packages/secubox-*/debian/control are pulled
+# later by `apt-get install -f -y` after the slipstreamed dpkg step (issue #218).
+# Avoid kernel/devfs-touching python packages here (python3-zmq fails to configure
+# during debootstrap second-stage — defer those to the post-install apt -f run).
 INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
 INCLUDE_PKGS+=",python3-aiosqlite,python3-jinja2,python3-jwt"
 INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
-INCLUDE_PKGS+=",python3-toml,python3-netifaces"
-# Auth / crypto stack (firstboot, secubox-users, secubox-auth, secubox-portal)
-INCLUDE_PKGS+=",python3-argon2,python3-pyotp,python3-qrcode,python3-jsonschema"
-INCLUDE_PKGS+=",python3-jose,python3-cryptography"
-# GeoIP + observability + websockets + hardware
-INCLUDE_PKGS+=",python3-maxminddb,python3-websockets,python3-evdev"
-INCLUDE_PKGS+=",python3-pyroute2,python3-zmq,python3-serial,python3-rich"
+INCLUDE_PKGS+=",python3-toml,python3-netifaces,python3-argon2"
 
 # Network and security tools
 INCLUDE_PKGS+=",bridge-utils,traceroute,dnsutils,whois,mtr-tiny,nmap,iputils-arping"
