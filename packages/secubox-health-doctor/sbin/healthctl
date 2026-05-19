@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+"""healthctl — SecuBox vital-services health monitor CLI (#212).
+
+Eighth verb of the SecuBox grammar, layer = ops monitoring. Parallel to:
+  haproxyctl   vhost  add/remove
+  mitmproxyctl route  add/remove
+  giteactl     repo   mirror add
+  giteactl     runner add/remove
+  giteactl     user   add/remove
+  publishctl   post   ...
+  dropletctl   publish/list/...
+  healthctl    check/list/status/alert  ← this
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+# Resolve in-tree or installed
+sys.path.insert(0, "/usr/lib/secubox/health-doctor")
+_here = Path(__file__).resolve()
+try:
+    sys.path.insert(0, str(_here.parents[1]))
+except IndexError:
+    pass
+
+from api import checks, runner  # noqa: E402
+
+
+def _color(ok: bool) -> str:
+    return "\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m"
+
+
+def cmd_check(args) -> int:
+    if args.name:
+        if args.name not in checks.REGISTRY:
+            print(f"unknown check: {args.name}", file=sys.stderr)
+            print(f"available: {', '.join(sorted(checks.REGISTRY.keys()))}", file=sys.stderr)
+            return 2
+        ok, details = checks.REGISTRY[args.name]()
+        if args.json:
+            print(json.dumps({"name": args.name, "ok": ok, "details": details}, indent=2))
+        else:
+            print(f"{_color(ok)} {args.name}")
+            for k, v in details.items():
+                print(f"    {k}: {v}")
+        return 0 if ok else 1
+    # Full pass
+    state = runner.run_once()
+    if args.json:
+        print(json.dumps(state, indent=2))
+        return 0 if state["summary"]["fail"] == 0 else 1
+    s = state["summary"]
+    print(f"Health Doctor — {s['ok']}/{s['total']} checks OK ({s['fail']} failing)")
+    for name, entry in state["checks"].items():
+        print(f"  {_color(entry['ok'])} {name:25s} ({entry['elapsed_ms']}ms)")
+    if s["transitions"]:
+        print("\nTransitions since last run:")
+        for t in s["transitions"]:
+            print(f"  ! {t['check']}: {t['transition']}")
+    return 0 if s["fail"] == 0 else 1
+
+
+def cmd_list(args) -> int:
+    state = runner.current()
+    cached = state.get("checks", {})
+    width = max((len(n) for n in checks.REGISTRY), default=10)
+    for name in sorted(checks.REGISTRY.keys()):
+        entry = cached.get(name)
+        if entry:
+            sym = _color(entry["ok"])
+            ts = entry.get("ts", "?")[:19]
+        else:
+            sym, ts = "·", "never"
+        print(f"  {sym}  {name.ljust(width)}  last: {ts}")
+    return 0
+
+
+def cmd_status(args) -> int:
+    if args.name not in checks.REGISTRY:
+        print(f"unknown check: {args.name}", file=sys.stderr)
+        return 2
+    state = runner.current()
+    entry = state.get("checks", {}).get(args.name)
+    if not entry:
+        print(f"{args.name}: never run; running now …")
+        ok, details = checks.REGISTRY[args.name]()
+        entry = {"ok": ok, "details": details, "ts": "now"}
+    print(json.dumps({"name": args.name, **entry}, indent=2))
+    return 0 if entry["ok"] else 1
+
+
+def cmd_alert(args) -> int:
+    """Show health_doctor_failed events from the journal (--since 1h default)."""
+    since = args.since or "1h ago"
+    try:
+        r = subprocess.run(
+            ["journalctl", "-u", "secubox-health-doctor", "--since", since,
+             "--output=cat", "--no-pager"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception as e:
+        print(f"journalctl failed: {e}", file=sys.stderr)
+        return 1
+    for line in r.stdout.splitlines():
+        if "health_doctor_failed" in line or "health_doctor_recovered" in line:
+            print(line)
+    return 0
+
+
+def cmd_components() -> int:
+    print(json.dumps({
+        "service": "secubox-health-doctor.service",
+        "timer": "secubox-health-doctor.timer",
+        "cache": str(runner.CACHE_PATH),
+        "api_base": "/api/v1/health-doctor",
+        "registered_checks": sorted(checks.REGISTRY.keys()),
+        "version": "1.0.0",
+    }, indent=2))
+    return 0
+
+
+def cmd_access() -> int:
+    print(json.dumps({
+        "api": {
+            "checks":   "GET  /api/v1/health-doctor/checks",
+            "status":   "GET  /api/v1/health-doctor/status/{name}",
+            "run":      "POST /api/v1/health-doctor/run",
+            "registered": "GET /api/v1/health-doctor/registered",
+        },
+        "cli": [
+            "healthctl check [NAME] [--json]",
+            "healthctl list",
+            "healthctl status NAME",
+            "healthctl alert [--since 1h]",
+            "healthctl components",
+            "healthctl access",
+        ],
+    }, indent=2))
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="healthctl", description="SecuBox vital-services health monitor (#212)")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    chk = sub.add_parser("check", help="run check(s) now")
+    chk.add_argument("name", nargs="?")
+    chk.add_argument("--json", action="store_true")
+    chk.set_defaults(func=cmd_check)
+    ls = sub.add_parser("list", help="list configured checks + last result")
+    ls.set_defaults(func=cmd_list)
+    st = sub.add_parser("status", help="show last status of one check")
+    st.add_argument("name")
+    st.set_defaults(func=cmd_status)
+    al = sub.add_parser("alert", help="recent failure/recovery events from journal")
+    al.add_argument("--since", default=None, help="systemd time spec (default 1h ago)")
+    al.set_defaults(func=cmd_alert)
+    sub.add_parser("components").set_defaults(func=lambda a: cmd_components())
+    sub.add_parser("access").set_defaults(func=lambda a: cmd_access())
+    return p
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

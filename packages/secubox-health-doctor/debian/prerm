@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  remove|purge)
+    systemctl disable --now secubox-health-doctor-runner.timer 2>/dev/null || true
+    systemctl disable --now secubox-health-doctor.service 2>/dev/null || true
+    ;;
+esac
+
+#DEBHELPER#

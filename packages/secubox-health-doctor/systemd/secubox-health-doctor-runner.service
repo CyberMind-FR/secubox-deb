@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox health-doctor — periodic check pass (#212)
+After=secubox-health-doctor.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/health-doctor
+ExecStart=/usr/bin/python3 -c "from api.runner import run_once; import json; print(json.dumps(run_once()['summary']))"
+StandardOutput=journal
+StandardError=journal
