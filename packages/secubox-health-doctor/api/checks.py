@@ -174,16 +174,22 @@ def check_act_runner_arm64() -> tuple[bool, dict]:
 
 # ── Registry ──────────────────────────────────────────────────────────────
 
+# Vital — every entry here counts toward the "failing" tally in the doctor
+# summary. Keep this list strict: only services whose absence makes the
+# board itself unusable. CI runners, optional capacity probes, etc. should
+# go in REGISTRY_INFORMATIONAL once that tier is forged (#214 followup).
 REGISTRY: Dict[str, CheckFn] = {
-    "haproxy":            check_haproxy,
-    "nginx":              check_nginx,
-    "secubox-metrics":    check_secubox_metrics,
-    "secubox-hub":        check_secubox_hub,
-    "mitmproxy-lxc":      check_mitmproxy_lxc,
-    "gitea-lxc":          check_gitea_lxc,
-    "mail-lxc":           check_mail_lxc,
+    "haproxy":             check_haproxy,
+    "nginx":               check_nginx,
+    "secubox-metrics":     check_secubox_metrics,
+    "secubox-hub":         check_secubox_hub,
+    "mitmproxy-lxc":       check_mitmproxy_lxc,
+    "gitea-lxc":           check_gitea_lxc,
+    "mail-lxc":            check_mail_lxc,
     "cookie-audit-ledger": check_cookie_audit_ledger,
-    "crowdsec":           check_crowdsec,
-    "filesystems":        check_filesystems,
-    "act-runner-arm64":   check_act_runner_arm64,
+    "crowdsec":            check_crowdsec,
+    "filesystems":         check_filesystems,
 }
+# check_act_runner_arm64 kept as a module-level function (cheap) so a
+# future REGISTRY_INFORMATIONAL tier can reuse it without duplication.
+# Not vital — a stopped CI runner doesn't break the board (#214).
