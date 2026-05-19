@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Stub for bats tests — logs args to $STUB_LOG, exit 0 unless STUB_METABLOGIZERCTL_FAIL=1.
+printf 'metablogizerctl %s\n' "$*" >> "${STUB_LOG:-/dev/null}"
+if [[ "${STUB_METABLOGIZERCTL_FAIL:-0}" = "1" ]]; then
+    echo "stub: forced failure" >&2
+    exit 1
+fi
+exit 0
