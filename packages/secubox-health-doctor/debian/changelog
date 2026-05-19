@@ -1,0 +1,16 @@
+secubox-health-doctor (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release (issue #212).
+  * Daemon + healthctl CLI + FastAPI exposing /api/v1/health-doctor/.
+  * 11 vital-service checks: haproxy, nginx, secubox-metrics, secubox-hub,
+    mitmproxy LXC, gitea LXC, mail LXC + ports 25/465/587/993, cookie-audit
+    ledger mtime, crowdsec + lapi, filesystems mounted RW, optional
+    act-runner-arm64 LXC.
+  * Eighth verb of the SecuBox grammar — closes the ops-monitoring layer
+    parallel to haproxyctl/giteactl/mitmproxyctl/dropletctl/etc.
+  * Persisted state cache at /var/cache/secubox/health-doctor.json.
+  * State transitions (ok->fail, fail->ok) emit structured journal events
+    for CSPN compliance.
+  * 60s timer + on-demand `healthctl check` + POST /api/v1/health-doctor/run.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 May 2026 08:00:00 +0200

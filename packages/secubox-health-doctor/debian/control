@@ -1,0 +1,23 @@
+Source: secubox-health-doctor
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-health-doctor
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends},
+         secubox-core (>= 1.1),
+         python3-uvicorn,
+         python3-fastapi,
+         lxc,
+         systemd
+Description: SecuBox vital-services health monitor
+ Daemon + CLI (healthctl) + FastAPI that runs periodic checks against the
+ vital services on a SecuBox board (haproxy, mitmproxy LXC, gitea LXC,
+ nginx, mail LXC, metrics socket, cookie-audit ledger freshness, crowdsec,
+ filesystems, act-runner). State transitions emit CSPN-compatible journal
+ events. Read-only API consumed by the portal banner.
