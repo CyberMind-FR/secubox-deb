@@ -1,3 +1,12 @@
+secubox-health-doctor (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Drop act-runner-arm64 from vital REGISTRY (#214). A stopped CI runner
+    doesn't break the board and shouldn't count as a vital-service failure.
+    The check_act_runner_arm64 function is kept at module level for reuse
+    by a future REGISTRY_INFORMATIONAL tier.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 May 2026 07:53:56 +0200
+
 secubox-health-doctor (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release (issue #212).
