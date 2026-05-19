@@ -188,9 +188,13 @@ load helpers
     [[ "$output" =~ "second.mydomain.test" ]]
 }
 
-@test "rename then list shows the renamed site at the correct vhost (not double-prefixed)" {
+@test "rename strips legacy prefixed-FQDN domain from TOML (no double-prefix in list)" {
     make_html "$TMP/page.html"
-    run "$DROPLETCTL" publish "$TMP/page.html" original mydomain.test
+    # Seed the legacy condition: publish with the FQDN as the explicit
+    # domain arg. cmd_publish stores it verbatim → TOML now contains
+    # domain="original.mydomain.test", which is the precondition that
+    # historically caused cmd_rename to double-prefix the new domain.
+    run "$DROPLETCTL" publish "$TMP/page.html" original original.mydomain.test
     [ "$status" -eq 0 ]
 
     : > "$STUB_LOG"
@@ -199,7 +203,10 @@ load helpers
 
     run "$DROPLETCTL" list
     [ "$status" -eq 0 ]
-    # Must show "renamed.mydomain.test" — NOT "renamed.renamed.mydomain.test".
+    # On the buggy code, list would print "renamed.renamed.mydomain.test"
+    # (because rename stored the FQDN "renamed.mydomain.test", then list
+    # computes vhost as "renamed.<that>"). The fix strips the legacy prefix
+    # back to the bare base, so list prints "renamed.mydomain.test".
     [[ "$output" =~ "renamed.mydomain.test" ]]
     [[ ! "$output" =~ "renamed.renamed" ]]
 }
