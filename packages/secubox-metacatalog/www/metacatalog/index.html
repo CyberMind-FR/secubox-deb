@@ -602,7 +602,7 @@
         async function checkAuth() {
             const token = localStorage.getItem('sbx_token');
             if (!token) {
-                window.location.href = '/portal/login.html';
+                window.location.href = '/login.html';
                 return false;
             }
             return true;
@@ -621,7 +621,7 @@
             try {
                 const res = await fetch(API + endpoint, opts);
                 if (res.status === 401) {
-                    window.location.href = '/portal/login.html';
+                    window.location.href = '/login.html';
                     return null;
                 }
                 return res.json();

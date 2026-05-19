@@ -652,7 +652,7 @@
 
         function checkAuth() {
             if (!getToken()) {
-                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 return false;
             }
             return true;
@@ -672,7 +672,7 @@
             try {
                 const res = await fetch(API + endpoint, opts);
                 if (res.status === 401) {
-                    window.location.href = '/portal/login.html';
+                    window.location.href = '/login.html';
                     return { success: false, error: 'Unauthorized' };
                 }
                 return res.json();
