@@ -1,9 +1,8 @@
 #!/usr/bin/make -f
 %:
-	dh $@ --with python3 --buildsystem=pybuild
+	dh $@
 
 override_dh_auto_install:
-	dh_auto_install
 	# Helper package
 	mkdir -p debian/secubox-eye-square/usr/lib/python3/dist-packages/eye_square_helper
 	cp -r helper/eye_square_helper/. debian/secubox-eye-square/usr/lib/python3/dist-packages/eye_square_helper/

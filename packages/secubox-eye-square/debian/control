@@ -2,11 +2,11 @@ Source: secubox-eye-square
 Section: admin
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
-Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-eye-square
-Architecture: arm64
+Architecture: all
 Depends:
  ${misc:Depends},
  ${python3:Depends},
