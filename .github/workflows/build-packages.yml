@@ -71,18 +71,39 @@ jobs:
               if [ -n "$requested_pkg" ] && [ "$requested_pkg" != "$pkg" ]; then
                 continue
               fi
-              is_all=0
-              if grep -q "^Architecture:[[:space:]]*all" "$ctrl"; then
-                is_all=1
-              fi
-              # amd64 always, unless arch=arm64 was requested explicitly.
-              if [ -z "$requested_arch" ] || [ "$requested_arch" = "amd64" ]; then
-                echo "{\"package\":\"$pkg\",\"arch\":\"amd64\"}"
-              fi
-              # arm64 only for arch-specific packages, unless arch=amd64 requested.
-              if [ "$is_all" = "0" ] && { [ -z "$requested_arch" ] || [ "$requested_arch" = "arm64" ]; }; then
-                echo "{\"package\":\"$pkg\",\"arch\":\"arm64\"}"
-              fi
+              # Read the binary-package Architecture: line (the one after
+              # "Package: <name>", not the Source stanza). All current
+              # packages declare one binary stanza, so first match is correct.
+              arch_field=$(awk '/^Package:/{p=1} p && /^Architecture:/{print $2; exit}' "$ctrl")
+              # Schedule entries by declared arch. Honour the workflow_dispatch
+              # `arch` filter if set.
+              case "$arch_field" in
+                all)
+                  # arch-all .deb is produced once on the amd64 builder and
+                  # is deployable on every Debian arch.
+                  if [ -z "$requested_arch" ] || [ "$requested_arch" = "amd64" ]; then
+                    echo "{\"package\":\"$pkg\",\"arch\":\"amd64\"}"
+                  fi
+                  ;;
+                any)
+                  # Source builds for every supported arch.
+                  if [ -z "$requested_arch" ] || [ "$requested_arch" = "amd64" ]; then
+                    echo "{\"package\":\"$pkg\",\"arch\":\"amd64\"}"
+                  fi
+                  if [ -z "$requested_arch" ] || [ "$requested_arch" = "arm64" ]; then
+                    echo "{\"package\":\"$pkg\",\"arch\":\"arm64\"}"
+                  fi
+                  ;;
+                amd64|arm64)
+                  # Single-arch package — schedule only that arch.
+                  if [ -z "$requested_arch" ] || [ "$requested_arch" = "$arch_field" ]; then
+                    echo "{\"package\":\"$pkg\",\"arch\":\"$arch_field\"}"
+                  fi
+                  ;;
+                *)
+                  echo "::warning::Unrecognised Architecture: '$arch_field' in $ctrl — skipping" >&2
+                  ;;
+              esac
             done | jq -s -c .)
           echo "matrix=$combos" >> "$GITHUB_OUTPUT"
           # Print the size so over-cap regressions are visible in the log.
