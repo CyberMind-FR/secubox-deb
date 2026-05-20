@@ -20,6 +20,11 @@ readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
 readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
 readonly AUTHELIA_VERSION="${SECUBOX_AUTHELIA_VERSION:-4.39.5}"
 readonly AUTHELIA_HTTP_PORT="${SECUBOX_AUTHELIA_PORT:-9091}"
+# Hub domain — the canonical SecuBox WebUI vhost where the SSO portal is
+# mounted under /auth/. Authelia REQUIRES a session.cookies[] entry per
+# top-level domain it serves, otherwise the SPA gets 403 on /auth/api/state.
+# Override via env when deploying on a non-default hub (gk2.secubox.in etc.).
+readonly SECUBOX_HUB_DOMAIN="${SECUBOX_HUB_DOMAIN:-gk2.secubox.in}"
 readonly PROVISION_DIR="${SECUBOX_PROVISION_DIR:-/usr/share/secubox/lib/authelia/provision}"
 readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/authelia}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
@@ -265,12 +270,25 @@ access_control:
   rules:
     - domain: "*.maegia.tv"
       policy: one_factor
+    # SecuBox hub vhost (admin.<hub>, lyrion.<hub>, zigbee.<hub>, etc.)
+    - domain: "${SECUBOX_HUB_DOMAIN}"
+      policy: one_factor
+    - domain: "*.${SECUBOX_HUB_DOMAIN}"
+      policy: one_factor
 
 session:
+  # One cookie entry per top-level domain. Authelia returns 403 on /auth/api/*
+  # if the request's Host header doesn't match any cookies[].domain — that's
+  # the symptom we saw on admin.${SECUBOX_HUB_DOMAIN} before this entry existed.
   cookies:
     - name: authelia_session
       domain: maegia.tv
       authelia_url: 'https://auth.maegia.tv/'
+      expiration: 3600
+      inactivity: 300
+    - name: authelia_session
+      domain: ${SECUBOX_HUB_DOMAIN}
+      authelia_url: 'https://admin.${SECUBOX_HUB_DOMAIN}/auth/'
       expiration: 3600
       inactivity: 300
   secret: ${jwt_secret}
