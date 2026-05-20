@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-lyrion :: install-lxc.sh
+#
+# Idempotent LXC bootstrap for the Lyrion Music Server. Safe to re-run.
+# Inherits all 9 install-lxc fixes from v2.11.1:
+#   1. lxc-create -t download (unprivileged-compatible)
+#   2. ensure_masquerade() 10.100.0.0/24
+#   3. ensure_resolv() via lxc-attach + unlink symlink
+#   4. (no apt repo dance like grafana — Lyrion is a single .deb)
+# Follows docs/MODULE-GUIDELINES.md §3.
+
+set -euo pipefail
+
+readonly LXC_NAME="${SECUBOX_LXC_NAME:-lyrion}"
+readonly LXC_IP="${SECUBOX_LXC_IP:-10.100.0.100}"
+readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+readonly LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
+readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
+readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
+readonly LYRION_VERSION="${SECUBOX_LYRION_VERSION:-9.1.0}"
+readonly LYRION_HTTP_PORT="${SECUBOX_LYRION_PORT:-9000}"
+# Upstream now ships an arch-independent _all.deb mirrored on lms-community.
+readonly SECUBOX_LYRION_DEB_URL_DEFAULT="https://downloads.lms-community.org/LyrionMusicServer_v${LYRION_VERSION}/lyrionmusicserver_${LYRION_VERSION}_all.deb"
+readonly PROVISION_DIR="${SECUBOX_PROVISION_DIR:-/usr/share/secubox/lib/lyrion/provision}"
+readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/lyrion}"
+readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
+readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
+
+log()  { printf '[lyrion-install] %s\n' "$*"; }
+fail() { printf '[lyrion-install] ERROR: %s\n' "$*" >&2; exit 1; }
+
+require_cmds() {
+    for c in lxc-create lxc-info lxc-start lxc-attach openssl nft; do
+        command -v "$c" >/dev/null 2>&1 || fail "$c not installed"
+    done
+}
+
+ensure_dirs() {
+    install -d -m 0755 -o root -g root "$LXC_PATH"
+    install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
+    install -d -m 0700 -o root -g root "$SECRETS_DIR"
+}
+
+ensure_bridge() {
+    if ! ip link show "$LXC_BRIDGE" >/dev/null 2>&1; then
+        log "Creating bridge $LXC_BRIDGE @ ${LXC_GW}/24 ..."
+        ip link add name "$LXC_BRIDGE" type bridge
+        ip addr add "${LXC_GW}/24" dev "$LXC_BRIDGE"
+        ip link set "$LXC_BRIDGE" up
+    fi
+}
+
+ensure_masquerade() {
+    if ! nft list table ip lxc 2>/dev/null | grep -q 'saddr 10.100.0.0/24'; then
+        log "Adding nftables MASQUERADE for 10.100.0.0/24 ..."
+        nft 'add table ip lxc' 2>/dev/null || true
+        nft 'add chain ip lxc postrouting { type nat hook postrouting priority srcnat ; policy accept ; }' 2>/dev/null || true
+        nft 'add rule ip lxc postrouting ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 counter masquerade' 2>/dev/null || true
+    fi
+}
+
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+
+create_lxc() {
+    if [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; then
+        log "LXC '$LXC_NAME' already exists — skipping debootstrap"
+        return
+    fi
+    log "Creating LXC '$LXC_NAME' (debian $DEBIAN_SUITE) ..."
+    lxc-create -n "$LXC_NAME" -t download -P "$LXC_PATH" \
+        -- --dist debian --release "$DEBIAN_SUITE" \
+           --arch "$(dpkg --print-architecture)"
+}
+
+write_lxc_config() {
+    log "Pinning network: $LXC_IP/24 on $LXC_BRIDGE"
+    cat > "$LXC_PATH/$LXC_NAME/config" <<EOF
+# SecuBox-managed — see secubox-lyrion / install-lxc.sh
+lxc.uts.name = $LXC_NAME
+lxc.net.0.type = veth
+lxc.net.0.link = $LXC_BRIDGE
+lxc.net.0.flags = up
+lxc.net.0.ipv4.address = $LXC_IP/24
+lxc.net.0.ipv4.gateway = $LXC_GW
+lxc.net.0.name = eth0
+lxc.rootfs.path = dir:$LXC_PATH/$LXC_NAME/rootfs
+lxc.include = /usr/share/lxc/config/common.conf
+lxc.apparmor.profile = generated
+lxc.start.auto = 1
+lxc.start.delay = 5
+EOF
+}
+
+start_lxc() {
+    [ "$(lxc_state)" = "running" ] && { log "Already running"; return; }
+    log "Starting LXC '$LXC_NAME' ..."
+    lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
+}
+
+wait_for_network() {
+    log "Waiting for LXC network ..."
+    for _ in $(seq 1 30); do
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- ping -c1 -W1 "$LXC_GW" >/dev/null 2>&1 && return 0
+        sleep 1
+    done
+    fail "LXC '$LXC_NAME' did not reach $LXC_GW within 30s"
+}
+
+ensure_resolv() {
+    log "Seeding /etc/resolv.conf in LXC ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c '
+        rm -f /etc/resolv.conf
+        printf "nameserver 1.1.1.1\nnameserver 9.9.9.9\n" > /etc/resolv.conf
+    '
+}
+
+# ── Lyrion install inside LXC ──────────────────────────────────────────────
+# Lyrion Music Server (formerly logitechmediaserver) is a Perl daemon.
+# Upstream ships .deb at https://downloads.lms-community.org/.
+# Note: the historic downloads.lyrion.org host now 301s to a marketing page;
+# LMS-Community CDN is the canonical artifact mirror.
+install_lyrion_in_lxc() {
+    log "Installing Lyrion Music Server in '$LXC_NAME' ..."
+    local url="${SECUBOX_LYRION_DEB_URL:-${SECUBOX_LYRION_DEB_URL_DEFAULT}}"
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- env \
+        SECUBOX_LYRION_DEB_URL="$url" \
+        bash -e <<'INNER'
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -q
+        apt-get install -y --no-install-recommends \
+            ca-certificates curl wget \
+            perl libio-socket-ssl-perl libnet-ssleay-perl \
+            libdbi-perl libdbd-sqlite3-perl libxml-parser-perl \
+            libencode-detect-perl libipc-shareable-perl libio-socket-inet6-perl
+
+        if ! dpkg -l lyrionmusicserver 2>/dev/null | grep -q "^ii"; then
+            # Upstream now ships a single arch-independent .deb (_all) — LMS
+            # is 99% Perl and uses architecture-independent assets.
+            echo "Downloading ${SECUBOX_LYRION_DEB_URL} ..."
+            cd /tmp
+            wget -q "${SECUBOX_LYRION_DEB_URL}" -O lyrion.deb
+            # Sanity: reject HTML 404s up-front (curl/wget happily save them).
+            # Check the ar(1) magic '!<arch>' that all .deb archives start with —
+            # `file` may not be installed in the LXC, so we read magic directly.
+            if [ "$(head -c 7 lyrion.deb)" != '!<arch>' ]; then
+                echo "ERROR: downloaded artifact is not a Debian (ar) archive" >&2
+                head -c 200 lyrion.deb >&2; echo >&2
+                exit 1
+            fi
+            apt-get install -y ./lyrion.deb || dpkg -i lyrion.deb
+            rm -f lyrion.deb
+        fi
+
+        # The package's own systemd unit handles startup; LMS listens on :9000
+        systemctl daemon-reload
+        systemctl enable lyrionmusicserver 2>/dev/null || systemctl enable logitechmediaserver 2>/dev/null || true
+        systemctl restart lyrionmusicserver 2>/dev/null || systemctl restart logitechmediaserver 2>/dev/null || true
+INNER
+}
+
+
+mark_provisioned() {
+    install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
+    date -Iseconds > "$SENTINEL"
+}
+
+main() {
+    require_cmds
+    ensure_dirs
+    ensure_bridge
+    ensure_masquerade
+    create_lxc
+    write_lxc_config
+    start_lxc
+    wait_for_network
+    ensure_resolv
+    install_lyrion_in_lxc
+    mark_provisioned
+    log "OK — LXC '$LXC_NAME' at $LXC_IP, Lyrion provisioned + running."
+    log "  · Web admin   : http://$LXC_IP:$LYRION_HTTP_PORT/"
+    log "  · JSON-RPC    : http://$LXC_IP:9090/"
+    log "  · slimproto   : tcp://$LXC_IP:3483/  (players auto-discover)"
+    log "  · Reverse proxy: /lyrion/ on the canonical hub vhost"
+}
+
+main "$@"

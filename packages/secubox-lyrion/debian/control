@@ -1,21 +1,37 @@
 Source: secubox-lyrion
-Section: net
+Section: admin
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
 
 Package: secubox-lyrion
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip, python3-httpx | python3-pip
-Description: Lyrion Music Server (LMS) for SecuBox
- Debian bookworm port of the OpenWRT luci-app-lyrion module.
- Provides FastAPI backend on /api/v1/lyrion/ via Unix socket.
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         secubox-users (>= 1.0),
+         secubox-haproxy,
+         lxc,
+         lxc-templates,
+         debootstrap,
+         python3-uvicorn,
+         python3-fastapi,
+         python3-toml,
+         python3-yaml,
+         openssl,
+         curl,
+         jq
+Recommends: secubox-mitmproxy
+Description: SecuBox Lyrion — Music server (HOSTING layer)
+ Hosts Lyrion in a Debian bookworm LXC at 10.100.0.100 on br-lxc.
+ File-backend identity provider reading /etc/secubox/users.json (the same
+ argon2-hashed user store already managed by secubox-users) so the canonical
+ SecuBox identity is the single source of truth for SSO.
  .
- Features:
-  - Docker/Podman container management for LMS
-  - Squeezebox JSON-RPC API integration
-  - Player control (play, pause, next, prev, volume)
-  - Library management and scanning
-  - Backup and restore functionality
-  - CRT-light P31 phosphor theme frontend
+ OIDC clients pre-provisioned for the three native admin UIs that already
+ support OIDC: Grafana, Gitea, Nextcloud. YaCy/RustDesk-web/mitmproxy-web
+ (no native OIDC) get nginx `auth_request` integration to the same Lyrion.
+ .
+ Health-banner injected on the Lyrion login page via nginx sub_filter so
+ the operator sees the SecuBox system health bar even on the SSO screen.
