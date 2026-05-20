@@ -1,0 +1,29 @@
+# /etc/udev/rules.d/99-secubox-rbs-sensor.rules
+# Installed by secubox-rbs-sensor (#236).
+#
+# Quectel EP06-E LTE Cat-6 modem (mPCIe). The composite enumerates as
+# four serial ports (option driver) + one QMI network interface (qmi_wwan).
+# We tag the AT port specifically — the spec is explicit that the port
+# index varies by hub topology + firmware revision, so DON'T hardcode
+# ttyUSB2; instead the rule symlinks ALL the Quectel serial ports to a
+# numbered convention, and `Ep06Modem._discover_port()` probes them.
+#
+# Quectel EP06-E composite: 2c7c:0306
+# Interface map (typical):
+#   if0 = NMEA / GPS
+#   if1 = diagnostic (DO NOT USE — OPAD §2 forbids the diag port)
+#   if2 = AT command port
+#   if3 = modem (PPP / data)
+
+# Catch any Quectel EP06 USB-serial child and label it. The Ep06Modem
+# detection in lib/rbs_sensor/ep06.py walks /sys/bus/usb to find the
+# parent then probes /dev/ttyUSB* children.
+SUBSYSTEM=="tty", SUBSYSTEMS=="usb", \
+    ATTRS{idVendor}=="2c7c", ATTRS{idProduct}=="0306", \
+    SYMLINK+="secubox-ep06-%n", MODE="0660", GROUP="dialout"
+
+# Tag the QMI control device (cdc-wdmX) — needed only when the data plane
+# is in use (qmi_wwan), not for the OPAD sensor. Provided for completeness.
+SUBSYSTEM=="usbmisc", SUBSYSTEMS=="usb", \
+    ATTRS{idVendor}=="2c7c", ATTRS{idProduct}=="0306", \
+    SYMLINK+="secubox-ep06-wdm", MODE="0660", GROUP="dialout"

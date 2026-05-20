@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+case "$1" in
+    purge)
+        rm -f /etc/secubox/rbs-sensor.toml /etc/secubox/rbs-sensor.toml.example
+        rm -f /etc/udev/rules.d/99-secubox-rbs-sensor.rules
+        rm -rf /var/lib/secubox/rbs-sensor
+        ;;
+esac
+#DEBHELPER#
+exit 0

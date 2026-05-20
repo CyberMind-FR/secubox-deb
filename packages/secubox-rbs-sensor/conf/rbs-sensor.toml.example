@@ -1,0 +1,30 @@
+# /etc/secubox/rbs-sensor.toml — SecuBox RBS Sensor configuration
+
+[sensor]
+# Module-level OPAD invariant flag — exposed via /api/v1/rbs-sensor/status.
+# DO NOT change to true. If you need a sensor that captures subscriber
+# identifiers, you are not in OPAD scope and should not ship via this
+# package. See docs/superpowers/specs/2026-05-20-secubox-wall-ep06.md §2.
+captures_subscriber_identifiers = false
+
+[ep06]
+# Backend selection — currently "ep06" is the only supported observer.
+# Future: "sierra" / "huawei" / "telit" pluggable via the Observer Protocol.
+backend = "ep06"
+# Poll interval for the Observer loop (seconds).
+poll_interval = 30
+# AT port discovery — leave empty for auto (probe each /dev/ttyUSB* with `AT`).
+# Override with e.g. "/dev/secubox-ep06" if you've shipped a udev rule.
+at_port = ""
+
+[exposure]
+# Host control plane — Unix socket. The nginx route /api/v1/rbs-sensor/ on
+# the canonical hub vhost is the only LAN-reachable endpoint.
+socket = "/run/secubox/rbs-sensor.sock"
+
+[mitigations]
+# Off-path mitigations are gated on the verdict engine in v0.2. v0.1
+# wires the API endpoints but the actuator stubs return
+# "not-implemented-v0.1".
+auto_mitigate = false
+auto_mitigate_verdict = "likely_rogue"  # only act on LIKELY_ROGUE
