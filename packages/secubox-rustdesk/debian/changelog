@@ -1,0 +1,13 @@
+secubox-rustdesk (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: RustDesk hbbs (signal) + hbbr (relay) in LXC.
+  * Opens the REMOTE-ACCESS layer of the SecuBox CTL grammar.
+  * Three-fold CTL grammar (rustdeskctl: components, status, access).
+  * Module-specific nouns: peer, relay, key, session.
+  * LXC at 10.100.0.90 on br-lxc; both hbbs+hbbr as separate systemd units.
+  * HAProxy stream-mode for TCP 21115/21116/21117 + nftables DNAT for 21116/udp
+    (mitmproxy cannot inspect raw UDP).
+  * Follows docs/MODULE-GUIDELINES.md, pattern locked in by PRs #231 + #233.
+  * Closes: #234
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 11:00:00 +0200

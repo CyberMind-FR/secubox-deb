@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: rustdeskctl
+# CyberMind — https://cybermind.fr
+#
+# RustDesk host-side controller — opens the REMOTE-ACCESS layer of the
+# SecuBox CTL grammar. Three-fold introspection + peer/relay/key/session
+# nouns. The 'daemon' component in the three-fold output decomposes into
+# hbbs (signal) and hbbr (relay) sub-states because RustDesk runs two
+# daemons.
+
+set -u
+
+readonly VERSION="1.0.0"
+readonly CONFIG_FILE="${SECUBOX_RUSTDESK_CONFIG:-/etc/secubox/rustdesk.toml}"
+readonly STATE_DIR="${SECUBOX_RUSTDESK_STATE:-/var/lib/secubox/rustdesk}"
+readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
+readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/rustdesk/install-lxc.sh}"
+
+readonly RED='\033[0;31m'; readonly GREEN='\033[0;32m'; readonly YELLOW='\033[1;33m'; readonly NC='\033[0m'
+log()  { printf '%b[rustdesk]%b %s\n' "$GREEN" "$NC" "$*"; }
+warn() { printf '%b[warn]%b %s\n' "$YELLOW" "$NC" "$*" >&2; }
+err()  { printf '%b[error]%b %s\n' "$RED" "$NC" "$*" >&2; }
+
+config_get() {
+    local key="$1" default="${2:-}"
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null \
+            | head -1 | cut -d= -f2- | tr -d ' "' | tr -d "'" || echo "$default"
+    else
+        echo "$default"
+    fi
+}
+
+LXC_NAME=$(config_get "name" "rustdesk")
+LXC_IP=$(config_get "ip" "10.100.0.90")
+LXC_PATH=$(config_get "path" "/data/lxc")
+SIGNAL_PORT=$(config_get "hbbs_signal_tcp_port" "21116")
+RELAY_PORT=$(config_get "hbbr_relay_port" "21117")
+WEB_PORT=$(config_get "web_admin_port" "21114")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "")
+
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+lxc_running() { [ "$(lxc_state)" = "running" ]; }
+lxc_exists()  { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+hbbs_running() {
+    lxc_running || return 1
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-active --quiet rustdesk-hbbs 2>/dev/null
+}
+hbbr_running() {
+    lxc_running || return 1
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-active --quiet rustdesk-hbbr 2>/dev/null
+}
+host_api_running() { systemctl is-active --quiet secubox-rustdesk.service 2>/dev/null; }
+
+emit_components_json() {
+    local lxc_st hbbs_st hbbr_st api_st
+    if lxc_exists; then lxc_st=$(lxc_state); [ -z "$lxc_st" ] && lxc_st="absent"
+    else lxc_st="absent"; fi
+    hbbs_running && hbbs_st="running" || hbbs_st="stopped"
+    hbbr_running && hbbr_st="running" || hbbr_st="stopped"
+    host_api_running && api_st="running" || api_st="stopped"
+    cat <<EOF
+{
+  "module": "rustdesk",
+  "version": "$VERSION",
+  "components": [
+    {"name": "lxc",       "state": "$lxc_st",   "detail": "$LXC_NAME @ $LXC_IP on br-lxc"},
+    {"name": "hbbs",      "state": "$hbbs_st",  "detail": "signal server, port $SIGNAL_PORT tcp+udp"},
+    {"name": "hbbr",      "state": "$hbbr_st",  "detail": "relay server, port $RELAY_PORT tcp"},
+    {"name": "host-api",  "state": "$api_st",   "detail": "secubox-rustdesk.service (uvicorn @ /run/secubox/rustdesk.sock)"}
+  ]
+}
+EOF
+}
+
+emit_components_text() {
+    printf '%-12s %-12s %s\n' "COMPONENT" "STATE" "DETAIL"
+    local s
+    if lxc_exists; then s=$(lxc_state); [ -z "$s" ] && s="absent"; printf '%-12s %-12s %s\n' "lxc" "$s" "$LXC_NAME @ $LXC_IP"
+    else printf '%-12s %-12s %s\n' "lxc" "absent" "$LXC_NAME — run 'rustdeskctl install'"; fi
+    hbbs_running && printf '%-12s %-12s %s\n' "hbbs" "running" "signal, port $SIGNAL_PORT tcp+udp" \
+                 || printf '%-12s %-12s %s\n' "hbbs" "stopped" "signal, port $SIGNAL_PORT tcp+udp"
+    hbbr_running && printf '%-12s %-12s %s\n' "hbbr" "running" "relay, port $RELAY_PORT tcp" \
+                 || printf '%-12s %-12s %s\n' "hbbr" "stopped" "relay, port $RELAY_PORT tcp"
+    host_api_running && printf '%-12s %-12s %s\n' "host-api" "running" "secubox-rustdesk.service" \
+                     || printf '%-12s %-12s %s\n' "host-api" "stopped" "secubox-rustdesk.service"
+}
+
+emit_status_json() {
+    local overall
+    if lxc_running && hbbs_running && hbbr_running && host_api_running; then overall="green"
+    elif lxc_exists && (hbbs_running || hbbr_running || host_api_running); then overall="yellow"
+    else overall="red"; fi
+    cat <<EOF
+{"module": "rustdesk", "version": "$VERSION", "overall": "$overall"}
+EOF
+}
+
+emit_access_json() {
+    local lan_url public_url
+    lan_url="https://$(hostname -I | awk '{print $1}')/rustdesk/"
+    [ -n "$PUBLIC_HOSTNAME" ] && public_url="https://${PUBLIC_HOSTNAME}/rustdesk/" || public_url=""
+    cat <<EOF
+{
+  "module": "rustdesk",
+  "access": [
+    {"url": "$lan_url", "auth": "jwt|rustdesk-admin", "scope": "lan-web"}$( [ -n "$public_url" ] && echo ',' )
+    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "jwt|rustdesk-admin", "scope": "public-web"}\n' "$public_url" ),
+    {"url": "rustdesk://$LXC_IP:$SIGNAL_PORT", "auth": "preshared-key", "scope": "lan-signal"},
+    {"url": "rustdesk://$LXC_IP:$RELAY_PORT",  "auth": "preshared-key", "scope": "lan-relay"}
+  ]
+}
+EOF
+}
+
+cmd_components() { case "${1:-}" in --json) emit_components_json ;; *) emit_components_text ;; esac; }
+cmd_status()     { case "${1:-}" in --json) emit_status_json ;; *) emit_components_text; echo; emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])' ;; esac; }
+cmd_access()     { case "${1:-}" in --json) emit_access_json ;; *) emit_access_json | python3 -m json.tool ;; esac; }
+
+cmd_install() {
+    [ -x "$INSTALL_LIB" ] || { err "install script not found at $INSTALL_LIB"; exit 2; }
+    log "Running LXC bootstrap from $INSTALL_LIB ..."
+    SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
+        bash "$INSTALL_LIB"
+    systemctl start secubox-rustdesk.service 2>/dev/null || true
+    log "Done. 'rustdeskctl status' to verify."
+}
+
+cmd_reload() {
+    systemctl restart secubox-rustdesk.service 2>/dev/null || true
+    if lxc_running; then
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart rustdesk-hbbs 2>/dev/null || true
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart rustdesk-hbbr 2>/dev/null || true
+    fi
+    log "Reloaded host FastAPI + hbbs + hbbr."
+}
+
+cmd_help() {
+    cat <<'HELP'
+rustdeskctl — SecuBox RustDesk controller (REMOTE-ACCESS layer)
+
+Three-fold introspection (decomposes 'daemon' into hbbs + hbbr):
+  rustdeskctl components [--json]
+  rustdeskctl status     [--json]
+  rustdeskctl access     [list|show <name>] [--json]
+
+Lifecycle:
+  rustdeskctl install               # idempotent LXC + hbbs + hbbr bootstrap
+  rustdeskctl reload                # restart host FastAPI + hbbs + hbbr
+
+Remote-access nouns:
+  rustdeskctl peer    list|add <id> <pubkey>|remove <id>
+  rustdeskctl relay   status|restart|log
+  rustdeskctl key     show|rotate
+  rustdeskctl session list|kill <id>
+
+  (--json on any verb returns machine-readable output)
+
+For grammar details: docs/grammar.md (REMOTE-ACCESS layer)
+HELP
+}
+
+main() {
+    local noun="${1:-help}"
+    shift || true
+    case "$noun" in
+        components|status|access|install|reload) "cmd_${noun}" "$@" ;;
+        peer|relay|key|session)
+            err "noun '$noun' not yet implemented in v$VERSION — see #234 follow-up task"
+            exit 2 ;;
+        --help|-h|help|"") cmd_help ;;
+        --version|-V) echo "rustdeskctl $VERSION" ;;
+        *) err "unknown noun: $noun"; cmd_help; exit 1 ;;
+    esac
+}
+
+main "$@"
