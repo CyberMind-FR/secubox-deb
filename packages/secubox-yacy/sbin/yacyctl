@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: yacyctl
+# CyberMind — https://cybermind.fr
+#
+# YaCy host-side controller — opens the SEARCH layer of the SecuBox CTL
+# grammar. Three-fold introspection + peer/index/query/blacklist/crawler
+# nouns. See docs/grammar.md and docs/MODULE-GUIDELINES.md.
+
+set -u
+
+readonly VERSION="1.0.0"
+readonly CONFIG_FILE="${SECUBOX_YACY_CONFIG:-/etc/secubox/yacy.toml}"
+readonly STATE_DIR="${SECUBOX_YACY_STATE:-/var/lib/secubox/yacy}"
+readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
+readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/yacy/install-lxc.sh}"
+
+readonly RED='\033[0;31m'; readonly GREEN='\033[0;32m'; readonly YELLOW='\033[1;33m'; readonly NC='\033[0m'
+log()  { printf '%b[yacy]%b %s\n' "$GREEN" "$NC" "$*"; }
+warn() { printf '%b[warn]%b %s\n' "$YELLOW" "$NC" "$*" >&2; }
+err()  { printf '%b[error]%b %s\n' "$RED" "$NC" "$*" >&2; }
+
+config_get() {
+    local key="$1" default="${2:-}"
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null \
+            | head -1 | cut -d= -f2- | tr -d ' "' | tr -d "'" || echo "$default"
+    else
+        echo "$default"
+    fi
+}
+
+LXC_NAME=$(config_get "name" "yacy")
+LXC_IP=$(config_get "ip" "10.100.0.80")
+LXC_PATH=$(config_get "path" "/data/lxc")
+HTTP_PORT=$(config_get "http_port" "8090")
+PEER_MODE=$(config_get "mode" "standalone")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "")
+
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+lxc_running() { [ "$(lxc_state)" = "running" ]; }
+lxc_exists()  { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+daemon_running() {
+    lxc_running || return 1
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-active --quiet yacy 2>/dev/null
+}
+host_api_running() { systemctl is-active --quiet secubox-yacy.service 2>/dev/null; }
+
+emit_components_json() {
+    local lxc_st daemon_st api_st
+    if lxc_exists; then lxc_st=$(lxc_state); [ -z "$lxc_st" ] && lxc_st="absent"
+    else lxc_st="absent"; fi
+    daemon_running && daemon_st="running" || daemon_st="stopped"
+    host_api_running && api_st="running" || api_st="stopped"
+    cat <<EOF
+{
+  "module": "yacy",
+  "version": "$VERSION",
+  "components": [
+    {"name": "lxc",      "state": "$lxc_st",      "detail": "$LXC_NAME @ $LXC_IP on br-lxc"},
+    {"name": "daemon",   "state": "$daemon_st",   "detail": "yacy ($PEER_MODE), port $HTTP_PORT"},
+    {"name": "host-api", "state": "$api_st",      "detail": "secubox-yacy.service (uvicorn @ /run/secubox/yacy.sock)"}
+  ]
+}
+EOF
+}
+
+emit_components_text() {
+    printf '%-12s %-12s %s\n' "COMPONENT" "STATE" "DETAIL"
+    local s
+    if lxc_exists; then s=$(lxc_state); [ -z "$s" ] && s="absent"; printf '%-12s %-12s %s\n' "lxc" "$s" "$LXC_NAME @ $LXC_IP on br-lxc"
+    else printf '%-12s %-12s %s\n' "lxc" "absent" "$LXC_NAME — run 'yacyctl install'"; fi
+    daemon_running && printf '%-12s %-12s %s\n' "daemon" "running" "yacy ($PEER_MODE), port $HTTP_PORT" \
+                   || printf '%-12s %-12s %s\n' "daemon" "stopped" "yacy ($PEER_MODE), port $HTTP_PORT"
+    host_api_running && printf '%-12s %-12s %s\n' "host-api" "running" "secubox-yacy.service (uvicorn)" \
+                     || printf '%-12s %-12s %s\n' "host-api" "stopped" "secubox-yacy.service (uvicorn)"
+}
+
+emit_status_json() {
+    local overall
+    if lxc_running && daemon_running && host_api_running; then overall="green"
+    elif lxc_exists && (daemon_running || host_api_running); then overall="yellow"
+    else overall="red"; fi
+    cat <<EOF
+{"module": "yacy", "version": "$VERSION", "overall": "$overall"}
+EOF
+}
+
+emit_access_json() {
+    local lan_url public_url
+    lan_url="https://$(hostname -I | awk '{print $1}')/yacy/"
+    [ -n "$PUBLIC_HOSTNAME" ] && public_url="https://${PUBLIC_HOSTNAME}/yacy/" || public_url=""
+    cat <<EOF
+{
+  "module": "yacy",
+  "access": [
+    {"url": "$lan_url", "auth": "jwt|yacy-admin", "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
+    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "jwt|yacy-admin", "scope": "public"}\n' "$public_url" )
+  ]
+}
+EOF
+}
+
+cmd_components() { case "${1:-}" in --json) emit_components_json ;; *) emit_components_text ;; esac; }
+cmd_status()     { case "${1:-}" in --json) emit_status_json ;; *) emit_components_text; echo; emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])' ;; esac; }
+cmd_access()     { case "${1:-}" in --json) emit_access_json ;; *) emit_access_json | python3 -m json.tool ;; esac; }
+
+cmd_install() {
+    [ -x "$INSTALL_LIB" ] || { err "install script not found at $INSTALL_LIB"; exit 2; }
+    log "Running LXC bootstrap from $INSTALL_LIB ..."
+    SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
+        bash "$INSTALL_LIB"
+    systemctl start secubox-yacy.service 2>/dev/null || true
+    log "Done. Try 'yacyctl status' to verify."
+}
+
+cmd_reload() {
+    systemctl restart secubox-yacy.service 2>/dev/null || true
+    lxc_running && lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart yacy 2>/dev/null || true
+    log "Reloaded."
+}
+
+cmd_help() {
+    cat <<'HELP'
+yacyctl — SecuBox YaCy controller (SEARCH layer)
+
+Three-fold introspection:
+  yacyctl components [--json]
+  yacyctl status     [--json]
+  yacyctl access     [list|show <name>] [--json]
+
+Lifecycle:
+  yacyctl install                  # idempotent LXC + JVM + YaCy bootstrap
+  yacyctl reload                   # restart host FastAPI + yacy daemon
+
+Search-engine nouns:
+  yacyctl peer       list|add <url>|remove <hash>|status <hash>
+  yacyctl index      status|build <urls.txt>|clear|optimize
+  yacyctl query      test <terms>|count <terms>
+  yacyctl blacklist  list|add <pattern>|remove <pattern>
+  yacyctl crawler    list|start <profile>|stop <id>|schedule <profile> <cron>
+
+  (--json on any verb returns machine-readable output)
+
+For grammar details: docs/grammar.md (SEARCH layer)
+HELP
+}
+
+main() {
+    local noun="${1:-help}"
+    shift || true
+    case "$noun" in
+        components|status|access|install|reload) "cmd_${noun}" "$@" ;;
+        peer|index|query|blacklist|crawler)
+            err "noun '$noun' not yet implemented in v$VERSION — see #232 follow-up task"
+            exit 2 ;;
+        --help|-h|help|"") cmd_help ;;
+        --version|-V) echo "yacyctl $VERSION" ;;
+        *) err "unknown noun: $noun"; cmd_help; exit 1 ;;
+    esac
+}
+
+main "$@"
