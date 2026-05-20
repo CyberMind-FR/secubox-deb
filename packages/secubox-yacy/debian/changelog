@@ -1,3 +1,40 @@
+secubox-yacy (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: new configure_yacy_admin() step injects the generated
+    admin password into yacy.conf as a Digest hash so the admin login
+    works on first hit. Before this, the operator had a password file at
+    /etc/secubox/secrets/yacy-admin but the actual yacy.conf still
+    carried YaCy's installed default hash — login always failed until
+    someone manually ran `bin/passwd.sh` inside the LXC.
+  * Hash format: MD5 of "admin:<adminRealm>:<password>", matching what
+    YaCy's own bin/passwd.sh script computes via Digest -strfhex.
+  * Idempotent: only patches yacy.conf when the current hash doesn't
+    already match the password file (re-running `yacyctl install` is
+    a no-op once aligned).
+  * Note: the realm string is pulled from the running yacy.conf at
+    install time — YaCy uses a long human-readable sentence as the
+    Digest realm, not the bare string "YaCy", and the realm IS part of
+    the hash input.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 21:30:00 +0200
+
+secubox-yacy (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * Ship the public-facing yacy.maegia.tv vhost as
+    /etc/nginx/sites-available/yacy.conf (from nginx/yacy-vhost.conf).
+    Operator enables with `ln -s ../sites-available/yacy.conf
+    /etc/nginx/sites-enabled/`. Was previously hand-crafted on the board.
+  * The shipped vhost now carries the `^~ /.well-known/acme-challenge/`
+    block so `acme.sh --issue -d yacy.maegia.tv -w /usr/share/secubox/www`
+    succeeds — without it, every renewal proxies the path to the YaCy
+    LXC which 404s, and HAProxy falls back to the alphabetically-first
+    cert (`*.gk2.secubox.in.pem`), making browsers reject the connection.
+  * Board-validated 2026-05-20: cert issued (LE E7, exp 2026-08-18),
+    HAProxy reloaded, `openssl s_client -servername yacy.maegia.tv`
+    returns `subject=CN = yacy.maegia.tv`. Closes #246.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 18:00:00 +0200
+
 secubox-yacy (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * install-lxc.sh: update YACY_RELEASE_URL to v1.941 (the v1.940 tarball
