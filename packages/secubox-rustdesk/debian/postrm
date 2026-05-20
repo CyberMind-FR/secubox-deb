@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+case "$1" in
+    purge)
+        rm -f /etc/secubox/rustdesk.toml /etc/secubox/rustdesk.toml.example
+        rm -rf /var/lib/secubox/rustdesk
+        ;;
+esac
+#DEBHELPER#
+exit 0

@@ -1,0 +1,9 @@
+{
+  "title": "RustDesk",
+  "subtitle": "Remote desktop relay",
+  "icon": "fa-desktop",
+  "url": "/rustdesk/",
+  "section": "remote-access",
+  "order": 70,
+  "module": "rustdesk"
+}

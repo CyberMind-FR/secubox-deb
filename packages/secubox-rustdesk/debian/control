@@ -1,0 +1,36 @@
+Source: secubox-rustdesk
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+
+Package: secubox-rustdesk
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         secubox-haproxy,
+         lxc,
+         lxc-templates,
+         debootstrap,
+         python3-uvicorn,
+         python3-fastapi,
+         python3-toml,
+         openssl,
+         curl,
+         jq,
+         iproute2,
+         nftables
+Description: SecuBox RustDesk — self-hosted remote desktop relay
+ Hosts RustDesk hbbs (signal) and hbbr (relay) servers in a Debian LXC at
+ 10.100.0.90 on br-lxc. Two separate systemd units inside the LXC for the
+ two daemons; rustdeskctl components surfaces both as independent.
+ .
+ Public exposure does not use mitmproxy (it cannot inspect the raw UDP
+ NAT-traversal traffic on 21116/udp). HAProxy stream-mode handles
+ 21115/tcp, 21116/tcp, 21117/tcp; nftables DNAT handles 21116/udp.
+ .
+ rustdeskctl exposes the canonical SecuBox three-fold introspection plus
+ peer/relay/key/session nouns matching the REMOTE-ACCESS layer of the CTL
+ grammar (sister to OPS MONITORING / SEARCH).
