@@ -959,6 +959,24 @@ AUTOLOGIN
   ok "Kiosk service installed and enabled (graphical.target, TTY2 autologin)"
 fi
 
+# ── Operator tools: flash/install/TUI (all boards) ──────────────────
+# These are useful regardless of kiosk/X11 availability — flash internal
+# eMMC/disk from a running system, drop into the console TUI, perform a
+# factory reset. See issue #228.
+for tool in secubox-flash-disk secubox-flash-emmc secubox-console-tui secubox-factory-reset; do
+  if [[ -f "${SCRIPT_DIR}/sbin/${tool}" ]]; then
+    cp "${SCRIPT_DIR}/sbin/${tool}" "${ROOTFS}/usr/sbin/"
+    chmod +x "${ROOTFS}/usr/sbin/${tool}"
+  fi
+done
+
+# secubox-kiosk-tui: discoverable alias for the kiosk-mode fallback TUI
+# (the TTY-side dashboard operators reach when the X11 kiosk is down or
+# off). Matches the `kiosk` mode in secubox-mode.
+if [[ -f "${ROOTFS}/usr/sbin/secubox-console-tui" ]]; then
+  ln -sf secubox-console-tui "${ROOTFS}/usr/sbin/secubox-kiosk-tui"
+fi
+
 # ── Pre-generate SSL certificates for nginx ─────────────────────────
 # (firstboot will regenerate on first boot, but nginx needs certs to start)
 # Generate certs on HOST (chroot may lack /dev/urandom)
