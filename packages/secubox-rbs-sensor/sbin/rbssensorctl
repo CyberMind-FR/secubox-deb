@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: rbssensorctl
+# CyberMind — https://cybermind.fr
+#
+# Rogue Base Station sensor controller. Host-resident (no LXC).
+# Three-fold introspection (components/status/access) + cell/neighbour nouns
+# + mitigation verbs (lte-only / rf-off / restore).
+#
+# Grammar: docs/grammar.md, WALL layer.
+# Conventions: docs/MODULE-GUIDELINES.md §7.
+# Doctrine: docs/superpowers/specs/2026-05-20-secubox-wall-ep06.md §2 (OPAD).
+
+set -u
+
+readonly VERSION="0.1.0"
+# Host-resident ctl talks only to the FastAPI on the Unix socket; no TOML
+# is parsed here (config lives in the daemon).
+readonly SOCKET="${SECUBOX_RBS_SENSOR_SOCKET:-/run/secubox/rbs-sensor.sock}"
+
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+
+log()  { printf '%b[rbs-sensor]%b %s\n' "$GREEN" "$NC" "$*"; }
+warn() { printf '%b[warn]%b %s\n'        "$YELLOW" "$NC" "$*" >&2; }
+err()  { printf '%b[error]%b %s\n'       "$RED"    "$NC" "$*" >&2; }
+
+# Hit the FastAPI on the Unix socket. Returns the body or "" on error.
+_curl_unix() {
+    local method="$1" path="$2"
+    curl -s -X "$method" --unix-socket "$SOCKET" "http://localhost$path" 2>/dev/null
+}
+
+host_api_running() {
+    systemctl is-active --quiet secubox-rbs-sensor.service 2>/dev/null
+}
+
+# ── Verbs ─────────────────────────────────────────────────────────────────────
+cmd_components() {
+    case "${1:-}" in
+        --json)
+            _curl_unix GET /components | python3 -m json.tool 2>/dev/null \
+                || echo '{"error":"api-unreachable"}'
+            ;;
+        ""|list|status)
+            local data
+            data=$(_curl_unix GET /components)
+            if [ -z "$data" ]; then
+                err "API unreachable at $SOCKET — is secubox-rbs-sensor.service up?"
+                exit 2
+            fi
+            printf '%-12s %-12s %s\n' "COMPONENT" "STATE" "DETAIL"
+            echo "$data" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+# .format() avoids both bash single-quote nesting and Python 3.11
+# no-backslash-in-fstring restriction.
+for c in d["components"]:
+    print("{:<12} {:<12} {}".format(c["name"], c["state"], c["detail"]))
+'
+            ;;
+        *) err "unknown verb for 'components': $1"; exit 1 ;;
+    esac
+}
+
+cmd_status() {
+    case "${1:-}" in
+        --json)
+            _curl_unix GET /status | python3 -m json.tool 2>/dev/null \
+                || echo '{"error":"api-unreachable"}'
+            ;;
+        "")
+            cmd_components
+            echo
+            local data; data=$(_curl_unix GET /status)
+            echo "$data" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print("overall: {}".format(d["overall"]))
+    print("captures_subscriber_identifiers: {}".format(d["captures_subscriber_identifiers"]))
+except Exception:
+    print("overall: unknown (api error)")
+'
+            ;;
+        *) err "unknown verb for 'status': $1"; exit 1 ;;
+    esac
+}
+
+cmd_access() {
+    _curl_unix GET /access | python3 -m json.tool 2>/dev/null \
+        || echo '{"error":"api-unreachable"}'
+}
+
+cmd_cell() {
+    case "${1:-show}" in
+        show|servingcell|"")
+            _curl_unix GET /servingcell | python3 -m json.tool 2>/dev/null \
+                || echo '{"error":"api-unreachable"}'
+            ;;
+        *) err "cell: only 'show' is implemented in v$VERSION"; exit 2 ;;
+    esac
+}
+
+cmd_neighbour() {
+    case "${1:-list}" in
+        list|"")
+            _curl_unix GET /neighbours | python3 -m json.tool 2>/dev/null \
+                || echo '{"error":"api-unreachable"}'
+            ;;
+        *) err "neighbour: only 'list' is implemented in v$VERSION"; exit 2 ;;
+    esac
+}
+
+cmd_mitigate() {
+    case "${1:-}" in
+        lte-only)
+            log "POST /mitigate/lte-only"
+            _curl_unix POST /mitigate/lte-only | python3 -m json.tool 2>/dev/null
+            ;;
+        rf-off)
+            log "POST /mitigate/rf-off"
+            _curl_unix POST /mitigate/rf-off | python3 -m json.tool 2>/dev/null
+            ;;
+        restore)
+            log "POST /restore"
+            _curl_unix POST /restore | python3 -m json.tool 2>/dev/null
+            ;;
+        *) err "mitigate: lte-only | rf-off | restore"; exit 2 ;;
+    esac
+}
+
+cmd_install() {
+    # Host-resident — nothing to bootstrap beyond the .deb itself.
+    log "Host-resident module — install scope is just the .deb install."
+    log "Starting host-side FastAPI ..."
+    systemctl start secubox-rbs-sensor.service 2>/dev/null || true
+    log "Done. Try 'rbssensorctl status' to verify."
+}
+
+cmd_reload() {
+    systemctl restart secubox-rbs-sensor.service 2>/dev/null || true
+    log "Reloaded host FastAPI."
+}
+
+cmd_help() {
+    cat <<'HELP'
+rbssensorctl — SecuBox Rogue Base Station sensor controller (WALL layer)
+
+Three-fold introspection:
+  rbssensorctl components [--json]      # modem / observer / actuator / host-api
+  rbssensorctl status     [--json]      # overall + OPAD invariant flag
+  rbssensorctl access     [--json]      # endpoints + auth
+
+Lifecycle (per docs/MODULE-GUIDELINES.md §7):
+  rbssensorctl install                  # host-resident — just starts the service
+  rbssensorctl reload                   # restart host FastAPI
+  rbssensorctl repair                   # (NOT YET IMPLEMENTED)
+
+Module nouns (v0.1.0):
+  rbssensorctl cell      show           # GET /servingcell
+  rbssensorctl neighbour list           # GET /neighbours
+
+Mitigations (off-path only — see spec §2 OPAD invariant):
+  rbssensorctl mitigate  lte-only       # AT+QCFG="nwscanmode",3,1
+  rbssensorctl mitigate  rf-off         # AT+CFUN=4 (airplane)
+  rbssensorctl mitigate  restore        # restore saved nwscanmode + AT+CFUN=1
+
+For grammar details: /usr/share/doc/secubox-rbs-sensor/README.gz
+                     docs/grammar.md (WALL layer, #236)
+
+OPAD invariant: this sensor reads broadcast cell identifiers + own-modem
+state ONLY. No IMSI/TMSI capture. No diag port. Off-path mitigations only.
+HELP
+}
+
+main() {
+    local noun="${1:-help}"
+    shift || true
+    case "$noun" in
+        components|status|access|install|reload) "cmd_${noun}" "$@" ;;
+        cell|neighbour|mitigate)                 "cmd_${noun}" "$@" ;;
+        --help|-h|help|"") cmd_help ;;
+        --version|-V) echo "rbssensorctl $VERSION" ;;
+        *) err "unknown noun: $noun"; cmd_help; exit 1 ;;
+    esac
+}
+
+main "$@"

@@ -1,0 +1,36 @@
+Source: secubox-rbs-sensor
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+
+Package: secubox-rbs-sensor
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         python3-uvicorn,
+         python3-fastapi,
+         python3-serial,
+         python3-toml,
+         usbutils
+Description: SecuBox RBS Sensor — Rogue Base Station sensor (WALL layer)
+ Host-resident module that drives a Quectel EP06-E mPCIe LTE modem as a
+ cellular telemetry sensor for false-base-station detection. Follows the
+ SecuBox OPAD doctrine (Off-Path Active Defense, OODA loop):
+ .
+ OBSERVE — broadcast cell identifiers + own-modem RX measurements only.
+ ORIENT  — local verdict engine scores LIKELY_ROGUE / SUSPECT / OK.
+ DECIDE  — operator policy or auto-mitigation.
+ ACT     — local off-path mitigation: RAT lock (refuse 2G), RF detach.
+ .
+ The sensor NEVER captures third-party subscriber identifiers
+ (IMSI/TMSI). The CellObservation / NeighbourObservation dataclasses
+ have no fields that could carry such data — proof verifiable via
+ `GET /api/v1/rbs-sensor/status` which returns
+ `captures_subscriber_identifiers: false`.
+ .
+ v0.1.0 is a scaffold: framework + EP06 driver shape + AT command
+ allowlist + service plumbing. The full LTE/GSM cell parser and verdict
+ engine land in v0.2 once a real EP06 is connected.

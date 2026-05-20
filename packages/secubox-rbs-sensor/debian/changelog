@@ -1,0 +1,43 @@
+secubox-rbs-sensor (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial scaffold per docs/superpowers/specs/2026-05-20-secubox-wall-ep06.md.
+  * Host-resident (no LXC) — the modem is host USB hardware (spec §8).
+  * OPAD framework scaffolded inside this package since the spec's
+    prerequisites (`wall_rbs_sensor.py`, `Observer` Protocol,
+    `CellObservation`, `NeighbourObservation`, verdict engine) were
+    absent from the repo at spec-receipt time:
+    - lib/rbs_sensor/observer.py: Observer Protocol + frozen-dataclass
+      CellObservation / NeighbourObservation with NO subscriber-identifier
+      fields (structural proof of OPAD invariant). The module-level
+      constant CAPTURES_SUBSCRIBER_IDENTIFIERS = False is exposed via
+      /api/v1/rbs-sensor/status.
+    - lib/rbs_sensor/verdict.py: Verdict (OK/SUSPECT/LIKELY_ROGUE) +
+      orient() entry point (v0.1 returns OK; real heuristics in v0.2).
+    - lib/rbs_sensor/ep06.py: AT_ALLOWLIST + AT_FORBIDDEN sets +
+      Ep06Modem (USB enumeration + dynamic ttyUSB* discovery) +
+      Ep06Observer + Ep06Actuator stubs. SMS / phonebook / paging /
+      diag / IMSI commands explicitly forbidden.
+  * sbin/rbssensorctl follows the SecuBox CTL grammar (components /
+    status / access + install / reload + cell / neighbour / mitigate
+    nouns). Hits the FastAPI on /run/secubox/rbs-sensor.sock.
+  * api/main.py: FastAPI control plane on Unix socket; nginx reverse
+    proxy at /api/v1/rbs-sensor/ on the canonical hub vhost.
+  * No QMI/MBIM dependency — the sensor only reads the AT control
+    port. `option` kernel module is sufficient (already in the gk2
+    kernel build); `qmi_wwan` is NOT required for sensor operation.
+  * Closes #236 v0.1.0 scope.
+
+  Out of scope for v0.1.0 (deferred to v0.2):
+
+   - Full AT response parser (servingcell LTE/GSM/WCDMA + neighbourcell)
+   - Real heuristics in the verdict engine (RAT downgrade pressure,
+     PCID hopping, EARFCN/band mismatch with operator priors, TAC churn
+     without mobility, asymmetric power profile)
+   - Live mitigation execution against real hardware (the stubs in
+     Ep06Actuator currently return "not-implemented-v0.1" pending real
+     EP06 on the gk2 board)
+   - 30+ unit tests including AT-allowlist audit + dataclass-fields
+     OPAD invariant check (test framework lives in tests/, currently
+     skeleton)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 23:55:00 +0200
