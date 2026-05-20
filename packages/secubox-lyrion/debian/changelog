@@ -1,3 +1,23 @@
+secubox-lyrion (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * SECURITY: replace the LAN-only allow/deny on /lyrion/ + lyrion.maegia.tv
+    with proper Authelia SSO via auth_request /__sbx_auth_verify
+    (wired by secubox-authelia v1.0.2 #263).
+  * On the canonical hub vhost: /lyrion/ uses the Authelia portal at
+    /auth/ (same origin).
+  * On the dedicated lyrion.maegia.tv vhost: 401 → 302 to
+    https://auth.maegia.tv/ (Authelia session cookie scoped to
+    .maegia.tv per #239 spec, shared across subdomains).
+  * Vhost-internal /__sbx_auth_verify location added (the secubox-d
+    snippet only loads on the canonical hub; dedicated vhosts need
+    their own copy).
+  * X-Forwarded-User / X-Forwarded-Groups propagated from Authelia
+    Remote-* headers to LMS.
+  * acme-challenge stays exposed (outside the gate) for LE renewals.
+  * Closes #264 (lyrion portion).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 02:50:00 +0200
+
 secubox-lyrion (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * SECURITY: gate /lyrion/ (canonical hub vhost) AND lyrion.maegia.tv
