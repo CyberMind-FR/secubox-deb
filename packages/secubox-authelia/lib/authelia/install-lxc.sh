@@ -184,8 +184,9 @@ INNER
 
 # ── Render configuration.yml from /etc/secubox/authelia.toml ────────────────
 # The host-side TOML is the operator-facing config; we render Authelia's YAML
-# from it at install + on `autheliactl reload`. Secrets are generated once and
-# persisted under /etc/secubox/secrets/.
+# host-side (with proper variable substitution) and pipe into the LXC via
+# lxc-attach stdin. Authelia 4.39+ schema (server.address, identity_validation
+# replaces top-level jwt_secret, jwks for OIDC).
 render_authelia_config() {
     local jwt_secret store_key
     [ -f "$SECRETS_DIR/authelia-jwt" ]   || openssl rand -hex 32 > "$SECRETS_DIR/authelia-jwt"
@@ -194,62 +195,60 @@ render_authelia_config() {
     jwt_secret=$(cat "$SECRETS_DIR/authelia-jwt")
     store_key=$(cat "$SECRETS_DIR/authelia-store")
 
-    log "Rendering /etc/authelia/configuration.yml inside LXC ..."
+    log "Rendering /etc/authelia/configuration.yml ..."
 
-    # Read /etc/secubox/users.json on the host and reformat as Authelia file
-    # backend user_database.yml. Done host-side because the LXC may not have
-    # python3-toml.
-    python3 - "$SECRETS_DIR" <<PYEOF
-import json, os, sys, secrets
-secrets_dir = sys.argv[1]
+    # 1. users_database.yml — convert /etc/secubox/users.json (v2 schema, argon2id
+    #    hashes) to Authelia's file-backend format.
+    python3 - <<PYEOF
+import json, os, sys
 users_json = "/etc/secubox/users.json"
-authelia_users_yml = "/tmp/authelia-users.yml"
+out = "/tmp/authelia-users.yml"
 
 if not os.path.exists(users_json):
     sys.exit("/etc/secubox/users.json missing — secubox-users must be installed first")
 
 doc = json.load(open(users_json))
 yml = "users:\n"
+n = 0
 for u in doc.get("users", []):
     if not u.get("enabled", True): continue
+    if not u.get("password_hash"): continue   # skip users with null hash
     yml += f"  {u['username']}:\n"
     yml += f"    displayname: {u['username']}\n"
-    yml += f"    password: {u.get('password_hash', '!')!r}\n"
+    yml += f"    password: '{u['password_hash']}'\n"
     yml += f"    email: {u.get('email') or u['username']+'@secubox.local'}\n"
     yml += f"    groups: [{u.get('role', 'user')}]\n"
-
-open(authelia_users_yml, "w").write(yml)
-print(f"Rendered {len(doc.get('users', []))} users to {authelia_users_yml}")
+    n += 1
+open(out, "w").write(yml)
+print(f"Rendered {n} users to {out}")
 PYEOF
 
-    # Push files into the LXC
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c "cat > /etc/authelia/users_database.yml" \
         < /tmp/authelia-users.yml
     rm -f /tmp/authelia-users.yml
 
-    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- env \
-        AUTHELIA_HTTP_PORT="$AUTHELIA_HTTP_PORT" \
-        AUTHELIA_JWT_SECRET="$jwt_secret" \
-        AUTHELIA_STORAGE_KEY="$store_key" \
-        sh -c 'cat > /etc/authelia/configuration.yml' <<'CONF'
-# /etc/authelia/configuration.yml — SecuBox-managed
+    # 2. configuration.yml — Authelia 4.39+ schema. Variables substituted
+    #    HOST-SIDE (we don't trust env-expansion-inside-quoted-heredoc).
+    #    OIDC disabled for v1.0.0: enabling it requires a JWKS RSA key pair
+    #    and at least one fully-configured client. v1.1.0 wizard handles that.
+    cat > /tmp/authelia-config.yml <<CONF
+# /etc/authelia/configuration.yml — SecuBox-managed (Authelia 4.39+)
 # Re-rendered by autheliactl reload from /etc/secubox/authelia.toml + secrets.
 # Do NOT edit by hand — your changes will be overwritten.
 
 theme: dark
-default_2fa_method: totp
 
 server:
-  host: 0.0.0.0
-  port: ${AUTHELIA_HTTP_PORT}
-  path: ""
+  address: 'tcp://0.0.0.0:${AUTHELIA_HTTP_PORT}/'
 
 log:
   level: info
   format: text
   file_path: /var/log/authelia/authelia.log
 
-jwt_secret: ${AUTHELIA_JWT_SECRET}
+identity_validation:
+  reset_password:
+    jwt_secret: ${jwt_secret}
 
 authentication_backend:
   file:
@@ -264,13 +263,16 @@ access_control:
       policy: one_factor
 
 session:
-  name: authelia_session
-  domain: maegia.tv
-  expiration: 3600
-  inactivity: 300
+  cookies:
+    - name: authelia_session
+      domain: maegia.tv
+      authelia_url: 'https://auth.maegia.tv/'
+      expiration: 3600
+      inactivity: 300
+  secret: ${jwt_secret}
 
 storage:
-  encryption_key: ${AUTHELIA_STORAGE_KEY}
+  encryption_key: ${store_key}
   local:
     path: /var/lib/authelia/db.sqlite3
 
@@ -278,14 +280,25 @@ notifier:
   filesystem:
     filename: /var/lib/authelia/notifications.txt
 
-identity_providers:
-  oidc:
-    hmac_secret: ${AUTHELIA_JWT_SECRET}
-    issuer_certificate_chain: ""
-    issuer_private_key: ""    # operator generates a key pair via `autheliactl oidc-client rotate-secret`
-    # Pre-provisioned clients (operator fills client_secret via wizard)
-    clients: []
+# OIDC identity provider — disabled in v1.0.0. Enable via 'autheliactl wizard'
+# in v1.1.0 (will generate the JWKS RSA key + at least one client).
+# identity_providers:
+#   oidc:
+#     hmac_secret: ${jwt_secret}
+#     jwks:
+#       - key_id: 'secubox-oidc'
+#         algorithm: 'RS256'
+#         key: |
+#           -----BEGIN RSA PRIVATE KEY-----
+#           ...
+#     clients:
+#       - client_id: 'secubox-grafana'
+#         ...
 CONF
+
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c "cat > /etc/authelia/configuration.yml" \
+        < /tmp/authelia-config.yml
+    rm -f /tmp/authelia-config.yml
 
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- chown -R authelia:authelia /etc/authelia
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart authelia.service

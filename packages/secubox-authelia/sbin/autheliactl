@@ -55,7 +55,7 @@ lxc_exists()  { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
 
 daemon_running() {
     lxc_running || return 1
-    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-active --quiet authelia-server 2>/dev/null
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-active --quiet authelia 2>/dev/null
 }
 
 host_api_running() {
@@ -80,7 +80,7 @@ emit_components_json() {
   "version": "$VERSION",
   "components": [
     {"name": "lxc",      "state": "$lxc_st",      "detail": "$LXC_NAME @ $LXC_IP on br-lxc"},
-    {"name": "daemon",   "state": "$daemon_st",   "detail": "authelia-server, port $HTTP_PORT"},
+    {"name": "daemon",   "state": "$daemon_st",   "detail": "authelia, port $HTTP_PORT"},
     {"name": "host-api", "state": "$api_st",      "detail": "secubox-authelia.service (uvicorn @ /run/secubox/authelia.sock)"}
   ]
 }
@@ -96,9 +96,9 @@ emit_components_text() {
         printf '%-12s %-12s %s\n' "lxc" "absent" "$LXC_NAME @ $LXC_IP on br-lxc — run 'autheliactl install'"
     fi
     if daemon_running; then
-        printf '%-12s %-12s %s\n' "daemon" "running" "authelia-server, port $HTTP_PORT"
+        printf '%-12s %-12s %s\n' "daemon" "running" "authelia, port $HTTP_PORT"
     else
-        printf '%-12s %-12s %s\n' "daemon" "stopped" "authelia-server, port $HTTP_PORT"
+        printf '%-12s %-12s %s\n' "daemon" "stopped" "authelia, port $HTTP_PORT"
     fi
     if host_api_running; then
         printf '%-12s %-12s %s\n' "host-api" "running" "secubox-authelia.service (uvicorn)"

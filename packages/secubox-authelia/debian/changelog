@@ -1,3 +1,18 @@
+secubox-authelia (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * sbin/autheliactl: detect `authelia` daemon (not the relic
+    `authelia-server` from the grafana sed-copy).
+  * lib/authelia/install-lxc.sh: render configuration.yml HOST-side with
+    proper variable substitution, then pipe via lxc-attach stdin (the
+    previous `env VAR=val sh -c 'cat ... <<CONF'` left ${VARS} literal).
+  * Authelia 4.39+ schema migration: server.address replaces server.host/
+    port; identity_validation.reset_password.jwt_secret replaces top-level
+    jwt_secret; session.cookies[] replaces session.{name,domain}.
+  * OIDC identity_providers block disabled in v1.0.0 (requires jwks RSA
+    key pair + non-empty clients list — both planned for v1.1.0 wizard).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 16:00:00 +0200
+
 secubox-authelia (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release: Authelia SSO IdP in LXC at 10.100.0.20.
