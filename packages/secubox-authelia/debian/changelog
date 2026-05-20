@@ -1,0 +1,13 @@
+secubox-authelia (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: Authelia SSO IdP in LXC at 10.100.0.20.
+  * File backend reading /etc/secubox/users.json (argon2 — matches Authelia spec).
+  * OIDC + 2FA TOTP (opt-in per user).
+  * Three-fold CTL grammar (autheliactl: components, status, access).
+  * Lifecycle verbs: install, reload, repair, wizard, uninstall.
+  * Pre-configured OIDC clients: grafana, gitea, nextcloud (operator fills client secrets).
+  * Inherits all 9 install-lxc fixes from v2.11.1 (download template, masquerade,
+    resolv via lxc-attach, ExecStartPre+ prefix, nginx routes.d/, etc.).
+  * Closes: #239
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 15:00:00 +0200
