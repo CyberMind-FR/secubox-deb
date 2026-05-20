@@ -26,7 +26,7 @@ from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Header, Request, Response
 
-VERSION = "1.0.3"
+VERSION = "1.0.6"
 CTL = shutil.which("autheliactl") or "/usr/sbin/autheliactl"
 
 # Authelia LXC (provisioned by install-lxc.sh at 10.100.0.20:9091). Override
