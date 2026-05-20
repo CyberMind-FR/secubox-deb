@@ -15,15 +15,29 @@ spec.
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import socket
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import FastAPI, HTTPException, Header, Response
+from fastapi import FastAPI, HTTPException, Header, Request, Response
 
-VERSION = "1.0.0"
+VERSION = "1.0.2"
 CTL = shutil.which("autheliactl") or "/usr/sbin/autheliactl"
+
+# Authelia LXC (provisioned by install-lxc.sh at 10.100.0.20:9091). Override
+# via SECUBOX_AUTHELIA_URL if the LXC IP/port differs (e.g. for tests).
+AUTHELIA_URL = os.environ.get("SECUBOX_AUTHELIA_URL", "http://10.100.0.20:9091")
+# Authelia headers worth forwarding back to nginx (and through to the
+# protected backend). nginx auth_request can capture these via
+# `auth_request_set $sbx_user $upstream_http_remote_user;` etc.
+_AUTH_REMOTE_HEADERS = (
+    "Remote-User", "Remote-Groups", "Remote-Email", "Remote-Name",
+)
 
 app = FastAPI(
     title="SecuBox Authelia",
@@ -76,23 +90,56 @@ def access() -> Dict[str, Any]:
 
 
 @app.get("/verify")
+@app.head("/verify")
 def verify(
+    request: Request,
     response: Response,
     authorization: str | None = Header(default=None),
     cookie: str | None = Header(default=None),
-) -> Dict[str, Any]:
+) -> Response:
     """
-    nginx `auth_request` target for SSO-less backends.
+    nginx `auth_request` target.
 
-    Returns 200 + X-Sbx-User / X-Sbx-Role headers if the SecuBox JWT is valid.
-    Returns 401 otherwise.
+    Reverse-proxies to Authelia's native /api/verify which:
+      - validates the `authelia_session` cookie against the session store
+      - returns 200 + Remote-User / Remote-Groups / Remote-Email headers
+        when the session is valid
+      - returns 401 otherwise
 
-    Stub for v1.0.0 — full JWT validation lives in secubox-portal/api/main.py
-    today. This endpoint reverse-proxies to the portal's existing /verify or
-    re-implements the JWT check locally; the v1.1.0 plan is to consolidate
-    into a shared secubox-core helper.
+    We propagate those Remote-* headers back to nginx so the protected
+    backend's `proxy_set_header` can capture them via
+    `auth_request_set $sbx_user $upstream_http_remote_user;` (etc).
     """
-    # TODO v1.1.0: validate JWT against /etc/secubox/secubox.conf:[api].jwt_secret
-    # For now, this endpoint is a stub that returns 401 — wire to secubox-portal
-    # /api/v1/portal/verify once that endpoint exists (see #239 spec §Phase A).
-    raise HTTPException(status_code=501, detail="auth_request /verify not yet wired — see #239 Phase A")
+    # Pass through Cookie + Authorization headers to Authelia. nginx already
+    # stripped the request body (proxy_pass_request_body off) so we're just
+    # forwarding metadata.
+    upstream = f"{AUTHELIA_URL.rstrip('/')}/api/verify"
+    headers = {}
+    if cookie:
+        headers["Cookie"] = cookie
+    if authorization:
+        headers["Authorization"] = authorization
+
+    req = urllib.request.Request(upstream, method="GET", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=3) as r:
+            status_code = r.status
+            for h in _AUTH_REMOTE_HEADERS:
+                v = r.headers.get(h)
+                if v is not None:
+                    response.headers[h] = v
+    except urllib.error.HTTPError as e:
+        # Authelia returned a non-2xx (typically 401). Propagate the code so
+        # nginx's `error_page 401 = @sbx_auth_login;` can fire.
+        return Response(status_code=e.code)
+    except (urllib.error.URLError, socket.timeout, ConnectionError, OSError) as e:
+        # Authelia LXC unreachable — fail closed (deny by default).
+        raise HTTPException(
+            status_code=503,
+            detail=f"authelia upstream unreachable: {e!r}",
+        )
+
+    # 2xx from Authelia → authenticated. Return 200 (with the Remote-* headers
+    # already written into `response`).
+    response.status_code = 200 if status_code < 300 else status_code
+    return response

@@ -1,3 +1,35 @@
+secubox-authelia (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * api/main.py: implement /verify properly. v1.0.1 returned HTTP 501
+    (stub) which blocked SSO-style auth_request gating on sibling
+    modules — see #259 (zigbee v2.4.1) and #261 (lyrion v1.0.4) which
+    both fell back to LAN-only allow/deny for this exact reason.
+    .
+    The /verify handler now reverse-proxies to Authelia's native
+    /api/verify endpoint (10.100.0.20:9091), which:
+      - validates the authelia_session cookie against the session store
+      - returns 200 + Remote-User / Remote-Groups / Remote-Email headers
+        when the session is valid
+      - returns 401 otherwise
+    .
+    The Remote-* headers are propagated back to nginx so protected
+    backends can capture them via
+        auth_request_set $sbx_user $upstream_http_remote_user;
+    and feed them into proxy_set_header X-Forwarded-User $sbx_user;
+    .
+    Fail-closed: if the Authelia LXC is unreachable, /verify returns
+    503 rather than 200 (nginx auth_request treats anything ≥500 as
+    deny, matching the LAN-only fallback semantics).
+    .
+    After this lands, sibling modules can swap their LAN-only
+    allow/deny for:
+        auth_request /__sbx_auth_verify;
+        error_page 401 = @sbx_auth_login;
+    See follow-up PRs to be filed against #259 / #261.
+  * Closes #262
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 02:30:00 +0200
+
 secubox-authelia (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * sbin/autheliactl: detect `authelia` daemon (not the relic
