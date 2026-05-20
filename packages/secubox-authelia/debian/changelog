@@ -1,3 +1,19 @@
+secubox-authelia (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/authelia.conf + nginx/authelia-vhost.conf: hardcode
+    X-Forwarded-Proto: https on the proxy to the Authelia LXC.
+    v1.0.3 used `$scheme` (nginx's internal scheme), which is `http`
+    because TLS terminates at HAProxy. Authelia then built its
+    post-login redirect URL as `http://admin.gk2.secubox.in:9080/...`
+    (nginx's listen port). Browser saw `https://...:9080/...`, tried
+    a TLS handshake on the plain-HTTP port, and bailed with
+    SSL_ERROR_RX_RECORD_TOO_LONG.
+    HAProxy is the only TLS terminator on the path; the user-facing
+    scheme is always https — hardcoding it is correct.
+  * Closes #268.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 03:55:00 +0200
+
 secubox-authelia (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * install-lxc.sh: set Authelia server.address path prefix /auth
