@@ -1,0 +1,9 @@
+{
+  "title": "Lyrion",
+  "subtitle": "Music server",
+  "icon": "fa-music",
+  "url": "/lyrion/",
+  "section": "hosting",
+  "order": 80,
+  "module": "lyrion"
+}

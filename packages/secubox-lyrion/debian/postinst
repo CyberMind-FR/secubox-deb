@@ -1,28 +1,36 @@
-#!/bin/bash
+#!/bin/sh
+# SecuBox Lyrion — post-install
 set -e
+
 case "$1" in
-  configure)
-    # Ensure secubox user exists
-    id -u secubox >/dev/null 2>&1 || \
-      adduser --system --group --no-create-home \
-        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    # Create runtime directories
-    install -d -o secubox -g secubox -m 750 /run/secubox
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox
-    # Create data directories
-    install -d -m 755 /srv/lyrion
-    install -d -m 755 /srv/media
-    install -d -m 755 /var/backups/secubox/lyrion
-    # Ensure nginx secubox.d directory exists
-    install -d -m 755 /etc/nginx/secubox.d
-    # Ensure config directory exists
-    install -d -m 755 /etc/secubox
-    # Enable and start service
-    systemctl daemon-reload
-    systemctl enable secubox-lyrion.service
-    systemctl start  secubox-lyrion.service || true
-    # Reload nginx to pick up new location
-    systemctl reload nginx 2>/dev/null || true
-    ;;
+    configure)
+        # secubox system user/group (idempotent, matches sibling modules)
+        getent group secubox >/dev/null || groupadd --system secubox
+        getent passwd secubox >/dev/null || useradd --system --gid secubox \
+            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
+
+        install -d -m 0770 -o root -g secubox /etc/secubox
+        install -d -m 0755 -o secubox -g secubox /var/lib/secubox/lyrion
+        install -d -m 0755 -o secubox -g secubox /var/log/secubox
+
+        # Seed config from example if no live config exists
+        if [ ! -f /etc/secubox/lyrion.toml ] && [ -f /etc/secubox/lyrion.toml.example ]; then
+            cp /etc/secubox/lyrion.toml.example /etc/secubox/lyrion.toml
+            chmod 640 /etc/secubox/lyrion.toml
+            chown root:secubox /etc/secubox/lyrion.toml
+        fi
+
+        # Reload nginx if it's running and our snippet parses
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable secubox-lyrion.service 2>/dev/null || true
+        # Do not start the FastAPI before the LXC is provisioned;
+        # `lyrionctl install` will start the service after the LXC is up.
+        ;;
 esac
+
 #DEBHELPER#
+exit 0
