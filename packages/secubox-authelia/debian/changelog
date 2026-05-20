@@ -1,3 +1,25 @@
+secubox-authelia (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * lib/authelia/install-lxc.sh: render session.cookies[] with TWO entries
+    — one per top-level domain where the SSO portal is consumed:
+    `maegia.tv` (auth.maegia.tv) and `${SECUBOX_HUB_DOMAIN}` (default:
+    gk2.secubox.in, override via env). Without the second entry, Authelia
+    rejects /auth/api/state with 403 ERR_BAD_REQUEST when the SPA is
+    loaded on admin.gk2.secubox.in/auth/ because no cookies[].domain
+    matched the request Host. Symptom in browser: AxiosError 403 inside
+    index.Bzd5GHAP.js after the page paints.
+  * lib/authelia/install-lxc.sh: add matching access_control rules
+    for `${SECUBOX_HUB_DOMAIN}` and `*.${SECUBOX_HUB_DOMAIN}`
+    (one_factor) so nginx auth_request → /auth/api/verify resolves
+    cleanly for the canonical hub vhost and every sibling app vhost
+    (lyrion., zigbee., grafana., etc.).
+  * lib/authelia/install-lxc.sh: new readonly SECUBOX_HUB_DOMAIN env
+    knob (default gk2.secubox.in) — operators on other hubs override
+    it before running `autheliactl install`.
+  * Closes #272.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 20 May 2026 18:00:00 +0000
+
 secubox-authelia (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * nginx/authelia.conf: add `sub_filter "__SBX_BANNER_OFF" "";` inside
