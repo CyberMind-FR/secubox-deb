@@ -1,3 +1,14 @@
+secubox-zigbee (2.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/zigbee.conf: fix the 401 → portal redirect scheme. v2.4.2
+    used `$scheme://$http_host` which resolves to `http://...:9080`
+    because nginx itself is plain HTTP (TLS terminates at HAProxy).
+    Now hardcoded to `https://$http_host` matching the public-facing
+    URL the browser actually uses.
+  * Closes #266 (zigbee portion).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 03:35:00 +0200
+
 secubox-zigbee (2.4.2-1~bookworm1) bookworm; urgency=medium
 
   * SECURITY: replace the LAN-only allow/deny on /zigbee/ with proper

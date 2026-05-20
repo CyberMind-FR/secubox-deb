@@ -1,3 +1,14 @@
+secubox-lyrion (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/lyrion.conf + nginx/lyrion-vhost.conf: fix the 401 → portal
+    redirect scheme. v1.0.5 used `$scheme://$http_host` which resolves
+    to `http://...:9080` because nginx is plain HTTP behind HAProxy.
+    Now hardcoded to `https://$http_host` matching the public-facing
+    URL.
+  * Closes #266 (lyrion portion).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 03:35:00 +0200
+
 secubox-lyrion (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * SECURITY: replace the LAN-only allow/deny on /lyrion/ + lyrion.maegia.tv
