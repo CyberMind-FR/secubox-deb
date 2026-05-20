@@ -1,3 +1,21 @@
+secubox-lyrion (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * SECURITY: gate /lyrion/ (canonical hub vhost) AND lyrion.maegia.tv
+    (dedicated vhost) to LAN-only via nginx allow/deny. LMS has no
+    authentication of its own (protectSettings was disabled in #248 to
+    make settings reachable behind nginx reverse-proxy), so without the
+    gate any internet visitor reaching the public DNS would get full
+    LMS control. Matches the secubox-zigbee v2.4.1 / #259 pattern.
+  * acme-challenge location stays exposed (outside the gate) so Let's
+    Encrypt renewals on lyrion.maegia.tv keep working from the public
+    internet.
+  * Commented-out auth_request /__sbx_auth_verify blocks left in both
+    locations, ready to enable when secubox-authelia v1.0.2+ ships a
+    working /verify (currently returns HTTP 501).
+  * Closes #260
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 01:45:00 +0200
+
 secubox-lyrion (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * install-lxc.sh: new ensure_slimproto_dnat() step writes a persistent
