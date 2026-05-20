@@ -1,0 +1,42 @@
+# /etc/secubox/sentinelle-gsm.toml — SecuBox SENTINELLE-GSM configuration
+
+[sensor]
+# Module-level OPAD/privacy invariants — exposed via /api/v1/sensor/gsm/status.
+# DO NOT change. This sensor is RX-only by construction (no SDR TX path) and
+# privacy-by-design (HMAC truncation in PROD). See spec §2 + §6.
+rx_only           = true
+captures_plaintext_imsi_in_prod = false
+
+[livemon]
+# Frequency for the (single) grgsm_livemon_headless instance. Spec §13.1
+# example uses 925.4M. A `secubox-gsm-livemon@<freq>.service` template
+# will land in v0.2 — for now this value is informational.
+frequency = "925.4M"
+
+[scanner]
+# grgsm_scanner sweep (alimente la baseline). v0.1 doesn't run it; v0.2
+# wires a systemd timer.
+sweep_interval_minutes = 360
+arfcn_ranges = ["GSM900", "GSM1800"]
+
+[scoring]
+# Alert threshold (0-100). Cells scoring >= this emit an alert.
+alert_threshold = 70
+
+[mode]
+# PROD = HMAC-truncated identifiers (default).
+# LAB  = plaintext IDs (gated; requires consent + audit; for owned-SIM tests).
+# Switch via `sentinellectl mode lab` (interactive CONSENT) or POST /mode.
+default = "prod"
+
+[retention]
+# Sliding window for stored observations. Spec §6.2 defaults to a SHORT
+# window — 24h. Operator can extend in their own deployment but the
+# default ships conservative.
+cell_observations_hours = 24
+alerts_hours            = 168     # 7d
+
+[exposure]
+# Host control plane — Unix socket. The nginx route /api/v1/sensor/gsm/
+# on the canonical hub vhost is the only LAN-reachable endpoint.
+socket = "/run/secubox/sentinelle-gsm.sock"

@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Host FastAPI
+	install -d debian/secubox-sentinelle-gsm/usr/lib/secubox/sentinelle-gsm
+	cp -r api debian/secubox-sentinelle-gsm/usr/lib/secubox/sentinelle-gsm/
+	# Privacy + livemon + scoring lib
+	install -d debian/secubox-sentinelle-gsm/usr/lib/secubox/sentinelle-gsm/lib
+	cp -r lib/. debian/secubox-sentinelle-gsm/usr/lib/secubox/sentinelle-gsm/lib/
+	# CTL
+	install -d debian/secubox-sentinelle-gsm/usr/sbin
+	install -m 755 sbin/sentinellectl debian/secubox-sentinelle-gsm/usr/sbin/sentinellectl
+	# Menu entry
+	install -d debian/secubox-sentinelle-gsm/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-sentinelle-gsm/usr/share/secubox/menu.d/ || true
+	# nginx route
+	install -d debian/secubox-sentinelle-gsm/etc/nginx/secubox.d
+	[ -f nginx/sentinelle-gsm.conf ] && cp nginx/sentinelle-gsm.conf debian/secubox-sentinelle-gsm/etc/nginx/secubox.d/ && (install -d debian/secubox-sentinelle-gsm/etc/nginx/secubox-routes.d && cp nginx/sentinelle-gsm.conf debian/secubox-sentinelle-gsm/etc/nginx/secubox-routes.d/) || true
+	# Config example
+	install -d debian/secubox-sentinelle-gsm/etc/secubox
+	[ -f conf/sentinelle-gsm.toml.example ] && cp conf/sentinelle-gsm.toml.example debian/secubox-sentinelle-gsm/etc/secubox/sentinelle-gsm.toml.example || true
+	# udev rule for RTL-SDR (USB access without root)
+	install -d debian/secubox-sentinelle-gsm/etc/udev/rules.d
+	[ -f udev/99-secubox-sentinelle-gsm.rules ] && cp udev/99-secubox-sentinelle-gsm.rules debian/secubox-sentinelle-gsm/etc/udev/rules.d/ || true
