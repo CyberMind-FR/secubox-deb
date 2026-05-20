@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-rustdesk/usr/lib/secubox/rustdesk
+	cp -r api debian/secubox-rustdesk/usr/lib/secubox/rustdesk/
+	install -d debian/secubox-rustdesk/usr/sbin
+	install -m 755 sbin/rustdeskctl debian/secubox-rustdesk/usr/sbin/rustdeskctl
+	install -d debian/secubox-rustdesk/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-rustdesk/usr/share/secubox/www/ || true
+	install -d debian/secubox-rustdesk/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-rustdesk/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-rustdesk/etc/nginx/secubox.d
+	[ -f nginx/rustdesk.conf ] && cp nginx/rustdesk.conf debian/secubox-rustdesk/etc/nginx/secubox.d/ || true
+	install -d debian/secubox-rustdesk/etc/secubox
+	[ -f conf/rustdesk.toml.example ] && cp conf/rustdesk.toml.example debian/secubox-rustdesk/etc/secubox/rustdesk.toml.example || true
+	install -d debian/secubox-rustdesk/usr/share/secubox/lib/rustdesk
+	[ -d lib/rustdesk ] && cp -r lib/rustdesk/. debian/secubox-rustdesk/usr/share/secubox/lib/rustdesk/ || true
+	# HAProxy stream-mode snippet (TCP frontend/backend for UDP+TCP 21115-21119)
+	install -d debian/secubox-rustdesk/etc/haproxy/secubox-streams
+	[ -f haproxy/rustdesk-stream.cfg ] && cp haproxy/rustdesk-stream.cfg debian/secubox-rustdesk/etc/haproxy/secubox-streams/ || true
