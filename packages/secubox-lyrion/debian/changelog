@@ -1,3 +1,15 @@
+secubox-lyrion (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/lyrion-vhost.conf: replace $scheme://$http_host with
+    https://$host in the rd= target of @sbx_auth_login. $scheme is
+    "http" behind HAProxy TLS termination and $http_host may carry an
+    internal port (:9080), so the previous form let the SSO portal
+    return the user to http://...:9080/... — never a valid public URL.
+    Hardcode https + $host (hostname only).
+  * Closes #273.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 20 May 2026 18:30:00 +0000
+
 secubox-lyrion (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * nginx/lyrion.conf + nginx/lyrion-vhost.conf: fix the 401 → portal
