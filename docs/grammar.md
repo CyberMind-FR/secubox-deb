@@ -9,6 +9,12 @@
 > matured through SecuBox-OpenWrt and incarnates here as SecuBox-Deb on
 > Debian bookworm arm64/amd64. This document codifies the CLI grammar that
 > makes the modular concept expressible from the shell.
+>
+> Sister documents:
+>
+> - [`MODULE-GUIDELINES.md`](MODULE-GUIDELINES.md) — package/LXC/WebUI/API scaffolding around a verb
+> - [`../HOWTO-grammar.md`](../HOWTO-grammar.md) — recipe for adding a new verb
+> - [`UI-GUIDE.md`](UI-GUIDE.md) — theme and sidebar conventions
 
 ---
 
