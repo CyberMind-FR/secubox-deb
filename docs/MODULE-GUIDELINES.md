@@ -96,7 +96,7 @@ Mirror an existing module of similar shape rather than starting from scratch:
 
 ### IP allocation
 
-The SecuBox LXC bridge is `br-secubox` on `10.100.0.0/24`. Allocations:
+The SecuBox LXC bridge is `br-lxc` on `10.100.0.0/24`. Allocations:
 
 | IP | Module |
 |---|---|
@@ -138,7 +138,7 @@ lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null | grep -q '^State: *RUNNING' 
 cat > "$LXC_PATH/$LXC_NAME/config" <<EOF
 lxc.uts.name = $LXC_NAME
 lxc.net.0.type = veth
-lxc.net.0.link = br-secubox
+lxc.net.0.link = br-lxc
 lxc.net.0.flags = up
 lxc.net.0.ipv4.address = $LXC_IP/24
 lxc.net.0.ipv4.gateway = 10.100.0.1

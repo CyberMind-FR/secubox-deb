@@ -201,11 +201,11 @@ if [ ! -d "$LXC_PATH/$LXC_NAME" ]; then
     lxc-create -n "$LXC_NAME" -t debian -P "$LXC_PATH" -- -r "$DEBIAN_SUITE"
 fi
 
-# 3. Wire static IP into LXC config (10.100.0.X on br-secubox)
+# 3. Wire static IP into LXC config (10.100.0.X on br-lxc)
 cat > "$LXC_PATH/$LXC_NAME/config" <<EOF
 lxc.uts.name = $LXC_NAME
 lxc.net.0.type = veth
-lxc.net.0.link = br-secubox
+lxc.net.0.link = br-lxc
 lxc.net.0.flags = up
 lxc.net.0.ipv4.address = $LXC_IP/24
 lxc.net.0.ipv4.gateway = 10.100.0.1
