@@ -1,0 +1,40 @@
+Source: secubox-sentinelle-gsm
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+
+Package: secubox-sentinelle-gsm
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         python3-uvicorn,
+         python3-fastapi,
+         python3-toml,
+         librtlsdr0,
+         rtl-sdr,
+         usbutils
+Recommends: gr-gsm, python3-scapy, python3-numpy
+Description: SecuBox SENTINELLE-GSM — passive rogue-BTS sensor (MIND layer)
+ Host-resident module that drives an RTL-SDR USB dongle as a passive
+ GSM broadcast receiver for false-BTS (IMSI-catcher) detection. Follows
+ the SecuBox OPAD/MIND doctrine: off-path by construction (RX only,
+ no RF emission, no traffic decryption), feeds alerts into WALL/OPAD
+ for correlation + reaction.
+ .
+ Privacy-by-design (spec §6.2): subscriber identifiers (IMSI/IMEI/TMSI),
+ when present in flight, are HMAC-SHA256-truncated using a locally
+ generated key (PROD mode, default). Plaintext observation is gated
+ behind explicit PROD→LAB mode flip + consent acknowledgement + audit
+ log, intended only for owned SIMs / consented devices.
+ .
+ The dataclass that flows from the GSMTAP parser into the scoring engine
+ has NO field that could carry a plaintext IMSI. Auditor-visible via
+ `GET /api/v1/sensor/gsm/status` returning
+ `captures_plaintext_imsi_in_prod: false` and `rx_only: true`.
+ .
+ v0.1.0 ships the privacy framework + 8/8 invariant tests + service
+ plumbing. The GSMTAP listener + the 8 scoring heuristics + gr-gsm
+ orchestration land in v0.2 once an RTL-SDR is connected.
