@@ -1,10 +1,36 @@
+secubox-lyrion (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * debian/rules: chmod 755 install-lxc.sh after cp -r (cp does not always
+    preserve git +x). Board v1.0.0 was missing the bit and `lyrionctl install`
+    refused to run with "install script not found".
+  * lyrionctl: drop sed leftovers (SECUBOX_GRAFANA_* → SECUBOX_LYRION_*,
+    "SSO IdP controller" → "music-server controller").
+  * install-lxc.sh: switch upstream .deb URL from the legacy
+    downloads.lyrion.org host (now 301s to a marketing page) to
+    downloads.lms-community.org which mirrors the arch-independent _all.deb.
+    Default version bumped to 9.1.0; override via SECUBOX_LYRION_DEB_URL.
+    Sanity-check the artifact by reading the ar(1) "!<arch>" magic directly
+    (the `file` command is not installed in the bare debootstrap rootfs), so
+    silent HTML 404s fail fast instead of cascading into dpkg.
+  * lyrionctl: track upstream unit name `lyrionmusicserver.service` (fall
+    back to legacy `logitechmediaserver.service`) — was looking for the
+    nonexistent `lyrion.service`, so `status` always reported "stopped"
+    even when the daemon was healthy.
+  * install-lxc.sh: replace Authelia-era "Web UI: https://auth.maegia.tv/"
+    + jwt/store secrets log lines with Lyrion-relevant endpoints
+    (web admin :9000, JSON-RPC :9090, slimproto :3483).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 17:45:00 +0200
+
 secubox-lyrion (1.0.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release.
-  * FastAPI backend with 18+ endpoints
-  * Features: Container management, player control, library scanning
-  * Squeezebox JSON-RPC API integration
-  * CRT-light P31 phosphor theme with Lyrion orange accents
-  * Backup and restore functionality
+  * Initial LXC port: Lyrion Music Server (formerly Logitech Media Server /
+    Squeezebox) in Debian LXC at 10.100.0.100 on br-lxc.
+  * Three-fold CTL grammar (lyrionctl: components, status, access).
+  * Lifecycle verbs: install, reload (repair/wizard/uninstall stubbed for v1.1.0).
+  * Module-specific nouns stubbed: player, library, playlist, plugin.
+  * Inherits all 11 install-lxc fixes from v2.11.1 + Authelia v1.0.1.
+  * Replaces the earlier OpenWRT Docker/Podman-based skeleton.
+  * Closes: #244
 
- -- Gerald KERMA <devel@cybermind.fr>  Sat, 28 Mar 2026 09:00:00 +0100
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 16:30:00 +0200

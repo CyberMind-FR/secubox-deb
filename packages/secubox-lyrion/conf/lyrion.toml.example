@@ -1,0 +1,28 @@
+# /etc/secubox/lyrion.toml — SecuBox Lyrion (Music Server) configuration
+
+[lxc]
+name         = "lyrion"
+ip           = "10.100.0.100"
+gateway      = "10.100.0.1"
+bridge       = "br-lxc"
+path         = "/data/lxc"
+debian_suite = "bookworm"
+
+[lyrion]
+# Lyrion Music Server version + arch-aware .deb URL (overridable for self-host).
+version       = "9.0.4"
+deb_url       = ""    # empty = use the default from install-lxc.sh
+http_port     = 9000  # web admin UI + JSON-RPC
+cli_port      = 9090  # telnet CLI
+slimproto_port = 3483 # squeezebox protocol (UDP+TCP)
+
+[library]
+# Music library path. Will be mounted into the LXC at the same path
+# via lxc.mount.entry on `lyrionctl install`. Read-only by default
+# (LMS scans + indexes, doesn't write to source files).
+path     = "/data/music"
+readonly = true
+
+[exposure]
+public_hostname = ""        # e.g. "lyrion.maegia.tv" — empty = LAN only
+waf_inspect     = true

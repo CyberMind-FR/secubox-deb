@@ -1,0 +1,16 @@
+#!/bin/sh
+# SecuBox Lyrion — post-remove
+set -e
+
+case "$1" in
+    purge)
+        # Only on purge — preserve operator data on plain remove/upgrade.
+        rm -f /etc/secubox/lyrion.toml /etc/secubox/lyrion.toml.example
+        rm -rf /var/lib/secubox/lyrion
+        # LXC is left intact: operator removes it explicitly via
+        # `lyrionctl uninstall` (TODO: future verb).
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
