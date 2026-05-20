@@ -6,6 +6,11 @@
 
 This document catalogs all SecuBox Debian modules, their features, and UI screenshots locations.
 
+> To **author** a new `secubox-<module>` package, read
+> [`MODULE-GUIDELINES.md`](MODULE-GUIDELINES.md) first — it codifies the
+> file layout, LXC pattern, WebUI conventions, CTL grammar fit, FastAPI
+> shape, and the validation checklist.
+
 ---
 
 ## Module Overview by Category
