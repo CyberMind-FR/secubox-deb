@@ -1,3 +1,16 @@
+secubox-hub (1.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * health-banner.js v1.4.5: stop emitting clickable <a href=…> alert
+    wrappers when sub_filter-injected on cross-domain vhosts.
+    Alert `action` paths (/crowdsec/, /waf/, /system/, /hub/, …) only
+    resolve on the canonical hub; on yacy.maegia.tv / auth.maegia.tv /
+    gitea.gk2.secubox.in / etc. they 404'd. Off-hub the banner now
+    renders alerts as static <div>s. Hub allowlist: *.gk2.secubox.in,
+    localhost, 127.0.0.1, 192.168.1.200. Manual override:
+    window.SECUBOX_HUB_VHOST = true. Closes #247.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 19:30:00 +0200
+
 secubox-hub (1.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Drop www/login.html (and the redundant www/portal/login.html copy of it)

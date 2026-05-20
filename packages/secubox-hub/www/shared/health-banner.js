@@ -21,7 +21,7 @@
     if (window.__SBX_HEALTH_BANNER__) return;
     window.__SBX_HEALTH_BANNER__ = true;
 
-    const VERSION = '1.4.4';
+    const VERSION = '1.4.5';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
     const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
@@ -36,6 +36,22 @@
     const REFRESH_INTERVAL = 30000; // 30s
     const CACHE_KEY = 'sbx_health_cache';
     const IS_CDN_INJECTED = !!window.SECUBOX_HEALTH_API;
+
+    // Alert actions (/crowdsec/, /waf/, /system/, /hub/, …) are relative paths
+    // that only resolve on the canonical hub vhost. When the banner is
+    // sub_filter-injected on cross-domain vhosts (yacy.maegia.tv,
+    // auth.maegia.tv, gitea.gk2.secubox.in, …), those paths 404. Detect the
+    // hub allowlist so we render alerts as static <div>s off-hub.
+    // Override: set window.SECUBOX_HUB_VHOST = true on a known hub-equivalent host.
+    function isHubVhost() {
+        if (window.SECUBOX_HUB_VHOST === true)  return true;
+        if (window.SECUBOX_HUB_VHOST === false) return false;
+        const h = window.location.hostname;
+        if (h === 'localhost' || h === '127.0.0.1') return true;
+        if (h === '192.168.1.200') return true;
+        if (h.endsWith('.gk2.secubox.in')) return true;
+        return false;
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DOUBLE-BUFFER CACHE with Lock Protection
@@ -797,13 +813,16 @@
             sslContainer.innerHTML = renderSslStatus(health.ssl);
         }
 
-        // Render doctor alerts
+        // Render doctor alerts. Actions are hub-relative paths, so when we are
+        // injected on a cross-domain vhost (yacy.maegia.tv, auth.maegia.tv, …)
+        // we render alerts as static <div>s — never a broken clickable link.
         const alertsEl = banner.querySelector('.hb-alerts');
         if (alertsEl) {
             const alerts = diagnose(health);
             const visibleAlerts = alerts.filter(a => a.severity !== 'celebration' || score >= 95).slice(0, 5);
+            const hub = isHubVhost();
             alertsEl.innerHTML = visibleAlerts.map(a =>
-                a.action
+                (a.action && hub)
                     ? `<a href="${a.action}" class="hb-alert ${a.severity}" title="${a.message}">
                         <span class="hb-alert-icon">${a.icon}</span>
                         <span class="hb-alert-text">${a.message}</span>
