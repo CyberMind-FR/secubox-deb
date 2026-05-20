@@ -60,6 +60,20 @@ EOF
     fi
 }
 
+ensure_masquerade() {
+    # NAT outbound from 10.100.0.0/24 so LXCs can reach the internet via the
+    # host's WAN. systemd-networkd's IPMasquerade=ipv4 only works when
+    # systemd-networkd manages the bridge — on appliances using ifupdown or
+    # NetworkManager the rule never lands. Add it idempotently to the existing
+    # `ip lxc` postrouting chain so it shares the LXC NAT lifecycle.
+    if ! nft list table ip lxc 2>/dev/null | grep -q 'saddr 10.100.0.0/24'; then
+        log "Adding nftables MASQUERADE for 10.100.0.0/24 ..."
+        nft 'add table ip lxc' 2>/dev/null || true
+        nft 'add chain ip lxc postrouting { type nat hook postrouting priority srcnat ; policy accept ; }' 2>/dev/null || true
+        nft 'add rule ip lxc postrouting ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 counter masquerade' 2>/dev/null || true
+    fi
+}
+
 # ── LXC lifecycle ────────────────────────────────────────────────────────────
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
@@ -72,7 +86,7 @@ create_lxc() {
         return
     fi
     log "Creating LXC '$LXC_NAME' (debian $DEBIAN_SUITE) ..."
-    lxc-create -n "$LXC_NAME" -t debian -P "$LXC_PATH" -- -r "$DEBIAN_SUITE"
+    lxc-create -n "$LXC_NAME" -t download -P "$LXC_PATH" -- --dist debian --release "$DEBIAN_SUITE" --arch "$(dpkg --print-architecture)"
 }
 
 write_lxc_config() {
@@ -92,6 +106,17 @@ lxc.apparmor.profile = generated
 lxc.start.auto = 1
 lxc.start.delay = 5
 EOF
+}
+
+ensure_resolv() {
+    # The download template ships /etc/resolv.conf as a symlink to
+    # /run/systemd/resolve/stub-resolv.conf (which doesn't exist before
+    # systemd-resolved is up). Unlink first, then write a plain file.
+    log "Seeding /etc/resolv.conf in LXC ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c '
+        rm -f /etc/resolv.conf
+        printf "nameserver 1.1.1.1\nnameserver 9.9.9.9\n" > /etc/resolv.conf
+    '
 }
 
 start_lxc() {
@@ -126,7 +151,9 @@ install_grafana_in_lxc() {
 
         if [ ! -f /etc/apt/sources.list.d/grafana.list ]; then
             install -d /etc/apt/keyrings
-            wget -q -O /etc/apt/keyrings/grafana.gpg https://apt.grafana.com/gpg.key
+            # ASCII-armored key from apt.grafana.com — needs dearmor for signed-by.
+            wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
+            chmod 644 /etc/apt/keyrings/grafana.gpg
             echo 'deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main' \
                 > /etc/apt/sources.list.d/grafana.list
             apt-get update -q
@@ -209,10 +236,12 @@ main() {
     require_cmds
     ensure_dirs
     ensure_bridge
+    ensure_masquerade
     create_lxc
     write_lxc_config
     start_lxc
     wait_for_network
+    ensure_resolv
     install_grafana_in_lxc
     generate_secrets
     provision_grafana
