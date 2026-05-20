@@ -1,0 +1,28 @@
+# /etc/secubox/grafana.toml — SecuBox Grafana module configuration
+#
+# This file is the operator-facing override of the package defaults.
+# Edit values then restart secubox-grafana.service (or run `grafanactl reload`).
+
+# ── LXC ───────────────────────────────────────────────────────────────
+[lxc]
+name         = "grafana"
+ip           = "10.100.0.70"
+gateway      = "10.100.0.1"
+bridge       = "br-lxc"
+path         = "/data/lxc"
+debian_suite = "bookworm"
+
+# ── Grafana daemon (inside the LXC) ───────────────────────────────────
+[grafana]
+http_port           = 3000
+admin_user          = "admin"
+admin_password_file = "/etc/secubox/secrets/grafana-admin"
+api_key_file        = "/etc/secubox/secrets/grafana-api-key"
+# Sub-path so nginx can iframe /grafana/ → http://10.100.0.70:3000/
+serve_from_sub_path = true
+root_url            = "https://%(domain)s/grafana/"
+
+# ── Public exposure (HAProxy vhost; see haproxyctl) ───────────────────
+[exposure]
+public_hostname = ""           # e.g. "grafana.gk2.secubox.in" — empty = LAN only
+waf_inspect     = true         # route through mitmproxy when exposed

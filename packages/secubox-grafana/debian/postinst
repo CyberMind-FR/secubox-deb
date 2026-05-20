@@ -1,0 +1,36 @@
+#!/bin/sh
+# SecuBox Grafana — post-install
+set -e
+
+case "$1" in
+    configure)
+        # secubox system user/group (idempotent, matches sibling modules)
+        getent group secubox >/dev/null || groupadd --system secubox
+        getent passwd secubox >/dev/null || useradd --system --gid secubox \
+            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
+
+        install -d -m 0770 -o root -g secubox /etc/secubox
+        install -d -m 0755 -o secubox -g secubox /var/lib/secubox/grafana
+        install -d -m 0755 -o secubox -g secubox /var/log/secubox
+
+        # Seed config from example if no live config exists
+        if [ ! -f /etc/secubox/grafana.toml ] && [ -f /etc/secubox/grafana.toml.example ]; then
+            cp /etc/secubox/grafana.toml.example /etc/secubox/grafana.toml
+            chmod 640 /etc/secubox/grafana.toml
+            chown root:secubox /etc/secubox/grafana.toml
+        fi
+
+        # Reload nginx if it's running and our snippet parses
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable secubox-grafana.service 2>/dev/null || true
+        # Do not start the FastAPI before the LXC is provisioned;
+        # `grafanactl install` will start the service after the LXC is up.
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

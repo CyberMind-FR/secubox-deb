@@ -1,0 +1,14 @@
+#!/bin/sh
+# SecuBox Grafana — pre-remove
+set -e
+
+case "$1" in
+    remove|deconfigure|upgrade)
+        systemctl stop secubox-grafana.service 2>/dev/null || true
+        systemctl disable secubox-grafana.service 2>/dev/null || true
+        # We do not destroy the LXC here — purge does that via postrm if asked.
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

@@ -1,0 +1,13 @@
+secubox-grafana (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: Grafana OSS in LXC for SecuBox security dashboards.
+  * Three-fold CTL grammar (grafanactl: components, status, access).
+  * Dashboard verbs: list/add/remove/export.
+  * Datasource verbs: list/add/remove/test.
+  * Pre-provisioned dashboards: nftables, crowdsec, suricata, cookie-audit,
+    mitmproxy-waf, secubox-services.
+  * LXC at 10.100.0.70 on br-lxc, Grafana OSS apt repo.
+  * Follows docs/MODULE-GUIDELINES.md.
+  * Closes: #230
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 10:00:00 +0200

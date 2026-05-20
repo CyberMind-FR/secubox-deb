@@ -1,0 +1,9 @@
+{
+  "title": "Grafana",
+  "subtitle": "Security metrics",
+  "icon": "fa-chart-line",
+  "url": "/grafana/",
+  "section": "monitoring",
+  "order": 50,
+  "module": "grafana"
+}
