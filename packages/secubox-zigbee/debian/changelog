@@ -1,3 +1,40 @@
+secubox-zigbee (2.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * v2.4.0 rewrite-in-place: move zigbee2mqtt into a dedicated LXC at
+    10.100.0.111 on br-lxc (sibling of mqtt v2.4.0). The v1.0.0 layout
+    is gone; the host-side zigbee2mqtt (if any) is masked on first
+    install via migrate_from_v1().
+  * Hard limits per docs/superpowers/specs/2026-05-20-secubox-zigbee-mqtt-iot-stack.md:
+    - permit_join: false in the rendered configuration.yaml (operator
+      opens explicitly + timed via `zigbeectl permit-join on N`)
+    - network_key / pan_id / ext_pan_id: GENERATE (never hard-coded)
+    - daemon User=zigbee2mqtt + dialout group + NoNewPrivileges=true +
+      ProtectSystem=strict
+  * Depends: secubox-mqtt (>= 2.4). Credentials read from
+    /etc/secubox/secrets/mqtt-z2m (provisioned by secubox-mqtt) and
+    rendered into /opt/zigbee2mqtt/data/configuration.yaml.
+  * udev rule /etc/udev/rules.d/99-secubox-zigbee.rules creates
+    /dev/secubox-zgb when a Sonoff CC2652P (1a86:55d4), ConBee II
+    (1cf1:0030), or CP210x (10c4:ea60, alt symlink) is plugged in.
+    LXC config bind-mounts /dev/secubox-zgb with create=file,optional
+    so the LXC starts whether or not the dongle is present.
+  * zigbee2mqtt 2.0.0 cloned from upstream tag, npm ci --omit=dev.
+    Node 20 installed from the NodeSource repo (Debian bookworm only
+    ships Node 18, too old for z2m 2.x).
+  * zigbeectl follows the SecuBox CTL grammar:
+    - introspection: components / status / access
+    - lifecycle:     install / reload (+ stubs)
+    - module nouns:  device / network / topology / permit-join
+                     (list/show + permit-join window in v2.4.0)
+  * Host control plane: FastAPI on /run/secubox/zigbee.sock with
+    /components, /status, /access, /healthz. Reverse-proxied at
+    /api/v1/zigbee/ on the canonical hub vhost. Reads
+    zigbee2mqtt/bridge/state from the broker to populate the bridge
+    component state.
+  * Closes #241
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 23:30:00 +0200
+
 secubox-zigbee (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release.

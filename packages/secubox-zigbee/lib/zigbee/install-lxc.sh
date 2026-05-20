@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-zigbee :: install-lxc.sh
+#
+# Idempotent LXC bootstrap for zigbee2mqtt 2.x. Safe to re-run.
+# Inherits the lessons from #240 mqtt v2.4.0:
+#   - migrate_from_v1() pattern (mask any host-side z2m if previously installed)
+#   - bash `is-active` check instead of `list-unit-files | grep` prefilter
+# Follows docs/MODULE-GUIDELINES.md §3 + §7.
+#
+# Hard limits (per docs/superpowers/specs/2026-05-20-secubox-zigbee-mqtt-iot-stack.md):
+#   - permit_join: false in production config (operator opens explicitly + timed)
+#   - network_key / pan_id / ext_pan_id: GENERATE — never hard-coded
+#   - User systemd inside LXC: zigbee2mqtt (non-root), with dialout group for /dev tty access
+#   - z2m credentials read from /etc/secubox/secrets/mqtt-z2m (provisioned by secubox-mqtt)
+
+set -euo pipefail
+
+readonly LXC_NAME="${SECUBOX_LXC_NAME:-zigbee}"
+readonly LXC_IP="${SECUBOX_LXC_IP:-10.100.0.111}"
+readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+readonly LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
+readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
+readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
+readonly MQTT_LXC_IP="${SECUBOX_MQTT_LXC_IP:-10.100.0.110}"
+readonly MQTT_PORT="${SECUBOX_MQTT_PORT:-1883}"
+readonly Z2M_FRONTEND_PORT="${SECUBOX_Z2M_FRONTEND_PORT:-8080}"
+readonly Z2M_VERSION="${SECUBOX_Z2M_VERSION:-2.10.1}"
+readonly NODE_MAJOR="${SECUBOX_NODE_MAJOR:-20}"
+readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/zigbee}"
+readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
+readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
+
+log()  { printf '[zigbee-install] %s\n' "$*"; }
+fail() { printf '[zigbee-install] ERROR: %s\n' "$*" >&2; exit 1; }
+
+require_cmds() {
+    for c in lxc-create lxc-info lxc-start lxc-attach openssl nft; do
+        command -v "$c" >/dev/null 2>&1 || fail "$c not installed"
+    done
+}
+
+ensure_dirs() {
+    install -d -m 0755 -o root -g root "$LXC_PATH"
+    install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
+    # NOTE: the secrets dir must be group-readable by `secubox` so the host
+    # FastAPI (uvicorn @ /run/secubox/zigbee.sock, runs as `secubox`) can
+    # read /etc/secubox/secrets/mqtt-z2m. `install -d` on an existing dir
+    # doesn't always re-apply mode/owner on bookworm; chmod/chown explicitly.
+    install -d "$SECRETS_DIR"
+    chmod 0750         "$SECRETS_DIR"
+    chown root:secubox "$SECRETS_DIR"
+}
+
+ensure_bridge() {
+    if ! ip link show "$LXC_BRIDGE" >/dev/null 2>&1; then
+        log "Creating bridge $LXC_BRIDGE @ ${LXC_GW}/24 ..."
+        ip link add name "$LXC_BRIDGE" type bridge
+        ip addr add "${LXC_GW}/24" dev "$LXC_BRIDGE"
+        ip link set "$LXC_BRIDGE" up
+    fi
+}
+
+ensure_masquerade() {
+    if ! nft list table ip lxc 2>/dev/null | grep -q 'saddr 10.100.0.0/24'; then
+        log "Adding nftables MASQUERADE for 10.100.0.0/24 ..."
+        nft 'add table ip lxc' 2>/dev/null || true
+        nft 'add chain ip lxc postrouting { type nat hook postrouting priority srcnat ; policy accept ; }' 2>/dev/null || true
+        nft 'add rule ip lxc postrouting ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 counter masquerade' 2>/dev/null || true
+    fi
+}
+
+migrate_from_v1() {
+    if systemctl is-active --quiet zigbee2mqtt 2>/dev/null; then
+        log "Stopping host-side zigbee2mqtt (legacy install) ..."
+        systemctl stop zigbee2mqtt    2>/dev/null || true
+        systemctl disable zigbee2mqtt 2>/dev/null || true
+        systemctl mask zigbee2mqtt    2>/dev/null || true
+    fi
+}
+
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+
+create_lxc() {
+    if [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; then
+        log "LXC '$LXC_NAME' already exists — skipping debootstrap"
+        return
+    fi
+    log "Creating LXC '$LXC_NAME' (debian $DEBIAN_SUITE) ..."
+    lxc-create -n "$LXC_NAME" -t download -P "$LXC_PATH" \
+        -- --dist debian --release "$DEBIAN_SUITE" \
+           --arch "$(dpkg --print-architecture)"
+}
+
+# Bind-mount /dev/secubox-zgb (from the udev rule) into the LXC with the
+# 'optional' flag so the LXC starts even without the dongle plugged in —
+# z2m will crash-loop until the device shows up.
+write_lxc_config() {
+    log "Pinning network: $LXC_IP/24 on $LXC_BRIDGE; passing /dev/secubox-zgb if present"
+    cat > "$LXC_PATH/$LXC_NAME/config" <<EOF
+# SecuBox-managed — see secubox-zigbee / install-lxc.sh
+lxc.uts.name = $LXC_NAME
+lxc.net.0.type = veth
+lxc.net.0.link = $LXC_BRIDGE
+lxc.net.0.flags = up
+lxc.net.0.ipv4.address = $LXC_IP/24
+lxc.net.0.ipv4.gateway = $LXC_GW
+lxc.net.0.name = eth0
+lxc.rootfs.path = dir:$LXC_PATH/$LXC_NAME/rootfs
+lxc.include = /usr/share/lxc/config/common.conf
+lxc.apparmor.profile = generated
+lxc.start.auto = 1
+lxc.start.delay = 5
+lxc.mount.entry = /dev/secubox-zgb dev/secubox-zgb none bind,create=file,optional 0 0
+lxc.cgroup2.devices.allow = c 188:* rwm
+lxc.cgroup2.devices.allow = c 166:* rwm
+EOF
+}
+
+start_lxc() {
+    [ "$(lxc_state)" = "running" ] && { log "Already running"; return; }
+    log "Starting LXC '$LXC_NAME' ..."
+    lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
+}
+
+wait_for_network() {
+    log "Waiting for LXC network ..."
+    for _ in $(seq 1 30); do
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- ping -c1 -W1 "$LXC_GW" >/dev/null 2>&1 && return 0
+        sleep 1
+    done
+    fail "LXC '$LXC_NAME' did not reach $LXC_GW within 30s"
+}
+
+ensure_resolv() {
+    log "Seeding /etc/resolv.conf in LXC ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c '
+        rm -f /etc/resolv.conf
+        printf "nameserver 1.1.1.1\nnameserver 9.9.9.9\n" > /etc/resolv.conf
+    '
+}
+
+# Install Node 20 from NodeSource + zigbee2mqtt from npm registry.
+# zigbee2mqtt 2.x requires Node 20; Debian bookworm ships Node 18.
+#
+# IMPORTANT lesson from the v2.0.0 attempt: the GitHub release tag ships
+# only TypeScript sources — `npm start` calls `pnpm run build` which is
+# fragile (had a `worker-timers-broker` TS error in 2.0.0). The npm tarball,
+# however, ships a pre-built dist/ with all compiled JS — so installing via
+# `npm install zigbee2mqtt@<ver>` skips the entire build chain.
+install_zigbee2mqtt_in_lxc() {
+    log "Installing Node ${NODE_MAJOR} + zigbee2mqtt v${Z2M_VERSION} in '$LXC_NAME' ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- env NODE_MAJOR="$NODE_MAJOR" Z2M_VERSION="$Z2M_VERSION" \
+        bash -e <<'INNER'
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+
+        apt-get update -q
+        apt-get install -y --no-install-recommends \
+            ca-certificates curl wget gnupg make g++ python3 \
+            udev
+
+        if [ ! -f /etc/apt/keyrings/nodesource.gpg ]; then
+            install -d -m 0755 /etc/apt/keyrings
+            curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+                | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+            chmod 0644 /etc/apt/keyrings/nodesource.gpg
+            echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+                > /etc/apt/sources.list.d/nodesource.list
+            apt-get update -q
+        fi
+        apt-get install -y --no-install-recommends nodejs
+
+        getent group  zigbee2mqtt >/dev/null || groupadd --system zigbee2mqtt
+        getent passwd zigbee2mqtt >/dev/null || useradd --system --gid zigbee2mqtt \
+            --home /opt/zigbee2mqtt --no-create-home --shell /usr/sbin/nologin zigbee2mqtt
+        usermod -aG dialout zigbee2mqtt 2>/dev/null || true
+
+        # /opt/zigbee2mqtt is the prefix. The actual daemon lives in
+        # node_modules/zigbee2mqtt after `npm install zigbee2mqtt@<ver>`,
+        # and the runtime data dir is /opt/zigbee2mqtt/data (env Z2M_DATA).
+        install -d -m 0755 -o zigbee2mqtt -g zigbee2mqtt /opt/zigbee2mqtt
+        install -d -m 0755 -o zigbee2mqtt -g zigbee2mqtt /opt/zigbee2mqtt/data
+
+        # Clean any leftover from a previous git-clone install attempt.
+        # We're switching to npm-install layout; .git and old dist/ are
+        # safe to drop.
+        if [ -d /opt/zigbee2mqtt/.git ]; then
+            rm -rf /opt/zigbee2mqtt/.git /opt/zigbee2mqtt/node_modules \
+                   /opt/zigbee2mqtt/package*.json /opt/zigbee2mqtt/index.js \
+                   /opt/zigbee2mqtt/cli.js /opt/zigbee2mqtt/dist /opt/zigbee2mqtt/.npm
+        fi
+
+        # Bootstrap a minimal package.json so `npm install <pkg>` works.
+        if [ ! -f /opt/zigbee2mqtt/package.json ]; then
+            cd /opt/zigbee2mqtt
+            # NOTE: sudo is broken in unprivileged LXC; runuser is the
+            # drop-in replacement that doesn't care about /etc/sudo.conf
+            # ownership.
+            runuser -u zigbee2mqtt -- bash -c 'cd /opt/zigbee2mqtt && npm init -y' >/dev/null
+        fi
+
+        cd /opt/zigbee2mqtt
+        runuser -u zigbee2mqtt -- bash -c \
+            "cd /opt/zigbee2mqtt && npm install --omit=dev --no-audit --no-fund zigbee2mqtt@${Z2M_VERSION}" 2>&1 | tail -5
+
+        cat > /etc/systemd/system/zigbee2mqtt.service <<UNIT
+[Unit]
+Description=zigbee2mqtt
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=zigbee2mqtt
+WorkingDirectory=/opt/zigbee2mqtt/node_modules/zigbee2mqtt
+Environment=Z2M_DATA=/opt/zigbee2mqtt/data
+StandardOutput=journal
+StandardError=journal
+Restart=always
+RestartSec=10
+ExecStart=/usr/bin/node /opt/zigbee2mqtt/node_modules/zigbee2mqtt/index.js
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/zigbee2mqtt/data /opt/zigbee2mqtt/node_modules/zigbee2mqtt
+DeviceAllow=/dev/secubox-zgb rw
+DeviceAllow=/dev/ttyUSB0 rw
+DeviceAllow=/dev/ttyACM0 rw
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        systemctl daemon-reload
+INNER
+}
+
+# Render configuration.yaml inside the LXC, wiring z2m to the SecuBox
+# Mosquitto broker. Credentials pulled from /etc/secubox/secrets/mqtt-z2m
+# (provisioned by secubox-mqtt v2.4 — that's a hard Depends).
+configure_zigbee2mqtt() {
+    log "Rendering zigbee2mqtt configuration.yaml ..."
+
+    local z2m_pw_file="$SECRETS_DIR/mqtt-z2m"
+    [ -f "$z2m_pw_file" ] || fail "missing $z2m_pw_file — install secubox-mqtt first and run 'mqttctl install'"
+    local z2m_pw; z2m_pw=$(cat "$z2m_pw_file")
+
+    local stage=/tmp/zigbee2mqtt-config.$$
+    cat > "$stage" <<YAML
+# /opt/zigbee2mqtt/data/configuration.yaml
+# Generated by secubox-zigbee install-lxc.sh — operator overrides go in
+# operator-overrides.yaml (loaded after this).
+homeassistant:
+  enabled: false
+permit_join: false
+mqtt:
+  base_topic: zigbee2mqtt
+  server: 'mqtt://${MQTT_LXC_IP}:${MQTT_PORT}'
+  user: z2m
+  password: '${z2m_pw}'
+  keepalive: 60
+serial:
+  port: /dev/secubox-zgb
+  adapter: zstack
+advanced:
+  network_key: GENERATE
+  pan_id: GENERATE
+  ext_pan_id: GENERATE
+  channel: 20
+  log_level: warning
+  log_output: ['file']
+  log_directory: /opt/zigbee2mqtt/data/log
+  log_file: '%TIMESTAMP%.log'
+  timestamp_format: 'YYYY-MM-DD HH:mm:ss'
+frontend:
+  enabled: true
+  port: ${Z2M_FRONTEND_PORT}
+  host: 0.0.0.0
+device_options:
+  legacy: false
+YAML
+
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- install -d -m 0755 -o zigbee2mqtt -g zigbee2mqtt /opt/zigbee2mqtt/data
+    cat "$stage" | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- tee /opt/zigbee2mqtt/data/configuration.yaml >/dev/null
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- chown zigbee2mqtt:zigbee2mqtt /opt/zigbee2mqtt/data/configuration.yaml
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- chmod 0640 /opt/zigbee2mqtt/data/configuration.yaml
+    rm -f "$stage"
+
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl enable zigbee2mqtt 2>/dev/null || true
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart zigbee2mqtt 2>/dev/null || true
+}
+
+# Install the udev rule on the host so /dev/secubox-zgb is created when a
+# Zigbee dongle gets plugged in. LXC bind-mount is optional — the LXC starts
+# regardless of dongle presence.
+install_udev_rule() {
+    local rule_file=/etc/udev/rules.d/99-secubox-zigbee.rules
+    log "Installing udev rule for Zigbee dongles ..."
+    cat > "$rule_file" <<'UDEV'
+# /etc/udev/rules.d/99-secubox-zigbee.rules
+# Installed by secubox-zigbee (#241)
+
+# Sonoff Zigbee 3.0 USB Plus (CC2652P)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", \
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
+
+# ConBee II (fallback)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", \
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
+
+# Generic CP210x (alt — ConBee III, Slaesh's CC2652RB)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
+    SYMLINK+="secubox-zgb-alt", MODE="0660", GROUP="dialout"
+UDEV
+    chmod 0644 "$rule_file"
+    udevadm control --reload-rules
+    udevadm trigger --subsystem-match=tty 2>/dev/null || true
+}
+
+mark_provisioned() {
+    install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
+    date -Iseconds > "$SENTINEL"
+}
+
+main() {
+    require_cmds
+    migrate_from_v1
+    ensure_dirs
+    install_udev_rule
+    ensure_bridge
+    ensure_masquerade
+    create_lxc
+    write_lxc_config
+    start_lxc
+    wait_for_network
+    ensure_resolv
+    install_zigbee2mqtt_in_lxc
+    configure_zigbee2mqtt
+    mark_provisioned
+    log "OK — LXC '$LXC_NAME' at $LXC_IP, zigbee2mqtt provisioned."
+    log "  · Frontend (LXC) : http://$LXC_IP:$Z2M_FRONTEND_PORT/"
+    log "  · MQTT bridge    : mqtt://$MQTT_LXC_IP:$MQTT_PORT (user z2m)"
+    log "  · Radio symlink  : /dev/secubox-zgb  (CC2652P / ConBee II)"
+    log "  · Status         : zigbeectl status   (radio absent → 'device: absent')"
+}
+
+main "$@"
