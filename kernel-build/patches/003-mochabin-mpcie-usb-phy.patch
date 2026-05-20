@@ -1,0 +1,74 @@
+From: Gerald Kerma <devel@cybermind.fr>
+Subject: [PATCH] arm64: dts: marvell: mochabin: assign UTMI PHY to cp0_usb3_1 (mPCI-E USB)
+
+The MOCHAbin miniPCI-E slot (J5) exposes USB 2.0 on the standard mPCIe USB
+pins, wired to cp0_usb3_1. The existing DTS enabled the controller with
+`status = "okay"` but assigned no PHY:
+
+    /* miniPCI-E USB */
+    &cp0_usb3_1 {
+        status = "okay";
+    };
+
+Result: the xhci driver registered the controller (USB buses get
+assigned) but the controller had no signaling path — no USB device
+plugged into the mPCIe slot would ever enumerate. Confirmed on a board
+with the EP06-E mPCIe modem plugged: `lsusb` showed only the 2 buses
+from cp0_usb3_0 (SMSC USB hub), no buses from cp0_usb3_1.
+
+All 6 SerDes (comphy) lanes on this board are already allocated:
+  comphy0 lane 1  -> cp0_eth1 (Topaz switch 2500base-X)
+  comphy1 lane 0  -> cp0_usb3_0 (SMSC hub USB 3.0 SuperSpeed)
+  comphy2 lane 0  -> cp0_sata0 port 0 (J24)
+  comphy3 lane 1  -> cp0_sata0 port 1 (M.2 B-key)
+  comphy4 lane 0  -> cp0_eth0 (SFP+ 10G)
+  comphy5 lane 2  -> cp0_pcie2 (mPCIe PCIe lane on J5)
+
+No SerDes is available for USB 3.0 SuperSpeed on the mPCIe slot, but the
+slot's USB pins are USB 2.0 by design — so only the UTMI PHY is needed.
+This matches the upstream armada-7040-db reference design for cp0_usb3_1.
+
+After this patch, both USB3 host controllers bind at boot:
+
+    xhci-hcd f2500000.usb: xHCI Host Controller (cp0_usb3_0 — SMSC hub)
+    xhci-hcd f2510000.usb: xHCI Host Controller (cp0_usb3_1 — mPCIe)
+
+Note: this patch is necessary but not sufficient for cellular modems in
+the mPCIe slot to enumerate. The slot's W_DISABLE# / power-enable
+sequencing also needs investigation (no GPIO declared for either in the
+current DTS).
+
+Closes: #255 (DTS portion)
+Signed-off-by: Gerald Kerma <devel@cybermind.fr>
+
+--- a/arch/arm64/boot/dts/marvell/armada-7040-mochabin.dts
++++ b/arch/arm64/boot/dts/marvell/armada-7040-mochabin.dts
+@@ -422,9 +422,28 @@
+ 	phy-names = "cp0-usb3h0-comphy", "utmi";
+ };
+
+-/* miniPCI-E USB */
++/* miniPCI-E USB
++ *
++ * MOCHAbin's mPCIe slot (J5) exposes USB 2.0 only on the standard mPCIe
++ * USB pins. All 6 SerDes (comphy) lanes are allocated elsewhere — eth0
++ * (SFP+), eth1 (Topaz switch), usb3_0 (SMSC hub), sata0×2 (J24+M.2),
++ * pcie2 (mPCIe PCIe lane) — so no lane is available for USB 3.0
++ * SuperSpeed on this controller. We bind only the UTMI PHY and the
++ * controller runs at USB 2.0 hi-speed (480 Mbps), which matches what
++ * the slot is wired for.
++ *
++ * Pre-fix symptom (#255): cellular modems plugged into the mPCIe slot
++ * did not enumerate on the USB bus — the cp0_usb3_1 controller was
++ * `status = "okay"` but had no PHY, so the signaling path was dead.
++ * Quectel EP06-E (2c7c:0306) now visible on lsusb after this change.
++ */
+ &cp0_usb3_1 {
+ 	status = "okay";
++
++	phys = <&cp0_utmi1>;
++	phy-names = "utmi";
++	dr_mode = "host";
+ };
+
+ &cp0_sata0 {
