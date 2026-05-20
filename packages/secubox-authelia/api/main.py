@@ -26,7 +26,7 @@ from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Header, Request, Response
 
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 CTL = shutil.which("autheliactl") or "/usr/sbin/autheliactl"
 
 # Authelia LXC (provisioned by install-lxc.sh at 10.100.0.20:9091). Override
@@ -122,6 +122,23 @@ def verify(
         headers["Cookie"] = cookie
     if authorization:
         headers["Authorization"] = authorization
+    # Authelia 4.39+ needs the original URL/host so it can (a) match the
+    # right session.cookies[].domain entry — multi-cookie deployments have
+    # several — and (b) apply access_control rules. nginx sets these in
+    # `location = /__sbx_auth_verify`; we forward verbatim. Without them
+    # Authelia falls back to the first cookies[] entry, doesn't find the
+    # session, returns 401 → infinite redirect loop.
+    for h in (
+        "X-Original-URL",
+        "X-Forwarded-Method",
+        "X-Forwarded-Proto",
+        "X-Forwarded-Host",
+        "X-Forwarded-Uri",
+        "X-Forwarded-For",
+    ):
+        v = request.headers.get(h)
+        if v is not None:
+            headers[h] = v
 
     req = urllib.request.Request(upstream, method="GET", headers=headers)
     try:
