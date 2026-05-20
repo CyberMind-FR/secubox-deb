@@ -1,3 +1,66 @@
+secubox-rustdesk (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: detect host arch (arm64/amd64/armhf) and download the
+    matching RustDesk server build. Previous hardcoded amd64 binary failed
+    with "Exec format error" on arm64 boards (MOCHAbin etc.).
+  * Flatten any of amd64/, arm64v8/, armv7/ subdirs the zip may contain.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 14:30:00 +0200
+
+secubox-rustdesk (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * debian/rules: also install nginx/<m>.conf to /etc/nginx/secubox-routes.d/
+    — the canonical hub vhost (admin.*.secubox.in via webui.conf) reads
+    that directory, NOT /etc/nginx/secubox.d/ (which is only included by
+    the legacy sites-available/secubox vhost).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 13:45:00 +0200
+
+secubox-rustdesk (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * .service: prefix ExecStartPre mkdir/chown with '+' (run as root) — they
+    fail when the unit runs as User=secubox and try to chown a dir.
+  * nginx/rustdesk.conf: switch the /api/v1/<m>/ location from
+    proxy_pass http://unix:.../sock:/ to explicit rewrite + bare socket URL
+    (matches the canonical pattern used by secubox-users — the previous
+    syntax did NOT strip the /api/v1/<m>/ prefix, so the FastAPI app saw
+    the full path and returned 404 on every route).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 13:30:00 +0200
+
+secubox-rustdesk (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: unlink /etc/resolv.conf symlink before writing
+    (download template ships it as symlink to /run/systemd/resolve/
+    stub-resolv.conf which doesn't exist before systemd-resolved is up).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 13:15:00 +0200
+
+secubox-rustdesk (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: seed /etc/resolv.conf via lxc-attach (the LXC is
+    unprivileged — rootfs is owned by mapped uid 100000, host root cannot
+    redirect to a file in there directly). Move call AFTER lxc-start.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 13:00:00 +0200
+
+secubox-rustdesk (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: ensure NAT MASQUERADE for 10.100.0.0/24 (systemd-networkd
+    IPMasquerade=ipv4 doesn't land on appliances using ifupdown/NM).
+  * install-lxc.sh: seed /etc/resolv.conf inside the LXC (download template
+    doesn't ship one).
+  * grafana: dearmor the apt.grafana.com GPG key (signed-by= needs binary).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 12:30:00 +0200
+
+secubox-rustdesk (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Use download template for lxc-create (legacy 'debian' template fails
+    on bookworm unprivileged). Detect arch via dpkg --print-architecture.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 12:00:00 +0200
+
 secubox-rustdesk (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release: RustDesk hbbs (signal) + hbbr (relay) in LXC.

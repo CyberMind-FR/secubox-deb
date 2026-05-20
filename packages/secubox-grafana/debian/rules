@@ -17,7 +17,7 @@ override_dh_auto_install:
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-grafana/usr/share/secubox/menu.d/ || true
 	# nginx snippet
 	install -d debian/secubox-grafana/etc/nginx/secubox.d
-	[ -f nginx/grafana.conf ] && cp nginx/grafana.conf debian/secubox-grafana/etc/nginx/secubox.d/ || true
+	[ -f nginx/grafana.conf ] && cp nginx/grafana.conf debian/secubox-grafana/etc/nginx/secubox.d/ || true && (install -d debian/secubox-grafana/etc/nginx/secubox-routes.d && cp nginx/grafana.conf debian/secubox-grafana/etc/nginx/secubox-routes.d/)
 	# Config example
 	install -d debian/secubox-grafana/etc/secubox
 	[ -f conf/grafana.toml.example ] && cp conf/grafana.toml.example debian/secubox-grafana/etc/secubox/grafana.toml.example || true
