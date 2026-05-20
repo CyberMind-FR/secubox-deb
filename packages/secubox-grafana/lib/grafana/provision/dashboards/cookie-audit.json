@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 38,
+  "uid": "secubox-cookie-audit",
+  "title": "SecuBox — Cookie audit (RGPD/ePrivacy)",
+  "tags": ["secubox", "rgpd", "cookies"],
+  "timezone": "browser",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Violations (24h)",
+      "datasource": {"type": "prometheus", "uid": "secubox-metrics"},
+      "targets": [
+        {"refId": "A", "expr": "increase(cookie_audit_violations_total[24h])"}
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Violations per category (rate, 1h)",
+      "datasource": {"type": "prometheus", "uid": "secubox-metrics"},
+      "targets": [
+        {"refId": "A", "expr": "rate(cookie_audit_violations_total[1h])", "legendFormat": "{{category}}"}
+      ],
+      "gridPos": {"x": 6, "y": 0, "w": 18, "h": 4}
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Top violating vhosts (24h)",
+      "datasource": {"type": "prometheus", "uid": "secubox-metrics"},
+      "targets": [
+        {"refId": "A", "expr": "topk(10, sum by (vhost) (increase(cookie_audit_violations_total[24h])))", "format": "table"}
+      ],
+      "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8}
+    }
+  ],
+  "time": {"from": "now-24h", "to": "now"}
+}

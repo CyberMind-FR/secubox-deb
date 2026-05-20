@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Host control plane (FastAPI)
+	install -d debian/secubox-grafana/usr/lib/secubox/grafana
+	cp -r api debian/secubox-grafana/usr/lib/secubox/grafana/
+	# CTL
+	install -d debian/secubox-grafana/usr/sbin
+	install -m 755 sbin/grafanactl debian/secubox-grafana/usr/sbin/grafanactl
+	# Web UI
+	install -d debian/secubox-grafana/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-grafana/usr/share/secubox/www/ || true
+	# Menu entry
+	install -d debian/secubox-grafana/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-grafana/usr/share/secubox/menu.d/ || true
+	# nginx snippet
+	install -d debian/secubox-grafana/etc/nginx/secubox.d
+	[ -f nginx/grafana.conf ] && cp nginx/grafana.conf debian/secubox-grafana/etc/nginx/secubox.d/ || true
+	# Config example
+	install -d debian/secubox-grafana/etc/secubox
+	[ -f conf/grafana.toml.example ] && cp conf/grafana.toml.example debian/secubox-grafana/etc/secubox/grafana.toml.example || true
+	# LXC bootstrap + provisioning (shipped, not pre-built)
+	install -d debian/secubox-grafana/usr/share/secubox/lib/grafana
+	[ -d lib/grafana ] && cp -r lib/grafana/. debian/secubox-grafana/usr/share/secubox/lib/grafana/ || true

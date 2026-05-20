@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: grafanactl
+# CyberMind — https://cybermind.fr
+#
+# Grafana host-side controller. LXC at 10.100.0.70 on br-lxc.
+# Three-fold introspection (components/status/access) + dashboard, datasource,
+# alert, user, api-key, install, reload verbs.
+#
+# Grammar: docs/grammar.md, OPS MONITORING layer.
+# Conventions: docs/MODULE-GUIDELINES.md §7.
+
+set -u
+
+readonly VERSION="1.0.0"
+readonly CONFIG_FILE="${SECUBOX_GRAFANA_CONFIG:-/etc/secubox/grafana.toml}"
+readonly STATE_DIR="${SECUBOX_GRAFANA_STATE:-/var/lib/secubox/grafana}"
+readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
+readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/grafana/install-lxc.sh}"
+
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+
+log()   { printf '%b[grafana]%b %s\n' "$GREEN" "$NC" "$*"; }
+warn()  { printf '%b[warn]%b %s\n'    "$YELLOW" "$NC" "$*" >&2; }
+err()   { printf '%b[error]%b %s\n'   "$RED"    "$NC" "$*" >&2; }
+
+# ── TOML config (best-effort, grep-style — same as giteactl) ─────────────────
+config_get() {
+    local key="$1" default="${2:-}"
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null \
+            | head -1 | cut -d= -f2- | tr -d ' "' | tr -d "'" || echo "$default"
+    else
+        echo "$default"
+    fi
+}
+
+LXC_NAME=$(config_get "name" "grafana")
+LXC_IP=$(config_get "ip" "10.100.0.70")
+LXC_PATH=$(config_get "path" "/data/lxc")
+HTTP_PORT=$(config_get "http_port" "3000")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "")
+
+# ── LXC helpers ───────────────────────────────────────────────────────────────
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+
+lxc_running() { [ "$(lxc_state)" = "running" ]; }
+lxc_exists()  { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+
+daemon_running() {
+    lxc_running || return 1
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-active --quiet grafana-server 2>/dev/null
+}
+
+host_api_running() {
+    systemctl is-active --quiet secubox-grafana.service 2>/dev/null
+}
+
+# ── Three-fold output (matches docs/MODULE-GUIDELINES.md §7) ──────────────────
+emit_components_json() {
+    local lxc_st daemon_st api_st
+    if lxc_exists; then
+        lxc_st=$(lxc_state)
+        [ -z "$lxc_st" ] && lxc_st="absent"
+    else
+        lxc_st="absent"
+    fi
+    daemon_running && daemon_st="running" || daemon_st="stopped"
+    host_api_running && api_st="running" || api_st="stopped"
+
+    cat <<EOF
+{
+  "module": "grafana",
+  "version": "$VERSION",
+  "components": [
+    {"name": "lxc",      "state": "$lxc_st",      "detail": "$LXC_NAME @ $LXC_IP on br-lxc"},
+    {"name": "daemon",   "state": "$daemon_st",   "detail": "grafana-server, port $HTTP_PORT"},
+    {"name": "host-api", "state": "$api_st",      "detail": "secubox-grafana.service (uvicorn @ /run/secubox/grafana.sock)"}
+  ]
+}
+EOF
+}
+
+emit_components_text() {
+    printf '%-12s %-12s %s\n' "COMPONENT" "STATE" "DETAIL"
+    if lxc_exists; then
+        local s; s=$(lxc_state); [ -z "$s" ] && s="absent"
+        printf '%-12s %-12s %s\n' "lxc" "$s" "$LXC_NAME @ $LXC_IP on br-lxc"
+    else
+        printf '%-12s %-12s %s\n' "lxc" "absent" "$LXC_NAME @ $LXC_IP on br-lxc — run 'grafanactl install'"
+    fi
+    if daemon_running; then
+        printf '%-12s %-12s %s\n' "daemon" "running" "grafana-server, port $HTTP_PORT"
+    else
+        printf '%-12s %-12s %s\n' "daemon" "stopped" "grafana-server, port $HTTP_PORT"
+    fi
+    if host_api_running; then
+        printf '%-12s %-12s %s\n' "host-api" "running" "secubox-grafana.service (uvicorn)"
+    else
+        printf '%-12s %-12s %s\n' "host-api" "stopped" "secubox-grafana.service (uvicorn)"
+    fi
+}
+
+emit_status_json() {
+    local overall
+    if lxc_running && daemon_running && host_api_running; then
+        overall="green"
+    elif lxc_exists && (daemon_running || host_api_running); then
+        overall="yellow"
+    else
+        overall="red"
+    fi
+    cat <<EOF
+{
+  "module": "grafana",
+  "version": "$VERSION",
+  "overall": "$overall"
+}
+EOF
+}
+
+emit_access_json() {
+    local lan_url public_url
+    lan_url="https://$(hostname -I | awk '{print $1}')/grafana/"
+    if [ -n "$PUBLIC_HOSTNAME" ]; then
+        public_url="https://${PUBLIC_HOSTNAME}/grafana/"
+    else
+        public_url=""
+    fi
+    cat <<EOF
+{
+  "module": "grafana",
+  "access": [
+    {"url": "$lan_url",    "auth": "jwt|grafana-admin", "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
+    $( [ -n "$public_url" ] && cat <<PUB
+{"url": "$public_url", "auth": "jwt|grafana-admin", "scope": "public"}
+PUB
+)
+  ]
+}
+EOF
+}
+
+# ── Verbs ─────────────────────────────────────────────────────────────────────
+cmd_components() {
+    case "${1:-}" in
+        --json) emit_components_json ;;
+        ""|list|status) emit_components_text ;;
+        *) err "unknown verb for 'components': $1"; exit 1 ;;
+    esac
+}
+
+cmd_status() {
+    case "${1:-}" in
+        --json) emit_status_json ;;
+        ""|"") emit_components_text ; echo ; emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])' ;;
+        *) err "unknown verb for 'status': $1"; exit 1 ;;
+    esac
+}
+
+cmd_access() {
+    case "${1:-}" in
+        --json) emit_access_json ;;
+        ""|list) emit_access_json | python3 -m json.tool ;;
+        show)
+            local name="${2:-lan}"
+            emit_access_json | python3 -c "import json,sys; d=json.load(sys.stdin); m=[a for a in d['access'] if a['scope']=='$name']; print(m[0] if m else 'not found')"
+            ;;
+        *) err "unknown verb for 'access': $1"; exit 1 ;;
+    esac
+}
+
+cmd_install() {
+    if [ ! -x "$INSTALL_LIB" ]; then
+        err "install script not found at $INSTALL_LIB (package not installed correctly?)"
+        exit 2
+    fi
+    log "Running LXC bootstrap from $INSTALL_LIB ..."
+    SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
+        bash "$INSTALL_LIB"
+    log "Starting host-side FastAPI ..."
+    systemctl start secubox-grafana.service 2>/dev/null || true
+    log "Done. Try 'grafanactl status' to verify."
+}
+
+cmd_reload() {
+    systemctl restart secubox-grafana.service 2>/dev/null || true
+    if lxc_running; then
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart grafana-server 2>/dev/null || true
+    fi
+    log "Reloaded host FastAPI and grafana-server (if running)."
+}
+
+cmd_help() {
+    cat <<'HELP'
+grafanactl — SecuBox Grafana controller (OPS MONITORING layer)
+
+Three-fold introspection:
+  grafanactl components [--json]      # LXC + daemon + host-API states
+  grafanactl status     [--json]      # overall green/yellow/red
+  grafanactl access     [list|show <name>] [--json]
+
+Lifecycle:
+  grafanactl install                  # idempotent LXC + daemon bootstrap
+  grafanactl reload                   # restart FastAPI + grafana-server
+
+Dashboards / datasources / alerts / users / api-keys:
+  grafanactl dashboard  list|add <file.json>|remove <uid>|export <uid>
+  grafanactl datasource list|add <toml>|remove <name>|test <name>
+  grafanactl alert      list|mute <id>|unmute <id>
+  grafanactl user       list|add <name> <role>|remove <name>|passwd <name>
+  grafanactl api-key    list|create <name> <role>|revoke <id>
+
+  (--json on any verb returns machine-readable output)
+
+For grammar details: /usr/share/doc/secubox-grafana/README.gz
+                     docs/grammar.md (OPS MONITORING layer)
+HELP
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────────────
+main() {
+    local noun="${1:-help}"
+    shift || true
+    case "$noun" in
+        components|status|access|install|reload) "cmd_${noun}" "$@" ;;
+        # The remaining nouns are stubs in v1.0.0 — see #230 task G5 for
+        # full implementation. They print a clear "not implemented yet" so
+        # the help/grammar surface is consistent now and the API contract
+        # is testable.
+        dashboard|datasource|alert|user|api-key)
+            err "noun '$noun' not yet implemented in v$VERSION — see #230 task G5"
+            exit 2
+            ;;
+        --help|-h|help|"") cmd_help ;;
+        --version|-V) echo "grafanactl $VERSION" ;;
+        *) err "unknown noun: $noun"; cmd_help; exit 1 ;;
+    esac
+}
+
+main "$@"
