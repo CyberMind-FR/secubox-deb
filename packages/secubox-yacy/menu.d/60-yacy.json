@@ -1,0 +1,9 @@
+{
+  "title": "YaCy",
+  "subtitle": "Peer-to-peer search",
+  "icon": "fa-search",
+  "url": "/yacy/",
+  "section": "search",
+  "order": 60,
+  "module": "yacy"
+}

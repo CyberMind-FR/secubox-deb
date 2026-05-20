@@ -1,0 +1,7 @@
+# SecuBox YaCy — search blacklist seed.
+# One regex per line. Matches against URL host. Comments ignored.
+# Use `yacyctl blacklist add <pattern>` to extend at runtime.
+#
+# Block known phishing / malware-ad / spammy index farms.
+.*\.example-spam\.test
+.*\.malware-host\.test
