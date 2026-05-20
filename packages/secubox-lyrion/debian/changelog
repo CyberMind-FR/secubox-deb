@@ -1,3 +1,19 @@
+secubox-lyrion (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: new ensure_slimproto_dnat() step writes a persistent
+    nftables file /etc/nftables.d/secubox-lyrion-dnat.nft with a
+    PREROUTING DNAT rule routing host LAN traffic on TCP+UDP :3483 to
+    the Lyrion LXC. Lets WiFi/LAN players (Squeezelite, iPeng, …) reach
+    the LMS server without bridging the LXC network into the LAN.
+    Default LAN interface is `lan0` — override via SECUBOX_LAN_IFACE.
+    Idempotent: re-running `lyrionctl install` deletes the live table
+    and re-applies from the file.
+  * Note: UDP player auto-discovery broadcasts do NOT cross subnets
+    without router-side IP-helper. Players on a different VLAN/SSID
+    must be configured manually with the board's LAN IP as the server.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 21:00:00 +0200
+
 secubox-lyrion (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Ship nginx/lyrion-vhost.conf to /etc/nginx/sites-available/lyrion.conf
