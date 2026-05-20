@@ -1,3 +1,15 @@
+secubox-zigbee (2.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/zigbee.conf: replace $http_host with $host in the 401 →
+    Authelia portal redirect (@sbx_auth_login). The Host header may
+    carry an internal port (e.g. :9080 from a LAN-direct request),
+    which must never appear in a public redirect URL. Symptom: browser
+    landed on https://admin.gk2.secubox.in:9080/auth/?rd=...:9080/zigbee/
+    instead of the public :443 URL. $host returns the hostname only.
+  * Closes #273.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 20 May 2026 18:30:00 +0000
+
 secubox-zigbee (2.4.3-1~bookworm1) bookworm; urgency=medium
 
   * nginx/zigbee.conf: fix the 401 → portal redirect scheme. v2.4.2
