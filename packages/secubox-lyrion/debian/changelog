@@ -1,3 +1,23 @@
+secubox-lyrion (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Ship nginx/lyrion-vhost.conf to /etc/nginx/sites-available/lyrion.conf
+    so the operator can expose the LMS web UI on the LAN IP directly.
+    Two server blocks:
+      1. LAN direct  — listen :9000, accepts 192.168.1.200 / lyrion.local /
+         localhost / _ ; proxies to LXC root. No TLS, no WAF.
+      2. Public chain — listen :9080, server_name lyrion.maegia.tv, with
+         the mandatory ^~ /.well-known/acme-challenge/ block (cf. #246).
+    Operator enables with:
+        ln -s ../sites-available/lyrion.conf /etc/nginx/sites-enabled/
+        systemctl reload nginx
+    After the symlink, http://192.168.1.200:9000/ serves the LMS web UI
+    directly. Closes #248.
+  * Note: subpath proxy (/lyrion/ on the canonical hub) is unsuitable
+    for LMS because LMS uses absolute asset paths (/skin/EN/..., /html/..., …).
+    LMS must live at vhost root.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 20:00:00 +0200
+
 secubox-lyrion (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * debian/rules: chmod 755 install-lxc.sh after cp -r (cp does not always

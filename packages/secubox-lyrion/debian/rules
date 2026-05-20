@@ -18,6 +18,9 @@ override_dh_auto_install:
 	# nginx snippet — install to BOTH secubox.d/ and secubox-routes.d/ (per v2.11.1 lesson)
 	install -d debian/secubox-lyrion/etc/nginx/secubox.d
 	[ -f nginx/lyrion.conf ] && cp nginx/lyrion.conf debian/secubox-lyrion/etc/nginx/secubox.d/ && (install -d debian/secubox-lyrion/etc/nginx/secubox-routes.d && cp nginx/lyrion.conf debian/secubox-lyrion/etc/nginx/secubox-routes.d/) || true
+	# Public + LAN vhost (sites-available — operator opts in via ln -s)
+	install -d debian/secubox-lyrion/etc/nginx/sites-available
+	[ -f nginx/lyrion-vhost.conf ] && cp nginx/lyrion-vhost.conf debian/secubox-lyrion/etc/nginx/sites-available/lyrion.conf || true
 	# Config example
 	install -d debian/secubox-lyrion/etc/secubox
 	[ -f conf/lyrion.toml.example ] && cp conf/lyrion.toml.example debian/secubox-lyrion/etc/secubox/lyrion.toml.example || true
