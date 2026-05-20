@@ -1,0 +1,15 @@
+#!/bin/sh
+# SecuBox Zigbee — post-remove
+set -e
+
+case "$1" in
+    purge)
+        rm -f /etc/secubox/zigbee.toml /etc/secubox/zigbee.toml.example
+        rm -f /etc/udev/rules.d/99-secubox-zigbee.rules
+        rm -rf /var/lib/secubox/zigbee
+        # LXC + z2m data preserved; operator removes via `zigbeectl uninstall`.
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

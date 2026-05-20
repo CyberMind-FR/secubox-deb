@@ -1,14 +1,13 @@
-#!/bin/bash
+#!/bin/sh
+# SecuBox Zigbee — pre-remove
 set -e
+
 case "$1" in
-  remove|upgrade)
-    # Remove nginx location config
-    rm -f /etc/nginx/secubox.d/zigbee.conf
-    # Stop and disable service
-    systemctl stop    secubox-zigbee.service 2>/dev/null || true
-    systemctl disable secubox-zigbee.service 2>/dev/null || true
-    # Reload nginx to remove location
-    systemctl reload nginx 2>/dev/null || true
-    ;;
+    remove|deconfigure|upgrade)
+        systemctl stop secubox-zigbee.service 2>/dev/null || true
+        systemctl disable secubox-zigbee.service 2>/dev/null || true
+        ;;
 esac
+
 #DEBHELPER#
+exit 0

@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: zigbeectl
+# CyberMind — https://cybermind.fr
+#
+# zigbee2mqtt host-side controller. LXC at 10.100.0.111 on br-lxc.
+# Three-fold introspection (components/status/access) + install/reload +
+# device/network/topology/permit-join nouns.
+#
+# Grammar: docs/grammar.md, MIND layer.
+# Conventions: docs/MODULE-GUIDELINES.md §7.
+
+set -u
+
+readonly VERSION="2.4.0"
+readonly CONFIG_FILE="${SECUBOX_ZIGBEE_CONFIG:-/etc/secubox/zigbee.toml}"
+readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
+readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/zigbee/install-lxc.sh}"
+
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+
+log()   { printf '%b[zigbee]%b %s\n' "$GREEN" "$NC" "$*"; }
+warn()  { printf '%b[warn]%b %s\n'   "$YELLOW" "$NC" "$*" >&2; }
+err()   { printf '%b[error]%b %s\n'  "$RED"    "$NC" "$*" >&2; }
+
+config_get() {
+    local key="$1" default="${2:-}" result=""
+    if [ -f "$CONFIG_FILE" ]; then
+        # The `cut | tr` pipeline returns 0 even when grep matches nothing,
+        # so `|| echo $default` never fires. Capture, then test empty.
+        result=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null \
+                 | head -1 | cut -d= -f2- | tr -d ' "' | tr -d "'")
+    fi
+    [ -z "$result" ] && result="$default"
+    printf '%s\n' "$result"
+}
+
+LXC_NAME=$(config_get "name" "zigbee")
+LXC_IP=$(config_get "ip" "10.100.0.111")
+LXC_PATH=$(config_get "path" "/data/lxc")
+FRONTEND_PORT=$(config_get "frontend_port" "8080")
+MQTT_LXC_IP=$(config_get "mqtt_ip" "10.100.0.110")
+MQTT_PORT=$(config_get "mqtt_port" "1883")
+
+# ── LXC + daemon helpers ─────────────────────────────────────────────────────
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+lxc_running() { [ "$(lxc_state)" = "running" ]; }
+lxc_exists()  { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+
+z2m_running() {
+    lxc_running || return 1
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-active --quiet zigbee2mqtt 2>/dev/null
+}
+
+host_api_running() {
+    systemctl is-active --quiet secubox-zigbee.service 2>/dev/null
+}
+
+# Radio detection: /dev/secubox-zgb is created by the udev rule when a
+# supported dongle is plugged in. Absence = "device: absent" — not fatal,
+# z2m will simply crash-loop until it shows up.
+radio_present() { [ -e /dev/secubox-zgb ]; }
+
+# bridge/state is published by z2m on the broker — "online" / "offline".
+# Reading it confirms z2m is talking to mqtt AND the broker accepted z2m's creds.
+z2m_bridge_state() {
+    local user="z2m" pw_file="$SECRETS_DIR/mqtt-z2m"
+    [ -f "$pw_file" ] || { echo "no-creds"; return; }
+    local pw; pw=$(cat "$pw_file")
+    # Subscribe with -W 2s, -C 1 to grab the retained state message.
+    timeout 4 mosquitto_sub -h "$MQTT_LXC_IP" -p "$MQTT_PORT" -u "$user" -P "$pw" \
+        -t 'zigbee2mqtt/bridge/state' -C 1 -W 2 2>/dev/null \
+        | python3 -c 'import sys,json
+try:
+    obj=json.loads(sys.stdin.read())
+    print(obj.get("state","unknown"))
+except Exception:
+    print("unknown")
+' 2>/dev/null || echo "unknown"
+}
+
+# ── Three-fold output ────────────────────────────────────────────────────────
+emit_components_text() {
+    printf '%-12s %-12s %s\n' "COMPONENT" "STATE" "DETAIL"
+    if lxc_exists; then
+        local s; s=$(lxc_state); [ -z "$s" ] && s="absent"
+        printf '%-12s %-12s %s\n' "lxc" "$s" "$LXC_NAME @ $LXC_IP on br-lxc"
+    else
+        printf '%-12s %-12s %s\n' "lxc" "absent" "$LXC_NAME @ $LXC_IP on br-lxc — run 'zigbeectl install'"
+    fi
+    radio_present \
+        && printf '%-12s %-12s %s\n' "device" "present" "/dev/secubox-zgb (CC2652P / ConBee II)" \
+        || printf '%-12s %-12s %s\n' "device" "absent"  "no Zigbee dongle plugged — z2m will idle"
+    z2m_running \
+        && printf '%-12s %-12s %s\n' "daemon" "running" "zigbee2mqtt, frontend port $FRONTEND_PORT" \
+        || printf '%-12s %-12s %s\n' "daemon" "stopped" "zigbee2mqtt"
+    local bridge; bridge=$(z2m_bridge_state)
+    printf '%-12s %-12s %s\n' "bridge" "$bridge" "zigbee2mqtt/bridge/state @ $MQTT_LXC_IP:$MQTT_PORT"
+    host_api_running \
+        && printf '%-12s %-12s %s\n' "host-api" "running" "secubox-zigbee.service (uvicorn)" \
+        || printf '%-12s %-12s %s\n' "host-api" "stopped" "secubox-zigbee.service (uvicorn)"
+}
+
+emit_components_json() {
+    local lxc_st dev_st daemon_st api_st bridge_st
+    if lxc_exists; then
+        lxc_st=$(lxc_state); [ -z "$lxc_st" ] && lxc_st="absent"
+    else
+        lxc_st="absent"
+    fi
+    radio_present && dev_st="present" || dev_st="absent"
+    z2m_running && daemon_st="running" || daemon_st="stopped"
+    host_api_running && api_st="running" || api_st="stopped"
+    bridge_st=$(z2m_bridge_state)
+
+    cat <<EOF
+{
+  "module": "zigbee",
+  "version": "$VERSION",
+  "components": [
+    {"name": "lxc",      "state": "$lxc_st",     "detail": "$LXC_NAME @ $LXC_IP on br-lxc"},
+    {"name": "device",   "state": "$dev_st",     "detail": "/dev/secubox-zgb (CC2652P / ConBee II)"},
+    {"name": "daemon",   "state": "$daemon_st",  "detail": "zigbee2mqtt, frontend port $FRONTEND_PORT"},
+    {"name": "bridge",   "state": "$bridge_st",  "detail": "zigbee2mqtt/bridge/state @ $MQTT_LXC_IP:$MQTT_PORT"},
+    {"name": "host-api", "state": "$api_st",     "detail": "secubox-zigbee.service (uvicorn)"}
+  ]
+}
+EOF
+}
+
+emit_status_json() {
+    local overall
+    if lxc_running && z2m_running && radio_present && [ "$(z2m_bridge_state)" = "online" ] && host_api_running; then
+        overall="green"
+    elif lxc_running && z2m_running && host_api_running; then
+        # daemon up but no device → expected on a board without dongle.
+        overall="yellow"
+    elif lxc_exists; then
+        overall="yellow"
+    else
+        overall="red"
+    fi
+    cat <<EOF
+{ "module": "zigbee", "version": "$VERSION", "overall": "$overall" }
+EOF
+}
+
+# Access: which clients connect to the zigbee surface? At v2.4.0 the
+# only "access" surface is the frontend port — list it as one entry.
+emit_access_json() {
+    cat <<EOF
+{
+  "module": "zigbee",
+  "access": [
+    {"endpoint": "http://$LXC_IP:$FRONTEND_PORT/", "scope": "lan", "auth": "none (LAN-only)"},
+    {"endpoint": "mqtt://$MQTT_LXC_IP:$MQTT_PORT (zigbee2mqtt/#)", "scope": "lan", "auth": "z2m user"}
+  ]
+}
+EOF
+}
+
+# ── Verbs ─────────────────────────────────────────────────────────────────────
+cmd_components() {
+    case "${1:-}" in
+        --json) emit_components_json ;;
+        ""|list|status) emit_components_text ;;
+        *) err "unknown verb for 'components': $1"; exit 1 ;;
+    esac
+}
+
+cmd_status() {
+    case "${1:-}" in
+        --json) emit_status_json ;;
+        "")
+            emit_components_text
+            echo
+            emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])'
+            ;;
+        *) err "unknown verb for 'status': $1"; exit 1 ;;
+    esac
+}
+
+cmd_access() {
+    case "${1:-}" in
+        --json) emit_access_json ;;
+        ""|list) emit_access_json | python3 -m json.tool ;;
+        *) err "unknown verb for 'access': $1"; exit 1 ;;
+    esac
+}
+
+cmd_install() {
+    if [ ! -x "$INSTALL_LIB" ]; then
+        err "install script not found at $INSTALL_LIB (package not installed correctly?)"
+        exit 2
+    fi
+    log "Running LXC bootstrap from $INSTALL_LIB ..."
+    SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
+        SECUBOX_MQTT_LXC_IP="$MQTT_LXC_IP" SECUBOX_MQTT_PORT="$MQTT_PORT" \
+        SECUBOX_Z2M_FRONTEND_PORT="$FRONTEND_PORT" \
+        bash "$INSTALL_LIB"
+    log "Starting host-side FastAPI ..."
+    systemctl start secubox-zigbee.service 2>/dev/null || true
+    log "Done. Try 'zigbeectl status' to verify."
+}
+
+cmd_reload() {
+    systemctl restart secubox-zigbee.service 2>/dev/null || true
+    if lxc_running; then
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart zigbee2mqtt 2>/dev/null || true
+    fi
+    log "Reloaded host FastAPI and zigbee2mqtt (if running)."
+}
+
+# Module nouns — read-only via MQTT in v2.4.0. Z2M publishes the device
+# list on a request/response topic; we subscribe + publish + harvest.
+_z2m_request() {
+    local target_topic="$1"
+    local response_topic="$2"
+    local payload="${3:-{}}"
+    local user="z2m" pw_file="$SECRETS_DIR/mqtt-z2m"
+    [ -f "$pw_file" ] || { err "missing $pw_file"; exit 2; }
+    local pw; pw=$(cat "$pw_file")
+    # Start sub in background, then publish, then collect first response.
+    timeout 6 mosquitto_sub -h "$MQTT_LXC_IP" -p "$MQTT_PORT" -u "$user" -P "$pw" \
+        -t "$response_topic" -C 1 -W 5 2>/dev/null &
+    local sub_pid=$!
+    sleep 0.5
+    timeout 3 mosquitto_pub -h "$MQTT_LXC_IP" -p "$MQTT_PORT" -u "$user" -P "$pw" \
+        -t "$target_topic" -m "$payload" 2>/dev/null
+    wait $sub_pid 2>/dev/null || true
+}
+
+cmd_device() {
+    case "${1:-list}" in
+        list)
+            # Read the retained bridge/devices topic.
+            local user="z2m" pw_file="$SECRETS_DIR/mqtt-z2m"
+            [ -f "$pw_file" ] || { err "missing $pw_file"; exit 2; }
+            local pw; pw=$(cat "$pw_file")
+            timeout 4 mosquitto_sub -h "$MQTT_LXC_IP" -p "$MQTT_PORT" -u "$user" -P "$pw" \
+                -t 'zigbee2mqtt/bridge/devices' -C 1 -W 3 2>/dev/null \
+                | python3 -m json.tool 2>/dev/null \
+                || echo "(no retained device list — daemon may be down or radio absent)"
+            ;;
+        *) err "device: only 'list' is implemented in v$VERSION (writes via /api/v1/zigbee/)"; exit 2 ;;
+    esac
+}
+
+cmd_network() {
+    case "${1:-info}" in
+        info|"")
+            local user="z2m" pw_file="$SECRETS_DIR/mqtt-z2m"
+            [ -f "$pw_file" ] || { err "missing $pw_file"; exit 2; }
+            local pw; pw=$(cat "$pw_file")
+            timeout 4 mosquitto_sub -h "$MQTT_LXC_IP" -p "$MQTT_PORT" -u "$user" -P "$pw" \
+                -t 'zigbee2mqtt/bridge/info' -C 1 -W 3 2>/dev/null \
+                | python3 -m json.tool 2>/dev/null \
+                || echo "(no retained info — daemon may be down or radio absent)"
+            ;;
+        *) err "network: only 'info' is implemented in v$VERSION"; exit 2 ;;
+    esac
+}
+
+cmd_topology() {
+    case "${1:-show}" in
+        show|"")
+            log "Topology read is async via MQTT request — not implemented in v$VERSION."
+            log "Open /api/v1/zigbee/topology (v2.5) or use the z2m frontend at http://$LXC_IP:$FRONTEND_PORT/."
+            ;;
+        *) err "topology: only 'show' is implemented in v$VERSION"; exit 2 ;;
+    esac
+}
+
+cmd_permit_join() {
+    case "${1:-}" in
+        on|true)
+            local secs="${2:-60}"
+            local user="z2m" pw_file="$SECRETS_DIR/mqtt-z2m"
+            [ -f "$pw_file" ] || { err "missing $pw_file"; exit 2; }
+            local pw; pw=$(cat "$pw_file")
+            log "Permitting joins for ${secs}s ..."
+            timeout 3 mosquitto_pub -h "$MQTT_LXC_IP" -p "$MQTT_PORT" -u "$user" -P "$pw" \
+                -t 'zigbee2mqtt/bridge/request/permit_join' \
+                -m "{\"value\": true, \"time\": ${secs}}"
+            log "Done. Window closes in ${secs}s."
+            ;;
+        off|false)
+            local user="z2m" pw_file="$SECRETS_DIR/mqtt-z2m"
+            [ -f "$pw_file" ] || { err "missing $pw_file"; exit 2; }
+            local pw; pw=$(cat "$pw_file")
+            timeout 3 mosquitto_pub -h "$MQTT_LXC_IP" -p "$MQTT_PORT" -u "$user" -P "$pw" \
+                -t 'zigbee2mqtt/bridge/request/permit_join' -m '{"value": false}'
+            log "permit_join: off"
+            ;;
+        *) err "permit-join: on [seconds] | off"; exit 2 ;;
+    esac
+}
+
+cmd_help() {
+    cat <<'HELP'
+zigbeectl — SecuBox zigbee2mqtt coordinator controller (MIND layer)
+
+Three-fold introspection:
+  zigbeectl components [--json]    # LXC + device + daemon + bridge + host-API
+  zigbeectl status     [--json]    # overall green/yellow/red
+  zigbeectl access     [list] [--json]
+
+Lifecycle (per docs/MODULE-GUIDELINES.md §7):
+  zigbeectl install                # idempotent LXC + z2m bootstrap
+  zigbeectl reload                 # restart host FastAPI + z2m
+  zigbeectl repair                 # (NOT YET IMPLEMENTED)
+  zigbeectl wizard                 # (NOT YET IMPLEMENTED)
+  zigbeectl uninstall              # (NOT YET IMPLEMENTED)
+
+Module nouns (v2.4.0 — read-only via MQTT, writes via /api/v1/zigbee/):
+  zigbeectl device       list                  # cat retained bridge/devices
+  zigbeectl network      info                  # cat retained bridge/info
+  zigbeectl topology     show                  # deferred to v2.5
+  zigbeectl permit-join  on [seconds] | off    # window-controlled join
+
+  (--json on any verb returns machine-readable output)
+
+For grammar details: /usr/share/doc/secubox-zigbee/README.gz
+                     docs/grammar.md (MIND layer, #241)
+HELP
+}
+
+main() {
+    local noun="${1:-help}"
+    shift || true
+    case "$noun" in
+        components|status|access|install|reload) "cmd_${noun}" "$@" ;;
+        device|network|topology) "cmd_${noun}" "$@" ;;
+        permit-join|permit_join) cmd_permit_join "$@" ;;
+        --help|-h|help|"") cmd_help ;;
+        --version|-V) echo "zigbeectl $VERSION" ;;
+        *) err "unknown noun: $noun"; cmd_help; exit 1 ;;
+    esac
+}
+
+main "$@"
