@@ -5,20 +5,29 @@ Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 Homepage: https://cybermind.fr/secubox
-Rules-Requires-Root: no
 
 Package: secubox-mqtt
 Architecture: all
 Depends: ${misc:Depends},
- secubox-core (>= 1.0),
- mosquitto,
- mosquitto-clients
-Description: SecuBox MQTT — Mosquitto Broker Management
- MQTT broker management module for SecuBox providing:
- - Broker status and health monitoring
- - Client connection tracking
- - Topic monitoring
- - User and ACL management
- - Configuration management via web UI
+         secubox-core (>= 1.0),
+         lxc,
+         lxc-templates,
+         debootstrap,
+         python3-uvicorn,
+         python3-fastapi,
+         python3-toml,
+         openssl
+Description: SecuBox MQTT — Mosquitto broker (WALL layer)
+ Hosts a hardened Mosquitto 2.x broker in a Debian bookworm LXC at
+ 10.100.0.110 on br-lxc.
  .
- Part of SecuBox-Deb platform — CyberMind.fr
+ No anonymous access (allow_anonymous false). Per-service authentication
+ via mosquitto_passwd-managed credentials and per-topic ACL — z2m,
+ sentinelle, domoticz and the SecuBox internal API each get their own
+ user with a randomly-generated password stored under
+ /etc/secubox/secrets/mqtt-* (mode 0600, owner root:secubox).
+ .
+ Host-side control plane: FastAPI on Unix socket /run/secubox/mqtt.sock
+ + nginx route /api/v1/mqtt/ on the canonical hub vhost. CTL grammar:
+ mqttctl components / status / access + install / reload + topic /
+ client / acl / user nouns.

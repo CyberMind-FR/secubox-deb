@@ -1,3 +1,33 @@
+secubox-mqtt (2.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * v2.4.0 rewrite-in-place: move Mosquitto into a dedicated LXC at
+    10.100.0.110 on br-lxc (matches the canonical SecuBox module pattern
+    of authelia/yacy/lyrion). The v1.0.0 host-bound layout is gone.
+  * Hard limits per docs/superpowers/specs/2026-05-20-secubox-zigbee-mqtt-iot-stack.md:
+    - allow_anonymous false
+    - per-service ACL (z2m, sentinelle, domoticz, homeassistant, secubox-api)
+    - randomly-generated passwords stored under
+      /etc/secubox/secrets/mqtt-<service> (0640 root:secubox)
+    - LXC binds 0.0.0.0:1883; LAN exposure via persistent nftables DNAT.
+  * mqttctl follows the SecuBox CTL grammar:
+    - introspection: components / status / access
+    - lifecycle:     install / reload (+ stubs repair/wizard/uninstall)
+    - module nouns:  topic / client / acl / user (list-only in v2.4.0)
+  * Host control plane: FastAPI on /run/secubox/mqtt.sock with
+    /components, /status, /access, /reload, /healthz. Reverse-proxied at
+    /api/v1/mqtt/ on the canonical hub vhost.
+  * Persistent nftables DNAT in /etc/nftables.d/secubox-mqtt-dnat.nft
+    routes LAN traffic on TCP :1883 to the LXC (same pattern as the
+    slimproto DNAT shipped by secubox-lyrion v1.0.3 / #248).
+  * Out of scope for v2.4.0 (deferred to v2.5):
+    - 4R double-buffer on the broker config
+    - Jinja2 templating of mosquitto.conf
+    - operator-level ACL/user management via /api/v1/mqtt/
+    - TLS 1.3 on port 8883
+  * Closes #240
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 22:30:00 +0200
+
 secubox-mqtt (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release

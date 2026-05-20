@@ -3,12 +3,27 @@
 	dh $@
 
 override_dh_auto_install:
-	install -d debian/secubox-mqtt/usr/lib/secubox/mqtt/
+	# Host control plane (FastAPI)
+	install -d debian/secubox-mqtt/usr/lib/secubox/mqtt
 	cp -r api debian/secubox-mqtt/usr/lib/secubox/mqtt/
+	# CTL
+	install -d debian/secubox-mqtt/usr/sbin
+	install -m 755 sbin/mqttctl debian/secubox-mqtt/usr/sbin/mqttctl
+	# Web UI
 	install -d debian/secubox-mqtt/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-mqtt/usr/share/secubox/www/ || true
+	# Menu entry
 	install -d debian/secubox-mqtt/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-mqtt/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
+	# nginx snippet — install to BOTH secubox.d/ and secubox-routes.d/ (per v2.11.1 lesson)
 	install -d debian/secubox-mqtt/etc/nginx/secubox.d
-	[ -f nginx/mqtt.conf ] && cp nginx/mqtt.conf debian/secubox-mqtt/etc/nginx/secubox.d/ || true
+	[ -f nginx/mqtt.conf ] && cp nginx/mqtt.conf debian/secubox-mqtt/etc/nginx/secubox.d/ && (install -d debian/secubox-mqtt/etc/nginx/secubox-routes.d && cp nginx/mqtt.conf debian/secubox-mqtt/etc/nginx/secubox-routes.d/) || true
+	# Config example
+	install -d debian/secubox-mqtt/etc/secubox
+	[ -f conf/mqtt.toml.example ] && cp conf/mqtt.toml.example debian/secubox-mqtt/etc/secubox/mqtt.toml.example || true
+	# LXC bootstrap
+	install -d debian/secubox-mqtt/usr/share/secubox/lib/mqtt
+	[ -d lib/mqtt ] && cp -r lib/mqtt/. debian/secubox-mqtt/usr/share/secubox/lib/mqtt/ || true
+	# install-lxc.sh must be executable (cp -r doesn't always preserve +x from git)
+	[ -f debian/secubox-mqtt/usr/share/secubox/lib/mqtt/install-lxc.sh ] && \
+	    chmod 755 debian/secubox-mqtt/usr/share/secubox/lib/mqtt/install-lxc.sh
