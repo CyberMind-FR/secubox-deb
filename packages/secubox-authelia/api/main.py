@@ -26,7 +26,7 @@ from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Header, Request, Response
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 CTL = shutil.which("autheliactl") or "/usr/sbin/autheliactl"
 
 # Authelia LXC (provisioned by install-lxc.sh at 10.100.0.20:9091). Override
@@ -113,7 +113,10 @@ def verify(
     # Pass through Cookie + Authorization headers to Authelia. nginx already
     # stripped the request body (proxy_pass_request_body off) so we're just
     # forwarding metadata.
-    upstream = f"{AUTHELIA_URL.rstrip('/')}/api/verify"
+    # Authelia 4.39+ is path-prefixed at /auth (server.address). The verify
+    # endpoint is therefore at /auth/api/verify (both /api/verify legacy
+    # and the prefixed path respond, but prefix is the canonical one).
+    upstream = f"{AUTHELIA_URL.rstrip('/')}/auth/api/verify"
     headers = {}
     if cookie:
         headers["Cookie"] = cookie

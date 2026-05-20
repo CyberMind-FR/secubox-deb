@@ -239,7 +239,11 @@ PYEOF
 theme: dark
 
 server:
-  address: 'tcp://0.0.0.0:${AUTHELIA_HTTP_PORT}/'
+  # Path prefix /auth (NO trailing slash — Authelia 4.39+ rejects it).
+  # Tells Authelia the React UI lives under /auth/ on the canonical hub
+  # vhost. Without this, the SPA makes API calls to /api/state etc.
+  # which 404 because nginx only routes /auth/ → the LXC.
+  address: 'tcp://0.0.0.0:${AUTHELIA_HTTP_PORT}/auth'
 
 log:
   level: info
