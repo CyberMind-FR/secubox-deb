@@ -1,0 +1,18 @@
+#!/bin/sh
+# SecuBox MQTT — post-remove
+set -e
+
+case "$1" in
+    purge)
+        # Only on purge — preserve operator data on plain remove/upgrade.
+        rm -f /etc/secubox/mqtt.toml /etc/secubox/mqtt.toml.example
+        rm -rf /var/lib/secubox/mqtt
+        # Secrets are NOT purged automatically — operator must `rm /etc/secubox/secrets/mqtt-*`
+        # manually after confirming no dependent service still relies on them.
+        # LXC is left intact: operator removes it explicitly via
+        # `mqttctl uninstall` (TODO: future verb).
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

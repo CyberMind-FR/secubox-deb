@@ -1,0 +1,50 @@
+# /etc/secubox/mqtt.toml — SecuBox MQTT (Mosquitto broker) configuration
+
+[lxc]
+name         = "mqtt"
+ip           = "10.100.0.110"
+gateway      = "10.100.0.1"
+bridge       = "br-lxc"
+path         = "/data/lxc"
+debian_suite = "bookworm"
+
+[broker]
+# Mosquitto listen port — both inside the LXC and on the host LAN
+# (DNAT'd via /etc/nftables.d/secubox-mqtt-dnat.nft).
+port = 1883
+# TLS is OUT OF SCOPE for v2.4.0 — terminate at HAProxy if needed.
+tls  = false
+
+# ACL services — keep this list aligned with lib/mqtt/install-lxc.sh.
+# Each service gets:
+#   - a randomly generated password at /etc/secubox/secrets/mqtt-<user>
+#   - a readwrite ACL on <topic>
+#
+# Adding a new service to this file is NOT enough — also edit ACL_SERVICES
+# in lib/mqtt/install-lxc.sh, rebuild the package and re-run `mqttctl install`.
+# (Operator-level ACL management via /api/v1/mqtt/ is deferred to v2.5.)
+[[acl]]
+user  = "z2m"
+topic = "zigbee2mqtt/#"
+
+[[acl]]
+user  = "sentinelle"
+topic = "sentinelle/#"
+
+[[acl]]
+user  = "domoticz"
+topic = "domoticz/#"
+
+[[acl]]
+user  = "homeassistant"
+topic = "homeassistant/#"
+
+[[acl]]
+user  = "secubox-api"
+topic = "#"
+
+[exposure]
+# The broker is LAN-only (no nginx route, no public DNS). For a future
+# remote-MQTT exposure, the canonical pattern is HAProxy TCP frontend +
+# mqtts:// 8883 (TLS 1.3). Not in v2.4.0.
+lan_only = true
