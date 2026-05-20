@@ -207,8 +207,49 @@ generate_admin_password() {
         local pw; pw=$(openssl rand -hex 16)
         echo "$pw" > "$SECRETS_DIR/yacy-admin"
         chmod 600 "$SECRETS_DIR/yacy-admin"
-        log "Generated YaCy admin password (set via the YaCy admin UI on first login)."
+        log "Generated YaCy admin password (32 hex chars) at $SECRETS_DIR/yacy-admin"
     fi
+}
+
+# Inject the generated password into YaCy's yacy.conf as a Digest hash so
+# the admin login works immediately. Without this, the operator couldn't
+# log in: YaCy's installed default hash doesn't match the password file.
+#
+# YaCy uses HTTP Digest authentication with the realm string copied from
+# the `adminRealm` pref (a long human-readable sentence). The expected
+# hash format is:
+#     adminAccountBase64MD5=MD5:<md5sum of "admin:<realm>:<password>">
+#
+# Computed host-side (md5sum is in coreutils, no java dep needed; matches
+# the output of YaCy's own bin/passwd.sh script which calls
+# `net.yacy.cora.order.Digest -strfhex` internally).
+configure_yacy_admin() {
+    local pw_file="$SECRETS_DIR/yacy-admin"
+    [ -f "$pw_file" ] || { log "no password file at $pw_file, skipping admin inject"; return; }
+
+    local pw realm hash yacy_conf
+    pw=$(cat "$pw_file")
+    yacy_conf="/opt/yacy/DATA/SETTINGS/yacy.conf"
+
+    # Pull the realm string from the running YaCy config inside the LXC.
+    realm=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c "grep '^adminRealm=' $yacy_conf | cut -d= -f2-" 2>/dev/null || true)
+    [ -z "$realm" ] && realm="YaCy"
+
+    hash=$(printf 'admin:%s:%s' "$realm" "$pw" | md5sum | cut -d' ' -f1)
+    [ -z "$hash" ] && { log "WARN: md5sum produced empty hash, skipping admin inject"; return; }
+
+    # Skip if the right hash is already set (idempotent).
+    if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- grep -q "^adminAccountBase64MD5=MD5:${hash}$" "$yacy_conf" 2>/dev/null; then
+        log "YaCy admin hash already matches generated password — skipping"
+        return
+    fi
+
+    log "Injecting YaCy admin Digest hash into yacy.conf ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl stop yacy 2>/dev/null || true
+    # YaCy rewrites the conf when running; pause it before editing.
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sed -i \
+        "s|^adminAccountBase64MD5=.*|adminAccountBase64MD5=MD5:${hash}|" "$yacy_conf"
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl start yacy 2>/dev/null || true
 }
 
 mark_provisioned() {
@@ -228,6 +269,7 @@ main() {
     ensure_resolv
     install_yacy_in_lxc
     generate_admin_password
+    configure_yacy_admin
     provision_yacy
     mark_provisioned
     log "OK — LXC '$LXC_NAME' at $LXC_IP, yacy provisioned + running on port 8090."
