@@ -1,0 +1,14 @@
+# SecuBox Grafana — Prometheus datasource for secubox-metrics
+apiVersion: 1
+datasources:
+  - name: secubox-metrics
+    type: prometheus
+    access: proxy
+    # The host LXC bridge gateway as seen from inside the grafana LXC.
+    # secubox-metrics listens on the host at :9090 (default).
+    url: http://10.100.0.1:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: "POST"

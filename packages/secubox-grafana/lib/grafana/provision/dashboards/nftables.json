@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 38,
+  "uid": "secubox-nftables",
+  "title": "SecuBox — nftables drops/accepts",
+  "tags": ["secubox", "firewall", "nftables"],
+  "timezone": "browser",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Drops per chain/rule (rate, 1m)",
+      "datasource": {"type": "prometheus", "uid": "secubox-metrics"},
+      "targets": [
+        {"refId": "A", "expr": "rate(nftables_counter_packets{verdict=\"drop\"}[1m])", "legendFormat": "{{chain}}/{{rule}}"}
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 8}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Accepts per chain (rate, 1m)",
+      "datasource": {"type": "prometheus", "uid": "secubox-metrics"},
+      "targets": [
+        {"refId": "A", "expr": "rate(nftables_counter_packets{verdict=\"accept\"}[1m])", "legendFormat": "{{chain}}"}
+      ],
+      "gridPos": {"x": 0, "y": 8, "w": 24, "h": 8}
+    }
+  ],
+  "time": {"from": "now-1h", "to": "now"}
+}

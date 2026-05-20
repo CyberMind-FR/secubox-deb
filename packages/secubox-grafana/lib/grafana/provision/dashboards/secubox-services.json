@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 38,
+  "uid": "secubox-services",
+  "title": "SecuBox — Services overview",
+  "tags": ["secubox", "systemd"],
+  "timezone": "browser",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Active secubox-* units",
+      "datasource": {"type": "prometheus", "uid": "secubox-metrics"},
+      "targets": [
+        {"refId": "A", "expr": "count(systemd_unit_state{name=~\"secubox-.*\\\\.service\", state=\"active\"})"}
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Failed secubox-* units",
+      "datasource": {"type": "prometheus", "uid": "secubox-metrics"},
+      "targets": [
+        {"refId": "A", "expr": "count(systemd_unit_state{name=~\"secubox-.*\\\\.service\", state=\"failed\"})"}
+      ],
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": 0}, {"color": "red", "value": 1}]}
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "secubox-* unit state over time",
+      "datasource": {"type": "prometheus", "uid": "secubox-metrics"},
+      "targets": [
+        {"refId": "A", "expr": "systemd_unit_state{name=~\"secubox-.*\\\\.service\", state=\"active\"}", "legendFormat": "{{name}}"}
+      ],
+      "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8}
+    }
+  ],
+  "time": {"from": "now-6h", "to": "now"}
+}

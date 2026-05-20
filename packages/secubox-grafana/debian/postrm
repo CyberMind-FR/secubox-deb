@@ -1,0 +1,16 @@
+#!/bin/sh
+# SecuBox Grafana — post-remove
+set -e
+
+case "$1" in
+    purge)
+        # Only on purge — preserve operator data on plain remove/upgrade.
+        rm -f /etc/secubox/grafana.toml /etc/secubox/grafana.toml.example
+        rm -rf /var/lib/secubox/grafana
+        # LXC is left intact: operator removes it explicitly via
+        # `grafanactl uninstall` (TODO: future verb).
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

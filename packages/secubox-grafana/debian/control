@@ -1,0 +1,35 @@
+Source: secubox-grafana
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+
+Package: secubox-grafana
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         secubox-haproxy,
+         lxc,
+         lxc-templates,
+         debootstrap,
+         python3-uvicorn,
+         python3-fastapi,
+         python3-toml,
+         openssl,
+         curl,
+         jq
+Recommends: secubox-mitmproxy, secubox-metrics
+Description: SecuBox Grafana — security metrics dashboards
+ Hosts Grafana OSS in a Debian LXC at 10.100.0.70 on br-lxc, with pre-provisioned
+ dashboards for the SecuBox security stack: nftables, crowdsec, suricata,
+ cookie-audit, mitmproxy WAF and per-service systemd health.
+ .
+ The host-side FastAPI control plane runs on /run/secubox/grafana.sock and
+ is exposed by nginx at /api/v1/grafana/. The native Grafana UI is iframe-
+ embedded under /grafana/ (proxy_pass to the LXC).
+ .
+ grafanactl exposes the canonical SecuBox three-fold introspection
+ (components/status/access) plus dashboard/datasource/alert/user/api-key
+ nouns matching the OPS MONITORING layer of the CTL grammar.
