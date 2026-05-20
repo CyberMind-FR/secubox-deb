@@ -1,0 +1,22 @@
+# /etc/udev/rules.d/99-secubox-sentinelle-gsm.rules
+# Installed by secubox-sentinelle-gsm (#237).
+#
+# RTL-SDR USB dongles. We tag them as plugdev-group readable so the
+# unprivileged `secubox` user (member of plugdev via the postinst) can
+# claim the device without root.
+
+# Realtek RTL2832U (DVB-T) — original RTL-SDR + RTL-SDR Blog v3
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", \
+    MODE="0660", GROUP="plugdev", SYMLINK+="secubox-rtlsdr"
+
+# Realtek RTL2832U + R820T2 — RTL-SDR Blog v4
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", \
+    MODE="0660", GROUP="plugdev", SYMLINK+="secubox-rtlsdr"
+
+# OpenMoko RTL-SDR clone
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="604b", \
+    MODE="0660", GROUP="plugdev", SYMLINK+="secubox-rtlsdr"
+
+# GTek WinFast DTV (DVB-T → RTL-SDR via librtlsdr)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="0001", \
+    MODE="0660", GROUP="plugdev", SYMLINK+="secubox-rtlsdr"

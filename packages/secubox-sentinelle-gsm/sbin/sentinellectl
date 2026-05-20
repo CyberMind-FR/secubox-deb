@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: sentinellectl
+# CyberMind — https://cybermind.fr
+#
+# SENTINELLE-GSM controller. Host-resident (no LXC).
+# Three-fold introspection (components/status/access) + cell/alert/mode nouns.
+#
+# Grammar: docs/grammar.md, MIND layer.
+# Doctrine: docs/superpowers/specs/2026-05-20-secubox-sentinelle-gsm.md §2 + §6.
+# Off-path by construction (RX-only SDR); privacy-by-design (HMAC by default).
+
+set -u
+
+readonly VERSION="0.1.0"
+readonly SOCKET="${SECUBOX_SENTINELLE_GSM_SOCKET:-/run/secubox/sentinelle-gsm.sock}"
+
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+
+log()  { printf '%b[sentinelle]%b %s\n' "$GREEN" "$NC" "$*"; }
+warn() { printf '%b[warn]%b %s\n'       "$YELLOW" "$NC" "$*" >&2; }
+err()  { printf '%b[error]%b %s\n'      "$RED"    "$NC" "$*" >&2; }
+
+_curl_unix() {
+    local method="$1" path="$2" body="${3:-}"
+    if [ -n "$body" ]; then
+        curl -s -X "$method" -H 'Content-Type: application/json' \
+            --unix-socket "$SOCKET" --data "$body" \
+            "http://localhost$path" 2>/dev/null
+    else
+        curl -s -X "$method" --unix-socket "$SOCKET" \
+            "http://localhost$path" 2>/dev/null
+    fi
+}
+
+# ── Verbs ─────────────────────────────────────────────────────────────────────
+cmd_components() {
+    case "${1:-}" in
+        --json)
+            _curl_unix GET /components | python3 -m json.tool 2>/dev/null \
+                || echo '{"error":"api-unreachable"}'
+            ;;
+        ""|list|status)
+            local data
+            data=$(_curl_unix GET /components)
+            if [ -z "$data" ]; then
+                err "API unreachable at $SOCKET — is secubox-sentinelle-gsm.service up?"
+                exit 2
+            fi
+            printf '%-12s %-12s %s\n' "COMPONENT" "STATE" "DETAIL"
+            echo "$data" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+# .format() — dodges bash quoting + Python 3.11 fstring restriction.
+for c in d["components"]:
+    print("{:<12} {:<12} {}".format(c["name"], c["state"], c["detail"]))
+'
+            ;;
+        *) err "unknown verb for 'components': $1"; exit 1 ;;
+    esac
+}
+
+cmd_status() {
+    case "${1:-}" in
+        --json)
+            _curl_unix GET /status | python3 -m json.tool 2>/dev/null \
+                || echo '{"error":"api-unreachable"}'
+            ;;
+        "")
+            cmd_components
+            echo
+            local data; data=$(_curl_unix GET /status)
+            echo "$data" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print("overall: {}".format(d["overall"]))
+    print("mode:    {}".format(d["mode"]))
+    print("captures_plaintext_imsi_in_prod: {}".format(d["captures_plaintext_imsi_in_prod"]))
+    print("rx_only: {}".format(d["rx_only"]))
+except Exception:
+    print("overall: unknown (api error)")
+'
+            ;;
+        *) err "unknown verb for 'status': $1"; exit 1 ;;
+    esac
+}
+
+cmd_access() {
+    _curl_unix GET /access | python3 -m json.tool 2>/dev/null \
+        || echo '{"error":"api-unreachable"}'
+}
+
+cmd_cell() {
+    case "${1:-list}" in
+        list|"")
+            _curl_unix GET /cells | python3 -m json.tool 2>/dev/null \
+                || echo '{"error":"api-unreachable"}'
+            ;;
+        *) err "cell: only 'list' is implemented in v$VERSION"; exit 2 ;;
+    esac
+}
+
+cmd_alert() {
+    case "${1:-list}" in
+        list|"")
+            _curl_unix GET /alerts | python3 -m json.tool 2>/dev/null \
+                || echo '{"error":"api-unreachable"}'
+            ;;
+        *) err "alert: only 'list' is implemented in v$VERSION"; exit 2 ;;
+    esac
+}
+
+cmd_mode() {
+    case "${1:-show}" in
+        show|"")
+            _curl_unix GET /status | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print("mode: {}".format(d["mode"]))
+except Exception:
+    print("mode: unknown")
+'
+            ;;
+        prod)
+            log 'Switching to PROD mode (anonymized identifiers)'
+            _curl_unix POST /mode '{"mode": "prod"}' | python3 -m json.tool 2>/dev/null
+            ;;
+        lab)
+            warn 'LAB mode allows plaintext IMSI observation.'
+            warn 'By proceeding you certify the device(s) being observed are'
+            warn 'owned by you OR have given explicit consent. This will be'
+            warn 'logged to /var/log/secubox/sentinelle-gsm-audit.log.'
+            printf 'Type CONSENT to confirm: '
+            read -r ack
+            if [ "$ack" != "CONSENT" ]; then
+                err 'aborted'; exit 1
+            fi
+            _curl_unix POST /mode '{"mode": "lab", "consent_ack": true}' \
+                | python3 -m json.tool 2>/dev/null
+            ;;
+        *) err "mode: show | prod | lab"; exit 2 ;;
+    esac
+}
+
+cmd_install() {
+    log 'Host-resident module — install scope is just the .deb install.'
+    log 'Starting host-side FastAPI ...'
+    systemctl start secubox-sentinelle-gsm.service 2>/dev/null || true
+    log "Done. Try 'sentinellectl status' to verify."
+}
+
+cmd_reload() {
+    systemctl restart secubox-sentinelle-gsm.service 2>/dev/null || true
+    log 'Reloaded host FastAPI.'
+}
+
+cmd_help() {
+    cat <<'HELP'
+sentinellectl — SecuBox SENTINELLE-GSM controller (MIND layer, off-path)
+
+Three-fold introspection:
+  sentinellectl components [--json]
+  sentinellectl status     [--json]   # + mode + privacy flags
+  sentinellectl access     [--json]
+
+Lifecycle (per docs/MODULE-GUIDELINES.md §7):
+  sentinellectl install                # host-resident — starts the service
+  sentinellectl reload                 # restart host FastAPI
+  sentinellectl repair                 # (NOT YET IMPLEMENTED)
+
+Module nouns (v0.1.0):
+  sentinellectl cell   list            # observed cells + scores
+  sentinellectl alert  list            # active + historized alerts
+  sentinellectl mode   show            # current PROD / LAB
+  sentinellectl mode   prod            # anonymize all IDs
+  sentinellectl mode   lab             # plaintext IDs (consent required)
+
+This sensor is OFF-PATH (RX-only) and privacy-by-design (HMAC-truncated
+identifiers in PROD mode). It NEVER emits RF and NEVER decrypts traffic.
+
+For grammar details: /usr/share/doc/secubox-sentinelle-gsm/README.gz
+                     docs/grammar.md (MIND layer, #237)
+HELP
+}
+
+main() {
+    local noun="${1:-help}"
+    shift || true
+    case "$noun" in
+        components|status|access|install|reload) "cmd_${noun}" "$@" ;;
+        cell|alert|mode)                          "cmd_${noun}" "$@" ;;
+        --help|-h|help|"") cmd_help ;;
+        --version|-V) echo "sentinellectl $VERSION" ;;
+        *) err "unknown noun: $noun"; cmd_help; exit 1 ;;
+    esac
+}
+
+main "$@"

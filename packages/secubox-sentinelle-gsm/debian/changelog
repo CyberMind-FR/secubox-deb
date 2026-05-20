@@ -1,0 +1,47 @@
+secubox-sentinelle-gsm (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial scaffold per docs/superpowers/specs/2026-05-20-secubox-sentinelle-gsm.md.
+  * Host-resident (no LXC) — RTL-SDR is host USB hardware.
+  * MIND-layer passive rogue-BTS sensor; complements WALL #236
+    (EP06 modem-based sensor — same OPAD doctrine, different backend).
+  * Privacy framework scaffolded in-package (the spec's prerequisites
+    — anonymizer, PROD/LAB mode, GSMTAP dataclass — were absent from
+    the repo):
+    - lib/sentinelle_gsm/observer.py: Anonymizer (HMAC-SHA256 truncated
+      to 16 hex / 64 bits), Mode enum (PROD default, LAB gated), and
+      a frozen GsmCellObservation dataclass with NO subscriber-id
+      fields. Module-level CAPTURES_PLAINTEXT_IMSI = False exposed
+      via /api/v1/sensor/gsm/status.
+    - lib/sentinelle_gsm/scoring.py: CellScore + Baseline + score()
+      scaffold (v0.1 returns 0; the 8 heuristics from spec §6.1 land
+      in v0.2).
+    - lib/sentinelle_gsm/livemon.py: RTL-SDR USB detection (Realtek
+      RTL2832U + R820T2 variants; spec §5.1 sysfs path). UDP GSMTAP
+      listener + scapy parser stubbed for v0.2.
+  * sbin/sentinellectl follows the SecuBox CTL grammar
+    (components / status / access + install / reload + cell / alert /
+    mode nouns). `mode lab` requires interactive `CONSENT` typed-ack.
+  * api/main.py: FastAPI control plane on Unix socket; nginx reverse
+    proxy at /api/v1/sensor/gsm/. POST /mode flip writes an audit-log
+    entry to /var/log/secubox/sentinelle-gsm-audit.log.
+  * 8/8 privacy invariant tests pass (tests/test_privacy_invariant.py):
+    - CAPTURES_PLAINTEXT_IMSI is False
+    - GsmCellObservation has no subscriber-id fields
+    - Anonymizer is deterministic + key-bound + non-reversible
+    - lab_passthrough() raises in PROD (regression guard)
+    - Anonymizer rejects keys shorter than 32 bytes
+    - Default mode is PROD
+  * Closes #237 v0.1.0 scope.
+
+  Out of scope for v0.1.0 (deferred to v0.2):
+
+   - Actual GSMTAP parsing via scapy (real gr-gsm output on lo:4729)
+   - The 8 scoring heuristics from spec §6.1 (cipher downgrade, ghost
+     BTS, identity mismatch, relocalization storm, Identity Request
+     abuse, anomalous neighbours, T3212 out-of-band, orphan ARFCN)
+   - SQLite encrypted-at-rest persistence
+   - WebSocket live-feed endpoint
+   - gr-gsm livemon orchestration (templated systemd unit + scanner timer)
+   - Multilingual legal banner (FR/DE/ZH)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 00:25:00 +0200

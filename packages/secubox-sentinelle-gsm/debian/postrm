@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+case "$1" in
+    purge)
+        rm -f /etc/secubox/sentinelle-gsm.toml /etc/secubox/sentinelle-gsm.toml.example
+        rm -f /etc/udev/rules.d/99-secubox-sentinelle-gsm.rules
+        rm -rf /var/lib/secubox/sentinelle-gsm
+        # NEVER auto-purge /etc/secubox/secrets/sentinelle-gsm-hmac on plain
+        # remove/upgrade. On purge we DO remove it — clean uninstall. The
+        # operator can pre-back it up if they want HMAC-token continuity.
+        rm -f /etc/secubox/secrets/sentinelle-gsm-hmac
+        ;;
+esac
+#DEBHELPER#
+exit 0

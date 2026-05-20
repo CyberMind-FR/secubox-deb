@@ -1,0 +1,55 @@
+#!/bin/sh
+# SecuBox SENTINELLE-GSM — post-install
+set -e
+
+case "$1" in
+    configure)
+        getent group secubox >/dev/null || groupadd --system secubox
+        getent passwd secubox >/dev/null || useradd --system --gid secubox \
+            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
+        # plugdev is the standard group for RTL-SDR USB access (matches the
+        # shipped udev rule). Adding secubox to plugdev so the analyzer
+        # daemon can claim the USB device when v0.2 wires the SDR I/O.
+        usermod -aG plugdev secubox 2>/dev/null || true
+
+        install -d -m 0770 -o root -g secubox /etc/secubox
+        install -d -m 0750 -o root -g secubox /etc/secubox/secrets
+        install -d -m 0755 -o secubox -g secubox /var/lib/secubox/sentinelle-gsm
+        install -d -m 0755 -o secubox -g secubox /var/log/secubox
+
+        # Generate the HMAC key for anonymization (32 bytes from /dev/urandom).
+        # The Anonymizer refuses keys shorter than 32 bytes — see test_privacy_invariant.
+        if [ ! -f /etc/secubox/secrets/sentinelle-gsm-hmac ]; then
+            head -c 32 /dev/urandom > /etc/secubox/secrets/sentinelle-gsm-hmac
+            chmod 0640 /etc/secubox/secrets/sentinelle-gsm-hmac
+            chown root:secubox /etc/secubox/secrets/sentinelle-gsm-hmac
+        fi
+
+        # Seed config from example
+        if [ ! -f /etc/secubox/sentinelle-gsm.toml ] && \
+           [ -f /etc/secubox/sentinelle-gsm.toml.example ]; then
+            cp /etc/secubox/sentinelle-gsm.toml.example /etc/secubox/sentinelle-gsm.toml
+            chmod 640 /etc/secubox/sentinelle-gsm.toml
+            chown root:secubox /etc/secubox/sentinelle-gsm.toml
+        fi
+
+        # Default mode marker = PROD (anonymized). LAB requires explicit flip.
+        if [ ! -f /var/lib/secubox/sentinelle-gsm/mode ]; then
+            echo prod > /var/lib/secubox/sentinelle-gsm/mode
+            chown secubox:secubox /var/lib/secubox/sentinelle-gsm/mode
+        fi
+
+        # Reload nginx + udev
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+        udevadm control --reload-rules 2>/dev/null || true
+
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable secubox-sentinelle-gsm.service 2>/dev/null || true
+        systemctl restart secubox-sentinelle-gsm.service 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
