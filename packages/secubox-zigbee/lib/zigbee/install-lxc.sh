@@ -115,6 +115,11 @@ lxc.apparmor.profile = generated
 lxc.start.auto = 1
 lxc.start.delay = 5
 lxc.mount.entry = /dev/secubox-zgb dev/secubox-zgb none bind,create=file,optional 0 0
+# Also bind /dev/serial/by-id so z2m's adapter auto-discovery can match the
+# manufacturer regex (e.g. ".*sonoff.*lite.*mg21.*" for the SONOFF MG21).
+# Without this, the configuration.yaml port: must be the bare /dev/secubox-zgb
+# AND z2m must match by USB VID/PID alone — which v2.10+ doesn't always do.
+lxc.mount.entry = /dev/serial/by-id dev/serial/by-id none bind,create=dir,optional 0 0
 lxc.cgroup2.devices.allow = c 188:* rwm
 lxc.cgroup2.devices.allow = c 166:* rwm
 EOF
@@ -207,6 +212,15 @@ install_zigbee2mqtt_in_lxc() {
         runuser -u zigbee2mqtt -- bash -c \
             "cd /opt/zigbee2mqtt && npm install --omit=dev --no-audit --no-fund zigbee2mqtt@${Z2M_VERSION}" 2>&1 | tail -5
 
+        # NOTE: the env var z2m actually reads is ZIGBEE2MQTT_DATA — NOT Z2M_DATA.
+        # The Z2M_* prefix is reserved for v2.x onboarding-related flags
+        # (e.g. Z2M_ONBOARD_NO_SERVER). v2.4.0 set the wrong var, so z2m fell
+        # back to its module-default data dir at
+        # /opt/zigbee2mqtt/node_modules/zigbee2mqtt/data and never read our
+        # configuration.yaml. Fixed in v2.4.1.
+        #
+        # Z2M_ONBOARD_NO_SERVER=1 skips the first-run web wizard so adapter
+        # init proceeds directly when configuration.yaml is complete.
         cat > /etc/systemd/system/zigbee2mqtt.service <<UNIT
 [Unit]
 Description=zigbee2mqtt
@@ -217,7 +231,8 @@ StartLimitIntervalSec=0
 Type=simple
 User=zigbee2mqtt
 WorkingDirectory=/opt/zigbee2mqtt/node_modules/zigbee2mqtt
-Environment=Z2M_DATA=/opt/zigbee2mqtt/data
+Environment=ZIGBEE2MQTT_DATA=/opt/zigbee2mqtt/data
+Environment=Z2M_ONBOARD_NO_SERVER=1
 StandardOutput=journal
 StandardError=journal
 Restart=always
@@ -249,6 +264,25 @@ configure_zigbee2mqtt() {
     [ -f "$z2m_pw_file" ] || fail "missing $z2m_pw_file — install secubox-mqtt first and run 'mqttctl install'"
     local z2m_pw; z2m_pw=$(cat "$z2m_pw_file")
 
+    # Detect the connected adapter type by USB VID/PID. We auto-pick the
+    # adapter + port to write into configuration.yaml so the operator
+    # doesn't have to touch YAML for the common dongles. If nothing's
+    # plugged in yet, default to zstack/CC2652P (most common) and let z2m
+    # re-detect on next restart once the dongle appears.
+    local detected_adapter="zstack"
+    local detected_port="/dev/secubox-zgb"
+    # SONOFF Dongle Lite MG21 (10c4:ea60, Silicon Labs EFR32MG21)
+    if lsusb 2>/dev/null | grep -qE "10c4:ea60.*Silicon Labs|SONOFF.*MG21"; then
+        detected_adapter="ember"
+        # z2m 2.x adapter discovery matches by manufacturer regex
+        # ".*sonoff.*lite.*mg21.*" against the path — use the canonical
+        # /dev/serial/by-id symlink which contains the SONOFF descriptor.
+        local byid
+        byid=$(ls /dev/serial/by-id/usb-SONOFF_*MG21* 2>/dev/null | head -1)
+        [ -n "$byid" ] && detected_port="$byid"
+    fi
+    log "  · detected adapter: $detected_adapter ($detected_port)"
+
     local stage=/tmp/zigbee2mqtt-config.$$
     cat > "$stage" <<YAML
 # /opt/zigbee2mqtt/data/configuration.yaml
@@ -264,8 +298,8 @@ mqtt:
   password: '${z2m_pw}'
   keepalive: 60
 serial:
-  port: /dev/secubox-zgb
-  adapter: zstack
+  port: ${detected_port}
+  adapter: ${detected_adapter}
 advanced:
   network_key: GENERATE
   pan_id: GENERATE
@@ -302,7 +336,15 @@ install_udev_rule() {
     log "Installing udev rule for Zigbee dongles ..."
     cat > "$rule_file" <<'UDEV'
 # /etc/udev/rules.d/99-secubox-zigbee.rules
-# Installed by secubox-zigbee (#241)
+# Installed by secubox-zigbee (#241, updated v2.4.1 for SONOFF MG21).
+# Order matters: ATTRS{product} filter MUST come before the generic CP210x
+# rule below, otherwise the SONOFF MG21 would land as -alt and z2m's adapter
+# discovery wouldn't pick it up.
+
+# SONOFF Dongle Lite MG21 (Silicon Labs EFR32MG21 behind a CP210x bridge)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
+    ATTRS{product}=="SONOFF Dongle Lite MG21", \
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
 
 # Sonoff Zigbee 3.0 USB Plus (CC2652P)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", \
@@ -312,7 +354,7 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", \
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", \
     SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
 
-# Generic CP210x (alt — ConBee III, Slaesh's CC2652RB)
+# Generic CP210x without the SONOFF descriptor — secondary symlink only
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
     SYMLINK+="secubox-zgb-alt", MODE="0660", GROUP="dialout"
 UDEV
