@@ -1,0 +1,32 @@
+[Unit]
+Description=SecuBox RBS Sensor — host control plane API (WALL layer)
+Documentation=file:///usr/share/doc/secubox-rbs-sensor/README
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+UMask=0007
+Type=simple
+User=secubox
+Group=secubox
+SupplementaryGroups=dialout
+WorkingDirectory=/usr/lib/secubox/rbs-sensor
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+ExecStartPre=+/bin/mkdir -p /etc/secubox
+ExecStartPre=+/bin/chown secubox:secubox /etc/secubox
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/rbs-sensor.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+LogsDirectory=secubox
+LogsDirectoryMode=0755
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
+# DeviceAllow: only the EP06 AT port (label set by the shipped udev rule).
+# When no EP06 is plugged, this allow-rule is a noop — the device just
+# doesn't exist.
+DeviceAllow=/dev/secubox-ep06 rw
+
+[Install]
+WantedBy=multi-user.target

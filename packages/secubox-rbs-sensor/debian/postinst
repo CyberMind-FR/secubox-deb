@@ -1,0 +1,39 @@
+#!/bin/sh
+# SecuBox RBS Sensor — post-install
+set -e
+
+case "$1" in
+    configure)
+        getent group secubox >/dev/null || groupadd --system secubox
+        getent passwd secubox >/dev/null || useradd --system --gid secubox \
+            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
+        # dialout: needed for /dev/ttyUSB* access when the EP06 enumerates
+        usermod -aG dialout secubox 2>/dev/null || true
+
+        install -d -m 0770 -o root -g secubox /etc/secubox
+        install -d -m 0755 -o secubox -g secubox /var/lib/secubox/rbs-sensor
+        install -d -m 0755 -o secubox -g secubox /var/log/secubox
+
+        # Seed config from example if no live config exists
+        if [ ! -f /etc/secubox/rbs-sensor.toml ] && \
+           [ -f /etc/secubox/rbs-sensor.toml.example ]; then
+            cp /etc/secubox/rbs-sensor.toml.example /etc/secubox/rbs-sensor.toml
+            chmod 640 /etc/secubox/rbs-sensor.toml
+            chown root:secubox /etc/secubox/rbs-sensor.toml
+        fi
+
+        # Reload nginx if it's running and our snippet parses
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+        # Reload udev so the EP06 rule picks up
+        udevadm control --reload-rules 2>/dev/null || true
+
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable secubox-rbs-sensor.service 2>/dev/null || true
+        systemctl restart secubox-rbs-sensor.service 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
