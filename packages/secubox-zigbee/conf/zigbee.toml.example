@@ -1,0 +1,37 @@
+# /etc/secubox/zigbee.toml — SecuBox Zigbee (zigbee2mqtt) configuration
+
+[lxc]
+name         = "zigbee"
+ip           = "10.100.0.111"
+gateway      = "10.100.0.1"
+bridge       = "br-lxc"
+path         = "/data/lxc"
+debian_suite = "bookworm"
+
+[zigbee]
+# z2m frontend (LAN-only, no auth in v2.4.0)
+frontend_port = 8080
+# Channel — 15, 20, 25 or 26 (avoid WiFi overlap; 20 is the default)
+channel       = 20
+# permit_join_timeout — max window (seconds) a single `permit-join on` call opens
+permit_join_timeout = 60
+
+[mqtt]
+# The SecuBox Mosquitto broker (provisioned by secubox-mqtt v2.4)
+ip   = "10.100.0.110"
+port = 1883
+user = "z2m"
+# Password is NOT in this file. install-lxc.sh reads it from
+# /etc/secubox/secrets/mqtt-z2m and writes it into z2m's configuration.yaml.
+
+[device]
+# Auto-detected by udev rule /etc/udev/rules.d/99-secubox-zigbee.rules
+# (Sonoff CC2652P 1a86:55d4, ConBee II 1cf1:0030, CP210x 10c4:ea60).
+# The symlink /dev/secubox-zgb is bind-mounted into the LXC.
+symlink = "/dev/secubox-zgb"
+
+[exposure]
+# zigbee2mqtt frontend is LAN-only by design. For an authenticated remote
+# exposure, the canonical pattern is a sites-available vhost behind
+# HAProxy + Authelia (matches the yacy/lyrion exposure pattern).
+lan_only = true

@@ -1,28 +1,27 @@
 [Unit]
-Description=SecuBox Zigbee2MQTT Gateway API
-After=network.target secubox-runtime.service
-Requires=secubox-runtime.service
-# Only start if explicitly enabled (Zigbee2MQTT configured)
-ConditionPathExists=/etc/secubox/zigbee/enabled
+Description=SecuBox Zigbee — host control plane API
+Documentation=file:///usr/share/doc/secubox-zigbee/README
+After=network.target secubox-core.service secubox-mqtt.service
+Wants=secubox-core.service
 
 [Service]
+UMask=0007
 Type=simple
-User=root
-Group=root
-WorkingDirectory=/usr/share/secubox/zigbee
-ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/zigbee.sock --workers 1
-ExecStartPost=-/bin/sleep 1
-ExecStartPost=-/bin/chmod 660 /run/secubox/zigbee.sock
-ExecStartPost=-/bin/chown secubox:secubox /run/secubox/zigbee.sock
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/zigbee
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+ExecStartPre=+/bin/mkdir -p /etc/secubox
+ExecStartPre=+/bin/chown secubox:secubox /etc/secubox
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/zigbee.sock --log-level warning
 Restart=on-failure
 RestartSec=5
-
-# Security hardening
-NoNewPrivileges=no
-
-ProtectHome=read-only
-
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /srv/zigbee2mqtt
+NoNewPrivileges=true
+LogsDirectory=secubox
+LogsDirectoryMode=0755
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 
 [Install]
 WantedBy=multi-user.target
