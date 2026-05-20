@@ -1988,13 +1988,19 @@ log "5/8 Installing SecuBox scripts..."
 mkdir -p "${ROOTFS}/usr/sbin"
 mkdir -p "${ROOTFS}/usr/lib/secubox"
 
-# Copy scripts (including kiosk-launcher for robust startup, TUI, mode switcher, and disk flasher)
-for script in secubox-net-detect secubox-net-reset secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk; do
+# Copy scripts (including kiosk-launcher for robust startup, TUI, mode switcher, disk/eMMC flashers)
+for script in secubox-net-detect secubox-net-reset secubox-kiosk-setup secubox-cmdline-handler secubox-kiosk-launcher secubox-x11-splash secubox-console-tui secubox-mode secubox-flash-disk secubox-flash-emmc; do
   if [[ -f "${SCRIPT_DIR}/sbin/${script}" ]]; then
     cp "${SCRIPT_DIR}/sbin/${script}" "${ROOTFS}/usr/sbin/"
     chmod +x "${ROOTFS}/usr/sbin/${script}"
   fi
 done
+
+# secubox-kiosk-tui: discoverable alias for the kiosk-mode fallback TUI
+# (matches the `kiosk` mode in secubox-mode) — see issue #228.
+if [[ -f "${ROOTFS}/usr/sbin/secubox-console-tui" ]]; then
+  ln -sf secubox-console-tui "${ROOTFS}/usr/sbin/secubox-kiosk-tui"
+fi
 
 # Copy overlay tools (v1.6.7.2+ - always included for factory reset capability)
 for script in secubox-overlay-init secubox-snapshot secubox-ramcache secubox-factory-reset; do
