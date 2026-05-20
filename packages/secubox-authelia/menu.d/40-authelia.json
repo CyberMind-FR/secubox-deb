@@ -1,0 +1,9 @@
+{
+  "title": "SSO",
+  "subtitle": "Authelia · OIDC IdP",
+  "icon": "fa-key",
+  "url": "/auth/",
+  "section": "security",
+  "order": 40,
+  "module": "authelia"
+}
