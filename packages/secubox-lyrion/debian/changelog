@@ -15,6 +15,17 @@ secubox-lyrion (1.0.2-1~bookworm1) bookworm; urgency=medium
   * Note: subpath proxy (/lyrion/ on the canonical hub) is unsuitable
     for LMS because LMS uses absolute asset paths (/skin/EN/..., /html/..., …).
     LMS must live at vhost root.
+  * install-lxc.sh: new configure_lms_for_proxy() step writes two LMS prefs
+    after the .deb install so the LAN UI works on first hit:
+      - protectSettings: 0   (LMS otherwise 403s every /settings/* page
+        when the peer is the bridge gateway / a "different network" —
+        both true through nginx reverse-proxy; access control is enforced
+        upstream by HAProxy + mitmproxy + Authelia).
+      - allowedHosts: 127.0.0.1,10.100.0.*,192.168.*
+    Was discovered post-board-validation when the wizard.html redirect
+    landed on a 403 with `Access to settings pages is restricted to the
+    local network or localhost: 10.100.0.1 -> 10.100.0.100` in
+    /var/log/squeezeboxserver/server.log.
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 20:00:00 +0200
 

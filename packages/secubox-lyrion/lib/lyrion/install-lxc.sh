@@ -164,6 +164,39 @@ INNER
 }
 
 
+configure_lms_for_proxy() {
+    # LMS has a `protectSettings: 1` default that 403s the settings pages
+    # whenever the request peer is the LXC bridge gateway (10.100.0.1) or on
+    # a "different network" — both true when traffic arrives through nginx
+    # reverse-proxy from the LAN. We disable it here because access control
+    # is enforced upstream (HAProxy + mitmproxy WAF + Authelia SSO).
+    # Also widen `allowedHosts` so the LAN can reach the UI even before
+    # the settings-protection lift takes effect.
+    log "Configuring LMS prefs for reverse-proxy access ..."
+    local prefs=/var/lib/squeezeboxserver/prefs/server.prefs
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl stop lyrionmusicserver 2>/dev/null || true
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- bash -e <<INNER
+        prefs=$prefs
+        if [ -f "\$prefs" ]; then
+            # protectSettings off — see comment in install-lxc.sh
+            if grep -q '^protectSettings' "\$prefs"; then
+                sed -i 's/^protectSettings:.*/protectSettings: 0/' "\$prefs"
+            else
+                echo 'protectSettings: 0' >> "\$prefs"
+            fi
+            # Widen allowedHosts to cover the LAN + bridge + localhost
+            if grep -q '^allowedHosts' "\$prefs"; then
+                sed -i 's|^allowedHosts:.*|allowedHosts: 127.0.0.1,10.100.0.*,192.168.*|' "\$prefs"
+            else
+                echo 'allowedHosts: 127.0.0.1,10.100.0.*,192.168.*' >> "\$prefs"
+            fi
+        fi
+INNER
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl start lyrionmusicserver 2>/dev/null \
+        || lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl start logitechmediaserver 2>/dev/null || true
+}
+
+
 mark_provisioned() {
     install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
     date -Iseconds > "$SENTINEL"
@@ -180,12 +213,15 @@ main() {
     wait_for_network
     ensure_resolv
     install_lyrion_in_lxc
+    configure_lms_for_proxy
     mark_provisioned
     log "OK — LXC '$LXC_NAME' at $LXC_IP, Lyrion provisioned + running."
-    log "  · Web admin   : http://$LXC_IP:$LYRION_HTTP_PORT/"
-    log "  · JSON-RPC    : http://$LXC_IP:9090/"
-    log "  · slimproto   : tcp://$LXC_IP:3483/  (players auto-discover)"
-    log "  · Reverse proxy: /lyrion/ on the canonical hub vhost"
+    log "  · Web admin (LXC) : http://$LXC_IP:$LYRION_HTTP_PORT/"
+    log "  · JSON-RPC        : http://$LXC_IP:9090/"
+    log "  · slimproto       : tcp://$LXC_IP:3483/  (players auto-discover)"
+    log "  · LAN UI          : http://<board-ip>:9000/  (enable nginx vhost)"
+    log "    ln -s ../sites-available/lyrion.conf /etc/nginx/sites-enabled/"
+    log "    systemctl reload nginx"
 }
 
 main "$@"
