@@ -1,3 +1,16 @@
+secubox-hub (1.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * Drop www/nac/index.html, www/soc/index.html and www/soc.html from
+    the package. Stale ancestors from the monolithic era — the canonical
+    owners are secubox-nac (1.0.4) and secubox-soc respectively.
+    Was blocking apt install of v1.3.2 with dpkg "trying to overwrite
+    '/usr/share/secubox/www/nac/index.html', which is also in package
+    secubox-nac" during the #247 deploy on prod board. soc.html was an
+    orphan shim with no references in the codebase. Closes the
+    long-standing UI package-overlap.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 22:00:00 +0200
+
 secubox-hub (1.3.2-1~bookworm1) bookworm; urgency=medium
 
   * health-banner.js v1.4.5: stop emitting clickable <a href=…> alert
