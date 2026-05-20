@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+case "$1" in
+    purge)
+        rm -f /etc/secubox/yacy.toml /etc/secubox/yacy.toml.example
+        rm -rf /var/lib/secubox/yacy
+        ;;
+esac
+#DEBHELPER#
+exit 0

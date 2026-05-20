@@ -1,0 +1,11 @@
+secubox-yacy (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: YaCy peer-to-peer search engine in LXC.
+  * Opens the SEARCH layer of the SecuBox CTL grammar.
+  * Three-fold CTL grammar (yacyctl: components, status, access).
+  * Module-specific nouns: peer, index, query, blacklist, crawler.
+  * LXC at 10.100.0.80 on br-lxc, default-jre-headless + YaCy v1.940.
+  * Follows docs/MODULE-GUIDELINES.md, pattern locked in by PR #231.
+  * Closes: #232
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 10:30:00 +0200

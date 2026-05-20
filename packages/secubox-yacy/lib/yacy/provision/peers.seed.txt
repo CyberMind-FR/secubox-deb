@@ -1,0 +1,7 @@
+# SecuBox YaCy — pre-seeded peer list.
+# Lines starting with '#' are ignored. One peer URL per line.
+# Use `yacyctl peer add <url>` to add more at runtime.
+#
+# Public freeworld peers (curated, last verified 2026-05-20).
+http://yacy.freeworld.de:8090
+http://search.yacy.net:8090

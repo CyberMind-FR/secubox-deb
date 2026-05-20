@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-yacy/usr/lib/secubox/yacy
+	cp -r api debian/secubox-yacy/usr/lib/secubox/yacy/
+	install -d debian/secubox-yacy/usr/sbin
+	install -m 755 sbin/yacyctl debian/secubox-yacy/usr/sbin/yacyctl
+	install -d debian/secubox-yacy/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-yacy/usr/share/secubox/www/ || true
+	install -d debian/secubox-yacy/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-yacy/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-yacy/etc/nginx/secubox.d
+	[ -f nginx/yacy.conf ] && cp nginx/yacy.conf debian/secubox-yacy/etc/nginx/secubox.d/ || true
+	install -d debian/secubox-yacy/etc/secubox
+	[ -f conf/yacy.toml.example ] && cp conf/yacy.toml.example debian/secubox-yacy/etc/secubox/yacy.toml.example || true
+	install -d debian/secubox-yacy/usr/share/secubox/lib/yacy
+	[ -d lib/yacy ] && cp -r lib/yacy/. debian/secubox-yacy/usr/share/secubox/lib/yacy/ || true

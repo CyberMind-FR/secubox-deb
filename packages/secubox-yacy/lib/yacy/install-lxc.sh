@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-yacy :: install-lxc.sh
+#
+# Idempotent LXC bootstrap for the YaCy module.
+# Follows docs/MODULE-GUIDELINES.md §3.
+
+set -euo pipefail
+
+readonly LXC_NAME="${SECUBOX_LXC_NAME:-yacy}"
+readonly LXC_IP="${SECUBOX_LXC_IP:-10.100.0.80}"
+readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+readonly LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
+readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
+readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
+readonly YACY_RELEASE_URL="${SECUBOX_YACY_RELEASE_URL:-https://release.yacy.net/yacy_v1.940_20240319_10001.tar.gz}"
+readonly YACY_INSTALL_DIR="${SECUBOX_YACY_INSTALL_DIR:-/opt/yacy}"
+readonly YACY_HEAP_MAX="${SECUBOX_YACY_HEAP_MAX:-1024}"
+readonly PROVISION_DIR="${SECUBOX_PROVISION_DIR:-/usr/share/secubox/lib/yacy/provision}"
+readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/yacy}"
+readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
+readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
+
+log()  { printf '[yacy-install] %s\n' "$*"; }
+fail() { printf '[yacy-install] ERROR: %s\n' "$*" >&2; exit 1; }
+
+require_cmds() {
+    for c in lxc-create lxc-info lxc-start lxc-attach openssl; do
+        command -v "$c" >/dev/null 2>&1 || fail "$c not installed"
+    done
+}
+
+ensure_dirs() {
+    install -d -m 0755 -o root -g root "$LXC_PATH"
+    install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
+    install -d -m 0700 -o root -g root "$SECRETS_DIR"
+}
+
+ensure_bridge() {
+    if ! ip link show "$LXC_BRIDGE" >/dev/null 2>&1; then
+        log "Creating bridge $LXC_BRIDGE @ ${LXC_GW}/24 ..."
+        ip link add name "$LXC_BRIDGE" type bridge
+        ip addr add "${LXC_GW}/24" dev "$LXC_BRIDGE"
+        ip link set "$LXC_BRIDGE" up
+        cat > /etc/systemd/network/10-secubox-lxc-bridge.netdev <<EOF
+[NetDev]
+Name=$LXC_BRIDGE
+Kind=bridge
+EOF
+        cat > /etc/systemd/network/10-secubox-lxc-bridge.network <<EOF
+[Match]
+Name=$LXC_BRIDGE
+
+[Network]
+Address=${LXC_GW}/24
+ConfigureWithoutCarrier=yes
+IPMasquerade=ipv4
+EOF
+        systemctl reload systemd-networkd 2>/dev/null || true
+    fi
+}
+
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+
+create_lxc() {
+    if [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; then
+        log "LXC '$LXC_NAME' already exists — skipping debootstrap"
+        return
+    fi
+    log "Creating LXC '$LXC_NAME' (debian $DEBIAN_SUITE) ..."
+    lxc-create -n "$LXC_NAME" -t debian -P "$LXC_PATH" -- -r "$DEBIAN_SUITE"
+}
+
+write_lxc_config() {
+    log "Pinning network: $LXC_IP/24 on $LXC_BRIDGE, gw $LXC_GW"
+    cat > "$LXC_PATH/$LXC_NAME/config" <<EOF
+# SecuBox-managed — see secubox-yacy / install-lxc.sh
+lxc.uts.name = $LXC_NAME
+lxc.net.0.type = veth
+lxc.net.0.link = $LXC_BRIDGE
+lxc.net.0.flags = up
+lxc.net.0.ipv4.address = $LXC_IP/24
+lxc.net.0.ipv4.gateway = $LXC_GW
+lxc.net.0.name = eth0
+lxc.rootfs.path = dir:$LXC_PATH/$LXC_NAME/rootfs
+lxc.include = /usr/share/lxc/config/common.conf
+lxc.apparmor.profile = generated
+lxc.start.auto = 1
+lxc.start.delay = 5
+EOF
+}
+
+start_lxc() {
+    [ "$(lxc_state)" = "running" ] && { log "Already running"; return; }
+    log "Starting LXC '$LXC_NAME' ..."
+    lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
+}
+
+wait_for_network() {
+    log "Waiting for LXC network ..."
+    for _ in $(seq 1 30); do
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- ping -c1 -W1 "$LXC_GW" >/dev/null 2>&1 && return 0
+        sleep 1
+    done
+    fail "LXC '$LXC_NAME' did not reach $LXC_GW within 30s"
+}
+
+install_yacy_in_lxc() {
+    log "Installing JVM and YaCy in '$LXC_NAME' ..."
+    # Pass the parametric URL/dir via `env` to the in-LXC shell — the heredoc
+    # stays unquoted-friendly because INNER is single-quoted.
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- env \
+        YACY_RELEASE_URL="$YACY_RELEASE_URL" \
+        YACY_INSTALL_DIR="$YACY_INSTALL_DIR" \
+        YACY_HEAP_MAX="$YACY_HEAP_MAX" \
+        bash -e <<'INNER'
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -q
+        apt-get install -y --no-install-recommends \
+            default-jre-headless wget ca-certificates tar
+
+        if [ ! -x "${YACY_INSTALL_DIR}/startYACY.sh" ]; then
+            mkdir -p "${YACY_INSTALL_DIR}"
+            cd /tmp
+            wget -q "${YACY_RELEASE_URL}" -O yacy.tar.gz
+            tar xzf yacy.tar.gz -C "${YACY_INSTALL_DIR}" --strip-components=1
+            rm -f yacy.tar.gz
+        fi
+
+        # JVM heap from env
+        if [ -f "${YACY_INSTALL_DIR}/defaults/yacy.init" ]; then
+            sed -i "s/^javastart_Xmx=.*/javastart_Xmx=Xmx${YACY_HEAP_MAX}m/" \
+                "${YACY_INSTALL_DIR}/defaults/yacy.init" || true
+        fi
+
+        # Dedicated user
+        if ! id -u yacy >/dev/null 2>&1; then
+            useradd -r -s /bin/false -d "${YACY_INSTALL_DIR}" yacy
+        fi
+        chown -R yacy:yacy "${YACY_INSTALL_DIR}"
+
+        # systemd unit
+        cat > /etc/systemd/system/yacy.service <<UNIT
+[Unit]
+Description=YaCy peer-to-peer search engine
+After=network.target
+
+[Service]
+Type=simple
+User=yacy
+WorkingDirectory=${YACY_INSTALL_DIR}
+ExecStart=${YACY_INSTALL_DIR}/startYACY.sh -f
+ExecStop=${YACY_INSTALL_DIR}/stopYACY.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        systemctl daemon-reload
+        systemctl enable yacy
+        systemctl restart yacy
+INNER
+}
+
+provision_yacy() {
+    [ -d "$PROVISION_DIR" ] || { log "No provisioning dir — skipping"; return; }
+    log "Provisioning peer seed + blacklist ..."
+
+    if [ -f "$PROVISION_DIR/peers.seed.txt" ]; then
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- bash -c "install -d -m 0755 /var/lib/yacy && chown yacy:yacy /var/lib/yacy"
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+            tee "/var/lib/yacy/peers.seed.txt" > /dev/null < "$PROVISION_DIR/peers.seed.txt"
+    fi
+    if [ -f "$PROVISION_DIR/blacklist.txt" ]; then
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+            tee "/var/lib/yacy/blacklist.txt" > /dev/null < "$PROVISION_DIR/blacklist.txt"
+    fi
+}
+
+generate_admin_password() {
+    if [ ! -f "$SECRETS_DIR/yacy-admin" ]; then
+        local pw; pw=$(openssl rand -hex 16)
+        echo "$pw" > "$SECRETS_DIR/yacy-admin"
+        chmod 600 "$SECRETS_DIR/yacy-admin"
+        log "Generated YaCy admin password (set via the YaCy admin UI on first login)."
+    fi
+}
+
+mark_provisioned() {
+    install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
+    date -Iseconds > "$SENTINEL"
+}
+
+main() {
+    require_cmds
+    ensure_dirs
+    ensure_bridge
+    create_lxc
+    write_lxc_config
+    start_lxc
+    wait_for_network
+    install_yacy_in_lxc
+    generate_admin_password
+    provision_yacy
+    mark_provisioned
+    log "OK — LXC '$LXC_NAME' at $LXC_IP, yacy provisioned + running on port 8090."
+    log "Web UI: https://<host>/yacy/  (admin / $(cat "$SECRETS_DIR/yacy-admin"))"
+}
+
+main "$@"

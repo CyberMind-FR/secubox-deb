@@ -1,0 +1,40 @@
+# /etc/secubox/yacy.toml — SecuBox YaCy module configuration
+
+# ── LXC ───────────────────────────────────────────────────────────────
+[lxc]
+name         = "yacy"
+ip           = "10.100.0.80"
+gateway      = "10.100.0.1"
+bridge       = "br-lxc"
+path         = "/data/lxc"
+debian_suite = "bookworm"
+
+# ── YaCy daemon (inside the LXC) ──────────────────────────────────────
+[yacy]
+http_port           = 8090
+admin_user          = "admin"
+admin_password_file = "/etc/secubox/secrets/yacy-admin"
+# YaCy v1.940 (https://release.yacy.net/)
+release_url         = "https://release.yacy.net/yacy_v1.940_20240319_10001.tar.gz"
+install_dir         = "/opt/yacy"
+# JVM heap (MB)
+heap_max            = 1024
+
+# ── Peer mode ─────────────────────────────────────────────────────────
+[peer]
+# "standalone" = local-only search, no public DHT participation
+# "freeworld"  = full peer-to-peer DHT (default)
+# "intranet"   = private intranet peer mode
+mode      = "standalone"
+peer_name = "secubox-yacy"
+
+# ── Public exposure (HAProxy vhost; see haproxyctl) ───────────────────
+[exposure]
+public_hostname = ""           # e.g. "yacy.gk2.secubox.in" — empty = LAN only
+waf_inspect     = true         # route through mitmproxy when exposed
+
+# ── Crawler defaults ──────────────────────────────────────────────────
+[crawler]
+default_depth      = 2
+default_must_match = ".*"
+default_must_not_match = ""
