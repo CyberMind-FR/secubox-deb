@@ -1,3 +1,19 @@
+secubox-authelia (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/authelia.conf (`location = /__sbx_auth_verify`): forward
+    X-Original-URL + X-Forwarded-{Method,Proto,Host,Uri,For} to the
+    FastAPI /verify socket. Authelia's /api/verify needs the original
+    URL to (a) match the right session.cookies[].domain entry —
+    multi-cookie deployments have several — and (b) apply access_control
+    rules. Without these headers Authelia defaults to the first cookies[]
+    entry (maegia.tv), the gk2.secubox.in session isn't found, /verify
+    returns 401 even after successful login → infinite redirect loop.
+  * api/main.py (`/verify`): forward the same X-Original-URL +
+    X-Forwarded-* headers verbatim to the Authelia LXC upstream.
+  * Closes #274.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 20 May 2026 19:00:00 +0000
+
 secubox-authelia (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * lib/authelia/install-lxc.sh: render session.cookies[] with TWO entries
