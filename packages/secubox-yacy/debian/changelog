@@ -1,3 +1,23 @@
+secubox-yacy (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: new configure_yacy_admin() step injects the generated
+    admin password into yacy.conf as a Digest hash so the admin login
+    works on first hit. Before this, the operator had a password file at
+    /etc/secubox/secrets/yacy-admin but the actual yacy.conf still
+    carried YaCy's installed default hash — login always failed until
+    someone manually ran `bin/passwd.sh` inside the LXC.
+  * Hash format: MD5 of "admin:<adminRealm>:<password>", matching what
+    YaCy's own bin/passwd.sh script computes via Digest -strfhex.
+  * Idempotent: only patches yacy.conf when the current hash doesn't
+    already match the password file (re-running `yacyctl install` is
+    a no-op once aligned).
+  * Note: the realm string is pulled from the running yacy.conf at
+    install time — YaCy uses a long human-readable sentence as the
+    Digest realm, not the bare string "YaCy", and the realm IS part of
+    the hash input.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 21:30:00 +0200
+
 secubox-yacy (1.0.8-1~bookworm1) bookworm; urgency=medium
 
   * Ship the public-facing yacy.maegia.tv vhost as
