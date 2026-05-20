@@ -1,3 +1,21 @@
+secubox-authelia (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: set Authelia server.address path prefix /auth
+    (NO trailing slash — 4.39+ validator rejects it). Without this,
+    the React SPA's API calls 404'd → browser AxiosError ERR_BAD_REQUEST.
+  * nginx/authelia.conf: drop trailing / on proxy_pass to preserve the
+    /auth/ prefix expected by Authelia 4.39+. Remove the health-banner
+    sub_filter — Authelia's strict CSP (default-src 'self';
+    style-src 'self' 'nonce-...'; base-uri 'self') rejects the injection.
+  * nginx/authelia-vhost.conf (auth.maegia.tv): same proxy_pass /
+    banner fixes + add `location = /` → 302 to /auth/ so the portal
+    URL is consistent across canonical hub + public vhost.
+  * api/main.py: /verify now reverse-proxies to /auth/api/verify
+    (matches the path-prefixed Authelia layout).
+  * Closes #266 (authelia portion).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 03:30:00 +0200
+
 secubox-authelia (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * api/main.py: implement /verify properly. v1.0.1 returned HTTP 501
