@@ -1,5 +1,38 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-05-09*
+*Mis à jour : 2026-05-20*
+
+---
+
+## 🔥 P0 — Immediate (in flight)
+
+- [ ] **v2.11.1 patch** — commit + PR + tag the 4 install-lxc.sh fixes once
+  validated on board gk2:
+  1. `lxc-create -t download` (bookworm unprivileged)
+  2. `ensure_masquerade` for 10.100.0.0/24
+  3. `gpg --dearmor` on grafana apt key
+  4. unlink `/etc/resolv.conf` symlink + write via `lxc-attach`
+- [ ] Validate end-to-end `grafanactl install`, `yacyctl install`, `rustdeskctl install` on the board (LXC green, daemon running, web UI reachable through nginx)
+
+## 🟡 P1 — Next release (v2.12.0 target)
+
+- [ ] **v1.1.0 verb implementations** for the three new ctl tools (currently stub `exit 2` for the noun-specific verbs):
+  - `grafanactl dashboard list/add/remove/export` + `datasource list/add/remove/test` + `alert list/mute/unmute` + `user list/add/remove/passwd` + `api-key list/create/revoke`. Backend = Grafana HTTP API on `10.100.0.70:3000`, auth = admin password from `/etc/secubox/secrets/grafana-admin`.
+  - `yacyctl peer list/add/remove/status` + `index status/build/clear/optimize` + `query test/count` + `blacklist list/add/remove` + `crawler list/start/stop/schedule`.
+  - `rustdeskctl peer list/add/remove` + `relay status/restart/log` + `key show/rotate` + `session list/kill`.
+- [ ] Add the 3 new modules to `docs/MODULES.md` catalog
+- [ ] Add the 3 new grammar rows to `docs/grammar.md` canonical table (OPS MONITORING / SEARCH / REMOTE-ACCESS)
+- [ ] Update `.claude/MIGRATION-MAP.md` with grafana / yacy / rustdesk
+
+## 🟣 P2 — Sensor stack (WALL/MIND alignment)
+
+- [ ] **#236 `secubox-rbs-sensor`** — Quectel EP06-E modem-based rogue-base-station sensor (WALL).
+  Spec: `docs/superpowers/specs/2026-05-20-secubox-wall-ep06.md`.
+  Prerequisites flagged: needs `wall_rbs_sensor.py` / `Observer(Protocol)` /
+  `CellObservation` / `NeighbourObservation` / OODA verdict engine scaffolded as part of the same package (none exist yet in repo).
+- [ ] **#237 `secubox-sentinelle-gsm`** — RTL-SDR + gr-gsm passive RX-only sensor for false-BTS detection (MIND, feeds WALL/OPAD).
+  Spec: `docs/superpowers/specs/2026-05-20-secubox-sentinelle-gsm.md`.
+  Privacy-by-design: HMAC-truncated identifiers in PROD, LAB mode with consent banner + audit. Hard limits: RX only, no decryption, no tracking primitive.
+- [ ] Decide build order: `rbs-sensor` framework first (Observer Protocol + CellObservation as part of `secubox-core` or its own package?), then `sentinelle-gsm` plugs as second backend.
 
 ---
 

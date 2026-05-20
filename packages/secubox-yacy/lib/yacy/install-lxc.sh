@@ -13,7 +13,7 @@ readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
 readonly LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
 readonly LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
 readonly DEBIAN_SUITE="${SECUBOX_DEBIAN_SUITE:-bookworm}"
-readonly YACY_RELEASE_URL="${SECUBOX_YACY_RELEASE_URL:-https://release.yacy.net/yacy_v1.940_20240319_10001.tar.gz}"
+readonly YACY_RELEASE_URL="${SECUBOX_YACY_RELEASE_URL:-https://release.yacy.net/yacy_v1.941_202603291103_f0464e7fb.tar.gz}"
 readonly YACY_INSTALL_DIR="${SECUBOX_YACY_INSTALL_DIR:-/opt/yacy}"
 readonly YACY_HEAP_MAX="${SECUBOX_YACY_HEAP_MAX:-1024}"
 readonly PROVISION_DIR="${SECUBOX_PROVISION_DIR:-/usr/share/secubox/lib/yacy/provision}"
@@ -60,6 +60,26 @@ EOF
     fi
 }
 
+ensure_masquerade() {
+    if ! nft list table ip lxc 2>/dev/null | grep -q 'saddr 10.100.0.0/24'; then
+        log "Adding nftables MASQUERADE for 10.100.0.0/24 ..."
+        nft 'add table ip lxc' 2>/dev/null || true
+        nft 'add chain ip lxc postrouting { type nat hook postrouting priority srcnat ; policy accept ; }' 2>/dev/null || true
+        nft 'add rule ip lxc postrouting ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 counter masquerade' 2>/dev/null || true
+    fi
+}
+
+ensure_resolv() {
+    # /etc/resolv.conf in the download template is a symlink to a nonexistent
+    # target before systemd-resolved is up. Unlink first, then write a plain
+    # file via lxc-attach (unprivileged LXC: rootfs owned by mapped uid 100000).
+    log "Seeding /etc/resolv.conf in LXC ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c '
+        rm -f /etc/resolv.conf
+        printf "nameserver 1.1.1.1\nnameserver 9.9.9.9\n" > /etc/resolv.conf
+    '
+}
+
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
         | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
@@ -71,7 +91,7 @@ create_lxc() {
         return
     fi
     log "Creating LXC '$LXC_NAME' (debian $DEBIAN_SUITE) ..."
-    lxc-create -n "$LXC_NAME" -t debian -P "$LXC_PATH" -- -r "$DEBIAN_SUITE"
+    lxc-create -n "$LXC_NAME" -t download -P "$LXC_PATH" -- --dist debian --release "$DEBIAN_SUITE" --arch "$(dpkg --print-architecture)"
 }
 
 write_lxc_config() {
@@ -200,10 +220,12 @@ main() {
     require_cmds
     ensure_dirs
     ensure_bridge
+    ensure_masquerade
     create_lxc
     write_lxc_config
     start_lxc
     wait_for_network
+    ensure_resolv
     install_yacy_in_lxc
     generate_admin_password
     provision_yacy

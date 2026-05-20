@@ -469,15 +469,52 @@ Plain stdout for humans, `--json` for machines. Schema:
 }
 ```
 
+### Mandatory lifecycle verbs
+
+In addition to the three-fold introspection, every `<module>ctl` MUST expose
+the following lifecycle verbs. They form the operator contract every module
+of SecuBox honours so the hub can drive provisioning, healing, and onboarding
+through the same surface.
+
+| Verb | Behaviour | Idempotent? | Required? |
+|---|---|---|---|
+| `install` | Provisions everything the module needs (LXC, daemon, secrets, provisioning, systemd enable). Re-running is a no-op when already provisioned, or repairs in-place when partially present. | yes | yes |
+| `repair` | Detects + fixes drift against the expected end-state. Examples: restart stopped daemon, re-issue missing secret, re-write missing config, restore broken nginx route, re-run failed provisioning step. Reports each detected issue + the action taken (one line each), exits 0 if everything ended green, exits 2 if any unfixable issue remains. | yes | yes |
+| `wizard` | Interactive first-time-setup. Walks the operator through credentials, exposure choices, optional integrations. Writes `/etc/secubox/<module>.toml` then chains `install` + `status`. May be invoked from the WebUI as a `/api/v1/<module>/wizard/*` flow. | should be (re-runnable to reconfigure) | yes — even if it's a thin wrapper that calls `install` with seed prompts |
+| `reload` | Restart host FastAPI + the in-LXC daemon. Cheap, no provisioning. | yes | yes |
+| `uninstall` | Remove the LXC + state + secrets. Asks for confirmation unless `--yes`. Does not remove the Debian package itself. | yes | yes |
+
+Implementation pattern:
+
+```bash
+cmd_install()   { bash "$INSTALL_LIB" "$@" ; systemctl start "secubox-${MODULE}.service" ; }
+cmd_repair()    {
+    local fixed=0 broken=0
+    if ! daemon_running; then
+        log "repair: daemon stopped — restarting"
+        lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart "$DAEMON_UNIT" && ((fixed++)) || ((broken++))
+    fi
+    if ! host_api_running; then
+        log "repair: host-api stopped — restarting"
+        systemctl restart "secubox-${MODULE}.service" && ((fixed++)) || ((broken++))
+    fi
+    # ...module-specific repairs: missing secrets, broken nginx, drifted resolv...
+    [ "$broken" -eq 0 ]
+}
+cmd_wizard()    { prompt_then_write_config && cmd_install ; }
+cmd_reload()    { systemctl restart "secubox-${MODULE}.service" ; lxc-attach … restart … ; }
+cmd_uninstall() { confirm "$@" && lxc-destroy … && rm -rf /var/lib/secubox/${MODULE} … ; }
+```
+
 ### Module-specific noun-verb pairs
 
-Per the grammar table — one verb closes one previously-implicit operation.
-Examples in flight:
+Per the grammar table — one verb closes one previously-implicit operation
+beyond the mandatory lifecycle above. Examples in flight:
 
 ```text
-grafanactl   dashboard list/add/remove/export        # OPS MONITORING (#229)
-yacyctl      index     status/build/clear/optimize   # SEARCH (#230)
-rustdeskctl  peer      add/remove/list               # REMOTE-ACCESS (#231)
+grafanactl   dashboard list/add/remove/export        # OPS MONITORING (#230)
+yacyctl      index     status/build/clear/optimize   # SEARCH (#232)
+rustdeskctl  peer      add/remove/list               # REMOTE-ACCESS (#234)
 ```
 
 ### Style

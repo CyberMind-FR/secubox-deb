@@ -1,5 +1,27 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-19*
+*Mis à jour : 2026-05-20*
+
+---
+
+## 🔄 2026-05-20: deploy grafana/yacy/rustdesk LXC modules on gk2 (192.168.1.200) — install-lxc.sh iterating bug-fixes
+
+End-to-end deployment of v2.11.0's three new LXC modules on the live arm64 board surfaced four install-lxc.sh bugs missing from the local smoke build (which doesn't exercise lxc-create). All fixes are on branch `fix/install-lxc-download-template` (not yet committed/PR'd; pending v1.0.4 install validation on board).
+
+- **Fix 1 — `lxc-create -t debian` broken on bookworm unprivileged** → switch to `lxc-create -t download -- --dist debian --release bookworm --arch $(dpkg --print-architecture)` (the legacy `debian` template fails: "This template can't be used for unprivileged containers").
+- **Fix 2 — NAT MASQUERADE missing for 10.100.0.0/24** → existing `ip lxc` nftables table only masquerades `10.0.3.0/24` (default LXC bridge). LXC can ping its gateway but can't reach the internet without the rule. systemd-networkd's `IPMasquerade=ipv4` only lands when systemd-networkd manages the bridge — appliances using ifupdown/NM skip it. Add `ensure_masquerade()` idempotent function.
+- **Fix 3 — Grafana apt GPG key not dearmored** → `wget https://apt.grafana.com/gpg.key` returns ASCII-armored key; `[signed-by=...]` requires binary keyring. Pipe through `gpg --dearmor`.
+- **Fix 4 — `/etc/resolv.conf` symlink in download template** → ships as a symlink to `/run/systemd/resolve/stub-resolv.conf` which doesn't exist before systemd-resolved is up. `cat > /etc/resolv.conf` fails. Unlink then write. Also moved `ensure_resolv` after `lxc-start` (rootfs is owned by mapped uid 100000, host root can't write directly; needs `lxc-attach`).
+
+Iteration trail: v1.0.0 (initial) → v1.0.1 (download template) → v1.0.2 (masquerade + resolv via host write + gpg dearmor) → v1.0.3 (resolv via lxc-attach) → v1.0.4 (unlink symlink). Currently v1.0.4 install running on board.
+
+When grafana install completes successfully, repeat for yacy + rustdesk, then commit the four fixes as PR → tag **v2.11.1** (patch release).
+
+### Spec backlog filed in parallel
+
+- **#236 `secubox-rbs-sensor`** — Quectel EP06-E modem-based rogue-base-station sensor, layer WALL. Spec at `docs/superpowers/specs/2026-05-20-secubox-wall-ep06.md`. Prerequisites flagged: `wall_rbs_sensor.py` / `Observer` Protocol / `CellObservation` not yet in the repo — needs framework scaffolding in same package.
+- **#237 `secubox-sentinelle-gsm`** — RTL-SDR + gr-gsm passive RX-only sensor for false-BTS detection (IMSI-catcher), layer MIND, feeds WALL/OPAD. Spec at `docs/superpowers/specs/2026-05-20-secubox-sentinelle-gsm.md`. Privacy-by-design: HMAC-truncated identifiers in PROD mode, LAB mode with consent banner + audit. Hard limits: RX only, no decryption, no tracking primitive.
+
+Both deferred until v2.11.0 deployment is fully validated on board.
 
 ---
 
