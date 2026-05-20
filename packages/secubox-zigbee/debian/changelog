@@ -1,3 +1,58 @@
+secubox-zigbee (2.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Six bugs found while wiring the SONOFF Dongle Lite MG21 on the gk2
+    board; all folded into this point release. After deploy the broker
+    bridge state goes ONLINE and the z2m web UI is reachable.
+  *
+  * 1. systemd Environment=Z2M_DATA → ZIGBEE2MQTT_DATA. z2m reads the
+    latter; the v2.4.0 unit set the wrong var, so z2m silently fell
+    back to /opt/zigbee2mqtt/node_modules/zigbee2mqtt/data/ and never
+    read our configuration.yaml. discoverAdapter() received
+    adapter=undefined, path=undefined and threw "No valid USB adapter
+    found". The Z2M_* prefix is for v2.x onboarding flags (see #4 below).
+  *
+  * 2. Environment=Z2M_ONBOARD_NO_SERVER=1 added. z2m 2.x ships a
+    first-run web wizard that intercepts BEFORE adapter init when
+    settings.onboarding is unset. With a complete configuration.yaml
+    we don't need it; this env var skips it so the daemon proceeds
+    directly to the adapter.
+  *
+  * 3. SONOFF Dongle Lite MG21 udev rule. The MG21 enumerates as
+    `10c4:ea60` (CP210x USB-UART bridge) — same VID/PID as a bare
+    CP210x serial bridge. The v2.4.0 rule put `10c4:ea60` on the
+    secondary symlink `/dev/secubox-zgb-alt`. v2.4.1 adds an explicit
+    `ATTRS{product}=="SONOFF Dongle Lite MG21"` match BEFORE the
+    generic CP210x fallback, so the MG21 lands on the primary
+    `/dev/secubox-zgb` symlink.
+  *
+  * 4. /dev/serial/by-id bind-mounted into the LXC. z2m 2.x adapter
+    discovery matches by manufacturer regex against the resolved path
+    (e.g. ".*sonoff.*lite.*mg21.*"), so the configuration.yaml `port:`
+    must be the canonical /dev/serial/by-id/usb-SONOFF_*_MG21_*-if00*
+    path inside the LXC.
+  *
+  * 5. Adapter auto-detection. install-lxc.sh now lsusb-greps for the
+    SONOFF MG21 and writes `adapter: ember` + the matching by-id path
+    into configuration.yaml. Falls back to `adapter: zstack` +
+    /dev/secubox-zgb for the original CC2652P pattern.
+  *
+  * 6. z2m web UI exposed at /zigbee/ on the canonical hub vhost
+    (proxied from the LXC at 10.100.0.111:8080 with WebSocket upgrade
+    + health-banner injection). Matches the sibling pattern of
+    /yacy/, /lyrion/, /auth/.
+  *
+  * Board-validated on gk2:
+  *   - SONOFF Dongle Lite MG21 detected as /dev/secubox-zgb
+  *   - zigbee2mqtt bridge state = "online"
+  *   - zigbeectl status: overall: green
+  *   - Frontend HTTP 200 at http://10.100.0.111:8080/
+  *   - Migration notes 1→2 through 4→5 ran cleanly
+  *   - One pre-existing Zigbee light visible in bridge/devices
+  *
+  * Closes the "device: absent → green" gap from #241.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 01:00:00 +0200
+
 secubox-zigbee (2.4.0-1~bookworm1) bookworm; urgency=medium
 
   * v2.4.0 rewrite-in-place: move zigbee2mqtt into a dedicated LXC at
