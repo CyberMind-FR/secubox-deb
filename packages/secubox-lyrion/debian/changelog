@@ -1,3 +1,50 @@
+secubox-lyrion (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc.sh: new ensure_slimproto_dnat() step writes a persistent
+    nftables file /etc/nftables.d/secubox-lyrion-dnat.nft with a
+    PREROUTING DNAT rule routing host LAN traffic on TCP+UDP :3483 to
+    the Lyrion LXC. Lets WiFi/LAN players (Squeezelite, iPeng, …) reach
+    the LMS server without bridging the LXC network into the LAN.
+    Default LAN interface is `lan0` — override via SECUBOX_LAN_IFACE.
+    Idempotent: re-running `lyrionctl install` deletes the live table
+    and re-applies from the file.
+  * Note: UDP player auto-discovery broadcasts do NOT cross subnets
+    without router-side IP-helper. Players on a different VLAN/SSID
+    must be configured manually with the board's LAN IP as the server.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 21:00:00 +0200
+
+secubox-lyrion (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Ship nginx/lyrion-vhost.conf to /etc/nginx/sites-available/lyrion.conf
+    so the operator can expose the LMS web UI on the LAN IP directly.
+    Two server blocks:
+      1. LAN direct  — listen :9000, accepts 192.168.1.200 / lyrion.local /
+         localhost / _ ; proxies to LXC root. No TLS, no WAF.
+      2. Public chain — listen :9080, server_name lyrion.maegia.tv, with
+         the mandatory ^~ /.well-known/acme-challenge/ block (cf. #246).
+    Operator enables with:
+        ln -s ../sites-available/lyrion.conf /etc/nginx/sites-enabled/
+        systemctl reload nginx
+    After the symlink, http://192.168.1.200:9000/ serves the LMS web UI
+    directly. Closes #248.
+  * Note: subpath proxy (/lyrion/ on the canonical hub) is unsuitable
+    for LMS because LMS uses absolute asset paths (/skin/EN/..., /html/..., …).
+    LMS must live at vhost root.
+  * install-lxc.sh: new configure_lms_for_proxy() step writes two LMS prefs
+    after the .deb install so the LAN UI works on first hit:
+      - protectSettings: 0   (LMS otherwise 403s every /settings/* page
+        when the peer is the bridge gateway / a "different network" —
+        both true through nginx reverse-proxy; access control is enforced
+        upstream by HAProxy + mitmproxy + Authelia).
+      - allowedHosts: 127.0.0.1,10.100.0.*,192.168.*
+    Was discovered post-board-validation when the wizard.html redirect
+    landed on a 403 with `Access to settings pages is restricted to the
+    local network or localhost: 10.100.0.1 -> 10.100.0.100` in
+    /var/log/squeezeboxserver/server.log.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 May 2026 20:00:00 +0200
+
 secubox-lyrion (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * debian/rules: chmod 755 install-lxc.sh after cp -r (cp does not always
