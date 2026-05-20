@@ -1,3 +1,21 @@
+secubox-authelia (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/authelia.conf: add `sub_filter "__SBX_BANNER_OFF" "";` inside
+    the /auth/ location to suppress the inherited server-level banner
+    injection from webui.conf. Per nginx docs, sub_filter inherits
+    from the parent server block when no child-level directive exists;
+    just deleting our location-level sub_filter in v1.0.3 left the
+    server-level injection still active. Authelia's strict CSP
+    (default-src 'self'; style-src 'self' 'nonce-...'; base-uri 'self')
+    then rejected the injected script-src + caused
+    base-uri / style-src-elem violations + an AxiosError 403 because
+    the SPA's API calls couldn't fire.
+    The never-match pattern replaces the inherited sub_filter with a
+    noop → response passes through unmodified.
+  * Closes #270.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 04:10:00 +0200
+
 secubox-authelia (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * nginx/authelia.conf + nginx/authelia-vhost.conf: hardcode
