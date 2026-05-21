@@ -481,8 +481,8 @@
             <div class="form-group">
                 <label>Provider Type</label>
                 <select id="provider-type" onchange="updateCredentialFields()">
+                    <option value="gandi" selected>Gandi LiveDNS</option>
                     <option value="cloudflare">Cloudflare</option>
-                    <option value="gandi">Gandi</option>
                     <option value="ovh">OVH</option>
                     <option value="route53">AWS Route53</option>
                 </select>
@@ -490,9 +490,16 @@
             <div id="credential-fields">
                 <!-- Dynamic credential fields -->
             </div>
+            <p class="hint" style="font-size:0.8rem;color:var(--text-dim);margin:0.5rem 0;">
+              Credentials persist in <code>/var/lib/secubox/dns-provider/providers.json</code>
+              (kept across <code>apt upgrade</code>, lost on <code>apt purge</code>). For
+              full migration safety also drop the raw key in
+              <code>/etc/secubox/secrets/dns-provider-gandi.key</code> (mode 600).
+            </p>
+            <div id="add-provider-status" style="font-size:0.85rem;margin:0.5rem 0;"></div>
             <div class="form-actions">
                 <button class="btn" onclick="hideModal('provider-modal')">Cancel</button>
-                <button class="btn primary" onclick="addProvider()">Add Provider</button>
+                <button class="btn primary" id="add-provider-btn" onclick="addProvider()">Add Provider</button>
             </div>
         </div>
     </div>
@@ -558,6 +565,31 @@
                 if (res.status === 401) { window.location = '/login.html'; return {}; }
                 return res.json();
             } catch (e) { console.error(e); return {}; }
+        }
+        // Like api() but surfaces non-2xx as a real error instead of silently
+        // returning the FastAPI {detail: …} body as if it were a success
+        // (legacy behaviour rendered 422 validation errors as `[object Object]`
+        // in alerts — see #299). Returns { ok, status, data, error }.
+        async function apiStrict(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { window.location = '/login.html'; return { ok: false, status: 401, error: 'unauthorised' }; }
+                let data = null;
+                try { data = await res.json(); } catch { /* non-JSON response body */ }
+                if (!res.ok) {
+                    let error = 'HTTP ' + res.status;
+                    if (data && data.detail) {
+                        error = typeof data.detail === 'string'
+                            ? data.detail
+                            : JSON.stringify(data.detail);
+                    }
+                    return { ok: false, status: res.status, data, error };
+                }
+                return { ok: true, status: res.status, data: data || {} };
+            } catch (e) {
+                console.error('[dns-provider] apiStrict()', e);
+                return { ok: false, status: 0, error: String(e) };
+            }
         }
 
         // Tab switching
@@ -755,27 +787,88 @@
         async function addProvider() {
             const type = document.getElementById('provider-type').value;
             const name = document.getElementById('provider-name').value.trim();
+            const btn   = document.getElementById('add-provider-btn');
+            const stat  = document.getElementById('add-provider-status');
+            stat.textContent = '';
+            stat.style.color = '';
 
-            if (!name) { alert('Provider name required'); return; }
+            if (!name) {
+                stat.textContent = 'Provider name required';
+                stat.style.color = 'var(--red, #ff4466)';
+                return;
+            }
 
             const credentials = {};
+            const missing = [];
             document.querySelectorAll('#credential-fields input').forEach(input => {
                 const key = input.id.replace('cred-', '');
-                credentials[key] = input.value;
+                const val = (input.value || '').trim();
+                if (!val) missing.push(key);
+                credentials[key] = val;
             });
+            if (missing.length) {
+                stat.textContent = 'Missing credentials: ' + missing.join(', ');
+                stat.style.color = 'var(--red, #ff4466)';
+                return;
+            }
 
-            const r = await api('/provider', {
+            btn.disabled = true;
+            const origLabel = btn.textContent;
+            btn.textContent = 'Adding…';
+            stat.textContent = 'Saving provider…';
+            stat.style.color = 'var(--text-dim)';
+
+            const r = await apiStrict('/provider', {
                 method: 'POST',
                 body: JSON.stringify({ provider: type, name, credentials, enabled: true })
             });
 
-            if (r.success) {
-                hideModal('provider-modal');
-                refresh();
-                document.getElementById('provider-name').value = '';
-            } else {
-                alert('Error: ' + (r.detail || 'Failed to add provider'));
+            if (!r.ok) {
+                btn.disabled = false;
+                btn.textContent = origLabel;
+                stat.textContent = 'Error: ' + (r.error || 'add failed');
+                stat.style.color = 'var(--red, #ff4466)';
+                return;
             }
+
+            const id = r.data.id;
+            stat.textContent = 'Saved. Probing ' + type + '…';
+            stat.style.color = 'var(--text-dim)';
+
+            // Probe the new credentials against /domains to confirm the key
+            // actually works upstream. Hide the modal either way; surface a
+            // toast / inline note so the operator sees the verdict.
+            const probe = await apiStrict('/domains?provider_id=' + encodeURIComponent(id));
+            btn.disabled = false;
+            btn.textContent = origLabel;
+
+            if (!probe.ok) {
+                stat.textContent = '⚠ Saved, but /domains probe failed: ' + (probe.error || probe.status);
+                stat.style.color = 'var(--yellow, #ffb347)';
+            } else {
+                const domains = (probe.data.domains || []).filter(d => !d.error);
+                const errored = (probe.data.domains || []).filter(d => d.error);
+                if (errored.length) {
+                    stat.innerHTML = '⚠ Saved, but provider returned an error: <code>' +
+                        (errored[0].error || 'unknown') + '</code>. Check key scope / format.';
+                    stat.style.color = 'var(--yellow, #ffb347)';
+                } else if (domains.length === 0) {
+                    stat.textContent = '⚠ Saved. Authenticated to ' + type + ' but no domains visible — check API token scope.';
+                    stat.style.color = 'var(--yellow, #ffb347)';
+                } else {
+                    stat.textContent = '✓ Saved. ' + domains.length + ' domain(s) visible. Closing…';
+                    stat.style.color = 'var(--green, #00dd44)';
+                    setTimeout(() => {
+                        hideModal('provider-modal');
+                        document.getElementById('provider-name').value = '';
+                        stat.textContent = '';
+                        refresh();
+                    }, 900);
+                    return;
+                }
+            }
+            // Non-fatal warning paths still refresh + leave modal open.
+            refresh();
         }
 
         async function toggleProvider(id, enabled) {
