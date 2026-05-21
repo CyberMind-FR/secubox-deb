@@ -1227,8 +1227,8 @@ ok "SecuBox profile scripts installed"
 # ── CRT-Style Boot Banners ─────────────────────────────────────────
 log "Creating boot banners..."
 
-# Pre-login banner (/etc/issue)
-printf '%b' "\e[38;5;214m
+# Pre-login banner (/etc/issue) - ROOT green per Charte §05.
+printf '%b' "\e[38;5;29m
    ██████ ███████  ██████ ██    ██ ██████   ██████  ██   ██
   ██      ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
   ███████ █████   ██      ██    ██ ██████  ██    ██   ███
