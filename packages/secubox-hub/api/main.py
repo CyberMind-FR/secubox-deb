@@ -1750,7 +1750,7 @@ CATEGORY_META = {
     # Every menu.d entry MUST set `category` to one of these six. The
     # ordering mirrors the charter's complementary-pair sequence:
     # AUTH/WALL/BOOT then their counterparts MIND/ROOT/MESH.
-    "auth": {"name": "Auth", "icon": "🛂", "order": 0, "color": "#C04E24"},
+    "auth": {"name": "Auth", "icon": "🎯", "order": 0, "color": "#C04E24"},
     "wall": {"name": "Wall", "icon": "🛡️", "order": 1, "color": "#9A6010"},
     "boot": {"name": "Boot", "icon": "🚀", "order": 2, "color": "#803018"},
     "mind": {"name": "Mind", "icon": "🧠", "order": 3, "color": "#3D35A0"},
