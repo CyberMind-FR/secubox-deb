@@ -1,3 +1,25 @@
+secubox-nextcloud (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/nextcloud.conf: revert v1.3.0 over-reach — `/nextcloud/` on the
+    canonical hub vhost is the SecuBox CONFIGURATION MODULE (static UI at
+    /usr/share/secubox/www/nextcloud/ driving the /api/v1/nextcloud/
+    socket), NOT the Nextcloud app. v1.3.0 had reverse-proxied it to the
+    LXC by mistake.
+  * nginx/nextcloud-vhost.conf (new file): public Nextcloud vhost
+    `nc.gk2.secubox.in` — separate server block with reverse-proxy to the
+    LXC Apache at 10.100.0.21:80, Authelia SSO gating (auth_request +
+    error_page 401 = @sbx_auth_login), X-Original-URL forwarding (#274
+    pattern). Operator enables with `ln -s ../sites-available/nextcloud.conf
+    /etc/nginx/sites-enabled/` + DNS + HAProxy SNI + mitmproxy route +
+    ACME cert (CLAUDE.md WAF rule).
+  * debian/rules: install nginx/nextcloud.conf to both
+    /etc/nginx/secubox.d/ AND /etc/nginx/secubox-routes.d/ (matches
+    secubox-authelia convention); install nginx/nextcloud-vhost.conf to
+    /etc/nginx/sites-available/nextcloud.conf.
+  * Closes #282.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 08:10:00 +0000
+
 secubox-nextcloud (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * nginx/nextcloud.conf: /nextcloud/ is now a reverse-proxy to the

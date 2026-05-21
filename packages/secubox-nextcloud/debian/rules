@@ -12,6 +12,15 @@ override_dh_auto_install:
 	install -d debian/secubox-nextcloud/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-nextcloud/usr/sbin/ || true
 
-	# Install nginx config
+	# nginx canonical-hub snippet (SecuBox config module + API). Installed to
+	# both secubox.d/ and secubox-routes.d/ (the canonical hub vhost includes
+	# both via /etc/nginx/snippets/secubox-routes.conf — same convention as
+	# secubox-authelia v1.0.5+).
 	install -d $(CURDIR)/debian/secubox-nextcloud/etc/nginx/secubox.d
 	install -m 644 nginx/nextcloud.conf $(CURDIR)/debian/secubox-nextcloud/etc/nginx/secubox.d/nextcloud.conf
+	install -d $(CURDIR)/debian/secubox-nextcloud/etc/nginx/secubox-routes.d
+	install -m 644 nginx/nextcloud.conf $(CURDIR)/debian/secubox-nextcloud/etc/nginx/secubox-routes.d/nextcloud.conf
+	# Public Nextcloud vhost (nc.gk2.secubox.in). Operator enables with
+	# ln -s ../sites-available/nextcloud.conf /etc/nginx/sites-enabled/
+	install -d $(CURDIR)/debian/secubox-nextcloud/etc/nginx/sites-available
+	install -m 644 nginx/nextcloud-vhost.conf $(CURDIR)/debian/secubox-nextcloud/etc/nginx/sites-available/nextcloud.conf
