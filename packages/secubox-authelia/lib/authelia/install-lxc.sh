@@ -288,7 +288,10 @@ session:
       inactivity: 300
     - name: authelia_session
       domain: ${SECUBOX_HUB_DOMAIN}
-      authelia_url: 'https://admin.${SECUBOX_HUB_DOMAIN}/auth/'
+      # SSO portal moved to its own vhost in #310 — sibling vhosts (zigbee,
+      # lyrion, nextcloud) now redirect here for login. The canonical hub
+      # /auth/ is the operator dashboard, not the portal anymore.
+      authelia_url: 'https://sso.${SECUBOX_HUB_DOMAIN}/'
       expiration: 3600
       inactivity: 300
   secret: ${jwt_secret}
