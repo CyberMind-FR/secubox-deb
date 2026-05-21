@@ -1,0 +1,104 @@
+name: Build SecuBox kernel (cross arm64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: 'Upstream kernel version (e.g. 6.12.85)'
+        required: true
+        default: '6.12.85'
+        type: string
+      revision:
+        description: 'Local revision suffix (-Nsecubox)'
+        required: true
+        default: '2secubox'
+        type: string
+
+# Single in-flight build to avoid wasted CI minutes on a long job.
+concurrency:
+  group: build-kernel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: cross-arm64 ${{ inputs.kernel_version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      KERNEL_VERSION: ${{ inputs.kernel_version }}
+      REVISION: ${{ inputs.revision }}
+      DEBFULLNAME: SecuBox Builder
+      DEBEMAIL: devel@cybermind.fr
+      KDEB_PKGVERSION: ${{ inputs.kernel_version }}-${{ inputs.revision }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cross toolchain + build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu make bc flex bison \
+            libssl-dev libelf-dev wget xz-utils \
+            kmod cpio rsync debhelper dpkg-dev fakeroot \
+            python3 git
+
+      - name: Download upstream kernel ${{ inputs.kernel_version }}
+        run: |
+          mkdir -p /tmp/build && cd /tmp/build
+          # 6.x major in URL — sufficient for the 6.x series.
+          MAJOR="$(echo "$KERNEL_VERSION" | cut -d. -f1)"
+          wget -q "https://cdn.kernel.org/pub/linux/kernel/v${MAJOR}.x/linux-${KERNEL_VERSION}.tar.xz"
+          tar xf "linux-${KERNEL_VERSION}.tar.xz"
+
+      - name: Apply SecuBox patches (if any)
+        run: |
+          cd /tmp/build/linux-${KERNEL_VERSION}
+          if [ -d "${GITHUB_WORKSPACE}/kernel-build/patches" ]; then
+            for p in "${GITHUB_WORKSPACE}/kernel-build/patches"/*.patch; do
+              [ -f "$p" ] && patch -p1 -N < "$p" || true
+            done
+          fi
+
+      - name: Merge SecuBox config fragments
+        run: |
+          cd /tmp/build/linux-${KERNEL_VERSION}
+          make ARCH=arm64 defconfig
+          # Merge order: upstream defconfig <- OpenWrt-merged base <- ZRAM (last write wins).
+          scripts/kconfig/merge_config.sh -m .config \
+            "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12-openwrt-merged.fragment" \
+            "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12.85-secubox-zram.fragment"
+          make ARCH=arm64 olddefconfig
+          # Sanity-check key configs landed.
+          grep -q "CONFIG_LEDS_IS31FL319X=m" .config || (echo "FAIL: LED module missing" && exit 1)
+          grep -q "CONFIG_ZRAM=m" .config           || (echo "FAIL: ZRAM module missing" && exit 1)
+          grep -q "CONFIG_ZRAM_DEF_COMP=\"zstd\"" .config || (echo "FAIL: ZRAM zstd default missing" && exit 1)
+
+      - name: Build kernel .deb (bindeb-pkg)
+        run: |
+          cd /tmp/build/linux-${KERNEL_VERSION}
+          # bindeb-pkg cross-builds a real linux-image-*.deb + linux-headers-*.deb.
+          # KDEB_PKGVERSION sets the .deb version string.
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+               -j"$(nproc)" \
+               KDEB_PKGVERSION="${KDEB_PKGVERSION}" \
+               bindeb-pkg
+
+      - name: Collect .deb artifacts
+        run: |
+          mkdir -p /tmp/artifacts
+          # bindeb-pkg drops .deb files in /tmp/build (one level above the src tree).
+          cp /tmp/build/linux-image-*.deb         /tmp/artifacts/ 2>/dev/null || true
+          cp /tmp/build/linux-headers-*.deb       /tmp/artifacts/ 2>/dev/null || true
+          cp /tmp/build/linux-libc-dev*.deb       /tmp/artifacts/ 2>/dev/null || true
+          ls -la /tmp/artifacts/
+
+      - name: Upload kernel .deb bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-kernel-${{ inputs.kernel_version }}-${{ inputs.revision }}-arm64
+          path: /tmp/artifacts/*.deb
+          if-no-files-found: error
+          retention-days: 30
