@@ -5,9 +5,12 @@
 #
 # Reason: gk2 board runs 15+ LXCs on 8 GiB without swap. zram-backed
 # compressed RAM swap is the safest swap option (no plaintext-on-disk
-# concerns for CSPN). The stock kernel ships `# CONFIG_ZRAM is not set`,
-# so we add it here as a module so userspace zram-tools / a systemd unit
-# can activate /dev/zram0 + mkswap + swapon.
+# concerns for CSPN). The stock kernel ships zram disabled by default,
+# so we add it here as a module. Userspace zram-tools / a systemd unit
+# can then activate /dev/zram0 + mkswap + swapon.
+# NOTE: keep "is-not-set" prose out of comments — merge_config.sh
+# greps every line and treats such strings as kconfig directives,
+# polluting the merge.
 
 # === ZRAM block device — compressed RAM-backed swap ===
 CONFIG_ZRAM=m
