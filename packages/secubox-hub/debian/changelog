@@ -1,3 +1,15 @@
+secubox-hub (1.3.4-1~bookworm1) bookworm; urgency=medium
+
+  * www/shared/health-banner.js: stop emitting clickable <a href="…">
+    alerts. Targets were relative paths like /waf/, /crowdsec/,
+    /system/ that resolved against whatever host embedded the banner —
+    cross-origin embeds (e.g. oracle.ganimed.fr) produced wrong-host
+    links like https://oracle.ganimed.fr/system/. Banner is now purely
+    informational; navigation belongs to the dashboard sidebar.
+  * Closes #290.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 09:30:00 +0000
+
 secubox-hub (1.3.3-1~bookworm1) bookworm; urgency=medium
 
   * Drop www/nac/index.html, www/soc/index.html and www/soc.html from

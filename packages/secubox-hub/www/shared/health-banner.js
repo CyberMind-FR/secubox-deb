@@ -821,16 +821,16 @@
             const alerts = diagnose(health);
             const visibleAlerts = alerts.filter(a => a.severity !== 'celebration' || score >= 95).slice(0, 5);
             const hub = isHubVhost();
+            // Alerts are always non-clickable (#290). The previous <a href>
+            // branch emitted relative URLs that resolved to whatever host the
+            // banner was embedded on — e.g. https://oracle.ganimed.fr/system/
+            // when loaded cross-origin. Banner stays purely informational;
+            // the dashboard sidebar is the canonical navigation surface.
             alertsEl.innerHTML = visibleAlerts.map(a =>
-                (a.action && hub)
-                    ? `<a href="${a.action}" class="hb-alert ${a.severity}" title="${a.message}">
-                        <span class="hb-alert-icon">${a.icon}</span>
-                        <span class="hb-alert-text">${a.message}</span>
-                    </a>`
-                    : `<div class="hb-alert ${a.severity}" title="${a.message}">
-                        <span class="hb-alert-icon">${a.icon}</span>
-                        <span class="hb-alert-text">${a.message}</span>
-                    </div>`
+                `<div class="hb-alert ${a.severity}" title="${a.message}">
+                    <span class="hb-alert-icon">${a.icon}</span>
+                    <span class="hb-alert-text">${a.message}</span>
+                </div>`
             ).join('');
         }
 
