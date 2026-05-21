@@ -31,8 +31,9 @@ app.include_router(waf_router, prefix="/waf", tags=["waf"])
 
 log = get_logger("mitmproxy")
 
-# Constants
-DATA_PATH = Path("/srv/mitmproxy-waf/data")
+# Canonical SecuBox storage (#319) — /data/. Boards previously on /srv/
+# are migrated by the dpkg postinst (mv + symlink for back-compat).
+DATA_PATH = Path("/data/mitmproxy-waf/data")
 STATS_CACHE_FILE = DATA_PATH / "stats.json"
 THREATS_LOG = DATA_PATH / "threats.log"
 

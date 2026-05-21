@@ -1,3 +1,13 @@
+secubox-mail (2.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * /data convention migration (#319 Phase 1). All hardcoded /srv/<pkg>
+    paths in source replaced by /data/<pkg> (canonical SecuBox storage
+    per charter §Storage). debian/postinst gains an idempotent migration
+    block that moves legacy /srv/<dir> → /data/<dir> on upgrade and
+    leaves a symlink behind for back-compat.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 14:30:00 +0000
+
 secubox-mail (2.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2 — Rspamd migration. Adds Rspamd as a single Postfix milter

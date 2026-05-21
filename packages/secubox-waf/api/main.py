@@ -751,9 +751,9 @@ async def doctor_check():
         issues.append({"type": "log_not_writable", "repairable": True})
 
     # Check mitmproxy routes (for WAF integration)
-    routes_file = Path("/srv/mitmproxy-waf/data/routes.json")
+    routes_file = Path("/data/mitmproxy-waf/data/routes.json")
     if not routes_file.exists():
-        routes_file = Path("/srv/mitmproxy/routes.json")
+        routes_file = Path("/data/mitmproxy/routes.json")
     if not routes_file.exists():
         issues.append({"type": "routes_missing", "repairable": False})
         can_repair = False
@@ -800,9 +800,9 @@ async def repair_waf():
     # This would be done via the mitmproxy addon
 
     # 4. Verify mitmproxy connection
-    routes_file = Path("/srv/mitmproxy-waf/data/routes.json")
+    routes_file = Path("/data/mitmproxy-waf/data/routes.json")
     if not routes_file.exists():
-        routes_file = Path("/srv/mitmproxy/routes.json")
+        routes_file = Path("/data/mitmproxy/routes.json")
     if routes_file.exists():
         try:
             routes = json.loads(routes_file.read_text())

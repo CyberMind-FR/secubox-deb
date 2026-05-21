@@ -11,13 +11,13 @@ After=network.target
 Type=simple
 User=mitmproxy
 Group=mitmproxy
-WorkingDirectory=/srv/mitmproxy
+WorkingDirectory=/data/mitmproxy
 ExecStart=/opt/mitmproxy/bin/mitmdump \
     --mode regular \
     --listen-host 0.0.0.0 \
     --listen-port 8080 \
-    --set confdir=/srv/mitmproxy \
-    --scripts /srv/mitmproxy/secubox_waf.py
+    --set confdir=/data/mitmproxy \
+    --scripts /data/mitmproxy/secubox_waf.py
 Restart=on-failure
 RestartSec=5
 
@@ -25,7 +25,7 @@ RestartSec=5
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/srv/mitmproxy /var/log/mitmproxy
+ReadWritePaths=/data/mitmproxy /var/log/mitmproxy
 
 [Install]
 WantedBy=multi-user.target
