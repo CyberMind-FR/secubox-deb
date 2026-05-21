@@ -14,7 +14,9 @@ CONFIG_ZRAM=m
 # Default compressor at /sys/block/zram0/comp_algorithm initial value.
 # zstd gives the best ratio at acceptable CPU cost on Armada 7040.
 CONFIG_ZRAM_DEF_COMP_ZSTD=y
-CONFIG_ZRAM_DEF_COMP="zstd"
+# CONFIG_ZRAM_DEF_COMP is auto-derived by kconfig from the choice above;
+# do not set it explicitly here — merge_config.sh handles it as a generic
+# overlay and the resulting .config has the right value either way.
 # Multi-comp slots so userspace can switch compressors on the fly.
 CONFIG_ZRAM_MULTI_COMP=y
 # Writeback to a backing block device — kept off; pure RAM only.

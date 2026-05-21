@@ -74,7 +74,11 @@ jobs:
           # Sanity-check key configs landed.
           grep -q "CONFIG_LEDS_IS31FL319X=m" .config || (echo "FAIL: LED module missing" && exit 1)
           grep -q "CONFIG_ZRAM=m" .config           || (echo "FAIL: ZRAM module missing" && exit 1)
-          grep -q "CONFIG_ZRAM_DEF_COMP=\"zstd\"" .config || (echo "FAIL: ZRAM zstd default missing" && exit 1)
+          # CONFIG_ZRAM_DEF_COMP_ZSTD is the *choice* we set in the fragment;
+          # CONFIG_ZRAM_DEF_COMP="zstd" is the auto-derived string and may or
+          # may not be emitted depending on kconfig's choice handling — check
+          # the source-of-truth symbol instead.
+          grep -q "^CONFIG_ZRAM_DEF_COMP_ZSTD=y" .config || (echo "FAIL: ZRAM zstd default missing" && exit 1)
 
       - name: Build kernel .deb (bindeb-pkg)
         run: |
