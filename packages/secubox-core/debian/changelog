@@ -1,3 +1,17 @@
+secubox-core (1.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Ship /etc/systemd/system/nftables.service.d/override.conf so that
+    `modprobe nf_conntrack / nf_nat / nft_chain_nat` are non-fatal in
+    the nftables.service ExecStartPre. The MOCHAbin custom kernel
+    (6.12.85-secubox-cybermind) builds these as `=y` not `=m`, so
+    modprobe exits 1 with no .ko file on disk — systemd then kills
+    the unit before ExecStart can load the rules. Every reboot
+    therefore lost all SecuBox DNAT/MASQUERADE rules: lyrion slimproto
+    :3483 (Squeezelite players), mqtt forwards, lxc masquerade.
+    Closes the nftables half of #150.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 14:00:00 +0000
+
 secubox-core (1.1.2-1~bookworm1) bookworm; urgency=medium
 
   * postinst: gate /etc/nginx/sites-available/secubox install on first install
