@@ -1,0 +1,14 @@
+[Unit]
+Description=SecuBox Certificate Manager API
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/lib/secubox/certs
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/certs.sock
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

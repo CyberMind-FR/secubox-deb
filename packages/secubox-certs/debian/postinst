@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    install -d -m 0755 /run/secubox /var/cache/secubox/certs
+    systemctl daemon-reload || true
+    systemctl enable --now secubox-certs.service || true
+fi
+#DEBHELPER#
+exit 0

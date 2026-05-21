@@ -1,0 +1,9 @@
+{
+  "id": "certs",
+  "name": "Certificates",
+  "category": "auth",
+  "icon": "\ud83d\udd10",
+  "path": "/certs/",
+  "order": 118,
+  "description": "ACME SSL/TLS certificate management"
+}

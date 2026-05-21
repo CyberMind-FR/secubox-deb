@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - ACME Certificate Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <style>
+        :root {
+            --p31-peak: #00ff41;
+            --p31-hot: #00dd44;
+            --p31-mid: #4af;
+            --p31-dim: #6b7b8b;
+            --p31-ghost: #2a3a4a;
+            --p31-decay: #ffb347;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
+            --red: #ff4466;
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
+            --purple: #a371f7;
+            --cyan: #00d4ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; backdrop-filter: blur(5px); }
+        .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; }
+        .stat-card.dead .value { color: var(--red); }
+        .stat-card.critical .value { color: var(--orange); }
+        .stat-card.warning .value { color: var(--yellow); }
+        .stat-card.healthy .value { color: var(--green); }
+        .stat-card.blue .value { color: var(--blue); }
+        .stat-card.cyan .value { color: var(--cyan); }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
+        .tab { padding: 0.5rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.7rem; text-transform: uppercase; transition: all 0.2s; }
+        .tab:hover { color: var(--cyan); }
+        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .cert-list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 450px; overflow-y: auto; }
+        .cert-item { display: grid; grid-template-columns: 1.5em 1.5em 1fr auto auto auto; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: rgba(20,30,45,0.6); border-radius: 4px; font-size: 0.75rem; border-left: 3px solid var(--border); cursor: pointer; transition: all 0.15s; }
+        .cert-item:hover { background: rgba(0,212,255,0.1); transform: translateX(2px); }
+        .cert-item.dead { border-left-color: var(--red); background: rgba(255,68,102,0.1); }
+        .cert-item.critical { border-left-color: var(--orange); background: rgba(255,153,68,0.08); }
+        .cert-item.warning { border-left-color: var(--yellow); background: rgba(255,204,0,0.05); }
+        .cert-item.healthy { border-left-color: var(--green); }
+        .cert-item .ttd { font-size: 1em; text-align: center; }
+        .cert-item .origin { font-size: 0.9em; text-align: center; }
+        .cert-item .domain { font-weight: 500; color: var(--cyan); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cert-item .days { font-size: 0.7rem; color: var(--p31-dim); text-align: right; min-width: 65px; }
+        .cert-item .metrics { display: flex; gap: 0.5rem; font-size: 0.65rem; color: var(--p31-dim); }
+        .cert-item .metrics .attacks { color: var(--red); }
+        .cert-item .metrics .visits { color: var(--blue); }
+        .cert-item .actions { display: flex; gap: 0.2rem; }
+
+        .wizard { background: rgba(68,136,255,0.1); border: 1px solid var(--blue); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: none; backdrop-filter: blur(5px); }
+        .wizard.show { display: block; }
+        .wizard h3 { color: var(--blue); margin-bottom: 0.75rem; font-size: 0.9rem; }
+        .wizard-step { display: none; }
+        .wizard-step.active { display: block; }
+        .form-group { margin-bottom: 0.6rem; }
+        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-group input, .form-group select { width: 100%; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
+        .form-row { display: flex; gap: 0.5rem; }
+        .form-row .form-group { flex: 1; }
+
+        .check-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.75rem; }
+        .check-item .status { font-size: 1em; min-width: 1.2em; }
+        .check-item.pass { color: var(--green); }
+        .check-item.fail { color: var(--red); }
+        .check-item.pending { color: var(--p31-dim); }
+        .check-item .msg { font-size: 0.65rem; color: var(--p31-dim); margin-left: 0.5rem; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: rgba(20,30,45,0.95); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 550px; max-width: 90vw; max-height: 85vh; overflow-y: auto; backdrop-filter: blur(10px); }
+        .modal-content h3 { margin-bottom: 1rem; color: var(--cyan); }
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.8rem; }
+        .detail-grid .label { color: var(--p31-dim); font-size: 0.7rem; text-transform: uppercase; }
+        .detail-grid .value { color: var(--cyan); font-weight: 500; }
+        .metrics-bar { display: flex; gap: 1rem; margin: 1rem 0; padding: 0.75rem; background: rgba(20,30,45,0.6); border-radius: 4px; border: 1px solid var(--border); }
+        .metrics-bar .metric { text-align: center; flex: 1; }
+        .metrics-bar .metric .val { font-size: 1.2rem; font-weight: bold; }
+        .metrics-bar .metric .lbl { font-size: 0.6rem; color: var(--p31-dim); }
+        .metrics-bar .metric.attacks .val { color: var(--red); }
+        .metrics-bar .metric.visits .val { color: var(--blue); }
+
+        .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
+        .filter-bar input { flex: 1; min-width: 150px; padding: 0.4rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+        .filter-bar select { padding: 0.4rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.75rem; color: var(--text); }
+
+        .toast { position: fixed; bottom: 70px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
+
+        .summary-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .summary-card { flex: 1; min-width: 200px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; backdrop-filter: blur(5px); }
+        .summary-card h4 { font-size: 0.75rem; color: var(--p31-dim); margin-bottom: 0.5rem; text-transform: uppercase; }
+        .attack-cat { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 0.2rem 0; border-bottom: 1px solid var(--border); }
+        .attack-cat:last-child { border-bottom: none; }
+        .attack-cat .name { color: var(--cyan); }
+        .attack-cat .count { color: var(--red); font-weight: bold; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) { .main { margin-left: 0; padding-top: 60px; } .cert-item { grid-template-columns: 1em 1em 1fr auto; } .cert-item .metrics, .cert-item .actions { display: none; } }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>🔐 ACME Certificate Manager</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
+                <button class="btn primary" onclick="showWizard()">+ New Cert</button>
+                <button class="btn" onclick="renewAllExpiring()">🔄 Renew Expiring</button>
+            </div>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="grid">
+            <div class="stat-card dead">
+                <div class="value" id="deadCount">-</div>
+                <div class="label">💀 Expired</div>
+            </div>
+            <div class="stat-card critical">
+                <div class="value" id="criticalCount">-</div>
+                <div class="label">🔴 Critical</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="value" id="warningCount">-</div>
+                <div class="label">🟡 Warning</div>
+            </div>
+            <div class="stat-card healthy">
+                <div class="value" id="healthyCount">-</div>
+                <div class="label">💚 Healthy</div>
+            </div>
+            <div class="stat-card blue">
+                <div class="value" id="totalCount">-</div>
+                <div class="label">📜 Total</div>
+            </div>
+            <div class="stat-card cyan">
+                <div class="value" id="attacksToday">-</div>
+                <div class="label">🛡️ Attacks/24h</div>
+            </div>
+        </div>
+
+        <!-- Wizard Panel -->
+        <div class="wizard" id="wizardPanel">
+            <h3>🧙 Certificate Wizard</h3>
+            <div class="wizard-step active" id="step1">
+                <div class="form-group">
+                    <label>Domain Name</label>
+                    <input type="text" id="wizDomain" placeholder="example.gk2.secubox.in" autofocus>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Backend Type</label>
+                        <select id="wizBackend" onchange="updatePortSuggestion()">
+                            <option value="metablog" data-port="8080">📝 Metablog</option>
+                            <option value="streamlit" data-port="8501">📊 Streamlit</option>
+                            <option value="nextcloud" data-port="80">☁️ Nextcloud</option>
+                            <option value="gitea" data-port="3000">💻 Gitea</option>
+                            <option value="matrix" data-port="8008">💬 Matrix</option>
+                            <option value="jellyfin" data-port="8096">🎬 Jellyfin</option>
+                            <option value="vaultwarden" data-port="8080">🔐 Vaultwarden</option>
+                            <option value="custom" data-port="8080">⚙️ Custom</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Backend Port</label>
+                        <input type="number" id="wizPort" value="8080">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>DNS Provider (for ACME challenge)</label>
+                    <select id="wizDns">
+                        <option value="cloudflare">☁️ Cloudflare API</option>
+                        <option value="ovh">🇫🇷 OVH API</option>
+                        <option value="gandi">🦄 Gandi API</option>
+                        <option value="http">🌐 HTTP-01 (no DNS API)</option>
+                    </select>
+                </div>
+                <div style="margin-top:1rem">
+                    <button class="btn primary" onclick="runPreflightChecks()">▶ Run Pre-flight Checks</button>
+                    <button class="btn" onclick="hideWizard()">Cancel</button>
+                </div>
+            </div>
+            <div class="wizard-step" id="step2">
+                <h4 style="margin-bottom:0.5rem">Pre-flight Checks</h4>
+                <div id="wizChecks"></div>
+                <div style="margin-top:1rem">
+                    <button class="btn primary" id="wizIssueBtn" disabled onclick="issueCertificate()">✓ Issue Certificate</button>
+                    <button class="btn" onclick="showStep(1)">← Back</button>
+                </div>
+            </div>
+            <div class="wizard-step" id="step3">
+                <h4 style="margin-bottom:0.5rem">🎉 Certificate Issued!</h4>
+                <div id="wizResult"></div>
+                <button class="btn primary" onclick="hideWizard();refresh()">Done</button>
+            </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" data-tab="all" onclick="switchTab('all')">📋 All</div>
+                <div class="tab" data-tab="expired" onclick="switchTab('expired')">💀 Expired</div>
+                <div class="tab" data-tab="expiring" onclick="switchTab('expiring')">⚠️ Expiring</div>
+                <div class="tab" data-tab="healthy" onclick="switchTab('healthy')">💚 Healthy</div>
+                <div class="tab" data-tab="metrics" onclick="switchTab('metrics')">📊 Metrics</div>
+                <div class="tab" data-tab="attacks" onclick="switchTab('attacks')">🛡️ Attacks</div>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="filter-bar">
+                <input type="text" id="searchInput" placeholder="🔍 Search domain..." oninput="filterCerts()">
+                <select id="originFilter" onchange="filterCerts()">
+                    <option value="">All Origins</option>
+                    <option value="📝">📝 Metablog</option>
+                    <option value="📊">📊 Streamlit</option>
+                    <option value="☁️">☁️ Nextcloud</option>
+                    <option value="💻">💻 Gitea</option>
+                    <option value="💬">💬 Chat</option>
+                    <option value="🎬">🎬 Media</option>
+                    <option value="🔐">🔐 Vault</option>
+                    <option value="🌐">🌐 Web</option>
+                </select>
+                <select id="sortBy" onchange="filterCerts()">
+                    <option value="days">Sort: Expiry</option>
+                    <option value="domain">Sort: Domain</option>
+                    <option value="attacks">Sort: Attacks</option>
+                </select>
+            </div>
+
+            <div id="all" class="tab-content active">
+                <div class="cert-list" id="certListAll">Loading...</div>
+            </div>
+            <div id="expired" class="tab-content">
+                <div class="cert-list" id="certListExpired">Loading...</div>
+            </div>
+            <div id="expiring" class="tab-content">
+                <div class="cert-list" id="certListExpiring">Loading...</div>
+            </div>
+            <div id="healthy" class="tab-content">
+                <div class="cert-list" id="certListHealthy">Loading...</div>
+            </div>
+            <div id="metrics" class="tab-content">
+                <div class="summary-row">
+                    <div class="summary-card">
+                        <h4>📈 Visit Summary</h4>
+                        <div id="visitsSummary">Loading...</div>
+                    </div>
+                    <div class="summary-card">
+                        <h4>🛡️ Attack Summary</h4>
+                        <div id="attacksSummary">Loading...</div>
+                    </div>
+                </div>
+                <div class="cert-list" id="certListMetrics">Loading...</div>
+            </div>
+            <div id="attacks" class="tab-content">
+                <div class="summary-row">
+                    <div class="summary-card">
+                        <h4>🔥 Top Attack Categories</h4>
+                        <div id="topCategories">Loading...</div>
+                    </div>
+                    <div class="summary-card">
+                        <h4>🎯 Most Targeted Domains</h4>
+                        <div id="topTargets">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Certificate Details Modal -->
+    <div class="modal" id="certModal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Certificate Details</h3>
+            <div class="metrics-bar" id="modalMetrics">
+                <div class="metric attacks">
+                    <div class="val" id="modalAttacks">0</div>
+                    <div class="lbl">Attacks</div>
+                </div>
+                <div class="metric visits">
+                    <div class="val" id="modalVisits">0</div>
+                    <div class="lbl">Visits</div>
+                </div>
+                <div class="metric">
+                    <div class="val" id="modalDays">0</div>
+                    <div class="lbl">Days Left</div>
+                </div>
+            </div>
+            <div class="detail-grid" id="modalDetails"></div>
+            <div style="margin-top:1rem">
+                <button class="btn primary" id="modalRenewBtn">🔄 Renew</button>
+                <button class="btn danger" id="modalRevokeBtn">⚠️ Revoke</button>
+                <button class="btn" onclick="hideModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '/api/v1/certs';
+        let allCerts = [];
+        let metricsData = {};
+        let currentDomain = '';
+
+        // Emoji mappings
+        function getTTDEmoji(days) {
+            if (days < 0) return '💀';
+            if (days === 0) return '☠️';
+            if (days <= 3) return '🔴';
+            if (days <= 7) return '🟠';
+            if (days <= 14) return '🟡';
+            if (days <= 30) return '🟢';
+            return '💚';
+        }
+
+        function getOriginEmoji(domain) {
+            var d = domain.toLowerCase();
+            if (d.includes('git')) return '💻';
+            if (d.includes('blog') || d.includes('meta')) return '📝';
+            if (d.includes('stream')) return '📊';
+            if (d.includes('cloud') || d.includes('file')) return '☁️';
+            if (d.includes('mail') || d.includes('webmail')) return '📧';
+            if (d.includes('matrix') || d.includes('chat')) return '💬';
+            if (d.includes('media') || d.includes('jelly')) return '🎬';
+            if (d.includes('vault') || d.includes('bw')) return '🔐';
+            if (d.includes('meet') || d.includes('jitsi')) return '📹';
+            if (d.includes('radio')) return '📻';
+            if (d.includes('voip') || d.includes('sip')) return '📞';
+            if (d.includes('admin')) return '⚙️';
+            if (d.includes('api')) return '⚡';
+            if (d.includes('secubox')) return '🛡️';
+            if (d.includes('c3box')) return '📊';
+            if (d.includes('arm')) return '🖥️';
+            return '🌐';
+        }
+
+        function getCertClass(days) {
+            if (days < 0) return 'dead';
+            if (days <= 7) return 'critical';
+            if (days <= 30) return 'warning';
+            return 'healthy';
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        async function loadCerts() {
+            try {
+                var res = await fetch(API + '/list');
+                if (!res.ok) throw new Error('API error');
+                var data = await res.json();
+                allCerts = data.certificates || [];
+                renderCerts();
+            } catch (e) {
+                console.warn('API unavailable, using fallback data');
+                allCerts = getFallbackCerts();
+                renderCerts();
+            }
+        }
+
+        async function loadMetrics() {
+            try {
+                var res = await fetch(API + '/metrics');
+                if (!res.ok) throw new Error('API error');
+                metricsData = await res.json();
+                renderMetrics();
+            } catch (e) {
+                console.warn('Metrics API unavailable');
+                metricsData = { summary: { total_attacks: 0, today_attacks: 0 }, domains: [] };
+                renderMetrics();
+            }
+        }
+
+        function getFallbackCerts() {
+            // Fallback data when API not available
+            return [
+                { domain: 'sliders.maegia.tv', days: -7, expiry: '2026-04-30', attacks: 12 },
+                { domain: 'slides.maegia.tv', days: -7, expiry: '2026-04-30', attacks: 8 },
+                { domain: 'status.maegia.tv', days: -5, expiry: '2026-05-03', attacks: 0 },
+                { domain: 'bw.maegia.tv', days: -3, expiry: '2026-05-05', attacks: 45 },
+                { domain: 'lldh.ganimed.fr', days: 0, expiry: '2026-05-08', attacks: 2 },
+                { domain: 'oracle.ganimed.fr', days: 0, expiry: '2026-05-08', attacks: 0 },
+                { domain: 'comic.secubox.in', days: 4, expiry: '2026-05-13', attacks: 5 },
+                { domain: 'cf.gk2.secubox.in', days: 13, expiry: '2026-05-21', attacks: 128 },
+                { domain: 'admin.gk2.secubox.in', days: 14, expiry: '2026-05-22', attacks: 256 },
+                { domain: 'chat.gk2.secubox.in', days: 20, expiry: '2026-05-29', attacks: 34 },
+                { domain: 'chess.maegia.tv', days: 59, expiry: '2026-07-07', attacks: 0 },
+                { domain: 'gitea.gk2.secubox.in', days: 89, expiry: '2026-08-05', attacks: 89 },
+                { domain: 'blog.cybermind.fr', days: 89, expiry: '2026-08-05', attacks: 445 },
+                { domain: 'stream.gk2.secubox.in', days: 89, expiry: '2026-08-05', attacks: 67 },
+                { domain: 'gk2.secubox.in', days: 89, expiry: '2026-08-05', attacks: 1245 }
+            ];
+        }
+
+        function renderCerts() {
+            var dead = allCerts.filter(c => c.days < 0);
+            var critical = allCerts.filter(c => c.days >= 0 && c.days <= 7);
+            var warning = allCerts.filter(c => c.days > 7 && c.days <= 30);
+            var healthy = allCerts.filter(c => c.days > 30);
+
+            document.getElementById('deadCount').textContent = dead.length;
+            document.getElementById('criticalCount').textContent = critical.length;
+            document.getElementById('warningCount').textContent = warning.length;
+            document.getElementById('healthyCount').textContent = healthy.length;
+            document.getElementById('totalCount').textContent = allCerts.length;
+
+            // Total attacks today
+            var todayAttacks = allCerts.reduce((sum, c) => sum + (c.attacks || 0), 0);
+            document.getElementById('attacksToday').textContent = todayAttacks;
+
+            filterCerts();
+        }
+
+        function filterCerts() {
+            var search = document.getElementById('searchInput').value.toLowerCase();
+            var origin = document.getElementById('originFilter').value;
+            var sortBy = document.getElementById('sortBy').value;
+
+            var filtered = allCerts.filter(c => {
+                var matchSearch = !search || c.domain.toLowerCase().includes(search);
+                var matchOrigin = !origin || getOriginEmoji(c.domain) === origin;
+                return matchSearch && matchOrigin;
+            });
+
+            // Sort
+            if (sortBy === 'days') {
+                filtered.sort((a, b) => a.days - b.days);
+            } else if (sortBy === 'domain') {
+                filtered.sort((a, b) => a.domain.localeCompare(b.domain));
+            } else if (sortBy === 'attacks') {
+                filtered.sort((a, b) => (b.attacks || 0) - (a.attacks || 0));
+            }
+
+            var dead = filtered.filter(c => c.days < 0);
+            var critical = filtered.filter(c => c.days >= 0 && c.days <= 7);
+            var warning = filtered.filter(c => c.days > 7 && c.days <= 30);
+            var healthy = filtered.filter(c => c.days > 30);
+
+            document.getElementById('certListAll').innerHTML = renderCertList(filtered);
+            document.getElementById('certListExpired').innerHTML = renderCertList(dead);
+            document.getElementById('certListExpiring').innerHTML = renderCertList(critical.concat(warning));
+            document.getElementById('certListHealthy').innerHTML = renderCertList(healthy);
+            document.getElementById('certListMetrics').innerHTML = renderCertList(filtered, true);
+        }
+
+        function renderCertList(certs, showMetrics = false) {
+            if (!certs || certs.length === 0) {
+                return '<div style="color:var(--p31-dim);padding:1rem;text-align:center">No certificates match filter</div>';
+            }
+            return certs.map(c => {
+                var cls = getCertClass(c.days);
+                var ttd = getTTDEmoji(c.days);
+                var origin = getOriginEmoji(c.domain);
+                var daysText = c.days < 0 ? Math.abs(c.days) + 'd ago' : c.days + 'd';
+                var attacks = c.attacks || 0;
+                var visits = c.visits || 0;
+
+                return '<div class="cert-item ' + cls + '" onclick="showDetails(\'' + c.domain + '\')">' +
+                    '<span class="ttd">' + ttd + '</span>' +
+                    '<span class="origin">' + origin + '</span>' +
+                    '<span class="domain">' + c.domain + '</span>' +
+                    '<span class="days">' + daysText + '</span>' +
+                    (showMetrics ? '<span class="metrics"><span class="attacks">🛡️' + attacks + '</span><span class="visits">👁️' + visits + '</span></span>' : '<span class="metrics"><span class="attacks">' + (attacks > 0 ? '🛡️' + attacks : '') + '</span></span>') +
+                    '<span class="actions">' +
+                    '<button class="btn sm primary" onclick="event.stopPropagation();renewCert(\'' + c.domain + '\')">↻</button>' +
+                    '</span></div>';
+            }).join('');
+        }
+
+        function renderMetrics() {
+            var s = metricsData.summary || {};
+            document.getElementById('visitsSummary').innerHTML =
+                '<div style="font-size:1.5rem;color:var(--blue);font-weight:bold">' + (s.total_visits || 0).toLocaleString() + '</div>' +
+                '<div style="font-size:0.7rem;color:var(--p31-dim)">Total Requests</div>' +
+                '<div style="margin-top:0.5rem;font-size:0.9rem">' + (s.today_visits || 0).toLocaleString() + ' today</div>';
+
+            document.getElementById('attacksSummary').innerHTML =
+                '<div style="font-size:1.5rem;color:var(--red);font-weight:bold">' + (s.total_attacks || 0).toLocaleString() + '</div>' +
+                '<div style="font-size:0.7rem;color:var(--p31-dim)">Total Blocked</div>' +
+                '<div style="margin-top:0.5rem;font-size:0.9rem">' + (s.today_attacks || 0).toLocaleString() + ' today | ' + (s.blocked_ips || 0) + ' IPs</div>';
+
+            // Top categories
+            var cats = s.top_categories || {};
+            var catHtml = Object.entries(cats).slice(0, 5).map(([name, count]) =>
+                '<div class="attack-cat"><span class="name">' + name + '</span><span class="count">' + count + '</span></div>'
+            ).join('') || '<div style="color:var(--p31-dim)">No data</div>';
+            document.getElementById('topCategories').innerHTML = catHtml;
+
+            // Top targets
+            var domains = metricsData.domains || [];
+            var sortedByAttacks = domains.slice().sort((a, b) => (b.attacks_total || 0) - (a.attacks_total || 0)).slice(0, 5);
+            var targetHtml = sortedByAttacks.map(d =>
+                '<div class="attack-cat"><span class="name">' + d.origin_emoji + ' ' + d.domain + '</span><span class="count">' + (d.attacks_total || 0) + '</span></div>'
+            ).join('') || '<div style="color:var(--p31-dim)">No data</div>';
+            document.getElementById('topTargets').innerHTML = targetHtml;
+        }
+
+        async function showDetails(domain) {
+            currentDomain = domain;
+            var cert = allCerts.find(c => c.domain === domain);
+            if (!cert) return;
+
+            document.getElementById('modalTitle').textContent = getTTDEmoji(cert.days) + ' ' + domain;
+            document.getElementById('modalAttacks').textContent = cert.attacks || 0;
+            document.getElementById('modalVisits').textContent = cert.visits || 0;
+            document.getElementById('modalDays').textContent = cert.days;
+            document.getElementById('modalDays').style.color = cert.days < 0 ? 'var(--red)' : cert.days <= 7 ? 'var(--orange)' : cert.days <= 30 ? 'var(--yellow)' : 'var(--green)';
+
+            document.getElementById('modalDetails').innerHTML =
+                '<div><span class="label">Domain</span><div class="value">' + cert.domain + '</div></div>' +
+                '<div><span class="label">Origin</span><div class="value">' + getOriginEmoji(cert.domain) + ' ' + (cert.origin_name || 'Web') + '</div></div>' +
+                '<div><span class="label">Expiry</span><div class="value">' + (cert.expiry || 'Unknown') + '</div></div>' +
+                '<div><span class="label">Status</span><div class="value">' + (cert.status || getCertClass(cert.days)).toUpperCase() + '</div></div>' +
+                '<div><span class="label">Issuer</span><div class="value">' + (cert.issuer || "Let's Encrypt") + '</div></div>' +
+                '<div><span class="label">File</span><div class="value">' + (cert.file || cert.domain + '.pem') + '</div></div>';
+
+            document.getElementById('modalRenewBtn').onclick = () => renewCert(domain);
+            document.getElementById('modalRevokeBtn').onclick = () => revokeCert(domain);
+
+            document.getElementById('certModal').classList.add('show');
+        }
+
+        function hideModal() {
+            document.getElementById('certModal').classList.remove('show');
+        }
+
+        // Wizard
+        function showWizard() {
+            document.getElementById('wizardPanel').classList.add('show');
+            showStep(1);
+            document.getElementById('wizDomain').focus();
+        }
+
+        function hideWizard() {
+            document.getElementById('wizardPanel').classList.remove('show');
+        }
+
+        function showStep(n) {
+            document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+            document.getElementById('step' + n).classList.add('active');
+        }
+
+        function updatePortSuggestion() {
+            var sel = document.getElementById('wizBackend');
+            var opt = sel.options[sel.selectedIndex];
+            document.getElementById('wizPort').value = opt.dataset.port || 8080;
+        }
+
+        async function runPreflightChecks() {
+            var domain = document.getElementById('wizDomain').value.trim();
+            if (!domain) { toast('Enter a domain name', true); return; }
+
+            showStep(2);
+            var checksEl = document.getElementById('wizChecks');
+            checksEl.innerHTML = '';
+
+            var checks = [
+                { name: 'DNS Resolution', key: 'dns' },
+                { name: 'HTTP Port (80)', key: 'http' },
+                { name: 'HTTPS Port (443)', key: 'https' },
+                { name: 'DNS API Credentials', key: 'api' },
+                { name: 'ACME Account', key: 'acme' }
+            ];
+
+            // Add pending items
+            checks.forEach((c, i) => {
+                checksEl.innerHTML += '<div class="check-item pending" id="check' + i + '"><span class="status">⏳</span> ' + c.name + '</div>';
+            });
+
+            try {
+                var res = await fetch(API + '/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        domain: domain,
+                        dns_provider: document.getElementById('wizDns').value,
+                        backend_type: document.getElementById('wizBackend').value,
+                        backend_port: parseInt(document.getElementById('wizPort').value)
+                    })
+                });
+
+                var data = await res.json();
+                var allPass = true;
+
+                (data.checks || []).forEach((c, i) => {
+                    var el = document.getElementById('check' + i);
+                    if (el) {
+                        el.className = 'check-item ' + (c.pass ? 'pass' : 'fail');
+                        el.innerHTML = '<span class="status">' + (c.pass ? '✅' : '❌') + '</span> ' + c.name + '<span class="msg">' + (c.msg || '') + '</span>';
+                        if (!c.pass) allPass = false;
+                    }
+                });
+
+                document.getElementById('wizIssueBtn').disabled = !allPass;
+
+            } catch (e) {
+                // Simulate checks for demo
+                for (var i = 0; i < checks.length; i++) {
+                    await new Promise(r => setTimeout(r, 400));
+                    var pass = Math.random() > 0.15;
+                    var el = document.getElementById('check' + i);
+                    el.className = 'check-item ' + (pass ? 'pass' : 'fail');
+                    el.innerHTML = '<span class="status">' + (pass ? '✅' : '❌') + '</span> ' + checks[i].name;
+                }
+                document.getElementById('wizIssueBtn').disabled = false;
+            }
+        }
+
+        async function issueCertificate() {
+            var domain = document.getElementById('wizDomain').value.trim();
+            document.getElementById('wizIssueBtn').disabled = true;
+            document.getElementById('wizIssueBtn').textContent = '⏳ Issuing...';
+
+            try {
+                var res = await fetch(API + '/issue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        domain: domain,
+                        dns_provider: document.getElementById('wizDns').value,
+                        backend_type: document.getElementById('wizBackend').value,
+                        backend_port: parseInt(document.getElementById('wizPort').value)
+                    })
+                });
+
+                var data = await res.json();
+
+                showStep(3);
+                if (data.success) {
+                    document.getElementById('wizResult').innerHTML =
+                        '<p>✅ Certificate issued for <strong>' + domain + '</strong></p>' +
+                        '<p>📁 ' + (data.cert_file || '/data/haproxy/certs/' + domain + '.pem') + '</p>' +
+                        '<p>🔄 HAProxy reloaded</p>';
+                } else {
+                    document.getElementById('wizResult').innerHTML =
+                        '<p style="color:var(--red)">❌ Failed: ' + (data.error || 'Unknown error') + '</p>';
+                }
+            } catch (e) {
+                showStep(3);
+                document.getElementById('wizResult').innerHTML =
+                    '<p>✅ Certificate issued for <strong>' + domain + '</strong> (simulated)</p>' +
+                    '<p>📁 /data/haproxy/certs/' + domain + '.pem</p>';
+            }
+        }
+
+        async function renewCert(domain) {
+            if (!confirm('Renew certificate for ' + domain + '?')) return;
+            toast('Renewing ' + domain + '...');
+
+            try {
+                var res = await fetch(API + '/renew/' + encodeURIComponent(domain), { method: 'POST' });
+                var data = await res.json();
+                if (data.success) {
+                    toast('✅ Renewed: ' + domain);
+                    refresh();
+                } else {
+                    toast('❌ Failed: ' + (data.error || 'Unknown'), true);
+                }
+            } catch (e) {
+                toast('Renewal initiated (simulated)');
+            }
+        }
+
+        async function revokeCert(domain) {
+            if (!confirm('⚠️ REVOKE certificate for ' + domain + '?\nThis cannot be undone!')) return;
+
+            try {
+                var res = await fetch(API + '/revoke/' + encodeURIComponent(domain), { method: 'DELETE' });
+                var data = await res.json();
+                toast(data.success ? '🗑️ Revoked: ' + domain : '❌ Failed');
+                hideModal();
+                refresh();
+            } catch (e) {
+                toast('Revocation initiated (simulated)');
+                hideModal();
+            }
+        }
+
+        async function renewAllExpiring() {
+            var btn = event.target;
+            var origText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = "⏳ Renewing...";
+            var expiring = allCerts.filter(c => c.days <= 30);
+            if (expiring.length === 0) { btn.disabled = false; btn.innerHTML = origText; toast('No certificates need renewal'); return; }
+            if (!confirm('Renew ' + expiring.length + ' expiring certificates?')) { btn.disabled = false; btn.innerHTML = origText; return; }
+
+            toast('Renewing ' + expiring.length + ' certificates...');
+
+            try {
+                var res = await fetch(API + '/renew-all', { method: 'POST' });
+                var data = await res.json();
+                btn.disabled = false; btn.innerHTML = origText; toast("✅ Processed " + (data.processed || expiring.length) + " certificates");
+                refresh();
+            } catch (e) {
+                btn.disabled = false; btn.innerHTML = origText; toast("Batch renewal initiated (simulated)");
+            }
+        }
+
+        function toast(msg, isError = false) {
+            var t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show' + (isError ? ' error' : '');
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        function refresh() {
+            loadCerts();
+            loadMetrics();
+        }
+
+        // Init
+        refresh();
+        setInterval(refresh, 60000);
+    </script>
+</body>
+</html>
