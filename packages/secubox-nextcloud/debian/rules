@@ -24,3 +24,8 @@ override_dh_auto_install:
 	# ln -s ../sites-available/nextcloud.conf /etc/nginx/sites-enabled/
 	install -d $(CURDIR)/debian/secubox-nextcloud/etc/nginx/sites-available
 	install -m 644 nginx/nextcloud-vhost.conf $(CURDIR)/debian/secubox-nextcloud/etc/nginx/sites-available/nextcloud.conf
+
+	# Operator config example. Shipped to /etc/secubox/ so operators can
+	# `cp nextcloud.toml.example nextcloud.toml` without hunting for keys.
+	install -d $(CURDIR)/debian/secubox-nextcloud/etc/secubox
+	install -m 644 conf/nextcloud.toml.example $(CURDIR)/debian/secubox-nextcloud/etc/secubox/nextcloud.toml.example
