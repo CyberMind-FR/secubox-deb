@@ -1,3 +1,12 @@
+secubox-nextcloud (1.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/nextcloud-vhost.conf: @sbx_auth_login redirects to
+    https://sso.gk2.secubox.in/?rd=… (was admin.gk2.secubox.in/auth/).
+    Follow-up to the SSO portal split (#310). The cookie scope
+    .gk2.secubox.in (#272) already covers the new portal vhost.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 12:30:00 +0000
+
 secubox-nextcloud (1.3.2-1~bookworm1) bookworm; urgency=medium
 
   * conf/nextcloud.toml.example (new): operator-facing config template

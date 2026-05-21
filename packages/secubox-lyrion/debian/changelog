@@ -1,3 +1,11 @@
+secubox-lyrion (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/lyrion-vhost.conf: @sbx_auth_login redirects to
+    https://sso.gk2.secubox.in/?rd=… (was admin.gk2.secubox.in/auth/).
+    Follow-up to the SSO portal split (#310).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 12:30:00 +0000
+
 secubox-lyrion (1.0.8-1~bookworm1) bookworm; urgency=medium
 
   * nginx/lyrion-vhost.conf: move public vhost from lyrion.maegia.tv to
