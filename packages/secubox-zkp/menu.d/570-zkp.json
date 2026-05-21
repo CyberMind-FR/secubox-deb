@@ -3,7 +3,7 @@
   "name": "Zero-Knowledge Proof",
   "icon": "🔐",
   "path": "/zkp/",
-  "category": "security",
+  "category": "auth",
   "order": 570,
   "description": "Zero-Knowledge Proof Hamiltonian management"
 }

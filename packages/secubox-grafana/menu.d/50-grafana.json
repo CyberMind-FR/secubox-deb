@@ -1,9 +1,10 @@
 {
-  "title": "Grafana",
   "subtitle": "Security metrics",
   "icon": "fa-chart-line",
-  "url": "/grafana/",
-  "section": "monitoring",
   "order": 50,
-  "module": "grafana"
+  "id": "grafana",
+  "name": "Grafana",
+  "path": "/grafana/",
+  "category": "mind",
+  "description": ""
 }

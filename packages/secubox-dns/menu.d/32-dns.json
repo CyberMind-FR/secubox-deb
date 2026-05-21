@@ -1,7 +1,7 @@
 {
   "id": "dns",
   "name": "Dns",
-  "category": "network",
+  "category": "mesh",
   "icon": "🌐",
   "path": "/dns/",
   "order": 32,

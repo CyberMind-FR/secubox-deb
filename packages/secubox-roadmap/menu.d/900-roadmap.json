@@ -3,7 +3,7 @@
   "name": "Migration Roadmap",
   "icon": "🗺️",
   "path": "/roadmap/",
-  "category": "system",
+  "category": "mind",
   "order": 900,
   "description": "OpenWRT to Debian migration tracking"
 }

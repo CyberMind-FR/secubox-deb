@@ -1,7 +1,7 @@
 {
   "id": "master-link",
   "name": "Master-link",
-  "category": "network",
+  "category": "boot",
   "icon": "🔗",
   "path": "/master-link/",
   "order": 200,

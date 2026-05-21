@@ -1,7 +1,7 @@
 {
   "id": "glances",
   "name": "Glances",
-  "category": "monitoring",
+  "category": "mind",
   "icon": "📈",
   "path": "/glances/",
   "order": 904,

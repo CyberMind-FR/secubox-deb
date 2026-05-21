@@ -1,8 +1,9 @@
 {
-    "name": "Ollama AI",
-    "path": "/ollama/",
-    "icon": "🧠",
-    "category": "apps",
-    "order": 800,
-    "description": "Local AI inference with Ollama"
+  "name": "Ollama AI",
+  "path": "/ollama/",
+  "icon": "🧠",
+  "category": "mind",
+  "order": 800,
+  "description": "Local AI inference with Ollama",
+  "id": "ollama"
 }

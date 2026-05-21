@@ -1,7 +1,7 @@
 {
   "id": "streamforge",
   "name": "StreamForge",
-  "category": "apps",
+  "category": "mesh",
   "icon": "🔨",
   "path": "/streamforge/",
   "order": 510,

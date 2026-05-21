@@ -1,7 +1,7 @@
 {
   "id": "cdn",
   "name": "CDN Cache",
-  "category": "network",
+  "category": "mesh",
   "icon": "💾",
   "path": "/cdn/",
   "order": 240,

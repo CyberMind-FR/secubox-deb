@@ -3,7 +3,7 @@
   "name": "WireGuard VPN",
   "icon": "🔐",
   "path": "/wireguard/",
-  "category": "security",
+  "category": "mesh",
   "order": 25,
   "description": "WireGuard VPN tunnel management"
 }

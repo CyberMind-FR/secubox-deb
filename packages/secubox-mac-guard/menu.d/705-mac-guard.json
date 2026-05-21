@@ -1,7 +1,7 @@
 {
   "id": "mac-guard",
   "name": "MAC Guard",
-  "category": "security",
+  "category": "wall",
   "icon": "🖥️",
   "path": "/mac-guard/",
   "order": 705,

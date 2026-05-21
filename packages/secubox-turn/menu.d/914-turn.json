@@ -3,7 +3,7 @@
   "name": "TURN/STUN Server",
   "icon": "📞",
   "path": "/turn/",
-  "category": "network",
+  "category": "mesh",
   "order": 914,
   "description": "TURN/STUN server management for WebRTC"
 }

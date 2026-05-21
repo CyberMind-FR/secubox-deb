@@ -3,7 +3,7 @@
   "name": "Network Diagnostics",
   "icon": "🩺",
   "path": "/netdiag/",
-  "category": "network",
+  "category": "root",
   "order": 921,
   "description": "Network troubleshooting tools: ping, traceroute, DNS, WHOIS, MTR, port scan"
 }

@@ -1,7 +1,7 @@
 {
   "id": "tor",
   "name": "Tor",
-  "category": "security",
+  "category": "mesh",
   "icon": "🧅",
   "path": "/tor/",
   "order": 560,

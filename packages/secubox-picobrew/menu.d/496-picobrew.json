@@ -3,7 +3,7 @@
   "name": "PicoBrew",
   "icon": "🍺",
   "path": "/picobrew/",
-  "category": "apps",
+  "category": "mesh",
   "order": 496,
   "description": "Homebrew fermentation controller"
 }

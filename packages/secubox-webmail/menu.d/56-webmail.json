@@ -1,7 +1,7 @@
 {
   "id": "webmail",
   "name": "Webmail",
-  "category": "apps",
+  "category": "mesh",
   "icon": "📬",
   "path": "/webmail/",
   "order": 56,

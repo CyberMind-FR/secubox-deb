@@ -3,7 +3,7 @@
   "name": "WAF",
   "icon": "🛡️",
   "path": "/mitmproxy/",
-  "category": "security",
+  "category": "wall",
   "order": 500,
   "description": "Web Application Firewall"
 }

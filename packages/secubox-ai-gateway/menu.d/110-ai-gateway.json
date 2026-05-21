@@ -1,7 +1,7 @@
 {
   "id": "ai-gateway",
   "name": "AI Gateway",
-  "category": "security",
+  "category": "mind",
   "icon": "🤖",
   "path": "/ai-gateway/",
   "order": 110,

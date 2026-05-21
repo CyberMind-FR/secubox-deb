@@ -1,1 +1,9 @@
-{"id":"vault","name":"Vault","icon":"🔐","path":"/vault/","category":"system","order":901,"description":"Secrets management"}
+{
+  "id": "vault",
+  "name": "Vault",
+  "icon": "🔐",
+  "path": "/vault/",
+  "category": "root",
+  "order": 901,
+  "description": "Secrets management"
+}

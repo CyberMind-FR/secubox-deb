@@ -3,7 +3,7 @@
   "name": "RezApp",
   "icon": "📦",
   "path": "/rezapp/",
-  "category": "apps",
+  "category": "root",
   "order": 494,
   "description": "Application deployment and management"
 }

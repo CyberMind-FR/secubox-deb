@@ -1,1 +1,9 @@
-{"id":"cloner","name":"Cloner","icon":"💾","path":"/cloner/","category":"system","order":902,"description":"System backup and restore"}
+{
+  "id": "cloner",
+  "name": "Cloner",
+  "icon": "💾",
+  "path": "/cloner/",
+  "category": "boot",
+  "order": 902,
+  "description": "System backup and restore"
+}

@@ -1,7 +1,7 @@
 {
   "id": "netmodes",
   "name": "Network Modes",
-  "category": "network",
+  "category": "mesh",
   "icon": "🔀",
   "path": "/netmodes/",
   "order": 200,

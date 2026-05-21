@@ -1,9 +1,9 @@
 {
-    "id": "metrics",
-    "name": "Metrics",
-    "icon": "📊",
-    "path": "/metrics/",
-    "order": 200,
-    "category": "monitoring",
-    "description": "Metrics Dashboard"
+  "id": "metrics",
+  "name": "Metrics",
+  "icon": "📊",
+  "path": "/metrics/",
+  "order": 200,
+  "category": "mind",
+  "description": "Metrics Dashboard"
 }

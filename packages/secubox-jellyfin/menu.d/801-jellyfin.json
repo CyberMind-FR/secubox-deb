@@ -3,7 +3,7 @@
   "name": "Jellyfin",
   "path": "/jellyfin/",
   "icon": "🎬",
-  "category": "apps",
+  "category": "mesh",
   "order": 801,
   "description": "Media server management"
 }

@@ -1,7 +1,7 @@
 {
   "id": "metacatalog",
   "name": "Service Catalog",
-  "category": "system",
+  "category": "mind",
   "icon": "📚",
   "path": "/metacatalog/",
   "order": 485,

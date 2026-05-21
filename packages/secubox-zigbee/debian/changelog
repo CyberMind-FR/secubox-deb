@@ -1,3 +1,17 @@
+secubox-zigbee (2.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * www/zigbee/index.html: rewrite using the canonical SecuBox webui
+    scaffold (body display:flex, sidebar fixed at 220px, .main with
+    padding-top reserving 48px for the global-menu-bar). Replaces the
+    ad-hoc grid layout that mismatched the global navbar. Uses MESH
+    palette (#104A88) per the charter — Zigbee is a mesh-topology IoT
+    manager.
+  * menu.d/80-zigbee.json: schema normalised to id/name/path/category
+    (was title/url/section/module — silently ignored by the hub),
+    category=mesh per the new 6-charter taxonomy (#306).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 11:30:00 +0000
+
 secubox-zigbee (2.5.2-1~bookworm1) bookworm; urgency=medium
 
   * menu.d/80-zigbee.json: rewrite (was a copy-paste of Lyrion's

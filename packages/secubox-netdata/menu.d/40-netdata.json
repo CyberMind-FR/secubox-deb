@@ -1,7 +1,7 @@
 {
   "id": "netdata",
   "name": "Netdata",
-  "category": "monitoring",
+  "category": "mind",
   "icon": "📊",
   "path": "/netdata/",
   "order": 300,

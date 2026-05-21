@@ -1,7 +1,7 @@
 {
   "id": "system",
   "name": "System Hub",
-  "category": "dashboard",
+  "category": "root",
   "icon": "🔧",
   "path": "/system/",
   "order": 10,
