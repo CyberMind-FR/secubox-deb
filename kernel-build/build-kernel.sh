@@ -10,6 +10,8 @@ BUILD_DIR="${BUILD_DIR:-/tmp/secubox-kernel-build}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIG_FRAGMENT="$REPO_DIR/board/mochabin/kernel/config-6.12-openwrt-merged.fragment"
+# Additional fragments merged on top (in order). Last write wins.
+CONFIG_FRAGMENT_ZRAM="$REPO_DIR/board/mochabin/kernel/config-6.12.85-secubox-zram.fragment"
 PATCHES_DIR="$SCRIPT_DIR/patches"
 JOBS="${JOBS:-$(nproc)}"
 OUTPUT_DIR="${OUTPUT_DIR:-$BUILD_DIR/output}"
@@ -43,9 +45,11 @@ configure_kernel() {
     log "Configuring kernel..."
     cd "$BUILD_DIR/linux-${KERNEL_VERSION}"
     make ARCH=arm64 defconfig
-    scripts/kconfig/merge_config.sh -m .config "$CONFIG_FRAGMENT"
+    scripts/kconfig/merge_config.sh -m .config "$CONFIG_FRAGMENT" "$CONFIG_FRAGMENT_ZRAM"
     make ARCH=arm64 olddefconfig
     grep -q "CONFIG_LEDS_IS31FL319X=m" .config && log "✓ LED as module" || log "⚠ LED not module"
+    grep -q "CONFIG_ZRAM=m" .config && log "✓ ZRAM as module" || log "⚠ ZRAM missing"
+    grep -q "CONFIG_ZRAM_DEF_COMP=\"zstd\"" .config && log "✓ ZRAM default zstd" || log "⚠ ZRAM compressor not zstd"
 }
 
 build_kernel() {
