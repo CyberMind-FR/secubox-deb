@@ -4,6 +4,15 @@
 ---
 ## 2026-05-21
 
+### secubox-nextcloud v1.3.0 — reverse-proxy + SSO gating + move to 10.100.0.21 (Issue #280)
+
+**Context:** Package predated the SSO chain. On gk2 the `/nextcloud/` URL served a static stub (alias to `/usr/share/secubox/www/nextcloud/`), the LXC was hand-patched from source's `lxc.net.0.type=none` to `veth+10.100.0.20/24` — colliding with `secubox-authelia` at the same IP. No Authelia gating.
+
+**Done:**
+- **#280 / PR [#281](https://github.com/CyberMind-FR/secubox-deb/pull/281)** (`b86dee78`): `secubox-nextcloud v1.3.0` — `nginx/nextcloud.conf` now reverse-proxies `/nextcloud/` to `10.100.0.21:80` with Apache-friendly headers and SSO-gates via `auth_request /__sbx_auth_verify` + `error_page 401 = @sbx_auth_login` (handler from secubox-authelia v1.0.8). `sbin/nextcloudctl` LXC template moved from `type=none` (host-mode) to `veth+br-lxc+10.100.0.21/24`, `LXC_PATH=/data/lxc`, env-override knobs per MODULE-GUIDELINES §3. Frees `10.100.0.20` for authelia. Operator rebind recipe in the PR.
+
+**Validation:** Hot-rebind on gk2 (`sed -i s/10.100.0.20/10.100.0.21/ /data/lxc/nextcloud/config` + restart), deployed nginx conf, both LXCs now reachable at distinct IPs. `/nextcloud/` no-cookie → 302 to `/auth/?rd=…/nextcloud/`. Apache returns 400 for plain `/` because of Nextcloud `trusted_domains` — operator must add `admin.gk2.secubox.in` to `config.php` for the post-SSO page to render.
+
 ### Authelia SSO loop fix — multi-cookie + access_control + X-Original-URL forwarding (Issues #272 #273 #274)
 
 **Context:** After v1.0.5 the browser flow on `https://admin.gk2.secubox.in/zigbee/` exhibited an infinite redirect loop: login succeeded, returned to `/zigbee/`, then nginx `auth_request` returned 401/403 → 302 back to `/auth/?rd=…` → loop. Three independent bugs stacked.
