@@ -1,3 +1,12 @@
+secubox-dns-provider (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * www/dns-provider/index.html: bump .modal z-index 100 → 1500. The
+    injected .global-menu-bar (z-index 998 !important, from
+    secubox-hub's hybrid-skin.css) overlapped the modal top, making
+    the Add Provider dialog look unviewable. Closes #301.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 10:35:00 +0000
+
 secubox-dns-provider (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * www/dns-provider/index.html: Add Provider modal hardening (#299):
