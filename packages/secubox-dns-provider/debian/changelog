@@ -1,3 +1,28 @@
+secubox-dns-provider (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * www/dns-provider/index.html: Add Provider modal hardening (#299):
+     - Default provider type is now Gandi LiveDNS (was Cloudflare; post-
+       OpenWrt-migration the typical first-add is Gandi).
+     - Added apiStrict() helper that surfaces non-2xx responses as a
+       proper error message instead of silently returning the FastAPI
+       {detail: …} body (legacy behaviour rendered 422 validation
+       errors as `[object Object]` in alert).
+     - addProvider() now: blocks submit until all credential fields
+       filled, shows inline saving / probing status, disables the
+       button during request, and AFTER successful POST immediately
+       probes /domains?provider_id=<new> to confirm the credentials
+       actually authenticate upstream. Result is shown inline
+       (green ✓ N domains | yellow ⚠ N=0 / auth error). No more
+       silent "saved but empty" symptom.
+     - Hint panel in the modal documents the persistence path
+       (/var/lib/secubox/dns-provider/providers.json) and the
+       migration-safe secrets escape hatch
+       (/etc/secubox/secrets/dns-provider-gandi.key, mode 600).
+  * Closes #299. Separate follow-up will add a server-side auto-seed
+    from the secrets file so the credential survives apt purge.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 10:15:00 +0000
+
 secubox-dns-provider (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
