@@ -1,0 +1,36 @@
+# SecuBox MOCHAbin Kernel Config Fragment
+# Apply on top of the Debian arm64 config with:
+#   scripts/kconfig/merge_config.sh -m .config this-file.fragment
+#   make olddefconfig
+#
+# Reason: gk2 board runs 15+ LXCs on 8 GiB without swap. zram-backed
+# compressed RAM swap is the safest swap option (no plaintext-on-disk
+# concerns for CSPN). The stock kernel ships `# CONFIG_ZRAM is not set`,
+# so we add it here as a module so userspace zram-tools / a systemd unit
+# can activate /dev/zram0 + mkswap + swapon.
+
+# === ZRAM block device — compressed RAM-backed swap ===
+CONFIG_ZRAM=m
+# Default compressor at /sys/block/zram0/comp_algorithm initial value.
+# zstd gives the best ratio at acceptable CPU cost on Armada 7040.
+CONFIG_ZRAM_DEF_COMP_ZSTD=y
+CONFIG_ZRAM_DEF_COMP="zstd"
+# Multi-comp slots so userspace can switch compressors on the fly.
+CONFIG_ZRAM_MULTI_COMP=y
+# Writeback to a backing block device — kept off; pure RAM only.
+# CONFIG_ZRAM_WRITEBACK is not set
+# Per-CPU dedup tables for compressed pages — small win on a homelab box.
+# CONFIG_ZRAM_TRACK_ENTRY_ACTIME is not set
+
+# === Underlying compressed-page allocator ===
+CONFIG_ZSMALLOC=y
+# Stats in /sys/kernel/debug/zsmalloc — useful for tuning.
+CONFIG_ZSMALLOC_STAT=y
+
+# === Compressors used by ZRAM ===
+# zstd is the default (above); LZ4 + LZO are kept available as fallbacks
+# selectable via `echo lz4 > /sys/block/zram0/comp_algorithm`.
+CONFIG_CRYPTO_ZSTD=y
+CONFIG_CRYPTO_LZ4=y
+CONFIG_CRYPTO_LZO=y
+CONFIG_CRYPTO_DEFLATE=y
