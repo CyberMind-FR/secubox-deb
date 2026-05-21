@@ -1,5 +1,20 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-20*
+*Mis à jour : 2026-05-21*
+
+---
+
+## ✅ 2026-05-21: Authelia SSO loop fix end-to-end — multi-cookie + access_control + X-Original-URL + named-location refactor (Issues #272 #273 #274 #278)
+
+Closed the infinite redirect loop the user hit on `https://admin.gk2.secubox.in/zigbee/` after v1.0.5. Four PRs merged, hot-deployed, browser-validated.
+
+- **#272 / PR [#275](https://github.com/CyberMind-FR/secubox-deb/pull/275)** — `secubox-authelia v1.0.6`: `install-lxc.sh` renders TWO `session.cookies[]` entries (`maegia.tv` + `${SECUBOX_HUB_DOMAIN}`, default `gk2.secubox.in`) + matching `access_control` rules. New env knob.
+- **#273 / PR [#276](https://github.com/CyberMind-FR/secubox-deb/pull/276)** — `secubox-zigbee v2.4.4` + `secubox-lyrion v1.0.7`: `@sbx_auth_login` uses `$host` not `$http_host` to strip `:9080` leak; lyrion-vhost hardcodes `https://`.
+- **#274 / PR [#277](https://github.com/CyberMind-FR/secubox-deb/pull/277)** — `secubox-authelia v1.0.7`: nginx `/__sbx_auth_verify` + FastAPI `/verify` forward `X-Original-URL` + `X-Forwarded-{Method,Proto,Host,Uri,For}` so Authelia picks the right `session.cookies[]` entry. Without it Authelia defaulted to `maegia.tv`, 401 → loop.
+- **#278 / PR [#279](https://github.com/CyberMind-FR/secubox-deb/pull/279)** — `secubox-authelia v1.0.8` owns `location @sbx_auth_login` (moved from secubox-zigbee v2.4.5). Decouples lyrion from a transitive zigbee install.
+
+**Hot-deployment caveat:** source-side `install-lxc.sh` doesn't touch the live LXC config — had to sed-patch `/etc/authelia/configuration.yml` inside the LXC to add `gk2.secubox.in` + `*.gk2.secubox.in` access_control rules; matching change is in v1.0.6 source for next install. Memorialized in memory `feedback_live_config_drift.md`.
+
+**Collateral:** z2m frontend at 10.100.0.111:8080 was silently hung 14h with no listener (process alive but never bound). Restart took 20s before binding — root cause unknown, watch list. Board load 359 → 7 once the loop stopped.
 
 ---
 
