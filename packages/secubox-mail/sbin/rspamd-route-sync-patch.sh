@@ -7,7 +7,7 @@
 # live containers (mail/horde/roundcube) instead of "dead" ones that
 # get auto-rerouted to webui.
 #
-# Also adds the rspamd.gk2.secubox.in entry to /srv/mitmproxy/haproxy-routes.json
+# Also adds the rspamd.gk2.secubox.in entry to /data/mitmproxy/haproxy-routes.json
 # (host copy AND mitmproxy LXC copy) so the Rspamd web UI is reachable via WAF.
 
 set -euo pipefail
@@ -60,7 +60,7 @@ PY
 }
 
 # 1) Host copy.
-HOST_JSON=/srv/mitmproxy/haproxy-routes.json
+HOST_JSON=/data/mitmproxy/haproxy-routes.json
 if [ -d "$(dirname "$HOST_JSON")" ]; then
     apply_route_python "$HOST_JSON" "$RSPAMD_FQDN" "$RSPAMD_HOST" "$RSPAMD_CTRL_PORT"
 else
@@ -72,7 +72,7 @@ fi
 # route map (it reads at startup, not live).
 if command -v lxc-attach >/dev/null 2>&1 && lxc-info -n mitmproxy 2>/dev/null | grep -q RUNNING; then
     lxc-attach -n mitmproxy -- bash -c "
-        python3 - /srv/mitmproxy/haproxy-routes.json '$RSPAMD_FQDN' '$RSPAMD_HOST' '$RSPAMD_CTRL_PORT' <<'PY'
+        python3 - /data/mitmproxy/haproxy-routes.json '$RSPAMD_FQDN' '$RSPAMD_HOST' '$RSPAMD_CTRL_PORT' <<'PY'
 import json, sys
 path, fqdn, host, port = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 try:

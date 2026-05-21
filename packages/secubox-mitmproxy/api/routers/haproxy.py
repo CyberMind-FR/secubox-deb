@@ -22,7 +22,7 @@ log = get_logger("mitmproxy.haproxy")
 CONFIG_FILE = Path("/etc/secubox/mitmproxy.toml")
 HAPROXY_CFG = Path("/etc/haproxy/haproxy.cfg")
 HAPROXY_BACKUP = Path("/etc/haproxy/haproxy.cfg.waf-backup")
-ROUTES_FILE = Path("/srv/mitmproxy-waf/data/routes.json")
+ROUTES_FILE = Path("/data/mitmproxy-waf/data/routes.json")
 
 
 class HAProxyStatus(BaseModel):

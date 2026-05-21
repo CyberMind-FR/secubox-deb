@@ -7,7 +7,7 @@ Progressive threat response:
 Features:
 - Pattern-based threat detection (SQLi, XSS, LFI, RCE, etc.)
 - Warning page on initial detection
-- Threat logging to /srv/mitmproxy/logs/waf-threats.log
+- Threat logging to /data/mitmproxy/logs/waf-threats.log
 - Auto-ban after threshold reached
 - Styled error pages for backend failures (502/503)
 """
@@ -20,11 +20,11 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from mitmproxy import http, ctx
 
-ROUTES_FILE = Path("/srv/mitmproxy/haproxy-routes.json")
-RULES_FILE = Path("/srv/mitmproxy/waf-rules.json")
-THREATS_LOG = Path("/srv/mitmproxy/logs/waf-threats.log")
-STATS_FILE = Path("/srv/mitmproxy/logs/waf-stats.json")
-CDN_CONFIG_FILE = Path("/srv/mitmproxy/cdn-config.json")
+ROUTES_FILE = Path("/data/mitmproxy/haproxy-routes.json")
+RULES_FILE = Path("/data/mitmproxy/waf-rules.json")
+THREATS_LOG = Path("/data/mitmproxy/logs/waf-threats.log")
+STATS_FILE = Path("/data/mitmproxy/logs/waf-stats.json")
+CDN_CONFIG_FILE = Path("/data/mitmproxy/cdn-config.json")
 WHITELIST = {"127.0.0.1", "192.168.255.1"}
 STATS_SAVE_INTERVAL = 100  # Save stats every N requests
 

@@ -1,6 +1,6 @@
 # CrowdSec acquisition for SecuBox WAF threats
 source: file
 filenames:
-  - /srv/mitmproxy-waf/data/threats.log
+  - /data/mitmproxy-waf/data/threats.log
 labels:
   type: secubox-waf

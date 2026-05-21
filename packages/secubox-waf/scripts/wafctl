@@ -106,13 +106,13 @@ CONF
     lxc-attach -n "$LXC_NAME" -- apt-get update
     lxc-attach -n "$LXC_NAME" -- apt-get install -y python3-pip python3-venv curl jq
 
-    lxc-attach -n "$LXC_NAME" -- mkdir -p /opt/mitmproxy /srv/mitmproxy /var/log/mitmproxy
+    lxc-attach -n "$LXC_NAME" -- mkdir -p /opt/mitmproxy /data/mitmproxy /var/log/mitmproxy
     lxc-attach -n "$LXC_NAME" -- python3 -m venv /opt/mitmproxy
     lxc-attach -n "$LXC_NAME" -- /opt/mitmproxy/bin/pip install mitmproxy
 
     # Create mitmproxy user
     lxc-attach -n "$LXC_NAME" -- useradd -r -s /bin/false mitmproxy || true
-    lxc-attach -n "$LXC_NAME" -- chown -R mitmproxy:mitmproxy /srv/mitmproxy /var/log/mitmproxy
+    lxc-attach -n "$LXC_NAME" -- chown -R mitmproxy:mitmproxy /data/mitmproxy /var/log/mitmproxy
 
     log "WAF container installed"
 }
@@ -159,7 +159,7 @@ cmd_logs() {
 
 cmd_routes() {
     if lxc_running; then
-        lxc-attach -n "$LXC_NAME" -- cat /srv/mitmproxy/haproxy-routes.json 2>/dev/null || echo "{}"
+        lxc-attach -n "$LXC_NAME" -- cat /data/mitmproxy/haproxy-routes.json 2>/dev/null || echo "{}"
     else
         error "Container not running"
     fi
@@ -181,8 +181,8 @@ cmd_add_route() {
     fi
 
     lxc-attach -n "$LXC_NAME" -- bash -c "
-        jq '. + {\"$domain\": [\"$backend_ip\", $backend_port]}' /srv/mitmproxy/haproxy-routes.json > /tmp/routes.json && \
-        mv /tmp/routes.json /srv/mitmproxy/haproxy-routes.json
+        jq '. + {\"$domain\": [\"$backend_ip\", $backend_port]}' /data/mitmproxy/haproxy-routes.json > /tmp/routes.json && \
+        mv /tmp/routes.json /data/mitmproxy/haproxy-routes.json
     "
     log "Added route: $domain -> $backend_ip:$backend_port"
 }

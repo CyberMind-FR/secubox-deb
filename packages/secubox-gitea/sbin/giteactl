@@ -6,7 +6,7 @@
 VERSION="1.5.0"
 CONFIG_FILE="/etc/secubox/gitea.toml"
 LXC_PATH=""              # auto-detected below if blank, see resolve_lxc_path
-DATA_PATH="/srv/gitea"
+DATA_PATH="/data/gitea"
 CONTAINER="gitea"
 GITEA_VERSION="1.22.6"
 
@@ -1030,19 +1030,19 @@ cmd_migrate() {
 
     # Migrate git repositories
     log "Migrating git repositories..."
-    rsync -avz --progress "root@$source:/srv/gitea/git/repositories/" "$DATA_PATH/git/repositories/"
+    rsync -avz --progress "root@$source:/data/gitea/git/repositories/" "$DATA_PATH/git/repositories/"
 
     # Migrate database
     log "Migrating database..."
-    rsync -avz --progress "root@$source:/srv/gitea/git/gitea.db" "$DATA_PATH/git/"
+    rsync -avz --progress "root@$source:/data/gitea/git/gitea.db" "$DATA_PATH/git/"
 
     # Migrate LFS data
     log "Migrating LFS data..."
-    rsync -avz --progress "root@$source:/srv/gitea/git/lfs/" "$DATA_PATH/git/lfs/" 2>/dev/null || true
+    rsync -avz --progress "root@$source:/data/gitea/git/lfs/" "$DATA_PATH/git/lfs/" 2>/dev/null || true
 
     # Migrate custom config
     log "Migrating configuration..."
-    rsync -avz --progress "root@$source:/srv/gitea/custom/" "$DATA_PATH/custom/"
+    rsync -avz --progress "root@$source:/data/gitea/custom/" "$DATA_PATH/custom/"
 
     # Import UCI config
     log "Importing UCI configuration..."

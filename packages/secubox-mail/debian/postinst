@@ -2,6 +2,23 @@
 set -e
 
 if [ "$1" = "configure" ]; then
+    # #319 /data migration. Move legacy /srv/<dir> → /data/<dir> and leave a
+    # symlink behind for back-compat. Idempotent.
+    for _d in mail; do
+      if [ -d "/srv/$_d" ] && [ ! -L "/srv/$_d" ] && [ ! -e "/data/$_d" ]; then
+        mkdir -p /data
+        _was_active=""
+        if systemctl is-active --quiet secubox-mail; then
+          systemctl stop secubox-mail || true
+          _was_active=1
+        fi
+        mv "/srv/$_d" "/data/$_d" && ln -s "/data/$_d" "/srv/$_d" \
+          && echo "secubox-mail: migrated /srv/$_d → /data/$_d"
+        [ -n "$_was_active" ] && systemctl start secubox-mail || true
+      fi
+    done
+
+
     # Phase 1 rev. 2: on upgrade from < 2.2, rewrite legacy toml + run
     # the defensive scanner. Both are idempotent and refuse to touch
     # /data/volumes/mail/vmail user data (spec invariant I13).

@@ -11,10 +11,10 @@ from secubox_core.config import get_config
 app = FastAPI(title="SecuBox Mail LXC")
 
 LXC_NAME = "mail"
-LXC_PATH = "/srv/lxc"
+LXC_PATH = "/data/lxc"
 LXC_ROOTFS = f"{LXC_PATH}/{LXC_NAME}/rootfs"
 LXC_CONFIG = f"{LXC_PATH}/{LXC_NAME}/config"
-DATA_PATH = "/srv/mail"
+DATA_PATH = "/data/mail"
 ALPINE_VERSION = "3.21"
 
 
@@ -240,7 +240,7 @@ async def add_user(user: MailUser):
     hash_r = subprocess.run(["openssl", "passwd", "-6", user.password], capture_output=True, text=True)
     entry = f"{user.username}:{hash_r.stdout.strip()}:1000:1000::/home/{user.username}:/sbin/nologin"
     _lxc_exec(["sh", "-c", f'echo "{entry}" >> /etc/mail-config/passwd'])
-    _lxc_exec(["mkdir", "-p", f"/srv/mail/{user.username}/Maildir"])
+    _lxc_exec(["mkdir", "-p", f"/data/mail/{user.username}/Maildir"])
     return {"success": True, "username": user.username}
 
 

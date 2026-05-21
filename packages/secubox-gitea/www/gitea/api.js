@@ -190,7 +190,7 @@ return baseclass.extend({
 		return callListRepos().then(function(res) {
 			return {
 				repos: res.repos || [],
-				repo_root: res.repo_root || '/srv/gitea/git/repositories'
+				repo_root: res.repo_root || '/data/gitea/git/repositories'
 			};
 		});
 	},
