@@ -1,29 +1,30 @@
 #!/bin/bash
-# SecuBox TUI Splash - ANSI colors
+# SecuBox TUI splash — single-colour SECUBOX ROOT-green (Charte §05 ROOT).
+# Previously alternated two greens per-letter ("S | EC | UB | OX") which was
+# busy and rendered ugly under reduced-palette terminals (#fix-banner).
 clear
-# P31 Green colors
-G1='\033[38;5;34m'   # Green
-G2='\033[38;5;40m'   # Bright green
-GO='\033[38;5;178m'  # Gold
-CY='\033[38;5;51m'   # Cyan
-GR='\033[38;5;240m'  # Gray
-RS='\033[0m'         # Reset
+
+# 256-colour codes approximating the SecuBox charter palette.
+ROOT='\033[38;5;29m'   # ROOT teal-green  (~#0A5840 / Teal Root)
+GOLD='\033[38;5;178m'  # Hermetic gold    (frame)
+CYAN='\033[38;5;51m'   # Tagline accent
+GRAY='\033[38;5;240m'  # Footer
+RS='\033[0m'
 
 cat << SPLASH
 
-${GO}╔════════════════════════════════════════════════════════════════════════╗${RS}
-${GO}║${RS}                                                                          ${GO}║${RS}
-${GO}║${RS}   ${G1}███████╗${G2}███████╗ ██████╗${G1}██╗   ██╗${G2}██████╗  ██████╗ ██╗  ██╗${RS}          ${GO}║${RS}
-${GO}║${RS}   ${G1}██╔════╝${G2}██╔════╝██╔════╝${G1}██║   ██║${G2}██╔══██╗██╔═══██╗╚██╗██╔╝${RS}          ${GO}║${RS}
-${GO}║${RS}   ${G1}███████╗${G2}█████╗  ██║     ${G1}██║   ██║${G2}██████╔╝██║   ██║ ╚███╔╝${RS}           ${GO}║${RS}
-${GO}║${RS}   ${G1}╚════██║${G2}██╔══╝  ██║     ${G1}██║   ██║${G2}██╔══██╗██║   ██║ ██╔██╗${RS}           ${GO}║${RS}
-${GO}║${RS}   ${G1}███████║${G2}███████╗╚██████╗${G1}╚██████╔╝${G2}██████╔╝╚██████╔╝██╔╝ ██╗${RS}          ${GO}║${RS}
-${GO}║${RS}   ${G1}╚══════╝${G2}╚══════╝ ╚═════╝${G1} ╚═════╝ ${G2}╚═════╝  ╚═════╝ ╚═╝  ╚═╝${RS}          ${GO}║${RS}
-${GO}║${RS}                                                                          ${GO}║${RS}
-${GO}║${RS}              ${CY}Debian Cybersecurity Platform v1.6.1${RS}                      ${GO}║${RS}
-${GO}║${RS}                                                                          ${GO}║${RS}
-${GO}║${RS}                    ${GR}CyberMind — cybermind.fr${RS}                            ${GO}║${RS}
-${GO}║${RS}                                                                          ${GO}║${RS}
-${GO}╚════════════════════════════════════════════════════════════════════════╝${RS}
+${GOLD}╔════════════════════════════════════════════════════════════════════════╗${RS}
+${GOLD}║${RS}                                                                        ${GOLD}║${RS}
+${GOLD}║${RS}   ${ROOT}███████╗███████╗ ██████╗██╗   ██╗██████╗  ██████╗ ██╗  ██╗${RS}          ${GOLD}║${RS}
+${GOLD}║${RS}   ${ROOT}██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔═══██╗╚██╗██╔╝${RS}          ${GOLD}║${RS}
+${GOLD}║${RS}   ${ROOT}███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║ ╚███╔╝${RS}           ${GOLD}║${RS}
+${GOLD}║${RS}   ${ROOT}╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║ ██╔██╗${RS}           ${GOLD}║${RS}
+${GOLD}║${RS}   ${ROOT}███████║███████╗╚██████╗╚██████╔╝██████╔╝╚██████╔╝██╔╝ ██╗${RS}          ${GOLD}║${RS}
+${GOLD}║${RS}   ${ROOT}╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝${RS}          ${GOLD}║${RS}
+${GOLD}║${RS}                                                                        ${GOLD}║${RS}
+${GOLD}║${RS}              ${CYAN}Debian Cybersecurity Platform${RS}                             ${GOLD}║${RS}
+${GOLD}║${RS}                    ${GRAY}CyberMind · cybermind.fr${RS}                            ${GOLD}║${RS}
+${GOLD}║${RS}                                                                        ${GOLD}║${RS}
+${GOLD}╚════════════════════════════════════════════════════════════════════════╝${RS}
 
 SPLASH
