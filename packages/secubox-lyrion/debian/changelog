@@ -1,3 +1,24 @@
+secubox-lyrion (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/lyrion-vhost.conf: move public vhost from lyrion.maegia.tv to
+    lyrion.gk2.secubox.in. Consolidates SSO under one portal
+    (admin.gk2.secubox.in/auth/) and one cookie scope (.gk2.secubox.in)
+    instead of a separate auth.maegia.tv portal + .maegia.tv cookie.
+  * nginx/lyrion-vhost.conf: re-declare /__sbx_auth_verify with full
+    X-Original-URL + X-Forwarded-{Method,Proto,Host,Uri,For} forwarding
+    (#274 pattern) so Authelia picks the correct session.cookies[] entry.
+  * Closes #287.
+
+  Deploy-side follow-up (operator):
+   - mitmproxy haproxy-routes.json: drop lyrion.maegia.tv entry, fix
+     lyrion.gk2.secubox.in to [192.168.1.200, 9080] (was [..., 8000]).
+   - HAProxy: remove lyrion_maegia_tv vhost if any; lyrion_gk2_secubox_in
+     is already present (or routes via default_backend).
+   - Wildcard *.gk2.secubox.in.pem already covers the new vhost — no
+     new cert needed.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 08:50:00 +0000
+
 secubox-lyrion (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * nginx/lyrion-vhost.conf: replace $scheme://$http_host with
