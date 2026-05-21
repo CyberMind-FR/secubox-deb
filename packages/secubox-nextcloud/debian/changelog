@@ -1,3 +1,18 @@
+secubox-nextcloud (1.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * conf/nextcloud.toml.example (new): operator-facing config template
+    documenting every key both api/main.py and nextcloudctl consume
+    (container_name, lxc_path, data_path, http_port, ssl_enabled,
+    ssl_domain, domain, admin_user, db_type). Without this file
+    operators had to read the source to find the right key names —
+    the symptom was the Connection URLs panel showing
+    http://localhost:8080 (default fallback) even with the new
+    nc.gk2.secubox.in vhost live.
+  * debian/rules: ships the file as /etc/secubox/nextcloud.toml.example.
+  * Closes #284.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 08:30:00 +0000
+
 secubox-nextcloud (1.3.1-1~bookworm1) bookworm; urgency=medium
 
   * nginx/nextcloud.conf: revert v1.3.0 over-reach — `/nextcloud/` on the

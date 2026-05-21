@@ -1,0 +1,30 @@
+# /etc/secubox/nextcloud.toml — SecuBox Nextcloud module
+# Copy this file to /etc/secubox/nextcloud.toml and adjust as needed.
+# Both the FastAPI control plane (/api/v1/nextcloud/) and `nextcloudctl`
+# read flat (un-sectioned) keys from this file.
+#
+# Restart `secubox-nextcloud.service` after editing for changes to take
+# effect on the FastAPI side.
+
+# ── LXC ──────────────────────────────────────────────────────────────
+container_name = "nextcloud"
+# v2.11.1 canonical layout — match secubox-authelia and siblings.
+lxc_path  = "/data/lxc"
+data_path = "/data/volumes/nextcloud"
+
+# ── Public app URL ───────────────────────────────────────────────────
+# Used by /api/v1/nextcloud/connections to build WebDAV/CalDAV/CardDAV
+# URLs displayed in the SecuBox config UI.
+#
+# When ssl_enabled = true, the UI shows https://${ssl_domain}/…
+# Otherwise it shows http://localhost:${http_port}/… (dev fallback).
+ssl_enabled = true
+ssl_domain  = "nc.gk2.secubox.in"
+http_port   = 80
+
+# ── Nextcloud install knobs (used by `nextcloudctl install`) ─────────
+domain     = "nc.gk2.secubox.in"
+admin_user = "ncadmin"
+# Storage backend for Nextcloud's metadata DB. "sqlite" is the simple
+# default; switch to "mariadb" or "pgsql" for multi-user deployments.
+db_type    = "sqlite"
