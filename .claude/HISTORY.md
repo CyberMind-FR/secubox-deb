@@ -2,6 +2,21 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-21
+
+### Authelia SSO loop fix — multi-cookie + access_control + X-Original-URL forwarding (Issues #272 #273 #274)
+
+**Context:** After v1.0.5 the browser flow on `https://admin.gk2.secubox.in/zigbee/` exhibited an infinite redirect loop: login succeeded, returned to `/zigbee/`, then nginx `auth_request` returned 401/403 → 302 back to `/auth/?rd=…` → loop. Three independent bugs stacked.
+
+**Done:**
+
+- **#272 / PR [#275](https://github.com/CyberMind-FR/secubox-deb/pull/275)** (`f6439aeb`): `secubox-authelia v1.0.6` — `install-lxc.sh` now renders TWO `session.cookies[]` entries (`maegia.tv` + `${SECUBOX_HUB_DOMAIN}`, default `gk2.secubox.in`) plus matching `access_control` rules. Authelia returned 403 on `/auth/api/state` because no `cookies[].domain` matched `admin.gk2.secubox.in`. New env knob `SECUBOX_HUB_DOMAIN`.
+- **#273 / PR [#276](https://github.com/CyberMind-FR/secubox-deb/pull/276)** (`a907b5ba`): `secubox-zigbee v2.4.4` + `secubox-lyrion v1.0.7` — `@sbx_auth_login` redirect changed from `$http_host` to `$host` to strip the internal `:9080` nginx port that was leaking into public redirects. Lyrion vhost also switches `$scheme://` → hardcoded `https://`.
+- **#274 / PR [#277](https://github.com/CyberMind-FR/secubox-deb/pull/277)** (`fe37e2c7`): `secubox-authelia v1.0.7` — nginx `/__sbx_auth_verify` and FastAPI `/verify` now forward `X-Original-URL` + `X-Forwarded-{Method,Proto,Host,Uri,For}` to Authelia's `/api/verify`. Without these, Authelia defaulted to the first `cookies[]` entry (`maegia.tv`), never found the `gk2.secubox.in` session, returned 401 → infinite loop after successful login.
+
+**Validation:** Hot-deployed nginx confs + `api/main.py` onto gk2 + sed-patched the live LXC config to add `gk2.secubox.in` + `*.gk2.secubox.in` to `access_control` (source-side install-lxc.sh changes don't touch the running config — caveat memorialised in memory). Also restarted z2m which had silently hung 14h with no listener on :8080 — root cause was z2m needing ~20s post-restart to bind. Board load dropped 359 → 7 once the auth loop stopped. Final state: `/zigbee/` returns clean 302 to `/auth/?rd=https://admin.gk2.secubox.in/zigbee/` (no `:9080`), `/auth/api/state` → 200, z2m UI loads after login. User confirmed.
+
+---
 ## 2026-05-19
 
 ### v2.10.0 + v2.10.1 — fresh-image login chain end-to-end, VBox amd64 + bare-metal x86_64 (Issues #218, #220, #222, #224)
