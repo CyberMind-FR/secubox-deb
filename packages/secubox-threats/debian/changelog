@@ -1,3 +1,18 @@
+secubox-threats (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * www/threats/index.html: rebuild as the canonical centralised threats
+    dashboard (#312). Single page surfacing every relevant
+    /api/v1/threats/* endpoint: status (threat level pill), timeline
+    (24h hourly bucket histogram), scores (overall + breakdown),
+    recent alerts, top IOCs, open incidents, alert sources, feeds,
+    reports. Five-stat strip across the top, three-card rows below.
+    Canonical SecuBox scaffold (body display:flex, sidebar 220px fixed,
+    .main reserving 48px for the global-menu-bar). Charter WALL palette
+    (#9A6010 yellow/amber). Auto-refresh every 30s on the volatile
+    panels (status, timeline, alerts).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 13:00:00 +0000
+
 secubox-threats (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
