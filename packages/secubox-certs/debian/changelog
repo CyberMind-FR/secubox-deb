@@ -1,0 +1,16 @@
+secubox-certs (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial source-side package. Reconstructed from the running
+    deployment on gk2 — the module existed as a ghost (files under
+    /usr/lib/secubox/certs, /usr/share/secubox/www/certs, etc.) but
+    no package owned them, so reinstalls / migrations lost it.
+  * api/main.py: ACME certificate manager FastAPI, control plane for
+    /data/haproxy/certs/ + certbot renewals.
+  * www/certs/index.html: WebUI dashboard (charter-aligned AUTH
+    palette per #306, category=auth).
+  * nginx/certs.conf: /certs/ alias + /api/v1/certs/ socket proxy.
+  * menu.d/36-certs.json: navbar entry, category=auth, order=118.
+  * debian/secubox-certs.service: systemd unit (uvicorn on
+    /run/secubox/certs.sock).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 11:50:00 +0000
