@@ -1,3 +1,11 @@
+secubox-zigbee (2.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/zigbee-vhost.conf: @sbx_auth_login redirects to
+    https://sso.gk2.secubox.in/?rd=… (was admin.gk2.secubox.in/auth/).
+    Follow-up to the SSO portal split (#310).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 12:30:00 +0000
+
 secubox-zigbee (2.5.3-1~bookworm1) bookworm; urgency=medium
 
   * www/zigbee/index.html: rewrite using the canonical SecuBox webui

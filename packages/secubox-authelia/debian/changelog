@@ -1,3 +1,24 @@
+secubox-authelia (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * Split SSO portal from operator dashboard (#310):
+    - nginx/authelia.conf: /auth/ on the canonical hub vhost is now a
+      static alias to /usr/share/secubox/www/authelia/ (control + status
+      dashboard). Used to reverse-proxy the Authelia LXC portal.
+    - nginx/authelia.conf: @sbx_auth_login redirects to
+      https://sso.gk2.secubox.in/?rd=… (was https://$host/auth/?rd=…).
+    - nginx/authelia-vhost.conf: new public vhost sso.gk2.secubox.in,
+      reverse-proxies / → /auth/ → Authelia LXC 10.100.0.20:9091. Same
+      pattern as the existing auth.maegia.tv block, on the
+      .gk2.secubox.in cookie scope.
+    - www/authelia/index.html: rewrite as the SecuBox AUTH config
+      module — service state, version, user count, cookie scopes,
+      access rules, components / status / access cards. Charter AUTH
+      palette (#C04E24 orange). Was a Lyrion copy-paste stub.
+    - lib/authelia/install-lxc.sh: session.cookies[] for the hub
+      domain now points authelia_url at sso.${SECUBOX_HUB_DOMAIN}.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 12:30:00 +0000
+
 secubox-authelia (1.0.8-1~bookworm1) bookworm; urgency=medium
 
   * nginx/authelia.conf: own the `@sbx_auth_login` named location.
