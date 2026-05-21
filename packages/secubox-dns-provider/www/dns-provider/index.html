@@ -197,7 +197,10 @@
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.7);
-            z-index: 100;
+            /* #301: must be > .global-menu-bar (z-index 998 !important from
+               shared/hybrid-skin.css) otherwise the modal opens behind the
+               navbar and looks unviewable. */
+            z-index: 1500;
             align-items: center;
             justify-content: center;
         }
