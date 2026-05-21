@@ -3,11 +3,16 @@
 # File sync in Debian LXC for Debian
 # Three-fold architecture: Components, Status, Access
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 CONFIG_FILE="/etc/secubox/nextcloud.toml"
-LXC_PATH="/srv/lxc"
-DATA_PATH="/srv/nextcloud"
-CONTAINER="nextcloud"
+# v2.11.1 modernization: /data/lxc is the canonical LXC path on SecuBox
+# boards (matches authelia/grafana/etc). Override via SECUBOX_LXC_PATH for tests.
+LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+DATA_PATH="${SECUBOX_NEXTCLOUD_DATA:-/data/volumes/nextcloud}"
+CONTAINER="${SECUBOX_LXC_NAME:-nextcloud}"
+LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
+LXC_IP="${SECUBOX_LXC_IP:-10.100.0.21}"
+LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
 NC_VERSION="30.0.4"
 
 RED='\033[0;31m'
@@ -88,23 +93,31 @@ create_lxc_config() {
     cat > "$LXC_PATH/$CONTAINER/config" << EOF
 lxc.uts.name = nextcloud
 lxc.rootfs.path = dir:${LXC_PATH}/${CONTAINER}/rootfs
+lxc.include = /usr/share/lxc/config/common.conf
+lxc.apparmor.profile = generated
 
-# Host networking (no bridge required)
-lxc.net.0.type = none
+# Bridged networking on br-lxc (10.100.0.0/24). Pinned to 10.100.0.21 to
+# avoid the legacy collision with secubox-authelia at 10.100.0.20 (see #280).
+lxc.net.0.type = veth
+lxc.net.0.link = ${LXC_BRIDGE:-br-lxc}
+lxc.net.0.flags = up
+lxc.net.0.name = eth0
+lxc.net.0.ipv4.address = ${LXC_IP:-10.100.0.21}/24
+lxc.net.0.ipv4.gateway = ${LXC_GW:-10.100.0.1}
 
-lxc.mount.auto = proc:mixed sys:ro cgroup:mixed
-lxc.cap.drop = sys_module mac_admin mac_override sys_time
-lxc.autodev = 1
-lxc.tty.max = 4
-lxc.pty.max = 256
-lxc.cgroup2.memory.max = 1G
+# Unprivileged uid mapping
+lxc.idmap = u 0 100000 65536
+lxc.idmap = g 0 100000 65536
+
+lxc.cgroup2.memory.max = 2G
 lxc.init.cmd = /sbin/init
+lxc.start.auto = 1
 
-# Bind mounts for persistent data
+# Bind mounts for persistent data (host paths must be owned by mapped uid 100000)
 lxc.mount.entry = ${DATA_PATH}/data var/www/nextcloud/data none bind,create=dir 0 0
 lxc.mount.entry = ${DATA_PATH}/config var/www/nextcloud/config none bind,create=dir 0 0
 EOF
-    log "LXC config created"
+    log "LXC config created (veth on ${LXC_BRIDGE:-br-lxc}, ip ${LXC_IP:-10.100.0.21})"
 }
 
 create_install_init() {

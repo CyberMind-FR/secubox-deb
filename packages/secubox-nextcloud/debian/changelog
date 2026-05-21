@@ -1,3 +1,28 @@
+secubox-nextcloud (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/nextcloud.conf: /nextcloud/ is now a reverse-proxy to the
+    Nextcloud LXC at 10.100.0.21:80 (was an unused static-stub alias).
+    Adds Apache-friendly headers (Host, X-Forwarded-{For,Proto,Host}),
+    bumps proxy_read_timeout to 300s and disables request buffering /
+    body-size limits for large uploads (WebDAV / mobile-app sync).
+  * nginx/nextcloud.conf: SSO-gated via auth_request /__sbx_auth_verify;
+    error_page 401 = @sbx_auth_login; — handler now owned by
+    secubox-authelia v1.0.8 (#278). User identity propagated to Apache
+    via X-Forwarded-{User,Groups}.
+  * sbin/nextcloudctl: LXC config template moved from lxc.net.0.type=none
+    (host-mode) to veth + br-lxc + 10.100.0.21/24. Default IP changed
+    to 10.100.0.21 to free 10.100.0.20 for secubox-authelia (#280).
+    Operators with an existing LXC at .20 must rebind manually (see
+    issue #280 for the migration recipe) — install-lxc.sh modernization
+    follows in v1.4.0.
+  * sbin/nextcloudctl: LXC_PATH now defaults to /data/lxc (v2.11.1
+    canonical path), DATA_PATH to /data/volumes/nextcloud. New env
+    knobs: SECUBOX_LXC_PATH, SECUBOX_NEXTCLOUD_DATA, SECUBOX_LXC_NAME,
+    SECUBOX_LXC_BRIDGE, SECUBOX_LXC_IP, SECUBOX_LXC_GW.
+  * Closes #280.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 07:50:00 +0000
+
 secubox-nextcloud (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Fix default port to 9080 (avoid CrowdSec conflict)
