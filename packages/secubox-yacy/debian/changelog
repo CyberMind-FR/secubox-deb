@@ -1,3 +1,24 @@
+secubox-yacy (1.0.10-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/yacy-vhost.conf: move public vhost from yacy.maegia.tv to
+    yacy.gk2.secubox.in. Consolidates gk2-board apps under one cookie
+    scope (.gk2.secubox.in) and one SSO portal
+    (admin.gk2.secubox.in/auth/). Same change applied to secubox-lyrion
+    in this branch (#287).
+  * debian/rules: comment updated.
+  * Closes #287.
+
+  Note: yacy-vhost.conf still doesn't carry SSO gating (auth_request).
+  Adding it is a follow-up consistent with siblings
+  (zigbee/lyrion/nextcloud).
+
+  Deploy-side follow-up (operator):
+   - mitmproxy haproxy-routes.json: drop yacy.maegia.tv entry, add
+     yacy.gk2.secubox.in -> [192.168.1.200, 9080].
+   - Wildcard *.gk2.secubox.in.pem already covers the new vhost.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 08:50:00 +0000
+
 secubox-yacy (1.0.9-1~bookworm1) bookworm; urgency=medium
 
   * install-lxc.sh: new configure_yacy_admin() step injects the generated

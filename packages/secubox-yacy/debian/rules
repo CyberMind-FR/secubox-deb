@@ -13,7 +13,7 @@ override_dh_auto_install:
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-yacy/usr/share/secubox/menu.d/ || true
 	install -d debian/secubox-yacy/etc/nginx/secubox.d
 	[ -f nginx/yacy.conf ] && cp nginx/yacy.conf debian/secubox-yacy/etc/nginx/secubox.d/ || true && (install -d debian/secubox-yacy/etc/nginx/secubox-routes.d && cp nginx/yacy.conf debian/secubox-yacy/etc/nginx/secubox-routes.d/)
-	# Public vhost yacy.maegia.tv — shipped to sites-available (operator opts in via ln -s)
+	# Public vhost yacy.gk2.secubox.in — shipped to sites-available (operator opts in via ln -s)
 	install -d debian/secubox-yacy/etc/nginx/sites-available
 	[ -f nginx/yacy-vhost.conf ] && cp nginx/yacy-vhost.conf debian/secubox-yacy/etc/nginx/sites-available/yacy.conf || true
 	install -d debian/secubox-yacy/etc/secubox
