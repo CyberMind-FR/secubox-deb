@@ -15,9 +15,14 @@ override_dh_auto_install:
 	# Menu entry
 	install -d debian/secubox-zigbee/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-zigbee/usr/share/secubox/menu.d/ || true
-	# nginx snippet — install to BOTH secubox.d/ and secubox-routes.d/ (per v2.11.1 lesson)
+	# nginx canonical-hub snippet (SecuBox config module + API). Installed to
+	# both secubox.d/ and secubox-routes.d/ (per v2.11.1 lesson).
 	install -d debian/secubox-zigbee/etc/nginx/secubox.d
 	[ -f nginx/zigbee.conf ] && cp nginx/zigbee.conf debian/secubox-zigbee/etc/nginx/secubox.d/ && (install -d debian/secubox-zigbee/etc/nginx/secubox-routes.d && cp nginx/zigbee.conf debian/secubox-zigbee/etc/nginx/secubox-routes.d/) || true
+	# Public Zigbee Manager vhost (zigbee.gk2.secubox.in). Operator enables
+	# with ln -s ../sites-available/zigbee.conf /etc/nginx/sites-enabled/
+	install -d debian/secubox-zigbee/etc/nginx/sites-available
+	[ -f nginx/zigbee-vhost.conf ] && install -m 644 nginx/zigbee-vhost.conf debian/secubox-zigbee/etc/nginx/sites-available/zigbee.conf || true
 	# Config example
 	install -d debian/secubox-zigbee/etc/secubox
 	[ -f conf/zigbee.toml.example ] && cp conf/zigbee.toml.example debian/secubox-zigbee/etc/secubox/zigbee.toml.example || true

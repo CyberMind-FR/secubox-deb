@@ -1,3 +1,45 @@
+secubox-zigbee (2.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Split SecuBox config module from the public z2m frontend (mirrors
+    the nextcloud split in #282).
+
+  * nginx/zigbee.conf: `/zigbee/` on the canonical hub vhost
+    (admin.gk2.secubox.in) is now a static alias to
+    /usr/share/secubox/www/zigbee/ — the SecuBox configuration UI that
+    drives /api/v1/zigbee/* (components / status / access) and links to
+    the full Zigbee Manager. Was a reverse-proxy to the LXC z2m
+    frontend in v2.4.x, which conflated the SecuBox view with the
+    upstream app.
+
+  * nginx/zigbee-vhost.conf (new): public vhost zigbee.gk2.secubox.in
+    reverse-proxies / to the z2m LXC (10.100.0.111:8080) with
+    WebSocket upgrade for live device-state pushes. Authelia SSO via
+    auth_request /__sbx_auth_verify (X-Original-URL + X-Forwarded-*
+    per #274). @sbx_auth_login redirects to
+    https://admin.gk2.secubox.in/auth/ — session.cookies on
+    .gk2.secubox.in (#272) cover this vhost.
+
+  * www/zigbee/index.html: rewrite (was a copy-paste of the Lyrion
+    stub). Now properly titled "SecuBox - Zigbee", calls
+    /api/v1/zigbee/* with the standard SecuBox auth wrapper, and
+    surfaces a prominent "Open Zigbee Manager ->" button linking to
+    https://zigbee.gk2.secubox.in/.
+
+  * debian/rules: ships nginx/zigbee-vhost.conf to
+    /etc/nginx/sites-available/zigbee.conf for operator opt-in via
+    `ln -s ../sites-available/zigbee.conf /etc/nginx/sites-enabled/`.
+
+  * Closes #289.
+
+  Deploy-side follow-up (operator):
+   - DNS zigbee.gk2.secubox.in -> board public IP.
+   - mitmproxy haproxy-routes.json (inside the mitmproxy LXC):
+       zigbee.gk2.secubox.in -> [192.168.1.200, 9080].
+   - Wildcard *.gk2.secubox.in.pem already covers the new vhost.
+   - `ln -s` + `systemctl reload nginx`.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 09:00:00 +0000
+
 secubox-zigbee (2.4.5-1~bookworm1) bookworm; urgency=medium
 
   * nginx/zigbee.conf: stop defining the `@sbx_auth_login` named location.
