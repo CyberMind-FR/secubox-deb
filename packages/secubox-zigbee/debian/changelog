@@ -1,3 +1,14 @@
+secubox-zigbee (2.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/zigbee.conf: stop defining the `@sbx_auth_login` named location.
+    Ownership moved to secubox-authelia v1.0.8 (same canonical hub server
+    block, same named-location lookup — no functional change for zigbee).
+    Lets lyrion (and any other SSO-gated app) stop transitively depending
+    on secubox-zigbee being installed.
+  * Closes #278.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 07:30:00 +0000
+
 secubox-zigbee (2.4.4-1~bookworm1) bookworm; urgency=medium
 
   * nginx/zigbee.conf: replace $http_host with $host in the 401 →

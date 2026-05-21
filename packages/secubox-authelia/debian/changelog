@@ -1,3 +1,16 @@
+secubox-authelia (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/authelia.conf: own the `@sbx_auth_login` named location.
+    Previously defined in secubox-zigbee, meaning lyrion (and any other
+    SSO-gated app) silently broke if zigbee was uninstalled. The handler
+    logically belongs to the SSO module — moved verbatim from
+    zigbee.conf v2.4.5 (no functional change; named-location lookup
+    happens within the same canonical hub server block via
+    `include /etc/nginx/secubox.d/*`).
+  * Closes #278.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 07:30:00 +0000
+
 secubox-authelia (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * nginx/authelia.conf (`location = /__sbx_auth_verify`): forward
