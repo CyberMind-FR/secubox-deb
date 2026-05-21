@@ -1,3 +1,14 @@
+secubox-zigbee (2.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * menu.d/80-zigbee.json: rewrite (was a copy-paste of Lyrion's
+    menu entry — title 'Lyrion', url '/lyrion/', module 'lyrion').
+    Two 'Lyrion' entries appeared in the SecuBox navbar and no
+    'Zigbee' entry at all. Now title 'Zigbee', subtitle 'Mesh
+    manager (z2m)', icon fa-microchip, url '/zigbee/', section
+    'hosting', order 85, module 'zigbee'. Closes #303.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 10:55:00 +0000
+
 secubox-zigbee (2.5.1-1~bookworm1) bookworm; urgency=medium
 
   * www/zigbee/index.html: layout fix. The shared sidebar.js injects a
