@@ -1,6 +1,23 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
+    # #319 /data migration. Move legacy /srv/<dir> → /data/<dir> and leave a
+    # symlink behind for back-compat. Idempotent.
+    for _d in gitea; do
+      if [ -d "/srv/$_d" ] && [ ! -L "/srv/$_d" ] && [ ! -e "/data/$_d" ]; then
+        mkdir -p /data
+        _was_active=""
+        if systemctl is-active --quiet secubox-gitea; then
+          systemctl stop secubox-gitea || true
+          _was_active=1
+        fi
+        mv "/srv/$_d" "/data/$_d" && ln -s "/data/$_d" "/srv/$_d" \
+          && echo "secubox-gitea: migrated /srv/$_d → /data/$_d"
+        [ -n "$_was_active" ] && systemctl start secubox-gitea || true
+      fi
+    done
+
+
     systemctl daemon-reload
     systemctl enable secubox-gitea.service || true
     systemctl start secubox-gitea.service || true

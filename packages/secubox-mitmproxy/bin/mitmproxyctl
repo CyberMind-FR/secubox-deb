@@ -24,7 +24,7 @@ Usage:
     mitmproxyctl route list           List all (host, ip, port) entries
     mitmproxyctl route add HOST IP PORT [--no-restart]
                                       Add/replace a route (atomic, mirrors
-                                      to /srv/mitmproxy/ and the LXC rootfs
+                                      to /data/mitmproxy/ and the LXC rootfs
                                       copy), then restart unless --no-restart
     mitmproxyctl route remove HOST [--no-restart]
                                       Remove a route, then restart
@@ -38,8 +38,8 @@ Config (TOML, default /etc/secubox/mitmproxy.toml):
   [proxy]
   listen_port = 8080
   web_port    = 8091
-  host_routes_path     = "/srv/mitmproxy/haproxy-routes.json"
-  inbound_routes_path  = "/srv/mitmproxy-in/haproxy-routes.json"
+  host_routes_path     = "/data/mitmproxy/haproxy-routes.json"
+  inbound_routes_path  = "/data/mitmproxy-in/haproxy-routes.json"
 """
 from __future__ import annotations
 
@@ -69,8 +69,8 @@ DEFAULT_LXC_ROOT = Path("/data/lxc")
 DEFAULT_LISTEN_PORT = 8080
 DEFAULT_WEB_PORT = 8091
 DEFAULT_MEMORY_LIMIT = "512M"
-DEFAULT_HOST_ROUTES = Path("/srv/mitmproxy/haproxy-routes.json")
-DEFAULT_INBOUND_ROUTES = Path("/srv/mitmproxy-in/haproxy-routes.json")
+DEFAULT_HOST_ROUTES = Path("/data/mitmproxy/haproxy-routes.json")
+DEFAULT_INBOUND_ROUTES = Path("/data/mitmproxy-in/haproxy-routes.json")
 
 
 # ── Config ─────────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ def cmd_start(cfg: dict) -> int:
         port = cfg["proxy"]["listen_port"]
         lxc_exec(name, [
             "sh", "-c",
-            f"nohup mitmdump --listen-port {port} -s /srv/mitmproxy/secubox_waf.py "
+            f"nohup mitmdump --listen-port {port} -s /data/mitmproxy/secubox_waf.py "
             f"> /var/log/mitmproxy.log 2>&1 &",
         ])
     print(f"  Started")

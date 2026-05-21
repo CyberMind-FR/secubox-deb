@@ -3,17 +3,35 @@ set -e
 
 case "$1" in
   configure)
+    # Migrate /srv/mitmproxy* → /data/mitmproxy* (#319). Idempotent: only
+    # acts if the legacy directory is a real dir and the new location is
+    # absent. Leaves a symlink behind so any external references to
+    # /srv/<name> keep working until operators clean them up.
+    for _d in mitmproxy-waf mitmproxy mitmproxy-in; do
+      if [ -d "/srv/$_d" ] && [ ! -L "/srv/$_d" ] && [ ! -e "/data/$_d" ]; then
+        mkdir -p /data
+        _was_active=""
+        if systemctl is-active --quiet secubox-mitmproxy; then
+          systemctl stop secubox-mitmproxy || true
+          _was_active=1
+        fi
+        mv "/srv/$_d" "/data/$_d" && ln -s "/data/$_d" "/srv/$_d" \
+          && echo "secubox-mitmproxy: migrated /srv/$_d → /data/$_d"
+        [ -n "$_was_active" ] && systemctl start secubox-mitmproxy || true
+      fi
+    done
+
     # Create data directories
-    install -d -o secubox -g secubox -m 750 /srv/mitmproxy-waf/data
-    install -d -o secubox -g secubox -m 750 /srv/mitmproxy-waf/addons
-    install -d -o secubox -g secubox -m 750 /srv/mitmproxy-waf/config
+    install -d -o secubox -g secubox -m 750 /data/mitmproxy-waf/data
+    install -d -o secubox -g secubox -m 750 /data/mitmproxy-waf/addons
+    install -d -o secubox -g secubox -m 750 /data/mitmproxy-waf/config
 
     # Copy addon to data directory
-    cp /usr/share/secubox/mitmproxy/addons/secubox_waf.py /srv/mitmproxy-waf/addons/
+    cp /usr/share/secubox/mitmproxy/addons/secubox_waf.py /data/mitmproxy-waf/addons/
 
     # Copy default rules if not exists
-    if [ ! -f /srv/mitmproxy-waf/data/waf-rules.json ]; then
-      cp /usr/share/secubox/mitmproxy/data/waf-rules.json /srv/mitmproxy-waf/data/
+    if [ ! -f /data/mitmproxy-waf/data/waf-rules.json ]; then
+      cp /usr/share/secubox/mitmproxy/data/waf-rules.json /data/mitmproxy-waf/data/
     fi
 
     # Install CrowdSec acquisition if CrowdSec is installed

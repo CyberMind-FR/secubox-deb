@@ -12,7 +12,7 @@ from secubox_core.logger import get_logger
 router = APIRouter()
 log = get_logger("mitmproxy.alerts")
 
-DATA_PATH = Path("/srv/mitmproxy-waf/data")
+DATA_PATH = Path("/data/mitmproxy-waf/data")
 THREATS_LOG = DATA_PATH / "threats.log"
 
 

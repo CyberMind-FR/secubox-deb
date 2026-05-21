@@ -11,7 +11,7 @@ from secubox_core.logger import get_logger
 router = APIRouter()
 log = get_logger("mitmproxy.waf")
 
-RULES_FILE = Path("/srv/mitmproxy-waf/data/waf-rules.json")
+RULES_FILE = Path("/data/mitmproxy-waf/data/waf-rules.json")
 DEFAULT_RULES = Path("/usr/share/secubox/mitmproxy/data/waf-rules.json")
 
 

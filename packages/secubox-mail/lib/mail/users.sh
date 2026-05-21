@@ -4,7 +4,7 @@
 DATA_PATH="${DATA_PATH:-/srv/mail}"
 CONFIG_PATH="$DATA_PATH/config"
 CONTAINER="${MAIL_CONTAINER:-mailserver}"
-LXC_PATH="/srv/lxc/$CONTAINER"
+LXC_PATH="/data/lxc/$CONTAINER"
 
 # ============================================================================
 # User Management
