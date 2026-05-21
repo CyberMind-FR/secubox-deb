@@ -1,8 +1,9 @@
 {
-    "name": "Torrent",
-    "path": "/torrent/",
-    "icon": "📥",
-    "category": "apps",
-    "order": 612,
-    "description": "BitTorrent client management"
+  "name": "Torrent",
+  "path": "/torrent/",
+  "icon": "📥",
+  "category": "mesh",
+  "order": 612,
+  "description": "BitTorrent client management",
+  "id": "torrent"
 }

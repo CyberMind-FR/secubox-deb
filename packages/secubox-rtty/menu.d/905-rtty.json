@@ -3,7 +3,7 @@
   "name": "Remote Terminal",
   "icon": "🖥️",
   "path": "/rtty/",
-  "category": "system",
+  "category": "root",
   "order": 905,
   "description": "Web-based remote terminal access using rtty"
 }

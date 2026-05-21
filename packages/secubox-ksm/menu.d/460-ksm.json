@@ -1,7 +1,7 @@
 {
   "id": "ksm",
   "name": "KSM Memory",
-  "category": "system",
+  "category": "wall",
   "icon": "💾",
   "path": "/ksm/",
   "order": 460,

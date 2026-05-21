@@ -3,7 +3,7 @@
   "name": "Domoticz",
   "icon": "&#127968;",
   "path": "/domoticz/",
-  "category": "apps",
+  "category": "mesh",
   "order": 614,
   "description": "Home automation system"
 }

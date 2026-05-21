@@ -1,1 +1,10 @@
-{"id":"simplex","name":"SimpleX","icon":"💬","path":"/simplex/","category":"apps","order":816,"description":"Zero-knowledge private messaging server","color":"#6366f1"}
+{
+  "id": "simplex",
+  "name": "SimpleX",
+  "icon": "💬",
+  "path": "/simplex/",
+  "category": "mesh",
+  "order": 816,
+  "description": "Zero-knowledge private messaging server",
+  "color": "#6366f1"
+}

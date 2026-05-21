@@ -1,7 +1,7 @@
 {
   "id": "haproxy",
   "name": "HAProxy",
-  "category": "network",
+  "category": "mesh",
   "icon": "⚖️",
   "path": "/haproxy/",
   "order": 250,

@@ -1,1 +1,9 @@
-{"id":"vm","name":"VM Manager","icon":"🖥️","path":"/vm/","category":"system","order":903,"description":"Virtual machines and containers"}
+{
+  "id": "vm",
+  "name": "VM Manager",
+  "icon": "🖥️",
+  "path": "/vm/",
+  "category": "root",
+  "order": 903,
+  "description": "Virtual machines and containers"
+}

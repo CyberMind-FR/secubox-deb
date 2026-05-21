@@ -4,7 +4,7 @@
   "icon": "🛡️",
   "path": "/hardening/",
   "api": "/api/v1/hardening/",
-  "category": "security",
+  "category": "wall",
   "order": 120,
   "description": "Kernel and system hardening"
 }

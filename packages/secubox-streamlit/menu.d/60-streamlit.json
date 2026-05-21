@@ -1,7 +1,7 @@
 {
   "id": "streamlit",
   "name": "Streamlit",
-  "category": "apps",
+  "category": "mesh",
   "icon": "🎯",
   "path": "/streamlit/",
   "order": 500,

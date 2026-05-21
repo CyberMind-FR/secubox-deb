@@ -1,7 +1,7 @@
 {
   "id": "meshname",
   "name": "Mesh DNS",
-  "category": "network",
+  "category": "mesh",
   "icon": "🌐",
   "path": "/meshname/",
   "order": 585,

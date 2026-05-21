@@ -1,7 +1,7 @@
 {
   "id": "mcp-server",
   "name": "MCP Server",
-  "category": "security",
+  "category": "mind",
   "icon": "🔌",
   "path": "/mcp-server/",
   "order": 115,

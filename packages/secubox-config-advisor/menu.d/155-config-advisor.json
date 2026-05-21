@@ -1,7 +1,7 @@
 {
   "id": "config-advisor",
   "name": "Config Advisor",
-  "category": "security",
+  "category": "mind",
   "icon": "📋",
   "path": "/config-advisor/",
   "order": 155,

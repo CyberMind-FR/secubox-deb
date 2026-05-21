@@ -3,7 +3,7 @@
   "name": "Home Assistant",
   "icon": "🏠",
   "path": "/homeassistant/",
-  "category": "apps",
+  "category": "mesh",
   "order": 618,
   "description": "Home automation and IoT hub"
 }

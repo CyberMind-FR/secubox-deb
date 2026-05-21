@@ -4,6 +4,6 @@
   "icon": "👁️",
   "path": "/eye-remote/",
   "order": 50,
-  "category": "system",
+  "category": "boot",
   "description": "Manage Eye Remote display devices"
 }

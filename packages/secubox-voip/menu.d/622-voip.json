@@ -1,8 +1,9 @@
 {
-    "name": "VoIP/PBX",
-    "path": "/voip/",
-    "icon": "📞",
-    "category": "apps",
-    "order": 622,
-    "description": "Asterisk/FreePBX PBX management"
+  "name": "VoIP/PBX",
+  "path": "/voip/",
+  "icon": "📞",
+  "category": "mesh",
+  "order": 622,
+  "description": "Asterisk/FreePBX PBX management",
+  "id": "voip"
 }

@@ -3,7 +3,7 @@
   "name": "Cookie Tracker",
   "icon": "🍪",
   "path": "/cookies/",
-  "category": "privacy",
+  "category": "mesh",
   "order": 704,
   "description": "Cookie tracking and privacy compliance"
 }

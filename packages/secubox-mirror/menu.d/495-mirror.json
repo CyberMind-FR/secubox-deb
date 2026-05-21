@@ -1,7 +1,7 @@
 {
   "id": "mirror",
   "name": "Mirror/CDN",
-  "category": "system",
+  "category": "mesh",
   "icon": "☁️",
   "path": "/mirror/",
   "order": 495,

@@ -1,7 +1,7 @@
 {
   "id": "hub",
   "name": "Dashboard",
-  "category": "dashboard",
+  "category": "root",
   "icon": "🏠",
   "path": "/",
   "order": 0,

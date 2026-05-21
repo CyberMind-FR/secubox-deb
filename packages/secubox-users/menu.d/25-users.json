@@ -1,7 +1,7 @@
 {
   "id": "users",
   "name": "Users",
-  "category": "security",
+  "category": "auth",
   "icon": "👥",
   "path": "/users/",
   "order": 25,

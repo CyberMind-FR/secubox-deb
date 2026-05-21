@@ -1,7 +1,7 @@
 {
   "id": "mail",
   "name": "Mail",
-  "category": "apps",
+  "category": "mesh",
   "icon": "📧",
   "path": "/mail/",
   "order": 55,

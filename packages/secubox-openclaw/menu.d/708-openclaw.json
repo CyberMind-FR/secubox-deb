@@ -1,7 +1,7 @@
 {
   "id": "openclaw",
   "name": "OpenClaw OSINT",
-  "category": "security",
+  "category": "auth",
   "icon": "🕵️",
   "path": "/openclaw/",
   "order": 708,

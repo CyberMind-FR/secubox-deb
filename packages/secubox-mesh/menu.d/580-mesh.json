@@ -1,9 +1,9 @@
 {
-    "id": "mesh",
-    "name": "Yggdrasil Mesh",
-    "icon": "🌐",
-    "path": "/mesh/",
-    "category": "network",
-    "order": 580,
-    "description": "Yggdrasil mesh network management"
+  "id": "mesh",
+  "name": "Yggdrasil Mesh",
+  "icon": "🌐",
+  "path": "/mesh/",
+  "category": "mesh",
+  "order": 580,
+  "description": "Yggdrasil mesh network management"
 }

@@ -1,7 +1,7 @@
 {
   "id": "backup",
   "name": "Backup",
-  "category": "system",
+  "category": "boot",
   "icon": "💾",
   "path": "/backup/",
   "order": 550,

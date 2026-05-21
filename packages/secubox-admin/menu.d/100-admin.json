@@ -1,7 +1,7 @@
 {
   "id": "admin",
   "name": "Administration",
-  "category": "core",
+  "category": "root",
   "icon": "⚙️",
   "path": "/admin/",
   "order": 100,

@@ -1,7 +1,7 @@
 {
   "id": "nettweak",
   "name": "Network Tuning",
-  "category": "system",
+  "category": "mesh",
   "icon": "🔧",
   "path": "/nettweak/",
   "order": 450,

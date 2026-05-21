@@ -1,7 +1,7 @@
 {
   "id": "publish",
   "name": "Publish",
-  "category": "publishing",
+  "category": "boot",
   "icon": "📡",
   "path": "/publish/",
   "order": 600,

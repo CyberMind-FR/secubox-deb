@@ -1,7 +1,7 @@
 {
   "id": "mediaflow",
   "name": "Media Flow",
-  "category": "monitoring",
+  "category": "boot",
   "icon": "📺",
   "path": "/mediaflow/",
   "order": 310,

@@ -3,7 +3,7 @@
   "name": "Matrix Chat",
   "icon": "💬",
   "path": "/matrix/",
-  "category": "apps",
+  "category": "mesh",
   "order": 619,
   "description": "Federated encrypted chat server"
 }

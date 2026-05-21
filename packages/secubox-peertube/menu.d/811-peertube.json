@@ -1,8 +1,9 @@
 {
-    "name": "PeerTube",
-    "path": "/peertube/",
-    "icon": "📹",
-    "category": "apps",
-    "order": 811,
-    "description": "Federated video platform"
+  "name": "PeerTube",
+  "path": "/peertube/",
+  "icon": "📹",
+  "category": "mesh",
+  "order": 811,
+  "description": "Federated video platform",
+  "id": "peertube"
 }

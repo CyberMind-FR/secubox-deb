@@ -1,7 +1,7 @@
 {
   "id": "watchdog",
   "name": "Watchdog",
-  "category": "system",
+  "category": "wall",
   "icon": "🔍",
   "path": "/watchdog/",
   "order": 555,
