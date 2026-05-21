@@ -1,9 +1,9 @@
 {
-  "title": "Lyrion",
-  "subtitle": "Music server",
-  "icon": "fa-music",
-  "url": "/lyrion/",
+  "title": "Zigbee",
+  "subtitle": "Mesh manager (z2m)",
+  "icon": "fa-microchip",
+  "url": "/zigbee/",
   "section": "hosting",
-  "order": 80,
-  "module": "lyrion"
+  "order": 85,
+  "module": "zigbee"
 }
