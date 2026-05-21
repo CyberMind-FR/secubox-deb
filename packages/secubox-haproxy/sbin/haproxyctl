@@ -9,10 +9,21 @@ VERSION="1.1.0"
 LXC_NAME="haproxy"
 LXC_PATH="/var/lib/lxc/$LXC_NAME"
 DOCKER_NAME="secubox-haproxy"
-DATA_PATH="/srv/haproxy"
+# Canonical SecuBox data root is /data (charter §Storage). Older boards used
+# /srv/haproxy; we honour both via auto-detect, with HAPROXY_DATA_PATH as the
+# explicit override. Closes the recurring cert-path bug in #286 where
+# cmd_generate wrote `bind *:443 ssl crt /srv/haproxy/certs/` on boards that
+# actually keep certs in /data/haproxy/certs/.
+DATA_PATH="${HAPROXY_DATA_PATH:-/data/haproxy}"
+[ -d "$DATA_PATH" ] || DATA_PATH="/srv/haproxy"
 CONF_PATH="/etc/secubox/haproxy.toml"
 CONFIG_DIR="/etc/haproxy"
 CERTS_DIR="$DATA_PATH/certs"
+# Operator-managed extra frontends/backends (webui-lan, gitea-ssh, custom
+# metablog_* backends, etc.) live as separate files in /etc/haproxy/cfg.d/.
+# cmd_generate appends them verbatim at the end of the generated cfg so they
+# survive every vhost-add regen (#286).
+EXTRA_CFG_DIR="${HAPROXY_EXTRA_CFG_DIR:-/etc/haproxy/cfg.d}"
 STATS_SOCKET="/run/haproxy/admin.sock"
 LOG_FILE="/var/log/secubox/haproxy.log"
 
@@ -585,9 +596,16 @@ cmd_generate() {
     local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8080")
     local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | cut -d'"' -f2 || echo "10.100.0.60")
 
-    mkdir -p "$CONFIG_DIR" /run/haproxy
+    mkdir -p "$CONFIG_DIR" /run/haproxy "$EXTRA_CFG_DIR"
 
-    cat > "$CONFIG_DIR/haproxy.cfg" << EOF
+    # Build to a tempfile, validate, then atomically promote. #286 — the old
+    # behaviour overwrote $CONFIG_DIR/haproxy.cfg block-by-block, so any
+    # validation failure left the live cfg in a half-written state and a
+    # subsequent reload picked up the broken version.
+    local out
+    out=$(mktemp /tmp/haproxy-gen.XXXXXX.cfg) || { error "mktemp failed"; return 1; }
+
+    cat > "$out" << EOF
 # SecuBox HAProxy Configuration (Auto-generated)
 # Generated: $(date)
 
@@ -618,7 +636,7 @@ frontend http-in
 EOF
 
     if webui_regex=$(_fetch_webui_regex); then
-        cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+        cat >> "$out" << EOF
     # WebUI Obfuscation (issue #44) — strict regex from /etc/default/secubox
     acl is_webui_admin hdr(host) -m reg $webui_regex
     use_backend webui_direct if is_webui_admin
@@ -653,10 +671,10 @@ EOF
                     echo "    use_backend $backend if host_$name"
                 fi
             }
-        done >> "$CONFIG_DIR/haproxy.cfg"
+        done >> "$out"
     fi
 
-    cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+    cat >> "$out" << EOF
     default_backend mitmproxy_inspector
 
 frontend https-in
@@ -665,7 +683,7 @@ frontend https-in
 EOF
 
     if webui_regex=$(_fetch_webui_regex); then
-        cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+        cat >> "$out" << EOF
     # WebUI Obfuscation (issue #44) — strict regex from /etc/default/secubox
     acl is_webui_admin hdr(host) -m reg $webui_regex
     use_backend webui_direct if is_webui_admin
@@ -701,16 +719,16 @@ EOF
                     echo "    use_backend $backend if host_$name"
                 fi
             }
-        done >> "$CONFIG_DIR/haproxy.cfg"
+        done >> "$out"
     fi
 
-    cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+    cat >> "$out" << EOF
     default_backend mitmproxy_inspector
 
 EOF
 
     # WAF inspector backend (mitmproxy LXC container)
-    [ "$waf_enabled" = "1" ] && cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+    [ "$waf_enabled" = "1" ] && cat >> "$out" << EOF
 # WAF Inspector Backend (mitmproxy LXC at $waf_ip:$waf_port)
 backend mitmproxy_inspector
     mode http
@@ -724,7 +742,7 @@ EOF
     # WebUI direct backend (issue #44 — for the strict-regex ACL above)
     # Only emit if SECUBOX_HOSTNAME is set (i.e., the strict ACL was injected).
     if _fetch_webui_regex >/dev/null 2>&1; then
-        cat >> "$CONFIG_DIR/haproxy.cfg" << 'EOF'
+        cat >> "$out" << 'EOF'
 backend webui_direct
     mode http
     server srv0 127.0.0.1:9080 check
@@ -740,7 +758,7 @@ EOF
             local balance=$(echo "$section" | grep -E '^balance\s*=' | cut -d'"' -f2 || echo "roundrobin")
             local servers=$(echo "$section" | grep -E '^servers\s*=' | cut -d'[' -f2 | cut -d']' -f1 | tr -d '"' | tr ',' '\n')
 
-            cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+            cat >> "$out" << EOF
 backend $name
     mode $mode
     balance $balance
@@ -749,28 +767,71 @@ EOF
             echo "$servers" | while read -r srv; do
                 [ -n "$srv" ] && {
                     srv=$(echo "$srv" | tr -d ' ')
-                    echo "    server srv$i $srv check" >> "$CONFIG_DIR/haproxy.cfg"
+                    echo "    server srv$i $srv check" >> "$out"
                     i=$((i + 1))
                 }
             done
-            echo "" >> "$CONFIG_DIR/haproxy.cfg"
+            echo "" >> "$out"
         done
     fi
 
     # Fallback backend
-    cat >> "$CONFIG_DIR/haproxy.cfg" << EOF
+    cat >> "$out" << EOF
 backend fallback
     mode http
     http-request deny deny_status 503
 EOF
 
-    # Validate config
-    if haproxy -c -f "$CONFIG_DIR/haproxy.cfg" 2>/dev/null; then
-        log "Configuration generated and validated: $CONFIG_DIR/haproxy.cfg"
+    # Make absolutely sure the canonical backends exist regardless of the
+    # waf_enabled gate or user TOML — #286: vhosts can reference these even
+    # when waf_enabled=0 (e.g. nginx_vhosts for non-WAF passthrough,
+    # webui_direct for the SECUBOX_HOSTNAME obfuscation regex).
+    grep -q '^backend nginx_vhosts$' "$out" || cat >> "$out" << EOF
+
+backend nginx_vhosts
+    mode http
+    balance roundrobin
+    server srv0 127.0.0.1:9080 check
+EOF
+    grep -q '^backend webui_direct$' "$out" || cat >> "$out" << EOF
+
+backend webui_direct
+    mode http
+    server srv0 127.0.0.1:9080 check
+EOF
+    grep -q '^backend mitmproxy_inspector$' "$out" || cat >> "$out" << EOF
+
+# Emitted unconditionally so use_backend mitmproxy_inspector references stay
+# resolvable even with waf_enabled=0 (defense in depth — #286).
+backend mitmproxy_inspector
+    mode http
+    balance roundrobin
+    server srv0 ${waf_ip:-10.100.0.60}:${waf_port:-8080} check
+EOF
+
+    # Operator-managed extras (#286). Files in $EXTRA_CFG_DIR are appended
+    # verbatim so things like the LAN webui frontend, gitea-ssh, custom
+    # metablog backends, etc. survive every vhost-add regeneration.
+    if [ -d "$EXTRA_CFG_DIR" ]; then
+        for extra in "$EXTRA_CFG_DIR"/*.cfg; do
+            [ -f "$extra" ] || continue
+            printf '\n# === %s ===\n' "$(basename "$extra")" >> "$out"
+            cat "$extra" >> "$out"
+        done
+    fi
+
+    # Validate THEN atomic-promote (#286). The old code wrote block-by-block
+    # to the live cfg and only validated at the end, leaving the file in a
+    # broken state on failure (recurring "broken-by-vhost-add" backups).
+    if haproxy -c -f "$out" 2>/dev/null; then
+        install -m 0644 -o root -g root "$out" "$CONFIG_DIR/haproxy.cfg"
+        rm -f "$out"
+        log "Configuration generated, validated and installed: $CONFIG_DIR/haproxy.cfg"
         return 0
     else
-        error "Configuration validation failed"
-        haproxy -c -f "$CONFIG_DIR/haproxy.cfg"
+        error "Configuration validation failed — live cfg LEFT UNTOUCHED"
+        haproxy -c -f "$out" 2>&1 | tail -20 >&2
+        rm -f "$out"
         return 1
     fi
 }

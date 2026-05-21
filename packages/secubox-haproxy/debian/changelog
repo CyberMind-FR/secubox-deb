@@ -1,3 +1,28 @@
+secubox-haproxy (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbin/haproxyctl: rewrite cmd_generate to be safe + complete (#286).
+    Previously every `haproxyctl vhost add` wiped operator-added
+    backends (nginx_vhosts, gitea_ssh, webui-lan, …) and emitted the
+    wrong cert path (/srv/haproxy/certs/ on boards that keep certs in
+    /data/haproxy/certs/). Four+ recurring "broken-by-vhost-add" cfg
+    backups attest to the bug.
+
+    New cmd_generate:
+     - Writes to a tempfile, validates `haproxy -c -f`, then atomically
+       installs the live cfg via `install`. On validation failure the
+       live cfg is LEFT UNTOUCHED.
+     - DATA_PATH defaults to /data/haproxy (canonical SecuBox storage),
+       falling back to /srv/haproxy if /data is missing. Override via
+       HAPROXY_DATA_PATH env.
+     - Always emits the three canonical backends — mitmproxy_inspector,
+       nginx_vhosts, webui_direct — regardless of waf_enabled, so
+       use_backend references stay resolvable.
+     - Reads /etc/haproxy/cfg.d/*.cfg as operator-managed extras and
+       appends them verbatim. Survives every regen. Override via
+       HAPROXY_EXTRA_CFG_DIR.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 13:40:00 +0000
+
 secubox-haproxy (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Add mitmproxy LXC WAF integration (10.100.0.60:8080)
