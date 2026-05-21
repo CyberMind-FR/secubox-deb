@@ -1,7 +1,7 @@
 {
   "id": "metabolizer",
   "name": "Metabolizer",
-  "category": "system",
+  "category": "mind",
   "icon": "&#128202;",
   "path": "/metabolizer/",
   "order": 480,

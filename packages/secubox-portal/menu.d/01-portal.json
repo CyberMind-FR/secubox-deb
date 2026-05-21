@@ -1,7 +1,7 @@
 {
   "id": "portal",
   "name": "Portal",
-  "category": "dashboard",
+  "category": "root",
   "icon": "🔐",
   "path": "/portal/",
   "order": 1,

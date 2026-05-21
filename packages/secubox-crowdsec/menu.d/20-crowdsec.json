@@ -1,7 +1,7 @@
 {
   "id": "crowdsec",
   "name": "CrowdSec",
-  "category": "security",
+  "category": "wall",
   "icon": "🛡️",
   "path": "/crowdsec/",
   "order": 100,

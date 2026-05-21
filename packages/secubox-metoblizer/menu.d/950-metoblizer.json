@@ -1,9 +1,10 @@
 {
   "name": "Metoblizer",
-  "title": "Metoblizer - Log Aggregator",
   "order": 950,
   "depends": {
-    "acl": ["luci-app-secubox"],
+    "acl": [
+      "luci-app-secubox"
+    ],
     "uci": {}
   },
   "entries": [
@@ -13,5 +14,10 @@
       "order": 1,
       "icon": "scroll"
     }
-  ]
+  ],
+  "id": "metoblizer",
+  "category": "mind",
+  "icon": "🧠",
+  "path": "/metoblizer/",
+  "description": ""
 }

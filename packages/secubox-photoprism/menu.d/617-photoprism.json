@@ -1,8 +1,9 @@
 {
-    "name": "PhotoPrism",
-    "path": "/photoprism/",
-    "icon": "📷",
-    "category": "apps",
-    "order": 617,
-    "description": "Photo management and AI recognition"
+  "name": "PhotoPrism",
+  "path": "/photoprism/",
+  "icon": "📷",
+  "category": "mesh",
+  "order": 617,
+  "description": "Photo management and AI recognition",
+  "id": "photoprism"
 }

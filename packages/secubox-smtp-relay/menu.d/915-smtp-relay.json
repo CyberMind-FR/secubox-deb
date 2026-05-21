@@ -1,7 +1,7 @@
 {
   "id": "smtp-relay",
   "name": "SMTP Relay",
-  "category": "services",
+  "category": "mesh",
   "icon": "envelope",
   "path": "/smtp-relay/",
   "order": 915,

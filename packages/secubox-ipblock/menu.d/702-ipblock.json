@@ -1,7 +1,7 @@
 {
   "id": "ipblock",
   "name": "IP Blocklist",
-  "category": "security",
+  "category": "wall",
   "icon": "🚫",
   "path": "/ipblock/",
   "order": 702,

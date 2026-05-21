@@ -1,7 +1,7 @@
 {
   "id": "nac",
   "name": "Client Guardian",
-  "category": "security",
+  "category": "auth",
   "icon": "👥",
   "path": "/nac/",
   "order": 130,

@@ -1,7 +1,7 @@
 {
   "id": "ad-guard",
   "name": "Ad Guard",
-  "category": "network",
+  "category": "wall",
   "icon": "🛡️",
   "path": "/ad-guard/",
   "order": 160,

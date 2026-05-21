@@ -1,7 +1,7 @@
 {
   "id": "iot-guard",
   "name": "IoT Guard",
-  "category": "security",
+  "category": "wall",
   "icon": "📡",
   "path": "/iot-guard/",
   "order": 150,

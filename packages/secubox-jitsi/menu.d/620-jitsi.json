@@ -3,7 +3,7 @@
   "name": "Jitsi Meet",
   "icon": "📹",
   "path": "/jitsi/",
-  "category": "apps",
+  "category": "mesh",
   "order": 620,
   "description": "Video conferencing and meetings"
 }

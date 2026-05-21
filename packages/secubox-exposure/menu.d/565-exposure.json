@@ -3,7 +3,7 @@
   "name": "Exposure",
   "icon": "🌐",
   "path": "/exposure/",
-  "category": "network",
+  "category": "wall",
   "order": 565,
   "description": "Unified exposure settings (Tor, SSL, DNS, Mesh)"
 }

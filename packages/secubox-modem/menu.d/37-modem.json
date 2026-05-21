@@ -3,7 +3,7 @@
   "name": "Modem",
   "icon": "📶",
   "path": "/modem/",
-  "category": "network",
+  "category": "mesh",
   "order": 37,
   "description": "LTE/5G modem management"
 }

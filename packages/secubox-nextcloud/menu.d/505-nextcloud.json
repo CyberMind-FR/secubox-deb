@@ -1,7 +1,7 @@
 {
   "id": "nextcloud",
   "name": "Nextcloud",
-  "category": "apps",
+  "category": "mesh",
   "icon": "☁️",
   "path": "/nextcloud/",
   "order": 505,

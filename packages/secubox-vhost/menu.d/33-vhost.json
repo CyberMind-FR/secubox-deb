@@ -1,7 +1,7 @@
 {
   "id": "vhost",
   "name": "Virtual Hosts",
-  "category": "network",
+  "category": "mesh",
   "icon": "🌍",
   "path": "/vhost/",
   "order": 230,

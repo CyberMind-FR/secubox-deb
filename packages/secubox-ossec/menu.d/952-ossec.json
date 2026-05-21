@@ -1,1 +1,9 @@
-{"id":"ossec","name":"OSSEC HIDS","icon":"🔒","path":"/ossec/","category":"security","order":952,"description":"Host intrusion detection"}
+{
+  "id": "ossec",
+  "name": "OSSEC HIDS",
+  "icon": "🔒",
+  "path": "/ossec/",
+  "category": "wall",
+  "order": 952,
+  "description": "Host intrusion detection"
+}

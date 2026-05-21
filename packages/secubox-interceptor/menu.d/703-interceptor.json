@@ -3,7 +3,7 @@
   "name": "Interceptor",
   "icon": "🎯",
   "path": "/interceptor/",
-  "category": "security",
+  "category": "wall",
   "order": 703,
   "description": "Traffic interception and analysis"
 }

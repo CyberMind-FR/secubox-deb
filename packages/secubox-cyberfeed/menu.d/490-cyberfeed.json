@@ -1,7 +1,7 @@
 {
   "id": "cyberfeed",
   "name": "CyberFeed",
-  "category": "security",
+  "category": "wall",
   "icon": "📡",
   "path": "/cyberfeed/",
   "order": 490,

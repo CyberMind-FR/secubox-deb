@@ -3,7 +3,7 @@
   "name": "WebRadio",
   "icon": "📻",
   "path": "/webradio/",
-  "category": "apps",
+  "category": "mesh",
   "order": 611,
   "description": "Internet radio streaming and recording"
 }

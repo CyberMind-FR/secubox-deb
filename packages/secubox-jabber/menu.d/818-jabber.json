@@ -1,1 +1,9 @@
-{"id":"jabber","name":"Jabber","icon":"💬","path":"/jabber/","category":"apps","order":818,"description":"XMPP messaging server"}
+{
+  "id": "jabber",
+  "name": "Jabber",
+  "icon": "💬",
+  "path": "/jabber/",
+  "category": "mesh",
+  "order": 818,
+  "description": "XMPP messaging server"
+}

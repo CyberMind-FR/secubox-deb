@@ -1,7 +1,7 @@
 {
   "id": "localrecall",
   "name": "Localrecall",
-  "category": "security",
+  "category": "mind",
   "icon": "🧠",
   "path": "/localrecall/",
   "order": 120,

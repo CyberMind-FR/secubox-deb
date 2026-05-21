@@ -3,7 +3,7 @@
   "name": "Traffic Shaping",
   "icon": "📊",
   "path": "/traffic/",
-  "category": "network",
+  "category": "mesh",
   "order": 36,
   "description": "TC/CAKE QoS traffic shaping per interface"
 }

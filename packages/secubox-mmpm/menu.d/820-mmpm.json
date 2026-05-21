@@ -1,1 +1,9 @@
-{"id":"mmpm","name":"MMPM","icon":"📦","path":"/mmpm/","category":"apps","order":820,"description":"MagicMirror Package Manager"}
+{
+  "id": "mmpm",
+  "name": "MMPM",
+  "icon": "📦",
+  "path": "/mmpm/",
+  "category": "mesh",
+  "order": 820,
+  "description": "MagicMirror Package Manager"
+}

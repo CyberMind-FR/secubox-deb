@@ -1,7 +1,7 @@
 {
   "id": "avatar",
   "name": "Identity Manager",
-  "category": "users",
+  "category": "mesh",
   "icon": "👤",
   "path": "/avatar/",
   "order": 470,

@@ -1,7 +1,7 @@
 {
   "id": "network-anomaly",
   "name": "Network-anomaly",
-  "category": "security",
+  "category": "wall",
   "icon": "📊",
   "path": "/network-anomaly/",
   "order": 140,

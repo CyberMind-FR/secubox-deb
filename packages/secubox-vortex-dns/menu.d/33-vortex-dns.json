@@ -1,7 +1,7 @@
 {
   "id": "vortex-dns",
   "name": "Vortex DNS",
-  "category": "network",
+  "category": "mesh",
   "icon": "🌀",
   "path": "/vortex-dns/",
   "order": 33,

@@ -1,9 +1,10 @@
 {
-  "title": "Lyrion",
   "subtitle": "Music server",
   "icon": "fa-music",
-  "url": "/lyrion/",
-  "section": "hosting",
   "order": 80,
-  "module": "lyrion"
+  "id": "lyrion",
+  "name": "Lyrion",
+  "path": "/lyrion/",
+  "category": "mesh",
+  "description": ""
 }

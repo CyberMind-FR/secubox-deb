@@ -1,9 +1,10 @@
 {
-  "title": "Zigbee",
   "subtitle": "Mesh manager (z2m)",
   "icon": "fa-microchip",
-  "url": "/zigbee/",
-  "section": "hosting",
   "order": 85,
-  "module": "zigbee"
+  "id": "zigbee",
+  "name": "Zigbee",
+  "path": "/zigbee/",
+  "category": "mesh",
+  "description": ""
 }

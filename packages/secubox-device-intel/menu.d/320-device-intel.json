@@ -1,7 +1,7 @@
 {
   "id": "device-intel",
   "name": "Device Intel",
-  "category": "monitoring",
+  "category": "mind",
   "icon": "🔬",
   "path": "/device-intel/",
   "order": 320,

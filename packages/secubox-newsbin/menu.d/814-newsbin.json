@@ -1,8 +1,9 @@
 {
-    "name": "Newsbin",
-    "path": "/newsbin/",
-    "icon": "📥",
-    "category": "apps",
-    "order": 814,
-    "description": "Usenet downloader management"
+  "name": "Newsbin",
+  "path": "/newsbin/",
+  "icon": "📥",
+  "category": "mesh",
+  "order": 814,
+  "description": "Usenet downloader management",
+  "id": "newsbin"
 }
