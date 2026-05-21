@@ -1,3 +1,16 @@
+secubox-core (1.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * systemd/secubox-runtime.service: stop fighting tmpfiles.d. The old
+    ExecStart sequence ran `mkdir + chown secubox:secubox + chmod 775`
+    on /run/secubox AFTER tmpfiles.d had already created it `1777
+    root:root`. Result on every reboot: /run/secubox loses world +x,
+    nginx workers can't reach the secubox-*.sock files, EVERY upstream
+    returns 502 (#151 + observed post-freeze on 2026-05-21). New unit
+    only re-applies the canonical tmpfiles rule and ordered After=
+    systemd-tmpfiles-setup.service. Closes #151.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 14:55:00 +0000
+
 secubox-core (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * Ship /etc/systemd/system/nftables.service.d/override.conf so that

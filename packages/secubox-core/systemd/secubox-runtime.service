@@ -1,15 +1,22 @@
 [Unit]
-Description=SecuBox Runtime Directory Setup
+Description=SecuBox Runtime Directory Setup (defers perms to tmpfiles.d)
 DefaultDependencies=no
 Before=secubox-hub.service secubox-portal.service secubox-p2p.service
-After=local-fs.target
+After=systemd-tmpfiles-setup.service local-fs.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# #151 + post-reboot freeze: the previous version chown'd /run/secubox to
+# secubox:secubox mode 775, which conflicts with the canonical tmpfiles.d
+# rule (`d /run/secubox 1777 root root -`). With 775 secubox:secubox the
+# other user (nginx / www-data) loses +x on the parent and can't reach the
+# socket files inside — every secubox-* upstream becomes a 502.
+#
+# Keep the directory-create as a safety net for boards whose tmpfiles
+# hasn't fired yet, then re-apply the canonical tmpfiles rule. NO chown.
 ExecStart=/bin/mkdir -p /run/secubox
-ExecStart=/bin/chown secubox:secubox /run/secubox
-ExecStart=/bin/chmod 775 /run/secubox
+ExecStart=/usr/bin/systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox.conf
 
 [Install]
 WantedBy=multi-user.target
