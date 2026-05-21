@@ -1,3 +1,13 @@
+secubox-zigbee (2.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * www/zigbee/index.html: layout fix. The shared sidebar.js injects a
+    `.global-menu-bar` (position:fixed, height:48px, z-index:998,
+    left:220px) at body top — page content was rendering under it.
+    Add `body { padding-top: 48px }` and adjust the grid sidebar column
+    from 260px to the canonical 220px. Closes #293.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 09:50:00 +0000
+
 secubox-zigbee (2.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Split SecuBox config module from the public z2m frontend (mirrors
