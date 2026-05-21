@@ -36,6 +36,12 @@ override_dh_auto_install:
 	               debian/secubox-core/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-runtime.service \
 	               debian/secubox-core/usr/lib/systemd/system/
+	# Drop-in override for nftables.service: tolerate missing nf_nat /
+	# nft_chain_nat kernel modules when those are BUILT-IN on the MOCHAbin
+	# custom kernel (#150 + lyrion-slimproto-after-reboot).
+	install -d debian/secubox-core/etc/systemd/system/nftables.service.d
+	install -m 644 systemd/nftables.service.d/override.conf \
+	               debian/secubox-core/etc/systemd/system/nftables.service.d/override.conf
 	# Create modular nginx directory (modules install their snippets here)
 	install -d debian/secubox-core/etc/nginx/secubox.d
 
