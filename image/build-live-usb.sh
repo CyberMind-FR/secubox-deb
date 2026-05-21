@@ -2951,8 +2951,8 @@ rm -rf "${ROOTFS}/tmp"/*
 # ── CRT-Style Boot Banner with Colors and Emojis ──────────────────────────────
 log "Creating colorful boot banners..."
 
-# Pre-login banner (/etc/issue) - use printf %b for real escape sequences
-printf '%b' "\e[38;5;214m
+# Pre-login banner (/etc/issue) - ROOT green per Charte §05.
+printf '%b' "\e[38;5;29m
    ██████ ███████  ██████ ██    ██ ██████   ██████  ██   ██
   ██      ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
   ███████ █████   ██      ██    ██ ██████  ██    ██   ███
