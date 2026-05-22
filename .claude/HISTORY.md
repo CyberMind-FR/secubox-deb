@@ -2,6 +2,43 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-22
+
+### MOCHAbin mPCIe slot J5 — EP06 GPIO investigation runbook (Issue #345)
+
+**Context:** PR #255's DTS patch wired the UTMI PHY to `cp0_usb3_1`, so the
+mPCIe slot's USB pipe is alive (4 USB buses on gk2 vs 2 before). But
+plugging an EP06-E still produces no enumeration: `lsusb` blank for the
+slot, `lspci -vvv` reports `DLActive-` on the PCIe side. Suspect: the
+slot's W_DISABLE# / PWR_EN / WAKE# control lines are not declared in
+the DTS, so they come up in whatever default state the SoC pad config
+leaves them — likely holding the modem powered-down. No MOCHAbin
+schematic in the repo to pin down which CP0 GPIO is wired to J5.
+
+**Done:**
+
+- **#345** — added `scripts/probe-mpcie-gpios.sh`: empirical sweep that
+  drives each *unrequested* CP0 GPIO line HIGH for a few seconds and
+  watches `dmesg` / `lsusb` for a new USB device. Skips any line marked
+  `[used]` by gpioinfo, uses libgpiod (`gpioset --mode=time` so the
+  line auto-restores to input on release). Three modes: `--baseline`
+  (snapshot only, no GPIO writes — safe to run anytime), `--line
+  gpiochipN K` (single line, useful once a candidate is found), or no
+  arg (full sweep across `gpiochip1` + `gpiochip2` = the two CP0
+  banks). Output to `/var/log/secubox/mpcie-probe-<ts>.log`.
+- Companion `docs/hardware/mochabin-mpcie-ep06-runbook.md` documenting
+  the hypothesis, the procedure step-by-step, and the DTS template
+  (`rfkill-gpio` block patterned after `cn9132-clearfog.dts` lines
+  69–122) to apply once a candidate GPIO is identified.
+
+**Validation:** `--baseline` smoke-tested on gk2 — produces correct
+gpioinfo dump, identifies the `[used]` lines (cp0_gpio0 line 0 "reset",
+line 12 "PHY reset", line 30 "shutdown", plus the SFP+ pca9554
+expander chip 3). Sweep deferred until the spare EP06 hardware arrives
+— sweeping with no mPCIe device in J5 yields no signal regardless of
+which GPIO drives W_DISABLE#.
+
+---
 ## 2026-05-21
 
 ### secubox-nextcloud v1.3.0 — reverse-proxy + SSO gating + move to 10.100.0.21 (Issue #280)
