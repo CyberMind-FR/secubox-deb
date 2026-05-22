@@ -48,6 +48,19 @@
     fieldLabel:    document.getElementById("field-label"),
     btnCancelAdd:  document.getElementById("btn-cancel-add"),
     toast:         document.getElementById("toast"),
+    // v0.3 scan control + observations
+    btnScanStart:    document.getElementById("btn-scan-start"),
+    btnScanStop:     document.getElementById("btn-scan-stop"),
+    scanFreqInput:   document.getElementById("scan-freq"),
+    scanStateDot:    document.getElementById("scan-state-dot"),
+    scanStateText:   document.getElementById("scan-state-text"),
+    scanFreqCell:    document.getElementById("scan-freq-cell"),
+    scanPidCell:     document.getElementById("scan-pid-cell"),
+    scanStartedCell: document.getElementById("scan-started-cell"),
+    scanStderrTail:  document.getElementById("scan-stderr-tail"),
+    obsCount:        document.getElementById("obs-count"),
+    obsTbody:        document.getElementById("obs-tbody"),
+    btnRefreshObs:   document.getElementById("btn-refresh-obs"),
   };
 
   // ── state ───────────────────────────────────────────────────────────
@@ -55,6 +68,8 @@
   let beepMuted = (localStorage.getItem(BEEP_MUTE_KEY) === "1");
   let _audioCtx = null;
   let _streamErrorTimer = null;
+  let _scanRunning = false;
+  let _scanPollTimer = null;
 
   // ── utils ───────────────────────────────────────────────────────────
   function fmtTime(epochSec) {
@@ -421,6 +436,123 @@
     });
   }
 
+  // ── scan control + observations (v0.3) ──────────────────────────────
+  function _formatScanTs(epoch) {
+    if (!epoch) return "—";
+    const d = new Date(epoch * 1000);
+    const pad = n => String(n).padStart(2, "0");
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function _renderScanStatus(st) {
+    const running = !!(st && st.running);
+    _scanRunning = running;
+    if (els.scanStateDot) {
+      els.scanStateDot.className = "dot " + (running ? "dot-live" : "dot-idle");
+    }
+    if (els.scanStateText) {
+      els.scanStateText.textContent = running ? "running" : "idle";
+    }
+    if (els.scanFreqCell) {
+      els.scanFreqCell.textContent = (st && st.freq) ? String(st.freq) : "—";
+    }
+    if (els.scanPidCell) {
+      els.scanPidCell.textContent = (st && st.pid) ? String(st.pid) : "—";
+    }
+    if (els.scanStartedCell) {
+      els.scanStartedCell.textContent = (st && st.started_at)
+        ? _formatScanTs(st.started_at) : "—";
+    }
+    if (els.scanStderrTail) {
+      const tail = (st && st.stderr_tail) ? String(st.stderr_tail) : "";
+      els.scanStderrTail.textContent = tail.length ? tail : "(no output)";
+    }
+    if (els.btnScanStart) els.btnScanStart.disabled = running;
+    if (els.btnScanStop)  els.btnScanStop.disabled  = !running;
+  }
+
+  async function loadScanStatus() {
+    try {
+      const st = await apiFetch("/scan/status");
+      _renderScanStatus(st);
+    } catch (e) {
+      if (els.scanStateDot) els.scanStateDot.className = "dot dot-down";
+      if (els.scanStateText) els.scanStateText.textContent = "error";
+      console.warn("scan status failed:", e);
+    }
+  }
+
+  async function startScan() {
+    const freq = (els.scanFreqInput && els.scanFreqInput.value || "").trim();
+    if (!freq) {
+      toast("Enter a frequency (e.g. 925.4M)", "warn");
+      return;
+    }
+    try {
+      const st = await apiFetch("/scan/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ freq: freq }),
+      });
+      _renderScanStatus(st);
+      toast("Scan started on " + freq, "ok");
+      // immediately refresh observations so the table comes alive
+      loadObservations();
+    } catch (e) {
+      toast("Start failed: " + e.message, "err");
+      loadScanStatus();
+    }
+  }
+
+  async function stopScan() {
+    try {
+      const st = await apiFetch("/scan/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      _renderScanStatus(st);
+      toast("Scan stopped", "ok");
+    } catch (e) {
+      toast("Stop failed: " + e.message, "err");
+      loadScanStatus();
+    }
+  }
+
+  function _buildObsRow(s) {
+    const tr = document.createElement("tr");
+    const fmt = (v) => (v === null || v === undefined || v === "") ? "—" : String(v);
+    tr.innerHTML =
+      `<td class="col-cell">${escapeHtml(s.cell_id)}</td>` +
+      `<td class="col-arfcn">${escapeHtml(fmt(s.arfcn))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(s.mcc))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(s.mnc))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(s.lac))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(s.ci))}</td>` +
+      `<td class="mono">${escapeHtml(fmtDateTime(s.first_seen))}</td>` +
+      `<td class="mono">${escapeHtml(fmtDateTime(s.last_seen))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(s.sighting_count))}</td>`;
+    return tr;
+  }
+
+  async function loadObservations() {
+    try {
+      const data = await apiFetch("/observations?limit=200");
+      const sightings = (data && data.sightings) || [];
+      els.obsTbody.innerHTML = "";
+      if (sightings.length === 0) {
+        els.obsTbody.innerHTML =
+          '<tr class="empty"><td colspan="9">no observations yet — start a scan</td></tr>';
+      } else {
+        sightings.forEach((s) => els.obsTbody.appendChild(_buildObsRow(s)));
+      }
+      if (els.obsCount) els.obsCount.textContent = String(sightings.length);
+    } catch (e) {
+      console.warn("observations load failed:", e);
+      // soft-fail: don't toast on every 10s tick
+    }
+  }
+
   // ── modal ───────────────────────────────────────────────────────────
   function openModal() {
     els.modal.classList.add("show");
@@ -505,6 +637,11 @@
     if (els.btnClearLogs) {
       els.btnClearLogs.addEventListener("click", clearLogs);
     }
+
+    // v0.3 scan control + observations
+    if (els.btnScanStart) els.btnScanStart.addEventListener("click", startScan);
+    if (els.btnScanStop)  els.btnScanStop.addEventListener("click", stopScan);
+    if (els.btnRefreshObs) els.btnRefreshObs.addEventListener("click", loadObservations);
   }
 
   // ── init ────────────────────────────────────────────────────────────
@@ -516,6 +653,17 @@
     loadTrusted();
     startAlertStream();
     startJournalStream();
+    loadScanStatus();
+    loadObservations();
+    // Background polling every 10s. When no scan is running, we still poll
+    // /scan/status (cheap) so the UI catches an externally-started scan,
+    // but we skip /observations to avoid hitting sqlite for nothing — the
+    // table is already at its post-scan terminal state and the user can
+    // hit Refresh manually.
+    _scanPollTimer = setInterval(() => {
+      loadScanStatus();
+      if (_scanRunning) loadObservations();
+    }, 10000);
   }
 
   if (document.readyState === "loading") {

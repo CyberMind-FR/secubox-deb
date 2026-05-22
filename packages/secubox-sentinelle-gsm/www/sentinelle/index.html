@@ -36,6 +36,8 @@
     <a href="#alerts" class="nav-link">Alerts</a>
     <a href="#trusted" class="nav-link">Trusted phones</a>
     <a href="#logs" class="nav-link">Live logs</a>
+    <a href="#scan-control" class="nav-link">Scan control</a>
+    <a href="#observations" class="nav-link">Observations</a>
     <a href="#actions" class="nav-link">Actions</a>
   </nav>
   <div class="local-nav-foot">
@@ -148,6 +150,83 @@
       Tail of <code>journalctl -u secubox-sentinelle-gsm -f</code>. The
       stream auto-reconnects on transient network errors.
     </p>
+  </section>
+
+  <!-- SCAN CONTROL panel (v0.3) ----------------------------------------- -->
+  <section id="scan-control" class="panel">
+    <div class="panel-head">
+      <h2>Scan control</h2>
+      <div class="panel-actions">
+        <button class="btn primary" id="btn-scan-start" type="button">Start</button>
+        <button class="btn danger" id="btn-scan-stop" type="button">Stop</button>
+      </div>
+    </div>
+    <div class="scan-status-row" aria-live="polite">
+      <div class="status-cell">
+        <div class="status-label">State</div>
+        <div class="status-value">
+          <span id="scan-state-dot" class="dot dot-idle" aria-hidden="true"></span>
+          <span id="scan-state-text">idle</span>
+        </div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">Freq</div>
+        <div class="status-value mono"><span id="scan-freq-cell">—</span></div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">PID</div>
+        <div class="status-value mono"><span id="scan-pid-cell">—</span></div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">Started</div>
+        <div class="status-value mono"><span id="scan-started-cell">—</span></div>
+      </div>
+    </div>
+    <div class="scan-input-row">
+      <label class="field">
+        <span class="field-label">Frequency</span>
+        <input type="text" id="scan-freq" name="freq"
+               placeholder="925.4M" value="925.4M" autocomplete="off">
+        <small class="field-help">
+          GSM-900 downlink: ARFCN 0 = 935 MHz, ARFCN 124 = 959.8 MHz, step 0.2 MHz.
+          Default <code>925.4M</code> corresponds to E-GSM 900 ARFCN 975.
+        </small>
+      </label>
+    </div>
+    <details class="scan-stderr-details">
+      <summary>stderr (last 2 KB)</summary>
+      <pre id="scan-stderr-tail" class="scan-stderr">(no output)</pre>
+    </details>
+  </section>
+
+  <!-- OBSERVATIONS panel (v0.3) ----------------------------------------- -->
+  <section id="observations" class="panel">
+    <div class="panel-head">
+      <h2>Observations <span class="badge" id="obs-count">0</span></h2>
+      <div class="panel-actions">
+        <button class="btn" id="btn-refresh-obs" type="button">Refresh</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="obs-table">
+        <thead>
+          <tr>
+            <th>Cell ID</th>
+            <th>ARFCN</th>
+            <th>MCC</th>
+            <th>MNC</th>
+            <th>LAC</th>
+            <th>CI</th>
+            <th>First seen</th>
+            <th>Last seen</th>
+            <th>Sightings</th>
+          </tr>
+        </thead>
+        <tbody id="obs-tbody">
+          <tr class="empty"><td colspan="9">no observations yet — start a scan</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <!-- ACTIONS panel ------------------------------------------------------ -->

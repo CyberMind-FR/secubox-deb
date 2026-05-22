@@ -143,3 +143,43 @@ def test_alert_sink_refuses_plaintext_imsi(tmp_path):
     )
     with pytest.raises(ValueError, match="plaintext-IMSI"):
         sink.write(a)
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 — Observation + Sighting + PagingEvent privacy invariants
+# ---------------------------------------------------------------------------
+
+
+def test_observation_has_no_plaintext_fields():
+    from sentinelle_gsm.gsmtap_listener import Observation
+    from dataclasses import fields
+    names = {f.name for f in fields(Observation)}
+    forbidden = {"imsi", "tmsi", "imei", "msisdn", "iccid", "subscriber_id"}
+    assert names.isdisjoint(forbidden), \
+        f"Observation has forbidden plaintext-identifier fields: {names & forbidden}"
+    assert "subscriber_hash" in names, \
+        "Observation must expose subscriber_hash for HMAC-truncated identifiers"
+
+
+def test_paging_event_only_stores_hash():
+    from sentinelle_gsm.observations import PagingEvent
+    from dataclasses import fields
+    names = {f.name for f in fields(PagingEvent)}
+    forbidden = {"imsi", "tmsi", "imei", "msisdn", "iccid"}
+    assert names.isdisjoint(forbidden), \
+        f"PagingEvent has forbidden plaintext-identifier fields: {names & forbidden}"
+    assert "subscriber_hash" in names
+
+
+def test_observations_db_refuses_plaintext_imsi(tmp_path):
+    from sentinelle_gsm.observations import ObservationsDB, PagingEvent
+    import pytest
+    db = ObservationsDB(tmp_path / "obs.db")
+    e = PagingEvent(
+        ts=0.0,
+        cell_id="208-01-100-1",
+        subscriber_hash="208201234567890",   # 15 digits = plaintext IMSI shape
+        request_type="paging-imsi",
+    )
+    with pytest.raises(ValueError, match="plaintext-IMSI"):
+        db.record_paging(e)
