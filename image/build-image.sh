@@ -1235,12 +1235,12 @@ printf '%b' "\e[38;5;29m
        ██ ██      ██      ██    ██ ██   ██ ██    ██  ██ ██
   ███████ ███████  ██████  ██████  ██████   ██████  ██   ██
 \e[0m
-\e[38;5;45m  ⚡ CyberMind Security Platform\e[0m  \e[38;5;82mv${SECUBOX_VERSION}\e[0m  \e[38;5;242m\\\\l @ \\\\n\e[0m
+\e[38;5;45m  >> CyberMind Security Platform\e[0m  \e[38;5;82mv${SECUBOX_VERSION}\e[0m  \e[38;5;242m\\\\l @ \\\\n\e[0m
 \e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
-\e[38;5;250m  🔐 Default: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
-\e[38;5;250m  🌐 Web UI: \e[38;5;45mhttps://<IP>:9443\e[0m
-\e[38;5;250m  📡 SSH:    \e[38;5;45mport 22\e[0m
+\e[38;5;250m  [user] Default: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
+\e[38;5;250m  [web]  Web UI: \e[38;5;45mhttps://<IP>:9443\e[0m
+\e[38;5;250m  [ssh]  SSH:    \e[38;5;45mport 22\e[0m
 
 \e[38;5;242m─────────────────────────────────────────────────────────────\e[0m
 
