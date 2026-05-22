@@ -26,6 +26,7 @@ case "$1" in
     systemctl daemon-reload
     systemctl enable secubox-streamlit.service
     systemctl start secubox-streamlit.service || true
+    systemctl enable --now secubox-streamlit-idle.timer || true
     ;;
 esac
 #DEBHELPER#

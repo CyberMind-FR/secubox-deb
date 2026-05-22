@@ -1,3 +1,24 @@
+secubox-streamlit (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * streamlitctl: new `app idle-check` + `app wake` subcommands.
+    idle-check stops apps with zero ESTABLISHED connections for the
+    configured timeout (default 30 min). wake lazily restarts a
+    stopped app and polls until its port is listening.
+  * systemd: new secubox-streamlit-idle.timer fires the sweep every
+    5 minutes (oneshot service). Enabled by postinst, disabled by
+    prerm; both are idempotent.
+  * api: new POST /api/v1/streamlit/apps/{name}/wake endpoint that
+    shells to `streamlitctl app wake`. Returns 200 (running/started),
+    404 (no such app), 502 (streamlitctl missing), 504 (wake timed
+    out). Covered by 3 pytest cases under api/tests/test_idle.py.
+  * config: new [idle] section in streamlit.toml.example (postinst
+    seeds it as /etc/secubox/streamlit.toml on fresh installs;
+    existing configs keep their content and inherit the built-in
+    defaults via the _idle_config helper).
+  * Memory win on gk2: ~80–150 MB freed per dormant app. Closes #331.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 06:00:00 +0000
+
 secubox-streamlit (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * streamlitctl: add `app info <name>` and `app restart <name>` verbs

@@ -30,6 +30,58 @@ lxc_running() { lxc-info -n "$LXC_NAME" -s 2>/dev/null | grep -q "RUNNING"; }
 lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
 
 # ─────────────────────────────────────────────────────────────────────
+# IDLE-TRACKING HELPERS (#331)
+# ─────────────────────────────────────────────────────────────────────
+
+IDLE_STATE_DIR="/var/lib/secubox/streamlit/idle"
+
+# Read [idle] settings from /etc/secubox/streamlit.toml with safe defaults.
+# Note: `grep | head | cut | tr` always exits 0 (tr's status) even when grep
+# matched nothing, so a trailing `|| echo $default` never fires and missing
+# keys silently returned empty. Capture explicitly and fall back via
+# `${v:-$default}` for the missing-or-blank case.
+_idle_config() {
+    local key="$1" default="$2" v
+    v=$(grep -E "^\s*${key}\s*=" "$CONF_PATH" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d ' "')
+    echo "${v:-$default}"
+}
+
+# Returns 0 if the app is listening on its port INSIDE the LXC, else 1.
+_app_running() {
+    local name="$1"
+    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    [ -z "$port" ] && return 1
+    lxc_running || return 1
+    lxc-attach -n "$LXC_NAME" -- ss -tln "sport = :$port" 2>/dev/null \
+        | awk -v p="$port" 'NR>1 && $4 ~ ":"p"$" {found=1} END {exit found?0:1}'
+}
+
+# Returns the count of ESTABLISHED connections to the app's port (inside LXC).
+_app_active_conns() {
+    local name="$1"
+    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    [ -z "$port" ] && { echo 0; return; }
+    lxc_running || { echo 0; return; }
+    lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" 2>/dev/null \
+        | awk 'NR>1' | wc -l
+}
+
+# Last-activity epoch for the app (file mtime). Touched by cmd_app_idle_check
+# when ESTABLISHED>0; created at start time by cmd_app_start.
+_app_last_active() {
+    local name="$1"
+    local f="$IDLE_STATE_DIR/$name.state"
+    [ -f "$f" ] || { echo 0; return; }
+    stat -c %Y "$f"
+}
+
+_app_touch_active() {
+    local name="$1"
+    mkdir -p "$IDLE_STATE_DIR"
+    touch "$IDLE_STATE_DIR/$name.state"
+}
+
+# ─────────────────────────────────────────────────────────────────────
 # CONTAINER MANAGEMENT
 # ─────────────────────────────────────────────────────────────────────
 
@@ -400,6 +452,7 @@ cmd_app_start() {
     "
 
     log "App $name started"
+    _app_touch_active "$name"
 }
 
 cmd_app_stop() {
@@ -421,6 +474,75 @@ cmd_app_stop() {
     "
 
     log "App $name stopped"
+}
+
+cmd_app_idle_check() {
+    local enabled; enabled=$(_idle_config "enabled" "true")
+    [ "$enabled" = "true" ] || { log "idle-check disabled in $CONF_PATH"; return 0; }
+
+    local timeout_min; timeout_min=$(_idle_config "timeout_minutes" "30")
+    local timeout_sec=$(( timeout_min * 60 ))
+    local now; now=$(date +%s)
+
+    local stopped=0 active=0 idle=0
+    for app_dir in "$APPS_PATH"/*/; do
+        [ -d "$app_dir" ] || continue
+        local name; name=$(basename "$app_dir")
+        [ "$name" = "*" ] && continue
+
+        _app_running "$name" || continue
+
+        local conns; conns=$(_app_active_conns "$name")
+        if [ "$conns" -gt 0 ]; then
+            _app_touch_active "$name"
+            active=$(( active + 1 ))
+            continue
+        fi
+
+        local last; last=$(_app_last_active "$name")
+        [ "$last" -eq 0 ] && { _app_touch_active "$name"; continue; }
+        local idle_sec=$(( now - last ))
+
+        if [ "$idle_sec" -ge "$timeout_sec" ]; then
+            log "idle-stop: $name (idle ${idle_sec}s >= ${timeout_sec}s)"
+            cmd_app_stop "$name" >/dev/null 2>&1 || true
+            stopped=$(( stopped + 1 ))
+        else
+            idle=$(( idle + 1 ))
+        fi
+    done
+
+    log "idle-check: active=$active idle=$idle stopped=$stopped"
+}
+
+cmd_app_wake() {
+    local name="$1"
+    local wait_sec="${2:-30}"
+    [ -z "$name" ] && { error "Usage: streamlitctl app wake <name> [wait_seconds]"; return 2; }
+    [ -d "$APPS_PATH/$name" ] || { error "App not found: $name"; return 2; }
+
+    if _app_running "$name"; then
+        _app_touch_active "$name"
+        log "wake: $name already running"
+        return 0
+    fi
+
+    log "wake: starting $name (will wait up to ${wait_sec}s)"
+    cmd_app_start "$name" >/dev/null 2>&1 || { error "wake: failed to start $name"; return 1; }
+
+    local elapsed=0
+    while [ "$elapsed" -lt "$wait_sec" ]; do
+        if _app_running "$name"; then
+            _app_touch_active "$name"
+            log "wake: $name listening after ${elapsed}s"
+            return 0
+        fi
+        sleep 1
+        elapsed=$(( elapsed + 1 ))
+    done
+
+    error "wake: $name did not come up within ${wait_sec}s"
+    return 1
 }
 
 cmd_app_deploy() {
@@ -733,7 +855,9 @@ case "${1:-}" in
 
     app)
         case "${2:-}" in
-            list)   cmd_app_list ;;
+            list)       cmd_app_list ;;
+            idle-check) cmd_app_idle_check ;;
+            wake)       cmd_app_wake "$3" "$4" ;;
             start)  cmd_app_start "$3" "$4" ;;
             stop)   cmd_app_stop "$3" ;;
             deploy) cmd_app_deploy "$3" "$4" ;;
@@ -741,7 +865,7 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|start|stop|restart|deploy|remove|logs|info} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
         esac
         ;;
 
