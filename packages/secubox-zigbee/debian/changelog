@@ -1,3 +1,18 @@
+secubox-zigbee (2.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * lib/zigbee/install-lxc.sh: zigbee2mqtt.service gains two
+    ExecStartPre `chmod 0666` lines for /dev/ttyUSB0 and /dev/ttyACM0.
+    Bind-mounted tty nodes inherit the host's root:dialout 0660 perms;
+    the host `dialout` GID does NOT map to the LXC's `zigbee2mqtt`
+    user (different user namespace), so without the chmod the z2m
+    user can't open the device even though the node exists. This was
+    the v2.5.5 follow-up gotcha — the live board needed `chmod 666`
+    on the device after lxc-device add for z2m to actually come up.
+    Idempotent; `|| true` keeps the unit healthy when the dongle is
+    unplugged.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 05:35:00 +0000
+
 secubox-zigbee (2.5.5-1~bookworm1) bookworm; urgency=medium
 
   * lib/zigbee/install-lxc.sh: bind /dev/ttyUSB0 and /dev/ttyACM0 into
