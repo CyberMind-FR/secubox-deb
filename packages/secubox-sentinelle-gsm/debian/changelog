@@ -1,3 +1,30 @@
+secubox-sentinelle-gsm (0.3.4-1~bookworm1) bookworm; urgency=medium
+
+  * sbin/secubox-grgsm-livemon-shim: NEW thin Python wrapper that
+    monkey-patches gnuradio.gsm.device.match() before runpy()-ing
+    grgsm_livemon_headless. Closes the actual root cause of every
+    livemon crash since v0.3.0: gr-gsm 1.0.0 (Debian bookworm) calls
+    `k in dev` and `dev[k]` against an osmosdr.device_t, but
+    libgnuradio-osmosdr 0.2.4 ships device_t as opaque (only
+    to_string() works), so every invocation crashes with
+    `TypeError: argument of type 'osmosdr.osmosdr_python.device_t'
+    is not iterable`. The shim parses to_string() into a dict and
+    runs the original matching logic against that.
+  * lib/sentinelle_gsm/livemon_runner.py: LivemonRunner now prefers
+    /usr/libexec/secubox/secubox-grgsm-livemon-shim when present,
+    falls back to /usr/bin/grgsm_livemon_headless otherwise. The
+    shim's CLI is identical to the upstream's (runpy passes argv
+    through), so no other Runner state changes.
+  * debian/rules: install the shim into /usr/libexec/secubox/.
+  * Validated on gk2 (kernel 6.12.85, gr-gsm 1.0.0~20220727-1+b3,
+    libgnuradio-osmosdr0.2.0 0.2.4-1): gr-osmosdr finds the
+    RTL2838UHIDIR (`Using device #0 Realtek RTL2838UHIDIR SN:
+    00000001`) and begins sample capture (`Allocating 15 zero-copy
+    buffers`).
+  * Closes #354. Refs #353 #351.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 21:00:00 +0000
+
 secubox-sentinelle-gsm (0.3.3-1~bookworm1) bookworm; urgency=medium
 
   * lib/sentinelle_gsm/livemon_runner.py: drop the `--args=rtl=0` default

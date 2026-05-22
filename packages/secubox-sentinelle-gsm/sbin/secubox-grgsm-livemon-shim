@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: secubox-grgsm-livemon-shim
+
+Monkey-patches gr-gsm 1.0.0's gnuradio.gsm.device.match() so it works
+against libgnuradio-osmosdr 0.2.4's opaque osmosdr.device_t, then
+exec()s grgsm_livemon_headless in-process.
+
+Why: the Debian bookworm packaging of gr-gsm assumes device_t is dict-
+like (does `k in dev`, `dev[k]`), but osmosdr 0.2.4 exposes device_t as
+an opaque object whose only useful method is to_string() (a comma-
+separated "key=value,…" string). Result: every grgsm_livemon_headless
+invocation crashes with `TypeError: argument of type
+'osmosdr.osmosdr_python.device_t' is not iterable`. Patching at runtime
+is the cleanest path — no dpkg-divert, no system-file modification.
+
+Validated on gk2 (kernel 6.12.85, libgnuradio-osmosdr0.2.0 0.2.4-1,
+gr-gsm 1.0.0~20220727-1+b3): gr-osmosdr finds the RTL2838UHIDIR and
+begins sample capture (`Using device #0 Realtek RTL2838UHIDIR SN:
+00000001`, `Allocating 15 zero-copy buffers`).
+
+Closes #354. Refs #353 #351.
+"""
+
+import gnuradio.gsm.device as _gsm_device
+
+
+def _patched_match(dev, filters):
+    """Replacement for gnuradio.gsm.device.match() that operates on
+    dev.to_string() instead of subscripting dev directly. Same matching
+    semantics (every k/v in every filter must match in the dev's args)."""
+    try:
+        raw = dev.to_string()
+    except AttributeError:
+        return False
+    kv = {}
+    for item in raw.split(","):
+        if "=" not in item:
+            continue
+        k, v = item.split("=", 1)
+        kv[k.strip()] = v.strip().strip("'\"")
+    for f in filters:
+        for k, v in f.items():
+            if k not in kv or kv[k] != v:
+                break
+        else:
+            return True
+    return False
+
+
+_gsm_device.match = _patched_match
+
+
+import runpy
+runpy.run_path("/usr/bin/grgsm_livemon_headless", run_name="__main__")

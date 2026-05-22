@@ -84,7 +84,19 @@ class LivemonRunner:
         # `_done` is True once the watcher observes the child exited.
         self._watcher_task: Optional[asyncio.Task] = None
         self._done: bool = False
-        self._bin = shutil.which("grgsm_livemon_headless") or "/usr/bin/grgsm_livemon_headless"
+        # v0.3.4: prefer the gr-gsm device.py monkey-patch shim shipped by
+        # this package (closes #354 — upstream gr-gsm 1.0.0 device.py is
+        # incompatible with libgnuradio-osmosdr 0.2.4, both crash with
+        # `TypeError: argument of type 'osmosdr.device_t' is not iterable`).
+        # Falls back to the upstream binary on systems where the shim isn't
+        # installed (dev, tests, future versions that don't need the patch).
+        # The shim is a thin runpy.run_path() wrapper, so its CLI is
+        # identical to the upstream's — no other Runner state changes.
+        shim = "/usr/libexec/secubox/secubox-grgsm-livemon-shim"
+        if os.path.isfile(shim) and os.access(shim, os.X_OK):
+            self._bin = shim
+        else:
+            self._bin = shutil.which("grgsm_livemon_headless") or "/usr/bin/grgsm_livemon_headless"
 
     def status(self) -> ScanStatus:
         # v0.3.2 fix: "running" now means proc exists AND watcher hasn't
