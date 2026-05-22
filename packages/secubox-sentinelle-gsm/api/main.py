@@ -46,7 +46,10 @@ from sentinelle_gsm.gsmtap_listener import GsmtapListener  # noqa: E402
 from sentinelle_gsm.l3_decode import (                   # noqa: E402
     L3Decode, MID_TYPE_IMSI, MID_TYPE_TMSI,
 )
+from sentinelle_gsm.livemon_fleet import LivemonFleet, RunnerSummary  # noqa: E402
 from sentinelle_gsm.livemon_runner import LivemonRunner, detect_rtlsdr_usb  # noqa: E402
+from sentinelle_gsm.scan_auto_job import JobRegistry, ScanAutoJob  # noqa: E402
+from sentinelle_gsm.scanner import CellInfo, scan_band, select_diverse  # noqa: E402
 from sentinelle_gsm.observations import (                # noqa: E402
     ObservationsDB, PagingEvent, Sighting,
 )
@@ -133,6 +136,21 @@ _livemon: Optional[LivemonRunner] = None
 _listener: Optional[GsmtapListener] = None
 _obs_db: Optional[ObservationsDB] = None
 _consume_task: Optional[asyncio.Task] = None
+# v0.3.5: multi-cell fleet, populated only by /scan/auto. Coexists with
+# the single-runner path on /scan/start — at most one of them is alive
+# at any moment (both 409 if the other is active).
+# v0.3.6: now populated by the async-job driver coroutine when it
+# transitions to `starting_fleet`. Cleared when /scan/stop or the job's
+# cancel path tears the fleet down. Same lifetime as before, just
+# managed from the background task instead of the request thread.
+_fleet: Optional[LivemonFleet] = None
+# v0.3.6: in-memory async-job registry for /scan/auto. The HTTP
+# handler posts a ScanAutoJob and returns immediately; a background
+# coroutine drives state transitions. Polling endpoints read from this
+# registry. Not durable across service restarts on purpose — the
+# observations DB owns historical sightings; this is just operational
+# state for "what's happening right now".
+_job_registry: JobRegistry = JobRegistry(max_history=10)
 
 OBSERVATIONS_DB_PATH = Path("/var/lib/secubox/sentinelle-gsm/observations.db")
 
@@ -687,6 +705,13 @@ async def scan_start(body: ScanStartBody) -> dict:
     global _consume_task
     if _consume_task is not None and not _consume_task.done():
         raise HTTPException(409, "scan already running")
+    if _fleet is not None:
+        raise HTTPException(409, "fleet scan already running — stop first")
+    # v0.3.6: also 409 if a scan-auto job is in flight even before it
+    # has spawned the fleet (state=scanning has no _fleet yet, but
+    # starting a single-runner would stomp on the scanner's 4729 bind).
+    if _job_registry.active() is not None:
+        raise HTTPException(409, "scan-auto job in flight — stop first")
     listener = get_listener()
     runner = get_livemon()
     try:
@@ -715,8 +740,14 @@ async def scan_start(body: ScanStartBody) -> dict:
 
 @app.post("/scan/stop", dependencies=[Depends(require_jwt)])
 async def scan_stop() -> dict:
-    """Cancel consume task, then stop runner + listener (in that order)."""
-    global _consume_task
+    """Cancel consume task, then stop runner(s) + listener.
+
+    v0.3.5: stops whichever path is active — the /scan/start single
+    runner OR the /scan/auto fleet. Idempotent for both.
+    v0.3.6: also marks the active scan-auto job as `stopped` so its
+    payload finishes the transition out of `running`.
+    """
+    global _consume_task, _fleet
     if _consume_task is not None:
         _consume_task.cancel()
         try:
@@ -728,9 +759,295 @@ async def scan_stop() -> dict:
         _consume_task = None
     runner = get_livemon()
     listener = get_listener()
+    fleet_finals: list[RunnerSummary] = []
+    if _fleet is not None:
+        fleet_finals = await _fleet.stop_all()
+        _fleet = None
+    # v0.3.6: if a job was running, mark it stopped. We don't cancel
+    # the task — it's already past the await-point that would block
+    # (running state holds no async work; the next state transition
+    # happens here, from outside the task).
+    active = _job_registry.active()
+    if active is not None and active.state == "running":
+        active.fleet = None
+        active.set_state("stopped")
     status = await runner.stop()
     await listener.stop()
+    if fleet_finals:
+        # Fleet was the active path; surface every runner's final state.
+        return {
+            "mode": "fleet",
+            "runners": [_runner_summary_payload(s) for s in fleet_finals],
+        }
     return _scan_status_payload(status)
+
+
+class ScanAutoBody(BaseModel):
+    # v0.3.5: discover cells with grgsm_scanner, then run N livemons in
+    # parallel. Defaults match the IMSI-catcher scan-and-livemon
+    # project: GSM900 (the band most common for IMSI catchers in EU
+    # rural/suburban areas) and 3 cells (one per French carrier).
+    band: str = "GSM900"
+    max_cells: int = 3
+    gain: Optional[float] = None
+    ppm: Optional[float] = None
+    samp_rate: Optional[str] = None
+    speed: Optional[int] = None
+    scan_timeout: float = 180.0
+
+
+def _cell_payload(c: CellInfo) -> dict:
+    return {
+        "arfcn": c.arfcn,
+        "freq": c.freq,
+        "cid": c.cid,
+        "lac": c.lac,
+        "mcc": c.mcc,
+        "mnc": c.mnc,
+        "power": c.power,
+    }
+
+
+def _runner_summary_payload(s: RunnerSummary) -> dict:
+    return {
+        "cell": _cell_payload(s.cell),
+        "serverport": s.serverport,
+        "status": _scan_status_payload(s.status),
+    }
+
+
+def _job_payload(j: ScanAutoJob) -> dict:
+    """Render a ScanAutoJob as the JSON the polling endpoints emit.
+    Keeps internal fields (the asyncio.Task handle, the LivemonFleet
+    reference) out — those aren't serialisable and would leak
+    implementation details."""
+    return {
+        "id": j.id,
+        "state": j.state,
+        "params": j.params,
+        "started_at": j.started_at,
+        "finished_at": j.finished_at,
+        "cells_found": j.cells_found,
+        "cells_selected": [_cell_payload(c) for c in j.cells_selected],
+        "runners": [_runner_summary_payload(s) for s in j.runners],
+        "error": j.error,
+    }
+
+
+async def _drive_scan_auto_job(job: ScanAutoJob) -> None:
+    """Background coroutine that walks a ScanAutoJob through its state
+    machine.
+
+    Pre-conditions (enforced by the /scan/auto handler before spawning
+    this task):
+      - No other active job in the registry
+      - /scan/start single runner is idle
+      - max_cells >= 1
+
+    State transitions:
+      pending → scanning → starting_fleet → running   (happy path)
+                                       ↘ failed
+                            ↘ failed
+                            ↘ cancelled
+
+    Cleanup on every exit path: listener restarted (or left stopped
+    if the scan failed and there's no fleet to feed it), single
+    runner ensured idle, fleet stopped on cancel/failure.
+    """
+    global _consume_task, _fleet
+    listener = get_listener()
+    runner = get_livemon()
+
+    # Snapshot params for the scanner / fleet calls. The job stores
+    # them as a dict so the API can echo them on poll.
+    p = job.params
+
+    try:
+        # ── scanning ────────────────────────────────────────────────
+        job.set_state("scanning")
+        # Scanner hard-binds 4729; listener has to be down. Idempotent
+        # for unbound state.
+        await listener.stop()
+
+        cells = await scan_band(
+            band=p["band"],
+            gain=p.get("gain"),
+            ppm=p.get("ppm"),
+            samp_rate=p.get("samp_rate"),
+            speed=p.get("speed"),
+            timeout=p.get("scan_timeout", 600.0),
+        )
+        job.cells_found = len(cells)
+
+        if not cells:
+            # No cells found — restart listener so other endpoints
+            # behave normally, and finish clean.
+            try:
+                await listener.start()
+            except OSError:
+                pass
+            job.set_state("stopped")
+            return
+
+        chosen = select_diverse(cells, p["max_cells"])
+        job.cells_selected = chosen
+
+        # ── starting_fleet ──────────────────────────────────────────
+        job.set_state("starting_fleet")
+        try:
+            await listener.start()
+        except OSError as e:
+            raise RuntimeError(f"listener bind failed after scan: {e}")
+
+        # Defensive: single-runner should be idle (we 409'd in the
+        # handler), but call stop() just in case.
+        await runner.stop()
+
+        fleet = LivemonFleet(
+            gsmtap_port=getattr(listener, "port", 4729),
+        )
+        try:
+            summaries = await fleet.start(
+                chosen,
+                gain=p.get("gain"),
+                ppm=p.get("ppm"),
+                samp_rate=p.get("samp_rate"),
+            )
+        except Exception as e:
+            # Don't leave the listener up if the fleet refused to
+            # start — nothing's emitting GSMTAP and we'd just leak
+            # the socket.
+            await listener.stop()
+            raise RuntimeError(f"fleet.start failed: {e}")
+
+        # ── running ─────────────────────────────────────────────────
+        job.runners = summaries
+        job.fleet = fleet
+        _fleet = fleet
+        _consume_task = asyncio.create_task(_consume_observations())
+        job.set_state("running")
+        # Stay in `running` until /scan/stop or cancel() — which both
+        # happen from OUTSIDE this coroutine. The task can be awaited
+        # but won't progress further on its own.
+
+    except asyncio.CancelledError:
+        # Cancellation can hit at any point. Best-effort cleanup of
+        # whatever state we managed to put in place, then re-raise so
+        # the task is properly marked cancelled.
+        try:
+            if job.fleet is not None:
+                await job.fleet.stop_all()
+                job.fleet = None
+            await listener.stop()
+        except Exception:                       # noqa: BLE001
+            _log.exception("cleanup after scan-auto cancel failed")
+        if _consume_task is not None:
+            _consume_task.cancel()
+            _consume_task = None
+        _fleet = None
+        job.set_state("cancelled")
+        raise
+
+    except Exception as e:                      # noqa: BLE001
+        _log.exception("scan-auto job %s failed", job.id)
+        job.error = str(e)
+        # Try to leave the system in a clean state — listener down,
+        # no orphan fleet, no consume task.
+        try:
+            if job.fleet is not None:
+                await job.fleet.stop_all()
+                job.fleet = None
+        except Exception:
+            pass
+        try:
+            await listener.stop()
+        except Exception:
+            pass
+        if _consume_task is not None:
+            _consume_task.cancel()
+            _consume_task = None
+        _fleet = None
+        job.set_state("failed")
+
+
+@app.post("/scan/auto", dependencies=[Depends(require_jwt)])
+async def scan_auto(body: ScanAutoBody) -> dict:
+    """Submit a new /scan/auto job and return immediately.
+
+    v0.3.6 makes /scan/auto fire-and-poll: the handler validates,
+    spawns the background driver, and returns `{job_id, state}`.
+    Callers GET /scan/auto/jobs/{id} to watch state transitions
+    (which can take 8-15 min on MOCHAbin's CPU for a full GSM900
+    sweep) without holding an HTTP connection open the whole time.
+    """
+    global _consume_task
+    if _consume_task is not None and not _consume_task.done():
+        raise HTTPException(409, "scan already running")
+    if _job_registry.active() is not None:
+        raise HTTPException(409, "scan-auto job already running")
+    if body.max_cells <= 0:
+        raise HTTPException(400, "max_cells must be ≥ 1")
+
+    job = _job_registry.submit(body.model_dump())
+    job.task = asyncio.create_task(_drive_scan_auto_job(job))
+    return {"id": job.id, "state": job.state}
+
+
+@app.get("/scan/auto/jobs/{job_id}", dependencies=[Depends(require_jwt)])
+async def scan_auto_job_get(job_id: str) -> dict:
+    """Poll one job's state. 404 if unknown / aged out of history."""
+    job = _job_registry.get(job_id)
+    if job is None:
+        raise HTTPException(404, f"no job {job_id}")
+    return _job_payload(job)
+
+
+@app.get("/scan/auto/jobs", dependencies=[Depends(require_jwt)])
+async def scan_auto_jobs_list(limit: int = 10) -> dict:
+    """Recent jobs, newest first. Capped by JobRegistry.max_history."""
+    if limit < 1:
+        limit = 1
+    if limit > 50:
+        limit = 50
+    return {"jobs": [_job_payload(j) for j in _job_registry.list(limit)]}
+
+
+@app.post(
+    "/scan/auto/jobs/{job_id}/cancel",
+    dependencies=[Depends(require_jwt)],
+)
+async def scan_auto_job_cancel(job_id: str) -> dict:
+    """Cancel an in-flight job. Idempotent on already-terminal jobs.
+
+    Implementation: call Task.cancel() and let the driver's
+    asyncio.CancelledError handler unwind listener + fleet state.
+    """
+    job = _job_registry.get(job_id)
+    if job is None:
+        raise HTTPException(404, f"no job {job_id}")
+    if job.is_terminal():
+        return _job_payload(job)
+    if job.task is not None:
+        job.task.cancel()
+        try:
+            await job.task
+        except asyncio.CancelledError:
+            pass
+    return _job_payload(job)
+
+
+@app.get("/scan/auto/status", dependencies=[Depends(require_jwt)])
+async def scan_auto_status() -> dict:
+    """Per-runner status of the currently-running fleet, or empty if
+    no fleet. Mirrors the active job's `runners` field when state is
+    `running`."""
+    if _fleet is None:
+        return {"mode": "fleet", "running": False, "runners": []}
+    return {
+        "mode": "fleet",
+        "running": _fleet.is_running(),
+        "runners": [_runner_summary_payload(s) for s in _fleet.summaries()],
+    }
 
 
 @app.get("/scan/status", dependencies=[Depends(require_jwt)])

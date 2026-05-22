@@ -1,3 +1,77 @@
+secubox-sentinelle-gsm (0.3.6-1~bookworm1) bookworm; urgency=medium
+
+  * lib/sentinelle_gsm/scan_auto_job.py: NEW async-job model for
+    /scan/auto. v0.3.5 ran the scanner synchronously in the HTTP
+    handler — fine for unit tests, brutal on real RF where a GSM900
+    sweep takes 8-15 minutes on the MOCHAbin's Cortex-A72 and blocks
+    the request thread the whole time. v0.3.6 makes /scan/auto
+    fire-and-poll:
+      - POST /scan/auto returns {id, state=pending} immediately and
+        spawns the driver coroutine in the background
+      - GET /scan/auto/jobs/{id} polls state + progress
+      - GET /scan/auto/jobs lists recent (newest first, capped at
+        max_history=10 terminal jobs by JobRegistry)
+      - POST /scan/auto/jobs/{id}/cancel aborts in-flight scans
+        (Task.cancel + driver's CancelledError handler cleans up
+        listener + fleet)
+    State machine: pending → scanning → starting_fleet → running →
+    stopped, with failed and cancelled as off-ramps.
+  * api/main.py: refactored /scan/auto handler — validate, submit
+    job, spawn driver task, return id. New endpoints
+    /scan/auto/jobs, /scan/auto/jobs/{id}, /scan/auto/jobs/{id}/cancel.
+    /scan/auto/status unchanged (still reflects the active fleet).
+    /scan/start now also 409s if a scan-auto job is in flight even
+    before it has spawned the fleet (state=scanning has no _fleet
+    yet, but starting a single-runner would stomp on the scanner's
+    4729 bind). /scan/stop marks the active job as `stopped` when
+    it tears the fleet down.
+  * api/tests/test_scan_auto_job.py: NEW. 12 tests covering the
+    registry FIFO eviction + the driver coroutine state machine
+    (happy path, empty-scan, scanner timeout, scanner runtime error,
+    fleet-start failure, cancellation mid-scan).
+  * api/tests/test_scan_api.py: refactored for async semantics —
+    POST returns immediately, the in-flight tests seed the registry
+    directly rather than rely on TestClient's task-scope (Starlette
+    TestClient cancels spawned tasks at request-scope exit; the
+    direct-driver tests live in test_scan_auto_job.py instead).
+  * 114/114 sweep (up from 96 in v0.3.5).
+  * Closes #357.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 23:30:00 +0000
+
+secubox-sentinelle-gsm (0.3.5-1~bookworm1) bookworm; urgency=medium
+
+  * lib/sentinelle_gsm/scanner.py: NEW wrapper around grgsm_scanner.
+    Parses the canonical output line (`ARFCN: %4u, Freq: %6.1fM, CID:
+    %5u, LAC: %5u, MCC: %3u, MNC: %3u, Pwr: %3i`) into a list of
+    CellInfo. `select_diverse(cells, n)` picks up to n cells, prefering
+    one per (MCC, MNC) operator and breaking ties by power — feeds the
+    scoring engine's cross-operator heuristics (ghost_bts,
+    anomalous_neighbours, identity_mismatch).
+  * lib/sentinelle_gsm/livemon_fleet.py: NEW LivemonFleet — manages N
+    LivemonRunner instances, each on `--serverport = base + i`
+    (default base=4730, mirroring the IMSI-catcher scan-and-livemon
+    pattern). All runners emit GSMTAP to the listener on 4729; the
+    listener demuxes by GSMTAP header ARFCN. Partial-start rollback +
+    explicit stop_all() semantics. RunnerSummary keeps the cell
+    context alongside each runner's ScanStatus so the API can echo
+    "which operator / which ARFCN" per runner.
+  * api/main.py: NEW POST /scan/auto endpoint. Body:
+    {band, max_cells, gain, ppm, samp_rate, speed, scan_timeout}.
+    Refuses if /scan/start single-runner OR a fleet is already
+    running. Lifecycle: stop listener → scan_band → restart listener
+    → start fleet. Returns mode/cells_found/cells_selected/runners.
+    NEW GET /scan/auto/status. POST /scan/stop now stops the fleet
+    in addition to the single runner; payload shape is
+    polymorphic on which path was active.
+  * api/tests/: NEW test_scanner.py (12 tests), test_livemon_fleet.py
+    (7 tests), and 6 new tests in test_scan_api.py for /scan/auto
+    happy path, 409/400/504 negative paths, and /scan/auto/status.
+    96/96 sweep (up from 71 in v0.3.4).
+  * Closes #356.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 23:00:00 +0000
+
 secubox-sentinelle-gsm (0.3.4-1~bookworm1) bookworm; urgency=medium
 
   * sbin/secubox-grgsm-livemon-shim: NEW thin Python wrapper that
