@@ -376,17 +376,17 @@ install_udev_rule() {
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
     ATTRS{product}=="SONOFF Dongle Lite MG21", \
     SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
-    RUN+="/bin/sh -c '/usr/bin/lxc-device add zigbee /dev/%k || true'"
+    RUN+="/bin/sh -c '/usr/bin/lxc-device -n zigbee add /dev/%k || true'"
 
 # Sonoff Zigbee 3.0 USB Plus (CC2652P)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", \
     SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
-    RUN+="/bin/sh -c '/usr/bin/lxc-device add zigbee /dev/%k || true'"
+    RUN+="/bin/sh -c '/usr/bin/lxc-device -n zigbee add /dev/%k || true'"
 
 # ConBee II (fallback)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", \
     SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
-    RUN+="/bin/sh -c '/usr/bin/lxc-device add zigbee /dev/%k || true'"
+    RUN+="/bin/sh -c '/usr/bin/lxc-device -n zigbee add /dev/%k || true'"
 
 # Generic CP210x without the SONOFF descriptor — secondary symlink only
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
