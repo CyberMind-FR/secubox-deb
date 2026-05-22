@@ -30,6 +30,58 @@ lxc_running() { lxc-info -n "$LXC_NAME" -s 2>/dev/null | grep -q "RUNNING"; }
 lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
 
 # ─────────────────────────────────────────────────────────────────────
+# IDLE-TRACKING HELPERS (#331)
+# ─────────────────────────────────────────────────────────────────────
+
+IDLE_STATE_DIR="/var/lib/secubox/streamlit/idle"
+
+# Read [idle] settings from /etc/secubox/streamlit.toml with safe defaults.
+# Note: `grep | head | cut | tr` always exits 0 (tr's status) even when grep
+# matched nothing, so a trailing `|| echo $default` never fires and missing
+# keys silently returned empty. Capture explicitly and fall back via
+# `${v:-$default}` for the missing-or-blank case.
+_idle_config() {
+    local key="$1" default="$2" v
+    v=$(grep -E "^\s*${key}\s*=" "$CONF_PATH" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d ' "')
+    echo "${v:-$default}"
+}
+
+# Returns 0 if the app is listening on its port INSIDE the LXC, else 1.
+_app_running() {
+    local name="$1"
+    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    [ -z "$port" ] && return 1
+    lxc_running || return 1
+    lxc-attach -n "$LXC_NAME" -- ss -tln "sport = :$port" 2>/dev/null \
+        | awk -v p="$port" 'NR>1 && $4 ~ ":"p"$" {found=1} END {exit found?0:1}'
+}
+
+# Returns the count of ESTABLISHED connections to the app's port (inside LXC).
+_app_active_conns() {
+    local name="$1"
+    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    [ -z "$port" ] && { echo 0; return; }
+    lxc_running || { echo 0; return; }
+    lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" 2>/dev/null \
+        | awk 'NR>1' | wc -l
+}
+
+# Last-activity epoch for the app (file mtime). Touched by cmd_app_idle_check
+# when ESTABLISHED>0; created at start time by cmd_app_start.
+_app_last_active() {
+    local name="$1"
+    local f="$IDLE_STATE_DIR/$name.state"
+    [ -f "$f" ] || { echo 0; return; }
+    stat -c %Y "$f"
+}
+
+_app_touch_active() {
+    local name="$1"
+    mkdir -p "$IDLE_STATE_DIR"
+    touch "$IDLE_STATE_DIR/$name.state"
+}
+
+# ─────────────────────────────────────────────────────────────────────
 # CONTAINER MANAGEMENT
 # ─────────────────────────────────────────────────────────────────────
 
@@ -400,6 +452,7 @@ cmd_app_start() {
     "
 
     log "App $name started"
+    _app_touch_active "$name"
 }
 
 cmd_app_stop() {
