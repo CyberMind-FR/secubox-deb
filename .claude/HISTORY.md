@@ -34,9 +34,11 @@ schematic in the repo to pin down which CP0 GPIO is wired to J5.
 **Validation:** `--baseline` smoke-tested on gk2 — produces correct
 gpioinfo dump, identifies the `[used]` lines (cp0_gpio0 line 0 "reset",
 line 12 "PHY reset", line 30 "shutdown", plus the SFP+ pca9554
-expander chip 3). Sweep deferred until the spare EP06 hardware arrives
-— sweeping with no mPCIe device in J5 yields no signal regardless of
-which GPIO drives W_DISABLE#.
+expander chip 3). Full sweep deferred until the existing EP06-E is
+re-seated in J5 — sweeping with no mPCIe device in J5 yields no
+signal regardless of which GPIO drives W_DISABLE#. No spare modem
+expected; if the sweep finds no candidate the next escalation is
+multimeter scoping of J5 pins 2/20/24/39/41/52.
 
 ---
 ## 2026-05-21

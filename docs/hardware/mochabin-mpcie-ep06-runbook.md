@@ -1,6 +1,7 @@
 # MOCHAbin mPCIe Slot J5 — EP06 Investigation Runbook
 
-**Status:** in progress, blocked on spare EP06 hardware.
+**Status:** parked. Runbook ready to execute when an mPCIe modem is
+reseated in J5 (the original EP06-E on hand; no spare on order).
 **Related issues:** #255 (DTS UTMI PHY landed) · #345 (this runbook).
 
 ## Symptom
@@ -124,15 +125,21 @@ the next suspect is a missing 3.3V rail enable. Look for an unused
 GPIO that toggles `/sys/class/regulator/regulator-N/state` from
 `disabled` → `enabled` when driven HIGH.
 
-## Decisions deferred to hardware availability
+## Disambiguating "dead modem" vs "slot not powering it"
 
-- We can't tell whether the current EP06 in our lab is bad or just
-  not getting power. The spare hardware order (from
-  `.claude/WIP.md`) will let us swap and disambiguate.
-- If the spare also fails to enumerate with the GPIO sweep returning
-  no candidates, the next step is to scope the J5 connector with a
-  multimeter on pins 20 (W_DISABLE#) and 2/24/39/41/52 (3V3) — but
-  that's outside the scope of this runbook.
+There's no spare EP06 coming, so we can't simply swap units. If the
+GPIO sweep finds no candidate line, the remaining signal that the
+modem is alive at all is:
+
+- **3.3V on J5 pin 2 / 24 / 39 / 41 / 52** — multimeter on the
+  connector with the modem unseated tells you if the slot's power rail
+  is live. If 3.3V is missing, the modem can't possibly enumerate
+  regardless of W_DISABLE#.
+- **Modem LED** — the EP06-E lights an onboard status LED when it has
+  power. Visible through the chassis cutout near J5.
+
+Multimeter scoping is outside the runbook's automated scope but is the
+next escalation if the sweep is inconclusive.
 
 ## Outcome we want
 
