@@ -1,0 +1,12 @@
+[Unit]
+Description=Run secubox-streamlit-idle.service every 5 minutes
+After=secubox-streamlit.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=secubox-streamlit-idle.service
+
+[Install]
+WantedBy=timers.target

@@ -9,6 +9,7 @@ case "$1" in
     # Don't remove nginx config on upgrade
     ;;
 esac
+systemctl disable --now secubox-streamlit-idle.timer || true
 systemctl stop    secubox-streamlit.service 2>/dev/null || true
 systemctl disable secubox-streamlit.service 2>/dev/null || true
 #DEBHELPER#
