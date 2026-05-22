@@ -476,6 +476,45 @@ cmd_app_stop() {
     log "App $name stopped"
 }
 
+cmd_app_idle_check() {
+    local enabled; enabled=$(_idle_config "enabled" "true")
+    [ "$enabled" = "true" ] || { log "idle-check disabled in $CONF_PATH"; return 0; }
+
+    local timeout_min; timeout_min=$(_idle_config "timeout_minutes" "30")
+    local timeout_sec=$(( timeout_min * 60 ))
+    local now; now=$(date +%s)
+
+    local stopped=0 active=0 idle=0
+    for app_dir in "$APPS_PATH"/*/; do
+        [ -d "$app_dir" ] || continue
+        local name; name=$(basename "$app_dir")
+        [ "$name" = "*" ] && continue
+
+        _app_running "$name" || continue
+
+        local conns; conns=$(_app_active_conns "$name")
+        if [ "$conns" -gt 0 ]; then
+            _app_touch_active "$name"
+            active=$(( active + 1 ))
+            continue
+        fi
+
+        local last; last=$(_app_last_active "$name")
+        [ "$last" -eq 0 ] && { _app_touch_active "$name"; continue; }
+        local idle_sec=$(( now - last ))
+
+        if [ "$idle_sec" -ge "$timeout_sec" ]; then
+            log "idle-stop: $name (idle ${idle_sec}s >= ${timeout_sec}s)"
+            cmd_app_stop "$name" >/dev/null 2>&1 || true
+            stopped=$(( stopped + 1 ))
+        else
+            idle=$(( idle + 1 ))
+        fi
+    done
+
+    log "idle-check: active=$active idle=$idle stopped=$stopped"
+}
+
 cmd_app_deploy() {
     local zip_file="$1"
     local name="$2"
@@ -786,7 +825,9 @@ case "${1:-}" in
 
     app)
         case "${2:-}" in
-            list)   cmd_app_list ;;
+            list)       cmd_app_list ;;
+            idle-check) cmd_app_idle_check ;;
+            wake)       cmd_app_wake "$3" "$4" ;;
             start)  cmd_app_start "$3" "$4" ;;
             stop)   cmd_app_stop "$3" ;;
             deploy) cmd_app_deploy "$3" "$4" ;;
@@ -794,7 +835,7 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|start|stop|restart|deploy|remove|logs|info} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
         esac
         ;;
 
