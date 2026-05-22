@@ -78,10 +78,20 @@ class LivemonRunner:
         self._started_at: Optional[float] = None
         self._stderr_buf = bytearray()
         self._stderr_task: Optional[asyncio.Task] = None
+        # v0.3.2: watcher task — awaits proc.wait() so we detect natural
+        # exit (e.g. gr-osmosdr crash) without relying on the caller
+        # polling proc.returncode. Set in start(), cleared in stop().
+        # `_done` is True once the watcher observes the child exited.
+        self._watcher_task: Optional[asyncio.Task] = None
+        self._done: bool = False
         self._bin = shutil.which("grgsm_livemon_headless") or "/usr/bin/grgsm_livemon_headless"
 
     def status(self) -> ScanStatus:
-        running = self._proc is not None and self._proc.returncode is None
+        # v0.3.2 fix: "running" now means proc exists AND watcher hasn't
+        # observed exit. Without this, a crashed grgsm child left
+        # proc.returncode=None forever (since nobody awaited proc.wait()),
+        # so status().running stayed True and /scan/start kept 409-ing.
+        running = self._proc is not None and not self._done
         return ScanStatus(
             running=running,
             pid=self._proc.pid if running else None,
@@ -90,44 +100,93 @@ class LivemonRunner:
             stderr_tail=self._stderr_buf.decode(errors="replace")[-2000:],
         )
 
-    async def start(self, freq: str) -> ScanStatus:
+    async def start(
+        self,
+        freq: str,
+        gain: Optional[float] = None,
+        samp_rate: Optional[str] = None,
+        ppm: Optional[float] = None,
+        args: str = "rtl=0",
+    ) -> ScanStatus:
         """Spawn grgsm_livemon_headless on the given frequency.
 
         freq: anything grgsm_livemon_headless accepts, e.g. '925.4M', '947.4e6'.
+        gain: optional RF gain (dB). grgsm default = 30. None = pass nothing
+            (let grgsm use its default).
+        samp_rate: optional sample rate string ('2.0M'). None = grgsm default.
+        ppm: optional clock offset in ppm. None = grgsm default (0).
+        args: gr-osmosdr device args. Default 'rtl=0' forces the RTL-SDR
+            backend (otherwise osmosdr loads UHD/USRP by default and
+            crashes when no USRP is plugged in).
         """
-        if self._proc is not None and self._proc.returncode is None:
+        if self._proc is not None and not self._done:
             raise RuntimeError("scan already running — stop first")
 
-        # gr-osmosdr default device is UHD; force RTL-SDR via --args=rtl=0
+        argv = [self._bin, f"--args={args}", "-f", freq]
+        if gain is not None:
+            argv += ["-g", str(gain)]
+        if samp_rate is not None:
+            argv += ["-s", str(samp_rate)]
+        if ppm is not None:
+            argv += ["-p", str(ppm)]
+
         self._proc = await asyncio.create_subprocess_exec(
-            self._bin,
-            "--args=rtl=0",
-            "-f", freq,
+            *argv,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
         self._freq = freq
         self._started_at = time.time()
         self._stderr_buf = bytearray()
+        self._done = False
         self._stderr_task = asyncio.create_task(self._drain_stderr())
+        self._watcher_task = asyncio.create_task(self._watch_exit())
         return self.status()
 
-    async def stop(self, timeout: float = 5.0) -> ScanStatus:
-        """SIGTERM the child; SIGKILL if it doesn't exit within timeout."""
-        if self._proc is None or self._proc.returncode is not None:
-            return self.status()
-        self._proc.terminate()
+    async def _watch_exit(self) -> None:
+        """Set self._done as soon as the child exits naturally (crash or
+        clean stop). Keeps stderr_buf intact for diagnostics."""
+        if self._proc is None:
+            return
         try:
-            await asyncio.wait_for(self._proc.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
-            self._proc.kill()
             await self._proc.wait()
-        if self._stderr_task:
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._done = True
+
+    async def stop(self, timeout: float = 5.0) -> ScanStatus:
+        """SIGTERM the child; SIGKILL if it doesn't exit within timeout.
+
+        Idempotent: if the child already exited naturally (the watcher
+        has observed self._done=True), stop() captures the stderr_tail
+        in the returned ScanStatus and clears the slot.
+        """
+        if self._proc is None:
+            return self.status()
+        # Child still alive — send SIGTERM, then SIGKILL on timeout.
+        if not self._done:
+            self._proc.terminate()
+            try:
+                await asyncio.wait_for(self._proc.wait(), timeout=timeout)
+            except asyncio.TimeoutError:
+                self._proc.kill()
+                await self._proc.wait()
+        # At this point the child has exited. Cancel the helpers and
+        # produce a final status with stderr_tail BEFORE clearing _proc.
+        if self._stderr_task and not self._stderr_task.done():
             self._stderr_task.cancel()
+        if self._watcher_task and not self._watcher_task.done():
+            self._watcher_task.cancel()
+        final = ScanStatus(
+            running=False, pid=None, freq=None, started_at=None,
+            stderr_tail=self._stderr_buf.decode(errors="replace")[-2000:],
+        )
         self._proc = None
         self._freq = None
         self._started_at = None
-        return self.status()
+        self._done = False
+        return final
 
     async def _drain_stderr(self) -> None:
         assert self._proc is not None and self._proc.stderr is not None
