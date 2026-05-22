@@ -15,24 +15,43 @@
 # slot's control lines (W_DISABLE#, PWR_EN, possibly WAKE#) are NOT
 # declared in the current DTS, so they come up in whatever default state
 # the SoC pad config leaves them in — which may be holding the modem
-# powered-down. This runbook drives each *unrequested* CP0 GPIO HIGH one
-# at a time, watching for a new USB enumeration event.
+# powered-down. This runbook drives carefully-selected CP0 GPIO lines
+# HIGH one at a time, watching for a new USB enumeration event.
 #
 # Prerequisites: run ON THE BOARD (gk2), as root, with a known-good
 # mPCIe device (EP06 modem or any mPCIe-USB device) physically seated
 # in J5 and the screw tightened.
 #
-# Safety: this script ONLY touches CP0 GPIO lines that gpioinfo reports
-# as "unused input". It snapshots dmesg + lsusb before each probe, flips
-# a single line to output-HIGH for SETTLE_SEC seconds, snapshots again,
-# then releases the line (libgpiod auto-restores to input on close).
-# Lines marked [used] (by the kernel for SFP+, PHY reset, etc.) are
-# skipped — never touched.
+# Safety (v0.2.0): gpioinfo's "[used]" tag only reflects lines the
+# kernel *requested* — some unrequested lines on the MOCHAbin are
+# physically wired to critical functions (eth switch reset, USB hub
+# power-enable, pca9554 IRQ, etc.) and driving them HIGH crashed
+# gk2 on the v0.1.0 blanket sweep (incident 2026-05-22). v0.2.0
+# therefore:
+#   1. Skips known-dangerous lines unconditionally (DANGER_LINES).
+#   2. Defaults to --dry-run (lists candidates without driving them).
+#   3. Requires --commit AND --line for the actual probe — no
+#      blanket sweep mode anymore.
+#   4. Refuses to touch gpiochip2 (CP0 GPIO1) entirely without an
+#      explicit --allow-chip2 flag (we have no per-line schematic
+#      mapping for that bank yet).
 
 set -euo pipefail
 
 readonly MODULE="probe-mpcie-gpios"
-readonly VERSION="0.1.0"
+readonly VERSION="0.2.0"
+
+# Lines known (from DTS inspection) to be wired to critical board
+# functions even when gpioinfo reports them as "unused input". Format:
+# "chip:line". Driving any of these would risk a board crash.
+readonly -a DANGER_LINES=(
+	# gpiochip1 = cp0_gpio0
+	"gpiochip1:1"   # mpp1 — cp0_switch_pins gpio function (Topaz reset)
+	"gpiochip1:9"   # mpp9 — cp0_pcie_reset_pins (PCIe2 PERST#); driving it can crash the slot
+	"gpiochip1:27"  # mpp27 — pca9554_int (SFP+ I/O expander IRQ); IRQ storm risk
+	# gpiochip2 = cp0_gpio1 — entire bank held off by default
+	# (no per-line schematic; require --allow-chip2 to probe)
+)
 readonly LOG_DIR="/var/log/secubox"
 readonly LOG_FILE="${LOG_DIR}/mpcie-probe-$(date +%Y%m%d-%H%M%S).log"
 readonly SETTLE_SEC="${SETTLE_SEC:-3}"
@@ -44,29 +63,53 @@ readonly CHIPS="${CHIPS:-gpiochip1 gpiochip2}"
 
 usage() {
 	cat <<EOF
-${MODULE} v${VERSION} — sweep CP0 GPIO lines to find mPCIe J5 W_DISABLE#
+${MODULE} v${VERSION} — probe one CP0 GPIO line to find mPCIe J5 W_DISABLE#
 
 usage:
-  $0                       sweep all unused lines on ${CHIPS}
-  $0 --baseline            snapshot only — no probing
-  $0 --line gpiochipN K    probe a single line (e.g. --line gpiochip2 14)
+  $0                                snapshot + list dry-run candidates (default)
+  $0 --baseline                     snapshot only — no candidate listing
+  $0 --line gpiochipN K             dry-run a single line (refuses if danger-listed)
+  $0 --line gpiochipN K --commit    actually drive the line HIGH for SETTLE_SEC
+  $0 --allow-chip2 ...              required to touch any gpiochip2 line
   $0 --help
 
 env vars:
-  SETTLE_SEC=N             seconds to hold each line HIGH (default 3)
-  CHIPS="gpiochipA gpiochipB"   chips to sweep (default: gpiochip1 gpiochip2)
+  SETTLE_SEC=N                      seconds to hold the line HIGH (default 3)
 
 output:
   ${LOG_DIR}/mpcie-probe-<timestamp>.log
 
+WARNING — read this before --commit:
+
+  v0.1.0 of this script ran a blanket sweep across all "unused input"
+  CP0 GPIOs. That took gk2 hard-down on 2026-05-22 — some unrequested
+  lines are physically wired to critical functions (eth switch reset,
+  PCIe2 PERST#, pca9554 IRQ, etc.) even though the kernel never
+  requests them. v0.2.0 therefore refuses to run a blanket sweep at
+  all, and the default mode just lists candidates without driving
+  anything.
+
+  When you do --commit a single line, make sure you can physically
+  reach the MOCHAbin to power-cycle it if the board locks up.
+
 prerequisites: run as root on the MOCHAbin, with an mPCIe device
-seated in J5 (preferably the EP06 modem). The script logs:
-  - baseline dmesg + lsusb -t
-  - for each probed line: pre/post dmesg diff + lsusb diff
+(preferably the EP06 modem) physically seated in J5 and the retention
+screw tightened.
+
 A successful probe shows a new "usb 2-1.X: new high-speed USB device"
-line in the post-dmesg, AND a new device in lsusb.
+line in the post-dmesg diff AND a new device in lsusb.
 
 EOF
+}
+
+# True if "chip:line" matches an entry in DANGER_LINES (case-sensitive).
+is_danger_line() {
+	local key="$1"
+	local entry
+	for entry in "${DANGER_LINES[@]}"; do
+		[[ "$entry" == "$key" ]] && return 0
+	done
+	return 1
 }
 
 require_root() {
@@ -113,58 +156,80 @@ snapshot_baseline() {
 	dmesg -T --since '60 sec ago' 2>/dev/null | tail -30 || dmesg | tail -30
 }
 
-# Returns 0 if the line is safe to probe (currently "unused input").
 # gpioinfo line format:
 #   "	line  14:      unnamed       unused   input  active-high "
 #   "	line   0:      unnamed      \"reset\"  output  active-low [used]"
-# We check three things:
-#   - label is "unnamed" (no consumer-side naming)
-#   - direction is "input"
-#   - NOT tagged [used]
-line_is_safe() {
-	local info="$1"
+# A "candidate" is: unnamed + unused + input + NOT in DANGER_LINES.
+line_is_candidate() {
+	local chip="$1"
+	local info="$2"
+	local n
+	if [[ "$info" =~ line\ +([0-9]+): ]]; then
+		n="${BASH_REMATCH[1]}"
+	else
+		return 1
+	fi
 	[[ "$info" != *"[used]"* ]] || return 1
 	[[ "$info" == *"input"* ]] || return 1
 	[[ "$info" == *"unused"* ]] || return 1
+	is_danger_line "${chip}:${n}" && return 1
 	return 0
 }
 
-probe_line() {
+list_candidates() {
+	local chip="$1"
+	echo
+	echo "=== candidates on ${chip} ==="
+	while IFS= read -r line; do
+		if line_is_candidate "${chip}" "${line}"; then
+			# Extract line number for the summary
+			[[ "$line" =~ line\ +([0-9]+): ]] && echo "  ${chip}:${BASH_REMATCH[1]}"
+		fi
+	done < <(gpioinfo "${chip}")
+}
+
+probe_line_commit() {
 	local chip="$1"
 	local n="$2"
 
-	echo
-	echo "── probe ${chip} line ${n} ──"
+	# Hard gate — never drive a danger-listed line, even with --commit.
+	if is_danger_line "${chip}:${n}"; then
+		echo "REFUSED: ${chip}:${n} is in DANGER_LINES — driving it" \
+			"risks crashing the board (see header comment)." >&2
+		exit 1
+	fi
 
-	# Snapshot pre-state
+	# gpiochip2 entirely off-limits without --allow-chip2.
+	if [[ "${chip}" == "gpiochip2" && "${ALLOW_CHIP2:-0}" != "1" ]]; then
+		echo "REFUSED: gpiochip2 (cp0_gpio1) requires --allow-chip2 — no" \
+			"per-line schematic mapping for that bank yet." >&2
+		exit 1
+	fi
+
+	echo
+	echo "── probe ${chip} line ${n} (COMMIT, HIGH for ${SETTLE_SEC}s) ──"
+
 	local pre_lsusb pre_dmesg_tail
 	pre_lsusb=$(lsusb | sort)
 	pre_dmesg_tail=$(dmesg | tail -1)
 
-	# Drive HIGH for SETTLE_SEC; gpioset --mode=time is reliable but
-	# blocks for the duration. Spawn in background so we can race a
-	# read of dmesg.
+	# Drive HIGH for SETTLE_SEC seconds. gpioset releases the line
+	# (libgpiod restores it to input on close).
 	timeout "$((SETTLE_SEC + 2))" gpioset --mode=time --sec="${SETTLE_SEC}" \
 		"${chip}" "${n}=1" &
 	local gpio_pid=$!
-
 	sleep "$((SETTLE_SEC - 1))"
 
-	# Snapshot post-state (while still HIGH)
 	local post_lsusb post_dmesg
 	post_lsusb=$(lsusb | sort)
-	# dmesg lines since pre_dmesg_tail
 	post_dmesg=$(dmesg | awk -v marker="${pre_dmesg_tail}" '
 		BEGIN { capture=0 }
 		index($0, marker) { capture=1; next }
 		capture { print }
 	')
 
-	# Wait for gpioset to finish — releases the line (libgpiod
-	# restores it to input automatically).
 	wait "${gpio_pid}" 2>/dev/null || true
 
-	# Diff lsusb
 	local lsusb_diff
 	lsusb_diff=$(diff <(echo "${pre_lsusb}") <(echo "${post_lsusb}") || true)
 
@@ -173,55 +238,98 @@ probe_line() {
 		echo "  --- lsusb diff ---"
 		echo "${lsusb_diff:-(no diff)}"
 		echo "  --- new dmesg ---"
-		echo "${post_dmesg}" | sed 's/^/    /'
+		printf '    %s\n' "${post_dmesg}"
 	else
 		echo "  no change"
 	fi
 }
 
-sweep_chip() {
+probe_line_dryrun() {
 	local chip="$1"
+	local n="$2"
 	echo
-	echo "=== sweep ${chip} ==="
-	# Parse gpioinfo; for each "unused input" line, run probe.
-	while IFS= read -r line; do
-		if [[ "$line" =~ line\ +([0-9]+): ]]; then
-			local n="${BASH_REMATCH[1]}"
-			if line_is_safe "$line"; then
-				probe_line "${chip}" "${n}"
-			fi
-		fi
-	done < <(gpioinfo "${chip}")
+	echo "── DRY-RUN ${chip}:${n} ──"
+	if is_danger_line "${chip}:${n}"; then
+		echo "  REFUSED: in DANGER_LINES"
+		return
+	fi
+	if [[ "${chip}" == "gpiochip2" && "${ALLOW_CHIP2:-0}" != "1" ]]; then
+		echo "  REFUSED: gpiochip2 requires --allow-chip2"
+		return
+	fi
+	# Verify the line is currently unrequested and an input.
+	local info
+	info=$(gpioinfo "${chip}" 2>/dev/null | awk -v n="${n}" '$2 == n":"')
+	if [[ -z "${info}" ]]; then
+		echo "  ERROR: line ${n} not found on ${chip}"
+		return
+	fi
+	if [[ "${info}" == *"[used]"* ]]; then
+		echo "  REFUSED: line is currently [used] by the kernel"
+		return
+	fi
+	echo "  OK: --commit would drive ${chip}:${n} HIGH for ${SETTLE_SEC}s"
 }
 
 main() {
 	require_root
 	require_libgpiod
 
-	case "${1:-}" in
-		--help|-h)
-			usage; exit 0 ;;
-		--baseline)
-			setup_log
+	local mode="default"
+	local chip=""
+	local n=""
+	local commit=0
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--help|-h)
+				usage; exit 0 ;;
+			--baseline)
+				mode="baseline"; shift ;;
+			--line)
+				[[ $# -ge 3 ]] || { usage; exit 1; }
+				mode="line"; chip="$2"; n="$3"; shift 3 ;;
+			--commit)
+				commit=1; shift ;;
+			--allow-chip2)
+				ALLOW_CHIP2=1; shift ;;
+			*)
+				usage; exit 1 ;;
+		esac
+	done
+
+	setup_log
+
+	case "${mode}" in
+		baseline)
 			snapshot_baseline
-			exit 0 ;;
-		--line)
-			[[ $# -eq 3 ]] || { usage; exit 1; }
-			setup_log
-			snapshot_baseline
-			probe_line "$2" "$3"
-			exit 0 ;;
-		"")
-			setup_log
-			snapshot_baseline
-			for chip in ${CHIPS}; do
-				sweep_chip "${chip}"
-			done
-			echo
-			echo "=== sweep complete — review ${LOG_FILE} for any *** CHANGE DETECTED *** ==="
 			;;
-		*)
-			usage; exit 1 ;;
+		line)
+			snapshot_baseline
+			if [[ "${commit}" == "1" ]]; then
+				probe_line_commit "${chip}" "${n}"
+			else
+				probe_line_dryrun "${chip}" "${n}"
+				echo
+				echo "(dry-run — pass --commit to actually drive the line)"
+			fi
+			;;
+		default)
+			snapshot_baseline
+			list_candidates gpiochip1
+			if [[ "${ALLOW_CHIP2:-0}" == "1" ]]; then
+				list_candidates gpiochip2
+			else
+				echo
+				echo "=== gpiochip2 candidates suppressed ==="
+				echo "  pass --allow-chip2 to list (no per-line schematic yet)"
+			fi
+			echo
+			echo "=== next step ==="
+			echo "  pick a candidate, then:"
+			echo "    $0 --line <chip> <line>           # dry-run"
+			echo "    $0 --line <chip> <line> --commit  # actually drive"
+			;;
 	esac
 }
 

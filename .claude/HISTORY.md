@@ -34,11 +34,22 @@ schematic in the repo to pin down which CP0 GPIO is wired to J5.
 **Validation:** `--baseline` smoke-tested on gk2 — produces correct
 gpioinfo dump, identifies the `[used]` lines (cp0_gpio0 line 0 "reset",
 line 12 "PHY reset", line 30 "shutdown", plus the SFP+ pca9554
-expander chip 3). Full sweep deferred until the existing EP06-E is
-re-seated in J5 — sweeping with no mPCIe device in J5 yields no
-signal regardless of which GPIO drives W_DISABLE#. No spare modem
-expected; if the sweep finds no candidate the next escalation is
-multimeter scoping of J5 pins 2/20/24/39/41/52.
+expander chip 3). No spare modem expected; if probing finds no
+candidate the next escalation is multimeter scoping of J5 pins
+2/20/24/39/41/52.
+
+**Incident — v0.1.0 blanket sweep crashed gk2:** running the
+"all unused inputs" sweep with no modem in J5 took the board hard-down
+within seconds (host became unreachable; ARP stopped responding).
+`gpioinfo`'s `[used]` tag only reflects lines the kernel *requested*,
+not lines that are physically wired — several unrequested CP0 GPIOs
+drive critical board functions (eth switch reset, PCIe2 PERST#,
+pca9554 IRQ). v0.2.0 of the script removes the blanket-sweep mode
+entirely: defaults to dry-run candidate listing, requires explicit
+`--commit --line CHIP N` to drive any single line, hardcodes a
+`DANGER_LINES` skip-list, and holds `gpiochip2` off behind
+`--allow-chip2`. Memorialised in memory
+`feedback_gpio_blanket_sweep_crashed_board.md`.
 
 ---
 ## 2026-05-21

@@ -21,12 +21,12 @@ slot.
 mPCIe defines several control pins per slot that the host must drive
 for the device to wake:
 
-| Pin           | Direction   | Meaning                | Default                          |
-| ------------- | ----------- | ---------------------- | -------------------------------- |
-| PERST#        | host→device | reset (active low)     | must transition low→high at boot |
-| W_DISABLE#    | host→device | radio kill (active low) | must be HIGH for radio          |
-| WAKE#         | device→host | wake event (active low) | input only                      |
-| PWR_EN / 3.3V | rail        | power                  | must be ON                       |
+| Pin           | Direction   | Meaning                 | Default                          |
+| ------------- | ----------- | ----------------------- | -------------------------------- |
+| PERST#        | host→device | reset (active low)      | must transition low→high at boot |
+| W_DISABLE#    | host→device | radio kill (active low) | must be HIGH for radio           |
+| WAKE#         | device→host | wake event (active low) | input only                       |
+| PWR_EN / 3.3V | rail        | power                   | must be ON                       |
 
 In `armada-7040-mochabin.dts`:
 
@@ -45,11 +45,21 @@ of its mPCIe / M.2 slots (lines 69–122). That's the pattern to copy.
 
 ## Investigation procedure
 
-`scripts/probe-mpcie-gpios.sh` automates an empirical sweep. It probes
-each *unrequested* CP0 GPIO line one at a time, driving it HIGH for a
-few seconds while watching `dmesg` and `lsusb` for any change. Lines
-that the kernel has already requested (PHY reset, switch reset, LED
-shutdown, etc.) are skipped — never touched.
+`scripts/probe-mpcie-gpios.sh` (v0.2.0) is a one-line-at-a-time probe.
+v0.1.0 of this script ran a blanket sweep across all "unused input"
+CP0 GPIOs and took gk2 hard-down on 2026-05-22 — `gpioinfo`'s
+`[used]` tag only reflects what the kernel *requested*, and several
+unrequested lines are physically wired to critical functions (eth
+switch reset, PCIe2 PERST#, pca9554 IRQ). v0.2.0 therefore:
+
+- skips a hardcoded `DANGER_LINES` list (those three + future
+  additions);
+- refuses to touch `gpiochip2` (CP0 GPIO1) entirely without
+  `--allow-chip2` (no per-line schematic mapping for that bank yet);
+- defaults to dry-run — listing candidates without driving anything;
+- requires `--commit` + `--line CHIP N` to actually drive a line HIGH.
+
+There is no longer a blanket-sweep mode.
 
 Prerequisites:
 
@@ -71,33 +81,43 @@ the gpioinfo table to confirm the lines you expect are `[used]` (PHY
 reset on cp0_gpio0 line 12, etc.) — the script will refuse to touch
 those.
 
-### Step 2 — sweep all unused lines
+### Step 2 — list candidates (dry-run, default mode)
 
 ```bash
-/usr/local/sbin/probe-mpcie-gpios
+ssh root@<mochabin> 'bash /tmp/probe-mpcie-gpios.sh'
 ```
 
-For each unused CP0 GPIO, the script:
+Prints the candidate list on `gpiochip1` (CP0 GPIO0). Each entry is
+of the form `gpiochip1:N` — an unrequested input that is NOT in
+`DANGER_LINES`. No GPIO is driven in this mode.
+
+If you want candidates on `gpiochip2` too (entire bank held off by
+default), add `--allow-chip2` — only do this if you can physically
+power-cycle the board if something locks up.
+
+### Step 3 — commit a single line
+
+Pick one candidate from step 2, then drive it for `SETTLE_SEC=3` s
+(longer with the env var if the EP06 needs more time to boot its
+radio):
+
+```bash
+ssh root@<mochabin> \
+  'SETTLE_SEC=10 bash /tmp/probe-mpcie-gpios.sh --line gpiochip1 14 --commit'
+```
+
+The script:
 
 1. Snapshots `lsusb` + last `dmesg` line.
-2. Drives the line output-HIGH for `SETTLE_SEC` seconds (default 3).
+2. Drives the line output-HIGH for `SETTLE_SEC` seconds.
 3. Re-snapshots.
 4. Releases the line (libgpiod restores input direction on close).
 5. If `lsusb` differs or new "new high-speed USB device" /
    "Quectel" / `2c7c` appears in dmesg, logs `*** CHANGE DETECTED ***`.
 
 A successful probe gives you the GPIO number to wire into the DTS.
-
-### Step 3 — narrow to a single line
-
-If the sweep flags a candidate, re-run with `--line` for confirmation:
-
-```bash
-SETTLE_SEC=10 /usr/local/sbin/probe-mpcie-gpios --line gpiochip2 14
-```
-
-Longer settle helps if the modem's boot sequence is slow (EP06 takes
-~6–8s to enumerate after radio enable).
+Iterate over candidates one at a time; if a probe locks up the board,
+add the line to `DANGER_LINES` in the script before retrying.
 
 ## Translating findings to DTS
 
