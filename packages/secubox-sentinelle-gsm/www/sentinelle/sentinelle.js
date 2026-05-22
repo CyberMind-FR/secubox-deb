@@ -61,6 +61,14 @@
     obsCount:        document.getElementById("obs-count"),
     obsTbody:        document.getElementById("obs-tbody"),
     btnRefreshObs:   document.getElementById("btn-refresh-obs"),
+    // v0.3.1 baseline + scoring
+    baselineCount:        document.getElementById("baseline-count"),
+    baselineTbody:        document.getElementById("baseline-tbody"),
+    btnRefreshBaseline:   document.getElementById("btn-refresh-baseline"),
+    btnBaselineLearn:     document.getElementById("btn-baseline-learn"),
+    thresholdGrid:        document.getElementById("threshold-grid"),
+    btnRefreshScoring:    document.getElementById("btn-refresh-scoring"),
+    btnSaveScoring:       document.getElementById("btn-save-scoring"),
   };
 
   // ── state ───────────────────────────────────────────────────────────
@@ -233,7 +241,7 @@
     const tr = document.createElement("tr");
     tr.dataset.alertId = alert.id;
     const targetCell = alert.trusted_label
-      ? `<span class="target-pill">${escapeHtml(alert.trusted_label)}</span>`
+      ? `<span class="trusted-chip">${escapeHtml(alert.trusted_label)}</span>`
       : '<span style="color:var(--text-dim)">—</span>';
     tr.innerHTML =
       `<td class="col-time">${escapeHtml(fmtTime(alert.ts))}</td>` +
@@ -553,6 +561,181 @@
     }
   }
 
+  // ── baseline + scoring (v0.3.1) ─────────────────────────────────────
+  function _buildBaselineRow(c) {
+    const tr = document.createElement("tr");
+    const fmt = (v) => (v === null || v === undefined || v === "") ? "—" : String(v);
+    tr.innerHTML =
+      `<td class="col-cell">${escapeHtml(c.cell_id)}</td>` +
+      `<td class="mono">${escapeHtml(fmt(c.mcc))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(c.mnc))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(c.lac))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(c.arfcn))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(c.cipher_a5))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(c.learn_count))}</td>` +
+      `<td class="mono">${escapeHtml(fmtDateTime(c.last_learned))}</td>`;
+    return tr;
+  }
+
+  function renderBaselineTable(cells) {
+    if (!els.baselineTbody) return;
+    els.baselineTbody.innerHTML = "";
+    if (!cells || cells.length === 0) {
+      els.baselineTbody.innerHTML =
+        '<tr class="empty"><td colspan="8">no baseline yet — start a scan + click "Start learn"</td></tr>';
+      return;
+    }
+    cells.forEach((c) => els.baselineTbody.appendChild(_buildBaselineRow(c)));
+  }
+
+  async function loadBaseline() {
+    try {
+      const r = await fetch(API + "/baseline?limit=200", { credentials: "include" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      const cells = j.cells || [];
+      if (els.baselineCount) els.baselineCount.textContent = String(cells.length);
+      renderBaselineTable(cells);
+    } catch (e) {
+      console.warn("loadBaseline failed:", e);
+    }
+  }
+
+  let _baselineLearnPollTimer = null;
+  async function startBaselineLearn() {
+    try {
+      const r = await fetch(API + "/baseline/learn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sweep_seconds: 300 }),
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      toast("baseline learn mode armed for 5 min", "ok");
+      // re-poll baseline every 15s for 5 min so the table fills as cells graduate
+      if (_baselineLearnPollTimer) clearInterval(_baselineLearnPollTimer);
+      let ticks = 0;
+      _baselineLearnPollTimer = setInterval(() => {
+        loadBaseline();
+        ticks += 1;
+        if (ticks >= 20) {              // 20 * 15s = 5 min
+          clearInterval(_baselineLearnPollTimer);
+          _baselineLearnPollTimer = null;
+        }
+      }, 15000);
+    } catch (e) {
+      toast("baseline learn failed: " + e.message, "err");
+    }
+  }
+
+  // Local cache of current scoring threshold form values, keyed by heuristic
+  // name. Each value is the full threshold object (enabled, score, plus any
+  // heuristic-specific fields the backend cares about).
+  let _thresholdState = {};
+
+  function _clampScore(n) {
+    n = Number(n);
+    if (!Number.isFinite(n)) return 0;
+    if (n < 0) return 0;
+    if (n > 100) return 100;
+    return Math.round(n);
+  }
+
+  function renderThresholdGrid(thresholds) {
+    const grid = els.thresholdGrid;
+    if (!grid) return;
+    grid.innerHTML = "";
+    const names = Object.keys(thresholds || {}).sort();
+    if (names.length === 0) {
+      grid.innerHTML = '<div class="empty">no scoring heuristics defined</div>';
+      return;
+    }
+    names.forEach((name) => {
+      const t = thresholds[name] || {};
+      const enabled = !!t.enabled;
+      const score = _clampScore(t.score);
+      const row = document.createElement("div");
+      row.className = "threshold-row";
+      row.innerHTML =
+        `<span class="threshold-name">${escapeHtml(name)}</span>` +
+        `<label><input type="checkbox" data-heur="${escapeHtml(name)}" data-field="enabled"` +
+          (enabled ? " checked" : "") + `> enabled</label>` +
+        `<label>score <input type="number" min="0" max="100" step="1"` +
+          ` data-heur="${escapeHtml(name)}" data-field="score" value="${score}"></label>`;
+      grid.appendChild(row);
+    });
+
+    // Wire change listeners. We listen on the grid container (event delegation).
+    grid.addEventListener("change", _onThresholdChange);
+  }
+
+  function _onThresholdChange(e) {
+    const inp = e.target;
+    if (!inp || !inp.dataset) return;
+    const heur = inp.dataset.heur;
+    const field = inp.dataset.field;
+    if (!heur || !field) return;
+    if (!_thresholdState[heur]) _thresholdState[heur] = {};
+    if (field === "enabled") {
+      _thresholdState[heur].enabled = !!inp.checked;
+    } else if (field === "score") {
+      const n = _clampScore(inp.value);
+      if (String(n) !== String(inp.value)) inp.value = String(n);
+      _thresholdState[heur].score = n;
+    }
+  }
+
+  async function loadThresholds() {
+    try {
+      const r = await fetch(API + "/scoring/thresholds", { credentials: "include" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      const thresholds = j.thresholds || {};
+      // Deep-ish copy: keep any backend-only fields so a round-trip POST does
+      // not silently drop them. The form only edits enabled + score.
+      _thresholdState = {};
+      Object.keys(thresholds).forEach((name) => {
+        const t = thresholds[name] || {};
+        _thresholdState[name] = Object.assign({}, t);
+      });
+      renderThresholdGrid(thresholds);
+    } catch (e) {
+      console.warn("loadThresholds failed:", e);
+    }
+  }
+
+  async function saveThresholds() {
+    try {
+      // Clamp any out-of-range score values one more time before POST.
+      Object.keys(_thresholdState).forEach((name) => {
+        if ("score" in _thresholdState[name]) {
+          _thresholdState[name].score = _clampScore(_thresholdState[name].score);
+        }
+      });
+      const r = await fetch(API + "/scoring/thresholds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(_thresholdState),
+        credentials: "include",
+      });
+      if (!r.ok) {
+        let detail = "HTTP " + r.status;
+        try { const b = await r.json(); if (b && b.detail) detail = b.detail; } catch (_) {}
+        throw new Error(detail);
+      }
+      const j = await r.json();
+      const thresholds = j.thresholds || j;
+      _thresholdState = {};
+      Object.keys(thresholds).forEach((name) => {
+        _thresholdState[name] = Object.assign({}, thresholds[name] || {});
+      });
+      renderThresholdGrid(thresholds);
+      toast("scoring thresholds updated", "ok");
+    } catch (e) {
+      toast("save failed: " + e.message, "err");
+    }
+  }
+
   // ── modal ───────────────────────────────────────────────────────────
   function openModal() {
     els.modal.classList.add("show");
@@ -642,6 +825,12 @@
     if (els.btnScanStart) els.btnScanStart.addEventListener("click", startScan);
     if (els.btnScanStop)  els.btnScanStop.addEventListener("click", stopScan);
     if (els.btnRefreshObs) els.btnRefreshObs.addEventListener("click", loadObservations);
+
+    // v0.3.1 baseline + scoring
+    if (els.btnRefreshBaseline) els.btnRefreshBaseline.addEventListener("click", loadBaseline);
+    if (els.btnBaselineLearn)   els.btnBaselineLearn.addEventListener("click", startBaselineLearn);
+    if (els.btnRefreshScoring)  els.btnRefreshScoring.addEventListener("click", loadThresholds);
+    if (els.btnSaveScoring)     els.btnSaveScoring.addEventListener("click", saveThresholds);
   }
 
   // ── init ────────────────────────────────────────────────────────────
@@ -655,14 +844,19 @@
     startJournalStream();
     loadScanStatus();
     loadObservations();
+    loadBaseline();
+    loadThresholds();
     // Background polling every 10s. When no scan is running, we still poll
     // /scan/status (cheap) so the UI catches an externally-started scan,
-    // but we skip /observations to avoid hitting sqlite for nothing — the
-    // table is already at its post-scan terminal state and the user can
-    // hit Refresh manually.
+    // but we skip /observations + /baseline to avoid hitting sqlite for
+    // nothing — the tables are already at their post-scan terminal state
+    // and the user can hit Refresh manually.
     _scanPollTimer = setInterval(() => {
       loadScanStatus();
-      if (_scanRunning) loadObservations();
+      if (_scanRunning) {
+        loadObservations();
+        loadBaseline();
+      }
     }, 10000);
   }
 
