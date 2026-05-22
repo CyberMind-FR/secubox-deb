@@ -18,6 +18,11 @@ override_dh_auto_install:
 	# nginx route
 	install -d debian/secubox-sentinelle-gsm/etc/nginx/secubox.d
 	[ -f nginx/sentinelle-gsm.conf ] && cp nginx/sentinelle-gsm.conf debian/secubox-sentinelle-gsm/etc/nginx/secubox.d/ && (install -d debian/secubox-sentinelle-gsm/etc/nginx/secubox-routes.d && cp nginx/sentinelle-gsm.conf debian/secubox-sentinelle-gsm/etc/nginx/secubox-routes.d/) || true
+	# nginx route for the standalone webui + SSE tuning (#340)
+	[ -f nginx/sentinelle-webui.conf ] && cp nginx/sentinelle-webui.conf debian/secubox-sentinelle-gsm/etc/nginx/secubox.d/ || true
+	# Standalone WebUI static files (#340)
+	install -d debian/secubox-sentinelle-gsm/usr/share/secubox/www/sentinelle
+	[ -d www/sentinelle ] && cp -r www/sentinelle/. debian/secubox-sentinelle-gsm/usr/share/secubox/www/sentinelle/ || true
 	# Config example
 	install -d debian/secubox-sentinelle-gsm/etc/secubox
 	[ -f conf/sentinelle-gsm.toml.example ] && cp conf/sentinelle-gsm.toml.example debian/secubox-sentinelle-gsm/etc/secubox/sentinelle-gsm.toml.example || true

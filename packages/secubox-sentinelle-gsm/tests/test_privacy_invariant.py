@@ -99,3 +99,47 @@ def test_anonymizer_rejects_short_keys(tmp_path):
     p.write_bytes(b"x")
     with pytest.raises(ValueError, match=r"32"):
         Anonymizer.from_file(p)
+
+
+# ---------------------------------------------------------------------------
+# v0.2.0 — Alert + TrustedPhone + AlertSink privacy invariants
+# ---------------------------------------------------------------------------
+
+
+def test_alert_dataclass_has_no_plaintext_fields():
+    """Alert may only carry the HMAC-truncated `subscriber_hash` — never a
+    plaintext subscriber identifier."""
+    from sentinelle_gsm.alert_sink import Alert
+
+    field_names = {f.name for f in fields(Alert)}
+    forbidden = {"imsi", "imei", "tmsi", "msisdn", "iccid", "subscriber_id"}
+    assert field_names.isdisjoint(forbidden), (
+        f"Alert has forbidden plaintext-identifier fields: "
+        f"{field_names & forbidden}"
+    )
+    assert "subscriber_hash" in field_names
+
+
+def test_trusted_phone_dataclass_only_stores_hash():
+    """TrustedPhone persists ONLY the HMAC hash, never the plaintext IMSI."""
+    from sentinelle_gsm.trusted import TrustedPhone
+
+    field_names = {f.name for f in fields(TrustedPhone)}
+    assert "imsi" not in field_names
+    assert "imsi_hash" in field_names
+
+
+def test_alert_sink_refuses_plaintext_imsi(tmp_path):
+    """AlertSink.write() must refuse any Alert whose textual fields contain
+    a 15-digit token (the plaintext-IMSI shape)."""
+    from sentinelle_gsm.alert_sink import Alert, AlertSink
+
+    sink = AlertSink(tmp_path / "alerts.db")
+    a = Alert(
+        cell_id="208-01-100-12345",
+        arfcn=124,
+        score=80,
+        reason="saw 208201234567890 in paging request",
+    )
+    with pytest.raises(ValueError, match="plaintext-IMSI"):
+        sink.write(a)

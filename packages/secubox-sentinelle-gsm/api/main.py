@@ -27,15 +27,21 @@ from __future__ import annotations
 
 import os
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 sys.path.insert(0, "/usr/lib/secubox/sentinelle-gsm/lib")
 
 from sentinelle_gsm import CAPTURES_PLAINTEXT_IMSI, Mode  # noqa: E402
+from sentinelle_gsm.alert_sink import Alert, AlertSink   # noqa: E402
 from sentinelle_gsm.livemon import detect_rtlsdr_usb     # noqa: E402
+from sentinelle_gsm.observer import Anonymizer           # noqa: E402
+from sentinelle_gsm.trusted import TrustedRegistry       # noqa: E402
 
 SECRETS_DIR = Path(os.environ.get("SECUBOX_SECRETS_DIR", "/etc/secubox/secrets"))
 HMAC_KEY_FILE = SECRETS_DIR / "sentinelle-gsm-hmac"
@@ -44,8 +50,64 @@ MODE_FILE = Path("/var/lib/secubox/sentinelle-gsm/mode")  # PROD by default
 app = FastAPI(
     title="SecuBox SENTINELLE-GSM",
     description="Passive GSM rogue-BTS sensor (MIND layer) — RX only, off-path",
-    version="0.1.0",
+    version="0.2.0",
 )
+
+
+# ── v0.2: alert sink + trusted registry singletons ──────────────────────────
+#
+# Auth note: this package is reverse-proxied through nginx + Authelia (see
+# nginx/sentinelle-gsm.conf), which terminates JWT before forwarding to the
+# Unix socket. `require_jwt` is therefore a no-op dependency here; it exists
+# as a hook so tests (and future host-direct callers) can override it via
+# `app.dependency_overrides[require_jwt]`.
+
+def require_jwt() -> dict:
+    """No-op auth hook. Real JWT enforcement happens at nginx/Authelia."""
+    return {"sub": "nginx-authelia"}
+
+
+_alert_sink: Optional[AlertSink] = None
+_trusted_registry: Optional[TrustedRegistry] = None
+
+ALERTS_DB_PATH = Path("/var/lib/secubox/sentinelle-gsm/alerts.db")
+TRUSTED_REGISTRY_PATH = Path("/etc/secubox/sentinelle-gsm/trusted.json")
+
+
+def _get_anonymizer() -> Anonymizer:
+    """Load the HMAC key from disk; fall back to an ephemeral key.
+
+    The ephemeral fallback exists so the API can boot on a freshly-installed
+    box where postinst hasn't yet generated the key. In that case the
+    trusted-registry hashes are stable for the lifetime of the process but
+    lost on restart — the operator should re-add trusted phones once the
+    persistent HMAC key is in place.
+    """
+    mode = _read_mode()
+    if _hmac_key_present():
+        return Anonymizer.from_file(HMAC_KEY_FILE, mode=mode)
+    return Anonymizer.ephemeral(mode=mode)
+
+
+def get_alert_sink() -> AlertSink:
+    if _alert_sink is None:
+        raise RuntimeError("alert_sink not initialised")
+    return _alert_sink
+
+
+def get_trusted_registry() -> TrustedRegistry:
+    if _trusted_registry is None:
+        raise RuntimeError("trusted_registry not initialised")
+    return _trusted_registry
+
+
+@app.on_event("startup")
+def _init_v0_2_singletons() -> None:
+    global _alert_sink, _trusted_registry
+    if _alert_sink is None:
+        _alert_sink = AlertSink(ALERTS_DB_PATH)
+    if _trusted_registry is None:
+        _trusted_registry = TrustedRegistry(TRUSTED_REGISTRY_PATH, _get_anonymizer())
 
 
 def _read_mode() -> Mode:
@@ -142,10 +204,83 @@ def cells() -> dict:
     return {"cells": []}  # v0.2 wires the GSMTAP feed
 
 
-@app.get("/alerts")
-def alerts() -> dict:
-    """Active + historized alerts. Empty in v0.1.0."""
-    return {"alerts": []}
+class TrustedAddBody(BaseModel):
+    imsi: str
+    label: str
+
+
+@app.get("/alerts", dependencies=[Depends(require_jwt)])
+async def list_alerts(limit: int = 100, since: float = 0.0) -> dict:
+    """Paginated alert history from the SQLite-backed sink."""
+    return {
+        "alerts": [
+            asdict(a) for a in get_alert_sink().list(limit=limit, since=since)
+        ]
+    }
+
+
+@app.get("/alerts/stream", dependencies=[Depends(require_jwt)])
+async def stream_alerts() -> StreamingResponse:
+    """Server-Sent Events live feed of anomaly alerts.
+
+    Headers disable buffering at every layer (nginx via X-Accel-Buffering,
+    HTTP client caches via Cache-Control). The async generator runs until
+    the client disconnects; FastAPI handles cancellation.
+    """
+    sink = get_alert_sink()
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(
+        sink.stream(), media_type="text/event-stream", headers=headers
+    )
+
+
+@app.post("/alerts/test", dependencies=[Depends(require_jwt)])
+async def test_alert(body: Optional[dict] = Body(default=None)) -> dict:
+    """Manual operator trigger — writes a synthetic alert end-to-end.
+
+    A privacy-guard violation (plaintext-IMSI shape detected in any field)
+    surfaces as a 500 so the upstream UI / curl gets a clean error rather
+    than a stack trace. The error message is preserved.
+    """
+    body = body or {}
+    a = Alert(
+        cell_id=body.get("cell_id", "208-01-100-99999"),
+        arfcn=body.get("arfcn", 124),
+        score=body.get("score", 80),
+        reason=body.get("reason", "operator-test"),
+        subscriber_hash=body.get("subscriber_hash"),
+        trusted_label=body.get("trusted_label"),
+    )
+    try:
+        written = get_alert_sink().write(a)
+    except ValueError as e:
+        raise HTTPException(500, str(e))
+    return {"ok": True, "id": written.id}
+
+
+@app.get("/trusted", dependencies=[Depends(require_jwt)])
+async def list_trusted() -> dict:
+    return {"phones": [asdict(p) for p in get_trusted_registry().list()]}
+
+
+@app.post("/trusted", dependencies=[Depends(require_jwt)])
+async def add_trusted(body: TrustedAddBody) -> dict:
+    try:
+        p = get_trusted_registry().add(body.imsi, body.label)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return asdict(p)
+
+
+@app.delete("/trusted/{phone_id}", dependencies=[Depends(require_jwt)])
+async def delete_trusted(phone_id: str) -> dict:
+    if not get_trusted_registry().delete(phone_id):
+        raise HTTPException(404, "not found")
+    return {"ok": True}
 
 
 @app.post("/mode")
