@@ -306,10 +306,22 @@ async def _journal_stream() -> "AsyncIterator[str]":  # noqa: F821
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
+    # Emit a `: subscribed` SSE comment IMMEDIATELY so browsers transition
+    # EventSource from CONNECTING to OPEN even if the journal happens to
+    # be idle. Then loop with a 30 s heartbeat that pings the connection
+    # alive across HAProxy/mitmproxy/nginx idle timeouts.
+    yield ": subscribed\n\n"
+    HEARTBEAT_SEC = 30.0
     try:
         assert proc.stdout is not None
         while True:
-            line = await proc.stdout.readline()
+            try:
+                line = await asyncio.wait_for(
+                    proc.stdout.readline(), timeout=HEARTBEAT_SEC
+                )
+            except asyncio.TimeoutError:
+                yield ": ping\n\n"
+                continue
             if not line:
                 break
             try:
