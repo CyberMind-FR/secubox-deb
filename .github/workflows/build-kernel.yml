@@ -70,25 +70,40 @@ jobs:
           scripts/kconfig/merge_config.sh -m .config \
             "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12-openwrt-merged.fragment" \
             "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12.85-secubox-zram.fragment"
-          # Enforce the choice symbols that merge_config.sh + olddefconfig
-          # don't always honour when set via a fragment (choice handling is
-          # special-cased in kconfig). scripts/config edits .config directly
-          # and olddefconfig then propagates dependencies.
-          scripts/config --module  ZRAM \
-                         --enable  ZRAM_DEF_COMP_ZSTD \
-                         --disable ZRAM_DEF_COMP_LZORLE \
-                         --enable  ZSMALLOC \
+          # Resolve deps + olddefconfig FIRST, then override the ZRAM
+          # compressor choice via sed. olddefconfig is what we're fighting:
+          # it re-resolves any kconfig `choice` block back to its declared
+          # default (ZRAM_DEF_COMP_LZORLE) even if a member is marked =y
+          # in .config. scripts/config --enable on a choice member applied
+          # BEFORE olddefconfig is silently undone by olddefconfig.
+          # These symbols are NOT inside a choice block — safe to set early.
+          scripts/config --enable  ZSMALLOC \
                          --enable  CRYPTO_ZSTD \
                          --enable  CRYPTO_LZ4 \
                          --enable  CRYPTO_LZO
           make ARCH=arm64 olddefconfig
+
+          # ZRAM compressor choice — surgical sed AFTER olddefconfig. The
+          # rest of the tree is already consistent so no further olddefconfig
+          # is needed; choice members are leaf symbols with no downstream
+          # build-time dependencies. This is the only reliable way: choice
+          # resolution in olddefconfig honours `default <member>` from
+          # Kconfig and ignores individual member =y lines.
+          echo "=== ZRAM choice pre-fixup ==="
+          grep -E "^(# )?CONFIG_ZRAM_DEF_COMP" .config || true
+          if ! grep -q "^CONFIG_ZRAM_DEF_COMP_ZSTD=y" .config; then
+            echo "INFO: olddefconfig defaulted the choice to LZORLE; forcing ZSTD"
+            sed -i 's/^CONFIG_ZRAM_DEF_COMP_LZORLE=y/# CONFIG_ZRAM_DEF_COMP_LZORLE is not set/' .config
+            sed -i 's/^# CONFIG_ZRAM_DEF_COMP_ZSTD is not set/CONFIG_ZRAM_DEF_COMP_ZSTD=y/' .config
+            # If kconfig dropped the symbol entirely, append it.
+            grep -q "ZRAM_DEF_COMP_ZSTD" .config || echo "CONFIG_ZRAM_DEF_COMP_ZSTD=y" >> .config
+          fi
+          echo "=== ZRAM choice post-fixup ==="
+          grep -E "^(# )?CONFIG_ZRAM" .config || true
+
           # Sanity-check key configs landed.
           grep -q "CONFIG_LEDS_IS31FL319X=m" .config || (echo "FAIL: LED module missing" && exit 1)
           grep -q "CONFIG_ZRAM=m" .config           || (echo "FAIL: ZRAM module missing" && exit 1)
-          # CONFIG_ZRAM_DEF_COMP_ZSTD is the *choice* we set in the fragment;
-          # CONFIG_ZRAM_DEF_COMP="zstd" is the auto-derived string and may or
-          # may not be emitted depending on kconfig's choice handling — check
-          # the source-of-truth symbol instead.
           grep -q "^CONFIG_ZRAM_DEF_COMP_ZSTD=y" .config || (echo "FAIL: ZRAM zstd default missing" && exit 1)
 
       - name: Build kernel .deb (bindeb-pkg)
