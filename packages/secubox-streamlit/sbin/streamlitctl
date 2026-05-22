@@ -49,7 +49,7 @@ _idle_config() {
 # Returns 0 if the app is listening on its port INSIDE the LXC, else 1.
 _app_running() {
     local name="$1"
-    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
     [ -z "$port" ] && return 1
     lxc_running || return 1
     lxc-attach -n "$LXC_NAME" -- ss -tln "sport = :$port" 2>/dev/null \
@@ -59,7 +59,7 @@ _app_running() {
 # Returns the count of ESTABLISHED connections to the app's port (inside LXC).
 _app_active_conns() {
     local name="$1"
-    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
     [ -z "$port" ] && { echo 0; return; }
     lxc_running || { echo 0; return; }
     lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" 2>/dev/null \
