@@ -66,7 +66,7 @@ a { color: var(--mind-violet-lt); text-decoration: none; }
 a:hover { color: var(--text-primary); }
 
 /* ── sidebar ──────────────────────────────────────────────────────────── */
-.sidebar {
+.local-nav {
   position: fixed;
   top: 0; left: 0;
   width: var(--sidebar-w);
@@ -81,7 +81,7 @@ a:hover { color: var(--text-primary); }
   z-index: 100;
 }
 
-.sidebar-brand .brand-tag {
+.local-nav-brand .brand-tag {
   display: inline-block;
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
@@ -93,19 +93,19 @@ a:hover { color: var(--text-primary); }
   color: #fff;
   margin-bottom: 0.5rem;
 }
-.sidebar-brand .brand-name {
+.local-nav-brand .brand-name {
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
 }
-.sidebar-brand .brand-sub {
+.local-nav-brand .brand-sub {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 0.15rem;
 }
 
-.sidebar-nav {
+.local-nav-list {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -127,7 +127,7 @@ a:hover { color: var(--text-primary); }
   border-left-color: var(--mind-violet-lt);
 }
 
-.sidebar-foot {
+.local-nav-foot {
   margin-top: auto;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
@@ -480,18 +480,18 @@ a:hover { color: var(--text-primary); }
 /* ── responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   body { flex-direction: column; }
-  .sidebar {
+  .local-nav {
     position: static;
     width: 100%;
     height: auto;
     padding: calc(var(--gmb-h) + 0.75rem) 1rem 0.75rem;
   }
   .main { margin-left: 0; padding: 1rem; }
-  .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
+  .local-nav-list { flex-direction: row; flex-wrap: wrap; }
   .nav-link { padding: 0.4rem 0.7rem; border-left: 0; border-bottom: 2px solid transparent; }
   .nav-link:hover { border-left: 0; border-bottom-color: var(--mind-violet-lt); }
   .status-strip { grid-template-columns: 1fr 1fr; }
-  .sidebar-foot { display: none; }
+  .local-nav-foot { display: none; }
 }
 
 @media (max-width: 520px) {
