@@ -375,7 +375,13 @@ fi
 
 # ── 11. Network Auto-Detection ──────────────────────────────────
 log "=== Network Detection ==="
-if [[ -x /usr/sbin/secubox-net-detect ]]; then
+# Short-circuit when the image was built with --static-ip: build-live-usb.sh
+# wrote a fixed netplan AND pre-touched /var/lib/secubox/.net-configured.
+# Running net-detect here would clobber the static config with router-mode
+# defaults (WAN + br-lan 192.168.1.1/24), the exact regression in #128.
+if [[ -f /var/lib/secubox/.net-configured ]]; then
+  log "Static netplan in effect (.net-configured present) — skipping net-detect"
+elif [[ -x /usr/sbin/secubox-net-detect ]]; then
   # Run detection
   /usr/sbin/secubox-net-detect detect /run/secubox/net-detect.json
 
