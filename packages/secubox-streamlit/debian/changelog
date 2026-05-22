@@ -1,3 +1,15 @@
+secubox-streamlit (1.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * sbin/streamlitctl: `_app_running` + `_app_active_conns` now strip
+    double-quotes from the port value (`tr -d ' "'`), not just spaces.
+    Older `.streamlit.toml` files were written as `port = "8527"` —
+    `cut | tr -d ' '` returned the literal string `"8527"` (quotes
+    included) and `ss "sport = :\"8527\""` never matched. Result on
+    gk2: idle-check reported `active=0 idle=0 stopped=0` even with 7
+    apps listening, because every app's port-extraction failed.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 06:20:00 +0000
+
 secubox-streamlit (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * Remove stale packages/secubox-streamlit/scripts/streamlitctl
