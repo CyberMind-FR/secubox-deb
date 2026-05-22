@@ -106,7 +106,8 @@ class LivemonRunner:
         gain: Optional[float] = None,
         samp_rate: Optional[str] = None,
         ppm: Optional[float] = None,
-        args: str = "rtl=0",
+        args: Optional[str] = None,
+        serverport: Optional[int] = None,
     ) -> ScanStatus:
         """Spawn grgsm_livemon_headless on the given frequency.
 
@@ -115,20 +116,31 @@ class LivemonRunner:
             (let grgsm use its default).
         samp_rate: optional sample rate string ('2.0M'). None = grgsm default.
         ppm: optional clock offset in ppm. None = grgsm default (0).
-        args: gr-osmosdr device args. Default 'rtl=0' forces the RTL-SDR
-            backend (otherwise osmosdr loads UHD/USRP by default and
-            crashes when no USRP is plugged in).
+        args: gr-osmosdr device args. v0.3.3: default is None — gkerma's
+            IMSI-catcher project (scan-and-livemon) proves the bare `-f FREQ`
+            form is canonical; gr-osmosdr auto-picks the first RTL-SDR.
+            v0.3.2 defaulted to 'rtl=0' which triggered "Wrong rtlsdr device
+            index given" inside livemon (different code path than
+            grgsm_scanner, which accepts the same syntax). Pass a value here
+            only to override the auto-pick.
+        serverport: optional GSMTAP UDP port (default 4729 inside grgsm).
+            Used for multi-cell capture: spawn N runners on 4730/4731/…
+            and demux on the listener side.
         """
         if self._proc is not None and not self._done:
             raise RuntimeError("scan already running — stop first")
 
-        argv = [self._bin, f"--args={args}", "-f", freq]
+        argv = [self._bin, "-f", freq]
+        if args is not None:
+            argv += [f"--args={args}"]
         if gain is not None:
             argv += ["-g", str(gain)]
         if samp_rate is not None:
             argv += ["-s", str(samp_rate)]
         if ppm is not None:
             argv += ["-p", str(ppm)]
+        if serverport is not None:
+            argv += [f"--serverport={serverport}"]
 
         self._proc = await asyncio.create_subprocess_exec(
             *argv,

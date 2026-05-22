@@ -38,13 +38,19 @@ async def test_initial_status_not_running():
 
 
 @pytest.mark.asyncio
-async def test_start_spawns_with_rtl_args():
+async def test_start_default_no_args_flag():
+    """v0.3.3: with no `args` kwarg, argv must NOT contain any --args=*.
+    The IMSI-catcher scan-and-livemon pattern proves this is the
+    canonical invocation — livemon rejects the same syntax scanner
+    accepts (different code paths in gnuradio)."""
     r = LivemonRunner()
     fake = _make_fake_proc()      # never exits
     with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=fake)) as mck:
         s = await r.start("925.4M")
     args = mck.call_args[0]
-    assert "--args=rtl=0" in args
+    assert not any(a.startswith("--args=") for a in args), (
+        f"v0.3.3 fix: no --args flag in default invocation, got {args}"
+    )
     assert "-f" in args and "925.4M" in args
     assert s.running is True
     assert s.pid == 12345
@@ -129,15 +135,44 @@ async def test_start_passes_gain_samp_rate_ppm():
 
 @pytest.mark.asyncio
 async def test_start_custom_args_override():
-    """v0.3.2: gr-osmosdr args can be overridden from the caller."""
+    """v0.3.2: gr-osmosdr args can be overridden from the caller.
+    v0.3.3: opt-in only (default is None — see test_start_default_no_args_flag)."""
     r = LivemonRunner()
     fake = _make_fake_proc()
     with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=fake)) as mck:
         await r.start("925.4M", args="numchan=1,rtl=0")
     args = mck.call_args[0]
     assert "--args=numchan=1,rtl=0" in args
-    # Default rtl=0 should NOT be in argv when overridden
+    # The override is the only --args= token; no leftover default rtl=0.
     assert "--args=rtl=0" not in args
+
+
+@pytest.mark.asyncio
+async def test_start_serverport_kwarg():
+    """v0.3.3: --serverport is passed through. Enables multi-cell capture
+    where N runners multiplex onto 4730/4731/… (the IMSI-catcher
+    scan-and-livemon pattern)."""
+    r = LivemonRunner()
+    fake = _make_fake_proc()
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=fake)) as mck:
+        await r.start("925.4M", serverport=4731)
+    args = mck.call_args[0]
+    assert "--serverport=4731" in args
+
+
+@pytest.mark.asyncio
+async def test_start_no_serverport_omits_flag():
+    """v0.3.3: default serverport=None means the flag is not emitted —
+    grgsm uses its own default (4729, also where the listener binds), so
+    single-cell capture remains the no-flag path."""
+    r = LivemonRunner()
+    fake = _make_fake_proc()
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=fake)) as mck:
+        await r.start("925.4M")
+    args = mck.call_args[0]
+    assert not any(a.startswith("--serverport=") for a in args), (
+        f"default serverport must omit flag, got {args}"
+    )
 
 
 @pytest.mark.asyncio

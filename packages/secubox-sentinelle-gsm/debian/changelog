@@ -1,3 +1,27 @@
+secubox-sentinelle-gsm (0.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * lib/sentinelle_gsm/livemon_runner.py: drop the `--args=rtl=0` default
+    that v0.3.2 emitted unconditionally. gr-osmosdr's livemon code path
+    rejected it with "Wrong rtlsdr device index given" — different from
+    grgsm_scanner, which accepts the same syntax. The canonical form
+    proven by gkerma/IMSI-catcher's scan-and-livemon is the bare
+    `-f FREQ` invocation: gr-osmosdr auto-picks the first RTL-SDR. The
+    `args` kwarg is still available as opt-in for overrides.
+  * lib/sentinelle_gsm/livemon_runner.py: new optional `serverport`
+    kwarg → passes `--serverport=N` through to grgsm. Used for
+    multi-cell capture, where N runners multiplex onto 4730/4731/…
+    while the listener demuxes (same pattern as scan-and-livemon).
+  * api/main.py: ScanStartBody — `args` is now `Optional[str] = None`
+    (was `"rtl=0"`); added `serverport: Optional[int] = None`. POST
+    /scan/start passes both through.
+  * api/tests/test_livemon_runner.py: rename `test_start_spawns_with_rtl_args`
+    → `test_start_default_no_args_flag` (inverted assertion: argv must
+    NOT contain any `--args=*`); add `test_start_serverport_kwarg` +
+    `test_start_no_serverport_omits_flag`. 11/11 sweep.
+  * Closes #353. Refs #351.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 19:30:00 +0000
+
 secubox-sentinelle-gsm (0.3.2-1~bookworm1) bookworm; urgency=medium
 
   * lib/sentinelle_gsm/livemon_runner.py: NEW watcher task awaits the
