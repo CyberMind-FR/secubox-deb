@@ -1,3 +1,38 @@
+secubox-sentinelle-gsm (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * lib/sentinelle_gsm/livemon_runner.py: NEW — manages a single
+    grgsm_livemon_headless subprocess. The CHILD claims the RTL-SDR;
+    the parent service never does. Closes #344 (ad-hoc tools — rtl_test,
+    rtl_adsb, kalibrate — can now run alongside the service when no
+    scan is active).
+  * lib/sentinelle_gsm/gsmtap_listener.py: NEW — asyncio UDP 4729
+    listener with a tiny by-hand GSMTAP v2 header parser, yields
+    typed Observation events. L3 decode (BCCH SI, paging) deferred to
+    v0.3.1.
+  * lib/sentinelle_gsm/observations.py: NEW — SQLite sightings +
+    paging_events with the same plaintext-IMSI shape guard as
+    alert_sink.
+  * lib/sentinelle_gsm/livemon.py: DROPPED — was the v0.1 USB-detect
+    stub. detect_rtlsdr_usb() (pure sysfs) is now in livemon_runner.py
+    alongside RTLSDR_USB_IDS.
+  * api/main.py: NEW /scan/start, /scan/stop, /scan/status,
+    /observations endpoints. Consume loop wires gsmtap_listener →
+    observations DB with a synthetic cell_id (`arfcn-X-ch-Y`) until
+    v0.3.1 L3 decode lands. /scan/start returns 409 if already
+    running and rolls back the listener bind on subprocess failure.
+  * www/sentinelle/: NEW Scan control + Observations panels (10 s
+    poll while running; manual Refresh button; collapsed stderr-tail
+    drawer; MIND palette).
+  * debian/control: python3-scapy promoted from Recommends to
+    Depends (runtime decode in v0.3.1); gr-gsm kept in Recommends
+    (subprocess only; heavy gnuradio chain).
+  * tests: 19 new (livemon_runner ×5, gsmtap_listener ×4, observations
+    ×4, scan_api ×3, privacy_invariant ×3); 48/48 total passing.
+  * Closes #344. Refs #347. Scoring engine fill-in + alert emission
+    from observations remain v0.3.1 scope.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 15:30:00 +0000
+
 secubox-sentinelle-gsm (0.2.3-1~bookworm1) bookworm; urgency=medium
 
   * lib/sentinelle_gsm/alert_sink.py: AlertSink.stream() now emits a
