@@ -1,3 +1,20 @@
+secubox-sentinelle-gsm (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * lib/sentinelle_gsm/alert_sink.py: AlertSink.stream() now emits a
+    `: subscribed` SSE comment IMMEDIATELY on subscribe, then a `: ping`
+    heartbeat every 30 s. Without the initial comment chunk the response
+    body stayed empty until the first alert was written, and browsers
+    kept EventSource.readyState in CONNECTING (0) forever — the webui
+    showed "SSE stream: connecting…" until manually triggered.
+  * api/main.py: _journal_stream() gets the same treatment (defensive —
+    catches the idle-journal edge case + keeps the long-poll alive
+    across HAProxy/mitmproxy/nginx idle timeouts).
+  * api/tests/test_alert_sink.py: updated test to consume the initial
+    subscribed comment then the alert event in sequence (5/5 still pass).
+  * Full pytest sweep 29/29 still green.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 15:00:00 +0000
+
 secubox-sentinelle-gsm (0.2.2-1~bookworm1) bookworm; urgency=medium
 
   * api/main.py: new GET /journal/stream endpoint streaming the service's

@@ -53,16 +53,22 @@ async def test_subscribe_receives_new_alerts(sink):
 
 
 @pytest.mark.asyncio
-async def test_stream_emits_sse_format(sink):
-    """One alert written, one SSE chunk yielded."""
-    async def collect_one():
-        gen = sink.stream()
-        return await asyncio.wait_for(gen.__anext__(), timeout=1.0)
-    task = asyncio.create_task(collect_one())
-    await asyncio.sleep(0.05)  # let subscribe() register
+async def test_stream_emits_subscribed_then_alert(sink):
+    """First SSE chunk is the `: subscribed` comment (forces EventSource
+    open), then the next chunk is the alert event."""
+    gen = sink.stream()
+    # First chunk must be the immediate subscribed comment so the
+    # browser transitions EventSource readyState CONNECTING → OPEN
+    # even when the alert queue is empty.
+    first = await asyncio.wait_for(gen.__anext__(), timeout=1.0)
+    assert first == ": subscribed\n\n"
+
+    # Now write an alert and consume the next chunk — it should be the
+    # alert event in proper SSE format.
     sink.write(Alert(cell_id="208-01-100-77777", arfcn=88, score=91, reason="identity_request_abuse"))
-    chunk = await task
+    chunk = await asyncio.wait_for(gen.__anext__(), timeout=1.0)
     assert chunk.startswith("event: alert\n")
     data_line = next(l for l in chunk.split("\n") if l.startswith("data: "))
     payload = json.loads(data_line[len("data: "):])
     assert payload["cell_id"] == "208-01-100-77777"
+    await gen.aclose()
