@@ -1,3 +1,14 @@
+secubox-dns-provider (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * www/dns-provider/index.html: dismiss the Add-Provider modal as
+    soon as the POST succeeds; surface the upstream /domains probe
+    verdict as a non-modal toast that auto-dismisses after 6s.
+    Previously the modal stayed open on a yellow probe-warning even
+    after the underlying issue got resolved, so the operator saw a
+    stale message contradicting the providers list. Closes #304.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 04:55:00 +0000
+
 secubox-dns-provider (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * www/dns-provider/index.html: bump .modal z-index 100 → 1500. The
