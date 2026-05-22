@@ -120,6 +120,14 @@ lxc.mount.entry = /dev/secubox-zgb dev/secubox-zgb none bind,create=file,optiona
 # Without this, the configuration.yaml port: must be the bare /dev/secubox-zgb
 # AND z2m must match by USB VID/PID alone — which v2.10+ doesn't always do.
 lxc.mount.entry = /dev/serial/by-id dev/serial/by-id none bind,create=dir,optional 0 0
+# CRITICAL: bind the actual /dev/tty{USB,ACM}* device nodes. The symlinks in
+# /dev/secubox-zgb and /dev/serial/by-id all *resolve* to /dev/ttyUSB0 or
+# /dev/ttyACM0 — if those nodes don't exist inside the container, z2m opens
+# the symlink, the kernel follows it, and the open(2) fails with ENOENT and
+# z2m crash-loops (4500+ restarts observed in the wild). The `optional`
+# flag means the LXC still starts when the dongle is unplugged.
+lxc.mount.entry = /dev/ttyUSB0 dev/ttyUSB0 none bind,create=file,optional 0 0
+lxc.mount.entry = /dev/ttyACM0 dev/ttyACM0 none bind,create=file,optional 0 0
 lxc.cgroup2.devices.allow = c 188:* rwm
 lxc.cgroup2.devices.allow = c 166:* rwm
 EOF
@@ -336,23 +344,42 @@ install_udev_rule() {
     log "Installing udev rule for Zigbee dongles ..."
     cat > "$rule_file" <<'UDEV'
 # /etc/udev/rules.d/99-secubox-zigbee.rules
-# Installed by secubox-zigbee (#241, updated v2.4.1 for SONOFF MG21).
+# Installed by secubox-zigbee (#241, updated v2.4.2 for hotplug → LXC).
 # Order matters: ATTRS{product} filter MUST come before the generic CP210x
 # rule below, otherwise the SONOFF MG21 would land as -alt and z2m's adapter
 # discovery wouldn't pick it up.
+#
+# What the SYMLINK lines do:
+#   * Create /dev/secubox-zgb pointing at the zigbee radio kernel device.
+#   * The LXC config bind-mounts BOTH /dev/secubox-zgb AND the underlying
+#     /dev/ttyUSB0 / /dev/ttyACM0 nodes, so the symlinks actually resolve
+#     to a real device inside the container.
+#
+# What the RUN line does (NEW in v2.4.2):
+#   * On a hotplug event (dongle re-inserted after the LXC was already
+#     running), `lxc-device add zigbee /dev/<kernel>` pushes the device
+#     node into the running container AND adds the cgroup permission.
+#     Without this, a replugged dongle stays invisible inside the LXC
+#     until the container restarts — which is the failure mode that
+#     produced 4500+ crash-loop restarts of zigbee2mqtt on gk2.
+#   * `|| true` keeps udev's overall ruleset healthy when the LXC is
+#     stopped (lxc-device exits non-zero in that case).
 
 # SONOFF Dongle Lite MG21 (Silicon Labs EFR32MG21 behind a CP210x bridge)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
     ATTRS{product}=="SONOFF Dongle Lite MG21", \
-    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
+    RUN+="/bin/sh -c '/usr/bin/lxc-device add zigbee /dev/%k || true'"
 
 # Sonoff Zigbee 3.0 USB Plus (CC2652P)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", \
-    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
+    RUN+="/bin/sh -c '/usr/bin/lxc-device add zigbee /dev/%k || true'"
 
 # ConBee II (fallback)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", \
-    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
+    RUN+="/bin/sh -c '/usr/bin/lxc-device add zigbee /dev/%k || true'"
 
 # Generic CP210x without the SONOFF descriptor — secondary symlink only
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
