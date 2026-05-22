@@ -1,0 +1,3 @@
+www/sentinelle/                  usr/share/secubox/www/
+nginx/sentinelle-webui.conf      etc/nginx/secubox.d/
+menu.d/45-sentinelle.json        usr/share/secubox/menu.d/
