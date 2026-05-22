@@ -39,7 +39,13 @@ jobs:
       - name: Install cross toolchain + build deps
         run: |
           sudo apt-get update -qq
+          # build-essential is needed because bindeb-pkg auto-generates a
+          # debian/control that lists `build-essential:native` in
+          # Build-Depends; dpkg-checkbuilddeps fails the run without it
+          # even though every individual binary it pulls in (gcc, g++,
+          # libc-dev, make) is independently installable.
           sudo apt-get install -y --no-install-recommends \
+            build-essential \
             gcc-aarch64-linux-gnu make bc flex bison \
             libssl-dev libelf-dev wget xz-utils \
             kmod cpio rsync debhelper dpkg-dev fakeroot \
