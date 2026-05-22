@@ -46,7 +46,9 @@ from sentinelle_gsm.gsmtap_listener import GsmtapListener  # noqa: E402
 from sentinelle_gsm.l3_decode import (                   # noqa: E402
     L3Decode, MID_TYPE_IMSI, MID_TYPE_TMSI,
 )
+from sentinelle_gsm.livemon_fleet import LivemonFleet, RunnerSummary  # noqa: E402
 from sentinelle_gsm.livemon_runner import LivemonRunner, detect_rtlsdr_usb  # noqa: E402
+from sentinelle_gsm.scanner import CellInfo, scan_band, select_diverse  # noqa: E402
 from sentinelle_gsm.observations import (                # noqa: E402
     ObservationsDB, PagingEvent, Sighting,
 )
@@ -133,6 +135,10 @@ _livemon: Optional[LivemonRunner] = None
 _listener: Optional[GsmtapListener] = None
 _obs_db: Optional[ObservationsDB] = None
 _consume_task: Optional[asyncio.Task] = None
+# v0.3.5: multi-cell fleet, populated only by /scan/auto. Coexists with
+# the single-runner path on /scan/start — at most one of them is alive
+# at any moment (both 409 if the other is active).
+_fleet: Optional[LivemonFleet] = None
 
 OBSERVATIONS_DB_PATH = Path("/var/lib/secubox/sentinelle-gsm/observations.db")
 
@@ -687,6 +693,8 @@ async def scan_start(body: ScanStartBody) -> dict:
     global _consume_task
     if _consume_task is not None and not _consume_task.done():
         raise HTTPException(409, "scan already running")
+    if _fleet is not None:
+        raise HTTPException(409, "fleet scan already running — stop first")
     listener = get_listener()
     runner = get_livemon()
     try:
@@ -715,8 +723,12 @@ async def scan_start(body: ScanStartBody) -> dict:
 
 @app.post("/scan/stop", dependencies=[Depends(require_jwt)])
 async def scan_stop() -> dict:
-    """Cancel consume task, then stop runner + listener (in that order)."""
-    global _consume_task
+    """Cancel consume task, then stop runner(s) + listener.
+
+    v0.3.5: stops whichever path is active — the /scan/start single
+    runner OR the /scan/auto fleet. Idempotent for both.
+    """
+    global _consume_task, _fleet
     if _consume_task is not None:
         _consume_task.cancel()
         try:
@@ -728,9 +740,150 @@ async def scan_stop() -> dict:
         _consume_task = None
     runner = get_livemon()
     listener = get_listener()
+    fleet_finals: list[RunnerSummary] = []
+    if _fleet is not None:
+        fleet_finals = await _fleet.stop_all()
+        _fleet = None
     status = await runner.stop()
     await listener.stop()
+    if fleet_finals:
+        # Fleet was the active path; surface every runner's final state.
+        return {
+            "mode": "fleet",
+            "runners": [_runner_summary_payload(s) for s in fleet_finals],
+        }
     return _scan_status_payload(status)
+
+
+class ScanAutoBody(BaseModel):
+    # v0.3.5: discover cells with grgsm_scanner, then run N livemons in
+    # parallel. Defaults match the IMSI-catcher scan-and-livemon
+    # project: GSM900 (the band most common for IMSI catchers in EU
+    # rural/suburban areas) and 3 cells (one per French carrier).
+    band: str = "GSM900"
+    max_cells: int = 3
+    gain: Optional[float] = None
+    ppm: Optional[float] = None
+    samp_rate: Optional[str] = None
+    speed: Optional[int] = None
+    scan_timeout: float = 180.0
+
+
+def _cell_payload(c: CellInfo) -> dict:
+    return {
+        "arfcn": c.arfcn,
+        "freq": c.freq,
+        "cid": c.cid,
+        "lac": c.lac,
+        "mcc": c.mcc,
+        "mnc": c.mnc,
+        "power": c.power,
+    }
+
+
+def _runner_summary_payload(s: RunnerSummary) -> dict:
+    return {
+        "cell": _cell_payload(s.cell),
+        "serverport": s.serverport,
+        "status": _scan_status_payload(s.status),
+    }
+
+
+@app.post("/scan/auto", dependencies=[Depends(require_jwt)])
+async def scan_auto(body: ScanAutoBody) -> dict:
+    """Discover cells via grgsm_scanner, then start a fleet of N livemons.
+
+    Lifecycle: refuses if a scan is already running (single OR fleet).
+    The scanner hard-binds UDP 4729, so the listener must be DOWN
+    while it runs; we stop the listener, scan, restart the listener,
+    then spawn the fleet. The window is brief but is the only time
+    the GSMTAP path is offline; no observations are lost because no
+    livemon is sending yet.
+    """
+    global _consume_task, _fleet
+    if (_consume_task is not None and not _consume_task.done()) or _fleet is not None:
+        raise HTTPException(409, "scan already running")
+    if body.max_cells <= 0:
+        raise HTTPException(400, "max_cells must be ≥ 1")
+
+    listener = get_listener()
+    runner = get_livemon()
+
+    # Ensure listener is down before the scanner tries to bind 4729.
+    # If listener.stop() is a no-op for unbound state, this is safe.
+    await listener.stop()
+
+    try:
+        cells = await scan_band(
+            band=body.band,
+            gain=body.gain,
+            ppm=body.ppm,
+            samp_rate=body.samp_rate,
+            speed=body.speed,
+            timeout=body.scan_timeout,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(500, f"grgsm_scanner missing: {e}")
+    except asyncio.TimeoutError:
+        raise HTTPException(504, f"grgsm_scanner did not finish in {body.scan_timeout}s")
+    except RuntimeError as e:
+        raise HTTPException(500, f"grgsm_scanner failed: {e}")
+
+    if not cells:
+        # Bring the listener back so other endpoints (status, observations)
+        # behave normally even after a fruitless scan.
+        try:
+            await listener.start()
+        except OSError:
+            pass
+        return {"mode": "fleet", "cells_found": 0, "runners": []}
+
+    chosen = select_diverse(cells, body.max_cells)
+
+    # Listener up first — fleet runners will start emitting GSMTAP
+    # immediately, and we don't want to drop packets while binding.
+    try:
+        await listener.start()
+    except OSError as e:
+        raise HTTPException(500, f"listener bind failed after scan: {e}")
+
+    # Single-runner state should be idle here (we 409'd earlier if it
+    # wasn't), but call stop() defensively to guarantee no stale child.
+    await runner.stop()
+
+    fleet = LivemonFleet(gsmtap_port=listener.port if hasattr(listener, "port") else 4729)
+    try:
+        summaries = await fleet.start(
+            chosen,
+            gain=body.gain,
+            ppm=body.ppm,
+            samp_rate=body.samp_rate,
+        )
+    except Exception as e:
+        await listener.stop()
+        raise HTTPException(500, f"fleet.start failed: {e}")
+
+    _fleet = fleet
+    _consume_task = asyncio.create_task(_consume_observations())
+
+    return {
+        "mode": "fleet",
+        "cells_found": len(cells),
+        "cells_selected": [_cell_payload(c) for c in chosen],
+        "runners": [_runner_summary_payload(s) for s in summaries],
+    }
+
+
+@app.get("/scan/auto/status", dependencies=[Depends(require_jwt)])
+async def scan_auto_status() -> dict:
+    """Per-runner status of the active fleet, or empty if no fleet."""
+    if _fleet is None:
+        return {"mode": "fleet", "running": False, "runners": []}
+    return {
+        "mode": "fleet",
+        "running": _fleet.is_running(),
+        "runners": [_runner_summary_payload(s) for s in _fleet.summaries()],
+    }
 
 
 @app.get("/scan/status", dependencies=[Depends(require_jwt)])
