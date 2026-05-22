@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox Streamlit — idle-app sweep
+After=secubox-streamlit.service
+Requires=secubox-streamlit.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/streamlitctl app idle-check
+# Best-effort — a failed sweep should not page anyone
+SuccessExitStatus=0 1

@@ -540,6 +540,54 @@ async def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
     return {"logs": result.get("output", "").splitlines()}
 
 
+# ── WAKE ───────────────────────────────────────────────────────────────
+# Lazy restart an idle-stopped streamlit app (ref #331)
+
+class WakeResult(BaseModel):
+    name: str
+    status: str  # "running" | "started"
+    duration_ms: int
+
+
+@router.post("/apps/{name}/wake", response_model=WakeResult)
+async def wake_app(name: str, user=Depends(require_jwt)) -> WakeResult:
+    """Wake an idle-stopped streamlit app.
+
+    Blocks until the port comes up or 30 s elapse. Idempotent — returns
+    immediately with status="running" if the app is already up.
+
+    Status codes:
+      - 200: app is up (status="running" or "started")
+      - 404: app does not exist on disk
+      - 502: streamlitctl binary missing
+      - 504: wake failed or timed out
+    """
+    if not Path(CTL).exists():
+        raise HTTPException(502, "streamlitctl missing")
+    app_dir = Path(APPS_PATH) / name
+    if not app_dir.is_dir():
+        raise HTTPException(404, f"app not found: {name}")
+
+    start = time.monotonic()
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", CTL, "app", "wake", name, "30"],
+            capture_output=True, timeout=35, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "wake exceeded 35s wall-clock")
+
+    duration_ms = int((time.monotonic() - start) * 1000)
+    if result.returncode == 0:
+        status = "running" if b"already running" in result.stderr else "started"
+        log.info("wake: %s status=%s duration_ms=%d", name, status, duration_ms)
+        return WakeResult(name=name, status=status, duration_ms=duration_ms)
+
+    stderr_snippet = result.stderr.decode(errors="replace")[:200]
+    log.warning("wake: %s failed rc=%d stderr=%s", name, result.returncode, stderr_snippet)
+    raise HTTPException(504, f"wake failed: {stderr_snippet}")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # INSTANCES
 # ═══════════════════════════════════════════════════════════════════════
