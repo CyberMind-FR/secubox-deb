@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gerald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox-Deb :: SENTINELLE-GSM webui (MIND layer)
+  Standalone single-page UI. All API calls hit /api/v1/sensor/gsm/* via nginx.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecuBox — SENTINELLE-GSM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="sentinelle.css">
+</head>
+<body>
+
+<aside class="sidebar" aria-label="Sentinelle navigation">
+  <div class="sidebar-brand">
+    <div class="brand-tag">MIND</div>
+    <div class="brand-name">sentinelle-gsm</div>
+    <div class="brand-sub">passive rogue-BTS sensor</div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#status" class="nav-link">Status</a>
+    <a href="#alerts" class="nav-link">Alerts</a>
+    <a href="#trusted" class="nav-link">Trusted phones</a>
+    <a href="#actions" class="nav-link">Actions</a>
+  </nav>
+  <div class="sidebar-foot">
+    <a href="/" class="back-hub">← hub</a>
+  </div>
+</aside>
+
+<main class="main">
+
+  <header class="page-header">
+    <h1><span aria-hidden="true">📡</span> SENTINELLE-GSM</h1>
+    <p class="subtitle">Passive GSM rogue-BTS sensor — RX only, off-path.</p>
+  </header>
+
+  <!-- STATUS strip ------------------------------------------------------- -->
+  <section id="status" class="status-strip" aria-label="Live status">
+    <div class="status-cell">
+      <div class="status-label">SSE stream</div>
+      <div class="status-value">
+        <span id="stream-dot" class="dot dot-idle" aria-hidden="true"></span>
+        <span id="stream-status">connecting…</span>
+      </div>
+    </div>
+    <div class="status-cell">
+      <div class="status-label">Trusted phones</div>
+      <div class="status-value mono"><span id="trusted-count">—</span></div>
+    </div>
+    <div class="status-cell">
+      <div class="status-label">Last alert</div>
+      <div class="status-value mono"><span id="last-alert-ts">—</span></div>
+    </div>
+    <div class="status-cell">
+      <div class="status-label">Notifications</div>
+      <div class="status-value">
+        <span id="notif-dot" class="dot dot-idle" aria-hidden="true"></span>
+        <span id="notif-status">unknown</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ALERTS panel ------------------------------------------------------- -->
+  <section id="alerts" class="panel">
+    <div class="panel-head">
+      <h2>Alerts <span class="badge" id="alerts-count">0</span></h2>
+      <div class="panel-actions">
+        <button class="btn" id="btn-refresh-alerts" type="button">Refresh history</button>
+      </div>
+    </div>
+    <div class="table-wrap" aria-live="polite" id="alerts-region">
+      <table class="data-table" id="alerts-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Cell ID</th>
+            <th>ARFCN</th>
+            <th>Score</th>
+            <th>Reason</th>
+            <th>Target</th>
+          </tr>
+        </thead>
+        <tbody id="alerts-tbody">
+          <tr class="empty"><td colspan="6">no alerts yet — waiting for stream…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TRUSTED panel ------------------------------------------------------ -->
+  <section id="trusted" class="panel">
+    <div class="panel-head">
+      <h2>Trusted phones</h2>
+      <div class="panel-actions">
+        <button class="btn primary" id="btn-add-trusted" type="button">+ Add phone</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Label</th>
+            <th>Added</th>
+            <th class="actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="trusted-tbody">
+          <tr class="empty"><td colspan="4">loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">
+      IMSI values are HMAC-hashed at registration. Plaintext IMSI is never stored.
+    </p>
+  </section>
+
+  <!-- ACTIONS panel ------------------------------------------------------ -->
+  <section id="actions" class="panel">
+    <div class="panel-head">
+      <h2>Actions</h2>
+    </div>
+    <div class="actions-grid">
+      <button class="btn primary" id="btn-test-alert" type="button">
+        Test alert
+      </button>
+      <button class="btn" id="btn-request-notif" type="button">
+        Request desktop notification permission
+      </button>
+      <button class="btn" id="btn-mute-beep" type="button" aria-pressed="false">
+        <span id="mute-label">Beep: on</span>
+      </button>
+    </div>
+    <p class="hint">
+      Test alert writes a synthetic event through the full pipeline (sink → SSE → UI).
+      Desktop notifications require an HTTPS context and a one-time user gesture.
+    </p>
+  </section>
+
+</main>
+
+<!-- Modal: add trusted phone ------------------------------------------- -->
+<div class="modal" id="modal-add" role="dialog" aria-modal="true" aria-labelledby="modal-add-title" aria-hidden="true">
+  <div class="modal-content">
+    <h3 id="modal-add-title">Add trusted phone</h3>
+    <p class="modal-hint">
+      Enter the IMSI in clear; it's hashed (HMAC-SHA256) before storage.
+      The label is displayed alongside alerts whenever the IMSI is observed.
+    </p>
+    <form id="form-add-trusted" autocomplete="off">
+      <label class="field">
+        <span class="field-label">IMSI</span>
+        <input type="text" id="field-imsi" name="imsi" required
+               inputmode="numeric" pattern="\d{14,15}"
+               placeholder="208011000000123" autocomplete="off">
+        <small class="field-help">14–15 digits, no spaces or dashes.</small>
+      </label>
+      <label class="field">
+        <span class="field-label">Label</span>
+        <input type="text" id="field-label" name="label" required
+               maxlength="64" placeholder="Owner's iPhone">
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="btn-cancel-add">Cancel</button>
+        <button type="submit" class="btn primary">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast banner ------------------------------------------------------- -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script defer src="sentinelle.js"></script>
+</body>
+</html>
