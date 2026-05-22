@@ -13,10 +13,11 @@ Depends: ${misc:Depends},
          python3-uvicorn,
          python3-fastapi,
          python3-toml,
+         python3-scapy,
          librtlsdr0,
          rtl-sdr,
          usbutils
-Recommends: gr-gsm, python3-scapy, python3-numpy
+Recommends: gr-gsm, python3-numpy
 Description: SecuBox SENTINELLE-GSM — passive rogue-BTS sensor (MIND layer)
  Host-resident module that drives an RTL-SDR USB dongle as a passive
  GSM broadcast receiver for false-BTS (IMSI-catcher) detection. Follows

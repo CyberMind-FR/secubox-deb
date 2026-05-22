@@ -17,9 +17,48 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import os
 import shutil
 import time
 from typing import Optional
+
+
+# RTL-SDR USB IDs (vendor:product). The original DVB-T sticks + the
+# RTL-SDR Blog v3/v4 official units. Other clones with the same chipset
+# enumerate the same way.
+RTLSDR_USB_IDS: tuple[tuple[str, str], ...] = (
+    ("0bda", "2832"),  # Realtek RTL2832U (DVB-T/RTL-SDR Blog v3)
+    ("0bda", "2838"),  # Realtek RTL2832U + R820T2 (RTL-SDR Blog v4)
+    ("1d50", "604b"),  # OpenMoko RTL-SDR
+    ("1f4d", "0001"),  # GTek WinFast DTV
+)
+
+
+def detect_rtlsdr_usb() -> Optional[tuple[str, str]]:
+    """Scan /sys/bus/usb for any RTL-SDR-compatible dongle. Returns
+    (vid, pid) on first match, None otherwise. Sysfs (not lsusb) so the
+    daemon can run sandboxed (no shell-out).
+
+    Note: this is a pure sysfs read — it does NOT claim the USB device.
+    Co-located with LivemonRunner (same domain: RTL-SDR + grgsm
+    orchestration) since the v0.1 livemon.py stub was removed.
+    """
+    sysfs = "/sys/bus/usb/devices"
+    if not os.path.isdir(sysfs):
+        return None
+    for dev in os.listdir(sysfs):
+        path = os.path.join(sysfs, dev)
+        try:
+            with open(os.path.join(path, "idVendor"), "r") as f:
+                vid = f.read().strip().lower()
+            with open(os.path.join(path, "idProduct"), "r") as f:
+                pid = f.read().strip().lower()
+        except (FileNotFoundError, PermissionError):
+            continue
+        for want_vid, want_pid in RTLSDR_USB_IDS:
+            if vid == want_vid and pid == want_pid:
+                return (vid, pid)
+    return None
 
 
 @dataclasses.dataclass

@@ -42,8 +42,7 @@ sys.path.insert(0, "/usr/lib/secubox/sentinelle-gsm/lib")
 from sentinelle_gsm import CAPTURES_PLAINTEXT_IMSI, Mode  # noqa: E402
 from sentinelle_gsm.alert_sink import Alert, AlertSink   # noqa: E402
 from sentinelle_gsm.gsmtap_listener import GsmtapListener  # noqa: E402
-from sentinelle_gsm.livemon import detect_rtlsdr_usb     # noqa: E402
-from sentinelle_gsm.livemon_runner import LivemonRunner  # noqa: E402
+from sentinelle_gsm.livemon_runner import LivemonRunner, detect_rtlsdr_usb  # noqa: E402
 from sentinelle_gsm.observations import ObservationsDB, Sighting  # noqa: E402
 from sentinelle_gsm.observer import Anonymizer           # noqa: E402
 from sentinelle_gsm.trusted import TrustedRegistry       # noqa: E402
