@@ -477,6 +477,41 @@ a:hover { color: var(--text-primary); }
 .toast.warn  { border-color: var(--warn); color: var(--warn); }
 .toast.err   { border-color: var(--crit); color: var(--crit); }
 
+/* ── live logs panel (v0.2.2) ─────────────────────────────────────────── */
+.inline-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.inline-toggle input[type="checkbox"] {
+  accent-color: var(--mind-violet);
+}
+.logs-pre {
+  margin: 0;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--mind-violet-dim);
+  border-radius: 6px;
+  padding: 0.75rem 0.9rem;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  height: 320px;
+  max-height: 50vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-color: var(--mind-violet-dim) transparent;
+}
+.log-line { display: inline; }
+.log-line.log-err   { color: var(--crit); }
+.log-line.log-warn  { color: var(--warn); }
+.log-line.log-info  { color: var(--text-primary); }
+.log-line.log-debug { color: var(--text-muted); opacity: 0.7; }
+
 /* ── responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   body { flex-direction: column; }

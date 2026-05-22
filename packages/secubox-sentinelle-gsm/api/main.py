@@ -283,6 +283,75 @@ async def delete_trusted(phone_id: str) -> dict:
     return {"ok": True}
 
 
+# ── JOURNAL STREAMING (v0.2.2) ─────────────────────────────────────────
+# Read-only SSE feed of `journalctl -u secubox-sentinelle-gsm -f -o json`.
+# The service user is in the systemd-journal group via postinst so no
+# elevated privileges are needed at runtime. The async generator runs
+# `journalctl` as a child process and yields each JSON line as an SSE
+# `event: log` chunk.
+
+async def _journal_stream() -> "AsyncIterator[str]":  # noqa: F821
+    import asyncio
+    import json as _json
+    import shutil
+
+    journalctl = shutil.which("journalctl") or "/usr/bin/journalctl"
+    proc = await asyncio.create_subprocess_exec(
+        journalctl,
+        "-u", "secubox-sentinelle-gsm",
+        "-f",                # follow
+        "-n", "50",          # bootstrap with the last 50 lines
+        "-o", "json",
+        "--no-pager",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    try:
+        assert proc.stdout is not None
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            try:
+                entry = _json.loads(line)
+            except _json.JSONDecodeError:
+                continue
+            # Keep only the fields the UI actually needs — message + ts.
+            payload = {
+                "ts": float(entry.get("__REALTIME_TIMESTAMP", 0)) / 1_000_000,
+                "priority": int(entry.get("PRIORITY", 6)),
+                "message": entry.get("MESSAGE", ""),
+                "syslog_id": entry.get("SYSLOG_IDENTIFIER", ""),
+            }
+            yield "event: log\ndata: " + _json.dumps(payload) + "\n\n"
+    finally:
+        if proc.returncode is None:
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+
+
+@app.get("/journal/stream", dependencies=[Depends(require_jwt)])
+async def stream_journal() -> StreamingResponse:
+    """Server-Sent Events live feed of this service's systemd journal.
+
+    Reads `journalctl -u secubox-sentinelle-gsm -f -o json` and forwards
+    each entry as an SSE `event: log` chunk with the message + priority
+    + RFC3339 timestamp. Uses the existing systemd-journal group
+    membership (set in postinst).
+    """
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(
+        _journal_stream(), media_type="text/event-stream", headers=headers
+    )
+
+
 @app.post("/mode")
 def set_mode(payload: dict = Body(...)) -> dict:
     """Flip between PROD ↔ LAB.

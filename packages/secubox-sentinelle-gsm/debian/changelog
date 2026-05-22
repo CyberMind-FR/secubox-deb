@@ -1,3 +1,22 @@
+secubox-sentinelle-gsm (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * api/main.py: new GET /journal/stream endpoint streaming the service's
+    own systemd-journal entries as Server-Sent Events. Reads
+    `journalctl -u secubox-sentinelle-gsm -f -o json` via an asyncio
+    subprocess and yields one SSE `event: log` chunk per entry with
+    {ts, priority, message, syslog_id}. Read-only — the service user
+    is already in the systemd-journal group via the existing postinst.
+  * nginx/sentinelle-webui.conf: add the matching SSE-tuned ^~ location
+    block for /api/v1/sensor/gsm/journal/stream alongside the existing
+    /alerts/stream one (same 24h timeouts, no buffering, no cache).
+  * www/sentinelle/: new "Live logs" panel — auto-scrolling monospace
+    <pre> consumes /journal/stream via EventSource. Per-line color by
+    syslog priority (err/warn/info/debug). Auto-scroll toggle + clear
+    button. Capped at 500 lines in-DOM to keep memory flat on long
+    sessions.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 14:00:00 +0000
+
 secubox-sentinelle-gsm (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * nginx/sentinelle-webui.conf: stop including secubox-proxy.conf in
