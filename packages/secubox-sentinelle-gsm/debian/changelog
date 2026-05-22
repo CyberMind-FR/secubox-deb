@@ -1,3 +1,29 @@
+secubox-sentinelle-gsm (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * lib/sentinelle_gsm/livemon_runner.py: NEW watcher task awaits the
+    subprocess natural exit and flips `_done=True`. Status.running now
+    reflects "child still alive" correctly even when grgsm crashes
+    silently (gr-osmosdr "Wrong rtlsdr device index given" was the
+    trigger on gk2). Without this, /scan/status reported running=true
+    long after the child was dead and /scan/start kept returning 409
+    "already running" until an explicit /scan/stop or service restart.
+  * lib/sentinelle_gsm/livemon_runner.py: start() gains optional `gain`,
+    `samp_rate`, `ppm`, and `args` kwargs passed as -g/-s/-p/--args=
+    flags to grgsm. All None by default → identical CLI to v0.3.1.
+    Operators can now tune RF params without redeploy.
+  * lib/sentinelle_gsm/livemon_runner.py: stop() is now idempotent and
+    skips SIGTERM if the child already exited; still produces a clean
+    ScanStatus with stderr_tail for diagnostics.
+  * api/main.py: POST /scan/start accepts gain/samp_rate/ppm/args body
+    fields (all optional). Same behavior as v0.3.1 when omitted.
+  * api/tests/test_livemon_runner.py: 4 new tests (watcher, tuning
+    args, custom args, restart-after-natural-exit) + the 5 existing
+    refactored to use a `_make_fake_proc()` helper that lets each test
+    pick whether proc.wait() blocks or resolves. Full sweep 86/86.
+  * Closes #351. Refs #349 #344.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 18:00:00 +0000
+
 secubox-sentinelle-gsm (0.3.1-1~bookworm1) bookworm; urgency=medium
 
   * lib/sentinelle_gsm/l3_decode.py: NEW — pure-Python TLV parser for

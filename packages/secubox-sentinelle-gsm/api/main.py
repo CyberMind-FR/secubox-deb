@@ -649,6 +649,17 @@ def set_mode(payload: dict = Body(...)) -> dict:
 
 class ScanStartBody(BaseModel):
     freq: str
+    # v0.3.2: optional tuning. Each falls back to grgsm_livemon_headless's
+    # own default when None. Mostly useful when the carrier RF environment
+    # needs more gain or the dongle's crystal needs a ppm correction.
+    gain: Optional[float] = None
+    samp_rate: Optional[str] = None
+    ppm: Optional[float] = None
+    # gr-osmosdr device-args. Default rtl=0 forces the RTL-SDR backend
+    # (osmosdr's default loads UHD/USRP and fails when none is plugged).
+    # Operators can override to experiment with alternative syntaxes
+    # while we figure out why livemon rejects what scanner accepts.
+    args: str = "rtl=0"
 
 
 def _scan_status_payload(st) -> dict:
@@ -680,7 +691,13 @@ async def scan_start(body: ScanStartBody) -> dict:
     except OSError as e:
         raise HTTPException(500, f"listener bind failed: {e}")
     try:
-        status = await runner.start(body.freq)
+        status = await runner.start(
+            body.freq,
+            gain=body.gain,
+            samp_rate=body.samp_rate,
+            ppm=body.ppm,
+            args=body.args,
+        )
     except RuntimeError as e:
         # runner refused (already running) — undo the listener bind
         await listener.stop()
