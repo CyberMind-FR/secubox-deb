@@ -1,3 +1,15 @@
+secubox-zigbee (2.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * lib/zigbee/install-lxc.sh: udev RUN+= now invokes
+    `lxc-device -n zigbee add /dev/%k` instead of the wrong
+    `lxc-device add zigbee /dev/%k` form shipped by v2.5.5. The
+    v2.5.5 syntax made lxc-device parse `add` as the container name
+    ("Container add is not running" was the actual error seen on
+    the live board), so hotplug events silently failed and a
+    re-plugged dongle never landed in the running LXC.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 06:05:00 +0000
+
 secubox-zigbee (2.5.6-1~bookworm1) bookworm; urgency=medium
 
   * lib/zigbee/install-lxc.sh: zigbee2mqtt.service gains two
