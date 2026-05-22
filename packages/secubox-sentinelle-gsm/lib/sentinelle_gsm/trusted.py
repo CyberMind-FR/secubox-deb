@@ -66,10 +66,18 @@ class TrustedRegistry:
         self.path.chmod(0o640)
 
     def add(self, plaintext_imsi: str, label: str) -> TrustedPhone:
-        """Hash the plaintext IMSI, persist the hash + label, discard plaintext."""
+        """Hash the plaintext IMSI, persist the hash + label, discard plaintext.
+
+        Hash representation: `imsi.encode("ascii").hex()` so the resulting
+        token matches the canonical form produced by the L3 decoder's
+        paging-request path (l3_decode._parse_paging() anonymizes
+        `plaintext_bytes.hex()` where `plaintext_bytes = digits.encode("ascii")`).
+        This is what enables trusted-phone lookup against paged-subscriber
+        hashes in the consume loop.
+        """
         if not plaintext_imsi.isdigit() or not (14 <= len(plaintext_imsi) <= 15):
             raise ValueError("IMSI must be 14 or 15 digits")
-        imsi_hash = self._anon.anonymize(plaintext_imsi)
+        imsi_hash = self._anon.anonymize(plaintext_imsi.encode("ascii").hex())
         phone = TrustedPhone(
             id=str(uuid.uuid4()),
             imsi_hash=imsi_hash,

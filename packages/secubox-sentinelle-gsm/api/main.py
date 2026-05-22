@@ -41,10 +41,17 @@ sys.path.insert(0, "/usr/lib/secubox/sentinelle-gsm/lib")
 
 from sentinelle_gsm import CAPTURES_PLAINTEXT_IMSI, Mode  # noqa: E402
 from sentinelle_gsm.alert_sink import Alert, AlertSink   # noqa: E402
+from sentinelle_gsm.baseline import CellBaseline         # noqa: E402
 from sentinelle_gsm.gsmtap_listener import GsmtapListener  # noqa: E402
+from sentinelle_gsm.l3_decode import (                   # noqa: E402
+    L3Decode, MID_TYPE_IMSI, MID_TYPE_TMSI,
+)
 from sentinelle_gsm.livemon_runner import LivemonRunner, detect_rtlsdr_usb  # noqa: E402
-from sentinelle_gsm.observations import ObservationsDB, Sighting  # noqa: E402
+from sentinelle_gsm.observations import (                # noqa: E402
+    ObservationsDB, PagingEvent, Sighting,
+)
 from sentinelle_gsm.observer import Anonymizer           # noqa: E402
+from sentinelle_gsm.scoring_engine import ScoringEngine  # noqa: E402
 from sentinelle_gsm.trusted import TrustedRegistry       # noqa: E402
 
 _log = logging.getLogger("secubox.sentinelle-gsm.api")
@@ -151,40 +158,191 @@ def get_obs_db() -> ObservationsDB:
 @app.on_event("startup")
 def _init_v0_3_singletons() -> None:
     global _livemon, _listener, _obs_db
+    global _l3, _scoring, _baseline
     if _livemon is None:
         _livemon = LivemonRunner()
     if _listener is None:
         _listener = GsmtapListener()
     if _obs_db is None:
         _obs_db = ObservationsDB(OBSERVATIONS_DB_PATH)
+    # v0.3.1: L3 decoder + baseline + scoring engine
+    if _baseline is None:
+        _baseline = CellBaseline(_obs_db._db)
+    if _l3 is None:
+        _l3 = L3Decode(_get_anonymizer())
+    if _scoring is None:
+        _scoring = ScoringEngine(_baseline)
+
+
+# ── v0.3.1: L3 decode + scoring + baseline singletons ───────────────────
+#
+# The consume loop pipes Observation.raw_l3 through L3Decode → updates
+# the operator baseline → runs the 8-heuristic ScoringEngine → matches
+# paged subscriber hashes against the trusted registry → emits an
+# Alert via AlertSink when score >= ALERT_THRESHOLD.
+
+_l3:       Optional[L3Decode] = None
+_scoring:  Optional[ScoringEngine] = None
+_baseline: Optional[CellBaseline] = None
+
+ALERT_THRESHOLD = int(os.environ.get("SENTINELLE_ALERT_THRESHOLD", "60"))
+
+
+def get_l3() -> L3Decode:
+    if _l3 is None:
+        raise RuntimeError("l3 decoder not initialised")
+    return _l3
+
+
+def get_scoring() -> ScoringEngine:
+    if _scoring is None:
+        raise RuntimeError("scoring engine not initialised")
+    return _scoring
+
+
+def get_baseline() -> CellBaseline:
+    if _baseline is None:
+        raise RuntimeError("baseline not initialised")
+    return _baseline
+
+
+# Map paging request L3 message type → human label for paging_events.
+_PAGING_REQUEST_LABEL = {
+    0x21: "paging-1",
+    0x22: "paging-2",
+    0x24: "paging-3",
+}
+
+
+def _cell_id_from_parsed(parsed_cell_info, obs) -> str:
+    """Build a cell_id from L3-parsed cell_info if complete, else fall back
+    to the arfcn/channel composite key. Always returns a non-empty string."""
+    ci = parsed_cell_info
+    if (ci is not None and ci.mcc is not None and ci.mnc is not None
+            and ci.lac is not None and ci.ci is not None):
+        return f"{ci.mcc}-{ci.mnc}-{ci.lac}-{ci.ci}"
+    return obs.cell_id or f"arfcn-{obs.arfcn}-ch-{obs.channel}"
+
+
+async def _process_observation(obs) -> None:
+    """Handle ONE GSMTAP Observation: L3-decode, persist, score, alert.
+
+    Extracted from _consume_observations() for testability. Tests can
+    feed synthesized Observation instances directly without driving the
+    UDP listener / consume coroutine.
+
+    Step-by-step (per v0.3.1 plan §6.3):
+      1. L3-decode obs.raw_l3 → ParsedFrame(cell_info?, paging?)
+      2. Derive cell_id from parsed cell_info OR fallback arfcn-ch key
+      3. upsert_sighting() with whatever metadata we have
+      4. record_paging() for every paged subscriber (already hashed)
+      5. baseline.consider() so the cell graduates after N sightings
+      6. scoring.evaluate() → CellScore
+      7. score >= threshold → match each paged hash against trusted
+         registry; emit a labeled-or-anomaly-only Alert.
+    """
+    l3 = get_l3()
+    db = get_obs_db()
+    baseline = get_baseline()
+    scoring = get_scoring()
+    sink = get_alert_sink()
+    trusted = get_trusted_registry()
+
+    parsed = l3.parse(obs.raw_l3 or b"")
+    cell_info = parsed.cell_info
+    paging = parsed.paging
+
+    cell_id = _cell_id_from_parsed(cell_info, obs)
+
+    # Prefer parsed (BCCH-derived) metadata over header-only fields.
+    mcc = (cell_info.mcc if cell_info and cell_info.mcc is not None
+           else obs.mcc)
+    mnc = (cell_info.mnc if cell_info and cell_info.mnc is not None
+           else obs.mnc)
+    lac = (cell_info.lac if cell_info and cell_info.lac is not None
+           else obs.lac)
+    ci_val = (cell_info.ci if cell_info and cell_info.ci is not None
+              else obs.ci)
+    cipher_a5 = cell_info.a5_advertised if cell_info else None
+
+    try:
+        db.upsert_sighting(Sighting(
+            cell_id=cell_id, arfcn=obs.arfcn,
+            mcc=mcc, mnc=mnc, lac=lac, ci=ci_val,
+        ))
+    except ValueError as exc:
+        _log.warning("observations: refused write: %s", exc)
+        return
+
+    if paging is not None:
+        label = _PAGING_REQUEST_LABEL.get(paging.paging_type, "paging")
+        for pid in paging.identities:
+            try:
+                db.record_paging(PagingEvent(
+                    ts=obs.ts, cell_id=cell_id,
+                    subscriber_hash=pid.subscriber_hash,
+                    request_type=label,
+                ))
+            except ValueError as exc:
+                _log.warning("paging_events: refused write: %s", exc)
+
+    baseline.consider(
+        cell_id, mcc=mcc, mnc=mnc, lac=lac,
+        arfcn=obs.arfcn, cipher_a5=cipher_a5,
+    )
+
+    result = scoring.evaluate(cell_info, paging, obs.arfcn)
+    if result.score < ALERT_THRESHOLD:
+        return
+
+    reason = "; ".join(result.reasons) if result.reasons else "anomaly"
+
+    # Try to match each paged subscriber against trusted registry.
+    matched: list[tuple[str, str]] = []   # (hash, label)
+    if paging is not None:
+        for pid in paging.identities:
+            tp = trusted.lookup_by_hash(pid.subscriber_hash)
+            if tp is not None:
+                matched.append((pid.subscriber_hash, tp.label))
+
+    if matched:
+        # One alert per matched trusted phone — operator wants per-device
+        # labeled visibility.
+        for sub_hash, label in matched:
+            try:
+                sink.write(Alert(
+                    cell_id=cell_id, arfcn=obs.arfcn,
+                    score=result.score, reason=reason,
+                    subscriber_hash=sub_hash, trusted_label=label,
+                ))
+            except ValueError as exc:
+                _log.warning("alert: refused write: %s", exc)
+    else:
+        # Anomaly-only — score crossed threshold but no trusted match.
+        try:
+            sink.write(Alert(
+                cell_id=cell_id, arfcn=obs.arfcn,
+                score=result.score, reason=reason,
+                subscriber_hash=None, trusted_label=None,
+            ))
+        except ValueError as exc:
+            _log.warning("alert: refused write: %s", exc)
 
 
 async def _consume_observations() -> None:
-    """Drain the GSMTAP listener and upsert sightings.
+    """Drain the GSMTAP listener and process each observation.
 
-    Cancellation-safe: on /scan/stop we cancel this task before
-    stopping the listener + runner so no leaked subprocess is left
-    behind. Until v0.3.1 wires the L3 BCCH decode we don't know the
-    operator quadruple (MCC/MNC/LAC/CI), so we synthesise a placeholder
-    cell_id from (arfcn, channel). The schema accepts NULL for the
-    operator fields.
+    Cancellation-safe: /scan/stop cancels this task first, then stops
+    the listener + runner. Per-observation errors are logged and the
+    loop continues — a single malformed frame must NOT kill the scan.
     """
     listener = get_listener()
-    db = get_obs_db()
     try:
         async for obs in listener.observations():
-            cell_id = obs.cell_id or f"arfcn-{obs.arfcn}-ch-{obs.channel}"
             try:
-                db.upsert_sighting(Sighting(
-                    cell_id=cell_id,
-                    arfcn=obs.arfcn,
-                    mcc=obs.mcc,
-                    mnc=obs.mnc,
-                    lac=obs.lac,
-                    ci=obs.ci,
-                ))
-            except ValueError as exc:
-                _log.warning("observations: refused write: %s", exc)
+                await _process_observation(obs)
+            except Exception:           # noqa: BLE001
+                _log.exception("process_observation failed; continuing")
     except asyncio.CancelledError:
         # Normal path on /scan/stop — propagate so the task transitions
         # to CANCELLED rather than swallowing.
@@ -570,6 +728,59 @@ async def list_observations(limit: int = 200) -> dict:
     return {
         "sightings": [asdict(s) for s in get_obs_db().sightings(limit=limit)],
     }
+
+
+# ── v0.3.1: baseline + scoring endpoints ────────────────────────────────
+#
+# /baseline           — read graduated cells
+# /baseline/learn     — enable learn-mode for a sweep window
+# /scoring/thresholds — read / write the 8-heuristic threshold table
+#
+# JWT enforcement is delegated to nginx + Authelia upstream (require_jwt
+# is a no-op hook here, overridable in tests).
+
+class BaselineLearnBody(BaseModel):
+    sweep_seconds: int = 300
+
+
+@app.get("/baseline", dependencies=[Depends(require_jwt)])
+def list_baseline(limit: int = 200) -> dict:
+    """Operator baseline — list of cells graduated to baseline."""
+    limit = max(1, min(1000, limit))
+    return {"cells": [asdict(c) for c in get_baseline().list(limit=limit)]}
+
+
+@app.post("/baseline/learn", dependencies=[Depends(require_jwt)])
+def baseline_learn(body: BaselineLearnBody) -> dict:
+    """Flip the baseline into learn-mode for `sweep_seconds`.
+
+    Cells observed during that window graduate to baseline immediately
+    (initial learn_count = LEARN_THRESHOLD) instead of waiting for the
+    default N=3 sightings. The operator must start a scan separately.
+    """
+    bl = get_baseline()
+    bl.set_learn_mode(body.sweep_seconds)
+    _log.info("baseline learn mode enabled for %ds", body.sweep_seconds)
+    import time
+    return {"learn_mode_until": time.time() + body.sweep_seconds}
+
+
+@app.get("/scoring/thresholds", dependencies=[Depends(require_jwt)])
+def scoring_thresholds_get() -> dict:
+    return {"thresholds": get_scoring().thresholds()}
+
+
+@app.post("/scoring/thresholds", dependencies=[Depends(require_jwt)])
+def scoring_thresholds_set(body: dict = Body(...)) -> dict:
+    """Per-heuristic deep-merge of `body` into the live threshold table.
+
+    Emits an audit log entry (caught by /journal/stream) listing which
+    heuristics were touched — operators need a paper trail when scoring
+    is tuned mid-deployment.
+    """
+    new = get_scoring().update_thresholds(body)
+    _log.info("scoring thresholds updated: %s", list(body.keys()))   # audit
+    return {"thresholds": new}
 
 
 @app.get("/healthz")
