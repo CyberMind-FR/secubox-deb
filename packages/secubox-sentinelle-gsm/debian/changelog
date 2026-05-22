@@ -1,3 +1,39 @@
+secubox-sentinelle-gsm (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * v0.2.0 — Local alerts persistence + trusted-phones whitelist +
+    WebUI dashboard (Hub menu integration). Closes #340.
+  * lib/sentinelle_gsm/alert_sink.py: SQLite-backed Alert persistence
+    with asyncio pub/sub. Privacy guard rejects any write where a
+    textual field contains the plaintext-IMSI shape (15 contiguous
+    digits) — defence-in-depth against accidental leak via reason
+    strings.
+  * lib/sentinelle_gsm/trusted.py: HMAC-hashed trusted-phones registry
+    persisted to /etc/secubox/sentinelle-gsm/trusted.json. Plaintext
+    IMSI accepted by add() only; hashed via the existing Anonymizer
+    before storage. JSON (stdlib) is used instead of TOML — python3-
+    tomli-w (the writer for the new tomllib reader) is not in Debian
+    bookworm.
+  * api/main.py: new REST routes
+    - GET  /api/v1/sensor/gsm/alerts             history
+    - POST /api/v1/sensor/gsm/alerts/test        synthetic injection
+    - GET  /api/v1/sensor/gsm/alerts/stream      SSE live feed
+    - GET/POST/DELETE /api/v1/sensor/gsm/trusted whitelist CRUD
+  * www/: standalone Sentinelle GSM WebUI (vanilla JS, SSE-driven
+    alerts feed, trusted-phones management). Served by nginx at
+    /sentinelle-gsm/.
+  * nginx + Hub menu.d entry shipped via the .install file so the
+    module appears in the SecuBox Hub dashboard.
+  * 29/29 tests pass: 5 alert_sink + 4 alerts_api + 3 trusted_api +
+    6 trusted_registry + 11 privacy_invariant. The privacy suite gains
+    three structural assertions:
+    - Alert dataclass has no field named imsi/imei/tmsi/msisdn/iccid
+    - TrustedPhone dataclass only stores imsi_hash (never plaintext)
+    - AlertSink.write() raises ValueError on any 15-digit token in
+      a textual field — non-regression guard against the OPAD-doctrine
+      privacy invariant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 22 May 2026 12:00:00 +0200
+
 secubox-sentinelle-gsm (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial scaffold per docs/superpowers/specs/2026-05-20-secubox-sentinelle-gsm.md.
