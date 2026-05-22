@@ -37,6 +37,10 @@
     btnTest:       document.getElementById("btn-test-alert"),
     btnNotif:      document.getElementById("btn-request-notif"),
     btnMute:       document.getElementById("btn-mute-beep"),
+    logsPre:       document.getElementById("logs-pre"),
+    logsCount:     document.getElementById("logs-count"),
+    toggleAutoscroll: document.getElementById("toggle-autoscroll"),
+    btnClearLogs:  document.getElementById("btn-clear-logs"),
     muteLabel:     document.getElementById("mute-label"),
     modal:         document.getElementById("modal-add"),
     modalForm:     document.getElementById("form-add-trusted"),
@@ -298,6 +302,72 @@
     return es;
   }
 
+  // ── journal live stream (v0.2.2) ────────────────────────────────────
+  const LOGS_MAX_LINES = 500;     // cap memory usage on long sessions
+  const _logsState = {
+    es: null,
+    count: 0,
+    autoscroll: true,
+  };
+
+  function _priorityClass(prio) {
+    // syslog: 0 emerg, 1 alert, 2 crit, 3 err, 4 warn, 5 notice, 6 info, 7 debug
+    if (prio <= 3) return "log-err";
+    if (prio === 4) return "log-warn";
+    if (prio === 7) return "log-debug";
+    return "log-info";
+  }
+
+  function _formatLogTs(ts) {
+    if (!ts) return "—";
+    const d = new Date(ts * 1000);
+    const pad = n => String(n).padStart(2, "0");
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function appendLogLine(entry) {
+    const pre = els.logsPre;
+    if (!pre) return;
+    if (_logsState.count === 0) pre.textContent = "";
+    const line = document.createElement("span");
+    line.className = "log-line " + _priorityClass(entry.priority || 6);
+    line.textContent = "[" + _formatLogTs(entry.ts) + "] " + (entry.message || "");
+    pre.appendChild(line);
+    pre.appendChild(document.createTextNode("\n"));
+    _logsState.count += 1;
+    if (els.logsCount) els.logsCount.textContent = _logsState.count;
+
+    // Trim the head if we exceed the cap, keeping the tail.
+    while (_logsState.count > LOGS_MAX_LINES) {
+      pre.removeChild(pre.firstChild);            // span
+      if (pre.firstChild && pre.firstChild.nodeType === Node.TEXT_NODE) {
+        pre.removeChild(pre.firstChild);          // the newline text
+      }
+      _logsState.count -= 1;
+    }
+    if (_logsState.autoscroll) pre.scrollTop = pre.scrollHeight;
+  }
+
+  function startJournalStream() {
+    if (_logsState.es) try { _logsState.es.close(); } catch (e) { /* ignore */ }
+    const es = new EventSource(API + "/journal/stream");
+    es.addEventListener("log", (e) => {
+      let entry;
+      try { entry = JSON.parse(e.data); }
+      catch (err) { return; }
+      appendLogLine(entry);
+    });
+    es.onerror = () => { /* auto-reconnect; no UI noise */ };
+    _logsState.es = es;
+    return es;
+  }
+
+  function clearLogs() {
+    if (els.logsPre) els.logsPre.textContent = "(cleared)";
+    _logsState.count = 0;
+    if (els.logsCount) els.logsCount.textContent = "0";
+  }
+
   // ── trusted phones ──────────────────────────────────────────────────
   function buildTrustedRow(phone) {
     const tr = document.createElement("tr");
@@ -426,6 +496,15 @@
     });
 
     els.btnMute.addEventListener("click", toggleMute);
+
+    if (els.toggleAutoscroll) {
+      els.toggleAutoscroll.addEventListener("change", (e) => {
+        _logsState.autoscroll = !!e.target.checked;
+      });
+    }
+    if (els.btnClearLogs) {
+      els.btnClearLogs.addEventListener("click", clearLogs);
+    }
   }
 
   // ── init ────────────────────────────────────────────────────────────
@@ -436,6 +515,7 @@
     loadAlertHistory();
     loadTrusted();
     startAlertStream();
+    startJournalStream();
   }
 
   if (document.readyState === "loading") {

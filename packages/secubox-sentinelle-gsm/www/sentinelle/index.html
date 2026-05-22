@@ -35,6 +35,7 @@
     <a href="#status" class="nav-link">Status</a>
     <a href="#alerts" class="nav-link">Alerts</a>
     <a href="#trusted" class="nav-link">Trusted phones</a>
+    <a href="#logs" class="nav-link">Live logs</a>
     <a href="#actions" class="nav-link">Actions</a>
   </nav>
   <div class="local-nav-foot">
@@ -127,6 +128,25 @@
     </div>
     <p class="hint">
       IMSI values are HMAC-hashed at registration. Plaintext IMSI is never stored.
+    </p>
+  </section>
+
+  <!-- LIVE LOGS panel (v0.2.2) ------------------------------------------- -->
+  <section id="logs" class="panel">
+    <div class="panel-head">
+      <h2>Live logs <span class="badge" id="logs-count">0</span></h2>
+      <div class="panel-actions">
+        <label class="inline-toggle">
+          <input type="checkbox" id="toggle-autoscroll" checked>
+          auto-scroll
+        </label>
+        <button class="btn" id="btn-clear-logs" type="button">Clear</button>
+      </div>
+    </div>
+    <pre id="logs-pre" class="logs-pre" role="log" aria-live="polite" aria-label="Service journal stream">waiting for journal stream…</pre>
+    <p class="hint">
+      Tail of <code>journalctl -u secubox-sentinelle-gsm -f</code>. The
+      stream auto-reconnects on transient network errors.
     </p>
   </section>
 
