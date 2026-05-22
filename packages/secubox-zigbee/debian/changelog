@@ -1,3 +1,22 @@
+secubox-zigbee (2.5.5-1~bookworm1) bookworm; urgency=medium
+
+  * lib/zigbee/install-lxc.sh: bind /dev/ttyUSB0 and /dev/ttyACM0 into
+    the zigbee LXC. The existing config bound /dev/secubox-zgb and
+    /dev/serial/by-id (symlinks) plus cgroup major 188/166, but the
+    underlying tty device NODES were not bind-mounted — so the kernel
+    followed the symlinks inside the container and the open(2) failed
+    with ENOENT. zigbee2mqtt crash-looped 4500+ times on gk2 today;
+    https://zigbee.gk2.secubox.in/ returned 502 because port 8080 in
+    the LXC was never opened.
+  * lib/zigbee/install-lxc.sh: udev rule now emits a RUN+= that calls
+    `lxc-device add zigbee /dev/<kernel>` on hotplug, so re-plugging
+    the dongle while the LXC is running pushes the new device node
+    in immediately instead of waiting for an LXC restart.
+  * Bumps v2.4.2 hardware fixes back into the install path. Closes the
+    https://zigbee.gk2.secubox.in/ 502 reported in chat.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 05:30:00 +0000
+
 secubox-zigbee (2.5.4-1~bookworm1) bookworm; urgency=medium
 
   * nginx/zigbee-vhost.conf: @sbx_auth_login redirects to
