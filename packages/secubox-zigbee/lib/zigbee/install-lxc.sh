@@ -245,6 +245,13 @@ StandardOutput=journal
 StandardError=journal
 Restart=always
 RestartSec=10
+# Bind-mounted /dev/tty* nodes land inside the LXC as root:root with
+# the host's 0660 perms. The host's `dialout` GID doesn't map to the
+# LXC's `zigbee2mqtt` user (different user namespace), so without
+# this chmod the z2m user can't open the device. Idempotent + cheap;
+# `|| true` survives the dongle-absent case. See secubox-zigbee #zigbee-prod-502.
+ExecStartPre=/bin/sh -c '[ -e /dev/ttyUSB0 ] && /bin/chmod 0666 /dev/ttyUSB0 || true'
+ExecStartPre=/bin/sh -c '[ -e /dev/ttyACM0 ] && /bin/chmod 0666 /dev/ttyACM0 || true'
 ExecStart=/usr/bin/node /opt/zigbee2mqtt/node_modules/zigbee2mqtt/index.js
 
 NoNewPrivileges=true
