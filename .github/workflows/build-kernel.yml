@@ -70,6 +70,17 @@ jobs:
           scripts/kconfig/merge_config.sh -m .config \
             "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12-openwrt-merged.fragment" \
             "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12.85-secubox-zram.fragment"
+          # Enforce the choice symbols that merge_config.sh + olddefconfig
+          # don't always honour when set via a fragment (choice handling is
+          # special-cased in kconfig). scripts/config edits .config directly
+          # and olddefconfig then propagates dependencies.
+          scripts/config --module  ZRAM \
+                         --enable  ZRAM_DEF_COMP_ZSTD \
+                         --disable ZRAM_DEF_COMP_LZORLE \
+                         --enable  ZSMALLOC \
+                         --enable  CRYPTO_ZSTD \
+                         --enable  CRYPTO_LZ4 \
+                         --enable  CRYPTO_LZO
           make ARCH=arm64 olddefconfig
           # Sanity-check key configs landed.
           grep -q "CONFIG_LEDS_IS31FL319X=m" .config || (echo "FAIL: LED module missing" && exit 1)
