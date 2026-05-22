@@ -20,19 +20,24 @@
 </head>
 <body>
 
-<aside class="sidebar" aria-label="Sentinelle navigation">
-  <div class="sidebar-brand">
+<!-- Canonical SecuBox global menu bar — injected by /shared/sidebar.js
+     (position:fixed, top:0, height:48px, z-index:998). The CSS already
+     reserves --gmb-h = 48px of top-padding for .main below. -->
+<nav class="sidebar" id="sidebar"></nav>
+
+<aside class="local-nav" aria-label="Sentinelle navigation">
+  <div class="local-nav-brand">
     <div class="brand-tag">MIND</div>
     <div class="brand-name">sentinelle-gsm</div>
     <div class="brand-sub">passive rogue-BTS sensor</div>
   </div>
-  <nav class="sidebar-nav">
+  <nav class="local-nav-list">
     <a href="#status" class="nav-link">Status</a>
     <a href="#alerts" class="nav-link">Alerts</a>
     <a href="#trusted" class="nav-link">Trusted phones</a>
     <a href="#actions" class="nav-link">Actions</a>
   </nav>
-  <div class="sidebar-foot">
+  <div class="local-nav-foot">
     <a href="/" class="back-hub">← hub</a>
   </div>
 </aside>
@@ -181,6 +186,7 @@
 <!-- Toast banner ------------------------------------------------------- -->
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<script src="/shared/sidebar.js"></script>
 <script defer src="sentinelle.js"></script>
 </body>
 </html>

@@ -39,6 +39,19 @@ case "$1" in
             chown secubox:secubox /var/lib/secubox/sentinelle-gsm/mode
         fi
 
+        # v0.2 — trusted phones registry: create dir + seed empty registry
+        # so the FastAPI app can read/write trusted.json on first start.
+        # The service runs as `secubox` and rewrites this file on every
+        # add/delete, so the FILE must be writable by the service user.
+        # We give the file to secubox:secubox (not root:secubox 0640 —
+        # group-read isn't enough for python's path.write_text() truncate).
+        install -d -m 0750 -o root -g secubox /etc/secubox/sentinelle-gsm
+        if [ ! -f /etc/secubox/sentinelle-gsm/trusted.json ]; then
+            echo '{"phones": []}' > /etc/secubox/sentinelle-gsm/trusted.json
+        fi
+        chown secubox:secubox /etc/secubox/sentinelle-gsm/trusted.json
+        chmod 0640 /etc/secubox/sentinelle-gsm/trusted.json
+
         # Reload nginx + udev
         if systemctl is-active --quiet nginx 2>/dev/null; then
             nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
