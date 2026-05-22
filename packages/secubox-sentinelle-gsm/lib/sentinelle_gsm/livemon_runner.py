@@ -142,7 +142,18 @@ class LivemonRunner:
         if self._proc is not None and not self._done:
             raise RuntimeError("scan already running — stop first")
 
-        argv = [self._bin, "-f", freq]
+        # v0.3.4: default grgsm to bind one port above our GSMTAP listener.
+        # grgsm's `network.socket_pdu('UDP_SERVER', '127.0.0.1', serverport,
+        # ...)` block BINDS --serverport (default 4729 — same as our
+        # listener), then sends GSMTAP packets out from there. Without an
+        # explicit override, both processes race for 4729 and grgsm dies
+        # with `RuntimeError: bind: Address already in use`. The
+        # IMSI-catcher project's scan-and-livemon dodges this the same way
+        # (serverport starts at 4730 and increments). Callers can still
+        # override via the kwarg (e.g. for multi-cell with 4731, 4732, …).
+        effective_serverport = serverport if serverport is not None else self.gsmtap_port + 1
+
+        argv = [self._bin, "-f", freq, f"--serverport={effective_serverport}"]
         if args is not None:
             argv += [f"--args={args}"]
         if gain is not None:
@@ -151,8 +162,6 @@ class LivemonRunner:
             argv += ["-s", str(samp_rate)]
         if ppm is not None:
             argv += ["-p", str(ppm)]
-        if serverport is not None:
-            argv += [f"--serverport={serverport}"]
 
         self._proc = await asyncio.create_subprocess_exec(
             *argv,

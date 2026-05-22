@@ -161,18 +161,32 @@ async def test_start_serverport_kwarg():
 
 
 @pytest.mark.asyncio
-async def test_start_no_serverport_omits_flag():
-    """v0.3.3: default serverport=None means the flag is not emitted —
-    grgsm uses its own default (4729, also where the listener binds), so
-    single-cell capture remains the no-flag path."""
+async def test_start_default_serverport_is_gsmtap_plus_one():
+    """v0.3.4: default --serverport must be one above the listener's
+    GSMTAP port (gsmtap_port=4729 default → --serverport=4730). grgsm
+    BINDS its --serverport, so leaving it at the grgsm built-in default
+    (4729) collides with our listener and crashes the child with
+    `RuntimeError: bind: Address already in use`. The IMSI-catcher
+    scan-and-livemon project dodges this the same way."""
     r = LivemonRunner()
     fake = _make_fake_proc()
     with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=fake)) as mck:
         await r.start("925.4M")
     args = mck.call_args[0]
-    assert not any(a.startswith("--serverport=") for a in args), (
-        f"default serverport must omit flag, got {args}"
+    assert "--serverport=4730" in args, (
+        f"default serverport must be gsmtap_port+1=4730, got {args}"
     )
+
+
+@pytest.mark.asyncio
+async def test_start_default_serverport_follows_custom_gsmtap_port():
+    """v0.3.4: a non-default GSMTAP port still drives --serverport+1."""
+    r = LivemonRunner(gsmtap_port=5000)
+    fake = _make_fake_proc()
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=fake)) as mck:
+        await r.start("925.4M")
+    args = mck.call_args[0]
+    assert "--serverport=5001" in args, args
 
 
 @pytest.mark.asyncio

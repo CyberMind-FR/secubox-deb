@@ -26,7 +26,13 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK added in v0.3.4: libusb 1.0 / libudev subscribe to kernel
+# uevents over netlink; without it, gr-osmosdr's libusb_init() aborts
+# with `AssertionError: libusb_init(&_context) == 0` and every scan
+# dies before reaching the RTL-SDR backend. Adding netlink keeps all
+# other CSPN-relevant restrictions intact (the diagnostic on gk2
+# proved dropping MDWE+SystemCallFilter alone did NOT unblock scans).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 MemoryDenyWriteExecute=true
 SystemCallFilter=@system-service
 CapabilityBoundingSet=

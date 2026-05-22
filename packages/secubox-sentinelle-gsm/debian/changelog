@@ -16,6 +16,25 @@ secubox-sentinelle-gsm (0.3.4-1~bookworm1) bookworm; urgency=medium
     shim's CLI is identical to the upstream's (runpy passes argv
     through), so no other Runner state changes.
   * debian/rules: install the shim into /usr/libexec/secubox/.
+  * debian/secubox-sentinelle-gsm.service: add AF_NETLINK to
+    RestrictAddressFamilies. libusb 1.0 / libudev subscribe to kernel
+    uevents over netlink; without it, libusb_init() aborts (proved on
+    gk2 by elimination — relaxing MDWE + SystemCallFilter via a
+    transient drop-in did NOT unblock scans). One token, every other
+    CSPN-relevant restriction intact (NoNewPrivileges, ProtectSystem,
+    ProtectHome, CapabilityBoundingSet=, MemoryDenyWriteExecute=true,
+    SystemCallFilter=@system-service).
+  * lib/sentinelle_gsm/livemon_runner.py: --serverport now defaults to
+    `gsmtap_port + 1` (= 4730 with the standard 4729 listener) instead
+    of letting grgsm pick its built-in default of 4729. grgsm BINDS
+    --serverport (not connects to it), so leaving the default collided
+    with our listener and crashed the child with `RuntimeError: bind:
+    Address already in use`. The IMSI-catcher scan-and-livemon project
+    avoids the same collision (serverport=4730+i). Callers can still
+    override.
+  * tests: replace test_start_no_serverport_omits_flag with two new
+    tests covering the default+1 behavior and the custom-gsmtap-port
+    case. 71/71 sweep.
   * Validated on gk2 (kernel 6.12.85, gr-gsm 1.0.0~20220727-1+b3,
     libgnuradio-osmosdr0.2.0 0.2.4-1): gr-osmosdr finds the
     RTL2838UHIDIR (`Using device #0 Realtek RTL2838UHIDIR SN:
