@@ -37,7 +37,10 @@ OVERLAY_MODE=0
 STATIC_IP=""
 STATIC_GATEWAY=""
 STATIC_DNS=""
-STATIC_IFACE="eth0"
+# Default to the modern predictable-name wildcard (enp*, eno*, ens*, enx*).
+# Literal "eth0" is the exception on Debian + systemd-udev — almost no
+# modern hardware enumerates the primary NIC as eth0. See #128.
+STATIC_IFACE="en*"
 STATIC_HOSTNAME=""
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
@@ -69,7 +72,10 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
                      secubox-net-detect; writes a static netplan instead.
   --gateway IP       Default gateway (required when --static-ip is set)
   --dns LIST         DNS servers, comma-separated (default: gateway)
-  --iface NAME       Netplan match name for the static iface (default: eth0)
+  --iface NAME       Netplan match name for the static iface. Supports
+                     shell-style globs (default: en* — matches enp*,
+                     eno*, ens*, enx*). Use a literal name only when
+                     you know systemd-udev hasn't renamed the NIC.
   --hostname NAME    Hostname baked into the image (default: secubox-live)
   --help             Show this help
 
