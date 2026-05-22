@@ -8,7 +8,7 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/metablogizer
-ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/metablogizer.sock --log-level warning
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/metablogizer.sock --log-level info
 Restart=on-failure
 RestartSec=5
 

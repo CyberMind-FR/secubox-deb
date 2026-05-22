@@ -1,3 +1,14 @@
+secubox-metablogizer (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * debian/secubox-metablogizer.service: lower uvicorn --log-level from
+    warning to info so the webhook deploy success line
+    `logger.info("deploy site=…")` reaches journald. Previously only
+    error paths were visible, making successful auto-deploys silent.
+    The 8 info-level log sites in api/main.py are all event-driven
+    (startup + webhook + sync) — no flood concern. Closes #119.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 05:10:00 +0000
+
 secubox-metablogizer (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * metablogizerctl site publish: new --public-domain <fqdn> flag.
