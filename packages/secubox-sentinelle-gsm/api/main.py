@@ -25,6 +25,8 @@ OPAD/privacy invariant proof: /status returns
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import sys
 from dataclasses import asdict
@@ -39,9 +41,14 @@ sys.path.insert(0, "/usr/lib/secubox/sentinelle-gsm/lib")
 
 from sentinelle_gsm import CAPTURES_PLAINTEXT_IMSI, Mode  # noqa: E402
 from sentinelle_gsm.alert_sink import Alert, AlertSink   # noqa: E402
+from sentinelle_gsm.gsmtap_listener import GsmtapListener  # noqa: E402
 from sentinelle_gsm.livemon import detect_rtlsdr_usb     # noqa: E402
+from sentinelle_gsm.livemon_runner import LivemonRunner  # noqa: E402
+from sentinelle_gsm.observations import ObservationsDB, Sighting  # noqa: E402
 from sentinelle_gsm.observer import Anonymizer           # noqa: E402
 from sentinelle_gsm.trusted import TrustedRegistry       # noqa: E402
+
+_log = logging.getLogger("secubox.sentinelle-gsm.api")
 
 SECRETS_DIR = Path(os.environ.get("SECUBOX_SECRETS_DIR", "/etc/secubox/secrets"))
 HMAC_KEY_FILE = SECRETS_DIR / "sentinelle-gsm-hmac"
@@ -108,6 +115,84 @@ def _init_v0_2_singletons() -> None:
         _alert_sink = AlertSink(ALERTS_DB_PATH)
     if _trusted_registry is None:
         _trusted_registry = TrustedRegistry(TRUSTED_REGISTRY_PATH, _get_anonymizer())
+
+
+# ── v0.3: scan control (livemon runner + GSMTAP listener + observations DB) ──
+#
+# The CHILD grgsm_livemon_headless claims the RTL-SDR; the parent never does.
+# This lets ad-hoc tools (rtl_test, kalibrate) coexist with the service when
+# no scan is active (closes #344).
+
+_livemon: Optional[LivemonRunner] = None
+_listener: Optional[GsmtapListener] = None
+_obs_db: Optional[ObservationsDB] = None
+_consume_task: Optional[asyncio.Task] = None
+
+OBSERVATIONS_DB_PATH = Path("/var/lib/secubox/sentinelle-gsm/observations.db")
+
+
+def get_livemon() -> LivemonRunner:
+    if _livemon is None:
+        raise RuntimeError("livemon runner not initialised")
+    return _livemon
+
+
+def get_listener() -> GsmtapListener:
+    if _listener is None:
+        raise RuntimeError("gsmtap listener not initialised")
+    return _listener
+
+
+def get_obs_db() -> ObservationsDB:
+    if _obs_db is None:
+        raise RuntimeError("observations db not initialised")
+    return _obs_db
+
+
+@app.on_event("startup")
+def _init_v0_3_singletons() -> None:
+    global _livemon, _listener, _obs_db
+    if _livemon is None:
+        _livemon = LivemonRunner()
+    if _listener is None:
+        _listener = GsmtapListener()
+    if _obs_db is None:
+        _obs_db = ObservationsDB(OBSERVATIONS_DB_PATH)
+
+
+async def _consume_observations() -> None:
+    """Drain the GSMTAP listener and upsert sightings.
+
+    Cancellation-safe: on /scan/stop we cancel this task before
+    stopping the listener + runner so no leaked subprocess is left
+    behind. Until v0.3.1 wires the L3 BCCH decode we don't know the
+    operator quadruple (MCC/MNC/LAC/CI), so we synthesise a placeholder
+    cell_id from (arfcn, channel). The schema accepts NULL for the
+    operator fields.
+    """
+    listener = get_listener()
+    db = get_obs_db()
+    try:
+        async for obs in listener.observations():
+            cell_id = obs.cell_id or f"arfcn-{obs.arfcn}-ch-{obs.channel}"
+            try:
+                db.upsert_sighting(Sighting(
+                    cell_id=cell_id,
+                    arfcn=obs.arfcn,
+                    mcc=obs.mcc,
+                    mnc=obs.mnc,
+                    lac=obs.lac,
+                    ci=obs.ci,
+                ))
+            except ValueError as exc:
+                _log.warning("observations: refused write: %s", exc)
+    except asyncio.CancelledError:
+        # Normal path on /scan/stop — propagate so the task transitions
+        # to CANCELLED rather than swallowing.
+        raise
+    except Exception:           # noqa: BLE001
+        _log.exception("consume loop crashed")
+        raise
 
 
 def _read_mode() -> Mode:
@@ -397,6 +482,95 @@ def set_mode(payload: dict = Body(...)) -> dict:
     except (PermissionError, OSError):
         pass  # don't 500 on audit-log fail; mode flip already persisted
     return {"ok": True, "mode": target_mode.value}
+
+
+# ── SCAN CONTROL (v0.3.0) ───────────────────────────────────────────────
+# Lifecycle: POST /scan/start spawns grgsm_livemon_headless, binds the
+# UDP listener and starts the consume loop that drains Observations
+# into ObservationsDB. POST /scan/stop cancels the consume task FIRST,
+# then stops the runner + listener — so no orphan subprocess remains.
+
+class ScanStartBody(BaseModel):
+    freq: str
+
+
+def _scan_status_payload(st) -> dict:
+    """Render a LivemonRunner.ScanStatus dataclass as JSON-safe dict.
+
+    The test fixture replaces _livemon with a MagicMock whose status()
+    returns a MagicMock-shaped object (not a real dataclass) — pluck
+    attributes individually so both paths work.
+    """
+    return {
+        "running": bool(getattr(st, "running", False)),
+        "pid": getattr(st, "pid", None),
+        "freq": getattr(st, "freq", None),
+        "started_at": getattr(st, "started_at", None),
+        "stderr_tail": getattr(st, "stderr_tail", "") or "",
+    }
+
+
+@app.post("/scan/start", dependencies=[Depends(require_jwt)])
+async def scan_start(body: ScanStartBody) -> dict:
+    """Spawn grgsm_livemon_headless on `freq`, start listener + consume loop."""
+    global _consume_task
+    if _consume_task is not None and not _consume_task.done():
+        raise HTTPException(409, "scan already running")
+    listener = get_listener()
+    runner = get_livemon()
+    try:
+        await listener.start()
+    except OSError as e:
+        raise HTTPException(500, f"listener bind failed: {e}")
+    try:
+        status = await runner.start(body.freq)
+    except RuntimeError as e:
+        # runner refused (already running) — undo the listener bind
+        await listener.stop()
+        raise HTTPException(409, str(e))
+    except FileNotFoundError as e:
+        await listener.stop()
+        raise HTTPException(500, f"grgsm_livemon_headless missing: {e}")
+    _consume_task = asyncio.create_task(_consume_observations())
+    return _scan_status_payload(status)
+
+
+@app.post("/scan/stop", dependencies=[Depends(require_jwt)])
+async def scan_stop() -> dict:
+    """Cancel consume task, then stop runner + listener (in that order)."""
+    global _consume_task
+    if _consume_task is not None:
+        _consume_task.cancel()
+        try:
+            await _consume_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:           # noqa: BLE001
+            _log.exception("consume task exited with error during stop")
+        _consume_task = None
+    runner = get_livemon()
+    listener = get_listener()
+    status = await runner.stop()
+    await listener.stop()
+    return _scan_status_payload(status)
+
+
+@app.get("/scan/status", dependencies=[Depends(require_jwt)])
+async def scan_status() -> dict:
+    """Current runner state (running / pid / freq / stderr-tail)."""
+    return _scan_status_payload(get_livemon().status())
+
+
+@app.get("/observations", dependencies=[Depends(require_jwt)])
+async def list_observations(limit: int = 200) -> dict:
+    """Recent cell sightings, newest first. `limit` is capped at 1000."""
+    if limit < 1:
+        limit = 1
+    if limit > 1000:
+        limit = 1000
+    return {
+        "sightings": [asdict(s) for s in get_obs_db().sightings(limit=limit)],
+    }
 
 
 @app.get("/healthz")
