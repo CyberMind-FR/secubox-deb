@@ -1,3 +1,23 @@
+secubox-sentinelle-gsm (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/sentinelle-webui.conf: stop including secubox-proxy.conf in
+    the SSE override block — the snippet declares proxy_http_version,
+    proxy_buffering, proxy_cache, proxy_read_timeout AND proxy_send_timeout,
+    all of which collide with our timeout overrides (nginx refuses with
+    "duplicate directive"). The override now inlines a strict subset of
+    the snippet plus the SSE-specific 24h timeouts.
+  * debian/postinst: chown the seeded trusted.json to secubox:secubox
+    (was root:secubox 0640 — the service user couldn't truncate the file
+    on add/delete and POST /trusted returned 500 with PermissionError).
+  * www/sentinelle/index.html: inject the canonical SecuBox global menu
+    bar via `<nav class="sidebar" id="sidebar"></nav>` + `<script
+    src="/shared/sidebar.js"></script>`. The local per-module navigation
+    aside was renamed from class="sidebar" to class="local-nav" (CSS
+    selectors updated accordingly) so /shared/sidebar.js can claim
+    `.sidebar` without colliding with our local styles.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 12:00:00 +0000
+
 secubox-sentinelle-gsm (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * v0.2.0 — Local alerts persistence + trusted-phones whitelist +
