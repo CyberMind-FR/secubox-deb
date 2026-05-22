@@ -106,11 +106,28 @@ class AlertSink:
             pass
 
     async def stream(self) -> AsyncIterator[str]:
-        """Yield SSE-formatted text/event-stream chunks."""
+        """Yield SSE-formatted text/event-stream chunks.
+
+        Emits a `: subscribed` SSE comment IMMEDIATELY so browsers see
+        the first response body byte and transition `EventSource.readyState`
+        from CONNECTING (0) to OPEN (1). Without this, the response would
+        hang on `q.get()` until the first alert is written — browsers stay
+        in CONNECTING and the UI shows "connecting…" forever.
+
+        Also emits a `: ping` heartbeat every 30 s so intermediate proxies
+        (HAProxy, mitmproxy, nginx) keep the long-poll connection alive.
+        """
         q = self.subscribe()
+        # SSE comments — browsers + EventSource ignore lines starting with ":"
+        yield ": subscribed\n\n"
+        HEARTBEAT_SEC = 30.0
         try:
             while True:
-                alert = await q.get()
+                try:
+                    alert = await asyncio.wait_for(q.get(), timeout=HEARTBEAT_SEC)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+                    continue
                 yield "event: alert\ndata: " + json.dumps(asdict(alert)) + "\n\n"
         finally:
             self.unsubscribe(q)
