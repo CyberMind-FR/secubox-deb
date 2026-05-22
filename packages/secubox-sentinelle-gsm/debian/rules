@@ -12,6 +12,9 @@ override_dh_auto_install:
 	# CTL
 	install -d debian/secubox-sentinelle-gsm/usr/sbin
 	install -m 755 sbin/sentinellectl debian/secubox-sentinelle-gsm/usr/sbin/sentinellectl
+	# gr-gsm device.py monkey-patch shim (#354)
+	install -d debian/secubox-sentinelle-gsm/usr/libexec/secubox
+	install -m 755 sbin/secubox-grgsm-livemon-shim debian/secubox-sentinelle-gsm/usr/libexec/secubox/secubox-grgsm-livemon-shim
 	# Menu entry
 	install -d debian/secubox-sentinelle-gsm/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-sentinelle-gsm/usr/share/secubox/menu.d/ || true

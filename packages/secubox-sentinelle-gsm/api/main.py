@@ -655,11 +655,14 @@ class ScanStartBody(BaseModel):
     gain: Optional[float] = None
     samp_rate: Optional[str] = None
     ppm: Optional[float] = None
-    # gr-osmosdr device-args. Default rtl=0 forces the RTL-SDR backend
-    # (osmosdr's default loads UHD/USRP and fails when none is plugged).
-    # Operators can override to experiment with alternative syntaxes
-    # while we figure out why livemon rejects what scanner accepts.
-    args: str = "rtl=0"
+    # v0.3.3: gr-osmosdr device-args, opt-in only. Default None → no --args
+    # flag passed; gr-osmosdr auto-picks the first RTL-SDR (the form gkerma's
+    # IMSI-catcher project uses). Set explicitly when you need to override.
+    args: Optional[str] = None
+    # v0.3.3: GSMTAP UDP port for the livemon child. None → 4729 (grgsm
+    # default, the port the listener binds). Override when multiplexing
+    # several runners across 4730/4731/… for multi-cell capture.
+    serverport: Optional[int] = None
 
 
 def _scan_status_payload(st) -> dict:
@@ -697,6 +700,7 @@ async def scan_start(body: ScanStartBody) -> dict:
             samp_rate=body.samp_rate,
             ppm=body.ppm,
             args=body.args,
+            serverport=body.serverport,
         )
     except RuntimeError as e:
         # runner refused (already running) — undo the listener bind

@@ -84,7 +84,19 @@ class LivemonRunner:
         # `_done` is True once the watcher observes the child exited.
         self._watcher_task: Optional[asyncio.Task] = None
         self._done: bool = False
-        self._bin = shutil.which("grgsm_livemon_headless") or "/usr/bin/grgsm_livemon_headless"
+        # v0.3.4: prefer the gr-gsm device.py monkey-patch shim shipped by
+        # this package (closes #354 — upstream gr-gsm 1.0.0 device.py is
+        # incompatible with libgnuradio-osmosdr 0.2.4, both crash with
+        # `TypeError: argument of type 'osmosdr.device_t' is not iterable`).
+        # Falls back to the upstream binary on systems where the shim isn't
+        # installed (dev, tests, future versions that don't need the patch).
+        # The shim is a thin runpy.run_path() wrapper, so its CLI is
+        # identical to the upstream's — no other Runner state changes.
+        shim = "/usr/libexec/secubox/secubox-grgsm-livemon-shim"
+        if os.path.isfile(shim) and os.access(shim, os.X_OK):
+            self._bin = shim
+        else:
+            self._bin = shutil.which("grgsm_livemon_headless") or "/usr/bin/grgsm_livemon_headless"
 
     def status(self) -> ScanStatus:
         # v0.3.2 fix: "running" now means proc exists AND watcher hasn't
@@ -106,7 +118,8 @@ class LivemonRunner:
         gain: Optional[float] = None,
         samp_rate: Optional[str] = None,
         ppm: Optional[float] = None,
-        args: str = "rtl=0",
+        args: Optional[str] = None,
+        serverport: Optional[int] = None,
     ) -> ScanStatus:
         """Spawn grgsm_livemon_headless on the given frequency.
 
@@ -115,14 +128,34 @@ class LivemonRunner:
             (let grgsm use its default).
         samp_rate: optional sample rate string ('2.0M'). None = grgsm default.
         ppm: optional clock offset in ppm. None = grgsm default (0).
-        args: gr-osmosdr device args. Default 'rtl=0' forces the RTL-SDR
-            backend (otherwise osmosdr loads UHD/USRP by default and
-            crashes when no USRP is plugged in).
+        args: gr-osmosdr device args. v0.3.3: default is None — gkerma's
+            IMSI-catcher project (scan-and-livemon) proves the bare `-f FREQ`
+            form is canonical; gr-osmosdr auto-picks the first RTL-SDR.
+            v0.3.2 defaulted to 'rtl=0' which triggered "Wrong rtlsdr device
+            index given" inside livemon (different code path than
+            grgsm_scanner, which accepts the same syntax). Pass a value here
+            only to override the auto-pick.
+        serverport: optional GSMTAP UDP port (default 4729 inside grgsm).
+            Used for multi-cell capture: spawn N runners on 4730/4731/…
+            and demux on the listener side.
         """
         if self._proc is not None and not self._done:
             raise RuntimeError("scan already running — stop first")
 
-        argv = [self._bin, f"--args={args}", "-f", freq]
+        # v0.3.4: default grgsm to bind one port above our GSMTAP listener.
+        # grgsm's `network.socket_pdu('UDP_SERVER', '127.0.0.1', serverport,
+        # ...)` block BINDS --serverport (default 4729 — same as our
+        # listener), then sends GSMTAP packets out from there. Without an
+        # explicit override, both processes race for 4729 and grgsm dies
+        # with `RuntimeError: bind: Address already in use`. The
+        # IMSI-catcher project's scan-and-livemon dodges this the same way
+        # (serverport starts at 4730 and increments). Callers can still
+        # override via the kwarg (e.g. for multi-cell with 4731, 4732, …).
+        effective_serverport = serverport if serverport is not None else self.gsmtap_port + 1
+
+        argv = [self._bin, "-f", freq, f"--serverport={effective_serverport}"]
+        if args is not None:
+            argv += [f"--args={args}"]
         if gain is not None:
             argv += ["-g", str(gain)]
         if samp_rate is not None:

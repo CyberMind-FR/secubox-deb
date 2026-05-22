@@ -1,3 +1,73 @@
+secubox-sentinelle-gsm (0.3.4-1~bookworm1) bookworm; urgency=medium
+
+  * sbin/secubox-grgsm-livemon-shim: NEW thin Python wrapper that
+    monkey-patches gnuradio.gsm.device.match() before runpy()-ing
+    grgsm_livemon_headless. Closes the actual root cause of every
+    livemon crash since v0.3.0: gr-gsm 1.0.0 (Debian bookworm) calls
+    `k in dev` and `dev[k]` against an osmosdr.device_t, but
+    libgnuradio-osmosdr 0.2.4 ships device_t as opaque (only
+    to_string() works), so every invocation crashes with
+    `TypeError: argument of type 'osmosdr.osmosdr_python.device_t'
+    is not iterable`. The shim parses to_string() into a dict and
+    runs the original matching logic against that.
+  * lib/sentinelle_gsm/livemon_runner.py: LivemonRunner now prefers
+    /usr/libexec/secubox/secubox-grgsm-livemon-shim when present,
+    falls back to /usr/bin/grgsm_livemon_headless otherwise. The
+    shim's CLI is identical to the upstream's (runpy passes argv
+    through), so no other Runner state changes.
+  * debian/rules: install the shim into /usr/libexec/secubox/.
+  * debian/secubox-sentinelle-gsm.service: add AF_NETLINK to
+    RestrictAddressFamilies. libusb 1.0 / libudev subscribe to kernel
+    uevents over netlink; without it, libusb_init() aborts (proved on
+    gk2 by elimination — relaxing MDWE + SystemCallFilter via a
+    transient drop-in did NOT unblock scans). One token, every other
+    CSPN-relevant restriction intact (NoNewPrivileges, ProtectSystem,
+    ProtectHome, CapabilityBoundingSet=, MemoryDenyWriteExecute=true,
+    SystemCallFilter=@system-service).
+  * lib/sentinelle_gsm/livemon_runner.py: --serverport now defaults to
+    `gsmtap_port + 1` (= 4730 with the standard 4729 listener) instead
+    of letting grgsm pick its built-in default of 4729. grgsm BINDS
+    --serverport (not connects to it), so leaving the default collided
+    with our listener and crashed the child with `RuntimeError: bind:
+    Address already in use`. The IMSI-catcher scan-and-livemon project
+    avoids the same collision (serverport=4730+i). Callers can still
+    override.
+  * tests: replace test_start_no_serverport_omits_flag with two new
+    tests covering the default+1 behavior and the custom-gsmtap-port
+    case. 71/71 sweep.
+  * Validated on gk2 (kernel 6.12.85, gr-gsm 1.0.0~20220727-1+b3,
+    libgnuradio-osmosdr0.2.0 0.2.4-1): gr-osmosdr finds the
+    RTL2838UHIDIR (`Using device #0 Realtek RTL2838UHIDIR SN:
+    00000001`) and begins sample capture (`Allocating 15 zero-copy
+    buffers`).
+  * Closes #354. Refs #353 #351.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 21:00:00 +0000
+
+secubox-sentinelle-gsm (0.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * lib/sentinelle_gsm/livemon_runner.py: drop the `--args=rtl=0` default
+    that v0.3.2 emitted unconditionally. gr-osmosdr's livemon code path
+    rejected it with "Wrong rtlsdr device index given" — different from
+    grgsm_scanner, which accepts the same syntax. The canonical form
+    proven by gkerma/IMSI-catcher's scan-and-livemon is the bare
+    `-f FREQ` invocation: gr-osmosdr auto-picks the first RTL-SDR. The
+    `args` kwarg is still available as opt-in for overrides.
+  * lib/sentinelle_gsm/livemon_runner.py: new optional `serverport`
+    kwarg → passes `--serverport=N` through to grgsm. Used for
+    multi-cell capture, where N runners multiplex onto 4730/4731/…
+    while the listener demuxes (same pattern as scan-and-livemon).
+  * api/main.py: ScanStartBody — `args` is now `Optional[str] = None`
+    (was `"rtl=0"`); added `serverport: Optional[int] = None`. POST
+    /scan/start passes both through.
+  * api/tests/test_livemon_runner.py: rename `test_start_spawns_with_rtl_args`
+    → `test_start_default_no_args_flag` (inverted assertion: argv must
+    NOT contain any `--args=*`); add `test_start_serverport_kwarg` +
+    `test_start_no_serverport_omits_flag`. 11/11 sweep.
+  * Closes #353. Refs #351.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 19:30:00 +0000
+
 secubox-sentinelle-gsm (0.3.2-1~bookworm1) bookworm; urgency=medium
 
   * lib/sentinelle_gsm/livemon_runner.py: NEW watcher task awaits the
