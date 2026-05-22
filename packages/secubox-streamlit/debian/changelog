@@ -1,3 +1,16 @@
+secubox-streamlit (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * Remove stale packages/secubox-streamlit/scripts/streamlitctl
+    duplicate (v1.0.0, pre-#182 + pre-#331). debian/rules ran
+    `install -m 755 sbin/*` followed by `install -m 755 scripts/*`
+    into the same /usr/sbin/, so the older script in scripts/
+    silently clobbered the fresh one from sbin/ every build.
+    Deployed .deb v1.2.2 on gk2 still ran VERSION=1.0.0 without
+    any idle-tracking helpers. With scripts/ removed the sbin/
+    version is the only candidate.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 06:15:00 +0000
+
 secubox-streamlit (1.2.2-1~bookworm1) bookworm; urgency=medium
 
   * streamlitctl: new `app idle-check` + `app wake` subcommands.
