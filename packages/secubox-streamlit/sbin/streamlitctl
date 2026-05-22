@@ -515,6 +515,36 @@ cmd_app_idle_check() {
     log "idle-check: active=$active idle=$idle stopped=$stopped"
 }
 
+cmd_app_wake() {
+    local name="$1"
+    local wait_sec="${2:-30}"
+    [ -z "$name" ] && { error "Usage: streamlitctl app wake <name> [wait_seconds]"; return 2; }
+    [ -d "$APPS_PATH/$name" ] || { error "App not found: $name"; return 2; }
+
+    if _app_running "$name"; then
+        _app_touch_active "$name"
+        log "wake: $name already running"
+        return 0
+    fi
+
+    log "wake: starting $name (will wait up to ${wait_sec}s)"
+    cmd_app_start "$name" >/dev/null 2>&1 || { error "wake: failed to start $name"; return 1; }
+
+    local elapsed=0
+    while [ "$elapsed" -lt "$wait_sec" ]; do
+        if _app_running "$name"; then
+            _app_touch_active "$name"
+            log "wake: $name listening after ${elapsed}s"
+            return 0
+        fi
+        sleep 1
+        elapsed=$(( elapsed + 1 ))
+    done
+
+    error "wake: $name did not come up within ${wait_sec}s"
+    return 1
+}
+
 cmd_app_deploy() {
     local zip_file="$1"
     local name="$2"
