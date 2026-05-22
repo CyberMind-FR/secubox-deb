@@ -55,8 +55,12 @@ async def test_listener_receives_a_datagram(tmp_path):
     listener = GsmtapListener(host="127.0.0.1", port=47291)
     await listener.start()
     try:
+        payload = b"\x06\x1a" + b"DECAFBAD" * 2
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(_build_gsmtap_v2(arfcn=42, channel=0x04), ("127.0.0.1", 47291))
+        sock.sendto(
+            _build_gsmtap_v2(arfcn=42, channel=0x04) + payload,
+            ("127.0.0.1", 47291),
+        )
 
         async def first():
             async for obs in listener.observations():
@@ -64,5 +68,6 @@ async def test_listener_receives_a_datagram(tmp_path):
         obs = await asyncio.wait_for(first(), timeout=1.0)
         assert obs.arfcn == 42
         assert obs.channel == 0x04
+        assert obs.raw_l3 == payload
     finally:
         await listener.stop()

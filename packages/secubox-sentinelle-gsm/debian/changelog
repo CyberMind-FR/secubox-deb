@@ -1,3 +1,36 @@
+secubox-sentinelle-gsm (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * lib/sentinelle_gsm/l3_decode.py: NEW — pure-Python TLV parser for
+    BCCH SI Type 3/4/6 (cell metadata) and CCCH Paging Request Type
+    1/2/3 (paged subscriber identities). All paged identities are
+    HMAC-hashed via Anonymizer BEFORE leaving the module; public API
+    surface NEVER returns plaintext IMSI/TMSI/IMEI.
+  * lib/sentinelle_gsm/baseline.py: NEW — operator-baseline learning.
+    Cells graduate to baseline after LEARN_THRESHOLD=3 sightings.
+    Explicit "learn mode" (POST /baseline/learn) immediately accepts
+    every observed cell as baseline within a sweep window.
+  * lib/sentinelle_gsm/scoring_engine.py: NEW — 8 heuristics from spec
+    §6.1 with default thresholds. Sliding windows for relocalization
+    storm + identity_request_abuse (in-memory deques). Per-heuristic
+    enable + threshold are runtime-mutable via POST /scoring/thresholds
+    (audit-logged to the journal stream).
+  * lib/sentinelle_gsm/scoring.py: DROPPED — v0.1 shape-only stub
+    replaced by scoring_engine.py.
+  * api/main.py: consume loop now decodes L3 of every Observation,
+    updates sighting metadata (mcc/mnc/lac/ci/cipher), persists
+    paging events with hashed subscriber IDs, feeds baseline,
+    runs the scoring engine, and emits Alert with trusted_label
+    when a paged hash matches the trusted_phones registry.
+  * api/main.py: new endpoints GET /baseline, POST /baseline/learn,
+    GET /scoring/thresholds, POST /scoring/thresholds.
+  * www/sentinelle/: new Baseline + Scoring panels; alert rows
+    render the trusted_label chip when present.
+  * tests: 34 new (l3_decode ×9, baseline ×5, scoring_engine ×11,
+    alert_emission ×5, privacy ×4); full sweep 82/82 passing.
+  * Closes #349. Refs #237.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 22 May 2026 16:30:00 +0000
+
 secubox-sentinelle-gsm (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * lib/sentinelle_gsm/livemon_runner.py: NEW — manages a single

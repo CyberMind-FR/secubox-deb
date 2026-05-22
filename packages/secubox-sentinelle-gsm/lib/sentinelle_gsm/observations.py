@@ -70,6 +70,16 @@ class ObservationsDB:
         """)
         self._db.execute("CREATE INDEX IF NOT EXISTS pe_ts_idx ON paging_events(ts)")
         self._db.execute("CREATE INDEX IF NOT EXISTS pe_cell_idx ON paging_events(cell_id)")
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS cell_baseline (
+                cell_id TEXT PRIMARY KEY,
+                mcc INTEGER, mnc INTEGER, lac INTEGER, arfcn INTEGER,
+                learn_count INTEGER NOT NULL DEFAULT 1,
+                first_learned REAL NOT NULL,
+                last_learned  REAL NOT NULL,
+                cipher_a5     INTEGER
+            )
+        """)
         self._db.commit()
 
     def upsert_sighting(self, s: Sighting) -> None:

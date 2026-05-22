@@ -33,6 +33,7 @@ class Observation:
     frame_nr: int
     channel: int           # GSMTAP channel type
     sub_type: int          # GSMTAP sub_type
+    raw_l3: bytes = b""    # L3 payload after GSMTAP header (BCCH SI / CCCH paging)
     lac: Optional[int] = None
     ci:  Optional[int]  = None
     mcc: Optional[int]  = None
@@ -92,17 +93,18 @@ class GsmtapListener:
         hdr = _parse_gsmtap_header(data)
         if hdr is None:
             return
+        raw_l3 = data[hdr["hdr_len"]:]
         obs = Observation(
             ts=time.time(),
             arfcn=hdr["arfcn"],
             frame_nr=hdr["frame_nr"],
             channel=hdr["channel"],
             sub_type=hdr["sub_type"],
+            raw_l3=raw_l3,
         )
-        # L3 decode (BCCH System Information, CCCH paging) is deferred
-        # to v0.3.1 where we wire scapy + the BCCH parser. For v0.3.0
-        # we record the bare ARFCN/frame_nr/channel to prove the pipe
-        # works and let the operator see real-time activity counts.
+        # L3 payload is now exposed via Observation.raw_l3 for v0.3.1
+        # downstream decoders (BCCH System Information, CCCH paging).
+        # Header-only metadata is still populated for legacy consumers.
         try:
             self._queue.put_nowait(obs)
         except asyncio.QueueFull:

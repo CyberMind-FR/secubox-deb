@@ -38,6 +38,8 @@
     <a href="#logs" class="nav-link">Live logs</a>
     <a href="#scan-control" class="nav-link">Scan control</a>
     <a href="#observations" class="nav-link">Observations</a>
+    <a href="#baseline" class="nav-link">Baseline</a>
+    <a href="#scoring" class="nav-link">Scoring</a>
     <a href="#actions" class="nav-link">Actions</a>
   </nav>
   <div class="local-nav-foot">
@@ -227,6 +229,50 @@
         </tbody>
       </table>
     </div>
+  </section>
+
+  <!-- BASELINE panel (v0.3.1) ------------------------------------------- -->
+  <section id="baseline" class="panel">
+    <div class="panel-head">
+      <h2>Operator baseline <span class="badge" id="baseline-count">0</span></h2>
+      <div class="panel-actions">
+        <button class="btn" id="btn-refresh-baseline" type="button">Refresh</button>
+        <button class="btn primary" id="btn-baseline-learn" type="button">Start learn (5 min)</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Cell ID</th><th>MCC</th><th>MNC</th><th>LAC</th><th>ARFCN</th>
+            <th>Cipher</th><th>Learn count</th><th>Last learned</th>
+          </tr>
+        </thead>
+        <tbody id="baseline-tbody">
+          <tr class="empty"><td colspan="8">no baseline yet — start a scan + click "Start learn"</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">
+      Cells graduate to baseline after 3 sightings under normal scan. The "Start learn" button accepts every cell observed within the next 5 minutes immediately.
+    </p>
+  </section>
+
+  <!-- SCORING panel (v0.3.1) -------------------------------------------- -->
+  <section id="scoring" class="panel">
+    <div class="panel-head">
+      <h2>Scoring heuristics</h2>
+      <div class="panel-actions">
+        <button class="btn" id="btn-refresh-scoring" type="button">Refresh</button>
+        <button class="btn primary" id="btn-save-scoring" type="button">Apply changes</button>
+      </div>
+    </div>
+    <div class="threshold-grid" id="threshold-grid">
+      <!-- rows injected by JS -->
+    </div>
+    <p class="hint">
+      Score sum ≥ 60 (default) emits an alert. Each heuristic can be enabled/disabled and its contribution adjusted. Changes are audit-logged to the live journal stream.
+    </p>
   </section>
 
   <!-- ACTIONS panel ------------------------------------------------------ -->

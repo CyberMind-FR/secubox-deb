@@ -183,3 +183,79 @@ def test_observations_db_refuses_plaintext_imsi(tmp_path):
     )
     with pytest.raises(ValueError, match="plaintext-IMSI"):
         db.record_paging(e)
+
+
+# ---------------------------------------------------------------------------
+# v0.3.1 — L3 decode + baseline + scoring engine privacy invariants
+# ---------------------------------------------------------------------------
+
+
+def test_l3_decode_returns_no_plaintext_fields():
+    from sentinelle_gsm.l3_decode import PagedIdentity, ParsedPagingRequest, CellInfo
+    from dataclasses import fields
+    for cls in (PagedIdentity, ParsedPagingRequest, CellInfo):
+        names = {f.name for f in fields(cls)}
+        forbidden = {"imsi", "tmsi", "imei", "msisdn", "iccid", "subscriber_id"}
+        assert names.isdisjoint(forbidden), \
+            f"{cls.__name__} has plaintext id fields: {names & forbidden}"
+
+
+def test_paging_request_hashes_paged_identities():
+    from sentinelle_gsm.observer import Anonymizer
+    from sentinelle_gsm.l3_decode import L3Decode, MID_TYPE_TMSI
+    anon = Anonymizer(b"x" * 32)
+    dec = L3Decode(anon)
+    # Build a paging request type 1 with a TMSI
+    tmsi = b"\xDE\xAD\xBE\xEF"
+    mid = b"\x05\xF4" + tmsi          # length=5 + body=[type_byte + 4 bytes TMSI]
+    raw = b"\x06\x21\x00" + mid       # L3 header + page_mode + MID
+    frame = dec.parse(raw)
+    assert frame.paging is not None
+    assert len(frame.paging.identities) >= 1
+    pid = frame.paging.identities[0]
+    # The plaintext TMSI bytes (as hex string) MUST NOT appear in the hash
+    assert tmsi.hex() not in pid.subscriber_hash
+    assert pid.id_type == MID_TYPE_TMSI
+
+
+def test_cell_baseline_has_no_subscriber_fields():
+    from sentinelle_gsm.baseline import BaselineCell
+    from dataclasses import fields
+    names = {f.name for f in fields(BaselineCell)}
+    forbidden = {"imsi", "tmsi", "imei", "subscriber_hash", "subscriber_id", "msisdn", "iccid"}
+    assert names.isdisjoint(forbidden), \
+        f"BaselineCell has forbidden id-related fields: {names & forbidden}"
+
+
+def test_scoring_engine_reasons_contain_no_plaintext_imsi():
+    """The reason strings produced by each heuristic must NOT contain
+    a 15-digit token (plaintext IMSI shape). All identifiers in reasons
+    should already be hashed/truncated."""
+    import re
+    from sentinelle_gsm.observer import Anonymizer
+    from sentinelle_gsm.scoring_engine import ScoringEngine
+    from sentinelle_gsm.baseline import CellBaseline
+    from sentinelle_gsm.observations import ObservationsDB
+    from sentinelle_gsm.l3_decode import CellInfo, ParsedPagingRequest, PagedIdentity, MID_TYPE_TMSI
+    import tempfile, pathlib
+
+    with tempfile.TemporaryDirectory() as td:
+        obs_db = ObservationsDB(pathlib.Path(td) / "obs.db")
+        baseline = CellBaseline(obs_db._db)
+        engine = ScoringEngine(baseline)
+
+        # Feed an observation that triggers identity_request_abuse with a TMSI
+        # hash like '208201234567890ABCDEF' — the hash output happens to
+        # contain 15 digits in the abusive case; the reason should still
+        # not echo those raw digits unguarded.
+        # Just verify NO reason string from a typical observation flow
+        # matches the plaintext-IMSI shape \b\d{15}\b.
+        ci = CellInfo(mcc=208, mnc=1, lac=100, ci=12345)
+        pg = ParsedPagingRequest(
+            paging_type=0x21,
+            identities=[PagedIdentity(id_type=MID_TYPE_TMSI, subscriber_hash="abc123def456")],
+        )
+        result = engine.evaluate(ci, pg, raw_arfcn=42)
+        for reason in result.reasons:
+            assert not re.search(r"\b\d{15}\b", reason), \
+                f"scoring reason contains plaintext-IMSI shape: {reason!r}"
