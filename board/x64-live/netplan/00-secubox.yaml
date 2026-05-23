@@ -9,11 +9,20 @@ network:
   renderer: networkd
 
   ethernets:
-    # Bootstrap: Enable DHCP on all ethernet interfaces for initial connectivity
-    # This ensures we get an IP regardless of interface naming (eno1, enp2s0, etc.)
+    # Bootstrap: Enable DHCP on all ethernet interfaces for initial connectivity.
+    # This ensures we get an IP regardless of interface naming (eno1, enp2s0, …).
     # After first boot, secubox-net-detect rewrites this with proper WAN/LAN split.
+    #
+    # WAN fallback (closes #370): the en*/eth* matches also carry a static
+    # 192.168.1.55/24 + gw 192.168.1.254. systemd-networkd accepts DHCP
+    # and static at the same time — DHCP routes use the configured low
+    # metric (100 / 200), the static gets metric 1000, so DHCP wins when
+    # available and the static keeps the appliance reachable when not.
+    # Caveat: if multiple interfaces match the pattern, both will try to
+    # take 192.168.1.55 and one will fail with address-in-use. In practice
+    # bare-metal boxes have ONE primary NIC; multi-NIC operators run
+    # net-detect to refine the layout anyway.
 
-    # Match all common ethernet interface patterns
     eth-dhcp:
       match:
         name: "en*"
@@ -24,6 +33,13 @@ network:
         use-routes: true
         route-metric: 100
       optional: true
+      addresses: [192.168.1.55/24]
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+      routes:
+        - to: default
+          via: 192.168.1.254
+          metric: 1000
 
     eth-legacy:
       match:
@@ -35,6 +51,13 @@ network:
         use-routes: true
         route-metric: 200
       optional: true
+      addresses: [192.168.1.55/24]
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+      routes:
+        - to: default
+          via: 192.168.1.254
+          metric: 1000
 
   bridges:
     # br-lan: Pre-defined but empty - secubox-net-detect populates interfaces
