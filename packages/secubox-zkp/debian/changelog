@@ -1,3 +1,14 @@
+secubox-zkp (1.0.1-1~bookworm1) bookworm; urgency=high
+
+  * Service runs as User=secubox / Group=secubox instead of www-data. Every
+    other secubox-* unit uses the secubox user, and /run/secubox/ is owned
+    by secubox:secubox 0755 — so www-data was unable to create zkp.sock,
+    leaving the service in a tight crash-loop (counter passed 170 on gk2,
+    ~96% CPU spike every 5s on each restart attempt). Aligning the unit
+    with siblings (auth, hub, ad-guard, ai-gateway) fixes the bind.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 23 May 2026 16:35:00 +0200
+
 secubox-zkp (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release.
