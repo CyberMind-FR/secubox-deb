@@ -1,15 +1,32 @@
 # /etc/netplan/00-secubox.yaml — x64 VM — Mode Router
-# Configuration pour environnements virtualisés
+# Configuration pour environnements virtualisés.
+#
+# WAN fallback (closes #370): every WAN-candidate interface declares
+# BOTH `dhcp4: true` AND a static `192.168.1.55/24` with
+# gw 192.168.1.254. systemd-networkd accepts both at once — DHCP
+# routes get the default low metric (100), the static route gets
+# `metric: 1000`, so DHCP wins whenever it answers. If DHCP fails
+# the system still has the static IP and the appliance is reachable
+# at 192.168.1.55. Same idea for all 3 vendor adapter patterns
+# (VirtualBox enp0s3, KVM enp1s0, VMware ens192) so the operator
+# doesn't have to know which hypervisor they're on.
 network:
   version: 2
   renderer: networkd
 
   ethernets:
-    # VirtualBox NAT adapter (WAN)
+    # VirtualBox NAT adapter (WAN) — DHCP first, static fallback
     enp0s3:
       dhcp4: true
       dhcp6: false
       optional: true
+      addresses: [192.168.1.55/24]
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+      routes:
+        - to: default
+          via: 192.168.1.254
+          metric: 1000
 
     # VirtualBox Host-only adapter (LAN)
     enp0s8:
@@ -19,6 +36,13 @@ network:
     enp1s0:
       dhcp4: true
       optional: true
+      addresses: [192.168.1.55/24]
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+      routes:
+        - to: default
+          via: 192.168.1.254
+          metric: 1000
     enp2s0:
       optional: true
 
@@ -26,6 +50,13 @@ network:
     ens192:
       dhcp4: true
       optional: true
+      addresses: [192.168.1.55/24]
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+      routes:
+        - to: default
+          via: 192.168.1.254
+          metric: 1000
     ens224:
       optional: true
 
