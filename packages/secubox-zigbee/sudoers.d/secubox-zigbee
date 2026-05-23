@@ -1,0 +1,7 @@
+# /etc/sudoers.d/secubox-zigbee
+# Lets the FastAPI (running as `secubox`) trigger the host-side
+# backup / restore scripts. Both scripts touch /data/lxc/<zigbee>/
+# files owned by host-root + invoke lxc-attach inside, so they
+# need root. Sibling pattern: /etc/sudoers.d/secubox-lxc grants
+# lxc-info / lxc-attach / lxc-start / lxc-stop the same way.
+secubox ALL=(root) NOPASSWD: /usr/sbin/zigbee-backup, /usr/sbin/zigbee-restore

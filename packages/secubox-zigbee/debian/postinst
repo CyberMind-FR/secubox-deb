@@ -33,6 +33,11 @@ case "$1" in
 
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable secubox-zigbee.service 2>/dev/null || true
+        # v2.6.0: enable + start the hourly backup timer. Safe to fire
+        # immediately — the script self-skips if the LXC isn't running.
+        install -d -m 0755 /data/backup/zigbee 2>/dev/null || true
+        systemctl enable secubox-zigbee-backup.timer 2>/dev/null || true
+        systemctl start  secubox-zigbee-backup.timer 2>/dev/null || true
         # Do not start the FastAPI before the LXC is provisioned;
         # `zigbeectl install` will start the service after the LXC is up.
         ;;

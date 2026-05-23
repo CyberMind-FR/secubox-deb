@@ -1,0 +1,78 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gerald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: zigbee-restore
+#
+# Restore z2m persistent state from a snapshot under
+# /data/backup/zigbee/<timestamp>/. The webui POST /restore triggers
+# this via subprocess. We always:
+#   1. stop z2m inside the LXC (clean shutdown — flushes pending writes)
+#   2. archive the CURRENT state as `pre-restore-<ts>` so the operator
+#      can revert if the restored snapshot turns out to be worse
+#   3. copy the snapshot files back into place
+#   4. start z2m
+# z2m re-reads database.db on start so we don't need to nudge it.
+#
+# Usage: zigbee-restore <timestamp>
+# Returns 0 on success, non-zero on any step failure.
+
+set -euo pipefail
+
+readonly MODULE="zigbee-restore"
+readonly LXC_NAME="${SECUBOX_LXC_NAME:-zigbee}"
+readonly BACKUP_ROOT="${SECUBOX_ZIGBEE_BACKUP_DIR:-/data/backup/zigbee}"
+readonly Z2M_DATA="/data/lxc/${LXC_NAME}/rootfs/opt/zigbee2mqtt/data"
+
+log() { echo "[${MODULE}] $*" >&2; }
+die() { log "ERROR: $*"; exit 1; }
+
+main() {
+	local ts="${1:-}"
+	if [[ -z "${ts}" ]]; then
+		die "missing timestamp arg (use one from /data/backup/zigbee/)"
+	fi
+	local src="${BACKUP_ROOT}/${ts}"
+	[[ -d "${src}" ]] || die "backup ${src} not found"
+	[[ -f "${src}/database.db" ]] || die "backup ${src} is incomplete (no database.db)"
+
+	if ! lxc-info -n "${LXC_NAME}" --state-only 2>/dev/null | grep -q RUNNING; then
+		die "LXC ${LXC_NAME} is not RUNNING — start it first"
+	fi
+
+	log "stopping z2m inside ${LXC_NAME}"
+	lxc-attach -n "${LXC_NAME}" -- systemctl stop zigbee2mqtt
+
+	# Safety net: save current state under a `pre-restore-` prefix so
+	# the operator has a way back if the chosen backup is worse.
+	local now; now="$(date -u +%Y%m%dT%H%M%SZ)"
+	local rescue="${BACKUP_ROOT}/pre-restore-${now}"
+	log "archiving current state → ${rescue}"
+	install -d -m 755 "${rescue}"
+	for f in database.db configuration.yaml coordinator_backup.json state.json; do
+		[[ -f "${Z2M_DATA}/${f}" ]] && cp -p "${Z2M_DATA}/${f}" "${rescue}/${f}" || true
+	done
+
+	log "restoring ${ts} → ${Z2M_DATA}"
+	for f in database.db configuration.yaml coordinator_backup.json state.json; do
+		if [[ -f "${src}/${f}" ]]; then
+			# Preserve ownership inside the LXC (mapped uid 100000+ on
+			# host = zigbee2mqtt inside). Copy via the host path and
+			# fix up with lxc-attach chown.
+			cp -p "${src}/${f}" "${Z2M_DATA}/${f}"
+		fi
+	done
+	# Chown via lxc-attach so the LXC sees correct owner. The lxc
+	# uid map (100000 = root inside) means host root files appear as
+	# owner=overflowuid inside; the chown forces them back to
+	# zigbee2mqtt:zigbee2mqtt (uid 999 in the LXC).
+	lxc-attach -n "${LXC_NAME}" -- chown -R zigbee2mqtt:zigbee2mqtt /opt/zigbee2mqtt/data
+
+	log "starting z2m"
+	lxc-attach -n "${LXC_NAME}" -- systemctl start zigbee2mqtt
+	log "restore complete; pre-restore state archived at ${rescue}"
+}
+
+main "$@"

@@ -18,7 +18,15 @@ ExecStartPre=+/bin/chown secubox:secubox /etc/secubox
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/zigbee.sock --log-level warning
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=true
+# v2.6.0: NoNewPrivileges relaxed — the FastAPI invokes `sudo -n
+# /usr/sbin/zigbee-backup` (NOPASSWD-gated per /etc/sudoers.d/
+# secubox-zigbee) to trigger host-side state snapshots. With
+# NoNewPrivileges=true, sudo refuses to escalate (PR_SET_NO_NEW_PRIVS
+# kernel flag). The attack surface stays gated by nginx + Authelia
+# SSO at the front end, the sudoers grant is whitelisted to two
+# specific scripts, and ProtectSystem + ReadWritePaths still apply
+# to the python process itself.
+NoNewPrivileges=false
 LogsDirectory=secubox
 LogsDirectoryMode=0755
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox

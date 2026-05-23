@@ -115,6 +115,23 @@
     </div>
   </section>
 
+  <!-- v2.6.0 — backup / restore. Hourly snapshots of database.db +
+       configuration.yaml + coordinator_backup.json live at
+       /data/backup/zigbee/ (host-side, survives LXC wipe). The
+       2026-05-23 incident wiped the in-LXC database during a z2m
+       crash-loop; this card lets the operator roll back to a known-
+       good snapshot without re-pairing every device. -->
+  <section class="card" style="margin-bottom: 1.5rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.75rem;">
+      <h3 style="font-size:14px; font-weight:600; color:var(--text);">Backups</h3>
+      <div style="display:flex; gap:0.4rem;">
+        <button class="btn" id="backup-refresh">Refresh</button>
+        <button class="btn primary" id="backup-now">Backup now</button>
+      </div>
+    </div>
+    <div id="backup-list" class="v" style="font-family:'JetBrains Mono', monospace; font-size:12px;">loading…</div>
+  </section>
+
   <div class="about">
     <h2>About this module</h2>
     <p>
@@ -165,6 +182,97 @@
     var list = (d.access || []).map(function (a) { return '<div>' + a.scope + ': <a href="' + a.url + '">' + a.url + '</a></div>'; }).join('');
     document.getElementById('access-v').innerHTML = list || '<span style="color:var(--muted)">no access points</span>';
   }).catch(function () { document.getElementById('access-v').innerHTML = '<span style="color:var(--muted)">unavailable</span>'; });
+
+  // ── Backups card ─────────────────────────────────────────────
+  // The list renders newest-first. Per-row Restore button opens a
+  // confirm dialog because restore stops z2m for ~3s and rewrites
+  // the live database; users shouldn't trip it casually.
+
+  function fmtSize(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+    return (b/1024/1024).toFixed(1) + ' MB';
+  }
+  function fmtTs(s) {
+    // 20260523T071302Z → 2026-05-23 07:13:02 UTC
+    var m = s.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+    return m ? (m[1] + '-' + m[2] + '-' + m[3] + ' ' + m[4] + ':' + m[5] + ':' + m[6] + ' UTC') : s;
+  }
+
+  function loadBackups() {
+    var el = document.getElementById('backup-list');
+    el.innerHTML = 'loading…';
+    get('/backups').then(function (d) {
+      var backups = d.backups || [];
+      if (!backups.length) {
+        el.innerHTML = '<span style="color:var(--muted);">No backups yet. Click <b>Backup now</b> to create one.</span>';
+        return;
+      }
+      var rows = backups.map(function (b) {
+        var kindBadge = b.kind === 'pre-restore'
+          ? '<span style="background:var(--wall-xlt); color:var(--wall-main); padding:1px 6px; border-radius:3px; font-size:10px; margin-left:6px;">PRE-RESTORE</span>'
+          : '';
+        return '<tr>' +
+          '<td>' + fmtTs(b.timestamp) + kindBadge + '</td>' +
+          '<td style="text-align:right;">' + (b.devices || 0) + ' dev</td>' +
+          '<td style="text-align:right;">' + fmtSize(b.size_db) + '</td>' +
+          '<td style="text-align:right;"><button class="btn" data-id="' + b.id + '" data-restore>Restore</button></td>' +
+          '</tr>';
+      }).join('');
+      el.innerHTML =
+        '<table style="width:100%; border-collapse:collapse;">' +
+          '<thead><tr style="color:var(--muted); font-size:11px; text-align:left; border-bottom:1px solid var(--border);">' +
+            '<th style="padding:4px 0;">Timestamp</th>' +
+            '<th style="padding:4px 0; text-align:right;">Devices</th>' +
+            '<th style="padding:4px 0; text-align:right;">DB size</th>' +
+            '<th></th>' +
+          '</tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>';
+      // Wire up per-row Restore handlers.
+      Array.from(el.querySelectorAll('button[data-restore]')).forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.getAttribute('data-id');
+          if (!confirm('Restore zigbee snapshot ' + fmtTs(id) +
+                       '?\n\nz2m will stop briefly (~3s). The current state will be archived as pre-restore-* first.')) return;
+          btn.disabled = true; btn.textContent = 'restoring…';
+          fetch('/api/v1/zigbee/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ id: id }),
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) {
+              alert('Restore OK. z2m restarted.');
+              loadBackups();
+            } else {
+              alert('Restore failed: ' + (d.error || d.stderr || 'unknown'));
+              btn.disabled = false; btn.textContent = 'Restore';
+            }
+          }).catch(function () {
+            alert('Restore failed (network)');
+            btn.disabled = false; btn.textContent = 'Restore';
+          });
+        });
+      });
+    }).catch(function () {
+      el.innerHTML = '<span style="color:var(--danger);">Failed to load backups</span>';
+    });
+  }
+  document.getElementById('backup-refresh').addEventListener('click', loadBackups);
+  document.getElementById('backup-now').addEventListener('click', function () {
+    var btn = document.getElementById('backup-now');
+    btn.disabled = true; btn.textContent = 'backing up…';
+    fetch('/api/v1/zigbee/backup', { method: 'POST', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        btn.disabled = false; btn.textContent = 'Backup now';
+        if (d.ok) loadBackups();
+        else alert('Backup failed: ' + (d.error || d.stderr || 'unknown'));
+      }).catch(function () {
+        btn.disabled = false; btn.textContent = 'Backup now';
+        alert('Backup failed (network)');
+      });
+  });
+  loadBackups();
 })();
 </script>
 
