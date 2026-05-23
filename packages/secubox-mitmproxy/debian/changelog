@@ -1,3 +1,16 @@
+secubox-mitmproxy (1.0.3-1~bookworm1) bookworm; urgency=high
+
+  * Self-loop guard in secubox_waf.py request() hook. When the X-Forwarded-For
+    chain contains mitmproxy's own LXC IP (10.100.0.60) more than twice, the
+    WAF short-circuits with 508 Loop Detected instead of forwarding upstream.
+    Stops runaway CPU when a Host header (eg literal IP from Eye Remote at
+    10.55.0.1) is not in haproxy-routes.json and would otherwise bounce
+    through HAProxy default_backend mitmproxy_inspector forever — observed
+    on gk2 with mitmdump at sustained 84% CPU and ~50 XFF self-references
+    per request.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 23 May 2026 14:30:00 +0200
+
 secubox-mitmproxy (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * /data convention migration (#319 Phase 1). All hardcoded /srv/<pkg>
