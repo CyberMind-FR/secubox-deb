@@ -225,20 +225,23 @@
         const TA  = '/api/v1/threat-analyst';
         const EXP = '/api/v1/exposure';
 
-        // Shared HTTP wrapper. v1.1.1: returns {ok, status, data, err}
-        // instead of null-on-error so panels can render meaningful
-        // error states ("auth", "404", "network") rather than stuck
-        // on "Loading…". Sends localStorage Bearer if present, but
-        // also includes browser credentials so Authelia SSO cookies
-        // travel with same-origin fetches (the canonical auth path
-        // for the secubox stack — nginx auth_request validates the
-        // SSO cookie before proxying to the per-module unix socket).
+        // Shared HTTP wrapper. v1.1.2: dropped credentials: 'include'.
+        // The secubox nginx vhost sends `Access-Control-Allow-Origin: *`
+        // on every /api/v1/* response; browsers REJECT a wildcard ACAO
+        // when the fetch is credentialed (per the CORS spec — credentials
+        // require a specific origin). That made every call throw
+        // TypeError before reaching the response, which our catch
+        // labelled "network" — every panel showed "Network unreachable"
+        // even though the endpoints worked fine via curl. fetch's default
+        // credentials mode is 'same-origin', which still includes Authelia
+        // cookies on same-origin requests without triggering the strict
+        // CORS check.
         async function api(base, path, method = 'GET', data = null) {
             const token = localStorage.getItem('sbx_token');
             const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
             try {
                 const res = await fetch(base + path, {
-                    method, headers, credentials: 'include',
+                    method, headers,
                     body: data ? JSON.stringify(data) : null,
                 });
                 if (res.status === 401) {
@@ -249,6 +252,15 @@
                 }
                 if (!res.ok) {
                     return { ok: false, status: res.status, err: 'http_' + res.status };
+                }
+                // Some SSO setups serve the login-challenge HTML with a
+                // 200 status (instead of 401 + redirect) so the browser
+                // doesn't follow opaquely. If we asked for JSON and got
+                // HTML, treat it as auth — otherwise res.json() would
+                // throw SyntaxError and we'd mis-label it "network".
+                const ctype = res.headers.get('content-type') || '';
+                if (!ctype.includes('json')) {
+                    return { ok: false, status: res.status, err: 'auth' };
                 }
                 const data = await res.json();
                 return { ok: true, status: res.status, data };

@@ -1,3 +1,19 @@
+secubox-threat-analyst (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: drop fetch credentials: 'include'.
+    v1.1.1 added it "defensively" — but the secubox nginx vhost sends
+    `Access-Control-Allow-Origin: *` on every /api/v1/* response, and
+    browsers REJECT a wildcard ACAO when the fetch is credentialed
+    (per the CORS spec — credentials require a specific origin). Every
+    call threw TypeError before reaching the response, which the
+    catch labelled "network" — every panel showed "Network
+    unreachable" even though curl showed the endpoints returning JSON.
+    Removing the explicit option falls back to the fetch default
+    `'same-origin'`, which still ships Authelia cookies on same-origin
+    requests without triggering the strict CORS check.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 12:00:00 +0000
+
 secubox-threat-analyst (1.1.1-1~bookworm1) bookworm; urgency=medium
 
   * www/threat-analyst/index.html: two follow-up fixes to v1.1.0:
