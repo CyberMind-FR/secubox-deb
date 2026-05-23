@@ -1,3 +1,24 @@
+secubox-hub (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * www/shared/sidebar.js: sidebar HTML pre-cache for instant render
+    (v2.38.0 → v2.39.0). Previous versions cached the menu DATA but
+    only used it as a FALLBACK when the API failed — every page
+    transition still showed a "Loading…" placeholder for 200-2000ms
+    until /api/v1/hub/public/menu responded. v2.39.0:
+      - NEW saveCachedSidebarHTML / loadCachedSidebarHTML helpers
+        (localStorage key `sbx_sidebar_html_v1`, same 1h TTL as the
+        existing menu cache).
+      - loadSidebar() now paints the cached HTML instantly at the
+        top of the function (before the await), then the existing
+        API fetch overwrites with fresh content + live LEDs.
+      - At the end of every successful render, the fully-rendered
+        sidebar.innerHTML is persisted for the next page load.
+    Net effect: instant skeleton on every internal navigation, no
+    perceived delay. First-ever visit still hits the "Loading…"
+    placeholder (cache empty).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 15:45:00 +0000
+
 secubox-hub (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * www/shared/hybrid-skin.css: drop the "gradient text" trick

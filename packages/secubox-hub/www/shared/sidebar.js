@@ -23,7 +23,7 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.38.0';
+    const VERSION = 'v2.39.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -67,6 +67,38 @@
             }));
         } catch (e) {
             console.log('[Sidebar] Menu cache save error:', e);
+        }
+    }
+
+    // ── Sidebar HTML pre-cache (v2.39.0) ────────────────────────
+    // Previous versions saved the menu DATA in cache but only used
+    // it as a FALLBACK when the API failed. Operators still saw a
+    // "Loading…" placeholder for 200-2000ms on every page transition.
+    // v2.39.0 caches the fully rendered sidebar HTML and paints it
+    // immediately on load. The fresh API result then overwrites it
+    // (LEDs etc. update from the actual /health-batch call). Net:
+    // instant skeleton, no perceived delay.
+    const SIDEBAR_HTML_CACHE_KEY = 'sbx_sidebar_html_v1';
+    function saveCachedSidebarHTML(html) {
+        try {
+            localStorage.setItem(SIDEBAR_HTML_CACHE_KEY, JSON.stringify({
+                ts: Date.now(),
+                html: html,
+            }));
+        } catch (e) {
+            // Quota exceeded etc. — silent: cache is best-effort.
+        }
+    }
+    function loadCachedSidebarHTML() {
+        try {
+            var raw = localStorage.getItem(SIDEBAR_HTML_CACHE_KEY);
+            if (!raw || raw.charAt(0) !== '{') return null;
+            var data = JSON.parse(raw);
+            if (!data.ts || (Date.now() - data.ts) > MENU_CACHE_TTL) return null;
+            return data.html;
+        } catch (e) {
+            try { localStorage.removeItem(SIDEBAR_HTML_CACHE_KEY); } catch (_) {}
+            return null;
         }
     }
 
@@ -2240,14 +2272,24 @@
         injectStyles();
         hideUnknownEnabled = getHideUnknownPref();
 
-        sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
-            '<div class="header-leds-metrics" id="header-leds-metrics">' +
-            '<div class="led-metric-row sync-status" id="sync-status-row"><div class="sync-led" id="sync-led">⏳</div><span class="led-metric-val sync-val" id="lm-sync" title="Data sync status">--</span></div>' +
-            '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,3)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-3"></div><span class="led-metric-val" id="lm-sec">--</span></div>' +
-            '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,2)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-2"></div><span class="led-metric-val" id="lm-svc">--</span></div>' +
-            '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,1)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-1"></div><span class="led-metric-val" id="lm-hw">--</span></div>' +
-            '</div></div>' +
-            '<div class="sidebar-nav"><div class="nav-section"><div class="nav-section-title"><span>Loading...</span></div></div></div>';
+        // v2.39.0: paint the cached sidebar HTML instantly. The API
+        // fetch below overwrites it within ~200ms-2s with the fresh
+        // structure + live LED states. Operators stop seeing a
+        // "Loading…" flash on every page transition.
+        var cachedHTML = loadCachedSidebarHTML();
+        if (cachedHTML) {
+            sidebar.innerHTML = cachedHTML;
+            console.log('[Sidebar] Instant render from HTML cache');
+        } else {
+            sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
+                '<div class="header-leds-metrics" id="header-leds-metrics">' +
+                '<div class="led-metric-row sync-status" id="sync-status-row"><div class="sync-led" id="sync-led">⏳</div><span class="led-metric-val sync-val" id="lm-sync" title="Data sync status">--</span></div>' +
+                '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,3)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-3"></div><span class="led-metric-val" id="lm-sec">--</span></div>' +
+                '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,2)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-2"></div><span class="led-metric-val" id="lm-svc">--</span></div>' +
+                '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,1)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-1"></div><span class="led-metric-val" id="lm-hw">--</span></div>' +
+                '</div></div>' +
+                '<div class="sidebar-nav"><div class="nav-section"><div class="nav-section-title"><span>Loading...</span></div></div></div>';
+        }
 
         try {
             var token = localStorage.getItem('sbx_token');
@@ -2355,6 +2397,11 @@
                 '<div class="sidebar-clock" id="sidebar-clock">00:00:00</div>' +
                 '<div class="sidebar-user"><span class="sidebar-user-avatar">👤</span><div class="sidebar-user-info"><div class="sidebar-user-name">' + user + '</div><div class="sidebar-user-role">OPERATOR</div></div><button class="sidebar-logout" onclick="localStorage.removeItem(\'sbx_token\');window.location.href=\'/login.html\';">EXIT</button></div>' +
                 '</div>';
+
+            // v2.39.0: persist this fully-rendered HTML so the next
+            // page transition can paint it instantly (see
+            // loadCachedSidebarHTML() at the top of loadSidebar).
+            saveCachedSidebarHTML(sidebar.innerHTML);
 
             var clock = document.getElementById('sidebar-clock');
             if (clock) startClock(clock);
