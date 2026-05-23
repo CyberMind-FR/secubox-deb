@@ -1,3 +1,44 @@
+secubox-zigbee (2.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * NEW host-side hourly backup of z2m persistent state. The
+    2026-05-23 incident wiped database.db during a z2m crash-loop
+    against a down MQTT broker (network_key regenerated, all 5
+    paired devices lost). This release adds the safety net:
+      - sbin/zigbee-backup: snapshots database.db, configuration.yaml,
+        coordinator_backup.json, state.json to /data/backup/zigbee/
+        <UTC-ts>/. Refuses to back up if the LXC isn't RUNNING OR
+        z2m frontend :8080 unresponsive OR database.db < 1 KB (the
+        "broken state" footprint). Keeps the last 24 snapshots.
+      - sbin/zigbee-restore <ts>: stops z2m, ARCHIVES the current
+        state as pre-restore-<now> (always reversible), copies the
+        snapshot back, restarts z2m.
+      - systemd/secubox-zigbee-backup.timer: OnBootSec=15min,
+        OnUnitActiveSec=1h, RandomizedDelaySec=5min, Persistent.
+        Enabled + started by postinst.
+  * api/main.py: NEW endpoints surfacing the backup workflow to
+    the webui. GET /backups (list newest-first with device count +
+    DB size + kind tag), POST /backup (synchronous trigger), POST
+    /restore {id} (path-traversal-guarded restore).
+  * www/zigbee/index.html: NEW Backups card above About. Lists
+    snapshots in a compact table with timestamp / device count / DB
+    size / Restore button. Restore opens a confirm dialog (z2m
+    stops ~3s during the operation). Pre-restore snapshots show a
+    "PRE-RESTORE" amber badge to distinguish them from regular
+    hourly backups.
+  * lib/zigbee/install-lxc.sh: prevention against the crash-loop
+    cause:
+      - lxc.start.order = 20 + lxc.start.delay = 20: zigbee LXC now
+        starts AFTER the mqtt LXC and gives mosquitto 20s to bind
+        1883 before z2m tries to connect.
+      - zigbee2mqtt.service ExecStartPre probes the MQTT broker on
+        TCP 1883 for up to 60s; if unreachable, z2m refuses to
+        start (systemd retries per Restart=). Stops z2m from
+        writing degraded state during MQTT outages.
+  * debian/postinst: enable + start secubox-zigbee-backup.timer and
+    create /data/backup/zigbee/ with 0755 root:root.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 17:00:00 +0000
+
 secubox-zigbee (2.5.8-1~bookworm1) bookworm; urgency=medium
 
   * api/main.py: /access endpoint fixes the "lan: undefined" bug

@@ -1,0 +1,15 @@
+[Unit]
+Description=SecuBox Zigbee — hourly backup timer
+Documentation=file:///usr/share/doc/secubox-zigbee/README
+
+[Timer]
+# 15 min after every reboot, then every hour. RandomizedDelay spreads
+# load away from the start of the hour.
+OnBootSec=15min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Persistent=true
+Unit=secubox-zigbee-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=SecuBox Zigbee — hourly backup of z2m persistent state
+Documentation=file:///usr/share/doc/secubox-zigbee/README
+ConditionPathExists=/data/lxc/zigbee/rootfs/opt/zigbee2mqtt/data
+After=lxc.service
+
+[Service]
+Type=oneshot
+# Runs as root so it can read the LXC rootfs files (host-mapped uid)
+# and call lxc-info. The backup target /data/backup/zigbee/ is
+# root-owned 0755.
+User=root
+ExecStart=/usr/sbin/zigbee-backup
+SuccessExitStatus=0
