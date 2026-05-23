@@ -491,7 +491,9 @@
         '/wireguard/': '🔐', '/netdata/': '📊', '/system/': '⚙️', '/vhost/': '🌐',
         '/dpi/': '🔍', '/netmodes/': '🔀', '/qos/': '📶', '/nac/': '🚫',
         '/auth/': '🔑', '/cdn/': '💾', '/mediaflow/': '🎬', '/portal/': '🚪',
-        '/metrics/': '📈', '/certs/': '📜', '/vortex-dns/': '🌀', '/eye-remote/': '👁️'
+        '/metrics/': '📈', '/certs/': '📜', '/vortex-dns/': '🌀', '/eye-remote/': '👁️',
+        '/sentinelle/': '📡', '/lyrion/': '🎵', '/grafana/': '📈',
+        '/zigbee/': '🐝', '/yacy/': '🔍', '/rustdesk/': '🖥️', '/mqtt/': '📡'
     };
 
     function getPageIcon(path) {

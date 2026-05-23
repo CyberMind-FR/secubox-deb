@@ -1,10 +1,10 @@
 {
-  "subtitle": "Music server",
-  "icon": "fa-music",
-  "order": 80,
-  "id": "lyrion",
-  "name": "Lyrion",
-  "path": "/lyrion/",
+  "subtitle": "MQTT broker",
+  "icon": "📡",
+  "order": 87,
+  "id": "mqtt",
+  "name": "MQTT",
+  "path": "/mqtt/",
   "category": "mesh",
-  "description": ""
+  "description": "Mosquitto MQTT broker (zigbee2mqtt + Home Assistant)"
 }

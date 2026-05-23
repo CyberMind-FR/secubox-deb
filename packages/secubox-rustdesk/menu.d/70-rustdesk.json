@@ -1,6 +1,6 @@
 {
   "subtitle": "Remote desktop relay",
-  "icon": "fa-desktop",
+  "icon": "🖥️",
   "order": 70,
   "id": "rustdesk",
   "name": "RustDesk",

@@ -1,6 +1,6 @@
 {
   "subtitle": "Security metrics",
-  "icon": "fa-chart-line",
+  "icon": "📈",
   "order": 50,
   "id": "grafana",
   "name": "Grafana",
