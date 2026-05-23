@@ -35,11 +35,15 @@ FRONTEND_PORT = int(os.environ.get("SECUBOX_Z2M_FRONTEND_PORT", "8080"))
 MQTT_LXC_IP = os.environ.get("SECUBOX_MQTT_LXC_IP", "10.100.0.110")
 MQTT_PORT = int(os.environ.get("SECUBOX_MQTT_PORT", "1883"))
 SECRETS_DIR = Path(os.environ.get("SECUBOX_SECRETS_DIR", "/etc/secubox/secrets"))
+# v2.5.8: the public SSO-gated vhost that nginx + Authelia front for
+# the zigbee2mqtt UI. Operators reach it from outside the LAN; the
+# /access list now includes it explicitly.
+PUBLIC_URL = os.environ.get("SECUBOX_ZIGBEE_PUBLIC_URL", "https://zigbee.gk2.secubox.in/")
 
 app = FastAPI(
     title="SecuBox Zigbee",
     description="zigbee2mqtt coordinator control plane (MIND layer)",
-    version="2.4.0",
+    version="2.5.8",
 )
 
 
@@ -141,13 +145,20 @@ def status() -> dict:
 
 @app.get("/access")
 def access() -> dict:
+    # v2.5.8: field renamed `endpoint` → `url` so the frontend's
+    # `a.url` access actually finds a value (previously "lan:
+    # undefined" rendered because the JS lookup missed). Public SSO-
+    # gated vhost added as the first entry — that's the one operators
+    # use from outside the LAN.
     return {
         "module": "zigbee",
         "access": [
-            {"endpoint": f"http://{LXC_IP}:{FRONTEND_PORT}/",
+            {"url": PUBLIC_URL,
+             "scope": "public", "auth": "Authelia SSO"},
+            {"url": f"http://{LXC_IP}:{FRONTEND_PORT}/",
              "scope": "lan", "auth": "none (LAN-only)"},
-            {"endpoint": f"mqtt://{MQTT_LXC_IP}:{MQTT_PORT} (zigbee2mqtt/#)",
-             "scope": "lan", "auth": "z2m user"},
+            {"url": f"mqtt://{MQTT_LXC_IP}:{MQTT_PORT} (zigbee2mqtt/#)",
+             "scope": "lan-mqtt", "auth": "z2m user"},
         ],
     }
 
