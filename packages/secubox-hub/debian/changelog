@@ -1,3 +1,19 @@
+secubox-hub (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * www/shared/hybrid-skin.css: drop the "gradient text" trick
+    (`-webkit-text-fill-color: transparent` + `background-clip: text`)
+    on `.card-metric` and `.page-title`. The rule had no `color`
+    fallback, so any render path where the gradient/background-clip
+    didn't take collapsed to the browser default colour over the
+    dark panel background — invisible black-on-black big numbers on
+    /soc/ (Threats 24h, MB/s Throughput, Active Services, etc.). User
+    reported regression; almost certainly a live hot-fix on gk2 was
+    overwritten by a later package deploy. Replace with solid `#ffffff`
+    on `.card-metric` and `var(--text-dark)` (#E8E6E0 cream) on
+    `.page-title`. Closes #360.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 09:00:00 +0000
+
 secubox-hub (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * api/main.py: CATEGORY_META rewritten to the 6 SecuBox charter
