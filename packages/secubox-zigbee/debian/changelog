@@ -1,3 +1,19 @@
+secubox-zigbee (2.5.8-1~bookworm1) bookworm; urgency=medium
+
+  * api/main.py: /access endpoint fixes the "lan: undefined" bug
+    AND adds the public SSO-gated vhost. The frontend reads `a.url`
+    but the backend returned `endpoint`, so every entry rendered
+    as "lan: undefined". Field renamed `endpoint` → `url`. Also
+    NEW first entry pointing at SECUBOX_ZIGBEE_PUBLIC_URL (default
+    https://zigbee.gk2.secubox.in/) with scope=`public`,
+    auth=`Authelia SSO`. The LAN web entry now scope=`lan`, the
+    MQTT bus entry scope=`lan-mqtt` so the UI shows distinct
+    labels instead of two identical "lan:" lines.
+  * Version bump 2.4.0 → 2.5.8 in FastAPI app title (was lagging
+    behind the package changelog since v2.4).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 16:15:00 +0000
+
 secubox-zigbee (2.5.7-1~bookworm1) bookworm; urgency=medium
 
   * lib/zigbee/install-lxc.sh: udev RUN+= now invokes
