@@ -1,3 +1,21 @@
+secubox-core (1.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * systemd/lxc.service.d/wait-for-data.conf: NEW drop-in adds
+    `RequiresMountsFor=/data` to lxc.service. The stock unit's
+    `After=remote-fs.target` doesn't cover local ext4 mounts like
+    /data; lxc.service ran ~2s into boot, lxc-autostart enumerated
+    /data/lxc/ before the mount happened, found nothing, exited 0
+    — every LXC with lxc.start.auto stayed STOPPED. Authelia
+    being one of them meant every /__sbx_auth_verify auth_request
+    returned 503 and every SecuBox vhost (zigbee, etc.) bounced
+    back with HTTP 500 instead of the SSO 302.
+    Reproduced on gk2 boot of 2026-05-22 16:38; 12 LXCs
+    (gitea, grafana, horde, lyrion, mail, matrix, nextcloud,
+    roundcube, rustdesk, streamlit, yacy, zigbee) all confirmed
+    sound — manual lxc-start works, autostart didn't fire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 16:30:00 +0000
+
 secubox-core (1.1.4-1~bookworm1) bookworm; urgency=medium
 
   * systemd/secubox-runtime.service: stop fighting tmpfiles.d. The old

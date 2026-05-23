@@ -42,6 +42,14 @@ override_dh_auto_install:
 	install -d debian/secubox-core/etc/systemd/system/nftables.service.d
 	install -m 644 systemd/nftables.service.d/override.conf \
 	               debian/secubox-core/etc/systemd/system/nftables.service.d/override.conf
+	# lxc.service drop-in: wait for /data before LXC autostart. Without
+	# this, lxc-autostart ran in 2s at boot and found nothing because
+	# the /data ext4 mount hadn't happened yet — 12+ LXCs stayed STOPPED
+	# despite lxc.start.auto = 1. RequiresMountsFor=/data lets systemd
+	# resolve the right mount unit and order lxc.service after it.
+	install -d debian/secubox-core/etc/systemd/system/lxc.service.d
+	install -m 644 systemd/lxc.service.d/wait-for-data.conf \
+	               debian/secubox-core/etc/systemd/system/lxc.service.d/wait-for-data.conf
 	# Create modular nginx directory (modules install their snippets here)
 	install -d debian/secubox-core/etc/nginx/secubox.d
 
