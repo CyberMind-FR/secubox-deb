@@ -22,8 +22,27 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 import httpx
 
-from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+
+
+# v1.2.0: local no-op `require_jwt`. The previous import from
+# secubox_core.auth demanded an HTTP `Authorization: Bearer` header on
+# every gated endpoint — but the threat-analyst frontend runs inside
+# the Authelia-SSO'd admin vhost where the operator only carries SSO
+# cookies, never a JWT in localStorage. Result: every /stats, /alerts,
+# /rules call returned 401 and the dashboard showed "?".
+#
+# Every other module in this stack (sentinelle-gsm, etc.) already uses
+# this no-op pattern. The actual security perimeter is nginx + the unix
+# socket at /run/secubox/threat-analyst.sock — the FastAPI never listens
+# on TCP and the socket is bound 0660 root:secubox by systemd, so
+# nothing outside the trust boundary can reach this code. The
+# `Depends(require_jwt)` decorators are kept for forward compatibility
+# (if a future deploy ever exposes the API on TCP, swapping this stub
+# for the real check is one line).
+def require_jwt() -> dict:
+    """Pass-through; security comes from nginx + unix socket perms."""
+    return {"sub": "secubox-internal"}
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/threat-analyst.toml")
