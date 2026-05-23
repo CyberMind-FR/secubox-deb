@@ -1,6 +1,6 @@
 {
   "subtitle": "Mesh manager (z2m)",
-  "icon": "fa-microchip",
+  "icon": "🐝",
   "order": 85,
   "id": "zigbee",
   "name": "Zigbee",

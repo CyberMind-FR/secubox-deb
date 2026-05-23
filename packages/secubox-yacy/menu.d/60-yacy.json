@@ -1,6 +1,6 @@
 {
   "subtitle": "Peer-to-peer search",
-  "icon": "fa-search",
+  "icon": "🔍",
   "order": 60,
   "id": "yacy",
   "name": "YaCy",
