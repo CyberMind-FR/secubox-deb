@@ -1,3 +1,34 @@
+secubox-threat-analyst (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: complete rewrite from scratch.
+    Operators reported the v1.2.x dashboard still felt broken — too
+    many panels, gradient-chip clutter, confusing error states.
+    v1.3.0 throws everything out and rebuilds against
+    .claude/DESIGN-CHARTER.md:
+      - WALL layer palette (threat-analyst is a WALL/firewall
+        module per the charter); --wall-main #9A6010 accent.
+      - Space Grotesk for display/body, JetBrains Mono for
+        monospace per the charter §Typography.
+      - Base white theme tokens: --bg / --surface / --surface2 /
+        --border / --text / --muted (all sourced from shared
+        /shared/design-tokens.css).
+      - Standard radius (14px cards, 6px swatches, 3px chips) and
+        spacing scale (XS 4 / S 8 / M 16 / L 24 / XL 40) per
+        charter §Grid System and §Spacing System.
+      - Single-column layout, plain tables for alerts/rules/
+        emancipated. No gradient text, no chip clutter under each
+        stat card.
+      - Each panel fetches independently and shows its own error
+        in plain text. No clever wrapper hiding 401s.
+      - NEW diagnostic footer table — tracks the latest fetch
+        outcome per endpoint (OK 200 / FAIL 401 / Network etc.)
+        so the operator can distinguish auth-vs-network-vs-404
+        without opening DevTools.
+      - body.module-wall set so any future shared CSS that scopes
+        by .module-wall picks up the right colour vars.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 14:30:00 +0000
+
 secubox-threat-analyst (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * api/main.py: replace `from secubox_core.auth import require_jwt`
