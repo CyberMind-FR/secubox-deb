@@ -26,16 +26,28 @@ from typing import List, Optional, Tuple
 from sentinelle_gsm.observer import Anonymizer
 
 
-# Pseudo-length / protocol-discriminator masks
-L3_PD_RR = 0x06           # Radio Resources protocol discriminator
+# Protocol-discriminator values (3GPP TS 24.007 §11.2.3.1.1)
+L3_PD_CC = 0x03           # Call Control
+L3_PD_MM = 0x05           # Mobility Management
+L3_PD_RR = 0x06           # Radio Resources
 
-# Message-type values inside RR
+# Message-type values inside RR (TS 44.018 §10.5)
 RR_MSG_SI3      = 0x1a
 RR_MSG_SI4      = 0x1c
 RR_MSG_SI6      = 0x1e
 RR_MSG_PAGING_REQUEST_1 = 0x21
 RR_MSG_PAGING_REQUEST_2 = 0x22
 RR_MSG_PAGING_REQUEST_3 = 0x24
+RR_MSG_PAGING_RESPONSE  = 0x27
+
+# Message-type values inside MM (TS 24.008 §10.4)
+MM_MSG_LU_ACCEPT       = 0x02
+MM_MSG_LU_REJECT       = 0x04
+MM_MSG_LU_REQUEST      = 0x08
+MM_MSG_AUTH_REQUEST    = 0x12
+MM_MSG_TMSI_REALLOC    = 0x1a
+MM_MSG_IDENTITY_REQ    = 0x18
+MM_MSG_IDENTITY_RSP    = 0x19
 
 
 # Mobile Identity type tags (TS 24.008 §10.5.1.4)
@@ -82,19 +94,39 @@ class L3Decode:
         self._anon = anonymizer
 
     def parse(self, raw: bytes) -> ParsedFrame:
-        if len(raw) < 2 or raw[0] != L3_PD_RR:
+        # GSMTAP raw_l3 payload starts with a L2 framing byte that varies
+        # per channel: BCCH/CCCH downlink prefixes the L3 message with an
+        # L2 pseudo-length byte (TS 44.006 §3.4); SDCCH uplink starts with
+        # a LAPDm header (typically 2-3 bytes). Rather than tracking that
+        # per-channel here, walk the first 4 bytes looking for the
+        # protocol discriminator byte (low nibble = PD per TS 24.007).
+        # Once we land on PD=RR or PD=MM, the next byte is the msg type.
+        pd, off = _find_l3_start(raw)
+        if pd is None or off + 1 >= len(raw):
             return ParsedFrame()
-        msg_type = raw[1]
-        if msg_type == RR_MSG_SI3:
-            return ParsedFrame(cell_info=self._parse_si3(raw))
-        if msg_type == RR_MSG_SI4:
-            return ParsedFrame(cell_info=self._parse_si4(raw))
-        if msg_type == RR_MSG_SI6:
-            return ParsedFrame(cell_info=self._parse_si6(raw))
-        if msg_type in (RR_MSG_PAGING_REQUEST_1,
-                        RR_MSG_PAGING_REQUEST_2,
-                        RR_MSG_PAGING_REQUEST_3):
-            return ParsedFrame(paging=self._parse_paging(raw, msg_type))
+        body = raw[off:]
+        msg_type = body[1]
+        if pd == L3_PD_RR:
+            if msg_type == RR_MSG_SI3:
+                return ParsedFrame(cell_info=self._parse_si3(body))
+            if msg_type == RR_MSG_SI4:
+                return ParsedFrame(cell_info=self._parse_si4(body))
+            if msg_type == RR_MSG_SI6:
+                return ParsedFrame(cell_info=self._parse_si6(body))
+            if msg_type in (RR_MSG_PAGING_REQUEST_1,
+                            RR_MSG_PAGING_REQUEST_2,
+                            RR_MSG_PAGING_REQUEST_3,
+                            RR_MSG_PAGING_RESPONSE):
+                return ParsedFrame(paging=self._parse_paging(body, msg_type))
+        elif pd == L3_PD_MM:
+            # MM Identity Response (uplink): mobile delivers its IMSI/IMEI
+            # in cleartext. Same mobile-identity TLV layout as paging.
+            if msg_type == MM_MSG_IDENTITY_RSP:
+                return ParsedFrame(paging=self._parse_paging(body, msg_type))
+            # MM LU Request: mobile sends its CKSN + LAI + MS Classmark
+            # + Mobile Identity. TMSI/IMSI lives in the mobile identity.
+            if msg_type == MM_MSG_LU_REQUEST:
+                return ParsedFrame(paging=self._parse_lu_request(body))
         return ParsedFrame()
 
     # ── SI parsers (BCCH) ──────────────────────────────────────────────
@@ -141,13 +173,20 @@ class L3Decode:
         a5 = _decode_a5_from_cell_options(raw[9]) if len(raw) > 9 else None
         return CellInfo(mcc=mcc, mnc=mnc, lac=lac, ci=ci, a5_advertised=a5)
 
-    # ── Paging parsers (CCCH) ──────────────────────────────────────────
+    # ── Paging / identity parsers (CCCH + SDCCH) ───────────────────────
     def _parse_paging(self, raw: bytes, msg_type: int) -> ParsedPagingRequest:
         out = ParsedPagingRequest(paging_type=msg_type)
-        # After the 2-byte L3 header :
-        #   page_mode + channel_needed (1 byte for type 1; differs slightly per variant)
-        #   then 1-N mobile identities
-        ptr = 3
+        # Where the first Mobile Identity TLV starts after the 2-byte L3
+        # header (PD + msg_type) varies by message:
+        #   Paging Request (1/2/3, downlink CCCH):   page_mode + ch_needed (1 B)
+        #   Paging Response (uplink SDCCH):          ciphering key seq + classmark (4 B)
+        #   MM Identity Response (uplink SDCCH):     identity starts immediately
+        if msg_type == MM_MSG_IDENTITY_RSP:
+            ptr = 2
+        elif msg_type == RR_MSG_PAGING_RESPONSE:
+            ptr = 2 + 1 + 3   # cksn+spare(1) + Mobile Station Classmark 2(3)
+        else:
+            ptr = 3
         while ptr < len(raw):
             mid, consumed = _try_extract_mobile_id(raw, ptr)
             if mid is None or consumed == 0:
@@ -162,8 +201,58 @@ class L3Decode:
             # plaintext_bytes goes out of scope here
         return out
 
+    def _parse_lu_request(self, raw: bytes) -> ParsedPagingRequest:
+        """LU REQUEST contains a Mobile Identity (TMSI or IMSI) after the
+        fixed header. Reuses ParsedPagingRequest as the carrier so the
+        downstream pipeline gets a uniform subscriber-event shape."""
+        out = ParsedPagingRequest(paging_type=MM_MSG_LU_REQUEST)
+        ptr = LU_REQUEST_MOBILE_ID_OFFSET
+        if ptr >= len(raw):
+            return out
+        mid, _ = _try_extract_mobile_id(raw, ptr)
+        if mid is not None:
+            id_type, plaintext_bytes = mid
+            if id_type in (MID_TYPE_IMSI, MID_TYPE_TMSI):
+                hashed = self._anon.anonymize(plaintext_bytes.hex())
+                out.identities.append(PagedIdentity(
+                    id_type=id_type, subscriber_hash=hashed,
+                ))
+        return out
+
 
 # ── private helpers ─────────────────────────────────────────────────────
+def _find_l3_start(buf: bytes) -> Tuple[Optional[int], int]:
+    """Scan the first 4 bytes for the protocol-discriminator byte.
+
+    Returns (pd_value, offset) on hit, or (None, 0) on miss. The L3 body
+    is buf[offset:] — first byte = PD, second byte = msg type. Leading
+    bytes before the PD are L2 framing (pseudo-length on BCCH/CCCH or
+    a short LAPDm header on SDCCH).
+
+    We accept ONLY exact PD bytes with transaction identifier = 0:
+      0x06 = RR (System Info, Paging, Channel Assignment)
+      0x05 = MM (LU Request/Accept, Identity Req/Rsp, Auth)
+    A nibble-based match is too loose: a pseudo-length byte like 0x25
+    also has low nibble 5, but it's not an MM message — accepting it
+    would derail the msg-type read.
+    """
+    LIMIT = min(len(buf), 4)
+    for ofs in range(LIMIT):
+        b = buf[ofs]
+        if b in (L3_PD_RR, L3_PD_MM):
+            if ofs + 1 < len(buf):
+                return b, ofs
+    return None, 0
+
+
+# LU REQUEST layout after the 2-byte L3 header (PD + msg_type):
+#   1 byte:  CKSN + LU type
+#   5 bytes: LAI (MCC/MNC + LAC)
+#   1 byte:  MS Classmark 1
+#   then mobile identity TLV
+LU_REQUEST_MOBILE_ID_OFFSET = 2 + 1 + 5 + 1
+
+
 def _decode_mcc_mnc(buf: bytes) -> Tuple[Optional[int], Optional[int]]:
     """3-byte BCD MCC/MNC encoding per TS 24.008 §10.5.1.3."""
     if len(buf) < 3:
@@ -181,6 +270,12 @@ def _decode_mcc_mnc(buf: bytes) -> Tuple[Optional[int], Optional[int]]:
         mnc = d_mnc_1 * 10 + d_mnc_2
     else:
         mnc = d_mnc_3 * 100 + d_mnc_2 * 10 + d_mnc_1
+    # ITU-T E.212 assigns MCCs in the range 200-999; anything below is a
+    # parser misalignment on a frame whose layout we don't match. Treat
+    # MCC=000 as "no decode" rather than poisoning the DB with bogus
+    # "0-0-0-CCCC" cell_id entries.
+    if mcc < 200:
+        return None, None
     return mcc, mnc
 
 

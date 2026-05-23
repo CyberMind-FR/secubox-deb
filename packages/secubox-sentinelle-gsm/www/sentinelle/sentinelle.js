@@ -69,6 +69,28 @@
     thresholdGrid:        document.getElementById("threshold-grid"),
     btnRefreshScoring:    document.getElementById("btn-refresh-scoring"),
     btnSaveScoring:       document.getElementById("btn-save-scoring"),
+    // v0.4.0 RDS / FM
+    btnRdsStart:          document.getElementById("btn-rds-start"),
+    btnRdsStop:           document.getElementById("btn-rds-stop"),
+    btnRdsSweep:          document.getElementById("btn-rds-sweep"),
+    btnRdsSweepCancel:    document.getElementById("btn-rds-sweep-cancel"),
+    btnRdsRefreshStations:document.getElementById("btn-rds-refresh-stations"),
+    rdsFreqInput:         document.getElementById("rds-freq"),
+    rdsPpmInput:          document.getElementById("rds-ppm"),
+    rdsGainInput:         document.getElementById("rds-gain"),
+    rdsStateDot:          document.getElementById("rds-state-dot"),
+    rdsStateText:         document.getElementById("rds-state-text"),
+    rdsFreqCell:          document.getElementById("rds-freq-cell"),
+    rdsFramesCell:        document.getElementById("rds-frames-cell"),
+    rdsPiCell:            document.getElementById("rds-pi-cell"),
+    rdsPsCell:            document.getElementById("rds-ps-cell"),
+    rdsStationsCount:     document.getElementById("rds-stations-count"),
+    rdsStationsTbody:     document.getElementById("rds-stations-tbody"),
+    rdsSweepProgress:     document.getElementById("rds-sweep-progress"),
+    rdsSweepState:        document.getElementById("rds-sweep-state"),
+    rdsSweepStep:         document.getElementById("rds-sweep-step"),
+    rdsSweepCurrent:      document.getElementById("rds-sweep-current"),
+    rdsSweepFound:        document.getElementById("rds-sweep-found"),
   };
 
   // ── state ───────────────────────────────────────────────────────────
@@ -831,6 +853,172 @@
     if (els.btnBaselineLearn)   els.btnBaselineLearn.addEventListener("click", startBaselineLearn);
     if (els.btnRefreshScoring)  els.btnRefreshScoring.addEventListener("click", loadThresholds);
     if (els.btnSaveScoring)     els.btnSaveScoring.addEventListener("click", saveThresholds);
+
+    // v0.4.0 RDS / FM
+    if (els.btnRdsStart)           els.btnRdsStart.addEventListener("click", startRds);
+    if (els.btnRdsStop)            els.btnRdsStop.addEventListener("click", stopRds);
+    if (els.btnRdsSweep)           els.btnRdsSweep.addEventListener("click", startRdsSweep);
+    if (els.btnRdsSweepCancel)     els.btnRdsSweepCancel.addEventListener("click", cancelRdsSweep);
+    if (els.btnRdsRefreshStations) els.btnRdsRefreshStations.addEventListener("click", loadRdsStations);
+  }
+
+  // ── RDS / FM (v0.4.0) ───────────────────────────────────────────────
+  let _rdsRunning = false;
+  let _rdsActiveSweepId = null;
+
+  function _renderRdsStatus(st) {
+    const running = !!(st && st.running);
+    _rdsRunning = running;
+    if (els.rdsStateDot) {
+      els.rdsStateDot.className = "dot " + (running ? "dot-live" : "dot-idle");
+    }
+    if (els.rdsStateText) els.rdsStateText.textContent = running ? "running" : "idle";
+    if (els.rdsFreqCell)  els.rdsFreqCell.textContent  = (st && st.freq)  ? String(st.freq) : "—";
+    if (els.rdsFramesCell) els.rdsFramesCell.textContent = (st && typeof st.frames === "number") ? String(st.frames) : "0";
+    if (els.rdsPiCell)    els.rdsPiCell.textContent    = (st && st.last_pi) ? String(st.last_pi) : "—";
+    if (els.rdsPsCell)    els.rdsPsCell.textContent    = (st && st.last_ps) ? String(st.last_ps) : "—";
+    if (els.btnRdsStart) els.btnRdsStart.disabled = running;
+    if (els.btnRdsStop)  els.btnRdsStop.disabled  = !running;
+  }
+
+  function _renderRdsSweepProgress(j) {
+    if (!els.rdsSweepProgress) return;
+    if (!j) {
+      els.rdsSweepProgress.hidden = true;
+      _rdsActiveSweepId = null;
+      return;
+    }
+    els.rdsSweepProgress.hidden = false;
+    if (els.rdsSweepState)   els.rdsSweepState.textContent   = j.state || "—";
+    if (els.rdsSweepStep)    els.rdsSweepStep.textContent    =
+      (typeof j.step_index === "number" && typeof j.step_total === "number")
+        ? (j.step_index + " / " + j.step_total) : "—";
+    if (els.rdsSweepCurrent) els.rdsSweepCurrent.textContent = (j.current_freq_mhz != null) ? (j.current_freq_mhz + " MHz") : "—";
+    if (els.rdsSweepFound)   els.rdsSweepFound.textContent   = (typeof j.stations_found === "number") ? String(j.stations_found) : "0";
+    _rdsActiveSweepId = (j.state && j.state !== "stopped" && j.state !== "failed" && j.state !== "cancelled") ? j.id : null;
+    if (els.btnRdsSweep)        els.btnRdsSweep.disabled        = !!_rdsActiveSweepId;
+    if (els.btnRdsSweepCancel)  els.btnRdsSweepCancel.disabled  = !_rdsActiveSweepId;
+  }
+
+  async function loadRdsStatus() {
+    try {
+      const st = await apiFetch("/rds/status");
+      _renderRdsStatus(st);
+    } catch (e) {
+      if (els.rdsStateDot)  els.rdsStateDot.className  = "dot dot-down";
+      if (els.rdsStateText) els.rdsStateText.textContent = "error";
+    }
+    try {
+      const jobs = await apiFetch("/rds/sweep/jobs?limit=1");
+      const job = (jobs && jobs.jobs && jobs.jobs[0]) || null;
+      // Show progress only for active sweeps; clear when terminal.
+      _renderRdsSweepProgress(job && job.state !== "stopped" && job.state !== "cancelled" && job.state !== "failed" ? job : null);
+    } catch (_) { /* ignore — no jobs yet */ }
+  }
+
+  function _buildRdsRow(s) {
+    const tr = document.createElement("tr");
+    const fmt = (v) => (v === null || v === undefined || v === "") ? "—" : String(v);
+    const flags = [];
+    if (s.tp) flags.push("TP");
+    if (s.ta) flags.push("TA");
+    tr.innerHTML =
+      `<td class="mono">${escapeHtml(fmt(s.pi))}</td>` +
+      `<td>${escapeHtml(fmt(s.ps))}</td>` +
+      `<td>${escapeHtml(fmt(s.rt))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(s.pty))}</td>` +
+      `<td class="mono">${escapeHtml(flags.join(" / ") || "—")}</td>` +
+      `<td class="mono">${escapeHtml(fmt(s.freq))}</td>` +
+      `<td class="mono">${escapeHtml(fmt(s.count))}</td>` +
+      `<td class="mono">${escapeHtml(fmtDateTime(s.last_seen))}</td>`;
+    return tr;
+  }
+
+  async function loadRdsStations() {
+    if (!els.rdsStationsTbody) return;
+    try {
+      const data = await apiFetch("/rds/stations?limit=200");
+      const stations = (data && data.stations) || [];
+      if (els.rdsStationsCount) els.rdsStationsCount.textContent = String(stations.length);
+      els.rdsStationsTbody.innerHTML = "";
+      if (!stations.length) {
+        els.rdsStationsTbody.innerHTML = `<tr class="empty"><td colspan="8">no stations yet — start a sweep or single-freq scan</td></tr>`;
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      for (const s of stations) frag.appendChild(_buildRdsRow(s));
+      els.rdsStationsTbody.appendChild(frag);
+    } catch (e) {
+      console.warn("rds stations failed:", e);
+    }
+  }
+
+  async function startRds() {
+    const freq = (els.rdsFreqInput && els.rdsFreqInput.value || "").trim();
+    if (!freq) { toast("Enter a frequency (e.g. 100.6M)", "warn"); return; }
+    const body = { freq: freq };
+    const ppmRaw  = (els.rdsPpmInput  && els.rdsPpmInput.value  || "").trim();
+    const gainRaw = (els.rdsGainInput && els.rdsGainInput.value || "").trim();
+    if (ppmRaw)  body.ppm  = Number(ppmRaw);
+    if (gainRaw) body.gain = Number(gainRaw);
+    try {
+      const st = await apiFetch("/rds/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      _renderRdsStatus(st);
+      toast("RDS scan started on " + freq, "ok");
+      loadRdsStations();
+    } catch (e) {
+      toast("RDS start failed: " + e.message, "err");
+      loadRdsStatus();
+    }
+  }
+
+  async function stopRds() {
+    try {
+      const st = await apiFetch("/rds/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      _renderRdsStatus(st);
+      toast("RDS scan stopped", "ok");
+      loadRdsStations();
+    } catch (e) {
+      toast("RDS stop failed: " + e.message, "err");
+      loadRdsStatus();
+    }
+  }
+
+  async function startRdsSweep() {
+    try {
+      const job = await apiFetch("/rds/sweep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      _renderRdsSweepProgress(job);
+      toast("RDS sweep launched", "ok");
+    } catch (e) {
+      toast("Sweep launch failed: " + e.message, "err");
+    }
+  }
+
+  async function cancelRdsSweep() {
+    if (!_rdsActiveSweepId) return;
+    try {
+      const j = await apiFetch("/rds/sweep/jobs/" + encodeURIComponent(_rdsActiveSweepId) + "/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      _renderRdsSweepProgress(j);
+      toast("Sweep cancelled", "ok");
+    } catch (e) {
+      toast("Cancel failed: " + e.message, "err");
+    }
   }
 
   // ── init ────────────────────────────────────────────────────────────
@@ -846,16 +1034,23 @@
     loadObservations();
     loadBaseline();
     loadThresholds();
+    loadRdsStatus();
+    loadRdsStations();
     // Background polling every 10s. When no scan is running, we still poll
     // /scan/status (cheap) so the UI catches an externally-started scan,
     // but we skip /observations + /baseline to avoid hitting sqlite for
     // nothing — the tables are already at their post-scan terminal state
-    // and the user can hit Refresh manually.
+    // and the user can hit Refresh manually. Same logic for the RDS half:
+    // poll the status, only walk the stations table while something runs.
     _scanPollTimer = setInterval(() => {
       loadScanStatus();
+      loadRdsStatus();
       if (_scanRunning) {
         loadObservations();
         loadBaseline();
+      }
+      if (_rdsRunning || _rdsActiveSweepId) {
+        loadRdsStations();
       }
     }, 10000);
   }

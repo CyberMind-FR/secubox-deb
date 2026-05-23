@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 Homepage: https://cybermind.fr/secubox
 
 Package: secubox-sentinelle-gsm
-Architecture: all
+Architecture: arm64
 Depends: ${misc:Depends},
          secubox-core (>= 1.0),
          python3-uvicorn,
@@ -16,7 +16,9 @@ Depends: ${misc:Depends},
          python3-scapy,
          librtlsdr0,
          rtl-sdr,
-         usbutils
+         usbutils,
+         libliquid1,
+         libsndfile1
 Recommends: gr-gsm, python3-numpy
 Description: SecuBox SENTINELLE-GSM — passive rogue-BTS sensor (MIND layer)
  Host-resident module that drives an RTL-SDR USB dongle as a passive

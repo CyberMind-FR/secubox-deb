@@ -160,7 +160,8 @@ async def scan_band(
     if gain is not None:
         argv += ["-g", str(gain)]
     if ppm is not None:
-        argv += ["-p", str(ppm)]
+        # grgsm_scanner refuses float ppm with "invalid integer value: '60.0'".
+        argv += ["-p", str(int(ppm))]
     if samp_rate is not None:
         argv += ["-s", str(samp_rate)]
     if speed is not None:
