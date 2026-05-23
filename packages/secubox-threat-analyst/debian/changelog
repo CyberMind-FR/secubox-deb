@@ -1,3 +1,28 @@
+secubox-threat-analyst (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: two follow-up fixes to v1.1.0:
+    1. `.main` padding: was 1.5rem flat, content slid UNDER the
+       global menu bar (sidebar.js v2.38.0 injects a fixed 48px
+       navbar at top). Added `--gmb-h: 48px` token and
+       `padding: calc(var(--gmb-h) + 1.5rem) 1.5rem 1.5rem` —
+       matches the sentinelle.css canonical pattern.
+    2. API wrapper silently swallowed every non-2xx. Panels stayed
+       on "Loading…" forever when the SSO cookie wasn't yet sent or
+       the endpoint returned 401/404/5xx. Rewrote `api()` to return
+       `{ok, status, data, err}`; new `renderApiError()` helper
+       paints a visible error ("Auth required" / "Endpoint missing"
+       / "Network unreachable" / "HTTP N") in each panel.
+    3. Metrics card falls back to the auth-free /status endpoint
+       when /stats returns 401, so the operator at least sees the
+       alerts_24h + pending_rules counts while the SSO cookie
+       warms up.
+    4. fetch() now sets `credentials: 'include'` explicitly so
+       Authelia SSO cookies travel with every same-origin call —
+       defensive against environments where the browser default
+       `same-origin` policy doesn't include them.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 11:30:00 +0000
+
 secubox-threat-analyst (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * www/threat-analyst/index.html: full dashboard rewrite to wire
