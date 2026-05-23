@@ -1,9 +1,9 @@
 {
-  "id": "sentinelle",
+  "id": "sentinelle-gsm",
   "name": "SENTINELLE-GSM",
   "path": "/sentinelle/",
   "category": "mind",
-  "icon": "satellite",
+  "icon": "📡",
   "order": 45,
   "description": "Passive IMSI-catcher / false-BTS sensor — live alerts"
 }

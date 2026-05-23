@@ -1,3 +1,68 @@
+secubox-sentinelle-gsm (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * FM RDS surface — new lib/sentinelle_gsm/rds_runner.py wraps a
+    rtl_fm | redsea pipeline at 171 kHz to decode the 57 kHz RDS
+    subcarrier (PI, PS, RT, TP, TA, PTY, AF). Mirrors LivemonRunner's
+    spawn/watch/stop lifecycle so the api/main.py device-claim layer
+    refuses concurrent GSM + FM scans on the same RTL-SDR.
+
+  * lib/sentinelle_gsm/rds_observations.py: RdsStationRegistry stores
+    one row per Programme Identification code in the shared
+    observations.db (table rds_stations). UPSERT keeps the latest PS
+    and RT while preserving the previous values when a bare-PI frame
+    arrives (COALESCE on each field).
+
+  * lib/sentinelle_gsm/rds_sweep_job.py: async-job model for a
+    /rds/sweep that walks the FM band (default 87.5 -> 108.0 MHz in
+    200 kHz steps x 10 s dwell, ~17 min total). Same JobRegistry +
+    state machine as scan_auto_job v0.3.6 — operator POSTs and polls
+    GET /rds/sweep/jobs/{id} for progress without blocking the HTTP
+    thread.
+
+  * api/main.py: new POST /rds/start, POST /rds/stop, GET /rds/status,
+    GET /rds/stations, POST /rds/sweep, GET /rds/sweep/jobs[/{id}],
+    POST /rds/sweep/jobs/{id}/cancel. Device-busy detection unified
+    via _device_busy_reason() so both GSM and RDS endpoints return a
+    consistent 409 with the conflicting subsystem named.
+
+  * debian/rules ships the redsea binary at /usr/libexec/secubox/
+    secubox-redsea (built natively on arm64 with -O2, no LTO, single
+    job; cross-build refused to link liquid-dsp's NEON intrinsics).
+    The runner picks up the path via SECUBOX_REDSEA_BIN env var with
+    that hardcoded default.
+
+  * www/sentinelle: new RDS panel with manual-tune controls (freq,
+    gain, ppm), sweep launcher with live progress bar, and a table of
+    observed stations sortable by last_seen / count / PI.
+
+  * L3 decoder (lib/sentinelle_gsm/l3_decode.py): now walks the first
+    4 bytes of the GSMTAP raw_l3 payload looking for the protocol-
+    discriminator byte instead of assuming the L3 message starts at
+    offset 0. BCCH/CCCH downlink frames carry a L2 pseudo-length prefix
+    and SDCCH uplink frames carry a short LAPDm header; both used to
+    leave parse() returning ParsedFrame() with no decode. This was
+    why MCC/MNC/LAC/CI stayed null on every sighting. New parsers
+    cover MM Identity Response (0x19), MM Location Update Request
+    (0x08), and RR Paging Response (0x27) — gives us TMSI/IMSI
+    extraction from uplink SDCCH on top of the existing Paging Request
+    downlink. _decode_mcc_mnc() now refuses MCC < 200 (no valid ITU
+    country code) so a misaligned frame can no longer poison the DB
+    with bogus '0-0-0-CCCC' cell_id entries. 8 unit tests added
+    against real Orange France hex (MCC=208 MNC=01 LAC=0x2901).
+
+  * scanner.py: cast ppm to int before invoking grgsm_scanner; the
+    binary refuses '60.0' with 'invalid integer value' and aborted
+    every scan-auto job on a board with a non-integer ppm value.
+
+  * menu.d/45-sentinelle.json: menu id renamed sentinelle → sentinelle
+    -gsm so the hub's _check_module_active() probe finds secubox-
+    sentinelle-gsm.service (was looking for secubox-sentinelle); URL
+    path stays /sentinelle/ for back-compat. debian/rules ships a
+    sentinelle-gsm → sentinelle symlink under /usr/share/secubox/www/
+    so the install probe also passes.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 23 May 2026 17:00:00 +0200
+
 secubox-sentinelle-gsm (0.3.6-1~bookworm1) bookworm; urgency=medium
 
   * lib/sentinelle_gsm/scan_auto_job.py: NEW async-job model for

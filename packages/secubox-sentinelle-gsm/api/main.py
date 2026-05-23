@@ -48,6 +48,11 @@ from sentinelle_gsm.l3_decode import (                   # noqa: E402
 )
 from sentinelle_gsm.livemon_fleet import LivemonFleet, RunnerSummary  # noqa: E402
 from sentinelle_gsm.livemon_runner import LivemonRunner, detect_rtlsdr_usb  # noqa: E402
+from sentinelle_gsm.rds_observations import RdsStationRegistry  # noqa: E402
+from sentinelle_gsm.rds_runner import RdsRunner, RdsFrame  # noqa: E402
+from sentinelle_gsm.rds_sweep_job import (                   # noqa: E402
+    FreqProbe, RdsSweepJob, RdsSweepRegistry, freq_range,
+)
 from sentinelle_gsm.scan_auto_job import JobRegistry, ScanAutoJob  # noqa: E402
 from sentinelle_gsm.scanner import CellInfo, scan_band, select_diverse  # noqa: E402
 from sentinelle_gsm.observations import (                # noqa: E402
@@ -151,6 +156,15 @@ _fleet: Optional[LivemonFleet] = None
 # observations DB owns historical sightings; this is just operational
 # state for "what's happening right now".
 _job_registry: JobRegistry = JobRegistry(max_history=10)
+# v0.4.0: RDS surface. Shares the single RTL-SDR with the GSM
+# pipeline — only ONE of {single GSM, GSM fleet, GSM scan-auto-job,
+# RDS single, RDS sweep} can hold the device at a time. The
+# `_device_busy()` helper centralises the 409 logic so every endpoint
+# routes through the same check (defensive against operators trying
+# to start an RDS sweep while a GSM scan-auto is mid-flight).
+_rds_runner: Optional[RdsRunner] = None
+_rds_registry: Optional[RdsStationRegistry] = None
+_rds_sweep_registry: RdsSweepRegistry = RdsSweepRegistry(max_history=10)
 
 OBSERVATIONS_DB_PATH = Path("/var/lib/secubox/sentinelle-gsm/observations.db")
 
@@ -177,12 +191,20 @@ def get_obs_db() -> ObservationsDB:
 def _init_v0_3_singletons() -> None:
     global _livemon, _listener, _obs_db
     global _l3, _scoring, _baseline
+    global _rds_runner, _rds_registry
     if _livemon is None:
         _livemon = LivemonRunner()
     if _listener is None:
         _listener = GsmtapListener()
     if _obs_db is None:
         _obs_db = ObservationsDB(OBSERVATIONS_DB_PATH)
+    # v0.4.0: RDS runner + station registry. Registry SHARES the same
+    # sqlite connection as the GSM observations DB — one file, two
+    # tables (sightings + rds_stations).
+    if _rds_runner is None:
+        _rds_runner = RdsRunner(on_frame=_on_rds_frame)
+    if _rds_registry is None:
+        _rds_registry = RdsStationRegistry(_obs_db._db)
     # v0.3.1: L3 decoder + baseline + scoring engine
     if _baseline is None:
         _baseline = CellBaseline(_obs_db._db)
@@ -224,11 +246,16 @@ def get_baseline() -> CellBaseline:
     return _baseline
 
 
-# Map paging request L3 message type → human label for paging_events.
+# Map L3 message type → human label for paging_events. Covers both
+# downlink (CCCH paging requests, SI broadcast) and uplink (SDCCH
+# paging response, MM Identity Response, MM LU Request) since v0.4.0.
 _PAGING_REQUEST_LABEL = {
     0x21: "paging-1",
     0x22: "paging-2",
     0x24: "paging-3",
+    0x27: "paging-response",
+    0x19: "identity-response",
+    0x08: "lu-request",
 }
 
 
@@ -703,15 +730,12 @@ def _scan_status_payload(st) -> dict:
 async def scan_start(body: ScanStartBody) -> dict:
     """Spawn grgsm_livemon_headless on `freq`, start listener + consume loop."""
     global _consume_task
-    if _consume_task is not None and not _consume_task.done():
-        raise HTTPException(409, "scan already running")
-    if _fleet is not None:
-        raise HTTPException(409, "fleet scan already running — stop first")
-    # v0.3.6: also 409 if a scan-auto job is in flight even before it
-    # has spawned the fleet (state=scanning has no _fleet yet, but
-    # starting a single-runner would stomp on the scanner's 4729 bind).
-    if _job_registry.active() is not None:
-        raise HTTPException(409, "scan-auto job in flight — stop first")
+    # v0.4.0: unified device-claim guard — also rejects when RDS is
+    # holding the RTL-SDR, where the prior local checks would have let
+    # us through and rtl_fm/grgsm would have collided on USB.
+    busy = _device_busy_reason()
+    if busy is not None:
+        raise HTTPException(409, busy)
     listener = get_listener()
     runner = get_livemon()
     try:
@@ -980,11 +1004,10 @@ async def scan_auto(body: ScanAutoBody) -> dict:
     (which can take 8-15 min on MOCHAbin's CPU for a full GSM900
     sweep) without holding an HTTP connection open the whole time.
     """
-    global _consume_task
-    if _consume_task is not None and not _consume_task.done():
-        raise HTTPException(409, "scan already running")
-    if _job_registry.active() is not None:
-        raise HTTPException(409, "scan-auto job already running")
+    # v0.4.0: unified device-claim guard (covers RDS too).
+    busy = _device_busy_reason()
+    if busy is not None:
+        raise HTTPException(409, busy)
     if body.max_cells <= 0:
         raise HTTPException(400, "max_cells must be ≥ 1")
 
@@ -1126,3 +1149,250 @@ def healthz() -> dict:
     return {"ok": True, "module": "sentinelle-gsm", "version": "0.1.0",
             "captures_plaintext_imsi_in_prod": CAPTURES_PLAINTEXT_IMSI,
             "rx_only": True}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# v0.4.0 — RDS surface (FM 87.5-108 MHz, rtl_fm + redsea pipeline)
+# ═══════════════════════════════════════════════════════════════════
+#
+# Shares the single RTL-SDR with the GSM scan path. Concurrency model:
+# only one of {GSM scan, GSM scan-auto job, RDS scan, RDS sweep} runs
+# at a time. _device_busy_reason() returns a human-readable explainer
+# string when the device is held, or None when free; every endpoint
+# that wants the device checks it first and returns 409 if non-None.
+
+def _device_busy_reason() -> Optional[str]:
+    """Return None if the RTL-SDR is free, or a short string saying
+    who's holding it."""
+    if _livemon is not None and _livemon.status().running:
+        return "GSM single-cell scan running"
+    if _fleet is not None and _fleet.is_running():
+        return "GSM fleet scan running"
+    active = _job_registry.active()
+    if active is not None and active.state in ("scanning", "starting_fleet"):
+        return f"GSM scan-auto job {active.id[:8]} in {active.state}"
+    if _rds_runner is not None and _rds_runner.status().running:
+        return "RDS single-freq scan running"
+    rds_active = _rds_sweep_registry.active()
+    if rds_active is not None:
+        return f"RDS sweep job {rds_active.id[:8]} in {rds_active.state}"
+    return None
+
+
+async def _on_rds_frame(frame: RdsFrame, freq: str) -> None:
+    """Callback invoked by RdsRunner for every decoded RDS frame.
+    Persists to the rds_stations registry (UPSERT by PI). The runner
+    catches our exceptions so we can be lazy about defensive coding."""
+    if _rds_registry is None or not frame.pi:
+        return
+    _rds_registry.record(
+        pi=frame.pi, ps=frame.ps, rt=frame.rt,
+        pty=frame.pty, tp=frame.tp, ta=frame.ta,
+        freq=freq,
+    )
+
+
+class RdsStartBody(BaseModel):
+    freq: str            # e.g. "100.6M" or "100600000"
+    gain: Optional[float] = None
+    ppm: Optional[float] = None
+
+
+def _rds_status_payload(st) -> dict:
+    return {
+        "running": bool(getattr(st, "running", False)),
+        "pid": getattr(st, "pid", None),
+        "freq": getattr(st, "freq", None),
+        "started_at": getattr(st, "started_at", None),
+        "last_pi": getattr(st, "last_pi", None),
+        "last_ps": getattr(st, "last_ps", None),
+        "frames": getattr(st, "frames", 0),
+        "stderr_tail": (getattr(st, "stderr_tail", "") or "")[-2000:],
+    }
+
+
+@app.post("/rds/start", dependencies=[Depends(require_jwt)])
+async def rds_start(body: RdsStartBody) -> dict:
+    """Tune `freq` and start the rtl_fm | redsea pipeline. Refuses if
+    any other scan is holding the RTL-SDR."""
+    busy = _device_busy_reason()
+    if busy is not None:
+        raise HTTPException(409, busy)
+    if _rds_runner is None:
+        raise HTTPException(500, "RdsRunner not initialised")
+    try:
+        st = await _rds_runner.start(body.freq, gain=body.gain, ppm=body.ppm)
+    except FileNotFoundError as e:
+        raise HTTPException(500, f"redsea or rtl_fm missing: {e}")
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    return _rds_status_payload(st)
+
+
+@app.post("/rds/stop", dependencies=[Depends(require_jwt)])
+async def rds_stop() -> dict:
+    if _rds_runner is None:
+        return _rds_status_payload(None)
+    return _rds_status_payload(await _rds_runner.stop())
+
+
+@app.get("/rds/status", dependencies=[Depends(require_jwt)])
+async def rds_status() -> dict:
+    if _rds_runner is None:
+        return _rds_status_payload(None)
+    return _rds_status_payload(_rds_runner.status())
+
+
+@app.get("/rds/stations", dependencies=[Depends(require_jwt)])
+async def rds_stations(limit: int = 200) -> dict:
+    """Newest-first list of every PI/PS observed so far. Limit
+    capped at 1000."""
+    if _rds_registry is None:
+        return {"stations": [], "count": 0}
+    if limit < 1: limit = 1
+    if limit > 1000: limit = 1000
+    rows = _rds_registry.list_stations(limit)
+    return {"stations": rows, "count": _rds_registry.count()}
+
+
+class RdsSweepBody(BaseModel):
+    # Default sweep: full FM broadcast band, 200 kHz steps, 10s dwell.
+    # 87.5 → 108.0 in 200 kHz = ~103 steps × 10s = ~17 min.
+    start_mhz:  float = 87.5
+    end_mhz:    float = 108.0
+    step_khz:   float = 200.0
+    dwell_sec:  float = 10.0
+    gain:  Optional[float] = None
+    ppm:   Optional[float] = None
+
+
+async def _drive_rds_sweep(job: RdsSweepJob) -> None:
+    """Walk the freq grid, dwell on each, capture PI/PS, persist."""
+    if _rds_runner is None:
+        job.error = "RdsRunner not initialised"
+        job.set_state("failed")
+        return
+    p = job.params
+    freqs = freq_range(p["start_mhz"], p["end_mhz"], p["step_khz"])
+    job.step_total = len(freqs)
+    try:
+        job.set_state("tuning")
+        for i, f_mhz in enumerate(freqs):
+            job.step_index   = i + 1
+            job.current_freq_mhz = f_mhz
+            freq_str = f"{f_mhz:.3f}M"
+            # Per-step lifecycle: start → dwell → stop. Catch errors
+            # so a single bad freq doesn't abort the whole sweep.
+            pre_pi = _rds_runner.status().last_pi
+            pre_frames = _rds_runner.status().frames
+            try:
+                await _rds_runner.start(freq_str, gain=p.get("gain"), ppm=p.get("ppm"))
+            except Exception as e:                       # noqa: BLE001
+                job.probes.append(FreqProbe(freq_mhz=f_mhz))
+                continue
+            try:
+                await asyncio.sleep(p["dwell_sec"])
+            except asyncio.CancelledError:
+                await _rds_runner.stop()
+                raise
+            st = _rds_runner.status()
+            await _rds_runner.stop()
+            probe = FreqProbe(
+                freq_mhz=f_mhz,
+                pi=st.last_pi if st.last_pi != pre_pi else None,
+                ps=st.last_ps,
+                frames=st.frames - pre_frames,
+            )
+            job.probes.append(probe)
+            # Count stations heard so far (rds_registry already
+            # upserted via _on_rds_frame).
+            if _rds_registry is not None:
+                job.stations_found = _rds_registry.count()
+        job.set_state("stopped")
+    except asyncio.CancelledError:
+        try:
+            if _rds_runner is not None and _rds_runner.status().running:
+                await _rds_runner.stop()
+        except Exception:
+            pass
+        job.set_state("cancelled")
+        raise
+    except Exception as e:                              # noqa: BLE001
+        job.error = str(e)
+        try:
+            if _rds_runner is not None and _rds_runner.status().running:
+                await _rds_runner.stop()
+        except Exception:
+            pass
+        job.set_state("failed")
+
+
+def _rds_sweep_job_payload(j: RdsSweepJob) -> dict:
+    return {
+        "id": j.id,
+        "state": j.state,
+        "params": j.params,
+        "started_at": j.started_at,
+        "finished_at": j.finished_at,
+        "step_index": j.step_index,
+        "step_total": j.step_total,
+        "current_freq_mhz": j.current_freq_mhz,
+        "stations_found": j.stations_found,
+        "probes": [
+            {"freq_mhz": p.freq_mhz, "pi": p.pi, "ps": p.ps, "frames": p.frames}
+            for p in j.probes
+        ],
+        "error": j.error,
+    }
+
+
+@app.post("/rds/sweep", dependencies=[Depends(require_jwt)])
+async def rds_sweep(body: RdsSweepBody) -> dict:
+    """Kick off a sweep. Returns the job_id immediately; poll
+    /rds/sweep/jobs/{id} to watch progress."""
+    busy = _device_busy_reason()
+    if busy is not None:
+        raise HTTPException(409, busy)
+    if not (87.0 <= body.start_mhz < body.end_mhz <= 108.5):
+        raise HTTPException(400, "freq range must be inside FM broadcast band 87.0-108.5 MHz")
+    if body.step_khz < 50 or body.step_khz > 1000:
+        raise HTTPException(400, "step_khz must be 50-1000")
+    if body.dwell_sec < 2 or body.dwell_sec > 60:
+        raise HTTPException(400, "dwell_sec must be 2-60")
+    job = _rds_sweep_registry.submit(body.model_dump())
+    job.task = asyncio.create_task(_drive_rds_sweep(job))
+    return {"id": job.id, "state": job.state}
+
+
+@app.get("/rds/sweep/jobs/{job_id}", dependencies=[Depends(require_jwt)])
+async def rds_sweep_job_get(job_id: str) -> dict:
+    job = _rds_sweep_registry.get(job_id)
+    if job is None:
+        raise HTTPException(404, f"no job {job_id}")
+    return _rds_sweep_job_payload(job)
+
+
+@app.get("/rds/sweep/jobs", dependencies=[Depends(require_jwt)])
+async def rds_sweep_jobs_list(limit: int = 10) -> dict:
+    if limit < 1: limit = 1
+    if limit > 50: limit = 50
+    return {"jobs": [_rds_sweep_job_payload(j) for j in _rds_sweep_registry.list(limit)]}
+
+
+@app.post(
+    "/rds/sweep/jobs/{job_id}/cancel",
+    dependencies=[Depends(require_jwt)],
+)
+async def rds_sweep_job_cancel(job_id: str) -> dict:
+    job = _rds_sweep_registry.get(job_id)
+    if job is None:
+        raise HTTPException(404, f"no job {job_id}")
+    if job.is_terminal():
+        return _rds_sweep_job_payload(job)
+    if job.task is not None:
+        job.task.cancel()
+        try:
+            await job.task
+        except asyncio.CancelledError:
+            pass
+    return _rds_sweep_job_payload(job)
