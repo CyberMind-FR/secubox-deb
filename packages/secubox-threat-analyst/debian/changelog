@@ -1,3 +1,29 @@
+secubox-threat-analyst (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: make the dashboard actually
+    USEFUL. v1.3.0 was charter-aligned but always showed zeros
+    because threat-analyst's internal DB is empty until /collect
+    is explicitly called.
+      - Auto-collect on page load AND every 60s (operator sees real
+        activity immediately; small green dot in header confirms
+        latest collection time + counts).
+      - NEW "Unique attackers" + "Countries" stat cards driven from
+        the collected alerts (not just raw alert count).
+      - NEW 4-panel Top-N row: top attackers (by hit count), top
+        source countries, top attack patterns, top targeted accounts
+        — the actual triage data an analyst needs at a glance.
+      - Recent attacks table is now RICH: src IP highlighted, ISO
+        country code, attack pattern (e.g. crowdsecurity/
+        ssh-time-based-bf_user-enum), service+target user (e.g.
+        ssh/admin), ASN org (e.g. AS48090 Techoff Srv Limited),
+        per-IP hit count. All flattened from the nested
+        details.events[].meta[{key,value}] structure that CrowdSec
+        returns.
+      - Layout + palette unchanged (still respects WALL module +
+        DESIGN-CHARTER §Typography §Spacing §Grid).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 15:00:00 +0000
+
 secubox-threat-analyst (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * www/threat-analyst/index.html: complete rewrite from scratch.
