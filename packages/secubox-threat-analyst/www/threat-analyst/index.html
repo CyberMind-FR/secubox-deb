@@ -9,10 +9,21 @@
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root { --p31-peak: #00dd44; --p31-mid: #009933; --p31-dim: #006622; --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7; --bg-card: var(--tube-pale); --border: var(--tube-soft); --text: #1b3d1c; --text-dim: var(--p31-dim); --primary: var(--p31-peak); --danger: #ff4466; --warning: #ffb347; --info: #4488ff; }
+        :root {
+            --p31-peak: #00dd44; --p31-mid: #009933; --p31-dim: #006622;
+            --tube-light: #e8f5e9; --tube-pale: #c8e6c9; --tube-soft: #a5d6a7;
+            --bg-card: var(--tube-pale); --border: var(--tube-soft);
+            --text: #1b3d1c; --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak); --danger: #ff4466; --warning: #ffb347; --info: #4488ff;
+            /* Reserve space for the global menu bar that sidebar.js
+             * (v2.38.0+) injects at the top — without this, .main
+             * content slides under the navbar. Matches sentinelle.css
+             * and all other recent dashboards. */
+            --gmb-h: 48px;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--text); display: flex; min-height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .main { flex: 1; margin-left: 220px; padding: calc(var(--gmb-h) + 1.5rem) 1.5rem 1.5rem; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border); }
         .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
         .header-actions { display: flex; gap: 0.5rem; align-items: center; }
@@ -214,22 +225,51 @@
         const TA  = '/api/v1/threat-analyst';
         const EXP = '/api/v1/exposure';
 
-        // Shared HTTP wrapper. Sends Authorization Bearer when
-        // localStorage has a token; redirects to /login.html on 401;
-        // returns null on any non-2xx so callers can render an error
-        // state without try/catching.
+        // Shared HTTP wrapper. v1.1.1: returns {ok, status, data, err}
+        // instead of null-on-error so panels can render meaningful
+        // error states ("auth", "404", "network") rather than stuck
+        // on "Loading…". Sends localStorage Bearer if present, but
+        // also includes browser credentials so Authelia SSO cookies
+        // travel with same-origin fetches (the canonical auth path
+        // for the secubox stack — nginx auth_request validates the
+        // SSO cookie before proxying to the per-module unix socket).
         async function api(base, path, method = 'GET', data = null) {
             const token = localStorage.getItem('sbx_token');
             const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
             try {
-                const res = await fetch(base + path, { method, headers, body: data ? JSON.stringify(data) : null });
-                if (res.status === 401) { window.location = '/login.html'; return null; }
-                if (!res.ok) return null;
-                return res.json();
-            } catch { return null; }
+                const res = await fetch(base + path, {
+                    method, headers, credentials: 'include',
+                    body: data ? JSON.stringify(data) : null,
+                });
+                if (res.status === 401) {
+                    return { ok: false, status: 401, err: 'auth' };
+                }
+                if (res.status === 404) {
+                    return { ok: false, status: 404, err: 'not_found' };
+                }
+                if (!res.ok) {
+                    return { ok: false, status: res.status, err: 'http_' + res.status };
+                }
+                const data = await res.json();
+                return { ok: true, status: res.status, data };
+            } catch (e) {
+                return { ok: false, status: 0, err: 'network', detail: String(e) };
+            }
         }
         const ta  = (p, m, d) => api(TA,  p, m, d);
         const exp = (p, m, d) => api(EXP, p, m, d);
+
+        // Render an error placeholder when an api() call fails.
+        // Caller passes the container element + the api() result.
+        function renderApiError(el, r, what) {
+            const map = {
+                auth:      'Auth required — log in via /auth/',
+                not_found: 'Endpoint missing on backend',
+                network:   'Network unreachable',
+            };
+            const msg = map[r.err] || ('HTTP ' + r.status);
+            el.innerHTML = `<div class="err">${what}: ${msg}</div>`;
+        }
 
         function renderBreakdownChips(target, dict, severityColor = false) {
             const el = document.getElementById(target);
@@ -251,11 +291,26 @@
         }
 
         async function loadMetrics() {
-            const s = await ta('/stats');
-            if (!s) {
-                document.getElementById('m-alerts-24h').textContent = '?';
+            const r = await ta('/stats');
+            if (!r.ok) {
+                // /status is auth-free — fall back so the count cards
+                // populate even when /stats 401's (browser hasn't
+                // refreshed Authelia cookie yet). Status only carries
+                // alerts_24h + pending_rules; the breakdowns stay
+                // marked with the error so the operator knows why.
+                const pub = await ta('/status');
+                document.getElementById('m-alerts-24h').textContent = pub.ok ? (pub.data.alerts_24h ?? 0) : '?';
+                document.getElementById('m-pending-rules').textContent = pub.ok ? (pub.data.pending_rules ?? 0) : '?';
+                document.getElementById('m-severity-total').textContent = '?';
+                document.getElementById('m-total-rules').textContent = 'total: ?';
+                const errLabel = r.err === 'auth' ? 'auth' : 'err';
+                document.getElementById('m-alerts-by-source').innerHTML =
+                    `<span class="chip" style="color:var(--danger);">${errLabel}</span>`;
+                document.getElementById('m-alerts-by-severity').innerHTML =
+                    `<span class="chip" style="color:var(--danger);">${errLabel}</span>`;
                 return;
             }
+            const s = r.data;
             document.getElementById('m-alerts-24h').textContent = s.alerts_24h ?? 0;
             renderBreakdownChips('m-alerts-by-source', s.by_source);
 
@@ -270,9 +325,10 @@
 
         async function loadAlerts() {
             const hours = document.getElementById('alerts-hours').value;
-            const d = await ta(`/alerts?hours=${hours}`);
+            const r = await ta(`/alerts?hours=${hours}`);
             const c = document.getElementById('alerts-container');
-            if (!d) { c.innerHTML = '<div class="err">Failed to load alerts</div>'; return; }
+            if (!r.ok) { renderApiError(c, r, 'Alerts'); return; }
+            const d = r.data;
             if (!d.alerts?.length) { c.innerHTML = '<div class="empty-state">No alerts in window</div>'; return; }
             // Cap at 25 rows so the column doesn't dominate the page —
             // the "+N more" line tells the operator there's more.
@@ -295,14 +351,16 @@
         }
 
         async function loadEmancipated() {
-            const d = await exp('/emancipated');
+            const r = await exp('/emancipated');
             const c = document.getElementById('emancipated-container');
-            if (!d) {
-                c.innerHTML = '<div class="err">Exposure API unreachable</div>';
+            if (!r.ok) {
+                renderApiError(c, r, 'Emancipated');
                 document.getElementById('m-emancipated').textContent = '?';
+                document.getElementById('m-emancipated-channels').innerHTML =
+                    `<span class="chip" style="color:var(--danger);">${r.err}</span>`;
                 return;
             }
-            const services = d.services || [];
+            const services = r.data.services || [];
             document.getElementById('m-emancipated').textContent = services.length;
 
             // Channel breakdown for the top-card chips. ssl+dns are
@@ -342,19 +400,19 @@
 
         async function revokeService(name) {
             if (!confirm(`Revoke exposure for "${name}"? All channels (Tor/SSL/Mesh) will be torn down.`)) return;
-            const d = await exp('/revoke', 'POST', { name });
-            if (!d || d.success === false) {
-                alert('Revoke failed: ' + (d?.error || 'unknown error'));
+            const r = await exp('/revoke', 'POST', { name });
+            if (!r.ok || r.data?.success === false) {
+                alert('Revoke failed: ' + (r.err || r.data?.error || 'unknown'));
                 return;
             }
             loadEmancipated();
         }
 
         async function loadRules() {
-            const d = await ta('/rules?status=pending');
+            const r = await ta('/rules?status=pending');
             const c = document.getElementById('rules-container');
-            if (!d) { c.innerHTML = '<div class="err">Failed to load rules</div>'; return; }
-            const rules = d.rules || [];
+            if (!r.ok) { renderApiError(c, r, 'Rules'); return; }
+            const rules = r.data.rules || [];
             if (!rules.length) { c.innerHTML = '<div class="empty-state">No pending rules</div>'; return; }
             c.innerHTML = rules.map(r => `
                 <div class="rule-row" id="rule-${r.id}">
@@ -373,8 +431,8 @@
         }
 
         async function ruleAction(id, verb) {
-            const d = await ta(`/rules/${id}/${verb}`, 'POST');
-            if (!d) { alert(verb + ' failed'); return; }
+            const r = await ta(`/rules/${id}/${verb}`, 'POST');
+            if (!r.ok) { alert(verb + ' failed: ' + r.err); return; }
             loadRules();
             loadMetrics();
         }
@@ -387,8 +445,9 @@
             // The backend's /analyze takes AnalysisRequest (hours + optional alert_ids).
             // Single-IOC quick lookup: send the ioc alongside the 24h window;
             // the backend ignores unknown keys.
-            const d = await ta('/analyze', 'POST', { ioc, hours: 24 });
-            if (!d) { r.innerHTML = '<div class="err">Analysis failed</div>'; return; }
+            const res = await ta('/analyze', 'POST', { ioc, hours: 24 });
+            if (!res.ok) { r.innerHTML = `<div class="err">Analysis failed: ${res.err}</div>`; return; }
+            const d = res.data;
             r.innerHTML = `
                 <div style="padding:0.5rem;background:var(--tube-light);border-radius:6px;font-size:0.8rem;">
                     <div><strong>${escapeHtml(ioc)}</strong></div>
@@ -400,9 +459,9 @@
         }
 
         async function collectNow() {
-            const d = await ta('/collect', 'POST');
-            if (!d) { alert('Collect failed'); return; }
-            const c = d.collected || {};
+            const r = await ta('/collect', 'POST');
+            if (!r.ok) { alert('Collect failed: ' + r.err); return; }
+            const c = r.data.collected || {};
             alert(`Collected:\n  CrowdSec: ${c.crowdsec ?? 0}\n  WAF: ${c.waf ?? 0}`);
             loadMetrics();
             loadAlerts();
