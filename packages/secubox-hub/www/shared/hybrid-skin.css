@@ -76,9 +76,10 @@ html body.hybrid-skin {
     font-size: 28px;
     font-weight: 600;
     margin-bottom: var(--space-xs, 4px);
-    background: linear-gradient(90deg, var(--text-dark), var(--root-light));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    /* Solid colour — same gradient-text fragility as .card-metric
+     * (closes #360). var(--text-dark) = #E8E6E0 cream, kept for
+     * brand consistency with .page-subtitle just below. */
+    color: var(--text-dark);
 }
 
 .page-subtitle {
@@ -208,9 +209,10 @@ html body.hybrid-skin {
     font-family: var(--font-mono);
     line-height: 1;
     margin-bottom: var(--space-s, 8px);
-    background: linear-gradient(90deg, var(--text-dark), var(--muted-dark));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    /* Solid white — the gradient + -webkit-text-fill-color: transparent
+     * trick used here originally collapsed to invisible black-on-black
+     * whenever the gradient render path failed (closes #360). */
+    color: #ffffff;
 }
 
 .card-label {
