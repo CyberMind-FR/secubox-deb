@@ -1,3 +1,37 @@
+secubox-threat-analyst (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * www/threat-analyst/index.html: full dashboard rewrite to wire
+    the frontend to endpoints that actually exist. v1.0.0 shipped
+    with 4 stat cards bound to /status fields the backend never
+    returned (active_threats / iocs_tracked / analyses_24h /
+    blocked_iocs) plus an Active Threats panel calling /threats
+    (doesn't exist) and a Recent Analyses table calling /analyses
+    (doesn't exist). Net result: every panel stuck on "–".
+  * Metrics row redesigned around the real /stats response
+    (alerts_24h, by_source, by_severity, pending_rules, total_rules).
+    Each card now carries a row of breakdown chips beneath the big
+    number — source breakdown under Alerts, severity breakdown
+    (color-coded) under Severity Mix, total-rules under Pending
+    Rules. Adds a 4th metric for /api/v1/exposure/emancipated count
+    + per-channel chip breakdown (tor / ssl / mesh).
+  * Active Alerts panel now calls /alerts?hours=N (the real
+    endpoint) with a 1h/6h/24h/7d window selector. Cap at 25 rows
+    with truncation indicator.
+  * NEW Emancipated panel (right column): lists exposed services
+    from /api/v1/exposure/emancipated with channel tags (Tor / SSL /
+    DNS / Mesh) color-coded by Punk-Exposure verb. Inline Revoke
+    button per row hits POST /api/v1/exposure/revoke.
+  * NEW Pending Rules panel: surfaces /rules?status=pending with
+    inline Approve / Apply / Reject buttons hitting the v1.0.0
+    backend's existing rule-workflow endpoints.
+  * Manual Collect button in the header — POST /collect pulls fresh
+    alerts from CrowdSec + WAF and reports counts.
+  * Two-column body layout (2fr alerts/rules | 1fr emancipate/IOC)
+    stacks to single column under 1024px.
+  * Closes #361.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 10:30:00 +0000
+
 secubox-threat-analyst (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
