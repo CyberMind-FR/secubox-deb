@@ -15,6 +15,8 @@ override_dh_auto_install:
 	# gr-gsm device.py monkey-patch shim (#354)
 	install -d debian/secubox-sentinelle-gsm/usr/libexec/secubox
 	install -m 755 sbin/secubox-grgsm-livemon-shim debian/secubox-sentinelle-gsm/usr/libexec/secubox/secubox-grgsm-livemon-shim
+	# redsea FM-RDS decoder binary (v0.4.0, built natively on arm64)
+	[ -f bin/secubox-redsea ] && install -m 755 bin/secubox-redsea debian/secubox-sentinelle-gsm/usr/libexec/secubox/secubox-redsea || true
 	# Menu entry
 	install -d debian/secubox-sentinelle-gsm/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-sentinelle-gsm/usr/share/secubox/menu.d/ || true
@@ -26,6 +28,12 @@ override_dh_auto_install:
 	# Standalone WebUI static files (#340)
 	install -d debian/secubox-sentinelle-gsm/usr/share/secubox/www/sentinelle
 	[ -d www/sentinelle ] && cp -r www/sentinelle/. debian/secubox-sentinelle-gsm/usr/share/secubox/www/sentinelle/ || true
+	# Compat symlink — the hub menu id is `sentinelle-gsm` to match the
+	# systemd unit + socket name (v0.4.0), but the URL path stays
+	# `/sentinelle/` for back-compat with bookmarks. The hub's
+	# _check_module_installed(id) walks /usr/share/secubox/www/<id>/, so
+	# we need a directory under the new id name. A symlink is enough.
+	ln -sfn sentinelle debian/secubox-sentinelle-gsm/usr/share/secubox/www/sentinelle-gsm
 	# Config example
 	install -d debian/secubox-sentinelle-gsm/etc/secubox
 	[ -f conf/sentinelle-gsm.toml.example ] && cp conf/sentinelle-gsm.toml.example debian/secubox-sentinelle-gsm/etc/secubox/sentinelle-gsm.toml.example || true
