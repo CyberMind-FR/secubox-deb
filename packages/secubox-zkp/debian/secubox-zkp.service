@@ -5,8 +5,8 @@ Requires=secubox-core.service
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=secubox
+Group=secubox
 WorkingDirectory=/usr/lib/secubox/zkp
 RuntimeDirectory=secubox
 RuntimeDirectoryMode=0755
