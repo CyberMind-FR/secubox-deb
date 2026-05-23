@@ -1,3 +1,23 @@
+secubox-threat-analyst (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * api/main.py: replace `from secubox_core.auth import require_jwt`
+    with a local no-op stub, matching the pattern every other SecuBox
+    module already uses (secubox-sentinelle-gsm, etc.). The real
+    secubox_core.require_jwt demanded an HTTP `Authorization: Bearer`
+    header on every gated endpoint, but the threat-analyst dashboard
+    runs inside the Authelia-SSO'd admin vhost where the operator only
+    carries SSO cookies, never a JWT in localStorage. Every /stats,
+    /alerts, /rules call therefore returned 401 and the dashboard
+    rendered "?" across every metric.
+    The actual security perimeter is nginx + the unix socket — the
+    FastAPI never listens on TCP, the socket is bound 0660 root:secubox
+    by systemd. The `Depends(require_jwt)` decorators are kept for
+    forward compatibility; if a future deploy exposes the API on TCP,
+    swapping the stub for the real check is one line.
+  * User-authorized 2026-05-23.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 May 2026 13:45:00 +0000
+
 secubox-threat-analyst (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * www/threat-analyst/index.html: add no-cache <meta> directives.
