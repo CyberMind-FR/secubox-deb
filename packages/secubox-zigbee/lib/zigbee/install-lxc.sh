@@ -113,7 +113,15 @@ lxc.rootfs.path = dir:$LXC_PATH/$LXC_NAME/rootfs
 lxc.include = /usr/share/lxc/config/common.conf
 lxc.apparmor.profile = generated
 lxc.start.auto = 1
-lxc.start.delay = 5
+# v2.6.0: start after the mqtt LXC. lxc-autostart honours start.order
+# (lower runs first) and start.delay (seconds to sleep BEFORE the next
+# container in the same order group). mqtt is at order=10/delay=5; we
+# go order=20 + delay=20 so z2m gets 20s after mqtt's start to let
+# mosquitto bind 1883 before z2m tries to connect. The 2026-05-23
+# incident wiped database.db because z2m crash-looped against a dead
+# MQTT broker.
+lxc.start.order = 20
+lxc.start.delay = 20
 lxc.mount.entry = /dev/secubox-zgb dev/secubox-zgb none bind,create=file,optional 0 0
 # Also bind /dev/serial/by-id so z2m's adapter auto-discovery can match the
 # manufacturer regex (e.g. ".*sonoff.*lite.*mg21.*" for the SONOFF MG21).
@@ -252,6 +260,13 @@ RestartSec=10
 # `|| true` survives the dongle-absent case. See secubox-zigbee #zigbee-prod-502.
 ExecStartPre=/bin/sh -c '[ -e /dev/ttyUSB0 ] && /bin/chmod 0666 /dev/ttyUSB0 || true'
 ExecStartPre=/bin/sh -c '[ -e /dev/ttyACM0 ] && /bin/chmod 0666 /dev/ttyACM0 || true'
+# v2.6.0: refuse to start until the MQTT broker answers on 1883.
+# Without this, z2m crash-loops when MQTT is briefly down and ends up
+# writing degraded state to database.db (the 2026-05-23 incident
+# regenerated network_key + lost 5 devices). 60s budget, 2s probe
+# interval; if the broker never comes up we exit non-zero and let
+# systemd retry per Restart=.
+ExecStartPre=/bin/sh -c 'for i in \$(seq 1 30); do if (echo > /dev/tcp/10.100.0.110/1883) >/dev/null 2>&1; then exit 0; fi; sleep 2; done; echo "MQTT 10.100.0.110:1883 unreachable after 60s — refusing to start z2m" >&2; exit 1'
 ExecStart=/usr/bin/node /opt/zigbee2mqtt/node_modules/zigbee2mqtt/index.js
 
 NoNewPrivileges=true

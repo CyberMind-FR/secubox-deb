@@ -9,6 +9,16 @@ override_dh_auto_install:
 	# CTL
 	install -d debian/secubox-zigbee/usr/sbin
 	install -m 755 sbin/zigbeectl debian/secubox-zigbee/usr/sbin/zigbeectl
+	# v2.6.0 backup / restore helpers + hourly timer
+	install -m 755 sbin/zigbee-backup   debian/secubox-zigbee/usr/sbin/zigbee-backup
+	install -m 755 sbin/zigbee-restore  debian/secubox-zigbee/usr/sbin/zigbee-restore
+	install -d debian/secubox-zigbee/lib/systemd/system
+	install -m 644 systemd/secubox-zigbee-backup.service debian/secubox-zigbee/lib/systemd/system/secubox-zigbee-backup.service
+	install -m 644 systemd/secubox-zigbee-backup.timer   debian/secubox-zigbee/lib/systemd/system/secubox-zigbee-backup.timer
+	# v2.6.0 sudoers grant: lets secubox-zigbee FastAPI trigger the
+	# backup / restore scripts (run as root, need access to LXC files).
+	install -d debian/secubox-zigbee/etc/sudoers.d
+	install -m 440 sudoers.d/secubox-zigbee debian/secubox-zigbee/etc/sudoers.d/secubox-zigbee
 	# Web UI
 	install -d debian/secubox-zigbee/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-zigbee/usr/share/secubox/www/ || true

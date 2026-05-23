@@ -163,6 +163,106 @@ def access() -> dict:
     }
 
 
+# ── v2.6.0 backup / restore surface ─────────────────────────────────
+# /data/backup/zigbee/<UTC-timestamp>/ holds hourly snapshots written
+# by zigbee-backup (systemd timer secubox-zigbee-backup.timer). The UI
+# can also POST /backup to trigger one on demand, and POST /restore to
+# roll back to a specific snapshot. The actual file work lives in the
+# two host scripts so the API has minimal privilege requirements.
+
+BACKUP_ROOT = Path(os.environ.get("SECUBOX_ZIGBEE_BACKUP_DIR", "/data/backup/zigbee"))
+# v2.6.0: the scripts need root (they read host-root-owned LXC files
+# and call lxc-attach). The FastAPI runs as `secubox` — the package
+# ships /etc/sudoers.d/secubox-zigbee granting NOPASSWD on both
+# scripts. We invoke with `sudo -n` so any sudo prompt fails fast.
+BACKUP_SCRIPT  = ["sudo", "-n", "/usr/sbin/zigbee-backup"]
+RESTORE_SCRIPT = ["sudo", "-n", "/usr/sbin/zigbee-restore"]
+
+
+@app.get("/backups")
+def list_backups() -> dict:
+    """List available z2m state snapshots, newest first.
+    Each entry includes the device count parsed from the .devices
+    sidecar (written by zigbee-backup) so the UI can show "5 devices"
+    without re-parsing the database file."""
+    items: list[dict] = []
+    if BACKUP_ROOT.is_dir():
+        for d in sorted(BACKUP_ROOT.iterdir(), key=lambda p: p.name, reverse=True):
+            if not d.is_dir():
+                continue
+            db = d / "database.db"
+            if not db.is_file():
+                continue
+            try:
+                size = db.stat().st_size
+            except OSError:
+                size = 0
+            devs = 0
+            try:
+                devs = int((d / ".devices").read_text().strip())
+            except (OSError, ValueError):
+                pass
+            items.append({
+                "id": d.name,
+                "kind": "pre-restore" if d.name.startswith("pre-restore-") else "hourly",
+                "size_db": size,
+                "devices": devs,
+                # ISO timestamp from the directory name (UTC).
+                "timestamp": d.name.replace("pre-restore-", ""),
+            })
+    return {"module": "zigbee", "backups": items, "root": str(BACKUP_ROOT)}
+
+
+@app.post("/backup")
+def trigger_backup() -> dict:
+    """Run zigbee-backup synchronously. Short (~1s) so we don't bother
+    with a background-task pattern."""
+    try:
+        res = subprocess.run(
+            BACKUP_SCRIPT,
+            capture_output=True, text=True, timeout=30,
+        )
+    except FileNotFoundError:
+        return {"ok": False, "error": f"missing {BACKUP_SCRIPT[-1]}"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "backup timeout (>30s)"}
+    return {
+        "ok": res.returncode == 0,
+        "returncode": res.returncode,
+        "stderr": res.stderr.strip()[-1500:],
+    }
+
+
+@app.post("/restore")
+def trigger_restore(body: dict) -> dict:
+    """Restore a specific snapshot. Body: {id: <timestamp>}.
+    The restore script stops z2m, archives the current state under a
+    pre-restore-* prefix so this action is reversible, then copies the
+    files back and restarts z2m."""
+    snap_id = (body or {}).get("id", "").strip()
+    if not snap_id:
+        return {"ok": False, "error": "missing 'id'"}
+    # Guard against path traversal — restore only accepts a directory
+    # name that already exists under BACKUP_ROOT.
+    target = BACKUP_ROOT / snap_id
+    if not target.is_dir() or target.parent.resolve() != BACKUP_ROOT.resolve():
+        return {"ok": False, "error": f"unknown snapshot '{snap_id}'"}
+    try:
+        res = subprocess.run(
+            RESTORE_SCRIPT + [snap_id],
+            capture_output=True, text=True, timeout=60,
+        )
+    except FileNotFoundError:
+        return {"ok": False, "error": f"missing {RESTORE_SCRIPT[-1]}"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "restore timeout (>60s)"}
+    return {
+        "ok": res.returncode == 0,
+        "returncode": res.returncode,
+        "stderr": res.stderr.strip()[-1500:],
+    }
+
+
 @app.get("/healthz")
 def healthz() -> dict:
     return {"ok": True, "module": "zigbee", "version": "2.4.0"}

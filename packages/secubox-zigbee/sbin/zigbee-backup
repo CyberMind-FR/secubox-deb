@@ -1,0 +1,115 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gerald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: zigbee-backup
+#
+# Snapshot zigbee2mqtt persistent state to host-side storage. Survives
+# LXC wipes and z2m crash-loops (the 2026-05-23 incident regenerated
+# network_key + lost all 5 paired devices because z2m wrote a degraded
+# database.db during MQTT outage; we want a known-good copy from BEFORE
+# the bad write that can be restored from the SecuBox webui).
+#
+# Backup target: /data/backup/zigbee/<timestamp>/
+#   - database.db
+#   - configuration.yaml
+#   - coordinator_backup.json
+#   - state.json
+#
+# Triggered hourly by secubox-zigbee-backup.timer. Skips when the
+# zigbee LXC isn't running OR z2m frontend :8080 doesn't respond
+# (otherwise we'd happily archive a corrupted database, defeating the
+# purpose). The API can also call it on-demand via POST /backup.
+
+set -euo pipefail
+
+readonly MODULE="zigbee-backup"
+readonly VERSION="2.6.0"
+readonly LXC_NAME="${SECUBOX_LXC_NAME:-zigbee}"
+readonly LXC_IP="${SECUBOX_LXC_IP:-10.100.0.111}"
+readonly FRONTEND_PORT="${SECUBOX_Z2M_FRONTEND_PORT:-8080}"
+readonly BACKUP_ROOT="${SECUBOX_ZIGBEE_BACKUP_DIR:-/data/backup/zigbee}"
+readonly Z2M_DATA="/data/lxc/${LXC_NAME}/rootfs/opt/zigbee2mqtt/data"
+readonly KEEP_HOURLY="${SECUBOX_ZIGBEE_KEEP_HOURLY:-24}"
+
+log() { echo "[${MODULE}] $*" >&2; }
+
+# Refuse to back up a broken state. Anything we archive here is a
+# candidate for /restore — we don't want corrupted snapshots in the
+# rotation.
+#
+# Note: we don't call `lxc-info` here. lxc-info as a non-root user
+# (the API's secubox uid that triggers POST /backup) prints a usage
+# error on some lxc-tools builds; and a successful TCP probe to the
+# z2m frontend port is a stricter "healthy" signal than RUNNING
+# anyway (RUNNING + crashed daemon would still be wrong to archive).
+preflight() {
+	# TCP probe — if z2m hasn't bound 8080 the daemon is crashed,
+	# starting, or the LXC is down. In all cases the database may be
+	# mid-write or already corrupt.
+	if ! timeout 2 bash -c "</dev/tcp/${LXC_IP}/${FRONTEND_PORT}" 2>/dev/null; then
+		log "z2m frontend ${LXC_IP}:${FRONTEND_PORT} unresponsive — skipping backup"
+		exit 0
+	fi
+	# Sanity: the database file must exist AND be at least 1 KB. The
+	# 2026-05-23 broken state was 560 B (coordinator-only).
+	local db="${Z2M_DATA}/database.db"
+	if [[ ! -f "${db}" ]] || [[ $(stat -c %s "${db}") -lt 1024 ]]; then
+		log "database.db missing or suspiciously small ($(stat -c %s "${db}" 2>/dev/null || echo missing) B) — skipping backup"
+		exit 0
+	fi
+}
+
+do_backup() {
+	local ts; ts="$(date -u +%Y%m%dT%H%M%SZ)"
+	local dst="${BACKUP_ROOT}/${ts}"
+	install -d -m 755 "${dst}"
+	# Files we care about. configuration.example.yaml is a template
+	# z2m ships; not worth archiving. coordinator_backup.json contains
+	# the network_key (sensitive) — same dir perm as the upstream.
+	for f in database.db configuration.yaml coordinator_backup.json state.json; do
+		if [[ -f "${Z2M_DATA}/${f}" ]]; then
+			cp -p "${Z2M_DATA}/${f}" "${dst}/${f}"
+		fi
+	done
+	# Also stash the device count so the UI can show "16 devices" per
+	# row without parsing the database.
+	if command -v python3 >/dev/null; then
+		local n
+		n="$(python3 -c "
+import json, sys
+try:
+    with open('${dst}/database.db') as f:
+        n = sum(1 for l in f if l.strip())
+    print(n)
+except: print(0)
+" 2>/dev/null || echo 0)"
+		echo "${n}" > "${dst}/.devices"
+	fi
+	log "backup OK → ${dst} ($(du -sh "${dst}" | cut -f1))"
+}
+
+rotate() {
+	# Keep the most recent KEEP_HOURLY snapshots; rm the rest.
+	# `find -printf` ordering is undefined; sort by name (timestamps
+	# sort lex order with ISO 8601 UTC = chronological).
+	local n=0
+	while IFS= read -r d; do
+		n=$((n + 1))
+		if [[ ${n} -gt ${KEEP_HOURLY} ]]; then
+			log "rotate drop ${d}"
+			rm -rf "${d}"
+		fi
+	done < <(find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d | sort -r)
+}
+
+main() {
+	install -d -m 755 "${BACKUP_ROOT}"
+	preflight
+	do_backup
+	rotate
+}
+
+main "$@"
