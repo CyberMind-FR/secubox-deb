@@ -706,6 +706,18 @@ class SecuBoxWAF:
             pass
     
     def request(self, flow: http.HTTPFlow):
+        # Self-loop guard: if our own LXC IP appears repeatedly in XFF, we are
+        # bouncing through HAProxy default_backend mitmproxy_inspector. Short-
+        # circuit with 508 so a misrouted Host (eg literal-IP from Eye Remote)
+        # cannot peg CPU by ping-ponging forever.
+        if flow.request.headers.get("X-Forwarded-For", "").count("10.100.0.60") > 2:
+            self.stats["blocked"] = self.stats.get("blocked", 0) + 1
+            flow.response = http.Response.make(
+                508,
+                b"<h1>508 Loop Detected</h1><p>SecuBox WAF refused to forward a self-looping request.</p>",
+                {"Content-Type": "text/html", "X-SecuBox-WAF": "loop-detected"},
+            )
+            return
         self.stats["requests"] += 1
         # Periodically save stats
         if self.stats["requests"] % STATS_SAVE_INTERVAL == 0:
