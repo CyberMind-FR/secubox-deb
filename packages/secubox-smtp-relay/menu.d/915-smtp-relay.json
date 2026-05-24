@@ -2,7 +2,7 @@
   "id": "smtp-relay",
   "name": "SMTP Relay",
   "category": "mesh",
-  "icon": "envelope",
+  "icon": "✉️",
   "path": "/smtp-relay/",
   "order": 915,
   "description": "Email forwarding through smarthost"

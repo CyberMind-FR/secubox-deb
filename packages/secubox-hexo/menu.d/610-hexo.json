@@ -1,7 +1,7 @@
 {
   "name": "Hexo",
   "path": "/hexo/",
-  "icon": "edit",
+  "icon": "📝",
   "category": "mesh",
   "order": 610,
   "description": "Static blog generator",
