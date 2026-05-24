@@ -14,6 +14,11 @@ User=secubox
 Group=secubox
 RuntimeDirectory=secubox
 RuntimeDirectoryMode=0755
+# MUST preserve /run/secubox across unit restarts — otherwise stopping
+# this service wipes the directory and removes every other secubox
+# module's socket (lyrion, authelia, etc.). Same pattern as every other
+# secubox unit that owns RuntimeDirectory=secubox.
+RuntimeDirectoryPreserve=yes
 WorkingDirectory=/usr/lib/secubox/fmrelay
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/fmrelay.sock --log-level warning
 Restart=always
