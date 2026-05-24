@@ -496,10 +496,32 @@
         '/zigbee/': '🐝', '/yacy/': '🔍', '/rustdesk/': '🖥️', '/mqtt/': '📡'
     };
 
+    // window._menuDataCache is populated by buildMenu() after the
+    // /api/v1/hub/public/menu fetch — every menu item carries its own
+    // emoji icon already (the menu.d entries). Reading from there
+    // saves the parallel hardcoded PAGE_ICONS table from going stale.
     function getPageIcon(path) {
+        // 1) Pinned hardcoded paths (loaded before menu fetch settles).
         for (var p in PAGE_ICONS) {
             if (path === p || path.startsWith(p)) return PAGE_ICONS[p];
         }
+        // 2) Fallback to live menu data — every module ships its own
+        // icon, so this catches everything PAGE_ICONS doesn't list.
+        try {
+            var data = window._menuDataCache;
+            if (data && Array.isArray(data.categories)) {
+                for (var i = 0; i < data.categories.length; i++) {
+                    var items = data.categories[i].items || [];
+                    for (var j = 0; j < items.length; j++) {
+                        var it = items[j];
+                        if (!it.path || !it.icon) continue;
+                        if (path === it.path || path.startsWith(it.path)) {
+                            return it.icon;
+                        }
+                    }
+                }
+            }
+        } catch (_) { /* ignore */ }
         return '📦';
     }
 
@@ -2268,6 +2290,13 @@
         var sidebar = document.getElementById('sidebar');
         if (!sidebar) return;
 
+        // Pre-seed _menuDataCache from localStorage so getPageIcon() finds
+        // module icons during the initial paint, before the API fetch lands.
+        try {
+            var preMenu = loadCachedMenu();
+            if (preMenu && preMenu.categories) window._menuDataCache = preMenu;
+        } catch (_) {}
+
         // Inject hybrid skin CSS (centralized for all modules)
         injectHybridSkin();
 
@@ -2326,6 +2355,20 @@
                 console.warn('[Sidebar] Invalid menu structure:', data);
                 throw new Error('Invalid menu structure');
             }
+
+            // Expose for getPageIcon() fallback (top page bar icon lookup).
+            try { window._menuDataCache = data; } catch (_) {}
+
+            // Refresh top page bar icon now that fresh menu data is in.
+            try {
+                var gmbIcon = document.querySelector('#global-menu-bar .menu-icon');
+                if (gmbIcon) {
+                    var freshIcon = getPageIcon(window.location.pathname);
+                    if (freshIcon && freshIcon !== gmbIcon.textContent) {
+                        gmbIcon.textContent = freshIcon;
+                    }
+                }
+            } catch (_) {}
 
             ALL_MODULES = extractModulesFromMenu(data);
             console.log('[Sidebar ' + VERSION + '] ' + ALL_MODULES.length + ' modules');

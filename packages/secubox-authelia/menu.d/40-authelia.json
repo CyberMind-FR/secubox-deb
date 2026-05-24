@@ -1,6 +1,6 @@
 {
   "subtitle": "Authelia · OIDC IdP",
-  "icon": "fa-key",
+  "icon": "🔑",
   "order": 40,
   "id": "authelia",
   "name": "SSO",
