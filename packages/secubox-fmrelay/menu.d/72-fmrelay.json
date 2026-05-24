@@ -1,0 +1,9 @@
+{
+  "id": "fmrelay",
+  "name": "FM Relay",
+  "path": "/fmrelay/",
+  "category": "mesh",
+  "icon": "📻",
+  "order": 72,
+  "description": "rtl_fm → Icecast2 MP3 mount with live RDS metadata (PI/PS/RT)"
+}

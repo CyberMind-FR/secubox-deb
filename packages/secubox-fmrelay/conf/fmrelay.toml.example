@@ -1,0 +1,25 @@
+# /etc/secubox/fmrelay.toml — SecuBox FM Relay configuration.
+#
+# Operator copies to /etc/secubox/fmrelay.toml and edits the icecast
+# admin/source passwords (the rest is fine on defaults).
+
+[icecast]
+# Host where icecast2 listens. Default = local icecast2 on the gk2 host.
+icecast_host         = "127.0.0.1"
+icecast_port         = 8000
+# MUST match what's in /etc/icecast2/icecast.xml. Default debian creds
+# are "hackme" — change them BOTH places.
+icecast_admin_pass   = "hackme"
+icecast_source_pass  = "hackme"
+
+[runner]
+# Defaults applied when start command omits the corresponding flag.
+bitrate_kbps         = 128
+gain_db              = 49     # rtl_fm tuner gain; R820T max ~49 dB
+ppm                  = 0      # rtl_fm tuner ppm correction (-200..+200)
+
+[exposure]
+# SecuBox webradio admin URL — used by the fmrelay admin webui as the
+# "Open Webradio →" button target. Read at runtime via /api/v1/fmrelay/
+# access (never hardcoded in HTML, per MODULE-GUIDELINES §4).
+webradio_url         = "https://admin.gk2.secubox.in/webradio/"

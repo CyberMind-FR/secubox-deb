@@ -1,0 +1,35 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Host FastAPI
+	install -d debian/secubox-fmrelay/usr/lib/secubox/fmrelay
+	cp -r api debian/secubox-fmrelay/usr/lib/secubox/fmrelay/
+	# CTL surface
+	install -d debian/secubox-fmrelay/usr/sbin
+	install -m 755 sbin/fmrelayctl debian/secubox-fmrelay/usr/sbin/fmrelayctl
+	# Runner + ICY pusher (under libexec, not on PATH)
+	install -d debian/secubox-fmrelay/usr/libexec/secubox
+	install -m 755 sbin/secubox-fmrelay-runner debian/secubox-fmrelay/usr/libexec/secubox/secubox-fmrelay-runner
+	install -m 755 sbin/secubox-fmrelay-icy    debian/secubox-fmrelay/usr/libexec/secubox/secubox-fmrelay-icy
+	# Menu entry
+	install -d debian/secubox-fmrelay/usr/share/secubox/menu.d
+	cp menu.d/72-fmrelay.json debian/secubox-fmrelay/usr/share/secubox/menu.d/
+	# nginx route (dual-vhost: api proxy + static admin alias)
+	install -d debian/secubox-fmrelay/etc/nginx/secubox.d
+	cp nginx/fmrelay.conf debian/secubox-fmrelay/etc/nginx/secubox.d/
+	install -d debian/secubox-fmrelay/etc/nginx/secubox-routes.d
+	cp nginx/fmrelay.conf debian/secubox-fmrelay/etc/nginx/secubox-routes.d/
+	# SecuBox admin static page
+	install -d debian/secubox-fmrelay/usr/share/secubox/www/fmrelay
+	cp -r www/fmrelay/. debian/secubox-fmrelay/usr/share/secubox/www/fmrelay/
+	# Config example (operator copies to /etc/secubox/fmrelay.toml)
+	install -d debian/secubox-fmrelay/etc/secubox
+	install -m 0644 conf/fmrelay.toml.example debian/secubox-fmrelay/etc/secubox/fmrelay.toml.example
+	# systemd unit
+	install -d debian/secubox-fmrelay/lib/systemd/system
+	install -m 0644 systemd/secubox-fmrelay.service debian/secubox-fmrelay/lib/systemd/system/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-fmrelay

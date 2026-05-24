@@ -1,0 +1,282 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gerald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# fmrelayctl — secubox-fmrelay control plane (issue #377).
+#
+# Spawns rtl_fm | lame to feed an icecast2 mount with FM audio, plus
+# a redsea side-car that pushes RDS PI/PS/RT as ICY metadata via
+# icecast2's /admin/metadata endpoint.
+#
+# Shares the RTL-SDR with secubox-sentinelle-gsm. The runner refuses
+# to start if the dongle is held by another module (cross-package
+# claim via /sys/class/usb/.../driver-busy is a follow-up; v0.1.0
+# trusts the operator not to dual-run).
+
+set -euo pipefail
+
+readonly VERSION="0.1.0"
+readonly CONFIG_FILE="/etc/secubox/fmrelay.toml"
+readonly STATE_DIR="/var/lib/secubox/fmrelay"
+readonly RUNNER_PID="${STATE_DIR}/runner.pid"
+readonly REDSEA_PID="${STATE_DIR}/redsea.pid"
+readonly CURRENT_FREQ_FILE="${STATE_DIR}/current-freq"
+readonly CURRENT_MOUNT_FILE="${STATE_DIR}/current-mount"
+readonly NOW_PLAYING_FILE="${STATE_DIR}/now-playing.json"
+
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+
+log()  { printf '%b[fmrelay]%b %s\n' "$GREEN" "$NC" "$*"; }
+warn() { printf '%b[warn]%b %s\n' "$YELLOW" "$NC" "$*" >&2; }
+err()  { printf '%b[error]%b %s\n' "$RED" "$NC" "$*" >&2; }
+
+# ── TOML config (grep + sed, same pattern as lyrionctl) ────────────────────
+config_get() {
+    # Strips TOML inline `# comment`, surrounding whitespace + quotes.
+    local key="$1" default="${2:-}" raw=""
+    if [[ -f "$CONFIG_FILE" ]]; then
+        raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1)
+    fi
+    if [[ -z "$raw" ]]; then
+        echo "$default"
+        return
+    fi
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+        | tr -d '"' | tr -d "'")
+    if [[ -z "$val" ]]; then echo "$default"; else echo "$val"; fi
+}
+
+ICECAST_HOST=$(config_get "icecast_host" "127.0.0.1")
+ICECAST_PORT=$(config_get "icecast_port" "8000")
+ICECAST_ADMIN_PASS=$(config_get "icecast_admin_pass" "hackme")
+ICECAST_SOURCE_PASS=$(config_get "icecast_source_pass" "hackme")
+DEFAULT_BITRATE=$(config_get "bitrate_kbps" "128")
+DEFAULT_GAIN=$(config_get "gain_db" "49")
+DEFAULT_PPM=$(config_get "ppm" "0")
+WEBRADIO_URL=$(config_get "webradio_url" "https://admin.gk2.secubox.in/webradio/")
+
+# ── Helpers ────────────────────────────────────────────────────────────────
+mkdir -p "$STATE_DIR"
+
+icecast_running() { systemctl is-active --quiet icecast2 2>/dev/null; }
+rtl_fm_present() { command -v rtl_fm >/dev/null 2>&1; }
+lame_present() { command -v lame >/dev/null 2>&1; }
+redsea_present() { [[ -x /usr/libexec/secubox/secubox-redsea ]] || command -v redsea >/dev/null 2>&1; }
+
+runner_pid() { [[ -f "$RUNNER_PID" ]] && cat "$RUNNER_PID" 2>/dev/null || echo; }
+runner_running() {
+    local p; p=$(runner_pid)
+    [[ -n "$p" ]] && [[ -d "/proc/$p" ]]
+}
+redsea_pid() { [[ -f "$REDSEA_PID" ]] && cat "$REDSEA_PID" 2>/dev/null || echo; }
+
+# ── Three-fold output ──────────────────────────────────────────────────────
+emit_components_json() {
+    local ic rl lm rs runner
+    icecast_running       && ic="running"   || ic="stopped"
+    rtl_fm_present        && rl="present"   || rl="missing"
+    lame_present          && lm="present"   || lm="missing"
+    redsea_present        && rs="present"   || rs="missing"
+    runner_running        && runner="running" || runner="idle"
+    cat <<EOF
+{
+  "module": "fmrelay",
+  "version": "$VERSION",
+  "components": [
+    {"name": "icecast2", "state": "$ic",     "detail": "${ICECAST_HOST}:${ICECAST_PORT}"},
+    {"name": "rtl_fm",   "state": "$rl",     "detail": "RTL-SDR FM demodulator"},
+    {"name": "lame",     "state": "$lm",     "detail": "MP3 encoder"},
+    {"name": "redsea",   "state": "$rs",     "detail": "RDS decoder (PI/PS/RT)"},
+    {"name": "runner",   "state": "$runner", "detail": "rtl_fm | lame pipe"}
+  ]
+}
+EOF
+}
+
+emit_components_text() {
+    printf '%-12s %-12s %s\n' "COMPONENT" "STATE" "DETAIL"
+    emit_components_json | python3 -c '
+import json, sys
+for c in json.load(sys.stdin)["components"]:
+    print(f"{c[\"name\"]:<12} {c[\"state\"]:<12} {c[\"detail\"]}")
+'
+}
+
+emit_status_json() {
+    local overall
+    if runner_running && icecast_running; then overall="green"
+    elif icecast_running; then overall="yellow"
+    else overall="red"; fi
+    cat <<EOF
+{"module": "fmrelay", "version": "$VERSION", "overall": "$overall"}
+EOF
+}
+
+emit_access_json() {
+    # Real mount URLs that consumers (Lyrion / webradio / VLC) hit.
+    # The admin webui's "Open Webradio" button reads from /access per
+    # MODULE-GUIDELINES §4 — never hardcode the URL in HTML.
+    local mount lan_url
+    mount=$([[ -f "$CURRENT_MOUNT_FILE" ]] && cat "$CURRENT_MOUNT_FILE" || echo "")
+    if [[ -n "$mount" ]]; then
+        lan_url="http://${ICECAST_HOST}:${ICECAST_PORT}/${mount}.mp3"
+    else
+        lan_url="http://${ICECAST_HOST}:${ICECAST_PORT}/"
+    fi
+    cat <<EOF
+{
+  "module": "fmrelay",
+  "access": [
+    {"url": "$lan_url",       "auth": "lan-only",     "scope": "lan"},
+    {"url": "$WEBRADIO_URL",  "auth": "Authelia SSO", "scope": "public"}
+  ]
+}
+EOF
+}
+
+emit_mounts_json() {
+    # Curl icecast admin API for live listener counts. Falls back to a
+    # minimal stub if icecast is down or creds are wrong.
+    local raw
+    raw=$(curl -sf -u "admin:${ICECAST_ADMIN_PASS}" \
+        "http://${ICECAST_HOST}:${ICECAST_PORT}/admin/listmounts" 2>/dev/null || true)
+    if [[ -z "$raw" ]]; then
+        echo '{"module":"fmrelay","mounts":[],"reason":"icecast unreachable"}'
+        return
+    fi
+    # Hand-parse the XML response — full XML parser would need lxml as
+    # a hard dep on the host. icecast's <listmounts> shape is stable.
+    python3 - <<PY
+import re, json
+xml = """${raw//\"/\\\"}"""
+mounts = []
+for m in re.finditer(r"<mount>([^<]+)</mount>.*?<listeners>(\d+)</listeners>", xml, re.S):
+    mounts.append({"mount": m.group(1), "listeners": int(m.group(2))})
+print(json.dumps({"module": "fmrelay", "mounts": mounts}))
+PY
+}
+
+emit_now_playing_json() {
+    if [[ -f "$NOW_PLAYING_FILE" ]]; then
+        cat "$NOW_PLAYING_FILE"
+    else
+        echo '{}'
+    fi
+}
+
+# ── Lifecycle: start / stop ────────────────────────────────────────────────
+cmd_start() {
+    if runner_running; then
+        err "fmrelay already running (pid $(runner_pid))"; exit 3
+    fi
+    local freq="${1:-}" mount="" bitrate="$DEFAULT_BITRATE" gain="$DEFAULT_GAIN" ppm="$DEFAULT_PPM"
+    shift || true
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --mount)    mount="$2";   shift 2 ;;
+            --bitrate)  bitrate="$2"; shift 2 ;;
+            --gain)     gain="$2";    shift 2 ;;
+            --ppm)      ppm="$2";     shift 2 ;;
+            --json)     shift ;;  # ignored — start returns JSON unconditionally below
+            *) err "unknown start option: $1"; exit 1 ;;
+        esac
+    done
+    [[ -z "$freq" ]]  && { err "freq required (eg 103.9M)"; exit 1; }
+    [[ -z "$mount" ]] && { err "--mount required (eg savoie)"; exit 1; }
+
+    if ! icecast_running;  then err "icecast2 not running on ${ICECAST_HOST}:${ICECAST_PORT}"; exit 2; fi
+    if ! rtl_fm_present;   then err "rtl_fm not installed (apt install rtl-sdr)"; exit 2; fi
+    if ! lame_present;     then err "lame not installed (apt install lame)"; exit 2; fi
+
+    log "Starting fmrelay: freq=$freq mount=$mount bitrate=${bitrate}k gain=${gain}dB ppm=${ppm}"
+    echo "$freq"  > "$CURRENT_FREQ_FILE"
+    echo "$mount" > "$CURRENT_MOUNT_FILE"
+    rm -f "$NOW_PLAYING_FILE"
+
+    # Spawn rtl_fm | lame -> icecast2 via a small wrapper that uses
+    # ezstream OR a curl-PUT-to-source upload. v0.1.0 uses ezstream
+    # because its config is simpler than crafting our own SHOUT/Icy
+    # handshake. The wrapper lives at /usr/libexec/secubox/secubox-fmrelay-runner.
+    nohup /usr/libexec/secubox/secubox-fmrelay-runner \
+        "$freq" "$mount" "$bitrate" "$gain" "$ppm" \
+        >> /var/log/secubox/fmrelay-runner.log 2>&1 &
+    echo $! > "$RUNNER_PID"
+
+    # Spawn redsea ICY pusher in parallel — separate rtl_fm at 171k
+    # sample rate (RDS subcarrier needs that exact rate; the audio
+    # side uses 48k). v0.1.0 accepts the dual-rtl_fm cost; v0.2 plan
+    # is to split a single stream with sox tee.
+    nohup /usr/libexec/secubox/secubox-fmrelay-icy \
+        "$freq" "$mount" "$ppm" \
+        >> /var/log/secubox/fmrelay-icy.log 2>&1 &
+    echo $! > "$REDSEA_PID"
+
+    sleep 1
+    emit_components_json
+}
+
+cmd_stop() {
+    local rp ip
+    rp=$(runner_pid); ip=$(redsea_pid)
+    if [[ -n "$rp" ]]; then
+        log "Killing runner pid $rp"
+        kill -TERM "$rp" 2>/dev/null || true
+        # Reap child grandchildren (rtl_fm, lame) — the wrapper traps
+        # SIGTERM and cleans up but be defensive.
+        sleep 1
+        kill -KILL "$rp" 2>/dev/null || true
+    fi
+    if [[ -n "$ip" ]]; then
+        log "Killing redsea-icy pid $ip"
+        kill -TERM "$ip" 2>/dev/null || true
+        sleep 0.5
+        kill -KILL "$ip" 2>/dev/null || true
+    fi
+    rm -f "$RUNNER_PID" "$REDSEA_PID" "$CURRENT_FREQ_FILE" "$CURRENT_MOUNT_FILE" "$NOW_PLAYING_FILE"
+    emit_components_json
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────────
+cmd_components() { case "${1:-}" in --json) emit_components_json ;; *) emit_components_text ;; esac; }
+cmd_status()     { case "${1:-}" in --json) emit_status_json ;; *) emit_components_text; echo; emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])' ;; esac; }
+cmd_access()     { case "${1:-}" in --json) emit_access_json ;; *) emit_access_json | python3 -m json.tool ;; esac; }
+cmd_mounts()     { case "${1:-}" in --json) emit_mounts_json ;; *) emit_mounts_json | python3 -m json.tool ;; esac; }
+cmd_now_playing(){ case "${1:-}" in --json) emit_now_playing_json ;; *) emit_now_playing_json | python3 -m json.tool ;; esac; }
+
+VERB="${1:-}"; shift || true
+case "$VERB" in
+    components) cmd_components "$@" ;;
+    status)     cmd_status "$@" ;;
+    access)     cmd_access "$@" ;;
+    mounts)     cmd_mounts "$@" ;;
+    now-playing) cmd_now_playing "$@" ;;
+    start)      cmd_start "$@" ;;
+    stop)       cmd_stop "$@" ;;
+    version)    echo "$VERSION" ;;
+    ""|help|-h|--help)
+        cat <<USAGE
+fmrelayctl $VERSION — FM RDS → Icecast relay
+
+Commands:
+  components [--json]      lifecycle state of icecast / rtl_fm / lame / redsea / runner
+  status [--json]          overall green | yellow | red
+  access [--json]          mount URL + webradio URL (used by admin webui button)
+  mounts [--json]          active icecast mounts + listener counts
+  now-playing [--json]     current RDS RadioText (if any)
+  start FREQ --mount NAME [--bitrate K] [--gain dB] [--ppm N]
+                           spawn rtl_fm | lame on icecast mount NAME
+  stop                     stop the runner + redsea-icy pusher
+  version                  print $VERSION
+
+Config: $CONFIG_FILE
+USAGE
+        ;;
+    *) err "unknown verb: $VERB (try 'fmrelayctl help')"; exit 1 ;;
+esac
