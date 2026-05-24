@@ -18,6 +18,10 @@ override_dh_auto_install:
 	# nginx snippet — install to BOTH secubox.d/ and secubox-routes.d/ (per v2.11.1 lesson)
 	install -d debian/secubox-authelia/etc/nginx/secubox.d
 	[ -f nginx/authelia.conf ] && cp nginx/authelia.conf debian/secubox-authelia/etc/nginx/secubox.d/ && (install -d debian/secubox-authelia/etc/nginx/secubox-routes.d && cp nginx/authelia.conf debian/secubox-authelia/etc/nginx/secubox-routes.d/) || true
+	# LAN-bypass geo block — http{}-level, MUST live in conf.d/ so it
+	# loads before secubox.d/authelia.conf inside the server{} blocks.
+	install -d debian/secubox-authelia/etc/nginx/conf.d
+	[ -f nginx/secubox-lan-geo.conf ] && cp nginx/secubox-lan-geo.conf debian/secubox-authelia/etc/nginx/conf.d/ || true
 	# Public vhost (auth.maegia.tv-style)
 	install -d debian/secubox-authelia/etc/nginx/sites-available
 	[ -f nginx/authelia-vhost.conf ] && cp nginx/authelia-vhost.conf debian/secubox-authelia/etc/nginx/sites-available/authelia.conf || true
