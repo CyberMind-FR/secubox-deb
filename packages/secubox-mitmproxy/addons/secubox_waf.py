@@ -65,6 +65,21 @@ BAN_WINDOW = 300   # Window in seconds (5 min)
 # Trusted proxy IPs (HAProxy, Docker bridge)
 TRUSTED_PROXIES = {"10.100.0.1", "127.0.0.1", "172.17.0.1", "192.168.255.1"}
 
+# Hosts that resolve to the box itself. When a client targets one of
+# these by literal IP and the Host is NOT in haproxy-routes.json, the
+# request would loop forever through HAProxy default_backend ->
+# mitmproxy -> HAProxy. The pre-route guard in request() rewrites such
+# requests to host nginx (9080) so a sensible vhost answers instead of
+# the WAF's 508 loop-detected page. Update this set if a new gk2-side
+# interface gets a routable IP that a browser could reach by literal.
+SELF_HOSTS = {
+    "127.0.0.1",
+    "192.168.1.200",   # lan0 — main LAN
+    "192.168.255.1",   # lan3 / lo — admin VLAN
+    "10.100.0.1",      # br-lxc — LXC bridge gateway
+    "10.55.0.1",       # eye-br0 — Eye Remote bridge
+}
+
 def get_real_client_ip(flow: http.HTTPFlow) -> str:
     """Extract real client IP from X-Forwarded-For or X-Real-IP headers.
 
@@ -706,11 +721,27 @@ class SecuBoxWAF:
             pass
     
     def request(self, flow: http.HTTPFlow):
-        # Self-loop guard: if our own LXC IP appears repeatedly in XFF, we are
-        # bouncing through HAProxy default_backend mitmproxy_inspector. Short-
-        # circuit with 508 so a misrouted Host (eg literal-IP from Eye Remote)
-        # cannot peg CPU by ping-ponging forever.
+        # Pre-route guard: a Host header that is one of this box's own
+        # listening IPs and is not explicitly mapped in haproxy-routes
+        # would loop (HAProxy default_backend mitmproxy_inspector ->
+        # mitmproxy -> Host header IP = HAProxy again). Rewrite to host
+        # nginx (9080) which has the canonical hub vhost and a sensible
+        # default catch-all. Avoids the 508 page the user would
+        # otherwise see.
+        host_pre = flow.request.pretty_host
+        if host_pre in SELF_HOSTS and host_pre not in self.routes:
+            ctx.log.info(f"[self-host] rewriting {host_pre} -> nginx 9080 (was unmapped)")
+            flow.request.host = "192.168.1.200"
+            flow.request.port = 9080
+            # Leave Host header intact so nginx can pick a vhost
+        # Self-loop guard (last resort): if our own LXC IP appears
+        # repeatedly in XFF, we are bouncing through HAProxy
+        # default_backend mitmproxy_inspector. Short-circuit with 508
+        # so a misrouted Host cannot peg CPU by ping-ponging forever.
         if flow.request.headers.get("X-Forwarded-For", "").count("10.100.0.60") > 2:
+            ctx.log.warn(f"[loop] 508 host={host_pre} xff_self_refs="
+                         f"{flow.request.headers.get('X-Forwarded-For', '').count('10.100.0.60')} "
+                         f"— add {host_pre!r} to haproxy-routes.json or SELF_HOSTS")
             self.stats["blocked"] = self.stats.get("blocked", 0) + 1
             flow.response = http.Response.make(
                 508,

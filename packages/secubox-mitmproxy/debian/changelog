@@ -1,3 +1,16 @@
+secubox-mitmproxy (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * Pre-route SELF_HOSTS guard. When a client targets the box by
+    literal local IP (192.168.1.200, 10.100.0.1, 10.55.0.1, etc.) and
+    the Host is NOT in haproxy-routes.json, the v1.0.3 loop guard
+    correctly broke the runaway but the user saw a 508 page. The new
+    pre-route check in request() rewrites unmapped self-IP Hosts to
+    nginx 9080 BEFORE forwarding, so the canonical hub vhost answers
+    instead. The 508 path now only fires as a true last resort and
+    logs the offending Host so the route can be added.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 09:10:00 +0200
+
 secubox-mitmproxy (1.0.3-1~bookworm1) bookworm; urgency=high
 
   * Self-loop guard in secubox_waf.py request() hook. When the X-Forwarded-For
