@@ -83,7 +83,7 @@
     <h1><span class="icon">🎯</span> Auth — SSO control</h1>
     <div class="header-actions">
       <a class="btn" href="/" title="Back to SecuBox hub">← hub</a>
-      <a class="btn primary" href="https://sso.gk2.secubox.in/" title="Open the Authelia SSO portal (login surface)">Open SSO Portal →</a>
+      <a class="btn primary" id="open-sso" href="#" target="_blank" rel="noopener" title="Open the Authelia SSO portal (login surface)">Open SSO Portal →</a>
     </div>
   </div>
 
@@ -191,8 +191,15 @@
     document.getElementById('stat-cookies-sub').textContent = cookies.map(function (c) { return c.domain || c; }).join(', ') || 'session.cookies[]';
     document.getElementById('stat-rules').textContent = String(rules.length || '?');
 
-    var v = (d.access || []).map(function (a) { return '<div>' + (a.scope || '') + ': <a href="' + (a.url || '#') + '">' + (a.url || '?') + '</a></div>'; }).join('');
+    var access = d.access || [];
+    var v = access.map(function (a) { return '<div>' + (a.scope || '') + ': <a href="' + (a.url || '#') + '">' + (a.url || '?') + '</a></div>'; }).join('');
     document.getElementById('access-v').innerHTML = v || '<span style="color:var(--muted)">no access points</span>';
+    // Single source of truth for the "Open SSO Portal" button.
+    var pub = access.find(function (a) { return a.scope === 'public'; });
+    var lan = access.find(function (a) { return a.scope === 'lan'; });
+    var target = (pub && pub.url) || (lan && lan.url) || '#';
+    var btn = document.getElementById('open-sso');
+    if (btn) btn.href = target;
   }).catch(function () {
     document.getElementById('access-v').innerHTML = '<span style="color:var(--muted)">unavailable</span>';
   });
