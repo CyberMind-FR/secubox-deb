@@ -1,3 +1,27 @@
+secubox-grafana (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * Apply dual-vhost MUST pattern (docs/MODULE-GUIDELINES.md §4):
+    /grafana/ on the canonical hub vhost is now `alias /usr/share/
+    secubox/www/grafana/` (static admin page), no longer a proxy to
+    the Grafana LXC. NEW dedicated vhost
+    `/etc/nginx/sites-available/grafana.conf` for
+    `grafana.gk2.secubox.in` (Authelia-gated) serves the real Grafana
+    UI at the root path so its absolute asset URLs resolve.
+  * Operator-side prerequisites for the new vhost: DNS record + TLS
+    cert + HAProxy ACL + mitmproxy route (documented in
+    nginx/grafana-vhost.conf header).
+  * grafanactl emit_access_json: real Grafana URLs — lan
+    `http://10.100.0.70:3000/` + public `https://grafana.gk2.secubox.in/`.
+    Default PUBLIC_HOSTNAME -> grafana.gk2.secubox.in.
+  * grafanactl config_get strips TOML inline comments. cmd_status
+    `""|""` duplicate pattern fixed to `""|list`.
+  * www/grafana/index.html: "native UI" button reads from /access.
+  * Grafana INI inside the LXC needs `serve_from_sub_path = false`
+    + `root_url = https://grafana.gk2.secubox.in/` for the new vhost;
+    update install-lxc.sh accordingly on next install/reload.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 10:31:00 +0200
+
 secubox-grafana (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * debian/rules: also install nginx/<m>.conf to /etc/nginx/secubox-routes.d/

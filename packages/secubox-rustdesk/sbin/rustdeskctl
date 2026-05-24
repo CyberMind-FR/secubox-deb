@@ -23,13 +23,20 @@ warn() { printf '%b[warn]%b %s\n' "$YELLOW" "$NC" "$*" >&2; }
 err()  { printf '%b[error]%b %s\n' "$RED" "$NC" "$*" >&2; }
 
 config_get() {
-    local key="$1" default="${2:-}"
+    # Strips TOML inline `# comment`, surrounding whitespace + quotes.
+    local key="$1" default="${2:-}" raw=""
     if [ -f "$CONFIG_FILE" ]; then
-        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null \
-            | head -1 | cut -d= -f2- | tr -d ' "' | tr -d "'" || echo "$default"
-    else
-        echo "$default"
+        raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1)
     fi
+    if [ -z "$raw" ]; then
+        echo "$default"
+        return
+    fi
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+        | tr -d '"' | tr -d "'")
+    if [ -z "$val" ]; then echo "$default"; else echo "$val"; fi
 }
 
 LXC_NAME=$(config_get "name" "rustdesk")
@@ -38,7 +45,7 @@ LXC_PATH=$(config_get "path" "/data/lxc")
 SIGNAL_PORT=$(config_get "hbbs_signal_tcp_port" "21116")
 RELAY_PORT=$(config_get "hbbr_relay_port" "21117")
 WEB_PORT=$(config_get "web_admin_port" "21114")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "rustdesk.gk2.secubox.in")
 
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
@@ -101,15 +108,19 @@ EOF
 }
 
 emit_access_json() {
+    # Real RustDesk web-admin URLs — NOT the /rustdesk/ admin subpath.
+    # The admin webui's "native UI" button reads `lan` / `public` via
+    # /access. We keep the historical `-web` suffix on the scope to
+    # distinguish from the signal/relay TCP exposure below.
     local lan_url public_url
-    lan_url="https://$(hostname -I | awk '{print $1}')/rustdesk/"
-    [ -n "$PUBLIC_HOSTNAME" ] && public_url="https://${PUBLIC_HOSTNAME}/rustdesk/" || public_url=""
+    lan_url="http://${LXC_IP}:${WEB_PORT}/"
+    [ -n "$PUBLIC_HOSTNAME" ] && public_url="https://${PUBLIC_HOSTNAME}/" || public_url=""
     cat <<EOF
 {
   "module": "rustdesk",
   "access": [
-    {"url": "$lan_url", "auth": "jwt|rustdesk-admin", "scope": "lan-web"}$( [ -n "$public_url" ] && echo ',' )
-    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "jwt|rustdesk-admin", "scope": "public-web"}\n' "$public_url" ),
+    {"url": "$lan_url", "auth": "lan-only",     "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
+    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "Authelia SSO", "scope": "public"}\n' "$public_url" ),
     {"url": "rustdesk://$LXC_IP:$SIGNAL_PORT", "auth": "preshared-key", "scope": "lan-signal"},
     {"url": "rustdesk://$LXC_IP:$RELAY_PORT",  "auth": "preshared-key", "scope": "lan-relay"}
   ]

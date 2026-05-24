@@ -29,20 +29,27 @@ err()   { printf '%b[error]%b %s\n'   "$RED"    "$NC" "$*" >&2; }
 
 # ── TOML config (best-effort, grep-style — same as giteactl) ─────────────────
 config_get() {
-    local key="$1" default="${2:-}"
+    # Strips TOML inline `# comment`, surrounding whitespace + quotes.
+    local key="$1" default="${2:-}" raw=""
     if [ -f "$CONFIG_FILE" ]; then
-        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null \
-            | head -1 | cut -d= -f2- | tr -d ' "' | tr -d "'" || echo "$default"
-    else
-        echo "$default"
+        raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1)
     fi
+    if [ -z "$raw" ]; then
+        echo "$default"
+        return
+    fi
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+        | tr -d '"' | tr -d "'")
+    if [ -z "$val" ]; then echo "$default"; else echo "$val"; fi
 }
 
 LXC_NAME=$(config_get "name" "grafana")
 LXC_IP=$(config_get "ip" "10.100.0.70")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "3000")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "grafana.gk2.secubox.in")
 
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 lxc_state() {
@@ -126,10 +133,12 @@ EOF
 }
 
 emit_access_json() {
+    # Real Grafana UI URLs — NOT the /grafana/ admin subpath. The admin
+    # webui's "Open Grafana" button reads this; single source of truth.
     local lan_url public_url
-    lan_url="https://$(hostname -I | awk '{print $1}')/grafana/"
+    lan_url="http://${LXC_IP}:${HTTP_PORT}/"
     if [ -n "$PUBLIC_HOSTNAME" ]; then
-        public_url="https://${PUBLIC_HOSTNAME}/grafana/"
+        public_url="https://${PUBLIC_HOSTNAME}/"
     else
         public_url=""
     fi
@@ -137,9 +146,9 @@ emit_access_json() {
 {
   "module": "grafana",
   "access": [
-    {"url": "$lan_url",    "auth": "jwt|grafana-admin", "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
+    {"url": "$lan_url",    "auth": "lan-only",     "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
     $( [ -n "$public_url" ] && cat <<PUB
-{"url": "$public_url", "auth": "jwt|grafana-admin", "scope": "public"}
+{"url": "$public_url", "auth": "Authelia SSO", "scope": "public"}
 PUB
 )
   ]
@@ -159,7 +168,7 @@ cmd_components() {
 cmd_status() {
     case "${1:-}" in
         --json) emit_status_json ;;
-        ""|"") emit_components_text ; echo ; emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])' ;;
+        ""|list) emit_components_text ; echo ; emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])' ;;
         *) err "unknown verb for 'status': $1"; exit 1 ;;
     esac
 }

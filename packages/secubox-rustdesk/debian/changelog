@@ -1,3 +1,29 @@
+secubox-rustdesk (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * Apply dual-vhost MUST pattern (docs/MODULE-GUIDELINES.md §4):
+    /rustdesk/ on the canonical hub vhost is now `alias /usr/share/
+    secubox/www/rustdesk/` (static admin page), no longer a proxy to
+    the RustDesk web admin LXC. NEW dedicated vhost
+    `/etc/nginx/sites-available/rustdesk.conf` for
+    `rustdesk.gk2.secubox.in` (Authelia-gated) serves the real web
+    admin at the root path.
+  * The signal/relay TCP/UDP ports (21115-21119) are unaffected —
+    they go through HAProxy stream-mode + nftables DNAT, not nginx.
+  * Operator-side prerequisites for the new vhost: DNS + TLS cert +
+    HAProxy ACL + mitmproxy route (documented in
+    nginx/rustdesk-vhost.conf header).
+  * rustdeskctl emit_access_json: real web-admin URLs — lan
+    `http://10.100.0.90:21114/` + public
+    `https://rustdesk.gk2.secubox.in/`. Scope renamed `lan-web` -> `lan`
+    and `public-web` -> `public` to match sibling modules (the
+    rustdesk:// scopes lan-signal/lan-relay stay as-is).
+    Default PUBLIC_HOSTNAME -> rustdesk.gk2.secubox.in.
+  * rustdeskctl config_get strips TOML inline comments.
+  * www/rustdesk/index.html: "native UI" button reads from /access,
+    skipping the rustdesk:// scopes (they're for the desktop client).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 10:32:00 +0200
+
 secubox-rustdesk (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * install-lxc.sh: detect host arch (arm64/amd64/armhf) and download the

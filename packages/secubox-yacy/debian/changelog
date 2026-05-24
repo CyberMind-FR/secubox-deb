@@ -1,3 +1,21 @@
+secubox-yacy (1.0.11-1~bookworm1) bookworm; urgency=medium
+
+  * Apply dual-vhost MUST pattern (docs/MODULE-GUIDELINES.md §4):
+    /yacy/ on the canonical hub vhost is now `alias /usr/share/secubox/
+    www/yacy/` (static admin page), no longer a proxy to the YaCy LXC.
+    The real YaCy admin UI keeps its dedicated vhost
+    yacy.gk2.secubox.in (was already in place).
+  * yacyctl emit_access_json: real YaCy URLs — lan
+    `http://10.100.0.80:8090/` + public `https://yacy.gk2.secubox.in/`
+    (drops the /yacy/ admin suffix that pointed at the broken proxy).
+    Default PUBLIC_HOSTNAME -> yacy.gk2.secubox.in.
+  * yacyctl config_get strips TOML inline comments (was concatenating
+    them into the value).
+  * www/yacy/index.html: "native UI" button reads its href from
+    /api/v1/yacy/access at runtime — single source of truth.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 10:30:00 +0200
+
 secubox-yacy (1.0.10-1~bookworm1) bookworm; urgency=medium
 
   * nginx/yacy-vhost.conf: move public vhost from yacy.maegia.tv to

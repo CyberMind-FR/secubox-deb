@@ -139,15 +139,17 @@
   });
 
   get('/access').then(d => {
+    var access = d.access || [];
     document.getElementById('access-v').innerHTML =
-      (d.access || []).map(a => '<div>' + a.scope + ': <a href="' + a.url + '">' + a.url + '</a></div>').join('');
+      access.map(a => '<div>' + a.scope + ': <a href="' + a.url + '">' + a.url + '</a></div>').join('');
+    // Single source of truth for the "native UI" button.
+    var pub = access.find(a => a.scope === 'public');
+    var lan = access.find(a => a.scope === 'lan');
+    var target = (pub && pub.url) || (lan && lan.url) || '#';
+    var btn = document.getElementById('open-native');
+    if (btn) { btn.href = target; btn.target = '_blank'; btn.rel = 'noopener'; }
   }).catch(() => {
     document.getElementById('access-v').textContent = 'unavailable';
-  });
-
-  document.getElementById('open-native').addEventListener('click', e => {
-    e.preventDefault();
-    window.location.href = '/grafana/';
   });
 })();
 </script>
