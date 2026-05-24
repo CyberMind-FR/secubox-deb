@@ -25,9 +25,12 @@ RATE_FILE="/tmp/secubox-ban-rate"
 STATUS_FILE="/tmp/secubox/led-status"
 STATE_FILE="/tmp/secubox/prev-state"
 
-# Brightness levels
-BRIGHTNESS_ACTIVE=100
-BRIGHTNESS_SLEEP=20
+# Brightness levels. Capped at 30 active / 5 sleep — IS31FL319X on the
+# MOCHAbin's i2c-1 bus errors with EIO above ~50 (the bus is shared with
+# other probes that NAK on absent addresses). See secubox-led for the
+# 2026-05-24 incident notes.
+BRIGHTNESS_ACTIVE=30
+BRIGHTNESS_SLEEP=5
 BRIGHTNESS=$BRIGHTNESS_SLEEP
 
 # Activity detection
