@@ -228,22 +228,25 @@ cmd_start() {
     echo "$mount" > "$CURRENT_MOUNT_FILE"
     rm -f "$NOW_PLAYING_FILE"
 
-    # Spawn rtl_fm | lame -> icecast2 via a small wrapper that uses
-    # ezstream OR a curl-PUT-to-source upload. v0.1.0 uses ezstream
-    # because its config is simpler than crafting our own SHOUT/Icy
-    # handshake. The wrapper lives at /usr/libexec/secubox/secubox-fmrelay-runner.
-    nohup /usr/libexec/secubox/secubox-fmrelay-runner \
+    # Spawn the rtl_fm | ffmpeg pipeline via the wrapper. `setsid` makes
+    # the wrapper its own session + process-group leader so cmd_stop can
+    # reliably `kill -- -$pid` and reap rtl_fm + ffmpeg in one shot —
+    # without it, the children inherit uvicorn's PG and the kill fails
+    # silently, leaving rtl_fm holding the USB and ffmpeg holding the
+    # icecast mount (next /start then hits "usb_claim_interface -6" +
+    # "icecast 403 Forbidden").
+    setsid nohup /usr/libexec/secubox/secubox-fmrelay-runner \
         "$freq" "$mount" "$bitrate" "$gain" "$ppm" \
-        >> /var/log/secubox/fmrelay-runner.log 2>&1 &
+        >> /var/log/secubox/fmrelay-runner.log 2>&1 < /dev/null &
     echo $! > "$RUNNER_PID"
 
     # Spawn redsea ICY pusher in parallel — separate rtl_fm at 171k
     # sample rate (RDS subcarrier needs that exact rate; the audio
     # side uses 48k). v0.1.0 accepts the dual-rtl_fm cost; v0.2 plan
-    # is to split a single stream with sox tee.
-    nohup /usr/libexec/secubox/secubox-fmrelay-icy \
+    # is to split a single stream with sox tee. Same setsid pattern.
+    setsid nohup /usr/libexec/secubox/secubox-fmrelay-icy \
         "$freq" "$mount" "$ppm" \
-        >> /var/log/secubox/fmrelay-icy.log 2>&1 &
+        >> /var/log/secubox/fmrelay-icy.log 2>&1 < /dev/null &
     echo $! > "$REDSEA_PID"
 
     sleep 1
@@ -253,20 +256,25 @@ cmd_start() {
 cmd_stop() {
     local rp ip
     rp=$(runner_pid); ip=$(redsea_pid)
+    # Send TERM to the whole process group of each wrapper (PGID == PID
+    # thanks to setsid in cmd_start), then escalate to KILL. This is
+    # what actually releases the USB dongle + the icecast SOURCE mount.
     if [[ -n "$rp" ]]; then
-        log "Killing runner pid $rp"
-        kill -TERM "$rp" 2>/dev/null || true
-        # Reap child grandchildren (rtl_fm, lame) — the wrapper traps
-        # SIGTERM and cleans up but be defensive.
-        sleep 1
-        kill -KILL "$rp" 2>/dev/null || true
+        log "Killing runner pgid $rp"
+        kill -TERM -- "-$rp" 2>/dev/null || kill -TERM "$rp" 2>/dev/null || true
     fi
     if [[ -n "$ip" ]]; then
-        log "Killing redsea-icy pid $ip"
-        kill -TERM "$ip" 2>/dev/null || true
-        sleep 0.5
-        kill -KILL "$ip" 2>/dev/null || true
+        log "Killing redsea-icy pgid $ip"
+        kill -TERM -- "-$ip" 2>/dev/null || kill -TERM "$ip" 2>/dev/null || true
     fi
+    sleep 1
+    [[ -n "$rp" ]] && { kill -KILL -- "-$rp" 2>/dev/null || kill -KILL "$rp" 2>/dev/null || true; }
+    [[ -n "$ip" ]] && { kill -KILL -- "-$ip" 2>/dev/null || kill -KILL "$ip" 2>/dev/null || true; }
+    # Belt-and-suspenders: nothing should still hold the RTL-SDR or
+    # the icecast SOURCE for our mount. If somehow rtl_fm/ffmpeg from
+    # a previous run leaked, mop them up by name (scoped to secubox).
+    pkill -KILL -u secubox -x rtl_fm 2>/dev/null || true
+    pkill -KILL -u secubox -x ffmpeg 2>/dev/null || true
     rm -f "$RUNNER_PID" "$REDSEA_PID" "$CURRENT_FREQ_FILE" "$CURRENT_MOUNT_FILE" "$NOW_PLAYING_FILE"
     emit_components_json
 }
