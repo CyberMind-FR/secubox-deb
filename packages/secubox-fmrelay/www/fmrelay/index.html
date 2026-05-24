@@ -67,6 +67,18 @@
     </a>
   </header>
 
+  <section class="card" style="margin-bottom: 1rem;">
+    <h3>Live preview</h3>
+    <p class="hint" style="margin-bottom: 0.5rem;">
+      Direct playback of the active LAN mount — handy to verify the stream
+      is healthy without leaving the dashboard.
+    </p>
+    <audio id="live-audio" controls preload="none" style="width: 100%; max-width: 500px;"></audio>
+    <div id="live-audio-meta" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted);">
+      no active mount
+    </div>
+  </section>
+
   <section class="cards">
     <article class="card">
       <h3>Status</h3>
@@ -180,6 +192,11 @@
       const target = (pub && pub.url) || (lan && lan.url) || "#";
       const btn = document.getElementById("open-webradio");
       if (btn) btn.href = target;
+
+      // Cache the LAN base for refreshLivePreview() (called by loadMounts
+      // once the mounts list is in — avoids relying on poll order).
+      window._fmrelayLanBase = (lan && lan.url) ? lan.url.replace(/\/$/, "") : "";
+      refreshLivePreview();
     } catch (e) {
       document.getElementById("access-v").innerHTML = `<span class="empty">${esc(e.message)}</span>`;
     }
@@ -209,6 +226,8 @@
     try {
       const d = await api("/mounts");
       const list = d.mounts || [];
+      window._fmrelayLastMounts = list;
+      refreshLivePreview();
       if (!list.length) {
         wrap.innerHTML = `<div class="empty">no active mounts${d.reason ? " — " + esc(d.reason) : ""}</div>`;
         return;
@@ -255,6 +274,24 @@
       btn.textContent = "Failed: " + e.message;
       setTimeout(() => { btn.textContent = "Stop"; btn.disabled = false; }, 4000);
     }
+  }
+
+  function refreshLivePreview() {
+    try {
+      const audio = document.getElementById("live-audio");
+      const meta  = document.getElementById("live-audio-meta");
+      const base  = window._fmrelayLanBase || "";
+      const mounts = window._fmrelayLastMounts || [];
+      const liveMount = mounts.find(m => (m.connected_sec || 0) > 0);
+      if (audio && base && liveMount) {
+        const url = base + liveMount.mount;
+        if (audio.getAttribute("src") !== url) audio.setAttribute("src", url);
+        if (meta) meta.textContent = `mount ${liveMount.mount} · ${liveMount.connected_sec}s · ${liveMount.content_type || ""}`;
+      } else if (audio) {
+        audio.removeAttribute("src");
+        if (meta) meta.textContent = "no active mount — start a relay below";
+      }
+    } catch (_) {}
   }
 
   function loadAll() {
