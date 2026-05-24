@@ -12,8 +12,9 @@
 
 set -euo pipefail
 
-# Brightness 100 works reliably with proper I2C delays
-readonly BRIGHTNESS=100
+# IS31FL319X EIO-safe ceiling on the MOCHAbin i2c-1 bus.
+# See packages/secubox-led-heartbeat/usr/sbin/secubox-led for context.
+readonly BRIGHTNESS=10
 readonly I2C_DELAY=0.03
 readonly RATE_FILE="/tmp/secubox-ban-rate"
 readonly STATUS_FILE="/tmp/secubox/led-status"

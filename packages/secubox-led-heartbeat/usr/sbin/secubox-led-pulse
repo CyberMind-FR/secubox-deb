@@ -4,7 +4,9 @@
 
 set -euo pipefail
 
-BRIGHTNESS=100
+# IS31FL319X EIO-safe ceiling on the MOCHAbin i2c-1 bus. See secubox-led
+# for the 2026-05-24 incident notes.
+BRIGHTNESS=10
 I2C_DELAY=0.15
 STATUS_FILE="/tmp/secubox/led-status"
 

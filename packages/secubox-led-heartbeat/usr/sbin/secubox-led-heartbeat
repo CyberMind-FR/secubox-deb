@@ -89,7 +89,11 @@ class LEDController:
             log.warning("No IS31FL3199 LEDs found - running in simulation mode")
 
     def set_rgb(self, led_num: int, r: int, g: int, b: int):
-        """Set RGB values for a LED (0-255 each)."""
+        """Set RGB values for a LED. Callers pass 0-255 per the COLORS
+        palette; we scale down to the IS31FL319X EIO-safe ceiling
+        (~10) before writing. Above ~50 the chip on the MOCHAbin's
+        i2c-1 bus errors out with -EIO and the LEDs freeze at their
+        last successful value (incident 2026-05-24)."""
         if not 1 <= led_num <= LED_COUNT:
             return
 
@@ -99,8 +103,15 @@ class LEDController:
             for color, value in values.items():
                 path = self.led_paths[led_num].get(color)
                 if path and path.exists():
+                    scaled = max(0, min(10, value * 10 // 255))
                     try:
-                        path.write_text(str(min(255, max(0, value))))
+                        path.write_text(str(scaled))
+                        # 30 ms between i2c writes — matches the bash
+                        # scripts. Without this, 9 channels written
+                        # back-to-back saturate the mv64xxx_i2c
+                        # controller and we get -EIO sprinkled across
+                        # random channels.
+                        time.sleep(0.03)
                     except PermissionError:
                         log.warning("No write access to %s", path)
 

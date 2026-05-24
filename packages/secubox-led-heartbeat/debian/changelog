@@ -1,3 +1,23 @@
+secubox-led-heartbeat (2.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Cap LED brightness at 10 (was 100) to keep the IS31FL319X chip on
+    the MOCHAbin's i2c-1 bus responsive. Pushing 100 or 255 saturates
+    the bus, the chip starts NACK'ing register writes with -EIO, and
+    the LEDs freeze at whatever value last got through — observed live
+    2026-05-24 with all three RGBs stuck plain green at 218/255/255.
+    Affected files:
+      - usr/sbin/secubox-led          (BRIGHTNESS 100 -> 10)
+      - usr/sbin/secubox-healthbump   (ACTIVE 100 -> 30, SLEEP 20 -> 5)
+      - usr/sbin/secubox-led-pulse    (BRIGHTNESS 100 -> 10)
+      - usr/sbin/secubox-led-heartbeat (python set_rgb now scales 0-255
+        callers down to 0-10 in write_text, and inserts a 30 ms sleep
+        between channels to give the i2c controller time to drain).
+    The misleading "BRIGHTNESS=100 works reliably" comment that the
+    code contradicted is replaced with an incident note pointing at
+    the EIO ceiling.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 08:35:00 +0200
+
 secubox-led-heartbeat (2.1.0-1~bookworm1) bookworm; urgency=medium
 
   * NEW: Activity-based brightness (ACTIVE=100, SLEEP=20)

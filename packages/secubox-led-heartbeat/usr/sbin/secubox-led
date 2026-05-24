@@ -10,12 +10,17 @@
 # Layers: hw|1|bottom, svc|2|middle, sec|3|top
 # Status: ok|green, warn|yellow, error|red, msg|blue, off
 #
-# Brightness value 10 is optimal for IS31FL3199 on Debian (255 causes I2C errors)
+# IS31FL319X on the MOCHAbin's i2c-1 bus errors with EIO above brightness
+# ~50 — pushing 100 or 255 saturates the bus, the next write fails with
+# `Setting an LED's brightness failed (-5)`, and the LEDs freeze at
+# whatever value last got through. Observed live 2026-05-24: green
+# channels at 218/255/255, blue/red writes returning EIO, all three
+# LEDs stuck plain green. Capping at 10 keeps writes reliable while
+# still being clearly visible on the front panel.
 
 set -euo pipefail
 
-# Brightness 100 works reliably with proper I2C delays
-readonly BRIGHTNESS=100
+readonly BRIGHTNESS=10
 readonly I2C_DELAY=0.03
 
 led_path() { echo "/sys/class/leds/$1:led$2/brightness"; }
