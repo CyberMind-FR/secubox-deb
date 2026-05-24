@@ -239,9 +239,14 @@ class HeartbeatDaemon:
         sys.exit(0)
 
     def pulse_brightness(self, phase: float) -> float:
-        """Calculate pulse brightness (sine wave 0.3-1.0)."""
+        """Calculate pulse brightness (sine wave 0.0-1.0 full swing).
+        Going all the way down to 0 makes the heartbeat visibly blink
+        the bottom LED off when LED2/LED3 are held constant by the
+        bumper — the previous 0.3-1.0 range only modulated 9-25 on
+        the IS31FL319X's brightness-30 ceiling and read as steady to
+        the eye."""
         import math
-        return 0.3 + 0.7 * (math.sin(phase * math.pi * 2) + 1) / 2
+        return (math.sin(phase * math.pi * 2) + 1) / 2
 
     def run(self):
         """Main daemon loop."""
