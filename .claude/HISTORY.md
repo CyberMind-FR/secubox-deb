@@ -2,6 +2,33 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-24
+
+### Module dual-vhost split — MUST pattern + lyrion/zigbee/authelia alignment
+
+Codified in `docs/MODULE-GUIDELINES.md` §4 (REQUIRED) + §5 (nginx
+template) + `.claude/PATTERNS.md` Pattern 12. Any module with a real
+upstream web UI MUST split:
+
+- `admin.gk2.secubox.in/<module>/` = SecuBox static admin page (calls `/api/v1/<module>/*`)
+- `<module>.gk2.secubox.in/` = real app at vhost root (so absolute asset URLs resolve)
+
+The admin page's `Open <App> UI →` button MUST read its href from
+`/api/v1/<module>/access` at runtime — never hardcode the public
+hostname. Reverse-proxying the app under `/<module>/` is now a
+forbidden anti-pattern (breaks LMS Material, Nextcloud, Grafana, …).
+
+Three modules aligned (master commits b1718788, d4adc1a3, 54da8a7c):
+
+- **secubox-lyrion 1.1.0** — `/lyrion/` rewritten as static admin; `lyrionctl` access URLs corrected (LAN `http://IP:9000/`, public `https://lyrion.gk2.secubox.in/`); `config_get` strips TOML inline comments; admin "Open Music UI" button now reads from `/access`.
+- **secubox-zigbee** — admin "Open Zigbee Manager" button reads from `/access`.
+- **secubox-authelia** — `autheliactl` same `config_get` + `emit_access_json` fixes; public hostname default `auth.maegia.tv` → `sso.gk2.secubox.in`; "Open SSO Portal" button reads from `/access`.
+
+Live on gk2 — all three return the same shape, all three admin pages
+behave identically. **Next**: nextcloud + audit grafana/yacy/rustdesk
+for the same anti-pattern.
+
+---
 ## 2026-05-22
 
 ### MOCHAbin mPCIe slot J5 — EP06 GPIO investigation runbook (Issue #345)

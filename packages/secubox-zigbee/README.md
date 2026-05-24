@@ -1,66 +1,66 @@
-# secubox-lyrion
+# secubox-zigbee
 
-[Lyrion Music Server](https://lyrion.org) (formerly Logitech Media Server /
-Squeezebox Server) for SecuBox, hosted in a Debian bookworm LXC at
-`10.100.0.100` on the SecuBox `br-lxc` bridge.
+[zigbee2mqtt](https://www.zigbee2mqtt.io) for SecuBox, hosted in a Debian
+bookworm LXC at `10.100.0.111` on the SecuBox `br-lxc` bridge. Coordinator
+radio is mounted into the LXC via the host's `/dev/secubox-zgb` symlink.
 
-Follows [`docs/MODULE-GUIDELINES.md`](../../docs/MODULE-GUIDELINES.md); opens
-the **HOSTING** layer of the SecuBox CTL grammar (sister to streamlitctl,
-metablogizerctl, etc.).
+Follows [`docs/MODULE-GUIDELINES.md`](../../docs/MODULE-GUIDELINES.md);
+opens the **MESH** layer of the SecuBox CTL grammar (sister to mqttctl,
+homeassistantctl, etc.).
+
+## URLs (dual-vhost split, per MODULE-GUIDELINES §4 REQUIRED)
+
+| URL | Role |
+| --- | --- |
+| `https://admin.gk2.secubox.in/zigbee/` | **SecuBox admin** — components / status / access / backups / restore. Static page calling `/api/v1/zigbee/*`. |
+| `https://zigbee.gk2.secubox.in/` | **Real zigbee2mqtt frontend** at vhost root, Authelia-gated. The admin page's `Open Zigbee Manager →` button points here (URL read from `/api/v1/zigbee/access` — do NOT hardcode). |
+| `http://10.100.0.111:8080/` | Inside the LXC, behind nginx — usually only useful for debugging from gk2 itself. |
 
 ## Quickstart
 
 ```bash
-apt install secubox-lyrion
-lyrionctl install       # provisions LXC at 10.100.0.100, installs Lyrion 9.0.4
-lyrionctl status        # green when LXC + daemon + host-api all up
+apt install secubox-zigbee
+# The package's install-lxc.sh provisions the LXC at 10.100.0.111,
+# installs zigbee2mqtt, mounts the radio, and starts the daemon.
+systemctl status secubox-zigbee   # green when host FastAPI + LXC + z2m + bridge all up
 ```
 
-Web admin at `http://10.100.0.100:9000/` (direct) or
-`https://<host>/lyrion/` (through the canonical hub vhost).
-
-## CTL — `lyrionctl`
-
-Three-fold + lifecycle (v1.0.0 ships install + reload; rest is v1.1.0):
+## API — `/api/v1/zigbee/` (Unix socket `/run/secubox/zigbee.sock`)
 
 ```text
-lyrionctl components | status | access [--json]
-lyrionctl install | reload | repair (1.1.0) | wizard (1.1.0) | uninstall (1.1.0)
-
-lyrionctl player    list | play <id> | pause <id> | next <id> | prev <id> | volume <id> <0-100>
-lyrionctl library   scan | refresh | status | wipe
-lyrionctl playlist  list | add <name> | remove <name> | tracks <name>
-lyrionctl plugin    list | install <name> | uninstall <name>
+GET  /healthz                  liveness
+GET  /components               three-fold: lxc, device, daemon, bridge
+GET  /status                   overall green | yellow | red
+GET  /access                   urls — public (Authelia), lan (direct), lan-mqtt
+GET  /backups                  list available z2m state snapshots
+POST /backup                   trigger a fresh snapshot (synchronous)
+POST /restore {id}             roll back to a snapshot (stops z2m, archives current,
+                               copies snapshot files, restarts z2m)
 ```
 
-## Music library
-
-The `[library]` section of `/etc/secubox/lyrion.toml` points to the host's
-music directory (default `/data/music`). On `lyrionctl install`, that path
-is bind-mounted read-only into the LXC at the same path. LMS scans +
-indexes from there; no writes to source files.
+The backup/restore surface (#373 → v2.6.0) lets the operator recover from
+a z2m database wipe — the failure mode behind the 2026-05-23 incident
+where a MQTT outage during reboot left z2m looping against EHOSTUNREACH
+and overwriting `database.db` with a 560 B coordinator-only file.
 
 ## Ports
 
 | Port | Proto | Use |
-|---|---|---|
-| 9000 | tcp | Web UI + JSON-RPC API (proxied via nginx `/lyrion/`) |
-| 9090 | tcp | CLI (telnet/netcat) |
-| 3483 | tcp+udp | slimproto (Squeezebox players discover/connect) |
-
-3483 is **NOT exposed publicly** — players are expected on the LAN. Add an
-nftables DNAT only if you have a remote Squeezebox.
+| --- | --- | --- |
+| 8080 | tcp | z2m frontend (proxied by nginx — admin via dedicated vhost) |
+| 1883 | tcp | MQTT broker reachable at `mqtt://10.100.0.110:1883` (separate `secubox-mqtt` LXC) |
 
 ## Files
 
 ```text
-/etc/secubox/lyrion.toml                  # operator config
-/etc/nginx/secubox.d/lyrion.conf          # /api/v1/lyrion/ + /lyrion/ iframe
-/etc/nginx/secubox-routes.d/lyrion.conf   # idem (canonical hub vhost)
-/usr/lib/secubox/lyrion/api/              # host FastAPI
-/usr/share/secubox/lib/lyrion/install-lxc.sh
-/usr/share/secubox/www/lyrion/            # SecuBox-themed iframe wrapper
-/usr/share/secubox/menu.d/80-lyrion.json
-/data/lxc/lyrion/                         # LXC rootfs (created by lyrionctl install)
-/data/music/                              # operator music library (bind-mounted)
+/etc/secubox/zigbee.toml                       # operator config (env vars: SECUBOX_LXC_IP, …)
+/etc/nginx/secubox.d/zigbee.conf               # /api/v1/zigbee/ + static /zigbee/ admin alias
+/etc/nginx/secubox-routes.d/zigbee.conf        # idem (canonical hub vhost include)
+/etc/nginx/sites-available/zigbee.conf         # dedicated zigbee.gk2.secubox.in vhost
+/usr/lib/secubox/zigbee/api/                   # host FastAPI
+/usr/share/secubox/www/zigbee/                 # SecuBox admin webui (static)
+/usr/share/secubox/menu.d/80-zigbee.json       # menu entry (mesh category)
+/usr/sbin/zigbee-backup, zigbee-restore        # host scripts (sudo NOPASSWD per package sudoers.d)
+/data/backup/zigbee/<UTC-timestamp>/           # hourly snapshots
+/data/lxc/zigbee/                              # LXC rootfs
 ```

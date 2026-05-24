@@ -476,6 +476,48 @@ Depends: ..., lxc, lxc-templates
 
 **CRITICAL: All module frontends MUST include the shared sidebar and CRT theme.**
 
+### MUST — dual-vhost split (modules with a real web UI)
+
+A module that wraps an upstream app with its own web UI (LMS, z2m,
+Authelia, Nextcloud, Grafana, …) MUST split the two surfaces on
+separate hostnames:
+
+| URL | Role |
+| --- | --- |
+| `https://admin.gk2.secubox.in/<module>/` | **SecuBox admin** — static page calling `/api/v1/<module>/*`. NEVER a `proxy_pass` to the app. |
+| `https://<module>.gk2.secubox.in/` | **Real app web UI** at the vhost root, Authelia-gated. |
+
+**Why** — upstream apps hardcode absolute asset paths (`/material/`,
+`/cometd/`, `/css/`, `/apps/`, `/public/`). Reverse-proxying under a
+subpath silently breaks every CSS/JS/RPC. The dedicated vhost serves
+the app at root so the absolute URLs resolve.
+
+**Single source of truth** — the `Open <App> UI →` button on the admin
+page reads its href from `/api/v1/<module>/access` at runtime. Never
+hardcode the public hostname in HTML. The `/access` endpoint is the
+only place the URL appears (see `lyrionctl`, `autheliactl` for the
+`emit_access_json` pattern).
+
+```js
+fetch('/api/v1/<module>/access').then(r => r.json()).then(d => {
+  const access = d.access || [];
+  const pub = access.find(a => a.scope === 'public');
+  const lan = access.find(a => a.scope === 'lan');
+  const btn = document.getElementById('open-app');
+  if (btn) btn.href = (pub && pub.url) || (lan && lan.url) || '#';
+});
+```
+
+**Forbidden anti-pattern** — `location /<module>/ { proxy_pass http://
+<lxc-ip>:<port>/; }` on the canonical hub vhost. Migrate any existing
+module still on this pattern (incident 2026-05-24, see secubox-lyrion
+v1.1.0 changelog).
+
+See `docs/MODULE-GUIDELINES.md` §4 (REQUIRED) and §5 (dual-vhost nginx
+template) for the full pattern.
+
+---
+
 ### Required CSS Includes
 ```html
 <head>

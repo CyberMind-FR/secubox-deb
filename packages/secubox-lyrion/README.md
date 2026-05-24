@@ -16,8 +16,14 @@ lyrionctl install       # provisions LXC at 10.100.0.100, installs Lyrion 9.0.4
 lyrionctl status        # green when LXC + daemon + host-api all up
 ```
 
-Web admin at `http://10.100.0.100:9000/` (direct) or
-`https://<host>/lyrion/` (through the canonical hub vhost).
+## URLs (dual-vhost split, per MODULE-GUIDELINES §4 REQUIRED)
+
+| URL | Role |
+| --- | --- |
+| `https://admin.gk2.secubox.in/lyrion/` | **SecuBox admin** — status / players / now-playing / rescan. Static page calling `/api/v1/lyrion/*`. |
+| `https://lyrion.gk2.secubox.in/` | **Real LMS Material UI** at vhost root, Authelia-gated. The admin page's `Open Lyrion Music UI →` button points here (URL read from `/api/v1/lyrion/access` — do NOT hardcode). |
+| `http://192.168.1.200:9000/` | LAN-only direct nginx vhost, no auth. Convenience for trusted-LAN players. |
+| `http://10.100.0.100:9000/` | Inside the LXC, behind nginx — usually only useful for debugging. |
 
 ## CTL — `lyrionctl`
 
