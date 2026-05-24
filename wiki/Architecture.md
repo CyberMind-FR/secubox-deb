@@ -119,12 +119,30 @@ Chaque module expose une API FastAPI sur socket Unix :
 
 Nginx reverse proxy unifie l'accès :
 
-```
+```text
 GET  /api/v1/<module>/<method>   # Lecture
 POST /api/v1/<module>/<method>   # Action
 ```
 
 Authentification JWT obligatoire sur tous les endpoints via `Depends(auth.require_jwt)`.
+
+### Dual-vhost split — REQUIRED pour les modules avec UI applicative
+
+Un module qui embarque une application avec sa propre interface web
+(LMS Material, zigbee2mqtt, Authelia, Nextcloud, Grafana, …) **DOIT**
+séparer ses deux surfaces sur des hôtes distincts :
+
+| URL | Rôle |
+| --- | --- |
+| `https://admin.gk2.secubox.in/<module>/` | Admin SecuBox (statique, appelle `/api/v1/<module>/*`) |
+| `https://<module>.gk2.secubox.in/` | App réelle servie à la racine du vhost, Authelia-gated |
+
+Reverse-proxy de l'app sous `/<module>/` casse silencieusement les
+URLs d'assets absolues (`/material/`, `/cometd/`, `/apps/`, `/public/`).
+Le bouton `Open <module> UI →` de la page admin lit son href depuis
+`/api/v1/<module>/access` au runtime — jamais hardcoded.
+
+Détails complets : [`docs/MODULE-GUIDELINES.md`](../docs/MODULE-GUIDELINES.md) §4 (REQUIRED) + §5.
 
 ---
 

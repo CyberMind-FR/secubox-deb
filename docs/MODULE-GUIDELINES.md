@@ -254,13 +254,62 @@ exposes — components / status / access — at the top of the page:
 
 Pulls live data from `/api/v1/<module>/components`, `/status`, `/access`.
 
-### Iframe pattern for LXC web UIs
+### REQUIRED: dual-vhost pattern for modules with a real web UI
 
-When the LXC daemon ships its own admin UI (Grafana, YaCy, RustDesk web
-console), embed it inside a SecuBox-themed iframe under `/<module>/`. The
-iframe target proxies through nginx to the LXC IP (see §5). Operator
-navigates dashboards via the SecuBox sidebar (`menu.d`), not the native
-chrome.
+When the module exposes a real web UI (LMS Material, z2m frontend,
+Authelia portal, Nextcloud, …), the two surfaces MUST be kept on
+separate hostnames:
+
+| URL | Role |
+| --- | --- |
+| `https://admin.gk2.secubox.in/<module>/` | **SecuBox admin** — static page calling `/api/v1/<module>/*`. NEVER a proxy to the app. |
+| `https://<module>.gk2.secubox.in/` | **Real app web UI** at the vhost root. Authelia-gated. |
+
+**Why this is mandatory:**
+
+Most apps hardcode absolute asset paths (LMS Material loads
+`/material/customcss/`, `/cometd/handshake`, `/css/`, `/js/`;
+Nextcloud loads `/apps/`, `/core/`; Grafana loads `/public/`). Reverse-
+proxying them under a `/<module>/` subpath drops the prefix on every
+asset request and the browser sees `text/html` 404s where it expects
+CSS/JS. The dedicated vhost serves the app at its root, so absolute
+URLs resolve correctly.
+
+The SecuBox admin under `/<module>/` is a **separate, static** page
+under SecuBox theming. Its job is to surface status, control actions
+(restart, rescan, …) and the `Open <App> UI →` button that points to
+the dedicated vhost.
+
+**Source-of-truth rule** — the `Open` button MUST read its URL from
+`/api/v1/<module>/access` at runtime; never hardcode the public
+hostname in the static HTML. The `/access` endpoint is the only
+place the hostname appears (see §6 for the access-emit pattern in
+`<module>ctl`).
+
+```html
+<!-- index.html — the "Open <App> UI" button -->
+<a class="btn primary" id="open-app" href="#" target="_blank" rel="noopener">
+  Open <App> UI →
+</a>
+```
+
+```js
+// JS — read /access and patch the button href on load
+fetch('/api/v1/<module>/access').then(r => r.json()).then(d => {
+  const access = d.access || [];
+  const pub = access.find(a => a.scope === 'public');
+  const lan = access.find(a => a.scope === 'lan');
+  const target = (pub && pub.url) || (lan && lan.url) || '#';
+  const btn = document.getElementById('open-app');
+  if (btn) btn.href = target;
+});
+```
+
+**Forbidden anti-pattern**: a single nginx `proxy_pass` from
+`/<module>/` to the LXC daemon. That always silently breaks an absolute
+asset path somewhere, sometimes only after a Material/skin/plugin
+upgrade. We hit this in #244 with LMS (incident 2026-05-24, see
+secubox-lyrion 1.1.0 changelog).
 
 ---
 
@@ -279,29 +328,44 @@ location /api/v1/<module>/ {
 }
 ```
 
-### LXC daemon iframe target
+### Module with a real web UI — REQUIRED dual-vhost split
+
+`/<module>/` on the canonical hub vhost serves the **static SecuBox
+admin** (via `alias`, not `proxy_pass`). The real app lives at its own
+vhost (`<module>.gk2.secubox.in`) which serves at the root path so
+absolute asset URLs resolve correctly.
 
 ```nginx
+# /etc/nginx/secubox.d/<module>.conf — on the canonical hub vhost
+
 location /api/v1/<module>/ {
-    proxy_pass http://unix:/run/secubox/<module>.sock:/;
+    auth_request /__sbx_auth_verify;
+    error_page 401 = @sbx_auth_login;
+    rewrite ^/api/v1/<module>/(.*)$ /$1 break;
+    proxy_pass http://unix:/run/secubox/<module>.sock;
     include /etc/nginx/snippets/secubox-proxy.conf;
 }
 
-# Native admin UI of the LXC daemon (iframe target)
+# SecuBox admin static page. NOT a proxy to the app.
 location /<module>/ {
-    proxy_pass http://10.100.0.XX:PORT/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
+    auth_request /__sbx_auth_verify;
+    error_page 401 = @sbx_auth_login;
+    alias /usr/share/secubox/www/<module>/;
+    index index.html;
+    try_files $uri $uri/ /<module>/index.html;
 }
 ```
 
-Daemon must be configured to serve from the `/<module>/` subpath
-(e.g. Grafana `serve_from_sub_path=true`).
+The dedicated vhost lives in `/etc/nginx/sites-available/<module>.conf`
+(template in `packages/secubox-<module>/nginx/<module>-vhost.conf`),
+listens on `0.0.0.0:9080` for `server_name <module>.gk2.secubox.in`,
+gates with `auth_request` and `proxy_pass`es to the LXC daemon at root.
+
+### Deprecated: iframe pattern / `proxy_pass /<module>/`
+
+Both patterns are now forbidden for modules with a real web UI. They
+silently break absolute asset URLs (see §4 REQUIRED). Existing modules
+still on those patterns are bugs to be migrated.
 
 ### Non-HTTP daemons (rustdesk, raw TCP/UDP)
 

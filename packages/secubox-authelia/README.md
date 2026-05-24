@@ -6,6 +6,18 @@ LXC at `10.100.0.20` on the SecuBox `br-lxc` bridge.
 Follows [`docs/MODULE-GUIDELINES.md`](../../docs/MODULE-GUIDELINES.md); opens
 the **AUTH-BRIDGE** sub-layer of the AUTH layer of the SecuBox CTL grammar.
 
+## URLs (dual-vhost split, per MODULE-GUIDELINES §4 REQUIRED)
+
+| URL | Role |
+| --- | --- |
+| `https://admin.gk2.secubox.in/authelia/` | **SecuBox admin** — components / status / cookies / access rules. Static page calling `/api/v1/authelia/*`. |
+| `https://sso.gk2.secubox.in/` | **Real Authelia login portal** at vhost root. All Authelia-gated vhosts (`*.gk2.secubox.in`) redirect 401 → here. The admin page's `Open SSO Portal →` button reads this URL from `/api/v1/authelia/access` — do NOT hardcode. |
+| `http://10.100.0.20:9091/` | Inside the LXC, behind nginx — debugging only. |
+
+The legacy `auth.maegia.tv` vhost is still supported via the same
+multi-cookie config (#272), but `sso.gk2.secubox.in` is the canonical
+public hostname since v1.0.9.
+
 ## Quickstart
 
 ```bash
@@ -14,9 +26,9 @@ autheliactl install       # provisions LXC + Authelia binary + secrets
 autheliactl status        # green when LXC + daemon + host-API all up
 ```
 
-Then point a browser at `https://auth.maegia.tv/` (DNS + HAProxy vhost must
-be operator-configured first — see `nginx/authelia-vhost.conf` for the
-exact incantation).
+Then point a browser at `https://sso.gk2.secubox.in/` (DNS + HAProxy
+vhost must be operator-configured first — see `nginx/authelia-vhost.conf`
+for the exact incantation).
 
 ## File backend = SecuBox single source of truth
 

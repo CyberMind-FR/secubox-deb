@@ -1,5 +1,44 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-21*
+*Mis à jour : 2026-05-24*
+
+---
+
+## ✅ 2026-05-24: Module dual-vhost MUST pattern + Lyrion/Zigbee/Authelia alignment (master 54da8a7c, b1718788, d4adc1a3)
+
+Codified the dual-vhost split as a **REQUIRED** rule in
+`docs/MODULE-GUIDELINES.md` §4 + `.claude/PATTERNS.md` Pattern 12:
+
+| URL | Role |
+| --- | --- |
+| `https://admin.gk2.secubox.in/<module>/` | SecuBox admin (static, calls `/api/v1/<module>/*`) |
+| `https://<module>.gk2.secubox.in/` | Real app web UI at vhost root, Authelia-gated |
+
+**Why** — LMS Material loads `/material/customcss/`, z2m `/api/`,
+Authelia `/api/firstfactor/`, Nextcloud `/apps/`. Reverse-proxying any
+of them under `/<module>/` silently breaks every absolute asset URL.
+Hit live on `admin.gk2.secubox.in/lyrion/`: 405 on `/cometd/handshake`,
+CSS served as text/html.
+
+**Source-of-truth rule** — `Open <App> UI →` button reads its href
+from `/api/v1/<module>/access` at runtime. Never hardcode the public
+hostname.
+
+Aligned three modules:
+
+- **lyrion 1.1.0** (b1718788, d4adc1a3) — `/lyrion/` is now static admin; `lyrion.gk2.secubox.in` keeps the real LMS Material UI. `lyrionctl` access URLs corrected (LAN `http://IP:9000/`, public `https://lyrion.gk2.secubox.in/`), `config_get` strips TOML inline comments (the bug that produced `http://IP:9000#webadminUI/`).
+- **zigbee** (54da8a7c) — `Open Zigbee Manager` button now dynamic from `/access`.
+- **authelia** (54da8a7c) — `autheliactl` same config_get + access_json fixes; public hostname default `auth.maegia.tv` → `sso.gk2.secubox.in`; `Open SSO Portal` button dynamic.
+
+Live verified — all three return same shape:
+
+```text
+lyrion   lan http://192.168.1.200:9000/  public https://lyrion.gk2.secubox.in/
+zigbee   lan http://10.100.0.111:8080/   public https://zigbee.gk2.secubox.in/
+authelia lan http://10.100.0.20:9091/    public https://sso.gk2.secubox.in/
+```
+
+**Next**: apply same pattern to `secubox-nextcloud` and audit
+`grafana/yacy/rustdesk` admin webuis for the same anti-pattern.
 
 ---
 
