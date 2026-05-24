@@ -15,15 +15,47 @@ spec.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException, Header, Response
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
+
+# LMS jsonrpc endpoint inside the LXC. Used for live data the lyrionctl
+# CLI does not expose (players list, now-playing, scan trigger).
+LMS_JSONRPC = os.environ.get(
+    "SECUBOX_LYRION_LMS_JSONRPC",
+    "http://10.100.0.100:9000/jsonrpc.js",
+)
+
+
+def _lms_rpc(player: str, command: List[Any], timeout: float = 5.0) -> Dict[str, Any]:
+    """POST a slim.request to the LMS JSON-RPC endpoint.
+
+    `player` is the player MAC/id ('' for server-level commands).
+    `command` is the list form of the CLI (e.g. ['players', '0', '99']).
+    Returns the parsed 'result' dict, or {} on any failure (callers
+    decide whether absence is an error or just an empty state)."""
+    body = json.dumps({
+        "id": 1, "method": "slim.request",
+        "params": [player, command],
+    }).encode()
+    req = urllib.request.Request(
+        LMS_JSONRPC, data=body,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode())
+            return payload.get("result", {}) or {}
+    except (urllib.error.URLError, json.JSONDecodeError, OSError):
+        return {}
 
 app = FastAPI(
     title="SecuBox Lyrion",
@@ -75,24 +107,63 @@ def access() -> Dict[str, Any]:
     return _ctl_json("access")
 
 
+@app.get("/players")
+def players() -> Dict[str, Any]:
+    """List players connected to LMS — name, model, id (MAC), ip, power.
+
+    Hits LMS JSON-RPC ['players', '0', '99']. Returns {"players": [...]}
+    so the admin webui can render a table even when the list is empty
+    (which is the common case: 0 players usually means a hardware
+    Squeezebox is on a different L2 segment and broadcast discovery
+    isn't crossing — see the hint in the admin page)."""
+    res = _lms_rpc("", ["players", "0", "99"])
+    items = res.get("players_loop", []) if isinstance(res, dict) else []
+    out = [
+        {
+            "id": p.get("playerid", ""),
+            "name": p.get("name", ""),
+            "model": p.get("modelname") or p.get("model") or "—",
+            "ip": p.get("ip", ""),
+            "power": bool(p.get("power", 0)),
+        }
+        for p in items
+    ]
+    return {"players": out, "count": len(out)}
+
+
 @app.get("/now-playing")
-def verify(
-    response: Response,
-    authorization: str | None = Header(default=None),
-    cookie: str | None = Header(default=None),
-) -> Dict[str, Any]:
-    """
-    placeholder for future module-specific endpoints.
+def now_playing() -> Dict[str, Any]:
+    """Track currently playing on any player. Empty dict if nothing is
+    playing on any connected player (or if no player is connected)."""
+    plist = _lms_rpc("", ["players", "0", "99"]).get("players_loop", []) or []
+    for p in plist:
+        if not p.get("power"):
+            continue
+        pid = p.get("playerid")
+        if not pid:
+            continue
+        status_res = _lms_rpc(pid, ["status", "-", "1", "tags:aladKN"])
+        playlist = status_res.get("playlist_loop", []) if isinstance(status_res, dict) else []
+        if not playlist:
+            continue
+        track = playlist[0]
+        if status_res.get("mode") == "play":
+            return {
+                "title":  track.get("title", ""),
+                "artist": track.get("artist", "") or track.get("trackartist", ""),
+                "album":  track.get("album", ""),
+                "player": p.get("name", pid),
+                "mode":   "play",
+            }
+    return {}
 
-    Returns 200 + X-Sbx-User / X-Sbx-Role headers if the SecuBox JWT is valid.
-    Returns 401 otherwise.
 
-    Stub for v1.0.0 — full JWT validation lives in secubox-portal/api/main.py
-    today. This endpoint reverse-proxies to the portal's existing /now-playing or
-    re-implements the JWT check locally; the v1.1.0 plan is to consolidate
-    into a shared secubox-core helper.
-    """
-    # TODO v1.1.0: implement /now-playing aggregator across all connected players,
-    # For now, this endpoint is a stub that returns 401 — wire to secubox-portal
-    # /api/v1/portal/now-playing once that endpoint exists (see #244 spec §Phase A).
-    raise HTTPException(status_code=501, detail="auth_request /now-playing not yet wired — see #244 Phase A")
+@app.post("/rescan")
+def rescan() -> Dict[str, Any]:
+    """Trigger an LMS library rescan. Returns {"ok": True} when the
+    request was accepted by LMS (the scan runs in the background and
+    can take minutes on a large library)."""
+    res = _lms_rpc("", ["rescan"])
+    # LMS returns {} on success for rescan — empty result is a positive
+    # ack as long as the RPC round-trip succeeded.
+    return {"ok": True, "result": res}

@@ -1,3 +1,33 @@
+secubox-lyrion (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * /lyrion/ on the canonical hub vhost is now a SecuBox admin webui,
+    NOT a reverse proxy to the LMS Material UI. The previous proxy_pass
+    to 10.100.0.100:9000 broke every LMS asset URL (/material/customcss,
+    /cometd/handshake, /css/...) because LMS hardcodes absolute paths
+    that lose the /lyrion/ prefix. The real music player still lives at
+    its own vhost lyrion.gk2.secubox.in where LMS serves at the root
+    and Material loads correctly — the admin page links to it via a
+    prominent "Open Lyrion Music UI" button.
+
+  * www/lyrion/index.html rewritten as a SecuBox admin panel: status
+    pill (green/yellow/red), components, access endpoints, now-playing
+    track, connected-players table, and a "Rescan library" action.
+    Polls every 15 s. No more iframe to /lyrion/d/... (which never had
+    a backend anyway).
+
+  * api/main.py: /players, /now-playing and /rescan are no longer stubs.
+    They hit LMS's JSON-RPC endpoint inside the LXC (slim.request) via
+    urllib — keeping the package dep set minimal. /now-playing scans
+    all powered-on players for the first one in play mode. /rescan
+    triggers an LMS scan that runs in the background.
+
+  * nginx/lyrion.conf rewritten: /lyrion/ is `alias /usr/share/secubox/
+    www/lyrion/` (static admin page) instead of `proxy_pass LMS`. Both
+    /api/v1/lyrion/ and /lyrion/ are gated by auth_request /__sbx_auth_
+    verify so the SecuBox SSO covers admin access.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 09:30:00 +0200
+
 secubox-lyrion (1.0.9-1~bookworm1) bookworm; urgency=medium
 
   * nginx/lyrion-vhost.conf: @sbx_auth_login redirects to
