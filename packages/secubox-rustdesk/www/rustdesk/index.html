@@ -95,14 +95,19 @@
   }).catch(() => { document.getElementById('status-v').textContent = 'unavailable'; });
 
   get('/access').then(d => {
+    var access = d.access || [];
     document.getElementById('access-v').innerHTML =
-      (d.access || []).map(a => '<div>' + a.scope + ': <span style="font-size:0.7rem">' + a.url + '</span></div>').join('');
+      access.map(a => '<div>' + a.scope + ': <span style="font-size:0.7rem">' + a.url + '</span></div>').join('');
+    // Single source of truth for the "native UI" button — point at the
+    // web admin URL (`public` HTTPS first, `lan` HTTP fallback). The
+    // rustdesk:// signal/relay scopes are skipped — they're for the
+    // client app, not the web admin.
+    var pub = access.find(a => a.scope === 'public');
+    var lan = access.find(a => a.scope === 'lan');
+    var target = (pub && pub.url) || (lan && lan.url) || '#';
+    var btn = document.getElementById('open-native');
+    if (btn) { btn.href = target; btn.target = '_blank'; btn.rel = 'noopener'; }
   }).catch(() => { document.getElementById('access-v').textContent = 'unavailable'; });
-
-  document.getElementById('open-native').addEventListener('click', e => {
-    e.preventDefault();
-    window.location.href = '/rustdesk/';
-  });
 })();
 </script>
 </body>

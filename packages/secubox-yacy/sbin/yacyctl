@@ -21,13 +21,20 @@ warn() { printf '%b[warn]%b %s\n' "$YELLOW" "$NC" "$*" >&2; }
 err()  { printf '%b[error]%b %s\n' "$RED" "$NC" "$*" >&2; }
 
 config_get() {
-    local key="$1" default="${2:-}"
+    # Strips TOML inline `# comment`, surrounding whitespace + quotes.
+    local key="$1" default="${2:-}" raw=""
     if [ -f "$CONFIG_FILE" ]; then
-        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null \
-            | head -1 | cut -d= -f2- | tr -d ' "' | tr -d "'" || echo "$default"
-    else
-        echo "$default"
+        raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1)
     fi
+    if [ -z "$raw" ]; then
+        echo "$default"
+        return
+    fi
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+        | tr -d '"' | tr -d "'")
+    if [ -z "$val" ]; then echo "$default"; else echo "$val"; fi
 }
 
 LXC_NAME=$(config_get "name" "yacy")
@@ -35,7 +42,7 @@ LXC_IP=$(config_get "ip" "10.100.0.80")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "8090")
 PEER_MODE=$(config_get "mode" "standalone")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "yacy.gk2.secubox.in")
 
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
@@ -90,15 +97,17 @@ EOF
 }
 
 emit_access_json() {
+    # Real YaCy admin URLs — NOT the /yacy/ admin subpath. The admin
+    # webui's "Open YaCy" button reads from this; single source of truth.
     local lan_url public_url
-    lan_url="https://$(hostname -I | awk '{print $1}')/yacy/"
-    [ -n "$PUBLIC_HOSTNAME" ] && public_url="https://${PUBLIC_HOSTNAME}/yacy/" || public_url=""
+    lan_url="http://${LXC_IP}:${HTTP_PORT}/"
+    [ -n "$PUBLIC_HOSTNAME" ] && public_url="https://${PUBLIC_HOSTNAME}/" || public_url=""
     cat <<EOF
 {
   "module": "yacy",
   "access": [
-    {"url": "$lan_url", "auth": "jwt|yacy-admin", "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
-    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "jwt|yacy-admin", "scope": "public"}\n' "$public_url" )
+    {"url": "$lan_url", "auth": "lan-only", "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
+    $( [ -n "$public_url" ] && printf '{"url": "%s", "auth": "Authelia SSO", "scope": "public"}\n' "$public_url" )
   ]
 }
 EOF
