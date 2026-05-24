@@ -67,8 +67,18 @@ mkdir -p "$STATE_DIR"
 
 icecast_running() { systemctl is-active --quiet icecast2 2>/dev/null; }
 rtl_fm_present() { command -v rtl_fm >/dev/null 2>&1; }
-lame_present() { command -v lame >/dev/null 2>&1; }
+ffmpeg_present() { command -v ffmpeg >/dev/null 2>&1; }
 redsea_present() { [[ -x /usr/libexec/secubox/secubox-redsea ]] || command -v redsea >/dev/null 2>&1; }
+
+# Pick the box's primary LAN IP so emit_access_json can publish a URL
+# that Lyrion + webradio listeners can actually reach. Falls back to
+# ICECAST_HOST when no LAN IP is detectable (containers, build env).
+lan_ip() {
+    local ip
+    ip=$(hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i !~ /^127\./ && $i ~ /\./) {print $i; exit}}')
+    [[ -z "$ip" ]] && ip="$ICECAST_HOST"
+    echo "$ip"
+}
 
 runner_pid() { [[ -f "$RUNNER_PID" ]] && cat "$RUNNER_PID" 2>/dev/null || echo; }
 runner_running() {
@@ -79,10 +89,10 @@ redsea_pid() { [[ -f "$REDSEA_PID" ]] && cat "$REDSEA_PID" 2>/dev/null || echo; 
 
 # ── Three-fold output ──────────────────────────────────────────────────────
 emit_components_json() {
-    local ic rl lm rs runner
+    local ic rl ff rs runner
     icecast_running       && ic="running"   || ic="stopped"
     rtl_fm_present        && rl="present"   || rl="missing"
-    lame_present          && lm="present"   || lm="missing"
+    ffmpeg_present        && ff="present"   || ff="missing"
     redsea_present        && rs="present"   || rs="missing"
     runner_running        && runner="running" || runner="idle"
     cat <<EOF
@@ -92,9 +102,9 @@ emit_components_json() {
   "components": [
     {"name": "icecast2", "state": "$ic",     "detail": "${ICECAST_HOST}:${ICECAST_PORT}"},
     {"name": "rtl_fm",   "state": "$rl",     "detail": "RTL-SDR FM demodulator"},
-    {"name": "lame",     "state": "$lm",     "detail": "MP3 encoder"},
+    {"name": "ffmpeg",   "state": "$ff",     "detail": "libmp3lame encoder + icecast SOURCE client"},
     {"name": "redsea",   "state": "$rs",     "detail": "RDS decoder (PI/PS/RT)"},
-    {"name": "runner",   "state": "$runner", "detail": "rtl_fm | lame pipe"}
+    {"name": "runner",   "state": "$runner", "detail": "rtl_fm | ffmpeg pipe"}
   ]
 }
 EOF
@@ -123,12 +133,15 @@ emit_access_json() {
     # Real mount URLs that consumers (Lyrion / webradio / VLC) hit.
     # The admin webui's "Open Webradio" button reads from /access per
     # MODULE-GUIDELINES §4 — never hardcode the URL in HTML.
-    local mount lan_url
+    # The host part is the box's LAN IP (auto-detected) so listeners
+    # outside the host (Lyrion in LXC, phones) can actually reach it.
+    local mount host lan_url
     mount=$([[ -f "$CURRENT_MOUNT_FILE" ]] && cat "$CURRENT_MOUNT_FILE" || echo "")
+    host=$(lan_ip)
     if [[ -n "$mount" ]]; then
-        lan_url="http://${ICECAST_HOST}:${ICECAST_PORT}/${mount}.mp3"
+        lan_url="http://${host}:${ICECAST_PORT}/${mount}.mp3"
     else
-        lan_url="http://${ICECAST_HOST}:${ICECAST_PORT}/"
+        lan_url="http://${host}:${ICECAST_PORT}/"
     fi
     cat <<EOF
 {
