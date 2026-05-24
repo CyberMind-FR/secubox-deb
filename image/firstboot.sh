@@ -468,6 +468,27 @@ systemctl enable nftables
 systemctl restart nftables 2>/dev/null || true
 ok "nftables configuré"
 
+# ── Kiosk safety net ────────────────────────────────────────────────
+# build-live-usb.sh touches /var/lib/secubox/.kiosk-enabled and enables
+# secubox-kiosk.service at build time, but those have been observed
+# missing from the booted image on bare-metal amd64 (user report
+# 2026-05-24 — operator had to run `secubox-kiosk-setup enable`
+# manually to land in kiosk mode). Call the setup helper at firstboot
+# if the sentinel isn't present — idempotent, leaves a working build
+# alone, recovers a broken one.
+if [[ -x /usr/sbin/secubox-kiosk-setup ]]; then
+    if [[ ! -f /var/lib/secubox/.kiosk-enabled ]]; then
+        log "Kiosk sentinel missing — running secubox-kiosk-setup enable"
+        if /usr/sbin/secubox-kiosk-setup enable --x11; then
+            ok "Kiosk enabled (X11)"
+        else
+            log "Kiosk enable failed — leaving in console mode"
+        fi
+    else
+        log "Kiosk sentinel already present, skipping setup"
+    fi
+fi
+
 log "=== First boot terminé ==="
 log "Interface : https://${HOSTNAME}/ ou https://$(hostname -I | awk '{print $1}')/"
 log "Login     : admin / ${ADMIN_PASS}"
