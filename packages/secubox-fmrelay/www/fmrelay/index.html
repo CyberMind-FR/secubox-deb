@@ -280,11 +280,13 @@
     try {
       const audio = document.getElementById("live-audio");
       const meta  = document.getElementById("live-audio-meta");
-      const base  = window._fmrelayLanBase || "";
       const mounts = window._fmrelayLastMounts || [];
       const liveMount = mounts.find(m => (m.connected_sec || 0) > 0);
-      if (audio && base && liveMount) {
-        const url = base + liveMount.mount;
+      if (audio && liveMount) {
+        // Use the HTTPS-proxied path (/fmrelay-stream/) so browsers
+        // don't block the audio request as mixed content. The actual
+        // icecast2 LAN URL stays in /access for VLC / Lyrion / etc.
+        const url = "/fmrelay-stream" + liveMount.mount;
         if (audio.getAttribute("src") !== url) audio.setAttribute("src", url);
         if (meta) meta.textContent = `mount ${liveMount.mount} · ${liveMount.connected_sec}s · ${liveMount.content_type || ""}`;
       } else if (audio) {
