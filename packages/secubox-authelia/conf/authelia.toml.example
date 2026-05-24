@@ -34,8 +34,9 @@ inactivity = "5m"
 enabled = false
 
 [exposure]
-# Public hostname for the Authelia login portal.
-public_hostname = "auth.maegia.tv"
+# Public hostname for the Authelia login portal. Used by the SecuBox
+# admin webui's "Open SSO Portal" button + the /access endpoint.
+public_hostname = "sso.gk2.secubox.in"
 waf_inspect     = true   # route through mitmproxy (canonical maegia.tv pattern)
 
 [oidc]
