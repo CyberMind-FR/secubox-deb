@@ -1,0 +1,33 @@
+Source: secubox-fmrelay
+Section: sound
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+
+Package: secubox-fmrelay
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         python3-uvicorn,
+         python3-fastapi,
+         rtl-sdr,
+         ffmpeg,
+         icecast2,
+         curl
+Recommends: secubox-sentinelle-gsm (>= 0.4)
+Description: SecuBox FM Relay — rtl_fm to Icecast MP3 mount with live RDS metadata
+ Captures FM broadcast audio with rtl_fm, encodes it to MP3 with ffmpeg
+ (libmp3lame), and feeds an Icecast2 mount that the SecuBox webradio
+ module serves and that Lyrion can ingest as a Favourite remote URL.
+ .
+ A parallel rtl_fm | redsea pipeline decodes the 57 kHz RDS subcarrier
+ (PI / PS / RT) and POSTs each RadioText update to Icecast2's admin
+ metadata endpoint so HTTP listeners see "Artist - Title" change live
+ in their player.
+ .
+ Shares the RTL-SDR with secubox-sentinelle-gsm. Don't run a GSM scan
+ or RDS sweep while a relay is active — the bus contention will crash
+ both. Cross-package device-claim coordination is a planned v0.2
+ follow-up.

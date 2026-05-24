@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gerald Kerma <devel@cybermind.fr>
+#
+# secubox-fmrelay-runner — rtl_fm → ffmpeg-libmp3lame → icecast2 mount.
+#
+# ffmpeg is the simplest path: it speaks the Icecast SOURCE protocol
+# natively (`icecast://`), encodes mp3 in one process and handles
+# reconnects on its own. ezstream + lame + curl would do the same in
+# three processes with a hand-rolled XML config — ffmpeg wins on
+# operability.
+#
+# Args (positional, all required): FREQ MOUNT BITRATE_KBPS GAIN_DB PPM
+# Reads ICECAST_HOST + ICECAST_PORT + ICECAST_SOURCE_PASS from env or
+# from /etc/secubox/fmrelay.toml (same TOML grep helper as fmrelayctl).
+
+set -euo pipefail
+
+FREQ="${1:?freq required (eg 103.9M)}"
+MOUNT="${2:?mount required (eg savoie)}"
+BITRATE="${3:-128}"
+GAIN="${4:-49}"
+PPM="${5:-0}"
+
+CONFIG_FILE="${SECUBOX_FMRELAY_CONFIG:-/etc/secubox/fmrelay.toml}"
+
+# Minimal TOML scalar reader (strips inline comments + quotes).
+toml_get() {
+    local key="$1" default="${2:-}" raw=""
+    [[ -f "$CONFIG_FILE" ]] && raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1)
+    if [[ -z "$raw" ]]; then echo "$default"; return; fi
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | tr -d '"' | tr -d "'")
+    [[ -z "$val" ]] && echo "$default" || echo "$val"
+}
+
+ICECAST_HOST="${ICECAST_HOST:-$(toml_get icecast_host 127.0.0.1)}"
+ICECAST_PORT="${ICECAST_PORT:-$(toml_get icecast_port 8000)}"
+ICECAST_PASS="${ICECAST_SOURCE_PASS:-$(toml_get icecast_source_pass hackme)}"
+
+trap 'echo "[runner] SIGTERM — stopping pipeline"; kill -- -$$ 2>/dev/null || true; exit 0' TERM INT
+
+echo "[runner] freq=$FREQ mount=$MOUNT bitrate=${BITRATE}k gain=${GAIN}dB ppm=$PPM"
+echo "[runner] icecast=http://${ICECAST_HOST}:${ICECAST_PORT}/${MOUNT}.mp3"
+
+# Pipeline:
+#  rtl_fm  ── narrowband-FM at 48 kS/s mono, gain GAIN, ppm PPM
+#    │
+#    ▼   raw S16LE mono PCM @ 48 kHz on stdout
+#  ffmpeg ── -f s16le -ar 48000 -ac 1 -i pipe:0
+#            -c:a libmp3lame -b:a ${BITRATE}k
+#            -f mp3 -content_type audio/mpeg
+#            icecast://source:PASS@HOST:PORT/MOUNT.mp3
+exec rtl_fm \
+        -f "$FREQ" \
+        -M fm \
+        -l 0 \
+        -A std \
+        -E deemp \
+        -s 48k \
+        -g "$GAIN" \
+        -p "$PPM" \
+        - \
+    | ffmpeg \
+        -hide_banner -loglevel warning \
+        -re \
+        -f s16le -ar 48000 -ac 1 -i pipe:0 \
+        -c:a libmp3lame -b:a "${BITRATE}k" \
+        -content_type audio/mpeg \
+        -ice_name "SecuBox FM Relay — ${MOUNT}" \
+        -ice_description "Live FM RDS stream from rtl_fm @ ${FREQ}" \
+        -ice_genre "Various" \
+        -f mp3 \
+        "icecast://source:${ICECAST_PASS}@${ICECAST_HOST}:${ICECAST_PORT}/${MOUNT}.mp3"

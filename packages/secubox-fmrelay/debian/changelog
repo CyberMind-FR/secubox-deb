@@ -1,0 +1,32 @@
+secubox-fmrelay (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release — closes #377.
+  * api/main.py: FastAPI on /run/secubox/fmrelay.sock with healthz /
+    version / status / components / access / mounts / now-playing /
+    start / stop. Delegates to fmrelayctl for the actual work.
+  * sbin/fmrelayctl: bash CTL surface following the lyrionctl pattern.
+    TOML config_get strips inline comments. emit_access_json returns
+    the real Icecast mount URL (lan) + webradio URL (public) so the
+    admin webui's "Open Webradio →" button can read its href from
+    /access at runtime (single source of truth, MODULE-GUIDELINES §4).
+  * sbin/secubox-fmrelay-runner: rtl_fm | ffmpeg-libmp3lame pipe to an
+    Icecast SOURCE mount. ffmpeg speaks icecast:// natively + handles
+    reconnects, much simpler than ezstream+curl.
+  * sbin/secubox-fmrelay-icy: separate rtl_fm @ 171kHz + redsea pipe
+    that POSTs RDS RT/PS as ICY metadata to Icecast2 admin endpoint.
+    Two rtl_fm processes share the dongle — v0.2 plan is to split a
+    single stream via sox tee.
+  * nginx/fmrelay.conf: /api/v1/fmrelay/ proxies to the unix socket;
+    /fmrelay/ aliases the static admin page. Both gated by
+    auth_request /__sbx_auth_verify per the dual-vhost MUST pattern.
+  * www/fmrelay/index.html: SecuBox admin with status pill, components,
+    access, now-playing, mounts table, manual start/stop form, and the
+    "Open Webradio →" button reading from /access.
+  * systemd/secubox-fmrelay.service: User=secubox, runs uvicorn on the
+    unix socket, NoNewPrivileges + ProtectHome hardening.
+  * conf/fmrelay.toml.example: icecast credentials + runner defaults +
+    webradio URL exposure.
+  * menu.d/72-fmrelay.json: registers under the "mesh" category with
+    📻 icon.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 11:00:00 +0200

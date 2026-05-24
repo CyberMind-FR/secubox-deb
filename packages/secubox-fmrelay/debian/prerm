@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+case "$1" in
+    remove|deconfigure|upgrade)
+        # Stop any active runner first (kills rtl_fm + ffmpeg + redsea pipes).
+        if [ -x /usr/sbin/fmrelayctl ]; then
+            /usr/sbin/fmrelayctl stop 2>/dev/null || true
+        fi
+        systemctl stop secubox-fmrelay.service 2>/dev/null || true
+        systemctl disable secubox-fmrelay.service 2>/dev/null || true
+        ;;
+esac
+#DEBHELPER#
+exit 0

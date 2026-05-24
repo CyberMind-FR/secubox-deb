@@ -1,0 +1,31 @@
+[Unit]
+Description=SecuBox FM Relay — host control plane API (issue #377)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/377
+After=network.target
+Requires=secubox-core.service
+# Soft dep: icecast2 must be up before any /start call can succeed,
+# but the API itself runs without it (it'll report `red` overall).
+Wants=icecast2.service
+After=icecast2.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+WorkingDirectory=/usr/lib/secubox/fmrelay
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/fmrelay.sock --log-level warning
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/run/secubox /var/lib/secubox/fmrelay /var/log/secubox
+
+[Install]
+WantedBy=multi-user.target
