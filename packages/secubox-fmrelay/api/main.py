@@ -45,18 +45,22 @@ app = FastAPI(
 
 
 def _ctl_json(*args: str) -> Dict[str, Any]:
-    """Invoke fmrelayctl with --json and parse the result."""
+    """Invoke fmrelayctl with --json and parse the result.
+
+    stderr is captured separately so human-readable log lines from
+    `log()` don't pollute the JSON parser on stdout. The captured
+    stderr is only surfaced when the call fails."""
     cmd = [CTL, *args, "--json"]
     try:
-        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=15)
+        proc = subprocess.run(cmd, capture_output=True, timeout=15, check=True)
     except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=f"fmrelayctl failed: {e.output!r}")
+        raise HTTPException(status_code=500, detail=f"fmrelayctl failed: {e.stderr!r}")
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail=f"fmrelayctl not found at {CTL}")
     try:
-        return json.loads(out.decode())
+        return json.loads(proc.stdout.decode())
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"fmrelayctl non-JSON: {e}; raw={out!r}")
+        raise HTTPException(status_code=500, detail=f"fmrelayctl non-JSON: {e}; stdout={proc.stdout!r}; stderr={proc.stderr!r}")
 
 
 def _ctl_text(*args: str) -> str:
