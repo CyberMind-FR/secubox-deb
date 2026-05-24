@@ -29,12 +29,27 @@ err()   { printf '%b[error]%b %s\n'   "$RED"    "$NC" "$*" >&2; }
 
 # ── TOML config (best-effort, grep-style — same as giteactl) ─────────────────
 config_get() {
-    local key="$1" default="${2:-}"
+    # Minimal TOML scalar read: strips inline `# comments`, surrounding
+    # whitespace, and the optional "..." / '...' quotes. The previous
+    # version concatenated comment text into the value (eg HTTP_PORT
+    # became `9000 # web admin UI` which then broke URL construction).
+    local key="$1" default="${2:-}" raw=""
     if [ -f "$CONFIG_FILE" ]; then
-        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null \
-            | head -1 | cut -d= -f2- | tr -d ' "' | tr -d "'" || echo "$default"
-    else
+        raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1)
+    fi
+    if [ -z "$raw" ]; then
         echo "$default"
+        return
+    fi
+    # value-after-equals, strip inline comment, trim whitespace, drop quotes
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+        | tr -d '"' | tr -d "'")
+    if [ -z "$val" ]; then
+        echo "$default"
+    else
+        echo "$val"
     fi
 }
 
@@ -42,7 +57,7 @@ LXC_NAME=$(config_get "name" "lyrion")
 LXC_IP=$(config_get "ip" "10.100.0.100")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "3000")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "lyrion.gk2.secubox.in")
 
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 lxc_state() {
@@ -130,10 +145,15 @@ EOF
 }
 
 emit_access_json() {
+    # Real LMS Music UI URLs — NOT the /lyrion/ admin subpath. The admin
+    # webui's "Open Music UI" button reads this; consistency comes from
+    # one source.
+    #   lan:    http://<host>:9000/   (direct nginx vhost, LAN-only)
+    #   public: https://<PUBLIC_HOSTNAME>/   (Authelia-gated dedicated vhost)
     local lan_url public_url
-    lan_url="https://$(hostname -I | awk '{print $1}')/lyrion/"
+    lan_url="http://$(hostname -I | awk '{print $1}'):${HTTP_PORT}/"
     if [ -n "$PUBLIC_HOSTNAME" ]; then
-        public_url="https://${PUBLIC_HOSTNAME}/lyrion/"
+        public_url="https://${PUBLIC_HOSTNAME}/"
     else
         public_url=""
     fi
@@ -141,9 +161,9 @@ emit_access_json() {
 {
   "module": "lyrion",
   "access": [
-    {"url": "$lan_url",    "auth": "jwt|lyrion-admin", "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
+    {"url": "$lan_url",    "auth": "lan-only",       "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
     $( [ -n "$public_url" ] && cat <<PUB
-{"url": "$public_url", "auth": "jwt|lyrion-admin", "scope": "public"}
+{"url": "$public_url", "auth": "Authelia SSO",   "scope": "public"}
 PUB
 )
   ]
@@ -163,7 +183,7 @@ cmd_components() {
 cmd_status() {
     case "${1:-}" in
         --json) emit_status_json ;;
-        ""|"") emit_components_text ; echo ; emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])' ;;
+        ""|list) emit_components_text ; echo ; emit_status_json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("overall:", d["overall"])' ;;
         *) err "unknown verb for 'status': $1"; exit 1 ;;
     esac
 }

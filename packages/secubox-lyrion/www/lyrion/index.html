@@ -71,7 +71,7 @@
       vhost — serving LMS at the root path is the only way the Material
       skin's absolute asset URLs load correctly.
     </p>
-    <a class="open-cta" href="https://lyrion.gk2.secubox.in/" target="_blank" rel="noopener">
+    <a class="open-cta" id="open-music-ui" href="#" target="_blank" rel="noopener">
       ▶ Open Lyrion Music UI →
     </a>
   </header>
@@ -179,15 +179,23 @@
   async function loadAccess() {
     try {
       const d = await api("/access");
-      const items = (d.access || []).map(a => [
+      const access = d.access || [];
+      const items = access.map(a => [
         escapeHtml(a.scope || "url"),
         `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.url)}</a>`
       ]);
       if (!items.length) {
         document.getElementById("access-v").innerHTML = `<div class="empty">none</div>`;
-        return;
+      } else {
+        setRows("access-v", items);
       }
-      setRows("access-v", items);
+      // Single source of truth for the "Open Music UI" button: prefer
+      // the `public` access entry (https + Authelia), fall back to lan.
+      const pub = access.find(a => a.scope === "public");
+      const lan = access.find(a => a.scope === "lan");
+      const target = (pub && pub.url) || (lan && lan.url) || "#";
+      const btn = document.getElementById("open-music-ui");
+      if (btn) btn.href = target;
     } catch (e) {
       document.getElementById("access-v").innerHTML = `<span class="empty">${escapeHtml(e.message)}</span>`;
     }
