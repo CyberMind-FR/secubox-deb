@@ -795,7 +795,16 @@ network:
     # This ensures we get an IP regardless of interface naming (eno1, enp2s0, etc.)
     # After first boot, secubox-net-detect rewrites this with proper WAN/LAN split.
 
-    # Match modern interface patterns (enp*, eno*, ens*, enx*)
+    # Match modern interface patterns (enp*, eno*, ens*, enx*).
+    # WAN fallback (closes #370): static 192.168.1.55/24 + gw
+    # 192.168.1.254 carried alongside DHCP. systemd-networkd accepts
+    # both — DHCP routes get the low metric (100), the static gets
+    # metric 1000, so DHCP wins when available and the static keeps
+    # the appliance reachable when DHCP fails. Caveat: if multiple
+    # interfaces match, both will try to claim 192.168.1.55 and one
+    # will fail with address-in-use; bare-metal boxes typically have
+    # one primary NIC, and multi-NIC operators run net-detect to
+    # refine the layout anyway.
     eth-dhcp:
       match:
         name: "en*"
@@ -806,8 +815,16 @@ network:
         use-routes: true
         route-metric: 100
       optional: true
+      addresses: [192.168.1.55/24]
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+      routes:
+        - to: default
+          via: 192.168.1.254
+          metric: 1000
 
-    # Match legacy interface patterns (eth0, eth1, etc.)
+    # Match legacy interface patterns (eth0, eth1, etc.) — same static
+    # WAN fallback rationale.
     eth-legacy:
       match:
         name: "eth*"
@@ -818,6 +835,13 @@ network:
         use-routes: true
         route-metric: 200
       optional: true
+      addresses: [192.168.1.55/24]
+      nameservers:
+        addresses: [1.1.1.1, 8.8.8.8]
+      routes:
+        - to: default
+          via: 192.168.1.254
+          metric: 1000
 
   wifis:
     # All WiFi interfaces (wlp*, wlan*, wl*)
