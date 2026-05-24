@@ -89,6 +89,20 @@ case "$1" in
             systemctl enable secubox-healthbump.timer 2>/dev/null || true
             systemctl enable secubox-led-pulse.service 2>/dev/null || true
         fi
+
+        # Neutralize a legacy unit deployed by hand on some boards
+        # (gk2, May 2026). secubox-led-health-bumper.service spawns a
+        # bash daemon at /usr/local/bin/secubox-led-health-bumper that
+        # competes with the python heartbeat for the same i2c chip:
+        # both writers driving the same channels saturates the bus and
+        # the LEDs freeze at the last successful value. The python
+        # heartbeat handles all three LEDs (LED1 health pulse, LED2
+        # threat, LED3 CPU) so the bumper is redundant — disable it
+        # if present.
+        if systemctl list-unit-files 2>/dev/null | grep -q '^secubox-led-health-bumper\.service'; then
+            systemctl disable --now secubox-led-health-bumper.service 2>/dev/null || true
+            echo "Disabled legacy secubox-led-health-bumper (redundant with heartbeat)."
+        fi
         ;;
 esac
 

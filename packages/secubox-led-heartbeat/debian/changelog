@@ -1,3 +1,21 @@
+secubox-led-heartbeat (2.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * pulse_brightness(): swing 0.0-1.0 instead of 0.3-1.0. At the
+    new IS31FL319X brightness ceiling (30), a 0.3 floor only modulated
+    the green channel between 9 and 25 — read as steady green to the
+    eye. Going all the way to 0 produces a visible heartbeat blink on
+    LED1 while LED2/LED3 stay held by their respective status colors.
+
+  * postinst: disable the legacy /etc/systemd/system/secubox-led-
+    health-bumper.service if found. That hand-deployed unit (gk2,
+    May 2026) spawns a bash daemon that competes with the python
+    heartbeat for the same i2c chip — both writers on the same
+    channels saturate the bus, the LEDs freeze, the pulse stops being
+    visible. The python heartbeat already handles LED1 (health pulse),
+    LED2 (threat) and LED3 (CPU); the bumper is redundant.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 09:00:00 +0200
+
 secubox-led-heartbeat (2.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Cap LED brightness at 10 (was 100) to keep the IS31FL319X chip on
