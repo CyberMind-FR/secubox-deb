@@ -3521,16 +3521,6 @@ else
   fi
 fi
 
-# Capture UUIDs — labels failed to resolve on at least one real UEFI
-# box (v2.12.x grub> shell symptom). Bake UUIDs into the embed-cfg
-# and grub.cfg so `search --fs-uuid` is used everywhere instead of
-# the fragile `search --label`. blkid is read AFTER mkfs.* so the
-# values are guaranteed fresh.
-udevadm settle 2>/dev/null || sleep 1
-ESP_UUID=$(blkid -s UUID -o value "${LOOP}p2" 2>/dev/null || echo "")
-LIVE_UUID=$(blkid -s UUID -o value "${LOOP}p3" 2>/dev/null || echo "")
-[[ -z "$ESP_UUID" || -z "$LIVE_UUID" ]] && err "Failed to read ESP/LIVE UUIDs from ${LOOP} after mkfs"
-log "ESP UUID=${ESP_UUID} LIVE UUID=${LIVE_UUID}"
 
 # Mount for file copy
 MNT="${WORK_DIR}/mnt"
@@ -3582,15 +3572,7 @@ insmod all_video
 insmod echo
 insmod gfxterm
 
-# Resolve LIVE partition by UUID — `search --label` failed silently on
-# real UEFI hardware (v2.12.x grub> shell). UUIDs are baked at build
-# time from blkid after mkfs.ext4, so this lookup is deterministic.
-search --no-floppy --fs-uuid ${LIVE_UUID} --set=live
-# Fallback: keep the label search as a second chance for firmware
-# that prefers labels (no-op if already set above).
-if [ -z "\$live" ]; then
-    search --no-floppy --label LIVE --set=live
-fi
+search --no-floppy --label LIVE --set=live
 
 # CRT-style menu colors (cyan on black, gold highlights)
 set menu_color_normal=cyan/black
@@ -3707,28 +3689,17 @@ fi
 
 cp "${MNT}/esp/boot/grub/grub.cfg" "${MNT}/esp/EFI/BOOT/grub.cfg"
 
-# Build GRUB EFI — use $cmdpath, the variable EFI firmware sets to the
-# directory it loaded BOOTX64.EFI from. /EFI/BOOT/grub.cfg sits right
-# next to BOOTX64.EFI on the ESP (script copies it there above), so
-# `configfile $cmdpath/grub.cfg` is a single-step lookup that doesn't
-# depend on filesystem labels or partition search — both of which
-# have failed on different real-hardware firmware over the v2.12.x
-# series. The full grub.cfg itself still does `search --label LIVE
-# --set=live` to find the squashfs partition, so that part is
-# unchanged.
+# Build GRUB EFI — verbatim from v2.10.3 (last known-good real UEFI
+# boot). Do NOT optimise this block: every "improvement" attempted in
+# the v2.12.x series (Secure Boot shim, $cmdpath, search --fs-uuid,
+# extra modules, multi-stage fallbacks) broke at least one piece of
+# hardware. Stay simple, stay shipped.
 GRUB_MODS="part_gpt part_msdos fat ext2 normal linux boot configfile loopback chain efi_gop efi_uga ls search search_label gfxterm all_video"
 
-cat > "${WORK_DIR}/grub-embed.cfg" <<EMBEDCFG
-# Try \$cmdpath first (set by firmware to dir of loaded .EFI). Falls
-# back to UUID-based search if \$cmdpath isn't usable.
-if [ -n "\$cmdpath" ]; then
-    configfile \$cmdpath/grub.cfg
-fi
-search --no-floppy --fs-uuid ${ESP_UUID} --set=root
-if [ -n "\$root" ]; then
-    configfile (\$root)/EFI/BOOT/grub.cfg
-fi
-echo "GRUB embed-cfg fallback failed: cmdpath=\$cmdpath root=\$root"
+cat > "${WORK_DIR}/grub-embed.cfg" <<'EMBEDCFG'
+search --no-floppy --label ESP --set=root
+set prefix=($root)/boot/grub
+configfile $prefix/grub.cfg
 EMBEDCFG
 
 grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
