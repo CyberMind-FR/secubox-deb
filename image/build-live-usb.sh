@@ -3688,18 +3688,19 @@ fi
 
 cp "${MNT}/esp/boot/grub/grub.cfg" "${MNT}/esp/EFI/BOOT/grub.cfg"
 
-# Build GRUB EFI — restored to the simple pre-e1a53297 working version.
-# The "hardened" variant added disk/usb/usbms/ahci/ata modules (none
-# exist in x86_64-efi — disks come from the EFI firmware) and a
-# multi-stage search fallback that landed in a grub> shell on real
-# UEFI hardware. This version was reported working on bare-metal
-# amd64 in v2.10.x and earlier; keep it as-is and don't gold-plate.
+# Build GRUB EFI — use $cmdpath, the variable EFI firmware sets to the
+# directory it loaded BOOTX64.EFI from. /EFI/BOOT/grub.cfg sits right
+# next to BOOTX64.EFI on the ESP (script copies it there above), so
+# `configfile $cmdpath/grub.cfg` is a single-step lookup that doesn't
+# depend on filesystem labels or partition search — both of which
+# have failed on different real-hardware firmware over the v2.12.x
+# series. The full grub.cfg itself still does `search --label LIVE
+# --set=live` to find the squashfs partition, so that part is
+# unchanged.
 GRUB_MODS="part_gpt part_msdos fat ext2 normal linux boot configfile loopback chain efi_gop efi_uga ls search search_label gfxterm all_video"
 
 cat > "${WORK_DIR}/grub-embed.cfg" <<'EMBEDCFG'
-search --no-floppy --label ESP --set=root
-set prefix=($root)/boot/grub
-configfile $prefix/grub.cfg
+configfile $cmdpath/grub.cfg
 EMBEDCFG
 
 grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
