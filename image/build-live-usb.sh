@@ -780,96 +780,37 @@ else
 # Uses two separate match patterns to avoid conflicts when multiple interfaces match
 # secubox-net-detect.service will generate proper config at first boot
 cat > "${ROOTFS}/etc/netplan/00-secubox.yaml" <<'NETPLAN'
-# /etc/netplan/00-secubox.yaml — SecuBox Live USB (Bare Metal) — Bootstrap Config
-# This is a minimal bootstrap configuration for real AMD64 hardware.
-# secubox-net-detect.service will generate the proper config at first boot.
+# /etc/netplan/00-secubox.yaml — SecuBox Live USB bootstrap.
 #
-# Strategy: Enable DHCP on ALL detected Ethernet interfaces initially.
-# secubox-net-detect will refine this to router mode (WAN + br-lan).
+# DHCP on every ethernet interface. That's it. Operators wire WiFi
+# and router-mode br-lan later via secubox-net-* tools.
+#
+# Earlier versions baked an empty `br-lan` bridge with a static
+# 192.168.1.1/24 address into the bootstrap. On bare-metal real
+# hardware the physical NIC went silent and only the phantom br-lan
+# showed an IP — networkd was honouring the static bridge but
+# something (predictable rename? secubox-net-detect leftover?)
+# stopped the DHCP request reaching the real cable. Stripping the
+# bridge + the wifi-with-empty-SSID block restores classic DHCP.
+# secubox-net-detect.service (disabled by default, no .wants/ link)
+# can still be run by hand once the operator has decided whether
+# this box is a router vs an endpoint.
 network:
   version: 2
   renderer: networkd
 
   ethernets:
-    # Bootstrap: Enable DHCP on all ethernet interfaces for initial connectivity
-    # This ensures we get an IP regardless of interface naming (eno1, enp2s0, etc.)
-    # After first boot, secubox-net-detect rewrites this with proper WAN/LAN split.
-
-    # Match modern interface patterns (enp*, eno*, ens*, enx*).
-    # WAN fallback (closes #370): static 192.168.1.55/24 + gw
-    # 192.168.1.254 carried alongside DHCP. systemd-networkd accepts
-    # both — DHCP routes get the low metric (100), the static gets
-    # metric 1000, so DHCP wins when available and the static keeps
-    # the appliance reachable when DHCP fails. Caveat: if multiple
-    # interfaces match, both will try to claim 192.168.1.55 and one
-    # will fail with address-in-use; bare-metal boxes typically have
-    # one primary NIC, and multi-NIC operators run net-detect to
-    # refine the layout anyway.
-    eth-dhcp:
+    # Match everything that *looks* like ethernet — covers enpXsY /
+    # enoX / ensX / enxAABBCC (USB ethernet) / ethX. All get DHCP.
+    eth-all:
       match:
-        name: "en*"
+        name: "e*"
       dhcp4: true
       dhcp6: false
       dhcp4-overrides:
         use-dns: true
         use-routes: true
-        route-metric: 100
       optional: true
-
-    # Match legacy interface patterns (eth0, eth1, etc.)
-    eth-legacy:
-      match:
-        name: "eth*"
-      dhcp4: true
-      dhcp6: false
-      dhcp4-overrides:
-        use-dns: true
-        use-routes: true
-        route-metric: 200
-      optional: true
-
-    # No-IP fallback is handled by secubox-net-fallback.service (ARP-probes
-    # common gateways, picks a free .250 IP in the discovered subnet). My
-    # earlier v2.12.1 attempt to bake `addresses: [192.168.1.55/24]` into
-    # both eth-dhcp and eth-legacy created an address-in-use collision when
-    # both matched the same NIC and broke netplan apply entirely on bare
-    # metal + VBox — boot console showed no IP at all (regressed even DHCP).
-    # Keep the netplan DHCP-only; trust net-fallback for the fallback path.
-
-  wifis:
-    # All WiFi interfaces (wlp*, wlan*, wl*)
-    all-wifi:
-      match:
-        name: "wl*"
-      dhcp4: true
-      dhcp4-overrides:
-        route-metric: 300
-        use-dns: true
-        use-routes: true
-      optional: true
-      access-points:
-        # Open networks (fallback)
-        "": {}
-
-  bridges:
-    # br-lan: Pre-defined but empty - secubox-net-detect populates interfaces
-    br-lan:
-      interfaces: []
-      addresses:
-        - 192.168.1.1/24
-      dhcp4: false
-      optional: true
-      parameters:
-        stp: false
-        forward-delay: 0
-
-# Note: At first boot, secubox-net-detect.service will:
-# 1. Detect board type (x64-baremetal) and available interfaces
-# 2. Determine WAN (first interface with link/DHCP response)
-# 3. Assign remaining interfaces to br-lan
-# 4. Rewrite this file with explicit interface names
-#
-# To force re-detection: rm /var/lib/secubox/.net-configured && reboot
 NETPLAN
 chmod 600 "${ROOTFS}/etc/netplan/00-secubox.yaml"
 fi  # end static-IP branch
