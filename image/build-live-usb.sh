@@ -141,8 +141,7 @@ fi
 
 # Required tools
 log "Checking dependencies..."
-apt-get install -y -qq debootstrap squashfs-tools \
-  grub-efi-amd64-bin grub-efi-amd64-signed grub-pc-bin shim-signed \
+apt-get install -y -qq debootstrap squashfs-tools grub-efi-amd64-bin grub-pc-bin \
   xorriso mtools dosfstools parted e2fsprogs live-boot 2>/dev/null || true
 
 for cmd in debootstrap parted mkfs.fat mkfs.ext4 mksquashfs grub-mkimage; do
@@ -3748,109 +3747,42 @@ fi
 
 cp "${MNT}/esp/boot/grub/grub.cfg" "${MNT}/esp/EFI/BOOT/grub.cfg"
 
-# ── Build GRUB EFI ────────────────────────────────────────────────────────
-# Module set tuned for booting from a USB stick / VM disk under both
-# OVMF (VirtualBox + qemu) and real UEFI firmware. The list MUST include
-# `disk`, `usb`, `usbms` so the firmware can hand off block IO; without
-# them OVMF drops to the EFI Shell PXE prompt instead of loading GRUB
-# (this was the v2.12.0/v2.12.1 regression — see issue #382 followup).
-GRUB_MODS="part_gpt part_msdos fat ext2 ntfs iso9660 normal linux boot \
-configfile loopback chain efi_gop efi_uga ls cat echo test help \
-search search_label search_fs_uuid search_fs_file \
-gfxterm gfxterm_background all_video gzio png jpeg font \
-fat exfat read sleep reboot halt true \
-disk usb usbms ahci ata loadenv minicmd terminal"
+# Build GRUB EFI — restored to the simple pre-e1a53297 working version.
+# The "hardened" variant added disk/usb/usbms/ahci/ata modules (none
+# exist in x86_64-efi — disks come from the EFI firmware) and a
+# multi-stage search fallback that landed in a grub> shell on real
+# UEFI hardware. This version was reported working on bare-metal
+# amd64 in v2.10.x and earlier; keep it as-is and don't gold-plate.
+GRUB_MODS="part_gpt part_msdos fat ext2 normal linux boot configfile loopback chain efi_gop efi_uga ls search search_label gfxterm all_video"
 
 cat > "${WORK_DIR}/grub-embed.cfg" <<'EMBEDCFG'
-# Fallback chain — label first (set by mkfs.fat -n ESP), then UUID,
-# then EFI's $cmdpath (the directory the .EFI was loaded from). Last
-# resort: hardcode the relative prefix so configfile can still find the
-# menu even if no var resolution worked.
-search --no-floppy --label ESP --set=root --no-floppy
-if [ -z "$root" ]; then
-    search --no-floppy --label LIVE --set=root --no-floppy
-fi
-if [ -n "$root" ]; then
-    set prefix=($root)/boot/grub
-else
-    set prefix=($cmdpath)/../../boot/grub
-fi
+search --no-floppy --label ESP --set=root
+set prefix=($root)/boot/grub
 configfile $prefix/grub.cfg
 EMBEDCFG
 
-# Build the EFI binary. Bail loudly if grub-mkimage fails — silent
-# failure leaves the ESP without BOOTX64.EFI and the box drops to PXE
-# at first boot, which is exactly the bug we just hit.
-if ! grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
-                  -O x86_64-efi \
-                  -c "${WORK_DIR}/grub-embed.cfg" \
-                  -p /boot/grub \
-                  --compress=xz \
-                  ${GRUB_MODS}; then
-    err "grub-mkimage failed — the image will not boot under EFI"
-fi
-[[ -s "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" ]] || err "BOOTX64.EFI missing or empty after grub-mkimage"
-EFI_SIZE=$(stat -c%s "${MNT}/esp/EFI/BOOT/BOOTX64.EFI")
-ok "BOOTX64.EFI built (${EFI_SIZE} bytes)"
+grub-mkimage -o "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" \
+  -O x86_64-efi \
+  -c "${WORK_DIR}/grub-embed.cfg" \
+  -p /boot/grub \
+  ${GRUB_MODS}
 
-# Mirror to /EFI/BOOT/grubx64.efi (some firmware looks for this name)
-# and to /EFI/secubox/grubx64.efi (lets `efibootmgr` register a named
-# entry once the live system is running, without clobbering /BOOT).
 cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/BOOT/grubx64.efi"
-mkdir -p "${MNT}/esp/EFI/secubox"
-cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/secubox/grubx64.efi"
 
-# Secure Boot assets: ship shim + signed grub alongside the unsigned
-# BOOTX64.EFI, but DON'T swap shim into BOOTX64.EFI.
-#
-# Rationale: shim requires Microsoft-signed keys enrolled in the firmware
-# to chainload grubx64.efi. OVMF / VirtualBox EFI ship without those keys
-# and Secure Boot off — shim refuses to hand off and the boot drops to
-# the EFI Shell / PXE. By keeping the unsigned grub-mkimage as
-# BOOTX64.EFI, every firmware (OVMF, VBox, real laptops with SB off)
-# loads grub directly.
-#
-# For Secure Boot ON systems: the firmware boot menu / efibootmgr can
-# point at /EFI/BOOT/shimx64.efi explicitly. Users opting into SB do
-# this once when registering the boot entry.
-SHIM_SRC="/usr/lib/shim/shimx64.efi.signed"
-GRUB_SIGNED_SRC="/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed"
-if [[ -f "$SHIM_SRC" && -f "$GRUB_SIGNED_SRC" ]]; then
-    cp "$SHIM_SRC"         "${MNT}/esp/EFI/BOOT/shimx64.efi"
-    cp "$GRUB_SIGNED_SRC"  "${MNT}/esp/EFI/BOOT/grubx64-signed.efi"
-    cp "$GRUB_SIGNED_SRC"  "${MNT}/esp/EFI/secubox/grubx64-signed.efi"
-    ok "Secure Boot assets shipped (shimx64.efi + grubx64-signed.efi alongside unsigned default)"
-else
-    log "Secure Boot assets not present — image boots fine without SB"
-    log "  (to enable: apt-get install shim-signed grub-efi-amd64-signed)"
-fi
-
-# EFI shell fallback — some OVMF builds drop into the shell on first
-# boot if no BootOrder is set. startup.nsh auto-runs the bootloader.
+# Add startup.nsh for EFI shell auto-boot (VirtualBox/OVMF compatibility)
 cat > "${MNT}/esp/startup.nsh" <<'STARTUPNSH'
 @echo -off
-echo "SecuBox Live — handing off to BOOTX64.EFI..."
 \EFI\BOOT\BOOTX64.EFI
 STARTUPNSH
 
-# Copy GRUB modules — only the bits BOOTX64.EFI's embedded prefix
-# might want to load on demand. Failure is non-fatal: we statically
-# linked everything we need above, this is belt-and-suspenders.
+# Copy GRUB modules
 cp /usr/lib/grub/x86_64-efi/*.mod "${MNT}/esp/boot/grub/x86_64-efi/" 2>/dev/null || true
 
-# ── BIOS GRUB ──────────────────────────────────────────────────────────────
-# Fail loudly here too — BIOS-only systems (older laptops, VBox legacy
-# default) silently won't boot if i386-pc grub isn't installed in the
-# BIOS-boot partition (p1, set bios_grub on).
-if ! grub-install --target=i386-pc \
-                  --boot-directory="${MNT}/esp/boot" \
-                  --recheck "${LOOP}" 2>&1 | tee "${WORK_DIR}/grub-install-bios.log"; then
-    cat "${WORK_DIR}/grub-install-bios.log"
-    err "BIOS grub-install failed — image will not boot on legacy systems"
-fi
+# Install BIOS GRUB
+grub-install --target=i386-pc --boot-directory="${MNT}/esp/boot" --recheck "${LOOP}" 2>/dev/null || warn "BIOS GRUB failed"
 cp /usr/lib/grub/i386-pc/*.mod "${MNT}/esp/boot/grub/i386-pc/" 2>/dev/null || true
 
-ok "GRUB installed (UEFI BOOTX64.EFI + BIOS i386-pc, dual-boot ready)"
+ok "GRUB installed (UEFI + BIOS)"
 
 # Persistence
 if [[ $INCLUDE_PERSISTENCE -eq 1 ]] && [[ -b "${LOOP}p4" ]]; then
