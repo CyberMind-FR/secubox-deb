@@ -377,8 +377,15 @@ enable_kiosk() {
     # Enable kiosk service
     systemctl enable secubox-kiosk.service
 
-    # Start kiosk
-    systemctl start secubox-kiosk.service || log "Kiosk will start on next boot"
+    # Start kiosk in the background so this caller doesn't block. The
+    # service has Conflicts=getty@tty7.service + TTYPath=/dev/tty7 and
+    # systemd will sometimes wait for /dev/tty7 to release / sync up,
+    # which deadlocks a synchronous `systemctl start` invoked from
+    # firstboot.sh (firstboot runs from inside the autologin shell on
+    # tty1 itself — observed live USB hang where kiosk-setup ran for
+    # 5+ minutes and the service stayed `inactive (dead)`).
+    systemctl --no-block start secubox-kiosk.service \
+        || log "Kiosk will start on next boot"
 
     ok "Kiosk mode enabled (${mode})"
     log "SecuBox WebUI will display on the connected screen"
