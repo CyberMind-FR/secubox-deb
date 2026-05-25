@@ -816,16 +816,8 @@ network:
         use-routes: true
         route-metric: 100
       optional: true
-      addresses: [192.168.1.55/24]
-      nameservers:
-        addresses: [1.1.1.1, 8.8.8.8]
-      routes:
-        - to: default
-          via: 192.168.1.254
-          metric: 1000
 
-    # Match legacy interface patterns (eth0, eth1, etc.) — same static
-    # WAN fallback rationale.
+    # Match legacy interface patterns (eth0, eth1, etc.)
     eth-legacy:
       match:
         name: "eth*"
@@ -836,13 +828,14 @@ network:
         use-routes: true
         route-metric: 200
       optional: true
-      addresses: [192.168.1.55/24]
-      nameservers:
-        addresses: [1.1.1.1, 8.8.8.8]
-      routes:
-        - to: default
-          via: 192.168.1.254
-          metric: 1000
+
+    # No-IP fallback is handled by secubox-net-fallback.service (ARP-probes
+    # common gateways, picks a free .250 IP in the discovered subnet). My
+    # earlier v2.12.1 attempt to bake `addresses: [192.168.1.55/24]` into
+    # both eth-dhcp and eth-legacy created an address-in-use collision when
+    # both matched the same NIC and broke netplan apply entirely on bare
+    # metal + VBox — boot console showed no IP at all (regressed even DHCP).
+    # Keep the netplan DHCP-only; trust net-fallback for the fallback path.
 
   wifis:
     # All WiFi interfaces (wlp*, wlan*, wl*)
@@ -2808,6 +2801,26 @@ INCOMPLETE_MODULES=(
   # them by hand once they wire the SDR / EP06.
   secubox-sentinelle-gsm
   secubox-fmrelay
+  # LXC-backed modules — their host control plane immediately tries to
+  # probe the container at 10.100.0.X over the br-lxc bridge. On live
+  # USB the LXC stack isn't initialised + the container doesn't exist,
+  # so the service fails the health probe and goes into restart-fail
+  # loop. Filled the boot console with [FAILED] lines and held up the
+  # multi-user target. Operators run install-lxc.sh once on a real
+  # install to provision the container, then `secubox-lxc-modules
+  # enable <name>` to lift the mask.
+  secubox-grafana
+  secubox-yacy
+  secubox-rustdesk
+  secubox-lyrion
+  secubox-authelia
+  secubox-mail
+  secubox-gitea
+  secubox-matrix
+  secubox-horde
+  secubox-mitmproxy
+  secubox-nextcloud
+  secubox-rbs-sensor
 )
 for svc in "${INCOMPLETE_MODULES[@]}"; do
   chroot "${ROOTFS}" systemctl disable ${svc}.service 2>/dev/null || true
