@@ -3,6 +3,15 @@ Description=SecuBox SENTINELLE-GSM — passive rogue-BTS analyzer (MIND layer)
 Documentation=file:///usr/share/doc/secubox-sentinelle-gsm/README
 After=network.target secubox-core.service
 Wants=secubox-core.service
+# Cap the restart storm: if start fails 3 times in 30s, give up
+# instead of looping forever. Observed live-USB regression — when the
+# RTL-SDR or its userspace stack is missing, Restart=on-failure +
+# RestartSec=5 spammed [FAILED] hundreds of times and blocked the
+# kiosk target from settling. StartLimitAction=none means we just
+# stop trying, not reboot the system.
+StartLimitIntervalSec=30
+StartLimitBurst=3
+StartLimitAction=none
 
 [Service]
 UMask=0007

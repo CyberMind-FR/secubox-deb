@@ -2803,6 +2803,11 @@ INCOMPLETE_MODULES=(
   secubox-newsbin
   secubox-ui-manager
   secubox-ui-health
+  # Hardware-gated modules — restart-storm on live USB without the
+  # physical RTL-SDR + GSM modem present. Operators install + enable
+  # them by hand once they wire the SDR / EP06.
+  secubox-sentinelle-gsm
+  secubox-fmrelay
 )
 for svc in "${INCOMPLETE_MODULES[@]}"; do
   chroot "${ROOTFS}" systemctl disable ${svc}.service 2>/dev/null || true
@@ -3769,23 +3774,29 @@ cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/BOOT/grubx64.efi"
 mkdir -p "${MNT}/esp/EFI/secubox"
 cp "${MNT}/esp/EFI/BOOT/BOOTX64.EFI" "${MNT}/esp/EFI/secubox/grubx64.efi"
 
-# Secure Boot: ship the Debian-signed shim + grub if they're available
-# on the builder. shim is what Microsoft trusts; it then verifies the
-# signed grubx64.efi we copy alongside. Firmware looks for
-# /EFI/BOOT/BOOTX64.EFI first, so when shim is present, point that at
-# shim and let it chainload grub.
+# Secure Boot assets: ship shim + signed grub alongside the unsigned
+# BOOTX64.EFI, but DON'T swap shim into BOOTX64.EFI.
+#
+# Rationale: shim requires Microsoft-signed keys enrolled in the firmware
+# to chainload grubx64.efi. OVMF / VirtualBox EFI ship without those keys
+# and Secure Boot off — shim refuses to hand off and the boot drops to
+# the EFI Shell / PXE. By keeping the unsigned grub-mkimage as
+# BOOTX64.EFI, every firmware (OVMF, VBox, real laptops with SB off)
+# loads grub directly.
+#
+# For Secure Boot ON systems: the firmware boot menu / efibootmgr can
+# point at /EFI/BOOT/shimx64.efi explicitly. Users opting into SB do
+# this once when registering the boot entry.
 SHIM_SRC="/usr/lib/shim/shimx64.efi.signed"
 GRUB_SIGNED_SRC="/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed"
 if [[ -f "$SHIM_SRC" && -f "$GRUB_SIGNED_SRC" ]]; then
-    log "Secure Boot assets present — installing shim as BOOTX64.EFI"
-    cp "$SHIM_SRC"         "${MNT}/esp/EFI/BOOT/BOOTX64.EFI"
-    cp "$GRUB_SIGNED_SRC"  "${MNT}/esp/EFI/BOOT/grubx64.efi"
-    cp "$GRUB_SIGNED_SRC"  "${MNT}/esp/EFI/secubox/grubx64.efi"
-    ok "Secure Boot shim wired (shimx64 -> grubx64.efi.signed)"
+    cp "$SHIM_SRC"         "${MNT}/esp/EFI/BOOT/shimx64.efi"
+    cp "$GRUB_SIGNED_SRC"  "${MNT}/esp/EFI/BOOT/grubx64-signed.efi"
+    cp "$GRUB_SIGNED_SRC"  "${MNT}/esp/EFI/secubox/grubx64-signed.efi"
+    ok "Secure Boot assets shipped (shimx64.efi + grubx64-signed.efi alongside unsigned default)"
 else
-    warn "Secure Boot shim not found — image won't boot with SB on"
-    warn "  missing: $SHIM_SRC OR $GRUB_SIGNED_SRC"
-    warn "  (install: apt-get install shim-signed grub-efi-amd64-signed)"
+    log "Secure Boot assets not present — image boots fine without SB"
+    log "  (to enable: apt-get install shim-signed grub-efi-amd64-signed)"
 fi
 
 # EFI shell fallback — some OVMF builds drop into the shell on first
