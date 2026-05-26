@@ -1,3 +1,22 @@
+secubox-waf (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Move expensive /stats, /alerts and /bans computations off the
+    request path. The threat log on a production board reaches 200 k+
+    entries (~50 MB); the old read-through cache (30 s TTL, lazy
+    compute) hit the request thread on every miss and a single scan
+    took longer than the TTL, so the cache never actually warmed.
+    Result on gk2: WAF dashboard rendering empty, HAProxy 504s on
+    /api/v1/waf/*, and the WAF process burning 50 % CPU continuously.
+  * New design: a single asyncio background task refreshes the warm
+    cache (stats + alerts tail + CrowdSec bans) every 30 s; endpoints
+    are now O(1) dict reads. The threat-log tail-reader uses a
+    seek-from-end of 512 KB instead of readlines() so memory does not
+    grow with log size. Cold-start (first request before the warm
+    task completes) falls back to a one-shot synchronous compute via
+    asyncio.to_thread so the dashboard is never blank.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 26 May 2026 12:00:00 +0000
+
 secubox-waf (1.1.1-1~bookworm1) bookworm; urgency=medium
 
   * /data convention migration (#319 Phase 1). All hardcoded /srv/<pkg>
