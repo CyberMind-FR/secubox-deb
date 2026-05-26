@@ -19,6 +19,7 @@ RestartSec=5
 # Security
 NoNewPrivileges=true
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 
 # Allow access to serial ports and modem devices

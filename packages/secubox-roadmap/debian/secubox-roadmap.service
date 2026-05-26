@@ -8,6 +8,7 @@ Type=simple
 User=secubox
 Group=secubox
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 WorkingDirectory=/usr/lib/secubox/roadmap
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/roadmap.sock --workers 1
 Restart=always

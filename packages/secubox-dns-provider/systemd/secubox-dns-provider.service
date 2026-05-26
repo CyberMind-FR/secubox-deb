@@ -15,6 +15,7 @@ UMask=0000
 PrivateTmp=true
 NoNewPrivileges=true
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 ProtectSystem=full
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox

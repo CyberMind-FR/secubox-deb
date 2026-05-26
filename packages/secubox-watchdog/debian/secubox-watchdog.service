@@ -14,6 +14,7 @@ RestartSec=5
 UMask=0000
 NoNewPrivileges=true
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 LogsDirectory=secubox
 LogsDirectoryMode=0755
