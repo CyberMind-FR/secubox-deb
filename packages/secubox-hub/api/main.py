@@ -11,6 +11,7 @@ from secubox_core.kiosk import (
 import subprocess
 import json
 import asyncio
+import os
 import time
 from pathlib import Path
 
@@ -1863,57 +1864,147 @@ app.include_router(router)
 
 # ══════════════════════════════════════════════════════════════════
 # Firewall Summary — nftables counters for SOC dashboard
-# Reads from cache files (/var/cache/secubox/nft-*.txt) updated by cron
+#
+# Cache (/var/cache/secubox/nft-*) is populated every 30s by
+# secubox-nft-cache.timer (shipped by this package). It is a speed
+# optimisation — the dashboard widget must never go blank because the
+# cache is missing or stale. If the cache file is absent or older than
+# NFT_CACHE_MAX_AGE seconds we fall back to a realtime `sudo nft list`
+# call AND nudge systemd to refresh the cache for the next request.
 # ══════════════════════════════════════════════════════════════════
+
+NFT_CACHE_DIR = "/var/cache/secubox"
+NFT_CACHE_MAX_AGE = 60  # seconds before we consider the cache stale
+
+
+def _parse_nft_counters(text: str) -> dict:
+    counters: dict = {}
+    current_counter = None
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("counter "):
+            parts = line.split()
+            if len(parts) >= 2:
+                current_counter = parts[1]
+        elif "packets" in line and current_counter:
+            parts = line.split()
+            for i, p in enumerate(parts):
+                if p == "packets" and i + 1 < len(parts):
+                    try:
+                        packets = int(parts[i + 1])
+                    except ValueError:
+                        break
+                    counters[current_counter] = counters.get(current_counter, 0) + packets
+                    break
+    return counters
+
+
+def _parse_nft_ruleset_json(text: str) -> tuple:
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return 0, 0, 0
+    nftables = data.get("nftables", [])
+    tables = sum(1 for x in nftables if "table" in x)
+    chains = sum(1 for x in nftables if "chain" in x)
+    rules = sum(1 for x in nftables if "rule" in x)
+    return tables, chains, rules
+
+
+def _read_if_fresh(path: str, max_age: int) -> str | None:
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    if (time.time() - st.st_mtime) > max_age:
+        return None
+    try:
+        with open(path, "r") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _nft_realtime(args: list) -> str | None:
+    """Run `sudo /usr/sbin/nft <args>` with a tight timeout. Returns
+    stdout on success, None on any failure. The sudoers fragment
+    shipped by this package whitelists `nft list *` for user secubox."""
+    try:
+        r = subprocess.run(
+            ["sudo", "-n", "/usr/sbin/nft"] + args,
+            capture_output=True, text=True, timeout=3,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    if r.returncode != 0:
+        return None
+    return r.stdout
+
+
+def _trigger_cache_refresh() -> None:
+    """Fire-and-forget systemctl start of the cache populator. Used
+    when we just served a realtime response so the next request lands
+    on a hot cache. The hub runs as user `secubox`; the sudoers
+    fragment shipped by this package whitelists the start of this one
+    specific unit, password-less."""
+    try:
+        subprocess.Popen(
+            ["sudo", "-n", "/usr/bin/systemctl", "--no-block", "start",
+             "secubox-nft-cache.service"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except (FileNotFoundError, OSError):
+        pass
+
+
 @public_router.get("/firewall_summary")
 async def firewall_summary():
-    """Get nftables stats for the SOC dashboard.
+    """nftables stats for the SOC dashboard widget.
 
-    Reads cache files populated every 30 s by secubox-nft-cache.timer.
-    Also surfaces the systemd state of nftables.service so the
-    dashboard widget can show ACTIVE/INACTIVE accurately (operator
-    report: 'Status INACTIVE' while 7 tables / 10 chains / 19 rules
-    were loaded — the kernel had the rules but the endpoint never
-    returned a status field, so the React bundle defaulted to
-    INACTIVE)."""
+    Strategy: cache-first, realtime-fallback.
+
+    1. If the JSON ruleset and counters cache files exist AND are fresh
+       (mtime within NFT_CACHE_MAX_AGE), parse them — fast path, no
+       privileged calls.
+    2. Otherwise call `sudo nft list ruleset -j` / `sudo nft list
+       counters` directly (sudoers fragment authorises this for user
+       secubox), and trigger the cache populator service in the
+       background so the next request is fast again.
+
+    The widget therefore stays populated even when the timer hasn't
+    run yet (fresh boot) or when the cache populator has been
+    masked / failing."""
     try:
-        counters = {}
-        try:
-            with open("/var/cache/secubox/nft-counters.txt", "r") as f:
-                current_counter = None
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("counter "):
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            current_counter = parts[1]
-                    elif "packets" in line and current_counter:
-                        parts = line.split()
-                        for i, p in enumerate(parts):
-                            if p == "packets" and i + 1 < len(parts):
-                                packets = int(parts[i + 1])
-                                counters[current_counter] = counters.get(current_counter, 0) + packets
-                                break
-        except FileNotFoundError:
-            pass
+        ruleset_path = os.path.join(NFT_CACHE_DIR, "nft-ruleset.json")
+        counters_path = os.path.join(NFT_CACHE_DIR, "nft-counters.txt")
+        lastrun_path = os.path.join(NFT_CACHE_DIR, "nft-cache.lastrun")
 
+        ruleset_text = _read_if_fresh(ruleset_path, NFT_CACHE_MAX_AGE)
+        counters_text = _read_if_fresh(counters_path, NFT_CACHE_MAX_AGE)
+
+        source = "cache"
+        if ruleset_text is None or counters_text is None:
+            source = "realtime"
+            # `-j` is a global option for nft and must come before the
+            # command. The sudoers fragment shipped by this package
+            # whitelists both `nft list *` and `nft -j list *`.
+            rt_ruleset = _nft_realtime(["-j", "list", "ruleset"])
+            rt_counters = _nft_realtime(["list", "counters"])
+            if rt_ruleset is not None:
+                ruleset_text = rt_ruleset
+            if rt_counters is not None:
+                counters_text = rt_counters
+            _trigger_cache_refresh()
+
+        tables = chains = rules = 0
+        if ruleset_text:
+            tables, chains, rules = _parse_nft_ruleset_json(ruleset_text)
+
+        counters = _parse_nft_counters(counters_text) if counters_text else {}
         processed = counters.get("processed", 0)
         dropped = sum(v for k, v in counters.items() if "blacklist" in k.lower())
 
-        # Table / chain / rule counts from JSON cache.
-        tables, chains, rules = 0, 0, 0
-        try:
-            with open("/var/cache/secubox/nft-ruleset.json", "r") as f:
-                data = json.loads(f.read())
-                nftables = data.get("nftables", [])
-                tables = sum(1 for x in nftables if "table" in x)
-                chains = sum(1 for x in nftables if "chain" in x)
-                rules = sum(1 for x in nftables if "rule" in x)
-        except FileNotFoundError:
-            pass
-
-        # Systemd state of nftables.service. `systemctl is-active`
-        # works for unprivileged users.
+        # systemd state of nftables.service.
         status = "inactive"
         try:
             r = subprocess.run(
@@ -1924,16 +2015,14 @@ async def firewall_summary():
                 status = "active"
         except Exception:
             pass
-        # If rules are loaded in the kernel but systemd reports inactive
-        # (rules came from a manual `nft -f` during firstboot), treat
-        # that as effectively active for dashboard purposes — operators
-        # want to see "the firewall is up" if there are rules in place.
+        # Rules in the kernel but systemd inactive (e.g. firstboot
+        # loaded them with `nft -f`) — surface as active for the widget.
         if status == "inactive" and rules > 0:
             status = "active-manual"
 
         last_cache_run = None
         try:
-            with open("/var/cache/secubox/nft-cache.lastrun", "r") as f:
+            with open(lastrun_path, "r") as f:
                 last_cache_run = f.read().strip()
         except FileNotFoundError:
             pass
@@ -1948,6 +2037,7 @@ async def firewall_summary():
             "accepted": processed - dropped if processed > dropped else 0,
             "counters": counters,
             "cache_last_run": last_cache_run,
+            "source": source,
         }
     except Exception as e:
         return {"error": str(e), "status": "error", "tables": 0, "chains": 0, "rules": 0, "dropped": 0, "accepted": 0, "processed": 0}

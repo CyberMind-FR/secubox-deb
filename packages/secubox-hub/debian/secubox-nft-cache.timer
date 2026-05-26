@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox nftables cache populator timer (every 30s)
+Documentation=https://secubox.in/docs/soc
+
+[Timer]
+OnBootSec=10s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=secubox-nft-cache.service
+
+[Install]
+WantedBy=timers.target

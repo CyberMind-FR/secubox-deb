@@ -478,52 +478,14 @@ systemctl enable nftables
 systemctl restart nftables 2>/dev/null || true
 ok "nftables configuré"
 
-# ── 12bis. nftables cache populator (powers SOC firewall_summary endpoint) ──
-# /api/v1/hub/public/firewall_summary reads /var/cache/secubox/nft-*.txt
-# expecting a cron to populate them. The cron was never created → all
-# counters showed 0 + status INACTIVE on the SOC dashboard. Ship a tiny
-# systemd timer that runs `nft list ruleset -j` + `nft list counters`
-# every 30 s as root and writes the cache files the endpoint expects.
-mkdir -p /var/cache/secubox
-cat > /usr/local/bin/secubox-nft-cache <<'NFTCACHE'
-#!/bin/sh
-# SecuBox nftables cache populator — fed to /api/v1/hub/public/firewall_summary
-set -e
-mkdir -p /var/cache/secubox
-nft -j list ruleset > /var/cache/secubox/nft-ruleset.json 2>/dev/null || true
-nft list counters > /var/cache/secubox/nft-counters.txt 2>/dev/null || true
-# Touch a status sentinel so the endpoint knows the cache is fresh.
-date -Iseconds > /var/cache/secubox/nft-cache.lastrun
-NFTCACHE
-chmod +x /usr/local/bin/secubox-nft-cache
-
-cat > /etc/systemd/system/secubox-nft-cache.service <<'NFTCACHE_SVC'
-[Unit]
-Description=SecuBox nftables cache populator (runs every 30s via timer)
-Documentation=https://secubox.in/docs/soc
-After=nftables.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/secubox-nft-cache
-NFTCACHE_SVC
-
-cat > /etc/systemd/system/secubox-nft-cache.timer <<'NFTCACHE_TIMER'
-[Unit]
-Description=SecuBox nftables cache populator timer (every 30s)
-
-[Timer]
-OnBootSec=10s
-OnUnitActiveSec=30s
-AccuracySec=5s
-
-[Install]
-WantedBy=timers.target
-NFTCACHE_TIMER
-
-systemctl daemon-reload
-systemctl enable --now secubox-nft-cache.timer 2>/dev/null || true
-ok "nftables cache timer installed (powers SOC dashboard)"
+# The nftables cache timer/service that powers the SOC firewall_summary
+# widget is now shipped by the secubox-hub package itself (it owns the
+# consuming endpoint). See:
+#   packages/secubox-hub/debian/secubox-nft-cache.service
+#   packages/secubox-hub/debian/secubox-nft-cache.timer
+#   packages/secubox-hub/sbin/secubox-nft-cache
+# Each module that needs cached external state ships its own
+# cache-populator + timer; firstboot stays platform-only.
 
 # ── Kiosk safety net ────────────────────────────────────────────────
 # build-live-usb.sh touches /var/lib/secubox/.kiosk-enabled and enables

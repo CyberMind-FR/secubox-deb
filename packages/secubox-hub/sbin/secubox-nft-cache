@@ -1,0 +1,14 @@
+#!/bin/sh
+# SecuBox nftables cache populator
+# Feeds /var/cache/secubox/nft-* files consumed by
+# /api/v1/hub/public/firewall_summary. The endpoint falls back to
+# realtime `nft list` (via sudo) when the cache is missing/stale,
+# so this populator is a SPEED OPTIMISATION — not a source of truth.
+set -e
+mkdir -p /var/cache/secubox
+chmod 755 /var/cache/secubox
+nft -j list ruleset > /var/cache/secubox/nft-ruleset.json.new 2>/dev/null \
+    && mv /var/cache/secubox/nft-ruleset.json.new /var/cache/secubox/nft-ruleset.json
+nft list counters > /var/cache/secubox/nft-counters.txt.new 2>/dev/null \
+    && mv /var/cache/secubox/nft-counters.txt.new /var/cache/secubox/nft-counters.txt
+date -Iseconds > /var/cache/secubox/nft-cache.lastrun
