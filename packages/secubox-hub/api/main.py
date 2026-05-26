@@ -1911,24 +1911,34 @@ def _parse_nft_ruleset_json(text: str) -> tuple:
     return tables, chains, rules
 
 
-def _read_if_fresh(path: str, max_age: int) -> str | None:
+def _read_cache(path: str, max_age: int | None = None) -> tuple:
+    """Return (contents, age_seconds) or (None, None) if unreadable.
+    When max_age is given, also return (None, age) if older than that —
+    callers can still use the stale contents by reading the file again
+    with max_age=None."""
     try:
         st = os.stat(path)
     except FileNotFoundError:
-        return None
-    if (time.time() - st.st_mtime) > max_age:
-        return None
+        return None, None
+    age = time.time() - st.st_mtime
+    if max_age is not None and age > max_age:
+        return None, age
     try:
         with open(path, "r") as f:
-            return f.read()
+            return f.read(), age
     except OSError:
-        return None
+        return None, age
 
 
 def _nft_realtime(args: list) -> str | None:
     """Run `sudo /usr/sbin/nft <args>` with a tight timeout. Returns
-    stdout on success, None on any failure. The sudoers fragment
-    shipped by this package whitelists `nft list *` for user secubox."""
+    stdout on success, None on any failure (including the silent
+    failure that happens when the hub runs under NoNewPrivileges=true,
+    which blocks setuid traversal so sudo itself can never elevate).
+
+    The sudoers fragment shipped by this package whitelists `nft list *`
+    for user secubox — useful if the operator ever decides to drop the
+    NoNewPrivileges sandbox; harmless otherwise."""
     try:
         r = subprocess.run(
             ["sudo", "-n", "/usr/sbin/nft"] + args,
@@ -1936,7 +1946,7 @@ def _nft_realtime(args: list) -> str | None:
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return None
-    if r.returncode != 0:
+    if r.returncode != 0 or not r.stdout.strip():
         return None
     return r.stdout
 
@@ -1961,33 +1971,34 @@ def _trigger_cache_refresh() -> None:
 async def firewall_summary():
     """nftables stats for the SOC dashboard widget.
 
-    Strategy: cache-first, realtime-fallback.
+    Strategy: fresh cache → realtime → stale cache.
 
-    1. If the JSON ruleset and counters cache files exist AND are fresh
-       (mtime within NFT_CACHE_MAX_AGE), parse them — fast path, no
-       privileged calls.
-    2. Otherwise call `sudo nft list ruleset -j` / `sudo nft list
-       counters` directly (sudoers fragment authorises this for user
-       secubox), and trigger the cache populator service in the
-       background so the next request is fast again.
+    1. If the cache files are fresh (mtime within NFT_CACHE_MAX_AGE),
+       parse them — fast path, no privileged calls.
+    2. Otherwise try realtime via `sudo nft list ...`. This works ONLY
+       if the hub is not sandboxed by NoNewPrivileges; on the shipped
+       systemd unit it is, so realtime is best-effort.
+    3. If realtime returned nothing, fall back to the *stale* cache —
+       showing slightly old data is far better than zeros on the SOC
+       widget. The systemd timer will refresh the cache shortly.
 
-    The widget therefore stays populated even when the timer hasn't
-    run yet (fresh boot) or when the cache populator has been
-    masked / failing."""
+    `source` in the response tells the frontend which path we took:
+    "cache", "realtime", "cache-stale", or "none"."""
     try:
         ruleset_path = os.path.join(NFT_CACHE_DIR, "nft-ruleset.json")
         counters_path = os.path.join(NFT_CACHE_DIR, "nft-counters.txt")
         lastrun_path = os.path.join(NFT_CACHE_DIR, "nft-cache.lastrun")
 
-        ruleset_text = _read_if_fresh(ruleset_path, NFT_CACHE_MAX_AGE)
-        counters_text = _read_if_fresh(counters_path, NFT_CACHE_MAX_AGE)
+        ruleset_text, _ = _read_cache(ruleset_path, NFT_CACHE_MAX_AGE)
+        counters_text, _ = _read_cache(counters_path, NFT_CACHE_MAX_AGE)
 
         source = "cache"
         if ruleset_text is None or counters_text is None:
             source = "realtime"
             # `-j` is a global option for nft and must come before the
             # command. The sudoers fragment shipped by this package
-            # whitelists both `nft list *` and `nft -j list *`.
+            # whitelists both `nft list *` and `nft -j list *` — useful
+            # if the operator drops NoNewPrivileges from the hub unit.
             rt_ruleset = _nft_realtime(["-j", "list", "ruleset"])
             rt_counters = _nft_realtime(["list", "counters"])
             if rt_ruleset is not None:
@@ -1995,6 +2006,21 @@ async def firewall_summary():
             if rt_counters is not None:
                 counters_text = rt_counters
             _trigger_cache_refresh()
+
+            # Realtime denied (NoNewPrivileges blocks sudo) — fall back
+            # to the stale cache rather than returning zeros. The timer
+            # will refresh the cache to a fresh state within ~30 s.
+            if ruleset_text is None:
+                ruleset_text, _ = _read_cache(ruleset_path)
+                if ruleset_text:
+                    source = "cache-stale"
+            if counters_text is None:
+                counters_text, _ = _read_cache(counters_path)
+                if counters_text and source != "cache-stale":
+                    source = "cache-stale"
+
+            if ruleset_text is None and counters_text is None:
+                source = "none"
 
         tables = chains = rules = 0
         if ruleset_text:
