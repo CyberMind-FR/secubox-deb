@@ -345,17 +345,16 @@ generate_netplan() {
         forward-delay: 0
 "
             else
-                # No LAN interfaces - just define empty bridge
-                bridges="  bridges:
-    br-lan:
-      interfaces: []
-      addresses: [192.168.1.1/24]
-      dhcp4: false
-      optional: true
-      parameters:
-        stp: false
-        forward-delay: 0
-"
+                # No LAN interfaces — DON'T create an empty br-lan with
+                # 192.168.1.1/24. A member-less bridge with a static IP
+                # squats the .1 address without routing anything, makes
+                # systemd-networkd think the interface is "configured",
+                # and frequently breaks DHCP on the real WAN NIC (the
+                # router refuses a second .1/24 on its broadcast domain
+                # or the bridge claims the gateway slot).
+                # Live USB and single-NIC installs should just stay
+                # WAN-only via the ethernet block above.
+                bridges=""
             fi
             ;;
         bridge)
