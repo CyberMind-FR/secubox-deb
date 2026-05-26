@@ -443,6 +443,16 @@ table inet secubox_filter {
         # HTTP/HTTPS (SecuBox UI)
         tcp dport { 80, 443 } accept
 
+        # DHCP client — accept DHCPOFFER / DHCPACK on UDP 68. The
+        # conntrack `established,related` clause above doesn't help
+        # for DHCP because the request goes out from 0.0.0.0:68 and
+        # the reply comes back broadcast (or unicast direct to the
+        # offered IP before it's actually bound), neither of which
+        # match the original 5-tuple. Without this rule networkd's
+        # DHCP times out and secubox-net-fallback's ARP-probe takes
+        # over — operator ends up on a random fallback subnet.
+        udp sport 67 udp dport 68 accept
+
         # WireGuard
         udp dport 51820 accept
 
