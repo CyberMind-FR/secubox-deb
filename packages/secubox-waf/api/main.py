@@ -3,6 +3,7 @@
 Mitmproxy-based threat detection with CrowdSec integration.
 300+ rules across 14+ categories (SQLi, XSS, RCE, VoIP, router botnets, etc.)
 """
+import asyncio
 import os
 import json
 import re
@@ -13,14 +14,13 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Request
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 import geoip2.database
 import geoip2.errors
-
-app = FastAPI(title="SecuBox WAF")
 
 # Paths
 RULES_PATH = "/usr/share/secubox/waf/waf-rules.json"
@@ -34,49 +34,53 @@ _request_counts: Dict[str, List[float]] = defaultdict(list)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Stats Cache — double-caching pattern (CLAUDE.md § Performance Patterns)
+# Warm Cache — background refresher per CLAUDE.md § Performance Patterns
 #
-# Threat-stats + alerts are expensive (full WAF log scan + GeoIP lookups).
-# SOC dashboard polls every 5 s; the underlying data changes at human pace.
-# A 30 s read-through cache drops sustained CPU from ~17 % to <1 % under
-# polling load without user-visible staleness.
+# The threat log on a busy production board reaches 200 k+ JSONL entries
+# (≈50 MB). Computing /stats means a full scan + GeoIP lookups, which
+# takes ~6 s of CPU on the Marvell ARM target. The old design ran that
+# scan on the request path (lazy read-through cache, 30 s TTL); once the
+# log grew past ~50 k entries the scan started taking longer than the
+# TTL itself, the cache never warmed, every request blocked the event
+# loop, and the dashboard saw HAProxy 504s and rendered empty.
 #
-# Mirrors `packages/secubox-crowdsec/api/main.py:106-138`.
+# New design: a single background asyncio task refreshes ALL expensive
+# state every WAF_WARM_INTERVAL seconds OFF the request path. Endpoints
+# return module-level dicts — O(1), no I/O. The first refresh happens at
+# startup; until it completes, endpoints either serve a "loading"
+# placeholder or compute synchronously (cold-start fallback).
+#
+# Per operator directive: "les cache double buffer ne doivent pas tomber
+# et permettre juste d'aller plus vite... un echec de cron et de cache
+# doit forcer le cron et faire du realtime".
 # ═══════════════════════════════════════════════════════════════════════
 
-class StatsCache:
-    """Thread-safe stats cache with TTL."""
-    def __init__(self, ttl_seconds: int = 30):
-        self.ttl = ttl_seconds
-        self._cache: Dict[str, Any] = {}
-        self._timestamps: Dict[str, float] = {}
-        self._lock = threading.Lock()
+WAF_WARM_INTERVAL = 30  # seconds between background refreshes
+WAF_ALERTS_TAIL_BYTES = 512 * 1024  # how much of the log tail to keep hot
 
-    def get(self, key: str) -> Optional[Any]:
-        with self._lock:
-            if key in self._cache:
-                if time.time() - self._timestamps[key] < self.ttl:
-                    return self._cache[key]
-                del self._cache[key]
-                del self._timestamps[key]
-        return None
-
-    def set(self, key: str, value: Any):
-        with self._lock:
-            self._cache[key] = value
-            self._timestamps[key] = time.time()
-
-    def invalidate(self, key: Optional[str] = None):
-        with self._lock:
-            if key:
-                self._cache.pop(key, None)
-                self._timestamps.pop(key, None)
-            else:
-                self._cache.clear()
-                self._timestamps.clear()
+_warm_lock = threading.Lock()
+_warm: Dict[str, Any] = {
+    "stats": None,           # full dashboard stats dict
+    "alerts_raw": None,      # list of latest threat entries (up to 500)
+    "bans": None,            # CrowdSec decisions, flattened
+    "last_refresh": 0.0,
+    "refresh_count": 0,
+    "refresh_duration_ms": 0,
+}
 
 
-stats_cache = StatsCache(ttl_seconds=30)
+# Back-compat shim so legacy call sites that still reference `stats_cache`
+# (notably write-side endpoints that invalidate after a state change) keep
+# working without an exception. Reads always return None so callers fall
+# through to the warm cache; writes are absorbed silently. Remove once
+# all references have been audited.
+class _StatsCacheShim:
+    def get(self, *_a, **_kw): return None
+    def set(self, *_a, **_kw): pass
+    def invalidate(self, *_a, **_kw): pass
+
+
+stats_cache = _StatsCacheShim()
 
 
 def _cfg():
@@ -353,6 +357,165 @@ def _get_threat_stats() -> dict:
     return stats
 
 
+# ───────────────────────────────────────────────────────────────────────
+# Warm-cache helpers (called only from the background refresher)
+# ───────────────────────────────────────────────────────────────────────
+
+def _read_log_tail(path: Path, max_bytes: int = WAF_ALERTS_TAIL_BYTES) -> List[str]:
+    """Return up to max_bytes-worth of complete trailing lines without
+    loading the full file. Threat-log entries are JSON one-liners of
+    ~200-400 bytes each, so 512 KB ≈ 1.5-2.5 k entries — enough for any
+    realistic dashboard view."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            chunk = min(size, max_bytes)
+            f.seek(-chunk, 2)
+            data = f.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return []
+    lines = data.split("\n")
+    # If we landed mid-line, the first split fragment is partial.
+    if chunk < size:
+        lines = lines[1:]
+    return [ln for ln in lines if ln.strip()]
+
+
+def _decorate_dashboard_stats(stats: dict) -> dict:
+    """Mirror of the legacy /stats endpoint's post-processing — adds the
+    dashboard-friendly fields the React widget expects."""
+    cfg = _cfg()
+    stats["running"] = cfg["enabled"]
+    stats["version"] = "1.2.0"
+    stats["rules_loaded"] = sum(len(p) for p in _compiled_patterns.values())
+    stats["blocked_today"] = stats.get("threats_today", 0)
+    stats["blocked_24h"] = stats.get("total_threats", 0)
+
+    cats = stats.get("by_category", {})
+    stats["categories_list"] = [
+        {"name": cat, "count": count}
+        for cat, count in sorted(cats.items(), key=lambda x: -x[1])[:8]
+    ]
+    countries = stats.get("top_countries", {})
+    stats["top_countries"] = [
+        {"country": c, "count": cnt}
+        for c, cnt in sorted(countries.items(), key=lambda x: -x[1])[:5]
+    ]
+    vhosts = stats.get("top_vhosts", {})
+    stats["top_vhosts"] = [
+        {"vhost": v, "count": cnt}
+        for v, cnt in sorted(vhosts.items(), key=lambda x: -x[1])[:5]
+    ]
+
+    # Last threat — tail-read up to 2 KB, take the last complete line.
+    log_path = Path(THREATS_LOG)
+    if log_path.exists():
+        try:
+            tail = _read_log_tail(log_path, max_bytes=4096)
+            if tail:
+                last = json.loads(tail[-1])
+                ts = last.get("timestamp", "")
+                time_ago = "recently"
+                if ts:
+                    try:
+                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        diff = datetime.now(dt.tzinfo) - dt
+                        mins = int(diff.total_seconds() / 60)
+                        if mins < 1:
+                            time_ago = "just now"
+                        elif mins < 60:
+                            time_ago = f"{mins}m ago"
+                        else:
+                            time_ago = f"{mins // 60}h ago"
+                    except Exception:
+                        pass
+                stats["last_threat"] = {
+                    "ip": last.get("ip") or last.get("client_ip", "unknown"),
+                    "type": last.get("category", "attack"),
+                    "vhost": last.get("host") or last.get("vhost"),
+                    "time_ago": time_ago,
+                }
+        except Exception:
+            pass
+
+    return stats
+
+
+def _read_alerts_raw() -> List[dict]:
+    """Read up to ~500 most recent threat entries from the log tail."""
+    log_path = Path(THREATS_LOG)
+    if not log_path.exists():
+        return []
+    parsed: List[dict] = []
+    for line in _read_log_tail(log_path):
+        try:
+            entry = json.loads(line)
+            entry["client_ip"] = entry.get("client_ip") or entry.get("ip", "unknown")
+            parsed.append(entry)
+        except json.JSONDecodeError:
+            continue
+    # Newest first.
+    return list(reversed(parsed))[:500]
+
+
+def _refresh_warm_caches() -> dict:
+    """Compute every expensive piece of state ONCE. Called from the
+    background loop via asyncio.to_thread so the event loop stays free."""
+    t0 = time.time()
+    new_stats = _decorate_dashboard_stats(_get_threat_stats())
+    new_alerts = _read_alerts_raw()
+    try:
+        new_bans = _get_bans()
+    except Exception:
+        new_bans = []
+    duration_ms = int((time.time() - t0) * 1000)
+
+    with _warm_lock:
+        _warm["stats"] = new_stats
+        _warm["alerts_raw"] = new_alerts
+        _warm["bans"] = new_bans
+        _warm["last_refresh"] = time.time()
+        _warm["refresh_count"] += 1
+        _warm["refresh_duration_ms"] = duration_ms
+    return {
+        "duration_ms": duration_ms,
+        "alerts": len(new_alerts),
+        "bans": len(new_bans),
+    }
+
+
+async def _warm_loop():
+    """Background refresher. Survives individual failures so a single
+    bad log line / cscli outage can't kill the loop."""
+    # Stagger the very first refresh by 1 s so uvicorn finishes binding
+    # before we burn CPU on the initial full scan.
+    await asyncio.sleep(1)
+    while True:
+        try:
+            await asyncio.to_thread(_refresh_warm_caches)
+        except Exception:
+            # Swallow — next tick will retry. Logging would spam.
+            pass
+        await asyncio.sleep(WAF_WARM_INTERVAL)
+
+
+@asynccontextmanager
+async def _lifespan(_app):
+    task = asyncio.create_task(_warm_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+
+app = FastAPI(title="SecuBox WAF", lifespan=_lifespan)
+
+
 # === Public Endpoints ===
 
 @app.get("/status")
@@ -444,174 +607,104 @@ async def toggle_category(category: str, req: ToggleCategoryRequest):
     return {"success": True, "category": category, "enabled": req.enabled}
 
 
+def _empty_stats_skeleton() -> dict:
+    """Minimal shape returned when the warm cache hasn't refreshed yet
+    (first second after boot, or refresh task crashed). Keeps the
+    dashboard from rendering `undefined`-laden cards."""
+    return {
+        "total_threats": 0, "threats_today": 0,
+        "by_category": {}, "by_severity": {},
+        "top_ips": {}, "top_ips_countries": {},
+        "top_countries": [], "top_vhosts": [], "categories_list": [],
+        "running": _cfg()["enabled"],
+        "version": "1.2.0",
+        "rules_loaded": sum(len(p) for p in _compiled_patterns.values()),
+        "blocked_today": 0, "blocked_24h": 0,
+        "loading": True,
+    }
+
+
 @app.get("/stats")
 async def get_stats():
-    """Get threat statistics (public).
+    """Threat statistics for the dashboard (public).
 
-    Read-through cache (TTL 30 s) — the underlying threat log is scanned
-    at most every 30 s even under dashboard polling. See `StatsCache`.
-    """
-    cached = stats_cache.get("threat_stats")
+    Always served from the warm cache populated by `_warm_loop()` every
+    WAF_WARM_INTERVAL seconds. If the very first refresh hasn't completed
+    yet, fall back to a synchronous compute so the dashboard isn't blank
+    on cold-start."""
+    with _warm_lock:
+        cached = _warm["stats"]
+        last_refresh = _warm["last_refresh"]
     if cached is not None:
-        return cached
+        out = dict(cached)
+        out["cache_last_run"] = last_refresh
+        out["source"] = "warm-cache"
+        return out
 
-    stats = _get_threat_stats()
-
-    # Add dashboard-friendly fields
-    stats["running"] = _cfg()["enabled"]
-    stats["version"] = "1.2.0"
-    stats["rules_loaded"] = sum(len(p) for p in _compiled_patterns.values())
-
-    # blocked_today for card metric
-    stats["blocked_today"] = stats.get("threats_today", 0)
-    stats["blocked_24h"] = stats.get("total_threats", 0)
-
-    # Categories list with counts for dashboard emojis
-    cats = stats.get("by_category", {})
-    stats["categories_list"] = [
-        {"name": cat, "count": count}
-        for cat, count in sorted(cats.items(), key=lambda x: -x[1])[:8]
-    ]
-
-    # Top countries formatted for dashboard
-    countries = stats.get("top_countries", {})
-    stats["top_countries"] = [
-        {"country": c, "count": cnt}
-        for c, cnt in sorted(countries.items(), key=lambda x: -x[1])[:5]
-    ]
-
-    # Top vhosts (full DNS names) for dashboard
-    vhosts = stats.get("top_vhosts", {})
-    stats["top_vhosts"] = [
-        {"vhost": v, "count": cnt}
-        for v, cnt in sorted(vhosts.items(), key=lambda x: -x[1])[:5]
-    ]
-
-    # Last threat for dashboard
-    log_path = Path(THREATS_LOG)
-    if log_path.exists():
-        try:
-            with open(log_path, "rb") as f:
-                f.seek(0, 2)  # End of file
-                size = f.tell()
-                if size > 2000:
-                    f.seek(-2000, 2)  # Last 2000 bytes
-                else:
-                    f.seek(0)
-                lines = f.read().decode("utf-8", errors="ignore").strip().split("\n")
-                if lines:
-                    last_line = lines[-1]
-                    last = json.loads(last_line)
-                    # Calculate time ago
-                    ts = last.get("timestamp", "")
-                    time_ago = "recently"
-                    if ts:
-                        try:
-                            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                            diff = datetime.now(dt.tzinfo) - dt
-                            mins = int(diff.total_seconds() / 60)
-                            if mins < 1:
-                                time_ago = "just now"
-                            elif mins < 60:
-                                time_ago = f"{mins}m ago"
-                            else:
-                                time_ago = f"{mins // 60}h ago"
-                        except Exception:
-                            pass
-                    stats["last_threat"] = {
-                        "ip": last.get("ip") or last.get("client_ip", "unknown"),
-                        "type": last.get("category", "attack"),
-                        "vhost": last.get("host") or last.get("vhost"),
-                        "time_ago": time_ago
-                    }
-        except Exception:
-            pass
-
-    stats_cache.set("threat_stats", stats)
+    # Cold start: warm task hasn't completed yet. Compute once on this
+    # request thread so the dashboard sees real data immediately, then
+    # the background loop takes over.
+    stats = await asyncio.to_thread(
+        lambda: _decorate_dashboard_stats(_get_threat_stats())
+    )
+    stats["source"] = "cold-start"
     return stats
+
+
+def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
+    """Slice and optionally aggregate the warm alerts list."""
+    if not aggregate:
+        return {"alerts": alerts[:limit], "aggregated": False}
+
+    ip_groups: Dict[str, dict] = defaultdict(
+        lambda: {"alerts": [], "count": 0, "categories": set(), "severities": set()}
+    )
+    for alert in alerts:
+        ip = alert.get("client_ip", "unknown")
+        ip_groups[ip]["alerts"].append(alert)
+        ip_groups[ip]["count"] += 1
+        ip_groups[ip]["categories"].add(alert.get("category", ""))
+        ip_groups[ip]["severities"].add(alert.get("severity", ""))
+        if "first_seen" not in ip_groups[ip]:
+            ip_groups[ip]["first_seen"] = alert.get("timestamp")
+        ip_groups[ip]["last_seen"] = alert.get("timestamp")
+
+    sev_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    aggregated = []
+    for ip, data in sorted(ip_groups.items(), key=lambda x: x[1]["count"], reverse=True)[:limit]:
+        max_sev = max(data["severities"], key=lambda s: sev_order.get(s, 0), default="low")
+        aggregated.append({
+            "client_ip": ip,
+            "count": data["count"],
+            "categories": list(data["categories"]),
+            "max_severity": max_sev,
+            "first_seen": data.get("first_seen"),
+            "last_seen": data.get("last_seen"),
+            "latest_alert": data["alerts"][0] if data["alerts"] else None,
+        })
+    return {"alerts": aggregated, "aggregated": True}
 
 
 @app.get("/alerts")
 async def get_alerts(limit: int = 50, aggregate: bool = False):
-    """Get recent threat alerts (public).
-
-    Read-through cache (TTL 30 s) keyed on (limit, aggregate). Tail-reading
-    the threat log is the expensive part; dashboard pollers hit a cached
-    response. See `StatsCache`.
-
-    Args:
-        limit: Max alerts to return
-        aggregate: If True, group alerts by IP with counts
-    """
-    cache_key = f"alerts:{limit}:{int(aggregate)}"
-    cached = stats_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    log_path = Path(THREATS_LOG)
-    if not log_path.exists():
-        empty = {"alerts": []}
-        stats_cache.set(cache_key, empty)
-        return empty
-
-    alerts = []
-    try:
-        with open(log_path) as f:
-            lines = f.readlines()[-500:]  # Read last 500 lines for aggregation
-            for line in reversed(lines):
-                try:
-                    entry = json.loads(line.strip())
-                    # Normalize field names
-                    entry["client_ip"] = entry.get("client_ip") or entry.get("ip", "unknown")
-                    alerts.append(entry)
-                except json.JSONDecodeError:
-                    pass
-    except Exception:
-        pass
-
-    if aggregate:
-        # Group by IP
-        from collections import defaultdict
-        ip_groups = defaultdict(lambda: {"alerts": [], "count": 0, "categories": set(), "severities": set()})
-
-        for alert in alerts:
-            ip = alert.get("client_ip", "unknown")
-            ip_groups[ip]["alerts"].append(alert)
-            ip_groups[ip]["count"] += 1
-            ip_groups[ip]["categories"].add(alert.get("category", ""))
-            ip_groups[ip]["severities"].add(alert.get("severity", ""))
-            if "first_seen" not in ip_groups[ip]:
-                ip_groups[ip]["first_seen"] = alert.get("timestamp")
-            ip_groups[ip]["last_seen"] = alert.get("timestamp")
-
-        # Convert to list sorted by count
-        aggregated = []
-        for ip, data in sorted(ip_groups.items(), key=lambda x: x[1]["count"], reverse=True)[:limit]:
-            # Determine highest severity
-            sev_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
-            max_sev = max(data["severities"], key=lambda s: sev_order.get(s, 0), default="low")
-            aggregated.append({
-                "client_ip": ip,
-                "count": data["count"],
-                "categories": list(data["categories"]),
-                "max_severity": max_sev,
-                "first_seen": data.get("first_seen"),
-                "last_seen": data.get("last_seen"),
-                "latest_alert": data["alerts"][0] if data["alerts"] else None,
-            })
-        response = {"alerts": aggregated, "aggregated": True}
-        stats_cache.set(cache_key, response)
-        return response
-
-    response = {"alerts": alerts[:limit], "aggregated": False}
-    stats_cache.set(cache_key, response)
-    return response
+    """Recent threat alerts, sliced/aggregated from the warm cache."""
+    with _warm_lock:
+        raw = _warm["alerts_raw"]
+    if raw is None:
+        # Cold start — tail-read once.
+        raw = await asyncio.to_thread(_read_alerts_raw)
+    return _slice_alerts(raw or [], limit, aggregate)
 
 
 @app.get("/bans")
 async def get_bans():
-    """Get active IP bans from CrowdSec (public)."""
-    bans = _get_bans()
+    """Active IP bans from CrowdSec. Read from warm cache; the
+    underlying `cscli` call is too slow (5-15 s) to run on the request
+    path. Cold start falls through to a synchronous fetch."""
+    with _warm_lock:
+        bans = _warm["bans"]
+    if bans is None:
+        bans = await asyncio.to_thread(_get_bans)
     return {"bans": bans, "total": len(bans)}
 
 

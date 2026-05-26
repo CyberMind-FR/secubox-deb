@@ -1,5 +1,65 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-24*
+*Mis à jour : 2026-05-26*
+
+---
+
+## 🔄 2026-05-26: SOC dashboard fixes — firewall_summary + WAF backend warm cache
+
+### ✅ Done
+
+- **v2.12.17** (`40b58372`, tagged + pushed): nft cache populator moved
+  from `image/firstboot.sh` to `secubox-hub` package. Ships
+  `/usr/sbin/secubox-nft-cache`, `secubox-nft-cache.{service,timer}`
+  (timer auto-enabled via `timers.target.wants/` symlink), plus a
+  sudoers fragment for the realtime fallback path.
+
+- **v2.12.18** (`a1c60d6b`, tagged + pushed): `/firewall_summary`
+  fallback ladder rewritten — `cache → realtime → cache-stale → none`.
+  Found at deploy time that `NoNewPrivileges=true` on the hub blocks
+  sudo, so realtime is best-effort; the stale-cache fallback prevents
+  the widget from ever rendering zeros. Verified all four paths on gk2.
+
+- **gk2 board cleanup**: removed two stray cron files
+  (`/etc/cron.d/secubox-nft-cache`, `/etc/cron.d/secubox-nft-stats`) and
+  `/usr/local/bin/secubox-nft-cache.sh` — leftovers from an earlier
+  ad-hoc fix, NOT shipped by any package. They were racing the new
+  systemd timer (both writing to the same `nft-ruleset.json`) and
+  occasionally produced a 0-byte JSON. Documented for boards upgrading
+  from v2.12.16.
+
+- **secubox-waf 1.1.2** (not yet committed, deployed to gk2): the
+  expensive `/stats`, `/alerts`, `/bans` computations moved to a
+  single asyncio background task (`_warm_loop`, refresh every 30 s).
+  Endpoints are now O(1) dict reads. Previously the 200 k-line
+  threat-log scan ran on the request path; each cache miss took
+  longer than the 30 s TTL on this board, so the cache never warmed,
+  HAProxy 504'd, and the dashboard rendered empty with the WAF
+  process burning 50-67 % CPU continuously. Post-fix on gk2:
+  `/stats` 200-900 ms (was 6+ s or timeout), `/alerts` 360 ms,
+  `/bans` 210 ms (was 5-15 s). `_read_log_tail()` uses
+  seek-from-end of 512 KB so memory no longer scales with log size.
+
+### ⬜ Next up
+
+- **Commit + tag secubox-waf 1.1.2** as v2.12.19 (the .deb is on the
+  board but the source change isn't committed yet).
+
+- **SOC navbar mismatch** on gk2 — operator reports the navbar on
+  `admin.gk2.secubox.in/soc/` isn't the right one. Need to identify
+  which sidebar JS / nginx route is being served vs what's expected.
+  Likely related to `secubox-soc` vs `secubox-soc-web` vs `secubox-hub`
+  ownership of `/usr/share/secubox/www/soc/`.
+
+- **SOC still missing metrics / some statuses** beyond the firewall
+  widget — list TBD, needs operator screenshot to enumerate.
+
+### Notes
+
+- Plans (TODO docs) saved earlier but not yet committed:
+  `docs/superpowers/plans/2026-05-26-build-scripts-refactor.md`,
+  `docs/superpowers/plans/2026-05-26-secubox-modules-consolidation.md`.
+- amd64 DHCP work deferred — operator swapping hub for switch first.
+- CI release-upload .gz truncation still pending investigation.
 
 ---
 
