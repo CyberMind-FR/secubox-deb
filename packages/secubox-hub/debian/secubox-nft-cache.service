@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox nftables cache populator (powers SOC firewall_summary)
+Documentation=https://secubox.in/docs/soc
+After=nftables.service
+ConditionPathExists=/usr/sbin/nft
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-nft-cache
+# Runs as root via systemd — nft list requires CAP_NET_ADMIN
+StandardOutput=journal
+StandardError=journal
