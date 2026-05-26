@@ -1867,10 +1867,17 @@ app.include_router(router)
 # ══════════════════════════════════════════════════════════════════
 @public_router.get("/firewall_summary")
 async def firewall_summary():
-    """Get nftables stats for dashboard from cache files."""
+    """Get nftables stats for the SOC dashboard.
+
+    Reads cache files populated every 30 s by secubox-nft-cache.timer.
+    Also surfaces the systemd state of nftables.service so the
+    dashboard widget can show ACTIVE/INACTIVE accurately (operator
+    report: 'Status INACTIVE' while 7 tables / 10 chains / 19 rules
+    were loaded — the kernel had the rules but the endpoint never
+    returned a status field, so the React bundle defaulted to
+    INACTIVE)."""
     try:
         counters = {}
-        # Read from cache file (updated by cron every 30s)
         try:
             with open("/var/cache/secubox/nft-counters.txt", "r") as f:
                 current_counter = None
@@ -1893,8 +1900,8 @@ async def firewall_summary():
         processed = counters.get("processed", 0)
         dropped = sum(v for k, v in counters.items() if "blacklist" in k.lower())
 
-        # Get table/chain/rule counts from JSON cache
-        tables, chains, rules = 2, 4, 0
+        # Table / chain / rule counts from JSON cache.
+        tables, chains, rules = 0, 0, 0
         try:
             with open("/var/cache/secubox/nft-ruleset.json", "r") as f:
                 data = json.loads(f.read())
@@ -1905,17 +1912,45 @@ async def firewall_summary():
         except FileNotFoundError:
             pass
 
+        # Systemd state of nftables.service. `systemctl is-active`
+        # works for unprivileged users.
+        status = "inactive"
+        try:
+            r = subprocess.run(
+                ["systemctl", "is-active", "nftables.service"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if r.stdout.strip() == "active":
+                status = "active"
+        except Exception:
+            pass
+        # If rules are loaded in the kernel but systemd reports inactive
+        # (rules came from a manual `nft -f` during firstboot), treat
+        # that as effectively active for dashboard purposes — operators
+        # want to see "the firewall is up" if there are rules in place.
+        if status == "inactive" and rules > 0:
+            status = "active-manual"
+
+        last_cache_run = None
+        try:
+            with open("/var/cache/secubox/nft-cache.lastrun", "r") as f:
+                last_cache_run = f.read().strip()
+        except FileNotFoundError:
+            pass
+
         return {
+            "status": status,
             "tables": tables,
             "chains": chains,
             "rules": rules,
             "processed": processed,
             "dropped": dropped,
             "accepted": processed - dropped if processed > dropped else 0,
-            "counters": counters
+            "counters": counters,
+            "cache_last_run": last_cache_run,
         }
     except Exception as e:
-        return {"error": str(e), "tables": 0, "chains": 0, "rules": 0, "dropped": 0, "accepted": 0, "processed": 0}
+        return {"error": str(e), "status": "error", "tables": 0, "chains": 0, "rules": 0, "dropped": 0, "accepted": 0, "processed": 0}
 
 
 app.include_router(public_router)  # Re-include for firewall_summary
