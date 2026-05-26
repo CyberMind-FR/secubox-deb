@@ -451,7 +451,7 @@ table inet secubox_filter {
         # match the original 5-tuple. Without this rule networkd's
         # DHCP times out and secubox-net-fallback's ARP-probe takes
         # over — operator ends up on a random fallback subnet.
-        udp sport 67 udp dport 68 accept
+        udp dport 68 accept
 
         # WireGuard
         udp dport 51820 accept
