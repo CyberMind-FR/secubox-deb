@@ -1,3 +1,24 @@
+secubox-soc (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Capture production SOC dashboard back into source. Prior to this
+    bump, packages/secubox-soc/www/soc/index.html in the source tree
+    (44 KB, "threat-map" design, talks to /api/v1/soc/*) did NOT match
+    what was actually running on production boards (107 KB
+    "comprehensive dashboard" that aggregates /api/v1/hub,
+    /api/v1/waf, /api/v1/crowdsec, /api/v1/hub/public/firewall_summary).
+    The board version was being maintained out-of-tree and dpkg
+    couldn't redeploy it. This bump pulls the 107 KB dashboard back
+    into source as the canonical SOC frontend.
+
+  * While re-syncing: strip the dead `.logo`, `.logo-icon`,
+    `.logo-text`, `.logo-version` CSS overrides at the top of the
+    file. The .logo-icon rule in particular re-styled the lock emoji
+    that sidebar.js injects into the sidebar header as a 40x40
+    gradient-box, breaking visual consistency with every other module.
+    The shared /shared/sidebar.css owns those classes — let it.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 26 May 2026 13:00:00 +0000
+
 secubox-soc (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
