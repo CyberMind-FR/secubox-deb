@@ -15,6 +15,7 @@ UMask=0000
 
 NoNewPrivileges=true
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox

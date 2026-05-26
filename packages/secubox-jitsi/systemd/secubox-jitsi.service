@@ -19,6 +19,7 @@ Restart=on-failure
 RestartSec=5
 PrivateTmp=true
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 
 [Install]

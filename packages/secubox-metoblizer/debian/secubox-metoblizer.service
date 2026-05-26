@@ -11,6 +11,7 @@ ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/metoblizer.sock --wor
 Restart=on-failure
 RestartSec=5
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 StateDirectory=secubox/metoblizer
 
 [Install]

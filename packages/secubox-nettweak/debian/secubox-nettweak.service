@@ -17,6 +17,7 @@ RestartSec=5
 
 NoNewPrivileges=false
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /etc/sysctl.d /proc/sys

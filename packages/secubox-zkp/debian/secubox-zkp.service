@@ -9,6 +9,7 @@ User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/zkp
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/zkp.sock
 Restart=always

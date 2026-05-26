@@ -23,6 +23,7 @@ StartLimitBurst=5
 # ProtectSystem=full
 NoNewPrivileges=true
 RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 # ReadWritePaths removed - causes NAMESPACE errors when haproxy not installed
 # (haproxy is Recommends, not Depends - /etc/haproxy may not exist)
