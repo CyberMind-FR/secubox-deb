@@ -1,3 +1,14 @@
+secubox-waf (1.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * mitmproxy/secubox_waf.py: skip cred-004 check on Nextcloud mobile
+    login + WebDAV endpoints (closes #395). NC's `/index.php/login/v2/
+    poll?token=…` and `/ocs/v2.php/core/login` use short-lived tokens
+    in URLs by design — cred-004 ("JWT/token in URL") flagged them as
+    credential leaks and banned the client after 3 polls (BAN_THRESHOLD).
+    NC enforces its own token TTL + bf protection on those endpoints.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 21:30:00 +0000
+
 secubox-waf (1.1.2-1~bookworm1) bookworm; urgency=medium
 
   * Move expensive /stats, /alerts and /bans computations off the
