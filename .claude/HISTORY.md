@@ -2,6 +2,114 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-26
+
+### SOC firewall_summary cache hardened (v2.12.17 + v2.12.18)
+
+**v2.12.17** (`40b58372`) — Moved the nftables cache populator from
+`image/firstboot.sh` into the `secubox-hub` package. Ships
+`/usr/sbin/secubox-nft-cache`, `secubox-nft-cache.{service,timer}` (30 s
+tick, auto-enabled via `timers.target.wants/` symlink), plus a sudoers
+fragment authorising user `secubox` to call `nft list *` and the
+restart of one specific unit. Co-locating crons with the module that
+consumes their data is now the canonical SecuBox pattern.
+
+**v2.12.18** (`a1c60d6b`) — `/firewall_summary` fallback ladder
+rewritten: `fresh cache → realtime via sudo → stale cache → none`.
+Discovered at deploy time that `NoNewPrivileges=true` on
+`secubox-hub.service` blocks setuid traversal, so `sudo` from inside
+the hub silently fails. The stale-cache fallback prevents the SOC
+widget from ever rendering zeros even when realtime is denied. All
+four code paths verified on gk2.
+
+Also documented a board-side cleanup step needed when upgrading from
+v2.12.16: remove the two stray cron files
+(`/etc/cron.d/secubox-nft-cache`, `/etc/cron.d/secubox-nft-stats`) and
+the helper `/usr/local/bin/secubox-nft-cache.sh` left over from an
+earlier ad-hoc fix. They were racing the new systemd timer and
+occasionally producing a 0-byte JSON cache.
+
+### secubox-waf 1.1.2 — warm asyncio cache (v2.12.19)
+
+**v2.12.19** (`30e89193`) — Rewrote the data path for the three hot
+WAF endpoints (`/stats`, `/alerts`, `/bans`). Old design ran a full
+200 k-line threat-log scan + GeoIP on every cache miss; the scan took
+longer than the 30 s TTL on this board, so the cache never warmed,
+HAProxy 504'd and the dashboard rendered empty while the WAF process
+burned 50-67 % CPU continuously. New design: a single asyncio
+background task refreshes a module-level `_warm` dict every 30 s off
+the request path; endpoints are O(1) dict reads. `_read_log_tail()`
+seeks 512 KB from end of log instead of `readlines()` so memory does
+not scale with log size. Cold-start hits compute synchronously once
+via `asyncio.to_thread`. Verified on gk2: `/stats` 200-900 ms (was
+6 s+ or timeout), `/alerts` 360 ms, `/bans` 210 ms (was 5-15 s).
+
+### secubox-soc 1.0.1 — production dashboard captured back into source
+
+**0de665c5** — Source-side `packages/secubox-soc/www/soc/index.html`
+had silently been rewritten in commit 24296084 (April 15) into a
+44 KB "threat-map" frontend that talks to `/api/v1/soc/*` (a
+`secubox-soc-gateway` backend that isn't running on production boards).
+Production boards have been running an out-of-tree 107 KB
+"comprehensive dashboard" aggregating `/api/v1/hub`, `/api/v1/waf`,
+`/api/v1/crowdsec` and `/api/v1/hub/public/firewall_summary` — never
+captured into source. First deploy of 1.0.1 from raw source clobbered
+the working dashboard and locked the operator out (login.html
+redirect, no gateway backend). Recovery: pulled the 107 KB file from
+`/srv/www/soc/index.html` (May 10 snapshot still on board) back into
+source, stripped the `.logo*` CSS overrides that re-styled the
+sidebar.js-injected SecuBox brand as a 40×40 gradient box, rebuilt,
+redeployed. Source is now the canonical comprehensive dashboard.
+
+Memory `feedback_source_first_always` saved as a hard rule: never
+bump+deploy a package without first diffing source against the
+running board's deployed copy. Board frontends are authoritative.
+
+### RuntimeDirectoryPreserve mass-redeploy on gk2
+
+Crowdsec endpoint 502s traced to the unix socket missing from
+`/run/secubox/`. Another secubox service had restarted with a unit
+file lacking `RuntimeDirectoryPreserve=yes` and wiped the directory
+for everyone. Source-side commit 24000d67 (v2.12.10 era) had already
+added the keyword to all 96 source units, but only 16/127 service
+files on gk2 had it — the other 111 packages had never been
+redeployed since the commit.
+
+Rebuilt 100 packages (3 needed `-d` to skip `python3-all` build-dep
+not installed locally; `scripts/build-packages.sh` hardcoded list
+only covers 30/100 so the remaining 70 went through a one-off shell
+loop) and shipped them all to gk2 with `dpkg -i --force-confold`. The
+cascade of 100 unordered postinst restarts overwhelmed the Marvell
+ARM board; SSH and HTTPS timed out, an emergency reboot was needed
+and triggered an fsck on `/data`.
+
+Post-reboot state: NTP auto-synced (TOTP login OK), 84/127 services
+with Preserve, 41 services without `RuntimeDirectory=` at all (so
+Preserve is sans objet), 2 real stragglers remaining
+(`secubox-torrent`, `secubox-voip`) tracked in TODO P0.
+
+### wazuh postinst tolerates masked unit (`63284497`)
+
+One of the 100 packages (`secubox-wazuh`) initially failed the
+mass-install: postinst called `systemctl enable secubox-wazuh.service`
+unconditionally, the operator had masked that unit at firstboot,
+`systemctl enable` returns exit 1 against a masked unit, `set -e`
+aborted the script, dpkg left the package `half-configured`. Recovery
+on board was `unmask → dpkg --configure → re-mask` to preserve
+operator intent. Source-side fix wraps enable+start in a
+`systemctl is-enabled ... != "masked"` check. Same pattern likely
+belongs in every other secubox-* postinst — audit tracked in TODO P0.
+
+### Memory entries saved
+
+- `feedback_source_first_always` — diff source vs board before any
+  bump/deploy; board frontend is authoritative.
+- `feedback_global_refactor_acceptable` — cross-package mass refactors
+  are correct when source-side fixes have stalled un-deployed;
+  performance-first design (warm asyncio cache, off-request-path
+  compute) preferred over correctness-only.
+
+---
 ## 2026-05-24
 
 ### Module dual-vhost split — MUST pattern + lyrion/zigbee/authelia alignment
