@@ -4,8 +4,14 @@ case "$1" in
   configure)
     install -d -o root -g root -m 755 /var/lib/secubox/wazuh
     systemctl daemon-reload
-    systemctl enable secubox-wazuh.service
-    systemctl start secubox-wazuh.service || true
+    # Respect operator masking — `systemctl enable` aborts with exit 1
+    # on masked units and `set -e` would then leave the package
+    # half-configured. Boards that don't use wazuh often mask this
+    # unit at firstboot.
+    if [ "$(systemctl is-enabled secubox-wazuh.service 2>/dev/null)" != "masked" ]; then
+      systemctl enable secubox-wazuh.service
+      systemctl start secubox-wazuh.service || true
+    fi
     systemctl reload nginx 2>/dev/null || true
     ;;
 esac
