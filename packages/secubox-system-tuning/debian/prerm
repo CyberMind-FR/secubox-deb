@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+# On removal: deliberately leave /data/swapfile and the LXC drop-ins
+# in place. Removing them mid-board-life could trigger OOM-killer on
+# heavy LXC containers. Operator can remove manually:
+#   swapoff /data/swapfile && rm /data/swapfile
+#   rm -rf /etc/systemd/system/lxc@*.service.d/50-memory-high.conf
+#   systemctl daemon-reload
+#   <restart LXC containers to drop runtime caps>
+
+#DEBHELPER#
+exit 0

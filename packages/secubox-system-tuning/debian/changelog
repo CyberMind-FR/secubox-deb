@@ -1,0 +1,19 @@
+secubox-system-tuning (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release — captures the gk2 RAM optimization applied by
+    hand on 2026-05-27 (closes #391).
+  * Creates /data/swapfile (default 4G) if /data has enough free
+    space and no swap is currently active; persists in /etc/fstab.
+  * Applies per-LXC-container cgroup MemoryHigh caps two ways:
+    - immediate cgroup write to /sys/fs/cgroup/lxc.payload.<name>/
+      memory.high for runtime effect, no restart needed;
+    - persistent edit of /data/lxc/<name>/config (or /var/lib/lxc/
+      <name>/config — falls back) adding
+      lxc.cgroup2.memory.high = <cap> so the cap is re-applied on
+      every lxc-start by lxc-autostart at boot.
+  * Idempotent secubox-tuning-apply script — re-run after editing
+    /etc/secubox/tuning/lxc-memory-high.toml to update caps.
+  * Default cap profile from gk2 (mail/matrix/mitmproxy/nextcloud/
+    lyrion/grafana/horde/authelia/mqtt/rustdesk/roundcube/zigbee).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 19:45:00 +0000
