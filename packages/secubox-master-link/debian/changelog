@@ -1,3 +1,22 @@
+secubox-master-link (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Transitional package — payload folded into secubox-p2p (>= 1.7)
+    (closes #384)
+  * Pre-1.1 master-link was effectively dead on a running system: its
+    standalone FastAPI service ran on /run/secubox/master-link.sock
+    but the package shipped no nginx config, so the 21 API endpoints
+    were unreachable from the web. The visible /master-link/ UI was
+    served by secubox-p2p all along.
+  * Section: oldlibs; no files shipped; postinst stops + disables +
+    removes the orphaned secubox-master-link.service and the
+    orphaned /usr/share/secubox/www/master-link/ frontend.
+  * The pre-1.1 state directory /var/lib/secubox/master-link/ is
+    preserved on upgrade so direct-socket clients (if any) can
+    retrieve token/peer data manually.
+  * Maintainer corrected to Gerald KERMA.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 13:00:00 +0000
+
 secubox-master-link (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
