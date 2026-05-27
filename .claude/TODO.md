@@ -5,6 +5,46 @@
 
 ## 🔥 P0 — Immediate (in flight)
 
+### Session 2026-05-27 follow-ups (consolidation pass)
+
+- [ ] **`secubox-daemon` arm64 cross-build + deploy** so the
+  c3box binary-package rename (#378, in master at `4cd5f343`)
+  lands on gk2 and other arm64 boards. Either:
+  (a) on a Marvell-arm64 host: `cd daemon && make build-arm64`,
+      rename `secuboxd-arm64` → `secuboxd` (etc.) in `daemon/build/`,
+      then `cd packages/secubox-daemon && dpkg-buildpackage -us -uc -b`;
+  (b) patch `packages/secubox-daemon/debian/rules` to detect target
+      arch and use the `-arm64`-suffixed binaries when cross-building
+      from amd64 (cleaner, lets the dev box build everything).
+  Non-acute: secubox-daemon not currently installed on gk2.
+
+- [ ] **`secubox-ndpid 1.0.1` blocked from gk2** by missing
+  `ndpid | ndpi-reader` apt source. Options:
+  (a) add an apt source that provides `ndpid` for bookworm/arm64;
+  (b) package `ndpid` ourselves under `packages/ndpid/`;
+  (c) relax `secubox-ndpid` `Depends:` → `Recommends:` and add a
+      runtime check that surfaces "ndpid daemon unavailable" in the
+      dashboard instead of refusing to install.
+  Recommend (c) for shortest path — operators who want the
+  fingerprinting dashboard install ndpid themselves.
+
+- [ ] **Mail transitional postinsts** (#380) should rm orphan nginx
+  snippets on upgrade. On gk2 today, dpkg's `.list` for
+  `secubox-mail-lxc 2.2.1`, `secubox-webmail 2.2.0`, `secubox-
+  webmail-lxc 2.2.0` claimed to own `/etc/nginx/secubox.d/
+  {mail-lxc,webmail,webmail-lxc}.conf` but the new (empty) .debs
+  don't ship them — leftovers from a pre-2.2 install that dpkg
+  didn't auto-clean. Patch each transitional postinst to add:
+
+  ```sh
+  rm -f /etc/nginx/secubox.d/<name>.conf
+  systemctl reload nginx 2>/dev/null || true
+  ```
+
+  (Mirror the mmpm pattern from #381's transitional postinst.)
+  Bump versions, rebuild, mass-redeploy. Without this fix, other
+  boards upgrading from <2.2 will inherit the same orphan files.
+
 ### Session 2026-05-26 follow-ups
 
 - [ ] **Finir Preserve fix sur 2 services restants** : `secubox-torrent` et
