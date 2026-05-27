@@ -1,12 +1,21 @@
 Source: secubox-identity
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-identity
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Identity Module
- Decentralized Identity
+Description: SecuBox Identity — decentralized identity management
+ Decentralized identity (DID) management for SecuBox: identity
+ issuance, verification, and lifecycle. Distinct from user-account
+ management (which is secubox-users' job).
+ .
+ Distinct from sibling packages in the identity stack:
+  - secubox-users — local user accounts (Argon2id hashes, TOTP, RBAC).
+  - secubox-auth — JWT auth guardian / session middleware.
+  - secubox-portal — web login portal.
+  - secubox-authelia — Authelia SSO IdP (LXC).
+  - secubox-avatar — profile image + display-name manager.
