@@ -1,3 +1,11 @@
+secubox-vortex-firewall (1.0.1-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as the nftables threat-feed
+    enforcer (complement to secubox-vortex-dns for IP-layer
+    enforcement vs DNS-layer) (closes #387)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 16:00:00 +0000
+
 secubox-vortex-firewall (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release

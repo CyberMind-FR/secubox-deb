@@ -1,3 +1,10 @@
+secubox-gitea (1.4.3-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as the self-hosted Gitea
+    Git server LXC-container manager (closes #387)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 16:00:00 +0000
+
 secubox-gitea (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * /data convention migration (#319 Phase 1). All hardcoded /srv/<pkg>
