@@ -1,12 +1,24 @@
 Source: secubox-master-link
-Section: admin
+Section: oldlibs
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-master-link
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Master-link Module
- Mesh Node Enrollment
+Section: oldlibs
+Depends: ${misc:Depends}, secubox-p2p (>= 1.7)
+Description: Transitional package — master-link folded into secubox-p2p
+ Mesh node enrollment lives inside secubox-p2p (>= 1.7), reachable
+ at /master-link/ and /api/v1/p2p/master-link/*. This package ships
+ no files. Safe to apt-get autoremove after upgrade.
+ .
+ Pre-1.1 secubox-master-link installs were never reachable via
+ nginx — the standalone service ran on /run/secubox/master-link.sock
+ but no nginx config routed to it. Operators saw secubox-p2p's
+ master-link UI all along.
+ .
+ The pre-1.1 state directory at /var/lib/secubox/master-link/ is
+ preserved on upgrade so any direct-socket clients can retrieve
+ their token/peer data manually. Delete it after migration.

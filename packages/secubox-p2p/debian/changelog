@@ -1,3 +1,16 @@
+secubox-p2p (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Absorb the master-link role from secubox-master-link (closes #384)
+    - Pre-1.7 secubox-master-link was effectively dead on production:
+      its 21-endpoint API was unreachable via nginx, while p2p's own
+      /master-link/* endpoints + frontend at /var/www/secubox/master-link/
+      provided the live UX all along
+    - Add Breaks/Replaces secubox-master-link (<< 1.1) so apt
+      full-upgrade removes the orphaned package cleanly
+    - Description updated to call out master-link ownership
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 13:00:00 +0000
+
 secubox-p2p (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Add Master-Link Admin Dashboard (/master-link/admin.html)

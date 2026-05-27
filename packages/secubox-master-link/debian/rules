@@ -1,11 +1,12 @@
 #!/usr/bin/make -f
+# Transitional package — ships no files. dh handles the metadata only.
 %:
 	dh $@
 
 override_dh_auto_install:
-	install -d debian/secubox-master-link/usr/lib/secubox/master-link
-	cp -r api debian/secubox-master-link/usr/lib/secubox/master-link/
-	install -d debian/secubox-master-link/usr/share/secubox/www/master-link
-	cp -r www/master-link/. debian/secubox-master-link/usr/share/secubox/www/master-link/
-	install -d debian/secubox-master-link/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-master-link/usr/share/secubox/menu.d/ || true
+	# intentionally empty — no payload in transitional package
+	:
+
+override_dh_installsystemd:
+	# intentionally empty — service has been removed
+	:

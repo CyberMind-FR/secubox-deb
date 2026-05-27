@@ -1,9 +1,29 @@
 #!/bin/sh
 set -e
+
+# Transitional package (secubox-master-link 1.1.0) — clean up the orphaned
+# standalone service, frontend, and nginx routing residue from <1.1 installs.
+# secubox-p2p (>= 1.1) is now the canonical owner of /master-link/ UI and
+# enrollment endpoints.
+#
+# The /var/lib/secubox/master-link/ state directory is intentionally NOT
+# removed: any direct-socket clients (rare) can retrieve token/peer data
+# from there manually before deleting it.
 if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-master-link.service || true
-    systemctl start secubox-master-link.service || true
+    if [ -e /lib/systemd/system/secubox-master-link.service ] \
+       || [ -e /etc/systemd/system/secubox-master-link.service ]; then
+        systemctl stop    secubox-master-link.service 2>/dev/null || true
+        systemctl disable secubox-master-link.service 2>/dev/null || true
+        rm -f /lib/systemd/system/secubox-master-link.service \
+              /etc/systemd/system/secubox-master-link.service
+        systemctl daemon-reload || true
+    fi
+    rm -rf /usr/lib/secubox/master-link
+    rm -rf /usr/share/secubox/www/master-link
+    rm -f /usr/share/secubox/menu.d/200-master-link.json
+    rm -f /etc/nginx/secubox.d/master-link.conf
+    systemctl reload nginx 2>/dev/null || true
 fi
+
 #DEBHELPER#
 exit 0
