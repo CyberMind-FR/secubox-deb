@@ -1,9 +1,0 @@
-{
-  "id": "webmail",
-  "name": "Webmail",
-  "category": "mesh",
-  "icon": "📬",
-  "path": "/webmail/",
-  "order": 56,
-  "description": "Webmail - Roundcube/SOGo"
-}
