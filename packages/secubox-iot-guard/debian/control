@@ -1,12 +1,15 @@
 Source: secubox-iot-guard
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-iot-guard
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Iot-guard Module
- IoT Device Security
+Description: SecuBox IoT Guard — IoT device discovery + segmentation
+ Inventories IoT devices on the LAN (vendor MAC OUI, mDNS/SSDP/MQTT
+ fingerprints), classifies them by type, and applies nftables
+ micro-segmentation policies to keep IoT traffic isolated from
+ trusted hosts.

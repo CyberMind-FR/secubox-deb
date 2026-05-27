@@ -1,12 +1,15 @@
 Source: secubox-localrecall
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-localrecall
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Localrecall Module
- AI Memory System
+Description: SecuBox LocalRecall — on-box AI memory store
+ Long-term, on-box memory store for AI assistants: conversation
+ history, learned operator preferences, project context. Local
+ storage only — nothing leaves the box. Pairs with secubox-mcp-server
+ if exposing memory contents to MCP-compatible AI clients.
