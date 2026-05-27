@@ -2,6 +2,145 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-27 (afternoon/evening session — peertube + photoprism + mail + WAF)
+
+Continuation of the morning consolidation session. Operator-driven
+work on three fronts: peertube package + container + URL, photoprism
+LXC + Nextcloud-shared photos folder, and mail/WAF/SSO unblocking
+mobile clients. Eight new PRs (#388–#395) and substantial live-fix
+work on gk2.
+
+### Container infra (gk2)
+
+* **2 new LXC containers** at `/data/lxc/{peertube,photoprism}/`,
+  each at 10.100.0.{120,130}. Both started life with the strict
+  `common.conf + userns.conf + apparmor.profile=generated` template
+  default, which blocked unprivileged operations (postgres-15
+  postinst chown, podman CNI bridge iptables, even basic apt). Fixed
+  by aligning their config with the working `matrix` LXC template:
+  single `lxc.include = /usr/share/lxc/config/debian.common.conf`,
+  drop the apparmor lines, keep the `lxc.idmap` UID mapping.
+* **Bind-mount UID ownership pattern** captured the hard way: bind
+  mounts default to host-root ownership which the LXC root (UID
+  100000 outside) cannot chown. Both peertube postgres + photoprism
+  storage failed with "Operation not permitted" until host-side
+  `chown -R 100000:100000 /data/<service>/` opened the dirs for the
+  LXC. Recipe should ship in the LXC template wiki.
+
+### IP forwarding / NAT (gk2)
+
+* **All LXC containers were silently cut off from external internet**
+  (apt update inside any container → DNS Temporary failure → fail).
+  Root cause: `99-secubox-hardening.conf` sets `ip_forward = 0`; my
+  `90-secubox-lxc-forward.conf` from the consolidation session was
+  alphabetically earlier and lost. Renamed to
+  `99-secubox-zz-lxc-forward.conf` so it wins. Also added
+  `net.ipv4.conf.all.forwarding = 1` explicitly (the legacy
+  `ip_forward` key alone isn't enough on modern Debian).
+* **Masquerade rule targeted `eth2`** which is DOWN — real WAN is
+  `lan0` (192.168.1.200/24, default route via 192.168.1.254). Added
+  `oif lan0 masquerade` to `inet nat postrouting`, traffic now
+  egresses correctly. Should backport to `secubox-system-tuning`.
+
+### Swap (gk2)
+
+* Added `/data/swapfile2` (4 GB) bringing total swap to **8 GB**
+  (was 4 GB from session #391). 
+
+### PhotoPrism — LIVE (#388 follow-up)
+
+* `secubox-photoprism` LXC running podman → official
+  `docker.io/photoprism/photoprism:latest` (Ubuntu 26.04 / 2.59 GB
+  image) with `--network=host` (CNI bridge can't add iptables rules
+  in unprivileged LXC), `PHOTOPRISM_HTTP_PORT=2342`, sqlite DB.
+* Bind mounts: `/var/lib/photoprism/originals` ← `/data/shared/photos`
+  (shared with NC), `/var/lib/photoprism/{storage,import}` ←
+  `/data/photoprism/{storage,import}`.
+* Public URL `https://photoprism.gk2.secubox.in/` wired:
+  - nginx vhost `/etc/nginx/sites-available/photoprism.conf` → 9080 →
+    `10.100.0.130:2342`
+  - HAProxy ACL `host_photoprism_gk2_secubox_in` added to both
+    http-in + https-in frontends → `nginx_vhosts` backend
+  - URL returns 307 (PhotoPrism login redirect) ✓
+  - login: `admin` / `secubox-CHANGE-ME` (must rotate)
+
+### Nextcloud — bind mount + URL alias + SSO removal (#394)
+
+* **Photo sync ready**: `/data/shared/photos` bind-mounted into NC at
+  `/var/www/nextcloud/data/Photos` (NC LXC config edit, requires
+  restart). Smartphone NC client → "Photos" folder → PhotoPrism
+  auto-indexes via the shared dir.
+* **URL `nextcloud.gk2.secubox.in` worked end-to-end** by:
+  - mitmproxy haproxy-routes.json entry added
+    (`nextcloud.gk2.secubox.in → 192.168.1.200:9080`) — **TWICE**,
+    once on host's `/srv/mitmproxy/haproxy-routes.json` and once on
+    the LXC's separate copy (live config drift — see TODO).
+  - nginx vhost `server_name` aliased: `nc.gk2.secubox.in
+    nextcloud.gk2.secubox.in;`
+  - mitmproxy LXC service restarted to pick up the new routes
+* **SSO removed from NC vhost** so official Nextcloud mobile client
+  (which uses HTTP Basic + app-password, not browser cookies) can
+  authenticate. Comment-out preserves the four
+  `auth_request` / `error_page 401` / `auth_request_set` /
+  `proxy_set_header X-Forwarded-User` lines for revert symmetry.
+  Source backport in #394 → `secubox-nextcloud 1.3.5`.
+* **NC bruteforce protection disabled at runtime** + table truncated.
+  The SSO loop had triggered NC's own bf throttle; operator
+  re-enables via `occ config:system:set
+  auth.bruteforce.protection.enabled --value=true` after confirming
+  mobile reconnect.
+
+### WAF cred-004 false-positive (#395)
+
+* After SSO unblock, NC mobile client hit a NEW 403 wall: WAF rule
+  `cred-004` ("JWT/token in URL", severity=critical) matches NC's
+  legitimate `/index.php/login/v2/poll?token=…` polling, banning the
+  client IP after `BAN_THRESHOLD=3` polls (every ~1-2 sec).
+* Fix: path-based early-return skip in
+  `packages/secubox-waf/mitmproxy/secubox_waf.py check_request()`
+  for `/index.php/login/v2/` and `/ocs/v2.php/core/login`. Source
+  bumped to `secubox-waf 1.1.3`; live patch applied to gk2's
+  `/data/lxc/mitmproxy/rootfs/srv/mitmproxy/secubox_waf.py`.
+* Verified: 0 new 403s in 60+ sec post-fix vs 1/sec before.
+
+### CrowdSec allowlist (gk2)
+
+* Created `cscli allowlist secubox-trusted` with 4 internal nets
+  (192.168.1.0/24, 192.168.255.0/24, 10.100.0.0/24, 10.0.3.0/24).
+  Operator's public IP not added (would need user input).
+
+### LXC DNS systemd-resolved gotcha
+
+* Fresh download-template LXCs default to systemd-resolved stub
+  resolv.conf (127.0.0.53) that has no actual nameservers
+  configured. Both peertube + photoprism failed apt with
+  "Temporary failure resolving 'deb.debian.org'" until I overwrote
+  /etc/resolv.conf with `nameserver 1.1.1.1 / 8.8.8.8`. The fix
+  doesn't persist across LXC restarts (systemd-resolved rewrites
+  it). Should ship a stable resolv.conf in the LXC template
+  bootstrap.
+
+### Peertube — install in flight at session end
+
+* LXC up at 10.100.0.120, all bind mounts + network OK, podman/
+  postgres prerequisites unblocked by the template fix + bind-mount
+  chown. Install script at `/root/install-peertube.sh` running step
+  6/8 (`yarn install --production --pure-lockfile`, ~10000 packages
+  on arm64). Monitor armed; service expected active in ~15-25 min.
+* Pre-emptively rewired host nginx `peertube.conf` `proxy_pass →
+  10.100.0.120:9000` (was 127.0.0.1:9001 from the earlier Podman
+  attempt). HAProxy ACL was already in place from #390.
+
+### Live config drift discovered (mitmproxy)
+
+* `/srv/mitmproxy/haproxy-routes.json` on the host is NOT
+  bind-mounted into the mitmproxy LXC. Each has its own copy,
+  edits to one don't reach the other. Tripped me up when adding
+  the nextcloud.gk2.secubox.in route. Recipe: also bind-mount
+  the LXC's `/srv/mitmproxy/` from host. Same applies to
+  `secubox_waf.py`. Filed in TODO.
+
+---
 ## 2026-05-27
 
 ### Consolidation pass — full per-cluster audit + 2 real merges + 5 naming sweeps + gk2 deploy

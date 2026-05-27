@@ -1,9 +1,80 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-05-27*
+*Mis à jour : 2026-05-27 (evening)*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Session 2026-05-27 evening follow-ups (peertube + photoprism + WAF)
+
+- [ ] **Peertube install monitoring**: still at step 6/8
+  (`yarn install --production`) in the LXC at 10.100.0.120 at session
+  end. When complete, verify https://peertube.gk2.secubox.in/ returns
+  PeerTube content (was 502; nginx vhost already rewired to
+  `10.100.0.120:9000`). If yarn install fails, fall back to PeerTube
+  Docker image inside the LXC (similar pattern to PhotoPrism with
+  `--network=host`).
+
+- [ ] **NC bruteforce protection re-enable** after operator confirms
+  mobile NC client reconnects successfully:
+
+  ```sh
+  ssh root@192.168.1.200 lxc-attach -n nextcloud -P /data/lxc -- \
+    sudo -u www-data php /var/www/nextcloud/occ \
+    config:system:set auth.bruteforce.protection.enabled \
+    --value=true --type=boolean
+  ```
+
+- [ ] **PhotoPrism admin password rotation**: still `secubox-CHANGE-ME`
+  from the initial systemd unit env. Operator should:
+  1. Login at https://photoprism.gk2.secubox.in/
+  2. Settings → Account → change password
+  3. Edit `/data/lxc/photoprism/rootfs/etc/systemd/system/photoprism.service`
+     `PHOTOPRISM_ADMIN_PASSWORD=` line to match (so future restarts
+     don't fight the DB)
+
+- [ ] **PhotoPrism auto-index of new photos**: NC client syncs to
+  `/data/shared/photos`; PhotoPrism only picks up new files on
+  `/library/index` API call or manual UI button. Add a systemd timer
+  inside the photoprism LXC that calls
+  `photoprism index` (or the HTTP API) every N minutes. Or
+  inotifywait-based watcher.
+
+- [ ] **LXC template bootstrap fixes** (capture lessons-learned):
+  1. **DNS**: fresh download-template LXCs ship a
+     systemd-resolved stub with no nameservers. Workaround: overwrite
+     `/etc/resolv.conf` with `nameserver 1.1.1.1 / 8.8.8.8`. Should
+     bake into the LXC template or a one-shot first-boot script.
+  2. **Template choice**: `lxc-create -t download -- -d debian` uses
+     `common.conf + userns.conf + apparmor=generated` by default,
+     which breaks postgres-15 postinst + podman CNI. Use
+     `debian.common.conf` (matrix template). Document in
+     wiki.
+  3. **Bind-mount UID ownership**: bind-mounted dirs default to host
+     root, LXC root (UID 100000 outside) can't chown across. Recipe:
+     `chown -R 100000:100000 /data/<svc>/` on host BEFORE first
+     container start. Document.
+
+- [ ] **mitmproxy + WAF live-config drift**: host's
+  `/srv/mitmproxy/haproxy-routes.json` and `secubox_waf.py` are NOT
+  bind-mounted into the mitmproxy LXC. Each has its own copy →
+  source-side edits don't propagate. Fix: add
+  `lxc.mount.entry = /srv/mitmproxy srv/mitmproxy none bind,create=dir`
+  to `/data/lxc/mitmproxy/config` so edits flow either way. Beware:
+  the LXC currently has `mitmproxy:mitmproxy` ownership; host owns
+  by root. Need to align UIDs first.
+
+- [ ] **IP-forward + lan0-masquerade backport to
+  `secubox-system-tuning`**: live fix on gk2 used
+  `99-secubox-zz-lxc-forward.conf` (alphabetical win) + manual
+  `nft add rule inet nat postrouting oif lan0 masquerade`. Backport
+  both as part of the tuning package so other boards inherit it on
+  apt install. Bump secubox-system-tuning to 1.1.0.
+
+- [ ] **CrowdSec public-IP allowlist**: operator's home/cellular IP
+  not in `secubox-trusted` allowlist (would need them to run
+  `curl ifconfig.me`). Without it they may hit external bf
+  scenarios. Add when known.
 
 ### Session 2026-05-27 follow-ups (consolidation pass)
 
