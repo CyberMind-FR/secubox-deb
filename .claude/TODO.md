@@ -1,9 +1,51 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-05-20*
+*Mis à jour : 2026-05-27*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Session 2026-05-26 follow-ups
+
+- [ ] **Finir Preserve fix sur 2 services restants** : `secubox-torrent` et
+  `secubox-voip` (les seuls avec `RuntimeDirectory=` mais sans
+  `RuntimeDirectoryPreserve=yes` après le mass-redeploy). Rebuild +
+  `dpkg -i` ces deux .debs seulement. ~2 min.
+
+- [ ] **Auditer tous les `postinst` qui font `systemctl enable` sans
+  tolérer les units masked.** Pattern à reproduire (depuis le fix
+  wazuh `63284497`) :
+
+  ```sh
+  if [ "$(systemctl is-enabled secubox-X.service 2>/dev/null)" != "masked" ]; then
+    systemctl enable secubox-X.service
+    systemctl start secubox-X.service || true
+  fi
+  ```
+
+  Sinon le prochain mass-redeploy se ramasse les mêmes
+  `half-configured` sur toute box qui a masked un service par choix
+  opérateur. Audit via `grep -L 'is-enabled.*masked' packages/*/debian/postinst | xargs grep -l 'systemctl enable'`.
+
+- [ ] **`secubox-system-restart` orchestrateur** (issue à créer) :
+  remplacer le `dpkg -i pkg1.deb pkg2.deb ... pkgN.deb` brutal par un
+  workflow ordonné qui :
+  1. Bloque les writers dashboard (mode read-only sur /data)
+  2. `sync` + `umount /data` (ou snapshot lvm)
+  3. Stop ordonné des services (dependency-graph aware)
+  4. Replay `dpkg -i` sur le lot
+  5. Remount /data + bring up dans l'ordre `secubox.target` →
+     `secubox-core` → modules
+  6. Unblock writers
+  Évite le cascade de 100 systemd restarts en parallèle + le fsck forcé
+  sur /data au reboot. Pas urgent mais nécessaire avant la prochaine
+  mass-deploy.
+
+- [ ] **`scripts/build-packages.sh` discovery dynamique** : la liste
+  `PACKAGES=()` est hardcodée (30 entrées) alors qu'on a 100+ paquets
+  dans `packages/*/debian/`. Remplacer par
+  `mapfile -t PACKAGES < <(find packages -maxdepth 2 -type d -name debian | sed 's|/debian||;s|^packages/||' | sort)`.
+  Le `--filter` continuera de fonctionner.
 
 - [ ] **v2.11.1 patch** — commit + PR + tag the 4 install-lxc.sh fixes once
   validated on board gk2:
