@@ -1,3 +1,16 @@
+secubox-dpi (1.0.5-1~bookworm1) bookworm; urgency=low
+
+  * Clarify Description: this is the netifyd-backed analytics layer
+    that complements secubox-netifyd (daemon lifecycle), not a
+    duplicate of it (closes #382)
+  * Recommend secubox-netifyd so operators get the full daemon-control
+    + analytics experience together
+  * Drop the "dual-stream netifyd/nDPId" framing — the code is
+    netifyd-only; nDPId-engine analysis lives in secubox-ndpid
+  * README rewritten to match
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 11:00:00 +0000
+
 secubox-dpi (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
