@@ -8,5 +8,15 @@ Standards-Version: 4.6.2
 Package: secubox-p2p
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, avahi-daemon, avahi-utils
+Breaks: secubox-master-link (<< 1.1)
+Replaces: secubox-master-link (<< 1.1)
 Description: SecuBox P2P - Peer-to-Peer Network Hub
- P2P network management with peers, services, mesh visualization, and threat intel.
+ P2P network management with peers, services, mesh visualization, and
+ threat intel. Includes master-link enrollment (token issuance, peer
+ approval, join workflow) served at /master-link/ and
+ /api/v1/p2p/master-link/*.
+ .
+ As of 1.7, this package absorbs the master-link role that was
+ previously shipped as a separate (but never nginx-reachable)
+ secubox-master-link package. Operators who had secubox-master-link
+ installed see it autoremoved on apt full-upgrade.
