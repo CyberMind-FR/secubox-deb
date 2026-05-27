@@ -137,13 +137,28 @@ Evidence lives in `out/clusters-fuzzy.txt`.
 - `mmpm` is the MagicMirror package manager — pure tooling around the
   same daemon.
 
-**`secubox-dpi` cluster: 4 → 2  (-2)**
+**~~`secubox-dpi` cluster: 4 → 2 (-2)~~ REVISED 2026-05-27: naming-fix only, no merge**
 - Members: `secubox-dpi`, `secubox-netifyd`, `secubox-ndpid`,
   `secubox-mediaflow`
-- `mediaflow` already declares `Depends: secubox-dpi` — tightly
-  coupled.
-- Proposal: `secubox-dpi` (engines: netifyd + ndpid + dpi dashboard) +
-  `secubox-mediaflow` (consumer dashboard) stays as separate consumer.
+- On closer inspection the four packages have **distinct** operator
+  roles, not duplicated ones:
+  - `secubox-netifyd` is the netifyd daemon lifecycle dashboard
+    (start/stop/config/alerts/restart/interfaces).
+  - `secubox-dpi` is the analytics layer on top of netifyd (top apps,
+    top protocols, bandwidth-by-app/device, talkers, risks, tc mirred
+    setup). Same daemon, different operator workflow.
+  - `secubox-ndpid` is the dashboard for the nDPId engine — different
+    backend daemon, JA3/JA4 TLS fingerprinting.
+  - `secubox-mediaflow` is a downstream consumer of DPI for
+    streaming/VoIP classification.
+- The audit's original "dual-stream netifyd/nDPId" framing for
+  `secubox-dpi` was aspirational — the code is netifyd-only, and
+  nDPId-engine analysis is already owned by `secubox-ndpid`.
+- Real bug surfaced: `secubox-dpi`'s Description headline ("netifyd
+  Dashboard") collided with `secubox-netifyd`'s. Fixed in #382 by
+  rewriting the Description + Recommends to make the layered model
+  explicit. No package merges.
+- **Decision: keep all four packages. Net reduction = 0.**
 
 ### Tier 3 — Plan-stub clusters confirmed by data
 
@@ -213,7 +228,7 @@ rename one or more for clarity**:
 |---|---|---|
 | Tier 0 (cleanup broken pkgs) | -1 to -2 | 139-140 |
 | Tier 1 (mail) | -3 | 136-137 |
-| Tier 2 (magicmirror, dpi — streamlit dropped 2026-05-27) | -3 | 133-134 |
+| Tier 2 (magicmirror only — streamlit + dpi dropped 2026-05-27) | -1 | 135-136 |
 | Tier 3 (dns, threats, mesh) | -14 | 118-119 |
 | Tier 4 (if all approved) | -18 | ~100-101 |
 
