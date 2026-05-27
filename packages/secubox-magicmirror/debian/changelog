@@ -1,3 +1,14 @@
+secubox-magicmirror (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Cluster merge: fold secubox-mmpm into secubox-magicmirror (closes #381)
+    - mmpm endpoints now mounted at /api/v1/magicmirror/mmpm/* via
+      api.routers.mmpm APIRouter
+    - mmpm frontend at /magicmirror/mmpm/ (was /mmpm/)
+    - Breaks/Replaces secubox-mmpm (<< 1.1) for clean upgrade
+  * Maintainer corrected to Gerald KERMA
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 10:00:00 +0000
+
 secubox-magicmirror (1.0.0-1) stable; urgency=low
 
   * Initial release

@@ -1,0 +1,1 @@
+# secubox-magicmirror API
