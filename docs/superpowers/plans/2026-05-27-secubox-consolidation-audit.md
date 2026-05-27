@@ -111,14 +111,26 @@ Evidence lives in `out/clusters-fuzzy.txt`.
 
 ### Tier 2 — Strong evidence, small surface (good first real merges)
 
-**`secubox-streamlit` cluster: 2 → 1  (-1)**
+**~~`secubox-streamlit` cluster: 2 → 1 (-1)~~ SKIPPED on closer inspection (2026-05-27)**
 - Members: `secubox-streamlit`, `secubox-streamforge`
 - `secubox-streamlit` already ships two services (`secubox-streamlit.service`
   and `secubox-streamlit-idle.service`) — the idle variant the plan
   stub flagged as a separate package is already an in-package
-  `ExecStart` variant. So the consolidation here is **fold streamforge
-  in**, not split idle out.
-- Effort: 1-2 days.
+  `ExecStart` variant.
+- However, the two packages serve **distinct operator workflows**:
+  `secubox-streamlit` is the runtime that **runs** Streamlit apps in
+  an LXC container (depends on `lxc`, `debootstrap`, sudoers for LXC,
+  955-line FastAPI, 934-line CLI). `secubox-streamforge` is the
+  template/author tool for **building** apps (no LXC, 660-line
+  FastAPI, 143-line CLI). They appear as separate menu entries
+  (🎯 "Streamlit app platform" vs 🔨 "Streamlit app development")
+  and map back to two distinct LuCI apps in the OpenWrt source
+  (`luci-app-streamlit` and `luci-app-streamlit-forge`).
+- Merging would force every `streamforge` operator to install
+  `lxc`/`debootstrap` (or require a complicated Recommends-vs-Depends
+  split). Net reduction = -1 package; cost = dependency bloat or
+  packaging complexity for marginal user-facing benefit.
+- **Decision: keep both packages separate.**
 
 **`secubox-magicmirror` cluster: 2 → 1  (-1)**
 - Members: `secubox-magicmirror`, `secubox-mmpm`
@@ -201,7 +213,7 @@ rename one or more for clarity**:
 |---|---|---|
 | Tier 0 (cleanup broken pkgs) | -1 to -2 | 139-140 |
 | Tier 1 (mail) | -3 | 136-137 |
-| Tier 2 (streamlit, magicmirror, dpi) | -4 | 132-133 |
+| Tier 2 (magicmirror, dpi — streamlit dropped 2026-05-27) | -3 | 133-134 |
 | Tier 3 (dns, threats, mesh) | -14 | 118-119 |
 | Tier 4 (if all approved) | -18 | ~100-101 |
 
