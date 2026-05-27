@@ -21,13 +21,13 @@ override_dh_auto_install:
 	install -d debian/secubox-daemon/etc/secubox
 	install -m 640 ../../daemon/testdata/secuboxd.yaml debian/secubox-daemon/etc/secubox/secuboxd.yaml.example
 	install -m 644 ../../daemon/testdata/hamgraph.json debian/secubox-daemon/etc/secubox/
-	# secubox-c3box package
-	install -d debian/secubox-c3box/usr/bin
-	install -m 755 ../../daemon/build/c3box debian/secubox-c3box/usr/bin/
-	install -d debian/secubox-c3box/lib/systemd/system
-	install -m 644 ../../daemon/systemd/c3box.service debian/secubox-c3box/lib/systemd/system/
-	install -d debian/secubox-c3box/usr/share/c3box/www
-	cp -r ../../daemon/c3box/frontend/* debian/secubox-c3box/usr/share/c3box/www/ 2>/dev/null || true
+	# secubox-daemon-c3box package (Go variant, distinct from the Python secubox-c3box)
+	install -d debian/secubox-daemon-c3box/usr/bin
+	install -m 755 ../../daemon/build/c3box debian/secubox-daemon-c3box/usr/bin/
+	install -d debian/secubox-daemon-c3box/lib/systemd/system
+	install -m 644 ../../daemon/systemd/c3box.service debian/secubox-daemon-c3box/lib/systemd/system/
+	install -d debian/secubox-daemon-c3box/usr/share/c3box/www
+	cp -r ../../daemon/c3box/frontend/* debian/secubox-daemon-c3box/usr/share/c3box/www/ 2>/dev/null || true
 
 override_dh_auto_clean:
 	# Don't clean pre-built binaries in ../../daemon/build/
