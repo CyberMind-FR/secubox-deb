@@ -18,10 +18,15 @@ Description: SecuBox Mesh Daemon - WireGuard mesh with ZKP authentication
  - SQLite telemetry with metrics collection
  Includes secuboxd daemon, secuboxctl CLI, and c3box dashboard.
 
-Package: secubox-c3box
+Package: secubox-daemon-c3box
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, secubox-daemon
-Description: SecuBox C3BOX - Situational Awareness Dashboard
+Conflicts: secubox-c3box (<< 1.1~)
+Description: SecuBox C3BOX - Situational Awareness Dashboard (Go variant)
  Web-based situational awareness dashboard for SecuBox mesh networks.
  Visualizes mesh topology, node status, and ZKP credentials.
  Connects to secuboxd via Unix socket.
+ .
+ This is the Go-built variant shipped alongside secubox-daemon. It
+ conflicts with the older Python secubox-c3box package; install only
+ one of the two on a given host.
