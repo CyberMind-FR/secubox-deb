@@ -39,25 +39,80 @@
   `/bans` 210 ms (was 5-15 s). `_read_log_tail()` uses
   seek-from-end of 512 KB so memory no longer scales with log size.
 
+- **v2.12.19** (`30e89193`, tagged + pushed): secubox-waf 1.1.2 source
+  committed. See above for the warm-cache rewrite rationale.
+
+- **secubox-soc 1.0.1** (`0de665c5`, on master, deployed): source-side
+  SOC dashboard had silently been rewritten into a "gateway-style" 44 KB
+  frontend that talks to `/api/v1/soc/*` (a backend the production boards
+  don't run). Production boards still ran the 107 KB "comprehensive
+  dashboard" aggregating `/api/v1/hub`, `/api/v1/waf`,
+  `/api/v1/crowdsec` and `/api/v1/hub/public/firewall_summary` — never
+  captured back into source. First deploy of 1.0.1 from raw source
+  clobbered the board's working dashboard and locked the user out
+  (login.html redirect, no gateway backend). Recovery: pulled the 107 KB
+  file from `/srv/www/soc/index.html` (May 10 snapshot still on board)
+  back into source, stripped the `.logo*` CSS overrides that re-styled
+  the sidebar.js-injected SecuBox brand logo as a 40×40 gradient box,
+  committed, rebuilt, redeployed. Source is now the canonical
+  comprehensive dashboard.
+
+  Memory `feedback_source_first_always` saved as a hard rule: never
+  bump+deploy a package without first diff-ing source against what's
+  on the running board. Board frontends are authoritative.
+
+- **RuntimeDirectoryPreserve mass-deploy**: discovered while
+  troubleshooting crowdsec endpoint 502s. The crowdsec Unix socket
+  had vanished from `/run/secubox/` because another secubox service
+  restarted with a unit file that lacked `RuntimeDirectoryPreserve=yes`
+  and wiped the directory. Source-side commit 24000d67 already added
+  the keyword to all 96 source units, but only 16/127 service files on
+  the board had it — the other 111 packages had never been redeployed
+  since the commit. Rebuilt 100 packages (3 needed `-d` to skip
+  python3-all build-dep), shipped 99 to gk2 with
+  `dpkg -i --force-confold`. One package (`secubox-wazuh`) failed
+  install for an unrelated reason — to investigate. The cascade of
+  postinst restarts on a Marvell ARM target overwhelmed the board
+  enough that an emergency reboot was needed and triggered an fsck on
+  `/data` (some writers hadn't shut down cleanly).
+
 ### ⬜ Next up
 
-- **Commit + tag secubox-waf 1.1.2** as v2.12.19 (the .deb is on the
-  board but the source change isn't committed yet).
+- **Operator-facing**: clock sync on gk2 — TOTP rejected during the
+  post-install login flurry, the widget itself reported
+  `Clock not synced (TOTP window widened to ±60s)`. Run
+  `chronyc makestep` / `ntpdate` once the board finishes fsck and
+  returns. Then re-test TOTP.
 
-- **SOC navbar mismatch** on gk2 — operator reports the navbar on
-  `admin.gk2.secubox.in/soc/` isn't the right one. Need to identify
-  which sidebar JS / nginx route is being served vs what's expected.
-  Likely related to `secubox-soc` vs `secubox-soc-web` vs `secubox-hub`
-  ownership of `/usr/share/secubox/www/soc/`.
+- **Verify Preserve count 127/127** on gk2 once SSH is back. Confirm
+  socket survival by restarting a non-critical service and checking
+  `/run/secubox/` is preserved.
 
-- **SOC still missing metrics / some statuses** beyond the firewall
-  widget — list TBD, needs operator screenshot to enumerate.
+- **`secubox-wazuh` install failure** — investigate postinst error.
+
+- **Orchestrated mass-restart helper**: today's lesson —
+  `dpkg -i --force-confold` on 100 packages produced 100 unordered
+  systemctl restarts, fighting each other for /run/secubox and
+  forcing an fsck on /data. Need a `secubox-system-restart` CLI (or a
+  `Before=` chain in unit files, or a `secubox.target` that gates
+  writers behind a quiescence step) so the next mass-deploy can:
+  1. Block dashboard writers, 2. Sync /data, 3. Stop services,
+  4. Replay package install, 5. Bring services up in dependency
+  order, 6. Unblock writers. File an issue and plan before the next
+  mass-deploy.
+
+- **SOC missing metrics / some statuses** beyond the firewall widget —
+  list TBD, needs operator screenshot to enumerate post-recovery.
 
 ### Notes
 
 - Plans (TODO docs) saved earlier but not yet committed:
   `docs/superpowers/plans/2026-05-26-build-scripts-refactor.md`,
   `docs/superpowers/plans/2026-05-26-secubox-modules-consolidation.md`.
+- `scripts/build-packages.sh` has a hardcoded PACKAGES list of 30
+  modules; the other 70 had to be built with a one-off shell loop.
+  Worth refactoring to discover packages dynamically from
+  `packages/*/debian/`.
 - amd64 DHCP work deferred — operator swapping hub for switch first.
 - CI release-upload .gz truncation still pending investigation.
 
