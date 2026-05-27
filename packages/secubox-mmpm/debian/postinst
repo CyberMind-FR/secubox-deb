@@ -1,12 +1,20 @@
-#!/bin/bash
+#!/bin/sh
 set -e
-case "$1" in
-  configure)
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox/mmpm
-    systemctl daemon-reload
-    systemctl enable secubox-mmpm.service
-    systemctl start secubox-mmpm.service || true
+
+# Transitional package (secubox-mmpm 1.1.0) — clean up the old standalone
+# service and nginx snippet if they're still around from <1.1 installs.
+if [ "$1" = "configure" ]; then
+    if [ -e /lib/systemd/system/secubox-mmpm.service ] \
+       || [ -e /etc/systemd/system/secubox-mmpm.service ]; then
+        systemctl stop    secubox-mmpm.service 2>/dev/null || true
+        systemctl disable secubox-mmpm.service 2>/dev/null || true
+        rm -f /lib/systemd/system/secubox-mmpm.service \
+              /etc/systemd/system/secubox-mmpm.service
+        systemctl daemon-reload || true
+    fi
+    rm -f /etc/nginx/secubox.d/mmpm.conf
     systemctl reload nginx 2>/dev/null || true
-    ;;
-esac
+fi
+
 #DEBHELPER#
+exit 0
