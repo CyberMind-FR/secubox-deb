@@ -44,7 +44,7 @@ DEFAULT_CONFIG = {
     "enabled": False,
     "image": "chocobozzz/peertube:production-bookworm",
     "http_port": 9000,
-    "data_path": "/srv/peertube",
+    "data_path": "/data/peertube",
     "timezone": "Europe/Paris",
     "domain": "peertube.secubox.local",
     "haproxy": False,
@@ -68,7 +68,7 @@ class PeerTubeConfig(BaseModel):
     enabled: bool = False
     image: str = "chocobozzz/peertube:production-bookworm"
     http_port: int = 9000
-    data_path: str = "/srv/peertube"
+    data_path: str = "/data/peertube"
     timezone: str = "Europe/Paris"
     domain: str = "peertube.secubox.local"
     haproxy: bool = False
@@ -262,7 +262,7 @@ async def status():
 
     # Disk usage
     disk_usage = ""
-    data_path = Path(cfg.get("data_path", "/srv/peertube"))
+    data_path = Path(cfg.get("data_path", "/data/peertube"))
     if data_path.exists():
         try:
             result = subprocess.run(
@@ -286,7 +286,7 @@ async def status():
         "enabled": cfg.get("enabled", False),
         "image": cfg.get("image", DEFAULT_CONFIG["image"]),
         "http_port": cfg.get("http_port", 9000),
-        "data_path": cfg.get("data_path", "/srv/peertube"),
+        "data_path": cfg.get("data_path", "/data/peertube"),
         "timezone": cfg.get("timezone", "Europe/Paris"),
         "domain": cfg.get("domain", "peertube.secubox.local"),
         "haproxy": cfg.get("haproxy", False),
@@ -583,7 +583,7 @@ async def update_transcoding_settings(settings: TranscodingSettings, user=Depend
 async def get_storage_stats(user=Depends(require_jwt)):
     """Get storage usage statistics."""
     cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/peertube"))
+    data_path = Path(cfg.get("data_path", "/data/peertube"))
 
     stats = {
         "total": "",
@@ -690,7 +690,7 @@ async def install_peertube(user=Depends(require_jwt)):
         return {"success": False, "error": "No container runtime (docker/podman) found"}
 
     cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/peertube"))
+    data_path = Path(cfg.get("data_path", "/data/peertube"))
 
     # Create directories
     for subdir in ["data", "config", "storage"]:
@@ -726,7 +726,7 @@ async def start_peertube(user=Depends(require_jwt)):
         return {"success": False, "error": "No container runtime"}
 
     cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/peertube"))
+    data_path = Path(cfg.get("data_path", "/data/peertube"))
     port = cfg.get("http_port", 9000)
     image = cfg.get("image", DEFAULT_CONFIG["image"])
     tz = cfg.get("timezone", "Europe/Paris")
