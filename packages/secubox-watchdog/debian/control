@@ -8,5 +8,16 @@ Standards-Version: 4.6.2
 Package: secubox-watchdog
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Watchdog Module
- Service and container health monitoring
+Description: SecuBox Watchdog — LXC + service + HTTP health monitor
+ Health monitor for LXC containers, systemd services, and HTTP
+ endpoints with auto-restart for failed targets. Real-time
+ dashboard with 30-second auto-refresh.
+ .
+ Distinct from sibling packages in the monitoring cluster:
+  - secubox-health-doctor — vital-services health check (different
+    target set: focuses on SecuBox-internal critical services).
+  - secubox-device-intel — asset discovery + device fingerprinting
+    (network-side, not service-side).
+  - secubox-netdata, secubox-glances, secubox-metrics — system
+    metrics dashboards (different upstreams: Netdata vs Glances vs
+    Prometheus).

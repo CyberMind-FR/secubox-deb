@@ -8,5 +8,14 @@ Standards-Version: 4.6.2
 Package: secubox-device-intel
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Device-intel Module
- Device Intelligence - Asset discovery and fingerprinting
+Description: SecuBox Device Intel — network asset discovery + fingerprinting
+ Scans the LAN for connected devices, fingerprints them (OS, vendor,
+ SecuBox/OpenWrt theme markers, LuCI version), and tracks asset
+ inventory over time. Distinct from secubox-watchdog (which monitors
+ *known* services for health, not unknown devices).
+ .
+ Distinct from sibling packages in the monitoring cluster:
+  - secubox-watchdog — LXC + service + HTTP health monitor.
+  - secubox-health-doctor — vital-services check.
+  - secubox-netdata, secubox-glances, secubox-metrics — system
+    metrics dashboards.
