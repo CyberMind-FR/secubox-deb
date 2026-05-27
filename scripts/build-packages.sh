@@ -32,39 +32,35 @@ ok()   { echo -e "${GREEN}[  OK ]${NC} $*"; }
 err()  { echo -e "${RED}[FAIL ]${NC} $*" >&2; }
 warn() { echo -e "${GOLD}[ WARN]${NC} $*"; }
 
-# Packages dans l'ordre de dépendance
-PACKAGES=(
-  "secubox-core"
-  "secubox-hub"
-  "secubox-crowdsec"
-  "secubox-netdata"
-  "secubox-wireguard"
-  "secubox-vhost"
-  "secubox-dpi"
-  "secubox-ndpid"
-  "secubox-mediaflow"
-  "secubox-qos"
-  "secubox-system"
-  "secubox-system-hub"
-  "secubox-netmodes"
-  "secubox-nac"
-  "secubox-auth"
-  "secubox-cdn"
-  "secubox-ai-gateway"
-  "secubox-localrecall"
-  "secubox-master-link"
-  "secubox-threat-analyst"
-  "secubox-cve-triage"
-  "secubox-network-anomaly"
-  "secubox-dns-guard"
-  "secubox-iot-guard"
-  "secubox-config-advisor"
-  "secubox-mcp-server"
-  "secubox-identity"
-  "secubox-ad-guard"
-  "secubox-full"
-  "secubox-lite"
+# Auto-discover all secubox-* packages that have a debian/control file.
+# (Previously a hardcoded list that fell out of sync as new packages were
+# added — 18+ packages were silently never built. Issue surfaced on
+# 2026-05-27 during the consolidation deploy.)
+#
+# Build order: secubox-core first (universal Depends:), metapackages
+# (secubox-full / secubox-lite) last, everything else alphabetical
+# between them. The exact order doesn't matter for dpkg-buildpackage
+# (each package builds independently), but the ordering keeps the build
+# log readable and surfaces core/meta build failures early/late
+# respectively.
+mapfile -t _ALL_PKGS < <(
+  for d in "${PACKAGES_DIR}"/secubox-*/; do
+    [[ -d "$d" ]] || continue
+    name=$(basename "$d")
+    [[ -f "${d}debian/control" ]] && echo "$name"
+  done | sort
 )
+PACKAGES=()
+[[ -f "${PACKAGES_DIR}/secubox-core/debian/control" ]] && PACKAGES+=("secubox-core")
+for _p in "${_ALL_PKGS[@]}"; do
+  case "$_p" in
+    secubox-core|secubox-full|secubox-lite) ;;
+    *) PACKAGES+=("$_p") ;;
+  esac
+done
+[[ -f "${PACKAGES_DIR}/secubox-full/debian/control" ]] && PACKAGES+=("secubox-full")
+[[ -f "${PACKAGES_DIR}/secubox-lite/debian/control" ]] && PACKAGES+=("secubox-lite")
+unset _ALL_PKGS _p
 
 log "══════════════════════════════════════════════════════════"
 log "Build all SecuBox packages for ${BOLD}${SUITE}/${ARCH}${NC}"
