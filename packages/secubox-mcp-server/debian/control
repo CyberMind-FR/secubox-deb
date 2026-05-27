@@ -1,12 +1,21 @@
 Source: secubox-mcp-server
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-mcp-server
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Mcp-server Module
- Model Context Protocol Server
+Description: SecuBox MCP Server — Model Context Protocol server for AI tools
+ Hosts a Model Context Protocol (MCP) server exposing SecuBox
+ telemetry, config, and operations to MCP-compatible AI clients
+ (Claude Desktop, Cursor, etc.). Operator-controlled tool surface
+ with per-client authentication.
+ .
+ Distinct from sibling packages in the AI cluster:
+  - secubox-ai-gateway — request router with sovereignty policy.
+  - secubox-ai-insights — ML-based threat detection.
+  - secubox-localai — self-hosted LocalAI LLM runtime.
+  - secubox-ollama — Ollama LLM runtime wrapper.

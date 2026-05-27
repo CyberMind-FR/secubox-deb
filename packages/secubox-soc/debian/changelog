@@ -1,3 +1,11 @@
+secubox-soc (1.0.2-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as the SOC aggregator
+    (consumes Hub/WAF/CrowdSec) and disambiguate from the three
+    other SOC-cluster packages (agent, gateway, web) (closes #386)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 15:00:00 +0000
+
 secubox-soc (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Capture production SOC dashboard back into source. Prior to this
