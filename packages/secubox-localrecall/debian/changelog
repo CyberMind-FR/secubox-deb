@@ -1,3 +1,11 @@
+secubox-localrecall (1.0.1-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as the on-box AI memory
+    store (local-only, pairs with secubox-mcp-server) (closes #387)
+  * Maintainer corrected to Gerald KERMA
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 16:00:00 +0000
+
 secubox-localrecall (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
