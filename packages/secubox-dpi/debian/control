@@ -10,8 +10,18 @@ Rules-Requires-Root: no
 Package: secubox-dpi
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2
-Recommends: netifyd
-Description: SecuBox DPI — netifyd Dashboard
- Deep Packet Inspection dual-stream : netifyd/nDPId, tc mirred ifb0, classification applicative.
+Recommends: netifyd, secubox-netifyd
+Description: SecuBox DPI Analytics — netifyd-backed app/protocol classification
+ Analytics layer on top of netifyd: top applications, top protocols,
+ bandwidth-by-app, bandwidth-by-device, talkers, and risk visualization.
+ Configures tc mirred to ifb0 for inline inspection.
  .
- Port Debian bookworm de luci-app-netifyd-dashboard (SecuBox OpenWrt / CyberMind.fr).
+ Complements secubox-netifyd, which manages the netifyd daemon
+ lifecycle (start/stop/config/alerts). Install both for the full
+ daemon-control + analytics experience. For TLS fingerprinting and
+ nDPId-engine analysis, install secubox-ndpid instead — it covers a
+ different DPI engine and is not provided by this package despite
+ historical "dual-stream" framing.
+ .
+ Port Debian bookworm de luci-app-netifyd-dashboard (SecuBox OpenWrt
+ / CyberMind.fr).
