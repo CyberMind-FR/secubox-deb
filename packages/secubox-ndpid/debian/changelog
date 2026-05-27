@@ -1,3 +1,13 @@
+secubox-ndpid (1.0.1-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as the nDPId-engine DPI
+    dashboard with TLS fingerprinting, and disambiguate from the
+    three other DPI-cluster packages (closes #386)
+  * Maintainer corrected to Gerald KERMA
+  * Distribution corrected from "stable" to "bookworm"
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 15:00:00 +0000
+
 secubox-ndpid (1.0.0-1) stable; urgency=medium
 
   * Initial release

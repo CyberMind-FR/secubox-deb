@@ -1,7 +1,7 @@
 Source: secubox-ndpid
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
@@ -9,7 +9,14 @@ Package: secubox-ndpid
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0), ndpid | ndpi-reader, python3-zmq
 Recommends: secubox-dpi
-Description: SecuBox nDPId Module
- Deep Packet Inspection with nDPI daemon integration.
- Features JA3/JA3S/JA4 TLS fingerprinting, protocol detection,
- application classification, risk scoring, and flow analysis.
+Description: SecuBox nDPId — DPI dashboard with JA3/JA4 TLS fingerprinting
+ nDPId-backed deep packet inspection dashboard: JA3/JA3S/JA4 TLS
+ fingerprinting, protocol detection, application classification,
+ risk scoring, and SQLite flow database.
+ .
+ Distinct from sibling packages in the DPI cluster:
+  - secubox-netifyd — netifyd daemon lifecycle dashboard (different
+    DPI engine).
+  - secubox-dpi — netifyd-backed analytics layer (top apps,
+    bandwidth, mirred setup) — see #382 for the layered model.
+  - secubox-mediaflow — streaming/VoIP classifier consuming DPI.

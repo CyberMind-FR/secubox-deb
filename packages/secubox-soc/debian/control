@@ -8,5 +8,13 @@ Standards-Version: 4.6.2
 Package: secubox-soc
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Soc Module
- Security Operations Center - Clock, Map, P2P Intel
+Description: SecuBox SOC — Security Operations Center aggregator
+ Aggregates alerts, threat-map data, and P2P intel from Hub, WAF,
+ and CrowdSec into a single Security Operations Center dashboard.
+ Read-only consumer of the existing alert sources.
+ .
+ Distinct from sibling packages in the SOC cluster:
+  - secubox-soc-agent — edge node agent reporting up to a gateway.
+  - secubox-soc-gateway — central fleet-monitoring hub
+    (multi-board aggregator).
+  - secubox-soc-web — React-based browser dashboard frontend.

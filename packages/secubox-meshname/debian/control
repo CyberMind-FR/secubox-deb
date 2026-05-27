@@ -8,5 +8,15 @@ Standards-Version: 4.6.2
 Package: secubox-meshname
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Meshname Module
- Meshname DNS - Mesh network domain resolution
+Description: SecuBox Meshname — Yggdrasil-overlay DNS resolver
+ Meshname DNS resolver: maps RFC-compliant `.ygg` domains to
+ Yggdrasil IPv6 addresses for mesh-internal name resolution.
+ Provides node and mapping CRUD via the web dashboard.
+ .
+ Distinct from sibling packages in the mesh cluster:
+  - secubox-mesh — Yggdrasil mesh daemon control (peers, sessions,
+    services). Different layer: meshname is the DNS overlay on top
+    of mesh's daemon control.
+  - secubox-p2p — P2P hub + master-link enrollment (canonical
+    after #384).
+  - secubox-daemon — Go-built mesh daemon (different runtime).
