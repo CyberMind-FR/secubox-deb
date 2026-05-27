@@ -4,7 +4,7 @@
   "icon": "📦",
   "path": "/repo/",
   "api": "/api/v1/repo/",
-  "category": "system",
+  "category": "root",
   "order": 150,
-  "description": "APT repository management"
+  "description": "APT repository manager (apt.secubox.in control plane)"
 }
