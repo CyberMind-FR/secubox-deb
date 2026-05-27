@@ -1,12 +1,22 @@
 Source: secubox-dns-guard
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-dns-guard
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Dns-guard Module
- DNS Anomaly Detection
+Recommends: dnsmasq
+Description: SecuBox DNS Guard — anomaly detection + dnsmasq blocking
+ Watches recursive DNS resolution for anomalous patterns and pushes
+ blocklists to dnsmasq via /etc/dnsmasq.d/secubox-blocklist.conf.
+ .
+ Distinct from sibling packages in the DNS cluster:
+  - secubox-vortex-dns — full recursive DNS firewall with RPZ
+    (unbound-backed; inline blocking before resolution).
+  - secubox-ad-guard — ad/tracker-specific blocking with per-device
+    stats.
+  - secubox-dns — authoritative BIND zone manager (publishing).
+  - secubox-dns-provider — external registrar API.
