@@ -70,49 +70,44 @@
   the board had it — the other 111 packages had never been redeployed
   since the commit. Rebuilt 100 packages (3 needed `-d` to skip
   python3-all build-dep), shipped 99 to gk2 with
-  `dpkg -i --force-confold`. One package (`secubox-wazuh`) failed
-  install for an unrelated reason — to investigate. The cascade of
-  postinst restarts on a Marvell ARM target overwhelmed the board
-  enough that an emergency reboot was needed and triggered an fsck on
-  `/data` (some writers hadn't shut down cleanly).
+  `dpkg -i --force-confold`. The cascade of postinst restarts on a
+  Marvell ARM target overwhelmed the board enough that an emergency
+  reboot was needed and triggered an fsck on `/data` (some writers
+  hadn't shut down cleanly). Post-reboot: clock auto-synced via NTP,
+  TOTP login OK, 84/127 services with Preserve, 41 services without
+  `RuntimeDirectory=` (Preserve sans objet), 2 vrais restants à
+  finir : `secubox-torrent` + `secubox-voip`.
+
+- **wazuh postinst masked-tolerant** (`63284497`, pushed): one of
+  the 100 packages (`secubox-wazuh`) initially failed install because
+  its postinst did `systemctl enable` against a masked unit and `set -e`
+  aborted, leaving the package `half-configured`. Recovery on board
+  was `unmask → configure → re-mask` to respect operator intent.
+  Source-side fix: wrap enable+start in
+  `[ "$(systemctl is-enabled X 2>/dev/null)" != "masked" ]` so the
+  same pattern survives masking. Same pattern likely belongs in every
+  secubox-* postinst — audit deferred to TODO.
+
+- **Docs sync** (`cfe16a6c`, pushed): TODO + WIP updated with the four
+  session follow-ups in P0 (finish torrent+voip Preserve, audit
+  postinst enable patterns, orchestrated mass-restart helper,
+  build-packages.sh dynamic discovery).
 
 ### ⬜ Next up
 
-- **Operator-facing**: clock sync on gk2 — TOTP rejected during the
-  post-install login flurry, the widget itself reported
-  `Clock not synced (TOTP window widened to ±60s)`. Run
-  `chronyc makestep` / `ntpdate` once the board finishes fsck and
-  returns. Then re-test TOTP.
+All session deliverables landed and pushed. Follow-ups tracked in
+`.claude/TODO.md` P0:
 
-- **Verify Preserve count 127/127** on gk2 once SSH is back. Confirm
-  socket survival by restarting a non-critical service and checking
-  `/run/secubox/` is preserved.
-
-- **`secubox-wazuh` install failure** — investigate postinst error.
-
-- **Orchestrated mass-restart helper**: today's lesson —
-  `dpkg -i --force-confold` on 100 packages produced 100 unordered
-  systemctl restarts, fighting each other for /run/secubox and
-  forcing an fsck on /data. Need a `secubox-system-restart` CLI (or a
-  `Before=` chain in unit files, or a `secubox.target` that gates
-  writers behind a quiescence step) so the next mass-deploy can:
-  1. Block dashboard writers, 2. Sync /data, 3. Stop services,
-  4. Replay package install, 5. Bring services up in dependency
-  order, 6. Unblock writers. File an issue and plan before the next
-  mass-deploy.
-
-- **SOC missing metrics / some statuses** beyond the firewall widget —
-  list TBD, needs operator screenshot to enumerate post-recovery.
+- Finir Preserve fix sur les 2 services restants (torrent + voip)
+- Audit des `postinst` `systemctl enable` non-masked-tolerant
+- Orchestrateur `secubox-system-restart` avant prochaine mass-deploy
+- `scripts/build-packages.sh` discovery dynamique des paquets
 
 ### Notes
 
 - Plans (TODO docs) saved earlier but not yet committed:
   `docs/superpowers/plans/2026-05-26-build-scripts-refactor.md`,
   `docs/superpowers/plans/2026-05-26-secubox-modules-consolidation.md`.
-- `scripts/build-packages.sh` has a hardcoded PACKAGES list of 30
-  modules; the other 70 had to be built with a one-off shell loop.
-  Worth refactoring to discover packages dynamically from
-  `packages/*/debian/`.
 - amd64 DHCP work deferred — operator swapping hub for switch first.
 - CI release-upload .gz truncation still pending investigation.
 
