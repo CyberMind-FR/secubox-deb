@@ -1,3 +1,34 @@
+secubox-peertube (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Rework to align with SecuBox conventions (closes #388):
+    - Service unit: User=root → User=secubox; replace ExecStartPost=
+      chmod/chown hacks with RuntimeDirectory=secubox +
+      RuntimeDirectoryPreserve=yes + RuntimeDirectoryMode=0775
+      (mass-redeploy safety); drop the broken
+      Requires=secubox-runtime.service (no such service); drop
+      ConditionPathExists=/etc/secubox/peertube/enabled gate so the
+      API daemon is always reachable to serve the management
+      dashboard (the heavy PeerTube container is still operator-
+      deployed on demand).
+    - api/main.py: default data_path switched from /srv/peertube to
+      /data/peertube (per #319 /data convention). Five hardcoded
+      fallbacks updated in lockstep.
+    - debian/postinst: added #319 /data migration block (mirror
+      gitea/wazuh pattern); wrapped systemctl enable in is-enabled
+      != masked check (per wazuh fix 63284497) so a deliberately
+      masked unit no longer fails the postinst; dropped the
+      hardcoded /srv/peertube/{storage,config,data} mkdir — those
+      subdirs are created by the API on first container/install so
+      PeerTube's UID/GID can own them; nginx reload guarded by
+      `nginx -t`.
+    - debian/control: Description rewritten with cross-references
+      to the other federated/streaming/media SecuBox packages
+      (matrix, jitsi, jellyfin, gotosocial, simplex). Recommends
+      reordered: podman first (smaller, distro-native), docker.io
+      as alternative.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 17:00:00 +0000
+
 secubox-peertube (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Rewrite for Docker/Podman container management.
