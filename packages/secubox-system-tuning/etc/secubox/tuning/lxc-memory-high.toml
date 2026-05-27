@@ -1,0 +1,28 @@
+# /etc/secubox/tuning/lxc-memory-high.toml — per-LXC-container MemoryHigh caps.
+#
+# MemoryHigh is a SOFT cap: when the container exceeds it, the kernel
+# throttles allocations rather than OOM-killing (which would happen on
+# MemoryMax). Tune up if you see throttling in `journalctl -u lxc@<name>`
+# or if a container becomes unresponsive under load.
+#
+# Each entry generates /etc/systemd/system/lxc@<container>.service.d/
+# 50-memory-high.conf with [Service] MemoryHigh=<value>. Applied at
+# runtime by secubox-tuning-apply via `systemctl set-property` (no
+# container restart required for already-running containers).
+#
+# Defaults below are from gk2 baseline (2026-05-27, post-#388 deploy).
+# They are roughly 2× current observed RSS for each container.
+
+[caps]
+mail       = "500M"   # postfix + dovecot + rspamd
+mitmproxy  = "400M"   # WAF inspector
+matrix     = "400M"   # synapse
+nextcloud  = "600M"   # NC + bundled mariadb
+lyrion     = "500M"   # Logitech Media Server
+grafana    = "400M"   # grafana-server
+horde      = "300M"   # horde webmail
+authelia   = "200M"   # SSO IdP
+mqtt       = "150M"   # mosquitto
+rustdesk   = "200M"   # rustdesk relay
+roundcube  = "200M"   # roundcube webmail (separate from horde)
+zigbee     = "200M"   # zigbee2mqtt
