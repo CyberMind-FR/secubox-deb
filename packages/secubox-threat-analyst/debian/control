@@ -1,12 +1,24 @@
 Source: secubox-threat-analyst
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-threat-analyst
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Threat-analyst Module
- AI Threat Analysis Agent
+Recommends: crowdsec
+Description: SecuBox Threat Analyst — AI agent that writes CrowdSec scenarios
+ AI-assisted threat analysis: ingests recent alerts, proposes new
+ CrowdSec scenarios, and writes them under /etc/crowdsec/scenarios/
+ for operator review and reload.
+ .
+ Distinct from sibling packages in the threats cluster:
+  - secubox-threats — umbrella dashboard aggregating CrowdSec +
+    Suricata + WAF alerts (read-only).
+  - secubox-cve-triage — CVE vulnerability triage workflow.
+  - secubox-network-anomaly — DNS-log anomaly detection.
+  - secubox-cyberfeed — threat-intel feed aggregator.
+  - secubox-ipblock — nftables-driven IP blocklist enforcement.
+  - secubox-openclaw — OSINT / domain reconnaissance.

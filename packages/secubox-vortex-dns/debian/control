@@ -8,5 +8,17 @@ Standards-Version: 4.6.2
 Package: secubox-vortex-dns
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Vortex-dns Module
- DNS Firewall with RPZ and threat feeds
+Recommends: unbound, dnsmasq
+Description: SecuBox Vortex DNS — recursive firewall with RPZ + threat feeds
+ Recursive DNS firewall: aggregates threat-feed blocklists into RPZ
+ zones and pushes them to unbound (preferred) or dnsmasq. Inline
+ blocking happens before resolution, so policy-violating lookups
+ never leave the box.
+ .
+ Distinct from sibling packages in the DNS cluster:
+  - secubox-dns-guard — post-resolution anomaly detection
+    (dnsmasq-only).
+  - secubox-ad-guard — ad/tracker-specific lookups with per-device
+    stats.
+  - secubox-dns — authoritative BIND zone manager (publishing).
+  - secubox-dns-provider — external registrar API.

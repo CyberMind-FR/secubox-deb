@@ -8,5 +8,14 @@ Standards-Version: 4.6.2
 Package: secubox-dns
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Dns Module
- DNS Master - BIND Zone Management
+Description: SecuBox DNS — authoritative BIND zone manager
+ BIND zone management dashboard for SecuBox: create, edit, and serve
+ authoritative DNS records you own.
+ .
+ Distinct from sibling packages in the DNS cluster:
+  - secubox-dns-provider — external registrar API (OVH, Cloudflare,
+    Gandi, Route53). Install if you publish records *at a registrar*.
+  - secubox-vortex-dns — recursive DNS firewall with RPZ + threat
+    feeds (unbound-backed).
+  - secubox-dns-guard — DNS anomaly detection (dnsmasq-backed).
+  - secubox-ad-guard — ad/tracker DNS blocking with per-device stats.
