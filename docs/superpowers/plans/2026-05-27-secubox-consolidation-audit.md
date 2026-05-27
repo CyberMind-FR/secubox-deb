@@ -160,56 +160,122 @@ Evidence lives in `out/clusters-fuzzy.txt`.
   explicit. No package merges.
 - **Decision: keep all four packages. Net reduction = 0.**
 
-### Tier 3 — Plan-stub clusters confirmed by data
+### Tier 3 — REVISED 2026-05-27: all three clusters are no-merge
 
-**`secubox-dns` cluster: 5 → 1  (-4)**
+Same pattern as the dpi cluster: on per-package code inspection, the
+"redundant" packages turn out to address distinct subsystems through
+distinct backends. Names rhyme; behaviour doesn't. Keep all members.
+
+**`secubox-dns` cluster: 5 → 5  (0)**
 - Members: `secubox-dns`, `secubox-dns-guard`, `secubox-dns-provider`,
   `secubox-vortex-dns`, `secubox-ad-guard`
-- All five depend only on `secubox-core`. All overlap on
-  `/etc/resolv.conf` and/or unbound. `vortex-dns` is the
-  CyberMind-branded variant. `ad-guard` is a DNS-sinkhole — same
-  resolver-layer concern.
-- Proposal: one `secubox-dns` source package with sub-features toggled
-  via `debconf` or feature flags in `/etc/secubox/dns.toml`.
-- Risk: medium (operators may pin specific variants — needs
-  `Provides:`/`Replaces:` per old name).
+- Five distinct DNS-layer subsystems, **no config-file overlap**:
+  - `secubox-dns` — authoritative **BIND** zone manager (publishing).
+    Touches `/var/lib/secubox/dns`.
+  - `secubox-dns-provider` — registrar API (OVH / Gandi / Cloudflare /
+    Route53) for external record management + ACME DNS-01 + DDNS.
+  - `secubox-vortex-dns` — recursive **DNS firewall** with RPZ +
+    threat feeds. Writes `/etc/unbound/unbound.conf.d/vortex-dns.conf`
+    and `/etc/dnsmasq.d/vortex-dns.conf`.
+  - `secubox-dns-guard` — DNS anomaly detection. Writes
+    `/etc/dnsmasq.d/secubox-blocklist.conf`.
+  - `secubox-ad-guard` — ad/tracker DNS blocking with per-device
+    statistics. Touches `/var/lib/secubox/ad-guard` only.
+- The audit's claim "all overlap on `/etc/resolv.conf` and/or unbound"
+  was wrong — `grep` for `/etc/resolv.conf` in any of them: zero hits.
+  Only `vortex-dns` writes unbound; only `dns-guard` (and partially
+  `vortex-dns`) write dnsmasq. They cooperate on dnsmasq via
+  **separate snippet files**, not shared config.
+- **Decision: keep all five packages. Net reduction = 0.** Worth a
+  follow-up Description-headline pass on `dns`, `dns-guard`,
+  `vortex-dns` (their headlines say "X Module" — placeholders) to
+  match the cluster-clarity work done on `dpi` in #382.
 
-**`secubox-threats` cluster: 7 → 1  (-6)**
+**`secubox-threats` cluster: 7 → 7  (0)**
 - Members: `secubox-threats`, `secubox-threat-analyst`,
   `secubox-cve-triage`, `secubox-network-anomaly`,
   `secubox-cyberfeed`, `secubox-ipblock`, `secubox-openclaw`
-- All depend only on `secubox-core`. Each ships exactly one service +
-  optional nginx route. The 7 services subscribe to the same
-  CrowdSec/Suricata event bus.
-- Proposal: one source `secubox-threats` building 7 binary packages
-  with a shared `secubox-threats-common` dependency, OR one binary
-  with feature toggles.
-- Risk: medium-high (largest surface change; 7 services to coordinate).
+- Seven distinct security capabilities with distinct backends:
+  - `secubox-threats` — umbrella dashboard aggregating CrowdSec +
+    Suricata + WAF alerts.
+  - `secubox-threat-analyst` — AI agent that writes CrowdSec
+    scenarios under `/etc/crowdsec/scenarios/`.
+  - `secubox-cve-triage` — CVE vulnerability triage with its own DB.
+  - `secubox-network-anomaly` — reads `/var/log/dnsmasq.log` for
+    anomalous resolution patterns.
+  - `secubox-cyberfeed` — aggregator of threat feeds (abuse.ch,
+    Spamhaus, etc.).
+  - `secubox-ipblock` — writes `/etc/nftables.d/ipblock.nft` from
+    blocklist sources (Spamhaus, AbuseIPDB, FireHOL).
+  - `secubox-openclaw` — OSINT / domain reconnaissance tool.
+- The audit's claim "all subscribe to the same CrowdSec/Suricata event
+  bus" was wrong — only `secubox-threats` does that. The other six
+  write to different sinks (crowdsec scenarios, nftables, dnsmasq logs,
+  remote feeds, own data dirs).
+- **Decision: keep all seven packages. Net reduction = 0.**
 
-**`secubox-mesh` cluster: 6 → 2  (-4)**
+**`secubox-mesh` cluster: 6 → 6 or 6 → 2 (NEEDS INSPECTION)**
 - Members: `secubox-mesh`, `secubox-meshname`, `secubox-master-link`,
   `secubox-mirror`, `secubox-p2p`, `secubox-daemon`
-- `secubox-p2p` already serves `/master-link/` — overlap with
-  `secubox-master-link`.
+- One pre-existing signal of real overlap: `secubox-p2p` already
+  serves a `/master-link/` route, suggesting `secubox-master-link` is
+  redundant. Worth a deeper investigation (out of scope for current
+  consolidation pass — file as follow-up issue if pursued).
 - `secubox-daemon` is the Go-built mesh daemon; should stay separate
-  from the Python dashboard layer.
-- Proposal: `secubox-daemon` (Go binary, unchanged) +
-  `secubox-mesh` (dashboard: absorbs meshname, master-link, mirror,
-  p2p dashboards).
+  from any Python dashboard layer regardless.
 
-### Tier 4 — Architecturally borderline (defer until Tier 1-3 lands)
+### Pattern observation (2026-05-27)
 
-| Cluster | Current → Proposed | Net |
+After hands-on inspection of the streamlit, dpi, dns, and threats
+clusters, the audit's initial cluster-affinity calls were largely
+**false positives based on naming similarity rather than
+architectural redundancy**. In every case the code revealed:
+
+- Distinct backends (different daemons, different sockets, different
+  config files).
+- Distinct operator workflows (different menu entries, different
+  install conditions, different LXC backers).
+- "Aspirational" descriptions that overstate cluster commonality
+  (e.g. `secubox-dpi`'s "dual-stream netifyd/nDPId" framing despite
+  netifyd-only code; `secubox-threats`'s "common event bus" claim
+  when only one of seven actually reads the bus).
+
+This pattern likely extends to most Tier 4 clusters too. **Treat the
+fuzzy-cluster grouping in `out/clusters-fuzzy.txt` as "candidates for
+inspection" rather than "merge targets"** — most will turn out to be
+naming overlaps with no real consolidation opportunity, and the
+work-product per cluster is a Description-clarity pass rather than a
+code merge.
+
+Realistic consolidation opportunities surface in three narrow places:
+
+1. **Half-completed transitions** (mail/webmail in #380; magicmirror
+   adjacency in #381) — finish the transition that the source tree
+   already signals.
+2. **Pre-existing tight coupling** (one package's source already
+   uses another's data path, e.g. `secubox-p2p` serving
+   `/master-link/`).
+3. **True scaffolding duplication** (two packages literally generated
+   by the meta-script generator with copy-paste API skeletons) — only
+   confirmed for the mmpm pair so far; others passed inspection.
+
+### Tier 4 — Probably also no-merge (per the pattern observed above)
+
+| Cluster | Audit's original proposal | Likely real outcome |
 |---|---|---|
-| `secubox-soc` (soc + soc-agent + soc-gateway + soc-web) | 4 → 2 (backend + React web) | -2 |
-| `secubox-system` (system + system-hub + admin + hub) | 4 → 2 (hub frontend + system backend) | -2 |
-| `secubox-waf` (waf + mitmproxy + haproxy + interceptor) | 4 → 2 (waf incl. mitmproxy + haproxy separate) | -2 |
-| `secubox-traffic` (traffic + qos + nettweak) | 3 → 1 | -2 |
-| `secubox-monitoring` (netdata + glances + metrics + health-doctor + watchdog + device-intel) | 6 → 2-3 | -3 to -4 |
-| `secubox-identity` (identity + users + avatar + auth + portal + authelia) | 6 → 3 | -3 |
-| `secubox-publishing` (droplet + cloner + publish + backup + reporter) | 5 → 3 | -2 |
-| `secubox-ai` (ai-gateway + ai-insights + localai + ollama + mcp-server) | 5 → 3 (ollama → localai) | -2 |
-| `secubox-meta-services` (metablogizer + metabolizer + metacatalog + metoblizer) | 4 → 4 (KEEP — see below) | 0 |
+| `secubox-soc` (soc + soc-agent + soc-gateway + soc-web) | 4 → 2 | distinct: edge agent, central gateway, umbrella, React frontend |
+| `secubox-system` (system + system-hub + admin + hub) | 4 → 2 | overlapping dashboards — possibly one mergeable pair |
+| `secubox-waf` (waf + mitmproxy + haproxy + interceptor) | 4 → 2 | distinct layers in the WAF pipeline |
+| `secubox-traffic` (traffic + qos + nettweak) | 3 → 1 | tc shaping vs QoS policy vs tunables — distinct |
+| `secubox-monitoring` (netdata + glances + metrics + health-doctor + watchdog + device-intel) | 6 → 2-3 | each backs a different upstream (netdata, glances, prom, etc.) |
+| `secubox-identity` (identity + users + avatar + auth + portal + authelia) | 6 → 3 | distinct layers in the identity stack |
+| `secubox-publishing` (droplet + cloner + publish + backup + reporter) | 5 → 3 | distinct artefact types |
+| `secubox-ai` (ai-gateway + ai-insights + localai + ollama + mcp-server) | 5 → 3 | distinct: gateway router, ML detection, local LLM runtime, ollama wrapper, MCP server |
+| `secubox-meta-services` (metablogizer + metabolizer + metacatalog + metoblizer) | 4 → 4 (already KEEP) | confirmed distinct |
+
+Each Tier 4 cluster needs the same per-package code inspection
+the Tier 2/3 clusters got. Until done, treat the original audit
+proposals as candidates for inspection rather than merge targets.
 
 **Note on `meta*` cluster** — the plan-stub flagged this as
 "typo proliferation". The audit disagrees: each of the four ships a
@@ -229,12 +295,25 @@ rename one or more for clarity**:
 | Tier 0 (cleanup broken pkgs) | -1 to -2 | 139-140 |
 | Tier 1 (mail) | -3 | 136-137 |
 | Tier 2 (magicmirror only — streamlit + dpi dropped 2026-05-27) | -1 | 135-136 |
-| Tier 3 (dns, threats, mesh) | -14 | 118-119 |
-| Tier 4 (if all approved) | -18 | ~100-101 |
+| Tier 3 (dns + threats no-merge after inspection; mesh deferred) | 0 to -2 | 134-136 |
+| Tier 4 (if pattern holds — mostly no-merge) | 0 to a few | 130-136 |
 
-So the realistic floor is **~100 packages**, a 28% reduction. The
-plan-stub's framing of "100+ packages" → consolidation is correct in
-the destination but understates the start (141, not 100+).
+Updated realistic floor (2026-05-27 after dpi/dns/threats inspection):
+**~130-136 packages**, a 4-8% reduction from 141. The audit's
+original ~100 floor was based on cluster-affinity calls that didn't
+survive hands-on inspection — most "redundant" packages turn out to
+be distinct subsystems with rhyming names.
+
+Where the consolidation *did* pay off: Tier 0 (one packaging bug
+fixed: c3box collision in #378); Tier 1 (finishing the mail
+transition already declared in source: -2634 LOC dead code in #380);
+Tier 2 (one true scaffolding-duplicate pair: mmpm + magicmirror
+folded in #381). The Description-clarity work (#382) and the audit
+itself are the rest of the value.
+
+The Phase 1 plan-stub framing of "consolidation down to <100 packages"
+was based on the same naming-affinity intuition that the audit
+inherited; the per-package code reality does not support it.
 
 ## Don't-merge confirmation
 
