@@ -1,3 +1,13 @@
+secubox-mcp-server (1.0.1-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as the Model Context
+    Protocol server exposing SecuBox telemetry/operations to AI
+    clients, and disambiguate from the four other AI-cluster
+    packages (closes #386)
+  * Maintainer corrected to Gerald KERMA
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 15:00:00 +0000
+
 secubox-mcp-server (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
