@@ -1,6 +1,11 @@
-# 🔬 Deep Packet Inspection
+# 🔬 SecuBox DPI Analytics
 
-DPI with netifyd/nDPId
+Netifyd-backed analytics layer: top apps, top protocols, bandwidth
+breakdown, talkers, risks. Sets up `tc mirred` to `ifb0` for inline
+inspection. Complements `secubox-netifyd` (daemon lifecycle).
+
+For nDPId-engine analysis with TLS fingerprinting (JA3/JA4), see
+`secubox-ndpid` instead.
 
 **Category:** Monitoring
 
