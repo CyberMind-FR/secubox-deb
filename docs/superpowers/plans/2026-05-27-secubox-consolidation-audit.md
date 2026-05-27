@@ -214,15 +214,53 @@ distinct backends. Names rhyme; behaviour doesn't. Keep all members.
   remote feeds, own data dirs).
 - **Decision: keep all seven packages. Net reduction = 0.**
 
-**`secubox-mesh` cluster: 6 → 6 or 6 → 2 (NEEDS INSPECTION)**
-- Members: `secubox-mesh`, `secubox-meshname`, `secubox-master-link`,
-  `secubox-mirror`, `secubox-p2p`, `secubox-daemon`
-- One pre-existing signal of real overlap: `secubox-p2p` already
-  serves a `/master-link/` route, suggesting `secubox-master-link` is
-  redundant. Worth a deeper investigation (out of scope for current
-  consolidation pass — file as follow-up issue if pursued).
-- `secubox-daemon` is the Go-built mesh daemon; should stay separate
-  from any Python dashboard layer regardless.
+**`secubox-mesh` cluster — inspected 2026-05-27**
+
+Cluster as originally listed: `secubox-mesh`, `secubox-meshname`,
+`secubox-master-link`, `secubox-mirror`, `secubox-p2p`,
+`secubox-daemon`. Findings per member:
+
+- `secubox-mesh` (1397 LOC) — Yggdrasil mesh daemon control
+  dashboard. Endpoints: `/status`, `/peers`, `/sessions`,
+  `/services`, `/announce`, `/revoke`, `/domains`, `/sync`.
+- `secubox-meshname` (522 LOC) — Meshname DNS resolver. Endpoints:
+  `/status`, `/service`, `/enable`, `/nodes`, `/mappings`. **Not**
+  redundant with `secubox-mesh`: they're two distinct layers of
+  Yggdrasil-based meshing (daemon vs DNS overlay).
+- `secubox-mirror` (650 LOC) — APT/CDN cache. **Not mesh-related at
+  all** — audit miscategorized this by prefix. Endpoints: nginx
+  caching proxy management, mirror sync status. Belongs in a
+  separate "infrastructure/cache" cluster (not currently defined).
+- `secubox-p2p` (2051 LOC) — P2P hub. Hosts the **canonical**
+  master-link UI: nginx ships `location /master-link/` aliased to
+  `/var/www/secubox/master-link/` (frontend installed by p2p);
+  API has `/master-link/status` and `/master-link/token`.
+- `secubox-master-link` (851 LOC) — **effectively dead on a running
+  system**:
+  - Has 21 API endpoints (tokens, join, peers, tree, wireguard,
+    stats, etc.) on `/run/secubox/master-link.sock` but ships **no
+    nginx config** → none of the endpoints is reachable from the web.
+  - Frontend installed at `/usr/share/secubox/www/master-link/` but
+    nginx serves p2p's version from `/var/www/secubox/master-link/`.
+  - Service runs (RAM cost) but receives no traffic.
+- `secubox-daemon` — Go-built mesh daemon; stays separate from any
+  Python dashboard layer regardless.
+
+**Real consolidation candidate: master-link → p2p.** Pattern matches
+issue #381 (mmpm fold into magicmirror) but bigger and needs operator
+input: the 21 vs 2 endpoint asymmetry between master-link and p2p's
+existing `/master-link/*` surface means folding isn't mechanical —
+needs decisions on which of master-link's `/peers`, `/wireguard`,
+`/tokens`, etc. endpoints survive vs p2p's already-existing
+equivalents.
+
+**Not consolidation: secubox-mesh, secubox-meshname, secubox-mirror,
+secubox-p2p, secubox-daemon are all distinct.** Net reduction of
+mesh cluster after a master-link → p2p fold: -1.
+
+Recommend filing master-link → p2p as a separate per-cluster issue
+with its own scoping pass before code work (similar to how #381
+required a detailed scope decision before the merge).
 
 ### Pattern observation (2026-05-27)
 
