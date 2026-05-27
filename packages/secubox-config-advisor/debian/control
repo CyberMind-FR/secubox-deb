@@ -1,12 +1,16 @@
 Source: secubox-config-advisor
 Section: admin
 Priority: optional
-Maintainer: SecuBox <dev@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-config-advisor
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Config-advisor Module
- Security Configuration Advisor
+Description: SecuBox Config Advisor — security configuration audit + recommendations
+ Scans installed SecuBox config (nftables rules, nginx vhosts,
+ systemd unit hardening, AppArmor profiles, file permissions) and
+ surfaces deviations from the CSPN-aligned baseline. Read-only;
+ produces an actionable recommendations report rather than auto-
+ applying fixes.

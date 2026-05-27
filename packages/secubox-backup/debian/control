@@ -8,5 +8,8 @@ Standards-Version: 4.6.2
 Package: secubox-backup
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
-Description: SecuBox Backup Module
- Backup Manager for system configs and LXC containers
+Description: SecuBox Backup — config + LXC-container backup manager
+ Backup manager covering SecuBox configs (/etc/secubox, nginx,
+ wireguard, haproxy, nftables), service data (/var/lib/secubox,
+ nextcloud, gitea), and LXC containers with automatic stop/start
+ around snapshots. Web dashboard with stats and history.
