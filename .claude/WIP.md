@@ -1,5 +1,60 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-26*
+*Mis à jour : 2026-05-27*
+
+---
+
+## 🔄 2026-05-27: Consolidation pass — audit + 2 real merges + 5 naming sweeps + gk2 deploy
+
+### ✅ Done (this session)
+
+- **Phase 1 audit** (`docs/superpowers/plans/2026-05-27-secubox-consolidation-audit.md`):
+  re-runnable `scripts/audit-packages.py` inventories all 141
+  packages with cluster + dep + service + route + has-payload data.
+  Meta-finding: audit's projected ~100-package floor was naming-
+  affinity intuition, real floor is ~135-137 (4-5% reduction).
+
+- **2 real package merges** (-2 effective packages):
+  - **#381** mmpm → magicmirror: APIRouter fold, frontend moves
+    `/mmpm/` → `/magicmirror/mmpm/`. Old becomes oldlibs.
+  - **#384** master-link → p2p: master-link's 851 LOC was dead
+    (no nginx config → unreachable). Operator-scoping calls
+    documented in commit.
+
+- **1 packaging bug** (#378): secubox-c3box binary collision —
+  Go variant renamed to `secubox-daemon-c3box`. **Not yet on gk2**
+  (Arch:any, needs arm64 rebuild — daemon not currently installed
+  on board so non-acute).
+
+- **1 cleanup** (#380): 2634 LOC of dead source pruned from the
+  three already-transitional mail packages.
+
+- **5 Description-clarity sweeps** (#382, #383, #385, #386, #387):
+  24 Descriptions clarified, 9 maintainer placeholders corrected.
+  After these land, no `secubox-*` package on master ships an
+  "X Module" placeholder headline anymore.
+
+- **Build tooling fix** (`561007fe`): `scripts/build-packages.sh`
+  switched from hardcoded 30-package allowlist to dynamic glob
+  over `packages/secubox-*/` with `debian/control`. Was silently
+  skipping 110 of 141 packages.
+
+- **gk2 deploy**: 30 .debs apt-installed and verified.
+  Transitional Breaks/Replaces fired cleanly. 24/24 expected
+  services active post-deploy.
+
+- **GitHub housekeeping**: 9 issues (#378, #380-#387) closed; 9
+  merged remote branches deleted; 9 local worktrees cleaned.
+
+### 📋 Carry-overs (filed in TODO.md)
+
+- `secubox-daemon` arm64 rebuild on a Marvell-arm64 host so the
+  c3box binary rename (#378) lands on gk2.
+- `secubox-ndpid 1.0.1` blocked from gk2 by missing `ndpid` apt
+  source — needs either package upload or `Recommends:` relax.
+- Orphan nginx snippets (`mail-lxc.conf`, `webmail.conf`,
+  `webmail-lxc.conf`) on gk2 manually removed; mail transitional
+  postinsts should be patched to do this on other boards.
+- Smart-strip packaging (#379, deferred to hardware track).
 
 ---
 
