@@ -1,9 +1,62 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-27*
+*Mis à jour : 2026-05-27 (evening)*
 
 ---
 
-## 🔄 2026-05-27: Consolidation pass — audit + 2 real merges + 5 naming sweeps + gk2 deploy
+## 🔄 2026-05-27 (evening): peertube + photoprism + mail + WAF unblocking
+
+### ✅ Done (this leg)
+
+* **PhotoPrism LIVE** at https://photoprism.gk2.secubox.in/
+  (login: admin / secubox-CHANGE-ME). Podman-based, LXC 10.100.0.130,
+  `--network=host` (CNI bridge unprivileged-LXC workaround).
+* **Photos shared folder** `/data/shared/photos` bind-mounted into both
+  PhotoPrism (`/var/lib/photoprism/originals`) and Nextcloud
+  (`/var/www/nextcloud/data/Photos`). Smartphone NC client → "Photos"
+  → PhotoPrism auto-indexes.
+* **nextcloud.gk2.secubox.in URL** wired (was only `nc.gk2`):
+  mitmproxy route entry added (host + LXC copies, see drift in TODO);
+  nginx `server_name` aliased.
+* **#394 NC SSO removal** so official mobile clients can authenticate
+  (HTTP Basic + app-password don't carry Authelia cookie). NC bf
+  protection disabled at runtime + table truncated.
+* **#395 WAF cred-004 false-positive** on NC mobile login-poll
+  (`/index.php/login/v2/poll?token=...`) fixed live + source-side.
+* **CrowdSec allowlist** `secubox-trusted` with 4 internal nets.
+* **8 GB swap** total (was 4 GB).
+* **IP forwarding** root-fixed: `99-secubox-hardening.conf` set
+  `ip_forward=0`, overrode our `90-secubox-lxc-forward.conf`
+  (alphabetical loss). Renamed to `99-secubox-zz-…` so it wins.
+  Also added explicit `lan0 masquerade` rule (real WAN, eth2 is
+  down).
+* **LXC template fix** for peertube + photoprism: replaced strict
+  `common.conf + userns.conf + apparmor` defaults with matrix's
+  working `debian.common.conf` template; otherwise postgres-15
+  postinst and podman CNI both fail in unprivileged-LXC sandbox.
+* **Bind-mount UID-mapping recipe**: host-side `chown -R
+  100000:100000 /data/<service>/` to allow LXC root (UID 100000
+  outside) to manage them.
+
+### 🔄 In flight
+
+* **Peertube install** in container at 10.100.0.120, step 6/8
+  (yarn install ~10000 packages on arm64). Monitor armed. When
+  done, URL https://peertube.gk2.secubox.in/ will serve real
+  content (nginx vhost already rewired to `10.100.0.120:9000`).
+
+### 📋 Carry-overs (filed in TODO.md)
+
+* Mail backup gap + URL fix (still deferred from earlier today)
+* IP-forward + lan0-masquerade + sysctl-ordering backport to
+  `secubox-system-tuning` package
+* mitmproxy + WAF script live-config drift (host vs LXC copies)
+* LXC template wiki: DNS resolv.conf, bind-mount chown UID 100000,
+  template choice (debian.common vs strict)
+* Release bump after everything lands (per user)
+
+---
+
+## 🔄 2026-05-27 (morning): Consolidation pass — audit + 2 real merges + 5 naming sweeps + gk2 deploy
 
 ### ✅ Done (this session)
 
