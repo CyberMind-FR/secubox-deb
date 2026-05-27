@@ -1,3 +1,12 @@
+secubox-users (1.4.1-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as local-account management
+    (Argon2id + TOTP + RBAC) and disambiguate from the five other
+    identity-stack packages (closes #385, part of identity+monitoring
+    naming sweep)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 14:00:00 +0000
+
 secubox-users (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Auth rework (ref #120): users.json v2 schema (argon2id hashes + TOTP block)

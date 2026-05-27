@@ -18,5 +18,15 @@ Depends: ${misc:Depends},
  python3-tomli | python3 (>= 3.11),
  secubox-core (>= 1.0),
  jq
-Description: SecuBox Users Module
- SecuBox Users - Unified Identity
+Description: SecuBox Users — local account manager (Argon2id + TOTP + RBAC)
+ Unified user-account management for SecuBox: account create/disable/
+ enable, password reset (Argon2id hashes), TOTP enrollment with backup
+ codes, session management, and role-based access control.
+ .
+ Distinct from sibling packages in the identity stack:
+  - secubox-identity — decentralized identity (DID) management.
+  - secubox-auth — JWT auth guardian / session middleware (consumes
+    secubox-users state).
+  - secubox-portal — web login portal.
+  - secubox-authelia — Authelia SSO IdP (LXC).
+  - secubox-avatar — profile image + display-name manager.

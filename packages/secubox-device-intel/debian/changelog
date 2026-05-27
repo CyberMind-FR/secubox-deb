@@ -1,3 +1,12 @@
+secubox-device-intel (1.2.2-1~bookworm1) bookworm; urgency=low
+
+  * Rewrite Description to identify this as network asset discovery
+    + device fingerprinting, and disambiguate from the other five
+    monitoring-cluster packages (closes #385, part of identity+
+    monitoring naming sweep)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 14:00:00 +0000
+
 secubox-device-intel (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Enhanced SecuBox detection with OpenWRT theme markers
