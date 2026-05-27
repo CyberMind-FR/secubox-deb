@@ -1,15 +1,23 @@
 Source: secubox-magicmirror
 Section: web
 Priority: optional
-Maintainer: SecuBox Team <team@secubox.local>
+Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 
 Package: secubox-magicmirror
 Architecture: all
 Depends: ${misc:Depends}, python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, secubox-core
-Recommends: nodejs, npm, xserver-xorg, chromium
+Recommends: nodejs, npm, xserver-xorg, chromium, git
+Breaks: secubox-mmpm (<< 1.1)
+Replaces: secubox-mmpm (<< 1.1)
 Description: SecuBox MagicMirror management
  Smart display platform management for SecuBox.
  Provides API and web UI for MagicMirror² configuration,
  module management, and display controls.
+ .
+ As of 1.1, the MagicMirror Package Manager (MMPM) frontend and
+ endpoints are folded into this package and reachable at
+ /magicmirror/mmpm/ and /api/v1/magicmirror/mmpm/* respectively.
+ The standalone secubox-mmpm package is now a transitional shell
+ and can be removed via apt autoremove after upgrade.

@@ -1,12 +1,16 @@
-"""SecuBox MMPM API - MagicMirror Package Manager."""
-from fastapi import FastAPI, HTTPException, Query
+"""SecuBox MMPM router — MagicMirror Package Manager.
+
+Folded into secubox-magicmirror in #381 (was its own secubox-mmpm package).
+Mounted under /mmpm by api.main; legacy /api/v1/mmpm/* routes are now
+served by /api/v1/magicmirror/mmpm/*.
+"""
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import subprocess
 import json
 import os
-import urllib.request
 
-app = FastAPI(title="SecuBox MMPM API", version="1.0.0")
+router = APIRouter()
 
 MMPM_DB = "/var/lib/secubox/mmpm/modules.json"
 MM_MODULES_DIR = "/opt/MagicMirror/modules"
@@ -58,7 +62,6 @@ def get_installed_modules() -> list:
         if os.path.isdir(path) and entry not in ["default", "node_modules"]:
             module_info = {"name": entry, "path": path}
 
-            # Check for package.json
             pkg_json = os.path.join(path, "package.json")
             if os.path.exists(pkg_json):
                 try:
@@ -69,7 +72,6 @@ def get_installed_modules() -> list:
                 except Exception:
                     pass
 
-            # Check for git repo
             git_dir = os.path.join(path, ".git")
             module_info["is_git"] = os.path.isdir(git_dir)
 
@@ -79,9 +81,8 @@ def get_installed_modules() -> list:
 
 
 def fetch_module_registry() -> list:
-    """Fetch list of available modules from MMPM wiki/registry."""
-    # Popular MagicMirror modules (curated list)
-    modules = [
+    """Curated list of popular MagicMirror third-party modules."""
+    return [
         {"name": "MMM-CalendarExt2", "author": "MMM-CalendarExt2", "description": "Advanced calendar with events", "category": "calendar"},
         {"name": "MMM-SystemStats", "author": "BenRoe", "description": "System CPU, RAM, disk usage", "category": "system"},
         {"name": "MMM-Remote-Control", "author": "Jopyth", "description": "Remote control interface", "category": "utility"},
@@ -103,35 +104,29 @@ def fetch_module_registry() -> list:
         {"name": "MMM-EmbPython", "author": "nissenm89", "description": "Embed Python scripts", "category": "developer"},
         {"name": "MMM-MQTT", "author": "ottopaulsen", "description": "MQTT data display", "category": "smarthome"},
     ]
-    return modules
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "mmpm"}
-
-
-@app.get("/status")
+@router.get("/status")
 def get_status():
-    """Get MMPM status and overview."""
+    """Get MMPM status and overview (mounted under /mmpm/status)."""
     installed = get_installed_modules()
     db = load_module_db()
 
     return {
         "installed_count": len(installed),
-        "available_count": len(db) if db else 20,  # Fallback count
+        "available_count": len(db) if db else 20,
         "mm_modules_dir": MM_MODULES_DIR,
         "mm_installed": os.path.exists("/opt/MagicMirror")
     }
 
 
-@app.get("/modules/installed")
+@router.get("/modules/installed")
 def list_installed():
     """List installed third-party modules."""
     return {"modules": get_installed_modules()}
 
 
-@app.get("/modules/available")
+@router.get("/modules/available")
 def list_available(category: str = None, search: str = None):
     """List available modules from registry."""
     modules = load_module_db()
@@ -151,7 +146,7 @@ def list_available(category: str = None, search: str = None):
     return {"modules": modules}
 
 
-@app.get("/modules/categories")
+@router.get("/modules/categories")
 def list_categories():
     """List available module categories."""
     modules = load_module_db()
@@ -162,7 +157,7 @@ def list_categories():
     return {"categories": sorted(categories)}
 
 
-@app.post("/modules/refresh")
+@router.post("/modules/refresh")
 def refresh_database():
     """Refresh the module database from registry."""
     modules = fetch_module_registry()
@@ -170,7 +165,7 @@ def refresh_database():
     return {"status": "refreshed", "count": len(modules)}
 
 
-@app.post("/modules/install")
+@router.post("/modules/install")
 def install_module(mod: ModuleInstall):
     """Install a module from GitHub."""
     if not mod.name.startswith("MMM-"):
@@ -181,19 +176,15 @@ def install_module(mod: ModuleInstall):
     if os.path.exists(module_path):
         raise HTTPException(status_code=409, detail="Module already installed")
 
-    # Determine repo URL
     repo_url = mod.repo_url
     if not repo_url:
-        # Try common GitHub patterns
         repo_url = f"https://github.com/MichMich/{mod.name}.git"
 
-    # Clone the repository
     stdout, stderr, code = run_cmd(
         ["git", "clone", "--depth", "1", repo_url, module_path]
     )
 
     if code != 0:
-        # Try alternative organizations
         for org in ["MagicMirrorOrg", "bugsounet", "CFenner", "jclarke0000"]:
             alt_url = f"https://github.com/{org}/{mod.name}.git"
             stdout, stderr, code = run_cmd(
@@ -205,14 +196,13 @@ def install_module(mod: ModuleInstall):
     if code != 0:
         raise HTTPException(status_code=500, detail=f"Failed to clone: {stderr}")
 
-    # Run npm install if package.json exists
     if os.path.exists(f"{module_path}/package.json"):
         run_cmd(["npm", "install", "--prefix", module_path])
 
     return {"status": "installed", "module": mod.name, "path": module_path}
 
 
-@app.delete("/modules/{module_name}")
+@router.delete("/modules/{module_name}")
 def uninstall_module(module_name: str):
     """Uninstall a module."""
     module_path = f"{MM_MODULES_DIR}/{module_name}"
@@ -229,7 +219,7 @@ def uninstall_module(module_name: str):
     return {"status": "uninstalled", "module": module_name}
 
 
-@app.post("/modules/{module_name}/update")
+@router.post("/modules/{module_name}/update")
 def update_module(module_name: str):
     """Update an installed module via git pull."""
     module_path = f"{MM_MODULES_DIR}/{module_name}"
@@ -241,7 +231,6 @@ def update_module(module_name: str):
     if not os.path.isdir(git_dir):
         raise HTTPException(status_code=400, detail="Module is not a git repository")
 
-    # Git pull
     stdout, stderr, code = run_cmd(
         ["git", "-C", module_path, "pull", "--ff-only"]
     )
@@ -249,14 +238,13 @@ def update_module(module_name: str):
     if code != 0:
         raise HTTPException(status_code=500, detail=f"Git pull failed: {stderr}")
 
-    # Re-run npm install if package.json exists
     if os.path.exists(f"{module_path}/package.json"):
         run_cmd(["npm", "install", "--prefix", module_path])
 
     return {"status": "updated", "module": module_name, "output": stdout}
 
 
-@app.get("/modules/{module_name}")
+@router.get("/modules/{module_name}")
 def get_module_info(module_name: str):
     """Get detailed info about an installed module."""
     module_path = f"{MM_MODULES_DIR}/{module_name}"
@@ -266,7 +254,6 @@ def get_module_info(module_name: str):
 
     info = {"name": module_name, "path": module_path}
 
-    # Read package.json
     pkg_json = f"{module_path}/package.json"
     if os.path.exists(pkg_json):
         try:
@@ -282,14 +269,12 @@ def get_module_info(module_name: str):
         except Exception:
             pass
 
-    # Check README
     for readme in ["README.md", "readme.md", "README.txt", "README"]:
         readme_path = f"{module_path}/{readme}"
         if os.path.exists(readme_path):
             info["has_readme"] = True
             break
 
-    # Check git status
     git_dir = f"{module_path}/.git"
     if os.path.isdir(git_dir):
         info["is_git"] = True
@@ -299,7 +284,7 @@ def get_module_info(module_name: str):
     return info
 
 
-@app.get("/search")
+@router.get("/search")
 def search_modules(q: str = Query(..., min_length=2)):
     """Search for modules by name or description."""
     modules = load_module_db()
@@ -327,7 +312,6 @@ def search_modules(q: str = Query(..., min_length=2)):
 
     results.sort(key=lambda x: x["_score"], reverse=True)
 
-    # Remove score from output
     for r in results:
         del r["_score"]
 

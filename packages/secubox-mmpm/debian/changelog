@@ -1,3 +1,13 @@
+secubox-mmpm (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Transitional package — content folded into secubox-magicmirror
+    1.1 (closes #381)
+  * Section: oldlibs; no files shipped
+  * Postinst stops + disables + removes the legacy
+    secubox-mmpm.service if present
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 10:30:00 +0000
+
 secubox-mmpm (1.0.0-1) stable; urgency=low
 
   * Initial release

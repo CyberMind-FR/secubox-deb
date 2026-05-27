@@ -6,7 +6,10 @@ import json
 import os
 import re
 
-app = FastAPI(title="SecuBox MagicMirror API", version="1.0.0")
+from .routers import mmpm as mmpm_router
+
+app = FastAPI(title="SecuBox MagicMirror API", version="1.1.0")
+app.include_router(mmpm_router.router, prefix="/mmpm", tags=["mmpm"])
 
 MM_DIR = "/opt/MagicMirror"
 CONFIG_FILE = f"{MM_DIR}/config/config.js"
