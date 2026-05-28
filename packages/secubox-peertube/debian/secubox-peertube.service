@@ -13,7 +13,10 @@ Restart=on-failure
 RestartSec=5
 UMask=0000
 
-NoNewPrivileges=true
+# NoNewPrivileges intentionally NOT set: the dashboard escalates via a single
+# narrowly-scoped sudoers rule (peertubectl set-youtube-cookies) to install
+# operator-supplied YouTube cookies into the LXC. NoNewPrivileges=true would
+# block sudo. See debian/secubox-peertube.sudoers.
 RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
