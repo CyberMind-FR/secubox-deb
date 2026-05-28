@@ -3,8 +3,11 @@
 # File sync in Debian LXC for Debian
 # Three-fold architecture: Components, Status, Access
 
-VERSION="1.3.0"
+VERSION="1.4.0"
 CONFIG_FILE="/etc/secubox/nextcloud.toml"
+# Shared photo library — also mounted by secubox-photoprism as its originals.
+# Phone → Nextcloud "PhotoLibrary" external storage → here → PhotoPrism (#397).
+SHARED_PHOTOS="${SECUBOX_SHARED_PHOTOS:-/data/shared/photos}"
 # v2.11.1 modernization: /data/lxc is the canonical LXC path on SecuBox
 # boards (matches authelia/grafana/etc). Override via SECUBOX_LXC_PATH for tests.
 LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
@@ -13,7 +16,7 @@ CONTAINER="${SECUBOX_LXC_NAME:-nextcloud}"
 LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
 LXC_IP="${SECUBOX_LXC_IP:-10.100.0.21}"
 LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
-NC_VERSION="30.0.4"
+NC_VERSION="31.0.14"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -116,7 +119,15 @@ lxc.start.auto = 1
 # Bind mounts for persistent data (host paths must be owned by mapped uid 100000)
 lxc.mount.entry = ${DATA_PATH}/data var/www/nextcloud/data none bind,create=dir 0 0
 lxc.mount.entry = ${DATA_PATH}/config var/www/nextcloud/config none bind,create=dir 0 0
+# Shared photo library, mounted OUTSIDE the data dir and exposed via the
+# "PhotoLibrary" external storage (nextcloudctl link-photos). Shared with
+# secubox-photoprism originals (#397/#398).
+lxc.mount.entry = ${SHARED_PHOTOS} media/photos none bind,create=dir 0 0
 EOF
+    # The shared dir must be writable by www-data (uid 33 → 100033) and
+    # readable by PhotoPrism; 0777 owned by the LXC root uid on a single box.
+    install -d -m 0777 "$SHARED_PHOTOS" 2>/dev/null || true
+    chown 100000:100000 "$SHARED_PHOTOS" 2>/dev/null || true
     log "LXC config created (veth on ${LXC_BRIDGE:-br-lxc}, ip ${LXC_IP:-10.100.0.21})"
 }
 
@@ -387,6 +398,9 @@ cmd_setup() {
     # Add cron job
     lxc_attach "echo '*/5 * * * * www-data php -f /var/www/nextcloud/cron.php' > /etc/cron.d/nextcloud"
 
+    # Photo integration (idempotent) — phone → PhotoLibrary → PhotoPrism.
+    link_photos
+
     log "Nextcloud setup complete!"
     log ""
     log "Admin credentials:"
@@ -394,6 +408,34 @@ cmd_setup() {
     log "  Password: $admin_pass"
     log ""
     log "Access: http://localhost:${HTTP_PORT}"
+}
+
+# ============================================================================
+# Photo integration (PhotoLibrary external storage → /media/photos)
+# ============================================================================
+
+link_photos() {
+    # Expose the shared photo dir (bind-mounted at /media/photos, OUTSIDE the
+    # NC data dir) as a Local external storage so the mobile client can sync
+    # into it and PhotoPrism indexes the same files. Idempotent.
+    if ! lxc_running; then
+        error "Container not running. Run: nextcloudctl start"
+        return 1
+    fi
+    log "Wiring 'PhotoLibrary' external storage → /media/photos ..."
+    lxc_attach "sudo -u www-data php /var/www/nextcloud/occ app:enable files_external" >/dev/null 2>&1 || true
+    if lxc_attach "sudo -u www-data php /var/www/nextcloud/occ files_external:list" 2>/dev/null | grep -q PhotoLibrary; then
+        log "PhotoLibrary already configured."
+        return 0
+    fi
+    local mid
+    mid=$(lxc_attach "sudo -u www-data php /var/www/nextcloud/occ files_external:create 'PhotoLibrary' local null::null -c datadir=/media/photos" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    if [ -n "$mid" ]; then
+        lxc_attach "sudo -u www-data php /var/www/nextcloud/occ files_external:option $mid filesystem_check_changes 1" >/dev/null 2>&1 || true
+        log "PhotoLibrary created (mount id $mid). Point the phone NC client's auto-upload here."
+    else
+        warn "Could not create PhotoLibrary mount (is files_external enabled?)."
+    fi
 }
 
 # ============================================================================
@@ -744,6 +786,7 @@ Apps:
   app list             List apps (JSON)
 
 Maintenance:
+  link-photos          Wire the 'PhotoLibrary' external storage (→ PhotoPrism)
   occ <command>        Run Nextcloud occ command
   backup [name]        Create backup
   restore <file>       Restore from backup
@@ -784,6 +827,7 @@ case "${1:-}" in
             *) echo "Usage: nextcloudctl app {install|list}"; exit 1 ;;
         esac
         ;;
+    link-photos) link_photos ;;
     occ) shift; occ "$@" ;;
     backup) shift; cmd_backup "$@" ;;
     restore) shift; cmd_restore "$@" ;;
