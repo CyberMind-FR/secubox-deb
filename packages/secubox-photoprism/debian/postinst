@@ -9,7 +9,10 @@ case "$1" in
     # Create runtime directories
     install -d -o secubox -g secubox -m 750 /run/secubox
     install -d -o secubox -g secubox -m 750 /var/lib/secubox
-    install -d -o root    -g root    -m 755 /etc/secubox
+    # Do NOT reset /etc/secubox — secubox-core owns it as secubox:secubox 0750
+    # (the users-engine needs dir-write for atomic users.json saves / TOTP).
+    # Only create as a fallback if it's somehow missing.
+    [ -d /etc/secubox ] || install -d -o secubox -g secubox -m 750 /etc/secubox
 
     # #319 /data migration: move legacy /srv/photoprism → /data/photoprism and
     # leave a back-compat symlink. Idempotent.
