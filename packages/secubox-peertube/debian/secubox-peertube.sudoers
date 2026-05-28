@@ -1,9 +1,0 @@
-# Installed at /etc/sudoers.d/secubox-peertube (mode 0440).
-#
-# Lets the unprivileged dashboard user (secubox) install operator-supplied
-# YouTube cookies into the PeerTube LXC, for the WebExtension/dashboard cookie
-# relay (#401). Tightly scoped: one command + one fixed spool path — the
-# dashboard writes the Netscape cookies body to /run/secubox/peertube-yt-cookies.txt
-# then runs exactly this command, which copies them into the LXC, enables the
-# import cookies feature, and restarts PeerTube.
-secubox ALL=(root) NOPASSWD: /usr/sbin/peertubectl set-youtube-cookies /run/secubox/peertube-yt-cookies.txt
