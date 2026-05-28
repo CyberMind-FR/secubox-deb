@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+  <title>SecuBox</title>
+</head>
+<body>
+  <header>
+    <span class="brand">SecuBox</span>
+    <span id="overall" class="dot dot-unknown" title="overall"></span>
+    <button id="refresh" class="icon-btn" title="Refresh">↻</button>
+  </header>
+
+  <section id="needs-config" class="hidden">
+    <p>No hub configured.</p>
+    <button id="open-options" class="btn">Open settings</button>
+  </section>
+
+  <section id="modules">
+    <ul id="module-list"><li class="muted">Loading…</li></ul>
+  </section>
+
+  <section id="youtube">
+    <h3>PeerTube import</h3>
+    <button id="relay-cookies" class="btn btn-primary">Send YouTube cookies → PeerTube</button>
+    <p id="relay-status" class="muted"></p>
+  </section>
+
+  <footer>
+    <a id="open-hub" href="#" target="_blank">Open dashboard ↗</a>
+    <a id="open-options-footer" href="#">Settings</a>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
