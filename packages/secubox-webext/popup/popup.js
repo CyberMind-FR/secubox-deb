@@ -7,11 +7,35 @@ const DEFAULTS = {
   modules: ["hub", "crowdsec", "waf", "wireguard", "peertube", "photoprism", "nextcloud"],
   // PeerTube cookie-intake endpoint (backend lands with #401 P1.5 / #388).
   cookieEndpoint: "/api/v1/peertube/import/cookies",
+  // SecuBox login endpoint (secubox-core JWT; any module's /auth/login works).
+  loginEndpoint: "/api/v1/peertube/auth/login",
 };
 
 async function getConfig() {
   const stored = await api.storage.local.get(DEFAULTS);
   return { ...DEFAULTS, ...stored };
+}
+
+async function getToken() {
+  return (await api.storage.local.get({ token: "" })).token;
+}
+
+async function authHeaders() {
+  const t = await getToken();
+  return t ? { Authorization: "Bearer " + t } : {};
+}
+
+async function login(cfg, username, password) {
+  const r = await fetch(`${cfg.hubBase}${cfg.loginEndpoint}`, {
+    method: "POST", credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!r.ok) throw new Error("login failed (" + r.status + ")");
+  const d = await r.json();
+  if (!d.access_token) throw new Error("no token in response");
+  await api.storage.local.set({ token: d.access_token });
+  return d.access_token;
 }
 
 function setDot(el, state) {
@@ -68,6 +92,7 @@ function toNetscape(cookies) {
 
 async function relayCookies(cfg) {
   const status = document.getElementById("relay-status");
+  const loginBox = document.getElementById("login-box");
   if (!cfg.hubBase) { status.textContent = "Configure the hub first."; return; }
   status.textContent = "Reading YouTube cookies…";
   try {
@@ -80,11 +105,17 @@ async function relayCookies(cfg) {
     status.textContent = `Sending ${cookies.length} cookies…`;
     const r = await fetch(`${cfg.hubBase}${cfg.cookieEndpoint}`, {
       method: "POST", credentials: "include",
-      headers: { "Content-Type": "text/plain" }, body,
+      headers: { "Content-Type": "text/plain", ...(await authHeaders()) }, body,
     });
+    if (r.status === 401 || r.status === 403) {
+      status.textContent = "SecuBox login required:";
+      loginBox.classList.remove("hidden");
+      return;
+    }
+    loginBox.classList.add("hidden");
     status.textContent = r.ok
-      ? `Sent ${cookies.length} cookies — retry the PeerTube import.`
-      : `Backend returned ${r.status} (cookie endpoint not deployed yet?).`;
+      ? `Sent ${cookies.length} cookies — PeerTube is restarting; retry the import shortly.`
+      : `Backend returned ${r.status}.`;
   } catch (e) {
     status.textContent = "Relay failed: " + (e?.message || e);
   }
@@ -97,6 +128,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("open-options-footer").addEventListener("click", openOpts);
   document.getElementById("refresh").addEventListener("click", () => renderModules(cfg));
   document.getElementById("relay-cookies").addEventListener("click", () => relayCookies(cfg));
+  document.getElementById("login-btn").addEventListener("click", async () => {
+    const status = document.getElementById("relay-status");
+    const u = document.getElementById("login-user").value.trim();
+    const p = document.getElementById("login-pass").value;
+    if (!u || !p) { status.textContent = "Enter SecuBox username + password."; return; }
+    status.textContent = "Logging in…";
+    try {
+      await login(cfg, u, p);
+      document.getElementById("login-pass").value = "";
+      await relayCookies(cfg);   // retry now that we have a token
+    } catch (e) {
+      status.textContent = "Login failed: " + (e?.message || e);
+    }
+  });
 
   const hub = document.getElementById("open-hub");
   hub.href = cfg.hubBase || "#";
