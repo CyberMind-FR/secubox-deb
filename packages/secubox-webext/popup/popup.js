@@ -91,43 +91,69 @@ function toNetscape(cookies) {
   return lines.join("\n") + "\n";
 }
 
-async function relayCookies(cfg) {
+// Robust JSON: never throws on HTML/empty bodies (the source of the
+// "JSON.parse: unexpected character at line 1 column 1" errors).
+async function safeJson(resp) {
+  const text = await resp.text();
+  if (!text) return {};
+  try { return JSON.parse(text); }
+  catch { return { _nonjson: text.slice(0, 120) }; }
+}
+
+// "Conformiser": the browser is the real cookie authority. Peek the avatar
+// credential registry, then for EACH registered service relay the browser's
+// live cookies (+ YouTube PO token if captured). One accessor, many logins.
+async function syncAllLogins(cfg) {
   const status = document.getElementById("relay-status");
+  const list = document.getElementById("cred-list");
   const loginBox = document.getElementById("login-box");
+  list.innerHTML = "";
   if (!cfg.hubBase) { status.textContent = "Configure the hub first."; return; }
-  status.textContent = "Reading YouTube cookies…";
+  status.textContent = "Discovering services…";
+
+  let services;
   try {
-    const cookies = await api.cookies.getAll({ domain: "youtube.com" });
-    if (!cookies.length) {
-      status.textContent = "No youtube.com cookies — log into YouTube in this browser first.";
-      return;
-    }
-    const netscape = toNetscape(cookies);
-    // Optional PO token captured from a youtube.com tab (P4, experimental).
-    const { yt_po_token = "", yt_visitor_data = "" } = await api.storage.local.get(
-      { yt_po_token: "", yt_visitor_data: "" });
-    status.textContent = `Poking ${cookies.length} cookies` + (yt_po_token ? " + PO token" : "") + "…";
-    const r = await fetch(`${cfg.hubBase}${cfg.cookieEndpoint}`, {
-      method: "POST", credentials: "include",
-      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-      body: JSON.stringify({
-        cookies: netscape,
-        po_token: yt_po_token || undefined,
-        visitor_data: yt_visitor_data || undefined,
-      }),
+    const r = await fetch(`${cfg.hubBase}/api/v1/avatar/cred/peek`, {
+      credentials: "include", headers: { ...(await authHeaders()) },
     });
     if (r.status === 401 || r.status === 403) {
-      status.textContent = "SecuBox login required:";
-      loginBox.classList.remove("hidden");
-      return;
+      status.textContent = "SecuBox login required:"; loginBox.classList.remove("hidden"); return;
     }
-    loginBox.classList.add("hidden");
-    status.textContent = r.ok
-      ? `Sent ${cookies.length} cookies — PeerTube is restarting; retry the import shortly.`
-      : `Backend returned ${r.status}.`;
+    if (!r.ok) { status.textContent = `Service discovery failed (HTTP ${r.status})`; return; }
+    services = (await safeJson(r)).services || [];
   } catch (e) {
-    status.textContent = "Relay failed: " + (e?.message || e);
+    status.textContent = "Discovery failed: " + (e?.message || e); return;
   }
+  loginBox.classList.add("hidden");
+  if (!services.length) { status.textContent = "No credential services registered on the hub."; return; }
+
+  let ok = 0;
+  for (const svc of services) {
+    const li = document.createElement("li");
+    list.append(li);
+    try {
+      const cookies = await api.cookies.getAll({ domain: svc.cookie_domain });
+      if (!cookies.length) { li.textContent = `${svc.service}: not logged into ${svc.cookie_domain}`; continue; }
+      const payload = { cookies: toNetscape(cookies) };
+      if (svc.service === "youtube") {
+        const s = await api.storage.local.get({ yt_po_token: "", yt_visitor_data: "" });
+        if (s.yt_po_token) payload.po_token = s.yt_po_token;
+        if (s.yt_visitor_data) payload.visitor_data = s.yt_visitor_data;
+      }
+      const pr = await fetch(`${cfg.hubBase}/api/v1/avatar/cred/poke/${svc.service}`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify(payload),
+      });
+      if (pr.status === 401 || pr.status === 403) { li.textContent = `${svc.service}: auth required`; loginBox.classList.remove("hidden"); continue; }
+      const jr = await safeJson(pr);
+      if (pr.ok && jr.success) { li.textContent = `${svc.service}: ✓ ${cookies.length} cookies relayed`; ok++; }
+      else { li.textContent = `${svc.service}: ⚠ ${JSON.stringify(jr.results || jr._nonjson || pr.status)}`; }
+    } catch (e) {
+      li.textContent = `${svc.service}: ✗ ${e?.message || e}`;
+    }
+  }
+  status.textContent = `Synced ${ok}/${services.length} login(s) from this browser.`;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -136,7 +162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("open-options").addEventListener("click", openOpts);
   document.getElementById("open-options-footer").addEventListener("click", openOpts);
   document.getElementById("refresh").addEventListener("click", () => renderModules(cfg));
-  document.getElementById("relay-cookies").addEventListener("click", () => relayCookies(cfg));
+  document.getElementById("relay-cookies").addEventListener("click", () => syncAllLogins(cfg));
   document.getElementById("login-btn").addEventListener("click", async () => {
     const status = document.getElementById("relay-status");
     const u = document.getElementById("login-user").value.trim();
@@ -146,7 +172,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       await login(cfg, u, p);
       document.getElementById("login-pass").value = "";
-      await relayCookies(cfg);   // retry now that we have a token
+      await syncAllLogins(cfg);   // retry now that we have a token
     } catch (e) {
       status.textContent = "Login failed: " + (e?.message || e);
     }
