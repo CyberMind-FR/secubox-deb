@@ -30,3 +30,6 @@ override_dh_auto_install:
 	# Systemd service (host dashboard daemon)
 	install -d debian/secubox-peertube/usr/lib/systemd/system
 	install -m 644 debian/secubox-peertube.service debian/secubox-peertube/usr/lib/systemd/system/
+	# sudoers: narrowly-scoped escalation for the cookie-relay (#401)
+	install -d debian/secubox-peertube/etc/sudoers.d
+	install -m 0440 debian/secubox-peertube.sudoers debian/secubox-peertube/etc/sudoers.d/secubox-peertube

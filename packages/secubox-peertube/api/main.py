@@ -12,11 +12,12 @@ Author: Gerald Kerma <gandalf@gk2.net>
 License: Proprietary / ANSSI CSPN candidate
 """
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import List, Optional, Dict
 
-from fastapi import FastAPI, APIRouter, Depends
+from fastapi import FastAPI, APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from secubox_core.auth import router as auth_router, require_jwt
@@ -473,6 +474,51 @@ async def import_video(req: VideoImport, user=Depends(require_jwt)):
         return {"success": True, "import_id": d.get("id"),
                 "video_uuid": vid.get("uuid"), "state": (d.get("state") or {})}
     return {"success": False, "error": result.get("error", "import failed")}
+
+
+# Spool path the dashboard (secubox) can write and that the narrowly-scoped
+# sudoers rule lets peertubectl read as root (see debian/secubox-peertube.sudoers).
+COOKIES_SPOOL = "/run/secubox/peertube-yt-cookies.txt"
+
+
+@router.post("/import/cookies")
+async def import_cookies(request: Request, user=Depends(require_jwt)):
+    """Install operator-supplied YouTube cookies (Netscape format) so yt-dlp
+    import can fetch YouTube. Body = the cookies.txt text (the SecuBox
+    WebExtension reads them from the logged-in browser and POSTs here, #401).
+
+    The dashboard runs unprivileged (secubox); it spools the body to
+    COOKIES_SPOOL then escalates via a single narrowly-scoped sudoers rule to
+    `peertubectl set-youtube-cookies`, which writes them into the LXC + enables
+    the feature + restarts PeerTube."""
+    body = (await request.body()).decode("utf-8", "replace")
+    if "\t" not in body or "youtube" not in body.lower():
+        return {"success": False, "error": "body is not a Netscape youtube cookies file"}
+    try:
+        with open(COOKIES_SPOOL, "w") as f:
+            f.write(body)
+        os.chmod(COOKIES_SPOOL, 0o600)
+    except Exception as e:
+        return {"success": False, "error": f"spool write failed: {e}"}
+    log.info(f"Installing YouTube cookies ({len(body)} bytes) by {user.get('sub', 'unknown')}")
+    try:
+        r = subprocess.run(
+            ["sudo", "-n", PEERTUBECTL, "set-youtube-cookies", COOKIES_SPOOL],
+            capture_output=True, text=True, timeout=90,
+        )
+        ok = r.returncode == 0
+        return {"success": ok,
+                "message": "cookies installed; PeerTube restarting" if ok else None,
+                "error": None if ok else (r.stderr or r.stdout or "install failed").strip()}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "timeout"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    finally:
+        try:
+            os.remove(COOKIES_SPOOL)
+        except OSError:
+            pass
 
 
 # ============================================================================
