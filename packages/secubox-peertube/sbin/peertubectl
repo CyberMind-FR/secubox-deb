@@ -92,18 +92,58 @@ cmd_reload() {
     fi
 }
 
+cmd_set_youtube_cookies() {
+    # Install a Netscape-format cookies.txt (exported from a browser logged into
+    # YouTube) so PeerTube's yt-dlp import can fetch YouTube videos. YouTube
+    # hard-blocks server IPs ("Sign in to confirm you're not a bot") — cookies
+    # are the only reliable workaround. Idempotent.
+    local src="${1:-}"
+    [ -n "$src" ] && [ -f "$src" ] || { err "usage: peertubectl set-youtube-cookies <cookies.txt>"; exit 1; }
+    lxc_running || { err "LXC '$LXC_NAME' not running"; exit 1; }
+    log "Installing YouTube cookies into $LXC_NAME ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- bash -c '
+        d=/var/www/peertube/storage/tmp-persistent
+        install -d -o peertube -g peertube "$d"
+        cat > "$d/youtube-cookies.txt"
+        chown peertube:peertube "$d/youtube-cookies.txt"
+        chmod 600 "$d/youtube-cookies.txt"
+    ' < "$src"
+    # Ensure the cookies feature is enabled in production.yaml.
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- python3 - <<'PY'
+import re, pathlib
+p = pathlib.Path('/var/www/peertube/config/production.yaml')
+lines = p.read_text().splitlines()
+ind = lambda s: len(s) - len(s.lstrip())
+imp=vid=http=ck=False; chg=False
+for i,l in enumerate(lines):
+    if re.match(r'^import\s*:', l) and ind(l)==0: imp=True; vid=http=ck=False; continue
+    if imp and l and ind(l)==0 and not l.startswith('#'): imp=vid=http=ck=False
+    if imp and re.match(r'^\s+videos\s*:', l): vid=True; http=ck=False; continue
+    if imp and vid and re.match(r'^\s+http\s*:', l): http=True; ck=False; continue
+    if imp and vid and http and re.match(r'^\s+cookies\s*:', l): ck=True; continue
+    if ck and re.match(r'^\s+enabled\s*:', l): lines[i]=l[:ind(l)]+'enabled: true'; ck=False; chg=True
+p.write_text('\n'.join(lines)+'\n')
+print('cookies enabled' if chg else 'cookies flag unchanged')
+PY
+    log "Cookies installed + enabled. Restarting PeerTube ..."
+    svc restart
+    log "Done. Retry the import from the PeerTube 'Import with URL' page."
+}
+
 cmd_help() {
     cat <<EOF
 peertubectl $VERSION — SecuBox PeerTube (native-LXC) controller
 
 Usage: peertubectl <verb> [args]
 
-  install            Provision the LXC + install PeerTube natively (idempotent)
-  status             LXC state + peertube.service + HTTP reachability
-  start|stop|restart Control peertube.service inside the LXC
-  logs [N]           Tail N lines of peertube journal (default 50)
-  reload             Reload host nginx (after vhost changes)
-  help               This message
+  install                       Provision the LXC + install PeerTube (idempotent)
+  status                        LXC state + peertube.service + HTTP reachability
+  start|stop|restart            Control peertube.service inside the LXC
+  set-youtube-cookies <file>    Install browser-exported YouTube cookies.txt so
+                                yt-dlp import works (YouTube blocks server IPs)
+  logs [N]                      Tail N lines of peertube journal (default 50)
+  reload                        Reload host nginx (after vhost changes)
+  help                          This message
 
 Config: $CONFIG_FILE  (name/ip/path/http_port/public_hostname)
 LXC: $LXC_NAME @ $LXC_IP on br-lxc — public https://$PUBLIC_HOSTNAME/
@@ -114,6 +154,7 @@ main() {
     local noun="${1:-help}"; shift || true
     case "$noun" in
         install|status|start|stop|restart|logs|reload) "cmd_${noun}" "$@" ;;
+        set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
         help|-h|--help) cmd_help ;;
         *) err "unknown verb: $noun"; cmd_help; exit 1 ;;
     esac
