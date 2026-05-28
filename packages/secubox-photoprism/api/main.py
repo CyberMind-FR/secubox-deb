@@ -4,7 +4,6 @@ Provides PhotoPrism Docker container management with library indexing,
 face recognition, album management, and storage configuration.
 """
 import asyncio
-import shutil
 import subprocess
 import json
 from datetime import datetime
@@ -34,16 +33,27 @@ log = get_logger("photoprism")
 
 # Configuration
 CONFIG_FILE = Path("/etc/secubox/photoprism.toml")
-CONTAINER_NAME = "secbx-photoprism"
+INSTALL_LIB = "/usr/share/secubox/lib/photoprism/install-lxc.sh"
+PHOTOPRISMCTL = "/usr/sbin/photoprismctl"
+# PhotoPrism runs as the `photoprism` podman container INSIDE the photoprism
+# LXC (see lib/photoprism/install-lxc.sh), not on the host.
+CONTAINER_NAME = "photoprism"
 DEFAULT_CONFIG = {
+    # LXC
+    "name": "photoprism",
+    "ip": "10.100.0.130",
+    "path": "/data/lxc",
+    # PhotoPrism (inside the LXC)
     "enabled": False,
-    "image": "photoprism/photoprism:latest",
+    "image": "docker.io/photoprism/photoprism:latest",
     "port": 2342,
-    "data_path": "/srv/photoprism",
-    "originals_path": "/srv/photoprism/originals",
-    "import_path": "/srv/photoprism/import",
+    "http_port": 2342,
+    "data_path": "/data/photoprism",
+    "originals_path": "/data/shared/photos",   # shared with Nextcloud "PhotoLibrary"
+    "import_path": "/data/photoprism/import",
     "timezone": "Europe/Paris",
-    "domain": "photos.secubox.local",
+    "domain": "photoprism.gk2.secubox.in",
+    "public_hostname": "photoprism.gk2.secubox.in",
     "haproxy": False,
     "face_recognition": True,
     "experimental": False,
@@ -93,14 +103,21 @@ class RestoreRequest(BaseModel):
 # ============================================================================
 
 def get_config() -> dict:
-    """Load photoprism configuration."""
+    """Load + flatten photoprism.toml ([lxc]/[photoprism]/[exposure]) over defaults."""
+    cfg = DEFAULT_CONFIG.copy()
     if CONFIG_FILE.exists():
         try:
             import tomllib
-            return tomllib.loads(CONFIG_FILE.read_text())
+            raw = tomllib.loads(CONFIG_FILE.read_text())
+            for section in ("lxc", "photoprism", "exposure"):
+                for k, v in (raw.get(section) or {}).items():
+                    cfg[k] = v
+            for k, v in raw.items():        # tolerate flat keys too
+                if not isinstance(v, dict):
+                    cfg[k] = v
         except Exception:
             pass
-    return DEFAULT_CONFIG.copy()
+    return cfg
 
 
 def save_config(config: dict):
@@ -119,46 +136,72 @@ def save_config(config: dict):
     CONFIG_FILE.write_text("\n".join(lines) + "\n")
 
 
-def detect_runtime() -> Optional[str]:
-    """Detect container runtime."""
-    if shutil.which("podman"):
-        return "podman"
-    if shutil.which("docker"):
-        return "docker"
-    return None
+def http_reachable() -> bool:
+    """True if PhotoPrism answers on <ip>:<http_port> (inside its LXC)."""
+    cfg = get_config()
+    ip = cfg.get("ip", "10.100.0.130")
+    port = cfg.get("http_port", cfg.get("port", 2342))
+    try:
+        r = subprocess.run(
+            ["curl", "-fsS", "-o", "/dev/null", "--max-time", "3", f"http://{ip}:{port}/"],
+            capture_output=True, timeout=5,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def lxc_state() -> str:
+    """LXC container state (best-effort; the dashboard user may lack access)."""
+    cfg = get_config()
+    try:
+        r = subprocess.run(
+            ["lxc-info", "-n", cfg.get("name", "photoprism"), "-P", cfg.get("path", "/data/lxc")],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in r.stdout.splitlines():
+            if line.strip().lower().startswith("state:"):
+                return line.split(":", 1)[1].strip().lower()
+    except Exception:
+        pass
+    return "unknown"
 
 
 def get_container_status() -> dict:
-    """Get PhotoPrism container status."""
-    rt = detect_runtime()
-    if not rt:
-        return {"status": "no_runtime", "uptime": ""}
-
-    try:
-        # Check if running
-        result = subprocess.run(
-            [rt, "ps", "--filter", f"name={CONTAINER_NAME}", "--format", "{{.Status}}"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.stdout.strip():
-            return {"status": "running", "uptime": result.stdout.strip()}
-
-        # Check if exists but stopped
-        result = subprocess.run(
-            [rt, "ps", "-a", "--filter", f"name={CONTAINER_NAME}", "--format", "{{.Status}}"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.stdout.strip():
-            return {"status": "stopped", "uptime": ""}
-
-        return {"status": "not_installed", "uptime": ""}
-    except Exception:
-        return {"status": "error", "uptime": ""}
+    """PhotoPrism status — primary signal is HTTP reachability of the LXC
+    instance (the dashboard runs unprivileged and can't always read lxc-info)."""
+    if http_reachable():
+        return {"status": "running", "uptime": ""}
+    state = lxc_state()
+    if state in ("stopped", "frozen"):
+        return {"status": "stopped", "uptime": ""}
+    return {"status": "not_installed", "uptime": ""}
 
 
 def is_running() -> bool:
-    """Check if PhotoPrism container is running."""
-    return get_container_status()["status"] == "running"
+    """Check if PhotoPrism is reachable."""
+    return http_reachable()
+
+
+def _pm() -> list:
+    """Command prefix to run podman inside the PhotoPrism LXC.
+
+    NOTE: lxc-attach needs root; the dashboard runs as the unprivileged
+    'secubox' user, so container-lifecycle verbs are best driven via
+    photoprismctl from a root context. Read-only status uses http_reachable()."""
+    cfg = get_config()
+    return ["lxc-attach", "-n", cfg.get("name", "photoprism"),
+            "-P", cfg.get("path", "/data/lxc"), "--", "podman"]
+
+
+def _photoprismctl(verb: str, timeout: int = 60) -> dict:
+    try:
+        r = subprocess.run([PHOTOPRISMCTL, verb], capture_output=True, text=True, timeout=timeout)
+        return {"success": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "timeout"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 def get_library_stats() -> dict:
@@ -270,28 +313,34 @@ async def health():
 
 @router.get("/status")
 async def status():
-    """Get PhotoPrism service status."""
+    """Get PhotoPrism service status (native-LXC)."""
     cfg = get_config()
-    rt = detect_runtime()
     container = get_container_status()
     lib_stats = get_library_stats()
+    hostname = cfg.get("public_hostname", cfg.get("domain", "photoprism.gk2.secubox.in"))
 
     return {
+        "deployment": "lxc-native",
         "enabled": cfg.get("enabled", False),
-        "image": cfg.get("image", "photoprism/photoprism:latest"),
+        "image": cfg.get("image", "docker.io/photoprism/photoprism:latest"),
         "port": cfg.get("port", 2342),
-        "data_path": cfg.get("data_path", "/srv/photoprism"),
-        "originals_path": cfg.get("originals_path", "/srv/photoprism/originals"),
-        "import_path": cfg.get("import_path", "/srv/photoprism/import"),
+        "lxc_name": cfg.get("name", "photoprism"),
+        "lxc_ip": cfg.get("ip", "10.100.0.130"),
+        "lxc_state": lxc_state(),
+        "http_reachable": http_reachable(),
+        "data_path": cfg.get("data_path", "/data/photoprism"),
+        "originals_path": cfg.get("originals_path", "/data/shared/photos"),
+        "import_path": cfg.get("import_path", "/data/photoprism/import"),
         "timezone": cfg.get("timezone", "Europe/Paris"),
-        "domain": cfg.get("domain", "photos.secubox.local"),
+        "domain": hostname,
+        "public_url": f"https://{hostname}/",
         "haproxy": cfg.get("haproxy", False),
         "face_recognition": cfg.get("face_recognition", True),
         "experimental": cfg.get("experimental", False),
         "readonly": cfg.get("readonly", False),
         "public": cfg.get("public", False),
-        "docker_available": rt is not None,
-        "runtime": rt or "none",
+        # webui back-compat keys (was Docker; now native-LXC):
+        "runtime": "lxc-native",
         "container_status": container["status"],
         "container_uptime": container["uptime"],
         "library_stats": lib_stats,
@@ -337,16 +386,12 @@ async def start_indexing(user=Depends(require_jwt)):
     if not is_running():
         return {"success": False, "error": "PhotoPrism is not running"}
 
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
     log.info(f"Starting index by {user.get('sub', 'unknown')}")
 
     try:
-        # Run photoprism index command in container
+        # Run photoprism index inside the LXC container.
         result = subprocess.run(
-            [rt, "exec", CONTAINER_NAME, "photoprism", "index"],
+            _pm() + ["exec", CONTAINER_NAME, "photoprism", "index"],
             capture_output=True, text=True, timeout=300
         )
         if result.returncode == 0:
@@ -365,16 +410,12 @@ async def import_photos(user=Depends(require_jwt)):
     if not is_running():
         return {"success": False, "error": "PhotoPrism is not running"}
 
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
     log.info(f"Starting import by {user.get('sub', 'unknown')}")
 
     try:
-        # Run photoprism import command
+        # Run photoprism import inside the LXC container.
         result = subprocess.run(
-            [rt, "exec", CONTAINER_NAME, "photoprism", "import"],
+            _pm() + ["exec", CONTAINER_NAME, "photoprism", "import"],
             capture_output=True, text=True, timeout=300
         )
         if result.returncode == 0:
@@ -581,14 +622,14 @@ async def delete_user(username: str, user=Depends(require_jwt)):
 
 @router.get("/container/status")
 async def container_status(user=Depends(require_jwt)):
-    """Get container status."""
-    rt = detect_runtime()
+    """LXC + reachability status (kept under /container/* for webui back-compat)."""
     container = get_container_status()
-
     return {
-        "runtime": rt or "none",
-        "runtime_available": rt is not None,
+        "runtime": "lxc-native",
+        "runtime_available": True,
         "container_name": CONTAINER_NAME,
+        "lxc_state": lxc_state(),
+        "http_reachable": http_reachable(),
         "status": container["status"],
         "uptime": container["uptime"],
     }
@@ -596,187 +637,66 @@ async def container_status(user=Depends(require_jwt)):
 
 @router.post("/container/install")
 async def install_photoprism(user=Depends(require_jwt)):
-    """Install PhotoPrism container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime (docker/podman) found"}
-
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/photoprism"))
-    originals_path = Path(cfg.get("originals_path", "/srv/photoprism/originals"))
-    import_path = Path(cfg.get("import_path", "/srv/photoprism/import"))
-
-    # Create directories
-    data_path.mkdir(parents=True, exist_ok=True)
-    originals_path.mkdir(parents=True, exist_ok=True)
-    import_path.mkdir(parents=True, exist_ok=True)
-    (data_path / "storage").mkdir(parents=True, exist_ok=True)
-
-    # Pull image
-    image = cfg.get("image", "photoprism/photoprism:latest")
-    log.info(f"Installing PhotoPrism ({image}) by {user.get('sub', 'unknown')}")
-
+    """Provision the LXC + podman + PhotoPrism. Long-running → detached."""
+    if not Path(INSTALL_LIB).exists():
+        return {"success": False, "error": f"install script missing at {INSTALL_LIB}"}
+    log.info(f"Launching native-LXC PhotoPrism install by {user.get('sub', 'unknown')}")
     try:
-        result = subprocess.run(
-            [rt, "pull", image],
-            capture_output=True, text=True, timeout=600
+        subprocess.Popen(
+            ["bash", INSTALL_LIB],
+            stdout=open("/var/log/secubox/photoprism-install.log", "a"),
+            stderr=subprocess.STDOUT, start_new_session=True,
         )
-        if result.returncode != 0:
-            return {"success": False, "error": result.stderr.strip(), "output": result.stdout}
-
-        return {"success": True, "output": "Image pulled successfully"}
-    except subprocess.TimeoutExpired:
-        return {"success": False, "error": "Pull timeout"}
+        return {"success": True,
+                "message": "Install started (several minutes). Follow "
+                           "/var/log/secubox/photoprism-install.log or 'photoprismctl logs'."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
 @router.post("/container/start")
 async def start_photoprism(user=Depends(require_jwt)):
-    """Start PhotoPrism container."""
-    if is_running():
-        return {"success": False, "error": "Already running"}
-
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/photoprism"))
-    originals_path = Path(cfg.get("originals_path", "/srv/photoprism/originals"))
-    import_path = Path(cfg.get("import_path", "/srv/photoprism/import"))
-    port = cfg.get("port", 2342)
-    image = cfg.get("image", "photoprism/photoprism:latest")
-    tz = cfg.get("timezone", "Europe/Paris")
-
-    # Ensure directories exist
-    data_path.mkdir(parents=True, exist_ok=True)
-    originals_path.mkdir(parents=True, exist_ok=True)
-    import_path.mkdir(parents=True, exist_ok=True)
-    (data_path / "storage").mkdir(parents=True, exist_ok=True)
-
-    # Build environment variables
-    env_vars = [
-        f"PHOTOPRISM_SITE_URL=http://localhost:{port}/",
-        f"PHOTOPRISM_ORIGINALS_PATH=/photoprism/originals",
-        f"PHOTOPRISM_IMPORT_PATH=/photoprism/import",
-        f"PHOTOPRISM_STORAGE_PATH=/photoprism/storage",
-        "PHOTOPRISM_HTTP_PORT=2342",
-        "PHOTOPRISM_DATABASE_DRIVER=sqlite",
-        f"PHOTOPRISM_DETECT_NSFW={'true' if cfg.get('experimental', False) else 'false'}",
-        f"PHOTOPRISM_EXPERIMENTAL={'true' if cfg.get('experimental', False) else 'false'}",
-        f"PHOTOPRISM_READONLY={'true' if cfg.get('readonly', False) else 'false'}",
-        f"PHOTOPRISM_PUBLIC={'true' if cfg.get('public', False) else 'false'}",
-        f"PHOTOPRISM_DISABLE_FACES={'false' if cfg.get('face_recognition', True) else 'true'}",
-        f"TZ={tz}",
-    ]
-
-    # Set admin password if configured
-    admin_pass = cfg.get("admin_password", "")
-    if admin_pass:
-        env_vars.append(f"PHOTOPRISM_ADMIN_PASSWORD={admin_pass}")
-    else:
-        env_vars.append("PHOTOPRISM_AUTH_MODE=public")  # No auth if no password
-
-    # Build run command
-    cmd = [
-        rt, "run", "-d",
-        "--name", CONTAINER_NAME,
-        "-v", f"{originals_path}:/photoprism/originals",
-        "-v", f"{import_path}:/photoprism/import",
-        "-v", f"{data_path}/storage:/photoprism/storage",
-        "-p", f"127.0.0.1:{port}:2342",
-        "--restart", "unless-stopped",
-    ]
-
-    # Add environment variables
-    for env in env_vars:
-        cmd.extend(["-e", env])
-
-    cmd.append(image)
-
-    log.info(f"Starting PhotoPrism by {user.get('sub', 'unknown')}")
-
-    try:
-        # Remove existing stopped container
-        subprocess.run([rt, "rm", "-f", CONTAINER_NAME], capture_output=True, timeout=10)
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        await asyncio.sleep(5)
-
-        if is_running():
-            return {"success": True}
-        else:
-            return {"success": False, "error": result.stderr.strip() or "Failed to start"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    """Start PhotoPrism (LXC)."""
+    log.info(f"Starting PhotoPrism LXC by {user.get('sub', 'unknown')}")
+    r = _photoprismctl("start")
+    return {"success": r.get("success", False), "output": r.get("stdout", r.get("error", ""))}
 
 
 @router.post("/container/stop")
 async def stop_photoprism(user=Depends(require_jwt)):
-    """Stop PhotoPrism container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    log.info(f"Stopping PhotoPrism by {user.get('sub', 'unknown')}")
-
-    try:
-        subprocess.run([rt, "stop", CONTAINER_NAME], capture_output=True, timeout=30)
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    """Stop PhotoPrism (LXC)."""
+    log.info(f"Stopping PhotoPrism LXC by {user.get('sub', 'unknown')}")
+    r = _photoprismctl("stop")
+    return {"success": r.get("success", False), "output": r.get("stdout", r.get("error", ""))}
 
 
 @router.post("/container/restart")
 async def restart_photoprism(user=Depends(require_jwt)):
-    """Restart PhotoPrism container."""
-    await stop_photoprism(user)
-    await asyncio.sleep(2)
-    return await start_photoprism(user)
+    """Restart PhotoPrism (LXC)."""
+    log.info(f"Restarting PhotoPrism LXC by {user.get('sub', 'unknown')}")
+    r = _photoprismctl("restart")
+    return {"success": r.get("success", False), "output": r.get("stdout", r.get("error", ""))}
 
 
 @router.post("/container/uninstall")
 async def uninstall_photoprism(user=Depends(require_jwt)):
-    """Uninstall PhotoPrism container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    log.info(f"Uninstalling PhotoPrism by {user.get('sub', 'unknown')}")
-
-    try:
-        subprocess.run([rt, "stop", CONTAINER_NAME], capture_output=True, timeout=30)
-        subprocess.run([rt, "rm", "-f", CONTAINER_NAME], capture_output=True, timeout=10)
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    """Stop the LXC (data on /data/photoprism + /data/shared/photos preserved)."""
+    log.info(f"Stopping PhotoPrism LXC (data preserved) by {user.get('sub', 'unknown')}")
+    r = _photoprismctl("stop")
+    return {"success": r.get("success", False), "message": "LXC stopped, data preserved"}
 
 
 @router.post("/container/update")
 async def update_photoprism(user=Depends(require_jwt)):
-    """Update PhotoPrism to latest image."""
+    """Pull the latest image inside the LXC + restart."""
     cfg = get_config()
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    image = cfg.get("image", "photoprism/photoprism:latest")
-    log.info(f"Updating PhotoPrism ({image}) by {user.get('sub', 'unknown')}")
-
+    image = cfg.get("image", "docker.io/photoprism/photoprism:latest")
+    log.info(f"Updating PhotoPrism image ({image}) by {user.get('sub', 'unknown')}")
     try:
-        # Pull new image
-        result = subprocess.run(
-            [rt, "pull", image],
-            capture_output=True, text=True, timeout=600
-        )
-        if result.returncode != 0:
-            return {"success": False, "error": result.stderr.strip()}
-
-        # Restart if running
-        if is_running():
-            await restart_photoprism(user)
-
+        pull = subprocess.run(_pm() + ["pull", image], capture_output=True, text=True, timeout=600)
+        if pull.returncode != 0:
+            return {"success": False, "error": pull.stderr.strip() or "pull failed"}
+        _photoprismctl("restart")
         return {"success": True, "output": "Update complete"}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -788,18 +708,16 @@ async def update_photoprism(user=Depends(require_jwt)):
 
 @router.get("/logs")
 async def get_logs(lines: int = 50, user=Depends(require_jwt)):
-    """Get container logs."""
-    rt = detect_runtime()
-    if not rt:
-        return {"logs": "No container runtime"}
-
+    """Tail photoprism.service journal inside the LXC."""
+    cfg = get_config()
     try:
         result = subprocess.run(
-            [rt, "logs", "--tail", str(lines), CONTAINER_NAME],
-            capture_output=True, text=True, timeout=10
+            ["lxc-attach", "-n", cfg.get("name", "photoprism"),
+             "-P", cfg.get("path", "/data/lxc"), "--",
+             "journalctl", "-u", "photoprism", "-n", str(lines), "--no-pager"],
+            capture_output=True, text=True, timeout=15,
         )
-        logs = result.stdout + result.stderr
-        return {"logs": logs}
+        return {"logs": (result.stdout + result.stderr) or "No logs available"}
     except Exception:
         return {"logs": "No logs available"}
 

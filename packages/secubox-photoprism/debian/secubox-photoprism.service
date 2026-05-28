@@ -1,23 +1,24 @@
 [Unit]
-# Only start if explicitly enabled (backend installed)
-ConditionPathExists=/etc/secubox/photoprism/enabled
 Description=SecuBox PhotoPrism API
-After=network.target secubox-core.service secubox-runtime.service docker.service
-Requires=secubox-runtime.service
-Wants=docker.service
+After=network.target secubox-core.service
+Requires=secubox-core.service
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=secubox
+Group=secubox
 WorkingDirectory=/usr/lib/secubox/photoprism
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/photoprism.sock --log-level warning
-ExecStartPost=-/bin/sleep 1
-ExecStartPost=-/bin/chmod 660 /run/secubox/photoprism.sock
-ExecStartPost=-/bin/chown secubox:secubox /run/secubox/photoprism.sock
 Restart=on-failure
 RestartSec=5
-PrivateTmp=true
+UMask=0000
+
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+RuntimeDirectoryMode=0775
+
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox /data/photoprism
 
 [Install]
 WantedBy=multi-user.target
