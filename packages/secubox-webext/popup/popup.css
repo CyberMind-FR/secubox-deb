@@ -1,0 +1,55 @@
+:root {
+  --cosmos-black: #0a0a0f;
+  --gold-hermetic: #c9a84c;
+  --cinnabar: #e63946;
+  --matrix-green: #00ff41;
+  --cyber-cyan: #00d4ff;
+  --text-primary: #e8e6d9;
+  --text-muted: #6b6b7a;
+}
+* { box-sizing: border-box; }
+body {
+  width: 320px;
+  margin: 0;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  background: var(--cosmos-black);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1c1c28;
+}
+.brand { color: var(--gold-hermetic); font-weight: 700; letter-spacing: 1px; flex: 1; }
+.icon-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 15px;
+}
+.icon-btn:hover { color: var(--cyber-cyan); }
+section { padding: 8px 12px; }
+h3 { margin: 4px 0 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+ul { list-style: none; margin: 0; padding: 0; }
+li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+li a { color: var(--text-primary); text-decoration: none; flex: 1; }
+li a:hover { color: var(--cyber-cyan); }
+.muted { color: var(--text-muted); }
+.hidden { display: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.dot-up { background: var(--matrix-green); box-shadow: 0 0 5px var(--matrix-green); }
+.dot-down { background: var(--cinnabar); box-shadow: 0 0 5px var(--cinnabar); }
+.dot-unknown { background: var(--text-muted); }
+.btn {
+  width: 100%; padding: 7px 10px; margin: 2px 0;
+  background: #16161f; color: var(--text-primary);
+  border: 1px solid #2a2a3a; border-radius: 4px; cursor: pointer;
+  font-family: inherit; font-size: 12px;
+}
+.btn:hover { border-color: var(--cyber-cyan); }
+.btn-primary { border-color: var(--gold-hermetic); color: var(--gold-hermetic); }
+.btn-primary:hover { background: var(--gold-hermetic); color: var(--cosmos-black); }
+footer {
+  display: flex; justify-content: space-between;
+  padding: 10px 12px; border-top: 1px solid #1c1c28;
+}
+footer a { color: var(--cyber-cyan); text-decoration: none; font-size: 12px; }
