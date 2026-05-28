@@ -1,27 +1,71 @@
-#!/bin/bash
+#!/bin/sh
 set -e
-case "$1" in
-  configure)
+
+if [ "$1" = "configure" ]; then
     # Ensure secubox user exists
     id -u secubox >/dev/null 2>&1 || \
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    # Create runtime directories
-    install -d -o secubox -g secubox -m 750 /run/secubox
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox
-    # Create PeerTube data directory
-    install -d -o root -g root -m 755 /srv/peertube
-    install -d -o root -g root -m 755 /srv/peertube/storage
-    install -d -o root -g root -m 755 /srv/peertube/config
-    install -d -o root -g root -m 755 /srv/peertube/data
-    # Ensure nginx secubox.d directory exists
+
+    # Runtime + state directories
+    install -d -o secubox -g secubox -m 750 /run/secubox /var/lib/secubox
+    # Do NOT reset /etc/secubox — secubox-core owns it as secubox:secubox 0750
+    # (the users-engine needs dir-write for atomic users.json saves / TOTP).
+    # Only create as a fallback if it's somehow missing.
+    [ -d /etc/secubox ] || install -d -o secubox -g secubox -m 750 /etc/secubox
+
+    # nginx snippet directory (peertube.conf shipped by the package lands here)
     install -d -m 755 /etc/nginx/secubox.d
-    # Enable and start service
+
+    # #319 /data migration. Move legacy /srv/peertube → /data/peertube and
+    # leave a symlink behind for back-compat. Idempotent.
+    for _d in peertube; do
+      if [ -d "/srv/$_d" ] && [ ! -L "/srv/$_d" ] && [ ! -e "/data/$_d" ]; then
+        mkdir -p /data
+        _was_active=""
+        if systemctl is-active --quiet secubox-peertube; then
+          systemctl stop secubox-peertube || true
+          _was_active=1
+        fi
+        mv "/srv/$_d" "/data/$_d" && ln -s "/data/$_d" "/srv/$_d" \
+          && echo "secubox-peertube: migrated /srv/$_d → /data/$_d"
+        [ -n "$_was_active" ] && systemctl start secubox-peertube || true
+      fi
+    done
+
+    # Pre-create the /data/peertube root with neutral ownership; the
+    # bind-mount subdirs (storage/ config/ postgres/ redis/) are created +
+    # chown'd to the LXC root UID by install-lxc.sh on `peertubectl install`.
+    install -d -o root -g root -m 755 /data/peertube
+
+    # Ship a default peertube.toml from the example if the operator has none.
+    if [ ! -e /etc/secubox/peertube.toml ] && [ -e /etc/secubox/peertube.toml.example ]; then
+      cp /etc/secubox/peertube.toml.example /etc/secubox/peertube.toml
+    fi
+
+    # Symlink the public vhost into sites-enabled (idempotent). The vhost
+    # proxies peertube.gk2.secubox.in (:9080) → PeerTube LXC :9000. Operator
+    # wires the HAProxy SNI ACL + ACME cert separately (CLAUDE.md convention).
+    if [ -f /etc/nginx/sites-available/peertube.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+      ln -sf ../sites-available/peertube.conf /etc/nginx/sites-enabled/peertube.conf
+    fi
+
+    # Enable + start the API daemon. Tolerate masked units (per wazuh fix
+    # 63284497): if the operator deliberately masked the service, leave it
+    # alone instead of failing the postinst.
     systemctl daemon-reload
-    systemctl enable secubox-peertube.service
-    systemctl start  secubox-peertube.service || true
-    # Reload nginx to pick up new location
-    systemctl reload nginx 2>/dev/null || true
-    ;;
-esac
+    if [ "$(systemctl is-enabled secubox-peertube.service 2>/dev/null)" != "masked" ]; then
+      systemctl enable secubox-peertube.service || true
+      systemctl start  secubox-peertube.service || true
+    fi
+
+    # Reload nginx to pick up the /api/v1/peertube/ + /peertube/ locations
+    # and the public vhost. NOTE: PeerTube itself is NOT installed by this
+    # postinst — run `peertubectl install` to provision the LXC.
+    if nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+fi
+
 #DEBHELPER#
+exit 0
