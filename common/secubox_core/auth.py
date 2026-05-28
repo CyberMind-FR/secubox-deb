@@ -77,7 +77,9 @@ def _cookie_domain() -> Optional[str]:
     return dom or None
 
 
-def _set_session_cookie(response: Response, token: str, expires_in: int = 86400) -> None:
+def set_session_cookie(response: Response, token: str, expires_in: int = 86400) -> None:
+    """Public helper so override modules (secubox-auth) emit the same SSO-lite
+    session cookie on their own login-success paths."""
     response.set_cookie(
         key=SESSION_COOKIE,
         value=token,
@@ -124,15 +126,22 @@ def _decode_token(token: str) -> Dict[str, Any]:
 
 
 async def require_jwt(
+    request: Request,
     creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> Dict[str, Any]:
-    if creds is None:
+    # SSO-lite (#400): accept the Bearer token OR the parent-domain session
+    # cookie. Additive — existing Bearer clients are unaffected; the cookie lets
+    # one SecuBox login cover every module without re-auth. The cookie is
+    # SameSite=Lax (CSRF-mitigated); cross-site POSTs from other origins won't
+    # carry it.
+    token = creds.credentials if creds is not None else request.cookies.get(SESSION_COOKIE)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token Bearer manquant",
+            detail="Token Bearer ou session manquant",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    payload = _decode_token(creds.credentials)
+    payload = _decode_token(token)
     jti = payload.get("jti")
     if not jti or not _session_validator(jti):
         raise HTTPException(
@@ -191,7 +200,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
     tok = create_token(req.username, jti=jti)
     # SSO-lite: also drop a parent-domain session cookie so nginx auth_request
     # (GET /auth/verify) gates sibling vhosts with this one login.
-    _set_session_cookie(response, tok)
+    set_session_cookie(response, tok)
     _emit_session_event("login_success", req.username, {
         "jti": jti,
         "expires_in": 86400,
