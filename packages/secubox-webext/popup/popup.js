@@ -10,6 +10,9 @@ const DEFAULTS = {
   cookieEndpoint: "/api/v1/avatar/cred/poke/youtube",
   // SecuBox login endpoint (secubox-core JWT; any module's /auth/login works).
   loginEndpoint: "/api/v1/peertube/auth/login",
+  // Session-vault allowlist (#409): which domains to back up. Cookie access for
+  // these needs matching host_permissions in the manifest.
+  vaultDomains: ["youtube.com", "linkedin.com", "facebook.com"],
 };
 
 async function getConfig() {
@@ -182,6 +185,57 @@ async function syncAllLogins(cfg) {
   status.textContent = `Synced ${ok}/${services.length} login(s) from this browser.`;
 }
 
+// ── Session vault (#409): encrypted backup + profile restore ────────────────
+async function loadVault(cfg) {
+  const list = document.getElementById("vault-list");
+  if (!list || !cfg.hubBase) return;
+  list.innerHTML = "";
+  try {
+    const data = await Vault.list(cfg.hubBase, await authHeaders());
+    const backups = data.backups || [];
+    if (!backups.length) { list.innerHTML = '<li class="muted">No backups yet</li>'; return; }
+    for (const b of backups) {
+      const li = document.createElement("li");
+      const span = document.createElement("span");
+      span.style.flex = "1";
+      const when = b.saved_at ? new Date(b.saved_at).toLocaleDateString() : "";
+      span.textContent = `${b.profile}/${b.domain} (${(b.meta || {}).cookie_count || "?"}c, ${when})`;
+      const rb = document.createElement("button");
+      rb.className = "btn"; rb.textContent = "Restore"; rb.style.width = "auto"; rb.style.padding = "2px 8px";
+      rb.addEventListener("click", () => doVaultRestore(cfg, b.profile, b.domain));
+      li.append(span, rb);
+      list.append(li);
+    }
+  } catch (e) {
+    list.innerHTML = `<li class="muted">vault: ${e?.message || e}</li>`;
+  }
+}
+
+async function doVaultBackup(cfg) {
+  const status = document.getElementById("vault-status");
+  const pass = document.getElementById("vault-pass").value;
+  const profile = (document.getElementById("vault-profile").value || "default").trim();
+  if (!cfg.hubBase) { status.textContent = "Configure the hub first."; return; }
+  if (!pass) { status.textContent = "Enter a vault passphrase."; return; }
+  status.textContent = "Encrypting + backing up…";
+  try {
+    const n = await Vault.backup(cfg.hubBase, await authHeaders(), pass, profile, cfg.vaultDomains);
+    status.textContent = n ? `Backed up ${n} domain(s) (encrypted).` : "Nothing to back up (not logged into those sites?).";
+    loadVault(cfg);
+  } catch (e) { status.textContent = "Backup failed: " + (e?.message || e); }
+}
+
+async function doVaultRestore(cfg, profile, domain) {
+  const status = document.getElementById("vault-status");
+  const pass = document.getElementById("vault-pass").value;
+  if (!pass) { status.textContent = "Enter the vault passphrase to restore."; return; }
+  status.textContent = `Restoring ${domain}…`;
+  try {
+    const n = await Vault.restore(cfg.hubBase, await authHeaders(), pass, profile, domain);
+    status.textContent = `Restored ${n} cookies for ${domain} — reload that site's tab.`;
+  } catch (e) { status.textContent = "Restore failed (wrong passphrase?): " + (e?.message || e); }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   const cfg = await getConfig();
   const openOpts = () => api.runtime.openOptionsPage();
@@ -212,6 +266,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("module-list").innerHTML = '<li class="muted">Set the hub URL in settings.</li>';
     return;
   }
+  document.getElementById("vault-backup").addEventListener("click", () => doVaultBackup(cfg));
   renderModules(cfg);
   loadMetrics(cfg);
+  loadVault(cfg);
 });

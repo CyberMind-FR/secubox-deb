@@ -43,11 +43,23 @@
     </div>
   </section>
 
+  <section id="vault">
+    <h3>Session vault <span class="muted" style="font-weight:400">· encrypted, on-box</span></h3>
+    <input id="vault-pass" type="password" placeholder="vault passphrase (stays in browser)" autocomplete="off">
+    <div class="vault-row">
+      <input id="vault-profile" type="text" placeholder="profile" value="default">
+      <button id="vault-backup" class="btn">Back up logins</button>
+    </div>
+    <ul id="vault-list"></ul>
+    <p id="vault-status" class="muted"></p>
+  </section>
+
   <footer>
     <a id="open-hub" href="#" target="_blank">Open dashboard ↗</a>
     <a id="open-options-footer" href="#">Settings</a>
   </footer>
 
+  <script src="vault.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
