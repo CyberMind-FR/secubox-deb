@@ -58,6 +58,18 @@ li a:hover { color: var(--cyber-cyan); }
 .vault-row input { flex: 1; min-width: 0; padding: 6px 8px; background: #16161f; color: var(--text-primary); border: 1px solid #2a2a3a; border-radius: 4px; font-family: inherit; font-size: 12px; }
 .vault-row .btn { width: auto; white-space: nowrap; }
 #vault-list li { font-size: 11px; gap: 6px; }
+.picker-head { display: flex; justify-content: space-between; align-items: center; margin: 6px 0 2px; font-size: 11px; }
+.linklike { background: none; border: none; color: var(--cyber-cyan); cursor: pointer; font-family: inherit; font-size: 11px; padding: 0; }
+.linklike:hover { color: var(--gold-hermetic); }
+#picker-list li { font-size: 11px; gap: 6px; padding: 2px 0; }
+#picker-list label { display: flex; align-items: center; gap: 6px; flex: 1; cursor: pointer; }
+#picker-list .rm { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; padding: 0 2px; }
+#picker-list .rm:hover { color: var(--cinnabar); }
+.persona-row { flex-wrap: wrap; }
+.persona-name { color: var(--gold-hermetic); font-weight: 700; flex: 1; }
+.persona-domains { width: 100%; color: var(--text-muted); font-size: 10px; padding-left: 2px; }
+.btn-become { border-color: var(--matrix-green); color: var(--matrix-green); width: auto !important; padding: 2px 8px !important; }
+.btn-become:hover { background: var(--matrix-green); color: var(--cosmos-black); }
 #login-box { margin-top: 6px; }
 #login-box input {
   width: 100%; padding: 6px 8px; margin: 3px 0;

@@ -27,6 +27,38 @@ const Vault = (() => {
     return JSON.parse(td.decode(pt));
   }
 
+  // Normalise a typed site to its registrable domain so "accounts.youtube.com"
+  // and "amazon.co.uk" store under one persona entry (not the public suffix).
+  const MULTI_TLD = new Set([
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au",
+    "co.jp", "co.nz", "co.in", "co.za", "com.br", "com.mx", "com.tr",
+    "com.sg", "com.hk", "com.cn",
+  ]);
+  function registrable(host) {
+    const h = (host || "").trim().replace(/^\./, "").replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
+    const parts = h.split(".");
+    if (parts.length <= 2) return h;
+    const last2 = parts.slice(-2).join(".");
+    if (MULTI_TLD.has(last2)) return parts.slice(-3).join(".");
+    return last2;
+  }
+
+  // Show which sites the operator is signed into, grouped by registrable
+  // domain, so the popup can offer a tick-list. Read-only and local: returns
+  // counts only, sends nothing off the machine.
+  async function discover() {
+    const all = await api.cookies.getAll({});
+    const groups = new Map();
+    for (const c of all) {
+      const d = registrable(c.domain);
+      if (!d || d.indexOf(".") < 0) continue;
+      groups.set(d, (groups.get(d) || 0) + 1);
+    }
+    return [...groups.entries()]
+      .map(([domain, count]) => ({ domain, count }))
+      .sort((a, b) => a.domain.localeCompare(b.domain));
+  }
+
   async function backup(hubBase, headers, passphrase, profile, domains) {
     let n = 0;
     for (const domain of domains) {
@@ -81,5 +113,20 @@ const Vault = (() => {
     return n;
   }
 
-  return { backup, list, restore };
+  // Become a persona: restore EVERY domain saved under one profile in a single
+  // click, so a fresh LAN machine adopts the whole login group at once.
+  async function restoreProfile(hubBase, headers, passphrase, profile) {
+    const data = await list(hubBase, headers);
+    const mine = (data.backups || []).filter((b) => b.profile === profile);
+    let domains = 0, cookies = 0;
+    for (const b of mine) {
+      try {
+        cookies += await restore(hubBase, headers, passphrase, profile, b.domain);
+        domains++;
+      } catch (e) { /* keep going; one bad domain shouldn't abort the persona */ }
+    }
+    return { domains, cookies };
+  }
+
+  return { backup, list, restore, restoreProfile, registrable, discover };
 })();
