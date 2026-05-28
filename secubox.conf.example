@@ -14,6 +14,10 @@ log_level = "warning"           # debug | info | warning | error
 [api]
 socket_dir  = "/run/secubox"    # Dossier des Unix sockets
 jwt_secret  = ""                # Généré au firstboot — ne pas modifier
+# SSO-lite (#400): domaine parent du cookie de session pour le gating
+# nginx auth_request (/auth/verify) — un seul login couvre tous les vhosts
+# *.<domaine>. Vide = cookie host-only. Ex: ".gk2.secubox.in"
+sso_cookie_domain = ""
 
 # Utilisateurs locaux (fallback si pas d'OAuth)
 [auth]
