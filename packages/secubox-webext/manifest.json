@@ -13,7 +13,9 @@
   "host_permissions": [
     "*://*.secubox.in/*",
     "https://*.youtube.com/*",
-    "https://youtube.com/*"
+    "https://youtube.com/*",
+    "https://*.linkedin.com/*",
+    "https://*.facebook.com/*"
   ],
   "action": {
     "default_title": "SecuBox Companion",

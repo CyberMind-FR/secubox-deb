@@ -53,6 +53,11 @@ li a:hover { color: var(--cyber-cyan); }
 .m-val { display: block; color: var(--cyber-cyan); font-size: 14px; font-weight: 700; }
 .m-lbl { display: block; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
 .m-hot { color: var(--cinnabar) !important; }
+#vault-pass { width: 100%; padding: 6px 8px; margin: 3px 0; background: #16161f; color: var(--text-primary); border: 1px solid #2a2a3a; border-radius: 4px; font-family: inherit; font-size: 12px; }
+.vault-row { display: flex; gap: 6px; }
+.vault-row input { flex: 1; min-width: 0; padding: 6px 8px; background: #16161f; color: var(--text-primary); border: 1px solid #2a2a3a; border-radius: 4px; font-family: inherit; font-size: 12px; }
+.vault-row .btn { width: auto; white-space: nowrap; }
+#vault-list li { font-size: 11px; gap: 6px; }
 #login-box { margin-top: 6px; }
 #login-box input {
   width: 100%; padding: 6px 8px; margin: 3px 0;
