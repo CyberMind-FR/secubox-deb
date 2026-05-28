@@ -22,6 +22,20 @@
   "background": {
     "scripts": ["background.js"]
   },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content/yt-capture.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content/yt-hook.js"],
+      "matches": ["https://www.youtube.com/*"]
+    }
+  ],
   "options_ui": {
     "page": "options/options.html",
     "open_in_tab": true

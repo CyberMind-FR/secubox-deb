@@ -5,8 +5,9 @@ const DEFAULTS = {
   hubBase: "",                          // e.g. "https://admin.gk2.secubox.in"
   // Modules to probe (name shown + URL slug). Operator can edit in options.
   modules: ["hub", "crowdsec", "waf", "wireguard", "peertube", "photoprism", "nextcloud"],
-  // PeerTube cookie-intake endpoint (backend lands with #401 P1.5 / #388).
-  cookieEndpoint: "/api/v1/peertube/import/cookies",
+  // Avatar credential-broker poke endpoint (#402): one place to share browser
+  // auth with any backend service. youtube → PeerTube.
+  cookieEndpoint: "/api/v1/avatar/cred/poke/youtube",
   // SecuBox login endpoint (secubox-core JWT; any module's /auth/login works).
   loginEndpoint: "/api/v1/peertube/auth/login",
 };
@@ -101,11 +102,19 @@ async function relayCookies(cfg) {
       status.textContent = "No youtube.com cookies — log into YouTube in this browser first.";
       return;
     }
-    const body = toNetscape(cookies);
-    status.textContent = `Sending ${cookies.length} cookies…`;
+    const netscape = toNetscape(cookies);
+    // Optional PO token captured from a youtube.com tab (P4, experimental).
+    const { yt_po_token = "", yt_visitor_data = "" } = await api.storage.local.get(
+      { yt_po_token: "", yt_visitor_data: "" });
+    status.textContent = `Poking ${cookies.length} cookies` + (yt_po_token ? " + PO token" : "") + "…";
     const r = await fetch(`${cfg.hubBase}${cfg.cookieEndpoint}`, {
       method: "POST", credentials: "include",
-      headers: { "Content-Type": "text/plain", ...(await authHeaders()) }, body,
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+      body: JSON.stringify({
+        cookies: netscape,
+        po_token: yt_po_token || undefined,
+        visitor_data: yt_visitor_data || undefined,
+      }),
     });
     if (r.status === 401 || r.status === 403) {
       status.textContent = "SecuBox login required:";
