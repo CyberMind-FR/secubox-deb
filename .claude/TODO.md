@@ -7,13 +7,39 @@
 
 ### Session 2026-05-27 evening follow-ups (peertube + photoprism + WAF)
 
-- [ ] **Peertube install monitoring**: still at step 6/8
-  (`yarn install --production`) in the LXC at 10.100.0.120 at session
-  end. When complete, verify https://peertube.gk2.secubox.in/ returns
-  PeerTube content (was 502; nginx vhost already rewired to
-  `10.100.0.120:9000`). If yarn install fails, fall back to PeerTube
-  Docker image inside the LXC (similar pattern to PhotoPrism with
-  `--network=host`).
+- [x] **Peertube install** — DONE 2026-05-28. LIVE at
+  https://peertube.gk2.secubox.in/, upload confirmed. Native-in-LXC
+  (Node 22 + pnpm). See HISTORY 2026-05-28. Did NOT need Docker
+  fallback — native install worked once Node bumped 20→22 + ownership
+  fixed + production.yaml patched.
+
+- [~] **Peertube SOURCE backport** — DONE 2026-05-28, pushed on
+  `feature/388-rework-secubox-peertube-align-with-secub` (commit `5e52598c`).
+  Native-LXC rework + dashboard correction + yt-dlp URL import. **#390 is
+  superseded** (its vhost folded in with the port corrected to LXC :9000;
+  user to close #390). PeerTube native HTTP import (yt-dlp) ALSO enabled on
+  the live gk2 instance — "Import with URL" now available in the PeerTube UI.
+  Pending: rebuild+deploy the `secubox-peertube` .deb to gk2 so the dashboard
+  Import tab + corrected status go live (currently only the upstream PeerTube
+  UI import is live). No PR opened yet (awaiting user go-ahead).
+
+- [ ] **(historical) Peertube SOURCE backport notes** — two issues/worktrees:
+  - **#388** (`feature/388-rework-secubox-peertube-align-with-secub`):
+    package describes a *Docker/Podman API-managed* model; live deploy
+    went *native-in-LXC* (Node 22 + pnpm + systemd `peertube.service`
+    inside the container). Reconcile: either (a) ship the native
+    install recipe as a packaged `install-peertube.sh` + document the
+    LXC pattern, or (b) rewrite to actually drive Docker/Podman.
+    Decide with operator — affects what the package ships + how it
+    reproduces. Live install script lives at
+    `/data/lxc/peertube/rootfs/root/{install-peertube.sh,peertube-finish.sh,install-node22.sh,peertube-config.py}`.
+  - **#390** (`feature/390-peertube-url-backport-vhost-template-por`):
+    committed nginx conf only has the `/api/v1/peertube/` socket
+    location; the real public vhost (listen :9080, `proxy_pass
+    http://10.100.0.120:9000`, 8G upload cap, 7d streaming timeouts,
+    WS upgrade, ACME) is live on gk2 at
+    `/etc/nginx/sites-available/peertube.conf` but NOT in source.
+    Mechanical backport — no design question.
 
 - [ ] **NC bruteforce protection re-enable** after operator confirms
   mobile NC client reconnects successfully:
@@ -33,12 +59,30 @@
      `PHOTOPRISM_ADMIN_PASSWORD=` line to match (so future restarts
      don't fight the DB)
 
-- [ ] **PhotoPrism auto-index of new photos**: NC client syncs to
-  `/data/shared/photos`; PhotoPrism only picks up new files on
-  `/library/index` API call or manual UI button. Add a systemd timer
-  inside the photoprism LXC that calls
-  `photoprism index` (or the HTTP API) every N minutes. Or
-  inotifywait-based watcher.
+- [x] **PhotoPrism auto-index + NC photo wiring** — DONE LIVE 2026-05-28.
+  Root cause: NC↔PhotoPrism were never connected — `/data/shared/photos`
+  (PhotoPrism originals) was bind-mounted to NC `data/Photos` (a path NC
+  doesn't serve), so it stayed empty while phone sync landed in
+  `data/<user>/files/`. Fix applied live:
+  - NC LXC bind re-pointed `/data/shared/photos → media/photos` (outside
+    data dir); `files_external` app enabled; Local external mount
+    **"PhotoLibrary"** (mount id 2, all users) → `/media/photos`, with
+    `filesystem_check_changes=1`.
+  - PhotoPrism: `photoprism-index.timer` (every 15 min, OnBootSec=5min) runs
+    `podman exec photoprism photoprism index` — PhotoPrism's built-in
+    auto-index only fires for its own UI uploads, NOT external/NC-synced
+    files, hence the timer.
+  - Verified round-trip: host file → NC PhotoLibrary → PhotoPrism originals.
+  - **Operator action**: point the phone NC client's auto-upload to the
+    **PhotoLibrary** folder.
+- [ ] **SOURCE backport of the PhotoPrism↔NC integration (DRIFT)** — both
+  `secubox-photoprism` and `secubox-nextcloud` are still dashboard-only
+  packages (no install-lxc.sh; the live LXC+podman installs were ad-hoc,
+  same pre-#388 state PeerTube was in). Capturing this integration in source
+  needs the SAME native-LXC rework as #388 for both packages (install-lxc.sh
+  with: NC media/photos bind + files_external PhotoLibrary mount;
+  photoprism-index.timer + podman run with originals=/data/shared/photos +
+  PHOTOPRISM_AUTO_INDEX). Sizeable — file as its own issue(s) before doing.
 
 - [ ] **LXC template bootstrap fixes** (capture lessons-learned):
   1. **DNS**: fresh download-template LXCs ship a
