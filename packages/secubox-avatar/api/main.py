@@ -12,6 +12,7 @@ import shutil
 import hashlib
 import asyncio
 import json
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -442,6 +443,133 @@ async def summary():
         "enabled_services": enabled_services,
         "timestamp": datetime.now().isoformat()
     }
+
+
+# ══════════════════════════════════════════════════════════════════
+# Credential broker — peek / poke (Punk-Exposure model) — #402
+# Share browser-side authentication (cookies, PO tokens) with backend services
+# via the SecuBox Companion extension. The browser passes YouTube's BotGuard,
+# so it can hand PeerTube fresh cookies/tokens that the server can't mint.
+# ══════════════════════════════════════════════════════════════════
+
+CRED_STATE_FILE = DATA_DIR / "cred-state.json"
+_PEERTUBECTL = "/usr/sbin/peertubectl"
+_PT_COOKIE_SPOOL = "/run/secubox/peertube-yt-cookies.txt"
+
+# Credential-shareable services: browser domain → how to apply it.
+CRED_SERVICES = {
+    "youtube": {
+        "label": "YouTube → PeerTube import",
+        "target": "peertube",
+        "cookie_domain": "youtube.com",
+        "accepts": ["cookies", "po_token", "visitor_data"],
+    },
+}
+
+
+class CredPoke(BaseModel):
+    """Browser-supplied credentials pushed by the extension."""
+    cookies: Optional[str] = None        # Netscape cookies.txt body
+    po_token: Optional[str] = None       # web GVS PO token (experimental)
+    visitor_data: Optional[str] = None   # paired with po_token
+
+
+def _load_cred_state() -> Dict[str, Any]:
+    if CRED_STATE_FILE.exists():
+        try:
+            return json.loads(CRED_STATE_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _save_cred_state(state: Dict[str, Any]):
+    _ensure_dirs()
+    CRED_STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def _apply_youtube(poke: CredPoke) -> Dict[str, str]:
+    """Install YouTube creds into PeerTube. Cookies use the existing, working
+    sudo `peertubectl set-youtube-cookies` path (#388). PO-token application is
+    experimental (needs the peertubectl set-youtube-potoken verb + browser
+    capture, #401 P4) — stored + reported, applied when that lands."""
+    results: Dict[str, str] = {}
+    if poke.cookies:
+        try:
+            with open(_PT_COOKIE_SPOOL, "w") as f:
+                f.write(poke.cookies)
+            os.chmod(_PT_COOKIE_SPOOL, 0o600)
+            r = subprocess.run(
+                ["sudo", "-n", _PEERTUBECTL, "set-youtube-cookies", _PT_COOKIE_SPOOL],
+                capture_output=True, text=True, timeout=90,
+            )
+            results["cookies"] = "ok" if r.returncode == 0 else (r.stderr or r.stdout or "failed").strip()
+        except Exception as e:
+            results["cookies"] = f"error: {e}"
+        finally:
+            try:
+                os.remove(_PT_COOKIE_SPOOL)
+            except OSError:
+                pass
+    if poke.po_token:
+        # Experimental: applied once peertubectl gains set-youtube-potoken (P4).
+        if os.path.exists(_PEERTUBECTL):
+            r = subprocess.run(
+                ["sudo", "-n", _PEERTUBECTL, "set-youtube-potoken",
+                 poke.po_token, poke.visitor_data or ""],
+                capture_output=True, text=True, timeout=30,
+            )
+            results["po_token"] = "ok" if r.returncode == 0 else "pending (peertubectl verb not deployed)"
+        else:
+            results["po_token"] = "pending"
+    return results
+
+
+@router.get("/cred/peek")
+async def cred_peek(user=Depends(require_jwt)):
+    """Peek: what credentials each service accepts + current state."""
+    state = _load_cred_state()
+    out = []
+    for svc, meta in CRED_SERVICES.items():
+        st = state.get(svc, {})
+        out.append({
+            "service": svc,
+            "label": meta["label"],
+            "target": meta["target"],
+            "cookie_domain": meta["cookie_domain"],
+            "accepts": meta["accepts"],
+            "last_poke": st.get("last_poke"),
+            "last_result": st.get("last_result"),
+            "has_cookies": st.get("has_cookies", False),
+            "has_po_token": st.get("has_po_token", False),
+        })
+    return {"services": out}
+
+
+@router.post("/cred/poke/{service}")
+async def cred_poke(service: str, poke: CredPoke, user=Depends(require_jwt)):
+    """Poke: apply browser-supplied credentials to a service's target."""
+    meta = CRED_SERVICES.get(service)
+    if not meta:
+        raise HTTPException(status_code=404, detail=f"unknown credential service: {service}")
+    if not (poke.cookies or poke.po_token):
+        raise HTTPException(status_code=400, detail="nothing to poke (cookies/po_token empty)")
+    if service == "youtube":
+        results = _apply_youtube(poke)
+    else:
+        raise HTTPException(status_code=501, detail=f"no handler for {service}")
+    log.info("cred poke %s by %s -> %s", service, user.get("sub", "?"), results)
+    state = _load_cred_state()
+    state[service] = {
+        "last_poke": datetime.now().isoformat(),
+        "last_result": results,
+        "has_cookies": bool(poke.cookies),
+        "has_po_token": bool(poke.po_token),
+        "by": user.get("sub", "?"),
+    }
+    _save_cred_state(state)
+    ok = bool(results) and all(v == "ok" for v in results.values())
+    return {"success": ok, "service": service, "results": results}
 
 
 app.include_router(router)
