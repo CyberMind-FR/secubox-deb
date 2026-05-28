@@ -2,6 +2,41 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-28 — PeerTube LIVE end-to-end (upload confirmed)
+
+PeerTube install completed on the gk2 LXC (10.100.0.120) and verified
+working at https://peertube.gk2.secubox.in/ including video/avatar
+upload. Resolution of the 2026-05-27 "in flight" install:
+
+* **pnpm install** finished after retry with
+  `MSGPACKR_NATIVE_ACCELERATION_DISABLED=1` (arm64 native binding for
+  msgpackr-extract is optional perf-only; JS fallback works).
+* **Ownership**: `chown -R peertube:peertube /var/www/peertube` — the
+  `config/` and `storage/` subdirs were root-owned, blocking
+  `storage/logs` creation (EACCES) and config template copy.
+* **Node 20 → 22.22.2**: PeerTube 8.2.0 requires Node ≥22. Installed
+  via the signed NodeSource apt repo (keyring + sources.list added
+  manually; the `curl | bash` setup script is blocked by policy).
+* **production.yaml** patched: `webserver.hostname=peertube.gk2.secubox.in`
+  + `https=true` + `port=443`; `listen.hostname=0.0.0.0` (so nginx on
+  the host reaches the LXC bridge IP); 64-byte hex `secrets.peertube`;
+  DB password `secubox`; admin email `admin@cybermind.fr`.
+* **Initial admin** (auto-generated first boot, logged once): `root` /
+  `gisatejewumefatibedu` — operator must rotate via UI.
+* **"No upload button"** turned out to be a stale browser bundle (the
+  service bounced ~6× during install + Node swap). Server side was
+  perfect throughout: role Administrator, quota -1, root_channel
+  present, `/videos/publish` + `/videos/upload` both 200, client fully
+  built. Hard-refresh resolved it; upload confirmed by operator.
+
+**Source drift NOT yet backported** (Source-first follow-up): the live
+install path is native-in-LXC (Node 22 + pnpm + systemd `peertube.service`
+inside the container), whereas `packages/secubox-peertube` (#388 branch)
+describes a Docker/Podman API-managed model, and #390's vhost conf still
+lacks the full public vhost (9000 port + streaming timeouts). Both need
+reconciliation — see TODO P0.
+
+---
 ## 2026-05-27 (afternoon/evening session — peertube + photoprism + mail + WAF)
 
 Continuation of the morning consolidation session. Operator-driven

@@ -37,12 +37,19 @@
   100000:100000 /data/<service>/` to allow LXC root (UID 100000
   outside) to manage them.
 
-### 🔄 In flight
+### ✅ Done (2026-05-28 — peertube finished)
 
-* **Peertube install** in container at 10.100.0.120, step 6/8
-  (yarn install ~10000 packages on arm64). Monitor armed. When
-  done, URL https://peertube.gk2.secubox.in/ will serve real
-  content (nginx vhost already rewired to `10.100.0.120:9000`).
+* **PeerTube LIVE** at https://peertube.gk2.secubox.in/ — upload
+  confirmed by operator. Native install in LXC 10.100.0.120
+  (Node 22 + pnpm + postgres-15 + redis + `peertube.service`).
+  Admin `root` / `gisatejewumefatibedu` (rotate via UI). Fixes:
+  pnpm with `MSGPACKR_NATIVE_ACCELERATION_DISABLED=1`, chown tree to
+  peertube, Node 20→22 (8.2.0 requires ≥22), production.yaml
+  (hostname/https/secret/db/listen 0.0.0.0). "Missing upload button"
+  was a stale browser bundle — server side was correct throughout.
+  See HISTORY 2026-05-28 entry. **Source backport still pending**
+  (live native-in-LXC ≠ #388 Docker/Podman package design; #390
+  vhost conf incomplete) — see TODO P0.
 
 ### 📋 Carry-overs (filed in TODO.md)
 
