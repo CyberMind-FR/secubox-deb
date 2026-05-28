@@ -1,3 +1,22 @@
+secubox-nextcloud (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * PhotoLibrary photo integration with secubox-photoprism (closes #398).
+  * nextcloudctl: new `link-photos` verb + called from `cmd_setup` (idempotent):
+    enables files_external and creates the Local external storage "PhotoLibrary"
+    → /media/photos with filesystem_check_changes=1. Phone → Nextcloud
+    PhotoLibrary → /data/shared/photos → PhotoPrism originals (#397).
+  * nextcloudctl create_lxc_config: bind-mount /data/shared/photos at
+    /media/photos (OUTSIDE the NC data dir, per NC external-storage guidance);
+    ensure the shared dir is 0777 owned by the LXC root uid so www-data can
+    write and PhotoPrism can read.
+  * Keep SQLite as the database backend (cmd_setup already uses
+    `--database sqlite`) per operator preference — lower RAM, simpler backups.
+    NB: the live gk2 instance was hand-installed on MariaDB (the outlier);
+    migrating it to SQLite is a separate data-migration task, not done here.
+  * Bump bundled NC_VERSION 30.0.4 → 31.0.14 (matches the live instance).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 May 2026 12:00:00 +0000
+
 secubox-nextcloud (1.3.4-1~bookworm1) bookworm; urgency=low
 
   * Rewrite Description to identify this as the self-hosted Nextcloud
