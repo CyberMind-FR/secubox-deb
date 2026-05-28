@@ -32,9 +32,9 @@ override_dh_auto_install:
 	# Config example
 	install -d debian/secubox-peertube/etc/secubox
 	[ -f conf/peertube.toml.example ] && cp conf/peertube.toml.example debian/secubox-peertube/etc/secubox/peertube.toml.example || true
-	# Systemd service (host dashboard daemon)
+	# Systemd units: the unprivileged dashboard daemon + the root cookie-install
+	# path-unit (#407) that applies spooled cookies without sudo (CSPN).
 	install -d debian/secubox-peertube/usr/lib/systemd/system
 	install -m 644 debian/secubox-peertube.service debian/secubox-peertube/usr/lib/systemd/system/
-	# sudoers: narrowly-scoped escalation for the cookie-relay (#401)
-	install -d debian/secubox-peertube/etc/sudoers.d
-	install -m 0440 debian/secubox-peertube.sudoers debian/secubox-peertube/etc/sudoers.d/secubox-peertube
+	install -m 644 debian/peertube-cookie-install.path debian/secubox-peertube/usr/lib/systemd/system/
+	install -m 644 debian/peertube-cookie-install.service debian/secubox-peertube/usr/lib/systemd/system/

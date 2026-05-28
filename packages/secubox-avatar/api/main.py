@@ -489,39 +489,22 @@ def _save_cred_state(state: Dict[str, Any]):
 
 
 def _apply_youtube(poke: CredPoke) -> Dict[str, str]:
-    """Install YouTube creds into PeerTube. Cookies use the existing, working
-    sudo `peertubectl set-youtube-cookies` path (#388). PO-token application is
-    experimental (needs the peertubectl set-youtube-potoken verb + browser
-    capture, #401 P4) — stored + reported, applied when that lands."""
+    """Apply YouTube creds to PeerTube. The avatar daemon stays UNPRIVILEGED
+    (CSPN): it writes the cookies to the spool and the root
+    peertube-cookie-install.path/.service installs them into the LXC (#407) —
+    no sudo, NoNewPrivileges intact. PO-token application is experimental and
+    pending the browser capture + a peertubectl verb (#401 P4)."""
     results: Dict[str, str] = {}
     if poke.cookies:
         try:
             with open(_PT_COOKIE_SPOOL, "w") as f:
                 f.write(poke.cookies)
             os.chmod(_PT_COOKIE_SPOOL, 0o600)
-            r = subprocess.run(
-                ["sudo", "-n", _PEERTUBECTL, "set-youtube-cookies", _PT_COOKIE_SPOOL],
-                capture_output=True, text=True, timeout=90,
-            )
-            results["cookies"] = "ok" if r.returncode == 0 else (r.stderr or r.stdout or "failed").strip()
+            results["cookies"] = "queued"   # root path-unit installs + restarts PeerTube
         except Exception as e:
             results["cookies"] = f"error: {e}"
-        finally:
-            try:
-                os.remove(_PT_COOKIE_SPOOL)
-            except OSError:
-                pass
     if poke.po_token:
-        # Experimental: applied once peertubectl gains set-youtube-potoken (P4).
-        if os.path.exists(_PEERTUBECTL):
-            r = subprocess.run(
-                ["sudo", "-n", _PEERTUBECTL, "set-youtube-potoken",
-                 poke.po_token, poke.visitor_data or ""],
-                capture_output=True, text=True, timeout=30,
-            )
-            results["po_token"] = "ok" if r.returncode == 0 else "pending (peertubectl verb not deployed)"
-        else:
-            results["po_token"] = "pending"
+        results["po_token"] = "pending"     # P4: browser PO-token relay not wired yet
     return results
 
 
@@ -568,7 +551,10 @@ async def cred_poke(service: str, poke: CredPoke, user=Depends(require_jwt)):
         "by": user.get("sub", "?"),
     }
     _save_cred_state(state)
-    ok = bool(results) and all(v == "ok" for v in results.values())
+    # Cookies are the primary credential ("queued" = handed to the root installer);
+    # an experimental po_token "pending" must not fail the poke.
+    cstat = results.get("cookies")
+    ok = cstat in ("ok", "queued") or (not poke.cookies and results.get("po_token") == "ok")
     return {"success": ok, "service": service, "results": results}
 
 
