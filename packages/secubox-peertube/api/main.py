@@ -334,9 +334,15 @@ async def status():
         if v.get("success") and isinstance(v.get("data"), dict):
             video_count = v["data"].get("total", 0)
 
-    # Map LXC state onto the keys the webui already consumes.
-    container_status = {"running": "running", "stopped": "stopped",
-                        "absent": "not_installed"}.get(state, state)
+    # Map LXC state onto the keys the webui already consumes. The dashboard
+    # runs as the unprivileged 'secubox' user, which can't always read the
+    # root-owned LXC via lxc-info (reports "absent"); trust HTTP reachability
+    # as the primary "running" signal, fall back to lxc_state when unreachable.
+    if reachable:
+        container_status = "running"
+    else:
+        container_status = {"running": "running", "stopped": "stopped",
+                            "absent": "not_installed"}.get(state, state)
 
     return {
         "deployment": "lxc-native",
