@@ -48,6 +48,12 @@ li a:hover { color: var(--cyber-cyan); }
 .btn:hover { border-color: var(--cyber-cyan); }
 .btn-primary { border-color: var(--gold-hermetic); color: var(--gold-hermetic); }
 .btn-primary:hover { background: var(--gold-hermetic); color: var(--cosmos-black); }
+#login-box { margin-top: 6px; }
+#login-box input {
+  width: 100%; padding: 6px 8px; margin: 3px 0;
+  background: #16161f; color: var(--text-primary);
+  border: 1px solid #2a2a3a; border-radius: 4px; font-family: inherit; font-size: 12px;
+}
 footer {
   display: flex; justify-content: space-between;
   padding: 10px 12px; border-top: 1px solid #1c1c28;
