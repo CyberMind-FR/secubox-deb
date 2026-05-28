@@ -58,6 +58,8 @@ if [ "$1" = "configure" ]; then
       systemctl enable secubox-peertube.service || true
       systemctl start  secubox-peertube.service || true
     fi
+    # Root path-unit (#407) that installs spooled YouTube cookies without sudo.
+    systemctl enable --now peertube-cookie-install.path 2>/dev/null || true
 
     # Reload nginx to pick up the /api/v1/peertube/ + /peertube/ locations
     # and the public vhost. NOTE: PeerTube itself is NOT installed by this
