@@ -12,10 +12,7 @@
   "permissions": ["storage", "cookies", "alarms"],
   "host_permissions": [
     "*://*.secubox.in/*",
-    "https://*.youtube.com/*",
-    "https://youtube.com/*",
-    "https://*.linkedin.com/*",
-    "https://*.facebook.com/*"
+    "<all_urls>"
   ],
   "action": {
     "default_title": "SecuBox Companion",
