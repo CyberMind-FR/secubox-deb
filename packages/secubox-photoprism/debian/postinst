@@ -9,19 +9,44 @@ case "$1" in
     # Create runtime directories
     install -d -o secubox -g secubox -m 750 /run/secubox
     install -d -o secubox -g secubox -m 750 /var/lib/secubox
-    # Create data directories
-    install -d -m 755 /srv/photoprism
-    install -d -m 755 /srv/photoprism/originals
-    install -d -m 755 /srv/photoprism/import
-    install -d -m 755 /srv/photoprism/storage
-    # Ensure nginx secubox.d directory exists
+    # Do NOT reset /etc/secubox — secubox-core owns it as secubox:secubox 0750
+    # (the users-engine needs dir-write for atomic users.json saves / TOTP).
+    # Only create as a fallback if it's somehow missing.
+    [ -d /etc/secubox ] || install -d -o secubox -g secubox -m 750 /etc/secubox
+
+    # #319 /data migration: move legacy /srv/photoprism → /data/photoprism and
+    # leave a back-compat symlink. Idempotent.
+    if [ -d /srv/photoprism ] && [ ! -L /srv/photoprism ] && [ ! -e /data/photoprism ]; then
+      mkdir -p /data
+      mv /srv/photoprism /data/photoprism && ln -s /data/photoprism /srv/photoprism \
+        && echo "secubox-photoprism: migrated /srv/photoprism → /data/photoprism"
+    fi
+    # Data + shared photo dirs. The bind-mount subdirs are created/chown'd by
+    # install-lxc.sh; /data/shared/photos is shared with Nextcloud.
+    install -d -m 0755 /data/photoprism /data/photoprism/storage /data/photoprism/import
+    install -d -m 0777 /data/shared/photos
+
+    # Ship a default photoprism.toml from the example if absent.
+    if [ ! -e /etc/secubox/photoprism.toml ] && [ -e /etc/secubox/photoprism.toml.example ]; then
+      cp /etc/secubox/photoprism.toml.example /etc/secubox/photoprism.toml
+    fi
+
+    # nginx snippet dir + public vhost symlink (idempotent).
     install -d -m 755 /etc/nginx/secubox.d
-    # Enable and start service
+    if [ -f /etc/nginx/sites-available/photoprism.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+      ln -sf ../sites-available/photoprism.conf /etc/nginx/sites-enabled/photoprism.conf
+    fi
+
+    # Enable + start the dashboard API daemon (tolerate masked units).
     systemctl daemon-reload
-    systemctl enable secubox-photoprism.service
-    systemctl start  secubox-photoprism.service || true
-    # Reload nginx to pick up new location
-    systemctl reload nginx 2>/dev/null || true
+    if [ "$(systemctl is-enabled secubox-photoprism.service 2>/dev/null)" != "masked" ]; then
+      systemctl enable secubox-photoprism.service || true
+      systemctl start  secubox-photoprism.service || true
+    fi
+    # NOTE: PhotoPrism itself is NOT installed here — run `photoprismctl install`.
+    if nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
     ;;
 esac
 #DEBHELPER#
