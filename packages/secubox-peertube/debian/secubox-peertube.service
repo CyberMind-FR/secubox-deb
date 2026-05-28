@@ -2,7 +2,6 @@
 Description=SecuBox PeerTube API
 After=network.target secubox-core.service
 Requires=secubox-core.service
-Wants=podman.service docker.service
 
 [Service]
 Type=simple

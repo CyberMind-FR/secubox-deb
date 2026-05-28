@@ -3,18 +3,30 @@
 	dh $@
 
 override_dh_auto_install:
-	# API files
+	# API files (host dashboard daemon)
 	install -d debian/secubox-peertube/usr/lib/secubox/peertube/
 	cp -r api debian/secubox-peertube/usr/lib/secubox/peertube/
+	# Host control plane CLI
+	install -d debian/secubox-peertube/usr/sbin
+	install -m 755 sbin/peertubectl debian/secubox-peertube/usr/sbin/peertubectl
+	# Native-LXC bootstrap (shipped, run on demand by `peertubectl install`)
+	install -d debian/secubox-peertube/usr/share/secubox/lib/peertube
+	[ -d lib/peertube ] && cp -r lib/peertube/. debian/secubox-peertube/usr/share/secubox/lib/peertube/ || true
 	# Static www files
 	install -d debian/secubox-peertube/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-peertube/usr/share/secubox/www/ || true
 	# Menu definitions
 	install -d debian/secubox-peertube/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-peertube/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
+	# Modular nginx config (API socket location → /etc/nginx/secubox.d/)
 	install -d debian/secubox-peertube/etc/nginx/secubox.d
 	[ -f nginx/peertube.conf ] && cp nginx/peertube.conf debian/secubox-peertube/etc/nginx/secubox.d/ || true
-	# Systemd service
+	# Public vhost template → sites-available (postinst symlinks into sites-enabled)
+	install -d debian/secubox-peertube/etc/nginx/sites-available
+	[ -f conf/peertube.nginx.conf ] && cp conf/peertube.nginx.conf debian/secubox-peertube/etc/nginx/sites-available/peertube.conf || true
+	# Config example
+	install -d debian/secubox-peertube/etc/secubox
+	[ -f conf/peertube.toml.example ] && cp conf/peertube.toml.example debian/secubox-peertube/etc/secubox/peertube.toml.example || true
+	# Systemd service (host dashboard daemon)
 	install -d debian/secubox-peertube/usr/lib/systemd/system
 	install -m 644 debian/secubox-peertube.service debian/secubox-peertube/usr/lib/systemd/system/

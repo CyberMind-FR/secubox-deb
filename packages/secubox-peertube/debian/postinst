@@ -30,10 +30,22 @@ if [ "$1" = "configure" ]; then
       fi
     done
 
-    # Pre-create the /data/peertube root with neutral ownership; subdirs
-    # (config/, data/, storage/) are created by the API on first
-    # container/install so PeerTube's UID/GID can own them.
+    # Pre-create the /data/peertube root with neutral ownership; the
+    # bind-mount subdirs (storage/ config/ postgres/ redis/) are created +
+    # chown'd to the LXC root UID by install-lxc.sh on `peertubectl install`.
     install -d -o root -g root -m 755 /data/peertube
+
+    # Ship a default peertube.toml from the example if the operator has none.
+    if [ ! -e /etc/secubox/peertube.toml ] && [ -e /etc/secubox/peertube.toml.example ]; then
+      cp /etc/secubox/peertube.toml.example /etc/secubox/peertube.toml
+    fi
+
+    # Symlink the public vhost into sites-enabled (idempotent). The vhost
+    # proxies peertube.gk2.secubox.in (:9080) → PeerTube LXC :9000. Operator
+    # wires the HAProxy SNI ACL + ACME cert separately (CLAUDE.md convention).
+    if [ -f /etc/nginx/sites-available/peertube.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+      ln -sf ../sites-available/peertube.conf /etc/nginx/sites-enabled/peertube.conf
+    fi
 
     # Enable + start the API daemon. Tolerate masked units (per wazuh fix
     # 63284497): if the operator deliberately masked the service, leave it
@@ -44,7 +56,9 @@ if [ "$1" = "configure" ]; then
       systemctl start  secubox-peertube.service || true
     fi
 
-    # Reload nginx to pick up the /api/v1/peertube/ + /peertube/ locations.
+    # Reload nginx to pick up the /api/v1/peertube/ + /peertube/ locations
+    # and the public vhost. NOTE: PeerTube itself is NOT installed by this
+    # postinst — run `peertubectl install` to provision the LXC.
     if nginx -t 2>/dev/null; then
       systemctl reload nginx 2>/dev/null || true
     fi
