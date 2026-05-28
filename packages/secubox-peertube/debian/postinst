@@ -9,7 +9,10 @@ if [ "$1" = "configure" ]; then
 
     # Runtime + state directories
     install -d -o secubox -g secubox -m 750 /run/secubox /var/lib/secubox
-    install -d -o root    -g root    -m 755 /etc/secubox
+    # Do NOT reset /etc/secubox — secubox-core owns it as secubox:secubox 0750
+    # (the users-engine needs dir-write for atomic users.json saves / TOTP).
+    # Only create as a fallback if it's somehow missing.
+    [ -d /etc/secubox ] || install -d -o secubox -g secubox -m 750 /etc/secubox
 
     # nginx snippet directory (peertube.conf shipped by the package lands here)
     install -d -m 755 /etc/nginx/secubox.d
