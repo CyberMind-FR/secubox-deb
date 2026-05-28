@@ -7,16 +7,23 @@ Standards-Version: 4.6.2
 
 Package: secubox-peertube
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip
-Recommends: podman | docker.io
-Description: SecuBox PeerTube — federated video platform manager (Docker/Podman)
- Dashboard + FastAPI backend for managing a PeerTube video-hosting
- instance running in a Docker or Podman container. The API daemon
- itself is lightweight (always reachable); the heavy PeerTube
- container is operator-deployed on demand from the dashboard.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip,
+ lxc, lxc-templates, nftables, openssl
+Description: SecuBox PeerTube — federated video platform (native LXC)
+ Dashboard + FastAPI backend for a PeerTube video-hosting instance
+ installed NATIVELY inside a dedicated Debian LXC (its own
+ peertube.service: Node 22 + PostgreSQL 15 + Redis + ffmpeg). The API
+ daemon on the host is lightweight (always reachable to serve the
+ dashboard); `peertubectl install` provisions the LXC and the PeerTube
+ stack on demand.
+ .
+ PeerTube runs native-in-LXC rather than Docker/Podman: an unprivileged
+ LXC cannot reliably bring up a podman CNI bridge on the Marvell arm64
+ boards, so the native systemd-managed install is the supported path.
  .
  Features:
-  - Docker/Podman container lifecycle (install, start, stop, restart, uninstall)
+  - LXC lifecycle via peertubectl (install, status, start, stop, restart, logs)
+  - Public nginx vhost (:9080 → LXC :9000) bypassing the WAF (gitea pattern)
   - Video and channel management
   - User creation and role assignment (admin/moderator/user)
   - Federation (ActivityPub) — follow/followers

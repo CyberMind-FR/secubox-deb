@@ -1,0 +1,25 @@
+# /etc/secubox/peertube.toml — SecuBox PeerTube module configuration
+#
+# Operator-facing override of the package defaults. Edit values then run
+# `peertubectl install` (first provision) or `peertubectl restart`.
+
+# ── LXC ───────────────────────────────────────────────────────────────
+[lxc]
+name         = "peertube"
+ip           = "10.100.0.120"
+gateway      = "10.100.0.1"
+bridge       = "br-lxc"
+path         = "/data/lxc"
+debian_suite = "bookworm"
+
+# ── PeerTube (native, inside the LXC) ─────────────────────────────────
+[peertube]
+http_port           = 9000     # PeerTube's own listen port inside the LXC
+db_password_file    = "/etc/secubox/secrets/peertube-db"
+secret_file         = "/etc/secubox/secrets/peertube-secret"
+admin_email         = "admin@cybermind.fr"
+
+# ── Public exposure (nginx vhost :9080 → LXC :9000; HAProxy SNI ACL) ──
+[exposure]
+public_hostname = "peertube.gk2.secubox.in"   # baked into PeerTube webserver config
+waf_inspect     = false        # video/uploads bypass the WAF (gitea pattern)

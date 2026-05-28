@@ -1,3 +1,46 @@
+secubox-peertube (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Native-LXC deployment + dashboard correction + URL import (closes #388,
+    supersedes #390). Validated live on gk2 — https://peertube.gk2.secubox.in/.
+  * lib/peertube/install-lxc.sh (NEW): idempotent native install of PeerTube
+    inside a dedicated Debian LXC (default 10.100.0.120 on br-lxc), mirroring
+    grafana/yacy. Bakes in every fix found while bringing the live instance up:
+    - Node 22 via the signed NodeSource apt repo (PeerTube 8.x requires >=22;
+      no `curl | bash`); pnpm with MSGPACKR_NATIVE_ACCELERATION_DISABLED=1
+      (arm64 msgpackr-extract prebuilt binding is broken, JS fallback is fine);
+    - debian.common.conf template (NOT common.conf) — postgresql-15 initdb +
+      postinst fail under the stricter unprivileged defaults;
+    - bind mounts /data/peertube/{storage,config,postgres,redis} chown'd to the
+      LXC root UID (100000) so the container can manage them;
+    - production.yaml patched: listen 0.0.0.0:9000, webserver https/hostname/
+      443, generated 64-byte secret, DB password, admin email, AND
+      import.videos.http.enabled=true (native HTTP import / yt-dlp);
+    - captures the first-boot root password to /etc/secubox/secrets/peertube-
+      admin so the dashboard can authenticate for write ops.
+  * sbin/peertubectl (NEW): install/status/start/stop/restart/logs/reload.
+  * conf/peertube.nginx.conf (folds #390, port corrected): public vhost
+    listen :9080 → PeerTube LXC 10.100.0.120:9000 (NOT the old 127.0.0.1:9001
+    Docker-on-host plan; all SecuBox vhosts share :9080 and differ by
+    server_name, so there is no lyrion collision). 8G upload cap, 7d streaming
+    timeouts, WS upgrade, ACME passthrough. Bypasses the WAF (gitea pattern).
+    postinst symlinks it into sites-enabled.
+  * api/main.py: rewritten to talk to the native instance over HTTP at
+    <lxc_ip>:<http_port> (with the required Host: <public_hostname> header —
+    PeerTube 403s on raw-IP Host) instead of `podman/docker exec` inside a
+    container. Status reports real LXC state + HTTP reachability + server
+    version. /container/* verbs now drive the LXC via peertubectl. NEW
+    POST /import + GET /imports (URL → instance via PeerTube import API).
+  * www/peertube/index.html: new "Import" tab (URL + channel + privacy +
+    recent-imports list); status/labels/links corrected for native-LXC
+    (Open PeerTube → public https URL; "Restart/Stop LXC"; logs from
+    peertube.service).
+  * debian/control: Description + Depends reframed Docker/Podman → native-LXC
+    (lxc, lxc-templates, nftables, openssl). debian/secubox-peertube.service:
+    drop the now-irrelevant Wants=podman.service docker.service.
+  * conf/peertube.toml.example (NEW): [lxc]/[peertube]/[exposure] sections.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 May 2026 10:00:00 +0000
+
 secubox-peertube (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Rework to align with SecuBox conventions (closes #388):
