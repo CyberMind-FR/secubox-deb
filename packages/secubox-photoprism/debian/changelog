@@ -1,3 +1,40 @@
+secubox-photoprism (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Native-LXC rework + Nextcloud photo integration (closes #397). Captures the
+    live gk2 deployment in source (Source-first; mirrors secubox-peertube #388).
+  * lib/photoprism/install-lxc.sh (NEW): idempotent LXC bootstrap (10.100.0.130
+    on br-lxc, debian.common.conf, idmap, cgroup caps) + podman install +
+    photoprism.service (podman run --network=host, sqlite, http 0.0.0.0:2342,
+    PHOTOPRISM_AUTO_INDEX=300, generated admin password to
+    /etc/secubox/secrets/photoprism-admin) + photoprism-index.timer (every
+    15 min → `photoprism index`; PhotoPrism's built-in auto-index only fires
+    for its own UI uploads, NOT Nextcloud-synced files). Bind mounts
+    /data/shared/photos→originals (shared with Nextcloud) + /data/photoprism/
+    {storage,import}.
+  * sbin/photoprismctl (NEW): install/status/start/stop/restart/index/logs/reload.
+  * conf/photoprism.nginx.conf (NEW): public vhost :9080 → 10.100.0.130:2342,
+    4G uploads, WS; WAF-bypass (gitea pattern). postinst symlinks it into
+    sites-enabled. conf/photoprism.toml.example (NEW).
+  * debian/control: reframe Docker → native-LXC; Depends lxc/nftables/openssl.
+  * debian/postinst: #319 /srv/photoprism → /data/photoprism migration (was
+    still hardcoding /srv); drop the /srv mkdir; ship default photoprism.toml;
+    tolerate masked unit. Stop shipping the admin password `secubox-CHANGE-ME`
+    (install-lxc.sh now generates one).
+  * debian/secubox-photoprism.service: drop the ConditionPathExists=/etc/
+    secubox/photoprism/enabled gate (the dashboard never started), the broken
+    Requires=secubox-runtime.service, and the docker.service deps; User=root →
+    User=secubox + RuntimeDirectory (mirror peertube #388). Makes the obsolete
+    live drop-ins (no-runtime-dir.conf/preserve.conf) unnecessary.
+  * api/main.py: rewritten to talk to the native instance over HTTP at
+    <lxc_ip>:<http_port> (status/reachability) instead of host docker/podman;
+    /container/* drive the LXC via photoprismctl; library index/import exec via
+    lxc-attach podman; config flattens [lxc]/[photoprism]/[exposure]; data paths
+    /srv → /data + originals → /data/shared/photos. Validated live on gk2.
+  * NB: the Nextcloud side (the "PhotoLibrary" external-storage mount → the
+    shared photos dir) is tracked separately for secubox-nextcloud.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 May 2026 11:00:00 +0000
+
 secubox-photoprism (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release.
