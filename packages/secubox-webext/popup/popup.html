@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+  <title>SecuBox</title>
+</head>
+<body>
+  <header>
+    <span class="brand">SecuBox</span>
+    <span id="overall" class="dot dot-unknown" title="overall"></span>
+    <button id="refresh" class="icon-btn" title="Refresh">↻</button>
+  </header>
+
+  <section id="needs-config" class="hidden">
+    <p>No hub configured.</p>
+    <button id="open-options" class="btn">Open settings</button>
+  </section>
+
+  <section id="metrics">
+    <div class="metric-grid">
+      <div class="metric"><span class="m-val" id="m-cpu">–</span><span class="m-lbl">CPU</span></div>
+      <div class="metric"><span class="m-val" id="m-mem">–</span><span class="m-lbl">RAM</span></div>
+      <div class="metric"><span class="m-val" id="m-disk">–</span><span class="m-lbl">Disk</span></div>
+      <div class="metric"><span class="m-val" id="m-temp">–</span><span class="m-lbl">Temp</span></div>
+    </div>
+  </section>
+
+  <section id="modules">
+    <ul id="module-list"><li class="muted">Loading…</li></ul>
+  </section>
+
+  <section id="creds">
+    <h3>Browser logins → SecuBox</h3>
+    <button id="relay-cookies" class="btn btn-primary">Sync browser logins</button>
+    <ul id="cred-list"></ul>
+    <p id="relay-status" class="muted"></p>
+    <div id="login-box" class="hidden">
+      <input id="login-user" type="text" placeholder="SecuBox user" autocomplete="username">
+      <input id="login-pass" type="password" placeholder="password" autocomplete="current-password">
+      <button id="login-btn" class="btn">Log in &amp; retry</button>
+    </div>
+  </section>
+
+  <footer>
+    <a id="open-hub" href="#" target="_blank">Open dashboard ↗</a>
+    <a id="open-options-footer" href="#">Settings</a>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
