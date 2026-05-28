@@ -48,6 +48,11 @@ li a:hover { color: var(--cyber-cyan); }
 .btn:hover { border-color: var(--cyber-cyan); }
 .btn-primary { border-color: var(--gold-hermetic); color: var(--gold-hermetic); }
 .btn-primary:hover { background: var(--gold-hermetic); color: var(--cosmos-black); }
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.metric { background: #16161f; border: 1px solid #1c1c28; border-radius: 4px; padding: 6px 4px; text-align: center; }
+.m-val { display: block; color: var(--cyber-cyan); font-size: 14px; font-weight: 700; }
+.m-lbl { display: block; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.m-hot { color: var(--cinnabar) !important; }
 #login-box { margin-top: 6px; }
 #login-box input {
   width: 100%; padding: 6px 8px; margin: 3px 0;

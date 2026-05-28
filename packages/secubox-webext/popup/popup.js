@@ -54,6 +54,32 @@ async function probe(base, mod) {
   }
 }
 
+async function loadMetrics(cfg) {
+  const set = (id, val, hot) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    el.classList.toggle("m-hot", !!hot);
+  };
+  if (!cfg.hubBase) return;
+  try {
+    const r = await fetch(`${cfg.hubBase}/api/v1/system/metrics`, {
+      credentials: "include", cache: "no-store",
+      headers: { ...(await authHeaders()) }, signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return;
+    const m = await r.json();
+    const cpu = Math.round(m.cpu_percent ?? 0);
+    const mem = Math.round(m.mem_percent ?? m.memory_percent ?? 0);
+    const disk = Math.round(m.disk_percent ?? 0);
+    const temp = m.cpu_temp != null ? Math.round(m.cpu_temp) : null;
+    set("m-cpu", cpu + "%", cpu >= 90);
+    set("m-mem", mem + "%", mem >= 90);
+    set("m-disk", disk + "%", disk >= 90);
+    set("m-temp", temp != null ? temp + "°" : "–", temp != null && temp >= 75);
+  } catch { /* leave dashes */ }
+}
+
 async function renderModules(cfg) {
   const list = document.getElementById("module-list");
   list.innerHTML = "";
@@ -161,7 +187,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const openOpts = () => api.runtime.openOptionsPage();
   document.getElementById("open-options").addEventListener("click", openOpts);
   document.getElementById("open-options-footer").addEventListener("click", openOpts);
-  document.getElementById("refresh").addEventListener("click", () => renderModules(cfg));
+  document.getElementById("refresh").addEventListener("click", () => { renderModules(cfg); loadMetrics(cfg); });
   document.getElementById("relay-cookies").addEventListener("click", () => syncAllLogins(cfg));
   document.getElementById("login-btn").addEventListener("click", async () => {
     const status = document.getElementById("relay-status");
@@ -187,4 +213,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
   renderModules(cfg);
+  loadMetrics(cfg);
 });
