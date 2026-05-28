@@ -181,7 +181,8 @@ def _verify_totp_ntp_aware(username: str, code: str) -> bool:
 
 
 # ─── Branching login router ────────────────────────────────────────────
-from fastapi import APIRouter as _APIRouter, Request as _Request
+from fastapi import APIRouter as _APIRouter, Request as _Request, Response as _Response
+from secubox_core.auth import set_session_cookie as _set_session_cookie
 
 _login_router = _APIRouter(tags=["auth-v2"])
 
@@ -210,7 +211,7 @@ def _check_scope(authorization: Optional[str], expected_scope: str) -> dict:
 
 
 @_login_router.post("/login")
-async def _login_v2(req: _LoginIn, request: _Request):
+async def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
     ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
           or request.headers.get("X-Real-IP", "")
@@ -253,6 +254,7 @@ async def _login_v2(req: _LoginIn, request: _Request):
 
     jti = secrets.token_hex(8)
     tok = create_token(req.username, jti=jti)
+    _set_session_cookie(response, tok)  # SSO-lite (#400)
     _on_session_event("login_success", req.username, {
         "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
     })
@@ -261,7 +263,7 @@ async def _login_v2(req: _LoginIn, request: _Request):
 
 
 @_login_router.post("/login/mfa")
-async def _login_mfa(req: _MfaIn, request: _Request):
+async def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
     payload = _check_scope(request.headers.get("Authorization"), "mfa-challenge")
     username = payload["sub"]
     if not user_store.is_enabled(username):
@@ -273,6 +275,7 @@ async def _login_mfa(req: _MfaIn, request: _Request):
         raise HTTPException(status_code=401, detail="Code invalide")
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
+    _set_session_cookie(response, tok)  # SSO-lite (#400)
     _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
     _users_engine.touch_last_login(username)
     return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
@@ -295,7 +298,7 @@ async def _totp_enroll(request: _Request):
 
 
 @_login_router.post("/totp/confirm")
-async def _totp_confirm(req: _MfaIn, request: _Request):
+async def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
     payload = _check_scope(request.headers.get("Authorization"), "totp-enroll")
     username = payload["sub"]
     secret = _pending.get(payload["jti"])
@@ -308,6 +311,7 @@ async def _totp_confirm(req: _MfaIn, request: _Request):
     _pending.delete(payload["jti"])
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
+    _set_session_cookie(response, tok)  # SSO-lite (#400)
     _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
     return {
         "access_token": tok, "token_type": "bearer", "expires_in": 86400,
