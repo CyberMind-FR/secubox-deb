@@ -19,6 +19,17 @@ EOF
         nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
     fi
 
+    # Ensure the system nftables.service actually loads /etc/nftables.conf at
+    # boot. That file holds the LXC NAT (`ip saddr 10.100.0.0/24 oif lan0
+    # masquerade`) and `include "/etc/nftables.d/*.nft"`. On the board it was
+    # found masked (symlink to /dev/null), so after every reboot the kernel had
+    # no NAT and all 10.100.0.0/24 LXCs lost outbound (#150). Unmask + enable so
+    # it loads at boot, ordered before the CrowdSec bouncer adds its own tables.
+    # Not force-started here: a live `nft -f` flushes the ruleset and would
+    # momentarily drop CrowdSec's live tables — boot-time loading is the fix.
+    systemctl unmask nftables.service 2>/dev/null || true
+    systemctl enable nftables.service 2>/dev/null || true
+
     systemctl daemon-reload
     systemctl enable secubox-vortex-firewall.service || true
     systemctl start secubox-vortex-firewall.service || true
