@@ -95,6 +95,7 @@ apt-get install -y --no-install-recommends \
     roundcube roundcube-core roundcube-plugins roundcube-sqlite3 \
     roundcube-skin-classic roundcube-skin-larry \
     php-net-sieve \
+    sqlite3 \
     ca-certificates curl
 
 apt-get clean
@@ -296,13 +297,36 @@ a2ensite roundcube
 a2enmod php8.2 rewrite 2>/dev/null || true
 CHROOT_EOF
 
-    # Point Roundcube at the local Dovecot + Postfix
-    if [ -f "$rootfs/etc/roundcube/config.inc.php" ]; then
-        sed -i \
-            -e "s|^\$config\['default_host'\].*|\$config['default_host'] = 'tls://localhost';|" \
-            -e "s|^\$config\['smtp_server'\].*|\$config['smtp_server'] = 'tls://localhost';|" \
-            "$rootfs/etc/roundcube/config.inc.php" || true
-    fi
+    # SQLite backend + local Dovecot/Postfix (issue #152). The Debian Roundcube
+    # default (debian-db.php) points at MySQL on :3306, but there is no MariaDB
+    # in this LXC → "Internal Error" page. Override via config.inc.php.local
+    # (included last, so it wins), init the SQLite schema, and relax TLS verify
+    # for the LXC's self-signed Dovecot/Postfix cert. Mirrors the verified live
+    # gk2 hotfix; idempotent.
+    chroot "$rootfs" /bin/bash <<'CHROOT_EOF'
+set -e
+mkdir -p /var/lib/roundcube/db
+DESKEY="$(openssl rand -base64 24 2>/dev/null || head -c18 /dev/urandom | base64)"
+cat > /etc/roundcube/config.inc.php.local <<LOCAL
+<?php
+// SecuBox :: Roundcube SQLite + local mail (issue #152). Included last so it
+// overrides the dbconfig-common MySQL default in debian-db.php.
+\$config['db_dsnw'] = 'sqlite:////var/lib/roundcube/db/sqlite.db?mode=0640';
+\$config['imap_host'] = 'tls://localhost';
+\$config['smtp_host'] = 'tls://localhost';
+\$config['des_key'] = '${DESKEY}';
+\$config['imap_conn_options'] = array('ssl' => array('verify_peer' => false, 'verify_peer_name' => false));
+\$config['smtp_conn_options'] = array('ssl' => array('verify_peer' => false, 'verify_peer_name' => false));
+LOCAL
+if [ -f /etc/roundcube/config.inc.php ] && ! grep -q "config.inc.php.local" /etc/roundcube/config.inc.php; then
+    echo "include_once('/etc/roundcube/config.inc.php.local');" >> /etc/roundcube/config.inc.php
+fi
+if [ ! -f /var/lib/roundcube/db/sqlite.db ] && [ -f /usr/share/dbconfig-common/data/roundcube/install/sqlite3 ]; then
+    sqlite3 /var/lib/roundcube/db/sqlite.db < /usr/share/dbconfig-common/data/roundcube/install/sqlite3
+fi
+chown -R www-data:www-data /var/lib/roundcube/db
+chmod 0640 /var/lib/roundcube/db/sqlite.db 2>/dev/null || true
+CHROOT_EOF
 
     echo "[install] Roundcube (Apache) configured"
 }
