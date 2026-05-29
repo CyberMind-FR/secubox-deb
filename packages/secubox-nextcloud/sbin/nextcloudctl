@@ -78,10 +78,19 @@ EOF
     # Set hostname
     echo "nextcloud" > "$LXC_PATH/$CONTAINER/rootfs/etc/hostname"
 
-    # DNS
+    # DNS. A static resolv.conf alone is fragile: if systemd-resolved is active
+    # in the container it hijacks /etc/resolv.conf to its 127.0.0.53 stub, which
+    # has no upstream → DNS silently dies (no appstore, no updates). Give
+    # systemd-resolved an explicit upstream too. See docs/FAQ-LXC-DNS.md.
     cat > "$LXC_PATH/$CONTAINER/rootfs/etc/resolv.conf" << 'EOF'
 nameserver 8.8.8.8
 nameserver 1.1.1.1
+EOF
+    mkdir -p "$LXC_PATH/$CONTAINER/rootfs/etc/systemd/resolved.conf.d"
+    cat > "$LXC_PATH/$CONTAINER/rootfs/etc/systemd/resolved.conf.d/secubox-dns.conf" << 'EOF'
+[Resolve]
+DNS=1.1.1.1 9.9.9.9
+FallbackDNS=8.8.8.8
 EOF
 
     log "Debian base system installed"
