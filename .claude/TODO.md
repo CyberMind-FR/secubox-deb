@@ -42,23 +42,17 @@
     `sites-available/` and `postinst` symlinks it into `sites-enabled/`. The
     `feature/390-…` branch is superseded — **operator can close #390**.
 
-- [ ] **NC bruteforce protection re-enable** after operator confirms
-  mobile NC client reconnects successfully:
+- [x] **NC bruteforce protection** — WON'T re-enable (operator decision
+  2026-05-29). The WAF (CIDR-aware LAN whitelist, commit 0bf67891) is the
+  brute-force layer; NC's built-in counter stays OFF. See memory
+  `project_nc_bruteforce_disabled`.
 
-  ```sh
-  ssh root@192.168.1.200 lxc-attach -n nextcloud -P /data/lxc -- \
-    sudo -u www-data php /var/www/nextcloud/occ \
-    config:system:set auth.bruteforce.protection.enabled \
-    --value=true --type=boolean
-  ```
-
-- [ ] **PhotoPrism admin password rotation**: still `secubox-CHANGE-ME`
-  from the initial systemd unit env. Operator should:
-  1. Login at https://photoprism.gk2.secubox.in/
-  2. Settings → Account → change password
-  3. Edit `/data/lxc/photoprism/rootfs/etc/systemd/system/photoprism.service`
-     `PHOTOPRISM_ADMIN_PASSWORD=` line to match (so future restarts
-     don't fight the DB)
+- [x] **PhotoPrism admin password** — DONE 2026-05-29 via `secubox-user-sync
+  seed` (#410): the seed ran `photoprism users mod -p` on admin, so the
+  password is the operator's chosen one. `PHOTOPRISM_ADMIN_PASSWORD` is
+  first-init-only in PhotoPrism, so the stale `secubox-CHANGE-ME` env in the
+  unit does NOT revert it — purely cosmetic. Optional tidy: drop that plaintext
+  default from the unit + source install-lxc.sh.
 
 - [x] **PhotoPrism auto-index + NC photo wiring** — DONE LIVE 2026-05-28.
   Root cause: NC↔PhotoPrism were never connected — `/data/shared/photos`
