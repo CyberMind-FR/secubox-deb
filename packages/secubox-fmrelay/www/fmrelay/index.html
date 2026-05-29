@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<!--
+  SecuBox FM Relay admin webui (issue #377, v0.1.0).
+  - Static cards for status / components / mounts / now-playing.
+  - Manual freq+mount form to start a relay.
+  - "Open Webradio →" button reads its href from /api/v1/fmrelay/access
+    at runtime (single source of truth per MODULE-GUIDELINES §4).
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecuBox · FM Relay (admin)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/crt-light.css">
+  <link rel="stylesheet" href="/shared/sidebar-light.css">
+  <style>
+    body { margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; }
+    .main { padding: calc(var(--gmb-h, 48px) + 1rem) 1.5rem 2rem 1.5rem; max-width: 1100px; margin: 0 auto; }
+    .page-header { margin-bottom: 1.25rem; }
+    .page-header h1 { margin: 0 0 0.25rem 0; font-size: 1.6rem; color: var(--text); }
+    .page-header .subtitle { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    .open-cta { display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; padding: 0.6rem 1rem; background: var(--mesh-main, #104A88); color: white !important; text-decoration: none; border-radius: 6px; font-weight: 500; }
+    .open-cta:hover { filter: brightness(1.15); }
+    .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-bottom: 1.5rem; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem; }
+    .card h3 { margin: 0 0 0.6rem 0; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    .card .v { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; line-height: 1.6; }
+    .card .v .row { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.1rem 0; }
+    .card .v .row .k { color: var(--muted); }
+    .status-pill { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-weight: 600; font-size: 0.8rem; }
+    .status-pill.green { background: rgba(0,212,155,.15); color: var(--root-main,#0a5840); }
+    .status-pill.yellow { background: rgba(255,200,0,.15); color: var(--wall-main,#9A6010); }
+    .status-pill.red { background: rgba(230,60,65,.15); color: var(--boot-main,#803018); }
+    .table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+    .table th, .table td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border); }
+    .table th { color: var(--muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+    .empty { color: var(--muted); font-style: italic; padding: 0.5rem; }
+    .hint { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
+    .form-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; margin-top: 0.5rem; }
+    .form-row label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
+    .form-row input { padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 4px; font-family: 'JetBrains Mono', monospace; }
+    .btn { padding: 0.45rem 0.95rem; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 0.85rem; }
+    .btn.primary { background: var(--mesh-main, #104A88); color: white; border-color: var(--mesh-main); }
+    .btn.danger { background: var(--boot-main, #803018); color: white; border-color: var(--boot-main); }
+    .btn:hover { filter: brightness(1.1); }
+  </style>
+</head>
+<body class="crt-light">
+
+<nav class="sidebar" id="sidebar"></nav>
+
+<main class="main">
+
+  <header class="page-header">
+    <h1>📻 FM Relay — SecuBox admin</h1>
+    <p class="subtitle">
+      Streams FM RDS audio (rtl_fm → ffmpeg → MP3) into an Icecast mount.
+      Consumed by the SecuBox <em>webradio</em> module and by Lyrion as a
+      Favourite. RDS RadioText pushes ICY metadata so the player shows
+      live track titles.
+    </p>
+    <a class="open-cta" id="open-webradio" href="#" target="_blank" rel="noopener">
+      ▶ Open Webradio →
+    </a>
+  </header>
+
+  <section class="card" style="margin-bottom: 1rem;">
+    <h3>Live preview</h3>
+    <p class="hint" style="margin-bottom: 0.5rem;">
+      Direct playback of the active LAN mount — handy to verify the stream
+      is healthy without leaving the dashboard.
+    </p>
+    <audio id="live-audio" controls preload="none" style="width: 100%; max-width: 500px;"></audio>
+    <div id="live-audio-meta" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted);">
+      no active mount
+    </div>
+  </section>
+
+  <section class="cards">
+    <article class="card">
+      <h3>Status</h3>
+      <div class="v" id="status-v">loading…</div>
+    </article>
+    <article class="card">
+      <h3>Components</h3>
+      <div class="v" id="components-v">loading…</div>
+    </article>
+    <article class="card">
+      <h3>Access</h3>
+      <div class="v" id="access-v">loading…</div>
+    </article>
+    <article class="card">
+      <h3>Now playing</h3>
+      <div class="v" id="now-playing-v">loading…</div>
+    </article>
+  </section>
+
+  <section class="card" style="margin-bottom: 1rem;">
+    <h3>Active mounts</h3>
+    <div id="mounts-wrap"><div class="empty">loading…</div></div>
+  </section>
+
+  <section class="card">
+    <h3>Manual relay</h3>
+    <p class="hint">
+      Shares the RTL-SDR with sentinelle-gsm. Don't start while a GSM scan
+      or RDS sweep is in flight — the bus contention will crash both.
+    </p>
+    <div class="form-row">
+      <label>Frequency <input id="freq" type="text" value="103.9M" autocomplete="off"></label>
+      <label>Mount    <input id="mount" type="text" value="savoie" autocomplete="off"></label>
+      <label>Bitrate (k) <input id="bitrate" type="number" value="128" min="32" max="320"></label>
+      <label>Gain (dB)   <input id="gain" type="number" value="49" min="0" max="50" step="0.1"></label>
+      <label>PPM         <input id="ppm" type="number" value="0" min="-200" max="200"></label>
+      <button class="btn primary" id="btn-start" type="button">Start</button>
+      <button class="btn danger"  id="btn-stop"  type="button">Stop</button>
+    </div>
+  </section>
+
+</main>
+
+<script src="/shared/sidebar.js"></script>
+<script>
+(function() {
+  const API = "/api/v1/fmrelay";
+
+  async function api(path, opts) {
+    const res = await fetch(API + path, opts || {});
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try { const j = await res.json(); detail = j.detail || detail; } catch (_) {}
+      throw new Error(detail);
+    }
+    return res.json();
+  }
+
+  function esc(s) {
+    return String(s == null ? "—" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function setRows(elId, rows) {
+    const el = document.getElementById(elId);
+    el.innerHTML = rows.map(([k, v]) =>
+      `<div class="row"><span class="k">${esc(k)}</span><span class="val">${v}</span></div>`
+    ).join("");
+  }
+
+  async function loadStatus() {
+    try {
+      const d = await api("/status");
+      const o = (d.overall || "unknown").toLowerCase();
+      const pill = o === "green" ? "green" : o === "yellow" ? "yellow" : "red";
+      setRows("status-v", [
+        ["Overall", `<span class="status-pill ${pill}">${esc(o.toUpperCase())}</span>`],
+        ["Module",  esc(d.module || "fmrelay")],
+        ["Version", esc(d.version || "—")],
+      ]);
+    } catch (e) {
+      document.getElementById("status-v").innerHTML = `<span class="empty">${esc(e.message)}</span>`;
+    }
+  }
+
+  async function loadComponents() {
+    try {
+      const d = await api("/components");
+      const items = (d.components || []).map(c => [c.name, esc(c.state || "?")]);
+      if (!items.length) { document.getElementById("components-v").innerHTML = `<div class="empty">none</div>`; return; }
+      setRows("components-v", items);
+    } catch (e) {
+      document.getElementById("components-v").innerHTML = `<span class="empty">${esc(e.message)}</span>`;
+    }
+  }
+
+  async function loadAccess() {
+    try {
+      const d = await api("/access");
+      const access = d.access || [];
+      const items = access.map(a => [
+        esc(a.scope || "url"),
+        `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a>`
+      ]);
+      document.getElementById("access-v").innerHTML = items.length
+        ? items.map(([k,v]) => `<div class="row"><span class="k">${k}</span><span class="val">${v}</span></div>`).join("")
+        : `<div class="empty">none</div>`;
+      // Source-of-truth: button reads from /access (public > lan).
+      const pub = access.find(a => a.scope === "public");
+      const lan = access.find(a => a.scope === "lan");
+      const target = (pub && pub.url) || (lan && lan.url) || "#";
+      const btn = document.getElementById("open-webradio");
+      if (btn) btn.href = target;
+
+      // Cache the LAN base for refreshLivePreview() (called by loadMounts
+      // once the mounts list is in — avoids relying on poll order).
+      window._fmrelayLanBase = (lan && lan.url) ? lan.url.replace(/\/$/, "") : "";
+      refreshLivePreview();
+    } catch (e) {
+      document.getElementById("access-v").innerHTML = `<span class="empty">${esc(e.message)}</span>`;
+    }
+  }
+
+  async function loadNowPlaying() {
+    try {
+      const d = await api("/now-playing");
+      if (!d || !d.song) {
+        document.getElementById("now-playing-v").innerHTML = `<div class="empty">nothing playing</div>`;
+        return;
+      }
+      setRows("now-playing-v", [
+        ["Song",    esc(d.song)],
+        ["PS",      esc(d.ps)],
+        ["RT",      esc(d.rt)],
+        ["PI",      esc(d.pi)],
+        ["Pushed",  d.icy_pushed ? "yes" : "no"],
+      ]);
+    } catch (e) {
+      document.getElementById("now-playing-v").innerHTML = `<span class="empty">${esc(e.message)}</span>`;
+    }
+  }
+
+  async function loadMounts() {
+    const wrap = document.getElementById("mounts-wrap");
+    try {
+      const d = await api("/mounts");
+      const list = d.mounts || [];
+      window._fmrelayLastMounts = list;
+      refreshLivePreview();
+      if (!list.length) {
+        wrap.innerHTML = `<div class="empty">no active mounts${d.reason ? " — " + esc(d.reason) : ""}</div>`;
+        return;
+      }
+      wrap.innerHTML =
+        '<table class="table"><thead><tr><th>Mount</th><th>Listeners</th></tr></thead><tbody>' +
+        list.map(m => `<tr><td>${esc(m.mount)}</td><td>${esc(m.listeners)}</td></tr>`).join("") +
+        '</tbody></table>';
+    } catch (e) {
+      wrap.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function startRelay() {
+    const body = {
+      freq:    document.getElementById("freq").value.trim(),
+      mount:   document.getElementById("mount").value.trim(),
+      bitrate: Number(document.getElementById("bitrate").value),
+      gain:    Number(document.getElementById("gain").value),
+      ppm:     Number(document.getElementById("ppm").value),
+    };
+    const btn = document.getElementById("btn-start");
+    btn.disabled = true; btn.textContent = "Starting…";
+    try {
+      await api("/start", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) });
+      btn.textContent = "Started ✓";
+      setTimeout(() => { btn.textContent = "Start"; btn.disabled = false; }, 2500);
+      loadAll();
+    } catch (e) {
+      btn.textContent = "Failed: " + e.message;
+      setTimeout(() => { btn.textContent = "Start"; btn.disabled = false; }, 4000);
+    }
+  }
+
+  async function stopRelay() {
+    const btn = document.getElementById("btn-stop");
+    btn.disabled = true; btn.textContent = "Stopping…";
+    try {
+      await api("/stop", { method: "POST", headers: {"Content-Type": "application/json"}, body: "{}" });
+      btn.textContent = "Stopped ✓";
+      setTimeout(() => { btn.textContent = "Stop"; btn.disabled = false; }, 2000);
+      loadAll();
+    } catch (e) {
+      btn.textContent = "Failed: " + e.message;
+      setTimeout(() => { btn.textContent = "Stop"; btn.disabled = false; }, 4000);
+    }
+  }
+
+  function refreshLivePreview() {
+    try {
+      const audio = document.getElementById("live-audio");
+      const meta  = document.getElementById("live-audio-meta");
+      const mounts = window._fmrelayLastMounts || [];
+      const liveMount = mounts.find(m => (m.connected_sec || 0) > 0);
+      if (audio && liveMount) {
+        // Use the HTTPS-proxied path (/fmrelay-stream/) so browsers
+        // don't block the audio request as mixed content. The actual
+        // icecast2 LAN URL stays in /access for VLC / Lyrion / etc.
+        const url = "/fmrelay-stream" + liveMount.mount;
+        if (audio.getAttribute("src") !== url) audio.setAttribute("src", url);
+        if (meta) meta.textContent = `mount ${liveMount.mount} · ${liveMount.connected_sec}s · ${liveMount.content_type || ""}`;
+      } else if (audio) {
+        audio.removeAttribute("src");
+        if (meta) meta.textContent = "no active mount — start a relay below";
+      }
+    } catch (_) {}
+  }
+
+  function loadAll() {
+    loadStatus();
+    loadComponents();
+    loadAccess();
+    loadNowPlaying();
+    loadMounts();
+  }
+
+  document.getElementById("btn-start").addEventListener("click", startRelay);
+  document.getElementById("btn-stop").addEventListener("click", stopRelay);
+
+  loadAll();
+  setInterval(loadAll, 10000);
+})();
+</script>
+
+</body>
+</html>
