@@ -29,8 +29,8 @@ override_dh_auto_install:
 	# Install nginx config (secubox.d for auto-include in server block)
 	install -m 644 debian/nginx-repo.conf $(CURDIR)/debian/secubox-repo/etc/nginx/secubox.d/repo.conf || true
 
-	# Install menu entry
-	install -m 644 debian/menu.json $(CURDIR)/debian/secubox-repo/usr/share/secubox/menu.d/repo.json || true
+	# Install menu entries (canonical menu.d/ location, matches other packages)
+	[ -d menu.d ] && cp -r menu.d/. $(CURDIR)/debian/secubox-repo/usr/share/secubox/menu.d/ || true
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-repo

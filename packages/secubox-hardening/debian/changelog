@@ -1,3 +1,38 @@
+secubox-hardening (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Fix navbar visibility (closes #389):
+    - The 1.0.1 attempt didn't actually take effect on installed
+      boards because debian/rules installed the menu from
+      debian/menu.json (category: "security", which is NOT one of
+      the 6 charter categories — hub silently dropped it). The
+      menu.d/ source file was orphaned and never read by the build.
+    - Delete the stray packages/secubox-hardening/debian/menu.json.
+    - debian/rules: replace the bespoke
+      `install -m 644 debian/menu.json …/120-hardening.json` with
+      the standard `[ -d menu.d ] && cp -r menu.d/.` pattern that
+      every other package uses.
+  * After this, the package actually ships
+    menu.d/105-hardening.json with category=root, order=105
+    (between Admin@100 and Rezapp@494 in the root menu).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 18:30:00 +0000
+
+secubox-hardening (1.0.1-1~bookworm1) bookworm; urgency=low
+
+  * Move menu entry from category "wall" → "root" (closes #389).
+    Hardening is proactive system-level config (sysctl, AppArmor,
+    kernel modules), not a threat-response enforcer like the wall
+    siblings (CrowdSec, WAF, threats). Natural neighbour to
+    secubox-admin / secubox-system / secubox-vault in root.
+    NOTE: this changelog entry shipped but the rules bug above
+    prevented the new menu file from actually being installed —
+    fixed in 1.0.2.
+  * Rename menu file 120-hardening.json → 105-hardening.json to
+    reflect the new order between Admin@100 and Rezapp@494.
+  * Description widened to enumerate the hardening scope.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 18:00:00 +0000
+
 secubox-hardening (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
