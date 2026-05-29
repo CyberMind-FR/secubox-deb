@@ -1,0 +1,16 @@
+# /etc/secubox/tuning/config.toml — SecuBox memory tuning master config
+# Modify and re-run /usr/sbin/secubox-tuning-apply to re-apply.
+
+[swap]
+# Path of the swap file. Lives on /data because boards typically have
+# the bulk of their storage there (mSSD), not on / (microSD).
+path = "/data/swapfile"
+
+# Swap size. Use 'G' or 'M' suffix (passed to fallocate -l).
+# Default 4G is sized for 8 GB boards with heavy LXC load (gk2 baseline).
+size = "4G"
+
+# Minimum free space on /data before secubox-tuning-apply will allocate
+# the swap file. Safety: avoid filling up /data on a board with limited
+# storage.
+minimum_data_free_gb = 8

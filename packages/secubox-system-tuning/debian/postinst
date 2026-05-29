@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    # Apply tuning with safe defaults. Idempotent; if swap is already
+    # active or caps are already applied, this is a no-op.
+    if [ -x /usr/sbin/secubox-tuning-apply ]; then
+        /usr/sbin/secubox-tuning-apply || \
+          echo "secubox-system-tuning: apply failed (non-fatal, edit /etc/secubox/tuning/ and re-run /usr/sbin/secubox-tuning-apply)" >&2
+    fi
+fi
+
+#DEBHELPER#
+exit 0
