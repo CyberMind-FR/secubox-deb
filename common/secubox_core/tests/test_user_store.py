@@ -96,3 +96,47 @@ def test_fallback_to_auth_toml_when_users_json_corrupt(tmp_path: Path, monkeypat
     monkeypatch.setattr(user_store, "AUTH_TOML_PATH", auth_toml)
     caplog.set_level(logging.WARNING)
     assert user_store.verify_password("admin", "fallbackonly") is True
+
+
+# --- set_password / provisioning (#410) ---------------------------------------
+
+def test_set_password_updates_existing(tmp_path: Path, monkeypatch):
+    p = tmp_path / "users.json"
+    _write_user(p)
+    monkeypatch.setattr(user_store, "USERS_PATH", p)
+    user_store.set_password("admin", "NewPass!99zz")
+    assert user_store.verify_password("admin", "NewPass!99zz") is True
+
+
+def test_set_password_provisions_new_user(tmp_path: Path, monkeypatch):
+    p = tmp_path / "users.json"
+    _write_user(p)
+    monkeypatch.setattr(user_store, "USERS_PATH", p)
+    user_store.set_password("gk2", "Gk2Pass!77aa", provision=True, role="user")
+    assert "gk2" in user_store.list_users()
+    assert user_store.verify_password("gk2", "Gk2Pass!77aa") is True
+
+
+def test_set_password_unknown_without_provision_raises(tmp_path: Path, monkeypatch):
+    p = tmp_path / "users.json"
+    _write_user(p)
+    monkeypatch.setattr(user_store, "USERS_PATH", p)
+    with pytest.raises(KeyError):
+        user_store.set_password("ghost", "whatever")
+
+
+def test_set_password_missing_store_raises(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(user_store, "USERS_PATH", tmp_path / "nope.json")
+    with pytest.raises(RuntimeError):
+        user_store.set_password("admin", "whatever", provision=True)
+
+
+def test_set_password_preserves_other_users(tmp_path: Path, monkeypatch):
+    p = tmp_path / "users.json"
+    _write_user(p)
+    monkeypatch.setattr(user_store, "USERS_PATH", p)
+    user_store.set_password("gk2", "Gk2Pass!77aa", provision=True)
+    user_store.set_password("admin", "AdminPass!88bb")
+    assert sorted(user_store.list_users()) == ["admin", "gk2"]
+    assert user_store.verify_password("admin", "AdminPass!88bb") is True
+    assert user_store.verify_password("gk2", "Gk2Pass!77aa") is True
