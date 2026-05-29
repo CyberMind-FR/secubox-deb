@@ -33,13 +33,14 @@
     Decide with operator — affects what the package ships + how it
     reproduces. Live install script lives at
     `/data/lxc/peertube/rootfs/root/{install-peertube.sh,peertube-finish.sh,install-node22.sh,peertube-config.py}`.
-  - **#390** (`feature/390-peertube-url-backport-vhost-template-por`):
-    committed nginx conf only has the `/api/v1/peertube/` socket
-    location; the real public vhost (listen :9080, `proxy_pass
-    http://10.100.0.120:9000`, 8G upload cap, 7d streaming timeouts,
-    WS upgrade, ACME) is live on gk2 at
-    `/etc/nginx/sites-available/peertube.conf` but NOT in source.
-    Mechanical backport — no design question.
+  - **#390** ✅ DONE 2026-05-29 — already backported (folded into the #388
+    merge). The full public vhost lives in source at
+    `packages/secubox-peertube/conf/peertube.nginx.conf` (listen :9080,
+    `proxy_pass http://10.100.0.120:9000`, 8G upload, 7d timeouts, WS, ACME)
+    and is **byte-identical** to the live `/etc/nginx/sites-available/
+    peertube.conf` (diff clean, ignoring comments). `debian/rules` ships it to
+    `sites-available/` and `postinst` symlinks it into `sites-enabled/`. The
+    `feature/390-…` branch is superseded — **operator can close #390**.
 
 - [ ] **NC bruteforce protection re-enable** after operator confirms
   mobile NC client reconnects successfully:
