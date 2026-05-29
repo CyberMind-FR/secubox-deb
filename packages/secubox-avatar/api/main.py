@@ -12,6 +12,7 @@ import shutil
 import hashlib
 import asyncio
 import json
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -556,6 +557,96 @@ async def cred_poke(service: str, poke: CredPoke, user=Depends(require_jwt)):
     cstat = results.get("cookies")
     ok = cstat in ("ok", "queued") or (not poke.cookies and results.get("po_token") == "ok")
     return {"success": ok, "service": service, "results": results}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Session vault — client-encrypted browser-session backup + profiles (#409)
+# The SecuBox keeps + protects these backups: the EXTENSION encrypts cookies
+# with the operator's passphrase (WebCrypto AES-GCM) BEFORE upload, so this
+# module stores OPAQUE ciphertext only — never plaintext, never the key. A
+# breach yields unreadable blobs. LAN/SSO-gated; nothing leaves the box.
+# ══════════════════════════════════════════════════════════════════
+
+VAULT_DIR = DATA_DIR / "vault"
+
+
+class VaultBackup(BaseModel):
+    """An encrypted session backup pushed by the extension."""
+    profile: str = Field("default", min_length=1, max_length=64)
+    domain: str = Field(..., min_length=1, max_length=128)
+    blob: str = Field(..., min_length=1)         # base64 AES-GCM ciphertext
+    iv: str = Field(..., min_length=1)           # base64 IV/nonce
+    meta: Optional[Dict[str, Any]] = None        # non-secret: cookie count, captured_at…
+
+
+def _safe(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", s)[:128]
+
+
+def _vault_path(profile: str, domain: str) -> Path:
+    return VAULT_DIR / _safe(profile) / f"{_safe(domain)}.json"
+
+
+@router.post("/vault/backup")
+async def vault_backup(b: VaultBackup, user=Depends(require_jwt)):
+    """Store an encrypted session backup (ciphertext only)."""
+    p = _vault_path(b.profile, b.domain)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(VAULT_DIR, 0o700)
+        os.chmod(p.parent, 0o700)
+    except OSError:
+        pass
+    p.write_text(json.dumps({
+        "profile": b.profile, "domain": b.domain,
+        "blob": b.blob, "iv": b.iv, "meta": b.meta or {},
+        "saved_at": datetime.now().isoformat(), "by": user.get("sub", "?"),
+    }))
+    try:
+        os.chmod(p, 0o600)
+    except OSError:
+        pass
+    log.info("vault backup %s/%s by %s", b.profile, b.domain, user.get("sub", "?"))
+    return {"success": True, "profile": b.profile, "domain": b.domain}
+
+
+@router.get("/vault/list")
+async def vault_list(user=Depends(require_jwt)):
+    """List backups (metadata only — never the ciphertext)."""
+    out, profiles = [], set()
+    if VAULT_DIR.exists():
+        for prof in sorted(VAULT_DIR.iterdir()):
+            if not prof.is_dir():
+                continue
+            for f in sorted(prof.glob("*.json")):
+                try:
+                    d = json.loads(f.read_text())
+                    profiles.add(d.get("profile", prof.name))
+                    out.append({"profile": d.get("profile"), "domain": d.get("domain"),
+                                "meta": d.get("meta", {}), "saved_at": d.get("saved_at")})
+                except Exception:
+                    pass
+    return {"backups": out, "profiles": sorted(profiles)}
+
+
+@router.get("/vault/restore/{profile}/{domain}")
+async def vault_restore(profile: str, domain: str, user=Depends(require_jwt)):
+    """Return the encrypted blob for the extension to decrypt + apply locally."""
+    p = _vault_path(profile, domain)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="no such backup")
+    d = json.loads(p.read_text())
+    return {"profile": d["profile"], "domain": d["domain"],
+            "blob": d["blob"], "iv": d["iv"], "meta": d.get("meta", {})}
+
+
+@router.delete("/vault/{profile}/{domain}")
+async def vault_delete(profile: str, domain: str, user=Depends(require_jwt)):
+    p = _vault_path(profile, domain)
+    if p.exists():
+        p.unlink()
+    log.info("vault delete %s/%s by %s", profile, domain, user.get("sub", "?"))
+    return {"success": True}
 
 
 app.include_router(router)
