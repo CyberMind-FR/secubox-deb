@@ -85,6 +85,37 @@ cmd_reload() {
     fi
 }
 
+# Provisioning push (#410): called by secubox-user-sync. Password via
+# $SECUBOX_USER_PASSWORD (piped over stdin, never argv on the host). Idempotent:
+# resets an existing user's password, or creates a new one scoped to a per-user
+# base path (originals/<user> = /data/shared/photos/<user>). `admin` is left
+# unrestricted (management); regular users are confined to their folder.
+cmd_user_provision() {
+    local username="${1:-}" role="${2:-user}"
+    local password="${SECUBOX_USER_PASSWORD:-}"
+    [ -z "$username" ] && { err "usage: SECUBOX_USER_PASSWORD=... photoprismctl user-provision <user> [role]"; return 1; }
+    [ -z "$password" ] && { err "SECUBOX_USER_PASSWORD not set"; return 1; }
+    case "$username" in *[!a-zA-Z0-9._-]*) err "invalid username"; return 1 ;; esac
+    lxc_running || { err "LXC not running"; return 1; }
+
+    local shared; shared=$(config_get "shared_photos" "/data/shared/photos")
+    mkdir -p "$shared/$username" && chmod 0777 "$shared/$username"
+
+    local pp_role="user"; [ "$role" = "admin" ] && pp_role="admin"
+    local verb opts
+    if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- podman exec photoprism photoprism users ls 2>/dev/null | grep -qw "$username"; then
+        verb="mod"; opts=""
+        log "Resetting PhotoPrism password for $username"
+    else
+        verb="add"
+        opts="--role $pp_role"
+        [ "$pp_role" != "admin" ] && opts="$opts --base-path $username --upload-path $username"
+        log "Creating PhotoPrism user $username (role=$pp_role)"
+    fi
+    printf '%s\n' "$password" | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        podman exec -i photoprism sh -c "read -r PPW; photoprism users $verb -p \"\$PPW\" $opts \"$username\""
+}
+
 cmd_help() {
     cat <<EOF
 photoprismctl $VERSION — SecuBox PhotoPrism (podman-in-LXC) controller
@@ -95,6 +126,7 @@ Usage: photoprismctl <verb> [args]
   status             LXC + service + HTTP reachability + index timer
   start|stop|restart Control photoprism.service inside the LXC
   index [args]       Run an immediate incremental index now
+  user-provision <user> [role]  Create/sync a user (SECUBOX_USER_PASSWORD env)
   logs [N]           Tail N lines of photoprism journal (default 50)
   reload             Reload host nginx
   help               This message
@@ -108,6 +140,7 @@ main() {
     local noun="${1:-help}"; shift || true
     case "$noun" in
         install|status|start|stop|restart|index|logs|reload) "cmd_${noun}" "$@" ;;
+        user-provision) cmd_user_provision "$@" ;;
         help|-h|--help) cmd_help ;;
         *) err "unknown verb: $noun"; cmd_help; exit 1 ;;
     esac
