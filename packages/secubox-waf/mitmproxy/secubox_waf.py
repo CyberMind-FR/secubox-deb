@@ -572,6 +572,12 @@ class SecuBoxWAF:
             return None
         if "/health" in path_lower or "/status" in path_lower or "system_health" in path_lower:
             return None
+        # NC mobile auth + WebDAV use short-lived tokens in URL by design;
+        # cred-004 ("JWT/token in URL") false-positives them and bans the
+        # client after 3 polls. NC enforces its own token TTL + bf
+        # protection. See #395.
+        if "/index.php/login/v2/" in path_lower or "/ocs/v2.php/core/login" in path_lower:
+            return None
         raw_query = dict(flow.request.query) if flow.request.query else {}
         query_str = " ".join(f"{k}={v}" for k, v in raw_query.items())
         
