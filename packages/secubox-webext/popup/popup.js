@@ -10,6 +10,9 @@ const DEFAULTS = {
   cookieEndpoint: "/api/v1/avatar/cred/poke/youtube",
   // SecuBox login endpoint (secubox-core JWT; any module's /auth/login works).
   loginEndpoint: "/api/v1/peertube/auth/login",
+  // Session-vault allowlist (#409): which domains to back up. Cookie access for
+  // these needs matching host_permissions in the manifest.
+  vaultDomains: ["youtube.com", "linkedin.com", "facebook.com"],
 };
 
 async function getConfig() {
@@ -182,6 +185,137 @@ async function syncAllLogins(cfg) {
   status.textContent = `Synced ${ok}/${services.length} login(s) from this browser.`;
 }
 
+// ── Avatar personas (#409): encrypted persona backup + one-click "become" ───
+// A persona = a named profile holding a GROUP of site logins. Restoring it
+// adopts every login at once — passwordless sign-in on any LAN machine.
+async function loadVault(cfg) {
+  const list = document.getElementById("vault-list");
+  if (!list || !cfg.hubBase) return;
+  list.innerHTML = "";
+  try {
+    const data = await Vault.list(cfg.hubBase, await authHeaders());
+    const backups = data.backups || [];
+    if (!backups.length) { list.innerHTML = '<li class="muted">No personas saved yet</li>'; return; }
+    const byProfile = new Map();
+    for (const b of backups) {
+      const g = byProfile.get(b.profile) || { domains: [], cookies: 0, when: "" };
+      g.domains.push(b.domain);
+      g.cookies += (b.meta || {}).cookie_count || 0;
+      if (b.saved_at && b.saved_at > g.when) g.when = b.saved_at;
+      byProfile.set(b.profile, g);
+    }
+    for (const [profile, g] of byProfile) {
+      const li = document.createElement("li");
+      li.className = "persona-row";
+      const name = document.createElement("span");
+      name.className = "persona-name";
+      const when = g.when ? new Date(g.when).toLocaleDateString() : "";
+      name.textContent = `${profile} · ${g.domains.length} site(s), ${g.cookies}c${when ? " · " + when : ""}`;
+      const become = document.createElement("button");
+      become.className = "btn btn-become"; become.textContent = "Become";
+      become.title = `Restore all ${g.domains.length} logins of "${profile}" on this computer`;
+      become.addEventListener("click", () => doVaultBecome(cfg, profile));
+      const doms = document.createElement("span");
+      doms.className = "persona-domains";
+      doms.textContent = g.domains.join(", ");
+      li.append(name, become, doms);
+      list.append(li);
+    }
+  } catch (e) {
+    list.innerHTML = `<li class="muted">vault: ${e?.message || e}</li>`;
+  }
+}
+
+async function doVaultBackup(cfg) {
+  const status = document.getElementById("vault-status");
+  const pass = document.getElementById("vault-pass").value;
+  const profile = (document.getElementById("vault-profile").value || "default").trim();
+  if (!cfg.hubBase) { status.textContent = "Configure the hub first."; return; }
+  if (!pass) { status.textContent = "Enter a vault passphrase."; return; }
+  const picked = selectedDomains();
+  if (!picked.length) { status.textContent = "Tick at least one site under “edit”."; return; }
+  status.textContent = `Encrypting ${picked.length} site(s)…`;
+  try {
+    const n = await Vault.backup(cfg.hubBase, await authHeaders(), pass, profile, picked);
+    status.textContent = n ? `Persona “${profile}” saved: ${n} site(s) encrypted.` : "Nothing saved (not logged into those sites?).";
+    loadVault(cfg);
+  } catch (e) { status.textContent = "Backup failed: " + (e?.message || e); }
+}
+
+// "Become" a persona: restore its whole login group on this machine.
+async function doVaultBecome(cfg, profile) {
+  const status = document.getElementById("vault-status");
+  const pass = document.getElementById("vault-pass").value;
+  if (!pass) { status.textContent = "Enter the vault passphrase to become a persona."; return; }
+  status.textContent = `Becoming “${profile}”…`;
+  try {
+    const r = await Vault.restoreProfile(cfg.hubBase, await authHeaders(), pass, profile);
+    status.textContent = `Now “${profile}”: ${r.cookies} cookies across ${r.domains} site(s) — reload your tabs.`;
+  } catch (e) { status.textContent = "Restore failed (wrong passphrase?): " + (e?.message || e); }
+}
+
+// ── Selectable cookie picker (the "includer") ───────────────────────────────
+// Auto-lists every site you're signed into and pre-ticks your saved selection,
+// so "keep all logins, pick which go into the persona" is one glance. The
+// ticked set is what gets encrypted on the next save and is remembered.
+const _selected = new Set();        // registrable domains ticked for the persona
+const _counts = new Map();          // domain → live cookie count (from discover)
+
+function selectedDomains() {
+  return [..._selected];
+}
+
+async function persistSelection(cfg) {
+  cfg.vaultDomains = [..._selected].sort();
+  await api.storage.local.set({ vaultDomains: cfg.vaultDomains });
+}
+
+// Merge auto-discovered logins with the saved selection into one tick-list.
+async function renderPicker(cfg) {
+  const ul = document.getElementById("picker-list");
+  if (!ul) return;
+  ul.innerHTML = '<li class="muted">Scanning your logins…</li>';
+  if (!_selected.size) for (const d of (cfg.vaultDomains || [])) _selected.add(d);
+
+  let discovered = [];
+  try { discovered = await Vault.discover(); }
+  catch (e) { /* no cookie permission yet — fall back to saved list only */ }
+  _counts.clear();
+  for (const { domain, count } of discovered) _counts.set(domain, count);
+
+  const domains = [...new Set([...discovered.map((d) => d.domain), ..._selected])].sort();
+  ul.innerHTML = "";
+  if (!domains.length) { ul.innerHTML = '<li class="muted">No logins found. Add one above.</li>'; return; }
+
+  for (const d of domains) {
+    const li = document.createElement("li");
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = _selected.has(d);
+    cb.addEventListener("change", async () => {
+      cb.checked ? _selected.add(d) : _selected.delete(d);
+      await persistSelection(cfg);
+    });
+    const txt = document.createElement("span");
+    const n = _counts.get(d);
+    txt.textContent = n ? `${d} (${n}c)` : d;
+    label.append(cb, txt);
+    li.append(label);
+    ul.append(li);
+  }
+}
+
+async function addPickerDomain(cfg) {
+  const input = document.getElementById("picker-add-input");
+  const raw = (input.value || "").trim();
+  if (!raw) return;
+  const d = Vault.registrable(raw);
+  if (d) _selected.add(d);
+  await persistSelection(cfg);
+  input.value = "";
+  renderPicker(cfg);
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   const cfg = await getConfig();
   const openOpts = () => api.runtime.openOptionsPage();
@@ -212,6 +346,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("module-list").innerHTML = '<li class="muted">Set the hub URL in settings.</li>';
     return;
   }
+  document.getElementById("vault-backup").addEventListener("click", () => doVaultBackup(cfg));
+  document.getElementById("picker-toggle").addEventListener("click", () => {
+    document.getElementById("picker").classList.toggle("hidden");
+  });
+  document.getElementById("picker-add").addEventListener("click", () => addPickerDomain(cfg));
+  document.getElementById("picker-add-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addPickerDomain(cfg);
+  });
+  renderPicker(cfg);
   renderModules(cfg);
   loadMetrics(cfg);
+  loadVault(cfg);
 });
