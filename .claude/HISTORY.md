@@ -2,6 +2,38 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-29 (cont.) — backlog sweep + v2.13.0 release
+
+Closed a batch of fixed-live-but-unmerged issues by finalizing each branch
+(PR → merge → worktree clean), and cut the minor release.
+
+* **#392** vhost-health: fold `error` (404/502) into the 🔴 bucket in the
+  pre-computed summary path (PR #413).
+* **#394** Nextcloud: drop the Authelia `auth_request` gate on the public vhost
+  so the mobile client authenticates (PR #414; changelog conflict resolved →
+  1.4.1 above master's 1.4.0).
+* **#152** Roundcube SQLite by default — config.inc.php.local DSN + des_key +
+  schema init + sqlite3 CLI (PR #415).
+* **#150** vortex-firewall postinst unmasks + enables nftables.service so LXC
+  NAT survives reboot (PR #416).
+* **#168** nginx reload no-op — diagnosed (orphan + stuck old master from a
+  binary-upgrade re-exec; serving master reloads fine), live-cleaned to a single
+  master, closed as operational (no package patch). Brief self-inflicted nginx
+  blip during cleanup, recovered.
+* **#395** WAF: skip cred-004 on NC mobile login + WebDAV (PR #417). Caveat:
+  landed in the `secubox-waf` addon copy; live addon is the `secubox-mitmproxy`
+  copy — the two-copy drift is a separate cleanup.
+* **#389** navbar resort (PR #418); **#391** secubox-system-tuning RAM package
+  (PR #419); **#377** secubox-fmrelay package — rtl_fm→Icecast+RDS (PR #420).
+* **#153** confirmed already squash-merged (PR #160); `git cherry` had mislead.
+* Worktree tree fully tidied (verified each branch's content was in master via
+  PR merge-commit/squash before removing).
+
+* **Release v2.13.0** (minor bump from v2.12.19): tag push triggers the release
+  pipeline → all packages + system images (mochabin/real-ARM, espressobin-v7/
+  ultra, vm-x64/amd64+VirtualBox, rpi400) + APT publish.
+
+---
 ## 2026-05-29 — WAF unban + NC 32 upgrade + user provisioning (#410) + Companion personas (#409)
 
 Long live-ops + feature session on gk2. Master commits pushed:

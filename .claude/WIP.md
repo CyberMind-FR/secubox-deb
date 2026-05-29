@@ -1,5 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-27 (evening)*
+*Mis à jour : 2026-05-29*
+
+---
+
+## 🔄 2026-05-29: live ops + backlog sweep + v2.13.0 release
+
+### ✅ Done
+* **Live ops on gk2**: WAF LAN/RFC1918 whitelist (operator unban, #waf),
+  LXC DNS fix (NC + mitmproxy resolved.conf upstream; FAQ doc), Nextcloud
+  31.0.14→32.0.10 + config hardening (trusted_proxies, APCu, PHP mem/opcache,
+  HSTS, gmp/imagick), NC user cleanup (→ admin+gk2 only), PhotoPrism stale env
+  removed.
+* **Issues merged/closed**: #390, #410 (user provisioning), #409 (Companion
+  personas), #392, #394, #152, #150, #168, #395, #389, #391, #377; #153
+  confirmed already-merged.
+* **secubox-user-sync** (#410): SecuBox = source of truth; `set/seed/sync/list`
+  pushes master users (gk2/admin) + passwords into NC + PhotoPrism with per-user
+  photo folders. gk2/admin seeded live by operator.
+* **Worktree tree tidied** to zero stale worktrees (license-phase-b-full kept).
+* **v2.13.0** release tagged (minor bump) → CI builds packages + images
+  (mochabin/real-ARM, espressobin-v7/ultra, vm-x64/amd64+VirtualBox, rpi400)
+  + APT publish.
+
+### ⬜ Next up / carry-overs
+* Verify v2.13.0 CI: packages + the arm/amd64/rpi400 image artifacts.
+* WAF addon two-copy drift (secubox-waf vs secubox-mitmproxy) — make cred-004 +
+  whitelist durable in the live-source copy.
+* Operator: re-confirm NC mobile reconnect (bruteforce stays OFF by decision).
 
 ---
 
