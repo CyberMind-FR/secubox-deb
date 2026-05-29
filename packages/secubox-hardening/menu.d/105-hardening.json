@@ -4,7 +4,7 @@
   "icon": "🛡️",
   "path": "/hardening/",
   "api": "/api/v1/hardening/",
-  "category": "wall",
-  "order": 120,
-  "description": "Kernel and system hardening"
+  "category": "root",
+  "order": 105,
+  "description": "Kernel and system hardening (sysctl, AppArmor, kernel modules)"
 }

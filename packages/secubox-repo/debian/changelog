@@ -1,3 +1,19 @@
+secubox-repo (1.0.1-1~bookworm1) bookworm; urgency=low
+
+  * Fix navbar visibility (closes #389):
+    - Menu file moved from debian/menu.json (non-canonical) to
+      menu.d/150-repo.json (canonical location, matches every other
+      package).
+    - Category corrected from "system" (not one of the 6 charter
+      categories — hub silently dropped it) → "root" (where
+      admin/system/vault siblings live).
+    - Description sharpened to call out the apt.secubox.in control-
+      plane role.
+  * debian/rules: replace the bespoke `install -m 644 debian/menu.json`
+    with the standard `[ -d menu.d ] && cp -r menu.d/.` pattern.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 18:00:00 +0000
+
 secubox-repo (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
