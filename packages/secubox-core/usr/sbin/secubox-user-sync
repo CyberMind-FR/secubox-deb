@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: secubox-user-sync
+
+Provisioning push: SecuBox is the single source of truth for user accounts.
+Setting a user's password here writes the canonical argon2 hash and pushes the
+same plaintext into every login-capable app that exposes a `<app>ctl
+user-provision` verb (Nextcloud, PhotoPrism, …). The plaintext is passed to the
+provisioners via the SECUBOX_USER_PASSWORD environment variable, never on argv.
+
+Master users `gk2` (host handler) and `admin` (management) must exist
+everywhere — `seed` provisions both.
+
+Usage:
+  secubox-user-sync set <user> [--role admin|user] [--email E] [--password-stdin]
+  secubox-user-sync seed                # (re)set gk2 + admin, prompting for each
+  secubox-user-sync sync <user>         # re-push existing account (prompts pwd)
+  secubox-user-sync list                # master users + per-app provisioning state
+  Add --dry-run to print actions without executing.
+"""
+from __future__ import annotations
+
+import argparse
+import getpass
+import os
+import shutil
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/lib/python3/dist-packages")
+try:
+    from secubox_core import user_store
+except Exception as exc:  # pragma: no cover
+    print(f"error: cannot import secubox_core.user_store: {exc}", file=sys.stderr)
+    sys.exit(2)
+
+MASTER_USERS = ("gk2", "admin")
+
+# (label, ctl binary, extra args builder). A provisioner is used only if its
+# ctl is installed on PATH — keeps core decoupled from which apps are present.
+PROVISIONERS = [
+    ("nextcloud", "nextcloudctl", lambda user, role: ["user-provision", user]),
+    ("photoprism", "photoprismctl", lambda user, role: ["user-provision", user, role]),
+]
+
+
+def _read_password(args) -> str:
+    if getattr(args, "password_stdin", False):
+        pw = sys.stdin.readline().rstrip("\n")
+        if not pw:
+            sys.exit("error: empty password on stdin")
+        return pw
+    pw = getpass.getpass(f"New password for {args.user}: ")
+    pw2 = getpass.getpass("Confirm: ")
+    if pw != pw2:
+        sys.exit("error: passwords do not match")
+    if not pw:
+        sys.exit("error: empty password")
+    return pw
+
+
+def _run_provisioners(user: str, role: str, password: str, dry_run: bool) -> int:
+    failures = 0
+    for label, ctl, build in PROVISIONERS:
+        if not shutil.which(ctl):
+            print(f"  - {label}: skipped ({ctl} not installed)")
+            continue
+        argv = [ctl, *build(user, role)]
+        if dry_run:
+            print(f"  - {label}: would run: {' '.join(argv)} (password via env)")
+            continue
+        env = dict(os.environ, SECUBOX_USER_PASSWORD=password)
+        try:
+            r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=120)
+        except Exception as exc:
+            print(f"  - {label}: ERROR ({exc})")
+            failures += 1
+            continue
+        if r.returncode == 0:
+            print(f"  - {label}: ok")
+        else:
+            print(f"  - {label}: FAILED (rc={r.returncode}) {(r.stderr or r.stdout).strip()[:200]}")
+            failures += 1
+    return failures
+
+
+def cmd_set(args) -> int:
+    password = _read_password(args)
+    if args.dry_run:
+        print(f"[dry-run] would set canonical password for {args.user} "
+              f"(role={args.role}, provision=True)")
+    else:
+        user_store.set_password(args.user, password, provision=True,
+                                role=args.role, email=args.email)
+        print(f"canonical password set for {args.user} (role={args.role})")
+    print("pushing to apps:")
+    fails = _run_provisioners(args.user, args.role, password, args.dry_run)
+    return 1 if fails else 0
+
+
+def cmd_seed(args) -> int:
+    rc = 0
+    for user in MASTER_USERS:
+        role = "admin" if user == "admin" else "user"
+        print(f"== {user} (role={role}) ==")
+        ns = argparse.Namespace(user=user, role=role, email=None,
+                                password_stdin=False, dry_run=args.dry_run)
+        rc |= cmd_set(ns)
+    return rc
+
+
+def cmd_sync(args) -> int:
+    if args.user not in user_store.list_users():
+        print(f"warning: {args.user} not in canonical store; use 'set' to provision",
+              file=sys.stderr)
+    return cmd_set(args)
+
+
+def cmd_list(args) -> int:
+    masters = set(MASTER_USERS)
+    core_users = user_store.list_users()
+    print("canonical (SecuBox) users:")
+    for u in sorted(set(core_users) | masters):
+        tags = []
+        if u in masters:
+            tags.append("master")
+        if u not in core_users:
+            tags.append("MISSING-in-core")
+        print(f"  - {u}{' [' + ', '.join(tags) + ']' if tags else ''}")
+    print("\nprovisioners available:")
+    for label, ctl, _ in PROVISIONERS:
+        print(f"  - {label}: {'yes' if shutil.which(ctl) else 'no (' + ctl + ' absent)'}")
+    return 0
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(prog="secubox-user-sync", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--dry-run", action="store_true", help="print actions, change nothing")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sp = sub.add_parser("set", help="set a user's password and push to apps")
+    sp.add_argument("user")
+    sp.add_argument("--role", choices=["admin", "user"], default="user")
+    sp.add_argument("--email", default=None)
+    sp.add_argument("--password-stdin", action="store_true",
+                    help="read password from stdin instead of prompting")
+    sp.set_defaults(func=cmd_set)
+
+    ss = sub.add_parser("seed", help="(re)set the master users gk2 + admin")
+    ss.set_defaults(func=cmd_seed)
+
+    sy = sub.add_parser("sync", help="re-push an existing user (prompts for password)")
+    sy.add_argument("user")
+    sy.add_argument("--role", choices=["admin", "user"], default="user")
+    sy.add_argument("--email", default=None)
+    sy.add_argument("--password-stdin", action="store_true")
+    sy.set_defaults(func=cmd_sync)
+
+    sl = sub.add_parser("list", help="show master users + provisioner availability")
+    sl.set_defaults(func=cmd_list)
+
+    args = p.parse_args()
+    try:
+        return args.func(args)
+    except (KeyError, RuntimeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

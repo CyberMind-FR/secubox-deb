@@ -1135,7 +1135,16 @@ async def module_health_alerts(user=Depends(require_jwt)):
 
 @router.get("/health-monitor/summary")
 async def vhost_health_summary(user=Depends(require_jwt)):
-    """Get VHost health summary (ok/slow/placeholder/down counts)."""
+    """Get VHost health summary (ok/slow/placeholder/down counts).
+
+    The prober at /usr/lib/secubox/health/prober.py classifies HTTP 4xx/5xx
+    (other than 503) as a separate "error" status. From an operator POV
+    that's the same as "down" — they merge into a single 🔴 bucket on the
+    dashboard. The fallback path below already does this correctly; the
+    pre-computed path used to drop the "error" count, which made
+    operators see ok+slow+down counts that didn't sum to total. Fixed
+    in #392 by merging data["error"] into the returned "down".
+    """
     try:
         if VHOST_HEALTH_CACHE.exists():
             data = json.loads(VHOST_HEALTH_CACHE.read_text())
@@ -1146,7 +1155,7 @@ async def vhost_health_summary(user=Depends(require_jwt)):
                     "ok": data.get("ok", 0),
                     "slow": data.get("slow", 0),
                     "placeholder": data.get("placeholder", 0),
-                    "down": data.get("down", 0),
+                    "down": data.get("down", 0) + data.get("error", 0),
                     "total": data.get("total", 0),
                 }
             # Fallback: compute from vhosts dict

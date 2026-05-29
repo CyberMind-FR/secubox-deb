@@ -1,23 +1,27 @@
 [Unit]
 Description=SecuBox PeerTube API
-After=network.target secubox-core.service secubox-runtime.service docker.service
-Requires=secubox-runtime.service
-Wants=docker.service
-# Only start if explicitly enabled (PeerTube LXC configured)
-ConditionPathExists=/etc/secubox/peertube/enabled
+After=network.target secubox-core.service
+Requires=secubox-core.service
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=secubox
+Group=secubox
 WorkingDirectory=/usr/lib/secubox/peertube
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/peertube.sock --log-level warning
-ExecStartPost=-/bin/sleep 1
-ExecStartPost=-/bin/chmod 660 /run/secubox/peertube.sock
-ExecStartPost=-/bin/chown secubox:secubox /run/secubox/peertube.sock
 Restart=on-failure
 RestartSec=5
-PrivateTmp=true
+UMask=0000
+
+# CSPN: the dashboard stays unprivileged. Cookie installs are spooled to
+# /run/secubox/peertube-yt-cookies.txt and applied by the root-run
+# peertube-cookie-install.path/.service (#407) — no sudo needed here.
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+RuntimeDirectoryMode=0775
+
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox /data/peertube
 
 [Install]
 WantedBy=multi-user.target

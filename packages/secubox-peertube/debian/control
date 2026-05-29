@@ -7,21 +7,36 @@ Standards-Version: 4.6.2
 
 Package: secubox-peertube
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip
-Recommends: docker.io | podman
-Description: PeerTube federated video platform management
- SecuBox module for managing PeerTube video hosting via Docker/Podman.
- Provides container management, video hosting, channel management,
- user management, federation (ActivityPub), transcoding settings,
- plugin management, and storage statistics.
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip,
+ lxc, lxc-templates, nftables, openssl
+Description: SecuBox PeerTube — federated video platform (native LXC)
+ Dashboard + FastAPI backend for a PeerTube video-hosting instance
+ installed NATIVELY inside a dedicated Debian LXC (its own
+ peertube.service: Node 22 + PostgreSQL 15 + Redis + ffmpeg). The API
+ daemon on the host is lightweight (always reachable to serve the
+ dashboard); `peertubectl install` provisions the LXC and the PeerTube
+ stack on demand.
+ .
+ PeerTube runs native-in-LXC rather than Docker/Podman: an unprivileged
+ LXC cannot reliably bring up a podman CNI bridge on the Marvell arm64
+ boards, so the native systemd-managed install is the supported path.
  .
  Features:
-  - Docker/Podman container management
+  - LXC lifecycle via peertubectl (install, status, start, stop, restart, logs)
+  - Public nginx vhost (:9080 → LXC :9000) bypassing the WAF (gitea pattern)
   - Video and channel management
-  - User creation and role assignment
-  - Federation with other PeerTube instances
+  - User creation and role assignment (admin/moderator/user)
+  - Federation (ActivityPub) — follow/followers
   - Transcoding settings (HLS, WebTorrent, resolutions)
   - Plugin installation from NPM
   - Storage usage monitoring
  .
- Provides FastAPI backend on /api/v1/peertube/ via Unix socket.
+ Distinct from sibling federated/streaming/media SecuBox packages:
+  - secubox-matrix — Matrix Synapse (chat federation, not video).
+  - secubox-jitsi — Jitsi Meet (real-time conferencing, not VOD).
+  - secubox-jellyfin — Jellyfin (local media library, not federated).
+  - secubox-gotosocial — GoToSocial (microblog ActivityPub, not video).
+  - secubox-simplex — SimpleX Chat (decentralized chat).
+ .
+ Reachable at /peertube/ (frontend) and /api/v1/peertube/* (API)
+ via Unix socket /run/secubox/peertube.sock.

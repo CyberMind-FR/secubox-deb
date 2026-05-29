@@ -1,0 +1,24 @@
+# /etc/secubox/photoprism.toml — SecuBox PhotoPrism module configuration
+#
+# Operator override of package defaults. Edit then run `photoprismctl install`
+# (first provision) or `photoprismctl restart`.
+
+[lxc]
+name         = "photoprism"
+ip           = "10.100.0.130"
+gateway      = "10.100.0.1"
+bridge       = "br-lxc"
+path         = "/data/lxc"
+debian_suite = "bookworm"
+
+[photoprism]
+http_port            = 2342
+image                = "docker.io/photoprism/photoprism:latest"
+admin_user           = "admin"
+admin_password_file  = "/etc/secubox/secrets/photoprism-admin"
+auto_index           = 300          # delay (s) before re-index after UI change; -1 disables
+originals            = "/data/shared/photos"   # shared with Nextcloud "PhotoLibrary"
+
+[exposure]
+public_hostname = "photoprism.gk2.secubox.in"
+waf_inspect     = false             # photo/video bypass the WAF (gitea pattern)

@@ -1,0 +1,13 @@
+[Unit]
+Description=Watch for spooled YouTube cookies to install into the PeerTube LXC
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/407
+
+[Path]
+# An unprivileged dashboard (secubox-peertube / secubox-avatar) drops the
+# Netscape cookies here; this root-run service installs them — no sudo, so the
+# dashboards keep NoNewPrivileges (CSPN privilege separation).
+PathChanged=/run/secubox/peertube-yt-cookies.txt
+Unit=peertube-cookie-install.service
+
+[Install]
+WantedBy=paths.target

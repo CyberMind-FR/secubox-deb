@@ -1,28 +1,29 @@
 """secubox-peertube -- FastAPI application for PeerTube video platform management.
 
-Provides PeerTube Docker container management with video, channel, user,
-federation, transcoding, plugin, and storage management.
+PeerTube runs NATIVELY inside a dedicated Debian LXC (peertube.service:
+Node 22 + PostgreSQL 15 + Redis + ffmpeg), provisioned by
+`peertubectl install` / lib/peertube/install-lxc.sh. This dashboard talks to
+that instance over HTTP at <lxc_ip>:<http_port> and drives the LXC lifecycle
+via peertubectl. It is NOT a Docker/Podman manager.
 
 SecuBox-Deb :: PeerTube
 CyberMind -- https://cybermind.fr
 Author: Gerald Kerma <gandalf@gk2.net>
 License: Proprietary / ANSSI CSPN candidate
 """
-import asyncio
 import json
-import shutil
+import os
 import subprocess
-from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query
+from fastapi import FastAPI, APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
 
-app = FastAPI(title="secubox-peertube", version="1.0.0", root_path="/api/v1/peertube")
+app = FastAPI(title="secubox-peertube", version="1.1.0", root_path="/api/v1/peertube")
 
 # ══════════════════════════════════════════════════════════════════
 # Health Check Endpoint (public, no auth)
@@ -39,24 +40,30 @@ log = get_logger("peertube")
 
 # Configuration
 CONFIG_FILE = Path("/etc/secubox/peertube.toml")
-CONTAINER_NAME = "secbx-peertube"
+INSTALL_LIB = "/usr/share/secubox/lib/peertube/install-lxc.sh"
+PEERTUBECTL = "/usr/sbin/peertubectl"
+
+# Flat defaults. The on-disk TOML uses [lxc]/[peertube]/[exposure] sections;
+# get_config() flattens them into these keys.
 DEFAULT_CONFIG = {
-    "enabled": False,
-    "image": "chocobozzz/peertube:production-bookworm",
+    # LXC
+    "name": "peertube",
+    "ip": "10.100.0.120",
+    "path": "/data/lxc",
+    "data_path": "/data/peertube",
+    # PeerTube (inside the LXC)
     "http_port": 9000,
-    "data_path": "/srv/peertube",
-    "timezone": "Europe/Paris",
-    "domain": "peertube.secubox.local",
-    "haproxy": False,
-    "signup_enabled": False,
+    "admin_user": "root",
+    "admin_password_file": "/etc/secubox/secrets/peertube-admin",
     "transcoding_enabled": True,
     "transcoding_threads": 2,
     "hls_enabled": True,
     "webtorrent_enabled": True,
     "federation_enabled": True,
-    "auto_follow_back": False,
     "instance_name": "SecuBox PeerTube",
     "short_description": "Federated video platform on SecuBox",
+    # Exposure
+    "public_hostname": "peertube.gk2.secubox.in",
 }
 
 
@@ -65,20 +72,13 @@ DEFAULT_CONFIG = {
 # ============================================================================
 
 class PeerTubeConfig(BaseModel):
-    enabled: bool = False
-    image: str = "chocobozzz/peertube:production-bookworm"
     http_port: int = 9000
-    data_path: str = "/srv/peertube"
-    timezone: str = "Europe/Paris"
-    domain: str = "peertube.secubox.local"
-    haproxy: bool = False
-    signup_enabled: bool = False
+    public_hostname: str = "peertube.gk2.secubox.in"
     transcoding_enabled: bool = True
     transcoding_threads: int = 2
     hls_enabled: bool = True
     webtorrent_enabled: bool = True
     federation_enabled: bool = True
-    auto_follow_back: bool = False
 
 
 class InstanceSettings(BaseModel):
@@ -114,13 +114,8 @@ class TranscodingSettings(BaseModel):
     hls_enabled: bool = True
     webtorrent_enabled: bool = True
     resolutions: Dict[str, bool] = {
-        "240p": True,
-        "360p": True,
-        "480p": True,
-        "720p": True,
-        "1080p": True,
-        "1440p": False,
-        "2160p": False,
+        "240p": True, "360p": True, "480p": True, "720p": True,
+        "1080p": True, "1440p": False, "2160p": False,
     }
 
 
@@ -128,119 +123,176 @@ class PluginInstall(BaseModel):
     npm_name: str  # e.g., peertube-plugin-auth-ldap
 
 
+class VideoImport(BaseModel):
+    """Import a video from a remote URL (YouTube, Vimeo, direct .mp4, …).
+
+    Uses PeerTube's native HTTP import (yt-dlp under the hood)."""
+    target_url: str = Field(..., min_length=4)
+    channel_id: Optional[int] = None      # default channel if omitted
+    name: Optional[str] = None            # title; PeerTube derives one if omitted
+    privacy: int = 1                      # 1=public 2=unlisted 3=private 4=internal
+
+
 # ============================================================================
-# Helpers
+# Config helpers
 # ============================================================================
 
 def get_config() -> dict:
-    """Load peertube configuration."""
+    """Load + flatten peertube.toml ([lxc]/[peertube]/[exposure]) over defaults."""
+    cfg = DEFAULT_CONFIG.copy()
     if CONFIG_FILE.exists():
         try:
             import tomllib
-            return tomllib.loads(CONFIG_FILE.read_text())
+            raw = tomllib.loads(CONFIG_FILE.read_text())
+            for section in ("lxc", "peertube", "exposure"):
+                for k, v in (raw.get(section) or {}).items():
+                    cfg[k] = v
+            for k, v in raw.items():        # tolerate flat keys too
+                if not isinstance(v, dict):
+                    cfg[k] = v
         except Exception:
             pass
-    return DEFAULT_CONFIG.copy()
+    return cfg
 
 
 def save_config(config: dict):
-    """Save peertube configuration."""
-    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["# PeerTube configuration"]
-    for k, v in config.items():
+    """Persist a flat config back as sectioned TOML."""
+    cfg = config
+    lxc_keys = ("name", "ip", "gateway", "bridge", "path", "debian_suite")
+    pt_keys = ("http_port", "admin_user", "admin_password_file", "secret_file",
+               "admin_email", "transcoding_enabled", "transcoding_threads",
+               "hls_enabled", "webtorrent_enabled", "federation_enabled",
+               "instance_name", "short_description", "description", "terms",
+               "signup_enabled", "signup_requires_email", "transcoding_resolutions")
+    exp_keys = ("public_hostname", "waf_inspect")
+
+    def emit(k):
+        v = cfg.get(k)
+        if v is None:
+            return None
         if isinstance(v, bool):
-            lines.append(f"{k} = {str(v).lower()}")
-        elif isinstance(v, int):
-            lines.append(f"{k} = {v}")
-        elif isinstance(v, dict):
-            lines.append(f'{k} = {json.dumps(v)}')
-        elif isinstance(v, list):
-            lines.append(f'{k} = {v}')
-        else:
-            lines.append(f'{k} = "{v}"')
-    CONFIG_FILE.write_text("\n".join(lines) + "\n")
+            return f"{k} = {str(v).lower()}"
+        if isinstance(v, int):
+            return f"{k} = {v}"
+        if isinstance(v, (dict, list)):
+            return f"{k} = {json.dumps(v)}"
+        return f'{k} = "{v}"'
+
+    out = ["# /etc/secubox/peertube.toml — managed by secubox-peertube"]
+    for section, keys in (("lxc", lxc_keys), ("peertube", pt_keys), ("exposure", exp_keys)):
+        rows = [emit(k) for k in keys if k in cfg and emit(k) is not None]
+        if rows:
+            out.append(f"\n[{section}]")
+            out.extend(rows)
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text("\n".join(out) + "\n")
 
 
-def detect_runtime() -> Optional[str]:
-    """Detect container runtime."""
-    if shutil.which("podman"):
-        return "podman"
-    if shutil.which("docker"):
-        return "docker"
-    return None
+# ============================================================================
+# Native-LXC + PeerTube HTTP helpers
+# ============================================================================
 
-
-def get_container_status() -> dict:
-    """Get PeerTube container status."""
-    rt = detect_runtime()
-    if not rt:
-        return {"status": "no_runtime", "uptime": ""}
-
+def get_lxc_state() -> str:
+    """LXC container state: running | stopped | absent."""
+    cfg = get_config()
     try:
-        result = subprocess.run(
-            [rt, "ps", "--filter", f"name={CONTAINER_NAME}", "--format", "{{.Status}}"],
-            capture_output=True, text=True, timeout=5
+        r = subprocess.run(
+            ["lxc-info", "-n", cfg["name"], "-P", cfg["path"]],
+            capture_output=True, text=True, timeout=5,
         )
-        if result.stdout.strip():
-            return {"status": "running", "uptime": result.stdout.strip()}
-
-        result = subprocess.run(
-            [rt, "ps", "-a", "--filter", f"name={CONTAINER_NAME}", "--format", "{{.Status}}"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.stdout.strip():
-            return {"status": "stopped", "uptime": ""}
-
-        return {"status": "not_installed", "uptime": ""}
+        for line in r.stdout.splitlines():
+            if line.strip().lower().startswith("state:"):
+                return line.split(":", 1)[1].strip().lower()
+        return "absent"
     except Exception:
-        return {"status": "error", "uptime": ""}
+        return "absent"
+
+
+def http_reachable() -> bool:
+    """True if PeerTube answers on <ip>:<http_port>."""
+    cfg = get_config()
+    url = f"http://{cfg['ip']}:{cfg['http_port']}/api/v1/config"
+    try:
+        r = subprocess.run(
+            ["curl", "-fsS", "-o", "/dev/null", "--max-time", "3",
+             "-H", f"Host: {cfg['public_hostname']}", url],
+            capture_output=True, timeout=5,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
 
 
 def is_running() -> bool:
-    """Check if PeerTube container is running."""
-    return get_container_status()["status"] == "running"
+    return http_reachable()
 
 
-def run_in_container(cmd: List[str], timeout: int = 30) -> dict:
-    """Run command inside PeerTube container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
+def pt_api(endpoint: str, method: str = "GET", data: Optional[dict] = None,
+           token: Optional[str] = None, timeout: int = 20) -> dict:
+    """Call PeerTube's HTTP API at <ip>:<http_port>.
 
+    PeerTube rejects requests whose Host is the raw IP, so we always send
+    Host: <public_hostname> (the configured webserver hostname)."""
+    cfg = get_config()
+    base = f"http://{cfg['ip']}:{cfg['http_port']}/api/v1"
+    cmd = ["curl", "-s", "--max-time", str(timeout),
+           "-H", f"Host: {cfg['public_hostname']}", base + endpoint]
+    if token:
+        cmd += ["-H", f"Authorization: Bearer {token}"]
+    if method == "POST":
+        cmd += ["-X", "POST"]
+        if data is not None:
+            cmd += ["-H", "Content-Type: application/json", "-d", json.dumps(data)]
+    elif method == "DELETE":
+        cmd += ["-X", "DELETE"]
     try:
-        full_cmd = [rt, "exec", CONTAINER_NAME] + cmd
-        result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout)
-        return {
-            "success": result.returncode == 0,
-            "stdout": result.stdout,
-            "stderr": result.stderr
-        }
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 5)
+        if r.returncode == 0 and r.stdout:
+            try:
+                return {"success": True, "data": json.loads(r.stdout)}
+            except json.JSONDecodeError:
+                return {"success": True, "data": r.stdout}
+        return {"success": False, "error": r.stderr.strip() or "API call failed"}
     except subprocess.TimeoutExpired:
-        return {"success": False, "error": "Command timeout"}
+        return {"success": False, "error": "API timeout"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
-def peertube_api(endpoint: str, method: str = "GET", data: dict = None) -> dict:
-    """Call PeerTube internal API."""
+def get_admin_token() -> Optional[str]:
+    """OAuth password-grant token for the stored admin user (for write ops)."""
     cfg = get_config()
-    port = cfg.get("http_port", 9000)
-    curl_cmd = ["curl", "-s", f"http://127.0.0.1:{port}/api/v1{endpoint}"]
+    pw_file = Path(cfg.get("admin_password_file", "/etc/secubox/secrets/peertube-admin"))
+    if not pw_file.exists():
+        return None
+    password = pw_file.read_text().strip()
+    username = cfg.get("admin_user", "root")
+    oc = pt_api("/oauth-clients/local")
+    if not oc.get("success") or not isinstance(oc.get("data"), dict):
+        return None
+    client = oc["data"]
+    base = f"http://{cfg['ip']}:{cfg['http_port']}/api/v1/users/token"
+    cmd = ["curl", "-s", "--max-time", "15", "-H", f"Host: {cfg['public_hostname']}", base,
+           "-d", f"client_id={client.get('client_id','')}",
+           "-d", f"client_secret={client.get('client_secret','')}",
+           "-d", "grant_type=password",
+           "-d", f"username={username}",
+           "-d", f"password={password}"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        tok = json.loads(r.stdout)
+        return tok.get("access_token")
+    except Exception:
+        return None
 
-    if method == "POST" and data:
-        curl_cmd.extend(["-X", "POST", "-H", "Content-Type: application/json", "-d", json.dumps(data)])
-    elif method == "DELETE":
-        curl_cmd.extend(["-X", "DELETE"])
 
-    result = run_in_container(curl_cmd)
-
-    if result.get("success") and result.get("stdout"):
-        try:
-            return {"success": True, "data": json.loads(result["stdout"])}
-        except json.JSONDecodeError:
-            return {"success": True, "data": result["stdout"]}
-
-    return {"success": False, "error": result.get("error", "API call failed")}
+def default_channel_id(token: str) -> Optional[int]:
+    me = pt_api("/users/me", token=token)
+    if me.get("success") and isinstance(me.get("data"), dict):
+        chans = me["data"].get("videoChannels") or []
+        if chans:
+            return chans[0].get("id")
+    return None
 
 
 # ============================================================================
@@ -249,57 +301,70 @@ def peertube_api(endpoint: str, method: str = "GET", data: dict = None) -> dict:
 
 @router.get("/health")
 async def health():
-    """Health check."""
     return {"status": "ok", "module": "peertube"}
 
 
 @router.get("/status")
 async def status():
-    """Get PeerTube service status."""
+    """Real native-LXC status: LXC state + PeerTube HTTP reachability + disk."""
     cfg = get_config()
-    rt = detect_runtime()
-    container = get_container_status()
+    state = get_lxc_state()
+    reachable = http_reachable()
 
-    # Disk usage
     disk_usage = ""
-    data_path = Path(cfg.get("data_path", "/srv/peertube"))
+    data_path = Path(cfg.get("data_path", "/data/peertube"))
     if data_path.exists():
         try:
-            result = subprocess.run(
-                ["du", "-sh", str(data_path)],
-                capture_output=True, text=True, timeout=30
-            )
-            disk_usage = result.stdout.split()[0] if result.stdout else ""
+            r = subprocess.run(["du", "-sh", str(data_path)],
+                               capture_output=True, text=True, timeout=30)
+            disk_usage = r.stdout.split()[0] if r.stdout else ""
         except Exception:
             pass
 
-    # Video count (if storage exists)
+    # Live counts straight from the instance config/stats when reachable.
+    instance_name = cfg.get("instance_name", "SecuBox PeerTube")
+    server_version = ""
     video_count = 0
-    videos_path = data_path / "storage" / "videos"
-    if videos_path.exists():
-        try:
-            video_count = len(list(videos_path.glob("*")))
-        except Exception:
-            pass
+    if reachable:
+        c = pt_api("/config")
+        if c.get("success") and isinstance(c.get("data"), dict):
+            d = c["data"]
+            instance_name = (d.get("instance") or {}).get("name", instance_name)
+            server_version = d.get("serverVersion", "")
+        v = pt_api("/videos?count=0")
+        if v.get("success") and isinstance(v.get("data"), dict):
+            video_count = v["data"].get("total", 0)
+
+    # Map LXC state onto the keys the webui already consumes. The dashboard
+    # runs as the unprivileged 'secubox' user, which can't always read the
+    # root-owned LXC via lxc-info (reports "absent"); trust HTTP reachability
+    # as the primary "running" signal, fall back to lxc_state when unreachable.
+    if reachable:
+        container_status = "running"
+    else:
+        container_status = {"running": "running", "stopped": "stopped",
+                            "absent": "not_installed"}.get(state, state)
 
     return {
-        "enabled": cfg.get("enabled", False),
-        "image": cfg.get("image", DEFAULT_CONFIG["image"]),
+        "deployment": "lxc-native",
+        "lxc_name": cfg.get("name", "peertube"),
+        "lxc_ip": cfg.get("ip", "10.100.0.120"),
+        "lxc_state": state,
         "http_port": cfg.get("http_port", 9000),
-        "data_path": cfg.get("data_path", "/srv/peertube"),
-        "timezone": cfg.get("timezone", "Europe/Paris"),
-        "domain": cfg.get("domain", "peertube.secubox.local"),
-        "haproxy": cfg.get("haproxy", False),
-        "signup_enabled": cfg.get("signup_enabled", False),
+        "http_reachable": reachable,
+        "data_path": cfg.get("data_path", "/data/peertube"),
+        "domain": cfg.get("public_hostname", "peertube.gk2.secubox.in"),
+        "public_url": f"https://{cfg.get('public_hostname', 'peertube.gk2.secubox.in')}/",
         "transcoding_enabled": cfg.get("transcoding_enabled", True),
         "federation_enabled": cfg.get("federation_enabled", True),
-        "docker_available": rt is not None,
-        "runtime": rt or "none",
-        "container_status": container["status"],
-        "container_uptime": container["uptime"],
+        # webui back-compat keys (was Docker; now native-LXC):
+        "runtime": "lxc-native",
+        "container_status": container_status,
+        "container_uptime": "",
         "disk_usage": disk_usage,
         "video_count": video_count,
-        "instance_name": cfg.get("instance_name", "SecuBox PeerTube"),
+        "instance_name": instance_name,
+        "server_version": server_version,
     }
 
 
@@ -309,7 +374,6 @@ async def status():
 
 @router.get("/instance")
 async def get_instance(user=Depends(require_jwt)):
-    """Get instance information."""
     cfg = get_config()
     return {
         "name": cfg.get("instance_name", "SecuBox PeerTube"),
@@ -318,13 +382,12 @@ async def get_instance(user=Depends(require_jwt)):
         "terms": cfg.get("terms", ""),
         "signup_enabled": cfg.get("signup_enabled", False),
         "signup_requires_email": cfg.get("signup_requires_email", True),
-        "domain": cfg.get("domain", "peertube.secubox.local"),
+        "domain": cfg.get("public_hostname", "peertube.gk2.secubox.in"),
     }
 
 
 @router.post("/instance")
 async def update_instance(settings: InstanceSettings, user=Depends(require_jwt)):
-    """Update instance settings."""
     cfg = get_config()
     cfg["instance_name"] = settings.name
     cfg["short_description"] = settings.short_description
@@ -342,34 +405,103 @@ async def update_instance(settings: InstanceSettings, user=Depends(require_jwt))
 # ============================================================================
 
 @router.get("/videos")
-async def list_videos(
-    start: int = 0,
-    count: int = 15,
-    sort: str = "-publishedAt",
-    user=Depends(require_jwt)
-):
-    """List videos on instance."""
+async def list_videos(start: int = 0, count: int = 15,
+                      sort: str = "-publishedAt", user=Depends(require_jwt)):
     if not is_running():
-        return {"videos": [], "total": 0, "error": "Container not running"}
-
-    result = peertube_api(f"/videos?start={start}&count={count}&sort={sort}")
-
+        return {"videos": [], "total": 0, "error": "PeerTube not reachable"}
+    result = pt_api(f"/videos?start={start}&count={count}&sort={sort}")
     if result.get("success") and isinstance(result.get("data"), dict):
-        data = result["data"]
-        return {"videos": data.get("data", []), "total": data.get("total", 0)}
-
+        d = result["data"]
+        return {"videos": d.get("data", []), "total": d.get("total", 0)}
     return {"videos": [], "total": 0}
 
 
 @router.delete("/video/{video_id}")
 async def delete_video(video_id: str, user=Depends(require_jwt)):
-    """Delete a video."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Deleting video {video_id} by {user.get('sub', 'unknown')}")
-    result = peertube_api(f"/videos/{video_id}", method="DELETE")
+    result = pt_api(f"/videos/{video_id}", method="DELETE", token=token)
     return {"success": result.get("success", False)}
+
+
+# ============================================================================
+# Video Import (yt-dlp via PeerTube native HTTP import)
+# ============================================================================
+
+@router.get("/imports")
+async def list_imports(user=Depends(require_jwt)):
+    """List the current user's video imports (queued/processing/done/failed)."""
+    if not is_running():
+        return {"imports": [], "total": 0, "error": "PeerTube not reachable"}
+    token = get_admin_token()
+    if not token:
+        return {"imports": [], "total": 0, "error": "no admin credentials on host"}
+    result = pt_api("/users/me/videos/imports?count=20&sort=-createdAt", token=token)
+    if result.get("success") and isinstance(result.get("data"), dict):
+        d = result["data"]
+        return {"imports": d.get("data", []), "total": d.get("total", 0)}
+    return {"imports": [], "total": 0, "error": result.get("error", "import list failed")}
+
+
+@router.post("/import")
+async def import_video(req: VideoImport, user=Depends(require_jwt)):
+    """Download a video from a URL into PeerTube (yt-dlp under the hood).
+
+    PeerTube must have import.videos.http enabled (install-lxc.sh sets it)."""
+    if not is_running():
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
+    if not token:
+        return {"success": False,
+                "error": "No admin credentials at /etc/secubox/secrets/peertube-admin"}
+    channel_id = req.channel_id or default_channel_id(token)
+    if not channel_id:
+        return {"success": False, "error": "could not resolve a target channel"}
+    payload = {
+        "targetUrl": req.target_url,
+        "channelId": channel_id,
+        "privacy": req.privacy,
+    }
+    if req.name:
+        payload["name"] = req.name
+    log.info(f"Importing {req.target_url} → channel {channel_id} by {user.get('sub', 'unknown')}")
+    result = pt_api("/videos/imports", method="POST", data=payload, token=token, timeout=60)
+    if result.get("success"):
+        d = result.get("data") or {}
+        vid = (d.get("video") or {})
+        return {"success": True, "import_id": d.get("id"),
+                "video_uuid": vid.get("uuid"), "state": (d.get("state") or {})}
+    return {"success": False, "error": result.get("error", "import failed")}
+
+
+# Spool the dashboard (unprivileged secubox) writes; the root-run
+# peertube-cookie-install.path/.service (#407) applies it — no sudo here (CSPN).
+COOKIES_SPOOL = "/run/secubox/peertube-yt-cookies.txt"
+
+
+@router.post("/import/cookies")
+async def import_cookies(request: Request, user=Depends(require_jwt)):
+    """Queue operator-supplied YouTube cookies (Netscape format) for the import
+    pipeline. Body = the cookies.txt text (the SecuBox WebExtension / avatar
+    broker reads them from the logged-in browser and POSTs here, #401/#402).
+
+    The dashboard stays unprivileged: it writes the spool, and the root
+    peertube-cookie-install.path watches it and installs them into the LXC +
+    restarts PeerTube (#407). No sudo, NoNewPrivileges intact."""
+    body = (await request.body()).decode("utf-8", "replace")
+    if "\t" not in body or "youtube" not in body.lower():
+        return {"success": False, "error": "body is not a Netscape youtube cookies file"}
+    try:
+        with open(COOKIES_SPOOL, "w") as f:
+            f.write(body)
+        os.chmod(COOKIES_SPOOL, 0o600)
+    except Exception as e:
+        return {"success": False, "error": f"spool write failed: {e}"}
+    log.info(f"Queued YouTube cookies ({len(body)} bytes) by {user.get('sub', 'unknown')}")
+    return {"success": True,
+            "message": "cookies queued; installing into the LXC + restarting PeerTube shortly"}
 
 
 # ============================================================================
@@ -378,27 +510,22 @@ async def delete_video(video_id: str, user=Depends(require_jwt)):
 
 @router.get("/channels")
 async def list_channels(user=Depends(require_jwt)):
-    """List video channels."""
     if not is_running():
-        return {"channels": [], "error": "Container not running"}
-
-    result = peertube_api("/video-channels?count=100")
-
+        return {"channels": [], "error": "PeerTube not reachable"}
+    result = pt_api("/video-channels?count=100")
     if result.get("success") and isinstance(result.get("data"), dict):
-        data = result["data"]
-        return {"channels": data.get("data", []), "total": data.get("total", 0)}
-
+        d = result["data"]
+        return {"channels": d.get("data", []), "total": d.get("total", 0)}
     return {"channels": [], "total": 0}
 
 
 @router.post("/channel")
 async def create_channel(channel: ChannelCreate, user=Depends(require_jwt)):
-    """Create a video channel."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Creating channel {channel.name} by {user.get('sub', 'unknown')}")
-    result = peertube_api("/video-channels", method="POST", data={
+    result = pt_api("/video-channels", method="POST", token=token, data={
         "name": channel.name,
         "displayName": channel.display_name,
         "description": channel.description,
@@ -408,12 +535,11 @@ async def create_channel(channel: ChannelCreate, user=Depends(require_jwt)):
 
 @router.delete("/channel/{channel_name}")
 async def delete_channel(channel_name: str, user=Depends(require_jwt)):
-    """Delete a video channel."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Deleting channel {channel_name} by {user.get('sub', 'unknown')}")
-    result = peertube_api(f"/video-channels/{channel_name}", method="DELETE")
+    result = pt_api(f"/video-channels/{channel_name}", method="DELETE", token=token)
     return {"success": result.get("success", False)}
 
 
@@ -423,27 +549,23 @@ async def delete_channel(channel_name: str, user=Depends(require_jwt)):
 
 @router.get("/users")
 async def list_users(user=Depends(require_jwt)):
-    """List users."""
     if not is_running():
-        return {"users": [], "error": "Container not running"}
-
-    result = peertube_api("/users?count=100")
-
+        return {"users": [], "error": "PeerTube not reachable"}
+    token = get_admin_token()
+    result = pt_api("/users?count=100", token=token)
     if result.get("success") and isinstance(result.get("data"), dict):
-        data = result["data"]
-        return {"users": data.get("data", []), "total": data.get("total", 0)}
-
+        d = result["data"]
+        return {"users": d.get("data", []), "total": d.get("total", 0)}
     return {"users": [], "total": 0}
 
 
 @router.post("/user")
 async def create_user(new_user: UserCreate, user=Depends(require_jwt)):
-    """Create a user."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Creating user {new_user.username} by {user.get('sub', 'unknown')}")
-    result = peertube_api("/users", method="POST", data={
+    result = pt_api("/users", method="POST", token=token, data={
         "username": new_user.username,
         "email": new_user.email,
         "password": new_user.password,
@@ -455,12 +577,11 @@ async def create_user(new_user: UserCreate, user=Depends(require_jwt)):
 
 @router.delete("/user/{user_id}")
 async def delete_user(user_id: int, user=Depends(require_jwt)):
-    """Delete a user."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Deleting user {user_id} by {user.get('sub', 'unknown')}")
-    result = peertube_api(f"/users/{user_id}", method="DELETE")
+    result = pt_api(f"/users/{user_id}", method="DELETE", token=token)
     return {"success": result.get("success", False)}
 
 
@@ -470,53 +591,43 @@ async def delete_user(user_id: int, user=Depends(require_jwt)):
 
 @router.get("/federation/followers")
 async def get_followers(user=Depends(require_jwt)):
-    """Get instance followers."""
     if not is_running():
-        return {"followers": [], "error": "Container not running"}
-
-    result = peertube_api("/server/followers?count=100")
-
+        return {"followers": [], "error": "PeerTube not reachable"}
+    result = pt_api("/server/followers?count=100")
     if result.get("success") and isinstance(result.get("data"), dict):
-        data = result["data"]
-        return {"followers": data.get("data", []), "total": data.get("total", 0)}
-
+        d = result["data"]
+        return {"followers": d.get("data", []), "total": d.get("total", 0)}
     return {"followers": [], "total": 0}
 
 
 @router.get("/federation/following")
 async def get_following(user=Depends(require_jwt)):
-    """Get instances we are following."""
     if not is_running():
-        return {"following": [], "error": "Container not running"}
-
-    result = peertube_api("/server/following?count=100")
-
+        return {"following": [], "error": "PeerTube not reachable"}
+    result = pt_api("/server/following?count=100")
     if result.get("success") and isinstance(result.get("data"), dict):
-        data = result["data"]
-        return {"following": data.get("data", []), "total": data.get("total", 0)}
-
+        d = result["data"]
+        return {"following": d.get("data", []), "total": d.get("total", 0)}
     return {"following": [], "total": 0}
 
 
 @router.post("/federation/follow")
 async def follow_instance(req: FollowRequest, user=Depends(require_jwt)):
-    """Follow remote instances."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Following instances {req.hosts} by {user.get('sub', 'unknown')}")
-    result = peertube_api("/server/following", method="POST", data={"hosts": req.hosts})
+    result = pt_api("/server/following", method="POST", token=token, data={"hosts": req.hosts})
     return {"success": result.get("success", False)}
 
 
 @router.delete("/federation/following/{follow_id}")
 async def unfollow_instance(follow_id: int, user=Depends(require_jwt)):
-    """Unfollow a remote instance."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Unfollowing {follow_id} by {user.get('sub', 'unknown')}")
-    result = peertube_api(f"/server/following/{follow_id}", method="DELETE")
+    result = pt_api(f"/server/following/{follow_id}", method="DELETE", token=token)
     return {"success": result.get("success", False)}
 
 
@@ -526,22 +637,18 @@ async def unfollow_instance(follow_id: int, user=Depends(require_jwt)):
 
 @router.get("/transcoding/jobs")
 async def get_transcoding_jobs(user=Depends(require_jwt)):
-    """Get transcoding job queue."""
     if not is_running():
-        return {"jobs": [], "error": "Container not running"}
-
-    result = peertube_api("/jobs/video-transcoding?count=50")
-
+        return {"jobs": [], "error": "PeerTube not reachable"}
+    token = get_admin_token()
+    result = pt_api("/jobs/video-transcoding?count=50", token=token)
     if result.get("success") and isinstance(result.get("data"), dict):
-        data = result["data"]
-        return {"jobs": data.get("data", []), "total": data.get("total", 0)}
-
+        d = result["data"]
+        return {"jobs": d.get("data", []), "total": d.get("total", 0)}
     return {"jobs": [], "total": 0}
 
 
 @router.get("/transcoding/settings")
 async def get_transcoding_settings(user=Depends(require_jwt)):
-    """Get transcoding settings."""
     cfg = get_config()
     return {
         "enabled": cfg.get("transcoding_enabled", True),
@@ -549,20 +656,14 @@ async def get_transcoding_settings(user=Depends(require_jwt)):
         "hls_enabled": cfg.get("hls_enabled", True),
         "webtorrent_enabled": cfg.get("webtorrent_enabled", True),
         "resolutions": cfg.get("transcoding_resolutions", {
-            "240p": True,
-            "360p": True,
-            "480p": True,
-            "720p": True,
-            "1080p": True,
-            "1440p": False,
-            "2160p": False,
+            "240p": True, "360p": True, "480p": True, "720p": True,
+            "1080p": True, "1440p": False, "2160p": False,
         })
     }
 
 
 @router.post("/transcoding/settings")
 async def update_transcoding_settings(settings: TranscodingSettings, user=Depends(require_jwt)):
-    """Update transcoding settings."""
     cfg = get_config()
     cfg["transcoding_enabled"] = settings.enabled
     cfg["transcoding_threads"] = settings.threads
@@ -570,7 +671,6 @@ async def update_transcoding_settings(settings: TranscodingSettings, user=Depend
     cfg["webtorrent_enabled"] = settings.webtorrent_enabled
     cfg["transcoding_resolutions"] = settings.resolutions
     save_config(cfg)
-
     log.info(f"Transcoding settings updated by {user.get('sub', 'unknown')}")
     return {"success": True, "message": "Restart PeerTube to apply changes"}
 
@@ -581,45 +681,27 @@ async def update_transcoding_settings(settings: TranscodingSettings, user=Depend
 
 @router.get("/storage/stats")
 async def get_storage_stats(user=Depends(require_jwt)):
-    """Get storage usage statistics."""
     cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/peertube"))
-
-    stats = {
-        "total": "",
-        "videos": "",
-        "thumbnails": "",
-        "torrents": "",
-        "streaming_playlists": "",
-    }
-
+    data_path = Path(cfg.get("data_path", "/data/peertube"))
+    stats = {"total": "", "videos": "", "thumbnails": "",
+             "torrents": "", "streaming_playlists": ""}
     if not data_path.exists():
         return {"stats": stats, "error": "Data path not found"}
-
     try:
-        # Total size
-        result = subprocess.run(
-            ["du", "-sh", str(data_path)],
-            capture_output=True, text=True, timeout=30
-        )
-        if result.stdout:
-            stats["total"] = result.stdout.split()[0]
-
-        # Subdirectory sizes
+        r = subprocess.run(["du", "-sh", str(data_path)],
+                           capture_output=True, text=True, timeout=30)
+        if r.stdout:
+            stats["total"] = r.stdout.split()[0]
         storage_path = data_path / "storage"
         for subdir in ["videos", "thumbnails", "torrents", "streaming-playlists"]:
-            sub_path = storage_path / subdir
-            if sub_path.exists():
-                result = subprocess.run(
-                    ["du", "-sh", str(sub_path)],
-                    capture_output=True, text=True, timeout=30
-                )
-                if result.stdout:
-                    key = subdir.replace("-", "_")
-                    stats[key] = result.stdout.split()[0]
+            sp = storage_path / subdir
+            if sp.exists():
+                r = subprocess.run(["du", "-sh", str(sp)],
+                                   capture_output=True, text=True, timeout=30)
+                if r.stdout:
+                    stats[subdir.replace("-", "_")] = r.stdout.split()[0]
     except Exception as e:
         return {"stats": stats, "error": str(e)}
-
     return {"stats": stats}
 
 
@@ -629,189 +711,113 @@ async def get_storage_stats(user=Depends(require_jwt)):
 
 @router.get("/plugins")
 async def list_plugins(user=Depends(require_jwt)):
-    """List installed plugins."""
     if not is_running():
-        return {"plugins": [], "error": "Container not running"}
-
-    result = peertube_api("/plugins?count=100")
-
+        return {"plugins": [], "error": "PeerTube not reachable"}
+    token = get_admin_token()
+    result = pt_api("/plugins?count=100", token=token)
     if result.get("success") and isinstance(result.get("data"), dict):
-        data = result["data"]
-        return {"plugins": data.get("data", []), "total": data.get("total", 0)}
-
+        d = result["data"]
+        return {"plugins": d.get("data", []), "total": d.get("total", 0)}
     return {"plugins": [], "total": 0}
 
 
 @router.post("/plugin/install")
 async def install_plugin(plugin: PluginInstall, user=Depends(require_jwt)):
-    """Install a plugin."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Installing plugin {plugin.npm_name} by {user.get('sub', 'unknown')}")
-    result = peertube_api("/plugins/install", method="POST", data={"npmName": plugin.npm_name})
+    result = pt_api("/plugins/install", method="POST", token=token,
+                    data={"npmName": plugin.npm_name})
     return {"success": result.get("success", False)}
 
 
 @router.delete("/plugin/{plugin_name}")
 async def uninstall_plugin(plugin_name: str, user=Depends(require_jwt)):
-    """Uninstall a plugin."""
     if not is_running():
-        return {"success": False, "error": "Container not running"}
-
+        return {"success": False, "error": "PeerTube not reachable"}
+    token = get_admin_token()
     log.info(f"Uninstalling plugin {plugin_name} by {user.get('sub', 'unknown')}")
-    result = peertube_api(f"/plugins/uninstall", method="POST", data={"npmName": plugin_name})
+    result = pt_api("/plugins/uninstall", method="POST", token=token,
+                    data={"npmName": plugin_name})
     return {"success": result.get("success", False)}
 
 
 # ============================================================================
-# Container Management
+# LXC lifecycle (was "Container Management" — now native-LXC via peertubectl)
 # ============================================================================
+
+def _peertubectl(verb: str, timeout: int = 30) -> dict:
+    try:
+        r = subprocess.run([PEERTUBECTL, verb], capture_output=True, text=True, timeout=timeout)
+        return {"success": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "timeout"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 
 @router.get("/container/status")
 async def container_status():
-    """Get container runtime status."""
-    rt = detect_runtime()
-    container = get_container_status()
-
+    """LXC + reachability status (kept under /container/* for webui back-compat)."""
+    cfg = get_config()
     return {
-        "runtime": rt or "none",
-        "docker_available": rt is not None,
-        "status": container["status"],
-        "uptime": container["uptime"],
+        "runtime": "lxc-native",
+        "lxc_state": get_lxc_state(),
+        "http_reachable": http_reachable(),
+        "lxc_ip": cfg.get("ip", "10.100.0.120"),
+        "http_port": cfg.get("http_port", 9000),
     }
 
 
 @router.post("/container/install")
 async def install_peertube(user=Depends(require_jwt)):
-    """Install PeerTube container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime (docker/podman) found"}
-
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/peertube"))
-
-    # Create directories
-    for subdir in ["data", "config", "storage"]:
-        (data_path / subdir).mkdir(parents=True, exist_ok=True)
-
-    # Pull image
-    image = cfg.get("image", DEFAULT_CONFIG["image"])
-    log.info(f"Installing PeerTube ({image}) by {user.get('sub', 'unknown')}")
-
+    """Provision the LXC + native PeerTube install. Long-running → detached."""
+    if not Path(INSTALL_LIB).exists():
+        return {"success": False, "error": f"install script missing at {INSTALL_LIB}"}
+    log.info(f"Launching native-LXC PeerTube install by {user.get('sub', 'unknown')}")
     try:
-        result = subprocess.run(
-            [rt, "pull", image],
-            capture_output=True, text=True, timeout=600
+        # Detach: install takes several minutes (apt + pnpm + release download).
+        subprocess.Popen(
+            ["bash", INSTALL_LIB],
+            stdout=open("/var/log/secubox/peertube-install.log", "a"),
+            stderr=subprocess.STDOUT, start_new_session=True,
         )
-        if result.returncode != 0:
-            return {"success": False, "error": result.stderr.strip(), "output": result.stdout}
-
-        return {"success": True, "output": "Image pulled successfully"}
-    except subprocess.TimeoutExpired:
-        return {"success": False, "error": "Pull timeout (>10 minutes)"}
+        return {"success": True,
+                "message": "Install started (several minutes). "
+                           "Follow /var/log/secubox/peertube-install.log or 'peertubectl logs'."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
 @router.post("/container/start")
 async def start_peertube(user=Depends(require_jwt)):
-    """Start PeerTube container."""
-    if is_running():
-        return {"success": False, "error": "Already running"}
-
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/peertube"))
-    port = cfg.get("http_port", 9000)
-    image = cfg.get("image", DEFAULT_CONFIG["image"])
-    tz = cfg.get("timezone", "Europe/Paris")
-    domain = cfg.get("domain", "peertube.secubox.local")
-
-    # Ensure directories exist
-    for subdir in ["data", "config", "storage"]:
-        (data_path / subdir).mkdir(parents=True, exist_ok=True)
-
-    # Build run command - PeerTube with embedded PostgreSQL and Redis
-    cmd = [
-        rt, "run", "-d",
-        "--name", CONTAINER_NAME,
-        "-v", f"{data_path}/data:/data",
-        "-v", f"{data_path}/config:/config",
-        "-v", f"{data_path}/storage:/var/www/peertube/storage",
-        "-e", f"TZ={tz}",
-        "-e", f"PEERTUBE_WEBSERVER_HOSTNAME={domain}",
-        "-e", "PEERTUBE_WEBSERVER_PORT=443",
-        "-e", "PEERTUBE_WEBSERVER_HTTPS=true",
-        "-e", "PEERTUBE_DB_SSL=false",
-        "-e", "PEERTUBE_TRUST_PROXY=loopback,uniquelocal",
-        "-e", "PT_INITIAL_ROOT_PASSWORD=secubox",
-        "-p", f"127.0.0.1:{port}:9000",
-        "--restart", "unless-stopped",
-    ]
-
-    cmd.append(image)
-
-    log.info(f"Starting PeerTube by {user.get('sub', 'unknown')}")
-
-    try:
-        # Remove existing stopped container
-        subprocess.run([rt, "rm", "-f", CONTAINER_NAME], capture_output=True, timeout=10)
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        await asyncio.sleep(5)
-
-        if is_running():
-            return {"success": True}
-        else:
-            return {"success": False, "error": result.stderr.strip() or "Failed to start"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    log.info(f"Starting PeerTube LXC by {user.get('sub', 'unknown')}")
+    r = _peertubectl("start")
+    return {"success": r.get("success", False), "output": r.get("stdout", r.get("error", ""))}
 
 
 @router.post("/container/stop")
 async def stop_peertube(user=Depends(require_jwt)):
-    """Stop PeerTube container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    log.info(f"Stopping PeerTube by {user.get('sub', 'unknown')}")
-
-    try:
-        subprocess.run([rt, "stop", CONTAINER_NAME], capture_output=True, timeout=30)
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    log.info(f"Stopping PeerTube LXC by {user.get('sub', 'unknown')}")
+    r = _peertubectl("stop")
+    return {"success": r.get("success", False), "output": r.get("stdout", r.get("error", ""))}
 
 
 @router.post("/container/restart")
 async def restart_peertube(user=Depends(require_jwt)):
-    """Restart PeerTube container."""
-    await stop_peertube(user)
-    await asyncio.sleep(3)
-    return await start_peertube(user)
+    log.info(f"Restarting PeerTube LXC by {user.get('sub', 'unknown')}")
+    r = _peertubectl("restart")
+    return {"success": r.get("success", False), "output": r.get("stdout", r.get("error", ""))}
 
 
 @router.post("/container/uninstall")
 async def uninstall_peertube(user=Depends(require_jwt)):
-    """Uninstall PeerTube container (data preserved)."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    log.info(f"Uninstalling PeerTube by {user.get('sub', 'unknown')}")
-
-    try:
-        subprocess.run([rt, "stop", CONTAINER_NAME], capture_output=True, timeout=30)
-        subprocess.run([rt, "rm", "-f", CONTAINER_NAME], capture_output=True, timeout=10)
-        return {"success": True, "message": "Container removed, data preserved"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    """Stop the LXC (data on /data/peertube is preserved)."""
+    log.info(f"Stopping PeerTube LXC (data preserved) by {user.get('sub', 'unknown')}")
+    r = _peertubectl("stop")
+    return {"success": r.get("success", False),
+            "message": "LXC stopped, data preserved at /data/peertube"}
 
 
 # ============================================================================
@@ -820,18 +826,15 @@ async def uninstall_peertube(user=Depends(require_jwt)):
 
 @router.get("/logs")
 async def get_logs(lines: int = 100, user=Depends(require_jwt)):
-    """Get container logs."""
-    rt = detect_runtime()
-    if not rt:
-        return {"logs": "No container runtime"}
-
+    """Tail peertube.service journal inside the LXC."""
+    cfg = get_config()
     try:
-        result = subprocess.run(
-            [rt, "logs", "--tail", str(lines), CONTAINER_NAME],
-            capture_output=True, text=True, timeout=10
+        r = subprocess.run(
+            ["lxc-attach", "-n", cfg["name"], "-P", cfg["path"], "--",
+             "journalctl", "-u", "peertube", "-n", str(lines), "--no-pager"],
+            capture_output=True, text=True, timeout=15,
         )
-        logs = result.stdout + result.stderr
-        return {"logs": logs}
+        return {"logs": (r.stdout + r.stderr) or "No logs available"}
     except Exception:
         return {"logs": "No logs available"}
 
@@ -842,15 +845,13 @@ async def get_logs(lines: int = 100, user=Depends(require_jwt)):
 
 @router.get("/config")
 async def get_peertube_config(user=Depends(require_jwt)):
-    """Get PeerTube configuration."""
     return get_config()
 
 
 @router.post("/config")
 async def set_peertube_config(config: PeerTubeConfig, user=Depends(require_jwt)):
-    """Update PeerTube configuration."""
     cfg = get_config()
-    cfg.update(config.dict())
+    cfg.update(config.model_dump())
     save_config(cfg)
     log.info(f"Config updated by {user.get('sub', 'unknown')}")
     return {"success": True}

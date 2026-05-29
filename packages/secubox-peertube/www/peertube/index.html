@@ -330,6 +330,7 @@
         <!-- Tabs -->
         <div class="tabs">
             <div class="tab active" onclick="showTab('videos')">Videos</div>
+            <div class="tab" onclick="showTab('import')">Import</div>
             <div class="tab" onclick="showTab('channels')">Channels</div>
             <div class="tab" onclick="showTab('users')">Users</div>
             <div class="tab" onclick="showTab('federation')">Federation</div>
@@ -345,6 +346,48 @@
                 <div id="videoGrid" class="video-grid">
                     <p style="color: var(--text-dim);">Loading videos...</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Import URL Tab (yt-dlp via PeerTube native HTTP import) -->
+        <div id="tab-import" class="tab-content">
+            <div class="card">
+                <h3>Import a video from a URL</h3>
+                <p style="color: var(--text-dim); margin-bottom: 1rem;">
+                    Downloads a video from YouTube, Vimeo, a direct file link, etc.
+                    straight into this PeerTube instance (yt-dlp under the hood).
+                </p>
+                <form id="importForm" onsubmit="importVideo(event)">
+                    <div class="form-group">
+                        <label>Video URL</label>
+                        <input type="url" id="importUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>Title (optional — PeerTube derives one if empty)</label>
+                        <input type="text" id="importName" placeholder="My imported video">
+                    </div>
+                    <div class="form-group">
+                        <label>Channel</label>
+                        <select id="importChannel"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Privacy</label>
+                        <select id="importPrivacy">
+                            <option value="1">Public</option>
+                            <option value="2">Unlisted</option>
+                            <option value="3" selected>Private</option>
+                            <option value="4">Internal</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Import</button>
+                </form>
+            </div>
+            <div class="card">
+                <h3>Recent imports</h3>
+                <table>
+                    <thead><tr><th>Target URL</th><th>Video</th><th>State</th><th>Created</th></tr></thead>
+                    <tbody id="importsTable"><tr><td colspan="4" style="color: var(--text-dim);">Loading...</td></tr></tbody>
+                </table>
             </div>
         </div>
 
@@ -561,7 +604,7 @@
         <!-- Logs Tab -->
         <div id="tab-logs" class="tab-content">
             <div class="card">
-                <h3>Container Logs</h3>
+                <h3>PeerTube Logs (peertube.service in LXC)</h3>
                 <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
                     <label>Lines:</label>
                     <select id="logLines" onchange="loadLogs()">
@@ -577,8 +620,8 @@
             <div class="card">
                 <h3>Maintenance</h3>
                 <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <button class="btn" onclick="restartPeerTube()">Restart Container</button>
-                    <button class="btn btn-danger" onclick="uninstallPeerTube()">Uninstall</button>
+                    <button class="btn" onclick="restartPeerTube()">Restart LXC</button>
+                    <button class="btn btn-danger" onclick="uninstallPeerTube()">Stop LXC (keep data)</button>
                 </div>
             </div>
         </div>
@@ -608,7 +651,7 @@
         function showTab(name) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabs = ['videos', 'channels', 'users', 'federation', 'transcoding', 'plugins', 'logs'];
+            const tabs = ['videos', 'import', 'channels', 'users', 'federation', 'transcoding', 'plugins', 'logs'];
             const idx = tabs.indexOf(name);
             if (idx >= 0) {
                 document.querySelectorAll('.tab')[idx].classList.add('active');
@@ -617,6 +660,7 @@
 
             // Load tab-specific data
             if (name === 'videos') loadVideos();
+            else if (name === 'import') { loadImportChannels(); loadImports(); }
             else if (name === 'channels') loadChannels();
             else if (name === 'users') loadUsers();
             else if (name === 'federation') { loadFollowing(); loadFollowers(); }
@@ -674,11 +718,11 @@
                     btn.onclick = () => toggleService();
                 }
 
-                // Open PeerTube link
+                // Open PeerTube link → public URL (HAProxy/nginx vhost)
                 const openLink = document.getElementById('openPeerTube');
                 if (isRunning) {
                     openLink.style.display = 'inline-flex';
-                    openLink.href = `http://${window.location.hostname}:${status.http_port}`;
+                    openLink.href = status.public_url || `https://${status.domain}/`;
                 } else {
                     openLink.style.display = 'none';
                 }
@@ -713,14 +757,13 @@
         }
 
         async function installPeerTube() {
-            if (!confirm('Install PeerTube? This will download the Docker image (~1GB).')) return;
-            toast('Installing PeerTube... This may take several minutes.');
+            if (!confirm('Provision the PeerTube LXC and install natively (Node 22 + PostgreSQL + Redis)? This runs in the background and takes several minutes.')) return;
+            toast('Installing PeerTube in its LXC... follow Logs / peertubectl logs.');
             try {
                 const res = await api('/container/install', { method: 'POST' });
                 if (res.success) {
-                    toast('PeerTube installed! Starting...');
-                    await api('/container/start', { method: 'POST' });
-                    await refresh();
+                    toast(res.message || 'Install started in background.');
+                    setTimeout(refresh, 5000);
                 } else {
                     toast(res.error || 'Install failed', 'error');
                 }
@@ -732,7 +775,7 @@
         // Videos
         async function loadVideos() {
             if (!isRunning) {
-                document.getElementById('videoGrid').innerHTML = '<p style="color: var(--text-dim);">Container not running</p>';
+                document.getElementById('videoGrid').innerHTML = '<p style="color: var(--text-dim);">PeerTube not reachable</p>';
                 return;
             }
             try {
@@ -753,6 +796,68 @@
                 }
             } catch (e) {
                 document.getElementById('videoGrid').innerHTML = '<p style="color: var(--error);">Error loading videos</p>';
+            }
+        }
+
+        // Import from URL (yt-dlp via PeerTube native HTTP import)
+        async function loadImportChannels() {
+            const sel = document.getElementById('importChannel');
+            try {
+                const data = await api('/channels');
+                const chans = data.channels || [];
+                if (chans.length === 0) {
+                    sel.innerHTML = '<option value="">(no channel — create one first)</option>';
+                } else {
+                    sel.innerHTML = chans.map(c =>
+                        `<option value="${c.id}">${c.displayName || c.name}</option>`).join('');
+                }
+            } catch (e) {
+                sel.innerHTML = '<option value="">(error loading channels)</option>';
+            }
+        }
+
+        async function loadImports() {
+            const tbody = document.getElementById('importsTable');
+            try {
+                const data = await api('/imports');
+                const imports = data.imports || [];
+                if (imports.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="color: var(--text-dim);">${data.error || 'No imports yet'}</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = imports.map(im => {
+                    const url = im.targetUrl || im.magnetUri || '-';
+                    const vid = (im.video && (im.video.name || im.video.uuid)) || '-';
+                    const state = (im.state && (im.state.label || im.state.id)) || '-';
+                    const created = im.createdAt ? new Date(im.createdAt).toLocaleString() : '-';
+                    return `<tr><td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;">${url}</td><td>${vid}</td><td>${state}</td><td>${created}</td></tr>`;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="4" style="color: var(--error);">Error loading imports</td></tr>';
+            }
+        }
+
+        async function importVideo(event) {
+            event.preventDefault();
+            const target_url = document.getElementById('importUrl').value.trim();
+            const name = document.getElementById('importName').value.trim();
+            const channel_id = parseInt(document.getElementById('importChannel').value, 10);
+            const privacy = parseInt(document.getElementById('importPrivacy').value, 10);
+            if (!target_url) { toast('URL required', 'error'); return; }
+            const body = { target_url, privacy };
+            if (name) body.name = name;
+            if (!isNaN(channel_id)) body.channel_id = channel_id;
+            try {
+                const res = await api('/import', { method: 'POST', body: JSON.stringify(body) });
+                if (res.success) {
+                    toast('Import queued — PeerTube is downloading the video.');
+                    document.getElementById('importForm').reset();
+                    loadImports();
+                } else {
+                    toast(res.error || 'Import failed', 'error');
+                }
+            } catch (e) {
+                toast('Import failed: ' + e.message, 'error');
             }
         }
 
@@ -1134,7 +1239,7 @@
         }
 
         async function uninstallPeerTube() {
-            if (!confirm('Uninstall PeerTube? Container will be removed but data is preserved.')) return;
+            if (!confirm('Stop the PeerTube LXC? The container stops but all data on /data/peertube is preserved.')) return;
             try {
                 const res = await api('/container/uninstall', { method: 'POST' });
                 if (res.success) {

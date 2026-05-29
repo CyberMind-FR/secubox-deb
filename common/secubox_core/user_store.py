@@ -102,6 +102,87 @@ def verify_password(username: str, plaintext: str) -> bool:
         return False
 
 
+def list_users() -> list[str]:
+    """Return all usernames from the canonical store (empty list on fallback/missing)."""
+    doc = _load_users_json()
+    if not doc:
+        return []
+    return [u.get("username") for u in doc.get("users", []) if u.get("username")]
+
+
+def _atomic_write_users(doc: Dict[str, Any]) -> None:
+    """Write users.json atomically, preserving 0600 + owner."""
+    import os
+    import tempfile
+    USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(USERS_PATH.parent), prefix=".users.", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(doc, f, indent=2)
+            f.write("\n")
+        try:
+            if USERS_PATH.exists():
+                st = USERS_PATH.stat()
+                os.chmod(tmp, st.st_mode & 0o777)
+                os.chown(tmp, st.st_uid, st.st_gid)
+            else:
+                os.chmod(tmp, 0o600)
+        except OSError:
+            pass
+        os.replace(tmp, USERS_PATH)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def set_password(username: str, plaintext: str, *, provision: bool = False,
+                 role: str = "user", email: Optional[str] = None) -> Dict[str, Any]:
+    """Set a user's password (argon2) in the canonical store and return the user.
+
+    This is the single password *write* path, and therefore the natural
+    capture point for downstream provisioning (push the same plaintext into
+    Nextcloud/PhotoPrism right after calling this). If the user is absent and
+    ``provision`` is True a new enabled user is created.
+
+    Raises KeyError if the user is absent and ``provision`` is False, and
+    RuntimeError if the canonical store is missing (fallback can't be written).
+    """
+    if not username or not plaintext:
+        raise ValueError("username and plaintext are required")
+    doc = _load_users_json()
+    if doc is None:
+        raise RuntimeError("users.json missing/corrupt; refusing to write")
+    doc.setdefault("users", [])
+    hash_ = _HASHER.hash(plaintext)
+    for u in doc["users"]:
+        if u.get("username") == username:
+            u["password_hash"] = hash_
+            u["must_change_password"] = False
+            if email is not None:
+                u["email"] = email
+            _atomic_write_users(doc)
+            log.info("user_store: password set for %s", username)
+            return u
+    if not provision:
+        raise KeyError(f"unknown user {username!r} (pass provision=True to create)")
+    new_user = {
+        "username": username,
+        "email": email,
+        "role": role,
+        "enabled": True,
+        "password_hash": hash_,
+        "must_change_password": False,
+        "totp": None,
+        "google": None,
+    }
+    doc["users"].append(new_user)
+    _atomic_write_users(doc)
+    log.info("user_store: provisioned new user %s (role=%s)", username, role)
+    return new_user
+
+
 def load_with_fallback() -> Dict[str, Any]:
     """Return {'source': 'users.json'|'auth.toml.fallback', 'users': [...]}.
 

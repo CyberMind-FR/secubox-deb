@@ -1,0 +1,11 @@
+[Unit]
+Description=Install spooled YouTube cookies into the PeerTube LXC (root, #407)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/407
+
+[Service]
+Type=oneshot
+# Runs as root (no User=) so peertubectl can lxc-attach into the container.
+# Installs the spooled cookies, then removes the spool (sensitive + avoids
+# re-triggering the watching .path unit).
+ExecStart=/usr/sbin/peertubectl set-youtube-cookies /run/secubox/peertube-yt-cookies.txt
+ExecStartPost=-/bin/rm -f /run/secubox/peertube-yt-cookies.txt

@@ -12,6 +12,8 @@ import shutil
 import hashlib
 import asyncio
 import json
+import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -442,6 +444,209 @@ async def summary():
         "enabled_services": enabled_services,
         "timestamp": datetime.now().isoformat()
     }
+
+
+# ══════════════════════════════════════════════════════════════════
+# Credential broker — peek / poke (Punk-Exposure model) — #402
+# Share browser-side authentication (cookies, PO tokens) with backend services
+# via the SecuBox Companion extension. The browser passes YouTube's BotGuard,
+# so it can hand PeerTube fresh cookies/tokens that the server can't mint.
+# ══════════════════════════════════════════════════════════════════
+
+CRED_STATE_FILE = DATA_DIR / "cred-state.json"
+_PEERTUBECTL = "/usr/sbin/peertubectl"
+_PT_COOKIE_SPOOL = "/run/secubox/peertube-yt-cookies.txt"
+
+# Credential-shareable services: browser domain → how to apply it.
+CRED_SERVICES = {
+    "youtube": {
+        "label": "YouTube → PeerTube import",
+        "target": "peertube",
+        "cookie_domain": "youtube.com",
+        "accepts": ["cookies", "po_token", "visitor_data"],
+    },
+}
+
+
+class CredPoke(BaseModel):
+    """Browser-supplied credentials pushed by the extension."""
+    cookies: Optional[str] = None        # Netscape cookies.txt body
+    po_token: Optional[str] = None       # web GVS PO token (experimental)
+    visitor_data: Optional[str] = None   # paired with po_token
+
+
+def _load_cred_state() -> Dict[str, Any]:
+    if CRED_STATE_FILE.exists():
+        try:
+            return json.loads(CRED_STATE_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _save_cred_state(state: Dict[str, Any]):
+    _ensure_dirs()
+    CRED_STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def _apply_youtube(poke: CredPoke) -> Dict[str, str]:
+    """Apply YouTube creds to PeerTube. The avatar daemon stays UNPRIVILEGED
+    (CSPN): it writes the cookies to the spool and the root
+    peertube-cookie-install.path/.service installs them into the LXC (#407) —
+    no sudo, NoNewPrivileges intact. PO-token application is experimental and
+    pending the browser capture + a peertubectl verb (#401 P4)."""
+    results: Dict[str, str] = {}
+    if poke.cookies:
+        try:
+            with open(_PT_COOKIE_SPOOL, "w") as f:
+                f.write(poke.cookies)
+            os.chmod(_PT_COOKIE_SPOOL, 0o600)
+            results["cookies"] = "queued"   # root path-unit installs + restarts PeerTube
+        except Exception as e:
+            results["cookies"] = f"error: {e}"
+    if poke.po_token:
+        results["po_token"] = "pending"     # P4: browser PO-token relay not wired yet
+    return results
+
+
+@router.get("/cred/peek")
+async def cred_peek(user=Depends(require_jwt)):
+    """Peek: what credentials each service accepts + current state."""
+    state = _load_cred_state()
+    out = []
+    for svc, meta in CRED_SERVICES.items():
+        st = state.get(svc, {})
+        out.append({
+            "service": svc,
+            "label": meta["label"],
+            "target": meta["target"],
+            "cookie_domain": meta["cookie_domain"],
+            "accepts": meta["accepts"],
+            "last_poke": st.get("last_poke"),
+            "last_result": st.get("last_result"),
+            "has_cookies": st.get("has_cookies", False),
+            "has_po_token": st.get("has_po_token", False),
+        })
+    return {"services": out}
+
+
+@router.post("/cred/poke/{service}")
+async def cred_poke(service: str, poke: CredPoke, user=Depends(require_jwt)):
+    """Poke: apply browser-supplied credentials to a service's target."""
+    meta = CRED_SERVICES.get(service)
+    if not meta:
+        raise HTTPException(status_code=404, detail=f"unknown credential service: {service}")
+    if not (poke.cookies or poke.po_token):
+        raise HTTPException(status_code=400, detail="nothing to poke (cookies/po_token empty)")
+    if service == "youtube":
+        results = _apply_youtube(poke)
+    else:
+        raise HTTPException(status_code=501, detail=f"no handler for {service}")
+    log.info("cred poke %s by %s -> %s", service, user.get("sub", "?"), results)
+    state = _load_cred_state()
+    state[service] = {
+        "last_poke": datetime.now().isoformat(),
+        "last_result": results,
+        "has_cookies": bool(poke.cookies),
+        "has_po_token": bool(poke.po_token),
+        "by": user.get("sub", "?"),
+    }
+    _save_cred_state(state)
+    # Cookies are the primary credential ("queued" = handed to the root installer);
+    # an experimental po_token "pending" must not fail the poke.
+    cstat = results.get("cookies")
+    ok = cstat in ("ok", "queued") or (not poke.cookies and results.get("po_token") == "ok")
+    return {"success": ok, "service": service, "results": results}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Session vault — client-encrypted browser-session backup + profiles (#409)
+# The SecuBox keeps + protects these backups: the EXTENSION encrypts cookies
+# with the operator's passphrase (WebCrypto AES-GCM) BEFORE upload, so this
+# module stores OPAQUE ciphertext only — never plaintext, never the key. A
+# breach yields unreadable blobs. LAN/SSO-gated; nothing leaves the box.
+# ══════════════════════════════════════════════════════════════════
+
+VAULT_DIR = DATA_DIR / "vault"
+
+
+class VaultBackup(BaseModel):
+    """An encrypted session backup pushed by the extension."""
+    profile: str = Field("default", min_length=1, max_length=64)
+    domain: str = Field(..., min_length=1, max_length=128)
+    blob: str = Field(..., min_length=1)         # base64 AES-GCM ciphertext
+    iv: str = Field(..., min_length=1)           # base64 IV/nonce
+    meta: Optional[Dict[str, Any]] = None        # non-secret: cookie count, captured_at…
+
+
+def _safe(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", s)[:128]
+
+
+def _vault_path(profile: str, domain: str) -> Path:
+    return VAULT_DIR / _safe(profile) / f"{_safe(domain)}.json"
+
+
+@router.post("/vault/backup")
+async def vault_backup(b: VaultBackup, user=Depends(require_jwt)):
+    """Store an encrypted session backup (ciphertext only)."""
+    p = _vault_path(b.profile, b.domain)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(VAULT_DIR, 0o700)
+        os.chmod(p.parent, 0o700)
+    except OSError:
+        pass
+    p.write_text(json.dumps({
+        "profile": b.profile, "domain": b.domain,
+        "blob": b.blob, "iv": b.iv, "meta": b.meta or {},
+        "saved_at": datetime.now().isoformat(), "by": user.get("sub", "?"),
+    }))
+    try:
+        os.chmod(p, 0o600)
+    except OSError:
+        pass
+    log.info("vault backup %s/%s by %s", b.profile, b.domain, user.get("sub", "?"))
+    return {"success": True, "profile": b.profile, "domain": b.domain}
+
+
+@router.get("/vault/list")
+async def vault_list(user=Depends(require_jwt)):
+    """List backups (metadata only — never the ciphertext)."""
+    out, profiles = [], set()
+    if VAULT_DIR.exists():
+        for prof in sorted(VAULT_DIR.iterdir()):
+            if not prof.is_dir():
+                continue
+            for f in sorted(prof.glob("*.json")):
+                try:
+                    d = json.loads(f.read_text())
+                    profiles.add(d.get("profile", prof.name))
+                    out.append({"profile": d.get("profile"), "domain": d.get("domain"),
+                                "meta": d.get("meta", {}), "saved_at": d.get("saved_at")})
+                except Exception:
+                    pass
+    return {"backups": out, "profiles": sorted(profiles)}
+
+
+@router.get("/vault/restore/{profile}/{domain}")
+async def vault_restore(profile: str, domain: str, user=Depends(require_jwt)):
+    """Return the encrypted blob for the extension to decrypt + apply locally."""
+    p = _vault_path(profile, domain)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="no such backup")
+    d = json.loads(p.read_text())
+    return {"profile": d["profile"], "domain": d["domain"],
+            "blob": d["blob"], "iv": d["iv"], "meta": d.get("meta", {})}
+
+
+@router.delete("/vault/{profile}/{domain}")
+async def vault_delete(profile: str, domain: str, user=Depends(require_jwt)):
+    p = _vault_path(profile, domain)
+    if p.exists():
+        p.unlink()
+    log.info("vault delete %s/%s by %s", profile, domain, user.get("sub", "?"))
+    return {"success": True}
 
 
 app.include_router(router)
