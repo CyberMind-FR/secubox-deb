@@ -1,3 +1,19 @@
+secubox-nextcloud (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/nextcloud-vhost.conf: remove Authelia auth_request gate
+    from the public NC vhost (closes #394). The official Nextcloud
+    mobile client (Android/iOS) uses HTTP Basic with an app-password
+    and does NOT carry browser SSO cookies — the SSO gate caused an
+    auth lockout loop on every smartphone sync attempt.
+  * NC handles its own web auth (login page + 2FA). Comment-out
+    preserves the original auth_request + auth_request_set +
+    error_page 401 lines for easy revert (see in-file comment block
+    for the desktop-vs-mobile trade-off).
+  * NC built-in bruteforce protection stays disabled — the SecuBox WAF
+    (LAN-whitelisted, CIDR-aware) is the brute-force layer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 May 2026 07:30:00 +0000
+
 secubox-nextcloud (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * PhotoLibrary photo integration with secubox-photoprism (closes #398).
