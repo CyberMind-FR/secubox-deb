@@ -64,5 +64,8 @@ override_dh_auto_install:
 	               debian/secubox-core/usr/sbin/
 	install -m 755 usr/sbin/secubox-led-k2000 \
 	               debian/secubox-core/usr/sbin/
+	# User provisioning push (gk2/admin → Nextcloud/PhotoPrism, #410)
+	install -m 755 usr/sbin/secubox-user-sync \
+	               debian/secubox-core/usr/sbin/
 	install -m 644 systemd/secubox-led-heartbeat.service \
 	               debian/secubox-core/usr/lib/systemd/system/
