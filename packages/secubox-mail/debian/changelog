@@ -1,3 +1,14 @@
+secubox-mail (2.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * Roundcube: configure SQLite by default (closes #152). configure_roundcube
+    now writes /etc/roundcube/config.inc.php.local with the SQLite db_dsnw,
+    a random des_key, tls://localhost IMAP/SMTP, and verify_peer=false for the
+    LXC's self-signed cert; inits the SQLite schema from dbconfig-common; and
+    ships the sqlite3 CLI. Replaces the manual hotfix that stopped the
+    "Internal Error" page (no MariaDB in the mail LXC). Idempotent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 May 2026 08:00:00 +0000
+
 secubox-mail (2.3.1-1~bookworm1) bookworm; urgency=medium
 
   * /data convention migration (#319 Phase 1). All hardcoded /srv/<pkg>
