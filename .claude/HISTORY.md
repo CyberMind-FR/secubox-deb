@@ -2,6 +2,56 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-29 — WAF unban + NC 32 upgrade + user provisioning (#410) + Companion personas (#409)
+
+Long live-ops + feature session on gk2. Master commits pushed:
+`0bf67891` (WAF), `787c6b03` (LXC DNS+FAQ), `3ff008aa` (NC32 pin).
+
+* **WAF lockout fixed** (`fix(waf)`): mitmproxy `secubox_waf.py` whitelist was
+  an exact-match 2-IP set, so a LAN operator whose request matched a rule (e.g.
+  a logout) hit the 3-strikes ban with no bypass. Made it **CIDR-aware** and
+  trusted loopback + RFC1918 (LAN + internal LXC net). Live in the mitmproxy
+  LXC + backported to `packages/secubox-mitmproxy/addons/secubox_waf.py`.
+  Operator IP 192.168.1.13 unbanned (CrowdSec had no decision — it was the
+  in-memory 403). The historical "router-goform on gitea" false-positives in
+  the 2026-05-08 threat log are from an older, since-tightened pattern
+  (`/goform/.*(\$\(|;|\`)` is specific now). "Attacked dead sites" = bot
+  probing counted pre-backend; not real visitors.
+* **LXC DNS gotcha fixed** (`fix(nextcloud)`): NC (and mitmproxy) containers had
+  resolv.conf → systemd-resolved stub `127.0.0.53` with **no upstream**, so DNS
+  died (appstore/addons not shown, update checks fail) while NAT egress worked.
+  Root fix: `resolved.conf.d` upstream `DNS=1.1.1.1 9.9.9.9`. Applied live to
+  NC + mitmproxy LXCs, persisted in `nextcloudctl` base install, documented in
+  **`docs/FAQ-LXC-DNS.md`** (closes the WIP "LXC template wiki: DNS" carry-over).
+* **Nextcloud 31.0.14 → 32.0.10** major upgrade (PHP 8.2 OK for NC32). DB dump
+  (`mysql`, not sqlite — the outlier) + config.php backed up to
+  `data/_pre32_backup/` + 825M tree backup first; ran `updater.phar` + repair +
+  `db:add-missing-indices`. All 3 hostnames 200 (added missing `cloud.gk2`
+  mitmproxy route). Source `NC_VERSION` bumped to 32.0.10.
+* **NC config-warning hardening** (live): `trusted_proxies` 10.100.0.0/24+lo,
+  `overwriteprotocol=https`, `memcache.local=APCu` (fixes DB-locking too),
+  PHP `memory_limit=512M` + `opcache.interned_strings_buffer=16` (apache SAPI),
+  HSTS, missing indices, maintenance window, `default_phone_region=FR`,
+  `php8.2-gmp` + imagick SVG delegate.
+* **NC user cleanup**: removed the 4 non-SecuBox users (bat, bourdon, lemurien,
+  ragondin) → NC now only `admin` + `gk2` (master-users rule). Data backed up
+  to `/data/backups/nc-removed-users-20260529.tar.gz` (71M, restorable).
+* **#410 user provisioning push** (branch `feature/410-…`, pushed): SecuBox is
+  source of truth. `user_store.set_password()` (single write path = capture
+  point) + `list_users()`; host CLI **`secubox-user-sync`** (set/seed/sync/list)
+  writes the canonical argon2 hash then pushes the same plaintext (env/stdin,
+  never argv) into each app's new `<app>ctl user-provision` verb (nextcloudctl,
+  photoprismctl), creating per-user photo folders `/data/shared/photos/<user>`
+  and user-scoped libraries. Validated live with a throwaway user (caught: NC
+  sudo strips OC_PASS → stdin+`--preserve-env`; PhotoPrism CE gates non-admin
+  roles → default role + `--upload-path`). 13/13 unit tests. **Seeding gk2/admin
+  is the operator's step** (`secubox-user-sync seed` — sets their passwords).
+* **#409 Companion personas** (earlier): avatar = persona holding a group of
+  cookie auths; selectable picker (auto-discovers logins), one-click "Become"
+  (group restore on any LAN machine), avatar webui "Personas" tab. Client-
+  encrypted, on-box ciphertext only. `.xpi` rebuilt; wiki updated.
+
+---
 ## 2026-05-28 — PeerTube LIVE end-to-end (upload confirmed)
 
 PeerTube install completed on the gk2 LXC (10.100.0.120) and verified
