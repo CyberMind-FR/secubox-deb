@@ -1,3 +1,20 @@
+secubox-hub (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * api/main.py /health-monitor/summary: merge data["error"] into
+    "down" in the pre-computed cache path (closes #392). The prober
+    classifies HTTP 4xx/5xx (other than 503) as a separate "error"
+    status, but the dashboard frontend only shows ok/slow/down/
+    placeholder buckets — so error vhosts were invisible despite
+    being included in the health_pct denominator. On gk2 that
+    meant 66 vhosts (404/502) silently vanished from the count
+    display while still pulling the % down to 31%.
+
+    Fallback path (compute from vhosts dict) already merged
+    "error" → "down" correctly; only the pre-computed path had
+    the gap.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 May 2026 20:00:00 +0000
+
 secubox-hub (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * www/shared/sidebar.js: sidebar HTML pre-cache for instant render
