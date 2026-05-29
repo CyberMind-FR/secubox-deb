@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+case "$1" in
+    purge)
+        rm -f /etc/secubox/fmrelay.toml /etc/secubox/fmrelay.toml.example
+        rm -rf /var/lib/secubox/fmrelay
+        # Logs stay — operator can purge /var/log/secubox/fmrelay-*.log
+        # by hand if they want a fully clean wipe.
+        ;;
+esac
+#DEBHELPER#
+exit 0

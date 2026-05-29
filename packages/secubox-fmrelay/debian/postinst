@@ -1,0 +1,40 @@
+#!/bin/sh
+# SecuBox FMRELAY — post-install
+set -e
+
+case "$1" in
+    configure)
+        getent group secubox >/dev/null || groupadd --system secubox
+        getent passwd secubox >/dev/null || useradd --system --gid secubox \
+            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
+
+        # plugdev grants access to the RTL-SDR USB dongle (matches the
+        # udev rule shipped by secubox-sentinelle-gsm, which we share
+        # the device with).
+        usermod -aG plugdev secubox 2>/dev/null || true
+
+        install -d -m 0770 -o root    -g secubox /etc/secubox
+        install -d -m 0755 -o secubox -g secubox /var/lib/secubox/fmrelay
+        install -d -m 0755 -o secubox -g secubox /var/log/secubox
+
+        # Seed config from example on first install only.
+        if [ ! -f /etc/secubox/fmrelay.toml ] && \
+           [ -f /etc/secubox/fmrelay.toml.example ]; then
+            cp /etc/secubox/fmrelay.toml.example /etc/secubox/fmrelay.toml
+            chmod 0640 /etc/secubox/fmrelay.toml
+            chown root:secubox /etc/secubox/fmrelay.toml
+        fi
+
+        # Reload nginx so the new /api/v1/fmrelay/ + /fmrelay/ routes pick up.
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable secubox-fmrelay.service 2>/dev/null || true
+        systemctl restart secubox-fmrelay.service 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
