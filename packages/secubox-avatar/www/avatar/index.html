@@ -267,6 +267,7 @@
         <div class="tabs">
             <div class="tab active" data-tab="identities">Identities</div>
             <div class="tab" data-tab="services">Services</div>
+            <div class="tab" data-tab="vault">Personas</div>
         </div>
 
         <div class="content">
@@ -308,6 +309,39 @@
                         <h2>Connected Services</h2>
                     </div>
                     <div id="services-list" class="identity-grid">
+                        <p style="color: var(--text-dim);">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Personas Tab (Companion cookie cacher) -->
+            <div id="tab-vault" class="tab-panel">
+                <div class="stats-row">
+                    <div class="stat-card purple">
+                        <div class="value" id="vstat-personas">0</div>
+                        <div class="label">Personas Cached</div>
+                    </div>
+                    <div class="stat-card cyan">
+                        <div class="value" id="vstat-sites">0</div>
+                        <div class="label">Sites Held</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="value" id="vstat-cookies">0</div>
+                        <div class="label">Cookies Encrypted</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Cached Personas</h2>
+                        <span class="badge badge-purple">ciphertext only · on-box</span>
+                    </div>
+                    <p style="color: var(--text-dim); font-size: 0.8rem; margin-bottom: 1rem;">
+                        Login bundles the SecuBox Companion encrypted in your browser and parked here.
+                        The box stores opaque ciphertext — it never holds the passphrase or the cookies in clear.
+                        Decrypt + "Become" a persona from the Companion popup; this page only manages the cache.
+                    </p>
+                    <div id="vault-list" class="identity-grid">
                         <p style="color: var(--text-dim);">Loading...</p>
                     </div>
                 </div>
@@ -542,6 +576,91 @@
             return icons[icon] || '?';
         }
 
+        // ── Personas: the Companion cookie cacher (metadata only) ──────────
+        // The box holds opaque ciphertext; it cannot decrypt. This view manages
+        // the CACHE — which persona holds which sites, how big, when saved.
+        let vaultPersonas = [];
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c =>
+                ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        async function loadVault() {
+            const container = document.getElementById('vault-list');
+            container.innerHTML = '<p style="color: var(--text-dim);">Loading...</p>';
+            const data = await api('/vault/list');
+            if (!data) { container.innerHTML = '<p style="color: var(--red);">Failed to load personas.</p>'; return; }
+            const map = {};
+            (data.backups || []).forEach(b => { (map[b.profile] = map[b.profile] || []).push(b); });
+            vaultPersonas = Object.keys(map).sort().map(profile => ({ profile, items: map[profile] }));
+
+            let sites = 0, cookies = 0;
+            vaultPersonas.forEach(p => {
+                sites += p.items.length;
+                p.items.forEach(b => cookies += (b.meta || {}).cookie_count || 0);
+            });
+            document.getElementById('vstat-personas').textContent = vaultPersonas.length;
+            document.getElementById('vstat-sites').textContent = sites;
+            document.getElementById('vstat-cookies').textContent = cookies;
+            renderVault();
+        }
+
+        function renderVault() {
+            const container = document.getElementById('vault-list');
+            if (!vaultPersonas.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">*</div>
+                        <p>No personas cached yet</p>
+                        <p style="font-size:0.8rem;">Save one from the SecuBox Companion: pick your logins, tap "Save persona".</p>
+                    </div>`;
+                return;
+            }
+            container.innerHTML = vaultPersonas.map((p, pi) => {
+                const cookies = p.items.reduce((n, b) => n + ((b.meta || {}).cookie_count || 0), 0);
+                const latest = p.items.map(b => b.saved_at).filter(Boolean).sort().slice(-1)[0];
+                const when = latest ? new Date(latest).toLocaleString() : '';
+                const rows = p.items.map((b, di) => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; padding:0.3rem 0; border-top:1px solid var(--border);">
+                        <span>${escapeHtml(b.domain)} <span style="color:var(--text-dim);">(${(b.meta || {}).cookie_count || '?'}c)</span></span>
+                        <button class="btn small danger" onclick="forgetDomain(${pi},${di})">Forget</button>
+                    </div>`).join('');
+                return `
+                    <div class="card" style="margin-bottom:0;">
+                        <div class="card-header">
+                            <h2 style="color:var(--purple);">${escapeHtml(p.profile)}</h2>
+                            <button class="btn small danger" onclick="forgetPersona(${pi})">Forget all</button>
+                        </div>
+                        <div class="identity-services" style="margin-bottom:0.5rem;">
+                            <span class="badge badge-cyan">${p.items.length} site(s)</span>
+                            <span class="badge badge-green">${cookies} cookies</span>
+                            ${when ? `<span class="badge badge-purple">${escapeHtml(when)}</span>` : ''}
+                        </div>
+                        ${rows}
+                    </div>`;
+            }).join('');
+        }
+
+        async function forgetDomain(pi, di) {
+            const p = vaultPersonas[pi]; if (!p) return;
+            const b = p.items[di]; if (!b) return;
+            if (!confirm(`Forget ${b.domain} from persona "${p.profile}"? The encrypted backup is deleted from the box.`)) return;
+            const r = await api(`/vault/${encodeURIComponent(p.profile)}/${encodeURIComponent(b.domain)}`, { method: 'DELETE' });
+            if (r?.success) { showToast('Forgot ' + b.domain); loadVault(); }
+            else showToast('Failed to forget', 'error');
+        }
+
+        async function forgetPersona(pi) {
+            const p = vaultPersonas[pi]; if (!p) return;
+            if (!confirm(`Forget the entire persona "${p.profile}"? All its encrypted site backups are deleted from the box.`)) return;
+            for (const b of p.items) {
+                await api(`/vault/${encodeURIComponent(p.profile)}/${encodeURIComponent(b.domain)}`, { method: 'DELETE' });
+            }
+            showToast('Forgot persona ' + p.profile);
+            loadVault();
+        }
+
         function openCreateModal() {
             selectedIdentityId = null;
             document.getElementById('modal-title').textContent = 'New Identity';
@@ -740,12 +859,14 @@
                 document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
 
                 if (tab.dataset.tab === 'services') loadServices();
+                if (tab.dataset.tab === 'vault') loadVault();
             });
         });
 
         function refresh() {
             loadIdentities();
             loadServices();
+            loadVault();
         }
 
         // Initial load

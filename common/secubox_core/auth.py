@@ -14,7 +14,8 @@ import secrets
 import time
 from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -60,6 +61,37 @@ def _secret() -> str:
     return s
 
 
+# SSO-lite (#400) ────────────────────────────────────────────────────────
+# A session cookie + /verify endpoint let nginx `auth_request` gate vhosts
+# against SecuBox users directly — replacing Authelia while reusing the same
+# argon2 user_store. The cookie is set parent-domain-scoped so one login
+# covers every *.<domain> vhost (SSO-lite). Configure the parent domain via
+# api.sso_cookie_domain in secubox.conf (e.g. ".gk2.secubox.in"); empty =
+# host-only cookie (still works, but not shared across subdomains).
+SESSION_COOKIE = "secubox_session"
+
+
+def _cookie_domain() -> Optional[str]:
+    cfg = get_config("api")
+    dom = cfg.get("sso_cookie_domain", "") or os.environ.get("SECUBOX_SSO_COOKIE_DOMAIN", "")
+    return dom or None
+
+
+def set_session_cookie(response: Response, token: str, expires_in: int = 86400) -> None:
+    """Public helper so override modules (secubox-auth) emit the same SSO-lite
+    session cookie on their own login-success paths."""
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        max_age=expires_in,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        domain=_cookie_domain(),
+        path="/",
+    )
+
+
 def create_token(
     username: str,
     expires_in: int = 86400,
@@ -94,15 +126,22 @@ def _decode_token(token: str) -> Dict[str, Any]:
 
 
 async def require_jwt(
+    request: Request,
     creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> Dict[str, Any]:
-    if creds is None:
+    # SSO-lite (#400): accept the Bearer token OR the parent-domain session
+    # cookie. Additive — existing Bearer clients are unaffected; the cookie lets
+    # one SecuBox login cover every module without re-auth. The cookie is
+    # SameSite=Lax (CSRF-mitigated); cross-site POSTs from other origins won't
+    # carry it.
+    token = creds.credentials if creds is not None else request.cookies.get(SESSION_COOKIE)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token Bearer manquant",
+            detail="Token Bearer ou session manquant",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    payload = _decode_token(creds.credentials)
+    payload = _decode_token(token)
     jti = payload.get("jti")
     if not jti or not _session_validator(jti):
         raise HTTPException(
@@ -141,7 +180,7 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest, request: Request):
+async def login(req: LoginRequest, request: Request, response: Response):
     """Plain login endpoint — secubox-auth overrides this with the full branching flow."""
     client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() \
         or request.headers.get("X-Real-IP", "") \
@@ -159,6 +198,9 @@ async def login(req: LoginRequest, request: Request):
         )
     jti = secrets.token_hex(8)
     tok = create_token(req.username, jti=jti)
+    # SSO-lite: also drop a parent-domain session cookie so nginx auth_request
+    # (GET /auth/verify) gates sibling vhosts with this one login.
+    set_session_cookie(response, tok)
     _emit_session_event("login_success", req.username, {
         "jti": jti,
         "expires_in": 86400,
@@ -166,3 +208,47 @@ async def login(req: LoginRequest, request: Request):
         "user_agent": user_agent[:100] if user_agent else "",
     })
     return TokenResponse(access_token=tok)
+
+
+@router.get("/verify")
+async def verify(request: Request):
+    """nginx `auth_request` target (SSO-lite, #400).
+
+    Validates the SecuBox session cookie (or a Bearer token for API clients)
+    against the same checks as require_jwt, and echoes the identity back as
+    `Remote-User` / `Remote-Groups` headers for the proxied app. 200 = allow,
+    401 = deny (nginx then 302s to the SecuBox login page)."""
+    tok = request.cookies.get(SESSION_COOKIE)
+    if not tok:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            tok = auth[7:]
+    if not tok:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="no session")
+    # _decode_token raises 401 on invalid/expired.
+    payload = _decode_token(tok)
+    jti = payload.get("jti")
+    if not jti or not _session_validator(jti):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="session révoquée")
+    sub = payload["sub"]
+    if not user_store.is_enabled(sub):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="compte désactivé")
+    role = ""
+    try:
+        getter = getattr(user_store, "get_user", None)
+        if callable(getter):
+            u = getter(sub) or {}
+            role = u.get("role", "") if isinstance(u, dict) else ""
+    except Exception:
+        role = ""
+    return JSONResponse(
+        {"ok": True, "user": sub},
+        headers={"Remote-User": sub, "Remote-Groups": role},
+    )
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """Clear the SSO-lite session cookie."""
+    response.delete_cookie(SESSION_COOKIE, domain=_cookie_domain(), path="/")
+    return {"ok": True}

@@ -1,9 +1,124 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-05-27*
+*Mis à jour : 2026-05-27 (evening)*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Session 2026-05-27 evening follow-ups (peertube + photoprism + WAF)
+
+- [x] **Peertube install** — DONE 2026-05-28. LIVE at
+  https://peertube.gk2.secubox.in/, upload confirmed. Native-in-LXC
+  (Node 22 + pnpm). See HISTORY 2026-05-28. Did NOT need Docker
+  fallback — native install worked once Node bumped 20→22 + ownership
+  fixed + production.yaml patched.
+
+- [~] **Peertube SOURCE backport** — DONE 2026-05-28, pushed on
+  `feature/388-rework-secubox-peertube-align-with-secub` (commit `5e52598c`).
+  Native-LXC rework + dashboard correction + yt-dlp URL import. **#390 is
+  superseded** (its vhost folded in with the port corrected to LXC :9000;
+  user to close #390). PeerTube native HTTP import (yt-dlp) ALSO enabled on
+  the live gk2 instance — "Import with URL" now available in the PeerTube UI.
+  Pending: rebuild+deploy the `secubox-peertube` .deb to gk2 so the dashboard
+  Import tab + corrected status go live (currently only the upstream PeerTube
+  UI import is live). No PR opened yet (awaiting user go-ahead).
+
+- [ ] **(historical) Peertube SOURCE backport notes** — two issues/worktrees:
+  - **#388** (`feature/388-rework-secubox-peertube-align-with-secub`):
+    package describes a *Docker/Podman API-managed* model; live deploy
+    went *native-in-LXC* (Node 22 + pnpm + systemd `peertube.service`
+    inside the container). Reconcile: either (a) ship the native
+    install recipe as a packaged `install-peertube.sh` + document the
+    LXC pattern, or (b) rewrite to actually drive Docker/Podman.
+    Decide with operator — affects what the package ships + how it
+    reproduces. Live install script lives at
+    `/data/lxc/peertube/rootfs/root/{install-peertube.sh,peertube-finish.sh,install-node22.sh,peertube-config.py}`.
+  - **#390** (`feature/390-peertube-url-backport-vhost-template-por`):
+    committed nginx conf only has the `/api/v1/peertube/` socket
+    location; the real public vhost (listen :9080, `proxy_pass
+    http://10.100.0.120:9000`, 8G upload cap, 7d streaming timeouts,
+    WS upgrade, ACME) is live on gk2 at
+    `/etc/nginx/sites-available/peertube.conf` but NOT in source.
+    Mechanical backport — no design question.
+
+- [ ] **NC bruteforce protection re-enable** after operator confirms
+  mobile NC client reconnects successfully:
+
+  ```sh
+  ssh root@192.168.1.200 lxc-attach -n nextcloud -P /data/lxc -- \
+    sudo -u www-data php /var/www/nextcloud/occ \
+    config:system:set auth.bruteforce.protection.enabled \
+    --value=true --type=boolean
+  ```
+
+- [ ] **PhotoPrism admin password rotation**: still `secubox-CHANGE-ME`
+  from the initial systemd unit env. Operator should:
+  1. Login at https://photoprism.gk2.secubox.in/
+  2. Settings → Account → change password
+  3. Edit `/data/lxc/photoprism/rootfs/etc/systemd/system/photoprism.service`
+     `PHOTOPRISM_ADMIN_PASSWORD=` line to match (so future restarts
+     don't fight the DB)
+
+- [x] **PhotoPrism auto-index + NC photo wiring** — DONE LIVE 2026-05-28.
+  Root cause: NC↔PhotoPrism were never connected — `/data/shared/photos`
+  (PhotoPrism originals) was bind-mounted to NC `data/Photos` (a path NC
+  doesn't serve), so it stayed empty while phone sync landed in
+  `data/<user>/files/`. Fix applied live:
+  - NC LXC bind re-pointed `/data/shared/photos → media/photos` (outside
+    data dir); `files_external` app enabled; Local external mount
+    **"PhotoLibrary"** (mount id 2, all users) → `/media/photos`, with
+    `filesystem_check_changes=1`.
+  - PhotoPrism: `photoprism-index.timer` (every 15 min, OnBootSec=5min) runs
+    `podman exec photoprism photoprism index` — PhotoPrism's built-in
+    auto-index only fires for its own UI uploads, NOT external/NC-synced
+    files, hence the timer.
+  - Verified round-trip: host file → NC PhotoLibrary → PhotoPrism originals.
+  - **Operator action**: point the phone NC client's auto-upload to the
+    **PhotoLibrary** folder.
+- [ ] **SOURCE backport of the PhotoPrism↔NC integration (DRIFT)** — both
+  `secubox-photoprism` and `secubox-nextcloud` are still dashboard-only
+  packages (no install-lxc.sh; the live LXC+podman installs were ad-hoc,
+  same pre-#388 state PeerTube was in). Capturing this integration in source
+  needs the SAME native-LXC rework as #388 for both packages (install-lxc.sh
+  with: NC media/photos bind + files_external PhotoLibrary mount;
+  photoprism-index.timer + podman run with originals=/data/shared/photos +
+  PHOTOPRISM_AUTO_INDEX). Sizeable — file as its own issue(s) before doing.
+
+- [ ] **LXC template bootstrap fixes** (capture lessons-learned):
+  1. **DNS**: fresh download-template LXCs ship a
+     systemd-resolved stub with no nameservers. Workaround: overwrite
+     `/etc/resolv.conf` with `nameserver 1.1.1.1 / 8.8.8.8`. Should
+     bake into the LXC template or a one-shot first-boot script.
+  2. **Template choice**: `lxc-create -t download -- -d debian` uses
+     `common.conf + userns.conf + apparmor=generated` by default,
+     which breaks postgres-15 postinst + podman CNI. Use
+     `debian.common.conf` (matrix template). Document in
+     wiki.
+  3. **Bind-mount UID ownership**: bind-mounted dirs default to host
+     root, LXC root (UID 100000 outside) can't chown across. Recipe:
+     `chown -R 100000:100000 /data/<svc>/` on host BEFORE first
+     container start. Document.
+
+- [ ] **mitmproxy + WAF live-config drift**: host's
+  `/srv/mitmproxy/haproxy-routes.json` and `secubox_waf.py` are NOT
+  bind-mounted into the mitmproxy LXC. Each has its own copy →
+  source-side edits don't propagate. Fix: add
+  `lxc.mount.entry = /srv/mitmproxy srv/mitmproxy none bind,create=dir`
+  to `/data/lxc/mitmproxy/config` so edits flow either way. Beware:
+  the LXC currently has `mitmproxy:mitmproxy` ownership; host owns
+  by root. Need to align UIDs first.
+
+- [ ] **IP-forward + lan0-masquerade backport to
+  `secubox-system-tuning`**: live fix on gk2 used
+  `99-secubox-zz-lxc-forward.conf` (alphabetical win) + manual
+  `nft add rule inet nat postrouting oif lan0 masquerade`. Backport
+  both as part of the tuning package so other boards inherit it on
+  apt install. Bump secubox-system-tuning to 1.1.0.
+
+- [ ] **CrowdSec public-IP allowlist**: operator's home/cellular IP
+  not in `secubox-trusted` allowlist (would need them to run
+  `curl ifconfig.me`). Without it they may hit external bf
+  scenarios. Add when known.
 
 ### Session 2026-05-27 follow-ups (consolidation pass)
 

@@ -26,6 +26,26 @@ THREATS_LOG = Path("/data/mitmproxy/logs/waf-threats.log")
 STATS_FILE = Path("/data/mitmproxy/logs/waf-stats.json")
 CDN_CONFIG_FILE = Path("/data/mitmproxy/cdn-config.json")
 WHITELIST = {"127.0.0.1", "192.168.255.1"}
+# Trusted networks bypass the WAF entirely: loopback + RFC1918 (the LAN and the
+# internal LXC bridge). The WAF protects against EXTERNAL probes; LAN operators
+# must never be banned (e.g. a logout request matching a rule). CIDR-aware.
+import ipaddress as _ipaddr
+_WL_NETS = []
+for _c in ("127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128", "fc00::/7"):
+    try:
+        _WL_NETS.append(_ipaddr.ip_network(_c))
+    except ValueError:
+        pass
+
+def _is_whitelisted(ip):
+    if ip in WHITELIST:
+        return True
+    try:
+        addr = _ipaddr.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _WL_NETS)
+
 STATS_SAVE_INTERVAL = 100  # Save stats every N requests
 
 # CDN Options (loaded from cdn-config.json)
@@ -757,7 +777,7 @@ class SecuBoxWAF:
         client_ip = get_real_client_ip(flow)
         
         # Skip whitelist
-        if client_ip in WHITELIST:
+        if _is_whitelisted(client_ip):
             if host in self.routes:
                 backend_ip, backend_port = self.routes[host]
                 original_host = flow.request.headers.get("Host", host)
