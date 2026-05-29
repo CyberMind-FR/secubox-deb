@@ -1,3 +1,14 @@
+secubox-vortex-firewall (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * postinst: unmask + enable nftables.service (closes #150). It was found
+    masked (symlink to /dev/null) on the board, so /etc/nftables.conf — which
+    carries the LXC MASQUERADE rule and `include /etc/nftables.d/*.nft` — never
+    loaded at boot, and every reboot left 10.100.0.0/24 LXCs with no outbound
+    NAT (apt/DNS broken inside containers). Not force-started in postinst to
+    avoid flushing CrowdSec's live tables; boot-time enable is the durable fix.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 May 2026 08:15:00 +0000
+
 secubox-vortex-firewall (1.0.1-1~bookworm1) bookworm; urgency=low
 
   * Rewrite Description to identify this as the nftables threat-feed
