@@ -108,8 +108,14 @@ cmd_user_provision() {
         log "Resetting PhotoPrism password for $username"
     else
         verb="add"
-        opts="--role $pp_role"
-        [ "$pp_role" != "admin" ] && opts="$opts --base-path $username --upload-path $username"
+        # PhotoPrism CE only offers the admin role for free; other roles need a
+        # paid membership. So: admin → --superadmin; everyone else → the default
+        # role, scoped by --upload-path (the only per-user scoping CE provides).
+        if [ "$pp_role" = "admin" ]; then
+            opts="--superadmin"
+        else
+            opts="--upload-path $username"
+        fi
         log "Creating PhotoPrism user $username (role=$pp_role)"
     fi
     printf '%s\n' "$password" | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \

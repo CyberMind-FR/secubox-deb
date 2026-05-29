@@ -479,11 +479,17 @@ user_provision() {
     [ -z "$password" ] && { error "SECUBOX_USER_PASSWORD not set"; return 1; }
     if ! lxc_running; then error "Container not running."; return 1; fi
 
+    # Password travels via stdin → OC_PASS (export + sudo --preserve-env, since
+    # sudo otherwise strips it); username/display passed as argv, not embedded —
+    # safe for special characters in either field.
     if occ user:list --output=json 2>/dev/null | grep -q "\"$username\""; then
         log "Resetting password for existing Nextcloud user: $username"
-        lxc_attach "export OC_PASS='$password' && sudo -u www-data php /var/www/nextcloud/occ user:resetpassword --password-from-env '$username'"
+        printf '%s' "$password" | lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c \
+            'IFS= read -r OC_PASS; export OC_PASS; sudo --preserve-env=OC_PASS -u www-data php /var/www/nextcloud/occ user:resetpassword --password-from-env "$1"' _ "$username"
     else
-        user_add "$username" "$password" "$display_name"
+        log "Creating Nextcloud user: $username"
+        printf '%s' "$password" | lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c \
+            'IFS= read -r OC_PASS; export OC_PASS; sudo --preserve-env=OC_PASS -u www-data php /var/www/nextcloud/occ user:add --password-from-env --display-name="$1" "$2"' _ "$display_name" "$username"
     fi
 
     # Per-user photo folder: /data/shared/photos/<user> (host) = /media/photos/<user> (container).
