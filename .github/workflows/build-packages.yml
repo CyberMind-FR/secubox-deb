@@ -197,7 +197,15 @@ jobs:
             exit 0
           fi
 
-          dpkg-buildpackage -us -uc -b
+          # Pass -a so the build targets matrix.arch — on the amd64 runner,
+          # without -a, dpkg defaults to amd64 and Architecture-specific
+          # packages (e.g. secubox-sentinelle-gsm = Architecture: arm64)
+          # produce no binary → dpkg-genbuildinfo fails with
+          # "no binary artifacts found" (#427). For amd64 jobs this is a
+          # no-op; for arm64 jobs that don't compile native code (Python +
+          # prebuilt arm64 binaries — like sentinelle-gsm), -a arm64 is
+          # enough to cross-stamp the .deb.
+          dpkg-buildpackage -us -uc -b -a ${{ matrix.arch }}
 
           echo "✅ Build OK: ${{ matrix.package }} (${{ matrix.arch }})"
 
