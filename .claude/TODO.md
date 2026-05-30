@@ -1,9 +1,44 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-05-27 (evening)*
+*Mis à jour : 2026-05-30*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Release pipeline (v2.13.2 in flight)
+
+- [~] **v2.13.2 Release CI** — watcher (`bgecqxt7i`) en cours. Doit confirmer
+  que `publish` APT débloque enfin avec les 3 packaging fixes mergés (fmrelay
+  + zkp-hamiltonian dual-compat → 13786c96/e16b4c12, et sentinelle-gsm
+  shlibdeps -X → PR #426). Si vert : c'est la première publication APT propre
+  depuis v2.13.0. Si rouge : voir quel job reste cassé.
+
+### Issues ouvertes filées 2026-05-30 (à traiter post-v2.13.2)
+
+- [ ] **#421** sockets `/run/secubox/*.sock` cachés (cause des 502 sur
+  `/api/v1/cookies` + `/api/v1/certs` + des 500 sur tous les vhosts gated
+  Authelia, dont lyrion). Cause racine identifiée : collision entre tmpfs
+  mount dédié à `/run/secubox` (créé par secubox-runtime/tmpfiles) et
+  `RuntimeDirectory=secubox` dans plusieurs units (qui crée un namespace
+  privé). Fix : choisir UNE seule mécanique de création et l'appliquer
+  partout, reboot-tested. Puis revert le contournement live sur lyrion
+  (`/etc/nginx/sites-available/lyrion.conf.bak.sso-removed.*`) pour
+  réactiver `auth_request /__sbx_auth_verify`.
+
+- [ ] **#422** image `vm-x64` cascade `[FAILED]` en VirtualBox (otg-gadget,
+  networkd-wait-online, mitmproxy, crowdsec, net-fallback, openclaw en
+  restart loop ; sshd accepte TCP mais pas de bannière). Fix : ajouter au
+  profil de build `vm-x64` un `systemctl mask` des services exclusivement
+  hardware-appliance (`secubox-otg-gadget`, etc.). Masker
+  `systemd-networkd-wait-online` sur le profil VM ou passer en `--any`.
+  Re-tester la VM `SecuBox-amd64` (gardée *powered off* sur le dev box)
+  une fois fixé. Tag v2.13.3.
+
+### Espressobin image builds (pré-existant)
+
+- [ ] **espressobin-v7 + espressobin-ultra** : `build-image` failure dans
+  toutes les Releases v2.13.x. Pas dans la chaîne packaging — distinct.
+  À investiguer séparément (board/espressobin-* config, kernel, etc.).
 
 ### Session 2026-05-27 evening follow-ups (peertube + photoprism + WAF)
 

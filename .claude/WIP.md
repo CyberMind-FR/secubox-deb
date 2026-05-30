@@ -1,5 +1,51 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-29*
+*Mis à jour : 2026-05-30*
+
+---
+
+## 🔄 2026-05-30: release polish (v2.13.1 → v2.13.2) + media livré
+
+### ✅ Done
+
+* **v2.13.1** taggé (fix dual-compat fmrelay + zkp-hamiltonian → fmrelay built
+  clean, mais publish toujours bloqué par sentinelle-gsm arm64).
+* **#425** (sentinelle-gsm arm64 build) filée + fixée le même jour : add
+  `override_dh_shlibdeps: dh_shlibdeps -Xsecubox-redsea` dans `debian/rules`
+  pour sauter le scan auto-deps sur le binaire prébuild aarch64 (les runtime
+  deps sont déjà déclarées dans control). PR #426 mergée.
+* **#423** (`--kiosk` flag dans `build-rpi-usb.sh` était un stub) filée +
+  fixée : ajout du vrai bloc d'install (chromium + xorg + openbox + xinit +
+  unit `secubox-kiosk.service` sur vt7 + seed `boot-mode=kiosk` + default
+  target `graphical`), et CI `build-all-live-usb.yml` ajoute `extra_args:
+  "--kiosk"` sur l'entrée matrice rpi400. PR #424 mergée.
+* **#422** filée (vm-x64 cascade `[FAILED]` en VBox : otg-gadget +
+  networkd-wait-online + openclaw restart-loop, sshd plombe par cascade).
+* **#421** filée + contournement live (lyrion) : sockets `/run/secubox/{authelia,
+  cookies,certs}.sock` cachés par collision tmpfs-mount vs
+  `RuntimeDirectory=secubox` dans namespace privé. Lyrion débloqué en
+  commentant les 4 lignes `auth_request` du vhost (sauvegarde `.bak.sso-removed`).
+* **v2.13.2** taggé : intègre fmrelay + zkp + sentinelle-gsm packaging fixes +
+  rpi400 kiosk-by-default → la Release CI re-orchestre le tout, publish APT
+  devrait débloquer pour la première fois depuis v2.13.0.
+* **Media flashé pour l'opérateur** :
+  - 🟢 **USB live amd64** sur Kingston DataTraveler 28,8 G (dd, sync OK).
+  - 🟢 **microSD rpi400** sur SanDisk SC32G 29,7 G (dd, partprobe OK).
+  - 🟡 **VirtualBox VM `SecuBox-amd64`** créée (NAT port-forward 2222/8080/8443)
+    mais image cassée (#422) → VM gardée *powered off* en attendant le fix.
+
+### ⬜ Next up / carry-overs
+
+* Verdict v2.13.2 CI (watcher en cours) : confirmer que `publish` APT passe
+  enfin proprement avec les 3 packaging fixes mergés (fmrelay + zkp +
+  sentinelle-gsm).
+* **#421** systemic socket fix (réconcilier `/run/secubox` tmpfs mount vs
+  `RuntimeDirectory=secubox`) — reboot-tested. Re-activer ensuite l'Authelia
+  `auth_request` sur lyrion (revert du contournement live).
+* **#422** vm-x64 image : gater les services appliance-only (`otg-gadget`,
+  etc.) sur le profil VM ; assouplir `networkd-wait-online`. Re-tester en
+  VBox une fois fixé.
+* Espressobin-v7 / -ultra image builds : encore en échec préexistant
+  v2.13.2 (à investiguer séparément, distinct de la chaîne packaging).
 
 ---
 
