@@ -2,6 +2,52 @@
 *Tracking completed milestones with dates*
 
 ---
+## 2026-05-30 — v2.13.1 + v2.13.2 release polish + media flash + 4 issues filed
+
+Follow-up day on v2.13.0 to actually get the release pipeline green and put
+the resulting artefacts in the operator's hands.
+
+* **v2.13.1** tagged — packaging fix: drop duplicate `debian/compat` in
+  `secubox-fmrelay` + `secubox-zkp-hamiltonian` (debhelper refused when compat
+  was declared both in `debian/compat` AND via `Build-Depends: debhelper-compat`).
+  CI verdict: fmrelay built clean ✅, but publish still blocked by
+  `secubox-sentinelle-gsm` arm64 (different root cause).
+* **#425** filed + fixed in same day — the sentinelle-gsm arm64 build failed
+  because `dh_shlibdeps` tried to resolve a prebuilt aarch64 ELF
+  (`bin/secubox-redsea`) on the amd64 CI runner. Runtime deps were already
+  declared explicitly in `debian/control`, so `dh_shlibdeps -Xsecubox-redsea`
+  in `debian/rules` is safe. Locally reproduced + fixed (PR #426).
+* **#423** filed + fixed — `build-rpi-usb.sh --kiosk` flag was a stub: parsed
+  but never installed chromium/X/openbox and never created `secubox-kiosk.service`
+  (which the boot menu's `apply_mode` already references). Added the full
+  install block (apt, kiosk files from `image/kiosk/`, systemd unit on vt7,
+  default boot mode = kiosk, default target = graphical) AND wired
+  `extra_args: "--kiosk"` on the rpi400 matrix entry in `build-all-live-usb.yml`
+  so Pi 400 artefacts ship chromium-fullscreen-by-default (PR #424).
+* **#422** filed — `vm-x64` image v2.13.0 boots in VirtualBox but with a
+  cascade of `[FAILED]` (otg-gadget, networkd-wait-online, mitmproxy, crowdsec,
+  net-fallback, openclaw in restart loop) → sshd accepts TCP but no banner.
+  Root cause: appliance-only services (`secubox-otg-gadget` needs configfs/USB
+  gadget kernel) aren't gated on a VM profile, plus `networkd-wait-online` is
+  strict. Proposed: mask the hardware-only units on the vm-x64 build profile.
+* **#421** filed — `/run/secubox/{authelia,cookies,certs}.sock` are bound by
+  services running in a private mount namespace (`RuntimeDirectory=secubox` +
+  the host dedicated `/run/secubox` tmpfs mount = collision), invisible to nginx
+  (host) → 502 on `/api/v1/cookies` + `/api/v1/certs` and 500 on every Authelia
+  `auth_request` consumer (lyrion was the loudest). Live workaround: commented
+  out the 4 Authelia `auth_request` lines in the lyrion vhost (lyrion now 200).
+  Real fix needs reconciling tmpfs-mount vs `RuntimeDirectory`, reboot-tested.
+* **v2.13.2** tagged after #425 + #423 merged → re-runs the release pipeline
+  with: fmrelay + zkp + sentinelle-gsm packaging fixes (publish unblocked
+  expected) + rpi400 kiosk-by-default. Watcher running.
+* **Media livré à l'opérateur** :
+  - 🟢 **USB live amd64** flashée sur Kingston DataTraveler 28,8 G
+  - 🟢 **microSD rpi400** flashée sur SanDisk SC32G 29,7 G
+  - 🟡 **VirtualBox VM `SecuBox-amd64`** créée (NAT port-forward SSH:2222,
+    HTTP:8080, HTTPS:8443) MAIS bug #422 → kept off-disk pour rejouer une
+    fois l'image corrigée.
+
+---
 ## 2026-05-29 (cont.) — backlog sweep + v2.13.0 release
 
 Closed a batch of fixed-live-but-unmerged issues by finalizing each branch
