@@ -59,6 +59,8 @@ jobs:
             embed_image: true
 
           # Raspberry Pi 400 (arm64) - Native Pi firmware boot
+          # Ships in kiosk mode by default — Pi 400 = keyboard + HDMI →
+          # chromium fullscreen on http://127.0.0.1/ at boot (#423).
           - platform: rpi400
             arch: arm64
             script: build-rpi-usb.sh
@@ -66,6 +68,7 @@ jobs:
             output_pattern: "secubox-rpi-arm64-*.img*"
             needs_qemu: true
             embed_image: false
+            extra_args: "--kiosk"
 
     steps:
       # Skip job if platform doesn't match (workflow_dispatch only)
@@ -170,7 +173,8 @@ jobs:
           sudo -E bash image/${{ matrix.script }} \
             --suite ${{ env.DEBIAN_SUITE }} \
             $SLIPSTREAM_OPT \
-            $COMPRESS_OPT
+            $COMPRESS_OPT \
+            ${{ matrix.extra_args }}
 
           sudo chown -R $(id -u):$(id -g) output/
         timeout-minutes: 120
