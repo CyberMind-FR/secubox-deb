@@ -2,6 +2,17 @@
 %:
 	dh $@
 
+# bin/secubox-redsea is a pre-built aarch64 ELF shipped under
+# /usr/libexec/secubox/. dh_shlibdeps tries to resolve its .so deps
+# (libliquid, libsndfile, libstdc++, libm, libgcc_s, libc) against the
+# build host's library set — which on an amd64 CI runner has no arm64
+# .so → "impossible de trouver la bibliothèque" → build fails. The
+# runtime deps are already declared explicitly in debian/control, so
+# skipping the auto-detection on this one binary is safe and unblocks
+# the v2.13.0/.1 APT publish (#425).
+override_dh_shlibdeps:
+	dh_shlibdeps -Xsecubox-redsea
+
 override_dh_auto_install:
 	# Host FastAPI
 	install -d debian/secubox-sentinelle-gsm/usr/lib/secubox/sentinelle-gsm
