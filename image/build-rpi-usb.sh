@@ -778,6 +778,71 @@ ln -sf /usr/lib/systemd/system/nginx.service \
 ok "SecuBox packages installed"
 
 # ══════════════════════════════════════════════════════════════════
+# Step 5.4: Optional GUI kiosk mode (closes #423)
+# ══════════════════════════════════════════════════════════════════
+# The --kiosk flag was parsed but never acted on (#423 was filed for this
+# stub). Implements: install chromium + minimal X stack, ship the kiosk
+# launcher + xinitrc from image/kiosk/, create the secubox-kiosk.service
+# (already referenced by apply_mode in the boot menu above), pre-seed the
+# boot-mode file to "kiosk" so first boot lands directly in the kiosk.
+if [[ "${INCLUDE_KIOSK}" -eq 1 ]]; then
+    log "Installing kiosk mode (chromium fullscreen → http://127.0.0.1/) ..."
+    chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
+        xserver-xorg xinit openbox chromium x11-xserver-utils ca-certificates \
+        2>/dev/null || warn "Some kiosk packages may have failed (continuing)"
+
+    KIOSK_SRC="${SCRIPT_DIR}/kiosk"
+    if [[ -d "${KIOSK_SRC}" ]]; then
+        install -d "${ROOTFS}/usr/share/secubox/kiosk"
+        install -m 0755 "${KIOSK_SRC}/secubox-kiosk.sh" \
+                        "${ROOTFS}/usr/share/secubox/kiosk/secubox-kiosk.sh"
+        install -m 0755 "${KIOSK_SRC}/xinitrc" \
+                        "${ROOTFS}/root/.xinitrc"
+        ok "Copied kiosk launcher + xinitrc from ${KIOSK_SRC}"
+    else
+        warn "image/kiosk/ source missing — kiosk scripts not installed"
+    fi
+
+    # secubox-kiosk.service: matches the unit name apply_mode already
+    # enables/disables (lines ~353/357 of this script). Runs startx on vt7
+    # as root; xinitrc above exec's /usr/share/secubox/kiosk/secubox-kiosk.sh.
+    cat > "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" <<'KIOSKSVC'
+[Unit]
+Description=SecuBox Kiosk (chromium fullscreen → http://127.0.0.1/)
+After=multi-user.target network-online.target
+Wants=network-online.target
+Conflicts=getty@tty7.service
+
+[Service]
+Type=simple
+User=root
+Environment=HOME=/root
+ExecStart=/usr/bin/startx -- :0 vt7 -nocursor
+Restart=on-failure
+RestartSec=5
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+
+[Install]
+WantedBy=graphical.target
+KIOSKSVC
+
+    # First boot lands directly in kiosk — apply_mode (from the boot menu)
+    # reads /var/lib/secubox/boot-mode; seed it so DEFAULT_MODE=kiosk.
+    install -d "${ROOTFS}/var/lib/secubox"
+    echo "kiosk" > "${ROOTFS}/var/lib/secubox/boot-mode"
+
+    chroot "${ROOTFS}" systemctl set-default graphical.target 2>/dev/null || true
+    chroot "${ROOTFS}" systemctl enable secubox-kiosk.service 2>/dev/null || true
+    ok "Kiosk mode installed and enabled (default boot mode = kiosk)"
+else
+    log "Kiosk mode skipped (pass --kiosk to enable; #423)"
+fi
+
+# ══════════════════════════════════════════════════════════════════
 # Step 5.5: SecuBox CRT-style banners + CLI helpers
 # ══════════════════════════════════════════════════════════════════
 # Ported from build-live-usb.sh so rpi400 ships with the same SecuBox
