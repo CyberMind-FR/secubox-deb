@@ -153,6 +153,14 @@ jobs:
           sudo apt-get install -y -qq \
             build-essential dpkg-dev debhelper devscripts fakeroot \
             dh-python python3-all python3-setuptools
+          # arm64 cross-toolchain — dh_strip and dh_makeshlibs invoke
+          # aarch64-linux-gnu-{strip,objdump} when -a arm64 is passed.
+          # Without these, arch-specific packages shipping prebuilt
+          # arm64 ELF (sentinelle-gsm, secubox-daemon) fail to build (#431).
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            sudo apt-get install -y -qq --no-install-recommends \
+              binutils-aarch64-linux-gnu
+          fi
 
       - name: Setup Node.js (for soc-web)
         if: matrix.package == 'secubox-soc-web'
