@@ -1,9 +1,70 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-30*
+*Mis à jour : 2026-05-31*
 
 ---
 
-## 🔄 2026-05-30: release polish (v2.13.1 → v2.13.2) + media livré
+## 🔄 2026-05-31 : v2.13.3 → v2.13.4 cross-build green + media + 4 issues filées
+
+### ✅ Done
+
+* **v2.13.3** taggé puis verdict KO : PR #428 (`-a matrix.arch`) nécessaire
+  mais insuffisante. Sur runner amd64 avec `-a arm64`, debhelper appelle les
+  cross-tools `aarch64-linux-gnu-{strip,objdump}` non installés.
+* **#431** filée + **PR #432** mergée même heure : install
+  `binutils-aarch64-linux-gnu` dans la step apt du job arm64 de
+  `build-packages.yml` (~5 MB, ~3 s setup).
+* **v2.13.4** taggé → ✅ **APT publish vert pour la 1ʳᵉ fois depuis v2.13.0**.
+  Release contient 153 assets dont 5 arm64 ; `apt.secubox.in/dists/bookworm`
+  sert 15 packages arm64. Chaîne complète : #425 + #427 + #431.
+* **#429** Nextcloud dashboard data réelle : `_public_base_url()` lit
+  `overwrite.cli.url` → trusted_domains → fallback ; `/users` ne court-circuite
+  plus quand LXC down ; `/storage` passe par `lxc_attach` `du`/`df` ; `/backups`
+  reconnaît 3 patterns. Branche `feature/429-...` pushée (commit `b715c0e4`),
+  **PR pas ouverte** (carry-over). Déployée live sur `/usr/lib/secubox/nextcloud/api/main.py`.
+* **Deploy mistake** rattrapée : `find | head` a renvoyé `mail/api/main.py`
+  alpha 1ᵉʳ → nextcloud's main.py a écrasé celui de mail. Restauré via scp
+  depuis sources, `secubox-mail` actif.
+* **NC upload limits debug live** :
+  - PHP SAPI Apache : drop-in `/etc/php/8.2/apache2/conf.d/99-secubox.ini` à
+    4G uploads, 3600s exec. Premier essai n'a rien fait : `#` n'est pas un
+    commentaire `.ini`, il faut `;`. Fixé.
+  - nginx host : `client_max_body_size 4G` + `proxy_request_buffering off`
+    dans `nginx.conf` http{}. Smoke test PUT 50M sur `nc.gk2` → 401 Sabre OK.
+* **Media flashé** :
+  - 🟢 microSD rpi400 (`/dev/mmcblk0`) avec v2.13.4 (8.6 GB, 38 MB/s, sha ✅).
+    ⚠️ **kiosk MISSING** dans l'image malgré `--kiosk` CI (#433).
+  - 🟢 USB live amd64 (`/dev/sda`, DataTraveler 3.0). 1ᵉʳ stick mort (I/O
+    errors à 268 MB, `usb 2-1: device not accepting address`). 2ᵉ stick OK
+    (8.6 GB, 24 MB/s, sha ✅).
+  - 🟢 VBox VM `SecuBox-live-amd64-v2134` créée + boote sur la kiosk login.
+    Test : "Invalid credentials" inline mais pas de lockdown — voir #434.
+* **Issues filées (5)** : #430 (NC federation OCM), #431 (cross-binutils,
+  déjà fixé), #433 (kiosk silent fail), #434 (kiosk lockdown).
+
+### ⬜ Next up / carry-overs
+
+* **PR #429** à ouvrir (branche déjà pushée, fix déployé live mais source
+  pas encore mergé en master).
+* **#421** sockets `/run/secubox/*.sock` (RuntimeDirectory vs tmpfs collision)
+  — reboot-tested fix attendu, puis revert le contournement Authelia sur
+  lyrion.
+* **#422** vm-x64 cascade `[FAILED]` en VBox (préexistant, pas re-testé v2.13.4).
+* **#433** kiosk silent fail dans `build-rpi-usb.sh` — apt qemu-arm64 broken
+  + `|| warn` masque, heredoc/seed ne se retrouvent pas dans le .img.
+  Faire fail-loud + assertion build-time avant rsync.
+* **#434** kiosk lockdown design : frontend template + JS counter + backend
+  rate-limit 429 + endpoint admin unlock + TOML config.
+* **cloud.gk2.secubox.in** pas dans `nextcloud.conf` server_name → tombe sur
+  default_server "wrong-domain". Ajouter à la ligne `server_name nc.gk2
+  nextcloud.gk2;`.
+* **Patch SD kiosk** via chroot qemu encore en pending (chromium + xorg +
+  openbox + xinit + secubox-kiosk.service + boot-mode=kiosk).
+* Espressobin-v7 / -ultra image builds : encore en échec préexistant v2.13.4
+  (à investiguer séparément).
+
+---
+
+## 🔄 2026-05-30 : release polish (v2.13.1 → v2.13.2) + media livré
 
 ### ✅ Done
 
