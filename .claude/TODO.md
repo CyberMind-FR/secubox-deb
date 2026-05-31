@@ -1,19 +1,52 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-05-30*
+*Mis à jour : 2026-05-31*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
 
-### Release pipeline (v2.13.2 in flight)
+### Release pipeline ✅ v2.13.4 GREEN
 
-- [~] **v2.13.2 Release CI** — watcher (`bgecqxt7i`) en cours. Doit confirmer
-  que `publish` APT débloque enfin avec les 3 packaging fixes mergés (fmrelay
-  + zkp-hamiltonian dual-compat → 13786c96/e16b4c12, et sentinelle-gsm
-  shlibdeps -X → PR #426). Si vert : c'est la première publication APT propre
-  depuis v2.13.0. Si rouge : voir quel job reste cassé.
+- [x] **v2.13.4** taggé, Release CI vert, **APT publish OK pour la 1ʳᵉ fois
+  depuis v2.13.0**. 153 release assets dont 5 arm64. Chaîne complète : #425
+  (`dh_shlibdeps -X`) + #427/PR #428 (`-a matrix.arch`) + #431/PR #432
+  (`binutils-aarch64-linux-gnu`).
 
-### Issues ouvertes filées 2026-05-30 (à traiter post-v2.13.2)
+### Issues filées 2026-05-31 (à traiter post-v2.13.4)
+
+- [ ] **PR #429** à OUVRIR : branche `feature/429-secubox-nextcloud-dashboard-api-renvoie`
+  pushée (commit `b715c0e4`), fix déployé live sur gk2 mais pas encore mergé
+  en master. Dashboard NC retourne enfin les vraies données (overwrite.cli.url,
+  occ users, du/df dans container).
+
+- [ ] **#430** Fédération Nextcloud OCM entre deux SecuBox : documenter le
+  workflow `occ federation:trusted-servers:add`, ajouter une page UI dans le
+  dashboard NC (`Settings → Federation`) + endpoints API GET/POST/DELETE
+  `/api/v1/nextcloud/federation/trusted-servers`, test d'intégration avec
+  une seconde LXC NC factice.
+
+- [ ] **#433** `build-rpi-usb.sh --kiosk` silently fails : malgré le log
+  `[OK] Kiosk mode installed and enabled`, l'image v2.13.4 ne contient ni
+  chromium/X/openbox ni `secubox-kiosk.service` ni `boot-mode=kiosk`.
+  Cause partielle : `chroot apt-get install ...` foire en qemu-arm64
+  (broken deps), `|| warn` swallow le fail. Le `cat > .service` heredoc
+  devrait quand même produire le fichier mais il n'y est pas. Fix :
+  fail-loud sur apt + assertion build-time pré-rsync vérifiant que les
+  artefacts kiosk sont bien dans `${ROOTFS}`.
+
+- [ ] **#434** kiosk login lockdown après N attempts (CSPN hardening) :
+  frontend kiosk login switch vers template `<lockdown />` après N fails
+  (default N=1), backend rate-limit 429 + endpoint admin unlock, TOML
+  config `/etc/secubox/kiosk.toml [lockdown]`, audit log immuable sur
+  lockdown. Unlock paths : reboot / USB key / timed.
+
+- [ ] **cloud.gk2.secubox.in pas dans aucun vhost nginx** — tombe sur
+  default_server `_` qui sert `wrong-domain.html`. Fix 1-ligne : ajouter
+  `cloud.gk2.secubox.in` à la ligne `server_name nc.gk2.secubox.in
+  nextcloud.gk2.secubox.in;` de `/etc/nginx/sites-available/nextcloud.conf`
+  (sur gk2 ET dans `packages/secubox-nextcloud/nginx/` source-side).
+
+### Issues encore ouvertes de 2026-05-30
 
 - [ ] **#421** sockets `/run/secubox/*.sock` cachés (cause des 502 sur
   `/api/v1/cookies` + `/api/v1/certs` + des 500 sur tous les vhosts gated

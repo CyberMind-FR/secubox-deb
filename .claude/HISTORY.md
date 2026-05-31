@@ -2,6 +2,115 @@
 *Tracking completed milestones with dates*
 
 ---
+
+## 2026-05-31 — v2.13.3 → v2.13.4 cross-build finally green + media + kiosk regressions
+
+Major release-pipeline day. The arm64 publish path that's been broken since
+v2.13.0 is finally green. Three releases shipped in one sitting.
+
+### Release pipeline saga (closes the v2.13.x cross-build chain)
+
+* **v2.13.3** tagged → still failed. PR #428 (`-a matrix.arch` on
+  `dpkg-buildpackage`) was correct but *insufficient*: with `-a arm64` on the
+  amd64 CI runner, debhelper invokes the cross-toolchain binaries
+  (`aarch64-linux-gnu-strip` for `dh_strip`, `aarch64-linux-gnu-objdump` for
+  `dh_makeshlibs`) which are *not installed* on the runner.
+  - `secubox-sentinelle-gsm arm64` → `dh_strip: aarch64-linux-gnu-strip: No such file or directory`
+  - `secubox-daemon arm64` → `dh_makeshlibs: aarch64-linux-gnu-objdump: No such file or directory`
+* **#431** filed + **PR #432** merged same hour — install
+  `binutils-aarch64-linux-gnu` (~5 MB) in `build-packages.yml` when
+  `matrix.arch == 'arm64'`. Folded into the existing apt step.
+* **v2.13.4** tagged → ✅ **APT publish green for the first time since v2.13.0**.
+  - 153 release assets, 5 arm64 (`secubox-daemon`, `secubox-sentinelle-gsm`,
+    `secubox-redroid`, `secubox-daemon-c3box`, plus the SHA256 manifest)
+  - `apt.secubox.in/dists/bookworm/main/binary-arm64/Packages` serves 15
+    arm64 packages
+  - Three-fix chain complete: **#425** (`dh_shlibdeps -Xsecubox-redsea`) →
+    **#427** (`dpkg-buildpackage -a matrix.arch`) → **#431** (cross-binutils)
+
+### Nextcloud dashboard real data (#429, branch pushed)
+
+* `secubox-nextcloud` dashboard was returning hardcoded stubs (localhost:8080
+  URLs, empty users, host-path storage). Added `_public_base_url()` reading
+  `overwrite.cli.url` → `trusted_domains[]` → fallback; rewrote `/connections`,
+  removed the `lxc_running()` early-return from `/users`, switched `/storage`
+  to `lxc_attach` `du`/`df` inside the container, added 3-pattern backup
+  detection.
+* Branch `feature/429-secubox-nextcloud-dashboard-api-renvoie` pushed (commit
+  `b715c0e4`), **PR not yet opened** (carry-over).
+* Live deployed to `/usr/lib/secubox/nextcloud/api/main.py` on gk2. **Deploy
+  mistake**: my `find | head -1` deploy detection took the alphabetically
+  first match (`/usr/lib/secubox/mail/api/main.py`) and overwrote it with
+  nextcloud's main.py. Caught from a head-mismatch, restored mail/main.py
+  from `packages/secubox-mail/api/main.py` via scp, restarted `secubox-mail`
+  (back active). Memo: deploy by *exact path*, never `find | head`.
+
+### Nextcloud upload-limits debugging (live patch on gk2)
+
+* Operator reported "erreurs de televersments" on `cloud.gk2` /
+  `nextcloud.gk2`. Traced through the chain:
+  - PHP SAPI Apache had `upload_max_filesize = 2M` / `post_max_size = 8M`
+    (Debian defaults — never bumped)
+  - host nginx had no `client_max_body_size` directive at all (default 1M)
+  - HAProxy/mitmproxy: no limit found
+* Wrote drop-in `/etc/php/8.2/apache2/conf.d/99-secubox.ini` bumping uploads
+  to 4G + `max_execution_time=3600`. **Initial drop-in didn't load**: used
+  `#` as comment prefix, which is invalid in PHP `.ini` (PHP wants `;`).
+  Switching `#` → `;` made the drop-in scanned and applied.
+* host nginx: added `client_max_body_size 4G` + `proxy_request_buffering off`
+  in `nginx.conf` http{} block.
+* Smoke test: PUT 5M then 50M to `https://nc.gk2.secubox.in/remote.php/dav/...`
+  → 401 Sabre auth (expected, full body received). Backend OK.
+* **Carry-over**: `cloud.gk2.secubox.in` is NOT in any nginx vhost
+  `server_name`. It falls through to the default_server which serves
+  `wrong-domain.html`. Fix: add `cloud.gk2.secubox.in` to
+  `nextcloud.conf`'s `server_name nc.gk2 nextcloud.gk2;` line.
+
+### Media flash for operator
+
+* **rpi400 microSD** (`/dev/mmcblk0`, 28.8 G): gunzip → dd
+  `secubox-rpi-arm64-bookworm.img.gz` (v2.13.4). 8.6 GB written at 38 MB/s.
+  SHA256 ✅. **Kiosk MISSING despite `--kiosk` in CI** — see #433 below.
+* **amd64 live USB** (`/dev/sda`, 28.8 G DataTraveler 3.0):
+  - 1st stick: dd I/O errored at 268 MB, USB device disappeared from kernel.
+    Stick is dying — classic NAND failure pattern (cf.
+    `feedback_test_with_two_usb_sticks.md`).
+  - 2nd stick (same batch): flash succeeded, 8.6 GB at 24 MB/s.
+* **VBox VM** `SecuBox-live-amd64-v2134` created from the same image:
+  2 CPU, 2 GB RAM, BIOS firmware, NAT with port forwards (2222/8080/8443/9080).
+  Boots to the SecuBox kiosk login screen; "Invalid credentials" inline error
+  on wrong password but no lockdown (see #434).
+
+### Issues filed (5 new)
+
+* **#430** — Federate two SecuBox Nextcloud instances (OCM trusted-servers
+  workflow, future dashboard tab + endpoints). Documentation + integration
+  test queued.
+* **#431** — CI cross-binutils (already fixed via PR #432 same day).
+* **#433** — `build-rpi-usb.sh --kiosk` silently fails: image v2.13.4 ships
+  without kiosk despite `Kiosk mode installed and enabled` log line. apt
+  install for chromium/xserver/openbox fails in qemu-arm64 chroot
+  (`apt --fix-broken install`), `|| warn` swallows it, and the subsequent
+  heredoc/seed steps don't end up in the rsynced rootfs (mechanism still
+  unclear — needs `set -e` review + build-time assertion).
+* **#434** — kiosk login lockdown after N failed attempts (CSPN brute-force
+  hardening, default N=1, unlock via reboot / USB key / timed).
+
+### Tracking files
+
+* `WIP.md` / `HISTORY.md` (this entry) / `TODO.md` updated to reflect
+  v2.13.4 victory, the 4 new issues, and the carry-over PR #429.
+
+### Lessons memorialised
+
+* (already in memory) Source-first ALWAYS — but **deploy by exact path**, not
+  `find | head`. Cost me one mail/main.py restoration.
+* PHP `.ini` drop-ins: comments are `;`, not `#`. `#` doesn't error, it just
+  silently aborts the parse and you lose every directive after.
+* For arm64 in CI, `dpkg-buildpackage -a arm64` requires `binutils-aarch64-linux-gnu`
+  installed alongside it — debhelper resolves cross-tools by triplet name.
+
+---
 ## 2026-05-30 — v2.13.1 + v2.13.2 release polish + media flash + 4 issues filed
 
 Follow-up day on v2.13.0 to actually get the release pipeline green and put
