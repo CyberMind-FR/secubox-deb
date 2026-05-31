@@ -153,6 +153,53 @@ chroot "${ROOTFS}" /debootstrap/debootstrap --second-stage
 ok "Debootstrap complete"
 
 # ══════════════════════════════════════════════════════════════════
+# Step 1.5: Chroot safety net for qemu-arm64 (closes #436)
+# ══════════════════════════════════════════════════════════════════
+# In a qemu-arm64 chroot, /run/systemd/system is bind-mounted from host
+# (so systemctl thinks systemd is running), but dbus can't be reached.
+# Result: every postinst that calls `systemctl enable/start` fails with
+# "Failed to connect to bus: Host is down", leaving packages
+# installed-but-not-configured (including secubox-core, cascading to
+# every secubox-* that depends on it).
+#
+# Three-part safety net :
+#   (1) divert /bin/systemctl → /bin/systemctl.distrib, install a wrapper
+#       that exports SYSTEMD_OFFLINE=1 before exec'ing the real binary;
+#   (2) install policy-rc.d returning 101 (blocks invoke-rc.d service
+#       starts during apt operations);
+#   (3) tmpfs-bind /boot/firmware so raspi-firmware's postinst
+#       (mountpoint -q /boot/firmware) doesn't fail before Step 7
+#       loop-mounts the real BOOT partition.
+#
+# Torn down right before Step 7 so the image ships clean.
+log "Installing chroot safety net (systemctl wrapper, policy-rc.d, /boot/firmware tmpfs)"
+
+# (1) systemctl wrapper
+chroot "${ROOTFS}" dpkg-divert --add --rename --quiet /bin/systemctl
+cat > "${ROOTFS}/bin/systemctl" <<'SYSTEMCTL_WRAPPER'
+#!/bin/sh
+# Build-time wrapper (#436): force offline mode so postinsts in a qemu
+# chroot can enable/disable units via filesystem only, no dbus needed.
+export SYSTEMD_OFFLINE=1
+exec /bin/systemctl.distrib "$@"
+SYSTEMCTL_WRAPPER
+chmod 0755 "${ROOTFS}/bin/systemctl"
+
+# (2) policy-rc.d
+cat > "${ROOTFS}/usr/sbin/policy-rc.d" <<'POLICY_RC_D'
+#!/bin/sh
+# Build-time policy (#436): never start daemons during chroot apt ops.
+exit 101
+POLICY_RC_D
+chmod 0755 "${ROOTFS}/usr/sbin/policy-rc.d"
+
+# (3) tmpfs at /boot/firmware (raspi-firmware postinst needs mountpoint)
+mkdir -p "${ROOTFS}/boot/firmware"
+mount -t tmpfs -o size=64M,mode=0755 tmpfs "${ROOTFS}/boot/firmware"
+
+ok "Chroot safety net installed"
+
+# ══════════════════════════════════════════════════════════════════
 # Step 2: Base configuration
 # ══════════════════════════════════════════════════════════════════
 log "2/7 System configuration..."
@@ -788,23 +835,22 @@ ok "SecuBox packages installed"
 if [[ "${INCLUDE_KIOSK}" -eq 1 ]]; then
     log "Installing kiosk mode (chromium fullscreen → http://127.0.0.1/) ..."
 
-    # The secubox-* .debs installed via dpkg -i in Step 5 (no dep resolution)
-    # leave the rootfs in a broken-deps state. apt refuses any new install
-    # while that state exists, so --fix-broken must run FIRST. This pulls in
-    # lxc / debootstrap / python3-cryptography / netdata / certbot / ...
-    # (~500 MB extra). Required for #433 — without it the chromium install
-    # below silently fails with "Some packages were not installed".
-    log "  apt --fix-broken install (clear pre-existing broken-deps state)"
+    # Best-effort fix-broken (postinsts may still fail individually in qemu
+    # chroot even with the #436 safety net, but we want the kiosk install
+    # to proceed regardless). The fail-loud is on the kiosk install below,
+    # not on fix-broken.
+    log "  apt --fix-broken install (best-effort, pre-existing state cleanup)"
     chroot "${ROOTFS}" /bin/bash -c \
         'DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y -q' \
-        || err "apt --fix-broken install failed inside chroot — kiosk install aborted"
+        || warn "apt --fix-broken install reported errors (continuing — kiosk install will report its own)"
 
     # Fail-loud on apt errors (was silently masked with || warn, #433 root cause).
     # If chromium/X can't install, abort the whole image build — silently
-    # shipping a no-kiosk image is worse than no image.
+    # shipping a no-kiosk image is worse than no image. The `-f` flag tells
+    # apt to satisfy deps even with some pre-existing broken state.
     log "  apt-get install kiosk stack"
     chroot "${ROOTFS}" /bin/bash -c \
-        'DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+        'DEBIAN_FRONTEND=noninteractive apt-get install -y -q -f --no-install-recommends \
             xserver-xorg xinit openbox chromium x11-xserver-utils \
             ca-certificates dbus-x11' \
         || err "apt-get install failed inside chroot — kiosk packages required when --kiosk is passed"
@@ -1126,6 +1172,27 @@ INITRD
 fi
 
 ok "Pi bootloader configured"
+
+# ══════════════════════════════════════════════════════════════════
+# Step 6.5: Tear down chroot safety net (closes #436)
+# ══════════════════════════════════════════════════════════════════
+# Undo Step 1.5's scaffolding so the .img doesn't ship with build-time
+# wrappers. Order matters : umount tmpfs BEFORE the rsync to /boot/firmware
+# in Step 7, restore systemctl AFTER the last `chroot systemctl` call
+# (which was Step 5.4's enable secubox-kiosk.service, already done by here).
+log "Removing chroot safety net (systemctl wrapper, policy-rc.d, /boot/firmware tmpfs)"
+
+# (3) umount tmpfs /boot/firmware (Step 7 mounts the real BOOT partition there)
+umount "${ROOTFS}/boot/firmware" 2>/dev/null || warn "tmpfs /boot/firmware was not mounted"
+
+# (2) remove policy-rc.d (first boot must be able to start daemons)
+rm -f "${ROOTFS}/usr/sbin/policy-rc.d"
+
+# (1) restore real systemctl
+rm -f "${ROOTFS}/bin/systemctl"
+chroot "${ROOTFS}" dpkg-divert --remove --rename --quiet /bin/systemctl
+
+ok "Chroot safety net removed"
 
 # ══════════════════════════════════════════════════════════════════
 # Step 7: Create image
