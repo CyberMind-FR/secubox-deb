@@ -787,21 +787,36 @@ ok "SecuBox packages installed"
 # boot-mode file to "kiosk" so first boot lands directly in the kiosk.
 if [[ "${INCLUDE_KIOSK}" -eq 1 ]]; then
     log "Installing kiosk mode (chromium fullscreen → http://127.0.0.1/) ..."
-    chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends \
-        xserver-xorg xinit openbox chromium x11-xserver-utils ca-certificates \
-        2>/dev/null || warn "Some kiosk packages may have failed (continuing)"
+
+    # The secubox-* .debs installed via dpkg -i in Step 5 (no dep resolution)
+    # leave the rootfs in a broken-deps state. apt refuses any new install
+    # while that state exists, so --fix-broken must run FIRST. This pulls in
+    # lxc / debootstrap / python3-cryptography / netdata / certbot / ...
+    # (~500 MB extra). Required for #433 — without it the chromium install
+    # below silently fails with "Some packages were not installed".
+    log "  apt --fix-broken install (clear pre-existing broken-deps state)"
+    chroot "${ROOTFS}" /bin/bash -c \
+        'DEBIAN_FRONTEND=noninteractive apt-get --fix-broken install -y -q' \
+        || err "apt --fix-broken install failed inside chroot — kiosk install aborted"
+
+    # Fail-loud on apt errors (was silently masked with || warn, #433 root cause).
+    # If chromium/X can't install, abort the whole image build — silently
+    # shipping a no-kiosk image is worse than no image.
+    log "  apt-get install kiosk stack"
+    chroot "${ROOTFS}" /bin/bash -c \
+        'DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            xserver-xorg xinit openbox chromium x11-xserver-utils \
+            ca-certificates dbus-x11' \
+        || err "apt-get install failed inside chroot — kiosk packages required when --kiosk is passed"
 
     KIOSK_SRC="${SCRIPT_DIR}/kiosk"
-    if [[ -d "${KIOSK_SRC}" ]]; then
-        install -d "${ROOTFS}/usr/share/secubox/kiosk"
-        install -m 0755 "${KIOSK_SRC}/secubox-kiosk.sh" \
-                        "${ROOTFS}/usr/share/secubox/kiosk/secubox-kiosk.sh"
-        install -m 0755 "${KIOSK_SRC}/xinitrc" \
-                        "${ROOTFS}/root/.xinitrc"
-        ok "Copied kiosk launcher + xinitrc from ${KIOSK_SRC}"
-    else
-        warn "image/kiosk/ source missing — kiosk scripts not installed"
-    fi
+    [[ -d "${KIOSK_SRC}" ]] || err "image/kiosk/ source missing — required for --kiosk"
+    install -d "${ROOTFS}/usr/share/secubox/kiosk"
+    install -m 0755 "${KIOSK_SRC}/secubox-kiosk.sh" \
+                    "${ROOTFS}/usr/share/secubox/kiosk/secubox-kiosk.sh"
+    install -m 0755 "${KIOSK_SRC}/xinitrc" \
+                    "${ROOTFS}/root/.xinitrc"
+    ok "Copied kiosk launcher + xinitrc from ${KIOSK_SRC}"
 
     # secubox-kiosk.service: matches the unit name apply_mode already
     # enables/disables (lines ~353/357 of this script). Runs startx on vt7
@@ -835,9 +850,39 @@ KIOSKSVC
     install -d "${ROOTFS}/var/lib/secubox"
     echo "kiosk" > "${ROOTFS}/var/lib/secubox/boot-mode"
 
-    chroot "${ROOTFS}" systemctl set-default graphical.target 2>/dev/null || true
-    chroot "${ROOTFS}" systemctl enable secubox-kiosk.service 2>/dev/null || true
-    ok "Kiosk mode installed and enabled (default boot mode = kiosk)"
+    # Fail-loud — graphical.target must exist now that xserver-xorg is installed.
+    chroot "${ROOTFS}" systemctl set-default graphical.target \
+        || err "systemctl set-default graphical.target failed — X stack not installed?"
+    chroot "${ROOTFS}" systemctl enable secubox-kiosk.service \
+        || err "systemctl enable secubox-kiosk.service failed"
+
+    # Build-time assertion (#433): verify EVERY kiosk artefact made it into
+    # the rootfs before Step 7's rsync. If any of these is missing, the .img
+    # would ship without kiosk despite the CI logging "Kiosk mode installed".
+    log "  Asserting kiosk artefacts in rootfs (closes #433 silent-fail bug)"
+    _kiosk_fail=0
+    for _f in \
+        "${ROOTFS}/usr/bin/chromium" \
+        "${ROOTFS}/usr/bin/startx" \
+        "${ROOTFS}/usr/bin/openbox" \
+        "${ROOTFS}/usr/share/secubox/kiosk/secubox-kiosk.sh" \
+        "${ROOTFS}/root/.xinitrc" \
+        "${ROOTFS}/etc/systemd/system/secubox-kiosk.service" \
+        "${ROOTFS}/var/lib/secubox/boot-mode" \
+    ; do
+        [[ -e "${_f}" ]] || { warn "MISSING: ${_f}"; _kiosk_fail=1; }
+    done
+    [[ "$(cat "${ROOTFS}/var/lib/secubox/boot-mode" 2>/dev/null)" == "kiosk" ]] \
+        || { warn "boot-mode != 'kiosk'"; _kiosk_fail=1; }
+    [[ "$(readlink "${ROOTFS}/etc/systemd/system/default.target" 2>/dev/null)" \
+        == *"graphical.target" ]] || { warn "default.target != graphical.target"; _kiosk_fail=1; }
+    [[ -e "${ROOTFS}/etc/systemd/system/graphical.target.wants/secubox-kiosk.service" ]] \
+        || { warn "secubox-kiosk.service not in graphical.target.wants/"; _kiosk_fail=1; }
+
+    [[ "${_kiosk_fail}" -eq 0 ]] \
+        || err "Kiosk artefacts incomplete — refusing to publish a broken image"
+
+    ok "Kiosk mode installed and enabled (default boot mode = kiosk, all artefacts verified)"
 else
     log "Kiosk mode skipped (pass --kiosk to enable; #423)"
 fi
