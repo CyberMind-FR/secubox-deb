@@ -3,6 +3,70 @@
 
 ---
 
+## 2026-06-01 — kiosk-on-rpi400 actually ships : the #436 chain (PRs #437–#441)
+
+Closing the kiosk regression discovered the day before. Five back-to-back PRs,
+six tags (v2.13.5 → v2.13.10) to make `--kiosk` actually produce a working
+image. The previous day's PR #435 made the assertion fail-loud, this day made
+it pass.
+
+### The full chain
+
+| Tag | PR | Issue | Failure exposed | Fix |
+|-----|-----|-------|-----------------|-----|
+| v2.13.5 | #435 (D-1) | #433 | `[OK] Kiosk installed` lied | fail-loud + pre-rsync assertion |
+| v2.13.6 | #437 | #436 | `Failed to connect to bus: Host is down` (cascade through secubox-* postinsts) | systemctl wrapper exports `SYSTEMD_OFFLINE=1`; `policy-rc.d` blocks invoke-rc.d; tmpfs at `/boot/firmware` (64M) |
+| v2.13.7 | #438 | #436 | ENOSPC on tmpfs + `findmnt: can't read /proc/mounts` | tmpfs 64M → 512M + bind-mount `/proc`,`/sys` into chroot |
+| v2.13.8 | #439 | #436 | `secubox-kiosk.service not in graphical.target.wants/` (SYSTEMD_OFFLINE doesn't always materialise WantedBy symlinks) | explicit `ln -sf` of the WantedBy symlink |
+| v2.13.9 | #440 | #436 | assertion still failed on the symlink — symlink target was absolute, host `[[ -e ]]` couldn't follow | switch to relative target (`../secubox-kiosk.service`) |
+| **v2.13.10** | **#441** | #436 | Step 7 : `config.txt: No such file` — tmpfs at `/boot/firmware` discarded raspi-firmware's writes on umount | tmpfs → `mount --bind ${ROOTFS}/boot/firmware ${ROOTFS}/boot/firmware` (self-bind preserves writes) |
+
+### Verification
+
+* `secubox-rpi-arm64-bookworm.img.gz` v2.13.10 downloaded from the
+  build-live-usb workflow artifact (1940 MB) — the GitHub release didn't
+  publish (`create-release` failed on the OTHER arch jobs that are
+  still broken : x64 live, mochabin live, espressobin-v7, espressobin-ultra)
+  but the rpi400 image itself built clean.
+* sha256sum matched.
+* Flashed `/dev/mmcblk0` (28.8 G microSD), 8.6 GB written at 37.8 MB/s.
+* Mounted p2 read-only and verified EVERY artefact :
+  - `/var/lib/secubox/boot-mode` = `kiosk` ✓
+  - `/etc/systemd/system/default.target` → `/lib/systemd/system/graphical.target` ✓
+  - `/etc/systemd/system/secubox-kiosk.service` (434 bytes) ✓
+  - `/etc/systemd/system/graphical.target.wants/secubox-kiosk.service` → `../secubox-kiosk.service` (relative) ✓
+  - `/usr/bin/chromium` ✓
+  - `/usr/share/secubox/kiosk/secubox-kiosk.sh` ✓
+
+### What this teaches about debootstrap+qemu chroots
+
+* `/run/systemd/system` being bind-mounted from the host makes systemctl
+  believe systemd is running, which breaks every offline operation. The
+  wrapper-with-SYSTEMD_OFFLINE pattern is the standard fix.
+* `policy-rc.d` returning 101 is the OTHER half — blocks invoke-rc.d
+  from trying to actually start daemons during apt operations.
+* For mountpoints needed by build-time hooks (raspi-firmware checks
+  `mountpoint -q /boot/firmware`), **bind-mount on self** is the right
+  primitive — NOT tmpfs. tmpfs throws away the postinst's writes ;
+  self-bind preserves them in the underlying directory.
+* `[[ -e symlink ]]` follows the symlink target. From the build host's
+  perspective, absolute symlinks created inside `${ROOTFS}` point to
+  paths outside `${ROOTFS}`. Use relative symlinks (matches systemctl's
+  own convention anyway).
+
+### Open follow-ups (non-blocking)
+
+* `build-live-usb` x64 amd64 — preexisting failure, separate from this chain.
+* `build-mochabin-live-usb` — same.
+* `build-image espressobin-v7` / `-ultra` — preexisting hardware-profile
+  issues, separate.
+* Release `create-release` job will keep failing as long as those four are
+  red. APT publish for v2.13.10 is therefore not present — rpi-arm64 +
+  amd64 .debs are still available from v2.13.4's APT repo, which is the
+  current install path.
+
+---
+
 ## 2026-05-31 — v2.13.3 → v2.13.4 cross-build finally green + media + kiosk regressions
 
 Major release-pipeline day. The arm64 publish path that's been broken since

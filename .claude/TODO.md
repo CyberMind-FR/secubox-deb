@@ -1,18 +1,31 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-05-31*
+*Mis à jour : 2026-06-01*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
 
-### Release pipeline ✅ v2.13.4 GREEN
+### Release pipeline ✅ v2.13.4 APT GREEN + v2.13.10 rpi400 image GREEN
 
 - [x] **v2.13.4** taggé, Release CI vert, **APT publish OK pour la 1ʳᵉ fois
   depuis v2.13.0**. 153 release assets dont 5 arm64. Chaîne complète : #425
   (`dh_shlibdeps -X`) + #427/PR #428 (`-a matrix.arch`) + #431/PR #432
   (`binutils-aarch64-linux-gnu`).
+- [x] **v2.13.10** rpi400 image build SUCCESS via PRs #437/#438/#439/#440/#441
+  (#436 closed). Image téléchargée depuis le workflow artifact (Release n'a
+  pas publié à cause des autres archs cassées), flashée + kiosk artefacts
+  tous vérifiés. **Boot test physique Pi 400 à faire**.
 
-### Issues filées 2026-05-31 (à traiter post-v2.13.4)
+### Espressobin / live-amd64 / mochabin builds (à traiter séparément)
+
+- [ ] `build-live-usb x64 amd64` failure préexistante depuis v2.13.x — bloque
+  la publication GH Release sur tous les tags.
+- [ ] `build-mochabin-live-usb` failure préexistante.
+- [ ] `build-image espressobin-v7` / `-ultra` failure préexistante.
+
+Ces 4 jobs sont distincts du chain kiosk #436. À investiguer un par un.
+
+### Issues ouvertes filées 2026-05-31 (post-v2.13.4)
 
 - [ ] **PR #429** à OUVRIR : branche `feature/429-secubox-nextcloud-dashboard-api-renvoie`
   pushée (commit `b715c0e4`), fix déployé live sur gk2 mais pas encore mergé
@@ -25,14 +38,8 @@
   `/api/v1/nextcloud/federation/trusted-servers`, test d'intégration avec
   une seconde LXC NC factice.
 
-- [ ] **#433** `build-rpi-usb.sh --kiosk` silently fails : malgré le log
-  `[OK] Kiosk mode installed and enabled`, l'image v2.13.4 ne contient ni
-  chromium/X/openbox ni `secubox-kiosk.service` ni `boot-mode=kiosk`.
-  Cause partielle : `chroot apt-get install ...` foire en qemu-arm64
-  (broken deps), `|| warn` swallow le fail. Le `cat > .service` heredoc
-  devrait quand même produire le fichier mais il n'y est pas. Fix :
-  fail-loud sur apt + assertion build-time pré-rsync vérifiant que les
-  artefacts kiosk sont bien dans `${ROOTFS}`.
+- [x] **#433** `build-rpi-usb.sh --kiosk` silently fails — closed by PR #435
+  (fail-loud + assertion). Subsequent #436 chain made the assertion pass.
 
 - [ ] **#434** kiosk login lockdown après N attempts (CSPN hardening) :
   frontend kiosk login switch vers template `<lockdown />` après N fails

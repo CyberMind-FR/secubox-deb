@@ -1,5 +1,49 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-05-31*
+*Mis à jour : 2026-06-01*
+
+---
+
+## 🔄 2026-06-01 : kiosk-on-rpi400 actually ships (#436 closed)
+
+### ✅ Done
+
+* **5 PRs / 6 tags v2.13.5 → v2.13.10** pour faire passer `--kiosk` du stub
+  au vrai. Voir HISTORY.md 2026-06-01 pour la table complète des failures
+  exposées à chaque itération.
+* **#436 chain résolu** :
+  - PR #437 (v2.13.6) — chroot safety net (systemctl wrapper exporte
+    `SYSTEMD_OFFLINE=1`, `policy-rc.d` retourne 101, tmpfs 64M `/boot/firmware`).
+  - PR #438 (v2.13.7) — tmpfs 64M → 512M (ENOSPC sur initrd) + bind `/proc` et
+    `/sys` (raspi-firmware utilise findmnt).
+  - PR #439 (v2.13.8) — force `graphical.target.wants/secubox-kiosk.service`
+    symlink (SYSTEMD_OFFLINE ne le matérialise pas toujours).
+  - PR #440 (v2.13.9) — symlink relatif au lieu d'absolu (host `[[ -e ]]`
+    ne peut suivre un chemin absolu hors `${ROOTFS}`).
+  - PR #441 (v2.13.10) — tmpfs → `mount --bind ${ROOTFS}/boot/firmware
+    ${ROOTFS}/boot/firmware` (tmpfs jetait les fichiers raspi-firmware au
+    umount, self-bind les préserve).
+* **Image v2.13.10 rpi400 téléchargée depuis le workflow artifact**
+  (build-live-usb-rpi400 = SUCCESS, le Release n'a pas publié à cause des
+  autres archs cassées). 1940 MB compressé, sha256 ✓.
+* **SD `/dev/mmcblk0` flashée** v2.13.10 — 8.6 GB en 227s @ 37.8 MB/s.
+* **Tous les artefacts kiosk vérifiés** sur la SD :
+  boot-mode=kiosk, default.target → graphical.target,
+  secubox-kiosk.service présent, WantedBy symlink relatif OK,
+  chromium installé, `/usr/share/secubox/kiosk/secubox-kiosk.sh` présent.
+
+### ⬜ Next up / carry-overs
+
+* **Boot test physique** Pi 400 avec la SD v2.13.10 — confirmer que le
+  kiosk chromium s'affiche bien sur HDMI au 1er boot.
+* Release `create-release` job rouge à cause de :
+  - `build-live-usb x64 amd64` (préexistant)
+  - `build-mochabin-live-usb` (préexistant)
+  - `build-images espressobin-v7` / `-ultra` (préexistant)
+  À traiter séparément du chain kiosk.
+* **#434** kiosk lockdown design (frontend + backend rate-limit + admin unlock).
+* **PR #429** NC dashboard fix encore à ouvrir (branche pushée).
+* **#421** sockets `/run/secubox/*.sock` + `#422` vm-x64 cascade.
+* **cloud.gk2.secubox.in** pas dans `nextcloud.conf` server_name.
 
 ---
 
