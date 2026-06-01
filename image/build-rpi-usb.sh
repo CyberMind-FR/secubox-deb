@@ -911,6 +911,14 @@ KIOSKSVC
     chroot "${ROOTFS}" systemctl enable secubox-kiosk.service \
         || err "systemctl enable secubox-kiosk.service failed"
 
+    # Belt-and-suspenders: `systemctl enable` under SYSTEMD_OFFLINE in a qemu
+    # chroot doesn't always materialise the WantedBy symlink (observed in
+    # v2.13.7). Create it explicitly so the next assertion passes regardless
+    # of whether systemctl's offline behaviour wrote the link itself.
+    install -d "${ROOTFS}/etc/systemd/system/graphical.target.wants"
+    ln -sf "/etc/systemd/system/secubox-kiosk.service" \
+           "${ROOTFS}/etc/systemd/system/graphical.target.wants/secubox-kiosk.service"
+
     # Build-time assertion (#433): verify EVERY kiosk artefact made it into
     # the rootfs before Step 7's rsync. If any of these is missing, the .img
     # would ship without kiosk despite the CI logging "Kiosk mode installed".
