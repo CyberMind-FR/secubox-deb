@@ -193,11 +193,15 @@ exit 101
 POLICY_RC_D
 chmod 0755 "${ROOTFS}/usr/sbin/policy-rc.d"
 
-# (3) tmpfs at /boot/firmware (raspi-firmware postinst needs mountpoint).
-# 512M: must fit kernel + initrd (~50-100M arm64) + dtbs + overlays + bootloader.
-# 64M was too small — v2.13.6 hit ENOSPC during initramfs-tools postinst.
+# (3) /boot/firmware as a self-bind-mount (raspi-firmware postinst needs
+# a real mountpoint, otherwise it errors with "missing /boot/firmware").
+# tmpfs is wrong — files raspi-firmware writes (config.txt, kernel, initrd)
+# get THROWN AWAY when the tmpfs is umounted in Step 6.5, then Step 7
+# fails with `grep: config.txt: No such file or directory` (v2.13.9 trap).
+# bind onto self: the dir IS a mountpoint, AND writes go to the underlying
+# directory on the ROOTFS — files persist after umount.
 mkdir -p "${ROOTFS}/boot/firmware"
-mount -t tmpfs -o size=512M,mode=0755 tmpfs "${ROOTFS}/boot/firmware"
+mount --bind "${ROOTFS}/boot/firmware" "${ROOTFS}/boot/firmware"
 
 # (4) /proc + /sys inside the chroot — raspi-firmware's update-initramfs hook
 # uses findmnt which reads /proc/mounts. Without these, postinst fails
@@ -1200,14 +1204,18 @@ ok "Pi bootloader configured"
 # wrappers. Order matters : umount tmpfs BEFORE the rsync to /boot/firmware
 # in Step 7, restore systemctl AFTER the last `chroot systemctl` call
 # (which was Step 5.4's enable secubox-kiosk.service, already done by here).
-log "Removing chroot safety net (systemctl wrapper, policy-rc.d, /boot/firmware tmpfs)"
+log "Removing chroot safety net (systemctl wrapper, policy-rc.d, /boot/firmware bind)"
 
 # (4) umount /proc + /sys (chroot no longer needs them)
 umount -lf "${ROOTFS}/proc" 2>/dev/null || true
 umount -lf "${ROOTFS}/sys"  2>/dev/null || true
 
-# (3) umount tmpfs /boot/firmware (Step 7 mounts the real BOOT partition there)
-umount "${ROOTFS}/boot/firmware" 2>/dev/null || warn "tmpfs /boot/firmware was not mounted"
+# (3) umount /boot/firmware bind (Step 7 mounts the real BOOT partition there).
+# Files written by raspi-firmware (config.txt, kernel, initrd, dtbs) PERSIST
+# in the underlying ${ROOTFS}/boot/firmware after this umount because the
+# bind was onto-self — Step 7's rsync to the loop-mounted real BOOT
+# partition then carries them along.
+umount "${ROOTFS}/boot/firmware" 2>/dev/null || warn "/boot/firmware bind was not mounted"
 
 # (2) remove policy-rc.d (first boot must be able to start daemons)
 rm -f "${ROOTFS}/usr/sbin/policy-rc.d"
