@@ -912,11 +912,14 @@ KIOSKSVC
         || err "systemctl enable secubox-kiosk.service failed"
 
     # Belt-and-suspenders: `systemctl enable` under SYSTEMD_OFFLINE in a qemu
-    # chroot doesn't always materialise the WantedBy symlink (observed in
-    # v2.13.7). Create it explicitly so the next assertion passes regardless
-    # of whether systemctl's offline behaviour wrote the link itself.
+    # chroot doesn't always materialise the WantedBy symlink (observed v2.13.7).
+    # Create it with a *relative* target (matches systemctl's own convention
+    # and resolves correctly both inside the chroot AND from the host's
+    # assertion check — v2.13.8 used an absolute "/etc/..." path which the
+    # host's `[[ -e symlink ]]` could not resolve because the absolute target
+    # doesn't exist on the host fs).
     install -d "${ROOTFS}/etc/systemd/system/graphical.target.wants"
-    ln -sf "/etc/systemd/system/secubox-kiosk.service" \
+    ln -sf "../secubox-kiosk.service" \
            "${ROOTFS}/etc/systemd/system/graphical.target.wants/secubox-kiosk.service"
 
     # Build-time assertion (#433): verify EVERY kiosk artefact made it into
