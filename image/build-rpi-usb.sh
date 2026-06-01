@@ -193,9 +193,18 @@ exit 101
 POLICY_RC_D
 chmod 0755 "${ROOTFS}/usr/sbin/policy-rc.d"
 
-# (3) tmpfs at /boot/firmware (raspi-firmware postinst needs mountpoint)
+# (3) tmpfs at /boot/firmware (raspi-firmware postinst needs mountpoint).
+# 512M: must fit kernel + initrd (~50-100M arm64) + dtbs + overlays + bootloader.
+# 64M was too small — v2.13.6 hit ENOSPC during initramfs-tools postinst.
 mkdir -p "${ROOTFS}/boot/firmware"
-mount -t tmpfs -o size=64M,mode=0755 tmpfs "${ROOTFS}/boot/firmware"
+mount -t tmpfs -o size=512M,mode=0755 tmpfs "${ROOTFS}/boot/firmware"
+
+# (4) /proc + /sys inside the chroot — raspi-firmware's update-initramfs hook
+# uses findmnt which reads /proc/mounts. Without these, postinst fails
+# silently with "findmnt: can't read /proc/mounts" before chmod/chown errors
+# show. Matches build-live-usb.sh's pattern (lines 277-278).
+mountpoint -q "${ROOTFS}/proc" || mount -t proc  proc  "${ROOTFS}/proc"
+mountpoint -q "${ROOTFS}/sys"  || mount -t sysfs sysfs "${ROOTFS}/sys"
 
 ok "Chroot safety net installed"
 
@@ -1181,6 +1190,10 @@ ok "Pi bootloader configured"
 # in Step 7, restore systemctl AFTER the last `chroot systemctl` call
 # (which was Step 5.4's enable secubox-kiosk.service, already done by here).
 log "Removing chroot safety net (systemctl wrapper, policy-rc.d, /boot/firmware tmpfs)"
+
+# (4) umount /proc + /sys (chroot no longer needs them)
+umount -lf "${ROOTFS}/proc" 2>/dev/null || true
+umount -lf "${ROOTFS}/sys"  2>/dev/null || true
 
 # (3) umount tmpfs /boot/firmware (Step 7 mounts the real BOOT partition there)
 umount "${ROOTFS}/boot/firmware" 2>/dev/null || warn "tmpfs /boot/firmware was not mounted"
