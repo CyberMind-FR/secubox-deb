@@ -177,7 +177,7 @@ mkdir -p "${ROOTFS}"
 # Core system packages
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server,locales"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,console-setup"
-INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
+INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools,iw,hostapd,wpasupplicant"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-arm64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",pciutils,usbutils,parted,dosfstools,e2fsprogs,lsb-release,gdisk"
