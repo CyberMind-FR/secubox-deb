@@ -1,0 +1,22 @@
+# /etc/udev/rules.d/80-secubox-mt76x2u-priority.rules
+#
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# CM-MESH-MPCIE-2026-06 v0.2.1 — closes #458
+#
+# Steal the WiFi interface (:1.2) of MediaTek MT7632U combo BT+WiFi chips
+# (USB ID 0e8d:7632) from btusb and hand it to mt76x2u.
+#
+# Without this rule, btusb claims ALL THREE interfaces of the combo chip
+# (:1.0 audio/uart, :1.1 BT data, :1.2 WiFi). When mt76x2u then probes :1.2,
+# the chip's hardware ROM-patch semaphore is already held by btusb's
+# init sequence, mt76x2u times out with -110 ETIMEDOUT, and no phyN
+# is ever created.
+#
+# Solution : on usb_interface add events for :1.2 of 0e8d:7632, unbind
+# btusb (silent no-op if not bound) and bind mt76x2u. Race-safe because
+# the unbind/bind cycle is atomic from the kernel's perspective.
+
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", \
+  ATTRS{idVendor}=="0e8d", ATTRS{idProduct}=="7632", \
+  ATTR{bInterfaceNumber}=="02", \
+  RUN+="/usr/local/sbin/secubox-mt76x2u-rebind %k"
