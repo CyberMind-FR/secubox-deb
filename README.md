@@ -33,12 +33,14 @@ See [LICENCE-CMSD-1.0.md](LICENCE-CMSD-1.0.md) (French, authoritative) or [LICEN
 
 | Metric | Value |
 |--------|-------|
-| ![Packages](https://img.shields.io/badge/Debian_Packages-132-blue?logo=debian) | 132 `.deb` packages |
-| ![Migration](https://img.shields.io/badge/Migration-94%25-brightgreen) | 124/132 modules migrated |
+| ![Packages](https://img.shields.io/badge/Debian_Packages-139-blue?logo=debian) | 139 `.deb` packages |
+| ![Migration](https://img.shields.io/badge/Migration-94%25-brightgreen) | 131/139 modules migrated |
 | ![APIs](https://img.shields.io/badge/API_Endpoints-2000+-informational) | FastAPI + JWT auth |
 | ![Arch](https://img.shields.io/badge/Architecture-amd64_|_arm64-orange) | x86_64 + ARM64 |
 
 SecuBox transforms any compatible device into a complete network security appliance with VPN, firewall, intrusion detection, and web dashboard — all preconfigured and ready to use.
+
+> **Status (2026-06-02)** — Versioning is **dev alpha**. The current line (v2.13.x) is **all-in-the-pipe working** — partly efficient, partly modules-integration-ready, partly upgradeable, **first-point POC**. Design philosophy : **KISS**. SecuBox aims to be a **full operating system for a security tool** — a **Swiss army knife** + **modular OS appliance**. See the [wiki Use-Cases page](https://github.com/CyberMind-FR/secubox-deb/wiki/Use-Cases) for scenario-by-scenario tweaks.
 
 ---
 
@@ -48,21 +50,31 @@ SecuBox transforms any compatible device into a complete network security applia
 [![All releases](https://img.shields.io/github/v/tag/CyberMind-FR/secubox-deb?label=latest%20tag&logo=git&color=cyan)](https://github.com/CyberMind-FR/secubox-deb/releases)
 [![Downloads](https://img.shields.io/github/downloads/CyberMind-FR/secubox-deb/total?label=downloads&color=brightgreen)](https://github.com/CyberMind-FR/secubox-deb/releases)
 
-### `v2.9.0` — Main system (2026-05-17)
+### `v2.13.x` — Main system line (2026-05-29 → ongoing)
 
-Full SecuBox-DEB platform: 132 `.deb` packages, system images for four boards, Live USB for amd64. See [release notes](https://github.com/CyberMind-FR/secubox-deb/releases/tag/v2.9.0).
+The current release line. v2.13.4 unblocked the arm64 APT publish (chain
+[#425](https://github.com/CyberMind-FR/secubox-deb/issues/425) /
+[#427](https://github.com/CyberMind-FR/secubox-deb/issues/427) /
+[#431](https://github.com/CyberMind-FR/secubox-deb/issues/431)).
+v2.13.10 produced the first working rpi400 kiosk image (chain
+[#433](https://github.com/CyberMind-FR/secubox-deb/issues/433) /
+[#436](https://github.com/CyberMind-FR/secubox-deb/issues/436)).
+v2.13.11 mass-masks non-essential services so the kiosk
+boots on a 4 GB Pi 400 ([#442](https://github.com/CyberMind-FR/secubox-deb/issues/442)).
+v2.13.12 enables the X cursor on the kiosk for salon-ready operator
+visibility ([#444](https://github.com/CyberMind-FR/secubox-deb/issues/444)).
 
-| Target | Download |
-|--------|----------|
-| **VirtualBox / QEMU / KVM** (amd64) | [`secubox-vm-x64-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-vm-x64-bookworm.img.gz) ·  [bundle with verifier + VDI](output/ci-vm-x64-25983593168/) |
-| **Live USB / amd64 PC** | [`secubox-live-amd64-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz) |
-| **MOCHAbin** (Marvell Armada 7040) | [`secubox-mochabin-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-mochabin-bookworm.img.gz) |
-| **Raspberry Pi 400** | [`secubox-rpi400-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-rpi400-bookworm.img.gz) |
-| **ESPRESSObin v7** (Marvell Armada 3720) | [`secubox-espressobin-v7-bookworm.img.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-espressobin-v7-bookworm.img.gz) |
-| **Installer ISO** (any amd64 host) | [`secubox-installer-amd64-bookworm.iso.gz`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-installer-amd64-bookworm.iso.gz) |
-| **All `.deb` packages** | attached to the [v2.9.0 release page](https://github.com/CyberMind-FR/secubox-deb/releases/tag/v2.9.0) |
-| **APT repository** | `https://apt.secubox.in/` ([install script](https://apt.secubox.in/install.sh)) |
-| **SHA256SUMS** | [`SHA256SUMS`](https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/SHA256SUMS) — verify every download |
+| Target | File | Notes |
+|--------|------|-------|
+| **VirtualBox / QEMU / KVM** (amd64) | `secubox-vm-x64-bookworm.img.gz` | service cascade in VBox is a known limit, [#422](https://github.com/CyberMind-FR/secubox-deb/issues/422) |
+| **Live USB / amd64 PC** | `secubox-live-amd64-bookworm.img.gz` | validated in VBox, boots to kiosk login |
+| **MOCHAbin** (Marvell Armada 7040) | `secubox-mochabin-bookworm.img.gz` | primary appliance target |
+| **Raspberry Pi 400 / Pi 4** | `secubox-rpi-arm64-bookworm.img.gz` | kiosk-by-default since v2.13.10 |
+| **Installer ISO** (any amd64 host) | `secubox-installer-amd64-bookworm.iso.gz` | dual format `.iso` + `.img` |
+| **APT repository** | `https://apt.secubox.in/` | signed arm64 + amd64 since v2.13.4 |
+| **SHA256SUMS** | `SHA256SUMS` | verify every download |
+
+All artefacts are attached to the [latest release page](https://github.com/CyberMind-FR/secubox-deb/releases/latest) — links above are illustrative ; the shield at the top of this section follows the latest stable tag automatically.
 
 ### `v2.2.1-eye-remote` — Round display (2026-05-11)
 
