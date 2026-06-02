@@ -38,6 +38,12 @@ jobs:
 
       - name: Install cross toolchain + build deps
         run: |
+          # Enable arm64 multi-arch BEFORE apt-get update so the index
+          # ships both amd64 and arm64 metadata. bindeb-pkg's auto-generated
+          # debian/control declares `Build-Depends: libssl-dev` which under
+          # dpkg-buildpackage -aarm64 resolves to libssl-dev:arm64 — the
+          # host's amd64 libssl-dev alone fails dpkg-checkbuilddeps.
+          sudo dpkg --add-architecture arm64
           sudo apt-get update -qq
           # build-essential is needed because bindeb-pkg auto-generates a
           # debian/control that lists `build-essential:native` in
@@ -47,7 +53,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential \
             gcc-aarch64-linux-gnu make bc flex bison \
-            libssl-dev libelf-dev wget xz-utils \
+            libssl-dev libssl-dev:arm64 libelf-dev wget xz-utils \
             kmod cpio rsync debhelper dpkg-dev fakeroot \
             python3 git
 
