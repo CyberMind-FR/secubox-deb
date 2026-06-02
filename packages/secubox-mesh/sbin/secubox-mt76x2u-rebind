@@ -1,0 +1,37 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# secubox-mt76x2u-rebind — udev helper, closes #458 race
+#
+# Called from /etc/udev/rules.d/80-secubox-mt76x2u-priority.rules on
+# usb_interface add events for the WiFi half (:1.2) of MediaTek MT7632U
+# combo BT+WiFi chips.
+#
+# btusb otherwise claims all 3 interfaces of the combo, deadlocking
+# the WiFi half's ROM-patch semaphore. This helper unbinds btusb from
+# the WiFi interface and binds mt76x2u — letting it own the hardware
+# semaphore cleanly.
+
+set -eu
+
+KERNEL_DEV="${1:-}"
+[ -n "$KERNEL_DEV" ] || exit 0   # no device specified, silent no-op
+
+LOG_TAG="secubox-mt76x2u-rebind"
+
+# Silent if btusb wasn't claiming this interface (rule still ran on a
+# fresh enumeration where btusb hadn't bound yet).
+if echo "$KERNEL_DEV" > /sys/bus/usb/drivers/btusb/unbind 2>/dev/null; then
+    logger -t "$LOG_TAG" "unbound btusb from $KERNEL_DEV"
+fi
+
+# Small delay so the kernel resettles before mt76x2u takes over.
+sleep 1
+
+if echo "$KERNEL_DEV" > /sys/bus/usb/drivers/mt76x2u/bind 2>/dev/null; then
+    logger -t "$LOG_TAG" "bound mt76x2u to $KERNEL_DEV"
+else
+    logger -t "$LOG_TAG" "WARN: mt76x2u bind failed on $KERNEL_DEV"
+    exit 1
+fi

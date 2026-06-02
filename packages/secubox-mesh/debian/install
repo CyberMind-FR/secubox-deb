@@ -1,0 +1,2 @@
+udev/80-secubox-mt76x2u-priority.rules    etc/udev/rules.d/
+sbin/secubox-mt76x2u-rebind               usr/local/sbin/
