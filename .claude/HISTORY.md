@@ -3,6 +3,82 @@
 
 ---
 
+## 2026-06-02 — Pi 400 BOOTS TO KIOSK + login works (live patches + #442 closed)
+
+The v2.13.10 image flashed yesterday booted but never reached graphical.target.
+Diag revealed two stacked issues : a build-time boot storm and a missing
+admin password seed.
+
+### What was happening
+
+* `multi-user.target.wants/` had **150 enabled services**. Pi 400 (4 GB) couldn't
+  bring them all up — many LXC-driven apps (jellyfin, jitsi, peertube, photoprism,
+  matrix, gotosocial, mail, ollama, localai, gitea, …) and hardware-specific
+  daemons (`secubox-otg-gadget`, `secubox-led-trigger`, `secubox-healthbump`,
+  `secubox-picobrew`) failed and entered restart loops. Journal showed
+  `restart counter is at 13`, then kernel `task blocked for more than
+  120 seconds`. multi-user.target never reached, so graphical.target never
+  activated, so secubox-kiosk.service never tried to start. Boot stopped
+  at tty1.
+* `secubox-bootmenu.service` failed with exit 1 in the early-boot tty
+  context (`read -t` on tty1 before getty is ready). Not blocking but
+  noise in the journal.
+* The kiosk web UI showed up after the fix but **rejected admin/secubox
+  login**. Root cause : `/etc/secubox/users.json` shipped with
+  `password_hash: null` for admin and `must_change_password: true`, and
+  the kiosk login form doesn't implement the "set new password on first
+  login" flow.
+
+### What was done
+
+* **Live SD patch** : removed 130 non-essential symlinks from
+  `multi-user.target.wants/`, kept a 20-entry kiosk-essential whitelist :
+  - Debian core : avahi-daemon, console-setup, cron, e2scrub_reap,
+    networking, nginx, remote-fs.target, ssh, systemd-networkd,
+    wpa_supplicant
+  - SecuBox web stack : secubox-auth, secubox-certs, secubox-cookies,
+    secubox-core, secubox-defaults, secubox-hardening, secubox-hub,
+    secubox-portal, secubox-runtime, secubox-system, secubox-users
+* **Live SD patch** : seeded `admin` password = `secubox` (argon2id hash),
+  cleared `must_change_password`, removed the bogus `runnervm3jyl0` user
+  that the CI runner had auto-created.
+* Pi 400 rebooted on patched SD : `Reached target multi-user.target`,
+  `Started secubox-kiosk.service`, `Reached target graphical.target` —
+  the kiosk Chromium displayed the SecuBox login screen on HDMI.
+* Login `admin` / `secubox` accepted, dashboard loaded.
+
+### What was committed as proper CI fix
+
+* **#442** filed + **PR #443** merged → **v2.13.11** tagged. Adds Step 5.3
+  to `build-rpi-usb.sh` after the dpkg -i loop : trims
+  `multi-user.target.wants/` to the same 20-entry whitelist + removes
+  `secubox-bootmenu.service` from `sysinit.target.wants/`. v2.13.11
+  build-rpi-usb CI is still in progress at HISTORY-write time.
+
+### Remaining cosmetic items (low priority)
+
+* `secubox-kiosk.service` runs `startx -- :0 vt7 -nocursor` — the
+  `-nocursor` hides the mouse pointer (intentional for a touch kiosk,
+  unwelcome on the Pi 400 keyboard+mouse form factor).
+* Kiosk login UI doesn't show the LAN IP — operator can't easily SSH
+  in without finding it via the router or another method.
+* The `password_hash: null` admin in users.json shouldn't ship at all —
+  the CI build should seed a known default OR force the first-login
+  wizard. Filed as a follow-up.
+
+### Lessons (added to memory)
+
+* `feedback_no_mass_daemon_restart` was about *runtime* on gk2 ; the
+  same pattern bites at *build time* on weaker boards (Pi 400). Image
+  builds need a per-board service profile, not enable-all-by-default.
+* When debugging "boot stops at tty1", check the journal for
+  `Reached target multi-user.target` and `Started getty@tty1.service`
+  in the SAME boot. If getty starts but multi-user never reaches, you
+  have a wants/ overload. Look at `restart counter` and
+  `task blocked for more than N seconds`.
+
+---
+
 ## 2026-06-01 — kiosk-on-rpi400 actually ships : the #436 chain (PRs #437–#441)
 
 Closing the kiosk regression discovered the day before. Five back-to-back PRs,

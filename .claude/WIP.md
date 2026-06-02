@@ -1,5 +1,61 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-01*
+*Mis à jour : 2026-06-02*
+
+---
+
+## 🔄 2026-06-02 : Pi 400 boot to kiosk + login working
+
+### ✅ Done
+
+* **Diag du boot Pi 400** (SD v2.13.10) : multi-user.target jamais atteinte
+  parce que 150 services enabled → restart loops sur ~10 services →
+  kernel `task blocked > 120s` → boot abandonné à tty1. Identifié dans le
+  journal post-boot (sudo NOPASSWD activé pour faciliter le diag).
+* **SD patchée live** : 130 symlinks retirés de
+  `multi-user.target.wants/`, 20 essentiels gardés (Debian core + SecuBox
+  web stack). `secubox-bootmenu.service` aussi retiré de
+  `sysinit.target.wants/`.
+* **users.json patch live** : `admin` password = `secubox` (hash
+  argon2id), `must_change_password` = false, user `runnervm3jyl0`
+  auto-créé par le CI supprimé.
+* Pi 400 reboot sur SD patchée → `Reached target multi-user`,
+  `Started secubox-kiosk.service`, `Reached target graphical.target`,
+  Chromium fullscreen sur la kiosk login UI. Login `admin / secubox` OK.
+* **#442 filée + PR #443 mergée** : Step 5.3 dans `build-rpi-usb.sh`
+  applique le même whitelist en CI build (130 symlinks → 20).
+  `secubox-bootmenu.service` également retiré de sysinit.target.wants.
+* **Tag v2.13.11 poussé**, watcher `boqacts2x` en cours sur le rebuild
+  rpi400.
+
+### ⬜ Next up
+
+### 🎪 Salon demo readiness — rpi400 doit être prêt
+
+Le Pi 400 doit servir de démo terrain. Tout ce qui distingue un appareil
+"prototype" d'un appareil "fini" doit être corrigé. Priorité salon :
+
+* **Cursor kiosk** (P0 salon, **PAS cosmétique**) : retirer `-nocursor`
+  du `ExecStart` de `secubox-kiosk.service`. Le visiteur salon DOIT
+  voir où il pointe à l'écran sinon ça paraît cassé. Fix simple en
+  source + live SD patch.
+* **LAN IP visible sur la kiosk login UI** : afficher l'IP du board
+  sur l'écran de login pour qu'on puisse pointer/expliquer "ce boîtier
+  est joignable à 192.168.x.y".
+* **Admin password seed côté CI** : ship `users.json` avec un password
+  seedé (pas `password_hash: null`). Pour le salon, login direct sans
+  intervention manuelle.
+* **Mode profil kiosk UI allégé** (architecture propre, post-v2.13.11) :
+  remplacer `secubox-full` + mass-mask par un profil "kiosk-light"
+  installant ~15 paquets (nginx + secubox web stack + chromium/openbox/xinit).
+  Image plus petite (~3-4 GB au lieu de 8 GB), boot plus rapide,
+  plus de mass-mask défensif. À filer en issue.
+* Verdict v2.13.11 CI (watcher `boqacts2x` en cours) — confirmer que
+  le mass-mask CI-side produit une image qui boote autonomement.
+
+### 📋 Backlog non-bloquant (post-salon)
+
+* #434 kiosk lockdown, PR #429 NC dashboard, #421 sockets, #422 vm-x64,
+  espressobin / live-amd64 / mochabin builds, cloud.gk2 vhost.
 
 ---
 
