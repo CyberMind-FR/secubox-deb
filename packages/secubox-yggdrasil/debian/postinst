@@ -46,8 +46,8 @@ EOF
 
         # Enable and start service
         systemctl daemon-reload
-        systemctl enable secubox-mesh.service
-        systemctl start secubox-mesh.service || true
+        systemctl enable secubox-yggdrasil.service
+        systemctl start secubox-yggdrasil.service || true
         ;;
 esac
 
