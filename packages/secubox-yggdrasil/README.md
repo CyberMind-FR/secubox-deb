@@ -22,7 +22,7 @@ Mesh networking with Yggdrasil
 curl -fsSL https://apt.secubox.in/install.sh | sudo bash
 
 # Install package
-sudo apt install secubox-mesh
+sudo apt install secubox-yggdrasil
 ```
 
 ## Configuration

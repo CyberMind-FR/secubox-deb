@@ -4,8 +4,8 @@ set -e
 case "$1" in
     remove|upgrade|deconfigure)
         # Stop service
-        systemctl stop secubox-mesh.service || true
-        systemctl disable secubox-mesh.service || true
+        systemctl stop secubox-yggdrasil.service || true
+        systemctl disable secubox-yggdrasil.service || true
         ;;
 esac
 

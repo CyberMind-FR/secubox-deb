@@ -1,7 +1,7 @@
 # debian/secubox.yaml
 # Auto-generated from debian/control
 
-name: secubox-mesh
+name: secubox-yggdrasil
 category: vpn
 tier: lite
 description: "SecuBox Mesh DNS - Meshname DNS for mesh networks"
