@@ -958,7 +958,7 @@ Conflicts=getty@tty7.service
 Type=simple
 User=root
 Environment=HOME=/root
-ExecStart=/usr/bin/startx -- :0 vt7 -nocursor
+ExecStart=/usr/bin/startx -- :0 vt7
 Restart=on-failure
 RestartSec=5
 StandardInput=tty
