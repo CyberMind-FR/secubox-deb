@@ -1,10 +1,44 @@
 # CLAUDE.md — sous-module `secubox-mesh-bt`
 
 > Emplacement cible : `packages/secubox-mesh-bt/CLAUDE.md`
-> Réf. spec : CM-MESH-MPCIE-2026-06 (annexe BT) · Cible : MochaBin-5G · Licence : LicenseRef-CMSD-1.0
+> Réf. spec : CM-MESH-MPCIE-2026-06 **v0.2.1-draft** (annexe BT) · Cible : MochaBin-5G · Licence : LicenseRef-CMSD-1.0
 > Dépend de : `secubox-mesh` (CM-MESH-MPCIE-2026-06)
+> Spec complète : [`docs/specs/CM-MESH-MPCIE-2026-06.md`](../../docs/specs/CM-MESH-MPCIE-2026-06.md)
 
 Sous-module Bluetooth/BLE de SecuBox-Deb. Trois sous-systèmes, **un seul flux unifié**. Lis tout avant d'agir.
+
+## ⚠ Update v0.2.1 (2026-06-02) — TROU MATÉRIEL BLE confirmé (bloquant S2/S3)
+
+La spec a été figée et le bilan inventaire BLE est sans appel :
+
+| Pièce détenue | Verdict |
+|---|---|
+| 3Com SL-10208 (2003) | ❌ BT 1.x, **pré-BLE** |
+| Belkin F8T012 | ❌ BT 2.0, **pas de LE** |
+| MT7632U (Ciotco) — moitié BT | ❌ support mainline = vieux staging `btmtk_usb` (noyaux 3.11–3.13 seulement, retiré) ; BT 4.x. **Inutilisable sur Debian ARM64 actuelle.** |
+| WLE650V5 (QCA6174) — BT | ⚠ BT 4.1 — **LESC à confirmer** ; prototypage uniquement, pas de garantie production |
+
+**Conclusion : aucun contrôleur BLE 5.x / LESC exploitable en stock.**
+
+### Décision à prendre avant d'implémenter S2/S3
+
+- **Option A** — sourcer un contrôleur **BLE 5.x mainline** :
+  - `btmtk` MT7921/7922 (chipsets WiFi+BT combo récents, BT 5.2)
+  - CSR8510 USB dongle (BT 4.0+, LESC ok, mainline `btusb`)
+  - nRF52 dev kit avec firmware HCI (BlueZ propre, contrôle total)
+- **Option B** — **ESP32 en front-end BLE** (en stock) : device Improv-canonical, MochaBin reste plan de contrôle. Voie cohérente avec `secubox-mesh-bt`. Le sous-module devient ALORS un **proxy GATT-over-USB-serial** ou **GATT-over-network** vers l'ESP32.
+
+**Tant que cette décision n'est pas tranchée :**
+
+- **S1 (BT Mesh relay/proxy)** : reste implémentable si un contrôleur BT 4.x suffit (à valider — bluetooth-meshd exige BLE 4.x minimum).
+- **S2 (BLE WiFi provisioning)** et **S3 (Double-auth QR+BLE)** : **BLOQUÉS** sur le choix Option A/B.
+
+L'agent qui démarre cette issue doit explicitement valider quelle option a été retenue (issue tracking séparée) AVANT d'écrire `gatt.py`, `oob.py`, `session.py`.
+
+### Conséquences architecturales
+
+- **Option A retenue** : l'arborescence et le code décrits ci-dessous restent valides. Le contrôleur BLE 5.x est local au MochaBin (HCI direct).
+- **Option B retenue (ESP32 front-end)** : `gatt.py` devient un client (pas un serveur) parlant à l'ESP32 via USB-serial ou UDP/TCP. Le flux QR+nonce+LESC-OOB reste piloté par le MochaBin, mais le pairing radio se passe sur l'ESP32. Refactor mineur.
 
 ---
 
