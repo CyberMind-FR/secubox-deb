@@ -112,6 +112,12 @@ jobs:
           grep -q "CONFIG_ZRAM=m" .config           || (echo "FAIL: ZRAM module missing" && exit 1)
           grep -q "^CONFIG_ZRAM_DEF_COMP_ZSTD=y" .config || (echo "FAIL: ZRAM zstd default missing" && exit 1)
 
+          # Wireless mesh stack (CM-MESH-MPCIE-2026-06 v0.2.1)
+          grep -q "CONFIG_MT76x2U=m"   .config || (echo "FAIL: mt76x2u missing"  && exit 1)
+          grep -q "CONFIG_ATH10K_PCI=m" .config || (echo "FAIL: ath10k_pci missing" && exit 1)
+          grep -q "CONFIG_ATH9K_HTC=m" .config || (echo "FAIL: ath9k_htc missing" && exit 1)
+          grep -q "CONFIG_MAC80211_MESH=y" .config || (echo "FAIL: 802.11s missing" && exit 1)
+
       - name: Build kernel .deb (bindeb-pkg)
         run: |
           cd /tmp/build/linux-${KERNEL_VERSION}

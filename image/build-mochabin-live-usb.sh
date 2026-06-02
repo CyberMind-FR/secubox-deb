@@ -177,7 +177,7 @@ mkdir -p "${ROOTFS}"
 # Core system packages
 INCLUDE_PKGS="systemd,systemd-sysv,dbus,netplan.io,nftables,openssh-server,locales"
 INCLUDE_PKGS+=",python3,python3-pip,nginx,curl,wget,ca-certificates,gnupg,console-setup"
-INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools"
+INCLUDE_PKGS+=",iproute2,iputils-ping,ethtool,net-tools,wireguard-tools,iw,hostapd,wpasupplicant"
 INCLUDE_PKGS+=",sudo,less,vim-tiny,logrotate,cron,rsync,jq,dnsmasq"
 INCLUDE_PKGS+=",linux-image-arm64,live-boot,live-boot-initramfs-tools,live-config,live-config-systemd"
 INCLUDE_PKGS+=",pciutils,usbutils,parted,dosfstools,e2fsprogs,lsb-release,gdisk"
@@ -193,6 +193,12 @@ INCLUDE_PKGS+=",python3-toml,python3-netifaces,python3-serial"
 INCLUDE_PKGS+=",bridge-utils,dnsutils,iputils-arping,avahi-daemon,avahi-utils"
 INCLUDE_PKGS+=",ieee-data,procps,openssl,haproxy,qrencode"
 INCLUDE_PKGS+=",fonts-noto-color-emoji"
+
+# WiFi firmware + regulatory (CM-MESH-MPCIE-2026-06 v0.2.1)
+#   firmware-misc-nonfree : mt7662 (MT7632U) + ath10k (QCA9880) blobs
+#   firmware-atheros      : htc_9271.fw (AR9271 USB) — firmware-free option
+#   wireless-regdb        : signed regulatory DB, FR domain lock at postinst
+INCLUDE_PKGS+=",firmware-misc-nonfree,firmware-atheros,wireless-regdb"
 
 # Cross-architecture debootstrap with QEMU
 debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \
