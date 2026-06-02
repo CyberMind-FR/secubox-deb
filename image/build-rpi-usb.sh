@@ -838,6 +838,73 @@ ln -sf /usr/lib/systemd/system/nginx.service \
 ok "SecuBox packages installed"
 
 # ══════════════════════════════════════════════════════════════════
+# Step 5.3: Mass-mask non-essential services (closes #442)
+# ══════════════════════════════════════════════════════════════════
+# Each secubox-* .deb's postinst enables its service in
+# multi-user.target.wants/. With secubox-full installed, that's 140+
+# services. Pi 400 (4 GB) can't bring them all up at boot — multi-user
+# never fully activates → graphical.target never activates →
+# secubox-kiosk never starts → boot stops at tty1.
+#
+# Trim multi-user.target.wants/ down to a kiosk-essential whitelist :
+# the web stack that serves http://127.0.0.1/ to chromium, plus the
+# Debian/system minimum. Everything else stays *installed* (so a
+# future profile change can re-enable) but is removed from the boot
+# wants list.
+log "Trimming multi-user.target.wants/ to kiosk-essential whitelist (#442)"
+
+KIOSK_WANTS_KEEP=(
+    # Debian/system core
+    avahi-daemon.service
+    console-setup.service
+    cron.service
+    e2scrub_reap.service
+    networking.service
+    nginx.service
+    remote-fs.target
+    ssh.service
+    systemd-networkd.service
+    wpa_supplicant.service
+    # SecuBox kiosk web stack — serves http://127.0.0.1/
+    secubox-auth.service
+    secubox-certs.service
+    secubox-cookies.service
+    secubox-core.service
+    secubox-defaults.service
+    secubox-hardening.service
+    secubox-hub.service
+    secubox-portal.service
+    secubox-runtime.service
+    secubox-system.service
+    secubox-users.service
+)
+declare -A _KEEP_SET
+for s in "${KIOSK_WANTS_KEEP[@]}"; do _KEEP_SET["$s"]=1; done
+
+_wants_dir="${ROOTFS}/etc/systemd/system/multi-user.target.wants"
+_removed=0
+for f in "${_wants_dir}"/*; do
+    [[ -e "$f" ]] || continue
+    bn=$(basename "$f")
+    if [[ -z "${_KEEP_SET[$bn]:-}" ]]; then
+        rm -f "$f"
+        _removed=$((_removed + 1))
+    fi
+done
+ok "Removed ${_removed} non-essential symlinks (kept ${#KIOSK_WANTS_KEEP[@]})"
+
+# secubox-bootmenu.service fails with exit 1 in the early-boot tty
+# context (read -t on tty1 returns non-zero before getty is ready).
+# It's redundant on rpi400 because the image pre-seeds boot-mode=kiosk
+# + default.target=graphical.target. Remove it from sysinit.target.wants
+# so its failure doesn't pollute the boot.
+_sysinit_wants="${ROOTFS}/etc/systemd/system/sysinit.target.wants"
+if [[ -e "${_sysinit_wants}/secubox-bootmenu.service" ]]; then
+    rm -f "${_sysinit_wants}/secubox-bootmenu.service"
+    ok "Removed secubox-bootmenu from sysinit.target.wants (was failing exit 1)"
+fi
+
+# ══════════════════════════════════════════════════════════════════
 # Step 5.4: Optional GUI kiosk mode (closes #423)
 # ══════════════════════════════════════════════════════════════════
 # The --kiosk flag was parsed but never acted on (#423 was filed for this
