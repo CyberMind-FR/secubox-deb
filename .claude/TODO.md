@@ -1,20 +1,31 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-01*
+*Mis à jour : 2026-06-02*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
 
-### Release pipeline ✅ v2.13.4 APT GREEN + v2.13.10 rpi400 image GREEN
+### Release pipeline ✅ v2.13.4 APT GREEN + v2.13.12 rpi400 kiosk SALON-READY
 
-- [x] **v2.13.4** taggé, Release CI vert, **APT publish OK pour la 1ʳᵉ fois
-  depuis v2.13.0**. 153 release assets dont 5 arm64. Chaîne complète : #425
-  (`dh_shlibdeps -X`) + #427/PR #428 (`-a matrix.arch`) + #431/PR #432
-  (`binutils-aarch64-linux-gnu`).
-- [x] **v2.13.10** rpi400 image build SUCCESS via PRs #437/#438/#439/#440/#441
-  (#436 closed). Image téléchargée depuis le workflow artifact (Release n'a
-  pas publié à cause des autres archs cassées), flashée + kiosk artefacts
-  tous vérifiés. **Boot test physique Pi 400 à faire**.
+- [x] **v2.13.4** APT publish vert (chaîne #425 + #427/PR #428 + #431/PR #432).
+- [x] **v2.13.10** rpi400 image build SUCCESS (chaîne #436 — PRs #437/#438/#439/#440/#441).
+- [x] **v2.13.11** mass-mask non-essential services (#442 / PR #443) — Pi 400 boote
+  enfin sur multi-user → graphical → kiosk.
+- [x] **v2.13.12** cursor visible sur kiosk (#444 / PR #445) — salon-ready.
+- [x] **Boot test Pi 400** : SD v2.13.10 + live patches (mass-mask + admin password seed)
+  boote, kiosk Chromium affiche, login admin/secubox OK.
+
+### 🎪 Salon demo readiness — issues filées 2026-06-02
+
+- [ ] **#447** admin password seed côté CI : `users.json` ship avec password seedé
+  (Option A : seed admin/secubox at build + drop `runnervm3jyl0` stray ; Option B :
+  implémenter `/setup` flow first-login). Recommandation : A maintenant, B follow-up.
+- [ ] **#448** LAN IP visible sur la kiosk login UI : backend
+  `GET /api/v1/system/identity` + frontend display IP/hostname/version au bas du form.
+- [ ] **#446** Full Traveller OS (multi-mode / multi-boot / multi-arch / shared data) —
+  vision opérateur 2026-06-02, big architectural feature, post-salon.
+
+### Issues ouvertes filées 2026-05-31 (post-v2.13.4)
 
 ### Espressobin / live-amd64 / mochabin builds (à traiter séparément)
 
