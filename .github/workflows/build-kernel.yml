@@ -154,6 +154,10 @@ jobs:
                bindeb-pkg
 
       - name: Collect .deb artifacts
+        # always() : even if bindeb-pkg fails late (linux-headers/linux-libc-dev
+        # build aborted), the linux-image-*.deb may already be on disk and is
+        # the deployment-critical artifact.
+        if: always()
         run: |
           mkdir -p /tmp/artifacts
           # bindeb-pkg drops .deb files in /tmp/build (one level above the src tree).
@@ -163,9 +167,11 @@ jobs:
           ls -la /tmp/artifacts/
 
       - name: Upload kernel .deb bundle
+        # always() so partial artifacts (linux-image-only) still land.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: secubox-kernel-${{ inputs.kernel_version }}-${{ inputs.revision }}-arm64
           path: /tmp/artifacts/*.deb
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
