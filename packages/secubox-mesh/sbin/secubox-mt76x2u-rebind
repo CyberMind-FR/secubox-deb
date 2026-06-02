@@ -6,32 +6,93 @@
 #
 # Called from /etc/udev/rules.d/80-secubox-mt76x2u-priority.rules on
 # usb_interface add events for the WiFi half (:1.2) of MediaTek MT7632U
-# combo BT+WiFi chips.
+# combo BT+WiFi chips (0e8d:7632).
 #
-# btusb otherwise claims all 3 interfaces of the combo, deadlocking
-# the WiFi half's ROM-patch semaphore. This helper unbinds btusb from
-# the WiFi interface and binds mt76x2u — letting it own the hardware
-# semaphore cleanly.
+# At boot, mt76x2u's FIRST probe attempt typically times out on the
+# chip's hardware ROM-patch semaphore (held by an earlier bootloader
+# touch or by btusb's concurrent claim). The chip refuses every
+# subsequent bind with -110 ETIMEDOUT until cold-reset.
+#
+# Strategy : USB-device-level `authorized` 0 → 1 cycle COLD-resets the
+# chip without physical replug. A `/run/secubox/mt76x2u/<dev>.done`
+# marker prevents an infinite udev loop : the authorize cycle below
+# triggers another `add` event that fires this script again — the
+# marker tells the second invocation to skip the cold-reset and just
+# do the bind sequence.
 
 set -eu
 
 KERNEL_DEV="${1:-}"
-[ -n "$KERNEL_DEV" ] || exit 0   # no device specified, silent no-op
+[ -n "$KERNEL_DEV" ] || exit 0
 
 LOG_TAG="secubox-mt76x2u-rebind"
+MARKER_DIR="/run/secubox/mt76x2u"
+mkdir -p "$MARKER_DIR" 2>/dev/null || true
 
-# Silent if btusb wasn't claiming this interface (rule still ran on a
-# fresh enumeration where btusb hadn't bound yet).
+# Resolve parent USB device (strip ":1.2" from interface kdev).
+USB_DEV="${KERNEL_DEV%:*}"
+USB_DEV_DIR="/sys/bus/usb/devices/$USB_DEV"
+
+# Sanity : a usb_interface always has a parent usb_device with `authorized`.
+[ -e "$USB_DEV_DIR/authorized" ] || {
+    logger -t "$LOG_TAG" "skip $KERNEL_DEV: no parent usb_device at $USB_DEV_DIR"
+    exit 0
+}
+
+# Marker key — use sanitized USB_DEV (turn '/' into '_' to keep it flat).
+MARKER="$MARKER_DIR/$(echo "$USB_DEV" | tr '/' '_').done"
+
+cold_reset=0
+if [ ! -e "$MARKER" ]; then
+    # First time we see this USB device this boot — cold-reset the chip.
+    cold_reset=1
+fi
+
+if [ "$cold_reset" -eq 1 ]; then
+    logger -t "$LOG_TAG" "cold-resetting $USB_DEV (authorized 0 -> 1)"
+    # Set marker BEFORE the cycle so the re-entrant invocation triggered
+    # by `authorized 1` does NOT loop into another cold-reset.
+    touch "$MARKER"
+
+    echo 0 > "$USB_DEV_DIR/authorized" 2>/dev/null || true
+    # 2 s : USB stack quiesce + chip semaphore clear.
+    sleep 2
+    echo 1 > "$USB_DEV_DIR/authorized" 2>/dev/null || true
+
+    # 5 s : USB re-enumeration + driver claim race.
+    # The re-enumeration will trigger this script again via udev with
+    # the marker present, so we exit here and let the second invocation
+    # do the bind sequence on a chip that just received a clean cold-boot.
+    sleep 5
+    logger -t "$LOG_TAG" "cold-reset done for $USB_DEV, leaving rebind to re-entrant invocation"
+    exit 0
+fi
+
+# Marker present → this is the re-entrant invocation post cold-reset.
+# Or it's a hot-plug after first one (which is also fine — the chip
+# coming in fresh from a physical plug doesn't need our cold-reset).
+
+# Unbind btusb if it claimed the WiFi interface.
 if echo "$KERNEL_DEV" > /sys/bus/usb/drivers/btusb/unbind 2>/dev/null; then
     logger -t "$LOG_TAG" "unbound btusb from $KERNEL_DEV"
 fi
 
-# Small delay so the kernel resettles before mt76x2u takes over.
+# 1 s : kernel resettles after unbind.
 sleep 1
+
+# Check current driver before attempting bind.
+DRV=$(readlink "/sys/bus/usb/devices/$KERNEL_DEV/driver" 2>/dev/null | xargs basename 2>/dev/null || echo none)
+
+if [ "$DRV" = "mt76x2u" ]; then
+    # Already bound (the auto-bind after cold-reset re-enumeration hit
+    # mt76x2u first this time). Nothing to do.
+    logger -t "$LOG_TAG" "$KERNEL_DEV already bound to mt76x2u (auto-bind after cold-reset)"
+    exit 0
+fi
 
 if echo "$KERNEL_DEV" > /sys/bus/usb/drivers/mt76x2u/bind 2>/dev/null; then
     logger -t "$LOG_TAG" "bound mt76x2u to $KERNEL_DEV"
 else
-    logger -t "$LOG_TAG" "WARN: mt76x2u bind failed on $KERNEL_DEV"
+    logger -t "$LOG_TAG" "WARN: mt76x2u bind failed on $KERNEL_DEV (currently=$DRV)"
     exit 1
 fi
