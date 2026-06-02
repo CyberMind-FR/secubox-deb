@@ -45,13 +45,23 @@ jobs:
           # bindeb-pkg under `dpkg-buildpackage -aarm64` then needs
           # libssl-dev:arm64 to satisfy the kernel package Build-Depends.
           sudo dpkg --add-architecture arm64
-          # Pin existing entries to amd64 only.
-          sudo sed -i 's|^deb http|deb [arch=amd64] http|' /etc/apt/sources.list
-          # Detect codename and add the arm64 ports mirror entries.
+          # Modern Ubuntu runners (noble+) use DEB822 sources.list.d/ubuntu.sources
+          # — not the legacy /etc/apt/sources.list. Pin EVERY existing source
+          # (legacy .list and DEB822 .sources) to amd64, then add an arm64
+          # pointer to ports.ubuntu.com (security/archive serve amd64 only).
+          for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+            [ -f "$f" ] && sudo sed -i 's|^deb http|deb [arch=amd64] http|; s|^deb https|deb [arch=amd64] https|' "$f"
+          done
+          for f in /etc/apt/sources.list.d/*.sources; do
+            [ -f "$f" ] && grep -q '^Architectures:' "$f" \
+              || ([ -f "$f" ] && sudo sed -i '/^Types:/a Architectures: amd64' "$f")
+          done
           CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+          PORTS_LIST=/etc/apt/sources.list.d/arm64-ports.list
+          sudo rm -f "$PORTS_LIST"
           for suite in "$CODENAME" "${CODENAME}-updates" "${CODENAME}-security" "${CODENAME}-backports"; do
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $suite main restricted universe multiverse" \
-              | sudo tee -a /etc/apt/sources.list >/dev/null
+              | sudo tee -a "$PORTS_LIST" >/dev/null
           done
           sudo apt-get update -qq
           # build-essential is needed because bindeb-pkg auto-generates a
