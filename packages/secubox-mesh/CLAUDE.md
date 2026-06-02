@@ -1,10 +1,32 @@
 # CLAUDE.md — module `secubox-mesh`
 
 > Emplacement cible : `packages/secubox-mesh/CLAUDE.md`
-> Réf. spec : CM-MESH-MPCIE-2026-06 · Cible : MochaBin-5G (Armada 7040) · Licence : LicenseRef-CMSD-1.0
+> Réf. spec : CM-MESH-MPCIE-2026-06 **v0.2.1-draft** (2026-06-02) · Cible : MochaBin-5G (Armada 7040) · Licence : LicenseRef-CMSD-1.0
+> Spec complète : [`docs/specs/CM-MESH-MPCIE-2026-06.md`](../../docs/specs/CM-MESH-MPCIE-2026-06.md)
 
 Ce fichier est le contexte opérationnel de l'agent pour construire le module **MESH** de SecuBox-Deb
 (WiFi mPCIe + mesh 802.11s + AP Passpoint). Lis-le entièrement avant toute action.
+
+## ⚠ Update v0.2.1 (2026-06-02) — matrice radio FIGÉE sur stock réel
+
+La spec a été figée d'après l'inventaire matériel réel. Conséquences pour le code agent :
+
+- **Backhaul mesh** : **WLE900VX / QCA9880 / `ath10k_pci`** (mPCIe PCIe natif, 3×3 5 GHz, 3 antennes U.FL requises).
+- **Accès client / mesh client** : **MT7632U / `mt76x2u`** (USB-interface, placement USB3 recommandé — alim/énumération plus propres, libère le mPCIe pour le WLE900VX). Alternative : **AR9271 / `ath9k_htc`** (firmware-free, 1×1 11n) pour auditabilité maximale.
+- **Topologie multi-radio par nœud** : 1 mPCIe (PCIe) + 2 USB3.0 → jusqu'à 3 radios. Tri-radio possible (backhaul + accès 5 GHz + accès 2.4 GHz/scan).
+- **MT7615 et ath9k mPCIe : ABANDONNÉS** (non détenus).
+- **Carte Globalscale (NXP 88W9xxx)** : écartée pour le mesh (pas de `mesh point`, firmware opaque).
+- **Repli backhaul documenté** : si 802.11s sous ath10k déçoit (point ouvert n°1), basculer le backhaul sur **MT7632U mt76 en mPCIe (USB2)** — mt76 mesh plus mûr, au prix du plafond ~480 Mbps brut.
+- **Modules blindés « S305-8946-1A4C » = MT7632U** (point ouvert n°6 résolu). USB-interface, comportement identique à la clé Ciotco.
+
+Le code reste **agnostique du chipset** (driver/bande/backhaul = paramètres TOML) mais le `mesh.toml` template par défaut reflète désormais le stock retenu (backhaul = `ath10k_pci`, access = `mt76x2u`).
+
+### Items de validation prioritaires (§9 de la spec)
+
+1. **802.11s/HWMP sous ath10k (QCA9880)** — item de validation **n°1**, bloquant choix backhaul. Le code DOIT être prêt au repli mt76 sans refactor (driver agnostique).
+2. **Stabilité MT7632U** — exemplaire détenu à valider (variantes signalées instables — driver qui plante, `wlan` absente malgré `mt76x2u`).
+3. **Maturité WPA3-SAE Mesh** — bloquant CSPN, à instrumenter en phase 1 (log WARN au démarrage déjà prévu).
+4. **Antennes U.FL** : 3 pigtails requis pour le WLE900VX 3×3 — vérifier stock.
 
 ---
 
