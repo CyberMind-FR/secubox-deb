@@ -542,7 +542,7 @@ async def get_status():
     mesh_running = False
     try:
         result = subprocess.run(
-            ["systemctl", "is-active", "secubox-mesh"],
+            ["systemctl", "is-active", "secubox-yggdrasil"],
             capture_output=True,
             text=True
         )
@@ -848,7 +848,7 @@ async def get_self_info(user=Depends(require_jwt)):
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "secubox-mesh", "version": "2.0.0"}
+    return {"status": "healthy", "service": "secubox-yggdrasil", "version": "2.0.0"}
 
 
 # ════════════════════════════════════════════════════════════════════════════
