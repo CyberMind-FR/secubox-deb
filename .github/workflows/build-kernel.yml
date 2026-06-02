@@ -38,12 +38,21 @@ jobs:
 
       - name: Install cross toolchain + build deps
         run: |
-          # Enable arm64 multi-arch BEFORE apt-get update so the index
-          # ships both amd64 and arm64 metadata. bindeb-pkg's auto-generated
-          # debian/control declares `Build-Depends: libssl-dev` which under
-          # dpkg-buildpackage -aarm64 resolves to libssl-dev:arm64 — the
-          # host's amd64 libssl-dev alone fails dpkg-checkbuilddeps.
+          # Enable arm64 multi-arch with the proper Ubuntu ports mirror.
+          # security.ubuntu.com / archive.ubuntu.com serve amd64/i386 only ;
+          # arm64 comes from ports.ubuntu.com. Without this, `apt-get update`
+          # 404s on arm64 indices after `dpkg --add-architecture arm64`.
+          # bindeb-pkg under `dpkg-buildpackage -aarm64` then needs
+          # libssl-dev:arm64 to satisfy the kernel package Build-Depends.
           sudo dpkg --add-architecture arm64
+          # Pin existing entries to amd64 only.
+          sudo sed -i 's|^deb http|deb [arch=amd64] http|' /etc/apt/sources.list
+          # Detect codename and add the arm64 ports mirror entries.
+          CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+          for suite in "$CODENAME" "${CODENAME}-updates" "${CODENAME}-security" "${CODENAME}-backports"; do
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $suite main restricted universe multiverse" \
+              | sudo tee -a /etc/apt/sources.list >/dev/null
+          done
           sudo apt-get update -qq
           # build-essential is needed because bindeb-pkg auto-generates a
           # debian/control that lists `build-essential:native` in
