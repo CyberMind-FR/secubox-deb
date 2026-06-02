@@ -1,4 +1,4 @@
-secubox-mesh (1.1.0-1~bookworm1) bookworm; urgency=medium
+secubox-yggdrasil (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add SecuBox peer discovery on Yggdrasil mesh
   * Probe mesh sessions for SecuBox/OpenWRT nodes
@@ -10,7 +10,7 @@ secubox-mesh (1.1.0-1~bookworm1) bookworm; urgency=medium
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Mar 2026 10:00:00 +0100
 
-secubox-mesh (1.0.0-1~bookworm1) bookworm; urgency=medium
+secubox-yggdrasil (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
   * Meshname DNS management for Yggdrasil mesh networks
