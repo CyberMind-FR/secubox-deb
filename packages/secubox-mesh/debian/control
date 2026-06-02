@@ -1,0 +1,29 @@
+Source: secubox-mesh
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-mesh
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends},
+ secubox-core (>= 1.0),
+ python3 (>= 3.11),
+ python3-fastapi | python3-pip,
+ python3-uvicorn | python3-pip,
+ python3-jinja2,
+ python3-pydantic,
+ iw,
+ hostapd,
+ wpasupplicant,
+ wireless-regdb
+Description: SecuBox-DEB MESH module (802.11s + Passpoint AP, OPAD)
+ Plan de contrôle FastAPI pour le module mesh : 802.11s/HWMP backhaul
+ (ath10k_pci QCA9880 par défaut), AP Passpoint HS2.0 via hostapd, et
+ client mesh USB (mt76x2u / ath9k_htc). Verrou régulatoire FR au
+ postinst, posture OPAD passive par défaut.
+ .
+ Référence spec : CM-MESH-MPCIE-2026-06 v0.2.1.
