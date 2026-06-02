@@ -194,6 +194,12 @@ INCLUDE_PKGS+=",bridge-utils,dnsutils,iputils-arping,avahi-daemon,avahi-utils"
 INCLUDE_PKGS+=",ieee-data,procps,openssl,haproxy,qrencode"
 INCLUDE_PKGS+=",fonts-noto-color-emoji"
 
+# WiFi firmware + regulatory (CM-MESH-MPCIE-2026-06 v0.2.1)
+#   firmware-misc-nonfree : mt7662 (MT7632U) + ath10k (QCA9880) blobs
+#   firmware-atheros      : htc_9271.fw (AR9271 USB) — firmware-free option
+#   wireless-regdb        : signed regulatory DB, FR domain lock at postinst
+INCLUDE_PKGS+=",firmware-misc-nonfree,firmware-atheros,wireless-regdb"
+
 # Cross-architecture debootstrap with QEMU
 debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \
     "${SUITE}" "${ROOTFS}" "${APT_MIRROR}"
