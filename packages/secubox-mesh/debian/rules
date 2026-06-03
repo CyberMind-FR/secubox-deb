@@ -25,6 +25,12 @@ override_dh_auto_install:
 	install -m 0755 sbin/secubox-mt76x2u-rebind debian/secubox-mesh/usr/sbin/
 	# Bring-up script
 	install -m 0755 scripts/mesh-up  debian/secubox-mesh/usr/sbin/
+	# WebUI (page admin Sidebar + cartes P31 light)
+	install -d debian/secubox-mesh/usr/share/secubox/www/mesh
+	cp -r www/mesh/. debian/secubox-mesh/usr/share/secubox/www/mesh/
+	# Menu entry
+	install -d debian/secubox-mesh/usr/share/secubox/menu.d
+	install -m 0644 menu.d/24-mesh.json debian/secubox-mesh/usr/share/secubox/menu.d/
 
 override_dh_installsystemd:
 	# Le canonique est sous systemd/ (spec §3). On le surface en debian/
