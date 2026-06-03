@@ -1,3 +1,13 @@
+secubox-core (1.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * postinst: relax /etc/secubox to 0755 (was 0750). Non-secubox daemons
+    (dnsmasq for secubox-eye-remote, hostapd/wpa_supplicant for
+    secubox-mesh, etc.) need to traverse the parent to reach their
+    config files. /etc/secubox/secrets stays 0700 — no leak. Live drift
+    already applied on gk2. Closes #468.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 03 Jun 2026 09:30:00 +0200
+
 secubox-core (1.1.5-1~bookworm1) bookworm; urgency=medium
 
   * systemd/lxc.service.d/wait-for-data.conf: NEW drop-in adds
