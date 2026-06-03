@@ -1,0 +1,43 @@
+secubox-mesh (2.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * WebUI: ship www/mesh/index.html (P31 light skin, 4 cards: RF, peers,
+    AP clients, liveness ; auto-refresh 8s ; SAE rotate button gated).
+  * Ship menu.d/24-mesh.json (category=mesh, icon=📡).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 03 Jun 2026 10:15:00 +0200
+
+
+secubox-mesh (2.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * systemd unit: use python3 -m uvicorn + PYTHONPATH=/usr/lib/secubox/mesh
+    (pattern hérité des autres modules ; /usr/bin/uvicorn nexiste pas sur
+    Debian bookworm, le binaire est dans le package python3-uvicorn mais
+    accessible uniquement via module entry).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 03 Jun 2026 10:00:00 +0200
+
+
+secubox-mesh (2.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * systemd unit: move inline comment off the PrivateDevices= line (systemd
+    failed to parse "false        # ..." as boolean, refused to start).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 03 Jun 2026 09:50:00 +0200
+
+
+secubox-mesh (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Refonte majeure : module radio 802.11s + AP Passpoint (CM-MESH-MPCIE-2026-06 v0.2.1).
+    Remplace le scaffold "Mesh DNS" 1.1.0 (le rôle DNS reste couvert par
+    secubox-meshname).
+  * FastAPI control plane sur 127.0.0.1:8743, 5 endpoints (mesh peers/rf/key-rotate,
+    ap clients, reg domain).
+  * Verrou régulatoire FR au postinst (iw reg set FR) ; OPAD passif par défaut.
+  * Config TOML /etc/secubox/mesh.toml ; SAE password jamais en clair
+    (sae_password_ref = file:// 0600 ou vault://).
+  * udev rule MT7632U + helper rebind (closes #458) + scripts/mesh-up bring-up
+    802.11s 2-nœuds idempotent.
+  * Templates Jinja2 hostapd (HS2.0/Passpoint R3) + wpa_supplicant (mode=5 SAE).
+  * Closes #449.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 03 Jun 2026 09:00:00 +0200

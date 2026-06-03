@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: MESH — postrm
+set -e
+
+case "$1" in
+  purge)
+    # Ne pas toucher /etc/secubox/secrets (peut être partagé d'autres modules)
+    rm -f /etc/secubox/mesh.toml
+    # User système — conservé par convention (cf. secubox-meshname)
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

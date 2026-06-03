@@ -19,7 +19,10 @@ Depends: ${misc:Depends}, ${python3:Depends},
  iw,
  hostapd,
  wpasupplicant,
- wireless-regdb
+ wireless-regdb,
+ adduser
+Replaces: secubox-mesh (<< 2.0.0~)
+Breaks: secubox-mesh (<< 2.0.0~)
 Description: SecuBox-DEB MESH module (802.11s + Passpoint AP, OPAD)
  Plan de contrôle FastAPI pour le module mesh : 802.11s/HWMP backhaul
  (ath10k_pci QCA9880 par défaut), AP Passpoint HS2.0 via hostapd, et

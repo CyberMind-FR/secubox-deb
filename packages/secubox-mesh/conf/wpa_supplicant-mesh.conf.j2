@@ -1,0 +1,17 @@
+{# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
+{# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> #}
+{# Spec : CM-MESH-MPCIE-2026-06 §6 — 802.11s + WPA3-SAE mesh (mode=5) #}
+# 802.11s + WPA3-SAE mesh — généré par secubox-mesh, NE PAS éditer
+ctrl_interface=/run/wpa_supplicant
+update_config=0
+country={{ radio.country if radio.country is defined else 'FR' }}
+
+network={
+    ssid="{{ mesh.mesh_id }}"
+    mode=5
+    frequency={{ mesh.freq }}
+    key_mgmt=SAE
+    sae_password="{{ sae_password }}"
+    ieee80211w=2
+    # mesh_fwding=1 : participe au HWMP (par défaut côté kernel)
+}

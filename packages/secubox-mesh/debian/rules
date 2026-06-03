@@ -1,0 +1,47 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+
+%:
+	dh $@
+
+# Pas de venv : on installe le module Python directement sous /usr/lib/secubox/mesh
+# (cf. pattern hérité de secubox-meshname). systemd unit exporte PYTHONPATH.
+override_dh_auto_install:
+	# Python module
+	install -d debian/secubox-mesh/usr/lib/secubox/mesh
+	cp -r secubox_mesh debian/secubox-mesh/usr/lib/secubox/mesh/
+	# Jinja2 templates (chemin attendu par ap.py/supplicant.py : ../conf/)
+	install -d debian/secubox-mesh/usr/lib/secubox/mesh/conf
+	cp conf/hostapd.conf.j2          debian/secubox-mesh/usr/lib/secubox/mesh/conf/
+	cp conf/wpa_supplicant-mesh.conf.j2 debian/secubox-mesh/usr/lib/secubox/mesh/conf/
+	# Config par défaut (conffile)
+	install -d debian/secubox-mesh/etc/secubox
+	install -m 0644 conf/mesh.toml   debian/secubox-mesh/etc/secubox/
+	# udev rule + helpers (depuis #458)
+	install -d debian/secubox-mesh/etc/udev/rules.d
+	install -m 0644 udev/80-secubox-mt76x2u-priority.rules \
+	  debian/secubox-mesh/etc/udev/rules.d/
+	install -d debian/secubox-mesh/usr/sbin
+	install -m 0755 sbin/secubox-mt76x2u-rebind debian/secubox-mesh/usr/sbin/
+	# Bring-up script
+	install -m 0755 scripts/mesh-up  debian/secubox-mesh/usr/sbin/
+	# WebUI (page admin Sidebar + cartes P31 light)
+	install -d debian/secubox-mesh/usr/share/secubox/www/mesh
+	cp -r www/mesh/. debian/secubox-mesh/usr/share/secubox/www/mesh/
+	# Menu entry
+	install -d debian/secubox-mesh/usr/share/secubox/menu.d
+	install -m 0644 menu.d/24-mesh.json debian/secubox-mesh/usr/share/secubox/menu.d/
+
+override_dh_installsystemd:
+	# Le canonique est sous systemd/ (spec §3). On le surface en debian/
+	# pour que dh_installsystemd le détecte automatiquement.
+	cp systemd/secubox-mesh.service debian/secubox-mesh.service
+	dh_installsystemd --no-start --no-enable
+
+# Pas de tests dh_auto_test (rien à exécuter au build)
+override_dh_auto_test:
+	@true
+
+# Désactive le strip (Python pur)
+override_dh_strip:
+	@true

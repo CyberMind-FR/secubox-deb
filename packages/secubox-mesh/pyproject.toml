@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secubox-mesh"
+version = "2.0.0"
+description = "SecuBox-Deb MESH control plane (802.11s + Passpoint AP, OPAD)"
+readme = "CLAUDE.md"
+requires-python = ">=3.11"
+license = { text = "LicenseRef-CMSD-1.0" }
+authors = [{ name = "Gérald Kerma", email = "devel@cybermind.fr" }]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "jinja2>=3.1",
+    "pydantic>=2.6",
+]
+
+[project.urls]
+Homepage = "https://cybermind.fr/secubox"
+Spec     = "https://github.com/CyberMind-FR/secubox-deb/blob/master/docs/specs/CM-MESH-MPCIE-2026-06.md"
+
+[tool.setuptools.packages.find]
+include = ["secubox_mesh*"]

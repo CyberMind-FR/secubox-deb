@@ -1,0 +1,2 @@
+/etc/secubox/mesh.toml
+/etc/udev/rules.d/80-secubox-mt76x2u-priority.rules
