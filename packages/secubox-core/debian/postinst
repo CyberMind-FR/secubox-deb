@@ -10,7 +10,13 @@ case "$1" in
     fi
 
     # ── Répertoires ──
-    install -d -o secubox -g secubox -m 750 /etc/secubox
+    # /etc/secubox MUST be world-traversable (0755): non-secubox daemons
+    # need to read their conf files under it (dnsmasq for secubox-eye-remote,
+    # hostapd/wpa_supplicant for secubox-mesh, etc.). 0750 blocks traversal
+    # even with world-readable files inside, causing daemon startup failures
+    # (see #468). Sensitive content lives in /etc/secubox/secrets (0700
+    # secubox:secubox), so opening the parent dir does NOT leak secrets.
+    install -d -o secubox -g secubox -m 755 /etc/secubox
     install -d -m 1777 /run/secubox  # World-writable for all service sockets
     install -d -o secubox -g secubox -m 750 /var/lib/secubox
     install -d -o secubox -g secubox -m 750 /usr/share/secubox/www
