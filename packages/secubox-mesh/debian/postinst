@@ -1,0 +1,44 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: MESH — postinst
+set -e
+
+case "$1" in
+  configure)
+    # 1. User système pour le service (CSPN : séparation de privilèges)
+    if ! getent passwd secubox-mesh >/dev/null; then
+      adduser --system --group --no-create-home \
+              --home /nonexistent --shell /usr/sbin/nologin \
+              --gecos "SecuBox-Deb MESH" secubox-mesh
+    fi
+
+    # 2. Dossier secrets (mesh-sae) — chmod 0700, owner secubox-mesh
+    install -d -m 0700 -o secubox-mesh -g secubox-mesh /etc/secubox/secrets
+
+    # 3. Dossiers runtime + log (tmpfiles-style — créés via systemd RuntimeDirectory
+    #    serait mieux, on garde explicite ici pour compat ancienne unit)
+    install -d -m 0750 -o secubox-mesh -g secubox-mesh /run/secubox
+    install -d -m 0750 -o secubox-mesh -g secubox-mesh /var/log/secubox
+
+    # 4. Verrou régulatoire FR (idempotent ; ne pas planter si iw absent)
+    if command -v iw >/dev/null 2>&1; then
+      iw reg set FR || true
+    fi
+
+    # 5. Recharger udev (pour la règle MT7632U fraîchement déposée)
+    if command -v udevadm >/dev/null 2>&1; then
+      udevadm control --reload || true
+    fi
+
+    # 6. systemd : daemon-reload + (re)start (dh_installsystemd gère enable)
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      systemctl enable secubox-mesh.service || true
+      # Si l'ancien 1.1.0 tournait, on le bascule en douceur (restart, pas mass)
+      systemctl restart secubox-mesh.service || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

@@ -1,0 +1,40 @@
+# /etc/secubox/mesh.toml — SecuBox-Deb MESH
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Spec : CM-MESH-MPCIE-2026-06 v0.2.1
+#
+# Template par défaut, reflet du stock retenu :
+#   backhaul = ath10k_pci (WLE900VX QCA9880 sur mPCIe — par défaut)
+#   access   = mt76x2u    (MT7632U USB) ou ath9k_htc (AR9271 USB, firmware-free)
+# Tout ce qui est ici est PAR DÉFAUT. Adapte selon le hardware réellement
+# détecté au bring-up (cf. `iw dev` / `lsusb`).
+schema_version = 1
+
+[radio]
+phy    = "phy0"
+driver = "ath9k_htc"        # ath9k | ath9k_htc | mt7615e | mt76x2u | ath10k_pci
+iface  = "wlan0"
+
+[reg]
+country = "FR"              # verrouillé ; override exceptionnel via /reg/domain
+dfs     = true
+
+[mesh]
+enabled  = true
+mesh_id  = "gondwana-air"
+band     = "2g"             # AR9271 = 2.4 GHz only ; passe à "5g" si QCA9880/MT76 5 GHz
+freq     = 2412             # MHz (channel 1) ; e.g. 5180 pour ath10k_pci 5 GHz
+sae_password_ref = "file:///etc/secubox/secrets/mesh-sae"   # JAMAIS en clair
+
+[ap]
+enabled = false             # désactivé tant qu'on n'a pas validé l'AP Passpoint
+ssid    = "Gondwana-Air"
+band    = "2g"
+hs20    = true
+anqp    = true
+
+[backhaul]
+mode = "wired"              # dbdc | wired | shared (cf. spec §4)
+
+[opad]
+reactive = false            # passif par défaut — NE PAS mettre true par défaut

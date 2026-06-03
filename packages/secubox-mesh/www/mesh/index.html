@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  SecuBox-Deb :: MESH dashboard (P31 light skin, hommage CRT-phosphor)
+  Spec : CM-MESH-MPCIE-2026-06 v0.2.1
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — MESH 802.11s</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root {
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --border: var(--tube-soft);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak);
+            --bloom-soft: 0 0 6px var(--p31-peak);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--p31-mid); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: 100%; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border: 1px solid var(--border); background: var(--bg-card); margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--p31-hot); text-shadow: var(--bloom-text); }
+        .header .badge { font-size: 0.85rem; color: var(--p31-dim); padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 3px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); padding: 1rem; box-shadow: var(--bloom-soft); }
+        .card h2 { font-size: 1rem; color: var(--p31-hot); text-shadow: var(--bloom-text); margin-bottom: 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+        .kv { display: grid; grid-template-columns: 1fr 2fr; gap: 0.3rem 0.8rem; font-size: 0.9rem; }
+        .kv .k { color: var(--p31-dim); }
+        .kv .v { color: var(--p31-peak); text-shadow: var(--bloom-text); }
+        .kv .v.null { color: var(--text-dim); opacity: 0.5; }
+        .toolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        button { font-family: inherit; font-size: 0.9rem; padding: 0.4rem 0.9rem; background: transparent; color: var(--p31-peak); border: 1px solid var(--p31-mid); cursor: pointer; text-shadow: var(--bloom-text); }
+        button:hover { background: var(--p31-ghost); border-color: var(--p31-hot); }
+        button.danger { color: var(--red); border-color: var(--red); text-shadow: 0 0 4px var(--red); }
+        button.danger:hover { background: rgba(255, 68, 102, 0.1); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+        th { color: var(--p31-hot); text-shadow: var(--bloom-text); }
+        td { color: var(--p31-mid); }
+        .empty { color: var(--text-dim); font-style: italic; padding: 1rem; text-align: center; }
+        .opad-banner { background: var(--p31-ghost); border: 1px solid var(--p31-mid); padding: 0.6rem 0.8rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--p31-dim); }
+        .opad-banner strong { color: var(--p31-hot); text-shadow: var(--bloom-text); }
+    </style>
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+<div class="main">
+    <div class="header">
+        <h1>📡 MESH 802.11s</h1>
+        <span class="badge" id="version-badge">v—</span>
+    </div>
+
+    <div class="opad-banner">
+        <strong>OPAD :</strong> posture passive par défaut — aucune action RF offensive automatisée.
+        Spec : CM-MESH-MPCIE-2026-06 v0.2.1.
+    </div>
+
+    <div class="toolbar">
+        <button onclick="refreshAll()">🔁 Refresh</button>
+        <button class="danger" onclick="rotateKey()">🔑 Rotate SAE</button>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>RF state</h2>
+            <div class="kv" id="rf"><span class="k">loading…</span><span class="v"></span></div>
+        </div>
+        <div class="card">
+            <h2>Mesh peers (HWMP)</h2>
+            <div id="peers"><div class="empty">loading…</div></div>
+        </div>
+        <div class="card">
+            <h2>AP clients</h2>
+            <div id="clients"><div class="empty">loading…</div></div>
+        </div>
+        <div class="card">
+            <h2>Liveness</h2>
+            <div class="kv" id="health"><span class="k">loading…</span><span class="v"></span></div>
+        </div>
+    </div>
+</div>
+
+<script src="/shared/sidebar.js"></script>
+<script>
+const API = '/api/v1/mesh';
+
+function vSpan(v, suffix='') {
+    if (v === null || v === undefined || v === '') return '<span class="v null">—</span>';
+    return `<span class="v">${v}${suffix}</span>`;
+}
+
+async function fetchJSON(path) {
+    try {
+        const r = await fetch(API + path, { credentials: 'same-origin' });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return await r.json();
+    } catch (e) {
+        return { __error: e.message };
+    }
+}
+
+async function loadRF() {
+    const d = await fetchJSON('/mesh/rf');
+    const el = document.getElementById('rf');
+    if (d.__error) { el.innerHTML = `<span class="k">error</span><span class="v" style="color:var(--red)">${d.__error}</span>`; return; }
+    el.innerHTML = `
+        <span class="k">iface</span>      ${vSpan(d.iface)}
+        <span class="k">type</span>       ${vSpan(d.type)}
+        <span class="k">channel</span>    ${vSpan(d.channel)}
+        <span class="k">freq</span>       ${vSpan(d.freq_mhz, ' MHz')}
+        <span class="k">width</span>      ${vSpan(d.width_mhz, ' MHz')}
+        <span class="k">tx power</span>   ${vSpan(d.txpower_dbm, ' dBm')}
+        <span class="k">reg country</span>${vSpan(d.reg_country)}
+        <span class="k">DFS</span>        ${vSpan(d.reg_dfs_state)}
+    `;
+}
+
+async function loadPeers() {
+    const d = await fetchJSON('/mesh/peers');
+    const el = document.getElementById('peers');
+    if (d.__error) { el.innerHTML = `<div class="empty" style="color:var(--red)">${d.__error}</div>`; return; }
+    if (!Array.isArray(d) || d.length === 0) { el.innerHTML = '<div class="empty">no peers</div>'; return; }
+    let html = '<table><thead><tr><th>MAC</th><th>plink</th><th>signal</th><th>tx</th><th>inactive</th></tr></thead><tbody>';
+    for (const p of d) {
+        html += `<tr><td>${p.mac}</td><td>${p.mesh_plink || '—'}</td><td>${p.signal_dbm ?? '—'}</td><td>${p.tx_bitrate_mbps ?? '—'}</td><td>${p.inactive_ms ?? '—'} ms</td></tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+}
+
+async function loadClients() {
+    const d = await fetchJSON('/ap/clients');
+    const el = document.getElementById('clients');
+    if (d.__error) { el.innerHTML = `<div class="empty" style="color:var(--red)">${d.__error}</div>`; return; }
+    if (!Array.isArray(d) || d.length === 0) { el.innerHTML = '<div class="empty">AP disabled or no clients</div>'; return; }
+    let html = '<table><thead><tr><th>MAC</th><th>signal</th><th>connected</th><th>Passpoint</th></tr></thead><tbody>';
+    for (const c of d) {
+        html += `<tr><td>${c.mac}</td><td>${c.signal_dbm ?? '—'}</td><td>${c.connected_time_s ?? '—'} s</td><td>${c.passpoint ? '✅' : '—'}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+}
+
+async function loadHealth() {
+    const d = await fetchJSON('/health');
+    const el = document.getElementById('health');
+    if (d.__error) { el.innerHTML = `<span class="k">error</span><span class="v" style="color:var(--red)">${d.__error}</span>`; return; }
+    el.innerHTML = `
+        <span class="k">status</span>  ${vSpan(d.status)}
+        <span class="k">module</span>  ${vSpan(d.module)}
+        <span class="k">version</span> ${vSpan(d.version)}
+    `;
+    document.getElementById('version-badge').textContent = `v${d.version}`;
+}
+
+async function refreshAll() {
+    await Promise.all([loadRF(), loadPeers(), loadClients(), loadHealth()]);
+}
+
+async function rotateKey() {
+    if (!confirm('Déclencher la rotation SAE ? (à n\'utiliser que si la maturité SAE-mesh du chipset est vérifiée)')) return;
+    const r = await fetch(API + '/mesh/key/rotate', { method: 'POST', credentials: 'same-origin' });
+    const j = await r.json();
+    alert(`Rotate result: ${JSON.stringify(j, null, 2)}`);
+    await loadPeers();
+}
+
+refreshAll();
+setInterval(refreshAll, 8000);
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+[Unit]
+Description=SecuBox-Deb MESH control plane (FastAPI/Uvicorn)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/blob/master/docs/specs/CM-MESH-MPCIE-2026-06.md
+After=network.target
+
+[Service]
+Type=simple
+User=secubox-mesh
+Group=secubox-mesh
+# Le module Python est installé sous /usr/lib/secubox/mesh/ (pas de venv).
+# Pattern hérité de secubox-meshname, authelia, etc. — voir CLAUDE.md root.
+Environment="PYTHONPATH=/usr/lib/secubox/mesh"
+ExecStart=/usr/bin/python3 -m uvicorn secubox_mesh.app:app --host 127.0.0.1 --port 8743 --log-level warning
+Restart=on-failure
+RestartSec=3
+
+# CSPN durcissement (cf. CLAUDE.md root §Règles CSPN / Sécurité formelle)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# PrivateDevices stays false: besoin de /dev/net/tun éventuel
+PrivateDevices=false
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+# Sockets/files autorisés
+ReadWritePaths=/run/secubox /var/log/secubox
+ReadOnlyPaths=/etc/secubox
+
+# Capabilities — aucune par défaut. Le bring-up RF (iw, wpa_supplicant) est
+# délégué à des helpers root via systemd-run (hors plan API courant).
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

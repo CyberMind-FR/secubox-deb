@@ -19,4 +19,4 @@
 ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", \
   ATTRS{idVendor}=="0e8d", ATTRS{idProduct}=="7632", \
   ATTR{bInterfaceNumber}=="02", \
-  RUN+="/usr/local/sbin/secubox-mt76x2u-rebind %k"
+  RUN+="/usr/sbin/secubox-mt76x2u-rebind %k"
