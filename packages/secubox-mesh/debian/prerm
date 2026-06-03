@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: MESH — prerm
+set -e
+
+case "$1" in
+  remove|upgrade|deconfigure)
+    if [ -d /run/systemd/system ]; then
+      systemctl stop secubox-mesh.service || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

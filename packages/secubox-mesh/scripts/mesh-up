@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: mesh-up — bring-up 802.11s 2-nœuds, idempotent.
+# Usage : mesh-up [IFACE] [FREQ_MHZ] [MESH_ID]
+# Defaults : wlan0 2412 gondwana-air
+#
+# Préconditions :
+#   - /etc/secubox/mesh.toml présent (mais ce script l'ignore : pour PoC bench
+#     uniquement, il prend tout en CLI)
+#   - secret SAE (32 caractères mini recommandé) dans /etc/secubox/secrets/mesh-sae
+#     en chmod 0600 si l'on veut passer wpa_supplicant après. Pour un simple
+#     mesh open : on saute SAE et on fait juste un `iw mesh join`.
+set -euo pipefail
+readonly MODULE="secubox-mesh"
+readonly VERSION="2.0.0"
+
+IFACE="${1:-wlan0}"
+FREQ="${2:-2412}"
+MESHID="${3:-gondwana-air}"
+
+log() { printf '[%s] %s\n' "$MODULE" "$*" >&2; }
+
+# 1. Verrou régulatoire FR (idempotent)
+log "iw reg set FR"
+iw reg set FR || true
+sleep 1
+
+# 2. Iface down + mode mp + up (ré-entrant)
+log "iface $IFACE → down/mp/up"
+ip link set "$IFACE" down 2>/dev/null || true
+iw dev "$IFACE" set type mp 2>&1 | grep -v "already" || true
+ip link set "$IFACE" up
+
+# 3. Join du mesh (open = pas de SAE). Si déjà joint : warn, pas d'erreur.
+log "iw dev $IFACE mesh join $MESHID freq $FREQ HT20"
+iw dev "$IFACE" mesh join "$MESHID" freq "$FREQ" HT20 \
+  || log "WARN : mesh join a échoué — déjà joint ? (vérifier 'iw dev $IFACE info')"
+
+# 4. État final
+log "── état post bring-up ──"
+iw dev "$IFACE" info  | sed 's/^/  /'
+log "── peers (à attendre quelques secondes) ──"
+iw dev "$IFACE" station dump | sed 's/^/  /' || true
+
+log "OK. Pour observer en continu : watch -n2 'iw dev $IFACE station dump'"
