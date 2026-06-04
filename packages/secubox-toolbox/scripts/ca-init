@@ -9,7 +9,16 @@ readonly CA_DIR="/etc/secubox/toolbox/ca"
 readonly MITM_DIR="/etc/secubox/toolbox/mitm"
 
 mkdir -p "$CA_DIR" "$MITM_DIR"
-chmod 0700 "$CA_DIR" "$MITM_DIR"
+# 0750 root:secubox-toolbox : root owns, secubox-toolbox (group) can read.
+# Without this the FastAPI service can't read ca.pem via subprocess openssl.
+# CSPN OK : group-restricted, no world access. Subkey stays 0600.
+if getent group secubox-toolbox >/dev/null 2>&1; then
+  chown root:secubox-toolbox "$CA_DIR" "$MITM_DIR"
+  chmod 0750 "$CA_DIR" "$MITM_DIR"
+else
+  # secubox-toolbox group not yet created (very early in postinst) — use 0700
+  chmod 0700 "$CA_DIR" "$MITM_DIR"
+fi
 
 if [ -f "$CA_DIR/ca.pem" ] && [ -f "$CA_DIR/key.pem" ]; then
   echo "[ca-init] CA déjà présente, no-op"
