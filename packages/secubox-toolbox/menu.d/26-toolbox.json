@@ -3,7 +3,7 @@
   "name": "ToolBoX",
   "icon": "📡",
   "path": "/toolbox/",
-  "category": "security",
+  "category": "wall",
   "order": 26,
   "description": "Cabine numérique Gondwana — captive AP + MITM analyzer (consent R2)"
 }
