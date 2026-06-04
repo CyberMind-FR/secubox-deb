@@ -12,6 +12,12 @@ case "$1" in
               --gecos "SecuBox-Deb ToolBoX" secubox-toolbox
     fi
 
+    # 1b. Ajout secubox-toolbox au groupe systemd-journal pour lire les logs
+    # via journalctl depuis l'API (calc des metrics MITM live).
+    if getent group systemd-journal >/dev/null 2>&1; then
+      usermod -aG systemd-journal secubox-toolbox 2>/dev/null || true
+    fi
+
     # 2. Sel rotatif MAC anonymisation (généré au premier install)
     if [ ! -f /etc/secubox/secrets/toolbox-mac-salt ]; then
       install -d -m 0750 -o root -g secubox-toolbox /etc/secubox/secrets
