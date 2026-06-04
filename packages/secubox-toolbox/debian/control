@@ -1,0 +1,35 @@
+Source: secubox-toolbox
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-toolbox
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends},
+ secubox-core (>= 1.0),
+ python3 (>= 3.11),
+ python3-fastapi | python3-pip,
+ python3-uvicorn | python3-pip,
+ python3-jinja2,
+ python3-pydantic,
+ python3-httpx,
+ python3-qrcode,
+ nftables,
+ iproute2,
+ hostapd,
+ dnsmasq,
+ mitmproxy,
+ openssl,
+ adduser
+Description: SecuBox-DEB ToolBoX — Gondwana Cabine Numérique (captive AP + MITM analyzer)
+ Phase 1 du parent #474 (ToolBoX Pipeline). Productionize le PoC captive
+ portal en package dédié : splash + consent R2 + CA distribution iOS
+ (mobileconfig) + nftables TPROXY → mitmproxy transparent +
+ addons (cookies/dpi/avatar/ja4/soc-relay) → modules SecuBox existants.
+ .
+ Conforme CSPN (R2 opt-in explicite, MAC hashing avec sel rotatif daily,
+ retention 24h défaut). Cible : borne publique cabine téléphonique numérique.

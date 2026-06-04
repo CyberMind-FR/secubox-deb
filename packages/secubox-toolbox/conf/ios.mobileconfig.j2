@@ -1,0 +1,46 @@
+{# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
+{# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> #}
+{# iOS mobileconfig — installs Gondwana ToolBoX CA. NOT signed yet (user trusts manually) #}
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadIdentifier</key>
+    <string>fr.cybermind.gondwana.toolbox</string>
+    <key>PayloadUUID</key>
+    <string>{{ payload_uuid }}</string>
+    <key>PayloadDisplayName</key>
+    <string>{{ profile_name }}</string>
+    <key>PayloadDescription</key>
+    <string>Installe le certificat racine Gondwana ToolBoX pour l'analyse de compromission temporaire (R2 opt-in CSPN).</string>
+    <key>PayloadOrganization</key>
+    <string>CyberMind / Gondwana</string>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.security.root</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadIdentifier</key>
+            <string>fr.cybermind.gondwana.toolbox.ca</string>
+            <key>PayloadUUID</key>
+            <string>{{ cert_uuid }}</string>
+            <key>PayloadDisplayName</key>
+            <string>Gondwana ToolBoX Root CA</string>
+            <key>PayloadDescription</key>
+            <string>Certificat racine self-signed pour analyse compromission Gondwana.</string>
+            <key>PayloadCertificateFileName</key>
+            <string>gondwana-toolbox-ca.pem</string>
+            <key>PayloadContent</key>
+            <data>
+{{ ca_b64 }}
+            </data>
+        </dict>
+    </array>
+</dict>
+</plist>

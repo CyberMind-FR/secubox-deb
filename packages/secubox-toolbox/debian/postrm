@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+set -e
+case "$1" in
+  purge)
+    rm -f /etc/secubox/toolbox.toml
+    # Préserver CA + sel par défaut (pourraient resservir au reinstall) ; purger sur demande user.
+    ;;
+esac
+#DEBHELPER#
+exit 0

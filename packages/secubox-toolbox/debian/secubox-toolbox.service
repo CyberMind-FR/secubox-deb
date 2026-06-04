@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=SecuBox-Deb ToolBoX captive portal (FastAPI/Uvicorn)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/475
+After=network.target nftables.service
+Wants=secubox-toolbox-mitm.service
+
+[Service]
+Type=simple
+User=secubox-toolbox
+Group=secubox-toolbox
+Environment="PYTHONPATH=/usr/lib/secubox/toolbox"
+ExecStart=/usr/bin/python3 -m uvicorn secubox_toolbox.app:app --host 10.99.0.1 --port 8088 --log-level info
+Restart=on-failure
+RestartSec=3
+
+# Minimal sandboxing — hostapd_cli + nft cli are tolerant only with weak Protect*
+# (cf. dette technique secubox-mesh : ProtectSystem=strict timeoute hostapd_cli)
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/secubox /var/log/secubox /var/lib/secubox/toolbox
+ReadOnlyPaths=/etc/secubox
+
+# nft + ip neigh require CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target
