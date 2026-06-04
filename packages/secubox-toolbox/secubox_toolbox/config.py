@@ -25,13 +25,16 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
 
 
 def resolve_secret(ref: str) -> str:
+    """Read a secret. Accepts 0600 (owner-only) or 0640 (owner+group-read).
+    Rejects any world perm OR group-write/exec — keeps secrets within owner+group."""
     u = urlparse(ref)
     if u.scheme == "file":
         p = Path(u.path)
         st = p.stat()
-        if st.st_mode & 0o077:
+        mode = st.st_mode & 0o777
+        if mode & 0o007 or mode & 0o030:
             raise PermissionError(
-                f"{p}: droits trop ouverts (mode={oct(st.st_mode & 0o777)}), exiger 0600/0640"
+                f"{p}: droits trop ouverts (mode={oct(mode)}), exiger 0600 ou 0640"
             )
         return p.read_text().strip()
     raise ValueError(f"secret scheme unsupported: {ref}")

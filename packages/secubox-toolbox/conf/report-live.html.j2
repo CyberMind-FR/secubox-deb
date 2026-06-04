@@ -1,0 +1,145 @@
+{# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
+{# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> #}
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="15">
+<title>Mon rapport Gondwana ToolBoX — live</title>
+<style>
+:root{--bg:#0a0a0f;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--red:#ff4466;--amber:#ffb347}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Courier New',Menlo,monospace;background:var(--bg);color:var(--text);padding:1rem;max-width:760px;margin:auto;line-height:1.5}
+h1{color:var(--phos-hot);text-shadow:0 0 6px var(--phos);font-size:1.6rem;margin-bottom:0.3rem;letter-spacing:0.05em}
+.sub{color:var(--dim);font-size:0.85rem;margin-bottom:1rem;letter-spacing:0.05em}
+.card{border:1px solid var(--dim);background:rgba(0,221,68,0.03);padding:0.9rem 1rem;margin-bottom:1rem}
+.card h2{color:var(--phos-hot);text-shadow:0 0 4px var(--phos);font-size:0.95rem;margin-bottom:0.5rem;border-bottom:1px solid var(--dim);padding-bottom:0.3rem;letter-spacing:0.05em}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:0.2rem 0.8rem;font-size:0.85rem}
+.kv .k{color:var(--dim)}
+.kv .v{color:var(--phos);text-shadow:0 0 4px var(--phos)}
+ul{list-style:none;padding-left:0.6rem}
+li{padding:0.15rem 0;font-size:0.85rem}
+li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
+.score{display:inline-block;padding:0.3rem 1rem;font-size:1.2rem;font-weight:bold;border:2px solid;border-radius:4px}
+.score.low{color:var(--phos-hot);border-color:var(--phos);text-shadow:0 0 6px var(--phos)}
+.score.med{color:var(--amber);border-color:var(--amber);text-shadow:0 0 6px var(--amber)}
+.score.high{color:var(--red);border-color:var(--red);text-shadow:0 0 6px var(--red)}
+.pin{color:var(--amber)}
+.url{font-family:monospace;font-size:0.78rem;color:var(--text);background:rgba(0,221,68,0.05);padding:0.15rem 0.4rem;border-radius:2px;margin:0.1rem 0;display:inline-block;max-width:100%;overflow-wrap:break-word;word-break:break-all}
+.actions{text-align:center;margin:1.5rem 0}
+.actions a{display:inline-block;margin:0 0.3rem;padding:0.5rem 1rem;border:1px solid var(--phos);color:var(--phos-hot);text-decoration:none;text-shadow:0 0 4px var(--phos);font-size:0.85rem}
+.actions a:hover{background:rgba(0,221,68,0.1)}
+.refresh{text-align:center;font-size:0.7rem;color:var(--dim);margin-top:1rem;font-style:italic}
+.footer{text-align:center;font-size:0.65rem;color:var(--dim);margin-top:1.5rem;border-top:1px solid var(--dim);padding-top:0.6rem}
+</style></head>
+<body>
+
+<h1>📡 GONDWANA TOOLBOX</h1>
+<p class="sub">// Rapport live — Cabine numérique VILLAGE3B</p>
+
+<div class="card">
+  <h2>👤 Identifiant anonyme</h2>
+  <div class="kv">
+    <span class="k">Hash session</span> <span class="v">{{ mac_hash }}</span>
+    <span class="k">Sandbox IP</span>   <span class="v">{{ ip }}</span>
+    <span class="k">Appareil</span>     <span class="v">{{ device_type }}</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>📊 Métriques session</h2>
+  <div class="kv">
+    <span class="k">Connexions</span>     <span class="v">{{ metrics.connections }}</span>
+    <span class="k">Hosts uniques</span>  <span class="v">{{ metrics.unique_hosts }}</span>
+    <span class="k">Réussies</span>       <span class="v">{{ metrics.successful }}</span>
+    <span class="k">Cert-pin block</span> <span class="v">{{ metrics.tls_pinned }}</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>🎯 Analyse compromission</h2>
+  <p style="text-align:center;margin:0.5rem 0">
+    {% if risk_score < 30 %}
+      <span class="score low">Score : {{ risk_score }}/100 — LOW</span>
+    {% elif risk_score < 70 %}
+      <span class="score med">Score : {{ risk_score }}/100 — MEDIUM</span>
+    {% else %}
+      <span class="score high">Score : {{ risk_score }}/100 — HIGH</span>
+    {% endif %}
+  </p>
+  <ul>
+    {% for ind in indicators %}<li>{{ ind }}</li>{% endfor %}
+  </ul>
+</div>
+
+<div class="card">
+  <h2>📱 Apps détectées</h2>
+  <ul>
+    {% for app in apps_detected %}<li>{{ app }}</li>{% endfor %}
+  </ul>
+</div>
+
+<div class="card">
+  <h2 class="pin">🔒 Apps protégées par cert-pinning</h2>
+  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">
+    Ces apps refusent notre certificat — ToolBoX ne peut PAS lire leur contenu. C'est un BON signe sécurité.
+  </p>
+  <ul>
+    {% for app in pinned_apps %}<li>{{ app }}</li>{% endfor %}
+  </ul>
+</div>
+
+{% if inspected_urls %}
+<div class="card">
+  <h2>👁 Trafic inspecté (R2 consent explicite)</h2>
+  {% for url in inspected_urls[:15] %}
+    <div class="url">{{ url }}</div>
+  {% endfor %}
+  {% if inspected_urls|length > 15 %}
+    <p style="font-size:0.75rem;color:var(--dim);margin-top:0.4rem">… et {{ inspected_urls|length - 15 }} autres URLs</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>✅ Recommandations</h2>
+  <ul>
+    {% for rec in recommendations %}<li>{{ rec }}</li>{% endfor %}
+  </ul>
+</div>
+
+<div class="actions">
+  <a href="/report/me">⬇ Télécharger PDF</a>
+  <a href="/">↩ Retour splash</a>
+  <a href="/status">📊 Statut JSON</a>
+</div>
+
+<p class="refresh">↻ Auto-refresh toutes les 15 secondes</p>
+
+<div class="card">
+  <h2>💚 Support &amp; soutien projet</h2>
+  <p style="font-size:0.82rem;color:var(--text);line-height:1.55">
+    Gondwana ToolBoX est un <b>commun numérique</b> open-source maintenu par
+    CyberMind / Gérald Kerma (Notre-Dame-du-Cruet, Savoie). Pas de pub, pas de
+    revente, pas de tracking commercial. Si ce service t'a aidé :
+  </p>
+  <ul style="margin-top:0.5rem">
+    <li>💰 <b>Don récurrent</b> : <a href="https://liberapay.com/cybermind" style="color:var(--phos);text-decoration:underline">liberapay.com/cybermind</a></li>
+    <li>💳 <b>Don ponctuel</b> : <a href="https://cybermind.fr/don" style="color:var(--phos);text-decoration:underline">cybermind.fr/don</a> (carte, virement SEPA)</li>
+    <li>📧 <b>Support technique</b> : <a href="mailto:support@cybermind.fr" style="color:var(--phos);text-decoration:underline">support@cybermind.fr</a></li>
+    <li>🐛 <b>Signaler un bug</b> : <a href="https://github.com/CyberMind-FR/secubox-deb/issues" style="color:var(--phos);text-decoration:underline">github.com/CyberMind-FR/secubox-deb/issues</a></li>
+    <li>📡 <b>Déployer une borne</b> près de chez toi : <a href="mailto:gondwana@cybermind.fr" style="color:var(--phos);text-decoration:underline">gondwana@cybermind.fr</a></li>
+  </ul>
+  <p style="font-size:0.78rem;color:var(--dim);margin-top:0.7rem;border-top:1px solid var(--dim);padding-top:0.5rem">
+    Audit SecuBox premium / déploiement collectivité / formation cybersécurité :
+    <a href="mailto:contact@cybermind.fr" style="color:var(--phos);text-decoration:underline">contact@cybermind.fr</a>
+  </p>
+</div>
+
+<div class="footer">
+  Gondwana ToolBoX · LicenseRef-CMSD-1.0 · code AGPL public<br>
+  Source : <a href="https://github.com/CyberMind-FR/secubox-deb" style="color:var(--dim)">github.com/CyberMind-FR/secubox-deb</a> (#474 #475 #477)<br>
+  CyberMind — Notre-Dame-du-Cruet (73130) · <a href="https://cybermind.fr" style="color:var(--dim)">cybermind.fr</a>
+</div>
+
+</body></html>
