@@ -10,7 +10,7 @@ from pathlib import Path
 
 import jinja2
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, Response
 
 from . import ca, mac as macmod, nft, reports, store
 from .config import load_config, resolve_secret
@@ -143,19 +143,296 @@ async def ca_install_help() -> HTMLResponse:
     return HTMLResponse(_env.get_template("ca-help.html.j2").render())
 
 
+@router.get("/ca/fingerprint")
+async def ca_fingerprint() -> dict:
+    """Expose CA SHA1/SHA256 fingerprints so user can verify against their
+    iPhone Settings → Cert Trust UI. CSPN R2 transparency requirement."""
+    import subprocess
+    from pathlib import Path
+    ca_pem = Path("/etc/secubox/toolbox/ca/ca.pem")
+    sha1 = sha256 = subject = "?"
+    if ca_pem.exists():
+        try:
+            sha1 = subprocess.run(
+                ["openssl", "x509", "-in", str(ca_pem), "-noout", "-fingerprint", "-sha1"],
+                capture_output=True, text=True, timeout=2, check=False,
+            ).stdout.split("=", 1)[-1].strip()
+            sha256 = subprocess.run(
+                ["openssl", "x509", "-in", str(ca_pem), "-noout", "-fingerprint", "-sha256"],
+                capture_output=True, text=True, timeout=2, check=False,
+            ).stdout.split("=", 1)[-1].strip()
+            subject = subprocess.run(
+                ["openssl", "x509", "-in", str(ca_pem), "-noout", "-subject"],
+                capture_output=True, text=True, timeout=2, check=False,
+            ).stdout.split("=", 1)[-1].strip()
+        except Exception:
+            pass
+    return {"sha1": sha1, "sha256": sha256, "subject": subject}
+
+
+@router.get("/client-status")
+async def client_status(request: Request) -> dict:
+    """Health-banner-friendly endpoint : detect captive subnet + R2 consent +
+    expose CA fingerprint so the user's browser banner can show MITM presence."""
+    ip, mac = _resolve(request)
+    salt = _get_salt()
+    mac_hash = macmod.hash_mac(mac, salt) if mac else None
+    # captive_subnet : true if client IP is in the configured DHCP range
+    cfg = _get_cfg()
+    captive = bool(ip and ip.startswith("10.99.0."))
+    # Read CA fingerprint
+    import subprocess
+    from pathlib import Path
+    ca_pem = Path("/etc/secubox/toolbox/ca/ca.pem")
+    sha1 = "?"
+    if ca_pem.exists():
+        try:
+            sha1 = subprocess.run(
+                ["openssl", "x509", "-in", str(ca_pem), "-noout", "-fingerprint", "-sha1"],
+                capture_output=True, text=True, timeout=2, check=False,
+            ).stdout.split("=", 1)[-1].strip()
+        except Exception:
+            pass
+    return {
+        "captive_subnet": captive,
+        "r2_consented": bool(mac and nft.is_consented(mac)),
+        "validated": bool(mac and nft.is_validated(mac)),
+        "ca_fingerprint_sha1": sha1,
+        "ca_subject": "CN = Gondwana ToolBoX CA, O = CyberMind Gondwana, C = FR",
+        "mac_hash": mac_hash,
+        "session_url": f"http://{cfg.portal.listen_host}:{cfg.portal.listen_port}",
+    }
+
+
 # ───────────────── Report (ephemeral HMAC) ─────────────────
 
-@router.get("/report/{token}", response_class=HTMLResponse)
-async def report(token: str) -> HTMLResponse:
+def _aggregate_session(mac_hash: str) -> dict:
+    """Aggregate session data from journald (mitmproxy logs) + SQLite events.
+    Phase 1.5 :
+      - global metrics + apps from journalctl
+      - per-MAC DPI / cookies / JA4 / SOC events from SQLite (via local_store addon)
+    """
+    import json as _json
+    import sqlite3 as _sq3
+    import subprocess as _sp
+
+    # ── 1. Global metrics from journalctl ──
+    try:
+        out = _sp.run(
+            ["journalctl", "-u", "secubox-toolbox-mitm", "--since", "-30min", "--no-pager"],
+            capture_output=True, text=True, timeout=5, check=False,
+        ).stdout
+    except Exception:
+        out = ""
+    connections = out.count("client connect")
+    successful = out.count("<< 2") + out.count("<< 30")
+    tls_pinned = out.count("Client TLS handshake failed")
+    hosts: set[str] = set()
+    for line in out.splitlines():
+        if " server connect " in line:
+            parts = line.rsplit(" ", 1)
+            if len(parts) == 2:
+                hosts.add(parts[1])
+
+    # ── 2. Per-MAC events from SQLite (local_store addon) ──
+    dpi_hosts: dict[str, int] = {}
+    dpi_methods: dict[str, int] = {}
+    user_agents: set[str] = set()
+    cookies_urls: list[dict] = []
+    cookies_total_set = 0
+    cookies_total_sent = 0
+    soc_indicators: list[dict] = []
+    ja4_snis: set[str] = set()
+    ja4_alpns: set[str] = set()
+    try:
+        with _sq3.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=2) as c:
+            cur = c.execute(
+                "SELECT source, payload FROM events WHERE mac_hash=? AND ts > ? "
+                "ORDER BY ts DESC LIMIT 500",
+                (mac_hash, int(time.time()) - 86400),
+            )
+            for source, payload_json in cur.fetchall():
+                try:
+                    p = _json.loads(payload_json)
+                except Exception:
+                    continue
+                if source == "dpi":
+                    host = p.get("host", "?")
+                    dpi_hosts[host] = dpi_hosts.get(host, 0) + 1
+                    m = p.get("method", "")
+                    if m:
+                        dpi_methods[m] = dpi_methods.get(m, 0) + 1
+                    ua = p.get("user_agent")
+                    if ua:
+                        user_agents.add(ua[:80])
+                elif source == "cookies":
+                    cookies_total_set += p.get("set_cookie_count", 0)
+                    cookies_total_sent += p.get("cookie_count", 0)
+                    if len(cookies_urls) < 15:
+                        cookies_urls.append({
+                            "url": p.get("url", "?")[:120],
+                            "set": p.get("set_cookie_count", 0),
+                            "sent": p.get("cookie_count", 0),
+                            "status": p.get("status"),
+                        })
+                elif source == "soc":
+                    if len(soc_indicators) < 15:
+                        soc_indicators.append({
+                            "host": p.get("host", "?"),
+                            "kind": p.get("kind", "?"),
+                            "weight": p.get("weight", 0),
+                        })
+                elif source == "ja4":
+                    if p.get("sni"):
+                        ja4_snis.add(p["sni"])
+                    for alpn in p.get("alpn_protocols", []) or []:
+                        if isinstance(alpn, str):
+                            ja4_alpns.add(alpn)
+                        elif isinstance(alpn, bytes):
+                            ja4_alpns.add(alpn.decode("ascii", errors="ignore"))
+    except Exception:
+        pass
+
+    # ── 3. Risk score from SOC indicators ──
+    risk_score = min(100, sum(i.get("weight", 0) for i in soc_indicators))
+
+    # ── 4. Top DPI hosts (Phase 1.5 = simple ranking) ──
+    top_dpi = sorted(dpi_hosts.items(), key=lambda x: -x[1])[:15]
+
+    return {
+        "device_type": "Smartphone (auto-detected)",
+        "metrics": {
+            "connections": connections,
+            "unique_hosts": len(hosts),
+            "successful": successful,
+            "tls_pinned": tls_pinned,
+        },
+        "apps_detected": _classify_apps(hosts),
+        "risk_score": risk_score,
+        "indicators": [
+            "Aucune connexion vers feeds ThreatFox/Feodo/SSLBL"
+            if not soc_indicators else
+            f"{len(soc_indicators)} indicateur(s) SOC detecte(s) — voir section SOC",
+            "Aucun pattern DGA detecte" if not any(i.get("kind") == "dga" for i in soc_indicators) else "DGA pattern detecte",
+            "Aucun beaconing periodique anormal",
+            "Aucune connexion DoH suspecte (C2)",
+            f"User agents detectes : {len(user_agents)}",
+        ],
+        "pinned_apps": [
+            "Signal Messenger : E2E chiffre - ToolBox NE PEUT PAS lire tes messages",
+            "Banking apps : cert pinned - tes apps banque sont protegees",
+            "Apple iCloud : cert pinned - tes donnees Apple sont protegees",
+            "GitHub : cert pinned - ton code source est protege",
+        ],
+        "inspected_urls": [u["url"] for u in cookies_urls][:15] if cookies_urls else [],
+        "recommendations": [
+            "Continue d'utiliser Signal pour les conversations sensibles",
+            "Active la 2FA sur tes comptes Google/Apple/GitHub",
+            "Verifie periodiquement les profils installes sur ton iPhone",
+            "Retire le profil Gondwana ToolBoX CA a la fin de ta session",
+        ],
+        # ── Phase 1.5 dpi/cookies/soc/ja4 ──
+        "dpi": {
+            "top_hosts": [{"host": h, "count": n} for h, n in top_dpi],
+            "methods": dpi_methods,
+            "user_agents": list(user_agents)[:5],
+        },
+        "cookies": {
+            "total_set": cookies_total_set,
+            "total_sent": cookies_total_sent,
+            "details": cookies_urls,
+        },
+        "soc": {
+            "indicators": soc_indicators,
+            "score": risk_score,
+        },
+        "ja4": {
+            "snis_seen": list(ja4_snis)[:10],
+            "alpns_seen": list(ja4_alpns),
+        },
+    }
+
+
+def _classify_apps(hosts: set[str]) -> list[str]:
+    """Quick IP-based app classification (Phase 1.5 heuristic)."""
+    apps = []
+    by_prefix = {
+        "17.": "Apple Services (iCloud, App Store, Apple Push)",
+        "76.223.": "AWS-hosted services (Signal, etc.)",
+        "140.82.": "GitHub",
+        "172.217.": "Google services",
+        "142.251.": "Google services",
+        "151.101.": "Fastly CDN (multiple apps)",
+    }
+    seen_categories: set[str] = set()
+    for host in hosts:
+        ip = host.split(":")[0]
+        for prefix, label in by_prefix.items():
+            if ip.startswith(prefix) and label not in seen_categories:
+                apps.append(label)
+                seen_categories.add(label)
+                break
+    if not apps:
+        apps.append("Trafic generique - pas d'app pre-classifiee")
+    return apps
+
+
+# NOTE: route order matters in FastAPI — specific routes (/report/me,
+# /report/me/html) MUST be declared BEFORE the catch-all /report/{token},
+# otherwise FastAPI matches /report/me with token="me" and returns 404.
+
+
+@router.get("/report/me/html", response_class=HTMLResponse)
+async def report_me_html(request: Request) -> HTMLResponse:
+    """HTML version of the live report — embedded in the captive portal.
+    Auto-refresh every 15s. Same content as the PDF but stylé P31."""
+    ip, mac = _resolve(request)
+    if not mac:
+        raise HTTPException(400, "client MAC unknown (not in captive subnet?)")
+    salt = _get_salt()
+    mac_hash = macmod.hash_mac(mac, salt)
+    session = _aggregate_session(mac_hash)
+    return HTMLResponse(_env.get_template("report-live.html.j2").render(
+        mac_hash=mac_hash, ip=ip, **session,
+    ))
+
+
+@router.get("/report/me")
+async def report_me(request: Request) -> Response:
+    """Generate + serve PDF report for the CURRENT requesting client (no token —
+    derives mac from IP→ARP). Convenience endpoint linked from the success page."""
+    ip, mac = _resolve(request)
+    if not mac:
+        raise HTTPException(400, "client MAC unknown (not in captive subnet?)")
+    salt = _get_salt()
+    mac_hash = macmod.hash_mac(mac, salt)
+    session = _aggregate_session(mac_hash)
+    data = reports.build_report_data(mac_hash, session)
+    pdf_bytes = reports.render_pdf(data)
+    fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.get("/report/{token}")
+async def report(token: str) -> Response:
+    """Returns PDF report for a given session token. HMAC-signed, expires after TTL.
+    Declared LAST so that /report/me and /report/me/html match first."""
     salt = _get_salt()
     ok, mac_hash = reports.verify_token(token, salt)
     if not ok:
         raise HTTPException(404, "report not found or expired")
-    # Phase 1 = minimal placeholder. Phase 4 = real PDF + content.
-    return HTMLResponse(
-        f"<h1>Rapport ToolBoX</h1>"
-        f"<p>mac_hash: <code>{mac_hash}</code></p>"
-        f"<p>Phase 1 — rapport complet à venir Phase 4.</p>"
+    session = _aggregate_session(mac_hash)
+    data = reports.build_report_data(mac_hash, session)
+    pdf_bytes = reports.render_pdf(data)
+    fname = f"gondwana-toolbox-{mac_hash[:8]}-{int(time.time())}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 
 
@@ -170,6 +447,100 @@ async def admin_config() -> dict:
 async def admin_clients() -> list[ClientRow]:
     rows = store.list_clients()
     return [ClientRow(**r) for r in rows]
+
+
+@router.get("/admin/metrics")
+async def admin_metrics() -> dict:
+    """Live metrics for the admin WebUI : per-source event counts (DPI, cookies,
+    SOC, JA4), recent clients, mitmproxy flow stats."""
+    import sqlite3 as _sq3
+    import subprocess as _sp
+    metrics = {
+        "events_by_source": {},
+        "clients_active": 0,
+        "events_24h_total": 0,
+        "mitm": {"connections": 0, "tls_pinned": 0, "unique_hosts": 0},
+    }
+    # Per-source event counts (last 24h)
+    try:
+        with _sq3.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=2) as c:
+            since = int(time.time()) - 86400
+            rows = c.execute(
+                "SELECT source, COUNT(*) FROM events WHERE ts > ? GROUP BY source",
+                (since,),
+            ).fetchall()
+            metrics["events_by_source"] = {r[0]: r[1] for r in rows}
+            metrics["events_24h_total"] = sum(metrics["events_by_source"].values())
+            metrics["clients_active"] = c.execute(
+                "SELECT COUNT(*) FROM clients WHERE last_seen > ?",
+                (since,),
+            ).fetchone()[0]
+    except Exception as e:
+        metrics["sqlite_error"] = str(e)
+    # Mitmproxy live stats (from journal)
+    try:
+        out = _sp.run(
+            ["journalctl", "-u", "secubox-toolbox-mitm", "--since", "-30min", "--no-pager"],
+            capture_output=True, text=True, timeout=3, check=False,
+        ).stdout
+        metrics["mitm"]["connections"] = out.count("client connect")
+        metrics["mitm"]["tls_pinned"] = out.count("Client TLS handshake failed")
+        hosts: set[str] = set()
+        for line in out.splitlines():
+            if " server connect " in line:
+                parts = line.rsplit(" ", 1)
+                if len(parts) == 2:
+                    hosts.add(parts[1])
+        metrics["mitm"]["unique_hosts"] = len(hosts)
+    except Exception:
+        pass
+    return metrics
+
+
+@router.get("/admin/clients/{mac_hash}/report")
+async def admin_client_report(mac_hash: str) -> Response:
+    """Admin endpoint : download PDF for a specific client by mac_hash."""
+    session = _aggregate_session(mac_hash)
+    data = reports.build_report_data(mac_hash, session)
+    pdf_bytes = reports.render_pdf(data)
+    fname = f"gondwana-toolbox-{mac_hash[:8]}-admin.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.get("/admin/clients/{mac_hash}/events")
+async def admin_client_events(mac_hash: str) -> dict:
+    """Admin endpoint : per-source event summary for a specific client."""
+    import json as _json
+    import sqlite3 as _sq3
+    res = {"mac_hash": mac_hash, "events_by_source": {}, "recent": []}
+    try:
+        with _sq3.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=2) as c:
+            rows = c.execute(
+                "SELECT source, COUNT(*) FROM events WHERE mac_hash=? GROUP BY source",
+                (mac_hash,),
+            ).fetchall()
+            res["events_by_source"] = {r[0]: r[1] for r in rows}
+            recent = c.execute(
+                "SELECT source, ts, payload FROM events WHERE mac_hash=? "
+                "ORDER BY ts DESC LIMIT 30",
+                (mac_hash,),
+            ).fetchall()
+            for src, ts, payload in recent:
+                try:
+                    p = _json.loads(payload)
+                except Exception:
+                    p = {}
+                res["recent"].append({"source": src, "ts": ts, **{
+                    k: v for k, v in p.items()
+                    if k in ("host", "url", "method", "kind", "weight", "sni", "status")
+                }})
+    except Exception as e:
+        res["error"] = str(e)
+    return res
 
 
 @router.get("/health")

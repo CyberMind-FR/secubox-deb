@@ -1,3 +1,71 @@
+secubox-toolbox (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * WebUI admin /toolbox/ : nouvelles cards Live metrics 24h (events par
+    source dpi/cookies/soc/ja4/avatar + MITM connections + cert-pin blocks)
+    et Per-client detail panel (events recents + lien PDF download).
+  * New API endpoints :
+    - GET /api/v1/toolbox/admin/metrics (live stats 24h)
+    - GET /api/v1/toolbox/admin/clients/{mac_hash}/report (per-client PDF)
+    - GET /api/v1/toolbox/admin/clients/{mac_hash}/events (per-client recent
+      events summary par source)
+  * Future integration : round-eye gadget polls /admin/metrics for emoji-first
+    cabine display (filed #478).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 04 Jun 2026 08:30:00 +0200
+
+
+secubox-toolbox (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add local_store.py mitmproxy addon : captures ALL flows directly into
+    toolbox.db (events table) hashed with daily-rotating sel. Sources :
+    dpi (request hooks), cookies (response hooks), soc (suspicious patterns),
+    ja4 (TLS ClientHello). No dependency on external sockets (cookies/dpi/
+    soc/threat-analyst .sock) which are Phase 2.
+  * _aggregate_session : reads per-MAC events from SQLite + computes top DPI
+    hosts, cookies stats, SOC indicators with risk_score, JA4 SNIs/ALPNs.
+  * PDF report : new sections DPI top hosts, cookies trackers, SOC indicators,
+    JA4 empreintes TLS.
+  * HTML live report : same sections + tables, conditionally shown.
+  * systemd unit : load local_store.py addon.
+  * success.html : Statut session button now points to /report/me/html
+    (live analysis page, auto-refresh 15s).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 04 Jun 2026 08:25:00 +0200
+
+
+secubox-toolbox (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add PDF report generation via fpdf2 (pure-Python, lightweight).
+    /report/{token} (HMAC) and /report/me (current client) endpoints now
+    return application/pdf with session analysis : hash MAC, metrics,
+    apps detected, compromise score, cert-pinned protected apps,
+    inspected URLs, recommendations, retention policy.
+  * Splash + success pages : add download link "Telecharger mon rapport PDF".
+  * ca-init script : 0750 root:secubox-toolbox au lieu de 0700 root:root
+    (fix permission denied sur lecture CA depuis API).
+  * README.md complet : mission, architecture E2E, API routes, install,
+    config, gardefous CSPN, sections rapport PDF, maintenance, WebUI.
+  * Closes #477.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 04 Jun 2026 08:15:00 +0200
+
+
+secubox-toolbox (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add inject_banner mitmproxy addon: HTML response interception injects a
+    visible MITM transparency banner with the CA SHA1 fingerprint. Allows
+    inspected users to verify against their iPhone Settings\ Cert Trust.
+    Idempotent (no double-inject), z-index max, closable.
+  * Add /api/v1/toolbox/ca/fingerprint endpoint (SHA1+SHA256+subject).
+  * Add /api/v1/toolbox/client-status endpoint : reports captive_subnet,
+    r2_consented, validated flags + CA fingerprint + mac_hash. Used by
+    JS clients to display in-context MITM status.
+  * systemd unit: load inject_banner.py addon.
+  * Closes #477.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 04 Jun 2026 08:05:00 +0200
+
+
 secubox-toolbox (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release — Phase 1 du parent #474 "ToolBoX Pipeline".
