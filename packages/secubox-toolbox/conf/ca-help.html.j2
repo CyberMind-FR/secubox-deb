@@ -1,0 +1,47 @@
+{# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gondwana ToolBoX — Installer le certificat</title>
+<style>
+body{font-family:'Courier New',monospace;background:#0a0a0f;color:#e8e6d9;padding:1.5rem;max-width:640px;margin:auto;line-height:1.55}
+h1,h2{color:#00ff55;text-shadow:0 0 6px #00dd44}
+h1{font-size:1.6rem;margin-bottom:0.5rem}
+h2{font-size:1.1rem;margin-top:1.5rem;margin-bottom:0.5rem}
+a.btn{display:inline-block;padding:0.6rem 1rem;background:transparent;color:#00ff55;border:1px solid #00dd44;text-decoration:none;margin:0.5rem 0}
+a.btn:hover{background:rgba(0,221,68,0.1)}
+ol{padding-left:1.2rem}
+li{margin-bottom:0.4rem}
+.warn{background:rgba(255,179,71,0.05);border-left:2px solid #ffb347;padding:0.6rem 0.8rem;margin:1rem 0;font-size:0.9rem}
+</style></head>
+<body>
+<h1>Installation du certificat ToolBoX</h1>
+<p>Sans le certificat installé, l'analyse de compromission est limitée aux métadonnées (R1). Avec le certificat, on inspecte le contenu chiffré (R2) — uniquement pendant ta session.</p>
+
+<div class="warn"><strong>Anonymat préservé :</strong> ta MAC est hashée quotidiennement, aucun lien session ↔ identité réelle stocké.</div>
+
+<h2>📱 iOS / iPadOS</h2>
+<ol>
+  <li><a class="btn" href="/ca/mobileconfig">⬇ Télécharger le profil</a></li>
+  <li>iOS te demande "Profil téléchargé" → Paramètres → Profil téléchargé</li>
+  <li>Tap "Installer", entrer ton code → Installer × 2</li>
+  <li>Paramètres → Général → À propos → Réglages de confiance certifs → activer "Gondwana ToolBoX CA"</li>
+</ol>
+
+<h2>🤖 Android</h2>
+<ol>
+  <li><a class="btn" href="/ca/android.crt">⬇ Télécharger le certificat (.crt)</a></li>
+  <li>Paramètres → Sécurité → Chiffrement et identifiants → Installer un certif depuis le stockage</li>
+  <li>Sélectionner le fichier téléchargé → Type : <strong>CA</strong></li>
+  <li>Nommer "Gondwana ToolBoX"</li>
+</ol>
+
+<h2>💻 Desktop (Linux/macOS/Windows)</h2>
+<ol>
+  <li><a class="btn" href="/ca/android.crt">⬇ Télécharger ca.crt (DER)</a></li>
+  <li>Voir <a href="https://github.com/CyberMind-FR/secubox-deb/wiki/toolbox-ca-install">le wiki</a> pour la procédure par OS</li>
+</ol>
+
+<p style="margin-top:2rem;font-size:0.75rem;color:#006622">// Gondwana ToolBoX · LicenseRef-CMSD-1.0 · <a href="/">retour splash</a></p>
+</body></html>

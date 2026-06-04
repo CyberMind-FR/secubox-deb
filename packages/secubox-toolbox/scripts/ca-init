@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# ToolBoX CA init : gen self-signed CA + populate mitmproxy confdir.
+# Idempotent, no-op if CA already exists.
+set -euo pipefail
+readonly CA_DIR="/etc/secubox/toolbox/ca"
+readonly MITM_DIR="/etc/secubox/toolbox/mitm"
+
+mkdir -p "$CA_DIR" "$MITM_DIR"
+chmod 0700 "$CA_DIR" "$MITM_DIR"
+
+if [ -f "$CA_DIR/ca.pem" ] && [ -f "$CA_DIR/key.pem" ]; then
+  echo "[ca-init] CA déjà présente, no-op"
+  exit 0
+fi
+
+echo "[ca-init] Generating Gondwana ToolBoX CA (one-time, 10y)"
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout "$CA_DIR/key.pem" \
+  -out "$CA_DIR/ca.pem" \
+  -days 3650 \
+  -subj "/CN=Gondwana ToolBoX CA/O=CyberMind Gondwana/C=FR" 2>/dev/null
+
+chmod 0600 "$CA_DIR/key.pem"
+chmod 0644 "$CA_DIR/ca.pem"
+
+# Pre-populate mitmproxy confdir : it expects mitmproxy-ca.pem combining cert+key
+cat "$CA_DIR/ca.pem" "$CA_DIR/key.pem" > "$MITM_DIR/mitmproxy-ca.pem"
+chmod 0600 "$MITM_DIR/mitmproxy-ca.pem"
+
+echo "[ca-init] OK : CA installed at $CA_DIR/ca.pem"

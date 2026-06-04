@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# ToolBoX bring-up bench : compose hostapd + dnsmasq + nftables + portal.
+# Idempotent. Usage: toolbox-up [--apply-only]
+set -euo pipefail
+readonly TOML="/etc/secubox/toolbox.toml"
+readonly NFT_OUT="/run/secubox/toolbox.nft"
+
+log() { printf '[toolbox-up] %s\n' "$*" >&2; }
+
+if [ ! -f "$TOML" ]; then
+  log "FAIL : $TOML absent. Installer le paquet d'abord."
+  exit 1
+fi
+
+# Render nftables from Jinja2 template via Python
+log "rendering nftables rules from /usr/lib/secubox/toolbox/conf/nft-toolbox.nft.j2"
+PYTHONPATH=/usr/lib/secubox/toolbox python3 - <<'PY' > "$NFT_OUT"
+import tomllib, jinja2
+from pathlib import Path
+cfg = tomllib.loads(Path("/etc/secubox/toolbox.toml").read_text())
+env = jinja2.Environment(loader=jinja2.FileSystemLoader("/usr/lib/secubox/toolbox/conf"))
+print(env.get_template("nft-toolbox.nft.j2").render(**cfg))
+PY
+
+# Apply : delete old + load new
+log "applying nftables (table inet toolbox)"
+nft delete table inet toolbox 2>/dev/null || true
+nft -f "$NFT_OUT"
+
+log "OK : table inet toolbox active. Use 'nft list set inet toolbox validated_macs' to inspect."

@@ -1,0 +1,60 @@
+{# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
+{# nftables rules pour ToolBoX captive + MITM transparent #}
+{# Rendered via toolbox-up CLI puis nft -f #}
+table inet toolbox {
+    set validated_macs {
+        type ether_addr
+        flags timeout
+        timeout 24h
+    }
+
+    set consented_r2_macs {
+        type ether_addr
+        flags timeout
+        timeout 24h
+    }
+
+    set quarantine_macs {
+        type ether_addr
+        flags timeout
+        timeout 1h
+    }
+
+    chain prerouting_mangle {
+        type filter hook prerouting priority -150;
+        # MITM uniquement pour MAC R2-consented (mitmproxy transparent inline)
+        iifname "{{ ap.iface }}" ether saddr @consented_r2_macs tcp dport { 80, 443 } \
+            meta mark set 0x1
+    }
+
+    chain prerouting_nat {
+        type nat hook prerouting priority dstnat;
+        # Captive portal pour MAC non validées (HTTP/HTTPS hijacked vers splash :8088)
+        iifname "{{ ap.iface }}" ether saddr != @validated_macs tcp dport { 80, 443 } \
+            dnat ip to {{ dhcp.gateway }}:{{ portal.listen_port }}
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority srcnat;
+        ip saddr 10.99.0.0/24 oifname "lan0" masquerade
+    }
+
+    chain forward {
+        type filter hook forward priority 10; policy accept;
+        # Quarantine first (high priority drop)
+        iifname "{{ ap.iface }}" ether saddr @quarantine_macs drop
+        # Validated MACs: forward to LAN/Internet
+        iifname "{{ ap.iface }}" oifname "lan0" ether saddr @validated_macs accept
+        iifname "lan0" oifname "{{ ap.iface }}" ct state established,related accept
+        # Default drop for unvalidated
+        iifname "{{ ap.iface }}" oifname "lan0" drop
+    }
+
+    chain input {
+        type filter hook input priority filter - 5; policy accept;
+        # Allow DHCP/DNS/portal/icmp from AP iface (gating handled separately)
+        iifname "{{ ap.iface }}" udp dport { 53, 67 } accept
+        iifname "{{ ap.iface }}" tcp dport { 80, 443, {{ portal.listen_port }} } accept
+        iifname "{{ ap.iface }}" icmp type echo-request accept
+    }
+}
