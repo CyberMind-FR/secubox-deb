@@ -1,0 +1,39 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Python module
+	install -d debian/secubox-toolbox/usr/lib/secubox/toolbox
+	cp -r secubox_toolbox       debian/secubox-toolbox/usr/lib/secubox/toolbox/
+	cp -r mitmproxy_addons      debian/secubox-toolbox/usr/lib/secubox/toolbox/
+	cp -r conf                  debian/secubox-toolbox/usr/lib/secubox/toolbox/
+	# Config par défaut (conffile)
+	install -d debian/secubox-toolbox/etc/secubox
+	install -m 0644 conf/toolbox.toml debian/secubox-toolbox/etc/secubox/
+	# WebUI
+	install -d debian/secubox-toolbox/usr/share/secubox/www/toolbox
+	cp -r www/toolbox/. debian/secubox-toolbox/usr/share/secubox/www/toolbox/
+	# Menu
+	install -d debian/secubox-toolbox/usr/share/secubox/menu.d
+	install -m 0644 menu.d/26-toolbox.json debian/secubox-toolbox/usr/share/secubox/menu.d/
+	# Helpers
+	install -d debian/secubox-toolbox/usr/sbin
+	install -m 0755 scripts/toolbox-up debian/secubox-toolbox/usr/sbin/
+	install -m 0755 scripts/ca-init    debian/secubox-toolbox/usr/sbin/secubox-toolbox-ca-init
+
+override_dh_installsystemd:
+	# Install the secondary unit manually (dh_installsystemd expects 1 unit/pkg).
+	install -d debian/secubox-toolbox/lib/systemd/system
+	install -m 0644 systemd/secubox-toolbox-mitm.service debian/secubox-toolbox/lib/systemd/system/
+	# Primary unit goes via dh_installsystemd which also handles the enable helpers.
+	cp systemd/secubox-toolbox.service debian/secubox-toolbox.service
+	dh_installsystemd --no-start --no-enable
+
+override_dh_auto_test:
+	@true
+
+override_dh_strip:
+	@true

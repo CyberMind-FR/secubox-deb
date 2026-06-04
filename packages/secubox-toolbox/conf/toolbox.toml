@@ -1,0 +1,43 @@
+# /etc/secubox/toolbox.toml — SecuBox-Deb ToolBoX
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Réf : #475 (Phase 1) sous parent #474
+schema_version = 1
+
+[ap]
+ssid     = "VILLAGE3B"
+iface    = "wlxa854b2428fbb"
+channel  = 1
+band     = "2g"
+
+[dhcp]
+range_start = "10.99.0.10"
+range_end   = "10.99.0.250"
+lease_ttl   = "1h"
+gateway     = "10.99.0.1"
+dns         = ["10.99.0.1"]
+
+[portal]
+listen_host  = "10.99.0.1"
+listen_port  = 8088
+admin_path   = "/toolbox/admin"
+mac_salt_ref = "file:///etc/secubox/secrets/toolbox-mac-salt"
+report_ttl   = "24h"
+
+[r2]
+# R2 = TLS-break opt-in (CSPN). Désactiver = R1 metadata-only mode.
+enabled     = true
+mitm_listen = "10.99.0.1:8080"
+ca_bundle   = "/etc/secubox/toolbox/ca/ca.pem"
+ca_key      = "/etc/secubox/toolbox/ca/key.pem"
+
+[addons]
+cookies   = "http+unix:///run/secubox/cookies.sock/inject"
+dpi       = "http+unix:///run/secubox/dpi.sock/classify"
+avatar    = "http+unix:///run/secubox/avatar.sock/fingerprint"
+ja4       = "http+unix:///run/secubox/threat-analyst.sock/ja4"
+soc_relay = "http+unix:///run/secubox/soc.sock/event"
+
+[quarantine]
+score_throttle   = 30
+score_quarantine = 70
+ban_on_crowdsec  = true

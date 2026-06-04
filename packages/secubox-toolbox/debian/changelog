@@ -1,0 +1,18 @@
+secubox-toolbox (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release — Phase 1 du parent #474 "ToolBoX Pipeline".
+  * Captive portal FastAPI : splash, consent R2, MAC hashing (sel rotatif),
+    SQLite store events.
+  * CA distribution : mobileconfig iOS (placeholder unsigned), DER pour Android,
+    page d'aide install par-OS.
+  * nftables transparent TPROXY template (validated_macs/consented_r2_macs/quarantine_macs).
+  * mitmproxy addons squelettes : cookies, dpi, avatar, ja4, soc_relay → POST
+    vers sockets existants (cookies.sock, dpi.sock, avatar.sock, threat-analyst.sock,
+    soc.sock).
+  * systemd : secubox-toolbox.service (FastAPI) + secubox-toolbox-mitm.service
+    (mitmdump transparent).
+  * Scripts : toolbox-up (compose nft), ca-init (gen CA self-signed 10y).
+  * WebUI admin /toolbox/ + menu.d/26-toolbox.json (category=security).
+  * Closes #475.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 04 Jun 2026 07:30:00 +0200

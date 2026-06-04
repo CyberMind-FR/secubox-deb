@@ -1,0 +1,43 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: ToolBoX — postinst
+set -e
+
+case "$1" in
+  configure)
+    # 1. User système (CSPN séparation privilèges)
+    if ! getent passwd secubox-toolbox >/dev/null; then
+      adduser --system --group --no-create-home \
+              --home /nonexistent --shell /usr/sbin/nologin \
+              --gecos "SecuBox-Deb ToolBoX" secubox-toolbox
+    fi
+
+    # 2. Sel rotatif MAC anonymisation (généré au premier install)
+    if [ ! -f /etc/secubox/secrets/toolbox-mac-salt ]; then
+      install -d -m 0700 -o root -g root /etc/secubox/secrets
+      head -c 32 /dev/urandom | base64 > /etc/secubox/secrets/toolbox-mac-salt
+      chmod 0640 /etc/secubox/secrets/toolbox-mac-salt
+      chown root:secubox-toolbox /etc/secubox/secrets/toolbox-mac-salt
+    fi
+
+    # 3. CA self-signed (idempotent)
+    if [ -x /usr/sbin/secubox-toolbox-ca-init ]; then
+      /usr/sbin/secubox-toolbox-ca-init || true
+    fi
+
+    # 4. Storage dir (SQLite + future PDF reports)
+    install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox
+    install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/log/secubox
+
+    # 5. systemd : enable mais ne PAS start automatiquement (l'AP doit être configuré d'abord)
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      systemctl enable secubox-toolbox.service || true
+      systemctl enable secubox-toolbox-mitm.service || true
+      # Pas de start auto — l'opérateur doit configurer mesh.toml et lancer toolbox-up
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

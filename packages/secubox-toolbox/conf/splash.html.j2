@@ -1,0 +1,58 @@
+{# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
+{# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> #}
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ ssid }} — Cabine numérique Gondwana</title>
+<style>
+:root{--bg:#0a0a0f;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--red:#ff4466}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem}
+.card{max-width:520px;width:100%;border:1px solid var(--dim);padding:2rem;box-shadow:0 0 20px rgba(0,221,68,0.3)}
+h1{font-size:1.8rem;color:var(--phos-hot);text-shadow:0 0 6px var(--phos);margin-bottom:0.5rem;letter-spacing:0.1em}
+.subtitle{color:var(--dim);font-size:0.9rem;margin-bottom:1.5rem;letter-spacing:0.05em}
+.info{background:rgba(0,221,68,0.05);border-left:2px solid var(--phos);padding:0.8rem 1rem;margin-bottom:1rem;font-size:0.9rem;line-height:1.55}
+.info b{color:var(--phos);text-shadow:0 0 4px var(--phos)}
+.r2{background:rgba(255,179,71,0.05);border-left:2px solid #ffb347;padding:0.8rem 1rem;margin-bottom:1rem;font-size:0.85rem;line-height:1.5;color:#ffd6a0}
+.r2 strong{color:#ffb347}
+.terms{font-size:0.78rem;color:var(--dim);margin-bottom:1.5rem;line-height:1.5}
+.terms a{color:var(--phos);text-decoration:underline}
+button{width:100%;font-family:inherit;font-size:1.05rem;padding:0.9rem;background:transparent;color:var(--phos-hot);border:1px solid var(--phos);cursor:pointer;text-shadow:0 0 6px var(--phos);letter-spacing:0.08em;transition:all 0.2s}
+button:hover{background:rgba(0,221,68,0.1);box-shadow:0 0 12px var(--phos)}
+.footer{text-align:center;margin-top:1.5rem;font-size:0.7rem;color:var(--dim);letter-spacing:0.1em}
+.footer a{color:var(--dim);text-decoration:none}
+</style></head><body>
+<div class="card">
+  <h1>📡 {{ ssid }}</h1>
+  <p class="subtitle">// Cabine numérique Gondwana — accès libre + diagnostic compromission</p>
+
+  <div class="info">
+    Tu es connecté au réseau public.<br>
+    Ton appareil : <b>{{ mac_hash }}</b> (anonymisé)
+  </div>
+
+  {% if r2_enabled %}
+  <div class="r2">
+    <strong>⚠ Inspection volontaire activée :</strong> en cliquant ci-dessous, tu acceptes que ton
+    trafic transitant par cette borne soit déchiffré (TLS-break) le temps de ta session, pour
+    détecter une éventuelle compromission de ton appareil. À la fin, tu pourras récupérer ton
+    rapport personnel anonyme (lien éphémère 24h). Aucune donnée n'est revendue.
+  </div>
+  {% endif %}
+
+  <p class="terms">
+    Conformité : R2 (CSPN) — consentement explicite ; LCEN — anonymisation par hash quotidien.
+    Ce dispositif est défensif (détection seule, pas d'interception de tiers).
+    <a href="/ca/install-help">Installer le certificat (recommandé pour TLS-break)</a>
+  </p>
+
+  <form method="POST" action="/accept">
+    <button type="submit">✓ Activer mon accès</button>
+  </form>
+
+  <p class="footer">
+    SecuBox-Deb · CyberMind · <a href="https://github.com/CyberMind-FR/secubox-deb">Source AGPL/CMSD</a>
+  </p>
+</div>
+</body></html>
