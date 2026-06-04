@@ -122,9 +122,54 @@ def render_pdf(report: dict) -> bytes:
         _bullet(pdf, app)
     pdf.ln(2)
 
-    # Inspected traffic
+    # ── DPI (Deep Packet Inspection) ──
+    dpi = report.get("dpi") or {}
+    if dpi.get("top_hosts"):
+        _section(pdf, "DPI - HOTES LES PLUS CONTACTES")
+        for entry in dpi["top_hosts"][:10]:
+            _bullet(pdf, f"{entry['host'][:60]} ({entry['count']} req)", font_size=8)
+        if dpi.get("user_agents"):
+            pdf.ln(1)
+            _kv(pdf, "User agents", str(len(dpi['user_agents'])))
+        pdf.ln(2)
+
+    # ── Cookies trackers ──
+    cookies = report.get("cookies") or {}
+    if cookies.get("total_set") or cookies.get("details"):
+        _section(pdf, "COOKIES / TRACKERS")
+        _kv(pdf, "Set-Cookie recus", str(cookies.get("total_set", 0)))
+        _kv(pdf, "Cookies envoyes", str(cookies.get("total_sent", 0)))
+        pdf.ln(1)
+        for detail in (cookies.get("details") or [])[:10]:
+            _bullet(pdf,
+                    f"{detail.get('url', '?')[:60]}  set={detail.get('set', 0)} sent={detail.get('sent', 0)}",
+                    font_size=8)
+        pdf.ln(2)
+
+    # ── SOC indicators ──
+    soc = report.get("soc") or {}
+    if soc.get("indicators"):
+        _section(pdf, "SOC - INDICATEURS DETECTES")
+        for ind in soc["indicators"][:10]:
+            _bullet(pdf,
+                    f"[poids {ind.get('weight', 0)}] {ind.get('kind', '?')} : {ind.get('host', '?')[:60]}",
+                    font_size=8)
+        pdf.ln(2)
+
+    # ── JA4 (TLS fingerprinting) ──
+    ja4 = report.get("ja4") or {}
+    if ja4.get("snis_seen"):
+        _section(pdf, "JA4 - EMPREINTES TLS (HOSTNAMES)")
+        for sni in ja4["snis_seen"][:8]:
+            _bullet(pdf, sni[:80], font_size=8)
+        if ja4.get("alpns_seen"):
+            pdf.ln(1)
+            _kv(pdf, "ALPN protocols", ", ".join(ja4['alpns_seen'])[:80])
+        pdf.ln(2)
+
+    # Inspected traffic (cookies-flagged URLs - kept for compat)
     inspected = report.get("inspected_urls", [])
-    if inspected:
+    if inspected and not cookies.get("details"):
         _section(pdf, "TRAFIC INSPECTE (R2 consent explicite)")
         for url in inspected[:15]:
             _bullet(pdf, url, font_size=8)

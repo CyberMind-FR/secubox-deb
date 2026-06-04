@@ -1,3 +1,38 @@
+secubox-toolbox (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * WebUI admin /toolbox/ : nouvelles cards Live metrics 24h (events par
+    source dpi/cookies/soc/ja4/avatar + MITM connections + cert-pin blocks)
+    et Per-client detail panel (events recents + lien PDF download).
+  * New API endpoints :
+    - GET /api/v1/toolbox/admin/metrics (live stats 24h)
+    - GET /api/v1/toolbox/admin/clients/{mac_hash}/report (per-client PDF)
+    - GET /api/v1/toolbox/admin/clients/{mac_hash}/events (per-client recent
+      events summary par source)
+  * Future integration : round-eye gadget polls /admin/metrics for emoji-first
+    cabine display (filed #478).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 04 Jun 2026 08:30:00 +0200
+
+
+secubox-toolbox (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add local_store.py mitmproxy addon : captures ALL flows directly into
+    toolbox.db (events table) hashed with daily-rotating sel. Sources :
+    dpi (request hooks), cookies (response hooks), soc (suspicious patterns),
+    ja4 (TLS ClientHello). No dependency on external sockets (cookies/dpi/
+    soc/threat-analyst .sock) which are Phase 2.
+  * _aggregate_session : reads per-MAC events from SQLite + computes top DPI
+    hosts, cookies stats, SOC indicators with risk_score, JA4 SNIs/ALPNs.
+  * PDF report : new sections DPI top hosts, cookies trackers, SOC indicators,
+    JA4 empreintes TLS.
+  * HTML live report : same sections + tables, conditionally shown.
+  * systemd unit : load local_store.py addon.
+  * success.html : Statut session button now points to /report/me/html
+    (live analysis page, auto-refresh 15s).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 04 Jun 2026 08:25:00 +0200
+
+
 secubox-toolbox (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Add PDF report generation via fpdf2 (pure-Python, lightweight).

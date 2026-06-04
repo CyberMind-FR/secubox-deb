@@ -60,16 +60,24 @@
 
     <div class="grid">
         <div class="card">
-            <h2>Configuration</h2>
+            <h2>📊 Live metrics (24h)</h2>
+            <div class="kv" id="metrics"><span class="k">loading…</span><span class="v"></span></div>
+        </div>
+        <div class="card">
+            <h2>⚙ Configuration</h2>
             <div class="kv" id="cfg-summary"><span class="k">loading…</span><span class="v"></span></div>
         </div>
         <div class="card">
-            <h2>Clients actifs</h2>
+            <h2>♥ Liveness</h2>
+            <div class="kv" id="health"><span class="k">loading…</span><span class="v"></span></div>
+        </div>
+        <div class="card" style="grid-column:1/-1">
+            <h2>👥 Clients actifs</h2>
             <div id="clients"><div class="empty">loading…</div></div>
         </div>
-        <div class="card">
-            <h2>Liveness</h2>
-            <div class="kv" id="health"><span class="k">loading…</span><span class="v"></span></div>
+        <div class="card" style="grid-column:1/-1;display:none" id="client-detail-card">
+            <h2 id="detail-title">🔍 Détails client</h2>
+            <div id="client-detail"></div>
         </div>
     </div>
 </div>
@@ -108,13 +116,77 @@ async function loadClients() {
     const el = document.getElementById('clients');
     if (d.__error) { el.innerHTML = `<div class="empty">${d.__error}</div>`; return; }
     if (!d.length) { el.innerHTML = '<div class="empty">no clients</div>'; return; }
-    let html = '<table><thead><tr><th>MAC (hash)</th><th>IP</th><th>state</th><th>score</th><th>last</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>MAC (hash)</th><th>IP</th><th>state</th><th>score</th><th>last</th><th>Actions</th></tr></thead><tbody>';
     for (const c of d) {
         const ago = Math.round((Date.now()/1000 - c.last_seen) / 60);
-        html += `<tr><td>${c.mac_hash}</td><td>${c.ip}</td><td><span class="state-${c.state}">${c.state}</span></td><td>${c.score}</td><td>${ago}m</td></tr>`;
+        html += `<tr>
+            <td><code>${c.mac_hash}</code></td>
+            <td>${c.ip}</td>
+            <td><span class="state-${c.state}">${c.state}</span></td>
+            <td>${c.score}</td>
+            <td>${ago}m</td>
+            <td>
+                <a href="${API}/admin/clients/${c.mac_hash}/report" target="_blank" style="color:var(--p31-peak);text-decoration:underline;font-size:0.8rem">PDF</a>
+                ·
+                <a href="javascript:void(0)" onclick="loadClientDetail('${c.mac_hash}')" style="color:var(--p31-peak);text-decoration:underline;font-size:0.8rem">Events</a>
+            </td>
+        </tr>`;
     }
     html += '</tbody></table>';
     el.innerHTML = html;
+}
+
+async function loadMetrics() {
+    const m = await J('/admin/metrics');
+    const el = document.getElementById('metrics');
+    if (m.__error) { el.innerHTML = `<span class="k">err</span><span class="v">${m.__error}</span>`; return; }
+    const ev = m.events_by_source || {};
+    let evHtml = '';
+    for (const src of ['dpi','cookies','soc','ja4','avatar']) {
+        const n = ev[src] || 0;
+        evHtml += `<span class="k">${src}</span><span class="v">${n}</span>`;
+    }
+    el.innerHTML = `
+        <span class="k">Clients actifs</span> <span class="v">${m.clients_active || 0}</span>
+        <span class="k">Events 24h</span>     <span class="v">${m.events_24h_total || 0}</span>
+        ${evHtml}
+        <span class="k">MITM connections</span> <span class="v">${m.mitm?.connections || 0}</span>
+        <span class="k">MITM hosts</span>     <span class="v">${m.mitm?.unique_hosts || 0}</span>
+        <span class="k">Cert-pin blocks</span> <span class="v">${m.mitm?.tls_pinned || 0}</span>
+    `;
+}
+
+async function loadClientDetail(macHash) {
+    const card = document.getElementById('client-detail-card');
+    const title = document.getElementById('detail-title');
+    const div = document.getElementById('client-detail');
+    title.textContent = `🔍 Détails client — ${macHash}`;
+    card.style.display = '';
+    div.innerHTML = '<div class="empty">loading…</div>';
+    const d = await J(`/admin/clients/${macHash}/events`);
+    if (d.__error) { div.innerHTML = `<div class="empty">${d.__error}</div>`; return; }
+    const ev = d.events_by_source || {};
+    const summary = Object.keys(ev).length
+        ? Object.entries(ev).map(([s,n]) => `<span style="margin-right:1rem"><b>${s}</b>: ${n}</span>`).join('')
+        : '<i style="color:var(--text-dim)">aucun event</i>';
+    let recentHtml = '';
+    if (d.recent && d.recent.length) {
+        recentHtml = '<table><thead><tr><th>Time</th><th>Source</th><th>Détail</th></tr></thead><tbody>';
+        for (const e of d.recent) {
+            const t = new Date(e.ts*1000).toLocaleTimeString();
+            const detail = e.host || e.url || e.sni || e.kind || '?';
+            recentHtml += `<tr><td>${t}</td><td><b>${e.source}</b></td><td><code style="font-size:0.78rem">${detail}</code></td></tr>`;
+        }
+        recentHtml += '</tbody></table>';
+    }
+    div.innerHTML = `
+        <p style="margin-bottom:0.8rem">${summary}</p>
+        <p style="margin-bottom:0.5rem;font-size:0.85rem;color:var(--p31-dim)">Récents :</p>
+        ${recentHtml}
+        <p style="margin-top:0.8rem">
+            <a href="${API}/admin/clients/${macHash}/report" target="_blank" style="color:var(--p31-peak);text-decoration:underline">⬇ Télécharger PDF complet</a>
+        </p>
+    `;
 }
 
 async function loadHealth() {
@@ -130,7 +202,7 @@ async function loadHealth() {
 }
 
 async function refreshAll() {
-    await Promise.all([loadCfg(), loadClients(), loadHealth()]);
+    await Promise.all([loadCfg(), loadClients(), loadHealth(), loadMetrics()]);
 }
 refreshAll();
 setInterval(refreshAll, 10000);

@@ -89,7 +89,84 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
   </ul>
 </div>
 
-{% if inspected_urls %}
+{% if dpi and dpi.top_hosts %}
+<div class="card">
+  <h2>🔍 DPI — hôtes les plus contactés</h2>
+  <table style="width:100%;font-size:0.82rem;border-collapse:collapse">
+    <thead><tr style="color:var(--dim);text-align:left;border-bottom:1px solid var(--dim)">
+      <th style="padding:0.2rem 0.4rem">Hôte</th><th style="padding:0.2rem 0.4rem;text-align:right">Requêtes</th>
+    </tr></thead>
+    <tbody>
+    {% for entry in dpi.top_hosts[:10] %}
+      <tr><td style="padding:0.15rem 0.4rem;font-family:monospace">{{ entry.host[:70] }}</td>
+          <td style="padding:0.15rem 0.4rem;text-align:right;color:var(--phos);text-shadow:0 0 4px var(--phos)">{{ entry.count }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if dpi.methods %}
+  <p style="font-size:0.78rem;color:var(--dim);margin-top:0.6rem">
+    Méthodes : {% for m,c in dpi.methods.items() %}<span style="color:var(--phos)">{{ m }}({{ c }})</span>{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+  {% endif %}
+  {% if dpi.user_agents %}
+  <p style="font-size:0.75rem;color:var(--dim);margin-top:0.4rem">
+    UA détectés : {{ dpi.user_agents|length }}
+    {% if dpi.user_agents %}<br><span style="color:var(--text);font-family:monospace;font-size:0.7rem">{{ dpi.user_agents[0][:90] }}</span>{% endif %}
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if cookies and (cookies.total_set or cookies.details) %}
+<div class="card">
+  <h2>🍪 Cookies / trackers</h2>
+  <div class="kv" style="margin-bottom:0.5rem">
+    <span class="k">Set-Cookie reçus</span> <span class="v">{{ cookies.total_set }}</span>
+    <span class="k">Cookies envoyés</span>  <span class="v">{{ cookies.total_sent }}</span>
+  </div>
+  {% if cookies.details %}
+  <p style="font-size:0.78rem;color:var(--dim);margin-top:0.4rem">URLs avec activité cookies (top {{ cookies.details|length }}) :</p>
+  {% for d in cookies.details[:10] %}
+    <div class="url">
+      <span style="color:var(--amber)">set={{ d.set }}/sent={{ d.sent }}</span> · {{ d.url[:90] }}
+    </div>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endif %}
+
+{% if soc and soc.indicators %}
+<div class="card">
+  <h2 class="pin">⚠ SOC — indicateurs détectés</h2>
+  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">
+    Score SOC actuel : <b style="color:var(--amber)">{{ soc.score }}/100</b>
+  </p>
+  <ul>
+    {% for ind in soc.indicators[:10] %}
+      <li><span style="color:var(--amber)">[poids {{ ind.weight }}]</span> {{ ind.kind }} : <code>{{ ind.host[:60] }}</code></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if ja4 and ja4.snis_seen %}
+<div class="card">
+  <h2>🔐 JA4 — empreintes TLS</h2>
+  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.4rem">
+    SNIs vus (top {{ ja4.snis_seen|length }}) :
+  </p>
+  {% for sni in ja4.snis_seen[:8] %}
+    <div class="url">{{ sni }}</div>
+  {% endfor %}
+  {% if ja4.alpns_seen %}
+  <p style="font-size:0.75rem;color:var(--dim);margin-top:0.5rem">
+    ALPN protocols : <span style="color:var(--phos)">{{ ja4.alpns_seen|join(', ') }}</span>
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if inspected_urls and not (cookies and cookies.details) %}
 <div class="card">
   <h2>👁 Trafic inspecté (R2 consent explicite)</h2>
   {% for url in inspected_urls[:15] %}
