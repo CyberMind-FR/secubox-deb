@@ -15,9 +15,11 @@ case "$1" in
     # 2. Dossier secrets (mesh-sae) — chmod 0700, owner secubox-mesh
     install -d -m 0700 -o secubox-mesh -g secubox-mesh /etc/secubox/secrets
 
-    # 3. Dossiers runtime + log (tmpfiles-style — créés via systemd RuntimeDirectory
-    #    serait mieux, on garde explicite ici pour compat ancienne unit)
-    install -d -m 0750 -o secubox-mesh -g secubox-mesh /run/secubox
+    # 3. Dossier log dédié au module.
+    # /run/secubox PARENT est platform-managed par secubox-core en 1777 root:root.
+    # NE PAS le toucher ici — l'écraser bloque la traversée nginx (www-data) et
+    # casse tous les /api/v1/<module>/* en 502 (cf. #471). Si besoin d'un
+    # sous-dossier privé, utiliser /run/secubox/mesh/ (et non le parent).
     install -d -m 0750 -o secubox-mesh -g secubox-mesh /var/log/secubox
 
     # 4. Verrou régulatoire FR (idempotent ; ne pas planter si iw absent)
