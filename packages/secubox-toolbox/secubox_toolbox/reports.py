@@ -106,13 +106,13 @@ def render_pdf(report: dict) -> bytes:
         pdf.set_text_color(255, 179, 71)
     else:
         pdf.set_text_color(255, 68, 102)
-    pdf.cell(0, 8, f"Score risque : {score}/100 ({risk_label})", ln=True)
+    pdf.cell(0, 8, _ascii_safe(f"Score risque : {score}/100 ({risk_label})"), ln=True)
     pdf.set_text_color(0)
     pdf.set_font("Helvetica", "", 10)
     pdf.ln(1)
     explanation = report.get("risk_explanation", "")
     if explanation:
-        pdf.multi_cell(_page_w(pdf), 5, explanation[:600])
+        pdf.multi_cell(_page_w(pdf), 5, _ascii_safe(explanation)[:600])
         pdf.ln(1)
     for sig in report.get("indicators", []):
         _bullet(pdf, sig)
@@ -281,11 +281,41 @@ def _page_w(pdf) -> float:
     return pdf.w - pdf.l_margin - pdf.r_margin
 
 
+# Helvetica is latin-1 only ; PDF report uses ASCII replacements for emoji
+# (HTML live report keeps the real emoji glyphs).
+_EMOJI_REPLACEMENTS = {
+    "📺": "[TV]", "🎬": "[FILM]", "🎵": "[MUSIC]", "👥": "[SOCIAL]",
+    "📷": "[PHOTO]", "🐦": "[X]", "👾": "[REDDIT]", "💼": "[WORK]",
+    "📌": "[PIN]", "🐘": "[MASTO]", "🦋": "[BSKY]", "🔒": "[E2E]",
+    "💬": "[CHAT]", "✈": "[TG]", "🟢": "[OK]", "🔍": "[SEARCH]",
+    "🦆": "[DDG]", "📦": "[BOX]", "☁": "[CLOUD]", "🐙": "[GH]",
+    "🦊": "[FF]", "📚": "[DOC]", "🏦": "[BANK]", "📧": "[MAIL]",
+    "🍎": "[APPLE]", "🧅": "[TOR]", "🔐": "[VPN]", "❔": "[?]",
+    "📱": "[PHONE]", "💻": "[PC]", "🐧": "[LINUX]", "🎮": "[GAME]",
+    "📟": "[BOT]", "🛠": "[TOOL]", "🪟": "[EDGE]", "🧭": "[SAFARI]",
+    "🔴": "[OPERA]", "🇫🇷": "[FR]", "🇺🇸": "[US]", "🏳": "[??]",
+    "📊": "[STATS]", "🎯": "[ADS]", "🟦": "[BLOCK]", "—": "-",
+    "·": "-", "…": "...", "✅": "[OK]", "⚠": "[WARN]", "❌": "[KO]",
+}
+
+
+def _ascii_safe(text: str) -> str:
+    """Strip / replace characters outside Helvetica's latin-1 coverage."""
+    if not text:
+        return ""
+    s = str(text)
+    for emoji, repl in _EMOJI_REPLACEMENTS.items():
+        if emoji in s:
+            s = s.replace(emoji, repl)
+    # Final fallback : encode to latin-1 ignoring unknown chars
+    return s.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def _section(pdf, title: str) -> None:
     pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(0, 221, 68)
-    pdf.multi_cell(_page_w(pdf), 7, title[:80])
+    pdf.multi_cell(_page_w(pdf), 7, _ascii_safe(title)[:80])
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(0)
 
@@ -293,9 +323,9 @@ def _section(pdf, title: str) -> None:
 def _kv(pdf, key: str, value: str) -> None:
     pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(45, 5, key[:30], ln=False)
+    pdf.cell(45, 5, _ascii_safe(key)[:30], ln=False)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(_page_w(pdf) - 45, 5, str(value)[:100], ln=True)
+    pdf.cell(_page_w(pdf) - 45, 5, _ascii_safe(value)[:100], ln=True)
 
 
 def _bullet(pdf, text: str, font_size: int = 9) -> None:
@@ -303,7 +333,7 @@ def _bullet(pdf, text: str, font_size: int = 9) -> None:
     'Not enough horizontal space' errors on long tokens/URLs."""
     pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "", font_size)
-    safe = str(text)[:160]
+    safe = _ascii_safe(text)[:160]
     # Break unreasonably long single tokens (URLs over ~60 chars)
     parts = []
     for word in safe.split(" "):
