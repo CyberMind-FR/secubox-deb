@@ -121,49 +121,29 @@ def render_pdf(report: dict) -> bytes:
     pdf._secubox_family = family
 
     # Header
-    pdf.set_font(family, "B", 18)
+    pdf.set_font(family, "B", 20)
     pdf.set_text_color(0, 90, 64)  # P31 dim green
     pdf.cell(0, 12, "📡 GONDWANA TOOLBOX", ln=True, align="C")
-    pdf.set_font(family, "", 11)
+    pdf.set_font(family, "", 10)
     pdf.set_text_color(110, 64, 201)
-    pdf.cell(0, 6, "Rapport d'analyse de session — Cabine numérique VILLAGE3B", ln=True, align="C")
-    pdf.ln(4)
+    pdf.cell(0, 5, "Rapport d'analyse de session — Cabine numérique VILLAGE3B", ln=True, align="C")
+    pdf.ln(3)
+
+    # ── HERO DASHBOARD : big global numbers ──
+    _dashboard_hero(pdf, family, report)
 
     # Anonymous ID
-    _section(pdf, "IDENTIFIANT ANONYME")
+    _section(pdf, "🔑 IDENTIFIANT ANONYME")
     _kv(pdf, "Hash session", report.get("mac_hash", "?"))
     _kv(pdf, "Type appareil", report.get("device_type", "?"))
     _kv(pdf, "Date analyse", report.get("generated_at", "?"))
-    _kv(pdf, "Sandbox subnet", "10.99.0.0/24 (reseau isole VILLAGE3B)")
+    _kv(pdf, "Sandbox subnet", "10.99.0.0/24 (réseau isolé VILLAGE3B)")
     pdf.ln(2)
 
-    # Metrics
-    _section(pdf, "METRIQUES SESSION")
-    m = report.get("metrics", {})
-    _kv(pdf, "Connexions totales", str(m.get("connections", 0)))
-    _kv(pdf, "Hosts uniques", str(m.get("unique_hosts", 0)))
-    _kv(pdf, "Reussies (200/3xx)", str(m.get("successful", 0)))
-    _kv(pdf, "Cert-pin blocks", str(m.get("tls_pinned", 0)))
-    pdf.ln(2)
-
-    # Apps detected
-    _section(pdf, "APPS DETECTEES")
-    for line in report.get("apps_detected", []):
-        _bullet(pdf, line)
-    pdf.ln(2)
-
-    # Compromise analysis
-    _section(pdf, "ANALYSE COMPROMISSION")
+    # Compromise analysis (the hero shows the risk badge ; details below)
+    _section(pdf, "🚨 ANALYSE COMPROMISSION")
     score = report.get("risk_score", 0)
     risk_label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
-    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 13)
-    if score < 30:
-        pdf.set_text_color(0, 221, 68)
-    elif score < 70:
-        pdf.set_text_color(255, 179, 71)
-    else:
-        pdf.set_text_color(255, 68, 102)
-    pdf.cell(0, 8, _ascii_safe(f"Score risque : {score}/100 ({risk_label})"), ln=True)
     pdf.set_text_color(0)
     pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 10)
     pdf.ln(1)
@@ -439,6 +419,97 @@ _EMOJI_REPLACEMENTS = {
     "🦊": "[FF]",  # fox face
     "🪟": "[EDGE]",  # window
 }
+
+
+def _dashboard_hero(pdf, family: str, report: dict) -> None:
+    """Phase 3 (#492) : visual hero with big global numbers + risk score badge.
+
+    Layout :
+      ┌──────────────────────────────────────────────────────────────────┐
+      │  📊 TA SESSION VILLAGE3B                  Risk : LOW  [score]    │
+      │                                                                  │
+      │  [N connexions]  [N hosts]  [N inspectés]  [N cert-pinning]      │
+      │                                                                  │
+      │  Top app : 📺 YouTube · Top device : 📱 iPhone iOS 17.4         │
+      │  Top country : 🇺🇸 United States (Amazon, Google, Apple)        │
+      └──────────────────────────────────────────────────────────────────┘
+    """
+    m = report.get("metrics") or {}
+    avatar = report.get("avatar_analysis") or {}
+    dpi_cls = report.get("dpi_classified") or {}
+    geo_hosts = report.get("geo_top_hosts") or []
+    score = report.get("risk_score", 0)
+    label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
+
+    # Hero card background
+    pdf.set_fill_color(20, 30, 25)  # dark green-tinted
+    pdf.set_draw_color(0, 90, 64)
+    pdf.set_line_width(0.5)
+    hero_y = pdf.get_y()
+    pdf.rect(pdf.l_margin, hero_y, _page_w(pdf), 42, "DF")
+
+    # Title left + Risk badge right
+    pdf.set_xy(pdf.l_margin + 4, hero_y + 3)
+    pdf.set_font(family, "B", 13)
+    pdf.set_text_color(0, 221, 68)
+    pdf.cell(_page_w(pdf) - 60, 6, "📊 TA SESSION VILLAGE3B", ln=False)
+    # Risk badge
+    if score < 30:
+        badge_r, badge_g, badge_b = 0, 200, 100
+    elif score < 70:
+        badge_r, badge_g, badge_b = 255, 179, 71
+    else:
+        badge_r, badge_g, badge_b = 255, 68, 102
+    pdf.set_fill_color(badge_r, badge_g, badge_b)
+    pdf.set_text_color(10, 10, 15)
+    pdf.set_x(pdf.l_margin + _page_w(pdf) - 55)
+    pdf.set_font(family, "B", 11)
+    pdf.cell(50, 6, _safe(f"Risque: {label} ({score}/100)"), align="C", fill=True)
+    pdf.ln(8)
+
+    # Big numbers row (4 KPI cells)
+    pdf.set_text_color(0, 221, 68)
+    pdf.set_font(family, "B", 18)
+    box_w = (_page_w(pdf) - 8) / 4
+    y_kpi = pdf.get_y() + 2
+    kpis = [
+        (str(m.get("connections", 0)), "connexions"),
+        (str(m.get("unique_hosts", 0)), "hôtes"),
+        (str(m.get("successful", 0)), "OK 2xx/3xx"),
+        (str(m.get("tls_pinned", 0)), "cert-pinning"),
+    ]
+    for i, (n, lbl) in enumerate(kpis):
+        x = pdf.l_margin + 4 + i * box_w
+        pdf.set_xy(x, y_kpi)
+        pdf.set_font(family, "B", 16)
+        pdf.set_text_color(0, 255, 85)
+        pdf.cell(box_w, 7, n, ln=False, align="C")
+        pdf.set_xy(x, y_kpi + 7)
+        pdf.set_font(family, "", 8)
+        pdf.set_text_color(150, 150, 150)
+        pdf.cell(box_w, 4, _safe(lbl), ln=False, align="C")
+
+    # Top device + top app + top country lines
+    pdf.set_xy(pdf.l_margin + 4, hero_y + 30)
+    pdf.set_font(family, "", 9)
+    pdf.set_text_color(220, 220, 200)
+    top_device = avatar.get("most_common") or "?"
+    top_device_emoji = avatar.get("most_common_emoji") or ""
+    top_app = "?"
+    if dpi_cls.get("top_apps"):
+        ta = dpi_cls["top_apps"][0]
+        top_app = f"{ta.get('emoji', '')} {ta.get('app', '?')}"
+    top_country = "?"
+    if geo_hosts:
+        gh = geo_hosts[0]
+        if gh.get("flag") or gh.get("country"):
+            top_country = f"{gh.get('flag', '')} {gh.get('asn_org', '?')[:30]}"
+    pdf.cell(0, 4, _safe(f"Top device : {top_device_emoji} {top_device}  ·  Top app : {top_app}  ·  Top ASN : {top_country}"), ln=True)
+
+    # Reset cursor + colors below the hero
+    pdf.set_y(hero_y + 44)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(2)
 
 
 def _safe(text: str) -> str:
