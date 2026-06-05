@@ -14,6 +14,25 @@
 
 ---
 
+## 📡 VILLAGE3B — Cabine Numérique Gondwana ToolBoX
+
+<p align="center">
+  <img src="docs/assets/poster/village3b-A2.png" alt="Poster grand public VILLAGE3B" width="600">
+</p>
+
+> **Diagnostic compromission iPhone gratuit · Anonyme · Open Source**
+>
+> 3 niveaux d'opt-in (R0 bypass complet, R1 analyse passive ✓ recommandée, R2 TLS-break + bandeau).
+> Rapport téléchargeable avec 9 widgets metrics : 🌐 connexions · 📡 hôtes · ✅ OK 2xx · 🔒 cert-pinning · 📺 apps · 🍪 trackers · 🌍 pays · 🎯 score · 📱 device.
+> Conformité CSPN ANSSI + LCEN. Aucune donnée externe.
+>
+> - Détails techniques : [docs/AI-HANDOVER-cabine-evolution.md](docs/AI-HANDOVER-cabine-evolution.md)
+> - Brief poster + variantes : [docs/marketing/POSTER-grand-public-village3b.md](docs/marketing/POSTER-grand-public-village3b.md)
+> - Press kit + candidatures France.gouv : [docs/marketing/PROMPT-claude-presse-gouv.md](docs/marketing/PROMPT-claude-presse-gouv.md)
+> - Issue tracking poster : [#497](https://github.com/CyberMind-FR/secubox-deb/issues/497)
+
+---
+
 ## License — CyberMind Source-Disclosed (CMSD-1.0)
 
 > **Source disclosed, rights reserved.**

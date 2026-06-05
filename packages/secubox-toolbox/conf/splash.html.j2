@@ -86,6 +86,25 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
       <span id="cert-text">Auto-test en cours...</span>
     </div>
 
+    {# Phase 3.x (#497) : 3 QR codes définitifs synchronisés avec le poster #}
+    <p style="font-size:0.78rem;color:#cbb6ff;margin-top:0.8rem;text-align:center;border-top:1px solid rgba(158,118,255,0.3);padding-top:0.5rem">
+      📲 <b>QR codes</b> — scanne depuis un autre appareil
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-top:0.4rem">
+      <div style="text-align:center;background:rgba(255,255,255,0.95);padding:0.4rem;border-radius:4px">
+        <img src="/qr/splash.png" alt="QR splash" style="width:100%;max-width:120px;display:block;margin:auto"/>
+        <p style="font-size:0.62rem;color:#0a0a0f;margin-top:0.2rem;font-weight:bold">① SPLASH</p>
+      </div>
+      <div style="text-align:center;background:rgba(255,255,255,0.95);padding:0.4rem;border-radius:4px">
+        <img src="/qr/cert.png" alt="QR cert" style="width:100%;max-width:120px;display:block;margin:auto"/>
+        <p style="font-size:0.62rem;color:#0a0a0f;margin-top:0.2rem;font-weight:bold">② CERT iPHONE</p>
+      </div>
+      <div style="text-align:center;background:rgba(255,255,255,0.95);padding:0.4rem;border-radius:4px">
+        <img src="/qr/webclip.png" alt="QR webclip" style="width:100%;max-width:120px;display:block;margin:auto"/>
+        <p style="font-size:0.62rem;color:#0a0a0f;margin-top:0.2rem;font-weight:bold">③ WEBCLIP HOME</p>
+      </div>
+    </div>
+
     <p style="font-size:0.7rem;opacity:0.85;margin-top:0.6rem;line-height:1.5">
       ⚠ L'auto-test est <b>best-effort</b> (probe HTTPS). Pour <b>certifier</b>
       que le CA est bien installé + activé sur iPhone :
