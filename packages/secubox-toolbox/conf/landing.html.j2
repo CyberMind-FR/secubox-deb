@@ -54,15 +54,44 @@ a:hover{text-decoration:underline}
 .cta.purple{background:var(--purple);color:#0a0a0f}
 .footer{text-align:center;font-size:0.78rem;color:var(--dim);padding:1.5rem;border-top:1px solid var(--dim);margin-top:2rem}
 .arch{font-family:monospace;font-size:0.75rem;color:var(--phos-hot);text-shadow:0 0 4px var(--phos);background:var(--bg2);padding:1rem;border:1px solid var(--dim);border-radius:4px;overflow-x:auto;white-space:pre;line-height:1.4}
+.quicknav{display:flex;flex-wrap:wrap;justify-content:center;gap:0.7rem;margin-top:1.2rem;max-width:780px;margin-left:auto;margin-right:auto}
+.qi{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0.6rem 0.4rem;min-width:78px;background:rgba(110,64,201,0.08);border:1px solid var(--purple);border-radius:8px;text-decoration:none;color:var(--text);transition:all 0.12s;font-family:inherit}
+.qi:hover{background:rgba(110,64,201,0.22);transform:translateY(-2px);box-shadow:0 4px 14px rgba(158,118,255,0.35);text-decoration:none}
+.qi-emoji{font-size:1.6rem;line-height:1}
+.qi-label{font-size:0.65rem;letter-spacing:0.04em;color:var(--phos-hot);font-weight:bold;white-space:nowrap}
 </style></head><body>
 
 <div class=hero>
   <h1>📡 VILLAGE3B</h1>
   <p class=tag>// CABINE NUMÉRIQUE GONDWANA · TOOLBOX</p>
   <p class=sub>Diagnostic gratuit de compromission iPhone / Android · Anonyme · Open Source · CMSD-1.0</p>
-  <div style="margin-top:1rem">
-    <a href=/ class=cta>🚀 Aller à la cabine VILLAGE3B</a>
-    <a href=/wg/r3-install class="cta purple">🌐 Mode R3 mobile (WireGuard)</a>
+
+  {# Phase 6.I : quick-access icon nav — one-tap to all key endpoints #}
+  <div class=quicknav>
+    <a href="/wg/r3-install" class=qi title="Installer R3 WireGuard">
+      <span class=qi-emoji>🌐</span><span class=qi-label>R3 Install</span>
+    </a>
+    <a href="/report/me/html" class=qi title="Mon rapport live">
+      <span class=qi-emoji>📊</span><span class=qi-label>Mon rapport</span>
+    </a>
+    <a href="/wg/ca.mobileconfig" class=qi title="CA R3 iPhone (.mobileconfig)">
+      <span class=qi-emoji>📲</span><span class=qi-label>CA iPhone</span>
+    </a>
+    <a href="/wg/ca.pem" class=qi title="CA R3 Android/PC (.pem)">
+      <span class=qi-emoji>🤖</span><span class=qi-label>CA Android</span>
+    </a>
+    <a href="/wg/qr.png" class=qi title="QR profil WireGuard">
+      <span class=qi-emoji>📱</span><span class=qi-label>QR profil</span>
+    </a>
+    <a href="/admin/" class=qi title="Admin webui">
+      <span class=qi-emoji>🛠️</span><span class=qi-label>Admin</span>
+    </a>
+    <a href="https://github.com/CyberMind-FR/secubox-deb/wiki/R3-WireGuard-install" class=qi title="Wiki R3 multi-OS">
+      <span class=qi-emoji>📖</span><span class=qi-label>Wiki</span>
+    </a>
+    <a href="/" class=qi title="Cabine VILLAGE3B">
+      <span class=qi-emoji>🚪</span><span class=qi-label>Cabine</span>
+    </a>
   </div>
 </div>
 
