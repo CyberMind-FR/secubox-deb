@@ -32,23 +32,36 @@ button:hover{background:rgba(0,221,68,0.1);box-shadow:0 0 12px var(--phos)}
     Ton appareil : <b>{{ mac_hash }}</b> (anonymisé)
   </div>
 
-  {% if r2_enabled %}
-  <div class="r2">
-    <strong>⚠ Inspection volontaire activée :</strong> en cliquant ci-dessous, tu acceptes que ton
-    trafic transitant par cette borne soit déchiffré (TLS-break) le temps de ta session, pour
-    détecter une éventuelle compromission de ton appareil. À la fin, tu pourras récupérer ton
-    rapport personnel anonyme (lien éphémère 24h). Aucune donnée n'est revendue.
-  </div>
-  {% endif %}
-
   <p class="terms">
     Conformité : R2 (CSPN) — consentement explicite ; LCEN — anonymisation par hash quotidien.
     Ce dispositif est défensif (détection seule, pas d'interception de tiers).
-    <a href="/ca/install-help">Installer le certificat (recommandé pour TLS-break)</a>
+    Choisis ton niveau ci-dessous (tu peux changer plus tard depuis le rapport) :
   </p>
 
-  <form method="POST" action="/accept">
-    <button type="submit">✓ Activer mon accès</button>
+  {# Phase 3 (#492) : 3-level explicit opt-in. R0 = net only, R1 = passive
+     analysis (default, no impact on UX), R2 = R1 + visible banner + QUIC drop. #}
+  <form method="POST" action="/accept" style="display:flex;flex-direction:column;gap:0.8rem">
+
+    <button type="submit" name="level" value="r0" style="border-color:var(--dim);color:var(--text)">
+      🌐 R0 — Accès simple <span style="opacity:0.7;font-size:0.75rem">· réseau seul, 0 analyse</span>
+    </button>
+
+    <button type="submit" name="level" value="r1" style="border-color:var(--phos);color:var(--phos-hot)">
+      🛡 R1 — Accès + analyse passive <span style="opacity:0.85;font-size:0.75rem">· rapport sur ta session, pas d'impact, recommandé</span>
+    </button>
+
+    {% if r2_enabled %}
+    <button type="submit" name="level" value="r2" style="border-color:#ffb347;color:#ffd6a0">
+      🔍 R2 — Analyse + bandeau Safari <span style="opacity:0.85;font-size:0.75rem">· peut casser iCloud/Push</span>
+    </button>
+
+    <div class="r2" style="font-size:0.75rem;margin-top:0.3rem">
+      <strong>⚠ R2 active</strong> : déchiffrement TLS (CA à installer) + bandeau visible sur les pages
+      web Safari + redirection forcée TCP (drop QUIC). Apps natives iOS (iCloud sync, FaceTime, Push
+      notifications) peuvent être lentes ou échouer le temps de la session. Tu peux revenir en R1
+      depuis le rapport. <a href="/ca/install-help" style="color:#ffb347">Installer le certificat</a>
+    </div>
+    {% endif %}
   </form>
 
   <p style="margin-top:1rem;font-size:0.78rem;color:var(--dim);text-align:center">

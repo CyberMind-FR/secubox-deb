@@ -59,3 +59,23 @@ def is_validated(mac: str) -> bool:
 def is_consented(mac: str) -> bool:
     rc, out, _ = _run(NFT, "list", "set", "inet", "toolbox", "consented_r2_macs")
     return rc == 0 and mac.lower() in out.lower()
+
+
+def add_r2_banner(mac: str, ttl: str = "24h") -> bool:
+    """Phase 3 (#492) : R2 explicit opt-in subset (banner inject + QUIC drop)."""
+    rc, _, err = _run(NFT, "add", "element", "inet", "toolbox",
+                      "r2_banner_macs", "{ " + mac + " timeout " + ttl + " }")
+    if rc:
+        log.error("nft add r2_banner_macs %s failed: %s", mac, err)
+    return rc == 0
+
+
+def del_r2_banner(mac: str) -> bool:
+    rc, _, _ = _run(NFT, "delete", "element", "inet", "toolbox",
+                    "r2_banner_macs", "{ " + mac + " }")
+    return rc == 0
+
+
+def is_r2_banner(mac: str) -> bool:
+    rc, out, _ = _run(NFT, "list", "set", "inet", "toolbox", "r2_banner_macs")
+    return rc == 0 and mac.lower() in out.lower()

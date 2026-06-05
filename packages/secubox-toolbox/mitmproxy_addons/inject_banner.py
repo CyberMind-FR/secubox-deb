@@ -294,6 +294,31 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
     return b"<script>" + js.encode("ascii") + b"</script>"
 
 
+# Phase 3 (#492) : level check — only inject banner for R2 opt-in clients
+try:
+    import sys as _sys
+    _sys.path.insert(0, "/usr/lib/secubox/toolbox")
+    from secubox_toolbox import store as _store_mod  # type: ignore
+    from _common import mac_hash_of  # type: ignore
+    _HAS_LEVEL = True
+except Exception:
+    _HAS_LEVEL = False
+
+
+def _client_level(flow) -> str:
+    """Returns 'r0' | 'r1' | 'r2'. Defaults 'r1' if lookup fails."""
+    if not _HAS_LEVEL:
+        return "r1"
+    try:
+        ip = flow.client_conn.peername[0] if flow.client_conn.peername else None
+        mh = mac_hash_of(ip)
+        if mh:
+            return _store_mod.get_client_level(mh)
+    except Exception:
+        pass
+    return "r1"
+
+
 class InjectBanner:
     def response(self, flow: http.HTTPFlow) -> None:
         if not flow.response:
@@ -302,6 +327,9 @@ class InjectBanner:
         if "text/html" not in ct.lower():
             return
         if flow.response.status_code < 200 or flow.response.status_code >= 400:
+            return
+        # Phase 3 (#492) : skip if client opted into R0/R1 only
+        if _client_level(flow) != "r2":
             return
         body = flow.response.content
         if body is None or _GUARD in body:
