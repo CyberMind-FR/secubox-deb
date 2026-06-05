@@ -23,13 +23,36 @@ import httpx
 
 app = FastAPI(title="secubox-dpi", version="2.0.0", root_path="/api/v1/dpi")
 
-# Phase 2b (#488) : ingest mitm DPI events from secubox-toolbox addon
+# Phase 2b/2c (#488/#490) : ingest mitm DPI events + nDPI-style classification
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+from secubox_core.classifiers import host_app as _host_app  # noqa: E402
+
+
+def _dpi_enrich(event: dict) -> dict:
+    """Phase 2c enrichment : classify host/SNI -> {app, category, emoji}.
+
+    Future Phase 3 : query nDPI/netifyd daemon socket for live classification.
+    """
+    host = event.get("host") or event.get("sni") or ""
+    if not host:
+        return event
+    cls = _host_app.classify_host(host)
+    event["enriched"] = {
+        "app": cls["app"],
+        "category": cls["category"],
+        "emoji": cls["emoji"],
+        "source": "secubox-dpi/host_app",
+        "method": "pattern-match",
+    }
+    return event
+
+
 mount_ingest_routes(
     app,
     endpoint_path="/classify",
     db_path="/var/lib/secubox/dpi/mitm-ingest.db",
     kind="dpi",
+    enrich_hook=_dpi_enrich,
 )
 
 # ══════════════════════════════════════════════════════════════════

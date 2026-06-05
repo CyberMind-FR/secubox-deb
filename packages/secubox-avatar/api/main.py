@@ -26,13 +26,43 @@ from secubox_core.logger import get_logger
 
 app = FastAPI(title="secubox-avatar", version="1.0.0", root_path="/api/v1/avatar")
 
-# Phase 2b (#488) : ingest mitm avatar fingerprint events from secubox-toolbox addon
+# Phase 2b/2c (#488/#490) : ingest mitm avatar events + UA/CH device classification
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+from secubox_core.classifiers import avatar as _avatar_cls  # noqa: E402
+
+
+def _avatar_enrich(event: dict) -> dict:
+    """Phase 2c enrichment : UA + Client Hints -> {device, browser, os, emoji}."""
+    ua = event.get("user_agent") or ""
+    if not ua:
+        return event
+    cls = _avatar_cls.classify_user_agent(ua)
+    # Augment with Client Hints if present (more reliable than UA spoofing)
+    chints = event.get("client_hints") or {}
+    if "sec-ch-ua-platform" in chints:
+        cls["ch_platform"] = chints["sec-ch-ua-platform"].strip('"')
+    if "sec-ch-ua-model" in chints:
+        cls["ch_model"] = chints["sec-ch-ua-model"].strip('"')
+    event["enriched"] = {
+        "device": cls.get("device", "unknown"),
+        "device_emoji": cls.get("device_emoji", "❔"),
+        "os_label": cls.get("os_label", "?"),
+        "browser": cls.get("browser", "unknown"),
+        "browser_emoji": cls.get("browser_emoji", "❔"),
+        "browser_label": cls.get("browser_label", "?"),
+        "ch_platform": cls.get("ch_platform"),
+        "ch_model": cls.get("ch_model"),
+        "source": "secubox-avatar/classifier",
+    }
+    return event
+
+
 mount_ingest_routes(
     app,
     endpoint_path="/fingerprint",
     db_path="/var/lib/secubox/avatar/mitm-ingest.db",
     kind="avatar",
+    enrich_hook=_avatar_enrich,
 )
 
 # ══════════════════════════════════════════════════════════════════

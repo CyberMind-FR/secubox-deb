@@ -1852,11 +1852,17 @@ _MITM_MODULES = [
 ]
 
 
-def _pull_mitm_module_events(mac_hash: str) -> dict:
+def _pull_mitm_module_events(mac_hash: str, limit: int = 50) -> dict:
     """Query each receiving module's GET /mitm-events for this client.
 
-    Returns a dict {module: {count, sample_events}} for the report. Errors per
-    module are non-fatal — if a module is down, it just shows count=0.
+    Returns a dict {module: {count, sample_events, enriched_summary}} for the
+    report. Errors per module are non-fatal — if a module is down, it just
+    shows count=0.
+
+    Phase 2c (#490) : also build an enriched_summary per module aggregating
+    the enrich_hook output (top apps from dpi, top providers from cookies,
+    devices from avatar, JA4 fingerprints from threat-analyst, score band
+    from soc).
     """
     import socket as _sock
     import urllib.parse as _up
@@ -1872,15 +1878,17 @@ def _pull_mitm_module_events(mac_hash: str) -> dict:
                     self.sock.connect(sock_path)
 
             conn = UDSConnection("localhost", timeout=2)
-            qs = _up.urlencode({"mac_hash": mac_hash, "limit": 20})
+            qs = _up.urlencode({"mac_hash": mac_hash, "limit": limit})
             conn.request("GET", f"/mitm-events?{qs}")
             resp = conn.getresponse()
             if resp.status == 200:
                 import json as _json
-                data = _json.loads(resp.read().decode("utf-8", errors="ignore")[:50000])
+                data = _json.loads(resp.read().decode("utf-8", errors="ignore")[:200000])
+                events = data.get("events", [])
                 out[kind] = {
                     "count": data.get("count", 0),
-                    "sample": data.get("events", [])[:5],
+                    "sample": events[:5],
+                    "enriched_summary": _summarize_enriched(kind, events),
                 }
             else:
                 out[kind] = {"count": 0, "error": f"HTTP {resp.status}"}
@@ -1890,6 +1898,88 @@ def _pull_mitm_module_events(mac_hash: str) -> dict:
         except Exception as e:
             out[kind] = {"count": 0, "error": str(e)[:60]}
     return out
+
+
+def _summarize_enriched(kind: str, events: list[dict]) -> dict:
+    """Phase 2c (#490) : per-module aggregation of enrich_hook output.
+
+    Each receiving module attaches its enrich_hook result under 'enriched'
+    inside the event payload. This function consolidates them into a
+    compact summary suitable for the /report display.
+    """
+    if not events:
+        return {}
+    if kind == "dpi":
+        apps: dict[str, dict] = {}
+        for ev in events:
+            e = (ev.get("payload") or {}).get("enriched") or {}
+            app = e.get("app")
+            if not app or app == "?":
+                continue
+            if app not in apps:
+                apps[app] = {"count": 0, "category": e.get("category"), "emoji": e.get("emoji")}
+            apps[app]["count"] += 1
+        top = sorted([{"app": k, **v} for k, v in apps.items()], key=lambda x: -x["count"])[:15]
+        return {"top_apps": top, "classified_events": sum(v["count"] for v in apps.values())}
+    if kind == "cookies":
+        providers: dict[str, dict] = {}
+        total_trackers = 0
+        for ev in events:
+            e = (ev.get("payload") or {}).get("enriched") or {}
+            for p, info in (e.get("providers") or {}).items():
+                if p not in providers:
+                    providers[p] = {"count": 0, "category": info.get("category"), "emoji": info.get("emoji")}
+                providers[p]["count"] += info.get("count", 1)
+                total_trackers += info.get("count", 1)
+        top = sorted([{"provider": k, **v} for k, v in providers.items()], key=lambda x: -x["count"])[:10]
+        return {"top_providers": top, "tracker_total": total_trackers}
+    if kind == "avatar":
+        devices: dict[str, dict] = {}
+        browsers: dict[str, dict] = {}
+        for ev in events:
+            e = (ev.get("payload") or {}).get("enriched") or {}
+            d = e.get("device")
+            if d and d != "unknown":
+                if d not in devices:
+                    devices[d] = {"count": 0, "emoji": e.get("device_emoji"), "os_label": e.get("os_label")}
+                devices[d]["count"] += 1
+            b = e.get("browser")
+            if b and b != "unknown":
+                if b not in browsers:
+                    browsers[b] = {"count": 0, "emoji": e.get("browser_emoji"), "label": e.get("browser_label")}
+                browsers[b]["count"] += 1
+        return {"devices": devices, "browsers": browsers}
+    if kind == "threat-analyst":
+        fps: dict[str, dict] = {}
+        for ev in events:
+            e = (ev.get("payload") or {}).get("enriched") or {}
+            fp = e.get("ja4_fingerprint")
+            if not fp:
+                continue
+            if fp not in fps:
+                fps[fp] = {
+                    "count": 0,
+                    "known_client": e.get("known_client"),
+                    "raw_repr": e.get("ja4_raw_repr"),
+                }
+            fps[fp]["count"] += 1
+        top = sorted([{"fingerprint": k, **v} for k, v in fps.items()], key=lambda x: -x["count"])[:10]
+        return {"top_fingerprints": top, "unique_count": len(fps)}
+    if kind == "soc":
+        total_w = 0
+        kinds_seen: dict[str, int] = {}
+        max_band = "low"
+        band_order = ["low", "medium", "high"]
+        for ev in events:
+            e = (ev.get("payload") or {}).get("enriched") or {}
+            total_w += e.get("total_weight") or 0
+            for k in e.get("indicator_kinds") or []:
+                kinds_seen[k] = kinds_seen.get(k, 0) + 1
+            b = e.get("band") or "low"
+            if band_order.index(b) > band_order.index(max_band):
+                max_band = b
+        return {"total_weight": total_w, "max_band": max_band, "indicator_kinds": kinds_seen}
+    return {}
 
 
 def _enrich_with_geo(matches: list[dict]) -> list[dict]:
