@@ -572,7 +572,7 @@ async def wg_status() -> dict:
         ).stdout
         return {"interface": "wg-toolbox", "active": "peer:" in out,
                 "peer_count": out.count("peer:"),
-                "endpoint": "kbin.gk2.net:51820"}
+                "endpoint": "kbin.gk2.secubox.in:51820"}
     except Exception as e:
         return {"interface": "wg-toolbox", "active": False, "error": str(e)[:80]}
 
