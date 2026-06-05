@@ -1,0 +1,50 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Phase 6.F (#496) — launcher wrapper for secubox-toolbox-mitm-wg.service.
+# Reads the mitm bypass list from /etc/secubox/toolbox/mitm-bypass.conf and
+# turns it into a single mitmproxy --set ignore_hosts=<regex> alternation.
+#
+# Why a wrapper instead of inline ExecStart: systemd doesn't expand $(cat)
+# or do regex composition; we need a real shell. Also, when the admin UI
+# adds/removes entries, restarting this service picks them up automatically
+# without editing the unit file.
+
+set -euo pipefail
+
+MITM_BIN=/opt/mitmproxy-toolbox/bin/mitmdump
+BYPASS_FILE=/var/lib/secubox/toolbox/mitm-bypass.conf
+ADDON_DIR=/usr/lib/secubox/toolbox/mitmproxy_addons
+
+# ── Compose ignore_hosts regex from bypass file ──
+IGNORE_REGEX=""
+if [ -r "$BYPASS_FILE" ]; then
+    # Strip comments + blank lines, join with |
+    PATTERNS=$(grep -v '^[[:space:]]*#' "$BYPASS_FILE" | grep -v '^[[:space:]]*$' | tr '\n' '|' | sed 's/|$//')
+    if [ -n "$PATTERNS" ]; then
+        IGNORE_REGEX="($PATTERNS)"
+    fi
+fi
+
+# ── Build mitm args ──
+ARGS=(
+    --mode transparent
+    --listen-host 10.99.1.1
+    --listen-port 8081
+    --set confdir=/etc/secubox/toolbox/ca-wg
+    --set ssl_insecure=false
+    --set web_open_browser=false
+)
+
+if [ -n "$IGNORE_REGEX" ]; then
+    ARGS+=(--set "ignore_hosts=$IGNORE_REGEX")
+    echo "[mitm-wg-launch] ignore_hosts regex applied (${#PATTERNS} chars, $(grep -cv '^[[:space:]]*\(#\|$\)' "$BYPASS_FILE" 2>/dev/null || echo 0) patterns)"
+fi
+
+# Addons
+for addon in local_store inject_banner dpi cookies avatar ja4 soc_relay; do
+    ARGS+=(-s "$ADDON_DIR/${addon}.py")
+done
+
+exec "$MITM_BIN" "${ARGS[@]}"

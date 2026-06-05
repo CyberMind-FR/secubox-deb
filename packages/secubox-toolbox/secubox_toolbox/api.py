@@ -10,7 +10,7 @@ from pathlib import Path
 
 import jinja2
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from . import (
     avatar_analysis,
@@ -409,71 +409,218 @@ async def webapp_manifest(request: Request) -> dict:
 
 @router.get("/wg/r3-install", response_class=HTMLResponse)
 async def wg_r3_install(request: Request) -> HTMLResponse:
-    """R3 install page — download WG profile + QR + iOS/Android instructions."""
+    """R3 install page — simplified 3-step install : QR scan / CA R3 / GO.
+
+    Optimized for first-time portable setup from anywhere (kbin.gk2.secubox.in).
+    No more wall-of-text — large QR, 3 numbered steps, one big GO button.
+    """
     html = """<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=apple-mobile-web-app-capable content=yes>
 <link rel=manifest href=/manifest.json>
-<title>R3 WireGuard — Installer le profil portable</title>
-<style>:root{--bg:#0a0a0f;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff}
+<title>R3 — Tunnel portable Gondwana</title>
+<style>:root{--bg:#0a0a0f;--gold:#c9a84c;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff;--orange:#ffb347;--err:#e63946}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);padding:1.2rem;max-width:560px;margin:auto;line-height:1.55}
-h1{color:var(--phos-hot);text-shadow:0 0 6px var(--phos);margin-bottom:0.3rem}
-.sub{color:var(--dim);font-size:0.85rem;margin-bottom:1rem}
-.card{border:1px solid var(--purple);padding:1rem;margin-bottom:1rem;background:rgba(110,64,201,0.05)}
-.card h2{color:var(--purple);font-size:0.95rem;margin-bottom:0.5rem}
-.btn{display:block;text-align:center;padding:0.8rem;background:var(--purple);color:#0a0a0f;
-text-decoration:none;border-radius:4px;font-weight:bold;margin:0.6rem 0;font-size:0.95rem}
-.btn.outline{background:transparent;color:var(--purple);border:1px solid var(--purple)}
-.qr{text-align:center;background:white;padding:0.8rem;border-radius:4px;margin:0.6rem 0}
-.qr img{max-width:240px;width:100%}
-ol{padding-left:1.4rem;font-size:0.85rem}
-code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem}
-.warn{font-size:0.75rem;color:#ffd6a0;background:rgba(255,179,71,0.08);padding:0.6rem;border-left:2px solid #ffb347;margin:0.6rem 0}
+html,body{background:var(--bg);color:var(--text);font-family:'Courier New',Menlo,monospace;line-height:1.5}
+body{padding:1.2rem;max-width:600px;margin:auto}
+h1{color:var(--gold);text-align:center;font-size:1.4rem;margin-bottom:0.2rem;letter-spacing:2px}
+.lead{color:var(--phos);text-align:center;font-size:0.8rem;margin-bottom:1.4rem;opacity:0.85}
+.lead b{color:var(--phos-hot)}
+.step{border:1px solid #2a2a3f;border-left:4px solid var(--purple);padding:1rem 1.2rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(110,64,201,0.04),rgba(110,64,201,0.10));border-radius:6px;box-shadow:0 1px 8px rgba(0,0,0,0.25)}
+.step h2{color:var(--purple);font-size:1rem;margin-bottom:0.6rem;display:flex;align-items:center;gap:8px}
+.num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:var(--purple);color:#0a0a0f;border-radius:50%;font-weight:bold;font-size:0.95rem}
+.qr{text-align:center;background:white;padding:14px;border-radius:8px;margin:0.6rem 0;box-shadow:0 2px 10px rgba(158,118,255,0.25)}
+.qr img{max-width:300px;width:100%;height:auto}
+.btn{display:block;text-align:center;padding:0.85rem 1rem;color:#0a0a0f;text-decoration:none;border-radius:6px;font-weight:bold;margin:0.5rem 0;font-size:0.95rem;transition:all 0.15s}
+.btn-pri{background:linear-gradient(90deg,var(--purple),#7e56df)}
+.btn-go{background:linear-gradient(90deg,var(--phos),var(--phos-hot));color:#0a0a0f;font-size:1.1rem;padding:1rem;letter-spacing:1px;text-shadow:0 0 6px rgba(0,255,85,0.5)}
+.btn-warn{background:linear-gradient(90deg,var(--orange),#dd7e0a)}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+.alt{font-size:0.72rem;color:#909090;text-align:center;margin-top:0.4rem}
+.alt a{color:var(--orange);text-decoration:underline}
+.tip{font-size:0.72rem;color:#a0d8a8;background:rgba(0,221,68,0.05);border-left:2px solid var(--phos);padding:0.5rem 0.7rem;margin-top:0.5rem;border-radius:0 3px 3px 0}
+.warn{font-size:0.78rem;color:#ffd6a0;background:rgba(255,179,71,0.08);border-left:3px solid var(--orange);padding:0.7rem;margin:0.4rem 0;border-radius:0 4px 4px 0}
+.back{display:block;text-align:center;margin-top:1.5rem;color:#666;text-decoration:none;font-size:0.85rem}
+.back:hover{color:var(--phos)}
 </style></head><body>
-<h1>🌐 R3 — WireGuard portable</h1>
-<p class=sub>// VPN tunnel mitm — marche partout (mobile data, WiFi tiers)</p>
 
-<div class=card>
-<h2>📲 Méthode 1 — Scanner le QR (recommandé)</h2>
-<p style="font-size:0.82rem">Ouvre l'app <b>WireGuard</b> (gratuite, App Store / Play Store) → ➕ Ajouter un tunnel → <b>Scanner depuis QR</b> → pointe l'iPhone vers ce QR :</p>
-<div class=qr><img src="/wg/qr.png" alt="QR profil WG"/></div>
-<p style="font-size:0.7rem;opacity:0.7;text-align:center">⚠ Le QR contient ta clé privée. Ne le partage pas.</p>
+<h1>🌐 R3 — TUNNEL PORTABLE</h1>
+<p class=lead>3 étapes pour activer le mode <b>R3</b> — surveillance partout, sur 4G/WiFi tiers</p>
+
+<div class=step>
+<h2><span class=num>1</span> 📲 Scanner le QR profil</h2>
+<p style="font-size:0.85rem;margin-bottom:0.4rem">Installe l'app gratuite <b>WireGuard</b> (App Store / Play Store) puis scanne :</p>
+<div class=qr><img src="/wg/qr.png" alt="QR profil WireGuard"/></div>
+<p class=alt>📥 Pas de scanner ? <a href="/wg/profile/new">Télécharger le .conf</a> (iPhone : touch → ouvrir dans WireGuard)</p>
 </div>
 
-<div class=card>
-<h2>💾 Méthode 2 — Télécharger .conf</h2>
-<a href=/wg/profile/new class=btn>📥 Télécharger village3b-toolbox.conf</a>
-<ol>
-<li>iPhone : ouvre le fichier → app WireGuard s'ouvre → tap 'Importer'</li>
-<li>Android : ouvre l'app WireGuard → ➕ → Importer depuis fichier</li>
-<li>Linux : <code>wg-quick up village3b-toolbox.conf</code></li>
-</ol>
-</div>
-
+<div class=step>
+<h2><span class=num>2</span> 🔐 Installer le certificat R3</h2>
+<p style="font-size:0.85rem;margin-bottom:0.4rem">Certif <b>spécifique R3</b> (≠ R1/R2). Sans lui, les sites HTTPS cassent.</p>
+<a href="/wg/ca.mobileconfig" class="btn btn-warn">📲 iPhone : 1-tap install</a>
+<a href="/wg/ca.pem" class="btn btn-warn">🤖 Android / PC : .pem</a>
 <div class=warn>
-<b>⚠ Important pour R3 :</b> il faut installer le <b>certificat R3 spécifique</b>
-(différent du certificat R1/R2). Sinon les sites HTTPS échouent dès le tunnel actif.
-<br><br>
-<a href="/wg/ca.mobileconfig" style="color:#ffb347;font-weight:bold">📥 Installer CA R3 iPhone (.mobileconfig)</a>
-<br>
-<a href="/wg/ca.pem" style="color:#ffb347;font-weight:bold">🤖 Télécharger CA R3 (.pem Android/PC)</a>
+<b>iPhone seulement :</b> après l'install, va aussi dans<br>
+Réglages → Général → Information → <b>Réglages de confiance</b><br>
+et active <b>« Gondwana ToolBoX WG CA »</b>
+</div>
 </div>
 
-<div class=card>
-<h2>🔌 Après connection</h2>
-<p style="font-size:0.82rem">Une fois le tunnel actif (icône VPN visible iOS) :</p>
-<ul style="padding-left:1.2rem;font-size:0.82rem">
-<li>Tout ton trafic (HTTPS + QUIC + DNS) passe par la cabine</li>
-<li>Le bandeau apparaît sur TOUTES les pages web (incl Safari)</li>
-<li>Le rapport <a href=/report/me/html style="color:var(--phos)">📊 /report/me/html</a> se remplit en temps réel</li>
-<li>iCloud Push + FaceTime continuent de marcher (routing-bypass)</li>
-</ul>
+<div class=step>
+<h2><span class=num>3</span> 🚀 Activer le tunnel</h2>
+<p style="font-size:0.85rem;margin-bottom:0.5rem">Dans l'app WireGuard, glisse le toggle <b>ON</b>. L'icône VPN apparaît dans la barre d'état.</p>
+<a href="/report/me/html" class="btn btn-go">📊 GO — Voir mon rapport live</a>
+<div class=tip>
+✓ Trafic chiffré entre iPhone et la cabine (jamais en clair sur Internet)<br>
+✓ Bandeau sur toutes les pages HTTPS<br>
+✓ FaceTime / iCloud / Signal restent fluides (bypass intelligent)
+</div>
 </div>
 
-<a href=/ class=btn outline>← Retour splash</a>
+<a href="/" class=back>← Retour splash</a>
 </body></html>"""
     return HTMLResponse(html)
+
+
+# ── Phase 6.F (#496) : MITM filtering whitelist ─────────────────────
+# Some apps use cert-pinning / E2E protocols that BREAK if mitm decrypts
+# their TLS (Signal, WhatsApp, Telegram, Apple Push, banking apps with
+# pinned certs). They MUST be bypassed at the mitm layer (ignore_hosts).
+# The whitelist file is the single source of truth — admin UI edits it,
+# mitm reads it via --set ignore_hosts on (re)start.
+
+MITM_BYPASS_FILE = Path("/var/lib/secubox/toolbox/mitm-bypass.conf")
+_MITM_BYPASS_DEFAULT_ENTRIES = [
+    "# SecuBox ToolBoX :: mitm bypass list (regex, one per line)",
+    "# These hosts/domains are NOT decrypted by mitm — TLS passthrough.",
+    "# Required for apps with cert pinning / E2E protocols.",
+    "# Edit via /admin/filter-control or by hand, then restart mitm services.",
+    "",
+    "# Signal — pinned certs, E2E",
+    "(.+\\.)?signal\\.org",
+    "(.+\\.)?signal\\.com",
+    "",
+    "# WhatsApp — cert pinning",
+    "(.+\\.)?whatsapp\\.net",
+    "(.+\\.)?whatsapp\\.com",
+    "",
+    "# Telegram — pinned + custom protocols",
+    "(.+\\.)?telegram\\.org",
+    "(.+\\.)?telegram\\.me",
+    "",
+    "# Apple Push / iMessage / FaceTime — pinned",
+    "(.+\\.)?push\\.apple\\.com",
+    "(.+\\.)?gateway\\.icloud\\.com",
+    "(.+\\.)?apple-cloudkit\\.com",
+    "",
+    "# Bank apps (common French banks) — pinned + ANSSI requirement",
+    "(.+\\.)?bnpparibas\\.net",
+    "(.+\\.)?creditmutuel\\.fr",
+    "(.+\\.)?ca-.*\\.fr",  # Crédit Agricole regional sites
+    "(.+\\.)?banquepopulaire\\.fr",
+    "(.+\\.)?caisse-epargne\\.fr",
+    "(.+\\.)?societegenerale\\.fr",
+]
+
+
+def _ensure_bypass_file() -> None:
+    if not MITM_BYPASS_FILE.exists():
+        MITM_BYPASS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        MITM_BYPASS_FILE.write_text("\n".join(_MITM_BYPASS_DEFAULT_ENTRIES) + "\n")
+
+
+def _load_bypass_entries() -> list[str]:
+    _ensure_bypass_file()
+    try:
+        lines = MITM_BYPASS_FILE.read_text().splitlines()
+        return [ln for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
+    except Exception:
+        return []
+
+
+@router.get("/admin/filter-control", response_class=HTMLResponse)
+async def admin_filter_control() -> HTMLResponse:
+    """Whitelist control panel — view + edit mitm bypass entries."""
+    entries = _load_bypass_entries()
+    raw = MITM_BYPASS_FILE.read_text() if MITM_BYPASS_FILE.exists() else ""
+    rows = "\n".join(
+        f'<tr><td><code>{e}</code></td><td><form method=POST action=/admin/filter-control/remove style=display:inline><input type=hidden name=entry value="{e}"/><button class=del>✕</button></form></td></tr>'
+        for e in entries
+    )
+    html = f"""<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Admin :: Filter Control</title>
+<style>:root{{--bg:#0a0a0f;--gold:#c9a84c;--phos:#00dd44;--purple:#9e76ff;--text:#e8e6d9;--err:#e63946}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);padding:1.2rem;max-width:780px;margin:auto;line-height:1.5}}
+h1{{color:var(--gold);font-size:1.3rem;margin-bottom:0.4rem}}
+.lead{{color:var(--purple);font-size:0.85rem;margin-bottom:1.2rem}}
+table{{width:100%;border-collapse:collapse;margin-bottom:1rem;background:rgba(110,64,201,0.03);border:1px solid #2a2a3f;border-radius:4px}}
+td,th{{padding:0.4rem 0.7rem;border-bottom:1px solid #2a2a3f;font-size:0.8rem;text-align:left}}
+th{{background:rgba(110,64,201,0.15);color:var(--purple);font-weight:bold}}
+code{{color:var(--phos);background:#111;padding:0.1rem 0.3rem;border-radius:2px}}
+.del{{background:var(--err);color:white;border:0;padding:0.2rem 0.5rem;border-radius:3px;cursor:pointer;font-weight:bold}}
+input[type=text]{{flex:1;background:#111;color:var(--text);border:1px solid #2a2a3f;padding:0.5rem;border-radius:4px;font-family:monospace;font-size:0.85rem}}
+.add{{display:flex;gap:0.5rem;margin:0.5rem 0 1rem}}
+button.add{{background:var(--phos);color:#0a0a0f;border:0;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;font-weight:bold}}
+.note{{font-size:0.75rem;color:#a0a0a0;background:rgba(255,179,71,0.06);border-left:2px solid #ffb347;padding:0.6rem 0.8rem;margin-top:1rem;border-radius:0 3px 3px 0}}
+a.back{{color:var(--purple);text-decoration:underline;font-size:0.85rem}}
+</style></head><body>
+<h1>🛡️ Mitm Filter Control</h1>
+<p class=lead>Hosts bypass — TLS passthrough, jamais déchiffrés. Apps avec cert-pinning ou E2E.</p>
+
+<form method=POST action=/admin/filter-control/add class=add>
+  <input type=text name=entry placeholder="ex: (.+\\.)?example\\.com" required>
+  <button class=add type=submit>➕ Ajouter</button>
+</form>
+
+<table>
+<tr><th>Pattern (regex)</th><th></th></tr>
+{rows or '<tr><td colspan=2 style="color:#666;text-align:center;padding:1rem">Aucune entrée.</td></tr>'}
+</table>
+
+<div class=note>
+ℹ Les modifications nécessitent un redémarrage de <code>secubox-toolbox-mitm-wg.service</code> + <code>secubox-mitmproxy</code> pour prendre effet.
+<br><b>Source de vérité :</b> <code>{MITM_BYPASS_FILE}</code> ({len(entries)} pattern{'s' if len(entries)>1 else ''})
+</div>
+
+<p style=margin-top:1.5rem><a href=/admin/ class=back>← Admin home</a></p>
+</body></html>"""
+    return HTMLResponse(html)
+
+
+@router.post("/admin/filter-control/add")
+async def admin_filter_add(request: Request) -> Response:
+    form = await request.form()
+    entry = (form.get("entry") or "").strip()
+    if entry and "\n" not in entry:
+        _ensure_bypass_file()
+        with MITM_BYPASS_FILE.open("a") as f:
+            f.write(entry + "\n")
+    return RedirectResponse("/admin/filter-control", status_code=303)
+
+
+@router.post("/admin/filter-control/remove")
+async def admin_filter_remove(request: Request) -> Response:
+    form = await request.form()
+    entry = (form.get("entry") or "").strip()
+    if entry and MITM_BYPASS_FILE.exists():
+        lines = MITM_BYPASS_FILE.read_text().splitlines()
+        new_lines = [ln for ln in lines if ln.strip() != entry]
+        MITM_BYPASS_FILE.write_text("\n".join(new_lines) + "\n")
+    return RedirectResponse("/admin/filter-control", status_code=303)
+
+
+@router.get("/admin/filter-control/regex")
+async def admin_filter_regex() -> dict:
+    """Returns the alternation regex consumable by mitmproxy --set ignore_hosts.
+    Used by the mitm-wg/mitm services startup scripts."""
+    entries = _load_bypass_entries()
+    if not entries:
+        return {"regex": "", "count": 0}
+    # mitmproxy ignore_hosts wants a single regex; join with | wrapped in non-capture group
+    regex = "(" + "|".join(entries) + ")"
+    return {"regex": regex, "count": len(entries)}
 
 
 @router.get("/ca/fingerprint")
@@ -1181,12 +1328,24 @@ def _classify_apps(hosts: set[str]) -> list[str]:
 @router.get("/report/me/html", response_class=HTMLResponse)
 async def report_me_html(request: Request) -> HTMLResponse:
     """HTML version of the live report — embedded in the captive portal.
-    Auto-refresh every 15s. Same content as the PDF but stylé P31."""
-    ip, mac = _resolve(request)
-    if not mac:
-        raise HTTPException(400, "client MAC unknown (not in captive subnet?)")
-    salt = _get_salt()
-    mac_hash = macmod.hash_mac(mac, salt)
+    Auto-refresh every 15s. Same content as the PDF but stylé P31.
+
+    Phase 6 (#496) : accepts ?mh=<hash> query param so R3 WG clients (no
+    ARP entry on captive subnet) and remote viewers via kbin can fetch
+    their own report. The hash for R3 = sha256(wg_pubkey)[:16] derived
+    by inject_banner.py and embedded in the banner 'Mon rapport' link.
+    """
+    # Bypass path : explicit mac_hash in query (R3 WG or kbin remote viewer)
+    mh_qp = (request.query_params.get("mh") or "").strip().lower()
+    if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
+        ip = request.client.host if request.client else "?"
+        mac_hash = mh_qp
+    else:
+        ip, mac = _resolve(request)
+        if not mac:
+            raise HTTPException(400, "client MAC unknown (not in captive subnet?) — use ?mh=<hash>")
+        salt = _get_salt()
+        mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
     # Phase 3 (#492) : pass query args + force no-cache so iPhone Safari
     # actually fetches the new template.

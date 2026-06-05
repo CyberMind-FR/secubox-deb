@@ -18,20 +18,12 @@ WorkingDirectory=/usr/lib/secubox/toolbox
 # wg-quick handles WG decapsulation (multi-peer). nft DNAT redirects
 # tcp 80/443 from wg-toolbox iface to this mitm port 8081.
 # mitm CA = /etc/secubox/toolbox/ca-wg/ (SEPARATE from R1/R2 transparent CA).
-ExecStart=/opt/mitmproxy-toolbox/bin/mitmdump \
-    --mode transparent \
-    --listen-host 10.99.1.1 \
-    --listen-port 8081 \
-    --set confdir=/etc/secubox/toolbox/ca-wg \
-    --set ssl_insecure=false \
-    --set web_open_browser=false \
-    -s /usr/lib/secubox/toolbox/mitmproxy_addons/local_store.py \
-    -s /usr/lib/secubox/toolbox/mitmproxy_addons/inject_banner.py \
-    -s /usr/lib/secubox/toolbox/mitmproxy_addons/dpi.py \
-    -s /usr/lib/secubox/toolbox/mitmproxy_addons/cookies.py \
-    -s /usr/lib/secubox/toolbox/mitmproxy_addons/avatar.py \
-    -s /usr/lib/secubox/toolbox/mitmproxy_addons/ja4.py \
-    -s /usr/lib/secubox/toolbox/mitmproxy_addons/soc_relay.py
+#
+# Phase 6.F (#496) : launcher wrapper (sbin/secubox-toolbox-mitm-wg-launch)
+# reads /etc/secubox/toolbox/mitm-bypass.conf and composes ignore_hosts
+# alternation regex on-the-fly. Restart this service to pick up bypass
+# list changes from the admin UI.
+ExecStart=/usr/sbin/secubox-toolbox-mitm-wg-launch
 
 Restart=on-failure
 RestartSec=5
