@@ -50,6 +50,14 @@ table inet toolbox {
         type filter hook forward priority 10; policy accept;
         # Quarantine first (high priority drop)
         iifname "{{ ap.iface }}" ether saddr @quarantine_macs drop
+        # Phase 3 (#492) : DROP QUIC/HTTP3 for R2-consented clients.
+        # iOS+Android use QUIC (UDP 443) aggressively which bypasses our TCP
+        # mitm transparent proxy entirely. Forcing clients to fall back to
+        # TCP HTTPS means mitmproxy sees the flows -> banner injection + full
+        # analysis works. Performance impact is minor for browsing, and Apple
+        # services (iCloud/Push/FaceTime) which prefer QUIC still work fine
+        # over TCP. UDP 53/67 (DNS/DHCP) explicitly allowed below.
+        iifname "{{ ap.iface }}" ether saddr @consented_r2_macs udp dport 443 reject with icmpx type port-unreachable
         # Validated MACs: forward to LAN/Internet
         iifname "{{ ap.iface }}" oifname "lan0" ether saddr @validated_macs accept
         iifname "lan0" oifname "{{ ap.iface }}" ct state established,related accept
