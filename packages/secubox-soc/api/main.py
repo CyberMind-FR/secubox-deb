@@ -34,6 +34,15 @@ P2P_SOCKET = "/run/secubox/p2p.sock"
 
 app = FastAPI(title="SecuBox SOC", version="2.0.0")
 
+# Phase 2b (#488) : ingest mitm SOC indicator events from secubox-toolbox addon
+from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+mount_ingest_routes(
+    app,
+    endpoint_path="/event",
+    db_path="/var/lib/secubox/soc/mitm-ingest.db",
+    kind="soc",
+)
+
 # Data directories
 DATA_DIR = Path("/var/lib/secubox/soc")
 TICKETS_FILE = DATA_DIR / "tickets.json"

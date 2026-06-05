@@ -54,6 +54,15 @@ QUEUE_FILE = DATA_DIR / "pending_rules.json"
 app = FastAPI(title="SecuBox Threat Analyst", version="1.0.0")
 logger = logging.getLogger("secubox.threat-analyst")
 
+# Phase 2b (#488) : ingest mitm JA4 clienthello events from secubox-toolbox addon
+from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+mount_ingest_routes(
+    app,
+    endpoint_path="/ja4",
+    db_path="/var/lib/secubox/threat-analyst/mitm-ingest.db",
+    kind="ja4",
+)
+
 
 class RuleType(str, Enum):
     MITMPROXY = "mitmproxy"

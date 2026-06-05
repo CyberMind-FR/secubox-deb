@@ -12,7 +12,7 @@ import re
 
 from mitmproxy import http
 
-from _common import fire_forget_post, mac_of, queue_async
+from _common import fire_forget_post, mac_hash_of, queue_async
 
 TARGET = "http+unix:///run/secubox/soc.sock/event"
 
@@ -42,7 +42,7 @@ class SOCRelay:
         payload = {
             "ts_ms": int(flow.timestamp_start * 1000),
             "client_ip": client_ip,
-            "client_mac": mac_of(client_ip) if client_ip else None,
+            "client_mac_hash": mac_hash_of(client_ip),
             "indicators": indicators,
             "source": "toolbox-mitm",
         }
