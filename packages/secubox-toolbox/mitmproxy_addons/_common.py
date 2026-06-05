@@ -64,10 +64,50 @@ def hash_mac(mac: str | None) -> str | None:
     return hmac.new(key, mac.lower().encode(), hashlib.sha256).hexdigest()[:16]
 
 
+# ── Phase 6 (#496) : WG peer identity (10.99.1.0/24) ───────────────
+import json as _jsonmod
+import hashlib as _hashlib
+from pathlib import Path as _Path
+
+_WG_PEERS_DB = _Path("/var/lib/secubox/toolbox/wg-peers.json")
+_WG_PEERS_CACHE: dict[str, str] = {}    # ip → wg_hash
+_WG_PEERS_MTIME: float = 0.0
+
+
+def _wg_hash_of(ip: str) -> str | None:
+    """Map 10.99.1.X → sha256(peer_pubkey)[:16]. Cached, reloaded on mtime
+    change. R3 clients have NO ARP entry on captive subnet, so we identify
+    them by their WG public key (one peer → one IP, deterministic)."""
+    global _WG_PEERS_MTIME
+    try:
+        if not _WG_PEERS_DB.exists():
+            return None
+        mtime = _WG_PEERS_DB.stat().st_mtime
+        if mtime != _WG_PEERS_MTIME or not _WG_PEERS_CACHE:
+            data = _jsonmod.loads(_WG_PEERS_DB.read_text()).get("peers", {})
+            _WG_PEERS_CACHE.clear()
+            for pubkey, meta in data.items():
+                peer_ip = meta.get("ip")
+                if peer_ip:
+                    _WG_PEERS_CACHE[peer_ip] = _hashlib.sha256(pubkey.encode()).hexdigest()[:16]
+            _WG_PEERS_MTIME = mtime
+        return _WG_PEERS_CACHE.get(ip)
+    except Exception:
+        return None
+
+
 def mac_hash_of(ip: str | None) -> str | None:
-    """Resolve IP to MAC via neighbour table then hash. Returns None on failure."""
+    """Resolve IP to a stable per-client identity hash.
+
+    - 10.99.1.0/24 (WG peer)   → sha256(peer_pubkey)[:16]   (Phase 6/R3)
+    - Captive subnet            → HMAC(salt, MAC from ARP)   (R0/R1/R2)
+    - Else                      → None
+    """
     if not ip:
         return None
+    # Phase 6 : WG peers identified by pubkey hash, not ARP
+    if ip.startswith("10.99.1."):
+        return _wg_hash_of(ip)
     raw = mac_of(ip)
     return hash_mac(raw) if raw else None
 

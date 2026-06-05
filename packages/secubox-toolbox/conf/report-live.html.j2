@@ -98,6 +98,24 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
       <div style="font-size:0.65rem;color:var(--dim)">risque /100</div>
     </div>
   </div>
+  {# 9th widget (poster sync #497) : 📱 empreinte device — full-width below #}
+  {% set _avatar = avatar_analysis or {} %}
+  {% set _dev_emj = _avatar.most_common_emoji or '❔' %}
+  {% set _dev_label = _avatar.most_common or 'unknown' %}
+  {% set _devices = _avatar.devices or {} %}
+  {% set _dev_info = _devices.get(_dev_label, {}) %}
+  {% set _os_label = _dev_info.os_label or _dev_label %}
+  {% set _browsers = _avatar.browsers or {} %}
+  <div style="margin-top:0.5rem;padding:0.7rem;background:rgba(45,25,60,0.5);border-radius:4px;text-align:center">
+    <div style="font-size:1.4rem">📱 <b style="color:#cbb6ff">{{ _dev_emj }} Empreinte device</b></div>
+    <div style="font-size:0.92rem;color:var(--phos-hot);margin-top:0.3rem;text-shadow:0 0 3px var(--phos)">
+      {{ _os_label }}
+      {% for br, info in _browsers.items() if br != 'unknown' %}
+        · {{ info.emoji or '' }} {{ info.label or br }}
+      {% endfor %}
+    </div>
+    <div style="font-size:0.65rem;color:var(--dim);margin-top:0.2rem">{{ _avatar.raw_count or 0 }} UAs distincts observés</div>
+  </div>
   {# Top device + app + ASN line #}
   {% set avatar = avatar_analysis or {} %}
   {% set top_dev = avatar.most_common or '?' %}
@@ -199,6 +217,18 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
       {% if current_level == 'r2' %}✓ {% endif %}🔍 R2
     </button>
   </form>
+  {% if wg_enabled|default(false) %}
+  {# Phase 6 (#496) : R3 WireGuard separate action (different flow — install profile first) #}
+  <p style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem;text-align:center">
+    Pour le mode R3 WireGuard (mobile + tout-décrypté) :
+    <a href="/wg/r3-install" style="color:#9e76ff;text-decoration:underline">🌐 installer le profil</a>
+  </p>
+  {% if current_level == 'r3' %}
+  <p style="font-size:0.72rem;color:#9e76ff;margin-top:0.3rem;text-align:center;font-weight:bold">
+    ✓ Tu es actuellement en mode R3 — tunnel WG actif
+  </p>
+  {% endif %}
+  {% endif %}
 </div>
 
 <div class="card">
@@ -492,7 +522,8 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
 </div>
 
 <div class="actions">
-  <a href="/report/me">⬇ Télécharger PDF</a>
+  {# Phase 6 (#496) : pass mh= so R3 WG clients can download from kbin too #}
+  <a href="/report/me?mh={{ mac_hash }}">⬇ Télécharger PDF</a>
   <a href="/">↩ Retour splash</a>
   <a href="/status">📊 Statut JSON</a>
 </div>

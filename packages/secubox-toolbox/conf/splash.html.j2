@@ -39,11 +39,41 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     {% if mac_hash and mac_hash != '??' %}<br>Ton appareil (anonymisé) : <b>{{ mac_hash }}</b>{% endif %}
   </div>
 
-  {% if already_validated %}
+  {# Phase 6.I (#496) : R3 WG client detected — show special banner, hide R0/R1/R2 switcher #}
+  {% if is_wg_r3 %}
+  <div class="info" style="margin-top:0.5rem;background:linear-gradient(135deg,rgba(158,118,255,0.15),rgba(158,118,255,0.05));border-left:4px solid var(--purple);padding:0.9rem 1rem">
+    <p style="font-size:1.05rem;font-weight:bold;color:#cbb6ff;margin-bottom:0.4rem">
+      🌐 <b>Mode R3 — Tunnel WireGuard ACTIF</b>
+    </p>
+    <p style="font-size:0.82rem;line-height:1.55;opacity:0.92">
+      Tu es connecté depuis l'extérieur via le tunnel R3 ({{ client_ip }}).<br>
+      Le bandeau s'injecte sur les pages HTTPS, Signal/WhatsApp/banques en passthrough.
+    </p>
+    <p style="margin-top:0.7rem;display:flex;flex-wrap:wrap;gap:0.5rem">
+      <a href="/report/me/html?mh={{ mac_hash }}"
+         style="background:var(--purple);color:#0a0a0f;padding:0.5rem 0.9rem;border-radius:4px;text-decoration:none;font-weight:bold;font-size:0.85rem">
+        📊 Mon rapport live
+      </a>
+      <a href="/report/me?mh={{ mac_hash }}"
+         style="background:transparent;color:var(--purple);border:1px solid var(--purple);padding:0.5rem 0.9rem;border-radius:4px;text-decoration:none;font-weight:bold;font-size:0.85rem">
+        ⬇ PDF
+      </a>
+      <a href="/wg/r3-install"
+         style="background:transparent;color:#cbb6ff;border:1px solid #555;padding:0.5rem 0.9rem;border-radius:4px;text-decoration:none;font-size:0.82rem">
+        🔧 Réinstaller R3
+      </a>
+    </p>
+    <p style="font-size:0.7rem;opacity:0.6;margin-top:0.5rem">
+      💡 R0/R1/R2 sont les niveaux de la cabine captive (WiFi local). En R3 tu es par
+      construction au niveau maximum d'analyse.
+    </p>
+  </div>
+  {% elif already_validated %}
   <div class="info" style="margin-top:0.5rem;background:rgba(0,221,68,0.08);border-left-color:var(--phos)">
     ✅ <b>Tu es déjà validé en mode
     {% if current_level == 'r0' %}🌐 R0 (bypass complet)
     {% elif current_level == 'r2' %}🔍 R2 (analyse + bandeau)
+    {% elif current_level == 'r3' %}🌐 R3 (WireGuard tunnel)
     {% else %}🛡 R1 (analyse passive){% endif %}</b>
     · <a href="/report/me/html" style="color:var(--phos-hot);text-decoration:underline">📊 Voir mon rapport live</a>
     <span style="font-size:0.72rem;opacity:0.7;display:block;margin-top:0.3rem">
@@ -84,6 +114,25 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     <div id="cert-status" style="font-size:0.8rem;padding:0.55rem;background:rgba(0,0,0,0.3);border-radius:3px;text-align:center;margin-top:0.5rem">
       <span id="cert-emoji">⏳</span>
       <span id="cert-text">Auto-test en cours...</span>
+    </div>
+
+    {# Phase 3.x (#497) : 3 QR codes définitifs synchronisés avec le poster #}
+    <p style="font-size:0.78rem;color:#cbb6ff;margin-top:0.8rem;text-align:center;border-top:1px solid rgba(158,118,255,0.3);padding-top:0.5rem">
+      📲 <b>QR codes</b> — scanne depuis un autre appareil
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-top:0.4rem">
+      <div style="text-align:center;background:rgba(255,255,255,0.95);padding:0.4rem;border-radius:4px">
+        <img src="/qr/splash.png" alt="QR splash" style="width:100%;max-width:120px;display:block;margin:auto"/>
+        <p style="font-size:0.62rem;color:#0a0a0f;margin-top:0.2rem;font-weight:bold">① SPLASH</p>
+      </div>
+      <div style="text-align:center;background:rgba(255,255,255,0.95);padding:0.4rem;border-radius:4px">
+        <img src="/qr/cert.png" alt="QR cert" style="width:100%;max-width:120px;display:block;margin:auto"/>
+        <p style="font-size:0.62rem;color:#0a0a0f;margin-top:0.2rem;font-weight:bold">② CERT iPHONE</p>
+      </div>
+      <div style="text-align:center;background:rgba(255,255,255,0.95);padding:0.4rem;border-radius:4px">
+        <img src="/qr/webclip.png" alt="QR webclip" style="width:100%;max-width:120px;display:block;margin:auto"/>
+        <p style="font-size:0.62rem;color:#0a0a0f;margin-top:0.2rem;font-weight:bold">③ WEBCLIP HOME</p>
+      </div>
     </div>
 
     <p style="font-size:0.7rem;opacity:0.85;margin-top:0.6rem;line-height:1.5">
@@ -172,6 +221,8 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
   })();
   </script>
 
+  {# Phase 6.I : R3 clients skip the captive R0/R1/R2 chooser entirely #}
+  {% if not is_wg_r3 %}
   <p class="choose-label">👇 Choisis ton niveau d'analyse :</p>
 
   <form method="POST" action="/accept" style="display:flex;flex-direction:column;gap:0.6rem">
@@ -196,7 +247,17 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
       <strong>⚠ Si tu choisis R2 :</strong> il te faut <a href="/ca/install-help">installer le certificat racine ToolBoX</a> sur ton iPhone, sinon les sites HTTPS échouent. Le bandeau n'apparaît que sur les pages HTML servies en TCP (la plupart des apps iPhone utilisent QUIC et ne montreront pas le bandeau). Tu peux revenir en R1 depuis le rapport à tout moment.
     </div>
     {% endif %}
+
+    {# Phase 6 (#496) : R3 WireGuard portable mode #}
+    {% if wg_enabled|default(false) %}
+    <a href="/wg/r3-install" class="lvl-btn lvl-r3"
+       style="display:block;text-align:left;padding:0.8rem 0.9rem;border:1px solid #9e76ff;color:#cbb6ff;background:rgba(110,64,201,0.08);text-decoration:none;font-size:0.95rem;line-height:1.35">
+      🌐 <b>R3 — WireGuard portable (NOUVEAU)</b>
+      <span style="display:block;font-size:0.72rem;opacity:0.85;margin-top:0.2rem">VPN tunnel mitm. Bandeau sur TOUT (HTTPS + QUIC). Marche hors VILLAGE3B (4G/5G, autre WiFi). Profile install 1 tap.</span>
+    </a>
+    {% endif %}
   </form>
+  {% endif %}  {# /not is_wg_r3 #}
 
   <p class="terms">
     <b>Conformité :</b> CSPN R2 — consentement explicite par MAC ; LCEN — anonymisation par hash quotidien rotatif. Dispositif défensif (rapport sur TON appareil, jamais sur les tiers).

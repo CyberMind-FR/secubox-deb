@@ -108,7 +108,7 @@ def add_event(mac_hash: str, source: str, payload: dict) -> None:
 def list_clients() -> list[dict]:
     with _conn() as c:
         rows = c.execute(
-            "SELECT mac_hash, ip, state, score, first_seen, last_seen FROM clients "
+            "SELECT mac_hash, ip, state, score, level, first_seen, last_seen FROM clients "
             "ORDER BY last_seen DESC LIMIT 200"
         ).fetchall()
     return [dict(r) for r in rows]
