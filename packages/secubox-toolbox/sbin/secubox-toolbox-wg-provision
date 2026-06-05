@@ -26,7 +26,7 @@ err() { printf '[toolbox-wg-provision] ERROR: %s\n' "$*" >&2; exit 1; }
 
 command -v wg >/dev/null || err "wg not found (apt install wireguard-tools)"
 
-install -d -m 0700 "$WG_DIR" "$CA_WG_DIR"
+install -d -m 0750 -o root -g secubox-toolbox "$WG_DIR" "$CA_WG_DIR"
 
 # ── Server keypair (idempotent : keep existing if already there) ──
 if [ ! -f "$WG_DIR/server.privkey" ]; then
@@ -40,7 +40,7 @@ else
     log "server keypair exists, keeping"
 fi
 
-# ── wg-quick interface conf ──
+# ── wg-quick interface conf (no PostUp iptables — gk2 uses nft natively) ──
 log "writing $WG_CONF"
 mkdir -p /etc/wireguard
 cat > "$WG_CONF" <<EOF
@@ -51,16 +51,21 @@ PrivateKey = $(cat "$WG_DIR/server.privkey")
 Address = ${WG_SERVER_IP}/24
 ListenPort = ${WG_PORT}
 SaveConfig = false
-# Forward traffic to the mitm container that listens inside
-# (toolbox-mitm-wg @ 10.100.0.62 reads tunneled flows from this iface).
-PostUp = iptables -A FORWARD -i ${WG_INTERFACE} -j ACCEPT
-PostUp = iptables -t nat -A POSTROUTING -s ${WG_SUBNET} -o lan0 -j MASQUERADE
-PostDown = iptables -D FORWARD -i ${WG_INTERFACE} -j ACCEPT
-PostDown = iptables -t nat -D POSTROUTING -s ${WG_SUBNET} -o lan0 -j MASQUERADE
-
+# NAT/forwarding is provisioned separately via the inet wg-toolbox nft table
+# (see below) — gk2 uses pure nft, iptables-nft compat layer is unreliable.
 # Peers added dynamically by /wg/profile/new endpoint via 'wg set' command.
 EOF
 chmod 0600 "$WG_CONF"
+
+# ── nft table for WG NAT (replaces iptables PostUp) ──
+log "ensuring nft inet wg-toolbox table + masquerade rule"
+nft add table inet wg-toolbox 2>/dev/null || true
+nft -- add chain inet wg-toolbox postrouting "{ type nat hook postrouting priority srcnat; }" 2>/dev/null || true
+nft add rule inet wg-toolbox postrouting ip saddr ${WG_SUBNET} oif lan0 masquerade 2>/dev/null || true
+
+# ── Enable IP forwarding (persist) ──
+echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-secubox-wg.conf
+sysctl -p /etc/sysctl.d/99-secubox-wg.conf >/dev/null 2>&1 || true
 
 # ── CA WG dedicated root (separate from transparent mitm CA) ──
 if [ ! -f "$CA_WG_DIR/ca.pem" ]; then
