@@ -121,6 +121,12 @@ For the amd64 VirtualBox target there's a turn-key tester bundle under [`output/
 
 - **VPN Server** — WireGuard with QR codes for mobile devices
 - **Intrusion Detection** — CrowdSec IDS/IPS with automatic threat blocking
+- **WAF Active Enforcement** — mitm pattern detection → CrowdSec → `nft` kernel
+  drop (~12s round-trip). Plus pre-mitm rate-limit (slowloris kill) and nginx
+  honeypot routes. See [wiki](https://github.com/CyberMind-FR/secubox-deb/wiki/WAF-active-enforcement).
+- **R3 Portable Tunnel** — WireGuard + transparent mitm so the cabine's
+  privacy analysis follows you anywhere (4G, public WiFi). Multi-OS install
+  guide [here](https://github.com/CyberMind-FR/secubox-deb/wiki/R3-WireGuard-install).
 - **Network Monitoring** — Real-time traffic analysis and bandwidth control
 - **Web Dashboard** — Modern dark-themed interface accessible from any browser
 - **Automatic Updates** — Security patches applied automatically

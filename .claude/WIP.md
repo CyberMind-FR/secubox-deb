@@ -3,6 +3,44 @@
 
 ---
 
+## 🔄 2026-06-05 : Phase 7.A.2 + 7.B WAF dashboard + rate-limit + honeypot SHIPPED (ref #498)
+
+### ✅ Done
+
+* Backport `packages/secubox-waf/mitmproxy/secubox_waf.py` : Phase 6.J
+  Connection:close + Phase 7.A bridge code. Two WAF copies in sync.
+* `debian/postinst` auto-runs `secubox-waf-cs-bridge-setup` if cscli present,
+  installs config to `/etc/secubox/waf/` AND bind-mounts into LXC.
+* `api/routers/waf.py` GET `/enforcement` : bridge_enabled, bans_pushed,
+  bans_failed, requests, blocked, warnings, rate_limit_offenders,
+  honeypot_hits_last_hour, recent_bans (cscli --origin=secubox-waf),
+  recent_threats (threats.log tail).
+* `www/mitmproxy/threats.html` : new dashboard tab — 6 KPI cards + 2 tables,
+  auto-refresh 5s.
+* `nftables/secubox-waf-ratelimit.nft` : table inet `secubox_waf_ratelimit`
+  with offenders_v4/v6 (dynamic 5min) + whitelist_v4 (LAN). Rule :
+  tcp SYN 80/443, limit 30/s burst 50 → add offender + drop. Live-loaded.
+* `secubox-waf-ratelimit.service` (systemd) replays on boot.
+* `nginx/honeypot.conf` : 5 location blocks (/wp-admin /.env /.git/config
+  /phpmyadmin /actuator /autodiscover ...) → empty 200 + log
+  `/var/log/nginx/honeypot.log` (custom format).
+* `debian/postinst` installs honeypot.conf in `secubox-routes.d/` + creates
+  log_format snippet in `conf.d/`.
+* Merge `4f89bd8b` on master (8 files, 938 insertions). Worktree cleaned.
+
+### ⬜ Next up
+
+* **Phase 7.C** (kept in #498, long-term) :
+  - eBPF/XDP kernel filter (replace Python WAF hot-path)
+  - ModSecurity in HAProxy with OWASP CRS rules
+  - Federation : CrowdSec Hub + AlienVault OTX + Spamhaus DROP
+* **Wiki page** `WAF-active-enforcement` documenting Phase 7.A/A.2/B setup +
+  operator runbook.
+* **FAQ entry** : "How are scanners dropped?" → links to Phase 7 pipeline.
+* **README** Phase 7 mention in the security stack section.
+
+---
+
 ## 🔄 2026-06-05 : Phase 7.A WAF active enforcement SHIPPED (ref #498)
 
 ### ✅ Done

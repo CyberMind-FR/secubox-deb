@@ -3,6 +3,79 @@
 
 ---
 
+## 2026-06-05 — Phase 7.A.2 + 7.B WAF dashboard + rate-limit + honeypot SHIPPED (ref #498)
+
+Same-day extension after Phase 7.A. Adds operator-facing dashboard, pre-mitm
+TCP rate-limit, and honeypot routes for known bot signatures.
+
+### What ships (live on gk2)
+
+**Phase 7.A.2 — backport + automation + dashboard**
+
+- `packages/secubox-waf/mitmproxy/secubox_waf.py` (older 756→878 lines) :
+  backported `_load_crowdsec_cfg`, `_cs_jwt`, `_ban_via_crowdsec`, Phase 6.J
+  `Connection: close` upstream. Both WAF copies now in sync.
+- `debian/postinst` : auto-invokes `secubox-waf-cs-bridge-setup` on package
+  install/upgrade if cscli present. Writes config to `/etc/secubox/waf/` on
+  host AND bind-mounts into the mitmproxy LXC if `/var/lib/lxc/mitmproxy/`
+  exists. Fully idempotent.
+- `api/routers/waf.py` GET `/enforcement` returns : bridge_enabled,
+  bans_pushed, bans_failed, requests, blocked, warnings,
+  rate_limit_offenders (live nft set count), honeypot_hits_last_hour
+  (from nginx log scan), recent_bans (cscli filtered origin=secubox-waf),
+  recent_threats (last 20 lines of threats.log).
+- `www/mitmproxy/threats.html` : new dashboard tab with 6 KPI cards
+  (Bans pushed / Bans failed / Rate-limit offenders / Honeypot hits 1h /
+  WAF blocked / WAF warnings) + 2 tables (recent bans, recent threats),
+  auto-refresh /5s.
+
+**Phase 7.B — pre-mitm enforcement + honeypot**
+
+- `nftables/secubox-waf-ratelimit.nft` : standalone nft table
+  `inet secubox_waf_ratelimit` with `offenders_v4`/`v6` dynamic sets
+  (5-min timeout) + `whitelist_v4` interval set (LAN/loopback). Input
+  hook priority -10. Rule : `tcp flags syn tcp dport {80,443} limit rate
+  over 30/second burst 50 packets add @offenders_v4 { ip saddr timeout 5m }
+  log prefix "[secubox-rl] " counter drop`. Self-healing 5-min TTL on
+  entries.
+- `debian/secubox-waf-ratelimit.service` (systemd) reapplies the table on
+  boot, `RemainAfterExit=yes`.
+- `nginx/honeypot.conf` : 5 location blocks for common bot recon
+  (`/wp-admin`, `/.env`, `/.git/config`, `/phpmyadmin`, `/actuator`,
+  `/autodiscover`, etc.). Returns empty 200, logs to
+  `/var/log/nginx/honeypot.log` with custom `secubox_honeypot` log_format
+  (ISO timestamp + IP + request + UA + referer).
+- `debian/postinst` installs into `/etc/nginx/secubox-routes.d/` +
+  creates `log_format` snippet in `conf.d/`.
+
+### Verification
+
+```
+nft list table inet secubox_waf_ratelimit  → table loaded, chain attached
+curl admin.gk2.secubox.in/wp-admin           → HTTP 200 (honeypot)
+tail /var/log/nginx/honeypot.log              → log lines appearing
+systemctl is-enabled secubox-waf-ratelimit    → enabled (boot persist)
+```
+
+### Files added
+
+- `packages/secubox-mitmproxy/nftables/secubox-waf-ratelimit.nft` (NEW)
+- `packages/secubox-mitmproxy/nginx/honeypot.conf` (NEW)
+- `packages/secubox-mitmproxy/www/mitmproxy/threats.html` (NEW)
+- `packages/secubox-mitmproxy/debian/secubox-waf-ratelimit.service` (NEW)
+
+### Master merged
+
+Commit `a35ab5c5` (8 files, 938 insertions). Merge `4f89bd8b`.
+
+### Remaining (Phase 7.C, kept in #498)
+
+- eBPF/XDP filter (replace Python WAF hot-path)
+- ModSecurity in HAProxy with OWASP CRS rules
+- Federation : CrowdSec Hub + AlienVault OTX + Spamhaus DROP
+
+---
+
 ## 2026-06-05 — Phase 7.A WAF active enforcement SHIPPED (ref #498)
 
 Same-day landing right after Phase 6 closure. WAF detections now become real
