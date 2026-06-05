@@ -1671,10 +1671,24 @@ code{background:#222;padding:0.1rem 0.3rem;border-radius:2px;font-size:0.75rem}
 .modal .lvl-row .r1{background:rgba(0,221,68,0.15);color:var(--phos-hot);border:1px solid var(--phos)}
 .modal .lvl-row .r2{background:rgba(255,179,71,0.15);color:#ffd6a0;border:1px solid var(--amber)}
 .modal .lvl-row .r3{background:rgba(158,118,255,0.15);color:#cbb6ff;border:1px solid var(--purple)}
+.adm-tabs{display:flex;gap:2px;border-bottom:1px solid var(--dim);margin-bottom:0.8rem}
+.adm-tab{background:transparent;border:0;color:#888;padding:0.5rem 1rem;font-family:inherit;font-size:0.85rem;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
+.adm-tab.active{color:var(--phos-hot);border-bottom-color:var(--phos);background:rgba(0,221,68,0.05)}
+.adm-tab:hover{color:var(--text)}
+.adm-content{display:none}
+.adm-content.active{display:block}
+button.del-pattern{background:var(--red);color:#fff;border:0;padding:0.2rem 0.5rem;border-radius:3px;cursor:pointer;font-weight:bold;font-size:0.75rem}
 </style></head><body>
 <h1>🛡 Admin — Gondwana ToolBoX</h1>
-<p class=sub>// Console opérateur · client management · level override</p>
+<p class=sub>// Console opérateur · client management · level override · mitm filtering</p>
 
+{# Phase 6.I : tabbed sections #}
+<div class=adm-tabs>
+  <button class="adm-tab active" data-tab=clients>👥 Clients</button>
+  <button class="adm-tab" data-tab=filter>🛡 Mitm filtering</button>
+</div>
+
+<div class="adm-content active" data-content=clients>
 <div id=cards class=cards></div>
 
 <table id=clients-table>
@@ -1684,6 +1698,31 @@ code{background:#222;padding:0.1rem 0.3rem;border-radius:2px;font-size:0.75rem}
 </tr></thead>
 <tbody id=clients-tbody><tr><td colspan=8>chargement…</td></tr></tbody>
 </table>
+</div>
+
+<div class="adm-content" data-content=filter>
+<h2 style="color:var(--purple);font-size:1.1rem;margin-bottom:0.4rem">🛡 Mitm bypass whitelist</h2>
+<p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.8rem">
+  Hosts/domains qui ne sont JAMAIS déchiffrés par mitm (TLS passthrough).
+  Pour apps cert-pinned ou E2E. Redémarre <code>secubox-toolbox-mitm-wg</code>
+  après modif.
+</p>
+
+<form id=add-pattern-form style="display:flex;gap:0.5rem;margin-bottom:0.8rem">
+  <input type=text name=entry placeholder="ex: (.+\\.)?example\\.com" required
+    style="flex:1;background:#111;color:var(--text);border:1px solid #2a2a3f;padding:0.5rem;border-radius:3px;font-family:monospace;font-size:0.8rem">
+  <button type=submit class=btn style="background:var(--phos);padding:0.5rem 1rem">➕ Ajouter</button>
+</form>
+
+<table id=filter-table style="font-size:0.78rem">
+<thead><tr><th>Pattern (regex)</th><th width=60>×</th></tr></thead>
+<tbody id=filter-tbody><tr><td colspan=2>chargement…</td></tr></tbody>
+</table>
+
+<p style="font-size:0.72rem;color:var(--dim);margin-top:0.6rem;border-left:2px solid var(--amber);padding-left:0.6rem">
+  📁 <code>/var/lib/secubox/toolbox/mitm-bypass.conf</code> · Source de vérité
+</p>
+</div>
 
 <div id=modal class=modal-bg>
 <div class=modal>
@@ -1763,9 +1802,71 @@ async function loadClients() {
 }
 loadClients();
 setInterval(loadClients, 15000);
+
+// ── Tabs (Phase 6.I) ──
+document.querySelectorAll('.adm-tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    var tn = this.dataset.tab;
+    document.querySelectorAll('.adm-tab').forEach(function(x){x.classList.remove('active');});
+    this.classList.add('active');
+    document.querySelectorAll('.adm-content').forEach(function(x){x.classList.remove('active');});
+    document.querySelector('[data-content='+tn+']').classList.add('active');
+    if (tn === 'filter') loadFilter();
+  });
+});
+
+// ── Filter Control (integrated tab) ──
+async function loadFilter(){
+  var r = await fetch('/admin/filter-control/list');
+  var tb = document.getElementById('filter-tbody');
+  if (!r.ok) { tb.innerHTML = '<tr><td colspan=2>Erreur '+r.status+'</td></tr>'; return; }
+  var d = await r.json();
+  if (!d.patterns || !d.patterns.length) {
+    tb.innerHTML = '<tr><td colspan=2 style="color:#666;text-align:center">Aucune entrée</td></tr>';
+    return;
+  }
+  tb.innerHTML = '';
+  d.patterns.forEach(function(p){
+    var tr = document.createElement('tr');
+    var td1 = document.createElement('td');
+    var code = document.createElement('code');
+    code.textContent = p;
+    td1.appendChild(code);
+    var td2 = document.createElement('td');
+    var btn = document.createElement('button');
+    btn.className = 'del-pattern';
+    btn.textContent = '×';
+    btn.onclick = function(){ delPattern(p); };
+    td2.appendChild(btn);
+    tr.appendChild(td1); tr.appendChild(td2);
+    tb.appendChild(tr);
+  });
+}
+async function delPattern(p){
+  var fd = new FormData(); fd.append('entry', p);
+  var r = await fetch('/admin/filter-control/remove', {method:'POST', body:fd});
+  if (r.ok || r.status === 303) loadFilter();
+}
+document.getElementById('add-pattern-form').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  var entry = ev.target.entry.value.trim();
+  if (!entry) return;
+  var fd = new FormData(); fd.append('entry', entry);
+  var r = await fetch('/admin/filter-control/add', {method:'POST', body:fd});
+  if (r.ok || r.status === 303) {
+    ev.target.entry.value = '';
+    loadFilter();
+  }
+});
 </script>
 </body></html>"""
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/admin/filter-control/list")
+async def admin_filter_list() -> dict:
+    """JSON list of bypass patterns — consumed by admin webui tab."""
+    return {"patterns": _load_bypass_entries(), "file": str(MITM_BYPASS_FILE)}
 
 
 @router.get("/admin/metrics")
