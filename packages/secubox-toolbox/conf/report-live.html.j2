@@ -121,7 +121,8 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
     <span class="k">Sensibilité actuelle</span>
     <span class="v">{{ sens.label|default('—') if sens else '—' }}</span>
     <span class="k">Description</span>
-    <span class="v" style="font-size:0.75rem">{{ sens.description|default('Engine pas chargé')[:90] if sens else 'Engine pas chargé' }}</span>
+    {% set sens_desc = (sens.description if sens and sens.description else 'Engine pas chargé') %}
+    <span class="v" style="font-size:0.75rem">{{ sens_desc[:90] }}</span>
     <span class="k">🔍 Threat-intel feeds</span>
     <span class="v">{{ (threat_intel_matches|default([]))|length }} matches actifs</span>
     <span class="k">🎲 DGA candidates</span>
