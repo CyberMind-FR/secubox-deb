@@ -39,6 +39,19 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     {% if mac_hash and mac_hash != '??' %}<br>Ton appareil (anonymisé) : <b>{{ mac_hash }}</b>{% endif %}
   </div>
 
+  {% if already_validated %}
+  <div class="info" style="margin-top:0.5rem;background:rgba(0,221,68,0.08);border-left-color:var(--phos)">
+    ✅ <b>Tu es déjà validé en mode
+    {% if current_level == 'r0' %}🌐 R0 (bypass complet)
+    {% elif current_level == 'r2' %}🔍 R2 (analyse + bandeau)
+    {% else %}🛡 R1 (analyse passive){% endif %}</b>
+    · <a href="/report/me/html" style="color:var(--phos-hot);text-decoration:underline">📊 Voir mon rapport live</a>
+    <span style="font-size:0.72rem;opacity:0.7;display:block;margin-top:0.3rem">
+      Tu peux installer/réinstaller les composants ci-dessous ou changer de niveau.
+    </span>
+  </div>
+  {% endif %}
+
   {# Phase 3 (#492) : 📦 Composants à installer — quick-up menu emoji #}
   <div class="info" style="margin-top:0.5rem;background:rgba(110,64,201,0.08);border-left-color:#9e76ff">
     <p style="font-size:0.9rem;color:#cbb6ff;margin-bottom:0.6rem;font-weight:bold">
