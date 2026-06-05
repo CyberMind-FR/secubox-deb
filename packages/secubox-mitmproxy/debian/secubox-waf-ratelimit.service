@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox WAF nft rate-limit pre-mitm [Phase 7.B #498]
+After=network.target nftables.service
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/498
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nft -f /etc/secubox/secubox-waf-ratelimit.nft
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

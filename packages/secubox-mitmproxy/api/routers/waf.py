@@ -111,3 +111,141 @@ async def toggle_rule(req: ToggleRequest, user=Depends(require_jwt)):
 async def get_rule_stats(user=Depends(require_jwt)):
     """Get per-category detection statistics."""
     return RuleStatsResponse(stats=_load_stats())
+
+
+# ── Phase 7.A/B (#498) : enforcement & threats dashboard ──────────────
+
+
+class EnforcementResponse(BaseModel):
+    """Phase 7.A : bridge / drop counters + recent bans / recent honeypot hits."""
+    bridge_enabled: bool
+    bans_pushed: int
+    bans_failed: int
+    requests: int
+    blocked: int
+    warnings: int
+    rate_limit_offenders: int = 0
+    honeypot_hits_last_hour: int = 0
+    recent_bans: list = []
+    recent_threats: list = []
+
+
+def _read_lines_tail(path: Path, n: int) -> list:
+    """Read last N lines from a log file (cheap, no need for tac/tail)."""
+    if not path.exists():
+        return []
+    try:
+        with path.open("rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            chunk = min(size, 64 * 1024)
+            f.seek(max(0, size - chunk))
+            return f.read().decode("utf-8", errors="ignore").splitlines()[-n:]
+    except Exception:
+        return []
+
+
+@router.get("/enforcement", response_model=EnforcementResponse)
+async def get_enforcement(user=Depends(require_jwt)):
+    """Phase 7.A/B (#498) — surface bridge + honeypot + rate-limit state.
+
+    Reads :
+      - /data/mitmproxy-waf/logs/waf-stats.json   (WAF counters incl. bans_pushed)
+      - /data/mitmproxy/data/threats.log           (recent threats)
+      - /var/log/nginx/honeypot.log                (honeypot hits last hour)
+      - nft set ip secubox_waf_ratelimit.offenders_v4 (live offender count)
+
+    Designed for the admin webui Threats tab. Auto-refresh client-side.
+    """
+    import subprocess
+    import time
+
+    stats_file = Path("/data/mitmproxy-waf/logs/waf-stats.json")
+    stats = {}
+    if stats_file.exists():
+        try:
+            stats = json.loads(stats_file.read_text())
+        except Exception:
+            pass
+
+    cfg_file = Path("/etc/secubox/waf/crowdsec.toml")
+    bridge_enabled = False
+    if cfg_file.exists():
+        try:
+            import tomllib
+            with cfg_file.open("rb") as f:
+                bridge_enabled = bool(tomllib.load(f).get("enabled", False))
+        except Exception:
+            pass
+
+    # Recent threats (last 20)
+    threats_log = Path("/data/mitmproxy/data/threats.log")
+    recent_threats = []
+    for line in _read_lines_tail(threats_log, 20):
+        try:
+            recent_threats.append(json.loads(line))
+        except Exception:
+            pass
+
+    # Recent bans : cscli decisions list filtered by origin=secubox-waf
+    recent_bans = []
+    try:
+        out = subprocess.run(
+            ["cscli", "decisions", "list", "-o", "json", "--origin", "secubox-waf"],
+            capture_output=True, text=True, timeout=3,
+        ).stdout
+        for d in json.loads(out or "[]")[:20]:
+            recent_bans.append({
+                "ip": d.get("decisions", [{}])[0].get("value", "?"),
+                "scenario": d.get("scenario", "?"),
+                "expiration": d.get("expiration", "?"),
+            })
+    except Exception:
+        pass
+
+    # Live rate-limit offender count
+    rate_limit_offenders = 0
+    try:
+        out = subprocess.run(
+            ["nft", "-j", "list", "set", "inet", "secubox_waf_ratelimit", "offenders_v4"],
+            capture_output=True, text=True, timeout=2,
+        ).stdout
+        data = json.loads(out or "{}")
+        for item in data.get("nftables", []):
+            elem = item.get("set", {}).get("elem", [])
+            rate_limit_offenders = len(elem) if isinstance(elem, list) else 0
+            break
+    except Exception:
+        pass
+
+    # Honeypot hits last hour (count lines whose timestamp is within last 3600s)
+    honeypot_hits = 0
+    hp_log = Path("/var/log/nginx/honeypot.log")
+    if hp_log.exists():
+        try:
+            cutoff = time.time() - 3600
+            for line in _read_lines_tail(hp_log, 5000):
+                # log_format starts with $time_iso8601 — first 25 chars
+                ts_str = line[:25]
+                try:
+                    from datetime import datetime as _dt
+                    ts = _dt.fromisoformat(ts_str.replace("Z", "+00:00")).timestamp()
+                    if ts > cutoff:
+                        honeypot_hits += 1
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    return EnforcementResponse(
+        bridge_enabled=bridge_enabled,
+        bans_pushed=stats.get("bans_pushed", 0),
+        bans_failed=stats.get("bans_failed", 0),
+        requests=stats.get("requests", 0),
+        blocked=stats.get("blocked", 0),
+        warnings=stats.get("warnings", 0),
+        rate_limit_offenders=rate_limit_offenders,
+        honeypot_hits_last_hour=honeypot_hits,
+        recent_bans=recent_bans,
+        recent_threats=recent_threats,
+    )
