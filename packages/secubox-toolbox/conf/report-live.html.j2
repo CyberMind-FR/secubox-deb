@@ -333,6 +333,69 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
   <a href="/status">📊 Statut JSON</a>
 </div>
 
+{# Phase 3 (#492) : transparency layer — inspection breakdown + per-host quality #}
+{% set t = transparency|default({}) %}
+{% if t and t.get('total_events', 0) > 0 %}
+<div class="card">
+  <h2>🔎 INSPECTION : CE QU'ON A REGARDÉ (et ce qu'on n'a PAS regardé)</h2>
+  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.6rem;font-style:italic">
+    Honnêteté avant magie : la cabine te dit ce qu'elle a inspecté, ce qu'elle a sciemment bypassé, et pourquoi.
+  </p>
+  <div class="kv">
+    {% set b = t.get('breakdown_pct', {}) %}
+    {% if b.get('inspected') %}
+      <div class="k">🔍 Inspecté (HTTPS via notre CA)</div>
+      <div class="v">{{ b.get('inspected', 0) }}% — contenu visible</div>
+    {% endif %}
+    {% if b.get('bypassed-whitelist') %}
+      <div class="k">🛡 Bypass whitelist</div>
+      <div class="v">{{ b.get('bypassed-whitelist', 0) }}% — décision policy (cert-pinning vendor)</div>
+    {% endif %}
+    {% if b.get('pinned-failed-mitm') %}
+      <div class="k">🔒 Cert-pinning détecté</div>
+      <div class="v">{{ b.get('pinned-failed-mitm', 0) }}% — l'app refuse notre CA, normal+bon signe</div>
+    {% endif %}
+    {% if b.get('e2e-opaque') %}
+      <div class="k">🔐 E2E messaging</div>
+      <div class="v">{{ b.get('e2e-opaque', 0) }}% — opaque par design, ton chiffrement marche</div>
+    {% endif %}
+    <div class="k">📊 Total events analysés</div>
+    <div class="v">{{ t.get('total_events', 0) }}</div>
+    {% if t.get('whitelist_stats') %}
+      <div class="k">📜 Patterns whitelist actifs</div>
+      <div class="v">{{ t.get('whitelist_stats', {}).get('count', 0) }} (baseline + override)</div>
+    {% endif %}
+  </div>
+</div>
+
+{% if t.get('per_host') %}
+<div class="card">
+  <h2>🎯 QUALITÉ SÉCURITÉ PAR DESTINATION</h2>
+  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.6rem;font-style:italic">
+    Grade A+/A/B/C/D/F basé sur TLS version + JA4 + headers + cookies. Worst-first :
+  </p>
+  <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
+    <thead>
+      <tr style="color:var(--phos);text-align:left;border-bottom:1px solid var(--dim)">
+        <th style="padding:0.3rem">Grade</th>
+        <th style="padding:0.3rem">Destination</th>
+        <th style="padding:0.3rem">Statut analyse</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for h in t.get('per_host', [])[:15] %}
+      <tr style="border-bottom:1px solid rgba(0,221,68,0.1)">
+        <td style="padding:0.25rem;font-weight:bold;color:{% if h.grade in ['A+','A'] %}var(--phos-hot){% elif h.grade == 'B' %}var(--phos){% elif h.grade == 'C' %}var(--amber){% else %}var(--red){% endif %}">{{ h.grade }}</td>
+        <td style="padding:0.25rem;font-family:monospace;color:var(--text)">{{ h.host[:60] }}</td>
+        <td style="padding:0.25rem;color:var(--dim);font-size:0.72rem">{{ h.status }} — {{ h.reason[:70] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
 <p class="refresh">↻ Auto-refresh toutes les 15 secondes</p>
 
 <div class="card">
