@@ -411,7 +411,47 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
       <div class="k">📜 Patterns whitelist actifs</div>
       <div class="v">{{ t.get('whitelist_stats', {}).get('count', 0) }} (baseline + override)</div>
     {% endif %}
+    {% if t.get('sensitivity') %}
+      <div class="k">🎛 Sensibilité active</div>
+      <div class="v">{{ t.get('sensitivity', {}).get('label', '?') }} — {{ t.get('sensitivity', {}).get('description', '')[:80] }}</div>
+    {% endif %}
   </div>
+
+  {# Phase 3 (#492) : tentatives counters — full transparency #}
+  {% set a = t.get('attempts', {}) %}
+  {% if a.get('total', 0) > 0 %}
+  <div style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--dim)">
+    <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.4rem"><b>📈 Tentatives observées (toutes catégories)</b></p>
+    <div class="kv" style="font-size:0.8rem">
+      <span class="k">Total observé</span><span class="v">{{ a.get('total', 0) }}</span>
+      <span class="k">🔍 Inspecté</span><span class="v">{{ a.get('inspected', 0) }}</span>
+      <span class="k">🛡 Bypass</span><span class="v">{{ a.get('bypassed_whitelist', 0) }}</span>
+      <span class="k">🔒 Cert-pinning</span><span class="v">{{ a.get('pinned_failed', 0) }}</span>
+      <span class="k">🔐 E2E opaque</span><span class="v">{{ a.get('e2e_opaque', 0) }}</span>
+      {% if a.get('blocked', 0) > 0 %}
+      <span class="k">🚫 Bloqué</span><span class="v" style="color:var(--red)">{{ a.get('blocked', 0) }}</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# Phase 3 (#492) : whitelist hits — accountability per pattern/category #}
+  {% set wh = t.get('whitelist_hits', {}) %}
+  {% if wh.get('total', 0) > 0 %}
+  <div style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--dim)">
+    <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.4rem"><b>📜 Tes bypass whitelist en détail</b> — {{ wh.get('total') }} connexions sciemment non-inspectées</p>
+    <div class="kv" style="font-size:0.78rem">
+      {% for cat, cnt in (wh.get('by_category', {}) | dictsort(by='value', reverse=True))[:8] %}
+      <span class="k">{{ cat }}</span><span class="v">{{ cnt }} hits</span>
+      {% endfor %}
+    </div>
+    <ul style="margin-top:0.4rem">
+      {% for p in wh.get('top_patterns', [])[:8] %}
+      <li style="font-size:0.72rem"><code>{{ p.pattern }}</code> · {{ p.count }} hits</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 </div>
 
 {% if t.get('per_host') %}
