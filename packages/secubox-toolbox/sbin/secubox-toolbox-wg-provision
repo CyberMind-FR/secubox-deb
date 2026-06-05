@@ -57,18 +57,30 @@ SaveConfig = false
 EOF
 chmod 0600 "$WG_CONF"
 
-# ── nft table for WG NAT + DNAT to mitm-wg ──
-log "ensuring nft inet wg-toolbox table + masquerade + DNAT rules"
+# ── nft table for WG NAT + forward + DNAT (optional) ──
+log "ensuring nft inet wg-toolbox table"
 nft add table inet wg-toolbox 2>/dev/null || true
+# Postrouting masquerade : packets out via lan0 get source-NAT'd
 nft -- add chain inet wg-toolbox postrouting "{ type nat hook postrouting priority srcnat; }" 2>/dev/null || true
 nft add rule inet wg-toolbox postrouting ip saddr ${WG_SUBNET} oif lan0 masquerade 2>/dev/null || true
-# Phase 6.C (#496) : DNAT incoming HTTP(S) on the wg-toolbox iface to the
-# transparent mitm endpoint on 10.99.1.1:8081. This is what enables R3
-# analysis : decapsulated WG packets get redirected to mitm BEFORE
-# masquerade, so addons see the full TLS handshake + decrypt traffic.
-nft -- add chain inet wg-toolbox prerouting "{ type nat hook prerouting priority dstnat; }" 2>/dev/null || true
-nft add rule inet wg-toolbox prerouting iif wg-toolbox tcp dport 443 dnat ip to ${WG_SERVER_IP}:8081 2>/dev/null || true
-nft add rule inet wg-toolbox prerouting iif wg-toolbox tcp dport 80 dnat ip to ${WG_SERVER_IP}:8081 2>/dev/null || true
+# Forward : explicit accept for wg-toolbox <-> lan0 traffic
+nft -- add chain inet wg-toolbox forward "{ type filter hook forward priority filter; }" 2>/dev/null || true
+nft add rule inet wg-toolbox forward iif wg-toolbox oif lan0 accept 2>/dev/null || true
+nft add rule inet wg-toolbox forward iif lan0 oif wg-toolbox ct state established,related accept 2>/dev/null || true
+
+# CRITICAL : allow WG handshake UDP packets to reach the kernel module.
+# Without this, the default inet filter input chain (policy=drop) silently
+# drops WG packets BEFORE they reach the wireguard kernel module → handshake
+# never completes despite tcpdump showing packets arriving.
+log "allowing UDP ${WG_PORT} on inet filter input"
+nft add rule inet filter input udp dport ${WG_PORT} accept 2>/dev/null || true
+
+# Phase 6.C (#496) : OPTIONAL DNAT prerouting for mitm interception.
+# Currently DISABLED by default — uncomment when mitm-wg service is running
+# on \${WG_SERVER_IP}:8081. With DNAT but no listener, surf breaks entirely.
+# nft -- add chain inet wg-toolbox prerouting "{ type nat hook prerouting priority dstnat; }" 2>/dev/null || true
+# nft add rule inet wg-toolbox prerouting iif wg-toolbox tcp dport 443 dnat ip to ${WG_SERVER_IP}:8081
+# nft add rule inet wg-toolbox prerouting iif wg-toolbox tcp dport 80 dnat ip to ${WG_SERVER_IP}:8081
 
 # ── Enable IP forwarding (persist) ──
 echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-secubox-wg.conf
