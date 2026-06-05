@@ -452,10 +452,12 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem}
 </div>
 
 <div class=warn>
-<b>⚠ Avant de connecter :</b> installe aussi le certificat racine ToolBoX
-(<a href="/ca/mobileconfig" style="color:#ffb347">iPhone .mobileconfig</a> ou
-<a href="/ca/android.crt" style="color:#ffb347">Android .crt</a>) sinon les
-sites HTTPS échoueront dès que tu actives le tunnel.
+<b>⚠ Important pour R3 :</b> il faut installer le <b>certificat R3 spécifique</b>
+(différent du certificat R1/R2). Sinon les sites HTTPS échouent dès le tunnel actif.
+<br><br>
+<a href="/wg/ca.mobileconfig" style="color:#ffb347;font-weight:bold">📥 Installer CA R3 iPhone (.mobileconfig)</a>
+<br>
+<a href="/wg/ca.pem" style="color:#ffb347;font-weight:bold">🤖 Télécharger CA R3 (.pem Android/PC)</a>
 </div>
 
 <div class=card>
@@ -588,6 +590,62 @@ async def wg_qr(request: Request) -> Response:
         content=_qr_png(profile["conf_text"], size=6, border=2),
         media_type="image/png",
         headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/wg/ca.pem")
+async def wg_ca_pem() -> Response:
+    """The mitm-wg-specific CA — REQUIRED for R3 HTTPS interception.
+
+    Separate from the R1/R2 CA at /ca/mobileconfig. iPhone in R3 mode must
+    install BOTH the WG profile (tunnel) AND this CA (trust mitm certs).
+    """
+    p = Path("/etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem")
+    if not p.exists():
+        raise HTTPException(404, "mitm-wg CA not yet generated")
+    return Response(
+        content=p.read_bytes(),
+        media_type="application/x-x509-ca-cert",
+        headers={"Content-Disposition": "attachment; filename=gondwana-toolbox-wg.crt"},
+    )
+
+
+@router.get("/wg/ca.mobileconfig")
+async def wg_ca_mobileconfig() -> Response:
+    """iOS profile that installs the mitm-wg CA in trust store."""
+    import uuid as _uuid
+    p = Path("/etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem")
+    if not p.exists():
+        raise HTTPException(404, "mitm-wg CA not yet generated")
+    pem = p.read_text()
+    # Strip headers + base64 body
+    body_lines = [ln for ln in pem.splitlines() if ln and not ln.startswith("-----")]
+    ca_b64 = "\n".join(body_lines)
+    payload_uuid = str(_uuid.uuid4()).upper()
+    cert_uuid = str(_uuid.uuid4()).upper()
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>PayloadType</key><string>Configuration</string>
+<key>PayloadVersion</key><integer>1</integer>
+<key>PayloadIdentifier</key><string>fr.cybermind.gondwana.toolbox.wg-ca</string>
+<key>PayloadUUID</key><string>{payload_uuid}</string>
+<key>PayloadDisplayName</key><string>Gondwana ToolBoX WG CA (R3)</string>
+<key>PayloadDescription</key><string>Certificat racine WireGuard mitm pour analyse R3.</string>
+<key>PayloadOrganization</key><string>CyberMind / Gondwana</string>
+<key>PayloadContent</key><array><dict>
+<key>PayloadType</key><string>com.apple.security.root</string>
+<key>PayloadVersion</key><integer>1</integer>
+<key>PayloadIdentifier</key><string>fr.cybermind.gondwana.toolbox.wg-ca.cert</string>
+<key>PayloadUUID</key><string>{cert_uuid}</string>
+<key>PayloadDisplayName</key><string>Gondwana ToolBoX WG Root CA</string>
+<key>PayloadCertificateFileName</key><string>gondwana-toolbox-wg-ca.pem</string>
+<key>PayloadContent</key><data>{ca_b64}</data>
+</dict></array></dict></plist>"""
+    return Response(
+        content=xml,
+        media_type="application/x-apple-aspen-config",
+        headers={"Content-Disposition": "attachment; filename=gondwana-toolbox-wg.mobileconfig"},
     )
 
 
