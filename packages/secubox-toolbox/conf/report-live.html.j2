@@ -42,6 +42,47 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
 <h1>📡 GONDWANA TOOLBOX</h1>
 <p class="sub">// Rapport live — Cabine numérique VILLAGE3B</p>
 
+{# Phase 3 (#492) : welcome / switch confirmation banner #}
+{% if request_args and (request_args.get('welcome') or request_args.get('switched')) %}
+<div class="card" style="background:rgba(0,221,68,0.08);border-color:var(--phos)">
+  <h2 style="color:var(--phos-hot)">
+    {% if request_args.get('switched') %}🔄 Niveau changé{% else %}🎉 Bienvenue !{% endif %}
+  </h2>
+  <p style="font-size:0.85rem">
+    Tu es maintenant en mode
+    <b style="color:var(--phos-hot)">
+      {% set lvl = request_args.get('level', 'r1') %}
+      {% if lvl == 'r0' %}🌐 R0 — Accès simple (aucune analyse)
+      {% elif lvl == 'r2' %}🔍 R2 — Analyse + bandeau Safari
+      {% else %}🛡 R1 — Analyse passive recommandée{% endif %}
+    </b>.
+    Tu peux maintenant <a href="http://captive.apple.com/hotspot-detect.html" target="_blank" style="color:var(--phos-hot);text-decoration:underline">surfer normalement</a> — ce rapport se met à jour toutes les 15s.
+  </p>
+</div>
+{% endif %}
+
+{# Phase 3 (#492) : level switcher — user can change opt-in level anytime #}
+<div class="card">
+  <h2>🔀 Mon niveau d'opt-in</h2>
+  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.6rem">
+    Tu peux changer de niveau à tout moment. R2 inspecte plus mais peut casser des apps.
+  </p>
+  <form method="POST" action="/change-level" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.4rem">
+    <button type="submit" name="level" value="r0"
+      style="padding:0.5rem;background:transparent;color:var(--text);border:1px solid var(--dim);cursor:pointer;font-family:inherit;font-size:0.85rem">
+      🌐 R0
+    </button>
+    <button type="submit" name="level" value="r1"
+      style="padding:0.5rem;background:rgba(0,221,68,0.1);color:var(--phos-hot);border:1px solid var(--phos);cursor:pointer;font-family:inherit;font-size:0.85rem;font-weight:bold">
+      🛡 R1
+    </button>
+    <button type="submit" name="level" value="r2"
+      style="padding:0.5rem;background:transparent;color:#ffd6a0;border:1px solid #ffb347;cursor:pointer;font-family:inherit;font-size:0.85rem">
+      🔍 R2
+    </button>
+  </form>
+</div>
+
 <div class="card">
   <h2>👤 Identifiant anonyme</h2>
   <div class="kv">

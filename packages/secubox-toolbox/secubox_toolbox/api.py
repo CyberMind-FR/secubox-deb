@@ -147,15 +147,66 @@ async def accept(request: Request):
     store.record_consent(mac_hash, ip, ua, ttl_seconds=86400)
     store.upsert_client(mac_hash, ip, level=level)
     log.info("consent recorded mac_hash=%s level=%s r2=%s", mac_hash, level, r2_ok)
-    # Phase 3 (#492) : detect whether the call came from a browser form (HTML
-    # response = render success page) vs from a programmatic API client (JSON).
+    # Phase 3 (#492) : detect form-vs-API.
+    # Browser : 303 redirect straight to the dashboard with welcome state.
+    # API     : JSON AcceptResp for programmatic clients.
     accept_hdr = request.headers.get("accept", "")
     wants_json = "application/json" in accept_hdr and "text/html" not in accept_hdr
     if wants_json:
         return AcceptResp(ok=True, mac_hash=mac_hash, r2=r2_ok)
-    return HTMLResponse(_env.get_template("success.html.j2").render(
-        mac_hash=mac_hash, r2_enabled=cfg.r2.enabled, level=level,
-    ))
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/report/me/html?welcome=1&level={level}",
+                             status_code=303)
+
+
+@router.post("/change-level")
+async def change_level(request: Request):
+    """Phase 3 (#492) : change opt-in level from the dashboard.
+
+    Adds/removes the MAC from the appropriate nft sets and updates the
+    persisted level. Redirects back to /report/me/html.
+    """
+    ip, mac = _resolve(request)
+    if not ip or not mac:
+        raise HTTPException(400, "client mac unknown")
+    cfg = _get_cfg()
+    salt = _get_salt()
+    mac_hash = macmod.hash_mac(mac, salt)
+
+    try:
+        form = await request.form()
+        level = (form.get("level") or "r1").lower()
+    except Exception:
+        level = "r1"
+    if level not in ("r0", "r1", "r2"):
+        level = "r1"
+    if level == "r2" and not cfg.r2.enabled:
+        level = "r1"
+
+    # Re-validate (idempotent extend)
+    nft.add_validated(mac, ttl="24h")
+    # Membership in consented_r2_macs : add for r1/r2, remove for r0
+    if level in ("r1", "r2"):
+        nft.add_consented(mac, ttl="24h")
+    else:
+        try:
+            nft.del_validated  # name-check
+            from . import nft as _nft
+            _nft._run(_nft.NFT, "delete", "element", "inet", "toolbox",
+                      "consented_r2_macs", "{ " + mac + " }")
+        except Exception:
+            pass
+    # Membership in r2_banner_macs : add for r2, remove otherwise
+    if level == "r2":
+        nft.add_r2_banner(mac, ttl="24h")
+    else:
+        nft.del_r2_banner(mac)
+
+    store.upsert_client(mac_hash, ip, level=level)
+    log.info("level switched mac_hash=%s -> %s", mac_hash, level)
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/report/me/html?switched=1&level={level}",
+                             status_code=303)
 
 
 @router.get("/status", response_model=StatusResp)
@@ -700,8 +751,12 @@ async def report_me_html(request: Request) -> HTMLResponse:
     salt = _get_salt()
     mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
+    # Phase 3 (#492) : pass query args for welcome/switched banner
     return HTMLResponse(_env.get_template("report-live.html.j2").render(
-        mac_hash=mac_hash, ip=ip, **session,
+        mac_hash=mac_hash, ip=ip,
+        request_args=dict(request.query_params),
+        current_level=store.get_client_level(mac_hash) if mac_hash else "r1",
+        **session,
     ))
 
 
