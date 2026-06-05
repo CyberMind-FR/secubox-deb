@@ -39,51 +39,84 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     {% if mac_hash and mac_hash != '??' %}<br>Ton appareil (anonymisé) : <b>{{ mac_hash }}</b>{% endif %}
   </div>
 
-  {# Phase 3 (#492) : cert chain auto-check. JS probes mitm response to a known
-     HTTPS endpoint. Result mapped to a colored badge. Helps user verify R2
-     readiness BEFORE selecting it. #}
-  <div id="cert-status" class="info" style="margin-top:0.5rem;font-size:0.78rem">
-    <span id="cert-emoji">⏳</span>
-    <span id="cert-text">Vérification certificat racine ToolBoX...</span>
-    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">
-      Empreinte attendue : <code id="cert-fp"></code>
+  {# Phase 3 (#492) : cert access + auto-check. Big install button + manual test
+     button + auto-detected status. R1/R2 require the CA to be in trust store. #}
+  <div id="cert-card" class="info" style="margin-top:0.5rem;background:rgba(110,64,201,0.08);border-left-color:#9e76ff">
+    <p style="font-size:0.85rem;color:#cbb6ff;margin-bottom:0.4rem">
+      🔐 <b>Certificat racine ToolBoX</b> — requis pour R1/R2
+    </p>
+    <p style="font-size:0.72rem;opacity:0.85;line-height:1.45;margin-bottom:0.5rem">
+      Sans certificat installé, R1 et R2 cassent tous les HTTPS (TLS handshake fails).
+      R0 fonctionne sans le certificat (mais aucune analyse).
+    </p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.5rem">
+      <a href="/ca/mobileconfig"
+         style="display:block;padding:0.55rem;background:#9e76ff;color:#0a0a0f;text-decoration:none;text-align:center;font-weight:bold;font-size:0.82rem;border-radius:3px">
+        📥 Installer (iPhone)
+      </a>
+      <a href="/ca/android.crt"
+         style="display:block;padding:0.55rem;background:transparent;color:#cbb6ff;text-decoration:none;text-align:center;font-weight:bold;font-size:0.82rem;border:1px solid #9e76ff;border-radius:3px">
+        🤖 Télécharger CRT (Android/PC)
+      </a>
     </div>
+
+    <button type="button" id="test-cert-btn"
+            style="width:100%;padding:0.5rem;background:transparent;color:var(--phos-hot);border:1px solid var(--phos);font-family:inherit;font-size:0.82rem;cursor:pointer;margin-bottom:0.4rem">
+      🧪 Tester le certificat maintenant
+    </button>
+
+    <div id="cert-status" style="font-size:0.78rem;padding:0.5rem;background:rgba(0,0,0,0.3);border-radius:3px;text-align:center">
+      <span id="cert-emoji">⏳</span>
+      <span id="cert-text">Auto-test en cours...</span>
+    </div>
+
+    <p style="font-size:0.65rem;opacity:0.7;margin-top:0.4rem;font-family:monospace;word-break:break-all">
+      Empreinte CA SHA-1 : <code id="cert-fp" style="color:#cbb6ff"></code>
+    </p>
   </div>
   <script>
   (function(){
     var fpEl = document.getElementById('cert-fp');
     var emEl = document.getElementById('cert-emoji');
     var txEl = document.getElementById('cert-text');
+    var btnEl = document.getElementById('test-cert-btn');
     var statusEl = document.getElementById('cert-status');
-    // Get the CA fingerprint for display
+
     fetch('/ca/fingerprint').then(function(r){return r.json();}).then(function(d){
-      fpEl.textContent = (d.sha1 || d.sha256 || '?').substring(0, 47);
+      fpEl.textContent = (d.sha1 || d.sha256 || '?');
     }).catch(function(){fpEl.textContent = '?';});
-    // Probe a HTTPS endpoint that the iPhone would reach via mitm if CA installed.
-    // We use a simple image fetch ; onload = success, onerror = TLS failure.
-    var probe = new Image();
-    probe.onload = function(){
-      emEl.textContent = '🟢';
-      txEl.innerHTML = '<b>Certificat installé</b> — R2 prêt à fonctionner.';
-      statusEl.style.borderLeftColor = 'var(--phos)';
-      statusEl.style.background = 'rgba(0,221,68,0.08)';
-    };
-    probe.onerror = function(){
-      emEl.textContent = '🔴';
-      txEl.innerHTML = '<b>Certificat NON installé</b> — <a href="/ca/install-help" style="color:var(--amber)">installer le profil</a> avant de choisir R2.';
-      statusEl.style.borderLeftColor = 'var(--amber)';
-      statusEl.style.background = 'rgba(255,179,71,0.08)';
-    };
-    // Cache-bust + cross-domain (any HTTPS works as a probe — the success
-    // proves CA validates the cert mitmproxy generated for that domain)
-    probe.src = 'https://www.google.com/favicon.ico?t=' + Date.now();
-    // Fallback timeout : if no resolution in 3s, mark unknown
-    setTimeout(function(){
-      if (emEl.textContent === '⏳') {
+
+    function runProbe() {
+      emEl.textContent = '⏳';
+      txEl.textContent = 'Test en cours...';
+      statusEl.style.background = 'rgba(0,0,0,0.3)';
+      var probe = new Image();
+      var done = false;
+      probe.onload = function(){
+        if (done) return; done = true;
+        emEl.textContent = '🟢';
+        txEl.innerHTML = '<b>Certificat OK — R1/R2 prêt</b>';
+        statusEl.style.background = 'rgba(0,221,68,0.15)';
+      };
+      probe.onerror = function(){
+        if (done) return; done = true;
+        emEl.textContent = '🔴';
+        txEl.innerHTML = '<b>Certificat NON installé</b> — clique 📥 ci-dessus';
+        statusEl.style.background = 'rgba(255,68,102,0.15)';
+      };
+      // Probe a reliable HTTPS endpoint. We try Apple captive (which iOS
+      // already trusts) — if it loads via mitm with our CA, our CA is trusted.
+      probe.src = 'https://captive.apple.com/library/test/success.html?t=' + Date.now();
+      setTimeout(function(){
+        if (done) return; done = true;
         emEl.textContent = '❔';
-        txEl.innerHTML = 'Statut indéterminé — <a href="/ca/install-help" style="color:var(--phos)">vérifier l\'installation du certificat</a>';
-      }
-    }, 3000);
+        txEl.innerHTML = 'Timeout — relance le test';
+        statusEl.style.background = 'rgba(255,179,71,0.15)';
+      }, 4000);
+    }
+    btnEl.addEventListener('click', runProbe);
+    setTimeout(runProbe, 600);
   })();
   </script>
 
