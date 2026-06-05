@@ -215,6 +215,15 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
       <strong>⚠ Si tu choisis R2 :</strong> il te faut <a href="/ca/install-help">installer le certificat racine ToolBoX</a> sur ton iPhone, sinon les sites HTTPS échouent. Le bandeau n'apparaît que sur les pages HTML servies en TCP (la plupart des apps iPhone utilisent QUIC et ne montreront pas le bandeau). Tu peux revenir en R1 depuis le rapport à tout moment.
     </div>
     {% endif %}
+
+    {# Phase 6 (#496) : R3 WireGuard portable mode #}
+    {% if wg_enabled|default(false) %}
+    <a href="/wg/r3-install" class="lvl-btn lvl-r3"
+       style="display:block;text-align:left;padding:0.8rem 0.9rem;border:1px solid #9e76ff;color:#cbb6ff;background:rgba(110,64,201,0.08);text-decoration:none;font-size:0.95rem;line-height:1.35">
+      🌐 <b>R3 — WireGuard portable (NOUVEAU)</b>
+      <span style="display:block;font-size:0.72rem;opacity:0.85;margin-top:0.2rem">VPN tunnel mitm. Bandeau sur TOUT (HTTPS + QUIC). Marche hors VILLAGE3B (4G/5G, autre WiFi). Profile install 1 tap.</span>
+    </a>
+    {% endif %}
   </form>
 
   <p class="terms">

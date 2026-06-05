@@ -1,0 +1,45 @@
+[Unit]
+Description=SecuBox ToolBoX MITM (WireGuard mode, R3 — dedicated LXC)
+After=network.target wg-quick@wg-toolbox.service
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/496
+# Hard requirement on wg interface up before mitm starts
+Requires=wg-quick@wg-toolbox.service
+
+[Service]
+Type=simple
+User=root
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/secubox/toolbox-mitm-wg /var/lib/secubox/toolbox /tmp
+WorkingDirectory=/usr/lib/secubox/toolbox
+
+# Phase 6 (#496) : mitmproxy 10+ WireGuard mode.
+# UDP 51820 = WG endpoint. mitm decapsulates the tunnel + intercepts ALL
+# traffic (TCP HTTPS + QUIC + UDP) → addons fire on full-fidelity flows.
+# The /etc/secubox/toolbox/wg/server.conf is generated at provision and
+# contains the server keypair + peer registrations.
+ExecStart=/usr/bin/mitmdump \
+    --mode wireguard:/etc/secubox/toolbox/wg/server.conf \
+    --listen-host 0.0.0.0 \
+    --listen-port 51820 \
+    --set confdir=/etc/secubox/toolbox/ca-wg \
+    --set ssl_insecure=false \
+    --set web_open_browser=false \
+    -s /usr/lib/secubox/toolbox/mitmproxy_addons/local_store.py \
+    -s /usr/lib/secubox/toolbox/mitmproxy_addons/inject_banner.py \
+    -s /usr/lib/secubox/toolbox/mitmproxy_addons/dpi.py \
+    -s /usr/lib/secubox/toolbox/mitmproxy_addons/cookies.py \
+    -s /usr/lib/secubox/toolbox/mitmproxy_addons/avatar.py \
+    -s /usr/lib/secubox/toolbox/mitmproxy_addons/ja4.py \
+    -s /usr/lib/secubox/toolbox/mitmproxy_addons/soc_relay.py
+Restart=on-failure
+RestartSec=5
+
+# WireGuard mode is heavier
+MemoryMax=720M
+MemoryHigh=560M
+CPUQuota=300%
+
+[Install]
+WantedBy=multi-user.target

@@ -352,6 +352,59 @@ async def qr_webclip(request: Request) -> Response:
                      headers={"Cache-Control": "public, max-age=3600"})
 
 
+# Phase 6 (#496) : WireGuard endpoints — R3 mode
+
+@router.get("/wg/profile/new")
+async def wg_profile_new(request: Request) -> Response:
+    """Generate a fresh WG profile for this client. Returns .conf content
+    suitable for direct import in WireGuard app (iOS + macOS + Linux)."""
+    try:
+        from . import wg as _wg
+    except ImportError:
+        raise HTTPException(503, "WG module not available (Phase 6 not provisioned)")
+    profile = _wg.generate_client_profile(client_label=request.headers.get("user-agent", "")[:60])
+    return Response(
+        content=profile["conf_text"],
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=village3b-toolbox.conf",
+            "X-Client-PubKey": profile["client_pubkey"],
+            "X-Client-IP": profile["client_ip"],
+        },
+    )
+
+
+@router.get("/wg/qr.png")
+async def wg_qr(request: Request) -> Response:
+    """QR code encoding the WG profile .conf — scannable by the iOS WG app."""
+    try:
+        from . import wg as _wg
+    except ImportError:
+        raise HTTPException(503, "WG module not available")
+    profile = _wg.generate_client_profile(client_label=request.headers.get("user-agent", "")[:60])
+    return Response(
+        content=_qr_png(profile["conf_text"], size=6, border=2),
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/wg/status")
+async def wg_status() -> dict:
+    """Running wg-toolbox interface state (peer count, handshakes)."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["wg", "show", "wg-toolbox"],
+            capture_output=True, text=True, timeout=2, check=False,
+        ).stdout
+        return {"interface": "wg-toolbox", "active": "peer:" in out,
+                "peer_count": out.count("peer:"),
+                "endpoint": "kbin.gk2.net:51820"}
+    except Exception as e:
+        return {"interface": "wg-toolbox", "active": False, "error": str(e)[:80]}
+
+
 @router.get("/qr/{target}")
 async def qr_generic(target: str, request: Request) -> Response:
     """Generic fallback : ?target=splash|cert|webclip|fingerprint maps to fixed
