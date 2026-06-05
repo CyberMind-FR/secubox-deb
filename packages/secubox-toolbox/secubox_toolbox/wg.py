@@ -31,7 +31,7 @@ PEERS_DB = Path("/var/lib/secubox/toolbox/wg-peers.json")
 # Client subnet — distinct from captive 10.99.0.0/24
 CLIENT_SUBNET_BASE = "10.99.1"
 WG_PORT = 51820
-WG_ENDPOINT = "kbin.gk2.net"
+WG_ENDPOINT = "kbin.gk2.secubox.in"  # Gandi-managed, A → 82.67.100.75 (gk2 pub IP)
 WG_INTERFACE = "wg-toolbox"
 
 # CA cert to bundle in the profile (so client trusts mitm's leaf certs)
