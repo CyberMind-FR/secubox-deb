@@ -3,6 +3,99 @@
 
 ---
 
+## 2026-06-05 — Phase 6 R3 WIREGUARD : MAJOR RELEASE shipped (ref #496) + WAF leak FIXED
+
+Phase 6 (R3 mode = portable WireGuard tunnel + mitm interception from anywhere)
+went from rough plumbing this morning to a polished public-grade release by
+evening. Branch `feature/496-phase-6-wireguard-mitm-autocert-mode-r3` carries
+30 commits, 2918 insertions across 26 files.
+
+### What ships
+
+**R3 architecture** (#496, deployed live on gk2)
+* WireGuard server `wg-quick@wg-toolbox` on UDP 51820, multi-peer
+* DNS A record `kbin.gk2.secubox.in → 82.67.100.75` provisioned via Gandi API
+* Dedicated mitm CA `Gondwana ToolBoX R3 CA` (separate from R1/R2 captive CA)
+  — final version has no SAN (Android Chrome rendered "émis par null" when SAN
+  contained spaces) and is served as PEM (/wg/ca.pem), DER (/wg/ca.crt),
+  Apple mobileconfig (/wg/ca.mobileconfig)
+* mitm-wg transparent on 10.99.1.1:8081 with launcher wrapper composing
+  `--set ignore_hosts=<regex>` from `/var/lib/secubox/toolbox/mitm-bypass.conf`
+  on every restart (15 patterns default : Signal, WhatsApp, Telegram,
+  Apple Push, French banks)
+* HAProxy vhost `kbin.gk2.secubox.in` with wildcard cert → backend
+  toolbox_landing → 10.99.0.1:8088 (FastAPI). All endpoints reachable from
+  Internet without captive constraints.
+
+**R3 first-class identity** (Phase 6.H, commit 2fab850a)
+* `mac_hash_of()` is now WG-aware: 10.99.1.x → sha256(peer_pubkey)[:16]
+  (cached, mtime-reloaded). Cascade fix : all addons (cookies, dpi, ja4,
+  soc, avatar, inject_banner, local_store) now write R3 events under the
+  correct stable mac_hash. Backfilled 21 existing peers into the clients
+  table with level=r3.
+
+**Banner enrichment** (Phase 6.G, commit 67985d93)
+* inject_banner now computes per-flow : cookies set+sent count, tracker
+  domains in body (200kB scan), is_tracker_host flag (1st-party host
+  matches ads*/pixel/analytics patterns). Display : 🍪 N · 🎯 N ·
+  ⚠ tracker-host. Privacy-safe : counts only, no names embedded.
+
+**Splash R3 detection** (Phase 6.I, commit 13e48c93)
+* When request to / comes from 10.99.1.x, splash shows large gradient
+  "🌐 Mode R3 — Tunnel WireGuard ACTIF" banner + report/PDF/reinstall
+  links, and HIDES the captive R0/R1/R2 chooser form (useless to R3
+  clients who are by construction at max-analysis).
+
+**Landing + admin polish** (commits b865636a, d81e16ac, e2b89314)
+* Public landing at https://kbin.gk2.secubox.in : 8-icon quicknav grid,
+  8 live KPI cells (auto-refresh /5s via /cumulative-stats.json with pulse
+  + flash animations), 🔬 cert R3 2-step probe (detects tunnel + mitm CA
+  trust separately), 4-level explanation cards, SVG charts.
+* /admin/ webui tabbed (👥 Clients + 🛡 Mitm filtering) with rich client
+  table, level switch modal, per-row × delete on filter patterns.
+* /admin/filter-control on public kbin = READ-ONLY (banner links to private
+  editor). Edit happens at https://admin.gk2.secubox.in/toolbox/ (SSO-gated)
+  in a new Filter card added to the existing toolbox webui.
+
+**Multi-OS install** (commit 645ce572)
+* /wg/r3-install page with 5 OS tabs (🍎 iOS, 🤖 Android, 🐧 Linux,
+  💻 macOS, 🪟 Windows), each with copy-paste-ready commands. Android
+  tab explicitly warns Chrome cannot install + walks Settings → Security
+  → Encryption & credentials path.
+* Wiki page : https://github.com/CyberMind-FR/secubox-deb/wiki/R3-WireGuard-install
+  (237 lines, same install matrix + architecture + whitelist + troubleshoot).
+
+### Bugs fixed during the session
+
+* **R3 banner not firing** : inject_banner gate accepted only "r2", not r3 (0a6073d5)
+* **/report/me/html 400 on WG** : added ?mh=<hash> bypass (67985d93)
+* **iPhone HTTPS broken in R3** : mitm 11 had no CA loaded, served default
+  CN=mitmproxy null cert (38461de4 → ba7144a3 final clean CA)
+* **Android "émis par null"** : CA had SAN with spaces → Chrome parser
+  failed → cert install dialog showed null. Regenerated CA minimal DN, no
+  SAN (ba7144a3).
+* **mitm-wg restart loop 191x** : `/etc/secubox/toolbox/ca-wg/mitmproxy-ca.pem`
+  was 0600 root:secubox-toolbox, mitm couldn't read as group member (owner
+  bit only). Fix : 0640 group-readable (3ba9e4ad).
+* **chess.maegia.tv 504 + general perf** : 1) streamlit LXC consuming 15
+  Python procs stopped + auto-start disabled (saved ~250 MB RAM) ; 2) mitm
+  WAF leak — pool of upstream keep-alive sockets accumulated 1500+ FDs over
+  4h → workers saturated → HAProxy 504. Fix : single line in addon
+  `flow.request.headers["Connection"] = "close"` forces upstream nginx to
+  close after each response (e2b89314 live + source backport this commit).
+  Cost: ~1ms loopback TCP handshake per request. FDs 1513→3, scur 812→87.
+
+### What still needs eyes
+
+* iPhone + Android : reinstall the FINAL CA (SHA1
+  `D5:E4:3A:C1:AD:4E:25:8A:A9:D4:2A:26:52:2C:D8:82:50:63:EA:0E`) and
+  delete any older "Gondwana ToolBoX..." profile first. Banner appears
+  on HTTPS pages once new CA is trusted.
+* PR #495 (Phase 5 LXC) + PR #496 (Phase 6 WG) to be opened once banner
+  E2E confirmed on both phones.
+
+---
+
 ## 2026-06-02 — Pi 400 BOOTS TO KIOSK + login works (live patches + #442 closed)
 
 The v2.13.10 image flashed yesterday booted but never reached graphical.target.

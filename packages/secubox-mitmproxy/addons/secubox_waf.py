@@ -741,6 +741,15 @@ class SecuBoxWAF:
             pass
     
     def request(self, flow: http.HTTPFlow):
+        # Connection close (Phase 6.J leak fix, ref #496) — prevents mitmproxy
+        # from accumulating idle keep-alive sockets to upstream backends.
+        # Without this, the per-server connection pool grows ~1 entry per
+        # unique upstream host and never shrinks; after a few hours we
+        # observed 1500+ FDs, 800+ ESTAB sockets, worker queue saturation,
+        # HAProxy timeouts → HTTP 504 on every WAF-routed vhost.
+        # Cost : 1 TCP handshake per request to upstream (~1ms loopback).
+        flow.request.headers["Connection"] = "close"
+
         # Pre-route guard: a Host header that is one of this box's own
         # listening IPs and is not explicitly mapped in haproxy-routes
         # would loop (HAProxy default_backend mitmproxy_inspector ->

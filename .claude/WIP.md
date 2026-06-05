@@ -1,5 +1,62 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-02*
+*Mis à jour : 2026-06-05*
+
+---
+
+## 🔄 2026-06-05 : Phase 6 R3 WireGuard — MAJOR RELEASE shipped (ref #496)
+
+### ✅ Done
+
+* **WG server** `wg-quick@wg-toolbox` UDP 51820 multi-peer, NAT via pure nft,
+  DSL port-forwarded, `kbin.gk2.secubox.in` DNS A record via Gandi API.
+* **mitm-wg transparent** sur 10.99.1.1:8081, launcher wrapper compose
+  `--set ignore_hosts=<regex>` from `/var/lib/secubox/toolbox/mitm-bypass.conf`
+  (15 patterns defaults : Signal/WhatsApp/Telegram/Apple Push/banks FR).
+* **Dedicated R3 CA** `Gondwana ToolBoX R3 CA` (final : pas de SAN — Android
+  Chrome ne supporte pas SAN avec espaces, affichait "émis par null").
+  Serve `/wg/ca.pem`, `/wg/ca.crt` (DER), `/wg/ca.mobileconfig`.
+* **R3 first-class identity** : `mac_hash_of()` WG-aware (10.99.1.x →
+  sha256(pubkey)[:16]). Cascade fix tous addons + `/wg/profile/new`
+  enregistre peer in `clients` table level=r3. 21 peers backfilled.
+* **Banner enrichi** : 🍪 cookies (set+sent) + 🎯 trackers (body scan 200kB)
+  + ⚠ tracker-host (1st-party). URL "Mon rapport" dynamique kbin public.
+* **Splash R3 detection** : large banner violet pour 10.99.1.x source, masque
+  R0/R1/R2 chooser (useless en R3).
+* **Landing public** kbin : 8-icon quicknav, 8 live KPI cells /5s, 🔬 cert
+  2-step probe (tunnel + CA trust), 4-level cards, SVG charts.
+* **Admin webui** : tabs 👥 Clients + 🛡 Mitm filtering, rich client table,
+  level switch modal, inline pattern add/delete.
+* **Kbin filter-control = READ-ONLY**, edit déplacée vers
+  `admin.gk2.secubox.in/toolbox/` (SSO-gated, new Filter card).
+* **Multi-OS install** : `/wg/r3-install` 5 tabs (iOS/Android/Linux/macOS/Win)
+  avec copy-paste commands. Wiki page complète.
+* **mitm WAF leak FIXÉ** : root cause = pool keep-alive upstream qui jamais
+  shrink, 1500+ FDs après 4h → 504. Fix 1 ligne :
+  `flow.request.headers["Connection"] = "close"` dans SecuBoxWAF.request.
+  Before/after : FDs 1513→3, scur 812→87, /toolbox/ 504→200/31ms.
+  Backporté dans `packages/secubox-mitmproxy/addons/secubox_waf.py`.
+* **Bugs résolus** :
+  - mitm-wg crash-loop 191x (mitmproxy-ca.pem 0600 → 0640)
+  - banner gate accepted only r2 (now r2+r3)
+  - /report/me/html 400 sur WG (ajout ?mh= bypass)
+  - streamlit LXC bouffait 250MB + 15 procs (stopped + auto-start off)
+
+### ⬜ Next up
+
+* **iPhone + Android E2E retest** : réinstaller CA Gondwana NEW
+  (SHA1 `D5:E4:3A:C1:AD:4E:25:8A:A9:D4:2A:26:52:2C:D8:82:50:63:EA:0E`),
+  supprimer ancien profil d'abord, vérifier banner R3 + cookies + trackers
+  visibles sur HTTPS pages.
+* **Merge branche feature/496-phase-6-wireguard-mitm-autocert-mode-r3 →
+  master** (30 commits, 2918 lignes, branche prête).
+* **Ouvrir PR #495** (Phase 5 LXC) + **PR #496** (Phase 6 WG) une fois
+  banner E2E confirmé.
+
+### 📌 Follow-ups potentiels
+
+* Threat_counts dict cleanup périodique (mineur leak, ~1 entrée/IP unique)
+* Investigation : pourquoi mitm-wg garde CPU > 30% au repos (idle keep-alives ?)
+* WAF leak fix : appliquer aussi à secubox-mitmproxy-deb (LXC template)
 
 ---
 

@@ -1,9 +1,30 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-02*
+*Mis à jour : 2026-06-05*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Phase 6 R3 WireGuard ✅ MAJOR RELEASE shipped 2026-06-05 (ref #496)
+
+- [x] **#496 Phase 6** R3 portable WG tunnel + mitm + multi-OS install — branch
+  `feature/496-phase-6-wireguard-mitm-autocert-mode-r3` (30 commits, 2918 lines, 26 files).
+  Live on gk2 + wiki + landing public kbin.gk2.secubox.in.
+- [x] **mitm WAF leak fix** (Connection: close upstream) — FDs 1513→3, scur 812→87.
+  Live + backported `packages/secubox-mitmproxy/addons/secubox_waf.py`.
+- [x] **Kbin filter-control READ-ONLY** + admin.gk2 toolbox webui editable card.
+- [ ] **iPhone + Android E2E confirm** : reinstall NEW CA
+  (SHA1 `D5:E4:3A...`), test banner sur HTTPS, validate "Mon rapport" link
+  → kbin/?mh= ouverture rapport perso.
+- [ ] **Merge** branche feature/496-... → master + push.
+- [ ] **PR #495** (Phase 5 LXC) + **PR #496** (Phase 6 WG) à ouvrir après E2E confirmé.
+
+### Phase 6 follow-ups
+
+- [ ] threat_counts dict cleanup périodique dans secubox_waf.py (mineur leak)
+- [ ] WAF leak fix : backporter aussi `packages/secubox-waf/mitmproxy/secubox_waf.py`
+  (le 2e fichier mitmproxy addon en sync, currently 756 lines vs 930 dans secubox-mitmproxy)
+- [ ] Investigate mitm-wg CPU > 30% au repos (idle keep-alives ?)
 
 ### Release pipeline ✅ v2.13.4 APT GREEN + v2.13.12 rpi400 kiosk SALON-READY
 
