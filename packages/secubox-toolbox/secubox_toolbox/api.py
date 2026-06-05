@@ -159,6 +159,25 @@ async def ca_android_crt() -> Response:
     )
 
 
+@router.get("/ca/webclip-cabine.mobileconfig")
+async def webclip_cabine() -> Response:
+    """Phase 3 (#492) : iOS Add-to-Home-Screen profile that drops a 'ToolBoX
+    Cabine' icon pointing at /report/me/html. User can then check the live
+    session report in 1 tap, surviving Safari cache misses + native-app gaps."""
+    import uuid as _uuid
+    cfg = _get_cfg()
+    body = _env.get_template("webclip.mobileconfig.j2").render(
+        payload_uuid=str(_uuid.uuid4()),
+        webclip_uuid=str(_uuid.uuid4()),
+        report_url=f"http://{cfg.dhcp.gateway}/report/me/html",
+    )
+    return Response(
+        content=body,
+        media_type="application/x-apple-aspen-config",
+        headers={"Content-Disposition": "attachment; filename=toolbox-cabine-icon.mobileconfig"},
+    )
+
+
 @router.get("/ca/install-help", response_class=HTMLResponse)
 async def ca_install_help() -> HTMLResponse:
     return HTMLResponse(_env.get_template("ca-help.html.j2").render())

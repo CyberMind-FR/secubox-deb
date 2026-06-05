@@ -32,6 +32,25 @@ REPORT_URL = "http://10.99.0.1:8088/report/me/html"
 _RE_BODY_CLOSE = re.compile(rb"</body\s*>", re.I)
 _GUARD = b"__GONDWANA_MITM_BANNER__"
 
+
+def _ncr(s: str) -> str:
+    """Encode any non-ASCII char as HTML numeric character reference.
+
+    Why: pages with non-UTF-8 declared charset (legacy iso-8859-1) reinterpret
+    our injected raw UTF-8 emoji bytes as garbage. NCRs (&#xXXXX;) are
+    charset-agnostic — the browser decodes them after charset translation.
+
+    Use for HTML content (both CSP-strict HTML body and JS innerHTML).
+    """
+    out = []
+    for ch in s:
+        cp = ord(ch)
+        if cp < 0x80:
+            out.append(ch)
+        else:
+            out.append(f"&#x{cp:X};")
+    return "".join(out)
+
 # Phase 3 classifiers (soft import : ToolBoX runs even if not deployed)
 try:
     from secubox_core.classifiers import host_app as _host_app
@@ -183,23 +202,25 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
       - csp_strict=True  : pure HTML+inline-style, NO JS. Non-dismissible.
       - csp_strict=False : JS-driven, dismissible, dynamic insertion.
     """
-    # Compose the per-site right-side text
-    right_parts = [f"{ctx['status_icon']} {ctx['status']}"]
+    # Compose per-site right-side text. NCR-encode all emojis so the banner
+    # renders correctly regardless of page charset (some legacy pages declare
+    # iso-8859-1 which would mangle our raw UTF-8 emoji bytes).
+    right_parts = [f"{_ncr(ctx['status_icon'])} {ctx['status']}"]
     if ctx["flag"]:
-        right_parts.append(ctx["flag"])
+        right_parts.append(_ncr(ctx["flag"]))
     if ctx["app_emoji"] and ctx["app"]:
-        right_parts.append(f"{ctx['app_emoji']} {ctx['app']}")
+        right_parts.append(f"{_ncr(ctx['app_emoji'])} {_ncr(ctx['app'])}")
     if ctx["asn"]:
-        right_parts.append(ctx["asn"])
-    right_text = " · ".join(right_parts)
+        right_parts.append(_ncr(ctx["asn"]))
+    right_text = " &#xB7; ".join(right_parts)  # middle dot · = &#xB7;
     grade = ctx["grade"]
     grade_color = ctx["grade_color"]
+    # Static emojis used in the left-side text
+    SAT_EMOJI = "&#x1F4E1;"  # 📡 satellite dish
 
     if csp_strict:
         # JS-less HTML banner — visible only, no close button, no padding-top hack.
-        # Uses position:fixed with inline styles (style-src 'unsafe-inline' usually allowed
-        # even when script-src is strict). If style-src is also strict, the banner becomes
-        # an unstyled inline block — still visible, just ugly.
+        # NCRs work even when page charset is iso-8859-1.
         html = (
             f"<div id=\"gondwana-mitm-banner\" role=\"status\" "
             f"style=\"position:fixed;top:0;left:0;right:0;z-index:2147483647;"
@@ -208,25 +229,26 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
             f"padding:6px 12px;font-size:11px;line-height:1.4;"
             f"border-bottom:2px solid #C04E24;text-align:left;"
             f"display:flex;justify-content:space-between;align-items:center;gap:8px\">"
-            f"<span><b>📡 ToolBoX R2</b> · CA SHA1: "
+            f"<span><b>{SAT_EMOJI} ToolBoX R2</b> &#xB7; CA SHA1: "
             f"<code style=\"background:rgba(0,0,0,0.1);padding:1px 4px;border-radius:2px\">{sha1[:23]}</code>"
-            f" · <span style=\"opacity:0.7;font-size:10px\">CSP-safe mode (no JS)</span></span>"
+            f" &#xB7; <span style=\"opacity:0.7;font-size:10px\">CSP-safe mode (no JS)</span></span>"
             f"<span style=\"color:#e8e6d9;background:rgba(0,0,0,0.4);padding:3px 8px;border-radius:3px\">"
             f"{right_text}"
-            f" · <b style=\"color:{grade_color};background:#0a0a0f;padding:1px 5px;border-radius:2px\">{grade}</b>"
+            f" &#xB7; <b style=\"color:{grade_color};background:#0a0a0f;padding:1px 5px;border-radius:2px\">{grade}</b>"
             f"</span></div>"
         )
-        # Mark guard via HTML comment (CSP-safe — no script)
-        return (b"<!-- " + _GUARD + b" -->" + html.encode("utf-8"))
+        return (b"<!-- " + _GUARD + b" -->" + html.encode("ascii"))
 
-    # Interactive JS version with full features
-    # Pre-encode the dynamic strings to JS-safe form
+    # Interactive JS version. We assemble innerHTML with NCRs already in place
+    # so the resulting DOM text is charset-agnostic.
     import json as _json
-    right_js = _json.dumps(right_text)
+    right_js = _json.dumps(right_text)             # already NCR-encoded
     grade_js = _json.dumps(grade)
     grade_col_js = _json.dumps(grade_color)
     sha1_js = _json.dumps(sha1[:23])
     report_js = _json.dumps(REPORT_URL)
+    sat_js = _json.dumps(SAT_EMOJI)
+    mid_js = _json.dumps(" &#xB7; ")
 
     js = f"""
 (function(){{
@@ -250,14 +272,16 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
     var gradeCol={grade_col_js};
     var sha1={sha1_js};
     var reportUrl={report_js};
-    b.innerHTML='<span><b>📡 ToolBoX R2</b> · CA SHA1: '+
+    var SAT={sat_js};
+    var MID={mid_js};
+    b.innerHTML='<span><b>'+SAT+' ToolBoX R2</b>'+MID+'CA SHA1: '+
       '<code style=\"background:rgba(0,0,0,0.1);padding:1px 4px;border-radius:2px\">'+sha1+'</code>'+
-      ' · <a href=\"'+reportUrl+'\" style=\"color:#0a5840;text-decoration:underline;font-weight:bold\">Mon rapport</a></span>'+
+      MID+'<a href=\"'+reportUrl+'\" style=\"color:#0a5840;text-decoration:underline;font-weight:bold\">Mon rapport</a></span>'+
       '<span style=\"display:flex;align-items:center;gap:8px\">'+
         '<span style=\"color:#e8e6d9;background:rgba(0,0,0,0.4);padding:3px 8px;border-radius:3px\">'+
-          rightText+' · <b style=\"color:'+gradeCol+';background:#0a0a0f;padding:1px 5px;border-radius:2px\">'+grade+'</b>'+
+          rightText+MID+'<b style=\"color:'+gradeCol+';background:#0a0a0f;padding:1px 5px;border-radius:2px\">'+grade+'</b>'+
         '</span>'+
-        '<a href=\"javascript:void(0)\" onclick=\"document.getElementById(\\'gondwana-mitm-banner\\').style.display=\\'none\\';document.body.style.paddingTop=0\" style=\"color:#0a0a0f;text-decoration:none;font-weight:bold;cursor:pointer\">[×]</a>'+
+        '<a href=\"javascript:void(0)\" onclick=\"document.getElementById(\\'gondwana-mitm-banner\\').style.display=\\'none\\';document.body.style.paddingTop=0\" style=\"color:#0a0a0f;text-decoration:none;font-weight:bold;cursor:pointer\">[&#xD7;]</a>'+
       '</span>';
     if(document.body.firstChild){{document.body.insertBefore(b,document.body.firstChild)}}
     else{{document.body.appendChild(b)}}
@@ -267,7 +291,7 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
   else{{inject()}}
 }})();
 """.strip()
-    return b"<script>" + js.encode("utf-8") + b"</script>"
+    return b"<script>" + js.encode("ascii") + b"</script>"
 
 
 class InjectBanner:
