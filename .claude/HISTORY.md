@@ -3,6 +3,54 @@
 
 ---
 
+## 2026-06-05 — Phase 7.A WAF active enforcement SHIPPED (ref #498)
+
+Same-day landing right after Phase 6 closure. WAF detections now become real
+nft drops within seconds.
+
+### Pipeline live-verified end-to-end on gk2
+
+```
+mitm WAF (LXC) detects threat (count >= BAN_THRESHOLD)
+  → _ban_via_crowdsec() POST /v1/alerts
+    → socat bridge 10.100.0.1:8080 → 127.0.0.1:8080
+      → CrowdSec LAPI insert decision
+        → crowdsec-firewall-bouncer poll + apply
+          → nft table ip crowdsec DROP
+
+login    : 200 JWT 160 chars
+alert    : 201 ← decision id 13244
+cscli    : Ip:192.0.2.99 ban origin=secubox-waf 1h
+nft      : 192.0.2.99 in table ip crowdsec (kernel drop)
+```
+
+Round-trip ~12s. Merged in `3eb5378e`. Issue #498 stays open for 7.B/7.C.
+
+### Files added
+
+- `packages/secubox-mitmproxy/addons/secubox_waf.py` — `_ban_via_crowdsec()`,
+  `_cs_jwt()` with 25-min cache, `_load_crowdsec_cfg()`, `ban_ip()` now
+  bridges via HTTP first (fallback to cscli subprocess)
+- `packages/secubox-mitmproxy/bin/secubox-waf-cs-bridge-setup` — idempotent
+  setup : creates socat unit, registers machine via `cscli machines add -f -`,
+  writes config TOML
+- `packages/secubox-mitmproxy/crowdsec/crowdsec.toml.example` — schema doc
+
+### Discoveries / decisions
+
+- LAPI POST /v1/alerts needs WATCHER (JWT) auth, NOT bouncer (X-Api-Key).
+  Bouncers only PULL via /v1/decisions/stream.
+- `cscli machines list -o json` uses key `machineId` not `name`.
+- `cscli machines add` writes to `/etc/crowdsec/local_api_credentials.yaml`
+  by default — conflicts with local agent. Use `-f -` to suppress.
+- Alert envelope requires `leakspeed` (one word, not snake_case).
+- urllib stdlib used instead of httpx (mitm venv lacks httpx, +1ms vs no dep).
+- Socat bridge chosen over changing LAPI `listen_uri` : changing the bind
+  address breaks the local agent + existing bouncer (hard-coded 127.0.0.1
+  in their credentials).
+
+---
+
 ## 2026-06-05 — Phase 6 R3 WIREGUARD : MAJOR RELEASE shipped (ref #496) + WAF leak FIXED
 
 Phase 6 (R3 mode = portable WireGuard tunnel + mitm interception from anywhere)

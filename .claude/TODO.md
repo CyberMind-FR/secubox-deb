@@ -28,14 +28,22 @@
 
 ### 🛡 Phase 7 — WAF active enforcement (issue #498 filée 2026-06-05)
 
-- [ ] **#498 Phase 7.A** quick win : bridge mitm WAF → CrowdSec `/v1/decisions`
-  → nft drop. Estim 2-3 jours. Acceptance : attacker dropped < 30s post-trigger,
-  threat_counts < 200 sous attaque.
-- [ ] **#498 Phase 7.B** mid-term : nft rate-limit pre-mitm + WAF dashboard +
-  honeypot routes pour bot signatures (/wp-admin /.env etc).
+- [x] **#498 Phase 7.A** SHIPPED 2026-06-05 same-day : bridge mitm WAF →
+  CrowdSec `/v1/alerts` (machine JWT auth) → nft drop via existing bouncer.
+  Live verified : login 200, alert 201, cscli decision, nft entry,
+  ~12s round-trip. Merged `3eb5378e`.
+- [ ] **#498 Phase 7.A.2 followups**
+  - [ ] Backport into `packages/secubox-waf/mitmproxy/secubox_waf.py` (older copy)
+  - [ ] `debian/postinst` invokes `secubox-waf-cs-bridge-setup` + bind-mounts
+    config into LXC
+  - [ ] WAF dashboard tab in admin webui : `bans_pushed` counter + recent bans
+  - [ ] Tune `BAN_THRESHOLD` per category (XSS=2, SQLi=1, scanner=5)
+- [ ] **#498 Phase 7.B** mid-term : nft rate-limit pre-mitm (catches TCP-only
+  scanners CrowdSec doesn't see), live attacker top-20 dashboard, honeypot
+  routes for `/wp-admin /.env /.git/config`.
 - [ ] **#498 Phase 7.C** long-term : eBPF/XDP kernel filter + ModSecurity
   remplacement mitm WAF + federation CrowdSec Hub/OTX/Spamhaus.
-- [ ] Roadmap doc : `.claude/PHASE-7-WAF-ROADMAP.md` ✅ (référence ci-dessus)
+- [x] Roadmap doc : `.claude/PHASE-7-WAF-ROADMAP.md` ✅
 
 ### Release pipeline ✅ v2.13.4 APT GREEN + v2.13.12 rpi400 kiosk SALON-READY
 
