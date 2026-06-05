@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS clients (
     ip TEXT,
     state TEXT NOT NULL DEFAULT 'validated',
     score INTEGER NOT NULL DEFAULT 0,
+    level TEXT NOT NULL DEFAULT 'r1',
     first_seen INTEGER NOT NULL,
     last_seen INTEGER NOT NULL
 );
@@ -64,14 +65,36 @@ def record_consent(mac_hash: str, ip: str, ua: str | None, ttl_seconds: int) -> 
         )
 
 
-def upsert_client(mac_hash: str, ip: str) -> None:
+def upsert_client(mac_hash: str, ip: str, level: str = "r1") -> None:
+    """Phase 3 (#492) : level = 'r0' | 'r1' | 'r2' opt-in tier."""
     now = int(time.time())
     with _conn() as c:
+        # Idempotent add of level column (for upgrades from pre-#492 DB)
+        try:
+            c.execute("ALTER TABLE clients ADD COLUMN level TEXT NOT NULL DEFAULT 'r1'")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         c.execute(
-            "INSERT INTO clients(mac_hash, ip, first_seen, last_seen) VALUES (?,?,?,?) "
-            "ON CONFLICT(mac_hash) DO UPDATE SET ip=excluded.ip, last_seen=excluded.last_seen",
-            (mac_hash, ip, now, now),
+            "INSERT INTO clients(mac_hash, ip, level, first_seen, last_seen) "
+            "VALUES (?,?,?,?,?) "
+            "ON CONFLICT(mac_hash) DO UPDATE SET ip=excluded.ip, "
+            "level=excluded.level, last_seen=excluded.last_seen",
+            (mac_hash, ip, level, now, now),
         )
+
+
+def get_client_level(mac_hash: str) -> str:
+    """Returns 'r0' | 'r1' | 'r2'. Default 'r1' if not found."""
+    try:
+        with _conn() as c:
+            row = c.execute(
+                "SELECT level FROM clients WHERE mac_hash=?", (mac_hash,)
+            ).fetchone()
+            if row:
+                return row["level"] or "r1"
+    except Exception:
+        pass
+    return "r1"
 
 
 def add_event(mac_hash: str, source: str, payload: dict) -> None:

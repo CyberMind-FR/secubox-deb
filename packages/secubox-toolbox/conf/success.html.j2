@@ -3,24 +3,67 @@
 <html lang="fr"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ToolBoX Cabine">
 <title>VILLAGE3B — Accès activé</title>
 <style>
-body{font-family:'Courier New',monospace;background:#0a0a0f;color:#00ff55;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:1rem;text-shadow:0 0 6px #00dd44}
-h1{font-size:2rem;margin-bottom:1rem}
-p{color:#006622;margin:0.4rem 0}
-.mac{font-family:monospace;color:#00dd44;text-shadow:0 0 4px #00dd44}
-.actions a{display:inline-block;margin:0.5rem;padding:0.4rem 0.9rem;color:#00ff55;border:1px solid #00dd44;text-decoration:none;font-size:0.85rem}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Courier New',monospace;background:#0a0a0f;color:#00ff55;min-height:100vh;padding:1.5rem;text-shadow:0 0 6px #00dd44}
+.card{max-width:560px;margin:auto;border:1px solid #006622;padding:1.5rem;box-shadow:0 0 20px rgba(0,221,68,0.3)}
+h1{font-size:1.8rem;text-align:center;margin-bottom:0.4rem;color:#00ff55;letter-spacing:0.05em}
+.lvl{display:inline-block;padding:0.35rem 1rem;border-radius:99px;font-size:0.85rem;font-weight:bold;margin:0.5rem auto;text-align:center}
+.lvl-r0{background:#222;color:#888;border:1px solid #444}
+.lvl-r1{background:rgba(0,221,68,0.15);color:#00ff55;border:1px solid #00dd44}
+.lvl-r2{background:rgba(255,179,71,0.15);color:#ffd6a0;border:1px solid #ffb347}
+p{color:#a8b6a8;margin:0.5rem 0;text-align:center;font-size:0.9rem}
+.mac{font-family:monospace;color:#00dd44;font-size:0.75rem;text-shadow:none;opacity:0.7}
+.go-surf{display:block;width:100%;text-align:center;padding:1rem;margin:1.2rem 0;background:linear-gradient(90deg,#00dd44 0%,#00aa33 100%);color:#0a0a0f;font-weight:bold;font-size:1.05rem;text-decoration:none;border-radius:4px;letter-spacing:0.05em;box-shadow:0 0 12px rgba(0,221,68,0.5)}
+.go-surf:hover{box-shadow:0 0 20px rgba(0,221,68,0.8)}
+.subtle{font-size:0.78rem;color:#666;text-align:center;margin:0.8rem 0}
+.actions{display:grid;grid-template-columns:1fr;gap:0.5rem;margin-top:1rem}
+.actions a{display:block;padding:0.6rem 1rem;color:#00ff55;border:1px solid #00dd44;text-decoration:none;font-size:0.88rem;text-align:left}
 .actions a:hover{background:rgba(0,221,68,0.1)}
-</style></head>
-<body><div>
-<h1>✓ Accès activé</h1>
-<p>Tu peux maintenant naviguer.</p>
-<p class="mac">{{ mac_hash }}</p>
-{% if r2_enabled %}<p>Inspection R2 en cours pour analyse compromission.</p>{% endif %}
-<div class="actions">
-  <a href="/report/me/html">📊 Mon analyse live (auto-refresh)</a>
-  <a href="/report/me">📄 Télécharger mon rapport (PDF)</a>
-  <a href="/ca/install-help">📜 Installer le certificat</a>
+.foot{margin-top:1.2rem;font-size:0.7rem;color:#444;text-align:center;border-top:1px solid #222;padding-top:0.7rem}
+</style></head><body>
+<div class="card">
+<h1>✓ ACCÈS ACTIVÉ</h1>
+<div style="text-align:center">
+{% if level == 'r0' %}
+  <span class="lvl lvl-r0">🌐 R0 — Accès simple</span>
+  <p>Tu surfes en mode <b>réseau seul</b>, aucune analyse. Bonne navigation.</p>
+{% elif level == 'r2' %}
+  <span class="lvl lvl-r2">🔍 R2 — Analyse + bandeau</span>
+  <p>Inspection R2 active : <b>bandeau Safari + QUIC drop</b>. Si iCloud/Push lent, repasse en R1.</p>
+{% else %}
+  <span class="lvl lvl-r1">🛡 R1 — Analyse passive</span>
+  <p>Analyse en arrière-plan, <b>aucun impact</b> sur ta navigation. Rapport disponible 24h.</p>
+{% endif %}
 </div>
-<p style="margin-top:1rem;font-size:0.7rem">// VILLAGE3B · Gondwana</p>
+
+{# Phase 3 (#492) : iOS captive-sheet aware. Linking directly to
+   https://duckduckgo.com gets intercepted by iOS captive UI which doesn't
+   navigate. Linking to the Apple captive probe lets iOS verify connectivity
+   and CLOSE the captive sheet automatically — user lands in Safari. #}
+<a href="http://captive.apple.com/hotspot-detect.html"
+   target="_blank" rel="noopener"
+   class="go-surf"
+   onclick="setTimeout(function(){window.location.href='https://duckduckgo.com';}, 500);">
+   🚀 COMMENCE À SURFER
+</a>
+<p style="font-size:0.7rem;color:#444;text-align:center;margin-top:-0.5rem">
+  ↑ ferme la page captive et ouvre Safari · ou utilise ton navigateur directement
+</p>
+
+<p class="subtle">// Hash session : <span class="mac">{{ mac_hash }}</span></p>
+
+<div class="actions">
+  <a href="/report/me/html">📊 Mon analyse live (auto-refresh 15s)</a>
+  <a href="/report/me">📄 Télécharger mon rapport PDF</a>
+  {% if level in ('r1', 'r2') %}
+  <a href="/ca/install-help">📜 Installer le certificat (R2 only)</a>
+  {% endif %}
+  <a href="/ca/webclip-cabine.mobileconfig">📱 Ajouter icône ToolBoX sur écran d'accueil</a>
+</div>
+
+<p class="foot">// VILLAGE3B · Gondwana ToolBoX · CyberMind</p>
 </div></body></html>
