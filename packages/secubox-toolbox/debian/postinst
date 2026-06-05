@@ -46,6 +46,29 @@ case "$1" in
     install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox
     install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/log/secubox
 
+    # 4b. GeoLite2 databases (Phase 2a+ : flag emojis + ASN org)
+    # ASN DB from geoipupdate or Debian package geoip-database
+    # Country DB from db-ip.com CC-BY (no MaxMind account required)
+    install -d -m 0755 /usr/share/GeoIP /var/lib/GeoIP
+    if [ ! -f /usr/share/GeoIP/GeoLite2-Country.mmdb ] && [ ! -f /var/lib/GeoIP/GeoLite2-Country.mmdb ]; then
+      DBIP_DATE=$(date +%Y-%m)
+      DBIP_URL="https://download.db-ip.com/free/dbip-country-lite-${DBIP_DATE}.mmdb.gz"
+      TMPF=$(mktemp --suffix=.mmdb.gz)
+      if command -v wget >/dev/null 2>&1; then
+        if wget -q --timeout=15 --tries=2 "$DBIP_URL" -O "$TMPF" && [ -s "$TMPF" ]; then
+          gunzip -f "$TMPF"
+          TMPF_RAW="${TMPF%.gz}"
+          install -m 0644 "$TMPF_RAW" /usr/share/GeoIP/GeoLite2-Country.mmdb
+          install -m 0644 "$TMPF_RAW" /var/lib/GeoIP/GeoLite2-Country.mmdb
+          rm -f "$TMPF_RAW"
+          echo "[secubox-toolbox] GeoLite2-Country.mmdb installed from db-ip.com CC-BY"
+        else
+          rm -f "$TMPF"
+          echo "[secubox-toolbox] GeoLite2-Country.mmdb download failed (network ?) — flag emojis disabled until manual install"
+        fi
+      fi
+    fi
+
     # 5. systemd : enable mais ne PAS start automatiquement (l'AP doit être configuré d'abord)
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
