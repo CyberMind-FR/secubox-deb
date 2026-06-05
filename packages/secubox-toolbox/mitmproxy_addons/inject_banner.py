@@ -143,6 +143,62 @@ def _level_label(flow) -> str:
     return "R2"
 
 
+# ── Phase 6.G (#496) : cookie + tracker detection ──────────────────
+# Tracker patterns mirror secubox-ad-guard ad_patterns — single source of
+# truth would be _whitelist_mod / a new classifiers module, but for the
+# banner we keep them inline (no extra import, no network calls).
+_TRACKER_PATTERNS = re.compile(
+    r"(?:^|\.)(?:"
+    r"doubleclick|googlesyndication|googleadservices|googletagmanager|"
+    r"google-analytics|googletagservices|"
+    r"facebook\.com/tr|connect\.facebook\.net|facebook\.net|"
+    r"scorecardresearch|chartbeat|hotjar|mixpanel|amplitude|"
+    r"segment\.com|segment\.io|criteo|adnxs|rubiconproject|"
+    r"taboola|outbrain|smartadserver|optimizely|fullstory|"
+    r"newrelic|datadog|sentry|amazon-adsystem|adsrvr|"
+    r"yieldlove|moatads|adservice\.google|adsystem|adserver"
+    r")",
+    re.IGNORECASE,
+)
+# 1st-party host classification : is the page ITSELF on a tracker domain ?
+_TRACKER_HOST_PATTERNS = re.compile(
+    r"^(?:ads?\d*|adserv|adtrack|doubleclick|googleadservices|"
+    r"googlesyndication|pixel|tracking|telemetry|analytics|"
+    r"beacon|metric|stats?\d*)\.",
+    re.IGNORECASE,
+)
+
+
+def _count_cookies(flow: http.HTTPFlow) -> tuple[int, int]:
+    """Returns (set_cookie_count, sent_cookie_count) for this flow."""
+    try:
+        sc = flow.response.headers.get_all("set-cookie") or []
+        rc_raw = flow.request.headers.get_all("cookie") or []
+        sent = 0
+        for h in rc_raw:
+            sent += sum(1 for p in h.split(";") if "=" in p)
+        return (len(sc), sent)
+    except Exception:
+        return (0, 0)
+
+
+def _count_trackers_in_body(body: bytes, cap: int = 200_000) -> int:
+    """Count unique tracker domains referenced in the HTML body. Capped to
+    cap bytes to avoid CPU spike on large pages. Returns 0 on any error."""
+    try:
+        if not body or len(body) == 0:
+            return 0
+        slice_ = body[:cap]
+        try:
+            text = slice_.decode("utf-8", errors="ignore")
+        except Exception:
+            text = slice_.decode("latin-1", errors="ignore")
+        matches = set(_TRACKER_PATTERNS.findall(text.lower()))
+        return len(matches)
+    except Exception:
+        return 0
+
+
 def _compute_site_context(flow: http.HTTPFlow) -> dict:
     """Compute per-site signals for the dynamic right-side of the banner."""
     host = (flow.request.host or "").lower()
@@ -157,7 +213,21 @@ def _compute_site_context(flow: http.HTTPFlow) -> dict:
         "asn": "",
         "status": "inspected",
         "status_icon": "🔍",
+        "cookies_set": 0,
+        "cookies_sent": 0,
+        "trackers": 0,
+        "is_tracker_host": False,
     }
+
+    # Cookies (cheap : just header counts, name-less for privacy)
+    set_n, sent_n = _count_cookies(flow)
+    ctx["cookies_set"] = set_n
+    ctx["cookies_sent"] = sent_n
+
+    # Trackers : 1st-party host check + body scan
+    ctx["is_tracker_host"] = bool(_TRACKER_HOST_PATTERNS.match(host))
+    if flow.response and flow.response.content:
+        ctx["trackers"] = _count_trackers_in_body(flow.response.content)
     if not _HAS_CLASSIFIERS:
         return ctx
 
@@ -272,6 +342,23 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
         right_parts.append(_ncr(ctx["flag"]))
     if ctx["app_emoji"] and ctx["app"]:
         right_parts.append(f"{_ncr(ctx['app_emoji'])} {_ncr(ctx['app'])}")
+    # Phase 6.G : cookies + trackers (privacy signals)
+    cookies_set = ctx.get("cookies_set", 0)
+    cookies_sent = ctx.get("cookies_sent", 0)
+    trackers = ctx.get("trackers", 0)
+    is_tracker = ctx.get("is_tracker_host", False)
+    cookie_total = cookies_set + cookies_sent
+    if cookie_total > 0:
+        # 🍪 N (set+sent) — colored if many
+        cookie_emoji = "&#x1F36A;"  # 🍪
+        right_parts.append(f"{cookie_emoji} {cookie_total}")
+    if trackers > 0 or is_tracker:
+        # 🎯 N trackers in body, or ⚠ if 1st-party host is itself a tracker
+        if is_tracker:
+            right_parts.append("&#x26A0; tracker-host")  # ⚠
+        else:
+            target_emoji = "&#x1F3AF;"  # 🎯
+            right_parts.append(f"{target_emoji} {trackers}")
     if ctx["asn"]:
         right_parts.append(_ncr(ctx["asn"]))
     right_text = " &#xB7; ".join(right_parts)  # middle dot · = &#xB7;
