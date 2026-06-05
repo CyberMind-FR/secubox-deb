@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from mitmproxy import http
 
-from _common import fire_forget_post, mac_of, queue_async
+from _common import fire_forget_post, mac_hash_of, queue_async
 
 TARGET = "http+unix:///run/secubox/dpi.sock/classify"
 
@@ -18,7 +18,7 @@ class DPIRelay:
         payload = {
             "ts_ms": int(flow.timestamp_start * 1000),
             "client_ip": client_ip,
-            "client_mac": mac_of(client_ip) if client_ip else None,
+            "client_mac_hash": mac_hash_of(client_ip),
             "host": host,
             "scheme": flow.request.scheme,
             "method": flow.request.method,

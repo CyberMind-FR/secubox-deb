@@ -415,7 +415,60 @@ def _aggregate_session(mac_hash: str) -> dict:
         "geo_top_hosts": _enrich_top_dpi_with_geo(top_dpi),
         "avatar_analysis": avatar_analysis.analyze_user_agents(user_agents),
         "cookies_providers": cookie_analysis.top_providers(cookies_urls, limit=10),
+        # ── Phase 2b (#488) : pull events from receiving modules ──
+        "mitm_modules": _pull_mitm_module_events(mac_hash),
     }
+
+
+# ── Phase 2b (#488) : cross-module mitm events pull ──
+
+_MITM_MODULES = [
+    ("dpi", "/run/secubox/dpi.sock"),
+    ("cookies", "/run/secubox/cookies.sock"),
+    ("avatar", "/run/secubox/avatar.sock"),
+    ("soc", "/run/secubox/soc.sock"),
+    ("threat-analyst", "/run/secubox/threat-analyst.sock"),
+]
+
+
+def _pull_mitm_module_events(mac_hash: str) -> dict:
+    """Query each receiving module's GET /mitm-events for this client.
+
+    Returns a dict {module: {count, sample_events}} for the report. Errors per
+    module are non-fatal — if a module is down, it just shows count=0.
+    """
+    import socket as _sock
+    import urllib.parse as _up
+    import http.client as _hc
+
+    out: dict[str, dict] = {}
+    for kind, sock_path in _MITM_MODULES:
+        try:
+            class UDSConnection(_hc.HTTPConnection):
+                def connect(self):
+                    self.sock = _sock.socket(_sock.AF_UNIX, _sock.SOCK_STREAM)
+                    self.sock.settimeout(self.timeout)
+                    self.sock.connect(sock_path)
+
+            conn = UDSConnection("localhost", timeout=2)
+            qs = _up.urlencode({"mac_hash": mac_hash, "limit": 20})
+            conn.request("GET", f"/mitm-events?{qs}")
+            resp = conn.getresponse()
+            if resp.status == 200:
+                import json as _json
+                data = _json.loads(resp.read().decode("utf-8", errors="ignore")[:50000])
+                out[kind] = {
+                    "count": data.get("count", 0),
+                    "sample": data.get("events", [])[:5],
+                }
+            else:
+                out[kind] = {"count": 0, "error": f"HTTP {resp.status}"}
+            conn.close()
+        except FileNotFoundError:
+            out[kind] = {"count": 0, "error": "socket-missing"}
+        except Exception as e:
+            out[kind] = {"count": 0, "error": str(e)[:60]}
+    return out
 
 
 def _enrich_with_geo(matches: list[dict]) -> list[dict]:

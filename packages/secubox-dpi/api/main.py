@@ -23,6 +23,15 @@ import httpx
 
 app = FastAPI(title="secubox-dpi", version="2.0.0", root_path="/api/v1/dpi")
 
+# Phase 2b (#488) : ingest mitm DPI events from secubox-toolbox addon
+from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+mount_ingest_routes(
+    app,
+    endpoint_path="/classify",
+    db_path="/var/lib/secubox/dpi/mitm-ingest.db",
+    kind="dpi",
+)
+
 # ══════════════════════════════════════════════════════════════════
 # Health Check Endpoint (public, no auth)
 # ══════════════════════════════════════════════════════════════════
