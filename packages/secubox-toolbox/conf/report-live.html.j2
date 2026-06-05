@@ -522,7 +522,8 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
 </div>
 
 <div class="actions">
-  <a href="/report/me">⬇ Télécharger PDF</a>
+  {# Phase 6 (#496) : pass mh= so R3 WG clients can download from kbin too #}
+  <a href="/report/me?mh={{ mac_hash }}">⬇ Télécharger PDF</a>
   <a href="/">↩ Retour splash</a>
   <a href="/status">📊 Statut JSON</a>
 </div>

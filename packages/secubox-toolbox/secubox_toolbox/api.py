@@ -1484,13 +1484,21 @@ async def report_me_html(request: Request) -> HTMLResponse:
 
 @router.get("/report/me")
 async def report_me(request: Request) -> Response:
-    """Generate + serve PDF report for the CURRENT requesting client (no token —
-    derives mac from IP→ARP). Convenience endpoint linked from the success page."""
-    ip, mac = _resolve(request)
-    if not mac:
-        raise HTTPException(400, "client MAC unknown (not in captive subnet?)")
-    salt = _get_salt()
-    mac_hash = macmod.hash_mac(mac, salt)
+    """Generate + serve PDF report for the CURRENT requesting client.
+
+    Phase 6 (#496) : same ?mh=<hash> bypass as /report/me/html — R3 WG
+    clients (no captive ARP entry) and remote viewers via kbin can
+    download their PDF report.
+    """
+    mh_qp = (request.query_params.get("mh") or "").strip().lower()
+    if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
+        mac_hash = mh_qp
+    else:
+        ip, mac = _resolve(request)
+        if not mac:
+            raise HTTPException(400, "client MAC unknown (not in captive subnet?) — use ?mh=<hash>")
+        salt = _get_salt()
+        mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
     pdf_bytes = reports.render_pdf(data)
