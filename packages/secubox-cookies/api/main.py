@@ -28,6 +28,15 @@ except ImportError:
 
 app = FastAPI(title="SecuBox Cookies API", version="1.0.0")
 
+# Phase 2b (#488) : ingest mitm cookies events from secubox-toolbox addon
+from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+mount_ingest_routes(
+    app,
+    endpoint_path="/inject",
+    db_path="/var/lib/secubox/cookies/mitm-ingest.db",
+    kind="cookies",
+)
+
 # Configuration paths
 CONFIG_FILE = Path("/etc/secubox/cookies.json")
 DATA_DIR = Path("/var/lib/secubox/cookies")

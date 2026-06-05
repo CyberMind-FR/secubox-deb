@@ -26,6 +26,15 @@ from secubox_core.logger import get_logger
 
 app = FastAPI(title="secubox-avatar", version="1.0.0", root_path="/api/v1/avatar")
 
+# Phase 2b (#488) : ingest mitm avatar fingerprint events from secubox-toolbox addon
+from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+mount_ingest_routes(
+    app,
+    endpoint_path="/fingerprint",
+    db_path="/var/lib/secubox/avatar/mitm-ingest.db",
+    kind="avatar",
+)
+
 # ══════════════════════════════════════════════════════════════════
 # Health Check Endpoint (public, no auth)
 # ══════════════════════════════════════════════════════════════════
