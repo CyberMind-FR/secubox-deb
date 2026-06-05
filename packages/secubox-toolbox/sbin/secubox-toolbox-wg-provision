@@ -96,7 +96,9 @@ if [ ! -f "$CA_WG_DIR/mitmproxy-ca.pem" ]; then
     log "generating dedicated WG CA (full DN, 10y)"
     cd "$CA_WG_DIR"
 
-    # OpenSSL config — full DN, CA extensions, SKI/AKI
+    # OpenSSL config — minimal DN, NO SAN (Android Settings parser chokes
+    # on SAN with spaces — shows "émis par null" in install dialog).
+    # Classic RFC 5280 X.509v3 root, sha256, pathlen 0.
     cat > _ca.cnf <<'CNF'
 [req]
 distinguished_name = dn
@@ -105,23 +107,19 @@ x509_extensions    = v3_ca
 
 [dn]
 C  = FR
-ST = Auvergne-Rhone-Alpes
-L  = Notre-Dame-du-Cruet
 O  = CyberMind Gondwana
-OU = ToolBoX R3 WireGuard
 CN = Gondwana ToolBoX R3 CA
 
 [v3_ca]
-basicConstraints       = critical, CA:TRUE
+basicConstraints       = critical, CA:TRUE, pathlen:0
 keyUsage               = critical, keyCertSign, cRLSign
 subjectKeyIdentifier   = hash
 authorityKeyIdentifier = keyid:always
-subjectAltName         = DNS:Gondwana ToolBoX R3 CA, DNS:cabine.gondwana.local
 CNF
 
     openssl genrsa -out _key.pem 2048 2>/dev/null
     openssl req -new -x509 -days 3650 -key _key.pem -out _cert.pem \
-        -config _ca.cnf 2>/dev/null
+        -config _ca.cnf -sha256 2>/dev/null
 
     # Combined key+cert for mitm (mitmproxy-ca.pem)
     cat _key.pem _cert.pem > mitmproxy-ca.pem
