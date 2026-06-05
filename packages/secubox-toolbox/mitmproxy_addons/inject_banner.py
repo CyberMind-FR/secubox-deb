@@ -306,11 +306,19 @@ except Exception:
 
 
 def _client_level(flow) -> str:
-    """Returns 'r0' | 'r1' | 'r2'. Defaults 'r1' if lookup fails."""
-    if not _HAS_LEVEL:
-        return "r1"
+    """Returns 'r0' | 'r1' | 'r2' | 'r3'. Defaults 'r1' if lookup fails.
+
+    Phase 6 (#496) : a peer arriving via the wg-toolbox tunnel (source IP in
+    10.99.1.0/24) is by construction R3 — the only way to be on that subnet
+    is to have downloaded a WG profile via /wg/profile/new AND installed our
+    dedicated CA. The tunnel + cert install IS the R3 opt-in signal.
+    """
     try:
         ip = flow.client_conn.peername[0] if flow.client_conn.peername else None
+        if ip and ip.startswith("10.99.1."):
+            return "r3"
+        if not _HAS_LEVEL:
+            return "r1"
         mh = mac_hash_of(ip)
         if mh:
             return _store_mod.get_client_level(mh)
@@ -328,8 +336,9 @@ class InjectBanner:
             return
         if flow.response.status_code < 200 or flow.response.status_code >= 400:
             return
-        # Phase 3 (#492) : skip if client opted into R0/R1 only
-        if _client_level(flow) != "r2":
+        # Phase 3 (#492) + Phase 6 (#496) : banner fires for R2 (captive opt-in)
+        # AND R3 (portable WG opt-in). R0/R1 stay banner-free.
+        if _client_level(flow) not in ("r2", "r3"):
             return
         body = flow.response.content
         if body is None or _GUARD in body:
