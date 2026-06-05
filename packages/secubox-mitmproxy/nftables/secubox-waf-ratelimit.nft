@@ -1,0 +1,57 @@
+# Phase 7.B (#498) — pre-mitm TCP rate-limit on public-facing ports.
+#
+# Catches : TCP-only scanners (slowloris, RST-flood, syn-scan), bot armies
+# that throttle below CrowdSec http-probing detection threshold, and the
+# "1500 sockets but 0 HTTP req" pattern we observed on 134.195.158.62 +
+# .157.224 on 2026-06-05 (live incident, logged in HISTORY.md).
+#
+# Mechanism : dynamic nft set with timeout 5m. IPs that exceed 30 new TCP
+# connections per second on port 80/443 get added → connection refused
+# (kernel-level) for 5 minutes. After 5 min without offending, entry
+# expires and the IP is welcome again.
+#
+# This rule lives in its own table so it can be deployed independently
+# of the main SecuBox firewall. Order : inserts at top of input hook
+# (priority -10, before main filter).
+#
+# Tune RATE_LIMIT (default 30/second burst 50) for your traffic profile.
+# Real browsers stay well under 5 conn/s per IP.
+
+table inet secubox_waf_ratelimit {
+    # Bots over the threshold are added here. Timeout 5m = self-healing.
+    set offenders_v4 {
+        type ipv4_addr
+        flags timeout
+        size 65535
+    }
+    set offenders_v6 {
+        type ipv6_addr
+        flags timeout
+        size 65535
+    }
+
+    # Whitelist : LAN, loopback, LXC bridges
+    set whitelist_v4 {
+        type ipv4_addr
+        flags interval
+        elements = { 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }
+    }
+
+    chain input {
+        type filter hook input priority -10; policy accept;
+
+        # Skip whitelist (LAN, loopback)
+        ip saddr @whitelist_v4 accept
+
+        # Drop active offenders fast (no further matching)
+        ip saddr @offenders_v4 counter drop
+        ip6 saddr @offenders_v6 counter drop
+
+        # Rate-limit only on TCP SYN to 80/443 (new public conn attempts)
+        # nft 'limit rate over X' syntax matches packets exceeding the rate.
+        tcp flags syn tcp dport { 80, 443 } \
+            limit rate over 30/second burst 50 packets \
+            add @offenders_v4 { ip saddr timeout 5m } \
+            log prefix "[secubox-rl] " level info counter drop
+    }
+}

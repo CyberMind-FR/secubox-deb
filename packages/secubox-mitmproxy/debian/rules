@@ -28,3 +28,12 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/logrotate.d
 	install -m 644 debian/cookie-audit.logrotate \
 	  $(CURDIR)/debian/secubox-mitmproxy/etc/logrotate.d/secubox-cookie-audit
+	# Phase 7.A/B (#498) : WAF → CrowdSec bridge + rate-limit + honeypot
+	install -m 755 bin/secubox-waf-cs-bridge-setup \
+	  $(CURDIR)/debian/secubox-mitmproxy/usr/sbin/
+	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/nftables
+	install -m 644 nftables/secubox-waf-ratelimit.nft \
+	  $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/nftables/
+	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/nginx
+	install -m 644 nginx/honeypot.conf \
+	  $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/nginx/
