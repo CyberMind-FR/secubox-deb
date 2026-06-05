@@ -39,6 +39,54 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     {% if mac_hash and mac_hash != '??' %}<br>Ton appareil (anonymisé) : <b>{{ mac_hash }}</b>{% endif %}
   </div>
 
+  {# Phase 3 (#492) : cert chain auto-check. JS probes mitm response to a known
+     HTTPS endpoint. Result mapped to a colored badge. Helps user verify R2
+     readiness BEFORE selecting it. #}
+  <div id="cert-status" class="info" style="margin-top:0.5rem;font-size:0.78rem">
+    <span id="cert-emoji">⏳</span>
+    <span id="cert-text">Vérification certificat racine ToolBoX...</span>
+    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">
+      Empreinte attendue : <code id="cert-fp"></code>
+    </div>
+  </div>
+  <script>
+  (function(){
+    var fpEl = document.getElementById('cert-fp');
+    var emEl = document.getElementById('cert-emoji');
+    var txEl = document.getElementById('cert-text');
+    var statusEl = document.getElementById('cert-status');
+    // Get the CA fingerprint for display
+    fetch('/ca/fingerprint').then(function(r){return r.json();}).then(function(d){
+      fpEl.textContent = (d.sha1 || d.sha256 || '?').substring(0, 47);
+    }).catch(function(){fpEl.textContent = '?';});
+    // Probe a HTTPS endpoint that the iPhone would reach via mitm if CA installed.
+    // We use a simple image fetch ; onload = success, onerror = TLS failure.
+    var probe = new Image();
+    probe.onload = function(){
+      emEl.textContent = '🟢';
+      txEl.innerHTML = '<b>Certificat installé</b> — R2 prêt à fonctionner.';
+      statusEl.style.borderLeftColor = 'var(--phos)';
+      statusEl.style.background = 'rgba(0,221,68,0.08)';
+    };
+    probe.onerror = function(){
+      emEl.textContent = '🔴';
+      txEl.innerHTML = '<b>Certificat NON installé</b> — <a href="/ca/install-help" style="color:var(--amber)">installer le profil</a> avant de choisir R2.';
+      statusEl.style.borderLeftColor = 'var(--amber)';
+      statusEl.style.background = 'rgba(255,179,71,0.08)';
+    };
+    // Cache-bust + cross-domain (any HTTPS works as a probe — the success
+    // proves CA validates the cert mitmproxy generated for that domain)
+    probe.src = 'https://www.google.com/favicon.ico?t=' + Date.now();
+    // Fallback timeout : if no resolution in 3s, mark unknown
+    setTimeout(function(){
+      if (emEl.textContent === '⏳') {
+        emEl.textContent = '❔';
+        txEl.innerHTML = 'Statut indéterminé — <a href="/ca/install-help" style="color:var(--phos)">vérifier l\'installation du certificat</a>';
+      }
+    }, 3000);
+  })();
+  </script>
+
   <p class="choose-label">👇 Choisis ton niveau d'analyse :</p>
 
   <form method="POST" action="/accept" style="display:flex;flex-direction:column;gap:0.6rem">
