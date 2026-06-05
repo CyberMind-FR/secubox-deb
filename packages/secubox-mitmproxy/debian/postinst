@@ -40,6 +40,56 @@ case "$1" in
         /etc/crowdsec/acquis.d/ 2>/dev/null || true
     fi
 
+    # Phase 7.A (#498) : WAF → CrowdSec HTTP bridge auto-setup.
+    # Runs the setup script if cscli is present. Idempotent (re-creates
+    # bouncer machine + config) — safe to re-run on package upgrade.
+    if command -v cscli >/dev/null 2>&1 && \
+       [ -x /usr/sbin/secubox-waf-cs-bridge-setup ]; then
+        echo "secubox-mitmproxy: configuring WAF → CrowdSec bridge (Phase 7.A)"
+        if /usr/sbin/secubox-waf-cs-bridge-setup >/tmp/cs-bridge-setup.log 2>&1; then
+            install -d -m 0750 /etc/secubox/waf
+            install -m 0640 /tmp/crowdsec.toml /etc/secubox/waf/crowdsec.toml
+            # If running with the mitmproxy LXC, also bind into it
+            if [ -d /var/lib/lxc/mitmproxy/rootfs ]; then
+                mkdir -p /var/lib/lxc/mitmproxy/rootfs/etc/secubox/waf
+                install -m 0644 /tmp/crowdsec.toml \
+                    /var/lib/lxc/mitmproxy/rootfs/etc/secubox/waf/crowdsec.toml
+            fi
+            rm -f /tmp/crowdsec.toml
+            echo "secubox-mitmproxy: WAF → CrowdSec bridge ready"
+        else
+            echo "secubox-mitmproxy: WARN — cs-bridge setup failed, see /tmp/cs-bridge-setup.log"
+        fi
+    fi
+
+    # Phase 7.B (#498) : nft rate-limit pre-mitm.
+    # Loads a standalone nft table that drops slowloris/scanner sources
+    # exceeding 30 conn/s on TCP 80/443. Self-healing : 5-min timeout.
+    if command -v nft >/dev/null 2>&1; then
+        if [ -f /usr/share/secubox/mitmproxy/nftables/secubox-waf-ratelimit.nft ]; then
+            if nft -f /usr/share/secubox/mitmproxy/nftables/secubox-waf-ratelimit.nft 2>/dev/null; then
+                echo "secubox-mitmproxy: WAF rate-limit nft table loaded"
+            else
+                echo "secubox-mitmproxy: WARN — failed to load rate-limit nft table"
+            fi
+        fi
+    fi
+
+    # Phase 7.B (#498) : honeypot nginx routes for known bot signatures.
+    # Returns empty 200s to common probes (/wp-admin /.env /.git ...) and
+    # logs to /var/log/nginx/honeypot.log for offline analysis.
+    if [ -d /etc/nginx/secubox-routes.d ]; then
+        install -m 644 /usr/share/secubox/mitmproxy/nginx/honeypot.conf \
+            /etc/nginx/secubox-routes.d/ 2>/dev/null || true
+        # Add log_format secubox_honeypot at http block level if not present
+        if [ ! -f /etc/nginx/conf.d/secubox-honeypot-log.conf ]; then
+            cat > /etc/nginx/conf.d/secubox-honeypot-log.conf <<'EOF'
+# Phase 7.B (#498) : honeypot log format
+log_format secubox_honeypot '$time_iso8601 $remote_addr "$request" "$http_user_agent" "$http_referer"';
+EOF
+        fi
+    fi
+
     # Enable and start service
     systemctl daemon-reload
     systemctl enable secubox-mitmproxy.service
