@@ -29,7 +29,14 @@ table inet toolbox {
 
     chain prerouting_nat {
         type nat hook prerouting priority dstnat;
-        # Captive portal pour MAC non validées (HTTP/HTTPS hijacked vers splash :8088)
+        # Règle 1 (priorité haute) : tout trafic destiné à l'IP du portail
+        # (http://village3b résout vers {{ dhcp.gateway }}) → portail direct.
+        # Bypass mitmproxy : le portail est HTTP only, pas besoin de TLS-break.
+        ip daddr {{ dhcp.gateway }} tcp dport 80 dnat ip to {{ dhcp.gateway }}:{{ portal.listen_port }}
+        # Règle 2 : MAC R2-consented → MITM transparent (sauf pour le portail lui-même).
+        iifname "{{ ap.iface }}" ether saddr @consented_r2_macs ip daddr != {{ dhcp.gateway }} tcp dport { 80, 443 } \
+            dnat ip to {{ dhcp.gateway }}:8080
+        # Règle 3 : MAC non validées → captive portal (HTTP/HTTPS hijacked vers splash :8088).
         iifname "{{ ap.iface }}" ether saddr != @validated_macs tcp dport { 80, 443 } \
             dnat ip to {{ dhcp.gateway }}:{{ portal.listen_port }}
     }
