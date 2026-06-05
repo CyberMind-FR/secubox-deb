@@ -823,12 +823,28 @@ async def qr_webclip(request: Request) -> Response:
 @router.get("/wg/profile/new")
 async def wg_profile_new(request: Request) -> Response:
     """Generate a fresh WG profile for this client. Returns .conf content
-    suitable for direct import in WireGuard app (iOS + macOS + Linux)."""
+    suitable for direct import in WireGuard app (iOS + macOS + Linux).
+
+    Phase 6.H (#496) : also registers the new peer in store.clients
+    with level=r3 so reports, level lookups, and admin webui all show
+    the WG client correctly (otherwise mac_hash is unknown to DB).
+    """
     try:
         from . import wg as _wg
     except ImportError:
         raise HTTPException(503, "WG module not available (Phase 6 not provisioned)")
     profile = _wg.generate_client_profile(client_label=request.headers.get("user-agent", "")[:60])
+
+    # Register the freshly generated peer in the clients table so all
+    # downstream consumers (store.get_client_level, _aggregate_session,
+    # /admin/clients/rich) know about it. mac_hash = sha256(pubkey)[:16].
+    import hashlib as _h
+    wg_hash = _h.sha256(profile["client_pubkey"].encode()).hexdigest()[:16]
+    try:
+        store.upsert_client(wg_hash, profile["client_ip"], level="r3")
+    except Exception as e:
+        logger.warning("wg peer upsert failed for %s: %s", wg_hash, e)
+
     return Response(
         content=profile["conf_text"],
         media_type="text/plain; charset=utf-8",
@@ -836,6 +852,7 @@ async def wg_profile_new(request: Request) -> Response:
             "Content-Disposition": "attachment; filename=village3b-toolbox.conf",
             "X-Client-PubKey": profile["client_pubkey"],
             "X-Client-IP": profile["client_ip"],
+            "X-Client-Hash": wg_hash,
         },
     )
 
