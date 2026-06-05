@@ -42,7 +42,102 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
 <h1>📡 GONDWANA TOOLBOX</h1>
 <p class="sub">// Rapport live — Cabine numérique VILLAGE3B</p>
 
-{# Phase 3 (#492) : welcome / switch confirmation banner #}
+{# Phase 3 (#492) : hero widgets — same shape as PDF #}
+{% set m = metrics or {} %}
+{% set sc = risk_score or 0 %}
+{% set rl = risk_label or 'LOW' %}
+<div class="card" style="background:linear-gradient(135deg,rgba(0,221,68,0.08),rgba(110,64,201,0.05));border-color:var(--phos)">
+  <h2 style="display:flex;justify-content:space-between;align-items:center">
+    📊 Ta session VILLAGE3B
+    <span style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:99px;
+      background:{% if sc < 30 %}#00cc44{% elif sc < 70 %}#ffb347{% else %}#ff4466{% endif %};
+      color:#0a0a0f;font-weight:bold">
+      {% if sc < 30 %}🟢{% elif sc < 70 %}🟡{% else %}🔴{% endif %} {{ rl }} {{ sc }}/100
+    </span>
+  </h2>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.8rem">
+    {% for emoji, val, lbl in [
+      ('🌐', m.connections|default(0), 'connexions'),
+      ('📡', m.unique_hosts|default(0), 'hôtes uniques'),
+      ('✅', m.successful|default(0), 'OK 2xx/3xx'),
+      ('🔒', m.tls_pinned|default(0), 'cert-pinning')
+    ] %}
+    <div style="padding:0.6rem;background:rgba(0,0,0,0.3);border-radius:4px;text-align:center">
+      <div style="font-size:1.2rem">{{ emoji }}</div>
+      <div style="font-size:1.3rem;font-weight:bold;color:var(--phos-hot);text-shadow:0 0 4px var(--phos)">{{ val }}</div>
+      <div style="font-size:0.65rem;color:var(--dim)">{{ lbl }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.5rem">
+    {% set dpi_cls = dpi_classified or {} %}
+    {% set cookies_p = cookies_providers or [] %}
+    {% set geo_h = geo_top_hosts or [] %}
+    {% set n_apps = (dpi_cls.top_apps|default([])|selectattr('app','ne','?')|list|length) %}
+    {% set n_trackers = (cookies_p|map(attribute='count')|sum) %}
+    {% set countries = geo_h|map(attribute='country')|reject('equalto','')|list %}
+    {% set n_countries = countries|unique|list|length %}
+    <div style="padding:0.6rem;background:rgba(25,25,45,0.5);border-radius:4px;text-align:center">
+      <div style="font-size:1.2rem">📺</div>
+      <div style="font-size:1.3rem;font-weight:bold;color:#9e76ff">{{ n_apps }}</div>
+      <div style="font-size:0.65rem;color:var(--dim)">apps détectées</div>
+    </div>
+    <div style="padding:0.6rem;background:rgba(45,25,35,0.5);border-radius:4px;text-align:center">
+      <div style="font-size:1.2rem">🍪</div>
+      <div style="font-size:1.3rem;font-weight:bold;color:#ff8866">{{ n_trackers }}</div>
+      <div style="font-size:0.65rem;color:var(--dim)">trackers</div>
+    </div>
+    <div style="padding:0.6rem;background:rgba(25,40,35,0.5);border-radius:4px;text-align:center">
+      <div style="font-size:1.2rem">🌍</div>
+      <div style="font-size:1.3rem;font-weight:bold;color:#66bbff">{{ n_countries }}</div>
+      <div style="font-size:0.65rem;color:var(--dim)">pays/ASN</div>
+    </div>
+    <div style="padding:0.6rem;background:rgba(60,50,15,0.5);border-radius:4px;text-align:center">
+      <div style="font-size:1.2rem">{% if sc < 30 %}🟢{% elif sc < 70 %}🟡{% else %}🔴{% endif %}</div>
+      <div style="font-size:1.3rem;font-weight:bold;color:{% if sc < 30 %}var(--phos-hot){% elif sc < 70 %}#ffb347{% else %}#ff4466{% endif %}">{{ sc }}</div>
+      <div style="font-size:0.65rem;color:var(--dim)">risque /100</div>
+    </div>
+  </div>
+  {# Top device + app + ASN line #}
+  {% set avatar = avatar_analysis or {} %}
+  {% set top_dev = avatar.most_common or '?' %}
+  {% set top_dev_emj = avatar.most_common_emoji or '' %}
+  {% set top_app = (dpi_cls.top_apps and dpi_cls.top_apps[0]) or {} %}
+  {% set top_geo = (geo_h and geo_h[0]) or {} %}
+  <p style="font-size:0.78rem;color:var(--dim);margin-top:0.6rem;text-align:center;padding-top:0.5rem;border-top:1px solid var(--dim)">
+    Top device : {{ top_dev_emj }} {{ top_dev }} ·
+    Top app : {{ top_app.emoji|default('') }} {{ top_app.app|default('?') }} ·
+    Top ASN : {{ top_geo.flag|default('') }} {{ top_geo.asn_org|default('?')[:30] }}
+  </p>
+</div>
+
+{# Phase 3 (#492) : filtering compromissions visibility #}
+{% set t = transparency|default({}) %}
+{% set sens = t.get('sensitivity') %}
+<div class="card" style="background:rgba(255,68,102,0.06);border-color:var(--red)">
+  <h2 style="color:var(--red)">🚨 Filtering compromissions actif</h2>
+  <div class="kv" style="font-size:0.82rem">
+    <span class="k">Sensibilité actuelle</span>
+    <span class="v">{{ sens.label|default('—') if sens else '—' }}</span>
+    <span class="k">Description</span>
+    <span class="v" style="font-size:0.75rem">{{ sens.description|default('Engine pas chargé')[:90] if sens else 'Engine pas chargé' }}</span>
+    <span class="k">🔍 Threat-intel feeds</span>
+    <span class="v">{{ (threat_intel_matches|default([]))|length }} matches actifs</span>
+    <span class="k">🎲 DGA candidates</span>
+    <span class="v">{{ (dga_candidates|default([]))|length }} hôtes suspects</span>
+    <span class="k">📡 Beaconing patterns</span>
+    <span class="v">{{ (beaconing_candidates|default([]))|length }} détectés</span>
+    <span class="k">🚫 Connexions bloquées</span>
+    <span class="v">{{ t.get('attempts', {}).get('blocked', 0) }} <span style="font-size:0.7rem;color:var(--dim)">(Phase 4 : observation only)</span></span>
+  </div>
+  <p style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem;font-style:italic">
+    Le moteur détecte mais ne bloque pas encore — passive transparency. La règle engine
+    décidera blocage actif quand R3 / Phase 4 sera wired.
+  </p>
+</div>
+
+{# Phase 3 (#492) : welcome / switch confirmation banner — uses server-side
+   current_level (NOT request_args.level which is stale after refresh). #}
 {% if request_args and (request_args.get('welcome') or request_args.get('switched')) %}
 <div class="card" style="background:rgba(0,221,68,0.08);border-color:var(--phos)">
   <h2 style="color:var(--phos-hot)">
@@ -51,9 +146,8 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
   <p style="font-size:0.85rem">
     Tu es maintenant en mode
     <b style="color:var(--phos-hot)">
-      {% set lvl = request_args.get('level', 'r1') %}
-      {% if lvl == 'r0' %}🌐 R0 — Accès simple (aucune analyse)
-      {% elif lvl == 'r2' %}🔍 R2 — Analyse + bandeau Safari
+      {% if current_level == 'r0' %}🌐 R0 — Bypass complet (aucune analyse)
+      {% elif current_level == 'r2' %}🔍 R2 — Analyse + bandeau Safari
       {% else %}🛡 R1 — Analyse passive recommandée{% endif %}
     </b>.
     Tu peux maintenant <a href="http://captive.apple.com/hotspot-detect.html" target="_blank" style="color:var(--phos-hot);text-decoration:underline">surfer normalement</a> — ce rapport se met à jour toutes les 15s.
@@ -61,24 +155,46 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
 </div>
 {% endif %}
 
-{# Phase 3 (#492) : level switcher — user can change opt-in level anytime #}
+{# Phase 3 (#492) : level switcher with active highlight from server-side
+   current_level. Disables button if user clicks their own level (no-op). #}
 <div class="card">
   <h2>🔀 Mon niveau d'opt-in</h2>
-  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.6rem">
-    Tu peux changer de niveau à tout moment. R2 inspecte plus mais peut casser des apps.
+  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">
+    📍 Tu es actuellement en
+    <b style="color:{% if current_level == 'r0' %}var(--text){% elif current_level == 'r2' %}#ffd6a0{% else %}var(--phos-hot){% endif %}">
+      {% if current_level == 'r0' %}🌐 R0 — Bypass complet
+      {% elif current_level == 'r2' %}🔍 R2 — Analyse + bandeau
+      {% else %}🛡 R1 — Analyse passive{% endif %}
+    </b>
+    · clique sur un autre niveau pour switcher
   </p>
   <form method="POST" action="/change-level" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.4rem">
     <button type="submit" name="level" value="r0"
-      style="padding:0.5rem;background:transparent;color:var(--text);border:1px solid var(--dim);cursor:pointer;font-family:inherit;font-size:0.85rem">
-      🌐 R0
+      style="padding:0.5rem;cursor:pointer;font-family:inherit;font-size:0.85rem;
+        {% if current_level == 'r0' %}
+          background:rgba(255,255,255,0.08);color:var(--text);border:2px solid var(--text);font-weight:bold;
+        {% else %}
+          background:transparent;color:var(--text);border:1px solid var(--dim);
+        {% endif %}">
+      {% if current_level == 'r0' %}✓ {% endif %}🌐 R0
     </button>
     <button type="submit" name="level" value="r1"
-      style="padding:0.5rem;background:rgba(0,221,68,0.1);color:var(--phos-hot);border:1px solid var(--phos);cursor:pointer;font-family:inherit;font-size:0.85rem;font-weight:bold">
-      🛡 R1
+      style="padding:0.5rem;cursor:pointer;font-family:inherit;font-size:0.85rem;
+        {% if current_level == 'r1' %}
+          background:rgba(0,221,68,0.25);color:var(--phos-hot);border:2px solid var(--phos);font-weight:bold;
+        {% else %}
+          background:transparent;color:var(--phos);border:1px solid var(--dim);
+        {% endif %}">
+      {% if current_level == 'r1' %}✓ {% endif %}🛡 R1
     </button>
     <button type="submit" name="level" value="r2"
-      style="padding:0.5rem;background:transparent;color:#ffd6a0;border:1px solid #ffb347;cursor:pointer;font-family:inherit;font-size:0.85rem">
-      🔍 R2
+      style="padding:0.5rem;cursor:pointer;font-family:inherit;font-size:0.85rem;
+        {% if current_level == 'r2' %}
+          background:rgba(255,179,71,0.25);color:#ffd6a0;border:2px solid #ffb347;font-weight:bold;
+        {% else %}
+          background:transparent;color:#9d7846;border:1px solid var(--dim);
+        {% endif %}">
+      {% if current_level == 'r2' %}✓ {% endif %}🔍 R2
     </button>
   </form>
 </div>

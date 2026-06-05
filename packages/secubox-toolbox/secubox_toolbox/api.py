@@ -86,20 +86,30 @@ def _resolve(request: Request) -> tuple[str | None, str | None]:
 @router.get("/hotspot-detect.html", response_class=HTMLResponse)
 @router.get("/generate_204", response_class=HTMLResponse)
 @router.get("/connecttest.txt", response_class=HTMLResponse)
-async def splash(request: Request) -> HTMLResponse:
+async def splash(request: Request):
     ip, mac = _resolve(request)
     cfg = _get_cfg()
     salt = _get_salt()
     mac_hash = macmod.hash_mac(mac, salt) if mac else None
 
+    no_cache_headers = {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+    }
+
+    # Phase 3 (#492) : if already validated, send user to the dashboard which
+    # has the level switcher + cert card + transparency metrics. The previous
+    # 'success.html.j2 fallback' was a stale dead-end that did NOT show the
+    # new cert card auto-check.
     validated = bool(mac and nft.is_validated(mac))
     if validated:
-        return HTMLResponse(_env.get_template("success.html.j2").render(
-            mac_hash=mac_hash, r2_enabled=cfg.r2.enabled,
-        ))
-    return HTMLResponse(_env.get_template("splash.html.j2").render(
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/report/me/html", status_code=303,
+                                 headers=no_cache_headers)
+    html = _env.get_template("splash.html.j2").render(
         mac_hash=mac_hash or "??", ssid=cfg.ap.ssid, r2_enabled=cfg.r2.enabled,
-    ))
+    )
+    return HTMLResponse(html, headers=no_cache_headers)
 
 
 @router.post("/accept")
@@ -796,13 +806,18 @@ async def report_me_html(request: Request) -> HTMLResponse:
     salt = _get_salt()
     mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
-    # Phase 3 (#492) : pass query args for welcome/switched banner
-    return HTMLResponse(_env.get_template("report-live.html.j2").render(
+    # Phase 3 (#492) : pass query args + force no-cache so iPhone Safari
+    # actually fetches the new template.
+    html = _env.get_template("report-live.html.j2").render(
         mac_hash=mac_hash, ip=ip,
         request_args=dict(request.query_params),
         current_level=store.get_client_level(mac_hash) if mac_hash else "r1",
         **session,
-    ))
+    )
+    return HTMLResponse(html, headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+    })
 
 
 @router.get("/report/me")
