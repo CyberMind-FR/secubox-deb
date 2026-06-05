@@ -69,11 +69,36 @@ case "$1" in
       fi
     fi
 
+    # 4c. Phase 5 (#495) : provision LXC container for the ToolBox mitm.
+    # Replaces the host-native secubox-toolbox-mitm.service.
+    # Provisioning is idempotent ; safe to skip if LXC isn't installed (dev box).
+    if command -v lxc-create >/dev/null 2>&1 && [ -x /usr/sbin/secubox-toolbox-lxc-provision ]; then
+      install -d -m 0755 /var/log/secubox/toolbox-mitm
+      install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox
+      # Best-effort provision; failures logged but don't block install.
+      if /usr/sbin/secubox-toolbox-lxc-provision 2>&1; then
+        echo "[secubox-toolbox] LXC container toolbox-mitm provisioned"
+        # Disable the host-native mitm service since the container takes over.
+        if systemctl is-enabled secubox-toolbox-mitm.service >/dev/null 2>&1; then
+          systemctl disable --now secubox-toolbox-mitm.service 2>/dev/null || true
+          echo "[secubox-toolbox] host-native mitm disabled — superseded by LXC container"
+        fi
+      else
+        echo "[secubox-toolbox] LXC provision failed — falling back to host-native mitm"
+      fi
+    else
+      echo "[secubox-toolbox] LXC not installed — using host-native mitm (legacy mode)"
+    fi
+
     # 5. systemd : enable mais ne PAS start automatiquement (l'AP doit être configuré d'abord)
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
       systemctl enable secubox-toolbox.service || true
-      systemctl enable secubox-toolbox-mitm.service || true
+      # secubox-toolbox-mitm.service stays enabled only if LXC isn't running.
+      # (postinst above disables it if LXC took over.)
+      if ! lxc-info -n toolbox-mitm 2>/dev/null | grep -q RUNNING; then
+        systemctl enable secubox-toolbox-mitm.service || true
+      fi
       # Pas de start auto — l'opérateur doit configurer mesh.toml et lancer toolbox-up
     fi
     ;;
