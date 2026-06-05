@@ -142,8 +142,6 @@ def render_pdf(report: dict) -> bytes:
 
     # Compromise analysis (the hero shows the risk badge ; details below)
     _section(pdf, "🚨 ANALYSE COMPROMISSION")
-    score = report.get("risk_score", 0)
-    risk_label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
     pdf.set_text_color(0)
     pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 10)
     pdf.ln(1)
@@ -421,94 +419,134 @@ _EMOJI_REPLACEMENTS = {
 }
 
 
-def _dashboard_hero(pdf, family: str, report: dict) -> None:
-    """Phase 3 (#492) : visual hero with big global numbers + risk score badge.
+def _widget(pdf, family: str, x: float, y: float, w: float, h: float,
+            emoji: str, value: str, label: str,
+            bg: tuple, fg: tuple = (10, 10, 15)) -> None:
+    """Render a single rounded widget tile : big emoji, value, label."""
+    pdf.set_fill_color(*bg)
+    pdf.set_draw_color(*bg)
+    pdf.set_line_width(0.3)
+    # Rounded rect (fpdf2 2.7+ supports round_corners + corner_radius)
+    try:
+        pdf.rect(x, y, w, h, style="DF", round_corners=True, corner_radius=3)
+    except TypeError:
+        pdf.rect(x, y, w, h, style="DF")  # older fpdf2 fallback
+    # Emoji at top-center
+    pdf.set_xy(x, y + 1.5)
+    pdf.set_font(family, "B", 14)
+    pdf.set_text_color(*fg)
+    pdf.cell(w, 6, _safe(emoji), ln=False, align="C")
+    # Value (big number)
+    pdf.set_xy(x, y + 7.5)
+    pdf.set_font(family, "B", 13)
+    pdf.cell(w, 6, _safe(value), ln=False, align="C")
+    # Label (small)
+    pdf.set_xy(x, y + 13.5)
+    pdf.set_font(family, "", 6)
+    pdf.cell(w, 3, _safe(label), ln=False, align="C")
 
-    Layout :
-      ┌──────────────────────────────────────────────────────────────────┐
-      │  📊 TA SESSION VILLAGE3B                  Risk : LOW  [score]    │
-      │                                                                  │
-      │  [N connexions]  [N hosts]  [N inspectés]  [N cert-pinning]      │
-      │                                                                  │
-      │  Top app : 📺 YouTube · Top device : 📱 iPhone iOS 17.4         │
-      │  Top country : 🇺🇸 United States (Amazon, Google, Apple)        │
-      └──────────────────────────────────────────────────────────────────┘
+
+def _dashboard_hero(pdf, family: str, report: dict) -> None:
+    """Phase 3 (#492) : 3-row widget dashboard, banner-style, with aggregations.
+
+    Row 1 (4 widgets) : raw global counters
+       🌐 conn   📡 hosts   ✅ OK 2xx   🔒 pinned
+
+    Row 2 (4 widgets) : aggregated insights
+       📺 apps detected   🍪 trackers   🌍 countries   🎯 risk score
+
+    Row 3 (single banner) : verbal summary
+       'Top device 📱 iPhone · Top app 📺 YouTube · Top ASN 🇺🇸 Amazon · Risque: LOW'
     """
     m = report.get("metrics") or {}
     avatar = report.get("avatar_analysis") or {}
     dpi_cls = report.get("dpi_classified") or {}
     geo_hosts = report.get("geo_top_hosts") or []
+    cookies_p = report.get("cookies_providers") or []
     score = report.get("risk_score", 0)
     label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
 
-    # Hero card background
-    pdf.set_fill_color(20, 30, 25)  # dark green-tinted
-    pdf.set_draw_color(0, 90, 64)
-    pdf.set_line_width(0.5)
-    hero_y = pdf.get_y()
-    pdf.rect(pdf.l_margin, hero_y, _page_w(pdf), 42, "DF")
-
-    # Title left + Risk badge right
-    pdf.set_xy(pdf.l_margin + 4, hero_y + 3)
-    pdf.set_font(family, "B", 13)
+    # Title with sat dish + session label
+    pdf.set_font(family, "B", 12)
     pdf.set_text_color(0, 221, 68)
-    pdf.cell(_page_w(pdf) - 60, 6, "📊 TA SESSION VILLAGE3B", ln=False)
-    # Risk badge
-    if score < 30:
-        badge_r, badge_g, badge_b = 0, 200, 100
-    elif score < 70:
-        badge_r, badge_g, badge_b = 255, 179, 71
-    else:
-        badge_r, badge_g, badge_b = 255, 68, 102
-    pdf.set_fill_color(badge_r, badge_g, badge_b)
-    pdf.set_text_color(10, 10, 15)
-    pdf.set_x(pdf.l_margin + _page_w(pdf) - 55)
-    pdf.set_font(family, "B", 11)
-    pdf.cell(50, 6, _safe(f"Risque: {label} ({score}/100)"), align="C", fill=True)
-    pdf.ln(8)
+    pdf.cell(0, 6, _safe("📊 TA SESSION VILLAGE3B"), ln=True)
+    pdf.ln(1)
 
-    # Big numbers row (4 KPI cells)
-    pdf.set_text_color(0, 221, 68)
-    pdf.set_font(family, "B", 18)
-    box_w = (_page_w(pdf) - 8) / 4
-    y_kpi = pdf.get_y() + 2
-    kpis = [
-        (str(m.get("connections", 0)), "connexions"),
-        (str(m.get("unique_hosts", 0)), "hôtes"),
-        (str(m.get("successful", 0)), "OK 2xx/3xx"),
-        (str(m.get("tls_pinned", 0)), "cert-pinning"),
+    # ── Row 1 : raw counters ──
+    y = pdf.get_y()
+    box_w = (_page_w(pdf) - 6) / 4
+    box_h = 17
+    row_kpis = [
+        ("🌐", str(m.get("connections", 0)), "connexions", (15, 35, 30)),
+        ("📡", str(m.get("unique_hosts", 0)), "hôtes uniques", (15, 30, 40)),
+        ("✅", str(m.get("successful", 0)), "OK 2xx/3xx", (15, 40, 25)),
+        ("🔒", str(m.get("tls_pinned", 0)), "cert-pinning", (40, 30, 15)),
     ]
-    for i, (n, lbl) in enumerate(kpis):
-        x = pdf.l_margin + 4 + i * box_w
-        pdf.set_xy(x, y_kpi)
-        pdf.set_font(family, "B", 16)
-        pdf.set_text_color(0, 255, 85)
-        pdf.cell(box_w, 7, n, ln=False, align="C")
-        pdf.set_xy(x, y_kpi + 7)
-        pdf.set_font(family, "", 8)
-        pdf.set_text_color(150, 150, 150)
-        pdf.cell(box_w, 4, _safe(lbl), ln=False, align="C")
+    for i, (emoji, val, lbl, bg) in enumerate(row_kpis):
+        x = pdf.l_margin + i * (box_w + 2)
+        _widget(pdf, family, x, y, box_w, box_h, emoji, val, lbl, bg, fg=(0, 255, 100))
+    pdf.set_y(y + box_h + 2)
 
-    # Top device + top app + top country lines
-    pdf.set_xy(pdf.l_margin + 4, hero_y + 30)
-    pdf.set_font(family, "", 9)
-    pdf.set_text_color(220, 220, 200)
+    # ── Row 2 : aggregations ──
+    # Count distinct apps detected (top_apps)
+    n_apps = len([a for a in dpi_cls.get("top_apps", []) if a.get("app") and a.get("app") != "?"])
+    # Trackers detected (cookies providers)
+    n_trackers = sum(p.get("count", 0) for p in cookies_p) if cookies_p else 0
+    # Countries seen (distinct country codes in geo_top_hosts)
+    countries = {h.get("country") for h in geo_hosts if h.get("country")}
+    n_countries = len(countries)
+    # Risk score widget
+    risk_emoji = "🟢" if score < 30 else "🟡" if score < 70 else "🔴"
+    risk_bg = (15, 50, 20) if score < 30 else (60, 50, 15) if score < 70 else (60, 20, 20)
+
+    y = pdf.get_y()
+    row_agg = [
+        ("📺", str(n_apps), "apps détectées", (25, 25, 45)),
+        ("🍪", str(n_trackers), "trackers", (45, 25, 35)),
+        ("🌍", str(n_countries), "pays/ASN", (25, 40, 35)),
+        (risk_emoji, f"{score}/100", f"risque {label}", risk_bg),
+    ]
+    for i, (emoji, val, lbl, bg) in enumerate(row_agg):
+        x = pdf.l_margin + i * (box_w + 2)
+        _widget(pdf, family, x, y, box_w, box_h, emoji, val, lbl, bg, fg=(0, 230, 220))
+    pdf.set_y(y + box_h + 2)
+
+    # ── Row 3 : verbal summary banner ──
     top_device = avatar.get("most_common") or "?"
     top_device_emoji = avatar.get("most_common_emoji") or ""
     top_app = "?"
     if dpi_cls.get("top_apps"):
         ta = dpi_cls["top_apps"][0]
-        top_app = f"{ta.get('emoji', '')} {ta.get('app', '?')}"
+        if ta.get("app") and ta["app"] != "?":
+            top_app = f"{ta.get('emoji', '')} {ta.get('app')}"
     top_country = "?"
     if geo_hosts:
         gh = geo_hosts[0]
-        if gh.get("flag") or gh.get("country"):
+        if gh.get("flag") or gh.get("country") or gh.get("asn_org"):
             top_country = f"{gh.get('flag', '')} {gh.get('asn_org', '?')[:30]}"
-    pdf.cell(0, 4, _safe(f"Top device : {top_device_emoji} {top_device}  ·  Top app : {top_app}  ·  Top ASN : {top_country}"), ln=True)
 
-    # Reset cursor + colors below the hero
-    pdf.set_y(hero_y + 44)
+    y = pdf.get_y()
+    # Banner with gradient-like background
+    pdf.set_fill_color(20, 25, 35)
+    pdf.set_draw_color(0, 90, 64)
+    try:
+        pdf.rect(pdf.l_margin, y, _page_w(pdf), 9, style="DF", round_corners=True, corner_radius=2)
+    except TypeError:
+        pdf.rect(pdf.l_margin, y, _page_w(pdf), 9, style="DF")
+    pdf.set_xy(pdf.l_margin + 3, y + 2)
+    pdf.set_font(family, "", 9)
+    pdf.set_text_color(220, 220, 200)
+    summary = (
+        f"Top device : {top_device_emoji} {top_device}    ·    "
+        f"Top app : {top_app}    ·    "
+        f"Top ASN : {top_country}"
+    )
+    pdf.cell(_page_w(pdf) - 6, 5, _safe(summary[:140]), ln=False)
+    pdf.set_y(y + 11)
+
+    # Reset
     pdf.set_text_color(0, 0, 0)
+    pdf.set_font(family, "", 10)
     pdf.ln(2)
 
 

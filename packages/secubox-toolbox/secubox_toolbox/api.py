@@ -102,8 +102,8 @@ async def splash(request: Request) -> HTMLResponse:
     ))
 
 
-@router.post("/accept", response_model=AcceptResp)
-async def accept(request: Request) -> AcceptResp:
+@router.post("/accept")
+async def accept(request: Request):
     """Phase 3 (#492) : 3-level explicit opt-in.
 
     Form field 'level' = 'r0' | 'r1' | 'r2' (default 'r1' for backward compat
@@ -147,7 +147,15 @@ async def accept(request: Request) -> AcceptResp:
     store.record_consent(mac_hash, ip, ua, ttl_seconds=86400)
     store.upsert_client(mac_hash, ip, level=level)
     log.info("consent recorded mac_hash=%s level=%s r2=%s", mac_hash, level, r2_ok)
-    return AcceptResp(ok=True, mac_hash=mac_hash, r2=r2_ok)
+    # Phase 3 (#492) : detect whether the call came from a browser form (HTML
+    # response = render success page) vs from a programmatic API client (JSON).
+    accept_hdr = request.headers.get("accept", "")
+    wants_json = "application/json" in accept_hdr and "text/html" not in accept_hdr
+    if wants_json:
+        return AcceptResp(ok=True, mac_hash=mac_hash, r2=r2_ok)
+    return HTMLResponse(_env.get_template("success.html.j2").render(
+        mac_hash=mac_hash, r2_enabled=cfg.r2.enabled, level=level,
+    ))
 
 
 @router.get("/status", response_model=StatusResp)
