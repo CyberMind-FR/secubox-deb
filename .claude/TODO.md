@@ -26,6 +26,17 @@
   (le 2e fichier mitmproxy addon en sync, currently 756 lines vs 930 dans secubox-mitmproxy)
 - [ ] Investigate mitm-wg CPU > 30% au repos (idle keep-alives ?)
 
+### 🛡 Phase 7 — WAF active enforcement (issue #498 filée 2026-06-05)
+
+- [ ] **#498 Phase 7.A** quick win : bridge mitm WAF → CrowdSec `/v1/decisions`
+  → nft drop. Estim 2-3 jours. Acceptance : attacker dropped < 30s post-trigger,
+  threat_counts < 200 sous attaque.
+- [ ] **#498 Phase 7.B** mid-term : nft rate-limit pre-mitm + WAF dashboard +
+  honeypot routes pour bot signatures (/wp-admin /.env etc).
+- [ ] **#498 Phase 7.C** long-term : eBPF/XDP kernel filter + ModSecurity
+  remplacement mitm WAF + federation CrowdSec Hub/OTX/Spamhaus.
+- [ ] Roadmap doc : `.claude/PHASE-7-WAF-ROADMAP.md` ✅ (référence ci-dessus)
+
 ### Release pipeline ✅ v2.13.4 APT GREEN + v2.13.12 rpi400 kiosk SALON-READY
 
 - [x] **v2.13.4** APT publish vert (chaîne #425 + #427/PR #428 + #431/PR #432).
