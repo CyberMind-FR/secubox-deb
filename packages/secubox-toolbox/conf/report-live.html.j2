@@ -105,7 +105,7 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
   <h2 class="pin">🚨 Threat-intel : matches feeds malware</h2>
   <ul>
     {% for m in threat_intel_matches[:10] %}
-      <li><span style="color:var(--red)">[{{ m.source }}/{{ m.weight }}]</span> <b>{{ m.label }}</b> : <code>{{ m.ioc[:60] }}</code></li>
+      <li>{{ m.flag }} <span style="color:var(--red)">[{{ m.source }}/{{ m.weight }}]</span> <b>{{ m.label }}</b> : <code>{{ m.ioc[:60] }}</code>{% if m.asn_org %} <span style="font-size:0.75rem;color:var(--dim)">({{ m.asn_org }})</span>{% endif %}</li>
     {% endfor %}
   </ul>
 </div>
@@ -113,10 +113,10 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
 
 {% if dga_candidates %}
 <div class="card">
-  <h2 class="pin">🔠 DGA — domaines suspects (générés algorithmiquement)</h2>
+  <h2 class="pin">🔠 DGA — domaines suspects</h2>
   <ul>
     {% for d in dga_candidates[:8] %}
-      <li><span style="color:var(--amber)">[{{ d.score }}]</span> <code>{{ d.host[:60] }}</code> <span style="font-size:0.75rem;color:var(--dim)">({{ d.indicators|join(', ') }})</span></li>
+      <li>{{ d.flag }} <span style="color:var(--amber)">[{{ d.score }}]</span> <code>{{ d.host[:60] }}</code> <span style="font-size:0.75rem;color:var(--dim)">({{ d.indicators|join(', ') }})</span></li>
     {% endfor %}
   </ul>
 </div>
@@ -127,21 +127,95 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
   <h2 class="pin">📡 Beaconing — patterns périodiques suspects</h2>
   <table style="width:100%;font-size:0.82rem">
     <thead><tr style="color:var(--dim);text-align:left">
-      <th>Score</th><th>Host</th><th style="text-align:right">Median</th><th style="text-align:right">CV</th>
+      <th>🚩</th><th>Score</th><th>Host</th><th style="text-align:right">Median</th><th style="text-align:right">CV</th><th>ASN</th>
     </tr></thead>
     <tbody>
     {% for b in beaconing_candidates[:8] %}
-      <tr><td style="color:var(--amber)">{{ b.score }}</td><td><code>{{ b.host[:50] }}</code></td>
+      <tr><td>{{ b.flag }}</td><td style="color:var(--amber)">{{ b.score }}</td><td><code>{{ b.host[:40] }}</code></td>
           <td style="text-align:right">{{ b.median_seconds }}s</td>
-          <td style="text-align:right">{{ b.cv }}</td></tr>
+          <td style="text-align:right">{{ b.cv }}</td>
+          <td style="font-size:0.78rem;color:var(--dim)">{{ b.asn_org[:30] if b.asn_org else '' }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
 {% endif %}
 
+{% if dpi_classified and dpi_classified.top_apps %}
 <div class="card">
-  <h2>📱 Apps détectées</h2>
+  <h2>🧭 Apps détectées (classification nDPI-style)</h2>
+  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">
+    Catégories : {% for cat, n in dpi_classified.by_category.items() %}{{ dpi_classified.category_emoji.get(cat, '❔') }} {{ cat }}({{ n }}){% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+  <table style="width:100%;font-size:0.85rem">
+    <thead><tr style="color:var(--dim);text-align:left">
+      <th>App</th><th>Catégorie</th><th style="text-align:right">Connexions</th>
+    </tr></thead>
+    <tbody>
+    {% for a in dpi_classified.top_apps[:15] %}
+      <tr><td>{{ a.emoji }} <b>{{ a.app }}</b></td><td style="font-size:0.78rem;color:var(--dim)">{{ a.category }}</td>
+          <td style="text-align:right;color:var(--phos);text-shadow:0 0 4px var(--phos)">{{ a.count }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if geo_top_hosts %}
+<div class="card">
+  <h2>🌍 Hôtes contactés (par pays + ASN + app)</h2>
+  <table style="width:100%;font-size:0.82rem">
+    <thead><tr style="color:var(--dim);text-align:left">
+      <th>🚩</th><th>App</th><th>Hôte</th><th>ASN</th><th style="text-align:right">Hits</th>
+    </tr></thead>
+    <tbody>
+    {% for h in geo_top_hosts[:15] %}
+      <tr><td>{{ h.flag }}</td><td>{{ h.emoji }} {{ h.app[:18] }}</td><td><code style="font-size:0.78rem">{{ h.host[:45] }}</code></td>
+          <td style="font-size:0.75rem;color:var(--dim)">{{ h.asn_org[:25] if h.asn_org else '' }}</td>
+          <td style="text-align:right;color:var(--phos)">{{ h.count }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if avatar_analysis and avatar_analysis.devices %}
+<div class="card">
+  <h2>{{ avatar_analysis.most_common_emoji }} Avatar / device fingerprint</h2>
+  <p style="margin-bottom:0.5rem">
+    <span style="font-size:1.2rem">{{ avatar_analysis.most_common_emoji }}</span>
+    <b>{{ avatar_analysis.most_common }}</b> (le plus représenté)
+  </p>
+  <div style="display:flex;flex-wrap:wrap;gap:1rem;font-size:0.85rem">
+    <div>
+      <div style="color:var(--dim);font-size:0.78rem;margin-bottom:0.3rem">Devices :</div>
+      {% for dev, info in avatar_analysis.devices.items() %}
+        <div>{{ info.emoji }} <b>{{ info.os_label }}</b> <span style="color:var(--dim)">({{ info.count }})</span></div>
+      {% endfor %}
+    </div>
+    <div>
+      <div style="color:var(--dim);font-size:0.78rem;margin-bottom:0.3rem">Browsers :</div>
+      {% for br, info in avatar_analysis.browsers.items() %}
+        <div>{{ info.emoji }} <b>{{ info.label }}</b> <span style="color:var(--dim)">({{ info.count }})</span></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if cookies_providers %}
+<div class="card">
+  <h2>🍪 Trackers / providers cookies (Phase 2a+)</h2>
+  <ul>
+    {% for p in cookies_providers[:10] %}
+      <li>{{ p.emoji }} <b>{{ p.provider }}</b> <span style="font-size:0.78rem;color:var(--dim)">({{ p.category }})</span> <span style="color:var(--phos)">×{{ p.count }}</span></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>📱 Apps détectées (vue IP forensics)</h2>
   <ul>
     {% for app in apps_detected %}<li>{{ app }}</li>{% endfor %}
   </ul>
