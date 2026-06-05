@@ -1,3 +1,17 @@
+secubox-toolbox (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add ap-iface.network.j2 Jinja template + toolbox-up renders it to
+    /etc/systemd/network/10-secubox-toolbox-ap.network at toolbox-up time.
+    Persists 10.99.0.1/24 on the AP iface across USB-dongle re-enumeration
+    (replug). ConfigureWithoutCarrier=yes so the IP applies even before
+    hostapd brings the radio up.
+  * toolbox-up : detect systemd-networkd availability ; fallback to
+    imperative `ip addr replace` if networkd is not used.
+  * Closes #482.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 04 Jun 2026 18:15:00 +0200
+
+
 secubox-toolbox (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * WebUI admin /toolbox/ : nouvelles cards Live metrics 24h (events par
