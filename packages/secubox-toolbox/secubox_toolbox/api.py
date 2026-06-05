@@ -135,10 +135,13 @@ async def accept(request: Request):
         level = (form.get("level") or "r1").lower()
     except Exception:
         level = "r1"
-    if level not in ("r0", "r1", "r2"):
+    if level not in ("r0", "r1", "r2", "r3"):
         level = "r1"
     # R2 only allowed if config enables it
     if level == "r2" and not cfg.r2.enabled:
+        level = "r1"
+    # R3 only allowed if WG container provisioned (presence of server.pubkey)
+    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
 
     # All levels get validated (net access)
@@ -148,9 +151,12 @@ async def accept(request: Request):
     r2_ok = False
     if level in ("r1", "r2") and nft.add_consented(mac, ttl="24h"):
         r2_ok = True
-    # R2-only : QUIC drop + banner injection (separate nft set)
+    # R2-only : banner injection (separate nft set)
     if level == "r2":
         nft.add_r2_banner(mac, ttl="24h")
+    # Phase 6 (#496) R3-only : WireGuard consent set
+    if level == "r3":
+        nft.add_r3_wg(mac, ttl="24h")
 
     ua = request.headers.get("user-agent", "")
     store.record_consent(mac_hash, ip, ua, ttl_seconds=86400)
@@ -187,14 +193,16 @@ async def change_level(request: Request):
         level = (form.get("level") or "r1").lower()
     except Exception:
         level = "r1"
-    if level not in ("r0", "r1", "r2"):
+    if level not in ("r0", "r1", "r2", "r3"):
         level = "r1"
     if level == "r2" and not cfg.r2.enabled:
+        level = "r1"
+    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
 
     # Re-validate (idempotent extend)
     v_ok = nft.add_validated(mac, ttl="24h")
-    # Membership in consented_r2_macs : add for r1/r2, remove for r0
+    # Membership in consented_r2_macs : add for r1/r2, remove for r0/r3
     if level in ("r1", "r2"):
         c_ok = nft.add_consented(mac, ttl="24h")
     else:
@@ -204,10 +212,15 @@ async def change_level(request: Request):
         b_ok = nft.add_r2_banner(mac, ttl="24h")
     else:
         b_ok = nft.del_r2_banner(mac)
+    # Phase 6 (#496) : r3 WireGuard set
+    if level == "r3":
+        wg_ok = nft.add_r3_wg(mac, ttl="24h")
+    else:
+        wg_ok = nft.del_r3_wg(mac)
 
     store.upsert_client(mac_hash, ip, level=level)
-    log.info("level switched mac_hash=%s -> %s (nft: validated=%s consented=%s banner=%s)",
-             mac_hash, level, v_ok, c_ok, b_ok)
+    log.info("level switched mac_hash=%s -> %s (nft: validated=%s consented=%s banner=%s wg=%s)",
+             mac_hash, level, v_ok, c_ok, b_ok, wg_ok)
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url=f"/report/me/html?switched=1&level={level}",
                              status_code=303)

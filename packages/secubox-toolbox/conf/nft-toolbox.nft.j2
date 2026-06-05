@@ -22,6 +22,15 @@ table inet toolbox {
         timeout 24h
     }
 
+    # Phase 6 (#496) : level R3 WireGuard opt-in. Membership = client installed
+    # WG profile + tunnel routes via 10.99.1.0/24. Captive DNAT does NOT apply
+    # to R3 clients (their traffic goes via wg-toolbox, not via the captive AP).
+    set consented_r3_wg_macs {
+        type ether_addr
+        flags timeout
+        timeout 24h
+    }
+
     set quarantine_macs {
         type ether_addr
         flags timeout
