@@ -287,6 +287,8 @@ def _aggregate_session(mac_hash: str) -> dict:
                             "url": p.get("url", "?")[:120],
                             "set": p.get("set_cookie_count", 0),
                             "sent": p.get("cookie_count", 0),
+                            "set_cookie_names": p.get("set_cookie_names", []),
+                            "cookie_names": p.get("cookie_names", []),
                             "status": p.get("status"),
                         })
                 elif source == "soc":
@@ -307,11 +309,18 @@ def _aggregate_session(mac_hash: str) -> dict:
     except Exception:
         pass
 
+    # Phase 2a+ : combine DPI hosts (HTTP host or IP) with JA4 SNIs to get
+    # real hostnames for classification. iOS captive probes + cert-pinned apps
+    # only expose SNIs ; we lose ~80% of classification data without this merge.
+    classifiable_hosts: dict[str, int] = dict(dpi_hosts)
+    for sni in ja4_snis:
+        classifiable_hosts[sni] = classifiable_hosts.get(sni, 0) + 1
+
     # ── 3. Phase 2a SOC scoring : threat-intel + DGA + beaconing ──
     # Threat-intel : match IPs in feeds (resolve hosts isn't done here — match domains
     # directly). On DPI hosts (which are domain names from SNI/Host) we check both.
     ti_matches: list[dict] = []
-    unique_hosts_list = list(dpi_hosts.keys())
+    unique_hosts_list = list(classifiable_hosts.keys())
     for host in unique_hosts_list:
         for m in threat_intel.is_malicious_domain(host):
             m["ioc"] = host
@@ -341,7 +350,8 @@ def _aggregate_session(mac_hash: str) -> dict:
     risk_score = score_result["score"]
 
     # ── 4. Top DPI hosts (Phase 1.5 = simple ranking) ──
-    top_dpi = sorted(dpi_hosts.items(), key=lambda x: -x[1])[:15]
+    # Use combined (DPI + SNI) so classification works on FQDNs not IPs
+    top_dpi = sorted(classifiable_hosts.items(), key=lambda x: -x[1])[:15]
 
     return {
         "device_type": "Smartphone (auto-detected)",
