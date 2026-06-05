@@ -552,7 +552,7 @@ def _build_transparency(
     host_analysis: dict[str, dict],
     dpi_hosts: dict[str, int],
     ja4_snis: set,
-) -> dict:
+) -> dict:  # noqa: C901
     """Phase 3 (#492) : pack the inspection breakdown + per-host quality table.
 
     The breakdown shows what % of traffic was inspected / bypassed / pinned /
@@ -605,6 +605,45 @@ def _build_transparency(
     # Whitelist sanity stats
     wl_stats = _whitelist_mod.stats() if _HAS_TRANSPARENCY else {"count": 0}
 
+    # Phase 3 (#492) : count whitelist hits per pattern + per category.
+    # iPhone usage stores IPs in dpi_hosts (cert-pinning bypasses) but SNIs
+    # in ja4_snis (TLS clienthello visible). Iterate BOTH so apple.com etc.
+    # actually match patterns like *.apple.com.
+    wl_hits_by_pattern: dict[str, int] = {}
+    wl_hits_by_category: dict[str, int] = {}
+    wl_hits_total = 0
+    if _HAS_TRANSPARENCY:
+        # Merge dpi_hosts (IP-tagged counts) and ja4_snis (FQDN tags with count 1)
+        all_hosts: dict[str, int] = dict(dpi_hosts)
+        for sni in ja4_snis:
+            all_hosts[sni] = all_hosts.get(sni, 0) + 1
+        for h, count in all_hosts.items():
+            entry = _whitelist_mod.match(h)
+            if entry:
+                pat = entry.get("pattern", h)
+                cat = entry.get("category", "other")
+                wl_hits_by_pattern[pat] = wl_hits_by_pattern.get(pat, 0) + count
+                wl_hits_by_category[cat] = wl_hits_by_category.get(cat, 0) + count
+                wl_hits_total += count
+
+    # Phase 3 (#492) : attempt counters — full transparency including failures
+    attempts = {
+        "total": sum(breakdown.values()),
+        "inspected": breakdown.get("inspected", 0),
+        "bypassed_whitelist": breakdown.get("bypassed-whitelist", 0),
+        "pinned_failed": breakdown.get("pinned-failed-mitm", 0),
+        "e2e_opaque": breakdown.get("e2e-opaque", 0),
+        "blocked": breakdown.get("blocked", 0),  # Phase 4 placeholder
+    }
+
+    # Sensitivity profile info (rule engine)
+    sensitivity = None
+    try:
+        from secubox_core import rule_engine as _re
+        sensitivity = _re.get_sensitivity()
+    except Exception:
+        pass
+
     return {
         "breakdown": breakdown,
         "breakdown_pct": pct,
@@ -612,6 +651,17 @@ def _build_transparency(
         "per_host": per_host[:50],
         "whitelist_stats": wl_stats,
         "has_transparency": _HAS_TRANSPARENCY,
+        # Phase 3 metrics for richer reporting
+        "attempts": attempts,
+        "whitelist_hits": {
+            "total": wl_hits_total,
+            "top_patterns": sorted(
+                [{"pattern": k, "count": v} for k, v in wl_hits_by_pattern.items()],
+                key=lambda x: -x["count"],
+            )[:15],
+            "by_category": wl_hits_by_category,
+        },
+        "sensitivity": sensitivity,
     }
 
 
