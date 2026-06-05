@@ -218,6 +218,262 @@ whitelist:
     category: vendor-os
     quality_expected: A
 
+  # ───────────── Banking FR additional (neobanks + extras) ─────────────
+  - pattern: "*.boursorama-banque.com"
+    reason: "Banking neobank FR"
+    category: financial
+    quality_expected: A
+  - pattern: "*.hellobank.fr"
+    reason: "Banking FR"
+    category: financial
+    quality_expected: A
+  - pattern: "*.bforbank.com"
+    reason: "Banking neobank FR"
+    category: financial
+    quality_expected: A
+  - pattern: "*.n26.com"
+    reason: "Banking neobank EU"
+    category: financial
+    quality_expected: A+
+  - pattern: "*.wise.com"
+    reason: "Money transfer service (Wise/Transferwise)"
+    category: financial
+    quality_expected: A+
+  - pattern: "*.monzo.com"
+    reason: "Banking neobank"
+    category: financial
+    quality_expected: A+
+  - pattern: "*.ing.fr"
+    reason: "Banking FR (ING)"
+    category: financial
+    quality_expected: A
+  - pattern: "*.traderepublic.com"
+    reason: "Brokerage EU"
+    category: financial
+    quality_expected: A+
+  - pattern: "*.binance.com"
+    reason: "Crypto exchange (cert-pinned)"
+    category: financial
+    quality_expected: A
+  - pattern: "*.kraken.com"
+    reason: "Crypto exchange (cert-pinned)"
+    category: financial
+    quality_expected: A+
+  - pattern: "*.coinbase.com"
+    reason: "Crypto exchange (cert-pinned)"
+    category: financial
+    quality_expected: A+
+
+  # ───────────── Streaming media (cert-pinned, MITM would break playback) ─────────────
+  - pattern: "*.netflix.com"
+    reason: "Netflix streaming, cert-pinned + DRM"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.nflximg.net"
+    reason: "Netflix CDN"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.nflxvideo.net"
+    reason: "Netflix video CDN"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.disneyplus.com"
+    reason: "Disney+ streaming"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.spotify.com"
+    reason: "Spotify cert-pinned"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.scdn.co"
+    reason: "Spotify CDN"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.deezer.com"
+    reason: "Deezer streaming FR"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.canalplus.com"
+    reason: "Canal+ streaming FR"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.mycanal.fr"
+    reason: "MyCanal streaming FR"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.france.tv"
+    reason: "France Télévisions (public broadcasting)"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.arte.tv"
+    reason: "Arte (public broadcasting FR/DE)"
+    category: streaming-media
+    quality_expected: A+
+  - pattern: "*.youtube.com"
+    reason: "YouTube cert-pinned, DRM video"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.googlevideo.com"
+    reason: "YouTube video CDN"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.ytimg.com"
+    reason: "YouTube static CDN"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.twitch.tv"
+    reason: "Twitch live streaming, cert-pinned"
+    category: streaming-media
+    quality_expected: A
+  - pattern: "*.amazonvideo.com"
+    reason: "Amazon Prime Video"
+    category: streaming-media
+    quality_expected: A
+
+  # ───────────── Productivity / Education FR ─────────────
+  - pattern: "*.pronote.net"
+    reason: "Pronote ENT scolaire FR"
+    category: education
+    quality_expected: A
+  - pattern: "*.index-education.net"
+    reason: "Pronote operator"
+    category: education
+    quality_expected: A
+  - pattern: "*.ecoledirecte.com"
+    reason: "Ecole Directe ENT scolaire FR"
+    category: education
+    quality_expected: A
+  - pattern: "*.ent.unice.fr"
+    reason: "ENT universitaire FR"
+    category: education
+    quality_expected: A
+  - pattern: "*.cned.fr"
+    reason: "CNED enseignement à distance FR"
+    category: education
+    quality_expected: A
+  - pattern: "*.maiia.com"
+    reason: "Telemedicine FR (Cegedim)"
+    category: health
+    quality_expected: A
+  - pattern: "*.livi.fr"
+    reason: "Telemedicine FR (Livi)"
+    category: health
+    quality_expected: A
+
+  # ───────────── Workplace SaaS (cert-pinned) ─────────────
+  - pattern: "*.office.com"
+    reason: "Microsoft Office365"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.live.com"
+    reason: "Microsoft accounts"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.office365.com"
+    reason: "Microsoft Office365"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.sharepoint.com"
+    reason: "Microsoft SharePoint"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.slack.com"
+    reason: "Slack messaging"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.zoom.us"
+    reason: "Zoom videoconference"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.teams.microsoft.com"
+    reason: "Microsoft Teams"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.salesforce.com"
+    reason: "Salesforce CRM"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.atlassian.com"
+    reason: "Atlassian (Jira, Confluence)"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.notion.so"
+    reason: "Notion workspace"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.dropbox.com"
+    reason: "Dropbox cloud sync"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.box.com"
+    reason: "Box.com cloud"
+    category: workplace
+    quality_expected: A
+  - pattern: "*.adobe.com"
+    reason: "Adobe Creative Cloud"
+    category: workplace
+    quality_expected: A
+
+  # ───────────── Gaming (cert-pinned, DRM, online auth) ─────────────
+  - pattern: "*.steamcommunity.com"
+    reason: "Steam community + downloads"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.steampowered.com"
+    reason: "Steam infrastructure"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.epicgames.com"
+    reason: "Epic Games"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.ea.com"
+    reason: "Electronic Arts"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.battle.net"
+    reason: "Blizzard Battle.net"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.playstation.com"
+    reason: "PlayStation Network"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.xbox.com"
+    reason: "Xbox Live"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.xboxlive.com"
+    reason: "Xbox Live infrastructure"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.nintendo.net"
+    reason: "Nintendo online services"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.discord.com"
+    reason: "Discord (gaming chat, cert-pinned)"
+    category: gaming
+    quality_expected: A
+  - pattern: "*.discord.gg"
+    reason: "Discord invite domain"
+    category: gaming
+    quality_expected: A
+
+  # ───────────── DNS-over-HTTPS resolvers ─────────────
+  - pattern: "*.cloudflare-dns.com"
+    reason: "Cloudflare DoH/DoT resolver"
+    category: privacy-tools
+    quality_expected: A+
+  - pattern: "*.dns.google"
+    reason: "Google DoH/DoT resolver"
+    category: privacy-tools
+    quality_expected: A+
+  - pattern: "*.nextdns.io"
+    reason: "NextDNS DoH/DoT resolver"
+    category: privacy-tools
+    quality_expected: A+
+
   # ───────────── Captive portal probes (must reach the portal itself, not internet) ─────────────
   # NOTE : these probes are HANDLED locally by the captive splash, never reach
   # this whitelist. Listed here for documentation.

@@ -28,6 +28,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
  adduser,
  fonts-dejavu-core,
  fonts-symbola,
+ fonts-noto-color-emoji,
  python3-yaml,
  python3-geoip2 | geoipupdate
 Description: SecuBox-DEB ToolBoX — Gondwana Cabine Numérique (captive AP + MITM analyzer)

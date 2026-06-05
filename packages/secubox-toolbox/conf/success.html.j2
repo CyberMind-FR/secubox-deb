@@ -40,7 +40,19 @@ p{color:#a8b6a8;margin:0.5rem 0;text-align:center;font-size:0.9rem}
 {% endif %}
 </div>
 
-<a href="https://duckduckgo.com" class="go-surf">🚀 COMMENCE À SURFER</a>
+{# Phase 3 (#492) : iOS captive-sheet aware. Linking directly to
+   https://duckduckgo.com gets intercepted by iOS captive UI which doesn't
+   navigate. Linking to the Apple captive probe lets iOS verify connectivity
+   and CLOSE the captive sheet automatically — user lands in Safari. #}
+<a href="http://captive.apple.com/hotspot-detect.html"
+   target="_blank" rel="noopener"
+   class="go-surf"
+   onclick="setTimeout(function(){window.location.href='https://duckduckgo.com';}, 500);">
+   🚀 COMMENCE À SURFER
+</a>
+<p style="font-size:0.7rem;color:#444;text-align:center;margin-top:-0.5rem">
+  ↑ ferme la page captive et ouvre Safari · ou utilise ton navigateur directement
+</p>
 
 <p class="subtle">// Hash session : <span class="mac">{{ mac_hash }}</span></p>
 
