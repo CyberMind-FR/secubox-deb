@@ -189,11 +189,11 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     {% if r2_enabled %}
     <button type="submit" name="level" value="r2" class="lvl-btn lvl-r2">
       🔍 <b>R2 — Analyse + bandeau Safari</b>
-      <span class="sub-desc">Déchiffrement TLS + bandeau visible sur les pages Safari. Apps natives iOS peuvent être lentes (iCloud / Push / FaceTime).</span>
+      <span class="sub-desc">Déchiffrement TLS + bandeau visible sur les pages Safari HTML.</span>
     </button>
 
     <div class="r2-warn">
-      <strong>⚠ Si tu choisis R2 :</strong> il te faut <a href="/ca/install-help">installer le certificat racine ToolBoX</a> sur ton iPhone, sinon TLS handshake fails. Tu pourras revenir en R1 depuis le rapport à tout moment.
+      <strong>⚠ Si tu choisis R2 :</strong> il te faut <a href="/ca/install-help">installer le certificat racine ToolBoX</a> sur ton iPhone, sinon les sites HTTPS échouent. Le bandeau n'apparaît que sur les pages HTML servies en TCP (la plupart des apps iPhone utilisent QUIC et ne montreront pas le bandeau). Tu peux revenir en R1 depuis le rapport à tout moment.
     </div>
     {% endif %}
   </form>

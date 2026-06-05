@@ -58,13 +58,13 @@ table inet toolbox {
         type filter hook forward priority 10; policy accept;
         # Quarantine first (high priority drop)
         iifname "{{ ap.iface }}" ether saddr @quarantine_macs drop
-        # Phase 3 (#492) : OPTIONAL QUIC/HTTP3 reject for clients in the
-        # r2_banner_macs set (level=R2 explicit opt-in). This forces TCP
-        # fallback so mitmproxy sees the flows -> banner injection works.
-        # Apps that REQUIRE QUIC (some iCloud paths, FaceTime) may degrade.
-        # Default = empty set, no impact. /accept POST with level=r2 adds
-        # the MAC; user can revert to R1 to remove without losing R1 analysis.
-        iifname "{{ ap.iface }}" ether saddr @r2_banner_macs udp dport 443 reject with icmpx type port-unreachable
+        # Phase 3 (#492) : QUIC drop REMOVED — too aggressive. iPhone Safari +
+        # Apple/Google heavily depend on QUIC ; rejecting UDP 443 for R2
+        # broke surf entirely for the iPhone session. Banner injection works
+        # on TCP HTTPS HTML responses (when those happen) without forcing
+        # the whole iOS stack to fall back from QUIC.
+        # The r2_banner_macs set is still used by inject_banner.py to gate
+        # the banner injection ; no nft rule needed for that.
         # Validated MACs: forward to LAN/Internet
         iifname "{{ ap.iface }}" oifname "lan0" ether saddr @validated_macs accept
         iifname "lan0" oifname "{{ ap.iface }}" ct state established,related accept
