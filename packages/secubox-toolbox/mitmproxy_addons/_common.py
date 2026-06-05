@@ -5,9 +5,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import logging
 import re
 import subprocess
+from datetime import date
+from pathlib import Path
 from urllib.parse import urlparse
 
 try:
@@ -17,6 +21,8 @@ except ImportError:
 
 log = logging.getLogger("secubox.toolbox.addons")
 _RE_MAC = re.compile(r"lladdr\s+([0-9a-f:]{17})", re.I)
+_SALT_FILE = Path("/etc/secubox/secrets/toolbox-mac-salt")
+_SALT_CACHE: str | None = None
 
 
 def mac_of(ip: str) -> str | None:
@@ -29,6 +35,41 @@ def mac_of(ip: str) -> str | None:
         return None
     m = _RE_MAC.search(out)
     return m.group(1).lower() if m else None
+
+
+def _salt() -> str:
+    """Read MAC anonymization salt once, cache in-process."""
+    global _SALT_CACHE
+    if _SALT_CACHE is None:
+        try:
+            _SALT_CACHE = _SALT_FILE.read_text().strip()
+        except Exception as e:
+            log.warning("salt unavailable, MAC hashing disabled: %s", e)
+            _SALT_CACHE = ""
+    return _SALT_CACHE
+
+
+def hash_mac(mac: str | None) -> str | None:
+    """HMAC-SHA256 of MAC with salt + day rotation. 16-char hex digest.
+
+    Same algorithm as secubox_toolbox.mac.hash_mac and local_store._hash_mac
+    so events from all addons cross-reference the same mac_hash.
+    """
+    if not mac:
+        return None
+    s = _salt()
+    if not s:
+        return None
+    key = (s + ":" + date.today().isoformat()).encode()
+    return hmac.new(key, mac.lower().encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def mac_hash_of(ip: str | None) -> str | None:
+    """Resolve IP to MAC via neighbour table then hash. Returns None on failure."""
+    if not ip:
+        return None
+    raw = mac_of(ip)
+    return hash_mac(raw) if raw else None
 
 
 def _resolve_socket_url(target: str) -> tuple[str, str]:
