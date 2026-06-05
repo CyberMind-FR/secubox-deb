@@ -104,6 +104,15 @@ async def splash(request: Request) -> HTMLResponse:
 
 @router.post("/accept", response_model=AcceptResp)
 async def accept(request: Request) -> AcceptResp:
+    """Phase 3 (#492) : 3-level explicit opt-in.
+
+    Form field 'level' = 'r0' | 'r1' | 'r2' (default 'r1' for backward compat
+    with bare-button submission). Each level adds the MAC to incremental nft
+    sets and persists the level in the clients table.
+      r0 = validated only (net access, no inspection)
+      r1 = r0 + consented_r2_macs (MITM enabled, passive analysis only)
+      r2 = r1 + r2_banner_macs (banner injection + QUIC drop)
+    """
     ip, mac = _resolve(request)
     if not ip or not mac:
         raise HTTPException(400, "client mac unknown")
@@ -111,16 +120,33 @@ async def accept(request: Request) -> AcceptResp:
     salt = _get_salt()
     mac_hash = macmod.hash_mac(mac, salt)
 
+    # Parse level from POST body — accept form-urlencoded or fallback to r1
+    try:
+        form = await request.form()
+        level = (form.get("level") or "r1").lower()
+    except Exception:
+        level = "r1"
+    if level not in ("r0", "r1", "r2"):
+        level = "r1"
+    # R2 only allowed if config enables it
+    if level == "r2" and not cfg.r2.enabled:
+        level = "r1"
+
+    # All levels get validated (net access)
     if not nft.add_validated(mac, ttl="24h"):
         raise HTTPException(500, "nft add validated failed")
+
     r2_ok = False
-    if cfg.r2.enabled and nft.add_consented(mac, ttl="24h"):
+    if level in ("r1", "r2") and nft.add_consented(mac, ttl="24h"):
         r2_ok = True
+    # R2-only : QUIC drop + banner injection (separate nft set)
+    if level == "r2":
+        nft.add_r2_banner(mac, ttl="24h")
 
     ua = request.headers.get("user-agent", "")
     store.record_consent(mac_hash, ip, ua, ttl_seconds=86400)
-    store.upsert_client(mac_hash, ip)
-    log.info("consent recorded mac_hash=%s r2=%s", mac_hash, r2_ok)
+    store.upsert_client(mac_hash, ip, level=level)
+    log.info("consent recorded mac_hash=%s level=%s r2=%s", mac_hash, level, r2_ok)
     return AcceptResp(ok=True, mac_hash=mac_hash, r2=r2_ok)
 
 

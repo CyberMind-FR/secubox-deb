@@ -14,6 +14,14 @@ table inet toolbox {
         timeout 24h
     }
 
+    # Phase 3 (#492) : level R2 explicit opt-in subset. Membership triggers
+    # the QUIC reject rule + inject_banner. Subset of consented_r2_macs.
+    set r2_banner_macs {
+        type ether_addr
+        flags timeout
+        timeout 24h
+    }
+
     set quarantine_macs {
         type ether_addr
         flags timeout
@@ -50,14 +58,13 @@ table inet toolbox {
         type filter hook forward priority 10; policy accept;
         # Quarantine first (high priority drop)
         iifname "{{ ap.iface }}" ether saddr @quarantine_macs drop
-        # Phase 3 (#492) : DROP QUIC/HTTP3 for R2-consented clients.
-        # iOS+Android use QUIC (UDP 443) aggressively which bypasses our TCP
-        # mitm transparent proxy entirely. Forcing clients to fall back to
-        # TCP HTTPS means mitmproxy sees the flows -> banner injection + full
-        # analysis works. Performance impact is minor for browsing, and Apple
-        # services (iCloud/Push/FaceTime) which prefer QUIC still work fine
-        # over TCP. UDP 53/67 (DNS/DHCP) explicitly allowed below.
-        iifname "{{ ap.iface }}" ether saddr @consented_r2_macs udp dport 443 reject with icmpx type port-unreachable
+        # Phase 3 (#492) : OPTIONAL QUIC/HTTP3 reject for clients in the
+        # r2_banner_macs set (level=R2 explicit opt-in). This forces TCP
+        # fallback so mitmproxy sees the flows -> banner injection works.
+        # Apps that REQUIRE QUIC (some iCloud paths, FaceTime) may degrade.
+        # Default = empty set, no impact. /accept POST with level=r2 adds
+        # the MAC; user can revert to R1 to remove without losing R1 analysis.
+        iifname "{{ ap.iface }}" ether saddr @r2_banner_macs udp dport 443 reject with icmpx type port-unreachable
         # Validated MACs: forward to LAN/Internet
         iifname "{{ ap.iface }}" oifname "lan0" ether saddr @validated_macs accept
         iifname "lan0" oifname "{{ ap.iface }}" ct state established,related accept
