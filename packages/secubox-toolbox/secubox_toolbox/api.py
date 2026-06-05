@@ -241,11 +241,73 @@ async def ca_mobileconfig() -> Response:
 
 @router.get("/ca/android.crt")
 async def ca_android_crt() -> Response:
+    """Serve CA cert as PEM (Android-friendly).
+    Chrome on Android prompts to install when MIME = application/x-x509-ca-cert."""
     return Response(
-        content=ca.ca_der(),
+        content=ca.ca_pem(),
         media_type="application/x-x509-ca-cert",
         headers={"Content-Disposition": "attachment; filename=gondwana-toolbox.crt"},
     )
+
+
+@router.get("/ca/android.der")
+async def ca_android_der() -> Response:
+    """Fallback DER binary for older Android versions / manual install."""
+    return Response(
+        content=ca.ca_der(),
+        media_type="application/x-x509-ca-cert",
+        headers={"Content-Disposition": "attachment; filename=gondwana-toolbox.der"},
+    )
+
+
+@router.get("/ca/android-help", response_class=HTMLResponse)
+async def ca_android_help() -> HTMLResponse:
+    """Step-by-step CA install guide for Android (Chrome + Settings flow)."""
+    html = """<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Installer le certificat Gondwana ToolBoX — Android</title>
+<style>body{font-family:sans-serif;background:#0a0a0f;color:#00ff55;padding:1.5rem;max-width:560px;margin:auto;line-height:1.6}
+h1{color:#00ff55;text-shadow:0 0 4px #00dd44}h2{color:#cbb6ff;margin-top:1.5rem;font-size:1.1rem}
+ol{padding-left:1.4rem}a.btn{display:block;text-align:center;padding:0.8rem;background:#9e76ff;color:#0a0a0f;
+text-decoration:none;border-radius:4px;font-weight:bold;margin:1rem 0}code{background:#222;padding:0.1rem 0.4rem;border-radius:2px}</style>
+</head><body>
+<h1>🤖 Installer le certificat — Android</h1>
+<p>Android &le; 13 et certaines apps (banques, gov) refusent les CAs utilisateur.
+Le navigateur Chrome lui le respecte. R1/R2 fonctionnent dans Chrome ; les apps natives
+peuvent rester en clear-text ou échouer.</p>
+
+<a href="/ca/android.crt" class=btn>📥 Télécharger le certificat (.crt)</a>
+
+<h2>Étape 1 — Télécharger</h2>
+<p>Tap le bouton ci-dessus. Chrome demande où enregistrer le fichier
+<code>gondwana-toolbox.crt</code> (Downloads).</p>
+
+<h2>Étape 2 — Installer dans Réglages</h2>
+<ol>
+<li>Ouvre <b>Réglages</b> → <b>Sécurité</b> (ou <b>Sécurité et confidentialité</b>)</li>
+<li>Cherche <b>Chiffrement et authentifiants</b> → <b>Installer un certificat</b></li>
+<li>Choisis <b>Certificat CA</b></li>
+<li>Sélectionne <code>gondwana-toolbox.crt</code> dans Downloads</li>
+<li>Confirme l'avertissement (oui, c'est un CA tiers ; il vit le temps de ta session)</li>
+</ol>
+
+<h2>Étape 3 — Vérifier l'empreinte</h2>
+<p>Après installation, retourne dans <b>Sécurité → Authentifiants de confiance →
+Utilisateur</b> et compare l'empreinte SHA-1 affichée avec celle de la cabine :</p>
+<p><code id=fp>chargement…</code></p>
+
+<h2>⚠ Limite Android</h2>
+<p>Depuis Android 7, les apps doivent <b>opt-in</b> aux CAs utilisateur via
+<code>network_security_config.xml</code>. La plupart des apps banques/gov/streaming
+NE LE FONT PAS — résultat : R1/R2 cassent leur connexion. Solution : utilise R0
+pour ces apps, OU passe en R3 (WireGuard).</p>
+
+<a href="/" class=btn style="background:transparent;color:#00ff55;border:1px solid #00ff55">← Retour splash</a>
+<script>
+fetch('/ca/fingerprint').then(r=>r.json()).then(d=>{document.getElementById('fp').textContent=d.sha1||'?';});
+</script>
+</body></html>"""
+    return HTMLResponse(html)
 
 
 @router.get("/ca/webclip-cabine.mobileconfig")
@@ -270,6 +332,103 @@ async def webclip_cabine() -> Response:
 @router.get("/ca/install-help", response_class=HTMLResponse)
 async def ca_install_help() -> HTMLResponse:
     return HTMLResponse(_env.get_template("ca-help.html.j2").render())
+
+
+# Phase 6 (#496) : Android PWA manifest + R3 install page
+# Android Chrome reads manifest.json + offers 'Add to Home Screen' = PWA
+# (Android's equivalent of iOS WebClip).
+
+@router.get("/manifest.json")
+async def webapp_manifest(request: Request) -> dict:
+    """Web App Manifest for Android Chrome 'Add to Home Screen' PWA install."""
+    return {
+        "name": "ToolBoX Cabine VILLAGE3B",
+        "short_name": "ToolBoX",
+        "description": "Cabine numérique Gondwana — diagnostic compromission iPhone/Android",
+        "start_url": "/report/me/html",
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "portrait",
+        "background_color": "#0a0a0f",
+        "theme_color": "#00dd44",
+        "icons": [
+            {
+                "src": "/qr/splash.png",
+                "sizes": "232x232",
+                "type": "image/png",
+                "purpose": "any maskable"
+            }
+        ],
+        "categories": ["security", "utilities"],
+        "lang": "fr-FR"
+    }
+
+
+@router.get("/wg/r3-install", response_class=HTMLResponse)
+async def wg_r3_install(request: Request) -> HTMLResponse:
+    """R3 install page — download WG profile + QR + iOS/Android instructions."""
+    html = """<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=apple-mobile-web-app-capable content=yes>
+<link rel=manifest href=/manifest.json>
+<title>R3 WireGuard — Installer le profil portable</title>
+<style>:root{--bg:#0a0a0f;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);padding:1.2rem;max-width:560px;margin:auto;line-height:1.55}
+h1{color:var(--phos-hot);text-shadow:0 0 6px var(--phos);margin-bottom:0.3rem}
+.sub{color:var(--dim);font-size:0.85rem;margin-bottom:1rem}
+.card{border:1px solid var(--purple);padding:1rem;margin-bottom:1rem;background:rgba(110,64,201,0.05)}
+.card h2{color:var(--purple);font-size:0.95rem;margin-bottom:0.5rem}
+.btn{display:block;text-align:center;padding:0.8rem;background:var(--purple);color:#0a0a0f;
+text-decoration:none;border-radius:4px;font-weight:bold;margin:0.6rem 0;font-size:0.95rem}
+.btn.outline{background:transparent;color:var(--purple);border:1px solid var(--purple)}
+.qr{text-align:center;background:white;padding:0.8rem;border-radius:4px;margin:0.6rem 0}
+.qr img{max-width:240px;width:100%}
+ol{padding-left:1.4rem;font-size:0.85rem}
+code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem}
+.warn{font-size:0.75rem;color:#ffd6a0;background:rgba(255,179,71,0.08);padding:0.6rem;border-left:2px solid #ffb347;margin:0.6rem 0}
+</style></head><body>
+<h1>🌐 R3 — WireGuard portable</h1>
+<p class=sub>// VPN tunnel mitm — marche partout (mobile data, WiFi tiers)</p>
+
+<div class=card>
+<h2>📲 Méthode 1 — Scanner le QR (recommandé)</h2>
+<p style="font-size:0.82rem">Ouvre l'app <b>WireGuard</b> (gratuite, App Store / Play Store) → ➕ Ajouter un tunnel → <b>Scanner depuis QR</b> → pointe l'iPhone vers ce QR :</p>
+<div class=qr><img src="/wg/qr.png" alt="QR profil WG"/></div>
+<p style="font-size:0.7rem;opacity:0.7;text-align:center">⚠ Le QR contient ta clé privée. Ne le partage pas.</p>
+</div>
+
+<div class=card>
+<h2>💾 Méthode 2 — Télécharger .conf</h2>
+<a href=/wg/profile/new class=btn>📥 Télécharger village3b-toolbox.conf</a>
+<ol>
+<li>iPhone : ouvre le fichier → app WireGuard s'ouvre → tap 'Importer'</li>
+<li>Android : ouvre l'app WireGuard → ➕ → Importer depuis fichier</li>
+<li>Linux : <code>wg-quick up village3b-toolbox.conf</code></li>
+</ol>
+</div>
+
+<div class=warn>
+<b>⚠ Avant de connecter :</b> installe aussi le certificat racine ToolBoX
+(<a href="/ca/mobileconfig" style="color:#ffb347">iPhone .mobileconfig</a> ou
+<a href="/ca/android.crt" style="color:#ffb347">Android .crt</a>) sinon les
+sites HTTPS échoueront dès que tu actives le tunnel.
+</div>
+
+<div class=card>
+<h2>🔌 Après connection</h2>
+<p style="font-size:0.82rem">Une fois le tunnel actif (icône VPN visible iOS) :</p>
+<ul style="padding-left:1.2rem;font-size:0.82rem">
+<li>Tout ton trafic (HTTPS + QUIC + DNS) passe par la cabine</li>
+<li>Le bandeau apparaît sur TOUTES les pages web (incl Safari)</li>
+<li>Le rapport <a href=/report/me/html style="color:var(--phos)">📊 /report/me/html</a> se remplit en temps réel</li>
+<li>iCloud Push + FaceTime continuent de marcher (routing-bypass)</li>
+</ul>
+</div>
+
+<a href=/ class=btn outline>← Retour splash</a>
+</body></html>"""
+    return HTMLResponse(html)
 
 
 @router.get("/ca/fingerprint")
