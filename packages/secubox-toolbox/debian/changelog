@@ -1,3 +1,33 @@
+secubox-toolbox (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2a : real SOC scoring multi-signal — major bump 1.5→2.0.
+  * threat_intel.py : pull asynchrone des feeds abuse.ch (ThreatFox 5k IoCs
+    cap, Feodo botnet C2, SSLBL TLS cert blacklist). Cache SQLite,
+    refresh 1h. API : is_malicious_ip(), is_malicious_domain(), feed_stats().
+  * dga.py : heuristique DGA (Shannon entropy, sub-domain length, vowel/digit
+    ratio) avec allowlist 2LD pour reduire FP (akamai, cloudflare, apple, etc.)
+  * beaconing.py : cadence analysis (median interval + coefficient of variation
+    sur DPI events SQLite par mac_hash). Detection beacons C2 (interval 5-300s
+    + cv < 0.20).
+  * scoring.py : aggregation multi-signal transparente. Categories ponderees
+    (threat_intel 0-80, dga 0-40, beaconing 0-50, raw_soc 0-40). Score capped
+    100. Label LOW/MEDIUM/HIGH + explication phrase complete + breakdown
+    detaille (every signal explainable).
+  * api.py _aggregate_session : integre les 3 nouveaux modules + scoring.
+    Returns scoring.{score,label,explanation,breakdown}, threat_intel_matches[],
+    dga_candidates[], beaconing_candidates[].
+  * app.py : asyncio task refresh threat-intel au startup + hourly.
+  * reports.py PDF : nouvelles sections Breakdown + Threat-intel matches + DGA +
+    Beaconing avec details lisibles.
+  * report-live.html.j2 : memes sections + breakdown table coloree + explication
+    encadree.
+
+  Closes #485 (Phase 2a parent #474). Phase 2b = wire to existing modules
+  (cookies.sock/dpi.sock/avatar.sock/threat-analyst.sock/soc.sock) reste a faire.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 05 Jun 2026 06:30:00 +0200
+
+
 secubox-toolbox (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Add ap-iface.network.j2 Jinja template + toolbox-up renders it to

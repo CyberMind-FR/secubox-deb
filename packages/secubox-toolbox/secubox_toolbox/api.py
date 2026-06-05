@@ -12,7 +12,17 @@ import jinja2
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
-from . import ca, mac as macmod, nft, reports, store
+from . import (
+    beaconing,
+    ca,
+    dga,
+    mac as macmod,
+    nft,
+    reports,
+    scoring,
+    store,
+    threat_intel,
+)
 from .config import load_config, resolve_secret
 from .models import AcceptResp, ClientRow, Config, StatusResp
 
@@ -293,8 +303,38 @@ def _aggregate_session(mac_hash: str) -> dict:
     except Exception:
         pass
 
-    # ── 3. Risk score from SOC indicators ──
-    risk_score = min(100, sum(i.get("weight", 0) for i in soc_indicators))
+    # ── 3. Phase 2a SOC scoring : threat-intel + DGA + beaconing ──
+    # Threat-intel : match IPs in feeds (resolve hosts isn't done here — match domains
+    # directly). On DPI hosts (which are domain names from SNI/Host) we check both.
+    ti_matches: list[dict] = []
+    unique_hosts_list = list(dpi_hosts.keys())
+    for host in unique_hosts_list:
+        for m in threat_intel.is_malicious_domain(host):
+            m["ioc"] = host
+            ti_matches.append(m)
+    # Also check raw IPs seen in mitm logs
+    for h in hosts:
+        ip = h.split(":")[0]
+        # crude IP detection : has dot + all digits
+        if ip.replace(".", "").isdigit():
+            for m in threat_intel.is_malicious_ip(ip):
+                m["ioc"] = ip
+                ti_matches.append(m)
+
+    # DGA heuristic on domains
+    dga_candidates = dga.analyze_hosts(unique_hosts_list)
+
+    # Beaconing analysis from SQLite cadence
+    beacon_candidates = beaconing.analyze_beaconing(mac_hash)
+
+    # Multi-signal score
+    score_result = scoring.compute_score(
+        threat_intel_matches=ti_matches,
+        dga_candidates=dga_candidates,
+        beaconing_candidates=beacon_candidates,
+        raw_soc_events=soc_indicators,
+    )
+    risk_score = score_result["score"]
 
     # ── 4. Top DPI hosts (Phase 1.5 = simple ranking) ──
     top_dpi = sorted(dpi_hosts.items(), key=lambda x: -x[1])[:15]
@@ -309,14 +349,10 @@ def _aggregate_session(mac_hash: str) -> dict:
         },
         "apps_detected": _classify_apps(hosts),
         "risk_score": risk_score,
-        "indicators": [
-            "Aucune connexion vers feeds ThreatFox/Feodo/SSLBL"
-            if not soc_indicators else
-            f"{len(soc_indicators)} indicateur(s) SOC detecte(s) — voir section SOC",
-            "Aucun pattern DGA detecte" if not any(i.get("kind") == "dga" for i in soc_indicators) else "DGA pattern detecte",
-            "Aucun beaconing periodique anormal",
-            "Aucune connexion DoH suspecte (C2)",
-            f"User agents detectes : {len(user_agents)}",
+        "risk_label": score_result["label"],
+        "risk_explanation": score_result["explanation"],
+        "indicators": score_result["indicators_summary"] or [
+            "Aucun signal de compromission détecté.",
         ],
         "pinned_apps": [
             "Signal Messenger : E2E chiffre - ToolBox NE PEUT PAS lire tes messages",
@@ -350,6 +386,16 @@ def _aggregate_session(mac_hash: str) -> dict:
             "snis_seen": list(ja4_snis)[:10],
             "alpns_seen": list(ja4_alpns),
         },
+        # ── Phase 2a SOC scoring ──
+        "scoring": {
+            "score": score_result["score"],
+            "label": score_result["label"],
+            "explanation": score_result["explanation"],
+            "breakdown": score_result["breakdown"],
+        },
+        "threat_intel_matches": ti_matches[:10],
+        "dga_candidates": dga_candidates[:10],
+        "beaconing_candidates": beacon_candidates[:10],
     }
 
 
