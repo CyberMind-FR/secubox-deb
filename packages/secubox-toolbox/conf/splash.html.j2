@@ -39,34 +39,36 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     {% if mac_hash and mac_hash != '??' %}<br>Ton appareil (anonymisé) : <b>{{ mac_hash }}</b>{% endif %}
   </div>
 
-  {# Phase 3 (#492) : cert access + auto-check. Big install button + manual test
-     button + auto-detected status. R1/R2 require the CA to be in trust store. #}
-  <div id="cert-card" class="info" style="margin-top:0.5rem;background:rgba(110,64,201,0.08);border-left-color:#9e76ff">
-    <p style="font-size:0.85rem;color:#cbb6ff;margin-bottom:0.4rem">
-      🔐 <b>Certificat racine ToolBoX</b> — requis pour R1/R2
-    </p>
-    <p style="font-size:0.72rem;opacity:0.85;line-height:1.45;margin-bottom:0.5rem">
-      Sans certificat installé, R1 et R2 cassent tous les HTTPS (TLS handshake fails).
-      R0 fonctionne sans le certificat (mais aucune analyse).
+  {# Phase 3 (#492) : 📦 Composants à installer — quick-up menu emoji #}
+  <div class="info" style="margin-top:0.5rem;background:rgba(110,64,201,0.08);border-left-color:#9e76ff">
+    <p style="font-size:0.9rem;color:#cbb6ff;margin-bottom:0.6rem;font-weight:bold">
+      📦 Quick install — composants ToolBoX
     </p>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.5rem">
-      <a href="/ca/mobileconfig"
-         style="display:block;padding:0.55rem;background:#9e76ff;color:#0a0a0f;text-decoration:none;text-align:center;font-weight:bold;font-size:0.82rem;border-radius:3px">
-        📥 Installer (iPhone)
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.6rem">
+      <a href="/ca/mobileconfig" class="qbtn qbtn-primary">
+        🔐 Certificat iPhone
+        <span class="qbtn-sub">.mobileconfig pour iOS</span>
       </a>
-      <a href="/ca/android.crt"
-         style="display:block;padding:0.55rem;background:transparent;color:#cbb6ff;text-decoration:none;text-align:center;font-weight:bold;font-size:0.82rem;border:1px solid #9e76ff;border-radius:3px">
-        🤖 Télécharger CRT (Android/PC)
+      <a href="/ca/android.crt" class="qbtn qbtn-outline">
+        🤖 Certificat Android/PC
+        <span class="qbtn-sub">.crt à installer manuellement</span>
+      </a>
+      <a href="/ca/webclip-cabine.mobileconfig" class="qbtn qbtn-primary-alt">
+        📱 Icône Home iPhone
+        <span class="qbtn-sub">1-tap accès rapport</span>
+      </a>
+      <a href="/ca/install-help" class="qbtn qbtn-outline">
+        📜 Guide pas-à-pas
+        <span class="qbtn-sub">comment installer</span>
       </a>
     </div>
 
-    <button type="button" id="test-cert-btn"
-            style="width:100%;padding:0.5rem;background:transparent;color:var(--phos-hot);border:1px solid var(--phos);font-family:inherit;font-size:0.82rem;cursor:pointer;margin-bottom:0.4rem">
+    <button type="button" id="test-cert-btn" class="qbtn qbtn-test">
       🧪 Tester le certificat maintenant
     </button>
 
-    <div id="cert-status" style="font-size:0.78rem;padding:0.5rem;background:rgba(0,0,0,0.3);border-radius:3px;text-align:center">
+    <div id="cert-status" style="font-size:0.8rem;padding:0.55rem;background:rgba(0,0,0,0.3);border-radius:3px;text-align:center;margin-top:0.5rem">
       <span id="cert-emoji">⏳</span>
       <span id="cert-text">Auto-test en cours...</span>
     </div>
@@ -75,6 +77,20 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
       Empreinte CA SHA-1 : <code id="cert-fp" style="color:#cbb6ff"></code>
     </p>
   </div>
+
+  <style>
+  .qbtn{display:block;padding:0.7rem 0.6rem;text-decoration:none;text-align:center;
+        font-family:inherit;font-size:0.82rem;font-weight:bold;border-radius:4px;
+        transition:transform 0.1s,box-shadow 0.1s;line-height:1.25}
+  .qbtn:hover{transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.4)}
+  .qbtn-sub{display:block;font-size:0.65rem;font-weight:normal;opacity:0.75;margin-top:0.2rem}
+  .qbtn-primary{background:#9e76ff;color:#0a0a0f}
+  .qbtn-primary-alt{background:#6e40c9;color:#fff}
+  .qbtn-outline{background:transparent;color:#cbb6ff;border:1px solid #9e76ff}
+  .qbtn-test{width:100%;background:transparent;color:var(--phos-hot);border:1px solid var(--phos);
+             padding:0.55rem;cursor:pointer;font-family:inherit;font-size:0.85rem}
+  .qbtn-test:hover{background:rgba(0,221,68,0.1)}
+  </style>
   <script>
   (function(){
     var fpEl = document.getElementById('cert-fp');
