@@ -23,6 +23,10 @@ DEJAVU_OBLIQUE_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"
 # Symbola : broad monochrome emoji + symbol coverage (📱📡🔍🔒🎯🎵🐙📊🍪…)
 # Apt package : fonts-symbola
 SYMBOLA_PATH = "/usr/share/fonts/truetype/ancient-scripts/Symbola_hint.ttf"
+# Noto Color Emoji : CBDT/CBLC color bitmap font covering ALL emojis incl.
+# flags (regional indicator pairs 🇫🇷🇺🇸🇩🇪) which Symbola lacks.
+# fpdf2 >= 2.7 supports color emoji rendering — package fonts-noto-color-emoji
+NOTO_COLOR_EMOJI_PATH = "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
 
 
 def mint_token(mac_hash: str, salt: str, ttl_seconds: int = 86400) -> ReportToken:
@@ -79,9 +83,22 @@ def _setup_fonts(pdf) -> str:
             if Path(DEJAVU_OBLIQUE_PATH).exists():
                 pdf.add_font("DejaVu", style="I", fname=DEJAVU_OBLIQUE_PATH)
             family = "DejaVu"
-            # Fallback chain : Symbola covers 📱📡🔍🔒🎯🎵🐙📊🍪 + most emoji
-            # not present in DejaVu.
+            # Fallback chain :
+            #   NotoColorEmoji  : COLOR CBDT/CBLC, covers ALL emojis including
+            #                     flags as composite glyphs (🇫🇷 = single bitmap)
+            #                     and modern 2020+ emojis Symbola lacks
+            #   Symbola         : monochrome vector fallback for chars not in Noto
+            # Order matters : Noto FIRST. Symbola has regional indicator letters
+            # but renders them as separate boxed letters, not composite flags.
+            # By trying Noto first, flag emojis render as proper single glyphs.
             fallback = []
+            if Path(NOTO_COLOR_EMOJI_PATH).exists():
+                try:
+                    pdf.add_font("NotoColorEmoji", style="", fname=NOTO_COLOR_EMOJI_PATH)
+                    fallback.append("NotoColorEmoji")
+                    log.info("NotoColorEmoji loaded — color emoji + flags enabled")
+                except Exception as e:
+                    log.warning("NotoColorEmoji font load failed: %s", e)
             if Path(SYMBOLA_PATH).exists():
                 try:
                     pdf.add_font("Symbola", style="", fname=SYMBOLA_PATH)
@@ -90,11 +107,8 @@ def _setup_fonts(pdf) -> str:
                     log.warning("Symbola font load failed: %s", e)
             if fallback:
                 try:
-                    # exact_match=False so Bold/Italic text also falls back to
-                    # regular Symbola (it has no Bold variant).
                     pdf.set_fallback_fonts(fallback, exact_match=False)
                 except TypeError:
-                    # Older fpdf2 without exact_match param
                     pdf.set_fallback_fonts(fallback)
                 except Exception as e:
                     log.warning("set_fallback_fonts failed: %s", e)
@@ -399,23 +413,14 @@ def _page_w(pdf) -> float:
 # Phase 3 (#492) : with DejaVu Sans + Noto fallback, most emojis render as
 # real glyphs (monochrome). For chars not in either font (e.g. some flags,
 # very recent emoji), we fall back to a small ASCII replacement table.
-_EMOJI_REPLACEMENTS = {
-    # Common emojis NOT in DejaVu Sans + Symbola fallback — replaced gracefully
-    # Flag emojis (regional indicator pairs, not in monochrome fonts)
-    "🇫🇷": "[FR]", "🇺🇸": "[US]", "🇩🇪": "[DE]", "🇨🇳": "[CN]",
-    "🇬🇧": "[GB]", "🇯🇵": "[JP]", "🇨🇦": "[CA]", "🇮🇪": "[IE]",
-    "🇮🇹": "[IT]", "🇪🇸": "[ES]", "🇧🇪": "[BE]", "🇨🇭": "[CH]",
-    "🇳🇱": "[NL]", "🇸🇪": "[SE]", "🇮🇱": "[IL]", "🇧🇷": "[BR]",
-    "🇷🇺": "[RU]", "🇮🇳": "[IN]", "🇰🇷": "[KR]", "🇦🇺": "[AU]",
-    "🏳": "[??]",
-    # Recent emoji (2020+) not in Symbola
-    "🟢": "[OK]",  # green circle
-    "🟡": "[WARN]",  # yellow circle
-    "🔴": "[KO]",  # red circle (also used for Opera but contextual)
-    "🟦": "[BOX]",  # blue square
-    "🦋": "[BSKY]",  # butterfly
-    "🦊": "[FF]",  # fox face
-    "🪟": "[EDGE]",  # window
+# With NotoColorEmoji fallback enabled, ALL emojis (incl flags + recent
+# 2020+ glyphs) render natively. The replacements table is now empty —
+# kept for backward compat (e.g. if NotoColorEmoji absent on a board,
+# we still want graceful degradation, but the user should install
+# fonts-noto-color-emoji per debian/control deps).
+_EMOJI_REPLACEMENTS: dict[str, str] = {
+    # Only catch the white-flag fallback (🏳 alone, no country) — explicit "unknown"
+    "🏳": "🏳",  # keep as-is (NotoColorEmoji has it)
 }
 
 
