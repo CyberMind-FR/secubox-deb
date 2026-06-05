@@ -184,26 +184,21 @@ async def change_level(request: Request):
         level = "r1"
 
     # Re-validate (idempotent extend)
-    nft.add_validated(mac, ttl="24h")
+    v_ok = nft.add_validated(mac, ttl="24h")
     # Membership in consented_r2_macs : add for r1/r2, remove for r0
     if level in ("r1", "r2"):
-        nft.add_consented(mac, ttl="24h")
+        c_ok = nft.add_consented(mac, ttl="24h")
     else:
-        try:
-            nft.del_validated  # name-check
-            from . import nft as _nft
-            _nft._run(_nft.NFT, "delete", "element", "inet", "toolbox",
-                      "consented_r2_macs", "{ " + mac + " }")
-        except Exception:
-            pass
+        c_ok = nft.del_consented(mac)
     # Membership in r2_banner_macs : add for r2, remove otherwise
     if level == "r2":
-        nft.add_r2_banner(mac, ttl="24h")
+        b_ok = nft.add_r2_banner(mac, ttl="24h")
     else:
-        nft.del_r2_banner(mac)
+        b_ok = nft.del_r2_banner(mac)
 
     store.upsert_client(mac_hash, ip, level=level)
-    log.info("level switched mac_hash=%s -> %s", mac_hash, level)
+    log.info("level switched mac_hash=%s -> %s (nft: validated=%s consented=%s banner=%s)",
+             mac_hash, level, v_ok, c_ok, b_ok)
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url=f"/report/me/html?switched=1&level={level}",
                              status_code=303)
