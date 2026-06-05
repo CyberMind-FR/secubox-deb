@@ -98,23 +98,62 @@ def render_pdf(report: dict) -> bytes:
     # Compromise analysis
     _section(pdf, "ANALYSE COMPROMISSION")
     score = report.get("risk_score", 0)
+    risk_label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
     pdf.set_font("Helvetica", "B", 13)
     if score < 30:
         pdf.set_text_color(0, 221, 68)
-        risk_label = "LOW"
     elif score < 70:
         pdf.set_text_color(255, 179, 71)
-        risk_label = "MEDIUM"
     else:
         pdf.set_text_color(255, 68, 102)
-        risk_label = "HIGH"
-    pdf.cell(0, 8, f"Score risque : {score}/100 ({risk_label})", ln=True)
+    pdf.cell(0, 8, _ascii_safe(f"Score risque : {score}/100 ({risk_label})"), ln=True)
     pdf.set_text_color(0)
     pdf.set_font("Helvetica", "", 10)
-    pdf.ln(2)
+    pdf.ln(1)
+    explanation = report.get("risk_explanation", "")
+    if explanation:
+        pdf.multi_cell(_page_w(pdf), 5, _ascii_safe(explanation)[:600])
+        pdf.ln(1)
     for sig in report.get("indicators", []):
         _bullet(pdf, sig)
     pdf.ln(2)
+
+    # Score breakdown — per-category transparency (Phase 2a)
+    scoring_data = report.get("scoring") or {}
+    breakdown = scoring_data.get("breakdown") or []
+    if breakdown:
+        _section(pdf, "BREAKDOWN DU SCORE")
+        for b in breakdown:
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(0, 5, f"{b.get('category', '?').upper()} : poids {b.get('weight_subtotal', 0)} (sur {b.get('raw_signal_count', 0)} signal)", ln=True)
+            pdf.set_font("Helvetica", "", 8)
+            for ex in (b.get("examples") or [])[:3]:
+                _bullet(pdf, ex, font_size=8)
+        pdf.ln(2)
+
+    # Threat-intel matches (feeds malware) — Phase 2a
+    ti = report.get("threat_intel_matches") or []
+    if ti:
+        _section(pdf, "THREAT INTEL - MATCHES FEEDS MALWARE")
+        for m in ti[:10]:
+            _bullet(pdf, f"[{m.get('source', '?')}/{m.get('weight', 0)}] {m.get('label', '?')} : {m.get('ioc', '?')[:60]}", font_size=8)
+        pdf.ln(2)
+
+    # DGA candidates — Phase 2a
+    dga_list = report.get("dga_candidates") or []
+    if dga_list:
+        _section(pdf, "DGA - DOMAINES SUSPECTS")
+        for d in dga_list[:8]:
+            _bullet(pdf, f"[{d.get('score', 0)}] {d.get('host', '?')[:60]} ({','.join(d.get('indicators', []))})", font_size=8)
+        pdf.ln(2)
+
+    # Beaconing patterns — Phase 2a
+    bc = report.get("beaconing_candidates") or []
+    if bc:
+        _section(pdf, "BEACONING - PATTERNS PERIODIQUES SUSPECTS")
+        for b in bc[:8]:
+            _bullet(pdf, f"[{b.get('score', 0)}] {b.get('host', '?')[:50]}  median={b.get('median_seconds', 0)}s  cv={b.get('cv', 0)}", font_size=8)
+        pdf.ln(2)
 
     # Cert-pinning protection
     _section(pdf, "PROTECTION CERT-PINNING (apps qui RESISTENT au MITM)")
@@ -122,15 +161,44 @@ def render_pdf(report: dict) -> bytes:
         _bullet(pdf, app)
     pdf.ln(2)
 
-    # ── DPI (Deep Packet Inspection) ──
-    dpi = report.get("dpi") or {}
-    if dpi.get("top_hosts"):
-        _section(pdf, "DPI - HOTES LES PLUS CONTACTES")
-        for entry in dpi["top_hosts"][:10]:
-            _bullet(pdf, f"{entry['host'][:60]} ({entry['count']} req)", font_size=8)
-        if dpi.get("user_agents"):
+    # ── DPI classification (Phase 2a+ nDPI-style apps with emojis) ──
+    dpi_cls = report.get("dpi_classified") or {}
+    if dpi_cls.get("top_apps"):
+        _section(pdf, "APPS DETECTEES (nDPI-style classification)")
+        for a in dpi_cls["top_apps"][:15]:
+            _bullet(pdf, f"{a.get('emoji', '?')} {a.get('app', '?')} ({a.get('category', '?')}) - {a.get('count', 0)} connexions", font_size=8)
+        pdf.ln(2)
+
+    # ── Geo top hosts (avec drapeaux + ASN) ──
+    geo_hosts = report.get("geo_top_hosts") or []
+    if geo_hosts:
+        _section(pdf, "HOTES PAR PAYS + ASN + APP (PHASE 2A+)")
+        for h in geo_hosts[:12]:
+            flag = h.get("flag", "")
+            line = f"{flag} {h.get('emoji', '')} {h.get('app', '?')} | {h.get('host', '?')[:40]} | {h.get('asn_org', '?')[:25]} | {h.get('count', 0)} hits"
+            _bullet(pdf, line, font_size=8)
+        pdf.ln(2)
+
+    # ── Avatar / device fingerprint ──
+    avatar = report.get("avatar_analysis") or {}
+    if avatar.get("devices"):
+        _section(pdf, f"AVATAR / DEVICE FINGERPRINT")
+        _kv(pdf, "Most common", f"{avatar.get('most_common_emoji', '?')} {avatar.get('most_common', '?')}")
+        _kv(pdf, "UA distincts", str(avatar.get('raw_count', 0)))
+        for dev, info in (avatar.get("devices") or {}).items():
+            _bullet(pdf, f"{info.get('emoji', '?')} {info.get('os_label', dev)} - {info.get('count', 0)}x", font_size=8)
+        if avatar.get("browsers"):
             pdf.ln(1)
-            _kv(pdf, "User agents", str(len(dpi['user_agents'])))
+            for br, info in (avatar.get("browsers") or {}).items():
+                _bullet(pdf, f"{info.get('emoji', '?')} {info.get('label', br)} - {info.get('count', 0)}x", font_size=8)
+        pdf.ln(2)
+
+    # ── Cookies providers (Phase 2a+) ──
+    cookies_providers = report.get("cookies_providers") or []
+    if cookies_providers:
+        _section(pdf, "COOKIES / TRACKERS PROVIDERS")
+        for p in cookies_providers[:12]:
+            _bullet(pdf, f"{p.get('emoji', '?')} {p.get('provider', '?')} ({p.get('category', '?')}) x{p.get('count', 0)}", font_size=8)
         pdf.ln(2)
 
     # ── Cookies trackers ──
@@ -213,11 +281,41 @@ def _page_w(pdf) -> float:
     return pdf.w - pdf.l_margin - pdf.r_margin
 
 
+# Helvetica is latin-1 only ; PDF report uses ASCII replacements for emoji
+# (HTML live report keeps the real emoji glyphs).
+_EMOJI_REPLACEMENTS = {
+    "📺": "[TV]", "🎬": "[FILM]", "🎵": "[MUSIC]", "👥": "[SOCIAL]",
+    "📷": "[PHOTO]", "🐦": "[X]", "👾": "[REDDIT]", "💼": "[WORK]",
+    "📌": "[PIN]", "🐘": "[MASTO]", "🦋": "[BSKY]", "🔒": "[E2E]",
+    "💬": "[CHAT]", "✈": "[TG]", "🟢": "[OK]", "🔍": "[SEARCH]",
+    "🦆": "[DDG]", "📦": "[BOX]", "☁": "[CLOUD]", "🐙": "[GH]",
+    "🦊": "[FF]", "📚": "[DOC]", "🏦": "[BANK]", "📧": "[MAIL]",
+    "🍎": "[APPLE]", "🧅": "[TOR]", "🔐": "[VPN]", "❔": "[?]",
+    "📱": "[PHONE]", "💻": "[PC]", "🐧": "[LINUX]", "🎮": "[GAME]",
+    "📟": "[BOT]", "🛠": "[TOOL]", "🪟": "[EDGE]", "🧭": "[SAFARI]",
+    "🔴": "[OPERA]", "🇫🇷": "[FR]", "🇺🇸": "[US]", "🏳": "[??]",
+    "📊": "[STATS]", "🎯": "[ADS]", "🟦": "[BLOCK]", "—": "-",
+    "·": "-", "…": "...", "✅": "[OK]", "⚠": "[WARN]", "❌": "[KO]",
+}
+
+
+def _ascii_safe(text: str) -> str:
+    """Strip / replace characters outside Helvetica's latin-1 coverage."""
+    if not text:
+        return ""
+    s = str(text)
+    for emoji, repl in _EMOJI_REPLACEMENTS.items():
+        if emoji in s:
+            s = s.replace(emoji, repl)
+    # Final fallback : encode to latin-1 ignoring unknown chars
+    return s.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def _section(pdf, title: str) -> None:
     pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(0, 221, 68)
-    pdf.multi_cell(_page_w(pdf), 7, title[:80])
+    pdf.multi_cell(_page_w(pdf), 7, _ascii_safe(title)[:80])
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(0)
 
@@ -225,9 +323,9 @@ def _section(pdf, title: str) -> None:
 def _kv(pdf, key: str, value: str) -> None:
     pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(45, 5, key[:30], ln=False)
+    pdf.cell(45, 5, _ascii_safe(key)[:30], ln=False)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(_page_w(pdf) - 45, 5, str(value)[:100], ln=True)
+    pdf.cell(_page_w(pdf) - 45, 5, _ascii_safe(value)[:100], ln=True)
 
 
 def _bullet(pdf, text: str, font_size: int = 9) -> None:
@@ -235,7 +333,7 @@ def _bullet(pdf, text: str, font_size: int = 9) -> None:
     'Not enough horizontal space' errors on long tokens/URLs."""
     pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "", font_size)
-    safe = str(text)[:160]
+    safe = _ascii_safe(text)[:160]
     # Break unreasonably long single tokens (URLs over ~60 chars)
     parts = []
     for word in safe.split(" "):
