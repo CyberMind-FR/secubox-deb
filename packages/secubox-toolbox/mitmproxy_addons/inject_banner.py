@@ -26,8 +26,13 @@ from mitmproxy import http
 log = logging.getLogger("secubox.toolbox.banner")
 
 CA_PEM = Path("/etc/secubox/toolbox/ca/ca.pem")
-PORTAL_URL = "http://10.99.0.1:8088"
-REPORT_URL = "http://10.99.0.1:8088/report/me/html"
+PORTAL_URL_CAPTIVE = "http://10.99.0.1:8088"
+REPORT_URL_CAPTIVE = "http://10.99.0.1:8088/report/me/html"
+# Phase 6 (#496) : remote (R3 WG) clients can't reach the captive 10.99.0.1.
+# Use the public kbin vhost (HAProxy → backend toolbox_landing → 10.99.0.1).
+PORTAL_URL_PUBLIC = "https://kbin.gk2.secubox.in"
+REPORT_URL_PUBLIC = "https://kbin.gk2.secubox.in/report/me/html"
+WG_PEERS_DB = Path("/var/lib/secubox/toolbox/wg-peers.json")
 
 _RE_BODY_CLOSE = re.compile(rb"</body\s*>", re.I)
 _GUARD = b"__GONDWANA_MITM_BANNER__"
@@ -84,6 +89,58 @@ def _ca_sha1() -> str:
 
 
 _CA_SHA1 = _ca_sha1()
+
+
+# ── Phase 6 (#496) : WG peer → stable anon hash ─────────────────────
+import hashlib as _hashlib
+import json as _jsonmod
+
+
+def _peer_hash_from_ip(ip: str | None) -> str | None:
+    """Map 10.99.1.X (WG peer ip) → sha256(peer_pubkey)[:16].
+
+    Stable per-device, anonymous, used as mac_hash equivalent for R3
+    clients (who don't have an ARP-resolvable MAC on the captive subnet).
+    """
+    if not ip or not ip.startswith("10.99.1."):
+        return None
+    try:
+        if not WG_PEERS_DB.exists():
+            return None
+        peers = _jsonmod.loads(WG_PEERS_DB.read_text()).get("peers", {})
+        for pubkey, meta in peers.items():
+            if meta.get("ip") == ip:
+                return _hashlib.sha256(pubkey.encode()).hexdigest()[:16]
+    except Exception:
+        pass
+    return None
+
+
+def _report_url_for(flow) -> str:
+    """Dynamic report URL :
+    - captive R2 client → http://10.99.0.1:8088/report/me/html (local)
+    - WG R3 client → https://kbin.gk2.secubox.in/report/me/html?mh=<wg_hash>
+      (reachable from anywhere, anonymized, no captive subnet required)
+    """
+    try:
+        ip = flow.client_conn.peername[0] if flow.client_conn.peername else None
+        wgh = _peer_hash_from_ip(ip)
+        if wgh:
+            return f"{REPORT_URL_PUBLIC}?mh={wgh}"
+    except Exception:
+        pass
+    return REPORT_URL_CAPTIVE
+
+
+def _level_label(flow) -> str:
+    """'R2' for captive clients, 'R3' for WG tunnel clients."""
+    try:
+        ip = flow.client_conn.peername[0] if flow.client_conn.peername else None
+        if ip and ip.startswith("10.99.1."):
+            return "R3"
+    except Exception:
+        pass
+    return "R2"
 
 
 def _compute_site_context(flow: http.HTTPFlow) -> dict:
@@ -195,12 +252,17 @@ def _detect_csp_strict(flow: http.HTTPFlow) -> bool:
     return False
 
 
-def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
+def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
+                          report_url: str, level_label: str) -> bytes:
     """Render the injection payload.
 
     Two flavors depending on CSP strictness :
       - csp_strict=True  : pure HTML+inline-style, NO JS. Non-dismissible.
       - csp_strict=False : JS-driven, dismissible, dynamic insertion.
+
+    report_url + level_label are computed by InjectBanner.response so the
+    URL is reachable for the client (kbin public for R3, captive for R2)
+    and the label matches the actual opt-in tier.
     """
     # Compose per-site right-side text. NCR-encode all emojis so the banner
     # renders correctly regardless of page charset (some legacy pages declare
@@ -219,19 +281,21 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
     SAT_EMOJI = "&#x1F4E1;"  # 📡 satellite dish
 
     if csp_strict:
-        # JS-less HTML banner — visible only, no close button, no padding-top hack.
+        # JS-less HTML banner — visible only, no close button. !important
+        # everywhere so page CSS can't override the fixed positioning.
         # NCRs work even when page charset is iso-8859-1.
         html = (
             f"<div id=\"gondwana-mitm-banner\" role=\"status\" "
-            f"style=\"position:fixed;top:0;left:0;right:0;z-index:2147483647;"
-            f"background:linear-gradient(90deg,#ffb347 60%,#0a0a0f 100%);"
-            f"color:#0a0a0f;font-family:Menlo,Consolas,monospace;"
-            f"padding:6px 12px;font-size:11px;line-height:1.4;"
-            f"border-bottom:2px solid #C04E24;text-align:left;"
-            f"display:flex;justify-content:space-between;align-items:center;gap:8px\">"
-            f"<span><b>{SAT_EMOJI} ToolBoX R2</b> &#xB7; CA SHA1: "
+            f"style=\"position:fixed!important;top:0!important;left:0!important;right:0!important;"
+            f"z-index:2147483647!important;"
+            f"background:linear-gradient(90deg,#ffb347 60%,#0a0a0f 100%)!important;"
+            f"color:#0a0a0f!important;font-family:Menlo,Consolas,monospace!important;"
+            f"padding:6px 12px!important;font-size:11px!important;line-height:1.4!important;"
+            f"border-bottom:2px solid #C04E24!important;text-align:left!important;"
+            f"display:flex!important;justify-content:space-between!important;align-items:center!important;gap:8px!important\">"
+            f"<span><b>{SAT_EMOJI} ToolBoX {level_label}</b> &#xB7; CA SHA1: "
             f"<code style=\"background:rgba(0,0,0,0.1);padding:1px 4px;border-radius:2px\">{sha1[:23]}</code>"
-            f" &#xB7; <span style=\"opacity:0.7;font-size:10px\">CSP-safe mode (no JS)</span></span>"
+            f" &#xB7; <a href=\"{report_url}\" style=\"color:#0a5840;text-decoration:underline;font-weight:bold\">Mon rapport</a></span>"
             f"<span style=\"color:#e8e6d9;background:rgba(0,0,0,0.4);padding:3px 8px;border-radius:3px\">"
             f"{right_text}"
             f" &#xB7; <b style=\"color:{grade_color};background:#0a0a0f;padding:1px 5px;border-radius:2px\">{grade}</b>"
@@ -246,7 +310,8 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
     grade_js = _json.dumps(grade)
     grade_col_js = _json.dumps(grade_color)
     sha1_js = _json.dumps(sha1[:23])
-    report_js = _json.dumps(REPORT_URL)
+    report_js = _json.dumps(report_url)
+    level_js = _json.dumps(level_label)
     sat_js = _json.dumps(SAT_EMOJI)
     mid_js = _json.dumps(" &#xB7; ")
 
@@ -272,9 +337,10 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool) -> bytes:
     var gradeCol={grade_col_js};
     var sha1={sha1_js};
     var reportUrl={report_js};
+    var level={level_js};
     var SAT={sat_js};
     var MID={mid_js};
-    b.innerHTML='<span><b>'+SAT+' ToolBoX R2</b>'+MID+'CA SHA1: '+
+    b.innerHTML='<span><b>'+SAT+' ToolBoX '+level+'</b>'+MID+'CA SHA1: '+
       '<code style=\"background:rgba(0,0,0,0.1);padding:1px 4px;border-radius:2px\">'+sha1+'</code>'+
       MID+'<a href=\"'+reportUrl+'\" style=\"color:#0a5840;text-decoration:underline;font-weight:bold\">Mon rapport</a></span>'+
       '<span style=\"display:flex;align-items:center;gap:8px\">'+
@@ -347,10 +413,15 @@ class InjectBanner:
         if not m:
             return
         # Phase 3 : compute per-site context + CSP awareness
+        # Phase 6 (#496) : flow-aware report URL (kbin public for R3, captive
+        # for R2) + level label ("R2" vs "R3")
         try:
             ctx = _compute_site_context(flow)
             csp_strict = _detect_csp_strict(flow)
-            snippet = _banner_html_dynamic(_CA_SHA1, ctx, csp_strict)
+            report_url = _report_url_for(flow)
+            level_label = _level_label(flow)
+            snippet = _banner_html_dynamic(_CA_SHA1, ctx, csp_strict,
+                                            report_url, level_label)
         except Exception as e:
             log.warning("banner compute failed for %s: %s", flow.request.host, e)
             # Fail-open : skip injection rather than break the page
