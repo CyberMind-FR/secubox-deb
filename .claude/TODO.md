@@ -32,15 +32,15 @@
   CrowdSec `/v1/alerts` (machine JWT auth) → nft drop via existing bouncer.
   Live verified : login 200, alert 201, cscli decision, nft entry,
   ~12s round-trip. Merged `3eb5378e`.
-- [ ] **#498 Phase 7.A.2 followups**
-  - [ ] Backport into `packages/secubox-waf/mitmproxy/secubox_waf.py` (older copy)
-  - [ ] `debian/postinst` invokes `secubox-waf-cs-bridge-setup` + bind-mounts
-    config into LXC
-  - [ ] WAF dashboard tab in admin webui : `bans_pushed` counter + recent bans
-  - [ ] Tune `BAN_THRESHOLD` per category (XSS=2, SQLi=1, scanner=5)
-- [ ] **#498 Phase 7.B** mid-term : nft rate-limit pre-mitm (catches TCP-only
-  scanners CrowdSec doesn't see), live attacker top-20 dashboard, honeypot
-  routes for `/wp-admin /.env /.git/config`.
+- [x] **#498 Phase 7.A.2 SHIPPED 2026-06-05** : backport secubox-waf, postinst
+  auto-setup, `/api/v1/mitmproxy/waf/enforcement` endpoint, `threats.html`
+  dashboard with 6 KPI + bans/threats tables auto-refresh. Merge `a35ab5c5`.
+  - [ ] Tune `BAN_THRESHOLD` per category (XSS=2, SQLi=1, scanner=5) — open
+- [x] **#498 Phase 7.B SHIPPED 2026-06-05** : nft rate-limit pre-mitm
+  (`secubox_waf_ratelimit` table, drop > 30/s SYN with 5-min self-healing
+  TTL), `secubox-waf-ratelimit.service` boot persist, honeypot nginx routes
+  for /wp-admin /.env /.git/config /phpmyadmin /actuator + custom log_format
+  `secubox_honeypot` → `/var/log/nginx/honeypot.log`. Merge `a35ab5c5`.
 - [ ] **#498 Phase 7.C** long-term : eBPF/XDP kernel filter + ModSecurity
   remplacement mitm WAF + federation CrowdSec Hub/OTX/Spamhaus.
 - [x] Roadmap doc : `.claude/PHASE-7-WAF-ROADMAP.md` ✅
