@@ -41,9 +41,12 @@ table inet toolbox {
         # (http://village3b résout vers {{ dhcp.gateway }}) → portail direct.
         # Bypass mitmproxy : le portail est HTTP only, pas besoin de TLS-break.
         ip daddr {{ dhcp.gateway }} tcp dport 80 dnat ip to {{ dhcp.gateway }}:{{ portal.listen_port }}
-        # Règle 2 : MAC R2-consented → MITM transparent (sauf pour le portail lui-même).
+        # Règle 2 : MAC R2-consented → MITM transparent.
+        # Phase 5 (#495) : DNAT vers le container 'toolbox-mitm' (10.100.0.61:8080)
+        # si déployé en LXC, sinon fallback vers host-native (configurable
+        # via {{ mitm.target }} : 10.100.0.61 pour LXC, gateway pour host).
         iifname "{{ ap.iface }}" ether saddr @consented_r2_macs ip daddr != {{ dhcp.gateway }} tcp dport { 80, 443 } \
-            dnat ip to {{ dhcp.gateway }}:8080
+            dnat ip to {{ mitm.target | default(dhcp.gateway) }}:8080
         # Règle 3 : MAC non validées → captive portal (HTTP/HTTPS hijacked vers splash :8088).
         iifname "{{ ap.iface }}" ether saddr != @validated_macs tcp dport { 80, 443 } \
             dnat ip to {{ dhcp.gateway }}:{{ portal.listen_port }}
