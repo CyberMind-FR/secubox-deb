@@ -3,6 +3,36 @@
 
 ---
 
+## 🔄 2026-06-05 : Phase 7.A WAF active enforcement SHIPPED (ref #498)
+
+### ✅ Done
+
+* Bridge mitm WAF (LXC) → CrowdSec LAPI (host) → nft drops, full chain E2E :
+  login 200 + alert 201 + cscli decision + nft entry, ~12s round-trip.
+* `_ban_via_crowdsec()` in `secubox_waf.py` uses watcher JWT auth (POST
+  /v1/alerts), urllib stdlib (no httpx dep), 25-min JWT cache, auto-refresh
+  on 401. Stats : `bans_pushed`, `bans_failed`.
+* `secubox-cs-bridge.service` (socat 10.100.0.1:8080 → 127.0.0.1:8080) so
+  the mitm LXC reaches host LAPI without invasive CrowdSec config change.
+* `secubox-waf-cs-bridge-setup` script : idempotent, registers machine with
+  `cscli machines add -f -` (avoids touching local_api_credentials.yaml),
+  writes config TOML.
+* `crowdsec.toml.example` documents schema (enabled/url/machine_id/password/duration).
+* Merged to master in `3eb5378e`. Worktree 498 cleaned.
+
+### ⬜ Next up
+
+* **Phase 7.A.2 followups** : backport into `packages/secubox-waf/`,
+  wire `debian/postinst` to invoke setup script + bind-mount config into LXC,
+  WAF dashboard tab in admin webui showing `bans_pushed` counter.
+* **Phase 7.B mid-term** : nft rate-limit pre-mitm (catches TCP-only scanners
+  like the 134.195.158.62 slowloris from earlier today), live attacker
+  top-20 dashboard, honeypot routes for `/wp-admin /.env /.git/config` etc.
+* **Phase 7.C long-term** : eBPF/XDP kernel filter, ModSecurity replacement,
+  CrowdSec Hub + AlienVault OTX + Spamhaus federation.
+
+---
+
 ## 🔄 2026-06-05 : Phase 6 R3 WireGuard — MAJOR RELEASE shipped (ref #496)
 
 ### ✅ Done
