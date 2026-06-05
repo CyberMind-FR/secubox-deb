@@ -515,21 +515,30 @@ pre{background:#1a1a25;color:var(--phos-hot);padding:0.6rem 0.8rem;border-radius
 </div>
 
 <div class="tab-content" data-content=android>
-<a href="/wg/ca.pem" class="btn btn-warn">📥 Télécharger ca.pem</a>
+<a href="/wg/ca.crt" class="btn btn-warn">📥 Télécharger CA (.crt format Android)</a>
 <div class=warn>
 ⚠ Chrome ne peut PAS installer un CA directement (sécurité Android 11+).
 Tu DOIS passer par les <b>Paramètres système</b>.
+<br><br>
+🆕 Si tu as déjà un essai raté avec « émis par null » : <b>supprime l'ancien fichier</b>
+dans Téléchargements + relance le téléchargement (le CA a été régénéré).
 </div>
-<h3>Procédure (toutes versions Android) :</h3>
+<h3>Procédure (toutes versions Android 7+) :</h3>
 <ol>
-<li>Télécharge le .pem (bouton ci-dessus, sauvé dans Téléchargements)</li>
-<li>Ouvre <b>Paramètres système</b> (pas Chrome)</li>
+<li>Tap <b>📥 Télécharger CA</b> ci-dessus → sauvé dans Téléchargements
+   sous <code>gondwana-toolbox-r3-ca.crt</code></li>
+<li>Ouvre <b>Paramètres système</b> (pas Chrome / pas Firefox)</li>
 <li>→ <b>Sécurité et confidentialité</b> (ou « Sécurité »)</li>
-<li>→ <b>Chiffrement et authentifiants</b> (ou « Identifiants »)</li>
-<li>→ <b>Installer un certificat</b> → <b>Certificat d'autorité</b></li>
-<li>Sélectionne <code>ca.pem</code> dans Téléchargements</li>
-<li>Confirme le PIN/empreinte du téléphone si demandé</li>
+<li>→ <b>Plus de paramètres de sécurité</b> → <b>Chiffrement et authentifiants</b>
+   (ou « Identifiants » selon constructeur)</li>
+<li>→ <b>Installer un certificat</b> → <b>Certificat d'autorité (CA)</b></li>
+<li>Accepter l'avertissement de sécurité</li>
+<li>Sélectionne <code>gondwana-toolbox-r3-ca.crt</code> dans Téléchargements</li>
+<li>Confirme le PIN/empreinte si demandé</li>
 </ol>
+<h3>Fallback PEM :</h3>
+<a href="/wg/ca.pem" style="color:var(--orange);font-size:0.85rem">📥 Télécharger en .pem</a>
+si le .crt ne s'ouvre pas (rare).
 <h3>Vérification :</h3>
 <pre>Paramètres → Sécurité → Identifiants
 de confiance → onglet UTILISATEUR
@@ -864,7 +873,7 @@ async def wg_profile_new(request: Request) -> Response:
     try:
         store.upsert_client(wg_hash, profile["client_ip"], level="r3")
     except Exception as e:
-        logger.warning("wg peer upsert failed for %s: %s", wg_hash, e)
+        log.warning("wg peer upsert failed for %s: %s", wg_hash, e)
 
     return Response(
         content=profile["conf_text"],
@@ -907,6 +916,22 @@ async def wg_ca_pem() -> Response:
         content=p.read_bytes(),
         media_type="application/x-x509-ca-cert",
         headers={"Content-Disposition": "attachment; filename=gondwana-toolbox-wg.crt"},
+    )
+
+
+@router.get("/wg/ca.der")
+@router.get("/wg/ca.crt")
+async def wg_ca_der() -> Response:
+    """DER (binary) version of the mitm-wg CA. Some Android installers
+    (especially Android 11+ Settings → CA certificate) prefer DER over PEM
+    and reject the .pem extension. Same cert, just binary-encoded."""
+    p = Path("/etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.cer")
+    if not p.exists():
+        raise HTTPException(404, "mitm-wg CA DER not yet generated")
+    return Response(
+        content=p.read_bytes(),
+        media_type="application/x-x509-ca-cert",
+        headers={"Content-Disposition": "attachment; filename=gondwana-toolbox-r3-ca.crt"},
     )
 
 
