@@ -1,3 +1,30 @@
+secubox-toolbox (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2a+ : GeoIP flags + ASN + nDPI-style classification + cookie
+    providers + avatar (UA) fingerprint analysis.
+  * geo.py : IP/hostname → ISO country code (emoji flag) + ASN org via
+    python3-geoip2 + GeoLite2 mmdb (fallback legacy GeoIP.dat). Cache
+    SQLite 24h.
+  * cookie_analysis.py : 40+ patterns trackers (Google Analytics,
+    Facebook Pixel, LinkedIn, TikTok, HubSpot, Hotjar, Cloudflare, etc.)
+    par catégorie (analytics/advertising/social/session/infra) + emoji.
+  * avatar_analysis.py : UA → device (iPhone/iPad/Pixel/Samsung/Mac/Win/
+    Linux/PlayStation/Xbox...) + browser (Chrome/Firefox/Safari/Edge/...) +
+    OS version + emoji par device.
+  * dpi_class.py : 60+ patterns hostnames → app category (streaming/
+    social/messaging-e2e/cloud/dev/banking/email/anon/vpn/cdn/apple) +
+    emoji par app (YouTube 📺, Signal 🔒, GitHub 🐙, etc.).
+  * api.py _aggregate_session : enrich threat_intel/dga/beaconing avec
+    flag + asn ; ajoute dpi_classified, geo_top_hosts, avatar_analysis,
+    cookies_providers.
+  * Reports PDF + HTML live : nouvelles sections avec drapeaux pays,
+    emojis par catégorie, tableau apps détectées, fingerprint avatar.
+
+  Bump 2.0.0 → 2.1.0-1~bookworm1. Closes #486.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 05 Jun 2026 07:30:00 +0200
+
+
 secubox-toolbox (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2a : real SOC scoring multi-signal — major bump 1.5→2.0.

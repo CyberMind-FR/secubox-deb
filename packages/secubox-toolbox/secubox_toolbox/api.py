@@ -13,9 +13,13 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
 from . import (
+    avatar_analysis,
     beaconing,
     ca,
+    cookie_analysis,
     dga,
+    dpi_class,
+    geo,
     mac as macmod,
     nft,
     reports,
@@ -393,10 +397,61 @@ def _aggregate_session(mac_hash: str) -> dict:
             "explanation": score_result["explanation"],
             "breakdown": score_result["breakdown"],
         },
-        "threat_intel_matches": ti_matches[:10],
-        "dga_candidates": dga_candidates[:10],
-        "beaconing_candidates": beacon_candidates[:10],
+        "threat_intel_matches": _enrich_with_geo(ti_matches[:10]),
+        "dga_candidates": _enrich_dga_with_geo(dga_candidates[:10]),
+        "beaconing_candidates": _enrich_beacon_with_geo(beacon_candidates[:10]),
+        # ── Phase 2a+ (#486) geo + app classification + UA analyzer ──
+        "dpi_classified": dpi_class.analyze_hosts(unique_hosts_list[:50]),
+        "geo_top_hosts": _enrich_top_dpi_with_geo(top_dpi),
+        "avatar_analysis": avatar_analysis.analyze_user_agents(user_agents),
+        "cookies_providers": cookie_analysis.top_providers(cookies_urls, limit=10),
     }
+
+
+def _enrich_with_geo(matches: list[dict]) -> list[dict]:
+    """Add geo info to threat_intel matches."""
+    out = []
+    for m in matches:
+        ioc = m.get("ioc") or ""
+        info = geo.lookup(ioc) if ioc else {}
+        out.append({**m, "flag": info.get("flag", ""), "country": info.get("country_iso", ""), "asn_org": info.get("asn_org", "")})
+    return out
+
+
+def _enrich_dga_with_geo(candidates: list[dict]) -> list[dict]:
+    out = []
+    for c in candidates:
+        info = geo.lookup(c.get("host", ""))
+        out.append({**c, "flag": info.get("flag", ""), "country": info.get("country_iso", ""), "asn_org": info.get("asn_org", "")})
+    return out
+
+
+def _enrich_beacon_with_geo(candidates: list[dict]) -> list[dict]:
+    out = []
+    for c in candidates:
+        info = geo.lookup(c.get("host", ""))
+        out.append({**c, "flag": info.get("flag", ""), "country": info.get("country_iso", ""), "asn_org": info.get("asn_org", "")})
+    return out
+
+
+def _enrich_top_dpi_with_geo(top_dpi: list[tuple]) -> list[dict]:
+    """Enrich top_dpi with geo + dpi_class + emoji."""
+    out = []
+    for host, count in top_dpi:
+        info = geo.lookup(host)
+        cls = dpi_class.classify_host(host)
+        out.append({
+            "host": host,
+            "count": count,
+            "flag": info.get("flag", ""),
+            "country": info.get("country_iso", ""),
+            "asn": info.get("asn", 0),
+            "asn_org": info.get("asn_org", ""),
+            "app": cls["app"],
+            "category": cls["category"],
+            "emoji": cls["emoji"],
+        })
+    return out
 
 
 def _classify_apps(hosts: set[str]) -> list[str]:

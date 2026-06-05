@@ -161,15 +161,44 @@ def render_pdf(report: dict) -> bytes:
         _bullet(pdf, app)
     pdf.ln(2)
 
-    # ── DPI (Deep Packet Inspection) ──
-    dpi = report.get("dpi") or {}
-    if dpi.get("top_hosts"):
-        _section(pdf, "DPI - HOTES LES PLUS CONTACTES")
-        for entry in dpi["top_hosts"][:10]:
-            _bullet(pdf, f"{entry['host'][:60]} ({entry['count']} req)", font_size=8)
-        if dpi.get("user_agents"):
+    # ── DPI classification (Phase 2a+ nDPI-style apps with emojis) ──
+    dpi_cls = report.get("dpi_classified") or {}
+    if dpi_cls.get("top_apps"):
+        _section(pdf, "APPS DETECTEES (nDPI-style classification)")
+        for a in dpi_cls["top_apps"][:15]:
+            _bullet(pdf, f"{a.get('emoji', '?')} {a.get('app', '?')} ({a.get('category', '?')}) - {a.get('count', 0)} connexions", font_size=8)
+        pdf.ln(2)
+
+    # ── Geo top hosts (avec drapeaux + ASN) ──
+    geo_hosts = report.get("geo_top_hosts") or []
+    if geo_hosts:
+        _section(pdf, "HOTES PAR PAYS + ASN + APP (PHASE 2A+)")
+        for h in geo_hosts[:12]:
+            flag = h.get("flag", "")
+            line = f"{flag} {h.get('emoji', '')} {h.get('app', '?')} | {h.get('host', '?')[:40]} | {h.get('asn_org', '?')[:25]} | {h.get('count', 0)} hits"
+            _bullet(pdf, line, font_size=8)
+        pdf.ln(2)
+
+    # ── Avatar / device fingerprint ──
+    avatar = report.get("avatar_analysis") or {}
+    if avatar.get("devices"):
+        _section(pdf, f"AVATAR / DEVICE FINGERPRINT")
+        _kv(pdf, "Most common", f"{avatar.get('most_common_emoji', '?')} {avatar.get('most_common', '?')}")
+        _kv(pdf, "UA distincts", str(avatar.get('raw_count', 0)))
+        for dev, info in (avatar.get("devices") or {}).items():
+            _bullet(pdf, f"{info.get('emoji', '?')} {info.get('os_label', dev)} - {info.get('count', 0)}x", font_size=8)
+        if avatar.get("browsers"):
             pdf.ln(1)
-            _kv(pdf, "User agents", str(len(dpi['user_agents'])))
+            for br, info in (avatar.get("browsers") or {}).items():
+                _bullet(pdf, f"{info.get('emoji', '?')} {info.get('label', br)} - {info.get('count', 0)}x", font_size=8)
+        pdf.ln(2)
+
+    # ── Cookies providers (Phase 2a+) ──
+    cookies_providers = report.get("cookies_providers") or []
+    if cookies_providers:
+        _section(pdf, "COOKIES / TRACKERS PROVIDERS")
+        for p in cookies_providers[:12]:
+            _bullet(pdf, f"{p.get('emoji', '?')} {p.get('provider', '?')} ({p.get('category', '?')}) x{p.get('count', 0)}", font_size=8)
         pdf.ln(2)
 
     # ── Cookies trackers ──
