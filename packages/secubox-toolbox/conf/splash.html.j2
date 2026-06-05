@@ -39,11 +39,41 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     {% if mac_hash and mac_hash != '??' %}<br>Ton appareil (anonymisé) : <b>{{ mac_hash }}</b>{% endif %}
   </div>
 
-  {% if already_validated %}
+  {# Phase 6.I (#496) : R3 WG client detected — show special banner, hide R0/R1/R2 switcher #}
+  {% if is_wg_r3 %}
+  <div class="info" style="margin-top:0.5rem;background:linear-gradient(135deg,rgba(158,118,255,0.15),rgba(158,118,255,0.05));border-left:4px solid var(--purple);padding:0.9rem 1rem">
+    <p style="font-size:1.05rem;font-weight:bold;color:#cbb6ff;margin-bottom:0.4rem">
+      🌐 <b>Mode R3 — Tunnel WireGuard ACTIF</b>
+    </p>
+    <p style="font-size:0.82rem;line-height:1.55;opacity:0.92">
+      Tu es connecté depuis l'extérieur via le tunnel R3 ({{ client_ip }}).<br>
+      Le bandeau s'injecte sur les pages HTTPS, Signal/WhatsApp/banques en passthrough.
+    </p>
+    <p style="margin-top:0.7rem;display:flex;flex-wrap:wrap;gap:0.5rem">
+      <a href="/report/me/html?mh={{ mac_hash }}"
+         style="background:var(--purple);color:#0a0a0f;padding:0.5rem 0.9rem;border-radius:4px;text-decoration:none;font-weight:bold;font-size:0.85rem">
+        📊 Mon rapport live
+      </a>
+      <a href="/report/me?mh={{ mac_hash }}"
+         style="background:transparent;color:var(--purple);border:1px solid var(--purple);padding:0.5rem 0.9rem;border-radius:4px;text-decoration:none;font-weight:bold;font-size:0.85rem">
+        ⬇ PDF
+      </a>
+      <a href="/wg/r3-install"
+         style="background:transparent;color:#cbb6ff;border:1px solid #555;padding:0.5rem 0.9rem;border-radius:4px;text-decoration:none;font-size:0.82rem">
+        🔧 Réinstaller R3
+      </a>
+    </p>
+    <p style="font-size:0.7rem;opacity:0.6;margin-top:0.5rem">
+      💡 R0/R1/R2 sont les niveaux de la cabine captive (WiFi local). En R3 tu es par
+      construction au niveau maximum d'analyse.
+    </p>
+  </div>
+  {% elif already_validated %}
   <div class="info" style="margin-top:0.5rem;background:rgba(0,221,68,0.08);border-left-color:var(--phos)">
     ✅ <b>Tu es déjà validé en mode
     {% if current_level == 'r0' %}🌐 R0 (bypass complet)
     {% elif current_level == 'r2' %}🔍 R2 (analyse + bandeau)
+    {% elif current_level == 'r3' %}🌐 R3 (WireGuard tunnel)
     {% else %}🛡 R1 (analyse passive){% endif %}</b>
     · <a href="/report/me/html" style="color:var(--phos-hot);text-decoration:underline">📊 Voir mon rapport live</a>
     <span style="font-size:0.72rem;opacity:0.7;display:block;margin-top:0.3rem">
@@ -191,6 +221,8 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
   })();
   </script>
 
+  {# Phase 6.I : R3 clients skip the captive R0/R1/R2 chooser entirely #}
+  {% if not is_wg_r3 %}
   <p class="choose-label">👇 Choisis ton niveau d'analyse :</p>
 
   <form method="POST" action="/accept" style="display:flex;flex-direction:column;gap:0.6rem">
@@ -225,6 +257,7 @@ button.lvl-r2{border-color:var(--amber);color:#ffd6a0}
     </a>
     {% endif %}
   </form>
+  {% endif %}  {# /not is_wg_r3 #}
 
   <p class="terms">
     <b>Conformité :</b> CSPN R2 — consentement explicite par MAC ; LCEN — anonymisation par hash quotidien rotatif. Dispositif défensif (rapport sur TON appareil, jamais sur les tiers).
