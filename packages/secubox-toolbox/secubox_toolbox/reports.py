@@ -6,11 +6,23 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import secrets
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .models import ReportToken
+
+log = logging.getLogger("secubox.toolbox.reports")
+
+# Phase 3 (#492) : Unicode fonts for real emoji rendering in PDF
+DEJAVU_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+DEJAVU_BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+DEJAVU_OBLIQUE_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"
+# Symbola : broad monochrome emoji + symbol coverage (📱📡🔍🔒🎯🎵🐙📊🍪…)
+# Apt package : fonts-symbola
+SYMBOLA_PATH = "/usr/share/fonts/truetype/ancient-scripts/Symbola_hint.ttf"
 
 
 def mint_token(mac_hash: str, salt: str, ttl_seconds: int = 86400) -> ReportToken:
@@ -51,6 +63,46 @@ def build_report_data(mac_hash: str, session_data: dict) -> dict:
     }
 
 
+def _setup_fonts(pdf) -> str:
+    """Load DejaVu Sans (broad Unicode) + Symbola (emoji) for the PDF.
+
+    Falls back to Helvetica (latin-1 only) if fonts are absent.
+
+    Returns the font family name to use for set_font() calls.
+    """
+    family = "Helvetica"
+    if Path(DEJAVU_PATH).exists():
+        try:
+            pdf.add_font("DejaVu", style="", fname=DEJAVU_PATH)
+            if Path(DEJAVU_BOLD_PATH).exists():
+                pdf.add_font("DejaVu", style="B", fname=DEJAVU_BOLD_PATH)
+            if Path(DEJAVU_OBLIQUE_PATH).exists():
+                pdf.add_font("DejaVu", style="I", fname=DEJAVU_OBLIQUE_PATH)
+            family = "DejaVu"
+            # Fallback chain : Symbola covers 📱📡🔍🔒🎯🎵🐙📊🍪 + most emoji
+            # not present in DejaVu.
+            fallback = []
+            if Path(SYMBOLA_PATH).exists():
+                try:
+                    pdf.add_font("Symbola", style="", fname=SYMBOLA_PATH)
+                    fallback.append("Symbola")
+                except Exception as e:
+                    log.warning("Symbola font load failed: %s", e)
+            if fallback:
+                try:
+                    # exact_match=False so Bold/Italic text also falls back to
+                    # regular Symbola (it has no Bold variant).
+                    pdf.set_fallback_fonts(fallback, exact_match=False)
+                except TypeError:
+                    # Older fpdf2 without exact_match param
+                    pdf.set_fallback_fonts(fallback)
+                except Exception as e:
+                    log.warning("set_fallback_fonts failed: %s", e)
+        except Exception as e:
+            log.warning("DejaVu font load failed (%s), falling back to Helvetica", e)
+    return family
+
+
 def render_pdf(report: dict) -> bytes:
     """Render the analysis report as PDF (fpdf2). Returns the binary blob."""
     try:
@@ -63,13 +115,18 @@ def render_pdf(report: dict) -> bytes:
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
+    # Phase 3 (#492) : Unicode font for emoji rendering
+    family = _setup_fonts(pdf)
+    # Stash for the helper functions to use
+    pdf._secubox_family = family
+
     # Header
-    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_font(family, "B", 18)
     pdf.set_text_color(0, 90, 64)  # P31 dim green
-    pdf.cell(0, 12, "GONDWANA TOOLBOX", ln=True, align="C")
-    pdf.set_font("Helvetica", "", 11)
+    pdf.cell(0, 12, "📡 GONDWANA TOOLBOX", ln=True, align="C")
+    pdf.set_font(family, "", 11)
     pdf.set_text_color(110, 64, 201)
-    pdf.cell(0, 6, "Rapport d'analyse de session - Cabine numerique VILLAGE3B", ln=True, align="C")
+    pdf.cell(0, 6, "Rapport d'analyse de session — Cabine numérique VILLAGE3B", ln=True, align="C")
     pdf.ln(4)
 
     # Anonymous ID
@@ -99,7 +156,7 @@ def render_pdf(report: dict) -> bytes:
     _section(pdf, "ANALYSE COMPROMISSION")
     score = report.get("risk_score", 0)
     risk_label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
-    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 13)
     if score < 30:
         pdf.set_text_color(0, 221, 68)
     elif score < 70:
@@ -108,7 +165,7 @@ def render_pdf(report: dict) -> bytes:
         pdf.set_text_color(255, 68, 102)
     pdf.cell(0, 8, _ascii_safe(f"Score risque : {score}/100 ({risk_label})"), ln=True)
     pdf.set_text_color(0)
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 10)
     pdf.ln(1)
     explanation = report.get("risk_explanation", "")
     if explanation:
@@ -124,9 +181,9 @@ def render_pdf(report: dict) -> bytes:
     if breakdown:
         _section(pdf, "BREAKDOWN DU SCORE")
         for b in breakdown:
-            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 9)
             pdf.cell(0, 5, f"{b.get('category', '?').upper()} : poids {b.get('weight_subtotal', 0)} (sur {b.get('raw_signal_count', 0)} signal)", ln=True)
-            pdf.set_font("Helvetica", "", 8)
+            pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 8)
             for ex in (b.get("examples") or [])[:3]:
                 _bullet(pdf, ex, font_size=8)
         pdf.ln(2)
@@ -271,16 +328,66 @@ def render_pdf(report: dict) -> bytes:
         # Per-host quality table — worst first, capped 10
         per_host = t.get("per_host") or []
         if per_host:
-            _section(pdf, "QUALITE SECURITE PAR DESTINATION (worst-first)")
+            _section(pdf, "🎯 QUALITÉ SÉCURITÉ PAR DESTINATION (worst-first)")
             for h in per_host[:10]:
                 grade = h.get("grade", "?")
                 host = h.get("host", "?")[:50]
                 status = h.get("status", "?")
-                _bullet(pdf, f"[{grade}] {host} - {status}", font_size=8)
+                _bullet(pdf, f"[{grade}] {host} — {status}", font_size=8)
             pdf.ln(2)
 
+    # Phase 2b/2c (#488/#490) : per-module mitm-ingest aggregate metrics
+    mm = report.get("mitm_modules") or {}
+    if mm and any(v.get("count", 0) > 0 for v in mm.values() if isinstance(v, dict)):
+        _section(pdf, "🛰 INGESTION PAR MODULE (Phase 2b/2c)")
+        for kind, data in mm.items():
+            if not isinstance(data, dict):
+                continue
+            cnt = data.get("count", 0)
+            if cnt == 0:
+                continue
+            emoji = {"dpi": "🌐", "cookies": "🍪", "avatar": "👤",
+                     "soc": "🛡", "threat-analyst": "🕵"}.get(kind, "📡")
+            _bullet(pdf, f"{emoji} secubox-{kind} : {cnt} events ingérés (24h)", font_size=9)
+            es = data.get("enriched_summary") or {}
+            # Per-module top items
+            if kind == "dpi" and es.get("top_apps"):
+                apps_str = " · ".join(f"{a.get('emoji','?')} {a.get('app','?')}×{a.get('count',0)}"
+                                       for a in es["top_apps"][:5])
+                _bullet(pdf, f"   Top apps : {apps_str[:200]}", font_size=8)
+            elif kind == "cookies" and es.get("top_providers"):
+                provs = " · ".join(f"{p.get('emoji','?')} {p.get('provider','?')}×{p.get('count',0)}"
+                                    for p in es["top_providers"][:5])
+                _bullet(pdf, f"   Top trackers : {provs[:200]}", font_size=8)
+                _bullet(pdf, f"   Total tracker hits : {es.get('tracker_total', 0)}", font_size=8)
+            elif kind == "avatar":
+                devs = es.get("devices") or {}
+                if devs:
+                    dev_str = " · ".join(f"{v.get('emoji','?')} {k}×{v.get('count',0)}"
+                                          for k, v in list(devs.items())[:5])
+                    _bullet(pdf, f"   Devices : {dev_str[:200]}", font_size=8)
+                brws = es.get("browsers") or {}
+                if brws:
+                    brw_str = " · ".join(f"{v.get('emoji','?')} {k}×{v.get('count',0)}"
+                                          for k, v in list(brws.items())[:5])
+                    _bullet(pdf, f"   Browsers : {brw_str[:200]}", font_size=8)
+            elif kind == "soc":
+                _bullet(pdf, f"   Score total : {es.get('total_weight', 0)} · "
+                             f"Band : {es.get('max_band', 'low')}", font_size=8)
+                kinds = es.get("indicator_kinds") or {}
+                if kinds:
+                    k_str = " · ".join(f"{k}×{v}" for k, v in list(kinds.items())[:5])
+                    _bullet(pdf, f"   Indicateurs : {k_str[:180]}", font_size=8)
+            elif kind == "threat-analyst" and es.get("top_fingerprints"):
+                fps = ", ".join(f.get("fingerprint", "?")[:12]
+                                 for f in es["top_fingerprints"][:5])
+                _bullet(pdf, f"   JA4 fingerprints uniques : {es.get('unique_count', 0)}",
+                        font_size=8)
+                _bullet(pdf, f"   Top : {fps[:180]}", font_size=8)
+        pdf.ln(2)
+
     # Retention
-    _section(pdf, "RETENTION DES DONNEES")
+    _section(pdf, "🔒 RÉTENTION DES DONNÉES")
     _bullet(pdf, "Hash MAC anonyme : 24h (sel rotatif quotidien)")
     _bullet(pdf, "Events detailles : 24h")
     _bullet(pdf, "Rapport ephemere : 24h (lien HMAC scelle)")
@@ -298,7 +405,7 @@ def render_pdf(report: dict) -> bytes:
     pdf.ln(4)
 
     # Footer
-    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "I", 8)
     pdf.set_text_color(110, 64, 201)
     pdf.cell(0, 4, "Gondwana ToolBoX  -  LicenseRef-CMSD-1.0 (Source-Disclosed License)", ln=True, align="C")
     pdf.cell(0, 4, "Source : github.com/CyberMind-FR/secubox-deb (issues #474 #475 #477)", ln=True, align="C")
@@ -311,50 +418,64 @@ def _page_w(pdf) -> float:
     return pdf.w - pdf.l_margin - pdf.r_margin
 
 
-# Helvetica is latin-1 only ; PDF report uses ASCII replacements for emoji
-# (HTML live report keeps the real emoji glyphs).
+# Phase 3 (#492) : with DejaVu Sans + Noto fallback, most emojis render as
+# real glyphs (monochrome). For chars not in either font (e.g. some flags,
+# very recent emoji), we fall back to a small ASCII replacement table.
 _EMOJI_REPLACEMENTS = {
-    "📺": "[TV]", "🎬": "[FILM]", "🎵": "[MUSIC]", "👥": "[SOCIAL]",
-    "📷": "[PHOTO]", "🐦": "[X]", "👾": "[REDDIT]", "💼": "[WORK]",
-    "📌": "[PIN]", "🐘": "[MASTO]", "🦋": "[BSKY]", "🔒": "[E2E]",
-    "💬": "[CHAT]", "✈": "[TG]", "🟢": "[OK]", "🔍": "[SEARCH]",
-    "🦆": "[DDG]", "📦": "[BOX]", "☁": "[CLOUD]", "🐙": "[GH]",
-    "🦊": "[FF]", "📚": "[DOC]", "🏦": "[BANK]", "📧": "[MAIL]",
-    "🍎": "[APPLE]", "🧅": "[TOR]", "🔐": "[VPN]", "❔": "[?]",
-    "📱": "[PHONE]", "💻": "[PC]", "🐧": "[LINUX]", "🎮": "[GAME]",
-    "📟": "[BOT]", "🛠": "[TOOL]", "🪟": "[EDGE]", "🧭": "[SAFARI]",
-    "🔴": "[OPERA]", "🇫🇷": "[FR]", "🇺🇸": "[US]", "🏳": "[??]",
-    "📊": "[STATS]", "🎯": "[ADS]", "🟦": "[BLOCK]", "—": "-",
-    "·": "-", "…": "...", "✅": "[OK]", "⚠": "[WARN]", "❌": "[KO]",
+    # Common emojis NOT in DejaVu Sans + Symbola fallback — replaced gracefully
+    # Flag emojis (regional indicator pairs, not in monochrome fonts)
+    "🇫🇷": "[FR]", "🇺🇸": "[US]", "🇩🇪": "[DE]", "🇨🇳": "[CN]",
+    "🇬🇧": "[GB]", "🇯🇵": "[JP]", "🇨🇦": "[CA]", "🇮🇪": "[IE]",
+    "🇮🇹": "[IT]", "🇪🇸": "[ES]", "🇧🇪": "[BE]", "🇨🇭": "[CH]",
+    "🇳🇱": "[NL]", "🇸🇪": "[SE]", "🇮🇱": "[IL]", "🇧🇷": "[BR]",
+    "🇷🇺": "[RU]", "🇮🇳": "[IN]", "🇰🇷": "[KR]", "🇦🇺": "[AU]",
+    "🏳": "[??]",
+    # Recent emoji (2020+) not in Symbola
+    "🟢": "[OK]",  # green circle
+    "🟡": "[WARN]",  # yellow circle
+    "🔴": "[KO]",  # red circle (also used for Opera but contextual)
+    "🟦": "[BOX]",  # blue square
+    "🦋": "[BSKY]",  # butterfly
+    "🦊": "[FF]",  # fox face
+    "🪟": "[EDGE]",  # window
 }
 
 
-def _ascii_safe(text: str) -> str:
-    """Strip / replace characters outside Helvetica's latin-1 coverage."""
+def _safe(text: str) -> str:
+    """Replace chars not in DejaVu+NotoSymbols fonts (mostly flag emojis).
+
+    Most emoji render directly via DejaVu Sans + fallback. Flag emojis use
+    regional indicator pairs that aren't in DejaVu, so we substitute them
+    with their ISO country code in brackets.
+    """
     if not text:
         return ""
     s = str(text)
     for emoji, repl in _EMOJI_REPLACEMENTS.items():
         if emoji in s:
             s = s.replace(emoji, repl)
-    # Final fallback : encode to latin-1 ignoring unknown chars
-    return s.encode("latin-1", errors="replace").decode("latin-1")
+    return s
+
+
+def _ascii_safe(text: str) -> str:
+    """Backward-compat alias (other code paths still call this name)."""
+    return _safe(text)
 
 
 def _section(pdf, title: str) -> None:
     pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 12)
     pdf.set_text_color(0, 221, 68)
     pdf.multi_cell(_page_w(pdf), 7, _ascii_safe(title)[:80])
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 10)
     pdf.set_text_color(0)
 
 
 def _kv(pdf, key: str, value: str) -> None:
     pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 9)
     pdf.cell(45, 5, _ascii_safe(key)[:30], ln=False)
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 9)
     pdf.cell(_page_w(pdf) - 45, 5, _ascii_safe(value)[:100], ln=True)
 
 
@@ -362,7 +483,7 @@ def _bullet(pdf, text: str, font_size: int = 9) -> None:
     """Render a bullet line. multi_cell with hard truncation to avoid fpdf
     'Not enough horizontal space' errors on long tokens/URLs."""
     pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "", font_size)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", font_size)
     safe = _ascii_safe(text)[:160]
     # Break unreasonably long single tokens (URLs over ~60 chars)
     parts = []
