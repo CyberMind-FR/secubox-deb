@@ -123,7 +123,10 @@ CNF
 
     # Combined key+cert for mitm (mitmproxy-ca.pem)
     cat _key.pem _cert.pem > mitmproxy-ca.pem
-    chmod 0600 mitmproxy-ca.pem
+    # 0640 (not 0600) : mitm-wg.service runs as secubox-toolbox group and
+    # needs to read the combined key+cert. 0600 → PermissionError →
+    # service crash-loops (~190 restarts in 5 min if undetected).
+    chmod 0640 mitmproxy-ca.pem
     chown root:secubox-toolbox mitmproxy-ca.pem
 
     # Public cert only (what we serve via /wg/ca.pem)
