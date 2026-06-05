@@ -68,14 +68,42 @@ a:hover{text-decoration:underline}
 
 <div class=container>
 
-  {# ── KPI live ── #}
+  {# ── KPI live (auto-refresh 5s via /cumulative-stats.json) ── #}
   <div class=section>
-    <h2>📊 Cabine en chiffres (live, 7 derniers jours)</h2>
+    <h2>📊 Cabine en chiffres
+      <span id=live-badge style="font-size:0.7rem;background:var(--red);color:#fff;padding:0.15rem 0.5rem;border-radius:99px;margin-left:0.5rem;letter-spacing:0.05em;animation:pulse 1.5s infinite">🔴 LIVE</span>
+      <span id=live-stamp style="font-size:0.7rem;color:var(--dim);margin-left:0.4rem">·</span>
+    </h2>
     <div class="grid grid-4">
-      <div class=kpi><span class=v>{{ stats.sessions.last_7d if stats.sessions else 0 }}</span><span class=l>👥 sessions uniques</span></div>
-      <div class=kpi><span class=v>{{ stats.events.get('dpi', 0) if stats.events else 0 }}</span><span class=l>🌐 connexions analysées</span></div>
-      <div class=kpi><span class=v>{{ (stats.top_hosts_7d | length) if stats.top_hosts_7d else 0 }}</span><span class=l>📡 hôtes uniques top</span></div>
-      <div class=kpi><span class=v>{{ stats.events.get('cookies', 0) if stats.events else 0 }}</span><span class=l>🍪 cookies trackés</span></div>
+      <div class=kpi><span class=v data-live=sessions.last_7d>{{ stats.sessions.last_7d if stats.sessions else 0 }}</span><span class=l>👥 sessions uniques (7j)</span></div>
+      <div class=kpi><span class=v data-live=events.dpi>{{ stats.events.get('dpi', 0) if stats.events else 0 }}</span><span class=l>🌐 connexions analysées</span></div>
+      <div class=kpi><span class=v data-live=top_hosts_7d.length>{{ (stats.top_hosts_7d | length) if stats.top_hosts_7d else 0 }}</span><span class=l>📡 hôtes uniques top</span></div>
+      <div class=kpi><span class=v data-live=events.cookies>{{ stats.events.get('cookies', 0) if stats.events else 0 }}</span><span class=l>🍪 cookies trackés</span></div>
+    </div>
+    <div class="grid grid-4" style="margin-top:1rem">
+      <div class=kpi><span class=v data-live=sessions.last_24h>{{ stats.sessions.last_24h if stats.sessions else 0 }}</span><span class=l>🕐 sessions 24h</span></div>
+      <div class=kpi><span class=v data-live=sessions.all_time>{{ stats.sessions.all_time if stats.sessions else 0 }}</span><span class=l>🌍 total all-time</span></div>
+      <div class=kpi><span class=v data-live=events.ja4>{{ stats.events.get('ja4', 0) if stats.events else 0 }}</span><span class=l>🔬 fingerprints JA4</span></div>
+      <div class=kpi><span class=v data-live=events.total_7d>{{ stats.events.get('total_7d', 0) if stats.events else 0 }}</span><span class=l>⚡ events 7j</span></div>
+    </div>
+  </div>
+
+  {# ── Cert autocheck — verify R3 CA install from anywhere ── #}
+  <div class=section>
+    <h2>🔐 Vérifier mon certificat R3 (test live)</h2>
+    <div class="card purple" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+      <div style="font-size:2.4rem;flex-shrink:0" id=cert-probe-emoji>❔</div>
+      <div style="flex:1;min-width:220px">
+        <p id=cert-probe-text style="font-size:0.92rem;line-height:1.5">
+          Clique sur <b>Tester</b> pour vérifier que ton CA R3 est bien installé sur ton device
+          (depuis le tunnel WireGuard). Le test télécharge une image HTTPS et vérifie le succès.
+        </p>
+        <p style="font-size:0.75rem;color:var(--dim);margin-top:0.3rem">
+          Empreinte SHA1 CA R3 (à vérifier dans Réglages iPhone) :
+          <code id=cert-fp-r3 style="font-size:0.7rem">…</code>
+        </p>
+      </div>
+      <button id=cert-probe-btn style="background:var(--purple);color:#0a0a0f;border:0;padding:0.7rem 1.2rem;font-weight:bold;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.9rem">🔬 Tester</button>
     </div>
   </div>
 
@@ -243,5 +271,94 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
   <a href="https://cybermind.fr">cybermind.fr</a> · <a href="https://github.com/CyberMind-FR/secubox-deb">github.com/CyberMind-FR/secubox-deb</a><br>
   // DIY · Open Source · Open Audit
 </div>
+
+<style>
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.v.tick{animation:flash 0.6s}
+@keyframes flash{0%{color:var(--gold);transform:scale(1.15)}100%{color:var(--phos-hot);transform:scale(1)}}
+</style>
+
+<script>
+// ── Live KPI auto-refresh from /cumulative-stats.json ──
+(function(){
+  function dig(o,path){
+    var parts = path.split('.');
+    var v = o;
+    for (var i=0; i<parts.length; i++) {
+      if (v == null) return null;
+      if (parts[i] === 'length' && Array.isArray(v)) return v.length;
+      v = v[parts[i]];
+    }
+    return v;
+  }
+  function fmtTs(t){
+    if (!t) return '·';
+    var d = new Date(t*1000);
+    var hh = String(d.getHours()).padStart(2,'0');
+    var mm = String(d.getMinutes()).padStart(2,'0');
+    var ss = String(d.getSeconds()).padStart(2,'0');
+    return 'maj ' + hh+':'+mm+':'+ss;
+  }
+  function refresh(){
+    fetch('/cumulative-stats.json', {cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+      document.querySelectorAll('[data-live]').forEach(function(el){
+        var v = dig(d, el.dataset.live);
+        if (v == null) return;
+        var prev = el.textContent.trim();
+        var next = String(v);
+        if (prev !== next) {
+          el.textContent = next;
+          el.classList.remove('tick');
+          void el.offsetWidth;  // force reflow
+          el.classList.add('tick');
+        }
+      });
+      var stamp = document.getElementById('live-stamp');
+      if (stamp) stamp.textContent = fmtTs(d.computed_at);
+    }).catch(function(){});
+  }
+  refresh();
+  setInterval(refresh, 5000);
+})();
+
+// ── Cert R3 probe + fingerprint display ──
+(function(){
+  var btn = document.getElementById('cert-probe-btn');
+  var emj = document.getElementById('cert-probe-emoji');
+  var txt = document.getElementById('cert-probe-text');
+  var fp  = document.getElementById('cert-fp-r3');
+  if (!btn) return;
+
+  // Display the WG CA fingerprint (use ?ca=wg flag if endpoint supports it,
+  // else fallback to default ca fingerprint).
+  fetch('/ca/fingerprint').then(function(r){return r.json();}).then(function(d){
+    fp.textContent = d.sha1 || d.sha256 || '?';
+  }).catch(function(){fp.textContent='?';});
+
+  function runProbe(){
+    emj.textContent = '⏳';
+    txt.innerHTML = 'Test en cours…';
+    var probe = new Image();
+    var done = false;
+    probe.onload = function(){
+      if (done) return; done = true;
+      emj.textContent = '🟢';
+      txt.innerHTML = '<b>HTTPS OK</b> — si tu es en R3 (tunnel WG actif), ton CA R3 est bien installé. ✓';
+    };
+    probe.onerror = function(){
+      if (done) return; done = true;
+      emj.textContent = '🔴';
+      txt.innerHTML = '<b>HTTPS échoue</b> — soit pas de réseau, soit WG actif mais CA R3 manquant. Installe le <a href=/wg/ca.mobileconfig>profil CA R3</a>.';
+    };
+    probe.src = 'https://example.com/favicon.ico?t=' + Date.now();
+    setTimeout(function(){
+      if (done) return; done = true;
+      emj.textContent = '❔';
+      txt.innerHTML = 'Timeout — relance ou vérifie ton réseau.';
+    }, 4000);
+  }
+  btn.addEventListener('click', runProbe);
+})();
+</script>
 
 </body></html>
