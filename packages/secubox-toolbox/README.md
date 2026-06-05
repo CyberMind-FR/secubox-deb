@@ -231,6 +231,6 @@ Référence à la mission communautaire :
 
 ## 📝 Licence
 
-LicenseRef-CMSD-1.0 — Source-Disclosed License. Code public AGPL pour tooling et tests.
+LicenseRef-CMSD-1.0 — Source-Disclosed License (FR faisant foi). Code source ouvert pour audit et tests, droits d'usage strictement régis par la licence CMSD.
 
 **Auteur** : Gerald Kerma — CyberMind / Gondwana — devel@cybermind.fr
