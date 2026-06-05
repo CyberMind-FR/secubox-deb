@@ -86,18 +86,62 @@ nft add rule inet filter input udp dport ${WG_PORT} accept 2>/dev/null || true
 echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-secubox-wg.conf
 sysctl -p /etc/sysctl.d/99-secubox-wg.conf >/dev/null 2>&1 || true
 
-# ── CA WG dedicated root (separate from transparent mitm CA) ──
-if [ ! -f "$CA_WG_DIR/ca.pem" ]; then
-    log "generating dedicated WG CA root"
+# ── CA WG : mitmproxy-readable combined PEM (key+cert) ──
+# mitm 11 looks for <confdir>/mitmproxy-ca.pem at startup. If present, it
+# uses our pre-generated CA instead of auto-generating an ugly one with
+# CN=mitmproxy. We MUST pre-generate it with a full DN so Android/Chrome
+# don't show "Ce certificat émis par null" (Chrome can't render certs
+# without a complete subject).
+if [ ! -f "$CA_WG_DIR/mitmproxy-ca.pem" ]; then
+    log "generating dedicated WG CA (full DN, 10y)"
     cd "$CA_WG_DIR"
-    openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out ca.pem \
-        -days 365 -subj "/CN=Gondwana ToolBoX WG CA/O=CyberMind Gondwana/C=FR" \
-        2>/dev/null
-    chmod 0600 key.pem
-    chmod 0644 ca.pem
-    log "WG CA root created at $CA_WG_DIR/ca.pem"
+
+    # OpenSSL config — full DN, CA extensions, SKI/AKI
+    cat > _ca.cnf <<'CNF'
+[req]
+distinguished_name = dn
+prompt             = no
+x509_extensions    = v3_ca
+
+[dn]
+C  = FR
+ST = Auvergne-Rhone-Alpes
+L  = Notre-Dame-du-Cruet
+O  = CyberMind Gondwana
+OU = ToolBoX R3 WireGuard
+CN = Gondwana ToolBoX R3 CA
+
+[v3_ca]
+basicConstraints       = critical, CA:TRUE
+keyUsage               = critical, keyCertSign, cRLSign
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always
+subjectAltName         = DNS:Gondwana ToolBoX R3 CA, DNS:cabine.gondwana.local
+CNF
+
+    openssl genrsa -out _key.pem 2048 2>/dev/null
+    openssl req -new -x509 -days 3650 -key _key.pem -out _cert.pem \
+        -config _ca.cnf 2>/dev/null
+
+    # Combined key+cert for mitm (mitmproxy-ca.pem)
+    cat _key.pem _cert.pem > mitmproxy-ca.pem
+    chmod 0600 mitmproxy-ca.pem
+    chown root:secubox-toolbox mitmproxy-ca.pem
+
+    # Public cert only (what we serve via /wg/ca.pem)
+    cp _cert.pem mitmproxy-ca-cert.pem
+    chmod 0644 mitmproxy-ca-cert.pem
+    chown root:secubox-toolbox mitmproxy-ca-cert.pem
+
+    # DER fallback for Android (some installers prefer .cer DER)
+    openssl x509 -in _cert.pem -outform DER -out mitmproxy-ca-cert.cer 2>/dev/null
+    chmod 0644 mitmproxy-ca-cert.cer
+    chown root:secubox-toolbox mitmproxy-ca-cert.cer
+
+    rm -f _key.pem _cert.pem _ca.cnf
+    log "WG CA generated : $(openssl x509 -in mitmproxy-ca-cert.pem -noout -subject 2>&1 | head -1)"
 else
-    log "WG CA root exists, keeping"
+    log "WG CA exists, keeping ($(openssl x509 -in $CA_WG_DIR/mitmproxy-ca-cert.pem -noout -subject 2>&1 | head -1))"
 fi
 
 # ── Enable wg-quick service ──

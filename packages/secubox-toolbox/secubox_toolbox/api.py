@@ -409,20 +409,20 @@ async def webapp_manifest(request: Request) -> dict:
 
 @router.get("/wg/r3-install", response_class=HTMLResponse)
 async def wg_r3_install(request: Request) -> HTMLResponse:
-    """R3 install page — simplified 3-step install : QR scan / CA R3 / GO.
+    """R3 install page — 3-step install with per-OS instructions tabs.
 
     Optimized for first-time portable setup from anywhere (kbin.gk2.secubox.in).
-    No more wall-of-text — large QR, 3 numbered steps, one big GO button.
+    Step 1 = WG profile, Step 2 = CA install (per-OS), Step 3 = GO.
     """
     html = """<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=apple-mobile-web-app-capable content=yes>
 <link rel=manifest href=/manifest.json>
-<title>R3 — Tunnel portable Gondwana</title>
-<style>:root{--bg:#0a0a0f;--gold:#c9a84c;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff;--orange:#ffb347;--err:#e63946}
+<title>R3 — Tunnel portable Gondwana (install all-OS)</title>
+<style>:root{--bg:#0a0a0f;--gold:#c9a84c;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff;--orange:#ffb347;--err:#e63946;--blue:#5fa8ff}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg);color:var(--text);font-family:'Courier New',Menlo,monospace;line-height:1.5}
-body{padding:1.2rem;max-width:600px;margin:auto}
+body{padding:1.2rem;max-width:720px;margin:auto}
 h1{color:var(--gold);text-align:center;font-size:1.4rem;margin-bottom:0.2rem;letter-spacing:2px}
 .lead{color:var(--phos);text-align:center;font-size:0.8rem;margin-bottom:1.4rem;opacity:0.85}
 .lead b{color:var(--phos-hot)}
@@ -432,52 +432,167 @@ h1{color:var(--gold);text-align:center;font-size:1.4rem;margin-bottom:0.2rem;let
 .qr{text-align:center;background:white;padding:14px;border-radius:8px;margin:0.6rem 0;box-shadow:0 2px 10px rgba(158,118,255,0.25)}
 .qr img{max-width:300px;width:100%;height:auto}
 .btn{display:block;text-align:center;padding:0.85rem 1rem;color:#0a0a0f;text-decoration:none;border-radius:6px;font-weight:bold;margin:0.5rem 0;font-size:0.95rem;transition:all 0.15s}
-.btn-pri{background:linear-gradient(90deg,var(--purple),#7e56df)}
 .btn-go{background:linear-gradient(90deg,var(--phos),var(--phos-hot));color:#0a0a0f;font-size:1.1rem;padding:1rem;letter-spacing:1px;text-shadow:0 0 6px rgba(0,255,85,0.5)}
 .btn-warn{background:linear-gradient(90deg,var(--orange),#dd7e0a)}
-.btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+.btn-small{display:inline-block;padding:0.4rem 0.8rem;background:var(--orange);color:#0a0a0f;border-radius:4px;font-weight:bold;font-size:0.78rem;text-decoration:none;margin:0.2rem 0.3rem 0.2rem 0}
+.btn-small.blue{background:var(--blue)}
+.btn:hover,.btn-small:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.4)}
 .alt{font-size:0.72rem;color:#909090;text-align:center;margin-top:0.4rem}
 .alt a{color:var(--orange);text-decoration:underline}
 .tip{font-size:0.72rem;color:#a0d8a8;background:rgba(0,221,68,0.05);border-left:2px solid var(--phos);padding:0.5rem 0.7rem;margin-top:0.5rem;border-radius:0 3px 3px 0}
 .warn{font-size:0.78rem;color:#ffd6a0;background:rgba(255,179,71,0.08);border-left:3px solid var(--orange);padding:0.7rem;margin:0.4rem 0;border-radius:0 4px 4px 0}
 .back{display:block;text-align:center;margin-top:1.5rem;color:#666;text-decoration:none;font-size:0.85rem}
 .back:hover{color:var(--phos)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid #2a2a3f;margin-bottom:0.6rem;flex-wrap:wrap}
+.tab{background:transparent;border:0;color:#888;padding:0.5rem 0.9rem;font-family:inherit;font-size:0.82rem;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
+.tab.active{color:var(--purple);border-bottom-color:var(--purple);background:rgba(158,118,255,0.06)}
+.tab:hover{color:var(--text)}
+.tab-content{display:none;padding:0.4rem 0.2rem}
+.tab-content.active{display:block}
+.tab-content h3{color:var(--gold);font-size:0.85rem;margin-bottom:0.3rem}
+.tab-content ol{padding-left:1.4rem;font-size:0.82rem;line-height:1.7}
+.tab-content code{background:#1a1a25;color:var(--phos-hot);padding:0.15rem 0.4rem;border-radius:3px;font-size:0.78rem;display:inline-block;word-break:break-all}
+pre{background:#1a1a25;color:var(--phos-hot);padding:0.6rem 0.8rem;border-radius:4px;font-size:0.75rem;overflow-x:auto;margin:0.4rem 0;line-height:1.5}
 </style></head><body>
 
 <h1>🌐 R3 — TUNNEL PORTABLE</h1>
-<p class=lead>3 étapes pour activer le mode <b>R3</b> — surveillance partout, sur 4G/WiFi tiers</p>
+<p class=lead>3 étapes · install <b>multi-OS</b> · marche partout (4G / WiFi tiers)</p>
 
 <div class=step>
-<h2><span class=num>1</span> 📲 Scanner le QR profil</h2>
-<p style="font-size:0.85rem;margin-bottom:0.4rem">Installe l'app gratuite <b>WireGuard</b> (App Store / Play Store) puis scanne :</p>
+<h2><span class=num>1</span> 📲 Profil WireGuard</h2>
+<p style="font-size:0.85rem;margin-bottom:0.4rem">Installe l'app <b>WireGuard</b> (gratuite, tous OS) puis scanne ce QR :</p>
 <div class=qr><img src="/wg/qr.png" alt="QR profil WireGuard"/></div>
-<p class=alt>📥 Pas de scanner ? <a href="/wg/profile/new">Télécharger le .conf</a> (iPhone : touch → ouvrir dans WireGuard)</p>
+<p class=alt>📥 Pas de scanner ? <a href="/wg/profile/new">Télécharger village3b-toolbox.conf</a></p>
+<div class=tip>
+🌐 <b>WireGuard download :</b>
+<a class=btn-small href="https://apps.apple.com/app/wireguard/id1441195209">iOS</a>
+<a class=btn-small href="https://play.google.com/store/apps/details?id=com.wireguard.android">Android</a>
+<a class=btn-small href="https://www.wireguard.com/install/">Linux/Win/Mac</a>
+</div>
 </div>
 
 <div class=step>
-<h2><span class=num>2</span> 🔐 Installer le certificat R3</h2>
-<p style="font-size:0.85rem;margin-bottom:0.4rem">Certif <b>spécifique R3</b> (≠ R1/R2). Sans lui, les sites HTTPS cassent.</p>
-<a href="/wg/ca.mobileconfig" class="btn btn-warn">📲 iPhone : 1-tap install</a>
-<a href="/wg/ca.pem" class="btn btn-warn">🤖 Android / PC : .pem</a>
+<h2><span class=num>2</span> 🔐 Certificat R3 (par OS)</h2>
+<p style="font-size:0.85rem;margin-bottom:0.5rem">Le CA <b>« Gondwana ToolBoX R3 CA »</b> doit être ajouté à la racine de confiance.</p>
+
+<div class=tabs>
+<button class="tab active" data-tab=ios>🍎 iOS / iPad</button>
+<button class="tab" data-tab=android>🤖 Android</button>
+<button class="tab" data-tab=linux>🐧 Linux</button>
+<button class="tab" data-tab=mac>💻 macOS</button>
+<button class="tab" data-tab=win>🪟 Windows</button>
+</div>
+
+<div class="tab-content active" data-content=ios>
+<a href="/wg/ca.mobileconfig" class="btn btn-warn">📲 Installer .mobileconfig (1-tap)</a>
+<h3>Puis :</h3>
+<ol>
+<li>Réglages → Général → <b>VPN et gestion d'appareils</b> → installer le profil</li>
+<li>Réglages → Général → Information → <b>Réglages de confiance des certificats</b></li>
+<li>Activer le toggle <b>« Gondwana ToolBoX R3 CA »</b> 🟢</li>
+</ol>
+</div>
+
+<div class="tab-content" data-content=android>
+<a href="/wg/ca.pem" class="btn btn-warn">📥 Télécharger ca.pem</a>
 <div class=warn>
-<b>iPhone seulement :</b> après l'install, va aussi dans<br>
-Réglages → Général → Information → <b>Réglages de confiance</b><br>
-et active <b>« Gondwana ToolBoX WG CA »</b>
+⚠ Chrome ne peut PAS installer un CA directement (sécurité Android 11+).
+Tu DOIS passer par les <b>Paramètres système</b>.
+</div>
+<h3>Procédure (toutes versions Android) :</h3>
+<ol>
+<li>Télécharge le .pem (bouton ci-dessus, sauvé dans Téléchargements)</li>
+<li>Ouvre <b>Paramètres système</b> (pas Chrome)</li>
+<li>→ <b>Sécurité et confidentialité</b> (ou « Sécurité »)</li>
+<li>→ <b>Chiffrement et authentifiants</b> (ou « Identifiants »)</li>
+<li>→ <b>Installer un certificat</b> → <b>Certificat d'autorité</b></li>
+<li>Sélectionne <code>ca.pem</code> dans Téléchargements</li>
+<li>Confirme le PIN/empreinte du téléphone si demandé</li>
+</ol>
+<h3>Vérification :</h3>
+<pre>Paramètres → Sécurité → Identifiants
+de confiance → onglet UTILISATEUR
+→ « Gondwana ToolBoX R3 CA » présent ✓</pre>
+</div>
+
+<div class="tab-content" data-content=linux>
+<a href="/wg/ca.pem" class="btn btn-warn">📥 Télécharger ca.pem</a>
+<h3>Debian / Ubuntu :</h3>
+<pre>sudo cp ca.pem /usr/local/share/ca-certificates/gondwana-toolbox-r3.crt
+sudo update-ca-certificates</pre>
+<h3>Fedora / RHEL :</h3>
+<pre>sudo cp ca.pem /etc/pki/ca-trust/source/anchors/gondwana-toolbox-r3.crt
+sudo update-ca-trust</pre>
+<h3>Arch :</h3>
+<pre>sudo trust anchor --store ca.pem</pre>
+<h3>Vérif Firefox / Chrome :</h3>
+<pre># Firefox utilise son propre store
+# Chrome utilise NSS :
+certutil -d sql:$HOME/.pki/nssdb -A -t "C,," \\
+    -n "Gondwana ToolBoX R3 CA" -i ca.pem</pre>
+<h3>Tunnel rapide (Linux) :</h3>
+<pre>wget /wg/profile/new -O village3b.conf
+sudo wg-quick up ./village3b.conf
+# stop :
+sudo wg-quick down ./village3b.conf</pre>
+</div>
+
+<div class="tab-content" data-content=mac>
+<a href="/wg/ca.pem" class="btn btn-warn">📥 Télécharger ca.pem</a>
+<h3>Install (Keychain Access) :</h3>
+<ol>
+<li>Double-clic <code>ca.pem</code> → s'ouvre dans <b>Trousseaux d'accès</b></li>
+<li>Choisir trousseau <b>Système</b> (pas Login)</li>
+<li>Authentifier avec ton mot de passe macOS</li>
+<li>Double-clic le cert installé → <b>Approuver</b> → « Toujours approuver »</li>
+</ol>
+<h3>Ou en CLI :</h3>
+<pre>sudo security add-trusted-cert -d -r trustRoot \\
+    -k /Library/Keychains/System.keychain ca.pem</pre>
+</div>
+
+<div class="tab-content" data-content=win>
+<a href="/wg/ca.pem" class="btn btn-warn">📥 Télécharger ca.pem</a>
+<h3>Install (PowerShell admin) :</h3>
+<pre>Import-Certificate -FilePath .\\ca.pem `
+    -CertStoreLocation Cert:\\LocalMachine\\Root</pre>
+<h3>Ou GUI :</h3>
+<ol>
+<li>Double-clic <code>ca.pem</code> → <b>Installer le certificat</b></li>
+<li>Emplacement : <b>Ordinateur local</b> (pas Utilisateur courant)</li>
+<li>Magasin : <b>Autorités de certification racines de confiance</b></li>
+</ol>
 </div>
 </div>
 
 <div class=step>
 <h2><span class=num>3</span> 🚀 Activer le tunnel</h2>
-<p style="font-size:0.85rem;margin-bottom:0.5rem">Dans l'app WireGuard, glisse le toggle <b>ON</b>. L'icône VPN apparaît dans la barre d'état.</p>
+<p style="font-size:0.85rem;margin-bottom:0.5rem">App WireGuard → toggle <b>ON</b> sur le profil <code>village3b-toolbox</code>. L'icône VPN apparaît dans la barre d'état.</p>
 <a href="/report/me/html" class="btn btn-go">📊 GO — Voir mon rapport live</a>
 <div class=tip>
-✓ Trafic chiffré entre iPhone et la cabine (jamais en clair sur Internet)<br>
-✓ Bandeau sur toutes les pages HTTPS<br>
-✓ FaceTime / iCloud / Signal restent fluides (bypass intelligent)
+✓ Trafic chiffré entre device et cabine (jamais en clair sur Internet)<br>
+✓ Bandeau apparaît sur toutes les pages HTTPS<br>
+✓ Signal / WhatsApp / Telegram / iCloud / banques → <b>passthrough</b> (jamais déchiffrés)
 </div>
 </div>
 
-<a href="/" class=back>← Retour splash</a>
+<p style="text-align:center;font-size:0.78rem;color:#666;margin-top:1.5rem">
+📖 Wiki complet : <a href="https://github.com/CyberMind-FR/secubox-deb/wiki/R3-WireGuard-install" style="color:var(--purple)">github.com/CyberMind-FR/secubox-deb/wiki/R3-WireGuard-install</a>
+</p>
+
+<a href="/landing" class=back>← Retour landing</a>
+
+<script>
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    var tn = this.dataset.tab;
+    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active');});
+    this.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(function(x){x.classList.remove('active');});
+    document.querySelector('[data-content='+tn+']').classList.add('active');
+  });
+});
+</script>
 </body></html>"""
     return HTMLResponse(html)
 
