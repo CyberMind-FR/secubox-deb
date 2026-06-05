@@ -299,6 +299,76 @@ async def ca_fingerprint() -> dict:
     return {"sha1": sha1, "sha256": sha256, "subject": subject}
 
 
+# Phase 3.x (#497) : 3 QR code endpoints — splash, cert install, webclip
+# Used by the splash page + reports + the public poster (POSTER-grand-public).
+
+def _qr_png(payload: str, size: int = 8, border: int = 2) -> bytes:
+    """Generate a PNG QR code for the given payload. Returns bytes."""
+    import qrcode
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=size,
+        border=border,
+    )
+    qr.add_data(payload)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    import io
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _portal_url(request: "Request", path: str = "/") -> str:
+    """Build absolute URL based on request Host header — works regardless of
+    whether the portal is reached via 10.99.0.1, village3b, or external."""
+    host = request.headers.get("host", "10.99.0.1:8088")
+    scheme = "http"  # captive portal is HTTP-only by design
+    return f"{scheme}://{host.rstrip('/')}{path}"
+
+
+@router.get("/qr/splash.png")
+async def qr_splash(request: Request) -> Response:
+    """QR encodes the splash URL — scannable from another device to join VILLAGE3B."""
+    return Response(content=_qr_png(_portal_url(request, "/")),
+                     media_type="image/png",
+                     headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/qr/cert.png")
+async def qr_cert(request: Request) -> Response:
+    """QR encodes the CA install URL (.mobileconfig)."""
+    return Response(content=_qr_png(_portal_url(request, "/ca/mobileconfig")),
+                     media_type="image/png",
+                     headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/qr/webclip.png")
+async def qr_webclip(request: Request) -> Response:
+    """QR encodes the webclip URL (Add-to-Home-Screen profile)."""
+    return Response(content=_qr_png(_portal_url(request, "/ca/webclip-cabine.mobileconfig")),
+                     media_type="image/png",
+                     headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/qr/{target}")
+async def qr_generic(target: str, request: Request) -> Response:
+    """Generic fallback : ?target=splash|cert|webclip|fingerprint maps to fixed
+    URLs ; anything else encodes the literal target string."""
+    targets = {
+        "splash": _portal_url(request, "/"),
+        "cert": _portal_url(request, "/ca/mobileconfig"),
+        "webclip": _portal_url(request, "/ca/webclip-cabine.mobileconfig"),
+        "report": _portal_url(request, "/report/me/html"),
+        "fingerprint": _portal_url(request, "/ca/fingerprint"),
+    }
+    payload = targets.get(target.removesuffix(".png"), target)
+    return Response(content=_qr_png(payload),
+                     media_type="image/png",
+                     headers={"Cache-Control": "public, max-age=3600"})
+
+
 @router.get("/client-status")
 async def client_status(request: Request) -> dict:
     """Health-banner-friendly endpoint : detect captive subnet + R2 consent +
