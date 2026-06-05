@@ -1,0 +1,226 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# CyberMind ToolBoX Whitelist baseline (#492)
+#
+# This file is installed to /usr/share/secubox/toolbox/whitelist-baseline.yaml
+# and reloaded automatically when modified. To override or extend without
+# touching this file, edit /etc/secubox/toolbox/whitelist.yaml (operator-owned,
+# survives upgrades).
+#
+# Each entry causes the matching FQDN to BYPASS mitmproxy inspection. The
+# cabine reports the bypass in the user-facing /report : honesty over
+# magic-numbers. Quality scoring continues passively (TLS version, JA4).
+
+whitelist:
+
+  # ───────────── Apple ecosystem (cert-pinning ubiquitous) ─────────────
+  - pattern: "*.push.apple.com"
+    reason: "Apple Push Notifications cert-pinned, no MITM possible"
+    category: vendor-os
+    quality_expected: A+
+  - pattern: "*.icloud.com"
+    reason: "Apple iCloud cert-pinned"
+    category: vendor-os
+    quality_expected: A+
+  - pattern: "*.apple.com"
+    reason: "Apple infrastructure (incl. itunes, mzstatic, appstore)"
+    category: vendor-os
+    quality_expected: A+
+  - pattern: "*.aaplimg.com"
+    reason: "Apple CDN"
+    category: vendor-os
+    quality_expected: A
+  - pattern: "*.cdn-apple.com"
+    reason: "Apple CDN"
+    category: vendor-os
+    quality_expected: A
+  - pattern: "*.mzstatic.com"
+    reason: "Apple iTunes/Store CDN"
+    category: vendor-os
+    quality_expected: A
+  - pattern: "smoot.apple.com"
+    reason: "Apple Search/Siri"
+    category: vendor-os
+    quality_expected: A+
+  - pattern: "*.apple-cloudkit.com"
+    reason: "Apple CloudKit"
+    category: vendor-os
+    quality_expected: A+
+
+  # ───────────── Google / Android OS ─────────────
+  - pattern: "*.googleapis.com"
+    reason: "Google APIs, cert-pinned for FCM/auth"
+    category: vendor-os
+    quality_expected: A+
+  - pattern: "*.gstatic.com"
+    reason: "Google CDN"
+    category: vendor-os
+    quality_expected: A
+  - pattern: "fcm.googleapis.com"
+    reason: "Firebase Cloud Messaging, cert-pinned"
+    category: vendor-os
+    quality_expected: A+
+  - pattern: "android.googleapis.com"
+    reason: "Android OS services, cert-pinned"
+    category: vendor-os
+    quality_expected: A+
+  - pattern: "play.googleapis.com"
+    reason: "Google Play Services"
+    category: vendor-os
+    quality_expected: A+
+
+  # ───────────── Messaging E2E (transport-only observation OK) ─────────────
+  - pattern: "*.signal.org"
+    reason: "Signal E2E messenger, content opaque by design"
+    category: messaging-e2e
+    quality_expected: A+
+  - pattern: "*.whispersystems.org"
+    reason: "Signal infrastructure"
+    category: messaging-e2e
+    quality_expected: A+
+  - pattern: "*.threema.ch"
+    reason: "Threema E2E"
+    category: messaging-e2e
+    quality_expected: A+
+  - pattern: "*.simplex.chat"
+    reason: "SimpleX E2E"
+    category: messaging-e2e
+    quality_expected: A+
+
+  # ───────────── Banking FR (CSPN policy : ne JAMAIS MITM la banque) ─────────────
+  - pattern: "*.banque-postale.fr"
+    reason: "Banking, MITM forbidden by ToolBoX policy"
+    category: financial
+    quality_expected: A
+  - pattern: "*.societegenerale.fr"
+    reason: "Banking, MITM forbidden by ToolBoX policy"
+    category: financial
+    quality_expected: A
+  - pattern: "*.bnpparibas.com"
+    reason: "Banking, MITM forbidden by ToolBoX policy"
+    category: financial
+    quality_expected: A
+  - pattern: "*.credit-agricole.fr"
+    reason: "Banking, MITM forbidden by ToolBoX policy"
+    category: financial
+    quality_expected: A
+  - pattern: "*.creditmutuel.fr"
+    reason: "Banking, MITM forbidden by ToolBoX policy"
+    category: financial
+    quality_expected: A
+  - pattern: "*.lcl.fr"
+    reason: "Banking, MITM forbidden by ToolBoX policy"
+    category: financial
+    quality_expected: A
+  - pattern: "*.boursorama.com"
+    reason: "Banking, MITM forbidden by ToolBoX policy"
+    category: financial
+    quality_expected: A
+  - pattern: "*.revolut.com"
+    reason: "Banking (neobank), MITM forbidden"
+    category: financial
+    quality_expected: A+
+
+  # ───────────── Government FR (sensitive citizen data) ─────────────
+  - pattern: "*.service-public.fr"
+    reason: "French government services, MITM forbidden"
+    category: government
+    quality_expected: A
+  - pattern: "*.impots.gouv.fr"
+    reason: "French tax service, MITM forbidden"
+    category: government
+    quality_expected: A
+  - pattern: "*.ameli.fr"
+    reason: "French healthcare, MITM forbidden"
+    category: government
+    quality_expected: A
+  - pattern: "*.france-identite.gouv.fr"
+    reason: "French digital identity, MITM forbidden"
+    category: government
+    quality_expected: A+
+  - pattern: "*.francetravail.fr"
+    reason: "French employment service"
+    category: government
+    quality_expected: A
+  - pattern: "*.caf.fr"
+    reason: "French family allowance"
+    category: government
+    quality_expected: A
+
+  # ───────────── Health (medical confidentiality) ─────────────
+  - pattern: "*.doctolib.fr"
+    reason: "Healthcare booking, medical confidentiality"
+    category: health
+    quality_expected: A
+  - pattern: "*.qare.fr"
+    reason: "Telemedicine, MITM forbidden"
+    category: health
+    quality_expected: A
+  - pattern: "monespacesante.fr"
+    reason: "French shared health record"
+    category: health
+    quality_expected: A+
+
+  # ───────────── Privacy-respecting search / DNS / VPN ─────────────
+  - pattern: "*.duckduckgo.com"
+    reason: "Privacy-respecting search"
+    category: privacy-tools
+    quality_expected: A+
+  - pattern: "*.qwant.com"
+    reason: "Privacy-respecting search FR"
+    category: privacy-tools
+    quality_expected: A
+  - pattern: "*.startpage.com"
+    reason: "Privacy-respecting search"
+    category: privacy-tools
+    quality_expected: A+
+  - pattern: "*.proton.me"
+    reason: "Proton (mail/VPN/drive), MITM forbidden"
+    category: privacy-tools
+    quality_expected: A+
+  - pattern: "*.protonmail.com"
+    reason: "Proton Mail legacy domain"
+    category: privacy-tools
+    quality_expected: A+
+  - pattern: "*.tutanota.com"
+    reason: "Tutanota E2E mail"
+    category: privacy-tools
+    quality_expected: A+
+  - pattern: "*.mullvad.net"
+    reason: "Mullvad VPN, MITM forbidden"
+    category: privacy-tools
+    quality_expected: A+
+  - pattern: "*.tailscale.com"
+    reason: "Tailscale mesh, control plane"
+    category: privacy-tools
+    quality_expected: A+
+
+  # ───────────── Tor (opaque by design + MITM impossible) ─────────────
+  - pattern: "*.torproject.org"
+    reason: "Tor Project (downloads + bridges)"
+    category: anon-network
+    quality_expected: A+
+
+  # ───────────── OS critical updates ─────────────
+  - pattern: "*.windowsupdate.com"
+    reason: "Windows Update infrastructure"
+    category: vendor-os
+    quality_expected: A
+  - pattern: "*.microsoft.com"
+    reason: "Microsoft services (Office365/Auth)"
+    category: vendor-os
+    quality_expected: A
+  - pattern: "*.debian.org"
+    reason: "Debian package repositories"
+    category: vendor-os
+    quality_expected: A
+  - pattern: "*.ubuntu.com"
+    reason: "Ubuntu package repositories"
+    category: vendor-os
+    quality_expected: A
+
+  # ───────────── Captive portal probes (must reach the portal itself, not internet) ─────────────
+  # NOTE : these probes are HANDLED locally by the captive splash, never reach
+  # this whitelist. Listed here for documentation.
+  # - pattern: "captive.apple.com"
+  # - pattern: "connectivitycheck.gstatic.com"
+  # - pattern: "www.msftconnecttest.com"

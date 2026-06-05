@@ -249,6 +249,36 @@ def render_pdf(report: dict) -> bytes:
         _bullet(pdf, rec)
     pdf.ln(2)
 
+    # Phase 3 (#492) : Transparency — inspection breakdown + per-host quality
+    t = report.get("transparency") or {}
+    if t.get("total_events"):
+        _section(pdf, "INSPECTION : CE QUI A ETE REGARDE (et pas regarde)")
+        b = t.get("breakdown_pct") or {}
+        if b.get("inspected"):
+            _bullet(pdf, f"Inspecte (MITM via notre CA) : {b['inspected']}% - contenu visible")
+        if b.get("bypassed-whitelist"):
+            _bullet(pdf, f"Bypass whitelist : {b['bypassed-whitelist']}% - decision policy (vendor cert-pinning)")
+        if b.get("pinned-failed-mitm"):
+            _bullet(pdf, f"Cert-pinning : {b['pinned-failed-mitm']}% - app refuse notre CA, normal+bon signe")
+        if b.get("e2e-opaque"):
+            _bullet(pdf, f"E2E messaging : {b['e2e-opaque']}% - opaque par design, ton chiffrement marche")
+        _bullet(pdf, f"Total events analyses : {t.get('total_events', 0)}")
+        wl = (t.get("whitelist_stats") or {}).get("count", 0)
+        if wl:
+            _bullet(pdf, f"Patterns whitelist actifs : {wl} (baseline + override operateur)")
+        pdf.ln(2)
+
+        # Per-host quality table — worst first, capped 10
+        per_host = t.get("per_host") or []
+        if per_host:
+            _section(pdf, "QUALITE SECURITE PAR DESTINATION (worst-first)")
+            for h in per_host[:10]:
+                grade = h.get("grade", "?")
+                host = h.get("host", "?")[:50]
+                status = h.get("status", "?")
+                _bullet(pdf, f"[{grade}] {host} - {status}", font_size=8)
+            pdf.ln(2)
+
     # Retention
     _section(pdf, "RETENTION DES DONNEES")
     _bullet(pdf, "Hash MAC anonyme : 24h (sel rotatif quotidien)")

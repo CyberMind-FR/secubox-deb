@@ -27,6 +27,13 @@ from . import (
     store,
     threat_intel,
 )
+# Phase 3 (#492) : transparency layer
+try:
+    from secubox_core import whitelist as _whitelist_mod
+    from secubox_core.classifiers import security_quality as _sec_quality
+    _HAS_TRANSPARENCY = True
+except ImportError:
+    _HAS_TRANSPARENCY = False
 from .config import load_config, resolve_secret
 from .models import AcceptResp, ClientRow, Config, StatusResp
 
@@ -258,6 +265,9 @@ def _aggregate_session(mac_hash: str) -> dict:
     soc_indicators: list[dict] = []
     ja4_snis: set[str] = set()
     ja4_alpns: set[str] = set()
+    # Phase 3 (#492) : transparency layer state
+    analysis_breakdown: dict[str, int] = {}
+    host_analysis: dict[str, dict] = {}
     try:
         with _sq3.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=2) as c:
             cur = c.execute(
@@ -279,6 +289,15 @@ def _aggregate_session(mac_hash: str) -> dict:
                     ua = p.get("user_agent")
                     if ua:
                         user_agents.add(ua[:80])
+                    # Phase 3 (#492) : analysis_status breakdown
+                    status = p.get("analysis_status")
+                    if status:
+                        analysis_breakdown[status] = analysis_breakdown.get(status, 0) + 1
+                        # Keep a per-host status for the quality table
+                        host_analysis[host] = {
+                            "status": status,
+                            "reason": p.get("analysis_reason", ""),
+                        }
                 elif source == "cookies":
                     cookies_total_set += p.get("set_cookie_count", 0)
                     cookies_total_sent += p.get("cookie_count", 0)
@@ -417,6 +436,78 @@ def _aggregate_session(mac_hash: str) -> dict:
         "cookies_providers": cookie_analysis.top_providers(cookies_urls, limit=10),
         # ── Phase 2b (#488) : pull events from receiving modules ──
         "mitm_modules": _pull_mitm_module_events(mac_hash),
+        # ── Phase 3 (#492) : transparency layer ──
+        "transparency": _build_transparency(
+            analysis_breakdown, host_analysis, dpi_hosts, ja4_snis,
+        ),
+    }
+
+
+def _build_transparency(
+    breakdown: dict[str, int],
+    host_analysis: dict[str, dict],
+    dpi_hosts: dict[str, int],
+    ja4_snis: set,
+) -> dict:
+    """Phase 3 (#492) : pack the inspection breakdown + per-host quality table.
+
+    The breakdown shows what % of traffic was inspected / bypassed / pinned /
+    e2e. The per-host quality table grades each destination via passive or
+    active signals (currently passive, since header capture is not yet wired).
+    """
+    total = sum(breakdown.values()) or 1
+    pct = {k: round(100 * v / total, 1) for k, v in breakdown.items()}
+
+    # Backfill any host without explicit analysis_status (legacy events)
+    for h in dpi_hosts:
+        if h not in host_analysis:
+            # Best-effort post-hoc tag : whitelist match → bypass, else inspected
+            target = h.lower()
+            if _HAS_TRANSPARENCY and _whitelist_mod.is_whitelisted(target):
+                host_analysis[h] = {
+                    "status": "bypassed-whitelist",
+                    "reason": (_whitelist_mod.match(target) or {}).get("reason", ""),
+                }
+            else:
+                host_analysis[h] = {
+                    "status": "inspected",
+                    "reason": "MITM decryption (post-hoc tag)",
+                }
+
+    # Build per-host quality (passive grading from what we have)
+    per_host: list[dict] = []
+    if _HAS_TRANSPARENCY:
+        for h, info in host_analysis.items():
+            status = info.get("status", "inspected")
+            is_e2e = status == "e2e-opaque"
+            # We don't know tls_version per host without further capture ; assume
+            # 13 for whitelisted (cert-pinned apps use modern TLS) and unknown otherwise
+            tls_v = "13" if status in ("bypassed-whitelist", "pinned-failed-mitm", "e2e-opaque") else None
+            g = _sec_quality.grade_passive(
+                tls_version=tls_v,
+                sni=h if h in ja4_snis else None,
+                is_e2e_messaging=is_e2e,
+            )
+            per_host.append({
+                "host": h,
+                "grade": g["grade"],
+                "score": g["score"],
+                "status": status,
+                "reason": info.get("reason", ""),
+            })
+        # Sort : worst quality first (catches user attention)
+        per_host.sort(key=lambda x: (x["score"], x["host"]))
+
+    # Whitelist sanity stats
+    wl_stats = _whitelist_mod.stats() if _HAS_TRANSPARENCY else {"count": 0}
+
+    return {
+        "breakdown": breakdown,
+        "breakdown_pct": pct,
+        "total_events": total,
+        "per_host": per_host[:50],
+        "whitelist_stats": wl_stats,
+        "has_transparency": _HAS_TRANSPARENCY,
     }
 
 
