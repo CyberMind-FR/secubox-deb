@@ -98,23 +98,62 @@ def render_pdf(report: dict) -> bytes:
     # Compromise analysis
     _section(pdf, "ANALYSE COMPROMISSION")
     score = report.get("risk_score", 0)
+    risk_label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
     pdf.set_font("Helvetica", "B", 13)
     if score < 30:
         pdf.set_text_color(0, 221, 68)
-        risk_label = "LOW"
     elif score < 70:
         pdf.set_text_color(255, 179, 71)
-        risk_label = "MEDIUM"
     else:
         pdf.set_text_color(255, 68, 102)
-        risk_label = "HIGH"
     pdf.cell(0, 8, f"Score risque : {score}/100 ({risk_label})", ln=True)
     pdf.set_text_color(0)
     pdf.set_font("Helvetica", "", 10)
-    pdf.ln(2)
+    pdf.ln(1)
+    explanation = report.get("risk_explanation", "")
+    if explanation:
+        pdf.multi_cell(_page_w(pdf), 5, explanation[:600])
+        pdf.ln(1)
     for sig in report.get("indicators", []):
         _bullet(pdf, sig)
     pdf.ln(2)
+
+    # Score breakdown — per-category transparency (Phase 2a)
+    scoring_data = report.get("scoring") or {}
+    breakdown = scoring_data.get("breakdown") or []
+    if breakdown:
+        _section(pdf, "BREAKDOWN DU SCORE")
+        for b in breakdown:
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(0, 5, f"{b.get('category', '?').upper()} : poids {b.get('weight_subtotal', 0)} (sur {b.get('raw_signal_count', 0)} signal)", ln=True)
+            pdf.set_font("Helvetica", "", 8)
+            for ex in (b.get("examples") or [])[:3]:
+                _bullet(pdf, ex, font_size=8)
+        pdf.ln(2)
+
+    # Threat-intel matches (feeds malware) — Phase 2a
+    ti = report.get("threat_intel_matches") or []
+    if ti:
+        _section(pdf, "THREAT INTEL - MATCHES FEEDS MALWARE")
+        for m in ti[:10]:
+            _bullet(pdf, f"[{m.get('source', '?')}/{m.get('weight', 0)}] {m.get('label', '?')} : {m.get('ioc', '?')[:60]}", font_size=8)
+        pdf.ln(2)
+
+    # DGA candidates — Phase 2a
+    dga_list = report.get("dga_candidates") or []
+    if dga_list:
+        _section(pdf, "DGA - DOMAINES SUSPECTS")
+        for d in dga_list[:8]:
+            _bullet(pdf, f"[{d.get('score', 0)}] {d.get('host', '?')[:60]} ({','.join(d.get('indicators', []))})", font_size=8)
+        pdf.ln(2)
+
+    # Beaconing patterns — Phase 2a
+    bc = report.get("beaconing_candidates") or []
+    if bc:
+        _section(pdf, "BEACONING - PATTERNS PERIODIQUES SUSPECTS")
+        for b in bc[:8]:
+            _bullet(pdf, f"[{b.get('score', 0)}] {b.get('host', '?')[:50]}  median={b.get('median_seconds', 0)}s  cv={b.get('cv', 0)}", font_size=8)
+        pdf.ln(2)
 
     # Cert-pinning protection
     _section(pdf, "PROTECTION CERT-PINNING (apps qui RESISTENT au MITM)")
