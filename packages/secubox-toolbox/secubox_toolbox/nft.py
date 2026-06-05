@@ -86,3 +86,24 @@ def del_consented(mac: str) -> bool:
 def is_r2_banner(mac: str) -> bool:
     rc, out, _ = _run(NFT, "list", "set", "inet", "toolbox", "r2_banner_macs")
     return rc == 0 and mac.lower() in out.lower()
+
+
+# Phase 6 (#496) : R3 WireGuard consented set
+
+def add_r3_wg(mac: str, ttl: str = "24h") -> bool:
+    rc, _, err = _run(NFT, "add", "element", "inet", "toolbox",
+                      "consented_r3_wg_macs", "{ " + mac + " timeout " + ttl + " }")
+    if rc:
+        log.error("nft add consented_r3_wg_macs %s failed: %s", mac, err)
+    return rc == 0
+
+
+def del_r3_wg(mac: str) -> bool:
+    rc, _, _ = _run(NFT, "delete", "element", "inet", "toolbox",
+                    "consented_r3_wg_macs", "{ " + mac + " }")
+    return rc == 0
+
+
+def is_r3_wg(mac: str) -> bool:
+    rc, out, _ = _run(NFT, "list", "set", "inet", "toolbox", "consented_r3_wg_macs")
+    return rc == 0 and mac.lower() in out.lower()

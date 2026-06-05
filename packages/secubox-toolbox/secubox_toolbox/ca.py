@@ -51,13 +51,21 @@ def ensure_ca(common_name: str = "Gondwana ToolBoX CA") -> None:
 
 
 def ca_der() -> bytes:
-    """Return CA cert as DER (Android-friendly)."""
-    pem = CA_PEM.read_bytes()
+    """Return CA cert as DER (binary)."""
     proc = subprocess.run(
         ["openssl", "x509", "-in", str(CA_PEM), "-outform", "DER"],
         capture_output=True, check=True,
     )
     return proc.stdout
+
+
+def ca_pem() -> bytes:
+    """Return CA cert as PEM (Android-friendly text format).
+
+    Android (especially 11+) accepts PEM .crt downloads more reliably than DER.
+    Chrome will offer to install when MIME type = application/x-x509-ca-cert.
+    """
+    return CA_PEM.read_bytes()
 
 
 def ca_pem_b64() -> str:

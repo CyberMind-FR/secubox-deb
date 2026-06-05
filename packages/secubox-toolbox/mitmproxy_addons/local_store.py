@@ -104,6 +104,41 @@ def _mac_of(ip: str | None) -> str | None:
     return m.group(1).lower() if m else None
 
 
+# Phase 6 (#496) : WG peer hash lookup (R3 clients have no ARP entry).
+import json as _jsonmod
+_WG_PEERS_DB = Path("/var/lib/secubox/toolbox/wg-peers.json")
+_WG_PEERS_CACHE: dict[str, str] = {}
+_WG_PEERS_MTIME: float = 0.0
+
+
+def _wg_hash_of(ip: str) -> str | None:
+    global _WG_PEERS_MTIME
+    try:
+        if not _WG_PEERS_DB.exists():
+            return None
+        mtime = _WG_PEERS_DB.stat().st_mtime
+        if mtime != _WG_PEERS_MTIME or not _WG_PEERS_CACHE:
+            data = _jsonmod.loads(_WG_PEERS_DB.read_text()).get("peers", {})
+            _WG_PEERS_CACHE.clear()
+            for pubkey, meta in data.items():
+                peer_ip = meta.get("ip")
+                if peer_ip:
+                    _WG_PEERS_CACHE[peer_ip] = hashlib.sha256(pubkey.encode()).hexdigest()[:16]
+            _WG_PEERS_MTIME = mtime
+        return _WG_PEERS_CACHE.get(ip)
+    except Exception:
+        return None
+
+
+def _client_hash(ip: str | None) -> str | None:
+    """Single entry point : WG IP → wg_hash, else MAC→hash via ARP."""
+    if not ip:
+        return None
+    if ip.startswith("10.99.1."):
+        return _wg_hash_of(ip)
+    return _hash_mac(_mac_of(ip))
+
+
 def _peer_ip(flow) -> str | None:
     if flow.client_conn and flow.client_conn.peername:
         return flow.client_conn.peername[0]
@@ -134,7 +169,7 @@ class LocalStore:
     def request(self, flow: http.HTTPFlow) -> None:
         """Capture every request as a DPI hint event."""
         ip = _peer_ip(flow)
-        mac_hash = _hash_mac(_mac_of(ip))
+        mac_hash = _client_hash(ip)
         if not mac_hash:
             return
         host = flow.request.host
@@ -156,7 +191,7 @@ class LocalStore:
         if not flow.response:
             return
         ip = _peer_ip(flow)
-        mac_hash = _hash_mac(_mac_of(ip))
+        mac_hash = _client_hash(ip)
         if not mac_hash:
             return
         # Cookies event — Phase 2a+ : capture names (NOT values) for provider mapping
@@ -208,7 +243,7 @@ class LocalStore:
         be honest about what we didn't inspect.
         """
         ip = data.context.client.peername[0] if data.context.client.peername else None
-        mac_hash = _hash_mac(_mac_of(ip))
+        mac_hash = _client_hash(ip)
         if not mac_hash:
             return
         sni = getattr(data.client_hello, "sni", None) if hasattr(data, "client_hello") else None
@@ -223,7 +258,7 @@ class LocalStore:
 
     def tls_clienthello(self, data) -> None:
         ip = data.context.client.peername[0] if data.context.client.peername else None
-        mac_hash = _hash_mac(_mac_of(ip))
+        mac_hash = _client_hash(ip)
         if not mac_hash:
             return
         ch = data.client_hello

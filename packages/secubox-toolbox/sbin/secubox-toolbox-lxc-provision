@@ -1,0 +1,93 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Phase 5 (#495) — provision the toolbox-mitm LXC container.
+# Idempotent : safe to re-run. Builds rootfs if missing, refreshes config
+# if drifted, ensures container is started after install.
+#
+# Reused by debian/postinst.
+
+set -euo pipefail
+
+CONTAINER="toolbox-mitm"
+LXC_PATH="/var/lib/lxc"
+ROOTFS="${LXC_PATH}/${CONTAINER}/rootfs"
+CONFIG_TARGET="/etc/lxc/${CONTAINER}.conf"
+CONFIG_TEMPLATE="/usr/share/secubox/toolbox/lxc/toolbox-mitm.conf.template"
+SVC_TEMPLATE="/usr/share/secubox/toolbox/lxc/toolbox-mitm.service.template"
+
+log() {
+    printf '[toolbox-lxc-provision] %s\n' "$*"
+}
+
+err() {
+    printf '[toolbox-lxc-provision] ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+# Prereq checks
+command -v lxc-create >/dev/null || err "lxc-create not found (apt install lxc)"
+command -v lxc-start >/dev/null || err "lxc-start not found"
+[ -f "$CONFIG_TEMPLATE" ] || err "config template missing: $CONFIG_TEMPLATE"
+
+# ── Build rootfs if absent ──
+if [ ! -d "$ROOTFS/etc" ]; then
+    log "rootfs missing, building Debian 12 bookworm arm64 (~80 MB)"
+    lxc-create -n "$CONTAINER" -t debian -- \
+        --release=bookworm --arch=arm64 --packages=mitmproxy,python3,curl,procps \
+        || err "lxc-create failed"
+    log "rootfs built"
+else
+    log "rootfs exists, skipping create"
+fi
+
+# ── Install/refresh config ──
+log "installing $CONFIG_TARGET from template"
+cp -f "$CONFIG_TEMPLATE" "$CONFIG_TARGET"
+chmod 0644 "$CONFIG_TARGET"
+
+# Bind-mount paths must exist on the host
+for p in /etc/secubox/toolbox/ca \
+         /var/lib/secubox/toolbox \
+         /var/log/secubox/toolbox-mitm \
+         /usr/lib/secubox/toolbox/mitmproxy_addons; do
+    mkdir -p "$p"
+done
+
+# Salt file required — postinst of toolbox creates it before lxc-provision
+if [ ! -f /etc/secubox/secrets/toolbox-mac-salt ]; then
+    log "WARN: /etc/secubox/secrets/toolbox-mac-salt missing — will create at toolbox postinst"
+fi
+
+# ── Install mitm service inside the container ──
+if [ -f "$SVC_TEMPLATE" ]; then
+    log "deploying mitm service into container"
+    cp -f "$SVC_TEMPLATE" "$ROOTFS/etc/systemd/system/secubox-toolbox-mitm.service"
+    chmod 0644 "$ROOTFS/etc/systemd/system/secubox-toolbox-mitm.service"
+    # Enable on first boot of container
+    mkdir -p "$ROOTFS/etc/systemd/system/multi-user.target.wants"
+    ln -sf /etc/systemd/system/secubox-toolbox-mitm.service \
+           "$ROOTFS/etc/systemd/system/multi-user.target.wants/secubox-toolbox-mitm.service"
+fi
+
+# ── Start the container (or restart if running) ──
+if lxc-info -n "$CONTAINER" 2>/dev/null | grep -q 'State.*RUNNING'; then
+    log "container running, restarting to pick up config"
+    lxc-stop -n "$CONTAINER" -t 5 -k 2>/dev/null || true
+    sleep 2
+fi
+
+log "starting container $CONTAINER"
+lxc-start -n "$CONTAINER" || err "lxc-start failed"
+
+# Wait for network up
+for i in 1 2 3 4 5; do
+    if lxc-info -n "$CONTAINER" 2>/dev/null | grep -q '10.100.0.61'; then
+        log "container network up : 10.100.0.61"
+        break
+    fi
+    sleep 1
+done
+
+log "provision complete"
