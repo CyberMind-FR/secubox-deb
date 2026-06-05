@@ -33,6 +33,41 @@ SALT_FILE = Path("/etc/secubox/secrets/toolbox-mac-salt")
 _RE_MAC = re.compile(r"lladdr\s+([0-9a-f:]{17})", re.I)
 _SALT_CACHE: str | None = None
 
+# Phase 3 (#492) : analysis_status tagging on every event
+# Soft import : whitelist may not be installed yet (older boards)
+try:
+    from secubox_core import whitelist as _whitelist
+except Exception:
+    _whitelist = None
+
+# Known E2E SNI suffixes — content opaque by design
+_E2E_SNI_PATTERNS = re.compile(
+    r"(\.signal\.org|\.whispersystems\.org|\.threema\.|\.simplex\.|"
+    r"\.matrix\.org|\.proton\.me|\.protonmail\.|\.tutanota\.)$",
+    re.I,
+)
+
+
+def _analysis_status(host: str | None, sni: str | None, decrypted: bool) -> tuple[str, str]:
+    """Return (status, reason) for an observed flow.
+
+    Order :
+      1. decrypted -> inspected
+      2. whitelist match -> bypassed-whitelist + reason from yaml
+      3. E2E SNI pattern -> e2e-opaque
+      4. fallback -> pinned-failed-mitm
+    """
+    if decrypted:
+        return ("inspected", "MITM decryption succeeded via ToolBoX CA")
+    target = (sni or host or "").lower()
+    if _whitelist is not None and target:
+        m = _whitelist.match(target)
+        if m:
+            return ("bypassed-whitelist", m.get("reason", "whitelisted"))
+    if target and _E2E_SNI_PATTERNS.search(target):
+        return ("e2e-opaque", "E2E messenger : content opaque by design")
+    return ("pinned-failed-mitm", "TLS handshake failed (cert-pinning detected)")
+
 
 def _salt() -> str:
     global _SALT_CACHE
@@ -103,6 +138,9 @@ class LocalStore:
         if not mac_hash:
             return
         host = flow.request.host
+        sni = getattr(flow.client_conn, "sni", None)
+        # If we got here with a parsed request, decryption succeeded.
+        status, reason = _analysis_status(host, sni, decrypted=True)
         _insert(mac_hash, "dpi", {
             "client_ip": ip,
             "host": host,
@@ -110,6 +148,8 @@ class LocalStore:
             "method": flow.request.method,
             "path": flow.request.path[:200],
             "user_agent": flow.request.headers.get("user-agent"),
+            "analysis_status": status,
+            "analysis_reason": reason,
         })
 
     def response(self, flow: http.HTTPFlow) -> None:
@@ -159,6 +199,27 @@ class LocalStore:
                 "kind": "suspicious_host_pattern",
                 "weight": 15,
             })
+
+    def tls_failed_clienthello(self, data) -> None:
+        """Phase 3 (#492) : record cert-pinning / whitelisted bypasses.
+
+        Fires when TLS handshake fails (cert-pinning) OR when we deliberately
+        skipped MITM (whitelist). We log the SNI + status so the report can
+        be honest about what we didn't inspect.
+        """
+        ip = data.context.client.peername[0] if data.context.client.peername else None
+        mac_hash = _hash_mac(_mac_of(ip))
+        if not mac_hash:
+            return
+        sni = getattr(data.client_hello, "sni", None) if hasattr(data, "client_hello") else None
+        status, reason = _analysis_status(host=None, sni=sni, decrypted=False)
+        _insert(mac_hash, "dpi", {
+            "client_ip": ip,
+            "host": sni or "?",
+            "sni": sni,
+            "analysis_status": status,
+            "analysis_reason": reason,
+        })
 
     def tls_clienthello(self, data) -> None:
         ip = data.context.client.peername[0] if data.context.client.peername else None

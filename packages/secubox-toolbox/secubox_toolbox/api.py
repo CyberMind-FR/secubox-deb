@@ -27,6 +27,13 @@ from . import (
     store,
     threat_intel,
 )
+# Phase 3 (#492) : transparency layer
+try:
+    from secubox_core import whitelist as _whitelist_mod
+    from secubox_core.classifiers import security_quality as _sec_quality
+    _HAS_TRANSPARENCY = True
+except ImportError:
+    _HAS_TRANSPARENCY = False
 from .config import load_config, resolve_secret
 from .models import AcceptResp, ClientRow, Config, StatusResp
 
@@ -79,24 +86,42 @@ def _resolve(request: Request) -> tuple[str | None, str | None]:
 @router.get("/hotspot-detect.html", response_class=HTMLResponse)
 @router.get("/generate_204", response_class=HTMLResponse)
 @router.get("/connecttest.txt", response_class=HTMLResponse)
-async def splash(request: Request) -> HTMLResponse:
+async def splash(request: Request):
     ip, mac = _resolve(request)
     cfg = _get_cfg()
     salt = _get_salt()
     mac_hash = macmod.hash_mac(mac, salt) if mac else None
 
-    validated = bool(mac and nft.is_validated(mac))
-    if validated:
-        return HTMLResponse(_env.get_template("success.html.j2").render(
-            mac_hash=mac_hash, r2_enabled=cfg.r2.enabled,
-        ))
-    return HTMLResponse(_env.get_template("splash.html.j2").render(
-        mac_hash=mac_hash or "??", ssid=cfg.ap.ssid, r2_enabled=cfg.r2.enabled,
-    ))
+    no_cache_headers = {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+    }
+
+    # Phase 3 (#492) : ALWAYS render splash on GET /. Even validated users
+    # benefit from seeing the cert install buttons + level switcher + dashboard
+    # link. Auto-redirect was hiding the cert links from users who already
+    # validated — they had no path back to the install buttons.
+    html = _env.get_template("splash.html.j2").render(
+        mac_hash=mac_hash or "??",
+        ssid=cfg.ap.ssid,
+        r2_enabled=cfg.r2.enabled,
+        already_validated=bool(mac and nft.is_validated(mac)),
+        current_level=store.get_client_level(mac_hash) if mac_hash else None,
+    )
+    return HTMLResponse(html, headers=no_cache_headers)
 
 
-@router.post("/accept", response_model=AcceptResp)
-async def accept(request: Request) -> AcceptResp:
+@router.post("/accept")
+async def accept(request: Request):
+    """Phase 3 (#492) : 3-level explicit opt-in.
+
+    Form field 'level' = 'r0' | 'r1' | 'r2' (default 'r1' for backward compat
+    with bare-button submission). Each level adds the MAC to incremental nft
+    sets and persists the level in the clients table.
+      r0 = validated only (net access, no inspection)
+      r1 = r0 + consented_r2_macs (MITM enabled, passive analysis only)
+      r2 = r1 + r2_banner_macs (banner injection + QUIC drop)
+    """
     ip, mac = _resolve(request)
     if not ip or not mac:
         raise HTTPException(400, "client mac unknown")
@@ -104,17 +129,88 @@ async def accept(request: Request) -> AcceptResp:
     salt = _get_salt()
     mac_hash = macmod.hash_mac(mac, salt)
 
+    # Parse level from POST body — accept form-urlencoded or fallback to r1
+    try:
+        form = await request.form()
+        level = (form.get("level") or "r1").lower()
+    except Exception:
+        level = "r1"
+    if level not in ("r0", "r1", "r2"):
+        level = "r1"
+    # R2 only allowed if config enables it
+    if level == "r2" and not cfg.r2.enabled:
+        level = "r1"
+
+    # All levels get validated (net access)
     if not nft.add_validated(mac, ttl="24h"):
         raise HTTPException(500, "nft add validated failed")
+
     r2_ok = False
-    if cfg.r2.enabled and nft.add_consented(mac, ttl="24h"):
+    if level in ("r1", "r2") and nft.add_consented(mac, ttl="24h"):
         r2_ok = True
+    # R2-only : QUIC drop + banner injection (separate nft set)
+    if level == "r2":
+        nft.add_r2_banner(mac, ttl="24h")
 
     ua = request.headers.get("user-agent", "")
     store.record_consent(mac_hash, ip, ua, ttl_seconds=86400)
-    store.upsert_client(mac_hash, ip)
-    log.info("consent recorded mac_hash=%s r2=%s", mac_hash, r2_ok)
-    return AcceptResp(ok=True, mac_hash=mac_hash, r2=r2_ok)
+    store.upsert_client(mac_hash, ip, level=level)
+    log.info("consent recorded mac_hash=%s level=%s r2=%s", mac_hash, level, r2_ok)
+    # Phase 3 (#492) : detect form-vs-API.
+    # Browser : 303 redirect straight to the dashboard with welcome state.
+    # API     : JSON AcceptResp for programmatic clients.
+    accept_hdr = request.headers.get("accept", "")
+    wants_json = "application/json" in accept_hdr and "text/html" not in accept_hdr
+    if wants_json:
+        return AcceptResp(ok=True, mac_hash=mac_hash, r2=r2_ok)
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/report/me/html?welcome=1&level={level}",
+                             status_code=303)
+
+
+@router.post("/change-level")
+async def change_level(request: Request):
+    """Phase 3 (#492) : change opt-in level from the dashboard.
+
+    Adds/removes the MAC from the appropriate nft sets and updates the
+    persisted level. Redirects back to /report/me/html.
+    """
+    ip, mac = _resolve(request)
+    if not ip or not mac:
+        raise HTTPException(400, "client mac unknown")
+    cfg = _get_cfg()
+    salt = _get_salt()
+    mac_hash = macmod.hash_mac(mac, salt)
+
+    try:
+        form = await request.form()
+        level = (form.get("level") or "r1").lower()
+    except Exception:
+        level = "r1"
+    if level not in ("r0", "r1", "r2"):
+        level = "r1"
+    if level == "r2" and not cfg.r2.enabled:
+        level = "r1"
+
+    # Re-validate (idempotent extend)
+    v_ok = nft.add_validated(mac, ttl="24h")
+    # Membership in consented_r2_macs : add for r1/r2, remove for r0
+    if level in ("r1", "r2"):
+        c_ok = nft.add_consented(mac, ttl="24h")
+    else:
+        c_ok = nft.del_consented(mac)
+    # Membership in r2_banner_macs : add for r2, remove otherwise
+    if level == "r2":
+        b_ok = nft.add_r2_banner(mac, ttl="24h")
+    else:
+        b_ok = nft.del_r2_banner(mac)
+
+    store.upsert_client(mac_hash, ip, level=level)
+    log.info("level switched mac_hash=%s -> %s (nft: validated=%s consented=%s banner=%s)",
+             mac_hash, level, v_ok, c_ok, b_ok)
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/report/me/html?switched=1&level={level}",
+                             status_code=303)
 
 
 @router.get("/status", response_model=StatusResp)
@@ -149,6 +245,25 @@ async def ca_android_crt() -> Response:
         content=ca.ca_der(),
         media_type="application/x-x509-ca-cert",
         headers={"Content-Disposition": "attachment; filename=gondwana-toolbox.crt"},
+    )
+
+
+@router.get("/ca/webclip-cabine.mobileconfig")
+async def webclip_cabine() -> Response:
+    """Phase 3 (#492) : iOS Add-to-Home-Screen profile that drops a 'ToolBoX
+    Cabine' icon pointing at /report/me/html. User can then check the live
+    session report in 1 tap, surviving Safari cache misses + native-app gaps."""
+    import uuid as _uuid
+    cfg = _get_cfg()
+    body = _env.get_template("webclip.mobileconfig.j2").render(
+        payload_uuid=str(_uuid.uuid4()),
+        webclip_uuid=str(_uuid.uuid4()),
+        report_url=f"http://{cfg.dhcp.gateway}/report/me/html",
+    )
+    return Response(
+        content=body,
+        media_type="application/x-apple-aspen-config",
+        headers={"Content-Disposition": "attachment; filename=toolbox-cabine-icon.mobileconfig"},
     )
 
 
@@ -258,6 +373,9 @@ def _aggregate_session(mac_hash: str) -> dict:
     soc_indicators: list[dict] = []
     ja4_snis: set[str] = set()
     ja4_alpns: set[str] = set()
+    # Phase 3 (#492) : transparency layer state
+    analysis_breakdown: dict[str, int] = {}
+    host_analysis: dict[str, dict] = {}
     try:
         with _sq3.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=2) as c:
             cur = c.execute(
@@ -279,6 +397,15 @@ def _aggregate_session(mac_hash: str) -> dict:
                     ua = p.get("user_agent")
                     if ua:
                         user_agents.add(ua[:80])
+                    # Phase 3 (#492) : analysis_status breakdown
+                    status = p.get("analysis_status")
+                    if status:
+                        analysis_breakdown[status] = analysis_breakdown.get(status, 0) + 1
+                        # Keep a per-host status for the quality table
+                        host_analysis[host] = {
+                            "status": status,
+                            "reason": p.get("analysis_reason", ""),
+                        }
                 elif source == "cookies":
                     cookies_total_set += p.get("set_cookie_count", 0)
                     cookies_total_sent += p.get("cookie_count", 0)
@@ -417,6 +544,128 @@ def _aggregate_session(mac_hash: str) -> dict:
         "cookies_providers": cookie_analysis.top_providers(cookies_urls, limit=10),
         # ── Phase 2b (#488) : pull events from receiving modules ──
         "mitm_modules": _pull_mitm_module_events(mac_hash),
+        # ── Phase 3 (#492) : transparency layer ──
+        "transparency": _build_transparency(
+            analysis_breakdown, host_analysis, dpi_hosts, ja4_snis,
+        ),
+    }
+
+
+def _build_transparency(
+    breakdown: dict[str, int],
+    host_analysis: dict[str, dict],
+    dpi_hosts: dict[str, int],
+    ja4_snis: set,
+) -> dict:  # noqa: C901
+    """Phase 3 (#492) : pack the inspection breakdown + per-host quality table.
+
+    The breakdown shows what % of traffic was inspected / bypassed / pinned /
+    e2e. The per-host quality table grades each destination via passive or
+    active signals (currently passive, since header capture is not yet wired).
+    """
+    total = sum(breakdown.values()) or 1
+    pct = {k: round(100 * v / total, 1) for k, v in breakdown.items()}
+
+    # Backfill any host without explicit analysis_status (legacy events)
+    for h in dpi_hosts:
+        if h not in host_analysis:
+            # Best-effort post-hoc tag : whitelist match → bypass, else inspected
+            target = h.lower()
+            if _HAS_TRANSPARENCY and _whitelist_mod.is_whitelisted(target):
+                host_analysis[h] = {
+                    "status": "bypassed-whitelist",
+                    "reason": (_whitelist_mod.match(target) or {}).get("reason", ""),
+                }
+            else:
+                host_analysis[h] = {
+                    "status": "inspected",
+                    "reason": "MITM decryption (post-hoc tag)",
+                }
+
+    # Build per-host quality (passive grading from what we have)
+    per_host: list[dict] = []
+    if _HAS_TRANSPARENCY:
+        for h, info in host_analysis.items():
+            status = info.get("status", "inspected")
+            is_e2e = status == "e2e-opaque"
+            # We don't know tls_version per host without further capture ; assume
+            # 13 for whitelisted (cert-pinned apps use modern TLS) and unknown otherwise
+            tls_v = "13" if status in ("bypassed-whitelist", "pinned-failed-mitm", "e2e-opaque") else None
+            g = _sec_quality.grade_passive(
+                tls_version=tls_v,
+                sni=h if h in ja4_snis else None,
+                is_e2e_messaging=is_e2e,
+            )
+            per_host.append({
+                "host": h,
+                "grade": g["grade"],
+                "score": g["score"],
+                "status": status,
+                "reason": info.get("reason", ""),
+            })
+        # Sort : worst quality first (catches user attention)
+        per_host.sort(key=lambda x: (x["score"], x["host"]))
+
+    # Whitelist sanity stats
+    wl_stats = _whitelist_mod.stats() if _HAS_TRANSPARENCY else {"count": 0}
+
+    # Phase 3 (#492) : count whitelist hits per pattern + per category.
+    # iPhone usage stores IPs in dpi_hosts (cert-pinning bypasses) but SNIs
+    # in ja4_snis (TLS clienthello visible). Iterate BOTH so apple.com etc.
+    # actually match patterns like *.apple.com.
+    wl_hits_by_pattern: dict[str, int] = {}
+    wl_hits_by_category: dict[str, int] = {}
+    wl_hits_total = 0
+    if _HAS_TRANSPARENCY:
+        # Merge dpi_hosts (IP-tagged counts) and ja4_snis (FQDN tags with count 1)
+        all_hosts: dict[str, int] = dict(dpi_hosts)
+        for sni in ja4_snis:
+            all_hosts[sni] = all_hosts.get(sni, 0) + 1
+        for h, count in all_hosts.items():
+            entry = _whitelist_mod.match(h)
+            if entry:
+                pat = entry.get("pattern", h)
+                cat = entry.get("category", "other")
+                wl_hits_by_pattern[pat] = wl_hits_by_pattern.get(pat, 0) + count
+                wl_hits_by_category[cat] = wl_hits_by_category.get(cat, 0) + count
+                wl_hits_total += count
+
+    # Phase 3 (#492) : attempt counters — full transparency including failures
+    attempts = {
+        "total": sum(breakdown.values()),
+        "inspected": breakdown.get("inspected", 0),
+        "bypassed_whitelist": breakdown.get("bypassed-whitelist", 0),
+        "pinned_failed": breakdown.get("pinned-failed-mitm", 0),
+        "e2e_opaque": breakdown.get("e2e-opaque", 0),
+        "blocked": breakdown.get("blocked", 0),  # Phase 4 placeholder
+    }
+
+    # Sensitivity profile info (rule engine)
+    sensitivity = None
+    try:
+        from secubox_core import rule_engine as _re
+        sensitivity = _re.get_sensitivity()
+    except Exception:
+        pass
+
+    return {
+        "breakdown": breakdown,
+        "breakdown_pct": pct,
+        "total_events": total,
+        "per_host": per_host[:50],
+        "whitelist_stats": wl_stats,
+        "has_transparency": _HAS_TRANSPARENCY,
+        # Phase 3 metrics for richer reporting
+        "attempts": attempts,
+        "whitelist_hits": {
+            "total": wl_hits_total,
+            "top_patterns": sorted(
+                [{"pattern": k, "count": v} for k, v in wl_hits_by_pattern.items()],
+                key=lambda x: -x["count"],
+            )[:15],
+            "by_category": wl_hits_by_category,
+        },
+        "sensitivity": sensitivity,
     }
 
 
@@ -556,9 +805,18 @@ async def report_me_html(request: Request) -> HTMLResponse:
     salt = _get_salt()
     mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
-    return HTMLResponse(_env.get_template("report-live.html.j2").render(
-        mac_hash=mac_hash, ip=ip, **session,
-    ))
+    # Phase 3 (#492) : pass query args + force no-cache so iPhone Safari
+    # actually fetches the new template.
+    html = _env.get_template("report-live.html.j2").render(
+        mac_hash=mac_hash, ip=ip,
+        request_args=dict(request.query_params),
+        current_level=store.get_client_level(mac_hash) if mac_hash else "r1",
+        **session,
+    )
+    return HTMLResponse(html, headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+    })
 
 
 @router.get("/report/me")

@@ -14,6 +14,14 @@ table inet toolbox {
         timeout 24h
     }
 
+    # Phase 3 (#492) : level R2 explicit opt-in subset. Membership triggers
+    # the QUIC reject rule + inject_banner. Subset of consented_r2_macs.
+    set r2_banner_macs {
+        type ether_addr
+        flags timeout
+        timeout 24h
+    }
+
     set quarantine_macs {
         type ether_addr
         flags timeout
@@ -50,6 +58,13 @@ table inet toolbox {
         type filter hook forward priority 10; policy accept;
         # Quarantine first (high priority drop)
         iifname "{{ ap.iface }}" ether saddr @quarantine_macs drop
+        # Phase 3 (#492) : QUIC drop REMOVED — too aggressive. iPhone Safari +
+        # Apple/Google heavily depend on QUIC ; rejecting UDP 443 for R2
+        # broke surf entirely for the iPhone session. Banner injection works
+        # on TCP HTTPS HTML responses (when those happen) without forcing
+        # the whole iOS stack to fall back from QUIC.
+        # The r2_banner_macs set is still used by inject_banner.py to gate
+        # the banner injection ; no nft rule needed for that.
         # Validated MACs: forward to LAN/Internet
         iifname "{{ ap.iface }}" oifname "lan0" ether saddr @validated_macs accept
         iifname "lan0" oifname "{{ ap.iface }}" ct state established,related accept

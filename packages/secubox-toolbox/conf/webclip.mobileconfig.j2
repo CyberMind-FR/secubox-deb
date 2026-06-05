@@ -1,0 +1,53 @@
+{# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
+{# iOS webclip — adds "ToolBoX Cabine" home-screen icon pointing at /report/me/html #}
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadIdentifier</key>
+    <string>fr.cybermind.gondwana.toolbox.webclip</string>
+    <key>PayloadUUID</key>
+    <string>{{ payload_uuid }}</string>
+    <key>PayloadDisplayName</key>
+    <string>ToolBoX Cabine — icône d'accueil</string>
+    <key>PayloadDescription</key>
+    <string>Ajoute une icône "ToolBoX Cabine" à ton écran d'accueil iPhone pour accéder en 1 tap au rapport live de ta session VILLAGE3B.</string>
+    <key>PayloadOrganization</key>
+    <string>CyberMind / Gondwana</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.webClip.managed</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadIdentifier</key>
+            <string>fr.cybermind.gondwana.toolbox.webclip.icon</string>
+            <key>PayloadUUID</key>
+            <string>{{ webclip_uuid }}</string>
+            <key>PayloadDisplayName</key>
+            <string>ToolBoX Cabine</string>
+            <key>PayloadDescription</key>
+            <string>Rapport live VILLAGE3B</string>
+            <key>URL</key>
+            <string>{{ report_url }}</string>
+            <key>Label</key>
+            <string>📡 ToolBoX</string>
+            <key>FullScreen</key>
+            <true/>
+            <key>IsRemovable</key>
+            <true/>
+            <key>Precomposed</key>
+            <false/>
+            <key>IgnoreManifestScope</key>
+            <true/>
+        </dict>
+    </array>
+</dict>
+</plist>

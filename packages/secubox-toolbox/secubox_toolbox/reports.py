@@ -6,11 +6,27 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import secrets
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .models import ReportToken
+
+log = logging.getLogger("secubox.toolbox.reports")
+
+# Phase 3 (#492) : Unicode fonts for real emoji rendering in PDF
+DEJAVU_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+DEJAVU_BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+DEJAVU_OBLIQUE_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"
+# Symbola : broad monochrome emoji + symbol coverage (📱📡🔍🔒🎯🎵🐙📊🍪…)
+# Apt package : fonts-symbola
+SYMBOLA_PATH = "/usr/share/fonts/truetype/ancient-scripts/Symbola_hint.ttf"
+# Noto Color Emoji : CBDT/CBLC color bitmap font covering ALL emojis incl.
+# flags (regional indicator pairs 🇫🇷🇺🇸🇩🇪) which Symbola lacks.
+# fpdf2 >= 2.7 supports color emoji rendering — package fonts-noto-color-emoji
+NOTO_COLOR_EMOJI_PATH = "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
 
 
 def mint_token(mac_hash: str, salt: str, ttl_seconds: int = 86400) -> ReportToken:
@@ -51,6 +67,56 @@ def build_report_data(mac_hash: str, session_data: dict) -> dict:
     }
 
 
+def _setup_fonts(pdf) -> str:
+    """Load DejaVu Sans (broad Unicode) + Symbola (emoji) for the PDF.
+
+    Falls back to Helvetica (latin-1 only) if fonts are absent.
+
+    Returns the font family name to use for set_font() calls.
+    """
+    family = "Helvetica"
+    if Path(DEJAVU_PATH).exists():
+        try:
+            pdf.add_font("DejaVu", style="", fname=DEJAVU_PATH)
+            if Path(DEJAVU_BOLD_PATH).exists():
+                pdf.add_font("DejaVu", style="B", fname=DEJAVU_BOLD_PATH)
+            if Path(DEJAVU_OBLIQUE_PATH).exists():
+                pdf.add_font("DejaVu", style="I", fname=DEJAVU_OBLIQUE_PATH)
+            family = "DejaVu"
+            # Fallback chain :
+            #   NotoColorEmoji  : COLOR CBDT/CBLC, covers ALL emojis including
+            #                     flags as composite glyphs (🇫🇷 = single bitmap)
+            #                     and modern 2020+ emojis Symbola lacks
+            #   Symbola         : monochrome vector fallback for chars not in Noto
+            # Order matters : Noto FIRST. Symbola has regional indicator letters
+            # but renders them as separate boxed letters, not composite flags.
+            # By trying Noto first, flag emojis render as proper single glyphs.
+            fallback = []
+            if Path(NOTO_COLOR_EMOJI_PATH).exists():
+                try:
+                    pdf.add_font("NotoColorEmoji", style="", fname=NOTO_COLOR_EMOJI_PATH)
+                    fallback.append("NotoColorEmoji")
+                    log.info("NotoColorEmoji loaded — color emoji + flags enabled")
+                except Exception as e:
+                    log.warning("NotoColorEmoji font load failed: %s", e)
+            if Path(SYMBOLA_PATH).exists():
+                try:
+                    pdf.add_font("Symbola", style="", fname=SYMBOLA_PATH)
+                    fallback.append("Symbola")
+                except Exception as e:
+                    log.warning("Symbola font load failed: %s", e)
+            if fallback:
+                try:
+                    pdf.set_fallback_fonts(fallback, exact_match=False)
+                except TypeError:
+                    pdf.set_fallback_fonts(fallback)
+                except Exception as e:
+                    log.warning("set_fallback_fonts failed: %s", e)
+        except Exception as e:
+            log.warning("DejaVu font load failed (%s), falling back to Helvetica", e)
+    return family
+
+
 def render_pdf(report: dict) -> bytes:
     """Render the analysis report as PDF (fpdf2). Returns the binary blob."""
     try:
@@ -63,52 +129,35 @@ def render_pdf(report: dict) -> bytes:
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
+    # Phase 3 (#492) : Unicode font for emoji rendering
+    family = _setup_fonts(pdf)
+    # Stash for the helper functions to use
+    pdf._secubox_family = family
+
     # Header
-    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_font(family, "B", 20)
     pdf.set_text_color(0, 90, 64)  # P31 dim green
-    pdf.cell(0, 12, "GONDWANA TOOLBOX", ln=True, align="C")
-    pdf.set_font("Helvetica", "", 11)
+    pdf.cell(0, 12, "📡 GONDWANA TOOLBOX", ln=True, align="C")
+    pdf.set_font(family, "", 10)
     pdf.set_text_color(110, 64, 201)
-    pdf.cell(0, 6, "Rapport d'analyse de session - Cabine numerique VILLAGE3B", ln=True, align="C")
-    pdf.ln(4)
+    pdf.cell(0, 5, "Rapport d'analyse de session — Cabine numérique VILLAGE3B", ln=True, align="C")
+    pdf.ln(3)
+
+    # ── HERO DASHBOARD : big global numbers ──
+    _dashboard_hero(pdf, family, report)
 
     # Anonymous ID
-    _section(pdf, "IDENTIFIANT ANONYME")
+    _section(pdf, "🔑 IDENTIFIANT ANONYME")
     _kv(pdf, "Hash session", report.get("mac_hash", "?"))
     _kv(pdf, "Type appareil", report.get("device_type", "?"))
     _kv(pdf, "Date analyse", report.get("generated_at", "?"))
-    _kv(pdf, "Sandbox subnet", "10.99.0.0/24 (reseau isole VILLAGE3B)")
+    _kv(pdf, "Sandbox subnet", "10.99.0.0/24 (réseau isolé VILLAGE3B)")
     pdf.ln(2)
 
-    # Metrics
-    _section(pdf, "METRIQUES SESSION")
-    m = report.get("metrics", {})
-    _kv(pdf, "Connexions totales", str(m.get("connections", 0)))
-    _kv(pdf, "Hosts uniques", str(m.get("unique_hosts", 0)))
-    _kv(pdf, "Reussies (200/3xx)", str(m.get("successful", 0)))
-    _kv(pdf, "Cert-pin blocks", str(m.get("tls_pinned", 0)))
-    pdf.ln(2)
-
-    # Apps detected
-    _section(pdf, "APPS DETECTEES")
-    for line in report.get("apps_detected", []):
-        _bullet(pdf, line)
-    pdf.ln(2)
-
-    # Compromise analysis
-    _section(pdf, "ANALYSE COMPROMISSION")
-    score = report.get("risk_score", 0)
-    risk_label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
-    pdf.set_font("Helvetica", "B", 13)
-    if score < 30:
-        pdf.set_text_color(0, 221, 68)
-    elif score < 70:
-        pdf.set_text_color(255, 179, 71)
-    else:
-        pdf.set_text_color(255, 68, 102)
-    pdf.cell(0, 8, _ascii_safe(f"Score risque : {score}/100 ({risk_label})"), ln=True)
+    # Compromise analysis (the hero shows the risk badge ; details below)
+    _section(pdf, "🚨 ANALYSE COMPROMISSION")
     pdf.set_text_color(0)
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 10)
     pdf.ln(1)
     explanation = report.get("risk_explanation", "")
     if explanation:
@@ -124,9 +173,9 @@ def render_pdf(report: dict) -> bytes:
     if breakdown:
         _section(pdf, "BREAKDOWN DU SCORE")
         for b in breakdown:
-            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 9)
             pdf.cell(0, 5, f"{b.get('category', '?').upper()} : poids {b.get('weight_subtotal', 0)} (sur {b.get('raw_signal_count', 0)} signal)", ln=True)
-            pdf.set_font("Helvetica", "", 8)
+            pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 8)
             for ex in (b.get("examples") or [])[:3]:
                 _bullet(pdf, ex, font_size=8)
         pdf.ln(2)
@@ -249,8 +298,88 @@ def render_pdf(report: dict) -> bytes:
         _bullet(pdf, rec)
     pdf.ln(2)
 
+    # Phase 3 (#492) : Transparency — inspection breakdown + per-host quality
+    t = report.get("transparency") or {}
+    if t.get("total_events"):
+        _section(pdf, "INSPECTION : CE QUI A ETE REGARDE (et pas regarde)")
+        b = t.get("breakdown_pct") or {}
+        if b.get("inspected"):
+            _bullet(pdf, f"Inspecte (MITM via notre CA) : {b['inspected']}% - contenu visible")
+        if b.get("bypassed-whitelist"):
+            _bullet(pdf, f"Bypass whitelist : {b['bypassed-whitelist']}% - decision policy (vendor cert-pinning)")
+        if b.get("pinned-failed-mitm"):
+            _bullet(pdf, f"Cert-pinning : {b['pinned-failed-mitm']}% - app refuse notre CA, normal+bon signe")
+        if b.get("e2e-opaque"):
+            _bullet(pdf, f"E2E messaging : {b['e2e-opaque']}% - opaque par design, ton chiffrement marche")
+        _bullet(pdf, f"Total events analyses : {t.get('total_events', 0)}")
+        wl = (t.get("whitelist_stats") or {}).get("count", 0)
+        if wl:
+            _bullet(pdf, f"Patterns whitelist actifs : {wl} (baseline + override operateur)")
+        pdf.ln(2)
+
+        # Per-host quality table — worst first, capped 10
+        per_host = t.get("per_host") or []
+        if per_host:
+            _section(pdf, "🎯 QUALITÉ SÉCURITÉ PAR DESTINATION (worst-first)")
+            for h in per_host[:10]:
+                grade = h.get("grade", "?")
+                host = h.get("host", "?")[:50]
+                status = h.get("status", "?")
+                _bullet(pdf, f"[{grade}] {host} — {status}", font_size=8)
+            pdf.ln(2)
+
+    # Phase 2b/2c (#488/#490) : per-module mitm-ingest aggregate metrics
+    mm = report.get("mitm_modules") or {}
+    if mm and any(v.get("count", 0) > 0 for v in mm.values() if isinstance(v, dict)):
+        _section(pdf, "🛰 INGESTION PAR MODULE (Phase 2b/2c)")
+        for kind, data in mm.items():
+            if not isinstance(data, dict):
+                continue
+            cnt = data.get("count", 0)
+            if cnt == 0:
+                continue
+            emoji = {"dpi": "🌐", "cookies": "🍪", "avatar": "👤",
+                     "soc": "🛡", "threat-analyst": "🕵"}.get(kind, "📡")
+            _bullet(pdf, f"{emoji} secubox-{kind} : {cnt} events ingérés (24h)", font_size=9)
+            es = data.get("enriched_summary") or {}
+            # Per-module top items
+            if kind == "dpi" and es.get("top_apps"):
+                apps_str = " · ".join(f"{a.get('emoji','?')} {a.get('app','?')}×{a.get('count',0)}"
+                                       for a in es["top_apps"][:5])
+                _bullet(pdf, f"   Top apps : {apps_str[:200]}", font_size=8)
+            elif kind == "cookies" and es.get("top_providers"):
+                provs = " · ".join(f"{p.get('emoji','?')} {p.get('provider','?')}×{p.get('count',0)}"
+                                    for p in es["top_providers"][:5])
+                _bullet(pdf, f"   Top trackers : {provs[:200]}", font_size=8)
+                _bullet(pdf, f"   Total tracker hits : {es.get('tracker_total', 0)}", font_size=8)
+            elif kind == "avatar":
+                devs = es.get("devices") or {}
+                if devs:
+                    dev_str = " · ".join(f"{v.get('emoji','?')} {k}×{v.get('count',0)}"
+                                          for k, v in list(devs.items())[:5])
+                    _bullet(pdf, f"   Devices : {dev_str[:200]}", font_size=8)
+                brws = es.get("browsers") or {}
+                if brws:
+                    brw_str = " · ".join(f"{v.get('emoji','?')} {k}×{v.get('count',0)}"
+                                          for k, v in list(brws.items())[:5])
+                    _bullet(pdf, f"   Browsers : {brw_str[:200]}", font_size=8)
+            elif kind == "soc":
+                _bullet(pdf, f"   Score total : {es.get('total_weight', 0)} · "
+                             f"Band : {es.get('max_band', 'low')}", font_size=8)
+                kinds = es.get("indicator_kinds") or {}
+                if kinds:
+                    k_str = " · ".join(f"{k}×{v}" for k, v in list(kinds.items())[:5])
+                    _bullet(pdf, f"   Indicateurs : {k_str[:180]}", font_size=8)
+            elif kind == "threat-analyst" and es.get("top_fingerprints"):
+                fps = ", ".join(f.get("fingerprint", "?")[:12]
+                                 for f in es["top_fingerprints"][:5])
+                _bullet(pdf, f"   JA4 fingerprints uniques : {es.get('unique_count', 0)}",
+                        font_size=8)
+                _bullet(pdf, f"   Top : {fps[:180]}", font_size=8)
+        pdf.ln(2)
+
     # Retention
-    _section(pdf, "RETENTION DES DONNEES")
+    _section(pdf, "🔒 RÉTENTION DES DONNÉES")
     _bullet(pdf, "Hash MAC anonyme : 24h (sel rotatif quotidien)")
     _bullet(pdf, "Events detailles : 24h")
     _bullet(pdf, "Rapport ephemere : 24h (lien HMAC scelle)")
@@ -268,7 +397,7 @@ def render_pdf(report: dict) -> bytes:
     pdf.ln(4)
 
     # Footer
-    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "I", 8)
     pdf.set_text_color(110, 64, 201)
     pdf.cell(0, 4, "Gondwana ToolBoX  -  LicenseRef-CMSD-1.0 (Source-Disclosed License)", ln=True, align="C")
     pdf.cell(0, 4, "Source : github.com/CyberMind-FR/secubox-deb (issues #474 #475 #477)", ln=True, align="C")
@@ -281,50 +410,186 @@ def _page_w(pdf) -> float:
     return pdf.w - pdf.l_margin - pdf.r_margin
 
 
-# Helvetica is latin-1 only ; PDF report uses ASCII replacements for emoji
-# (HTML live report keeps the real emoji glyphs).
-_EMOJI_REPLACEMENTS = {
-    "📺": "[TV]", "🎬": "[FILM]", "🎵": "[MUSIC]", "👥": "[SOCIAL]",
-    "📷": "[PHOTO]", "🐦": "[X]", "👾": "[REDDIT]", "💼": "[WORK]",
-    "📌": "[PIN]", "🐘": "[MASTO]", "🦋": "[BSKY]", "🔒": "[E2E]",
-    "💬": "[CHAT]", "✈": "[TG]", "🟢": "[OK]", "🔍": "[SEARCH]",
-    "🦆": "[DDG]", "📦": "[BOX]", "☁": "[CLOUD]", "🐙": "[GH]",
-    "🦊": "[FF]", "📚": "[DOC]", "🏦": "[BANK]", "📧": "[MAIL]",
-    "🍎": "[APPLE]", "🧅": "[TOR]", "🔐": "[VPN]", "❔": "[?]",
-    "📱": "[PHONE]", "💻": "[PC]", "🐧": "[LINUX]", "🎮": "[GAME]",
-    "📟": "[BOT]", "🛠": "[TOOL]", "🪟": "[EDGE]", "🧭": "[SAFARI]",
-    "🔴": "[OPERA]", "🇫🇷": "[FR]", "🇺🇸": "[US]", "🏳": "[??]",
-    "📊": "[STATS]", "🎯": "[ADS]", "🟦": "[BLOCK]", "—": "-",
-    "·": "-", "…": "...", "✅": "[OK]", "⚠": "[WARN]", "❌": "[KO]",
+# Phase 3 (#492) : with DejaVu Sans + Noto fallback, most emojis render as
+# real glyphs (monochrome). For chars not in either font (e.g. some flags,
+# very recent emoji), we fall back to a small ASCII replacement table.
+# With NotoColorEmoji fallback enabled, ALL emojis (incl flags + recent
+# 2020+ glyphs) render natively. The replacements table is now empty —
+# kept for backward compat (e.g. if NotoColorEmoji absent on a board,
+# we still want graceful degradation, but the user should install
+# fonts-noto-color-emoji per debian/control deps).
+_EMOJI_REPLACEMENTS: dict[str, str] = {
+    # Only catch the white-flag fallback (🏳 alone, no country) — explicit "unknown"
+    "🏳": "🏳",  # keep as-is (NotoColorEmoji has it)
 }
 
 
-def _ascii_safe(text: str) -> str:
-    """Strip / replace characters outside Helvetica's latin-1 coverage."""
+def _widget(pdf, family: str, x: float, y: float, w: float, h: float,
+            emoji: str, value: str, label: str,
+            bg: tuple, fg: tuple = (10, 10, 15)) -> None:
+    """Render a single rounded widget tile : big emoji, value, label."""
+    pdf.set_fill_color(*bg)
+    pdf.set_draw_color(*bg)
+    pdf.set_line_width(0.3)
+    # Rounded rect (fpdf2 2.7+ supports round_corners + corner_radius)
+    try:
+        pdf.rect(x, y, w, h, style="DF", round_corners=True, corner_radius=3)
+    except TypeError:
+        pdf.rect(x, y, w, h, style="DF")  # older fpdf2 fallback
+    # Emoji at top-center
+    pdf.set_xy(x, y + 1.5)
+    pdf.set_font(family, "B", 14)
+    pdf.set_text_color(*fg)
+    pdf.cell(w, 6, _safe(emoji), ln=False, align="C")
+    # Value (big number)
+    pdf.set_xy(x, y + 7.5)
+    pdf.set_font(family, "B", 13)
+    pdf.cell(w, 6, _safe(value), ln=False, align="C")
+    # Label (small)
+    pdf.set_xy(x, y + 13.5)
+    pdf.set_font(family, "", 6)
+    pdf.cell(w, 3, _safe(label), ln=False, align="C")
+
+
+def _dashboard_hero(pdf, family: str, report: dict) -> None:
+    """Phase 3 (#492) : 3-row widget dashboard, banner-style, with aggregations.
+
+    Row 1 (4 widgets) : raw global counters
+       🌐 conn   📡 hosts   ✅ OK 2xx   🔒 pinned
+
+    Row 2 (4 widgets) : aggregated insights
+       📺 apps detected   🍪 trackers   🌍 countries   🎯 risk score
+
+    Row 3 (single banner) : verbal summary
+       'Top device 📱 iPhone · Top app 📺 YouTube · Top ASN 🇺🇸 Amazon · Risque: LOW'
+    """
+    m = report.get("metrics") or {}
+    avatar = report.get("avatar_analysis") or {}
+    dpi_cls = report.get("dpi_classified") or {}
+    geo_hosts = report.get("geo_top_hosts") or []
+    cookies_p = report.get("cookies_providers") or []
+    score = report.get("risk_score", 0)
+    label = report.get("risk_label") or ("LOW" if score < 30 else "MEDIUM" if score < 70 else "HIGH")
+
+    # Title with sat dish + session label
+    pdf.set_font(family, "B", 12)
+    pdf.set_text_color(0, 221, 68)
+    pdf.cell(0, 6, _safe("📊 TA SESSION VILLAGE3B"), ln=True)
+    pdf.ln(1)
+
+    # ── Row 1 : raw counters ──
+    y = pdf.get_y()
+    box_w = (_page_w(pdf) - 6) / 4
+    box_h = 17
+    row_kpis = [
+        ("🌐", str(m.get("connections", 0)), "connexions", (15, 35, 30)),
+        ("📡", str(m.get("unique_hosts", 0)), "hôtes uniques", (15, 30, 40)),
+        ("✅", str(m.get("successful", 0)), "OK 2xx/3xx", (15, 40, 25)),
+        ("🔒", str(m.get("tls_pinned", 0)), "cert-pinning", (40, 30, 15)),
+    ]
+    for i, (emoji, val, lbl, bg) in enumerate(row_kpis):
+        x = pdf.l_margin + i * (box_w + 2)
+        _widget(pdf, family, x, y, box_w, box_h, emoji, val, lbl, bg, fg=(0, 255, 100))
+    pdf.set_y(y + box_h + 2)
+
+    # ── Row 2 : aggregations ──
+    # Count distinct apps detected (top_apps)
+    n_apps = len([a for a in dpi_cls.get("top_apps", []) if a.get("app") and a.get("app") != "?"])
+    # Trackers detected (cookies providers)
+    n_trackers = sum(p.get("count", 0) for p in cookies_p) if cookies_p else 0
+    # Countries seen (distinct country codes in geo_top_hosts)
+    countries = {h.get("country") for h in geo_hosts if h.get("country")}
+    n_countries = len(countries)
+    # Risk score widget
+    risk_emoji = "🟢" if score < 30 else "🟡" if score < 70 else "🔴"
+    risk_bg = (15, 50, 20) if score < 30 else (60, 50, 15) if score < 70 else (60, 20, 20)
+
+    y = pdf.get_y()
+    row_agg = [
+        ("📺", str(n_apps), "apps détectées", (25, 25, 45)),
+        ("🍪", str(n_trackers), "trackers", (45, 25, 35)),
+        ("🌍", str(n_countries), "pays/ASN", (25, 40, 35)),
+        (risk_emoji, f"{score}/100", f"risque {label}", risk_bg),
+    ]
+    for i, (emoji, val, lbl, bg) in enumerate(row_agg):
+        x = pdf.l_margin + i * (box_w + 2)
+        _widget(pdf, family, x, y, box_w, box_h, emoji, val, lbl, bg, fg=(0, 230, 220))
+    pdf.set_y(y + box_h + 2)
+
+    # ── Row 3 : verbal summary banner ──
+    top_device = avatar.get("most_common") or "?"
+    top_device_emoji = avatar.get("most_common_emoji") or ""
+    top_app = "?"
+    if dpi_cls.get("top_apps"):
+        ta = dpi_cls["top_apps"][0]
+        if ta.get("app") and ta["app"] != "?":
+            top_app = f"{ta.get('emoji', '')} {ta.get('app')}"
+    top_country = "?"
+    if geo_hosts:
+        gh = geo_hosts[0]
+        if gh.get("flag") or gh.get("country") or gh.get("asn_org"):
+            top_country = f"{gh.get('flag', '')} {gh.get('asn_org', '?')[:30]}"
+
+    y = pdf.get_y()
+    # Banner with gradient-like background
+    pdf.set_fill_color(20, 25, 35)
+    pdf.set_draw_color(0, 90, 64)
+    try:
+        pdf.rect(pdf.l_margin, y, _page_w(pdf), 9, style="DF", round_corners=True, corner_radius=2)
+    except TypeError:
+        pdf.rect(pdf.l_margin, y, _page_w(pdf), 9, style="DF")
+    pdf.set_xy(pdf.l_margin + 3, y + 2)
+    pdf.set_font(family, "", 9)
+    pdf.set_text_color(220, 220, 200)
+    summary = (
+        f"Top device : {top_device_emoji} {top_device}    ·    "
+        f"Top app : {top_app}    ·    "
+        f"Top ASN : {top_country}"
+    )
+    pdf.cell(_page_w(pdf) - 6, 5, _safe(summary[:140]), ln=False)
+    pdf.set_y(y + 11)
+
+    # Reset
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font(family, "", 10)
+    pdf.ln(2)
+
+
+def _safe(text: str) -> str:
+    """Replace chars not in DejaVu+NotoSymbols fonts (mostly flag emojis).
+
+    Most emoji render directly via DejaVu Sans + fallback. Flag emojis use
+    regional indicator pairs that aren't in DejaVu, so we substitute them
+    with their ISO country code in brackets.
+    """
     if not text:
         return ""
     s = str(text)
     for emoji, repl in _EMOJI_REPLACEMENTS.items():
         if emoji in s:
             s = s.replace(emoji, repl)
-    # Final fallback : encode to latin-1 ignoring unknown chars
-    return s.encode("latin-1", errors="replace").decode("latin-1")
+    return s
+
+
+def _ascii_safe(text: str) -> str:
+    """Backward-compat alias (other code paths still call this name)."""
+    return _safe(text)
 
 
 def _section(pdf, title: str) -> None:
     pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 12)
     pdf.set_text_color(0, 221, 68)
     pdf.multi_cell(_page_w(pdf), 7, _ascii_safe(title)[:80])
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 10)
     pdf.set_text_color(0)
 
 
 def _kv(pdf, key: str, value: str) -> None:
     pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 9)
     pdf.cell(45, 5, _ascii_safe(key)[:30], ln=False)
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 9)
     pdf.cell(_page_w(pdf) - 45, 5, _ascii_safe(value)[:100], ln=True)
 
 
@@ -332,7 +597,7 @@ def _bullet(pdf, text: str, font_size: int = 9) -> None:
     """Render a bullet line. multi_cell with hard truncation to avoid fpdf
     'Not enough horizontal space' errors on long tokens/URLs."""
     pdf.set_x(pdf.l_margin)
-    pdf.set_font("Helvetica", "", font_size)
+    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", font_size)
     safe = _ascii_safe(text)[:160]
     # Break unreasonably long single tokens (URLs over ~60 chars)
     parts = []

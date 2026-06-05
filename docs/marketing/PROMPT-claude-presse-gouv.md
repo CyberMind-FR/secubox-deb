@@ -305,3 +305,93 @@ Tu produiras :
 ---
 
 Bonne rédaction. Pour toute question structurante, demande à l'auteur (Gérald Kerma, devel@cybermind.fr) plutôt que de deviner.
+
+---
+
+## ANNEXE — Mise à jour 2026-06-05 : architecture R0/R1/R2/R3
+
+Depuis la rédaction initiale de ce prompt, le produit a évolué. Intégrer ces éléments dans tes livrables :
+
+### Modèle d'opt-in à 3 niveaux + 1 mode portable (Phase 3 #492 mergeable + Phase 6 #496 roadmap)
+
+L'utilisateur choisit explicitement son niveau d'analyse sur le splash captif :
+
+| Niveau | Mode | Impact UX | Cas d'usage cible |
+|--------|------|-----------|-------------------|
+| 🌐 **R0** | Bypass complet | Aucune analyse, AP WiFi normal | Visiteur juste de passage, refus principiel d'analyse |
+| 🛡 **R1** | Analyse passive | Rapport généré, AUCUN impact surf | **Défaut recommandé** — bénéfice diagnostic sans coût UX |
+| 🔍 **R2** | TLS-break + bandeau | Déchiffrement, bandeau visible Safari | Curieux éclairé, audit personnel approfondi |
+| 🌐 **R3** | WireGuard mobile (roadmap Phase 6) | VPN tunnel, marche hors-WiFi cabine | Mobilité, mode portable, bénéfice élargi territorial |
+
+L'angle CSPN/ANSSI : le consentement n'est plus binaire (accept/refuse) mais **gradué**, **explicable**, **réversible à tout moment depuis le rapport**. C'est un argument fort pour la conformité **principe de proportionnalité** et **minimisation des données**.
+
+### Transparence radicale (Phase 3 #492)
+
+Le rapport montre **honnêtement** :
+- 🔍 X% du trafic inspecté (HTTPS via notre CA)
+- 🛡 X% bypassé par whitelist (Apple/banques/Signal — 108 patterns curés)
+- 🔒 X% cert-pinning détecté (app refuse notre CA = normal, bon signe)
+- 🔐 X% E2E messaging (Signal/iMessage opaques par design)
+
+**La cabine se sait se taire, et DIT QUAND elle se tait.** C'est le différenciateur fondamental contre les produits qui vendent "98% sécurisé" sans détailler les bypass.
+
+### Architecture mitm disjoints (Phase 5 #495)
+
+Roadmap : séparer le mitm cabine (analyse client iPhone) du WAF mitm (protection vhosts CyberMind) dans deux containers LXC distincts. **Isolation totale** des deux usages, certs séparés, addons séparés. Argument souveraineté : la cabine n'écoute QUE le trafic de son utilisateur, jamais celui d'un tiers.
+
+### Mode WireGuard portable (Phase 6 #496 — kbin.gk2.net:51820)
+
+Roadmap majeure pour 2026 :
+
+> **L'utilisateur scanne un QR code, installe un profil WireGuard sur son iPhone, et obtient l'analyse depuis n'importe où — pas besoin d'être physiquement à la cabine.**
+
+Bénéfices presse/gouv :
+- Inclusion territoriale : usage déporté en zone blanche, depuis le domicile, depuis un autre WiFi
+- Maillage léger : plusieurs cabines = plusieurs endpoints WireGuard, possible mutualisation
+- Conformité renforcée : profil VPN visible iOS, consentement encore plus explicite
+- Continuité de service : si la cabine physique est en maintenance, le profil installé continue de fonctionner
+
+### Engine de filtrage compromissions à sensibilité réglable
+
+`/etc/secubox/toolbox/rule-engine.yaml` permet à l'opérateur (collectivité, association de quartier, France Services) de choisir un profil :
+
+- 🟢 **Permissif** : bloque uniquement malware confirmé (zéro faux positif)
+- 🟡 **Équilibré** (défaut) : malware + DGA fort + beaconing évident
+- 🟠 **Strict** : ajoute ASN faible réputation
+- 🔴 **Paranoïaque** : default-deny sauf whitelist
+
+L'angle souveraineté : la cabine s'adapte au contexte (école, EHPAD, médiathèque) sans changer de produit. Un médiateur numérique peut ajuster la rigueur sans toucher au code.
+
+### Empreinte hardware & Open Source
+
+- Cible matérielle : MochaBin GlobalScale (Marvell Armada 7040 ARM64) — fabricant taïwanais avec écosystème ouvert
+- Debian 12 bookworm arm64 — distribution souveraine de facto
+- Code source intégral : `github.com/CyberMind-FR/secubox-deb` (licence CMSD-1.0, audit citoyen possible)
+- Coût matériel : ~250 € HT par cabine assemblée (sans WiFi USB ni boîtier décoratif)
+
+### Documentation technique
+
+Un brief auto-portant pour LLM externe (`docs/AI-HANDOVER-cabine-evolution.md`) existe désormais : un autre rédacteur ou contributeur (humain ou GPT/Gemini) peut comprendre l'architecture entière sans contexte préalable. **Continuité du commun numérique au-delà d'un seul auteur.**
+
+### Composants installables sur iPhone (splash quick-up menu)
+
+```
+🔐 Certificat iPhone     → /ca/mobileconfig
+🤖 Certificat Android/PC → /ca/android.crt
+📱 Icône Home iPhone     → /ca/webclip-cabine.mobileconfig
+📜 Guide pas-à-pas       → /ca/install-help
+🌐 Profil WireGuard (R3) → /wg/profile/new (roadmap #496)
+```
+
+Tous bundlés avec l'empreinte CA SHA-1 affichée pour vérification visuelle dans Réglages iOS.
+
+### Engagement de l'auteur
+
+> *« Je ne vends pas une boîte noire. Je publie un commun numérique que tu peux installer toi-même, auditer ligne par ligne, et adapter à ta collectivité. Si demain CyberMind disparaît, le code reste, la documentation reste, le brief LLM reste — quelqu'un d'autre peut reprendre. »*
+
+Cette posture est à intégrer dans la tribune et le communiqué de presse — c'est le différenciateur éthique face aux SaaS américains et aux solutions clé-en-main propriétaires.
+
+---
+
+**Status au 2026-06-05** : Phase 3 PR #493 prête à merge. Phases 5+6 ouvertes (#495, #496). Mise à jour livrables marketing avec les éléments ci-dessus avant publication.
+

@@ -25,7 +25,12 @@ Depends: ${misc:Depends}, ${python3:Depends},
  dnsmasq,
  mitmproxy,
  openssl,
- adduser
+ adduser,
+ fonts-dejavu-core,
+ fonts-symbola,
+ fonts-noto-color-emoji,
+ python3-yaml,
+ python3-geoip2 | geoipupdate
 Description: SecuBox-DEB ToolBoX — Gondwana Cabine Numérique (captive AP + MITM analyzer)
  Phase 1 du parent #474 (ToolBoX Pipeline). Productionize le PoC captive
  portal en package dédié : splash + consent R2 + CA distribution iOS
