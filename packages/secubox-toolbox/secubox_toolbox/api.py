@@ -97,17 +97,16 @@ async def splash(request: Request):
         "Pragma": "no-cache",
     }
 
-    # Phase 3 (#492) : if already validated, send user to the dashboard which
-    # has the level switcher + cert card + transparency metrics. The previous
-    # 'success.html.j2 fallback' was a stale dead-end that did NOT show the
-    # new cert card auto-check.
-    validated = bool(mac and nft.is_validated(mac))
-    if validated:
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/report/me/html", status_code=303,
-                                 headers=no_cache_headers)
+    # Phase 3 (#492) : ALWAYS render splash on GET /. Even validated users
+    # benefit from seeing the cert install buttons + level switcher + dashboard
+    # link. Auto-redirect was hiding the cert links from users who already
+    # validated — they had no path back to the install buttons.
     html = _env.get_template("splash.html.j2").render(
-        mac_hash=mac_hash or "??", ssid=cfg.ap.ssid, r2_enabled=cfg.r2.enabled,
+        mac_hash=mac_hash or "??",
+        ssid=cfg.ap.ssid,
+        r2_enabled=cfg.r2.enabled,
+        already_validated=bool(mac and nft.is_validated(mac)),
+        current_level=store.get_client_level(mac_hash) if mac_hash else None,
     )
     return HTMLResponse(html, headers=no_cache_headers)
 
