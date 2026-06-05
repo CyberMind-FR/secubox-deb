@@ -54,13 +54,39 @@ QUEUE_FILE = DATA_DIR / "pending_rules.json"
 app = FastAPI(title="SecuBox Threat Analyst", version="1.0.0")
 logger = logging.getLogger("secubox.threat-analyst")
 
-# Phase 2b (#488) : ingest mitm JA4 clienthello events from secubox-toolbox addon
+# Phase 2b/2c (#488/#490) : ingest mitm JA4 events + compute fingerprint hash
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+from secubox_core.classifiers import ja4 as _ja4_cls  # noqa: E402
+
+
+def _ja4_enrich(event: dict) -> dict:
+    """Phase 2c enrichment : compute JA4-style fingerprint + lookup known clients."""
+    ja4_hash = _ja4_cls.compute_ja4_hash(
+        sni=event.get("sni"),
+        alpn_protocols=event.get("alpn_protocols"),
+        cipher_suites=event.get("cipher_suites"),
+        extensions=event.get("extensions"),
+    )
+    known = _ja4_cls.lookup_ja4(ja4_hash["fingerprint"])
+    event["enriched"] = {
+        "ja4_fingerprint": ja4_hash["fingerprint"],
+        "ja4_raw_repr": ja4_hash["raw_repr"],
+        "cipher_count": ja4_hash["cipher_count"],
+        "alpn_count": ja4_hash["alpn_count"],
+        "ext_count": ja4_hash["ext_count"],
+        "sni_present": ja4_hash["sni_present"],
+        "known_client": known,  # None if unknown, dict if matched
+        "source": "secubox-threat-analyst/ja4",
+    }
+    return event
+
+
 mount_ingest_routes(
     app,
     endpoint_path="/ja4",
     db_path="/var/lib/secubox/threat-analyst/mitm-ingest.db",
     kind="ja4",
+    enrich_hook=_ja4_enrich,
 )
 
 
