@@ -104,10 +104,11 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
   {% set top_dev_emj = avatar.most_common_emoji or '' %}
   {% set top_app = (dpi_cls.top_apps and dpi_cls.top_apps[0]) or {} %}
   {% set top_geo = (geo_h and geo_h[0]) or {} %}
+  {% set top_asn_raw = top_geo.asn_org if top_geo.asn_org else '?' %}
   <p style="font-size:0.78rem;color:var(--dim);margin-top:0.6rem;text-align:center;padding-top:0.5rem;border-top:1px solid var(--dim)">
     Top device : {{ top_dev_emj }} {{ top_dev }} ·
     Top app : {{ top_app.emoji|default('') }} {{ top_app.app|default('?') }} ·
-    Top ASN : {{ top_geo.flag|default('') }} {{ top_geo.asn_org|default('?')[:30] }}
+    Top ASN : {{ top_geo.flag|default('') }} {{ top_asn_raw[:30] }}
   </p>
 </div>
 
