@@ -119,14 +119,33 @@ class LocalStore:
         mac_hash = _hash_mac(_mac_of(ip))
         if not mac_hash:
             return
-        # Cookies event
+        # Cookies event — Phase 2a+ : capture names (NOT values) for provider mapping
         set_cookies = flow.response.headers.get_all("set-cookie") or []
         req_cookies = flow.request.headers.get_all("cookie") or []
         if set_cookies or req_cookies:
+            # Extract names only (truncated, max 32 chars each) — privacy-safe metadata
+            set_names = []
+            for sc in set_cookies[:30]:
+                # Set-Cookie format: "name=value; Path=/; ..."
+                head = sc.split(";", 1)[0]
+                if "=" in head:
+                    n = head.split("=", 1)[0].strip()[:32]
+                    if n:
+                        set_names.append(n)
+            sent_names = []
+            for cookie_hdr in req_cookies:
+                # Cookie format: "name1=v1; name2=v2; ..."
+                for part in cookie_hdr.split(";"):
+                    if "=" in part:
+                        n = part.split("=", 1)[0].strip()[:32]
+                        if n and len(sent_names) < 50:
+                            sent_names.append(n)
             _insert(mac_hash, "cookies", {
                 "url": flow.request.pretty_url[:300],
                 "set_cookie_count": len(set_cookies),
                 "cookie_count": len(req_cookies),
+                "set_cookie_names": set_names,
+                "cookie_names": sent_names,
                 "status": flow.response.status_code,
             })
         # SOC trivial indicator (suspicious patterns)

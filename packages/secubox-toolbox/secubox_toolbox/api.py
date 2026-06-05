@@ -12,7 +12,21 @@ import jinja2
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
-from . import ca, mac as macmod, nft, reports, store
+from . import (
+    avatar_analysis,
+    beaconing,
+    ca,
+    cookie_analysis,
+    dga,
+    dpi_class,
+    geo,
+    mac as macmod,
+    nft,
+    reports,
+    scoring,
+    store,
+    threat_intel,
+)
 from .config import load_config, resolve_secret
 from .models import AcceptResp, ClientRow, Config, StatusResp
 
@@ -273,6 +287,8 @@ def _aggregate_session(mac_hash: str) -> dict:
                             "url": p.get("url", "?")[:120],
                             "set": p.get("set_cookie_count", 0),
                             "sent": p.get("cookie_count", 0),
+                            "set_cookie_names": p.get("set_cookie_names", []),
+                            "cookie_names": p.get("cookie_names", []),
                             "status": p.get("status"),
                         })
                 elif source == "soc":
@@ -293,11 +309,49 @@ def _aggregate_session(mac_hash: str) -> dict:
     except Exception:
         pass
 
-    # ── 3. Risk score from SOC indicators ──
-    risk_score = min(100, sum(i.get("weight", 0) for i in soc_indicators))
+    # Phase 2a+ : combine DPI hosts (HTTP host or IP) with JA4 SNIs to get
+    # real hostnames for classification. iOS captive probes + cert-pinned apps
+    # only expose SNIs ; we lose ~80% of classification data without this merge.
+    classifiable_hosts: dict[str, int] = dict(dpi_hosts)
+    for sni in ja4_snis:
+        classifiable_hosts[sni] = classifiable_hosts.get(sni, 0) + 1
+
+    # ── 3. Phase 2a SOC scoring : threat-intel + DGA + beaconing ──
+    # Threat-intel : match IPs in feeds (resolve hosts isn't done here — match domains
+    # directly). On DPI hosts (which are domain names from SNI/Host) we check both.
+    ti_matches: list[dict] = []
+    unique_hosts_list = list(classifiable_hosts.keys())
+    for host in unique_hosts_list:
+        for m in threat_intel.is_malicious_domain(host):
+            m["ioc"] = host
+            ti_matches.append(m)
+    # Also check raw IPs seen in mitm logs
+    for h in hosts:
+        ip = h.split(":")[0]
+        # crude IP detection : has dot + all digits
+        if ip.replace(".", "").isdigit():
+            for m in threat_intel.is_malicious_ip(ip):
+                m["ioc"] = ip
+                ti_matches.append(m)
+
+    # DGA heuristic on domains
+    dga_candidates = dga.analyze_hosts(unique_hosts_list)
+
+    # Beaconing analysis from SQLite cadence
+    beacon_candidates = beaconing.analyze_beaconing(mac_hash)
+
+    # Multi-signal score
+    score_result = scoring.compute_score(
+        threat_intel_matches=ti_matches,
+        dga_candidates=dga_candidates,
+        beaconing_candidates=beacon_candidates,
+        raw_soc_events=soc_indicators,
+    )
+    risk_score = score_result["score"]
 
     # ── 4. Top DPI hosts (Phase 1.5 = simple ranking) ──
-    top_dpi = sorted(dpi_hosts.items(), key=lambda x: -x[1])[:15]
+    # Use combined (DPI + SNI) so classification works on FQDNs not IPs
+    top_dpi = sorted(classifiable_hosts.items(), key=lambda x: -x[1])[:15]
 
     return {
         "device_type": "Smartphone (auto-detected)",
@@ -309,14 +363,10 @@ def _aggregate_session(mac_hash: str) -> dict:
         },
         "apps_detected": _classify_apps(hosts),
         "risk_score": risk_score,
-        "indicators": [
-            "Aucune connexion vers feeds ThreatFox/Feodo/SSLBL"
-            if not soc_indicators else
-            f"{len(soc_indicators)} indicateur(s) SOC detecte(s) — voir section SOC",
-            "Aucun pattern DGA detecte" if not any(i.get("kind") == "dga" for i in soc_indicators) else "DGA pattern detecte",
-            "Aucun beaconing periodique anormal",
-            "Aucune connexion DoH suspecte (C2)",
-            f"User agents detectes : {len(user_agents)}",
+        "risk_label": score_result["label"],
+        "risk_explanation": score_result["explanation"],
+        "indicators": score_result["indicators_summary"] or [
+            "Aucun signal de compromission détecté.",
         ],
         "pinned_apps": [
             "Signal Messenger : E2E chiffre - ToolBox NE PEUT PAS lire tes messages",
@@ -350,7 +400,68 @@ def _aggregate_session(mac_hash: str) -> dict:
             "snis_seen": list(ja4_snis)[:10],
             "alpns_seen": list(ja4_alpns),
         },
+        # ── Phase 2a SOC scoring ──
+        "scoring": {
+            "score": score_result["score"],
+            "label": score_result["label"],
+            "explanation": score_result["explanation"],
+            "breakdown": score_result["breakdown"],
+        },
+        "threat_intel_matches": _enrich_with_geo(ti_matches[:10]),
+        "dga_candidates": _enrich_dga_with_geo(dga_candidates[:10]),
+        "beaconing_candidates": _enrich_beacon_with_geo(beacon_candidates[:10]),
+        # ── Phase 2a+ (#486) geo + app classification + UA analyzer ──
+        "dpi_classified": dpi_class.analyze_hosts(unique_hosts_list[:50]),
+        "geo_top_hosts": _enrich_top_dpi_with_geo(top_dpi),
+        "avatar_analysis": avatar_analysis.analyze_user_agents(user_agents),
+        "cookies_providers": cookie_analysis.top_providers(cookies_urls, limit=10),
     }
+
+
+def _enrich_with_geo(matches: list[dict]) -> list[dict]:
+    """Add geo info to threat_intel matches."""
+    out = []
+    for m in matches:
+        ioc = m.get("ioc") or ""
+        info = geo.lookup(ioc) if ioc else {}
+        out.append({**m, "flag": info.get("flag", ""), "country": info.get("country_iso", ""), "asn_org": info.get("asn_org", "")})
+    return out
+
+
+def _enrich_dga_with_geo(candidates: list[dict]) -> list[dict]:
+    out = []
+    for c in candidates:
+        info = geo.lookup(c.get("host", ""))
+        out.append({**c, "flag": info.get("flag", ""), "country": info.get("country_iso", ""), "asn_org": info.get("asn_org", "")})
+    return out
+
+
+def _enrich_beacon_with_geo(candidates: list[dict]) -> list[dict]:
+    out = []
+    for c in candidates:
+        info = geo.lookup(c.get("host", ""))
+        out.append({**c, "flag": info.get("flag", ""), "country": info.get("country_iso", ""), "asn_org": info.get("asn_org", "")})
+    return out
+
+
+def _enrich_top_dpi_with_geo(top_dpi: list[tuple]) -> list[dict]:
+    """Enrich top_dpi with geo + dpi_class + emoji."""
+    out = []
+    for host, count in top_dpi:
+        info = geo.lookup(host)
+        cls = dpi_class.classify_host(host)
+        out.append({
+            "host": host,
+            "count": count,
+            "flag": info.get("flag", ""),
+            "country": info.get("country_iso", ""),
+            "asn": info.get("asn", 0),
+            "asn_org": info.get("asn_org", ""),
+            "app": cls["app"],
+            "category": cls["category"],
+            "emoji": cls["emoji"],
+        })
+    return out
 
 
 def _classify_apps(hosts: set[str]) -> list[str]:
