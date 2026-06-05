@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 #
-# ToolBoX bring-up bench : compose hostapd + dnsmasq + nftables + portal.
-# Idempotent. Usage: toolbox-up [--apply-only]
+# ToolBoX bring-up bench : compose nftables + persistent AP iface IP.
+# Idempotent.
 set -euo pipefail
 readonly TOML="/etc/secubox/toolbox.toml"
 readonly NFT_OUT="/run/secubox/toolbox.nft"
+readonly NET_OUT="/etc/systemd/network/10-secubox-toolbox-ap.network"
+readonly TPL_DIR="/usr/lib/secubox/toolbox/conf"
 
 log() { printf '[toolbox-up] %s\n' "$*" >&2; }
 
@@ -16,7 +18,7 @@ if [ ! -f "$TOML" ]; then
 fi
 
 # Render nftables from Jinja2 template via Python
-log "rendering nftables rules from /usr/lib/secubox/toolbox/conf/nft-toolbox.nft.j2"
+log "rendering nftables rules from ${TPL_DIR}/nft-toolbox.nft.j2"
 PYTHONPATH=/usr/lib/secubox/toolbox python3 - <<'PY' > "$NFT_OUT"
 import tomllib, jinja2
 from pathlib import Path
@@ -25,9 +27,36 @@ env = jinja2.Environment(loader=jinja2.FileSystemLoader("/usr/lib/secubox/toolbo
 print(env.get_template("nft-toolbox.nft.j2").render(**cfg))
 PY
 
-# Apply : delete old + load new
+# Apply nft : delete old + load new
 log "applying nftables (table inet toolbox)"
 nft delete table inet toolbox 2>/dev/null || true
 nft -f "$NFT_OUT"
 
-log "OK : table inet toolbox active. Use 'nft list set inet toolbox validated_macs' to inspect."
+# Render systemd-networkd file for the AP iface (persistent IP)
+log "rendering ${NET_OUT}"
+mkdir -p "$(dirname "$NET_OUT")"
+PYTHONPATH=/usr/lib/secubox/toolbox python3 - <<'PY' > "$NET_OUT"
+import tomllib, jinja2
+from pathlib import Path
+cfg = tomllib.loads(Path("/etc/secubox/toolbox.toml").read_text())
+env = jinja2.Environment(loader=jinja2.FileSystemLoader("/usr/lib/secubox/toolbox/conf"))
+print(env.get_template("ap-iface.network.j2").render(**cfg))
+PY
+
+# Reload networkd if available
+if systemctl list-unit-files systemd-networkd.service >/dev/null 2>&1; then
+  if ! systemctl is-active --quiet systemd-networkd; then
+    log "enabling + starting systemd-networkd"
+    systemctl enable --now systemd-networkd 2>&1 | tail -1 || true
+  else
+    log "reloading systemd-networkd"
+    networkctl reload 2>&1 | tail -1 || systemctl reload systemd-networkd 2>&1 | tail -1 || true
+  fi
+else
+  log "WARN : systemd-networkd not available — applying IP imperatively"
+  IFACE=$(python3 -c "import tomllib; print(tomllib.load(open('/etc/secubox/toolbox.toml','rb'))['ap']['iface'])")
+  GW=$(python3 -c "import tomllib; print(tomllib.load(open('/etc/secubox/toolbox.toml','rb'))['dhcp']['gateway'])")
+  ip addr replace "$GW/24" dev "$IFACE" 2>&1 | head -1 || true
+fi
+
+log "OK : table inet toolbox active + IP persistence via ${NET_OUT}"

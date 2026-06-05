@@ -1,0 +1,13 @@
+{# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
+{# Render via toolbox-up → /etc/systemd/network/10-secubox-toolbox-ap.network #}
+# /etc/systemd/network/10-secubox-toolbox-ap.network
+# Persists the AP captive-subnet IP across iface re-enumeration (USB replug).
+
+[Match]
+Name={{ ap.iface }}
+
+[Network]
+Address={{ dhcp.gateway }}/24
+ConfigureWithoutCarrier=yes
+LinkLocalAddressing=no
+IPv6AcceptRA=no
