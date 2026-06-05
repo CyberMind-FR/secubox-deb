@@ -683,15 +683,47 @@ def _load_bypass_entries() -> list[str]:
         return []
 
 
+def _is_public_kbin(request: Request) -> bool:
+    """Phase 6.J : detect if request comes via the public kbin vhost.
+    Public traffic must be READ-ONLY on /admin/filter-control endpoints —
+    editing happens only via the auth-gated admin.gk2.secubox.in/toolbox/."""
+    host = (request.headers.get("host", "") or "").lower()
+    return host.startswith("kbin.")
+
+
 @router.get("/admin/filter-control", response_class=HTMLResponse)
-async def admin_filter_control() -> HTMLResponse:
-    """Whitelist control panel — view + edit mitm bypass entries."""
+async def admin_filter_control(request: Request) -> HTMLResponse:
+    """Whitelist control panel — VIEW always, EDIT only when reached via
+    admin.gk2.secubox.in (auth-gated). Kbin public hits get a read-only
+    page with a link to the private editor."""
     entries = _load_bypass_entries()
-    raw = MITM_BYPASS_FILE.read_text() if MITM_BYPASS_FILE.exists() else ""
-    rows = "\n".join(
-        f'<tr><td><code>{e}</code></td><td><form method=POST action=/admin/filter-control/remove style=display:inline><input type=hidden name=entry value="{e}"/><button class=del>✕</button></form></td></tr>'
-        for e in entries
+    readonly = _is_public_kbin(request)
+    if readonly:
+        # No remove button per row, no add form
+        rows = "\n".join(
+            f'<tr><td><code>{e}</code></td></tr>'
+            for e in entries
+        )
+    else:
+        rows = "\n".join(
+            f'<tr><td><code>{e}</code></td><td><form method=POST action=/admin/filter-control/remove style=display:inline><input type=hidden name=entry value="{e}"/><button class=del>✕</button></form></td></tr>'
+            for e in entries
+        )
+
+    readonly_banner = (
+        '<div style="background:rgba(255,179,71,0.08);border-left:3px solid #ffb347;padding:0.7rem;margin-bottom:1rem;border-radius:0 4px 4px 0;font-size:0.85rem;color:#ffd6a0">'
+        '🔒 <b>Lecture seule (vhost public kbin).</b> Pour éditer la liste, utilise '
+        '<a href="https://admin.gk2.secubox.in/toolbox/" style="color:#ffb347;text-decoration:underline">'
+        'admin.gk2.secubox.in/toolbox/</a> (authentifié SSO).'
+        '</div>'
     )
+    editor_form = (
+        '<form method=POST action=/admin/filter-control/add class=add>'
+        '<input type=text name=entry placeholder="ex: (.+\\.)?example\\.com" required>'
+        '<button class=add type=submit>➕ Ajouter</button></form>'
+    )
+    readonly_th = '<th>Pattern (regex)</th>'
+    editor_th = '<th>Pattern (regex)</th><th></th>'
     html = f"""<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Admin :: Filter Control</title>
@@ -711,16 +743,13 @@ button.add{{background:var(--phos);color:#0a0a0f;border:0;padding:0.5rem 1rem;bo
 .note{{font-size:0.75rem;color:#a0a0a0;background:rgba(255,179,71,0.06);border-left:2px solid #ffb347;padding:0.6rem 0.8rem;margin-top:1rem;border-radius:0 3px 3px 0}}
 a.back{{color:var(--purple);text-decoration:underline;font-size:0.85rem}}
 </style></head><body>
-<h1>🛡️ Mitm Filter Control</h1>
+<h1>🛡️ Mitm Filter Control{" (lecture seule)" if readonly else ""}</h1>
 <p class=lead>Hosts bypass — TLS passthrough, jamais déchiffrés. Apps avec cert-pinning ou E2E.</p>
 
-<form method=POST action=/admin/filter-control/add class=add>
-  <input type=text name=entry placeholder="ex: (.+\\.)?example\\.com" required>
-  <button class=add type=submit>➕ Ajouter</button>
-</form>
+{readonly_banner if readonly else editor_form}
 
 <table>
-<tr><th>Pattern (regex)</th><th></th></tr>
+<tr>{readonly_th if readonly else editor_th}</tr>
 {rows or '<tr><td colspan=2 style="color:#666;text-align:center;padding:1rem">Aucune entrée.</td></tr>'}
 </table>
 
@@ -736,6 +765,8 @@ a.back{{color:var(--purple);text-decoration:underline;font-size:0.85rem}}
 
 @router.post("/admin/filter-control/add")
 async def admin_filter_add(request: Request) -> Response:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "filter editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
     form = await request.form()
     entry = (form.get("entry") or "").strip()
     if entry and "\n" not in entry:
@@ -747,6 +778,8 @@ async def admin_filter_add(request: Request) -> Response:
 
 @router.post("/admin/filter-control/remove")
 async def admin_filter_remove(request: Request) -> Response:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "filter editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
     form = await request.form()
     entry = (form.get("entry") or "").strip()
     if entry and MITM_BYPASS_FILE.exists():
@@ -1657,7 +1690,12 @@ async def admin_override_level(mac_hash: str, request: Request) -> dict:
 
     Allows the operator to force-change a client's R0/R1/R2/R3 level from
     the admin webUI without requiring the client to navigate the dashboard.
+
+    Phase 6.J : refused on public kbin vhost — editing happens only via
+    auth-gated admin.gk2.secubox.in/toolbox/.
     """
+    if _is_public_kbin(request):
+        raise HTTPException(403, "level override disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
     try:
         form = await request.form()
         new_level = (form.get("level") or "").lower()
