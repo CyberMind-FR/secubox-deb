@@ -17,6 +17,7 @@ from . import (
     beaconing,
     ca,
     cookie_analysis,
+    cumulative,
     dga,
     dpi_class,
     geo,
@@ -27,6 +28,14 @@ from . import (
     store,
     threat_intel,
 )
+
+
+def _cumulative_stats() -> dict:
+    """Cached anonymous cumulative stats — see secubox_toolbox.cumulative."""
+    try:
+        return cumulative.get_cached()
+    except Exception:
+        return {}
 # Phase 3 (#492) : transparency layer
 try:
     from secubox_core import whitelist as _whitelist_mod
@@ -101,10 +110,13 @@ async def splash(request: Request):
     # benefit from seeing the cert install buttons + level switcher + dashboard
     # link. Auto-redirect was hiding the cert links from users who already
     # validated — they had no path back to the install buttons.
+    # Phase 6 (#496) : wg_enabled = server.pubkey exists = R3 ready
+    wg_enabled = Path("/etc/secubox/toolbox/wg/server.pubkey").exists()
     html = _env.get_template("splash.html.j2").render(
         mac_hash=mac_hash or "??",
         ssid=cfg.ap.ssid,
         r2_enabled=cfg.r2.enabled,
+        wg_enabled=wg_enabled,
         already_validated=bool(mac and nft.is_validated(mac)),
         current_level=store.get_client_level(mac_hash) if mac_hash else None,
     )
@@ -321,6 +333,24 @@ fetch('/ca/fingerprint').then(r=>r.json()).then(d=>{document.getElementById('fp'
 </script>
 </body></html>"""
     return HTMLResponse(html)
+
+
+@router.get("/cumulative-stats.json")
+async def cumulative_stats_json() -> dict:
+    """Public anonymous cumulative stats — fed by landing page + dashboards."""
+    return _cumulative_stats()
+
+
+@router.get("/landing", response_class=HTMLResponse)
+@router.get("/cabine", response_class=HTMLResponse)
+async def landing(request: Request) -> HTMLResponse:
+    """Public landing page for the cabine — shown on kbin.gk2.secubox.in.
+
+    Visitor-facing demo of the project : pitch + 4 levels + install + live
+    cumulative anonymous stats + open source license + contact."""
+    stats = _cumulative_stats()
+    return HTMLResponse(_env.get_template("landing.html.j2").render(stats=stats),
+                         headers={"Cache-Control": "public, max-age=60"})
 
 
 @router.get("/ca/webclip-cabine.mobileconfig")
@@ -1102,10 +1132,16 @@ async def report_me_html(request: Request) -> HTMLResponse:
     session = _aggregate_session(mac_hash)
     # Phase 3 (#492) : pass query args + force no-cache so iPhone Safari
     # actually fetches the new template.
+    # Phase 6 (#496) : also pass wg_enabled so dashboard R3 link renders
+    wg_enabled = Path("/etc/secubox/toolbox/wg/server.pubkey").exists()
+    # Phase 6.D (#497) : cumulative anonymous stats for visual context
+    cumulative = _cumulative_stats()
     html = _env.get_template("report-live.html.j2").render(
         mac_hash=mac_hash, ip=ip,
         request_args=dict(request.query_params),
         current_level=store.get_client_level(mac_hash) if mac_hash else "r1",
+        wg_enabled=wg_enabled,
+        cumulative=cumulative,
         **session,
     )
     return HTMLResponse(html, headers={
@@ -1164,6 +1200,79 @@ async def admin_config() -> dict:
 async def admin_clients() -> list[ClientRow]:
     rows = store.list_clients()
     return [ClientRow(**r) for r in rows]
+
+
+@router.get("/admin/clients/rich")
+async def admin_clients_rich() -> dict:
+    """Phase 6.D : enriched client list with pseudo icons + statuses + levels.
+
+    Returns each client decorated with device emoji, status emoji, level chip,
+    and last activity. Designed for the admin webui table.
+    """
+    import time as _t
+    rows = store.list_clients()
+    now = _t.time()
+    enriched = []
+    for r in rows:
+        age_min = (now - (r.get("last_seen") or 0)) / 60.0
+        if age_min < 5:
+            status_emoji = "🟢"
+            status_label = "actif"
+        elif age_min < 60:
+            status_emoji = "🟡"
+            status_label = "idle"
+        else:
+            status_emoji = "⚪"
+            status_label = "expiré"
+        if r.get("state") == "quarantine":
+            status_emoji = "🔴"
+            status_label = "quarantine"
+        level = r.get("level") or "r1"
+        level_emoji = {"r0": "🌐", "r1": "🛡", "r2": "🔍", "r3": "🌐"}.get(level, "❔")
+        score = r.get("score", 0)
+        risk_emoji = "🟢" if score < 30 else "🟡" if score < 70 else "🔴"
+        enriched.append({
+            "mac_hash": r.get("mac_hash"),
+            "ip": r.get("ip"),
+            "state": r.get("state"),
+            "level": level,
+            "level_emoji": level_emoji,
+            "score": score,
+            "risk_emoji": risk_emoji,
+            "status_emoji": status_emoji,
+            "status_label": status_label,
+            "first_seen": r.get("first_seen"),
+            "last_seen": r.get("last_seen"),
+            "device_emoji": "📱",  # placeholder ; could derive from avatar_analysis
+        })
+    return {"clients": enriched, "count": len(enriched)}
+
+
+@router.post("/admin/clients/{mac_hash}/level")
+async def admin_override_level(mac_hash: str, request: Request) -> dict:
+    """Phase 6.D : admin override of a client's level (operator-only).
+
+    Allows the operator to force-change a client's R0/R1/R2/R3 level from
+    the admin webUI without requiring the client to navigate the dashboard.
+    """
+    try:
+        form = await request.form()
+        new_level = (form.get("level") or "").lower()
+    except Exception:
+        new_level = ""
+    if new_level not in ("r0", "r1", "r2", "r3"):
+        raise HTTPException(400, f"invalid level '{new_level}', expected r0|r1|r2|r3")
+    # Need to know the client's current MAC ; the store keeps mac_hash only.
+    # Without raw MAC we can't update nft sets — operator must trigger the
+    # client's own /change-level to push to nft. We update the store level
+    # which the inject_banner addon reads.
+    row = next((c for c in store.list_clients() if c.get("mac_hash") == mac_hash), None)
+    if not row:
+        raise HTTPException(404, "client not found")
+    store.upsert_client(mac_hash, row.get("ip") or "?", level=new_level)
+    log.info("admin override mac_hash=%s -> level=%s", mac_hash, new_level)
+    return {"ok": True, "mac_hash": mac_hash, "new_level": new_level,
+            "note": "nft sets not auto-updated; client must reload or operator manually adjusts nft"}
 
 
 @router.get("/admin/metrics")
