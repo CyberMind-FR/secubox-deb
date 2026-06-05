@@ -202,7 +202,7 @@ def render_pdf(report: dict) -> bytes:
     # Footer
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(110, 64, 201)
-    pdf.cell(0, 4, "Gondwana ToolBoX  -  LicenseRef-CMSD-1.0  -  AGPL public", ln=True, align="C")
+    pdf.cell(0, 4, "Gondwana ToolBoX  -  LicenseRef-CMSD-1.0 (Source-Disclosed License)", ln=True, align="C")
     pdf.cell(0, 4, "Source : github.com/CyberMind-FR/secubox-deb (issues #474 #475 #477)", ln=True, align="C")
 
     return bytes(pdf.output(dest="S"))
