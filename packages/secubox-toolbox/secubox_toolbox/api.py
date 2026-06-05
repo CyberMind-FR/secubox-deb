@@ -1275,6 +1275,142 @@ async def admin_override_level(mac_hash: str, request: Request) -> dict:
             "note": "nft sets not auto-updated; client must reload or operator manually adjusts nft"}
 
 
+@router.get("/admin/", response_class=HTMLResponse)
+@router.get("/admin", response_class=HTMLResponse)
+async def admin_index() -> HTMLResponse:
+    """Operator admin webUI with client list + level switcher."""
+    html = """<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>🛡 Admin — Gondwana ToolBoX</title>
+<style>:root{--bg:#0a0a0f;--bg2:#0e0e15;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff;--amber:#ffb347;--red:#ff4466}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Menlo,Consolas,monospace;background:var(--bg);color:var(--text);padding:1.2rem;max-width:1100px;margin:auto;line-height:1.55}
+h1{color:var(--phos-hot);text-shadow:0 0 6px var(--phos);font-size:1.6rem;margin-bottom:0.4rem;letter-spacing:0.05em}
+.sub{color:var(--dim);font-size:0.85rem;margin-bottom:1.2rem}
+table{width:100%;border-collapse:collapse;font-size:0.85rem;background:var(--bg2);border:1px solid var(--dim)}
+th,td{padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--dim)}
+th{color:var(--phos-hot);text-shadow:0 0 3px var(--phos);background:rgba(0,221,68,0.08)}
+tr:hover{background:rgba(0,221,68,0.04)}
+.chip{display:inline-block;padding:0.15rem 0.5rem;border-radius:99px;font-size:0.72rem;font-weight:bold}
+.chip.r0{background:#222;color:#999}
+.chip.r1{background:rgba(0,221,68,0.2);color:var(--phos-hot)}
+.chip.r2{background:rgba(255,179,71,0.2);color:#ffd6a0}
+.chip.r3{background:rgba(158,118,255,0.2);color:#cbb6ff}
+.btn{background:var(--purple);color:#0a0a0f;padding:0.3rem 0.6rem;border:none;border-radius:3px;cursor:pointer;font-family:inherit;font-size:0.72rem;font-weight:bold;margin-right:0.2rem}
+.btn:hover{background:#b598ff}
+.btn.outline{background:transparent;color:var(--phos);border:1px solid var(--phos)}
+code{background:#222;padding:0.1rem 0.3rem;border-radius:2px;font-size:0.75rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.8rem;margin-bottom:1.5rem}
+.card{background:var(--bg2);border:1px solid var(--dim);padding:0.8rem;border-radius:4px;text-align:center}
+.card .v{font-size:1.6rem;color:var(--phos-hot);font-weight:bold;display:block}
+.card .l{font-size:0.7rem;color:var(--dim)}
+.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-bg.show{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--phos);padding:1.5rem;border-radius:4px;max-width:400px;width:90%}
+.modal h2{color:var(--phos-hot);font-size:1rem;margin-bottom:0.8rem}
+.modal .lvl-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.8rem}
+.modal .lvl-row button{padding:0.5rem;cursor:pointer;font-family:inherit;font-size:0.75rem;border-radius:3px}
+.modal .lvl-row .r0{background:#222;color:#999;border:1px solid #444}
+.modal .lvl-row .r1{background:rgba(0,221,68,0.15);color:var(--phos-hot);border:1px solid var(--phos)}
+.modal .lvl-row .r2{background:rgba(255,179,71,0.15);color:#ffd6a0;border:1px solid var(--amber)}
+.modal .lvl-row .r3{background:rgba(158,118,255,0.15);color:#cbb6ff;border:1px solid var(--purple)}
+</style></head><body>
+<h1>🛡 Admin — Gondwana ToolBoX</h1>
+<p class=sub>// Console opérateur · client management · level override</p>
+
+<div id=cards class=cards></div>
+
+<table id=clients-table>
+<thead><tr>
+<th>Status</th><th>Device</th><th>Hash</th><th>IP</th>
+<th>Level</th><th>Risk</th><th>Last seen</th><th>Actions</th>
+</tr></thead>
+<tbody id=clients-tbody><tr><td colspan=8>chargement…</td></tr></tbody>
+</table>
+
+<div id=modal class=modal-bg>
+<div class=modal>
+<h2>🔀 Change level — <code id=modal-mh></code></h2>
+<p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">⚠ Admin override : updates store only. Client must reload to sync nft.</p>
+<div class=lvl-row>
+<button class=r0 onclick="setLevel('r0')">🌐 R0</button>
+<button class=r1 onclick="setLevel('r1')">🛡 R1</button>
+<button class=r2 onclick="setLevel('r2')">🔍 R2</button>
+<button class=r3 onclick="setLevel('r3')">🌐 R3</button>
+</div>
+<button onclick="closeModal()" class=btn style="background:transparent;color:var(--dim);border:1px solid var(--dim)">Annuler</button>
+</div>
+</div>
+
+<script>
+var selectedMh = null;
+function openModal(mh) {
+  selectedMh = mh;
+  document.getElementById('modal-mh').textContent = mh;
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+async function setLevel(lvl) {
+  if (!selectedMh) return;
+  var fd = new FormData();
+  fd.append('level', lvl);
+  var r = await fetch('/admin/clients/'+selectedMh+'/level', {method:'POST', body:fd});
+  if (r.ok) {
+    closeModal();
+    loadClients();
+  } else {
+    alert('Erreur: '+r.status);
+  }
+}
+async function loadClients() {
+  var r = await fetch('/admin/clients/rich');
+  if (!r.ok) {
+    document.getElementById('clients-tbody').innerHTML = '<tr><td colspan=8>Erreur '+r.status+'</td></tr>';
+    return;
+  }
+  var data = await r.json();
+  var tbody = document.getElementById('clients-tbody');
+  tbody.innerHTML = '';
+  data.clients.forEach(function(c){
+    var lvlChip = '<span class="chip '+c.level+'">'+c.level_emoji+' '+c.level.toUpperCase()+'</span>';
+    var dt = new Date(c.last_seen*1000).toISOString().substring(11,16);
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+c.status_emoji+' '+c.status_label+'</td>'+
+      '<td>'+c.device_emoji+'</td>'+
+      '<td><code>'+c.mac_hash.substring(0,12)+'…</code></td>'+
+      '<td>'+(c.ip||'?')+'</td>'+
+      '<td>'+lvlChip+'</td>'+
+      '<td>'+c.risk_emoji+' '+c.score+'</td>'+
+      '<td>'+dt+'</td>'+
+      '<td><button class=btn onclick="openModal(\\''+c.mac_hash+'\\')">🔀 Override</button>'+
+      '<a href="/admin/clients/'+c.mac_hash+'/report" class="btn outline">📄 PDF</a></td>';
+    tbody.appendChild(tr);
+  });
+  // KPI cards
+  var counts = {r0:0,r1:0,r2:0,r3:0,actif:0,risk_low:0,risk_mh:0};
+  data.clients.forEach(function(c){
+    counts[c.level] = (counts[c.level]||0)+1;
+    if (c.status_label==='actif') counts.actif++;
+    if (c.score < 30) counts.risk_low++;
+    if (c.score >= 30) counts.risk_mh++;
+  });
+  document.getElementById('cards').innerHTML =
+    '<div class=card><span class=v>'+data.count+'</span><span class=l>Total clients</span></div>'+
+    '<div class=card><span class=v>'+counts.actif+'</span><span class=l>🟢 Actifs (5min)</span></div>'+
+    '<div class=card><span class=v>'+counts.r1+'</span><span class=l>🛡 R1</span></div>'+
+    '<div class=card><span class=v>'+counts.r2+'</span><span class=l>🔍 R2</span></div>'+
+    '<div class=card><span class=v>'+counts.r3+'</span><span class=l>🌐 R3 WG</span></div>'+
+    '<div class=card><span class=v>'+counts.risk_low+'</span><span class=l>🟢 Risque LOW</span></div>';
+}
+loadClients();
+setInterval(loadClients, 15000);
+</script>
+</body></html>"""
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/admin/metrics")
 async def admin_metrics() -> dict:
     """Live metrics for the admin WebUI : per-source event counts (DPI, cookies,
