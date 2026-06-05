@@ -217,6 +217,18 @@ li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
       {% if current_level == 'r2' %}✓ {% endif %}🔍 R2
     </button>
   </form>
+  {% if wg_enabled|default(false) %}
+  {# Phase 6 (#496) : R3 WireGuard separate action (different flow — install profile first) #}
+  <p style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem;text-align:center">
+    Pour le mode R3 WireGuard (mobile + tout-décrypté) :
+    <a href="/wg/r3-install" style="color:#9e76ff;text-decoration:underline">🌐 installer le profil</a>
+  </p>
+  {% if current_level == 'r3' %}
+  <p style="font-size:0.72rem;color:#9e76ff;margin-top:0.3rem;text-align:center;font-weight:bold">
+    ✓ Tu es actuellement en mode R3 — tunnel WG actif
+  </p>
+  {% endif %}
+  {% endif %}
 </div>
 
 <div class="card">
