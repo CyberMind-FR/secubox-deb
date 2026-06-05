@@ -101,6 +101,24 @@ async def splash(request: Request):
     salt = _get_salt()
     mac_hash = macmod.hash_mac(mac, salt) if mac else None
 
+    # Phase 6.I (#496) : if request comes from a WG peer (10.99.1.x), the
+    # client is by construction R3 — bypass MAC/ARP resolution and use
+    # the WG peer hash so the splash shows R3 status, masks R0/R1/R2
+    # switch (useless when already in tunnel), and links to /report?mh=.
+    client_ip = request.client.host if request.client else None
+    is_wg_r3 = bool(client_ip and client_ip.startswith("10.99.1."))
+    if is_wg_r3:
+        try:
+            from . import wg as _wg
+            peers = _wg._load_peers().get("peers", {})
+            import hashlib as _h
+            for pk, m in peers.items():
+                if m.get("ip") == client_ip:
+                    mac_hash = _h.sha256(pk.encode()).hexdigest()[:16]
+                    break
+        except Exception:
+            pass
+
     no_cache_headers = {
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
         "Pragma": "no-cache",
@@ -112,13 +130,16 @@ async def splash(request: Request):
     # validated — they had no path back to the install buttons.
     # Phase 6 (#496) : wg_enabled = server.pubkey exists = R3 ready
     wg_enabled = Path("/etc/secubox/toolbox/wg/server.pubkey").exists()
+    current_level = "r3" if is_wg_r3 else (store.get_client_level(mac_hash) if mac_hash else None)
     html = _env.get_template("splash.html.j2").render(
         mac_hash=mac_hash or "??",
         ssid=cfg.ap.ssid,
         r2_enabled=cfg.r2.enabled,
         wg_enabled=wg_enabled,
-        already_validated=bool(mac and nft.is_validated(mac)),
-        current_level=store.get_client_level(mac_hash) if mac_hash else None,
+        already_validated=bool(mac and nft.is_validated(mac)) or is_wg_r3,
+        current_level=current_level,
+        is_wg_r3=is_wg_r3,
+        client_ip=client_ip,
     )
     return HTMLResponse(html, headers=no_cache_headers)
 
