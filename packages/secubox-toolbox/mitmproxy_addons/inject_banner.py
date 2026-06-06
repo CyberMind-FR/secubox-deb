@@ -359,7 +359,12 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     # iso-8859-1 which would mangle our raw UTF-8 emoji bytes).
     right_parts = [f"{_ncr(ctx['status_icon'])} {ctx['status']}"]
     if ctx["flag"]:
-        right_parts.append(_ncr(ctx["flag"]))
+        # Phase 6.M (#496) : flags are Unicode "regional indicator" pairs
+        # (🇫🇷 = U+1F1EB + U+1F1F7). NCR-encoded pairs do NOT join into a
+        # flag emoji — browsers render them as two boxed letters ("FR").
+        # Emit raw UTF-8 so the font's regional-indicator-join logic works.
+        # Trade-off : breaks on legacy iso-8859-1 pages (rare in 2026).
+        right_parts.append(ctx["flag"])
     if ctx["app_emoji"] and ctx["app"]:
         right_parts.append(f"{_ncr(ctx['app_emoji'])} {_ncr(ctx['app'])}")
     # Phase 6.G : cookies + trackers (privacy signals)
