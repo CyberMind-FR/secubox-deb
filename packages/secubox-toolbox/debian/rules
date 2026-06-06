@@ -28,6 +28,13 @@ override_dh_installsystemd:
 	# Install the secondary unit manually (dh_installsystemd expects 1 unit/pkg).
 	install -d debian/secubox-toolbox/lib/systemd/system
 	install -m 0644 systemd/secubox-toolbox-mitm.service debian/secubox-toolbox/lib/systemd/system/
+	# Phase 6.P (#496) : systemd drop-ins for RuntimeMaxSec=6h on mitm + mitm-wg
+	install -d debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm.service.d
+	install -m 0644 systemd/secubox-toolbox-mitm.service.d/10-runtime-max.conf \
+	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm.service.d/
+	install -d debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm-wg.service.d
+	install -m 0644 systemd/secubox-toolbox-mitm-wg.service.d/10-runtime-max.conf \
+	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm-wg.service.d/
 	# Primary unit goes via dh_installsystemd which also handles the enable helpers.
 	cp systemd/secubox-toolbox.service debian/secubox-toolbox.service
 	dh_installsystemd --no-start --no-enable

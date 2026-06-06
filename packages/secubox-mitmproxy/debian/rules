@@ -44,3 +44,9 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/tmpfiles.d
 	install -m 644 tmpfiles.d/secubox-thp.conf \
 	  $(CURDIR)/debian/secubox-mitmproxy/etc/tmpfiles.d/
+	# Phase 6.P (#496) : memory optimization (journald rotation + LXC budgets)
+	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/systemd/journald.conf.d
+	install -m 644 systemd/journald.conf.d/90-secubox-rotation.conf \
+	  $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/systemd/journald.conf.d/
+	install -m 755 bin/secubox-apply-lxc-memory-budget \
+	  $(CURDIR)/debian/secubox-mitmproxy/usr/sbin/
