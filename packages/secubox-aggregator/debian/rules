@@ -14,3 +14,6 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-aggregator/lib/systemd/system
 	install -m 644 systemd/secubox-aggregator.service \
 	  $(CURDIR)/debian/secubox-aggregator/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-aggregator/usr/sbin
+	install -m 755 sbin/secubox-aggregator-migrate \
+	  $(CURDIR)/debian/secubox-aggregator/usr/sbin/

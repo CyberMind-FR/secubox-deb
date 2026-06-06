@@ -1,11 +1,18 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
-    # Create data directories
+    # Create data directories. The openclaw FastAPI imports a module that
+    # touches /var/lib/secubox/openclaw/scans at import time, so the user
+    # that loads it MUST be able to traverse the parent dir. Under
+    # Phase 7.D (secubox-aggregator) the loader runs as `secubox`, not
+    # root — so the parent dir is 0755 and owned by `secubox:secubox`.
     mkdir -p /var/lib/secubox/openclaw/scans
     mkdir -p /var/cache/secubox/openclaw
-    chown -R root:root /var/lib/secubox/openclaw
-    chmod 750 /var/lib/secubox/openclaw
+    if getent passwd secubox >/dev/null; then
+        chown -R secubox:secubox /var/lib/secubox/openclaw /var/cache/secubox/openclaw
+    fi
+    chmod 0755 /var/lib/secubox/openclaw
+    chmod 0750 /var/lib/secubox/openclaw/scans
 
     # Enable and start service
     systemctl daemon-reload

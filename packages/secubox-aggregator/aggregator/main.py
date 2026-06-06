@@ -74,14 +74,31 @@ SECUBOX_LIB = Path("/usr/lib/secubox")
 def _load_app_from_path(name: str) -> FastAPI | None:
     """Locate the module's FastAPI by walking /usr/lib/secubox/<name>/.
 
-    SecuBox modules ship their FastAPI as `api/main.py` (and the per-module
-    systemd unit runs `uvicorn api.main:app` from cwd=/usr/lib/secubox/<name>).
-    They are not installed as Python packages, so importlib.import_module
-    can't find them — we load by absolute path via spec_from_file_location.
+    SecuBox modules ship their FastAPI as `api/main.py`. They are not
+    installed as Python packages — the per-module systemd unit runs
+    `uvicorn api.main:app` from cwd=/usr/lib/secubox/<name>, so module
+    code typically uses one of these import styles :
 
-    The aggregator adds the module's directory to sys.path TEMPORARILY so
-    relative imports inside `api/main.py` work (e.g. `from .deps import ...`).
-    The path is popped after loading to avoid cross-module shadowing.
+        from .deps import X         # relative — needs __package__ set
+        from api.deps import X      # absolute — needs cwd on sys.path
+        from api import deps        # mixed
+        import api.deps             # bare absolute
+
+    To make all four work for many modules in the SAME interpreter we :
+
+    1. Synthesise a per-module parent package `sbx_pkg_<safe>` whose
+       __path__ is `<name>/api`. Loading api/main.py as `<pkg>.main`
+       inside that synthetic package makes `from .deps` resolve to
+       `sbx_pkg_<safe>.deps`, served from the right `api/` directory.
+    2. Pop any cached `sys.modules["api"]` / `sys.modules["api.*"]` left
+       behind by previously-loaded modules and put <name> on sys.path —
+       so absolute `from api.X` resolves freshly to THIS module's `api/`.
+    3. After exec, drop the freshly-loaded `api*` entries again so the
+       next module starts with a clean slate (and remove the sys.path
+       entry to prevent cross-module bleed).
+
+    Both styles now work per-module without one module's `api/`
+    shadowing another's — the bug that hit haproxy after auth had loaded.
     """
     import importlib.util as _util
 
@@ -91,21 +108,60 @@ def _load_app_from_path(name: str) -> FastAPI | None:
     ]
     target = next((p for p in candidates if p.exists()), None)
     if target is None:
-        _LOAD_ERRORS[name] = f"main.py not found under {SECUBOX_LIB}/{{{name},{name.replace('-','_')}}}/api/"
+        _LOAD_ERRORS[name] = (
+            f"main.py not found under "
+            f"{SECUBOX_LIB}/{{{name},{name.replace('-', '_')}}}/api/"
+        )
         return None
 
-    mod_dir = str(target.parent.parent)  # /usr/lib/secubox/<name>
-    spec = _util.spec_from_file_location(f"sbx_mod_{name.replace('-', '_')}", target)
+    api_dir = target.parent           # /usr/lib/secubox/<name>/api
+    mod_dir = str(api_dir.parent)     # /usr/lib/secubox/<name>
+    safe = name.replace("-", "_")
+    pkg_name = f"sbx_pkg_{safe}"
+    main_name = f"{pkg_name}.main"
+
+    # ── (1) Synthetic parent package so `from .deps import X` works ──
+    pkg_init = api_dir / "__init__.py"
+    if pkg_init.exists():
+        pkg_spec = _util.spec_from_file_location(
+            pkg_name, pkg_init,
+            submodule_search_locations=[str(api_dir)],
+        )
+    else:
+        pkg_spec = _util.spec_from_loader(pkg_name, loader=None, is_package=True)
+        pkg_spec.submodule_search_locations = [str(api_dir)]
+    if pkg_spec is None:
+        _LOAD_ERRORS[name] = "could not build synthetic parent package spec"
+        return None
+    pkg_mod = _util.module_from_spec(pkg_spec)
+    pkg_mod.__path__ = [str(api_dir)]
+
+    # ── (2) Isolate the `api` namespace from prior module loads ──
+    for k in list(sys.modules):
+        if k == "api" or k.startswith("api."):
+            del sys.modules[k]
+    sys.path.insert(0, mod_dir)
+    sys.modules[pkg_name] = pkg_mod
+    if pkg_init.exists() and pkg_spec.loader is not None:
+        try:
+            pkg_spec.loader.exec_module(pkg_mod)
+        except Exception as e:
+            _LOAD_ERRORS[name] = f"exec_module(parent): {type(e).__name__}: {e}"
+            sys.modules.pop(pkg_name, None)
+            try:
+                sys.path.remove(mod_dir)
+            except ValueError:
+                pass
+            return None
+
+    # ── (3) Load api/main.py as `<pkg>.main` so it inherits __package__ ──
+    spec = _util.spec_from_file_location(main_name, target)
     if spec is None or spec.loader is None:
         _LOAD_ERRORS[name] = f"spec_from_file_location returned None for {target}"
         return None
-
     mod = _util.module_from_spec(spec)
-    # Inject into sys.modules under a unique name so reloading/dependent
-    # imports inside the module find it.
-    sys.modules[spec.name] = mod
-    # Add the module's parent dir to sys.path so its relative imports work.
-    sys.path.insert(0, mod_dir)
+    mod.__package__ = pkg_name
+    sys.modules[main_name] = mod
     try:
         spec.loader.exec_module(mod)
     except Exception as e:
@@ -116,6 +172,11 @@ def _load_app_from_path(name: str) -> FastAPI | None:
             sys.path.remove(mod_dir)
         except ValueError:
             pass
+        # Drop any `api*` cache this load produced so the next module gets
+        # its own fresh `api` namespace.
+        for k in list(sys.modules):
+            if k == "api" or k.startswith("api."):
+                del sys.modules[k]
 
     sub_app = getattr(mod, "app", None)
     if not isinstance(sub_app, FastAPI):

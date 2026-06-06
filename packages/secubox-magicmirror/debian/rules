@@ -5,7 +5,10 @@
 override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api
 	install -m 644 api/main.py $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api/
-	touch $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api/__init__.py
+	install -m 644 api/__init__.py $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api/
+	install -d $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api/routers
+	install -m 644 api/routers/__init__.py $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api/routers/
+	install -m 644 api/routers/mmpm.py $(CURDIR)/debian/secubox-magicmirror/usr/lib/secubox/magicmirror/api/routers/
 	install -d $(CURDIR)/debian/secubox-magicmirror/usr/share/secubox/www/magicmirror
 	install -m 644 www/magicmirror/index.html $(CURDIR)/debian/secubox-magicmirror/usr/share/secubox/www/magicmirror/
 	install -d $(CURDIR)/debian/secubox-magicmirror/etc/nginx/secubox.d
