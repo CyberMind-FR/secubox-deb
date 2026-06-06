@@ -1,0 +1,24 @@
+Source: secubox-aggregator
+Section: net
+Priority: optional
+Maintainer: CyberMind FR <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+Homepage: https://github.com/CyberMind-FR/secubox-deb
+
+Package: secubox-aggregator
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3,
+         python3-fastapi,
+         python3-uvicorn,
+         secubox-core
+Description: SecuBox API gateway — master ASGI process
+ Mounts SecuBox module FastAPIs as sub-apps under /api/v1/<module>,
+ eliminating the duplicated Python interpreter overhead of running
+ each module as its own uvicorn process.
+ .
+ Pilot mounts (per /etc/secubox/aggregator.toml) save ~30 MB RAM per
+ migrated module versus a per-module systemd unit. Full migration of
+ the ~100 SecuBox modules would free ~3 GB on a typical install.
