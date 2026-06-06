@@ -77,24 +77,85 @@ MOUNTED_COUNT=$(printf '%s' "$MOUNTED" | wc -w)
 log "aggregator mounted ${MOUNTED_COUNT} modules — proceeding with cutover"
 
 # ── Step 5 : nginx proxy_pass switch ─────────────────────────────────────
+#
+# Per-module FastAPIs used to listen on /run/secubox/<name>.sock and the
+# per-module nginx route did :
+#     proxy_pass http://unix:.../<name>.sock:/;
+# The trailing `:/` strips the matching location prefix, so the upstream
+# saw a bare `/foo` URI and matched its top-level routes.
+#
+# The aggregator mounts each sub-app under /api/v1/<name>, so it expects
+# the FULL prefix to arrive intact. Rewrite must :
+#   1. Point at /run/secubox/aggregator.sock
+#   2. Preserve the /api/v1/<name>/ prefix on the upstream URI
+#
+# Three locations need patching :
+#   /etc/nginx/secubox.d/<name>.conf         ← legacy module-side drop-ins
+#   /etc/nginx/secubox-routes.d/<name>.conf  ← newer per-module route files
+#   /etc/nginx/sites-enabled/webui.conf      ← inline per-module location blocks
+#                                              + the /api/ catch-all fallback
+# Plus one special case : hub used to listen on TCP 127.0.0.1:8001.
 SWITCHED=0
 NGINX_SKIPPED=0
+
+_rewrite_file() {
+    local f="$1" name="$2"
+    [ -f "$f" ] || return 0
+    case "$f" in *.bak*|*.dpkg*|*.disabled*) return 0 ;; esac
+    # First-run backup
+    [ -f "${f}.bak.phase7" ] || cp "$f" "${f}.bak.phase7"
+    # Every per-module unix socket → aggregator + /api/v1/<name>/ prefix
+    sed -i -E \
+      -e "s|proxy_pass http://unix:/run/secubox/${name}\.sock(:/[^;]*)?;|proxy_pass http://unix:/run/secubox/aggregator.sock:/api/v1/${name}/;|g" \
+      -e "s|proxy_pass http://unix:/run/secubox/aggregator\.sock:/;|proxy_pass http://unix:/run/secubox/aggregator.sock:/api/v1/${name}/;|g" \
+      "$f"
+}
+
 for name in $MOUNTED; do
-    cfg=/etc/nginx/secubox-routes.d/${name}.conf
-    if [ ! -f "$cfg" ]; then
+    found_any=0
+    for dir in /etc/nginx/secubox.d /etc/nginx/secubox-routes.d; do
+        cfg="${dir}/${name}.conf"
+        if [ -f "$cfg" ]; then
+            _rewrite_file "$cfg" "$name"
+            found_any=1
+        fi
+    done
+    if [ "$found_any" -eq 0 ]; then
         NGINX_SKIPPED=$((NGINX_SKIPPED + 1))
         continue
     fi
-    # First-run backup
-    [ -f "${cfg}.bak.phase7" ] || cp "$cfg" "${cfg}.bak.phase7"
-    sed -i "s|unix:/run/secubox/${name}\.sock|unix:/run/secubox/aggregator.sock|g" "$cfg"
     SWITCHED=$((SWITCHED + 1))
 done
+
+# Hub special case : it used TCP 127.0.0.1:8001 (not a unix socket). Replace
+# every such line in secubox.d/hub.conf and in webui.conf inline blocks.
+HUB_CFG=/etc/nginx/secubox.d/hub.conf
+if [ -f "$HUB_CFG" ]; then
+    [ -f "${HUB_CFG}.bak.phase7" ] || cp "$HUB_CFG" "${HUB_CFG}.bak.phase7"
+    sed -i -E "s|proxy_pass http://127\.0\.0\.1:8001/?;|proxy_pass http://unix:/run/secubox/aggregator.sock:/api/v1/hub/;|g" "$HUB_CFG"
+fi
+
+# webui.conf : inline `location /api/v1/<name>/` blocks + `/api/` catch-all
+WEBUI=/etc/nginx/sites-enabled/webui.conf
+if [ -f "$WEBUI" ]; then
+    [ -f "/root/webui.conf.bak.phase7" ] || cp "$WEBUI" /root/webui.conf.bak.phase7
+    # NOTE: backup stored under /root, not next to $WEBUI, because nginx
+    # auto-includes anything matching sites-enabled/* and would crash on
+    # duplicate-default-server.
+    for name in $MOUNTED; do
+        sed -i -E \
+          -e "s|proxy_pass http://unix:/run/secubox/${name}\.sock(:/[^;]*)?;|proxy_pass http://unix:/run/secubox/aggregator.sock:/api/v1/${name}/;|g" \
+          "$WEBUI"
+    done
+    # Catch-all : keep the full URI by removing any rewrite on /api/
+    sed -i -E "/location \/api\/ \{/,/\}/ s|proxy_pass http://127\.0\.0\.1:8001;|proxy_pass http://unix:/run/secubox/aggregator.sock;|" "$WEBUI"
+fi
+
 log "nginx routes switched : ${SWITCHED} (skipped ${NGINX_SKIPPED} with no route file)"
 
 # Validate + reload nginx
 if ! nginx -t 2>/dev/null; then
-    err "nginx config check failed — review /etc/nginx/secubox-routes.d/"
+    err "nginx config check failed — review /etc/nginx/{secubox.d,secubox-routes.d,sites-enabled/webui.conf}"
 fi
 systemctl reload nginx
 log "nginx reloaded"
@@ -134,8 +195,12 @@ Failed mount reasons (relative imports etc.) :
 
 Rollback per module if needed :
 
+    # restore whichever of these exist
+    cp /etc/nginx/secubox.d/<name>.conf.bak.phase7 \\
+       /etc/nginx/secubox.d/<name>.conf 2>/dev/null
     cp /etc/nginx/secubox-routes.d/<name>.conf.bak.phase7 \\
-       /etc/nginx/secubox-routes.d/<name>.conf
+       /etc/nginx/secubox-routes.d/<name>.conf 2>/dev/null
+    cp /root/webui.conf.bak.phase7 /etc/nginx/sites-enabled/webui.conf
     systemctl enable --now secubox-<name>.service
     systemctl reload nginx
 ────────────────────────────────────────────────────────────────────
