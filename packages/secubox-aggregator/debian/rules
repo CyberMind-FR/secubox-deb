@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@ --with python3
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-aggregator/usr/lib/python3/dist-packages/aggregator
+	install -m 644 aggregator/__init__.py \
+	  $(CURDIR)/debian/secubox-aggregator/usr/lib/python3/dist-packages/aggregator/
+	install -m 644 aggregator/main.py \
+	  $(CURDIR)/debian/secubox-aggregator/usr/lib/python3/dist-packages/aggregator/
+	install -d $(CURDIR)/debian/secubox-aggregator/etc/secubox
+	install -m 644 debian/aggregator.toml.example \
+	  $(CURDIR)/debian/secubox-aggregator/etc/secubox/aggregator.toml.example
+	install -d $(CURDIR)/debian/secubox-aggregator/lib/systemd/system
+	install -m 644 systemd/secubox-aggregator.service \
+	  $(CURDIR)/debian/secubox-aggregator/lib/systemd/system/

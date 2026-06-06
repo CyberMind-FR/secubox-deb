@@ -1,0 +1,19 @@
+# SecuBox Aggregator config (Phase 7 / #496)
+# Lists modules whose FastAPI gets mounted under /api/v1/<name>
+# in the master uvicorn process.
+#
+# After adding a module here, restart secubox-aggregator and disable
+# the per-module systemd unit:
+#
+#   systemctl restart secubox-aggregator
+#   systemctl disable --now secubox-<module>
+#
+# nginx routes /api/v1/<module>/ should be repointed to
+# unix:/run/secubox/aggregator.sock (handled by debian/postinst).
+
+# Pilot batch — small, light, no startup deps on other modules
+modules = [
+    "ai-insights",
+    "cookies",
+    "avatar",
+]
