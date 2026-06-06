@@ -1102,9 +1102,15 @@ def _aggregate_session(mac_hash: str) -> dict:
     import subprocess as _sp
 
     # ── 1. Global metrics from journalctl ──
+    # Phase 6.L (#496) : merge BOTH mitm units (captive R2 + WG R3) so the
+    # report shows connections/successful/tls_pinned for R3 clients too.
+    # Without -u for both, R3 clients always saw 0 connections in metrics.
     try:
         out = _sp.run(
-            ["journalctl", "-u", "secubox-toolbox-mitm", "--since", "-30min", "--no-pager"],
+            ["journalctl",
+             "-u", "secubox-toolbox-mitm",
+             "-u", "secubox-toolbox-mitm-wg",
+             "--since", "-30min", "--no-pager"],
             capture_output=True, text=True, timeout=5, check=False,
         ).stdout
     except Exception:
@@ -1124,6 +1130,7 @@ def _aggregate_session(mac_hash: str) -> dict:
     dpi_methods: dict[str, int] = {}
     user_agents: set[str] = set()
     cookies_urls: list[dict] = []
+    cookies_hosts: dict[str, int] = {}
     cookies_total_set = 0
     cookies_total_sent = 0
     soc_indicators: list[dict] = []
@@ -1165,6 +1172,14 @@ def _aggregate_session(mac_hash: str) -> dict:
                 elif source == "cookies":
                     cookies_total_set += p.get("set_cookie_count", 0)
                     cookies_total_sent += p.get("cookie_count", 0)
+                    # Phase 6.L : extract host from URL for classifier merge
+                    # (independent of the cookies_urls 15-cap which is just for
+                    # the report's bypass detail table)
+                    _url = p.get("url", "")
+                    if "://" in _url:
+                        _h = _url.split("://", 1)[1].split("/", 1)[0]
+                        if _h:
+                            cookies_hosts[_h] = cookies_hosts.get(_h, 0) + 1
                     if len(cookies_urls) < 15:
                         cookies_urls.append({
                             "url": p.get("url", "?")[:120],
@@ -1192,12 +1207,31 @@ def _aggregate_session(mac_hash: str) -> dict:
     except Exception:
         pass
 
+    # Phase 6.L (#496) : drop IP-only entries before classification
+    def _looks_like_ip(s: str) -> bool:
+        if not s:
+            return False
+        # IPv4 : 4 numeric segments
+        parts = s.split(":")[0].split(".")
+        return len(parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in parts)
+
     # Phase 2a+ : combine DPI hosts (HTTP host or IP) with JA4 SNIs to get
     # real hostnames for classification. iOS captive probes + cert-pinned apps
     # only expose SNIs ; we lose ~80% of classification data without this merge.
-    classifiable_hosts: dict[str, int] = dict(dpi_hosts)
+    # Phase 6.L (#496) : also merge cookies URL hosts. R3 Chrome on Android
+    # records mostly raw IPs in dpi events (Chrome IP-direct + ECH hides SNI),
+    # so cookies URLs are the only reliable source of hostnames.
+    classifiable_hosts: dict[str, int] = {}
+    for h, n in dpi_hosts.items():
+        # Skip IP-only entries (no dot or all-numeric segments)
+        if h and not _looks_like_ip(h):
+            classifiable_hosts[h] = classifiable_hosts.get(h, 0) + n
     for sni in ja4_snis:
         classifiable_hosts[sni] = classifiable_hosts.get(sni, 0) + 1
+    # Cookies hosts : full coverage (not capped at 15 like cookies_urls)
+    for host, n in cookies_hosts.items():
+        if not _looks_like_ip(host):
+            classifiable_hosts[host] = classifiable_hosts.get(host, 0) + n
 
     # ── 3. Phase 2a SOC scoring : threat-intel + DGA + beaconing ──
     # Threat-intel : match IPs in feeds (resolve hosts isn't done here — match domains

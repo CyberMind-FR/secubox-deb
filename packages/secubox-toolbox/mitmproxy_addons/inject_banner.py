@@ -57,13 +57,33 @@ def _ncr(s: str) -> str:
     return "".join(out)
 
 # Phase 3 classifiers (soft import : ToolBoX runs even if not deployed)
+# Phase 6.L (#496) : host_app classifier actually lives in
+# secubox_toolbox.dpi_class (the secubox_core.classifiers.host_app module
+# was an aspirational reference that never shipped). Fallback chain tries
+# the aspirational location first for forward compat, then dpi_class.
+_HAS_CLASSIFIERS = False
+_host_app = None
+_sec_quality = None
+_whitelist_mod = None
 try:
-    from secubox_core.classifiers import host_app as _host_app
-    from secubox_core.classifiers import security_quality as _sec_quality
-    from secubox_core import whitelist as _whitelist_mod
-    _HAS_CLASSIFIERS = True
-except ImportError:
-    _HAS_CLASSIFIERS = False
+    import sys as _sys
+    if "/usr/lib/secubox/toolbox" not in _sys.path:
+        _sys.path.insert(0, "/usr/lib/secubox/toolbox")
+    try:
+        from secubox_core.classifiers import host_app as _host_app
+    except ImportError:
+        from secubox_toolbox import dpi_class as _host_app  # 100+ patterns
+    try:
+        from secubox_core.classifiers import security_quality as _sec_quality
+    except ImportError:
+        pass
+    try:
+        from secubox_core import whitelist as _whitelist_mod
+    except ImportError:
+        pass
+    _HAS_CLASSIFIERS = _host_app is not None
+except Exception:
+    pass
 
 # Geo lookup (toolbox-local, falls back gracefully)
 try:
