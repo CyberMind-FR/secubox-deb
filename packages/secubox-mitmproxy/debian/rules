@@ -37,3 +37,10 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/nginx
 	install -m 644 nginx/honeypot.conf \
 	  $(CURDIR)/debian/secubox-mitmproxy/usr/share/secubox/mitmproxy/nginx/
+	# Phase 6.O (#496) : perf tuning
+	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/sysctl.d
+	install -m 644 sysctl/95-secubox-perf.conf \
+	  $(CURDIR)/debian/secubox-mitmproxy/etc/sysctl.d/
+	install -d $(CURDIR)/debian/secubox-mitmproxy/etc/tmpfiles.d
+	install -m 644 tmpfiles.d/secubox-thp.conf \
+	  $(CURDIR)/debian/secubox-mitmproxy/etc/tmpfiles.d/
