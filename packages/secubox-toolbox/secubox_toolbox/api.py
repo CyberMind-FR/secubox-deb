@@ -680,6 +680,22 @@ _MITM_BYPASS_DEFAULT_ENTRIES = [
     "(.+\\.)?facebook\\.net",
     "(.+\\.)?fbcdn\\.net",
     "(.+\\.)?instagram\\.com",
+    "",
+    "# Phase 6.M (#496) : pinned device telemetry + ad networks (Chrome",
+    "# retry storms — silently 100+ failures/min before whitelist added)",
+    "(.+\\.)?miui\\.com",                # Xiaomi devices telemetry",
+    "(.+\\.)?xiaomi\\.com",
+    "(.+\\.)?socdm\\.com",               # TreasureData",
+    "(.+\\.)?adform\\.net",              # AdForm",
+    "(.+\\.)?rubiconproject\\.com",      # Magnite/Rubicon",
+    "(.+\\.)?smartadserver\\.com",
+    "(.+\\.)?indexww\\.com",             # Index Exchange",
+    "(.+\\.)?spot\\.im",                 # OpenWeb comments",
+    "(.+\\.)?fwmrm\\.net",               # FreeWheel",
+    "(.+\\.)?amazon-adsystem\\.com",
+    "(.+\\.)?wct-[0-9]+\\.com",          # Wat-Consumer-Tracking",
+    "(.+\\.)?trustpilot\\.com",
+    "iphone-ld\\.apple\\.com",           # Apple Location Services",
 ]
 
 
