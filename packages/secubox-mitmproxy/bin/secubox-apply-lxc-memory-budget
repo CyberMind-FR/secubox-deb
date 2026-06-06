@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-apply-lxc-memory-budget
+# Phase 6.P (#496) — bound per-LXC memory.max so a misbehaving app doesn't
+# eat all host RAM. Also disables LXC-side swap to prevent grinding under
+# pressure (OOM-kill is preferred over slow-death thrashing).
+#
+# Idempotent : safe to re-run. Applies LIVE to running containers AND
+# writes config so future starts honour the budget. Skips LXCs that
+# don't exist on this host.
+
+set -euo pipefail
+readonly MODULE="secubox-apply-lxc-memory-budget"
+readonly VERSION="0.1.0"
+
+log() { printf '[%s] %s\n' "$MODULE" "$*" >&2; }
+err() { printf '[%s] ERROR: %s\n' "$MODULE" "$*" >&2; exit 1; }
+
+[ -d /var/lib/lxc ] || { log "no /var/lib/lxc — LXC not installed, skip"; exit 0; }
+
+# Per-LXC budgets in MiB. Total budget : 5.5 GB of an 8 GB host, leaving
+# 2.5 GB for kernel + host services. Adjust the user's set as needed.
+declare -A BUDGET=(
+    [authelia]=128
+    [gitea]=256
+    [grafana]=256
+    [horde]=256
+    [lyrion]=384
+    [mail]=384
+    [matrix]=384
+    [mitmproxy]=512
+    [mqtt]=128
+    [nextcloud]=512
+    [peertube]=1024
+    [photoprism]=512
+    [roundcube]=256
+    [rustdesk]=128
+    [yacy]=256
+    [zigbee]=128
+)
+
+applied=0
+for name in "${!BUDGET[@]}"; do
+    cfg=/var/lib/lxc/${name}/config
+    [ -f "$cfg" ] || continue
+
+    mem_mb=${BUDGET[$name]}
+    mem_bytes=$((mem_mb * 1024 * 1024))
+
+    # Persist in config (idempotent : strip old + append new)
+    sed -i '/^lxc.cgroup2.memory.max/d;/^lxc.cgroup2.memory.swap.max/d' "$cfg"
+    {
+        echo "# Phase 6.P (#496) : memory budget"
+        echo "lxc.cgroup2.memory.max = ${mem_mb}M"
+        echo "lxc.cgroup2.memory.swap.max = 0"
+    } >> "$cfg"
+
+    # Apply LIVE to running containers
+    cg=/sys/fs/cgroup/lxc.payload.${name}/memory.max
+    if [ -f "$cg" ]; then
+        echo "${mem_bytes}" > "$cg" 2>/dev/null && \
+            log "${name} : ${mem_mb}M (live + persisted)" || \
+            log "${name} : ${mem_mb}M (config only — kernel write failed)"
+    else
+        log "${name} : ${mem_mb}M (config only — container stopped)"
+    fi
+    applied=$((applied + 1))
+done
+
+log "applied to ${applied} container(s)"
+
+# Optionally : list LXCs we don't have a budget for (unknown ones operator
+# added). These keep using the kernel default (= unbounded).
+unknown=""
+for cfg in /var/lib/lxc/*/config; do
+    [ -f "$cfg" ] || continue
+    name=$(basename "$(dirname "$cfg")")
+    if [ -z "${BUDGET[$name]:-}" ]; then
+        unknown="${unknown} ${name}"
+    fi
+done
+if [ -n "$unknown" ]; then
+    log "unknown LXCs (no budget set, kernel default applies) :${unknown}"
+fi

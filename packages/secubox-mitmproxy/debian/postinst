@@ -90,6 +90,22 @@ EOF
         fi
     fi
 
+    # Phase 6.P (#496) : journal disk rotation — bound to 200 MB / 2 weeks.
+    # Drops journald from typical 1-2 GB retention down to ~200 MB.
+    if [ -d /etc/systemd/journald.conf.d ] || mkdir -p /etc/systemd/journald.conf.d; then
+        install -m 644 /usr/share/secubox/mitmproxy/systemd/journald.conf.d/90-secubox-rotation.conf \
+            /etc/systemd/journald.conf.d/ 2>/dev/null || true
+        # Vacuum to enforce the new ceiling immediately
+        journalctl --vacuum-size=200M >/dev/null 2>&1 || true
+        systemctl restart systemd-journald >/dev/null 2>&1 || true
+    fi
+
+    # Phase 6.P (#496) : per-LXC memory budgets (caps + swap=0).
+    # Prevents one runaway LXC from eating all 8 GB host RAM. Idempotent.
+    if [ -x /usr/sbin/secubox-apply-lxc-memory-budget ]; then
+        /usr/sbin/secubox-apply-lxc-memory-budget 2>&1 | head -20
+    fi
+
     # Enable and start service
     systemctl daemon-reload
     systemctl enable secubox-mitmproxy.service
