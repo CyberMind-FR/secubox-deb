@@ -1,5 +1,65 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-05*
+*Mis à jour : 2026-06-06*
+
+---
+
+## 🔄 2026-06-06 : Phase 7.D ASGI consolidation SHIPPED (ref #498)
+
+Master uvicorn process mounts every per-module FastAPI as a sub-app —
+replaces 100+ per-module uvicorn services. Branch
+`feature/498-asgi-migrate` (commits `5ef13b56`, `7b8cc301`, `b1ee9427`,
+`705476cf`). No PR yet (per memory rule — push freely, open PRs only on
+ask).
+
+### ✅ Done
+
+* New package `secubox-aggregator` (1.0.0-1) :
+  - `aggregator/main.py` : FastAPI gateway, reads
+    `/etc/secubox/aggregator.toml`, mounts each module's FastAPI at
+    `/api/v1/<name>` via `app.mount()`. Loader uses synthetic parent
+    package `sbx_pkg_<name>` so `from .deps import X` works AND
+    `sys.modules["api.X"]` cache is dropped before/after each load
+    (otherwise auth shadows haproxy etc.).
+  - `systemd/secubox-aggregator.service` : single uvicorn listening on
+    `/run/secubox/aggregator.sock` — `--workers 1 --backlog 400
+    --limit-concurrency 200 --log-level warning`, `PYTHONOPTIMIZE=1`,
+    `MemoryMax=1G`, `MemoryHigh=768M`.
+* `sbin/secubox-aggregator-migrate` : reusable cutover helper.
+  Discovers all `/usr/lib/secubox/<name>/api/main.py`, writes
+  `/etc/secubox/aggregator.toml`, restarts aggregator, reads
+  `/health` to learn what mounted, then rewrites nginx
+  `proxy_pass` lines in **both** `/etc/nginx/secubox.d/` and
+  `/etc/nginx/secubox-routes.d/` plus the inline blocks +
+  `/api/` catch-all in `sites-enabled/webui.conf`, preserving
+  `/api/v1/<name>/` prefix on every rewrite. Stops + disables
+  migrated per-module services, prints rollback recipe.
+* Live on gk2 after reboot :
+  - **119 of 121 modules mounted** in a single aggregator process
+    (1 mounted from 110 after the loader fix added 9 modules)
+  - Per-module uvicorn count : 103 → 41 procs (still 41 because
+    some modules are not yet in the toml or run side-services)
+  - RAM uvicorn footprint : 3499 → 1984 MB (**-43 %**)
+  - Free RAM : 153 MB → 2.7 GiB (**+18×**)
+  - Aggregator RSS ≈ 170 MB serving 119 modules
+* 2 remaining import failures are real module bugs, not loader bugs :
+  - `magicmirror` ships `api/__init__.py + api/main.py` only ; its
+    `from .routers import mmpm` import has no `routers/` package
+    in the .deb. Was already broken under its own systemd unit.
+  - `openclaw` mkdir's `/var/lib/secubox/openclaw/scans` at import
+    time — that directory is 0750 `root:root`, aggregator runs as
+    `secubox`. Fix is in openclaw postinst, not here.
+
+### ⬜ Next up
+
+* Fix magicmirror : ship `api/routers/mmpm.py` in the .deb (it's
+  currently missing from `debian/install`).
+* Fix openclaw : `chown -R secubox:secubox /var/lib/secubox/openclaw`
+  in postinst (or chmod 0755 the parent dir).
+* Chase 4 nginx 503/404 stragglers (`heartbeat 503`, `secubox-haproxy`
+  / `secubox-hub` / `sentinelle-gsm` 404) — these route fine but the
+  module's own `/health` route is missing or hangs.
+* Wiki page : add Phase 7.D section to `Phase-7-Roadmap.md` (done
+  in same sprint — see commit in `secubox-deb.wiki`).
 
 ---
 

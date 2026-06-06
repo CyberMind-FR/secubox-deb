@@ -3,6 +3,107 @@
 
 ---
 
+## 2026-06-06 — Phase 7.D ASGI consolidation SHIPPED (ref #498)
+
+Memory pressure on gk2 was driven by ~100 per-module uvicorn processes
+each carrying its own Python interpreter + FastAPI + Pydantic + Starlette
+in a separate address space (~30 MB duplicated × N modules). Phase 7.D
+collapses that into one master uvicorn that mounts every module's
+FastAPI as a sub-app.
+
+### What ships
+
+**New package — `secubox-aggregator` 1.0.0-1**
+
+- `aggregator/main.py` reads `/etc/secubox/aggregator.toml`, walks
+  `/usr/lib/secubox/<name>/api/main.py` for each entry and mounts the
+  resulting FastAPI under `/api/v1/<name>` via `app.mount()`. Failures
+  are isolated (try/except per module) and surfaced at `/health`.
+- The loader synthesises a per-module parent package `sbx_pkg_<name>`
+  whose `__path__` points at `<name>/api`, then loads `api/main.py`
+  as `<pkg>.main` with `__package__` set. This makes `from .deps
+  import X` resolve to the right `deps.py` even though the module is
+  not pip-installed. `sys.modules["api"]` / `api.*` is cleared before
+  and after every load so one module's `api/` cannot shadow another's
+  (the bug that hit `haproxy` after `auth` loaded — both have
+  `api/webui_identity.py`).
+- `systemd/secubox-aggregator.service` : single uvicorn on
+  `/run/secubox/aggregator.sock`, `--workers 1 --backlog 400
+  --limit-concurrency 200`, `PYTHONOPTIMIZE=1`, `MemoryMax=1G`,
+  `MemoryHigh=768M`.
+
+**Cutover helper — `secubox-aggregator-migrate`**
+
+- Discovers every `/usr/lib/secubox/<name>/api/main.py`, generates
+  `/etc/secubox/aggregator.toml`, restarts the aggregator, reads
+  `/health` to learn which modules actually mounted.
+- Rewrites every nginx `proxy_pass` that pointed at a per-module
+  unix socket (or hub's old TCP `127.0.0.1:8001`) to target
+  `aggregator.sock` AND preserve the `/api/v1/<name>/` prefix
+  upstream. Three places get patched : `/etc/nginx/secubox.d/`,
+  `/etc/nginx/secubox-routes.d/`, and inline blocks +
+  `location /api/` catch-all in `sites-enabled/webui.conf`.
+- Stops + disables per-module systemd units for migrated modules,
+  prints rollback recipe. Idempotent.
+
+### Numbers (live on gk2 after reboot)
+
+| | Before Phase 7.D | After Phase 7.D |
+|---|---:|---:|
+| uvicorn procs | 103 | 41 |
+| RAM uvicorn (RSS sum) | 3499 MB | 1984 MB |
+| Free RAM | 153 MB | 2.7 GiB (+18×) |
+| Modules mounted | (each on own port) | 119/121 in one proc |
+| Aggregator RSS | — | ≈170 MB |
+| Sample endpoint p50 | unchanged | unchanged |
+
+### Bug fixes during the same sprint
+
+- **Loader v1** flat-loaded `api/main.py` as `sbx_mod_<name>`, leaving
+  `__package__ = None`. Nine modules (`crowdsec`, `eye-remote`,
+  `haproxy`, `health-doctor`, `mail`, `modem`, `users`,
+  `secubox-crowdsec`, `secubox-modem`) failed with "attempted
+  relative import with no known parent package" or with a stale
+  `sys.modules["api"]` from a previously-loaded module. **Loader v2**
+  builds a synthetic parent package and clears the `api*` namespace
+  per load — all 9 now mount.
+- **Migration helper v1** only walked `/etc/nginx/secubox-routes.d/`
+  and used a naive socket-name sed that kept the `:/` strip-prefix
+  rewrite. Result on first run : `/api/v1/hub/public/menu` returned
+  502, navbar empty. **Migration helper v2** walks all 3 nginx config
+  locations and rewrites every variant to preserve the
+  `/api/v1/<name>/` prefix the aggregator expects.
+
+### Remaining edge cases (carried as follow-ups)
+
+- `magicmirror` : `api/__init__.py + api/main.py` ships in the deb
+  but `from .routers import mmpm` references a missing `routers/`
+  directory. Pre-existing bug — was broken under per-module systemd
+  too.
+- `openclaw` : `/var/lib/secubox/openclaw/` is 0750 `root:root`, the
+  aggregator user `secubox` can't traverse it during the module's
+  import-time `mkdir`. Fix is a postinst chown in the openclaw deb.
+- 4 nginx 503/404 (`heartbeat`, `secubox-haproxy`, `secubox-hub`,
+  `sentinelle-gsm`) — mount fine but each module's own `/health`
+  route is missing or hangs ; investigate per module.
+
+### Files changed
+
+- Source : `packages/secubox-aggregator/` (new package, ~430 lines
+  total — main.py, migration script, systemd unit, debian/*)
+- Live : `/etc/nginx/secubox.d/*.conf`, `secubox-routes.d/*.conf`,
+  `sites-enabled/webui.conf` (110+ files, mass-rewritten + backed
+  up under `.bak.phase7` / `/root/webui.conf.bak.phase7`)
+
+### Ref
+
+- Branch `feature/498-asgi-migrate`
+- Commits `5ef13b56` (skeleton) → `7b8cc301` (migration helper) →
+  `b1ee9427` (nginx rewrite fix) → `705476cf` (loader v2)
+- Public tracker : `#498`
+
+---
+
 ## 2026-06-05 — Phase 7.A.2 + 7.B WAF dashboard + rate-limit + honeypot SHIPPED (ref #498)
 
 Same-day extension after Phase 7.A. Adds operator-facing dashboard, pre-mitm
