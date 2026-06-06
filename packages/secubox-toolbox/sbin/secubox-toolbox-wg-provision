@@ -68,6 +68,14 @@ nft -- add chain inet wg-toolbox forward "{ type filter hook forward priority fi
 nft add rule inet wg-toolbox forward iif wg-toolbox oif lan0 accept 2>/dev/null || true
 nft add rule inet wg-toolbox forward iif lan0 oif wg-toolbox ct state established,related accept 2>/dev/null || true
 
+# Phase 6.K (#496) : drop UDP 443 (QUIC/HTTP3) from WG clients.
+# Chrome and Firefox aggressively prefer HTTP/3 over QUIC, which bypasses
+# our TCP-only transparent mitm entirely. By dropping UDP 443, browsers
+# transparently fall back to HTTP/2 over TCP → DNAT'd to mitm → analyzed.
+# Cost : ~50ms initial fallback handshake. Trade well worth it for visibility.
+log "dropping UDP 443 (QUIC) on wg-toolbox to force HTTP/2 fallback"
+nft add rule inet wg-toolbox forward iif wg-toolbox udp dport 443 counter drop 2>/dev/null || true
+
 # CRITICAL : allow WG handshake UDP packets to reach the kernel module.
 # Without this, the default inet filter input chain (policy=drop) silently
 # drops WG packets BEFORE they reach the wireguard kernel module → handshake

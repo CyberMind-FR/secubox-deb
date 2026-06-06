@@ -665,6 +665,21 @@ _MITM_BYPASS_DEFAULT_ENTRIES = [
     "(.+\\.)?banquepopulaire\\.fr",
     "(.+\\.)?caisse-epargne\\.fr",
     "(.+\\.)?societegenerale\\.fr",
+    "",
+    "# Google Play Services & GMS APIs — cert pinning via Network Security Config",
+    "# Android apps using google-services pin the Google CA; user-installed CAs",
+    "# are rejected → handshake fail. Whitelist = passthrough (opaque to mitm).",
+    "(.+\\.)?googleapis\\.com",
+    "(.+\\.)?google-analytics\\.com",
+    "(.+\\.)?gstatic\\.com",
+    "(.+\\.)?googleusercontent\\.com",
+    "android\\.clients\\.google\\.com",
+    "",
+    "# Meta/Facebook stack — pinned by FB/Instagram/WhatsApp/Messenger",
+    "(.+\\.)?facebook\\.com",
+    "(.+\\.)?facebook\\.net",
+    "(.+\\.)?fbcdn\\.net",
+    "(.+\\.)?instagram\\.com",
 ]
 
 
