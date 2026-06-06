@@ -92,6 +92,11 @@ case "$1" in
 
     # 5. systemd : enable mais ne PAS start automatiquement (l'AP doit être configuré d'abord)
     if [ -d /run/systemd/system ]; then
+# Phase 6.Q (#496) : SQLite tuning + indexes
+if [ -x /usr/sbin/secubox-toolbox-db-tune ]; then
+    /usr/sbin/secubox-toolbox-db-tune 2>&1 | head -3 || true
+fi
+
       systemctl daemon-reload || true
       systemctl enable secubox-toolbox.service || true
       # secubox-toolbox-mitm.service stays enabled only if LXC isn't running.

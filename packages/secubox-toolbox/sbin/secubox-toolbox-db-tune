@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Phase 6.Q (#496) — apply SQLite tuning + ensure indexes + VACUUM.
+# Idempotent ; safe at any time. Called from debian/postinst.
+
+set -euo pipefail
+DB="${DB:-/var/lib/secubox/toolbox/toolbox.db}"
+[ -f "$DB" ] || exit 0
+
+sqlite3 "$DB" <<'SQL'
+PRAGMA journal_mode=WAL;
+PRAGMA synchronous=NORMAL;
+PRAGMA cache_size=-8000;
+PRAGMA mmap_size=268435456;
+PRAGMA temp_store=MEMORY;
+PRAGMA optimize;
+
+CREATE INDEX IF NOT EXISTS idx_events_mac_ts    ON events(mac_hash, ts);
+CREATE INDEX IF NOT EXISTS idx_events_source_ts ON events(source, ts);
+CREATE INDEX IF NOT EXISTS idx_clients_last_seen ON clients(last_seen);
+
+VACUUM;
+SQL
+
+echo "[secubox-toolbox-db-tune] applied to $DB"
