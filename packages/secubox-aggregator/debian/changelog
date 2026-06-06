@@ -1,0 +1,9 @@
+secubox-aggregator (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial package — Phase 7 (#496) ASGI consolidation
+  * Master uvicorn that mounts SecuBox module FastAPIs as sub-apps
+  * Pilot config (aggregator.toml) starts with 3 lightweight modules:
+    ai-insights, cookies, avatar
+  * /health endpoint reports per-module mount status + load errors
+
+ -- CyberMind FR <devel@cybermind.fr>  Sat, 06 Jun 2026 14:00:00 +0200

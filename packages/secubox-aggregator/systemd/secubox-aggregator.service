@@ -1,0 +1,46 @@
+[Unit]
+Description=SecuBox API gateway (master ASGI uvicorn) [Phase 7 #496]
+After=network.target
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/498
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+
+# Ensure runtime socket directory exists with correct ownership.
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=1777
+RuntimeDirectoryPreserve=yes
+
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="PYTHONOPTIMIZE=1"
+Environment="PYTHONUNBUFFERED=1"
+
+# Single worker handles all mounted modules via asyncio. Bounded backlog +
+# concurrency keep memory predictable. Log level intentionally low to avoid
+# duplicating each sub-app's own logging.
+ExecStart=/usr/bin/python3 -m uvicorn aggregator.main:app \
+    --uds /run/secubox/aggregator.sock \
+    --workers 1 \
+    --backlog 400 \
+    --limit-concurrency 200 \
+    --log-level warning
+
+# Service is in critical path — restart fast on crash.
+Restart=on-failure
+RestartSec=2
+
+# Reasonable bounds on a multi-module process.
+MemoryMax=1G
+MemoryHigh=768M
+
+# Hardening basics — no privilege escalation, read-only system, private tmp.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/secubox /var/lib/secubox /var/log/secubox
+
+[Install]
+WantedBy=multi-user.target
