@@ -15,16 +15,30 @@ set -euo pipefail
 
 MITM_BIN=/opt/mitmproxy-toolbox/bin/mitmdump
 BYPASS_FILE=/var/lib/secubox/toolbox/mitm-bypass.conf
+DYNAMIC_FILE=/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf  # noqa: SC2034 (used by addon hint)
 ADDON_DIR=/usr/lib/secubox/toolbox/mitmproxy_addons
 
-# ── Compose ignore_hosts regex from bypass file ──
+# ── Compose ignore_hosts regex : merge static + dynamic bypass lists ──
+# Phase 6.N (#496) : the dynamic file is auto-populated by the cert_pin_detect
+# addon when it observes repeated TLS handshake failures (cert pinning).
+# We merge both lists here so a single regex covers known + learned pinned
+# domains. Dedup happens at line level (sort -u).
 IGNORE_REGEX=""
-if [ -r "$BYPASS_FILE" ]; then
-    # Strip comments + blank lines, join with |
-    PATTERNS=$(grep -v '^[[:space:]]*#' "$BYPASS_FILE" | grep -v '^[[:space:]]*$' | tr '\n' '|' | sed 's/|$//')
-    if [ -n "$PATTERNS" ]; then
-        IGNORE_REGEX="($PATTERNS)"
+PATTERNS=""
+COUNT=0
+for src in "$BYPASS_FILE" "$DYNAMIC_FILE"; do
+    if [ -r "$src" ]; then
+        ADD=$(grep -v '^[[:space:]]*#' "$src" | sed 's/[[:space:]]*#.*$//' | grep -v '^[[:space:]]*$' || true)
+        if [ -n "$ADD" ]; then
+            PATTERNS="${PATTERNS}${PATTERNS:+\n}${ADD}"
+        fi
     fi
+done
+if [ -n "$PATTERNS" ]; then
+    # Dedup + join with |
+    JOINED=$(printf '%b' "$PATTERNS" | sort -u | tr '\n' '|' | sed 's/|$//')
+    COUNT=$(printf '%b' "$PATTERNS" | sort -u | grep -cv '^[[:space:]]*$' || echo 0)
+    IGNORE_REGEX="($JOINED)"
 fi
 
 # ── Build mitm args ──
@@ -39,11 +53,11 @@ ARGS=(
 
 if [ -n "$IGNORE_REGEX" ]; then
     ARGS+=(--set "ignore_hosts=$IGNORE_REGEX")
-    echo "[mitm-wg-launch] ignore_hosts regex applied (${#PATTERNS} chars, $(grep -cv '^[[:space:]]*\(#\|$\)' "$BYPASS_FILE" 2>/dev/null || echo 0) patterns)"
+    echo "[mitm-wg-launch] ignore_hosts regex applied (${#IGNORE_REGEX} chars, ${COUNT} patterns, static+dynamic)"
 fi
 
-# Addons
-for addon in local_store inject_banner dpi cookies avatar ja4 soc_relay; do
+# Addons : cert_pin_detect auto-learns pinned hosts (Phase 6.N)
+for addon in local_store inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
     ARGS+=(-s "$ADDON_DIR/${addon}.py")
 done
 
