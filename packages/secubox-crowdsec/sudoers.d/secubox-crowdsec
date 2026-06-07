@@ -1,1 +1,11 @@
-secubox ALL=(root) NOPASSWD: /usr/bin/cscli
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Phase 7 follow-up (#498) — the crowdsec module health check runs
+# under the aggregator user (`secubox`) and needs read-only access to :
+#   • cscli bouncers list (bouncer count for the health gauge)
+#   • nft list tables    (presence of the crowdsec ip/ip6 tables)
+# Both commands are exact-match — no wildcards, no shell, no flag
+# escapes — so the residual capability is bounded to listing those
+# two states.
+
+secubox ALL=(root) NOPASSWD: /usr/bin/cscli bouncers list -o json
+secubox ALL=(root) NOPASSWD: /usr/sbin/nft list tables
