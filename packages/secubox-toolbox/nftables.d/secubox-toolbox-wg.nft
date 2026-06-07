@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Phase 6.F + Phase 7 follow-up (#498) — persistent nft drop-in.
+#
+# Why this file exists : secubox-toolbox-wg-provision runs at package
+# install/upgrade only, so the inet wg-toolbox table + the UDP 51820 input
+# accept rule disappear on every reboot. After the Phase 7 reboot the
+# iPhone reported "connected" but no handshake completed because the
+# default policy=drop on inet filter input silently swallowed WG packets.
+#
+# Loaded by /etc/nftables.conf via `include "/etc/nftables.d/*.nft"` so
+# nftables.service replays it at every boot.
+
+# ── (1) Allow incoming WG handshake on UDP 51820 ──
+# inet filter input has policy=drop ; this rule MUST exist or no peer ever
+# completes a handshake.
+add rule inet filter input udp dport 51820 accept comment "secubox-toolbox wg-toolbox"
+
+# ── (2) inet wg-toolbox table : NAT + forward + interception DNAT ──
+table inet wg-toolbox {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        # Source-NAT tunnel egress to lan0 so peers can reach the internet
+        ip saddr 10.99.1.0/24 oif "lan0" masquerade
+    }
+
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        # Phase 6.C — interception : redirect peer TCP 443/80 to mitm-wg.
+        # mitmproxy in transparent mode listens at 10.99.1.1:8081. The
+        # ignore_hosts whitelist (static + dynamic, cert_pin_detect addon)
+        # bypasses pinned hosts transparently so banner injection works
+        # everywhere else.
+        iif "wg-toolbox" tcp dport 443 dnat ip to 10.99.1.1:8081
+        iif "wg-toolbox" tcp dport 80  dnat ip to 10.99.1.1:8081
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+        # Outbound from tunnel → internet
+        iif "wg-toolbox" oif "lan0" accept
+        # Return traffic
+        iif "lan0" oif "wg-toolbox" ct state established,related accept
+        # Phase 6.K — drop UDP 443 (QUIC/HTTP3) so browsers fall back to
+        # HTTP/2 over TCP, which our DNAT can intercept. Without this,
+        # Chrome/Firefox prefer QUIC and bypass mitm entirely.
+        iif "wg-toolbox" udp dport 443 counter drop
+    }
+}

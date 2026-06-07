@@ -104,7 +104,23 @@ fi
       if ! lxc-info -n toolbox-mitm 2>/dev/null | grep -q RUNNING; then
         systemctl enable secubox-toolbox-mitm.service || true
       fi
+      # Phase 7 (#498) : boot-time peer-restore service for wg-toolbox.
+      # Keeps the enrolled WG peers alive across reboots.
+      systemctl enable secubox-toolbox-wg-restore.service || true
       # Pas de start auto — l'opérateur doit configurer mesh.toml et lancer toolbox-up
+    fi
+
+    # Phase 7 (#498) : install nft drop-in for boot-survival + reload nft so
+    # the running ruleset matches what nftables.service will load at next boot.
+    if [ -f /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg.nft ]; then
+      install -d -m 0755 /etc/nftables.d
+      install -m 0644 /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg.nft \
+        /etc/nftables.d/secubox-toolbox-wg.nft
+      if systemctl is-active --quiet nftables.service 2>/dev/null; then
+        systemctl reload nftables.service 2>/dev/null \
+          || /usr/sbin/nft -f /etc/nftables.d/secubox-toolbox-wg.nft 2>/dev/null \
+          || true
+      fi
     fi
     ;;
 esac
