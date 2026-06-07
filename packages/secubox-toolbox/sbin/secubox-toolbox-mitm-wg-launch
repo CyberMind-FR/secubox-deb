@@ -61,8 +61,11 @@ if [ -n "$IGNORE_REGEX" ]; then
     echo "[mitm-wg-launch] ignore_hosts regex applied (${#IGNORE_REGEX} chars, ${COUNT} patterns, static+dynamic)"
 fi
 
-# Addons : cert_pin_detect auto-learns pinned hosts (Phase 6.N)
-for addon in local_store inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
+# Addons :
+#   - inject_xff (Phase 7 #498) MUST be FIRST — sets X-Forwarded-For at
+#     requestheaders so other addons and the upstream see the real peer IP
+#   - cert_pin_detect auto-learns pinned hosts (Phase 6.N)
+for addon in inject_xff local_store inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
     ARGS+=(-s "$ADDON_DIR/${addon}.py")
 done
 
