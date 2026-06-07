@@ -1,3 +1,12 @@
+secubox-openclaw (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7 (#498) fix : postinst chowns /var/lib/secubox/openclaw to
+    secubox:secubox 0755 (parent) / 0750 (scans) — was root:root 0750
+    which prevented the aggregator user (secubox) from traversing the
+    parent during api/main.py's import-time mkdir of scans/.
+
+ -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:44:13 +0000
+
 secubox-openclaw (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release

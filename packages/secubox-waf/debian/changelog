@@ -1,3 +1,19 @@
+secubox-waf (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * New endpoint GET /bans/history?hours=N&limit=M (ref #498) :
+    aggregates waf-threats.log per source IP within the window,
+    cross-references the active CrowdSec decision set, returns
+    {count, severity_max, first_seen, last_seen, top_categories,
+    sample_path, currently_banned}. Handles both mitm WAF format
+    (client_ip) and in-process WAF format (ip).
+  * Frontend www/waf/index.html : new 'Tracked Attackers (24 h)'
+    glass-card after the existing Visitors/Vhosts cards. Table of
+    top 30 IPs with state (🚫 silenced / 👁️ tracked-only), severity,
+    top categories, first/last seen — operator's 'silence but track'
+    view.
+
+ -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:44:13 +0000
+
 secubox-waf (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * mitmproxy/secubox_waf.py: skip cred-004 check on Nextcloud mobile

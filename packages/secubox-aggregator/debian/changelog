@@ -1,3 +1,21 @@
+secubox-aggregator (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Loader v2 (ref #498) : synthetic parent package sbx_pkg_<name>
+    with __path__ → <name>/api, drops sys.modules['api*'] before and
+    after each load. Fixes 9 of 11 previously-failing modules
+    (crowdsec, eye-remote, haproxy, health-doctor, mail, modem, users,
+    secubox-crowdsec, secubox-modem) ; relative imports + cross-module
+    api shadow both handled.
+  * Migration helper v2 (ref #498) : walks /etc/nginx/secubox.d/,
+    /etc/nginx/secubox-routes.d/ AND sites-enabled/webui.conf inline
+    blocks + /api/ catch-all. Preserves /api/v1/<name>/ prefix on
+    every rewrite. Special-cases hub TCP 127.0.0.1:8001 → aggregator
+    unix. Skips legacy secubox-* prefixed twin dirs.
+  * Live numbers on gk2 : 119 of 121 modules mount, 3499 → 1984 MB
+    RSS, free RAM 153 MB → 2.7 GiB.
+
+ -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:44:13 +0000
+
 secubox-aggregator (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial package — Phase 7 (#496) ASGI consolidation

@@ -1,3 +1,13 @@
+secubox-magicmirror (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7 (#498) fix : debian/rules now installs api/routers/
+    (__init__.py + mmpm.py) — previous version shipped only api/main.py
+    and an empty __init__.py, so 'from .routers import mmpm' always
+    failed at import time. Pre-existing bug uncovered by aggregator
+    consolidation.
+
+ -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:44:13 +0000
+
 secubox-magicmirror (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Cluster merge: fold secubox-mmpm into secubox-magicmirror (closes #381)
