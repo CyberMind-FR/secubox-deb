@@ -3,6 +3,142 @@
 
 ---
 
+## 2026-06-07 — Phase 7 reboot follow-up sprint SHIPPED (ref #498)
+
+Same-day follow-up after the Phase 7.D mass reboot. Two user-facing
+regressions — iPhone tunnel broken end-to-end, kbin R3 verification
+card permanently "Hors tunnel R3" — plus several collateral fixes.
+
+### Package bumps
+
+| Package | from | to |
+|---|---|---|
+| secubox-toolbox | 2.1.0 | **2.2.0** |
+| secubox-aggregator | 0.1.0 | **0.2.0** |
+| secubox-waf | 1.1.3 | **1.2.0** |
+| secubox-magicmirror | 1.1.0 | **1.1.1** |
+| secubox-openclaw | 1.0.0 | **1.0.1** |
+
+### What broke and what fixed it
+
+**1. iPhone tunnel browsing cut after reboot.** Three independent
+boot-time gaps :
+
+- `/etc/nftables.conf` had no `udp dport 51820 accept` on the inet
+  filter input chain (policy=drop), so every WG handshake initiation
+  arriving from 192.168.1.254 was silently swallowed.
+- `secubox-toolbox-wg-provision` created the `inet wg-toolbox` NAT
+  table only at package install. After reboot the table was gone —
+  even if handshake had completed, packets had no MASQUERADE rule.
+- The wg-quick config has no `[Peer]` blocks by design ; the 35
+  enrolled peers live in `wg-peers.json` and are added via `wg set`
+  at runtime. Boot wipes them.
+
+**Fix** : new `nftables.d/secubox-toolbox-wg.nft` drop-in
+(`nftables.service` replays at boot) + new
+`secubox-toolbox-wg-restore.service` (oneshot After=wg-quick@... that
+re-injects every peer from JSON).
+
+**2. iPhone DNS resolution broken even with tunnel up.** Existing
+peer configs handed out `DNS = 10.99.0.1` (captive AP IP) but the
+wlan iface is linkdown most of the time, so resolution returned ICMP
+port unreachable. Unbound only listened on 127.0.0.1.
+
+**Fix** : `unbound/99-secubox-wg.conf` binds unbound on
+`10.99.1.1 + 10.99.0.1` with `ip-transparent` ; nftables drop-in adds
+DNS DNAT 10.99.0.1:53 → 10.99.1.1:53 for legacy peers ; `wg.py` now
+emits `DNS = 10.99.1.1` on new profiles.
+
+**3. R3 verification card permanently "Hors tunnel R3".** Two bugs in
+the detection chain, then a third in the cert-trust probe :
+
+- The toolbox FastAPI's R3 check read `request.client.host` — which
+  is the upstream proxy peer (unix socket / HAProxy IP) after the wg
+  → mitm-wg → HAProxy → nginx loop. The real client IP was always
+  lost.
+- mitm-wg didn't propagate the original peer IP upstream at all.
+- The JS verification probe loaded `http://10.99.0.1:8088/qr/...`
+  from an HTTPS page : iOS Safari blocks mixed content, so the
+  request never fired regardless of whether the network was reachable.
+- The cert-trust probe targeted `https://www.gstatic.com/generate_204`
+  — but gstatic.com is in mitm-wg's `ignore_hosts` whitelist, so
+  mitm-wg passed it through with the real Google cert. The probe
+  wasn't testing CA trust at all. Plus `generate_204` returns HTTP
+  204 with no body, which `<Image>.onerror` treats identically to a
+  cert error — every CA install reported as failed.
+
+**Fix** : new `inject_xff.py` mitm-wg addon (loaded first) adds
+`X-Forwarded-For`, `X-R3-Peer`, `X-Through-R3-Tunnel: 1` headers.
+New `_client_ip(request)` helper in `api.py` reads those. New
+`GET /wg/r3-check` endpoint returns `{tunnel:bool}`. `landing.html.j2`
+JS rewritten : same-origin `fetch('/wg/r3-check')` then
+`fetch('https://duckduckgo.com/favicon.ico', {mode: 'no-cors'})` —
+duckduckgo is not whitelisted so mitm-wg actually terminates TLS with
+the R3 CA, and `fetch(no-cors)` distinguishes a successful TLS
+handshake from a cert error unambiguously.
+
+**4. Linux operators can't import the WG profile.** Cosmic/GNOME/KDE
+nmcli refused the standard `wg-quick.conf` with "le mot de passe pour
+«wireguard.private-key» n'est pas indiqué dans le paramètre
+«passwd-file»". The private key flag defaults to agent-owned (1),
+which makes nmcli require `--ask`.
+
+**Fix** : new `GET /wg/profile/new.nmconnection` emits the same
+fresh peer in NetworkManager keyfile format with
+`private-key-flags=0` (system-owned). Drop into
+`/etc/NetworkManager/system-connections/`, `nmcli c reload`, click
+Connect.
+
+**5. Aggregator load spike (83 % CPU, free RAM 137 MB).** A single
+runaway Firefox tab on the toolbox admin dashboard was hammering
+`/api/v1/toolbox/admin/{health,config,clients,metrics,filter-control/list}`
+at ~530 req/sec (stacked `setInterval(refreshAll, 10000)` timers
+accumulating across session-restore + aggregator restarts).
+
+**Fix** : nginx `limit_req zone=sbx_toolbox_admin rate=20r/s burst=40
+nodelay` on `/api/v1/toolbox/admin/*`. Live numbers : load avg 9.16
+→ 2.34, free RAM 137 → 353 MB, aggregator CPU 83 % → 18 %.
+
+**6. Other follow-up fixes :**
+
+- `secubox-magicmirror` 1.1.1 — debian/rules now ships `api/routers/`
+  (was missing → `from .routers import mmpm` always failed).
+- `secubox-openclaw` 1.0.1 — postinst chowns `/var/lib/secubox/openclaw`
+  to `secubox:secubox` so the aggregator user can traverse it.
+- Migration helper skips legacy `secubox-*` prefixed twin dirs whose
+  canonical unprefixed sibling already exists.
+- Live-masked `secubox-ui-manager.service` (was looping in
+  `activating(start)` consuming 74 % of a core). Source fix pending.
+
+### Numbers after the sprint
+
+| | Before | After |
+|---|---:|---:|
+| Load avg (1 m) | 9.16 | 2.34 |
+| Free RAM | 137 MB | 353 MB |
+| Aggregator CPU | 83 % | 18 % |
+| mitm-wg CPU | 2.1 % | 4.3 % |
+| Modules mounted | 117/121 | 117/121 |
+
+### Files changed
+
+- `packages/secubox-toolbox/` : 13 files (nftables.d/, sbin/,
+  systemd/, unbound/, mitmproxy_addons/, secubox_toolbox/,
+  conf/, nginx/, debian/)
+- `packages/secubox-aggregator/` : 4 files (aggregator/,
+  sbin/, debian/)
+- `packages/secubox-waf/` : 2 files (api/, www/)
+- `packages/secubox-magicmirror/debian/rules`
+- `packages/secubox-openclaw/debian/postinst`
+
+### Ref
+
+- Branch landings : `8b0d4840`, `22748b29`, `613de765`, `9ac35005`,
+  `7e5c510c`, `6812dfb0`
+- Public tracker : `#498`
+
+---
+
 ## 2026-06-06 — Phase 7.D ASGI consolidation SHIPPED (ref #498)
 
 Memory pressure on gk2 was driven by ~100 per-module uvicorn processes

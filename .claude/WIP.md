@@ -1,5 +1,101 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-06*
+*Mis à jour : 2026-06-07*
+
+---
+
+## 🔄 2026-06-07 : Phase 7 reboot follow-up sprint SHIPPED (ref #498)
+
+Two main user-visible problems surfaced after the Phase 7.D ASGI
+consolidation reboot : (1) iPhone tunnel ceased to work end-to-end,
+and (2) the kbin R3 verification card insisted "Hors tunnel R3" even
+when the iPhone was clearly on the tunnel. Both fixed + several
+collateral fixes.
+
+### ✅ Done — packages bumped
+
+| Package | from | to | Why |
+|---|---|---|---|
+| secubox-toolbox | 2.1.0-1 | **2.2.0-1** | WG boot survival + R3 detection chain + NM keyfile + admin rate-limit |
+| secubox-aggregator | 0.1.0-1 | **0.2.0-1** | Loader v2 + migration helper v2 |
+| secubox-waf | 1.1.3-1 | **1.2.0-1** | /bans/history + Tracked Attackers tile |
+| secubox-magicmirror | 1.1.0-1 | **1.1.1-1** | api/routers/ shipping fix |
+| secubox-openclaw | 1.0.0-1 | **1.0.1-1** | postinst chown for aggregator user |
+
+### ✅ Done — fixes in detail
+
+**WG boot survival** ([commit `8b0d4840`](https://github.com/CyberMind-FR/secubox-deb/commit/8b0d4840))
+
+* `/etc/nftables.d/secubox-toolbox-wg.nft` — UDP 51820 input accept +
+  `inet wg-toolbox` table (postrouting MASQUERADE, prerouting DNAT
+  443/80 to mitm-wg, DNS DNAT 10.99.0.1:53 + 8088 → 10.99.1.1, QUIC
+  drop). Loaded by `nftables.service` at boot.
+* `secubox-toolbox-wg-restore.service` — one-shot replays
+  `wg-peers.json` (35 peers) after `wg-quick@wg-toolbox` at boot
+  via `wg set`.
+* `unbound/99-secubox-wg.conf` — binds 10.99.1.1 + 10.99.0.1 with
+  `ip-transparent`, allows 10.99.0.0/16.
+* `wg.py` — new profiles get `DNS = 10.99.1.1` (was 10.99.0.1,
+  served by wlan AP which is often linkdown).
+* `service.d/20-bind-all.conf` — captive portal uvicorn binds
+  `0.0.0.0:8088` so DNAT can land WG peer probes (was
+  `--host 10.99.0.1`, only on the down wlan).
+
+**R3 detection chain** ([commits `22748b29`, `613de765`, `9ac35005`](https://github.com/CyberMind-FR/secubox-deb/commits/master))
+
+* New `inject_xff.py` mitm-wg addon (loaded FIRST) sets
+  `X-Forwarded-For`, `X-R3-Peer: 10.99.1.x`, `X-Through-R3-Tunnel: 1`
+  on every upstream request — so HAProxy → nginx → toolbox FastAPI
+  see the real peer IP after the wg → mitm-wg → upstream loop.
+* `api.py` new `_client_ip(request)` helper : `X-R3-Peer` > leftmost
+  XFF > raw socket peer. Splash + `_resolve()` now use it.
+* New `GET /wg/r3-check` returns `{tunnel:bool, peer_ip}` based on
+  `_client_ip`. Same-origin HTTPS so iOS Safari doesn't block it as
+  mixed content (the previous probe used `http://10.99.0.1:8088/qr/...`
+  which Safari refused to fire from an HTTPS page).
+* `landing.html.j2` JS rewritten — `fetch('/wg/r3-check')` for tunnel
+  detection ; `fetch('https://duckduckgo.com/favicon.ico', mode:
+  'no-cors')` for CA trust (was `<img https://www.gstatic.com/...>`
+  which was both whitelisted by mitm-wg AND returned ambiguous
+  204 errors).
+
+**NetworkManager keyfile** ([commit `6812dfb0`](https://github.com/CyberMind-FR/secubox-deb/commit/6812dfb0))
+
+* New `GET /wg/profile/new.nmconnection` emits the same fresh peer
+  in NM keyfile format with `private-key-flags=0` — Linux operators
+  can drop it into `/etc/NetworkManager/system-connections/` and
+  `nmcli c reload` for one-click Cosmic/GNOME/KDE import without
+  the `--ask` workaround.
+
+**Rate-limit + memory** ([commit `7e5c510c`](https://github.com/CyberMind-FR/secubox-deb/commit/7e5c510c))
+
+* `nginx/toolbox.conf` + `nginx/secubox-toolbox-limits.conf` :
+  `limit_req zone=sbx_toolbox_admin rate=20r/s burst=40 nodelay`
+  on `/api/v1/toolbox/admin/*`. A Firefox tab on the admin dashboard
+  was hammering the aggregator at 530 req/s (stacked setInterval) —
+  load avg dropped 9.16 → 2.34, free RAM 137 → 353 MB once applied.
+* Live-masked `secubox-ui-manager.service` — was looping in
+  `activating(start)`, eating 74 % of one core. Needs a real fix or
+  systemd `Restart=` policy tightening as a follow-up.
+
+**Aggregator follow-ups** ([commits `0cc99d51`, `33b35643`](https://github.com/CyberMind-FR/secubox-deb/commits/master))
+
+* `secubox-magicmirror` debian/rules now installs `api/routers/`
+  (was shipping only `api/main.py` and an empty `__init__.py`).
+* `secubox-openclaw` postinst `chown secubox:secubox` on
+  `/var/lib/secubox/openclaw/` so the aggregator user can traverse
+  it during the module's import-time `mkdir`.
+* Migration helper skips legacy `/usr/lib/secubox/secubox-<name>/`
+  twin dirs whose canonical unprefixed sibling already exists.
+
+### ⬜ Next up
+
+* **R3 verification PAGE on iPhone** still needs a refresh after the
+  cert-trust probe fix lands ; expected to read "Tunnel R3 actif +
+  CA R3 trusté" once the user retests.
+* **`secubox-ui-manager`** is masked live but the service-side fix
+  (preventing the `activating(start)` loop) is not in source yet.
+* **Heartbeat 503 + sentinelle-gsm 404** — minor module-state
+  issues, not loader-related.
 
 ---
 
