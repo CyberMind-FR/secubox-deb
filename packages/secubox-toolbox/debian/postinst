@@ -122,6 +122,18 @@ fi
           || true
       fi
     fi
+
+    # Phase 7 (#498) : install unbound listener for wg-toolbox + captive AP.
+    # Without it WG peers' DNS queries to 10.99.1.1 (or legacy 10.99.0.1)
+    # get ICMP port unreachable and the iPhone stops resolving names.
+    if [ -f /usr/share/secubox/toolbox/unbound/99-secubox-wg.conf ] \
+        && [ -d /etc/unbound/unbound.conf.d ]; then
+      install -m 0644 /usr/share/secubox/toolbox/unbound/99-secubox-wg.conf \
+        /etc/unbound/unbound.conf.d/99-secubox-wg.conf
+      if systemctl is-active --quiet unbound.service 2>/dev/null; then
+        systemctl restart unbound.service 2>/dev/null || true
+      fi
+    fi
     ;;
 esac
 

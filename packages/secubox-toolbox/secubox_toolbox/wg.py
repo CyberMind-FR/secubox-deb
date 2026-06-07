@@ -116,7 +116,10 @@ def generate_client_profile(client_label: str | None = None) -> dict:
         f"[Interface]\n"
         f"PrivateKey = {priv}\n"
         f"Address = {client_ip}/32\n"
-        f"DNS = 10.99.0.1\n"
+        # Phase 7 (#498) — was 10.99.0.1 (captive-AP IP) ; if the wlan AP is
+        # down the iPhone gets ICMP unreachable. Use the wg server IP which
+        # is always up while the tunnel is.
+        f"DNS = 10.99.1.1\n"
         f"\n"
         f"[Peer]\n"
         f"PublicKey = {server_pub}\n"
@@ -131,7 +134,7 @@ def generate_client_profile(client_label: str | None = None) -> dict:
         "client_ip": client_ip,
         "server_pubkey": server_pub,
         "endpoint": f"{WG_ENDPOINT}:{WG_PORT}",
-        "dns": "10.99.0.1",
+        "dns": "10.99.1.1",
         "conf_text": conf_text,
         "ca_pem": _ca_pem(),
     }
