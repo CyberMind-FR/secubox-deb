@@ -128,6 +128,20 @@ def generate_client_profile(client_label: str | None = None) -> dict:
         f"PersistentKeepalive = 25\n"
     )
 
+    # Phase 7 (#498) — NetworkManager keyfile alongside the standard
+    # wg-quick .conf. The Cosmic / GNOME Network UI imports .conf files
+    # via nmcli but stores the private key as an "agent-owned" secret by
+    # default (private-key-flags=1) — which means nmcli refuses to bring
+    # the tunnel up without --ask. A native .nmconnection keyfile drops
+    # straight into /etc/NetworkManager/system-connections/ with the
+    # right system-owned flag and lets the operator click "Connect".
+    nm_text = _nm_keyfile(
+        conn_id=(client_label or f"village3b-{client_ip}"),
+        priv=priv,
+        client_ip=client_ip,
+        server_pub=server_pub,
+    )
+
     return {
         "client_privkey": priv,
         "client_pubkey": pub,
@@ -136,8 +150,59 @@ def generate_client_profile(client_label: str | None = None) -> dict:
         "endpoint": f"{WG_ENDPOINT}:{WG_PORT}",
         "dns": "10.99.1.1",
         "conf_text": conf_text,
+        "nm_text": nm_text,
         "ca_pem": _ca_pem(),
     }
+
+
+def _nm_keyfile(*, conn_id: str, priv: str, client_ip: str, server_pub: str) -> str:
+    """Build a NetworkManager keyfile (.nmconnection) for the same peer.
+
+    Dropped into /etc/NetworkManager/system-connections/<conn_id>.nmconnection
+    (chmod 0600, owner root:root). After `nmcli connection reload` the
+    profile appears in the Network panel and connects in one click.
+
+    private-key-flags=0 means "system-owned" — the secret lives in the
+    file itself, NM doesn't ask the user at connect time. That's the
+    setting nmcli's default import is missing.
+    """
+    import re as _re
+    import uuid as _uuid
+    # netlink iface name : [a-z0-9-_], max 15 chars. Slugify aggressively
+    # so any User-Agent-derived label still produces a valid name.
+    safe = _re.sub(r"[^a-z0-9_-]+", "-", conn_id.lower()).strip("-")[:13] or "village3b"
+    iface = f"wg-{safe}"[:15]
+    uuid = str(_uuid.uuid4())
+    return (
+        "[connection]\n"
+        f"id={conn_id}\n"
+        f"uuid={uuid}\n"
+        "type=wireguard\n"
+        f"interface-name={iface}\n"
+        "autoconnect=false\n"
+        "\n"
+        "[wireguard]\n"
+        f"private-key={priv}\n"
+        "private-key-flags=0\n"
+        "listen-port=0\n"
+        "fwmark=0\n"
+        "\n"
+        f"[wireguard-peer.{server_pub}]\n"
+        f"endpoint={WG_ENDPOINT}:{WG_PORT}\n"
+        "persistent-keepalive=25\n"
+        "allowed-ips=0.0.0.0/0;::/0;\n"
+        "\n"
+        "[ipv4]\n"
+        f"address1={client_ip}/32\n"
+        "dns=10.99.1.1;\n"
+        "method=manual\n"
+        "\n"
+        "[ipv6]\n"
+        "addr-gen-mode=default\n"
+        "method=disabled\n"
+        "\n"
+        "[proxy]\n"
+    )
 
 
 def revoke_client(client_pubkey: str) -> bool:
