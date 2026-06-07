@@ -677,6 +677,29 @@
                 </div>
                 <div class="eyemote-legend-mini" id="vhostLegend"></div>
             </div>
+
+            <!-- Phase 7 (#498) — silenced-but-tracked attackers (24 h) -->
+            <div class="glass-card" id="trackedAttackersCard" style="grid-column: span 2;">
+                <h2>🎯 Tracked Attackers <span class="muted" style="font-size:0.8rem;">— silenced, still tracked (24 h)</span></h2>
+                <div class="table-wrap">
+                    <table class="data-table" id="trackedAttackersTable">
+                        <thead>
+                            <tr>
+                                <th>IP</th>
+                                <th>Hits</th>
+                                <th>Severity</th>
+                                <th>Top categories</th>
+                                <th>First seen</th>
+                                <th>Last seen</th>
+                                <th>State</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trackedAttackersBody">
+                            <tr><td colspan="7" class="muted">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -1130,9 +1153,46 @@
                 loadStatus(),
                 loadStats(),
                 loadSecurityEvents(),
-                loadCategories()
+                loadCategories(),
+                loadTrackedAttackers()
             ]);
             btn.innerHTML = '🔄<span class="quick-btn-tooltip">Refresh</span>';
+        }
+
+        // Phase 7 (#498) — Silenced-but-tracked attackers table.
+        // Renders /bans/history : IPs that hit WAF rules in the last 24 h
+        // with severity + categories + active-ban status.
+        function _shortISO(iso) {
+            if (!iso) return '-';
+            return iso.replace('T', ' ').replace('Z', '').slice(5, 16);
+        }
+        async function loadTrackedAttackers() {
+            const data = await api('/bans/history?hours=24&limit=30');
+            const body = document.getElementById('trackedAttackersBody');
+            if (!body) return;
+            const rows = data?.tracked || [];
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="7" class="muted">No tracked attackers in the last 24 h.</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(r => {
+                const cats = (r.top_categories || []).map(c =>
+                    (CAT_EMOJI[c.category] || CAT_EMOJI.default) + ' ' + c.category + ' (' + c.count + ')'
+                ).join(', ');
+                const sev = (r.severity_max || 'low').toLowerCase();
+                const state = r.currently_banned
+                    ? '<span class="severity-badge critical" title="active CrowdSec drop">🚫 silenced</span>'
+                    : '<span class="severity-badge medium" title="ban expired but still tracked">👁️ tracked</span>';
+                return '<tr>'
+                    + '<td><code>' + r.ip + '</code></td>'
+                    + '<td>' + r.count + '</td>'
+                    + '<td><span class="severity-badge ' + sev + '">' + (SEV_EMOJI[sev] || '') + ' ' + sev + '</span></td>'
+                    + '<td>' + (cats || '-') + '</td>'
+                    + '<td>' + _shortISO(r.first_seen) + '</td>'
+                    + '<td>' + _shortISO(r.last_seen) + '</td>'
+                    + '<td>' + state + '</td>'
+                    + '</tr>';
+            }).join('');
         }
 
         // WAF Toggle

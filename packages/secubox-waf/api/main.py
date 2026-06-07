@@ -708,6 +708,101 @@ async def get_bans():
     return {"bans": bans, "total": len(bans)}
 
 
+def _aggregate_threats(hours: int, limit: int) -> List[dict]:
+    """Walk waf-threats.log and aggregate per-IP within the last N hours.
+
+    Returns the top `limit` source IPs ordered by hit count. Each entry
+    carries first-seen / last-seen / top categories / max severity so the
+    UI can show 'silence but track' status even after the CrowdSec ban
+    expired (active ban set in `currently_banned`)."""
+    log_path = Path(THREATS_LOG)
+    if not log_path.exists():
+        return []
+
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff_iso = cutoff.isoformat() + "Z"
+
+    sev_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    by_ip: dict = {}
+
+    # Reading the whole log keeps the request simple ; threats.log is rotated
+    # by logrotate so this stays bounded. For very large logs we tail by size.
+    raw_lines = _read_log_tail(log_path, max_bytes=8 * 1024 * 1024)
+    for raw in raw_lines:
+        try:
+            e = json.loads(raw)
+        except Exception:
+            continue
+        ts = e.get("timestamp", "")
+        if ts < cutoff_iso:
+            continue
+        # mitm WAF writes the source IP as "client_ip" ; the in-process WAF
+        # writes it as "ip". Accept both so this works no matter which path
+        # produced the entry.
+        ip = e.get("client_ip") or e.get("ip")
+        if not ip:
+            continue
+        rec = by_ip.setdefault(ip, {
+            "ip": ip,
+            "count": 0,
+            "first_seen": ts,
+            "last_seen": ts,
+            "categories": {},
+            "severity_max": "low",
+            "sample_path": e.get("path", ""),
+        })
+        rec["count"] += 1
+        if ts < rec["first_seen"]:
+            rec["first_seen"] = ts
+        if ts > rec["last_seen"]:
+            rec["last_seen"] = ts
+            rec["sample_path"] = e.get("path", "")
+        cat = e.get("category") or "unknown"
+        rec["categories"][cat] = rec["categories"].get(cat, 0) + 1
+        sev = e.get("severity") or "low"
+        if sev_rank.get(sev, 0) > sev_rank.get(rec["severity_max"], 0):
+            rec["severity_max"] = sev
+
+    # Cross-reference active CrowdSec bans so the UI can mark "currently
+    # silenced (drop) vs only tracked".
+    active = set()
+    with _warm_lock:
+        bans = _warm.get("bans")
+    if bans:
+        active = {b.get("ip") for b in bans if b.get("ip")}
+
+    out = []
+    for rec in by_ip.values():
+        cats = sorted(rec["categories"].items(), key=lambda kv: kv[1], reverse=True)
+        rec["top_categories"] = [{"category": c, "count": n} for c, n in cats[:3]]
+        rec["currently_banned"] = rec["ip"] in active
+        del rec["categories"]
+        out.append(rec)
+    out.sort(key=lambda r: r["count"], reverse=True)
+    return out[:limit]
+
+
+@app.get("/bans/history")
+async def get_bans_history(hours: int = 24, limit: int = 100):
+    """Tracked attackers — IPs we have threat-logged in the window.
+
+    Surfaces every source IP that hit a WAF rule even AFTER its CrowdSec
+    decision expires. Lets the operator audit "who was silenced and is
+    still being silenced" vs "who was silenced and may slip back in".
+    `currently_banned=True` means there is an active nft drop right now.
+    """
+    if hours < 1 or hours > 24 * 31:
+        hours = 24
+    if limit < 1 or limit > 1000:
+        limit = 100
+    rows = await asyncio.to_thread(_aggregate_threats, hours, limit)
+    return {
+        "window_hours": hours,
+        "total_ips": len(rows),
+        "tracked": rows,
+    }
+
+
 class BanRequest(BaseModel):
     ip: str
     duration: str = "4h"

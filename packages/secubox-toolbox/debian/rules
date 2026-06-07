@@ -50,3 +50,12 @@ override_dh_strip:
 	install -d debian/secubox-toolbox/lib/systemd/system/secubox-toolbox.service.d
 	install -m 0644 systemd/secubox-toolbox.service.d/10-perf.conf \
 	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox.service.d/
+	# Phase 7 (#498) : boot-survival — nft drop-in (loaded by nftables.service
+	# at boot) + peer-restore script + oneshot service
+	install -d debian/secubox-toolbox/usr/share/secubox/toolbox/nftables.d
+	install -m 0644 nftables.d/secubox-toolbox-wg.nft \
+	  debian/secubox-toolbox/usr/share/secubox/toolbox/nftables.d/
+	install -m 0755 sbin/secubox-toolbox-wg-restore \
+	  debian/secubox-toolbox/usr/sbin/
+	install -m 0644 systemd/secubox-toolbox-wg-restore.service \
+	  debian/secubox-toolbox/lib/systemd/system/
