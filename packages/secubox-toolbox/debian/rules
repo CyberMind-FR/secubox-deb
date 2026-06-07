@@ -64,3 +64,10 @@ override_dh_strip:
 	install -d debian/secubox-toolbox/usr/share/secubox/toolbox/unbound
 	install -m 0644 unbound/99-secubox-wg.conf \
 	  debian/secubox-toolbox/usr/share/secubox/toolbox/unbound/
+	# Phase 7 (#498) : nginx route + rate-limit
+	install -d debian/secubox-toolbox/etc/nginx/secubox-routes.d
+	install -m 0644 nginx/toolbox.conf \
+	  debian/secubox-toolbox/etc/nginx/secubox-routes.d/toolbox.conf
+	install -d debian/secubox-toolbox/etc/nginx/conf.d
+	install -m 0644 nginx/secubox-toolbox-limits.conf \
+	  debian/secubox-toolbox/etc/nginx/conf.d/
