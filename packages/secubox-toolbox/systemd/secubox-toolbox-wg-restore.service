@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Phase 7 follow-up (#498) — replay peers from wg-peers.json after wg-quick
+# brings up the wg-toolbox interface. See secubox-toolbox-wg-restore for why.
+
+[Unit]
+Description=SecuBox ToolBoX — replay WG peers from wg-peers.json at boot
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/498
+After=wg-quick@wg-toolbox.service
+Requires=wg-quick@wg-toolbox.service
+PartOf=wg-quick@wg-toolbox.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/secubox-toolbox-wg-restore
+# Don't crash boot on a transient peer-restore failure.
+SuccessExitStatus=0 1
+
+[Install]
+WantedBy=multi-user.target

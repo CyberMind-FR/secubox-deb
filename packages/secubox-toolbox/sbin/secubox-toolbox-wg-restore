@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Phase 7 follow-up (#498) — boot-time WG peer re-injection.
+#
+# wg-quick brings up the interface from /etc/wireguard/wg-toolbox.conf which
+# has NO [Peer] blocks by design — peers are stored in
+# /var/lib/secubox/toolbox/wg-peers.json (managed by the FastAPI /wg/profile
+# endpoints) and added to the kernel via `wg set` at runtime. Without this
+# script, every reboot wipes all 35+ enrolled peers and iPhone connections
+# silently fail (handshake responses go to peers the kernel doesn't know).
+#
+# Run as a one-shot service after wg-quick@wg-toolbox.service.
+
+set -euo pipefail
+readonly MODULE="secubox-toolbox-wg-restore"
+readonly IFACE="wg-toolbox"
+readonly PEERS_JSON="/var/lib/secubox/toolbox/wg-peers.json"
+
+log() { printf '[%s] %s\n' "$MODULE" "$*" >&2; }
+
+if [ ! -f "$PEERS_JSON" ]; then
+    log "no $PEERS_JSON yet — nothing to restore"
+    exit 0
+fi
+
+if ! ip link show "$IFACE" >/dev/null 2>&1; then
+    log "interface $IFACE not up — wg-quick@$IFACE must run first"
+    exit 1
+fi
+
+python3 - "$PEERS_JSON" "$IFACE" <<'PY'
+import json
+import subprocess
+import sys
+
+peers_json, iface = sys.argv[1], sys.argv[2]
+data = json.load(open(peers_json))
+peers = data.get("peers", {})
+
+ok = 0
+bad = 0
+for pubkey, info in peers.items():
+    ip = info.get("ip")
+    if not ip or not pubkey:
+        continue
+    r = subprocess.run(
+        ["wg", "set", iface, "peer", pubkey, "allowed-ips", f"{ip}/32"],
+        capture_output=True, text=True,
+    )
+    if r.returncode == 0:
+        ok += 1
+    else:
+        bad += 1
+        label = info.get("label", "?")[:30]
+        print(f"  FAIL {label} ({ip}): {r.stderr.strip()}", file=sys.stderr)
+
+print(f"[secubox-toolbox-wg-restore] re-injected ok={ok} bad={bad}", file=sys.stderr)
+sys.exit(0 if bad == 0 else 0)  # never fail boot on partial peer restore
+PY
