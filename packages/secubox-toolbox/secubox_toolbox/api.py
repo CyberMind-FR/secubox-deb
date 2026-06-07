@@ -1000,6 +1000,49 @@ async def wg_profile_new(request: Request) -> Response:
     )
 
 
+@router.get("/wg/profile/new.nmconnection")
+async def wg_profile_new_nmconnection(request: Request) -> Response:
+    """Phase 7 (#498) — same fresh WG profile but in NetworkManager
+    keyfile format. Cosmic / GNOME / KDE's nmcli GUI fail to import
+    a plain wg-quick .conf because they store private-key as an
+    "agent-owned" secret (`private-key-flags=1`) and refuse to bring
+    up the tunnel without --ask.
+
+    This endpoint emits a native .nmconnection : drop it into
+    /etc/NetworkManager/system-connections/, chmod 0600, then
+    `nmcli connection reload` — the profile is ready to click in the
+    Network panel.
+
+        sudo install -m 0600 village3b-toolbox.nmconnection \
+             /etc/NetworkManager/system-connections/
+        sudo nmcli connection reload
+        nmcli connection up village3b-toolbox
+    """
+    try:
+        from . import wg as _wg
+    except ImportError:
+        raise HTTPException(503, "WG module not available (Phase 6 not provisioned)")
+    profile = _wg.generate_client_profile(client_label=request.headers.get("user-agent", "")[:60])
+
+    import hashlib as _h
+    wg_hash = _h.sha256(profile["client_pubkey"].encode()).hexdigest()[:16]
+    try:
+        store.upsert_client(wg_hash, profile["client_ip"], level="r3")
+    except Exception as e:
+        log.warning("wg peer upsert failed for %s: %s", wg_hash, e)
+
+    return Response(
+        content=profile["nm_text"],
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=village3b-toolbox.nmconnection",
+            "X-Client-PubKey": profile["client_pubkey"],
+            "X-Client-IP": profile["client_ip"],
+            "X-Client-Hash": wg_hash,
+        },
+    )
+
+
 @router.get("/wg/qr.png")
 async def wg_qr(request: Request) -> Response:
     """QR code encoding the WG profile .conf — scannable by the iOS WG app."""
