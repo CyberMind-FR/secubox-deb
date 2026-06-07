@@ -1,3 +1,16 @@
+secubox-aggregator (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7 follow-up (#498) — relax hardening for module sudoers :
+    - NoNewPrivileges=false (was true). Blocked tightly-scoped sudo
+      drops shipped by individual modules (e.g. secubox-crowdsec's
+      cscli + nft read-only entries) ; the sudoers entries are the
+      real defense in depth.
+    - ReadWritePaths += /var/lib/crowdsec (cscli rewrites perms on
+      crowdsec.db at every invocation) + /etc/secubox (module config
+      writes touched by toolbox/dpi).
+
+ -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:57:29 +0000
+
 secubox-aggregator (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Loader v2 (ref #498) : synthetic parent package sbx_pkg_<name>
