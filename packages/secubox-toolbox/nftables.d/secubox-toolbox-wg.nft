@@ -42,6 +42,11 @@ table inet wg-toolbox {
         # should use 10.99.1.1 directly (see wg.py).
         iif "wg-toolbox" ip daddr 10.99.0.1 udp dport 53 dnat ip to 10.99.1.1:53
         iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 53 dnat ip to 10.99.1.1:53
+        # Captive-portal HTTP probe : R3 verification page on kbin.gk2.secubox.in
+        # JS-loads http://10.99.0.1:8088/qr/splash.png — route it to the toolbox
+        # FastAPI which Phase 7 binds on 0.0.0.0:8088 (see secubox-toolbox
+        # service drop-in 20-bind-all.conf).
+        iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 8088 dnat ip to 10.99.1.1:8088
     }
 
     chain forward {
