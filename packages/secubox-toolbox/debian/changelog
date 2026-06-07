@@ -1,3 +1,38 @@
+secubox-toolbox (2.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7 (#498) — WG boot survival + interception layer hardening :
+    - nftables.d/secubox-toolbox-wg.nft : persistent UDP 51820 input
+      accept + inet wg-toolbox table (NAT + forward + QUIC drop + DNAT
+      443/80 → mitm-wg:8081 + DNS DNAT + captive-portal HTTP 8088 DNAT).
+    - secubox-toolbox-wg-restore.service : one-shot replay of
+      wg-peers.json after wg-quick@wg-toolbox at boot.
+    - unbound/99-secubox-wg.conf : bind 10.99.1.1 + 10.99.0.1 with
+      ip-transparent so WG peer DNS queries actually resolve.
+    - wg.py : DNS = 10.99.1.1 (was 10.99.0.1, wlan often linkdown).
+    - service.d/20-bind-all.conf : captive portal uvicorn binds
+      0.0.0.0:8088 so DNAT can route WG peer probes.
+  * Phase 7 (#498) — R3 detection chain :
+    - new mitmproxy_addons/inject_xff.py adds X-Forwarded-For +
+      X-R3-Peer + X-Through-R3-Tunnel headers upstream so the chain
+      below mitm-wg sees the true peer IP.
+    - api.py _client_ip() helper : XFF-aware client resolution.
+    - new GET /wg/r3-check returns {tunnel:bool, peer_ip}.
+    - landing.html.j2 JS : same-origin HTTPS R3 probe (replaces broken
+      cross-origin HTTP image probe that Safari blocked as mixed content).
+    - cert-trust probe targets duckduckgo.com (non-whitelisted host)
+      via fetch(no-cors) instead of gstatic Image (HTTP 204 ambiguity).
+  * Phase 7 (#498) — Network Manager :
+    - new GET /wg/profile/new.nmconnection emits NetworkManager keyfile
+      with private-key-flags=0 so Cosmic/GNOME/KDE can import + connect
+      without nmcli --ask.
+  * Phase 7 (#498) — Hardening :
+    - nginx/toolbox.conf : limit_req zone=sbx_toolbox_admin rate=20r/s
+      burst=40 nodelay on /api/v1/toolbox/admin/* against runaway
+      dashboard polling.
+    - nginx/secubox-toolbox-limits.conf : http-context zone declaration.
+
+ -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:44:13 +0000
+
 secubox-toolbox (2.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2a+ : GeoIP flags + ASN + nDPI-style classification + cookie
