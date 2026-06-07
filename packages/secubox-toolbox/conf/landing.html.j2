@@ -407,22 +407,34 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
         inWG = !!(d && d.tunnel);
         if (!inWG) { finalize(); return; }
         txt.innerHTML = 'Tunnel R3 détecté ✓ — test 2/2 cert mitm…';
-        // Step 2 : probe external HTTPS — if mitm CA trusted, image loads.
-        var ext = new Image();
+        // Step 2 : probe an external HTTPS host that mitm-wg DOES
+        // intercept (i.e. not in ignore_hosts). gstatic / google /
+        // apple / fbcdn are whitelisted so they pass through with
+        // their real cert ; useless to test CA trust. duckduckgo
+        // isn't whitelisted, so the TLS handshake is performed by
+        // mitm-wg with the R3 CA — it succeeds only if the iPhone
+        // trusts that CA.
+        //
+        // fetch(no-cors) resolves on any successful TLS handshake
+        // regardless of HTTP status, and rejects on cert / network
+        // error — exactly the signal we want. Image.onload was
+        // ambiguous : a 204 No Content reply (no image data) also
+        // triggered onerror, making CA-trusted look like CA-untrusted.
         var extDone = false;
-        ext.onload = function(){
-          if (extDone) return; extDone = true;
-          httpsOk = true; finalize();
-        };
-        ext.onerror = function(){
-          if (extDone) return; extDone = true;
-          httpsOk = false; finalize();
-        };
-        ext.src = 'https://www.gstatic.com/generate_204?t=' + Date.now();
-        setTimeout(function(){ if (!extDone) { extDone = true; httpsOk = false; finalize(); }}, 3000);
+        fetch('https://duckduckgo.com/favicon.ico?t=' + Date.now(),
+              {mode: 'no-cors', cache: 'no-store'})
+          .then(function(){
+            if (extDone) return; extDone = true;
+            httpsOk = true; finalize();
+          })
+          .catch(function(){
+            if (extDone) return; extDone = true;
+            httpsOk = false; finalize();
+          });
+        setTimeout(function(){ if (!extDone) { extDone = true; httpsOk = false; finalize(); }}, 4000);
       })
       .catch(function(){ inWG = false; finalize(); });
-    setTimeout(function(){ if (!done) { inWG = false; finalize(); }}, 4000);
+    setTimeout(function(){ if (!done) { inWG = false; finalize(); }}, 6000);
   }
   btn.addEventListener('click', runProbe);
 })();
