@@ -34,6 +34,14 @@ table inet wg-toolbox {
         # everywhere else.
         iif "wg-toolbox" tcp dport 443 dnat ip to 10.99.1.1:8081
         iif "wg-toolbox" tcp dport 80  dnat ip to 10.99.1.1:8081
+        # Phase 7 (#498) — DNS backward-compat. Existing peer configs hand
+        # out DNS = 10.99.0.1 (captive-AP IP). When the wlan AP is down,
+        # iPhone gets ICMP port unreachable and stops resolving names.
+        # Redirect such queries to unbound on 10.99.1.1:53 so legacy peer
+        # configs keep working without re-provisioning. New peer configs
+        # should use 10.99.1.1 directly (see wg.py).
+        iif "wg-toolbox" ip daddr 10.99.0.1 udp dport 53 dnat ip to 10.99.1.1:53
+        iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 53 dnat ip to 10.99.1.1:53
     }
 
     chain forward {
