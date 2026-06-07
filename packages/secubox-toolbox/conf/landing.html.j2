@@ -395,36 +395,34 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
       }
     }
 
-    // Step 1 : try to reach the WG-only endpoint at 10.99.0.1:8088.
-    // It is ONLY reachable from inside the WG tunnel (no public route).
-    var wg = new Image();
-    var wgDone = false;
-    wg.onload = function(){
-      if (wgDone) return; wgDone = true;
-      inWG = true;
-      txt.innerHTML = 'Tunnel R3 détecté ✓ — test 2/2 cert mitm…';
-      // Step 2 : probe external HTTPS — if mitm CA trusted, image loads.
-      var ext = new Image();
-      var extDone = false;
-      ext.onload = function(){
-        if (extDone) return; extDone = true;
-        httpsOk = true; finalize();
-      };
-      ext.onerror = function(){
-        if (extDone) return; extDone = true;
-        httpsOk = false; finalize();
-      };
-      ext.src = 'https://www.gstatic.com/generate_204?t=' + Date.now();
-      setTimeout(function(){ if (!extDone) { extDone = true; httpsOk = false; finalize(); }}, 3000);
-    };
-    wg.onerror = function(){
-      if (wgDone) return; wgDone = true;
-      inWG = false; finalize();
-    };
-    // Internal-only endpoint : qr/splash.png lives ONLY at 10.99.0.1 (captive)
-    // and is reachable from R3 clients via NAT through the tunnel.
-    wg.src = 'http://10.99.0.1:8088/qr/splash.png?t=' + Date.now();
-    setTimeout(function(){ if (!wgDone) { wgDone = true; inWG = false; finalize(); }}, 2500);
+    // Phase 7 (#498) — same-origin HTTPS R3 probe.
+    // The previous probe loaded http://10.99.0.1:8088/qr/splash.png as
+    // an Image. iOS Safari blocks mixed content (HTTP from an HTTPS
+    // page) so the request never fired and inWG always stayed false.
+    // /wg/r3-check returns { tunnel: bool } based on the X-R3-Peer /
+    // XFF headers mitm-wg sets via the inject_xff addon.
+    fetch('/wg/r3-check?t=' + Date.now(), {cache: 'no-store'})
+      .then(function(r){ return r.ok ? r.json() : {tunnel:false}; })
+      .then(function(d){
+        inWG = !!(d && d.tunnel);
+        if (!inWG) { finalize(); return; }
+        txt.innerHTML = 'Tunnel R3 détecté ✓ — test 2/2 cert mitm…';
+        // Step 2 : probe external HTTPS — if mitm CA trusted, image loads.
+        var ext = new Image();
+        var extDone = false;
+        ext.onload = function(){
+          if (extDone) return; extDone = true;
+          httpsOk = true; finalize();
+        };
+        ext.onerror = function(){
+          if (extDone) return; extDone = true;
+          httpsOk = false; finalize();
+        };
+        ext.src = 'https://www.gstatic.com/generate_204?t=' + Date.now();
+        setTimeout(function(){ if (!extDone) { extDone = true; httpsOk = false; finalize(); }}, 3000);
+      })
+      .catch(function(){ inWG = false; finalize(); });
+    setTimeout(function(){ if (!done) { inWG = false; finalize(); }}, 4000);
   }
   btn.addEventListener('click', runProbe);
 })();
