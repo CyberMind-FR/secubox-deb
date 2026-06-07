@@ -286,6 +286,28 @@ async def change_level(request: Request):
                              status_code=303)
 
 
+@router.get("/wg/r3-check")
+async def wg_r3_check(request: Request):
+    """Phase 7 (#498) — same-origin HTTPS probe for the R3 verification
+    landing card. iOS Safari blocks mixed content, so the previous
+    `<img src='http://10.99.0.1:8088/qr/splash.png'>` cross-origin HTTP
+    probe never fires from an HTTPS-served page (and the JS concluded
+    "off tunnel" no matter what).
+
+    This endpoint is reachable on every secubox vhost (including the
+    public kbin one) and reads `_client_ip(request)` which honours
+    `X-R3-Peer` / XFF set by mitm-wg's inject_xff addon. A 10.99.1.x
+    source means R3 ; anything else means the request did not come
+    through the WireGuard tunnel.
+    """
+    ip = _client_ip(request)
+    in_tunnel = bool(ip and ip.startswith("10.99.1."))
+    return {
+        "tunnel": in_tunnel,
+        "peer_ip": ip if in_tunnel else None,
+    }
+
+
 @router.get("/status", response_model=StatusResp)
 async def status(request: Request) -> StatusResp:
     ip, mac = _resolve(request)
