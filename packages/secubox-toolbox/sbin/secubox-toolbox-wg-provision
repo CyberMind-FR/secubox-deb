@@ -83,12 +83,24 @@ nft add rule inet wg-toolbox forward iif wg-toolbox udp dport 443 counter drop 2
 log "allowing UDP ${WG_PORT} on inet filter input"
 nft add rule inet filter input udp dport ${WG_PORT} accept 2>/dev/null || true
 
-# Phase 6.C (#496) : OPTIONAL DNAT prerouting for mitm interception.
-# Currently DISABLED by default — uncomment when mitm-wg service is running
-# on \${WG_SERVER_IP}:8081. With DNAT but no listener, surf breaks entirely.
-# nft -- add chain inet wg-toolbox prerouting "{ type nat hook prerouting priority dstnat; }" 2>/dev/null || true
-# nft add rule inet wg-toolbox prerouting iif wg-toolbox tcp dport 443 dnat ip to ${WG_SERVER_IP}:8081
-# nft add rule inet wg-toolbox prerouting iif wg-toolbox tcp dport 80 dnat ip to ${WG_SERVER_IP}:8081
+# Phase 6.C (#496) : DNAT prerouting for mitm interception.
+# secubox-toolbox-mitm-wg.service starts in parallel ; in the worst case the
+# tunnel briefly proxies through a not-yet-listening port and curls retry.
+# Trade-off accepted — banner injection + WAF visibility require interception.
+nft -- add chain inet wg-toolbox prerouting "{ type nat hook prerouting priority dstnat; }" 2>/dev/null || true
+nft add rule inet wg-toolbox prerouting iif wg-toolbox tcp dport 443 dnat ip to ${WG_SERVER_IP}:8081 2>/dev/null || true
+nft add rule inet wg-toolbox prerouting iif wg-toolbox tcp dport 80 dnat ip to ${WG_SERVER_IP}:8081 2>/dev/null || true
+
+# ── Persist the same rules in /etc/nftables.d/ so they survive reboot ──
+# The runtime nft add commands above evaporate on reboot ; the drop-in
+# below is loaded by nftables.service via /etc/nftables.conf include.
+NFT_DROPIN=/etc/nftables.d/secubox-toolbox-wg.nft
+NFT_DROPIN_SRC=/usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg.nft
+if [ -f "$NFT_DROPIN_SRC" ]; then
+    install -d -m 0755 /etc/nftables.d
+    install -m 0644 "$NFT_DROPIN_SRC" "$NFT_DROPIN"
+    log "installed nft drop-in $NFT_DROPIN (boot-survival)"
+fi
 
 # ── Enable IP forwarding (persist) ──
 echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-secubox-wg.conf
