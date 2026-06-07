@@ -1,3 +1,14 @@
+secubox-crowdsec (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7 (#498) : ship /etc/sudoers.d/secubox-crowdsec with two
+    exact-match entries so the aggregator user can call
+    cscli bouncers list + nft list tables read-only for the /health
+    gauge. Without this drop-in the WebUI showed firewall errors
+    after Phase 7.D consolidation (aggregator runs as secubox, no
+    sudoers context for the FastAPI's subprocess calls).
+
+ -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:57:29 +0000
+
 secubox-crowdsec (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * Three-fold architecture (Components/Status/Access endpoints)
