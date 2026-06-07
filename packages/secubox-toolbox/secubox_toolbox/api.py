@@ -82,11 +82,36 @@ def _get_salt() -> str:
 
 
 def _resolve(request: Request) -> tuple[str | None, str | None]:
-    """Return (ip, mac) for the request client."""
-    ip = request.client.host if request.client else None
+    """Return (ip, mac) for the request client.
+
+    Phase 7 (#498) : for WG R3 peers the FastAPI runs behind nginx and
+    behind mitm-wg, so `request.client.host` is the upstream proxy IP
+    (unix socket peer for nginx or HAProxy's address). The real source
+    IP is in X-Forwarded-For — set by mitm-wg's inject_xff addon for
+    tunneled requests and by nginx for everyone else.
+    """
+    ip = _client_ip(request)
     if not ip:
         return None, None
     return ip, macmod.mac_of(ip)
+
+
+def _client_ip(request: Request) -> str | None:
+    """Pick the most trustworthy client IP : X-Through-R3-Tunnel sentinel
+    set by mitm-wg's inject_xff > leftmost X-Forwarded-For > raw socket
+    peer. The sentinel header is the cleanest signal because it can only
+    be set by our own proxy chain."""
+    # Sentinel : mitm-wg always populates this for 10.99.1.x peers
+    r3 = request.headers.get("X-R3-Peer")
+    if r3 and r3.startswith("10.99.1."):
+        return r3
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        # leftmost = original client
+        first = xff.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else None
 
 
 # ───────────────── Public routes ─────────────────
@@ -105,7 +130,9 @@ async def splash(request: Request):
     # client is by construction R3 — bypass MAC/ARP resolution and use
     # the WG peer hash so the splash shows R3 status, masks R0/R1/R2
     # switch (useless when already in tunnel), and links to /report?mh=.
-    client_ip = request.client.host if request.client else None
+    # Phase 7 (#498) : prefer XFF / X-R3-Peer sentinel because the FastAPI
+    # runs behind nginx + mitm-wg, so request.client.host is the proxy peer.
+    client_ip = _client_ip(request)
     is_wg_r3 = bool(client_ip and client_ip.startswith("10.99.1."))
     if is_wg_r3:
         try:
