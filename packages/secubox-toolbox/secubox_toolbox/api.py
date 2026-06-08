@@ -1000,6 +1000,184 @@ async def wg_profile_new(request: Request) -> Response:
     )
 
 
+@router.get("/wg/onboard", response_class=HTMLResponse)
+async def wg_onboard(request: Request) -> HTMLResponse:
+    """Phase 7 follow-up (#498) — auto-detect onboarding page.
+
+    Single URL the operator can hand to anyone : detects the visitor's
+    OS from the User-Agent and renders the right one-click install
+    flow. iPhone → QR + Safari CA mobileconfig button. Android →
+    QR + CA .crt link + step-by-step. Linux → .nmconnection download
+    + one-line cp command. Windows / macOS → .conf + CA + install
+    hint. No device-specific URLs to remember.
+
+    The artefacts themselves stay at the existing endpoints :
+        /wg/profile/new                  → wg-quick .conf
+        /wg/profile/new.nmconnection     → NetworkManager keyfile
+        /wg/ca.mobileconfig              → iOS profile
+        /wg/ca.pem                       → CA root cert
+        /wg/qr.png                       → QR of the .conf
+    """
+    ua = (request.headers.get("user-agent") or "").lower()
+    # Cheap UA sniffing — good enough for "show the right button first".
+    if "iphone" in ua or "ipad" in ua or "ios" in ua:
+        platform = "ios"
+    elif "android" in ua:
+        platform = "android"
+    elif "macintosh" in ua or "mac os x" in ua:
+        platform = "macos"
+    elif "windows" in ua:
+        platform = "windows"
+    elif "linux" in ua:
+        platform = "linux"
+    else:
+        platform = "other"
+
+    return HTMLResponse(_render_onboard(platform))
+
+
+def _render_onboard(platform: str) -> str:
+    """Plain HTML : minimal CSS, no JS framework. iOS Safari + Android
+    Chrome + desktop browsers all render the same markup. Each platform
+    gets its dedicated panel expanded by default ; the others are
+    collapsed details elements so a user on the wrong device can still
+    follow the right flow."""
+    panels = {
+        "ios":     ("🍎 iPhone / iPad", "ios"),
+        "android": ("🤖 Android", "android"),
+        "linux":   ("🐧 Linux", "linux"),
+        "macos":   ("🍏 macOS", "macos"),
+        "windows": ("🪟 Windows", "windows"),
+    }
+    order = [platform] + [k for k in panels if k != platform]
+    # de-dup if platform was "other"
+    order = [k for i, k in enumerate(order) if k in panels and k not in order[:i]]
+
+    sections = []
+    for key in order:
+        title, slug = panels[key]
+        body = _ONBOARD_BODY[slug]
+        open_attr = " open" if key == order[0] else ""
+        sections.append(
+            f'<details class="step" id="step-{slug}"{open_attr}>'
+            f'<summary><span class="emoji">{title.split()[0]}</span> '
+            f'<b>{title}</b></summary>{body}</details>'
+        )
+    body_html = "\n".join(sections)
+    return f"""<!doctype html><html lang=fr><head>
+<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Activer SecuBox R3 — Tunnel + Audit</title>
+<style>
+:root{{--cosmos-black:#0a0a0f;--gold-hermetic:#c9a84c;--matrix-green:#00ff41;
+--void-purple:#6e40c9;--text-primary:#e8e6d9;--text-muted:#6b6b7a;
+--cinnabar:#e63946;--card:rgba(110,64,201,0.08);--border:rgba(110,64,201,0.4)}}
+*{{box-sizing:border-box}}
+html,body{{margin:0;padding:0;background:var(--cosmos-black);color:var(--text-primary);
+font-family:'JetBrains Mono',ui-monospace,monospace;min-height:100vh}}
+header{{padding:1.5rem 1rem 0;text-align:center}}
+header h1{{color:var(--matrix-green);font-size:1.4rem;margin:0 0 0.3rem;letter-spacing:0.5px}}
+header p{{color:var(--text-muted);margin:0;font-size:0.92rem}}
+main{{max-width:560px;margin:1rem auto;padding:0 1rem 4rem}}
+.step{{background:var(--card);border:1px solid var(--border);border-radius:10px;
+padding:0.9rem 1.1rem;margin:0.75rem 0}}
+.step summary{{cursor:pointer;font-size:1.05rem;list-style:none;color:var(--gold-hermetic)}}
+.step summary::-webkit-details-marker{{display:none}}
+.step[open] summary{{margin-bottom:0.75rem}}
+.emoji{{font-size:1.2rem;margin-right:0.35rem}}
+.btn{{display:inline-block;padding:0.6rem 1rem;margin:0.35rem 0.25rem 0.35rem 0;
+background:var(--void-purple);color:#fff;text-decoration:none;border-radius:8px;
+font-weight:bold;font-size:0.92rem}}
+.btn.alt{{background:transparent;border:1px solid var(--void-purple);color:var(--void-purple)}}
+ol{{padding-left:1.2rem;line-height:1.55}}
+code{{background:rgba(0,0,0,0.4);padding:0.12rem 0.4rem;border-radius:4px;
+font-size:0.85rem;color:var(--matrix-green)}}
+.note{{color:var(--text-muted);font-size:0.85rem;margin-top:0.8rem;
+border-left:2px solid var(--gold-hermetic);padding-left:0.7rem}}
+footer{{text-align:center;color:var(--text-muted);font-size:0.8rem;padding:1rem}}
+footer a{{color:var(--gold-hermetic)}}
+</style></head><body>
+<header><h1>🛰 SecuBox R3 — Activation</h1>
+<p>Choisis ton appareil. La méthode adaptée s'ouvre en premier.</p></header>
+<main>{body_html}
+<details class=step><summary><span class=emoji>📡</span><b>Comment ça marche</b></summary>
+<p>R3 fait passer ton trafic dans un tunnel WireGuard chiffré jusqu'à
+ton SecuBox personnel. Une fois le tunnel actif, l'analyseur affiche
+un bandeau sur chaque page web visitée — tu peux voir en temps réel
+quels services tiers chargent quoi, quels cookies sont posés, quel
+fournisseur héberge la requête, etc.</p>
+<p class=note>Le certificat racine R3 est généré localement par
+<b>ton</b> SecuBox. Il n'est utilisé que pour les flux du tunnel ;
+révocable à tout moment depuis Réglages.</p>
+</details></main>
+<footer>SecuBox-Deb · CyberMind / Gérald Kerma · <a href=https://cybermind.fr>cybermind.fr</a></footer>
+</body></html>"""
+
+
+# Per-platform body fragments — kept in module scope so they're parsed once.
+_ONBOARD_BODY = {
+    "ios": """
+<ol>
+<li>Installe l'app <a class=btn href="https://apps.apple.com/app/wireguard/id1441195209" target=_blank rel=noopener>WireGuard</a> depuis l'App Store.</li>
+<li>Scanne ton QR :<br><img src="/wg/qr.png" alt="QR code" style="width:240px;max-width:100%;margin:0.5rem 0;border-radius:6px"></li>
+<li>Active le tunnel dans WireGuard (bouton vert).</li>
+<li>Installe le certificat :<br><a class=btn href="/wg/ca.mobileconfig">📥 Profil iOS (CA R3)</a></li>
+<li>Réglages → Profil téléchargé → Installer.</li>
+<li>Réglages → Général → Informations → <b>Confiance des certificats racines</b> → active le profil <i>Gondwana ToolBoX</i>.</li>
+<li>Ouvre n'importe quel site — le bandeau orange doit apparaître en haut.</li>
+</ol>
+<p class=note>Si rien ne se passe : Réglages → Batterie → désactive le mode économie (il coupe parfois les VPN).</p>
+""",
+    "android": """
+<ol>
+<li>Installe l'app <a class=btn href="https://play.google.com/store/apps/details?id=com.wireguard.android" target=_blank rel=noopener>WireGuard</a> depuis le Play Store.</li>
+<li>Dans l'app, tap "+" → "Scan from QR code" → scanne ton QR :<br><img src="/wg/qr.png" alt="QR code" style="width:240px;max-width:100%;margin:0.5rem 0;border-radius:6px"></li>
+<li>Active le tunnel (interrupteur).</li>
+<li>Installe le certificat racine : <a class=btn href="/wg/ca.pem">📥 ca.pem</a> ou <a class=btn alt href="/wg/ca.cer">.cer (DER)</a></li>
+<li>Paramètres → Sécurité → Chiffrement et identifiants → Installer un certif depuis le stockage → CA → choisis le fichier.</li>
+<li>Ouvre Chrome — le bandeau orange doit apparaître.</li>
+</ol>
+<p class=note>Sur Android 14+, certains constructeurs (Samsung, Xiaomi) demandent en plus d'autoriser les CA utilisateur dans <i>Paramètres → Sécurité supplémentaire</i>.</p>
+""",
+    "linux": """
+<p>Choisis ton format :</p>
+<a class=btn href="/wg/profile/new.nmconnection">📥 NetworkManager keyfile</a>
+<a class=btn alt href="/wg/profile/new">📥 wg-quick .conf</a>
+<a class=btn alt href="/wg/ca.pem">🔐 CA root .pem</a>
+<p><b>NetworkManager (Cosmic / GNOME / KDE) :</b></p>
+<pre><code>sudo install -m 0600 village3b-toolbox.nmconnection \\
+     /etc/NetworkManager/system-connections/
+sudo nmcli connection reload
+nmcli connection up village3b-toolbox</code></pre>
+<p><b>Ou wg-quick (sans NetworkManager) :</b></p>
+<pre><code>sudo cp village3b-toolbox.conf /etc/wireguard/village3b.conf
+sudo wg-quick up village3b</code></pre>
+<p><b>Faire confiance au CA :</b></p>
+<pre><code>sudo cp ca.pem /usr/local/share/ca-certificates/secubox-r3.crt
+sudo update-ca-certificates</code></pre>
+<p class=note>Pour Firefox : about:preferences#privacy → Voir les certificats → Importer ca.pem dans "Autorités".</p>
+""",
+    "macos": """
+<ol>
+<li>Installe <a class=btn href="https://apps.apple.com/app/wireguard/id1451685025" target=_blank rel=noopener>WireGuard</a> depuis le Mac App Store.</li>
+<li>Télécharge ton profil :<br><a class=btn href="/wg/profile/new">📥 village3b-toolbox.conf</a></li>
+<li>Glisse le .conf sur l'icône WireGuard dans la barre de menu → Active.</li>
+<li>Télécharge le CA : <a class=btn alt href="/wg/ca.pem">🔐 ca.pem</a></li>
+<li>Ouvre <i>Trousseau d'accès</i> → glisse le ca.pem dans "Système" → double-clique → <b>Toujours approuver</b>.</li>
+</ol>
+""",
+    "windows": """
+<ol>
+<li>Installe <a class=btn href="https://download.wireguard.com/windows-client/" target=_blank rel=noopener>WireGuard for Windows</a>.</li>
+<li>Télécharge ton profil :<br><a class=btn href="/wg/profile/new">📥 village3b-toolbox.conf</a></li>
+<li>Dans WireGuard : "Add Tunnel" → "Add Tunnel from file..." → sélectionne le .conf → <b>Activate</b>.</li>
+<li>Télécharge le CA : <a class=btn alt href="/wg/ca.pem">🔐 ca.pem</a></li>
+<li>Double-clique le .pem → <b>Installer le certificat</b> → Magasin local "Autorités principales de confiance".</li>
+</ol>
+<p class=note>Sous Edge / Chrome, le bandeau apparaît une fois le tunnel actif. Firefox utilise son propre magasin — importe ca.pem dans Paramètres → Confidentialité → Certificats.</p>
+""",
+}
+
+
 @router.get("/wg/profile/new.nmconnection")
 async def wg_profile_new_nmconnection(request: Request) -> Response:
     """Phase 7 (#498) — same fresh WG profile but in NetworkManager

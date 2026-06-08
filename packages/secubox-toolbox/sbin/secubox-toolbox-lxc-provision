@@ -10,12 +10,47 @@
 
 set -euo pipefail
 
-CONTAINER="toolbox-mitm"
+# Phase 7 follow-up (#498) — accept --target {transparent,wg} so we can
+# provision the second LXC (toolbox-mitm-wg) the same way. Default keeps
+# the historical transparent-mitm behaviour (#495).
+TARGET="${1:-transparent}"
+case "$TARGET" in
+    --target=wg|wg)        TARGET="wg" ;;
+    --target=transparent|transparent|"") TARGET="transparent" ;;
+    --help|-h)
+        cat <<EOF
+Usage: $(basename "$0") [transparent|wg]
+
+    transparent  (default) — toolbox-mitm LXC at 10.100.0.61
+                              for the captive-AP mitm (#495).
+    wg                     — toolbox-mitm-wg LXC at 10.100.0.62
+                              for the R3 WG mitm (#498). Replaces
+                              the host-side secubox-toolbox-mitm-wg
+                              service so nothing wg-related runs on
+                              the host except wg-quick.
+EOF
+        exit 0
+        ;;
+    *) echo "unknown target: $TARGET (use 'transparent' or 'wg')" >&2; exit 2 ;;
+esac
+
+if [ "$TARGET" = "wg" ]; then
+    CONTAINER="toolbox-mitm-wg"
+    CONFIG_TEMPLATE="/usr/share/secubox/toolbox/lxc/toolbox-mitm-wg.conf.template"
+    SVC_TEMPLATE="/usr/share/secubox/toolbox/lxc/toolbox-mitm-wg.service.template"
+    SVC_NAME="secubox-toolbox-mitm-wg.service"
+    CONTAINER_IP="10.100.0.62"
+else
+    CONTAINER="toolbox-mitm"
+    CONFIG_TEMPLATE="/usr/share/secubox/toolbox/lxc/toolbox-mitm.conf.template"
+    SVC_TEMPLATE="/usr/share/secubox/toolbox/lxc/toolbox-mitm.service.template"
+    SVC_NAME="secubox-toolbox-mitm.service"
+    CONTAINER_IP="10.100.0.61"
+fi
+
 LXC_PATH="/var/lib/lxc"
 ROOTFS="${LXC_PATH}/${CONTAINER}/rootfs"
 CONFIG_TARGET="/etc/lxc/${CONTAINER}.conf"
-CONFIG_TEMPLATE="/usr/share/secubox/toolbox/lxc/toolbox-mitm.conf.template"
-SVC_TEMPLATE="/usr/share/secubox/toolbox/lxc/toolbox-mitm.service.template"
 
 log() {
     printf '[toolbox-lxc-provision] %s\n' "$*"
@@ -47,11 +82,25 @@ log "installing $CONFIG_TARGET from template"
 cp -f "$CONFIG_TEMPLATE" "$CONFIG_TARGET"
 chmod 0644 "$CONFIG_TARGET"
 
-# Bind-mount paths must exist on the host
-for p in /etc/secubox/toolbox/ca \
-         /var/lib/secubox/toolbox \
-         /var/log/secubox/toolbox-mitm \
-         /usr/lib/secubox/toolbox/mitmproxy_addons; do
+# Bind-mount paths must exist on the host (Phase 7 #498 — wg variant adds
+# /etc/secubox/toolbox/ca-wg + /etc/secubox/toolbox/wg + a dedicated log dir).
+if [ "$TARGET" = "wg" ]; then
+    PATHS_TO_ENSURE=(
+        /etc/secubox/toolbox/ca-wg
+        /etc/secubox/toolbox/wg
+        /var/lib/secubox/toolbox
+        /var/log/secubox/toolbox-mitm-wg
+        /usr/lib/secubox/toolbox/mitmproxy_addons
+    )
+else
+    PATHS_TO_ENSURE=(
+        /etc/secubox/toolbox/ca
+        /var/lib/secubox/toolbox
+        /var/log/secubox/toolbox-mitm
+        /usr/lib/secubox/toolbox/mitmproxy_addons
+    )
+fi
+for p in "${PATHS_TO_ENSURE[@]}"; do
     mkdir -p "$p"
 done
 
@@ -62,13 +111,25 @@ fi
 
 # ── Install mitm service inside the container ──
 if [ -f "$SVC_TEMPLATE" ]; then
-    log "deploying mitm service into container"
-    cp -f "$SVC_TEMPLATE" "$ROOTFS/etc/systemd/system/secubox-toolbox-mitm.service"
-    chmod 0644 "$ROOTFS/etc/systemd/system/secubox-toolbox-mitm.service"
+    log "deploying $SVC_NAME into container"
+    cp -f "$SVC_TEMPLATE" "$ROOTFS/etc/systemd/system/$SVC_NAME"
+    chmod 0644 "$ROOTFS/etc/systemd/system/$SVC_NAME"
     # Enable on first boot of container
     mkdir -p "$ROOTFS/etc/systemd/system/multi-user.target.wants"
-    ln -sf /etc/systemd/system/secubox-toolbox-mitm.service \
-           "$ROOTFS/etc/systemd/system/multi-user.target.wants/secubox-toolbox-mitm.service"
+    ln -sf "/etc/systemd/system/$SVC_NAME" \
+           "$ROOTFS/etc/systemd/system/multi-user.target.wants/$SVC_NAME"
+fi
+
+# Phase 7 (#498) — WG variant : the LXC needs the host's bypass + peers
+# state and the addons exactly as the host service used to load them. The
+# bind-mounts in the template handle that, but we also need to make sure
+# the addons + state files exist on the host BEFORE the container boots
+# (LXC fails to start if a bind-mount source is missing without
+# `optional`). The seed below is a no-op if the files already exist.
+if [ "$TARGET" = "wg" ]; then
+    install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox 2>/dev/null || true
+    touch /var/lib/secubox/toolbox/mitm-bypass.conf 2>/dev/null || true
+    touch /var/lib/secubox/toolbox/mitm-bypass-dynamic.conf 2>/dev/null || true
 fi
 
 # ── Start the container (or restart if running) ──
@@ -81,13 +142,37 @@ fi
 log "starting container $CONTAINER"
 lxc-start -n "$CONTAINER" || err "lxc-start failed"
 
-# Wait for network up
+# Wait for network
 for i in 1 2 3 4 5; do
-    if lxc-info -n "$CONTAINER" 2>/dev/null | grep -q '10.100.0.61'; then
-        log "container network up : 10.100.0.61"
+    if lxc-info -n "$CONTAINER" 2>/dev/null | grep -q "$CONTAINER_IP"; then
+        log "container network up : $CONTAINER_IP"
         break
     fi
     sleep 1
 done
 
-log "provision complete"
+# Phase 7 (#498) — WG cutover hints. The host's secubox-toolbox-mitm-wg
+# service can be replaced once this LXC is verified working. We don't
+# touch the host service automatically — operator decides the cutover
+# moment with `secubox-toolbox-mitm-wg-cutover` (separate tool).
+if [ "$TARGET" = "wg" ]; then
+    cat <<EOF
+
+Next steps to cut over to the LXC mitm-wg (manual — service moment) :
+
+  1. Verify the LXC accepts traffic on port 8081 :
+       lxc-attach -n toolbox-mitm-wg -- ss -tln | grep 8081
+
+  2. Repoint the nft DNAT from 10.99.1.1:8081 to 10.100.0.62:8081 :
+       nft replace rule inet wg-toolbox prerouting \\
+           handle <h> iif wg-toolbox tcp dport 443 dnat ip to 10.100.0.62:8081
+
+  3. Stop + disable the host service :
+       systemctl disable --now secubox-toolbox-mitm-wg.service
+
+  4. Update /etc/nftables.d/secubox-toolbox-wg.nft to point at .62
+     (so next reboot loads the new target).
+EOF
+fi
+
+log "provision complete (target=$TARGET, ip=$CONTAINER_IP)"

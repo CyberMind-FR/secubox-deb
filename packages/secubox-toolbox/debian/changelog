@@ -1,3 +1,31 @@
+secubox-toolbox (2.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7 follow-up (#498) — auto-detect onboarding page :
+    new GET /wg/onboard sniffs the visitor's User-Agent and renders
+    the right one-click install flow first (iOS, Android, Linux,
+    macOS, Windows). Hands one URL to anyone — no device-specific
+    URLs to remember. All artefacts still live at their existing
+    paths (/wg/profile/new, /wg/profile/new.nmconnection,
+    /wg/ca.mobileconfig, /wg/ca.pem, /wg/qr.png).
+  * Phase 7 follow-up (#498) — scaffold for mitm-wg-in-LXC :
+    - secubox-toolbox-lxc-provision now accepts a {transparent,wg}
+      target arg. `secubox-toolbox-lxc-provision wg` provisions the
+      toolbox-mitm-wg LXC at 10.100.0.62 using the existing wg LXC
+      conf + service templates.
+    - LXC config template rewritten for transparent mode on TCP 8081
+      (instead of mitmproxy --mode wireguard which would have
+      required a server.conf format peer migration). wg-quick stays
+      on the host ; only the mitmdump process moves to the LXC.
+    - LXC service template runs the SAME secubox-toolbox-mitm-wg-
+      launch script as the host service, bind-mounted in RO — single
+      source of truth for the addon chain + ignore_hosts compose
+      logic. RuntimeMaxSec=21600 hygiene cycle matches the WAF LXC.
+    - Cutover is OPT-IN (no automatic switchover in postinst). The
+      provisioner prints the exact nft replace + systemctl disable
+      steps after a successful run.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 07:02:00 +0000
+
 secubox-toolbox (2.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 7 (#498) — WG boot survival + interception layer hardening :
