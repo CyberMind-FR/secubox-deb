@@ -21,11 +21,24 @@ ExecStart=/opt/mitmproxy/bin/mitmdump \
 Restart=on-failure
 RestartSec=5
 
+# Phase 7 follow-up (#498) — memory hygiene. mitmproxy under heavy long-
+# running traffic accumulates connection / SSL session state ; on gk2 the
+# unit ran 1 d 16 h with 200 MB RSS, 934 ESTAB conns and 51 % response-
+# error rate on the HAProxy backend. RuntimeMaxSec lets systemd cycle the
+# process every 6 h with a clean restart — matches the host mitm-wg /
+# mitm captive Phase 6.P drop-ins (10-runtime-max.conf).
+RuntimeMaxSec=21600
+
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/data/mitmproxy /var/log/mitmproxy
+
+# Phase 7 (#498) — memory bound. mitmproxy can balloon under attack
+# traffic ; OOM-killing it is cleaner than swap thrash.
+MemoryHigh=400M
+MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target

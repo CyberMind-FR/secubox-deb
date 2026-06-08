@@ -1,3 +1,17 @@
+secubox-waf (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7 follow-up (#498) — LXC mitmproxy.service memory hygiene :
+    - RuntimeMaxSec=21600 (6 h) so systemd cycles the process cleanly.
+      Live on gk2 the unit ran 1 d 16 h with 200 MB RSS, 934 ESTAB
+      conns and 51 % response-error rate on the HAProxy backend.
+      Matches the host-side Phase 6.P drop-ins for mitm-wg + mitm
+      captive.
+    - MemoryHigh=400M / MemoryMax=512M : same bound as host units.
+      Under attack traffic mitmproxy can balloon ; OOM is cleaner
+      than swap thrash.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 06:56:00 +0000
+
 secubox-waf (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * New endpoint GET /bans/history?hours=N&limit=M (ref #498) :
