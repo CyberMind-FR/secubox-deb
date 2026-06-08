@@ -1,3 +1,29 @@
+secubox-toolbox (2.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 8 Quick Win (#500) — anti-Utiq defense R0 (log) + R1 (block).
+    Utiq is the operator-grade tracking ID consortium launched in 2023
+    by Deutsche Telekom + Orange + Telefónica + Vodafone — a carrier-
+    issued 90-day-stable identifier that cookies + standard anti-
+    fingerprinting tools can't address.
+    Shipped :
+      - mitmproxy_addons/utiq_defense.py addon (placed early in the
+        chain so R1 short-circuits before downstream addons spin on
+        a doomed flow). Default level R0 (log) ; toggle to R1 via
+        env var UTIQ_DEFAULT_LEVEL=R1.
+      - secubox_toolbox/utiq.py SQLite event store (utiq_events
+        table with publisher extracted from host, action + level
+        per record, indexes on ts / client_ip / publisher).
+      - GET /api/v1/toolbox/admin/utiq-events?hours=&limit= returns
+        recent events + aggregates (by_publisher / by_client /
+        by_action) for the admin dashboard.
+      - inject_banner tile : '📡 utiq:N' appears in the right-side
+        of the SecuBox banner when the client has hit a Utiq host
+        in the last hour. Cheap query, fail-open.
+      - utiq_defense added to the mitm-wg-launch addon chain
+        between inject_xff and local_store.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 14:19:50 +0000
+
 secubox-toolbox (2.3.3-1~bookworm1) bookworm; urgency=medium
 
   * Phase 7.E.3 (#498) — new unbound drop-in

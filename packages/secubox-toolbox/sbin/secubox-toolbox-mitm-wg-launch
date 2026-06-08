@@ -68,8 +68,11 @@ fi
 # Addons :
 #   - inject_xff (Phase 7 #498) MUST be FIRST — sets X-Forwarded-For at
 #     requestheaders so other addons and the upstream see the real peer IP
+#   - utiq_defense (Phase 8 #500) runs at requestheaders too ; placed
+#     EARLY so a R1 block short-circuits the flow before downstream
+#     addons spend cycles on it
 #   - cert_pin_detect auto-learns pinned hosts (Phase 6.N)
-for addon in inject_xff local_store inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
+for addon in inject_xff utiq_defense local_store inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
     ARGS+=(-s "$ADDON_DIR/${addon}.py")
 done
 
