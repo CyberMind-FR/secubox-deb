@@ -1,9 +1,52 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-05*
+*Mis à jour : 2026-06-08*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Phase 8 — Anti-tracking opérateur (Utiq) — issue #500
+
+Plan complet documenté en issue. À implémenter :
+
+- [ ] **Quick Win (1 j)** — addon `utiq_defense.py` R0 (log) + R1 (block),
+  tile banner "🎯 Utiq detecté", tableau brut `/admin/utiq-events`,
+  schéma SQLite.
+- [ ] **Phase 2 (1 sem)** — R2 (mask `utiqLoader.js` → mtid=null) +
+  R3 (pseudo-avatar via `avatar.py`).
+- [ ] **Phase 3 (doctrine)** — section CSPN sur la forge d'identifiant
+  R3, consentement explicite par client, banner UX étoffé.
+- [ ] **Tests E2E** — 5 sites éditeurs européens (lemonde.fr,
+  lefigaro.fr, marmiton.org, tf1.fr, 20minutes.fr) avec attendus
+  par niveau.
+
+### Phase 7.E follow-ups (de 2026-06-08, ref #498)
+
+- [ ] `secubox-aggregator` 0.2.1 build + dpkg upgrade live sur gk2
+  (ProtectSystem=full + /etc/secubox dans ReadWritePaths). Le live
+  drop-in `40-etc-secubox-rw.conf` est en place tant que le paquet
+  n'est pas upgrade.
+- [ ] Rebuild + déploiement `secubox-users` 1.4.2 (postinst chowne
+  aussi auth.toml).
+- [ ] Investigation : pourquoi `systemd-timesyncd` reste
+  `NTPSynchronized: no` sur gk2 même avec NTP servers configurés et
+  UDP 123 outbound fonctionnel. Peut-être un IPv6-only resolve qui
+  échoue silencieusement.
+
+### Phase 9 (futur) — mitm-wg multi-instance dispatcher
+
+Re-attaquable seulement avec une archi à inventer :
+
+- [ ] Évaluer un dispatcher Python custom qui termine wg-quick côté hôte
+  puis route par peer-id vers une mitmproxy instance dans une LXC.
+- [ ] OR : wg-quick dans la LXC privilégiée avec accès netfilter
+  partagé (kernel module loaded host-side, exposé via /proc).
+- [ ] Évaluer aussi le patch upstream mitmproxy pour multi-peer
+  `--mode wireguard` (probablement pas dans leur scope).
+
+---
+
+
 
 ### Phase 6 R3 WireGuard ✅ MAJOR RELEASE shipped 2026-06-05 (ref #496)
 

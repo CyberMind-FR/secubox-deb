@@ -3,6 +3,82 @@
 
 ---
 
+## 2026-06-08 — Phase 7.E.x LXC hygiene + auth recovery + Phase 8 opening (ref #498, #500)
+
+### Package bumps
+
+| Package | from → to |
+|---|---|
+| secubox-waf | 1.2.0 → **1.2.1** |
+| secubox-toolbox | 2.2.0 → **2.3.2** |
+| secubox-auth | 1.0.1 → **1.0.2** |
+| secubox-users | 1.4.1 → **1.4.2** |
+
+### What landed
+
+**1. LXC mitm WAF hygiene** (`secubox-waf` 1.2.1, commit `c5f0482e`)
+
+`mitmproxy.service` inside la `mitmproxy` LXC tournait 1 d 16 h
+avec 51 % d'eresp HAProxy. Phase 6.P avait shippé le
+`RuntimeMaxSec=21600` drop-in pour les host units mais avait oublié
+la LXC. `RuntimeMaxSec=21600` + memory caps maintenant en source.
+
+**2. Auto-detect `/wg/onboard`** (`secubox-toolbox` 2.3.0, commit
+`c5f0482e`)
+
+Une URL unique sniff User-Agent et rend le panneau de la bonne
+plate-forme (iOS / Android / Linux / macOS / Windows) ouvert en
+premier. Tous les artefacts inchangés ; l'onboard compose juste.
+
+**3. NM connection name fix** (`secubox-toolbox` 2.3.1, commit
+`f1418b53`)
+
+Switch de l'UA brut (`Mozilla/5.0 (X11; Linux x86_64; rv:151.0)`) à
+`village3b-r3-<dernier-octet>` pour le champ NetworkManager `id`.
+
+**4. LXC mitm-wg scaffolding + finding architectural**
+(`secubox-toolbox` 2.3.2, commit `3c4d1cc1`)
+
+- Provision script accepte `wg` target → LXC privilégié à 10.100.0.62.
+- Launcher mitm-wg paramétré par `MITM_WG_LISTEN_HOST`.
+- **Cutover live tenté + rollback** : transparent-mode mitm dans un
+  LXC échoue parce que `SO_ORIGINAL_DST` est conntrack-backed et
+  conntrack est namespace-scoped — les entries DNAT en netns hôte
+  sont invisibles depuis le netns LXC.
+- `mitmproxy --mode wireguard` (alternative) est strictement
+  single-peer. Migration de 35 peers = re-onboarding complet.
+- **Décision** : mitm-wg reste sur l'hôte. Scaffolding LXC reste
+  shippée pour une éventuelle archi multi-instance Phase 9.
+
+**5. Auth recovery** (`secubox-auth` 1.0.2 + `secubox-users` 1.4.2,
+commits `87bd8e51` + `64e4de16`)
+
+Symptôme : utilisateur locked out de l'admin UI. Trois bugs empilés :
+
+1. `ntp_health.probe()` n'avait que chrony ; fallback timedatectl
+   ajouté (les SecuBox ship timesyncd).
+2. Clock à +3.28 s vs NTP, force-step via ntpdate.
+3. **Auth complètement cassée** : `users.json` + `auth.toml` étaient
+   `root:root` → user `secubox` ne pouvait rien lire → tous les
+   logins "Identifiants incorrects". `auth.toml` n'avait JAMAIS été
+   chown'd depuis l'install initiale. Source fix : `secubox-users`
+   1.4.2 chowne les deux. Plus drop-in
+   `40-etc-secubox-rw.conf` (`ReadWritePaths=/etc/secubox`) pour
+   l'engine puisse persister `last_step` après verify TOTP.
+
+**6. Phase 8 — anti-tracking opérateur (Utiq)** (issue #500)
+
+Ouverture du tracker Phase 8. Plan complet 4 niveaux R0 / R1 / R2 / R3,
+schéma SQLite, banner UI, doctrine CSPN, Quick Win 1 j + Phase 2 1
+sem + Phase 3 doctrine. Prompt Gemini fourni pour design exploratoire.
+
+### Ref
+
+- Commits : `c5f0482e`, `f1418b53`, `3c4d1cc1`, `87bd8e51`, `64e4de16`
+- Public trackers : `#498` + `#500`
+
+---
+
 ## 2026-06-07 — Phase 7 reboot follow-up sprint SHIPPED (ref #498)
 
 Same-day follow-up after the Phase 7.D mass reboot. Two user-facing
