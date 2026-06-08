@@ -46,6 +46,15 @@ lxc.mount.entry = /usr/sbin/secubox-toolbox-mitm-wg-launch usr/sbin/secubox-tool
 lxc.mount.entry = /usr/lib/secubox/toolbox/mitmproxy_addons usr/lib/secubox/toolbox/mitmproxy_addons none ro,bind,create=dir 0 0
 #   - Dedicated WG CA (RO) — separate from the transparent-mitm CA so the
 #     two containers remain compartmentalised (#495 isolation invariant).
+# IMPORTANT (Phase 7 #498) — for UNPRIVILEGED LXC the source paths
+# below MUST be readable by the LXC root's mapped UID (100000 by
+# default). /etc/secubox/toolbox/ca-wg is 0750 root:secubox-toolbox at
+# the moment which BLOCKS the mount (Permission denied). Either :
+#   1. chmod 0755 /etc/secubox/toolbox/ca-wg (RX for all — relaxes the
+#      CA-key visibility ; OK for the PUBLIC cert files, NOT for the
+#      private key inside it).
+#   2. Use a PRIVILEGED LXC (no lxc.idmap line) — matches the existing
+#      mitmproxy LXC. Recommended path for now.
 lxc.mount.entry = /etc/secubox/toolbox/ca-wg etc/secubox/toolbox/ca-wg none ro,bind,create=dir 0 0
 #   - Bypass lists + SQLite event store (RW, shared with host FastAPI
 #     so the cert-pin auto-learning addon's writes show up in /admin).
