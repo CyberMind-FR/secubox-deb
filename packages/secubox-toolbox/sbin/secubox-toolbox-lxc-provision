@@ -105,9 +105,23 @@ done
 lxc-info -n "$CONTAINER" 2>/dev/null | grep -q 'State.*RUNNING' \
     && lxc-stop -n "$CONTAINER" -t 5 -k 2>/dev/null && sleep 1 || true
 
-# Extract the idmap lines from the auto-generated config (these encode
-# the chosen unprivileged uid range — must NOT be re-randomised).
-IDMAP_LINES=$(grep -E '^lxc\.idmap' "$LIVE_CONFIG" || true)
+# Phase 7 (#498) — privilege mode :
+#   transparent (Phase 5)  → unprivileged (lxc.idmap preserved from
+#                            auto-gen) — matches the captive-mitm
+#                            container convention.
+#   wg                     → PRIVILEGED — required for the bind mount
+#                            of /etc/secubox/toolbox/ca-wg (0750
+#                            root:secubox-toolbox) which is invisible
+#                            to a non-privileged LXC's mapped UID.
+#                            Matches the existing mitmproxy WAF LXC.
+if [ "$TARGET" = "wg" ]; then
+    IDMAP_LINES=""
+    INCLUDE_USERNS=""
+    log "wg target → PRIVILEGED LXC (no idmap, matches mitmproxy WAF convention)"
+else
+    IDMAP_LINES=$(grep -E '^lxc\.idmap' "$LIVE_CONFIG" || true)
+    INCLUDE_USERNS="lxc.include = /usr/share/lxc/config/userns.conf"
+fi
 
 # Compose final config :
 TMP_CONFIG=$(mktemp)
@@ -116,10 +130,9 @@ TMP_CONFIG=$(mktemp)
     echo "# DO NOT EDIT — re-run the provisioner to refresh."
     echo
     echo "lxc.include = /usr/share/lxc/config/common.conf"
-    echo "lxc.include = /usr/share/lxc/config/userns.conf"
+    [ -n "$INCLUDE_USERNS" ] && echo "$INCLUDE_USERNS"
     echo
-    echo "$IDMAP_LINES"
-    echo
+    [ -n "$IDMAP_LINES" ] && { echo "$IDMAP_LINES"; echo; }
     echo "lxc.rootfs.path = dir:${LIVE_ROOTFS}"
     # Then everything from the template EXCEPT lxc.rootfs.path (we just
     # set the correct one above) and any include directives that the
