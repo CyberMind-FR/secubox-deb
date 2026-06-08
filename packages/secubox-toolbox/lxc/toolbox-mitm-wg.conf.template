@@ -1,17 +1,22 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
-# Phase 6 (#496) — LXC config for the dedicated ToolBoX WireGuard MITM container.
-# Lives at /etc/lxc/toolbox-mitm-wg.conf after install. Provisioned by
-# packages/secubox-toolbox/sbin/secubox-toolbox-wg-provision.
+# Phase 7 follow-up (#498) — LXC config for the dedicated ToolBoX WireGuard
+# MITM container (transparent mode on TCP 8081).
 #
-# This is the SECOND mitm container — first being toolbox-mitm (#495 transparent).
-# Architecture invariant : the two MUST stay disjoint. Don't share addons or CA.
+# Lives at /etc/lxc/toolbox-mitm-wg.conf after install. Provisioned by
+# `secubox-toolbox-lxc-provision wg`.
+#
+# This is the SECOND mitm container — first being toolbox-mitm (#495
+# captive transparent). Architecture invariant : the two MUST stay
+# disjoint — distinct CA, distinct addon chain, distinct log dir.
 
-# Base — minimal Debian 12 rootfs, mitmproxy 11+ for --mode wireguard.
+# Base — minimal Debian 12 rootfs, /opt/mitmproxy-toolbox (mitmproxy 11+)
+# bind-mounted in from the host so the LXC inherits whatever version the
+# operator runs on bare metal.
 lxc.uts.name = toolbox-mitm-wg
 lxc.arch = arm64
 lxc.rootfs.path = dir:/var/lib/lxc/toolbox-mitm-wg/rootfs
 
-# Network — bridged on br-lxc, distinct IP from WAF (60) and tx (61).
+# Network — bridged on br-lxc, distinct IP from WAF (.60) and tx (.61).
 lxc.net.0.type = veth
 lxc.net.0.link = br-lxc
 lxc.net.0.flags = up
@@ -20,35 +25,38 @@ lxc.net.0.hwaddr = 00:16:3e:00:00:62
 lxc.net.0.ipv4.address = 10.100.0.62/24
 lxc.net.0.ipv4.gateway = 10.100.0.1
 
-# Resource bounds — WG mode is heavier than transparent (full QUIC decap).
-lxc.cgroup2.memory.high = 600M
-lxc.cgroup2.memory.max = 768M
+# Resource bounds — same envelope as the WAF mitm container.
+lxc.cgroup2.memory.high = 400M
+lxc.cgroup2.memory.max = 512M
+lxc.cgroup2.memory.swap.max = 0
 
 # Autostart, after WAF (100) and toolbox-mitm-tx (110).
 lxc.start.auto = 1
 lxc.start.delay = 5
 lxc.start.order = 120
 
-# Bind mounts — WG-specific :
-#   - own CA on host (separate from transparent mitm CA for #495 isolation
-#     guarantee). NOT bind-mounting /etc/secubox/toolbox/ca here.
-lxc.mount.entry = /etc/secubox/toolbox/ca-wg etc/secubox/toolbox/ca-wg none ro,bind,create=dir 0 0
-#   - WG keys + peer database on host (operator-owned)
-lxc.mount.entry = /etc/secubox/toolbox/wg etc/secubox/toolbox/wg none ro,bind,create=dir 0 0
-#   - mitm-events SQLite shared with toolbox-mitm-tx for unified reporting
-lxc.mount.entry = /var/lib/secubox/toolbox var/lib/secubox/toolbox none bind,create=dir 0 0
-#   - logs
-lxc.mount.entry = /var/log/secubox/toolbox-mitm-wg var/log/secubox/toolbox-mitm-wg none bind,create=dir 0 0
-#   - addons (RO from host)
+# Bind mounts — single source of truth for code + state. The LXC sees
+# the host's files RO (code/secrets) or RW (state).
+#
+#   - Mitmproxy install (RO) — host owns the version, LXC inherits.
+lxc.mount.entry = /opt/mitmproxy-toolbox opt/mitmproxy-toolbox none ro,bind,create=dir 0 0
+#   - Launcher script (RO) — composed with addon order + ignore_hosts.
+lxc.mount.entry = /usr/sbin/secubox-toolbox-mitm-wg-launch usr/sbin/secubox-toolbox-mitm-wg-launch none ro,bind,create=file 0 0
+#   - Addons (RO from host so updates land without rebuilding the LXC).
 lxc.mount.entry = /usr/lib/secubox/toolbox/mitmproxy_addons usr/lib/secubox/toolbox/mitmproxy_addons none ro,bind,create=dir 0 0
-#   - salt for MAC hashing
+#   - Dedicated WG CA (RO) — separate from the transparent-mitm CA so the
+#     two containers remain compartmentalised (#495 isolation invariant).
+lxc.mount.entry = /etc/secubox/toolbox/ca-wg etc/secubox/toolbox/ca-wg none ro,bind,create=dir 0 0
+#   - Bypass lists + SQLite event store (RW, shared with host FastAPI
+#     so the cert-pin auto-learning addon's writes show up in /admin).
+lxc.mount.entry = /var/lib/secubox/toolbox var/lib/secubox/toolbox none bind,create=dir 0 0
+#   - Logs (RW).
+lxc.mount.entry = /var/log/secubox/toolbox-mitm-wg var/log/secubox/toolbox-mitm-wg none bind,create=dir 0 0
+#   - Salt for MAC hashing (RO, owned root:secubox-toolbox).
 lxc.mount.entry = /etc/secubox/secrets/toolbox-mac-salt etc/secubox/secrets/toolbox-mac-salt none ro,bind,create=file 0 0
 
-# Capabilities — WG needs CAP_NET_ADMIN + the kernel wireguard module.
+# Standard capability drops — transparent mode at the application layer
+# does not need CAP_NET_ADMIN ; this LXC is a plain user-space TCP proxy.
 lxc.cap.drop = audit_control audit_write mac_admin mac_override mknod sys_module sys_rawio sys_time
-# wg kernel iface + tun
-lxc.cgroup2.devices.allow = c 10:200 rwm
-lxc.cgroup2.devices.allow = c 138:* rwm
-lxc.mount.entry = /dev/net/tun dev/net/tun none bind,create=file,optional 0 0
 
 lxc.apparmor.profile = unconfined
