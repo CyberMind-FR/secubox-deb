@@ -411,16 +411,73 @@ async def cumulative_stats_json() -> dict:
     return _cumulative_stats()
 
 
+def _ua_platform(ua: str) -> str:
+    """Cheap UA sniff. Same logic as /wg/onboard so the auto-open panel
+    matches between the two pages."""
+    ua = (ua or "").lower()
+    if "iphone" in ua or "ipad" in ua or "ios" in ua:
+        return "ios"
+    if "android" in ua:
+        return "android"
+    if "macintosh" in ua or "mac os x" in ua:
+        return "macos"
+    if "windows" in ua:
+        return "windows"
+    if "linux" in ua:
+        return "linux"
+    return "other"
+
+
+def _install_panels_html(platform: str) -> str:
+    """Reusable platform-detected install panels for both
+    /wg/onboard and the landing page.  Same content, same CSS classes
+    so styling stays consistent (the landing page injects matching
+    classes via its own style block)."""
+    panels = {
+        "ios":     ("🍎 iPhone / iPad", "ios"),
+        "android": ("🤖 Android", "android"),
+        "linux":   ("🐧 Linux", "linux"),
+        "macos":   ("🍏 macOS", "macos"),
+        "windows": ("🪟 Windows", "windows"),
+    }
+    order = [platform] + [k for k in panels if k != platform]
+    order = [k for i, k in enumerate(order) if k in panels and k not in order[:i]]
+    sections = []
+    for key in order:
+        title, slug = panels[key]
+        body = _ONBOARD_BODY[slug]
+        open_attr = " open" if key == order[0] else ""
+        sections.append(
+            f'<details class="install-panel" id="install-{slug}"{open_attr}>'
+            f'<summary><span class="emoji">{title.split()[0]}</span> '
+            f'<b>{title}</b></summary>{body}</details>'
+        )
+    return "\n".join(sections)
+
+
 @router.get("/landing", response_class=HTMLResponse)
 @router.get("/cabine", response_class=HTMLResponse)
 async def landing(request: Request) -> HTMLResponse:
     """Public landing page for the cabine — shown on kbin.gk2.secubox.in.
 
     Visitor-facing demo of the project : pitch + 4 levels + install + live
-    cumulative anonymous stats + open source license + contact."""
+    cumulative anonymous stats + open source license + contact.
+
+    Phase 8.2 (#500) — embeds the same platform-detected install
+    panels as /wg/onboard so visitors get a one-click flow matching
+    their device right on the landing page.
+    """
     stats = _cumulative_stats()
-    return HTMLResponse(_env.get_template("landing.html.j2").render(stats=stats),
-                         headers={"Cache-Control": "public, max-age=60"})
+    platform = _ua_platform(request.headers.get("user-agent") or "")
+    install_panels = _install_panels_html(platform)
+    return HTMLResponse(
+        _env.get_template("landing.html.j2").render(
+            stats=stats,
+            install_panels=install_panels,
+            install_platform=platform,
+        ),
+        headers={"Cache-Control": "private, max-age=60, no-transform"},
+    )
 
 
 @router.get("/ca/webclip-cabine.mobileconfig")

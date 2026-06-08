@@ -1,3 +1,16 @@
+secubox-toolbox (2.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Landing page kbin.gk2.secubox.in : la section 'Démo install R3'
+    est remplacée par les panneaux platform-detected du /wg/onboard.
+    UA sniff côté serveur (iOS / Android / Linux / macOS / Windows),
+    le panneau de la plate-forme du visiteur est ouvert en premier ;
+    les autres restent en details collapsed. Single source of truth :
+    _install_panels_html() partagé entre /wg/onboard et la landing.
+    Visiteur arrive sur kbin → voit immédiatement le bouton d'install
+    adapté à son device, sans devoir aller sur une page tierce.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 15:51:43 +0000
+
 secubox-toolbox (2.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Phase 8.1 perf (#500) — mitm-wg CPU bottleneck under multi-peer.
