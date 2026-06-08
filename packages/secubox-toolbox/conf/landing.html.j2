@@ -241,19 +241,40 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
     </div>
   </div>
 
-  {# ── Install demo ── #}
+  {# ── Install : auto-detected platform panels (Phase 8.2 #500) ── #}
   <div class=section>
-    <h2>📥 Démo : installer le mode R3 portable</h2>
-    <ol class=steps>
-      <li>Installer l'app <b>WireGuard</b> (gratuite, App Store / Play Store)</li>
-      <li>Aller sur <a href=/wg/r3-install>🌐 page d'install R3</a> → scanner le QR avec l'app WireGuard</li>
-      <li>Activer le tunnel dans l'app WireGuard → icône VPN apparaît dans iOS</li>
-      <li>Ouvrir n'importe quelle page web → bandeau ToolBox apparaît + rapport temps réel se remplit</li>
-      <li>Désactiver le tunnel à tout moment → retour au surf normal</li>
-    </ol>
-    <p style="margin-top:0.6rem;font-size:0.78rem;color:var(--dim)">
-      Avantage R3 : marche hors-cabine (4G/5G, autre WiFi). Inclus tout le trafic (HTTPS + QUIC).
-      Profile + CA bundlés dans un seul fichier .conf.
+    <h2>📥 Installer R3 sur ton appareil</h2>
+    <p style="font-size:0.85rem;color:var(--dim);margin-bottom:0.8rem">
+      On a détecté <code>{{ install_platform }}</code> via ton navigateur — le panneau adapté
+      est ouvert en premier. Autre appareil ? Déplie le bon panneau ci-dessous.
+    </p>
+    <style>
+      .install-panel{background:rgba(0,255,65,0.04);border:1px solid rgba(0,255,65,0.25);
+        border-radius:6px;padding:0.6rem 0.9rem;margin:0.45rem 0}
+      .install-panel summary{cursor:pointer;font-size:0.95rem;color:var(--phos-peak,#00dd44);
+        list-style:none;outline:none}
+      .install-panel summary::-webkit-details-marker{display:none}
+      .install-panel[open] summary{margin-bottom:0.6rem}
+      .install-panel .emoji{font-size:1.1rem;margin-right:0.3rem}
+      .install-panel ol{padding-left:1.1rem;line-height:1.5;font-size:0.85rem}
+      .install-panel .btn{display:inline-block;padding:0.45rem 0.75rem;margin:0.25rem 0.2rem 0.25rem 0;
+        background:var(--purple,#6e40c9);color:#fff;text-decoration:none;border-radius:5px;
+        font-weight:bold;font-size:0.82rem}
+      .install-panel .btn.alt{background:transparent;border:1px solid var(--purple,#6e40c9);
+        color:var(--purple,#6e40c9)}
+      .install-panel code{background:rgba(0,0,0,0.4);padding:0.1rem 0.35rem;border-radius:3px;
+        font-size:0.8rem;color:var(--phos-peak,#00dd44)}
+      .install-panel .note{color:var(--dim,#888);font-size:0.78rem;margin-top:0.6rem;
+        border-left:2px solid var(--phos-hot,#ffb347);padding-left:0.6rem}
+      .install-panel img{max-width:100%;border-radius:5px;margin:0.4rem 0}
+      .install-panel pre{background:rgba(0,0,0,0.4);padding:0.5rem 0.7rem;border-radius:4px;
+        overflow-x:auto;font-size:0.78rem;margin:0.4rem 0}
+    </style>
+    {{ install_panels | safe }}
+    <p style="margin-top:0.8rem;font-size:0.78rem;color:var(--dim)">
+      Avantage R3 : marche hors-cabine (4G/5G, autre WiFi). Inclut tout le trafic (HTTPS).
+      Profil + CA bundlés. Le tunnel est révoquable à tout moment depuis Réglages.
+      Page équivalente standalone : <a href=/wg/onboard>/wg/onboard</a>.
     </p>
   </div>
 
