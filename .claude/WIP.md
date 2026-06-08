@@ -1,5 +1,86 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-07*
+*Mis à jour : 2026-06-08*
+
+---
+
+## 🔄 2026-06-08 : Phase 7.E.x — LXC hygiene + auth recovery + Phase 8 plan (ref #498, #500)
+
+Une journée chargée — beaucoup de petits fixes empilés + une découverte
+architecturale + l'ouverture de Phase 8.
+
+### ✅ Done — packages
+
+| Package | from → to | Commit |
+|---|---|---|
+| secubox-waf | 1.2.0 → **1.2.1** | `c5f0482e` (LXC mitmproxy.service RuntimeMaxSec + memory caps) |
+| secubox-toolbox | 2.2.0 → **2.3.2** | `c5f0482e`, `f1418b53`, `3c4d1cc1` (auto-detect /wg/onboard + NM keyfile name + LXC scaffolding) |
+| secubox-auth | 1.0.1 → **1.0.2** | `87bd8e51` (ntp_health timedatectl fallback) |
+| secubox-users | 1.4.1 → **1.4.2** | `64e4de16` (postinst chowns auth.toml) |
+
+### ✅ Done — détails par axe
+
+**LXC mitm WAF hygiene** (`secubox-waf` 1.2.1) — `RuntimeMaxSec=21600` +
+memory caps shippés sur `mitmproxy.service` inside la LXC. Comble
+l'oubli Phase 6.P qui ne couvrait que les host units.
+
+**Auto-detect /wg/onboard** (`secubox-toolbox` 2.3.0) — une URL unique
+sniff User-Agent → panneau iOS / Android / Linux / macOS / Windows
+ouvert en premier. Tous les artefacts inchangés ; l'onboard compose.
+
+**NM connection name** (`secubox-toolbox` 2.3.1) — switch de l'UA brut
+("Mozilla/5.0…") à `village3b-r3-<dernier-octet>` pour le champ
+NetworkManager `id`.
+
+**LXC mitm-wg scaffolding + finding architectural** (`secubox-toolbox`
+2.3.2)
+- Provision script accepte `wg` target → LXC privilégié à 10.100.0.62
+  (drop de `lxc.idmap`, résout la perm denial sur ca-wg).
+- Launcher mitm-wg paramétré par `MITM_WG_LISTEN_HOST` (host : `10.99.1.1`
+  / LXC : `0.0.0.0`).
+- **Cutover live tenté + rollback** : transparent-mode mitm dans un LXC
+  ne marche pas tant que le DNAT happen dans le netns hôte —
+  `SO_ORIGINAL_DST` est conntrack-backed et conntrack est
+  namespace-scoped. Chaque flow erre avec
+  `Transparent mode failure: FileNotFoundError(2)`. Documenté inline
+  dans `toolbox-mitm-wg.conf.template`.
+- `mitmproxy --mode wireguard` (alternative) est **strictly single-peer**
+  (JSON {server_key, client_key}). Migration de 35 peers = re-onboarding
+  complet. Pas viable. **mitm-wg reste sur l'hôte.**
+
+**Auth recovery** (`secubox-auth` 1.0.2 + `secubox-users` 1.4.2)
+- `ntp_health.probe()` n'utilisait que `chronyc` — fallback timedatectl
+  ajouté (les SecuBox ship timesyncd, pas chrony).
+- **Auth complètement cassée découverte** : `/etc/secubox/users.json`
+  + `auth.toml` étaient `root:root` → aggregator user `secubox` ne
+  pouvait rien lire → `user_store: fallback to auth.toml... Permission
+  denied` → tous les logins → "Identifiants incorrects".
+- Le postinst `secubox-users` 1.4.1 chownait users.json mais ne touchait
+  PAS auth.toml. `auth.toml` n'avait JAMAIS été chown'd par aucun
+  postinst depuis l'install initiale en mai. Source fix : `secubox-users`
+  1.4.2 couvre les deux.
+- Live mitigations : chown manuel + drop-in `40-etc-secubox-rw.conf`
+  (`ReadWritePaths=/etc/secubox` pour l'engine puisse persister
+  `last_step` post-verify — sans ça verify levait 500
+  "Read-only file system"). Note : `/etc/secubox` est déjà dans
+  `ReadWritePaths` côté source `secubox-aggregator` 0.2.1, le drop-in
+  est juste la couverture en attendant l'upgrade dpkg live.
+
+**Phase 8 — anti-tracking opérateur (Utiq)** (`#500`)
+- Issue créée avec plan complet R0 (log) / R1 (block) / R2 (mask) /
+  R3 (pseudo-avatar via `avatar.py`).
+- Schéma SQLite `utiq_events`, banner UI, doctrine CSPN du R3,
+  Quick Win 1 j + Phase 2 1 sem + Phase 3 doctrine.
+
+### ⬜ Next up
+
+* **Phase 8 Quick Win (1 j)** : addon `utiq_defense.py` R0 + R1, tile
+  banner "🎯 Utiq detecté", tableau brut `/admin/utiq-events`.
+* **secubox-aggregator** : vérifier que 0.2.1 (drop NoNewPrivileges +
+  `/etc/secubox` dans ReadWritePaths) sera bien upgrade live au prochain
+  dpkg run sur gk2 — sinon ré-appliquer le drop-in manuel.
+* **wg-quick / mitm-wg en LXC** : nécessite un dispatcher multi-peer
+  custom ou wg-quick sur LXC privilégié avec accès netfilter partagé.
+  Pas urgent — l'archi hôte est saine pour 35 peers.
 
 ---
 
