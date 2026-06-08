@@ -33,6 +33,12 @@ Type=simple
 User=root
 WorkingDirectory=/usr/lib/secubox/toolbox
 
+# Phase 7 (#498) — LXC sees DNAT'd traffic arriving on the br-lxc
+# interface (eth0 inside the container, 10.100.0.62). Bind 0.0.0.0
+# so we don't have to know our IP at startup. The launcher reads this
+# env var and passes it via --listen-host.
+Environment="MITM_WG_LISTEN_HOST=0.0.0.0"
+
 # Same launcher as the host variant — it is bind-mounted in from the host
 # (lxc.mount.entry in toolbox-mitm-wg.conf). The launcher composes the
 # ignore_hosts regex from static + dynamic bypass lists and exec's

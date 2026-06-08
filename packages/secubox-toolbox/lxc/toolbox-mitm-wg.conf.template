@@ -8,6 +8,29 @@
 # This is the SECOND mitm container — first being toolbox-mitm (#495
 # captive transparent). Architecture invariant : the two MUST stay
 # disjoint — distinct CA, distinct addon chain, distinct log dir.
+#
+# ┌─────────────────────────────────────────────────────────────────────┐
+# │  KNOWN LIMITATION (Phase 7 #498 cutover attempt 2026-06-08)         │
+# │                                                                     │
+# │  Transparent mode in this LXC FAILS when DNAT happens in the host   │
+# │  netns. mitmproxy 11+ uses Linux's SO_ORIGINAL_DST socket option    │
+# │  (conntrack-backed) to recover the original destination IP/port.    │
+# │  conntrack is namespace-scoped — the entries created by the host's  │
+# │  `nft prerouting` chain are invisible inside the LXC's netns, so    │
+# │  mitmproxy errors with `Transparent mode failure:                   │
+# │  FileNotFoundError(2, 'No such file or directory')` on every flow.  │
+# │                                                                     │
+# │  Two viable architectures going forward :                           │
+# │    1. Keep mitm-wg on the host (current path until #498 resolves).  │
+# │    2. Switch the LXC to `mitmproxy --mode wireguard` — mitmproxy    │
+# │       BECOMES the WG endpoint, no DNAT needed, conntrack stays in   │
+# │       the LXC netns. Requires migrating wg-peers.json to mitm's     │
+# │       server.conf format + moving UDP 51820 ingress to the LXC IP.  │
+# │                                                                     │
+# │  This file + the provisioner stay shipped as scaffolding for the    │
+# │  option-2 migration ; the host service `secubox-toolbox-mitm-wg`    │
+# │  remains the active path.                                           │
+# └─────────────────────────────────────────────────────────────────────┘
 
 # Base — minimal Debian 12 rootfs, /opt/mitmproxy-toolbox (mitmproxy 11+)
 # bind-mounted in from the host so the LXC inherits whatever version the

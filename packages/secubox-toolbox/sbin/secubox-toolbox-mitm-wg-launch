@@ -42,9 +42,13 @@ if [ -n "$PATTERNS" ]; then
 fi
 
 # ── Build mitm args ──
+# Phase 7 (#498) — listen-host is overridable via env. Host (default) binds
+# 10.99.1.1 (the wg-toolbox interface IP) ; LXC variant sets 0.0.0.0 so it
+# accepts the DNAT'd traffic on the 10.100.0.62 br-lxc interface.
+MITM_WG_LISTEN_HOST="${MITM_WG_LISTEN_HOST:-10.99.1.1}"
 ARGS=(
     --mode transparent
-    --listen-host 10.99.1.1
+    --listen-host "$MITM_WG_LISTEN_HOST"
     --listen-port 8081
     --set confdir=/etc/secubox/toolbox/ca-wg
     --set ssl_insecure=false
