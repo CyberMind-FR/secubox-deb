@@ -1,3 +1,17 @@
+secubox-crowdsec (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * Fix (#498) : sudoers.d/secubox-crowdsec gains the 5 read-only cscli
+    commands the /status + /console/status endpoints need. Without
+    them the CrowdSec dashboard showed permanent 'CAPI Not enrolled'
+    + 'LAPI not reachable' even after a successful
+    `cscli console enroll …` because every `sudo cscli capi status`
+    spawned by the FastAPI failed silently (no NOPASSWD entry → sudo
+    prompted for a password → returncode != 0 → status = false).
+    Added : cscli lapi status, cscli capi status, cscli decisions
+    list, cscli alerts list, cscli console status.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 10:00:44 +0000
+
 secubox-crowdsec (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * Phase 7 (#498) : ship /etc/sudoers.d/secubox-crowdsec with two
