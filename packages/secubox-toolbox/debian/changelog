@@ -1,3 +1,31 @@
+secubox-toolbox (2.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Fix (#498) : NetworkManager connection `id` was the raw User-Agent
+    string ("Mozilla/5.0 (X11; Linux x86_64; rv:151.0)...") which
+    looks awful in the Network panel. Use `village3b-r3-<last-octet>`
+    instead — short, stable, distinct per peer.
+  * lxc-provision (#498) : substantial improvements toward the
+    eventual wg LXC cutover :
+      - Use lxc-create --template download (works for unprivileged ;
+        `debian` template needs privileged-only).
+      - Replace the LXC's live config at /data/lxc/<name>/config
+        (LXC ignores /etc/lxc/<name>.conf for the actual runtime
+        config).
+      - Push runtime IP + systemd-networkd profile + working DNS
+        via lxc-attach (unprivileged containers can't self-assign
+        a static IP via lxc.net.0.ipv4.address).
+      - Install python3 inside the container post-network so apt
+        actually resolves names.
+    Known roadblock NOT yet resolved : the wg LXC bind mount of
+    /etc/secubox/toolbox/ca-wg fails because the host dir is
+    0750 root:secubox-toolbox — invisible to the unprivileged LXC's
+    mapped UID. Operator must either chmod the CA cert dir to 0755
+    OR drop lxc.idmap from the config to switch to privileged mode
+    (matches the existing mitmproxy LXC). Documented inline in the
+    LXC template. Cutover stays opt-in until this is resolved.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 07:28:47 +0000
+
 secubox-toolbox (2.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 7 follow-up (#498) — auto-detect onboarding page :

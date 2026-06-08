@@ -135,8 +135,15 @@ def generate_client_profile(client_label: str | None = None) -> dict:
     # the tunnel up without --ask. A native .nmconnection keyfile drops
     # straight into /etc/NetworkManager/system-connections/ with the
     # right system-owned flag and lets the operator click "Connect".
+    # Phase 7 follow-up (#498) — connection NAME must be stable + readable.
+    # Previously used `client_label` which is the raw User-Agent, so users
+    # ended up with NetworkManager connections called
+    # "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0".
+    # Use a tidy ID based on the assigned tunnel IP — last octet keeps it
+    # short (village3b-r3-42) and distinct per peer.
+    last_octet = client_ip.rsplit(".", 1)[-1]
     nm_text = _nm_keyfile(
-        conn_id=(client_label or f"village3b-{client_ip}"),
+        conn_id=f"village3b-r3-{last_octet}",
         priv=priv,
         client_ip=client_ip,
         server_pub=server_pub,
