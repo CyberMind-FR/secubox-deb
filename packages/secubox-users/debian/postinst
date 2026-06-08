@@ -42,10 +42,19 @@ if not any(u['username'] == username for u in doc['users']):
 PYEOF
         done
 
-        # Ownership + permissions on users.json
+        # Ownership + permissions on users.json + auth.toml (Phase 7 #498).
+        # Both files are read by the aggregator (running as `secubox`) via
+        # secubox_core.user_store. Without root:secubox 0640 they're
+        # invisible to non-root services and every login returns
+        # "Identifiants incorrects" because user_store falls through to
+        # the auth.toml fallback which is then ALSO unreadable.
         if [ -f /etc/secubox/users.json ]; then
-            chmod 660 /etc/secubox/users.json
             chown root:secubox /etc/secubox/users.json
+            chmod 0640 /etc/secubox/users.json
+        fi
+        if [ -f /etc/secubox/auth.toml ]; then
+            chown root:secubox /etc/secubox/auth.toml
+            chmod 0640 /etc/secubox/auth.toml
         fi
 
         # Restart the service so it picks up the new users.json
