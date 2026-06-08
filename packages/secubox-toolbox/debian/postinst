@@ -123,13 +123,21 @@ fi
       fi
     fi
 
-    # Phase 7 (#498) : install unbound listener for wg-toolbox + captive AP.
-    # Without it WG peers' DNS queries to 10.99.1.1 (or legacy 10.99.0.1)
-    # get ICMP port unreachable and the iPhone stops resolving names.
-    if [ -f /usr/share/secubox/toolbox/unbound/99-secubox-wg.conf ] \
-        && [ -d /etc/unbound/unbound.conf.d ]; then
-      install -m 0644 /usr/share/secubox/toolbox/unbound/99-secubox-wg.conf \
-        /etc/unbound/unbound.conf.d/99-secubox-wg.conf
+    # Phase 7 (#498) : install unbound listeners.
+    # 99-secubox-wg.conf — WG peers (10.99.x). Without it WG peers' DNS
+    #   queries get ICMP port unreachable and the iPhone stops resolving.
+    # 98-secubox-lxc.conf — br-lxc (10.100.0.x). Without it every LXC
+    #   that uses DNS=10.100.0.1 (default route) gets nothing back, and
+    #   things like Gitea mirror sync towards GitHub fail with
+    #   "Could not resolve host" (3-week silent regression found
+    #   2026-06-08).
+    if [ -d /etc/unbound/unbound.conf.d ]; then
+      for f in 99-secubox-wg.conf 98-secubox-lxc.conf; do
+        if [ -f "/usr/share/secubox/toolbox/unbound/$f" ]; then
+          install -m 0644 "/usr/share/secubox/toolbox/unbound/$f" \
+            "/etc/unbound/unbound.conf.d/$f"
+        fi
+      done
       if systemctl is-active --quiet unbound.service 2>/dev/null; then
         systemctl restart unbound.service 2>/dev/null || true
       fi

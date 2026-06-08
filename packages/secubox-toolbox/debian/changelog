@@ -1,3 +1,21 @@
+secubox-toolbox (2.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7.E.3 (#498) — new unbound drop-in
+    `98-secubox-lxc.conf` makes Unbound listen on 10.100.0.1 (br-lxc
+    gateway) with access-control allowing 10.100.0.0/24. Without it
+    every LXC on br-lxc has DNS=10.100.0.1 from its static config but
+    Unbound was only listening on 10.99.x (the WG subnets shipped in
+    Phase 7.E by 99-secubox-wg.conf). All external DNS queries from
+    inside any LXC failed silently for 3 weeks — symptom found when
+    checking why the Gitea mirror sync towards github.com hadn't run
+    since 2026-05-17 : "fatal: unable to access ...: Could not
+    resolve host: github.com". The Phase 6.J + 7.E pulls had no
+    reason to detect this earlier — no LXC needed external DNS
+    until the mirror sync started failing.
+    Postinst now installs both drop-ins atomically.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 10:08:49 +0000
+
 secubox-toolbox (2.3.2-1~bookworm1) bookworm; urgency=medium
 
   * Phase 7 follow-up (#498) — wg LXC : privileged mode + listen-host

@@ -64,6 +64,10 @@ override_dh_strip:
 	install -d debian/secubox-toolbox/usr/share/secubox/toolbox/unbound
 	install -m 0644 unbound/99-secubox-wg.conf \
 	  debian/secubox-toolbox/usr/share/secubox/toolbox/unbound/
+	# Phase 7.E.3 (#498) : also serve br-lxc (10.100.0.0/24) so every LXC
+	# can resolve external names through unbound.
+	install -m 0644 unbound/98-secubox-lxc.conf \
+	  debian/secubox-toolbox/usr/share/secubox/toolbox/unbound/
 	# Phase 7 (#498) : nginx route + rate-limit
 	install -d debian/secubox-toolbox/etc/nginx/secubox-routes.d
 	install -m 0644 nginx/toolbox.conf \
