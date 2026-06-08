@@ -1,3 +1,16 @@
+secubox-users (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Fix (#498) : postinst now also chowns /etc/secubox/auth.toml to
+    root:secubox 0640 (only users.json was covered before). Without
+    this both files were unreadable by the aggregator user (secubox)
+    after Phase 7.D consolidation : user_store.get_user(admin) fell
+    through to auth.toml fallback which was ALSO unreadable, and
+    every login returned 'Identifiants incorrects' regardless of
+    password. Live diagnostic on gk2 surfaced two stacked permission
+    denials — auth.toml has never had its perms set by any postinst.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 08:09:50 +0000
+
 secubox-users (1.4.1-1~bookworm1) bookworm; urgency=low
 
   * Rewrite Description to identify this as local-account management
