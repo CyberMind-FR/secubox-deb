@@ -31,27 +31,60 @@ def probe() -> Dict[str, object]:
 
 
 def _probe_uncached() -> Dict[str, object]:
+    """Try chrony first, fall back to systemd-timesyncd (timedatectl).
+
+    SecuBox boxes ship with systemd-timesyncd by default ; chrony is the
+    operator-installed alternative. Phase 7 (#498) — the chrony-only
+    probe always returned `synced: False` on stock installs, which made
+    the auth UI permanently flag "Clock not synced" even when the system
+    clock was within a few microseconds of NTP.
+    """
+    # ── 1. chronyc tracking ──
     try:
         out = subprocess.run(
             ["chronyc", "-n", "tracking"],
             capture_output=True, text=True, timeout=2, check=False,
         )
+        if out.returncode == 0:
+            m_offset = _OFFSET_RE.search(out.stdout)
+            m_leap = _LEAP_RE.search(out.stdout)
+            m_ref = _REF_RE.search(out.stdout)
+            drift = float(m_offset.group(1)) if m_offset else None
+            leap = m_leap.group(1).strip() if m_leap else "Unknown"
+            ref = m_ref.group(1) if m_ref else "?"
+            synced = leap.lower().startswith("normal") and ref != "7F7F0101"
+            return {
+                "synced": synced,
+                "drift_seconds": drift,
+                "leap_status": leap,
+                "reference_id": ref,
+                "source": "chrony",
+            }
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # ── 2. timedatectl (systemd-timesyncd) ──
+    try:
+        out = subprocess.run(
+            ["timedatectl", "show",
+             "--property=NTPSynchronized",
+             "--property=NTP"],
+            capture_output=True, text=True, timeout=2, check=False,
+        )
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        return {"synced": False, "error": f"chronyc unavailable: {exc}"}
+        return {"synced": False, "error": f"neither chronyc nor timedatectl available: {exc}"}
     if out.returncode != 0:
-        return {"synced": False, "error": out.stderr.strip() or "chronyc failed"}
-    m_offset = _OFFSET_RE.search(out.stdout)
-    m_leap = _LEAP_RE.search(out.stdout)
-    m_ref = _REF_RE.search(out.stdout)
-    drift = float(m_offset.group(1)) if m_offset else None
-    leap = m_leap.group(1).strip() if m_leap else "Unknown"
-    ref = m_ref.group(1) if m_ref else "?"
-    synced = leap.lower().startswith("normal") and ref != "7F7F0101"  # 7F7F0101 = unsynchronised
+        return {"synced": False, "error": out.stderr.strip() or "timedatectl failed"}
+
+    fields = dict(line.split("=", 1) for line in out.stdout.strip().splitlines() if "=" in line)
+    ntp_enabled = fields.get("NTP", "").lower() == "yes"
+    ntp_synced = fields.get("NTPSynchronized", "").lower() == "yes"
     return {
-        "synced": synced,
-        "drift_seconds": drift,
-        "leap_status": leap,
-        "reference_id": ref,
+        "synced": ntp_enabled and ntp_synced,
+        "drift_seconds": None,  # timedatectl doesn't expose offset cheaply
+        "leap_status": "Normal" if ntp_synced else "Not synchronised",
+        "reference_id": "systemd-timesyncd" if ntp_enabled else "none",
+        "source": "timedatectl",
     }
 
 

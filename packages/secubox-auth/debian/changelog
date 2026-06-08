@@ -1,3 +1,16 @@
+secubox-auth (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Fix (#498) : ntp_health.probe() falls back to timedatectl/systemd-
+    timesyncd when chronyc isn't installed. SecuBox boxes ship with
+    timesyncd by default, so the chrony-only probe always returned
+    `synced: False` and the admin login UI permanently showed
+    'Clock not synced' (TOTP window then widened to ±60s but the
+    operator was still confused). Added a chrony → timedatectl
+    fallback chain with explicit `source` in the response so the
+    operator can see which backend answered.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 07:49:50 +0000
+
 secubox-auth (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
