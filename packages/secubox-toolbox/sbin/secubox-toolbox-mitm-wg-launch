@@ -53,11 +53,27 @@ ARGS=(
     --set confdir=/etc/secubox/toolbox/ca-wg
     --set ssl_insecure=false
     --set web_open_browser=false
-    # Phase 6.P (#496) — HTTP/2 multiplexed streams retain per-stream state
-    # in mitm's address space. With many concurrent users + long-lived sessions
-    # (R3 tunnel users), this accumulates ~50 MB/day. h2=false forces HTTP/1.1
-    # downgrade ; small CPU cost per request, big memory stability gain.
-    --set http2=false
+    # Phase 8.1 (#500 perf) — RE-ENABLE HTTP/2.
+    # Phase 6.P had disabled it to bound memory growth ; observation
+    # 2026-06-08 shows the actual problem is single-thread CPU saturation
+    # (mitm-wg hits 65 % CPU on one core even at near-zero throughput
+    # with 35 enrolled peers + 3 concurrent active).  HTTP/2 multiplex
+    # halves the number of TLS handshakes per page load + reuses
+    # connections, which translates directly into less work per
+    # browsing session.  We compensate the memory drift by halving
+    # RuntimeMaxSec from 6 h to 3 h (drop-in 10-runtime-max.conf).
+    --set http2=true
+    # Phase 8.1 — connection_strategy=eager makes mitm open the upstream
+    # connection at requestheaders rather than waiting for the body,
+    # which lets the asyncio loop overlap upstream RTT with downstream
+    # parsing.  Marginal win on slow-RTT publishers.
+    --set connection_strategy=eager
+    # Phase 8.1 — keep upstream connections alive for reuse across
+    # flows from the same source.  Phase 6.J's Connection:close fix
+    # forced close to prevent a memory leak that was actually patched
+    # upstream in mitmproxy 10.4 ; with mitmproxy 11+ we can safely
+    # re-enable keep-alive.  Halves TCP handshakes towards busy CDNs.
+    --set keep_host_header=true
 )
 
 if [ -n "$IGNORE_REGEX" ]; then

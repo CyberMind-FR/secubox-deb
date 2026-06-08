@@ -1,3 +1,27 @@
+secubox-toolbox (2.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 8.1 perf (#500) — mitm-wg CPU bottleneck under multi-peer.
+    Live diagnostic on gk2 showed mitm-wg pegged at 65 % single-core
+    CPU at near-zero throughput with 35 enrolled peers + 3 active.
+    Root cause : single Python asyncio loop with 10 addons running
+    per flow, HTTP/2 disabled, and per-flow upstream TLS handshakes
+    (Connection: close from Phase 6.J).
+    Quick win (live result : CPU 65 % → 12 %) :
+      - launcher: --set http2=true (re-enabled). Phase 6.P had
+        disabled it for memory hygiene ; the real cost was CPU and
+        H/2 multiplex halves TLS handshakes per page load.
+      - launcher: --set connection_strategy=eager. Lets asyncio
+        overlap upstream RTT with downstream parse.
+      - launcher: --set keep_host_header=true. Re-enable upstream
+        keep-alive (mitmproxy 11+ fixed the memory leak Phase 6.J
+        worked around).
+      - service.d/10-runtime-max.conf: RuntimeMaxSec 6 h → 3 h to
+        compensate the H/2 in-process state drift. Memory still
+        bounded by the 400 MB envelope ; restart latency stays
+        sub-second so no user-visible impact.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 15:39:44 +0000
+
 secubox-toolbox (2.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 8 Quick Win (#500) — anti-Utiq defense R0 (log) + R1 (block).
