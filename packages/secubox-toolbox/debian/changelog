@@ -1,3 +1,29 @@
+secubox-toolbox (2.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 7 follow-up (#498) — wg LXC : privileged mode + listen-host
+    parameterisation, but transparent-mode cutover blocked by netns
+    architecture.
+    - secubox-toolbox-lxc-provision : new `wg` target now produces
+      a PRIVILEGED LXC (drops lxc.idmap, drops lxc.include userns.conf,
+      matches the existing mitmproxy WAF LXC convention). Solves the
+      CA-WG bind-mount permission denial from 2.3.1.
+    - secubox-toolbox-mitm-wg-launch : new env var
+      MITM_WG_LISTEN_HOST overrides the hardcoded 10.99.1.1 so the
+      LXC variant can bind 0.0.0.0 on its br-lxc interface.
+    - lxc/toolbox-mitm-wg.service.template : sets
+      Environment=MITM_WG_LISTEN_HOST=0.0.0.0 alongside RuntimeMaxSec.
+    - lxc/toolbox-mitm-wg.conf.template : documents the netns/conntrack
+      finding that blocks the transparent-mode cutover live. Two
+      viable paths forward (keep host or switch to mitmproxy --mode
+      wireguard) recorded inline.
+    Cutover attempted live 2026-06-08, traffic reached the LXC, TLS
+    handshake failed because SO_ORIGINAL_DST returns FileNotFoundError
+    (conntrack is netns-scoped). Rolled back to host service ; iPhone
+    tunnel never broke for more than a few seconds. The LXC stays
+    provisioned + ready as a base for the --mode wireguard migration.
+
+ -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 07:41:54 +0000
+
 secubox-toolbox (2.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Fix (#498) : NetworkManager connection `id` was the raw User-Agent
