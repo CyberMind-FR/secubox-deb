@@ -1962,6 +1962,21 @@ async def report(token: str) -> Response:
 
 # ───────────────── Admin (Phase 1 minimal) ─────────────────
 
+@router.get("/admin/utiq-events")
+async def admin_utiq_events(hours: int = 24, limit: int = 200) -> dict:
+    """Phase 8 (#500) — silenced-but-tracked Utiq detections.
+
+    Lists every event the mitm-wg `utiq_defense` addon recorded within
+    the window (default 24 h, max 31 d).  Operator dashboard uses this
+    to surface the per-client + per-publisher views.
+    """
+    from . import utiq as _u
+    return {
+        "events": _u.recent(hours=hours, limit=limit),
+        "aggregates": _u.aggregates(hours=hours),
+    }
+
+
 @router.get("/admin/config")
 async def admin_config() -> dict:
     return _get_cfg().model_dump()

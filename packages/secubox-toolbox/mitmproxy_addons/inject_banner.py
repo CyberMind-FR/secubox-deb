@@ -237,12 +237,27 @@ def _compute_site_context(flow: http.HTTPFlow) -> dict:
         "cookies_sent": 0,
         "trackers": 0,
         "is_tracker_host": False,
+        "utiq_recent_count": 0,
     }
 
     # Cookies (cheap : just header counts, name-less for privacy)
     set_n, sent_n = _count_cookies(flow)
     ctx["cookies_set"] = set_n
     ctx["cookies_sent"] = sent_n
+
+    # Phase 8 (#500) — Utiq tile : count events from this peer in the
+    # last hour.  Best-effort : if the store import fails or the DB
+    # isn't reachable we just leave the counter at 0 and the tile
+    # disappears.  No exception ever propagates to the addon chain.
+    try:
+        from secubox_toolbox import utiq as _u
+        peer_ip = None
+        if flow.client_conn and flow.client_conn.peername:
+            peer_ip = flow.client_conn.peername[0]
+        if peer_ip:
+            ctx["utiq_recent_count"] = _u.client_recent_count(peer_ip, hours=1)
+    except Exception:
+        pass
 
     # Trackers : 1st-party host check + body scan
     ctx["is_tracker_host"] = bool(_TRACKER_HOST_PATTERNS.match(host))
@@ -384,6 +399,13 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
         else:
             target_emoji = "&#x1F3AF;"  # 🎯
             right_parts.append(f"{target_emoji} {trackers}")
+    # Phase 8 (#500) — surface Utiq hits for this client. Cheap query
+    # against the utiq_events store (last 1 h). Avoids surfacing the
+    # tile on stale state by capping the lookback window.
+    utiq_n = ctx.get("utiq_recent_count", 0)
+    if utiq_n > 0:
+        # 📡 N — operator-grade tracker active
+        right_parts.append(f"&#x1F4E1; utiq:{utiq_n}")
     if ctx["asn"]:
         right_parts.append(_ncr(ctx["asn"]))
     right_text = " &#xB7; ".join(right_parts)  # middle dot · = &#xB7;
