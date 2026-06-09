@@ -35,6 +35,11 @@ override_dh_installsystemd:
 	install -d debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm-wg.service.d
 	install -m 0644 systemd/secubox-toolbox-mitm-wg.service.d/10-runtime-max.conf \
 	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm-wg.service.d/
+	# Phase 9 (#501) : multi-worker fanout template — opt-in via
+	# systemctl enable @1..4.  See unit's [Unit] doc string for the
+	# activation + rollback recipe.
+	install -m 0644 systemd/secubox-toolbox-mitm-wg-worker@.service \
+	  debian/secubox-toolbox/lib/systemd/system/
 	# Primary unit goes via dh_installsystemd which also handles the enable helpers.
 	cp systemd/secubox-toolbox.service debian/secubox-toolbox.service
 	dh_installsystemd --no-start --no-enable
@@ -56,6 +61,10 @@ override_dh_strip:
 	# at boot) + peer-restore script + oneshot service + unbound listener
 	install -d debian/secubox-toolbox/usr/share/secubox/toolbox/nftables.d
 	install -m 0644 nftables.d/secubox-toolbox-wg.nft \
+	  debian/secubox-toolbox/usr/share/secubox/toolbox/nftables.d/
+	# Phase 9 (#501) : fanout DNAT drop-in (opt-in).  Operator activates
+	# by symlinking /etc/nftables.d/secubox-toolbox-wg.nft → this file.
+	install -m 0644 nftables.d/secubox-toolbox-wg-fanout.nft \
 	  debian/secubox-toolbox/usr/share/secubox/toolbox/nftables.d/
 	install -m 0755 sbin/secubox-toolbox-wg-restore \
 	  debian/secubox-toolbox/usr/sbin/

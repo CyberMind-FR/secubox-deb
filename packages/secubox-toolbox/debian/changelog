@@ -1,3 +1,32 @@
+secubox-toolbox (2.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 9 (#501) — multi-worker fanout for mitm-wg.
+    Single-process mitm-wg saturated one ARM core at ~90 % even with
+    just 2-3 active wg peers, limited by the Python GIL.  Phase 9
+    spreads new TCP flows across N=4 worker instances :
+      - systemd : new template secubox-toolbox-mitm-wg-worker@.service ;
+        per-instance Environment=MITM_WG_LISTEN_PORT=808%i (8081..8084).
+        Per-worker RuntimeMaxSec=3 h, MemoryMax=128M, TasksMax=128.
+      - launcher : reads MITM_WG_LISTEN_PORT (default 8081 for legacy
+        single-worker service).
+      - nft : new drop-in nftables.d/secubox-toolbox-wg-fanout.nft
+        replaces the prerouting chain with a numgen inc round-robin
+        across 4 ports.  Conntrack pins each TCP flow to its initially
+        assigned worker for the lifetime of the connection
+        (sticky-per-flow ; rebalancing only at new connection).
+      - opt-in : single-worker secubox-toolbox-mitm-wg.service stays
+        shipped + functional.  Activation recipe in the worker unit's
+        [Unit] description.
+    Live numbers on gk2 with 2 active Linux peers + 1 iPhone :
+      single  90-95 % CPU on 1 core (saturated)
+      fanout  ~55 % avg per worker × 4, 0-70 % range (headroom)
+    SQLite WAL on toolbox.db handles 4 concurrent writers ; the
+    cert-pin auto-learning dynamic bypass file is the remaining race
+    surface (4 writers can dupe a line, the launcher's sort -u
+    de-dupes at next reload).  A real filelock lands in Phase 9.1.
+
+ -- Gérald Kerma <devel@cybermind.fr>  mar., 09 juin 2026 04:27:27 +0000
+
 secubox-toolbox (2.4.3-1~bookworm1) bookworm; urgency=medium
 
   * Phase 8.2 perf (#500) — defensive performance work :
