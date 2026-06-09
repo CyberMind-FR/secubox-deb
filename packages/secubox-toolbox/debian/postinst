@@ -112,10 +112,21 @@ fi
 
     # Phase 7 (#498) : install nft drop-in for boot-survival + reload nft so
     # the running ruleset matches what nftables.service will load at next boot.
+    # Phase 10 (#501 perf) : ALSO deploy the Phase 9 fanout drop-in as
+    # zz-prefixed so it loads AFTER the base file (alphabetical glob) and
+    # overrides the prerouting chain with the 4-worker numgen DNAT.  The
+    # base file creates the table + chains + 51820 input rule ; the zz
+    # drop-in flushes prerouting and repopulates it with the fanout map.
+    # Pre-2.5.2 operators who applied the fanout via runtime nft -f got it
+    # silently wiped on every dpkg upgrade — fixed here (idempotent).
     if [ -f /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg.nft ]; then
       install -d -m 0755 /etc/nftables.d
       install -m 0644 /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg.nft \
         /etc/nftables.d/secubox-toolbox-wg.nft
+      if [ -f /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg-fanout.nft ]; then
+        install -m 0644 /usr/share/secubox/toolbox/nftables.d/secubox-toolbox-wg-fanout.nft \
+          /etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft
+      fi
       if systemctl is-active --quiet nftables.service 2>/dev/null; then
         systemctl reload nftables.service 2>/dev/null \
           || /usr/sbin/nft -f /etc/nftables.d/secubox-toolbox-wg.nft 2>/dev/null \
@@ -141,6 +152,25 @@ fi
       if systemctl is-active --quiet unbound.service 2>/dev/null; then
         systemctl restart unbound.service 2>/dev/null || true
       fi
+    fi
+
+    # Phase 10 (#501 perf) : on UPGRADE ($2 = previous version), try-restart
+    # the long-running daemons so the new code is live without operator
+    # intervention.  dh_installsystemd ships --no-start --no-enable in
+    # debian/rules so without this loop secubox-toolbox.service stays dead
+    # post-upgrade until reboot (caught 2026-06-09 : kbin.gk2 503'd for 5 min
+    # after the 2.5.0 → 2.5.1 upgrade because the unit was SIGTERMed and
+    # never restarted).  try-restart is a no-op when the unit is not
+    # running, so it's safe on fresh install / unconfigured boards.
+    if [ -n "${2:-}" ] && [ -d /run/systemd/system ]; then
+      for unit in secubox-toolbox.service \
+                  secubox-toolbox-mitm.service \
+                  secubox-toolbox-mitm-wg-worker@1.service \
+                  secubox-toolbox-mitm-wg-worker@2.service \
+                  secubox-toolbox-mitm-wg-worker@3.service \
+                  secubox-toolbox-mitm-wg-worker@4.service ; do
+        systemctl try-restart "$unit" 2>/dev/null || true
+      done
     fi
     ;;
 esac
