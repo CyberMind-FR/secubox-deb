@@ -131,13 +131,18 @@
       .force('center', d3.forceCenter(W / 2, H / 2))
       .force('collide', d3.forceCollide().radius(22));
 
-    const linkSel = svg.append('g').attr('class', 'links')
+    // Phase 11.B v3 — content group that owns links + nodes ; the
+    // d3.zoom behavior applies its transform here so pan/pinch don't
+    // move the SVG itself (or its viewBox).
+    const content = svg.append('g').attr('class', 'content');
+
+    const linkSel = content.append('g').attr('class', 'links')
       .selectAll('line').data([...links, ...accentLinks]).join('line')
       .attr('class', d => d.accent ? 'edge accent' : 'edge')
       .attr('stroke-width', d => Math.max(1, Math.log(1 + (d.reuse || 0)) * 1.8))
       .attr('stroke-dasharray', d => d.accent ? '4,3' : null);
 
-    const nodeG = svg.append('g').attr('class', 'nodes')
+    const nodeG = content.append('g').attr('class', 'nodes')
       .selectAll('g').data(nodes).join('g')
       .attr('class', d => 'node node-' + d.kind)
       .call(d3.drag()
@@ -154,11 +159,60 @@
       .attr('x', 12).attr('y', 4)
       .text(d => d.label.length > 22 ? d.label.slice(0, 21) + '…' : d.label);
 
+    // ─── pan + pinch-zoom on the SVG (transform applies to content) ──
+    // Drag on a node calls d3.drag, drag on empty SVG calls d3.zoom's
+    // pan ; pinch and wheel always zoom.  Touch-action: none on the
+    // svg (css) keeps the browser from intercepting these gestures.
+    const zoom = d3.zoom()
+      .scaleExtent([0.2, 6])
+      .filter((ev) => {
+        // Allow pan when the gesture didn't start on a node element.
+        // Allow all wheel + touch (multi-finger pinch).
+        if (ev.type === 'wheel' || (ev.touches && ev.touches.length > 1)) return true;
+        return !ev.target.closest('.node');
+      })
+      .on('zoom', (ev) => content.attr('transform', ev.transform));
+    svg.call(zoom).on('dblclick.zoom', () => autoFit(800));
+
+    // Auto-fit once the simulation cools so all nodes are visible.
+    let fitDone = false;
+    function autoFit(duration = 600) {
+      if (!nodes.length) return;
+      const bbox = content.node().getBBox();
+      if (!bbox.width || !bbox.height) return;
+      const pad = 28;
+      const scale = Math.min(
+        (W - pad * 2) / bbox.width,
+        (H - pad * 2) / bbox.height,
+        2.5,
+      );
+      const tx = (W - bbox.width * scale) / 2 - bbox.x * scale;
+      const ty = (H - bbox.height * scale) / 2 - bbox.y * scale;
+      svg.transition().duration(duration).call(
+        zoom.transform,
+        d3.zoomIdentity.translate(tx, ty).scale(scale),
+      );
+    }
+
     simulation.on('tick', () => {
       linkSel
         .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
         .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
       nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
+      if (!fitDone && simulation.alpha() < 0.1) {
+        fitDone = true;
+        autoFit();
+      }
+    });
+    // Re-fit on viewport resize.
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const sz = svgSize();
+        svg.attr('viewBox', `0 0 ${sz.W} ${sz.H}`);
+        autoFit(400);
+      }, 150);
     });
   }
 
