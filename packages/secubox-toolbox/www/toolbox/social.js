@@ -196,7 +196,7 @@
   }
   async function confirmWipe() {
     try {
-      const r = await fetch(`/api/v1/toolbox/social/wipe/${encodeURIComponent(token)}`, { method: 'POST' });
+      const r = await fetch(`/social/wipe/${encodeURIComponent(token)}`, { method: 'POST' });
       if (!r.ok) throw new Error('http ' + r.status);
       const j = await r.json();
       wipeModal.close();
@@ -226,7 +226,7 @@
   // ─── fetch + bootstrap ───
   async function fetchGraph() {
     try {
-      const r = await fetch(`/api/v1/toolbox/social/graph/${encodeURIComponent(token)}?since=86400`);
+      const r = await fetch(`/social/graph/${encodeURIComponent(token)}?since=86400`);
       if (!r.ok) throw new Error('http ' + r.status);
       const g = await r.json();
       render(g);

@@ -2103,6 +2103,38 @@ def _load_social_i18n(lang: str) -> dict:
         return {}
 
 
+@router.get("/social/me")
+async def social_view_me(request: Request) -> RedirectResponse:
+    """Self-resolving entry point used by the kbin splash menu.
+
+    Mirrors /report/me/html : accepts ?mh=<hash> for R3 / remote viewers
+    (the inject_banner.py + landing template both already pass `mh` in
+    their report links), else falls back to ARP _resolve() for R2 captive
+    clients.
+
+    Mints a short-TTL (1 h) HMAC token bound to the resolved mac_hash and
+    redirects to /social/{token}.  This keeps a single HMAC-token-gated
+    code path for the actual graph view + wipe endpoint.
+    """
+    salt = _get_salt()
+    mh_qp = (request.query_params.get("mh") or "").strip().lower()
+    if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
+        mac_hash = mh_qp
+    else:
+        ip, mac = _resolve(request)
+        if not mac:
+            raise HTTPException(
+                400,
+                "client MAC unknown (not in captive subnet?) — use ?mh=<hash>",
+            )
+        mac_hash = macmod.hash_mac(mac, salt)
+
+    tok = reports.mint_token(mac_hash, salt, ttl_seconds=3600)
+    lang = request.query_params.get("lang") or ""
+    suffix = f"?lang={lang}" if lang else ""
+    return RedirectResponse(url=f"/social/{tok.token}{suffix}", status_code=303)
+
+
 @router.get("/social/{token}", response_class=HTMLResponse)
 async def social_view(token: str, request: Request) -> HTMLResponse:
     """Per-client social mapping HTML page.
