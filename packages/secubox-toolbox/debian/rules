@@ -23,6 +23,13 @@ override_dh_auto_install:
 	install -d debian/secubox-toolbox/usr/sbin
 	install -m 0755 scripts/toolbox-up debian/secubox-toolbox/usr/sbin/
 	install -m 0755 scripts/ca-init    debian/secubox-toolbox/usr/sbin/secubox-toolbox-ca-init
+	# sbin/ helpers (Phase 5 LXC, Phase 6 R3 WG, Phase 9 fanout, Phase 11 social).
+	# Pre-2.6.0 only db-tune + lxc-provision shipped — the mitm-wg-launch
+	# wrapper had to be hand-installed on the board.  This block ships them
+	# all consistently so the .deb is self-contained.
+	install -m 0755 sbin/secubox-toolbox-lxc-provision   debian/secubox-toolbox/usr/sbin/
+	install -m 0755 sbin/secubox-toolbox-mitm-wg-launch  debian/secubox-toolbox/usr/sbin/
+	install -m 0755 sbin/secubox-toolbox-wg-provision    debian/secubox-toolbox/usr/sbin/
 
 override_dh_installsystemd:
 	# Install the secondary unit manually (dh_installsystemd expects 1 unit/pkg).
