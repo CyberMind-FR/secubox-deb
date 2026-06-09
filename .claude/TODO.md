@@ -1,9 +1,34 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-08*
+*Mis à jour : 2026-06-09*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Phase 10 — Banner injection perf (#501) — ✅ shipped 2026-06-09
+
+- [x] **Banner perf quick wins** (`secubox-toolbox` 2.5.1, commit `ce059d0f`)
+  — LRU `_host_signals` (2048), drop body tracker scan, 2 MB body cap,
+  trim dead tile. Deployed live sur gk2, iPhone confirme "better...
+  perfect work".
+- [x] **Postinst regression fix** (`secubox-toolbox` 2.5.2, commit `15f48d9d`)
+  — auto-deploy fanout drop-in en `zz-`, try-restart sur upgrade. Push
+  origin, code-only (pas encore déployé).
+- [ ] **Build + deploy 2.5.2 sur gk2** — postinst-only, attendre fenêtre
+  de maintenance (ne pas perturber session iPhone stable).
+- [ ] **Ouvrir PR #501** sur instruction utilisateur (branche poussée :
+  `perf/501-banner-injection-quickwins`).
+- [ ] **Phase 10 future** — refactor banner JS-driven async (élimine
+  buffer-read pour tous corps, pas seulement < 2 MB).
+
+### Phase 9 — mitm-wg multi-worker fanout (#501) — ✅ shipped 2026-06-08
+
+- [x] **4-worker template + numgen DNAT fanout** (`secubox-toolbox`
+  2.5.0, merged `89380a12`). Live numbers gk2 : CPU 68/44/50/54 % au
+  lieu d'un single ~90 %.
+- [ ] **Phase 9.1 future** : real filelock pour
+  `/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf` (race 4-worker
+  tolérable via launcher's `sort -u`, mais propre serait mieux).
 
 ### Phase 8 — Anti-tracking opérateur (Utiq) — issue #500
 
@@ -33,16 +58,12 @@ Plan complet documenté en issue. À implémenter :
   UDP 123 outbound fonctionnel. Peut-être un IPv6-only resolve qui
   échoue silencieusement.
 
-### Phase 9 (futur) — mitm-wg multi-instance dispatcher
+### Phase 9 ✅ shipped 2026-06-08 — voir bloc P0 ci-dessus
 
-Re-attaquable seulement avec une archi à inventer :
-
-- [ ] Évaluer un dispatcher Python custom qui termine wg-quick côté hôte
-  puis route par peer-id vers une mitmproxy instance dans une LXC.
-- [ ] OR : wg-quick dans la LXC privilégiée avec accès netfilter
-  partagé (kernel module loaded host-side, exposé via /proc).
-- [ ] Évaluer aussi le patch upstream mitmproxy pour multi-peer
-  `--mode wireguard` (probablement pas dans leur scope).
+Approche initialement envisagée (dispatcher custom, LXC privilégiée
+shared-netfilter) — résolue plus simplement via nft `numgen inc mod 4`
++ conntrack flow-pinning + systemd template `@.service`.
+**#502 D redesign** capture la suite (captive → LXC TPROXY-inside).
 
 ---
 

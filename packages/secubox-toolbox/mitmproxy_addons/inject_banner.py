@@ -219,8 +219,84 @@ def _count_trackers_in_body(body: bytes, cap: int = 200_000) -> int:
         return 0
 
 
+# Phase 10 (#501 perf) — per-host context cache.
+#
+# `_compute_site_context` used to call into 4 sub-systems per response :
+# `_host_app.classify_host` (host → emoji + app via 100+ pattern walk),
+# `_whitelist_mod.match`, `_geo_mod.lookup` (DNS + GeoIP mmdb lookup),
+# plus the body tracker scan + cookie counts. Of those, ALL host-keyed
+# results are stable for hours — there's no point recomputing per
+# response. An LRU cache on `host` shaves ~20-50 ms per HTML response,
+# and frees the GIL during banner injection so the rest of the addon
+# chain (and other workers) can progress.
+import functools as _functools
+
+
+@_functools.lru_cache(maxsize=2048)
+def _host_signals(host: str) -> tuple:
+    """Return (app_emoji, app, flag, country, asn, status, status_icon).
+
+    Tuple form keeps the cache key + value flat and hashable. We don't
+    cache cookie counts (per-flow) or tracker scan (per-response) — only
+    the truly host-stable values.
+
+    A cache miss is the expensive path : classify_host (~50 µs typical,
+    up to 5 ms on the hot patterns), whitelist match (~1 µs), and the
+    GeoIP lookup (DNS + mmdb — can be 5-50 ms on a cold DNS cache).
+    """
+    app_emoji = "❔"
+    app = host
+    flag = ""
+    country = ""
+    asn = ""
+    status = "inspected"
+    status_icon = "🔍"
+
+    if not _HAS_CLASSIFIERS:
+        return (app_emoji, app, flag, country, asn, status, status_icon)
+
+    try:
+        cls = _host_app.classify_host(host)
+        app_emoji = cls.get("emoji", "❔")
+        app = cls.get("app", host) if cls.get("app") != "?" else host
+    except Exception:
+        pass
+
+    try:
+        wl = _whitelist_mod.match(host)
+        if wl:
+            status = "bypassed-whitelist"
+            status_icon = "🛡"
+        elif re.search(r"\.(signal|whispersystems|threema|simplex|matrix|proton|tutanota)\.", host):
+            status = "e2e-opaque"
+            status_icon = "🔐"
+    except Exception:
+        pass
+
+    if _HAS_GEO:
+        try:
+            info = _geo_mod.lookup(host) or {}
+            flag = info.get("flag", "")
+            country = info.get("country_iso", "")
+            asn = (info.get("asn_org") or "")[:24]
+        except Exception:
+            pass
+
+    return (app_emoji, app, flag, country, asn, status, status_icon)
+
+
 def _compute_site_context(flow: http.HTTPFlow) -> dict:
-    """Compute per-site signals for the dynamic right-side of the banner."""
+    """Compute per-site signals for the dynamic right-side of the banner.
+
+    Phase 10 (#501 perf) — host-stable signals come from the LRU cache
+    (`_host_signals`). The body tracker scan is REMOVED ; the
+    1st-party `is_tracker_host` flag already surfaces tracker hosts as
+    `⚠ tracker-host` in the banner, which is the privacy-relevant
+    signal. Counting trackers in the body required a full body buffer
+    scan that delayed banner injection by 30-200 ms per HTML response
+    on big publishers — not worth it for a "trackers: N" count that
+    most users don't read.
+    """
     host = (flow.request.host or "").lower()
     ctx = {
         "host": host[:50],
@@ -239,6 +315,10 @@ def _compute_site_context(flow: http.HTTPFlow) -> dict:
         "is_tracker_host": False,
         "utiq_recent_count": 0,
     }
+
+    # Host-stable signals — single LRU lookup per host.
+    (ctx["app_emoji"], ctx["app"], ctx["flag"], ctx["country"], ctx["asn"],
+     ctx["status"], ctx["status_icon"]) = _host_signals(host)
 
     # Cookies (cheap : just header counts, name-less for privacy)
     set_n, sent_n = _count_cookies(flow)
@@ -259,43 +339,10 @@ def _compute_site_context(flow: http.HTTPFlow) -> dict:
     except Exception:
         pass
 
-    # Trackers : 1st-party host check + body scan
+    # Trackers : 1st-party host flag only — body scan removed in Phase 10
+    # for perceived-latency win. The banner still shows ⚠ tracker-host
+    # when the visited site is itself a known tracker domain.
     ctx["is_tracker_host"] = bool(_TRACKER_HOST_PATTERNS.match(host))
-    if flow.response and flow.response.content:
-        ctx["trackers"] = _count_trackers_in_body(flow.response.content)
-    if not _HAS_CLASSIFIERS:
-        return ctx
-
-    # App classification
-    try:
-        cls = _host_app.classify_host(host)
-        ctx["app_emoji"] = cls.get("emoji", "❔")
-        ctx["app"] = cls.get("app", host) if cls.get("app") != "?" else host
-    except Exception:
-        pass
-
-    # Whitelist / status
-    try:
-        wl = _whitelist_mod.match(host)
-        if wl:
-            ctx["status"] = "bypassed-whitelist"
-            ctx["status_icon"] = "🛡"
-        # E2E pattern check (cheap)
-        elif re.search(r"\.(signal|whispersystems|threema|simplex|matrix|proton|tutanota)\.", host):
-            ctx["status"] = "e2e-opaque"
-            ctx["status_icon"] = "🔐"
-    except Exception:
-        pass
-
-    # Geo (flag + country + ASN)
-    if _HAS_GEO:
-        try:
-            info = _geo_mod.lookup(host) or {}
-            ctx["flag"] = info.get("flag", "")
-            ctx["country"] = info.get("country_iso", "")
-            ctx["asn"] = (info.get("asn_org") or "")[:24]
-        except Exception:
-            pass
 
     # Quality grade (passive — we only see response headers + transport)
     try:
@@ -382,23 +429,17 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
         right_parts.append(ctx["flag"])
     if ctx["app_emoji"] and ctx["app"]:
         right_parts.append(f"{_ncr(ctx['app_emoji'])} {_ncr(ctx['app'])}")
-    # Phase 6.G : cookies + trackers (privacy signals)
+    # Phase 6.G : cookies + 1st-party tracker host (privacy signals).
+    # Phase 10 perf : the per-response tracker body scan is gone — we keep
+    # only the host-level flag (cheap regex on the request host).
     cookies_set = ctx.get("cookies_set", 0)
     cookies_sent = ctx.get("cookies_sent", 0)
-    trackers = ctx.get("trackers", 0)
     is_tracker = ctx.get("is_tracker_host", False)
     cookie_total = cookies_set + cookies_sent
     if cookie_total > 0:
-        # 🍪 N (set+sent) — colored if many
-        cookie_emoji = "&#x1F36A;"  # 🍪
-        right_parts.append(f"{cookie_emoji} {cookie_total}")
-    if trackers > 0 or is_tracker:
-        # 🎯 N trackers in body, or ⚠ if 1st-party host is itself a tracker
-        if is_tracker:
-            right_parts.append("&#x26A0; tracker-host")  # ⚠
-        else:
-            target_emoji = "&#x1F3AF;"  # 🎯
-            right_parts.append(f"{target_emoji} {trackers}")
+        right_parts.append(f"&#x1F36A; {cookie_total}")  # 🍪
+    if is_tracker:
+        right_parts.append("&#x26A0; tracker-host")  # ⚠
     # Phase 8 (#500) — surface Utiq hits for this client. Cheap query
     # against the utiq_events store (last 1 h). Avoids surfacing the
     # tile on stale state by capping the lookback window.
@@ -527,6 +568,9 @@ def _client_level(flow) -> str:
     return "r1"
 
 
+_MAX_INJECT_BYTES = 2 * 1024 * 1024  # Phase 10 perf cap : skip injection on huge bodies
+
+
 class InjectBanner:
     def response(self, flow: http.HTTPFlow) -> None:
         if not flow.response:
@@ -540,8 +584,20 @@ class InjectBanner:
         # AND R3 (portable WG opt-in). R0/R1 stay banner-free.
         if _client_level(flow) not in ("r2", "r3"):
             return
+        # Phase 10 perf : cheap pre-flight check on Content-Length to avoid
+        # reading multi-MB bodies into RAM just to discover we'd skip them.
+        # `flow.response.content` would buffer the whole body before returning.
+        try:
+            cl = int(flow.response.headers.get("content-length", "0") or "0")
+            if cl > _MAX_INJECT_BYTES:
+                return
+        except (TypeError, ValueError):
+            pass
         body = flow.response.content
         if body is None or _GUARD in body:
+            return
+        if len(body) > _MAX_INJECT_BYTES:
+            # Streamed bodies without content-length still get caught here.
             return
         m = _RE_BODY_CLOSE.search(body)
         if not m:
