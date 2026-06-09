@@ -3,6 +3,100 @@
 
 ---
 
+## 2026-06-09 — Phase 10 banner injection perf quick wins + postinst regression fix (ref #501)
+
+### Package bumps
+
+| Package | from → to |
+|---|---|
+| secubox-toolbox | 2.5.0 → **2.5.1** (banner perf, déployé live) |
+| secubox-toolbox | 2.5.1 → **2.5.2** (postinst regression fix, code-only) |
+
+### What landed
+
+**1. Banner injection quick wins** (`secubox-toolbox` 2.5.1, commit `ce059d0f`)
+
+User signal : "la banner n'apparait qu'en fin de chargement et les
+chargements de pages sont très lents". Quatre changements ciblés :
+
+* `_host_signals(host)` — nouvelle fonction LRU-cachée (maxsize=2048)
+  retournant `(app_emoji, app, flag, country, asn, status, status_icon)`.
+  Re-hits coûtent un dict lookup au lieu de 5-50 ms (`classify_host` +
+  `whitelist match` + GeoIP DNS+mmdb).
+* `_count_trackers_in_body()` retiré du chemin chaud. Le flag
+  `is_tracker_host` (regex cheap sur l'host de la requête) couvre le
+  signal privacy ; le scan plein-corps économise 30-200 ms sur les
+  publishers lourds.
+* `_MAX_INJECT_BYTES = 2 MB` — skip injection sur gros corps via
+  pré-check `Content-Length` + garde défensive `len(body)` pour les
+  streamed bodies sans CL.
+* Tile 🎯 N trackers (corps) supprimée ; cookies + ⚠ tracker-host
+  conservés.
+
+Confirmation utilisateur post-déploiement gk2 : "browsing performance
+on iPhone is better... perfect work".
+
+**2. Postinst regression fix** (`secubox-toolbox` 2.5.2, commit `15f48d9d`)
+
+Deux régressions silencieuses pendant le déploiement 2.5.0 → 2.5.1 sur gk2 :
+
+* **kbin.gk2.secubox.in 503 pendant 5 min** : dpkg upgrade a SIGTERMé
+  `secubox-toolbox.service` (FastAPI kbin landing) et ne l'a jamais
+  redémarré, car `dh_installsystemd --no-start --no-enable` dans
+  `debian/rules`. Détecté quand l'utilisateur a signalé "kbin 503".
+* **iPhone tunnel inutilisable** : postinst a écrasé
+  `/etc/nftables.d/secubox-toolbox-wg.nft` avec la version single-port
+  DNAT, supprimant le fanout Phase 9 (que l'opérateur avait déployé en
+  runtime avec `nft -f` sans persistence côté package). Résultat : tout
+  le trafic WG R3 pinné sur worker@1 à 97 % CPU, w2-w4 idle. Détecté
+  quand l'utilisateur a signalé "browsing excessivement trop lent".
+
+Fixes postinst-only :
+
+* Postinst déploie maintenant `secubox-toolbox-wg-fanout.nft` en
+  `/etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft`. Le préfixe `zz-`
+  garantit le tri alphabétique après le base file dans le glob include
+  de `/etc/nftables.conf` → le base file crée la table + chains + UDP
+  51820 input rule, puis le zz drop-in flush+repeuple `prerouting`
+  avec le numgen fanout map sur ports 8081..8084.
+* Sur upgrade (`$2` set), `systemctl try-restart` sur
+  `secubox-toolbox.service`, `secubox-toolbox-mitm.service`, et les 4
+  instances `secubox-toolbox-mitm-wg-worker@{1..4}.service`. `try-restart`
+  est no-op si l'unité n'est pas active, donc safe sur fresh install.
+
+### Mitigations live appliquées sur gk2 (2026-06-09)
+
+* `systemctl start secubox-toolbox.service` — restaure kbin landing.
+* `cp .../secubox-toolbox-wg-fanout.nft /etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft`
+  + `systemctl reload nftables.service` + `systemctl restart
+  secubox-toolbox-mitm-wg-worker@1.service` (pour drop les sticky
+  flows pinnés sur w1) — restaure le fanout 4-worker.
+
+### Mémoire ajoutée
+
+* `feedback_nft_layered_dropins_persistence.md` — Phase 9 fanout doit
+  trier APRÈS son table-creator (zz- prefix) ; ne jamais symlinker en
+  place du base file.
+* `feedback_postinst_preserve_runtime_state.md` — dpkg upgrade SIGTERMe
+  l'unité ; postinst doit try-restart + redéployer les drop-ins nft
+  appliqués en runtime.
+
+### Branche
+
+`perf/501-banner-injection-quickwins` poussée sur origin (commits
+`ce059d0f` + `15f48d9d`). **Pas de PR ouverte** par défaut (rule
+`feedback_no_unprompted_prs.md`).
+
+### À faire ensuite
+
+* Build + deploy `secubox-toolbox 2.5.2` sur gk2 (postinst-only — pas
+  de code change ; attendre fenêtre de maintenance).
+* Ouvrir PR #501 sur instruction.
+* Phase 10 future : refactor banner vers JS-driven async (élimine le
+  buffer-read pour TOUS les corps, pas seulement < 2 MB).
+
+---
+
 ## 2026-06-08 — Phase 7.E.x LXC hygiene + auth recovery + Phase 8 opening (ref #498, #500)
 
 ### Package bumps
