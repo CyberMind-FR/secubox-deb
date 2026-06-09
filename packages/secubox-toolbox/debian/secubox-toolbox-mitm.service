@@ -19,6 +19,9 @@ ExecStart=/usr/bin/mitmdump \
     --set confdir=/etc/secubox/toolbox/mitm \
     --set ssl_insecure=false \
     --set web_open_browser=false \
+    --set http2=true \
+    --set connection_strategy=eager \
+    --set keep_host_header=true \
     -s /usr/lib/secubox/toolbox/mitmproxy_addons/cookies.py \
     -s /usr/lib/secubox/toolbox/mitmproxy_addons/dpi.py \
     -s /usr/lib/secubox/toolbox/mitmproxy_addons/avatar.py \
