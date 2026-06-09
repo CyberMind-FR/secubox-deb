@@ -82,16 +82,51 @@ def _registrable_domain(host: str) -> str:
 
 
 # ─── peer identity ───
-# We reuse the local_store helpers so the social addon sees the SAME
-# mac_hash the rest of the toolbox does.  Imported lazily to avoid a
-# circular import at addon-load time.
-def _client_mac_hash(flow) -> Optional[str]:
+# Phase 11.A originally tried `from . import local_store` which silently
+# failed because mitmproxy loads addons as top-level modules (not as
+# package members), so the relative import never resolved.  Inlined
+# here — only the R3 path (peer IP in 10.99.1.0/24 → WG pubkey hash)
+# since Phase B is R3-only.  R2 captive lookup remains in local_store
+# and joins later when the addon is wired into the captive mitm.
+import hashlib as _hashlib
+import json as _json
+from pathlib import Path as _Path
+
+_WG_PEERS_DB = _Path("/var/lib/secubox/toolbox/wg-peers.json")
+_WG_PEERS_CACHE: dict = {}
+_WG_PEERS_MTIME: float = 0.0
+
+
+def _wg_hash_of(ip: str) -> Optional[str]:
+    global _WG_PEERS_MTIME
     try:
-        from . import local_store as _ls  # type: ignore
-        ip = _ls._peer_ip(flow)
-        return _ls._client_hash(ip)
+        if not _WG_PEERS_DB.exists():
+            return None
+        mtime = _WG_PEERS_DB.stat().st_mtime
+        if mtime != _WG_PEERS_MTIME or not _WG_PEERS_CACHE:
+            data = _json.loads(_WG_PEERS_DB.read_text()).get("peers", {})
+            _WG_PEERS_CACHE.clear()
+            for pubkey, meta in data.items():
+                peer_ip = meta.get("ip")
+                if peer_ip:
+                    _WG_PEERS_CACHE[peer_ip] = _hashlib.sha256(
+                        pubkey.encode()
+                    ).hexdigest()[:16]
+            _WG_PEERS_MTIME = mtime
+        return _WG_PEERS_CACHE.get(ip)
     except Exception:
         return None
+
+
+def _client_mac_hash(flow) -> Optional[str]:
+    try:
+        if flow.client_conn and flow.client_conn.peername:
+            ip = flow.client_conn.peername[0]
+            if ip and ip.startswith("10.99.1."):
+                return _wg_hash_of(ip)
+    except Exception:
+        pass
+    return None
 
 
 # ─── cookie parsers ───

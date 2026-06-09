@@ -52,6 +52,17 @@ case "$1" in
     # subdirs inside keep their own restricted perms.
     install -d -m 0755 -o secubox-toolbox -g secubox-toolbox /var/log/secubox
 
+    # 4a. Phase 11.B (#507) — make /usr/share/secubox/www traversable so
+    # the FastAPI StaticFiles mount can serve /toolbox/social.{css,js} +
+    # /toolbox/d3.v7.min.js to clients arriving via the kbin HAProxy
+    # route (which bypasses nginx and so doesn't use the nginx /toolbox/
+    # alias).  Without this chmod the uvicorn process crashes at
+    # startup with PermissionError on Path("/usr/share/secubox/www/
+    # toolbox").is_dir().  Idempotent ; safe to repeat.
+    if [ -d /usr/share/secubox/www ]; then
+      chmod 0755 /usr/share/secubox/www 2>/dev/null || true
+    fi
+
     # 4b. GeoLite2 databases (Phase 2a+ : flag emojis + ASN org)
     # ASN DB from geoipupdate or Debian package geoip-database
     # Country DB from db-ip.com CC-BY (no MaxMind account required)

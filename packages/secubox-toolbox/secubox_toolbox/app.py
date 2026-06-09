@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__, social, store, threat_intel
 from .api import router as toolbox_router
@@ -25,6 +27,14 @@ app = FastAPI(
     openapi_url=None,
 )
 app.include_router(toolbox_router)
+
+# Phase 11.B (#507) — serve the WebUI assets on the same origin as
+# the FastAPI HTML pages.  Required because the kbin vhost routes
+# through HAProxy directly to uvicorn (bypassing nginx), so the
+# nginx /toolbox/ alias never gets a chance to match.
+_TOOLBOX_WWW = Path("/usr/share/secubox/www/toolbox")
+if _TOOLBOX_WWW.is_dir():
+    app.mount("/toolbox", StaticFiles(directory=_TOOLBOX_WWW), name="toolbox-www")
 
 
 @app.on_event("startup")
