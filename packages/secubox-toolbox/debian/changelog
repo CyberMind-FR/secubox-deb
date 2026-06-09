@@ -1,3 +1,35 @@
+secubox-toolbox (2.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 10 (#501 perf) — banner injection quick wins.
+    User reported "la banner n'apparait qu'en fin de chargement et les
+    chargements de pages sont très lents".  Root cause : every HTML
+    response triggered (a) a full body buffer-read just to scan for
+    tracker patterns, (b) un-cached _host_app.classify_host walk over
+    100+ regexes, (c) un-cached _geo_mod.lookup hitting DNS + the
+    GeoIP mmdb.  All three ran on every flow, all three were
+    host-stable.  Quick wins :
+      - LRU cache (maxsize=2048) on a new _host_signals(host) tuple
+        returning (app_emoji, app, flag, country, asn, status,
+        status_icon).  Re-hits cost a dict lookup instead of 5-50 ms.
+      - Dropped the per-response body tracker scan
+        (_count_trackers_in_body).  The 1st-party is_tracker_host
+        flag (cheap regex on the request host) is the privacy-
+        relevant signal ; the "trackers: N in body" count was a
+        nice-to-have that delayed banner injection by 30-200 ms on
+        big publishers.
+      - Skip injection entirely when the response body exceeds 2 MB
+        (cheap pre-flight check on Content-Length, plus a defensive
+        len() guard for streamed bodies without CL).  Huge SPA
+        bundles and PDF-as-HTML now flow through untouched.
+      - Trimmed the cookie/tracker tile : the dead "🎯 N" body-scan
+        branch is gone, only "🍪 N" + "⚠ tracker-host" remain.
+    Net effect on a typical page : banner shows up at first paint
+    instead of after the body finishes streaming, and TTFB for big
+    HTML responses is no longer banner-bound.
+    No protocol or schema change ; addon order is identical.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 09 Jun 2026 22:00:00 +0200
+
 secubox-toolbox (2.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 9 (#501) — multi-worker fanout for mitm-wg.
