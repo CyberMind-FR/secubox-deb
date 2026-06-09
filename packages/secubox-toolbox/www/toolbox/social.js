@@ -22,7 +22,10 @@
 
   const body = document.body;
   const token = body.dataset.token;
-  const i18n = JSON.parse(body.dataset.i18n || '{}');
+  // i18n is injected via <script>window.__SOCIAL_I18N__ = { … }</script>
+  // in the template head — keeps FR apostrophes intact (was a JSON.parse
+  // crash when inlined as a data-* attribute).
+  const i18n = window.__SOCIAL_I18N__ || {};
 
   // ─── i18n helper ───
   function t(key, vars = {}) {

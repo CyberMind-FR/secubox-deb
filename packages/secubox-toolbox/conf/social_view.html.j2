@@ -5,10 +5,18 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>{{ t.page_title }} — VILLAGE3B</title>
   <link rel="stylesheet" href="/toolbox/social.css">
+  <script>
+    // Inline JSON safer than a data-* attribute : FR text has
+    // apostrophes (l'effacement) that would break single-quoted
+    // HTML attrs.  Wrapped in <script> JSON is verbatim so long as
+    // it doesn't contain </script (json.dumps from Python never
+    // emits raw "</" in normal output).
+    window.__SOCIAL_I18N__ = {{ t_json | safe }};
+  </script>
   <script defer src="/toolbox/d3.v7.min.js"></script>
   <script defer src="/toolbox/social.js"></script>
 </head>
-<body data-token="{{ token }}" data-lang="{{ lang }}" data-i18n='{{ t_json | safe }}'>
+<body data-token="{{ token }}" data-lang="{{ lang }}">
 
 <header class="social-header">
   <div class="brand">
