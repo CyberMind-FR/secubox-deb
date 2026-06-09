@@ -2034,6 +2034,57 @@ async def admin_utiq_events(hours: int = 24, limit: int = 200) -> dict:
     }
 
 
+# ───────────────── Phase 11.A — Social Mapping (#505, parent #502) ─────────────────
+
+@router.get("/social/graph/{token}")
+async def social_graph_client(token: str, since: int = 86400) -> dict:
+    """Per-client cross-cookie tracker graph.
+
+    `token` is the same HMAC-signed report token used by /report/{token}
+    (see reports.verify_token).  Same TTL semantics : 24 h then the
+    salt rotation invalidates further access.
+
+    The returned shape is the JSON contract consumed by the d3 view in
+    Phase 11.B and by the bilingual PDF in Phase 11.C.
+    """
+    from . import social as _s
+    salt = _get_salt()
+    ok, mac_hash = reports.verify_token(token, salt)
+    if not ok:
+        raise HTTPException(404, "graph not found or expired")
+    # Clamp the window between 1 h and 7 d so a bad query can't
+    # walk the entire retention period.
+    since = max(3600, min(int(since or 86400), 7 * 86400))
+    return _s.fetch_graph(mac_hash, since_seconds=since)
+
+
+@router.post("/social/wipe/{token}")
+async def social_wipe_client(token: str) -> dict:
+    """RGPD art. 17 — droit à l'effacement.
+
+    HMAC-token-gated to the same identity as the per-client view.
+    Deletes every row across social_edges + social_nodes + social_links
+    for the resolved mac_hash.
+    """
+    from . import social as _s
+    salt = _get_salt()
+    ok, mac_hash = reports.verify_token(token, salt)
+    if not ok:
+        raise HTTPException(404, "graph not found or expired")
+    rows = _s.wipe_mac(mac_hash)
+    return {"wiped": True, "rows_deleted": rows, "mac_hash_prefix": mac_hash[:8]}
+
+
+@router.get("/admin/social-aggregate")
+async def admin_social_aggregate(hours: int = 24) -> dict:
+    """Operator dashboard view : KPI tiles + tracker-domain histogram +
+    anonymized client table.  No per-client graph at this endpoint
+    (that lives behind the HMAC-token route above).
+    """
+    from . import social as _s
+    return _s.aggregate(hours=hours)
+
+
 @router.get("/admin/config")
 async def admin_config() -> dict:
     return _get_cfg().model_dump()
