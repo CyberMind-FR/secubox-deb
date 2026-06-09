@@ -1,3 +1,51 @@
+secubox-toolbox (2.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 11.B (#507, parent #502) — social mapping per-client view +
+    favicon proxy + i18n.
+      - secubox_toolbox/api.py : two new endpoints.
+          GET /social/{token}            renders the HTML view
+                                         (HMAC-token gated, lang via
+                                         ?lang= or Accept-Language).
+          GET /social/favicon/{domain}   server-side cached proxy with
+                                         7 d TTL.  Strict domain
+                                         charset + SHA-256 keyed cache
+                                         file; HTTPS only with a hard
+                                         5 s timeout; falls back to a
+                                         1×1 transparent gif.
+      - conf/social_view.html.j2 : Jinja2 template implementing the
+        locked design (Cinzel header / IM Fell body / JetBrains Mono
+        data, force-directed d3 graph, three collapsible cards,
+        tracker-node bottom-sheet, FR-primary bilingual labels,
+        wipe-confirmation dialog with 3 s countdown).
+      - conf/i18n/social.fr.json + conf/i18n/social.en.json : single
+        dictionary per language.  FR is the source-of-truth.
+      - www/toolbox/social.css : palette-precise stylesheet.  No
+        third-party CSS dependency.  Mobile-first; desktop bumps the
+        node-detail panel to a right-rail at >= 720 px.
+      - www/toolbox/social.js : self-contained d3 driver.  Consumes
+        the Phase A JSON contract, force layout (link distance 70,
+        charge -180), tap-to-focus pulse on tracker nodes, wipe
+        modal countdown timer, refresh after wipe.  ~270 LOC.
+      - www/toolbox/d3.v7.min.js : d3 v7.9.0 self-hosted (~280 KB),
+        ISC-licensed, no CDN runtime dependency.
+
+    Design language consolidated from the #502 round-2 lock — edge
+    color placeholder cyber-cyan until the Phase C family taxonomy,
+    edge thickness = log(reuse_count + 1) * 1.8, animated pulse on
+    focus, tracker-node detail sheet (bottom on mobile, right-rail
+    >= 720 px), 3 s countdown before wipe confirm is enabled.
+
+    Out of scope for 2.6.1 (deferred to Phase 11.C) :
+      - Legal-evidence flag computation (consent-state probe + extra
+        EU transfer detection).
+      - Bilingual FR/EN PDF report cover + body.
+      - GeoIP + ASN org populated in the tracker node detail panel
+        (country / ASN values currently show "-" placeholders).
+      - Operator dashboard /admin/social/ HTML view (the JSON
+        /admin/social-aggregate endpoint already ships from 2.6.0).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 09 Jun 2026 12:05:00 +0200
+
 secubox-toolbox (2.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 11.A (#505, parent #502) — social mapping per device :

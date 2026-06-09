@@ -2085,6 +2085,119 @@ async def admin_social_aggregate(hours: int = 24) -> dict:
     return _s.aggregate(hours=hours)
 
 
+# ───────────────── Phase 11.B — per-client view + favicon proxy (#507) ─────────────────
+
+import json as _json_b
+
+
+def _load_social_i18n(lang: str) -> dict:
+    """Pick the FR or EN dictionary.  FR is the source-of-truth."""
+    lang = (lang or "").lower().split(",", 1)[0].split("-", 1)[0]
+    if lang not in ("en", "fr"):
+        lang = "fr"
+    path = TEMPLATE_DIR / "i18n" / f"social.{lang}.json"
+    try:
+        return _json_b.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        log.warning("social i18n load failed (%s): %s", lang, e)
+        return {}
+
+
+@router.get("/social/{token}", response_class=HTMLResponse)
+async def social_view(token: str, request: Request) -> HTMLResponse:
+    """Per-client social mapping HTML page.
+
+    HMAC-token-gated identically to /report/{token} so the same kbin
+    splash + R3 onboard flow can issue a link.  The page itself
+    contains no per-client data — the d3 layer fetches it via
+    GET /social/graph/{token} after page-load (so a forwarded link
+    that's been TTL-expired surfaces an empty graph + error message
+    in the page rather than a 404 at HTTP layer).
+    """
+    salt = _get_salt()
+    ok, _mac_hash = reports.verify_token(token, salt)
+    if not ok:
+        raise HTTPException(404, "page not found or expired")
+
+    # Language pick : query string `?lang=` wins, else Accept-Language.
+    lang = request.query_params.get("lang") or request.headers.get("accept-language", "fr")
+    lang = "fr" if "fr" in lang.lower() else "en"
+    i18n = _load_social_i18n(lang)
+    html = _env.get_template("social_view.html.j2").render(
+        token=token,
+        lang=lang,
+        t=i18n,
+        t_json=_json_b.dumps(i18n, ensure_ascii=False),
+    )
+    return HTMLResponse(content=html)
+
+
+# Favicon cache (Phase 11.B) — server-side cache so the per-client
+# view never makes a client-side request to a tracker domain just to
+# show its icon.  Default TTL 7 d.
+_FAVICON_CACHE_DIR = Path("/var/lib/secubox/toolbox/favicons")
+_FAVICON_TTL_SECONDS = 7 * 86400
+
+
+@router.get("/social/favicon/{domain}")
+async def social_favicon(domain: str) -> Response:
+    """Server-side favicon proxy with 7 d disk cache.
+
+    Path traversal is impossible because `domain` is whitelisted to
+    a strict charset and the cache file is sha256-keyed.  We fetch
+    over HTTPS only, time out hard at 5 s, and fall back to a 1×1
+    transparent gif on any failure.
+    """
+    import hashlib as _h
+    import re as _re
+    import time as _time
+
+    if not _re.match(r"^[a-z0-9.-]{1,253}$", domain.lower()):
+        raise HTTPException(400, "invalid domain")
+
+    _FAVICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    key = _h.sha256(domain.lower().encode()).hexdigest()[:24]
+    cache_file = _FAVICON_CACHE_DIR / f"{key}.ico"
+    now = _time.time()
+
+    if cache_file.exists() and now - cache_file.stat().st_mtime < _FAVICON_TTL_SECONDS:
+        return Response(
+            content=cache_file.read_bytes(),
+            media_type="image/x-icon",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    # Best-effort fetch.  No cross-host redirects, no JS, no cookies.
+    try:
+        import httpx
+        url = f"https://{domain.lower()}/favicon.ico"
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as c:
+            r = await c.get(
+                url,
+                headers={"User-Agent": "SecuBox-ToolBox-Favicon-Cache/1.0"},
+            )
+            if r.status_code == 200 and r.content and len(r.content) < 65536:
+                cache_file.write_bytes(r.content)
+                return Response(
+                    content=r.content,
+                    media_type="image/x-icon",
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
+    except Exception as e:  # noqa: BLE001
+        log.warning("favicon fetch failed for %s: %s", domain, e)
+
+    # Fallback : 1×1 transparent gif.
+    GIF = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00"
+        b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02L\x01\x00;"
+    )
+    return Response(
+        content=GIF,
+        media_type="image/gif",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 @router.get("/admin/config")
 async def admin_config() -> dict:
     return _get_cfg().model_dump()

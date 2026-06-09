@@ -1,0 +1,231 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 */
+/* Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> */
+
+/* Phase 11.B (#507) — Social mapping per-client view stylesheet.
+   Palette: cosmos-black / gold-hermetic / cinnabar / matrix-green /
+   void-purple / cyber-cyan / text-primary / text-muted.
+   Typography: Cinzel (headers) + IM Fell English (body) + JetBrains Mono (code/data). */
+
+:root {
+  --cosmos-black: #0a0a0f;
+  --gold-hermetic: #c9a84c;
+  --cinnabar: #e63946;
+  --matrix-green: #00ff41;
+  --void-purple: #6e40c9;
+  --cyber-cyan: #00d4ff;
+  --text-primary: #e8e6d9;
+  --text-muted: #6b6b7a;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--cosmos-black); color: var(--text-primary); }
+body {
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Header */
+.social-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--gold-hermetic);
+  background: linear-gradient(180deg, rgba(201,168,76,.06), transparent);
+}
+.brand-title {
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 0.05em;
+  color: var(--gold-hermetic);
+}
+.brand-divider { color: var(--text-muted); margin: 0 8px; }
+.brand-subtitle { color: var(--text-primary); font-style: italic; }
+.lang {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px solid var(--text-muted);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+
+/* Main */
+.social-main { padding: 14px 16px 24px; max-width: 720px; margin: 0 auto; }
+.social-intro { color: var(--text-muted); font-size: 14px; margin: 8px 0 16px; }
+
+/* Stats tiles */
+.stats { display: flex; gap: 12px; margin-bottom: 18px; }
+.stat-tile {
+  flex: 1;
+  background: rgba(0, 212, 255, .04);
+  border: 1px solid rgba(0, 212, 255, .2);
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex; flex-direction: column;
+}
+.stat-n {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  color: var(--cyber-cyan);
+}
+.stat-l { font-size: 12px; color: var(--text-muted); }
+
+/* Graph */
+.graph-wrap {
+  position: relative;
+  background: rgba(110, 64, 201, .03);
+  border: 1px solid rgba(110, 64, 201, .25);
+  border-radius: 4px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  max-height: 70vh;
+}
+.graph-hint {
+  position: absolute; top: 8px; right: 12px;
+  font-size: 10px; color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  pointer-events: none;
+}
+#social-graph { display: block; width: 100%; height: 100%; touch-action: none; }
+.social-loading {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+}
+.social-empty {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: var(--matrix-green);
+  text-align: center;
+  font-family: 'Cinzel', serif;
+}
+.empty-title { font-size: 22px; letter-spacing: 0.1em; margin-bottom: 8px; }
+.empty-body { font-family: 'IM Fell English', serif; font-style: italic; color: var(--matrix-green); opacity: .8; }
+
+/* d3 node + edge styling — colors come from the data class on each element. */
+.node circle { stroke: var(--cosmos-black); stroke-width: 1.5; }
+.node text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  fill: var(--text-primary);
+  pointer-events: none;
+}
+.edge { fill: none; stroke: var(--cyber-cyan); stroke-opacity: .55; }
+.edge.focused {
+  stroke: var(--gold-hermetic);
+  stroke-opacity: 1;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { stroke-opacity: .35; stroke-width: 1.2; }
+  50%      { stroke-opacity: 1; stroke-width: 3; }
+}
+
+/* Node detail panel — bottom sheet on mobile, side panel on desktop */
+.node-detail {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: var(--cosmos-black);
+  border-top: 2px solid var(--gold-hermetic);
+  padding: 12px 16px env(safe-area-inset-bottom);
+  max-height: 50vh;
+  overflow-y: auto;
+  z-index: 100;
+}
+.node-detail header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.nd-domain {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--gold-hermetic);
+  font-size: 14px;
+}
+.nd-close {
+  background: transparent; border: 1px solid var(--text-muted);
+  color: var(--text-primary); border-radius: 3px;
+  padding: 2px 10px; cursor: pointer;
+  font-size: 18px; line-height: 1;
+}
+.node-detail dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; }
+.node-detail dt { color: var(--text-muted); font-style: italic; }
+.node-detail dd { margin: 0; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 12px; word-break: break-word; }
+
+/* Cards */
+.card {
+  background: rgba(201, 168, 76, .04);
+  border: 1px solid rgba(201, 168, 76, .25);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.card summary {
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--gold-hermetic);
+  list-style: none;
+}
+.card summary::-webkit-details-marker { display: none; }
+.card summary::after { content: ' ▾'; color: var(--text-muted); font-size: 12px; }
+.card[open] summary::after { content: ' ▴'; }
+.card-pending { color: var(--text-muted); font-style: italic; margin: 8px 0 4px; }
+.card-wipe { border-color: rgba(230, 57, 70, .4); background: rgba(230, 57, 70, .03); }
+.card-wipe summary { color: var(--cinnabar); }
+
+/* Buttons */
+.wipe-btn {
+  display: block; width: 100%; margin-top: 8px;
+  background: transparent; color: var(--cinnabar);
+  border: 1px solid var(--cinnabar); border-radius: 3px;
+  padding: 10px;
+  font-family: 'Cinzel', serif; letter-spacing: 0.06em; cursor: pointer;
+}
+.wipe-btn:hover { background: rgba(230, 57, 70, .1); }
+
+/* Modal */
+dialog#wipe-modal {
+  background: var(--cosmos-black);
+  color: var(--text-primary);
+  border: 2px solid var(--cinnabar);
+  border-radius: 4px;
+  max-width: 420px;
+  padding: 20px;
+}
+dialog::backdrop { background: rgba(10, 10, 15, .85); }
+dialog h2 {
+  font-family: 'Cinzel', serif;
+  color: var(--cinnabar);
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  margin: 0 0 12px;
+}
+.modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+.btn-secondary, .btn-danger {
+  flex: 1;
+  padding: 10px;
+  border-radius: 3px;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--text-muted); }
+.btn-danger { background: var(--cinnabar); color: var(--cosmos-black); border: 1px solid var(--cinnabar); font-weight: bold; }
+.btn-danger:disabled { background: rgba(230, 57, 70, .25); color: var(--text-muted); cursor: not-allowed; border-color: var(--text-muted); }
+.wipe-countdown {
+  color: var(--gold-hermetic);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  text-align: center;
+  margin: 8px 0;
+}
+
+@media (min-width: 720px) {
+  /* Desktop : node detail slides in from the right rail instead of bottom sheet */
+  .node-detail { top: 70px; bottom: auto; right: 14px; left: auto; width: 320px; max-height: 60vh; border-top: 0; border-left: 2px solid var(--gold-hermetic); border-radius: 4px; }
+}
