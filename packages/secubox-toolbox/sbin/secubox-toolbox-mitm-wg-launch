@@ -18,6 +18,14 @@ BYPASS_FILE=/var/lib/secubox/toolbox/mitm-bypass.conf
 DYNAMIC_FILE=/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf  # noqa: SC2034 (used by addon hint)
 ADDON_DIR=/usr/lib/secubox/toolbox/mitmproxy_addons
 
+# Phase 11.A (#505) — make the secubox_toolbox package importable from
+# addons running inside /opt/mitmproxy-toolbox/bin/python3 (a venv that
+# has its own site-packages and never sees /usr/lib/secubox/toolbox).
+# Without this PYTHONPATH every addon's `from secubox_toolbox import …`
+# silently degrades — inject_banner loses host classification + GeoIP,
+# social_graph loses its SQLite store reference, etc.
+export PYTHONPATH="/usr/lib/secubox/toolbox${PYTHONPATH:+:$PYTHONPATH}"
+
 # ── Compose ignore_hosts regex : merge static + dynamic bypass lists ──
 # Phase 6.N (#496) : the dynamic file is auto-populated by the cert_pin_detect
 # addon when it observes repeated TLS handshake failures (cert pinning).
