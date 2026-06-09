@@ -1,5 +1,103 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-08*
+*Mis à jour : 2026-06-09*
+
+---
+
+## 🔄 2026-06-09 : Phase 10 — Banner injection perf quick wins + postinst regression fix (ref #501)
+
+User signal : "la banner n'apparait qu'en fin de chargement et les
+chargements de pages sont très lents. peut-on améliorer ces rendus sans
+compromettre l'analyse... ou alléger l'analyse nécessaire à la
+bannière ?".
+
+Diagnostic — chaque réponse HTML déclenchait trois opérations
+host-stables sans cache et **un scan plein-corps en regex** juste pour
+remplir une tile "trackers: N" que personne ne lit :
+
+* `_host_app.classify_host(host)` — walk sur 100+ patterns (5-50 ms à froid)
+* `_whitelist_mod.match(host)` — match contre la whitelist
+* `_geo_mod.lookup(host)` — DNS + mmdb GeoIP (5-50 ms à froid)
+* `_count_trackers_in_body(flow.response.content)` — buffer-read intégral
+  du corps avant injection → la bannière n'apparaissait qu'en fin de
+  streaming.
+
+### ✅ Done — packages
+
+| Package | from → to | Commit |
+|---|---|---|
+| secubox-toolbox | 2.5.0 → **2.5.1** | `ce059d0f` (banner perf quick wins, déployé live) |
+| secubox-toolbox | 2.5.1 → **2.5.2** | `15f48d9d` (postinst regression fix, code only) |
+
+Branche : `perf/501-banner-injection-quickwins` (poussée sur origin, **pas de PR**).
+
+### ✅ Done — détails
+
+**1. Banner injection quick wins** (`secubox-toolbox` 2.5.1, commit `ce059d0f`)
+
+* `_host_signals(host)` — nouvelle fonction LRU-cachée (maxsize=2048)
+  retournant un tuple `(app_emoji, app, flag, country, asn, status,
+  status_icon)`. Re-hits coûtent un dict lookup au lieu de 5-50 ms.
+* `_count_trackers_in_body()` retiré du chemin chaud. Le flag
+  `is_tracker_host` (regex cheap sur l'host de la requête) couvre le
+  signal privacy.
+* `_MAX_INJECT_BYTES = 2 MB` — skip de l'injection sur les gros corps
+  via pré-check `Content-Length` + garde défensive `len(body)` pour les
+  streamed bodies sans CL.
+* Tile cookies + ⚠ tracker-host conservée ; tile 🎯 N trackers (corps)
+  morte → supprimée.
+
+**Mesure live** : sur le déploiement gk2, l'iPhone confirme "browsing
+performance on iPhone is better... perfect work".
+
+**2. Postinst regression fix** (`secubox-toolbox` 2.5.2, commit `15f48d9d`)
+
+Deux régressions silencieuses pendant le déploiement 2.5.0 → 2.5.1 sur gk2 :
+
+* **kbin.gk2.secubox.in 503 pendant 5 min** : dpkg upgrade a SIGTERMé
+  `secubox-toolbox.service` et ne l'a jamais redémarré
+  (`dh_installsystemd --no-start --no-enable` dans debian/rules).
+* **iPhone tunnel KO** : postinst a écrasé
+  `/etc/nftables.d/secubox-toolbox-wg.nft` avec la version single-port
+  DNAT, supprimant le fanout Phase 9 que l'opérateur avait déployé en
+  runtime → tout le trafic pinné sur worker@1 à 97 % CPU.
+
+Fixes postinst (pas de code change) :
+
+* Postinst déploie maintenant le fanout drop-in en
+  `/etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft`. Le préfixe `zz-`
+  garantit le tri alphabétique après le base file dans le glob include
+  de `/etc/nftables.conf` → le base file crée la table + chains, puis
+  le zz drop-in flush+repeuple la chain `prerouting` avec le numgen
+  fanout map.
+* Sur upgrade (`$2` set), `systemctl try-restart` sur
+  `secubox-toolbox.service`, `secubox-toolbox-mitm.service`, et les 4
+  instances `secubox-toolbox-mitm-wg-worker@{1..4}.service`. `try-restart`
+  est no-op si l'unité n'est pas active, donc safe sur fresh install.
+
+### Mémoire mise à jour
+
+* [nft layered drop-ins persistence](../memory/feedback_nft_layered_dropins_persistence.md)
+  — drop-ins doivent trier APRÈS leur table-creator ; ne jamais
+  symlinker en place du base file.
+* [postinst must preserve runtime state](../memory/feedback_postinst_preserve_runtime_state.md)
+  — dpkg upgrade SIGTERMe l'unité ; postinst doit try-restart + redéployer
+  les drop-ins nft appliqués en runtime.
+
+### ⬜ Next up
+
+* **Build + deploy 2.5.2 sur gk2** (postinst-only fix — pas de code change ;
+  attendre prochaine fenêtre de maintenance, ne pas perturber la session
+  iPhone actuellement stable).
+* **PR #501** quand prêt (branche poussée mais pas de PR ouvert, per
+  rule "Don't open PRs unprompted").
+* **Phase 10 future** : refactor banner injection vers une approche
+  JS-driven async pour éliminer complètement le buffer-read du corps
+  (envoyer un `<script>` minimal à la position `<head>` qui fetch le
+  contenu de la bannière + le contexte via XHR, puis injecte le DOM
+  côté client). Ferait passer la bannière de "fin de streaming" à
+  "first paint" pour TOUS les corps, pas seulement les < 2 MB.
+* **#502 D redesign** : captive → LXC avec TPROXY-inside-LXC (toujours
+  en attente, pas commencé).
 
 ---
 
