@@ -1,3 +1,26 @@
+secubox-toolbox (2.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 8.2 perf (#500) — defensive performance work :
+    - Captive mitm service flags now match the mitm-wg quick win of
+      2.4.1 (--set http2=true / connection_strategy=eager /
+      keep_host_header=true). No perceptible change today (the
+      captive AP is down so the service idles at ~0 % CPU) but the
+      moment the AP is reactivated the captive picks up the same
+      ×4 CPU win the WG path got.
+    - Addon SQLite writes (local_store + utiq) are now fire-and-
+      forget through a singleton ThreadPoolExecutor. Each addon owns
+      its own bg writer thread (sbx_store_write / sbx_utiq_write).
+      The mitmproxy asyncio event loop never blocks on _conn() open
+      / INSERT / fsync. Live diagnostic showed the actual mitm-wg
+      bottleneck is mitmproxy itself (TLS termination + per-flow
+      H/2 parsing) under multi-peer fan-in, not the addon writes ;
+      the change is still warranted as defensive hygiene before
+      shipping the Phase 9 multi-worker fanout that will benefit
+      from non-blocking writes when 4 workers contend on the same
+      SQLite file.
+
+ -- Gérald Kerma <devel@cybermind.fr>  mar., 09 juin 2026 04:19:18 +0000
+
 secubox-toolbox (2.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Landing page kbin.gk2.secubox.in : la section 'Démo install R3'
