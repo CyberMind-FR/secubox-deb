@@ -91,8 +91,12 @@ fi
 #   - utiq_defense (Phase 8 #500) runs at requestheaders too ; placed
 #     EARLY so a R1 block short-circuits the flow before downstream
 #     addons spend cycles on it
+#   - social_graph (Phase 11.A #505) sees the same cookie state as
+#     local_store but records cross-site identifiers separately ; it
+#     must run BEFORE inject_banner so the banner cookies our addon
+#     emits don't pollute the graph
 #   - cert_pin_detect auto-learns pinned hosts (Phase 6.N)
-for addon in inject_xff utiq_defense local_store inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
+for addon in inject_xff utiq_defense local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
     ARGS+=(-s "$ADDON_DIR/${addon}.py")
 done
 

@@ -1,3 +1,49 @@
+secubox-toolbox (2.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 11.A (#505, parent #502) — social mapping per device :
+    backend correlation engine + SQLite tables + JSON API.
+      - secubox_toolbox/social.py : new module.  Schema for
+        social_edges (raw events, 7 d retention), social_nodes
+        (per-peer per-tracker aggregate), social_links (per-peer
+        per-site-pair aggregate with shared-tracker list + JA4
+        collision flag).  Fire-and-forget executor pattern matches
+        utiq.py (#500 Phase 8.B) — never blocks the mitmproxy
+        asyncio loop.  fold_recent() rebuilds nodes + links from
+        raw edges every 5 min.  wipe_mac() backs the RGPD art. 17
+        endpoint.  aggregate() backs the operator dashboard.
+      - mitmproxy_addons/social_graph.py : new addon.  Loaded
+        between local_store and inject_banner in the mitm-wg
+        chain.  Parses Set-Cookie + Cookie headers, normalizes
+        identifiers via cookie_id_hash = sha256(domain||name||
+        value)[:16] — NEVER persists raw cookie values.  Deny-list
+        strips session/CSRF/auth/locale names.  3rd-party detection
+        via a cheap eTLD+1 approximation (covers > 99 % of the
+        ecosystem we see ; full PSL fold is a future enhancement
+        if the data demands it).
+      - secubox_toolbox/api.py : three new endpoints.
+        GET /social/graph/{token} — per-client graph, HMAC-token
+        gated (same TTL semantics as the existing /report/{token}).
+        POST /social/wipe/{token} — RGPD art. 17 droit à
+        l'effacement, same HMAC contract.  GET /admin/social-
+        aggregate — JWT-gated operator view, KPI tiles + tracker
+        histogram + anonymized client table.  No per-client graph
+        on the admin path.
+      - secubox_toolbox/app.py : two new startup background tasks.
+        social_fold_loop() runs fold_recent every 5 min.
+        social_purge_loop() drops raw edges older than 7 d every
+        hour.  Symmetric with the existing purge_loop + threat_intel
+        refresh_loop.
+      - sbin/secubox-toolbox-mitm-wg-launch : addon chain updated
+        to include social_graph AFTER local_store and BEFORE
+        inject_banner.
+    Scope explicitly limited to the R3 mitm-wg path for Phase A.
+    R2 captive hookup, the d3 graph UI, the bilingual PDF report,
+    and the legal-evidence flag computation (consent-state probe,
+    extra-EU transfer flag) are deferred to Phase 11.B / 11.C
+    per the design lock on #502 (rounds 1 + 2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 09 Jun 2026 09:55:00 +0200
+
 secubox-toolbox (2.5.2-1~bookworm1) bookworm; urgency=medium
 
   * Phase 10.1 (#501 perf) — postinst regressions caught on 2.5.1 deploy.
