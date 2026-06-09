@@ -145,7 +145,15 @@ def _peer_ip(flow) -> str | None:
     return None
 
 
-def _insert(mac_hash: str | None, source: str, payload: dict) -> None:
+# Phase 8.B perf (#500) — fire-and-forget SQLite writes via a single
+# background thread so the mitmproxy asyncio event loop never blocks
+# on `fsync()`. Single worker keeps inserts ordered AND avoids SQLite
+# write contention (the engine itself serialises writers in WAL mode).
+import concurrent.futures as _futures
+_executor = _futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="sbx_store_write")
+
+
+def _insert_sync(mac_hash: str | None, source: str, payload: dict) -> None:
     if not mac_hash:
         return
     try:
@@ -161,6 +169,22 @@ def _insert(mac_hash: str | None, source: str, payload: dict) -> None:
             )
     except Exception as e:
         log.debug("sqlite insert failed: %s", e)
+
+
+def _insert(mac_hash: str | None, source: str, payload: dict) -> None:
+    """Phase 8.B — submit the insert to the bg thread. Hook returns
+    instantly ; the mitmproxy event loop keeps churning flows while
+    the SQLite IO happens off-thread.
+
+    Submit may raise RuntimeError if the executor was shut down during
+    interpreter teardown ; we swallow that to keep the hook silent on
+    shutdown."""
+    if not mac_hash:
+        return
+    try:
+        _executor.submit(_insert_sync, mac_hash, source, payload)
+    except RuntimeError:
+        pass
 
 
 # ──────────────── mitmproxy hooks ────────────────

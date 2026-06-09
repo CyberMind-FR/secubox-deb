@@ -79,17 +79,15 @@ def _publisher_from_host(host: str) -> str:
     return h or "unknown"
 
 
-def record_event(
-    *,
-    client_ip: Optional[str],
-    host: str,
-    path: Optional[str],
-    action: str,
-    level: str,
-    detected_mtid: Optional[str] = None,
-    injected_mtid: Optional[str] = None,
-) -> None:
-    """Insert one event.  Best-effort — never raises into the addon."""
+# Phase 8.B perf (#500) — fire-and-forget SQLite writes via single
+# background thread (matches local_store.py pattern). Mitmproxy's
+# asyncio event loop never blocks on _conn() open + INSERT + fsync.
+import concurrent.futures as _futures
+_executor = _futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="sbx_utiq_write")
+
+
+def _record_sync(client_ip, host, path, action, level,
+                 detected_mtid, injected_mtid) -> None:
     try:
         with _conn() as c:
             c.execute(
@@ -110,6 +108,26 @@ def record_event(
             )
     except Exception as e:
         log.warning("record_event failed: %s", e)
+
+
+def record_event(
+    *,
+    client_ip: Optional[str],
+    host: str,
+    path: Optional[str],
+    action: str,
+    level: str,
+    detected_mtid: Optional[str] = None,
+    injected_mtid: Optional[str] = None,
+) -> None:
+    """Insert one event off-thread. Best-effort — never raises into
+    the addon, never blocks the mitmproxy asyncio loop."""
+    try:
+        _executor.submit(_record_sync, client_ip, host, path, action,
+                         level, detected_mtid, injected_mtid)
+    except RuntimeError:
+        # Executor shut down (interpreter teardown) — silent drop.
+        pass
 
 
 def recent(hours: int = 24, limit: int = 200) -> List[Dict]:
