@@ -45,11 +45,15 @@ fi
 # Phase 7 (#498) — listen-host is overridable via env. Host (default) binds
 # 10.99.1.1 (the wg-toolbox interface IP) ; LXC variant sets 0.0.0.0 so it
 # accepts the DNAT'd traffic on the 10.100.0.62 br-lxc interface.
+# Phase 9 (#501) — listen-port is overridable too. Each fanout worker
+# instance (secubox-toolbox-mitm-wg-worker@N) sets MITM_WG_LISTEN_PORT
+# to 808N. The legacy single-process service keeps the 8081 default.
 MITM_WG_LISTEN_HOST="${MITM_WG_LISTEN_HOST:-10.99.1.1}"
+MITM_WG_LISTEN_PORT="${MITM_WG_LISTEN_PORT:-8081}"
 ARGS=(
     --mode transparent
     --listen-host "$MITM_WG_LISTEN_HOST"
-    --listen-port 8081
+    --listen-port "$MITM_WG_LISTEN_PORT"
     --set confdir=/etc/secubox/toolbox/ca-wg
     --set ssl_insecure=false
     --set web_open_browser=false
