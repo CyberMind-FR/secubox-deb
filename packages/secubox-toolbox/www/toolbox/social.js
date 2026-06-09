@@ -39,8 +39,6 @@
   // ─── DOM refs ───
   const svgEl = document.getElementById('social-graph');
   const svg = d3.select(svgEl);
-  const loadingEl = document.getElementById('social-loading');
-  const emptyEl = document.getElementById('social-empty');
   const ndEl = document.getElementById('node-detail');
   const wipeModal = document.getElementById('wipe-modal');
 
@@ -52,7 +50,14 @@
 
   // ─── graph state ───
   let simulation = null;
-  const W = 600, H = 600;
+
+  function svgSize() {
+    // Measure actual rendered size so the force center scales with the
+    // viewport.  Falls back to a sane default if the layout hasn't
+    // settled yet.
+    const r = svgEl.getBoundingClientRect();
+    return { W: Math.max(r.width, 320), H: Math.max(r.height, 320) };
+  }
 
   function clearGraph() {
     svg.selectAll('*').remove();
@@ -61,16 +66,15 @@
 
   function render(graph) {
     clearGraph();
+    const { W, H } = svgSize();
+    svg.attr('viewBox', `0 0 ${W} ${H}`);
 
     bind('total_trackers', graph.stats.total_trackers || 0);
     bind('total_sites', graph.stats.total_sites || 0);
 
-    loadingEl.hidden = true;
-    if (!graph.nodes.length) {
-      emptyEl.hidden = false;
-      return;
-    }
-    emptyEl.hidden = true;
+    // Empty graph → just return ; the stats tiles already show 0/0 and
+    // the user knows.  No persistent overlay message.
+    if (!graph.nodes.length) return;
 
     // Build d3 dataset: sites are union of all node.sites + tracker nodes themselves.
     const siteSet = new Set();
@@ -204,9 +208,6 @@
       const j = await r.json();
       wipeModal.close();
       alert(t('wipe_success', { n: j.rows_deleted || 0 }));
-      // Refresh
-      loadingEl.hidden = false;
-      svgEl.style.display = '';
       fetchGraph();
     } catch (e) {
       console.error('[social] wipe failed', e);
@@ -235,7 +236,6 @@
       render(g);
     } catch (e) {
       console.error('[social] fetch failed', e);
-      loadingEl.textContent = t('error');
     }
   }
   fetchGraph();
