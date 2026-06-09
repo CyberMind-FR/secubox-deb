@@ -125,11 +125,21 @@
       }
     }
 
+    // Phase 11.B v4 — when we have many nodes (last test: 86 trackers +
+    // 60 sites = 146 nodes) the default force layout spreads them far
+    // outside the viewport, and the first autoFit caught the simulation
+    // mid-flight so only a single node was visible.  Scale the forces
+    // with node count and pre-warm the simulation synchronously before
+    // first render so layout is already settled.
+    const N = nodes.length;
+    const linkDist = N > 80 ? 40 : N > 30 ? 55 : 70;
+    const chargeStr = N > 80 ? -60 : N > 30 ? -120 : -180;
     simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink([...links, ...accentLinks]).id(d => d.id).distance(70))
-      .force('charge', d3.forceManyBody().strength(-180))
+      .force('link', d3.forceLink([...links, ...accentLinks]).id(d => d.id).distance(linkDist))
+      .force('charge', d3.forceManyBody().strength(chargeStr))
       .force('center', d3.forceCenter(W / 2, H / 2))
-      .force('collide', d3.forceCollide().radius(22));
+      .force('collide', d3.forceCollide().radius(N > 80 ? 14 : 22))
+      .alphaDecay(0.05);  // settle faster than the 0.0228 default
 
     // Phase 11.B v3 — content group that owns links + nodes ; the
     // d3.zoom behavior applies its transform here so pan/pinch don't
@@ -174,36 +184,56 @@
       .on('zoom', (ev) => content.attr('transform', ev.transform));
     svg.call(zoom).on('dblclick.zoom', () => autoFit(800));
 
-    // Auto-fit once the simulation cools so all nodes are visible.
-    let fitDone = false;
+    // Auto-fit using node data positions (not getBBox — which can be
+    // skewed by text labels far outside the actual node cluster).
     function autoFit(duration = 600) {
       if (!nodes.length) return;
-      const bbox = content.node().getBBox();
-      if (!bbox.width || !bbox.height) return;
-      const pad = 28;
+      const xs = nodes.map(n => n.x).filter(Number.isFinite);
+      const ys = nodes.map(n => n.y).filter(Number.isFinite);
+      if (!xs.length) return;
+      const x0 = Math.min(...xs), x1 = Math.max(...xs);
+      const y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const bw = Math.max(x1 - x0, 100);
+      const bh = Math.max(y1 - y0, 100);
+      const pad = 60;
       const scale = Math.min(
-        (W - pad * 2) / bbox.width,
-        (H - pad * 2) / bbox.height,
+        (W - pad * 2) / bw,
+        (H - pad * 2) / bh,
         2.5,
       );
-      const tx = (W - bbox.width * scale) / 2 - bbox.x * scale;
-      const ty = (H - bbox.height * scale) / 2 - bbox.y * scale;
+      const cx = (x0 + x1) / 2;
+      const cy = (y0 + y1) / 2;
+      const tx = W / 2 - cx * scale;
+      const ty = H / 2 - cy * scale;
       svg.transition().duration(duration).call(
         zoom.transform,
         d3.zoomIdentity.translate(tx, ty).scale(scale),
       );
     }
 
+    // Pre-warm the simulation synchronously so the layout is already
+    // settled before the user sees the first frame.  300 ticks is
+    // enough for ~150 nodes to find their resting positions.
+    for (let i = 0; i < 300; i++) simulation.tick();
+
+    // Now bind the live tick so subsequent micro-drift updates the DOM.
     simulation.on('tick', () => {
       linkSel
         .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
         .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
       nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
-      if (!fitDone && simulation.alpha() < 0.1) {
-        fitDone = true;
-        autoFit();
-      }
     });
+
+    // Render once immediately with the pre-warmed positions.
+    linkSel
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
+
+    // Allow a gentle re-settle for visual polish (low alpha so it
+    // barely moves) and fit-to-viewport immediately.
+    simulation.alpha(0.05).restart();
+    requestAnimationFrame(() => autoFit(0));
     // Re-fit on viewport resize.
     let resizeTimer;
     window.addEventListener('resize', () => {
