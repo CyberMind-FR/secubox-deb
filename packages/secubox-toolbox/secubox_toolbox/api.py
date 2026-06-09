@@ -2107,27 +2107,60 @@ def _load_social_i18n(lang: str) -> dict:
 async def social_view_me(request: Request) -> RedirectResponse:
     """Self-resolving entry point used by the kbin splash menu.
 
-    Mirrors /report/me/html : accepts ?mh=<hash> for R3 / remote viewers
-    (the inject_banner.py + landing template both already pass `mh` in
-    their report links), else falls back to ARP _resolve() for R2 captive
-    clients.
+    Resolution chain (matches /report/me/html):
+      1. ?mh=<hash>             explicit R3 hash in URL (e.g. from banner)
+      2. X-R3-Peer header       mitm-wg's inject_xff sentinel for transparent
+                                R3 flows (peer IP in 10.99.1.0/24)
+      3. _resolve() ARP lookup  R2 captive subnet clients only
 
     Mints a short-TTL (1 h) HMAC token bound to the resolved mac_hash and
-    redirects to /social/{token}.  This keeps a single HMAC-token-gated
-    code path for the actual graph view + wipe endpoint.
+    redirects to /social/{token}.  Keeps a single HMAC-token-gated code
+    path for the graph view + wipe endpoint.
     """
     salt = _get_salt()
+    mac_hash = None
+
+    # 1) ?mh= overrides everything (used by inject_banner.py links + the
+    # report flow + manual curl).
     mh_qp = (request.query_params.get("mh") or "").strip().lower()
     if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
         mac_hash = mh_qp
-    else:
-        ip, mac = _resolve(request)
-        if not mac:
-            raise HTTPException(
-                400,
-                "client MAC unknown (not in captive subnet?) — use ?mh=<hash>",
-            )
-        mac_hash = macmod.hash_mac(mac, salt)
+
+    # 2) X-R3-Peer (transparent R3 — the iPhone hits kbin via the R3
+    # tunnel, mitm-wg adds the sentinel, HAProxy passes it through).
+    # We derive the same mac_hash the local_store addon uses :
+    # sha256(wg_pubkey)[:16] looked up from /var/lib/secubox/toolbox/
+    # wg-peers.json keyed by peer IP.
+    if not mac_hash:
+        peer_ip = _client_ip(request)
+        if peer_ip and peer_ip.startswith("10.99.1."):
+            try:
+                import hashlib as _h
+                import json as _j
+                from pathlib import Path as _P
+                _DB = _P("/var/lib/secubox/toolbox/wg-peers.json")
+                if _DB.exists():
+                    peers = _j.loads(_DB.read_text()).get("peers", {})
+                    for pubkey, meta in peers.items():
+                        if meta.get("ip") == peer_ip:
+                            mac_hash = _h.sha256(pubkey.encode()).hexdigest()[:16]
+                            break
+            except Exception as e:
+                log.warning("/social/me wg-peer lookup failed: %s", e)
+
+    # 3) R2 captive — ARP _resolve().
+    if not mac_hash:
+        _ip, mac = _resolve(request)
+        if mac:
+            mac_hash = macmod.hash_mac(mac, salt)
+
+    if not mac_hash:
+        raise HTTPException(
+            400,
+            "client identity unresolved (not on R3 tunnel and not in "
+            "captive subnet) — append ?mh=<hash> from your banner's "
+            "report link",
+        )
 
     tok = reports.mint_token(mac_hash, salt, ttl_seconds=3600)
     lang = request.query_params.get("lang") or ""
