@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Phase 9 (#501) — multi-worker fanout drop-in for the R3 wg tunnel mitm.
+#
+# REPLACES the prerouting rules from secubox-toolbox-wg.nft :
+#   iif wg-toolbox tcp dport 443 dnat ip to 10.99.1.1:8081  (single port)
+# with a round-robin numgen mapping to ports 8081..8084.
+#
+# Why numgen inc and not jhash : nftables 1.0.6 (Debian bookworm) doesn't
+# support `jhash` in numgen yet (lands in 1.0.7+).  `inc` is round-robin
+# per-rule-evaluation, but conntrack pins the chosen DNAT translation for
+# the lifetime of the TCP flow — so each individual TCP connection sees
+# exactly one worker from SYN to FIN.  Re-balancing happens only between
+# connections, which is exactly what we want.
+#
+# To apply at boot (the postinst installs this file next to the single-
+# worker drop-in ; the operator picks which is loaded by nftables.service
+# via a symlink at /etc/nftables.d/secubox-toolbox-wg.nft).
+
+flush chain inet wg-toolbox prerouting
+
+table inet wg-toolbox {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+
+        # Phase 9 (#501) — 4-worker round-robin DNAT.  numgen returns
+        # 0..3 ; the map sends each to one of the 4 worker ports on
+        # 10.99.1.1.  Conntrack pins the choice for the whole flow.
+        iif "wg-toolbox" tcp dport 443 dnat ip to 10.99.1.1 \
+            : numgen inc mod 4 map {
+                0 : 8081,
+                1 : 8082,
+                2 : 8083,
+                3 : 8084
+            }
+        iif "wg-toolbox" tcp dport 80 dnat ip to 10.99.1.1 \
+            : numgen inc mod 4 map {
+                0 : 8081,
+                1 : 8082,
+                2 : 8083,
+                3 : 8084
+            }
+
+        # Phase 7 (#498) — DNS DNAT for legacy peer configs that hand out
+        # DNS = 10.99.0.1.  Single target — these queries are tiny and
+        # don't need worker fanout.
+        iif "wg-toolbox" ip daddr 10.99.0.1 udp dport 53 dnat ip to 10.99.1.1:53
+        iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 53 dnat ip to 10.99.1.1:53
+
+        # Phase 7 (#498) — captive-portal HTTP probe from the R3
+        # verification page.
+        iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 8088 dnat ip to 10.99.1.1:8088
+    }
+}
