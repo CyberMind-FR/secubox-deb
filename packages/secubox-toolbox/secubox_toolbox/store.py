@@ -132,3 +132,30 @@ def purge_expired() -> int:
     if n:
         log.info("purge_expired: %d rows", n)
     return n
+
+
+def reset_client(mac_hash: str) -> int:
+    """Phase 12.B (#516) — RAZ a specific client's accumulated toolbox
+    state : events + consents + reports.  Returns rows deleted.  The
+    `clients` row itself is kept (it re-populates from live activity)
+    but its score is zeroed.  Social-mapping rows are wiped separately
+    via secubox_toolbox.social.wipe_mac().
+    """
+    if not mac_hash:
+        return 0
+    n = 0
+    try:
+        with _conn() as c:
+            for table in ("events", "consents", "reports"):
+                n += c.execute(
+                    f"DELETE FROM {table} WHERE mac_hash = ?", (mac_hash,)
+                ).rowcount or 0
+            c.execute(
+                "UPDATE clients SET score = 0, state = 'validated' "
+                "WHERE mac_hash = ?", (mac_hash,)
+            )
+    except Exception as e:
+        log.warning("reset_client failed: %s", e)
+    if n:
+        log.info("reset_client %s: %d rows", mac_hash[:8], n)
+    return n

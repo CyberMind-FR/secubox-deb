@@ -1,3 +1,34 @@
+secubox-toolbox (2.6.5-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 12.B (#516, parent #514) — anti-bot / "prove you're human"
+    detection + ring-level graph + per-client operator tools.
+      - social_graph.py: detect_antibot() classifies the bot-checker /
+        CAPTCHA vendor challenging a flow (reCAPTCHA / hCaptcha /
+        Turnstile / Datadome / PerimeterX-HUMAN / Arkose / Kasada /
+        Akamai Bot Manager) from URL + cookies + headers. Detection
+        only ; bypass stays gated behind its own doctrine.
+      - social.py: social_host_meta.antibot_vendor + new social_antibot
+        per-client challenge table. fetch_graph carries antibot_vendor
+        + an antibot list/stats; aggregate adds by_antibot + 
+        antibot_clients; wipe_mac clears social_antibot too.
+      - social.js: anti-bot hosts get the highest-severity cinnabar
+        lens + a spinning warning ring + 🤖 label; "challenged your
+        humanity" alert banner; node-detail shows the vendor.
+      - VISIBLE RING LEVELS: radial force is now dominant (strength
+        0.9) with weak charge + weak link springs, plus dashed ring
+        guides (inner = your sites, outer = trackers) so the Round-Eye
+        levels read clearly. Assets cache-busted (?v=264b).
+      - index.html operator social tab: anti-bot breakdown card.
+      - index.html Clients tab: per-row 🕸️ Carto (opens the client's
+        graph via a minted token), ↺ Reset (RAZ the client's stats).
+      - api.py: GET /admin/clients/{mac}/social (operator graph link),
+        POST /admin/clients/{mac}/reset (RAZ social + events + score).
+      - store.py: reset_client() wipes events/consents/reports + zeroes
+        score.
+      - i18n: node_detail_antibot + antibot_alert (FR/EN).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 11:00:00 +0200
+
 secubox-toolbox (2.6.4-1~bookworm1) bookworm; urgency=medium
 
   * Phase 12.A (#515, parent #514) — CDN cache detection + Round-Eye

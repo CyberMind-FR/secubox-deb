@@ -140,6 +140,10 @@
                 <h2>🛰️ Réseaux CDN / edge</h2>
                 <div id="social-cdn"><div class="empty">loading…</div></div>
             </div>
+            <div class="card">
+                <h2>🤖 Anti-bot / "prouvez que vous êtes humain"</h2>
+                <div id="social-antibot"><div class="empty">loading…</div></div>
+            </div>
             <div class="card" style="grid-column:1/-1">
                 <h2>🎯 Top tracker domains</h2>
                 <div id="social-trackers"><div class="empty">loading…</div></div>
@@ -242,14 +246,33 @@ async function loadClients() {
             <td>${c.score ?? '—'}</td>
             <td>${ago}</td>
             <td>
+                <a class="link" href="${API}/admin/clients/${c.mac_hash}/social" target="_blank" style="font-size:0.8rem">🕸️ Carto</a>
+                ·
                 <a class="link" href="${API}/admin/clients/${c.mac_hash}/report" target="_blank" style="font-size:0.8rem">PDF</a>
                 ·
                 <a class="link" href="javascript:void(0)" onclick="loadClientDetail('${c.mac_hash}')" style="font-size:0.8rem">Events</a>
+                ·
+                <a class="link" href="javascript:void(0)" onclick="resetClient('${c.mac_hash}')" style="font-size:0.8rem;color:var(--red)">↺ Reset</a>
             </td>
         </tr>`;
     }
     html += '</tbody></table>';
     el.innerHTML = html;
+}
+
+// Phase 12.B — RAZ a specific client's accumulated statistics
+// (social mapping graph + toolbox events). Operator-gated.
+async function resetClient(macHash) {
+    if (!confirm(`Remettre à zéro les statistiques du client ${macHash.slice(0,16)}… ?\n\nCela efface sa cartographie sociale + ses events. Irréversible.`)) return;
+    try {
+        const r = await fetch(`${API}/admin/clients/${macHash}/reset`, {
+            method: 'POST', credentials: 'same-origin'
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        alert(`RAZ effectuée : ${j.rows_deleted || 0} enregistrements supprimés.`);
+        loadClients();
+    } catch (e) { alert('Échec RAZ : ' + e.message); }
 }
 
 async function loadMetrics() {
@@ -371,6 +394,16 @@ async function loadSocial() {
               bv.map(r => `<tr><td>${r.cdn_vendor}</td><td>${r.hosts}</td></tr>`).join('') +
               '</tbody></table>'
             : '<div class="empty">aucun CDN détecté</div>';
+    }
+    const ab = document.getElementById('social-antibot');
+    if (ab) {
+        const ba = agg.by_antibot || [];
+        ab.innerHTML = ba.length
+            ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${agg.antibot_clients||0} client(s) défié(s)</p>` +
+              '<table><thead><tr><th>Vendor</th><th>sites</th><th>clients</th><th>défis</th></tr></thead><tbody>' +
+              ba.map(r => `<tr><td>🤖 ${r.antibot_vendor}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.challenges}</td></tr>`).join('') +
+              '</tbody></table>'
+            : '<div class="empty">aucun anti-bot détecté</div>';
     }
 }
 

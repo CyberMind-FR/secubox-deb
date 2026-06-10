@@ -112,13 +112,23 @@ CREATE TABLE IF NOT EXISTS social_links (
 );
 
 -- Phase 12.A (#515) — host-stable CDN/edge metadata, mac-independent.
--- Written fire-and-forget by the addon when it sees CDN response
--- headers ; LEFT JOINed onto graph nodes + the operator aggregate.
+-- Phase 12.B (#516) adds antibot_vendor (anti-bot / CAPTCHA vendor).
 CREATE TABLE IF NOT EXISTS social_host_meta (
     tracker_domain  TEXT PRIMARY KEY,
     cdn_vendor      TEXT,
     cache_status    TEXT,
+    antibot_vendor  TEXT,
     last_seen       INTEGER NOT NULL
+);
+
+-- Phase 12.B (#516) — per-client "challenged your humanity" log.
+CREATE TABLE IF NOT EXISTS social_antibot (
+    client_mac_hash TEXT NOT NULL,
+    src_site        TEXT NOT NULL,
+    antibot_vendor  TEXT NOT NULL,
+    hits            INTEGER NOT NULL DEFAULT 0,
+    last_seen       INTEGER NOT NULL,
+    PRIMARY KEY (client_mac_hash, src_site, antibot_vendor)
 );
 """
 
@@ -143,6 +153,9 @@ _PHASE11C_MIGRATIONS = (
     ("social_nodes",  "asn_org",          "TEXT"),
     ("social_nodes",  "eu_inside",        "INTEGER NOT NULL DEFAULT 1"),
     ("social_nodes",  "pre_consent_hits", "INTEGER NOT NULL DEFAULT 0"),
+    # Phase 12.B (#516) — anti-bot vendor column on the host-meta table
+    # (created by 12.A ; additive on a 2.6.3/2.6.4 → upgrade).
+    ("social_host_meta", "antibot_vendor", "TEXT"),
 )
 
 
@@ -324,6 +337,79 @@ def record_host_cdn(*, domain: str, cdn_vendor: Optional[str] = None,
         _executor.submit(_record_host_cdn_sync, domain, cdn_vendor, cache_status)
     except RuntimeError:
         pass
+
+
+# ── Phase 12.B (#516) — anti-bot / "prove you're human" recording ──
+
+def _record_host_antibot_sync(domain: str, vendor: str) -> None:
+    try:
+        with _conn() as c:
+            c.execute(
+                "INSERT INTO social_host_meta(tracker_domain, antibot_vendor, "
+                "last_seen) VALUES (?, ?, ?) "
+                "ON CONFLICT(tracker_domain) DO UPDATE SET "
+                "antibot_vendor=excluded.antibot_vendor, "
+                "last_seen=excluded.last_seen",
+                (domain, vendor, int(time.time())),
+            )
+    except Exception as e:  # pragma: no cover
+        log.warning("record_host_antibot failed: %s", e)
+
+
+def record_host_antibot(*, domain: str, antibot_vendor: str) -> None:
+    """Upsert the host-stable anti-bot vendor fronting `domain`."""
+    if not (domain and antibot_vendor):
+        return
+    try:
+        _executor.submit(_record_host_antibot_sync, domain, antibot_vendor)
+    except RuntimeError:
+        pass
+
+
+def _record_antibot_challenge_sync(mac_hash: str, src_site: str, vendor: str) -> None:
+    try:
+        with _conn() as c:
+            c.execute(
+                "INSERT INTO social_antibot(client_mac_hash, src_site, "
+                "antibot_vendor, hits, last_seen) VALUES (?, ?, ?, 1, ?) "
+                "ON CONFLICT(client_mac_hash, src_site, antibot_vendor) DO UPDATE "
+                "SET hits = hits + 1, last_seen = excluded.last_seen",
+                (mac_hash, src_site, vendor, int(time.time())),
+            )
+    except Exception as e:  # pragma: no cover
+        log.warning("record_antibot_challenge failed: %s", e)
+
+
+def record_antibot_challenge(*, client_mac_hash: str, src_site: str,
+                             antibot_vendor: str) -> None:
+    """Record a per-client "this site challenged your humanity" event."""
+    if not (client_mac_hash and src_site and antibot_vendor):
+        return
+    try:
+        _executor.submit(_record_antibot_challenge_sync, client_mac_hash,
+                         src_site, antibot_vendor)
+    except RuntimeError:
+        pass
+
+
+def antibot_for_client(mac_hash: str, since_seconds: int = 86400) -> List[Dict]:
+    """Per-client anti-bot challenge list for the graph alert tile."""
+    since = int(time.time()) - max(since_seconds, 3600)
+    out: List[Dict] = []
+    if not mac_hash:
+        return out
+    try:
+        with _conn() as c:
+            for r in c.execute(
+                "SELECT src_site, antibot_vendor, hits, last_seen "
+                "FROM social_antibot WHERE client_mac_hash = ? AND last_seen >= ? "
+                "ORDER BY last_seen DESC LIMIT 100",
+                (mac_hash, since),
+            ).fetchall():
+                out.append(dict(r))
+    except Exception as e:  # pragma: no cover
+        log.warning("antibot_for_client failed: %s", e)
+    return out
 
 
 def fold_recent(window_seconds: int = 300) -> Tuple[int, int]:
@@ -520,7 +606,7 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
             # can colour/label by edge-network vendor.
             for r in c.execute(
                 "SELECT n.tracker_domain, n.hits, n.first_seen, n.last_seen, "
-                "n.sites_jsonl, m.cdn_vendor, m.cache_status "
+                "n.sites_jsonl, m.cdn_vendor, m.cache_status, m.antibot_vendor "
                 "FROM social_nodes n "
                 "LEFT JOIN social_host_meta m ON m.tracker_domain = n.tracker_domain "
                 "WHERE n.client_mac_hash = ? AND n.last_seen >= ? "
@@ -542,6 +628,7 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
                         "last_seen": r["last_seen"],
                         "cdn_vendor": r["cdn_vendor"],
                         "cache_status": r["cache_status"],
+                        "antibot_vendor": r["antibot_vendor"],
                     }
                 )
 
@@ -580,11 +667,16 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
                     for s in n["sites"]
                 }
             )
+            # Phase 12.B — per-client anti-bot challenges for the alert tile.
+            antibot = antibot_for_client(mac_hash, since_seconds=since_seconds)
+            out["antibot"] = antibot
             out["stats"] = {
                 "total_trackers": (stats_row["total_trackers"] or 0) if stats_row else 0,
                 "total_sites": sites_count,
                 "first_seen": stats_row["first_seen"] if stats_row else None,
                 "last_seen": stats_row["last_seen"] if stats_row else None,
+                "antibot_sites": len({a["src_site"] for a in antibot}),
+                "antibot_vendors": sorted({a["antibot_vendor"] for a in antibot}),
             }
     except Exception as e:  # pragma: no cover
         log.warning("fetch_graph failed: %s", e)
@@ -601,7 +693,8 @@ def wipe_mac(mac_hash: str) -> int:
     total = 0
     try:
         with _conn() as c:
-            for table in ("social_edges", "social_nodes", "social_links"):
+            for table in ("social_edges", "social_nodes", "social_links",
+                          "social_antibot"):
                 cur = c.execute(
                     f"DELETE FROM {table} WHERE client_mac_hash = ?", (mac_hash,)
                 )
@@ -626,6 +719,8 @@ def aggregate(hours: int = 24) -> Dict:
         "by_tracker_domain": [],
         "by_client": [],
         "by_cdn": [],  # Phase 12.A
+        "by_antibot": [],  # Phase 12.B
+        "antibot_clients": 0,  # Phase 12.B
     }
     try:
         with _conn() as c:
@@ -674,6 +769,24 @@ def aggregate(hours: int = 24) -> Dict:
                     (since, since),
                 ).fetchall()
             ]
+            # Phase 12.B — anti-bot / "prove you're human" breakdown.
+            out["by_antibot"] = [
+                dict(r)
+                for r in c.execute(
+                    "SELECT antibot_vendor, "
+                    "COUNT(DISTINCT src_site) AS sites, "
+                    "COUNT(DISTINCT client_mac_hash) AS clients, "
+                    "SUM(hits) AS challenges "
+                    "FROM social_antibot WHERE last_seen >= ? "
+                    "GROUP BY antibot_vendor ORDER BY challenges DESC LIMIT 25",
+                    (since,),
+                ).fetchall()
+            ]
+            out["antibot_clients"] = c.execute(
+                "SELECT COUNT(DISTINCT client_mac_hash) FROM social_antibot "
+                "WHERE last_seen >= ?",
+                (since,),
+            ).fetchone()[0]
     except Exception as e:  # pragma: no cover
         log.warning("aggregate failed: %s", e)
     return out

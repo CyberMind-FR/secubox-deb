@@ -31,5 +31,7 @@
   "lang_label": "FR",
   "card_pdf_download": "⬇ Télécharger le rapport PDF (FR/EN)",
   "card_evidence_active": "Analyse de conformité : traqueurs avant consentement (RGPD art. 6.1.a + 7) et transferts hors UE (art. 44). Voir le rapport PDF pour le détail.",
-  "node_detail_cdn": "CDN / cache"
+  "node_detail_cdn": "CDN / cache",
+  "node_detail_antibot": "Anti-bot",
+  "antibot_alert": "⚠ {n} site(s) ont vérifié que vous êtes humain"
 }
