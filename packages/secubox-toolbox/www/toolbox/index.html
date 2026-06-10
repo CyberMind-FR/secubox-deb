@@ -2,7 +2,7 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  SecuBox-Deb :: ToolBoX admin dashboard (P31 light skin)
+  SecuBox-Deb :: ToolBoX admin dashboard (P31 light skin) — sub-tab nav (#513)
 -->
 <html lang="fr">
 <head>
@@ -14,14 +14,22 @@
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
-        :root{--p31-peak:#00dd44;--p31-hot:#00ff55;--p31-mid:#009933;--p31-dim:#006622;--p31-decay:#ffb347;--tube-light:#e8f5e9;--tube-pale:#c8e6c9;--tube-soft:#a5d6a7;--bg-card:var(--tube-pale);--border:var(--tube-soft);--text-dim:var(--p31-dim);--red:#ff4466;--bloom-text:0 0 2px var(--p31-peak),0 0 6px var(--p31-peak);--bloom-soft:0 0 6px var(--p31-peak)}
+        :root{--p31-peak:#00dd44;--p31-hot:#00ff55;--p31-mid:#009933;--p31-dim:#006622;--p31-decay:#ffb347;--tube-light:#e8f5e9;--tube-pale:#c8e6c9;--tube-soft:#a5d6a7;--bg-card:var(--tube-pale);--border:var(--tube-soft);--text-dim:var(--p31-dim);--red:#ff4466;--purple:#9e76ff;--bloom-text:0 0 2px var(--p31-peak),0 0 6px var(--p31-peak);--bloom-soft:0 0 6px var(--p31-peak)}
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:'Courier Prime',monospace;background:var(--tube-light);color:var(--p31-mid);display:flex;min-height:100vh}
         .sidebar{width:220px;position:fixed;height:100vh;overflow-y:auto}
         .main{flex:1;margin-left:220px;padding:1.5rem}
-        .header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border:1px solid var(--border);background:var(--bg-card);margin-bottom:1.5rem}
+        .header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border:1px solid var(--border);background:var(--bg-card);margin-bottom:1rem}
         .header h1{font-size:1.4rem;color:var(--p31-hot);text-shadow:var(--bloom-text)}
         .badge{font-size:0.85rem;color:var(--p31-dim);padding:0.2rem 0.6rem;border:1px solid var(--border);border-radius:3px}
+        /* Sub-tab nav (#513) */
+        .tabs{display:flex;gap:0.3rem;margin-bottom:1.2rem;border-bottom:1px solid var(--border);flex-wrap:wrap}
+        .tab{font-family:inherit;font-size:0.9rem;padding:0.5rem 1rem;background:transparent;color:var(--p31-dim);border:1px solid var(--border);border-bottom:none;cursor:pointer;border-radius:3px 3px 0 0}
+        .tab:hover{color:var(--p31-peak);background:rgba(0,221,68,0.05)}
+        .tab.active{color:var(--p31-hot);text-shadow:var(--bloom-text);background:var(--bg-card);border-color:var(--p31-mid);font-weight:bold}
+        .panel{display:none}
+        .panel.active{display:block;animation:fade .15s ease-in}
+        @keyframes fade{from{opacity:0}to{opacity:1}}
         .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:1rem}
         .card{background:var(--bg-card);border:1px solid var(--border);padding:1rem;box-shadow:var(--bloom-soft)}
         .card h2{font-size:1rem;color:var(--p31-hot);text-shadow:var(--bloom-text);margin-bottom:0.6rem;padding-bottom:0.4rem;border-bottom:1px solid var(--border)}
@@ -32,13 +40,23 @@
         th,td{text-align:left;padding:0.4rem 0.5rem;border-bottom:1px solid var(--border)}
         th{color:var(--p31-hot);text-shadow:var(--bloom-text)}
         .empty{color:var(--text-dim);font-style:italic;padding:1rem;text-align:center}
-        .toolbar{display:flex;gap:0.5rem;margin-bottom:1rem}
+        .toolbar{display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap}
         button{font-family:inherit;font-size:0.9rem;padding:0.4rem 0.9rem;background:transparent;color:var(--p31-peak);border:1px solid var(--p31-mid);cursor:pointer;text-shadow:var(--bloom-text)}
         button:hover{background:rgba(0,221,68,0.1)}
         .r2-banner{background:rgba(255,179,71,0.08);border-left:2px solid var(--p31-decay);padding:0.6rem 0.8rem;margin-bottom:1rem;font-size:0.85rem;color:#996b1a}
         .state-validated{color:var(--p31-peak);text-shadow:var(--bloom-text)}
         .state-throttle{color:var(--p31-decay)}
         .state-quarantine{color:var(--red)}
+        /* level chips + switcher (folded from kbin /admin/) */
+        .chip{display:inline-block;padding:0.1rem 0.45rem;border-radius:99px;font-size:0.7rem;font-weight:bold}
+        .chip.r0{background:#cfd8cf;color:#555}
+        .chip.r1{background:rgba(0,221,68,0.25);color:var(--p31-mid)}
+        .chip.r2{background:rgba(255,179,71,0.3);color:#996b1a}
+        .chip.r3{background:rgba(158,118,255,0.25);color:#6a4fd0}
+        .lvlbtn{font-size:0.68rem;padding:0.12rem 0.4rem;margin-right:0.15rem;border:1px solid var(--p31-dim)}
+        code{background:rgba(0,0,0,0.05);padding:0.1rem 0.3rem;border-radius:2px;font-size:0.78rem}
+        a.link{color:var(--p31-mid);text-decoration:underline}
+        .filterlist li{font-size:0.82rem;padding:0.2rem 0;border-bottom:1px solid var(--border);list-style:none;display:flex;justify-content:space-between;align-items:center}
     </style>
 </head>
 <body>
@@ -53,38 +71,114 @@
         <strong>R2 actif :</strong> TLS-break opt-in. Voir #475 / #474 pour la doctrine.
     </div>
 
-    <div class="toolbar">
-        <button onclick="refreshAll()">🔁 Refresh</button>
-        <button onclick="window.open('/api/v1/toolbox/admin/config', '_blank')">⚙ Config TOML</button>
-    </div>
+    <!-- Sub-tab navigation (#513) -->
+    <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="overview" onclick="switchTab('overview')">📊 Vue d'ensemble</button>
+        <button class="tab" data-tab="clients" onclick="switchTab('clients')">👥 Clients</button>
+        <button class="tab" data-tab="filtres" onclick="switchTab('filtres')">🚦 Filtres MITM</button>
+        <button class="tab" data-tab="social" onclick="switchTab('social')">🕸️ Cartographie sociale</button>
+        <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ Config</button>
+    </nav>
 
-    <div class="grid">
+    <!-- Overview -->
+    <section class="panel active" id="panel-overview">
+        <div class="toolbar">
+            <button onclick="refreshAll()">🔁 Refresh</button>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <h2>📊 Live metrics (24h)</h2>
+                <div class="kv" id="metrics"><span class="k">loading…</span><span class="v"></span></div>
+            </div>
+            <div class="card">
+                <h2>♥ Liveness</h2>
+                <div class="kv" id="health"><span class="k">loading…</span><span class="v"></span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Clients (folds in the kbin /admin/ level switcher) -->
+    <section class="panel" id="panel-clients">
+        <div class="toolbar">
+            <button onclick="loadClients()">🔁 Refresh</button>
+        </div>
+        <div class="card" style="margin-bottom:1rem">
+            <h2>👥 Clients actifs</h2>
+            <div id="clients"><div class="empty">loading…</div></div>
+        </div>
+        <div class="card" style="display:none" id="client-detail-card">
+            <h2 id="detail-title">🔍 Détails client</h2>
+            <div id="client-detail"></div>
+        </div>
+    </section>
+
+    <!-- Filtres MITM (bypass list) -->
+    <section class="panel" id="panel-filtres">
+        <div class="toolbar">
+            <button onclick="loadFilters()">🔁 Refresh</button>
+        </div>
         <div class="card">
-            <h2>📊 Live metrics (24h)</h2>
-            <div class="kv" id="metrics"><span class="k">loading…</span><span class="v"></span></div>
+            <h2>🚦 Hosts bypassés (mitm ignore_hosts)</h2>
+            <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
+                Hosts exclus de l'inspection TLS (cert-pinning détecté ou whitelist statique).
+            </p>
+            <ul class="filterlist" id="filters"><li class="empty">loading…</li></ul>
+        </div>
+    </section>
+
+    <!-- Cartographie sociale (Phase 11 operator aggregate) -->
+    <section class="panel" id="panel-social">
+        <div class="toolbar">
+            <button onclick="loadSocial()">🔁 Refresh</button>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <h2>🕸️ Agrégat trackers (24h)</h2>
+                <div class="kv" id="social-kpi"><span class="k">loading…</span><span class="v"></span></div>
+            </div>
+            <div class="card">
+                <h2>🛰️ Réseaux CDN / edge</h2>
+                <div id="social-cdn"><div class="empty">loading…</div></div>
+            </div>
+            <div class="card">
+                <h2>🤖 Anti-bot / "prouvez que vous êtes humain"</h2>
+                <div id="social-antibot"><div class="empty">loading…</div></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+                <h2>🎯 Top tracker domains</h2>
+                <div id="social-trackers"><div class="empty">loading…</div></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+                <h2>👤 Clients anonymisés</h2>
+                <div id="social-clients"><div class="empty">loading…</div></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Config -->
+    <section class="panel" id="panel-config">
+        <div class="toolbar">
+            <button onclick="window.open('/api/v1/toolbox/admin/config', '_blank')">⚙ Config TOML brute</button>
         </div>
         <div class="card">
             <h2>⚙ Configuration</h2>
             <div class="kv" id="cfg-summary"><span class="k">loading…</span><span class="v"></span></div>
         </div>
-        <div class="card">
-            <h2>♥ Liveness</h2>
-            <div class="kv" id="health"><span class="k">loading…</span><span class="v"></span></div>
-        </div>
-        <div class="card" style="grid-column:1/-1">
-            <h2>👥 Clients actifs</h2>
-            <div id="clients"><div class="empty">loading…</div></div>
-        </div>
-        <div class="card" style="grid-column:1/-1;display:none" id="client-detail-card">
-            <h2 id="detail-title">🔍 Détails client</h2>
-            <div id="client-detail"></div>
-        </div>
-    </div>
+    </section>
 </div>
 
 <script src="/shared/sidebar.js"></script>
 <script>
 const API = '/api/v1/toolbox';
+
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+    // Lazy-load the heavier tabs only when first opened.
+    if (name === 'filtres') loadFilters();
+    if (name === 'social') loadSocial();
+    location.hash = name;
+}
 
 async function J(path) {
     try {
@@ -111,29 +205,74 @@ async function loadCfg() {
     document.getElementById('r2-banner').style.display = c.r2.enabled ? '' : 'none';
 }
 
+function levelChip(lvl) {
+    const l = (lvl || 'r1').toLowerCase();
+    return `<span class="chip ${l}">${l.toUpperCase()}</span>`;
+}
+
+function levelSwitcher(macHash, current) {
+    const cur = (current || 'r1').toLowerCase();
+    return ['r0','r1','r2','r3'].map(l =>
+        l === cur ? '' :
+        `<button class="lvlbtn" onclick="setLevel('${macHash}','${l}')">${l.toUpperCase()}</button>`
+    ).join('');
+}
+
+async function setLevel(macHash, level) {
+    try {
+        const fd = new FormData(); fd.append('level', level);
+        const r = await fetch(`${API}/admin/clients/${macHash}/level`, {
+            method: 'POST', body: fd, credentials: 'same-origin'
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        loadClients();
+    } catch (e) { alert('Échec changement niveau : ' + e.message); }
+}
+
 async function loadClients() {
-    const d = await J('/admin/clients');
+    const d = await J('/admin/clients/rich');
     const el = document.getElementById('clients');
-    if (d.__error) { el.innerHTML = `<div class="empty">${d.__error}</div>`; return; }
-    if (!d.length) { el.innerHTML = '<div class="empty">no clients</div>'; return; }
-    let html = '<table><thead><tr><th>MAC (hash)</th><th>IP</th><th>state</th><th>score</th><th>last</th><th>Actions</th></tr></thead><tbody>';
-    for (const c of d) {
-        const ago = Math.round((Date.now()/1000 - c.last_seen) / 60);
+    const rows = (d && d.clients) ? d.clients : (Array.isArray(d) ? d : null);
+    if (!rows) { el.innerHTML = `<div class="empty">${(d && d.__error) || 'no data'}</div>`; return; }
+    if (!rows.length) { el.innerHTML = '<div class="empty">no clients</div>'; return; }
+    let html = '<table><thead><tr><th>MAC (hash)</th><th>IP</th><th>state</th><th>niveau</th><th>score</th><th>last</th><th>Actions</th></tr></thead><tbody>';
+    for (const c of rows) {
+        const ago = c.last_seen ? Math.round((Date.now()/1000 - c.last_seen) / 60) + 'm' : '—';
         html += `<tr>
             <td><code>${c.mac_hash}</code></td>
-            <td>${c.ip}</td>
-            <td><span class="state-${c.state}">${c.state}</span></td>
-            <td>${c.score}</td>
-            <td>${ago}m</td>
+            <td>${c.ip || '—'}</td>
+            <td><span class="state-${c.state}">${c.state || '—'}</span></td>
+            <td>${levelChip(c.level)} ${levelSwitcher(c.mac_hash, c.level)}</td>
+            <td>${c.score ?? '—'}</td>
+            <td>${ago}</td>
             <td>
-                <a href="${API}/admin/clients/${c.mac_hash}/report" target="_blank" style="color:var(--p31-peak);text-decoration:underline;font-size:0.8rem">PDF</a>
+                <a class="link" href="${API}/admin/clients/${c.mac_hash}/social" target="_blank" style="font-size:0.8rem">🕸️ Carto</a>
                 ·
-                <a href="javascript:void(0)" onclick="loadClientDetail('${c.mac_hash}')" style="color:var(--p31-peak);text-decoration:underline;font-size:0.8rem">Events</a>
+                <a class="link" href="${API}/admin/clients/${c.mac_hash}/report" target="_blank" style="font-size:0.8rem">PDF</a>
+                ·
+                <a class="link" href="javascript:void(0)" onclick="loadClientDetail('${c.mac_hash}')" style="font-size:0.8rem">Events</a>
+                ·
+                <a class="link" href="javascript:void(0)" onclick="resetClient('${c.mac_hash}')" style="font-size:0.8rem;color:var(--red)">↺ Reset</a>
             </td>
         </tr>`;
     }
     html += '</tbody></table>';
     el.innerHTML = html;
+}
+
+// Phase 12.B — RAZ a specific client's accumulated statistics
+// (social mapping graph + toolbox events). Operator-gated.
+async function resetClient(macHash) {
+    if (!confirm(`Remettre à zéro les statistiques du client ${macHash.slice(0,16)}… ?\n\nCela efface sa cartographie sociale + ses events. Irréversible.`)) return;
+    try {
+        const r = await fetch(`${API}/admin/clients/${macHash}/reset`, {
+            method: 'POST', credentials: 'same-origin'
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        alert(`RAZ effectuée : ${j.rows_deleted || 0} enregistrements supprimés.`);
+        loadClients();
+    } catch (e) { alert('Échec RAZ : ' + e.message); }
 }
 
 async function loadMetrics() {
@@ -162,6 +301,7 @@ async function loadClientDetail(macHash) {
     const div = document.getElementById('client-detail');
     title.textContent = `🔍 Détails client — ${macHash}`;
     card.style.display = '';
+    card.scrollIntoView({behavior:'smooth', block:'nearest'});
     div.innerHTML = '<div class="empty">loading…</div>';
     const d = await J(`/admin/clients/${macHash}/events`);
     if (d.__error) { div.innerHTML = `<div class="empty">${d.__error}</div>`; return; }
@@ -175,7 +315,7 @@ async function loadClientDetail(macHash) {
         for (const e of d.recent) {
             const t = new Date(e.ts*1000).toLocaleTimeString();
             const detail = e.host || e.url || e.sni || e.kind || '?';
-            recentHtml += `<tr><td>${t}</td><td><b>${e.source}</b></td><td><code style="font-size:0.78rem">${detail}</code></td></tr>`;
+            recentHtml += `<tr><td>${t}</td><td><b>${e.source}</b></td><td><code>${detail}</code></td></tr>`;
         }
         recentHtml += '</tbody></table>';
     }
@@ -184,7 +324,7 @@ async function loadClientDetail(macHash) {
         <p style="margin-bottom:0.5rem;font-size:0.85rem;color:var(--p31-dim)">Récents :</p>
         ${recentHtml}
         <p style="margin-top:0.8rem">
-            <a href="${API}/admin/clients/${macHash}/report" target="_blank" style="color:var(--p31-peak);text-decoration:underline">⬇ Télécharger PDF complet</a>
+            <a class="link" href="${API}/admin/clients/${macHash}/report" target="_blank">⬇ Télécharger PDF complet</a>
         </p>
     `;
 }
@@ -201,11 +341,88 @@ async function loadHealth() {
     document.getElementById('version-badge').textContent = `v${h.version}`;
 }
 
+async function loadFilters() {
+    const el = document.getElementById('filters');
+    const d = await J('/admin/filter-control/list');
+    const items = (d && d.hosts) ? d.hosts : (Array.isArray(d) ? d : null);
+    if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
+    if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
+    el.innerHTML = items.map(h => {
+        const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
+        const src = (typeof h === 'object' && h.source) ? h.source : '';
+        return `<li><code>${host}</code>${src ? `<span style="color:var(--p31-dim);font-size:0.72rem">${src}</span>` : ''}</li>`;
+    }).join('');
+}
+
+async function loadSocial() {
+    const agg = await J('/admin/social-aggregate?hours=24');
+    const kpi = document.getElementById('social-kpi');
+    const trk = document.getElementById('social-trackers');
+    const cli = document.getElementById('social-clients');
+    const cdn = document.getElementById('social-cdn');
+    if (agg.__error) {
+        kpi.innerHTML = `<span class="k">err</span><span class="v">${agg.__error}</span>`;
+        trk.innerHTML = cli.innerHTML = '';
+        if (cdn) cdn.innerHTML = '';
+        return;
+    }
+    kpi.innerHTML = `
+        <span class="k">Clients actifs</span> <span class="v">${agg.active_clients || 0}</span>
+        <span class="k">Trackers vus</span>   <span class="v">${agg.total_trackers_seen || 0}</span>
+        <span class="k">Hors-UE (Phase C)</span> <span class="v">${agg.extra_eu_trackers || 0}</span>
+        <span class="k">Fenêtre</span>        <span class="v">${agg.window_hours || 24}h</span>
+    `;
+    const td = agg.by_tracker_domain || [];
+    trk.innerHTML = td.length
+        ? '<table><thead><tr><th>Tracker domain</th><th>hits</th><th>clients</th></tr></thead><tbody>' +
+          td.map(r => `<tr><td><code>${r.tracker_domain}</code></td><td>${r.hits}</td><td>${r.clients}</td></tr>`).join('') +
+          '</tbody></table>'
+        : '<div class="empty">aucun tracker dans la fenêtre</div>';
+    const bc = agg.by_client || [];
+    cli.innerHTML = bc.length
+        ? '<table><thead><tr><th>Client (hash)</th><th>sites</th><th>trackers</th><th>last</th></tr></thead><tbody>' +
+          bc.map(r => {
+              const ago = r.last_seen ? Math.round((Date.now()/1000 - r.last_seen)/60) + 'm' : '—';
+              return `<tr><td><code>${(r.client_mac_hash||'').slice(0,16)}</code></td><td>${r.sites}</td><td>${r.trackers}</td><td>${ago}</td></tr>`;
+          }).join('') +
+          '</tbody></table>'
+        : '<div class="empty">aucun client</div>';
+    if (cdn) {
+        const bv = agg.by_cdn || [];
+        cdn.innerHTML = bv.length
+            ? '<table><thead><tr><th>CDN / edge</th><th>hôtes</th></tr></thead><tbody>' +
+              bv.map(r => `<tr><td>${r.cdn_vendor}</td><td>${r.hosts}</td></tr>`).join('') +
+              '</tbody></table>'
+            : '<div class="empty">aucun CDN détecté</div>';
+    }
+    const ab = document.getElementById('social-antibot');
+    if (ab) {
+        const ba = agg.by_antibot || [];
+        ab.innerHTML = ba.length
+            ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${agg.antibot_clients||0} client(s) défié(s)</p>` +
+              '<table><thead><tr><th>Vendor</th><th>sites</th><th>clients</th><th>défis</th></tr></thead><tbody>' +
+              ba.map(r => `<tr><td>🤖 ${r.antibot_vendor}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.challenges}</td></tr>`).join('') +
+              '</tbody></table>'
+            : '<div class="empty">aucun anti-bot détecté</div>';
+    }
+}
+
 async function refreshAll() {
     await Promise.all([loadCfg(), loadClients(), loadHealth(), loadMetrics()]);
 }
+
+// Deep-link : open the tab named in the URL hash on load.
+const initial = (location.hash || '').replace('#', '');
+if (['overview','clients','filtres','social','config'].includes(initial)) switchTab(initial);
+
 refreshAll();
-setInterval(refreshAll, 10000);
+setInterval(() => {
+    // Only refresh the currently-visible tab's live data.
+    const active = document.querySelector('.tab.active')?.dataset.tab;
+    if (active === 'overview') { loadHealth(); loadMetrics(); }
+    else if (active === 'clients') loadClients();
+    else if (active === 'social') loadSocial();
+}, 10000);
 </script>
 </body>
 </html>

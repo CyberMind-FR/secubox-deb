@@ -1,3 +1,217 @@
+secubox-toolbox (2.6.6-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 12.B follow-up (#516) — fix the Clients-tab 🕸️ Carto link
+    landing on the aggregator "missing module" page.  The /social/
+    route is only served on the kbin vhost ; the operator triggers the
+    link from admin.gk2.secubox.in.  admin_client_social() now builds
+    an absolute kbin URL (swaps the leading admin. host label for
+    kbin.) instead of a relative redirect.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 11:20:00 +0200
+
+secubox-toolbox (2.6.5-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 12.B (#516, parent #514) — anti-bot / "prove you're human"
+    detection + ring-level graph + per-client operator tools.
+      - social_graph.py: detect_antibot() classifies the bot-checker /
+        CAPTCHA vendor challenging a flow (reCAPTCHA / hCaptcha /
+        Turnstile / Datadome / PerimeterX-HUMAN / Arkose / Kasada /
+        Akamai Bot Manager) from URL + cookies + headers. Detection
+        only ; bypass stays gated behind its own doctrine.
+      - social.py: social_host_meta.antibot_vendor + new social_antibot
+        per-client challenge table. fetch_graph carries antibot_vendor
+        + an antibot list/stats; aggregate adds by_antibot + 
+        antibot_clients; wipe_mac clears social_antibot too.
+      - social.js: anti-bot hosts get the highest-severity cinnabar
+        lens + a spinning warning ring + 🤖 label; "challenged your
+        humanity" alert banner; node-detail shows the vendor.
+      - VISIBLE RING LEVELS: radial force is now dominant (strength
+        0.9) with weak charge + weak link springs, plus dashed ring
+        guides (inner = your sites, outer = trackers) so the Round-Eye
+        levels read clearly. Assets cache-busted (?v=264b).
+      - index.html operator social tab: anti-bot breakdown card.
+      - index.html Clients tab: per-row 🕸️ Carto (opens the client's
+        graph via a minted token), ↺ Reset (RAZ the client's stats).
+      - api.py: GET /admin/clients/{mac}/social (operator graph link),
+        POST /admin/clients/{mac}/reset (RAZ social + events + score).
+      - store.py: reset_client() wipes events/consents/reports + zeroes
+        score.
+      - i18n: node_detail_antibot + antibot_alert (FR/EN).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 11:00:00 +0200
+
+secubox-toolbox (2.6.4-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 12.A (#515, parent #514) — CDN cache detection + Round-Eye
+    central-hotspot graph.
+      - mitmproxy_addons/social_graph.py: detect_cdn() classifies the
+        edge network fronting each 3rd-party host from response headers
+        (Cloudflare / Fastly / Akamai / CloudFront / Google / Vercel /
+        Netlify / BunnyCDN / KeyCDN / Sucuri / Imperva + generic
+        edge-cache). Recorded host-stable (mac-independent) off-thread.
+      - secubox_toolbox/social.py: new social_host_meta table
+        (tracker_domain PK, cdn_vendor, cache_status). fetch_graph()
+        LEFT JOINs it onto nodes; aggregate() adds a by_cdn breakdown.
+      - www/toolbox/social.js: the per-client graph is re-centred on a
+        Round-Eye hotspot — the device is a pulsing eye at the centre,
+        sites orbit it on an inner ring (forceRadial), trackers push to
+        an outer ring, so the densest tracker clusters read as the
+        "hot spots". Tracker nodes are tinted by CDN vendor; node-detail
+        shows CDN / cache status.
+      - www/toolbox/social.css: eye halo/sclera/iris/pupil + breathing
+        animation + cinnabar spoke edges.
+      - www/toolbox/index.html: operator social tab gains a
+        "Réseaux CDN / edge" breakdown card.
+      - i18n: node_detail_cdn (FR/EN).
+    First passive track of the #514 anti-human-detection platform —
+    zero legal exposure, reuses the consent-probe response-header path.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 10:00:00 +0200
+
+secubox-toolbox (2.6.3-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 11.C (#508, parent #502) — social mapping evidence + bilingual
+    FR/EN PDF report.
+      - mitmproxy_addons/social_graph.py : consent-platform probe.
+        Detects OneTrust / Didomi / Quantcast / Sourcepoint cookies +
+        loader URLs per (peer, site).  Each recorded edge is stamped
+        consent_state in {none_seen, pre_consent, post_consent}.
+        pre_consent = a tracker fired while the site runs a CMP but no
+        consent cookie was seen yet (RGPD art. 6.1.a + 7 evidence).
+      - secubox_toolbox/social.py : schema (consent_state + GeoIP
+        columns) + EU/EEA whitelist + GeoIP fold + evidence() helper.
+      - secubox_toolbox/social_report.py : NEW — bilingual FR/EN
+        evidence PDF via fpdf2 (same engine as reports.py).  Fact-only
+        cover + summary + pre-consent table + extra-EU table + RGPD
+        article references.  Text fallback when fpdf2 is absent.
+      - secubox_toolbox/api.py : GET /social/report/{token}.pdf, same
+        HMAC-token gate as /social/graph/{token}.
+      - conf/social_view.html.j2 + i18n : the "Rapport PDF" card now
+        has a real download button ; the "Évidence juridique" card
+        switched to the active compliance summary.
+    Phase 11 (social mapping per device) is now feature-complete :
+    A (backend) + B (d3 view) + C (evidence + PDF).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 09:30:00 +0200
+
+secubox-toolbox (2.6.2-1~bookworm1) bookworm; urgency=medium
+
+  * ToolBox WebUI sub-tab navigation + kbin /admin/ removal (#513).
+      - www/toolbox/index.html : rebuilt with a 5-tab nav
+        (Vue d'ensemble / Clients / Filtres MITM / Cartographie
+        sociale / Config).  Each tab lazy-loads its data; the live
+        refresh interval only polls the visible tab.  URL hash
+        deep-links a tab (e.g. /toolbox/#social).
+      - Clients tab folds in the R0/R1/R2/R3 level switcher that
+        used to live only in the kbin inline admin UI (calls
+        /admin/clients/{mac}/level).
+      - Cartographie sociale tab surfaces the Phase 11 operator
+        aggregate (/admin/social-aggregate) : KPI tiles + top
+        tracker domains + anonymized client table.
+      - api.py : DELETED the inline kbin /admin/ HTML route
+        (admin_index(), ~230 lines).  The canonical operator
+        dashboard is now admin.gk2.secubox.in/toolbox/.  All
+        /admin/* JSON API routes are untouched.
+      - conf/landing.html.j2 : removed the 🛠️ Admin quicknav icon
+        (the page it pointed at no longer exists).
+    kbin.gk2.secubox.in/admin/ now 404s by design.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 09:15:00 +0200
+
+secubox-toolbox (2.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 11.B (#507, parent #502) — social mapping per-client view +
+    favicon proxy + i18n.
+      - secubox_toolbox/api.py : two new endpoints.
+          GET /social/{token}            renders the HTML view
+                                         (HMAC-token gated, lang via
+                                         ?lang= or Accept-Language).
+          GET /social/favicon/{domain}   server-side cached proxy with
+                                         7 d TTL.  Strict domain
+                                         charset + SHA-256 keyed cache
+                                         file; HTTPS only with a hard
+                                         5 s timeout; falls back to a
+                                         1×1 transparent gif.
+      - conf/social_view.html.j2 : Jinja2 template implementing the
+        locked design (Cinzel header / IM Fell body / JetBrains Mono
+        data, force-directed d3 graph, three collapsible cards,
+        tracker-node bottom-sheet, FR-primary bilingual labels,
+        wipe-confirmation dialog with 3 s countdown).
+      - conf/i18n/social.fr.json + conf/i18n/social.en.json : single
+        dictionary per language.  FR is the source-of-truth.
+      - www/toolbox/social.css : palette-precise stylesheet.  No
+        third-party CSS dependency.  Mobile-first; desktop bumps the
+        node-detail panel to a right-rail at >= 720 px.
+      - www/toolbox/social.js : self-contained d3 driver.  Consumes
+        the Phase A JSON contract, force layout (link distance 70,
+        charge -180), tap-to-focus pulse on tracker nodes, wipe
+        modal countdown timer, refresh after wipe.  ~270 LOC.
+      - www/toolbox/d3.v7.min.js : d3 v7.9.0 self-hosted (~280 KB),
+        ISC-licensed, no CDN runtime dependency.
+
+    Design language consolidated from the #502 round-2 lock — edge
+    color placeholder cyber-cyan until the Phase C family taxonomy,
+    edge thickness = log(reuse_count + 1) * 1.8, animated pulse on
+    focus, tracker-node detail sheet (bottom on mobile, right-rail
+    >= 720 px), 3 s countdown before wipe confirm is enabled.
+
+    Out of scope for 2.6.1 (deferred to Phase 11.C) :
+      - Legal-evidence flag computation (consent-state probe + extra
+        EU transfer detection).
+      - Bilingual FR/EN PDF report cover + body.
+      - GeoIP + ASN org populated in the tracker node detail panel
+        (country / ASN values currently show "-" placeholders).
+      - Operator dashboard /admin/social/ HTML view (the JSON
+        /admin/social-aggregate endpoint already ships from 2.6.0).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 09 Jun 2026 12:05:00 +0200
+
+secubox-toolbox (2.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 11.A (#505, parent #502) — social mapping per device :
+    backend correlation engine + SQLite tables + JSON API.
+      - secubox_toolbox/social.py : new module.  Schema for
+        social_edges (raw events, 7 d retention), social_nodes
+        (per-peer per-tracker aggregate), social_links (per-peer
+        per-site-pair aggregate with shared-tracker list + JA4
+        collision flag).  Fire-and-forget executor pattern matches
+        utiq.py (#500 Phase 8.B) — never blocks the mitmproxy
+        asyncio loop.  fold_recent() rebuilds nodes + links from
+        raw edges every 5 min.  wipe_mac() backs the RGPD art. 17
+        endpoint.  aggregate() backs the operator dashboard.
+      - mitmproxy_addons/social_graph.py : new addon.  Loaded
+        between local_store and inject_banner in the mitm-wg
+        chain.  Parses Set-Cookie + Cookie headers, normalizes
+        identifiers via cookie_id_hash = sha256(domain||name||
+        value)[:16] — NEVER persists raw cookie values.  Deny-list
+        strips session/CSRF/auth/locale names.  3rd-party detection
+        via a cheap eTLD+1 approximation (covers > 99 % of the
+        ecosystem we see ; full PSL fold is a future enhancement
+        if the data demands it).
+      - secubox_toolbox/api.py : three new endpoints.
+        GET /social/graph/{token} — per-client graph, HMAC-token
+        gated (same TTL semantics as the existing /report/{token}).
+        POST /social/wipe/{token} — RGPD art. 17 droit à
+        l'effacement, same HMAC contract.  GET /admin/social-
+        aggregate — JWT-gated operator view, KPI tiles + tracker
+        histogram + anonymized client table.  No per-client graph
+        on the admin path.
+      - secubox_toolbox/app.py : two new startup background tasks.
+        social_fold_loop() runs fold_recent every 5 min.
+        social_purge_loop() drops raw edges older than 7 d every
+        hour.  Symmetric with the existing purge_loop + threat_intel
+        refresh_loop.
+      - sbin/secubox-toolbox-mitm-wg-launch : addon chain updated
+        to include social_graph AFTER local_store and BEFORE
+        inject_banner.
+    Scope explicitly limited to the R3 mitm-wg path for Phase A.
+    R2 captive hookup, the d3 graph UI, the bilingual PDF report,
+    and the legal-evidence flag computation (consent-state probe,
+    extra-EU transfer flag) are deferred to Phase 11.B / 11.C
+    per the design lock on #502 (rounds 1 + 2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 09 Jun 2026 09:55:00 +0200
+
 secubox-toolbox (2.5.2-1~bookworm1) bookworm; urgency=medium
 
   * Phase 10.1 (#501 perf) — postinst regressions caught on 2.5.1 deploy.

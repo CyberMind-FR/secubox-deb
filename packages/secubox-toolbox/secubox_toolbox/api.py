@@ -2034,6 +2034,259 @@ async def admin_utiq_events(hours: int = 24, limit: int = 200) -> dict:
     }
 
 
+# ───────────────── Phase 11.A — Social Mapping (#505, parent #502) ─────────────────
+
+@router.get("/social/graph/{token}")
+async def social_graph_client(token: str, since: int = 86400) -> dict:
+    """Per-client cross-cookie tracker graph.
+
+    `token` is the same HMAC-signed report token used by /report/{token}
+    (see reports.verify_token).  Same TTL semantics : 24 h then the
+    salt rotation invalidates further access.
+
+    The returned shape is the JSON contract consumed by the d3 view in
+    Phase 11.B and by the bilingual PDF in Phase 11.C.
+    """
+    from . import social as _s
+    salt = _get_salt()
+    ok, mac_hash = reports.verify_token(token, salt)
+    if not ok:
+        raise HTTPException(404, "graph not found or expired")
+    # Clamp the window between 1 h and 7 d so a bad query can't
+    # walk the entire retention period.
+    since = max(3600, min(int(since or 86400), 7 * 86400))
+    return _s.fetch_graph(mac_hash, since_seconds=since)
+
+
+@router.post("/social/wipe/{token}")
+async def social_wipe_client(token: str) -> dict:
+    """RGPD art. 17 — droit à l'effacement.
+
+    HMAC-token-gated to the same identity as the per-client view.
+    Deletes every row across social_edges + social_nodes + social_links
+    for the resolved mac_hash.
+    """
+    from . import social as _s
+    salt = _get_salt()
+    ok, mac_hash = reports.verify_token(token, salt)
+    if not ok:
+        raise HTTPException(404, "graph not found or expired")
+    rows = _s.wipe_mac(mac_hash)
+    return {"wiped": True, "rows_deleted": rows, "mac_hash_prefix": mac_hash[:8]}
+
+
+@router.get("/admin/social-aggregate")
+async def admin_social_aggregate(hours: int = 24) -> dict:
+    """Operator dashboard view : KPI tiles + tracker-domain histogram +
+    anonymized client table.  No per-client graph at this endpoint
+    (that lives behind the HMAC-token route above).
+    """
+    from . import social as _s
+    return _s.aggregate(hours=hours)
+
+
+@router.get("/social/report/{token}.pdf")
+async def social_report_pdf(token: str) -> Response:
+    """Phase 11.C (#508) — bilingual FR/EN evidence PDF for a peer.
+
+    Same HMAC-token gate as /social/graph/{token}.  Fact-only report :
+    cross-site tracker reuse, trackers fired before consent (RGPD art.
+    6.1.a + 7), extra-EU transfers (art. 44+).
+    """
+    from . import social_report as _sr
+    salt = _get_salt()
+    ok, mac_hash = reports.verify_token(token, salt)
+    if not ok:
+        raise HTTPException(404, "report not found or expired")
+    data = _sr.build_social_report(mac_hash, since_seconds=7 * 86400)
+    data["generated_at"] = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+    pdf_bytes = _sr.render_social_pdf(data)
+    fname = f"village3b-carto-{mac_hash[:8]}-{int(time.time())}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+# ───────────────── Phase 11.B — per-client view + favicon proxy (#507) ─────────────────
+
+import json as _json_b
+
+
+def _load_social_i18n(lang: str) -> dict:
+    """Pick the FR or EN dictionary.  FR is the source-of-truth."""
+    lang = (lang or "").lower().split(",", 1)[0].split("-", 1)[0]
+    if lang not in ("en", "fr"):
+        lang = "fr"
+    path = TEMPLATE_DIR / "i18n" / f"social.{lang}.json"
+    try:
+        return _json_b.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        log.warning("social i18n load failed (%s): %s", lang, e)
+        return {}
+
+
+@router.get("/social/me")
+async def social_view_me(request: Request) -> RedirectResponse:
+    """Self-resolving entry point used by the kbin splash menu.
+
+    Resolution chain (matches /report/me/html):
+      1. ?mh=<hash>             explicit R3 hash in URL (e.g. from banner)
+      2. X-R3-Peer header       mitm-wg's inject_xff sentinel for transparent
+                                R3 flows (peer IP in 10.99.1.0/24)
+      3. _resolve() ARP lookup  R2 captive subnet clients only
+
+    Mints a short-TTL (1 h) HMAC token bound to the resolved mac_hash and
+    redirects to /social/{token}.  Keeps a single HMAC-token-gated code
+    path for the graph view + wipe endpoint.
+    """
+    salt = _get_salt()
+    mac_hash = None
+
+    # 1) ?mh= overrides everything (used by inject_banner.py links + the
+    # report flow + manual curl).
+    mh_qp = (request.query_params.get("mh") or "").strip().lower()
+    if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
+        mac_hash = mh_qp
+
+    # 2) X-R3-Peer (transparent R3 — the iPhone hits kbin via the R3
+    # tunnel, mitm-wg adds the sentinel, HAProxy passes it through).
+    # We derive the same mac_hash the local_store addon uses :
+    # sha256(wg_pubkey)[:16] looked up from /var/lib/secubox/toolbox/
+    # wg-peers.json keyed by peer IP.
+    if not mac_hash:
+        peer_ip = _client_ip(request)
+        if peer_ip and peer_ip.startswith("10.99.1."):
+            try:
+                import hashlib as _h
+                import json as _j
+                from pathlib import Path as _P
+                _DB = _P("/var/lib/secubox/toolbox/wg-peers.json")
+                if _DB.exists():
+                    peers = _j.loads(_DB.read_text()).get("peers", {})
+                    for pubkey, meta in peers.items():
+                        if meta.get("ip") == peer_ip:
+                            mac_hash = _h.sha256(pubkey.encode()).hexdigest()[:16]
+                            break
+            except Exception as e:
+                log.warning("/social/me wg-peer lookup failed: %s", e)
+
+    # 3) R2 captive — ARP _resolve().
+    if not mac_hash:
+        _ip, mac = _resolve(request)
+        if mac:
+            mac_hash = macmod.hash_mac(mac, salt)
+
+    if not mac_hash:
+        raise HTTPException(
+            400,
+            "client identity unresolved (not on R3 tunnel and not in "
+            "captive subnet) — append ?mh=<hash> from your banner's "
+            "report link",
+        )
+
+    tok = reports.mint_token(mac_hash, salt, ttl_seconds=3600)
+    lang = request.query_params.get("lang") or ""
+    suffix = f"?lang={lang}" if lang else ""
+    return RedirectResponse(url=f"/social/{tok.token}{suffix}", status_code=303)
+
+
+@router.get("/social/{token}", response_class=HTMLResponse)
+async def social_view(token: str, request: Request) -> HTMLResponse:
+    """Per-client social mapping HTML page.
+
+    HMAC-token-gated identically to /report/{token} so the same kbin
+    splash + R3 onboard flow can issue a link.  The page itself
+    contains no per-client data — the d3 layer fetches it via
+    GET /social/graph/{token} after page-load (so a forwarded link
+    that's been TTL-expired surfaces an empty graph + error message
+    in the page rather than a 404 at HTTP layer).
+    """
+    salt = _get_salt()
+    ok, _mac_hash = reports.verify_token(token, salt)
+    if not ok:
+        raise HTTPException(404, "page not found or expired")
+
+    # Language pick : query string `?lang=` wins, else Accept-Language.
+    lang = request.query_params.get("lang") or request.headers.get("accept-language", "fr")
+    lang = "fr" if "fr" in lang.lower() else "en"
+    i18n = _load_social_i18n(lang)
+    html = _env.get_template("social_view.html.j2").render(
+        token=token,
+        lang=lang,
+        t=i18n,
+        t_json=_json_b.dumps(i18n, ensure_ascii=False),
+    )
+    return HTMLResponse(content=html)
+
+
+# Favicon cache (Phase 11.B) — server-side cache so the per-client
+# view never makes a client-side request to a tracker domain just to
+# show its icon.  Default TTL 7 d.
+_FAVICON_CACHE_DIR = Path("/var/lib/secubox/toolbox/favicons")
+_FAVICON_TTL_SECONDS = 7 * 86400
+
+
+@router.get("/social/favicon/{domain}")
+async def social_favicon(domain: str) -> Response:
+    """Server-side favicon proxy with 7 d disk cache.
+
+    Path traversal is impossible because `domain` is whitelisted to
+    a strict charset and the cache file is sha256-keyed.  We fetch
+    over HTTPS only, time out hard at 5 s, and fall back to a 1×1
+    transparent gif on any failure.
+    """
+    import hashlib as _h
+    import re as _re
+    import time as _time
+
+    if not _re.match(r"^[a-z0-9.-]{1,253}$", domain.lower()):
+        raise HTTPException(400, "invalid domain")
+
+    _FAVICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    key = _h.sha256(domain.lower().encode()).hexdigest()[:24]
+    cache_file = _FAVICON_CACHE_DIR / f"{key}.ico"
+    now = _time.time()
+
+    if cache_file.exists() and now - cache_file.stat().st_mtime < _FAVICON_TTL_SECONDS:
+        return Response(
+            content=cache_file.read_bytes(),
+            media_type="image/x-icon",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    # Best-effort fetch.  No cross-host redirects, no JS, no cookies.
+    try:
+        import httpx
+        url = f"https://{domain.lower()}/favicon.ico"
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as c:
+            r = await c.get(
+                url,
+                headers={"User-Agent": "SecuBox-ToolBox-Favicon-Cache/1.0"},
+            )
+            if r.status_code == 200 and r.content and len(r.content) < 65536:
+                cache_file.write_bytes(r.content)
+                return Response(
+                    content=r.content,
+                    media_type="image/x-icon",
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
+    except Exception as e:  # noqa: BLE001
+        log.warning("favicon fetch failed for %s: %s", domain, e)
+
+    # Fallback : 1×1 transparent gif.
+    GIF = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00"
+        b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02L\x01\x00;"
+    )
+    return Response(
+        content=GIF,
+        media_type="image/gif",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 @router.get("/admin/config")
 async def admin_config() -> dict:
     return _get_cfg().model_dump()
@@ -2123,235 +2376,9 @@ async def admin_override_level(mac_hash: str, request: Request) -> dict:
             "note": "nft sets not auto-updated; client must reload or operator manually adjusts nft"}
 
 
-@router.get("/admin/", response_class=HTMLResponse)
-@router.get("/admin", response_class=HTMLResponse)
-async def admin_index() -> HTMLResponse:
-    """Operator admin webUI with client list + level switcher."""
-    html = """<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
-<meta name=viewport content="width=device-width,initial-scale=1">
-<title>🛡 Admin — Gondwana ToolBoX</title>
-<style>:root{--bg:#0a0a0f;--bg2:#0e0e15;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff;--amber:#ffb347;--red:#ff4466}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Menlo,Consolas,monospace;background:var(--bg);color:var(--text);padding:1.2rem;max-width:1100px;margin:auto;line-height:1.55}
-h1{color:var(--phos-hot);text-shadow:0 0 6px var(--phos);font-size:1.6rem;margin-bottom:0.4rem;letter-spacing:0.05em}
-.sub{color:var(--dim);font-size:0.85rem;margin-bottom:1.2rem}
-table{width:100%;border-collapse:collapse;font-size:0.85rem;background:var(--bg2);border:1px solid var(--dim)}
-th,td{padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--dim)}
-th{color:var(--phos-hot);text-shadow:0 0 3px var(--phos);background:rgba(0,221,68,0.08)}
-tr:hover{background:rgba(0,221,68,0.04)}
-.chip{display:inline-block;padding:0.15rem 0.5rem;border-radius:99px;font-size:0.72rem;font-weight:bold}
-.chip.r0{background:#222;color:#999}
-.chip.r1{background:rgba(0,221,68,0.2);color:var(--phos-hot)}
-.chip.r2{background:rgba(255,179,71,0.2);color:#ffd6a0}
-.chip.r3{background:rgba(158,118,255,0.2);color:#cbb6ff}
-.btn{background:var(--purple);color:#0a0a0f;padding:0.3rem 0.6rem;border:none;border-radius:3px;cursor:pointer;font-family:inherit;font-size:0.72rem;font-weight:bold;margin-right:0.2rem}
-.btn:hover{background:#b598ff}
-.btn.outline{background:transparent;color:var(--phos);border:1px solid var(--phos)}
-code{background:#222;padding:0.1rem 0.3rem;border-radius:2px;font-size:0.75rem}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.8rem;margin-bottom:1.5rem}
-.card{background:var(--bg2);border:1px solid var(--dim);padding:0.8rem;border-radius:4px;text-align:center}
-.card .v{font-size:1.6rem;color:var(--phos-hot);font-weight:bold;display:block}
-.card .l{font-size:0.7rem;color:var(--dim)}
-.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;z-index:100}
-.modal-bg.show{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--phos);padding:1.5rem;border-radius:4px;max-width:400px;width:90%}
-.modal h2{color:var(--phos-hot);font-size:1rem;margin-bottom:0.8rem}
-.modal .lvl-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.8rem}
-.modal .lvl-row button{padding:0.5rem;cursor:pointer;font-family:inherit;font-size:0.75rem;border-radius:3px}
-.modal .lvl-row .r0{background:#222;color:#999;border:1px solid #444}
-.modal .lvl-row .r1{background:rgba(0,221,68,0.15);color:var(--phos-hot);border:1px solid var(--phos)}
-.modal .lvl-row .r2{background:rgba(255,179,71,0.15);color:#ffd6a0;border:1px solid var(--amber)}
-.modal .lvl-row .r3{background:rgba(158,118,255,0.15);color:#cbb6ff;border:1px solid var(--purple)}
-.adm-tabs{display:flex;gap:2px;border-bottom:1px solid var(--dim);margin-bottom:0.8rem}
-.adm-tab{background:transparent;border:0;color:#888;padding:0.5rem 1rem;font-family:inherit;font-size:0.85rem;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
-.adm-tab.active{color:var(--phos-hot);border-bottom-color:var(--phos);background:rgba(0,221,68,0.05)}
-.adm-tab:hover{color:var(--text)}
-.adm-content{display:none}
-.adm-content.active{display:block}
-button.del-pattern{background:var(--red);color:#fff;border:0;padding:0.2rem 0.5rem;border-radius:3px;cursor:pointer;font-weight:bold;font-size:0.75rem}
-</style></head><body>
-<h1>🛡 Admin — Gondwana ToolBoX</h1>
-<p class=sub>// Console opérateur · client management · level override · mitm filtering</p>
-
-{# Phase 6.I : tabbed sections #}
-<div class=adm-tabs>
-  <button class="adm-tab active" data-tab=clients>👥 Clients</button>
-  <button class="adm-tab" data-tab=filter>🛡 Mitm filtering</button>
-</div>
-
-<div class="adm-content active" data-content=clients>
-<div id=cards class=cards></div>
-
-<table id=clients-table>
-<thead><tr>
-<th>Status</th><th>Device</th><th>Hash</th><th>IP</th>
-<th>Level</th><th>Risk</th><th>Last seen</th><th>Actions</th>
-</tr></thead>
-<tbody id=clients-tbody><tr><td colspan=8>chargement…</td></tr></tbody>
-</table>
-</div>
-
-<div class="adm-content" data-content=filter>
-<h2 style="color:var(--purple);font-size:1.1rem;margin-bottom:0.4rem">🛡 Mitm bypass whitelist</h2>
-<p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.8rem">
-  Hosts/domains qui ne sont JAMAIS déchiffrés par mitm (TLS passthrough).
-  Pour apps cert-pinned ou E2E. Redémarre <code>secubox-toolbox-mitm-wg</code>
-  après modif.
-</p>
-
-<form id=add-pattern-form style="display:flex;gap:0.5rem;margin-bottom:0.8rem">
-  <input type=text name=entry placeholder="ex: (.+\\.)?example\\.com" required
-    style="flex:1;background:#111;color:var(--text);border:1px solid #2a2a3f;padding:0.5rem;border-radius:3px;font-family:monospace;font-size:0.8rem">
-  <button type=submit class=btn style="background:var(--phos);padding:0.5rem 1rem">➕ Ajouter</button>
-</form>
-
-<table id=filter-table style="font-size:0.78rem">
-<thead><tr><th>Pattern (regex)</th><th width=60>×</th></tr></thead>
-<tbody id=filter-tbody><tr><td colspan=2>chargement…</td></tr></tbody>
-</table>
-
-<p style="font-size:0.72rem;color:var(--dim);margin-top:0.6rem;border-left:2px solid var(--amber);padding-left:0.6rem">
-  📁 <code>/var/lib/secubox/toolbox/mitm-bypass.conf</code> · Source de vérité
-</p>
-</div>
-
-<div id=modal class=modal-bg>
-<div class=modal>
-<h2>🔀 Change level — <code id=modal-mh></code></h2>
-<p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">⚠ Admin override : updates store only. Client must reload to sync nft.</p>
-<div class=lvl-row>
-<button class=r0 onclick="setLevel('r0')">🌐 R0</button>
-<button class=r1 onclick="setLevel('r1')">🛡 R1</button>
-<button class=r2 onclick="setLevel('r2')">🔍 R2</button>
-<button class=r3 onclick="setLevel('r3')">🌐 R3</button>
-</div>
-<button onclick="closeModal()" class=btn style="background:transparent;color:var(--dim);border:1px solid var(--dim)">Annuler</button>
-</div>
-</div>
-
-<script>
-var selectedMh = null;
-function openModal(mh) {
-  selectedMh = mh;
-  document.getElementById('modal-mh').textContent = mh;
-  document.getElementById('modal').classList.add('show');
-}
-function closeModal() {
-  document.getElementById('modal').classList.remove('show');
-}
-async function setLevel(lvl) {
-  if (!selectedMh) return;
-  var fd = new FormData();
-  fd.append('level', lvl);
-  var r = await fetch('/admin/clients/'+selectedMh+'/level', {method:'POST', body:fd});
-  if (r.ok) {
-    closeModal();
-    loadClients();
-  } else {
-    alert('Erreur: '+r.status);
-  }
-}
-async function loadClients() {
-  var r = await fetch('/admin/clients/rich');
-  if (!r.ok) {
-    document.getElementById('clients-tbody').innerHTML = '<tr><td colspan=8>Erreur '+r.status+'</td></tr>';
-    return;
-  }
-  var data = await r.json();
-  var tbody = document.getElementById('clients-tbody');
-  tbody.innerHTML = '';
-  data.clients.forEach(function(c){
-    var lvlChip = '<span class="chip '+c.level+'">'+c.level_emoji+' '+c.level.toUpperCase()+'</span>';
-    var dt = new Date(c.last_seen*1000).toISOString().substring(11,16);
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td>'+c.status_emoji+' '+c.status_label+'</td>'+
-      '<td>'+c.device_emoji+'</td>'+
-      '<td><code>'+c.mac_hash.substring(0,12)+'…</code></td>'+
-      '<td>'+(c.ip||'?')+'</td>'+
-      '<td>'+lvlChip+'</td>'+
-      '<td>'+c.risk_emoji+' '+c.score+'</td>'+
-      '<td>'+dt+'</td>'+
-      '<td><button class=btn onclick="openModal(\\''+c.mac_hash+'\\')">🔀 Override</button>'+
-      '<a href="/admin/clients/'+c.mac_hash+'/report" class="btn outline">📄 PDF</a></td>';
-    tbody.appendChild(tr);
-  });
-  // KPI cards
-  var counts = {r0:0,r1:0,r2:0,r3:0,actif:0,risk_low:0,risk_mh:0};
-  data.clients.forEach(function(c){
-    counts[c.level] = (counts[c.level]||0)+1;
-    if (c.status_label==='actif') counts.actif++;
-    if (c.score < 30) counts.risk_low++;
-    if (c.score >= 30) counts.risk_mh++;
-  });
-  document.getElementById('cards').innerHTML =
-    '<div class=card><span class=v>'+data.count+'</span><span class=l>Total clients</span></div>'+
-    '<div class=card><span class=v>'+counts.actif+'</span><span class=l>🟢 Actifs (5min)</span></div>'+
-    '<div class=card><span class=v>'+counts.r1+'</span><span class=l>🛡 R1</span></div>'+
-    '<div class=card><span class=v>'+counts.r2+'</span><span class=l>🔍 R2</span></div>'+
-    '<div class=card><span class=v>'+counts.r3+'</span><span class=l>🌐 R3 WG</span></div>'+
-    '<div class=card><span class=v>'+counts.risk_low+'</span><span class=l>🟢 Risque LOW</span></div>';
-}
-loadClients();
-setInterval(loadClients, 15000);
-
-// ── Tabs (Phase 6.I) ──
-document.querySelectorAll('.adm-tab').forEach(function(t){
-  t.addEventListener('click', function(){
-    var tn = this.dataset.tab;
-    document.querySelectorAll('.adm-tab').forEach(function(x){x.classList.remove('active');});
-    this.classList.add('active');
-    document.querySelectorAll('.adm-content').forEach(function(x){x.classList.remove('active');});
-    document.querySelector('[data-content='+tn+']').classList.add('active');
-    if (tn === 'filter') loadFilter();
-  });
-});
-
-// ── Filter Control (integrated tab) ──
-async function loadFilter(){
-  var r = await fetch('/admin/filter-control/list');
-  var tb = document.getElementById('filter-tbody');
-  if (!r.ok) { tb.innerHTML = '<tr><td colspan=2>Erreur '+r.status+'</td></tr>'; return; }
-  var d = await r.json();
-  if (!d.patterns || !d.patterns.length) {
-    tb.innerHTML = '<tr><td colspan=2 style="color:#666;text-align:center">Aucune entrée</td></tr>';
-    return;
-  }
-  tb.innerHTML = '';
-  d.patterns.forEach(function(p){
-    var tr = document.createElement('tr');
-    var td1 = document.createElement('td');
-    var code = document.createElement('code');
-    code.textContent = p;
-    td1.appendChild(code);
-    var td2 = document.createElement('td');
-    var btn = document.createElement('button');
-    btn.className = 'del-pattern';
-    btn.textContent = '×';
-    btn.onclick = function(){ delPattern(p); };
-    td2.appendChild(btn);
-    tr.appendChild(td1); tr.appendChild(td2);
-    tb.appendChild(tr);
-  });
-}
-async function delPattern(p){
-  var fd = new FormData(); fd.append('entry', p);
-  var r = await fetch('/admin/filter-control/remove', {method:'POST', body:fd});
-  if (r.ok || r.status === 303) loadFilter();
-}
-document.getElementById('add-pattern-form').addEventListener('submit', async function(ev){
-  ev.preventDefault();
-  var entry = ev.target.entry.value.trim();
-  if (!entry) return;
-  var fd = new FormData(); fd.append('entry', entry);
-  var r = await fetch('/admin/filter-control/add', {method:'POST', body:fd});
-  if (r.ok || r.status === 303) {
-    ev.target.entry.value = '';
-    loadFilter();
-  }
-});
-</script>
-</body></html>"""
-    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+# Phase 11.B+ (#513) — the inline kbin /admin/ HTML admin UI was removed.
+# The canonical operator dashboard is admin.gk2.secubox.in/toolbox/ (sub-tab
+# WebUI in www/toolbox/index.html).  All /admin/* JSON API routes below stay.
 
 
 @router.get("/admin/filter-control/list")
@@ -2420,6 +2447,45 @@ async def admin_client_report(mac_hash: str) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
+
+@router.get("/admin/clients/{mac_hash}/social")
+async def admin_client_social(mac_hash: str, request: Request) -> RedirectResponse:
+    """Phase 12.B (#516) — operator entry to a client's social mapping
+    graph from the toolbox WebUI Clients tab.  Mints a short-TTL (1 h)
+    HMAC token for the mac_hash and 303-redirects to the per-client view.
+
+    The /social/ route is ONLY served on the kbin vhost (HAProxy → the
+    toolbox uvicorn).  When the operator triggers this from
+    admin.gk2.secubox.in, a relative redirect would land on the
+    aggregator's "missing module" page — so we build an ABSOLUTE kbin
+    URL by swapping the leading `admin.` host label for `kbin.`.
+    """
+    salt = _get_salt()
+    tok = reports.mint_token(mac_hash, salt, ttl_seconds=3600)
+    host = (request.headers.get("host") or "").strip()
+    if host.startswith("admin."):
+        kbin_host = "kbin." + host[len("admin."):]
+        target = f"https://{kbin_host}/social/{tok.token}"
+    elif host.startswith("kbin."):
+        target = f"/social/{tok.token}"  # already on kbin, relative is fine
+    else:
+        # Fallback : same-origin relative (dev / direct uvicorn).
+        target = f"/social/{tok.token}"
+    return RedirectResponse(url=target, status_code=303)
+
+
+@router.post("/admin/clients/{mac_hash}/reset")
+async def admin_client_reset(mac_hash: str) -> dict:
+    """Phase 12.B (#516) — RAZ a specific client's accumulated statistics
+    from the operator WebUI.  Wipes the social-mapping graph + the
+    toolbox events/consents/reports and zeroes the client score.
+    """
+    from . import social as _s
+    rows = store.reset_client(mac_hash)
+    rows += _s.wipe_mac(mac_hash)
+    log.info("admin reset client %s: %d rows", mac_hash[:8], rows)
+    return {"ok": True, "rows_deleted": rows, "mac_hash_prefix": mac_hash[:8]}
 
 
 @router.get("/admin/clients/{mac_hash}/events")
