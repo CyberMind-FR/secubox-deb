@@ -1,3 +1,29 @@
+secubox-waf (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 11+ (#509) — double-buffered cache for WAF stats consumed by
+    both /waf/ and /soc/ dashboards.
+    Live triage on gk2 (2026-06-10) found the aggregator pinned at
+    89 % CPU with 8+ concurrent open file descriptors on the 110 MB
+    waf-threats.log because _get_threat_stats() iterated the full
+    JSONL on every request.  Both dashboards showed empty cards.
+    Fix : incremental log reader with persisted byte position.
+      - New disk cache : /var/lib/secubox/waf/stats-disk-cache.json
+        stores counters + byte_position + ip_countries.  Atomic
+        write (.tmp -> rename) so a crash mid-write never corrupts.
+      - _get_threat_stats() reloads from disk, seeks to the last
+        position, reads only the new tail since then.
+      - Log rotation / truncation detected via size shrink ; counters
+        reset cleanly.
+      - Day rollover resets threats_today only ; full-history
+        counters keep accumulating.
+      - ip_countries dict capped at 1200 entries (most-active 1000
+        retained on overflow).
+    Net effect : /waf/stats steady-state under 100 ms ; warm refresh
+    cycle under 1 s per tick instead of 30 s ; aggregator CPU drops
+    back to idle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 08:40:00 +0200
+
 secubox-waf (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Phase 7 follow-up (#498) — LXC mitmproxy.service memory hygiene :
