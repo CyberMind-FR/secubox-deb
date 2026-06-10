@@ -258,6 +258,61 @@ def _consent_state_for(mac_hash: str, site: str) -> str:
     return "none_seen"
 
 
+# ─── CDN / edge-network detection (Phase 12.A #515) ───
+# Passive : classify the CDN fronting a host from its response headers.
+# A shared CDN seeing the same browser across sites is itself a
+# cross-site correlation surface — worth surfacing as its own lens.
+def detect_cdn(headers) -> tuple:
+    """Return (cdn_vendor, cache_status) from response headers, best-effort.
+
+    `headers` is mitmproxy's Headers (case-insensitive .get).  Returns
+    (None, None) when no CDN signature is present.
+    """
+    def g(name):
+        try:
+            return (headers.get(name) or "").lower()
+        except Exception:
+            return ""
+
+    server = g("server")
+    via = g("via")
+    x_cache = g("x-cache")
+    x_served = g("x-served-by")
+
+    # Cloudflare
+    if g("cf-ray") or g("cf-cache-status") or "cloudflare" in server:
+        return "Cloudflare", (g("cf-cache-status") or x_cache or None)
+    # Fastly (Varnish-based, x-served-by cache nodes)
+    if "fastly" in via or "fastly" in x_served or ("cache-" in x_served):
+        return "Fastly", (x_cache or None)
+    # Akamai
+    if "akamaighost" in server or g("x-akamai-transformed") or g("x-akamai-request-id"):
+        return "Akamai", (x_cache or None)
+    # Amazon CloudFront
+    if g("x-amz-cf-id") or "cloudfront" in via or "cloudfront" in x_cache:
+        return "CloudFront", (x_cache or None)
+    # Google edge
+    if "google" in via or g("x-goog-generation") or g("x-goog-meta"):
+        return "Google", None
+    # Vercel / Netlify / Bunny / KeyCDN / Sucuri / Imperva
+    if g("x-vercel-cache") or "vercel" in server:
+        return "Vercel", (g("x-vercel-cache") or None)
+    if g("x-nf-request-id") or "netlify" in server:
+        return "Netlify", None
+    if g("cdn-cache") or "bunnycdn" in server or g("x-bunny-cache"):
+        return "BunnyCDN", None
+    if "keycdn" in server or g("x-edge-location"):
+        return "KeyCDN", None
+    if g("x-sucuri-id") or g("x-sucuri-cache"):
+        return "Sucuri", (g("x-sucuri-cache") or None)
+    if g("x-iinfo") or "incapsula" in g("set-cookie"):
+        return "Imperva/Incapsula", None
+    # Generic edge-cache tell (x-cache HIT/MISS without a known vendor)
+    if x_cache or x_served:
+        return "edge-cache", (x_cache or None)
+    return None, None
+
+
 # ─── JA4 lookup ───
 def _ja4_hash(flow) -> Optional[str]:
     """Pull the JA4 fingerprint set by the ja4 addon, if present."""
@@ -298,6 +353,22 @@ class SocialGraph:
         #                   all (we make no claim ; baseline)
         _update_consent_log(mac_hash, src_site, flow)
         consent_state = _consent_state_for(mac_hash, src_site)
+
+        # Phase 12.A (#515) — passive CDN detection on the responding host.
+        # Host-stable, mac-independent ; upserted off-thread.  We only
+        # record for 3rd-party hosts (the ones that become graph nodes).
+        try:
+            resp_host = _registrable_domain(flow.request.host)
+            if resp_host and resp_host != src_site:
+                cdn_vendor, cache_status = detect_cdn(flow.response.headers)
+                if cdn_vendor:
+                    _social.record_host_cdn(
+                        domain=resp_host,
+                        cdn_vendor=cdn_vendor,
+                        cache_status=cache_status,
+                    )
+        except Exception:
+            pass
 
         # Set-Cookie headers : the 3rd-party server hands a new identifier.
         # The Set-Cookie domain may differ from flow.request.host (Set-Cookie

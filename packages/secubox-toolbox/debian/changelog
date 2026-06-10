@@ -1,3 +1,31 @@
+secubox-toolbox (2.6.4-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 12.A (#515, parent #514) — CDN cache detection + Round-Eye
+    central-hotspot graph.
+      - mitmproxy_addons/social_graph.py: detect_cdn() classifies the
+        edge network fronting each 3rd-party host from response headers
+        (Cloudflare / Fastly / Akamai / CloudFront / Google / Vercel /
+        Netlify / BunnyCDN / KeyCDN / Sucuri / Imperva + generic
+        edge-cache). Recorded host-stable (mac-independent) off-thread.
+      - secubox_toolbox/social.py: new social_host_meta table
+        (tracker_domain PK, cdn_vendor, cache_status). fetch_graph()
+        LEFT JOINs it onto nodes; aggregate() adds a by_cdn breakdown.
+      - www/toolbox/social.js: the per-client graph is re-centred on a
+        Round-Eye hotspot — the device is a pulsing eye at the centre,
+        sites orbit it on an inner ring (forceRadial), trackers push to
+        an outer ring, so the densest tracker clusters read as the
+        "hot spots". Tracker nodes are tinted by CDN vendor; node-detail
+        shows CDN / cache status.
+      - www/toolbox/social.css: eye halo/sclera/iris/pupil + breathing
+        animation + cinnabar spoke edges.
+      - www/toolbox/index.html: operator social tab gains a
+        "Réseaux CDN / edge" breakdown card.
+      - i18n: node_detail_cdn (FR/EN).
+    First passive track of the #514 anti-human-detection platform —
+    zero legal exposure, reuses the consent-probe response-header path.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 10:00:00 +0200
+
 secubox-toolbox (2.6.3-1~bookworm1) bookworm; urgency=medium
 
   * Phase 11.C (#508, parent #502) — social mapping evidence + bilingual

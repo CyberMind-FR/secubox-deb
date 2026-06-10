@@ -110,6 +110,16 @@ CREATE TABLE IF NOT EXISTS social_links (
     last_seen             INTEGER NOT NULL,
     PRIMARY KEY (client_mac_hash, site_a, site_b)
 );
+
+-- Phase 12.A (#515) — host-stable CDN/edge metadata, mac-independent.
+-- Written fire-and-forget by the addon when it sees CDN response
+-- headers ; LEFT JOINed onto graph nodes + the operator aggregate.
+CREATE TABLE IF NOT EXISTS social_host_meta (
+    tracker_domain  TEXT PRIMARY KEY,
+    cdn_vendor      TEXT,
+    cache_status    TEXT,
+    last_seen       INTEGER NOT NULL
+);
 """
 
 
@@ -284,6 +294,35 @@ def record_edge(
         )
     except RuntimeError:
         # Executor shut down (interpreter teardown) — silent drop.
+        pass
+
+
+def _record_host_cdn_sync(domain: str, cdn_vendor: Optional[str],
+                          cache_status: Optional[str]) -> None:
+    try:
+        with _conn() as c:
+            c.execute(
+                "INSERT INTO social_host_meta(tracker_domain, cdn_vendor, "
+                "cache_status, last_seen) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(tracker_domain) DO UPDATE SET "
+                "cdn_vendor=COALESCE(excluded.cdn_vendor, cdn_vendor), "
+                "cache_status=COALESCE(excluded.cache_status, cache_status), "
+                "last_seen=excluded.last_seen",
+                (domain, cdn_vendor, cache_status, int(time.time())),
+            )
+    except Exception as e:  # pragma: no cover
+        log.warning("record_host_cdn failed: %s", e)
+
+
+def record_host_cdn(*, domain: str, cdn_vendor: Optional[str] = None,
+                    cache_status: Optional[str] = None) -> None:
+    """Phase 12.A (#515) — upsert host-stable CDN metadata off-thread.
+    Best-effort, host-keyed (mac-independent)."""
+    if not domain or not (cdn_vendor or cache_status):
+        return
+    try:
+        _executor.submit(_record_host_cdn_sync, domain, cdn_vendor, cache_status)
+    except RuntimeError:
         pass
 
 
@@ -476,11 +515,16 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
         return out
     try:
         with _conn() as c:
-            # Nodes : trackers active in window
+            # Nodes : trackers active in window.  Phase 12.A — LEFT JOIN
+            # the host-stable CDN metadata so the d3 view + node detail
+            # can colour/label by edge-network vendor.
             for r in c.execute(
-                "SELECT tracker_domain, hits, first_seen, last_seen, sites_jsonl "
-                "FROM social_nodes WHERE client_mac_hash = ? AND last_seen >= ? "
-                "ORDER BY hits DESC LIMIT 500",
+                "SELECT n.tracker_domain, n.hits, n.first_seen, n.last_seen, "
+                "n.sites_jsonl, m.cdn_vendor, m.cache_status "
+                "FROM social_nodes n "
+                "LEFT JOIN social_host_meta m ON m.tracker_domain = n.tracker_domain "
+                "WHERE n.client_mac_hash = ? AND n.last_seen >= ? "
+                "ORDER BY n.hits DESC LIMIT 500",
                 (mac_hash, since),
             ).fetchall():
                 try:
@@ -496,6 +540,8 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
                         "sites": sites,
                         "first_seen": r["first_seen"],
                         "last_seen": r["last_seen"],
+                        "cdn_vendor": r["cdn_vendor"],
+                        "cache_status": r["cache_status"],
                     }
                 )
 
@@ -579,6 +625,7 @@ def aggregate(hours: int = 24) -> Dict:
         "extra_eu_trackers": 0,  # Phase C will populate this
         "by_tracker_domain": [],
         "by_client": [],
+        "by_cdn": [],  # Phase 12.A
     }
     try:
         with _conn() as c:
@@ -611,6 +658,20 @@ def aggregate(hours: int = 24) -> Dict:
                     "FROM social_edges WHERE ts >= ? "
                     "GROUP BY client_mac_hash ORDER BY last_seen DESC LIMIT 100",
                     (since,),
+                ).fetchall()
+            ]
+            # Phase 12.A — CDN/edge-network breakdown over the trackers
+            # seen in the window (host-stable metadata, mac-independent).
+            out["by_cdn"] = [
+                dict(r)
+                for r in c.execute(
+                    "SELECT m.cdn_vendor, COUNT(DISTINCT m.tracker_domain) AS hosts "
+                    "FROM social_host_meta m "
+                    "WHERE m.cdn_vendor IS NOT NULL AND m.last_seen >= ? "
+                    "AND m.tracker_domain IN ("
+                    "  SELECT DISTINCT tracker_domain FROM social_edges WHERE ts >= ?) "
+                    "GROUP BY m.cdn_vendor ORDER BY hosts DESC LIMIT 25",
+                    (since, since),
                 ).fetchall()
             ]
     except Exception as e:  # pragma: no cover

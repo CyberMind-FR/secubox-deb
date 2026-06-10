@@ -136,6 +136,10 @@
                 <h2>🕸️ Agrégat trackers (24h)</h2>
                 <div class="kv" id="social-kpi"><span class="k">loading…</span><span class="v"></span></div>
             </div>
+            <div class="card">
+                <h2>🛰️ Réseaux CDN / edge</h2>
+                <div id="social-cdn"><div class="empty">loading…</div></div>
+            </div>
             <div class="card" style="grid-column:1/-1">
                 <h2>🎯 Top tracker domains</h2>
                 <div id="social-trackers"><div class="empty">loading…</div></div>
@@ -332,9 +336,11 @@ async function loadSocial() {
     const kpi = document.getElementById('social-kpi');
     const trk = document.getElementById('social-trackers');
     const cli = document.getElementById('social-clients');
+    const cdn = document.getElementById('social-cdn');
     if (agg.__error) {
         kpi.innerHTML = `<span class="k">err</span><span class="v">${agg.__error}</span>`;
         trk.innerHTML = cli.innerHTML = '';
+        if (cdn) cdn.innerHTML = '';
         return;
     }
     kpi.innerHTML = `
@@ -358,6 +364,14 @@ async function loadSocial() {
           }).join('') +
           '</tbody></table>'
         : '<div class="empty">aucun client</div>';
+    if (cdn) {
+        const bv = agg.by_cdn || [];
+        cdn.innerHTML = bv.length
+            ? '<table><thead><tr><th>CDN / edge</th><th>hôtes</th></tr></thead><tbody>' +
+              bv.map(r => `<tr><td>${r.cdn_vendor}</td><td>${r.hosts}</td></tr>`).join('') +
+              '</tbody></table>'
+            : '<div class="empty">aucun CDN détecté</div>';
+    }
 }
 
 async function refreshAll() {
