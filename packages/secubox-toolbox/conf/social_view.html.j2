@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>{{ t.page_title }} — VILLAGE3B</title>
+  <link rel="stylesheet" href="/toolbox/social.css?v=264b">
+  <script>
+    // Inline JSON safer than a data-* attribute : FR text has
+    // apostrophes (l'effacement) that would break single-quoted
+    // HTML attrs.  Wrapped in <script> JSON is verbatim so long as
+    // it doesn't contain </script (json.dumps from Python never
+    // emits raw "</" in normal output).
+    window.__SOCIAL_I18N__ = {{ t_json | safe }};
+  </script>
+  <script defer src="/toolbox/d3.v7.min.js"></script>
+  <script defer src="/toolbox/social.js?v=264b"></script>
+</head>
+<body data-token="{{ token }}" data-lang="{{ lang }}">
+
+<header class="social-header">
+  <div class="brand">
+    <span class="brand-title">{{ t.header_title }}</span>
+    <span class="brand-divider"> / </span>
+    <span class="brand-subtitle">{{ t.header_subtitle }}</span>
+  </div>
+  <div class="lang">{{ t.lang_label }}</div>
+</header>
+
+<main class="social-main">
+  <section class="graph-wrap" aria-label="{{ t.header_subtitle }}">
+    <section class="stats" aria-live="polite">
+      <div class="stat-tile"><span class="stat-n" data-bind="total_trackers">0</span><span class="stat-l">{{ t.stats_total_trackers }}</span></div>
+      <div class="stat-tile"><span class="stat-n" data-bind="total_sites">0</span><span class="stat-l">{{ t.stats_total_sites }}</span></div>
+    </section>
+    <p class="graph-hint">{{ t.graph_swipe_hint }}</p>
+    <div id="antibot-alert" class="antibot-alert" hidden></div>
+    <svg id="social-graph" role="img" preserveAspectRatio="xMidYMid meet"></svg>
+  </section>
+
+  <aside id="node-detail" class="node-detail" hidden aria-live="polite">
+    <header>
+      <span class="nd-domain" data-bind="nd_domain"></span>
+      <button type="button" class="nd-close" aria-label="close" data-action="close-nd">×</button>
+    </header>
+    <dl>
+      <dt>{{ t.node_detail_country }}</dt>
+      <dd data-bind="nd_country">—</dd>
+      <dt>{{ t.node_detail_asn }}</dt>
+      <dd data-bind="nd_asn">—</dd>
+      <dt>{{ t.node_detail_cdn }}</dt>
+      <dd data-bind="nd_cdn">—</dd>
+      <dt>{{ t.node_detail_antibot }}</dt>
+      <dd data-bind="nd_antibot">—</dd>
+      <dt>{{ t.node_detail_sites }}</dt>
+      <dd data-bind="nd_sites">—</dd>
+      <dt>{{ t.node_detail_first_seen }}</dt>
+      <dd data-bind="nd_first_seen">—</dd>
+      <dt>{{ t.node_detail_last_seen }}</dt>
+      <dd data-bind="nd_last_seen">—</dd>
+    </dl>
+  </aside>
+
+  <nav class="cards-row">
+    <details class="card">
+      <summary>{{ t.card_evidence }}</summary>
+      <p class="card-pending">{{ t.card_evidence_active }}</p>
+    </details>
+    <details class="card card-wipe">
+      <summary>{{ t.card_wipe }}</summary>
+      <button type="button" class="wipe-btn" data-action="open-wipe">{{ t.wipe_button }}</button>
+    </details>
+    <details class="card">
+      <summary>{{ t.card_pdf }}</summary>
+      <a class="pdf-btn" href="/social/report/{{ token }}.pdf" target="_blank" rel="noopener">{{ t.card_pdf_download }}</a>
+    </details>
+  </nav>
+</main>
+
+<dialog id="wipe-modal" aria-labelledby="wipe-modal-title">
+  <h2 id="wipe-modal-title">{{ t.wipe_modal_title }}</h2>
+  <p>{{ t.wipe_modal_body }}</p>
+  <p class="wipe-countdown" data-bind="wipe_countdown" hidden></p>
+  <div class="modal-actions">
+    <button type="button" data-action="cancel-wipe" class="btn-secondary">{{ t.wipe_modal_cancel }}</button>
+    <button type="button" data-action="confirm-wipe" class="btn-danger" disabled>{{ t.wipe_modal_confirm }}</button>
+  </div>
+</dialog>
+
+</body>
+</html>
