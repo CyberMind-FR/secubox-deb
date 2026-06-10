@@ -76,12 +76,23 @@
     // the user knows.  No persistent overlay message.
     if (!graph.nodes.length) return;
 
+    // ── Round-Eye central hotspot (Phase 12.A) ──────────────────────
+    // The user's device is the EYE at the centre of the storm : every
+    // visited site orbits it, and every tracker that recognises the
+    // device reaches in toward the eye.  Sites link to the eye, trackers
+    // link to their sites — so the eye is the gravitational centre and
+    // the densest tracker clusters become the visible "hot spots".
+    const EYE_ID = 'eye:device';
+
     // Build d3 dataset: sites are union of all node.sites + tracker nodes themselves.
     const siteSet = new Set();
     for (const n of graph.nodes) for (const s of (n.sites || [])) siteSet.add(s);
 
     const nodes = [];
     const idx = new Map();
+    // The eye node, pinned to centre.
+    idx.set(EYE_ID, nodes.length);
+    nodes.push({ id: EYE_ID, label: '', kind: 'eye', fx: W / 2, fy: H / 2 });
     for (const s of siteSet) {
       idx.set('site:' + s, nodes.length);
       nodes.push({ id: 'site:' + s, label: s, kind: 'site' });
@@ -96,12 +107,16 @@
         sites: n.sites,
         first_seen: n.first_seen,
         last_seen: n.last_seen,
+        cdn_vendor: n.cdn_vendor || null,
+        cache_status: n.cache_status || null,
       });
     }
 
-    // Edges: connect tracker → each of its sites.  Phase B uses a
-    // simple uniform stroke ; reuse count via stroke-width.
+    // Edges: eye → each site (gravity), then tracker → each of its sites.
     const links = [];
+    for (const s of siteSet) {
+      links.push({ source: EYE_ID, target: 'site:' + s, reuse: 1, spoke: true });
+    }
     for (const n of graph.nodes) {
       const trackerKey = 'tracker:' + n.domain;
       for (const s of (n.sites || [])) {
@@ -134,10 +149,17 @@
     const N = nodes.length;
     const linkDist = N > 80 ? 40 : N > 30 ? 55 : 70;
     const chargeStr = N > 80 ? -60 : N > 30 ? -120 : -180;
+    const R = Math.min(W, H) / 2;
     simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink([...links, ...accentLinks]).id(d => d.id).distance(linkDist))
+      .force('link', d3.forceLink([...links, ...accentLinks]).id(d => d.id)
+        .distance(d => d.spoke ? R * 0.42 : linkDist))
       .force('charge', d3.forceManyBody().strength(chargeStr))
-      .force('center', d3.forceCenter(W / 2, H / 2))
+      // Radial ring : sites on an inner orbit around the eye, trackers
+      // pushed to an outer ring — produces the "central hotspot" look.
+      .force('radial', d3.forceRadial(
+        d => d.kind === 'eye' ? 0 : d.kind === 'site' ? R * 0.42 : R * 0.78,
+        W / 2, H / 2,
+      ).strength(d => d.kind === 'eye' ? 0 : d.kind === 'site' ? 0.25 : 0.12))
       .force('collide', d3.forceCollide().radius(N > 80 ? 14 : 22))
       .alphaDecay(0.05);  // settle faster than the 0.0228 default
 
@@ -156,16 +178,40 @@
       .selectAll('g').data(nodes).join('g')
       .attr('class', d => 'node node-' + d.kind)
       .call(d3.drag()
-        .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-        .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
-        .on('end', (ev, d) => { if (!ev.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }))
+        .on('start', (ev, d) => { if (d.kind === 'eye') return; if (!ev.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', (ev, d) => { if (d.kind === 'eye') return; d.fx = ev.x; d.fy = ev.y; })
+        .on('end', (ev, d) => { if (d.kind === 'eye') return; if (!ev.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }))
       .on('click', (ev, d) => focusNode(d, linkSel));
 
-    nodeG.append('circle')
-      .attr('r', d => d.kind === 'tracker' ? 7 : 10)
-      .attr('fill', d => d.kind === 'tracker' ? 'var(--cyber-cyan)' : 'var(--gold-hermetic)');
+    // CDN palette — distinct lens per edge-network vendor (Phase 12.A).
+    const CDN_COLORS = {
+      Cloudflare: '#f48120', Fastly: '#ff282d', Akamai: '#0099cc',
+      CloudFront: '#ff9900', Google: '#4285f4', Vercel: '#ffffff',
+      Netlify: '#00c7b7', BunnyCDN: '#ffb347', KeyCDN: '#3686ff',
+      Sucuri: '#00a651', 'Imperva/Incapsula': '#ff5a00', 'edge-cache': '#9aa0a6',
+    };
+    function nodeColor(d) {
+      if (d.kind === 'eye') return 'var(--cinnabar)';
+      if (d.kind === 'site') return 'var(--gold-hermetic)';
+      if (d.cdn_vendor && CDN_COLORS[d.cdn_vendor]) return CDN_COLORS[d.cdn_vendor];
+      return 'var(--cyber-cyan)';
+    }
 
-    nodeG.append('text')
+    // The central eye : concentric pulse rings + iris.
+    const eyeSel = nodeG.filter(d => d.kind === 'eye');
+    eyeSel.append('circle').attr('class', 'eye-halo').attr('r', 26);
+    eyeSel.append('circle').attr('class', 'eye-sclera').attr('r', 15);
+    eyeSel.append('circle').attr('class', 'eye-iris').attr('r', 7);
+    eyeSel.append('circle').attr('class', 'eye-pupil').attr('r', 3);
+
+    // Site + tracker nodes.
+    nodeG.filter(d => d.kind !== 'eye').append('circle')
+      .attr('r', d => d.kind === 'tracker' ? 7 : 10)
+      .attr('fill', nodeColor)
+      .attr('stroke', d => (d.kind === 'tracker' && d.cdn_vendor) ? '#0a0a0f' : null)
+      .attr('stroke-width', d => (d.kind === 'tracker' && d.cdn_vendor) ? 1.5 : 0);
+
+    nodeG.filter(d => d.kind !== 'eye').append('text')
       .attr('x', 12).attr('y', 4)
       .text(d => d.label.length > 22 ? d.label.slice(0, 21) + '…' : d.label);
 
@@ -252,6 +298,7 @@
     bind('nd_domain', node.label);
     bind('nd_country', '—');  // Phase C dependency (GeoIP)
     bind('nd_asn',     '—');
+    bind('nd_cdn', node.cdn_vendor ? (node.cdn_vendor + (node.cache_status ? ' · ' + node.cache_status : '')) : '—');
     bind('nd_sites',   (node.sites || []).join(', ') || '—');
     bind('nd_first_seen', node.first_seen ? new Date(node.first_seen * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—');
     bind('nd_last_seen',  node.last_seen  ? new Date(node.last_seen  * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—');

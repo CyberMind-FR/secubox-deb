@@ -124,6 +124,7 @@ body {
   pointer-events: none;
 }
 .edge { fill: none; stroke: var(--cyber-cyan); stroke-opacity: .55; }
+.edge.spoke { stroke: var(--cinnabar); stroke-opacity: .28; }
 .edge.focused {
   stroke: var(--gold-hermetic);
   stroke-opacity: 1;
@@ -133,6 +134,23 @@ body {
   0%, 100% { stroke-opacity: .35; stroke-width: 1.2; }
   50%      { stroke-opacity: 1; stroke-width: 3; }
 }
+
+/* ── Round-Eye central hotspot (Phase 12.A) ── */
+.node-eye circle { stroke: none; }
+.eye-halo {
+  fill: var(--cinnabar);
+  opacity: .12;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: eye-breathe 2.6s ease-in-out infinite;
+}
+@keyframes eye-breathe {
+  0%, 100% { opacity: .08; r: 22px; }
+  50%      { opacity: .22; r: 30px; }
+}
+.eye-sclera { fill: #e8e6d9; }
+.eye-iris   { fill: var(--cyber-cyan); }
+.eye-pupil  { fill: var(--cosmos-black); }
 
 /* Node detail panel — bottom sheet on mobile, side panel on desktop */
 .node-detail {
