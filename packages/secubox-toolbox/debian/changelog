@@ -1,3 +1,14 @@
+secubox-toolbox (2.6.6-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 12.B follow-up (#516) — fix the Clients-tab 🕸️ Carto link
+    landing on the aggregator "missing module" page.  The /social/
+    route is only served on the kbin vhost ; the operator triggers the
+    link from admin.gk2.secubox.in.  admin_client_social() now builds
+    an absolute kbin URL (swaps the leading admin. host label for
+    kbin.) instead of a relative redirect.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 11:20:00 +0200
+
 secubox-toolbox (2.6.5-1~bookworm1) bookworm; urgency=medium
 
   * Phase 12.B (#516, parent #514) — anti-bot / "prove you're human"
