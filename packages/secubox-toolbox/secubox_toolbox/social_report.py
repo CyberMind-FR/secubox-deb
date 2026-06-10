@@ -49,15 +49,28 @@ _L = {
                          "Nous rapportons le fait observé, pas l'absence de garanties (SCC).",
                          "Legal basis: GDPR art. 44+ (international transfers). We report the "
                          "observed fact, not the absence of safeguards (SCC)."),
+    "ev_opgrade": ("Évidence : surfaces opérateur-grade / proche-État",
+                   "Evidence: operator-grade / state-adjacent surfaces"),
+    "ev_opgrade_basis": ("Enrichissement réseau (MSISDN/ACR), identifiants de "
+                         "consortium opérateur, et courtiers de données / analytics "
+                         "proches-État. Fait réseau observé, sans qualification d'entité.",
+                         "Network enrichment (MSISDN/ACR), operator-consortium IDs, and "
+                         "data-broker / state-adjacent analytics. Observed network fact, "
+                         "no entity qualification."),
     "col_tracker": ("Traqueur", "Tracker"),
     "col_sites": ("Sites", "Sites"),
     "col_hits": ("Occurrences", "Hits"),
     "col_country": ("Pays", "Country"),
     "col_asn": ("Hébergeur (ASN)", "Host (ASN)"),
+    "col_opvendor": ("Surface", "Surface"),
+    "col_opcat": ("Catégorie", "Category"),
+    "col_site": ("Site", "Site"),
     "none_pre": ("Aucun traqueur déclenché avant consentement détecté.",
                  "No tracker fired before consent detected."),
     "none_eu": ("Aucun transfert hors UE/EEE détecté.",
                 "No extra-EU/EEA transfer detected."),
+    "none_op": ("Aucune surface opérateur-grade / proche-État détectée.",
+                "No operator-grade / state-adjacent surface detected."),
     "footer": ("Rapport factuel — données calculées localement, aucune donnée externe. "
                "Anonyme : aucune valeur de cookie brute conservée. Droit à l'effacement : RGPD art. 17.",
                "Factual report — computed locally, no external data. Anonymous: no raw cookie "
@@ -87,6 +100,8 @@ def build_social_report(mac_hash: str, since_seconds: int = 7 * 86400) -> Dict:
         "total_sites": stats.get("total_sites", 0),
         "pre_consent": evidence.get("pre_consent", []),
         "extra_eu": evidence.get("extra_eu", []),
+        # Phase 12.C — operator-grade / state-adjacent surfaces.
+        "opgrade": _social.opgrade_for_client(mac_hash, since_seconds=since_seconds),
     }
 
 
@@ -181,6 +196,21 @@ def render_social_pdf(report: Dict) -> bytes:
         ])
     else:
         _note(pdf, family, _bi("none_eu"))
+    pdf.ln(3)
+
+    # ── Evidence : operator-grade / state-adjacent (Phase 12.C) ──
+    bi("ev_opgrade", 12, "B", 110, 64, 201, gap=0.3)
+    bi("ev_opgrade_basis", 8, "", 120, 120, 120, gap=1)
+    op = report.get("opgrade", [])
+    if op:
+        _table(pdf, family, op, [
+            (_bi("col_opvendor"), "opgrade_vendor", 45),
+            (_bi("col_opcat"), "category", 40),
+            (_bi("col_site"), "src_site", 55),
+            (_bi("col_hits"), "hits", 25),
+        ])
+    else:
+        _note(pdf, family, _bi("none_op"))
     pdf.ln(4)
 
     # ── Footer ──
