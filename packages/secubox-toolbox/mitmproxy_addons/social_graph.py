@@ -313,6 +313,75 @@ def detect_cdn(headers) -> tuple:
     return None, None
 
 
+# ─── anti-bot / "prove you're human" detection (Phase 12.B #516) ───
+# Passive : classify the bot-checker / CAPTCHA vendor that fronts a host,
+# from request URL fragments + cookies + response headers.  Detection
+# only — the (legally-sensitive) bypass half is gated behind its own
+# doctrine.  Vendor is host-stable ; stored like cdn_vendor.
+_ANTIBOT_URL = (
+    ("reCAPTCHA", ("/recaptcha/", "google.com/recaptcha", "gstatic.com/recaptcha")),
+    ("hCaptcha", ("hcaptcha.com", "newassets.hcaptcha.com", "imgs.hcaptcha.com")),
+    ("Turnstile", ("challenges.cloudflare.com",)),
+    ("Datadome", ("captcha-delivery.com", "datadome.co", "ct.captcha-delivery.com")),
+    ("PerimeterX/HUMAN", ("px-cdn.net", "perimeterx.net", "pxchk", "px-cloud.net")),
+    ("Arkose/FunCaptcha", ("arkoselabs.com", "funcaptcha.com", "arkose-labs")),
+    ("Kasada", ("kasada.io", "ct.kasada", "kpsdk")),
+)
+_ANTIBOT_COOKIE = (
+    ("Turnstile", ("__cf_bm", "cf_chl_")),
+    ("Datadome", ("datadome",)),
+    ("PerimeterX/HUMAN", ("_px", "_pxhd", "_pxvid", "_pxff")),
+    ("Akamai-BotManager", ("ak_bmsc", "bm_sz", "_abck", "bm_mi")),
+    ("hCaptcha", ("hcaptcha",)),
+)
+_ANTIBOT_HEADER = (
+    ("Datadome", ("x-datadome", "x-dd-b")),
+    ("Kasada", ("x-kpsdk-ct", "x-kpsdk-cd")),
+    ("PerimeterX/HUMAN", ("x-px",)),
+)
+
+
+def detect_antibot(flow) -> Optional[str]:
+    """Return the anti-bot / CAPTCHA vendor challenging this flow, or None.
+
+    Best-effort, passive.  Scans the request URL, the response + request
+    headers, and cookie names.
+    """
+    try:
+        url = (flow.request.pretty_url or "").lower()
+        for vendor, frags in _ANTIBOT_URL:
+            if any(f in url for f in frags):
+                return vendor
+
+        # Response headers
+        rh = flow.response.headers if flow.response else None
+        if rh is not None:
+            keys = " ".join(k.lower() for k in rh.keys())
+            for vendor, hdrs in _ANTIBOT_HEADER:
+                if any(h in keys for h in hdrs):
+                    return vendor
+
+        # Cookie names (both directions)
+        blobs = []
+        try:
+            blobs.extend(flow.request.headers.get_all("cookie") or [])
+        except Exception:
+            pass
+        try:
+            if flow.response:
+                blobs.extend(flow.response.headers.get_all("set-cookie") or [])
+        except Exception:
+            pass
+        joined = " ".join(blobs).lower()
+        if joined:
+            for vendor, names in _ANTIBOT_COOKIE:
+                if any(n in joined for n in names):
+                    return vendor
+    except Exception:
+        pass
+    return None
+
+
 # ─── JA4 lookup ───
 def _ja4_hash(flow) -> Optional[str]:
     """Pull the JA4 fingerprint set by the ja4 addon, if present."""
@@ -355,10 +424,15 @@ class SocialGraph:
         consent_state = _consent_state_for(mac_hash, src_site)
 
         # Phase 12.A (#515) — passive CDN detection on the responding host.
-        # Host-stable, mac-independent ; upserted off-thread.  We only
-        # record for 3rd-party hosts (the ones that become graph nodes).
+        # Phase 12.B (#516) — anti-bot / CAPTCHA vendor detection.  Both
+        # host-stable, mac-independent ; upserted off-thread.  Anti-bot
+        # is recorded for the responding host AND, when the challenge
+        # surface is a 3rd-party (e.g. captcha-delivery.com), attributed
+        # to the 1st-party site too via record_antibot_site so the
+        # per-client "challenged your humanity" alert is accurate.
         try:
             resp_host = _registrable_domain(flow.request.host)
+            antibot = detect_antibot(flow)
             if resp_host and resp_host != src_site:
                 cdn_vendor, cache_status = detect_cdn(flow.response.headers)
                 if cdn_vendor:
@@ -367,6 +441,14 @@ class SocialGraph:
                         cdn_vendor=cdn_vendor,
                         cache_status=cache_status,
                     )
+            if antibot and resp_host:
+                _social.record_host_antibot(domain=resp_host, antibot_vendor=antibot)
+                # Attribute the challenge to the 1st-party site the user
+                # was on (for the per-client alert), keyed by mac_hash.
+                _social.record_antibot_challenge(
+                    client_mac_hash=mac_hash, src_site=src_site,
+                    antibot_vendor=antibot,
+                )
         except Exception:
             pass
 

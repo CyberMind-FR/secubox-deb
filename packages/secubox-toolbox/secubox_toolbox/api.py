@@ -2449,6 +2449,31 @@ async def admin_client_report(mac_hash: str) -> Response:
     )
 
 
+@router.get("/admin/clients/{mac_hash}/social")
+async def admin_client_social(mac_hash: str) -> RedirectResponse:
+    """Phase 12.B (#516) — operator entry to a client's social mapping
+    graph from the toolbox WebUI Clients tab.  Mints a short-TTL (1 h)
+    HMAC token for the mac_hash and 303-redirects to /social/{token},
+    so the operator reuses the exact same per-client view the user sees.
+    """
+    salt = _get_salt()
+    tok = reports.mint_token(mac_hash, salt, ttl_seconds=3600)
+    return RedirectResponse(url=f"/social/{tok.token}", status_code=303)
+
+
+@router.post("/admin/clients/{mac_hash}/reset")
+async def admin_client_reset(mac_hash: str) -> dict:
+    """Phase 12.B (#516) — RAZ a specific client's accumulated statistics
+    from the operator WebUI.  Wipes the social-mapping graph + the
+    toolbox events/consents/reports and zeroes the client score.
+    """
+    from . import social as _s
+    rows = store.reset_client(mac_hash)
+    rows += _s.wipe_mac(mac_hash)
+    log.info("admin reset client %s: %d rows", mac_hash[:8], rows)
+    return {"ok": True, "rows_deleted": rows, "mac_hash_prefix": mac_hash[:8]}
+
+
 @router.get("/admin/clients/{mac_hash}/events")
 async def admin_client_events(mac_hash: str) -> dict:
     """Admin endpoint : per-source event summary for a specific client."""

@@ -48,6 +48,16 @@
     if (el) el.textContent = value;
   }
 
+  // Phase 12.B — show/hide the "challenged your humanity" banner.
+  function updateAntibotTile(sites, vendors) {
+    const el = document.getElementById('antibot-alert');
+    if (!el) return;
+    if (!sites) { el.hidden = true; return; }
+    const v = (vendors || []).join(', ');
+    el.textContent = t('antibot_alert', { n: sites }) + (v ? ' — ' + v : '');
+    el.hidden = false;
+  }
+
   // ─── graph state ───
   let simulation = null;
 
@@ -71,6 +81,8 @@
 
     bind('total_trackers', graph.stats.total_trackers || 0);
     bind('total_sites', graph.stats.total_sites || 0);
+    // Phase 12.B — "challenged your humanity" alert tile.
+    updateAntibotTile(graph.stats.antibot_sites || 0, graph.stats.antibot_vendors || []);
 
     // Empty graph → just return ; the stats tiles already show 0/0 and
     // the user knows.  No persistent overlay message.
@@ -109,6 +121,7 @@
         last_seen: n.last_seen,
         cdn_vendor: n.cdn_vendor || null,
         cache_status: n.cache_status || null,
+        antibot_vendor: n.antibot_vendor || null,
       });
     }
 
@@ -147,26 +160,34 @@
     // with node count and pre-warm the simulation synchronously before
     // first render so layout is already settled.
     const N = nodes.length;
-    const linkDist = N > 80 ? 40 : N > 30 ? 55 : 70;
-    const chargeStr = N > 80 ? -60 : N > 30 ? -120 : -180;
+    const chargeStr = N > 80 ? -28 : N > 30 ? -55 : -90;
     const R = Math.min(W, H) / 2;
+    // Three concentric rings : eye (centre) → sites (inner) → trackers
+    // (outer).  The radial force is now the DOMINANT force (strong pull
+    // to the ring), charge is weak (just spreads nodes along the ring),
+    // and links are weak springs so they don't yank nodes off-ring.
+    const ringR = d => d.kind === 'eye' ? 0 : d.kind === 'site' ? R * 0.40 : R * 0.80;
     simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink([...links, ...accentLinks]).id(d => d.id)
-        .distance(d => d.spoke ? R * 0.42 : linkDist))
-      .force('charge', d3.forceManyBody().strength(chargeStr))
-      // Radial ring : sites on an inner orbit around the eye, trackers
-      // pushed to an outer ring — produces the "central hotspot" look.
-      .force('radial', d3.forceRadial(
-        d => d.kind === 'eye' ? 0 : d.kind === 'site' ? R * 0.42 : R * 0.78,
-        W / 2, H / 2,
-      ).strength(d => d.kind === 'eye' ? 0 : d.kind === 'site' ? 0.25 : 0.12))
-      .force('collide', d3.forceCollide().radius(N > 80 ? 14 : 22))
-      .alphaDecay(0.05);  // settle faster than the 0.0228 default
+        .distance(d => d.spoke ? R * 0.40 : 24).strength(0.08))
+      .force('charge', d3.forceManyBody().strength(chargeStr).distanceMax(R * 0.6))
+      .force('radial', d3.forceRadial(ringR, W / 2, H / 2)
+        .strength(d => d.kind === 'eye' ? 0 : 0.9))
+      .force('collide', d3.forceCollide().radius(N > 120 ? 9 : N > 60 ? 13 : 20))
+      .alphaDecay(0.04);
 
     // Phase 11.B v3 — content group that owns links + nodes ; the
     // d3.zoom behavior applies its transform here so pan/pinch don't
     // move the SVG itself (or its viewBox).
     const content = svg.append('g').attr('class', 'content');
+
+    // Visible ring guides — the "Round-Eye" levels : inner = your sites,
+    // outer = the trackers reaching in.  Drawn first so they sit behind.
+    const guides = content.append('g').attr('class', 'ring-guides');
+    [['ring-inner', R * 0.40], ['ring-outer', R * 0.80]].forEach(([cls, rad]) => {
+      guides.append('circle').attr('class', cls)
+        .attr('cx', W / 2).attr('cy', H / 2).attr('r', rad);
+    });
 
     const linkSel = content.append('g').attr('class', 'links')
       .selectAll('line').data([...links, ...accentLinks]).join('line')
@@ -193,6 +214,8 @@
     function nodeColor(d) {
       if (d.kind === 'eye') return 'var(--cinnabar)';
       if (d.kind === 'site') return 'var(--gold-hermetic)';
+      // Phase 12.B — anti-bot hosts get the highest-severity lens.
+      if (d.antibot_vendor) return 'var(--cinnabar)';
       if (d.cdn_vendor && CDN_COLORS[d.cdn_vendor]) return CDN_COLORS[d.cdn_vendor];
       return 'var(--cyber-cyan)';
     }
@@ -204,16 +227,20 @@
     eyeSel.append('circle').attr('class', 'eye-iris').attr('r', 7);
     eyeSel.append('circle').attr('class', 'eye-pupil').attr('r', 3);
 
+    // Phase 12.B — anti-bot hosts get a severe pulsing warning ring.
+    nodeG.filter(d => d.kind === 'tracker' && d.antibot_vendor)
+      .append('circle').attr('class', 'antibot-ring').attr('r', 12);
+
     // Site + tracker nodes.
     nodeG.filter(d => d.kind !== 'eye').append('circle')
       .attr('r', d => d.kind === 'tracker' ? 7 : 10)
       .attr('fill', nodeColor)
-      .attr('stroke', d => (d.kind === 'tracker' && d.cdn_vendor) ? '#0a0a0f' : null)
-      .attr('stroke-width', d => (d.kind === 'tracker' && d.cdn_vendor) ? 1.5 : 0);
+      .attr('stroke', d => (d.kind === 'tracker' && (d.cdn_vendor || d.antibot_vendor)) ? '#0a0a0f' : null)
+      .attr('stroke-width', d => (d.kind === 'tracker' && (d.cdn_vendor || d.antibot_vendor)) ? 1.5 : 0);
 
     nodeG.filter(d => d.kind !== 'eye').append('text')
       .attr('x', 12).attr('y', 4)
-      .text(d => d.label.length > 22 ? d.label.slice(0, 21) + '…' : d.label);
+      .text(d => (d.antibot_vendor ? '🤖 ' : '') + (d.label.length > 22 ? d.label.slice(0, 21) + '…' : d.label));
 
     // ─── pan + pinch-zoom on the SVG (transform applies to content) ──
     // Drag on a node calls d3.drag, drag on empty SVG calls d3.zoom's
@@ -299,6 +326,7 @@
     bind('nd_country', '—');  // Phase C dependency (GeoIP)
     bind('nd_asn',     '—');
     bind('nd_cdn', node.cdn_vendor ? (node.cdn_vendor + (node.cache_status ? ' · ' + node.cache_status : '')) : '—');
+    bind('nd_antibot', node.antibot_vendor ? ('🤖 ' + node.antibot_vendor) : '—');
     bind('nd_sites',   (node.sites || []).join(', ') || '—');
     bind('nd_first_seen', node.first_seen ? new Date(node.first_seen * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—');
     bind('nd_last_seen',  node.last_seen  ? new Date(node.last_seen  * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—');
