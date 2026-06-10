@@ -3,6 +3,60 @@
 
 ---
 
+## 2026-06-10 (soir) — Phase 11 COMPLETE + Phase 12.A/B + toolbox tabs — v2.13.15 (ref #502-#516)
+
+Consolidated stack merged via PR #517. `secubox-toolbox 2.5.2 → 2.6.6`,
+tag **v2.13.15**.
+
+### Package progression
+2.6.0 (11.A backend) → 2.6.1 (11.B frontend) → 2.6.2 (#513 toolbox tabs)
+→ 2.6.3 (11.C consent+PDF) → 2.6.4 (12.A CDN) → 2.6.5 (12.B anti-bot) →
+2.6.6 (Carto kbin-redirect fix).
+
+### Phase 11 — social mapping per device (#502) COMPLETE
+- **11.A** (#505) : `social.py` correlation engine, 3 SQLite tables,
+  `social_graph.py` addon (cookie_id_hash = sha256, never raw values),
+  `/social/graph|wipe/{token}` + `/admin/social-aggregate`.
+- **11.B** (#507) : d3 force-directed view, FR/EN i18n, server-side
+  favicon proxy, wipe modal (3s countdown), `/social/me` splash link.
+  Critical live fixes : PYTHONPATH in mitm-wg launcher (every addon's
+  `secubox_toolbox` import was silently degraded), i18n in `<script>`
+  block, StaticFiles mount + 0755 www, X-R3-Peer resolution.
+- **11.C** (#508) : consent-platform probe (OneTrust/Didomi/Quantcast/
+  Sourcepoint), pre-consent + extra-EU evidence, bilingual FR/EN PDF
+  (fpdf2). Live PDF 200 / valid v1.3.
+
+### Toolbox WebUI (#513)
+5-tab nav (Vue d'ensemble / Clients / Filtres / Cartographie sociale /
+Config). Inline kbin `/admin/` HTML route (~230 lines) deleted ;
+canonical operator surface is now `admin.gk2.secubox.in/toolbox/`.
+
+### Phase 12 — anti-human-detection platform (#514)
+- **12.A** (#515) : `detect_cdn()` from response headers (11 vendors +
+  generic edge-cache), `social_host_meta` table, by_cdn aggregate.
+  **Round-Eye central-hotspot graph** : device = pulsing eye at centre,
+  sites on inner forceRadial ring, trackers outer ring, CDN-tinted nodes.
+- **12.B** (#516) : `detect_antibot()` (reCAPTCHA/hCaptcha/Turnstile/
+  Datadome/PerimeterX-HUMAN/Arkose/Kasada/Akamai-BotManager) from URL +
+  cookies + headers — DETECTION ONLY, bypass gated behind doctrine.
+  Severe cinnabar lens + spinning warning ring + "challenged your
+  humanity" banner. Visible ring levels (dominant radial + ring guides +
+  cache-bust). Per-client operator tools : 🕸️ Carto (token-minted graph
+  link, absolute kbin redirect), ↺ Reset/RAZ (`store.reset_client` +
+  `social.wipe_mac`).
+
+### Round Eye gadget — diagnosed, physical fix required
+OTG USB CDC-Ethernet TX queue wedged (NETDEV WATCHDOG, probe -110).
+Gadget enumerates but data path dead. gk2-side recovery exhausted
+(link bounce, USB unbind/rebind). Needs Pi power-cycle / cable re-seat.
+
+### Live + verified on gk2
+Graph renders real cross-site tracking (`35.214.136.108` relay bridging
+4 publishers), PDF valid, CDN + anti-bot read paths green end-to-end,
+reset works, Carto opens the client graph on kbin.
+
+---
+
 ## 2026-06-10 — Phase 11 social mapping (A+B) + system triage + v2.13.14 (ref #502-#509)
 
 ### Package bumps
