@@ -2450,15 +2450,29 @@ async def admin_client_report(mac_hash: str) -> Response:
 
 
 @router.get("/admin/clients/{mac_hash}/social")
-async def admin_client_social(mac_hash: str) -> RedirectResponse:
+async def admin_client_social(mac_hash: str, request: Request) -> RedirectResponse:
     """Phase 12.B (#516) — operator entry to a client's social mapping
     graph from the toolbox WebUI Clients tab.  Mints a short-TTL (1 h)
-    HMAC token for the mac_hash and 303-redirects to /social/{token},
-    so the operator reuses the exact same per-client view the user sees.
+    HMAC token for the mac_hash and 303-redirects to the per-client view.
+
+    The /social/ route is ONLY served on the kbin vhost (HAProxy → the
+    toolbox uvicorn).  When the operator triggers this from
+    admin.gk2.secubox.in, a relative redirect would land on the
+    aggregator's "missing module" page — so we build an ABSOLUTE kbin
+    URL by swapping the leading `admin.` host label for `kbin.`.
     """
     salt = _get_salt()
     tok = reports.mint_token(mac_hash, salt, ttl_seconds=3600)
-    return RedirectResponse(url=f"/social/{tok.token}", status_code=303)
+    host = (request.headers.get("host") or "").strip()
+    if host.startswith("admin."):
+        kbin_host = "kbin." + host[len("admin."):]
+        target = f"https://{kbin_host}/social/{tok.token}"
+    elif host.startswith("kbin."):
+        target = f"/social/{tok.token}"  # already on kbin, relative is fine
+    else:
+        # Fallback : same-origin relative (dev / direct uvicorn).
+        target = f"/social/{tok.token}"
+    return RedirectResponse(url=target, status_code=303)
 
 
 @router.post("/admin/clients/{mac_hash}/reset")
