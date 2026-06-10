@@ -28,5 +28,7 @@
   "wipe_success": "Your data has been erased. {n} rows deleted.",
   "loading": "Loading…",
   "error": "Loading error.",
-  "lang_label": "EN"
+  "lang_label": "EN",
+  "card_pdf_download": "⬇ Download PDF report (FR/EN)",
+  "card_evidence_active": "Compliance analysis: trackers before consent (GDPR art. 6.1.a + 7) and extra-EU transfers (art. 44). See the PDF report for details."
 }

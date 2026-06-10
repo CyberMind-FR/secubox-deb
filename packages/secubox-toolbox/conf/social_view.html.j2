@@ -59,7 +59,7 @@
   <nav class="cards-row">
     <details class="card">
       <summary>{{ t.card_evidence }}</summary>
-      <p class="card-pending">{{ t.card_evidence_pending }}</p>
+      <p class="card-pending">{{ t.card_evidence_active }}</p>
     </details>
     <details class="card card-wipe">
       <summary>{{ t.card_wipe }}</summary>
@@ -67,7 +67,7 @@
     </details>
     <details class="card">
       <summary>{{ t.card_pdf }}</summary>
-      <p class="card-pending">{{ t.card_pdf_pending }}</p>
+      <a class="pdf-btn" href="/social/report/{{ token }}.pdf" target="_blank" rel="noopener">{{ t.card_pdf_download }}</a>
     </details>
   </nav>
 </main>

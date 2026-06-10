@@ -171,6 +171,105 @@ def _ja4_hash(flow) -> Optional[str]:
     return None
 
 
+# ─── consent-platform detection (Phase 11.C #508) ───
+#
+# We detect the four dominant CMP (Consent Management Platform) cookies.
+# Their PRESENCE on a flow means the user has interacted with the consent
+# banner on this site at least once.  We track, per (peer, site) :
+#   - whether the site is KNOWN to run a CMP (we've seen the cookie OR the
+#     loader path), and
+#   - whether a consent cookie has been observed yet.
+# This lets us classify each tracker edge as pre/post/none-consent.
+#
+# Names are matched case-insensitively as a prefix (OneTrust appends
+# region suffixes, Didomi rotates tokens, etc.).
+_CMP_COOKIE_PREFIXES = (
+    "optanonconsent", "onetrustconsent", "optanonalertboxclosed",  # OneTrust
+    "didomi_token", "euconsent-v2",                                 # Didomi / IAB TCF
+    "__qca", "quantcast",                                           # Quantcast
+    "sp_choice", "consentuid", "_sp_",                              # Sourcepoint
+)
+# CMP loader URL fragments — seeing the site REQUEST one of these proves
+# the site runs a consent platform even before the cookie is set.
+_CMP_LOADER_FRAGMENTS = (
+    "cdn.cookielaw.org", "onetrust.com",      # OneTrust
+    "sdk.privacy-center.org", "didomi.io",    # Didomi
+    "quantcast.mgr.consensu.org", "quantcast.com/choice",  # Quantcast
+    "sourcepoint.mgr.consensu.org", "sp-prod.net",          # Sourcepoint
+)
+
+# Per-(peer, site) consent observation log.  Bounded soft-cap : if it
+# grows past 20k entries we drop it wholesale (a fresh session rebuild is
+# cheap and the salt rotates daily anyway).
+_consent_log: dict = {}
+
+
+def _consent_key(mac_hash: str, site: str) -> tuple:
+    return (mac_hash, site)
+
+
+def _update_consent_log(mac_hash: str, src_site: str, flow) -> None:
+    """Observe whether this flow reveals a CMP cookie or loader for the
+    (peer, site) pair, and update the in-memory log."""
+    try:
+        if len(_consent_log) > 20000:
+            _consent_log.clear()
+        key = _consent_key(mac_hash, src_site)
+        state = _consent_log.get(key, {"has_cmp": False, "consented": False})
+
+        # 1) CMP loader request → the site runs a consent platform.
+        url = (flow.request.pretty_url or "").lower()
+        if any(frag in url for frag in _CMP_LOADER_FRAGMENTS):
+            state["has_cmp"] = True
+
+        # 2) CMP cookie present (either direction) → consent recorded.
+        cookie_blobs = []
+        cookie_blobs.extend(flow.request.headers.get_all("cookie") or [])
+        cookie_blobs.extend(flow.response.headers.get_all("set-cookie") or [])
+        for blob in cookie_blobs:
+            low = blob.lower()
+            for pref in _CMP_COOKIE_PREFIXES:
+                if pref in low:
+                    state["has_cmp"] = True
+                    state["consented"] = True
+                    break
+        _consent_log[key] = state
+    except Exception:
+        pass
+
+
+def _consent_state_for(mac_hash: str, site: str) -> str:
+    """Classify the current consent state for the (peer, site) pair.
+
+    Evidence-only semantics (no interpretation beyond the observation) :
+      post_consent — a CMP cookie has been seen here for this peer.
+      pre_consent  — the site runs a CMP (loader/cookie seen) but no
+                     consent cookie yet : a tracker firing now fires
+                     before consent.
+      none_seen    — no CMP detected at all ; we make no claim.
+    """
+    st = _consent_log.get(_consent_key(mac_hash, site))
+    if not st:
+        return "none_seen"
+    if st.get("consented"):
+        return "post_consent"
+    if st.get("has_cmp"):
+        return "pre_consent"
+    return "none_seen"
+
+
+# ─── JA4 lookup ───
+def _ja4_hash(flow) -> Optional[str]:
+    """Pull the JA4 fingerprint set by the ja4 addon, if present."""
+    try:
+        ja4 = (flow.metadata or {}).get("ja4")
+        if ja4:
+            return str(ja4)[:32]
+    except Exception:
+        pass
+    return None
+
+
 # ─── main ───
 class SocialGraph:
     """mitmproxy addon : record cookie-bearing edges per R2/R3 peer."""
@@ -185,6 +284,20 @@ class SocialGraph:
         src_site = _registrable_domain(flow.request.host)
         if not src_site:
             return
+
+        # Phase 11.C (#508) — consent-state detection.  Before recording
+        # any edge, update our per-peer × per-site consent log : has a
+        # consent-platform cookie (OneTrust / Didomi / Quantcast /
+        # Sourcepoint) been observed for this peer on this site yet ?
+        # The edge's consent_state is then :
+        #   post_consent  — a consent cookie was already seen here
+        #   pre_consent   — NOT yet seen, AND the site DOES run a consent
+        #                   platform somewhere (so a tracker firing now is
+        #                   firing before consent — RGPD art. 6.1.a + 7)
+        #   none_seen     — no consent platform detected for this site at
+        #                   all (we make no claim ; baseline)
+        _update_consent_log(mac_hash, src_site, flow)
+        consent_state = _consent_state_for(mac_hash, src_site)
 
         # Set-Cookie headers : the 3rd-party server hands a new identifier.
         # The Set-Cookie domain may differ from flow.request.host (Set-Cookie
@@ -211,6 +324,7 @@ class SocialGraph:
                 tracker_domain=tracker_domain,
                 cookie_id_hash_val=cid,
                 ja4_hash=ja4,
+                consent_state=consent_state,
             )
 
         # Request-side Cookie headers (only meaningful when the
@@ -233,6 +347,7 @@ class SocialGraph:
             # called itself).
             return
 
+        ctx_consent = _consent_state_for(mac_hash, ctx_site)
         for hdr in cookie_hdrs[:5]:
             for name, value in _parse_cookie_header(hdr)[:50]:
                 if _social.is_deny_listed(name):
@@ -244,6 +359,7 @@ class SocialGraph:
                     tracker_domain=tracker_domain,
                     cookie_id_hash_val=cid,
                     ja4_hash=ja4,
+                    consent_state=ctx_consent,
                 )
 
 

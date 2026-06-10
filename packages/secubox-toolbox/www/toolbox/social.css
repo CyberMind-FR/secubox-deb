@@ -224,6 +224,17 @@ body {
 }
 .wipe-btn:hover { background: rgba(230, 57, 70, .1); }
 
+/* Phase 11.C — PDF report download button */
+.pdf-btn {
+  display: block; width: 100%; margin-top: 8px;
+  text-align: center; text-decoration: none;
+  background: transparent; color: var(--gold-hermetic);
+  border: 1px solid var(--gold-hermetic); border-radius: 3px;
+  padding: 10px;
+  font-family: 'Cinzel', serif; letter-spacing: 0.06em;
+}
+.pdf-btn:hover { background: rgba(201, 168, 76, .12); }
+
 /* Modal */
 dialog#wipe-modal {
   background: var(--cosmos-black);
