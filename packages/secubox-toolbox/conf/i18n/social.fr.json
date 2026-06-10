@@ -28,5 +28,7 @@
   "wipe_success": "Vos données ont été effacées. {n} enregistrements supprimés.",
   "loading": "Chargement…",
   "error": "Erreur de chargement.",
-  "lang_label": "FR"
+  "lang_label": "FR",
+  "card_pdf_download": "⬇ Télécharger le rapport PDF (FR/EN)",
+  "card_evidence_active": "Analyse de conformité : traqueurs avant consentement (RGPD art. 6.1.a + 7) et transferts hors UE (art. 44). Voir le rapport PDF pour le détail."
 }

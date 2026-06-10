@@ -1,3 +1,29 @@
+secubox-toolbox (2.6.3-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 11.C (#508, parent #502) — social mapping evidence + bilingual
+    FR/EN PDF report.
+      - mitmproxy_addons/social_graph.py : consent-platform probe.
+        Detects OneTrust / Didomi / Quantcast / Sourcepoint cookies +
+        loader URLs per (peer, site).  Each recorded edge is stamped
+        consent_state in {none_seen, pre_consent, post_consent}.
+        pre_consent = a tracker fired while the site runs a CMP but no
+        consent cookie was seen yet (RGPD art. 6.1.a + 7 evidence).
+      - secubox_toolbox/social.py : schema (consent_state + GeoIP
+        columns) + EU/EEA whitelist + GeoIP fold + evidence() helper.
+      - secubox_toolbox/social_report.py : NEW — bilingual FR/EN
+        evidence PDF via fpdf2 (same engine as reports.py).  Fact-only
+        cover + summary + pre-consent table + extra-EU table + RGPD
+        article references.  Text fallback when fpdf2 is absent.
+      - secubox_toolbox/api.py : GET /social/report/{token}.pdf, same
+        HMAC-token gate as /social/graph/{token}.
+      - conf/social_view.html.j2 + i18n : the "Rapport PDF" card now
+        has a real download button ; the "Évidence juridique" card
+        switched to the active compliance summary.
+    Phase 11 (social mapping per device) is now feature-complete :
+    A (backend) + B (d3 view) + C (evidence + PDF).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 09:30:00 +0200
+
 secubox-toolbox (2.6.2-1~bookworm1) bookworm; urgency=medium
 
   * ToolBox WebUI sub-tab navigation + kbin /admin/ removal (#513).

@@ -2085,6 +2085,30 @@ async def admin_social_aggregate(hours: int = 24) -> dict:
     return _s.aggregate(hours=hours)
 
 
+@router.get("/social/report/{token}.pdf")
+async def social_report_pdf(token: str) -> Response:
+    """Phase 11.C (#508) — bilingual FR/EN evidence PDF for a peer.
+
+    Same HMAC-token gate as /social/graph/{token}.  Fact-only report :
+    cross-site tracker reuse, trackers fired before consent (RGPD art.
+    6.1.a + 7), extra-EU transfers (art. 44+).
+    """
+    from . import social_report as _sr
+    salt = _get_salt()
+    ok, mac_hash = reports.verify_token(token, salt)
+    if not ok:
+        raise HTTPException(404, "report not found or expired")
+    data = _sr.build_social_report(mac_hash, since_seconds=7 * 86400)
+    data["generated_at"] = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+    pdf_bytes = _sr.render_social_pdf(data)
+    fname = f"village3b-carto-{mac_hash[:8]}-{int(time.time())}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 # ───────────────── Phase 11.B — per-client view + favicon proxy (#507) ─────────────────
 
 import json as _json_b
