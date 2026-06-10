@@ -112,13 +112,16 @@ CREATE TABLE IF NOT EXISTS social_links (
 );
 
 -- Phase 12.A (#515) — host-stable CDN/edge metadata, mac-independent.
--- Phase 12.B (#516) adds antibot_vendor (anti-bot / CAPTCHA vendor).
+-- Phase 12.B (#516) adds antibot_vendor.  Phase 12.C (#518) adds
+-- opgrade_vendor + opgrade_category (operator-grade / state-adjacent).
 CREATE TABLE IF NOT EXISTS social_host_meta (
-    tracker_domain  TEXT PRIMARY KEY,
-    cdn_vendor      TEXT,
-    cache_status    TEXT,
-    antibot_vendor  TEXT,
-    last_seen       INTEGER NOT NULL
+    tracker_domain   TEXT PRIMARY KEY,
+    cdn_vendor       TEXT,
+    cache_status     TEXT,
+    antibot_vendor   TEXT,
+    opgrade_vendor   TEXT,
+    opgrade_category TEXT,
+    last_seen        INTEGER NOT NULL
 );
 
 -- Phase 12.B (#516) — per-client "challenged your humanity" log.
@@ -129,6 +132,17 @@ CREATE TABLE IF NOT EXISTS social_antibot (
     hits            INTEGER NOT NULL DEFAULT 0,
     last_seen       INTEGER NOT NULL,
     PRIMARY KEY (client_mac_hash, src_site, antibot_vendor)
+);
+
+-- Phase 12.C (#518) — per-client operator-grade / state-adjacent log.
+CREATE TABLE IF NOT EXISTS social_opgrade (
+    client_mac_hash TEXT NOT NULL,
+    src_site        TEXT NOT NULL,
+    opgrade_vendor  TEXT NOT NULL,
+    category        TEXT NOT NULL,
+    hits            INTEGER NOT NULL DEFAULT 0,
+    last_seen       INTEGER NOT NULL,
+    PRIMARY KEY (client_mac_hash, src_site, opgrade_vendor)
 );
 """
 
@@ -156,6 +170,9 @@ _PHASE11C_MIGRATIONS = (
     # Phase 12.B (#516) — anti-bot vendor column on the host-meta table
     # (created by 12.A ; additive on a 2.6.3/2.6.4 → upgrade).
     ("social_host_meta", "antibot_vendor", "TEXT"),
+    # Phase 12.C (#518) — operator-grade / state-adjacent columns.
+    ("social_host_meta", "opgrade_vendor", "TEXT"),
+    ("social_host_meta", "opgrade_category", "TEXT"),
 )
 
 
@@ -412,6 +429,83 @@ def antibot_for_client(mac_hash: str, since_seconds: int = 86400) -> List[Dict]:
     return out
 
 
+# ── Phase 12.C (#518) — operator-grade / state-adjacent recording ──
+
+def _record_host_opgrade_sync(domain, vendor, category) -> None:
+    try:
+        with _conn() as c:
+            c.execute(
+                "INSERT INTO social_host_meta(tracker_domain, opgrade_vendor, "
+                "opgrade_category, last_seen) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(tracker_domain) DO UPDATE SET "
+                "opgrade_vendor=excluded.opgrade_vendor, "
+                "opgrade_category=excluded.opgrade_category, "
+                "last_seen=excluded.last_seen",
+                (domain, vendor, category, int(time.time())),
+            )
+    except Exception as e:  # pragma: no cover
+        log.warning("record_host_opgrade failed: %s", e)
+
+
+def record_host_opgrade(*, domain: str, opgrade_vendor: str,
+                        opgrade_category: Optional[str] = None) -> None:
+    if not (domain and opgrade_vendor):
+        return
+    try:
+        _executor.submit(_record_host_opgrade_sync, domain, opgrade_vendor,
+                         opgrade_category)
+    except RuntimeError:
+        pass
+
+
+def _record_opgrade_event_sync(mac_hash, src_site, vendor, category) -> None:
+    try:
+        with _conn() as c:
+            c.execute(
+                "INSERT INTO social_opgrade(client_mac_hash, src_site, "
+                "opgrade_vendor, category, hits, last_seen) "
+                "VALUES (?, ?, ?, ?, 1, ?) "
+                "ON CONFLICT(client_mac_hash, src_site, opgrade_vendor) DO UPDATE "
+                "SET hits = hits + 1, category = excluded.category, "
+                "last_seen = excluded.last_seen",
+                (mac_hash, src_site, vendor, category, int(time.time())),
+            )
+    except Exception as e:  # pragma: no cover
+        log.warning("record_opgrade_event failed: %s", e)
+
+
+def record_opgrade_event(*, client_mac_hash: str, src_site: str,
+                         opgrade_vendor: str, category: str) -> None:
+    if not (client_mac_hash and src_site and opgrade_vendor):
+        return
+    try:
+        _executor.submit(_record_opgrade_event_sync, client_mac_hash,
+                         src_site, opgrade_vendor, category or "")
+    except RuntimeError:
+        pass
+
+
+def opgrade_for_client(mac_hash: str, since_seconds: int = 86400) -> List[Dict]:
+    """Per-client operator-grade / state-adjacent list for the alert tile
+    + the PDF evidence section."""
+    since = int(time.time()) - max(since_seconds, 3600)
+    out: List[Dict] = []
+    if not mac_hash:
+        return out
+    try:
+        with _conn() as c:
+            for r in c.execute(
+                "SELECT src_site, opgrade_vendor, category, hits, last_seen "
+                "FROM social_opgrade WHERE client_mac_hash = ? AND last_seen >= ? "
+                "ORDER BY last_seen DESC LIMIT 100",
+                (mac_hash, since),
+            ).fetchall():
+                out.append(dict(r))
+    except Exception as e:  # pragma: no cover
+        log.warning("opgrade_for_client failed: %s", e)
+    return out
+
+
 def fold_recent(window_seconds: int = 300) -> Tuple[int, int]:
     """Fold raw edges from the last `window_seconds` into the node + link
     aggregate tables. Returns (nodes_touched, links_touched).
@@ -606,7 +700,8 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
             # can colour/label by edge-network vendor.
             for r in c.execute(
                 "SELECT n.tracker_domain, n.hits, n.first_seen, n.last_seen, "
-                "n.sites_jsonl, m.cdn_vendor, m.cache_status, m.antibot_vendor "
+                "n.sites_jsonl, m.cdn_vendor, m.cache_status, m.antibot_vendor, "
+                "m.opgrade_vendor, m.opgrade_category "
                 "FROM social_nodes n "
                 "LEFT JOIN social_host_meta m ON m.tracker_domain = n.tracker_domain "
                 "WHERE n.client_mac_hash = ? AND n.last_seen >= ? "
@@ -629,6 +724,8 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
                         "cdn_vendor": r["cdn_vendor"],
                         "cache_status": r["cache_status"],
                         "antibot_vendor": r["antibot_vendor"],
+                        "opgrade_vendor": r["opgrade_vendor"],
+                        "opgrade_category": r["opgrade_category"],
                     }
                 )
 
@@ -670,6 +767,9 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
             # Phase 12.B — per-client anti-bot challenges for the alert tile.
             antibot = antibot_for_client(mac_hash, since_seconds=since_seconds)
             out["antibot"] = antibot
+            # Phase 12.C — operator-grade / state-adjacent surfaces.
+            opgrade = opgrade_for_client(mac_hash, since_seconds=since_seconds)
+            out["opgrade"] = opgrade
             out["stats"] = {
                 "total_trackers": (stats_row["total_trackers"] or 0) if stats_row else 0,
                 "total_sites": sites_count,
@@ -677,6 +777,8 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
                 "last_seen": stats_row["last_seen"] if stats_row else None,
                 "antibot_sites": len({a["src_site"] for a in antibot}),
                 "antibot_vendors": sorted({a["antibot_vendor"] for a in antibot}),
+                "opgrade_sites": len({o["src_site"] for o in opgrade}),
+                "opgrade_vendors": sorted({o["opgrade_vendor"] for o in opgrade}),
             }
     except Exception as e:  # pragma: no cover
         log.warning("fetch_graph failed: %s", e)
@@ -694,7 +796,7 @@ def wipe_mac(mac_hash: str) -> int:
     try:
         with _conn() as c:
             for table in ("social_edges", "social_nodes", "social_links",
-                          "social_antibot"):
+                          "social_antibot", "social_opgrade"):
                 cur = c.execute(
                     f"DELETE FROM {table} WHERE client_mac_hash = ?", (mac_hash,)
                 )
@@ -721,6 +823,8 @@ def aggregate(hours: int = 24) -> Dict:
         "by_cdn": [],  # Phase 12.A
         "by_antibot": [],  # Phase 12.B
         "antibot_clients": 0,  # Phase 12.B
+        "by_opgrade": [],  # Phase 12.C
+        "opgrade_clients": 0,  # Phase 12.C
     }
     try:
         with _conn() as c:
@@ -784,6 +888,24 @@ def aggregate(hours: int = 24) -> Dict:
             ]
             out["antibot_clients"] = c.execute(
                 "SELECT COUNT(DISTINCT client_mac_hash) FROM social_antibot "
+                "WHERE last_seen >= ?",
+                (since,),
+            ).fetchone()[0]
+            # Phase 12.C — operator-grade / state-adjacent breakdown.
+            out["by_opgrade"] = [
+                dict(r)
+                for r in c.execute(
+                    "SELECT opgrade_vendor, category, "
+                    "COUNT(DISTINCT src_site) AS sites, "
+                    "COUNT(DISTINCT client_mac_hash) AS clients, "
+                    "SUM(hits) AS events "
+                    "FROM social_opgrade WHERE last_seen >= ? "
+                    "GROUP BY opgrade_vendor ORDER BY events DESC LIMIT 25",
+                    (since,),
+                ).fetchall()
+            ]
+            out["opgrade_clients"] = c.execute(
+                "SELECT COUNT(DISTINCT client_mac_hash) FROM social_opgrade "
                 "WHERE last_seen >= ?",
                 (since,),
             ).fetchone()[0]

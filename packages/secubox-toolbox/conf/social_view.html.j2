@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>{{ t.page_title }} — VILLAGE3B</title>
-  <link rel="stylesheet" href="/toolbox/social.css?v=264b">
+  <link rel="stylesheet" href="/toolbox/social.css?v=26c">
   <script>
     // Inline JSON safer than a data-* attribute : FR text has
     // apostrophes (l'effacement) that would break single-quoted
@@ -14,7 +14,7 @@
     window.__SOCIAL_I18N__ = {{ t_json | safe }};
   </script>
   <script defer src="/toolbox/d3.v7.min.js"></script>
-  <script defer src="/toolbox/social.js?v=264b"></script>
+  <script defer src="/toolbox/social.js?v=26c"></script>
 </head>
 <body data-token="{{ token }}" data-lang="{{ lang }}">
 
@@ -34,6 +34,7 @@
       <div class="stat-tile"><span class="stat-n" data-bind="total_sites">0</span><span class="stat-l">{{ t.stats_total_sites }}</span></div>
     </section>
     <p class="graph-hint">{{ t.graph_swipe_hint }}</p>
+    <div id="opgrade-alert" class="opgrade-alert" hidden></div>
     <div id="antibot-alert" class="antibot-alert" hidden></div>
     <svg id="social-graph" role="img" preserveAspectRatio="xMidYMid meet"></svg>
   </section>
@@ -52,6 +53,8 @@
       <dd data-bind="nd_cdn">—</dd>
       <dt>{{ t.node_detail_antibot }}</dt>
       <dd data-bind="nd_antibot">—</dd>
+      <dt>{{ t.node_detail_opgrade }}</dt>
+      <dd data-bind="nd_opgrade">—</dd>
       <dt>{{ t.node_detail_sites }}</dt>
       <dd data-bind="nd_sites">—</dd>
       <dt>{{ t.node_detail_first_seen }}</dt>

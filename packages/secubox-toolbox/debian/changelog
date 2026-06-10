@@ -1,3 +1,29 @@
+secubox-toolbox (2.6.7-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 12.C (#518, parent #514) — operator-grade / state-adjacent
+    identity detection (extends Utiq #500). Passive, top-severity tier.
+      - social_graph.py detect_operator_grade(): telco header-enrichment
+        (MSISDN / x-acr / WAP bearer), operator-consortium IDs (Utiq /
+        TrustPid), and data-broker / state-adjacent analytics hosts
+        (LiveRamp / Oracle-BlueKai / Acxiom / Neustar / Tapad / Experian
+        / Palantir-class). Returns (vendor, category) for severity tier.
+      - social.py: social_host_meta.opgrade_vendor + opgrade_category;
+        new social_opgrade per-client table; record_host_opgrade +
+        record_opgrade_event + opgrade_for_client; fetch_graph carries
+        it + stats; aggregate by_opgrade + opgrade_clients; wipe_mac
+        clears social_opgrade.
+      - social.js: top-tier void-purple lens (above anti-bot cinnabar)
+        + pulsing double ring + ⛔ "operator-grade / state-adjacent"
+        banner; node-detail shows vendor + category.
+      - index.html operator tab: opérateur-grade breakdown card.
+      - social_report.py: operator-grade evidence section in the PDF.
+      - i18n: node_detail_opgrade + opgrade_alert (FR/EN). Assets
+        cache-busted ?v=26c.
+    Detection only — no bypass. Factual network-surface flagging, no
+    claim about any specific entity.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 12:00:00 +0200
+
 secubox-toolbox (2.6.6-1~bookworm1) bookworm; urgency=medium
 
   * Phase 12.B follow-up (#516) — fix the Clients-tab 🕸️ Carto link

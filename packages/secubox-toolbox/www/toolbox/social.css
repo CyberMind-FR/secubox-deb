@@ -327,3 +327,27 @@ dialog h2 {
 .ring-guides circle { fill: none; stroke-width: 1; pointer-events: none; }
 .ring-inner { stroke: var(--gold-hermetic); stroke-opacity: .18; stroke-dasharray: 2 4; }
 .ring-outer { stroke: var(--cyber-cyan); stroke-opacity: .14; stroke-dasharray: 2 6; }
+
+/* ── Operator-grade / state-adjacent (Phase 12.C) — top severity ── */
+.opgrade-ring {
+  fill: none;
+  stroke: var(--void-purple);
+  stroke-width: 2;
+  opacity: .9;
+  animation: opgrade-pulse 1.8s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@keyframes opgrade-pulse { 0%,100% { r: 13px; opacity: .5; } 50% { r: 17px; opacity: 1; } }
+.opgrade-alert {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 7;
+  background: var(--void-purple);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: bold;
+  padding: 5px 12px; border-radius: 3px;
+  max-width: 90%; text-align: center;
+  box-shadow: 0 2px 12px rgba(110,64,201,.5);
+}
+.opgrade-alert + .antibot-alert { top: 38px; }

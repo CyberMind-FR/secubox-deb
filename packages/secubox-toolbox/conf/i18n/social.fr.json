@@ -33,5 +33,7 @@
   "card_evidence_active": "Analyse de conformité : traqueurs avant consentement (RGPD art. 6.1.a + 7) et transferts hors UE (art. 44). Voir le rapport PDF pour le détail.",
   "node_detail_cdn": "CDN / cache",
   "node_detail_antibot": "Anti-bot",
-  "antibot_alert": "⚠ {n} site(s) ont vérifié que vous êtes humain"
+  "antibot_alert": "⚠ {n} site(s) ont vérifié que vous êtes humain",
+  "node_detail_opgrade": "Opérateur / état",
+  "opgrade_alert": "⛔ {n} surface(s) opérateur-grade / proche-État"
 }
