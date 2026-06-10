@@ -144,6 +144,10 @@
                 <h2>🤖 Anti-bot / "prouvez que vous êtes humain"</h2>
                 <div id="social-antibot"><div class="empty">loading…</div></div>
             </div>
+            <div class="card">
+                <h2>📡 Opérateur-grade / proche-État</h2>
+                <div id="social-opgrade"><div class="empty">loading…</div></div>
+            </div>
             <div class="card" style="grid-column:1/-1">
                 <h2>🎯 Top tracker domains</h2>
                 <div id="social-trackers"><div class="empty">loading…</div></div>
@@ -404,6 +408,16 @@ async function loadSocial() {
               ba.map(r => `<tr><td>🤖 ${r.antibot_vendor}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.challenges}</td></tr>`).join('') +
               '</tbody></table>'
             : '<div class="empty">aucun anti-bot détecté</div>';
+    }
+    const og = document.getElementById('social-opgrade');
+    if (og) {
+        const bo = agg.by_opgrade || [];
+        og.innerHTML = bo.length
+            ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${agg.opgrade_clients||0} client(s) exposé(s)</p>` +
+              '<table><thead><tr><th>Vendor</th><th>catégorie</th><th>sites</th><th>clients</th><th>events</th></tr></thead><tbody>' +
+              bo.map(r => `<tr><td>📡 ${r.opgrade_vendor}</td><td>${r.category}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.events}</td></tr>`).join('') +
+              '</tbody></table>'
+            : '<div class="empty">aucune surface opérateur-grade détectée</div>';
     }
 }
 

@@ -33,5 +33,7 @@
   "card_evidence_active": "Compliance analysis: trackers before consent (GDPR art. 6.1.a + 7) and extra-EU transfers (art. 44). See the PDF report for details.",
   "node_detail_cdn": "CDN / cache",
   "node_detail_antibot": "Anti-bot",
-  "antibot_alert": "⚠ {n} site(s) challenged that you are human"
+  "antibot_alert": "⚠ {n} site(s) challenged that you are human",
+  "node_detail_opgrade": "Operator / state",
+  "opgrade_alert": "⛔ {n} operator-grade / state-adjacent surface(s)"
 }

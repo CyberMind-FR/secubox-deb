@@ -382,6 +382,59 @@ def detect_antibot(flow) -> Optional[str]:
     return None
 
 
+# ─── operator-grade / state-adjacent identity detection (Phase 12.C #518) ──
+# The heaviest identity surfaces : carrier header-enrichment (the network
+# itself injects your phone number / subscriber id), operator-consortium
+# IDs (Utiq / TrustPid), and known data-broker / state-adjacent analytics
+# aggregation endpoints.  We flag the network SURFACE factually — never a
+# claim about a specific entity.  Returns (vendor, category) or (None, None).
+# category ∈ {telco-enrichment, consortium, data-broker} for severity tiering.
+_OPGRADE_HEADERS = (  # carrier-injected request headers
+    ("telco-enrichment", "MSISDN-header", (
+        "x-msisdn", "x-up-calling-line-id", "x-nokia-msisdn", "x-wap-msisdn",
+        "x-up-subno", "msisdn", "x-forwarded-for-msisdn", "x-network-info")),
+    ("telco-enrichment", "Verizon/AT&T-ACR", ("x-acr",)),
+    ("telco-enrichment", "WAP-bearer", ("x-up-bearer-type",)),
+    ("consortium", "TrustPid", ("x-trustpid",)),
+)
+_OPGRADE_HOSTS = (  # host eTLD+1 fragments
+    ("consortium", "Utiq", ("utiq.com", "consenthub.utiq")),
+    ("consortium", "TrustPid", ("trustpid.com", "trustpid")),
+    ("data-broker", "LiveRamp", ("rlcdn.com", "liveramp.com", "liveramp")),
+    ("data-broker", "Oracle-BlueKai", ("bluekai.com", "bkrtx.com")),
+    ("data-broker", "Acxiom", ("acxiom.com", "acxiom-online")),
+    ("data-broker", "Neustar", ("neustar.biz", "agkn.com")),
+    ("data-broker", "Tapad", ("tapad.com",)),
+    ("data-broker", "Experian", ("experian.com", "tapestry.experian")),
+    ("data-broker", "Palantir-class", ("palantir.com", "palantircloud", "foundry.palantir")),
+)
+
+
+def detect_operator_grade(flow) -> tuple:
+    """Return (vendor, category) for an operator-grade / state-adjacent
+    identity surface, or (None, None).  Passive ; factual.
+    """
+    try:
+        # 1) Carrier-injected request headers (the strongest signal —
+        # the NETWORK enriched the request with subscriber identity).
+        try:
+            keys = " ".join(k.lower() for k in flow.request.headers.keys())
+        except Exception:
+            keys = ""
+        for category, vendor, hdrs in _OPGRADE_HEADERS:
+            if any(h in keys for h in hdrs):
+                return vendor, category
+
+        # 2) Host-based : consortium IDs + data-broker / state-adjacent.
+        host = (flow.request.host or "").lower()
+        for category, vendor, frags in _OPGRADE_HOSTS:
+            if any(f in host for f in frags):
+                return vendor, category
+    except Exception:
+        pass
+    return None, None
+
+
 # ─── JA4 lookup ───
 def _ja4_hash(flow) -> Optional[str]:
     """Pull the JA4 fingerprint set by the ja4 addon, if present."""
@@ -448,6 +501,18 @@ class SocialGraph:
                 _social.record_antibot_challenge(
                     client_mac_hash=mac_hash, src_site=src_site,
                     antibot_vendor=antibot,
+                )
+            # Phase 12.C (#518) — operator-grade / state-adjacent identity.
+            op_vendor, op_category = detect_operator_grade(flow)
+            if op_vendor:
+                if resp_host:
+                    _social.record_host_opgrade(
+                        domain=resp_host, opgrade_vendor=op_vendor,
+                        opgrade_category=op_category,
+                    )
+                _social.record_opgrade_event(
+                    client_mac_hash=mac_hash, src_site=src_site,
+                    opgrade_vendor=op_vendor, category=op_category,
                 )
         except Exception:
             pass

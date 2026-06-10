@@ -58,6 +58,16 @@
     el.hidden = false;
   }
 
+  // Phase 12.C — top-severity operator-grade / state-adjacent banner.
+  function updateOpgradeTile(sites, vendors) {
+    const el = document.getElementById('opgrade-alert');
+    if (!el) return;
+    if (!sites) { el.hidden = true; return; }
+    const v = (vendors || []).join(', ');
+    el.textContent = t('opgrade_alert', { n: sites }) + (v ? ' — ' + v : '');
+    el.hidden = false;
+  }
+
   // ─── graph state ───
   let simulation = null;
 
@@ -83,6 +93,7 @@
     bind('total_sites', graph.stats.total_sites || 0);
     // Phase 12.B — "challenged your humanity" alert tile.
     updateAntibotTile(graph.stats.antibot_sites || 0, graph.stats.antibot_vendors || []);
+    updateOpgradeTile(graph.stats.opgrade_sites || 0, graph.stats.opgrade_vendors || []);
 
     // Empty graph → just return ; the stats tiles already show 0/0 and
     // the user knows.  No persistent overlay message.
@@ -122,6 +133,8 @@
         cdn_vendor: n.cdn_vendor || null,
         cache_status: n.cache_status || null,
         antibot_vendor: n.antibot_vendor || null,
+        opgrade_vendor: n.opgrade_vendor || null,
+        opgrade_category: n.opgrade_category || null,
       });
     }
 
@@ -214,7 +227,10 @@
     function nodeColor(d) {
       if (d.kind === 'eye') return 'var(--cinnabar)';
       if (d.kind === 'site') return 'var(--gold-hermetic)';
-      // Phase 12.B — anti-bot hosts get the highest-severity lens.
+      // Severity tiers (highest first):
+      // 12.C operator-grade / state-adjacent = void-purple (top).
+      if (d.opgrade_vendor) return 'var(--void-purple)';
+      // 12.B anti-bot = cinnabar.
       if (d.antibot_vendor) return 'var(--cinnabar)';
       if (d.cdn_vendor && CDN_COLORS[d.cdn_vendor]) return CDN_COLORS[d.cdn_vendor];
       return 'var(--cyber-cyan)';
@@ -230,6 +246,10 @@
     // Phase 12.B — anti-bot hosts get a severe pulsing warning ring.
     nodeG.filter(d => d.kind === 'tracker' && d.antibot_vendor)
       .append('circle').attr('class', 'antibot-ring').attr('r', 12);
+
+    // Phase 12.C — operator-grade hosts get the top-tier double ring.
+    nodeG.filter(d => d.kind === 'tracker' && d.opgrade_vendor)
+      .append('circle').attr('class', 'opgrade-ring').attr('r', 14);
 
     // Site + tracker nodes.
     nodeG.filter(d => d.kind !== 'eye').append('circle')
@@ -327,6 +347,7 @@
     bind('nd_asn',     '—');
     bind('nd_cdn', node.cdn_vendor ? (node.cdn_vendor + (node.cache_status ? ' · ' + node.cache_status : '')) : '—');
     bind('nd_antibot', node.antibot_vendor ? ('🤖 ' + node.antibot_vendor) : '—');
+    bind('nd_opgrade', node.opgrade_vendor ? ('📡 ' + node.opgrade_vendor + (node.opgrade_category ? ' (' + node.opgrade_category + ')' : '')) : '—');
     bind('nd_sites',   (node.sites || []).join(', ') || '—');
     bind('nd_first_seen', node.first_seen ? new Date(node.first_seen * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—');
     bind('nd_last_seen',  node.last_seen  ? new Date(node.last_seen  * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—');
