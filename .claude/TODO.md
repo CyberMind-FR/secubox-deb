@@ -1,9 +1,39 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-09*
+*Mis à jour : 2026-06-10*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Phase 11 — Social mapping per device (#502)
+
+- [x] **11.A backend** (#505 / PR #506, `secubox-toolbox 2.6.0`) — correlation
+  engine + SQLite + API. Déployé live gk2.
+- [x] **11.B frontend** (#507, `2.6.1`) — d3 graph + i18n FR/EN + favicon
+  proxy + wipe modal + full-viewport pan/zoom. Live `/social/me`.
+- [ ] **11.C evidence + PDF** (#508) — reprendre depuis checkpoint
+  `55626e51` : consent-probe addon (OneTrust/Didomi/Quantcast/Sourcepoint)
+  + extra-EU flag + PDF bilingue FR/EN + wire frontend (remplacer le
+  placeholder "Rapport PDF arrive en Phase 11.C").
+- [ ] **Merger PR #506** (11.A backend) → master quand prêt.
+- [ ] **11.D opérateur** (futur) — dashboard agrégat `/admin/social/` HTML
+  (l'endpoint JSON `/admin/social-aggregate` existe déjà depuis 2.6.0).
+
+### Système — bugs gk2 (2026-06-10)
+
+- [x] **CrowdSec firewall** — restart bouncer → tables nft recréées.
+- [x] **WAF /var/log/secubox traversal** — chmod 0755 live.
+- [x] **WAF /stats perf** (#509 / PR #510, `secubox-waf 1.2.2`) — double-buffer
+  cache. Mergé + `v2.13.14`.
+- [x] **PeerTube + PhotoPrism** — LXC redémarrés.
+- [ ] **Round Eye gadget** — ne voit plus gk2, métriques locales only.
+  Investigation Pi Zero (dashboard `localhost:8000` proxie vers gk2 via OTG).
+- [ ] **admin.gk2/toolbox/ tab** — toolbox déjà wiré (`/toolbox/` alias +
+  sidebar). User veut surfacer l'UI kbin/admin dedans — décision en
+  attente : proxy_pass `10.99.0.1:8088/admin/` (cleanest) / iframe (CSP) /
+  sous-tab frontend-only.
+- [ ] **Postinst `/var/log/secubox` 0755** — porter le fix live en source
+  (même pattern que `/etc/secubox` parent + `/usr/share/secubox/www`).
 
 ### Phase 10 — Banner injection perf (#501) — ✅ shipped 2026-06-09
 

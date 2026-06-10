@@ -3,6 +3,79 @@
 
 ---
 
+## 2026-06-10 — Phase 11 social mapping (A+B) + system triage + v2.13.14 (ref #502-#509)
+
+### Package bumps
+
+| Package | from → to |
+|---|---|
+| secubox-toolbox | 2.5.2 → **2.6.0** (#505 Phase 11.A backend) |
+| secubox-toolbox | 2.6.0 → **2.6.1** (#507 Phase 11.B frontend) |
+| secubox-waf | 1.2.1 → **1.2.2** (#509 double-buffer cache) |
+| Release tag | **v2.13.14** |
+
+### Phase 11 — Social mapping per device (#502)
+
+**11.A backend** (`secubox-toolbox 2.6.0`, PR #506) — `social.py`
+correlation engine + 3 SQLite tables (`social_edges` / `social_nodes`
+/ `social_links`), `social_graph.py` mitm addon (cookie_id_hash =
+sha256, never persists raw values), `/social/graph/{token}` +
+`/social/wipe/{token}` (RGPD art. 17) + `/admin/social-aggregate`
+endpoints, fold + purge background tasks.
+
+**11.B frontend** (`secubox-toolbox 2.6.1`, #507) — d3 force-directed
+graph view at `/social/{token}`, FR/EN i18n, server-side favicon proxy
+(7d cache), wipe modal with 3s countdown, full-viewport layout with
+pan/pinch-zoom + pre-warm + autoFit. Splash menu link `/social/me`
+(🕸️ Ma carto) resolving R3 peers via X-R3-Peer sentinel.
+
+**Live result** : graph renders real cross-site tracking on gk2 — the
+ad-tech relay `35.214.136.108` bridging 360yield + seedtag +
+smartadserver + smilewanted publishers, surfacing exactly the
+fingerprint reuse Phase 11 targets.
+
+**Critical live-deploy fixes** : addon relative-import never resolved
+(mitmproxy loads addons top-level) → inlined; **PYTHONPATH missing in
+mitm-wg launcher** silently degraded every addon's `secubox_toolbox`
+imports → fixed globally (also un-degraded inject_banner's host
+classification + GeoIP); i18n moved to `<script>` block (FR
+apostrophes broke JSON.parse); StaticFiles mount + chmod 0755 www
+(kbin HAProxy path bypasses nginx).
+
+**11.C** (#508) — WIP checkpoint `55626e51` : schema (consent_state +
+GeoIP columns), EU/EEA whitelist, GeoIP fold enrichment, evidence()
+helper. PDF generator + consent-probe addon + frontend wire pending.
+
+### System triage on gk2
+
+- **CrowdSec firewall** — bouncer ran healthy but had no nft tables
+  (external flush). Restart recreated `ip crowdsec` + `ip6 crowdsec6`,
+  100 live decisions.
+- **WAF + SOC empty cards** — `/var/log/secubox` was 0750
+  secubox-toolbox, blocking the aggregator (user `secubox`) from
+  traversing to read `waf-threats.log`. chmod 0755 live.
+- **WAF /stats 30s+ timeout** — `_get_threat_stats()` re-parsed the full
+  110 MB / 332k-entry JSONL on every request (89% aggregator CPU).
+  Fixed via #509 double-buffered cache : disk-persisted counters +
+  byte-position incremental tail reading. `/waf/stats` now 30-37 ms.
+- **PeerTube + PhotoPrism 502** — LXCs were STOPPED; `lxc-start` → live.
+
+### CI + release
+
+- #503/PR #504 — drop espressobin-v7 + ultra from the scheduled
+  build-image matrix (cause of the v2.13.9-12 release failures).
+- #509/PR #510 — double-buffer WAF cache.
+- Merged both to master (`3ebb4477`, `a6f44807`), tagged **v2.13.14**.
+
+### Carried forward
+
+- Round Eye gadget remote-link to gk2 (shows local metrics only) —
+  needs Pi-side investigation.
+- admin.gk2/toolbox/ tab surfacing decision (proxy/iframe/sub-tab).
+- `/var/log/secubox` 0755 source-side postinst patch (live-only for now).
+
+---
+
 ## 2026-06-09 — Phase 10 banner injection perf quick wins + postinst regression fix (ref #501)
 
 ### Package bumps
