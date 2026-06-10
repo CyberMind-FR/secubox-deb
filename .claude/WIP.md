@@ -1,5 +1,73 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-09*
+*Mis à jour : 2026-06-10*
+
+---
+
+## 🔄 2026-06-10 : Phase 11 social mapping (A+B) + system triage round (ref #502-#509)
+
+Grosse journée : Phase 11 social mapping shippé jusqu'au frontend live,
+puis une cascade de fixes système découverts par l'utilisateur en
+production sur gk2.
+
+### ✅ Done — Phase 11 social mapping (#502 parent)
+
+| Issue | Phase | État |
+|---|---|---|
+| #505 / PR #506 | **11.A backend** : correlation engine + SQLite + API | ✅ mergeable, déployé live `secubox-toolbox 2.6.0` |
+| #507 | **11.B frontend** : d3 graph + i18n FR/EN + favicon proxy + wipe modal | ✅ déployé live `2.6.1`, branche poussée |
+| #508 | **11.C evidence + PDF** | 🔄 WIP checkpoint `55626e51` (schema + GeoIP fold + evidence helper) |
+
+**Design** : 2 rounds de design lock sur #502 (Gemini + GPT mockups),
+edge-thickness + animated-pulse + tracker bottom-sheet + 3s wipe
+countdown verrouillés.
+
+**Live URL** : `https://kbin.gk2.secubox.in/social/me` (splash → 🕸️ Ma carto).
+Le graphe montre les trackers cross-site réels (relais ad-tech
+`35.214.136.108` reliant 360yield + seedtag + smartadserver + smilewanted).
+
+**Fixes live-deploy critiques découverts** :
+- `social_graph.py` : `from . import local_store` ne résolvait jamais
+  (mitmproxy charge les addons en top-level) → inliné le WG peer hash.
+- **PYTHONPATH manquant dans le launcher mitm-wg** : TOUS les addons
+  (`inject_banner` dpi/geo/store, `social_graph`) avaient leurs
+  `from secubox_toolbox import …` silencieusement dégradés. Fix global.
+- i18n déplacé de `data-*` attr vers `<script>` (apostrophes FR
+  cassaient `JSON.parse`).
+- StaticFiles mount + chmod 0755 `/usr/share/secubox/www` (kbin passe
+  par HAProxy direct uvicorn, bypass nginx).
+- d3 : full-viewport + pan/pinch-zoom + pre-warm 300 ticks + autoFit
+  data-based (146 nodes spread off-screen avant).
+
+### ✅ Done — triage système gk2 (2026-06-10)
+
+| Bug | Cause racine | Fix |
+|---|---|---|
+| CrowdSec firewall status faux | bouncer tournait mais sans tables nft (flush externe) | restart bouncer → `ip crowdsec` + `ip6 crowdsec6` recréées, 100 décisions live |
+| WAF /threats + tracked attackers vides | `/var/log/secubox` 0750 secubox-toolbox bloquait traversal aggregator (user `secubox`) | chmod 0755 live |
+| WAF /stats timeout 30s+ | `_get_threat_stats()` re-parsait 110 MB / 332k JSONL à CHAQUE requête (CPU 89%) | **#509 double-buffer cache** (disk + byte-position incrémental) `secubox-waf 1.2.2` |
+| SOC /soc/ status WAF+firewall faux | consommait les mêmes endpoints WAF cassés | résolu en cascade par le fix WAF |
+| PeerTube + PhotoPrism 502 | LXC STOPPED | `lxc-start` → 200 / 307 |
+
+### ✅ Done — CI + release
+
+- **#503 / PR #504** : drop espressobin-v7 + ultra du matrix build-image
+  scheduled (faisaient échouer le pipeline release v2.13.9-12).
+- **#509 / PR #510** : double-buffer WAF cache.
+- **Merge #504 + #510 → master** (`3ebb4477`, `a6f44807`).
+- **Tag `v2.13.14`** poussé.
+
+### ⬜ Next up
+
+- **Round Eye gadget** : ne voit plus le lien gk2, montre ses métriques
+  locales. iface `eye-remote` UP côté gk2, route `/api/v1/eye-remote/*`
+  renvoie page erreur. Investigation côté Pi Zero nécessaire.
+- **admin.gk2/toolbox/ tab** : le toolbox est DÉJÀ wiré (`/toolbox/`
+  alias + sidebar). User veut surfacer l'UI kbin/admin dedans —
+  décision en attente : proxy_pass / iframe / sous-tab.
+- **Phase 11.C** : reprendre depuis `55626e51` (consent probe addon +
+  extra-EU flag + PDF bilingue + wire frontend).
+- **Postinst patch** : `/var/log/secubox` 0755 en source (pour l'instant
+  fix live uniquement) — même pattern que `/etc/secubox` + `www`.
 
 ---
 
