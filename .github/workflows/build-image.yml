@@ -24,8 +24,8 @@ on:
         type: choice
         options:
           - mochabin
-          - espressobin-v7
-          - espressobin-ultra
+          - espressobin-v7    # on-demand only — disabled in scheduled CI, ref #503
+          - espressobin-ultra # on-demand only — disabled in scheduled CI, ref #503
           - vm-x64
           - vm-arm64
           - rpi400
@@ -50,7 +50,12 @@ jobs:
       fail-fast: false
       matrix:
         # Handle all event types: push (tags), workflow_call, workflow_dispatch
-        board: ${{ (github.event_name == 'push' || (inputs.board == 'all' || inputs.board == '')) && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64","rpi400"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","espressobin-v7","espressobin-ultra","vm-x64","rpi400"]') || fromJson(format('["{0}"]', inputs.board || github.event.inputs.board || 'vm-x64'))) }}
+        # Scheduled / tag-push matrix excludes espressobin-v7 + espressobin-ultra (#503) :
+        # those board builds fail in the cross-arm64 chroot stage and block the
+        # downstream release.yml job for every image even though fail-fast is off.
+        # Operators can still build them on-demand via workflow_dispatch (the
+        # choice list above retains the entries).
+        board: ${{ (github.event_name == 'push' || (inputs.board == 'all' || inputs.board == '')) && fromJson('["mochabin","vm-x64","rpi400"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","vm-x64","rpi400"]') || fromJson(format('["{0}"]', inputs.board || github.event.inputs.board || 'vm-x64'))) }}
 
     steps:
       - name: Checkout
@@ -221,15 +226,17 @@ jobs:
             | Image | Board | Architecture | Description |
             |-------|-------|--------------|-------------|
             | `secubox-mochabin-bookworm.img.gz` | MOCHAbin | arm64 | Marvell Armada 7040 (Pro) |
-            | `secubox-espressobin-v7-bookworm.img.gz` | ESPRESSObin v7 | arm64 | Marvell Armada 3720 (Lite) |
-            | `secubox-espressobin-ultra-bookworm.img.gz` | ESPRESSObin Ultra | arm64 | Marvell Armada 3720 (Lite+) |
             | `secubox-rpi400-bookworm.img.gz` | Raspberry Pi 400 | arm64 | Pi 400 / Pi 4 |
             | `secubox-vm-x64-bookworm.img.gz` | VirtualBox/QEMU | amd64 | VM for testing |
             | `create-qemu-arm64-vm.sh` | QEMU ARM64 | script | Run ARM64 on x86 hosts |
 
+            *ESPRESSObin v7 and Ultra board images are no longer published in
+            scheduled releases (see #503).  Board support remains in tree and
+            on-demand builds are available via workflow_dispatch.*
+
             ### Installation
 
-            **ARM64 boards (MOCHAbin, ESPRESSObin):**
+            **ARM64 boards (MOCHAbin, Raspberry Pi 400):**
             ```bash
             # Flash to SD card or eMMC
             gunzip -c secubox-mochabin-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
