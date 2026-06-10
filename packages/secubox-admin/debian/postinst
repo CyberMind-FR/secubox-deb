@@ -8,7 +8,7 @@ case "$1" in
     install -d -o secubox -g secubox -m 750 /run/secubox
     install -d -o secubox -g secubox -m 750 /var/lib/secubox
     install -d -o secubox -g secubox -m 750 /var/lib/secubox/admin
-    install -d -o root -g secubox -m 750 /var/log/secubox
+    install -d -o root -g secubox -m 0755 /var/log/secubox
     systemctl daemon-reload
     systemctl enable secubox-admin.service
     systemctl start  secubox-admin.service || true

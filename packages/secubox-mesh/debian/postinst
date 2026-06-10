@@ -20,7 +20,7 @@ case "$1" in
     # NE PAS le toucher ici — l'écraser bloque la traversée nginx (www-data) et
     # casse tous les /api/v1/<module>/* en 502 (cf. #471). Si besoin d'un
     # sous-dossier privé, utiliser /run/secubox/mesh/ (et non le parent).
-    install -d -m 0750 -o secubox-mesh -g secubox-mesh /var/log/secubox
+    install -d -m 0755 -o secubox-mesh -g secubox-mesh /var/log/secubox
 
     # 4. Verrou régulatoire FR (idempotent ; ne pas planter si iw absent)
     if command -v iw >/dev/null 2>&1; then
