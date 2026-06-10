@@ -1,3 +1,27 @@
+secubox-toolbox (2.6.2-1~bookworm1) bookworm; urgency=medium
+
+  * ToolBox WebUI sub-tab navigation + kbin /admin/ removal (#513).
+      - www/toolbox/index.html : rebuilt with a 5-tab nav
+        (Vue d'ensemble / Clients / Filtres MITM / Cartographie
+        sociale / Config).  Each tab lazy-loads its data; the live
+        refresh interval only polls the visible tab.  URL hash
+        deep-links a tab (e.g. /toolbox/#social).
+      - Clients tab folds in the R0/R1/R2/R3 level switcher that
+        used to live only in the kbin inline admin UI (calls
+        /admin/clients/{mac}/level).
+      - Cartographie sociale tab surfaces the Phase 11 operator
+        aggregate (/admin/social-aggregate) : KPI tiles + top
+        tracker domains + anonymized client table.
+      - api.py : DELETED the inline kbin /admin/ HTML route
+        (admin_index(), ~230 lines).  The canonical operator
+        dashboard is now admin.gk2.secubox.in/toolbox/.  All
+        /admin/* JSON API routes are untouched.
+      - conf/landing.html.j2 : removed the 🛠️ Admin quicknav icon
+        (the page it pointed at no longer exists).
+    kbin.gk2.secubox.in/admin/ now 404s by design.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 10 Jun 2026 09:15:00 +0200
+
 secubox-toolbox (2.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Phase 11.B (#507, parent #502) — social mapping per-client view +
