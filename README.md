@@ -31,6 +31,30 @@
 > - Press kit + candidatures France.gouv : [docs/marketing/PROMPT-claude-presse-gouv.md](docs/marketing/PROMPT-claude-presse-gouv.md)
 > - Issue tracking poster : [#497](https://github.com/CyberMind-FR/secubox-deb/issues/497)
 
+### 🕸️ Cartographie sociale — « You Have Been Tracked » (Phase 11)
+
+<p align="center">
+  <img src="docs/assets/poster/kbin-you-have-been-tracked.png" alt="Poster YOU HAVE BEEN TRACKED — cartographie sociale kbin" width="500">
+</p>
+
+> **Le même navigateur, reconnu de site en site.**
+>
+> En R3 consenti, la cabine corrèle les **cookies tiers** et les
+> **fingerprints JA4** par device pour révéler, en temps réel, quels
+> acteurs commerciaux reconnaissent votre navigateur à travers les sites
+> visités. Un relais ad-tech reliant 4 éditeurs (360yield + seedtag +
+> smartadserver + smilewanted via la même IP) saute aux yeux dans le
+> graphe force-dirigé.
+>
+> - Vue per-client : `https://kbin.gk2.secubox.in/social/me` (🕸️ « Ma carto »)
+> - Graphe d3 plein écran (pan / pinch-zoom), évidence cross-site,
+>   effacement RGPD art. 17, rapport PDF bilingue (Phase 11.C).
+> - **Anonyme** : `mac_hash` à sel rotatif 24h, aucune valeur de cookie
+>   brute persistée. Tout calculé localement.
+> - Tableau opérateur : `admin.gk2.secubox.in/toolbox/#social`.
+> - Brief poster : [docs/marketing/POSTER-you-have-been-tracked.md](docs/marketing/POSTER-you-have-been-tracked.md)
+> - Plan + design lock : [#502](https://github.com/CyberMind-FR/secubox-deb/issues/502)
+
 ---
 
 ## License — CyberMind Source-Disclosed (CMSD-1.0)
