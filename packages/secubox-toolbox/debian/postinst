@@ -44,7 +44,13 @@ case "$1" in
 
     # 4. Storage dir (SQLite + future PDF reports)
     install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox
-    install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/log/secubox
+    # /var/log/secubox is a SHARED parent traversed by many service users
+    # (the aggregator runs as `secubox` and reads waf-threats.log under
+    # here).  It MUST be 0755 — a 0750 owned by secubox-toolbox silently
+    # breaks WAF + SOC dashboards for the `secubox` user (#511, regressed
+    # the /waf/ + /soc/ pages on gk2 2026-06-10).  Per-module log files +
+    # subdirs inside keep their own restricted perms.
+    install -d -m 0755 -o secubox-toolbox -g secubox-toolbox /var/log/secubox
 
     # 4b. GeoLite2 databases (Phase 2a+ : flag emojis + ASN org)
     # ASN DB from geoipupdate or Debian package geoip-database
