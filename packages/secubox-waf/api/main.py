@@ -26,6 +26,10 @@ import geoip2.errors
 RULES_PATH = "/usr/share/secubox/waf/waf-rules.json"
 THREATS_LOG = "/var/log/secubox/waf-threats.log"
 STATS_CACHE = "/tmp/secubox/waf-stats.json"
+# Phase 7+ (#509) — disk-persisted counters + log byte position for
+# the double-buffered cache.  Survives aggregator restart, populated
+# incrementally by the warm refresh loop.
+STATS_DISK_CACHE = "/var/lib/secubox/waf/stats-disk-cache.json"
 
 # Runtime state
 _compiled_patterns: Dict[str, List[dict]] = {}
@@ -291,70 +295,170 @@ def _get_bans() -> List[dict]:
     return []
 
 
-def _get_threat_stats() -> dict:
-    """Get threat statistics from log with GeoIP country lookup."""
-    stats = {
-        "total_threats": 0,
-        "threats_today": 0,
-        "by_category": defaultdict(int),
-        "by_severity": defaultdict(int),
-        "top_ips": defaultdict(int),
-        "top_countries": defaultdict(int),
-        "top_vhosts": defaultdict(int),
-    }
-    ip_countries: Dict[str, str] = {}  # IP → country mapping
+def _load_stats_disk_cache() -> dict:
+    """Load the persisted counter state + last-read byte position.
 
-    log_path = Path(THREATS_LOG)
-    if not log_path.exists():
-        return stats
+    Schema : {byte_position: int, counters: {...}, ip_countries: {...},
+              today_iso: 'YYYY-MM-DD', threats_today: int,
+              last_updated: int}
 
-    today = datetime.now().date().isoformat()
-    geoip_reader = _get_geoip_reader()
-
+    Counters are full-history accumulators ; `threats_today` is reset
+    at the day rollover.
+    """
+    p = Path(STATS_DISK_CACHE)
+    if not p.exists():
+        return {}
     try:
-        with open(log_path) as f:
-            for line in f:
-                try:
-                    entry = json.loads(line.strip())
-                    stats["total_threats"] += 1
+        return json.loads(p.read_text())
+    except Exception:
+        return {}
 
-                    if entry.get("timestamp", "").startswith(today):
-                        stats["threats_today"] += 1
 
-                    stats["by_category"][entry.get("category", "unknown")] += 1
-                    stats["by_severity"][entry.get("severity", "unknown")] += 1
-
-                    # IP tracking - try both field names for compatibility
-                    ip = entry.get("client_ip") or entry.get("ip", "unknown")
-                    stats["top_ips"][ip] += 1
-
-                    # Country lookup via GeoIP (cache per IP)
-                    if ip not in ip_countries:
-                        ip_countries[ip] = _lookup_country(ip, geoip_reader)
-                    country = ip_countries[ip]
-                    stats["top_countries"][country] += 1
-
-                    # Vhost tracking
-                    vhost = entry.get("host") or entry.get("vhost", "unknown")
-                    stats["top_vhosts"][vhost] += 1
-                except json.JSONDecodeError:
-                    pass
+def _save_stats_disk_cache(state: dict) -> None:
+    try:
+        p = Path(STATS_DISK_CACHE)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        # Atomic write : tmp → rename so a half-written file never
+        # corrupts the cache on the next load.
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state))
+        tmp.replace(p)
     except Exception:
         pass
 
-    # Convert defaultdicts and get top 10
-    stats["by_category"] = dict(stats["by_category"])
-    stats["by_severity"] = dict(stats["by_severity"])
 
-    # Top IPs with country codes included
-    top_ips_sorted = sorted(stats["top_ips"].items(), key=lambda x: -x[1])[:10]
-    stats["top_ips"] = {ip: count for ip, count in top_ips_sorted}
-    stats["top_ips_countries"] = {ip: ip_countries.get(ip, "??") for ip, _ in top_ips_sorted}
+def _get_threat_stats() -> dict:
+    """Get threat statistics from log with GeoIP country lookup.
 
-    stats["top_countries"] = dict(sorted(stats["top_countries"].items(), key=lambda x: -x[1])[:10])
-    stats["top_vhosts"] = dict(sorted(stats["top_vhosts"].items(), key=lambda x: -x[1])[:10])
+    Phase 7+ (#509) — double-buffered cache : the first call after a
+    cold start does ONE full-log pass and persists counters + the byte
+    position to disk.  Subsequent calls only read the new tail since
+    the last position.  Log rotation / truncation is detected via the
+    file shrinking ; counters are reset cleanly.
+    """
+    state = _load_stats_disk_cache()
+    today = datetime.now().date().isoformat()
 
-    return stats
+    # Reset accumulators if the day has rolled over.
+    if state.get("today_iso") != today:
+        state["today_iso"] = today
+        state["threats_today"] = 0
+
+    counters = state.get("counters", {})
+    by_category = defaultdict(int, counters.get("by_category", {}))
+    by_severity = defaultdict(int, counters.get("by_severity", {}))
+    top_ips = defaultdict(int, counters.get("top_ips", {}))
+    top_countries = defaultdict(int, counters.get("top_countries", {}))
+    top_vhosts = defaultdict(int, counters.get("top_vhosts", {}))
+    total_threats = counters.get("total_threats", 0)
+    threats_today = state.get("threats_today", 0)
+    ip_countries: Dict[str, str] = dict(state.get("ip_countries", {}))
+
+    log_path = Path(THREATS_LOG)
+    if not log_path.exists():
+        # Return whatever's cached.
+        return _finalize_stats(
+            total_threats, threats_today, by_category, by_severity,
+            top_ips, top_countries, top_vhosts, ip_countries,
+        )
+
+    geoip_reader = _get_geoip_reader()
+    try:
+        size_now = log_path.stat().st_size
+        byte_position = state.get("byte_position", 0)
+
+        # Log rotation / truncation : the file shrank since last read.
+        # Drop accumulators ; we'll rebuild from the new (smaller) file.
+        if size_now < byte_position:
+            by_category.clear(); by_severity.clear(); top_ips.clear()
+            top_countries.clear(); top_vhosts.clear()
+            total_threats = 0
+            threats_today = 0
+            byte_position = 0
+            ip_countries.clear()
+
+        if size_now > byte_position:
+            with open(log_path) as f:
+                f.seek(byte_position)
+                for line in f:
+                    try:
+                        entry = json.loads(line.strip())
+                        total_threats += 1
+
+                        if entry.get("timestamp", "").startswith(today):
+                            threats_today += 1
+
+                        by_category[entry.get("category", "unknown")] += 1
+                        by_severity[entry.get("severity", "unknown")] += 1
+
+                        ip = entry.get("client_ip") or entry.get("ip", "unknown")
+                        top_ips[ip] += 1
+
+                        if ip not in ip_countries:
+                            ip_countries[ip] = _lookup_country(ip, geoip_reader)
+                        top_countries[ip_countries[ip]] += 1
+
+                        vhost = entry.get("host") or entry.get("vhost", "unknown")
+                        top_vhosts[vhost] += 1
+                    except json.JSONDecodeError:
+                        pass
+                byte_position = f.tell()
+    except Exception:
+        pass
+
+    # Cap the ip_countries dict so it doesn't grow without bound.
+    # Top-1000 most recently seen IPs is plenty for the dashboard.
+    if len(ip_countries) > 1200:
+        ip_countries = dict(
+            sorted(ip_countries.items(), key=lambda kv: -top_ips.get(kv[0], 0))[:1000]
+        )
+
+    # Persist before returning so the next call starts from here.
+    _save_stats_disk_cache({
+        "today_iso": today,
+        "threats_today": threats_today,
+        "byte_position": byte_position,
+        "counters": {
+            "total_threats": total_threats,
+            "by_category": dict(by_category),
+            "by_severity": dict(by_severity),
+            "top_ips": dict(top_ips),
+            "top_countries": dict(top_countries),
+            "top_vhosts": dict(top_vhosts),
+        },
+        "ip_countries": ip_countries,
+        "last_updated": int(time.time()),
+    })
+
+    return _finalize_stats(
+        total_threats, threats_today, by_category, by_severity,
+        top_ips, top_countries, top_vhosts, ip_countries,
+    )
+
+
+def _finalize_stats(
+    total_threats: int, threats_today: int,
+    by_category, by_severity, top_ips, top_countries, top_vhosts,
+    ip_countries: dict,
+) -> dict:
+    """Shape the dashboard-friendly result : top-10 lists + plain dicts."""
+    top_ips_sorted = sorted(top_ips.items(), key=lambda x: -x[1])[:10]
+    return {
+        "total_threats": total_threats,
+        "threats_today": threats_today,
+        "by_category": dict(by_category),
+        "by_severity": dict(by_severity),
+        "top_ips": {ip: count for ip, count in top_ips_sorted},
+        "top_ips_countries": {
+            ip: ip_countries.get(ip, "??") for ip, _ in top_ips_sorted
+        },
+        "top_countries": dict(
+            sorted(top_countries.items(), key=lambda x: -x[1])[:10]
+        ),
+        "top_vhosts": dict(
+            sorted(top_vhosts.items(), key=lambda x: -x[1])[:10]
+        ),
+    }
 
 
 # ───────────────────────────────────────────────────────────────────────
