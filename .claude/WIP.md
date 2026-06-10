@@ -3,6 +3,67 @@
 
 ---
 
+## 🔄 2026-06-10 (soir) : Phase 11 COMPLETE + Phase 12.A/B + toolbox tabs — merged v2.13.15 (ref #502-#516)
+
+Tout le stack Phase 11 + Phase 12.A/B mergé en une PR consolidée (#517),
+`secubox-toolbox 2.5.2 → 2.6.6`, tag **v2.13.15**.
+
+### ✅ Done — mergé master
+
+| Issue | Livré | Version |
+|---|---|---|
+| #505 11.A backend | correlation engine + SQLite + /social API | 2.6.0 |
+| #507 11.B frontend | d3 graph + i18n FR/EN + favicon proxy + wipe + /social/me | 2.6.1 |
+| #513 toolbox tabs | 5-tab WebUI, kbin /admin/ inline UI supprimé | 2.6.2 |
+| #508 11.C evidence | consent-probe + PDF bilingue FR/EN | 2.6.3 |
+| #515 12.A CDN | detect_cdn + Round-Eye central-hotspot graph | 2.6.4 |
+| #516 12.B anti-bot | detect_antibot + ring levels visibles + Carto/Reset | 2.6.5/2.6.6 |
+
+### ✅ Phase 11 — social mapping per device (#502)
+
+Live : `https://kbin.gk2.secubox.in/social/me` (🕸️ Ma carto).
+Graphe Round-Eye : l'appareil = œil central pulsant, sites sur anneau
+interne (forceRadial 0.9), trackers anneau externe. Montre le relais
+ad-tech `35.214.136.108` reliant 360yield + seedtag + smartadserver +
+smilewanted. PDF d'évidence bilingue (consentement RGPD art. 6.1.a+7,
+transferts hors-UE art. 44). Effacement RGPD art. 17. Anonyme (mac_hash
+sel rotatif 24h, aucune valeur cookie brute).
+
+### ✅ Phase 12 — anti-human-detection platform (#514)
+
+- **12.A CDN** : detect_cdn (Cloudflare/Fastly/Akamai/CloudFront/Google/
+  Vercel/Netlify/Bunny/KeyCDN/Sucuri/Imperva). Nodes teintés par vendor,
+  table social_host_meta, agrégat by_cdn.
+- **12.B anti-bot** : detect_antibot (reCAPTCHA/hCaptcha/Turnstile/
+  Datadome/PerimeterX-HUMAN/Arkose/Kasada/Akamai-BotManager). Lens
+  cinnabar sévère + ring d'alerte + bannière "challenged your humanity".
+  Table social_antibot per-client, agrégat by_antibot.
+  **Bypass NON livré** — gated derrière doctrine (séquencement #514).
+- **Ring levels visibles** : forceRadial dominant + guides d'anneau +
+  cache-bust ?v=264b (le user ne voyait pas la réorg ; corrigé).
+- **Outils opérateur Clients tab** : 🕸️ Carto (ouvre le graphe client
+  via token, redirige vers kbin absolu), ↺ Reset/RAZ (efface social +
+  events + score).
+
+### ⚠️ Round Eye gadget — diagnostic, fix physique requis
+
+OTG USB CDC-Ethernet **TX queue wedged** (NETDEV WATCHDOG timeout sur
+3-1.1.2). Le gadget énumère (descripteurs lisibles) mais le data path
+TX est mort — control transfers OK, bulk KO. Recovery gk2 épuisée
+(link bounce, unbind/rebind → probe error -110). **Power-cycle du Pi
+Zero ou re-seat câble OTG nécessaire** ; self-heal au prochain boot
+propre via la règle systemd .link.
+
+### ⬜ Next up
+
+- **Phase 12.C** (#514) : opérateur-grade / state-adjacent (étend #500
+  Utiq). Détection identité carrier-grade + analytics state-adjacent.
+- **Phase 12.B bypass + 12.D noise** : derniers, chacun gated par sa
+  doctrine + design review (interférence active 3rd-party = R3 opt-in).
+- **Round Eye** : reprendre côté gk2 dès que le Pi re-énumère propre.
+
+---
+
 ## 🔄 2026-06-10 : Phase 11 social mapping (A+B) + system triage round (ref #502-#509)
 
 Grosse journée : Phase 11 social mapping shippé jusqu'au frontend live,
