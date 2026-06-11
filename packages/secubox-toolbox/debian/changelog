@@ -1,3 +1,31 @@
+secubox-toolbox (2.6.8-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 13.A (#521, parent #519) — unified blacklist enforcement spine.
+      - nftables.d/secubox-blacklist.nft : table inet secubox_blacklist
+        with blacklist_v4 / blacklist_v6 sets (flags interval,timeout)
+        + a single forward-hook chain (priority -10, policy accept) that
+        counter-drops any routed packet whose saddr OR daddr is
+        blacklisted. One rule set covers every device egress path
+        (captive / R3 WG / br-lxc / LAN) — no per-interface logic.
+        Loaded by nftables.service at boot ; survives reboot.
+      - sbin/secubox-blacklist-sync : unions CrowdSec ban decisions
+        (cscli) + threat-intel C2 IPs (threat_intel ip IOCs from
+        toolbox.db) into the sets, per-element timeout 2h (auto-expire
+        on stale feeds), 50k safety cap, idempotent add (no flush race
+        with CrowdSec's own table).
+      - systemd/secubox-blacklist-sync.{service,timer} : oneshot +
+        every-5-min timer (OnBootSec 90s).
+      - postinst : install drop-in to /etc/nftables.d/, reload nft,
+        enable+start the timer, kick a first sync.
+      - api.py : GET /admin/blacklist — element counts + drop counters
+        from nft -j (read-only status).
+    Doctrine preserved : policy accept only ADDS drops (a drop in any
+    chain wins) — never a WAF/default-drop bypass. Detection sources are
+    high-confidence only (CrowdSec bans + threat-intel C2) ; WAF-ban +
+    Vortex-resolved-IP feeds land in 13.B/13.D.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Jun 2026 09:00:00 +0200
+
 secubox-toolbox (2.6.7-1~bookworm1) bookworm; urgency=medium
 
   * Phase 12.C (#518, parent #514) — operator-grade / state-adjacent

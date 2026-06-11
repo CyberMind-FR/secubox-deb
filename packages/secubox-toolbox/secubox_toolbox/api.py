@@ -2085,6 +2085,48 @@ async def admin_social_aggregate(hours: int = 24) -> dict:
     return _s.aggregate(hours=hours)
 
 
+@router.get("/admin/blacklist")
+async def admin_blacklist() -> dict:
+    """Phase 13.A (#521) — enforcement-spine status : element counts +
+    drop counters of the unified nft blacklist sets.  Read-only ; parses
+    `nft -j list table inet secubox_blacklist`.
+    """
+    import json as _json
+    import subprocess as _sp
+    out: dict = {
+        "active": False,
+        "v4_count": 0,
+        "v6_count": 0,
+        "drops": 0,
+        "sources": ["crowdsec", "threat-intel"],
+    }
+    try:
+        r = _sp.run(
+            ["/usr/sbin/nft", "-j", "list", "table", "inet", "secubox_blacklist"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode != 0:
+            return out
+        data = _json.loads(r.stdout or "{}")
+        for item in data.get("nftables", []):
+            if "set" in item:
+                s = item["set"]
+                n = len(s.get("elem", []) or [])
+                if s.get("name") == "blacklist_v4":
+                    out["v4_count"] = n
+                elif s.get("name") == "blacklist_v6":
+                    out["v6_count"] = n
+            if "rule" in item:
+                for ex in item["rule"].get("expr", []):
+                    c = ex.get("counter")
+                    if c:
+                        out["drops"] += int(c.get("packets", 0) or 0)
+        out["active"] = True
+    except Exception as e:  # noqa: BLE001
+        log.warning("admin_blacklist failed: %s", e)
+    return out
+
+
 @router.get("/social/report/{token}.pdf")
 async def social_report_pdf(token: str) -> Response:
     """Phase 11.C (#508) — bilingual FR/EN evidence PDF for a peer.
