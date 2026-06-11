@@ -1,5 +1,48 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-10*
+*Mis à jour : 2026-06-11*
+
+---
+
+## 🔄 2026-06-11 : Phase 12.C + Phase 13 COMPLETE (protection enforcement plane) — v2.13.16→19 (ref #518-#528)
+
+### ✅ Phase 12.C — operator-grade / state-adjacent (#518, v2.13.16)
+detect_operator_grade : telco header-enrichment (MSISDN/x-acr), consortium
+(Utiq/TrustPid), data-broker / state-adjacent (LiveRamp/BlueKai/Acxiom/
+Neustar/Tapad/Experian/Palantir-class). Top-severity void-purple lens +
+PDF section. `secubox-toolbox 2.6.7`.
+
+### ✅ Phase 13 — protection enforcement plane (#519) COMPLETE
+Le plan de bannissement (Vortex DNS + WAF + CrowdSec) enforce maintenant
+sur le browsing des appareils, à tous les niveaux egress.
+
+| Track | Issue | Livré | Tag |
+|---|---|---|---|
+| 13.A spine | #521 | nft set `inet secubox_blacklist` + forward-drop chain ; sync CrowdSec+threat-intel | v2.13.17 (2.6.8) |
+| 13.B DNS-guard | #522 | résout domaines blocklistés → IPs (anti-DoH bypass) + détection DoH/DoT count-only | v2.13.17 (2.6.9) |
+| 13.C attribution | #524 | per-device (WG/lease hash) blocked-attempts + quarantine set + endpoints | v2.13.18 (2.6.10) |
+| 13.D feedback | #527 | escalation evaluator (detections→nft/cscli/quarantine), audit-log, **default OFF** | v2.13.19 (2.6.11) |
+
+**Doctrine** : DEFAULT DROP préservé (policy accept n'ajoute que des drops) ;
+pas de WAF bypass ; anonyme (mac_hash sel rotatif) ; tout réversible (TTL +
+unban) ; escalade opt-in par source.
+
+**Bug latent corrigé (#521)** : `override_dh_strip` ne tourne jamais pour
+un paquet `Architecture: all` → tous les drop-ins nft/unbound/nginx/perf
+avaient cessé de shipper (cause racine de la live-config-drift). Déplacé
+vers `execute_after_dh_auto_install`. Mémoire ajoutée.
+
+### 💡 Idée future capturée (#525)
+Phase 14 « plan de déception » : au lieu de bloquer les IPs trackers,
+générer des pseudo-réponses proxy (indistinguable du drop, pollue le
+profil) ; idem neutraliser les scripts CDN préchargés. Pour plus tard.
+
+### ⬜ Next up
+- **Phase 13 opt-in tuning** : activer les sources d'escalade (env
+  `SECUBOX_ESCALATE_*`) selon politique opérateur quand voulu.
+- **threatfox feed = 0 IOCs** : investiguer pourquoi l'ingestion domain
+  est vide (impacte 13.B resolved_domains).
+- **Phase 14 déception** (#525) quand prêt.
+- **Round Eye** : power-cycle Pi (USB TX wedged, recovery gk2 épuisée).
 
 ---
 

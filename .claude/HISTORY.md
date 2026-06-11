@@ -3,6 +3,52 @@
 
 ---
 
+## 2026-06-11 — Phase 12.C + Phase 13 protection enforcement plane COMPLETE (ref #518-#528)
+
+`secubox-toolbox 2.6.6 → 2.6.11`, tags v2.13.16 → v2.13.19.
+
+### Phase 12.C — operator-grade / state-adjacent (#518, v2.13.16, 2.6.7)
+`detect_operator_grade` : telco header-enrichment (MSISDN/x-acr/WAP),
+operator-consortium (Utiq/TrustPid), data-broker / state-adjacent hosts
+(LiveRamp/BlueKai/Acxiom/Neustar/Tapad/Experian/Palantir-class). Top
+severity void-purple lens + double ring + ⛔ banner + PDF evidence
+section. Detection only.
+
+### Phase 13 — protection enforcement plane (#519) COMPLETE
+Made the SecuBox ban plane (Vortex DNS + WAF + CrowdSec) actually enforce
+on device browsing across every egress path.
+- **13.A** (#521, v2.13.17, 2.6.8) — `inet secubox_blacklist` nft table,
+  v4/v6 interval+timeout sets, single forward-hook drop chain (covers
+  captive/WG/br-lxc/LAN); `secubox-blacklist-sync` unions CrowdSec bans +
+  threat-intel C2 (2h timeout); /admin/blacklist. **Also fixed the
+  override_dh_strip latent bug** (never runs for arch:all → nft/unbound/
+  nginx/perf drop-ins had stopped shipping; root cause of live-config
+  drift) by moving to execute_after_dh_auto_install. Memory saved.
+- **13.B** (#522, v2.13.17, 2.6.9) — DNS-guard: resolve blocklisted
+  domains → IPs into the set (closes DoH/hardcoded-IP bypass); count-only
+  DoH/DoT detection chain (15 v4 + 6 v6 providers); SECUBOX_DOH_BLOCK
+  opt-in. create-or-replace idiom → idempotent reloads.
+- **13.C** (#524, v2.13.18, 2.6.10) — per-device attribution: rate-limited
+  SBX-BL-DROP/SBX-DOH nft logs → journald tailer → device_blocks
+  (anonymous WG/lease hash); quarantine set + /admin/quarantine + one-click
+  operator action.
+- **13.D** (#527, v2.13.19, 2.6.11) — feedback loop: escalation evaluator
+  reads opgrade/antibot/device-blocks aggregates, escalates over threshold
+  to blacklist IPs / cscli decision / device quarantine. Audit-logged,
+  reversible, **all sources default OFF** (opt-in via SECUBOX_ESCALATE_*).
+
+**Doctrine** : DEFAULT DROP preserved (policy accept only adds drops); no
+WAF bypass; anonymous (rotating mac_hash); all escalations TTL'd +
+reversible + opt-in. Verified live on gk2 (18 C2 IPs enforced, quarantine
+add/remove, synthetic escalation + audit entry).
+
+### Future idea captured (#525)
+Phase 14 deception plane — pseudo-responses from a proxy instead of
+dropping tracker IPs (indistinguable, pollutes the profile) + neutralizing
+CDN-preloaded tracking scripts. For later.
+
+---
+
 ## 2026-06-10 (soir) — Phase 11 COMPLETE + Phase 12.A/B + toolbox tabs — v2.13.15 (ref #502-#516)
 
 Consolidated stack merged via PR #517. `secubox-toolbox 2.5.2 → 2.6.6`,
