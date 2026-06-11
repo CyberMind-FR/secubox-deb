@@ -2087,43 +2087,69 @@ async def admin_social_aggregate(hours: int = 24) -> dict:
 
 @router.get("/admin/blacklist")
 async def admin_blacklist() -> dict:
-    """Phase 13.A (#521) — enforcement-spine status : element counts +
-    drop counters of the unified nft blacklist sets.  Read-only ; parses
-    `nft -j list table inet secubox_blacklist`.
+    """Phase 13.A (#521) + 13.B (#522) — enforcement-spine status :
+    element counts + drop counters of the unified nft blacklist sets,
+    plus the DoH/DoT detection counters and the last-sync state.
+    Read-only ; parses `nft -j list table inet secubox_blacklist`.
     """
     import json as _json
     import subprocess as _sp
+    from pathlib import Path as _P
     out: dict = {
         "active": False,
         "v4_count": 0,
         "v6_count": 0,
         "drops": 0,
-        "sources": ["crowdsec", "threat-intel"],
+        "doh_detect_v4": 0,
+        "doh_detect_v6": 0,
+        "doh_hits": 0,
+        "resolved_domains": 0,
+        "doh_block": False,
+        "sources": ["crowdsec", "threat-intel", "dns-guard"],
     }
     try:
         r = _sp.run(
             ["/usr/sbin/nft", "-j", "list", "table", "inet", "secubox_blacklist"],
             capture_output=True, text=True, timeout=5,
         )
-        if r.returncode != 0:
-            return out
-        data = _json.loads(r.stdout or "{}")
-        for item in data.get("nftables", []):
-            if "set" in item:
-                s = item["set"]
-                n = len(s.get("elem", []) or [])
-                if s.get("name") == "blacklist_v4":
-                    out["v4_count"] = n
-                elif s.get("name") == "blacklist_v6":
-                    out["v6_count"] = n
-            if "rule" in item:
-                for ex in item["rule"].get("expr", []):
-                    c = ex.get("counter")
-                    if c:
-                        out["drops"] += int(c.get("packets", 0) or 0)
-        out["active"] = True
+        if r.returncode == 0:
+            data = _json.loads(r.stdout or "{}")
+            for item in data.get("nftables", []):
+                if "set" in item:
+                    s = item["set"]
+                    n = len(s.get("elem", []) or [])
+                    name = s.get("name")
+                    if name == "blacklist_v4":
+                        out["v4_count"] = n
+                    elif name == "blacklist_v6":
+                        out["v6_count"] = n
+                    elif name == "doh_detect_v4":
+                        out["doh_detect_v4"] = n
+                    elif name == "doh_detect_v6":
+                        out["doh_detect_v6"] = n
+                if "rule" in item:
+                    chain = item["rule"].get("chain", "")
+                    for ex in item["rule"].get("expr", []):
+                        c = ex.get("counter")
+                        if not c:
+                            continue
+                        pk = int(c.get("packets", 0) or 0)
+                        if chain == "doh_watch":
+                            out["doh_hits"] += pk
+                        else:
+                            out["drops"] += pk
+            out["active"] = True
     except Exception as e:  # noqa: BLE001
-        log.warning("admin_blacklist failed: %s", e)
+        log.warning("admin_blacklist nft parse failed: %s", e)
+    # Last-sync state file (resolved-domain count + doh_block flag).
+    try:
+        st = _P("/run/secubox/blacklist-sync.json")
+        if st.exists():
+            j = _json.loads(st.read_text())
+            out["resolved_domains"] = int(j.get("resolved_domains", 0) or 0)
+            out["doh_block"] = str(j.get("doh_block", "0")) == "1"
+    except Exception:
+        pass
     return out
 
 

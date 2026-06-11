@@ -1,3 +1,27 @@
+secubox-toolbox (2.6.9-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 13.B (#522, parent #519) — DNS-guard : resolve blocklisted
+    domains into the enforcement set + DoH/DoT detection.
+      - secubox-blacklist-sync : Source 3 resolves threat_intel
+        ioc_type='domain' to A/AAAA (getent, per-lookup timeout 2s,
+        2000-domain cap) and pushes the IPs into blacklist_v4/v6 — so a
+        device that resolves a known-bad domain via DoH / hardcoded IP
+        is still dropped at the forward hook. Writes a state file
+        /run/secubox/blacklist-sync.json (resolved count + doh_block).
+      - nftables.d/secubox-blacklist.nft : doh_detect_v4/v6 sets + a
+        count-only doh_watch chain (priority -11) that counters device
+        egress to known DoH/DoT provider endpoints (Cloudflare/Google/
+        Quad9/AdGuard/OpenDNS/CleanBrowsing/Control-D/NextDNS) on
+        tcp 443/853. Detection only by default.
+      - secubox-blacklist-sync : populates the DoH sets every cycle ;
+        SECUBOX_DOH_BLOCK=1 ALSO adds them to the enforced blacklist
+        (forces devices back through Vortex DNS). Default off — gated.
+      - api.py /admin/blacklist : adds doh_detect counts, doh_hits
+        counter, resolved_domains, doh_block flag.
+    Detection-first ; DoH blocking opt-in only (intrusive, per #519 Q1).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Jun 2026 09:30:00 +0200
+
 secubox-toolbox (2.6.8-1~bookworm1) bookworm; urgency=medium
 
   * Phase 13.A (#521, parent #519) — unified blacklist enforcement spine.
