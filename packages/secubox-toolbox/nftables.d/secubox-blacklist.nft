@@ -39,11 +39,31 @@ table inet secubox_blacklist {
         flags interval, timeout
     }
 
+    # Phase 13.C (#524) — per-device quarantine. An operator (or the
+    # auto-quarantine policy, default off) adds a device's source IP here ;
+    # ALL its forward traffic is dropped until the entry expires / is
+    # removed. Separate from the C2 blacklist so un-quarantine is a single
+    # set op and the device dashboard can show quarantine state distinctly.
+    set quarantine_v4 {
+        type ipv4_addr
+        flags interval, timeout
+    }
+    set quarantine_v6 {
+        type ipv6_addr
+        flags interval, timeout
+    }
+
     chain enforce {
         type filter hook forward priority -10; policy accept;
-        ip  daddr @blacklist_v4 counter drop
+        # Quarantine first : a quarantined device is fully cut off.
+        ip  saddr @quarantine_v4 counter drop
+        ip6 saddr @quarantine_v6 counter drop
+        # C2 blacklist (13.A). Phase 13.C : rate-limited log so the
+        # attribution tailer can bucket drops per source device without
+        # flooding the kernel log.
+        ip  daddr @blacklist_v4 limit rate 20/second log prefix "SBX-BL-DROP " counter drop
         ip  saddr @blacklist_v4 counter drop
-        ip6 daddr @blacklist_v6 counter drop
+        ip6 daddr @blacklist_v6 limit rate 20/second log prefix "SBX-BL-DROP " counter drop
         ip6 saddr @blacklist_v6 counter drop
     }
 
@@ -64,7 +84,9 @@ table inet secubox_blacklist {
     }
     chain doh_watch {
         type filter hook forward priority -11; policy accept;
-        ip  daddr @doh_detect_v4 tcp dport { 443, 853 } counter
-        ip6 daddr @doh_detect_v6 tcp dport { 443, 853 } counter
+        # Phase 13.C : rate-limited log (new connections only) so the
+        # attribution tailer can bucket DoH attempts per device.
+        ip  daddr @doh_detect_v4 tcp dport { 443, 853 } ct state new limit rate 5/second log prefix "SBX-DOH " counter
+        ip6 daddr @doh_detect_v6 tcp dport { 443, 853 } ct state new limit rate 5/second log prefix "SBX-DOH " counter
     }
 }

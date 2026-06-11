@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Phase 13.C (#524) — attribute nft drops/DoH attempts to devices.
+[Unit]
+Description=SecuBox blacklist per-device attribution (kernel-log tailer)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/524
+After=secubox-toolbox.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-blacklist-attrib
+User=root
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

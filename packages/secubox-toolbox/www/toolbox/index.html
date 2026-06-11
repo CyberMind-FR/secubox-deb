@@ -149,6 +149,10 @@
                 <div id="social-opgrade"><div class="empty">loading…</div></div>
             </div>
             <div class="card" style="grid-column:1/-1">
+                <h2>🛡️ Blocages par appareil (13.C)</h2>
+                <div id="social-devblocks"><div class="empty">loading…</div></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
                 <h2>🎯 Top tracker domains</h2>
                 <div id="social-trackers"><div class="empty">loading…</div></div>
             </div>
@@ -277,6 +281,17 @@ async function resetClient(macHash) {
         alert(`RAZ effectuée : ${j.rows_deleted || 0} enregistrements supprimés.`);
         loadClients();
     } catch (e) { alert('Échec RAZ : ' + e.message); }
+}
+
+async function quarantine(ip) {
+    if (!ip) return;
+    if (!confirm(`Mettre en quarantaine l'appareil ${ip} ? Tout son trafic sera coupé 6h.`)) return;
+    try {
+        const r = await fetch(`${API}/admin/quarantine/${encodeURIComponent(ip)}`, { method: 'POST', credentials: 'same-origin' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        alert('Appareil en quarantaine (6h).');
+        loadSocial();
+    } catch (e) { alert('Échec quarantaine : ' + e.message); }
 }
 
 async function loadMetrics() {
@@ -408,6 +423,17 @@ async function loadSocial() {
               ba.map(r => `<tr><td>🤖 ${r.antibot_vendor}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.challenges}</td></tr>`).join('') +
               '</tbody></table>'
             : '<div class="empty">aucun anti-bot détecté</div>';
+    }
+    const dbk = document.getElementById('social-devblocks');
+    if (dbk) {
+        const db = await J('/admin/device-blocks?hours=24');
+        const bd = (db && db.by_device) || [];
+        dbk.innerHTML = bd.length
+            ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${db.devices||0} appareil(s) · ${db.total_hits||0} blocages 24h</p>` +
+              '<table><thead><tr><th>Appareil (hash)</th><th>IP</th><th>blacklist</th><th>DoH</th><th>total</th><th>Quarantaine</th></tr></thead><tbody>' +
+              bd.map(r => `<tr><td><code>${(r.mac_hash||'').slice(0,16)}</code></td><td>${r.ip||'—'}</td><td>${r.blacklist||0}</td><td>${r.doh||0}</td><td>${r.total||0}</td><td><a class="link" href="javascript:void(0)" onclick="quarantine('${r.ip||''}')" style="color:var(--red);font-size:0.78rem">⛔ Quarantaine</a></td></tr>`).join('') +
+              '</tbody></table>'
+            : '<div class="empty">aucun blocage attribué (24h)</div>';
     }
     const og = document.getElementById('social-opgrade');
     if (og) {

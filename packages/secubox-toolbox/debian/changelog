@@ -1,3 +1,27 @@
+secubox-toolbox (2.6.10-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 13.C (#524, parent #519) — DHCP/WG per-device attribution +
+    quarantine.
+      - secubox-blacklist.nft : quarantine_v4/v6 sets + a quarantine-first
+        rule in the enforce chain (a quarantined device's saddr is fully
+        dropped). Rate-limited log prefixes SBX-BL-DROP (enforce drops)
+        and SBX-DOH (DoH watch, ct state new) for attribution.
+      - secubox_toolbox/device_blocks.py : device resolver (R3 WG peer
+        hash / dnsmasq-lease MAC hash with rotating salt / IP fallback)
+        + device_blocks SQLite aggregate + retention.
+      - sbin/secubox-blacklist-attrib : journald kernel-log tailer
+        (cursor-based) that buckets SBX-BL-DROP / SBX-DOH by source IP,
+        maps to an anonymous device, upserts device_blocks. 2-min timer.
+      - api.py : GET /admin/device-blocks (per-device aggregate),
+        POST /admin/quarantine/{ip} + /admin/unquarantine/{ip}.
+      - app.py : device_blocks 7-day retention in the purge loop.
+      - index.html operator tab : per-device blocked-attempts card with
+        a one-click quarantine action.
+    Anonymous attribution (rotating mac_hash). Auto-quarantine NOT wired
+    (operator-manual only this pass ; threshold policy is #519 Q2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Jun 2026 10:00:00 +0200
+
 secubox-toolbox (2.6.9-1~bookworm1) bookworm; urgency=medium
 
   * Phase 13.B (#522, parent #519) — DNS-guard : resolve blocklisted

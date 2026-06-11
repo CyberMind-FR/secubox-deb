@@ -88,6 +88,13 @@ execute_after_dh_auto_install:
 	  debian/secubox-toolbox/lib/systemd/system/
 	install -m 0644 systemd/secubox-blacklist-sync.timer \
 	  debian/secubox-toolbox/lib/systemd/system/
+	# Phase 13.C (#524) : per-device attribution tailer + timer.
+	install -m 0755 sbin/secubox-blacklist-attrib \
+	  debian/secubox-toolbox/usr/sbin/
+	install -m 0644 systemd/secubox-blacklist-attrib.service \
+	  debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-blacklist-attrib.timer \
+	  debian/secubox-toolbox/lib/systemd/system/
 	install -m 0755 sbin/secubox-toolbox-wg-restore \
 	  debian/secubox-toolbox/usr/sbin/
 	install -m 0644 systemd/secubox-toolbox-wg-restore.service \
