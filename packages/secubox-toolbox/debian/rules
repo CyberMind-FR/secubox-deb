@@ -95,6 +95,13 @@ execute_after_dh_auto_install:
 	  debian/secubox-toolbox/lib/systemd/system/
 	install -m 0644 systemd/secubox-blacklist-attrib.timer \
 	  debian/secubox-toolbox/lib/systemd/system/
+	# Phase 13.D (#527) : escalation evaluator (all sources default OFF).
+	install -m 0755 sbin/secubox-escalate \
+	  debian/secubox-toolbox/usr/sbin/
+	install -m 0644 systemd/secubox-escalate.service \
+	  debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-escalate.timer \
+	  debian/secubox-toolbox/lib/systemd/system/
 	install -m 0755 sbin/secubox-toolbox-wg-restore \
 	  debian/secubox-toolbox/usr/sbin/
 	install -m 0644 systemd/secubox-toolbox-wg-restore.service \

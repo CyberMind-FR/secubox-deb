@@ -1,3 +1,28 @@
+secubox-toolbox (2.6.11-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 13.D (#527, parent #519) — feedback loop : detections escalate
+    to enforcement. ALL SOURCES DEFAULT OFF.
+      - secubox_toolbox/escalate.py : evaluator reads the social-mapping
+        (by_opgrade / by_antibot) + device-blocks aggregates, applies
+        operator-tunable thresholds, and escalates :
+          * operator-grade / state-adjacent data-broker hosts over
+            threshold → resolve IPs → blacklist_v4/v6 (+ optional cscli
+            decision for audit + TTL),
+          * anti-bot vendors over threshold → flag only (legit infra ;
+            no auto-ban),
+          * devices over the DoH-attempt threshold → 13.C quarantine.
+        Every action append-logged to /var/log/secubox/audit.log (CSPN)
+        and reversible (nft/cscli TTL + operator unban).
+      - sbin/secubox-escalate + systemd .service/.timer (every 10 min) ;
+        sources opted in per SECUBOX_ESCALATE_* env in a drop-in.
+      - api.py GET /admin/escalate : policy flags + last-cycle summary.
+    Phase 13 (protection enforcement plane) complete : A spine + B
+    DNS-guard + C per-device attribution/quarantine + D feedback loop.
+    Detection stays factual ; escalation is a separate, logged,
+    reversible, opt-in policy decision (#519 doctrine).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 11 Jun 2026 10:30:00 +0200
+
 secubox-toolbox (2.6.10-1~bookworm1) bookworm; urgency=medium
 
   * Phase 13.C (#524, parent #519) — DHCP/WG per-device attribution +

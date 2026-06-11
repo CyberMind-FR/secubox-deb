@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: secubox-escalate (Phase 13.D #527)
+# Thin wrapper : run one escalation cycle. All sources DEFAULT OFF —
+# nothing escalates until an operator opts in via SECUBOX_ESCALATE_* env
+# (set in a /etc/systemd/system/secubox-escalate.service.d/ drop-in).
+set -euo pipefail
+PYHELPER=/usr/lib/secubox/toolbox
+STATE=/run/secubox/escalate.json
+mkdir -p /run/secubox 2>/dev/null || true
+PYTHONPATH="$PYHELPER" python3 - <<'PYEOF' > "$STATE" 2>/dev/null || true
+import json
+from secubox_toolbox import escalate
+print(json.dumps(escalate.evaluate_and_apply()))
+PYEOF
+logger -t secubox-escalate -- "cycle done ($(cat "$STATE" 2>/dev/null | head -c 200))" 2>/dev/null || true
+exit 0
