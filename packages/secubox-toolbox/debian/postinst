@@ -151,6 +151,26 @@ fi
       fi
     fi
 
+    # Phase 13.A (#521) : unified blacklist enforcement spine.
+    # nft drop-in (loaded by nftables.service at boot) + sync timer that
+    # unions CrowdSec decisions + threat-intel C2 IPs into the sets.
+    if [ -f /usr/share/secubox/toolbox/nftables.d/secubox-blacklist.nft ]; then
+      install -d -m 0755 /etc/nftables.d
+      install -m 0644 /usr/share/secubox/toolbox/nftables.d/secubox-blacklist.nft \
+        /etc/nftables.d/secubox-blacklist.nft
+      if systemctl is-active --quiet nftables.service 2>/dev/null; then
+        systemctl reload nftables.service 2>/dev/null \
+          || /usr/sbin/nft -f /etc/nftables.d/secubox-blacklist.nft 2>/dev/null \
+          || true
+      fi
+      if [ -d /run/systemd/system ]; then
+        systemctl enable secubox-blacklist-sync.timer 2>/dev/null || true
+        systemctl start secubox-blacklist-sync.timer 2>/dev/null || true
+        # Kick an immediate first sync (best-effort).
+        systemctl start secubox-blacklist-sync.service 2>/dev/null || true
+      fi
+    fi
+
     # Phase 7 (#498) : install unbound listeners.
     # 99-secubox-wg.conf — WG peers (10.99.x). Without it WG peers' DNS
     #   queries get ICMP port unreachable and the iPhone stops resolving.

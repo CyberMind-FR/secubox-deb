@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# SecuBox-Deb :: secubox-blacklist-sync
+#
+# Phase 13.A (#521) — union all ban sources into the nft enforcement
+# sets (inet secubox_blacklist blacklist_v4 / blacklist_v6).  Idempotent,
+# safe to run on a timer.  Each element gets a timeout so stale entries
+# auto-expire if a source stops listing them.
+set -euo pipefail
+readonly MODULE="secubox-blacklist-sync"
+readonly VERSION="13.A"
+
+NFT=/usr/sbin/nft
+TABLE="inet secubox_blacklist"
+TOOLBOX_DB=/var/lib/secubox/toolbox/toolbox.db
+ELEM_TIMEOUT="${SECUBOX_BL_TIMEOUT:-2h}"   # auto-expiry per element
+# Safety cap : never load more than this many IPs (a runaway feed
+# shouldn't be able to black-hole the box).
+MAX_ELEMS="${SECUBOX_BL_MAX:-50000}"
+
+log() { logger -t "$MODULE" -- "$*" 2>/dev/null || echo "[$MODULE] $*" >&2; }
+
+# The nft table must already exist (loaded by nftables.service from the
+# drop-in).  If it doesn't, load the drop-in once.
+if ! $NFT list table $TABLE >/dev/null 2>&1; then
+    if [ -r /etc/nftables.d/secubox-blacklist.nft ]; then
+        $NFT -f /etc/nftables.d/secubox-blacklist.nft || {
+            log "ERROR: table missing and drop-in load failed"; exit 1; }
+    else
+        log "ERROR: table $TABLE missing and no drop-in to load"; exit 1
+    fi
+fi
+
+# ── Collect IPs from all sources into temp files (v4 / v6) ──
+TMP4=$(mktemp); TMP6=$(mktemp)
+trap 'rm -f "$TMP4" "$TMP6"' EXIT
+
+# Source 1 : threat-intel C2 IPs (feodo / threatfox / sslbl) from the
+# toolbox SQLite. ioc_type='ip'.
+if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
+    sqlite3 "$TOOLBOX_DB" \
+        "SELECT DISTINCT ioc FROM threat_intel WHERE ioc_type='ip';" \
+        2>/dev/null >> "$TMP4.raw" || true
+fi
+
+# Source 2 : CrowdSec decisions (ban scope=Ip). JSON via cscli.
+if command -v cscli >/dev/null 2>&1; then
+    cscli decisions list -o json 2>/dev/null \
+      | { command -v jq >/dev/null 2>&1 \
+            && jq -r '.[] | select(.decisions != null) | .decisions[] | select(.type=="ban") | .value' 2>/dev/null \
+            || sed -n 's/.*"value":"\([0-9a-fA-F:.]*\)".*/\1/p'; } \
+      >> "$TMP4.raw" || true
+fi
+
+# Source 3 (Phase 13.B #522) : DNS-guard — resolve blocklisted DOMAINS
+# (threat_intel ioc_type='domain') to their A/AAAA records and add those
+# IPs. Closes the DoH / hardcoded-IP bypass : even if a device resolves a
+# known-bad domain out-of-band, the resulting IP is dropped at forward.
+# Bounded : cap on domains/cycle + per-lookup timeout so the sync never
+# hangs on a dead resolver.
+DOMAIN_CAP="${SECUBOX_BL_DOMAIN_CAP:-2000}"
+RESOLVE_TIMEOUT="${SECUBOX_BL_RESOLVE_TIMEOUT:-2}"
+resolved_domains=0
+if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
+    while IFS= read -r dom; do
+        [ -n "$dom" ] || continue
+        # getent ahosts returns both A + AAAA ; timeout guards a dead lookup.
+        ips=$(timeout "$RESOLVE_TIMEOUT" getent ahosts "$dom" 2>/dev/null \
+                | awk '{print $1}' | sort -u)
+        if [ -n "$ips" ]; then
+            printf '%s\n' "$ips" >> "$TMP4.raw"
+            resolved_domains=$((resolved_domains + 1))
+        fi
+    done < <(sqlite3 "$TOOLBOX_DB" \
+        "SELECT DISTINCT ioc FROM threat_intel WHERE ioc_type='domain' LIMIT $DOMAIN_CAP;" \
+        2>/dev/null)
+fi
+
+# Split v4 / v6, validate, dedup, cap.
+if [ -f "$TMP4.raw" ]; then
+    # IPv6 = contains a colon ; IPv4 = dotted quad (optionally /CIDR).
+    grep -E ':' "$TMP4.raw" 2>/dev/null | grep -vE '^\s*$' | sort -u > "$TMP6" || true
+    grep -vE ':' "$TMP4.raw" 2>/dev/null \
+      | grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$' \
+      | sort -u > "$TMP4" || true
+    rm -f "$TMP4.raw"
+fi
+
+n4=$(wc -l < "$TMP4" 2>/dev/null || echo 0)
+n6=$(wc -l < "$TMP6" 2>/dev/null || echo 0)
+
+if [ "$n4" -gt "$MAX_ELEMS" ]; then
+    log "WARN: $n4 v4 IPs exceeds cap $MAX_ELEMS — truncating"
+    head -n "$MAX_ELEMS" "$TMP4" > "$TMP4.cap" && mv "$TMP4.cap" "$TMP4"
+    n4=$MAX_ELEMS
+fi
+
+# ── Push into the nft sets (batched add-element with per-elem timeout) ──
+# We don't flush : timeouts handle expiry, and re-adding refreshes the
+# timeout on still-active entries. Batching keeps it to one nft call.
+add_batch() {
+    local set="$1" file="$2" fam="$3"
+    [ -s "$file" ] || return 0
+    local elems
+    elems=$(awk -v t="$ELEM_TIMEOUT" 'NF{printf "%s timeout %s, ", $1, t}' "$file")
+    elems="${elems%, }"
+    [ -n "$elems" ] || return 0
+    # add (not flush+add) so concurrent CrowdSec table updates don't race.
+    $NFT add element $TABLE "$set" "{ $elems }" 2>/dev/null \
+        || log "WARN: partial add to $set ($fam)"
+}
+
+add_batch blacklist_v4 "$TMP4" v4
+add_batch blacklist_v6 "$TMP6" v6
+
+# ── Phase 13.B (#522) : DoH/DoT detection-list population ──
+# Known DoH/DoT provider endpoints. Count-only by default (the doh_watch
+# chain just counters) ; SECUBOX_DOH_BLOCK=1 also adds them to the
+# enforced blacklist so devices are forced back through Vortex DNS.
+DOH_BLOCK="${SECUBOX_DOH_BLOCK:-0}"
+DOH_V4="1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 9.9.9.9 149.112.112.112 \
+94.140.14.14 94.140.15.15 208.67.222.222 208.67.220.220 \
+185.228.168.9 76.76.2.0 76.76.10.0 45.90.28.0 45.90.30.0"
+DOH_V6="2606:4700:4700::1111 2606:4700:4700::1001 2001:4860:4860::8888 \
+2001:4860:4860::8844 2620:fe::fe 2620:fe::9"
+doh4_elems=$(printf '%s ' $DOH_V4 | awk -v t="$ELEM_TIMEOUT" '{for(i=1;i<=NF;i++)printf "%s timeout %s, ",$i,t}')
+doh6_elems=$(printf '%s ' $DOH_V6 | awk -v t="$ELEM_TIMEOUT" '{for(i=1;i<=NF;i++)printf "%s timeout %s, ",$i,t}')
+[ -n "$doh4_elems" ] && $NFT add element $TABLE doh_detect_v4 "{ ${doh4_elems%, } }" 2>/dev/null || true
+[ -n "$doh6_elems" ] && $NFT add element $TABLE doh_detect_v6 "{ ${doh6_elems%, } }" 2>/dev/null || true
+if [ "$DOH_BLOCK" = "1" ]; then
+    # Opt-in : also enforce-drop DoH so devices fall back to Vortex.
+    [ -n "$doh4_elems" ] && $NFT add element $TABLE blacklist_v4 "{ ${doh4_elems%, } }" 2>/dev/null || true
+    [ -n "$doh6_elems" ] && $NFT add element $TABLE blacklist_v6 "{ ${doh6_elems%, } }" 2>/dev/null || true
+fi
+
+# ── Report + state file (consumed by /admin/blacklist) ──
+live4=$($NFT list set $TABLE blacklist_v4 2>/dev/null | grep -c 'timeout' || echo 0)
+live6=$($NFT list set $TABLE blacklist_v6 2>/dev/null | grep -c 'timeout' || echo 0)
+STATE=/run/secubox/blacklist-sync.json
+mkdir -p /run/secubox 2>/dev/null || true
+printf '{"ts":%s,"v4_added":%s,"v6_added":%s,"resolved_domains":%s,"doh_block":%s}\n' \
+    "$(date +%s)" "${n4:-0}" "${n6:-0}" "${resolved_domains:-0}" "${DOH_BLOCK}" \
+    > "$STATE" 2>/dev/null || true
+log "synced: +${n4} v4 / +${n6} v6 (live ~${live4}/${live6}, resolved ${resolved_domains:-0} domains, doh_block=${DOH_BLOCK}, timeout ${ELEM_TIMEOUT})"
+exit 0
