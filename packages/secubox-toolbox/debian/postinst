@@ -168,6 +168,9 @@ fi
         systemctl start secubox-blacklist-sync.timer 2>/dev/null || true
         # Kick an immediate first sync (best-effort).
         systemctl start secubox-blacklist-sync.service 2>/dev/null || true
+        # Phase 13.C (#524) : per-device attribution tailer timer.
+        systemctl enable secubox-blacklist-attrib.timer 2>/dev/null || true
+        systemctl start secubox-blacklist-attrib.timer 2>/dev/null || true
       fi
     fi
 
