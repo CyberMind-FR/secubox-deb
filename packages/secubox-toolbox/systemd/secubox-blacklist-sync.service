@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Phase 13.A (#521) — union ban sources into the nft blacklist sets.
+[Unit]
+Description=SecuBox blacklist enforcement sync (CrowdSec + threat-intel -> nft sets)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/521
+After=nftables.service secubox-toolbox.service
+Wants=nftables.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-blacklist-sync
+# Needs CAP_NET_ADMIN for nft set writes ; root is simplest + the script
+# is read-only against the toolbox DB + cscli.
+User=root
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

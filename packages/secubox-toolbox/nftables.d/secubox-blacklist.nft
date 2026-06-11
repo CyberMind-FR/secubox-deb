@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Phase 13.A (#521) — unified blacklist enforcement spine.
+#
+# One authoritative pair of sets (v4/v6) fed by secubox-blacklist-sync
+# from ALL ban sources (CrowdSec decisions + threat-intel C2 IPs ;
+# WAF-ban + Vortex-resolved feeds land in 13.B/13.D).  A single
+# forward-hook chain drops any ROUTED packet whose source OR destination
+# is blacklisted — so it covers every device egress path at once
+# (captive 10.99.0.0/24, R3 WG wg-toolbox 10.99.1.0/24, br-lxc, LAN)
+# with no per-interface logic.
+#
+# Doctrine : policy accept here only ADDS drops ; it never bypasses the
+# main inet filter default-drop (a drop in any chain wins regardless of
+# another chain's accept policy).  Loaded by nftables.service at boot
+# via /etc/nftables.d/*.nft so it survives reboot (#498/#501 pattern).
+#
+# The sets are `interval` (CIDR support) + `timeout` (elements auto-expire
+# if the sync stops re-adding them — fail-open on stale data, never a
+# permanent black hole from a one-off bad feed).
+
+table inet secubox_blacklist {
+    set blacklist_v4 {
+        type ipv4_addr
+        flags interval, timeout
+    }
+    set blacklist_v6 {
+        type ipv6_addr
+        flags interval, timeout
+    }
+
+    chain enforce {
+        type filter hook forward priority -10; policy accept;
+        ip  daddr @blacklist_v4 counter drop
+        ip  saddr @blacklist_v4 counter drop
+        ip6 daddr @blacklist_v6 counter drop
+        ip6 saddr @blacklist_v6 counter drop
+    }
+}
