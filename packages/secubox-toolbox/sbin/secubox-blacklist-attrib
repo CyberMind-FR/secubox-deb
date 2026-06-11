@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# SecuBox-Deb :: secubox-blacklist-attrib (Phase 13.C #524)
+#
+# Reads the kernel log for the nft drop/DoH log prefixes (SBX-BL-DROP /
+# SBX-DOH), extracts SRC=/DST=, maps SRC to an anonymous device hash, and
+# records per-device block events into device_blocks.  Runs on a timer ;
+# uses a cursor file so each run only consumes new journal lines.
+set -euo pipefail
+readonly MODULE="secubox-blacklist-attrib"
+
+CURSOR=/run/secubox/blacklist-attrib.cursor
+PYHELPER=/usr/lib/secubox/toolbox
+mkdir -p /run/secubox 2>/dev/null || true
+
+log() { logger -t "$MODULE" -- "$*" 2>/dev/null || echo "[$MODULE] $*" >&2; }
+
+# Pull new kernel-log lines since the saved cursor (journald), kernel
+# facility only, matching our prefixes. --after-cursor needs a stored
+# cursor ; first run uses --since to bound the backlog.
+JARGS=(-k -o export --no-pager)
+if [ -r "$CURSOR" ] && [ -s "$CURSOR" ]; then
+    JARGS+=(--after-cursor "$(cat "$CURSOR")")
+else
+    JARGS+=(--since "-5min")
+fi
+
+# Collect SRC/DST per prefix into a temp, then hand to python for the
+# device mapping + DB upsert (one process, not per-line).
+TMP=$(mktemp); trap 'rm -f "$TMP"' EXIT
+
+# journalctl -o export emits field=value blocks ; we grep MESSAGE lines.
+# Save the last cursor seen so the next run resumes cleanly.
+LASTCUR=""
+while IFS= read -r line; do
+    case "$line" in
+        __CURSOR=*) LASTCUR="${line#__CURSOR=}" ;;
+        MESSAGE=*SBX-BL-DROP*)
+            src=$(printf '%s\n' "$line" | sed -n 's/.*SRC=\([0-9a-fA-F:.]*\).*/\1/p')
+            dst=$(printf '%s\n' "$line" | sed -n 's/.*DST=\([0-9a-fA-F:.]*\).*/\1/p')
+            [ -n "$src" ] && printf 'blacklist-drop\t%s\t%s\n' "$src" "$dst" >> "$TMP"
+            ;;
+        MESSAGE=*SBX-DOH*)
+            src=$(printf '%s\n' "$line" | sed -n 's/.*SRC=\([0-9a-fA-F:.]*\).*/\1/p')
+            dst=$(printf '%s\n' "$line" | sed -n 's/.*DST=\([0-9a-fA-F:.]*\).*/\1/p')
+            [ -n "$src" ] && printf 'doh-attempt\t%s\t%s\n' "$src" "$dst" >> "$TMP"
+            ;;
+    esac
+done < <(journalctl "${JARGS[@]}" 2>/dev/null | grep -aE '^(__CURSOR=|MESSAGE=.*SBX-(BL-DROP|DOH))')
+
+# Persist the cursor for the next run.
+[ -n "$LASTCUR" ] && printf '%s' "$LASTCUR" > "$CURSOR" 2>/dev/null || true
+
+count=$(wc -l < "$TMP" 2>/dev/null || echo 0)
+if [ "$count" -gt 0 ]; then
+    PYTHONPATH="$PYHELPER" python3 - "$TMP" <<'PYEOF'
+import sys
+from secubox_toolbox import device_blocks as db
+n = 0
+with open(sys.argv[1]) as f:
+    for ln in f:
+        parts = ln.rstrip("\n").split("\t")
+        if len(parts) != 3:
+            continue
+        kind, src, dst = parts
+        mac = db.resolve_device(src)
+        db.record_block(mac, src, kind, dst or "?")
+        n += 1
+print(n)
+PYEOF
+fi
+log "attributed ${count} block events"
+exit 0

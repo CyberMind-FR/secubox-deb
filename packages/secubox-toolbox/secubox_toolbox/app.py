@@ -65,6 +65,12 @@ async def _startup() -> None:
         while True:
             try:
                 social.purge_older_than(days=7)
+                # Phase 13.C (#524) — device-blocks retention.
+                try:
+                    from . import device_blocks as _db
+                    _db.purge_older_than(days=7)
+                except Exception:
+                    pass
             except Exception as e:
                 _log.error("social.purge_older_than failed: %s", e)
             await asyncio.sleep(3600)
