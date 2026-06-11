@@ -1,9 +1,30 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-10*
+*Mis à jour : 2026-06-11*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Phase 13 — Protection enforcement plane (#519) — ✅ COMPLETE
+
+- [x] **13.A spine** (#521, `2.6.8`, v2.13.17) — nft blacklist set + forward-drop
+  chain + sync (CrowdSec + threat-intel). + override_dh_strip drift fix.
+- [x] **13.B DNS-guard** (#522, `2.6.9`, v2.13.17) — résout domaines blocklistés
+  → IPs ; détection DoH/DoT (block opt-in).
+- [x] **13.C attribution** (#524, `2.6.10`, v2.13.18) — per-device blocked-attempts
+  + quarantine + endpoints + tile.
+- [x] **13.D feedback** (#527, `2.6.11`, v2.13.19) — escalation evaluator
+  (detections→nft/cscli/quarantine), audit-log, **default OFF**.
+- [ ] **13.x opt-in tuning** — activer `SECUBOX_ESCALATE_*` / `SECUBOX_DOH_BLOCK`
+  selon politique opérateur quand voulu.
+- [ ] **threatfox feed = 0** — investiguer l'ingestion domain vide (impacte
+  13.B resolved_domains).
+
+### Phase 14 — Plan de déception (#525, idée future)
+
+- [ ] Pseudo-réponses proxy au lieu de blocage IP (indistinguable, pollue
+  le profil) + neutralisation des scripts CDN préchargés. R3 consenti,
+  réutilise la détection Phase 11/12. **Pour plus tard.**
 
 ### Phase 11 — Social mapping per device (#502) — ✅ COMPLETE (v2.13.15)
 
@@ -21,9 +42,9 @@
   graph + by_cdn. Mergé.
 - [x] **12.B anti-bot** (#516, `2.6.5/2.6.6`) — detect_antibot (détection
   seule) + ring levels visibles + Carto/Reset opérateur. Mergé.
-- [ ] **12.C opérateur-grade / state-adjacent** — étend #500 Utiq :
-  identité carrier-grade (MSISDN injection, CGNAT fingerprint) + analytics
-  state-adjacent. Prochain track.
+- [x] **12.C opérateur-grade / state-adjacent** (#518, `2.6.7`, v2.13.16) —
+  detect_operator_grade (telco MSISDN/x-acr + consortium Utiq/TrustPid +
+  data-broker LiveRamp/BlueKai/Palantir-class). Top-severity lens + PDF.
 - [ ] **12.B bypass** — résolution de challenge (gated derrière doctrine
   lawful-use + design review ; R3 opt-in uniquement).
 - [ ] **12.D noise counter-measures** — cookie-noising / header-strip /
