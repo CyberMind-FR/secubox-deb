@@ -36,13 +36,18 @@ Phase 14 « plan de déception » : au lieu de bloquer les IPs trackers,
 générer des pseudo-réponses proxy (indistinguable du drop, pollue le
 profil) ; idem neutraliser les scripts CDN préchargés. Pour plus tard.
 
+### 🧹 État du dépôt
+Toutes les branches Phase 11/12/13 mergées + supprimées sur origin.
+master @ `v2.13.19` (`secubox-toolbox 2.6.11`). Worktrees Phase 11-13
+nettoyés. (Worktrees plus anciens #429/#485/#486/#490/#494/#495/#498 +
+license = travail parallèle, non touchés.)
+
 ### ⬜ Next up
 - **Phase 13 opt-in tuning** : activer les sources d'escalade (env
   `SECUBOX_ESCALATE_*`) selon politique opérateur quand voulu.
 - **threatfox feed = 0 IOCs** : investiguer pourquoi l'ingestion domain
   est vide (impacte 13.B resolved_domains).
 - **Phase 14 déception** (#525) quand prêt.
-- **Round Eye** : power-cycle Pi (USB TX wedged, recovery gk2 épuisée).
 
 ---
 
