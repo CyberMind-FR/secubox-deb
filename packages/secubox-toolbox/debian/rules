@@ -54,8 +54,14 @@ override_dh_installsystemd:
 override_dh_auto_test:
 	@true
 
-override_dh_strip:
-	@true
+# NOTE: dh_strip is NOT invoked in the binary-indep sequence (this is an
+# Architecture: all package with no binaries to strip), so an
+# override_dh_strip target would silently never run.  Everything that
+# used to live there is installed from execute_after_dh_auto_install
+# below — which DOES run — so nft drop-ins / unbound / nginx / perf
+# drop-ins / blacklist spine actually ship in the .deb (#521 caught the
+# stale-on-disk drift this caused).
+execute_after_dh_auto_install:
 	# Phase 6.Q (#496) : DB tuning helper + uvicorn perf drop-in
 	install -m 755 sbin/secubox-toolbox-db-tune \
 	  debian/secubox-toolbox/usr/sbin/
@@ -73,6 +79,15 @@ override_dh_strip:
 	# by symlinking /etc/nftables.d/secubox-toolbox-wg.nft → this file.
 	install -m 0644 nftables.d/secubox-toolbox-wg-fanout.nft \
 	  debian/secubox-toolbox/usr/share/secubox/toolbox/nftables.d/
+	# Phase 13.A (#521) : unified blacklist enforcement spine.
+	install -m 0644 nftables.d/secubox-blacklist.nft \
+	  debian/secubox-toolbox/usr/share/secubox/toolbox/nftables.d/
+	install -m 0755 sbin/secubox-blacklist-sync \
+	  debian/secubox-toolbox/usr/sbin/
+	install -m 0644 systemd/secubox-blacklist-sync.service \
+	  debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-blacklist-sync.timer \
+	  debian/secubox-toolbox/lib/systemd/system/
 	install -m 0755 sbin/secubox-toolbox-wg-restore \
 	  debian/secubox-toolbox/usr/sbin/
 	install -m 0644 systemd/secubox-toolbox-wg-restore.service \
