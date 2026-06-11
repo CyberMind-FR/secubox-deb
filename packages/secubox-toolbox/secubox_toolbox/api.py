@@ -2153,6 +2153,54 @@ async def admin_blacklist() -> dict:
     return out
 
 
+@router.get("/admin/device-blocks")
+async def admin_device_blocks(hours: int = 24) -> dict:
+    """Phase 13.C (#524) — per-device blocked-attempts attribution :
+    which anonymous device hit blacklisted IPs / DoH endpoints, how often.
+    """
+    from . import device_blocks as _db
+    return _db.aggregate(hours=hours)
+
+
+def _quarantine_ip(ip: str, add: bool, ttl: str = "6h") -> dict:
+    """Add/remove a device source IP to the nft quarantine set."""
+    import ipaddress as _ip
+    import subprocess as _sp
+    try:
+        addr = _ip.ip_address(ip)
+    except ValueError:
+        raise HTTPException(400, f"invalid IP {ip!r}")
+    setname = "quarantine_v6" if addr.version == 6 else "quarantine_v4"
+    op = "add" if add else "delete"
+    elem = f"{ip} timeout {ttl}" if add else ip
+    try:
+        r = _sp.run(
+            ["/usr/sbin/nft", op, "element", "inet", "secubox_blacklist",
+             setname, "{ " + elem + " }"],
+            capture_output=True, text=True, timeout=5,
+        )
+        ok = r.returncode == 0
+        if not ok and not add and "No such file" in (r.stderr or ""):
+            ok = True  # already absent → treat as success
+        log.info("quarantine %s %s -> %s", op, ip, "ok" if ok else r.stderr.strip())
+        return {"ok": ok, "ip": ip, "action": op, "set": setname,
+                "error": None if ok else (r.stderr or "").strip()}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"nft {op} failed: {e}")
+
+
+@router.post("/admin/quarantine/{ip}")
+async def admin_quarantine_add(ip: str, ttl: str = "6h") -> dict:
+    """Quarantine a device : drop ALL its forward traffic for `ttl`."""
+    return _quarantine_ip(ip, add=True, ttl=ttl)
+
+
+@router.post("/admin/unquarantine/{ip}")
+async def admin_quarantine_remove(ip: str) -> dict:
+    """Lift a device's quarantine."""
+    return _quarantine_ip(ip, add=False)
+
+
 @router.get("/social/report/{token}.pdf")
 async def social_report_pdf(token: str) -> Response:
     """Phase 11.C (#508) — bilingual FR/EN evidence PDF for a peer.

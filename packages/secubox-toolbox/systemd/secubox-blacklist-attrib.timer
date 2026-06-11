@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Phase 13.C (#524) — per-device attribution every 2 min.
+[Unit]
+Description=SecuBox blacklist attribution timer (every 2 min)
+
+[Timer]
+OnBootSec=120s
+OnUnitActiveSec=2min
+AccuracySec=20s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
