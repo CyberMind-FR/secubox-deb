@@ -19,6 +19,15 @@
 # The sets are `interval` (CIDR support) + `timeout` (elements auto-expire
 # if the sync stops re-adding them — fail-open on stale data, never a
 # permanent black hole from a one-off bad feed).
+#
+# Idempotent load : the create-or-replace idiom below makes `nft -f` on
+# this file safe to run repeatedly (postinst reload, manual reload)
+# WITHOUT appending duplicate rules to the chains. The sets are wiped on
+# reload but secubox-blacklist-sync repopulates them immediately (postinst
+# kicks a sync ; the timer keeps them fresh every 5 min) — a brief empty
+# window is the fail-open direction anyway.
+table inet secubox_blacklist { }
+delete table inet secubox_blacklist
 
 table inet secubox_blacklist {
     set blacklist_v4 {
@@ -36,5 +45,26 @@ table inet secubox_blacklist {
         ip  saddr @blacklist_v4 counter drop
         ip6 daddr @blacklist_v6 counter drop
         ip6 saddr @blacklist_v6 counter drop
+    }
+
+    # Phase 13.B (#522) — DoH/DoT detection. COUNT-ONLY by default : a
+    # device reaching a known DoH/DoT provider endpoint is counted (for
+    # passive stats + the "this device bypasses Vortex DNS" signal) but
+    # NOT blocked. Blocking is opt-in : secubox-blacklist-sync with
+    # SECUBOX_DOH_BLOCK=1 ALSO adds these IPs to blacklist_v4/v6 above,
+    # where the enforce chain drops them — forcing the device back through
+    # Vortex DNS. Default off (intrusive ; gated per #519 open Q1).
+    set doh_detect_v4 {
+        type ipv4_addr
+        flags interval, timeout
+    }
+    set doh_detect_v6 {
+        type ipv6_addr
+        flags interval, timeout
+    }
+    chain doh_watch {
+        type filter hook forward priority -11; policy accept;
+        ip  daddr @doh_detect_v4 tcp dport { 443, 853 } counter
+        ip6 daddr @doh_detect_v6 tcp dport { 443, 853 } counter
     }
 }
