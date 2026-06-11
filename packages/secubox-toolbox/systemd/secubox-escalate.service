@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Phase 13.D (#527) — escalation evaluator. DEFAULT OFF : set the
+# SECUBOX_ESCALATE_* env in a drop-in to opt a source in.
+[Unit]
+Description=SecuBox detection->enforcement escalation evaluator
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/527
+After=secubox-toolbox.service secubox-blacklist-sync.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-escalate
+User=root
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=90
+# All escalation sources OFF by default. Opt in via a drop-in, e.g.:
+#   [Service]
+#   Environment=SECUBOX_ESCALATE_OPGRADE=1
+#   Environment=SECUBOX_ESCALATE_DEVICE_DOH=1
+
+[Install]
+WantedBy=multi-user.target

@@ -171,6 +171,11 @@ fi
         # Phase 13.C (#524) : per-device attribution tailer timer.
         systemctl enable secubox-blacklist-attrib.timer 2>/dev/null || true
         systemctl start secubox-blacklist-attrib.timer 2>/dev/null || true
+        # Phase 13.D (#527) : escalation evaluator timer. The TIMER runs,
+        # but every escalation SOURCE is default OFF — nothing escalates
+        # until the operator opts in via a SECUBOX_ESCALATE_* drop-in.
+        systemctl enable secubox-escalate.timer 2>/dev/null || true
+        systemctl start secubox-escalate.timer 2>/dev/null || true
       fi
     fi
 
