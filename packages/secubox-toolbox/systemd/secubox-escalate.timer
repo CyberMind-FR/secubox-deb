@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Phase 13.D (#527) — escalation evaluator every 10 min.
+[Unit]
+Description=SecuBox escalation evaluator timer (every 10 min)
+
+[Timer]
+OnBootSec=180s
+OnUnitActiveSec=10min
+AccuracySec=60s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

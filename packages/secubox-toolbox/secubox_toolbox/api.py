@@ -2201,6 +2201,25 @@ async def admin_quarantine_remove(ip: str) -> dict:
     return _quarantine_ip(ip, add=False)
 
 
+@router.get("/admin/escalate")
+async def admin_escalate() -> dict:
+    """Phase 13.D (#527) — escalation policy + last cycle summary.
+    Read-only : the policy flags (all default OFF) come from the
+    evaluator's env, the last-run summary from its state file.
+    """
+    import json as _json
+    from pathlib import Path as _P
+    from . import escalate as _esc
+    out: dict = {"policy": _esc.load_policy(), "last_run": None}
+    try:
+        st = _P("/run/secubox/escalate.json")
+        if st.exists():
+            out["last_run"] = _json.loads(st.read_text())
+    except Exception:
+        pass
+    return out
+
+
 @router.get("/social/report/{token}.pdf")
 async def social_report_pdf(token: str) -> Response:
     """Phase 11.C (#508) — bilingual FR/EN evidence PDF for a peer.
