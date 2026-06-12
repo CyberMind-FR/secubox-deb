@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Build the SecuBox Android ToolBox client APK (#531).
+# No Gradle wrapper jar is committed (text-only scaffold) — setup-gradle
+# provides Gradle ; setup-android provides the SDK. Produces a debug APK
+# artifact (sideloadable). Release signing is a follow-up (needs a
+# keystore secret).
+name: build-android-apk
+
+on:
+  push:
+    branches: [ master ]
+    paths: [ "clients/android-toolbox/**", ".github/workflows/build-android-apk.yml" ]
+    tags: [ "android-v*" ]
+  pull_request:
+    paths: [ "clients/android-toolbox/**" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: clients/android-toolbox
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-toolbox-android-debug
+          path: clients/android-toolbox/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
