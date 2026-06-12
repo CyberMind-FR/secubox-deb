@@ -63,12 +63,15 @@ write_server_conf() {
         echo "PrivateKey = ${SRV_PRIV}"
         echo
         if [ -s "$PEERS_STATE" ]; then
-            while IFS=$'\t' read -r pname pip ppub; do
-                [ -n "$ppub" ] || continue
-                echo "# peer: ${pname}"
+            # NB: local loop vars — read into pip/ppub here would clobber
+            # the caller's $pip used for the client config (subtle bug).
+            local _pn _pip _pub
+            while IFS=$'\t' read -r _pn _pip _pub; do
+                [ -n "$_pub" ] || continue
+                echo "# peer: ${_pn}"
                 echo "[Peer]"
-                echo "PublicKey = ${ppub}"
-                echo "AllowedIPs = ${pip}/32"
+                echo "PublicKey = ${_pub}"
+                echo "AllowedIPs = ${_pip}/32"
                 echo
             done < "$PEERS_STATE"
         fi
