@@ -152,12 +152,16 @@ async def ingest_threatfox(limit: int = 5000) -> int:
         return 0
     now = int(time.time())
     rows = []
-    # ThreatFox returns { "<id>": [ {ioc, ioc_type, malware, ...}, ... ], ... }
+    # ThreatFox returns { "<id>": [ {ioc_value, ioc_type, malware, ...}, ... ], ... }
+    # The export/json/recent/ endpoint uses `ioc_value` ; the legacy
+    # api/v1 endpoint used `ioc`. Support both so a future endpoint swap
+    # doesn't silently ingest 0 again (#530 : the field rename had us
+    # ingesting nothing, starving Phase 13.B DNS-guard of domain IOCs).
     for entries in data.values():
         if not isinstance(entries, list):
             continue
         for e in entries:
-            ioc = e.get("ioc", "")
+            ioc = e.get("ioc_value") or e.get("ioc") or ""
             ioc_type = e.get("ioc_type", "")
             malware = e.get("malware_printable") or e.get("malware") or "?"
             if not ioc:
