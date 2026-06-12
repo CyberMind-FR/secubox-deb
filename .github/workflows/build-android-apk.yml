@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # needed to attach the APK to a release on tags
 
 jobs:
   build:
@@ -44,9 +44,27 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: secubox-toolbox-android-debug
           path: clients/android-toolbox/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # On android-v* tags, publish the APK as a release asset under the
+      # stable name the toolbox fetch helper + /wg/toolbox.apk expect
+      # (#536). `latest/download/secubox-toolbox-android.apk` resolves to
+      # whichever release is newest.
+      - name: Stage release asset
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/release"
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             "$GITHUB_WORKSPACE/release/secubox-toolbox-android.apk"
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/secubox-toolbox-android.apk
+          fail_on_unmatched_files: true
