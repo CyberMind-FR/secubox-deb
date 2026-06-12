@@ -1,3 +1,21 @@
+secubox-toolbox (2.6.13-1~bookworm1) bookworm; urgency=medium
+
+  * Serve the Android ToolBox APK from the toolbox (#536, follow-up #531).
+      - api.py GET /wg/toolbox.apk : serves the local APK
+        (/var/lib/secubox/toolbox/android/village3b-toolbox.apk) with
+        content-type application/vnd.android.package-archive ; if absent,
+        302 → the latest public GitHub release asset (button never
+        dead-ends, offline-capable once fetched).
+      - /wg/onboard Android panel (both the inline + the _install_panels
+        variants) : new "📱 Installer l'app ToolBoX (1-tap)" button.
+      - sbin/secubox-toolbox-fetch-apk : pulls the latest release asset
+        into the serve path (best-effort, APK-magic sanity check).
+      - postinst : create the android serve dir + best-effort first fetch.
+      - build-android-apk.yml : on android-v* tags, publish the APK as a
+        release asset named secubox-toolbox-android.apk (contents:write).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 12 Jun 2026 14:30:00 +0200
+
 secubox-toolbox (2.6.12-1~bookworm1) bookworm; urgency=medium
 
   * fix(threat_intel) #530 — ThreatFox ingested 0 IOCs for weeks because
