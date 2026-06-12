@@ -164,6 +164,65 @@ EOF2
     log "peer '${name}' added at ${pip}"
 }
 
+# ── ssh hardening (idempotent) ──
+# Run ONLY after the wg-admin tunnel is confirmed working (key auth over
+# the tunnel). Closes the public SSH brute-force surface :
+#   - sshd : key-only (PasswordAuthentication no, root prohibit-password),
+#   - nft  : drop tcp/22 from any source not in the LAN or the 10.x
+#     tunnels, inserted BEFORE the blanket `iif eth1 accept` so the
+#     router's port-forwarded public SSH (real public source IP) is
+#     dropped while LAN + wg-admin stay reachable.
+# Trusted SSH source sets are tunable via env.
+SSH_LAN_CIDR="${ADMIN_SSH_LAN:-192.168.1.0/24}"
+SSH_TUN_CIDR="${ADMIN_SSH_TUN:-10.0.0.0/8}"
+NFTCONF="/etc/nftables.conf"
+SSHD_DROPIN="/etc/ssh/sshd_config.d/99-secubox-hardening.conf"
+
+harden_ssh() {
+    # Pre-flight : a working key in root's authorized_keys, or we refuse
+    # (don't lock the operator out by disabling passwords with no key).
+    [ -s /root/.ssh/authorized_keys ] || die "no /root/.ssh/authorized_keys — refusing to disable password auth"
+
+    # 1) sshd key-only (idempotent : just (re)write the drop-in).
+    cat > "$SSHD_DROPIN" <<EOF
+# SecuBox admin hardening (#529) — key-only ; admin via wg-admin / LAN.
+PasswordAuthentication no
+PermitRootLogin prohibit-password
+KbdInteractiveAuthentication no
+EOF
+    sshd -t || die "sshd config invalid — left drop-in in place, NOT reloaded"
+    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+    log "sshd hardened : key-only (password auth disabled)"
+
+    # 2) nft SSH-guard — persist in $NFTCONF (after the established-accept).
+    local guard="tcp dport 22 ip saddr != { ${SSH_LAN_CIDR}, ${SSH_TUN_CIDR} } drop"
+    if ! grep -qF "SSH-guard (#529)" "$NFTCONF" 2>/dev/null; then
+        cp "$NFTCONF" "${NFTCONF}.bak.$(date +%s)" 2>/dev/null || true
+        sed -i "/ct state established,related accept/a\\    # SSH-guard (#529): drop public-sourced SSH — LAN + 10.x tunnels only.\\n    ${guard}" "$NFTCONF"
+        nft -c -f "$NFTCONF" || die "nftables.conf failed syntax check after edit — restore from .bak"
+        log "SSH-guard persisted in ${NFTCONF}"
+    else
+        log "SSH-guard already in ${NFTCONF}"
+    fi
+    # 3) Apply live without flushing other tables : insert before the
+    # blanket `iif <lan> accept` rule (looked up by handle).
+    if ! nft list chain inet filter input 2>/dev/null | grep -q "dport 22 ip saddr !="; then
+        local h
+        h=$(nft -a list chain inet filter input 2>/dev/null \
+              | awk '/iif "eth1" accept/ {for(i=1;i<=NF;i++) if($i=="handle"){print $(i+1); exit}}')
+        if [ -n "$h" ]; then
+            nft insert rule inet filter input position "$h" $guard 2>/dev/null \
+              && log "SSH-guard applied live (before handle $h)" \
+              || log "WARN: live insert failed — applies on next nft reload"
+        else
+            log "WARN: could not find LAN-accept handle — guard applies on next reload"
+        fi
+    else
+        log "SSH-guard already live"
+    fi
+    log "hardening done. VERIFY now: ssh root@${WG_SERVER_IP} (tunnel, must work) ; public :22 must time out."
+}
+
 # ── main ──
 case "${1:-provision}" in
     provision)
@@ -180,7 +239,10 @@ case "${1:-provision}" in
     add)
         add_peer "${2:-}"
         ;;
+    harden)
+        harden_ssh
+        ;;
     *)
-        die "usage: $0 [provision | add <name>]"
+        die "usage: $0 [provision | add <name> | harden]"
         ;;
 esac
