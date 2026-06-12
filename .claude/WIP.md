@@ -3,6 +3,38 @@
 
 ---
 
+## 🔄 2026-06-12 : Admin WireGuard tunnel + SSH hardening (ref #529)
+
+Accès admin out-of-band + fermeture de la surface SSH publique.
+
+- **wg-admin** (#529) : interface dédiée UDP **51821**, server `10.98.0.1/24`,
+  distincte de wg-toolbox (51820). Peer `gandalf-admin` @ `10.98.0.2`.
+  nft drop-in `secubox-admin-wg.nft` (udp/51821), `wg-quick@wg-admin`
+  enabled. Client importé dans NetworkManager du poste dev, tunnel UP,
+  `ssh root@10.98.0.1` confirmé (key auth).
+- **Découverte sécurité** : la box subissait un brute-force SSH public
+  actif (centaines de tentatives 87.251.64.x / 51.68.34.x + IPs déjà
+  blacklistées). Le routeur `192.168.1.254` port-forward :22 → box sur
+  `eth1`/`lan0`, et l'input chain a un blanket `iif eth1 accept` (le
+  DNAT préserve l'IP source publique réelle).
+- **Hardening appliqué + vérifié** :
+  - sshd : `PasswordAuthentication no` + `PermitRootLogin prohibit-password`
+    (drop-in `99-secubox-hardening.conf`, key-only).
+  - nft SSH-guard : `tcp dport 22 ip saddr != { 192.168.1.0/24, 10.0.0.0/8 } drop`
+    inséré AVANT `iif eth1 accept` (live sans flush + persisté dans
+    `/etc/nftables.conf`).
+  - Résultat : `ssh root@10.98.0.1` (tunnel) OK key-only ; public
+    `admin.gk2.secubox.in:22` **timeout (bloqué)**. Tables blacklist/wg
+    intactes.
+- **Script reproductible** `scripts/setup-admin-tunnel.sh`
+  (`provision | add <name> | harden`), idempotent, branche `feature/529`
+  poussée (pas de PR).
+- **Reste à faire (côté user)** : retirer le port-forward :22 du routeur
+  (le tunnel remplace l'accès) ; IPv6 SSH non couvert par le guard v4
+  (à ajouter si exposition IPv6).
+
+---
+
 ## 🔄 2026-06-11 : Phase 12.C + Phase 13 COMPLETE (protection enforcement plane) — v2.13.16→19 (ref #518-#528)
 
 ### ✅ Phase 12.C — operator-grade / state-adjacent (#518, v2.13.16)
