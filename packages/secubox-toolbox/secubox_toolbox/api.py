@@ -621,6 +621,11 @@ pre{background:#1a1a25;color:var(--phos-hot);padding:0.6rem 0.8rem;border-radius
 </div>
 
 <div class="tab-content" data-content=android>
+<a href="/wg/toolbox.apk" class="btn btn-go">📱 Installer l'app ToolBoX (1-tap)</a>
+<div class=warn style="margin-top:0.5rem">
+✨ <b>Le plus simple</b> : l'app fait tout (CA + tunnel + vérif) en 5 étapes.
+Active « sources inconnues » à l'installation. Sinon, méthode manuelle ci-dessous :
+</div>
 <a href="/wg/ca.crt" class="btn btn-warn">📥 Télécharger CA (.crt format Android)</a>
 <div class=warn>
 ⚠ Chrome ne peut PAS installer un CA directement (sécurité Android 11+).
@@ -1185,6 +1190,9 @@ _ONBOARD_BODY = {
 <p class=note>Si rien ne se passe : Réglages → Batterie → désactive le mode économie (il coupe parfois les VPN).</p>
 """,
     "android": """
+<p><b>✨ Le plus simple — l'app ToolBoX fait tout :</b></p>
+<a class=btn href="/wg/toolbox.apk">📱 Installer l'app ToolBoX (.apk, 1-tap)</a>
+<p class=note>Active « sources inconnues » à l'installation. L'app installe le CA, importe le tunnel et vérifie le R3 en 5 étapes. Sinon, méthode manuelle :</p>
 <ol>
 <li>Installe l'app <a class=btn href="https://play.google.com/store/apps/details?id=com.wireguard.android" target=_blank rel=noopener>WireGuard</a> depuis le Play Store.</li>
 <li>Dans l'app, tap "+" → "Scan from QR code" → scanne ton QR :<br><img src="/wg/qr.png" alt="QR code" style="width:240px;max-width:100%;margin:0.5rem 0;border-radius:6px"></li>
@@ -1324,6 +1332,37 @@ async def wg_ca_der() -> Response:
         media_type="application/x-x509-ca-cert",
         headers={"Content-Disposition": "attachment; filename=gondwana-toolbox-r3-ca.crt"},
     )
+
+
+# Android ToolBox app (#531/#536). CI publishes the APK as a GitHub
+# release asset on `android-v*` tags ; secubox-toolbox-fetch-apk pulls it
+# into the serve path below.  If absent, we redirect to the public
+# release so the button always works.
+_ANDROID_APK = Path("/var/lib/secubox/toolbox/android/village3b-toolbox.apk")
+_ANDROID_APK_RELEASE = (
+    "https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/"
+    "secubox-toolbox-android.apk"
+)
+
+
+@router.get("/wg/toolbox.apk")
+async def wg_toolbox_apk() -> Response:
+    """Serve the Android ToolBox installer APK (#536).
+
+    Local file first (sideload from the cabine, works offline) ; if it
+    hasn't been fetched yet, 302 to the latest public GitHub release
+    asset so the onboard button never dead-ends.
+    """
+    if _ANDROID_APK.exists() and _ANDROID_APK.stat().st_size > 0:
+        return Response(
+            content=_ANDROID_APK.read_bytes(),
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Content-Disposition": "attachment; filename=village3b-toolbox.apk",
+                "Cache-Control": "public, max-age=300",
+            },
+        )
+    return RedirectResponse(url=_ANDROID_APK_RELEASE, status_code=302)
 
 
 @router.get("/wg/ca.mobileconfig")
