@@ -21,11 +21,18 @@ le navigateur : badge live des traceurs + popup.
 - **Serve depuis la toolbox** (`2.6.14`) : `GET /wg/toolbox.xpi` (local
   sinon 302 → release), bouton `🧩 Extension navigateur` sur les 2
   panneaux onboard, helper `secubox-toolbox-fetch-xpi`, postinst dir.
-- **CI** : `build-webext.yml` — `web-ext lint` + build, artifact, release
-  asset `secubox-toolbox-webext.xpi` sur tag `webext-v*`.
+- **CI** : `build-webext.yml` — `web-ext lint` (0 erreur, 2 warnings
+  bénins) + build, artifact, release asset sur tag `webext-v*`.
+- **Release** (PR #540 + #541, mergées) : tag `webext-v0.1.0` poussé →
+  CI a publié `secubox-toolbox-webext.xpi` (téléchargeable, vérifié 200).
+  `make_latest:false` + URL **tag-pinned** dans `/wg/toolbox.xpi` +
+  `secubox-toolbox-fetch-xpi` pour ne pas voler le pointeur "Latest" à la
+  release APK Android (dont l'endpoint résout via `/releases/latest/...`).
+  → bumper le tag dans la constante + le helper à chaque `webext-v*`.
 - **Reste à faire** : signature AMO (`.xpi` non signé = sideload/dev) ;
   endpoint SSE `/social/live/{token}` optionnel ; icône PNG Chromium ;
-  contrôle Poke/Emancipate par-site quand #525 (déception) arrive.
+  contrôle Poke/Emancipate par-site quand #525 (déception) arrive ;
+  déployer `secubox-toolbox 2.6.14` sur la board pour activer le bouton.
 
 ---
 

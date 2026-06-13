@@ -28,7 +28,13 @@ to your cabine over the R3 tunnel — no third-party calls.
 
 ## Install
 
-The toolbox serves the built extension:
+Published release `.xpi` (downloadable directly):
+
+```
+https://github.com/CyberMind-FR/secubox-deb/releases/download/webext-v0.1.0/secubox-toolbox-webext.xpi
+```
+
+The toolbox also serves it from the cabine:
 
 ```
 https://kbin.<board>.secubox.in/wg/toolbox.xpi
@@ -36,7 +42,12 @@ https://kbin.<board>.secubox.in/wg/toolbox.xpi
 
 The kbin onboard panel exposes a **🧩 Extension navigateur (cartographie)**
 button. When a local build is present the cabine serves it; otherwise it
-302-redirects to the latest GitHub release asset `secubox-toolbox-webext.xpi`.
+302-redirects to the **tag-pinned** release asset above. The webext release
+is published `make_latest:false` so it does not steal the repo "Latest"
+pointer from the Android APK release (whose endpoint resolves via
+`/releases/latest/download/…`) — bump the tag in the `/wg/toolbox.xpi`
+endpoint constant + `secubox-toolbox-fetch-xpi` when a new `webext-v*`
+release is cut.
 
 - **Firefox** — open the `.xpi`. A permanent install needs an AMO-signed
   build (release CI step / `web-ext sign`); for development use
