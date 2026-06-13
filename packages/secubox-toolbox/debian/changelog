@@ -1,3 +1,21 @@
+secubox-toolbox (2.6.18-1~bookworm1) bookworm; urgency=medium
+
+  * Cartographie donut-bubble view + geography rollups (#553).
+      - social.py fetch_graph: nodes gain country_iso / country_flag /
+        continent / tier ; new by_country, by_continent (flags + per-tier
+        breakdown) and by_tier aggregations (additive, read-time). stats
+        gains total_countries / total_continents. IP/ASN intentionally
+        NOT used as a graph dimension. Helpers _flag_emoji / _continent_of
+        / _tracker_tier (no GeoIP/publicsuffix dep).
+      - social.js: new "🍩 Donuts" view (default, ⇄ "👁️ Œil" toggle) —
+        a d3.pack of continent backdrop bubbles, each country a donut sized
+        by tracking impact (hits), ring split by severity tier, flag in the
+        hole ; tier legend ; click → country summary in the detail panel.
+        Eye force-graph kept as one-click fallback ; node detail now fills
+        the country flag.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 14:30:00 +0200
+
 secubox-toolbox (2.6.17-1~bookworm1) bookworm; urgency=medium
 
   * Social correlation: domain-rollup + history + target↔tracker (#549).

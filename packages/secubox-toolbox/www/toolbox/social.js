@@ -70,6 +70,54 @@
 
   // ─── graph state ───
   let simulation = null;
+  let lastGraph = null;
+  let view = 'donuts';            // #553 : 'donuts' (default) | 'eye'
+
+  // Severity-tier palette shared by the donut view + legend.
+  const TIER = {
+    opgrade: { c: 'var(--void-purple)', label: '📡 opérateur' },
+    antibot: { c: 'var(--cinnabar)',    label: '🤖 anti-bot' },
+    cdn:     { c: 'var(--cyber-cyan)',  label: '☁ CDN' },
+    other:   { c: 'var(--gold-hermetic)', label: '• autre' },
+  };
+  const TIER_ORDER = ['opgrade', 'antibot', 'cdn', 'other'];
+
+  function draw(graph) {
+    if (!graph) return;
+    if (view === 'donuts') renderDonuts(graph);
+    else render(graph);
+  }
+
+  // Inject the view toggle (🍩 donuts ⇄ 👁️ œil) once, above the svg.
+  function ensureToggle() {
+    if (document.getElementById('view-toggle') || !svgEl) return;
+    const bar = document.createElement('div');
+    bar.id = 'view-toggle';
+    bar.style.cssText = 'display:flex;gap:.4rem;justify-content:center;margin:.4rem 0';
+    const mk = (id, txt) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.view = id; b.textContent = txt;
+      b.style.cssText = 'cursor:pointer;border:1px solid var(--void-purple,#6e40c9);'
+        + 'background:transparent;color:var(--text-primary,#e8e6d9);border-radius:6px;'
+        + 'padding:.35rem .8rem;font:inherit';
+      b.addEventListener('click', () => {
+        view = id; syncToggle();
+        draw(lastGraph);
+      });
+      return b;
+    };
+    bar.appendChild(mk('donuts', '🍩 Donuts'));
+    bar.appendChild(mk('eye', '👁️ Œil'));
+    svgEl.parentNode.insertBefore(bar, svgEl);
+    syncToggle();
+  }
+  function syncToggle() {
+    document.querySelectorAll('#view-toggle button').forEach((b) => {
+      const on = b.dataset.view === view;
+      b.style.background = on ? 'var(--void-purple,#6e40c9)' : 'transparent';
+      b.style.color = on ? '#0a0a0f' : 'var(--text-primary,#e8e6d9)';
+    });
+  }
 
   function svgSize() {
     // Measure actual rendered size so the force center scales with the
@@ -130,6 +178,8 @@
         sites: n.sites,
         first_seen: n.first_seen,
         last_seen: n.last_seen,
+        country_iso: n.country_iso || null,
+        country_flag: n.country_flag || '',
         cdn_vendor: n.cdn_vendor || null,
         cache_status: n.cache_status || null,
         antibot_vendor: n.antibot_vendor || null,
@@ -339,11 +389,118 @@
     });
   }
 
+  // ─── #553 donut-bubble view ───
+  // Continents are faint backdrop bubbles ; each country is a donut sized
+  // by tracking impact (hits), its ring split by severity tier, with the
+  // flag in the centre.  No IP/ASN — geography + impact + tier only.
+  function renderDonuts(graph) {
+    clearGraph();
+    const { W, H } = svgSize();
+    svg.attr('viewBox', `0 0 ${W} ${H}`);
+    bind('total_trackers', graph.stats.total_trackers || 0);
+    bind('total_sites', graph.stats.total_sites || 0);
+    updateAntibotTile(graph.stats.antibot_sites || 0, graph.stats.antibot_vendors || []);
+    updateOpgradeTile(graph.stats.opgrade_sites || 0, graph.stats.opgrade_vendors || []);
+
+    const countries = graph.by_country || [];
+    if (!countries.length) return;
+
+    // hierarchy : root → continent → country(leaf, value=hits)
+    const byCont = new Map();
+    for (const c of countries) {
+      const k = c.continent || 'Autre';
+      if (!byCont.has(k)) byCont.set(k, []);
+      byCont.get(k).push(c);
+    }
+    const root = {
+      name: 'root',
+      children: [...byCont.entries()].map(([cont, list]) => ({
+        name: cont, continent: true,
+        children: list.map(c => ({
+          leaf: true, name: c.country_iso || '??', flag: c.flag || '🏴',
+          value: Math.max(c.hits || 0, 1), tiers: c.tiers || {},
+          tracker_count: c.tracker_count || 0,
+        })),
+      })),
+    };
+    const h = d3.hierarchy(root).sum(d => d.value || 0)
+      .sort((a, b) => (b.value || 0) - (a.value || 0));
+    d3.pack().size([W, H]).padding(d => d.depth === 1 ? 14 : 4)(h);
+
+    const content = svg.append('g').attr('class', 'content');
+
+    // continent backdrop bubbles + labels
+    content.append('g').selectAll('circle.cont')
+      .data(h.descendants().filter(d => d.depth === 1)).join('circle')
+      .attr('class', 'cont')
+      .attr('cx', d => d.x).attr('cy', d => d.y).attr('r', d => d.r)
+      .attr('fill', 'rgba(110,64,201,0.06)')
+      .attr('stroke', 'rgba(110,64,201,0.45)').attr('stroke-dasharray', '3,3');
+    content.append('g').selectAll('text.cont')
+      .data(h.descendants().filter(d => d.depth === 1)).join('text')
+      .attr('class', 'cont').attr('x', d => d.x).attr('y', d => d.y - d.r + 14)
+      .attr('text-anchor', 'middle').attr('fill', 'var(--void-purple,#9e76ff)')
+      .attr('font-size', 12).attr('font-weight', 'bold')
+      .text(d => '🌍 ' + d.data.name);
+
+    // country donut bubbles
+    const pie = d3.pie().sort(null).value(d => d[1]);
+    const leaves = content.append('g').selectAll('g.country')
+      .data(h.leaves()).join('g')
+      .attr('class', 'country node')
+      .attr('transform', d => `translate(${d.x},${d.y})`)
+      .style('cursor', 'pointer')
+      .on('click', (ev, d) => focusCountry(d.data));
+    leaves.each(function (d) {
+      const g = d3.select(this);
+      const r = d.r;
+      const inner = Math.max(r * 0.5, r - 7);
+      const arc = d3.arc().innerRadius(inner).outerRadius(r);
+      const data = TIER_ORDER.map(k => [k, (d.data.tiers && d.data.tiers[k]) || 0])
+        .filter(e => e[1] > 0);
+      const slices = data.length ? pie(data) : pie([['other', 1]]);
+      g.selectAll('path').data(slices).join('path')
+        .attr('d', arc)
+        .attr('fill', s => (TIER[s.data[0]] || TIER.other).c)
+        .attr('stroke', '#0a0a0f').attr('stroke-width', 0.6);
+      // flag (or ISO) in the hole
+      g.append('text').attr('text-anchor', 'middle').attr('dy', '.35em')
+        .attr('font-size', Math.max(9, Math.min(inner * 1.1, 26)))
+        .text(d.data.flag || d.data.name);
+    });
+
+    // tier legend (bottom-left)
+    const lg = content.append('g').attr('transform', `translate(12,${H - 12 - TIER_ORDER.length * 16})`);
+    TIER_ORDER.forEach((k, i) => {
+      const row = lg.append('g').attr('transform', `translate(0,${i * 16})`);
+      row.append('rect').attr('width', 10).attr('height', 10).attr('rx', 2)
+        .attr('fill', TIER[k].c);
+      row.append('text').attr('x', 15).attr('y', 9).attr('font-size', 10)
+        .attr('fill', 'var(--text-muted,#6b6b7a)').text(TIER[k].label);
+    });
+  }
+
+  // Donut country click → reuse the detail panel with a country summary.
+  function focusCountry(c) {
+    if (!ndEl) return;
+    bind('nd_domain', (c.flag || '') + ' ' + (c.name || '?'));
+    bind('nd_country', (c.flag || '') + ' ' + (c.name || '—'));
+    bind('nd_asn', '—');
+    const tier = TIER_ORDER.filter(k => (c.tiers || {})[k])
+      .map(k => `${TIER[k].label}:${c.tiers[k]}`).join(' · ') || '—';
+    bind('nd_cdn', tier);
+    bind('nd_antibot', (c.tiers && c.tiers.antibot) ? '🤖 ' + c.tiers.antibot : '—');
+    bind('nd_opgrade', (c.tiers && c.tiers.opgrade) ? '📡 ' + c.tiers.opgrade : '—');
+    bind('nd_sites', (c.tracker_count || 0) + ' traceurs');
+    bind('nd_first_seen', '—'); bind('nd_last_seen', '—');
+    ndEl.hidden = false;
+  }
+
   // ─── focus / detail panel ───
   function focusNode(node, linkSel) {
     if (node.kind !== 'tracker') { ndEl.hidden = true; return; }
     bind('nd_domain', node.label);
-    bind('nd_country', '—');  // Phase C dependency (GeoIP)
+    bind('nd_country', node.country_flag ? (node.country_flag + ' ' + (node.country_iso || '')) : '—');
     bind('nd_asn',     '—');
     bind('nd_cdn', node.cdn_vendor ? (node.cdn_vendor + (node.cache_status ? ' · ' + node.cache_status : '')) : '—');
     bind('nd_antibot', node.antibot_vendor ? ('🤖 ' + node.antibot_vendor) : '—');
@@ -413,7 +570,9 @@
       const r = await fetch(`/social/graph/${encodeURIComponent(token)}?since=86400`);
       if (!r.ok) throw new Error('http ' + r.status);
       const g = await r.json();
-      render(g);
+      lastGraph = g;
+      ensureToggle();
+      draw(g);
     } catch (e) {
       console.error('[social] fetch failed', e);
     }
