@@ -1,3 +1,21 @@
+secubox-toolbox (2.6.20-1~bookworm1) bookworm; urgency=medium
+
+  * Protective mode — tracker alerting + active spoofer (#560), DEFAULT OFF.
+      - mitmproxy_addons/protective_mode.py : env SECUBOX_PROTECTIVE_MODE =
+        off (default) | alert (detect + audit-log + count) | spoof (alert +
+        neutralise on classified 3rd-party tracker hosts only — strip
+        operator-grade/tracking headers MSISDN/x-acr/x-up-*/x-wap-*/
+        forwarded-IPs, drop the Cookie header to the tracker, strip referer,
+        assert DNT:1 + Sec-GPC:1). 1st-party traffic never touched.
+      - Every spoof action appended to /var/log/secubox/audit.log (CSPN) ;
+        live counts in /run/secubox/protective.json.
+      - Wired into the mitm-wg launcher + mitm.service addon list (inert
+        until opted in). GET /admin/protective : mode + counters.
+    Doctrine : opt-in, default off, logged, reversible (CM-WALL ; mirrors
+    Phase 13.D + Phase 8).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 16:00:00 +0200
+
 secubox-toolbox (2.6.19-1~bookworm1) bookworm; urgency=medium
 
   * Favicons of major sites in the cartographie (#555) — never IPs.
