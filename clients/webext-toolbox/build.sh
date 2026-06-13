@@ -14,9 +14,11 @@ OUT="secubox-toolbox-webext-${VER}.xpi"
 rm -f "$OUT"
 
 # -FS = sync (drop stale entries) ; exclude VCS, dotfiles, build script,
-# any previously built artefact, and docs.
+# any previously built artefact, docs, and the SVG icon source (only the
+# rasterised PNGs are referenced by the manifest — keep SVG out of the
+# package so Firefox never renders it in chrome UI).
 zip -r -FS "$OUT" . \
-  -x '*.git*' '*/.*' 'build.sh' '*.xpi' 'README.md' >/dev/null
+  -x '*.git*' '*/.*' 'build.sh' '*.xpi' 'README.md' 'icons/icon.svg' >/dev/null
 
 echo "built $OUT ($(stat -c%s "$OUT" 2>/dev/null || stat -f%z "$OUT") bytes)"
 echo "Firefox: about:debugging → This Firefox → Load Temporary Add-on → pick the .xpi (or manifest.json)."
