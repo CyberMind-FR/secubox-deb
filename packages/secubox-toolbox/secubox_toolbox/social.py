@@ -708,6 +708,58 @@ def _registrable_domain(host: str) -> str:
     return last_two
 
 
+# ── geography helpers (#553) : flag + continent rollup, no IP/ASN ──
+def _flag_emoji(iso2: Optional[str]) -> str:
+    """ISO-3166 alpha-2 → flag emoji (regional indicator pair). '' if unknown."""
+    if not iso2 or len(iso2) != 2 or not iso2.isalpha():
+        return ""
+    base = 0x1F1E6
+    return "".join(chr(base + (ord(ch) - ord("A"))) for ch in iso2.upper())
+
+
+# Compact ISO-3166 alpha-2 → continent map (covers the countries a French
+# civic kiosk realistically surfaces ; unknowns fall back to "Autre").
+_CONTINENT = {
+    # Europe
+    "FR": "Europe", "DE": "Europe", "GB": "Europe", "UK": "Europe", "IE": "Europe",
+    "NL": "Europe", "BE": "Europe", "LU": "Europe", "ES": "Europe", "PT": "Europe",
+    "IT": "Europe", "CH": "Europe", "AT": "Europe", "SE": "Europe", "NO": "Europe",
+    "FI": "Europe", "DK": "Europe", "PL": "Europe", "CZ": "Europe", "RO": "Europe",
+    "BG": "Europe", "GR": "Europe", "HU": "Europe", "SK": "Europe", "HR": "Europe",
+    "RS": "Europe", "UA": "Europe", "RU": "Europe", "IS": "Europe", "EE": "Europe",
+    "LV": "Europe", "LT": "Europe", "SI": "Europe",
+    # Americas
+    "US": "Amériques", "CA": "Amériques", "MX": "Amériques", "BR": "Amériques",
+    "AR": "Amériques", "CL": "Amériques", "CO": "Amériques", "PE": "Amériques",
+    # Asia
+    "CN": "Asie", "JP": "Asie", "KR": "Asie", "IN": "Asie", "SG": "Asie",
+    "HK": "Asie", "TW": "Asie", "TH": "Asie", "ID": "Asie", "VN": "Asie",
+    "IL": "Asie", "TR": "Asie", "AE": "Asie", "SA": "Asie",
+    # Africa
+    "ZA": "Afrique", "EG": "Afrique", "MA": "Afrique", "DZ": "Afrique",
+    "TN": "Afrique", "NG": "Afrique", "KE": "Afrique", "SN": "Afrique",
+    # Oceania
+    "AU": "Océanie", "NZ": "Océanie",
+}
+
+
+def _continent_of(iso2: Optional[str]) -> str:
+    if not iso2:
+        return "Inconnu"
+    return _CONTINENT.get(iso2.upper(), "Autre")
+
+
+def _tracker_tier(opgrade, antibot, cdn) -> str:
+    """Severity tier used for the donut breakdown (highest wins)."""
+    if opgrade:
+        return "opgrade"
+    if antibot:
+        return "antibot"
+    if cdn:
+        return "cdn"
+    return "other"
+
+
 def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
     """Return the per-client graph JSON contract.
 
@@ -727,8 +779,8 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
             # can colour/label by edge-network vendor.
             for r in c.execute(
                 "SELECT n.tracker_domain, n.hits, n.first_seen, n.last_seen, "
-                "n.sites_jsonl, m.cdn_vendor, m.cache_status, m.antibot_vendor, "
-                "m.opgrade_vendor, m.opgrade_category "
+                "n.sites_jsonl, n.country_iso, m.cdn_vendor, m.cache_status, "
+                "m.antibot_vendor, m.opgrade_vendor, m.opgrade_category "
                 "FROM social_nodes n "
                 "LEFT JOIN social_host_meta m ON m.tracker_domain = n.tracker_domain "
                 "WHERE n.client_mac_hash = ? AND n.last_seen >= ? "
@@ -739,6 +791,7 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
                     sites = json.loads(r["sites_jsonl"])
                 except Exception:
                     sites = []
+                cc = (r["country_iso"] or "").upper() or None
                 out["nodes"].append(
                     {
                         "id": r["tracker_domain"],
@@ -748,6 +801,11 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
                         "sites": sites,
                         "first_seen": r["first_seen"],
                         "last_seen": r["last_seen"],
+                        "country_iso": cc,
+                        "country_flag": _flag_emoji(cc),
+                        "continent": _continent_of(cc),
+                        "tier": _tracker_tier(r["opgrade_vendor"], r["antibot_vendor"],
+                                              r["cdn_vendor"]),
                         "cdn_vendor": r["cdn_vendor"],
                         "cache_status": r["cache_status"],
                         "antibot_vendor": r["antibot_vendor"],
@@ -871,10 +929,52 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
                 })
             out["history"] = history
 
+            # (d) #553 geography + tier rollups for the donut-bubble view.
+            _TIERS = ("opgrade", "antibot", "cdn", "other")
+            tier_tot = {t: 0 for t in _TIERS}
+            _ctry: Dict[str, dict] = {}
+            _cont: Dict[str, dict] = {}
+            for n in out["nodes"]:
+                tier = n["tier"]; hits = n["hits"] or 0
+                tier_tot[tier] += hits
+                cc = n["country_iso"] or "??"
+                ct = _ctry.setdefault(cc, {
+                    "country_iso": None if cc == "??" else cc,
+                    "flag": n["country_flag"], "continent": n["continent"],
+                    "tracker_count": 0, "hits": 0,
+                    "tiers": {t: 0 for t in _TIERS}, "_sites": set(),
+                })
+                ct["tracker_count"] += 1; ct["hits"] += hits
+                ct["tiers"][tier] += hits; ct["_sites"].update(n["sites"])
+                co = _cont.setdefault(n["continent"], {
+                    "continent": n["continent"], "country_count_set": set(),
+                    "tracker_count": 0, "hits": 0, "tiers": {t: 0 for t in _TIERS},
+                })
+                co["country_count_set"].add(cc)
+                co["tracker_count"] += 1; co["hits"] += hits
+                co["tiers"][tier] += hits
+            by_country = sorted(
+                ({"country_iso": v["country_iso"], "flag": v["flag"],
+                  "continent": v["continent"], "tracker_count": v["tracker_count"],
+                  "hits": v["hits"], "sites_count": len(v["_sites"]),
+                  "tiers": v["tiers"]} for v in _ctry.values()),
+                key=lambda x: -x["hits"])
+            by_continent = sorted(
+                ({"continent": v["continent"],
+                  "country_count": len(v["country_count_set"]),
+                  "tracker_count": v["tracker_count"], "hits": v["hits"],
+                  "tiers": v["tiers"]} for v in _cont.values()),
+                key=lambda x: -x["hits"])
+            out["by_country"] = by_country
+            out["by_continent"] = by_continent
+            out["by_tier"] = tier_tot
+
             out["stats"] = {
                 "total_trackers": (stats_row["total_trackers"] or 0) if stats_row else 0,
                 "total_sites": sites_count,
                 "total_domains": len(by_domain),
+                "total_countries": len([c for c in by_country if c["country_iso"]]),
+                "total_continents": len([c for c in by_continent if c["continent"] not in ("Inconnu",)]),
                 "first_seen": stats_row["first_seen"] if stats_row else None,
                 "last_seen": stats_row["last_seen"] if stats_row else None,
                 "antibot_sites": len({a["src_site"] for a in antibot}),
