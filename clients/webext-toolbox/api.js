@@ -89,6 +89,12 @@ async function wipe(host, token) {
   return await resp.json();
 }
 
+// Favicon of a major site/tracker via the cabine's server-side proxy
+// (7-day cached PNG, transparent 1×1 fallback) — no third-party call.
+function faviconUrl(host, domain) {
+  return `${baseUrl(host)}/social/favicon/${encodeURIComponent(domain || "")}`;
+}
+
 function socialUrl(host, token) {
   return `${baseUrl(host)}/social/${token}`;
 }
@@ -106,6 +112,7 @@ const SbxApi = {
   r3Check,
   graph,
   wipe,
+  faviconUrl,
   socialUrl,
   reportUrl,
   tokenFromUrl,

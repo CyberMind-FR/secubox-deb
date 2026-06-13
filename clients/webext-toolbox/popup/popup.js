@@ -8,6 +8,7 @@
 // SyntaxError that aborts popup.js. Use api.ext instead.
 const api = globalThis.SbxApi;
 const $ = (id) => document.getElementById(id);
+let curHost = api.DEFAULTS.host;   // for favicon URLs (#555)
 
 function show(which) {
   $("pair").hidden = which !== "pair";
@@ -24,6 +25,14 @@ function fillTopList(nodes) {
     .forEach((n) => {
       const row = document.createElement("div");
       row.className = "row";
+      // favicon of the major site/tracker (cabine proxy) — not an IP (#555)
+      const fav = document.createElement("img");
+      fav.className = "fav";
+      fav.loading = "lazy";
+      fav.alt = "";
+      fav.src = api.faviconUrl(curHost, n.domain || n.id);
+      fav.addEventListener("error", () => { fav.style.visibility = "hidden"; });
+      row.appendChild(fav);
       const dom = document.createElement("span");
       dom.className = "dom";
       dom.textContent = n.domain || n.id;
@@ -57,6 +66,7 @@ function paint(data) {
 
 async function load() {
   const cfg = await api.getConfig();
+  curHost = cfg.host || api.DEFAULTS.host;
   $("ver").textContent = "v" + (api.ext.runtime.getManifest().version || "");
 
   // tunnel indicator
