@@ -52,6 +52,13 @@ case "$1" in
     if [ -x /usr/sbin/secubox-toolbox-fetch-apk ]; then
       /usr/sbin/secubox-toolbox-fetch-apk 2>&1 | head -2 || true
     fi
+    # #532 : browser extension serve dir + best-effort fetch of the
+    # latest release .xpi (so GET /wg/toolbox.xpi serves it locally).
+    # Non-blocking : falls back to redirecting to the public release.
+    install -d -m 0755 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox/webext
+    if [ -x /usr/sbin/secubox-toolbox-fetch-xpi ]; then
+      /usr/sbin/secubox-toolbox-fetch-xpi 2>&1 | head -2 || true
+    fi
     # /var/log/secubox is a SHARED parent traversed by many service users
     # (the aggregator runs as `secubox` and reads waf-threats.log under
     # here).  It MUST be 0755 — a 0750 owned by secubox-toolbox silently

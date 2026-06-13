@@ -30,6 +30,7 @@
 * [[ESPRESSObin]] | [FR](ESPRESSObin-FR) | [DE](ESPRESSObin-DE) | [中文](ESPRESSObin-ZH)
 * [[Eye-Remote]] 📡
 * [[Android-ToolBox]] 📱 one-tap R3
+* [[Browser-Extension]] 🧩 cartographie
 * [[QEMU-ARM64]] 🖥️
 
 ### 🟢 ROOT — Configuration

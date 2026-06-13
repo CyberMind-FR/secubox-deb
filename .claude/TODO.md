@@ -5,17 +5,22 @@
 
 ## 🔥 P0 — Immediate (in flight)
 
-### Android ToolBox client (`clients/android-toolbox/`)
+### ToolBox clients (`clients/`)
 
-- [x] **#531 scaffold + CI** — Gradle/Compose one-tap onboarding, debug APK
-  via `build-android-apk.yml`. CI green.
-- [x] **#536 serve from toolbox** — `GET /wg/toolbox.apk` + onboard button +
+- [x] **#531 Android scaffold + CI** — Gradle/Compose one-tap onboarding,
+  debug APK via `build-android-apk.yml`. CI green.
+- [x] **#536 serve APK from toolbox** — `GET /wg/toolbox.apk` + onboard button +
   `secubox-toolbox-fetch-apk` helper.
-- [x] **#538 root-mode silent** (PR #539) — system CA install + native kernel
-  WireGuard + auto R3 verify, gated behind explicit root tap.
-- [ ] **release signing** — keystore secret in CI for a stable published
-  fingerprint (currently debug-signed sideload).
-- [ ] **#532 browser XPI** — Firefox/Chrome extension equivalent (later).
+- [x] **#538 Android root-mode silent** (PR #539) — system CA install + native
+  kernel WireGuard + auto R3 verify, gated behind explicit root tap.
+- [x] **#532 browser extension** (`clients/webext-toolbox/`) — MV3 Firefox
+  `.xpi`/Chromium; live tracker badge + popup mini Round-Eye graph over
+  `/social/*`; `GET /wg/toolbox.xpi` + fetch helper + `build-webext.yml`.
+- [ ] **release signing** — Android keystore + AMO `.xpi` signing secrets in CI
+  for stable published fingerprints (currently unsigned sideload).
+- [ ] **#532 follow-ups** — optional `GET /social/live/{token}` SSE (replace the
+  client-side poll) ; Poke/Emancipate per-site control once #525 (deception)
+  ships ; Chromium PNG icon rasterisation for the Web Store.
 
 ### Phase 13 — Protection enforcement plane (#519) — ✅ COMPLETE
 
