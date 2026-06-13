@@ -32,12 +32,13 @@ jobs:
           node-version: "20"
 
       - name: Lint (web-ext)
-        run: npx --yes web-ext lint --source-dir . --self-hosted
+        run: npx --yes web-ext lint --source-dir . --self-hosted --ignore-files build.sh README.md
 
       - name: Build .xpi (web-ext)
         run: |
           npx --yes web-ext build --source-dir . \
             --artifacts-dir web-ext-artifacts --overwrite-dest \
+            --ignore-files build.sh README.md \
             --filename "secubox-toolbox-webext.xpi"
 
       - name: Upload .xpi artifact

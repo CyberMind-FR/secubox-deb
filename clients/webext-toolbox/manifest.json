@@ -13,9 +13,6 @@
   "host_permissions": [
     "*://*.secubox.in/*"
   ],
-  "optional_host_permissions": [
-    "*://*/*"
-  ],
   "action": {
     "default_title": "SecuBox Cartographie",
     "default_popup": "popup/popup.html",
