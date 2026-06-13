@@ -12,13 +12,20 @@ import the WireGuard profile, verify the tunnel, then open the live
 4. **Verify** — polls `/wg/r3-check` → "Tunnel R3 actif ✓".
 5. **Live metrics** — opens `/social/me` (cartographie sociale).
 
-## Root path — fully-automated silent onboarding (#538, #551)
-When the device is **rooted**, the app runs the whole onboarding with **zero
-taps**: on launch it auto-detects root and, if this cabine host hasn't been
-onboarded yet, starts the silent sequence automatically (`RootAuto` step,
-streaming log). The **⚡ Installation automatique (root)** button stays for
-re-runs. The "already onboarded" flag is persisted per host (SharedPreferences)
-so reopening the app doesn't redo it. Steps:
+## Root path — real zero-tap, fully automated (#538, #551, #558)
+On a **rooted** device the app onboards with **zero taps**, two ways:
+
+- **On launch** — auto-detects root and runs the silent sequence immediately
+  every launch (no gate), retrying reachability while WiFi/tunnel settle.
+- **On boot** — a `BOOT_COMPLETED` receiver starts a short foreground service
+  (`OnboardService`) that runs the same silent sequence **without opening the
+  app**, then stops. After one reboot the device self-onboards.
+
+The **⚡ Installation automatique (root)** button remains as a manual
+re-trigger. Two interactions are **mandated by Android and unavoidable** for
+any app: the sideload install confirm ("install unknown apps") and the
+first-time superuser (Magisk/su) grant prompt. Everything after those is
+zero-tap. Steps:
 
 1. **System CA install** — downloads `/wg/ca.pem`, computes the OpenSSL
    `subject_hash_old` in pure Kotlin, and bind-mounts a populated copy of
