@@ -682,12 +682,39 @@ def fold_recent(window_seconds: int = 300) -> Tuple[int, int]:
     return nodes_touched, links_touched
 
 
+# eTLD+1 rollup (#549). Mirror of the addon's _registrable_domain so the
+# graph can group trackers under their registrable parent (all
+# *.doubleclick.net → doubleclick.net) without a publicsuffix dependency.
+_MULTI_LABEL_TLDS = {
+    "co.uk", "ac.uk", "gov.uk", "org.uk", "net.uk",
+    "co.jp", "ne.jp", "ac.jp",
+    "com.au", "net.au", "org.au",
+    "com.br", "com.cn", "com.hk", "com.tw", "com.mx",
+}
+
+
+def _registrable_domain(host: str) -> str:
+    """Cheap eTLD+1 : www.lemonde.fr → lemonde.fr ; a.b.example.co.uk →
+    example.co.uk. Raw IPs and single-label hosts pass through."""
+    h = (host or "").lower().strip(".")
+    if not h or h.replace(".", "").replace(":", "").isdigit():
+        return h
+    parts = h.split(".")
+    if len(parts) < 2:
+        return h
+    last_two = ".".join(parts[-2:])
+    if last_two in _MULTI_LABEL_TLDS and len(parts) >= 3:
+        return ".".join(parts[-3:])
+    return last_two
+
+
 def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
     """Return the per-client graph JSON contract.
 
     {nodes:[{id,domain,family,hits,sites_count}],
      edges:[{src,dst,reuse_count,shared_trackers[],ja4_match}],
-     stats:{total_trackers,total_sites,first_seen,last_seen}}
+     stats:{total_trackers,total_sites,first_seen,last_seen},
+     by_domain:[...], targets:[...], history:[...]}   # additive (#549)
     """
     since = int(time.time()) - max(since_seconds, 3600)
     out: Dict = {"nodes": [], "edges": [], "stats": {}}
@@ -770,9 +797,84 @@ def fetch_graph(mac_hash: str, since_seconds: int = 86400) -> Dict:
             # Phase 12.C — operator-grade / state-adjacent surfaces.
             opgrade = opgrade_for_client(mac_hash, since_seconds=since_seconds)
             out["opgrade"] = opgrade
+            # ── #549 additive aggregations (read-time, no schema change) ──
+            # (a) by_domain : roll trackers up under registrable parent.
+            _dom: Dict[str, dict] = {}
+            for n in out["nodes"]:
+                parent = _registrable_domain(n["domain"])
+                d = _dom.setdefault(parent, {
+                    "domain": parent, "tracker_count": 0, "hits": 0,
+                    "_trackers": set(), "_sites": set(), "_vendors": set(),
+                    "last_seen": 0,
+                })
+                d["_trackers"].add(n["domain"])
+                d["hits"] += n["hits"] or 0
+                d["_sites"].update(n["sites"])
+                d["last_seen"] = max(d["last_seen"], n["last_seen"] or 0)
+                for v in (n.get("cdn_vendor"), n.get("antibot_vendor"),
+                          n.get("opgrade_vendor")):
+                    if v:
+                        d["_vendors"].add(v)
+            by_domain = []
+            for d in _dom.values():
+                by_domain.append({
+                    "domain": d["domain"],
+                    "tracker_count": len(d["_trackers"]),
+                    "trackers": sorted(d["_trackers"])[:30],
+                    "hits": d["hits"],
+                    "sites_count": len(d["_sites"]),
+                    "sites": sorted(d["_sites"])[:20],
+                    "vendors": sorted(d["_vendors"]),
+                    "last_seen": d["last_seen"],
+                })
+            by_domain.sort(key=lambda x: (-x["hits"], -x["tracker_count"]))
+            out["by_domain"] = by_domain
+
+            # (b) targets : invert sites→trackers (who watches each page).
+            _tgt: Dict[str, dict] = {}
+            for n in out["nodes"]:
+                for s in n["sites"]:
+                    t = _tgt.setdefault(s, {
+                        "site": s, "hits": 0,
+                        "_trackers": set(), "_domains": set(),
+                    })
+                    t["_trackers"].add(n["domain"])
+                    t["_domains"].add(_registrable_domain(n["domain"]))
+                    t["hits"] += n["hits"] or 0
+            targets = []
+            for t in _tgt.values():
+                targets.append({
+                    "site": t["site"],
+                    "tracker_count": len(t["_trackers"]),
+                    "trackers": sorted(t["_trackers"])[:30],
+                    "parent_domains": sorted(t["_domains"]),
+                    "hits": t["hits"],
+                })
+            targets.sort(key=lambda x: (-x["tracker_count"], -x["hits"]))
+            out["targets"] = targets
+
+            # (c) history : per-(UTC)day timeline from the raw edge log.
+            history = []
+            for r in c.execute(
+                "SELECT (ts/86400) AS day_epoch, COUNT(*) AS hits, "
+                "COUNT(DISTINCT tracker_domain) AS trackers, "
+                "COUNT(DISTINCT src_site) AS sites "
+                "FROM social_edges WHERE client_mac_hash = ? AND ts >= ? "
+                "GROUP BY day_epoch ORDER BY day_epoch",
+                (mac_hash, since),
+            ).fetchall():
+                history.append({
+                    "day": int(r["day_epoch"]) * 86400,
+                    "hits": r["hits"],
+                    "trackers": r["trackers"],
+                    "sites": r["sites"],
+                })
+            out["history"] = history
+
             out["stats"] = {
                 "total_trackers": (stats_row["total_trackers"] or 0) if stats_row else 0,
                 "total_sites": sites_count,
+                "total_domains": len(by_domain),
                 "first_seen": stats_row["first_seen"] if stats_row else None,
                 "last_seen": stats_row["last_seen"] if stats_row else None,
                 "antibot_sites": len({a["src_site"] for a in antibot}),
