@@ -3,12 +3,14 @@ secubox-toolbox (2.6.14-1~bookworm1) bookworm; urgency=medium
   * Serve the browser ToolBoX extension .xpi from the toolbox (#532).
       - api.py GET /wg/toolbox.xpi : serves the local .xpi
         (/var/lib/secubox/toolbox/webext/secubox-toolbox-webext.xpi) with
-        content-type application/x-xpinstall ; if absent, 302 → the latest
-        public GitHub release asset (button never dead-ends).
+        content-type application/x-xpinstall ; if absent, 302 → the
+        tag-pinned GitHub release asset (button never dead-ends). The
+        webext release is published make_latest:false so it does not steal
+        "latest" from the Android APK release.
       - /wg/onboard : new "🧩 Extension navigateur (cartographie)" button
         on both the inline + _install_panels variants.
-      - sbin/secubox-toolbox-fetch-xpi : pulls the latest release asset
-        into the serve path (best-effort, ZIP-magic sanity check).
+      - sbin/secubox-toolbox-fetch-xpi : pulls the release asset into the
+        serve path (best-effort, ZIP-magic sanity check).
       - postinst : create the webext serve dir + best-effort first fetch.
       - New client clients/webext-toolbox/ (MV3 Firefox/Chromium): live
         tracker badge + popup mini Round-Eye graph over /social/* ;
