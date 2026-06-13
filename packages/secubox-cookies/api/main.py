@@ -28,13 +28,45 @@ except ImportError:
 
 app = FastAPI(title="SecuBox Cookies API", version="1.0.0")
 
-# Phase 2b (#488) : ingest mitm cookies events from secubox-toolbox addon
+# Phase 2b/2c (#488/#490) : ingest mitm cookies events + provider classification
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+from secubox_core.classifiers import cookie as _cookie_cls  # noqa: E402
+
+
+def _cookies_enrich(event: dict) -> dict:
+    """Phase 2c enrichment : map cookie names -> {providers[], categories{}}."""
+    set_names = event.get("set_cookie_names", []) or []
+    sent_names = event.get("cookie_names", []) or []
+    all_names = list(set_names) + list(sent_names)
+    if not all_names:
+        return event
+    providers: dict[str, dict] = {}
+    categories: dict[str, int] = {}
+    for n in all_names:
+        cls = _cookie_cls.classify_cookie_name(n)
+        p = cls["provider"]
+        if p != "unknown":
+            if p not in providers:
+                providers[p] = {"count": 0, "category": cls["category"], "emoji": cls["emoji"]}
+            providers[p]["count"] += 1
+        cat = cls["category"]
+        categories[cat] = categories.get(cat, 0) + 1
+    event["enriched"] = {
+        "providers": providers,
+        "categories": categories,
+        "total_names": len(all_names),
+        "tracker_count": sum(v["count"] for v in providers.values()),
+        "source": "secubox-cookies/classifier",
+    }
+    return event
+
+
 mount_ingest_routes(
     app,
     endpoint_path="/inject",
     db_path="/var/lib/secubox/cookies/mitm-ingest.db",
     kind="cookies",
+    enrich_hook=_cookies_enrich,
 )
 
 # Configuration paths
