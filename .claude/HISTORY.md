@@ -3,6 +3,24 @@
 
 ---
 
+## 2026-06-13 — Android ToolBox app : serve + root-mode silent onboarding (ref #531/#536/#538)
+
+App compagnon Android one-tap R3 (`clients/android-toolbox/`, Kotlin + Compose).
+
+- **#531** — scaffold Gradle/Compose + CI `build-android-apk.yml` (debug APK
+  artifact, release asset sur tag `android-v*`). CI green.
+- **#536** — `GET /wg/toolbox.apk` (build local sinon 302 → release GitHub) +
+  bouton onboard kbin + helper `secubox-toolbox-fetch-apk`.
+- **#538** (PR #539) — root-mode silent onboarding : install CA système
+  (bind-mount cacerts + APEX conscrypt, SELinux ctx, `subject_hash_old`
+  pur Kotlin) + WireGuard natif noyau + vérif R3 auto, gated derrière le tap
+  `⚡ Installation automatique (root)`. Fallback handoff app WireGuard.
+  Fichiers `RootShell.kt`, `RootOnboard.kt`, step `RootAuto`. CI APK build
+  green (code compile).
+- Suivi : release signing (keystore CI) pour empreinte publiée stable.
+
+---
+
 ## 2026-06-11 — Phase 12.C + Phase 13 protection enforcement plane COMPLETE (ref #518-#528)
 
 `secubox-toolbox 2.6.6 → 2.6.11`, tags v2.13.16 → v2.13.19.
