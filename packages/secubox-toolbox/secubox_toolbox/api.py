@@ -622,6 +622,7 @@ pre{background:#1a1a25;color:var(--phos-hot);padding:0.6rem 0.8rem;border-radius
 
 <div class="tab-content" data-content=android>
 <a href="/wg/toolbox.apk" class="btn btn-go">📱 Installer l'app ToolBoX (1-tap)</a>
+<a href="/wg/toolbox.xpi" class="btn">🧩 Extension navigateur (cartographie)</a>
 <div class=warn style="margin-top:0.5rem">
 ✨ <b>Le plus simple</b> : l'app fait tout (CA + tunnel + vérif) en 5 étapes.
 Active « sources inconnues » à l'installation. Sinon, méthode manuelle ci-dessous :
@@ -1192,6 +1193,7 @@ _ONBOARD_BODY = {
     "android": """
 <p><b>✨ Le plus simple — l'app ToolBoX fait tout :</b></p>
 <a class=btn href="/wg/toolbox.apk">📱 Installer l'app ToolBoX (.apk, 1-tap)</a>
+<a class=btn href="/wg/toolbox.xpi">🧩 Extension navigateur (cartographie live)</a>
 <p class=note>Active « sources inconnues » à l'installation. L'app installe le CA, importe le tunnel et vérifie le R3 en 5 étapes. Sinon, méthode manuelle :</p>
 <ol>
 <li>Installe l'app <a class=btn href="https://play.google.com/store/apps/details?id=com.wireguard.android" target=_blank rel=noopener>WireGuard</a> depuis le Play Store.</li>
@@ -1363,6 +1365,34 @@ async def wg_toolbox_apk() -> Response:
             },
         )
     return RedirectResponse(url=_ANDROID_APK_RELEASE, status_code=302)
+
+
+# Browser extension (Firefox .xpi), same serve pattern as the APK (#532).
+_WEBEXT_XPI = Path("/var/lib/secubox/toolbox/webext/secubox-toolbox-webext.xpi")
+_WEBEXT_XPI_RELEASE = (
+    "https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/"
+    "secubox-toolbox-webext.xpi"
+)
+
+
+@router.get("/wg/toolbox.xpi")
+async def wg_toolbox_xpi() -> Response:
+    """Serve the browser ToolBoX extension .xpi (#532).
+
+    Local file first (install from the cabine, works offline) ; if it
+    hasn't been fetched yet, 302 to the latest public GitHub release
+    asset so the onboard button never dead-ends.
+    """
+    if _WEBEXT_XPI.exists() and _WEBEXT_XPI.stat().st_size > 0:
+        return Response(
+            content=_WEBEXT_XPI.read_bytes(),
+            media_type="application/x-xpinstall",
+            headers={
+                "Content-Disposition": "attachment; filename=secubox-toolbox-webext.xpi",
+                "Cache-Control": "public, max-age=300",
+            },
+        )
+    return RedirectResponse(url=_WEBEXT_XPI_RELEASE, status_code=302)
 
 
 @router.get("/wg/ca.mobileconfig")

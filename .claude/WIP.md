@@ -3,6 +3,32 @@
 
 ---
 
+## 🔄 2026-06-13 : Browser extension — emancipate cartographie live (#532)
+
+Extension navigateur (`clients/webext-toolbox/`, MV3 Firefox `.xpi` +
+Chromium) sœur de l'app Android. Sort la *cartographie sociale* R3 dans
+le navigateur : badge live des traceurs + popup.
+
+- **Extension** : `manifest.json` (MV3, background `service_worker` +
+  `scripts` pour FF115+/Chromium), `api.js` (client `/wg/r3-check`,
+  `/social/me` → token, `/social/graph/{token}`, `/social/wipe`),
+  `background.js` (badge = total_trackers, re-pair silencieux si token
+  expiré, couleur escalade gold→anti-bot→opérateur), popup (4 tuiles
+  stats + **mini Round-Eye graph SVG sans dépendance** + top-traceurs
+  taggés CDN/anti-bot/opérateur + actions cartographie/PDF/RGPD-wipe),
+  options (hôte/fenêtre/token manuel). Pas de CORS backend nécessaire
+  (host_permissions). Validé : JSON+JS+SVG OK, `.xpi` build 11.8 KB.
+- **Serve depuis la toolbox** (`2.6.14`) : `GET /wg/toolbox.xpi` (local
+  sinon 302 → release), bouton `🧩 Extension navigateur` sur les 2
+  panneaux onboard, helper `secubox-toolbox-fetch-xpi`, postinst dir.
+- **CI** : `build-webext.yml` — `web-ext lint` + build, artifact, release
+  asset `secubox-toolbox-webext.xpi` sur tag `webext-v*`.
+- **Reste à faire** : signature AMO (`.xpi` non signé = sideload/dev) ;
+  endpoint SSE `/social/live/{token}` optionnel ; icône PNG Chromium ;
+  contrôle Poke/Emancipate par-site quand #525 (déception) arrive.
+
+---
+
 ## 🔄 2026-06-13 : Android ToolBox app — serve + root-mode silent onboarding (#531/#536/#538)
 
 App compagnon Android **one-tap R3** pour la cabine VILLAGE3B

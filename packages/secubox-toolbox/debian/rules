@@ -105,6 +105,9 @@ execute_after_dh_auto_install:
 	# #536 : Android APK fetch helper.
 	install -m 0755 sbin/secubox-toolbox-fetch-apk \
 	  debian/secubox-toolbox/usr/sbin/
+	# #532 : browser extension .xpi fetch helper.
+	install -m 0755 sbin/secubox-toolbox-fetch-xpi \
+	  debian/secubox-toolbox/usr/sbin/
 	install -m 0755 sbin/secubox-toolbox-wg-restore \
 	  debian/secubox-toolbox/usr/sbin/
 	install -m 0644 systemd/secubox-toolbox-wg-restore.service \

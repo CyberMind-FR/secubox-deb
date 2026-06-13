@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# SecuBox-Deb :: secubox-toolbox-fetch-xpi (#532)
+#
+# Pull the latest browser ToolBoX extension .xpi (published as a GitHub
+# release asset by build-webext.yml on webext-v* tags) into the toolbox
+# serve path, so GET /wg/toolbox.xpi serves it locally (offline-capable
+# install from the cabine). Best-effort : a failure leaves any existing
+# .xpi in place ; the endpoint falls back to the public release redirect.
+set -euo pipefail
+readonly MODULE="secubox-toolbox-fetch-xpi"
+
+DEST_DIR="/var/lib/secubox/toolbox/webext"
+DEST="${DEST_DIR}/secubox-toolbox-webext.xpi"
+RELEASE_URL="https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-toolbox-webext.xpi"
+
+log() { logger -t "$MODULE" -- "$*" 2>/dev/null || echo "[$MODULE] $*" >&2; }
+
+install -d -m 0755 -o secubox-toolbox -g secubox-toolbox "$DEST_DIR" 2>/dev/null \
+  || mkdir -p "$DEST_DIR"
+
+TMP=$(mktemp --suffix=.xpi)
+trap 'rm -f "$TMP"' EXIT
+
+if command -v wget >/dev/null 2>&1; then
+    if wget -q --timeout=20 --tries=2 "$RELEASE_URL" -O "$TMP" && [ -s "$TMP" ]; then
+        # Sanity : an .xpi is a ZIP — must start with PK\x03\x04.
+        if head -c 2 "$TMP" | grep -q "PK"; then
+            install -m 0644 "$TMP" "$DEST"
+            chown secubox-toolbox:secubox-toolbox "$DEST" 2>/dev/null || true
+            log "fetched .xpi -> ${DEST} ($(stat -c%s "$DEST" 2>/dev/null) bytes)"
+            exit 0
+        else
+            log "downloaded file is not an .xpi (no release asset yet?) — keeping existing"
+        fi
+    else
+        log "fetch failed (no release yet / network) — /wg/toolbox.xpi will redirect to the release"
+    fi
+else
+    log "wget missing — cannot fetch .xpi"
+fi
+exit 0

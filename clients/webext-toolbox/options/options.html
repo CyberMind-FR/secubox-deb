@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>SecuBox Cartographie — Réglages</title>
+  <style>
+    body { background:#0a0a0f; color:#e8e6d9; font:14px/1.5 system-ui,sans-serif;
+           max-width:520px; margin:40px auto; padding:0 20px; }
+    h1 { color:#c9a84c; font-size:18px; }
+    label { display:block; color:#6b6b7a; font-size:12px; margin:14px 0 4px; }
+    input,select { width:100%; padding:8px; border-radius:6px; border:1px solid #333;
+            background:#14141c; color:#e8e6d9; }
+    button { margin-top:16px; padding:9px 14px; border-radius:6px; border:1px solid #c9a84c;
+             background:#c9a84c; color:#0a0a0f; font-weight:700; cursor:pointer; }
+    .muted { color:#6b6b7a; font-size:12px; }
+    #msg { color:#00ff41; min-height:18px; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <h1>👁️ SecuBox Cartographie — Réglages</h1>
+  <p class="muted">L'extension parle uniquement à ta cabine via le tunnel R3.
+     Aucune donnée n'est envoyée ailleurs.</p>
+
+  <label>Borne (hôte de la cabine)
+    <input id="host" type="text" placeholder="kbin.gk2.secubox.in" autocomplete="off">
+  </label>
+  <label>Fenêtre d'analyse
+    <select id="since">
+      <option value="3600">1 heure</option>
+      <option value="86400" selected>24 heures</option>
+      <option value="604800">7 jours</option>
+    </select>
+  </label>
+  <label>Jeton de session (optionnel — sinon appairage auto via R3)
+    <input id="token" type="text" placeholder="mac.exp.nonce.sig" autocomplete="off">
+  </label>
+
+  <button id="save">Enregistrer</button>
+  <p id="msg"></p>
+
+  <script src="../api.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
