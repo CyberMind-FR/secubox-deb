@@ -34,13 +34,42 @@ P2P_SOCKET = "/run/secubox/p2p.sock"
 
 app = FastAPI(title="SecuBox SOC", version="2.0.0")
 
-# Phase 2b (#488) : ingest mitm SOC indicator events from secubox-toolbox addon
+# Phase 2b/2c (#488/#490) : ingest mitm SOC events + score aggregation
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
+
+
+def _soc_enrich(event: dict) -> dict:
+    """Phase 2c enrichment : sum indicator weights -> score band.
+
+    Future Phase 3 : query threat-intel feeds (CrowdSec/ThreatFox/etc.)
+    locally instead of just summing static weights.
+    """
+    indicators = event.get("indicators") or []
+    if not indicators:
+        return event
+    total_weight = sum((i.get("weight") or 0) for i in indicators if isinstance(i, dict))
+    band = "low"
+    if total_weight >= 50:
+        band = "high"
+    elif total_weight >= 20:
+        band = "medium"
+    kinds = sorted({i.get("kind", "?") for i in indicators if isinstance(i, dict)})
+    event["enriched"] = {
+        "total_weight": total_weight,
+        "band": band,
+        "indicator_kinds": kinds,
+        "indicator_count": len(indicators),
+        "source": "secubox-soc/scoring",
+    }
+    return event
+
+
 mount_ingest_routes(
     app,
     endpoint_path="/event",
     db_path="/var/lib/secubox/soc/mitm-ingest.db",
     kind="soc",
+    enrich_hook=_soc_enrich,
 )
 
 # Data directories
