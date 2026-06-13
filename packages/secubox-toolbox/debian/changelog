@@ -1,3 +1,15 @@
+secubox-toolbox (2.6.19-1~bookworm1) bookworm; urgency=medium
+
+  * Favicons of major sites in the cartographie (#555) — never IPs.
+      - social.js eye-view: site + tracker nodes render the site favicon
+        (same-origin /social/favicon/{domain} proxy, 7-day cached,
+        transparent 1×1 fallback → the tier-coloured circle shows through),
+        clipped to the bubble. No IP/ASN displayed anywhere.
+      - Companion webext popup gains favicons in its top-tracker list
+        (clients/webext-toolbox 0.1.2). /wg/toolbox.xpi tag-pin → webext-v0.1.2.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 15:30:00 +0200
+
 secubox-toolbox (2.6.18-1~bookworm1) bookworm; urgency=medium
 
   * Cartographie donut-bubble view + geography rollups (#553).
