@@ -1,3 +1,16 @@
+secubox-toolbox (2.6.16-1~bookworm1) bookworm; urgency=medium
+
+  * Injected banner neon-tube redesign (#545) — inject_banner.py.
+      - New _LEVEL_THEME map: R3 (and the planned R4) get a neon-tube look
+        (dark glass bar, glowing tube border via layered box-shadow + neon
+        text-shadow on the title) ; R2 keeps the original amber flat bar.
+      - _banner_html_dynamic() takes the level and themes both the
+        CSP-strict (JS-less) and JS (dismissible) variants ; all inline CSS,
+        no injected <style>/@keyframes, ASCII/NCR-clean for legacy charsets.
+      - R4 theme defined but inert until _client_level() returns 'r4'.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 12:30:00 +0200
+
 secubox-toolbox (2.6.15-1~bookworm1) bookworm; urgency=medium
 
   * kbin landing radical-simplify redesign (#543) — conf/landing.html.j2.
