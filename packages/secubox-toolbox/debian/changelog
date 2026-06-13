@@ -1,3 +1,19 @@
+secubox-toolbox (2.6.15-1~bookworm1) bookworm; urgency=medium
+
+  * kbin landing radical-simplify redesign (#543) — conf/landing.html.j2.
+      - Animated hero (gazing 👁️ + floating tracker dots) + one big
+        "✨ Protège-moi (R3)" CTA + "🕸️ Qui me piste ?" secondary.
+      - Auto-detected install panel pulled up front ("📥 Installe en 1 tap").
+      - KPIs / cert-probe / pitch / R0-R3 levels / charts / architecture /
+        open-source / contact moved behind an "En savoir plus" <details> fold.
+      - Quick-nav trimmed: removed CA iPhone / CA Android / QR profil cards
+        (they live inside the per-platform install panel now) — kept R3
+        Install / Mon rapport / Ma carto / Wiki / Cabine.
+      - Count-up animation on the live KPIs on first paint. All Jinja
+        variables + the live-stats and cert-probe scripts preserved.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 12:00:00 +0200
+
 secubox-toolbox (2.6.14-1~bookworm1) bookworm; urgency=medium
 
   * Serve the browser ToolBoX extension .xpi from the toolbox (#532).

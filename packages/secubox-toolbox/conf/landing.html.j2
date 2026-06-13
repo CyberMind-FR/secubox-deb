@@ -1,20 +1,57 @@
 {# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
 {# Public landing page — kbin.gk2.secubox.in #}
+{# Radical-simplify redesign (#543): animated hero + one CTA + install panel
+   up top ; everything else folded behind "En savoir plus". #}
 <!DOCTYPE html>
 <html lang=fr><head>
 <meta charset=UTF-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=description content="VILLAGE3B — Cabine numérique Gondwana : diagnostic compromission iPhone/Android anonyme, gratuit, open source CMSD">
-<title>📡 VILLAGE3B — Cabine Numérique Gondwana</title>
+<title>👁️ VILLAGE3B — Qui te piste ?</title>
 <link rel=manifest href=/manifest.json>
 <style>
-:root{--bg:#0a0a0f;--bg2:#0e0e15;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff;--gold:#c9a84c;--amber:#ffb347;--red:#ff4466}
+:root{--bg:#0a0a0f;--bg2:#0e0e15;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff;--gold:#c9a84c;--amber:#ffb347;--red:#ff4466;--cyan:#00d4ff}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Courier New',Menlo,monospace;background:var(--bg);color:var(--text);line-height:1.55;padding-bottom:3rem}
-.hero{background:linear-gradient(135deg,#1a0a2e 0%,#0a0a0f 100%);padding:2.5rem 1.5rem;text-align:center;border-bottom:2px solid var(--phos)}
-.hero h1{font-size:2.4rem;color:var(--phos-hot);text-shadow:0 0 8px var(--phos);letter-spacing:0.08em}
-.hero p.tag{color:var(--gold);font-size:1rem;margin-top:0.4rem;letter-spacing:0.08em}
-.hero p.sub{color:var(--dim);font-size:0.85rem;margin-top:0.6rem;max-width:600px;margin-left:auto;margin-right:auto}
+a{color:var(--phos);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── HERO ── */
+.hero{position:relative;overflow:hidden;background:radial-gradient(120% 120% at 50% -10%,#221041 0%,#0a0a0f 60%);padding:3rem 1.5rem 2.4rem;text-align:center;border-bottom:2px solid var(--phos)}
+.eye{font-size:3.4rem;line-height:1;display:inline-block;animation:gaze 5s ease-in-out infinite;filter:drop-shadow(0 0 14px rgba(0,255,85,0.55))}
+@keyframes gaze{0%,100%{transform:translateX(0) scale(1)}25%{transform:translateX(-6px) scale(1.04)}60%{transform:translateX(7px) scale(1.04)}}
+.hero h1{font-size:2.6rem;color:var(--phos-hot);text-shadow:0 0 10px var(--phos);letter-spacing:0.08em;margin-top:0.3rem}
+.hero .punch{color:var(--text);font-size:1.25rem;margin-top:0.6rem;font-weight:bold}
+.hero .punch b{color:var(--gold)}
+.hero .sub{color:var(--dim);font-size:0.82rem;margin-top:0.5rem;max-width:560px;margin-left:auto;margin-right:auto}
+/* floating tracker dots = "who's watching" */
+.dots{position:absolute;inset:0;pointer-events:none;z-index:0}
+.dots i{position:absolute;width:7px;height:7px;border-radius:50%;opacity:0.0;animation:float 7s ease-in-out infinite}
+.dots i:nth-child(1){left:12%;top:30%;background:var(--cyan);animation-delay:.0s}
+.dots i:nth-child(2){left:82%;top:24%;background:var(--amber);animation-delay:1.1s}
+.dots i:nth-child(3){left:24%;top:68%;background:var(--red);animation-delay:2.3s}
+.dots i:nth-child(4){left:70%;top:64%;background:var(--purple);animation-delay:.7s}
+.dots i:nth-child(5){left:50%;top:14%;background:var(--cyan);animation-delay:3.0s}
+.dots i:nth-child(6){left:90%;top:54%;background:var(--red);animation-delay:1.8s}
+@keyframes float{0%{opacity:0;transform:translateY(8px) scale(.6)}30%{opacity:.85}70%{opacity:.7}100%{opacity:0;transform:translateY(-14px) scale(1.1)}}
+.hero>*{position:relative;z-index:1}
+
+/* ── big CTA row ── */
+.ctas{margin-top:1.4rem;display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap}
+.cta{display:inline-block;padding:0.85rem 1.6rem;font-weight:bold;border-radius:8px;font-size:1.02rem;text-shadow:none;transition:transform .12s,box-shadow .12s}
+.cta:hover{text-decoration:none;transform:translateY(-2px)}
+.cta.go{background:var(--phos);color:#0a0a0f;box-shadow:0 4px 18px rgba(0,221,68,0.4)}
+.cta.go:hover{box-shadow:0 6px 24px rgba(0,221,68,0.6)}
+.cta.alt{background:transparent;color:var(--purple);border:1px solid var(--purple)}
+.cta.alt:hover{background:rgba(158,118,255,0.12)}
+
+/* ── quicknav (trimmed) ── */
+.quicknav{display:flex;flex-wrap:wrap;justify-content:center;gap:0.6rem;margin-top:1.4rem;max-width:620px;margin-left:auto;margin-right:auto}
+.qi{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0.5rem 0.4rem;min-width:74px;background:rgba(110,64,201,0.08);border:1px solid var(--purple);border-radius:8px;text-decoration:none;color:var(--text);transition:all 0.12s;font-family:inherit}
+.qi:hover{background:rgba(110,64,201,0.22);transform:translateY(-2px);box-shadow:0 4px 14px rgba(158,118,255,0.35);text-decoration:none}
+.qi-emoji{font-size:1.5rem;line-height:1}
+.qi-label{font-size:0.62rem;letter-spacing:0.04em;color:var(--phos-hot);font-weight:bold;white-space:nowrap}
+
 .container{max-width:1080px;margin:auto;padding:2rem 1.5rem}
 .section{margin-bottom:2.5rem}
 h2{color:var(--phos-hot);text-shadow:0 0 4px var(--phos);font-size:1.3rem;margin-bottom:0.8rem;border-bottom:1px solid var(--dim);padding-bottom:0.4rem;letter-spacing:0.04em}
@@ -43,30 +80,54 @@ svg.chart{width:100%;max-width:400px;height:auto}
 .svg-bar{fill:var(--phos);transition:fill 0.3s}
 .svg-bar.medium{fill:var(--amber)}
 .svg-bar.high{fill:var(--red)}
-.steps{counter-reset:step}
-.steps li{counter-increment:step;list-style:none;padding:0.6rem 0 0.6rem 2.4rem;position:relative;font-size:0.9rem}
-.steps li::before{content:counter(step);position:absolute;left:0;top:0.5rem;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--phos);color:#0a0a0f;text-align:center;line-height:1.8rem;font-weight:bold;text-shadow:none}
 code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;color:var(--phos-hot)}
-a{color:var(--phos);text-decoration:none}
-a:hover{text-decoration:underline}
-.cta{display:inline-block;background:var(--phos);color:#0a0a0f;padding:0.7rem 1.4rem;text-decoration:none;font-weight:bold;border-radius:4px;margin:0.5rem 0.3rem 0.5rem 0;text-shadow:none}
-.cta.outline{background:transparent;color:var(--phos);border:1px solid var(--phos)}
-.cta.purple{background:var(--purple);color:#0a0a0f}
+.cta-sm{display:inline-block;background:var(--phos);color:#0a0a0f;padding:0.7rem 1.4rem;text-decoration:none;font-weight:bold;border-radius:4px;margin:0.5rem 0.3rem 0.5rem 0;text-shadow:none}
+.cta-sm.outline{background:transparent;color:var(--phos);border:1px solid var(--phos)}
 .footer{text-align:center;font-size:0.78rem;color:var(--dim);padding:1.5rem;border-top:1px solid var(--dim);margin-top:2rem}
 .arch{font-family:monospace;font-size:0.75rem;color:var(--phos-hot);text-shadow:0 0 4px var(--phos);background:var(--bg2);padding:1rem;border:1px solid var(--dim);border-radius:4px;overflow-x:auto;white-space:pre;line-height:1.4}
-.quicknav{display:flex;flex-wrap:wrap;justify-content:center;gap:0.7rem;margin-top:1.2rem;max-width:780px;margin-left:auto;margin-right:auto}
-.qi{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0.6rem 0.4rem;min-width:78px;background:rgba(110,64,201,0.08);border:1px solid var(--purple);border-radius:8px;text-decoration:none;color:var(--text);transition:all 0.12s;font-family:inherit}
-.qi:hover{background:rgba(110,64,201,0.22);transform:translateY(-2px);box-shadow:0 4px 14px rgba(158,118,255,0.35);text-decoration:none}
-.qi-emoji{font-size:1.6rem;line-height:1}
-.qi-label{font-size:0.65rem;letter-spacing:0.04em;color:var(--phos-hot);font-weight:bold;white-space:nowrap}
+
+/* ── install panel (kept up top) ── */
+.install-panel{background:rgba(0,255,65,0.04);border:1px solid rgba(0,255,65,0.25);border-radius:6px;padding:0.6rem 0.9rem;margin:0.45rem 0;text-align:left}
+.install-panel summary{cursor:pointer;font-size:0.95rem;color:var(--phos-hot);list-style:none;outline:none}
+.install-panel summary::-webkit-details-marker{display:none}
+.install-panel[open] summary{margin-bottom:0.6rem}
+.install-panel .emoji{font-size:1.1rem;margin-right:0.3rem}
+.install-panel ol{padding-left:1.1rem;line-height:1.5;font-size:0.85rem}
+.install-panel .btn{display:inline-block;padding:0.45rem 0.75rem;margin:0.25rem 0.2rem 0.25rem 0;background:var(--purple);color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;font-size:0.82rem}
+.install-panel .btn.alt{background:transparent;border:1px solid var(--purple);color:var(--purple)}
+.install-panel code{background:rgba(0,0,0,0.4);padding:0.1rem 0.35rem;border-radius:3px;font-size:0.8rem;color:var(--phos-hot)}
+.install-panel .note{color:var(--dim);font-size:0.78rem;margin-top:0.6rem;border-left:2px solid var(--amber);padding-left:0.6rem}
+.install-panel img{max-width:100%;border-radius:5px;margin:0.4rem 0}
+.install-panel pre{background:rgba(0,0,0,0.4);padding:0.5rem 0.7rem;border-radius:4px;overflow-x:auto;font-size:0.78rem;margin:0.4rem 0}
+
+/* ── "En savoir plus" fold ── */
+.more{max-width:1080px;margin:0 auto;padding:0 1.5rem}
+.more>summary{cursor:pointer;list-style:none;text-align:center;color:var(--purple);font-size:0.95rem;letter-spacing:0.05em;padding:0.9rem;border:1px dashed var(--purple);border-radius:8px;margin-bottom:1rem;transition:background .12s}
+.more>summary::-webkit-details-marker{display:none}
+.more>summary:hover{background:rgba(158,118,255,0.1)}
+.more[open]>summary{margin-bottom:1.6rem}
+.more>summary .chev{display:inline-block;transition:transform .2s}
+.more[open]>summary .chev{transform:rotate(90deg)}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.v.tick{animation:flash 0.6s}
+@keyframes flash{0%{color:var(--gold);transform:scale(1.15)}100%{color:var(--phos-hot);transform:scale(1)}}
 </style></head><body>
 
 <div class=hero>
-  <h1>📡 VILLAGE3B</h1>
-  <p class=tag>// CABINE NUMÉRIQUE GONDWANA · TOOLBOX</p>
+  <div class=dots><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <span class=eye>👁️</span>
+  <h1>VILLAGE3B</h1>
+  <p class=punch>Qui te piste ? <b>La cabine te le montre.</b></p>
   <p class=sub>Diagnostic gratuit de compromission iPhone / Android · Anonyme · Open Source · CMSD-1.0</p>
 
-  {# Phase 6.I : quick-access icon nav — one-tap to all key endpoints #}
+  <div class=ctas>
+    <a href="/wg/r3-install" class="cta go">✨ Protège-moi (R3)</a>
+    <a href="/social/me" class="cta alt">🕸️ Qui me piste ?</a>
+  </div>
+
+  {# trimmed quick-nav — CA iPhone / CA Android / QR profil moved into the
+     per-platform install panel below (#543) #}
   <div class=quicknav>
     <a href="/wg/r3-install" class=qi title="Installer R3 WireGuard">
       <span class=qi-emoji>🌐</span><span class=qi-label>R3 Install</span>
@@ -77,15 +138,6 @@ a:hover{text-decoration:underline}
     <a href="/social/me" class=qi title="Cartographie sociale — qui me piste, où ?">
       <span class=qi-emoji>🕸️</span><span class=qi-label>Ma carto</span>
     </a>
-    <a href="/wg/ca.mobileconfig" class=qi title="CA R3 iPhone (.mobileconfig)">
-      <span class=qi-emoji>📲</span><span class=qi-label>CA iPhone</span>
-    </a>
-    <a href="/wg/ca.pem" class=qi title="CA R3 Android/PC (.pem)">
-      <span class=qi-emoji>🤖</span><span class=qi-label>CA Android</span>
-    </a>
-    <a href="/wg/qr.png" class=qi title="QR profil WireGuard">
-      <span class=qi-emoji>📱</span><span class=qi-label>QR profil</span>
-    </a>
     <a href="https://github.com/CyberMind-FR/secubox-deb/wiki/R3-WireGuard-install" class=qi title="Wiki R3 multi-OS">
       <span class=qi-emoji>📖</span><span class=qi-label>Wiki</span>
     </a>
@@ -95,7 +147,25 @@ a:hover{text-decoration:underline}
   </div>
 </div>
 
+{# ── Install : auto-detected platform panel, front and centre ── #}
 <div class=container>
+  <div class=section style="margin-bottom:1.5rem">
+    <h2>📥 Installe en 1 tap</h2>
+    <p style="font-size:0.85rem;color:var(--dim);margin-bottom:0.8rem">
+      On a détecté <code>{{ install_platform }}</code> — le panneau adapté est ouvert.
+      Le CA, le QR et le profil sont dedans. Autre appareil ? Déplie le bon panneau.
+    </p>
+    {{ install_panels | safe }}
+    <p style="margin-top:0.8rem;font-size:0.78rem;color:var(--dim)">
+      R3 marche hors-cabine (4G/5G, autre WiFi), couvre tout le HTTPS, et se révoque
+      à tout moment. Page standalone : <a href=/wg/onboard>/wg/onboard</a>.
+    </p>
+  </div>
+</div>
+
+{# ── Everything else, folded ── #}
+<details class=more>
+  <summary><span class=chev>▸</span> En savoir plus — la cabine en détail, en chiffres, en open source</summary>
 
   {# ── KPI live (auto-refresh 5s via /cumulative-stats.json) ── #}
   <div class=section>
@@ -241,43 +311,6 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
     </div>
   </div>
 
-  {# ── Install : auto-detected platform panels (Phase 8.2 #500) ── #}
-  <div class=section>
-    <h2>📥 Installer R3 sur ton appareil</h2>
-    <p style="font-size:0.85rem;color:var(--dim);margin-bottom:0.8rem">
-      On a détecté <code>{{ install_platform }}</code> via ton navigateur — le panneau adapté
-      est ouvert en premier. Autre appareil ? Déplie le bon panneau ci-dessous.
-    </p>
-    <style>
-      .install-panel{background:rgba(0,255,65,0.04);border:1px solid rgba(0,255,65,0.25);
-        border-radius:6px;padding:0.6rem 0.9rem;margin:0.45rem 0}
-      .install-panel summary{cursor:pointer;font-size:0.95rem;color:var(--phos-peak,#00dd44);
-        list-style:none;outline:none}
-      .install-panel summary::-webkit-details-marker{display:none}
-      .install-panel[open] summary{margin-bottom:0.6rem}
-      .install-panel .emoji{font-size:1.1rem;margin-right:0.3rem}
-      .install-panel ol{padding-left:1.1rem;line-height:1.5;font-size:0.85rem}
-      .install-panel .btn{display:inline-block;padding:0.45rem 0.75rem;margin:0.25rem 0.2rem 0.25rem 0;
-        background:var(--purple,#6e40c9);color:#fff;text-decoration:none;border-radius:5px;
-        font-weight:bold;font-size:0.82rem}
-      .install-panel .btn.alt{background:transparent;border:1px solid var(--purple,#6e40c9);
-        color:var(--purple,#6e40c9)}
-      .install-panel code{background:rgba(0,0,0,0.4);padding:0.1rem 0.35rem;border-radius:3px;
-        font-size:0.8rem;color:var(--phos-peak,#00dd44)}
-      .install-panel .note{color:var(--dim,#888);font-size:0.78rem;margin-top:0.6rem;
-        border-left:2px solid var(--phos-hot,#ffb347);padding-left:0.6rem}
-      .install-panel img{max-width:100%;border-radius:5px;margin:0.4rem 0}
-      .install-panel pre{background:rgba(0,0,0,0.4);padding:0.5rem 0.7rem;border-radius:4px;
-        overflow-x:auto;font-size:0.78rem;margin:0.4rem 0}
-    </style>
-    {{ install_panels | safe }}
-    <p style="margin-top:0.8rem;font-size:0.78rem;color:var(--dim)">
-      Avantage R3 : marche hors-cabine (4G/5G, autre WiFi). Inclut tout le trafic (HTTPS).
-      Profil + CA bundlés. Le tunnel est révoquable à tout moment depuis Réglages.
-      Page équivalente standalone : <a href=/wg/onboard>/wg/onboard</a>.
-    </p>
-  </div>
-
   {# ── Open Source ── #}
   <div class=section>
     <h2>🔓 Open Source — CMSD-1.0</h2>
@@ -286,8 +319,8 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
       (audit citoyen possible, droits d'usage régis par licence CMSD). Pas de boîte noire.
     </p>
     <div style="margin-top:0.6rem">
-      <a href="https://github.com/CyberMind-FR/secubox-deb" class=cta>📂 Code source GitHub</a>
-      <a href="https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENCE-CMSD-1.0.md" class="cta outline">📜 Licence CMSD-1.0</a>
+      <a href="https://github.com/CyberMind-FR/secubox-deb" class=cta-sm>📂 Code source GitHub</a>
+      <a href="https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENCE-CMSD-1.0.md" class="cta-sm outline">📜 Licence CMSD-1.0</a>
     </div>
   </div>
 
@@ -314,7 +347,7 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
     </div>
   </div>
 
-</div>
+</details>
 
 <div class=footer>
   📡 Gondwana ToolBox · CyberMind / Gérald Kerma · Notre-Dame-du-Cruet (73130) · Savoie · France<br>
@@ -322,14 +355,8 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
   // DIY · Open Source · Open Audit
 </div>
 
-<style>
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-.v.tick{animation:flash 0.6s}
-@keyframes flash{0%{color:var(--gold);transform:scale(1.15)}100%{color:var(--phos-hot);transform:scale(1)}}
-</style>
-
 <script>
-// ── Live KPI auto-refresh from /cumulative-stats.json ──
+// ── Live KPI auto-refresh from /cumulative-stats.json (+ count-up on first paint) ──
 (function(){
   function dig(o,path){
     var parts = path.split('.');
@@ -349,6 +376,23 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
     var ss = String(d.getSeconds()).padStart(2,'0');
     return 'maj ' + hh+':'+mm+':'+ss;
   }
+  // count-up: animate each KPI from 0 → its server-rendered value, once.
+  function countUp(el, target){
+    var start = 0, dur = 900, t0 = null;
+    function step(ts){
+      if (t0 === null) t0 = ts;
+      var p = Math.min(1, (ts - t0) / dur);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(start + (target - start) * eased);
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = target;
+    }
+    requestAnimationFrame(step);
+  }
+  document.querySelectorAll('.kpi .v[data-live]').forEach(function(el){
+    var n = parseInt(el.textContent.trim(), 10);
+    if (!isNaN(n) && n > 0) countUp(el, n);
+  });
   function refresh(){
     fetch('/cumulative-stats.json', {cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
       document.querySelectorAll('[data-live]').forEach(function(el){
@@ -379,16 +423,10 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
   var fp  = document.getElementById('cert-fp-r3');
   if (!btn) return;
 
-  // Display the WG CA fingerprint (use ?ca=wg flag if endpoint supports it,
-  // else fallback to default ca fingerprint).
   fetch('/ca/fingerprint').then(function(r){return r.json();}).then(function(d){
     fp.textContent = d.sha1 || d.sha256 || '?';
   }).catch(function(){fp.textContent='?';});
 
-  // Phase 6.H : 3-step probe :
-  //  1) Detect if user is in WG R3 tunnel (probe our internal-only endpoint)
-  //  2) Probe an external HTTPS (verifies mitm decrypt + CA trust)
-  //  3) Combine results into a clear verdict
   function runProbe(){
     emj.textContent = '⏳';
     txt.innerHTML = 'Test en cours… (1/2 détection tunnel)';
@@ -416,31 +454,12 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
       }
     }
 
-    // Phase 7 (#498) — same-origin HTTPS R3 probe.
-    // The previous probe loaded http://10.99.0.1:8088/qr/splash.png as
-    // an Image. iOS Safari blocks mixed content (HTTP from an HTTPS
-    // page) so the request never fired and inWG always stayed false.
-    // /wg/r3-check returns { tunnel: bool } based on the X-R3-Peer /
-    // XFF headers mitm-wg sets via the inject_xff addon.
     fetch('/wg/r3-check?t=' + Date.now(), {cache: 'no-store'})
       .then(function(r){ return r.ok ? r.json() : {tunnel:false}; })
       .then(function(d){
         inWG = !!(d && d.tunnel);
         if (!inWG) { finalize(); return; }
         txt.innerHTML = 'Tunnel R3 détecté ✓ — test 2/2 cert mitm…';
-        // Step 2 : probe an external HTTPS host that mitm-wg DOES
-        // intercept (i.e. not in ignore_hosts). gstatic / google /
-        // apple / fbcdn are whitelisted so they pass through with
-        // their real cert ; useless to test CA trust. duckduckgo
-        // isn't whitelisted, so the TLS handshake is performed by
-        // mitm-wg with the R3 CA — it succeeds only if the iPhone
-        // trusts that CA.
-        //
-        // fetch(no-cors) resolves on any successful TLS handshake
-        // regardless of HTTP status, and rejects on cert / network
-        // error — exactly the signal we want. Image.onload was
-        // ambiguous : a 204 No Content reply (no image data) also
-        // triggered onerror, making CA-trusted look like CA-untrusted.
         var extDone = false;
         fetch('https://duckduckgo.com/favicon.ico?t=' + Date.now(),
               {mode: 'no-cors', cache: 'no-store'})
