@@ -404,8 +404,40 @@ def _detect_csp_strict(flow: http.HTTPFlow) -> bool:
     return False
 
 
+# Per-level visual theme (#545). R3 — and the planned R4 — get the
+# neon-tube treatment (dark glass bar, glowing tube border + neon
+# text-shadow). R2 keeps the original amber flat bar. All values are inline
+# CSS only (no injected <style>/@keyframes) so it survives strict CSP and
+# arbitrary third-party pages.
+_LEVEL_THEME = {
+    "r2": {
+        "neon": False,
+        "bg": "linear-gradient(90deg,#ffb347 60%,#0a0a0f 100%)",
+        "fg": "#0a0a0f", "edge": "#C04E24", "accent": "#ffb347",
+        "glow": "", "link": "#0a5840", "chip": "rgba(0,0,0,0.1)",
+    },
+    "r3": {
+        "neon": True,
+        "bg": "rgba(8,8,14,0.95)",
+        "fg": "#e8e6d9", "edge": "#00d4ff", "accent": "#00d4ff",
+        "glow": "rgba(0,212,255,0.45)", "link": "#00d4ff",
+        "chip": "rgba(0,212,255,0.12)",
+    },
+    # planned (#545): R4 drops in with its own neon colour — inert until
+    # _client_level() can return 'r4'.
+    "r4": {
+        "neon": True,
+        "bg": "rgba(12,8,16,0.96)",
+        "fg": "#e8e6d9", "edge": "#ff3df0", "accent": "#ff3df0",
+        "glow": "rgba(255,61,240,0.45)", "link": "#ff3df0",
+        "chip": "rgba(255,61,240,0.12)",
+    },
+}
+
+
 def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
-                          report_url: str, level_label: str) -> bytes:
+                          report_url: str, level_label: str,
+                          level: str = "r2") -> bytes:
     """Render the injection payload.
 
     Two flavors depending on CSP strictness :
@@ -455,22 +487,47 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     # Static emojis used in the left-side text
     SAT_EMOJI = "&#x1F4E1;"  # 📡 satellite dish
 
+    # ── theme resolution (#545) : R3/R4 neon tube, R2 amber flat ──
+    th = _LEVEL_THEME.get(level, _LEVEL_THEME["r2"])
+    _base = (
+        "position:fixed!important;top:0!important;left:0!important;right:0!important;"
+        "z-index:2147483647!important;font-family:Menlo,Consolas,monospace!important;"
+        "padding:6px 12px!important;font-size:11px!important;line-height:1.4!important;"
+        "text-align:left!important;display:flex!important;justify-content:space-between!important;"
+        "align-items:center!important;gap:8px!important;"
+    )
+    if th["neon"]:
+        # glowing glass tube : outer + inset accent glow, neon edge
+        bar_css = (
+            _base
+            + f"background:{th['bg']}!important;color:{th['fg']}!important;"
+            + f"border-bottom:2px solid {th['edge']}!important;"
+            + f"box-shadow:0 0 10px {th['accent']},0 3px 22px {th['glow']},"
+              f"inset 0 -1px 6px {th['glow']}!important;"
+            + "backdrop-filter:blur(3px)!important;"
+        )
+        title_css = f"color:{th['accent']};text-shadow:0 0 6px {th['accent']},0 0 12px {th['accent']}"
+    else:
+        bar_css = (
+            _base
+            + f"background:{th['bg']}!important;color:{th['fg']}!important;"
+            + f"border-bottom:2px solid {th['edge']}!important;"
+            + "box-shadow:0 2px 8px rgba(0,0,0,0.3)!important;"
+        )
+        title_css = ""
+    code_css = f"background:{th['chip']};padding:1px 4px;border-radius:2px"
+    link_css = f"color:{th['link']};text-decoration:underline;font-weight:bold"
+    title_attr = f" style=\"{title_css}\"" if title_css else ""
+
     if csp_strict:
         # JS-less HTML banner — visible only, no close button. !important
         # everywhere so page CSS can't override the fixed positioning.
         # NCRs work even when page charset is iso-8859-1.
         html = (
-            f"<div id=\"gondwana-mitm-banner\" role=\"status\" "
-            f"style=\"position:fixed!important;top:0!important;left:0!important;right:0!important;"
-            f"z-index:2147483647!important;"
-            f"background:linear-gradient(90deg,#ffb347 60%,#0a0a0f 100%)!important;"
-            f"color:#0a0a0f!important;font-family:Menlo,Consolas,monospace!important;"
-            f"padding:6px 12px!important;font-size:11px!important;line-height:1.4!important;"
-            f"border-bottom:2px solid #C04E24!important;text-align:left!important;"
-            f"display:flex!important;justify-content:space-between!important;align-items:center!important;gap:8px!important\">"
-            f"<span><b>{SAT_EMOJI} ToolBoX {level_label}</b> &#xB7; CA SHA1: "
-            f"<code style=\"background:rgba(0,0,0,0.1);padding:1px 4px;border-radius:2px\">{sha1[:23]}</code>"
-            f" &#xB7; <a href=\"{report_url}\" style=\"color:#0a5840;text-decoration:underline;font-weight:bold\">Mon rapport</a></span>"
+            f"<div id=\"gondwana-mitm-banner\" role=\"status\" style=\"{bar_css}\">"
+            f"<span><b{title_attr}>{SAT_EMOJI} ToolBoX {level_label}</b> &#xB7; CA SHA1: "
+            f"<code style=\"{code_css}\">{sha1[:23]}</code>"
+            f" &#xB7; <a href=\"{report_url}\" style=\"{link_css}\">Mon rapport</a></span>"
             f"<span style=\"color:#e8e6d9;background:rgba(0,0,0,0.4);padding:3px 8px;border-radius:3px\">"
             f"{right_text}"
             f" &#xB7; <b style=\"color:{grade_color};background:#0a0a0f;padding:1px 5px;border-radius:2px\">{grade}</b>"
@@ -489,6 +546,12 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     level_js = _json.dumps(level_label)
     sat_js = _json.dumps(SAT_EMOJI)
     mid_js = _json.dumps(" &#xB7; ")
+    # theme (#545) — JS-encoded so the same neon/amber styling applies here
+    bar_css_js = _json.dumps(bar_css)
+    title_attr_js = _json.dumps(title_attr)
+    code_css_js = _json.dumps(code_css)
+    link_css_js = _json.dumps(link_css)
+    close_col_js = _json.dumps(th["fg"])
 
     js = f"""
 (function(){{
@@ -499,14 +562,7 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     var b=document.createElement('div');
     b.id='gondwana-mitm-banner';
     b.setAttribute('role','status');
-    b.style.cssText='position:fixed!important;top:0!important;left:0!important;right:0!important;'+
-      'z-index:2147483647!important;'+
-      'background:linear-gradient(90deg,#ffb347 60%,#0a0a0f 100%)!important;'+
-      'color:#0a0a0f!important;font-family:Menlo,Consolas,monospace!important;'+
-      'padding:6px 12px!important;font-size:11px!important;line-height:1.4!important;'+
-      'border-bottom:2px solid #C04E24!important;box-shadow:0 2px 8px rgba(0,0,0,0.3)!important;'+
-      'text-align:left!important;display:flex!important;'+
-      'justify-content:space-between!important;align-items:center!important;gap:8px!important';
+    b.style.cssText={bar_css_js};
     var rightText={right_js};
     var grade={grade_js};
     var gradeCol={grade_col_js};
@@ -515,14 +571,18 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     var level={level_js};
     var SAT={sat_js};
     var MID={mid_js};
-    b.innerHTML='<span><b>'+SAT+' ToolBoX '+level+'</b>'+MID+'CA SHA1: '+
-      '<code style=\"background:rgba(0,0,0,0.1);padding:1px 4px;border-radius:2px\">'+sha1+'</code>'+
-      MID+'<a href=\"'+reportUrl+'\" style=\"color:#0a5840;text-decoration:underline;font-weight:bold\">Mon rapport</a></span>'+
+    var TITLE_ATTR={title_attr_js};
+    var CODE_CSS={code_css_js};
+    var LINK_CSS={link_css_js};
+    var CLOSE_COL={close_col_js};
+    b.innerHTML='<span><b'+TITLE_ATTR+'>'+SAT+' ToolBoX '+level+'</b>'+MID+'CA SHA1: '+
+      '<code style=\"'+CODE_CSS+'\">'+sha1+'</code>'+
+      MID+'<a href=\"'+reportUrl+'\" style=\"'+LINK_CSS+'\">Mon rapport</a></span>'+
       '<span style=\"display:flex;align-items:center;gap:8px\">'+
         '<span style=\"color:#e8e6d9;background:rgba(0,0,0,0.4);padding:3px 8px;border-radius:3px\">'+
           rightText+MID+'<b style=\"color:'+gradeCol+';background:#0a0a0f;padding:1px 5px;border-radius:2px\">'+grade+'</b>'+
         '</span>'+
-        '<a href=\"javascript:void(0)\" onclick=\"document.getElementById(\\'gondwana-mitm-banner\\').style.display=\\'none\\';document.body.style.paddingTop=0\" style=\"color:#0a0a0f;text-decoration:none;font-weight:bold;cursor:pointer\">[&#xD7;]</a>'+
+        '<a href=\"javascript:void(0)\" onclick=\"document.getElementById(\\'gondwana-mitm-banner\\').style.display=\\'none\\';document.body.style.paddingTop=0\" style=\"color:'+CLOSE_COL+';text-decoration:none;font-weight:bold;cursor:pointer\">[&#xD7;]</a>'+
       '</span>';
     if(document.body.firstChild){{document.body.insertBefore(b,document.body.firstChild)}}
     else{{document.body.appendChild(b)}}
@@ -610,8 +670,9 @@ class InjectBanner:
             csp_strict = _detect_csp_strict(flow)
             report_url = _report_url_for(flow)
             level_label = _level_label(flow)
+            level = _client_level(flow)
             snippet = _banner_html_dynamic(_CA_SHA1, ctx, csp_strict,
-                                            report_url, level_label)
+                                            report_url, level_label, level)
         except Exception as e:
             log.warning("banner compute failed for %s: %s", flow.request.host, e)
             # Fail-open : skip injection rather than break the page
