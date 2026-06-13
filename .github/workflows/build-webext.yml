@@ -50,11 +50,14 @@ jobs:
 
       # On webext-v* tags, publish the .xpi as a release asset under the
       # stable name the toolbox fetch helper + /wg/toolbox.xpi expect.
-      # `latest/download/secubox-toolbox-webext.xpi` resolves to the
-      # newest release.
+      # make_latest:false so this client release does NOT steal the
+      # "latest" pointer from the Android APK release (which the APK
+      # endpoint resolves via /releases/latest/download/…). The xpi
+      # endpoint/fetcher therefore use a tag-pinned download URL.
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/webext-v')
         uses: softprops/action-gh-release@v2
         with:
           files: clients/webext-toolbox/web-ext-artifacts/secubox-toolbox-webext.xpi
           fail_on_unmatched_files: true
+          make_latest: false
