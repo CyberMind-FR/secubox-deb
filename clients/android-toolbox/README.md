@@ -5,12 +5,35 @@ One-tap **R3 onboarding** for the VILLAGE3B cabine : install the CA,
 import the WireGuard profile, verify the tunnel, then open the live
 *cartographie sociale*. Replaces the manual Android tutorial.
 
-## Flow
+## Flow (manual path)
 1. **Discover** — scan the kbin QR or type the booth host (`kbin.gk2.secubox.in`).
 2. **Install CA** — downloads `/wg/ca.crt`, launches the Android cert-install intent (`KeyChain.createInstallIntent`).
 3. **Import profile** — downloads `/wg/profile/new`, hands the `.conf` to the WireGuard app via `FileProvider` + `ACTION_VIEW`.
 4. **Verify** — polls `/wg/r3-check` → "Tunnel R3 actif ✓".
 5. **Live metrics** — opens `/social/me` (cartographie sociale).
+
+## Root path — fully-automated silent onboarding (#538)
+When the device is **rooted**, the Discover step shows an extra
+**⚡ Installation automatique (root)** button. Tapping it runs the whole
+onboarding with zero further interaction (`RootAuto` step, streaming log):
+
+1. **System CA install** — downloads `/wg/ca.pem`, computes the OpenSSL
+   `subject_hash_old` in pure Kotlin, and bind-mounts a populated copy of
+   the trust store over `/system/etc/security/cacerts` (+ the conscrypt
+   APEX path on Android 14), restoring the SELinux context
+   (`u:object_r:system_security_cacerts_file:s0`). **Every** app trusts the
+   cabine CA — not just user-CA opt-in apps. Reversible via `umount`.
+2. **Native WireGuard** — if the kernel has the WireGuard module + `wg`/`ip`,
+   brings the tunnel up natively (`ip link add … type wireguard` + `wg set`),
+   no WireGuard app required.
+3. **Auto R3 verify** — polls `/wg/r3-check`.
+
+**Fallback** — if the kernel lacks WireGuard, the root path installs the
+system CA then hands off to the manual WireGuard-app flow (steps 3–5 above).
+
+All root actions are **gated behind the explicit tap** — nothing runs as
+root without the operator choosing root mode on their own device.
+See `RootShell.kt` (su wrapper) and `RootOnboard.kt` (silent sequence).
 
 ## Build
 No Gradle wrapper jar is committed (text-only scaffold). CI builds it:
@@ -22,12 +45,14 @@ gradle :app:assembleDebug      # app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## Constraints (MVP)
-- Android 11+ restricts **user CA trust** ; the app launches the install
-  intent + guides the manual confirm step. Browsers on the device need
-  the CA trusted for the mitm R3 break — this is the known Android
-  limitation (documented, not yet automated).
-- WireGuard profile import uses the **official WireGuard app** (no embedded
-  tunnel in the MVP) — most reliable, no extra native deps.
+- Android 11+ restricts **user CA trust** ; the *manual* path launches the
+  install intent + guides the confirm step. Browsers on the device need the
+  CA trusted for the mitm R3 break — this is the known Android limitation on
+  non-rooted devices. **Rooted devices bypass it entirely** via the system
+  CA install (see Root path above).
+- The *manual* path imports the WireGuard profile via the **official
+  WireGuard app** (no embedded tunnel) — most reliable, no extra native
+  deps. The *root* path brings the tunnel up natively with the kernel module.
 - Debug APK is self-signed (sideload). Release signing (published
   fingerprint, served from the toolbox) is a follow-up needing a keystore
   secret in CI.

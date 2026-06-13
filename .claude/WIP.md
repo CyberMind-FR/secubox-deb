@@ -1,5 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-11*
+*Mis à jour : 2026-06-13*
+
+---
+
+## 🔄 2026-06-13 : Android ToolBox app — serve + root-mode silent onboarding (#531/#536/#538)
+
+App compagnon Android **one-tap R3** pour la cabine VILLAGE3B
+(`clients/android-toolbox/`, `in.secubox.toolbox`, Kotlin + Compose).
+
+- **#531 — scaffold + CI** : projet Gradle/Compose (5-step stepper
+  Discover→InstallCa→ImportProfile→Verify→Done), client `HttpURLConnection`,
+  workflow `build-android-apk.yml` (debug APK artifact, release asset sur
+  tag `android-v*`). CI **GREEN**.
+- **#536 — serve depuis la toolbox** : endpoint `GET /wg/toolbox.apk`
+  (sert le build local `/var/lib/secubox/toolbox/android/`, sinon 302 →
+  release GitHub) + bouton *📱 Installer l'app ToolBoX (1-tap)* dans les
+  panneaux onboard kbin + helper `secubox-toolbox-fetch-apk`. Vérifié :
+  200 `application/vnd.android.package-archive`, 14.8 MB.
+- **#538 — root-mode silent onboarding** (PR #539, branche poussée) :
+  bouton *⚡ Installation automatique (root)* sur devices rootés →
+  install CA dans le magasin **système** (bind-mount cacerts + APEX
+  conscrypt, SELinux ctx, `subject_hash_old` en Kotlin pur) + tunnel
+  WireGuard **natif noyau** (`ip link add … type wireguard` + `wg set`) +
+  vérif R3 auto. Fallback handoff app WireGuard si noyau sans WG. Toutes
+  les actions root gated derrière le tap explicite. Nouveaux fichiers
+  `RootShell.kt`, `RootOnboard.kt`, step `RootAuto` (log streamé).
+- **Reste à faire** : release signing (keystore secret CI) pour une
+  empreinte publiée stable — actuellement debug-signé (sideload).
 
 ---
 
