@@ -12,10 +12,13 @@ import the WireGuard profile, verify the tunnel, then open the live
 4. **Verify** — polls `/wg/r3-check` → "Tunnel R3 actif ✓".
 5. **Live metrics** — opens `/social/me` (cartographie sociale).
 
-## Root path — fully-automated silent onboarding (#538)
-When the device is **rooted**, the Discover step shows an extra
-**⚡ Installation automatique (root)** button. Tapping it runs the whole
-onboarding with zero further interaction (`RootAuto` step, streaming log):
+## Root path — fully-automated silent onboarding (#538, #551)
+When the device is **rooted**, the app runs the whole onboarding with **zero
+taps**: on launch it auto-detects root and, if this cabine host hasn't been
+onboarded yet, starts the silent sequence automatically (`RootAuto` step,
+streaming log). The **⚡ Installation automatique (root)** button stays for
+re-runs. The "already onboarded" flag is persisted per host (SharedPreferences)
+so reopening the app doesn't redo it. Steps:
 
 1. **System CA install** — downloads `/wg/ca.pem`, computes the OpenSSL
    `subject_hash_old` in pure Kotlin, and bind-mounts a populated copy of
