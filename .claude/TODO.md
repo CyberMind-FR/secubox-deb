@@ -16,6 +16,9 @@
 - [x] **#532 browser extension** (`clients/webext-toolbox/`) — MV3 Firefox
   `.xpi`/Chromium; live tracker badge + popup mini Round-Eye graph over
   `/social/*`; `GET /wg/toolbox.xpi` + fetch helper + `build-webext.yml`.
+- [x] **#532 release** — tag `webext-v0.1.1` published the `.xpi`
+  (downloadable, verified 200). `make_latest:false` + tag-pinned URL so it
+  doesn't steal "Latest" from the Android APK release.
 - [ ] **release signing** — Android keystore + AMO `.xpi` signing secrets in CI
   for stable published fingerprints (currently unsigned sideload).
 - [ ] **#532 follow-ups** — optional `GET /social/live/{token}` SSE (replace the
