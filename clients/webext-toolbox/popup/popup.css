@@ -66,6 +66,7 @@ button.danger { color: var(--cinnabar); border-color: var(--cinnabar); }
   display: flex; align-items: center; gap: 6px; padding: 3px 2px;
   border-bottom: 1px solid #1a1a22; font-size: 11px;
 }
+.row .fav { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; background: #1a1a22; object-fit: contain; }
 .row .dom { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .hits { color: var(--muted); }
 .tier { font-size: 9px; padding: 1px 4px; border-radius: 3px; }

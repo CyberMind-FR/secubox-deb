@@ -308,6 +308,19 @@
       .attr('stroke', d => (d.kind === 'tracker' && (d.cdn_vendor || d.antibot_vendor)) ? '#0a0a0f' : null)
       .attr('stroke-width', d => (d.kind === 'tracker' && (d.cdn_vendor || d.antibot_vendor)) ? 1.5 : 0);
 
+    // #555 — favicon of the major site/tracker (same-origin cabine proxy,
+    // 7-day cached, transparent 1×1 fallback so the coloured tier circle
+    // shows through when there's no icon). No IP shown anywhere.
+    nodeG.filter(d => d.kind !== 'eye').append('image')
+      .attr('href', d => '/social/favicon/' + encodeURIComponent(d.label || ''))
+      .attr('width', d => (d.kind === 'tracker' ? 7 : 10) * 1.7)
+      .attr('height', d => (d.kind === 'tracker' ? 7 : 10) * 1.7)
+      .attr('x', d => -(d.kind === 'tracker' ? 7 : 10) * 0.85)
+      .attr('y', d => -(d.kind === 'tracker' ? 7 : 10) * 0.85)
+      .attr('preserveAspectRatio', 'xMidYMid slice')
+      .attr('clip-path', 'circle()')
+      .attr('pointer-events', 'none');
+
     nodeG.filter(d => d.kind !== 'eye').append('text')
       .attr('x', 12).attr('y', 4)
       .text(d => (d.antibot_vendor ? '🤖 ' : '') + (d.label.length > 22 ? d.label.slice(0, 21) + '…' : d.label));
