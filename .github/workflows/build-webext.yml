@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Build the SecuBox ToolBoX browser extension (#532).
+# Plain JS/HTML/CSS — no bundler. web-ext lints + packages the .xpi.
+# Produces an unsigned .xpi artifact; release signing (AMO) is a
+# follow-up (needs AMO API credentials as secrets).
+name: build-webext
+
+on:
+  push:
+    branches: [ master ]
+    paths: [ "clients/webext-toolbox/**", ".github/workflows/build-webext.yml" ]
+    tags: [ "webext-v*" ]
+  pull_request:
+    paths: [ "clients/webext-toolbox/**" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to attach the .xpi to a release on tags
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: clients/webext-toolbox
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Lint (web-ext)
+        run: npx --yes web-ext lint --source-dir . --self-hosted --ignore-files build.sh README.md
+
+      - name: Build .xpi (web-ext)
+        run: |
+          npx --yes web-ext build --source-dir . \
+            --artifacts-dir web-ext-artifacts --overwrite-dest \
+            --ignore-files build.sh README.md \
+            --filename "secubox-toolbox-webext.xpi"
+
+      - name: Upload .xpi artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secubox-toolbox-webext
+          path: clients/webext-toolbox/web-ext-artifacts/secubox-toolbox-webext.xpi
+          if-no-files-found: error
+
+      # On webext-v* tags, publish the .xpi as a release asset under the
+      # stable name the toolbox fetch helper + /wg/toolbox.xpi expect.
+      # `latest/download/secubox-toolbox-webext.xpi` resolves to the
+      # newest release.
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/webext-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: clients/webext-toolbox/web-ext-artifacts/secubox-toolbox-webext.xpi
+          fail_on_unmatched_files: true

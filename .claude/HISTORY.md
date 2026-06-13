@@ -3,6 +3,23 @@
 
 ---
 
+## 2026-06-13 — Browser extension : emancipate cartographie live (ref #532)
+
+Nouveau client `clients/webext-toolbox/` (MV3 Firefox `.xpi` + Chromium),
+sœur de l'app Android. Surface la cartographie sociale R3 dans le
+navigateur : badge live des traceurs + popup (4 tuiles + mini Round-Eye
+graph SVG sans dépendance + top-traceurs taggés CDN/anti-bot/opérateur +
+actions cartographie/PDF/RGPD-wipe). Parle uniquement à la cabine via R3
+(pas de CORS backend grâce à host_permissions).
+
+`secubox-toolbox 2.6.14` : `GET /wg/toolbox.xpi` (local sinon 302 →
+release), bouton onboard, helper `secubox-toolbox-fetch-xpi`, postinst
+dir. CI `build-webext.yml` (`web-ext lint` + build, release asset sur tag
+`webext-v*`). Suivi : signature AMO, SSE `/social/live`, icône PNG
+Chromium, Poke/Emancipate (#525).
+
+---
+
 ## 2026-06-13 — Android ToolBox app : serve + root-mode silent onboarding (ref #531/#536/#538)
 
 App compagnon Android one-tap R3 (`clients/android-toolbox/`, Kotlin + Compose).
