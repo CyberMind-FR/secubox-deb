@@ -64,8 +64,50 @@ fun OnboardApp() {
     val api = remember(host) { ToolboxApi(host) }
     var rootAvail by remember { mutableStateOf(false) }
     val rootLog = remember { mutableStateListOf<String>() }
+    val prefs = remember {
+        ctx.getSharedPreferences("secubox-toolbox", android.content.Context.MODE_PRIVATE)
+    }
+    var autoTried by remember { mutableStateOf(false) }
+
+    // The whole root-mode silent run, reused by the ⚡ button AND the
+    // zero-tap auto-launch (#551). Persists an onboarded flag per host on
+    // success so reopening the app doesn't redo it.
+    val runRootAuto: () -> Unit = {
+        busy = true; status = ""; rootLog.clear()
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) { api.reachable() }
+            if (!ok) {
+                busy = false; status = "Borne injoignable — vérifie le réseau."
+            } else {
+                step = Step.RootAuto
+                val onb = RootOnboard(api, ctx.cacheDir)
+                val out = withContext(Dispatchers.IO) {
+                    onb.runSilent { line -> scope.launch(Dispatchers.Main) { rootLog.add(line) } }
+                }
+                busy = false
+                onTunnel = out.verified
+                if (out.verified) prefs.edit().putBoolean("onboarded:$host", true).apply()
+                when {
+                    out.verified -> step = Step.Done
+                    out.wgViaApp -> { step = Step.ImportProfile
+                        status = "CA installé en root ✓ — termine le tunnel via l'app WireGuard." }
+                    else -> { step = Step.Verify
+                        status = "Active le tunnel puis vérifie." }
+                }
+            }
+        }
+    }
+
     // Detect root once, off the main thread.
     LaunchedEffect(Unit) { rootAvail = withContext(Dispatchers.IO) { RootShell.available() } }
+    // Zero-tap (#551): on a rooted device, auto-run the silent onboarding
+    // once on launch — unless this host was already onboarded.
+    LaunchedEffect(rootAvail) {
+        if (rootAvail && !autoTried && step == Step.Discover) {
+            autoTried = true
+            if (!prefs.getBoolean("onboarded:$host", false)) runRootAuto()
+        }
+    }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Gold, secondary = Cyan, background = Cosmos, surface = Cosmos,
@@ -105,32 +147,11 @@ fun OnboardApp() {
                         }
                         if (rootAvail) {
                             Spacer(Modifier.height(10.dp))
-                            Text("🔓 Root détecté — installation 100% automatique possible.",
+                            Text("🔓 Root détecté — l'installation se lance automatiquement. " +
+                                 "Tu peux aussi la relancer ici.",
                                 color = Matrix, fontSize = 12.sp)
                             Spacer(Modifier.height(6.dp))
-                            OutlinedButton(onClick = {
-                                busy = true; status = ""; rootLog.clear()
-                                scope.launch {
-                                    val ok = withContext(Dispatchers.IO) { api.reachable() }
-                                    if (!ok) { busy = false; status = "Borne injoignable."; return@launch }
-                                    step = Step.RootAuto
-                                    val onb = RootOnboard(api, ctx.cacheDir)
-                                    val out = withContext(Dispatchers.IO) {
-                                        onb.runSilent { line ->
-                                            scope.launch(Dispatchers.Main) { rootLog.add(line) }
-                                        }
-                                    }
-                                    busy = false
-                                    onTunnel = out.verified
-                                    when {
-                                        out.verified -> step = Step.Done
-                                        out.wgViaApp -> { step = Step.ImportProfile
-                                            status = "CA installé en root ✓ — termine le tunnel via l'app WireGuard." }
-                                        else -> { step = Step.Verify
-                                            status = "Active le tunnel puis vérifie." }
-                                    }
-                                }
-                            }, modifier = Modifier.fillMaxWidth(),
+                            OutlinedButton(onClick = runRootAuto, modifier = Modifier.fillMaxWidth(),
                                border = BorderStroke(1.dp, Matrix),
                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Matrix)) {
                                 Text("⚡ Installation automatique (root)", fontWeight = FontWeight.Bold)
