@@ -1,3 +1,22 @@
+secubox-toolbox (2.6.22-1~bookworm1) bookworm; urgency=medium
+
+  * detect_antibot: deployment vs challenge, response-level signals (#564,
+    review of #516).
+      - detect_antibot(flow) → (vendor, is_challenge). vendor = WAF/anti-bot
+        DEPLOYED (URL script / cookie / header presence) → the "which sites
+        moved behind which WAF over time" map (record_host_antibot, always).
+      - is_challenge = an ACTUAL challenge issued on THIS response, response-
+        level only: Cloudflare cf-mitigated header (definitive), or a non-200
+        (403/429/503) text/html small body carrying __cf_chl /
+        challenges.cloudflare.com / cdn-cgi/challenge-platform / vendor block
+        markers. Presence on a 200 is NOT a challenge → kills the big false-
+        positive class (bm_sz/_abck, _px*, datadome cookie, embedded
+        reCAPTCHA all ride normal 200s). Only is_challenge feeds the per-
+        client alert + severity (record_antibot_challenge).
+      - Detection stays cleanly separate from bypass (doctrine).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 17:15:00 +0200
+
 secubox-toolbox (2.6.21-1~bookworm1) bookworm; urgency=medium
 
   * fix(ca): /ca/fingerprint surfaces the R3 CA on the tunnel (#562).

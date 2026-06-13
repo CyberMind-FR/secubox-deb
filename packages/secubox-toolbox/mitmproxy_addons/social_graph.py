@@ -340,28 +340,62 @@ _ANTIBOT_HEADER = (
     ("PerimeterX/HUMAN", ("x-px",)),
 )
 
+# Response-level CHALLENGE signals (#516) — distinct from deployment above.
+_CHALLENGE_STATUSES = {403, 429, 503}
+# Markers found in an actual challenge/block interstitial body.
+_CHALLENGE_BODY = (
+    b"__cf_chl", b"challenges.cloudflare.com", b"/cdn-cgi/challenge-platform",
+    b"cf-challenge", b"px-captcha", b"_pxcaptcha", b"datadome",
+    b"captcha-delivery", b"verify you are human", b"are you a robot",
+    b"enable javascript and cookies",
+)
+_MAX_CHALLENGE_PEEK = 262144  # 256 KiB — challenge pages are small
 
-def detect_antibot(flow) -> Optional[str]:
-    """Return the anti-bot / CAPTCHA vendor challenging this flow, or None.
 
-    Best-effort, passive.  Scans the request URL, the response + request
-    headers, and cookie names.
+def detect_antibot(flow) -> tuple:
+    """Return ``(vendor, is_challenge)``.
+
+    Per #516, keep DEPLOYMENT separate from an actual CHALLENGE:
+
+    - **vendor** — the anti-bot / WAF vendor *deployed* on this flow,
+      from request-URL script fragments, cookie names, or response
+      headers. Presence only (e.g. a ``bm_sz`` cookie or an embedded
+      reCAPTCHA on a normal 200). Used for the "which sites moved behind
+      which WAF over time" map. ``None`` if no vendor signature.
+    - **is_challenge** — True only when a challenge was actually *issued*
+      on THIS response, a response-level signal (never content on a 200):
+        * Cloudflare ``cf-mitigated`` header (definitive — only set on a
+          challenge response ; its value carries the cType), or
+        * a non-200 (403/429/503) ``text/html`` response whose small body
+          carries a challenge token / script.
+      A large 200 body that merely *mentions* a vendor is NOT a challenge.
+
+    Best-effort, passive.
     """
+    vendor = None
+    is_challenge = False
     try:
         url = (flow.request.pretty_url or "").lower()
-        for vendor, frags in _ANTIBOT_URL:
+        for v, frags in _ANTIBOT_URL:
             if any(f in url for f in frags):
-                return vendor
+                vendor = v
+                break
 
-        # Response headers
         rh = flow.response.headers if flow.response else None
-        if rh is not None:
-            keys = " ".join(k.lower() for k in rh.keys())
-            for vendor, hdrs in _ANTIBOT_HEADER:
-                if any(h in keys for h in hdrs):
-                    return vendor
+        status = flow.response.status_code if flow.response else 0
 
-        # Cookie names (both directions)
+        if rh is not None:
+            # Cloudflare's definitive signal — present only on a challenge.
+            if rh.get("cf-mitigated"):
+                vendor = vendor or "Cloudflare"
+                is_challenge = True
+            keys = " ".join(k.lower() for k in rh.keys())
+            for v, hdrs in _ANTIBOT_HEADER:
+                if any(h in keys for h in hdrs):
+                    vendor = vendor or v
+                    break
+
+        # Cookie names (both directions) — DEPLOYMENT signal.
         blobs = []
         try:
             blobs.extend(flow.request.headers.get_all("cookie") or [])
@@ -374,12 +408,37 @@ def detect_antibot(flow) -> Optional[str]:
             pass
         joined = " ".join(blobs).lower()
         if joined:
-            for vendor, names in _ANTIBOT_COOKIE:
+            for v, names in _ANTIBOT_COOKIE:
                 if any(n in joined for n in names):
-                    return vendor
+                    vendor = vendor or v
+                    break
+
+        # Challenge by status + small text/html body. This is the
+        # false-positive killer: only non-200 interstitials count.
+        if not is_challenge and status in _CHALLENGE_STATUSES and rh is not None:
+            ct = (rh.get("content-type", "") or "").lower()
+            if "text/html" in ct:
+                try:
+                    cl = int(rh.get("content-length", "0") or "0")
+                except (TypeError, ValueError):
+                    cl = 0
+                if cl <= _MAX_CHALLENGE_PEEK:
+                    try:
+                        body = (flow.response.content or b"")[:_MAX_CHALLENGE_PEEK].lower()
+                    except Exception:
+                        body = b""
+                    if any(tok in body for tok in _CHALLENGE_BODY):
+                        is_challenge = True
+                        if vendor is None and (b"cf" in body or b"cloudflare" in body
+                                               or b"cdn-cgi" in body):
+                            vendor = "Cloudflare"
+                    elif vendor is not None:
+                        # non-200 from a known WAF vendor + tiny html page
+                        # → a block / challenge interstitial.
+                        is_challenge = True
     except Exception:
         pass
-    return None
+    return vendor, is_challenge
 
 
 # ─── operator-grade / state-adjacent identity detection (Phase 12.C #518) ──
@@ -485,7 +544,7 @@ class SocialGraph:
         # per-client "challenged your humanity" alert is accurate.
         try:
             resp_host = _registrable_domain(flow.request.host)
-            antibot = detect_antibot(flow)
+            antibot, antibot_challenge = detect_antibot(flow)
             if resp_host and resp_host != src_site:
                 cdn_vendor, cache_status = detect_cdn(flow.response.headers)
                 if cdn_vendor:
@@ -495,13 +554,18 @@ class SocialGraph:
                         cache_status=cache_status,
                     )
             if antibot and resp_host:
+                # DEPLOYMENT — always: this host sits behind WAF `antibot`
+                # (the "which sites moved behind which WAF" map). #516
                 _social.record_host_antibot(domain=resp_host, antibot_vendor=antibot)
-                # Attribute the challenge to the 1st-party site the user
-                # was on (for the per-client alert), keyed by mac_hash.
-                _social.record_antibot_challenge(
-                    client_mac_hash=mac_hash, src_site=src_site,
-                    antibot_vendor=antibot,
-                )
+                # CHALLENGE — only when one was actually ISSUED on this
+                # response. Presence on a 200 is deployment, not a challenge,
+                # so it must NOT inflate the per-client "challenged your
+                # humanity" alert / severity.
+                if antibot_challenge:
+                    _social.record_antibot_challenge(
+                        client_mac_hash=mac_hash, src_site=src_site,
+                        antibot_vendor=antibot,
+                    )
             # Phase 12.C (#518) — operator-grade / state-adjacent identity.
             op_vendor, op_category = detect_operator_grade(flow)
             if op_vendor:
