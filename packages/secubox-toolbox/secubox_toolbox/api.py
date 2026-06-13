@@ -944,31 +944,52 @@ async def admin_filter_regex() -> dict:
     return {"regex": regex, "count": len(entries)}
 
 
-@router.get("/ca/fingerprint")
-async def ca_fingerprint() -> dict:
-    """Expose CA SHA1/SHA256 fingerprints so user can verify against their
-    iPhone Settings → Cert Trust UI. CSPN R2 transparency requirement."""
+def _ca_fp(ca_pem) -> dict:
+    """SHA1/SHA256/subject of a CA pem via openssl. '?' on any failure."""
     import subprocess
+    out = {"sha1": "?", "sha256": "?", "subject": "?"}
+    if not ca_pem.exists():
+        return out
+    try:
+        for key, flag in (("sha1", "-sha1"), ("sha256", "-sha256")):
+            out[key] = subprocess.run(
+                ["openssl", "x509", "-in", str(ca_pem), "-noout", "-fingerprint", flag],
+                capture_output=True, text=True, timeout=2, check=False,
+            ).stdout.split("=", 1)[-1].strip()
+        out["subject"] = subprocess.run(
+            ["openssl", "x509", "-in", str(ca_pem), "-noout", "-subject"],
+            capture_output=True, text=True, timeout=2, check=False,
+        ).stdout.split("=", 1)[-1].strip()
+    except Exception:
+        pass
+    return out
+
+
+@router.get("/ca/fingerprint")
+async def ca_fingerprint(request: Request, ca: str = "auto") -> dict:
+    """Expose CA SHA1/SHA256 fingerprints so the user can verify against
+    their device's Cert Trust UI. CSPN R2/R3 transparency requirement.
+
+    ?ca=wg → the R3 WireGuard CA ; ?ca=default → the R1/R2 captive CA ;
+    auto (default) → R3 when the request arrives over the R3 tunnel
+    (X-R3-Peer / 10.99.1.x), else R1/R2. Fixes the landing cert-probe
+    showing the wrong (R1/R2) fingerprint to R3 users.
+    """
     from pathlib import Path
-    ca_pem = Path("/etc/secubox/toolbox/ca/ca.pem")
-    sha1 = sha256 = subject = "?"
-    if ca_pem.exists():
-        try:
-            sha1 = subprocess.run(
-                ["openssl", "x509", "-in", str(ca_pem), "-noout", "-fingerprint", "-sha1"],
-                capture_output=True, text=True, timeout=2, check=False,
-            ).stdout.split("=", 1)[-1].strip()
-            sha256 = subprocess.run(
-                ["openssl", "x509", "-in", str(ca_pem), "-noout", "-fingerprint", "-sha256"],
-                capture_output=True, text=True, timeout=2, check=False,
-            ).stdout.split("=", 1)[-1].strip()
-            subject = subprocess.run(
-                ["openssl", "x509", "-in", str(ca_pem), "-noout", "-subject"],
-                capture_output=True, text=True, timeout=2, check=False,
-            ).stdout.split("=", 1)[-1].strip()
-        except Exception:
-            pass
-    return {"sha1": sha1, "sha256": sha256, "subject": subject}
+    r3 = Path("/etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem")
+    default = Path("/etc/secubox/toolbox/ca/ca.pem")
+    want_wg = False
+    if ca == "wg":
+        want_wg = True
+    elif ca == "auto":
+        peer = request.headers.get("x-r3-peer", "") or ""
+        xff = request.headers.get("x-forwarded-for", "") or ""
+        if peer.startswith("10.99.1.") or "10.99.1." in xff:
+            want_wg = True
+    path = r3 if (want_wg and r3.exists()) else default
+    out = _ca_fp(path)
+    out["ca"] = "r3" if path == r3 else "default"
+    return out
 
 
 # Phase 3.x (#497) : 3 QR code endpoints — splash, cert install, webclip
