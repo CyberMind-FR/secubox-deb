@@ -70,12 +70,20 @@ fun OnboardApp() {
     var autoTried by remember { mutableStateOf(false) }
 
     // The whole root-mode silent run, reused by the ⚡ button AND the
-    // zero-tap auto-launch (#551). Persists an onboarded flag per host on
-    // success so reopening the app doesn't redo it.
+    // zero-tap auto-launch (#551/#558). NO onboarded gate — it auto-runs
+    // every launch (idempotent: re-asserts CA + WG). Reachability is
+    // RETRIED so a WiFi/tunnel race at launch doesn't kill the auto-run.
     val runRootAuto: () -> Unit = {
         busy = true; status = ""; rootLog.clear()
         scope.launch {
-            val ok = withContext(Dispatchers.IO) { api.reachable() }
+            // poll reachability up to ~9 s (network may still be settling)
+            var ok = false
+            for (attempt in 1..6) {
+                ok = withContext(Dispatchers.IO) { api.reachable() }
+                if (ok) break
+                status = "Recherche de la borne… ($attempt)"
+                kotlinx.coroutines.delay(1500)
+            }
             if (!ok) {
                 busy = false; status = "Borne injoignable — vérifie le réseau."
             } else {
@@ -86,7 +94,6 @@ fun OnboardApp() {
                 }
                 busy = false
                 onTunnel = out.verified
-                if (out.verified) prefs.edit().putBoolean("onboarded:$host", true).apply()
                 when {
                     out.verified -> step = Step.Done
                     out.wgViaApp -> { step = Step.ImportProfile
@@ -100,12 +107,13 @@ fun OnboardApp() {
 
     // Detect root once, off the main thread.
     LaunchedEffect(Unit) { rootAvail = withContext(Dispatchers.IO) { RootShell.available() } }
-    // Zero-tap (#551): on a rooted device, auto-run the silent onboarding
-    // once on launch — unless this host was already onboarded.
+    // Zero-tap (#558): on a rooted device, auto-run the silent onboarding
+    // on every launch — no gate. (Boot-time auto-run is handled by
+    // BootReceiver + OnboardService so it runs without opening the app.)
     LaunchedEffect(rootAvail) {
         if (rootAvail && !autoTried && step == Step.Discover) {
             autoTried = true
-            if (!prefs.getBoolean("onboarded:$host", false)) runRootAuto()
+            runRootAuto()
         }
     }
 

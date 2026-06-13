@@ -4,6 +4,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- #558 full-auto: run the silent onboarding on device boot, no app open. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Query the WireGuard app so we can hand it the generated profile. -->
     <queries>
         <package android:name="com.wireguard.android" />
@@ -25,6 +30,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- #558 : boot-completed → start the onboarding foreground service
+             so a rooted device self-onboards with zero taps after a reboot. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name=".OnboardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Silent R3 onboarding on a rooted, operator-owned cabine device" />
+        </service>
 
         <!-- FileProvider to share the downloaded CA + WG .conf with the
              system cert installer / the WireGuard app. -->
