@@ -1,0 +1,5 @@
+# build artefacts
+*.xpi
+*.zip
+*.crx
+web-ext-artifacts/

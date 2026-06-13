@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+  <title>SecuBox Cartographie</title>
+</head>
+<body>
+  <header>
+    <span class="logo">👁️ VILLAGE3B</span>
+    <span id="r3dot" class="r3 off" title="État du tunnel R3">R3</span>
+  </header>
+
+  <!-- Pairing (shown when no token) -->
+  <section id="pair" hidden>
+    <p class="muted">Connecte-toi à la cabine pour voir qui t'observe.</p>
+    <label>Borne
+      <input id="host" type="text" placeholder="kbin.gk2.secubox.in" autocomplete="off">
+    </label>
+    <button id="pairBtn" class="go">Appairer (R3)</button>
+    <p id="pairMsg" class="err"></p>
+  </section>
+
+  <!-- Live view (shown when paired) -->
+  <section id="live" hidden>
+    <div class="stats">
+      <div class="stat"><b id="sTrackers">–</b><span>traceurs</span></div>
+      <div class="stat"><b id="sSites">–</b><span>sites</span></div>
+      <div class="stat warn"><b id="sAntibot">–</b><span>anti-bot</span></div>
+      <div class="stat opg"><b id="sOpgrade">–</b><span>opérateur</span></div>
+    </div>
+
+    <svg id="graph" viewBox="0 0 260 180" role="img" aria-label="Mini cartographie"></svg>
+
+    <div class="toplist" id="topList"></div>
+
+    <div class="actions">
+      <button id="openFull">🗺️ Cartographie complète</button>
+      <button id="pdf">📄 Rapport PDF</button>
+      <button id="wipe" class="danger">🧹 Effacer mes données</button>
+    </div>
+    <p id="liveMsg" class="muted"></p>
+  </section>
+
+  <footer>
+    <a href="#" id="settings">Réglages</a>
+    <span class="muted" id="ver"></span>
+  </footer>
+
+  <script src="../api.js"></script>
+  <script src="graph.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
