@@ -423,7 +423,7 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
   var fp  = document.getElementById('cert-fp-r3');
   if (!btn) return;
 
-  fetch('/ca/fingerprint').then(function(r){return r.json();}).then(function(d){
+  fetch('/ca/fingerprint?ca=wg').then(function(r){return r.json();}).then(function(d){
     fp.textContent = d.sha1 || d.sha256 || '?';
   }).catch(function(){fp.textContent='?';});
 
