@@ -14,6 +14,7 @@ import android.provider.Settings
 import android.security.KeyChain
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -40,7 +41,7 @@ private val Matrix = Color(0xFF00FF41)
 private val Cinnabar = Color(0xFFE63946)
 private val TextPrimary = Color(0xFFE8E6D9)
 
-enum class Step { Discover, InstallCa, ImportProfile, Verify, Done }
+enum class Step { Discover, RootAuto, InstallCa, ImportProfile, Verify, Done }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +62,10 @@ fun OnboardApp() {
     var onTunnel by remember { mutableStateOf(false) }
     var peerIp by remember { mutableStateOf<String?>(null) }
     val api = remember(host) { ToolboxApi(host) }
+    var rootAvail by remember { mutableStateOf(false) }
+    val rootLog = remember { mutableStateListOf<String>() }
+    // Detect root once, off the main thread.
+    LaunchedEffect(Unit) { rootAvail = withContext(Dispatchers.IO) { RootShell.available() } }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Gold, secondary = Cyan, background = Cosmos, surface = Cosmos,
@@ -96,6 +101,57 @@ fun OnboardApp() {
                                 busy = false
                                 if (ok) { step = Step.InstallCa; status = "" }
                                 else status = "Borne injoignable — vérifie l'adresse / le réseau."
+                            }
+                        }
+                        if (rootAvail) {
+                            Spacer(Modifier.height(10.dp))
+                            Text("🔓 Root détecté — installation 100% automatique possible.",
+                                color = Matrix, fontSize = 12.sp)
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedButton(onClick = {
+                                busy = true; status = ""; rootLog.clear()
+                                scope.launch {
+                                    val ok = withContext(Dispatchers.IO) { api.reachable() }
+                                    if (!ok) { busy = false; status = "Borne injoignable."; return@launch }
+                                    step = Step.RootAuto
+                                    val onb = RootOnboard(api, ctx.cacheDir)
+                                    val out = withContext(Dispatchers.IO) {
+                                        onb.runSilent { line ->
+                                            scope.launch(Dispatchers.Main) { rootLog.add(line) }
+                                        }
+                                    }
+                                    busy = false
+                                    onTunnel = out.verified
+                                    when {
+                                        out.verified -> step = Step.Done
+                                        out.wgViaApp -> { step = Step.ImportProfile
+                                            status = "CA installé en root ✓ — termine le tunnel via l'app WireGuard." }
+                                        else -> { step = Step.Verify
+                                            status = "Active le tunnel puis vérifie." }
+                                    }
+                                }
+                            }, modifier = Modifier.fillMaxWidth(),
+                               border = BorderStroke(1.dp, Matrix),
+                               colors = ButtonDefaults.outlinedButtonColors(contentColor = Matrix)) {
+                                Text("⚡ Installation automatique (root)", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Step.RootAuto -> {
+                        StepBody("Installation automatique (root)",
+                            "CA système + tunnel WireGuard, sans intervention.")
+                        Surface(color = Color(0xFF0E0E15), shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                rootLog.forEach { line ->
+                                    Text(line, color = if (line.startsWith("✗")) Cinnabar
+                                        else if (line.startsWith("✓")) Matrix else TextPrimary,
+                                        fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                                }
+                                if (busy) {
+                                    Spacer(Modifier.height(6.dp))
+                                    CircularProgressIndicator(Modifier.size(18.dp), color = Gold, strokeWidth = 2.dp)
+                                }
                             }
                         }
                     }

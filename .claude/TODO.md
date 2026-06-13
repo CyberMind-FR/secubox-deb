@@ -1,9 +1,21 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-11*
+*Mis à jour : 2026-06-13*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### Android ToolBox client (`clients/android-toolbox/`)
+
+- [x] **#531 scaffold + CI** — Gradle/Compose one-tap onboarding, debug APK
+  via `build-android-apk.yml`. CI green.
+- [x] **#536 serve from toolbox** — `GET /wg/toolbox.apk` + onboard button +
+  `secubox-toolbox-fetch-apk` helper.
+- [x] **#538 root-mode silent** (PR #539) — system CA install + native kernel
+  WireGuard + auto R3 verify, gated behind explicit root tap.
+- [ ] **release signing** — keystore secret in CI for a stable published
+  fingerprint (currently debug-signed sideload).
+- [ ] **#532 browser XPI** — Firefox/Chrome extension equivalent (later).
 
 ### Phase 13 — Protection enforcement plane (#519) — ✅ COMPLETE
 
