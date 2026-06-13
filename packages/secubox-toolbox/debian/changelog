@@ -1,3 +1,17 @@
+secubox-toolbox (2.6.21-1~bookworm1) bookworm; urgency=medium
+
+  * fix(ca): /ca/fingerprint surfaces the R3 CA on the tunnel (#562).
+      - Was always reading the R1/R2 captive CA (/etc/secubox/toolbox/ca/
+        ca.pem, "Gondwana ToolBoX CA") — so R3 users verifying their
+        installed cert saw the WRONG fingerprint. The real R3 CA is
+        /etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem ("R3 CA").
+      - /ca/fingerprint now takes ?ca=wg|default|auto ; auto returns the
+        R3 CA when the request arrives over the R3 tunnel (X-R3-Peer /
+        10.99.1.x), else R1/R2. Response gains a "ca" field. Landing
+        cert-probe fetches ?ca=wg (it is the R3 probe).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 16:45:00 +0200
+
 secubox-toolbox (2.6.20-1~bookworm1) bookworm; urgency=medium
 
   * Protective mode — tracker alerting + active spoofer (#560), DEFAULT OFF.
