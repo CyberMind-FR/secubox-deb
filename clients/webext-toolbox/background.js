@@ -12,15 +12,18 @@ if (typeof importScripts === "function") {
   try { importScripts("api.js"); } catch (_) {}
 }
 
+// NB: do NOT declare `const ext` here — api.js already declares it in the
+// shared script scope (event page) / worker global (importScripts), and a
+// second `const ext` is a "redeclaration of const ext" SyntaxError that
+// kills the whole background script. Use api.ext instead.
 const api = globalThis.SbxApi;
-const ext = globalThis.browser || globalThis.chrome;
 
 const ALARM = "sbx-refresh";
 const PERIOD_MIN = 1; // poll the cabine once a minute
 
 function setBadge(text, color) {
   try {
-    ext.action.setBadgeText({ text: text || "" });
+    api.ext.action.setBadgeText({ text: text || "" });
     if (color) ext.action.setBadgeBackgroundColor({ color });
   } catch (_) {}
 }
@@ -59,18 +62,18 @@ async function refresh() {
   }
 }
 
-ext.runtime.onInstalled.addListener(() => {
-  ext.alarms.create(ALARM, { periodInMinutes: PERIOD_MIN });
+api.ext.runtime.onInstalled.addListener(() => {
+  api.ext.alarms.create(ALARM, { periodInMinutes: PERIOD_MIN });
   refresh();
 });
-ext.runtime.onStartup && ext.runtime.onStartup.addListener(() => {
-  ext.alarms.create(ALARM, { periodInMinutes: PERIOD_MIN });
+api.ext.runtime.onStartup && api.ext.runtime.onStartup.addListener(() => {
+  api.ext.alarms.create(ALARM, { periodInMinutes: PERIOD_MIN });
   refresh();
 });
-ext.alarms.onAlarm.addListener((a) => { if (a.name === ALARM) refresh(); });
+api.ext.alarms.onAlarm.addListener((a) => { if (a.name === ALARM) refresh(); });
 
 // popup asks for an immediate refresh after pairing / config change
-ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+api.ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg && msg.type === "refresh") {
     refresh().then(() => sendResponse({ ok: true }));
     return true; // async response

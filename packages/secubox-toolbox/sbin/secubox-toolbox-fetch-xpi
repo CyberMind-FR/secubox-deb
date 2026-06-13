@@ -16,7 +16,7 @@ DEST_DIR="/var/lib/secubox/toolbox/webext"
 DEST="${DEST_DIR}/secubox-toolbox-webext.xpi"
 # Tag-pinned (not /latest/): the webext release is make_latest:false so it
 # doesn't steal "latest" from the Android APK release. Bump on new webext-v*.
-RELEASE_URL="https://github.com/CyberMind-FR/secubox-deb/releases/download/webext-v0.1.0/secubox-toolbox-webext.xpi"
+RELEASE_URL="https://github.com/CyberMind-FR/secubox-deb/releases/download/webext-v0.1.1/secubox-toolbox-webext.xpi"
 
 log() { logger -t "$MODULE" -- "$*" 2>/dev/null || echo "[$MODULE] $*" >&2; }
 

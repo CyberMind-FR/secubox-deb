@@ -23,7 +23,7 @@ le navigateur : badge live des traceurs + popup.
   panneaux onboard, helper `secubox-toolbox-fetch-xpi`, postinst dir.
 - **CI** : `build-webext.yml` — `web-ext lint` (0 erreur, 2 warnings
   bénins) + build, artifact, release asset sur tag `webext-v*`.
-- **Release** (PR #540 + #541, mergées) : tag `webext-v0.1.0` poussé →
+- **Release** (PR #540 + #541, mergées) : tag `webext-v0.1.1` poussé →
   CI a publié `secubox-toolbox-webext.xpi` (téléchargeable, vérifié 200).
   `make_latest:false` + URL **tag-pinned** dans `/wg/toolbox.xpi` +
   `secubox-toolbox-fetch-xpi` pour ne pas voler le pointeur "Latest" à la

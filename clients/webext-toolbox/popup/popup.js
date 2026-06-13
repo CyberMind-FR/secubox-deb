@@ -3,8 +3,10 @@
 //
 // SecuBox-Deb :: webext-toolbox :: popup controller
 
+// NB: api.js (loaded first in this page) already declares `const ext` in the
+// shared script scope — re-declaring it here is a "redeclaration of const ext"
+// SyntaxError that aborts popup.js. Use api.ext instead.
 const api = globalThis.SbxApi;
-const ext = api.ext;
 const $ = (id) => document.getElementById(id);
 
 function show(which) {
@@ -55,7 +57,7 @@ function paint(data) {
 
 async function load() {
   const cfg = await api.getConfig();
-  $("ver").textContent = "v" + (ext.runtime.getManifest().version || "");
+  $("ver").textContent = "v" + (api.ext.runtime.getManifest().version || "");
 
   // tunnel indicator
   api.r3Check(cfg.host).then((r) => {
@@ -96,7 +98,7 @@ $("pairBtn").addEventListener("click", async () => {
     await api.setConfig({ host });
     const token = await api.pair(host);
     await api.setConfig({ token });
-    ext.runtime.sendMessage({ type: "refresh" });
+    api.ext.runtime.sendMessage({ type: "refresh" });
     await load();
   } catch (e) {
     $("pairMsg").textContent = e.message + " (es-tu sur le tunnel ?)";
@@ -105,11 +107,11 @@ $("pairBtn").addEventListener("click", async () => {
 
 $("openFull").addEventListener("click", async () => {
   const cfg = await api.getConfig();
-  ext.tabs.create({ url: api.socialUrl(cfg.host, cfg.token) });
+  api.ext.tabs.create({ url: api.socialUrl(cfg.host, cfg.token) });
 });
 $("pdf").addEventListener("click", async () => {
   const cfg = await api.getConfig();
-  ext.tabs.create({ url: api.reportUrl(cfg.host, cfg.token) });
+  api.ext.tabs.create({ url: api.reportUrl(cfg.host, cfg.token) });
 });
 $("wipe").addEventListener("click", async () => {
   if (!confirm("Effacer toutes tes données de cartographie sur la cabine ?")) return;
@@ -125,7 +127,7 @@ $("wipe").addEventListener("click", async () => {
 });
 $("settings").addEventListener("click", (e) => {
   e.preventDefault();
-  ext.runtime.openOptionsPage();
+  api.ext.runtime.openOptionsPage();
 });
 
 load();
