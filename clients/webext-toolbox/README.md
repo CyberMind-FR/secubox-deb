@@ -53,9 +53,15 @@ release is cut.
   build (release CI step / `web-ext sign`); for development use
   *about:debugging → Load Temporary Add-on*, or an ESR/Dev build with
   `xpinstall.signatures.required=false`.
+- **Linux Firefox (fast)** — one call grabs the `.xpi` and launches Firefox
+  with it loaded (via `web-ext run`, no signing needed):
+  ```bash
+  clients/webext-toolbox/install-firefox-linux.sh            # from kbin.gk2.secubox.in
+  clients/webext-toolbox/install-firefox-linux.sh --release  # from the GitHub release
+  clients/webext-toolbox/install-firefox-linux.sh --local    # from this checkout
+  ```
 - **Chromium** — load unpacked (`chrome://extensions` → Developer mode).
-  Note: Chromium action icons must be raster — rasterise `icons/icon.svg`
-  to PNG before a Chrome Web Store build (Firefox accepts the SVG as-is).
+  Ships rasterised PNG icons (`icons/icon-48/128.png`), so it loads as-is.
 
 ## Build
 
