@@ -1,3 +1,20 @@
+secubox-toolbox (2.6.17-1~bookworm1) bookworm; urgency=medium
+
+  * Social correlation: domain-rollup + history + target↔tracker (#549).
+      - fetch_graph() now returns three additive top-level keys (read-time,
+        no schema change, d3 contract untouched):
+        · by_domain  — trackers rolled up under their registrable parent
+          (eTLD+1, e.g. all *.doubleclick.net → doubleclick.net) with
+          tracker_count / hits / sites / vendors ;
+        · targets    — inverse map: per 1st-party site, the trackers +
+          parent domains watching it ;
+        · history    — per-UTC-day timeline (hits / trackers / sites) from
+          the raw social_edges log over the window.
+      - stats gains total_domains. Added a local _registrable_domain eTLD+1
+        helper (mirrors the addon, no publicsuffix dep).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 13:00:00 +0200
+
 secubox-toolbox (2.6.16-1~bookworm1) bookworm; urgency=medium
 
   * Injected banner neon-tube redesign (#545) — inject_banner.py.
