@@ -2382,6 +2382,28 @@ async def admin_escalate() -> dict:
     return out
 
 
+@router.get("/admin/protective")
+async def admin_protective() -> dict:
+    """#560 — protective-mode status + counters. Read-only.
+    mode comes from SECUBOX_PROTECTIVE_MODE (default off) ; the live
+    alert/spoof counts from the addon's state file.
+    """
+    import json as _json
+    import os as _os
+    from pathlib import Path as _P
+    out: dict = {
+        "mode": (_os.environ.get("SECUBOX_PROTECTIVE_MODE") or "off").lower(),
+        "alerts": 0, "spoofs": 0, "since": None, "updated": None,
+    }
+    try:
+        st = _P("/run/secubox/protective.json")
+        if st.exists():
+            out.update(_json.loads(st.read_text()))
+    except Exception:
+        pass
+    return out
+
+
 @router.get("/social/report/{token}.pdf")
 async def social_report_pdf(token: str) -> Response:
     """Phase 11.C (#508) — bilingual FR/EN evidence PDF for a peer.

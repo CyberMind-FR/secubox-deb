@@ -25,6 +25,7 @@ ExecStart=/usr/bin/mitmdump \
     -s /usr/lib/secubox/toolbox/mitmproxy_addons/ja4.py \
     -s /usr/lib/secubox/toolbox/mitmproxy_addons/soc_relay.py \
     -s /usr/lib/secubox/toolbox/mitmproxy_addons/inject_banner.py \
+    -s /usr/lib/secubox/toolbox/mitmproxy_addons/protective_mode.py \
     -s /usr/lib/secubox/toolbox/mitmproxy_addons/local_store.py
 Restart=on-failure
 RestartSec=5

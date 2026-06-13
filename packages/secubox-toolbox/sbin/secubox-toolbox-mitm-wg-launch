@@ -104,7 +104,10 @@ fi
 #     must run BEFORE inject_banner so the banner cookies our addon
 #     emits don't pollute the graph
 #   - cert_pin_detect auto-learns pinned hosts (Phase 6.N)
-for addon in inject_xff utiq_defense local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
+# protective_mode (#560) runs right after utiq_defense — early, so spoof-level
+# header/cookie stripping happens before the logging addons record the flow.
+# Inert unless SECUBOX_PROTECTIVE_MODE=alert|spoof (default off).
+for addon in inject_xff utiq_defense protective_mode local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
     ARGS+=(-s "$ADDON_DIR/${addon}.py")
 done
 
