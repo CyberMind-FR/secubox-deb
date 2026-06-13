@@ -1368,10 +1368,13 @@ async def wg_toolbox_apk() -> Response:
 
 
 # Browser extension (Firefox .xpi), same serve pattern as the APK (#532).
+# Tag-pinned URL (not /latest/): the webext release is published with
+# make_latest:false so it does not steal "latest" from the Android APK
+# release. Bump the tag here when a new webext-v* release is cut.
 _WEBEXT_XPI = Path("/var/lib/secubox/toolbox/webext/secubox-toolbox-webext.xpi")
 _WEBEXT_XPI_RELEASE = (
-    "https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/"
-    "secubox-toolbox-webext.xpi"
+    "https://github.com/CyberMind-FR/secubox-deb/releases/download/"
+    "webext-v0.1.0/secubox-toolbox-webext.xpi"
 )
 
 
