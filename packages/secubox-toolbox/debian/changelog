@@ -1,3 +1,14 @@
+secubox-toolbox (2.6.33-1~bookworm1) bookworm; urgency=medium
+
+  * Shared broadcast pin in every banner (#578). An operator-set "📌 pin"
+    (or the top-1 tracker of the day) is stored in /run/secubox/pin.json and
+    shown as the first chip in EVERY R2/R3 client's banner (24 h window) —
+    a shared signal around all banner injections. api: GET/POST /admin/pin
+    + GET /admin/pin/ui setter (with an "use top-1 tracker" auto-fill from
+    the social aggregate). inject_banner reads + renders it.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 14 Jun 2026 15:15:00 +0200
+
 secubox-toolbox (2.6.32-1~bookworm1) bookworm; urgency=medium
 
   * Shared media proxy-cache (#577) — DEFAULT OFF (opt-in filter `media_cache`).

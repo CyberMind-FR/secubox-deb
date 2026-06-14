@@ -452,6 +452,9 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     # renders correctly regardless of page charset (some legacy pages declare
     # iso-8859-1 which would mangle our raw UTF-8 emoji bytes).
     right_parts = [f"{_ncr(ctx['status_icon'])} {ctx['status']}"]
+    # #578 — shared broadcast pin first, so every banner shows it.
+    if ctx.get("pin"):
+        right_parts.insert(0, "&#x1F4CC; " + _ncr(ctx["pin"]))  # 📌
     if ctx["flag"]:
         # Phase 6.M (#496) : flags are Unicode "regional indicator" pairs
         # (🇫🇷 = U+1F1EB + U+1F1F7). NCR-encoded pairs do NOT join into a
@@ -707,6 +710,18 @@ class InjectBanner:
             except Exception:
                 ctx["ghost_blocked"] = 0
                 ctx["ghost_kb"] = 0
+            # #578 — shared broadcast pin (operator/top-1), shown in every
+            # client's banner. Fresh window 24 h.
+            ctx["pin"] = ""
+            try:
+                import json as _json
+                import time as _time
+                with open("/run/secubox/pin.json", "r", encoding="utf-8") as _pf:
+                    _p = _json.load(_pf)
+                if _p.get("text") and (_time.time() - _p.get("ts", 0)) < 86400:
+                    ctx["pin"] = str(_p["text"])[:80]
+            except Exception:
+                pass
             csp_strict = _detect_csp_strict(flow)
             report_url = _report_url_for(flow)
             level_label = _level_label(flow)
