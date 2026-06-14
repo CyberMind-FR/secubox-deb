@@ -1,3 +1,13 @@
+secubox-toolbox (2.6.36-1~bookworm1) bookworm; urgency=medium
+
+  * fix(autolearn): exclude anti-bot vendors from the auto-block list (#589
+    follow-up). Anti-bot WADs (Datadome/PerimeterX) often sit in the visited
+    site's own path, so auto-blocking them would break the page. The learner
+    now feeds only OPERATOR-GRADE/data-broker classified trackers (+ threat-
+    intel domains); cross-site threshold lowered 4→2.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 14 Jun 2026 16:50:00 +0200
+
 secubox-toolbox (2.6.35-1~bookworm1) bookworm; urgency=medium
 
   * Autolearn bad trackers/actors (#589) — feeds ad_ghost's block set.
