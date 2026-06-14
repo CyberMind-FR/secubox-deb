@@ -1,3 +1,26 @@
+secubox-toolbox (2.6.23-1~bookworm1) bookworm; urgency=medium
+
+  * Modular mitm filters + R3+/R4 silent ad/banner ghoster (#566).
+      - secubox_toolbox/filters.py : single filter config
+        (/etc/secubox/toolbox/filters.json), 5 s cached, toggled live from
+        the toolbox WebUI — banner / protective(off|alert|spoof) / ad_ghost /
+        ad_ghost_block / per-category cosmetics. No restart to flip.
+      - mitmproxy_addons/ad_ghost.py : for R3+/R4 (10.99.1.0/24) only —
+        204 known ad/tracker hosts (real bandwidth save) + inject ad-hiding
+        CSS (ads / consent-nag / newsletter / social-widget categories) into
+        HTML. Tallies blocked_requests + bytes_saved_est + pages_cleaned →
+        /run/secubox/ghost.json. Wired into the mitm-wg launcher.
+      - inject_banner : reads the filter (banner on/off), shows the ghost
+        quick-stats (shield N + ~X Ko), relabels status inspected→protected
+        on R3+/R4. protective_mode level now sourced from the filter config
+        (env fallback).
+      - api: GET/POST /admin/filters, GET /admin/ghost, GET /admin/filters/ui
+        (toggle panel). postinst seeds filters.json (preserved on upgrade).
+    Doctrine: opt-in via filter, logged, reversible ; cosmetic ghosting only
+    on the opted-in R3+/R4 tiers, 1st-party pages stay usable.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 18:00:00 +0200
+
 secubox-toolbox (2.6.22-1~bookworm1) bookworm; urgency=medium
 
   * detect_antibot: deployment vs challenge, response-level signals (#564,

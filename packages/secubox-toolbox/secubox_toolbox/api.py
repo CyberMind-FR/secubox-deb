@@ -2422,7 +2422,95 @@ async def admin_protective() -> dict:
             out.update(_json.loads(st.read_text()))
     except Exception:
         pass
+    try:
+        from .filters import get_filters as _gf
+        out["mode"] = _gf().get("protective", out["mode"])
+    except Exception:
+        pass
     return out
+
+
+@router.get("/admin/ghost")
+async def admin_ghost() -> dict:
+    """#566 — ad/banner ghoster savings (R3+/R4). Read-only counters."""
+    import json as _json
+    from pathlib import Path as _P
+    out: dict = {"blocked_requests": 0, "bytes_saved_est": 0,
+                 "pages_cleaned": 0, "since": None, "updated": None}
+    try:
+        st = _P("/run/secubox/ghost.json")
+        if st.exists():
+            out.update(_json.loads(st.read_text()))
+    except Exception:
+        pass
+    out["mb_saved_est"] = round(out.get("bytes_saved_est", 0) / 1048576, 1)
+    return out
+
+
+@router.get("/admin/filters")
+async def admin_filters_get() -> dict:
+    """#566 — modular mitm filter config (read)."""
+    from .filters import get_filters
+    return get_filters(force=True)
+
+
+@router.post("/admin/filters")
+async def admin_filters_set(request: Request) -> dict:
+    """#566 — toggle mitm filters from the toolbox WebUI (write)."""
+    from .filters import set_filters
+    try:
+        patch = await request.json()
+    except Exception:
+        patch = {}
+    if not isinstance(patch, dict):
+        raise HTTPException(status_code=400, detail="json object expected")
+    return set_filters(patch)
+
+
+@router.get("/admin/filters/ui", response_class=HTMLResponse)
+async def admin_filters_ui() -> HTMLResponse:
+    """#566 — minimal filter toggle panel for the toolbox WebUI."""
+    html = """<!doctype html><html lang=fr><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Filtres ToolBoX</title>
+<style>
+ body{background:#0a0a0f;color:#e8e6d9;font:14px system-ui,sans-serif;max-width:560px;margin:30px auto;padding:0 18px}
+ h1{color:#c9a84c;font-size:18px} h2{color:#6e40c9;font-size:13px;margin:18px 0 6px}
+ label{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1a1a22}
+ select,input{accent-color:#6e40c9} .muted{color:#6b6b7a;font-size:12px}
+ .stat{display:inline-block;background:#12121a;border:1px solid #222;border-radius:6px;padding:6px 10px;margin:4px 4px 0 0}
+ #msg{color:#00ff41;min-height:18px;margin-top:10px}
+</style>
+<h1>🛡 Filtres ToolBoX</h1>
+<p class=muted>Activation/désactivation à chaud des filtres mitm (R2/R3+). Prend effet en quelques secondes, sans redémarrage.</p>
+<div id=stats></div>
+<h2>Bannière & inspection</h2>
+<label><input type=checkbox data-k=banner> Bannière de transparence (R2/R3)</label>
+<label>Mode protecteur (spoof traceurs)
+  <select data-k=protective><option value=off>off</option><option value=alert>alert</option><option value=spoof>spoof</option></select></label>
+<h2>Ghosting pub (R3+/R4)</h2>
+<label><input type=checkbox data-k=ad_ghost> Masquer pubs/bannières/widgets (cosmétique)</label>
+<label><input type=checkbox data-k=ad_ghost_block> Bloquer les hôtes pub/traceurs (économise la bande passante)</label>
+<label><input type=checkbox data-c=ads> · catégorie : publicités</label>
+<label><input type=checkbox data-c=consent_nag> · catégorie : bandeaux cookies/consentement</label>
+<label><input type=checkbox data-c=newsletter> · catégorie : pop-ups newsletter</label>
+<label><input type=checkbox data-c=social_widgets> · catégorie : widgets sociaux</label>
+<p id=msg></p>
+<script>
+const $=s=>document.querySelector(s);
+function post(p){fetch('/admin/filters',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(p)}).then(r=>r.json()).then(load).then(()=>{$('#msg').textContent='Enregistré ✓';setTimeout(()=>$('#msg').textContent='',1200)});}
+function load(f){
+ document.querySelectorAll('[data-k]').forEach(el=>{const k=el.dataset.k;if(el.type==='checkbox')el.checked=!!f[k];else el.value=f[k];});
+ const c=f.ad_ghost_categories||{};document.querySelectorAll('[data-c]').forEach(el=>el.checked=!!c[el.dataset.c]);
+}
+function wire(){
+ document.querySelectorAll('[data-k]').forEach(el=>el.addEventListener('change',()=>{const v=el.type==='checkbox'?el.checked:el.value;post({[el.dataset.k]:v});}));
+ document.querySelectorAll('[data-c]').forEach(el=>el.addEventListener('change',()=>post({ad_ghost_categories:{[el.dataset.c]:el.checked}})));
+}
+function stats(){fetch('/admin/ghost').then(r=>r.json()).then(g=>{$('#stats').innerHTML=`<span class=stat>🛡 ${g.blocked_requests||0} bloqués</span><span class=stat>💾 ~${g.mb_saved_est||0} Mo économisés</span><span class=stat>🧹 ${g.pages_cleaned||0} pages nettoyées</span>`;});}
+fetch('/admin/filters').then(r=>r.json()).then(f=>{load(f);wire();stats();});
+</script></html>"""
+    return HTMLResponse(content=html)
 
 
 @router.get("/social/report/{token}.pdf")

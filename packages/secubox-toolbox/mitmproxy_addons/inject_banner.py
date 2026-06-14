@@ -479,6 +479,12 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     if utiq_n > 0:
         # 📡 N — operator-grade tracker active
         right_parts.append(f"&#x1F4E1; utiq:{utiq_n}")
+    # #566 — ghost quick-stats: ads/widgets ghosted + bandwidth saved.
+    g_blocked = ctx.get("ghost_blocked", 0)
+    g_kb = ctx.get("ghost_kb", 0)
+    if g_blocked > 0:
+        # 🛡 N · ~X Ko économisés
+        right_parts.append(f"&#x1F6E1; {g_blocked}&#xA0;&#x2715;&#xA0;~{g_kb}&#x202F;Ko")
     if ctx["asn"]:
         right_parts.append(_ncr(ctx["asn"]))
     right_text = " &#xB7; ".join(right_parts)  # middle dot · = &#xB7;
@@ -644,6 +650,17 @@ class InjectBanner:
         # AND R3 (portable WG opt-in). R0/R1 stay banner-free.
         if _client_level(flow) not in ("r2", "r3"):
             return
+        # #566 — modular filter toggle (toolbox WebUI). Banner can be
+        # disabled without touching the addon list.
+        try:
+            import sys as _sys
+            if "/usr/lib/secubox/toolbox" not in _sys.path:
+                _sys.path.insert(0, "/usr/lib/secubox/toolbox")
+            from secubox_toolbox.filters import get_filters as _gf
+            if not _gf().get("banner", True):
+                return
+        except Exception:
+            pass
         # Phase 10 perf : cheap pre-flight check on Content-Length to avoid
         # reading multi-MB bodies into RAM just to discover we'd skip them.
         # `flow.response.content` would buffer the whole body before returning.
@@ -667,10 +684,25 @@ class InjectBanner:
         # for R2) + level label ("R2" vs "R3")
         try:
             ctx = _compute_site_context(flow)
+            # #566 — ghost quick-stats (ads/widgets ghosted + KB saved).
+            try:
+                import json as _json
+                with open("/run/secubox/ghost.json", "r", encoding="utf-8") as _gf2:
+                    _g = _json.load(_gf2)
+                ctx["ghost_blocked"] = int(_g.get("blocked_requests", 0))
+                ctx["ghost_kb"] = int(_g.get("bytes_saved_est", 0)) // 1024
+            except Exception:
+                ctx["ghost_blocked"] = 0
+                ctx["ghost_kb"] = 0
             csp_strict = _detect_csp_strict(flow)
             report_url = _report_url_for(flow)
             level_label = _level_label(flow)
             level = _client_level(flow)
+            # #566 — R3+/R4 is an active-protection tier (spoof + ghost),
+            # not mere inspection: relabel the banner status accordingly.
+            if level in ("r3", "r4") and ctx.get("status") == "inspected":
+                ctx["status"] = "protected"
+                ctx["status_icon"] = "\U0001F6E1"  # 🛡
             snippet = _banner_html_dynamic(_CA_SHA1, ctx, csp_strict,
                                             report_url, level_label, level)
         except Exception as e:
