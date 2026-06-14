@@ -21,7 +21,7 @@ function fillTopList(nodes) {
   (nodes || [])
     .slice()
     .sort((a, b) => (b.hits || 0) - (a.hits || 0))
-    .slice(0, 12)
+    .slice(0, 5)
     .forEach((n) => {
       const row = document.createElement("div");
       row.className = "row";
