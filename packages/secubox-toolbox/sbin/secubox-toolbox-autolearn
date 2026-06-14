@@ -5,10 +5,12 @@
 # #589 — autolearn bad trackers/actors. Builds a HIGH-CONFIDENCE block list
 # that ad_ghost consults (in addition to its static ad-host regex), from:
 #   1. threat-intel domain IOCs (threatfox malicious C2/malware domains) ;
-#   2. cross-site tracker domains CLASSIFIED anti-bot / operator-grade
-#      (social_host_meta) seen on >= MIN_SITES distinct 1st-party sites.
+#   2. cross-site OPERATOR-GRADE / data-broker tracker domains
+#      (social_host_meta.opgrade_vendor) seen on >= MIN_SITES sites.
 # Deliberately conservative — a plain cross-site CDN (fonts, shared assets)
-# is NOT learned, so live R3 users don't get legit sites broken. Run hourly
+# is NOT learned, and ANTI-BOT vendors are NOT learned either : a site's own
+# WAF (Datadome/PerimeterX) sits in the 1st-party path, so blocking it would
+# break the site. So live R3 users don't get legit sites broken. Run hourly
 # by secubox-toolbox-autolearn.timer ; output read by ad_ghost (cached).
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ import time
 
 DB = "/var/lib/secubox/toolbox/toolbox.db"
 OUT = "/var/lib/secubox/toolbox/learned-trackers.txt"
-MIN_SITES = 4          # cross-site threshold for classified trackers
+MIN_SITES = 2          # cross-site threshold for operator-grade trackers
 MAX_ENTRIES = 8000
 _2L = ("co.uk", "com.au", "co.jp", "co.nz", "com.br", "co.za", "gouv.fr")
 
@@ -54,12 +56,14 @@ def main() -> int:
         pass
     ti = len(learned)
 
-    # 2) cross-site CLASSIFIED trackers (anti-bot / operator-grade only).
+    # 2) cross-site OPERATOR-GRADE / data-broker trackers ONLY. Anti-bot
+    # vendors are deliberately excluded — they're frequently the visited
+    # site's own WAF (in-path), so blocking them breaks the page.
     try:
         classified = set()
         for r in c.execute(
             "SELECT tracker_domain FROM social_host_meta "
-            "WHERE antibot_vendor IS NOT NULL OR opgrade_vendor IS NOT NULL"):
+            "WHERE opgrade_vendor IS NOT NULL"):
             d = registrable(r["tracker_domain"])
             if d:
                 classified.add(d)
