@@ -1,3 +1,14 @@
+secubox-toolbox (2.6.28-1~bookworm1) bookworm; urgency=medium
+
+  * Eye graph: hide all IP nodes + cap clients list (#575).
+      - social.js: drop every IP-only tracker node (IPv4/IPv6) from the
+        eye force-graph — no more domain+IP double bubbles for one tracker.
+        Remaining tracker nodes are labelled country-flag + domain name.
+      - www/toolbox index.html #clients tab: show the top 5 clients only
+        ("+ N autres" note when more).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 14 Jun 2026 12:30:00 +0200
+
 secubox-toolbox (2.6.27-1~bookworm1) bookworm; urgency=medium
 
   * webext popup: protection stats + live filter toggles (#574); webext

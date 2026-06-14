@@ -243,8 +243,9 @@ async function loadClients() {
     const rows = (d && d.clients) ? d.clients : (Array.isArray(d) ? d : null);
     if (!rows) { el.innerHTML = `<div class="empty">${(d && d.__error) || 'no data'}</div>`; return; }
     if (!rows.length) { el.innerHTML = '<div class="empty">no clients</div>'; return; }
+    const shown = rows.slice(0, 5);   // #575 — cap the list to top 5
     let html = '<table><thead><tr><th>MAC (hash)</th><th>IP</th><th>state</th><th>niveau</th><th>score</th><th>last</th><th>Actions</th></tr></thead><tbody>';
-    for (const c of rows) {
+    for (const c of shown) {
         const ago = c.last_seen ? Math.round((Date.now()/1000 - c.last_seen) / 60) + 'm' : '—';
         html += `<tr>
             <td><code>${c.mac_hash}</code></td>
@@ -265,6 +266,9 @@ async function loadClients() {
         </tr>`;
     }
     html += '</tbody></table>';
+    if (rows.length > shown.length) {
+        html += `<div class="empty">+ ${rows.length - shown.length} autres clients (top 5 affichés)</div>`;
+    }
     el.innerHTML = html;
 }
 
