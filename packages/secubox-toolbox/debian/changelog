@@ -1,3 +1,10 @@
+secubox-toolbox (2.6.24-1~bookworm1) bookworm; urgency=medium
+
+  * webext: cap the popup top-tracker list to 5 items (#568); webext 0.1.3.
+    /wg/toolbox.xpi tag-pin → webext-v0.1.3.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 18:30:00 +0200
+
 secubox-toolbox (2.6.23-1~bookworm1) bookworm; urgency=medium
 
   * Modular mitm filters + R3+/R4 silent ad/banner ghoster (#566).
@@ -80,7 +87,7 @@ secubox-toolbox (2.6.19-1~bookworm1) bookworm; urgency=medium
         transparent 1×1 fallback → the tier-coloured circle shows through),
         clipped to the bubble. No IP/ASN displayed anywhere.
       - Companion webext popup gains favicons in its top-tracker list
-        (clients/webext-toolbox 0.1.2). /wg/toolbox.xpi tag-pin → webext-v0.1.2.
+        (clients/webext-toolbox 0.1.2). /wg/toolbox.xpi tag-pin → webext-v0.1.3.
 
  -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 15:30:00 +0200
 

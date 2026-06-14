@@ -15,7 +15,7 @@
 set -euo pipefail
 
 DEFAULT_HOST="kbin.gk2.secubox.in"
-RELEASE_URL="https://github.com/CyberMind-FR/secubox-deb/releases/download/webext-v0.1.2/secubox-toolbox-webext.xpi"
+RELEASE_URL="https://github.com/CyberMind-FR/secubox-deb/releases/download/webext-v0.1.3/secubox-toolbox-webext.xpi"
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 say(){ printf '\033[1;36m▸\033[0m %s\n' "$*"; }
