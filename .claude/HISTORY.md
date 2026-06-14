@@ -3,6 +3,49 @@
 
 ---
 
+## 2026-06-14 — ToolBoX privacy/perf sprint : 2.6.23 → 2.6.36, all live on gk2
+
+Large feature sprint on `secubox-toolbox` (built + merged + deployed live,
+kbin healthy) + clients + two live fixes. Each shipped via PR + merge +
+build + deploy.
+
+**Toolbox (`secubox-toolbox` 2.6.23 → 2.6.36):**
+- #560 protective mode — tracker alerting + active **spoofer** (strip
+  operator/tracking headers, drop 3rd-party cookies, DNT/GPC). Live in
+  `spoof` on the 4 R3 workers + R2.
+- #566 modular **filters** (`/etc/secubox/toolbox/filters.json`, WebUI
+  `/admin/filters/ui`) + R3+/R4 **ad/banner ghoster** (ad-hiding CSS +
+  204 ad/tracker hosts ; savings → banner quick-stats).
+- #584 ad ghosting = **collapse** (no placeholder ; reverted #576 black-hole).
+- #577 shared **media proxy-cache** (image/video-segment, 16 MB/obj cap,
+  2 GB LRU, default OFF/opt-in) — `/admin/cache`.
+- #589/#591 **autolearn** bad trackers → ad_ghost block set (threat-intel
+  domains + operator-grade cross-site ; anti-bot excluded) + hourly timer.
+- #553/#549 cartographie **donut** (continent→country) + #587
+  **domain-nugget** cloud (country→eTLD+1) + #575 **IP nodes hidden**
+  (flag+name only) + #555 **favicons** of major sites (never IPs).
+- #545/#572 banner: neon → colourful **emoji-chip guirlande** ;
+  inspected→**protected** on R3+/R4 ; #578 shared **pin** broadcast
+  (`/admin/pin/ui`).
+- #570 DPI **media/content-type statistifier** + donut (`/admin/media/ui`).
+- #574 webext popup **protection panel** ; #568 top-tracker list capped 5.
+- #562 `/ca/fingerprint` surfaces the **R3 CA** (D5:E4:3A) on the tunnel.
+- #581 **postinst fix** : enabled units get a real `restart` on upgrade
+  (was leaving the portal dead → kbin 503 ; bit us twice).
+- #516 review (#564): `detect_antibot` → (vendor, **is_challenge**),
+  response-level (cf-mitigated / non-200 token) — deployment vs challenge.
+
+**Clients:** Android APK **v0.3.0** (real zero-tap : launch + boot
+auto-onboard) ; webext **v0.1.4** (crash-fix const-ext, favicons, popup
+protection panel) — both served from the cabine + GitHub releases.
+
+**Live fixes:** Nextcloud iPhone photo sync (disabled broken
+`files_antivirus` + raised PHP upload limits) ; kbin 503 root-caused →
+#581.
+
+**Open / blocked:** #592 unified webmail-hub (Gmail OAuth2 + Gandi + OVH) —
+design filed, BLOCKED on a Google OAuth client + operator decisions.
+
 ## 2026-06-13 — Browser extension : emancipate cartographie live (ref #532)
 
 Nouveau client `clients/webext-toolbox/` (MV3 Firefox `.xpi` + Chromium),
