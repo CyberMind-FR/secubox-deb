@@ -61,6 +61,9 @@ SBXFILTERS
 
     # 4. Storage dir (SQLite + future PDF reports)
     install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox
+    # #577 : shared media proxy-cache dir (opt-in via filters ; 2 GB LRU).
+    install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/cache/secubox/toolbox/media 2>/dev/null || \
+      mkdir -p /var/cache/secubox/toolbox/media
     # #536 : Android APK serve dir + best-effort fetch of the latest
     # release asset (so GET /wg/toolbox.apk serves it locally/offline).
     # Non-blocking : if there's no release yet / no network, the endpoint
