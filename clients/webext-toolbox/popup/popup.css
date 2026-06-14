@@ -69,6 +69,14 @@ button.danger { color: var(--cinnabar); border-color: var(--cinnabar); }
 .row .fav { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; background: #1a1a22; object-fit: contain; }
 .row .dom { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .hits { color: var(--muted); }
+
+/* #574 — protection panel */
+#protect { margin: 8px 0; padding: 8px; background: #0e0e15; border: 1px solid #222; border-radius: 8px; }
+.phead { color: var(--matrix); font-weight: 700; font-size: 12px; margin-bottom: 6px; }
+.gstat { color: var(--muted); font-weight: 400; font-size: 10px; }
+.tg { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 0; }
+.tg select { margin-left: auto; background: #14141c; color: var(--text); border: 1px solid #333; border-radius: 4px; }
+#protect input { accent-color: var(--void); }
 .tier { font-size: 9px; padding: 1px 4px; border-radius: 3px; }
 .tier.cdn { background: #1d2a33; color: var(--cyan); }
 .tier.ab { background: #2a1416; color: var(--cinnabar); }

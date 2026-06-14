@@ -64,6 +64,41 @@ function paint(data) {
   fillTopList(data.nodes);
 }
 
+// #574 — protection stats + live filter toggles in the popup.
+async function loadProtection() {
+  const sec = $("protect");
+  if (!sec) return;
+  const g = await api.ghost(curHost);
+  if (g) {
+    $("ghostStat").textContent =
+      `${g.blocked_requests || 0} bloqués · ~${g.mb_saved_est || 0} Mo · ${g.pages_cleaned || 0} nettoyées`;
+  }
+  const f = await api.getAdminFilters(curHost);
+  if (!f) { sec.style.opacity = "0.5"; return; }
+  sec.style.opacity = "1";
+  sec.querySelectorAll("[data-f]").forEach((el) => {
+    const k = el.dataset.f;
+    if (el.type === "checkbox") el.checked = !!f[k];
+    else el.value = f[k];
+  });
+  if (!sec.dataset.wired) {
+    sec.dataset.wired = "1";
+    sec.querySelectorAll("[data-f]").forEach((el) => {
+      el.addEventListener("change", async () => {
+        const v = el.type === "checkbox" ? el.checked : el.value;
+        try {
+          await api.setAdminFilters(curHost, { [el.dataset.f]: v });
+          $("protectMsg").textContent = "✓ appliqué";
+          setTimeout(() => ($("protectMsg").textContent = ""), 1000);
+          loadProtection();
+        } catch (e) {
+          $("protectMsg").textContent = "erreur : " + e.message;
+        }
+      });
+    });
+  }
+}
+
 async function load() {
   const cfg = await api.getConfig();
   curHost = cfg.host || api.DEFAULTS.host;
@@ -87,6 +122,7 @@ async function load() {
     const data = await api.graph(cfg.host, cfg.token, cfg.since);
     paint(data);
     $("liveMsg").textContent = "";
+    loadProtection();
   } catch (e) {
     if (String(e.message) === "token-expired") {
       // token died — drop it and go back to pairing

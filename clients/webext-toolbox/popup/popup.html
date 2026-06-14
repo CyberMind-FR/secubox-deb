@@ -36,6 +36,17 @@
 
     <div class="toplist" id="topList"></div>
 
+    <section id="protect">
+      <div class="phead">🛡 Protection <span id="ghostStat" class="gstat"></span></div>
+      <label class="tg"><input type="checkbox" data-f="ad_ghost"> Masquer pubs/bannières (R3+)</label>
+      <label class="tg"><input type="checkbox" data-f="ad_ghost_block"> Bloquer hôtes pub (économie)</label>
+      <label class="tg"><input type="checkbox" data-f="banner"> Bannière transparence</label>
+      <label class="tg">Mode protecteur
+        <select data-f="protective"><option value="off">off</option><option value="alert">alert</option><option value="spoof">spoof</option></select>
+      </label>
+      <p id="protectMsg" class="muted"></p>
+    </section>
+
     <div class="actions">
       <button id="openFull">🗺️ Cartographie complète</button>
       <button id="pdf">📄 Rapport PDF</button>
