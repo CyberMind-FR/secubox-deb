@@ -2481,6 +2481,80 @@ async def admin_cache() -> dict:
     return out
 
 
+_PIN_PATH = "/run/secubox/pin.json"
+
+
+@router.get("/admin/pin")
+async def admin_pin() -> dict:
+    """#578 — the shared broadcast pin shown in every client's banner."""
+    import json as _json
+    from pathlib import Path as _P
+    cur = {"text": "", "url": "", "ts": 0, "by": ""}
+    try:
+        p = _P(_PIN_PATH)
+        if p.exists():
+            cur.update(_json.loads(p.read_text()))
+    except Exception:
+        pass
+    return cur
+
+
+@router.post("/admin/pin")
+async def admin_pin_set(request: Request) -> dict:
+    """#578 — set/clear the shared pin (broadcast to all banners). Empty
+    text clears it."""
+    import json as _json
+    import time as _time
+    from pathlib import Path as _P
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    text = (str(body.get("text", "")) if isinstance(body, dict) else "")[:80].strip()
+    url = (str(body.get("url", "")) if isinstance(body, dict) else "")[:300].strip()
+    rec = {"text": text, "url": url, "ts": int(_time.time()) if text else 0, "by": "admin"}
+    try:
+        _P(_PIN_PATH).parent.mkdir(parents=True, exist_ok=True)
+        _P(_PIN_PATH).write_text(_json.dumps(rec))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return rec
+
+
+@router.get("/admin/pin/ui", response_class=HTMLResponse)
+async def admin_pin_ui() -> HTMLResponse:
+    """#578 — minimal pin setter; can auto-fill the current top-1 tracker."""
+    html = """<!doctype html><html lang=fr><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Pin partagé — ToolBoX</title>
+<style>
+ body{background:#0a0a0f;color:#e8e6d9;font:14px system-ui,sans-serif;max-width:520px;margin:30px auto;padding:0 18px}
+ h1{color:#c9a84c;font-size:18px} label{display:block;color:#6b6b7a;font-size:12px;margin:12px 0 4px}
+ input{width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#14141c;color:#e8e6d9}
+ button{margin:14px 8px 0 0;padding:9px 14px;border-radius:6px;border:1px solid #c9a84c;background:#c9a84c;color:#0a0a0f;font-weight:700;cursor:pointer}
+ button.alt{background:transparent;color:#00d4ff;border-color:#00d4ff}
+ button.danger{background:transparent;color:#e63946;border-color:#e63946}
+ #msg{color:#00ff41;min-height:18px;margin-top:10px} .muted{color:#6b6b7a;font-size:12px}
+</style>
+<h1>📌 Pin partagé (toutes les bannières)</h1>
+<p class=muted>Un message épinglé, diffusé dans la bannière de TOUS les clients R2/R3 (24 h).</p>
+<label>Texte du pin <input id=text maxlength=80 placeholder="ex: traceur #1 du jour — doubleclick.net"></label>
+<label>Lien (optionnel) <input id=url maxlength=300 placeholder="https://…"></label>
+<button id=save>📌 Épingler</button>
+<button class=alt id=top>⬆ Utiliser le traceur #1</button>
+<button class=danger id=clear>Retirer</button>
+<p id=msg></p>
+<script>
+const $=s=>document.querySelector(s);
+fetch('/admin/pin').then(r=>r.json()).then(p=>{$('#text').value=p.text||'';$('#url').value=p.url||'';});
+function post(t,u){return fetch('/admin/pin',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,url:u})}).then(r=>r.json()).then(()=>{$('#msg').textContent='✓ diffusé';setTimeout(()=>$('#msg').textContent='',1500);});}
+$('#save').onclick=()=>post($('#text').value,$('#url').value);
+$('#clear').onclick=()=>{$('#text').value='';$('#url').value='';post('','');};
+$('#top').onclick=()=>fetch('/admin/social-aggregate?hours=24').then(r=>r.json()).then(d=>{const t=(d.by_tracker_domain||[])[0];if(t){$('#text').value='Traceur #1 : '+t.tracker_domain+' ('+t.hits+' hits)';}else{$('#msg').textContent='aucun traceur';}});
+</script></html>"""
+    return HTMLResponse(content=html)
+
+
 @router.get("/admin/media")
 async def admin_media() -> dict:
     """#570 — DPI media/content-type statistics for the donut UI."""
