@@ -107,7 +107,10 @@ fi
 # protective_mode (#560) runs right after utiq_defense — early, so spoof-level
 # header/cookie stripping happens before the logging addons record the flow.
 # Inert unless SECUBOX_PROTECTIVE_MODE=alert|spoof (default off).
-for addon in inject_xff utiq_defense protective_mode local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
+# ad_ghost (#566) runs right after protective_mode: for R3+/R4 it 204s known
+# ad/tracker hosts (bandwidth save) at request time and injects ad-hiding CSS
+# on HTML responses. Gated by the modular filter config (toolbox WebUI).
+for addon in inject_xff utiq_defense protective_mode ad_ghost local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect; do
     ARGS+=(-s "$ADDON_DIR/${addon}.py")
 done
 
