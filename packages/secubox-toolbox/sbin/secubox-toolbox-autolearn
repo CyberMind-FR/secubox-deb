@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# #589 — autolearn bad trackers/actors. Builds a HIGH-CONFIDENCE block list
+# that ad_ghost consults (in addition to its static ad-host regex), from:
+#   1. threat-intel domain IOCs (threatfox malicious C2/malware domains) ;
+#   2. cross-site tracker domains CLASSIFIED anti-bot / operator-grade
+#      (social_host_meta) seen on >= MIN_SITES distinct 1st-party sites.
+# Deliberately conservative — a plain cross-site CDN (fonts, shared assets)
+# is NOT learned, so live R3 users don't get legit sites broken. Run hourly
+# by secubox-toolbox-autolearn.timer ; output read by ad_ghost (cached).
+from __future__ import annotations
+
+import json
+import sqlite3
+import sys
+import time
+
+DB = "/var/lib/secubox/toolbox/toolbox.db"
+OUT = "/var/lib/secubox/toolbox/learned-trackers.txt"
+MIN_SITES = 4          # cross-site threshold for classified trackers
+MAX_ENTRIES = 8000
+_2L = ("co.uk", "com.au", "co.jp", "co.nz", "com.br", "co.za", "gouv.fr")
+
+
+def registrable(host: str):
+    host = (host or "").split(":")[0].lower().strip(".")
+    if not host or host.replace(".", "").isdigit() or ":" in host:
+        return None
+    p = host.split(".")
+    if len(p) <= 2:
+        return host
+    last2 = ".".join(p[-2:])
+    return ".".join(p[-3:]) if (last2 in _2L and len(p) >= 3) else last2
+
+
+def main() -> int:
+    learned: set[str] = set()
+    try:
+        c = sqlite3.connect(DB, timeout=10)
+        c.row_factory = sqlite3.Row
+    except Exception as e:
+        sys.stderr.write(f"autolearn: cannot open {DB}: {e}\n")
+        return 0
+
+    # 1) threat-intel malicious domains (high confidence).
+    try:
+        for r in c.execute("SELECT DISTINCT ioc FROM threat_intel WHERE type='domain'"):
+            d = registrable(r["ioc"])
+            if d:
+                learned.add(d)
+    except Exception:
+        pass
+    ti = len(learned)
+
+    # 2) cross-site CLASSIFIED trackers (anti-bot / operator-grade only).
+    try:
+        classified = set()
+        for r in c.execute(
+            "SELECT tracker_domain FROM social_host_meta "
+            "WHERE antibot_vendor IS NOT NULL OR opgrade_vendor IS NOT NULL"):
+            d = registrable(r["tracker_domain"])
+            if d:
+                classified.add(d)
+        # distinct 1st-party sites per registrable tracker domain
+        sites: dict[str, set] = {}
+        for r in c.execute("SELECT tracker_domain, sites_jsonl FROM social_nodes"):
+            d = registrable(r["tracker_domain"])
+            if not d or d not in classified:
+                continue
+            try:
+                for s in json.loads(r["sites_jsonl"] or "[]"):
+                    sites.setdefault(d, set()).add(s)
+            except Exception:
+                pass
+        for d, ss in sites.items():
+            if len(ss) >= MIN_SITES:
+                learned.add(d)
+    except Exception:
+        pass
+
+    c.close()
+    learned.discard(None)
+    out = sorted(learned)[:MAX_ENTRIES]
+    try:
+        tmp = OUT + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(out) + ("\n" if out else ""))
+        import os
+        os.replace(tmp, OUT)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: write failed: {e}\n")
+        return 0
+    sys.stderr.write(
+        f"autolearn: {len(out)} hosts learned ({ti} threat-intel + "
+        f"{len(out) - ti} classified cross-site) @ {int(time.time())}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

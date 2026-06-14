@@ -1,3 +1,17 @@
+secubox-toolbox (2.6.35-1~bookworm1) bookworm; urgency=medium
+
+  * Autolearn bad trackers/actors (#589) — feeds ad_ghost's block set.
+      - sbin/secubox-toolbox-autolearn (+ hourly timer) builds a HIGH-
+        confidence list /var/lib/secubox/toolbox/learned-trackers.txt from
+        (1) threat-intel domain IOCs (threatfox malicious) and (2) cross-site
+        domains CLASSIFIED anti-bot/operator-grade seen on >=4 sites.
+        Conservative — plain cross-site CDNs are NOT learned.
+      - ad_ghost.py loads it (mtime-cached) and 204s learned hosts too
+        (X-SecuBox-Ghost: learned), gated by the new `autolearn` filter
+        (default on). postinst enables the timer + runs once.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 14 Jun 2026 16:30:00 +0200
+
 secubox-toolbox (2.6.34-1~bookworm1) bookworm; urgency=medium
 
   * Cartographie: domain-nugget cloud view (#587). New "🏷️ Domaines" toggle
