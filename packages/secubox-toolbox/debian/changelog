@@ -1,3 +1,13 @@
+secubox-toolbox (2.6.29-1~bookworm1) bookworm; urgency=medium
+
+  * fix(postinst): portal reliably restarts after dpkg upgrade (#581). The
+    upgrade SIGTERMs the units before postinst runs, so the old try-restart
+    loop was a no-op on the already-stopped portal → secubox-toolbox.service
+    stayed dead → kbin 503 (hit twice 2026-06-14). Now ENABLED units get a
+    full `restart` (starts even if stopped); others keep `try-restart`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 14 Jun 2026 13:00:00 +0200
+
 secubox-toolbox (2.6.28-1~bookworm1) bookworm; urgency=medium
 
   * Eye graph: hide all IP nodes + cap clients list (#575).
