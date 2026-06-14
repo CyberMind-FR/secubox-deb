@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox ToolBoX — hourly autolearn of bad trackers (#589)
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

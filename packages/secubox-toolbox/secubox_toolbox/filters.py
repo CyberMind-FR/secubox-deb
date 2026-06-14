@@ -22,6 +22,7 @@ DEFAULTS: Dict = {
     "ad_ghost": True,               # R3+/R4 silent ad/banner/widget ghosting
     "ad_ghost_block": True,         # 204 known ad/tracker hosts (save bandwidth)
     "media_cache": False,           # #577 shared media proxy-cache (opt-in)
+    "autolearn": True,              # #589 also block auto-learned bad hosts
     "ad_ghost_categories": {        # cosmetic ghost groups
         "ads": True,
         "consent_nag": True,
@@ -73,7 +74,7 @@ def set_filters(patch: Dict) -> Dict:
                  if ck in DEFAULTS["ad_ghost_categories"]})
         elif k == "protective" and v in _VALID_PROTECTIVE:
             cur["protective"] = v
-        elif k in ("banner", "ad_ghost", "ad_ghost_block", "media_cache"):
+        elif k in ("banner", "ad_ghost", "ad_ghost_block", "media_cache", "autolearn"):
             cur[k] = bool(v)
     try:
         os.makedirs(os.path.dirname(FILTERS_PATH), exist_ok=True)

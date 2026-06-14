@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox ToolBoX — autolearn bad trackers/actors (#589)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/589
+After=secubox-toolbox.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-toolbox-autolearn
+Nice=10
+IOSchedulingClass=idle
+# best-effort, never block boot
+TimeoutStartSec=120
