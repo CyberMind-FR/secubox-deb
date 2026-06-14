@@ -1,3 +1,12 @@
+secubox-toolbox (2.6.34-1~bookworm1) bookworm; urgency=medium
+
+  * Cartographie: domain-nugget cloud view (#587). New "🏷️ Domaines" toggle
+    (alongside 🍩 Donuts / 👁️ Œil) — trackers folded to eTLD+1 and packed as
+    cloud-nugget bubbles grouped by country (country→domain d3.pack), sized by
+    hits, tier-coloured, flag+name labels, click → domain summary. IPs hidden.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 14 Jun 2026 15:45:00 +0200
+
 secubox-toolbox (2.6.33-1~bookworm1) bookworm; urgency=medium
 
   * Shared broadcast pin in every banner (#578). An operator-set "📌 pin"

@@ -85,7 +85,19 @@
   function draw(graph) {
     if (!graph) return;
     if (view === 'donuts') renderDonuts(graph);
+    else if (view === 'nuggets') renderNuggets(graph);
     else render(graph);
+  }
+
+  // #587 — registrable domain (eTLD+1) for the domain-nugget view.
+  const _2L = ['co.uk', 'com.au', 'co.jp', 'co.nz', 'com.br', 'co.za', 'gouv.fr'];
+  function registrable(host) {
+    host = (host || '').split(':')[0].toLowerCase().replace(/^\.+|\.+$/g, '');
+    if (!host || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':')) return null;
+    const p = host.split('.');
+    if (p.length <= 2) return host;
+    const last2 = p.slice(-2).join('.');
+    return (_2L.includes(last2) && p.length >= 3) ? p.slice(-3).join('.') : last2;
   }
 
   // Inject the view toggle (🍩 donuts ⇄ 👁️ œil) once, above the svg.
@@ -107,6 +119,7 @@
       return b;
     };
     bar.appendChild(mk('donuts', '🍩 Donuts'));
+    bar.appendChild(mk('nuggets', '🏷️ Domaines'));
     bar.appendChild(mk('eye', '👁️ Œil'));
     svgEl.parentNode.insertBefore(bar, svgEl);
     syncToggle();
@@ -514,6 +527,77 @@
     bind('nd_sites', (c.tracker_count || 0) + ' traceurs');
     bind('nd_first_seen', '—'); bind('nd_last_seen', '—');
     ndEl.hidden = false;
+  }
+
+  // #587 — domain-nugget cloud : trackers folded to eTLD+1, packed as
+  // cloud bubbles grouped by country (country→domain d3.pack). IPs hidden.
+  function _shortDom(d) { d = d || ''; return d.length > 16 ? d.slice(0, 15) + '…' : d; }
+  function focusDomain(d) {
+    if (!ndEl) return;
+    bind('nd_domain', (d.flag || '') + ' ' + d.domain);
+    bind('nd_country', d.flag || '—'); bind('nd_asn', '—');
+    bind('nd_cdn', d.tier || '—'); bind('nd_antibot', '—'); bind('nd_opgrade', '—');
+    bind('nd_sites', '~' + Math.round(d.value) + ' hits');
+    bind('nd_first_seen', '—'); bind('nd_last_seen', '—');
+    ndEl.hidden = false;
+  }
+  function renderNuggets(graph) {
+    clearGraph();
+    const { W, H } = svgSize();
+    svg.attr('viewBox', `0 0 ${W} ${H}`);
+    bind('total_trackers', graph.stats.total_trackers || 0);
+    bind('total_sites', graph.stats.total_sites || 0);
+    updateAntibotTile(graph.stats.antibot_sites || 0, graph.stats.antibot_vendors || []);
+    updateOpgradeTile(graph.stats.opgrade_sites || 0, graph.stats.opgrade_vendors || []);
+
+    const byDom = new Map();
+    for (const n of (graph.nodes || [])) {
+      const d = registrable(n.domain);
+      if (!d) continue;  // skip IPs
+      let e = byDom.get(d);
+      if (!e) { e = { domain: d, hits: 0, flag: n.country_flag || '', cc: n.country_iso || '??', tier: n.tier || 'other' }; byDom.set(d, e); }
+      e.hits += (n.hits || 0);
+      if (!e.flag && n.country_flag) { e.flag = n.country_flag; e.cc = n.country_iso || '??'; }
+    }
+    const doms = [...byDom.values()];
+    if (!doms.length) return;
+    const byCC = new Map();
+    for (const d of doms) {
+      const k = d.cc || '??';
+      if (!byCC.has(k)) byCC.set(k, { cc: k, flag: d.flag, list: [] });
+      byCC.get(k).list.push(d);
+    }
+    const root = { name: 'root', children: [...byCC.values()].map(c => ({
+      name: c.cc, flag: c.flag, country: true,
+      children: c.list.map(d => ({ leaf: true, domain: d.domain, flag: d.flag, tier: d.tier, value: Math.max(d.hits, 1) })),
+    })) };
+    const h = d3.hierarchy(root).sum(d => d.value || 0)
+      .sort((a, b) => (b.value || 0) - (a.value || 0));
+    d3.pack().size([W, H]).padding(d => d.depth === 1 ? 12 : 3)(h);
+
+    const content = svg.append('g').attr('class', 'content');
+    content.append('g').selectAll('circle.cc')
+      .data(h.descendants().filter(d => d.depth === 1)).join('circle')
+      .attr('cx', d => d.x).attr('cy', d => d.y).attr('r', d => d.r)
+      .attr('fill', 'rgba(0,212,255,0.05)')
+      .attr('stroke', 'rgba(0,212,255,0.4)').attr('stroke-dasharray', '2,3');
+    content.append('g').selectAll('text.cc')
+      .data(h.descendants().filter(d => d.depth === 1)).join('text')
+      .attr('x', d => d.x).attr('y', d => d.y - d.r + 13).attr('text-anchor', 'middle')
+      .attr('fill', 'var(--cyber-cyan,#00d4ff)').attr('font-size', 12).attr('font-weight', 'bold')
+      .text(d => (d.data.flag || '🏴') + ' ' + (d.data.name || '?'));
+    const leaves = content.append('g').selectAll('g.nug')
+      .data(h.leaves()).join('g')
+      .attr('class', 'node').attr('transform', d => `translate(${d.x},${d.y})`)
+      .style('cursor', 'pointer').on('click', (ev, d) => focusDomain(d.data));
+    leaves.append('circle').attr('r', d => d.r)
+      .attr('fill', d => (TIER[d.data.tier] || TIER.other).c).attr('fill-opacity', 0.85)
+      .attr('stroke', '#0a0a0f').attr('stroke-width', 0.6);
+    leaves.append('text').attr('text-anchor', 'middle').attr('dy', '.35em')
+      .attr('font-size', d => Math.max(7, Math.min(d.r * 0.45, 12)))
+      .attr('fill', '#0a0a0f')
+      .text(d => d.r > 14 ? ((d.data.flag ? d.data.flag + ' ' : '') + _shortDom(d.data.domain)) : (d.r > 8 ? _shortDom(d.data.domain) : ''));
+    leaves.append('title').text(d => d.data.domain + ' — ~' + Math.round(d.data.value) + ' hits');
   }
 
   // ─── focus / detail panel ───
