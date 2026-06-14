@@ -31,7 +31,7 @@ to your cabine over the R3 tunnel — no third-party calls.
 Published release `.xpi` (downloadable directly):
 
 ```
-https://github.com/CyberMind-FR/secubox-deb/releases/download/webext-v0.1.3/secubox-toolbox-webext.xpi
+https://github.com/CyberMind-FR/secubox-deb/releases/download/webext-v0.1.4/secubox-toolbox-webext.xpi
 ```
 
 The toolbox also serves it from the cabine:
