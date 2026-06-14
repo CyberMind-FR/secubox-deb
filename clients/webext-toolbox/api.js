@@ -89,6 +89,29 @@ async function wipe(host, token) {
   return await resp.json();
 }
 
+// #574 — protection stats + modular filter toggles (cabine admin API).
+async function ghost(host) {
+  try {
+    const r = await fetch(`${baseUrl(host)}/admin/ghost`, { credentials: "omit" });
+    return r.ok ? await r.json() : null;
+  } catch (_) { return null; }
+}
+async function getAdminFilters(host) {
+  try {
+    const r = await fetch(`${baseUrl(host)}/admin/filters`, { credentials: "omit" });
+    return r.ok ? await r.json() : null;
+  } catch (_) { return null; }
+}
+async function setAdminFilters(host, patch) {
+  const r = await fetch(`${baseUrl(host)}/admin/filters`, {
+    method: "POST", credentials: "omit",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return await r.json();
+}
+
 // Favicon of a major site/tracker via the cabine's server-side proxy
 // (7-day cached PNG, transparent 1×1 fallback) — no third-party call.
 function faviconUrl(host, domain) {
@@ -112,6 +135,9 @@ const SbxApi = {
   r3Check,
   graph,
   wipe,
+  ghost,
+  getAdminFilters,
+  setAdminFilters,
   faviconUrl,
   socialUrl,
   reportUrl,
