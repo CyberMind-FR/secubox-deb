@@ -1,3 +1,13 @@
+secubox-toolbox (2.6.26-1~bookworm1) bookworm; urgency=medium
+
+  * Banner: colourful emoji-chip "guirlande" (#572). The right-side stat
+    row (status, flag, app, cookies, tracker-host, utiq, ghost, ASN) now
+    renders as vibrant rounded pills cycling an 8-colour festive palette
+    with a neon glow (box-shadow). Pure-ASCII inline styling — works in
+    both the CSP-strict and JS banner variants.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 19:30:00 +0200
+
 secubox-toolbox (2.6.25-1~bookworm1) bookworm; urgency=medium
 
   * DPI media/content-type statistifier + donut (#570).
