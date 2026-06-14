@@ -155,6 +155,11 @@
     // the densest tracker clusters become the visible "hot spots".
     const EYE_ID = 'eye:device';
 
+    // #575 — IPs are noise in this view (and produce a 2nd bubble next to
+    // the domain for the same metric). Hide every IP-only tracker node ;
+    // keep domains, labelled by country flag + name (never the IP).
+    const isIp = (s) => /^\d{1,3}(\.\d{1,3}){3}$/.test(s) || (s || '').includes(':');
+
     // Build d3 dataset: sites are union of all node.sites + tracker nodes themselves.
     const siteSet = new Set();
     for (const n of graph.nodes) for (const s of (n.sites || [])) siteSet.add(s);
@@ -169,10 +174,11 @@
       nodes.push({ id: 'site:' + s, label: s, kind: 'site' });
     }
     for (const n of graph.nodes) {
+      if (isIp(n.domain)) continue;   // #575 — hide IP-only nodes
       idx.set('tracker:' + n.domain, nodes.length);
       nodes.push({
         id: 'tracker:' + n.domain,
-        label: n.domain,
+        label: (n.country_flag ? n.country_flag + ' ' : '') + n.domain,
         kind: 'tracker',
         hits: n.hits,
         sites: n.sites,
@@ -194,6 +200,7 @@
       links.push({ source: EYE_ID, target: 'site:' + s, reuse: 1, spoke: true });
     }
     for (const n of graph.nodes) {
+      if (isIp(n.domain)) continue;   // #575 — no links to hidden IP nodes
       const trackerKey = 'tracker:' + n.domain;
       for (const s of (n.sites || [])) {
         links.push({
