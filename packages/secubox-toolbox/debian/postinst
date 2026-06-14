@@ -211,6 +211,11 @@ fi
         # until the operator opts in via a SECUBOX_ESCALATE_* drop-in.
         systemctl enable secubox-escalate.timer 2>/dev/null || true
         systemctl start secubox-escalate.timer 2>/dev/null || true
+        # #589 : autolearn bad-tracker timer (hourly) + a first run now so
+        # the learned list exists immediately for ad_ghost.
+        systemctl enable secubox-toolbox-autolearn.timer 2>/dev/null || true
+        systemctl start secubox-toolbox-autolearn.timer 2>/dev/null || true
+        /usr/sbin/secubox-toolbox-autolearn 2>&1 | head -1 || true
       fi
     fi
 

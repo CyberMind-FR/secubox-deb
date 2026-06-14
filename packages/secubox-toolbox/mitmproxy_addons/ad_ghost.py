@@ -46,6 +46,43 @@ _AD_HOST = re.compile(
     re.IGNORECASE,
 )
 
+# #589 — auto-learned bad hosts (threat-intel + classified cross-site
+# trackers), rebuilt hourly by secubox-toolbox-autolearn. Loaded with a
+# mtime check so a fresh learn takes effect within ~60 s, no restart.
+_LEARNED_PATH = "/var/lib/secubox/toolbox/learned-trackers.txt"
+_learned: set = set()
+_learned_mtime = 0.0
+_learned_check = 0.0
+_2L_TLD = ("co.uk", "com.au", "co.jp", "co.nz", "com.br", "co.za", "gouv.fr")
+
+
+def _registrable(host: str):
+    host = (host or "").split(":")[0].lower().strip(".")
+    if not host or host.replace(".", "").isdigit() or ":" in host:
+        return None
+    p = host.split(".")
+    if len(p) <= 2:
+        return host
+    last2 = ".".join(p[-2:])
+    return ".".join(p[-3:]) if (last2 in _2L_TLD and len(p) >= 3) else last2
+
+
+def _learned_set() -> set:
+    global _learned, _learned_mtime, _learned_check
+    now = time.time()
+    if now - _learned_check < 60:
+        return _learned
+    _learned_check = now
+    try:
+        m = os.path.getmtime(_LEARNED_PATH)
+        if m != _learned_mtime:
+            with open(_LEARNED_PATH, encoding="utf-8") as f:
+                _learned = {ln.strip().lower() for ln in f if ln.strip()}
+            _learned_mtime = m
+    except Exception:
+        pass
+    return _learned
+
 # Cosmetic hide selectors, grouped so the WebUI can toggle each category.
 _COSMETIC = {
     "ads": (
@@ -124,10 +161,18 @@ class AdGhost:
         if not _is_r3plus(flow):
             return
         host = flow.request.pretty_host or ""
-        if _AD_HOST.search(host):
+        blocked = bool(_AD_HOST.search(host))
+        learned = False
+        if not blocked and f.get("autolearn", True):
+            reg = _registrable(host)
+            if reg and (reg in _learned_set() or host.lower() in _learned_set()):
+                blocked = learned = True
+        if blocked:
             flow.response = http.Response.make(
-                204, b"", {"X-SecuBox-Ghost": "blocked"})
+                204, b"", {"X-SecuBox-Ghost": "learned" if learned else "blocked"})
             _counts["blocked_requests"] += 1
+            if learned:
+                _counts["learned_blocks"] = _counts.get("learned_blocks", 0) + 1
             _counts["bytes_saved_est"] += _EST_BYTES_PER_REQ
             _flush()
 
