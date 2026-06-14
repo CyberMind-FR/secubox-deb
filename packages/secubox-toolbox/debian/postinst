@@ -42,6 +42,23 @@ case "$1" in
       chown root:secubox-toolbox /etc/secubox/toolbox/ca/ca.pem /etc/secubox/toolbox/ca/key.pem 2>/dev/null || true
     fi
 
+    # #566 : modular filter config (toolbox WebUI toggles). Seed once;
+    # preserve operator edits on upgrade. Writable by the portal user.
+    install -d -m 0750 -o root -g secubox-toolbox /etc/secubox/toolbox 2>/dev/null || true
+    if [ ! -f /etc/secubox/toolbox/filters.json ]; then
+      cat > /etc/secubox/toolbox/filters.json <<'SBXFILTERS'
+{
+ "banner": true,
+ "protective": "spoof",
+ "ad_ghost": true,
+ "ad_ghost_block": true,
+ "ad_ghost_categories": {"ads": true, "consent_nag": true, "newsletter": true, "social_widgets": true}
+}
+SBXFILTERS
+      chown root:secubox-toolbox /etc/secubox/toolbox/filters.json
+      chmod 0664 /etc/secubox/toolbox/filters.json
+    fi
+
     # 4. Storage dir (SQLite + future PDF reports)
     install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox
     # #536 : Android APK serve dir + best-effort fetch of the latest

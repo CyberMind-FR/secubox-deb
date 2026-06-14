@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import re
 import time
 
@@ -61,7 +62,15 @@ _last_flush = 0.0
 
 
 def _level() -> str:
-    v = (os.environ.get("SECUBOX_PROTECTIVE_MODE") or "off").strip().lower()
+    # Modular filter config (toolbox WebUI) is the source of truth (#566);
+    # fall back to the SECUBOX_PROTECTIVE_MODE env when the config is absent.
+    try:
+        if "/usr/lib/secubox/toolbox" not in sys.path:
+            sys.path.insert(0, "/usr/lib/secubox/toolbox")
+        from secubox_toolbox.filters import get_filters
+        v = (get_filters().get("protective") or "off").strip().lower()
+    except Exception:
+        v = (os.environ.get("SECUBOX_PROTECTIVE_MODE") or "off").strip().lower()
     return v if v in ("off", "alert", "spoof") else "off"
 
 
