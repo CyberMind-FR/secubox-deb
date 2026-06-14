@@ -2455,6 +2455,32 @@ _MEDIA_EMOJI = {
 }
 
 
+@router.get("/admin/cache")
+async def admin_cache() -> dict:
+    """#577 — shared media cache stats (hits/misses/bytes served/size)."""
+    import json as _json
+    from pathlib import Path as _P
+    out: dict = {"hits": 0, "misses": 0, "stored": 0, "evicted": 0,
+                 "bytes_served": 0, "objects": 0, "bytes_cached": 0,
+                 "since": None, "updated": None}
+    try:
+        st = _P("/run/secubox/media_cache.json")
+        if st.exists():
+            out.update(_json.loads(st.read_text()))
+    except Exception:
+        pass
+    tot = (out.get("hits", 0) + out.get("misses", 0)) or 1
+    out["hit_rate"] = round(100 * out.get("hits", 0) / tot, 1)
+    out["mb_served"] = round(out.get("bytes_served", 0) / 1048576, 1)
+    out["mb_cached"] = round(out.get("bytes_cached", 0) / 1048576, 1)
+    try:
+        from .filters import get_filters as _gf
+        out["enabled"] = bool(_gf().get("media_cache"))
+    except Exception:
+        out["enabled"] = False
+    return out
+
+
 @router.get("/admin/media")
 async def admin_media() -> dict:
     """#570 — DPI media/content-type statistics for the donut UI."""
@@ -2570,6 +2596,9 @@ async def admin_filters_ui() -> HTMLResponse:
 <h2>Ghosting pub (R3+/R4)</h2>
 <label><input type=checkbox data-k=ad_ghost> Masquer pubs/bannières/widgets (cosmétique)</label>
 <label><input type=checkbox data-k=ad_ghost_block> Bloquer les hôtes pub/traceurs (économise la bande passante)</label>
+<h2>Cache média partagé (#577)</h2>
+<label><input type=checkbox data-k=media_cache> Cache média/photo/vidéo partagé (2 Go, 1 fetch → tous les clients)</label>
+<h2>Catégories ghosting</h2>
 <label><input type=checkbox data-c=ads> · catégorie : publicités</label>
 <label><input type=checkbox data-c=consent_nag> · catégorie : bandeaux cookies/consentement</label>
 <label><input type=checkbox data-c=newsletter> · catégorie : pop-ups newsletter</label>

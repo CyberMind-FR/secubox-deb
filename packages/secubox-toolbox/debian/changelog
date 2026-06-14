@@ -1,3 +1,19 @@
+secubox-toolbox (2.6.32-1~bookworm1) bookworm; urgency=medium
+
+  * Shared media proxy-cache (#577) — DEFAULT OFF (opt-in filter `media_cache`).
+      - mitmproxy_addons/media_cache.py : cacheable GET media/static (image /
+        video segment / audio / font / css / js) stored on disk under
+        /var/cache/secubox/toolbox/media, keyed by URL, served from cache to
+        EVERY R2/R3 client (one upstream fetch → all clients). Safety rails
+        for the RAM-light board : 16 MB/object cap gated on Content-Length
+        (large/progressive video passed through, never RAM-held by us), 2 GB
+        on-disk LRU, never caches Range/auth/Set-Cookie/no-store, fail-open.
+      - filters: media_cache toggle (WebUI panel). api: GET /admin/cache
+        (hits/misses/hit-rate/Mo served/size). postinst: cache dir.
+        Wired into the mitm-wg launcher (request hook serves, response stores).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 14 Jun 2026 14:45:00 +0200
+
 secubox-toolbox (2.6.31-1~bookworm1) bookworm; urgency=medium
 
   * ad_ghost: remove ad placeholders entirely (#584, reverses #576). Ghosted
