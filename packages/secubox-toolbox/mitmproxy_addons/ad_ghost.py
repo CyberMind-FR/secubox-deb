@@ -108,7 +108,25 @@ def _style_for(cats: dict) -> bytes:
             sels.extend(_COSMETIC[cat])
     if not sels:
         return b""
-    rule = ",".join(sels) + "{display:none!important;visibility:hidden!important}"
+    sel = ",".join(sels)
+    # #576 — instead of display:none (a blank collapsed gap), replace the
+    # ghosted ad slot with a CSS-layered "black hole" : a dark void box
+    # (radial gradient + inset glow), its real content hidden, and a glowing
+    # accretion-disc drawn with ::after. Intentional reclaimed space, not a
+    # broken hole. !important throughout so page CSS can't fight it.
+    rule = (
+        sel + "{position:relative!important;background:#05010a!important;"
+        "background-image:radial-gradient(ellipse at center,#1a0030 0%,#05010a 60%,#000 100%)!important;"
+        "box-shadow:inset 0 0 40px #000,inset 0 0 10px #6e40c9!important;"
+        "border:0!important;border-radius:10px!important;overflow:hidden!important;"
+        "min-height:28px!important;}"
+        + sel + ">*{visibility:hidden!important;opacity:0!important;pointer-events:none!important;}"
+        + sel + "::after{content:''!important;position:absolute!important;top:50%!important;"
+        "left:50%!important;width:38px!important;height:38px!important;margin:-19px 0 0 -19px!important;"
+        "border-radius:50%!important;background:radial-gradient(circle,#000 42%,#6e40c9 44%,#00d4ff 52%,"
+        "rgba(0,0,0,0) 70%)!important;box-shadow:0 0 22px 6px rgba(110,64,201,.7)!important;"
+        "visibility:visible!important;opacity:.85!important;animation:none!important;}"
+    )
     return (b"<style id=\"sbx-ghost-style\">" + rule.encode("utf-8") + b"</style>")
 
 
