@@ -2447,6 +2447,85 @@ async def admin_ghost() -> dict:
     return out
 
 
+_MEDIA_EMOJI = {
+    "page": "\U0001F4C4", "image": "\U0001F5BC", "video": "\U0001F3AC",
+    "audio": "\U0001F3B5", "script": "\U0001F9E9", "style": "\U0001F3A8",
+    "font": "\U0001F524", "api": "\U0001F4E6", "text": "\U0001F4DD",
+    "other": "❓",
+}
+
+
+@router.get("/admin/media")
+async def admin_media() -> dict:
+    """#570 — DPI media/content-type statistics for the donut UI."""
+    import json as _json
+    from pathlib import Path as _P
+    raw: dict = {"categories": {}, "providers": {}, "total": {"bytes": 0, "count": 0}}
+    try:
+        st = _P("/run/secubox/media.json")
+        if st.exists():
+            raw.update(_json.loads(st.read_text()))
+    except Exception:
+        pass
+    tot_b = max(int(raw.get("total", {}).get("bytes", 0)), 1)
+    cats = []
+    for cat, v in (raw.get("categories") or {}).items():
+        b = int(v.get("bytes", 0))
+        cats.append({"cat": cat, "emoji": _MEDIA_EMOJI.get(cat, "❓"),
+                     "bytes": b, "count": int(v.get("count", 0)),
+                     "mb": round(b / 1048576, 1), "pct": round(100 * b / tot_b, 1)})
+    cats.sort(key=lambda x: -x["bytes"])
+    provs = sorted(
+        ({"provider": p, "bytes": int(v.get("bytes", 0)),
+          "count": int(v.get("count", 0)), "mb": round(int(v.get("bytes", 0)) / 1048576, 1)}
+         for p, v in (raw.get("providers") or {}).items()),
+        key=lambda x: -x["bytes"])[:5]
+    return {"categories": cats, "top_providers": provs,
+            "total_mb": round(raw.get("total", {}).get("bytes", 0) / 1048576, 1),
+            "total_count": raw.get("total", {}).get("count", 0),
+            "updated": raw.get("updated")}
+
+
+@router.get("/admin/media/ui", response_class=HTMLResponse)
+async def admin_media_ui() -> HTMLResponse:
+    """#570 — donut + emoji legend + top-5 providers."""
+    html = """<!doctype html><html lang=fr><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>DPI Médias — ToolBoX</title>
+<style>
+ body{background:#0a0a0f;color:#e8e6d9;font:14px system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 18px;text-align:center}
+ h1{color:#c9a84c;font-size:18px} .muted{color:#6b6b7a;font-size:12px}
+ #legend{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:10px 0}
+ .lg{background:#12121a;border:1px solid #222;border-radius:14px;padding:4px 9px;font-size:12px}
+ table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+ td{padding:5px 4px;border-bottom:1px solid #1a1a22;text-align:left} td.r{text-align:right;color:#6b6b7a}
+ .fav{width:16px;height:16px;border-radius:3px;vertical-align:middle;margin-right:6px;background:#1a1a22}
+ h2{color:#6e40c9;font-size:13px;margin:18px 0 4px;text-align:left}
+</style>
+<h1>📊 DPI — types de contenus</h1>
+<p class=muted id=tot>…</p>
+<svg id=donut viewBox="0 0 200 200" width=200 height=200></svg>
+<div id=legend></div>
+<h2>Top 5 fournisseurs</h2>
+<table id=provs></table>
+<script>
+const PAL=['#c9a84c','#00d4ff','#e63946','#6e40c9','#00ff41','#ff9900','#9aa0a6','#ff5a9e','#4285f4','#888'];
+const SVGNS='http://www.w3.org/2000/svg';
+function arc(cx,cy,r,a0,a1){const p=(a,rr)=>[cx+rr*Math.cos(a),cy+rr*Math.sin(a)];const[x0,y0]=p(a0,r),[x1,y1]=p(a1,r),[xi1,yi1]=p(a1,r*0.58),[xi0,yi0]=p(a0,r*0.58);const big=a1-a0>Math.PI?1:0;return`M${x0} ${y0}A${r} ${r} 0 ${big} 1 ${x1} ${y1}L${xi1} ${yi1}A${r*0.58} ${r*0.58} 0 ${big} 0 ${xi0} ${yi0}Z`;}
+fetch('/admin/media').then(r=>r.json()).then(d=>{
+ document.getElementById('tot').textContent=`${d.total_mb||0} Mo · ${d.total_count||0} flux`;
+ const svg=document.getElementById('donut');const cats=d.categories||[];
+ let a=-Math.PI/2;const tot=cats.reduce((s,c)=>s+c.bytes,0)||1;
+ cats.forEach((c,i)=>{const a1=a+2*Math.PI*c.bytes/tot;const path=document.createElementNS(SVGNS,'path');path.setAttribute('d',arc(100,100,92,a,a1));path.setAttribute('fill',PAL[i%PAL.length]);const t=document.createElementNS(SVGNS,'title');t.textContent=`${c.emoji} ${c.cat} ${c.pct}% (${c.mb} Mo)`;path.appendChild(t);svg.appendChild(path);a=a1;});
+ const lg=document.getElementById('legend');
+ cats.forEach((c,i)=>{const s=document.createElement('span');s.className='lg';s.innerHTML=`<b style="color:${PAL[i%PAL.length]}">●</b> ${c.emoji} ${c.cat} ${c.pct}%`;lg.appendChild(s);});
+ const tb=document.getElementById('provs');
+ (d.top_providers||[]).forEach(p=>{const tr=document.createElement('tr');tr.innerHTML=`<td><img class=fav loading=lazy src="/social/favicon/${encodeURIComponent(p.provider)}" onerror="this.style.visibility='hidden'">${p.provider}</td><td class=r>${p.mb} Mo · ${p.count}</td>`;tb.appendChild(tr);});
+});
+</script></html>"""
+    return HTMLResponse(content=html)
+
+
 @router.get("/admin/filters")
 async def admin_filters_get() -> dict:
     """#566 — modular mitm filter config (read)."""
