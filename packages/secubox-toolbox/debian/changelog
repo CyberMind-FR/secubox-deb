@@ -1,3 +1,17 @@
+secubox-toolbox (2.6.25-1~bookworm1) bookworm; urgency=medium
+
+  * DPI media/content-type statistifier + donut (#570).
+      - mitmproxy_addons/media_stats.py : buckets every response by content-
+        type CATEGORY (page/image/video/audio/script/style/font/api/text/
+        other, emoji-iconified) and by PROVIDER (eTLD+1), summing
+        Content-Length (header only — never reads the body, safe on video).
+        Rolling counters → /run/secubox/media.json. Wired into the launcher.
+      - api: GET /admin/media (categories %+emoji, top-5 providers, totals) ;
+        GET /admin/media/ui (SVG donut + emoji legend + top-5 providers with
+        favicons).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 13 Jun 2026 19:00:00 +0200
+
 secubox-toolbox (2.6.24-1~bookworm1) bookworm; urgency=medium
 
   * webext: cap the popup top-tracker list to 5 items (#568); webext 0.1.3.
