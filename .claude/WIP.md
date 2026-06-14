@@ -1,5 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-13*
+*Mis à jour : 2026-06-14*
+
+---
+
+## 🔄 2026-06-14 : ToolBoX privacy/perf sprint — 2.6.36 live (see HISTORY)
+
+Tout mergé + déployé sur gk2 (kbin sain, `secubox-toolbox 2.6.36`).
+Détail complet dans HISTORY 2026-06-14. Résumé :
+
+- ✅ Protective spoof (#560), modular filters + ad-ghoster (#566, collapse
+  #584), media cache opt-in (#577), autolearn (#589/#591), DPI media donut
+  (#570), donut + domain-nugget cartographie (#553/#587, IP cachées #575,
+  favicons #555), guirlande banner + pin (#572/#578), webext popup panel
+  (#574), /ca/fingerprint R3 (#562), postinst restart fix (#581),
+  detect_antibot deployment-vs-challenge (#564).
+- ✅ Clients : APK v0.3.0 (zero-tap launch+boot), webext v0.1.4.
+- ✅ Fixes live : Nextcloud iPhone photos (files_antivirus off + PHP
+  limits), kbin 503 (#581).
+
+### ⬜ Next Up
+
+- **#592 secubox-webmail-hub** (Gmail OAuth2 + Gandi + OVH, inbox unifié) —
+  design filé, **BLOQUÉ** : besoin d'un client OAuth Google (client_id/
+  secret/redirect) + nom de vhost + (read-only Phase 1 ?). Phase 1 IMAP
+  (Gandi/OVH) peut démarrer sans OAuth sur "start phase 1".
+- Côté user : re-trust R3 CA `D5:E4:3A` sur l'iPhone (bannière HTTPS) ;
+  tester l'upload photo Nextcloud ; activer `media_cache` si voulu
+  (`/admin/filters/ui`) et surveiller `/admin/cache`.
 
 ---
 
