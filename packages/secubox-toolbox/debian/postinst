@@ -231,14 +231,15 @@ fi
       fi
     fi
 
-    # Phase 10 (#501 perf) : on UPGRADE ($2 = previous version), try-restart
-    # the long-running daemons so the new code is live without operator
-    # intervention.  dh_installsystemd ships --no-start --no-enable in
-    # debian/rules so without this loop secubox-toolbox.service stays dead
-    # post-upgrade until reboot (caught 2026-06-09 : kbin.gk2 503'd for 5 min
-    # after the 2.5.0 → 2.5.1 upgrade because the unit was SIGTERMed and
-    # never restarted).  try-restart is a no-op when the unit is not
-    # running, so it's safe on fresh install / unconfigured boards.
+    # Phase 10 (#501 perf) : on UPGRADE ($2 = previous version), bring the
+    # long-running daemons back on the new code without operator action.
+    # dh_installsystemd ships --no-start --no-enable in debian/rules.
+    # #581 fix : the dpkg upgrade SIGTERMs the units BEFORE this postinst
+    # runs, so `try-restart` (a no-op on a stopped unit) left
+    # secubox-toolbox.service DEAD post-upgrade -> kbin 503 (caught twice on
+    # 2026-06-14, first on 2026-06-09).  So : ENABLED units get a full
+    # `restart` (starts them even if currently stopped) ; everything else
+    # keeps `try-restart` (preserve an operator's deliberate stop).
     if [ -n "${2:-}" ] && [ -d /run/systemd/system ]; then
       for unit in secubox-toolbox.service \
                   secubox-toolbox-mitm.service \
@@ -246,7 +247,11 @@ fi
                   secubox-toolbox-mitm-wg-worker@2.service \
                   secubox-toolbox-mitm-wg-worker@3.service \
                   secubox-toolbox-mitm-wg-worker@4.service ; do
-        systemctl try-restart "$unit" 2>/dev/null || true
+        if systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+          systemctl restart "$unit" 2>/dev/null || true
+        else
+          systemctl try-restart "$unit" 2>/dev/null || true
+        fi
       done
     fi
     ;;
