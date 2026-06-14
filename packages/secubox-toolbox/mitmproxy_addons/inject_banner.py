@@ -487,7 +487,20 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
         right_parts.append(f"&#x1F6E1; {g_blocked}&#xA0;&#x2715;&#xA0;~{g_kb}&#x202F;Ko")
     if ctx["asn"]:
         right_parts.append(_ncr(ctx["asn"]))
-    right_text = " &#xB7; ".join(right_parts)  # middle dot · = &#xB7;
+    # #572 — render the stats as a colourful "guirlande" of emoji chips :
+    # each metric is a vibrant rounded pill with a neon glow, cycling
+    # through a festive palette. Pure-ASCII styling (NCR emojis) so the
+    # ascii-encode of both the CSP-strict + JS paths stays happy.
+    _GUIRLANDE = ("#c9a84c", "#00d4ff", "#00ff41", "#e63946",
+                  "#9e76ff", "#ff9900", "#ff5a9e", "#39ff14")
+    _chips = []
+    for _i, _p in enumerate(right_parts):
+        _c = _GUIRLANDE[_i % len(_GUIRLANDE)]
+        _chips.append(
+            f"<span style=\"background:{_c};color:#0a0a0f;padding:1px 7px;"
+            f"margin:0 2px;border-radius:9px;font-weight:bold;white-space:nowrap;"
+            f"box-shadow:0 0 6px {_c},0 0 2px {_c}\">{_p}</span>")
+    right_text = "".join(_chips)
     grade = ctx["grade"]
     grade_color = ctx["grade_color"]
     # Static emojis used in the left-side text
