@@ -92,7 +92,9 @@ def get_virsh_vms() -> list:
 def get_lxc_containers() -> list:
     """List all LXC containers."""
     containers = []
-    stdout, _, code = run_priv(["lxc-ls", "-f", "-F", "NAME,STATE,IPV4,MEMORY"])
+    # NB: the memory column key is `RAM` — `MEMORY` is rejected by lxc-ls
+    # ("Invalid key") and yields zero output (#601).
+    stdout, _, code = run_priv(["lxc-ls", "-f", "-F", "NAME,STATE,IPV4,RAM"])
 
     if code != 0:
         return containers
