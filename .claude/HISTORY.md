@@ -30,6 +30,26 @@ built + deployed live on gk2.
 (#521, exit 2) → `secubox_blacklist` nft sets empty. Does not affect the
 overview (firewall count comes from the bouncer via Prometheus).
 
+### 1.4.4 — real CrowdSec ingestion (#599, PR #600)
+
+The overview cards populated, but the **headline stats + Top-N leaderboards
+stayed 0**: `collect_crowdsec_alerts()` shelled out to bare `cscli`, which
+fails for the unprivileged `secubox` user → `alerts.jsonl` empty.
+
+- **Read-only sudo ingestion** (backend only; frontend stays value-only):
+  collector now runs `sudo -n /usr/bin/cscli alerts list -o json -l 200`.
+  Ships `/etc/sudoers.d/secubox-threat-analyst` (only `cscli alerts/decisions
+  list *`, read-only), `visudo`-validated in postinst (self-removes if bad).
+- **`NoNewPrivileges=no`** on the unit so sudo can escalate — matches the
+  sibling `secubox-crowdsec` / `secubox-waf` units (`NoNewPrivileges=yes`
+  had blocked sudo: "no new privileges flag is set").
+- **Auto-collect loop** (~5 min) fills the DB without the page open; severity
+  mapped correctly (`remediation` is a bool).
+- **Dedup + 48 h compaction**: `get_recent_alerts` dedups by id, `compact_
+  alerts()` bounds the append-only log (was inflating counts/leaderboards).
+- Live verified (1.4.4): `alerts_24h=12`, **13 unique IPs, 10 countries**
+  (BG/BR/DE/FR/ID/IE/JP/NL/SG/US), 6+ scenarios → stats + leaderboards real.
+
 ## 2026-06-14 — ToolBoX privacy/perf sprint : 2.6.23 → 2.6.36, all live on gk2
 
 Large feature sprint on `secubox-toolbox` (built + merged + deployed live,
