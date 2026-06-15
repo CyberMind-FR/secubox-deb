@@ -1,3 +1,15 @@
+secubox-mitmproxy (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * fix(waf): live-reload haproxy-routes.json on change (#609). The addon now
+    re-reads the routes file when its mtime changes (throttled 10 s, in the
+    requestheaders hook), so haproxyctl route edits take effect with NO
+    restart. Pairs with the directory bind-mount in wafctl that replaced the
+    fragile file bind-mount (a file mount binds one inode → went stale when
+    route tools edit via `jq > tmp && mv`). Verified live: jq+mv add →
+    addon live-reloaded, 0 restart.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 18:00:00 +0200
+
 secubox-mitmproxy (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * feat(waf): behind-WAF media cache (#607). New media_cache.py addon caches
