@@ -765,59 +765,54 @@ async def _waf_overview() -> Dict[str, Any]:
     return {"running": False}
 
 
-def _run_json(cmd: List[str], timeout: int = 8):
-    try:
-        out = subprocess.run(cmd, capture_output=True, text=True,
-                             timeout=timeout, check=False).stdout
-        return json.loads(out) if out.strip() else None
-    except Exception:
-        return None
+# CrowdSec exposes a privilege-free Prometheus endpoint on :6060. We parse it
+# instead of shelling out to `cscli`/`nft` (both need root — this daemon runs as
+# the unprivileged `secubox` user, CSPN least-privilege). This gives us both the
+# detection layer (cs_alerts) and the enforcement layer (cs_active_decisions,
+# which the crowdsec-firewall-bouncer materializes into nft) from one HTTP GET.
+_PROM_URL = "http://127.0.0.1:6060/metrics"
 
 
-def _crowdsec_overview() -> Dict[str, Any]:
-    """CrowdSec active bans + recent alerts (blocking — runs in executor)."""
-    out: Dict[str, Any] = {"running": False, "active_decisions": 0, "alerts": 0}
-    dec = _run_json(["cscli", "decisions", "list", "-o", "json"])
-    if dec is not None:
-        out["running"] = True
-        out["active_decisions"] = len(dec) if isinstance(dec, list) else 0
-    al = _run_json(["cscli", "alerts", "list", "-o", "json"])
-    if isinstance(al, list):
-        out["alerts"] = len(al)
-        out["running"] = True
-    return out
-
-
-def _firewall_overview() -> Dict[str, Any]:
-    """nft blacklist set sizes (blacklist_v4 + blacklist_v6)."""
-    out: Dict[str, Any] = {"blacklisted": 0, "v4": 0, "v6": 0}
-    sets = _run_json(["nft", "-j", "list", "sets"])
-    if not sets:
-        return out
-    targets = {}
-    for obj in sets.get("nftables", []):
-        s = obj.get("set")
-        if s and s.get("name") in ("blacklist_v4", "blacklist_v6"):
-            targets[s["name"]] = (s.get("family", "inet"), s.get("table", ""))
-    for name, (fam, tbl) in targets.items():
-        d = _run_json(["nft", "-j", "list", "set", fam, tbl, name])
-        if not d:
+def _prom_sum(text: str, prefix: str) -> int:
+    """Sum the values of every Prometheus sample line starting with prefix."""
+    total = 0.0
+    for line in text.splitlines():
+        if not line.startswith(prefix) or line.startswith("#"):
             continue
-        for obj in d.get("nftables", []):
-            s = obj.get("set")
-            if s and s.get("name") == name:
-                n = len(s.get("elem", []) or [])
-                out["v4" if name.endswith("v4") else "v6"] = n
-    out["blacklisted"] = out["v4"] + out["v6"]
-    return out
+        try:
+            total += float(line.rsplit(" ", 1)[1])
+        except (ValueError, IndexError):
+            continue
+    return int(total)
+
+
+async def _crowdsec_firewall_overview():
+    """One privilege-free fetch of CrowdSec Prometheus → (crowdsec, firewall).
+
+    crowdsec : detection layer  — alerts + active decisions
+    firewall : enforcement layer — IPs blocked in nft via crowdsec-firewall-bouncer
+    """
+    cs: Dict[str, Any] = {"running": False, "active_decisions": 0, "alerts": 0}
+    fw: Dict[str, Any] = {"running": False, "blocked": 0,
+                          "source": "crowdsec-firewall-bouncer (nft)"}
+    try:
+        async with httpx.AsyncClient(timeout=4) as c:
+            r = await c.get(_PROM_URL)
+        if r.status_code == 200:
+            active = _prom_sum(r.text, "cs_active_decisions")
+            alerts = _prom_sum(r.text, "cs_alerts")
+            cs = {"running": True, "active_decisions": active, "alerts": alerts}
+            fw = {"running": True, "blocked": active,
+                  "source": "crowdsec-firewall-bouncer (nft)"}
+    except Exception as e:
+        logger.debug("crowdsec prometheus overview failed: %s", e)
+    return cs, fw
 
 
 async def _build_overview() -> Dict[str, Any]:
-    loop = asyncio.get_event_loop()
-    waf, cs, fw = await asyncio.gather(
+    waf, (cs, fw) = await asyncio.gather(
         _waf_overview(),
-        loop.run_in_executor(None, _crowdsec_overview),
-        loop.run_in_executor(None, _firewall_overview),
+        _crowdsec_firewall_overview(),
     )
     return {"waf": waf, "crowdsec": cs, "firewall": fw, "updated": int(time.time())}
 
