@@ -13,7 +13,10 @@ Restart=on-failure
 RestartSec=5
 UMask=0000
 
-NoNewPrivileges=true
+# #599 — allow the read-only `sudo cscli` ingestion grant (sibling pattern:
+# secubox-crowdsec / secubox-waf also set this). The sudo scope is tightly
+# limited to read-only `cscli alerts/decisions list` in /etc/sudoers.d.
+NoNewPrivileges=no
 RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
