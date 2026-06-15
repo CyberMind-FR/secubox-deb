@@ -14,3 +14,7 @@ override_dh_auto_install:
 	install -m 644 menu.d/903-vm.json $(CURDIR)/debian/secubox-vm/usr/share/secubox/menu.d/
 	install -d $(CURDIR)/debian/secubox-vm/usr/lib/systemd/system
 	install -m 644 debian/secubox-vm.service $(CURDIR)/debian/secubox-vm/usr/lib/systemd/system/
+	# #601 — read+lifecycle sudo grant so LXC enumeration works under the
+	# unprivileged `secubox` user the aggregator mounts this module as.
+	install -d $(CURDIR)/debian/secubox-vm/etc/sudoers.d
+	install -m 0440 debian/sudoers.d/secubox-vm $(CURDIR)/debian/secubox-vm/etc/sudoers.d/secubox-vm
