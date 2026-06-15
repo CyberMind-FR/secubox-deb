@@ -1,6 +1,19 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
+    # #599 — validate the read-only cscli sudo grant; drop it if malformed so a
+    # bad drop-in can never break sudo for the whole system.
+    SUDOERS=/etc/sudoers.d/secubox-threat-analyst
+    if [ -f "$SUDOERS" ]; then
+        chmod 0440 "$SUDOERS" || true
+        if command -v visudo >/dev/null 2>&1; then
+            if ! visudo -cf "$SUDOERS" >/dev/null 2>&1; then
+                echo "secubox-threat-analyst: invalid sudoers drop-in, removing" >&2
+                rm -f "$SUDOERS"
+            fi
+        fi
+    fi
+
     # #595 — build-safe enable: a plain `systemctl enable` no-ops during an
     # offline / image-build (chroot) install, leaving the unit DISABLED on
     # the live board (caught on gk2: /threat-analyst/ backend down). Use
