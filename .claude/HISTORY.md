@@ -3,6 +3,33 @@
 
 ---
 
+## 2026-06-15 — threat-analyst: global security overview (1.4.3, live on gk2)
+
+`secubox-threat-analyst` 1.4.1 → 1.4.3, merged via **PR #598 (closes #597)**,
+built + deployed live on gk2.
+
+- **#597** — threat-analyst page becomes a **global security overview**: all
+  metrics dynamic, fed live from WAF + CrowdSec + firewall. New cached
+  `/overview` endpoint (double-buffer, 60 s background refresh →
+  `overview.json`) aggregating WAF (`/run/secubox/waf.sock /stats`: threats
+  today, blocked 24 h, rules loaded), CrowdSec (detection: alerts), firewall
+  (enforcement: IPs blocked in nft via crowdsec-firewall-bouncer). WebUI gains
+  a "Vue globale sécurité" card row + source health line (`loadOverview()` in
+  `loadAll()`).
+- **Privilege-safe sourcing**: daemon runs as unprivileged `secubox` user →
+  `cscli`/`nft list` (both root-only) failed silently. Switched to CrowdSec's
+  privilege-free **Prometheus :6060** (`cs_alerts` + `cs_active_decisions`).
+  No privilege escalation, no coupling to broken `secubox-blacklist-sync`.
+- Also carried the **1.4.2 build-safe postinst** fix (#595/#596) which had
+  not yet reached the board (was at 1.4.1; `deb-systemd-helper` enable).
+- Live verified: CrowdSec 3712 alerts / 29312 active decisions, firewall
+  29312 blocked, WAF 140 rules; `/overview` 200 via socket **and** aggregator
+  proxy (aggregator restarted to re-discover the new route).
+
+**Found, not fixed (separate):** `secubox-blacklist-sync.service` is **failed**
+(#521, exit 2) → `secubox_blacklist` nft sets empty. Does not affect the
+overview (firewall count comes from the bouncer via Prometheus).
+
 ## 2026-06-14 — ToolBoX privacy/perf sprint : 2.6.23 → 2.6.36, all live on gk2
 
 Large feature sprint on `secubox-toolbox` (built + merged + deployed live,
