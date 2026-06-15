@@ -82,6 +82,13 @@ cmd_install() {
     # Create symlink for lxc-* commands
     ln -sf "$LXC_PATH/$LXC_NAME" "/var/lib/lxc/$LXC_NAME"
 
+    # Ensure the host-maintained routes file exists so the bind-mount below has
+    # a source (#603). haproxyctl writes this file on the host; the WAF addon
+    # inside the LXC reads /data/mitmproxy/haproxy-routes.json — the bind-mount
+    # keeps them the same file instead of two copies that drift apart.
+    mkdir -p /srv/mitmproxy
+    [ -f /srv/mitmproxy/haproxy-routes.json ] || echo '{}' > /srv/mitmproxy/haproxy-routes.json
+
     # Configure container
     cat >> "$LXC_PATH/$LXC_NAME/config" << CONF
 
@@ -91,6 +98,12 @@ lxc.net.0.link = br-lxc
 lxc.net.0.flags = up
 lxc.net.0.ipv4.address = $LXC_IP/24
 lxc.net.0.ipv4.gateway = 10.100.0.1
+
+# Routes: bind-mount the host-maintained haproxy routes into the path the WAF
+# addon reads. Without this the addon loaded an empty/stale in-LXC copy
+# (routes_count: 0) so no upstream routing happened and every inspected vhost
+# went to its public DNS IP. (#603)
+lxc.mount.entry = /srv/mitmproxy/haproxy-routes.json data/mitmproxy/haproxy-routes.json none bind,create=file 0 0
 
 # Autostart
 lxc.start.auto = 1
