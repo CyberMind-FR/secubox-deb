@@ -1,3 +1,16 @@
+secubox-mitmproxy (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * feat(waf): behind-WAF media cache (#607). New media_cache.py addon caches
+    cacheable GET media/static (image/video/audio/font/css/js) from our vhosts
+    on disk (URL key, 16 MB/obj, 2 GB LRU, TTL from max-age) and serves repeat
+    requests from cache — cutting backend load + latency for hosted media. Not
+    a bypass: requests still pass secubox_waf inspection; only the response
+    body is served from a WAF-populated cache. Toggle via
+    /data/mitmproxy/media-cache.json {"enabled": true} (default on). Verified
+    live: X-SecuBox-Cache: HIT.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 17:00:00 +0200
+
 secubox-mitmproxy (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * fix(waf): refuse unmapped hosts — close the open forward-proxy (#605). In
