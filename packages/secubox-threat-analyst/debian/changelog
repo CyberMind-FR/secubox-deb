@@ -1,3 +1,13 @@
+secubox-threat-analyst (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix(postinst): build-safe service enable (#595). A plain `systemctl
+    enable` no-ops during offline/image-build installs, so the unit ended
+    up DISABLED on the live board → /threat-analyst/ page loaded but its
+    backend (stats/alerts/rules) was down. Now uses deb-systemd-helper
+    (persists the enable to first boot) + guarded daemon-reload/start.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 15 Jun 2026 11:00:00 +0200
+
 secubox-threat-analyst (1.4.1-1~bookworm1) bookworm; urgency=low
 
   * Rewrite Description to identify this as the AI agent that
