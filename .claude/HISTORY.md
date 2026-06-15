@@ -25,12 +25,32 @@ Made the apt repo at `https://admin.gk2.secubox.in/repo/` (served from
   secubox-core and others from every build). 1 pkg failed (sentinelle-gsm,
   buildinfo artifact race — deb still produced).
 
-**Blocker for public HTTPS (separate, pre-existing):** `apt.secubox.in` via
-HAProxy returns 503 because the **WAF mitmproxy LXC is crash-looping**
-(restart #45552, `PermissionError: /home/mitmproxy/.mitmproxy/config.yaml`),
-which downs the `mitmproxy_inspector` backend → ALL WAF-inspected vhosts 503
-(analyse.gk2 etc., not just apt). Repo is reachable internally (nginx :9080)
-and via the `/repo/` WebUI; public apt URL needs the WAF restored.
+**Public HTTPS now works — WAF mitmproxy restored (3 stacked bugs).** The WAF
+LXC (`mitmproxy`, served via HAProxy `mitmproxy_inspector` → 10.100.0.60:8080)
+was down board-wide (every inspected vhost 503/400), blocking public
+`apt.secubox.in`. Three compounding faults, all fixed live on gk2:
+
+1. **Crash-loop** (restart #45552): the `cookie-audit.conf` systemd drop-in
+   (added #156) overrode `ExecStart` but dropped `--set confdir=/data/mitmproxy`
+   → mitmdump fell back to `~/.mitmproxy`, which `ProtectHome=true` blocks →
+   `PermissionError: config.yaml`. Restored the flag in the drop-in (+ copied
+   the existing CA into `/data/mitmproxy` to preserve identity).
+2. **mitmproxy-11 routing**: the LXC addon (`secubox_waf.py`, pre-#499) only
+   redirected upstream in the `request` hook, but mitmproxy 11 opens the
+   upstream connection *before* `request` → traffic went to the public IP
+   (82.67.100.75). Added a `requestheaders` hook that sets
+   `flow.server_conn.address` (+ request host/port) before the connect.
+3. **Route-file drift** (the real killer, `routes_count: 0`): the addon reads
+   `/data/mitmproxy/haproxy-routes.json`, but the system maintains
+   `/srv/mitmproxy/haproxy-routes.json` (255 routes). The addon's file was
+   missing. Fixed by **bind-mounting** the host file into the container at the
+   addon's path (`/var/lib/lxc/mitmproxy/config`) so they stay in sync.
+
+Verified: `apt-get update` against `https://apt.secubox.in` fetches a
+**GPG-signed** InRelease + Packages (no signature errors), apt sees 130
+secubox packages, `.deb` downloads (200). Other inspected vhosts recovered.
+Live fixes are durable (container rootfs + LXC config survive restarts);
+porting them into the provisioning package is a follow-up.
 
 ## 2026-06-15 — threat-analyst: global security overview (1.4.3, live on gk2)
 
