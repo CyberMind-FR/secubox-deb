@@ -3,6 +3,22 @@
 
 ---
 
+## 2026-06-15 — gitea mis-route fix + robust WAF route propagation
+
+- **gitea (`git.maegia.tv`) 404 → 200.** Pure routing-table error: its WAF
+  route pointed at `192.168.1.200:8000` (unrelated nginx) instead of the gitea
+  LXC `10.100.0.40:3000`. Corrected the route; gitea container was healthy
+  throughout. (`gitea.gk2`→nginx:9080 and `git.gk2`→gitea:3000 were already OK.)
+- **Robust route propagation (#609/PR #610, mitmproxy 1.0.8 + waf 1.2.6).**
+  Fixing gitea surfaced that the #603 *file* bind-mount binds an inode, so route
+  tools (`jq > tmp && mv` = new inode) didn't reach the addon until a container
+  restart. Now: **directory** bind-mount (host `/srv/mitmproxy` →
+  `/var/lib/secubox-waf-routes`, ro) + symlink, and the addon **live-reloads**
+  `haproxy-routes.json` on mtime change (10 s throttle, in `requestheaders`).
+  Verified live: `jq+mv` add → `[routes] live-reloaded 256 routes`, **0
+  restart**. Ported to source (both synced `secubox_waf.py` copies + wafctl) +
+  rebuilt into apt.secubox.in.
+
 ## 2026-06-15 — WAF hardening + perf: close open-proxy, behind-WAF media cache
 
 Follow-up to the WAF restoration. Three findings investigated; two fixed.
