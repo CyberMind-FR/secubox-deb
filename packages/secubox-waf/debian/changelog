@@ -1,3 +1,12 @@
+secubox-waf (1.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * fix(waf): refuse unmapped hosts in the addon copy — close the open
+    forward-proxy (#605, synced with secubox-mitmproxy). 421 for any host not
+    in routes / our domains / our IPs; no upstream connect. Kills the ~72%
+    scanner-driven error churn and the self-loop 508s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 16:30:00 +0200
+
 secubox-waf (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * fix(waf): mitmproxy-11 upstream routing — `requestheaders` hook in the

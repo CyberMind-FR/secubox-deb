@@ -712,6 +712,12 @@ class SecuBoxWAF:
         if ROUTES_FILE.exists():
             try:
                 self.routes = json.loads(ROUTES_FILE.read_text())
+                sfx = set()
+                for _h in self.routes:
+                    _p = _h.split('.')
+                    if len(_p) >= 2 and not _p[-1].isdigit():
+                        sfx.add('.'.join(_p[-2:]))
+                self.local_suffixes = sfx
                 ctx.log.info(f"Loaded {len(self.routes)} routes")
             except Exception as e:
                 ctx.log.error(f"Failed to load routes: {e}")
@@ -920,12 +926,12 @@ class SecuBoxWAF:
             ctx.log.warn(f"BAN FAILED for {ip} ({reason}) : LAPI off + cscli unavailable")
     
     def requestheaders(self, flow: http.HTTPFlow):
-        # #603 — mitmproxy 11 opens the upstream connection BETWEEN the
-        # requestheaders and request hooks, so upstream redirection must
-        # happen here. Doing it in request() (below) is too late: the
-        # socket is already connected to the original Host, so routed
-        # vhosts went to their public DNS IP instead of the internal
-        # backend. Setting flow.server_conn.address here fixes routing.
+        # #605 — mitmproxy 11 opens the upstream connection before request(),
+        # so routing must happen here. ALSO: in --mode regular mitmproxy is a
+        # forward proxy that would relay ANY Host, so internet scanners abused
+        # it as an open proxy (~70% error churn + self-loops). Serve ONLY our
+        # own vhosts: mapped (routes), our domains (-> nginx catch-all), or our
+        # own IPs; refuse everything else with 421 and never open an upstream.
         try:
             host = flow.request.pretty_host
             if host in self.routes:
@@ -938,8 +944,31 @@ class SecuBoxWAF:
                 except Exception:
                     pass
                 flow.request.headers['Host'] = orig
+                return
+            if host in SELF_HOSTS or self._is_local_host(host):
+                flow.request.host = '192.168.1.200'
+                flow.request.port = 9080
+                try:
+                    flow.server_conn.address = ('192.168.1.200', 9080)
+                except Exception:
+                    pass
+                return
+            self.stats['blocked'] = self.stats.get('blocked', 0) + 1
+            flow.response = http.Response.make(
+                421,
+                b'<h1>421 Misdirected Request</h1><p>SecuBox WAF does not proxy this host.</p>',
+                {'Content-Type': 'text/html', 'X-SecuBox-WAF': 'unmapped-host'},
+            )
         except Exception as e:
             ctx.log.warn(f'[requestheaders-route] {e}')
+
+    def _is_local_host(self, host: str) -> bool:
+        # #605 — is `host` one of our own (registrable) domains? Derived from
+        # the routed hosts in load_routes (self.local_suffixes).
+        sfx = getattr(self, 'local_suffixes', None)
+        if not sfx:
+            return False
+        return any(host == s or host.endswith('.' + s) for s in sfx)
 
     def request(self, flow: http.HTTPFlow):
         # Connection close (Phase 6.J leak fix, ref #496) — prevents mitmproxy
