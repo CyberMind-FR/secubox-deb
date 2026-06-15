@@ -1,3 +1,18 @@
+secubox-waf (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * fix(waf): mitmproxy-11 upstream routing — `requestheaders` hook in the
+    addon copy (#603, kept in sync with secubox-mitmproxy).
+  * fix(wafctl): bind-mount the host-maintained
+    /srv/mitmproxy/haproxy-routes.json into the LXC at the addon's read path
+    (/data/mitmproxy/haproxy-routes.json). The two had drifted (in-LXC copy
+    went stale → routes_count: 0 → no routing). Also ensures the host file
+    exists at provision time.
+  * doc(service): warn that any ExecStart drop-in MUST keep
+    `--set confdir=/data/mitmproxy` (a cookie_audit drop-in once dropped it
+    and crash-looped the WAF on ProtectHome).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 16:00:00 +0200
+
 secubox-waf (1.2.2-1~bookworm1) bookworm; urgency=medium
 
   * Phase 11+ (#509) — double-buffered cache for WAF stats consumed by
