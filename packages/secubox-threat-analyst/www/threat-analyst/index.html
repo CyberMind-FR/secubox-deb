@@ -262,6 +262,31 @@
             </div>
         </div>
 
+        <!-- #597 Global security overview — live from WAF + CrowdSec + firewall -->
+        <h3 style="margin:1rem 0 .4rem">🛡 Vue globale sécurité <span id="ov-sources" style="font-size:.7rem;color:var(--text-muted)"></span></h3>
+        <div class="stats">
+            <div class="stat warn">
+                <div class="stat-label">WAF — menaces (24h)</div>
+                <div class="stat-value" id="o-waf-threats">—</div>
+                <div class="stat-hint" id="o-waf-blocked">bloquées: —</div>
+            </div>
+            <div class="stat crit">
+                <div class="stat-label">CrowdSec — détections</div>
+                <div class="stat-value" id="o-cs-bans">—</div>
+                <div class="stat-hint" id="o-cs-alerts">alertes: —</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Firewall — IP bloquées (nft)</div>
+                <div class="stat-value" id="o-fw-blacklist">—</div>
+                <div class="stat-hint" id="o-fw-split">via crowdsec-bouncer</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">WAF — règles chargées</div>
+                <div class="stat-value" id="o-waf-rules">—</div>
+                <div class="stat-hint">moteur d'inspection</div>
+            </div>
+        </div>
+
         <!-- Top-N leaderboards — the real insight surface -->
         <div class="top-row">
             <div class="top-box">
@@ -555,8 +580,29 @@
             setAutoStatus('', `collected ${c.crowdsec ?? 0} cs · ${c.waf ?? 0} waf — ${new Date().toLocaleTimeString()}`);
             await loadAll();
         }
+        // #597 — global overview from WAF + CrowdSec + firewall
+        async function loadOverview() {
+            const r = await get('/api/v1/threat-analyst/overview');
+            diagSet('/overview', r);
+            if (!r.ok) return;
+            const o = r.data || {}, w = o.waf || {}, c = o.crowdsec || {}, f = o.firewall || {};
+            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+            set('o-waf-threats', w.threats_today ?? '—');
+            set('o-waf-blocked', 'bloquées: ' + (w.blocked_24h ?? 0) + ' (24h)');
+            set('o-cs-bans', c.alerts ?? '—');
+            set('o-cs-alerts', 'décisions actives: ' + (c.active_decisions ?? 0));
+            set('o-fw-blacklist', f.blocked ?? '—');
+            set('o-fw-split', f.source || 'via crowdsec-bouncer');
+            set('o-waf-rules', w.rules_loaded ?? '—');
+            const up = [];
+            up.push((w.running ? '🟢' : '🔴') + ' WAF');
+            up.push((c.running ? '🟢' : '🔴') + ' CrowdSec');
+            up.push('🟢 Firewall');
+            const ago = o.updated ? Math.max(0, Math.round(Date.now()/1000 - o.updated)) + 's' : '';
+            set('ov-sources', up.join(' · ') + (ago ? ' · maj ' + ago : ''));
+        }
         async function loadAll() {
-            await Promise.all([loadStats(), loadAlerts(), loadRules(), loadEmancipated()]);
+            await Promise.all([loadOverview(), loadStats(), loadAlerts(), loadRules(), loadEmancipated()]);
         }
 
         // Diagnostic

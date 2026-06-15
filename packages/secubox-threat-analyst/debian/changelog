@@ -1,3 +1,16 @@
+secubox-threat-analyst (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat(overview): global security overview — all metrics now dynamic,
+    fed live from WAF + CrowdSec + firewall (#597). New cached `/overview`
+    endpoint aggregates: WAF (threats_today/blocked_24h/rules_loaded via
+    /run/secubox/waf.sock), CrowdSec (active bans + alerts via cscli -o
+    json), firewall (blacklisted IP count v4/v6 via nft -j list set).
+    Double-buffer background refresh (60s, overview.json) + source
+    health line. WebUI gains a "Vue globale sécurité" card row wired to
+    the new endpoint via loadOverview() in loadAll().
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 10:00:00 +0200
+
 secubox-threat-analyst (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * fix(postinst): build-safe service enable (#595). A plain `systemctl

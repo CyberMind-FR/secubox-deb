@@ -11,6 +11,7 @@ Features:
 import os
 import json
 import time
+import asyncio
 import logging
 import subprocess
 from datetime import datetime, timedelta
@@ -727,8 +728,125 @@ async def rollback_rule(rule_id: str):
 # Startup
 # ============================================================================
 
+# ============================================================================
+# #597 — Global security overview : aggregate live metrics from WAF +
+# CrowdSec + the nft firewall. Double-cache pattern (CLAUDE perf rule) :
+# a background task refreshes every 60 s into _OVERVIEW so /overview is
+# instant and never blocks on cscli/nft subprocesses. Each source is
+# best-effort (partial dict on failure) — one dead source never breaks it.
+# ============================================================================
+
+_OVERVIEW: Dict[str, Any] = {}
+_OVERVIEW_FILE = DATA_DIR / "overview.json"
+_OVERVIEW_TTL = 60
+
+
+async def _waf_overview() -> Dict[str, Any]:
+    """WAF /stats over its unix socket."""
+    try:
+        transport = httpx.AsyncHTTPTransport(uds="/run/secubox/waf.sock")
+        async with httpx.AsyncClient(transport=transport, timeout=4) as c:
+            r = await c.get("http://waf/stats")
+            if r.status_code == 200:
+                s = r.json()
+                return {
+                    "running": bool(s.get("running")),
+                    "threats_today": s.get("threats_today", 0),
+                    "threats_total": s.get("total_threats", 0),
+                    "blocked_24h": s.get("blocked_24h", 0),
+                    "rules_loaded": s.get("rules_loaded", 0),
+                    "by_category": s.get("by_category", {}),
+                    "by_severity": s.get("by_severity", {}),
+                    "top_countries": s.get("top_countries", [])[:5],
+                    "top_vhosts": s.get("top_vhosts", [])[:5],
+                }
+    except Exception as e:
+        logger.debug("waf overview failed: %s", e)
+    return {"running": False}
+
+
+# CrowdSec exposes a privilege-free Prometheus endpoint on :6060. We parse it
+# instead of shelling out to `cscli`/`nft` (both need root — this daemon runs as
+# the unprivileged `secubox` user, CSPN least-privilege). This gives us both the
+# detection layer (cs_alerts) and the enforcement layer (cs_active_decisions,
+# which the crowdsec-firewall-bouncer materializes into nft) from one HTTP GET.
+_PROM_URL = "http://127.0.0.1:6060/metrics"
+
+
+def _prom_sum(text: str, prefix: str) -> int:
+    """Sum the values of every Prometheus sample line starting with prefix."""
+    total = 0.0
+    for line in text.splitlines():
+        if not line.startswith(prefix) or line.startswith("#"):
+            continue
+        try:
+            total += float(line.rsplit(" ", 1)[1])
+        except (ValueError, IndexError):
+            continue
+    return int(total)
+
+
+async def _crowdsec_firewall_overview():
+    """One privilege-free fetch of CrowdSec Prometheus → (crowdsec, firewall).
+
+    crowdsec : detection layer  — alerts + active decisions
+    firewall : enforcement layer — IPs blocked in nft via crowdsec-firewall-bouncer
+    """
+    cs: Dict[str, Any] = {"running": False, "active_decisions": 0, "alerts": 0}
+    fw: Dict[str, Any] = {"running": False, "blocked": 0,
+                          "source": "crowdsec-firewall-bouncer (nft)"}
+    try:
+        async with httpx.AsyncClient(timeout=4) as c:
+            r = await c.get(_PROM_URL)
+        if r.status_code == 200:
+            active = _prom_sum(r.text, "cs_active_decisions")
+            alerts = _prom_sum(r.text, "cs_alerts")
+            cs = {"running": True, "active_decisions": active, "alerts": alerts}
+            fw = {"running": True, "blocked": active,
+                  "source": "crowdsec-firewall-bouncer (nft)"}
+    except Exception as e:
+        logger.debug("crowdsec prometheus overview failed: %s", e)
+    return cs, fw
+
+
+async def _build_overview() -> Dict[str, Any]:
+    waf, (cs, fw) = await asyncio.gather(
+        _waf_overview(),
+        _crowdsec_firewall_overview(),
+    )
+    return {"waf": waf, "crowdsec": cs, "firewall": fw, "updated": int(time.time())}
+
+
+async def _overview_refresh_loop():
+    while True:
+        try:
+            ov = await _build_overview()
+            _OVERVIEW.clear(); _OVERVIEW.update(ov)
+            try:
+                _OVERVIEW_FILE.write_text(json.dumps(ov))
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning("overview refresh failed: %s", e)
+        await asyncio.sleep(_OVERVIEW_TTL)
+
+
+@app.get("/overview")
+async def get_overview():
+    """Global security overview (WAF + CrowdSec + firewall), 60 s cached."""
+    if _OVERVIEW:
+        return _OVERVIEW
+    if _OVERVIEW_FILE.exists():
+        try:
+            return json.loads(_OVERVIEW_FILE.read_text())
+        except Exception:
+            pass
+    return await _build_overview()
+
+
 @app.on_event("startup")
 async def startup():
     """Initialize on startup."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    asyncio.create_task(_overview_refresh_loop())
     logger.info("Threat Analyst started")
