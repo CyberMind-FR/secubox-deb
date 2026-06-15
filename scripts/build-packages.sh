@@ -140,13 +140,18 @@ for PKG in "${PACKAGES[@]}"; do
   # Use timeout to prevent infinite hangs (5 minutes per package)
   TIMEOUT_CMD="timeout --kill-after=30s 300s"
 
+  # -d skips the build-dependency check: every SecuBox package is
+  # Architecture: all (dh just copies files), so the Build-Depends need not be
+  # installed on the build host. Without -d, packages declaring deps absent
+  # here (e.g. python3-all version mismatch) fail dpkg-checkbuilddeps and were
+  # silently dropped from the repo — incl. secubox-core. (CLAUDE.md mandates -d.)
   if [[ "$ARCH" == "arm64" ]] && [[ "$(uname -m)" != "aarch64" ]]; then
     # Cross-compile pour arm64
-    if $TIMEOUT_CMD dpkg-buildpackage -a arm64 --host-arch arm64 -us -uc -b > "$BUILD_LOG" 2>&1; then
+    if $TIMEOUT_CMD dpkg-buildpackage -a arm64 --host-arch arm64 -us -uc -b -d > "$BUILD_LOG" 2>&1; then
       BUILD_OK=1
     fi
   else
-    if $TIMEOUT_CMD dpkg-buildpackage -us -uc -b > "$BUILD_LOG" 2>&1; then
+    if $TIMEOUT_CMD dpkg-buildpackage -us -uc -b -d > "$BUILD_LOG" 2>&1; then
       BUILD_OK=1
     fi
   fi

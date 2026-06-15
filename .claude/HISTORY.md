@@ -3,6 +3,35 @@
 
 ---
 
+## 2026-06-15 — APT repo: all packages published + signed (apt.secubox.in)
+
+Made the apt repo at `https://admin.gk2.secubox.in/repo/` (served from
+`/var/www/apt.secubox.in`, manager `repoctl`/reprepro) carry **all** packages.
+
+- **Was broken**: pool had 15 orphan debs with an **empty reprepro DB** and no
+  working signature — the published signing key `packages@secubox.in`
+  (fp 31848880…) has **no private key on the board**.
+- **Signing** (user chose on-board `apt@secubox.in`, fp 219BA872…): imported its
+  secret into the repo GPG home (`/var/lib/secubox-repo/gpg`), wrote
+  `conf/distributions` (`SignWith: 219BA872…`) + `conf/options`, re-published
+  `secubox-keyring.gpg` + `FINGERPRINT.txt`. `InRelease`/`Release.gpg` now
+  **Good signature**. (install.sh doesn't pin the fp — transparent.)
+- **Built all 144 packages** (`-d`, arch:all) + `reprepro includedeb bookworm`
+  → 288 entries (×2 arch), 145 debs in pool, current versions
+  (core 1.1.6, threat-analyst 1.4.4, vm 1.0.1, toolbox 2.6.37, hub 1.4.3).
+  WebUI `/api/v1/repo/packages` lists 288. Served + signed via nginx :9080.
+- **Tooling fix**: `scripts/build-packages.sh` now passes `-d` to
+  dpkg-buildpackage (it omitted it → dpkg-checkbuilddeps silently dropped
+  secubox-core and others from every build). 1 pkg failed (sentinelle-gsm,
+  buildinfo artifact race — deb still produced).
+
+**Blocker for public HTTPS (separate, pre-existing):** `apt.secubox.in` via
+HAProxy returns 503 because the **WAF mitmproxy LXC is crash-looping**
+(restart #45552, `PermissionError: /home/mitmproxy/.mitmproxy/config.yaml`),
+which downs the `mitmproxy_inspector` backend → ALL WAF-inspected vhosts 503
+(analyse.gk2 etc., not just apt). Repo is reachable internally (nginx :9080)
+and via the `/repo/` WebUI; public apt URL needs the WAF restored.
+
 ## 2026-06-15 — threat-analyst: global security overview (1.4.3, live on gk2)
 
 `secubox-threat-analyst` 1.4.1 → 1.4.3, merged via **PR #598 (closes #597)**,
