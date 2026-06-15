@@ -1,9 +1,26 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
-    systemctl daemon-reload
-    systemctl enable secubox-threat-analyst.service || true
-    systemctl start secubox-threat-analyst.service || true
+    # #595 — build-safe enable: a plain `systemctl enable` no-ops during an
+    # offline / image-build (chroot) install, leaving the unit DISABLED on
+    # the live board (caught on gk2: /threat-analyst/ backend down). Use
+    # deb-systemd-helper (records the enable, applies on first boot) and only
+    # touch the running system when systemd is actually up.
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+    fi
+    if command -v deb-systemd-helper >/dev/null 2>&1; then
+        deb-systemd-helper enable secubox-threat-analyst.service >/dev/null 2>&1 || true
+    else
+        systemctl enable secubox-threat-analyst.service || true
+    fi
+    if [ -d /run/systemd/system ]; then
+        if command -v deb-systemd-invoke >/dev/null 2>&1; then
+            deb-systemd-invoke start secubox-threat-analyst.service >/dev/null 2>&1 || true
+        else
+            systemctl start secubox-threat-analyst.service || true
+        fi
+    fi
 fi
 #DEBHELPER#
 exit 0
