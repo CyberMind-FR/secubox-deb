@@ -1,3 +1,15 @@
+secubox-mitmproxy (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * fix(waf): refuse unmapped hosts — close the open forward-proxy (#605). In
+    --mode regular the addon relayed any Host, so HAProxy's default_backend
+    made the WAF an open proxy; internet scanners drove ~72% backend-error
+    churn + self-loops. The `requestheaders` hook now serves ONLY our vhosts
+    (mapped, our domains via routes-derived `local_suffixes` → nginx catch-all,
+    or our own IPs) and returns 421 for everything else with no upstream
+    connect. Verified live: 0 external server-connects, 0 loop-508s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 16:30:00 +0200
+
 secubox-mitmproxy (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * fix(waf): mitmproxy-11 upstream routing (#603). The addon only redirected
