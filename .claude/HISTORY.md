@@ -50,6 +50,26 @@ fails for the unprivileged `secubox` user → `alerts.jsonl` empty.
 - Live verified (1.4.4): `alerts_24h=12`, **13 unique IPs, 10 countries**
   (BG/BR/DE/FR/ID/IE/JP/NL/SG/US), 6+ scenarios → stats + leaderboards real.
 
+### secubox-vm 1.0.1 — /vm/ showed 0 containers (#601, PR #602)
+
+`https://admin.gk2.secubox.in/vm/` reported 0 containers though gk2 runs 20
+LXC (16 running). Two compounding bugs:
+
+- **Privilege**: the **aggregator mounts each module in-process** as the
+  unprivileged `secubox` user (serving model confirmed:
+  `/usr/lib/python3/dist-packages/aggregator/main.py` imports
+  `/usr/lib/secubox/<name>/api/main.py`). Bare `lxc-ls` can't see root's
+  `/var/lib/lxc` → empty.
+- **Wrong `-F` key**: `lxc-ls -F MEMORY` is rejected (`Invalid key`) and emits
+  no rows — valid key is `RAM`.
+
+Fix (backend-only): LXC read+lifecycle via `sudo -n` (`run_priv`); ships
+`/etc/sudoers.d/secubox-vm` (`lxc-ls/info/start/stop`, visudo-validated);
+`lxc-create`/`destroy` stay root-only (endpoints carry no JWT); `lxc-ls -F
+…,RAM`; postinst reloads `secubox-aggregator`. KVM/libvirt readings were
+already correct (`/dev/kvm` absent, libvirtd off). Live: `containers
+{total: 20, running: 16}`, `/vms` lists all 20.
+
 ## 2026-06-14 — ToolBoX privacy/perf sprint : 2.6.23 → 2.6.36, all live on gk2
 
 Large feature sprint on `secubox-toolbox` (built + merged + deployed live,
