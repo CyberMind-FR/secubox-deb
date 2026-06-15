@@ -1,3 +1,13 @@
+secubox-waf (1.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * feat(waf): behind-WAF media cache (#607) — ship media_cache.py addon copy,
+    load it in the LXC mitmproxy.service ExecStart, and create
+    /data/mitmproxy/cache/media + logs in wafctl provisioning. Caches hosted
+    media (image/video/static) for repeat requests; not a bypass (requests
+    still inspected). Synced with secubox-mitmproxy.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 17:00:00 +0200
+
 secubox-waf (1.2.4-1~bookworm1) bookworm; urgency=medium
 
   * fix(waf): refuse unmapped hosts in the addon copy — close the open
