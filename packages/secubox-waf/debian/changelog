@@ -1,3 +1,14 @@
+secubox-waf (1.2.6-1~bookworm1) bookworm; urgency=medium
+
+  * fix(waf): robust route propagation (#609). wafctl now uses a DIRECTORY
+    bind-mount (host /srv/mitmproxy → /var/lib/secubox-waf-routes, ro) + a
+    symlink /data/mitmproxy/haproxy-routes.json → it, replacing the #603 file
+    bind-mount (which bound one inode and went stale on `mv`). With the addon
+    live-reload (synced secubox_waf.py copies), haproxyctl route edits apply
+    with no restart. Fixes the class of bug that left git.maegia.tv mis-routed.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 18:00:00 +0200
+
 secubox-waf (1.2.5-1~bookworm1) bookworm; urgency=medium
 
   * feat(waf): behind-WAF media cache (#607) — ship media_cache.py addon copy,

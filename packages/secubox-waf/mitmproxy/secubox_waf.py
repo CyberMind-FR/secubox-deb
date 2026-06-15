@@ -570,6 +570,8 @@ ERROR_503_PAGE = b"""<!DOCTYPE html>
 class SecuBoxWAF:
     def __init__(self):
         self.routes = {}
+        self._routes_mtime = 0.0
+        self._last_route_check = 0.0
         self.compiled_patterns = {}
         self.stats = {"requests": 0, "warnings": 0, "blocked": 0, "errors": 0}
         self.threat_counts = defaultdict(list)  # IP -> list of timestamps
@@ -781,7 +783,29 @@ class SecuBoxWAF:
         except Exception:
             ctx.log.warn(f"BAN FAILED for {ip} ({reason})")
     
+    def _maybe_reload_routes(self):
+        # #609 — live-reload haproxy-routes.json when it changes (throttled
+        # 10 s) so haproxyctl route edits take effect with NO restart. Pairs
+        # with the directory bind-mount that makes mv-replaced files visible.
+        import os as _o, time as _t
+        now = _t.time()
+        if now - getattr(self, "_last_route_check", 0) < 10:
+            return
+        self._last_route_check = now
+        try:
+            m = _o.path.getmtime(str(ROUTES_FILE))
+        except OSError:
+            return
+        if m != getattr(self, "_routes_mtime", 0):
+            self._routes_mtime = m
+            self.load_routes()
+            try:
+                ctx.log.info(f"[routes] live-reloaded {len(self.routes)} routes")
+            except Exception:
+                pass
+
     def requestheaders(self, flow: http.HTTPFlow):
+        self._maybe_reload_routes()
         # #605 — mitmproxy 11 opens the upstream connection before request(),
         # so routing must happen here. ALSO: in --mode regular mitmproxy is a
         # forward proxy that would relay ANY Host, so internet scanners abused
