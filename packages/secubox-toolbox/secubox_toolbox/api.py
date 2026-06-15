@@ -1543,15 +1543,14 @@ def _aggregate_session(mac_hash: str) -> dict:
     # Without -u for both, R3 clients always saw 0 connections in metrics.
     try:
         out = _sp.run(
-            ["journalctl",
-             "-u", "secubox-toolbox-mitm",
-             "-u", "secubox-toolbox-mitm-wg",
+            # #593 — glob matches the live R3 workers (…-mitm-wg-worker@N).
+            ["journalctl", "-u", "secubox-toolbox-mitm*",
              "--since", "-30min", "--no-pager"],
             capture_output=True, text=True, timeout=5, check=False,
         ).stdout
     except Exception:
         out = ""
-    connections = out.count("client connect")
+    connections = out.count("server connect")
     successful = out.count("<< 2") + out.count("<< 30")
     tls_pinned = out.count("Client TLS handshake failed")
     hosts: set[str] = set()
@@ -3028,10 +3027,12 @@ async def admin_metrics() -> dict:
     # Mitmproxy live stats (from journal)
     try:
         out = _sp.run(
-            ["journalctl", "-u", "secubox-toolbox-mitm", "--since", "-30min", "--no-pager"],
-            capture_output=True, text=True, timeout=3, check=False,
+            # #593 — glob matches the LIVE R3 workers (…-mitm-wg-worker@N),
+            # not just the (dead) R2 …-mitm unit → real numbers.
+            ["journalctl", "-u", "secubox-toolbox-mitm*", "--since", "-30min", "--no-pager"],
+            capture_output=True, text=True, timeout=4, check=False,
         ).stdout
-        metrics["mitm"]["connections"] = out.count("client connect")
+        metrics["mitm"]["connections"] = out.count("server connect")
         metrics["mitm"]["tls_pinned"] = out.count("Client TLS handshake failed")
         hosts: set[str] = set()
         for line in out.splitlines():
