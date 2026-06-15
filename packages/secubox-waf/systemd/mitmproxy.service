@@ -12,6 +12,10 @@ Type=simple
 User=mitmproxy
 Group=mitmproxy
 WorkingDirectory=/data/mitmproxy
+# WARNING (#603): any ExecStart override (drop-in) MUST keep
+# `--set confdir=/data/mitmproxy`. Without it mitmdump falls back to
+# ~/.mitmproxy, which ProtectHome=true makes inaccessible → PermissionError
+# crash-loop. A cookie_audit drop-in once dropped this flag and downed the WAF.
 ExecStart=/opt/mitmproxy/bin/mitmdump \
     --mode regular \
     --listen-host 0.0.0.0 \

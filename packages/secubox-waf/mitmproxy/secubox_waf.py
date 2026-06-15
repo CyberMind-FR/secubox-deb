@@ -775,6 +775,28 @@ class SecuBoxWAF:
         except Exception:
             ctx.log.warn(f"BAN FAILED for {ip} ({reason})")
     
+    def requestheaders(self, flow: http.HTTPFlow):
+        # #603 — mitmproxy 11 opens the upstream connection BETWEEN the
+        # requestheaders and request hooks, so upstream redirection must
+        # happen here. Doing it in request() (below) is too late: the
+        # socket is already connected to the original Host, so routed
+        # vhosts went to their public DNS IP instead of the internal
+        # backend. Setting flow.server_conn.address here fixes routing.
+        try:
+            host = flow.request.pretty_host
+            if host in self.routes:
+                bip, bport = self.routes[host]
+                orig = flow.request.headers.get('Host', host)
+                flow.request.host = bip
+                flow.request.port = bport
+                try:
+                    flow.server_conn.address = (bip, bport)
+                except Exception:
+                    pass
+                flow.request.headers['Host'] = orig
+        except Exception as e:
+            ctx.log.warn(f'[requestheaders-route] {e}')
+
     def request(self, flow: http.HTTPFlow):
         # Connection close (Phase 6.J leak fix, ref #496) — prevents mitmproxy
         # from accumulating idle keep-alive sockets to upstream backends.
