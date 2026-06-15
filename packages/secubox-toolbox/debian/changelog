@@ -1,3 +1,16 @@
+secubox-toolbox (2.6.37-1~bookworm1) bookworm; urgency=medium
+
+  * fix(webui): metrics mitm=0 + threats list full of IPs (#593).
+      - /admin/metrics + the report metrics read journalctl `-u
+        secubox-toolbox-mitm` (the dead R2 unit) → always 0. Now a glob
+        `secubox-toolbox-mitm*` matches the live R3 workers
+        (…-mitm-wg-worker@N) ; connections counted from `server connect`.
+      - /admin/social-aggregate `by_tracker_domain` listed raw IPs (incl.
+        the cabine's own WAN IP as the top "tracker"). Now folds to the
+        registrable domain (eTLD+1) and drops IP literals (`_is_ip`).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 14 Jun 2026 17:30:00 +0200
+
 secubox-toolbox (2.6.36-1~bookworm1) bookworm; urgency=medium
 
   * fix(autolearn): exclude anti-bot vendors from the auto-block list (#589
