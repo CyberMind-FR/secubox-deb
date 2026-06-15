@@ -1,0 +1,9 @@
+# SecuBox VM module — host virtualization management as the `secubox` user.
+# The aggregator mounts this module in-process as `secubox`, which cannot see
+# root's /var/lib/lxc containers without sudo. READ + container LIFECYCLE only.
+# lxc-create / lxc-destroy are deliberately NOT granted — creating/deleting
+# containers stays root-only (these endpoints carry no JWT). CSPN least-priv.
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-ls *
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-info *
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-start *
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-stop *
