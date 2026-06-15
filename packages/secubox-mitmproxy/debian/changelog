@@ -1,3 +1,15 @@
+secubox-mitmproxy (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix(waf): mitmproxy-11 upstream routing (#603). The addon only redirected
+    the upstream in the `request` hook, but mitmproxy 11 opens the upstream
+    connection between `requestheaders` and `request` — so routed vhosts
+    connected to their public DNS IP instead of the internal backend (the WAF
+    was effectively pass-through). Added a `requestheaders` hook that sets
+    `flow.server_conn.address` before the connect. Ported from the live gk2
+    fix that restored apt.secubox.in + all inspected vhosts.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 16:00:00 +0200
+
 secubox-mitmproxy (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Pre-route SELF_HOSTS guard. When a client targets the box by
