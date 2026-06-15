@@ -41,6 +41,17 @@ def run_cmd(cmd: list, timeout: int = 60) -> tuple:
         return "", str(e), 1
 
 
+def run_priv(cmd: list, timeout: int = 60) -> tuple:
+    """Run a host privileged command via the read/lifecycle sudo grant.
+
+    The aggregator mounts this module in-process as the unprivileged `secubox`
+    user, which cannot see root's /var/lib/lxc containers — bare `lxc-ls`
+    returns nothing, so the dashboard reported 0 containers (#601). The grant
+    in /etc/sudoers.d/secubox-vm covers read + lifecycle only.
+    """
+    return run_cmd(["sudo", "-n"] + cmd, timeout=timeout)
+
+
 def is_libvirt_running() -> bool:
     """Check if libvirtd is running."""
     _, _, code = run_cmd(["systemctl", "is-active", "--quiet", "libvirtd"])
@@ -81,7 +92,9 @@ def get_virsh_vms() -> list:
 def get_lxc_containers() -> list:
     """List all LXC containers."""
     containers = []
-    stdout, _, code = run_cmd(["lxc-ls", "-f", "-F", "NAME,STATE,IPV4,MEMORY"])
+    # NB: the memory column key is `RAM` — `MEMORY` is rejected by lxc-ls
+    # ("Invalid key") and yields zero output (#601).
+    stdout, _, code = run_priv(["lxc-ls", "-f", "-F", "NAME,STATE,IPV4,RAM"])
 
     if code != 0:
         return containers
@@ -122,7 +135,7 @@ def get_lxc_info(name: str) -> dict:
     """Get detailed LXC container info."""
     info = {"name": name, "type": "lxc"}
 
-    stdout, _, code = run_cmd(["lxc-info", "-n", name])
+    stdout, _, code = run_priv(["lxc-info", "-n", name])
     if code == 0:
         for line in stdout.strip().split('\n'):
             if ':' in line:
@@ -319,7 +332,7 @@ def start_vm(name: str):
     if is_lxc_available():
         for c in get_lxc_containers():
             if c["name"] == name:
-                stdout, stderr, code = run_cmd(["lxc-start", "-n", name])
+                stdout, stderr, code = run_priv(["lxc-start", "-n", name])
                 if code != 0:
                     raise HTTPException(status_code=500, detail=f"Failed to start: {stderr}")
                 return {"status": "started", "name": name}
@@ -347,7 +360,7 @@ def stop_vm(name: str, force: bool = False):
                 cmd = ["lxc-stop", "-n", name]
                 if force:
                     cmd.append("-k")
-                stdout, stderr, code = run_cmd(cmd)
+                stdout, stderr, code = run_priv(cmd)
                 if code != 0:
                     raise HTTPException(status_code=500, detail=f"Failed to stop: {stderr}")
                 return {"status": "stopped", "name": name}
@@ -371,8 +384,8 @@ def restart_vm(name: str):
     if is_lxc_available():
         for c in get_lxc_containers():
             if c["name"] == name:
-                run_cmd(["lxc-stop", "-n", name])
-                stdout, stderr, code = run_cmd(["lxc-start", "-n", name])
+                run_priv(["lxc-stop", "-n", name])
+                stdout, stderr, code = run_priv(["lxc-start", "-n", name])
                 if code != 0:
                     raise HTTPException(status_code=500, detail=f"Failed to restart: {stderr}")
                 return {"status": "restarted", "name": name}
@@ -404,9 +417,11 @@ def delete_vm(name: str):
         for c in get_lxc_containers():
             if c["name"] == name:
                 if c.get('state') == 'running':
-                    run_cmd(["lxc-stop", "-n", name, "-k"])
+                    run_priv(["lxc-stop", "-n", name, "-k"])
 
-                stdout, stderr, code = run_cmd(["lxc-destroy", "-n", name])
+                # lxc-destroy is intentionally NOT in the sudo grant — deleting
+                # containers from an unauthenticated endpoint stays root-only.
+                stdout, stderr, code = run_priv(["lxc-destroy", "-n", name])
                 if code != 0:
                     raise HTTPException(status_code=500, detail=f"Failed to delete: {stderr}")
 

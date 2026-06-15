@@ -1,3 +1,16 @@
+secubox-vm (1.0.1-1) stable; urgency=medium
+
+  * fix(lxc): /vm/ reported 0 containers though the host runs 20 LXC
+    containers (#601). The aggregator mounts this module in-process as the
+    unprivileged `secubox` user, so bare `lxc-ls` could not see root's
+    /var/lib/lxc → empty list. LXC read + lifecycle now go through `sudo -n`
+    via a new read-only-ish grant (/etc/sudoers.d/secubox-vm: lxc-ls/info/
+    start/stop, visudo-validated). lxc-create/lxc-destroy stay root-only.
+    postinst reloads secubox-aggregator so the in-process module refreshes.
+    (KVM/libvirt readings were already correct: no /dev/kvm, libvirtd off.)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 13:00:00 +0200
+
 secubox-vm (1.0.0-1) stable; urgency=low
 
   * Initial release
