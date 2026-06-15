@@ -3,6 +3,33 @@
 
 ---
 
+## 2026-06-15 — WAF hardening + perf: close open-proxy, behind-WAF media cache
+
+Follow-up to the WAF restoration. Three findings investigated; two fixed.
+
+- **Open forward-proxy / loops (#605/PR #606, mitmproxy 1.0.6 + waf 1.2.4).**
+  `--mode regular` + HAProxy `default_backend mitmproxy_inspector` made the WAF
+  an open proxy: internet scanners (114.66.25.146, 211.154.17.165,
+  hashtagbrock.nl) drove a **72% backend-error rate** + 11 self-loop 508s/hr.
+  The `requestheaders` hook now serves ONLY our vhosts (routes / our domains
+  via routes-derived `local_suffixes` → nginx :9080 / `SELF_HOSTS`) and returns
+  **421 with no upstream connect** otherwise. Live: 0 external server-connects,
+  0 loop-508s, apt/admin/kbin 200, scanners 421.
+- **Behind-WAF media cache (#607/PR #608, mitmproxy 1.0.7 + waf 1.2.5).** New
+  `media_cache.py` addon caches cacheable GET media/static (image/video/audio/
+  font/css/js) from our vhosts on disk (URL key, 16 MB/obj, 2 GB LRU, TTL from
+  `max-age`) and serves repeats from cache — backend-load + latency win for
+  hosted media. **Not a bypass**: requests still pass `secubox_waf` inspection;
+  only the response body is served from a WAF-populated cache. Toggle
+  `/data/mitmproxy/media-cache.json` (default on). Live: `X-SecuBox-Cache: HIT`.
+  Gate fix vs the toolbox copy: cache on body length (our nginx is chunked).
+- **WG R3 tunnel** (`wg-toolbox`, 4 peers, 4 `mitm-wg-worker@{1..4}`) is
+  healthy — not the bottleneck; the WAF open-proxy churn was. All fixes ported
+  to source (both synced `secubox_waf.py` copies) + rebuilt into apt.secubox.in.
+
+**Still optional:** relax the forced `Connection: close` (FD-leak fix #496) to
+bounded keep-alive now that scanner churn is gone — lower per-request latency.
+
 ## 2026-06-15 — APT repo: all packages published + signed (apt.secubox.in)
 
 Made the apt repo at `https://admin.gk2.secubox.in/repo/` (served from
