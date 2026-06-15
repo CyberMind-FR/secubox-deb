@@ -271,14 +271,14 @@
                 <div class="stat-hint" id="o-waf-blocked">bloquées: —</div>
             </div>
             <div class="stat crit">
-                <div class="stat-label">CrowdSec — bans actifs</div>
+                <div class="stat-label">CrowdSec — détections</div>
                 <div class="stat-value" id="o-cs-bans">—</div>
                 <div class="stat-hint" id="o-cs-alerts">alertes: —</div>
             </div>
             <div class="stat">
-                <div class="stat-label">Firewall — IP blacklistées</div>
+                <div class="stat-label">Firewall — IP bloquées (nft)</div>
                 <div class="stat-value" id="o-fw-blacklist">—</div>
-                <div class="stat-hint" id="o-fw-split">v4/v6: —</div>
+                <div class="stat-hint" id="o-fw-split">via crowdsec-bouncer</div>
             </div>
             <div class="stat">
                 <div class="stat-label">WAF — règles chargées</div>
@@ -589,10 +589,10 @@
             const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
             set('o-waf-threats', w.threats_today ?? '—');
             set('o-waf-blocked', 'bloquées: ' + (w.blocked_24h ?? 0) + ' (24h)');
-            set('o-cs-bans', c.active_decisions ?? '—');
-            set('o-cs-alerts', 'alertes: ' + (c.alerts ?? 0));
-            set('o-fw-blacklist', f.blacklisted ?? '—');
-            set('o-fw-split', 'v4/v6: ' + (f.v4 ?? 0) + '/' + (f.v6 ?? 0));
+            set('o-cs-bans', c.alerts ?? '—');
+            set('o-cs-alerts', 'décisions actives: ' + (c.active_decisions ?? 0));
+            set('o-fw-blacklist', f.blocked ?? '—');
+            set('o-fw-split', f.source || 'via crowdsec-bouncer');
             set('o-waf-rules', w.rules_loaded ?? '—');
             const up = [];
             up.push((w.running ? '🟢' : '🔴') + ' WAF');
