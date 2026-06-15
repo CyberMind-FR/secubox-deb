@@ -173,12 +173,18 @@ class ThreatAnalyzer:
             f.write(json.dumps(alert.model_dump()) + "\n")
 
     def get_recent_alerts(self, hours: int = 24, source: Optional[str] = None) -> List[ThreatAlert]:
-        """Get recent alerts."""
+        """Get recent alerts, deduplicated by id (last occurrence wins).
+
+        The collector appends on every poll, so the same CrowdSec alert id can
+        recur many times — without dedup the headline counts and Top-N
+        leaderboards are massively inflated.
+        """
         cutoff = datetime.utcnow() - timedelta(hours=hours)
-        alerts = []
+        by_id: Dict[str, ThreatAlert] = {}
+        anon = 0
 
         if not self.alerts_file.exists():
-            return alerts
+            return []
 
         with open(self.alerts_file) as f:
             for line in f:
@@ -189,35 +195,82 @@ class ThreatAnalyzer:
                         continue
                     if source and data.get("source") != source:
                         continue
-                    alerts.append(ThreatAlert(**data))
+                    aid = data.get("id")
+                    if not aid:
+                        aid = f"_anon-{anon}"; anon += 1
+                    by_id[aid] = ThreatAlert(**data)
                 except Exception:
                     continue
 
-        return alerts
+        return list(by_id.values())
+
+    def compact_alerts(self, hours: int = 48):
+        """Rewrite alerts.jsonl keeping only the last `hours`, deduped by id —
+        keeps the append-only log from growing unbounded."""
+        if not self.alerts_file.exists():
+            return
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        recent: Dict[str, Dict[str, Any]] = {}
+        anon = 0
+        try:
+            with open(self.alerts_file) as f:
+                for line in f:
+                    try:
+                        data = json.loads(line)
+                        ts = datetime.fromisoformat(data["timestamp"].rstrip("Z"))
+                        if ts < cutoff:
+                            continue
+                        aid = data.get("id") or f"_anon-{anon}"
+                        if not data.get("id"):
+                            anon += 1
+                        recent[aid] = data
+                    except Exception:
+                        continue
+            tmp = self.alerts_file.with_suffix(".jsonl.tmp")
+            with open(tmp, "w") as f:
+                for data in recent.values():
+                    f.write(json.dumps(data) + "\n")
+            tmp.replace(self.alerts_file)
+        except Exception as e:
+            logger.warning("compact_alerts failed: %s", e)
 
     async def collect_crowdsec_alerts(self) -> List[ThreatAlert]:
         """Collect alerts from CrowdSec."""
         alerts = []
         try:
+            # The daemon runs as the unprivileged `secubox` user; `cscli` needs
+            # root (reads /etc/crowdsec/local_api_credentials.yaml). We go through
+            # the read-only sudo grant shipped in /etc/sudoers.d/secubox-threat-
+            # analyst (sudo lives here on the BACKEND only — the frontend just
+            # consumes the resulting values).
             result = subprocess.run(
-                ["cscli", "alerts", "list", "-o", "json"],
+                ["sudo", "-n", "/usr/bin/cscli",
+                 "alerts", "list", "-o", "json", "-l", "200"],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=15
             )
-            if result.returncode == 0:
-                data = json.loads(result.stdout)
-                for item in data[:50]:  # Limit to 50
+            if result.returncode == 0 and result.stdout.strip():
+                data = json.loads(result.stdout) or []
+                for item in data[:200]:
+                    src = item.get("source") or {}
+                    # `remediation` is a bool, not a severity — map it.
+                    severity = "high" if item.get("remediation") else "medium"
                     alert = ThreatAlert(
                         id=f"cs-{item.get('id', '')}",
                         source="crowdsec",
-                        severity=item.get("remediation", "medium"),
+                        severity=severity,
                         type=item.get("scenario", "unknown"),
-                        ip=item.get("source", {}).get("ip"),
+                        ip=src.get("ip") or src.get("value"),
                         details=item,
                         timestamp=item.get("created_at", datetime.utcnow().isoformat() + "Z")
                     )
                     alerts.append(alert)
+            else:
+                logger.warning(
+                    "cscli alerts list failed (rc=%s): %s",
+                    result.returncode, (result.stderr or "").strip()[:200]
+                )
         except Exception as e:
             logger.warning(f"CrowdSec collection failed: {e}")
 
@@ -844,9 +897,31 @@ async def get_overview():
     return await _build_overview()
 
 
+_COLLECT_TTL = 300  # 5 min
+
+
+async def _collect_refresh_loop():
+    """Backend auto-collect: keep the alerts DB fed from CrowdSec + WAF even
+    when no operator has the page open. Compacts the log after each run so it
+    stays bounded (and deduped). subprocess work is brief and best-effort."""
+    while True:
+        try:
+            cs = await analyzer.collect_crowdsec_alerts()
+            waf = await analyzer.collect_waf_alerts()
+            for a in cs + waf:
+                analyzer.record_alert(a)
+            analyzer.compact_alerts()
+            if cs or waf:
+                logger.info("auto-collect: %d crowdsec + %d waf alerts", len(cs), len(waf))
+        except Exception as e:
+            logger.warning("auto-collect failed: %s", e)
+        await asyncio.sleep(_COLLECT_TTL)
+
+
 @app.on_event("startup")
 async def startup():
     """Initialize on startup."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     asyncio.create_task(_overview_refresh_loop())
+    asyncio.create_task(_collect_refresh_loop())
     logger.info("Threat Analyst started")

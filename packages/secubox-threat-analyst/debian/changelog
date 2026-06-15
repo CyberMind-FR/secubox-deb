@@ -1,3 +1,21 @@
+secubox-threat-analyst (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * feat(ingest): populate the headline stats + Top-N leaderboards with real
+    CrowdSec data (#599). The collector shelled out to bare `cscli`, which
+    fails for the unprivileged `secubox` user the daemon runs as → the alerts
+    DB stayed empty (Unique attackers / Active threats / Countries / Top-N all
+    0). Now goes through a read-only sudo grant (`/etc/sudoers.d/
+    secubox-threat-analyst`: `cscli alerts list *` + `decisions list *`,
+    visudo-validated in postinst) and fetches `-l 200`. sudo is BACKEND-only;
+    the frontend stays value-only.
+  * feat(collect): backend auto-collect loop (~5 min) so the DB fills without
+    the page open; severity mapped correctly (`remediation` is a bool).
+  * fix(dedup): `get_recent_alerts` now dedups by alert id (last wins) and a
+    bounded 48 h compaction rewrites `alerts.jsonl` — the append-on-every-poll
+    log was massively inflating counts and leaderboards.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 15 Jun 2026 12:00:00 +0200
+
 secubox-threat-analyst (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * feat(overview): global security overview — all metrics now dynamic,
