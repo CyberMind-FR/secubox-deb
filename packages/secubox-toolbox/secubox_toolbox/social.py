@@ -33,6 +33,7 @@ import concurrent.futures as _futures
 import hashlib
 import json
 import logging
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -693,6 +694,15 @@ _MULTI_LABEL_TLDS = {
 }
 
 
+_IP_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+
+def _is_ip(host: str) -> bool:
+    """True for an IPv4/IPv6 literal (to keep IPs out of domain views)."""
+    h = host or ""
+    return bool(_IP_RE.match(h)) or ":" in h
+
+
 def _registrable_domain(host: str) -> str:
     """Cheap eTLD+1 : www.lemonde.fr → lemonde.fr ; a.b.example.co.uk →
     example.co.uk. Raw IPs and single-label hosts pass through."""
@@ -1040,16 +1050,27 @@ def aggregate(hours: int = 24) -> Dict:
                 "WHERE ts >= ?",
                 (since,),
             ).fetchone()[0]
-            out["by_tracker_domain"] = [
-                dict(r)
-                for r in c.execute(
-                    "SELECT tracker_domain, COUNT(*) AS hits, "
-                    "COUNT(DISTINCT client_mac_hash) AS clients "
-                    "FROM social_edges WHERE ts >= ? "
-                    "GROUP BY tracker_domain ORDER BY hits DESC LIMIT 50",
-                    (since,),
-                ).fetchall()
-            ]
+            # #593 — fold to registrable domain + drop IP literals (the raw
+            # column otherwise surfaces IPs, incl. the cabine's own WAN IP,
+            # as the top "tracker"). Over-fetch, fold in Python, top 50.
+            _byd: dict = {}
+            for r in c.execute(
+                "SELECT tracker_domain, COUNT(*) AS hits, "
+                "COUNT(DISTINCT client_mac_hash) AS clients "
+                "FROM social_edges WHERE ts >= ? "
+                "GROUP BY tracker_domain ORDER BY hits DESC LIMIT 400",
+                (since,),
+            ).fetchall():
+                td = r["tracker_domain"] or ""
+                if not td or _is_ip(td):
+                    continue
+                dom = _registrable_domain(td)
+                e = _byd.setdefault(dom, {"tracker_domain": dom, "hits": 0,
+                                         "clients": 0})
+                e["hits"] += r["hits"]
+                e["clients"] = max(e["clients"], r["clients"])
+            out["by_tracker_domain"] = sorted(
+                _byd.values(), key=lambda x: -x["hits"])[:50]
             out["by_client"] = [
                 dict(r)
                 for r in c.execute(
