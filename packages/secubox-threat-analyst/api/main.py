@@ -11,6 +11,7 @@ Features:
 import os
 import json
 import time
+import asyncio
 import logging
 import subprocess
 from datetime import datetime, timedelta
@@ -727,8 +728,130 @@ async def rollback_rule(rule_id: str):
 # Startup
 # ============================================================================
 
+# ============================================================================
+# #597 — Global security overview : aggregate live metrics from WAF +
+# CrowdSec + the nft firewall. Double-cache pattern (CLAUDE perf rule) :
+# a background task refreshes every 60 s into _OVERVIEW so /overview is
+# instant and never blocks on cscli/nft subprocesses. Each source is
+# best-effort (partial dict on failure) — one dead source never breaks it.
+# ============================================================================
+
+_OVERVIEW: Dict[str, Any] = {}
+_OVERVIEW_FILE = DATA_DIR / "overview.json"
+_OVERVIEW_TTL = 60
+
+
+async def _waf_overview() -> Dict[str, Any]:
+    """WAF /stats over its unix socket."""
+    try:
+        transport = httpx.AsyncHTTPTransport(uds="/run/secubox/waf.sock")
+        async with httpx.AsyncClient(transport=transport, timeout=4) as c:
+            r = await c.get("http://waf/stats")
+            if r.status_code == 200:
+                s = r.json()
+                return {
+                    "running": bool(s.get("running")),
+                    "threats_today": s.get("threats_today", 0),
+                    "threats_total": s.get("total_threats", 0),
+                    "blocked_24h": s.get("blocked_24h", 0),
+                    "rules_loaded": s.get("rules_loaded", 0),
+                    "by_category": s.get("by_category", {}),
+                    "by_severity": s.get("by_severity", {}),
+                    "top_countries": s.get("top_countries", [])[:5],
+                    "top_vhosts": s.get("top_vhosts", [])[:5],
+                }
+    except Exception as e:
+        logger.debug("waf overview failed: %s", e)
+    return {"running": False}
+
+
+def _run_json(cmd: List[str], timeout: int = 8):
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True,
+                             timeout=timeout, check=False).stdout
+        return json.loads(out) if out.strip() else None
+    except Exception:
+        return None
+
+
+def _crowdsec_overview() -> Dict[str, Any]:
+    """CrowdSec active bans + recent alerts (blocking — runs in executor)."""
+    out: Dict[str, Any] = {"running": False, "active_decisions": 0, "alerts": 0}
+    dec = _run_json(["cscli", "decisions", "list", "-o", "json"])
+    if dec is not None:
+        out["running"] = True
+        out["active_decisions"] = len(dec) if isinstance(dec, list) else 0
+    al = _run_json(["cscli", "alerts", "list", "-o", "json"])
+    if isinstance(al, list):
+        out["alerts"] = len(al)
+        out["running"] = True
+    return out
+
+
+def _firewall_overview() -> Dict[str, Any]:
+    """nft blacklist set sizes (blacklist_v4 + blacklist_v6)."""
+    out: Dict[str, Any] = {"blacklisted": 0, "v4": 0, "v6": 0}
+    sets = _run_json(["nft", "-j", "list", "sets"])
+    if not sets:
+        return out
+    targets = {}
+    for obj in sets.get("nftables", []):
+        s = obj.get("set")
+        if s and s.get("name") in ("blacklist_v4", "blacklist_v6"):
+            targets[s["name"]] = (s.get("family", "inet"), s.get("table", ""))
+    for name, (fam, tbl) in targets.items():
+        d = _run_json(["nft", "-j", "list", "set", fam, tbl, name])
+        if not d:
+            continue
+        for obj in d.get("nftables", []):
+            s = obj.get("set")
+            if s and s.get("name") == name:
+                n = len(s.get("elem", []) or [])
+                out["v4" if name.endswith("v4") else "v6"] = n
+    out["blacklisted"] = out["v4"] + out["v6"]
+    return out
+
+
+async def _build_overview() -> Dict[str, Any]:
+    loop = asyncio.get_event_loop()
+    waf, cs, fw = await asyncio.gather(
+        _waf_overview(),
+        loop.run_in_executor(None, _crowdsec_overview),
+        loop.run_in_executor(None, _firewall_overview),
+    )
+    return {"waf": waf, "crowdsec": cs, "firewall": fw, "updated": int(time.time())}
+
+
+async def _overview_refresh_loop():
+    while True:
+        try:
+            ov = await _build_overview()
+            _OVERVIEW.clear(); _OVERVIEW.update(ov)
+            try:
+                _OVERVIEW_FILE.write_text(json.dumps(ov))
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning("overview refresh failed: %s", e)
+        await asyncio.sleep(_OVERVIEW_TTL)
+
+
+@app.get("/overview")
+async def get_overview():
+    """Global security overview (WAF + CrowdSec + firewall), 60 s cached."""
+    if _OVERVIEW:
+        return _OVERVIEW
+    if _OVERVIEW_FILE.exists():
+        try:
+            return json.loads(_OVERVIEW_FILE.read_text())
+        except Exception:
+            pass
+    return await _build_overview()
+
+
 @app.on_event("startup")
 async def startup():
     """Initialize on startup."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    asyncio.create_task(_overview_refresh_loop())
     logger.info("Threat Analyst started")
