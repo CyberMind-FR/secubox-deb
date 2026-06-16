@@ -1,3 +1,11 @@
+secubox-security-posture (1.0.1-1) unstable; urgency=medium
+
+  * Add Hub sidebar menu entry (menu.d/security-posture.json, category wall)
+  * Serve dashboard at /security-posture/ (rename dashboard.html -> index.html)
+  * Install menu.d into /usr/share/secubox/menu.d in debian/rules
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 15:00:00 +0200
+
 secubox-security-posture (1.0.0-1) unstable; urgency=medium
 
   * Initial release of SecuBox Security Posture module

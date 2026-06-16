@@ -1,0 +1,9 @@
+{
+  "id": "security-posture",
+  "name": "Security Posture",
+  "category": "wall",
+  "icon": "🎚️",
+  "path": "/security-posture/",
+  "order": 115,
+  "description": "DEFCON level, CSPN/TPN compliance and performance posture"
+}
