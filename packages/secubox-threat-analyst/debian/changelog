@@ -1,3 +1,10 @@
+secubox-threat-analyst (1.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * ui: add country flag emoji to the Top source countries list (#613) —
+    ISO 3166-1 alpha-2 → regional-indicator emoji before each code.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 16 Jun 2026 09:30:00 +0200
+
 secubox-threat-analyst (1.4.5-1~bookworm1) bookworm; urgency=medium
 
   * ui: limit the Recent attacks table to 5 rows (#611), matching the Top-N
