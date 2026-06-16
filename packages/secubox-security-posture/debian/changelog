@@ -1,0 +1,11 @@
+secubox-security-posture (1.0.0-1) unstable; urgency=medium
+
+  * Initial release of SecuBox Security Posture module
+  * DEFCON-level security health monitoring (1-5)
+  * CSPN compliance checking (ANSSI certification alignment)
+  * TPN Media compliance checking (media industry standards)
+  * Performance monitoring with bottleneck detection
+  * Combined security dashboard API
+  * REST API endpoints for all security posture data
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 16 Jun 2026 14:00:00 +0200

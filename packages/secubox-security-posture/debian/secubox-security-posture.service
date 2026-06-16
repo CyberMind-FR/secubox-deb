@@ -1,0 +1,41 @@
+[Unit]
+Description=SecuBox Security Posture API Service
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=secubox
+Group=secubox
+
+# Service runtime directory
+RuntimeDirectory=secubox-security-posture
+RuntimeDirectoryMode=0750
+
+# Main service - use unix socket
+ExecStart=/usr/bin/uvicorn secubox_security_posture.api.main:app \
+    --uds /run/secubox/security-posture.sock \
+    --log-level info \
+    --workers 2
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/secubox /var/log/secubox /run/secubox
+InaccessiblePaths=/boot /home /root /run/user /tmp
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=UVICORN_RELOAD=false
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target
