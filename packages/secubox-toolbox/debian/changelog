@@ -1,3 +1,19 @@
+secubox-toolbox (2.6.39-1~bookworm1) bookworm; urgency=medium
+
+  * perf(ttfb): TTFB phase 2 — streaming loader inject (#620), gated on the
+    stream_inject filter (default OFF; OFF path byte-identical to before).
+      - inject_banner.request(): strip Accept-Encoding for top-level HTML
+        navigations so the document returns identity-encoded (injectable).
+      - inject_banner.responseheaders(): set flow.response.stream to inject a
+        tiny /__toolbox/loader.js <script> into the first chunk holding
+        <head>/<body> — no full-body buffer (TTFB ≈ passthrough). Compressed
+        responses fall back to the legacy buffer path.
+      - response(): skip the buffer path when streamed.
+      - The loader renders the banner + per-page tracker/cookie stats
+        client-side (Resource Timing / document.cookie).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 19:00:00 +0200
+
 secubox-toolbox (2.6.38-1~bookworm1) bookworm; urgency=medium
 
   * perf(ttfb): TTFB phase 1 — per-host cosmetic decision bundle (#620).
