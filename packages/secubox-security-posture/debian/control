@@ -2,7 +2,7 @@ Source: secubox-security-posture
 Section: net
 Priority: optional
 Maintainer: CyberMind <devel@cybermind.fr>
-Build-Depends: debhelper (>= 11)
+Build-Depends: debhelper-compat (= 13), debhelper (>= 11)
 Standards-Version: 4.5.0
 Homepage: https://github.com/CyberMind-FR/secubox-deb
 
@@ -14,9 +14,6 @@ Depends:
     python3-fastapi,
     python3-httpx,
     python3-psutil,
-    secubox-common (>= 1.0.0),
-    secubox-threat-analyst (>= 1.0.0),
-    secubox-health-doctor (>= 1.0.0),
 Description: SecuBox Security Posture - DEFCON & Compliance Monitoring
  SecuBox Security Posture provides real-time security health monitoring
  with military-standard DEFCON levels (1-5), mapped to ANSSI CSPN requirements
