@@ -28,26 +28,41 @@ CROWDSEC_PROM = "http://127.0.0.1:6060/metrics"
 DEFAULT_TIMEOUT = 3.0
 
 
-async def socket_get(name: str, path: str,
-                     timeout: float = DEFAULT_TIMEOUT) -> Tuple[bool, Optional[dict]]:
-    """GET a JSON document from a sibling module's unix socket (public route).
-
-    ``name`` is the module id (socket = /run/secubox/<name>.sock); ``path`` is
-    the raw route (e.g. "/status"). Returns ``(ok, data)``; ``ok`` is False on
-    any transport/HTTP/JSON error so the caller can record UNKNOWN.
-    """
-    sock = f"{RUN_DIR}/{name}.sock"
-    if not os.path.exists(sock):
-        return False, None
+async def _uds_get(sock: str, host: str, path: str,
+                   timeout: float) -> Tuple[bool, Optional[dict]]:
     try:
         transport = httpx.AsyncHTTPTransport(uds=sock)
         async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
-            resp = await client.get(f"http://{name}{path}")
+            resp = await client.get(f"http://{host}{path}")
             if resp.status_code != 200:
                 return False, None
             return True, resp.json()
     except Exception:
         return False, None
+
+
+async def socket_get(name: str, path: str,
+                     timeout: float = DEFAULT_TIMEOUT) -> Tuple[bool, Optional[dict]]:
+    """GET a JSON document from a sibling module's PUBLIC route.
+
+    Most SecuBox modules are not standalone services — they are mounted
+    in-process by secubox-aggregator and reachable only via the aggregator
+    socket under ``/api/v1/<name>/``. A few (e.g. waf) also expose their own
+    ``/run/secubox/<name>.sock`` serving raw paths. We try the direct socket
+    first (fast, survives an aggregator restart) then fall back to the
+    aggregator. ``ok`` is False on any failure so the caller records UNKNOWN.
+    """
+    direct = f"{RUN_DIR}/{name}.sock"
+    if os.path.exists(direct):
+        ok, data = await _uds_get(direct, name, path, timeout)
+        if ok:
+            return ok, data
+
+    agg = f"{RUN_DIR}/aggregator.sock"
+    if os.path.exists(agg):
+        return await _uds_get(agg, "agg", f"/api/v1/{name}{path}", timeout)
+
+    return False, None
 
 
 async def http_get_text(url: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[str]:
