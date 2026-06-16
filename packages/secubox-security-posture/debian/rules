@@ -8,9 +8,12 @@ override_dh_auto_build:
 	# Nothing to build - pure Python package
 
 override_dh_auto_install:
-	# Install Python package
-	install -d debian/secubox-security-posture/usr/lib/secubox/secubox-security-posture/api
-	cp -r api/*.py debian/secubox-security-posture/usr/lib/secubox/secubox-security-posture/api/
+	# Install Python package to Python dist-packages
+	install -d debian/secubox-security-posture/usr/lib/python3/dist-packages/secubox_security_posture/api
+	cp -r api/*.py debian/secubox-security-posture/usr/lib/python3/dist-packages/secubox_security_posture/api/
+	
+	# Create __init__.py for the module directory
+	touch debian/secubox-security-posture/usr/lib/python3/dist-packages/secubox_security_posture/__init__.py
 	
 	# Install config
 	install -d debian/secubox-security-posture/etc/secubox
