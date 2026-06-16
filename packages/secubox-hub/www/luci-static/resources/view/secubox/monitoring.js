@@ -13,6 +13,13 @@ async function callSystemHealth(params) {
     return sbxFetch('/api/v1/hub/get_system_health', params, 'GET');
 }
 
+async function callSecurityPostureSummary(params) {
+    return fetch('/api/v1/security-posture/overview').then(function(response) {
+        if (!response.ok) return null;
+        return response.json();
+    }).catch(function() { return null; });
+}
+
 function formatBytes(bytes) {
 	if (!bytes || bytes === 0) return '0 B';
 	var k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -36,15 +43,32 @@ function getBarColor(percent) {
 	return '#22c55e';
 }
 
+// DEFCON color mapping
+function getDefconColor(defconLevel) {
+	var defconColors = {
+		'defcon_1': '#991b1b', // MAXIMUM - Critical breach (red)
+		'defcon_2': '#ef4444', // SEVERE - Major incident (red)
+		'defcon_3': '#f97316', // HEIGHTENED - Active threats (orange)
+		'defcon_4': '#86efac', // INCREASED CHATTER - Minor issues (light green)
+		'defcon_5': '#22c55e'  // NORMAL - All systems operational (green)
+	};
+	return defconColors[defconLevel] || '#666666';
+}
+
 return view.extend({
 	health: {},
+	securityPosture: null,
 	history: { cpu: [], memory: [], disk: [], load: [] },
 	maxPoints: 60,
 
 	load: function() {
 		var self = this;
-		return callSystemHealth().then(function(data) {
-			self.health = data || {};
+		return Promise.all([
+			callSystemHealth(),
+			callSecurityPostureSummary()
+		]).then(function(results) {
+			self.health = results[0] || {};
+			self.securityPosture = results[1] || null;
 			self.addDataPoint();
 			return self.health;
 		}).catch(function() { return {}; });
@@ -81,8 +105,12 @@ return view.extend({
 		var self = this;
 
 		poll.add(function() {
-			return callSystemHealth().then(function(data) {
-				self.health = data || {};
+			return Promise.all([
+				callSystemHealth(),
+				callSecurityPostureSummary()
+			]).then(function(results) {
+				self.health = results[0] || {};
+				self.securityPosture = results[1] || null;
 				self.addDataPoint();
 				self.updateDisplay();
 			});
@@ -92,6 +120,7 @@ return view.extend({
 			E('style', {}, this.getStyles()),
 			this.renderHeader(),
 			this.renderStatsGrid(),
+			this.renderSecurityPosture(),
 			this.renderChartsGrid()
 		]);
 
@@ -100,6 +129,7 @@ return view.extend({
 
 	renderHeader: function() {
 		var h = this.health;
+		var sp = this.securityPosture || {};
 		var cpu = h.cpu || {};
 		var memory = h.memory || {};
 		var disk = h.disk || {};
@@ -108,12 +138,16 @@ return view.extend({
 		var memPct = memory.usage_percent || memory.percent || 0;
 		var diskPct = disk.usage_percent || disk.percent || 0;
 		var uptime = h.uptime || 0;
+		var defcon = sp.defcon || {};
+		var defconLevel = defcon.current_level || 'defcon_5';
+		var defconScore = defcon.score !== undefined ? defcon.score : (sp.overall_score || 0);
 
 		var chips = [
 			{ icon: '🔥', label: 'CPU', value: cpuPct.toFixed(1) + '%', color: getBarColor(cpuPct) },
 			{ icon: '💾', label: 'Memory', value: memPct.toFixed(1) + '%', color: getBarColor(memPct) },
 			{ icon: '💿', label: 'Disk', value: diskPct.toFixed(1) + '%', color: getBarColor(diskPct) },
-			{ icon: '⏱', label: 'Uptime', value: formatUptime(uptime) }
+			{ icon: '⏱', label: 'Uptime', value: formatUptime(uptime) },
+			{ icon: '🛡️', label: 'DEFCON', value: defconLevel.replace('defcon_', '').toUpperCase() + ' (' + defconScore.toFixed(0) + '%)', color: getDefconColor(defconLevel) }
 		];
 
 		return E('div', { 'class': 'sb-header' }, [
@@ -163,6 +197,68 @@ return view.extend({
 		}));
 	},
 
+	renderSecurityPosture: function() {
+		var sp = this.securityPosture || {};
+		var defcon = sp.defcon || {};
+		var cspn = sp.cspn || {};
+		var tpn = sp.tpn || {};
+		var perf = sp.performance || {};
+
+		var defconLevel = defcon.current_level || 'defcon_5';
+		var defconScore = defcon.score !== undefined ? defcon.score : (sp.overall_score || 0);
+		var cspnScore = cspn.compliance_score || cspn.score || 0;
+		var tpnScore = tpn.compliance_score || tpn.score || 0;
+		var perfScore = perf.score || 0;
+
+		return E('div', { 'class': 'sb-security-posture' }, [
+			E('h3', { 'style': 'margin: 0 0 16px 0; font-size: 16px;' }, [
+				E('span', { 'style': 'margin-right: 8px;' }, '🛡️'),
+				'Security Posture'
+			]),
+			E('div', { 'class': 'sb-sp-cards' }, [
+				// DEFCON Card
+				E('div', { 'class': 'sb-sp-card', 'style': 'border-left: 4px solid ' + getDefconColor(defconLevel) + ';' }, [
+					E('div', { 'class': 'sb-sp-card-header' }, [
+						E('span', { 'class': 'sb-sp-card-icon' }, '🛡️'),
+						E('span', { 'class': 'sb-sp-card-title' }, 'DEFCON Level')
+					]),
+					E('div', { 'class': 'sb-sp-card-value' }, defconLevel.replace('defcon_', '').toUpperCase()),
+					E('div', { 'class': 'sb-sp-card-subtitle' }, [
+						E('span', { 'style': 'color: ' + getDefconColor(defconLevel) + '; font-weight: bold;' }, defconScore.toFixed(0) + '%'),
+						E('span', { 'style': 'margin-left: 8px; color: #666;' }, 'Security Score')
+					])
+				]),
+				// CSPN Card
+				E('div', { 'class': 'sb-sp-card', 'style': 'border-left: 4px solid #3b82f6;' }, [
+					E('div', { 'class': 'sb-sp-card-header' }, [
+						E('span', { 'class': 'sb-sp-card-icon' }, '📜'),
+						E('span', { 'class': 'sb-sp-card-title' }, 'CSPN Compliance')
+					]),
+					E('div', { 'class': 'sb-sp-card-value' }, cspnScore.toFixed(0) + '%'),
+					E('div', { 'class': 'sb-sp-card-subtitle' }, 'ANSSI Requirements')
+				]),
+				// TPN Card
+				E('div', { 'class': 'sb-sp-card', 'style': 'border-left: 4px solid #8b5cf6;' }, [
+					E('div', { 'class': 'sb-sp-card-header' }, [
+						E('span', { 'class': 'sb-sp-card-icon' }, '🎬'),
+						E('span', { 'class': 'sb-sp-card-title' }, 'TPN Compliance')
+					]),
+					E('div', { 'class': 'sb-sp-card-value' }, tpnScore.toFixed(0) + '%'),
+					E('div', { 'class': 'sb-sp-card-subtitle' }, 'Media Requirements')
+				]),
+				// Performance Card
+				E('div', { 'class': 'sb-sp-card', 'style': 'border-left: 4px solid #10b981;' }, [
+					E('div', { 'class': 'sb-sp-card-header' }, [
+						E('span', { 'class': 'sb-sp-card-icon' }, '⚡'),
+						E('span', { 'class': 'sb-sp-card-title' }, 'Performance')
+					]),
+					E('div', { 'class': 'sb-sp-card-value' }, perfScore.toFixed(0) + '%'),
+					E('div', { 'class': 'sb-sp-card-subtitle' }, 'System Health')
+				])
+			])
+		]);
+	},
+
 	renderChartsGrid: function() {
 		var charts = [
 			{ id: 'cpu', label: 'CPU Usage', color: '#6366f1' },
@@ -194,19 +290,26 @@ return view.extend({
 		this.updateHeaderChips();
 		this.updateStatsGrid();
 		this.updateCharts();
+		this.updateSecurityPosture();
 	},
 
 	updateHeaderChips: function() {
 		var h = this.health;
+		var sp = this.securityPosture || {};
 		var cpu = h.cpu || {};
 		var memory = h.memory || {};
 		var disk = h.disk || {};
+
+		var defcon = sp.defcon || {};
+		var defconLevel = defcon.current_level || 'defcon_5';
+		var defconScore = defcon.score !== undefined ? defcon.score : (sp.overall_score || 0);
 
 		var updates = {
 			'cpu': { value: (cpu.usage_percent || cpu.percent || 0).toFixed(1) + '%', color: getBarColor(cpu.usage_percent || 0) },
 			'memory': { value: (memory.usage_percent || memory.percent || 0).toFixed(1) + '%', color: getBarColor(memory.usage_percent || 0) },
 			'disk': { value: (disk.usage_percent || disk.percent || 0).toFixed(1) + '%', color: getBarColor(disk.usage_percent || 0) },
-			'uptime': { value: formatUptime(h.uptime || 0) }
+			'uptime': { value: formatUptime(h.uptime || 0) },
+			'defcon': { value: defconLevel.replace('defcon_', '').toUpperCase() + ' (' + defconScore.toFixed(0) + '%)', color: getDefconColor(defconLevel) }
 		};
 
 		Object.keys(updates).forEach(function(key) {
@@ -241,6 +344,42 @@ return view.extend({
 			var el = document.querySelector('[data-stat="' + key + '"]');
 			if (el) el.textContent = updates[key];
 		});
+	},
+
+	updateSecurityPosture: function() {
+		var sp = this.securityPosture || {};
+		var defcon = sp.defcon || {};
+		var cspn = sp.cspn || {};
+		var tpn = sp.tpn || {};
+		var perf = sp.performance || {};
+
+		var defconLevel = defcon.current_level || 'defcon_5';
+		var defconScore = defcon.score !== undefined ? defcon.score : (sp.overall_score || 0);
+		var cspnScore = cspn.compliance_score || cspn.score || 0;
+		var tpnScore = tpn.compliance_score || tpn.score || 0;
+		var perfScore = perf.score || 0;
+
+		// Update DEFCON display
+		var defconEl = document.querySelector('.sb-sp-defcon-value');
+		if (defconEl) defconEl.textContent = defconLevel.replace('defcon_', '').toUpperCase();
+
+		var defconScoreEl = document.querySelector('.sb-sp-defcon-score');
+		if (defconScoreEl) {
+			defconScoreEl.textContent = defconScore.toFixed(0) + '%';
+			defconScoreEl.style.color = getDefconColor(defconLevel);
+		}
+
+		// Update CSPN
+		var cspnEl = document.querySelector('.sb-sp-cspn-value');
+		if (cspnEl) cspnEl.textContent = cspnScore.toFixed(0) + '%';
+
+		// Update TPN
+		var tpnEl = document.querySelector('.sb-sp-tpn-value');
+		if (tpnEl) tpnEl.textContent = tpnScore.toFixed(0) + '%';
+
+		// Update Performance
+		var perfEl = document.querySelector('.sb-sp-perf-value');
+		if (perfEl) perfEl.textContent = perfScore.toFixed(0) + '%';
 	},
 
 	updateCharts: function() {
@@ -290,33 +429,47 @@ return view.extend({
 
 	getStyles: function() {
 		return `
-.sb-monitoring { max-width: 1400px; margin: 0 auto; padding: 20px; }
-.sb-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.sb-title { margin: 0; font-size: 24px; font-weight: 700; }
-.sb-subtitle { margin: 4px 0 0; color: #666; font-size: 14px; }
-.sb-chips { display: flex; gap: 12px; flex-wrap: wrap; }
-.sb-chip { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 8px; }
-.sb-chip-icon { font-size: 18px; }
-.sb-chip-label { font-size: 11px; color: #666; display: block; }
-.sb-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.sb-stat-card { display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.sb-stat-icon { font-size: 24px; }
-.sb-stat-value { font-size: 18px; font-weight: 700; }
-.sb-stat-label { font-size: 12px; color: #666; }
-.sb-charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-.sb-chart-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.sb-chart-card h4 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
-.sb-chart-container { height: 120px; background: #f8f9fa; border-radius: 8px; overflow: hidden; }
-.sb-chart { width: 100%; height: 100%; }
-.sb-chart-footer { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; }
-.sb-chart-status { color: #22c55e; font-weight: 500; }
-@media (prefers-color-scheme: dark) {
-  .sb-monitoring { color: #e5e7eb; }
-  .sb-header, .sb-stat-card, .sb-chart-card { background: #1f2937; }
-  .sb-chip { background: #374151; border-color: #4b5563; }
-  .sb-chip-label, .sb-subtitle, .sb-stat-label { color: #9ca3af; }
-  .sb-chart-container { background: #374151; }
-}
+	.sb-monitoring { max-width: 1400px; margin: 0 auto; padding: 20px; }
+	.sb-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+	.sb-title { margin: 0; font-size: 24px; font-weight: 700; }
+	.sb-subtitle { margin: 4px 0 0; color: #666; font-size: 14px; }
+	.sb-chips { display: flex; gap: 12px; flex-wrap: wrap; }
+	.sb-chip { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 8px; }
+	.sb-chip-icon { font-size: 18px; }
+	.sb-chip-label { font-size: 11px; color: #666; display: block; }
+	.sb-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+	.sb-stat-card { display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+	.sb-stat-icon { font-size: 24px; }
+	.sb-stat-value { font-size: 18px; font-weight: 700; }
+	.sb-stat-label { font-size: 12px; color: #666; }
+	.sb-charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+	.sb-chart-card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+	.sb-chart-card h4 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+	.sb-chart-container { height: 120px; background: #f8f9fa; border-radius: 8px; overflow: hidden; }
+	.sb-chart { width: 100%; height: 100%; }
+	.sb-chart-footer { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; }
+	.sb-chart-status { color: #22c55e; font-weight: 500; }
+	/* Security Posture Styles */
+	.sb-security-posture { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+	.sb-security-posture h3 { margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: #374151; }
+	.sb-sp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+	.sb-sp-card { background: #f8f9fa; border-radius: 8px; padding: 16px; border-left: 4px solid #666; }
+	.sb-sp-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+	.sb-sp-card-icon { font-size: 20px; }
+	.sb-sp-card-title { font-size: 12px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; }
+	.sb-sp-card-value { font-size: 28px; font-weight: 700; color: #1f2937; }
+	.sb-sp-card-subtitle { font-size: 11px; color: #6b7280; margin-top: 4px; }
+	@media (prefers-color-scheme: dark) {
+	  .sb-monitoring { color: #e5e7eb; }
+	  .sb-header, .sb-stat-card, .sb-chart-card, .sb-security-posture { background: #1f2937; }
+	  .sb-chip { background: #374151; border-color: #4b5563; }
+	  .sb-chip-label, .sb-subtitle, .sb-stat-label { color: #9ca3af; }
+	  .sb-chart-container { background: #374151; }
+	  .sb-sp-card { background: #374151; }
+	  .sb-sp-card-title { color: #d1d5db; }
+	  .sb-sp-card-value { color: #f9fafb; }
+	  .sb-sp-card-subtitle { color: #9ca3af; }
+	}
 `;
 	},
 
