@@ -1,3 +1,19 @@
+secubox-security-posture (2.0.0-1) unstable; urgency=medium
+
+  * Full rewrite — honest, board-truthful posture scorecard (closes #617).
+  * Replaces the broken v1: /overview NameError, ~95% stubbed TPN, hardcoded
+    performance/DEFCON values and the zip()/gather() CSPN misalignment bug.
+  * New posture/ engine: pure scoring (DEFCON dial), real provenance-tracked
+    collectors over public sibling sockets + CrowdSec Prometheus + /proc.
+  * Indicators grouped by the six SecuBox module-domains; unmeasurable signals
+    render UNKNOWN/MANUAL and are excluded from the score, never faked.
+  * Repaired CSPN backbone; real TPN media overlay (anti-piracy DNS, TLS).
+  * New shared hybrid-skin dark UI; sidebar menu.d entry (folds #616).
+  * Unit tests for scoring, CSPN parsers and collector normalization.
+  * Drop python3-psutil; add python3-uvicorn. Standards-Version 4.6.2.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 16:00:00 +0200
+
 secubox-security-posture (1.0.0-1) unstable; urgency=medium
 
   * Initial release of SecuBox Security Posture module

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!--
+  SecuBox · Security Posture — v2.0.0
+  Honest, board-truthful scorecard. Every number on this page traces to a real
+  measurement; UNKNOWN/MANUAL badges mark what could not be auto-verified.
+  Palette + layout follow .claude/DESIGN-CHARTER.md (WALL module hue), rendered
+  on the shared hybrid-skin dark tokens via /shared/sidebar.js.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <title>SecuBox · Security Posture</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="posture.css">
+</head>
+<body>
+    <div class="main">
+        <header class="page">
+            <h1>🎚️ Security Posture <span class="ver" id="ver">v2.0.0</span></h1>
+            <div class="actions">
+                <span class="updated" id="updated">—</span>
+                <button class="btn" id="refresh" title="Recompute now">↻ Refresh</button>
+            </div>
+        </header>
+
+        <div id="error" class="banner err" hidden></div>
+        <div id="loading" class="banner info">Computing posture…</div>
+
+        <main id="content" hidden>
+            <!-- Hero: DEFCON gauge + overall score -->
+            <section class="hero">
+                <div class="gauge-wrap">
+                    <svg viewBox="0 0 200 120" class="gauge" id="gauge" aria-label="DEFCON gauge">
+                        <path class="gauge-track" d="M20 110 A 80 80 0 0 1 180 110" />
+                        <path class="gauge-fill" id="gaugeFill" d="M20 110 A 80 80 0 0 1 180 110" />
+                    </svg>
+                    <div class="gauge-center">
+                        <div class="gauge-score" id="score">—</div>
+                        <div class="gauge-max">/ 100</div>
+                    </div>
+                </div>
+                <div class="hero-meta">
+                    <div class="defcon-badge" id="defconBadge">
+                        <span class="defcon-emoji" id="defconEmoji">⚫</span>
+                        <div>
+                            <div class="defcon-level" id="defconLevel">DEFCON —</div>
+                            <div class="defcon-name" id="defconName">Unknown</div>
+                        </div>
+                    </div>
+                    <div class="coverage-note" id="coverageNote"></div>
+                    <p class="hero-blurb">Single posture score from real, provenance-tracked
+                       signals across the six SecuBox module-domains. Unmeasured signals are
+                       shown honestly as <span class="badge unknown">unknown</span> /
+                       <span class="badge manual">manual</span> and excluded from the score.</p>
+                </div>
+            </section>
+
+            <!-- Six module-domain cards -->
+            <section>
+                <h2>Domains</h2>
+                <div class="domain-grid" id="domains"></div>
+            </section>
+
+            <!-- Actionable findings -->
+            <section>
+                <h2>Findings <span class="count" id="findingCount"></span></h2>
+                <div class="findings" id="findings"></div>
+            </section>
+
+            <!-- CSPN audit -->
+            <section>
+                <details class="audit">
+                    <summary><h2>CSPN compliance <span class="pill" id="cspnPill"></span></h2></summary>
+                    <table class="audit-table" id="cspnTable"></table>
+                </details>
+            </section>
+
+            <!-- TPN media overlay -->
+            <section>
+                <details class="audit">
+                    <summary><h2>TPN media protection <span class="pill" id="tpnPill"></span></h2></summary>
+                    <table class="audit-table" id="tpnTable"></table>
+                </details>
+            </section>
+        </main>
+    </div>
+
+    <script src="/shared/sidebar.js" defer></script>
+    <script src="posture.js" defer></script>
+</body>
+</html>
