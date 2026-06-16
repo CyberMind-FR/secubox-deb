@@ -1,3 +1,16 @@
+secubox-toolbox (2.6.38-1~bookworm1) bookworm; urgency=medium
+
+  * perf(ttfb): TTFB phase 1 — per-host cosmetic decision bundle (#620).
+      - secubox_toolbox/bundle.py: build_bundle/get_bundle (level, pin,
+        report URL, tracker patterns) with a short TTL cache; fail-open.
+      - api.py: GET /__toolbox/bundle (per-client JSON) + /__toolbox/loader.js
+        (static cosmetic loader; applies banner client-side, derives
+        tracker/cookie stats in-browser via Resource Timing/document.cookie).
+      - filters.py: stream_inject toggle, default OFF.
+      - Additive and inert: inject_banner buffering unchanged until phase 2.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 17:00:00 +0200
+
 secubox-toolbox (2.6.37-1~bookworm1) bookworm; urgency=medium
 
   * fix(webui): metrics mitm=0 + threats list full of IPs (#593).
