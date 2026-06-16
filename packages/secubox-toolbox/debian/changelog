@@ -1,3 +1,15 @@
+secubox-toolbox (2.6.40-1~bookworm1) bookworm; urgency=medium
+
+  * fix(postinst): stop clobbering shared parent dir modes (#620). The
+    `install -d -m 0750 /var/lib/secubox/toolbox` (and the media/android
+    variants) re-moded the SHARED /var/lib/secubox (and /var/cache/secubox)
+    parents to 0750, breaking traversal for other secubox-* daemons and taking
+    kbin to HTTP 500. Now: create leaves via mkdir + explicit chown/chmod, and
+    re-assert the shared parents are 0755. (Same #511 traversal class; a wider
+    sweep of ~12 packages with the same footgun is tracked separately.)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 19:30:00 +0200
+
 secubox-toolbox (2.6.39-1~bookworm1) bookworm; urgency=medium
 
   * perf(ttfb): TTFB phase 2 — streaming loader inject (#620), gated on the
