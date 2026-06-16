@@ -14,7 +14,7 @@ RuntimeDirectory=secubox-security-posture
 RuntimeDirectoryMode=0750
 
 # Main service - use unix socket
-ExecStart=/usr/bin/uvicorn secubox_security_posture.api.main:app \
+ExecStart=/usr/bin/python3 -m uvicorn secubox_security_posture.api.main:app \
     --uds /run/secubox/security-posture.sock \
     --log-level info \
     --workers 2
