@@ -19,8 +19,9 @@
     <link rel="stylesheet" href="/shared/sidebar.css">
     <link rel="stylesheet" href="posture.css">
 </head>
-<body>
-    <div class="main">
+<body class="module-wall">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main">
         <header class="page">
             <h1>🎚️ Security Posture <span class="ver" id="ver">v2.0.0</span></h1>
             <div class="actions">
@@ -32,7 +33,7 @@
         <div id="error" class="banner err" hidden></div>
         <div id="loading" class="banner info">Computing posture…</div>
 
-        <main id="content" hidden>
+        <div id="content" hidden>
             <!-- Hero: DEFCON gauge + overall score -->
             <section class="hero">
                 <div class="gauge-wrap">
@@ -88,10 +89,10 @@
                     <table class="audit-table" id="tpnTable"></table>
                 </details>
             </section>
-        </main>
-    </div>
+        </div>
+    </main>
 
-    <script src="/shared/sidebar.js" defer></script>
+    <script src="/shared/sidebar.js"></script>
     <script src="posture.js" defer></script>
 </body>
 </html>
