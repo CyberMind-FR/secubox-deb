@@ -1,3 +1,11 @@
+secubox-threat-analyst (1.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * ui: limit the Recent attacks table to 5 rows (#611), matching the Top-N
+    lists. Stats + leaderboards are unaffected (computed from the full alert
+    set before the table slice).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 16 Jun 2026 09:00:00 +0200
+
 secubox-threat-analyst (1.4.4-1~bookworm1) bookworm; urgency=medium
 
   * feat(ingest): populate the headline stats + Top-N leaderboards with real
