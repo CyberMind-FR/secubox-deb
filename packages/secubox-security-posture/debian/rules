@@ -21,3 +21,7 @@ override_dh_auto_install:
 	# Install www assets
 	install -d debian/secubox-security-posture/usr/share/secubox/www/security-posture
 	cp -r www/* debian/secubox-security-posture/usr/share/secubox/www/security-posture/ 2>/dev/null || true
+
+	# Install sidebar menu entry
+	install -d debian/secubox-security-posture/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-security-posture/usr/share/secubox/menu.d/ || true
