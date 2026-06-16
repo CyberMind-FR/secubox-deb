@@ -5,7 +5,7 @@ After=network.target nss-lookup.target
 Wants=network-online.target
 
 [Service]
-Type=notify
+Type=simple
 User=secubox
 Group=secubox
 
