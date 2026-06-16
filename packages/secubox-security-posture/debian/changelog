@@ -1,3 +1,14 @@
+secubox-security-posture (2.0.1-1) unstable; urgency=medium
+
+  * fix(postinst): stop clobbering /var/lib/secubox parent mode. The 2.0.0
+    postinst ran `install -d -m 0750 /var/lib/secubox/security-posture`, which
+    re-moded the SHARED parent to 0750 secubox:secubox and broke directory
+    traversal for every other secubox-* daemon (took kbin/toolbox to HTTP 500).
+    Now: keep the parent 0755, create only the leaf restricted; service creates
+    its own dir at runtime. (#511 traversal class — regression fix.)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 18:00:00 +0200
+
 secubox-security-posture (2.0.0-1) unstable; urgency=medium
 
   * Full rewrite — honest, board-truthful posture scorecard (closes #617).
