@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox Security Posture Unix Socket
+After=network.target
+
+[Socket]
+ListenStream=%t/secubox/security-posture.sock
+SocketMode=0660
+SocketUser=root
+SocketGroup=secubox
+
+[Install]
+WantedBy=sockets.target

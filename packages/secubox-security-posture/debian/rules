@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# Nothing to build - pure Python package
+
+override_dh_auto_install:
+	# Install Python package
+	install -d debian/secubox-security-posture/usr/lib/secubox/secubox-security-posture/api
+	cp -r api/*.py debian/secubox-security-posture/usr/lib/secubox/secubox-security-posture/api/
+	
+	# Install config
+	install -d debian/secubox-security-posture/etc/secubox
+	
+	# Install systemd service
+	install -d debian/secubox-security-posture/lib/systemd/system
+	cp debian/secubox-security-posture.sock debian/secubox-security-posture/lib/systemd/system/
+	cp debian/secubox-security-posture.service debian/secubox-security-posture/lib/systemd/system/
+	
+	# Install www assets
+	install -d debian/secubox-security-posture/usr/share/secubox/www/security-posture
+	cp -r www/* debian/secubox-security-posture/usr/share/secubox/www/security-posture/ 2>/dev/null || true
