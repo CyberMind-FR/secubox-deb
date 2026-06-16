@@ -27,3 +27,7 @@ override_dh_auto_install:
 	# Sidebar menu entry (self-contained — folds PR #616)
 	install -d $(DESTDIR)/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. $(DESTDIR)/usr/share/secubox/menu.d/ || true
+
+	# nginx route drop-in (own socket — not aggregator-served)
+	install -d $(DESTDIR)/etc/nginx/secubox-routes.d
+	cp nginx/security-posture.conf $(DESTDIR)/etc/nginx/secubox-routes.d/

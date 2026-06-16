@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+set -e
+
+# Writable cache dir for the posture snapshot (service runs as secubox).
+if getent passwd secubox >/dev/null 2>&1; then
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/security-posture 2>/dev/null || true
+fi
+
+#DEBHELPER#
+
+# Reload nginx so the /api/v1/security-posture/ route drop-in takes effect.
+if command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1; then
+        nginx -s reload >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0
