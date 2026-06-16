@@ -144,6 +144,29 @@ def write_cache(data: dict):
 
 def build_overview() -> dict:
     """Build system overview metrics."""
+    # CPU usage
+    try:
+        with open('/proc/stat') as f:
+            # Read first line (cpu total)
+            cpu_line = f.readline()
+            if cpu_line.startswith('cpu '):
+                # Parse CPU times (user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice)
+                parts = cpu_line.split()
+                if len(parts) >= 5:
+                    # Calculate usage: (total - idle) / total * 100
+                    total = sum(int(x) for x in parts[1:])  # Sum all time values
+                    idle = int(parts[4])  # idle time is 5th column (index 4)
+                    if total > 0:
+                        cpu_pct = ((total - idle) / total) * 100
+                    else:
+                        cpu_pct = 0
+                else:
+                    cpu_pct = 0
+            else:
+                cpu_pct = 0
+    except Exception:
+        cpu_pct = 0
+
     # Uptime
     try:
         with open('/proc/uptime') as f:
@@ -246,6 +269,7 @@ def build_overview() -> dict:
     return {
         "uptime": uptime,
         "load": load,
+        "cpu_pct": cpu_pct,
         "mem_total_kb": mem_total,
         "mem_used_kb": mem_used,
         "mem_pct": mem_pct,
@@ -393,6 +417,24 @@ async def get_overview(auth: None = Depends(require_jwt)):
 
     data["_freshness"] = get_freshness()
     return data
+
+@app.get("/api/v1/metrics/summary")
+async def get_metrics_summary(auth: None = Depends(require_jwt)):
+    """Get metrics summary for top navbar - returns cpu, mem, load in expected format."""
+    cached = read_cache()
+    if cached and cache_is_fresh():
+        data = cached.get("overview", build_overview())
+    else:
+        data = build_overview()
+
+    # Map overview data to format expected by sidebar.js for /metrics/ page
+    # sidebar.js expects: cpu, mem, load
+    return {
+        "cpu": data.get("cpu_pct", 0),
+        "mem": data.get("mem_pct", 0),
+        "load": data.get("load", "0 0 0"),
+        "_freshness": get_freshness()
+    }
 
 @app.get("/api/v1/metrics/waf_stats")
 async def get_waf_stats(auth: None = Depends(require_jwt)):
