@@ -421,12 +421,21 @@
             for (const v of items) { if (!v) continue; counts[v] = (counts[v] || 0) + 1; }
             return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, n);
         }
-        function renderTop(elId, pairs) {
+        // ISO 3166-1 alpha-2 → flag emoji (regional indicator symbols). #613
+        function flagEmoji(cc) {
+            if (!cc || !/^[A-Za-z]{2}$/.test(cc)) return '';
+            const A = 0x1F1E6;
+            return String.fromCodePoint(A + cc.toUpperCase().charCodeAt(0) - 65,
+                                        A + cc.toUpperCase().charCodeAt(1) - 65);
+        }
+        function renderTop(elId, pairs, withFlag = false) {
             const el = document.getElementById(elId);
             if (!pairs.length) { el.innerHTML = '<li class="empty">no data</li>'; return; }
-            el.innerHTML = pairs.map(([k, v]) =>
-                `<li><span class="k">${esc(k)}</span><span class="v">${v}</span></li>`
-            ).join('');
+            el.innerHTML = pairs.map(([k, v]) => {
+                const fl = withFlag ? flagEmoji(k) : '';
+                const label = fl ? `<span class="flag-emoji">${fl}</span> ${esc(k)}` : esc(k);
+                return `<li><span class="k">${label}</span><span class="v">${v}</span></li>`;
+            }).join('');
         }
 
         // Loaders
@@ -496,7 +505,7 @@
             document.getElementById('s-unique-ips').textContent = ipSet.size;
             document.getElementById('s-countries').textContent  = countrySet.size;
             renderTop('top-ips',       topN(ips, 5));
-            renderTop('top-countries', topN(countries, 5));
+            renderTop('top-countries', topN(countries, 5), true);
             renderTop('top-types',     topN(types, 5));
             renderTop('top-targets',   topN(targets, 5));
         }
