@@ -1,3 +1,19 @@
+secubox-hub (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * fix(perf): dashboard/services cache never warmed under the aggregator,
+    so _svc() fell back to blocking per-module systemctl on the SHARED event
+    loop -> /api/v1/hub/dashboard timed out (12s) -> 504s + empty hardware
+    widget board-wide (closes #619).
+      - Lazy-start background refresh on first request (mounted sub-apps don't
+        receive startup/lifespan under the aggregator); idempotent guard shared
+        with the startup hook.
+      - Offload blocking systemctl/psutil work to threads (asyncio.to_thread)
+        in the refresh loop and in /dashboard, /status, /modules.
+      - /alerts: use the cached _svc() (offloaded) instead of an un-timed
+        per-module systemctl loop.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 16 Jun 2026 18:30:00 +0200
+
 secubox-hub (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * api/main.py /health-monitor/summary: merge data["error"] into
