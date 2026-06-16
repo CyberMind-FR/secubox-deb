@@ -460,7 +460,7 @@
                 document.getElementById('s-countries').textContent = 0;
                 return;
             }
-            const rows = alerts.slice(0, 100).map(a => {
+            const rows = alerts.slice(0, 5).map(a => {
                 const m = flatMeta(a);
                 return `<tr>
                     <td>${m.lastSeen ? esc(new Date(m.lastSeen).toLocaleString()) : '—'}</td>
@@ -472,7 +472,7 @@
                     <td><span class="mono">${m.hitCount}</span></td>
                 </tr>`;
             }).join('');
-            const extra = alerts.length > 100 ? `<div class="msg msg-empty">${alerts.length - 100} more not shown</div>` : '';
+            const extra = alerts.length > 5 ? `<div class="msg msg-empty">${alerts.length - 5} more not shown</div>` : '';
             c.innerHTML = `<table>
                 <thead><tr>
                     <th>Last seen</th><th>Sev</th><th>Source IP</th>
