@@ -273,7 +273,7 @@
         }
 
         async function fetchTopDomains() {
-            const data = await api('/blocklist/top?limit=15');
+            const data = await api('/blocklist/top?limit=5');
             const tbody = document.getElementById('top-domains-table');
             if (!data?.domains?.length) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);">No blocked domains yet</td></tr>';
