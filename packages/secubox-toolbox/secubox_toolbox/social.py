@@ -275,6 +275,10 @@ def _record_edge_sync(
     ja4_hash: Optional[str],
     consent_state: str,
 ) -> None:
+    # #642 — never record IP-literal "trackers" (no SNI/hostname = the client's
+    # own traffic to gk2 service IPs etc.); they're noise the domain views filter.
+    if _is_ip(tracker_domain):
+        return
     try:
         with _conn() as c:
             c.execute(
@@ -1045,11 +1049,6 @@ def aggregate(hours: int = 24) -> Dict:
                 "WHERE ts >= ?",
                 (since,),
             ).fetchone()[0]
-            out["total_trackers_seen"] = c.execute(
-                "SELECT COUNT(DISTINCT tracker_domain) FROM social_edges "
-                "WHERE ts >= ?",
-                (since,),
-            ).fetchone()[0]
             # #593 — fold to registrable domain + drop IP literals (the raw
             # column otherwise surfaces IPs, incl. the cabine's own WAN IP,
             # as the top "tracker"). Over-fetch, fold in Python, top 50.
@@ -1071,6 +1070,9 @@ def aggregate(hours: int = 24) -> Dict:
                 e["clients"] = max(e["clients"], r["clients"])
             out["by_tracker_domain"] = sorted(
                 _byd.values(), key=lambda x: -x["hits"])[:50]
+            # #642 — KPI = distinct non-IP registrable trackers (matches the
+            # table's universe; was a raw COUNT that surfaced IP literals).
+            out["total_trackers_seen"] = len(_byd)
             out["by_client"] = [
                 dict(r)
                 for r in c.execute(
