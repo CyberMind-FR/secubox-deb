@@ -55,3 +55,24 @@ def ip_in_allowlist(ip: str, networks: Iterable) -> bool:
         if addr.version == net.version and addr in net:
             return True
     return False
+
+
+def exclusive_tracker_ips(pure_hosts: Iterable[str],
+                          resolve: Callable[[str], List[str]],
+                          allow_nets: Iterable) -> set:
+    """Resolve each pure-tracker host and return the set of IPs that are NOT in
+    the CDN/cloud allowlist (so safe to nft-drop). `resolve` is injected
+    (escalate._resolve_ips in production) to keep this function pure/testable."""
+    allow = list(allow_nets)
+    drop: set = set()
+    for host in pure_hosts:
+        if not host:
+            continue
+        try:
+            ips = resolve(host) or []
+        except Exception:
+            ips = []
+        for ip in ips:
+            if ip and not ip_in_allowlist(ip, allow):
+                drop.add(ip)
+    return drop
