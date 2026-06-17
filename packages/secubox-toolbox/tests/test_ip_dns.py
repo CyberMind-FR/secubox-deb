@@ -64,3 +64,12 @@ def test_unbound_block_lines_empty_has_only_server_header():
     lines = ip_dns.unbound_block_lines([])
     assert "server:" in lines
     assert not any("local-zone:" in l for l in lines)
+
+
+def test_unbound_block_lines_rejects_malformed_domains():
+    # a domain that survived with stray chars must NOT be emitted (would break
+    # unbound config parsing → DNS outage on restart)
+    lines = ip_dns.unbound_block_lines(['evil.com" foo', "ok-tracker.com",
+                                        "bad domain.com", 'q"uote.com'])
+    lz = [l for l in lines if "local-zone:" in l]
+    assert lz == ['    local-zone: "ok-tracker.com." always_nxdomain']
