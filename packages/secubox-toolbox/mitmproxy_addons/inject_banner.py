@@ -762,6 +762,12 @@ class InjectBanner:
                 return
         except Exception:
             pass
+        # #636 — strict CSP would block the injected loader <script> and its
+        # /__toolbox/bundle fetch → no banner. Don't stream; fall through to the
+        # legacy buffer path, which injects an inline-CSS banner (no script/fetch)
+        # that survives strict CSP.
+        if _detect_csp_strict(flow):
+            return
         try:
             resp.stream = _LoaderInjector(_loader_script(flow))
             flow.metadata["sbx_streamed"] = True
