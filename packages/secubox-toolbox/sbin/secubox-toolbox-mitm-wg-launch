@@ -110,7 +110,7 @@ fi
 # ad_ghost (#566) runs right after protective_mode: for R3+/R4 it 204s known
 # ad/tracker hosts (bandwidth save) at request time and injects ad-hiding CSS
 # on HTML responses. Gated by the modular filter config (toolbox WebUI).
-for addon in inject_xff utiq_defense protective_mode ad_ghost media_cache local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect media_stats; do
+for addon in inject_xff utiq_defense protective_mode privacy_guard ad_ghost media_cache local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect media_stats; do
     ARGS+=(-s "$ADDON_DIR/${addon}.py")
 done
 
