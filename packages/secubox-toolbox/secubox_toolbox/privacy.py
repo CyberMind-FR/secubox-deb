@@ -12,8 +12,11 @@ fabricated identity per (client, tracker), and return a per-request verdict
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import re
 from pathlib import Path
+from typing import Optional
 
 # Canonical 3rd-party tracker host patterns for Anti-Track v2 (#633). This is a
 # verbatim copy of the live protective_mode._TRACKER regex; protective_mode will
@@ -118,3 +121,47 @@ def classify(host: str, beacon_hint: bool = False) -> str:
     if confirmed_pure or beacon_hint:
         return "pure"
     return "loadbearing"
+
+
+JAR_KEY_PATH = "/etc/secubox/secrets/privacy-jar.key"
+_jar_key_cache: dict = {"v": None}
+
+
+def _jar_key() -> Optional[bytes]:
+    if _jar_key_cache["v"] is None:
+        try:
+            raw = Path(JAR_KEY_PATH).read_bytes().strip()
+            _jar_key_cache["v"] = raw or b""
+        except OSError:
+            _jar_key_cache["v"] = b""
+    return _jar_key_cache["v"] or None
+
+
+def _shape(name: str, digest: bytes) -> str:
+    """Render the HMAC digest into the cookie's observed format so the target
+    accepts it. Unknown names → opaque hex token."""
+    n = (name or "").lower()
+    i = int.from_bytes(digest[:8], "big")
+    j = int.from_bytes(digest[8:16], "big")
+    if n == "_ga" or n.startswith("_ga"):
+        return "GA1.2.%d.%d" % (i % 10_000_000_000, j % 10_000_000_000)
+    if n in ("_fbp",):
+        return "fb.1.%d.%d" % (i % 10_000_000_000_000, j % 10_000_000_000)
+    if n in ("uuid", "uid", "_pk_id") or len(name) >= 32:
+        h = digest.hex()
+        return "%s-%s-%s-%s-%s" % (h[:8], h[8:12], h[12:16], h[16:20], h[20:32])
+    return digest.hex()[:32]
+
+
+def fake_id(client_hash: str, tracker: str, cookie_name: str) -> Optional[str]:
+    """Stable fabricated cookie value for (client, tracker, cookie_name).
+
+    Deterministic HMAC of stable inputs → identical across workers and restarts
+    ('rémanent'), never derived from real client data. None if the seed key is
+    unavailable (caller falls back to anonymize-drop)."""
+    key = _jar_key()
+    if not key or not client_hash or not tracker:
+        return None
+    msg = ("%s|%s|%s" % (client_hash, registrable(tracker), cookie_name)).encode()
+    digest = hmac.new(key, msg, hashlib.sha256).digest()
+    return _shape(cookie_name, digest)

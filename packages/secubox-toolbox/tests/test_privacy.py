@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
+import re
+
 from secubox_toolbox import privacy
 
 
@@ -36,3 +38,38 @@ def test_is_tracker_learned_list(tmp_path, monkeypatch):
     assert privacy.is_tracker("www.example-tracker.net") is True   # registrable match
     assert privacy.is_tracker("not-listed.example.org") is False
     assert privacy.classify("example-tracker.net", beacon_hint=False) == "loadbearing"
+
+
+def test_fake_id_deterministic(tmp_path, monkeypatch):
+    key = tmp_path / "privacy-jar.key"
+    key.write_text("0123456789abcdef0123456789abcdef")
+    monkeypatch.setattr(privacy, "JAR_KEY_PATH", str(key))
+    privacy._jar_key_cache["v"] = None  # reset cache
+    a = privacy.fake_id("clientHASH1", "criteo.com", "_ga")
+    b = privacy.fake_id("clientHASH1", "criteo.com", "_ga")
+    assert a == b and a is not None
+
+
+def test_fake_id_differs_per_client(tmp_path, monkeypatch):
+    key = tmp_path / "privacy-jar.key"
+    key.write_text("0123456789abcdef0123456789abcdef")
+    monkeypatch.setattr(privacy, "JAR_KEY_PATH", str(key))
+    privacy._jar_key_cache["v"] = None
+    a = privacy.fake_id("clientHASH1", "criteo.com", "_ga")
+    b = privacy.fake_id("clientHASH2", "criteo.com", "_ga")
+    assert a != b
+
+
+def test_fake_id_format_shaping_ga(tmp_path, monkeypatch):
+    key = tmp_path / "privacy-jar.key"
+    key.write_text("k" * 32)
+    monkeypatch.setattr(privacy, "JAR_KEY_PATH", str(key))
+    privacy._jar_key_cache["v"] = None
+    val = privacy.fake_id("c", "google-analytics.com", "_ga")
+    assert re.match(r"^GA1\.2\.\d+\.\d+$", val), val
+
+
+def test_fake_id_missing_key_returns_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(privacy, "JAR_KEY_PATH", str(tmp_path / "nope.key"))
+    privacy._jar_key_cache["v"] = None
+    assert privacy.fake_id("c", "criteo.com", "_ga") is None
