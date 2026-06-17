@@ -121,15 +121,18 @@ def main() -> int:
     except Exception as e:
         sys.stderr.write(f"autolearn: write failed: {e}\n")
         return 0
+    # Only (re)write pure-trackers.txt when the learn module is available; if
+    # the import failed, leave the previous file intact rather than zeroing the
+    # hard-block allowlist (which would silently disable seed hard-blocks).
     pout = sorted(x for x in pure if x)
-    try:
-        ptmp = PURE_OUT + ".tmp"
-        with open(ptmp, "w", encoding="utf-8") as f:
-            f.write("\n".join(pout) + ("\n" if pout else ""))
-        os.replace(ptmp, PURE_OUT)
-    except Exception as e:
-        sys.stderr.write(f"autolearn: pure write failed: {e}\n")
-        pout = []
+    if _learn is not None:
+        try:
+            ptmp = PURE_OUT + ".tmp"
+            with open(ptmp, "w", encoding="utf-8") as f:
+                f.write("\n".join(pout) + ("\n" if pout else ""))
+            os.replace(ptmp, PURE_OUT)
+        except Exception as e:
+            sys.stderr.write(f"autolearn: pure write failed: {e}\n")
     sys.stderr.write(
         f"autolearn: {len(out)} hosts learned ({ti} threat-intel + "
         f"{len(out) - ti} classified cross-site) @ {int(time.time())}"
