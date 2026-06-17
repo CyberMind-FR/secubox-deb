@@ -416,55 +416,85 @@ def _refresh_system_stats():
 _version_refresh_counter = 0
 
 async def _background_cache_refresh():
-    """Background task to refresh cache every CACHE_TTL seconds."""
+    """Background task to refresh cache every CACHE_TTL seconds.
+
+    The blocking systemctl/psutil work is offloaded to a thread so it never
+    stalls the (possibly shared, aggregator) event loop.
+    """
     global _version_refresh_counter
     while True:
         try:
-            _refresh_services_cache()
-            _refresh_system_stats()
+            await asyncio.to_thread(_refresh_services_cache)
+            await asyncio.to_thread(_refresh_system_stats)
             _cache["last_refresh"] = time.time()
             # Refresh package versions every 12 cycles (~60s)
             _version_refresh_counter += 1
             if _version_refresh_counter >= 12:
                 _version_refresh_counter = 0
-                _refresh_package_versions()
+                await asyncio.to_thread(_refresh_package_versions)
         except Exception as e:
             log.error("Background cache error: %s", e)
         await asyncio.sleep(CACHE_TTL)
 
 
-@app.on_event("startup")
-async def startup():
-    """Start background cache refresh tasks."""
-    global MODULES, _modules_discovered, _menu_cache
-    # Discover modules (non-blocking via thread)
-    try:
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(_discover_modules)
-            discovered = future.result(timeout=15)
-            if discovered:
-                # Replace MODULES with discovered modules
-                MODULES.clear()
-                MODULES.update(discovered)
-                _modules_discovered = True
-                log.info("Discovered %d modules", len(MODULES))
-    except Exception as e:
-        log.warning("Module discovery timed out: %s, using defaults", e)
-    # Initial sync refresh (fast, no dpkg-query)
-    _refresh_services_cache()
-    _refresh_system_stats()
-    _cache["last_refresh"] = time.time()
+# Whether the background warm-up + refresh loops have been kicked off. Guarded
+# so it runs exactly once whether triggered by the startup hook (standalone
+# uvicorn) OR lazily on the first request (when served in-process by the
+# aggregator, where mounted sub-apps' startup/lifespan never fires).
+_bg_started = False
 
-    # Load menu cache from file (instant navbar on startup)
+
+async def _start_background_once():
+    """Idempotently warm the caches and start the periodic refresh tasks."""
+    global _bg_started, _modules_discovered, _menu_cache
+    if _bg_started:
+        return
+    _bg_started = True
+    # Discover modules off the event loop.
+    try:
+        discovered = await asyncio.to_thread(_discover_modules)
+        if discovered:
+            MODULES.clear()
+            MODULES.update(discovered)
+            _modules_discovered = True
+            log.info("Discovered %d modules", len(MODULES))
+    except Exception as e:
+        log.warning("Module discovery failed: %s, using defaults", e)
+    # Initial cache warm, off the event loop.
+    try:
+        await asyncio.to_thread(_refresh_services_cache)
+        await asyncio.to_thread(_refresh_system_stats)
+        _cache["last_refresh"] = time.time()
+    except Exception as e:
+        log.warning("Initial cache warm failed: %s", e)
+    # Load menu cache from file (instant navbar).
     _menu_cache = _load_menu_cache_from_file()
     if _menu_cache:
         log.info("Menu cache loaded from file: %d modules", _menu_cache.get("total_installed", 0))
-
-    # Start background tasks
+    # Start periodic background tasks.
     asyncio.create_task(_background_cache_refresh())
     asyncio.create_task(_refresh_menu_cache())
     log.info("Background cache tasks started")
+
+
+@app.on_event("startup")
+async def startup():
+    """Start background tasks when run as a standalone uvicorn service."""
+    await _start_background_once()
+
+
+@app.middleware("http")
+async def _lazy_background_start(request, call_next):
+    """Kick the background warm-up on the first request.
+
+    Mounted sub-apps don't receive startup/lifespan events under the aggregator,
+    so the cache would otherwise stay cold and every _svc() would fall back to a
+    blocking per-module systemctl call. Fire-and-forget so this request isn't
+    delayed by the warm-up.
+    """
+    if not _bg_started:
+        asyncio.create_task(_start_background_once())
+    return await call_next(request)
 
 
 _version_cache: dict = {}
@@ -514,24 +544,24 @@ def _svc(name: str) -> dict:
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
     board = get_board_info()
-    modules_status = {k: _svc(v) for k,v in MODULES.items()}
+    # Offload _svc() — blocking systemctl on a cold cache must not stall the loop.
+    modules_status = await asyncio.to_thread(lambda: {k: _svc(v) for k, v in MODULES.items()})
     active = sum(1 for m in modules_status.values() if m["active"])
     return {**board, "modules": modules_status,
             "active_modules": active, "total_modules": len(MODULES)}
 
 @router.get("/modules")
 async def modules(user=Depends(require_jwt)):
-    return [{"id": k, **_svc(v)} for k,v in MODULES.items()]
+    return await asyncio.to_thread(lambda: [{"id": k, **_svc(v)} for k, v in MODULES.items()])
 
 @router.get("/alerts")
 async def alerts(user=Depends(require_jwt)):
-    alerts_list = []
-    for mod, svc in MODULES.items():
-        r = subprocess.run(["systemctl", "is-active", svc], capture_output=True, text=True)
-        if r.stdout.strip() != "active":
-            alerts_list.append({"type": "service_down", "module": mod,
-                                 "service": svc, "severity": "warning"})
-    return alerts_list
+    # Use the cached _svc() (offloaded) instead of an un-timed per-module
+    # systemctl loop that blocked the shared aggregator event loop.
+    statuses = await asyncio.to_thread(lambda: {m: _svc(svc) for m, svc in MODULES.items()})
+    return [{"type": "service_down", "module": m, "service": MODULES[m],
+             "severity": "warning"}
+            for m, st in statuses.items() if not st.get("active")]
 
 @router.get("/monitoring")
 async def monitoring(user=Depends(require_jwt)):
@@ -563,7 +593,9 @@ def _get_build_info() -> dict:
 async def dashboard(user=Depends(require_jwt)):
     """Données complètes du dashboard (uses cached stats for speed)."""
     board = get_board_info()
-    modules_status = {k: _svc(v) for k, v in MODULES.items()}
+    # Offload _svc() — on a cold cache it makes blocking systemctl calls that
+    # must not stall the shared aggregator event loop.
+    modules_status = await asyncio.to_thread(lambda: {k: _svc(v) for k, v in MODULES.items()})
     active = sum(1 for m in modules_status.values() if m["active"])
     build_info = _get_build_info()
 
