@@ -1,3 +1,13 @@
+secubox-toolbox (2.6.42-1~bookworm1) bookworm; urgency=medium
+
+  * Banner stream_inject fix (#636): on strict-CSP sites, fall back from the
+    loader-<script> injection to the legacy inline-CSS buffer banner so the
+    R2/R3 transparency banner renders (CSP blocks the loader + its bundle fetch).
+    Bundle cache keyed by (client_id, is_wg). The R3 report link was NOT broken
+    (real R3 clients send wg=1 -> public kbin url).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 14:00:00 +0200
+
 secubox-toolbox (2.6.41-1~bookworm1) bookworm; urgency=medium
 
   * perf(ttfb): stream_inject now defaults ON (#630) — phase-2 streaming loader
