@@ -1,3 +1,11 @@
+secubox-toolbox (2.6.41-1~bookworm1) bookworm; urgency=medium
+
+  * perf(ttfb): stream_inject now defaults ON (#630) — phase-2 streaming loader
+    inject is the default (workers ~71MB/8% vs ~100MB/28%). Operators can still
+    toggle it off via /etc/secubox/toolbox/filters.json.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 17 Jun 2026 11:00:00 +0200
+
 secubox-toolbox (2.6.40-1~bookworm1) bookworm; urgency=medium
 
   * fix(postinst): stop clobbering shared parent dir modes (#620). The

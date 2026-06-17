@@ -58,6 +58,18 @@ override_dh_auto_install:
 	install -m 644 tmpfiles.d/secubox.conf \
 	               debian/secubox-core/usr/lib/tmpfiles.d/
 
+	# Shared-dir traversal guard (#630): keep /var/{lib,log,cache} + /etc +
+	# /usr/share /secubox parents at 0755 so every secubox-* user can traverse.
+	# Counters the recurring `install -d -m 0750 …/secubox` clobber in module
+	# postinsts that breaks kbin/toolbox.
+	install -d debian/secubox-core/usr/sbin
+	install -m 755 usr/sbin/secubox-dirs-guard.sh \
+	               debian/secubox-core/usr/sbin/secubox-dirs-guard.sh
+	install -m 644 systemd/secubox-dirs-guard.service \
+	               debian/secubox-core/usr/lib/systemd/system/
+	install -m 644 systemd/secubox-dirs-guard.timer \
+	               debian/secubox-core/usr/lib/systemd/system/
+
 	# LED scripts and services
 	install -d debian/secubox-core/usr/sbin
 	install -m 755 usr/sbin/secubox-led-heartbeat \
