@@ -1,10 +1,13 @@
 secubox-toolbox (2.6.42-1~bookworm1) bookworm; urgency=medium
 
-  * Banner stream_inject fix (#636): on strict-CSP sites, fall back from the
-    loader-<script> injection to the legacy inline-CSS buffer banner so the
-    R2/R3 transparency banner renders (CSP blocks the loader + its bundle fetch).
-    Bundle cache keyed by (client_id, is_wg). The R3 report link was NOT broken
-    (real R3 clients send wg=1 -> public kbin url).
+  * R3 banner fix (#636): the mitm now serves /__toolbox/loader.js +
+    /__toolbox/bundle directly for ANY origin (request-hook short-circuit), so
+    the injected loader resolves on external sites / SPAs instead of returning
+    the origin's HTML — this was breaking PeerTube ("Incompatible browser") and
+    silently killing the banner on R3. The loader now renders a TOP bar (with
+    body padding) instead of a bottom bar. Plus: strict-CSP responses fall back
+    to the legacy inline-CSS buffer banner; bundle cache keyed by
+    (client_id, is_wg). The R3 report link was NOT broken (wg=1 -> public kbin).
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 14:00:00 +0200
 
