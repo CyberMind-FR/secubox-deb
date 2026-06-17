@@ -1,3 +1,16 @@
+secubox-toolbox (2.6.48-1~bookworm1) bookworm; urgency=medium
+
+  * R3 banner fix (#636): the mitm now serves /__toolbox/loader.js +
+    /__toolbox/bundle directly for ANY origin (request-hook short-circuit), so
+    the injected loader resolves on external sites / SPAs instead of returning
+    the origin's HTML — this was breaking PeerTube ("Incompatible browser") and
+    silently killing the banner on R3. The loader now renders a TOP bar (with
+    body padding) instead of a bottom bar. Plus: strict-CSP responses fall back
+    to the legacy inline-CSS buffer banner; bundle cache keyed by
+    (client_id, is_wg). The R3 report link was NOT broken (wg=1 -> public kbin).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 20:00:00 +0200
+
 secubox-toolbox (2.6.47-1~bookworm1) bookworm; urgency=medium
 
   * Anti-Track v2 Plan 2d (#633): #social tracker table shows the top-5 by
