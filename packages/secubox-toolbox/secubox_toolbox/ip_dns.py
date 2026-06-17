@@ -30,7 +30,9 @@ def load_cdn_allowlist(path: str = CDN_ALLOWLIST_PATH) -> list:
     nets = []
     try:
         text = Path(path).read_text(encoding="utf-8")
-    except OSError:
+    except OSError as e:
+        log.warning("cdn-allowlist: not found/unreadable (%s) — allowlist EMPTY, "
+                    "no CDN IPs will be exempted: %s", path, e)
         return nets
     for line in text.splitlines():
         s = line.strip()
