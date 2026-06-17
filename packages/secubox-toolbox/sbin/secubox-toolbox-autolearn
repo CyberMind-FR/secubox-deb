@@ -71,13 +71,13 @@ def _dns_feed(pure_hosts) -> int:
         return -1
     if not (f.get("privacy_enforce") and f.get("privacy_dns_feed")):
         return -1
-    lines = _ip_dns.unbound_block_lines(pure_hosts)
     try:
+        lines = _ip_dns.unbound_block_lines(pure_hosts)
         tmp = UNBOUND_BLOCK_CONF + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
         os.replace(tmp, UNBOUND_BLOCK_CONF)
-    except OSError as e:
+    except Exception as e:
         sys.stderr.write(f"autolearn: dns drop-in write failed: {e}\n")
         return -1
     if os.environ.get("SECUBOX_UNBOUND_RELOAD", "1") != "0":
