@@ -143,7 +143,10 @@ def _shape(name: str, digest: bytes) -> str:
     n = (name or "").lower()
     i = int.from_bytes(digest[:8], "big")
     j = int.from_bytes(digest[8:16], "big")
-    if n == "_ga" or n.startswith("_ga"):
+    # Best-effort shaping: a syntactically plausible value the tracker accepts.
+    # GA4 per-property cookies (_ga_<id>) also get the GA1 shape — acceptable
+    # for a privacy tool (goal is "accepted", not byte-perfect GA4 fidelity).
+    if n.startswith("_ga"):
         return "GA1.2.%d.%d" % (i % 10_000_000_000, j % 10_000_000_000)
     if n in ("_fbp",):
         return "fb.1.%d.%d" % (i % 10_000_000_000_000, j % 10_000_000_000)
