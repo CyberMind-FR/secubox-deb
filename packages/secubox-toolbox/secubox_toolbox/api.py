@@ -793,6 +793,27 @@ def _load_bypass_entries() -> list[str]:
         return []
 
 
+def _read_patterns(path) -> list:
+    try:
+        return [ln.strip() for ln in path.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("#")]
+    except OSError:
+        return []
+
+
+def _load_bypass_tagged() -> list:
+    """All bypass patterns across the three sources, one row per pattern, tagged
+    with the most authoritative source (seed > static > learned)."""
+    seen: dict = {}
+    for source, path in (("seed", MITM_BYPASS_SEED_FILE),
+                         ("static", MITM_BYPASS_FILE),
+                         ("learned", MITM_BYPASS_DYNAMIC_FILE)):
+        for pat in _read_patterns(path):
+            if pat not in seen:        # first wins → seed > static > learned
+                seen[pat] = source
+    return [{"pattern": p, "source": s} for p, s in sorted(seen.items())]
+
+
 def _is_public_kbin(request: Request) -> bool:
     """Phase 6.J : detect if request comes via the public kbin vhost.
     Public traffic must be READ-ONLY on /admin/filter-control endpoints —
@@ -909,6 +930,13 @@ async def admin_filter_regex() -> dict:
     # mitmproxy ignore_hosts wants a single regex; join with | wrapped in non-capture group
     regex = "(" + "|".join(entries) + ")"
     return {"regex": regex, "count": len(entries)}
+
+
+@router.get("/admin/filter-control/list")
+async def admin_filter_list() -> dict:
+    """JSON for the #filtres panel — tagged bypass patterns (seed/static/learned)."""
+    tagged = _load_bypass_tagged()
+    return {"hosts": tagged, "count": len(tagged)}
 
 
 def _ca_fp(ca_pem) -> dict:
