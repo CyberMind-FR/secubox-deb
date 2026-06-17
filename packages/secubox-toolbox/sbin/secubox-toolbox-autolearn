@@ -15,14 +15,25 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 import time
 
-DB = "/var/lib/secubox/toolbox/toolbox.db"
-OUT = "/var/lib/secubox/toolbox/learned-trackers.txt"
+DB = os.environ.get("SECUBOX_AUTOLEARN_DB", "/var/lib/secubox/toolbox/toolbox.db")
+OUT = os.environ.get("SECUBOX_AUTOLEARN_OUT",
+                     "/var/lib/secubox/toolbox/learned-trackers.txt")
+PURE_OUT = os.environ.get("SECUBOX_AUTOLEARN_PURE_OUT",
+                          "/var/lib/secubox/toolbox/pure-trackers.txt")
 MIN_SITES = 2          # cross-site threshold for operator-grade trackers
 MAX_ENTRIES = 8000
+COOKIE_XSITE_TOP_N = int(os.environ.get("SECUBOX_COOKIE_XSITE_TOP_N", "5"))
+
+sys.path.insert(0, os.environ.get("SECUBOX_TOOLBOX_LIB", "/usr/lib/secubox/toolbox"))
+try:
+    from secubox_toolbox import learn as _learn
+except Exception:       # pragma: no cover - degraded mode
+    _learn = None
 _2L = ("co.uk", "com.au", "co.jp", "co.nz", "com.br", "co.za", "gouv.fr")
 
 
@@ -84,6 +95,21 @@ def main() -> int:
     except Exception:
         pass
 
+    # 3) NEW (#633): cross-site pre-consent cookie trackers, top-N capped.
+    if _learn is not None:
+        try:
+            for d in _learn.cookie_xsite_trackers(c, top_n=COOKIE_XSITE_TOP_N):
+                learned.add(d)
+        except Exception:
+            pass
+    # compute pure-trackers (seed + conservative auto-promote) while DB open.
+    pure: set = set(_learn.PURE_SEED) if _learn is not None else set()
+    if _learn is not None:
+        try:
+            pure = _learn.pure_trackers(c, learned=learned, seed=_learn.PURE_SEED)
+        except Exception:
+            pass
+
     c.close()
     learned.discard(None)
     out = sorted(learned)[:MAX_ENTRIES]
@@ -91,14 +117,23 @@ def main() -> int:
         tmp = OUT + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             f.write("\n".join(out) + ("\n" if out else ""))
-        import os
         os.replace(tmp, OUT)
     except Exception as e:
         sys.stderr.write(f"autolearn: write failed: {e}\n")
         return 0
+    pout = sorted(x for x in pure if x)
+    try:
+        ptmp = PURE_OUT + ".tmp"
+        with open(ptmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(pout) + ("\n" if pout else ""))
+        os.replace(ptmp, PURE_OUT)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: pure write failed: {e}\n")
+        pout = []
     sys.stderr.write(
         f"autolearn: {len(out)} hosts learned ({ti} threat-intel + "
-        f"{len(out) - ti} classified cross-site) @ {int(time.time())}\n")
+        f"{len(out) - ti} classified cross-site) @ {int(time.time())}"
+        f" ; {len(pout)} pure\n")
     return 0
 
 
