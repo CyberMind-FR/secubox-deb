@@ -1,3 +1,14 @@
+secubox-core (1.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * fix(postinst): /var/lib/secubox + /usr/share/secubox/www were set 0750,
+    breaking traversal for non-secubox daemons (kbin/toolbox 500) — now 0755
+    (same reasoning the postinst already applied to /etc/secubox).
+  * feat: secubox-dirs-guard timer — re-asserts the shared /…/secubox parents
+    to 0755 every minute, self-healing the recurring 0750 clobber from module
+    postinsts (closes #630).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 17 Jun 2026 11:00:00 +0200
+
 secubox-core (1.1.6-1~bookworm1) bookworm; urgency=medium
 
   * postinst: relax /etc/secubox to 0755 (was 0750). Non-secubox daemons
