@@ -16,6 +16,7 @@ set -euo pipefail
 MITM_BIN=/opt/mitmproxy-toolbox/bin/mitmdump
 BYPASS_FILE=/var/lib/secubox/toolbox/mitm-bypass.conf
 DYNAMIC_FILE=/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf  # noqa: SC2034 (used by addon hint)
+SEED_FILE=/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf
 ADDON_DIR=/usr/lib/secubox/toolbox/mitmproxy_addons
 
 # Phase 11.A (#505) — make the secubox_toolbox package importable from
@@ -34,7 +35,7 @@ export PYTHONPATH="/usr/lib/secubox/toolbox${PYTHONPATH:+:$PYTHONPATH}"
 IGNORE_REGEX=""
 PATTERNS=""
 COUNT=0
-for src in "$BYPASS_FILE" "$DYNAMIC_FILE"; do
+for src in "$SEED_FILE" "$BYPASS_FILE" "$DYNAMIC_FILE"; do
     if [ -r "$src" ]; then
         ADD=$(grep -v '^[[:space:]]*#' "$src" | sed 's/[[:space:]]*#.*$//' | grep -v '^[[:space:]]*$' || true)
         if [ -n "$ADD" ]; then
