@@ -372,11 +372,12 @@ async function loadFilters() {
     if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
     if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
     const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned'};
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     el.innerHTML = items.map(h => {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
-        const badge = BADGE[src] || src;
-        return `<li><code>${host}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
+        const badge = BADGE[src] || esc(src);
+        return `<li><code>${esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
     }).join('');
 }
 
