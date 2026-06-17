@@ -1,3 +1,13 @@
+secubox-toolbox (2.6.50-1~bookworm1) bookworm; urgency=medium
+
+  * #clients tab: bulk "reset all clients" admin action (#634) — applies the
+    per-client reset (events/consents/reports + social graph wiped, scores
+    zeroed, client rows kept) to every client, kbin-gated, confirm-dialogged.
+    Per-client device emoji (from latest UA via avatar_analysis), country flag +
+    hosting/ASN via geo (#635), shown in the clients list.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 22:00:00 +0200
+
 secubox-toolbox (2.6.49-1~bookworm1) bookworm; urgency=medium
 
   * Banner fix (#639): inject the transparency banner only into top-level
