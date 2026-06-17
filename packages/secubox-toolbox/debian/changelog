@@ -1,3 +1,12 @@
+secubox-toolbox (2.6.44-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2b (#633): exclusive pure-tracker IP nft-drop via
+    escalate.py, gated dark (privacy_enforce && privacy_ip_drop), with a
+    shipped CDN/cloud allowlist (cdn-allowlist.txt) so shared-infra IPs are
+    never blackholed. TTL'd + audited. DNS-refuse feed deferred to a follow-up.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 17 Jun 2026 00:00:00 +0000
+
 secubox-toolbox (2.6.43-1~bookworm1) bookworm; urgency=medium
 
   * Anti-Track v2 Plan 2a (#633): autolearn cookie-xsite tracker signal
