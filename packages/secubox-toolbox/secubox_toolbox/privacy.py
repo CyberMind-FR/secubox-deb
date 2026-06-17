@@ -168,3 +168,26 @@ def fake_id(client_hash: str, tracker: str, cookie_name: str) -> Optional[str]:
     msg = ("%s|%s|%s" % (client_hash, registrable(tracker), cookie_name)).encode()
     digest = hmac.new(key, msg, hashlib.sha256).digest()
     return _shape(cookie_name, digest)
+
+
+def same_site(host: str, site: str) -> bool:
+    return bool(site) and registrable(host) == registrable(site)
+
+
+def verdict(host: str, site: str, beacon_hint: bool = False,
+            fortknox: bool = False) -> str:
+    """Layered per-request decision. First match wins.
+
+    Returns 'allow' | 'block' | 'poison'.  ('anonymize' is applied to ALL
+    non-blocked flows separately by the addon, not a verdict branch.)
+    """
+    # 1. Fort Knox armed for this site → first-party only
+    if fortknox:
+        return "allow" if same_site(host, site) else "block"
+    # 2. tracker classification
+    kind = classify(host, beacon_hint=beacon_hint)
+    if kind == "none":
+        return "allow"
+    if kind == "pure":
+        return "block"
+    return "poison"  # loadbearing

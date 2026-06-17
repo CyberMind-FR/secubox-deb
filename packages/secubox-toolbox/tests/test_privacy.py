@@ -73,3 +73,39 @@ def test_fake_id_missing_key_returns_none(tmp_path, monkeypatch):
     monkeypatch.setattr(privacy, "JAR_KEY_PATH", str(tmp_path / "nope.key"))
     privacy._jar_key_cache["v"] = None
     assert privacy.fake_id("c", "criteo.com", "_ga") is None
+
+
+def test_verdict_first_party_allows():
+    v = privacy.verdict(host="api.example.com", site="example.com",
+                        beacon_hint=False, fortknox=False)
+    assert v == "allow"
+
+
+def test_verdict_fortknox_blocks_third_party():
+    v = privacy.verdict(host="cdn.other.com", site="example.com",
+                        beacon_hint=False, fortknox=True)
+    assert v == "block"
+
+
+def test_verdict_fortknox_allows_first_party():
+    v = privacy.verdict(host="static.example.com", site="example.com",
+                        beacon_hint=False, fortknox=True)
+    assert v == "allow"
+
+
+def test_verdict_pure_tracker_blocks():
+    v = privacy.verdict(host="google-analytics.com", site="example.com",
+                        beacon_hint=True, fortknox=False)
+    assert v == "block"
+
+
+def test_verdict_loadbearing_tracker_poisons():
+    v = privacy.verdict(host="criteo.com", site="example.com",
+                        beacon_hint=False, fortknox=False)
+    assert v == "poison"
+
+
+def test_verdict_non_tracker_allows():
+    v = privacy.verdict(host="fonts.googleapis.com", site="example.com",
+                        beacon_hint=False, fortknox=False)
+    assert v == "allow"
