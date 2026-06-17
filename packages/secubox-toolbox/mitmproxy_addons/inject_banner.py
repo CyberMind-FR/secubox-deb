@@ -404,6 +404,14 @@ def _detect_csp_strict(flow: http.HTTPFlow) -> bool:
     return False
 
 
+def _is_top_level_document(flow: http.HTTPFlow) -> bool:
+    """True if the response is a top-level navigation (so the banner belongs).
+    Skip iframes/sub-documents/sub-resources so we inject ONE banner per visit.
+    Sec-Fetch-Dest absent (old UAs) → assume top-level (best-effort, prior behavior)."""
+    dest = (flow.request.headers.get("sec-fetch-dest", "") or "").lower()
+    return dest in ("", "document")
+
+
 # Per-level visual theme (#545). R3 — and the planned R4 — get the
 # neon-tube treatment (dark glass bar, glowing tube border + neon
 # text-shadow). R2 keeps the original amber flat bar. All values are inline
@@ -800,6 +808,10 @@ class InjectBanner:
         # that survives strict CSP.
         if _detect_csp_strict(flow):
             return
+        # #639 — only inject into top-level navigations; iframes/sub-documents
+        # each get their own responseheaders call → multiple banners per visit.
+        if not _is_top_level_document(flow):
+            return
         try:
             resp.stream = _LoaderInjector(_loader_script(flow))
             flow.metadata["sbx_streamed"] = True
@@ -832,6 +844,10 @@ class InjectBanner:
                 return
         except Exception:
             pass
+        # #639 — only inject into top-level navigations; iframes/sub-documents
+        # share the same buffer path and would each get a banner.
+        if not _is_top_level_document(flow):
+            return
         # Phase 10 perf : cheap pre-flight check on Content-Length to avoid
         # reading multi-MB bodies into RAM just to discover we'd skip them.
         # `flow.response.content` would buffer the whole body before returning.
