@@ -725,6 +725,13 @@ class InjectBanner:
         # hosts whose origin can't serve /__toolbox/*). Short-circuit upstream.
         try:
             p = flow.request.path or ""
+            # NOTE: startswith (not ==) is REQUIRED: flow.request.path includes
+            # the query string, and the loader fetches /__toolbox/bundle?mh=..&wg=..
+            # — an exact-match would never fire for the bundle. Do not "tighten".
+            # The bundle echoes a caller-supplied mh + store.get_client_level(mh)
+            # unauthenticated — intentional, same as the portal /__toolbox/bundle
+            # endpoint; trust boundary is the R3 nftables perimeter (these workers
+            # are not externally reachable).
             if p.startswith("/__toolbox/loader.js"):
                 from secubox_toolbox import bundle as _b
                 flow.response = http.Response.make(
