@@ -1,3 +1,13 @@
+secubox-toolbox (2.6.43-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2a (#633): autolearn cookie-xsite tracker signal
+    (cross-site pre-consent cookie setters, top-N capped, default 5) +
+    pure-trackers.txt promotion (curated seed + conservative non-CDN/>=3-site
+    auto-promote). Both lists consumed by the privacy brain; enforcement
+    remains dark (privacy_enforce=false).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 18:00:00 +0200
+
 secubox-toolbox (2.6.42-1~bookworm1) bookworm; urgency=medium
 
   * Anti-Track v2 core (#633): privacy_guard mitm addon (block/poison/anonymize),
