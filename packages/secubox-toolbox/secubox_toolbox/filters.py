@@ -22,7 +22,7 @@ DEFAULTS: Dict = {
     "ad_ghost": True,               # R3+/R4 silent ad/banner/widget ghosting
     "ad_ghost_block": True,         # 204 known ad/tracker hosts (save bandwidth)
     "media_cache": False,           # #577 shared media proxy-cache (opt-in)
-    "stream_inject": False,         # #620 stream loader inject (TTFB) — opt-in, phase 2
+    "stream_inject": True,          # #620/#630 stream loader inject (TTFB) — default on
     "autolearn": True,              # #589 also block auto-learned bad hosts
     "ad_ghost_categories": {        # cosmetic ghost groups
         "ads": True,
