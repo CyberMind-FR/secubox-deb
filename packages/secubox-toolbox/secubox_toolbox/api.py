@@ -2907,9 +2907,13 @@ async def admin_clients_rich() -> dict:
     """Phase 6.D : enriched client list with pseudo icons + statuses + levels.
 
     Returns each client decorated with device emoji, status emoji, level chip,
-    and last activity. Designed for the admin webui table.
+    last activity, real device classification (from UA), and geo data (country,
+    flag, ASN org).  Designed for the admin webui table.
     """
     import time as _t
+    # Use module-level imports so monkeypatching in tests works correctly.
+    _av = avatar_analysis
+    _geo = geo
     rows = store.list_clients()
     now = _t.time()
     enriched = []
@@ -2931,6 +2935,28 @@ async def admin_clients_rich() -> dict:
         level_emoji = {"r0": "🌐", "r1": "🛡", "r2": "🔍", "r3": "🌐"}.get(level, "❔")
         score = r.get("score", 0)
         risk_emoji = "🟢" if score < 30 else "🟡" if score < 70 else "🔴"
+
+        # --- Device classification (UA-based) ---
+        dev_emoji, dev_label = "📱", ""
+        try:
+            ua = store.latest_user_agent(r.get("mac_hash") or "")
+            if ua:
+                cl = _av.classify_user_agent(ua)
+                dev_emoji = cl.get("device_emoji") or dev_emoji
+                dev_label = cl.get("device") or ""
+        except Exception:
+            pass
+
+        # --- Geo enrichment (country flag, ISO, ASN org) ---
+        flag = country_iso = asn_org = ""
+        try:
+            gi = _geo.lookup(r.get("ip") or "")
+            flag = gi.get("flag", "") or ""
+            country_iso = gi.get("country_iso", "") or ""
+            asn_org = gi.get("asn_org", "") or ""
+        except Exception:
+            pass
+
         enriched.append({
             "mac_hash": r.get("mac_hash"),
             "ip": r.get("ip"),
@@ -2943,7 +2969,11 @@ async def admin_clients_rich() -> dict:
             "status_label": status_label,
             "first_seen": r.get("first_seen"),
             "last_seen": r.get("last_seen"),
-            "device_emoji": "📱",  # placeholder ; could derive from avatar_analysis
+            "device_emoji": dev_emoji,
+            "device": dev_label,
+            "flag": flag,
+            "country_iso": country_iso,
+            "asn_org": asn_org,
         })
     return {"clients": enriched, "count": len(enriched)}
 
