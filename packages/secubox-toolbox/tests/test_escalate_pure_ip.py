@@ -22,9 +22,11 @@ def test_pure_ip_drop_applies_non_cdn_only(tmp_path, monkeypatch):
     monkeypatch.setattr(escalate, "_resolve_ips", lambda h: resolve.get(h, []))
     monkeypatch.setattr(escalate, "_nft_add_blacklist",
                         lambda ip: dropped.append(ip) or True)
-    monkeypatch.setattr(escalate, "_audit", lambda msg: None)
+    audited = []
+    monkeypatch.setattr(escalate, "_audit", lambda msg: audited.append(msg))
     n = escalate.pure_tracker_ip_drop(
         pure_path=str(pure), allowlist_path=str(cdn),
         enforce=True, ip_drop=True)
     assert dropped == ["203.0.113.9"]
     assert n == 1
+    assert any("203.0.113.9" in m for m in audited)   # dropped IP is audited

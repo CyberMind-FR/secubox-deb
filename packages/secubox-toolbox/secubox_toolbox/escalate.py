@@ -139,15 +139,20 @@ def pure_tracker_ip_drop(pure_path: str = PURE_TRACKERS_PATH,
                  if ln.strip() and not ln.strip().startswith("#")]
     except OSError:
         return 0
+    # NOTE: a missing/unreadable CDN allowlist yields [] → every resolved pure
+    # IP becomes eligible to drop (fail-open). Bounded by the conservative
+    # pure-only source and the dark double-gate, but keep the shipped allowlist
+    # present in production.
     nets = ip_dns.load_cdn_allowlist(allowlist_path)
     ips = ip_dns.exclusive_tracker_ips(hosts, _resolve_ips, nets)
-    dropped = 0
+    dropped_ips = []
     for ip in sorted(ips):
         if _nft_add_blacklist(ip):
-            dropped += 1
-    if dropped:
-        _audit(f"ESCALATE pure-tracker-ip dropped={dropped} ttl={ESCALATE_TTL}")
-    return dropped
+            dropped_ips.append(ip)
+    if dropped_ips:
+        _audit(f"ESCALATE pure-tracker-ip dropped={len(dropped_ips)} "
+               f"ips={','.join(dropped_ips)} ttl={ESCALATE_TTL}")
+    return len(dropped_ips)
 
 
 def evaluate_and_apply() -> Dict:
