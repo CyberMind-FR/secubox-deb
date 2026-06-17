@@ -30,12 +30,16 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
+from . import ip_dns
+
 log = logging.getLogger("secubox.toolbox.escalate")
 
 NFT = "/usr/sbin/nft"
 TABLE = "inet secubox_blacklist"
 AUDIT_LOG = Path("/var/log/secubox/audit.log")
 ESCALATE_TTL = os.environ.get("SECUBOX_ESCALATE_TTL", "4h")
+PURE_TRACKERS_PATH = os.environ.get(
+    "SECUBOX_PURE_TRACKERS", "/var/lib/secubox/toolbox/pure-trackers.txt")
 
 
 def _flag(name: str, default: str = "0") -> bool:
@@ -121,6 +125,36 @@ def _cscli_decision(ip: str, reason: str) -> bool:
         return False
 
 
+def pure_tracker_ip_drop(pure_path: str = PURE_TRACKERS_PATH,
+                         allowlist_path: str = ip_dns.CDN_ALLOWLIST_PATH,
+                         enforce: bool = False, ip_drop: bool = False) -> int:
+    """Drop the IPs of confirmed pure-tracker domains into the nft blacklist,
+    excluding CDN/cloud ranges. No-op unless enforce AND ip_drop. Returns the
+    number of IPs dropped. Reversible (TTL) + audited."""
+    if not (enforce and ip_drop):
+        return 0
+    try:
+        hosts = [ln.split()[0].lower()
+                 for ln in Path(pure_path).read_text(encoding="utf-8").splitlines()
+                 if ln.strip() and not ln.strip().startswith("#")]
+    except OSError:
+        return 0
+    # NOTE: a missing/unreadable CDN allowlist yields [] → every resolved pure
+    # IP becomes eligible to drop (fail-open). Bounded by the conservative
+    # pure-only source and the dark double-gate, but keep the shipped allowlist
+    # present in production.
+    nets = ip_dns.load_cdn_allowlist(allowlist_path)
+    ips = ip_dns.exclusive_tracker_ips(hosts, _resolve_ips, nets)
+    dropped_ips = []
+    for ip in sorted(ips):
+        if _nft_add_blacklist(ip):
+            dropped_ips.append(ip)
+    if dropped_ips:
+        _audit(f"ESCALATE pure-tracker-ip dropped={len(dropped_ips)} "
+               f"ips={','.join(dropped_ips)} ttl={ESCALATE_TTL}")
+    return len(dropped_ips)
+
+
 def evaluate_and_apply() -> Dict:
     """Run one escalation cycle. Returns a summary of actions taken.
     No-op (beyond reading aggregates) unless a source is opted-in."""
@@ -134,6 +168,17 @@ def evaluate_and_apply() -> Dict:
         "ips_added": 0,
         "actions": [],
     }
+
+    # Anti-Track v2 (#633): pure-tracker exclusive-IP drop (dark unless armed).
+    try:
+        from .filters import get_filters as _gf
+        _f = _gf()
+        _n = pure_tracker_ip_drop(enforce=bool(_f.get("privacy_enforce")),
+                                  ip_drop=bool(_f.get("privacy_ip_drop")))
+        if _n:
+            summary["actions"].append(f"pure-tracker-ip drop x{_n}")
+    except Exception as e:
+        log.warning("pure_tracker_ip_drop step failed: %s", e)
 
     from . import social as _social
     from . import device_blocks as _devblk

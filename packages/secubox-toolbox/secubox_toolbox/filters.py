@@ -14,7 +14,8 @@ import os
 import time
 from typing import Dict
 
-FILTERS_PATH = "/etc/secubox/toolbox/filters.json"
+FILTERS_PATH = os.environ.get(
+    "SECUBOX_FILTERS_PATH", "/etc/secubox/toolbox/filters.json")
 
 DEFAULTS: Dict = {
     "banner": True,                 # inject the R2/R3 transparency banner
@@ -24,6 +25,13 @@ DEFAULTS: Dict = {
     "media_cache": False,           # #577 shared media proxy-cache (opt-in)
     "stream_inject": True,          # #620/#630 stream loader inject (TTFB) — default on
     "autolearn": True,              # #589 also block auto-learned bad hosts
+    # ── Anti-Track v2 (#633) — ships dark; arm after observe-only soak ──
+    "privacy_enforce": False,       # master switch; off = observe-only
+    "privacy_poison": True,         # forge stable fake id for loadbearing trackers
+    "privacy_anonymize": True,      # always-on header hygiene (DNT/GPC, strip op-hdrs)
+    "privacy_ip_drop": False,       # nft-drop exclusive-tracker IPs (plan 2)
+    "privacy_dns_feed": True,       # feed learned blacklist into dns-guard (plan 2)
+    "fortknox_sites": [],           # per-site first-party-only opt-in
     "ad_ghost_categories": {        # cosmetic ghost groups
         "ads": True,
         "consent_nag": True,
@@ -75,7 +83,11 @@ def set_filters(patch: Dict) -> Dict:
                  if ck in DEFAULTS["ad_ghost_categories"]})
         elif k == "protective" and v in _VALID_PROTECTIVE:
             cur["protective"] = v
-        elif k in ("banner", "ad_ghost", "ad_ghost_block", "media_cache", "autolearn"):
+        elif k == "fortknox_sites" and isinstance(v, list):
+            cur["fortknox_sites"] = [str(s).strip().lower() for s in v if str(s).strip()]
+        elif k in ("banner", "ad_ghost", "ad_ghost_block", "media_cache", "autolearn",
+                   "privacy_enforce", "privacy_poison", "privacy_anonymize",
+                   "privacy_ip_drop", "privacy_dns_feed"):
             cur[k] = bool(v)
     try:
         os.makedirs(os.path.dirname(FILTERS_PATH), exist_ok=True)
