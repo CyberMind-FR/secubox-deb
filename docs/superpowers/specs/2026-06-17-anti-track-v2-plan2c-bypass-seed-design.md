@@ -5,8 +5,40 @@
 - **Issue:** #633
 - **Status:** Design approved, pending implementation plan
 - **Origin:** operator observation — the `#filtres` "🚦 Hosts bypassés" panel shows
-  "aucun host bypassé"; the only feed is reactive cert-pin detection (a pinned app
-  must fail ~3× before it's auto-bypassed) and there's no proactive seed.
+  "aucun host bypassé".
+
+---
+
+## 0. Discovery during planning (corrects the origin diagnosis)
+
+Reading `api.py` + `www/toolbox/index.html` revealed the panel is empty for a
+**different reason than assumed**:
+
+1. **The panel's data endpoint does not exist.** `loadFilters()` fetches
+   `GET /admin/filter-control/list`, but `api.py` only defines
+   `GET /admin/filter-control` (HTML page), `/add`, `/remove`, and `/regex` — there
+   is **no `/list` JSON route**. So the panel always renders empty/"no data"
+   regardless of how many hosts are bypassed. **This missing endpoint is the
+   actual bug** and the primary fix.
+2. **A seed already exists, inline.** `_ensure_bypass_file()` writes a large
+   `_MITM_BYPASS_DEFAULT_ENTRIES` default list (Signal/WhatsApp/Telegram/Apple/
+   French banks/googleapis/facebook/ad-networks) into `mitm-bypass.conf` on first
+   creation. So "no proactive seed" is false — but the seed is baked into the
+   **operator** file (mixing package + operator ownership) and is fairly broad.
+3. **The frontend already supports source tags.** `loadFilters()` already renders
+   `h.source` if present — so the API just needs to return `[{pattern, source}]`.
+
+**Revised scope (supersedes the original framing below):**
+- **Primary:** add the missing `GET /admin/filter-control/list` JSON endpoint,
+  returning tagged `[{pattern, source}]` over all sources (seed/static/learned).
+- **Secondary:** move the inline `_MITM_BYPASS_DEFAULT_ENTRIES` seed into a
+  package-owned `mitm-bypass-seed.conf` (read-only) + 3-way merge in the launch
+  script, so `mitm-bypass.conf` becomes purely operator-owned (created empty).
+- The source-label rendering (§5) is already wired client-side; only a small
+  legend/badge polish remains.
+
+The Sections below describe the seed-file + merge + labels design; read them
+through the lens of this revised scope (the `/list` endpoint is the keystone).
 
 ---
 
