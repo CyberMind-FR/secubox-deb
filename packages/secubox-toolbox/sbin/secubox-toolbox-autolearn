@@ -34,6 +34,16 @@ try:
     from secubox_toolbox import learn as _learn
 except Exception:       # pragma: no cover - degraded mode
     _learn = None
+
+try:
+    from secubox_toolbox import ip_dns as _ip_dns
+except Exception:       # pragma: no cover
+    _ip_dns = None
+
+UNBOUND_BLOCK_CONF = os.environ.get(
+    "SECUBOX_UNBOUND_BLOCK_CONF",
+    "/etc/unbound/unbound.conf.d/97-secubox-antitrack-block.conf")
+
 _2L = ("co.uk", "com.au", "co.jp", "co.nz", "com.br", "co.za", "gouv.fr")
 
 
@@ -46,6 +56,42 @@ def registrable(host: str):
         return host
     last2 = ".".join(p[-2:])
     return ".".join(p[-3:]) if (last2 in _2L and len(p) >= 3) else last2
+
+
+def _dns_feed(pure_hosts) -> int:
+    """Write the unbound NXDOMAIN drop-in for pure trackers + reload, gated by
+    privacy_enforce && privacy_dns_feed. Returns the zone count written, or -1
+    if the gate is off / unavailable (drop-in left untouched)."""
+    if _ip_dns is None:
+        return -1
+    try:
+        from secubox_toolbox.filters import get_filters
+        f = get_filters()
+    except Exception:
+        return -1
+    if not (f.get("privacy_enforce") and f.get("privacy_dns_feed")):
+        return -1
+    lines = _ip_dns.unbound_block_lines(pure_hosts)
+    try:
+        tmp = UNBOUND_BLOCK_CONF + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        os.replace(tmp, UNBOUND_BLOCK_CONF)
+    except OSError as e:
+        sys.stderr.write(f"autolearn: dns drop-in write failed: {e}\n")
+        return -1
+    if os.environ.get("SECUBOX_UNBOUND_RELOAD", "1") != "0":
+        import subprocess
+        try:
+            subprocess.run(["unbound-control", "reload"], timeout=10,
+                           capture_output=True)
+        except Exception:
+            try:
+                subprocess.run(["systemctl", "reload", "unbound"], timeout=10,
+                               capture_output=True)
+            except Exception as e:
+                sys.stderr.write(f"autolearn: unbound reload failed: {e}\n")
+    return sum(1 for l in lines if "local-zone:" in l)
 
 
 def main() -> int:
@@ -133,10 +179,11 @@ def main() -> int:
             os.replace(ptmp, PURE_OUT)
         except Exception as e:
             sys.stderr.write(f"autolearn: pure write failed: {e}\n")
+    dns_zones = _dns_feed(pout)
     sys.stderr.write(
         f"autolearn: {len(out)} hosts learned ({ti} threat-intel + "
         f"{len(out) - ti} classified cross-site) @ {int(time.time())}"
-        f" ; {len(pout)} pure\n")
+        f" ; {len(pout)} pure ; dns_feed={dns_zones}\n")
     return 0
 
 
