@@ -1,3 +1,11 @@
+secubox-toolbox (2.6.47-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2d (#633): #social tracker table shows the top-5 by
+    default with a "tout afficher" toggle for the rest; tracker domain
+    HTML-escaped in the render (stored-XSS hardening). Pure frontend.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 17 Jun 2026 00:00:00 +0000
+
 secubox-toolbox (2.6.46-1~bookworm1) bookworm; urgency=medium
 
   * Anti-Track v2 Plan 2c (#633): fix empty #filtres panel — replace the stale
