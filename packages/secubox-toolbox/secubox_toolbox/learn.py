@@ -40,6 +40,8 @@ def cookie_xsite_trackers(conn: sqlite3.Connection, top_n: int = 5) -> list[str]
         if not candidates:
             return []
         agg: dict[str, list[int]] = {}  # reg -> [clients, hits]
+        # clients/hits may double-count across subdomains of the same
+        # registrable — acceptable for relative top-N ranking.
         for r in conn.execute(
             "SELECT tracker_domain, COUNT(*) AS hits, "
             "       COUNT(DISTINCT client_mac_hash) AS clients "
@@ -55,3 +57,65 @@ def cookie_xsite_trackers(conn: sqlite3.Connection, top_n: int = 5) -> list[str]
         return [d for d, _ in ranked[:max(0, top_n)]]
     except sqlite3.Error:
         return []
+
+
+# Curated seed of unambiguous pure beacon/ad hosts (registrable form). These
+# never carry first-party content, so they are always safe to hard-block.
+PURE_SEED: set[str] = {
+    "google-analytics.com", "doubleclick.net", "googlesyndication.com",
+    "googleadservices.com", "googletagservices.com", "scorecardresearch.com",
+    "adnxs.com", "rubiconproject.com", "criteo.com", "taboola.com",
+    "outbrain.com", "moatads.com", "amazon-adsystem.com", "adsrvr.org",
+    "demdex.net", "krxd.net", "bluekai.com", "exelator.com",
+}
+
+
+def _sites_per_tracker(conn: sqlite3.Connection) -> dict[str, set]:
+    """registrable tracker domain -> set of first-party site registrables."""
+    out: dict[str, set] = {}
+    for r in conn.execute("SELECT tracker_domain, sites_jsonl FROM social_nodes"):
+        d = registrable(r["tracker_domain"])
+        if not d:
+            continue
+        try:
+            sites = json.loads(r["sites_jsonl"] or "[]")
+        except (ValueError, TypeError):
+            sites = []
+        bucket = out.setdefault(d, set())
+        for s in sites:
+            rs = registrable(s)
+            if rs:
+                bucket.add(rs)
+    return out
+
+
+def pure_trackers(conn: sqlite3.Connection, learned: Iterable[str],
+                  seed: Iterable[str] = PURE_SEED) -> set[str]:
+    """Hard-block allowlist = curated seed ∪ conservatively auto-promoted
+    learned trackers. Auto-promote requires: seen on >=3 distinct sites AND
+    cdn_vendor IS NULL (not a CDN → not load-bearing) AND the tracker's
+    registrable is never itself one of those first-party sites."""
+    pure: set[str] = {registrable(s) or s for s in seed}
+    learned_set = {registrable(d) or d for d in learned}
+    try:
+        non_cdn: set[str] = set()
+        for r in conn.execute(
+            "SELECT tracker_domain, cdn_vendor FROM social_host_meta"):
+            if r["cdn_vendor"]:
+                continue
+            d = registrable(r["tracker_domain"])
+            if d:
+                non_cdn.add(d)
+        sites = _sites_per_tracker(conn)
+        for d in learned_set:
+            ss = sites.get(d, set())
+            if len(ss) < 3:
+                continue
+            if d not in non_cdn:
+                continue
+            if d in ss:
+                continue
+            pure.add(d)
+    except sqlite3.Error:
+        pass
+    return pure
