@@ -46,7 +46,7 @@ TRACKER_PATTERNS = [
     "yieldlove", "moatads", "adservice.google", "adsystem", "adserver",
 ]
 
-_cache: Dict[str, tuple] = {}   # client_id -> (built_at, bundle)
+_cache: Dict[tuple, tuple] = {}   # (client_id, is_wg) -> (built_at, bundle)
 
 
 def _read_pin() -> str:
@@ -89,11 +89,12 @@ def get_bundle(client_id: str, is_wg: bool = False) -> dict:
     """Return the cached bundle for a client, rebuilding past the TTL. Fail-open."""
     try:
         now = time.time()
-        hit = _cache.get(client_id or "")
+        key = (client_id or "", bool(is_wg))
+        hit = _cache.get(key)
         if hit and (now - hit[0]) < BUNDLE_TTL:
             return hit[1]
         bundle = build_bundle(client_id, is_wg)
-        _cache[client_id or ""] = (now, bundle)
+        _cache[key] = (now, bundle)
         return bundle
     except Exception:
         # Minimal safe bundle — never break the loader.
@@ -132,10 +133,10 @@ LOADER_JS = r"""(function(){
     try { ck = document.cookie ? document.cookie.split(";").filter(function(x){return x.indexOf("=")>=0;}).length : 0; } catch (_) {}
     var bar = document.createElement("div");
     bar.id = "sbx-banner";
-    bar.setAttribute("style", "position:fixed;left:0;right:0;bottom:0;z-index:2147483647;"
+    bar.setAttribute("style", "position:fixed;left:0;right:0;top:0;z-index:2147483647;"
       + "font:12px/1.4 system-ui,-apple-system,sans-serif;background:#0A0E14;color:#E8E6E0;"
-      + "border-top:2px solid #148C66;padding:6px 12px;display:flex;gap:14px;align-items:center;"
-      + "box-shadow:0 -2px 12px rgba(0,0,0,.4)");
+      + "border-bottom:2px solid #148C66;padding:6px 12px;display:flex;gap:14px;align-items:center;"
+      + "box-shadow:0 2px 12px rgba(0,0,0,.4)");
     var pin = b.pin ? "<span title=\"pinned\">📌 " + esc(b.pin) + "</span>" : "";
     bar.innerHTML = "<b style=\"color:#148C66\">SecuBox</b>"
       + "<span>" + esc((b.level || "r1").toUpperCase()) + "</span>"
@@ -145,8 +146,9 @@ LOADER_JS = r"""(function(){
       + "<a href=\"" + esc(b.report_url || "#") + "\" style=\"margin-left:auto;color:#2C70C0;text-decoration:none\">report ▸</a>"
       + "<button aria-label=\"dismiss\" style=\"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px\">✕</button>";
     document.body.appendChild(bar);
+    try { document.body.style.paddingTop = (bar.offsetHeight || 34) + "px"; } catch (_) {}
     var btn = bar.querySelector("button");
-    if (btn) btn.onclick = function(){ bar.remove(); };
+    if (btn) btn.onclick = function(){ try { document.body.style.paddingTop = ""; } catch (_) {} bar.remove(); };
   }
   fetch("/__toolbox/bundle?mh=" + encodeURIComponent(mh) + "&wg=" + encodeURIComponent(wg), {credentials:"omit"})
     .then(function(r){ return r.json(); })
