@@ -134,6 +134,21 @@ def purge_expired() -> int:
     return n
 
 
+def latest_user_agent(mac_hash: str) -> str | None:
+    """Most recent recorded User-Agent for a client (from consents), or None."""
+    try:
+        with _conn() as c:
+            row = c.execute(
+                "SELECT user_agent FROM consents "
+                "WHERE mac_hash=? AND user_agent IS NOT NULL AND user_agent<>'' "
+                "ORDER BY ts DESC LIMIT 1",
+                (mac_hash,),
+            ).fetchone()
+        return row["user_agent"] if row else None
+    except sqlite3.Error:
+        return None
+
+
 def reset_client(mac_hash: str) -> int:
     """Phase 12.B (#516) — RAZ a specific client's accumulated toolbox
     state : events + consents + reports.  Returns rows deleted.  The
