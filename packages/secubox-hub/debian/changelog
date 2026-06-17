@@ -1,3 +1,11 @@
+secubox-hub (1.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * feat(health): Health Monitor page (/health/) — live status of vital +
+    common services from public/health-batch, grouped + severity-sorted,
+    auto-refresh, dark hybrid-skin. Sidebar menu entry (closes #628).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 17 Jun 2026 10:00:00 +0200
+
 secubox-hub (1.4.4-1~bookworm1) bookworm; urgency=medium
 
   * fix(perf): dashboard/services cache never warmed under the aggregator,

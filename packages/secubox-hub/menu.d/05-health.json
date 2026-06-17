@@ -1,0 +1,9 @@
+{
+  "id": "health",
+  "name": "Health Monitor",
+  "category": "root",
+  "icon": "💚",
+  "path": "/health/",
+  "order": 5,
+  "description": "Live status of vital and common SecuBox services"
+}
