@@ -4,7 +4,12 @@ case "$1" in
   configure)
     id -u secubox >/dev/null 2>&1 || \
       adduser --system --group --no-create-home --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    install -d -o secubox -g secubox -m 750 /run/secubox /var/lib/secubox /var/lib/secubox/haproxy /var/lib/secubox/haproxy/config_backups
+    # Shared parents stay 0755 (traversable by every secubox-* daemon — setting
+    # them 0750 here broke kbin/toolbox by blocking traversal, #626). Only the
+    # haproxy-private leaves are restricted.
+    install -d -o secubox -g secubox -m 755 /run/secubox /var/lib/secubox
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/haproxy /var/lib/secubox/haproxy/config_backups
+    chmod 0755 /var/lib/secubox /run/secubox 2>/dev/null || true
     # Create /etc/haproxy if not present (haproxy is Recommends, not Depends)
     # Required for systemd namespace setup
     install -d -m 755 /etc/haproxy
