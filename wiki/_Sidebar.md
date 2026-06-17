@@ -40,6 +40,7 @@
 
 ### 🟣 MIND — Modules
 
+* [[Anti-Track]] 🛡️ bloque · empoisonne · anonymise
 * [[MODULES-EN|Modules]] 🇬🇧
 * [[MODULES-FR]] 🇫🇷
 * [[MODULES-DE]] 🇩🇪
