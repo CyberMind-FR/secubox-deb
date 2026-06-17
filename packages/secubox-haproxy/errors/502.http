@@ -1,0 +1,70 @@
+HTTP/1.1 502 Bad Gateway
+Cache-Control: no-store, no-cache, must-revalidate
+Connection: close
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Service recovering — SecuBox</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{min-height:100vh;background:#0a0a0f;color:#e8e6d9;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;
+  background-image:radial-gradient(ellipse at 30% 20%,rgba(201,168,76,.06)0%,transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(0,212,255,.05)0%,transparent 50%)}
+.card{max-width:520px;width:100%;text-align:center;background:rgba(17,23,32,.85);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:40px 32px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.code{font-family:'JetBrains Mono',monospace;font-size:5.5rem;font-weight:700;line-height:1;color:#c9a84c;text-shadow:0 0 30px rgba(201,168,76,.4)}
+h1{font-size:1.5rem;font-weight:600;margin:12px 0 8px;color:#e8e6d9}
+p{color:#8a9aa8;font-size:.95rem;line-height:1.6;margin:6px 0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#c9a84c;margin-right:8px;animation:pulse 1.2s ease-in-out infinite;vertical-align:middle}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+.status{margin:24px 0 8px;font-family:'JetBrains Mono',monospace;font-size:.9rem;color:#00d4ff;min-height:1.4em}
+.status.ok{color:#00ff41}
+.bar{height:3px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin:16px 0}
+.bar>i{display:block;height:100%;width:30%;background:linear-gradient(90deg,transparent,#00d4ff,transparent);animation:scan 1.6s linear infinite}
+@keyframes scan{0%{transform:translateX(-120%)}100%{transform:translateX(400%)}}
+button{margin-top:18px;background:transparent;color:#c9a84c;border:1px solid #c9a84c;border-radius:8px;padding:10px 20px;font:inherit;font-size:.9rem;cursor:pointer;transition:all .2s}
+button:hover{background:#c9a84c;color:#0a0a0f}
+.brand{margin-top:28px;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:#6b6b7a;letter-spacing:1px}
+.brand b{color:#0a5840;filter:brightness(1.6)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="code" id="code">502</div>
+  <h1><span class="dot"></span>Service recovering</h1>
+  <p>This service is temporarily unavailable. It's being inspected by the SecuBox WAF and is recovering.</p>
+  <p>This page checks automatically and will reload the moment it's back — no need to refresh.</p>
+  <div class="bar"><i></i></div>
+  <div class="status" id="status">⟳ checking…</div>
+  <button id="retry" type="button">Retry now</button>
+  <div class="brand">SecuBox<b>·</b> secured edge — self-healing</div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var s=document.getElementById('status'),attempt=0,delay=4000,timer=null;
+  function recovered(st){return st>0&&st<500;}
+  function check(){
+    attempt++;
+    s.className='status';s.textContent='⟳ checking… (attempt '+attempt+')';
+    fetch(location.href,{method:'GET',cache:'no-store',redirect:'manual',headers:{'x-secubox-healthcheck':'1'}})
+      .then(function(r){
+        if(recovered(r.type==='opaqueredirect'?200:r.status)){
+          s.className='status ok';s.textContent='✓ back online — reloading…';
+          clearTimeout(timer);setTimeout(function(){location.reload();},600);
+        }else{schedule();}
+      })
+      .catch(function(){schedule();});
+  }
+  function schedule(){
+    delay=Math.min(delay+1000,15000);
+    timer=setTimeout(check,delay);
+  }
+  document.getElementById('retry').addEventListener('click',function(){clearTimeout(timer);delay=4000;check();});
+  timer=setTimeout(check,2500);
+})();
+</script>
+</body>
+</html>
