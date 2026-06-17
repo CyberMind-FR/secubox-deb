@@ -1,0 +1,7 @@
+[Unit]
+Description=SecuBox shared-dir traversal guard (keep /…/secubox parents 0755)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-dirs-guard.sh
+Nice=10

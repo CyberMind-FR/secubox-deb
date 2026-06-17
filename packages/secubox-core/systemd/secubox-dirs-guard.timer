@@ -1,0 +1,8 @@
+[Unit]
+Description=Re-assert SecuBox shared-dir perms every minute
+[Timer]
+OnCalendar=*:0/1
+AccuracySec=10s
+Persistent=true
+[Install]
+WantedBy=timers.target

@@ -18,8 +18,12 @@ case "$1" in
     # secubox:secubox), so opening the parent dir does NOT leak secrets.
     install -d -o secubox -g secubox -m 755 /etc/secubox
     install -d -m 1777 /run/secubox  # World-writable for all service sockets
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox
-    install -d -o secubox -g secubox -m 750 /usr/share/secubox/www
+    # Same reasoning as /etc/secubox above: these SHARED parents must be 0755 so
+    # every secubox-* daemon (running as its own user, not in group secubox) can
+    # traverse to its own subtree. 0750 here broke kbin/toolbox repeatedly
+    # (#626/#630). Per-module leaves + secrets stay restricted.
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox
+    install -d -o secubox -g secubox -m 755 /usr/share/secubox/www
 
     # ── tmpfiles.d for persistent /run/secubox ──
     systemd-tmpfiles --create 2>/dev/null || true
@@ -69,6 +73,11 @@ case "$1" in
 
     # Enable runtime directory service (ensures /run/secubox exists before other services)
     systemctl enable --now secubox-runtime.service 2>/dev/null || true
+
+    # Shared-dir traversal guard (#630): self-heals the recurring 0750 clobber
+    # (from this and other module postinsts) that breaks kbin/toolbox.
+    systemctl enable --now secubox-dirs-guard.timer 2>/dev/null || true
+    systemctl start secubox-dirs-guard.service 2>/dev/null || true
 
     # ── Python dependencies (ensure compatible versions) ──
     # Debian bookworm ships old pydantic v1 and fastapi, upgrade via pip
