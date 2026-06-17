@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -769,6 +770,10 @@ document.querySelectorAll('.tab').forEach(function(t){
 # mitm reads it via --set ignore_hosts on (re)start.
 
 MITM_BYPASS_FILE = Path("/var/lib/secubox/toolbox/mitm-bypass.conf")
+MITM_BYPASS_SEED_FILE = Path(os.environ.get(
+    "SECUBOX_BYPASS_SEED", "/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf"))
+MITM_BYPASS_DYNAMIC_FILE = Path(os.environ.get(
+    "SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"))
 _MITM_BYPASS_DEFAULT_ENTRIES = [
     "# SecuBox ToolBoX :: mitm bypass list (regex, one per line)",
     "# These hosts/domains are NOT decrypted by mitm — TLS passthrough.",
@@ -836,7 +841,11 @@ _MITM_BYPASS_DEFAULT_ENTRIES = [
 def _ensure_bypass_file() -> None:
     if not MITM_BYPASS_FILE.exists():
         MITM_BYPASS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        MITM_BYPASS_FILE.write_text("\n".join(_MITM_BYPASS_DEFAULT_ENTRIES) + "\n")
+        MITM_BYPASS_FILE.write_text(
+            "# SecuBox ToolBoX :: operator bypass additions (regex, one per line).\n"
+            "# Package cert-pinned defaults live in the read-only seed file;\n"
+            "# auto-learned hosts in mitm-bypass-dynamic.conf. Edit via "
+            "/admin/filter-control.\n")
 
 
 def _load_bypass_entries() -> list[str]:
