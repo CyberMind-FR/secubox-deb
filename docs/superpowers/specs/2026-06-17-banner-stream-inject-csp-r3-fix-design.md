@@ -25,18 +25,22 @@ report link, without losing the `stream_inject` TTFB win on normal sites.
    buffer path injects an inline-CSS banner `<div>` (no external script, no fetch)
    and was CSP-tolerant by design — but `responseheaders` streams the loader
    without ever checking CSP, so the legacy fallback never runs.
-2. **R3 report link unreachable.** `/__toolbox/bundle` returns
-   `report_url=http://10.99.0.1:8088/report/me/html` for everyone. R3 (WG) clients
-   cannot reach the captive `10.99.0.1` (per `inject_banner.py`'s own comment) →
-   the "report ▸" link is dead for R3. R3 should get the public
-   `https://kbin.gk2.secubox.in/report/me/html?mh=<wg_hash>`.
+2. **~~R3 report link unreachable~~ — RETRACTED (misdiagnosis).** Live re-test
+   showed the route (`api.py:71`) DOES forward `bool(wg)` to `get_bundle`, and a
+   real R3 client's loader sends `&wg=1` → `_report_url(client_id, is_wg=True)` →
+   the public `https://kbin.gk2.secubox.in/report/me/html?mh=<wg_hash>`. **R3's
+   report link is correct.** The captive URL I first saw came from a curl WITHOUT
+   `wg=1`. The only genuine residual is a **minor cache bug**: `bundle.get_bundle`
+   caches by `client_id` (mh) only, ignoring `is_wg`, so a wg/non-wg pair sharing
+   one mh can bleed report_urls. Low impact (R3 always sends wg=1 with a unique
+   wg_hash mh), but a real correctness nit — fixed cheaply here as a bonus.
 
 ### Decisions
 
 | Question | Decision |
 |---|---|
-| CSP handling | **Fall back to the legacy buffer path on strict CSP** (reuse `_detect_csp_strict`); do NOT rewrite the site's CSP header |
-| R3 report-url | Bundle selects public-kbin+`mh` for WG/R3 clients, captive for R2 (mirror `inject_banner._report_url_for`) |
+| CSP handling (Bug 1, primary) | **Fall back to the legacy buffer path on strict CSP** (reuse `_detect_csp_strict`); do NOT rewrite the site's CSP header |
+| Bundle cache key (minor) | Key `_cache` by `(client_id, is_wg)` so wg/non-wg bundles don't bleed |
 
 ---
 
@@ -62,20 +66,22 @@ fall back even when `script-src 'self'` would have allowed the loader) — that 
 acceptable: the fallback always produces a correct banner, only forgoing the TTFB
 optimization on those sites. (A future refinement could special-case `'self'`.)
 
-### Bug 2 — the `/__toolbox/bundle` builder (`secubox_toolbox/bundle.py` and/or its `api.py` route)
+### Bug 2 (minor) — `bundle.get_bundle` cache ignores `is_wg`
 
-Select `report_url` by client class:
-- **R3 / WG** (client IP `10.99.1.x`, or the `wg` flag the loader carries):
-  `https://kbin.gk2.secubox.in/report/me/html?mh=<wg_hash>` (public, reachable).
-- **R2 / captive:** the existing `http://10.99.0.1:8088/report/me/html`.
-
-Reuse the existing report-url logic in `inject_banner.py` (`REPORT_URL_PUBLIC`,
-`_peer_hash_from_ip`, `_report_url_for`) — extract/share it rather than duplicate,
-or replicate the same selection in the bundle builder. The bundle endpoint already
-sees the client connection (it served the loader's fetch), so it can derive
-WG-ness from the client IP; if the bundle is fetched same-origin through the proxy,
-the client IP is the WG peer IP (10.99.1.x) and `_peer_hash_from_ip` yields the
-`mh`.
+`get_bundle(client_id, is_wg)` caches by `client_id` only:
+`_cache.get(client_id or "")`. So once an mh is cached for one `is_wg` value, a
+later request for the same mh with the *other* `is_wg` returns the stale bundle
+(wrong `report_url`). The report-url *selection* itself is already correct
+(`_report_url(client_id, is_wg)`); only the cache key is wrong. Fix: key the cache
+by `(client_id, is_wg)`:
+```python
+key = (client_id or "", bool(is_wg))
+hit = _cache.get(key)
+...
+_cache[key] = (now, bundle)
+```
+Low impact (R3 always sends `wg=1` with a unique wg_hash mh, R2 sends `wg=0`), but
+a genuine correctness fix and trivial.
 
 ---
 
@@ -96,9 +102,11 @@ the client IP is the WG peer IP (10.99.1.x) and `_peer_hash_from_ip` yields the
   after `responseheaders`, `flow.metadata.get("sbx_streamed")` is falsy AND
   `resp.stream` is not a `_LoaderInjector` (fell back). A flow with no CSP (or
   `'unsafe-inline'`) → streams (`sbx_streamed` true). Use mitmproxy `tflow`.
-- bundle report_url: build the bundle for a WG client (10.99.1.x / wg=1) → URL is
-  the public kbin form with `mh=`; for an R2/captive client → captive URL.
-- Reuse `SECUBOX_*` env / monkeypatch for filters (stream_inject on) as the other
+- bundle cache key: `get_bundle("mh1", is_wg=True)` then `get_bundle("mh1",
+  is_wg=False)` return DIFFERENT bundles (public vs captive report_url) — i.e. the
+  second call is not served the cached wg=True bundle. (Clear `_cache` between, or
+  assert the two report_urls differ.)
+- Reuse mitmproxy `tflow` / monkeypatch for filters (stream_inject on) as the other
   inject_banner-adjacent tests do.
 
 ## 5. Rollout
