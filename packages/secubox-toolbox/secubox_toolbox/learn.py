@@ -19,6 +19,10 @@ from typing import Iterable
 
 from secubox_toolbox.privacy import registrable
 
+import logging
+
+log = logging.getLogger("secubox.toolbox.learn")
+
 
 def cookie_xsite_trackers(conn: sqlite3.Connection, top_n: int = 5) -> list[str]:
     """Registrable tracker domains that set a cookie id reused across >=2 sites
@@ -55,7 +59,8 @@ def cookie_xsite_trackers(conn: sqlite3.Connection, top_n: int = 5) -> list[str]
             cur[1] += int(r["hits"])
         ranked = sorted(agg.items(), key=lambda kv: (-kv[1][0], -kv[1][1], kv[0]))
         return [d for d, _ in ranked[:max(0, top_n)]]
-    except sqlite3.Error:
+    except sqlite3.Error as e:
+        log.warning("cookie_xsite_trackers: DB error, skipping signal: %s", e)
         return []
 
 
@@ -116,6 +121,7 @@ def pure_trackers(conn: sqlite3.Connection, learned: Iterable[str],
             if d in ss:
                 continue
             pure.add(d)
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as e:
+        log.warning("pure_trackers: DB error, returning seed only: %s", e)
+        # fail toward seed-only (fewer hard-blocks)
     return pure
