@@ -166,10 +166,7 @@ def evaluate_and_apply() -> Dict:
 
     # Anti-Track v2 (#633): pure-tracker exclusive-IP drop (dark unless armed).
     try:
-        import sys as _sys
-        _sys.path.insert(0, os.environ.get("SECUBOX_TOOLBOX_LIB",
-                                           "/usr/lib/secubox/toolbox"))
-        from secubox_toolbox.filters import get_filters as _gf
+        from .filters import get_filters as _gf
         _f = _gf()
         _n = pure_tracker_ip_drop(enforce=bool(_f.get("privacy_enforce")),
                                   ip_drop=bool(_f.get("privacy_ip_drop")))
