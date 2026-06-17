@@ -720,6 +720,31 @@ class _LoaderInjector:
 
 class InjectBanner:
     def request(self, flow: http.HTTPFlow) -> None:
+        # #636 — serve the banner loader + bundle for ANY origin so the injected
+        # <script src="/__toolbox/loader.js"> resolves (R3 clients hit arbitrary
+        # hosts whose origin can't serve /__toolbox/*). Short-circuit upstream.
+        try:
+            p = flow.request.path or ""
+            if p.startswith("/__toolbox/loader.js"):
+                from secubox_toolbox import bundle as _b
+                flow.response = http.Response.make(
+                    200, _b.LOADER_JS.encode("utf-8"),
+                    {"Content-Type": "application/javascript",
+                     "Cache-Control": "public, max-age=3600"})
+                return
+            if p.startswith("/__toolbox/bundle"):
+                from secubox_toolbox import bundle as _b
+                import json as _json
+                q = flow.request.query
+                mh = q.get("mh", "") if q else ""
+                wg = (q.get("wg", "0") if q else "0") in ("1", "true", "yes", "on")
+                flow.response = http.Response.make(
+                    200, _json.dumps(_b.get_bundle(mh, wg)).encode("utf-8"),
+                    {"Content-Type": "application/json",
+                     "Cache-Control": "no-store"})
+                return
+        except Exception as e:
+            log.warning("toolbox asset serve failed for %s: %s", flow.request.path, e)
         # #620 : for top-level HTML navigations, ask upstream for identity
         # encoding so we can stream-inject the loader without decompressing.
         if not _stream_enabled():
