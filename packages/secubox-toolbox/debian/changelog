@@ -1,3 +1,60 @@
+secubox-toolbox (2.6.47-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2d (#633): #social tracker table shows the top-5 by
+    default with a "tout afficher" toggle for the rest; tracker domain
+    HTML-escaped in the render (stored-XSS hardening). Pure frontend.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 17 Jun 2026 00:00:00 +0000
+
+secubox-toolbox (2.6.46-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2c (#633): fix empty #filtres panel — replace the stale
+    /admin/filter-control/list (wrong shape) with a tagged seed/static/learned
+    endpoint + source badges. Move inline cert-pinned bypass defaults to a
+    package-owned mitm-bypass-seed.conf (operator file starts empty); launch
+    script merges seed + operator + learned into ignore_hosts (behavior-preserving).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 00:00:00 +0000
+
+secubox-toolbox (2.6.45-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2b-DNS (#633): autolearn writes an unbound NXDOMAIN
+    drop-in (97-secubox-antitrack-block.conf) for confirmed pure-tracker
+    domains + unbound-control reload, gated dark (privacy_enforce &&
+    privacy_dns_feed). Targets unbound (the live client resolver); dns-guard
+    is inactive on the board and intentionally not used. filters.json path is
+    now env-overridable (SECUBOX_FILTERS_PATH) for testing.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 17 Jun 2026 00:00:00 +0000
+
+secubox-toolbox (2.6.44-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2b (#633): exclusive pure-tracker IP nft-drop via
+    escalate.py, gated dark (privacy_enforce && privacy_ip_drop), with a
+    shipped CDN/cloud allowlist (cdn-allowlist.txt) so shared-infra IPs are
+    never blackholed. TTL'd + audited. DNS-refuse feed deferred to a follow-up.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 17 Jun 2026 00:00:00 +0000
+
+secubox-toolbox (2.6.43-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2a (#633): autolearn cookie-xsite tracker signal
+    (cross-site pre-consent cookie setters, top-N capped, default 5) +
+    pure-trackers.txt promotion (curated seed + conservative non-CDN/>=3-site
+    auto-promote). Both lists consumed by the privacy brain; enforcement
+    remains dark (privacy_enforce=false).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 18:00:00 +0200
+
+secubox-toolbox (2.6.42-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 core (#633): privacy_guard mitm addon (block/poison/anonymize),
+    privacy brain (classification + stable fake-identity jar + layered verdict),
+    Fort-Knox per-site first-party-only, filter toggles (ship dark:
+    privacy_enforce=false), privacy-jar.key provisioning.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 14:00:00 +0200
+
 secubox-toolbox (2.6.41-1~bookworm1) bookworm; urgency=medium
 
   * perf(ttfb): stream_inject now defaults ON (#630) — phase-2 streaming loader

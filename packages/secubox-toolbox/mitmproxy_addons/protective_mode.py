@@ -23,31 +23,18 @@ from __future__ import annotations
 import logging
 import os
 import sys
-import re
 import time
 
 from mitmproxy import http
+
+if "/usr/lib/secubox/toolbox" not in sys.path:
+    sys.path.insert(0, "/usr/lib/secubox/toolbox")
+from secubox_toolbox import privacy   # single source of tracker patterns (#633)
 
 log = logging.getLogger("secubox.toolbox.protective")
 
 _AUDIT = "/var/log/secubox/audit.log"
 _STATS = "/run/secubox/protective.json"
-
-# 3rd-party tracker hosts (mirror of inject_banner's _TRACKER_PATTERNS).
-_TRACKER = re.compile(
-    r"(?:^|\.)(?:"
-    r"doubleclick|googlesyndication|googleadservices|googletagmanager|"
-    r"google-analytics|googletagservices|adservice\.google|"
-    r"facebook\.com/tr|connect\.facebook\.net|facebook\.net|"
-    r"scorecardresearch|chartbeat|hotjar|mixpanel|amplitude|"
-    r"segment\.com|segment\.io|criteo|adnxs|rubiconproject|"
-    r"taboola|outbrain|smartadserver|optimizely|fullstory|"
-    r"newrelic|datadog|sentry|amazon-adsystem|adsrvr|adform|"
-    r"yieldlove|moatads|adsystem|adserver|liveramp|bluekai|"
-    r"krxd|demdex|agkn|tapad|exelator|utiq"
-    r")",
-    re.IGNORECASE,
-)
 
 # Operator-grade / tracking request headers stripped in spoof mode.
 _STRIP = (
@@ -75,7 +62,7 @@ def _level() -> str:
 
 
 def _is_tracker(host: str) -> bool:
-    return bool(host) and bool(_TRACKER.search(host))
+    return privacy.is_tracker(host or "")
 
 
 def _audit(action: str, host: str, detail: str) -> None:
