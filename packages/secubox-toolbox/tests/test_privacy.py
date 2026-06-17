@@ -119,3 +119,15 @@ def test_same_site_empty_inputs():
 def test_verdict_fortknox_empty_host_blocks():
     # undefined host under Fort-Knox must fail safe to block, never allow
     assert privacy.verdict(host="", site="example.com", fortknox=True) == "block"
+
+
+def test_protective_mode_uses_privacy_patterns():
+    import pathlib, sys
+    sys_path_dir = str(pathlib.Path(__file__).resolve().parents[1] / "mitmproxy_addons")
+    if sys_path_dir not in sys.path:
+        sys.path.insert(0, sys_path_dir)
+    import protective_mode
+    # protective_mode must delegate tracker detection to privacy (single source)
+    assert protective_mode._is_tracker("connect.facebook.net") is True
+    assert protective_mode._is_tracker("example.com") is False
+    assert protective_mode.privacy.is_tracker is not None
