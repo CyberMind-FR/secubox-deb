@@ -1,3 +1,14 @@
+secubox-mitmproxy (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * feat(robustness): self-healing WAF inspector watchdog (closes #624).
+      - secubox-waf-watchdog.{sh,service,timer}: every 60s check inspector
+        :8080; after 3 consecutive failures auto-recover the mitmproxy LXC
+        (lxc-stop -k / lxc-start), rate-limited once/10min. Turns an inspector
+        crash from a multi-hour board-wide 503 into a ~3-minute auto-recovery.
+      - Enabled in postinst, stopped/disabled in prerm.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 17 Jun 2026 08:00:00 +0200
+
 secubox-mitmproxy (1.0.8-1~bookworm1) bookworm; urgency=medium
 
   * fix(waf): live-reload haproxy-routes.json on change (#609). The addon now

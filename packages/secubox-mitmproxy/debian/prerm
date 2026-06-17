@@ -5,6 +5,8 @@ case "$1" in
   remove|purge)
     systemctl stop secubox-mitmproxy.service || true
     systemctl disable secubox-mitmproxy.service || true
+    systemctl stop secubox-waf-watchdog.timer 2>/dev/null || true
+    systemctl disable secubox-waf-watchdog.timer 2>/dev/null || true
     ;;
 esac
 #DEBHELPER#
