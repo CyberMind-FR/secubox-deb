@@ -122,6 +122,7 @@
             <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
                 Hosts exclus de l'inspection TLS (cert-pinning détecté ou whitelist statique).
             </p>
+            <p style="font-size:0.72rem;color:#888">Sources : 🌱 seed (paquet) · ✋ static (opérateur) · 🔍 learned (cert-pin auto)</p>
             <ul class="filterlist" id="filters"><li class="empty">loading…</li></ul>
         </div>
     </section>
@@ -370,10 +371,12 @@ async function loadFilters() {
     const items = (d && d.hosts) ? d.hosts : (Array.isArray(d) ? d : null);
     if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
     if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
+    const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned'};
     el.innerHTML = items.map(h => {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
-        return `<li><code>${host}</code>${src ? `<span style="color:var(--p31-dim);font-size:0.72rem">${src}</span>` : ''}</li>`;
+        const badge = BADGE[src] || src;
+        return `<li><code>${host}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
     }).join('');
 }
 
