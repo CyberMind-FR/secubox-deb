@@ -47,3 +47,20 @@ def test_exclusive_tracker_ips_dedups_and_handles_empty():
         [])
     assert out == {"198.51.100.5"}
     assert ip_dns.exclusive_tracker_ips([], lambda h: ["1.2.3.4"], []) == set()
+
+
+def test_unbound_block_lines_folds_dedups_sorts():
+    lines = ip_dns.unbound_block_lines(
+        ["www.criteo.com", "doubleclick.net", "criteo.com", ""])
+    assert lines[0] == "server:"
+    lz = [l for l in lines if "local-zone:" in l]
+    assert lz == [
+        '    local-zone: "criteo.com." always_nxdomain',
+        '    local-zone: "doubleclick.net." always_nxdomain',
+    ]
+
+
+def test_unbound_block_lines_empty_has_only_server_header():
+    lines = ip_dns.unbound_block_lines([])
+    assert "server:" in lines
+    assert not any("local-zone:" in l for l in lines)

@@ -19,6 +19,8 @@ import logging
 from pathlib import Path
 from typing import Callable, Iterable, List
 
+from secubox_toolbox.privacy import registrable
+
 log = logging.getLogger("secubox.toolbox.ip_dns")
 
 CDN_ALLOWLIST_PATH = "/usr/lib/secubox/toolbox/data/cdn-allowlist.txt"
@@ -76,3 +78,19 @@ def exclusive_tracker_ips(pure_hosts: Iterable[str],
             if ip and not ip_in_allowlist(ip, allow):
                 drop.add(ip)
     return drop
+
+
+def unbound_block_lines(pure_hosts: Iterable[str]) -> list:
+    """Render an unbound drop-in body that NXDOMAINs each pure-tracker domain.
+    Registrable-folded, deduped, sorted. `server:` is always the first line so
+    the file is a valid (possibly empty) unbound conf.d drop-in."""
+    zones = set()
+    for h in pure_hosts:
+        d = registrable(h) if h else ""
+        if d:
+            zones.add(d)
+    lines = ["server:",
+             "    # SecuBox Anti-Track v2 (#633) — generated; do not edit by hand."]
+    for d in sorted(zones):
+        lines.append('    local-zone: "%s." always_nxdomain' % d)
+    return lines
