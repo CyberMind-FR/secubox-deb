@@ -122,6 +122,7 @@
             <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
                 Hosts exclus de l'inspection TLS (cert-pinning détecté ou whitelist statique).
             </p>
+            <p style="font-size:0.72rem;color:#888">Sources : 🌱 seed (paquet) · ✋ static (opérateur) · 🔍 learned (cert-pin auto)</p>
             <ul class="filterlist" id="filters"><li class="empty">loading…</li></ul>
         </div>
     </section>
@@ -370,10 +371,13 @@ async function loadFilters() {
     const items = (d && d.hosts) ? d.hosts : (Array.isArray(d) ? d : null);
     if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
     if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
+    const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned'};
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     el.innerHTML = items.map(h => {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
-        return `<li><code>${host}</code>${src ? `<span style="color:var(--p31-dim);font-size:0.72rem">${src}</span>` : ''}</li>`;
+        const badge = BADGE[src] || esc(src);
+        return `<li><code>${esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
     }).join('');
 }
 
@@ -396,11 +400,24 @@ async function loadSocial() {
         <span class="k">Fenêtre</span>        <span class="v">${agg.window_hours || 24}h</span>
     `;
     const td = agg.by_tracker_domain || [];
-    trk.innerHTML = td.length
-        ? '<table><thead><tr><th>Tracker domain</th><th>hits</th><th>clients</th></tr></thead><tbody>' +
-          td.map(r => `<tr><td><code>${r.tracker_domain}</code></td><td>${r.hits}</td><td>${r.clients}</td></tr>`).join('') +
-          '</tbody></table>'
-        : '<div class="empty">aucun tracker dans la fenêtre</div>';
+    const escT = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    if (!td.length) {
+        trk.innerHTML = '<div class="empty">aucun tracker dans la fenêtre</div>';
+    } else {
+        const row = r => `<tr><td><code>${escT(r.tracker_domain)}</code></td><td>${r.hits}</td><td>${r.clients}</td></tr>`;
+        const top = td.slice(0, 5).map(row).join('');
+        const rest = td.slice(5).map(row).join('');
+        let html = '<table><thead><tr><th>Tracker domain</th><th>hits</th><th>clients</th></tr></thead>'
+                 + '<tbody>' + top + '</tbody>';
+        if (rest) {
+            html += '<tbody id="sbx-trk-rest" style="display:none">' + rest + '</tbody>';
+        }
+        html += '</table>';
+        if (rest) {
+            html += `<button type="button" onclick="(function(b){var x=document.getElementById('sbx-trk-rest');var on=x.style.display==='none';x.style.display=on?'':'none';b.textContent=on?'▴ réduire':'▾ tout afficher (${td.length})';})(this)" style="margin-top:6px;background:none;border:0;color:var(--p31,#2C70C0);cursor:pointer;font-size:0.8rem">▾ tout afficher (${td.length})</button>`;
+        }
+        trk.innerHTML = html;
+    }
     const bc = agg.by_client || [];
     cli.innerHTML = bc.length
         ? '<table><thead><tr><th>Client (hash)</th><th>sites</th><th>trackers</th><th>last</th></tr></thead><tbody>' +

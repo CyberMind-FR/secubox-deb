@@ -15,14 +15,35 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 import time
 
-DB = "/var/lib/secubox/toolbox/toolbox.db"
-OUT = "/var/lib/secubox/toolbox/learned-trackers.txt"
+DB = os.environ.get("SECUBOX_AUTOLEARN_DB", "/var/lib/secubox/toolbox/toolbox.db")
+OUT = os.environ.get("SECUBOX_AUTOLEARN_OUT",
+                     "/var/lib/secubox/toolbox/learned-trackers.txt")
+PURE_OUT = os.environ.get("SECUBOX_AUTOLEARN_PURE_OUT",
+                          "/var/lib/secubox/toolbox/pure-trackers.txt")
 MIN_SITES = 2          # cross-site threshold for operator-grade trackers
 MAX_ENTRIES = 8000
+COOKIE_XSITE_TOP_N = int(os.environ.get("SECUBOX_COOKIE_XSITE_TOP_N", "5"))
+
+sys.path.insert(0, os.environ.get("SECUBOX_TOOLBOX_LIB", "/usr/lib/secubox/toolbox"))
+try:
+    from secubox_toolbox import learn as _learn
+except Exception:       # pragma: no cover - degraded mode
+    _learn = None
+
+try:
+    from secubox_toolbox import ip_dns as _ip_dns
+except Exception:       # pragma: no cover
+    _ip_dns = None
+
+UNBOUND_BLOCK_CONF = os.environ.get(
+    "SECUBOX_UNBOUND_BLOCK_CONF",
+    "/etc/unbound/unbound.conf.d/97-secubox-antitrack-block.conf")
+
 _2L = ("co.uk", "com.au", "co.jp", "co.nz", "com.br", "co.za", "gouv.fr")
 
 
@@ -35,6 +56,42 @@ def registrable(host: str):
         return host
     last2 = ".".join(p[-2:])
     return ".".join(p[-3:]) if (last2 in _2L and len(p) >= 3) else last2
+
+
+def _dns_feed(pure_hosts) -> int:
+    """Write the unbound NXDOMAIN drop-in for pure trackers + reload, gated by
+    privacy_enforce && privacy_dns_feed. Returns the zone count written, or -1
+    if the gate is off / unavailable (drop-in left untouched)."""
+    if _ip_dns is None:
+        return -1
+    try:
+        from secubox_toolbox.filters import get_filters
+        f = get_filters()
+    except Exception:
+        return -1
+    if not (f.get("privacy_enforce") and f.get("privacy_dns_feed")):
+        return -1
+    try:
+        lines = _ip_dns.unbound_block_lines(pure_hosts)
+        tmp = UNBOUND_BLOCK_CONF + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        os.replace(tmp, UNBOUND_BLOCK_CONF)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: dns drop-in write failed: {e}\n")
+        return -1
+    if os.environ.get("SECUBOX_UNBOUND_RELOAD", "1") != "0":
+        import subprocess
+        try:
+            subprocess.run(["unbound-control", "reload"], timeout=10,
+                           capture_output=True)
+        except Exception:
+            try:
+                subprocess.run(["systemctl", "reload", "unbound"], timeout=10,
+                               capture_output=True)
+            except Exception as e:
+                sys.stderr.write(f"autolearn: unbound reload failed: {e}\n")
+    return sum(1 for l in lines if "local-zone:" in l)
 
 
 def main() -> int:
@@ -84,6 +141,21 @@ def main() -> int:
     except Exception:
         pass
 
+    # 3) NEW (#633): cross-site pre-consent cookie trackers, top-N capped.
+    if _learn is not None:
+        try:
+            for d in _learn.cookie_xsite_trackers(c, top_n=COOKIE_XSITE_TOP_N):
+                learned.add(d)
+        except Exception:
+            pass
+    # compute pure-trackers (seed + conservative auto-promote) while DB open.
+    pure: set = set(_learn.PURE_SEED) if _learn is not None else set()
+    if _learn is not None:
+        try:
+            pure = _learn.pure_trackers(c, learned=learned, seed=_learn.PURE_SEED)
+        except Exception:
+            pass
+
     c.close()
     learned.discard(None)
     out = sorted(learned)[:MAX_ENTRIES]
@@ -91,14 +163,27 @@ def main() -> int:
         tmp = OUT + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             f.write("\n".join(out) + ("\n" if out else ""))
-        import os
         os.replace(tmp, OUT)
     except Exception as e:
         sys.stderr.write(f"autolearn: write failed: {e}\n")
         return 0
+    # Only (re)write pure-trackers.txt when the learn module is available; if
+    # the import failed, leave the previous file intact rather than zeroing the
+    # hard-block allowlist (which would silently disable seed hard-blocks).
+    pout = sorted(x for x in pure if x)
+    if _learn is not None:
+        try:
+            ptmp = PURE_OUT + ".tmp"
+            with open(ptmp, "w", encoding="utf-8") as f:
+                f.write("\n".join(pout) + ("\n" if pout else ""))
+            os.replace(ptmp, PURE_OUT)
+        except Exception as e:
+            sys.stderr.write(f"autolearn: pure write failed: {e}\n")
+    dns_zones = _dns_feed(pout)
     sys.stderr.write(
         f"autolearn: {len(out)} hosts learned ({ti} threat-intel + "
-        f"{len(out) - ti} classified cross-site) @ {int(time.time())}\n")
+        f"{len(out) - ti} classified cross-site) @ {int(time.time())}"
+        f" ; {len(pout)} pure ; dns_feed={dns_zones}\n")
     return 0
 
 
