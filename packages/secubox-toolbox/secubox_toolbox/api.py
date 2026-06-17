@@ -3088,6 +3088,35 @@ async def admin_client_reset(mac_hash: str) -> dict:
     return {"ok": True, "rows_deleted": rows, "mac_hash_prefix": mac_hash[:8]}
 
 
+def _reset_all_clients() -> dict:
+    """Apply the per-client reset to every client (events/consents/reports +
+    social graph wiped, score zeroed, client row kept). One client's failure is
+    logged and skipped. Returns counts."""
+    from . import social as _s
+    clients_reset = 0
+    rows_deleted = 0
+    for c in store.list_clients():
+        mh = c.get("mac_hash")
+        if not mh:
+            continue
+        try:
+            rows_deleted += store.reset_client(mh)
+            rows_deleted += _s.wipe_mac(mh)
+            clients_reset += 1
+        except Exception as e:
+            log.warning("reset-all: client %s failed: %s", str(mh)[:8], e)
+    log.info("admin reset-all: %d clients, %d rows", clients_reset, rows_deleted)
+    return {"ok": True, "clients_reset": clients_reset, "rows_deleted": rows_deleted}
+
+
+@router.post("/admin/clients/reset-all")
+async def admin_clients_reset_all(request: Request) -> dict:
+    """RAZ ALL clients (bulk per-client reset). Blocked on the public kbin vhost."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "reset-all disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    return _reset_all_clients()
+
+
 @router.get("/admin/clients/{mac_hash}/events")
 async def admin_client_events(mac_hash: str) -> dict:
     """Admin endpoint : per-source event summary for a specific client."""
