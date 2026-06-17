@@ -13,11 +13,15 @@ Group=secubox
 RuntimeDirectory=secubox-security-posture
 RuntimeDirectoryMode=0750
 
-# Main service - use unix socket
+# Remove any stale socket left by a previous run so uvicorn can re-bind
+# cleanly on restart (avoids "Address already in use" on dpkg upgrades).
+ExecStartPre=-/bin/rm -f /run/secubox/security-posture.sock
+
+# Main service - single worker (one background refresh loop / one cache writer).
 ExecStart=/usr/bin/python3 -m uvicorn secubox_security_posture.api.main:app \
     --uds /run/secubox/security-posture.sock \
     --log-level info \
-    --workers 2
+    --workers 1
 
 # Security hardening
 NoNewPrivileges=true
