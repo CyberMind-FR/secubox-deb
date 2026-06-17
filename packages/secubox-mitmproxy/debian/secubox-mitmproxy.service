@@ -8,7 +8,8 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/mitmproxy
-ExecStart=/usr/bin/uvicorn api.main:app \
+ExecStartPre=-/bin/rm -f /run/secubox/mitmproxy.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/mitmproxy.sock \
     --log-level warning
 ExecStartPost=/bin/chmod 660 /run/secubox/mitmproxy.sock
