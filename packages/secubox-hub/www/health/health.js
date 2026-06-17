@@ -65,8 +65,10 @@
 
     async function load() {
         try {
-            const modules = await getJSON(BATCH);
-            render(modules || {});
+            const batch = await getJSON(BATCH);
+            // health-batch returns {modules: {id: {status,msg}}, count: N}
+            const modules = (batch && batch.modules) || batch || {};
+            render(modules);
             $('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
             $('loading').hidden = true; $('error').hidden = true; $('content').hidden = false;
             getJSON(INFO).then((i) => {
