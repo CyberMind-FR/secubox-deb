@@ -9,12 +9,13 @@ import time
 from pathlib import Path
 
 import jinja2
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from . import (
     avatar_analysis,
     beaconing,
+    bundle as bundlemod,
     ca,
     cookie_analysis,
     cumulative,
@@ -49,6 +50,27 @@ from .models import AcceptResp, ClientRow, Config, StatusResp
 log = logging.getLogger("secubox.toolbox")
 
 router = APIRouter(tags=["toolbox"])
+
+
+# ── #620 phase 1 : TTFB cosmetic loader + per-host decision bundle ──────────
+@router.get("/__toolbox/loader.js")
+async def toolbox_loader_js() -> Response:
+    """Static cosmetic loader (applies the banner client-side from the bundle)."""
+    return Response(
+        content=bundlemod.LOADER_JS,
+        media_type="application/javascript",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@router.get("/__toolbox/bundle")
+async def toolbox_bundle(mh: str = Query(default=""), wg: int = Query(default=0)) -> JSONResponse:
+    """Per-client cosmetic decision bundle. ``mh`` = client identity hash (supplied
+    by the streaming injector); fail-open to a minimal r1 bundle."""
+    return JSONResponse(
+        content=bundlemod.get_bundle(mh, bool(wg)),
+        headers={"Cache-Control": "no-store"},
+    )
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "conf"
 _env = jinja2.Environment(

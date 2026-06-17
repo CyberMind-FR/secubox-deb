@@ -653,8 +653,125 @@ def _client_level(flow) -> str:
 _MAX_INJECT_BYTES = 2 * 1024 * 1024  # Phase 10 perf cap : skip injection on huge bodies
 
 
+# ── #620 phase 2 : streaming loader inject (TTFB) ───────────────────────────
+# When the `stream_inject` filter is ON, we stop buffering the whole HTML body
+# to insert the banner. Instead we (1) strip Accept-Encoding on the document
+# request so the response is identity-encoded, and (2) stream the response,
+# injecting a tiny loader <script> into the first chunk that contains <head>/
+# <body>. The loader (served at /__toolbox/loader.js) fetches the per-host
+# bundle and renders the banner + per-page stats client-side — off the proxy
+# critical path. Gated, fail-open: any miss falls back to passthrough (no
+# banner on that page) or to the legacy buffer path when the body is compressed.
+
+def _stream_enabled() -> bool:
+    try:
+        import sys as _sys
+        if "/usr/lib/secubox/toolbox" not in _sys.path:
+            _sys.path.insert(0, "/usr/lib/secubox/toolbox")
+        from secubox_toolbox.filters import get_filters as _gf
+        return bool(_gf().get("stream_inject", False))
+    except Exception:
+        return False
+
+
+def _loader_script(flow) -> bytes:
+    """Tiny loader <script> tag carrying the client identity + WG flag."""
+    mh, wg = "", "0"
+    try:
+        ip = flow.client_conn.peername[0] if flow.client_conn.peername else None
+        if ip and ip.startswith("10.99.1."):
+            wg = "1"
+        if _HAS_LEVEL and ip:
+            mh = mac_hash_of(ip) or ""
+    except Exception:
+        pass
+    tag = ('<script src="/__toolbox/loader.js" data-mh="%s" data-wg="%s" async></script>'
+           % (mh, wg))
+    return b"<!-- " + _GUARD + b" -->" + tag.encode("ascii", "ignore")
+
+
+class _LoaderInjector:
+    """Stream modifier: inject `script` once, in the first chunk holding
+    <head>/<body>. Never holds bytes back (TTFB-safe); gives up after 128 KB."""
+
+    def __init__(self, script: bytes):
+        self.script = script
+        self.done = False
+        self.seen = 0
+
+    def __call__(self, data: bytes) -> bytes:
+        if self.done or not data or self.seen > 131072:
+            self.seen += len(data or b"")
+            return data
+        self.seen += len(data)
+        low = data.lower()
+        h = low.find(b"<head")
+        if h >= 0:
+            j = data.find(b">", h)
+            if j >= 0:
+                self.done = True
+                return data[:j + 1] + self.script + data[j + 1:]
+        b = low.find(b"<body")
+        if b >= 0:
+            self.done = True
+            return data[:b] + self.script + data[b:]
+        return data
+
+
 class InjectBanner:
+    def request(self, flow: http.HTTPFlow) -> None:
+        # #620 : for top-level HTML navigations, ask upstream for identity
+        # encoding so we can stream-inject the loader without decompressing.
+        if not _stream_enabled():
+            return
+        try:
+            req = flow.request
+            accept = (req.headers.get("accept", "") or "").lower()
+            dest = (req.headers.get("sec-fetch-dest", "") or "").lower()
+            if dest == "document" or "text/html" in accept:
+                if "accept-encoding" in req.headers:
+                    req.headers["accept-encoding"] = "identity"
+        except Exception:
+            pass
+
+    def responseheaders(self, flow: http.HTTPFlow) -> None:
+        # #620 : set up streaming injection BEFORE the body is read. Falls back
+        # to the legacy buffer path (response hook) if anything disqualifies.
+        if not _stream_enabled():
+            return
+        resp = flow.response
+        if not resp:
+            return
+        ct = (resp.headers.get("content-type", "") or "").lower()
+        if "text/html" not in ct:
+            return
+        if resp.status_code < 200 or resp.status_code >= 400:
+            return
+        # Compressed (upstream ignored our identity request) → let the buffer
+        # path handle it (mitmproxy auto-decodes there). Don't stream.
+        if resp.headers.get("content-encoding"):
+            return
+        if _client_level(flow) not in ("r2", "r3"):
+            return
+        try:
+            import sys as _sys
+            if "/usr/lib/secubox/toolbox" not in _sys.path:
+                _sys.path.insert(0, "/usr/lib/secubox/toolbox")
+            from secubox_toolbox.filters import get_filters as _gf
+            if not _gf().get("banner", True):
+                return
+        except Exception:
+            pass
+        try:
+            resp.stream = _LoaderInjector(_loader_script(flow))
+            flow.metadata["sbx_streamed"] = True
+        except Exception as e:
+            log.warning("stream-inject setup failed for %s: %s", flow.request.host, e)
+
     def response(self, flow: http.HTTPFlow) -> None:
+        # #620 : already handled by the streaming injector — skip the buffer path.
+        if flow.metadata.get("sbx_streamed"):
+            return
         if not flow.response:
             return
         ct = flow.response.headers.get("content-type", "")
