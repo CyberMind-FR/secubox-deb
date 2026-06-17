@@ -101,6 +101,7 @@
     <section class="panel" id="panel-clients">
         <div class="toolbar">
             <button onclick="loadClients()">🔁 Refresh</button>
+            <button type="button" onclick="resetAllClients()" style="color:var(--red,#e63946)">↺ Reset all</button>
         </div>
         <div class="card" style="margin-bottom:1rem">
             <h2>👥 Clients actifs</h2>
@@ -245,12 +246,13 @@ async function loadClients() {
     if (!rows) { el.innerHTML = `<div class="empty">${(d && d.__error) || 'no data'}</div>`; return; }
     if (!rows.length) { el.innerHTML = '<div class="empty">no clients</div>'; return; }
     const shown = rows.slice(0, 5);   // #575 — cap the list to top 5
-    let html = '<table><thead><tr><th>MAC (hash)</th><th>IP</th><th>state</th><th>niveau</th><th>score</th><th>last</th><th>Actions</th></tr></thead><tbody>';
+    const escA = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    let html = '<table><thead><tr><th>MAC (hash)</th><th>IP / type</th><th>state</th><th>niveau</th><th>score</th><th>last</th><th>Actions</th></tr></thead><tbody>';
     for (const c of shown) {
         const ago = c.last_seen ? Math.round((Date.now()/1000 - c.last_seen) / 60) + 'm' : '—';
         html += `<tr>
             <td><code>${c.mac_hash}</code></td>
-            <td>${c.ip || '—'}</td>
+            <td>${c.ip || '—'} <span style="white-space:nowrap">${c.device_emoji||''} ${c.flag||''}</span>${c.asn_org ? `<br><span style="color:var(--p31-dim,#888);font-size:0.72rem" title="${escA(c.device||'')}">${escA(c.asn_org)}</span>` : ''}</td>
             <td><span class="state-${c.state}">${c.state || '—'}</span></td>
             <td>${levelChip(c.level)} ${levelSwitcher(c.mac_hash, c.level)}</td>
             <td>${c.score ?? '—'}</td>
@@ -286,6 +288,20 @@ async function resetClient(macHash) {
         alert(`RAZ effectuée : ${j.rows_deleted || 0} enregistrements supprimés.`);
         loadClients();
     } catch (e) { alert('Échec RAZ : ' + e.message); }
+}
+
+async function resetAllClients() {
+    if (!confirm('Remettre à zéro TOUS les clients ? (events, consentements, graphes social — scores remis à zéro, clients conservés)')) return;
+    try {
+        const r = await fetch(`${API}/admin/clients/reset-all`, {
+            method: 'POST', credentials: 'same-origin'
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json().catch(()=>({}));
+        if (!r.ok) { alert('Reset all refusé: ' + (d.detail || r.status)); return; }
+        await loadClients();
+        if (typeof loadSocial === 'function') loadSocial();
+    } catch (e) { alert('Reset all erreur: ' + e.message); }
 }
 
 async function quarantine(ip) {
