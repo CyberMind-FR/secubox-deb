@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+set -e
+
+# Writable cache dir for the posture snapshot (service runs as secubox).
+# IMPORTANT: never use `install -d -m 0750 /var/lib/secubox/<leaf>` — it re-modes
+# the SHARED parent /var/lib/secubox to 0750, which breaks traversal for every
+# other secubox-* daemon (e.g. it took kbin/toolbox down). The parent must stay
+# 0755; only the leaf is restricted; the service (User=secubox) creates the leaf
+# itself at runtime, so we just guarantee the parent is traversable here.
+if [ -d /var/lib/secubox ]; then
+    chmod 0755 /var/lib/secubox 2>/dev/null || true
+fi
+if getent passwd secubox >/dev/null 2>&1; then
+    mkdir -p /var/lib/secubox/security-posture 2>/dev/null || true
+    chown secubox:secubox /var/lib/secubox/security-posture 2>/dev/null || true
+    chmod 0750 /var/lib/secubox/security-posture 2>/dev/null || true
+fi
+
+#DEBHELPER#
+
+# Reload nginx so the /api/v1/security-posture/ route drop-in takes effect.
+if command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1; then
+        nginx -s reload >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0
