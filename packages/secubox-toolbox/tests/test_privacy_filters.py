@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
+import importlib
 import json
+import os
 from secubox_toolbox import filters
 
 
@@ -22,3 +24,17 @@ def test_set_privacy_toggles(monkeypatch, tmp_path):
     saved = json.loads(p.read_text())
     assert saved["privacy_enforce"] is True
     assert saved["fortknox_sites"] == ["bank.example.com"]
+
+
+def test_filters_path_env_override(monkeypatch, tmp_path):
+    import secubox_toolbox.filters as flt
+    p = tmp_path / "f.json"
+    p.write_text('{"privacy_enforce": true}')
+    monkeypatch.setenv("SECUBOX_FILTERS_PATH", str(p))
+    importlib.reload(flt)
+    try:
+        assert flt.FILTERS_PATH == str(p)
+        assert flt.get_filters(force=True)["privacy_enforce"] is True
+    finally:
+        monkeypatch.delenv("SECUBOX_FILTERS_PATH", raising=False)
+        importlib.reload(flt)   # restore default for other tests
