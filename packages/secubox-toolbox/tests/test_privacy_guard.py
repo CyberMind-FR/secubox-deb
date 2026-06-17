@@ -32,7 +32,7 @@ def test_pure_tracker_blocked_with_204(monkeypatch, tmp_path):
     f.request.host = "google-analytics.com"
     f.request.path = "/collect?v=2"
     f.request.headers["accept"] = "*/*"          # beacon hint
-    addon.request(f)
+    addon.requestheaders(f)
     assert f.response is not None and f.response.status_code == 204
 
 
@@ -56,5 +56,20 @@ def test_observe_only_does_not_act(monkeypatch, tmp_path, privacy_enforce=False)
     f.request.host = "google-analytics.com"
     f.request.path = "/collect"
     f.request.headers["accept"] = "*/*"
-    addon.request(f)
+    addon.requestheaders(f)
     assert f.response is None                       # observe-only: never blocks
+
+
+def test_poison_drops_cookie_when_no_jar_key(monkeypatch, tmp_path):
+    addon = _mk_addon(monkeypatch, tmp_path)
+    # simulate missing jar key → fake_id returns None
+    monkeypatch.setattr(privacy, "JAR_KEY_PATH", str(tmp_path / "absent.key"))
+    privacy._jar_key_cache["v"] = None
+    f = tflow.tflow()
+    f.request.host = "criteo.com"
+    f.request.path = "/js/loader.js"
+    f.request.headers["accept"] = "text/html"
+    f.request.headers["cookie"] = "_ga=GA1.2.111.222"
+    addon.requestheaders(f)
+    assert f.response is None                      # not blocked
+    assert "cookie" not in f.request.headers       # dropped, real value NOT forwarded

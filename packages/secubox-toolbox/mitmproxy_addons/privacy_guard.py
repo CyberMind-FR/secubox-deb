@@ -60,6 +60,9 @@ def _beacon_hint(flow: http.HTTPFlow) -> bool:
 
 
 def _site_of(flow: http.HTTPFlow) -> str:
+    # No Referer (top-level navigation, or Referrer-Policy stripping) → fall back
+    # to the request host, so under Fort-Knox the flow is treated as first-party.
+    # Intentionally permissive: we never want to break a navigation (fail open).
     ref = flow.request.headers.get("referer") or ""
     if ref:
         try:
@@ -148,20 +151,20 @@ class PrivacyGuard:
         forged = []
         for part in cookie.split(";"):
             if "=" not in part:
-                forged.append(part)
-                continue
+                continue  # malformed / attribute-only fragment → drop
             name, _, _val = part.strip().partition("=")
             fake = privacy.fake_id(ch, host, name)
-            forged.append("%s=%s" % (name, fake) if fake else part.strip())
-        flow.request.headers["cookie"] = "; ".join(p for p in forged if p)
+            if fake:
+                forged.append("%s=%s" % (name, fake))
+            # fake is None (no jar key) → omit the cookie entirely (fail private)
+        if forged:
+            flow.request.headers["cookie"] = "; ".join(forged)
+        else:
+            del flow.request.headers["cookie"]
         if "referer" in flow.request.headers:
             flow.request.headers["referer"] = "https://%s/" % (
                 privacy.registrable(host) or host)
         _counts["poisons"] += 1
         _audit("poison", host, "cookies=%d" % len(forged))
-
-    def request(self, flow: http.HTTPFlow) -> None:
-        self.requestheaders(flow)
-
 
 addons = [PrivacyGuard()]
