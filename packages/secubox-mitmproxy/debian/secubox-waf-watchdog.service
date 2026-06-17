@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox WAF inspector watchdog (auto-recover mitmproxy LXC)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+ConditionPathExists=/usr/sbin/secubox-waf-watchdog.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-waf-watchdog.sh
+Nice=10
