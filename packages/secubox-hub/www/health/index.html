@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!--
+  SecuBox · Health Monitor — live status of vital + common services.
+  Consumes /api/v1/hub/public/health-batch. Dark hybrid-skin via /shared/sidebar.js.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <title>SecuBox · Health Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/sidebar.css">
+    <link rel="stylesheet" href="health.css">
+</head>
+<body class="module-root">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main">
+        <header class="page">
+            <h1>💚 Health Monitor <span class="ver" id="ver">v1.0</span></h1>
+            <div class="actions">
+                <span class="updated" id="updated">—</span>
+                <button class="btn" id="refresh" type="button">↻ Refresh</button>
+            </div>
+        </header>
+
+        <div id="error" class="banner err" hidden></div>
+        <div id="loading" class="banner info">Loading service health…</div>
+
+        <div id="content" hidden>
+            <!-- Summary strip -->
+            <section class="summary" id="summary"></section>
+
+            <!-- Vital services -->
+            <section>
+                <h2>Vital services <span class="count" id="vitalCount"></span></h2>
+                <div class="svc-grid" id="vital"></div>
+            </section>
+
+            <!-- Common services -->
+            <section>
+                <h2>Common services <span class="count" id="commonCount"></span></h2>
+                <div class="svc-grid" id="common"></div>
+            </section>
+        </div>
+    </main>
+
+    <script src="/shared/sidebar.js"></script>
+    <script src="health.js" defer></script>
+</body>
+</html>
