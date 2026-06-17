@@ -111,6 +111,10 @@ EOF
     systemctl enable secubox-mitmproxy.service
     systemctl start secubox-mitmproxy.service || true
 
+    # WAF inspector self-healing watchdog (#624)
+    systemctl enable secubox-waf-watchdog.timer 2>/dev/null || true
+    systemctl start secubox-waf-watchdog.timer 2>/dev/null || true
+
     # Reload nginx if installed
     systemctl reload nginx 2>/dev/null || true
     ;;
