@@ -1,3 +1,13 @@
+secubox-toolbox (2.6.46-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-Track v2 Plan 2c (#633): fix empty #filtres panel — replace the stale
+    /admin/filter-control/list (wrong shape) with a tagged seed/static/learned
+    endpoint + source badges. Move inline cert-pinned bypass defaults to a
+    package-owned mitm-bypass-seed.conf (operator file starts empty); launch
+    script merges seed + operator + learned into ignore_hosts (behavior-preserving).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 17 Jun 2026 00:00:00 +0000
+
 secubox-toolbox (2.6.45-1~bookworm1) bookworm; urgency=medium
 
   * Anti-Track v2 Plan 2b-DNS (#633): autolearn writes an unbound NXDOMAIN
