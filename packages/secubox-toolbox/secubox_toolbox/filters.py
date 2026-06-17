@@ -14,7 +14,8 @@ import os
 import time
 from typing import Dict
 
-FILTERS_PATH = "/etc/secubox/toolbox/filters.json"
+FILTERS_PATH = os.environ.get(
+    "SECUBOX_FILTERS_PATH", "/etc/secubox/toolbox/filters.json")
 
 DEFAULTS: Dict = {
     "banner": True,                 # inject the R2/R3 transparency banner
