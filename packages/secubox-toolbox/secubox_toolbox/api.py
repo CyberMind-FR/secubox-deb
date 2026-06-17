@@ -2985,12 +2985,6 @@ async def admin_override_level(mac_hash: str, request: Request) -> dict:
 # WebUI in www/toolbox/index.html).  All /admin/* JSON API routes below stay.
 
 
-@router.get("/admin/filter-control/list")
-async def admin_filter_list() -> dict:
-    """JSON list of bypass patterns — consumed by admin webui tab."""
-    return {"patterns": _load_bypass_entries(), "file": str(MITM_BYPASS_FILE)}
-
-
 @router.get("/admin/metrics")
 async def admin_metrics() -> dict:
     """Live metrics for the admin WebUI : per-source event counts (DPI, cookies,
