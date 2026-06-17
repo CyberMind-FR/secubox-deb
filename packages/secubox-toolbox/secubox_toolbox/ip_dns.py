@@ -6,9 +6,10 @@
 """
 SecuBox-Deb :: toolbox :: Anti-Track v2 Plan 2b IP/DNS helpers (#633)
 
-Pure functions — no nft, no DNS, no file writes beyond reading the static CDN
-allowlist. Consumed by escalate.py (exclusive-IP nft-drop). The CDN/cloud
-allowlist is the collateral gate: an IP that belongs to shared infrastructure
+Pure functions — no nft and no file writes beyond reading the static CDN
+allowlist (it also renders unbound DNS-block config lines as strings). Consumed
+by escalate.py (exclusive-IP nft-drop). The CDN/cloud allowlist is the
+collateral gate: an IP that belongs to shared infrastructure
 (Cloudflare/Fastly/Akamai/Google/AWS/Azure) is NEVER dropped, even when a pure
 tracker resolves there.
 """
@@ -16,6 +17,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import re
 from pathlib import Path
 from typing import Callable, Iterable, List
 
@@ -24,6 +26,11 @@ from secubox_toolbox.privacy import registrable
 log = logging.getLogger("secubox.toolbox.ip_dns")
 
 CDN_ALLOWLIST_PATH = "/usr/lib/secubox/toolbox/data/cdn-allowlist.txt"
+
+# A registrable domain safe to embed in an unbound `local-zone: "<d>."` directive.
+# Guards against malformed tracker domains (e.g. crafted Set-Cookie Domain= values
+# with quotes/spaces) breaking the generated unbound config → DNS outage on restart.
+_DNS_SAFE = re.compile(r"^[a-z0-9.-]+$")
 
 
 def load_cdn_allowlist(path: str = CDN_ALLOWLIST_PATH) -> list:
@@ -87,7 +94,7 @@ def unbound_block_lines(pure_hosts: Iterable[str]) -> list:
     zones = set()
     for h in pure_hosts:
         d = registrable(h) if h else ""
-        if d:
+        if d and _DNS_SAFE.match(d):
             zones.add(d)
     lines = ["server:",
              "    # SecuBox Anti-Track v2 (#633) — generated; do not edit by hand."]
