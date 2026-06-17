@@ -46,7 +46,7 @@ TRACKER_PATTERNS = [
     "yieldlove", "moatads", "adservice.google", "adsystem", "adserver",
 ]
 
-_cache: Dict[str, tuple] = {}   # client_id -> (built_at, bundle)
+_cache: Dict[tuple, tuple] = {}   # (client_id, is_wg) -> (built_at, bundle)
 
 
 def _read_pin() -> str:
@@ -89,11 +89,12 @@ def get_bundle(client_id: str, is_wg: bool = False) -> dict:
     """Return the cached bundle for a client, rebuilding past the TTL. Fail-open."""
     try:
         now = time.time()
-        hit = _cache.get(client_id or "")
+        key = (client_id or "", bool(is_wg))
+        hit = _cache.get(key)
         if hit and (now - hit[0]) < BUNDLE_TTL:
             return hit[1]
         bundle = build_bundle(client_id, is_wg)
-        _cache[client_id or ""] = (now, bundle)
+        _cache[key] = (now, bundle)
         return bundle
     except Exception:
         # Minimal safe bundle — never break the loader.
