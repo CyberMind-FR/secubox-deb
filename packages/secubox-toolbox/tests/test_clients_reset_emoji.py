@@ -43,3 +43,22 @@ def test_reset_all_clients_one_failure_continues(monkeypatch):
     monkeypatch.setattr(so, "wipe_mac", lambda mh: 2)
     out = api._reset_all_clients()
     assert out["ok"] is True and out["clients_reset"] == 1
+
+
+def test_clients_rich_enriches_device_and_geo(monkeypatch):
+    import asyncio
+    import secubox_toolbox.api as api
+    from secubox_toolbox import store as st, geo as g
+    monkeypatch.setattr(st, "list_clients", lambda: [
+        {"mac_hash": "m1", "ip": "1.2.3.4", "state": "validated",
+         "score": 10, "level": "r2", "first_seen": 0, "last_seen": 0}])
+    monkeypatch.setattr(st, "latest_user_agent",
+                        lambda mh: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X)")
+    monkeypatch.setattr(g, "lookup",
+                        lambda ip: {"flag": "🇫🇷", "country_iso": "FR", "asn_org": "OVH"})
+    out = asyncio.get_event_loop().run_until_complete(api.admin_clients_rich())
+    c = out["clients"][0]
+    assert c["flag"] == "🇫🇷" and c["country_iso"] == "FR" and c["asn_org"] == "OVH"
+    assert "device" in c and "device_emoji" in c
+    # iPhone UA should classify to a phone device (not the bare placeholder semantics)
+    assert c["device"]  # non-empty device label derived from UA
