@@ -171,7 +171,7 @@ def fake_id(client_hash: str, tracker: str, cookie_name: str) -> Optional[str]:
 
 
 def same_site(host: str, site: str) -> bool:
-    return bool(site) and registrable(host) == registrable(site)
+    return bool(host) and bool(site) and registrable(host) == registrable(site)
 
 
 def verdict(host: str, site: str, beacon_hint: bool = False,

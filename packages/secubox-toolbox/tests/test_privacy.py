@@ -109,3 +109,13 @@ def test_verdict_non_tracker_allows():
     v = privacy.verdict(host="fonts.googleapis.com", site="example.com",
                         beacon_hint=False, fortknox=False)
     assert v == "allow"
+
+
+def test_same_site_empty_inputs():
+    assert privacy.same_site("", "example.com") is False
+    assert privacy.same_site("example.com", "") is False
+
+
+def test_verdict_fortknox_empty_host_blocks():
+    # undefined host under Fort-Knox must fail safe to block, never allow
+    assert privacy.verdict(host="", site="example.com", fortknox=True) == "block"
