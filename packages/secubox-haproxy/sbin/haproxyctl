@@ -620,9 +620,19 @@ defaults
     timeout connect 5s
     timeout client 30s
     timeout server 30s
+    retries 3
+    option redispatch
     option httplog
     option dontlognull
     option forwardfor
+    # Smart self-healing error pages (#626) — shipped by secubox-haproxy.
+    errorfile 400 /etc/haproxy/secubox-errors/400.http
+    errorfile 403 /etc/haproxy/secubox-errors/403.http
+    errorfile 408 /etc/haproxy/secubox-errors/408.http
+    errorfile 500 /etc/haproxy/secubox-errors/500.http
+    errorfile 502 /etc/haproxy/secubox-errors/502.http
+    errorfile 503 /etc/haproxy/secubox-errors/503.http
+    errorfile 504 /etc/haproxy/secubox-errors/504.http
 
 frontend stats
     bind *:${stats_port}
@@ -661,16 +671,18 @@ EOF
             local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
             # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
-            [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ] && continue
+            if [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ]; then continue; fi
 
-            [ "$enabled" = "1" ] && [ -n "$domain" ] && {
+            # NB: use if/then/fi, not `[ ] && [ ] && { }` — under `set -e` a
+            # short-circuited &&-chain (e.g. a non-SSL vhost) aborts generation.
+            if [ "$enabled" = "1" ] && [ -n "$domain" ]; then
                 echo "    acl host_$name hdr(host) -i $domain"
                 if [ "$waf_enabled" = "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"
                 else
                     echo "    use_backend $backend if host_$name"
                 fi
-            }
+            fi
         done >> "$out"
     fi
 
@@ -709,16 +721,17 @@ EOF
             local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
             # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
-            [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ] && continue
+            if [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ]; then continue; fi
 
-            [ "$enabled" = "1" ] && [ "$ssl" = "1" ] && [ -n "$domain" ] && {
+            # if/then/fi (not `&& { }`) — set -e safe for non-SSL vhosts.
+            if [ "$enabled" = "1" ] && [ "$ssl" = "1" ] && [ -n "$domain" ]; then
                 echo "    acl host_$name hdr(host) -i $domain"
                 if [ "$waf_enabled" = "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"
                 else
                     echo "    use_backend $backend if host_$name"
                 fi
-            }
+            fi
         done >> "$out"
     fi
 
@@ -728,7 +741,8 @@ EOF
 EOF
 
     # WAF inspector backend (mitmproxy LXC container)
-    [ "$waf_enabled" = "1" ] && cat >> "$out" << EOF
+    # if/then/fi (not `&& cat`) — under set -e a false test here aborts generation.
+    if [ "$waf_enabled" = "1" ]; then cat >> "$out" << EOF
 # WAF Inspector Backend (mitmproxy LXC at $waf_ip:$waf_port)
 backend mitmproxy_inspector
     mode http
@@ -738,6 +752,7 @@ backend mitmproxy_inspector
     server waf ${waf_ip}:${waf_port} check
 
 EOF
+    fi
 
     # WebUI direct backend (issue #44 — for the strict-regex ACL above)
     # Only emit if SECUBOX_HOSTNAME is set (i.e., the strict ACL was injected).
@@ -753,6 +768,9 @@ EOF
     if [ -f "$CONF_PATH" ]; then
         grep '^\[backends\.' "$CONF_PATH" | while read -r line; do
             local name=$(echo "$line" | sed 's/\[backends\.//;s/\]//')
+            # Skip backends already emitted (mitmproxy_inspector/webui_direct are
+            # auto-generated above) to avoid duplicate-backend fatal errors.
+            if grep -q "^backend $name\$" "$out"; then continue; fi
             local section=$(sed -n "/^\[backends\.$name\]/,/^\[/p" "$CONF_PATH" | head -n -1)
             local mode=$(echo "$section" | grep -E '^mode\s*=' | cut -d'"' -f2 || echo "http")
             local balance=$(echo "$section" | grep -E '^balance\s*=' | cut -d'"' -f2 || echo "roundrobin")
@@ -765,11 +783,11 @@ backend $name
 EOF
             local i=0
             echo "$servers" | while read -r srv; do
-                [ -n "$srv" ] && {
+                if [ -n "$srv" ]; then
                     srv=$(echo "$srv" | tr -d ' ')
                     echo "    server srv$i $srv check" >> "$out"
                     i=$((i + 1))
-                }
+                fi
             done
             echo "" >> "$out"
         done
@@ -824,6 +842,22 @@ EOF
     # to the live cfg and only validated at the end, leaving the file in a
     # broken state on failure (recurring "broken-by-vhost-add" backups).
     if haproxy -c -f "$out" 2>/dev/null; then
+        # Drift guard (#626): refuse to overwrite a live config that has MORE
+        # vhosts/backends than we just generated — that means the live cfg holds
+        # entries absent from our inputs (haproxy.toml / cfg.d). Without this,
+        # a successful regen would silently drop hand-maintained vhosts (kbin,
+        # gitea, …). `local x=$(...)` masks grep's exit so set -e stays happy.
+        if [ -f "$CONFIG_DIR/haproxy.cfg" ]; then
+            local _nh=$(grep -c '^[[:space:]]*acl host_' "$out")
+            local _oh=$(grep -c '^[[:space:]]*acl host_' "$CONFIG_DIR/haproxy.cfg")
+            local _nb=$(grep -c '^backend ' "$out")
+            local _ob=$(grep -c '^backend ' "$CONFIG_DIR/haproxy.cfg")
+            if [ "${_nh:-0}" -lt "${_oh:-0}" ] || [ "${_nb:-0}" -lt "${_ob:-0}" ]; then
+                error "Drift guard: generated cfg has fewer vhosts/backends than live (acl ${_nh}<${_oh} or backend ${_nb}<${_ob}) — refusing to clobber. Migrate the missing entries into haproxy.toml/cfg.d first."
+                rm -f "$out"
+                return 1
+            fi
+        fi
         install -m 0644 -o root -g root "$out" "$CONFIG_DIR/haproxy.cfg"
         rm -f "$out"
         log "Configuration generated, validated and installed: $CONFIG_DIR/haproxy.cfg"
