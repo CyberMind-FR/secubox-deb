@@ -12,7 +12,9 @@ ExecStartPre=-/bin/rm -f /run/secubox/mitmproxy.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/mitmproxy.sock \
     --log-level warning
-ExecStartPost=/bin/chmod 660 /run/secubox/mitmproxy.sock
+# Wait for uvicorn to bind the uds before chmod; non-fatal so a race never
+# fails the unit (Type=simple runs ExecStartPost without waiting for readiness).
+ExecStartPost=-/bin/sh -c 'for i in 1 2 3 4 5 6; do [ -S /run/secubox/mitmproxy.sock ] && exec chmod 660 /run/secubox/mitmproxy.sock; sleep 0.5; done'
 Restart=on-failure
 RestartSec=5
 
