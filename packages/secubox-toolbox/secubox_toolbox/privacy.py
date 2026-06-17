@@ -12,14 +12,15 @@ fabricated identity per (client, tracker), and return a per-request verdict
 """
 from __future__ import annotations
 
-import os
 import re
-import time
 from pathlib import Path
-from typing import Optional
 
-# Single source of truth for 3rd-party tracker hosts. protective_mode.py and
-# ad_ghost.py import is_tracker() / _TRACKER from here (#633).
+# Canonical 3rd-party tracker host patterns for Anti-Track v2 (#633). This is a
+# verbatim copy of the live protective_mode._TRACKER regex; protective_mode will
+# be refactored to import is_tracker()/_TRACKER from here in a later task so this
+# becomes the single source of truth. Kept byte-for-byte to preserve detection
+# parity with the running WAF — do NOT retune the host list here (that belongs
+# to the autolearn pipeline).
 _TRACKER = re.compile(
     r"(?:^|\.)(?:"
     r"doubleclick|googlesyndication|googleadservices|googletagmanager|"

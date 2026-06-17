@@ -25,3 +25,14 @@ def test_classify_unknown_tracker_defaults_loadbearing():
 
 def test_classify_beacon_hint_is_pure():
     assert privacy.classify("google-analytics.com", beacon_hint=True) == "pure"
+
+
+def test_is_tracker_learned_list(tmp_path, monkeypatch):
+    learned = tmp_path / "learned-trackers.txt"
+    learned.write_text("# comment line\nexample-tracker.net\nsub.evil.example\n")
+    monkeypatch.setattr(privacy, "LEARNED_PATH", str(learned))
+    privacy._lists_cache["mtime"] = (0.0, 0.0)  # force reload
+    assert privacy.is_tracker("example-tracker.net") is True
+    assert privacy.is_tracker("www.example-tracker.net") is True   # registrable match
+    assert privacy.is_tracker("not-listed.example.org") is False
+    assert privacy.classify("example-tracker.net", beacon_hint=False) == "loadbearing"
