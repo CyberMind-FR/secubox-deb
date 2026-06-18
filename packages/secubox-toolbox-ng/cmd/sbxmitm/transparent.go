@@ -29,6 +29,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -339,6 +340,13 @@ func (px *Proxy) handleTransparent(client net.Conn) {
 	if !ok {
 		return // transparent mode only accepts raw TCP conns
 	}
+	// R3 WG client? The data-wg attribute of the injected loader mirrors the
+	// Python _loader_script (ip.startswith("10.99.1.")) — derived from the same
+	// client conn peer IP that feeds clientHashFromConn.
+	wg := false
+	if peer, _, perr := net.SplitHostPort(client.RemoteAddr().String()); perr == nil {
+		wg = strings.HasPrefix(peer, "10.99.1.")
+	}
 	dstHost, dstPort, err := origDst(tcp)
 	if err != nil {
 		return // no original-dst (not DNAT'd) → drop; nothing safe to do
@@ -386,5 +394,5 @@ func (px *Proxy) handleTransparent(client net.Conn) {
 		return
 	}
 	defer tconn.Close()
-	px.mitmPipeline(tconn, client, decisionHost, verdict, dialAddr)
+	px.mitmPipeline(tconn, client, decisionHost, verdict, dialAddr, wg)
 }
