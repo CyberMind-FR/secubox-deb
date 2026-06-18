@@ -671,6 +671,26 @@ _MAX_INJECT_BYTES = 2 * 1024 * 1024  # Phase 10 perf cap : skip injection on hug
 # critical path. Gated, fail-open: any miss falls back to passthrough (no
 # banner on that page) or to the legacy buffer path when the body is compressed.
 
+# ── #646 : adaptive Accept-Encoding strip ───────────────────────────────────
+# Forcing identity on EVERY document pulled CSP-strict / heavy pages
+# uncompressed (3-5x bytes) through the GIL-bound worker for ZERO benefit —
+# streaming is disqualified on those pages anyway. So we keep gzip/br by
+# default and only strip Accept-Encoding for hosts we've PROVEN
+# streaming-eligible (top-level html + 2xx-3xx + r2/r3 + banner on + NOT
+# CSP-strict) on a prior response. CSP-strict / non-doc hosts stay compressed
+# forever (banner still injects via the buffer path, which decompresses fine).
+# Per-process, in-memory, size-capped, self-healing — verdicts re-learn cheaply.
+_STREAM_VERDICT: dict = {}        # host -> bool (True = strip identity & stream)
+_STREAM_VERDICT_MAX = 8192
+
+
+def _record_stream_verdict(host: str, eligible: bool) -> None:
+    if not host:
+        return
+    if len(_STREAM_VERDICT) >= _STREAM_VERDICT_MAX:
+        _STREAM_VERDICT.clear()   # crude self-heal; cheap to re-learn
+    _STREAM_VERDICT[host] = eligible
+
 def _stream_enabled() -> bool:
     try:
         import sys as _sys
@@ -760,15 +780,18 @@ class InjectBanner:
                 return
         except Exception as e:
             log.warning("toolbox asset serve failed for %s: %s", flow.request.path, e)
-        # #620 : for top-level HTML navigations, ask upstream for identity
-        # encoding so we can stream-inject the loader without decompressing.
+        # #620/#646 : for top-level HTML navigations to hosts PROVEN
+        # streaming-eligible, ask upstream for identity encoding so we can
+        # stream-inject the loader without decompressing. Unknown / CSP-strict
+        # hosts keep their gzip/br compression (learned in responseheaders).
         if not _stream_enabled():
             return
         try:
             req = flow.request
             accept = (req.headers.get("accept", "") or "").lower()
             dest = (req.headers.get("sec-fetch-dest", "") or "").lower()
-            if dest == "document" or "text/html" in accept:
+            is_doc = dest == "document" or "text/html" in accept
+            if is_doc and _STREAM_VERDICT.get(flow.request.pretty_host or ""):
                 if "accept-encoding" in req.headers:
                     req.headers["accept-encoding"] = "identity"
         except Exception:
@@ -787,10 +810,6 @@ class InjectBanner:
             return
         if resp.status_code < 200 or resp.status_code >= 400:
             return
-        # Compressed (upstream ignored our identity request) → let the buffer
-        # path handle it (mitmproxy auto-decodes there). Don't stream.
-        if resp.headers.get("content-encoding"):
-            return
         if _client_level(flow) not in ("r2", "r3"):
             return
         try:
@@ -802,15 +821,20 @@ class InjectBanner:
                 return
         except Exception:
             pass
-        # #636 — strict CSP would block the injected loader <script> and its
-        # /__toolbox/bundle fetch → no banner. Don't stream; fall through to the
-        # legacy buffer path, which injects an inline-CSS banner (no script/fetch)
-        # that survives strict CSP.
-        if _detect_csp_strict(flow):
+        # #646 — learn per-host streaming eligibility from THIS response, so the
+        # next visit's request() knows whether to strip Accept-Encoding. This is
+        # independent of the current encoding: a host eligible today is worth
+        # asking identity from tomorrow. #636 — strict CSP blocks the injected
+        # loader <script>; #639 — only top-level navigations get the banner.
+        # Both disqualify streaming → ineligible → keep compression.
+        eligible = _is_top_level_document(flow) and not _detect_csp_strict(flow)
+        _record_stream_verdict(flow.request.pretty_host or "", eligible)
+        if not eligible:
             return
-        # #639 — only inject into top-level navigations; iframes/sub-documents
-        # each get their own responseheaders call → multiple banners per visit.
-        if not _is_top_level_document(flow):
+        # Compressed (upstream ignored our identity request, or this is the first
+        # visit before we'd learned to ask identity) → let the buffer path handle
+        # it (mitmproxy auto-decodes there). Can only stream an identity body.
+        if resp.headers.get("content-encoding"):
             return
         try:
             resp.stream = _LoaderInjector(_loader_script(flow))
