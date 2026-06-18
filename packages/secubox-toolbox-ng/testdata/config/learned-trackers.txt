@@ -1,2 +1,3 @@
 learned-tracker.example
 pure-tracker.example
+commented-learned.example # inline comment — _learned_set keeps the FULL line, not comment-stripped
