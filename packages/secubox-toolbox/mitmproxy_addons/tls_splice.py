@@ -37,9 +37,14 @@ LEARNED_PATH = os.environ.get("SECUBOX_SPLICE_LEARNED",
                               "/var/lib/secubox/toolbox/splice-learned.txt")
 PURE_PATH = os.environ.get("SECUBOX_PURE_TRACKERS",
                            "/var/lib/secubox/toolbox/pure-trackers.txt")
-STATS = "/run/secubox/splice.json"
+# #651 — per-worker stats file. The 4 mitm-wg workers are separate processes;
+# a single shared splice.json was clobbered last-writer-wins (undercount). Key
+# the file by this worker's listen port so each writes its own, and a reader
+# sums splice.*.json. Falls back to a plain name for the legacy single process.
+_PORT = os.environ.get("MITM_WG_LISTEN_PORT", "")
+STATS = "/run/secubox/splice.%s.json" % _PORT if _PORT else "/run/secubox/splice.json"
 
-_counts = {"spliced": 0, "would_splice": 0, "mitm": 0, "since": int(time.time())}
+_counts = {"spliced": 0, "would_splice": 0, "since": int(time.time())}
 _last_flush = 0.0
 
 # Learning observations are written off the proxy event loop (mirror
@@ -99,6 +104,7 @@ class TlsSplice:
             if mode == "on":
                 data.ignore_connection = True
                 _counts["spliced"] += 1
+                log.debug("tls-splice spliced %s", sni)
             else:  # observe
                 _counts["would_splice"] += 1
                 log.info("tls-splice would-splice %s", sni)
@@ -141,6 +147,15 @@ class TlsSplice:
             os.makedirs(os.path.dirname(STATS), exist_ok=True)
             with open(STATS, "w", encoding="utf-8") as f:
                 json.dump({**_counts, "updated": int(now)}, f)
+        except Exception:
+            pass
+        # #651 — helpful, non-spammy console feedback: one INFO line per flush
+        # window (~5 s) showing this worker's running totals + active mode, so
+        # the splice activity is visible in `journalctl -u …mitm-wg-worker@*`.
+        try:
+            log.info("tls-splice[%s] mode=%s spliced=%d would_splice=%d",
+                     _PORT or "single", _gf().get("tls_splice", "observe"),
+                     _counts["spliced"], _counts["would_splice"])
         except Exception:
             pass
 

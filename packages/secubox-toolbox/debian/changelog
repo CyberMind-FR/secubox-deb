@@ -1,3 +1,17 @@
+secubox-toolbox (2.6.55-1~bookworm1) bookworm; urgency=medium
+
+  * perf(#651): broaden the media SNI-splice seed (11 → 35 video/image/audio
+    CDNs: reddit/imgur/giphy/vimeo/tiktok/twitch/dailymotion/pornhub/spotify…,
+    still media-only) so more heavy flows splice once armed.
+  * fix(#651): per-worker stats — the 4 mitm-wg workers each write
+    /run/secubox/splice.<port>.json instead of clobbering one shared file
+    (was undercounting); dropped the dead `mitm` counter.
+  * #651: helpful console feedback — one INFO summary line per ~5 s flush
+    (`tls-splice[<port>] mode=… spliced=N would_splice=M`) + a per-splice DEBUG
+    line, visible in journalctl for the mitm-wg workers.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 15:30:00 +0200
+
 secubox-toolbox (2.6.54-1~bookworm1) bookworm; urgency=medium
 
   * feat(#649): selective SNI-splice (Lever A). New tls_splice addon (first in
