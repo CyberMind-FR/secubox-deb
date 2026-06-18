@@ -1,0 +1,29 @@
+{
+  "_doc": "Cross-engine parity fixtures (#662 Phase 3). Both the Go core (policy_test.go) and the Python addons (tests/test_engine_parity.py) load THIS file plus the testdata/config snapshot, run their Decide logic on each host, and must agree. Python is the source of truth; Go matches it. action ∈ {allow, block, splice, mitm}.",
+  "config": {
+    "ad_allowlist": "config/ad-allowlist.txt",
+    "learned_trackers": "config/learned-trackers.txt",
+    "splice_seed": "config/tls-splice-seed.conf",
+    "splice_learned": "config/splice-learned.txt",
+    "pure_trackers": "config/pure-trackers.txt",
+    "self_domains": ["secubox.in"],
+    "fortknox_sites": ["mybank.example"]
+  },
+  "fixtures": [
+    {"host": "ads.doubleclick.net",          "expect": "block",  "why": "static ad host (_AD_HOST dotted-prefix doubleclick)"},
+    {"host": "doubleclick.net",               "expect": "block",  "why": "static ad host (_AD_HOST bare)"},
+    {"host": "criteo.com",                    "expect": "block",  "why": "static ad host (_AD_HOST criteo)"},
+    {"host": "learned-tracker.example",       "expect": "block",  "why": "auto-learned tracker (learned-trackers.txt)"},
+    {"host": "pure-tracker.example",          "expect": "block",  "why": "pure-tracker + splice-learned: never wins (no splice) → falls to block (also learned)"},
+    {"host": "hub.secubox.in",                "expect": "allow",  "why": "own-infra subdomain (self_domains) — never block/splice"},
+    {"host": "secubox.in",                    "expect": "allow",  "why": "own-infra apex"},
+    {"host": "analytics.example-allowed.com", "expect": "allow",  "why": "operator allowlisted host"},
+    {"host": "criteo-but-allowed.example",    "expect": "allow",  "why": "would-be-ad registrable but allowlisted → allowlist wins"},
+    {"host": "r1.googlevideo.com",            "expect": "splice", "why": "splice seed subdomain (CDN shard)"},
+    {"host": "googlevideo.com",               "expect": "splice", "why": "splice seed exact"},
+    {"host": "assets.example-cdn.com",        "expect": "splice", "why": "splice-learned host"},
+    {"host": "mybank.example",                "expect": "mitm",   "why": "fortknox site in never-set; not in seed/learned → no splice; not ad/learned → mitm"},
+    {"host": "notdoubleclick.net",            "expect": "mitm",   "why": "no-false-suffix negative — _AD_HOST requires (^|.) boundary"},
+    {"host": "news.example.com",              "expect": "mitm",   "why": "plain site"}
+  ]
+}

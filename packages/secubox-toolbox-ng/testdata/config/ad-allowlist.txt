@@ -1,0 +1,4 @@
+# SecuBox toolbox-ng parity fixture: operator ad-allowlist.
+# Allowlist ALWAYS wins (never block, never splice, never record).
+analytics.example-allowed.com   # an allowlisted host
+criteo-but-allowed.example      # would-be-ad registrable, but allowlisted

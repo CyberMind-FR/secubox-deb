@@ -1,0 +1,3 @@
+# SecuBox toolbox-ng parity fixture: auto-learned splice (never-HTML) hosts.
+assets.example-cdn.com    # a splice-learned host
+pure-tracker.example      # ALSO in pure-trackers (never) → never wins → not spliced
