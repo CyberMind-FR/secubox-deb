@@ -1,0 +1,27 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: toolbox-ng — postinst
+#
+# DARK by design (#662 Phase 5-prep):
+#   - DO reload the systemd unit catalogue so the template is known.
+#   - DO NOT enable or start secubox-toolbox-ng-worker@.service — this is the
+#     Phase-6 cutover target; the live R3 tunnel keeps running on the Python
+#     workers until the operator performs the cutover manually.
+#   - DO NOT touch nftables (no DNAT, no live-R3 rewiring).
+set -e
+
+case "$1" in
+  configure)
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    # Intentionally NO `systemctl enable --now`. See the unit header and
+    # debian/changelog: enabled only at the Phase 6 cutover.
+    ;;
+  abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0
