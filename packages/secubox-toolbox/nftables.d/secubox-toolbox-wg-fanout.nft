@@ -3,7 +3,12 @@
 #
 # REPLACES the prerouting rules from secubox-toolbox-wg.nft :
 #   iif wg-toolbox tcp dport 443 dnat ip to 10.99.1.1:8081  (single port)
-# with a round-robin numgen mapping to ports 8081..8084.
+# with a round-robin numgen mapping to ports 8091..8094.
+#
+# #662 CUTOVER (2026-06-18): the fanout now targets the Go MITM engine
+# (secubox-toolbox-ng-worker@{1..4}, transparent on 10.99.1.1:809%i) instead
+# of the Python mitmproxy workers (808%i). Rollback = change 809x → 808x below
+# and `nft -f` this file (the Python workers are kept warm for that).
 #
 # Why numgen inc and not jhash : nftables 1.0.6 (Debian bookworm) doesn't
 # support `jhash` in numgen yet (lands in 1.0.7+).  `inc` is round-robin
@@ -25,19 +30,20 @@ table inet wg-toolbox {
         # Phase 9 (#501) — 4-worker round-robin DNAT.  numgen returns
         # 0..3 ; the map sends each to one of the 4 worker ports on
         # 10.99.1.1.  Conntrack pins the choice for the whole flow.
+        # #662: ports are 809x (Go engine), was 808x (Python).
         iif "wg-toolbox" tcp dport 443 dnat ip to 10.99.1.1 \
             : numgen inc mod 4 map {
-                0 : 8081,
-                1 : 8082,
-                2 : 8083,
-                3 : 8084
+                0 : 8091,
+                1 : 8092,
+                2 : 8093,
+                3 : 8094
             }
         iif "wg-toolbox" tcp dport 80 dnat ip to 10.99.1.1 \
             : numgen inc mod 4 map {
-                0 : 8081,
-                1 : 8082,
-                2 : 8083,
-                3 : 8084
+                0 : 8091,
+                1 : 8092,
+                2 : 8093,
+                3 : 8094
             }
 
         # Phase 7 (#498) — DNS DNAT for legacy peer configs that hand out
