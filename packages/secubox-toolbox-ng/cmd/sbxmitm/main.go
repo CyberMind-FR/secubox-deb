@@ -37,6 +37,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -324,6 +325,16 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	clientHash := clientHashFromConn(rawClient) // mac_hash-aware (WG persona)
 	anonymizeRequest(req.Header)
 
+	// #662 — pin the upstream Accept-Encoding to gzip (overwrite, dropping
+	// br/zstd/deflate we cannot decode with the stdlib). This guarantees every
+	// response is either gzip or identity, so the inject path can reliably
+	// gunzip→inject→re-gzip the HTML. We Set (not Del): Del would make Go's
+	// Transport auto-decompress and re-serve identity, losing wire compression
+	// to the client for ALL resources (incl. non-injected ones). Set keeps the
+	// Transport in pass-through mode so non-HTML bodies stay compressed
+	// end-to-end. Browsers always accept gzip, so relaying gzip back is safe.
+	req.Header.Set("Accept-Encoding", "gzip")
+
 	// proxy upstream, inject into HTML bodies.
 	up := &http.Client{Timeout: 30 * time.Second}
 	if dialHost != "" {
@@ -356,9 +367,25 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// Inject the transparency-banner loader only on 2xx text/html responses
 	// (mirrors the Python addon, which skips non-200). The loader's same-origin
 	// <script src="/__toolbox/loader.js"> is served by the short-circuit above.
+	//
+	// #662 — the body may be gzip-compressed (we pinned Accept-Encoding: gzip
+	// upstream). injectIntoBody gunzips→injects→re-gzips when Content-Encoding
+	// is gzip, injects directly when identity, and fails open (untouched) on a
+	// corrupt/unknown encoding. Only on a successful rewrite do we update the
+	// framing: writeResponse emits Content-Length from len(body), but a stale
+	// resp.ContentLength / Content-Encoding could mislead downstream — so we
+	// keep them consistent with the bytes we actually serve.
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 &&
 		strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
-		body = injectLoader(body, clientHash, wg)
+		if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), clientHash, wg); ok {
+			body = out
+			// Keep the response framing consistent with the served bytes. The
+			// encoding is unchanged (gzip stays gzip, identity stays identity);
+			// only the length changed because injection grew the body. A stale
+			// Content-Length would truncate/corrupt the response.
+			resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+			resp.ContentLength = int64(len(body))
+		}
 	}
 	writeResponse(tconn, resp, body)
 }
