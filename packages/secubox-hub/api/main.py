@@ -264,54 +264,20 @@ async def public_led_status():
 async def public_health_batch():
     """Batch health check for all modules — returns status for sidebar LEDs.
 
-    Returns a dict of module_id -> {status: 'ok'|'warn'|'error', msg: str}
-    Used by sidebar.js for efficient status display.
+    Serves the TTL snapshot built by the background loop; on a cold miss it
+    builds it ONCE off the event loop. Never makes a synchronous systemctl call
+    on the request path.
     """
-    import subprocess
-
-    modules = {}
-
-    # Get list of secubox services from systemd
-    try:
-        result = subprocess.run(
-            ["systemctl", "list-units", "--type=service", "--state=running,failed,inactive",
-             "--no-legend", "--plain", "secubox-*"],
-            capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.strip().split("\n"):
-            if not line.strip():
-                continue
-            parts = line.split()
-            if len(parts) >= 4:
-                unit = parts[0]
-                load = parts[1]
-                active = parts[2]
-                sub = parts[3]
-
-                # Extract module id from unit name (secubox-xxx.service -> xxx)
-                if unit.startswith("secubox-") and unit.endswith(".service"):
-                    mod_id = unit[8:-8]  # Remove 'secubox-' and '.service'
-
-                    if active == "active" and sub == "running":
-                        modules[mod_id] = {"status": "ok", "msg": "Running"}
-                    elif active == "active":
-                        modules[mod_id] = {"status": "warn", "msg": f"Active ({sub})"}
-                    elif active == "failed":
-                        modules[mod_id] = {"status": "error", "msg": "Failed"}
-                    else:
-                        modules[mod_id] = {"status": "warn", "msg": f"{active}/{sub}"}
-    except Exception as e:
-        log.warning("health-batch systemctl error: %s", e)
-
-    # Also check socket-based services
-    socket_dir = Path("/run/secubox")
-    if socket_dir.exists():
-        for sock in socket_dir.glob("*.sock"):
-            mod_id = sock.stem
-            if mod_id not in modules:
-                modules[mod_id] = {"status": "ok", "msg": "Socket active"}
-
-    return {"modules": modules, "count": len(modules)}
+    hb = _cache.get("health_batch")
+    if hb and (time.time() - _cache.get("health_batch_ts", 0)) < CACHE_TTL * 2:
+        return hb
+    async with _health_batch_lock:
+        # Re-check under the lock: a concurrent waiter may have just rebuilt it.
+        hb = _cache.get("health_batch")
+        if not hb or (time.time() - _cache.get("health_batch_ts", 0)) >= CACHE_TTL * 2:
+            await asyncio.to_thread(_refresh_health_batch)
+            hb = _cache.get("health_batch") or {"modules": {}, "count": 0}
+    return hb
 
 
 app.include_router(public_router)
@@ -324,8 +290,15 @@ _cache = {
     "menu": None,         # Full menu response
     "system_stats": {},   # CPU, memory, disk
     "last_refresh": 0,
+    "health_batch": None, # {modules: {...}, count: int} snapshot for sidebar LEDs
+    "health_batch_ts": 0, # monotonic-ish wall time of last health_batch build
 }
 CACHE_TTL = 5  # seconds - cache valid for 5 seconds
+
+# Collapse a thundering herd of concurrent cold requests (the background loop is
+# starved >10s, e.g. under aggregator saturation) to a single refresh each.
+_services_warm_lock = asyncio.Lock()
+_health_batch_lock = asyncio.Lock()
 
 # MODULES dict is dynamically populated from installed services
 # These are the "expected" core modules - actual list comes from systemd
@@ -399,6 +372,51 @@ def _refresh_services_cache():
         log.warning("Cache refresh failed: %s", e)
 
 
+def _refresh_health_batch():
+    """Build the sidebar health snapshot in ONE systemctl list-units call.
+
+    Stores _cache["health_batch"] = {modules, count} + stamps health_batch_ts.
+    Shared by the background loop and the /public/health-batch cold-miss path so
+    the request never makes its own (3.3 s) synchronous systemctl call.
+    """
+    modules = {}
+    try:
+        result = subprocess.run(
+            ["systemctl", "list-units", "--type=service",
+             "--state=running,failed,inactive", "--no-legend", "--plain",
+             "secubox-*"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split()
+            if len(parts) >= 4:
+                unit, _load, active, sub = parts[0], parts[1], parts[2], parts[3]
+                if unit.startswith("secubox-") and unit.endswith(".service"):
+                    mod_id = unit[8:-8]
+                    if active == "active" and sub == "running":
+                        modules[mod_id] = {"status": "ok", "msg": "Running"}
+                    elif active == "active":
+                        modules[mod_id] = {"status": "warn", "msg": f"Active ({sub})"}
+                    elif active == "failed":
+                        modules[mod_id] = {"status": "error", "msg": "Failed"}
+                    else:
+                        modules[mod_id] = {"status": "warn", "msg": f"{active}/{sub}"}
+    except Exception as e:
+        log.warning("health-batch systemctl error: %s", e)
+
+    socket_dir = Path("/run/secubox")
+    if socket_dir.exists():
+        for sock in socket_dir.glob("*.sock"):
+            mod_id = sock.stem
+            if mod_id not in modules:
+                modules[mod_id] = {"status": "ok", "msg": "Socket active"}
+
+    _cache["health_batch"] = {"modules": modules, "count": len(modules)}
+    _cache["health_batch_ts"] = time.time()
+
+
 def _refresh_system_stats():
     """Refresh system stats (CPU, memory, disk)."""
     try:
@@ -426,6 +444,7 @@ async def _background_cache_refresh():
         try:
             await asyncio.to_thread(_refresh_services_cache)
             await asyncio.to_thread(_refresh_system_stats)
+            await asyncio.to_thread(_refresh_health_batch)
             _cache["last_refresh"] = time.time()
             # Refresh package versions every 12 cycles (~60s)
             _version_refresh_counter += 1
@@ -464,6 +483,7 @@ async def _start_background_once():
     try:
         await asyncio.to_thread(_refresh_services_cache)
         await asyncio.to_thread(_refresh_system_stats)
+        await asyncio.to_thread(_refresh_health_batch)
         _cache["last_refresh"] = time.time()
     except Exception as e:
         log.warning("Initial cache warm failed: %s", e)
@@ -541,9 +561,28 @@ def _svc(name: str) -> dict:
     except Exception:
         return {"name": name, "active": False, "socket": False, "version": "-"}
 
+
+async def _ensure_services_warm():
+    """Refresh the services cache in ONE batched call when cold/stale.
+
+    Replaces the ~16 per-module `systemctl is-active` fallbacks inside _svc()
+    with a single offloaded `is-active -- [all]` so dashboard/status/modules cold
+    paths cost one call instead of sixteen, and never block the shared loop.
+    """
+    if (time.time() - _cache["last_refresh"]) < CACHE_TTL * 2:
+        return
+    async with _services_warm_lock:
+        # Re-check under the lock: a concurrent waiter may have just refreshed.
+        if (time.time() - _cache["last_refresh"]) < CACHE_TTL * 2:
+            return
+        await asyncio.to_thread(_refresh_services_cache)
+        _cache["last_refresh"] = time.time()
+
+
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
     board = get_board_info()
+    await _ensure_services_warm()
     # Offload _svc() — blocking systemctl on a cold cache must not stall the loop.
     modules_status = await asyncio.to_thread(lambda: {k: _svc(v) for k, v in MODULES.items()})
     active = sum(1 for m in modules_status.values() if m["active"])
@@ -552,12 +591,14 @@ async def status(user=Depends(require_jwt)):
 
 @router.get("/modules")
 async def modules(user=Depends(require_jwt)):
+    await _ensure_services_warm()
     return await asyncio.to_thread(lambda: [{"id": k, **_svc(v)} for k, v in MODULES.items()])
 
 @router.get("/alerts")
 async def alerts(user=Depends(require_jwt)):
     # Use the cached _svc() (offloaded) instead of an un-timed per-module
     # systemctl loop that blocked the shared aggregator event loop.
+    await _ensure_services_warm()
     statuses = await asyncio.to_thread(lambda: {m: _svc(svc) for m, svc in MODULES.items()})
     return [{"type": "service_down", "module": m, "service": MODULES[m],
              "severity": "warning"}
@@ -593,6 +634,7 @@ def _get_build_info() -> dict:
 async def dashboard(user=Depends(require_jwt)):
     """Données complètes du dashboard (uses cached stats for speed)."""
     board = get_board_info()
+    await _ensure_services_warm()
     # Offload _svc() — on a cold cache it makes blocking systemctl calls that
     # must not stall the shared aggregator event loop.
     modules_status = await asyncio.to_thread(lambda: {k: _svc(v) for k, v in MODULES.items()})

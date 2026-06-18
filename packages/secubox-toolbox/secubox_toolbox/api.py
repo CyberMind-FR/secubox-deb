@@ -73,6 +73,11 @@ async def toolbox_bundle(mh: str = Query(default=""), wg: int = Query(default=0)
         headers={"Cache-Control": "no-store"},
     )
 
+# Cap geo/UA enrichment on /admin/clients/rich to the rows the UI actually shows
+# (top-5 + headroom). Beyond this, clients get bare fields — avoids ~51 cached
+# geo lookups per poll (ref #644).
+ENRICH_LIMIT = 12
+
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "conf"
 _env = jinja2.Environment(
     loader=jinja2.FileSystemLoader(TEMPLATE_DIR),
@@ -2915,9 +2920,10 @@ async def admin_clients_rich() -> dict:
     _av = avatar_analysis
     _geo = geo
     rows = store.list_clients()
+    rows = sorted(rows, key=lambda r: (r.get("last_seen") or 0), reverse=True)
     now = _t.time()
     enriched = []
-    for r in rows:
+    for idx, r in enumerate(rows):
         age_min = (now - (r.get("last_seen") or 0)) / 60.0
         if age_min < 5:
             status_emoji = "🟢"
@@ -2936,26 +2942,25 @@ async def admin_clients_rich() -> dict:
         score = r.get("score", 0)
         risk_emoji = "🟢" if score < 30 else "🟡" if score < 70 else "🔴"
 
-        # --- Device classification (UA-based) ---
+        # Device + geo enrichment only for the displayed rows (ENRICH_LIMIT).
         dev_emoji, dev_label = "📱", ""
-        try:
-            ua = store.latest_user_agent(r.get("mac_hash") or "")
-            if ua:
-                cl = _av.classify_user_agent(ua)
-                dev_emoji = cl.get("device_emoji") or dev_emoji
-                dev_label = cl.get("device") or ""
-        except Exception:
-            pass
-
-        # --- Geo enrichment (country flag, ISO, ASN org) ---
         flag = country_iso = asn_org = ""
-        try:
-            gi = _geo.lookup(r.get("ip") or "")
-            flag = gi.get("flag", "") or ""
-            country_iso = gi.get("country_iso", "") or ""
-            asn_org = gi.get("asn_org", "") or ""
-        except Exception:
-            pass
+        if idx < ENRICH_LIMIT:
+            try:
+                ua = store.latest_user_agent(r.get("mac_hash") or "")
+                if ua:
+                    cl = _av.classify_user_agent(ua)
+                    dev_emoji = cl.get("device_emoji") or dev_emoji
+                    dev_label = cl.get("device") or ""
+            except Exception:
+                pass
+            try:
+                gi = _geo.lookup(r.get("ip") or "")
+                flag = gi.get("flag", "") or ""
+                country_iso = gi.get("country_iso", "") or ""
+                asn_org = gi.get("asn_org", "") or ""
+            except Exception:
+                pass
 
         enriched.append({
             "mac_hash": r.get("mac_hash"),
