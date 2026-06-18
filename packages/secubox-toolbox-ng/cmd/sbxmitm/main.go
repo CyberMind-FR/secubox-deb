@@ -61,23 +61,43 @@ func loadCA(certPath, keyPath string) (*CA, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read ca key: %w", err)
 	}
-	cblk, _ := pem.Decode(cpem)
+	// Scan for the right block TYPE rather than assuming position: the live R3
+	// CA the toolbox forges with (mitmproxy confdir `mitmproxy-ca.pem`) is a
+	// COMBINED cert+key bundle, and --ca-key may point at it. Tolerate cert and
+	// key co-residing in either file, in any order.
+	cblk := firstPEMBlock(cpem, func(b *pem.Block) bool { return b.Type == "CERTIFICATE" })
 	if cblk == nil {
-		return nil, fmt.Errorf("ca cert: no PEM block")
+		return nil, fmt.Errorf("ca cert: no CERTIFICATE PEM block")
 	}
 	cert, err := x509.ParseCertificate(cblk.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("parse ca cert: %w", err)
 	}
-	kblk, _ := pem.Decode(kpem)
+	kblk := firstPEMBlock(kpem, func(b *pem.Block) bool { return strings.Contains(b.Type, "PRIVATE KEY") })
 	if kblk == nil {
-		return nil, fmt.Errorf("ca key: no PEM block")
+		return nil, fmt.Errorf("ca key: no PRIVATE KEY PEM block")
 	}
 	key, err := parseKey(kblk.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("parse ca key: %w", err)
 	}
 	return &CA{cert: cert, key: key, cache: map[string]*tls.Certificate{}}, nil
+}
+
+// firstPEMBlock returns the first PEM block in data satisfying want, or nil.
+// Used to pull a specific block (CERTIFICATE / PRIVATE KEY) out of a file that
+// may hold several (e.g. mitmproxy's combined CA bundle).
+func firstPEMBlock(data []byte, want func(*pem.Block) bool) *pem.Block {
+	for {
+		blk, rest := pem.Decode(data)
+		if blk == nil {
+			return nil
+		}
+		if want(blk) {
+			return blk
+		}
+		data = rest
+	}
 }
 
 func parseKey(der []byte) (crypto.Signer, error) {
@@ -182,6 +202,7 @@ type Proxy struct {
 	jaSink func(string) // JA4 observations (logged; a sidecar in prod)
 	jarKey []byte       // anti-track HMAC fake-identity seed (nil → poison off)
 	poison bool         // master gate: poison tracker Set-Cookies (default on when jarKey present)
+	portal string       // portal base URL for /__toolbox/* reverse-proxy (banner assets)
 }
 
 func (px *Proxy) serverTLSConfig() *tls.Config {
@@ -238,7 +259,8 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	// Shared post-TLS pipeline. CONNECT dials upstream by the request URL host
 	// (req.URL.Host set inside), so dialHost is "" → mitmPipeline derives it.
-	px.mitmPipeline(tconn, client, host, verdict, "")
+	// CONNECT PoC is never an R3 WG client → wg=false.
+	px.mitmPipeline(tconn, client, host, verdict, "", false)
 }
 
 // mitmPipeline runs the shared post-TLS-handshake MITM logic used by BOTH the
@@ -256,7 +278,9 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 //     CONNECT semantics: dial by req.URL.Host (the request URL / host). Non-""
 //     → transparent: TCP-connect the captured original-dst while doing TLS with
 //     ServerName=host and verifying the cert against host (not the bare IP).
-func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string) {
+//   - wg         : the client is an R3 WireGuard peer (10.99.1.0/24); threaded
+//     into the injected loader's data-wg attribute. CONNECT path passes false.
+func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string, wg bool) {
 	br := newReader(tconn)
 	req, err := http.ReadRequest(br)
 	if err != nil {
@@ -265,6 +289,16 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	req.URL.Scheme = "https"
 	if req.URL.Host == "" {
 		req.URL.Host = host
+	}
+
+	// #636/#662 — serve the banner loader + bundle for ANY origin so the injected
+	// <script src="/__toolbox/loader.js"> resolves (R3 clients hit arbitrary
+	// hosts whose origin can't serve /__toolbox/*). Short-circuit BEFORE dialing
+	// the real upstream by reverse-proxying to the portal. Mirrors the Python
+	// InjectBanner.request() startswith checks (path includes the query string).
+	if isToolboxAssetPath(req.URL.RequestURI()) {
+		servePortalAsset(tconn, px.portal, req.URL.RequestURI())
+		return
 	}
 	// Transparent: the upstream request must carry the SNI host (for Host header,
 	// SNI, and cert verification); the actual TCP dial is pinned to the captured
@@ -319,8 +353,12 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	}
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
-		body = px.pol.injectMarker(body)
+	// Inject the transparency-banner loader only on 2xx text/html responses
+	// (mirrors the Python addon, which skips non-200). The loader's same-origin
+	// <script src="/__toolbox/loader.js"> is served by the short-circuit above.
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 &&
+		strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
+		body = injectLoader(body, clientHash, wg)
 	}
 	writeResponse(tconn, resp, body)
 }
@@ -355,6 +393,8 @@ func main() {
 		"poison tracking Set-Cookies on MITM'd tracker flows (needs --jar-key; never touches allow/own-infra)")
 	transparent := flag.Bool("transparent", false,
 		"transparent mode: accept nft-DNAT'd conns + recover SO_ORIGINAL_DST (live R3); default is the CONNECT proxy PoC")
+	portal := flag.String("portal", "http://127.0.0.1:8088",
+		"portal base URL; /__toolbox/loader.js + /__toolbox/bundle are reverse-proxied here (banner assets, served for any MITM'd origin)")
 	flag.Parse()
 	ca, err := loadCA(*caCert, *caKey)
 	if err != nil {
@@ -380,6 +420,7 @@ func main() {
 		jaSink: func(s string) { log.Printf("ja4 %s", s) },
 		jarKey: jarKey,
 		poison: *poison,
+		portal: *portal,
 	}
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT

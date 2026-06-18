@@ -72,6 +72,65 @@ func TestForgeChainsToCA(t *testing.T) {
 	}
 }
 
+// TestLoadCACombinedPEM proves loadCA pulls the right blocks out of a COMBINED
+// cert+key bundle — the real shape of mitmproxy's confdir `mitmproxy-ca.pem`,
+// which the live R3 CA uses and the worker unit points --ca-key at. mitmproxy
+// writes the PRIVATE KEY block first, then the CERTIFICATE; loadCA must scan by
+// type, not position.
+func TestLoadCACombinedPEM(t *testing.T) {
+	dir := t.TempDir()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(7),
+		Subject:               pkix.Name{CommonName: "Gondwana ToolBoX R3 CA (test)"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kder, _ := x509.MarshalPKCS8PrivateKey(key)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: kder})
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+
+	// mitmproxy-ca.pem layout: key THEN cert in one file.
+	combined := filepath.Join(dir, "mitmproxy-ca.pem")
+	if err := os.WriteFile(combined, append(append([]byte{}, keyPEM...), certPEM...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// mitmproxy-ca-cert.pem: cert only.
+	certOnly := filepath.Join(dir, "mitmproxy-ca-cert.pem")
+	if err := os.WriteFile(certOnly, certPEM, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The unit's exact arg shape: --ca-cert <cert-only> --ca-key <combined>.
+	ca, err := loadCA(certOnly, combined)
+	if err != nil {
+		t.Fatalf("loadCA(cert-only, combined): %v", err)
+	}
+	leaf, err := ca.forge("ads.example.com")
+	if err != nil {
+		t.Fatalf("forge: %v", err)
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(ca.cert)
+	if _, err := leaf.Leaf.Verify(x509.VerifyOptions{Roots: pool, DNSName: "ads.example.com"}); err != nil {
+		t.Fatalf("forged leaf does not chain to combined-PEM CA: %v", err)
+	}
+	// Belt-and-braces: the combined file works as BOTH cert and key source.
+	if _, err := loadCA(combined, combined); err != nil {
+		t.Fatalf("loadCA(combined, combined): %v", err)
+	}
+}
+
 // NOTE (#662 Phase 3): the old TestActionDecision drove the removed hardcoded
 // Policy{AdHosts, SpliceHosts} fields. The decision surface now loads from
 // disk (LoadPolicy) and mirrors the Python addons; coverage moved to
