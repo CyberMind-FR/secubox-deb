@@ -48,11 +48,6 @@ def test_get_bundle_caches(monkeypatch):
 
 
 def test_loader_js_is_served_string():
-    # Initial render must NOT depend on a load/DOMContentLoaded event — it uses
-    # currentScript + ready() polling so it works even when injected mid-stream.
-    # (#653: the popstate listener is for SPA re-assert, not initial render, so a
-    # blanket "no addEventListener" ban is too broad — assert the real intent.)
-    assert "DOMContentLoaded" not in bundle.LOADER_JS
-    assert 'addEventListener("load"' not in bundle.LOADER_JS
-    assert "__toolbox/bundle" in bundle.LOADER_JS   # fetch retained as fallback
+    assert "addEventListener" not in bundle.LOADER_JS  # uses currentScript pattern
+    assert "__toolbox/bundle" in bundle.LOADER_JS
     assert bundle.LOADER_JS.strip().startswith("(function()")
