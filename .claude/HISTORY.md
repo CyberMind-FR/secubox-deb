@@ -3,6 +3,29 @@
 
 ---
 
+## 2026-06-18 — #662 R3 CUTOVER to the Go MITM engine (PR #670) — LIVE + banner ported
+
+- **Cutover executed and live.** The Go engine now serves **100% of R3 traffic**,
+  replacing the Python mitmproxy workers. Found + fixed 4 blockers that made the dark
+  package unable to serve the live path: (1) it forged with the wrong CA (ca-wg "WG CA"
+  vs the "R3 CA" clients trust) → now uses the mitmproxy confdir bundle; (2) root-only
+  key vs non-root user → R3 CA bundle is group-readable; (3) bound 127.0.0.1 vs the
+  10.99.1.1 DNAT target → now binds 10.99.1.1; (4) ran CONNECT vs transparent → now
+  `--transparent`. `loadCA` scans PEM blocks by type (combined cert+key bundle).
+- **Validated on real arm64 hardware** then rolled out gated: localhost forge against
+  the real R3 CA → scoped-DNAT transparent capture → **canary slot 3 (~25%, dead-man
+  armed)** → **widen to 100%**. At 100%: 0 restarts, 0 errors, ~64MB total
+  (vs Python ~280-470MB), even round-robin, 142 distinct SNIs/75s.
+- **Banner ported** (the one regression the user caught — "no more banner but fast").
+  Go now injects the real loader `<script src="/__toolbox/loader.js" data-mh=.. data-wg=..>`
+  (guard-idempotent, R3 wg flag, mac_hash identity) and reverse-proxies
+  `/__toolbox/loader.js`+`/__toolbox/bundle` to the portal (127.0.0.1:8088, fail-open),
+  keeping bundle/level logic in Python. Verified live: loader injected + assets 200.
+- **Rollback** = one `nft replace` (Python workers kept warm). **Persistence gap**: the
+  nft flip is a live edit, not yet in the drift-managed generator → reboot safely falls
+  back to Python (workers enabled, banner intact). Phase 7 (decommission Python +
+  persist nft) deferred to a soak'd follow-up.
+
 ## 2026-06-18 — #662 MITM engine migration: P5-prep + P6-prep (PRs #668, #669, all DARK)
 
 - **P5-prep (PR #668).** Wired the ported `Decide`+jar into the Go engine's request/
