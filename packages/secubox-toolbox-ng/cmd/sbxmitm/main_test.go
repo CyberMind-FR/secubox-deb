@@ -72,24 +72,13 @@ func TestForgeChainsToCA(t *testing.T) {
 	}
 }
 
-func TestActionDecision(t *testing.T) {
-	p := Policy{AdHosts: []string{"doubleclick.net"}, SpliceHosts: []string{"googlevideo.com"}}
-	cases := map[string]string{
-		"ads.doubleclick.net": "block",
-		"doubleclick.net":     "block",
-		"r1.googlevideo.com":  "splice",
-		"news.example.com":    "mitm",
-		"notdoubleclick.net":  "mitm",
-	}
-	for host, want := range cases {
-		if got := p.action(host); got != want {
-			t.Errorf("action(%q)=%q want %q", host, got, want)
-		}
-	}
-}
+// NOTE (#662 Phase 3): the old TestActionDecision drove the removed hardcoded
+// Policy{AdHosts, SpliceHosts} fields. The decision surface now loads from
+// disk (LoadPolicy) and mirrors the Python addons; coverage moved to
+// TestParityDecide / TestPolicyActionVerbs in policy_test.go.
 
 func TestInjectMarker(t *testing.T) {
-	p := Policy{Inject: []byte("<!--SBX-->")}
+	p := &Policy{Inject: []byte("<!--SBX-->")}
 	out := string(p.injectMarker([]byte("<html><head></head><body>hi</body></html>")))
 	if !contains(out, "<!--SBX--></head>") {
 		t.Fatalf("marker not injected before </head>: %s", out)
