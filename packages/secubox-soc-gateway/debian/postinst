@@ -17,7 +17,7 @@ case "$1" in
         # Ensure log directory exists with correct permissions
         mkdir -p /var/log/secubox
         chown root:adm /var/log/secubox
-        chmod 750 /var/log/secubox
+        chmod 0755 /var/log/secubox
 
         # Create config directory
         mkdir -p /etc/secubox

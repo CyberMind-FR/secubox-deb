@@ -1,3 +1,15 @@
+secubox-core (1.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#623): tmpfiles.d now declares all shared secubox parents
+    (/var/lib, /var/log, /var/cache, /etc, /usr/share /secubox) at 0755
+    (mode-only, owner-agnostic), in addition to /run/secubox 1777 — boot +
+    install-time defense-in-depth that self-heals a momentary 0750 clobber
+    before the next secubox-dirs-guard.timer tick. Pairs with the source-wide
+    postinst sweep that stopped ~56 module postinsts from clobbering those
+    parents.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 18 Jun 2026 13:00:00 +0200
+
 secubox-core (1.1.7-1~bookworm1) bookworm; urgency=medium
 
   * fix(postinst): /var/lib/secubox + /usr/share/secubox/www were set 0750,
