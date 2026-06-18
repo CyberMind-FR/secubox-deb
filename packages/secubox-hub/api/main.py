@@ -583,6 +583,7 @@ async def modules(user=Depends(require_jwt)):
 async def alerts(user=Depends(require_jwt)):
     # Use the cached _svc() (offloaded) instead of an un-timed per-module
     # systemctl loop that blocked the shared aggregator event loop.
+    await _ensure_services_warm()
     statuses = await asyncio.to_thread(lambda: {m: _svc(svc) for m, svc in MODULES.items()})
     return [{"type": "service_down", "module": m, "service": MODULES[m],
              "severity": "warning"}
