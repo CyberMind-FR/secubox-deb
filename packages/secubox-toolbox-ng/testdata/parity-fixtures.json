@@ -24,6 +24,8 @@
     {"host": "assets.example-cdn.com",        "expect": "splice", "why": "splice-learned host"},
     {"host": "mybank.example",                "expect": "mitm",   "why": "fortknox site in never-set; not in seed/learned → no splice; not ad/learned → mitm"},
     {"host": "notdoubleclick.net",            "expect": "mitm",   "why": "no-false-suffix negative — _AD_HOST requires (^|.) boundary"},
-    {"host": "news.example.com",              "expect": "mitm",   "why": "plain site"}
+    {"host": "news.example.com",              "expect": "mitm",   "why": "plain site"},
+    {"host": "notsecubox.in",                 "expect": "mitm",   "why": "own-infra FALSE-prefix negative — must NOT match self_domains"},
+    {"host": "commented-learned.example",     "expect": "mitm",   "why": "learned-trackers NOT comment-stripped (_learned_set keeps full line incl ' # ...'); bare host not in set → not blocked. Discriminates loadLinesRaw vs loadLines"}
   ]
 }
