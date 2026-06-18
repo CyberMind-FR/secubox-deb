@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * banner: port the real transparency-banner inject — inject the loader
+    <script src="/__toolbox/loader.js" data-mh=.. data-wg=..> (guard-idempotent,
+    R3 wg flag, mac_hash identity) and reverse-proxy /__toolbox/loader.js +
+    /__toolbox/bundle to the portal (127.0.0.1:8088), replacing the invisible
+    marker comment. Fail-open to 204. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Jun 2026 19:20:00 +0000
+
 secubox-toolbox-ng (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * worker@ unit: forge with the LIVE R3 CA clients trust (mitmproxy confdir
