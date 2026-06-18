@@ -7,8 +7,8 @@ case "$1" in
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     # Create runtime directories
-    install -d -o secubox -g secubox -m 750 /run/secubox
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    install -d -o root -g root -m 1777 /run/secubox
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox
     # Create data directories
     install -d -o secubox -g secubox -m 755 /var/lib/secubox/webradio
     install -d -o secubox -g secubox -m 755 /var/lib/secubox/webradio/recordings
