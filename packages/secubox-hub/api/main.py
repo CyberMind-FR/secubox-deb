@@ -324,6 +324,8 @@ _cache = {
     "menu": None,         # Full menu response
     "system_stats": {},   # CPU, memory, disk
     "last_refresh": 0,
+    "health_batch": None, # {modules: {...}, count: int} snapshot for sidebar LEDs
+    "health_batch_ts": 0, # monotonic-ish wall time of last health_batch build
 }
 CACHE_TTL = 5  # seconds - cache valid for 5 seconds
 
@@ -397,6 +399,51 @@ def _refresh_services_cache():
             }
     except Exception as e:
         log.warning("Cache refresh failed: %s", e)
+
+
+def _refresh_health_batch():
+    """Build the sidebar health snapshot in ONE systemctl list-units call.
+
+    Stores _cache["health_batch"] = {modules, count} + stamps health_batch_ts.
+    Shared by the background loop and the /public/health-batch cold-miss path so
+    the request never makes its own (3.3 s) synchronous systemctl call.
+    """
+    modules = {}
+    try:
+        result = subprocess.run(
+            ["systemctl", "list-units", "--type=service",
+             "--state=running,failed,inactive", "--no-legend", "--plain",
+             "secubox-*"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split()
+            if len(parts) >= 4:
+                unit, _load, active, sub = parts[0], parts[1], parts[2], parts[3]
+                if unit.startswith("secubox-") and unit.endswith(".service"):
+                    mod_id = unit[8:-8]
+                    if active == "active" and sub == "running":
+                        modules[mod_id] = {"status": "ok", "msg": "Running"}
+                    elif active == "active":
+                        modules[mod_id] = {"status": "warn", "msg": f"Active ({sub})"}
+                    elif active == "failed":
+                        modules[mod_id] = {"status": "error", "msg": "Failed"}
+                    else:
+                        modules[mod_id] = {"status": "warn", "msg": f"{active}/{sub}"}
+    except Exception as e:
+        log.warning("health-batch systemctl error: %s", e)
+
+    socket_dir = Path("/run/secubox")
+    if socket_dir.exists():
+        for sock in socket_dir.glob("*.sock"):
+            mod_id = sock.stem
+            if mod_id not in modules:
+                modules[mod_id] = {"status": "ok", "msg": "Socket active"}
+
+    _cache["health_batch"] = {"modules": modules, "count": len(modules)}
+    _cache["health_batch_ts"] = time.time()
 
 
 def _refresh_system_stats():
@@ -540,6 +587,19 @@ def _svc(name: str) -> dict:
                 "socket": sock.exists(), "version": _version_cache.get(name, "-")}
     except Exception:
         return {"name": name, "active": False, "socket": False, "version": "-"}
+
+
+async def _ensure_services_warm():
+    """Refresh the services cache in ONE batched call when cold/stale.
+
+    Replaces the ~16 per-module `systemctl is-active` fallbacks inside _svc()
+    with a single offloaded `is-active -- [all]` so dashboard/status/modules cold
+    paths cost one call instead of sixteen, and never block the shared loop.
+    """
+    if (time.time() - _cache["last_refresh"]) >= CACHE_TTL * 2:
+        await asyncio.to_thread(_refresh_services_cache)
+        _cache["last_refresh"] = time.time()
+
 
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
