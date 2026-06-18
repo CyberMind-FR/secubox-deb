@@ -15,7 +15,7 @@ case "$1" in
 
         # Create log directory
         mkdir -p /var/log/secubox
-        chmod 750 /var/log/secubox
+        chmod 0755 /var/log/secubox
 
         # Create config directory
         mkdir -p /etc/secubox/ui
