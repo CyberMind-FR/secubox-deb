@@ -201,9 +201,15 @@ case "$1" in
     id -u secubox >/dev/null 2>&1 || \
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    # Create runtime directories
-    install -d -o secubox -g secubox -m 750 /run/secubox
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    # Create runtime directories.
+    # NOTE (#623): these are SHARED parents — keep them traversable for every
+    # secubox-* daemon. /run/secubox MUST stay 1777 (world-writable sticky, all
+    # services drop sockets there, ref #471); /var/lib/secubox MUST stay 0755.
+    # NEVER set a shared parent to 0750/0700 — it breaks traversal for non-secubox
+    # users (kbin/toolbox 500). Module-private leaves (/var/lib/secubox/PKGNAME)
+    # may be 0750. Re-asserting 0755/1777 here is idempotent + self-healing.
+    install -d -o root -g root -m 1777 /run/secubox
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox
     # Ensure nginx secubox.d directory exists
     install -d -m 755 /etc/nginx/secubox.d
     # Enable and start service

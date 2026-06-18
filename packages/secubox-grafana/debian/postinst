@@ -9,7 +9,7 @@ case "$1" in
         getent passwd secubox >/dev/null || useradd --system --gid secubox \
             --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
 
-        install -d -m 0770 -o root -g secubox /etc/secubox
+        install -d -o secubox -g secubox -m 755 /etc/secubox
         install -d -m 0755 -o secubox -g secubox /var/lib/secubox/grafana
         install -d -m 0755 -o secubox -g secubox /var/log/secubox
 
