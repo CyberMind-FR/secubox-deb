@@ -1,3 +1,17 @@
+secubox-toolbox (2.6.54-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#649): selective SNI-splice (Lever A). New tls_splice addon (first in
+    the mitm-wg chain) splices pure-asset flows at the TLS ClientHello — curated
+    media seed (googlevideo/ytimg/fbcdn/twimg/scdn…) ∪ autolearn-promoted
+    never-HTML hosts — so the GIL-bound R3 workers skip forge/decrypt/parse/16-
+    addons on flows with no L7 value. Ships tls_splice=observe (DARK: classify +
+    log would-splice, still MITM); flip to `on` after soak; `off` kill-switch.
+    Never splices trackers (pure-trackers)/fortknox/no-SNI/media_cache-on.
+    Learning obs recorded off the event loop (bg thread), only for undecided
+    hosts. New splice_host_obs table; autolearn _splice_feed promotion.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 14:30:00 +0200
+
 secubox-toolbox (2.6.53-1~bookworm1) bookworm; urgency=medium
 
   * perf(#646): adaptive Accept-Encoding strip in inject_banner. Keep gzip/br by

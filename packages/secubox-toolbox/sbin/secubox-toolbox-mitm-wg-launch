@@ -95,8 +95,12 @@ if [ -n "$IGNORE_REGEX" ]; then
 fi
 
 # Addons :
-#   - inject_xff (Phase 7 #498) MUST be FIRST — sets X-Forwarded-For at
-#     requestheaders so other addons and the upstream see the real peer IP
+#   - tls_splice (#649) runs at tls_clienthello (BEFORE any requestheaders
+#     addon) — it splices pure-asset flows so the rest of the chain never even
+#     sees them. Listed first for clarity; its hook phase makes ordering vs the
+#     requestheaders addons irrelevant, so inject_xff stays first-at-requestheaders.
+#   - inject_xff (Phase 7 #498) MUST be FIRST among requestheaders addons — sets
+#     X-Forwarded-For at requestheaders so other addons and the upstream see the real peer IP
 #   - utiq_defense (Phase 8 #500) runs at requestheaders too ; placed
 #     EARLY so a R1 block short-circuits the flow before downstream
 #     addons spend cycles on it
@@ -111,7 +115,7 @@ fi
 # ad_ghost (#566) runs right after protective_mode: for R3+/R4 it 204s known
 # ad/tracker hosts (bandwidth save) at request time and injects ad-hiding CSS
 # on HTML responses. Gated by the modular filter config (toolbox WebUI).
-for addon in inject_xff utiq_defense protective_mode privacy_guard ad_ghost media_cache local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect media_stats; do
+for addon in tls_splice inject_xff utiq_defense protective_mode privacy_guard ad_ghost media_cache local_store social_graph inject_banner dpi cookies avatar ja4 soc_relay cert_pin_detect media_stats; do
     ARGS+=(-s "$ADDON_DIR/${addon}.py")
 done
 
