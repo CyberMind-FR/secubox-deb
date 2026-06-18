@@ -1,0 +1,22 @@
+Source: secubox-toolbox-ng
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.22~)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-toolbox-ng
+Architecture: arm64
+Depends: ${misc:Depends}
+Description: SecuBox-Deb — Go MITM engine (migration target, DARK)
+ Multi-core Go re-implementation of the R3 toolbox MITM engine (#662),
+ ported off the GIL-bound Python mitmproxy worker fleet. Ships the
+ standalone sbxmitm binary plus a DISABLED systemd template unit.
+ .
+ This package is the Phase-6-cutover migration target. The unit is NOT
+ enabled or started by the maintainer scripts — the live R3 tunnel keeps
+ running on the Python workers until the cutover is performed manually.
+ Installing this package changes NO runtime behaviour (no service start,
+ no nft DNAT).

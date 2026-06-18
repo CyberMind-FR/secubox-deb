@@ -1,3 +1,12 @@
 /sbxmitm
 *.test
 cmd/sbxmitm/sbxmitm
+# Debian build artifacts (rules builds the binary + go caches in-tree)
+/_gocache/
+/_gopath/
+/debian/.debhelper/
+/debian/files
+/debian/*.substvars
+/debian/secubox-toolbox-ng/
+/debian/debhelper-build-stamp
+/debian/*.debhelper.log
