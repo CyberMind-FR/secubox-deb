@@ -3,6 +3,29 @@
 
 ---
 
+## 2026-06-18 — #656 Ad Intelligence (PR #657, toolbox 2.6.56) + splice reverted
+
+- **Ad Intelligence — learn/act/measure.** `ad_ghost` now records every
+  block/silent per (ad_host, site=registrable(Referer), action) into a new
+  `ad_block_stats` store (in-memory dicts, bg-thread flush — no SQLite on the
+  proxy hot path), exposed via `GET /admin/ad-stats` + a new **#ads dashboard
+  tab** (top ad hosts, ads-blocked-per-site, action split, KB saved). Aggressive
+  learning: 3rd-party ad-shape requests captured as `ad_candidates`; autolearn
+  `_ad_feed` promotes hosts on ≥AD_MIN_SITES (default 1) distinct sites into the
+  204'd blocklist. Safety (inverts the splice mistake — learning to BLOCK is
+  reversible): `ad-allowlist.txt` always wins, `ad_learn` toggle, every block
+  visible in metrics, no IP-drop, no CSP weakening. 115 tests green; deployed +
+  verified (/admin/ad-stats 200, metrics flowing, ad_ghost intact).
+- **Splice (#649/#651) REVERTED to off.** `tls_splice=on` bypassed the whole
+  addon chain → autolearn promoted telemetry/tracker hosts (datadog/MS/newsroom)
+  to splice → ad_ghost/anti-track bypassed → ads returned. Flipped `tls_splice=off`
+  (full MITM, ad-blocking restored). Splice perf vs ad-blocking is a fundamental
+  conflict; needs media-only-no-learn rework before any re-enable.
+- **Banner #653 reverted** (async loader can't read currentScript → inline-bundle
+  was dead code; setupReassert regressed the banner). Board on 2.6.55-equivalent
+  banner. The strict-CSP/SPA banner gap (YouTube) is the browser-extension's job
+  (webext content-script WIP on `feature/655`, paused).
+
 ## 2026-06-18 — #649 selective SNI-splice (Lever A) shipped dark (PR #650, toolbox 2.6.54)
 
 - **Architecture decision.** Asked "do we need a full mitm for R3 HTTPS?" Answer:
