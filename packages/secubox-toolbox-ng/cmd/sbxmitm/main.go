@@ -22,6 +22,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/tls"
@@ -248,11 +249,13 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 //
 //   - tconn      : the TLS-terminated client connection (forged leaf).
 //   - rawClient  : the underlying client net.Conn (for the per-client identity).
-//   - host       : the decision host (CONNECT host / transparent SNI).
+//   - host       : the decision host (CONNECT host / transparent SNI). Also the
+//     Host/SNI used for the upstream request and TLS verification.
 //   - verdict    : the already-Decided action ∈ {allow, mitm, block}.
-//   - dialHost   : upstream "ip:port" to dial. "" → derive https://host:443 from
-//     the request (CONNECT semantics). Transparent passes the captured
-//     original-dst so the upstream is the REAL destination, not the SNI.
+//   - dialHost   : upstream "ip:port" to FORCE-dial at the TCP layer. "" →
+//     CONNECT semantics: dial by req.URL.Host (the request URL / host). Non-""
+//     → transparent: TCP-connect the captured original-dst while doing TLS with
+//     ServerName=host and verifying the cert against host (not the bare IP).
 func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string) {
 	br := newReader(tconn)
 	req, err := http.ReadRequest(br)
@@ -260,11 +263,14 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		return
 	}
 	req.URL.Scheme = "https"
-	if dialHost != "" {
-		// Transparent: dial the captured original-dst. Host header (req.Host)
-		// still names the virtual host for the upstream.
-		req.URL.Host = dialHost
-	} else if req.URL.Host == "" {
+	if req.URL.Host == "" {
+		req.URL.Host = host
+	}
+	// Transparent: the upstream request must carry the SNI host (for Host header,
+	// SNI, and cert verification); the actual TCP dial is pinned to the captured
+	// original-dst by transparentTransport. We do NOT put the bare ip:port in
+	// req.URL.Host (that would make http.Client verify the cert against the IP).
+	if dialHost != "" && host != "" {
 		req.URL.Host = host
 	}
 
@@ -286,6 +292,11 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 
 	// proxy upstream, inject into HTML bodies.
 	up := &http.Client{Timeout: 30 * time.Second}
+	if dialHost != "" {
+		// Transparent: pin the TCP dial to the captured original-dst, do TLS with
+		// ServerName=host, verify the cert against host (verification stays ON).
+		up.Transport = transparentTransport(dialHost, host)
+	}
 	req.RequestURI = ""
 	resp, err := up.Do(req)
 	if err != nil {
@@ -312,6 +323,26 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		body = px.pol.injectMarker(body)
 	}
 	writeResponse(tconn, resp, body)
+}
+
+// transparentTransport builds a per-request http.Transport for the transparent
+// path: it TCP-dials the captured original-dst (ip:port) for EVERY connection
+// regardless of req.URL.Host, while performing TLS with ServerName=sni and
+// verifying the cert against that name — so a transparently-redirected upstream
+// is reached at the real captured IP yet validated by hostname, NOT the bare IP
+// (which would always mismatch the cert). Cert verification stays ON
+// (no InsecureSkipVerify). Pure stdlib so it builds on all GOOS.
+func transparentTransport(dialAddr, sni string) *http.Transport {
+	d := &net.Dialer{Timeout: 10 * time.Second}
+	return &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return d.DialContext(ctx, network, dialAddr)
+		},
+		TLSClientConfig:       &tls.Config{ServerName: sni},
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ForceAttemptHTTP2:     false,
+	}
 }
 
 func main() {
