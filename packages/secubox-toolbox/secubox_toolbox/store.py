@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS ad_block_stats (
 CREATE TABLE IF NOT EXISTS ad_candidates (
     host TEXT, site TEXT, hits INTEGER NOT NULL DEFAULT 0, last_seen REAL,
     PRIMARY KEY (host, site));
+CREATE TABLE IF NOT EXISTS ad_block_client_host (
+    mac_hash TEXT, ad_host TEXT, hits INTEGER NOT NULL DEFAULT 0,
+    bytes INTEGER NOT NULL DEFAULT 0, last_seen REAL,
+    PRIMARY KEY (mac_hash, ad_host));
 """
 
 
@@ -84,6 +88,43 @@ def record_ad_blocks(rows) -> None:
                 [(h, s or "", a, int(n), int(b), now) for (h, s, a, n, b) in rows])
     except Exception as e:
         log.debug("record_ad_blocks failed: %s", e)
+
+
+def record_ad_client_blocks(rows) -> None:
+    """rows: iterable of (mac_hash, ad_host, hits, bytes). Per-visitor ad-block
+    breakdown (#659). Batch upsert. Skips rows with empty mac_hash."""
+    rows = [r for r in rows if r and r[0]]
+    if not rows:
+        return
+    now = time.time()
+    try:
+        with _conn() as c:
+            c.executemany(
+                "INSERT INTO ad_block_client_host(mac_hash,ad_host,hits,bytes,last_seen) "
+                "VALUES(?,?,?,?,?) ON CONFLICT(mac_hash,ad_host) DO UPDATE SET "
+                "hits=hits+excluded.hits, bytes=bytes+excluded.bytes, last_seen=excluded.last_seen",
+                [(mh, h or "", int(n), int(b), now) for (mh, h, n, b) in rows])
+    except Exception as e:
+        log.debug("record_ad_client_blocks failed: %s", e)
+
+
+def ad_client_stats(mac_hash: str, hours: int = 24, top: int = 25) -> dict:
+    """One visitor's top ad hosts blocked, within the time window (#659)."""
+    cutoff = time.time() - hours * 3600
+    out = {"mac_hash": mac_hash, "total": 0, "top_hosts": []}
+    try:
+        with _conn() as c:
+            r = c.execute(
+                "SELECT SUM(hits) FROM ad_block_client_host WHERE mac_hash=? AND last_seen>=?",
+                (mac_hash, cutoff)).fetchone()
+            out["total"] = int((r and r[0]) or 0)
+            out["top_hosts"] = [{"host": h, "hits": int(n), "bytes": int(b or 0)} for h, n, b in c.execute(
+                "SELECT ad_host, SUM(hits), SUM(bytes) FROM ad_block_client_host "
+                "WHERE mac_hash=? AND last_seen>=? GROUP BY ad_host ORDER BY SUM(hits) DESC LIMIT ?",
+                (mac_hash, cutoff, top))]
+    except Exception as e:
+        log.debug("ad_client_stats failed: %s", e)
+    return out
 
 
 def record_ad_candidates(rows) -> None:
@@ -117,7 +158,8 @@ def ad_candidate_sites(min_sites: int = 1, max_hosts: int = 5000) -> list:
 def ad_stats(hours: int = 24, top: int = 25) -> dict:
     cutoff = time.time() - hours * 3600
     out = {"window_hours": hours, "total_blocked": 0, "total_bytes": 0,
-           "by_action": {"block": 0, "silent": 0}, "top_hosts": [], "top_sites": []}
+           "by_action": {"block": 0, "silent": 0}, "top_hosts": [], "top_sites": [],
+           "top_visitors": []}
     try:
         with _conn() as c:
             for action, hits in c.execute(
@@ -134,6 +176,10 @@ def ad_stats(hours: int = 24, top: int = 25) -> dict:
             out["top_sites"] = [{"site": s, "hits": int(n)} for s, n in c.execute(
                 "SELECT site, SUM(hits) FROM ad_block_stats WHERE action='block' AND last_seen>=? AND site<>'' "
                 "GROUP BY site ORDER BY SUM(hits) DESC LIMIT ?", (cutoff, top))]
+            out["top_visitors"] = [{"mac_hash": mh, "hits": int(n)} for mh, n in c.execute(
+                "SELECT mac_hash, SUM(hits) FROM ad_block_client_host "
+                "WHERE last_seen>=? AND mac_hash<>'' GROUP BY mac_hash "
+                "ORDER BY SUM(hits) DESC LIMIT ?", (cutoff, top))]
     except Exception as e:
         log.debug("ad_stats failed: %s", e)
     return out
