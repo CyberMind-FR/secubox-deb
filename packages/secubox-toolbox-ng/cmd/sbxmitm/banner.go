@@ -121,7 +121,14 @@ func portalTargetURL(portal, pathWithQuery string) string {
 // portalClient is the short-timeout HTTP client used to fetch banner assets from
 // the portal. Shared (stdlib http.Client is goroutine-safe) so we don't churn
 // connections per request.
-var portalClient = &http.Client{Timeout: 5 * time.Second}
+var portalClient = &http.Client{
+	Timeout: 5 * time.Second,
+	// Never follow redirects: the portal is a fixed loopback base, so not
+	// following 3xx means a misbehaving/compromised portal can't steer the
+	// worker into fetching an arbitrary outbound host (SSRF hygiene). The 3xx
+	// is relayed to the client as-is.
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
 
 // servePortalAsset reverse-proxies a /__toolbox/* request to the portal and
 // writes the portal's response (status + Content-Type + Cache-Control + body)
