@@ -1,3 +1,15 @@
+secubox-toolbox (2.6.58-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#659): per-visitor ad-block breakdown in #ads. ad_ghost now also tallies
+    the visitor (mac_hash_of(client_ip), cached WG-hash for R3 — no blocking) per
+    blocked ad into a new `ad_block_client_host` table (hot-path = dict increments,
+    bg-thread flush). `/admin/ad-stats` gains `top_visitors`; new
+    `/admin/ad-stats/client/{mac_hash}` for the drill-down. #ads tab shows a
+    "Top visiteurs (pubs bloquées)" table; click a visitor → their top ad hosts.
+    Bounded (clients×hosts); own-infra guard (#658) keeps our own hosts out.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 20:00:00 +0200
+
 secubox-toolbox (2.6.57-1~bookworm1) bookworm; urgency=medium
 
   * fix(#658): ad-learn hardening — never self-block own infrastructure.
