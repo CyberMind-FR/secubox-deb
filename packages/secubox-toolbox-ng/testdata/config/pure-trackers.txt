@@ -1,0 +1,3 @@
+# SecuBox toolbox-ng parity fixture: pure trackers — the splice never-set.
+# A host here is NEVER spliced even if it's a splice-seed/learned candidate.
+pure-tracker.example      # pure tracker AND in splice-learned → never wins → block
