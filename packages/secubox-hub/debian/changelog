@@ -1,3 +1,14 @@
+secubox-hub (1.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * perf(#644): dashboard/status/modules/alerts + public/health-batch now served
+    from the TTL background-refreshed cache. Cold path makes ONE batched
+    `systemctl is-active` (via _ensure_services_warm) instead of ~16 per-module
+    calls, and health-batch serves a snapshot (one offloaded list-units on a cold
+    miss) instead of a 3.3 s synchronous call — eliminates the 9-12 s dashboard
+    latency under the aggregator (no sub-app lifespan -> cold caches).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 18 Jun 2026 09:00:00 +0200
+
 secubox-hub (1.4.5-1~bookworm1) bookworm; urgency=medium
 
   * feat(health): Health Monitor page (/health/) — live status of vital +

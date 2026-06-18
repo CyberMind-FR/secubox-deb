@@ -1,3 +1,12 @@
+secubox-toolbox (2.6.52-1~bookworm1) bookworm; urgency=medium
+
+  * perf(#644): /admin/clients/rich enriches only the ENRICH_LIMIT (12)
+    most-recent clients (sorted by last_seen). Rows beyond the cap return bare
+    device/geo fields — avoids ~51 cached geo/UA lookups per poll. All keys
+    preserved so the admin table is unaffected.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 09:00:00 +0200
+
 secubox-toolbox (2.6.51-1~bookworm1) bookworm; urgency=medium
 
   * social-graph (#642): stop recording IP-literal "tracker" edges (no-SNI
