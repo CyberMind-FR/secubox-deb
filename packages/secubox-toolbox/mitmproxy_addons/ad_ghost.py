@@ -14,6 +14,7 @@
 # toggle), logged, reversible.
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import re
@@ -33,8 +34,31 @@ except Exception:
                 "ad_ghost_categories": {"ads": True, "consent_nag": True,
                                         "newsletter": True, "social_widgets": True}}
 
+# #656 — contextual ad metrics + candidate learning. SQLite is touched ONLY
+# off the request hot path, on a single bg worker (mirrors local_store.py).
+try:
+    from secubox_toolbox import store as _store      # noqa: E402
+except Exception:  # pragma: no cover
+    _store = None
+
+_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="sbx_ad")
+
 _STATS = "/run/secubox/ghost.json"
 _EST_BYTES_PER_REQ = 45000  # honest estimate per blocked ad/tracker request
+
+# #656 — operator allowlist (host or registrable, one per line, # comments).
+# Allowlist ALWAYS wins: an allowlisted host is never 204'd nor recorded.
+_ALLOW_PATH = "/var/lib/secubox/toolbox/ad-allowlist.txt"
+# Path heuristics for 3rd-party ad/track candidate capture (learning only).
+_AD_PATH = re.compile(r"/ads?/|/adserver|/pagead|/gampad|/doubleclick|/beacon|"
+                      r"/pixel|/collect|/track(ing)?|/telemetry|/metric", re.I)
+
+# Hot-path dict increments only; drained + offloaded to SQLite in _flush.
+_ctx: dict = {}        # (host, site, action) -> [hits, bytes]
+_cand: dict = {}       # (host, site) -> hits
+_allow: set = set()
+_allow_mtime = 0.0
 
 # Ad / tracker hosts to 204 (bandwidth save). Conservative: ad/tracker only.
 _AD_HOST = re.compile(
@@ -65,6 +89,39 @@ def _registrable(host: str):
         return host
     last2 = ".".join(p[-2:])
     return ".".join(p[-3:]) if (last2 in _2L_TLD and len(p) >= 3) else last2
+
+
+def _allowed(host: str) -> bool:
+    """#656 — allowlist wins. True if host (or its registrable) is allowed."""
+    global _allow, _allow_mtime
+    try:
+        m = os.stat(_ALLOW_PATH).st_mtime if os.path.exists(_ALLOW_PATH) else 0.0
+        if m != _allow_mtime:
+            _allow = set()
+            if m:
+                with open(_ALLOW_PATH, encoding="utf-8") as f:
+                    for ln in f:
+                        ln = ln.split("#", 1)[0].strip().lower()
+                        if ln:
+                            _allow.add(ln)
+            _allow_mtime = m
+    except Exception:
+        pass
+    h = (host or "").lower()
+    reg = _registrable(h) or h
+    return h in _allow or reg in _allow
+
+
+def _site_of(flow) -> str:
+    """Registrable domain of the page that issued this request (Referer)."""
+    try:
+        ref = flow.request.headers.get("referer", "") or ""
+        if ref:
+            from urllib.parse import urlparse
+            return _registrable(urlparse(ref).hostname or "") or ""
+    except Exception:
+        pass
+    return ""
 
 
 def _learned_set() -> set:
@@ -136,6 +193,22 @@ def _flush(force: bool = False) -> None:
             json.dump({**_counts, "updated": int(now)}, f)
     except Exception:
         pass
+    # #656 — drain the hot-path dicts and offload the SQLite writes to the bg
+    # thread, so the proxy event loop never touches the DB. Snapshot+clear
+    # under no lock is fine: CPython dict ops are atomic and a missed increment
+    # between snapshot and clear is harmless (stats, not security).
+    if _store is not None and (_ctx or _cand):
+        try:
+            rows = [(h, s, a, v[0], v[1]) for (h, s, a), v in _ctx.items()]
+            cand_rows = [(h, s, n) for (h, s), n in _cand.items()]
+            _ctx.clear()
+            _cand.clear()
+            if rows:
+                _executor.submit(_store.record_ad_blocks, rows)
+            if cand_rows:
+                _executor.submit(_store.record_ad_candidates, cand_rows)
+        except Exception:
+            pass
 
 
 def _style_for(cats: dict) -> bytes:
@@ -161,12 +234,16 @@ class AdGhost:
         if not _is_r3plus(flow):
             return
         host = flow.request.pretty_host or ""
+        # #656 — allowlist ALWAYS wins: never block, never record.
+        if _allowed(host):
+            return
         blocked = bool(_AD_HOST.search(host))
         learned = False
         if not blocked and f.get("autolearn", True):
             reg = _registrable(host)
             if reg and (reg in _learned_set() or host.lower() in _learned_set()):
                 blocked = learned = True
+        site = _site_of(flow)
         if blocked:
             flow.response = http.Response.make(
                 204, b"", {"X-SecuBox-Ghost": "learned" if learned else "blocked"})
@@ -174,7 +251,28 @@ class AdGhost:
             if learned:
                 _counts["learned_blocks"] = _counts.get("learned_blocks", 0) + 1
             _counts["bytes_saved_est"] += _EST_BYTES_PER_REQ
+            # #656 — contextual block tally (per host/site), dict increment only.
+            try:
+                if len(_ctx) < 20000:
+                    k = (host, site, "block")
+                    v = _ctx.get(k) or [0, 0]
+                    v[0] += 1
+                    v[1] += _EST_BYTES_PER_REQ
+                    _ctx[k] = v
+            except Exception:
+                pass
             _flush()
+        elif f.get("ad_learn", True) and site:
+            # #656 — aggressive candidate capture: 3rd-party request whose path
+            # smells like an ad/track endpoint. Learning only; no block here.
+            try:
+                if (_registrable(host) != _registrable(site)
+                        and _AD_PATH.search(flow.request.path or "")
+                        and len(_cand) < 20000):
+                    ck = (host, site)
+                    _cand[ck] = _cand.get(ck, 0) + 1
+            except Exception:
+                pass
 
     def response(self, flow: http.HTTPFlow) -> None:
         f = get_filters()
@@ -200,6 +298,16 @@ class AdGhost:
             new = style + body
         flow.response.content = new
         _counts["pages_cleaned"] += 1
+        # #656 — silent (cosmetic-hide) tally per site, dict increment only.
+        try:
+            if len(_ctx) < 20000:
+                site = _site_of(flow) or (flow.request.pretty_host or "")
+                k = (site, site, "silent")
+                v = _ctx.get(k) or [0, 0]
+                v[0] += 1
+                _ctx[k] = v
+        except Exception:
+            pass
         _flush()
 
 
