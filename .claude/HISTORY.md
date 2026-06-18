@@ -3,6 +3,31 @@
 
 ---
 
+## 2026-06-18 — perf sprint (hub latency, R3 tunnel encoding) + crowdsec unblock
+
+- **Hub dashboard latency (#644, PR #645, hub `1.4.6`).** The hub runs mounted in
+  `secubox-aggregator` (no sub-app lifespan → cold caches); cold `/dashboard` fanned
+  out ~16 sequential `systemctl is-active` (9-12 s) and `/public/health-batch` did an
+  uncached 3.3 s `list-units`. Fix: `_ensure_services_warm()` (one batched offloaded
+  `is-active`, double-checked lock vs thundering herd) on dashboard/status/modules/
+  alerts; `_refresh_health_batch()` TTL snapshot served by the bg loop, cold-miss =
+  one offloaded call. **Verified live: health-batch 3.3 s → 8 ms** (77 modules, shape
+  unchanged). Toolbox `/admin/clients/rich` enrichment capped to the 12 most-recent.
+- **R3 tunnel web-load (#646, PR #647, toolbox `2.6.53`).** Diagnosed live: 4-core
+  board at load ~5; the 4 mitm-wg workers are GIL-bound (~1 core total, ceiling ~30%/
+  worker) competing with R2-mitm/gitea/metrics/crowdsec. Hot path already cached. The
+  one code fix: `inject_banner` forced `Accept-Encoding: identity` on EVERY document
+  for stream-inject, but streaming is disqualified on CSP-strict sites + when upstream
+  compresses → those pages pulled uncompressed (3-5× bytes) through the worker for
+  zero benefit. Now adaptive: keep gzip/br by default, learn per-host eligibility
+  (`_STREAM_VERDICT`, capped/self-healing), strip identity only on proven-eligible
+  hosts' next visit. No feature loss; workers came back leaner (72 MB vs 117 MB).
+  Deploy via detached `dpkg -i` + rolling sequential restart of the 4 workers.
+- **crowdsec unblocked.** Its postinst's `cscli hub update` had 403'd
+  (cdn-hub.crowdsec.net) leaving it half-configured (blocking apt). Re-tested → the
+  403 was TRANSIENT CloudFront throttling (HTTP/2 200, real Amazon cert, not WAF-
+  intercepted); `dpkg --configure crowdsec` → RC=0, `dpkg --audit` clean. No patch.
+
 ## 2026-06-15 — gitea mis-route fix + robust WAF route propagation
 
 - **gitea (`git.maegia.tv`) 404 → 200.** Pure routing-table error: its WAF
