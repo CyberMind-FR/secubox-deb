@@ -3,6 +3,28 @@
 
 ---
 
+## 2026-06-18 — #649 selective SNI-splice (Lever A) shipped dark (PR #650, toolbox 2.6.54)
+
+- **Architecture decision.** Asked "do we need a full mitm for R3 HTTPS?" Answer:
+  outbound HTTPS interception intrinsically needs per-host cert forging (the
+  WAF/own-cert analogy doesn't transfer) — so we keep a forging MITM but only
+  decrypt flows we'd actually modify. Plan = A-then-B: **A** = selective
+  SNI-splice (this), **B** = Go/Rust core (strategic, later). WAF deferred.
+- **Lever A.** New `tls_splice` addon (first in the mitm-wg chain) decides at the
+  TLS ClientHello, from the SNI alone, whether to MITM or **splice** (raw
+  passthrough — no forge/decrypt/parse/16-addons). Policy: curated media-only seed
+  (googlevideo/ytimg/fbcdn/twimg/scdn…, deliberately NOT generic CDN edges) ∪
+  autolearn-promoted never-HTML hosts (`splice_host_obs` table, ≥20 obs,
+  html_hits==0). Never splices trackers/fortknox/no-SNI/media_cache-on. Learning
+  obs recorded off the event loop (bg thread), only for undecided hosts.
+- **Dark-launch.** Ships `tls_splice=observe` (classify + log would-splice, still
+  MITM — zero behavior change); `on` flip is post-soak; `off` kill-switch.
+- **Built TDD** (7 tasks, 102 tests), two-stage reviews per task + whole-branch
+  review (APPROVED; closed a hot-path sync-SQLite issue → bg-thread offload, and a
+  fortknox-WebUI never-set refresh gap). **Deployed gk2 2.6.54**, rolling restart
+  of the 4 workers, addon loads clean, 0 runtime errors, dark default confirmed.
+  Next: soak → review → flip `on`.
+
 ## 2026-06-18 — #623 systemic shared-parent clobber resolved at source (PR #648)
 
 - **Root cause corrected.** The recurring `/var/{lib,log,cache,…}/secubox` parent

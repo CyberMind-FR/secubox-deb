@@ -34,8 +34,23 @@ Tout mergé sur master + déployé sur gk2. Détail dans HISTORY 2026-06-18.
   thundering-herd) ; live couvert par `dirs-guard.timer` ; arrive au prochain
   build CI / reflash.
 
+- ✅ **#649 Lever A — selective SNI-splice (PR #650, toolbox 2.6.54 LIVE dark)**.
+  New `tls_splice` addon (first in mitm-wg chain) splices pure-asset flows at the
+  TLS ClientHello — curated media seed (googlevideo/ytimg/fbcdn/twimg/scdn…) ∪
+  autolearn-promoted never-HTML hosts — so GIL-bound R3 workers skip
+  forge/decrypt/parse/16-addons on no-L7-value flows. Ships `tls_splice=observe`
+  (DARK: classify+log, still MITM). Deployed gk2, addon loads clean, 0 runtime
+  errors. Answer to "do we need full mitm?": YES for outbound HTTPS (per-host cert
+  forging is intrinsic) — but only decrypt what we modify. Lever B (Go/Rust core)
+  = strategic follow-up. WAF = later.
+
 ### ⬜ Next Up
 
+- **#649 SOAK → FLIP** — review `would-splice` logs + `/run/secubox/splice.json`
+  on real traffic for a soak window, confirm no first-party/HTML host is
+  classified, then flip `tls_splice=on` in `/etc/secubox/toolbox/filters.json`
+  (hot-reload). Before flip: the fortknox-via-WebUI refresh gap is already fixed.
+- **Lever B (#649 follow-up)** — Go/Rust forging-proxy core if A isn't enough.
 - **Anti-Track v2 ARMING** (décision USER, gated) — soak observe-only puis flip
   `privacy_enforce=true` ; régénérer `data/cdn-allowlist.txt` depuis les plages
   publiques avant `privacy_ip_drop` ; `unbound-checkconf` avant `privacy_dns_feed`.
