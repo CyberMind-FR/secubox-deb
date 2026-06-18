@@ -1,3 +1,16 @@
+secubox-toolbox (2.6.53-1~bookworm1) bookworm; urgency=medium
+
+  * perf(#646): adaptive Accept-Encoding strip in inject_banner. Keep gzip/br by
+    default; only force identity (for stream-injecting the loader) on hosts
+    proven streaming-eligible (top-level html, 2xx-3xx, r2/r3, banner on, NOT
+    CSP-strict) on a prior response. CSP-strict / heavy sites stay compressed
+    instead of being pulled uncompressed (3-5x bytes) through the GIL-bound R3
+    worker for zero benefit — cuts per-document CPU + transfer on the slow path.
+    No feature loss: banner still injects via the buffer path; streaming TTFB
+    win preserved on eligible hosts after the first visit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 11:00:00 +0200
+
 secubox-toolbox (2.6.52-1~bookworm1) bookworm; urgency=medium
 
   * perf(#644): /admin/clients/rich enriches only the ENRICH_LIMIT (12)
