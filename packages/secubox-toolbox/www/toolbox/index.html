@@ -531,7 +531,7 @@ async function refreshAll() {
 
 // Deep-link : open the tab named in the URL hash on load.
 const initial = (location.hash || '').replace('#', '');
-if (['overview','clients','filtres','social','config'].includes(initial)) switchTab(initial);
+if (['overview','clients','filtres','social','ads','config'].includes(initial)) switchTab(initial);
 
 refreshAll();
 setInterval(() => {
