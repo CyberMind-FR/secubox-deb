@@ -22,6 +22,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/tls"
@@ -234,12 +235,44 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tconn.Close()
+
+	// Shared post-TLS pipeline. CONNECT dials upstream by the request URL host
+	// (req.URL.Host set inside), so dialHost is "" → mitmPipeline derives it.
+	px.mitmPipeline(tconn, client, host, verdict, "")
+}
+
+// mitmPipeline runs the shared post-TLS-handshake MITM logic used by BOTH the
+// CONNECT path (handleConnect) and the transparent path (handleTransparent):
+// read the decrypted request, apply the verdict, anonymize, proxy upstream,
+// poison tracker Set-Cookies, inject into HTML, and write the response back over
+// tconn. Factored out so the two accept paths never drift.
+//
+//   - tconn      : the TLS-terminated client connection (forged leaf).
+//   - rawClient  : the underlying client net.Conn (for the per-client identity).
+//   - host       : the decision host (CONNECT host / transparent SNI). Also the
+//     Host/SNI used for the upstream request and TLS verification.
+//   - verdict    : the already-Decided action ∈ {allow, mitm, block}.
+//   - dialHost   : upstream "ip:port" to FORCE-dial at the TCP layer. "" →
+//     CONNECT semantics: dial by req.URL.Host (the request URL / host). Non-""
+//     → transparent: TCP-connect the captured original-dst while doing TLS with
+//     ServerName=host and verifying the cert against host (not the bare IP).
+func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string) {
 	br := newReader(tconn)
 	req, err := http.ReadRequest(br)
 	if err != nil {
 		return
 	}
-	req.URL.Scheme, req.URL.Host = "https", r.URL.Host
+	req.URL.Scheme = "https"
+	if req.URL.Host == "" {
+		req.URL.Host = host
+	}
+	// Transparent: the upstream request must carry the SNI host (for Host header,
+	// SNI, and cert verification); the actual TCP dial is pinned to the captured
+	// original-dst by transparentTransport. We do NOT put the bare ip:port in
+	// req.URL.Host (that would make http.Client verify the cert against the IP).
+	if dialHost != "" && host != "" {
+		req.URL.Host = host
+	}
 
 	if verdict == "block" {
 		writeRaw(tconn, 204, "No Content", map[string]string{"X-SecuBox-Ng": "blocked"}, nil)
@@ -254,11 +287,16 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// Always-on hygiene: anonymize the request on EVERY MITM'd flow (incl.
 	// allow — stripping operator headers + asserting opt-out is universally
 	// safe and never touches own-infra correctness).
-	clientHash := clientHashFromConn(client) // PoC: peer IP — TODO(#662 P6): mac_hash
+	clientHash := clientHashFromConn(rawClient) // mac_hash-aware (WG persona)
 	anonymizeRequest(req.Header)
 
 	// proxy upstream, inject into HTML bodies.
 	up := &http.Client{Timeout: 30 * time.Second}
+	if dialHost != "" {
+		// Transparent: pin the TCP dial to the captured original-dst, do TLS with
+		// ServerName=host, verify the cert against host (verification stays ON).
+		up.Transport = transparentTransport(dialHost, host)
+	}
 	req.RequestURI = ""
 	resp, err := up.Do(req)
 	if err != nil {
@@ -287,6 +325,26 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	writeResponse(tconn, resp, body)
 }
 
+// transparentTransport builds a per-request http.Transport for the transparent
+// path: it TCP-dials the captured original-dst (ip:port) for EVERY connection
+// regardless of req.URL.Host, while performing TLS with ServerName=sni and
+// verifying the cert against that name — so a transparently-redirected upstream
+// is reached at the real captured IP yet validated by hostname, NOT the bare IP
+// (which would always mismatch the cert). Cert verification stays ON
+// (no InsecureSkipVerify). Pure stdlib so it builds on all GOOS.
+func transparentTransport(dialAddr, sni string) *http.Transport {
+	d := &net.Dialer{Timeout: 10 * time.Second}
+	return &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return d.DialContext(ctx, network, dialAddr)
+		},
+		TLSClientConfig:       &tls.Config{ServerName: sni},
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ForceAttemptHTTP2:     false,
+	}
+}
+
 func main() {
 	caCert := flag.String("ca-cert", "/etc/secubox/toolbox/ca-wg/ca.pem", "CA cert PEM")
 	caKey := flag.String("ca-key", "/etc/secubox/toolbox/ca-wg/key.pem", "CA key PEM")
@@ -295,6 +353,8 @@ func main() {
 		"anti-track HMAC fake-identity seed (poison disabled if absent)")
 	poison := flag.Bool("poison", true,
 		"poison tracking Set-Cookies on MITM'd tracker flows (needs --jar-key; never touches allow/own-infra)")
+	transparent := flag.Bool("transparent", false,
+		"transparent mode: accept nft-DNAT'd conns + recover SO_ORIGINAL_DST (live R3); default is the CONNECT proxy PoC")
 	flag.Parse()
 	ca, err := loadCA(*caCert, *caKey)
 	if err != nil {
@@ -321,6 +381,15 @@ func main() {
 		jarKey: jarKey,
 		poison: *poison,
 	}
+	if *transparent {
+		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
+		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The
+		// accept loop lives in runTransparent — linux-tagged, with a non-linux
+		// stub so the package still builds (and `darwin go build`) off-target.
+		runTransparent(px, *addr)
+		return
+	}
+
 	srv := &http.Server{Addr: *addr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodConnect {
 			px.handleConnect(w, r)
@@ -328,6 +397,6 @@ func main() {
 		}
 		http.Error(w, "CONNECT only (PoC)", 405)
 	})}
-	log.Printf("sbxmitm PoC listening on %s (CA %s)", *addr, *caCert)
+	log.Printf("sbxmitm CONNECT PoC listening on %s (CA %s)", *addr, *caCert)
 	log.Fatal(srv.ListenAndServe())
 }
