@@ -3,6 +3,25 @@
 
 ---
 
+## 2026-06-18 — #662 Phase 7: Python R3 engine DECOMMISSIONED + nft persistence
+
+- **nft persistence** (master `eea46326`): the boot re-apply source is the drop-in
+  `/etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft` (loaded by nftables.service). Edited
+  it `808x→809x` (live already 809x → zero disruption), `nft -c -f` validated reboot-safe;
+  patched the repo source `packages/secubox-toolbox/nftables.d/secubox-toolbox-wg-fanout.nft`.
+- **Python decommissioned**: `disable --now secubox-toolbox-mitm-wg-worker@{1..4}` +
+  `-mitm-wg-dynreload.path` → 8081-8084 free, **~240M RAM freed**. Units kept (disabled)
+  for emergency rollback. **Kept** `secubox-toolbox-mitm.service` (R2 captive-AP mitm on
+  10.99.0.1:8080 — a different path; the cutover was R3-only). Also pointed the board's
+  `/usr/share/.../secubox-toolbox-wg-fanout.nft` → 809x so a postinst re-run can't revert
+  to dead ports.
+- **Verified self-sufficient with Python gone**: banner injects on gzip HTML, ads 204,
+  redirects relayed 301.
+- Deliberately did NOT rebuild+reinstall the secubox-toolbox .deb (portal-restart blip +
+  board-wide nft reload, gratuitous) — repo source is 809x, the next natural build closes
+  the installed-payload drift. **#662 epic complete: Go engine sole R3 MITM, fast, ~64MB
+  vs ~280-470MB, persistent, ad-block + banner + redirects all correct.**
+
 ## 2026-06-18 — #662 R3 CUTOVER to the Go MITM engine (PR #670) — LIVE + banner ported
 
 - **Cutover executed and live.** The Go engine now serves **100% of R3 traffic**,
