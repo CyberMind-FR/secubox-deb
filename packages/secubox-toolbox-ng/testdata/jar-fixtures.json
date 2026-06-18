@@ -65,6 +65,20 @@
       "cookie_name": "uid",
       "expect": "c1b6daf8-7ac1-edf6-c67b-3e23ec8eb61d",
       "why": "registrable folding B (ads.doubleclick.net) -> SAME fake_id as A"
+    },
+    {
+      "client": "clientGovuk",
+      "tracker": "ad.example.gov.uk",
+      "cookie_name": "uid",
+      "expect": "75cc2df5-1ee2-da62-9023-aa11c57419af",
+      "why": "DIVERGENCE GUARD: privacy.registrable=example.gov.uk (gov.uk in privacy._MULTI_TLD); ad_ghost._2L lacks gov.uk so policy.registrable would give gov.uk -> forces the jar to use registrableJar"
+    },
+    {
+      "client": "clientIP",
+      "tracker": "9.9.9.9",
+      "cookie_name": "sid",
+      "expect": "53bf4dd57df7a26d6eff83092c869835",
+      "why": "DIVERGENCE GUARD: IP-literal tracker -> privacy.registrable returns as-is (ad_ghost._registrable returns None) -> forces registrableJar"
     }
   ]
 }

@@ -26,6 +26,46 @@ import (
 	"strings"
 )
 
+// _privacyMultiTLD mirrors privacy._MULTI_TLD EXACTLY (NOT ad_ghost._2L — they
+// differ: privacy has ac.uk/com.cn/com.tr/gov.uk/org.uk, lacks gouv.fr; and
+// privacy returns IP literals as-is where ad_ghost returns None). The jar MUST
+// use the privacy-flavored registrable so fakeID is byte-identical to
+// privacy.fake_id across engines (else the fake persona mismatches at cutover).
+var _privacyMultiTLD = map[string]bool{
+	"ac.uk": true, "co.jp": true, "co.nz": true, "co.uk": true, "co.za": true,
+	"com.au": true, "com.br": true, "com.cn": true, "com.tr": true,
+	"gov.uk": true, "org.uk": true,
+}
+
+// registrableJar mirrors privacy.registrable (NOT policy.go's ad_ghost-flavored
+// registrable). eTLD+1 with the privacy multi-TLD table; IP literals returned
+// as-is.
+func registrableJar(host string) string {
+	host = strings.TrimRight(strings.ToLower(strings.TrimSpace(host)), ".")
+	if host == "" {
+		return host
+	}
+	allDigit := true
+	for _, c := range strings.ReplaceAll(host, ".", "") {
+		if c < '0' || c > '9' {
+			allDigit = false
+			break
+		}
+	}
+	if allDigit {
+		return host // IP literal → as-is (matches privacy.registrable)
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) <= 2 {
+		return host
+	}
+	last2 := strings.Join(parts[len(parts)-2:], ".")
+	if _privacyMultiTLD[last2] {
+		return strings.Join(parts[len(parts)-3:], ".")
+	}
+	return last2
+}
+
 // loadJarKey reads the seed key file, trimming surrounding whitespace exactly
 // like Python's `Path(JAR_KEY_PATH).read_bytes().strip()`.
 //
@@ -101,7 +141,7 @@ func fakeID(clientHash, tracker, cookieName string, key []byte) (string, bool) {
 	if len(key) == 0 || clientHash == "" || tracker == "" {
 		return "", false
 	}
-	msg := fmt.Sprintf("%s|%s|%s", clientHash, registrable(tracker), cookieName)
+	msg := fmt.Sprintf("%s|%s|%s", clientHash, registrableJar(tracker), cookieName)
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(msg))
 	digest := mac.Sum(nil)
