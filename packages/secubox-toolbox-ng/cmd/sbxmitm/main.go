@@ -129,38 +129,14 @@ func (c *CA) forge(host string) (*tls.Certificate, error) {
 	return tc, nil
 }
 
-// ── Pure handler logic (the ported addon decisions) ─────────────────────────
-
-type Policy struct {
-	AdHosts     []string // ad_ghost: 204 these (suffix match)
-	SpliceHosts []string // tls_splice: passthrough, no MITM (suffix match)
-	Inject      []byte   // banner / ad-CSS marker injected before </head> or </body>
-}
-
-func suffixMatch(host string, pats []string) bool {
-	h := strings.ToLower(strings.TrimSpace(host))
-	for _, p := range pats {
-		p = strings.ToLower(p)
-		if h == p || strings.HasSuffix(h, "."+p) {
-			return true
-		}
-	}
-	return false
-}
-
-// action: "block" (204), "splice" (passthrough), or "mitm".
-func (p Policy) action(host string) string {
-	if suffixMatch(host, p.SpliceHosts) {
-		return "splice"
-	}
-	if suffixMatch(host, p.AdHosts) {
-		return "block"
-	}
-	return "mitm"
-}
+// ── Pure handler logic ───────────────────────────────────────────────────────
+//
+// The decision surface (Decide / action / registrable / splice helpers) lives
+// in policy.go, ported from the Python addons and proven at parity by the
+// cross-engine harness. The body-inject helper is kept here next to the wiring.
 
 // injectMarker inserts p.Inject before </head> (else </body>, else prepends).
-func (p Policy) injectMarker(body []byte) []byte {
+func (p *Policy) injectMarker(body []byte) []byte {
 	if len(p.Inject) == 0 || bytes.Contains(body, p.Inject) {
 		return body
 	}
@@ -201,7 +177,7 @@ func ja4ish(h *tls.ClientHelloInfo) string {
 
 type Proxy struct {
 	ca     *CA
-	pol    Policy
+	pol    *Policy
 	jaSink func(string) // JA4 observations (logged; a sidecar in prod)
 }
 
@@ -290,13 +266,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("CA load: %v", err)
 	}
+	// Load the BLOCK/SPLICE policy from the SAME on-disk config the Python
+	// addons read (defaults + env overrides). Missing files are tolerated
+	// (best-effort, like the addons): the engine then simply MITMs everything.
+	pol, err := LoadPolicy(PolicyOpts{})
+	if err != nil {
+		log.Fatalf("policy load: %v", err)
+	}
+	pol.Inject = []byte("<!-- sbx-ng banner -->")
 	px := &Proxy{
-		ca: ca,
-		pol: Policy{
-			AdHosts:     []string{"doubleclick.net", "googlesyndication.com"},
-			SpliceHosts: []string{"googlevideo.com", "fbcdn.net"},
-			Inject:      []byte("<!-- sbx-ng banner -->"),
-		},
+		ca:     ca,
+		pol:    pol,
 		jaSink: func(s string) { log.Printf("ja4 %s", s) },
 	}
 	srv := &http.Server{Addr: *addr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
