@@ -352,20 +352,11 @@ func main() {
 	}
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
-		// destination via SO_ORIGINAL_DST (recovered in handleTransparent).
-		ln, err := net.Listen("tcp", *addr)
-		if err != nil {
-			log.Fatalf("transparent listen: %v", err)
-		}
-		log.Printf("sbxmitm TRANSPARENT listening on %s (CA %s)", *addr, *caCert)
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				log.Printf("accept: %v", err)
-				continue
-			}
-			go px.handleTransparent(conn)
-		}
+		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The
+		// accept loop lives in runTransparent — linux-tagged, with a non-linux
+		// stub so the package still builds (and `darwin go build`) off-target.
+		runTransparent(px, *addr)
+		return
 	}
 
 	srv := &http.Server{Addr: *addr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
