@@ -1,0 +1,60 @@
+import asyncio
+import importlib
+import sys
+from pathlib import Path
+
+import pytest
+
+# Import the hub app module.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
+main = importlib.import_module("main")
+
+
+def _reset_cache():
+    main._cache["services"] = {}
+    main._cache["last_refresh"] = 0
+    main._cache["health_batch"] = None
+    main._cache["health_batch_ts"] = 0
+
+
+def test_ensure_services_warm_refreshes_when_cold(monkeypatch):
+    _reset_cache()
+    calls = {"n": 0}
+
+    def fake_refresh():
+        calls["n"] += 1
+        main._cache["services"]["secubox-x"] = {"name": "secubox-x", "active": True, "socket": False}
+
+    monkeypatch.setattr(main, "_refresh_services_cache", fake_refresh)
+    asyncio.run(main._ensure_services_warm())
+    assert calls["n"] == 1
+    assert main._cache["last_refresh"] > 0
+
+
+def test_ensure_services_warm_skips_when_fresh(monkeypatch):
+    _reset_cache()
+    main._cache["last_refresh"] = main.time.time()
+    calls = {"n": 0}
+    monkeypatch.setattr(main, "_refresh_services_cache", lambda: calls.__setitem__("n", calls["n"] + 1))
+    asyncio.run(main._ensure_services_warm())
+    assert calls["n"] == 0
+
+
+def test_refresh_health_batch_parses_units(monkeypatch):
+    _reset_cache()
+
+    class R:
+        stdout = (
+            "secubox-hub.service loaded active running Hub\n"
+            "secubox-dpi.service loaded active exited DPI\n"
+            "secubox-cdn.service loaded failed failed CDN\n"
+        )
+
+    monkeypatch.setattr(main.subprocess, "run", lambda *a, **k: R())
+    # No sockets present for these in the test env.
+    main._refresh_health_batch()
+    hb = main._cache["health_batch"]
+    assert hb["modules"]["hub"]["status"] == "ok"
+    assert hb["modules"]["dpi"]["status"] == "warn"
+    assert hb["modules"]["cdn"]["status"] == "error"
+    assert main._cache["health_batch_ts"] > 0
