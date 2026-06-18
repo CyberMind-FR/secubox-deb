@@ -107,3 +107,11 @@ def test_response_off_mode_skips(monkeypatch, tmp_path):
         response=types.SimpleNamespace(headers={"content-type": "text/html"}))
     a.response(f)
     assert calls == []   # off → recorder disabled
+
+
+def test_stats_file_is_per_worker_port(monkeypatch):
+    import importlib
+    monkeypatch.setenv("MITM_WG_LISTEN_PORT", "8083")
+    import tls_splice; importlib.reload(tls_splice)
+    assert tls_splice.STATS == "/run/secubox/splice.8083.json"
+    assert "mitm" not in tls_splice._counts   # dead counter removed
