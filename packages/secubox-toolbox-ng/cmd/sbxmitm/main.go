@@ -336,7 +336,16 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	req.Header.Set("Accept-Encoding", "gzip")
 
 	// proxy upstream, inject into HTML bodies.
-	up := &http.Client{Timeout: 30 * time.Second}
+	//
+	// CheckRedirect: a MITM proxy must NOT follow 3xx itself — it relays the
+	// redirect to the client so the BROWSER follows it (correct URL bar, origin,
+	// cookie scope, method semantics). Go's http.Client follows by default, which
+	// would collapse a 301/302 into the final 200 under the original URL (wrong).
+	// Mirror mitmproxy's pass-through behaviour.
+	up := &http.Client{
+		Timeout:       30 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	if dialHost != "" {
 		// Transparent: pin the TCP dial to the captured original-dst, do TLS with
 		// ServerName=host, verify the cert against host (verification stays ON).

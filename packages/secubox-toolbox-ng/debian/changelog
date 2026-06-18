@@ -1,3 +1,12 @@
+secubox-toolbox-ng (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * proxy: do NOT follow upstream redirects — relay 3xx to the client so the
+    browser follows it (correct URL/origin/cookies). Go's default http.Client
+    followed them, collapsing 301/302 into a final 200 under the original URL.
+    (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Jun 2026 20:10:00 +0000
+
 secubox-toolbox-ng (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * banner: inject into COMPRESSED HTML too. Pin upstream Accept-Encoding to gzip
