@@ -41,6 +41,12 @@ try:
 except Exception:  # pragma: no cover
     _store = None
 
+# #659 — resolve client IP → stable per-visitor identity hash (best-effort).
+try:
+    from _common import mac_hash_of            # noqa: E402
+except Exception:  # pragma: no cover
+    mac_hash_of = None
+
 _executor = concurrent.futures.ThreadPoolExecutor(
     max_workers=1, thread_name_prefix="sbx_ad")
 
@@ -63,6 +69,7 @@ _AD_PATH = re.compile(r"/ads?/|/adserver|/pagead|/gampad|/doubleclick|/beacon|"
 # Hot-path dict increments only; drained + offloaded to SQLite in _flush.
 _ctx: dict = {}        # (host, site, action) -> [hits, bytes]
 _cand: dict = {}       # (host, site) -> hits
+_cli: dict = {}        # #659 (mac_hash, ad_host) -> [hits, bytes]
 _allow: set = set()
 _allow_mtime = 0.0
 
@@ -207,16 +214,20 @@ def _flush(force: bool = False) -> None:
     # thread, so the proxy event loop never touches the DB. Snapshot+clear
     # under no lock is fine: CPython dict ops are atomic and a missed increment
     # between snapshot and clear is harmless (stats, not security).
-    if _store is not None and (_ctx or _cand):
+    if _store is not None and (_ctx or _cand or _cli):
         try:
             rows = [(h, s, a, v[0], v[1]) for (h, s, a), v in _ctx.items()]
             cand_rows = [(h, s, n) for (h, s), n in _cand.items()]
+            cli_rows = [(mh, h, v[0], v[1]) for (mh, h), v in _cli.items()]
             _ctx.clear()
             _cand.clear()
+            _cli.clear()
             if rows:
                 _executor.submit(_store.record_ad_blocks, rows)
             if cand_rows:
                 _executor.submit(_store.record_ad_candidates, cand_rows)
+            if cli_rows:
+                _executor.submit(_store.record_ad_client_blocks, cli_rows)
         except Exception:
             pass
 
@@ -269,6 +280,20 @@ class AdGhost:
                     v[0] += 1
                     v[1] += _EST_BYTES_PER_REQ
                     _ctx[k] = v
+            except Exception:
+                pass
+            # #659 — per-visitor breakdown: resolve the client identity and
+            # tally this blocked ad host against it. Dict increment only.
+            try:
+                if mac_hash_of is not None and len(_cli) < 50000:
+                    ip = flow.client_conn.peername[0] if flow.client_conn.peername else None
+                    mh = mac_hash_of(ip) if ip else None
+                    if mh:
+                        ck = (mh, host)
+                        cv = _cli.get(ck) or [0, 0]
+                        cv[0] += 1
+                        cv[1] += _EST_BYTES_PER_REQ
+                        _cli[ck] = cv
             except Exception:
                 pass
             _flush()
