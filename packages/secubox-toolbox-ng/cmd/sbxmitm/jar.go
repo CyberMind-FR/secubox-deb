@@ -133,10 +133,14 @@ func shape(name string, digest []byte) string {
 //	return _shape(cookie_name, digest)
 //
 // Returns ("", false) for every case where Python returns None: empty key,
-// empty clientHash, or empty tracker. registrable() is the Phase-3 port in
-// policy.go (shared single source of truth for eTLD+1 folding) — note Python's
-// fake_id uses privacy.registrable, which folds subdomains to the registrable
-// domain, so two subdomains of the same tracker yield the SAME fake_id.
+// empty clientHash, or empty tracker.
+//
+// IMPORTANT: this uses registrableJar (privacy.registrable flavor), NOT the
+// ad_ghost-flavored registrable() in policy.go. They DIVERGE (gov.uk vs gouv.fr,
+// IP literals) — `privacy.fake_id` folds the tracker via privacy.registrable, so
+// the jar MUST too or the fake persona mismatches across engines at cutover.
+// Do NOT "consolidate" to policy.registrable; the divergence-guard fixtures
+// (ad.example.gov.uk, 9.9.9.9) will fail if you do.
 func fakeID(clientHash, tracker, cookieName string, key []byte) (string, bool) {
 	if len(key) == 0 || clientHash == "" || tracker == "" {
 		return "", false
