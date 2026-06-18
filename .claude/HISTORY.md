@@ -3,6 +3,28 @@
 
 ---
 
+## 2026-06-18 — #662 MITM engine migration: P5-prep + P6-prep (PRs #668, #669, all DARK)
+
+- **P5-prep (PR #668).** Wired the ported `Decide`+jar into the Go engine's request/
+  response handlers: `handleConnect` runs allow/splice/block/mitm; `anonymizeRequest`
+  (strip operator/re-id headers + DNT/GPC) on every MITM'd flow; cookie-poison gated
+  to mitm+tracker only (never allow/own-infra; fail-closed-to-clean; benign cookies +
+  Set-Cookie attrs preserved). New `secubox-toolbox-ng` debian pkg builds an arm64
+  `.deb` shipping `/usr/sbin/sbxmitm` + a **DISABLED** `worker@.service` on `:809%i`
+  (no enable/start, no nft). 22 Go tests, reviewed APPROVED.
+- **P6-prep (PR #669).** No-traffic build-out of the live transparent path, still DARK.
+  `machash.go` ports `mac_hash_of`/`_wg_hash_of` (WG peers → `sha256(pubkey)[:16]`,
+  mtime-cached, fail-open) wired into `clientHashFromConn`, cross-engine parity vs
+  Python (anti-rig verified). Transparent `SO_ORIGINAL_DST` accept (`--transparent`,
+  default off): peeks ClientHello SNI WITHOUT decrypting → Decide → **splice = true raw
+  passthrough** (never `tls.Server`) / else forge via replayable `prefixConn`; upstream
+  TLS verifies by SNI, pins captured ip:port. Two-stage review caught + fixed a
+  splice-decrypt defect. Builds linux/arm64+amd64+darwin, vet clean, race green, Python
+  parity 10 passed. CONNECT path + poison gate byte-unchanged.
+- **Engine now functionally complete + packaged, entirely DARK.** Remaining work =
+  the production DEPLOYMENT phases (shadow → cutover → decommission), which touch live
+  R3 traffic and are deferred to a deliberate watched session — NOT chained off "go".
+
 ## 2026-06-18 — #656 Ad Intelligence (PR #657, toolbox 2.6.56) + splice reverted
 
 - **Ad Intelligence — learn/act/measure.** `ad_ghost` now records every
