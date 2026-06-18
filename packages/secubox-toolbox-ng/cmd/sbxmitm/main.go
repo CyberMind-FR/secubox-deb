@@ -179,6 +179,8 @@ type Proxy struct {
 	ca     *CA
 	pol    *Policy
 	jaSink func(string) // JA4 observations (logged; a sidecar in prod)
+	jarKey []byte       // anti-track HMAC fake-identity seed (nil → poison off)
+	poison bool         // master gate: poison tracker Set-Cookies (default on when jarKey present)
 }
 
 func (px *Proxy) serverTLSConfig() *tls.Config {
@@ -210,7 +212,11 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	defer client.Close()
 	io.WriteString(client, "HTTP/1.1 200 Connection Established\r\n\r\n")
 
-	if px.pol.action(host) == "splice" {
+	// Decide once on (host, sni). For the CONNECT PoC the SNI is the CONNECT
+	// host; the transparent engine will splice on the real ClientHello SNI.
+	verdict := px.pol.Decide(host, host)
+
+	if verdict == "splice" {
 		// passthrough: raw TCP to upstream, no TLS interception (tls_splice).
 		up, err := net.DialTimeout("tcp", r.URL.Host, 10*time.Second)
 		if err != nil {
@@ -235,10 +241,21 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	req.URL.Scheme, req.URL.Host = "https", r.URL.Host
 
-	if px.pol.action(host) == "block" {
+	if verdict == "block" {
 		writeRaw(tconn, 204, "No Content", map[string]string{"X-SecuBox-Ng": "blocked"}, nil)
 		return
 	}
+
+	// ── verdict ∈ {"allow","mitm"} → intercept normally ──────────────────────
+	//
+	// allow  → own-infra / allowlist: clean MITM, apply NO block/poison.
+	// mitm   → intercept + apply the response handlers (poison if a tracker).
+	//
+	// Always-on hygiene: anonymize the request on EVERY MITM'd flow (incl.
+	// allow — stripping operator headers + asserting opt-out is universally
+	// safe and never touches own-infra correctness).
+	clientHash := clientHashFromConn(client) // PoC: peer IP — TODO(#662 P6): mac_hash
+	anonymizeRequest(req.Header)
 
 	// proxy upstream, inject into HTML bodies.
 	up := &http.Client{Timeout: 30 * time.Second}
@@ -249,18 +266,35 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+
+	// Poison: only on MITM'd tracker flows (never on allow/own-infra), and only
+	// when the jar key is loaded. Replaces tracking-id Set-Cookie values with a
+	// stable fabricated persona; benign cookies pass through untouched.
+	if verdict == "mitm" && px.poison && len(px.jarKey) > 0 && px.pol.shouldPoison(host) {
+		if sc := resp.Header.Values("Set-Cookie"); len(sc) > 0 {
+			poisoned := poisonSetCookies(sc, clientHash, host, px.jarKey)
+			resp.Header.Del("Set-Cookie")
+			for _, c := range poisoned {
+				resp.Header.Add("Set-Cookie", c)
+			}
+		}
+	}
+
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
 		body = px.pol.injectMarker(body)
 	}
-	hdr := map[string]string{"Content-Type": resp.Header.Get("Content-Type")}
-	writeRaw(tconn, resp.StatusCode, resp.Status, hdr, body)
+	writeResponse(tconn, resp, body)
 }
 
 func main() {
 	caCert := flag.String("ca-cert", "/etc/secubox/toolbox/ca-wg/ca.pem", "CA cert PEM")
 	caKey := flag.String("ca-key", "/etc/secubox/toolbox/ca-wg/key.pem", "CA key PEM")
 	addr := flag.String("listen", ":8090", "CONNECT proxy listen addr")
+	jarKeyPath := flag.String("jar-key", "/etc/secubox/secrets/privacy-jar.key",
+		"anti-track HMAC fake-identity seed (poison disabled if absent)")
+	poison := flag.Bool("poison", true,
+		"poison tracking Set-Cookies on MITM'd tracker flows (needs --jar-key; never touches allow/own-infra)")
 	flag.Parse()
 	ca, err := loadCA(*caCert, *caKey)
 	if err != nil {
@@ -274,10 +308,18 @@ func main() {
 		log.Fatalf("policy load: %v", err)
 	}
 	pol.Inject = []byte("<!-- sbx-ng banner -->")
+	// Anti-track jar seed: best-effort (like the Python _jar_key). Absent/empty
+	// → loadJarKey returns nil → poison stays off even if --poison is set.
+	jarKey := loadJarKey(*jarKeyPath)
+	if *poison && len(jarKey) == 0 {
+		log.Printf("poison requested but jar key %s absent/empty → poison OFF", *jarKeyPath)
+	}
 	px := &Proxy{
 		ca:     ca,
 		pol:    pol,
 		jaSink: func(s string) { log.Printf("ja4 %s", s) },
+		jarKey: jarKey,
+		poison: *poison,
 	}
 	srv := &http.Server{Addr: *addr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodConnect {
