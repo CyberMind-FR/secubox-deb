@@ -1,3 +1,12 @@
+secubox-toolbox-ng (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * banner: inject into COMPRESSED HTML too. Pin upstream Accept-Encoding to gzip
+    (stdlib can't brotli), and in the inject path gunzip → injectLoader → re-gzip
+    (32MiB inflate cap, fail-open on corrupt). Fixes missing banner on the common
+    gzip/br case; non-HTML passes through untouched. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Jun 2026 19:45:00 +0000
+
 secubox-toolbox-ng (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * banner: port the real transparency-banner inject — inject the loader
