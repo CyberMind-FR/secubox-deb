@@ -58,3 +58,35 @@ def test_refresh_health_batch_parses_units(monkeypatch):
     assert hb["modules"]["dpi"]["status"] == "warn"
     assert hb["modules"]["cdn"]["status"] == "error"
     assert main._cache["health_batch_ts"] > 0
+
+
+def test_health_batch_serves_cache_without_subprocess(monkeypatch):
+    _reset_cache()
+    main._cache["health_batch"] = {"modules": {"hub": {"status": "ok", "msg": "Running"}}, "count": 1}
+    main._cache["health_batch_ts"] = main.time.time()
+
+    def boom(*a, **k):
+        raise AssertionError("subprocess must NOT be called when cache is warm")
+
+    monkeypatch.setattr(main.subprocess, "run", boom)
+    out = asyncio.run(main.public_health_batch())
+    assert out["count"] == 1
+    assert out["modules"]["hub"]["status"] == "ok"
+
+
+def test_health_batch_cold_miss_builds_once(monkeypatch):
+    _reset_cache()
+
+    class R:
+        stdout = "secubox-hub.service loaded active running Hub\n"
+
+    calls = {"n": 0}
+
+    def fake_run(*a, **k):
+        calls["n"] += 1
+        return R()
+
+    monkeypatch.setattr(main.subprocess, "run", fake_run)
+    out = asyncio.run(main.public_health_batch())
+    assert out["count"] >= 1
+    assert calls["n"] == 1
