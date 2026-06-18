@@ -416,7 +416,7 @@ async function loadFilters() {
     if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
     const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned'};
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    el.innerHTML = items.map(h => {
+    el.innerHTML = items.slice(0, 5).map(h => {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
         const badge = BADGE[src] || esc(src);
@@ -464,7 +464,7 @@ async function loadSocial() {
     const bc = agg.by_client || [];
     cli.innerHTML = bc.length
         ? '<table><thead><tr><th>Client (hash)</th><th>sites</th><th>trackers</th><th>last</th></tr></thead><tbody>' +
-          bc.map(r => {
+          bc.slice(0, 5).map(r => {
               const ago = r.last_seen ? Math.round((Date.now()/1000 - r.last_seen)/60) + 'm' : '—';
               return `<tr><td><code>${(r.client_mac_hash||'').slice(0,16)}</code></td><td>${r.sites}</td><td>${r.trackers}</td><td>${ago}</td></tr>`;
           }).join('') +
@@ -474,7 +474,7 @@ async function loadSocial() {
         const bv = agg.by_cdn || [];
         cdn.innerHTML = bv.length
             ? '<table><thead><tr><th>CDN / edge</th><th>hôtes</th></tr></thead><tbody>' +
-              bv.map(r => `<tr><td>${r.cdn_vendor}</td><td>${r.hosts}</td></tr>`).join('') +
+              bv.slice(0, 5).map(r => `<tr><td>${r.cdn_vendor}</td><td>${r.hosts}</td></tr>`).join('') +
               '</tbody></table>'
             : '<div class="empty">aucun CDN détecté</div>';
     }
@@ -484,7 +484,7 @@ async function loadSocial() {
         ab.innerHTML = ba.length
             ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${agg.antibot_clients||0} client(s) défié(s)</p>` +
               '<table><thead><tr><th>Vendor</th><th>sites</th><th>clients</th><th>défis</th></tr></thead><tbody>' +
-              ba.map(r => `<tr><td>🤖 ${r.antibot_vendor}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.challenges}</td></tr>`).join('') +
+              ba.slice(0, 5).map(r => `<tr><td>🤖 ${r.antibot_vendor}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.challenges}</td></tr>`).join('') +
               '</tbody></table>'
             : '<div class="empty">aucun anti-bot détecté</div>';
     }
@@ -495,7 +495,7 @@ async function loadSocial() {
         dbk.innerHTML = bd.length
             ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${db.devices||0} appareil(s) · ${db.total_hits||0} blocages 24h</p>` +
               '<table><thead><tr><th>Appareil (hash)</th><th>IP</th><th>blacklist</th><th>DoH</th><th>total</th><th>Quarantaine</th></tr></thead><tbody>' +
-              bd.map(r => `<tr><td><code>${(r.mac_hash||'').slice(0,16)}</code></td><td>${r.ip||'—'}</td><td>${r.blacklist||0}</td><td>${r.doh||0}</td><td>${r.total||0}</td><td><a class="link" href="javascript:void(0)" onclick="quarantine('${r.ip||''}')" style="color:var(--red);font-size:0.78rem">⛔ Quarantaine</a></td></tr>`).join('') +
+              bd.slice(0, 5).map(r => `<tr><td><code>${(r.mac_hash||'').slice(0,16)}</code></td><td>${r.ip||'—'}</td><td>${r.blacklist||0}</td><td>${r.doh||0}</td><td>${r.total||0}</td><td><a class="link" href="javascript:void(0)" onclick="quarantine('${r.ip||''}')" style="color:var(--red);font-size:0.78rem">⛔ Quarantaine</a></td></tr>`).join('') +
               '</tbody></table>'
             : '<div class="empty">aucun blocage attribué (24h)</div>';
     }
@@ -505,7 +505,7 @@ async function loadSocial() {
         og.innerHTML = bo.length
             ? `<p style="font-size:0.8rem;color:var(--p31-dim);margin-bottom:0.5rem">${agg.opgrade_clients||0} client(s) exposé(s)</p>` +
               '<table><thead><tr><th>Vendor</th><th>catégorie</th><th>sites</th><th>clients</th><th>events</th></tr></thead><tbody>' +
-              bo.map(r => `<tr><td>📡 ${r.opgrade_vendor}</td><td>${r.category}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.events}</td></tr>`).join('') +
+              bo.slice(0, 5).map(r => `<tr><td>📡 ${r.opgrade_vendor}</td><td>${r.category}</td><td>${r.sites}</td><td>${r.clients}</td><td>${r.events}</td></tr>`).join('') +
               '</tbody></table>'
             : '<div class="empty">aucune surface opérateur-grade détectée</div>';
     }
@@ -520,15 +520,15 @@ async function loadAds() {
       + ` <span class="k">Ko économisés</span> <span class="v">${Math.round((d.total_bytes||0)/1024)}</span>`
       + ` <span class="k">Silenced</span> <span class="v">${(d.by_action&&d.by_action.silent)||0}</span>`
       + ` <span class="k">Fenêtre</span> <span class="v">${d.window_hours||24}h</span>`;
-    const hostRows = (d.top_hosts||[]).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
-    const siteRows = (d.top_sites||[]).map(r=>`<tr><td><code>${esc(r.site)}</code></td><td>${r.hits}</td></tr>`).join('');
+    const hostRows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
+    const siteRows = (d.top_sites||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.site)}</code></td><td>${r.hits}</td></tr>`).join('');
     document.getElementById('ads-hosts').innerHTML = hostRows
       ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+hostRows+'</tbody></table>'
       : '<div class="empty">aucune pub bloquée dans la fenêtre</div>';
     document.getElementById('ads-sites').innerHTML = siteRows
       ? '<table><thead><tr><th>Site</th><th>pubs bloquées</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
       : '';
-    const visRows = (d.top_visitors||[]).map(r=>{
+    const visRows = (d.top_visitors||[]).slice(0, 5).map(r=>{
         const mh = esc(r.mac_hash);
         return `<tr><td><a href="#" onclick="loadAdsClient('${mh}');return false;"><code>${mh}</code></a></td><td>${r.hits}</td></tr>`;
     }).join('');
@@ -543,7 +543,7 @@ async function loadAdsClient(mh) {
     detail.innerHTML = '<div class="empty">loading…</div>';
     const d = await J('/admin/ad-stats/client/'+encodeURIComponent(mh));
     if (!d || d.__error) { detail.innerHTML = `<div class="empty">${(d&&d.__error)||'no data'}</div>`; return; }
-    const rows = (d.top_hosts||[]).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
+    const rows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
     detail.innerHTML = `<h3>👤 <code>${esc(d.mac_hash)}</code> — ${d.total||0} pubs bloquées</h3>`
       + (rows
         ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+rows+'</tbody></table>'

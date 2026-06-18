@@ -1,3 +1,12 @@
+secubox-toolbox (2.6.59-1~bookworm1) bookworm; urgency=medium
+
+  * ui: cap all admin dashboard lists to top-5 shown — #filtres bypass hosts,
+    the #social sub-tables (by-client/cdn/antibot/device-blocks/opgrade), and the
+    #ads tables (hosts/sites/visitors + per-visitor drill-down). Clients + top
+    tracker domains were already 5. Display-only (full data still in the API).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 21:00:00 +0200
+
 secubox-toolbox (2.6.58-1~bookworm1) bookworm; urgency=medium
 
   * feat(#659): per-visitor ad-block breakdown in #ads. ad_ghost now also tallies
