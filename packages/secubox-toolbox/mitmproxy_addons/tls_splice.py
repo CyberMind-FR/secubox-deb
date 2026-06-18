@@ -23,7 +23,7 @@ if "/usr/lib/secubox/toolbox" not in sys.path:
     sys.path.insert(0, "/usr/lib/secubox/toolbox")
 
 from secubox_toolbox import splice as _splice          # noqa: E402
-from secubox_toolbox.filters import get_filters as _gf  # noqa: E402
+from secubox_toolbox.filters import get_filters as _gf, FILTERS_PATH as _FILTERS_PATH  # noqa: E402
 try:
     from secubox_toolbox import store as _store          # noqa: E402
 except Exception:  # pragma: no cover
@@ -58,11 +58,15 @@ class TlsSplice:
         self._refresh_sets()
 
     def _refresh_sets(self) -> None:
-        """Reload seed/learned/never sets when any backing file changes."""
+        """Reload seed/learned/never sets when any backing file changes.
+
+        Includes FILTERS_PATH so a fortknox site added via the WebUI lands in
+        the never-set promptly (else a newly-protected site could still be
+        spliced once in `on` mode until another file's mtime moved)."""
         try:
             mtimes = tuple(
                 os.stat(p).st_mtime if os.path.exists(p) else 0.0
-                for p in (SEED_PATH, LEARNED_PATH, PURE_PATH))
+                for p in (SEED_PATH, LEARNED_PATH, PURE_PATH, _FILTERS_PATH))
         except Exception:
             mtimes = ()
         if mtimes == self._mtimes and self._seed:
