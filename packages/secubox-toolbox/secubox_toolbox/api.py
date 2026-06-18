@@ -2436,6 +2436,13 @@ async def admin_ad_stats(hours: int = 24) -> dict:
     return store.ad_stats(hours=h)
 
 
+@router.get("/admin/ad-stats/client/{mac_hash}")
+async def admin_ad_stats_client(mac_hash: str, hours: int = 24) -> dict:
+    """#659 — one visitor's ad-block drill-down (read-only)."""
+    h = max(1, min(int(hours if hours is not None else 24), 168))
+    return store.ad_client_stats(mac_hash, hours=h)
+
+
 @router.get("/admin/ghost")
 async def admin_ghost() -> dict:
     """#566 — ad/banner ghoster savings (R3+/R4). Read-only counters."""
