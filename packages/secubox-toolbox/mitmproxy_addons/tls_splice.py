@@ -12,6 +12,7 @@ autolearn never-HTML promotion. Registered FIRST in the mitm-wg addon chain.
 """
 from __future__ import annotations
 
+import concurrent.futures as _futures
 import json
 import logging
 import os
@@ -40,6 +41,12 @@ STATS = "/run/secubox/splice.json"
 
 _counts = {"spliced": 0, "would_splice": 0, "mitm": 0, "since": int(time.time())}
 _last_flush = 0.0
+
+# Learning observations are written off the proxy event loop (mirror
+# local_store): the response hook must return instantly. Single worker thread
+# serialises writes to the shared SQLite.
+_obs_executor = _futures.ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="sbx_splice_obs")
 
 
 class TlsSplice:
@@ -96,15 +103,27 @@ class TlsSplice:
             log.debug("tls_splice clienthello error: %s", e)
 
     def response(self, flow) -> None:
-        """Record host content-type on MITM'd flows (learning signal)."""
+        """Record host content-type on MITM'd flows (learning signal).
+
+        Off the event loop (bg thread) so the hook returns instantly. Skips
+        hosts already decided (seed/learned/never) — they need no more signal —
+        so the DB is touched only for the still-unclassified long tail.
+        """
         if _store is None:
             return
         try:
             if _gf().get("tls_splice", "observe") == "off":
                 return
-            host = flow.request.pretty_host or ""
+            host = (flow.request.pretty_host or "").lower().strip(".")
+            if not host:
+                return
+            # Already-decided hosts gain nothing from more observations.
+            if (_splice.host_matches(host, self._seed)
+                    or _splice.host_matches(host, self._learned)
+                    or _splice.host_matches(host, self._never)):
+                return
             ct = (flow.response.headers.get("content-type", "") or "").lower()
-            _store.record_splice_obs(host, is_html=("text/html" in ct))
+            _obs_executor.submit(_store.record_splice_obs, host, "text/html" in ct)
         except Exception:
             pass
 
