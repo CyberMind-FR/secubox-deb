@@ -1,0 +1,16 @@
+{
+  "peers": {
+    "aL3kF2pQ9rZxT7vN1wB4cD6eH8jM0sU2yX5zA7bC1E=": {
+      "ip": "10.99.1.10",
+      "name": "phone-gk2"
+    },
+    "bM4lG3qR0sAyU8wO2xC5dE7fI9kN1tV3zY6aB8cD2F=": {
+      "ip": "10.99.1.11",
+      "name": "laptop-admin"
+    },
+    "cN5mH4rS1tBzV9xP3yD6eF8gJ0lO2uW4aZ7bC9dE3G=": {
+      "ip": "10.99.1.12",
+      "name": "tablet-lab"
+    }
+  }
+}
