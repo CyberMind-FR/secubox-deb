@@ -1,5 +1,43 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-14*
+*Mis à jour : 2026-06-18*
+
+---
+
+## 🔄 2026-06-17/18 : Anti-Track v2 + perf/ops sprint (gk2 live)
+
+Tout mergé sur master + déployé sur gk2. Détail dans HISTORY 2026-06-18.
+
+- ✅ **Anti-Track v2 (#633, PR #637)** — bloque/empoisonne/anonymise, moteur
+  `privacy.py` + addon `privacy_guard.py`, learning (`learn.py`), IP-drop +
+  unbound DNS-refuse (`ip_dns.py`/`escalate.py`), bypass-seed + #filtres badges,
+  #social top-5. **Tourne DARK** (`privacy_enforce` unset). Wiki `Anti-Track.md`.
+- ✅ **Banner saga (#636/#639, PR #638/#640)** — mitm sert loader/bundle pour
+  toute origine (PeerTube fixé), CSP fallback, top-bar, 1 bannière/visite.
+- ✅ **#634/#635** — reset-all clients + emojis device/flag/hosting.
+- ✅ **#642 (PR #643)** — social-graph ignore les edges IP-littéraux ; KPI
+  "Trackers vus" = table.
+- ✅ **#644 (PR #645)** — hub dashboard/health-batch servis depuis cache TTL
+  (health-batch 3.3 s → 8 ms) ; clients/rich enrichit 12 max. **hub 1.4.6**.
+- ✅ **#646 (PR #647)** — adaptive Accept-Encoding strip : plus de pages
+  CSP-strict tirées décompressées via le worker R3 GIL-bound. **toolbox 2.6.53**.
+- ✅ **crowdsec** réparé (403 transitoire CDN → `dpkg --configure` RC=0, audit clean).
+
+### ⬜ Next Up
+
+- **#623 (P0 bug)** — clobber systémique des modes parents `/var/{lib,log,cache}/
+  secubox` sur ~12 paquets (postinsts `install -d -m 0750` multi-arg que le sweep
+  #623 a manqués). Couvert par `secubox-dirs-guard.timer` mais la cause-racine
+  reste ouverte paquet par paquet → casse la traversée non-`secubox` (kbin/toolbox
+  500). **Prochain actionnable propre** (PR bornée).
+- **Anti-Track v2 ARMING** (décision USER, gated) — soak observe-only puis flip
+  `privacy_enforce=true` ; régénérer `data/cdn-allowlist.txt` depuis les plages
+  publiques avant `privacy_ip_drop` ; `unbound-checkconf` avant `privacy_dns_feed`.
+- **Tunnel R3 perf** — l'encoding fix aide ; reste la contention CPU board-wide
+  (load ~5/4 cœurs, workers mono-thread). Lever suivant = réduire les co-tenants
+  (gitea/R2-mitm/crowdsec/metrics) ou isoler le mitm, pas du tuning d'addon.
+- **#615** — Security Posture dans la navbar du Hub (petit enhancement).
+- **#592 webmail-hub** — BLOQUÉ : besoin client OAuth Google + vhost ; Phase 1
+  IMAP (Gandi/OVH) peut démarrer sans OAuth.
 
 ---
 
