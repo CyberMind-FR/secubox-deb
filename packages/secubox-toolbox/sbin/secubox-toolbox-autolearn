@@ -25,6 +25,11 @@ OUT = os.environ.get("SECUBOX_AUTOLEARN_OUT",
                      "/var/lib/secubox/toolbox/learned-trackers.txt")
 PURE_OUT = os.environ.get("SECUBOX_AUTOLEARN_PURE_OUT",
                           "/var/lib/secubox/toolbox/pure-trackers.txt")
+SPLICE_LEARNED_OUT = os.environ.get(
+    "SECUBOX_SPLICE_LEARNED_OUT",
+    "/var/lib/secubox/toolbox/splice-learned.txt")
+SPLICE_MIN_HITS = int(os.environ.get("SECUBOX_SPLICE_MIN_HITS", "20"))
+SPLICE_MAX = 2000
 MIN_SITES = 2          # cross-site threshold for operator-grade trackers
 MAX_ENTRIES = 8000
 COOKIE_XSITE_TOP_N = int(os.environ.get("SECUBOX_COOKIE_XSITE_TOP_N", "5"))
@@ -92,6 +97,38 @@ def _dns_feed(pure_hosts) -> int:
             except Exception as e:
                 sys.stderr.write(f"autolearn: unbound reload failed: {e}\n")
     return sum(1 for l in lines if "local-zone:" in l)
+
+
+def _splice_feed() -> int:
+    """Promote hosts that NEVER served text/html over >= SPLICE_MIN_HITS
+    observations into the learned-splice file (registrable-folded, capped).
+    Gated: skip when tls_splice == 'off'. Returns count written, or -1 if gated."""
+    try:
+        from secubox_toolbox.filters import get_filters
+        if get_filters().get("tls_splice", "observe") == "off":
+            return -1
+    except Exception:
+        pass
+    try:
+        con = sqlite3.connect(DB, timeout=5)
+        rows = con.execute(
+            "SELECT host FROM splice_host_obs WHERE hits >= ? AND html_hits = 0",
+            (SPLICE_MIN_HITS,)).fetchall()
+        con.close()
+    except Exception as e:
+        sys.stderr.write(f"autolearn: splice query failed: {e}\n")
+        return -1
+    hosts = sorted({(r[0] or "").lower().strip(".") for r in rows if r[0]})[:SPLICE_MAX]
+    try:
+        os.makedirs(os.path.dirname(SPLICE_LEARNED_OUT), exist_ok=True)
+        tmp = SPLICE_LEARNED_OUT + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(hosts) + ("\n" if hosts else ""))
+        os.replace(tmp, SPLICE_LEARNED_OUT)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: splice write failed: {e}\n")
+        return -1
+    return len(hosts)
 
 
 def main() -> int:
@@ -180,6 +217,11 @@ def main() -> int:
         except Exception as e:
             sys.stderr.write(f"autolearn: pure write failed: {e}\n")
     dns_zones = _dns_feed(pout)
+    try:
+        _n_splice = _splice_feed()
+        sys.stderr.write(f"autolearn: {_n_splice} splice hosts learned\n")
+    except Exception as e:
+        sys.stderr.write(f"autolearn: splice feed error: {e}\n")
     sys.stderr.write(
         f"autolearn: {len(out)} hosts learned ({ti} threat-intel + "
         f"{len(out) - ti} classified cross-site) @ {int(time.time())}"

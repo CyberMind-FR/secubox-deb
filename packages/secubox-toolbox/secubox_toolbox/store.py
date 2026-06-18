@@ -14,6 +14,12 @@ log = logging.getLogger("secubox.toolbox")
 DB_PATH = Path("/var/lib/secubox/toolbox/toolbox.db")
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS splice_host_obs (
+    host       TEXT PRIMARY KEY,
+    hits       INTEGER NOT NULL DEFAULT 0,
+    html_hits  INTEGER NOT NULL DEFAULT 0,
+    last_seen  REAL
+);
 CREATE TABLE IF NOT EXISTS consents (
     mac_hash TEXT PRIMARY KEY,
     ts INTEGER NOT NULL,
@@ -54,6 +60,45 @@ def _conn() -> sqlite3.Connection:
     c.row_factory = sqlite3.Row
     c.executescript(SCHEMA)
     return c
+
+
+_SPLICE_OBS_CAP = 50   # stop counting once we have enough signal per host
+
+
+def record_splice_obs(host: str, is_html: bool) -> None:
+    """Observe a MITM'd flow's host + whether it served text/html. Sampling-capped
+    so writes stay bounded. Best-effort (never raises into the proxy path)."""
+    h = (host or "").lower().strip(".")
+    if not h:
+        return
+    try:
+        with _conn() as c:
+            c.execute(
+                "INSERT INTO splice_host_obs(host, hits, html_hits, last_seen) "
+                "VALUES(?, 1, ?, ?) "
+                "ON CONFLICT(host) DO UPDATE SET "
+                "  hits = MIN(hits + 1, ?), "
+                "  html_hits = html_hits + ?, "
+                "  last_seen = ? "
+                "WHERE splice_host_obs.hits < ?",
+                (h, 1 if is_html else 0, time.time(),
+                 _SPLICE_OBS_CAP, 1 if is_html else 0, time.time(), _SPLICE_OBS_CAP),
+            )
+    except Exception as e:
+        log.debug("splice obs failed: %s", e)
+
+
+def never_html_hosts(min_hits: int = 20) -> list[str]:
+    """Hosts observed >= min_hits times that NEVER served text/html."""
+    try:
+        with _conn() as c:
+            rows = c.execute(
+                "SELECT host FROM splice_host_obs WHERE hits >= ? AND html_hits = 0",
+                (min_hits,),
+            ).fetchall()
+        return [r[0] for r in rows]
+    except Exception:
+        return []
 
 
 def record_consent(mac_hash: str, ip: str, ua: str | None, ttl_seconds: int) -> None:
