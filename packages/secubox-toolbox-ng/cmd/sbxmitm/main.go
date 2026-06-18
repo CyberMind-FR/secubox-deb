@@ -234,12 +234,39 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tconn.Close()
+
+	// Shared post-TLS pipeline. CONNECT dials upstream by the request URL host
+	// (req.URL.Host set inside), so dialHost is "" → mitmPipeline derives it.
+	px.mitmPipeline(tconn, client, host, verdict, "")
+}
+
+// mitmPipeline runs the shared post-TLS-handshake MITM logic used by BOTH the
+// CONNECT path (handleConnect) and the transparent path (handleTransparent):
+// read the decrypted request, apply the verdict, anonymize, proxy upstream,
+// poison tracker Set-Cookies, inject into HTML, and write the response back over
+// tconn. Factored out so the two accept paths never drift.
+//
+//   - tconn      : the TLS-terminated client connection (forged leaf).
+//   - rawClient  : the underlying client net.Conn (for the per-client identity).
+//   - host       : the decision host (CONNECT host / transparent SNI).
+//   - verdict    : the already-Decided action ∈ {allow, mitm, block}.
+//   - dialHost   : upstream "ip:port" to dial. "" → derive https://host:443 from
+//     the request (CONNECT semantics). Transparent passes the captured
+//     original-dst so the upstream is the REAL destination, not the SNI.
+func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string) {
 	br := newReader(tconn)
 	req, err := http.ReadRequest(br)
 	if err != nil {
 		return
 	}
-	req.URL.Scheme, req.URL.Host = "https", r.URL.Host
+	req.URL.Scheme = "https"
+	if dialHost != "" {
+		// Transparent: dial the captured original-dst. Host header (req.Host)
+		// still names the virtual host for the upstream.
+		req.URL.Host = dialHost
+	} else if req.URL.Host == "" {
+		req.URL.Host = host
+	}
 
 	if verdict == "block" {
 		writeRaw(tconn, 204, "No Content", map[string]string{"X-SecuBox-Ng": "blocked"}, nil)
@@ -254,7 +281,7 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// Always-on hygiene: anonymize the request on EVERY MITM'd flow (incl.
 	// allow — stripping operator headers + asserting opt-out is universally
 	// safe and never touches own-infra correctness).
-	clientHash := clientHashFromConn(client) // PoC: peer IP — TODO(#662 P6): mac_hash
+	clientHash := clientHashFromConn(rawClient) // mac_hash-aware (WG persona)
 	anonymizeRequest(req.Header)
 
 	// proxy upstream, inject into HTML bodies.
@@ -295,6 +322,8 @@ func main() {
 		"anti-track HMAC fake-identity seed (poison disabled if absent)")
 	poison := flag.Bool("poison", true,
 		"poison tracking Set-Cookies on MITM'd tracker flows (needs --jar-key; never touches allow/own-infra)")
+	transparent := flag.Bool("transparent", false,
+		"transparent mode: accept nft-DNAT'd conns + recover SO_ORIGINAL_DST (live R3); default is the CONNECT proxy PoC")
 	flag.Parse()
 	ca, err := loadCA(*caCert, *caKey)
 	if err != nil {
@@ -321,6 +350,24 @@ func main() {
 		jarKey: jarKey,
 		poison: *poison,
 	}
+	if *transparent {
+		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
+		// destination via SO_ORIGINAL_DST (recovered in handleTransparent).
+		ln, err := net.Listen("tcp", *addr)
+		if err != nil {
+			log.Fatalf("transparent listen: %v", err)
+		}
+		log.Printf("sbxmitm TRANSPARENT listening on %s (CA %s)", *addr, *caCert)
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				log.Printf("accept: %v", err)
+				continue
+			}
+			go px.handleTransparent(conn)
+		}
+	}
+
 	srv := &http.Server{Addr: *addr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodConnect {
 			px.handleConnect(w, r)
@@ -328,6 +375,6 @@ func main() {
 		}
 		http.Error(w, "CONNECT only (PoC)", 405)
 	})}
-	log.Printf("sbxmitm PoC listening on %s (CA %s)", *addr, *caCert)
+	log.Printf("sbxmitm CONNECT PoC listening on %s (CA %s)", *addr, *caCert)
 	log.Fatal(srv.ListenAndServe())
 }
