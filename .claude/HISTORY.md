@@ -3,6 +3,29 @@
 
 ---
 
+## 2026-06-18 — #623 systemic shared-parent clobber resolved at source (PR #648)
+
+- **Root cause corrected.** The recurring `/var/{lib,log,cache,…}/secubox` parent
+  clobber was NOT the `install -d -m 0750 /parent/leaf` leaf form (empirically
+  proven harmless: GNU `install -d -m` modes only the final component). It was the
+  scaffold boilerplate `install -d -m 750 /var/lib/secubox` + `/run/secubox` (BARE
+  parents) in ~56 module postinsts — written `-m 750` (3-digit), which is why prior
+  greps/sweeps (#511/#627/#631) missed it.
+- **Source-wide fix.** Scripted rewrite of all bare-parent targets → `/run/secubox`
+  1777 root:root, `/var/lib|log|cache|etc|usr/share/secubox` 0755; 6 multi-arg
+  lines split per-parent (4 were setting `/var/lib/secubox` world-writable 1777 —
+  a security regression); 3 `chmod 750 /var/log/secubox` (soc-gateway/soc-agent/
+  ui-manager) → 0755. Module-private leaves (`/var/lib/secubox/<mod>` 0750) left
+  untouched. Scaffold `new-package.sh` + `.claude/PATTERNS.md` fixed so new
+  packages don't reintroduce it. secubox-core 1.1.8 tmpfiles.d now declares all 5
+  shared parents at 0755 (mode-only) for boot/install-time self-heal.
+- **Verified:** all 64 changed maintainer scripts `bash -n` clean; zero bare-parent
+  restrictive lines remain (install-d + chmod forms); saas-relay + core rebuilt and
+  packaged postinst/tmpfiles confirmed. Two-stage review (found + closed 2 gaps:
+  the chmod-form clobbers + tmpfiles coverage). NOT mass-deployed (60-pkg restart =
+  thundering-herd risk); live covered by `secubox-dirs-guard.timer`; lands at next
+  CI image build / reflash.
+
 ## 2026-06-18 — perf sprint (hub latency, R3 tunnel encoding) + crowdsec unblock
 
 - **Hub dashboard latency (#644, PR #645, hub `1.4.6`).** The hub runs mounted in
