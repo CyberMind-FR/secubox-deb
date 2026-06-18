@@ -1,3 +1,18 @@
+secubox-toolbox (2.6.57-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#658): ad-learn hardening — never self-block own infrastructure.
+    - ad_ghost `_allowed` now ALWAYS allows the appliance's own domains
+      (`_SELF_REGS`, default {secubox.in}, env `SECUBOX_SELF_DOMAINS`) — hard-coded
+      so it survives a reflash with no allowlist file; this also stops own-infra
+      from ever being captured as a candidate (early-return).
+    - autolearn `_ad_feed` excludes own-infra AND promotes the EXACT candidate
+      host instead of its registrable — so a tracker subdomain
+      (analytics.tiktok.com) no longer blocks the parent site (tiktok.com).
+    Root cause: the aggressive learner self-promoted secubox.in → 204'd all
+    *.secubox.in for R3; live-mitigated via allowlist, now fixed at source.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 19:00:00 +0200
+
 secubox-toolbox (2.6.56-1~bookworm1) bookworm; urgency=medium
 
   * feat(#656): Ad Intelligence — learn · act · measure.

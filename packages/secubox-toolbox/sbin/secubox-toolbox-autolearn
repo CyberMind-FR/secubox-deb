@@ -176,6 +176,11 @@ def _ad_feed() -> int:
         sys.stderr.write(f"autolearn: ad query failed: {e}\n")
         return -1
     allow = _load_ad_allowlist()
+    # #658 — never promote the appliance's own domains (the learner once
+    # self-promoted secubox.in). Hard default + env-overridable.
+    self_doms = {d.strip().lower() for d in
+                 os.environ.get("SECUBOX_SELF_DOMAINS", "secubox.in").split(",")
+                 if d.strip()}
     promoted: set = set()
     for r in rows:
         h = (r[0] or "").lower().strip(".")
@@ -184,7 +189,12 @@ def _ad_feed() -> int:
         reg = registrable(h) or h
         if h in allow or reg in allow:
             continue
-        promoted.add(reg)
+        if reg in self_doms or any(h == d or h.endswith("." + d) for d in self_doms):
+            continue
+        # #658 — promote the EXACT host, NOT the registrable: blocking a tracker
+        # subdomain (analytics.tiktok.com) must never block the parent site
+        # (tiktok.com). Dedicated ad hosts are already registrable-level.
+        promoted.add(h)
     if not promoted:
         return 0
     # MERGE with existing learned-trackers.txt (union, dedup, cap).
