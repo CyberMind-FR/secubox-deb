@@ -32,6 +32,10 @@ SPLICE_MIN_HITS = int(os.environ.get("SECUBOX_SPLICE_MIN_HITS", "20"))
 SPLICE_MAX = 2000
 MIN_SITES = 2          # cross-site threshold for operator-grade trackers
 MAX_ENTRIES = 8000
+# #656 — ad-candidate promotion (aggressive: 1 distinct site by default).
+AD_MIN_SITES = int(os.environ.get("SECUBOX_AD_MIN_SITES", "1"))
+AD_ALLOWLIST = os.environ.get("SECUBOX_AD_ALLOWLIST",
+                              "/var/lib/secubox/toolbox/ad-allowlist.txt")
 COOKIE_XSITE_TOP_N = int(os.environ.get("SECUBOX_COOKIE_XSITE_TOP_N", "5"))
 
 sys.path.insert(0, os.environ.get("SECUBOX_TOOLBOX_LIB", "/usr/lib/secubox/toolbox"))
@@ -131,6 +135,82 @@ def _splice_feed() -> int:
     return len(hosts)
 
 
+def _load_ad_allowlist() -> set:
+    """host + registrable entries from the ad allowlist (comment-stripped)."""
+    allow: set = set()
+    try:
+        if os.path.exists(AD_ALLOWLIST):
+            with open(AD_ALLOWLIST, encoding="utf-8") as fh:
+                for ln in fh:
+                    ln = ln.split("#", 1)[0].strip().lower()
+                    if not ln:
+                        continue
+                    allow.add(ln)
+                    reg = registrable(ln)
+                    if reg:
+                        allow.add(reg)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: ad allowlist read failed: {e}\n")
+    return allow
+
+
+def _ad_feed() -> int:
+    """Promote ad-candidate hosts (seen on >= AD_MIN_SITES distinct sites) into
+    the learned-trackers blocklist. Allowlist always wins. MERGES into the
+    existing learned-trackers.txt (never overwrites). Gated on filters
+    'ad_learn'. Returns count promoted, or -1 if gated/unavailable. Best-effort:
+    never raises."""
+    try:
+        from secubox_toolbox.filters import get_filters
+        if not get_filters().get("ad_learn", True):
+            return -1
+    except Exception:
+        pass
+    try:
+        con = sqlite3.connect(DB, timeout=5)
+        rows = con.execute(
+            "SELECT host FROM ad_candidates GROUP BY host "
+            "HAVING COUNT(DISTINCT site) >= ?", (AD_MIN_SITES,)).fetchall()
+        con.close()
+    except Exception as e:
+        sys.stderr.write(f"autolearn: ad query failed: {e}\n")
+        return -1
+    allow = _load_ad_allowlist()
+    promoted: set = set()
+    for r in rows:
+        h = (r[0] or "").lower().strip(".")
+        if not h:
+            continue
+        reg = registrable(h) or h
+        if h in allow or reg in allow:
+            continue
+        promoted.add(reg)
+    if not promoted:
+        return 0
+    # MERGE with existing learned-trackers.txt (union, dedup, cap).
+    existing: set = set()
+    try:
+        if os.path.exists(OUT):
+            with open(OUT, encoding="utf-8") as fh:
+                for ln in fh:
+                    ln = ln.strip()
+                    if ln:
+                        existing.add(ln)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: ad merge read failed: {e}\n")
+    merged = sorted(existing | promoted)[:MAX_ENTRIES]
+    try:
+        os.makedirs(os.path.dirname(OUT), exist_ok=True)
+        tmp = OUT + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(merged) + ("\n" if merged else ""))
+        os.replace(tmp, OUT)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: ad write failed: {e}\n")
+        return -1
+    return len(promoted)
+
+
 def main() -> int:
     learned: set[str] = set()
     try:
@@ -222,6 +302,11 @@ def main() -> int:
         sys.stderr.write(f"autolearn: {_n_splice} splice hosts learned\n")
     except Exception as e:
         sys.stderr.write(f"autolearn: splice feed error: {e}\n")
+    try:
+        _n_ad = _ad_feed()
+        sys.stderr.write(f"autolearn: {_n_ad} ad-candidate hosts promoted\n")
+    except Exception as e:
+        sys.stderr.write(f"autolearn: ad feed error: {e}\n")
     sys.stderr.write(
         f"autolearn: {len(out)} hosts learned ({ti} threat-intel + "
         f"{len(out) - ti} classified cross-site) @ {int(time.time())}"
