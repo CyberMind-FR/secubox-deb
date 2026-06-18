@@ -184,6 +184,11 @@
                 <h2>🌐 Top sites visités</h2>
                 <div id="ads-sites"><div class="empty">loading…</div></div>
             </div>
+            <div class="card" style="grid-column:1/-1">
+                <h2>👤 Top visiteurs (pubs bloquées)</h2>
+                <div id="ads-visitors"><div class="empty">loading…</div></div>
+                <div id="ads-client-detail"></div>
+            </div>
         </div>
     </section>
 
@@ -523,6 +528,26 @@ async function loadAds() {
     document.getElementById('ads-sites').innerHTML = siteRows
       ? '<table><thead><tr><th>Site</th><th>pubs bloquées</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
       : '';
+    const visRows = (d.top_visitors||[]).map(r=>{
+        const mh = esc(r.mac_hash);
+        return `<tr><td><a href="#" onclick="loadAdsClient('${mh}');return false;"><code>${mh}</code></a></td><td>${r.hits}</td></tr>`;
+    }).join('');
+    document.getElementById('ads-visitors').innerHTML = visRows
+      ? '<table><thead><tr><th>Visiteur</th><th>pubs bloquées</th></tr></thead><tbody>'+visRows+'</tbody></table>'
+      : '<div class="empty">aucun visiteur dans la fenêtre</div>';
+}
+
+async function loadAdsClient(mh) {
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const detail = document.getElementById('ads-client-detail');
+    detail.innerHTML = '<div class="empty">loading…</div>';
+    const d = await J('/admin/ad-stats/client/'+encodeURIComponent(mh));
+    if (!d || d.__error) { detail.innerHTML = `<div class="empty">${(d&&d.__error)||'no data'}</div>`; return; }
+    const rows = (d.top_hosts||[]).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
+    detail.innerHTML = `<h3>👤 <code>${esc(d.mac_hash)}</code> — ${d.total||0} pubs bloquées</h3>`
+      + (rows
+        ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+rows+'</tbody></table>'
+        : '<div class="empty">aucune pub bloquée pour ce visiteur</div>');
 }
 
 async function refreshAll() {
