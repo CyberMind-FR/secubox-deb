@@ -22,13 +22,20 @@ Tout mergé sur master + déployé sur gk2. Détail dans HISTORY 2026-06-18.
   CSP-strict tirées décompressées via le worker R3 GIL-bound. **toolbox 2.6.53**.
 - ✅ **crowdsec** réparé (403 transitoire CDN → `dpkg --configure` RC=0, audit clean).
 
+- ✅ **#623 (PR #648, merged 9950e9ec)** — clobber systémique RÉSOLU au source.
+  La vraie cause : boilerplate scaffold `install -d -m 750 /var/lib/secubox` +
+  `/run/secubox` (parents NUS) dans ~56 postinsts — écrit `-m 750` (3 chiffres),
+  d'où le ratage des sweeps précédents. Empiriquement prouvé que le form
+  `install -d -m 750 /parent/leaf` NE clobbe PAS le parent (seuls les targets
+  parents-nus). Fix : tous → 1777 (/run) / 0755 ; 6 lignes multi-arg splittées
+  (4 mettaient /var/lib en world-writable 1777) ; 3 `chmod 750 /var/log` ;
+  scaffold `new-package.sh` + `PATTERNS.md` ; core 1.1.8 tmpfiles.d déclare les 5
+  parents 0755. **PAS de mass-deploy** (60 paquets = mass-restart = risque
+  thundering-herd) ; live couvert par `dirs-guard.timer` ; arrive au prochain
+  build CI / reflash.
+
 ### ⬜ Next Up
 
-- **#623 (P0 bug)** — clobber systémique des modes parents `/var/{lib,log,cache}/
-  secubox` sur ~12 paquets (postinsts `install -d -m 0750` multi-arg que le sweep
-  #623 a manqués). Couvert par `secubox-dirs-guard.timer` mais la cause-racine
-  reste ouverte paquet par paquet → casse la traversée non-`secubox` (kbin/toolbox
-  500). **Prochain actionnable propre** (PR bornée).
 - **Anti-Track v2 ARMING** (décision USER, gated) — soak observe-only puis flip
   `privacy_enforce=true` ; régénérer `data/cdn-allowlist.txt` depuis les plages
   publiques avant `privacy_ip_drop` ; `unbound-checkconf` avant `privacy_dns_feed`.
