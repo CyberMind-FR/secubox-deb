@@ -77,6 +77,7 @@
         <button class="tab" data-tab="clients" onclick="switchTab('clients')">👥 Clients</button>
         <button class="tab" data-tab="filtres" onclick="switchTab('filtres')">🚦 Filtres MITM</button>
         <button class="tab" data-tab="social" onclick="switchTab('social')">🕸️ Cartographie sociale</button>
+        <button class="tab" data-tab="ads" onclick="switchTab('ads')">🛑 Pubs</button>
         <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ Config</button>
     </nav>
 
@@ -165,6 +166,27 @@
         </div>
     </section>
 
+    <!-- Pubs bloquées (#656 — contextual ad-block metrics) -->
+    <section class="panel" id="panel-ads">
+        <div class="toolbar">
+            <button onclick="loadAds()">🔁 Refresh</button>
+        </div>
+        <div id="ads-section" class="grid">
+            <div class="card" style="grid-column:1/-1">
+                <h2>🛑 Pubs bloquées (24h)</h2>
+                <div class="kv" id="ads-kpi"><span class="k">loading…</span><span class="v"></span></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+                <h2>🎯 Top hôtes publicitaires bloqués</h2>
+                <div id="ads-hosts"><div class="empty">loading…</div></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+                <h2>🌐 Top sites visités</h2>
+                <div id="ads-sites"><div class="empty">loading…</div></div>
+            </div>
+        </div>
+    </section>
+
     <!-- Config -->
     <section class="panel" id="panel-config">
         <div class="toolbar">
@@ -187,6 +209,7 @@ function switchTab(name) {
     // Lazy-load the heavier tabs only when first opened.
     if (name === 'filtres') loadFilters();
     if (name === 'social') loadSocial();
+    if (name === 'ads') loadAds();
     location.hash = name;
 }
 
@@ -481,6 +504,25 @@ async function loadSocial() {
               '</tbody></table>'
             : '<div class="empty">aucune surface opérateur-grade détectée</div>';
     }
+}
+
+async function loadAds() {
+    const d = await J('/admin/ad-stats?hours=24');
+    const kpi = document.getElementById('ads-kpi');
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (!d || d.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(d&&d.__error)||'no data'}</span>`; return; }
+    kpi.innerHTML = `<span class="k">Pubs bloquées</span> <span class="v">${d.total_blocked||0}</span>`
+      + ` <span class="k">Ko économisés</span> <span class="v">${Math.round((d.total_bytes||0)/1024)}</span>`
+      + ` <span class="k">Silenced</span> <span class="v">${(d.by_action&&d.by_action.silent)||0}</span>`
+      + ` <span class="k">Fenêtre</span> <span class="v">${d.window_hours||24}h</span>`;
+    const hostRows = (d.top_hosts||[]).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
+    const siteRows = (d.top_sites||[]).map(r=>`<tr><td><code>${esc(r.site)}</code></td><td>${r.hits}</td></tr>`).join('');
+    document.getElementById('ads-hosts').innerHTML = hostRows
+      ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+hostRows+'</tbody></table>'
+      : '<div class="empty">aucune pub bloquée dans la fenêtre</div>';
+    document.getElementById('ads-sites').innerHTML = siteRows
+      ? '<table><thead><tr><th>Site</th><th>pubs bloquées</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
+      : '';
 }
 
 async function refreshAll() {
