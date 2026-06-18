@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: toolbox-ng — Go MITM engine (migration target, DARK)
+#
+# The binary is pure-stdlib (no go.sum, no external modules), so it
+# cross-compiles offline with GOPROXY=off. CI cross-builds for arm64;
+# this rules file does the same with `GOOS=linux GOARCH=arm64 go build`.
+
+export DH_VERBOSE = 1
+
+# Build the static arm64 binary offline (stdlib only — no network, no go.sum).
+export GOOS = linux
+export GOARCH = arm64
+export CGO_ENABLED = 0
+export GOFLAGS = -mod=mod
+export GOPROXY = off
+# Keep the Go build/module cache inside the build tree (sandbox-friendly).
+export GOCACHE = $(CURDIR)/_gocache
+export GOPATH  = $(CURDIR)/_gopath
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go build -trimpath -ldflags=-s -o sbxmitm ./cmd/sbxmitm
+
+# No Go unit tests at package-build time (run in CI on the host arch; the
+# arm64 cross-binary cannot execute its tests here).
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/secubox-toolbox-ng/usr/sbin
+	install -m 0755 sbxmitm debian/secubox-toolbox-ng/usr/sbin/sbxmitm
+
+override_dh_auto_clean:
+	rm -f sbxmitm
+	rm -rf _gocache _gopath
+
+# DARK: install the unit file into the catalogue but DO NOT enable or start it.
+# This is the Phase-6 cutover target; the live R3 tunnel stays on the Python
+# workers until the operator enables it manually. The postinst still reloads the
+# unit catalogue so `systemctl` knows the template exists.
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start --name=secubox-toolbox-ng-worker@
