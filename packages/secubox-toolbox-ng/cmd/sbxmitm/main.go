@@ -61,23 +61,43 @@ func loadCA(certPath, keyPath string) (*CA, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read ca key: %w", err)
 	}
-	cblk, _ := pem.Decode(cpem)
+	// Scan for the right block TYPE rather than assuming position: the live R3
+	// CA the toolbox forges with (mitmproxy confdir `mitmproxy-ca.pem`) is a
+	// COMBINED cert+key bundle, and --ca-key may point at it. Tolerate cert and
+	// key co-residing in either file, in any order.
+	cblk := firstPEMBlock(cpem, func(b *pem.Block) bool { return b.Type == "CERTIFICATE" })
 	if cblk == nil {
-		return nil, fmt.Errorf("ca cert: no PEM block")
+		return nil, fmt.Errorf("ca cert: no CERTIFICATE PEM block")
 	}
 	cert, err := x509.ParseCertificate(cblk.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("parse ca cert: %w", err)
 	}
-	kblk, _ := pem.Decode(kpem)
+	kblk := firstPEMBlock(kpem, func(b *pem.Block) bool { return strings.Contains(b.Type, "PRIVATE KEY") })
 	if kblk == nil {
-		return nil, fmt.Errorf("ca key: no PEM block")
+		return nil, fmt.Errorf("ca key: no PRIVATE KEY PEM block")
 	}
 	key, err := parseKey(kblk.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("parse ca key: %w", err)
 	}
 	return &CA{cert: cert, key: key, cache: map[string]*tls.Certificate{}}, nil
+}
+
+// firstPEMBlock returns the first PEM block in data satisfying want, or nil.
+// Used to pull a specific block (CERTIFICATE / PRIVATE KEY) out of a file that
+// may hold several (e.g. mitmproxy's combined CA bundle).
+func firstPEMBlock(data []byte, want func(*pem.Block) bool) *pem.Block {
+	for {
+		blk, rest := pem.Decode(data)
+		if blk == nil {
+			return nil
+		}
+		if want(blk) {
+			return blk
+		}
+		data = rest
+	}
 }
 
 func parseKey(der []byte) (crypto.Signer, error) {

@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * worker@ unit: forge with the LIVE R3 CA clients trust (mitmproxy confdir
+    bundle, group-readable) instead of the root-only ca-wg WG-CA key; bind
+    transparent on 10.99.1.1:809%i (the nft R3 DNAT target) instead of CONNECT
+    on 127.0.0.1; add wg-quick@wg-toolbox dependency. (ref #662)
+  * loadCA: scan PEM blocks by type so a combined cert+key bundle
+    (mitmproxy-ca.pem) is accepted for --ca-key. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Jun 2026 19:00:00 +0000
+
 secubox-toolbox-ng (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial packaging of the Go MITM engine migration target (#662 Phase 5-prep).

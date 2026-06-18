@@ -8,31 +8,45 @@
 # (secubox-toolbox-mitm-wg-worker@{1..4}, ports 8081-8084) until the cutover is
 # performed manually.
 #
-# Mirrors the Python worker@ fanout: each %i ∈ {1..4} listens on 127.0.0.1:809%i
-# (distinct from the Python 808%i ports so both fleets can coexist during a
-# side-by-side cutover validation). Enable ONLY at Phase 6:
+# Mirrors the Python worker@ fanout: each %i ∈ {1..4} listens TRANSPARENT on
+# 10.99.1.1:809%i — the SAME wg-toolbox interface IP the nft R3 DNAT targets
+# (`iif wg-toolbox tcp dport 443/80 → 10.99.1.1:numgen inc mod 4 → 808{1..4}`),
+# on 809%i ports so the Go and Python fleets coexist during a side-by-side
+# canary. The engine recovers the original destination via SO_ORIGINAL_DST
+# (works for this non-root user under NoNewPrivileges, same as mitmdump).
 #
-#   systemctl enable --now secubox-toolbox-ng-worker@{1,2,3,4}.service
-#   # then re-point the nft DNAT at 809%i and retire the Python workers
+# Forges with the LIVE R3 CA clients already trust — mitmproxy's confdir bundle
+# (CN "Gondwana ToolBoX R3 CA"), group-readable by secubox-toolbox — NOT the
+# root-only ca-wg key.pem (CN "WG CA"), which clients do NOT trust.
 #
-# Rollback: disable these, re-point DNAT at the Python 808%i workers.
+# Enable ONLY at Phase 6 canary:
+#
+#   systemctl enable --now secubox-toolbox-ng-worker@1.service   # one slot first
+#   # canary: nft ... map { ... 3 : 8091 }  (was 3:8084), watch, then widen
+#
+# Rollback: re-point the nft DNAT map slot back at the Python 808%i worker,
+# then disable this unit.
 
 [Unit]
-Description=SecuBox ToolBoX-NG Go MITM worker %i (migration target, port 809%i)
+Description=SecuBox ToolBoX-NG Go MITM worker %i (migration target, transparent 10.99.1.1:809%i)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/662
-After=network.target
+After=network.target wg-quick@wg-toolbox.service
+Wants=wg-quick@wg-toolbox.service
 
 [Service]
 Type=simple
 User=secubox-toolbox
 Group=secubox-toolbox
 
-# Reuse the EXISTING ca-wg CA (R3 clients already trust it — no re-enroll).
-# The anti-track jar key is best-effort: absent → poison stays off.
+# Forge with the LIVE R3 CA the clients trust: cert = mitmproxy-ca-cert.pem,
+# key = mitmproxy-ca.pem (a combined cert+key bundle — loadCA scans for the
+# PRIVATE KEY block). Both are group-readable by secubox-toolbox. The anti-track
+# jar key is best-effort: absent → poison stays off.
 ExecStart=/usr/sbin/sbxmitm \
-  --listen 127.0.0.1:809%i \
-  --ca-cert /etc/secubox/toolbox/ca-wg/ca.pem \
-  --ca-key /etc/secubox/toolbox/ca-wg/key.pem \
+  --transparent \
+  --listen 10.99.1.1:809%i \
+  --ca-cert /etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem \
+  --ca-key /etc/secubox/toolbox/ca-wg/mitmproxy-ca.pem \
   --jar-key /etc/secubox/secrets/privacy-jar.key
 
 Restart=on-failure
