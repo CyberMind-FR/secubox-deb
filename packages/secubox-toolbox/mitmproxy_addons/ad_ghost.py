@@ -50,6 +50,12 @@ _EST_BYTES_PER_REQ = 45000  # honest estimate per blocked ad/tracker request
 # #656 — operator allowlist (host or registrable, one per line, # comments).
 # Allowlist ALWAYS wins: an allowlisted host is never 204'd nor recorded.
 _ALLOW_PATH = "/var/lib/secubox/toolbox/ad-allowlist.txt"
+# #658 — the appliance's OWN domains. NEVER blocked/learned (the aggressive
+# learner once self-promoted secubox.in → 204'd all *.secubox.in for R3).
+# Hard-coded (env-overridable) so it survives a reflash with no allowlist file.
+_SELF_REGS = {d.strip().lower() for d in
+              os.environ.get("SECUBOX_SELF_DOMAINS", "secubox.in").split(",")
+              if d.strip()}
 # Path heuristics for 3rd-party ad/track candidate capture (learning only).
 _AD_PATH = re.compile(r"/ads?/|/adserver|/pagead|/gampad|/doubleclick|/beacon|"
                       r"/pixel|/collect|/track(ing)?|/telemetry|/metric", re.I)
@@ -109,6 +115,10 @@ def _allowed(host: str) -> bool:
         pass
     h = (host or "").lower()
     reg = _registrable(h) or h
+    # #658 — own infra always allowed (never block/capture our own domains),
+    # independent of the allowlist file (reflash-safe).
+    if reg in _SELF_REGS or any(h == d or h.endswith("." + d) for d in _SELF_REGS):
+        return True
     return h in _allow or reg in _allow
 
 
