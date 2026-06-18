@@ -25,6 +25,7 @@ DEFAULTS: Dict = {
     "media_cache": False,           # #577 shared media proxy-cache (opt-in)
     "stream_inject": True,          # #620/#630 stream loader inject (TTFB) — default on
     "autolearn": True,              # #589 also block auto-learned bad hosts
+    "tls_splice": "observe",        # #649 off | observe | on  (asset SNI-splice)
     # ── Anti-Track v2 (#633) — ships dark; arm after observe-only soak ──
     "privacy_enforce": False,       # master switch; off = observe-only
     "privacy_poison": True,         # forge stable fake id for loadbearing trackers
@@ -41,6 +42,7 @@ DEFAULTS: Dict = {
 }
 
 _VALID_PROTECTIVE = ("off", "alert", "spoof")
+_VALID_SPLICE = ("off", "observe", "on")
 
 _cache: Dict = {}
 _cache_ts: float = 0.0
@@ -66,6 +68,8 @@ def get_filters(force: bool = False) -> Dict:
         pass
     if out.get("protective") not in _VALID_PROTECTIVE:
         out["protective"] = DEFAULTS["protective"]
+    if out.get("tls_splice") not in _VALID_SPLICE:
+        out["tls_splice"] = DEFAULTS["tls_splice"]
     _cache = out
     _cache_ts = now
     return out
@@ -83,6 +87,8 @@ def set_filters(patch: Dict) -> Dict:
                  if ck in DEFAULTS["ad_ghost_categories"]})
         elif k == "protective" and v in _VALID_PROTECTIVE:
             cur["protective"] = v
+        elif k == "tls_splice" and v in _VALID_SPLICE:
+            cur["tls_splice"] = v
         elif k == "fortknox_sites" and isinstance(v, list):
             cur["fortknox_sites"] = [str(s).strip().lower() for s in v if str(s).strip()]
         elif k in ("banner", "ad_ghost", "ad_ghost_block", "media_cache", "autolearn",
