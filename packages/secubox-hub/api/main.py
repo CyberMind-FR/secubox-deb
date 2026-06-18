@@ -269,9 +269,14 @@ async def public_health_batch():
     on the request path.
     """
     hb = _cache.get("health_batch")
-    if not hb or (time.time() - _cache.get("health_batch_ts", 0)) >= CACHE_TTL * 2:
-        await asyncio.to_thread(_refresh_health_batch)
-        hb = _cache.get("health_batch") or {"modules": {}, "count": 0}
+    if hb and (time.time() - _cache.get("health_batch_ts", 0)) < CACHE_TTL * 2:
+        return hb
+    async with _health_batch_lock:
+        # Re-check under the lock: a concurrent waiter may have just rebuilt it.
+        hb = _cache.get("health_batch")
+        if not hb or (time.time() - _cache.get("health_batch_ts", 0)) >= CACHE_TTL * 2:
+            await asyncio.to_thread(_refresh_health_batch)
+            hb = _cache.get("health_batch") or {"modules": {}, "count": 0}
     return hb
 
 
@@ -289,6 +294,11 @@ _cache = {
     "health_batch_ts": 0, # monotonic-ish wall time of last health_batch build
 }
 CACHE_TTL = 5  # seconds - cache valid for 5 seconds
+
+# Collapse a thundering herd of concurrent cold requests (the background loop is
+# starved >10s, e.g. under aggregator saturation) to a single refresh each.
+_services_warm_lock = asyncio.Lock()
+_health_batch_lock = asyncio.Lock()
 
 # MODULES dict is dynamically populated from installed services
 # These are the "expected" core modules - actual list comes from systemd
@@ -559,7 +569,12 @@ async def _ensure_services_warm():
     with a single offloaded `is-active -- [all]` so dashboard/status/modules cold
     paths cost one call instead of sixteen, and never block the shared loop.
     """
-    if (time.time() - _cache["last_refresh"]) >= CACHE_TTL * 2:
+    if (time.time() - _cache["last_refresh"]) < CACHE_TTL * 2:
+        return
+    async with _services_warm_lock:
+        # Re-check under the lock: a concurrent waiter may have just refreshed.
+        if (time.time() - _cache["last_refresh"]) < CACHE_TTL * 2:
+            return
         await asyncio.to_thread(_refresh_services_cache)
         _cache["last_refresh"] = time.time()
 
