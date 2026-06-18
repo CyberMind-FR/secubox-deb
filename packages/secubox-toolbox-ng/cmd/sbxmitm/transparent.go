@@ -26,10 +26,31 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"syscall"
 	"unsafe"
 )
+
+// runTransparent runs the transparent (SO_ORIGINAL_DST) accept loop: listen on
+// addr, and for each nft-DNAT'd connection recover its pre-DNAT destination and
+// dispatch to handleTransparent. Linux-only (build-tagged); a non-linux stub in
+// transparent_stub.go keeps the package building off-target.
+func runTransparent(px *Proxy, addr string) {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("transparent listen: %v", err)
+	}
+	log.Printf("sbxmitm TRANSPARENT listening on %s", addr)
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Printf("accept: %v", err)
+			continue
+		}
+		go px.handleTransparent(conn)
+	}
+}
 
 // SO_ORIGINAL_DST is the Netfilter getsockopt that returns the pre-DNAT
 // destination sockaddr. Same value (80) for IPv4 (SOL_IP) and IPv6
