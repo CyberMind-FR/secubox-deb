@@ -150,31 +150,9 @@ LOADER_JS = r"""(function(){
     var btn = bar.querySelector("button");
     if (btn) btn.onclick = function(){ try { document.body.style.paddingTop = ""; } catch (_) {} bar.remove(); };
   }
-  // #653 — re-assert the banner across SPA navigations / DOM wipes. render()
-  // is idempotent (guards on #sbx-banner), so re-calling is safe.
-  function setupReassert(b){
-    if (window.__SBX_REASSERT__) return; window.__SBX_REASSERT__ = 1;
-    function reassert(){ ready(function(){ if (!document.getElementById("sbx-banner")) render(b); }); }
-    ["pushState","replaceState"].forEach(function(m){
-      var orig = history[m];
-      if (typeof orig === "function") {
-        history[m] = function(){ var r = orig.apply(this, arguments); setTimeout(reassert, 60); return r; };
-      }
-    });
-    window.addEventListener("popstate", function(){ setTimeout(reassert, 60); });
-  }
-  function go(b){ if (!b) return; ready(function(){ render(b); }); setupReassert(b); }
-  // #653 — prefer the inlined bundle (no fetch → faster, no connect-src dep);
-  // fall back to the fetch when the data- attribute is absent (back-compat).
-  var inb = null;
-  try { if (ds.bundle) inb = JSON.parse(ds.bundle); } catch (_) { inb = null; }
-  if (inb) {
-    go(inb);
-  } else {
-    fetch("/__toolbox/bundle?mh=" + encodeURIComponent(mh) + "&wg=" + encodeURIComponent(wg), {credentials:"omit"})
-      .then(function(r){ return r.json(); })
-      .then(go)
-      .catch(function(){});
-  }
+  fetch("/__toolbox/bundle?mh=" + encodeURIComponent(mh) + "&wg=" + encodeURIComponent(wg), {credentials:"omit"})
+    .then(function(r){ return r.json(); })
+    .then(function(b){ ready(function(){ render(b); }); })
+    .catch(function(){});
 })();
 """

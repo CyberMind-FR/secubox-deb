@@ -702,20 +702,8 @@ def _stream_enabled() -> bool:
         return False
 
 
-def _attr_escape(s: str) -> str:
-    """Escape a string for an HTML double-quoted attribute value."""
-    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-             .replace('"', "&quot;").replace("'", "&#39;"))
-
-
 def _loader_script(flow) -> bytes:
-    """Tiny loader <script> tag carrying the client identity + WG flag.
-
-    #653 — inline the per-client bundle as a data- attribute so the loader
-    renders the banner WITHOUT a second `fetch('/__toolbox/bundle')`: faster
-    (one less round-trip) and no `connect-src` CSP dependency. Best-effort; the
-    loader falls back to the fetch path when the attribute is absent.
-    """
+    """Tiny loader <script> tag carrying the client identity + WG flag."""
     mh, wg = "", "0"
     try:
         ip = flow.client_conn.peername[0] if flow.client_conn.peername else None
@@ -725,17 +713,8 @@ def _loader_script(flow) -> bytes:
             mh = mac_hash_of(ip) or ""
     except Exception:
         pass
-    bundle_attr = ""
-    if _HAS_LEVEL:
-        try:
-            import json as _json
-            from secubox_toolbox import bundle as _b
-            j = _json.dumps(_b.get_bundle(mh, wg == "1"), separators=(",", ":"))
-            bundle_attr = ' data-bundle="%s"' % _attr_escape(j)
-        except Exception:
-            bundle_attr = ""
-    tag = ('<script src="/__toolbox/loader.js" data-mh="%s" data-wg="%s"%s async></script>'
-           % (mh, wg, bundle_attr))
+    tag = ('<script src="/__toolbox/loader.js" data-mh="%s" data-wg="%s" async></script>'
+           % (mh, wg))
     return b"<!-- " + _GUARD + b" -->" + tag.encode("ascii", "ignore")
 
 
