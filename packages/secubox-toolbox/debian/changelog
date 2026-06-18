@@ -1,3 +1,18 @@
+secubox-toolbox (2.6.56-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#653): banner reliability — the injected loader now carries the
+    per-client bundle inline (`data-bundle` attr) and renders WITHOUT a second
+    `fetch('/__toolbox/bundle')`: faster (one less round-trip) and no
+    `connect-src` CSP dependency. Fetch retained as back-compat fallback.
+  * fix(#653): loader re-asserts the banner across SPA navigations
+    (pushState/replaceState/popstate) and if the DOM drops it — render() stays
+    idempotent (guards on #sbx-banner). NOTE: genuinely strict-CSP sites
+    (script-src 'none' / strict style-src) still can't be served from the page
+    without weakening their CSP — that's the browser-extension's job (separate),
+    we deliberately do NOT rewrite site CSP headers.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 16:30:00 +0200
+
 secubox-toolbox (2.6.55-1~bookworm1) bookworm; urgency=medium
 
   * perf(#651): broaden the media SNI-splice seed (11 → 35 video/image/audio
