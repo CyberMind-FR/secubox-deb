@@ -159,21 +159,36 @@ func (p *Policy) shouldPoison(host string) bool {
 // clientHashFromConn returns the per-client identity used to mint the stable
 // fake persona (jar fakeID first arg).
 //
-// PoC / CONNECT path: this is the peer IP string. A real TRANSPARENT R3 deploy
-// MUST replace this with the mac_hash the Python addon uses
-// (privacy_guard._client_hash → _common.mac_hash_of(peer_ip)), resolved via the
-// SO_ORIGINAL_DST original-destination socket option and the WireGuard-peer →
-// MAC map. Using the raw peer IP here is NOT identity-stable across NAT/DHCP
-// and is intentionally a Phase-6-cutover TODO, not a shipped behaviour.
+// It mirrors the Python privacy_guard._client_hash → _common.mac_hash_of(peer_ip)
+// for the WireGuard R3 path: the peer IP is resolved to the WG persona hash
+// (sha256(peer_pubkey)[:16]) by macHashOf. For 10.99.1.0/24 WG peers that hash
+// is byte-identical to the Python engine (proven in machash_test.go ↔
+// test_machash_parity.py), so a flow's fake persona is stable across the Go and
+// Python engines and across restarts.
 //
-// TODO(#662 Phase 6): wire mac_hash via SO_ORIGINAL_DST + WG-peer map.
+// macHashOf returns "" for any IP it cannot resolve (non-WG peers, the captive
+// R0-R2 ARP path which is out of scope for this R3 engine, missing WG DB). In
+// that case we fall back to the raw peer IP so non-WG / test conns still get a
+// deterministic seed and poison remains functional — the fallback value is just
+// not cross-engine-stable, which is acceptable for non-R3 traffic.
+//
+// DONE(#662): mac_hash wiring for the WG path. Remaining gaps, intentionally NOT
+// addressed here:
+//   - the transparent original-dst plumbing that feeds the *real* peer IP into
+//     this function lives in transparent.go (handleTransparent); the CONNECT PoC
+//     still sees the proxy-hop peer IP.
+//   - the R0-R2 captive-subnet ARP/HMAC branch of _common.mac_hash_of is out of
+//     scope (this engine is WG-only — see machash.go macHashOf).
 func clientHashFromConn(conn net.Conn) string {
 	if conn == nil {
 		return ""
 	}
 	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 	if err != nil {
-		return conn.RemoteAddr().String()
+		host = conn.RemoteAddr().String()
+	}
+	if mh := macHashOf(host); mh != "" {
+		return mh
 	}
 	return host
 }
