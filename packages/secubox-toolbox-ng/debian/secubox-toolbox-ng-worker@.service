@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: toolbox-ng — Go MITM engine worker template (#662)
+#
+# ── DISABLED BY DESIGN (DARK) ────────────────────────────────────────────────
+# This is the Phase-6 CUTOVER MIGRATION TARGET. It is NOT enabled or started by
+# the package (postinst does not `systemctl enable --now`). The live R3 tunnel
+# keeps running on the Python mitmproxy workers
+# (secubox-toolbox-mitm-wg-worker@{1..4}, ports 8081-8084) until the cutover is
+# performed manually.
+#
+# Mirrors the Python worker@ fanout: each %i ∈ {1..4} listens on 127.0.0.1:809%i
+# (distinct from the Python 808%i ports so both fleets can coexist during a
+# side-by-side cutover validation). Enable ONLY at Phase 6:
+#
+#   systemctl enable --now secubox-toolbox-ng-worker@{1,2,3,4}.service
+#   # then re-point the nft DNAT at 809%i and retire the Python workers
+#
+# Rollback: disable these, re-point DNAT at the Python 808%i workers.
+
+[Unit]
+Description=SecuBox ToolBoX-NG Go MITM worker %i (migration target, port 809%i)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/662
+After=network.target
+
+[Service]
+Type=simple
+User=secubox-toolbox
+Group=secubox-toolbox
+
+# Reuse the EXISTING ca-wg CA (R3 clients already trust it — no re-enroll).
+# The anti-track jar key is best-effort: absent → poison stays off.
+ExecStart=/usr/sbin/sbxmitm \
+  --listen 127.0.0.1:809%i \
+  --ca-cert /etc/secubox/toolbox/ca-wg/ca.pem \
+  --ca-key /etc/secubox/toolbox/ca-wg/key.pem \
+  --jar-key /etc/secubox/secrets/privacy-jar.key
+
+Restart=on-failure
+RestartSec=5
+
+# Hardening (mirrors the Python worker envelope).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/secubox
+MemoryHigh=100M
+MemoryMax=128M
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target
