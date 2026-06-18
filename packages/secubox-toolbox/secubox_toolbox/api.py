@@ -2429,6 +2429,13 @@ async def admin_protective() -> dict:
     return out
 
 
+@router.get("/admin/ad-stats")
+async def admin_ad_stats(hours: int = 24) -> dict:
+    """Contextual ad-block metrics for the #ads tab (read-only, kbin-safe)."""
+    h = max(1, min(int(hours if hours is not None else 24), 168))
+    return store.ad_stats(hours=h)
+
+
 @router.get("/admin/ghost")
 async def admin_ghost() -> dict:
     """#566 — ad/banner ghoster savings (R3+/R4). Read-only counters."""

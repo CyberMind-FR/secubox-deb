@@ -25,6 +25,7 @@ DEFAULTS: Dict = {
     "media_cache": False,           # #577 shared media proxy-cache (opt-in)
     "stream_inject": True,          # #620/#630 stream loader inject (TTFB) — default on
     "autolearn": True,              # #589 also block auto-learned bad hosts
+    "ad_learn": True,               # #656 aggressive ad-URL learning toggle
     "tls_splice": "observe",        # #649 off | observe | on  (asset SNI-splice)
     # ── Anti-Track v2 (#633) — ships dark; arm after observe-only soak ──
     "privacy_enforce": False,       # master switch; off = observe-only
@@ -93,7 +94,7 @@ def set_filters(patch: Dict) -> Dict:
             cur["fortknox_sites"] = [str(s).strip().lower() for s in v if str(s).strip()]
         elif k in ("banner", "ad_ghost", "ad_ghost_block", "media_cache", "autolearn",
                    "privacy_enforce", "privacy_poison", "privacy_anonymize",
-                   "privacy_ip_drop", "privacy_dns_feed"):
+                   "privacy_ip_drop", "privacy_dns_feed", "ad_learn"):
             cur[k] = bool(v)
     try:
         os.makedirs(os.path.dirname(FILTERS_PATH), exist_ok=True)

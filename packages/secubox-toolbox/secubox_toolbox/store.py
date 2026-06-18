@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS reports (
     pdf_path TEXT,
     expires_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ad_block_stats (
+    ad_host TEXT, site TEXT, action TEXT,
+    hits INTEGER NOT NULL DEFAULT 0, bytes INTEGER NOT NULL DEFAULT 0,
+    last_seen REAL, PRIMARY KEY (ad_host, site, action));
+CREATE TABLE IF NOT EXISTS ad_candidates (
+    host TEXT, site TEXT, hits INTEGER NOT NULL DEFAULT 0, last_seen REAL,
+    PRIMARY KEY (host, site));
 """
 
 
@@ -60,6 +67,76 @@ def _conn() -> sqlite3.Connection:
     c.row_factory = sqlite3.Row
     c.executescript(SCHEMA)
     return c
+
+
+def record_ad_blocks(rows) -> None:
+    """rows: iterable of (ad_host, site, action, hits, bytes). Batch upsert."""
+    rows = [r for r in rows if r and r[0]]
+    if not rows:
+        return
+    now = time.time()
+    try:
+        with _conn() as c:
+            c.executemany(
+                "INSERT INTO ad_block_stats(ad_host,site,action,hits,bytes,last_seen) "
+                "VALUES(?,?,?,?,?,?) ON CONFLICT(ad_host,site,action) DO UPDATE SET "
+                "hits=hits+excluded.hits, bytes=bytes+excluded.bytes, last_seen=excluded.last_seen",
+                [(h, s or "", a, int(n), int(b), now) for (h, s, a, n, b) in rows])
+    except Exception as e:
+        log.debug("record_ad_blocks failed: %s", e)
+
+
+def record_ad_candidates(rows) -> None:
+    """rows: iterable of (host, site, hits)."""
+    rows = [r for r in rows if r and r[0]]
+    if not rows:
+        return
+    now = time.time()
+    try:
+        with _conn() as c:
+            c.executemany(
+                "INSERT INTO ad_candidates(host,site,hits,last_seen) VALUES(?,?,?,?) "
+                "ON CONFLICT(host,site) DO UPDATE SET hits=hits+excluded.hits, last_seen=excluded.last_seen",
+                [(h, s or "", int(n), now) for (h, s, n) in rows])
+    except Exception as e:
+        log.debug("record_ad_candidates failed: %s", e)
+
+
+def ad_candidate_sites(min_sites: int = 1, max_hosts: int = 5000) -> list:
+    """Hosts seen as ad-candidates on >= min_sites DISTINCT sites."""
+    try:
+        with _conn() as c:
+            return [r[0] for r in c.execute(
+                "SELECT host FROM ad_candidates GROUP BY host "
+                "HAVING COUNT(DISTINCT site) >= ? ORDER BY SUM(hits) DESC LIMIT ?",
+                (min_sites, max_hosts))]
+    except Exception:
+        return []
+
+
+def ad_stats(hours: int = 24, top: int = 25) -> dict:
+    cutoff = time.time() - hours * 3600
+    out = {"window_hours": hours, "total_blocked": 0, "total_bytes": 0,
+           "by_action": {"block": 0, "silent": 0}, "top_hosts": [], "top_sites": []}
+    try:
+        with _conn() as c:
+            for action, hits in c.execute(
+                "SELECT action, SUM(hits) FROM ad_block_stats WHERE last_seen>=? GROUP BY action",
+                (cutoff,)):
+                out["by_action"][action] = int(hits or 0)
+            out["total_blocked"] = out["by_action"].get("block", 0)
+            r = c.execute("SELECT SUM(bytes) FROM ad_block_stats WHERE action='block' AND last_seen>=?",
+                          (cutoff,)).fetchone()
+            out["total_bytes"] = int((r and r[0]) or 0)
+            out["top_hosts"] = [{"host": h, "hits": int(n), "bytes": int(b or 0)} for h, n, b in c.execute(
+                "SELECT ad_host, SUM(hits), SUM(bytes) FROM ad_block_stats WHERE action='block' AND last_seen>=? "
+                "GROUP BY ad_host ORDER BY SUM(hits) DESC LIMIT ?", (cutoff, top))]
+            out["top_sites"] = [{"site": s, "hits": int(n)} for s, n in c.execute(
+                "SELECT site, SUM(hits) FROM ad_block_stats WHERE action='block' AND last_seen>=? AND site<>'' "
+                "GROUP BY site ORDER BY SUM(hits) DESC LIMIT ?", (cutoff, top))]
+    except Exception as e:
+        log.debug("ad_stats failed: %s", e)
+    return out
 
 
 _SPLICE_OBS_CAP = 50   # stop counting once we have enough signal per host

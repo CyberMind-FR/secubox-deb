@@ -56,7 +56,7 @@ def test_clients_rich_enriches_device_and_geo(monkeypatch):
                         lambda mh: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X)")
     monkeypatch.setattr(g, "lookup",
                         lambda ip: {"flag": "🇫🇷", "country_iso": "FR", "asn_org": "OVH"})
-    out = asyncio.get_event_loop().run_until_complete(api.admin_clients_rich())
+    out = asyncio.run(api.admin_clients_rich())
     c = out["clients"][0]
     assert c["flag"] == "🇫🇷" and c["country_iso"] == "FR" and c["asn_org"] == "OVH"
     assert "device" in c and "device_emoji" in c

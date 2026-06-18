@@ -1,3 +1,21 @@
+secubox-toolbox (2.6.56-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#656): Ad Intelligence — learn · act · measure.
+    - Contextual metrics: ad_ghost now records every block/silent per
+      (ad_host, site, action) into ad_block_stats (in-memory, bg-thread flush —
+      no SQLite on the proxy path). New GET /admin/ad-stats + #ads dashboard tab
+      (top ad hosts, ads-blocked-per-site, action split, KB saved).
+    - Aggressive learning: ad_ghost captures 3rd-party ad-shape requests as
+      candidates; autolearn _ad_feed promotes hosts seen on >= AD_MIN_SITES
+      (default 1) distinct sites into learned-trackers.txt (204'd).
+    - Safety: ad-allowlist.txt ALWAYS wins (operator un-block, never 204'd even
+      if matched); `ad_learn` toggle stops growth; block-only (reversible);
+      every block visible in the #ads metrics. No IP-drop, no CSP weakening.
+  * test: modernize emoji test to asyncio.run (order-independent; drops the
+    deprecated get_event_loop warning).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 18 Jun 2026 18:00:00 +0200
+
 secubox-toolbox (2.6.55-1~bookworm1) bookworm; urgency=medium
 
   * perf(#651): broaden the media SNI-splice seed (11 → 35 video/image/audio
