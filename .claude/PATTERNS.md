@@ -383,9 +383,13 @@ case "$1" in
       adduser --system --group --no-create-home --home /var/lib/secubox secubox
     fi
 
-    # Répertoires runtime
-    install -d -o secubox -g secubox -m 750 /run/secubox
-    install -d -o secubox -g secubox -m 750 /var/lib/secubox
+    # Répertoires runtime — SHARED parents, NE JAMAIS les passer en 0750/0700
+    # (#623 : casse la traversée pour les daemons non-secubox → kbin/toolbox 500).
+    # /run/secubox reste 1777 (sticky world-writable, sockets de tous les services,
+    # #471) ; /var/lib/secubox reste 0755. Les leaves privées
+    # (/var/lib/secubox/<module>) peuvent être 0750.
+    install -d -o root -g root -m 1777 /run/secubox
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox
 
     # Activer et démarrer le service
     systemctl daemon-reload

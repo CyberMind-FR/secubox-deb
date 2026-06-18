@@ -10,7 +10,7 @@ case "$1" in
         # dialout: needed for /dev/ttyUSB* access when the EP06 enumerates
         usermod -aG dialout secubox 2>/dev/null || true
 
-        install -d -m 0770 -o root -g secubox /etc/secubox
+        install -d -o secubox -g secubox -m 755 /etc/secubox
         install -d -m 0755 -o secubox -g secubox /var/lib/secubox/rbs-sensor
         install -d -m 0755 -o secubox -g secubox /var/log/secubox
 

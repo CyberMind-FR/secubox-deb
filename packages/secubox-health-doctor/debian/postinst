@@ -3,7 +3,7 @@ set -e
 
 case "$1" in
   configure)
-    install -d -o secubox -g secubox -m 750 /var/cache/secubox
+    install -d -o secubox -g secubox -m 755 /var/cache/secubox
     systemctl daemon-reload
     # API daemon + periodic timer
     systemctl enable --now secubox-health-doctor.service || true
