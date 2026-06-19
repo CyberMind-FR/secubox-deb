@@ -72,6 +72,15 @@ def _report_url(client_id: str, is_wg: bool) -> str:
     return REPORT_URL_CAPTIVE
 
 
+def _tor_mode() -> bool:
+    """kbin Tor egress on? (#683) Read from filters; fail-safe to off."""
+    try:
+        from .filters import get_filters
+        return bool(get_filters().get("tor_mode", False))
+    except Exception:
+        return False
+
+
 def build_bundle(client_id: str, is_wg: bool = False) -> dict:
     """Build the per-client cosmetic decision bundle (pure given inputs + pin file)."""
     return {
@@ -81,6 +90,7 @@ def build_bundle(client_id: str, is_wg: bool = False) -> dict:
         "pin": _read_pin(),
         "report_url": _report_url(client_id, is_wg),
         "tracker_patterns": TRACKER_PATTERNS,
+        "tor_mode": _tor_mode(),
         "ts": int(time.time()),
     }
 
@@ -157,8 +167,12 @@ _BANNER_CORE = r"""
     // #662 — 🔓 proof: the engine relaxed this page's CSP to inject this banner.
     var cspProof = (csp === "1")
       ? "<span title=\"CSP contourné par SecuBox (démonstration)\">🔓</span>" : "";
+    // #683 — 🧅 kbin Tor mode: this session's exit is anonymised via Tor.
+    var tor = b.tor_mode
+      ? "<span title=\"Sortie anonymisée via Tor\" style=\"color:#9E76FF;font-weight:bold\">🧅 Tor</span>" : "";
     bar.innerHTML = "<b style=\"color:#148C66\">SecuBox</b>"
       + cspProof
+      + tor
       + "<span>" + esc((b.level || "r1").toUpperCase()) + "</span>"
       + "<span>🛰️ " + trk + " trackers</span>"
       + "<span>🍪 " + ck + " cookies</span>"

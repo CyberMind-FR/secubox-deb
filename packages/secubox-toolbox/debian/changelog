@@ -1,3 +1,14 @@
+secubox-toolbox (2.7.6-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#683): the 🧅 Tor indicator now appears on the ACTUAL injected banner.
+    The live page banner is the client-side stream-inject bundle (bundle.py:
+    "SecuBox · LEVEL · 🛰️ trackers · 🍪 cookies · report ▸ · ✕"), NOT the
+    server-rendered inject_banner chip I'd added earlier. Added `tor_mode` to the
+    decision bundle + a "🧅 Tor" span in the banner render() (loader + inline
+    paths) so a consenting client sees their exit is anonymised.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 17:40:00 +0200
+
 secubox-toolbox (2.7.5-1~bookworm1) bookworm; urgency=medium
 
   * feat(#683): public kbin-safe GET /wg/tor-status ({tor_mode, running,
