@@ -1,9 +1,25 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-13*
+*Mis à jour : 2026-06-19*
 
 ---
 
 ## 🔥 P0 — Immediate (in flight)
+
+### kbin Tor endpoint — anonymized quick-switch surfing (#683)
+
+> Capstone du couteau suisse cyber : l'anonymat de la sortie. Spec :
+> `docs/superpowers/specs/2026-06-19-kbin-tor-anonymized-surfing-design.md`.
+> Invariants : inspection préservée, fail-closed, opt-in (défaut OFF), no DNS leak, CSPN audit.
+
+- [ ] **Transport** — Option A dialer SOCKS5 upstream (cœur Go #662, *préféré*) vs
+  Option B nft mark → Tor TransPort (fallback pré-#662).
+- [ ] **Profil Tor egress** — réutiliser `secubox-exposure` (bootstrap/NEWNYM), egress-only.
+- [ ] **API toolbox** — `POST /admin/tor/{on,off}` (WG-hash scoped) + `GET /tor/state` +
+  `POST /tor/newnym` + état SQLite per-client (TTL 24h).
+- [ ] **UI kbin** — toggle 🧅 + badge état + flag pays de sortie + bouton « nouvelle identité ».
+- [ ] **Leak-guard nft** + DNS-over-Tor (test exit IP + resolver ≠ Unbound).
+- [ ] **`tls_splice` OFF en mode Tor** (#649) — sinon les flux asset fuient l'IP réelle.
+- [ ] **CSPN** — audit-log chaque bascule ; soak DARK (flag présent, UI cachée) avant flip.
 
 ### ToolBox clients (`clients/`)
 
