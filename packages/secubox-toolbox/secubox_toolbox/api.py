@@ -2342,6 +2342,46 @@ def _classify_apps(hosts: set[str]) -> list[str]:
     return apps
 
 
+def _build_report_charts(session: dict) -> dict:
+    """Graph-ready aggregates for the simplified report (trackers donut,
+    countries bars, apps bars). Defensive / fail-empty. Each list item has
+    {label, emoji/flag, count, pct}; trackers also carry cumulative start/end
+    for a CSS conic-gradient donut."""
+    def _top_pct(items: list, n: int = 6) -> list:
+        items = [it for it in items if it.get("count")]
+        items.sort(key=lambda x: x["count"], reverse=True)
+        items = items[:n]
+        total = sum(x["count"] for x in items) or 1
+        for it in items:
+            it["pct"] = round(100 * it["count"] / total)
+        return items
+
+    cp = session.get("cookies_providers") or []
+    trackers = _top_pct([
+        {"label": p.get("provider", "?"), "emoji": p.get("emoji", "🍪"),
+         "count": int(p.get("count", 0) or 0)} for p in cp])
+    cum = 0
+    for it in trackers:
+        it["start"] = cum
+        cum += it["pct"]
+        it["end"] = cum
+
+    by_country: dict = {}
+    for h in (session.get("geo_top_hosts") or []):
+        key = (h.get("flag") or "🏴", h.get("country") or "?")
+        by_country[key] = by_country.get(key, 0) + int(h.get("count", 0) or 0)
+    countries = _top_pct([
+        {"flag": k[0], "label": k[1], "count": v} for k, v in by_country.items()])
+
+    dc = session.get("dpi_classified") or {}
+    apps = _top_pct([
+        {"label": a.get("app", "?"), "emoji": a.get("emoji", "📦"),
+         "count": int(a.get("count", 0) or 0)}
+        for a in (dc.get("top_apps") or []) if a.get("app") not in (None, "", "?")])
+
+    return {"trackers": trackers, "countries": countries, "apps": apps}
+
+
 # NOTE: route order matters in FastAPI — specific routes (/report/me,
 # /report/me/html) MUST be declared BEFORE the catch-all /report/{token},
 # otherwise FastAPI matches /report/me with token="me" and returns 404.
@@ -2357,17 +2397,16 @@ async def report_me_html(request: Request) -> HTMLResponse:
     their own report. The hash for R3 = sha256(wg_pubkey)[:16] derived
     by inject_banner.py and embedded in the banner 'Mon rapport' link.
     """
-    # Bypass path : explicit mac_hash in query (R3 WG or kbin remote viewer)
-    mh_qp = (request.query_params.get("mh") or "").strip().lower()
-    if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
-        ip = request.client.host if request.client else "?"
-        mac_hash = mh_qp
-    else:
-        ip, mac = _resolve(request)
-        if not mac:
-            raise HTTPException(400, "client MAC unknown (not in captive subnet?) — use ?mh=<hash>")
-        salt = _get_salt()
-        mac_hash = macmod.hash_mac(mac, salt)
+    # Resolve identity the same way everywhere: ?mh → R3 WG peer (wg-peers.json)
+    # → captive ARP. R3 clients hitting this directly (no ?mh) now resolve too.
+    mac_hash = _client_mac_hash(request, _get_salt())
+    if not mac_hash:
+        raise HTTPException(
+            400,
+            "client identity unresolved (not on R3 tunnel and not in captive "
+            "subnet) — append ?mh=<hash> from your banner's report link",
+        )
+    ip = _client_ip(request) or (request.client.host if request.client else "?")
     session = _aggregate_session(mac_hash)
     # Phase 3 (#492) : pass query args + force no-cache so iPhone Safari
     # actually fetches the new template.
@@ -2381,6 +2420,7 @@ async def report_me_html(request: Request) -> HTMLResponse:
         current_level=store.get_client_level(mac_hash) if mac_hash else "r1",
         wg_enabled=wg_enabled,
         cumulative=cumulative,
+        charts=_build_report_charts(session),
         **session,
     )
     return HTMLResponse(html, headers={
