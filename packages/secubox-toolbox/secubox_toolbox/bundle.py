@@ -118,6 +118,11 @@ LOADER_JS = r"""(function(){
   // <script>. When set, the banner shows a 🔓 as VISIBLE proof the page's CSP was
   // bypassed to inject. Absent → no proof emoji (page had no CSP to bypass).
   var csp = ds.csp || "";
+  // SPA support (#662): cache the bundle + remember an explicit dismiss, so the
+  // banner can be re-asserted after client-side navigation / DOM re-renders
+  // (cnn, youtube… swap content without reloading → the one-shot loader would
+  // otherwise vanish). Re-assert never fights a user who clicked ✕.
+  var bundle = null, dismissed = false;
   function ready(fn){ if (document.body) { fn(); } else { setTimeout(function(){ready(fn);}, 30); } }
   function esc(t){ return String(t).replace(/[&<>"]/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
@@ -132,6 +137,7 @@ LOADER_JS = r"""(function(){
     } catch (_) { return 0; }
   }
   function render(b){
+    if (dismissed) return;
     if (document.getElementById("sbx-banner")) return;
     var trk = countTrackers(b.tracker_patterns);
     var ck = 0;
@@ -157,11 +163,24 @@ LOADER_JS = r"""(function(){
     document.body.appendChild(bar);
     try { document.body.style.paddingTop = (bar.offsetHeight || 34) + "px"; } catch (_) {}
     var btn = bar.querySelector("button");
-    if (btn) btn.onclick = function(){ try { document.body.style.paddingTop = ""; } catch (_) {} bar.remove(); };
+    if (btn) btn.onclick = function(){ dismissed = true; try { document.body.style.paddingTop = ""; } catch (_) {} bar.remove(); };
   }
+  // ensure(): (re)render the banner if it's absent and the bundle is loaded and
+  // the user hasn't dismissed it. Cheap (a getElementById guard inside render).
+  function ensure(){ if (bundle && !dismissed) ready(function(){ render(bundle); }); }
   fetch("/__toolbox/bundle?mh=" + encodeURIComponent(mh) + "&wg=" + encodeURIComponent(wg), {credentials:"omit"})
     .then(function(r){ return r.json(); })
-    .then(function(b){ ready(function(){ render(b); }); })
+    .then(function(b){ bundle = b; ensure(); })
     .catch(function(){});
+  // SPA re-assert: wrap history nav + popstate (defer so the framework settles),
+  // plus a light 2s poll as a catch-all for DOM re-renders that drop the banner.
+  ["pushState","replaceState"].forEach(function(m){
+    var o = history[m];
+    if (typeof o === "function") {
+      try { history[m] = function(){ var r = o.apply(this, arguments); setTimeout(ensure, 150); return r; }; } catch (_) {}
+    }
+  });
+  window.addEventListener("popstate", function(){ setTimeout(ensure, 150); });
+  setInterval(ensure, 2000);
 })();
 """
