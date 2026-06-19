@@ -1,3 +1,22 @@
+secubox-toolbox (2.7.10-1~bookworm1) bookworm; urgency=medium
+
+  * fix: /report/me/html now resolves identity via the shared _client_mac_hash
+    (?mh → R3 WG peer → captive ARP), so R3 clients reach their report without
+    ?mh (it previously only did captive ARP → 400 "client MAC unknown").
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 19:55:00 +0200
+
+secubox-toolbox (2.7.9-1~bookworm1) bookworm; urgency=medium
+
+  * feat: report (/report/me/html) regenerated — verdict-first + graphs + plain
+    helpers. Top: a score gauge (conic-gradient) + 6 KPIs + 3 graphs (trackers
+    donut, countries bars, apps bars) computed server-side (_build_report_charts).
+    All the deep technical cards (threat-intel, DGA, beaconing, hosts, apps,
+    cookies, avatar, transparency, per-host grades, identity, reco) collapse into
+    <details> so the page reads instantly. System-font, rounded, mobile-first.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 19:30:00 +0200
+
 secubox-toolbox (2.7.8-1~bookworm1) bookworm; urgency=medium
 
   * fix: landing "Ma carto" / "Mon rapport" / "Qui me piste ?" links hit

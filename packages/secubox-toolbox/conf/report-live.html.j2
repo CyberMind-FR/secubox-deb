@@ -1,662 +1,325 @@
 {# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
 {# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> #}
+{# #683 report redesign — verdict-first, graphs, plain-language helpers, deep
+   technical cards collapsed into <details>. Same data model as before. #}
 <!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="15">
-{# Phase 3 (#492) : PWA tags for iOS Add-to-Home-Screen webclip experience #}
+<meta http-equiv="refresh" content="20">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ToolBoX Cabine">
 <meta name="theme-color" content="#0a0a0f">
-<title>Mon rapport Gondwana ToolBoX — live</title>
+<title>Mon rapport — VILLAGE3B</title>
 <style>
-:root{--bg:#0a0a0f;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--red:#ff4466;--amber:#ffb347}
+:root{--bg:#0a0a0f;--panel:#11131a;--phos:#00dd44;--phos-hot:#00ff55;--dim:#5a6b60;--line:#1e2630;--text:#e8e6d9;--red:#ff4466;--amber:#ffb347;--violet:#9e76ff;--blue:#66bbff}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Courier New',Menlo,monospace;background:var(--bg);color:var(--text);padding:1rem;max-width:760px;margin:auto;line-height:1.5}
-h1{color:var(--phos-hot);text-shadow:0 0 6px var(--phos);font-size:1.6rem;margin-bottom:0.3rem;letter-spacing:0.05em}
-.sub{color:var(--dim);font-size:0.85rem;margin-bottom:1rem;letter-spacing:0.05em}
-.card{border:1px solid var(--dim);background:rgba(0,221,68,0.03);padding:0.9rem 1rem;margin-bottom:1rem}
-.card h2{color:var(--phos-hot);text-shadow:0 0 4px var(--phos);font-size:0.95rem;margin-bottom:0.5rem;border-bottom:1px solid var(--dim);padding-bottom:0.3rem;letter-spacing:0.05em}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:0.2rem 0.8rem;font-size:0.85rem}
-.kv .k{color:var(--dim)}
-.kv .v{color:var(--phos);text-shadow:0 0 4px var(--phos)}
-ul{list-style:none;padding-left:0.6rem}
-li{padding:0.15rem 0;font-size:0.85rem}
-li::before{content:"▸ ";color:var(--phos);text-shadow:0 0 4px var(--phos)}
-.score{display:inline-block;padding:0.3rem 1rem;font-size:1.2rem;font-weight:bold;border:2px solid;border-radius:4px}
-.score.low{color:var(--phos-hot);border-color:var(--phos);text-shadow:0 0 6px var(--phos)}
-.score.med{color:var(--amber);border-color:var(--amber);text-shadow:0 0 6px var(--amber)}
-.score.high{color:var(--red);border-color:var(--red);text-shadow:0 0 6px var(--red)}
-.pin{color:var(--amber)}
-.url{font-family:monospace;font-size:0.78rem;color:var(--text);background:rgba(0,221,68,0.05);padding:0.15rem 0.4rem;border-radius:2px;margin:0.1rem 0;display:inline-block;max-width:100%;overflow-wrap:break-word;word-break:break-all}
-.actions{text-align:center;margin:1.5rem 0}
-.actions a{display:inline-block;margin:0 0.3rem;padding:0.5rem 1rem;border:1px solid var(--phos);color:var(--phos-hot);text-decoration:none;text-shadow:0 0 4px var(--phos);font-size:0.85rem}
-.actions a:hover{background:rgba(0,221,68,0.1)}
-.refresh{text-align:center;font-size:0.7rem;color:var(--dim);margin-top:1rem;font-style:italic}
-.footer{text-align:center;font-size:0.65rem;color:var(--dim);margin-top:1.5rem;border-top:1px solid var(--dim);padding-top:0.6rem}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);padding:1rem;max-width:740px;margin:auto;line-height:1.5}
+h1{color:var(--phos-hot);font-size:1.35rem;letter-spacing:.04em;display:flex;align-items:center;gap:.4rem}
+.sub{color:var(--dim);font-size:.82rem;margin-bottom:1.1rem}
+.help{color:var(--dim);font-size:.78rem;font-style:italic;margin-top:.25rem}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:1rem 1.1rem;margin-bottom:1rem}
+.card h2{color:var(--phos-hot);font-size:.95rem;margin-bottom:.5rem;letter-spacing:.03em}
+/* ── verdict hero ── */
+.hero{text-align:center;background:radial-gradient(120% 120% at 50% 0%,rgba(0,221,68,.10),rgba(110,64,201,.05) 70%,transparent);border-color:var(--phos)}
+.gauge{width:170px;height:170px;border-radius:50%;margin:.4rem auto;display:flex;align-items:center;justify-content:center}
+.gauge-hole{width:124px;height:124px;border-radius:50%;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge-num{font-size:2.6rem;font-weight:800;line-height:1}
+.gauge-max{font-size:.8rem;color:var(--dim)}
+.verdict{font-size:1.15rem;font-weight:700;margin-top:.3rem}
+/* ── KPI row ── */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.4rem}
+.kpi{background:#0d0f15;border:1px solid var(--line);border-radius:10px;padding:.6rem .3rem;text-align:center}
+.kpi .e{font-size:1.15rem}
+.kpi .n{font-size:1.3rem;font-weight:800;color:var(--phos-hot)}
+.kpi .l{font-size:.62rem;color:var(--dim);text-transform:uppercase;letter-spacing:.04em}
+/* ── graphs ── */
+.graphs{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:560px){.graphs{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+.donut-wrap{display:flex;gap:.8rem;align-items:center}
+.donut{width:96px;height:96px;border-radius:50%;flex:0 0 auto}
+.donut-hole{width:54px;height:54px;border-radius:50%;background:var(--panel);margin:21px;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--dim);text-align:center}
+.legend{font-size:.78rem;display:flex;flex-direction:column;gap:.2rem;min-width:0}
+.legend .row{display:flex;align-items:center;gap:.35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:.6rem;height:.6rem;border-radius:50%;flex:0 0 auto}
+.bar-row{display:grid;grid-template-columns:5.5rem 1fr 2rem;gap:.45rem;align-items:center;font-size:.78rem;margin:.2rem 0}
+.bar-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{background:#0d0f15;border-radius:99px;height:.7rem;overflow:hidden}
+.bar-fill{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--phos),var(--phos-hot))}
+.bar-val{text-align:right;color:var(--phos);font-weight:700}
+.empty{color:var(--dim);font-size:.8rem;font-style:italic;padding:.4rem 0}
+/* ── details ── */
+details{border:1px solid var(--line);background:var(--panel);border-radius:12px;margin-bottom:1rem;overflow:hidden}
+details>summary{cursor:pointer;padding:.85rem 1.1rem;font-weight:700;color:var(--phos-hot);font-size:.92rem;list-style:none}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"▸ ";color:var(--phos)}
+details[open]>summary::before{content:"▾ "}
+details .inner{padding:0 1.1rem 1rem}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.2rem .8rem;font-size:.84rem}
+.kv .k{color:var(--dim)}.kv .v{color:var(--phos)}
+table{width:100%;font-size:.8rem;border-collapse:collapse}
+th{color:var(--dim);text-align:left;font-weight:600;border-bottom:1px solid var(--line);padding:.25rem .3rem}
+td{padding:.2rem .3rem;border-bottom:1px solid rgba(255,255,255,.03)}
+code{font-family:ui-monospace,Menlo,monospace;font-size:.74rem;color:var(--text);word-break:break-all}
+ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::before{content:"▸ ";color:var(--phos)}
+.pin h2,.pin{color:var(--amber)}
+.lvl{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-top:.4rem}
+.lvl button{padding:.55rem;cursor:pointer;font-family:inherit;font-size:.85rem;border-radius:8px;background:transparent;color:var(--text);border:1px solid var(--line)}
+.lvl button.on{border-width:2px;font-weight:700}
+.actions{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin:1.2rem 0}
+.actions a{padding:.55rem 1rem;border:1px solid var(--phos);color:var(--phos-hot);text-decoration:none;border-radius:8px;font-size:.85rem}
+.footer{text-align:center;font-size:.66rem;color:var(--dim);margin-top:1.4rem;border-top:1px solid var(--line);padding-top:.7rem}
+.url{font-family:ui-monospace,monospace;font-size:.72rem;background:#0d0f15;padding:.12rem .35rem;border-radius:4px;margin:.1rem 0;display:block;word-break:break-all}
 </style></head>
 <body>
 
-<h1>📡 GONDWANA TOOLBOX</h1>
-<p class="sub">// Rapport live — Cabine numérique VILLAGE3B</p>
-
-{# Phase 3 (#492) : hero widgets — same shape as PDF #}
 {% set m = metrics or {} %}
-{% set sc = risk_score or 0 %}
-{% set rl = risk_label or 'LOW' %}
-<div class="card" style="background:linear-gradient(135deg,rgba(0,221,68,0.08),rgba(110,64,201,0.05));border-color:var(--phos)">
-  <h2 style="display:flex;justify-content:space-between;align-items:center">
-    📊 Ta session VILLAGE3B
-    <span style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:99px;
-      background:{% if sc < 30 %}#00cc44{% elif sc < 70 %}#ffb347{% else %}#ff4466{% endif %};
-      color:#0a0a0f;font-weight:bold">
-      {% if sc < 30 %}🟢{% elif sc < 70 %}🟡{% else %}🔴{% endif %} {{ rl }} {{ sc }}/100
-    </span>
-  </h2>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.8rem">
-    {% for emoji, val, lbl in [
-      ('🌐', m.connections|default(0), 'connexions'),
-      ('📡', m.unique_hosts|default(0), 'hôtes uniques'),
-      ('✅', m.successful|default(0), 'OK 2xx/3xx'),
-      ('🔒', m.tls_pinned|default(0), 'cert-pinning')
-    ] %}
-    <div style="padding:0.6rem;background:rgba(0,0,0,0.3);border-radius:4px;text-align:center">
-      <div style="font-size:1.2rem">{{ emoji }}</div>
-      <div style="font-size:1.3rem;font-weight:bold;color:var(--phos-hot);text-shadow:0 0 4px var(--phos)">{{ val }}</div>
-      <div style="font-size:0.65rem;color:var(--dim)">{{ lbl }}</div>
-    </div>
-    {% endfor %}
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.5rem">
-    {% set dpi_cls = dpi_classified or {} %}
-    {% set cookies_p = cookies_providers or [] %}
-    {% set geo_h = geo_top_hosts or [] %}
-    {% set n_apps = (dpi_cls.top_apps|default([])|selectattr('app','ne','?')|list|length) %}
-    {% set n_trackers = (cookies_p|map(attribute='count')|sum) %}
-    {% set countries = geo_h|map(attribute='country')|reject('equalto','')|list %}
-    {% set n_countries = countries|unique|list|length %}
-    <div style="padding:0.6rem;background:rgba(25,25,45,0.5);border-radius:4px;text-align:center">
-      <div style="font-size:1.2rem">📺</div>
-      <div style="font-size:1.3rem;font-weight:bold;color:#9e76ff">{{ n_apps }}</div>
-      <div style="font-size:0.65rem;color:var(--dim)">apps détectées</div>
-    </div>
-    <div style="padding:0.6rem;background:rgba(45,25,35,0.5);border-radius:4px;text-align:center">
-      <div style="font-size:1.2rem">🍪</div>
-      <div style="font-size:1.3rem;font-weight:bold;color:#ff8866">{{ n_trackers }}</div>
-      <div style="font-size:0.65rem;color:var(--dim)">trackers</div>
-    </div>
-    <div style="padding:0.6rem;background:rgba(25,40,35,0.5);border-radius:4px;text-align:center">
-      <div style="font-size:1.2rem">🌍</div>
-      <div style="font-size:1.3rem;font-weight:bold;color:#66bbff">{{ n_countries }}</div>
-      <div style="font-size:0.65rem;color:var(--dim)">pays/ASN</div>
-    </div>
-    <div style="padding:0.6rem;background:rgba(60,50,15,0.5);border-radius:4px;text-align:center">
-      <div style="font-size:1.2rem">{% if sc < 30 %}🟢{% elif sc < 70 %}🟡{% else %}🔴{% endif %}</div>
-      <div style="font-size:1.3rem;font-weight:bold;color:{% if sc < 30 %}var(--phos-hot){% elif sc < 70 %}#ffb347{% else %}#ff4466{% endif %}">{{ sc }}</div>
-      <div style="font-size:0.65rem;color:var(--dim)">risque /100</div>
-    </div>
-  </div>
-  {# 9th widget (poster sync #497) : 📱 empreinte device — full-width below #}
-  {% set _avatar = avatar_analysis or {} %}
-  {% set _dev_emj = _avatar.most_common_emoji or '❔' %}
-  {% set _dev_label = _avatar.most_common or 'unknown' %}
-  {% set _devices = _avatar.devices or {} %}
-  {% set _dev_info = _devices.get(_dev_label, {}) %}
-  {% set _os_label = _dev_info.os_label or _dev_label %}
-  {% set _browsers = _avatar.browsers or {} %}
-  <div style="margin-top:0.5rem;padding:0.7rem;background:rgba(45,25,60,0.5);border-radius:4px;text-align:center">
-    <div style="font-size:1.4rem">📱 <b style="color:#cbb6ff">{{ _dev_emj }} Empreinte device</b></div>
-    <div style="font-size:0.92rem;color:var(--phos-hot);margin-top:0.3rem;text-shadow:0 0 3px var(--phos)">
-      {{ _os_label }}
-      {% for br, info in _browsers.items() if br != 'unknown' %}
-        · {{ info.emoji or '' }} {{ info.label or br }}
-      {% endfor %}
-    </div>
-    <div style="font-size:0.65rem;color:var(--dim);margin-top:0.2rem">{{ _avatar.raw_count or 0 }} UAs distincts observés</div>
-  </div>
-  {# Top device + app + ASN line #}
-  {% set avatar = avatar_analysis or {} %}
-  {% set top_dev = avatar.most_common or '?' %}
-  {% set top_dev_emj = avatar.most_common_emoji or '' %}
-  {% set top_app = (dpi_cls.top_apps and dpi_cls.top_apps[0]) or {} %}
-  {% set top_geo = (geo_h and geo_h[0]) or {} %}
-  {% set top_asn_raw = top_geo.asn_org if top_geo.asn_org else '?' %}
-  <p style="font-size:0.78rem;color:var(--dim);margin-top:0.6rem;text-align:center;padding-top:0.5rem;border-top:1px solid var(--dim)">
-    Top device : {{ top_dev_emj }} {{ top_dev }} ·
-    Top app : {{ top_app.emoji|default('') }} {{ top_app.app|default('?') }} ·
-    Top ASN : {{ top_geo.flag|default('') }} {{ top_asn_raw[:30] }}
-  </p>
-</div>
+{% set sc = risk_score|default(0) %}
+{% set rl = risk_label|default('LOW') %}
+{% set ch = charts or {} %}
+{% set gcol = 'var(--phos-hot)' if sc < 30 else ('var(--amber)' if sc < 70 else 'var(--red)') %}
+{% set palette = ['#00dd44','#9e76ff','#ff8866','#66bbff','#ffb347','#ff4466'] %}
+{% set dpi_cls = dpi_classified or {} %}
+{% set cookies_p = cookies_providers or [] %}
+{% set geo_h = geo_top_hosts or [] %}
+{% set n_apps = (dpi_cls.top_apps|default([])|selectattr('app','ne','?')|list|length) %}
+{% set n_trackers = (cookies_p|map(attribute='count')|sum) %}
+{% set n_countries = (geo_h|map(attribute='country')|reject('equalto','')|list|unique|list|length) %}
+{% set _avatar = avatar_analysis or {} %}
 
-{# Phase 3 (#492) : filtering compromissions visibility #}
-{% set t = transparency|default({}) %}
-{% set sens = t.get('sensitivity') %}
-<div class="card" style="background:rgba(255,68,102,0.06);border-color:var(--red)">
-  <h2 style="color:var(--red)">🚨 Filtering compromissions actif</h2>
-  <div class="kv" style="font-size:0.82rem">
-    <span class="k">Sensibilité actuelle</span>
-    <span class="v">{{ sens.label|default('—') if sens else '—' }}</span>
-    <span class="k">Description</span>
-    {% set sens_desc = (sens.description if sens and sens.description else 'Engine pas chargé') %}
-    <span class="v" style="font-size:0.75rem">{{ sens_desc[:90] }}</span>
-    <span class="k">🔍 Threat-intel feeds</span>
-    <span class="v">{{ (threat_intel_matches|default([]))|length }} matches actifs</span>
-    <span class="k">🎲 DGA candidates</span>
-    <span class="v">{{ (dga_candidates|default([]))|length }} hôtes suspects</span>
-    <span class="k">📡 Beaconing patterns</span>
-    <span class="v">{{ (beaconing_candidates|default([]))|length }} détectés</span>
-    <span class="k">🚫 Connexions bloquées</span>
-    <span class="v">{{ t.get('attempts', {}).get('blocked', 0) }} <span style="font-size:0.7rem;color:var(--dim)">(Phase 4 : observation only)</span></span>
-  </div>
-  <p style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem;font-style:italic">
-    Le moteur détecte mais ne bloque pas encore — passive transparency. La règle engine
-    décidera blocage actif quand R3 / Phase 4 sera wired.
-  </p>
-</div>
+<h1>👁️ VILLAGE3B <span style="font-size:.8rem;color:var(--dim);font-weight:400">· mon rapport</span></h1>
+<p class="sub">Diagnostic live de ce que ton appareil envoie sur le réseau · anonyme · se rafraîchit tout seul</p>
 
-{# Phase 3 (#492) : welcome / switch confirmation banner — uses server-side
-   current_level (NOT request_args.level which is stale after refresh). #}
 {% if request_args and (request_args.get('welcome') or request_args.get('switched')) %}
-<div class="card" style="background:rgba(0,221,68,0.08);border-color:var(--phos)">
-  <h2 style="color:var(--phos-hot)">
-    {% if request_args.get('switched') %}🔄 Niveau changé{% else %}🎉 Bienvenue !{% endif %}
-  </h2>
-  <p style="font-size:0.85rem">
-    Tu es maintenant en mode
-    <b style="color:var(--phos-hot)">
-      {% if current_level == 'r0' %}🌐 R0 — Bypass complet (aucune analyse)
-      {% elif current_level == 'r2' %}🔍 R2 — Analyse + bandeau Safari
-      {% else %}🛡 R1 — Analyse passive recommandée{% endif %}
-    </b>.
-    Tu peux maintenant <a href="http://captive.apple.com/hotspot-detect.html" target="_blank" style="color:var(--phos-hot);text-decoration:underline">surfer normalement</a> — ce rapport se met à jour toutes les 15s.
-  </p>
+<div class="card" style="border-color:var(--phos)">
+  <b style="color:var(--phos-hot)">{% if request_args.get('switched') %}🔄 Niveau changé{% else %}🎉 Bienvenue !{% endif %}</b> —
+  tu es en mode
+  {% if current_level == 'r0' %}🌐 R0 (aucune analyse){% elif current_level == 'r2' %}🔍 R2 (analyse + bandeau){% elif current_level == 'r3' %}🧅 R3 (tunnel){% else %}🛡 R1 (analyse passive){% endif %}.
+  Tu peux surfer normalement.
 </div>
 {% endif %}
 
-{# Phase 3 (#492) : level switcher with active highlight from server-side
-   current_level. Disables button if user clicks their own level (no-op). #}
+{# ── VERDICT HERO : score gauge + plain verdict ── #}
+<div class="card hero">
+  <div class="gauge" style="background:conic-gradient({{ gcol }} {{ sc }}%, #1a1a22 {{ sc }}% 100%)">
+    <div class="gauge-hole">
+      <span class="gauge-num" style="color:{{ gcol }}">{{ sc }}</span>
+      <span class="gauge-max">/ 100</span>
+    </div>
+  </div>
+  <div class="verdict" style="color:{{ gcol }}">
+    {% if sc < 30 %}🟢 Tout va bien — {{ rl }}{% elif sc < 70 %}🟡 À surveiller — {{ rl }}{% else %}🔴 Attention — {{ rl }}{% endif %}
+  </div>
+  <p class="help">Score de risque de ton appareil. Plus il est <b>bas</b>, mieux tu es protégé.</p>
+  {% if risk_explanation %}<p style="font-size:.85rem;margin-top:.5rem">{{ risk_explanation }}</p>{% endif %}
+</div>
+
+{# ── KPI row ── #}
+<div class="kpis">
+  <div class="kpi"><div class="e">🌐</div><div class="n">{{ m.connections|default(0) }}</div><div class="l">connexions</div></div>
+  <div class="kpi"><div class="e">📡</div><div class="n">{{ m.unique_hosts|default(0) }}</div><div class="l">hôtes</div></div>
+  <div class="kpi"><div class="e">🍪</div><div class="n">{{ n_trackers }}</div><div class="l">trackers</div></div>
+  <div class="kpi"><div class="e">🌍</div><div class="n">{{ n_countries }}</div><div class="l">pays</div></div>
+  <div class="kpi"><div class="e">📺</div><div class="n">{{ n_apps }}</div><div class="l">apps</div></div>
+  <div class="kpi"><div class="e">🔒</div><div class="n">{{ m.tls_pinned|default(0) }}</div><div class="l">cert-pin</div></div>
+</div>
+<p class="help" style="text-align:center;margin-bottom:1rem">Ton appareil a contacté {{ m.unique_hosts|default(0) }} serveurs dans {{ n_countries }} pays, avec {{ n_trackers }} traceurs repérés.</p>
+
+{# ── GRAPHS ── #}
 <div class="card">
-  <h2>🔀 Mon niveau d'opt-in</h2>
-  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">
-    📍 Tu es actuellement en
-    <b style="color:{% if current_level == 'r0' %}var(--text){% elif current_level == 'r2' %}#ffd6a0{% else %}var(--phos-hot){% endif %}">
-      {% if current_level == 'r0' %}🌐 R0 — Bypass complet
-      {% elif current_level == 'r2' %}🔍 R2 — Analyse + bandeau
-      {% else %}🛡 R1 — Analyse passive{% endif %}
-    </b>
-    · clique sur un autre niveau pour switcher
-  </p>
-  <form method="POST" action="/change-level" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.4rem">
-    <button type="submit" name="level" value="r0"
-      style="padding:0.5rem;cursor:pointer;font-family:inherit;font-size:0.85rem;
-        {% if current_level == 'r0' %}
-          background:rgba(255,255,255,0.08);color:var(--text);border:2px solid var(--text);font-weight:bold;
-        {% else %}
-          background:transparent;color:var(--text);border:1px solid var(--dim);
-        {% endif %}">
-      {% if current_level == 'r0' %}✓ {% endif %}🌐 R0
-    </button>
-    <button type="submit" name="level" value="r1"
-      style="padding:0.5rem;cursor:pointer;font-family:inherit;font-size:0.85rem;
-        {% if current_level == 'r1' %}
-          background:rgba(0,221,68,0.25);color:var(--phos-hot);border:2px solid var(--phos);font-weight:bold;
-        {% else %}
-          background:transparent;color:var(--phos);border:1px solid var(--dim);
-        {% endif %}">
-      {% if current_level == 'r1' %}✓ {% endif %}🛡 R1
-    </button>
-    <button type="submit" name="level" value="r2"
-      style="padding:0.5rem;cursor:pointer;font-family:inherit;font-size:0.85rem;
-        {% if current_level == 'r2' %}
-          background:rgba(255,179,71,0.25);color:#ffd6a0;border:2px solid #ffb347;font-weight:bold;
-        {% else %}
-          background:transparent;color:#9d7846;border:1px solid var(--dim);
-        {% endif %}">
-      {% if current_level == 'r2' %}✓ {% endif %}🔍 R2
-    </button>
+  <h2>📊 En un coup d'œil</h2>
+  <div class="graphs">
+
+    {# trackers donut #}
+    <div>
+      <div style="font-size:.82rem;color:var(--dim);margin-bottom:.4rem">🍪 Qui te trace</div>
+      {% if ch.trackers %}
+      <div class="donut-wrap">
+        <div class="donut" style="background:conic-gradient({% for t in ch.trackers %}{{ palette[loop.index0 % palette|length] }} {{ t.start }}% {{ t.end }}%{% if not loop.last %},{% endif %}{% endfor %})">
+          <div class="donut-hole">{{ n_trackers }}<br>traceurs</div>
+        </div>
+        <div class="legend">
+          {% for t in ch.trackers %}
+          <span class="row"><span class="dot" style="background:{{ palette[loop.index0 % palette|length] }}"></span>{{ t.emoji }} {{ t.label[:14] }} <b style="color:var(--text)">{{ t.pct }}%</b></span>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}<div class="empty">Aucun traceur repéré 🎉</div>{% endif %}
+    </div>
+
+    {# countries bars #}
+    <div>
+      <div style="font-size:.82rem;color:var(--dim);margin-bottom:.4rem">🌍 Vers quels pays</div>
+      {% if ch.countries %}
+        {% for c in ch.countries %}
+        <div class="bar-row"><span class="bar-lbl">{{ c.flag }} {{ c.label[:8] }}</span><span class="bar-track"><span class="bar-fill" style="width:{{ c.pct }}%"></span></span><span class="bar-val">{{ c.count }}</span></div>
+        {% endfor %}
+      {% else %}<div class="empty">Pas encore de données géo</div>{% endif %}
+    </div>
+
+    {# apps bars #}
+    <div style="grid-column:1/-1">
+      <div style="font-size:.82rem;color:var(--dim);margin-bottom:.4rem">📺 Quelles apps / services</div>
+      {% if ch.apps %}
+        {% for a in ch.apps %}
+        <div class="bar-row"><span class="bar-lbl">{{ a.emoji }} {{ a.label[:16] }}</span><span class="bar-track"><span class="bar-fill" style="width:{{ a.pct }}%;background:linear-gradient(90deg,var(--violet),#c9b6ff)"></span></span><span class="bar-val" style="color:var(--violet)">{{ a.count }}</span></div>
+        {% endfor %}
+      {% else %}<div class="empty">Aucune app classifiée</div>{% endif %}
+    </div>
+
+  </div>
+  <p class="help">Les traceurs suivent ta navigation entre sites. Les apps cert-pinning (🔒) refusent l'analyse — c'est bon signe.</p>
+</div>
+
+{# ── LEVEL SWITCHER (action) ── #}
+<div class="card">
+  <h2>🔀 Mon niveau de protection</h2>
+  <form method="POST" action="/change-level" class="lvl">
+    <button type="submit" name="level" value="r0" class="{{ 'on' if current_level=='r0' }}" style="{% if current_level=='r0' %}border-color:var(--text){% endif %}">{% if current_level=='r0' %}✓ {% endif %}🌐 R0</button>
+    <button type="submit" name="level" value="r1" class="{{ 'on' if current_level=='r1' }}" style="{% if current_level=='r1' %}border-color:var(--phos);color:var(--phos-hot){% endif %}">{% if current_level=='r1' %}✓ {% endif %}🛡 R1</button>
+    <button type="submit" name="level" value="r2" class="{{ 'on' if current_level=='r2' }}" style="{% if current_level=='r2' %}border-color:var(--amber);color:var(--amber){% endif %}">{% if current_level=='r2' %}✓ {% endif %}🔍 R2</button>
   </form>
-  {% if wg_enabled|default(false) %}
-  {# Phase 6 (#496) : R3 WireGuard separate action (different flow — install profile first) #}
-  <p style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem;text-align:center">
-    Pour le mode R3 WireGuard (mobile + tout-décrypté) :
-    <a href="/wg/r3-install" style="color:#9e76ff;text-decoration:underline">🌐 installer le profil</a>
-  </p>
-  {% if current_level == 'r3' %}
-  <p style="font-size:0.72rem;color:#9e76ff;margin-top:0.3rem;text-align:center;font-weight:bold">
-    ✓ Tu es actuellement en mode R3 — tunnel WG actif
-  </p>
-  {% endif %}
-  {% endif %}
+  <p class="help">R0 = aucune analyse · R1 = analyse passive (recommandé) · R2 = analyse + bandeau.{% if wg_enabled|default(false) %} <a href="/wg/r3-install" style="color:var(--violet)">🧅 R3 tunnel mobile</a>.{% endif %}</p>
 </div>
 
-<div class="card">
-  <h2>👤 Identifiant anonyme</h2>
-  <div class="kv">
-    <span class="k">Hash session</span> <span class="v">{{ mac_hash }}</span>
-    <span class="k">Sandbox IP</span>   <span class="v">{{ ip }}</span>
-    <span class="k">Appareil</span>     <span class="v">{{ device_type }}</span>
-  </div>
-</div>
+{# ════════════ DÉTAILS TECHNIQUES (repliés) ════════════ #}
 
-<div class="card">
-  <h2>📊 Métriques session</h2>
-  <div class="kv">
-    <span class="k">Connexions</span>     <span class="v">{{ metrics.connections }}</span>
-    <span class="k">Hosts uniques</span>  <span class="v">{{ metrics.unique_hosts }}</span>
-    <span class="k">Réussies</span>       <span class="v">{{ metrics.successful }}</span>
-    <span class="k">Cert-pin block</span> <span class="v">{{ metrics.tls_pinned }}</span>
-  </div>
-</div>
-
-<div class="card">
-  <h2>🎯 Analyse compromission</h2>
-  <p style="text-align:center;margin:0.5rem 0">
-    {% if risk_score < 30 %}
-      <span class="score low">Score : {{ risk_score }}/100 — {{ risk_label|default('LOW') }}</span>
-    {% elif risk_score < 70 %}
-      <span class="score med">Score : {{ risk_score }}/100 — {{ risk_label|default('MEDIUM') }}</span>
-    {% else %}
-      <span class="score high">Score : {{ risk_score }}/100 — {{ risk_label|default('HIGH') }}</span>
+<details>
+  <summary>🎯 Analyse de compromission &amp; score</summary>
+  <div class="inner">
+    {% if risk_explanation %}<p style="font-size:.85rem;margin-bottom:.6rem">{{ risk_explanation }}</p>{% endif %}
+    <ul>{% for ind in indicators %}<li>{{ ind }}</li>{% endfor %}</ul>
+    {% if scoring and scoring.breakdown %}
+    <table style="margin-top:.6rem"><thead><tr><th>Catégorie</th><th style="text-align:right">Signaux</th><th style="text-align:right">Poids</th></tr></thead><tbody>
+      {% for b in scoring.breakdown %}
+      <tr><td>{{ b.category }}</td><td style="text-align:right">{{ b.raw_signal_count }}</td><td style="text-align:right;color:var(--amber)">+{{ b.weight_subtotal }}</td></tr>
+      {% endfor %}
+    </tbody></table>
     {% endif %}
-  </p>
-  {% if risk_explanation %}
-  <p style="font-size:0.85rem;color:var(--text);margin-bottom:0.8rem;padding:0.5rem;background:rgba(0,221,68,0.05);border-left:2px solid var(--phos)">{{ risk_explanation }}</p>
-  {% endif %}
-  <ul>
-    {% for ind in indicators %}<li>{{ ind }}</li>{% endfor %}
-  </ul>
-</div>
+  </div>
+</details>
 
-{% if scoring and scoring.breakdown %}
-<div class="card">
-  <h2>🔬 Breakdown du score (transparent)</h2>
-  <table style="width:100%;font-size:0.82rem;border-collapse:collapse">
-    <thead><tr style="color:var(--dim);border-bottom:1px solid var(--dim)">
-      <th style="padding:0.2rem 0.4rem;text-align:left">Catégorie</th>
-      <th style="padding:0.2rem 0.4rem;text-align:right">Signaux</th>
-      <th style="padding:0.2rem 0.4rem;text-align:right">Poids</th>
-    </tr></thead>
-    <tbody>
-    {% for b in scoring.breakdown %}
-      <tr><td style="padding:0.15rem 0.4rem">{{ b.category }}</td>
-          <td style="padding:0.15rem 0.4rem;text-align:right">{{ b.raw_signal_count }}</td>
-          <td style="padding:0.15rem 0.4rem;text-align:right;color:var(--amber);text-shadow:0 0 4px var(--amber)">+{{ b.weight_subtotal }}</td></tr>
-      {% if b.examples %}
-        <tr><td colspan="3" style="padding:0;font-size:0.75rem;color:var(--text)">
-          {% for ex in b.examples[:3] %}<div style="margin-left:1rem;padding:0.1rem 0">▸ <code>{{ ex }}</code></div>{% endfor %}
-        </td></tr>
-      {% endif %}
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-
-{% if threat_intel_matches %}
-<div class="card">
-  <h2 class="pin">🚨 Threat-intel : matches feeds malware</h2>
-  <ul>
-    {% for m in threat_intel_matches[:10] %}
-      <li>{{ m.flag }} <span style="color:var(--red)">[{{ m.source }}/{{ m.weight }}]</span> <b>{{ m.label }}</b> : <code>{{ m.ioc[:60] }}</code>{% if m.asn_org %} <span style="font-size:0.75rem;color:var(--dim)">({{ m.asn_org }})</span>{% endif %}</li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
-
-{% if dga_candidates %}
-<div class="card">
-  <h2 class="pin">🔠 DGA — domaines suspects</h2>
-  <ul>
-    {% for d in dga_candidates[:8] %}
-      <li>{{ d.flag }} <span style="color:var(--amber)">[{{ d.score }}]</span> <code>{{ d.host[:60] }}</code> <span style="font-size:0.75rem;color:var(--dim)">({{ d.indicators|join(', ') }})</span></li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
-
-{% if beaconing_candidates %}
-<div class="card">
-  <h2 class="pin">📡 Beaconing — patterns périodiques suspects</h2>
-  <table style="width:100%;font-size:0.82rem">
-    <thead><tr style="color:var(--dim);text-align:left">
-      <th>🚩</th><th>Score</th><th>Host</th><th style="text-align:right">Median</th><th style="text-align:right">CV</th><th>ASN</th>
-    </tr></thead>
-    <tbody>
-    {% for b in beaconing_candidates[:8] %}
-      <tr><td>{{ b.flag }}</td><td style="color:var(--amber)">{{ b.score }}</td><td><code>{{ b.host[:40] }}</code></td>
-          <td style="text-align:right">{{ b.median_seconds }}s</td>
-          <td style="text-align:right">{{ b.cv }}</td>
-          <td style="font-size:0.78rem;color:var(--dim)">{{ b.asn_org[:30] if b.asn_org else '' }}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-
-{% if dpi_classified and dpi_classified.top_apps %}
-<div class="card">
-  <h2>🧭 Apps détectées (classification nDPI-style)</h2>
-  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">
-    Catégories : {% for cat, n in dpi_classified.by_category.items() %}{{ dpi_classified.category_emoji.get(cat, '❔') }} {{ cat }}({{ n }}){% if not loop.last %} · {% endif %}{% endfor %}
-  </p>
-  <table style="width:100%;font-size:0.85rem">
-    <thead><tr style="color:var(--dim);text-align:left">
-      <th>App</th><th>Catégorie</th><th style="text-align:right">Connexions</th>
-    </tr></thead>
-    <tbody>
-    {% for a in dpi_classified.top_apps[:15] %}
-      <tr><td>{{ a.emoji }} <b>{{ a.app }}</b></td><td style="font-size:0.78rem;color:var(--dim)">{{ a.category }}</td>
-          <td style="text-align:right;color:var(--phos);text-shadow:0 0 4px var(--phos)">{{ a.count }}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+{% if threat_intel_matches or dga_candidates or beaconing_candidates %}
+<details>
+  <summary class="pin">🚨 Menaces détectées ({{ (threat_intel_matches|default([]))|length + (dga_candidates|default([]))|length + (beaconing_candidates|default([]))|length }})</summary>
+  <div class="inner">
+    {% if threat_intel_matches %}<p style="color:var(--amber);font-size:.82rem;margin:.3rem 0">🚨 Threat-intel (feeds malware)</p><ul>
+      {% for x in threat_intel_matches[:10] %}<li>{{ x.flag }} <span style="color:var(--red)">[{{ x.source }}]</span> <b>{{ x.label }}</b> <code>{{ x.ioc[:50] }}</code></li>{% endfor %}</ul>{% endif %}
+    {% if dga_candidates %}<p style="color:var(--amber);font-size:.82rem;margin:.5rem 0 .2rem">🔠 Domaines générés (DGA)</p><ul>
+      {% for d in dga_candidates[:8] %}<li>{{ d.flag }} [{{ d.score }}] <code>{{ d.host[:50] }}</code></li>{% endfor %}</ul>{% endif %}
+    {% if beaconing_candidates %}<p style="color:var(--amber);font-size:.82rem;margin:.5rem 0 .2rem">📡 Beaconing (périodique)</p><ul>
+      {% for b in beaconing_candidates[:8] %}<li>{{ b.flag }} [{{ b.score }}] <code>{{ b.host[:40] }}</code> · {{ b.median_seconds }}s</li>{% endfor %}</ul>{% endif %}
+  </div>
+</details>
 {% endif %}
 
 {% if geo_top_hosts %}
-<div class="card">
-  <h2>🌍 Hôtes contactés (par pays + ASN + app)</h2>
-  <table style="width:100%;font-size:0.82rem">
-    <thead><tr style="color:var(--dim);text-align:left">
-      <th>🚩</th><th>App</th><th>Hôte</th><th>ASN</th><th style="text-align:right">Hits</th>
-    </tr></thead>
-    <tbody>
-    {% for h in geo_top_hosts[:15] %}
-      <tr><td>{{ h.flag }}</td><td>{{ h.emoji }} {{ h.app[:18] }}</td><td><code style="font-size:0.78rem">{{ h.host[:45] }}</code></td>
-          <td style="font-size:0.75rem;color:var(--dim)">{{ h.asn_org[:25] if h.asn_org else '' }}</td>
-          <td style="text-align:right;color:var(--phos)">{{ h.count }}</td></tr>
+<details>
+  <summary>🌍 Hôtes contactés ({{ geo_top_hosts|length }})</summary>
+  <div class="inner"><table><thead><tr><th>🚩</th><th>App</th><th>Hôte</th><th style="text-align:right">Hits</th></tr></thead><tbody>
+    {% for h in geo_top_hosts[:20] %}
+    <tr><td>{{ h.flag }}</td><td>{{ h.emoji }} {{ h.app[:14] }}</td><td><code>{{ h.host[:42] }}</code></td><td style="text-align:right;color:var(--phos)">{{ h.count }}</td></tr>
     {% endfor %}
-    </tbody>
-  </table>
-</div>
+  </tbody></table></div>
+</details>
 {% endif %}
 
-{% if avatar_analysis and avatar_analysis.devices %}
-<div class="card">
-  <h2>{{ avatar_analysis.most_common_emoji }} Avatar / device fingerprint</h2>
-  <p style="margin-bottom:0.5rem">
-    <span style="font-size:1.2rem">{{ avatar_analysis.most_common_emoji }}</span>
-    <b>{{ avatar_analysis.most_common }}</b> (le plus représenté)
-  </p>
-  <div style="display:flex;flex-wrap:wrap;gap:1rem;font-size:0.85rem">
-    <div>
-      <div style="color:var(--dim);font-size:0.78rem;margin-bottom:0.3rem">Devices :</div>
-      {% for dev, info in avatar_analysis.devices.items() %}
-        <div>{{ info.emoji }} <b>{{ info.os_label }}</b> <span style="color:var(--dim)">({{ info.count }})</span></div>
-      {% endfor %}
-    </div>
-    <div>
-      <div style="color:var(--dim);font-size:0.78rem;margin-bottom:0.3rem">Browsers :</div>
-      {% for br, info in avatar_analysis.browsers.items() %}
-        <div>{{ info.emoji }} <b>{{ info.label }}</b> <span style="color:var(--dim)">({{ info.count }})</span></div>
-      {% endfor %}
-    </div>
-  </div>
-</div>
+{% if dpi_classified and dpi_classified.top_apps %}
+<details>
+  <summary>🧭 Apps détectées (nDPI)</summary>
+  <div class="inner"><table><thead><tr><th>App</th><th>Catégorie</th><th style="text-align:right">Conn.</th></tr></thead><tbody>
+    {% for a in dpi_classified.top_apps[:20] %}
+    <tr><td>{{ a.emoji }} <b>{{ a.app }}</b></td><td style="color:var(--dim)">{{ a.category }}</td><td style="text-align:right;color:var(--phos)">{{ a.count }}</td></tr>
+    {% endfor %}
+  </tbody></table></div>
+</details>
 {% endif %}
 
 {% if cookies_providers %}
-<div class="card">
-  <h2>🍪 Trackers / providers cookies (Phase 2a+)</h2>
-  <ul>
-    {% for p in cookies_providers[:10] %}
-      <li>{{ p.emoji }} <b>{{ p.provider }}</b> <span style="font-size:0.78rem;color:var(--dim)">({{ p.category }})</span> <span style="color:var(--phos)">×{{ p.count }}</span></li>
-    {% endfor %}
-  </ul>
-</div>
+<details>
+  <summary>🍪 Traceurs / providers cookies ({{ cookies_providers|length }})</summary>
+  <div class="inner"><ul>
+    {% for p in cookies_providers[:15] %}<li>{{ p.emoji }} <b>{{ p.provider }}</b> <span style="color:var(--dim)">({{ p.category }})</span> <span style="color:var(--phos)">×{{ p.count }}</span></li>{% endfor %}
+  </ul></div>
+</details>
 {% endif %}
 
-<div class="card">
-  <h2>📱 Apps détectées (vue IP forensics)</h2>
-  <ul>
-    {% for app in apps_detected %}<li>{{ app }}</li>{% endfor %}
-  </ul>
-</div>
-
-<div class="card">
-  <h2 class="pin">🔒 Apps protégées par cert-pinning</h2>
-  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">
-    Ces apps refusent notre certificat — ToolBoX ne peut PAS lire leur contenu. C'est un BON signe sécurité.
-  </p>
-  <ul>
-    {% for app in pinned_apps %}<li>{{ app }}</li>{% endfor %}
-  </ul>
-</div>
-
-{% if dpi and dpi.top_hosts %}
-<div class="card">
-  <h2>🔍 DPI — hôtes les plus contactés</h2>
-  <table style="width:100%;font-size:0.82rem;border-collapse:collapse">
-    <thead><tr style="color:var(--dim);text-align:left;border-bottom:1px solid var(--dim)">
-      <th style="padding:0.2rem 0.4rem">Hôte</th><th style="padding:0.2rem 0.4rem;text-align:right">Requêtes</th>
-    </tr></thead>
-    <tbody>
-    {% for entry in dpi.top_hosts[:10] %}
-      <tr><td style="padding:0.15rem 0.4rem;font-family:monospace">{{ entry.host[:70] }}</td>
-          <td style="padding:0.15rem 0.4rem;text-align:right;color:var(--phos);text-shadow:0 0 4px var(--phos)">{{ entry.count }}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% if dpi.methods %}
-  <p style="font-size:0.78rem;color:var(--dim);margin-top:0.6rem">
-    Méthodes : {% for m,c in dpi.methods.items() %}<span style="color:var(--phos)">{{ m }}({{ c }})</span>{% if not loop.last %} · {% endif %}{% endfor %}
-  </p>
-  {% endif %}
-  {% if dpi.user_agents %}
-  <p style="font-size:0.75rem;color:var(--dim);margin-top:0.4rem">
-    UA détectés : {{ dpi.user_agents|length }}
-    {% if dpi.user_agents %}<br><span style="color:var(--text);font-family:monospace;font-size:0.7rem">{{ dpi.user_agents[0][:90] }}</span>{% endif %}
-  </p>
-  {% endif %}
-</div>
-{% endif %}
-
-{% if cookies and (cookies.total_set or cookies.details) %}
-<div class="card">
-  <h2>🍪 Cookies / trackers</h2>
-  <div class="kv" style="margin-bottom:0.5rem">
-    <span class="k">Set-Cookie reçus</span> <span class="v">{{ cookies.total_set }}</span>
-    <span class="k">Cookies envoyés</span>  <span class="v">{{ cookies.total_sent }}</span>
-  </div>
-  {% if cookies.details %}
-  <p style="font-size:0.78rem;color:var(--dim);margin-top:0.4rem">URLs avec activité cookies (top {{ cookies.details|length }}) :</p>
-  {% for d in cookies.details[:10] %}
-    <div class="url">
-      <span style="color:var(--amber)">set={{ d.set }}/sent={{ d.sent }}</span> · {{ d.url[:90] }}
+{% if avatar_analysis and avatar_analysis.devices %}
+<details>
+  <summary>{{ _avatar.most_common_emoji }} Empreinte appareil</summary>
+  <div class="inner">
+    <p style="margin-bottom:.4rem">{{ _avatar.most_common_emoji }} <b>{{ _avatar.most_common }}</b> · {{ _avatar.raw_count|default(0) }} UAs distincts</p>
+    <div style="display:flex;flex-wrap:wrap;gap:1.2rem;font-size:.84rem">
+      <div><div style="color:var(--dim);font-size:.75rem">Devices</div>{% for dev,info in _avatar.devices.items() %}<div>{{ info.emoji }} {{ info.os_label }} ({{ info.count }})</div>{% endfor %}</div>
+      <div><div style="color:var(--dim);font-size:.75rem">Browsers</div>{% for br,info in (_avatar.browsers or {}).items() %}<div>{{ info.emoji }} {{ info.label }} ({{ info.count }})</div>{% endfor %}</div>
     </div>
-  {% endfor %}
-  {% endif %}
-</div>
+  </div>
+</details>
 {% endif %}
 
-{% if soc and soc.indicators %}
-<div class="card">
-  <h2 class="pin">⚠ SOC — indicateurs détectés</h2>
-  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.5rem">
-    Score SOC actuel : <b style="color:var(--amber)">{{ soc.score }}/100</b>
-  </p>
-  <ul>
-    {% for ind in soc.indicators[:10] %}
-      <li><span style="color:var(--amber)">[poids {{ ind.weight }}]</span> {{ ind.kind }} : <code>{{ ind.host[:60] }}</code></li>
-    {% endfor %}
-  </ul>
-</div>
+{% if pinned_apps %}
+<details>
+  <summary>🔒 Apps protégées (cert-pinning) ({{ pinned_apps|length }})</summary>
+  <div class="inner"><p class="help" style="margin-bottom:.4rem">Ces apps refusent notre certificat — on ne peut PAS lire leur contenu. Bon signe.</p>
+    <ul>{% for app in pinned_apps %}<li>{{ app }}</li>{% endfor %}</ul></div>
+</details>
 {% endif %}
 
-{% if ja4 and ja4.snis_seen %}
-<div class="card">
-  <h2>🔐 JA4 — empreintes TLS</h2>
-  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.4rem">
-    SNIs vus (top {{ ja4.snis_seen|length }}) :
-  </p>
-  {% for sni in ja4.snis_seen[:8] %}
-    <div class="url">{{ sni }}</div>
-  {% endfor %}
-  {% if ja4.alpns_seen %}
-  <p style="font-size:0.75rem;color:var(--dim);margin-top:0.5rem">
-    ALPN protocols : <span style="color:var(--phos)">{{ ja4.alpns_seen|join(', ') }}</span>
-  </p>
-  {% endif %}
-</div>
-{% endif %}
-
-{% if inspected_urls and not (cookies and cookies.details) %}
-<div class="card">
-  <h2>👁 Trafic inspecté (R2 consent explicite)</h2>
-  {% for url in inspected_urls[:15] %}
-    <div class="url">{{ url }}</div>
-  {% endfor %}
-  {% if inspected_urls|length > 15 %}
-    <p style="font-size:0.75rem;color:var(--dim);margin-top:0.4rem">… et {{ inspected_urls|length - 15 }} autres URLs</p>
-  {% endif %}
-</div>
-{% endif %}
-
-<div class="card">
-  <h2>✅ Recommandations</h2>
-  <ul>
-    {% for rec in recommendations %}<li>{{ rec }}</li>{% endfor %}
-  </ul>
-</div>
-
-<div class="actions">
-  {# Phase 6 (#496) : pass mh= so R3 WG clients can download from kbin too #}
-  <a href="/report/me?mh={{ mac_hash }}">⬇ Télécharger PDF</a>
-  <a href="/">↩ Retour splash</a>
-  <a href="/status">📊 Statut JSON</a>
-</div>
-
-{# Phase 3 (#492) : transparency layer — inspection breakdown + per-host quality #}
 {% set t = transparency|default({}) %}
 {% if t and t.get('total_events', 0) > 0 %}
-<div class="card">
-  <h2>🔎 INSPECTION : CE QU'ON A REGARDÉ (et ce qu'on n'a PAS regardé)</h2>
-  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.6rem;font-style:italic">
-    Honnêteté avant magie : la cabine te dit ce qu'elle a inspecté, ce qu'elle a sciemment bypassé, et pourquoi.
-  </p>
-  <div class="kv">
-    {% set b = t.get('breakdown_pct', {}) %}
-    {% if b.get('inspected') %}
-      <div class="k">🔍 Inspecté (HTTPS via notre CA)</div>
-      <div class="v">{{ b.get('inspected', 0) }}% — contenu visible</div>
-    {% endif %}
-    {% if b.get('bypassed-whitelist') %}
-      <div class="k">🛡 Bypass whitelist</div>
-      <div class="v">{{ b.get('bypassed-whitelist', 0) }}% — décision policy (cert-pinning vendor)</div>
-    {% endif %}
-    {% if b.get('pinned-failed-mitm') %}
-      <div class="k">🔒 Cert-pinning détecté</div>
-      <div class="v">{{ b.get('pinned-failed-mitm', 0) }}% — l'app refuse notre CA, normal+bon signe</div>
-    {% endif %}
-    {% if b.get('e2e-opaque') %}
-      <div class="k">🔐 E2E messaging</div>
-      <div class="v">{{ b.get('e2e-opaque', 0) }}% — opaque par design, ton chiffrement marche</div>
-    {% endif %}
-    <div class="k">📊 Total events analysés</div>
-    <div class="v">{{ t.get('total_events', 0) }}</div>
-    {% if t.get('whitelist_stats') %}
-      <div class="k">📜 Patterns whitelist actifs</div>
-      <div class="v">{{ t.get('whitelist_stats', {}).get('count', 0) }} (baseline + override)</div>
-    {% endif %}
-    {% if t.get('sensitivity') %}
-      <div class="k">🎛 Sensibilité active</div>
-      <div class="v">{{ t.get('sensitivity', {}).get('label', '?') }} — {{ t.get('sensitivity', {}).get('description', '')[:80] }}</div>
-    {% endif %}
-  </div>
-
-  {# Phase 3 (#492) : tentatives counters — full transparency #}
-  {% set a = t.get('attempts', {}) %}
-  {% if a.get('total', 0) > 0 %}
-  <div style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--dim)">
-    <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.4rem"><b>📈 Tentatives observées (toutes catégories)</b></p>
-    <div class="kv" style="font-size:0.8rem">
-      <span class="k">Total observé</span><span class="v">{{ a.get('total', 0) }}</span>
-      <span class="k">🔍 Inspecté</span><span class="v">{{ a.get('inspected', 0) }}</span>
-      <span class="k">🛡 Bypass</span><span class="v">{{ a.get('bypassed_whitelist', 0) }}</span>
-      <span class="k">🔒 Cert-pinning</span><span class="v">{{ a.get('pinned_failed', 0) }}</span>
-      <span class="k">🔐 E2E opaque</span><span class="v">{{ a.get('e2e_opaque', 0) }}</span>
-      {% if a.get('blocked', 0) > 0 %}
-      <span class="k">🚫 Bloqué</span><span class="v" style="color:var(--red)">{{ a.get('blocked', 0) }}</span>
-      {% endif %}
+<details>
+  <summary>🔎 Transparence : ce qu'on a regardé</summary>
+  <div class="inner">
+    <p class="help" style="margin-bottom:.5rem">Honnêteté avant magie : ce qu'on a inspecté, bypassé, et pourquoi.</p>
+    <div class="kv">
+      {% set b = t.get('breakdown_pct', {}) %}
+      {% if b.get('inspected') %}<span class="k">🔍 Inspecté</span><span class="v">{{ b.get('inspected') }}%</span>{% endif %}
+      {% if b.get('pinned-failed-mitm') %}<span class="k">🔒 Cert-pinning</span><span class="v">{{ b.get('pinned-failed-mitm') }}%</span>{% endif %}
+      {% if b.get('e2e-opaque') %}<span class="k">🔐 E2E chiffré</span><span class="v">{{ b.get('e2e-opaque') }}%</span>{% endif %}
+      <span class="k">📊 Total events</span><span class="v">{{ t.get('total_events', 0) }}</span>
     </div>
-  </div>
-  {% endif %}
-
-  {# Phase 3 (#492) : whitelist hits — accountability per pattern/category #}
-  {% set wh = t.get('whitelist_hits', {}) %}
-  {% if wh.get('total', 0) > 0 %}
-  <div style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--dim)">
-    <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.4rem"><b>📜 Tes bypass whitelist en détail</b> — {{ wh.get('total') }} connexions sciemment non-inspectées</p>
-    <div class="kv" style="font-size:0.78rem">
-      {% for cat, cnt in (wh.get('by_category', {}) | dictsort(by='value', reverse=True))[:8] %}
-      <span class="k">{{ cat }}</span><span class="v">{{ cnt }} hits</span>
+    {% if t.get('per_host') %}
+    <table style="margin-top:.7rem"><thead><tr><th>Grade</th><th>Destination</th><th>Statut</th></tr></thead><tbody>
+      {% for h in t.get('per_host', [])[:15] %}
+      <tr><td style="font-weight:700;color:{% if h.grade in ['A+','A'] %}var(--phos-hot){% elif h.grade=='B' %}var(--phos){% elif h.grade=='C' %}var(--amber){% else %}var(--red){% endif %}">{{ h.grade }}</td><td><code>{{ h.host[:48] }}</code></td><td style="color:var(--dim);font-size:.72rem">{{ h.status }}</td></tr>
       {% endfor %}
-    </div>
-    <ul style="margin-top:0.4rem">
-      {% for p in wh.get('top_patterns', [])[:8] %}
-      <li style="font-size:0.72rem"><code>{{ p.pattern }}</code> · {{ p.count }} hits</li>
-      {% endfor %}
-    </ul>
+    </tbody></table>
+    {% endif %}
   </div>
-  {% endif %}
-</div>
-
-{% if t.get('per_host') %}
-<div class="card">
-  <h2>🎯 QUALITÉ SÉCURITÉ PAR DESTINATION</h2>
-  <p style="font-size:0.78rem;color:var(--dim);margin-bottom:0.6rem;font-style:italic">
-    Grade A+/A/B/C/D/F basé sur TLS version + JA4 + headers + cookies. Worst-first :
-  </p>
-  <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
-    <thead>
-      <tr style="color:var(--phos);text-align:left;border-bottom:1px solid var(--dim)">
-        <th style="padding:0.3rem">Grade</th>
-        <th style="padding:0.3rem">Destination</th>
-        <th style="padding:0.3rem">Statut analyse</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for h in t.get('per_host', [])[:15] %}
-      <tr style="border-bottom:1px solid rgba(0,221,68,0.1)">
-        <td style="padding:0.25rem;font-weight:bold;color:{% if h.grade in ['A+','A'] %}var(--phos-hot){% elif h.grade == 'B' %}var(--phos){% elif h.grade == 'C' %}var(--amber){% else %}var(--red){% endif %}">{{ h.grade }}</td>
-        <td style="padding:0.25rem;font-family:monospace;color:var(--text)">{{ h.host[:60] }}</td>
-        <td style="padding:0.25rem;color:var(--dim);font-size:0.72rem">{{ h.status }} — {{ h.reason[:70] }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
+</details>
 {% endif %}
 
-<p class="refresh">↻ Auto-refresh toutes les 15 secondes</p>
+<details>
+  <summary>👤 Identité &amp; recommandations</summary>
+  <div class="inner">
+    <div class="kv">
+      <span class="k">Hash session</span><span class="v"><code>{{ mac_hash }}</code></span>
+      <span class="k">Sandbox IP</span><span class="v">{{ ip }}</span>
+      <span class="k">Appareil</span><span class="v">{{ device_type }}</span>
+    </div>
+    {% if recommendations %}<p style="color:var(--phos-hot);font-size:.85rem;margin:.6rem 0 .2rem">✅ Recommandations</p><ul>{% for rec in recommendations %}<li>{{ rec }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+</details>
+
+<div class="actions">
+  <a href="/report/me?mh={{ mac_hash }}">⬇ Télécharger le PDF</a>
+  <a href="/social/me?mh={{ mac_hash }}">🕸️ Ma carto</a>
+  <a href="/landing">↩ Accueil</a>
+</div>
 
 <div class="card">
-  <h2>💚 Support &amp; soutien projet</h2>
-  <p style="font-size:0.82rem;color:var(--text);line-height:1.55">
-    Gondwana ToolBoX est un <b>commun numérique</b> open-source maintenu par
-    CyberMind / Gérald Kerma (Notre-Dame-du-Cruet, Savoie). Pas de pub, pas de
-    revente, pas de tracking commercial. Si ce service t'a aidé :
-  </p>
-  <ul style="margin-top:0.5rem">
-    <li>💰 <b>Don récurrent</b> : <a href="https://liberapay.com/cybermind" style="color:var(--phos);text-decoration:underline">liberapay.com/cybermind</a></li>
-    <li>💳 <b>Don ponctuel</b> : <a href="https://cybermind.fr/don" style="color:var(--phos);text-decoration:underline">cybermind.fr/don</a> (carte, virement SEPA)</li>
-    <li>📧 <b>Support technique</b> : <a href="mailto:support@cybermind.fr" style="color:var(--phos);text-decoration:underline">support@cybermind.fr</a></li>
-    <li>🐛 <b>Signaler un bug</b> : <a href="https://github.com/CyberMind-FR/secubox-deb/issues" style="color:var(--phos);text-decoration:underline">github.com/CyberMind-FR/secubox-deb/issues</a></li>
-    <li>📡 <b>Déployer une borne</b> près de chez toi : <a href="mailto:gondwana@cybermind.fr" style="color:var(--phos);text-decoration:underline">gondwana@cybermind.fr</a></li>
+  <h2>💚 Soutenir le projet</h2>
+  <p class="help">Commun numérique open-source, sans pub ni revente — CyberMind / Gérald Kerma (Savoie).</p>
+  <ul style="margin-top:.4rem">
+    <li>💰 <a href="https://liberapay.com/cybermind" style="color:var(--phos)">liberapay.com/cybermind</a></li>
+    <li>🐛 <a href="https://github.com/CyberMind-FR/secubox-deb/issues" style="color:var(--phos)">Signaler un bug</a></li>
   </ul>
-  <p style="font-size:0.78rem;color:var(--dim);margin-top:0.7rem;border-top:1px solid var(--dim);padding-top:0.5rem">
-    Audit SecuBox premium / déploiement collectivité / formation cybersécurité :
-    <a href="mailto:contact@cybermind.fr" style="color:var(--phos);text-decoration:underline">contact@cybermind.fr</a>
-  </p>
 </div>
 
 <div class="footer">
-  Gondwana ToolBoX · LicenseRef-CMSD-1.0 (Source-Disclosed License)<br>
-  Source : <a href="https://github.com/CyberMind-FR/secubox-deb" style="color:var(--dim)">github.com/CyberMind-FR/secubox-deb</a> (#474 #475 #477)<br>
-  CyberMind — Notre-Dame-du-Cruet (73130) · <a href="https://cybermind.fr" style="color:var(--dim)">cybermind.fr</a>
+  Gondwana ToolBoX · LicenseRef-CMSD-1.0 · ↻ rafraîchit toutes les 20 s<br>
+  <a href="https://github.com/CyberMind-FR/secubox-deb" style="color:var(--dim)">github.com/CyberMind-FR/secubox-deb</a> · <a href="https://cybermind.fr" style="color:var(--dim)">cybermind.fr</a>
 </div>
 
 </body></html>
