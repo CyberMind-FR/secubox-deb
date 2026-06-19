@@ -1,3 +1,14 @@
+secubox-toolbox (2.7.7-1~bookworm1) bookworm; urgency=medium
+
+  * fix: injected banner trackers/cookies counts were stuck at 0. They were
+    computed ONCE at render time — which fires early, before page resources +
+    cookies have loaded (Resource Timing empty) — and the 2s poll's ensure()
+    early-returned once the banner existed, so the counts never refreshed. Now
+    the trackers/cookies spans have ids and updateCounts() re-counts live on the
+    poll, so they climb to real values within ~2s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 18:10:00 +0200
+
 secubox-toolbox (2.7.6-1~bookworm1) bookworm; urgency=medium
 
   * fix(#683): the 🧅 Tor indicator now appears on the ACTUAL injected banner.
