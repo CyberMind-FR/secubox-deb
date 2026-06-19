@@ -568,6 +568,11 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 			resp.ContentLength = int64(len(body))
 		}
 	}
+	// #662 — strip Alt-Svc so the browser is never told this origin offers HTTP/3
+	// (h3). With h3 unadvertised it keeps using HTTP/2 over TCP, which we MITM;
+	// otherwise it caches "h3 available" and keeps trying QUIC (UDP 443) — which
+	// bypasses this TCP proxy and is only best-effort blocked by the nft reject.
+	resp.Header.Del("Alt-Svc")
 	writeResponse(tconn, resp, body)
 }
 

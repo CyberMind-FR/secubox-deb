@@ -1,3 +1,12 @@
+secubox-toolbox-ng (0.1.14-1~bookworm1) bookworm; urgency=medium
+
+  * quic/banner: strip Alt-Svc response header so browsers stop learning/preferring
+    HTTP/3 (h3) and stay on HTTP/2-over-TCP (MITM-able). Complements the nft
+    udp443 reject; addresses sites where browsers ignore the reject and keep
+    retrying QUIC, bypassing inject/adblock/metrics. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 14:30:00 +0000
+
 secubox-toolbox-ng (0.1.13-1~bookworm1) bookworm; urgency=medium
 
   * banner: INLINE the banner (server-side bundle fetch, baked literals) instead
