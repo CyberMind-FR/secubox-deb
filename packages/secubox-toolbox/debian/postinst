@@ -66,8 +66,18 @@ case "$1" in
  "ad_ghost_categories": {"ads": true, "consent_nag": true, "newsletter": true, "social_widgets": true}
 }
 SBXFILTERS
-      chown root:secubox-toolbox /etc/secubox/toolbox/filters.json
+      chown secubox-toolbox:secubox-toolbox /etc/secubox/toolbox/filters.json
       chmod 0664 /etc/secubox/toolbox/filters.json
+    fi
+    # #683 : the portal persists filters.json (Tor switch + mitm toggles) as its
+    # OWNER (secubox-toolbox). The operator UI is proxied to this same portal, so
+    # owner-write is sufficient — no aggregator write. Re-applied every install to
+    # repair the pre-existing root:root drift that made /admin/filters + the Tor
+    # switch silently no-op. (set_filters writes in-place; the 0750 dir blocks the
+    # atomic tmp+rename, and the service grants RW on /etc/secubox/toolbox only.)
+    if [ -f /etc/secubox/toolbox/filters.json ]; then
+      chown secubox-toolbox:secubox-toolbox /etc/secubox/toolbox/filters.json 2>/dev/null || true
+      chmod 0664 /etc/secubox/toolbox/filters.json 2>/dev/null || true
     fi
 
     # 4. Storage dir (SQLite + future PDF reports)
@@ -182,7 +192,23 @@ fi
       # Phase 7 (#498) : boot-time peer-restore service for wg-toolbox.
       # Keeps the enrolled WG peers alive across reboots.
       systemctl enable secubox-toolbox-wg-restore.service || true
+      # #683 : kbin Tor egress — enable the path watcher so flipping tor_mode
+      # in filters.json arms/disarms the tunnel (reconciler runs as root; the
+      # portal stays NoNewPrivileges=true). Default tor_mode=false → reconcile
+      # is a no-op until the operator flips it. Enable+start the .path; run one
+      # reconcile so a fresh/false flag leaves no tunnel behind.
+      systemctl enable secubox-toolbox-tor.path 2>/dev/null || true
+      systemctl start  secubox-toolbox-tor.path 2>/dev/null || true
+      systemctl enable secubox-toolbox-tor.timer 2>/dev/null || true
+      systemctl start  secubox-toolbox-tor.timer 2>/dev/null || true
       # Pas de start auto — l'opérateur doit configurer mesh.toml et lancer toolbox-up
+    fi
+
+    # #683 : let the portal authenticate to Tor's control port (cookie is
+    # group-readable by debian-tor — see torrc-toolbox-egress.conf) so the
+    # Tor card can read bootstrap/circuits + SIGNAL NEWNYM without a secret.
+    if getent group debian-tor >/dev/null 2>&1; then
+      usermod -aG debian-tor secubox-toolbox 2>/dev/null || true
     fi
 
     # Phase 7 (#498) : install nft drop-in for boot-survival + reload nft so
@@ -274,6 +300,7 @@ fi
     if [ -n "${2:-}" ] && [ -d /run/systemd/system ]; then
       for unit in secubox-toolbox.service \
                   secubox-toolbox-mitm.service \
+                  secubox-toolbox-mitm-wg.service \
                   secubox-toolbox-mitm-wg-worker@1.service \
                   secubox-toolbox-mitm-wg-worker@2.service \
                   secubox-toolbox-mitm-wg-worker@3.service \
@@ -284,6 +311,13 @@ fi
           systemctl try-restart "$unit" 2>/dev/null || true
         fi
       done
+    fi
+    # #683 : converge the Tor tunnel LAST — after the nft reloads above (which
+    # would otherwise flush the runtime table) and after the worker restarts.
+    # Idempotent: re-arms iff tor_mode=true, no-op otherwise. Closes the
+    # flag-on/tunnel-off leak window an upgrade could open.
+    if [ -x /usr/sbin/secubox-toolbox-tor-reconcile ]; then
+      /usr/sbin/secubox-toolbox-tor-reconcile reconcile 2>/dev/null || true
     fi
     ;;
 esac

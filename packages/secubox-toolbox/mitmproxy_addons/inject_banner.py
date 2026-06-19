@@ -314,7 +314,18 @@ def _compute_site_context(flow: http.HTTPFlow) -> dict:
         "trackers": 0,
         "is_tracker_host": False,
         "utiq_recent_count": 0,
+        "tor_mode": False,
     }
+
+    # #683 — kbin Tor egress status. When armed, this flow's upstream exits via
+    # Tor (only the exit IP changes; inspection is still happening — that's how
+    # this banner exists). Surfaced as a 🧅 chip so the client sees they're
+    # anonymised. get_filters is 5 s-cached → cheap on the hot path.
+    try:
+        from secubox_toolbox.filters import get_filters as _gf
+        ctx["tor_mode"] = bool(_gf().get("tor_mode", False))
+    except Exception:
+        pass
 
     # Host-stable signals — single LRU lookup per host.
     (ctx["app_emoji"], ctx["app"], ctx["flag"], ctx["country"], ctx["asn"],
@@ -463,6 +474,10 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     # #578 — shared broadcast pin first, so every banner shows it.
     if ctx.get("pin"):
         right_parts.insert(0, "&#x1F4CC; " + _ncr(ctx["pin"]))  # 📌
+    # #683 — Tor status FIRST when kbin Tor mode is armed: this flow exits via
+    # Tor (anonymised). 🧅 = U+1F9C5. Most prominent chip so the client sees it.
+    if ctx.get("tor_mode"):
+        right_parts.insert(0, "&#x1F9C5; Tor")  # 🧅
     if ctx["flag"]:
         # Phase 6.M (#496) : flags are Unicode "regional indicator" pairs
         # (🇫🇷 = U+1F1EB + U+1F1F7). NCR-encoded pairs do NOT join into a

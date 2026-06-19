@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SecuBox ToolBoX — Cartographie sociale",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Surface the SecuBox R3 toolbox live tracker analysis (cartographie sociale) in your browser: live badge, per-session trackers, mini Round-Eye graph, RGPD wipe + PDF report.",
   "browser_specific_settings": {
     "gecko": {

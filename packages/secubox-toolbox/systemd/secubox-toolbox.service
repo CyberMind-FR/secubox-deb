@@ -19,7 +19,10 @@ RestartSec=3
 NoNewPrivileges=true
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/run/secubox /var/log/secubox /var/lib/secubox/toolbox
+# #683: the portal must persist its own config (filters.json — Tor switch +
+# mitm filter toggles). /etc/secubox stays read-only EXCEPT the toolbox subdir;
+# the CA key inside stays 0600 root, still unreadable to this user.
+ReadWritePaths=/run/secubox /var/log/secubox /var/lib/secubox/toolbox /etc/secubox/toolbox
 ReadOnlyPaths=/etc/secubox
 
 # nft + ip neigh require CAP_NET_ADMIN

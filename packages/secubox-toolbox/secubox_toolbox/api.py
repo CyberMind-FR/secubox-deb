@@ -328,6 +328,36 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+def _client_mac_hash(request: Request, salt: str) -> str | None:
+    """Resolve the caller's identity hash, same precedence as /social/me:
+    explicit ?mh= → R3 WG peer (wg-peers.json) → captive ARP. Returns None when
+    unresolvable. Used to bake ?mh= into the landing links so they never hit the
+    'identity unresolved' 400 (the page already knows who you are)."""
+    mh_qp = (request.query_params.get("mh") or "").strip().lower()
+    if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
+        return mh_qp
+    ip = _client_ip(request)
+    if ip and ip.startswith("10.99.1."):
+        try:
+            import hashlib as _h
+            import json as _j
+            from pathlib import Path as _P
+            _db = _P("/var/lib/secubox/toolbox/wg-peers.json")
+            if _db.exists():
+                for pubkey, meta in _j.loads(_db.read_text()).get("peers", {}).items():
+                    if meta.get("ip") == ip:
+                        return _h.sha256(pubkey.encode()).hexdigest()[:16]
+        except Exception:
+            pass
+    try:
+        _ip, mac = _resolve(request)
+        if mac:
+            return macmod.hash_mac(mac, salt)
+    except Exception:
+        pass
+    return None
+
+
 # ───────────────── Public routes ─────────────────
 
 @router.get("/", response_class=HTMLResponse)
@@ -498,6 +528,23 @@ async def change_level(request: Request):
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url=f"/report/me/html?switched=1&level={level}",
                              status_code=303)
+
+
+@router.get("/wg/tor-status")
+async def wg_tor_status() -> dict:
+    """kbin Tor egress status for the clients (#683). Public + read-only, so it
+    is reachable on the kbin vhost (unlike the admin-gated /admin/tor/*). The
+    webext popup + Android app poll this to show the 🧅 indicator + exit IP."""
+    from .filters import get_filters
+    from . import tor_ctl
+    f = get_filters(force=False)
+    st = tor_ctl.status()
+    return {
+        "tor_mode": bool(f.get("tor_mode", False)),
+        "running": bool(st.get("running", False)),
+        "bootstrap": int(st.get("bootstrap", 0) or 0),
+        "exit_ip": _tor_exit_ip_cached(),
+    }
 
 
 @router.get("/wg/r3-check")
@@ -684,11 +731,15 @@ async def landing(request: Request) -> HTMLResponse:
     stats = _cumulative_stats()
     platform = _ua_platform(request.headers.get("user-agent") or "")
     install_panels = _install_panels_html(platform)
+    # Resolve identity now (the page knows who you are) so the report/carto links
+    # carry ?mh= and never hit the /social/me "identity unresolved" 400.
+    mac_hash = _client_mac_hash(request, _get_salt()) or ""
     return HTMLResponse(
         _env.get_template("landing.html.j2").render(
             stats=stats,
             install_panels=install_panels,
             install_platform=platform,
+            mac_hash=mac_hash,
         ),
         headers={"Cache-Control": "private, max-age=60, no-transform"},
     )
@@ -2291,6 +2342,46 @@ def _classify_apps(hosts: set[str]) -> list[str]:
     return apps
 
 
+def _build_report_charts(session: dict) -> dict:
+    """Graph-ready aggregates for the simplified report (trackers donut,
+    countries bars, apps bars). Defensive / fail-empty. Each list item has
+    {label, emoji/flag, count, pct}; trackers also carry cumulative start/end
+    for a CSS conic-gradient donut."""
+    def _top_pct(items: list, n: int = 6) -> list:
+        items = [it for it in items if it.get("count")]
+        items.sort(key=lambda x: x["count"], reverse=True)
+        items = items[:n]
+        total = sum(x["count"] for x in items) or 1
+        for it in items:
+            it["pct"] = round(100 * it["count"] / total)
+        return items
+
+    cp = session.get("cookies_providers") or []
+    trackers = _top_pct([
+        {"label": p.get("provider", "?"), "emoji": p.get("emoji", "🍪"),
+         "count": int(p.get("count", 0) or 0)} for p in cp])
+    cum = 0
+    for it in trackers:
+        it["start"] = cum
+        cum += it["pct"]
+        it["end"] = cum
+
+    by_country: dict = {}
+    for h in (session.get("geo_top_hosts") or []):
+        key = (h.get("flag") or "🏴", h.get("country") or "?")
+        by_country[key] = by_country.get(key, 0) + int(h.get("count", 0) or 0)
+    countries = _top_pct([
+        {"flag": k[0], "label": k[1], "count": v} for k, v in by_country.items()])
+
+    dc = session.get("dpi_classified") or {}
+    apps = _top_pct([
+        {"label": a.get("app", "?"), "emoji": a.get("emoji", "📦"),
+         "count": int(a.get("count", 0) or 0)}
+        for a in (dc.get("top_apps") or []) if a.get("app") not in (None, "", "?")])
+
+    return {"trackers": trackers, "countries": countries, "apps": apps}
+
+
 # NOTE: route order matters in FastAPI — specific routes (/report/me,
 # /report/me/html) MUST be declared BEFORE the catch-all /report/{token},
 # otherwise FastAPI matches /report/me with token="me" and returns 404.
@@ -2306,17 +2397,16 @@ async def report_me_html(request: Request) -> HTMLResponse:
     their own report. The hash for R3 = sha256(wg_pubkey)[:16] derived
     by inject_banner.py and embedded in the banner 'Mon rapport' link.
     """
-    # Bypass path : explicit mac_hash in query (R3 WG or kbin remote viewer)
-    mh_qp = (request.query_params.get("mh") or "").strip().lower()
-    if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
-        ip = request.client.host if request.client else "?"
-        mac_hash = mh_qp
-    else:
-        ip, mac = _resolve(request)
-        if not mac:
-            raise HTTPException(400, "client MAC unknown (not in captive subnet?) — use ?mh=<hash>")
-        salt = _get_salt()
-        mac_hash = macmod.hash_mac(mac, salt)
+    # Resolve identity the same way everywhere: ?mh → R3 WG peer (wg-peers.json)
+    # → captive ARP. R3 clients hitting this directly (no ?mh) now resolve too.
+    mac_hash = _client_mac_hash(request, _get_salt())
+    if not mac_hash:
+        raise HTTPException(
+            400,
+            "client identity unresolved (not on R3 tunnel and not in captive "
+            "subnet) — append ?mh=<hash> from your banner's report link",
+        )
+    ip = _client_ip(request) or (request.client.host if request.client else "?")
     session = _aggregate_session(mac_hash)
     # Phase 3 (#492) : pass query args + force no-cache so iPhone Safari
     # actually fetches the new template.
@@ -2330,6 +2420,7 @@ async def report_me_html(request: Request) -> HTMLResponse:
         current_level=store.get_client_level(mac_hash) if mac_hash else "r1",
         wg_enabled=wg_enabled,
         cumulative=cumulative,
+        charts=_build_report_charts(session),
         **session,
     )
     return HTMLResponse(html, headers={
@@ -2845,6 +2936,116 @@ async def admin_filters_set(request: Request) -> dict:
     return set_filters(patch)
 
 
+# ── kbin Tor egress switch (#683) — reuses the secubox-tor control plane ──
+_TOR_EXIT_IP_CACHE = "/tmp/tor_exit_ip"  # shared with secubox-tor
+
+
+def _tor_exit_ip_cached():
+    try:
+        if os.path.exists(_TOR_EXIT_IP_CACHE):
+            return (open(_TOR_EXIT_IP_CACHE).read().strip() or None)
+    except Exception:
+        pass
+    return None
+
+
+def _require_tor_admin(request: Request) -> None:
+    """Tor on/off/newnym/leak-check are operator actions — blocked on the
+    public kbin vhost (defense-in-depth, mirrors /admin/filter-control)."""
+    if _is_public_kbin(request):
+        raise HTTPException(status_code=403,
+                            detail="Tor controls are admin-only (use admin.gk2.secubox.in)")
+
+
+@router.get("/admin/tor/state")
+async def admin_tor_state() -> dict:
+    """kbin Tor mode status: the flag + live daemon bootstrap/circuits/exit IP.
+    Read-only — safe to expose on the public kbin vhost (no secrets)."""
+    from .filters import get_filters
+    from . import tor_ctl
+    f = get_filters(force=True)
+    st = tor_ctl.status()
+    st.update({
+        "tor_mode": bool(f.get("tor_mode", False)),
+        "tor_preset": f.get("tor_preset", "anonymous"),
+        "exit_ip": _tor_exit_ip_cached(),
+    })
+    return st
+
+
+@router.post("/admin/tor/on")
+async def admin_tor_on(request: Request) -> dict:
+    """Arm kbin Tor mode. Flips the flag only; the privileged tunnel arm runs
+    async via secubox-toolbox-tor.path → reconcile (portal stays unprivileged)."""
+    _require_tor_admin(request)
+    from .filters import set_filters
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    patch = {"tor_mode": True}
+    if isinstance(body, dict) and body.get("tor_preset"):
+        patch["tor_preset"] = body["tor_preset"]
+    out = set_filters(patch)
+    return {"tor_mode": out["tor_mode"], "tor_preset": out["tor_preset"], "armed_async": True}
+
+
+@router.post("/admin/tor/off")
+async def admin_tor_off(request: Request) -> dict:
+    """Disarm kbin Tor mode (flag flip; reconciler tears the tunnel down)."""
+    _require_tor_admin(request)
+    from .filters import set_filters
+    out = set_filters({"tor_mode": False})
+    return {"tor_mode": out["tor_mode"], "disarmed_async": True}
+
+
+@router.post("/admin/tor/newnym")
+async def admin_tor_newnym(request: Request) -> dict:
+    """Request a fresh Tor circuit (new exit IP) — SIGNAL NEWNYM via control port."""
+    _require_tor_admin(request)
+    from . import tor_ctl
+    ok = tor_ctl.new_identity()
+    try:
+        if os.path.exists(_TOR_EXIT_IP_CACHE):
+            os.unlink(_TOR_EXIT_IP_CACHE)
+    except Exception:
+        pass
+    return {"success": ok}
+
+
+@router.post("/admin/tor/check-leaks")
+async def admin_tor_check_leaks(request: Request) -> dict:
+    """Probe the egress IP via Tor SOCKS (9050) and cache it for the badge.
+    A real off-board leak test is still the source of truth; this confirms the
+    SOCKS path resolves and surfaces the current exit IP."""
+    _require_tor_admin(request)
+    from . import tor_ctl
+    if not tor_ctl.tor_running():
+        return {"ok": False, "error": "tor not running"}
+    import httpx
+    result: dict = {"ok": True}
+    # httpx renamed proxies= → proxy= (0.26+, removed proxies in 0.28); board
+    # ships bookworm's 0.23 (proxies=). Support both.
+    try:
+        _client = httpx.AsyncClient(timeout=15.0, proxy="socks5://127.0.0.1:9050")
+    except TypeError:
+        _client = httpx.AsyncClient(timeout=15.0, proxies="socks5://127.0.0.1:9050")
+    try:
+        async with _client as c:
+            tor_ip = (await c.get("https://api.ipify.org")).text.strip()
+        result["tor_ip"] = tor_ip
+        try:
+            with open(_TOR_EXIT_IP_CACHE, "w") as fh:
+                fh.write(tor_ip)
+        except Exception:
+            pass
+    except Exception:
+        result["ok"] = False
+        result["tor_ip"] = None
+        result["error"] = "SOCKS probe failed (python3-socksio installed? tor bootstrapped?)"
+    return result
+
+
 @router.get("/admin/filters/ui", response_class=HTMLResponse)
 async def admin_filters_ui() -> HTMLResponse:
     """#566 — minimal filter toggle panel for the toolbox WebUI."""
@@ -3262,23 +3463,25 @@ async def admin_metrics() -> dict:
             ).fetchone()[0]
     except Exception as e:
         metrics["sqlite_error"] = str(e)
-    # Mitmproxy live stats (from journal)
+    # Live MITM activity. NOTE: the old journal-scrape for "server connect"
+    # NEVER worked — the workers run at --log-level warning, so those INFO lines
+    # are never emitted → the trio was permanently 0. Derive from real data: the
+    # cumulative stats (same source the landing page uses) + the auto-learned
+    # cert-pin bypass list.
     try:
-        out = _sp.run(
-            # #593 — glob matches the LIVE R3 workers (…-mitm-wg-worker@N),
-            # not just the (dead) R2 …-mitm unit → real numbers.
-            ["journalctl", "-u", "secubox-toolbox-mitm*", "--since", "-30min", "--no-pager"],
-            capture_output=True, text=True, timeout=4, check=False,
-        ).stdout
-        metrics["mitm"]["connections"] = out.count("server connect")
-        metrics["mitm"]["tls_pinned"] = out.count("Client TLS handshake failed")
-        hosts: set[str] = set()
-        for line in out.splitlines():
-            if " server connect " in line:
-                parts = line.rsplit(" ", 1)
-                if len(parts) == 2:
-                    hosts.add(parts[1])
-        metrics["mitm"]["unique_hosts"] = len(hosts)
+        cs = cumulative.get_cached() or {}
+        ev = cs.get("events", {}) or {}
+        # "connections analysées" — DPI classifies one flow per upstream connection.
+        metrics["mitm"]["connections"] = int(ev.get("dpi", 0) or 0)
+        metrics["mitm"]["unique_hosts"] = len(cs.get("top_hosts_7d", []) or [])
+    except Exception:
+        pass
+    # Cert-pinned hosts that had to be bypassed (auto-learned by cert_pin_detect).
+    try:
+        if MITM_BYPASS_DYNAMIC_FILE.exists():
+            metrics["mitm"]["tls_pinned"] = sum(
+                1 for ln in MITM_BYPASS_DYNAMIC_FILE.read_text().splitlines()
+                if ln.strip() and not ln.strip().startswith("#"))
     except Exception:
         pass
     return metrics

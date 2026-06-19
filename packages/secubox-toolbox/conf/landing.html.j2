@@ -1,7 +1,8 @@
 {# SPDX-License-Identifier: LicenseRef-CMSD-1.0 #}
 {# Public landing page — kbin.gk2.secubox.in #}
-{# Radical-simplify redesign (#543): animated hero + one CTA + install panel
-   up top ; everything else folded behind "En savoir plus". #}
+{# #683 restyle: aligned with the new /report look — system font, rounded
+   --panel/--line cards, cleaner accents. Dynamic bits (data-live KPIs + JS,
+   install panels, cert-probe, ?mh links) unchanged. #}
 <!DOCTYPE html>
 <html lang=fr><head>
 <meta charset=UTF-8>
@@ -10,108 +11,84 @@
 <title>👁️ VILLAGE3B — Qui te piste ?</title>
 <link rel=manifest href=/manifest.json>
 <style>
-:root{--bg:#0a0a0f;--bg2:#0e0e15;--phos:#00dd44;--phos-hot:#00ff55;--dim:#006622;--text:#e8e6d9;--purple:#9e76ff;--gold:#c9a84c;--amber:#ffb347;--red:#ff4466;--cyan:#00d4ff}
+:root{--bg:#0a0a0f;--panel:#11131a;--soft:#0d0f15;--phos:#00dd44;--phos-hot:#00ff55;--dim:#5a6b60;--line:#1e2630;--text:#e8e6d9;--purple:#9e76ff;--gold:#c9a84c;--amber:#ffb347;--red:#ff4466;--cyan:#66bbff}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Courier New',Menlo,monospace;background:var(--bg);color:var(--text);line-height:1.55;padding-bottom:3rem}
-a{color:var(--phos);text-decoration:none}
-a:hover{text-decoration:underline}
-
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.55;padding-bottom:3rem}
+a{color:var(--phos);text-decoration:none}a:hover{text-decoration:underline}
+.help{color:var(--dim);font-size:.8rem;font-style:italic}
 /* ── HERO ── */
-.hero{position:relative;overflow:hidden;background:radial-gradient(120% 120% at 50% -10%,#221041 0%,#0a0a0f 60%);padding:3rem 1.5rem 2.4rem;text-align:center;border-bottom:2px solid var(--phos)}
-.eye{font-size:3.4rem;line-height:1;display:inline-block;animation:gaze 5s ease-in-out infinite;filter:drop-shadow(0 0 14px rgba(0,255,85,0.55))}
+.hero{position:relative;overflow:hidden;background:radial-gradient(120% 120% at 50% -10%,#1a1030 0%,#0a0a0f 62%);padding:3rem 1.5rem 2.4rem;text-align:center;border-bottom:1px solid var(--line)}
+.eye{font-size:3.4rem;line-height:1;display:inline-block;animation:gaze 5s ease-in-out infinite;filter:drop-shadow(0 0 14px rgba(0,255,85,.5))}
 @keyframes gaze{0%,100%{transform:translateX(0) scale(1)}25%{transform:translateX(-6px) scale(1.04)}60%{transform:translateX(7px) scale(1.04)}}
-.hero h1{font-size:2.6rem;color:var(--phos-hot);text-shadow:0 0 10px var(--phos);letter-spacing:0.08em;margin-top:0.3rem}
-.hero .punch{color:var(--text);font-size:1.25rem;margin-top:0.6rem;font-weight:bold}
-.hero .punch b{color:var(--gold)}
-.hero .sub{color:var(--dim);font-size:0.82rem;margin-top:0.5rem;max-width:560px;margin-left:auto;margin-right:auto}
-/* floating tracker dots = "who's watching" */
+.hero h1{font-size:2.4rem;color:var(--phos-hot);letter-spacing:.06em;margin-top:.3rem;font-weight:800}
+.hero .punch{color:var(--text);font-size:1.2rem;margin-top:.6rem;font-weight:700}.hero .punch b{color:var(--gold)}
+.hero .sub{color:var(--dim);font-size:.82rem;margin-top:.5rem;max-width:560px;margin-left:auto;margin-right:auto}
 .dots{position:absolute;inset:0;pointer-events:none;z-index:0}
-.dots i{position:absolute;width:7px;height:7px;border-radius:50%;opacity:0.0;animation:float 7s ease-in-out infinite}
-.dots i:nth-child(1){left:12%;top:30%;background:var(--cyan);animation-delay:.0s}
+.dots i{position:absolute;width:7px;height:7px;border-radius:50%;opacity:0;animation:float 7s ease-in-out infinite}
+.dots i:nth-child(1){left:12%;top:30%;background:var(--cyan);animation-delay:0s}
 .dots i:nth-child(2){left:82%;top:24%;background:var(--amber);animation-delay:1.1s}
 .dots i:nth-child(3){left:24%;top:68%;background:var(--red);animation-delay:2.3s}
 .dots i:nth-child(4){left:70%;top:64%;background:var(--purple);animation-delay:.7s}
-.dots i:nth-child(5){left:50%;top:14%;background:var(--cyan);animation-delay:3.0s}
+.dots i:nth-child(5){left:50%;top:14%;background:var(--cyan);animation-delay:3s}
 .dots i:nth-child(6){left:90%;top:54%;background:var(--red);animation-delay:1.8s}
 @keyframes float{0%{opacity:0;transform:translateY(8px) scale(.6)}30%{opacity:.85}70%{opacity:.7}100%{opacity:0;transform:translateY(-14px) scale(1.1)}}
 .hero>*{position:relative;z-index:1}
-
-/* ── big CTA row ── */
-.ctas{margin-top:1.4rem;display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap}
-.cta{display:inline-block;padding:0.85rem 1.6rem;font-weight:bold;border-radius:8px;font-size:1.02rem;text-shadow:none;transition:transform .12s,box-shadow .12s}
+/* ── CTA row ── */
+.ctas{margin-top:1.4rem;display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap}
+.cta{display:inline-block;padding:.85rem 1.6rem;font-weight:700;border-radius:10px;font-size:1.02rem;transition:transform .12s}
 .cta:hover{text-decoration:none;transform:translateY(-2px)}
-.cta.go{background:var(--phos);color:#0a0a0f;box-shadow:0 4px 18px rgba(0,221,68,0.4)}
-.cta.go:hover{box-shadow:0 6px 24px rgba(0,221,68,0.6)}
+.cta.go{background:var(--phos);color:#06140a;box-shadow:0 4px 18px rgba(0,221,68,.35)}
 .cta.alt{background:transparent;color:var(--purple);border:1px solid var(--purple)}
-.cta.alt:hover{background:rgba(158,118,255,0.12)}
-
-/* ── quicknav (trimmed) ── */
-.quicknav{display:flex;flex-wrap:wrap;justify-content:center;gap:0.6rem;margin-top:1.4rem;max-width:620px;margin-left:auto;margin-right:auto}
-.qi{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0.5rem 0.4rem;min-width:74px;background:rgba(110,64,201,0.08);border:1px solid var(--purple);border-radius:8px;text-decoration:none;color:var(--text);transition:all 0.12s;font-family:inherit}
-.qi:hover{background:rgba(110,64,201,0.22);transform:translateY(-2px);box-shadow:0 4px 14px rgba(158,118,255,0.35);text-decoration:none}
-.qi-emoji{font-size:1.5rem;line-height:1}
-.qi-label{font-size:0.62rem;letter-spacing:0.04em;color:var(--phos-hot);font-weight:bold;white-space:nowrap}
-
-.container{max-width:1080px;margin:auto;padding:2rem 1.5rem}
-.section{margin-bottom:2.5rem}
-h2{color:var(--phos-hot);text-shadow:0 0 4px var(--phos);font-size:1.3rem;margin-bottom:0.8rem;border-bottom:1px solid var(--dim);padding-bottom:0.4rem;letter-spacing:0.04em}
-h3{color:var(--purple);font-size:1rem;margin-bottom:0.5rem}
-.grid{display:grid;gap:1rem}
-.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.grid-4{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
-.card{border:1px solid var(--dim);background:var(--bg2);padding:1rem 1.2rem;border-radius:4px}
-.card.purple{border-color:var(--purple);background:rgba(110,64,201,0.05)}
-.card.amber{border-color:var(--amber);background:rgba(255,179,71,0.05)}
-.kpi{text-align:center;padding:1rem;background:rgba(0,221,68,0.05);border:1px solid var(--phos);border-radius:4px}
-.kpi .v{font-size:2rem;font-weight:bold;color:var(--phos-hot);text-shadow:0 0 6px var(--phos);display:block}
-.kpi .l{font-size:0.75rem;color:var(--dim)}
-.level{display:flex;align-items:start;gap:0.8rem;padding:0.9rem;border-radius:4px}
-.level .emj{font-size:1.8rem;flex-shrink:0}
-.level .body{flex:1}
-.level .body b{display:block;font-size:1rem;margin-bottom:0.2rem}
-.level .body .desc{font-size:0.85rem;color:var(--text);opacity:0.85}
-.level.r0{background:rgba(255,255,255,0.03);border:1px solid var(--dim)}
-.level.r1{background:rgba(0,221,68,0.08);border:1px solid var(--phos);color:var(--phos-hot)}
-.level.r2{background:rgba(255,179,71,0.08);border:1px solid var(--amber)}
-.level.r3{background:rgba(158,118,255,0.08);border:1px solid var(--purple)}
-.tag-recommended{display:inline-block;background:var(--phos);color:#0a0a0f;font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:99px;font-weight:bold;margin-left:0.3rem;vertical-align:middle}
-.tag-new{display:inline-block;background:var(--purple);color:#fff;font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:99px;font-weight:bold;margin-left:0.3rem;vertical-align:middle}
+.cta.alt:hover{background:rgba(158,118,255,.12)}
+/* ── quicknav ── */
+.quicknav{display:flex;flex-wrap:wrap;justify-content:center;gap:.6rem;margin:1.4rem auto 0;max-width:620px}
+.qi{display:flex;flex-direction:column;align-items:center;gap:4px;padding:.55rem .45rem;min-width:74px;background:var(--soft);border:1px solid var(--line);border-radius:12px;color:var(--text);transition:.12s;font-family:inherit}
+.qi:hover{border-color:var(--purple);transform:translateY(-2px);text-decoration:none}
+.qi-emoji{font-size:1.5rem;line-height:1}.qi-label{font-size:.62rem;letter-spacing:.04em;color:var(--phos-hot);font-weight:700;white-space:nowrap}
+/* ── layout ── */
+.container{max-width:760px;margin:auto;padding:1.6rem 1.1rem}
+.section{margin-bottom:1.7rem}
+h2{color:var(--phos-hot);font-size:1.12rem;margin-bottom:.6rem;letter-spacing:.02em}
+h3{color:var(--purple);font-size:.95rem;margin-bottom:.4rem}
+.grid{display:grid;gap:1rem}.grid-2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}.grid-4{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.card{border:1px solid var(--line);background:var(--panel);padding:1rem 1.1rem;border-radius:12px}
+.card.purple{border-color:rgba(158,118,255,.4)}.card.amber{border-color:rgba(255,179,71,.4)}
+.kpi{text-align:center;padding:.8rem .4rem;background:var(--soft);border:1px solid var(--line);border-radius:12px}
+.kpi .v{font-size:1.7rem;font-weight:800;color:var(--phos-hot);display:block}.kpi .l{font-size:.66rem;color:var(--dim)}
+.level{display:flex;align-items:start;gap:.8rem;padding:.85rem;border-radius:12px}
+.level .emj{font-size:1.7rem;flex-shrink:0}.level .body{flex:1}.level .body b{display:block;font-size:.98rem;margin-bottom:.2rem}.level .body .desc{font-size:.84rem;color:var(--text);opacity:.85}
+.level.r0{background:var(--soft);border:1px solid var(--line)}.level.r1{background:rgba(0,221,68,.08);border:1px solid var(--phos)}.level.r2{background:rgba(255,179,71,.08);border:1px solid var(--amber)}.level.r3{background:rgba(158,118,255,.08);border:1px solid var(--purple)}
+.tag-recommended{display:inline-block;background:var(--phos);color:#06140a;font-size:.65rem;padding:.1rem .45rem;border-radius:99px;font-weight:700;margin-left:.3rem;vertical-align:middle}
+.tag-new{display:inline-block;background:var(--purple);color:#fff;font-size:.65rem;padding:.1rem .45rem;border-radius:99px;font-weight:700;margin-left:.3rem;vertical-align:middle}
 svg.chart{width:100%;max-width:400px;height:auto}
-.svg-bar{fill:var(--phos);transition:fill 0.3s}
-.svg-bar.medium{fill:var(--amber)}
-.svg-bar.high{fill:var(--red)}
-code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;color:var(--phos-hot)}
-.cta-sm{display:inline-block;background:var(--phos);color:#0a0a0f;padding:0.7rem 1.4rem;text-decoration:none;font-weight:bold;border-radius:4px;margin:0.5rem 0.3rem 0.5rem 0;text-shadow:none}
-.cta-sm.outline{background:transparent;color:var(--phos);border:1px solid var(--phos)}
-.footer{text-align:center;font-size:0.78rem;color:var(--dim);padding:1.5rem;border-top:1px solid var(--dim);margin-top:2rem}
-.arch{font-family:monospace;font-size:0.75rem;color:var(--phos-hot);text-shadow:0 0 4px var(--phos);background:var(--bg2);padding:1rem;border:1px solid var(--dim);border-radius:4px;overflow-x:auto;white-space:pre;line-height:1.4}
-
-/* ── install panel (kept up top) ── */
-.install-panel{background:rgba(0,255,65,0.04);border:1px solid rgba(0,255,65,0.25);border-radius:6px;padding:0.6rem 0.9rem;margin:0.45rem 0;text-align:left}
-.install-panel summary{cursor:pointer;font-size:0.95rem;color:var(--phos-hot);list-style:none;outline:none}
+.svg-bar{fill:var(--phos)}.svg-bar.medium{fill:var(--amber)}.svg-bar.high{fill:var(--red)}
+code{background:var(--soft);padding:.1rem .4rem;border-radius:4px;font-size:.82rem;color:var(--phos-hot);font-family:ui-monospace,Menlo,monospace}
+.cta-sm{display:inline-block;background:var(--phos);color:#06140a;padding:.6rem 1.2rem;font-weight:700;border-radius:10px;margin:.4rem .3rem .4rem 0}.cta-sm.outline{background:transparent;color:var(--phos);border:1px solid var(--phos)}
+.footer{text-align:center;font-size:.7rem;color:var(--dim);padding:1.4rem;border-top:1px solid var(--line);margin-top:2rem}
+.arch{font-family:ui-monospace,Menlo,monospace;font-size:.74rem;color:var(--phos-hot);background:var(--soft);padding:1rem;border:1px solid var(--line);border-radius:12px;overflow-x:auto;white-space:pre;line-height:1.4}
+/* ── install panel ── */
+.install-panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.7rem 1rem;margin:.5rem 0;text-align:left}
+.install-panel summary{cursor:pointer;font-size:.95rem;color:var(--phos-hot);list-style:none;outline:none;font-weight:700}
 .install-panel summary::-webkit-details-marker{display:none}
-.install-panel[open] summary{margin-bottom:0.6rem}
-.install-panel .emoji{font-size:1.1rem;margin-right:0.3rem}
-.install-panel ol{padding-left:1.1rem;line-height:1.5;font-size:0.85rem}
-.install-panel .btn{display:inline-block;padding:0.45rem 0.75rem;margin:0.25rem 0.2rem 0.25rem 0;background:var(--purple);color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;font-size:0.82rem}
+.install-panel[open] summary{margin-bottom:.6rem}
+.install-panel .emoji{font-size:1.1rem;margin-right:.3rem}
+.install-panel ol{padding-left:1.1rem;line-height:1.5;font-size:.85rem}
+.install-panel .btn{display:inline-block;padding:.45rem .8rem;margin:.25rem .2rem .25rem 0;background:var(--purple);color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:.82rem}
 .install-panel .btn.alt{background:transparent;border:1px solid var(--purple);color:var(--purple)}
-.install-panel code{background:rgba(0,0,0,0.4);padding:0.1rem 0.35rem;border-radius:3px;font-size:0.8rem;color:var(--phos-hot)}
-.install-panel .note{color:var(--dim);font-size:0.78rem;margin-top:0.6rem;border-left:2px solid var(--amber);padding-left:0.6rem}
-.install-panel img{max-width:100%;border-radius:5px;margin:0.4rem 0}
-.install-panel pre{background:rgba(0,0,0,0.4);padding:0.5rem 0.7rem;border-radius:4px;overflow-x:auto;font-size:0.78rem;margin:0.4rem 0}
-
+.install-panel code{background:var(--soft);padding:.1rem .35rem;border-radius:4px;font-size:.8rem;color:var(--phos-hot)}
+.install-panel .note{color:var(--dim);font-size:.78rem;margin-top:.6rem;border-left:2px solid var(--amber);padding-left:.6rem}
+.install-panel img{max-width:100%;border-radius:8px;margin:.4rem 0}
+.install-panel pre{background:var(--soft);padding:.5rem .7rem;border-radius:8px;overflow-x:auto;font-size:.76rem;margin:.4rem 0}
 /* ── "En savoir plus" fold ── */
-.more{max-width:1080px;margin:0 auto;padding:0 1.5rem}
-.more>summary{cursor:pointer;list-style:none;text-align:center;color:var(--purple);font-size:0.95rem;letter-spacing:0.05em;padding:0.9rem;border:1px dashed var(--purple);border-radius:8px;margin-bottom:1rem;transition:background .12s}
+.more{max-width:760px;margin:0 auto;padding:0 1.1rem}
+.more>summary{cursor:pointer;list-style:none;text-align:center;color:var(--purple);font-size:.92rem;letter-spacing:.04em;padding:.85rem;border:1px solid var(--line);border-radius:12px;margin-bottom:1rem;transition:background .12s}
 .more>summary::-webkit-details-marker{display:none}
-.more>summary:hover{background:rgba(158,118,255,0.1)}
-.more[open]>summary{margin-bottom:1.6rem}
+.more>summary:hover{background:rgba(158,118,255,.08)}
+.more[open]>summary{margin-bottom:1.4rem}
 .more>summary .chev{display:inline-block;transition:transform .2s}
 .more[open]>summary .chev{transform:rotate(90deg)}
-
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-.v.tick{animation:flash 0.6s}
-@keyframes flash{0%{color:var(--gold);transform:scale(1.15)}100%{color:var(--phos-hot);transform:scale(1)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.v.tick{animation:flash .6s}@keyframes flash{0%{color:var(--gold);transform:scale(1.15)}100%{color:var(--phos-hot);transform:scale(1)}}
 </style></head><body>
 
 <div class=hero>
@@ -123,19 +100,17 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
 
   <div class=ctas>
     <a href="/wg/r3-install" class="cta go">✨ Protège-moi (R3)</a>
-    <a href="/social/me" class="cta alt">🕸️ Qui me piste ?</a>
+    <a href="/social/me{{ '?mh=' + mac_hash if mac_hash else '' }}" class="cta alt">🕸️ Qui me piste ?</a>
   </div>
 
-  {# trimmed quick-nav — CA iPhone / CA Android / QR profil moved into the
-     per-platform install panel below (#543) #}
   <div class=quicknav>
     <a href="/wg/r3-install" class=qi title="Installer R3 WireGuard">
       <span class=qi-emoji>🌐</span><span class=qi-label>R3 Install</span>
     </a>
-    <a href="/report/me/html" class=qi title="Mon rapport live">
+    <a href="/report/me/html{{ '?mh=' + mac_hash if mac_hash else '' }}" class=qi title="Mon rapport live">
       <span class=qi-emoji>📊</span><span class=qi-label>Mon rapport</span>
     </a>
-    <a href="/social/me" class=qi title="Cartographie sociale — qui me piste, où ?">
+    <a href="/social/me{{ '?mh=' + mac_hash if mac_hash else '' }}" class=qi title="Cartographie sociale — qui me piste, où ?">
       <span class=qi-emoji>🕸️</span><span class=qi-label>Ma carto</span>
     </a>
     <a href="https://github.com/CyberMind-FR/secubox-deb/wiki/R3-WireGuard-install" class=qi title="Wiki R3 multi-OS">
@@ -151,12 +126,12 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
 <div class=container>
   <div class=section style="margin-bottom:1.5rem">
     <h2>📥 Installe en 1 tap</h2>
-    <p style="font-size:0.85rem;color:var(--dim);margin-bottom:0.8rem">
+    <p class=help style="margin-bottom:.8rem">
       On a détecté <code>{{ install_platform }}</code> — le panneau adapté est ouvert.
       Le CA, le QR et le profil sont dedans. Autre appareil ? Déplie le bon panneau.
     </p>
     {{ install_panels | safe }}
-    <p style="margin-top:0.8rem;font-size:0.78rem;color:var(--dim)">
+    <p class=help style="margin-top:.8rem">
       R3 marche hors-cabine (4G/5G, autre WiFi), couvre tout le HTTPS, et se révoque
       à tout moment. Page standalone : <a href=/wg/onboard>/wg/onboard</a>.
     </p>
@@ -170,8 +145,8 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
   {# ── KPI live (auto-refresh 5s via /cumulative-stats.json) ── #}
   <div class=section>
     <h2>📊 Cabine en chiffres
-      <span id=live-badge style="font-size:0.7rem;background:var(--red);color:#fff;padding:0.15rem 0.5rem;border-radius:99px;margin-left:0.5rem;letter-spacing:0.05em;animation:pulse 1.5s infinite">🔴 LIVE</span>
-      <span id=live-stamp style="font-size:0.7rem;color:var(--dim);margin-left:0.4rem">·</span>
+      <span id=live-badge style="font-size:.7rem;background:var(--red);color:#fff;padding:.15rem .5rem;border-radius:99px;margin-left:.5rem;letter-spacing:.04em;animation:pulse 1.5s infinite">🔴 LIVE</span>
+      <span id=live-stamp style="font-size:.7rem;color:var(--dim);margin-left:.4rem">·</span>
     </h2>
     <div class="grid grid-4">
       <div class=kpi><span class=v data-live=sessions.last_7d>{{ stats.sessions.last_7d if stats.sessions else 0 }}</span><span class=l>👥 sessions uniques (7j)</span></div>
@@ -193,16 +168,16 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
     <div class="card purple" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
       <div style="font-size:2.4rem;flex-shrink:0" id=cert-probe-emoji>❔</div>
       <div style="flex:1;min-width:220px">
-        <p id=cert-probe-text style="font-size:0.92rem;line-height:1.5">
+        <p id=cert-probe-text style="font-size:.92rem;line-height:1.5">
           Clique sur <b>Tester</b> pour vérifier que ton CA R3 est bien installé sur ton device
           (depuis le tunnel WireGuard). Le test télécharge une image HTTPS et vérifie le succès.
         </p>
-        <p style="font-size:0.75rem;color:var(--dim);margin-top:0.3rem">
+        <p class=help style="margin-top:.3rem">
           Empreinte SHA1 CA R3 (à vérifier dans Réglages iPhone) :
-          <code id=cert-fp-r3 style="font-size:0.7rem">…</code>
+          <code id=cert-fp-r3 style="font-size:.7rem">…</code>
         </p>
       </div>
-      <button id=cert-probe-btn style="background:var(--purple);color:#0a0a0f;border:0;padding:0.7rem 1.2rem;font-weight:bold;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.9rem">🔬 Tester</button>
+      <button id=cert-probe-btn style="background:var(--purple);color:#06140a;border:0;padding:.7rem 1.2rem;font-weight:700;border-radius:10px;cursor:pointer;font-family:inherit;font-size:.9rem">🔬 Tester</button>
     </div>
   </div>
 
@@ -215,7 +190,7 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
       niveau d'analyse, tu obtiens un rapport détaillé sur les apps, trackers, certificats,
       et risques observés pendant ta session.
     </p>
-    <p style="margin-top:0.6rem">
+    <p style="margin-top:.6rem">
       <b>Conçu par CyberMind / Gérald Kerma</b> à Notre-Dame-du-Cruet (Savoie). Conforme
       <b>CSPN ANSSI</b> + <b>LCEN</b> : consentement explicite, hash MAC quotidien rotatif,
       données effacées après 24h, aucun envoi externe.
@@ -248,10 +223,10 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
         </div>
       </div>
       <div class="level r3">
-        <span class=emj>🌐</span>
+        <span class=emj>🧅</span>
         <div class=body>
           <b>R3 — WireGuard portable<span class=tag-new>NOUVEAU</span></b>
-          <p class=desc>VPN tunnel mitm. Bandeau sur TOUT (HTTPS + QUIC). <b>Marche hors VILLAGE3B</b> (4G/5G, autre WiFi). Profile install 1 tap via QR.</p>
+          <p class=desc>VPN tunnel mitm. Bandeau sur TOUT (HTTPS + QUIC). <b>Marche hors VILLAGE3B</b> (4G/5G, autre WiFi). Option sortie 🧅 Tor anonymisée. Profile install 1 tap via QR.</p>
         </div>
       </div>
     </div>
@@ -269,14 +244,15 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
         {% set mpct = (risk.medium * 100 / total) | round(0) | int %}
         {% set hpct = (risk.high * 100 / total) | round(0) | int %}
         <svg class=chart viewBox="0 0 300 60" xmlns="http://www.w3.org/2000/svg">
-          <rect x=0 y=20 width="{{ lpct * 3 }}" height=20 class=svg-bar/>
+          <rect x=0 y=20 width="{{ lpct * 3 }}" height=20 rx=4 class=svg-bar/>
           <rect x="{{ lpct * 3 }}" y=20 width="{{ mpct * 3 }}" height=20 class="svg-bar medium"/>
-          <rect x="{{ (lpct + mpct) * 3 }}" y=20 width="{{ hpct * 3 }}" height=20 class="svg-bar high"/>
-          <text x=10 y=15 fill="#00ff55" font-family=monospace font-size=10>🟢 {{ lpct }}% LOW</text>
-          <text x="{{ lpct * 3 + 10 }}" y=15 fill="#ffb347" font-family=monospace font-size=10>🟡 {{ mpct }}% MED</text>
-          <text x="{{ (lpct + mpct) * 3 + 10 }}" y=15 fill="#ff4466" font-family=monospace font-size=10>🔴 {{ hpct }}% HI</text>
-          <text x=10 y=55 fill="#666" font-family=monospace font-size=8>{{ total }} sessions analysées</text>
+          <rect x="{{ (lpct + mpct) * 3 }}" y=20 width="{{ hpct * 3 }}" height=20 rx=4 class="svg-bar high"/>
+          <text x=10 y=15 fill="#00ff55" font-size=10>🟢 {{ lpct }}% LOW</text>
+          <text x="{{ lpct * 3 + 10 }}" y=15 fill="#ffb347" font-size=10>🟡 {{ mpct }}% MED</text>
+          <text x="{{ (lpct + mpct) * 3 + 10 }}" y=15 fill="#ff4466" font-size=10>🔴 {{ hpct }}% HI</text>
+          <text x=10 y=55 fill="#5a6b60" font-size=8>{{ total }} sessions analysées</text>
         </svg>
+        <p class=help>La plupart des sessions sont à faible risque.</p>
       </div>
       <div class=card>
         <h3>🛡 Niveau d'opt-in choisi par les visiteurs</h3>
@@ -284,15 +260,16 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
         {% set ltotal = (lvl.r0 + lvl.r1 + lvl.r2 + lvl.r3) or 1 %}
         <svg class=chart viewBox="0 0 300 90" xmlns="http://www.w3.org/2000/svg">
           {% set ws = [(lvl.r0 * 300 / ltotal)|round|int, (lvl.r1 * 300 / ltotal)|round|int, (lvl.r2 * 300 / ltotal)|round|int, (lvl.r3 * 300 / ltotal)|round|int] %}
-          <rect x=0 y=10 width="{{ ws[0] }}" height=15 fill="#666"/>
-          <rect x=0 y=30 width="{{ ws[1] }}" height=15 fill="#00dd44"/>
-          <rect x=0 y=50 width="{{ ws[2] }}" height=15 fill="#ffb347"/>
-          <rect x=0 y=70 width="{{ ws[3] }}" height=15 fill="#9e76ff"/>
-          <text x="{{ ws[0] + 5 }}" y=22 fill="#888" font-family=monospace font-size=10>🌐 R0 ({{ lvl.r0 }})</text>
-          <text x="{{ ws[1] + 5 }}" y=42 fill="#00ff55" font-family=monospace font-size=10>🛡 R1 ({{ lvl.r1 }})</text>
-          <text x="{{ ws[2] + 5 }}" y=62 fill="#ffd6a0" font-family=monospace font-size=10>🔍 R2 ({{ lvl.r2 }})</text>
-          <text x="{{ ws[3] + 5 }}" y=82 fill="#cbb6ff" font-family=monospace font-size=10>🌐 R3 ({{ lvl.r3 }})</text>
+          <rect x=0 y=10 width="{{ ws[0] }}" height=15 rx=4 fill="#5a6b60"/>
+          <rect x=0 y=30 width="{{ ws[1] }}" height=15 rx=4 fill="#00dd44"/>
+          <rect x=0 y=50 width="{{ ws[2] }}" height=15 rx=4 fill="#ffb347"/>
+          <rect x=0 y=70 width="{{ ws[3] }}" height=15 rx=4 fill="#9e76ff"/>
+          <text x="{{ ws[0] + 5 }}" y=22 fill="#888" font-size=10>🌐 R0 ({{ lvl.r0 }})</text>
+          <text x="{{ ws[1] + 5 }}" y=42 fill="#00ff55" font-size=10>🛡 R1 ({{ lvl.r1 }})</text>
+          <text x="{{ ws[2] + 5 }}" y=62 fill="#ffd6a0" font-size=10>🔍 R2 ({{ lvl.r2 }})</text>
+          <text x="{{ ws[3] + 5 }}" y=82 fill="#cbb6ff" font-size=10>🧅 R3 ({{ lvl.r3 }})</text>
         </svg>
+        <p class=help>R1 (analyse passive) est le choix le plus courant.</p>
       </div>
     </div>
   </div>
@@ -303,7 +280,7 @@ code{background:#222;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.85rem;c
     <div class=arch>
 LXC mitmproxy        10.100.0.60   WAF (vhosts CyberMind)
 LXC toolbox-mitm     10.100.0.61   R1/R2 transparent
-LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
+LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard (+🧅 Tor)
                      ↑
                      CAs séparées · addons partagés · DB unifiée
                      ↑
@@ -318,7 +295,7 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
       Le code est <b>publié intégralement</b> sous licence <b>CyberMind Source-Disclosed v1.0</b>
       (audit citoyen possible, droits d'usage régis par licence CMSD). Pas de boîte noire.
     </p>
-    <div style="margin-top:0.6rem">
+    <div style="margin-top:.6rem">
       <a href="https://github.com/CyberMind-FR/secubox-deb" class=cta-sm>📂 Code source GitHub</a>
       <a href="https://github.com/CyberMind-FR/secubox-deb/blob/master/LICENCE-CMSD-1.0.md" class="cta-sm outline">📜 Licence CMSD-1.0</a>
     </div>
@@ -326,11 +303,11 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
 
   {# ── Contact ── #}
   <div class=section>
-    <h2>📡 Contact & soutiens</h2>
+    <h2>📡 Contact &amp; soutiens</h2>
     <div class="grid grid-2">
       <div class=card>
         <h3>💚 Soutenir le projet</h3>
-        <ul style="list-style:none;padding-left:0;font-size:0.85rem">
+        <ul style="list-style:none;padding-left:0;font-size:.85rem">
           <li>💰 Don récurrent : <a href="https://liberapay.com/cybermind">liberapay.com/cybermind</a></li>
           <li>💳 Don ponctuel : <a href="https://cybermind.fr/don">cybermind.fr/don</a></li>
           <li>📧 Support : <a href="mailto:support@cybermind.fr">support@cybermind.fr</a></li>
@@ -338,7 +315,7 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
       </div>
       <div class="card purple">
         <h3>🏢 Déploiement collectivité</h3>
-        <ul style="list-style:none;padding-left:0;font-size:0.85rem">
+        <ul style="list-style:none;padding-left:0;font-size:.85rem">
           <li>📡 Borne grand public : <a href="mailto:gondwana@cybermind.fr">gondwana@cybermind.fr</a></li>
           <li>🎓 Formation cybersécurité : <a href="mailto:contact@cybermind.fr">contact@cybermind.fr</a></li>
           <li>🛡 Audit SecuBox premium : <a href="mailto:contact@cybermind.fr">contact@cybermind.fr</a></li>
@@ -376,7 +353,6 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
     var ss = String(d.getSeconds()).padStart(2,'0');
     return 'maj ' + hh+':'+mm+':'+ss;
   }
-  // count-up: animate each KPI from 0 → its server-rendered value, once.
   function countUp(el, target){
     var start = 0, dur = 900, t0 = null;
     function step(ts){
@@ -403,7 +379,7 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
         if (prev !== next) {
           el.textContent = next;
           el.classList.remove('tick');
-          void el.offsetWidth;  // force reflow
+          void el.offsetWidth;
           el.classList.add('tick');
         }
       });
@@ -449,8 +425,8 @@ LXC toolbox-mitm-wg  10.100.0.62   R3 WireGuard
       } else {
         emj.textContent = '🔴';
         txt.innerHTML = '<b>Tunnel R3 actif mais CA R3 NON trusté</b> — HTTPS casse. ' +
-          'Installe le <a href=/wg/ca.mobileconfig style="color:var(--orange)">profil CA R3 iPhone</a> ' +
-          'ou le <a href=/wg/ca.pem style="color:var(--orange)">ca.pem Android/PC</a>.';
+          'Installe le <a href=/wg/ca.mobileconfig style="color:var(--amber)">profil CA R3 iPhone</a> ' +
+          'ou le <a href=/wg/ca.pem style="color:var(--amber)">ca.pem Android/PC</a>.';
       }
     }
 

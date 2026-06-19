@@ -32,7 +32,14 @@ traverse le pipeline de forge MITM SecuBox — sans configuration, sans app obli
 
 ---
 
-## La lame suivante : 🧅 Tor quick-switch (plan #683)
+## La lame suivante : 🧅 Tor quick-switch (#683 — implémenté DARK en 2.7.1)
+
+> **Statut** : switch + tunnel livrés dans `secubox-toolbox` 2.7.1, **défaut OFF /
+> fail-closed**. Onglet 🧅 Tor dans la WebUI opérateur (badge bootstrap/circuits/IP
+> de sortie, toggle arm/désarm, nouvelle identité NEWNYM, sonde de fuite SOCKS).
+> Granularité = mode Tor **global** (l'owner-match nft ne peut pas être par-client ;
+> le per-client viendra avec le dialer SOCKS5 du cœur Go #662). Avant de basculer
+> ON : soak + test de fuite hors-board (l'IP réelle ne doit jamais apparaître).
 
 C'est la **pointe manquante** : l'anonymat de la sortie.
 

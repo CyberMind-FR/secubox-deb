@@ -72,6 +72,15 @@ def _report_url(client_id: str, is_wg: bool) -> str:
     return REPORT_URL_CAPTIVE
 
 
+def _tor_mode() -> bool:
+    """kbin Tor egress on? (#683) Read from filters; fail-safe to off."""
+    try:
+        from .filters import get_filters
+        return bool(get_filters().get("tor_mode", False))
+    except Exception:
+        return False
+
+
 def build_bundle(client_id: str, is_wg: bool = False) -> dict:
     """Build the per-client cosmetic decision bundle (pure given inputs + pin file)."""
     return {
@@ -81,6 +90,7 @@ def build_bundle(client_id: str, is_wg: bool = False) -> dict:
         "pin": _read_pin(),
         "report_url": _report_url(client_id, is_wg),
         "tracker_patterns": TRACKER_PATTERNS,
+        "tor_mode": _tor_mode(),
         "ts": int(time.time()),
     }
 
@@ -141,12 +151,23 @@ _BANNER_CORE = r"""
       return Object.keys(seen).length;
     } catch (_) { return 0; }
   }
+  function countCookies(){
+    try { return document.cookie ? document.cookie.split(";").filter(function(x){return x.indexOf("=")>=0;}).length : 0; } catch (_) { return 0; }
+  }
+  // #683 — counts are taken at render time, but resources + cookies keep loading
+  // AFTER the banner appears (early render → stuck at 0). Re-count live on the
+  // 2s poll so trackers/cookies climb to their real values.
+  function updateCounts(b){
+    var t = document.getElementById("sbx-trk");
+    if (t) t.textContent = "🛰️ " + countTrackers((b || {}).tracker_patterns) + " trackers";
+    var c = document.getElementById("sbx-ck");
+    if (c) c.textContent = "🍪 " + countCookies() + " cookies";
+  }
   function render(b){
     if (dismissed) return;
     if (document.getElementById("sbx-banner")) return;
     var trk = countTrackers(b.tracker_patterns);
-    var ck = 0;
-    try { ck = document.cookie ? document.cookie.split(";").filter(function(x){return x.indexOf("=")>=0;}).length : 0; } catch (_) {}
+    var ck = countCookies();
     var bar = document.createElement("div");
     bar.id = "sbx-banner";
     bar.setAttribute("style", "position:fixed;left:0;right:0;top:0;z-index:2147483647;"
@@ -157,11 +178,15 @@ _BANNER_CORE = r"""
     // #662 — 🔓 proof: the engine relaxed this page's CSP to inject this banner.
     var cspProof = (csp === "1")
       ? "<span title=\"CSP contourné par SecuBox (démonstration)\">🔓</span>" : "";
+    // #683 — 🧅 kbin Tor mode: this session's exit is anonymised via Tor.
+    var tor = b.tor_mode
+      ? "<span title=\"Sortie anonymisée via Tor\" style=\"color:#9E76FF;font-weight:bold\">🧅 Tor</span>" : "";
     bar.innerHTML = "<b style=\"color:#148C66\">SecuBox</b>"
       + cspProof
+      + tor
       + "<span>" + esc((b.level || "r1").toUpperCase()) + "</span>"
-      + "<span>🛰️ " + trk + " trackers</span>"
-      + "<span>🍪 " + ck + " cookies</span>"
+      + "<span id=\"sbx-trk\">🛰️ " + trk + " trackers</span>"
+      + "<span id=\"sbx-ck\">🍪 " + ck + " cookies</span>"
       + pin
       + "<a href=\"" + esc(b.report_url || "#") + "\" style=\"margin-left:auto;color:#2C70C0;text-decoration:none\">report ▸</a>"
       + "<button aria-label=\"dismiss\" style=\"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px\">✕</button>";
@@ -172,7 +197,7 @@ _BANNER_CORE = r"""
   }
   // ensure(): (re)render the banner if it's absent and the bundle is loaded and
   // the user hasn't dismissed it. Cheap (a getElementById guard inside render).
-  function ensure(){ if (bundle && !dismissed) ready(function(){ render(bundle); }); }
+  function ensure(){ if (bundle && !dismissed) ready(function(){ if (document.getElementById("sbx-banner")) updateCounts(bundle); else render(bundle); }); }
   // SPA re-assert: wrap history nav + popstate (defer so the framework settles),
   // plus a light 2s poll as a catch-all for DOM re-renders that drop the banner.
   ["pushState","replaceState"].forEach(function(m){

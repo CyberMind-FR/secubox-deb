@@ -52,6 +52,17 @@ override_dh_installsystemd:
 	# activation + rollback recipe.
 	install -m 0644 systemd/secubox-toolbox-mitm-wg-worker@.service \
 	  debian/secubox-toolbox/lib/systemd/system/
+	# #683 : kbin Tor egress reconciler (root, oneshot) + path watcher on
+	# filters.json. conf/nft-toolbox-tor.nft + conf/torrc-toolbox-egress.conf
+	# ship via the `cp -r conf` above (→ /usr/lib/secubox/toolbox/conf/).
+	install -m 0755 sbin/secubox-toolbox-tor-reconcile \
+	  debian/secubox-toolbox/usr/sbin/
+	install -m 0644 systemd/secubox-toolbox-tor.service \
+	  debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-toolbox-tor.path \
+	  debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-toolbox-tor.timer \
+	  debian/secubox-toolbox/lib/systemd/system/
 	# Primary unit goes via dh_installsystemd which also handles the enable helpers.
 	cp systemd/secubox-toolbox.service debian/secubox-toolbox.service
 	dh_installsystemd --no-start --no-enable
