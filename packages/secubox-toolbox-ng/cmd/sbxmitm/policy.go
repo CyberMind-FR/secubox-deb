@@ -17,6 +17,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 )
 
 // ── ad_ghost: static ad/tracker host pattern (port of _AD_HOST) ──────────────
@@ -95,18 +97,54 @@ func envOr(key, def string) string {
 // Policy carries the loaded sets/regex and decides per-host actions. It also
 // keeps the legacy PoC fields (Inject) so the existing wiring/tests still work.
 type Policy struct {
-	adHost       *regexp.Regexp
-	learned      map[string]bool // learned-trackers (host or registrable, lowercased)
-	allow        map[string]bool // ad-allowlist (host or registrable, lowercased)
-	spliceSeed   map[string]bool // splice seed patterns
-	spliceLearn  map[string]bool // splice learned patterns
-	never        map[string]bool // pure-trackers ∪ fortknox (splice never-set)
-	selfRegs     map[string]bool // own-infra registrable domains
-	selfDomains  []string        // own-infra (for the host==d || host endswith .d guard)
+	// mu guards the live-reloadable map fields below. Decide/allowed/blockedByAd/
+	// shouldSplice take RLock; maybeReload takes Lock only when a backing file
+	// actually changed (the throttle + stat happen under a separate lighter lock).
+	mu sync.RWMutex
+
+	adHost      *regexp.Regexp
+	learned     map[string]bool // learned-trackers (host or registrable, lowercased)
+	allow       map[string]bool // ad-allowlist (host or registrable, lowercased)
+	spliceSeed  map[string]bool // splice seed patterns
+	spliceLearn map[string]bool // splice learned patterns
+	never       map[string]bool // pure-trackers ∪ fortknox (splice never-set)
+	selfRegs    map[string]bool // own-infra registrable domains
+	selfDomains []string        // own-infra (for the host==d || host endswith .d guard)
+
+	// ── live-reload state (#662 auto-learn loop) ─────────────────────────────
+	//
+	// The lists are loaded once at startup, then re-read on-disk when their
+	// mtime changes so autolearn promotions / manual edits take effect WITHOUT a
+	// worker restart (mirrors ad_ghost._maybe_reload). The hot path (Decide)
+	// calls maybeReload(): a throttle check, then — at most every reloadThrottle —
+	// a cheap stat() of each backing file. Only a changed file is re-read and its
+	// map atomically swapped under mu.
+	reloadFiles    []reloadTarget // backing files + their swap target
+	fortknoxSites  []string       // kept for rebuilding the never-set on pure-trackers reload
+	reloadMu       sync.Mutex     // guards lastReloadCheck + the per-file mtimes
+	lastReloadID   int64          // unix-nano of the last throttle pass (0 = never)
+	reloadThrottle time.Duration  // min interval between stat passes (0 in tests = eager)
 
 	// Legacy PoC fields kept so non-policy behaviour is unchanged.
 	Inject []byte // banner / ad-CSS marker injected before </head> or </body>
 }
+
+// reloadTarget describes one backing file the engine live-reloads: its path, the
+// last mtime we read, whether comment-stripping applies (loadLines vs
+// loadLinesRaw), and an applier that swaps the freshly-read set into the right
+// Policy field (under p.mu, held by the caller). pure-trackers re-derives the
+// never-set (∪ fortknox) so it stays consistent.
+type reloadTarget struct {
+	path      string
+	stripComm bool
+	lastMtime int64
+	apply     func(p *Policy, set map[string]bool)
+}
+
+// defaultReloadThrottle is the production stat cadence: a backing-file change
+// (autolearn runs hourly; a promotion is rare) is observed within ~15s, and the
+// hot path stats at most ~4×/minute regardless of request rate.
+const defaultReloadThrottle = 15 * time.Second
 
 // loadLines mirrors the comment-stripping Python loaders (splice._load_lines,
 // ad_ghost._allowed's allowlist read): split on first '#', trim, lowercase,
@@ -196,16 +234,107 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 		selfDomains = append(selfDomains, d)
 	}
 
-	return &Policy{
-		adHost:      re,
-		learned:     loadLinesRaw(opts.LearnedPath), // mirrors _learned_set (no comment-strip)
-		allow:       loadLines(opts.AllowPath),
-		spliceSeed:  loadLines(opts.SpliceSeedPath),
-		spliceLearn: loadLines(opts.SpliceLearnPath),
-		never:       never,
-		selfRegs:    selfRegs,
-		selfDomains: selfDomains,
-	}, nil
+	p := &Policy{
+		adHost:         re,
+		learned:        loadLinesRaw(opts.LearnedPath), // mirrors _learned_set (no comment-strip)
+		allow:          loadLines(opts.AllowPath),
+		spliceSeed:     loadLines(opts.SpliceSeedPath),
+		spliceLearn:    loadLines(opts.SpliceLearnPath),
+		never:          never,
+		selfRegs:       selfRegs,
+		selfDomains:    selfDomains,
+		fortknoxSites:  append([]string(nil), opts.FortknoxSites...),
+		reloadThrottle: defaultReloadThrottle,
+	}
+
+	// ── register the live-reloadable backing files (#662 auto-learn loop) ─────
+	//
+	// Each entry re-reads its file when its mtime changes and atomically swaps
+	// the map under p.mu (held by maybeReload). learned-trackers + ad-allowlist
+	// are the load-bearing pair (autolearn promotes into learned; the operator
+	// edits the allowlist); the splice seed/learned + pure-trackers files are
+	// reloaded too for consistency (pure-trackers re-derives the never-set).
+	p.reloadFiles = []reloadTarget{
+		{path: opts.LearnedPath, stripComm: false, lastMtime: statMtime(opts.LearnedPath),
+			apply: func(p *Policy, s map[string]bool) { p.learned = s }},
+		{path: opts.AllowPath, stripComm: true, lastMtime: statMtime(opts.AllowPath),
+			apply: func(p *Policy, s map[string]bool) { p.allow = s }},
+		{path: opts.SpliceSeedPath, stripComm: true, lastMtime: statMtime(opts.SpliceSeedPath),
+			apply: func(p *Policy, s map[string]bool) { p.spliceSeed = s }},
+		{path: opts.SpliceLearnPath, stripComm: true, lastMtime: statMtime(opts.SpliceLearnPath),
+			apply: func(p *Policy, s map[string]bool) { p.spliceLearn = s }},
+		{path: opts.PureTrackersPath, stripComm: true, lastMtime: statMtime(opts.PureTrackersPath),
+			apply: func(p *Policy, s map[string]bool) {
+				// pure-trackers ∪ fortknox → never-set (mirrors LoadPolicy above).
+				for _, fk := range p.fortknoxSites {
+					if fk = strings.Trim(strings.ToLower(strings.TrimSpace(fk)), "."); fk != "" {
+						s[fk] = true
+					}
+				}
+				p.never = s
+			}},
+	}
+	return p, nil
+}
+
+// statMtime returns the file's mtime in unix-nano, or 0 when the file is missing
+// or unreadable (best-effort, like the Python loaders: a missing file → empty
+// set, mtime 0). A file appearing/disappearing therefore registers as a change.
+func statMtime(path string) int64 {
+	if path == "" {
+		return 0
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return fi.ModTime().UnixNano()
+}
+
+// maybeReload re-reads any backing list whose on-disk mtime changed since the
+// last pass, swapping the affected map(s) under p.mu. Throttled to at most one
+// stat pass per p.reloadThrottle (cheap: a time compare + a few stats), so the
+// Decide hot path pays almost nothing. Concurrency-safe: the throttle/mtime
+// bookkeeping is under reloadMu and the map swap under mu — Decide's readers
+// hold mu.RLock, so a swap is atomic w.r.t. any in-flight decision.
+func (p *Policy) maybeReload() {
+	now := time.Now()
+	p.reloadMu.Lock()
+	if p.reloadThrottle > 0 && p.lastReloadID != 0 &&
+		now.Sub(time.Unix(0, p.lastReloadID)) < p.reloadThrottle {
+		p.reloadMu.Unlock()
+		return
+	}
+	p.lastReloadID = now.UnixNano()
+
+	// Collect the files that changed (stat under reloadMu; re-read outside mu).
+	type pending struct {
+		idx int
+		set map[string]bool
+	}
+	var changed []pending
+	for i := range p.reloadFiles {
+		rt := &p.reloadFiles[i]
+		if rt.path == "" {
+			continue
+		}
+		m := statMtime(rt.path)
+		if m != rt.lastMtime {
+			rt.lastMtime = m
+			changed = append(changed, pending{idx: i, set: scanLines(rt.path, rt.stripComm)})
+		}
+	}
+	p.reloadMu.Unlock()
+
+	if len(changed) == 0 {
+		return
+	}
+	// Swap the affected maps atomically under the write lock.
+	p.mu.Lock()
+	for _, c := range changed {
+		p.reloadFiles[c.idx].apply(p, c.set)
+	}
+	p.mu.Unlock()
 }
 
 // ── registrable: port of ad_ghost._registrable ───────────────────────────────
@@ -279,6 +408,11 @@ func hostMatches(host string, patterns map[string]bool) bool {
 
 // allowed: port of ad_ghost._allowed. Own-infra ALWAYS wins (reflash-safe),
 // then the operator allowlist (host or registrable).
+//
+// LOCK CONTRACT: reads the reloadable allow map — the caller MUST hold at least
+// p.mu.RLock (Decide / shouldPoison do). Lock-free internally so Decide can call
+// it alongside shouldSplice/blockedByAd under a single RLock (sync.RWMutex is
+// not reentrant).
 func (p *Policy) allowed(host string) bool {
 	h := strings.ToLower(host)
 	reg := registrable(h)
@@ -297,7 +431,19 @@ func (p *Policy) allowed(host string) bool {
 	return p.allow[h] || p.allow[reg]
 }
 
+// allowedSafe is the lock-taking entry point to allowed() for callers OUTSIDE a
+// Decide RLock (e.g. the ad-candidate feed). It also picks up a live-reloaded
+// allowlist via maybeReload, so a freshly-allowlisted host stops being learned.
+func (p *Policy) allowedSafe(host string) bool {
+	p.maybeReload()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.allowed(host)
+}
+
 // shouldSplice: port of splice.should_splice (never wins; then seed ∪ learned).
+// LOCK CONTRACT: reads the reloadable never/spliceSeed/spliceLearn maps — the
+// caller MUST hold at least p.mu.RLock (Decide does).
 func (p *Policy) shouldSplice(sni string) bool {
 	s := strings.Trim(strings.ToLower(sni), ".")
 	if s == "" {
@@ -312,6 +458,10 @@ func (p *Policy) shouldSplice(sni string) bool {
 // blockedByAd: port of the ad_ghost requestheaders block decision (sans the
 // allowlist guard, which Decide applies first): _AD_HOST match OR
 // registrable/host in learned-trackers.
+//
+// LOCK CONTRACT: reads the reloadable learned map — the caller MUST hold at
+// least p.mu.RLock. Decide and shouldPoison (via isTracker) do; the candidate-
+// emit path calls it only through those.
 func (p *Policy) blockedByAd(host string) bool {
 	if p.adHost.MatchString(host) {
 		return true
@@ -339,9 +489,16 @@ func (p *Policy) blockedByAd(host string) bool {
 // sni defaults to host when empty (the live engine splices on SNI == the TLS
 // host; for the parity harness host and sni are the same value).
 func (p *Policy) Decide(host, sni string) string {
+	// #662 — pick up autolearn promotions / manual edits without a worker
+	// restart. Throttled to ~every reloadThrottle and best-effort, so the hot
+	// path normally pays only a time compare. Done BEFORE taking the read lock
+	// (maybeReload may take the write lock to swap a changed map).
+	p.maybeReload()
 	if sni == "" {
 		sni = host
 	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	if p.allowed(host) {
 		return "allow"
 	}
