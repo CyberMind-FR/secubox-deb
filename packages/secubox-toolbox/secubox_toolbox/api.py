@@ -3119,6 +3119,14 @@ async def admin_clients_rich() -> dict:
     # Use module-level imports so monkeypatching in tests works correctly.
     _av = avatar_analysis
     _geo = geo
+    # Phase 6 (#662) : map each WG client to its REAL external (pre-tunnel)
+    # endpoint IP so the flag reflects the client's true origin country, not
+    # the internal 10.99.1.x (which GeoIPs to nothing). Best-effort, cached.
+    try:
+        from . import wg as _wg
+        _wg_eps = _wg.wg_endpoints()
+    except Exception:
+        _wg_eps = {}
     rows = store.list_clients()
     rows = sorted(rows, key=lambda r: (r.get("last_seen") or 0), reverse=True)
     now = _t.time()
@@ -3155,7 +3163,13 @@ async def admin_clients_rich() -> dict:
             except Exception:
                 pass
             try:
-                gi = _geo.lookup(r.get("ip") or "")
+                # PRIVACY : the external endpoint IP is used transiently for the
+                # GeoIP lookup ONLY — it is NEVER stored or returned in the API
+                # response. The appliance is privacy-focused: country-granularity
+                # only (flag / ISO), never the raw client origin IP. Fall back to
+                # the stored (internal) IP for non-WG / captive clients.
+                geo_key = _wg_eps.get(r.get("mac_hash") or "") or (r.get("ip") or "")
+                gi = _geo.lookup(geo_key)
                 flag = gi.get("flag", "") or ""
                 country_iso = gi.get("country_iso", "") or ""
                 asn_org = gi.get("asn_org", "") or ""
