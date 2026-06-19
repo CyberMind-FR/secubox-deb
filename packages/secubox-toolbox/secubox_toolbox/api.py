@@ -94,6 +94,16 @@ async def toolbox_ad_event(request: Request) -> Response:
     500s the engine (it is fire-and-forget) — always returns 204. See the trust
     note above for why this is unauthenticated."""
     try:
+        # Body-size guard: this is the only unauthenticated POST-with-body on the
+        # R3 perimeter, and the portal serves the whole board — bound the body
+        # BEFORE parsing so a misbehaving/compromised WG peer can't pressure
+        # portal memory. The legit payload (≤5000 keys × 2 maps) is well under 2 MB.
+        try:
+            clen = int(request.headers.get("content-length") or 0)
+        except (TypeError, ValueError):
+            clen = 0
+        if clen > 2 * 1024 * 1024:
+            return Response(status_code=204)
         body = await request.json()
         if not isinstance(body, dict):
             return Response(status_code=204)
