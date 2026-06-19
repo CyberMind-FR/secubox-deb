@@ -32,9 +32,93 @@ DB = Path("/var/lib/secubox/toolbox/toolbox.db")
 CACHE_FILE = Path("/var/lib/secubox/toolbox/cumulative-cache.json")
 CACHE_TTL_SECONDS = 60  # refresh every minute
 
+# Live analysis-module event stores (post-#662 Phase-7 cutover). The legacy
+# toolbox.db `events` table froze at the cutover; the live counts + hosts now
+# live in each analysis module, exposed over its own unix socket.
+#   GET /mitm-events/stats?since_seconds=N -> {"kind":..,"count":n,...}
+#   GET /mitm-events?limit=N               -> {"events":[{...payload...}],"count":n}
+_MITM_MODULES = [
+    ("dpi", "/run/secubox/dpi.sock"),
+    ("cookies", "/run/secubox/cookies.sock"),
+    ("ja4", "/run/secubox/threat-analyst.sock"),
+]
+# dpi socket is the one carrying host/sni payloads for top-hosts aggregation.
+_DPI_SOCK = "/run/secubox/dpi.sock"
+
 
 def _now() -> int:
     return int(time.time())
+
+
+def _uds_get_json(sock_path: str, path: str, timeout: int = 2) -> dict | None:
+    """GET a JSON document over a unix socket. Returns the parsed dict, or
+    None on any error (never raises). Mirrors api._pull_mitm_module_events's
+    UDSConnection pattern."""
+    import socket as _sock
+    import http.client as _hc
+
+    try:
+        class UDSConnection(_hc.HTTPConnection):
+            def connect(self):
+                self.sock = _sock.socket(_sock.AF_UNIX, _sock.SOCK_STREAM)
+                self.sock.settimeout(self.timeout)
+                self.sock.connect(sock_path)
+
+        conn = UDSConnection("localhost", timeout=timeout)
+        try:
+            conn.request("GET", path)
+            resp = conn.getresponse()
+            if resp.status != 200:
+                return None
+            raw = resp.read().decode("utf-8", errors="ignore")[:1000000]
+            return json.loads(raw)
+        finally:
+            conn.close()
+    except Exception as e:
+        log.debug("uds get %s%s failed: %s", sock_path, path, e)
+        return None
+
+
+def _live_event_counts(window_seconds: int) -> dict | None:
+    """Query each analysis module's GET /mitm-events/stats for its event count
+    in the window. Returns {"dpi":n,"cookies":n,"ja4":n} (missing/error module
+    omitted). Returns None only if EVERY module call failed (caller falls back
+    to the legacy toolbox.db query)."""
+    counts: dict[str, int] = {}
+    any_ok = False
+    for kind, sock_path in _MITM_MODULES:
+        data = _uds_get_json(
+            sock_path, f"/mitm-events/stats?since_seconds={int(window_seconds)}"
+        )
+        if data is None:
+            continue
+        any_ok = True
+        # Prefer the module's self-reported kind; fall back to our tag.
+        k = data.get("kind") or kind
+        try:
+            counts[k] = int(data.get("count", 0))
+        except (TypeError, ValueError):
+            counts[k] = 0
+    return counts if any_ok else None
+
+
+def _live_top_hosts(limit: int = 5000, top: int = 25) -> list | None:
+    """Aggregate top hosts from the dpi module's recent events. Returns a list
+    of {"host":..,"count":..} (same shape as the legacy top_hosts_7d), or None
+    if the dpi module call failed."""
+    data = _uds_get_json(_DPI_SOCK, f"/mitm-events?limit={int(limit)}")
+    if data is None:
+        return None
+    host_counter: Counter = Counter()
+    for ev in data.get("events", []) or []:
+        try:
+            p = ev.get("payload") or {}
+            h = p.get("host") or p.get("sni")
+            if h:
+                host_counter[h] += 1
+        except Exception:
+            pass
+    return [{"host": h, "count": n} for h, n in host_counter.most_common(top)]
 
 
 def _safe_query(db, sql: str, params: tuple = ()) -> list:
@@ -74,30 +158,48 @@ def compute() -> dict:
             out["sessions"]["all_time"] = (_safe_query(c,
                 "SELECT COUNT(DISTINCT mac_hash) FROM clients") or [(0,)])[0][0]
 
-            # Event counts by source (last 7 days for relevance)
-            for row in _safe_query(c,
-                "SELECT source, COUNT(*) as n FROM events WHERE ts > ? GROUP BY source",
-                (d7d,)):
-                out["events"][row["source"]] = row["n"]
-            out["events"]["total_7d"] = sum(out["events"].values())
+            # Event counts by source (last 7 days for relevance).
+            # Post-#662 Phase-7: the live counts live in the analysis modules'
+            # own stores (queried over unix sockets). The legacy toolbox.db
+            # `events` table froze at the cutover, so prefer the live path and
+            # only fall back to the frozen table if EVERY module call fails.
+            live_counts = _live_event_counts(86400 * 7)
+            if live_counts is not None:
+                out["events"].update(live_counts)
+            else:
+                for row in _safe_query(c,
+                    "SELECT source, COUNT(*) as n FROM events WHERE ts > ? GROUP BY source",
+                    (d7d,)):
+                    out["events"][row["source"]] = row["n"]
+            out["events"]["total_7d"] = sum(
+                v for v in out["events"].values() if isinstance(v, int)
+            )
 
-            # Top hosts (anonymized — just hostnames, no mac_hash)
-            host_counter = Counter()
-            for row in _safe_query(c,
-                "SELECT payload FROM events WHERE source='dpi' AND ts > ? LIMIT 5000",
-                (d7d,)):
-                try:
-                    p = json.loads(row["payload"])
-                    h = p.get("host") or p.get("sni")
-                    if h:
-                        host_counter[h] += 1
-                except Exception:
-                    pass
-            out["top_hosts_7d"] = [
-                {"host": h, "count": n}
-                for h, n in host_counter.most_common(15)
-            ]
+            # Top hosts (anonymized — just hostnames, no mac_hash).
+            # Live path: aggregate the dpi module's recent events; fall back to
+            # the frozen toolbox.db `events` table only if the dpi call fails.
+            live_hosts = _live_top_hosts()
+            if live_hosts is not None:
+                out["top_hosts_7d"] = live_hosts
+            else:
+                host_counter = Counter()
+                for row in _safe_query(c,
+                    "SELECT payload FROM events WHERE source='dpi' AND ts > ? LIMIT 5000",
+                    (d7d,)):
+                    try:
+                        p = json.loads(row["payload"])
+                        h = p.get("host") or p.get("sni")
+                        if h:
+                            host_counter[h] += 1
+                    except Exception:
+                        pass
+                out["top_hosts_7d"] = [
+                    {"host": h, "count": n}
+                    for h, n in host_counter.most_common(15)
+                ]
 
+            # Risk score / level distributions read the `clients` table (not
+            # the frozen `events` table), so they stay on toolbox.db for now.
             # Risk score distribution (last 7d)
             score_buckets = {"low": 0, "medium": 0, "high": 0}
             for row in _safe_query(c,
