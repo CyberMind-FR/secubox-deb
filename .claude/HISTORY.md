@@ -3,6 +3,21 @@
 
 ---
 
+## 2026-06-19 — #662 anti-bot: Chrome TLS fingerprint (uTLS) — defeat DataDome without splice (PR #674)
+
+- lemonde.fr (DataDome) blocked R3 navigation at the 2nd level: the engine re-origined
+  upstream TLS with a Go JA3/JA4 → flagged as bot. Splice rejected (don't exempt a
+  tracking site). Fix: upstream transport now presents a real **Chrome** fingerprint
+  via **uTLS HelloChrome_Auto + h2-over-uTLS**. Verified live: JA4
+  `t13d1516h2_8daaf6152771_02713d6af862` (Chrome), was Go.
+- **Cert verification preserved** (manual verifyUConn: system roots + intermediates +
+  hostname; adversarially tested). Stopped the Accept-Encoding downgrade (was a tell) +
+  added brotli/zstd decode-inject-reencode. H1 response-header timeout.
+- First vendored deps (utls/brotli/zstd/x-net, pure-Go), offline arm64 via -mod=vendor.
+  Canary 1 worker → verified Chrome FP + cert chains + ad-block + banner → widened to 4.
+- Caveat: DataDome also fingerprints HTTP/2 + behaviour — uTLS helps strongly, not a
+  100% guarantee. Browser test is the real confirmation.
+
 ## 2026-06-19 — #662 post-cutover restore: ad-block metrics + popup CSS (PR #673)
 
 - **Found by verification**: the cutover ported the 204-block but NOT ad_ghost's
