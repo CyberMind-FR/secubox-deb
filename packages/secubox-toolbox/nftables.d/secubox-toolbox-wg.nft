@@ -55,9 +55,12 @@ table inet wg-toolbox {
         # outbound accept below. If it sits AFTER the accept it is never reached
         # (the accept terminates evaluation) → QUIC slips through and the whole
         # MITM is bypassed (no inject, no ad-block, no metrics, no social). The
-        # drop forces Chrome/Firefox to fall back to HTTP/2 over TCP, which our
-        # DNAT intercepts. ORDER IS LOAD-BEARING — keep this rule first.
-        iif "wg-toolbox" udp dport 443 counter drop
+        # REJECT (not drop) forces Chrome/Firefox to fall back to HTTP/2 over TCP
+        # IMMEDIATELY: a silent drop just makes the browser RETRY QUIC for tens of
+        # seconds (observed 199 retry packets, never falling back) — an ICMP
+        # port-unreachable tells it "no QUIC here" at once. First in the chain so
+        # it also breaks existing QUIC sessions (outbound). ORDER IS LOAD-BEARING.
+        iif "wg-toolbox" udp dport 443 counter reject
         # Outbound from tunnel → internet
         iif "wg-toolbox" oif "lan0" accept
         # Return traffic
