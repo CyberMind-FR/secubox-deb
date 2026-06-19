@@ -75,34 +75,50 @@ func gzipBytes(in []byte) []byte {
 	return buf.Bytes()
 }
 
-// injectIntoBody runs the transparency-banner injection over a (possibly
-// gzip-compressed) HTML body, returning the new body bytes to serve and whether
-// the body was rewritten.
+// injectHTML applies BOTH HTML transforms in one pass over the DECOMPRESSED
+// body: the transparency-banner loader (always) AND, for R3 (wg) clients, the
+// ad/popup-hiding cosmetic <style> (#662 — the cutover left this unported). Both
+// are idempotent (own guard markers) and order-independent; running them in the
+// same decompressed step means the cosmetic style benefits from the gzip
+// handling exactly like the loader. The cosmetic style is gated to wg because it
+// is an R3-tunnel opt-in behaviour (mirrors the Python addon's _is_r3plus gate).
+func injectHTML(plain []byte, clientHash string, wg bool) []byte {
+	out := injectLoader(plain, clientHash, wg)
+	if wg {
+		out = injectCosmetic(out)
+	}
+	return out
+}
+
+// injectIntoBody runs the HTML injection (loader + R3 cosmetic style) over a
+// (possibly gzip-compressed) HTML body, returning the new body bytes to serve
+// and whether the body was rewritten.
 //
-//   - encoding == "" (identity): injectLoader runs directly on body; the result
+//   - encoding == "" (identity): injectHTML runs directly on body; the result
 //     is returned (ok=true). The caller MUST update Content-Length to len(out).
 //   - encoding == "gzip" (case-insensitive): the body is gunzipped, injected,
 //     then RE-gzipped so the client transfer stays compressed (the tunnel is
 //     perf-sensitive). The caller keeps Content-Encoding: gzip and sets
-//     Content-Length to len(out).
+//     Content-Length to len(out). BOTH the loader and the cosmetic style are
+//     injected on this decompressed body, so the cosmetic CSS lands on
+//     gzip-compressed pages too (the common case).
 //   - any other encoding (br/zstd/deflate — should not occur after the upstream
 //     Accept-Encoding pin, but be safe): pass through untouched, ok=false.
 //
 // Fail-open: if gunzip fails (corrupt / not-actually-gzip / bomb), the ORIGINAL
 // bytes are returned with ok=false so the page is never broken.
 //
-// idempotency / placement live entirely inside injectLoader (unchanged).
+// idempotency / placement live entirely inside injectLoader / injectCosmetic.
 func injectIntoBody(body []byte, encoding, clientHash string, wg bool) (out []byte, ok bool) {
 	switch strings.ToLower(strings.TrimSpace(encoding)) {
 	case "":
-		return injectLoader(body, clientHash, wg), true
+		return injectHTML(body, clientHash, wg), true
 	case "gzip":
 		plain, err := gunzipBytes(body)
 		if err != nil {
 			return body, false // fail open: serve the original compressed bytes
 		}
-		injected := injectLoader(plain, clientHash, wg)
-		return gzipBytes(injected), true
+		return gzipBytes(injectHTML(plain, clientHash, wg)), true
 	default:
 		return body, false // unknown encoding we cannot decode → pass through
 	}

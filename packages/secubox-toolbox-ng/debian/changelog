@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * ad-stats: record ad-block metrics again (frozen since the #662 cutover) —
+    aggregate blocks in-memory, flush every 10s to the portal /__toolbox/ad-event
+    which writes the SQLite store feeding the #ads dashboard. (ref #662)
+  * cosmetic: inject the ad/popup-hiding <style> (ported from ad_ghost _COSMETIC,
+    expanded with ad-specific interstitial/overlay/popunder/exit-intent tokens) on
+    R3 HTML, restoring popup-ad hiding lost at cutover. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 08:00:00 +0000
+
 secubox-toolbox-ng (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * proxy: do NOT follow upstream redirects — relay 3xx to the client so the
