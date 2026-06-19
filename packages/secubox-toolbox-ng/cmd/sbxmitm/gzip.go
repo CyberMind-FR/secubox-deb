@@ -152,8 +152,8 @@ func zstdBytes(in []byte) ([]byte, error) {
 // same decompressed step means the cosmetic style benefits from the gzip
 // handling exactly like the loader. The cosmetic style is gated to wg because it
 // is an R3-tunnel opt-in behaviour (mirrors the Python addon's _is_r3plus gate).
-func injectHTML(plain []byte, clientHash string, wg bool) []byte {
-	out := injectLoader(plain, clientHash, wg)
+func injectHTML(plain []byte, clientHash string, wg, cspBypassed bool) []byte {
+	out := injectLoader(plain, clientHash, wg, cspBypassed)
 	if wg {
 		out = injectCosmetic(out)
 	}
@@ -162,7 +162,8 @@ func injectHTML(plain []byte, clientHash string, wg bool) []byte {
 
 // injectIntoBody runs the HTML injection (loader + R3 cosmetic style) over a
 // (possibly gzip-compressed) HTML body, returning the new body bytes to serve
-// and whether the body was rewritten.
+// and whether the body was rewritten. cspBypassed (#662) is threaded into the
+// loader tag as data-csp="1" when a real CSP was relaxed on this page.
 //
 //   - encoding == "" (identity): injectHTML runs directly on body; the result
 //     is returned (ok=true). The caller MUST update Content-Length to len(out).
@@ -181,22 +182,22 @@ func injectHTML(plain []byte, clientHash string, wg bool) []byte {
 //
 // The 32MiB decompression-bomb cap (gunzipCap) is enforced uniformly across
 // gzip/br/zstd. idempotency / placement live inside injectLoader/injectCosmetic.
-func injectIntoBody(body []byte, encoding, clientHash string, wg bool) (out []byte, ok bool) {
+func injectIntoBody(body []byte, encoding, clientHash string, wg, cspBypassed bool) (out []byte, ok bool) {
 	switch strings.ToLower(strings.TrimSpace(encoding)) {
 	case "":
-		return injectHTML(body, clientHash, wg), true
+		return injectHTML(body, clientHash, wg, cspBypassed), true
 	case "gzip":
 		plain, err := gunzipBytes(body)
 		if err != nil {
 			return body, false // fail open: serve the original compressed bytes
 		}
-		return gzipBytes(injectHTML(plain, clientHash, wg)), true
+		return gzipBytes(injectHTML(plain, clientHash, wg, cspBypassed)), true
 	case "br":
 		plain, err := unbrotliBytes(body)
 		if err != nil {
 			return body, false // fail open
 		}
-		reenc, err := brotliBytes(injectHTML(plain, clientHash, wg))
+		reenc, err := brotliBytes(injectHTML(plain, clientHash, wg, cspBypassed))
 		if err != nil {
 			return body, false // fail open: never serve a truncated br frame
 		}
@@ -206,7 +207,7 @@ func injectIntoBody(body []byte, encoding, clientHash string, wg bool) (out []by
 		if err != nil {
 			return body, false // fail open
 		}
-		reenc, err := zstdBytes(injectHTML(plain, clientHash, wg))
+		reenc, err := zstdBytes(injectHTML(plain, clientHash, wg, cspBypassed))
 		if err != nil {
 			return body, false // fail open: never serve a truncated zstd frame
 		}

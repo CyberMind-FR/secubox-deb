@@ -53,14 +53,24 @@ func asciiOnly(s string) string {
 // carrying the client identity (data-mh) + WG flag (data-wg). wg → "1" else "0";
 // clientHash is ascii-sanitised. The src is same-origin so it resolves to the
 // MITM'd host and is intercepted by the /__toolbox/* short-circuit.
-func loaderScript(clientHash string, wg bool) []byte {
+//
+// #662 CONSENTED-DEMONSTRATION: when cspBypassed is true (we actually relaxed a
+// real CSP on this page so the loader could run), the tag also carries
+// data-csp="1" — the portal loader renders a 🔓 from it as the VISIBLE proof
+// that the page's CSP was bypassed to inject. The attribute is OMITTED when
+// cspBypassed is false so a page with no CSP shows no false proof.
+func loaderScript(clientHash string, wg, cspBypassed bool) []byte {
 	wgVal := "0"
 	if wg {
 		wgVal = "1"
 	}
 	mh := asciiOnly(clientHash)
+	cspAttr := ""
+	if cspBypassed {
+		cspAttr = ` data-csp="1"`
+	}
 	tag := `<script src="/__toolbox/loader.js" data-mh="` + mh +
-		`" data-wg="` + wgVal + `" async></script>`
+		`" data-wg="` + wgVal + `"` + cspAttr + ` async></script>`
 	return []byte("<!-- " + bannerGuard + " -->" + tag)
 }
 
@@ -71,11 +81,14 @@ func loaderScript(clientHash string, wg bool) []byte {
 //     after it and insert the tag right after that ">".
 //   - else find the first "<body" and insert the tag right BEFORE it.
 //   - if neither is present → return the body unchanged (no inject).
-func injectLoader(body []byte, clientHash string, wg bool) []byte {
+//
+// cspBypassed (#662): true when a real CSP was relaxed on this page so the
+// loader could run; threaded into loaderScript as data-csp="1" (the 🔓 proof).
+func injectLoader(body []byte, clientHash string, wg, cspBypassed bool) []byte {
 	if bytes.Contains(body, []byte(bannerGuard)) {
 		return body
 	}
-	script := loaderScript(clientHash, wg)
+	script := loaderScript(clientHash, wg, cspBypassed)
 	low := bytes.ToLower(body)
 
 	if h := bytes.Index(low, []byte("<head")); h >= 0 {

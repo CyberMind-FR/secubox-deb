@@ -1,3 +1,24 @@
+secubox-toolbox-ng (0.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * demo/csp: only relax + flag 🔓 when the page's effective script directive
+    would ACTUALLY block the same-origin loader (no 'self'/'*'/scheme, or
+    'strict-dynamic'/'none'/empty). CSPs that already allow the loader are left
+    byte-for-byte untouched — the 🔓 is now honest proof of a defeated CSP, not
+    just "a CSP existed". (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 10:05:00 +0000
+
+secubox-toolbox-ng (0.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * demo: consented CSP-bypass for the transparency banner — on the R3 inject
+    path (gated --csp-bypass-demo, default on) relax the page script-src/-elem
+    (drop strict-dynamic/none, add 'self'/'unsafe-inline') so the loader runs on
+    strict-CSP sites (github etc.), and mark the bypass with data-csp=1 → the
+    portal banner shows a 🔓 proof. Only the script directive is touched, only on
+    injected 2xx-html R3 responses. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 09:45:00 +0000
+
 secubox-toolbox-ng (0.1.6-1~bookworm1) bookworm; urgency=medium
 
   * anti-bot: present a Chrome TLS fingerprint upstream via uTLS (HelloChrome_Auto)

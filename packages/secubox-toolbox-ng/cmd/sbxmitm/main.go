@@ -197,13 +197,14 @@ func ja4ish(h *tls.ClientHelloInfo) string {
 // ── CONNECT-proxy MITM wiring ────────────────────────────────────────────────
 
 type Proxy struct {
-	ca     *CA
-	pol    *Policy
-	jaSink func(string) // JA4 observations (logged; a sidecar in prod)
-	jarKey []byte       // anti-track HMAC fake-identity seed (nil → poison off)
-	poison bool         // master gate: poison tracker Set-Cookies (default on when jarKey present)
-	portal string       // portal base URL for /__toolbox/* reverse-proxy (banner assets)
-	ads    *adStats     // #662 — ad-block metrics aggregator (flushed to the portal)
+	ca      *CA
+	pol     *Policy
+	jaSink  func(string) // JA4 observations (logged; a sidecar in prod)
+	jarKey  []byte       // anti-track HMAC fake-identity seed (nil → poison off)
+	poison  bool         // master gate: poison tracker Set-Cookies (default on when jarKey present)
+	portal  string       // portal base URL for /__toolbox/* reverse-proxy (banner assets)
+	ads     *adStats     // #662 — ad-block metrics aggregator (flushed to the portal)
+	cspDemo bool         // #662 CONSENTED-DEMONSTRATION: relax a page's CSP so the injected loader runs, and flag the bypass (data-csp=1 → 🔓). Default on.
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -406,7 +407,18 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// keep them consistent with the bytes we actually serve.
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 &&
 		strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
-		if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), clientHash, wg); ok {
+		// #662 CONSENTED-DEMONSTRATION — ONLY here, on the responses we actually
+		// inject into (2xx text/html, R3/wg gate), and ONLY when the operator
+		// left the demo on, do we relax the page's CSP so the same-origin
+		// /__toolbox/loader.js can execute even on strict-CSP sites. cspBypassed
+		// is true iff there was a real CSP to bypass — it becomes data-csp="1" on
+		// the loader tag and the portal banner renders a 🔓 as the visible proof.
+		// We never strip CSP on non-injected responses.
+		cspBypassed := false
+		if px.cspDemo {
+			cspBypassed = relaxCSPForLoader(resp.Header)
+		}
+		if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), clientHash, wg, cspBypassed); ok {
 			body = out
 			// Keep the response framing consistent with the served bytes. The
 			// encoding is unchanged (gzip stays gzip, identity stays identity);
@@ -431,6 +443,8 @@ func main() {
 		"transparent mode: accept nft-DNAT'd conns + recover SO_ORIGINAL_DST (live R3); default is the CONNECT proxy PoC")
 	portal := flag.String("portal", "http://127.0.0.1:8088",
 		"portal base URL; /__toolbox/loader.js + /__toolbox/bundle are reverse-proxied here (banner assets, served for any MITM'd origin)")
+	cspDemo := flag.Bool("csp-bypass-demo", true,
+		"CONSENTED DEMONSTRATION: relax a page's CSP so the injected transparency-banner loader runs even on strict-CSP sites, and flag the bypass (banner shows 🔓). Only on injected 2xx text/html R3 responses; never on non-injected responses. Set false to never touch CSP.")
 	flag.Parse()
 	ca, err := loadCA(*caCert, *caKey)
 	if err != nil {
@@ -451,13 +465,14 @@ func main() {
 		log.Printf("poison requested but jar key %s absent/empty → poison OFF", *jarKeyPath)
 	}
 	px := &Proxy{
-		ca:     ca,
-		pol:    pol,
-		jaSink: func(s string) { log.Printf("ja4 %s", s) },
-		jarKey: jarKey,
-		poison: *poison,
-		portal: *portal,
-		ads:    newAdStats(),
+		ca:      ca,
+		pol:     pol,
+		jaSink:  func(s string) { log.Printf("ja4 %s", s) },
+		jarKey:  jarKey,
+		poison:  *poison,
+		portal:  *portal,
+		ads:     newAdStats(),
+		cspDemo: *cspDemo,
 	}
 	// #662 — start the ad-block metrics flusher: the block path tallies every
 	// 204 into px.ads, drained every 10s to the portal's /__toolbox/ad-event

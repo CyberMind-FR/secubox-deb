@@ -17,7 +17,7 @@ import (
 func TestInjectLoaderGuardIdempotent(t *testing.T) {
 	// Body already carrying the guard → returned byte-for-byte unchanged.
 	body := []byte("<html><head><!-- " + bannerGuard + " --><script></script></head><body>hi</body></html>")
-	out := injectLoader(body, "abc123", false)
+	out := injectLoader(body, "abc123", false, false)
 	if string(out) != string(body) {
 		t.Fatalf("guarded body must be unchanged.\n got: %s", out)
 	}
@@ -25,7 +25,7 @@ func TestInjectLoaderGuardIdempotent(t *testing.T) {
 
 func TestInjectLoaderHeadInsertion(t *testing.T) {
 	body := []byte(`<html><head lang="en"><title>x</title></head><body>hi</body></html>`)
-	out := string(injectLoader(body, "deadbeef", true))
+	out := string(injectLoader(body, "deadbeef", true, false))
 	// The tag must land right AFTER the first <head ...>'s closing '>'.
 	headOpen := `<head lang="en">`
 	idx := strings.Index(out, headOpen)
@@ -46,7 +46,7 @@ func TestInjectLoaderHeadInsertion(t *testing.T) {
 func TestInjectLoaderBodyFallback(t *testing.T) {
 	// No <head> → insert right BEFORE the first <body>.
 	body := []byte(`<html><body class="x">hi</body></html>`)
-	out := string(injectLoader(body, "cafe", false))
+	out := string(injectLoader(body, "cafe", false, false))
 	wantTag := `<!-- ` + bannerGuard + ` --><script src="/__toolbox/loader.js" data-mh="cafe" data-wg="0" async></script>`
 	if !strings.Contains(out, wantTag+`<body class="x">`) {
 		t.Fatalf("tag not inserted right before <body>.\n got: %s", out)
@@ -55,7 +55,7 @@ func TestInjectLoaderBodyFallback(t *testing.T) {
 
 func TestInjectLoaderNeitherHeadNorBody(t *testing.T) {
 	body := []byte(`<p>just a fragment</p>`)
-	out := injectLoader(body, "x", true)
+	out := injectLoader(body, "x", true, false)
 	if string(out) != string(body) {
 		t.Fatalf("no head/body → must be unchanged.\n got: %s", out)
 	}
@@ -70,7 +70,7 @@ func TestInjectLoaderWGAttr(t *testing.T) {
 		{false, `data-wg="0"`},
 	}
 	for _, c := range cases {
-		out := string(injectLoader([]byte(`<head></head>`), "mh1", c.wg))
+		out := string(injectLoader([]byte(`<head></head>`), "mh1", c.wg, false))
 		if !strings.Contains(out, c.want) {
 			t.Fatalf("wg=%v: want %q in %s", c.wg, c.want, out)
 		}
@@ -79,7 +79,7 @@ func TestInjectLoaderWGAttr(t *testing.T) {
 
 func TestInjectLoaderNonASCIIHashStripped(t *testing.T) {
 	// Non-ascii bytes in the client hash are dropped (Python .encode("ascii","ignore")).
-	out := string(injectLoader([]byte(`<head></head>`), "abécÿ12", false))
+	out := string(injectLoader([]byte(`<head></head>`), "abécÿ12", false, false))
 	if !strings.Contains(out, `data-mh="abc12"`) {
 		t.Fatalf("non-ascii bytes not stripped: %s", out)
 	}
@@ -87,7 +87,7 @@ func TestInjectLoaderNonASCIIHashStripped(t *testing.T) {
 
 func TestInjectLoaderHeadCaseInsensitive(t *testing.T) {
 	body := []byte(`<HTML><HEAD></HEAD><BODY>hi</BODY></HTML>`)
-	out := string(injectLoader(body, "z", false))
+	out := string(injectLoader(body, "z", false, false))
 	if !strings.Contains(out, `<HEAD><!-- `+bannerGuard) {
 		t.Fatalf("case-insensitive <HEAD> match failed: %s", out)
 	}
