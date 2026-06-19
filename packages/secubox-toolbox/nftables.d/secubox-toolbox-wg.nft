@@ -51,13 +51,16 @@ table inet wg-toolbox {
 
     chain forward {
         type filter hook forward priority filter; policy accept;
+        # Phase 6.K / #662 — drop UDP 443 (QUIC/HTTP3) FIRST, before the blanket
+        # outbound accept below. If it sits AFTER the accept it is never reached
+        # (the accept terminates evaluation) → QUIC slips through and the whole
+        # MITM is bypassed (no inject, no ad-block, no metrics, no social). The
+        # drop forces Chrome/Firefox to fall back to HTTP/2 over TCP, which our
+        # DNAT intercepts. ORDER IS LOAD-BEARING — keep this rule first.
+        iif "wg-toolbox" udp dport 443 counter drop
         # Outbound from tunnel → internet
         iif "wg-toolbox" oif "lan0" accept
         # Return traffic
         iif "lan0" oif "wg-toolbox" ct state established,related accept
-        # Phase 6.K — drop UDP 443 (QUIC/HTTP3) so browsers fall back to
-        # HTTP/2 over TCP, which our DNAT can intercept. Without this,
-        # Chrome/Firefox prefer QUIC and bypass mitm entirely.
-        iif "wg-toolbox" udp dport 443 counter drop
     }
 }
