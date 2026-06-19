@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 //
-// SecuBox-Deb :: toolbox-ng :: gzip-aware banner injection (#662)
+// SecuBox-Deb :: toolbox-ng :: compression-aware banner injection (#662)
 //
 // The transparency-banner inject (injectLoader) scans the HTML body for
-// <head>/<body>. Browsers send `Accept-Encoding: gzip, br`, so most upstream
-// responses come back COMPRESSED — and a compressed body has no plaintext
-// <head>/<body> for injectLoader to find, so it silently no-ops (the banner
-// vanished on every gzip page). mitmPipeline now pins the upstream request to
-// `Accept-Encoding: gzip` (dropping br/zstd/deflate we cannot decode with the
-// stdlib), so every response is either gzip or identity.
+// <head>/<body>. Browsers send `Accept-Encoding: gzip, deflate, br, zstd`, so
+// most upstream responses come back COMPRESSED — and a compressed body has no
+// plaintext <head>/<body> for injectLoader to find, so it silently no-ops.
 //
-// This file holds the gzip helpers + the single inject-path transform that
-// decompresses (if gzip) → injectLoader → recompresses, fail-open on any error
-// so a banner asset never breaks the page.
+// #662 — we NO LONGER downgrade the upstream Accept-Encoding to gzip (that
+// override was itself an anti-bot tell). The client's real AE is forwarded
+// verbatim, so a response can come back gzip, br, zstd, or identity. This file
+// decodes EACH of those, runs the inject over the plaintext, and RE-ENCODES in
+// the SAME encoding (gzip→gzip, br→br, zstd→zstd) so AE preservation no longer
+// costs us injection AND the client transfer stays compressed. Everything fails
+// open (serve the ORIGINAL bytes on any decode/encode error — never corrupt a
+// page); unknown encodings pass through untouched.
 //
-// Pure standard library — compress/gzip only; no external modules (brotli/zstd
-// are NOT in the stdlib, which is exactly why we constrain the wire to gzip).
+// Dependencies (cgo-free, pure-Go):
+//   - compress/gzip                        (stdlib)
+//   - github.com/andybalholm/brotli        (br)
+//   - github.com/klauspost/compress/zstd   (zstd)
 package main
 
 import (
@@ -24,14 +28,32 @@ import (
 	"compress/gzip"
 	"io"
 	"strings"
+
+	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 )
 
-// gunzipCap bounds the decompressed output so a maliciously-crafted gzip body
-// (a "decompression bomb") cannot blow the worker's memory. The upstream body
-// itself is already read under an 8MiB LimitReader; 32MiB of inflated HTML is a
-// generous ceiling for a single page. Exceeding it → treated as an error
-// (caller fails open and serves the original compressed bytes).
+// gunzipCap bounds the decompressed output of EVERY codec (gzip/br/zstd) so a
+// maliciously-crafted body (a "decompression bomb") cannot blow the worker's
+// memory. The upstream body itself is already read under an 8MiB LimitReader;
+// 32MiB of inflated HTML is a generous ceiling for a single page. Exceeding it →
+// treated as an error (caller fails open and serves the original compressed
+// bytes). Named gunzipCap for history; applies uniformly to br + zstd too.
 const gunzipCap = 32 << 20
+
+// readCapped inflates a decompressing reader with the gunzipCap bomb guard,
+// shared by gzip/br/zstd. Reads up to gunzipCap+1 so "exactly at the cap" (fine)
+// is distinguished from "over the cap" (bomb → error).
+func readCapped(r io.Reader) ([]byte, error) {
+	out, err := io.ReadAll(io.LimitReader(r, gunzipCap+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(out) > gunzipCap {
+		return nil, errGunzipTooLarge
+	}
+	return out, nil
+}
 
 // gunzipBytes inflates a gzip-compressed body. It is defensive on two axes:
 //   - a malformed/non-gzip input returns an error (caller fails open),
@@ -43,16 +65,7 @@ func gunzipBytes(in []byte) ([]byte, error) {
 		return nil, err
 	}
 	defer zr.Close()
-	// Read up to gunzipCap+1 so we can tell "exactly at the cap" (fine) from
-	// "the stream is bigger than the cap" (bomb → error).
-	out, err := io.ReadAll(io.LimitReader(zr, gunzipCap+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(out) > gunzipCap {
-		return nil, errGunzipTooLarge
-	}
-	return out, nil
+	return readCapped(zr)
 }
 
 // errGunzipTooLarge is returned by gunzipBytes when the decompressed stream
@@ -73,6 +86,63 @@ func gzipBytes(in []byte) []byte {
 	_, _ = zw.Write(in)
 	_ = zw.Close()
 	return buf.Bytes()
+}
+
+// unbrotliBytes inflates a brotli-compressed body with the gunzipCap bomb guard.
+// A malformed/non-brotli input or an over-cap stream returns an error (caller
+// fails open). Pure-Go (github.com/andybalholm/brotli — cgo-free).
+func unbrotliBytes(in []byte) ([]byte, error) {
+	return readCapped(brotli.NewReader(bytes.NewReader(in)))
+}
+
+// brotliBytes compresses in with brotli at the default quality. It writes into
+// an in-memory buffer; Close flushes the final block. The bytes.Buffer cannot
+// fail, but brotli.Writer.Write/Close return errors → surfaced so the caller
+// fails open rather than serving a truncated stream.
+func brotliBytes(in []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	bw := brotli.NewWriter(&buf)
+	if _, err := bw.Write(in); err != nil {
+		_ = bw.Close()
+		return nil, err
+	}
+	if err := bw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// unzstdBytes inflates a zstd-compressed body with the gunzipCap bomb guard. A
+// malformed/non-zstd input or an over-cap stream returns an error (caller fails
+// open). Pure-Go (github.com/klauspost/compress/zstd — cgo-free). The decoder is
+// created per-call WITHOUT concurrency goroutines (WithDecoderConcurrency(1)) so
+// nothing is left running, then Closed.
+func unzstdBytes(in []byte) ([]byte, error) {
+	zr, err := zstd.NewReader(bytes.NewReader(in), zstd.WithDecoderConcurrency(1))
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	return readCapped(zr)
+}
+
+// zstdBytes compresses in with zstd at the default level. The encoder is created
+// per-call and Closed (flushing the final frame). Errors are surfaced so the
+// caller fails open rather than serving a truncated frame.
+func zstdBytes(in []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zw, err := zstd.NewWriter(&buf, zstd.WithEncoderConcurrency(1))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := zw.Write(in); err != nil {
+		_ = zw.Close()
+		return nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // injectHTML applies BOTH HTML transforms in one pass over the DECOMPRESSED
@@ -96,19 +166,21 @@ func injectHTML(plain []byte, clientHash string, wg bool) []byte {
 //
 //   - encoding == "" (identity): injectHTML runs directly on body; the result
 //     is returned (ok=true). The caller MUST update Content-Length to len(out).
-//   - encoding == "gzip" (case-insensitive): the body is gunzipped, injected,
-//     then RE-gzipped so the client transfer stays compressed (the tunnel is
-//     perf-sensitive). The caller keeps Content-Encoding: gzip and sets
-//     Content-Length to len(out). BOTH the loader and the cosmetic style are
-//     injected on this decompressed body, so the cosmetic CSS lands on
-//     gzip-compressed pages too (the common case).
-//   - any other encoding (br/zstd/deflate — should not occur after the upstream
-//     Accept-Encoding pin, but be safe): pass through untouched, ok=false.
+//   - encoding ∈ {gzip, br, zstd} (case-insensitive): the body is decoded,
+//     injected, then RE-ENCODED in the SAME codec so the client transfer stays
+//     compressed (the tunnel is perf-sensitive) and Content-Encoding is
+//     UNCHANGED. The caller sets Content-Length to len(out). BOTH the loader and
+//     the cosmetic style are injected on the decompressed body, so the cosmetic
+//     CSS lands on compressed pages too (the common case).
+//   - any other encoding (deflate, multi-value, …): pass through untouched,
+//     ok=false.
 //
-// Fail-open: if gunzip fails (corrupt / not-actually-gzip / bomb), the ORIGINAL
-// bytes are returned with ok=false so the page is never broken.
+// Fail-open: if the decode OR the re-encode fails (corrupt / mislabelled / bomb /
+// encoder error), the ORIGINAL bytes are returned with ok=false so the page is
+// never broken or corrupted.
 //
-// idempotency / placement live entirely inside injectLoader / injectCosmetic.
+// The 32MiB decompression-bomb cap (gunzipCap) is enforced uniformly across
+// gzip/br/zstd. idempotency / placement live inside injectLoader/injectCosmetic.
 func injectIntoBody(body []byte, encoding, clientHash string, wg bool) (out []byte, ok bool) {
 	switch strings.ToLower(strings.TrimSpace(encoding)) {
 	case "":
@@ -119,6 +191,26 @@ func injectIntoBody(body []byte, encoding, clientHash string, wg bool) (out []by
 			return body, false // fail open: serve the original compressed bytes
 		}
 		return gzipBytes(injectHTML(plain, clientHash, wg)), true
+	case "br":
+		plain, err := unbrotliBytes(body)
+		if err != nil {
+			return body, false // fail open
+		}
+		reenc, err := brotliBytes(injectHTML(plain, clientHash, wg))
+		if err != nil {
+			return body, false // fail open: never serve a truncated br frame
+		}
+		return reenc, true
+	case "zstd":
+		plain, err := unzstdBytes(body)
+		if err != nil {
+			return body, false // fail open
+		}
+		reenc, err := zstdBytes(injectHTML(plain, clientHash, wg))
+		if err != nil {
+			return body, false // fail open: never serve a truncated zstd frame
+		}
+		return reenc, true
 	default:
 		return body, false // unknown encoding we cannot decode → pass through
 	}
