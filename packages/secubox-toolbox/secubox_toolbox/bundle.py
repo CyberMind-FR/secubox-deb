@@ -113,6 +113,11 @@ LOADER_JS = r"""(function(){
   var s = document.currentScript || {};
   var ds = s.dataset || {};
   var mh = ds.mh || "", wg = ds.wg || "0";
+  // #662 CONSENTED-DEMONSTRATION: the engine relaxed this page's CSP so this
+  // loader could run even under a strict policy, and stamped data-csp="1" on our
+  // <script>. When set, the banner shows a 🔓 as VISIBLE proof the page's CSP was
+  // bypassed to inject. Absent → no proof emoji (page had no CSP to bypass).
+  var csp = ds.csp || "";
   function ready(fn){ if (document.body) { fn(); } else { setTimeout(function(){ready(fn);}, 30); } }
   function esc(t){ return String(t).replace(/[&<>"]/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
@@ -138,7 +143,11 @@ LOADER_JS = r"""(function(){
       + "border-bottom:2px solid #148C66;padding:6px 12px;display:flex;gap:14px;align-items:center;"
       + "box-shadow:0 2px 12px rgba(0,0,0,.4)");
     var pin = b.pin ? "<span title=\"pinned\">📌 " + esc(b.pin) + "</span>" : "";
+    // #662 — 🔓 proof: the engine relaxed this page's CSP to inject this banner.
+    var cspProof = (csp === "1")
+      ? "<span title=\"CSP contourné par SecuBox (démonstration)\">🔓</span>" : "";
     bar.innerHTML = "<b style=\"color:#148C66\">SecuBox</b>"
+      + cspProof
       + "<span>" + esc((b.level || "r1").toUpperCase()) + "</span>"
       + "<span>🛰️ " + trk + " trackers</span>"
       + "<span>🍪 " + ck + " cookies</span>"
