@@ -18,7 +18,9 @@
 //	avatar    →   /run/secubox/avatar.sock          POST /fingerprint
 //	ja4       →   /run/secubox/threat-analyst.sock  POST /ja4
 //	soc_relay →   /run/secubox/soc.sock             POST /event
-//	social_graph: in-process (no socket) — correlated inside the engine, not emitted.
+//	social_graph: correlated in-process (social.go) — edges (hash-only, never raw
+//	  cookie values) are NOT emitted to a module socket but POSTed to the portal
+//	  /__toolbox/social-event ingest (the social store lives in the toolbox/portal).
 //
 // emit takes the full socket PATH (not an http+unix:// URL) plus the route in
 // the payload's destination; callers build the path from the table above.
