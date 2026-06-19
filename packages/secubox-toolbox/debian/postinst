@@ -199,7 +199,8 @@ fi
       # reconcile so a fresh/false flag leaves no tunnel behind.
       systemctl enable secubox-toolbox-tor.path 2>/dev/null || true
       systemctl start  secubox-toolbox-tor.path 2>/dev/null || true
-      /usr/sbin/secubox-toolbox-tor-reconcile reconcile 2>/dev/null || true
+      systemctl enable secubox-toolbox-tor.timer 2>/dev/null || true
+      systemctl start  secubox-toolbox-tor.timer 2>/dev/null || true
       # Pas de start auto — l'opérateur doit configurer mesh.toml et lancer toolbox-up
     fi
 
@@ -299,6 +300,7 @@ fi
     if [ -n "${2:-}" ] && [ -d /run/systemd/system ]; then
       for unit in secubox-toolbox.service \
                   secubox-toolbox-mitm.service \
+                  secubox-toolbox-mitm-wg.service \
                   secubox-toolbox-mitm-wg-worker@1.service \
                   secubox-toolbox-mitm-wg-worker@2.service \
                   secubox-toolbox-mitm-wg-worker@3.service \
@@ -309,6 +311,13 @@ fi
           systemctl try-restart "$unit" 2>/dev/null || true
         fi
       done
+    fi
+    # #683 : converge the Tor tunnel LAST — after the nft reloads above (which
+    # would otherwise flush the runtime table) and after the worker restarts.
+    # Idempotent: re-arms iff tor_mode=true, no-op otherwise. Closes the
+    # flag-on/tunnel-off leak window an upgrade could open.
+    if [ -x /usr/sbin/secubox-toolbox-tor-reconcile ]; then
+      /usr/sbin/secubox-toolbox-tor-reconcile reconcile 2>/dev/null || true
     fi
     ;;
 esac

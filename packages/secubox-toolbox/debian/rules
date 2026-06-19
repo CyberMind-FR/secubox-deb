@@ -61,6 +61,8 @@ override_dh_installsystemd:
 	  debian/secubox-toolbox/lib/systemd/system/
 	install -m 0644 systemd/secubox-toolbox-tor.path \
 	  debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-toolbox-tor.timer \
+	  debian/secubox-toolbox/lib/systemd/system/
 	# Primary unit goes via dh_installsystemd which also handles the enable helpers.
 	cp systemd/secubox-toolbox.service debian/secubox-toolbox.service
 	dh_installsystemd --no-start --no-enable

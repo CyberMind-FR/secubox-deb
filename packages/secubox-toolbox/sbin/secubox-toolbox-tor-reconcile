@@ -20,6 +20,11 @@ readonly MODULE="toolbox-tor"
 
 FILTERS="${SECUBOX_FILTERS_PATH:-/etc/secubox/toolbox/filters.json}"
 NFT_FILE=/usr/lib/secubox/toolbox/conf/nft-toolbox-tor.nft
+# Persist the table as a drop-in so it SURVIVES `nft -f /etc/nftables.conf`
+# reloads (which other postinsts trigger and which would otherwise flush the
+# runtime-only table → flag-on/tunnel-off leak). zz- = loads after the wg
+# tables (alphabetical glob), per the layered-dropin ordering rule.
+NFT_DROPIN=/etc/nftables.d/zz-secubox-toolbox-tor.nft
 TORRC_DROPIN_SRC=/usr/lib/secubox/toolbox/conf/torrc-toolbox-egress.conf
 TORRC_DROPIN=/etc/tor/torrc.d/10-secubox-toolbox-egress.conf
 TORRC_MAIN=/etc/tor/torrc
@@ -41,8 +46,11 @@ arm() {
   if ! grep -qE '^\s*%include\s+/etc/tor/torrc\.d/' "$TORRC_MAIN" 2>/dev/null; then
     echo '%include /etc/tor/torrc.d/*.conf' >> "$TORRC_MAIN"
   fi
-  # Load nft FIRST (kill-switch active) so there is never a clearnet window.
-  nft -f "$NFT_FILE"
+  # Persist as a drop-in (survives nft reloads) then load it NOW. nft FIRST
+  # (kill-switch active) so there is never a clearnet window.
+  install -d -m 0755 /etc/nftables.d
+  install -m 0644 "$NFT_FILE" "$NFT_DROPIN"
+  nft -f "$NFT_DROPIN"
   systemctl restart tor 2>/dev/null || systemctl start tor 2>/dev/null || \
     log "WARN tor failed to (re)start — egress fail-closed until it does"
   log "ARMED"
@@ -50,7 +58,8 @@ arm() {
 
 disarm() {
   log "disarming kbin Tor egress"
-  table_present && nft delete table inet toolbox_tor 2>/dev/null || true
+  rm -f "$NFT_DROPIN"
+  if table_present; then nft delete table inet toolbox_tor 2>/dev/null || true; fi
   rm -f "$TORRC_DROPIN"
   # Stop tor to minimise attack surface when not in use (no hidden services
   # are owned by this drop-in; secubox-tor manages those separately).
