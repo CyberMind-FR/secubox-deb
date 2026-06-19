@@ -199,12 +199,13 @@ func ja4ish(h *tls.ClientHelloInfo) string {
 type Proxy struct {
 	ca      *CA
 	pol     *Policy
-	jaSink  func(string) // JA4 observations (logged; a sidecar in prod)
-	jarKey  []byte       // anti-track HMAC fake-identity seed (nil → poison off)
-	poison  bool         // master gate: poison tracker Set-Cookies (default on when jarKey present)
-	portal  string       // portal base URL for /__toolbox/* reverse-proxy (banner assets)
-	ads     *adStats     // #662 — ad-block metrics aggregator (flushed to the portal)
-	cspDemo bool         // #662 CONSENTED-DEMONSTRATION: relax a page's CSP so the injected loader runs, and flag the bypass (data-csp=1 → 🔓). Default on.
+	jaSink  func(string)  // JA4 observations (logged; a sidecar in prod)
+	jarKey  []byte        // anti-track HMAC fake-identity seed (nil → poison off)
+	poison  bool          // master gate: poison tracker Set-Cookies (default on when jarKey present)
+	portal  string        // portal base URL for /__toolbox/* reverse-proxy (banner assets)
+	ads     *adStats      // #662 — ad-block metrics aggregator (flushed to the portal)
+	cand    *adCandidates // #662 — ad-candidate learning feed (flushed with ads to the portal)
+	cspDemo bool          // #662 CONSENTED-DEMONSTRATION: relax a page's CSP so the injected loader runs, and flag the bypass (data-csp=1 → 🔓). Default on.
 
 	// analysisRelay gates the per-flow telemetry relay to the dpi/cookies/ja4
 	// analysis sidecar sockets (#662 — restoring the "Qui te piste?" events the
@@ -227,6 +228,33 @@ func (px *Proxy) recordAdBlock(adHost, site, macHash string) {
 	if px.ads != nil {
 		px.ads.recordAdBlock(adHost, site, macHash)
 	}
+}
+
+// maybeRecordAdCandidate feeds the auto-learn loop (#662): on the allow/mitm
+// path (NOT block — already caught; NOT allowlisted/own-infra), it records an
+// ad-candidate (host, site) when the request is 3rd-party
+// (registrable(host) != registrable(site)) AND the path smells like an ad/track
+// endpoint (adPathRE). It is the engine port of ad_ghost's candidate capture —
+// the feed secubox-toolbox-autolearn promotes into learned-trackers.txt at
+// AD_MIN_SITES distinct sites. Gated behind the analysis/ad relay flag, O(1) hot
+// path, fire-and-forget, nil-safe (CONNECT PoC / tests with no feed).
+func (px *Proxy) maybeRecordAdCandidate(host, site, path string) {
+	if px == nil || px.cand == nil || !px.relayEnabled() || px.pol == nil {
+		return
+	}
+	if site == "" || host == "" {
+		return // no 1st-party context (no Referer) → nothing to attribute.
+	}
+	if px.pol.allowedSafe(host) {
+		return // own-infra / allowlist: never learn our own / trusted hosts.
+	}
+	if registrable(host) == registrable(site) {
+		return // 1st-party request: not a cross-site ad/track signal.
+	}
+	if !adPathRE.MatchString(path) {
+		return // path doesn't look like an ad/track endpoint.
+	}
+	px.cand.record(host, site)
 }
 
 func (px *Proxy) serverTLSConfig() *tls.Config {
@@ -414,6 +442,15 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	relayIP := peerIP(rawClient)
 	px.emitDPI(relayIP, clientHash, host, req)
 
+	// #662 — feed the auto-learn loop: on this allow/mitm flow, record an
+	// ad-candidate when the request is 3rd-party AND its path smells like an
+	// ad/track endpoint (ad_ghost's _AD_PATH heuristic). site = registrable of
+	// the Referer (the ad_ghost _site_of flavour). Done BEFORE anonymize mutates
+	// headers (so the Referer is the client's original). O(1), gated,
+	// fire-and-forget — a new adware host gets observed here, promoted by
+	// autolearn, then blocked+smogged after the policy live-reloads it.
+	px.maybeRecordAdCandidate(host, refererSite(req.Header.Get("Referer")), req.URL.Path)
+
 	anonymizeRequest(req.Header)
 
 	// #662 — do NOT touch Accept-Encoding. We FORWARD the client's original
@@ -569,6 +606,7 @@ func main() {
 		poison:  *poison,
 		portal:  *portal,
 		ads:     newAdStats(),
+		cand:    newAdCandidates(),
 		cspDemo: *cspDemo,
 
 		analysisRelay: *analysisRelay,
@@ -585,7 +623,9 @@ func main() {
 	// #662 — start the ad-block metrics flusher: the block path tallies every
 	// 204 into px.ads, drained every 10s to the portal's /__toolbox/ad-event
 	// (best-effort, fire-and-forget) so the #ads dashboard sees blocks again.
-	go px.ads.runAdStatsFlusher(*portal)
+	// #662 — the candidate feed (px.cand) is drained in the SAME flush so the
+	// learning candidates ride the existing ad-event channel (one POST / 10s).
+	go px.ads.runAdStatsFlusher(*portal, px.cand)
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
 		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The

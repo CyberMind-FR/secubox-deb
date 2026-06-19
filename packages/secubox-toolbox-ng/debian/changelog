@@ -1,3 +1,12 @@
+secubox-toolbox-ng (0.1.12-1~bookworm1) bookworm; urgency=medium
+
+  * adlearn: live-reload the blocklist (mtime) so promotions/edits block without
+    a worker restart; emit ad-candidates (3rd-party ad-path) to the portal;
+    autolearn also promotes cross-site trackers from social_edges. Learned
+    trackers are auto-204 + poison-smogged. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 12:30:00 +0000
+
 secubox-toolbox-ng (0.1.11-1~bookworm1) bookworm; urgency=medium
 
   * social: ALSO correlate on the block path — blocked 3rd-party trackers still

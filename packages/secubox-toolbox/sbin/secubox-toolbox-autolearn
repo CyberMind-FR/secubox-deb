@@ -221,6 +221,92 @@ def _ad_feed() -> int:
     return len(promoted)
 
 
+# #662 — cross-site-reuse promotion. A tracker_domain seen issuing cookies on
+# >= SOCIAL_MIN_SITES DISTINCT src_site (across peers, recent window) is a
+# BEHAVIOURALLY-confirmed cross-site tracker (the social graph), independent of
+# the ad-path heuristic. Promote it into learned-trackers.txt so the engine
+# blocks (204) + smogs it. Conservative + reuses the SAME allowlist/self guard as
+# _ad_feed (NEVER promote allowlisted or self domains). De-dups against OUT.
+SOCIAL_MIN_SITES = int(os.environ.get("SECUBOX_SOCIAL_MIN_SITES", "3"))
+SOCIAL_WINDOW_HOURS = int(os.environ.get("SECUBOX_SOCIAL_WINDOW_HOURS", "168"))
+
+
+def _social_feed() -> int:
+    """Promote cross-site cookie-reuse trackers (social_edges) into the learned
+    blocklist. A tracker_domain linking >= SOCIAL_MIN_SITES distinct src_site in
+    the last SOCIAL_WINDOW_HOURS is promoted. Allowlist + self domains excluded
+    (reused guard). MERGES into OUT (never overwrites). Returns count promoted, or
+    -1 if unavailable (e.g. no social_edges table). Best-effort: never raises."""
+    cutoff = int(time.time()) - SOCIAL_WINDOW_HOURS * 3600
+    try:
+        con = sqlite3.connect(DB, timeout=5)
+        rows = con.execute(
+            "SELECT tracker_domain, COUNT(DISTINCT src_site) AS sites "
+            "FROM social_edges WHERE ts >= ? "
+            "GROUP BY tracker_domain", (cutoff,)).fetchall()
+        con.close()
+    except Exception as e:
+        sys.stderr.write(f"autolearn: social query failed: {e}\n")
+        return -1
+    # Fold to registrable and aggregate the distinct-site count per eTLD+1 (two
+    # tracker subdomains of the same registrable jointly meet the threshold).
+    by_reg: dict[str, set] = {}
+    try:
+        scon = sqlite3.connect(DB, timeout=5)
+        for td, _sites in rows:
+            reg = registrable(td)
+            if not reg:
+                continue
+            ss = by_reg.setdefault(reg, set())
+            for (s,) in scon.execute(
+                "SELECT DISTINCT src_site FROM social_edges "
+                "WHERE ts >= ? AND tracker_domain = ?", (cutoff, td)):
+                if s:
+                    ss.add(s)
+        scon.close()
+    except Exception as e:
+        sys.stderr.write(f"autolearn: social fold failed: {e}\n")
+        return -1
+
+    allow = _load_ad_allowlist()
+    self_doms = {d.strip().lower() for d in
+                 os.environ.get("SECUBOX_SELF_DOMAINS", "secubox.in").split(",")
+                 if d.strip()}
+    promoted: set = set()
+    for reg, sites in by_reg.items():
+        if len(sites) < SOCIAL_MIN_SITES:
+            continue
+        if reg in allow:
+            continue
+        if reg in self_doms or any(reg == d or reg.endswith("." + d) for d in self_doms):
+            continue
+        promoted.add(reg)
+    if not promoted:
+        return 0
+    existing: set = set()
+    try:
+        if os.path.exists(OUT):
+            with open(OUT, encoding="utf-8") as fh:
+                for ln in fh:
+                    ln = ln.strip()
+                    if ln:
+                        existing.add(ln)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: social merge read failed: {e}\n")
+    new = promoted - existing
+    merged = sorted(existing | promoted)[:MAX_ENTRIES]
+    try:
+        os.makedirs(os.path.dirname(OUT), exist_ok=True)
+        tmp = OUT + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(merged) + ("\n" if merged else ""))
+        os.replace(tmp, OUT)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: social write failed: {e}\n")
+        return -1
+    return len(new)
+
+
 def main() -> int:
     learned: set[str] = set()
     try:
@@ -317,6 +403,11 @@ def main() -> int:
         sys.stderr.write(f"autolearn: {_n_ad} ad-candidate hosts promoted\n")
     except Exception as e:
         sys.stderr.write(f"autolearn: ad feed error: {e}\n")
+    try:
+        _n_social = _social_feed()
+        sys.stderr.write(f"autolearn: {_n_social} cross-site cookie trackers promoted\n")
+    except Exception as e:
+        sys.stderr.write(f"autolearn: social feed error: {e}\n")
     sys.stderr.write(
         f"autolearn: {len(out)} hosts learned ({ti} threat-intel + "
         f"{len(out) - ti} classified cross-site) @ {int(time.time())}"
