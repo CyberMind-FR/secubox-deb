@@ -2,18 +2,22 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # SecuBox-Deb :: toolbox-ng — Go MITM engine (migration target, DARK)
 #
-# The binary is pure-stdlib (no go.sum, no external modules), so it
-# cross-compiles offline with GOPROXY=off. CI cross-builds for arm64;
-# this rules file does the same with `GOOS=linux GOARCH=arm64 go build`.
+# #662 added the FIRST external modules (uTLS Chrome upstream + brotli/zstd
+# inject). They are VENDORED into ./vendor and committed, so the binary STILL
+# cross-compiles fully offline (GOPROXY=off, -mod=vendor — no network, no module
+# download). All deps are pure-Go: CGO_ENABLED=0 holds. GOTOOLCHAIN=local pins
+# the build to the distro Go so an offline sandbox never tries to fetch a newer
+# toolchain. CI cross-builds for arm64; this rules file does the same.
 
 export DH_VERBOSE = 1
 
-# Build the static arm64 binary offline (stdlib only — no network, no go.sum).
+# Build the static arm64 binary offline from the committed vendor/ tree.
 export GOOS = linux
 export GOARCH = arm64
 export CGO_ENABLED = 0
-export GOFLAGS = -mod=mod
+export GOFLAGS = -mod=vendor
 export GOPROXY = off
+export GOTOOLCHAIN = local
 # Keep the Go build/module cache inside the build tree (sandbox-friendly).
 export GOCACHE = $(CURDIR)/_gocache
 export GOPATH  = $(CURDIR)/_gopath

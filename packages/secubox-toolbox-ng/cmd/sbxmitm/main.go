@@ -22,7 +22,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/tls"
@@ -313,8 +312,8 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	}
 	// Transparent: the upstream request must carry the SNI host (for Host header,
 	// SNI, and cert verification); the actual TCP dial is pinned to the captured
-	// original-dst by transparentTransport. We do NOT put the bare ip:port in
-	// req.URL.Host (that would make http.Client verify the cert against the IP).
+	// original-dst by the uchromeTransport. We do NOT put the bare ip:port in
+	// req.URL.Host (that would make the upstream verify the cert against the IP).
 	if dialHost != "" && host != "" {
 		req.URL.Host = host
 	}
@@ -341,17 +340,25 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	clientHash := clientHashFromConn(rawClient) // mac_hash-aware (WG persona)
 	anonymizeRequest(req.Header)
 
-	// #662 — pin the upstream Accept-Encoding to gzip (overwrite, dropping
-	// br/zstd/deflate we cannot decode with the stdlib). This guarantees every
-	// response is either gzip or identity, so the inject path can reliably
-	// gunzip→inject→re-gzip the HTML. We Set (not Del): Del would make Go's
-	// Transport auto-decompress and re-serve identity, losing wire compression
-	// to the client for ALL resources (incl. non-injected ones). Set keeps the
-	// Transport in pass-through mode so non-HTML bodies stay compressed
-	// end-to-end. Browsers always accept gzip, so relaying gzip back is safe.
-	req.Header.Set("Accept-Encoding", "gzip")
+	// #662 — do NOT touch Accept-Encoding. We FORWARD the client's original
+	// header untouched: a real browser sends `gzip, deflate, br, zstd`, and
+	// overriding it (the old `Set("Accept-Encoding","gzip")`) is itself a bot
+	// tell that anti-bot vendors fingerprint on. The inject path
+	// (injectIntoBody) now decodes/re-encodes br + zstd in addition to gzip, so
+	// preserving the real AE no longer costs us injection. If the client sent no
+	// AE we add none — the uTLS Chrome upstream transport never auto-injects one,
+	// so non-HTML bodies still stay compressed end-to-end exactly as the origin
+	// chose.
 
 	// proxy upstream, inject into HTML bodies.
+	//
+	// #662 — the upstream TLS is now a uTLS Chrome-fingerprinted RoundTripper
+	// (uchromeTransport): the upstream ClientHello presents a current Chrome
+	// JA3/JA4 to defeat DataDome / anti-bot blocking, WITHOUT splicing (full body
+	// inspection + cert verification preserved). The dial is pinned exactly as
+	// before — transparent (dialHost != "") → the captured original-dst, CONNECT
+	// (dialHost == "") → req.URL.Host — and the cert is verified against the
+	// SNI/Host (here `host`), never the bare IP.
 	//
 	// CheckRedirect: a MITM proxy must NOT follow 3xx itself — it relays the
 	// redirect to the client so the BROWSER follows it (correct URL bar, origin,
@@ -361,11 +368,7 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	up := &http.Client{
 		Timeout:       30 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
-	if dialHost != "" {
-		// Transparent: pin the TCP dial to the captured original-dst, do TLS with
-		// ServerName=host, verify the cert against host (verification stays ON).
-		up.Transport = transparentTransport(dialHost, host)
+		Transport:     newUchromeTransport(dialHost, host),
 	}
 	req.RequestURI = ""
 	resp, err := up.Do(req)
@@ -393,9 +396,10 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// (mirrors the Python addon, which skips non-200). The loader's same-origin
 	// <script src="/__toolbox/loader.js"> is served by the short-circuit above.
 	//
-	// #662 — the body may be gzip-compressed (we pinned Accept-Encoding: gzip
-	// upstream). injectIntoBody gunzips→injects→re-gzips when Content-Encoding
-	// is gzip, injects directly when identity, and fails open (untouched) on a
+	// #662 — the body may be compressed in WHATEVER codec the origin chose
+	// (Accept-Encoding is now forwarded verbatim, not pinned to gzip).
+	// injectIntoBody decodes→injects→re-encodes for gzip / br / zstd (encoding
+	// unchanged), injects directly when identity, and fails open (untouched) on a
 	// corrupt/unknown encoding. Only on a successful rewrite do we update the
 	// framing: writeResponse emits Content-Length from len(body), but a stale
 	// resp.ContentLength / Content-Encoding could mislead downstream — so we
@@ -413,26 +417,6 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		}
 	}
 	writeResponse(tconn, resp, body)
-}
-
-// transparentTransport builds a per-request http.Transport for the transparent
-// path: it TCP-dials the captured original-dst (ip:port) for EVERY connection
-// regardless of req.URL.Host, while performing TLS with ServerName=sni and
-// verifying the cert against that name — so a transparently-redirected upstream
-// is reached at the real captured IP yet validated by hostname, NOT the bare IP
-// (which would always mismatch the cert). Cert verification stays ON
-// (no InsecureSkipVerify). Pure stdlib so it builds on all GOOS.
-func transparentTransport(dialAddr, sni string) *http.Transport {
-	d := &net.Dialer{Timeout: 10 * time.Second}
-	return &http.Transport{
-		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			return d.DialContext(ctx, network, dialAddr)
-		},
-		TLSClientConfig:       &tls.Config{ServerName: sni},
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-		ForceAttemptHTTP2:     false,
-	}
 }
 
 func main() {
