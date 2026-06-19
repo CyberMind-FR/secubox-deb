@@ -35,6 +35,26 @@ def test_tor_preset_enum_guarded(filters_mod):
     assert out["tor_preset"] == "stealth"
 
 
+def test_set_filters_persists_when_dir_not_writable(tmp_path, monkeypatch):
+    """Regression (#683): aggregator runs as a user that can't create a tmp file
+    in the 0750 /etc/secubox/toolbox — set_filters must still persist in-place."""
+    import os
+    d = tmp_path / "ro"
+    d.mkdir()
+    fpath = d / "filters.json"
+    fpath.write_text('{"banner": true}\n')
+    monkeypatch.setenv("SECUBOX_FILTERS_PATH", str(fpath))
+    import secubox_toolbox.filters as f
+    importlib.reload(f)
+    os.chmod(d, 0o555)  # dir read-only → tmp+rename fails, in-place must work
+    try:
+        out = f.set_filters({"tor_mode": True})
+        assert out["tor_mode"] is True
+        assert json.loads(fpath.read_text())["tor_mode"] is True  # actually persisted
+    finally:
+        os.chmod(d, 0o755)
+
+
 def test_get_filters_clamps_bad_preset_on_disk(filters_mod):
     with open(filters_mod.FILTERS_PATH, "w") as fh:
         json.dump({"tor_preset": "evil"}, fh)

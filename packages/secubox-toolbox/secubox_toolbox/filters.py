@@ -104,12 +104,24 @@ def set_filters(patch: Dict) -> Dict:
                    "privacy_enforce", "privacy_poison", "privacy_anonymize",
                    "privacy_ip_drop", "privacy_dns_feed", "ad_learn", "tor_mode"):
             cur[k] = bool(v)
+    data = json.dumps(cur, indent=1)
     try:
-        os.makedirs(os.path.dirname(FILTERS_PATH), exist_ok=True)
+        # Preferred: atomic tmp + rename (needs write on the parent dir).
         tmp = FILTERS_PATH + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(cur, f, indent=1)
+            f.write(data)
         os.replace(tmp, FILTERS_PATH)
+    except OSError:
+        # The serving user often can't create a tmp here: the operator UI is
+        # served by the aggregator (user `secubox`) and /etc/secubox/toolbox is
+        # 0750 → no dir-write. Fall back to an in-place write, which needs only
+        # file-write perm (filters.json is group-writable) AND reliably fires
+        # the secubox-toolbox-tor.path watcher (in-place modify, not a rename).
+        try:
+            with open(FILTERS_PATH, "w", encoding="utf-8") as f:
+                f.write(data)
+        except Exception:
+            pass
     except Exception:
         pass
     _cache_ts = 0.0  # invalidate
