@@ -1,3 +1,11 @@
+secubox-toolbox-ng (0.1.13-1~bookworm1) bookworm; urgency=medium
+
+  * banner: INLINE the banner (server-side bundle fetch, baked literals) instead
+    of <script src>/fetch — defeats site service workers that intercept the
+    same-origin /__toolbox/* requests (leparisien, cnn). Fail-open. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 13:15:00 +0000
+
 secubox-toolbox-ng (0.1.12-1~bookworm1) bookworm; urgency=medium
 
   * adlearn: live-reload the blocklist (mtime) so promotions/edits block without
