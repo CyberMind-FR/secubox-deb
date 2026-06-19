@@ -1,3 +1,12 @@
+secubox-toolbox (2.7.11-1~bookworm1) bookworm; urgency=medium
+
+  * feat: landing (kbin.gk2) restyled to match the new report — system font,
+    rounded --panel/--line cards, cleaner accents, softer SVG bars, helper lines,
+    R3 panel mentions the 🧅 Tor egress option. Dynamic bits unchanged (live KPIs
+    + JS, per-OS install panels, cert-probe, ?mh links).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 20:20:00 +0200
+
 secubox-toolbox (2.7.10-1~bookworm1) bookworm; urgency=medium
 
   * fix: /report/me/html now resolves identity via the shared _client_mac_hash
