@@ -3372,23 +3372,25 @@ async def admin_metrics() -> dict:
             ).fetchone()[0]
     except Exception as e:
         metrics["sqlite_error"] = str(e)
-    # Mitmproxy live stats (from journal)
+    # Live MITM activity. NOTE: the old journal-scrape for "server connect"
+    # NEVER worked — the workers run at --log-level warning, so those INFO lines
+    # are never emitted → the trio was permanently 0. Derive from real data: the
+    # cumulative stats (same source the landing page uses) + the auto-learned
+    # cert-pin bypass list.
     try:
-        out = _sp.run(
-            # #593 — glob matches the LIVE R3 workers (…-mitm-wg-worker@N),
-            # not just the (dead) R2 …-mitm unit → real numbers.
-            ["journalctl", "-u", "secubox-toolbox-mitm*", "--since", "-30min", "--no-pager"],
-            capture_output=True, text=True, timeout=4, check=False,
-        ).stdout
-        metrics["mitm"]["connections"] = out.count("server connect")
-        metrics["mitm"]["tls_pinned"] = out.count("Client TLS handshake failed")
-        hosts: set[str] = set()
-        for line in out.splitlines():
-            if " server connect " in line:
-                parts = line.rsplit(" ", 1)
-                if len(parts) == 2:
-                    hosts.add(parts[1])
-        metrics["mitm"]["unique_hosts"] = len(hosts)
+        cs = cumulative.get_cached() or {}
+        ev = cs.get("events", {}) or {}
+        # "connections analysées" — DPI classifies one flow per upstream connection.
+        metrics["mitm"]["connections"] = int(ev.get("dpi", 0) or 0)
+        metrics["mitm"]["unique_hosts"] = len(cs.get("top_hosts_7d", []) or [])
+    except Exception:
+        pass
+    # Cert-pinned hosts that had to be bypassed (auto-learned by cert_pin_detect).
+    try:
+        if MITM_BYPASS_DYNAMIC_FILE.exists():
+            metrics["mitm"]["tls_pinned"] = sum(
+                1 for ln in MITM_BYPASS_DYNAMIC_FILE.read_text().splitlines()
+                if ln.strip() and not ln.strip().startswith("#"))
     except Exception:
         pass
     return metrics

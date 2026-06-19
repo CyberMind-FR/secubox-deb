@@ -1,3 +1,14 @@
+secubox-toolbox (2.7.3-1~bookworm1) bookworm; urgency=medium
+
+  * fix: dashboard "Live metrics" MITM trio (connections / hosts / cert-pin
+    blocks) was permanently 0 — it scraped "server connect" from the journal,
+    but the workers run at --log-level warning so those INFO lines are never
+    emitted. Now derived from real data: connections = DPI flow count + unique
+    hosts from the cumulative top-hosts (same source as the landing page), and
+    cert-pin blocks = the auto-learned mitm-bypass-dynamic host count.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 14:00:00 +0200
+
 secubox-toolbox (2.7.2-1~bookworm1) bookworm; urgency=medium
 
   * feat(#683): 🧅 Tor status chip on the injected transparency banner — shown
