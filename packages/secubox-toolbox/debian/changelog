@@ -1,3 +1,16 @@
+secubox-toolbox (2.7.4-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#683): Tor mode no longer torifies the box's OWN services. kbin/admin
+    resolve to the WAN IP (reached via hairpin) and the LAN wasn't exempt, so
+    with Tor armed the portal's self-traffic round-tripped through Tor (~18×
+    slower) → kbin landing + dashboard graphs/metrics loaded empty for clients
+    behind the MITM. nft tunnel now has a reconciler-populated `tor_exempt` set:
+    loopback + board-local subnets (LAN/WG/LXC) + the board's own public IP →
+    self-traffic stays DIRECT. DNS stays Tor-routed (no leak) and the Tor automap
+    range (10.192.0.0/10) stays torified (it's never a connected route).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 15:00:00 +0200
+
 secubox-toolbox (2.7.3-1~bookworm1) bookworm; urgency=medium
 
   * fix: dashboard "Live metrics" MITM trio (connections / hosts / cert-pin
