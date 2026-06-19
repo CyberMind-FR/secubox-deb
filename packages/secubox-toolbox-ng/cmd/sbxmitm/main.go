@@ -205,6 +205,11 @@ type Proxy struct {
 	portal  string       // portal base URL for /__toolbox/* reverse-proxy (banner assets)
 	ads     *adStats     // #662 — ad-block metrics aggregator (flushed to the portal)
 	cspDemo bool         // #662 CONSENTED-DEMONSTRATION: relax a page's CSP so the injected loader runs, and flag the bypass (data-csp=1 → 🔓). Default on.
+
+	// analysisRelay gates the per-flow telemetry relay to the dpi/cookies/ja4
+	// analysis sidecar sockets (#662 — restoring the "Qui te piste?" events the
+	// decommissioned Python addons fed). Default on; relay.go is the transport.
+	analysisRelay bool
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -217,10 +222,23 @@ func (px *Proxy) recordAdBlock(adHost, site, macHash string) {
 }
 
 func (px *Proxy) serverTLSConfig() *tls.Config {
+	return px.serverTLSConfigCapture(nil)
+}
+
+// serverTLSConfigCapture is serverTLSConfig with an extra per-handshake hook:
+// capture, if non-nil, is invoked inside GetCertificate with the live
+// *tls.ClientHelloInfo (SNI, SupportedProtos, CipherSuites). The accept-path
+// handlers use it to relay the ja4 ClientHello payload (relay.go) WITH the
+// client conn's peer IP — which is known at the handler, not inside the TLS
+// config. Passing nil yields the plain forging config (CONNECT PoC, tests).
+func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo)) *tls.Config {
 	return &tls.Config{
 		GetCertificate: func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			if px.jaSink != nil {
 				px.jaSink(ja4ish(h)) // capture handshake fingerprint
+			}
+			if capture != nil {
+				capture(h) // ja4 relay material (peer IP threaded in by the handler)
 			}
 			name := h.ServerName
 			if name == "" {
@@ -228,6 +246,38 @@ func (px *Proxy) serverTLSConfig() *tls.Config {
 			}
 			return px.ca.forge(name)
 		},
+	}
+}
+
+// peerIP returns the remote IP (no port) of a client conn, the same basis as
+// clientHashFromConn. Used as the client_ip field of every relay payload.
+func peerIP(conn net.Conn) string {
+	if conn == nil {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		return conn.RemoteAddr().String()
+	}
+	return host
+}
+
+// captureAndEmitJA4 returns a GetCertificate capture hook that relays the ja4
+// ClientHello payload for THIS handshake (once), tagged with the given client
+// conn's peer IP + mac-hash-aware clientHash. Gated by analysisRelay (emitJA4
+// checks). The hook copies the ClientHelloInfo fields it needs immediately
+// (the struct is only valid during the callback). Returns nil when the relay is
+// off so the plain config is used (no per-handshake allocation).
+func (px *Proxy) captureAndEmitJA4(rawClient net.Conn) func(*tls.ClientHelloInfo) {
+	if !px.relayEnabled() {
+		return nil
+	}
+	ip := peerIP(rawClient)
+	hash := clientHashFromConn(rawClient)
+	return func(h *tls.ClientHelloInfo) {
+		alpn := append([]string(nil), h.SupportedProtos...)
+		ciphers := append([]uint16(nil), h.CipherSuites...)
+		px.emitJA4(ip, hash, h.ServerName, alpn, ciphers)
 	}
 }
 
@@ -262,7 +312,9 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// MITM: TLS-terminate the client with a forged cert (+ ClientHello capture).
-	tconn := tls.Server(client, px.serverTLSConfig())
+	// The capture hook relays the ja4 ClientHello payload for this handshake,
+	// tagged with the client's peer IP (#662). nil when the relay gate is off.
+	tconn := tls.Server(client, px.serverTLSConfigCapture(px.captureAndEmitJA4(client)))
 	if err := tconn.Handshake(); err != nil {
 		return
 	}
@@ -339,6 +391,15 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// allow — stripping operator headers + asserting opt-out is universally
 	// safe and never touches own-infra correctness).
 	clientHash := clientHashFromConn(rawClient) // mac_hash-aware (WG persona)
+
+	// #662 — relay the DPI classification hint for this MITM'd request (allow|mitm
+	// only; never the block 204 / splice paths). Fire-and-forget BEFORE anonymize
+	// mutates headers, so we relay the client's original User-Agent (the Python
+	// DPIRelay ran on the unmodified request). Gated by --analysis-relay; a
+	// dead/slow dpi.sock can never block or delay the proxy flow.
+	relayIP := peerIP(rawClient)
+	px.emitDPI(relayIP, clientHash, host, req)
+
 	anonymizeRequest(req.Header)
 
 	// #662 — do NOT touch Accept-Encoding. We FORWARD the client's original
@@ -378,6 +439,13 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		return
 	}
 	defer resp.Body.Close()
+
+	// #662 — relay the cookie metadata for this MITM'd response (allow|mitm only).
+	// NAMES ONLY (never values — privacy/CSPN); no-op unless ≥1 Set-Cookie OR ≥1
+	// request Cookie is present. Emitted before poison rewrites Set-Cookie VALUES,
+	// which is irrelevant here (names are unchanged by poison) but keeps the
+	// relayed names byte-for-byte the origin's. Fire-and-forget, gated.
+	px.emitCookies(relayIP, clientHash, req, resp)
 
 	// Poison: only on MITM'd tracker flows (never on allow/own-infra), and only
 	// when the jar key is loaded. Replaces tracking-id Set-Cookie values with a
@@ -445,6 +513,8 @@ func main() {
 		"portal base URL; /__toolbox/loader.js + /__toolbox/bundle are reverse-proxied here (banner assets, served for any MITM'd origin)")
 	cspDemo := flag.Bool("csp-bypass-demo", true,
 		"CONSENTED DEMONSTRATION: relax a page's CSP so the injected transparency-banner loader runs even on strict-CSP sites, and flag the bypass (banner shows 🔓). Only on injected 2xx text/html R3 responses; never on non-injected responses. Set false to never touch CSP.")
+	analysisRelay := flag.Bool("analysis-relay", true,
+		"relay per-flow telemetry (dpi/cookies/ja4) to the analysis sidecar sockets so the kbin \"Qui te piste?\" events refill (#662; replaces the decommissioned Python relay addons). Fire-and-forget; a dead/slow sidecar never affects the proxy. Set false to emit nothing.")
 	flag.Parse()
 	ca, err := loadCA(*caCert, *caKey)
 	if err != nil {
@@ -473,6 +543,8 @@ func main() {
 		portal:  *portal,
 		ads:     newAdStats(),
 		cspDemo: *cspDemo,
+
+		analysisRelay: *analysisRelay,
 	}
 	// #662 — start the ad-block metrics flusher: the block path tallies every
 	// 204 into px.ads, drained every 10s to the portal's /__toolbox/ad-event

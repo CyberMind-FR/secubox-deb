@@ -389,7 +389,11 @@ func (px *Proxy) handleTransparent(client net.Conn) {
 	// over a replayable conn, then run the shared pipeline dialling the captured
 	// original-dst (NOT the SNI).
 	replay := &prefixConn{prefix: hello, Conn: client}
-	tconn := tls.Server(replay, px.serverTLSConfig())
+	// The capture hook relays the ja4 ClientHello payload for this handshake,
+	// tagged with the REAL transparent peer IP from the raw client conn (#662).
+	// nil when the relay gate is off. Emitted around Decide → blocked/allowed
+	// alike, matching the Python addon's per-tls_clienthello behaviour.
+	tconn := tls.Server(replay, px.serverTLSConfigCapture(px.captureAndEmitJA4(client)))
 	if err := tconn.Handshake(); err != nil {
 		return
 	}
