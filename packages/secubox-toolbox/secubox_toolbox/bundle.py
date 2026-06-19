@@ -103,26 +103,31 @@ def get_bundle(client_id: str, is_wg: bool = False) -> dict:
                 "tracker_patterns": TRACKER_PATTERNS, "ts": int(time.time())}
 
 
-# Cosmetic client-side loader. Served static + cached; applies the transparency
-# banner from the bundle off the page's critical render path. Per-page stats
-# (trackers, cookies) are derived in-browser (Resource Timing / document.cookie),
-# so the proxy never scans the body. Self-guarded, dismissible, fail-silent.
-LOADER_JS = r"""(function(){
-  "use strict";
-  if (window.__SBX_LOADER__) return; window.__SBX_LOADER__ = 1;
-  var s = document.currentScript || {};
-  var ds = s.dataset || {};
-  var mh = ds.mh || "", wg = ds.wg || "0";
-  // #662 CONSENTED-DEMONSTRATION: the engine relaxed this page's CSP so this
-  // loader could run even under a strict policy, and stamped data-csp="1" on our
-  // <script>. When set, the banner shows a 🔓 as VISIBLE proof the page's CSP was
-  // bypassed to inject. Absent → no proof emoji (page had no CSP to bypass).
-  var csp = ds.csp || "";
-  // SPA support (#662): cache the bundle + remember an explicit dismiss, so the
-  // banner can be re-asserted after client-side navigation / DOM re-renders
-  // (cnn, youtube… swap content without reloading → the one-shot loader would
-  // otherwise vanish). Re-assert never fights a user who clicked ✕.
-  var bundle = null, dismissed = false;
+# ── shared banner JS body (#662) ─────────────────────────────────────────────
+#
+# The render + SPA-re-assert + dismiss + countTrackers + 🔓 cspProof logic is
+# IDENTICAL between the legacy src-loader (LOADER_JS, fetched as
+# /__toolbox/loader.js → fetch()es /__toolbox/bundle) and the new INLINE banner
+# (inline_script(), baked into the page by the Go engine at inject time). To
+# avoid drift, that logic lives ONCE in _BANNER_CORE; each caller differs only in
+# its PRELUDE — how `bundle`, `mh`, `wg`, `csp`, `dismissed` are obtained:
+#
+#   * LOADER_JS → reads data-mh/data-wg/data-csp off document.currentScript and
+#                 fetch()es the bundle (legacy; kept working for the
+#                 /__toolbox/loader.js route).
+#   * inline    → mh/wg/csp/bundle are baked as JS LITERALS (no currentScript,
+#                 no fetch) so a site's SERVICE WORKER has nothing same-origin to
+#                 hijack (leparisien, cnn… run a SW that 404s our assets).
+#
+# _BANNER_CORE assumes `mh`, `wg`, `csp`, `bundle`, `dismissed` are already
+# declared by the prelude and runs render/SPA off them.
+
+# render + SPA-re-assert + dismiss + countTrackers + 🔓 cspProof. Shared verbatim
+# by both preludes. References `mh`, `wg`, `csp`, `bundle`, `dismissed` from the
+# enclosing prelude scope. Defines ensure() + installs the history/popstate hooks
+# + 2s poll; the prelude calls ensure() (inline) or sets `bundle` then ensure()s
+# (src-loader).
+_BANNER_CORE = r"""
   function ready(fn){ if (document.body) { fn(); } else { setTimeout(function(){ready(fn);}, 30); } }
   function esc(t){ return String(t).replace(/[&<>"]/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
@@ -168,10 +173,6 @@ LOADER_JS = r"""(function(){
   // ensure(): (re)render the banner if it's absent and the bundle is loaded and
   // the user hasn't dismissed it. Cheap (a getElementById guard inside render).
   function ensure(){ if (bundle && !dismissed) ready(function(){ render(bundle); }); }
-  fetch("/__toolbox/bundle?mh=" + encodeURIComponent(mh) + "&wg=" + encodeURIComponent(wg), {credentials:"omit"})
-    .then(function(r){ return r.json(); })
-    .then(function(b){ bundle = b; ensure(); })
-    .catch(function(){});
   // SPA re-assert: wrap history nav + popstate (defer so the framework settles),
   // plus a light 2s poll as a catch-all for DOM re-renders that drop the banner.
   ["pushState","replaceState"].forEach(function(m){
@@ -182,5 +183,93 @@ LOADER_JS = r"""(function(){
   });
   window.addEventListener("popstate", function(){ setTimeout(ensure, 150); });
   setInterval(ensure, 2000);
+"""
+
+
+def _js_str(value: str) -> str:
+    """JS string LITERAL for an arbitrary string. json.dumps yields a valid JS
+    string; we additionally escape ``</`` → ``<\\/`` so a value can never close
+    the surrounding inline <script> (e.g. a value of "</script>")."""
+    return json.dumps(value).replace("</", "<\\/")
+
+
+def _js_json(obj) -> str:
+    """JS object LITERAL for a JSON-serialisable object, hardened against a
+    ``</script>`` breakout: json.dumps is valid JS, and escaping ``</`` → ``<\\/``
+    means no nested string (pin, report_url…) can terminate the inline script."""
+    return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
+
+
+def inline_script(mh: str, wg: bool, csp: bool) -> str:
+    """Build the COMPLETE self-contained inline banner script BODY (#662).
+
+    Service-worker survival: sites like leparisien / cnn register a SW that
+    intercepts every same-origin request — so the legacy
+    ``<script src="/__toolbox/loader.js">`` + its ``fetch("/__toolbox/bundle")``
+    are hijacked by the SW (404 / app-shell) before reaching our MITM engine, and
+    the banner never appears. The fix is to bake EVERYTHING as JS literals so the
+    inline script makes NO same-origin request the SW can touch:
+
+      * ``bundle`` is ``get_bundle(mh, wg)`` baked as a JSON literal (not fetched),
+      * ``mh`` / ``wg`` / ``csp`` are baked as string literals (NOT data-attrs /
+        currentScript — the null-currentScript-in-async bug killed #653),
+      * NO ``document.currentScript``, NO ``fetch()``.
+
+    Returns an IIFE string suitable for ``<script>…</script>``. The single-run
+    guard (``window.__SBX_LOADER__``), the ``#sbx-banner`` element-id guard, the
+    dismissed flag, the history pushState/replaceState/popstate hooks + 2s poll,
+    and the 🔓 proof when ``csp`` is set are all preserved (from _BANNER_CORE).
+    """
+    bundle_obj = get_bundle(mh, bool(wg))
+    prelude = (
+        "(function(){\n"
+        '  "use strict";\n'
+        "  if (window.__SBX_LOADER__) return; window.__SBX_LOADER__ = 1;\n"
+        # Baked literals — no currentScript / dataset, no fetch (SW-immune).
+        "  var mh = " + _js_str(mh or "") + ";\n"
+        "  var wg = " + _js_str("1" if wg else "0") + ";\n"
+        # csp=="1" → the engine relaxed a real CSP to inject; render the 🔓 proof.
+        "  var csp = " + _js_str("1" if csp else "0") + ";\n"
+        "  var bundle = " + _js_json(bundle_obj) + ";\n"
+        "  var dismissed = false;\n"
+    )
+    # Inline path renders on the first tick — the bundle is already present (no
+    # async fetch to wait on), so ensure() can run immediately.
+    return prelude + _BANNER_CORE + "  ensure();\n})();"
+
+
+# Cosmetic client-side loader. Served static + cached; applies the transparency
+# banner from the bundle off the page's critical render path. Per-page stats
+# (trackers, cookies) are derived in-browser (Resource Timing / document.cookie),
+# so the proxy never scans the body. Self-guarded, dismissible, fail-silent.
+#
+# Legacy src-loader (#620): kept working for the /__toolbox/loader.js route. The
+# INLINE path (inline_script) supersedes it in the live engine inject path because
+# a site service-worker hijacks the same-origin src + fetch (#662).
+_LOADER_PRELUDE = r"""(function(){
+  "use strict";
+  if (window.__SBX_LOADER__) return; window.__SBX_LOADER__ = 1;
+  var s = document.currentScript || {};
+  var ds = s.dataset || {};
+  var mh = ds.mh || "", wg = ds.wg || "0";
+  // #662 CONSENTED-DEMONSTRATION: the engine relaxed this page's CSP so this
+  // loader could run even under a strict policy, and stamped data-csp="1" on our
+  // <script>. When set, the banner shows a 🔓 as VISIBLE proof the page's CSP was
+  // bypassed to inject. Absent → no proof emoji (page had no CSP to bypass).
+  var csp = ds.csp || "";
+  // SPA support (#662): cache the bundle + remember an explicit dismiss, so the
+  // banner can be re-asserted after client-side navigation / DOM re-renders
+  // (cnn, youtube… swap content without reloading → the one-shot loader would
+  // otherwise vanish). Re-assert never fights a user who clicked ✕.
+  var bundle = null, dismissed = false;
+"""
+
+# The legacy src-loader fetches the bundle (same-origin), then ensure()s. The
+# render + SPA logic is the SAME _BANNER_CORE the inline path uses (no drift).
+LOADER_JS = _LOADER_PRELUDE + _BANNER_CORE + r"""
+  fetch("/__toolbox/bundle?mh=" + encodeURIComponent(mh) + "&wg=" + encodeURIComponent(wg), {credentials:"omit"})
+    .then(function(r){ return r.json(); })
+    .then(function(b){ bundle = b; ensure(); })
+    .catch(function(){});
 })();
 """
