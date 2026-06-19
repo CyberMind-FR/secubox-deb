@@ -151,12 +151,23 @@ _BANNER_CORE = r"""
       return Object.keys(seen).length;
     } catch (_) { return 0; }
   }
+  function countCookies(){
+    try { return document.cookie ? document.cookie.split(";").filter(function(x){return x.indexOf("=")>=0;}).length : 0; } catch (_) { return 0; }
+  }
+  // #683 — counts are taken at render time, but resources + cookies keep loading
+  // AFTER the banner appears (early render → stuck at 0). Re-count live on the
+  // 2s poll so trackers/cookies climb to their real values.
+  function updateCounts(b){
+    var t = document.getElementById("sbx-trk");
+    if (t) t.textContent = "🛰️ " + countTrackers((b || {}).tracker_patterns) + " trackers";
+    var c = document.getElementById("sbx-ck");
+    if (c) c.textContent = "🍪 " + countCookies() + " cookies";
+  }
   function render(b){
     if (dismissed) return;
     if (document.getElementById("sbx-banner")) return;
     var trk = countTrackers(b.tracker_patterns);
-    var ck = 0;
-    try { ck = document.cookie ? document.cookie.split(";").filter(function(x){return x.indexOf("=")>=0;}).length : 0; } catch (_) {}
+    var ck = countCookies();
     var bar = document.createElement("div");
     bar.id = "sbx-banner";
     bar.setAttribute("style", "position:fixed;left:0;right:0;top:0;z-index:2147483647;"
@@ -174,8 +185,8 @@ _BANNER_CORE = r"""
       + cspProof
       + tor
       + "<span>" + esc((b.level || "r1").toUpperCase()) + "</span>"
-      + "<span>🛰️ " + trk + " trackers</span>"
-      + "<span>🍪 " + ck + " cookies</span>"
+      + "<span id=\"sbx-trk\">🛰️ " + trk + " trackers</span>"
+      + "<span id=\"sbx-ck\">🍪 " + ck + " cookies</span>"
       + pin
       + "<a href=\"" + esc(b.report_url || "#") + "\" style=\"margin-left:auto;color:#2C70C0;text-decoration:none\">report ▸</a>"
       + "<button aria-label=\"dismiss\" style=\"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px\">✕</button>";
@@ -186,7 +197,7 @@ _BANNER_CORE = r"""
   }
   // ensure(): (re)render the banner if it's absent and the bundle is loaded and
   // the user hasn't dismissed it. Cheap (a getElementById guard inside render).
-  function ensure(){ if (bundle && !dismissed) ready(function(){ render(bundle); }); }
+  function ensure(){ if (bundle && !dismissed) ready(function(){ if (document.getElementById("sbx-banner")) updateCounts(bundle); else render(bundle); }); }
   // SPA re-assert: wrap history nav + popstate (defer so the framework settles),
   // plus a light 2s poll as a catch-all for DOM re-renders that drop the banner.
   ["pushState","replaceState"].forEach(function(m){
