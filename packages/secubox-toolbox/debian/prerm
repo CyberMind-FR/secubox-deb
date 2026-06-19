@@ -9,5 +9,18 @@ case "$1" in
     fi
     ;;
 esac
+# #683 : on real removal, tear the kbin Tor tunnel down (flush nft table +
+# torrc drop-in + stop tor) so the box never stays torified post-uninstall.
+# NOT on upgrade — that must preserve runtime state.
+case "$1" in
+  remove)
+    for u in secubox-toolbox-tor.path secubox-toolbox-tor.timer; do
+      systemctl stop "$u" 2>/dev/null || true
+      systemctl disable "$u" 2>/dev/null || true
+    done
+    [ -x /usr/sbin/secubox-toolbox-tor-reconcile ] && \
+      /usr/sbin/secubox-toolbox-tor-reconcile disarm 2>/dev/null || true
+    ;;
+esac
 #DEBHELPER#
 exit 0

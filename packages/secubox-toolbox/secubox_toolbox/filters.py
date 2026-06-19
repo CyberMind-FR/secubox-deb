@@ -27,6 +27,9 @@ DEFAULTS: Dict = {
     "autolearn": True,              # #589 also block auto-learned bad hosts
     "ad_learn": True,               # #656 aggressive ad-URL learning toggle
     "tls_splice": "observe",        # #649 off | observe | on  (asset SNI-splice)
+    # ── kbin Tor egress (#683) — ships dark; arm via reconciler after soak ──
+    "tor_mode": False,              # route MITM upstream egress through Tor (global kbin Tor mode)
+    "tor_preset": "anonymous",      # anonymous | stealth | minimal (secubox-tor preset)
     # ── Anti-Track v2 (#633) — ships dark; arm after observe-only soak ──
     "privacy_enforce": False,       # master switch; off = observe-only
     "privacy_poison": True,         # forge stable fake id for loadbearing trackers
@@ -44,6 +47,7 @@ DEFAULTS: Dict = {
 
 _VALID_PROTECTIVE = ("off", "alert", "spoof")
 _VALID_SPLICE = ("off", "observe", "on")
+_VALID_TOR_PRESET = ("anonymous", "stealth", "minimal")
 
 _cache: Dict = {}
 _cache_ts: float = 0.0
@@ -71,6 +75,8 @@ def get_filters(force: bool = False) -> Dict:
         out["protective"] = DEFAULTS["protective"]
     if out.get("tls_splice") not in _VALID_SPLICE:
         out["tls_splice"] = DEFAULTS["tls_splice"]
+    if out.get("tor_preset") not in _VALID_TOR_PRESET:
+        out["tor_preset"] = DEFAULTS["tor_preset"]
     _cache = out
     _cache_ts = now
     return out
@@ -90,18 +96,32 @@ def set_filters(patch: Dict) -> Dict:
             cur["protective"] = v
         elif k == "tls_splice" and v in _VALID_SPLICE:
             cur["tls_splice"] = v
+        elif k == "tor_preset" and v in _VALID_TOR_PRESET:
+            cur["tor_preset"] = v
         elif k == "fortknox_sites" and isinstance(v, list):
             cur["fortknox_sites"] = [str(s).strip().lower() for s in v if str(s).strip()]
         elif k in ("banner", "ad_ghost", "ad_ghost_block", "media_cache", "autolearn",
                    "privacy_enforce", "privacy_poison", "privacy_anonymize",
-                   "privacy_ip_drop", "privacy_dns_feed", "ad_learn"):
+                   "privacy_ip_drop", "privacy_dns_feed", "ad_learn", "tor_mode"):
             cur[k] = bool(v)
+    data = json.dumps(cur, indent=1)
     try:
-        os.makedirs(os.path.dirname(FILTERS_PATH), exist_ok=True)
+        # Preferred: atomic tmp + rename (needs write on the parent dir).
         tmp = FILTERS_PATH + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(cur, f, indent=1)
+            f.write(data)
         os.replace(tmp, FILTERS_PATH)
+    except OSError:
+        # The serving user often can't create a tmp here: the operator UI is
+        # served by the aggregator (user `secubox`) and /etc/secubox/toolbox is
+        # 0750 → no dir-write. Fall back to an in-place write, which needs only
+        # file-write perm (filters.json is group-writable) AND reliably fires
+        # the secubox-toolbox-tor.path watcher (in-place modify, not a rename).
+        try:
+            with open(FILTERS_PATH, "w", encoding="utf-8") as f:
+                f.write(data)
+        except Exception:
+            pass
     except Exception:
         pass
     _cache_ts = 0.0  # invalidate

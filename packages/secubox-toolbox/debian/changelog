@@ -1,3 +1,137 @@
+secubox-toolbox (2.7.11-1~bookworm1) bookworm; urgency=medium
+
+  * feat: landing (kbin.gk2) restyled to match the new report — system font,
+    rounded --panel/--line cards, cleaner accents, softer SVG bars, helper lines,
+    R3 panel mentions the 🧅 Tor egress option. Dynamic bits unchanged (live KPIs
+    + JS, per-OS install panels, cert-probe, ?mh links).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 20:20:00 +0200
+
+secubox-toolbox (2.7.10-1~bookworm1) bookworm; urgency=medium
+
+  * fix: /report/me/html now resolves identity via the shared _client_mac_hash
+    (?mh → R3 WG peer → captive ARP), so R3 clients reach their report without
+    ?mh (it previously only did captive ARP → 400 "client MAC unknown").
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 19:55:00 +0200
+
+secubox-toolbox (2.7.9-1~bookworm1) bookworm; urgency=medium
+
+  * feat: report (/report/me/html) regenerated — verdict-first + graphs + plain
+    helpers. Top: a score gauge (conic-gradient) + 6 KPIs + 3 graphs (trackers
+    donut, countries bars, apps bars) computed server-side (_build_report_charts).
+    All the deep technical cards (threat-intel, DGA, beaconing, hosts, apps,
+    cookies, avatar, transparency, per-host grades, identity, reco) collapse into
+    <details> so the page reads instantly. System-font, rounded, mobile-first.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 19:30:00 +0200
+
+secubox-toolbox (2.7.8-1~bookworm1) bookworm; urgency=medium
+
+  * fix: landing "Ma carto" / "Mon rapport" / "Qui me piste ?" links hit
+    /social/me + /report/me with NO ?mh=, so clicking them re-resolved identity
+    at click-time and could 400 "client identity unresolved". The landing now
+    resolves the caller's mac_hash (new _client_mac_hash helper: ?mh → R3 WG peer
+    → captive ARP) and bakes ?mh= into those links, so they always open the right
+    client's view. No change to identity precedence; resolution stays server-side.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 18:40:00 +0200
+
+secubox-toolbox (2.7.7-1~bookworm1) bookworm; urgency=medium
+
+  * fix: injected banner trackers/cookies counts were stuck at 0. They were
+    computed ONCE at render time — which fires early, before page resources +
+    cookies have loaded (Resource Timing empty) — and the 2s poll's ensure()
+    early-returned once the banner existed, so the counts never refreshed. Now
+    the trackers/cookies spans have ids and updateCounts() re-counts live on the
+    poll, so they climb to real values within ~2s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 18:10:00 +0200
+
+secubox-toolbox (2.7.6-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#683): the 🧅 Tor indicator now appears on the ACTUAL injected banner.
+    The live page banner is the client-side stream-inject bundle (bundle.py:
+    "SecuBox · LEVEL · 🛰️ trackers · 🍪 cookies · report ▸ · ✕"), NOT the
+    server-rendered inject_banner chip I'd added earlier. Added `tor_mode` to the
+    decision bundle + a "🧅 Tor" span in the banner render() (loader + inline
+    paths) so a consenting client sees their exit is anonymised.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 17:40:00 +0200
+
+secubox-toolbox (2.7.5-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#683): public kbin-safe GET /wg/tor-status ({tor_mode, running,
+    bootstrap, exit_ip}) so the clients (webext popup + Android app) can show a
+    🧅 Tor-egress indicator. Mirrors /wg/r3-check (reachable on every vhost incl.
+    public kbin; the /admin/tor/* controls stay admin-gated).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 17:00:00 +0200
+
+secubox-toolbox (2.7.4-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#683): Tor mode no longer torifies the box's OWN services. kbin/admin
+    resolve to the WAN IP (reached via hairpin) and the LAN wasn't exempt, so
+    with Tor armed the portal's self-traffic round-tripped through Tor (~18×
+    slower) → kbin landing + dashboard graphs/metrics loaded empty for clients
+    behind the MITM. nft tunnel now has a reconciler-populated `tor_exempt` set:
+    loopback + board-local subnets (LAN/WG/LXC) + the board's own public IP →
+    self-traffic stays DIRECT. DNS stays Tor-routed (no leak) and the Tor automap
+    range (10.192.0.0/10) stays torified (it's never a connected route).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 15:00:00 +0200
+
+secubox-toolbox (2.7.3-1~bookworm1) bookworm; urgency=medium
+
+  * fix: dashboard "Live metrics" MITM trio (connections / hosts / cert-pin
+    blocks) was permanently 0 — it scraped "server connect" from the journal,
+    but the workers run at --log-level warning so those INFO lines are never
+    emitted. Now derived from real data: connections = DPI flow count + unique
+    hosts from the cumulative top-hosts (same source as the landing page), and
+    cert-pin blocks = the auto-learned mitm-bypass-dynamic host count.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 14:00:00 +0200
+
+secubox-toolbox (2.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#683): 🧅 Tor status chip on the injected transparency banner — shown
+    first (most prominent) when kbin Tor mode is armed, so the client sees their
+    surf is anonymised. Read from filters (5s-cached) on the banner hot path.
+  * fix(#683): the Tor tunnel now SURVIVES nftables reloads. The runtime
+    toolbox_tor table was flushed by any `nft -f /etc/nftables.conf` (triggered
+    by other postinsts) → flag-on/tunnel-off leak window. Reconciler now persists
+    it as /etc/nftables.d/zz-secubox-toolbox-tor.nft (zz- = loads after the wg
+    tables). Added secubox-toolbox-tor.timer (2-min idempotent re-arm) to self-heal
+    any bare `nft flush ruleset`, and a final postinst reconcile (after the nft
+    reloads) so upgrades never leave the flag/tunnel mismatched.
+  * fix: postinst restart loop now also restarts secubox-toolbox-mitm-wg.service
+    (single-service R3 path), so mitm addon updates take effect without a manual
+    restart.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 13:05:00 +0200
+
+secubox-toolbox (2.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#683): kbin Tor egress quick-switch — switch + tunnel, ships DARK
+    (tor_mode default OFF, fail-closed). Routes ONLY the R3 mitm-wg worker uid's
+    upstream egress + DNS through Tor's TransPort(9040)/DNSPort(5353) via an nft
+    owner-match table, so inspection (ad-block/poison/banner/safe-browsing) is
+    fully preserved — only the exit IP + network identity change.
+  * New filters flags `tor_mode` / `tor_preset` (anonymous|stealth|minimal).
+  * API (kbin-gated, admin.gk2 only for actions): GET /admin/tor/state,
+    POST /admin/tor/{on,off,newnym,check-leaks}. State read-only-safe on kbin.
+  * WebUI: 🧅 Tor tab — status badge (bootstrap/circuits/exit IP), arm/disarm
+    toggle, preset selector, New-Identity (NEWNYM), SOCKS leak probe. Reuses the
+    secubox-tor control-port logic (new tor_ctl.py) — no cross-service JWT.
+  * Tunnel arms via a root, path-triggered reconciler (secubox-toolbox-tor.path
+    watches filters.json) — portal stays NoNewPrivileges=true, no sudo. nft is
+    loaded BEFORE tor starts (fail-closed: no clearnet window). IPv6 worker
+    egress dropped (no v6 leak). prerm disarms on real removal (not upgrade).
+  * Depends: jq; Recommends: tor, python3-socksio. postinst adds secubox-toolbox
+    to the debian-tor group for control-cookie access.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 16:00:00 +0200
+
 secubox-toolbox (2.7.0-1~bookworm1) bookworm; urgency=medium
 
   * MIDDLE RELEASE — caps the 2.6.x line (ad-intelligence / Anti-Track v2 /

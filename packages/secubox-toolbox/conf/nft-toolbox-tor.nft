@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# kbin Tor egress tunnel (#683) — torify ONLY the MITM worker uid's upstream.
+#
+# The R3 mitm-wg workers run as user `secubox-toolbox` and dial the *real*
+# upstream AFTER decrypting + inspecting + poisoning + bannering. We redirect
+# only that uid's internet egress (80/443) and ALL its DNS through Tor's
+# TransPort/DNSPort, so inspection is fully preserved and only the exit IP +
+# network identity change. Loaded/flushed by secubox-toolbox-tor-reconcile,
+# which also POPULATES the `tor_exempt` set (see below).
+#
+# Invariants: inspection preserved · no DNS leak · fail-closed (kill-switch
+# drops any worker egress that escaped the redirect — never leaks the real IP).
+#
+# `tor_exempt` = destinations that must NEVER be torified: loopback, the board's
+# own local subnets (LAN/WG/LXC), and the board's own PUBLIC IP. Without this the
+# box torifies traffic to its OWN services (kbin/admin resolve to the WAN IP,
+# reached via hairpin) → self-views round-trip Tor and load empty/slow. The
+# reconciler fills the set at arm time (it is intentionally empty here). The Tor
+# automap range (10.192.0.0/10) is deliberately NOT exempt so worker-initiated
+# hostname connections still egress via Tor.
+table inet toolbox_tor {
+    set tor_exempt {
+        type ipv4_addr
+        flags interval
+    }
+
+    # ── NAT: redirect the worker uid's egress into Tor (TransPort/DNSPort) ──
+    chain output_nat {
+        type nat hook output priority -100; policy accept;
+        oifname "lo" return
+        # DNS always via Tor (no leak), even to local resolvers — before the
+        # tor_exempt return so own-subnet resolvers don't bypass it.
+        ip daddr != 127.0.0.0/8 meta skuid "secubox-toolbox" meta l4proto { tcp, udp } th dport 53 redirect to :5353
+        # Own services / LAN / loopback → DIRECT (never torified).
+        ip daddr @tor_exempt return
+        # Everything else from the worker uid → Tor TransPort.
+        meta skuid "secubox-toolbox" tcp dport { 80, 443 } redirect to :9040
+    }
+
+    # ── Kill-switch: fail-closed safety net (runs after the NAT redirect) ──
+    chain output_killswitch {
+        type filter hook output priority 0; policy accept;
+        oifname "lo" return
+        ip daddr @tor_exempt return
+        # IPv4 that escaped the redirect (Tor down / rule gap) → drop, no leak
+        meta skuid "secubox-toolbox" tcp dport { 80, 443 } ip daddr != 127.0.0.0/8 drop
+        meta skuid "secubox-toolbox" meta l4proto { tcp, udp } th dport 53 ip daddr != 127.0.0.0/8 drop
+        # IPv6 is not carried over Tor here → drop worker v6 egress (no v6 leak)
+        meta skuid "secubox-toolbox" meta nfproto ipv6 tcp dport { 80, 443 } drop
+        meta skuid "secubox-toolbox" meta nfproto ipv6 meta l4proto { tcp, udp } th dport 53 drop
+    }
+}

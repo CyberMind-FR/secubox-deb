@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Watches the toolbox filter config; any change re-runs the Tor reconciler so
+# flipping `tor_mode` from the WebUI arms/disarms the tunnel within seconds —
+# no portal privilege escalation, no restart. The reconciler is idempotent
+# (no-op when desired == current) so unrelated filter toggles are cheap.
+[Unit]
+Description=SecuBox-Deb ToolBoX — watch filters.json for kbin Tor mode (#683)
+
+[Path]
+PathModified=/etc/secubox/toolbox/filters.json
+Unit=secubox-toolbox-tor.service
+
+[Install]
+WantedBy=multi-user.target

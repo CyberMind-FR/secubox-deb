@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: toolbox :: kbin Tor egress reconciler (#683)
+#
+# Reconciles the kbin Tor egress tunnel to match filters.json `tor_mode`.
+# Runs as root (path-triggered by secubox-toolbox-tor.path on filters.json,
+# or invoked directly with `arm`/`disarm`). The portal API never escalates —
+# it only flips the flag; this privileged, hardening-preserving step does the
+# nft + tor work asynchronously.
+#
+# Fail-closed: nft (incl. the kill-switch) is loaded BEFORE tor starts, so if
+# tor is down the redirect target is simply unreachable — egress is refused,
+# never leaked in the clear.
+set -euo pipefail
+readonly MODULE="toolbox-tor"
+
+FILTERS="${SECUBOX_FILTERS_PATH:-/etc/secubox/toolbox/filters.json}"
+NFT_FILE=/usr/lib/secubox/toolbox/conf/nft-toolbox-tor.nft
+# Persist the table as a drop-in so it SURVIVES `nft -f /etc/nftables.conf`
+# reloads (which other postinsts trigger and which would otherwise flush the
+# runtime-only table → flag-on/tunnel-off leak). zz- = loads after the wg
+# tables (alphabetical glob), per the layered-dropin ordering rule.
+NFT_DROPIN=/etc/nftables.d/zz-secubox-toolbox-tor.nft
+TORRC_DROPIN_SRC=/usr/lib/secubox/toolbox/conf/torrc-toolbox-egress.conf
+TORRC_DROPIN=/etc/tor/torrc.d/10-secubox-toolbox-egress.conf
+TORRC_MAIN=/etc/tor/torrc
+
+log() { logger -t "secubox-${MODULE}" -- "$*" 2>/dev/null || true; echo "[$MODULE] $*"; }
+
+table_present() { nft list table inet toolbox_tor >/dev/null 2>&1; }
+
+want_from_flag() {
+  # default false on any parse error (fail-safe = off)
+  jq -r '.tor_mode // false' "$FILTERS" 2>/dev/null || echo false
+}
+
+arm() {
+  log "arming kbin Tor egress (TransPort 9040 / DNSPort 5353)"
+  mkdir -p /etc/tor/torrc.d
+  install -m 0644 "$TORRC_DROPIN_SRC" "$TORRC_DROPIN"
+  # Debian's torrc does not %include torrc.d by default — add it idempotently.
+  if ! grep -qE '^\s*%include\s+/etc/tor/torrc\.d/' "$TORRC_MAIN" 2>/dev/null; then
+    echo '%include /etc/tor/torrc.d/*.conf' >> "$TORRC_MAIN"
+  fi
+  # Persist as a drop-in (survives nft reloads) then load it NOW. nft FIRST
+  # (kill-switch active) so there is never a clearnet window.
+  install -d -m 0755 /etc/nftables.d
+  install -m 0644 "$NFT_FILE" "$NFT_DROPIN"
+  nft -f "$NFT_DROPIN"
+  populate_exempt
+  systemctl restart tor 2>/dev/null || systemctl start tor 2>/dev/null || \
+    log "WARN tor failed to (re)start — egress fail-closed until it does"
+  log "ARMED"
+}
+
+# Fill the tor_exempt set so the box reaches its OWN services DIRECT (never via
+# Tor): loopback, board-local subnets (LAN/WG/LXC), and the board's own public
+# IP (kbin/admin resolve to it, reached via hairpin). Without this, self-views
+# round-trip Tor and load empty/slow. The Tor automap range (10.192.0.0/10) is
+# never a connected route, so it is correctly NOT added → still torified.
+populate_exempt() {
+  local net pub
+  nft add element inet toolbox_tor tor_exempt "{ 127.0.0.0/8 }" 2>/dev/null || true
+  # board-local connected RFC1918 subnets
+  for net in $(ip -4 route show scope link 2>/dev/null | awk '{print $1}' \
+               | grep -E '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)'); do
+    case "$net" in 10.19[2-9].*|10.2[0-5][0-9].*) continue ;; esac  # belt: skip automap
+    nft add element inet toolbox_tor tor_exempt "{ $net }" 2>/dev/null || true
+  done
+  # board's own public IP — detected DIRECT (root egress is not torified).
+  pub=$(timeout 6 curl -s https://api.ipify.org 2>/dev/null || true)
+  case "$pub" in
+    [0-9]*.[0-9]*.[0-9]*.[0-9]*)
+      nft add element inet toolbox_tor tor_exempt "{ $pub }" 2>/dev/null || true
+      log "exempt own public IP $pub" ;;
+  esac
+}
+
+disarm() {
+  log "disarming kbin Tor egress"
+  rm -f "$NFT_DROPIN"
+  if table_present; then nft delete table inet toolbox_tor 2>/dev/null || true; fi
+  rm -f "$TORRC_DROPIN"
+  # Stop tor to minimise attack surface when not in use (no hidden services
+  # are owned by this drop-in; secubox-tor manages those separately).
+  systemctl stop tor 2>/dev/null || true
+  log "DISARMED"
+}
+
+main() {
+  local arg="${1:-reconcile}" want
+  case "$arg" in
+    arm)     want=true ;;
+    disarm)  want=false ;;
+    reconcile) want="$(want_from_flag)" ;;
+    *) echo "usage: $0 {arm|disarm|reconcile}" >&2; exit 1 ;;
+  esac
+
+  if [ "$want" = "true" ]; then
+    table_present && { log "already armed — no-op"; exit 0; }
+    arm
+  else
+    if ! table_present && [ ! -f "$TORRC_DROPIN" ]; then
+      log "already disarmed — no-op"; exit 0
+    fi
+    disarm
+  fi
+}
+
+main "$@"
