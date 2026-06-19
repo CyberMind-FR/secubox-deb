@@ -138,6 +138,87 @@ async def toolbox_ad_event(request: Request) -> Response:
         log.debug("ad-event ingest failed: %s", e)
     return Response(status_code=204)
 
+
+# #662 — cross-site cookie-tracker edge ingest from the Go MITM engine (sbxmitm).
+# The #662 Phase-7 cutover decommissioned the in-process Python social_graph addon
+# that fed social.record_edge(), so the kbin /social graph (social_edges →
+# social_nodes/social_links) froze. The engine now computes the SAME 3rd-party
+# cookie-tracker edges (FAITHFUL port of social_graph.py: deny-list, eTLD+1
+# 3rd-party check, cookie_id_hash, CMP consent_state) and POSTs a batch here. We
+# call social.record_edge() per row, which writes raw social_edges; the existing
+# app.py social_fold_loop folds them into nodes/links.
+#
+# Raw cookie VALUES never reach this endpoint — only the truncated cookie_id_hash
+# (privacy/CSPN; this is exactly why the original ran in-process).
+#
+# UNAUTHENTICATED, same trust note as /__toolbox/ad-event: the engine reaches the
+# portal only over the R3 nft perimeter (loopback / WG ingress).
+_SOCIAL_EVENT_ROW_CAP = 5000  # bound the edge list so a misbehaving engine can't flood us
+_SOCIAL_FOLD_DEBOUNCE = 60  # seconds: floor between in-handler safety folds
+_social_last_fold = 0.0  # module-level throttle timestamp
+
+
+@router.post("/__toolbox/social-event")
+async def toolbox_social_event(request: Request) -> Response:
+    """Ingest a batch of cross-site tracker edges from the Go engine. Best-effort:
+    never 500s the engine (it is fire-and-forget) — always returns 204. See the
+    trust note above for why this is unauthenticated."""
+    global _social_last_fold
+    try:
+        # Body-size guard BEFORE parsing (mirrors /__toolbox/ad-event): the legit
+        # payload (≤5000 edges) is well under 2 MB; reject larger outright so a
+        # misbehaving/compromised WG peer can't pressure portal memory.
+        try:
+            clen = int(request.headers.get("content-length") or 0)
+        except (TypeError, ValueError):
+            clen = 0
+        if clen > 2 * 1024 * 1024:
+            return Response(status_code=204)
+        body = await request.json()
+        if not isinstance(body, dict):
+            return Response(status_code=204)
+        edges = body.get("edges") or []
+        if not isinstance(edges, list):
+            edges = []
+        edges = edges[:_SOCIAL_EVENT_ROW_CAP]
+
+        from . import social as _social
+
+        recorded = 0
+        for e in edges:
+            if not isinstance(e, dict):
+                continue
+            try:
+                _social.record_edge(
+                    client_mac_hash=e.get("client_mac_hash") or "",
+                    src_site=e.get("src_site") or "",
+                    tracker_domain=e.get("tracker_domain") or "",
+                    cookie_id_hash_val=e.get("cookie_id_hash_val") or "",
+                    ja4_hash=e.get("ja4_hash") or None,
+                    consent_state=e.get("consent_state") or "none_seen",
+                )
+                recorded += 1
+            except Exception as row_err:  # one bad row never fails the batch
+                log.debug("social-event row failed: %s", row_err)
+
+        # Safety fold: the app.py social_fold_loop already folds every 5 min, but
+        # fold here too (debounced to ≤ once / 60 s via a module-level timestamp)
+        # so a freshly-ingested edge surfaces in the d3 graph promptly even between
+        # loop ticks. Cheap (indexed window scan) and self-throttling; a fold
+        # failure is swallowed (the loop will catch up).
+        if recorded:
+            now = time.time()
+            if now - _social_last_fold >= _SOCIAL_FOLD_DEBOUNCE:
+                _social_last_fold = now
+                try:
+                    _social.fold_recent(window_seconds=600)
+                except Exception as fold_err:
+                    log.debug("social-event fold failed: %s", fold_err)
+    except Exception as e:  # never raise into the engine's fire-and-forget POST
+        log.debug("social-event ingest failed: %s", e)
+    return Response(status_code=204)
+
+
 # Cap geo/UA enrichment on /admin/clients/rich to the rows the UI actually shows
 # (top-5 + headroom). Beyond this, clients get bare fields — avoids ~51 cached
 # geo lookups per poll (ref #644).
