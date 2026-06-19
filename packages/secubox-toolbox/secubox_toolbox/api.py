@@ -2845,6 +2845,116 @@ async def admin_filters_set(request: Request) -> dict:
     return set_filters(patch)
 
 
+# ── kbin Tor egress switch (#683) — reuses the secubox-tor control plane ──
+_TOR_EXIT_IP_CACHE = "/tmp/tor_exit_ip"  # shared with secubox-tor
+
+
+def _tor_exit_ip_cached():
+    try:
+        if os.path.exists(_TOR_EXIT_IP_CACHE):
+            return (open(_TOR_EXIT_IP_CACHE).read().strip() or None)
+    except Exception:
+        pass
+    return None
+
+
+def _require_tor_admin(request: Request) -> None:
+    """Tor on/off/newnym/leak-check are operator actions — blocked on the
+    public kbin vhost (defense-in-depth, mirrors /admin/filter-control)."""
+    if _is_public_kbin(request):
+        raise HTTPException(status_code=403,
+                            detail="Tor controls are admin-only (use admin.gk2.secubox.in)")
+
+
+@router.get("/admin/tor/state")
+async def admin_tor_state() -> dict:
+    """kbin Tor mode status: the flag + live daemon bootstrap/circuits/exit IP.
+    Read-only — safe to expose on the public kbin vhost (no secrets)."""
+    from .filters import get_filters
+    from . import tor_ctl
+    f = get_filters(force=True)
+    st = tor_ctl.status()
+    st.update({
+        "tor_mode": bool(f.get("tor_mode", False)),
+        "tor_preset": f.get("tor_preset", "anonymous"),
+        "exit_ip": _tor_exit_ip_cached(),
+    })
+    return st
+
+
+@router.post("/admin/tor/on")
+async def admin_tor_on(request: Request) -> dict:
+    """Arm kbin Tor mode. Flips the flag only; the privileged tunnel arm runs
+    async via secubox-toolbox-tor.path → reconcile (portal stays unprivileged)."""
+    _require_tor_admin(request)
+    from .filters import set_filters
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    patch = {"tor_mode": True}
+    if isinstance(body, dict) and body.get("tor_preset"):
+        patch["tor_preset"] = body["tor_preset"]
+    out = set_filters(patch)
+    return {"tor_mode": out["tor_mode"], "tor_preset": out["tor_preset"], "armed_async": True}
+
+
+@router.post("/admin/tor/off")
+async def admin_tor_off(request: Request) -> dict:
+    """Disarm kbin Tor mode (flag flip; reconciler tears the tunnel down)."""
+    _require_tor_admin(request)
+    from .filters import set_filters
+    out = set_filters({"tor_mode": False})
+    return {"tor_mode": out["tor_mode"], "disarmed_async": True}
+
+
+@router.post("/admin/tor/newnym")
+async def admin_tor_newnym(request: Request) -> dict:
+    """Request a fresh Tor circuit (new exit IP) — SIGNAL NEWNYM via control port."""
+    _require_tor_admin(request)
+    from . import tor_ctl
+    ok = tor_ctl.new_identity()
+    try:
+        if os.path.exists(_TOR_EXIT_IP_CACHE):
+            os.unlink(_TOR_EXIT_IP_CACHE)
+    except Exception:
+        pass
+    return {"success": ok}
+
+
+@router.post("/admin/tor/check-leaks")
+async def admin_tor_check_leaks(request: Request) -> dict:
+    """Probe the egress IP via Tor SOCKS (9050) and cache it for the badge.
+    A real off-board leak test is still the source of truth; this confirms the
+    SOCKS path resolves and surfaces the current exit IP."""
+    _require_tor_admin(request)
+    from . import tor_ctl
+    if not tor_ctl.tor_running():
+        return {"ok": False, "error": "tor not running"}
+    import httpx
+    result: dict = {"ok": True}
+    # httpx renamed proxies= → proxy= (0.26+, removed proxies in 0.28); board
+    # ships bookworm's 0.23 (proxies=). Support both.
+    try:
+        _client = httpx.AsyncClient(timeout=15.0, proxy="socks5://127.0.0.1:9050")
+    except TypeError:
+        _client = httpx.AsyncClient(timeout=15.0, proxies="socks5://127.0.0.1:9050")
+    try:
+        async with _client as c:
+            tor_ip = (await c.get("https://api.ipify.org")).text.strip()
+        result["tor_ip"] = tor_ip
+        try:
+            with open(_TOR_EXIT_IP_CACHE, "w") as fh:
+                fh.write(tor_ip)
+        except Exception:
+            pass
+    except Exception:
+        result["ok"] = False
+        result["tor_ip"] = None
+        result["error"] = "SOCKS probe failed (python3-socksio installed? tor bootstrapped?)"
+    return result
+
+
 @router.get("/admin/filters/ui", response_class=HTMLResponse)
 async def admin_filters_ui() -> HTMLResponse:
     """#566 — minimal filter toggle panel for the toolbox WebUI."""
