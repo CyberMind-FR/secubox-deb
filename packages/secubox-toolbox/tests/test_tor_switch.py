@@ -166,6 +166,24 @@ def test_nft_tunnel_failclosed_invariants():
     assert text.count("ip daddr @tor_exempt return") >= 2
 
 
+def test_bundle_banner_has_tor_indicator(tmp_path, monkeypatch):
+    """The LIVE injected banner is the stream-inject bundle (bundle.py), not the
+    server-side inject_banner chip. Its render() must show the 🧅 span and the
+    decision bundle must carry tor_mode."""
+    import importlib
+    monkeypatch.setenv("SECUBOX_FILTERS_PATH", str(tmp_path / "filters.json"))
+    import secubox_toolbox.filters as f
+    importlib.reload(f)
+    f.set_filters({"tor_mode": True})
+    import secubox_toolbox.bundle as b
+    importlib.reload(b)
+    assert b.build_bundle("abc", True)["tor_mode"] is True
+    assert b.build_bundle("abc", True) is not None
+    # the banner render() (shared by loader + inline) emits the 🧅 span
+    assert "b.tor_mode" in b.LOADER_JS
+    assert "\U0001F9C5" in b.LOADER_JS  # 🧅
+
+
 def test_reconcile_populates_exempt_and_excludes_automap():
     """The reconciler must fill tor_exempt with loopback + own public IP and
     must NOT exempt the Tor automap range (10.192/10) or transparent proxy breaks."""
