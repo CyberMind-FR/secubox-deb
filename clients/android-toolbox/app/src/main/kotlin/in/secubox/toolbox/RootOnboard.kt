@@ -9,7 +9,14 @@ import java.io.File
 import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 
-class RootOnboard(private val api: ToolboxApi, private val cacheDir: File) {
+class RootOnboard(
+    private val api: ToolboxApi,
+    private val cacheDir: File,
+    // #683: app-internal storage for the STABLE WG identity (survives reboot).
+    // Defaults to cacheDir so older call sites still compile, but real callers
+    // pass filesDir so the identity persists instead of churning each boot.
+    private val filesDir: File = cacheDir,
+) {
 
     /** A line appended to the on-screen log during the silent run. */
     fun interface Logger { fun log(line: String) }
@@ -123,8 +130,10 @@ class RootOnboard(private val api: ToolboxApi, private val cacheDir: File) {
             log.log("• Noyau sans module WireGuard — bascule sur l'app WireGuard")
             return false
         }
-        log.log("• Génération du profil WireGuard…")
-        val conf = api.downloadProfile(cacheDir).readText()
+        log.log("• Profil WireGuard (identité stable)…")
+        // #683: reuse the persisted keypair so the device keeps ONE identity
+        // across reboots (no more stats reset to a fresh empty hash each boot).
+        val conf = api.persistentProfile(filesDir).readText()
         val wg = parse(conf) ?: run { log.log("✗ profil illisible"); return false }
         val iface = "wg-village3b"
         val r = RootShell.runScript(

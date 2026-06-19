@@ -500,6 +500,23 @@ async def change_level(request: Request):
                              status_code=303)
 
 
+@router.get("/wg/tor-status")
+async def wg_tor_status() -> dict:
+    """kbin Tor egress status for the clients (#683). Public + read-only, so it
+    is reachable on the kbin vhost (unlike the admin-gated /admin/tor/*). The
+    webext popup + Android app poll this to show the 🧅 indicator + exit IP."""
+    from .filters import get_filters
+    from . import tor_ctl
+    f = get_filters(force=False)
+    st = tor_ctl.status()
+    return {
+        "tor_mode": bool(f.get("tor_mode", False)),
+        "running": bool(st.get("running", False)),
+        "bootstrap": int(st.get("bootstrap", 0) or 0),
+        "exit_ip": _tor_exit_ip_cached(),
+    }
+
+
 @router.get("/wg/r3-check")
 async def wg_r3_check(request: Request):
     """Phase 7 (#498) — same-origin HTTPS probe for the R3 verification

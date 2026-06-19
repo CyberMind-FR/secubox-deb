@@ -51,6 +51,41 @@ class ToolboxApi(rawHost: String) {
     fun downloadCa(cacheDir: File): File = download("/wg/ca.crt", "village3b-ca.crt", cacheDir)
     fun downloadProfile(cacheDir: File): File = download("/wg/profile/new", "village3b-toolbox.conf", cacheDir)
 
+    /**
+     * The device's STABLE WireGuard identity (#683 lost-referrer fix).
+     *
+     * `/wg/profile/new` mints a FRESH keypair on every call. The onboarding
+     * runs on every boot, so calling it each time gave the device a NEW pubkey
+     * → new sha256(pubkey) identity hash → its stats/social history reset to an
+     * empty bucket on every reboot/reconnect. Here we fetch a peer ONCE and
+     * persist the .conf in app-internal `filesDir` (survives reboots, unlike the
+     * evictable cacheDir). Every later call reuses the SAME keypair → SAME
+     * identity → the device keeps one continuous history.
+     *
+     * Survives reboot/reconnect/app-restart. (Reinstall still wipes filesDir;
+     * cross-reinstall persistence would need allowBackup — kept off for CSPN.)
+     */
+    fun persistentProfile(filesDir: File): File {
+        val stored = File(filesDir, "identity-wg.conf")
+        if (stored.exists() && stored.length() > 0L &&
+            stored.readText().contains("PrivateKey", ignoreCase = true)) {
+            return stored
+        }
+        val fresh = download("/wg/profile/new", "identity-wg.conf.tmp", filesDir)
+        fresh.copyTo(stored, overwrite = true)
+        fresh.delete()
+        return stored
+    }
+
+    /** kbin Tor egress status for the client UI (read-only, kbin-safe). */
+    fun torStatus(): JSONObject? {
+        val c = open("/wg/tor-status")
+        return try {
+            if (c.responseCode !in 200..299) null
+            else JSONObject(c.inputStream.bufferedReader().readText())
+        } catch (_: Exception) { null } finally { c.disconnect() }
+    }
+
     /** R3 tunnel status. Returns (onTunnel, peerIp?). */
     fun r3Check(): Pair<Boolean, String?> {
         val c = open("/wg/r3-check")

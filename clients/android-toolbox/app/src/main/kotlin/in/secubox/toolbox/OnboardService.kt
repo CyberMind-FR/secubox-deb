@@ -50,7 +50,7 @@ class OnboardService : Service() {
             kotlinx.coroutines.delay(2000)
         }
         if (!ok) return
-        RootOnboard(api, cacheDir).runSilent { /* headless: no UI log */ }
+        RootOnboard(api, cacheDir, filesDir).runSilent { /* headless: no UI log */ }
     }
 
     private fun buildNotification(): Notification {

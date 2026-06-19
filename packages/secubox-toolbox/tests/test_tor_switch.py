@@ -160,5 +160,19 @@ def test_nft_tunnel_failclosed_invariants():
     assert "meta nfproto ipv6" in text and "drop" in text
     # only the worker uid is torified (not a blanket rule)
     assert text.count('meta skuid "secubox-toolbox"') >= 4
-    # loopback + local subnets are exempted (no plumbing breakage)
-    assert "10.99.0.0/16" in text and "10.100.0.0/16" in text
+    # own-services exemption: the reconciler-populated set must exist and be
+    # consulted before the redirect/drop (so the box reaches itself directly)
+    assert "set tor_exempt" in text
+    assert text.count("ip daddr @tor_exempt return") >= 2
+
+
+def test_reconcile_populates_exempt_and_excludes_automap():
+    """The reconciler must fill tor_exempt with loopback + own public IP and
+    must NOT exempt the Tor automap range (10.192/10) or transparent proxy breaks."""
+    import pathlib
+    sh = (pathlib.Path(__file__).resolve().parents[1]
+          / "sbin" / "secubox-toolbox-tor-reconcile").read_text()
+    assert "tor_exempt" in sh and "127.0.0.0/8" in sh
+    assert "api.ipify.org" in sh          # own public IP detected direct
+    assert "scope link" in sh             # board-local subnets
+    assert "10.19" in sh                   # explicit automap-range guard

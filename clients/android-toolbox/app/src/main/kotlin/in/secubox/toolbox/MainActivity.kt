@@ -88,12 +88,23 @@ fun OnboardApp() {
                 busy = false; status = "Borne injoignable — vérifie le réseau."
             } else {
                 step = Step.RootAuto
-                val onb = RootOnboard(api, ctx.cacheDir)
+                val onb = RootOnboard(api, ctx.cacheDir, ctx.filesDir)
                 val out = withContext(Dispatchers.IO) {
                     onb.runSilent { line -> scope.launch(Dispatchers.Main) { rootLog.add(line) } }
                 }
                 busy = false
                 onTunnel = out.verified
+                // #683 — surface kbin Tor egress status (anonymised exit) if on.
+                rootLog.add(withContext(Dispatchers.IO) {
+                    val t = api.torStatus()
+                    when {
+                        t == null -> "• Statut Tor : indisponible"
+                        !t.optBoolean("tor_mode", false) -> "• Mode Tor : inactif"
+                        t.optBoolean("running", false) ->
+                            "🧅 Mode Tor ACTIF — sortie anonymisée${t.optString("exit_ip", "").let { if (it.isNotBlank() && it != "null") " ($it)" else "" }}"
+                        else -> "🧅 Mode Tor activé — tunnel Tor en démarrage…"
+                    }
+                })
                 when {
                     out.verified -> step = Step.Done
                     out.wgViaApp -> { step = Step.ImportProfile
