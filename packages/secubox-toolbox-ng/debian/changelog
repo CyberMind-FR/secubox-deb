@@ -1,3 +1,22 @@
+secubox-toolbox-ng (0.1.11-1~bookworm1) bookworm; urgency=medium
+
+  * social: ALSO correlate on the block path — blocked 3rd-party trackers still
+    carry the browser's request Cookie (the cross-site evidence); without this
+    the /social graph misses the very trackers it exists to expose (they're 204'd
+    before the allow/mitm correlation). resp=nil request-only, hash-only. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 11:55:00 +0000
+
+secubox-toolbox-ng (0.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * social: faithfully port the in-process social_graph correlation — the engine
+    computes cross-site tracker edges (byte-exact cookie_id_hash, deny-list,
+    eTLD+1 3rd-party check, CMP consent_state) and relays HASH-ONLY edges
+    (never raw values, WG-only) to the new portal /__toolbox/social-event →
+    social.record_edge → /social graph un-frozen. --social-relay (default on). (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 11:30:00 +0000
+
 secubox-toolbox-ng (0.1.9-1~bookworm1) bookworm; urgency=medium
 
   * telemetry: relay per-flow metadata to the analysis sidecars (dpi /classify,
