@@ -204,6 +204,16 @@ type Proxy struct {
 	jarKey []byte       // anti-track HMAC fake-identity seed (nil → poison off)
 	poison bool         // master gate: poison tracker Set-Cookies (default on when jarKey present)
 	portal string       // portal base URL for /__toolbox/* reverse-proxy (banner assets)
+	ads    *adStats     // #662 — ad-block metrics aggregator (flushed to the portal)
+}
+
+// recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
+// aggregator (#662). Nil-safe so the CONNECT PoC (no aggregator) and tests can
+// run the block path without one. Non-blocking (the aggregator is O(1)).
+func (px *Proxy) recordAdBlock(adHost, site, macHash string) {
+	if px.ads != nil {
+		px.ads.recordAdBlock(adHost, site, macHash)
+	}
 }
 
 func (px *Proxy) serverTLSConfig() *tls.Config {
@@ -310,6 +320,12 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	}
 
 	if verdict == "block" {
+		// #662 — tally the block BEFORE writing the 204 so the #ads dashboard
+		// (frozen since the cutover) sees it again. site = registrable(Referer)
+		// (the ad_ghost _site_of flavour); empty when there is no Referer. The
+		// per-client breakdown keys on the WG persona hash. recordAdBlock is
+		// O(1) and never blocks the block path.
+		px.recordAdBlock(host, refererSite(req.Header.Get("Referer")), clientHashFromConn(rawClient))
 		writeRaw(tconn, 204, "No Content", map[string]string{"X-SecuBox-Ng": "blocked"}, nil)
 		return
 	}
@@ -457,7 +473,12 @@ func main() {
 		jarKey: jarKey,
 		poison: *poison,
 		portal: *portal,
+		ads:    newAdStats(),
 	}
+	// #662 — start the ad-block metrics flusher: the block path tallies every
+	// 204 into px.ads, drained every 10s to the portal's /__toolbox/ad-event
+	// (best-effort, fire-and-forget) so the #ads dashboard sees blocks again.
+	go px.ads.runAdStatsFlusher(*portal)
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
 		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The
