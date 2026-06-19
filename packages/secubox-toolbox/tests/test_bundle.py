@@ -48,6 +48,9 @@ def test_get_bundle_caches(monkeypatch):
 
 
 def test_loader_js_is_served_string():
-    assert "addEventListener" not in bundle.LOADER_JS  # uses currentScript pattern
+    # The legacy src-loader uses the currentScript pattern and fetch()es the
+    # bundle same-origin (the inline path #662 supersedes it in the live engine
+    # but /__toolbox/loader.js still serves this).
+    assert "currentScript" in bundle.LOADER_JS
     assert "__toolbox/bundle" in bundle.LOADER_JS
     assert bundle.LOADER_JS.strip().startswith("(function()")
