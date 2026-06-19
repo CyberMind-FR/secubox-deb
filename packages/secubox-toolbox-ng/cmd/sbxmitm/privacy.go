@@ -148,6 +148,12 @@ func (p *Policy) isTracker(host string) bool {
 // allowlisted — own-infra flows are left clean (same dark safety as the block
 // path). The caller additionally requires a loaded jar key.
 func (p *Policy) shouldPoison(host string) bool {
+	// #662 — consult the same live-reloaded learned set Decide uses, so a host
+	// promoted into learned-trackers (by autolearn) is poisoned (smogged), not
+	// only 204'd, without a worker restart. RLock-guard the reloadable maps
+	// (allowed + isTracker→blockedByAd read them); maybeReload may swap them.
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	if p.allowed(host) {
 		return false // own-infra / allowlist → never poison
 	}

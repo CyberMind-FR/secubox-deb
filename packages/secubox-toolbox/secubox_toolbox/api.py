@@ -113,12 +113,20 @@ async def toolbox_ad_event(request: Request) -> Response:
             return Response(status_code=204)
         blocks = body.get("blocks") or []
         clients = body.get("clients") or []
+        # #662 — the Go engine now also feeds the AUTO-LEARN loop: 3rd-party
+        # ad-path requests it saw on the allow/mitm path (ad_ghost's _AD_PATH
+        # heuristic), recorded as candidates here for secubox-toolbox-autolearn
+        # to promote into learned-trackers.txt at AD_MIN_SITES distinct sites.
+        candidates = body.get("candidates") or []
         if not isinstance(blocks, list):
             blocks = []
         if not isinstance(clients, list):
             clients = []
+        if not isinstance(candidates, list):
+            candidates = []
         blocks = blocks[:_AD_EVENT_ROW_CAP]
         clients = clients[:_AD_EVENT_ROW_CAP]
+        candidates = candidates[:_AD_EVENT_ROW_CAP]
 
         block_rows = [
             (b["ad_host"], b.get("site", ""), "block", int(b.get("hits", 0)), int(b.get("bytes", 0)))
@@ -130,10 +138,17 @@ async def toolbox_ad_event(request: Request) -> Response:
             for c in clients
             if isinstance(c, dict) and c.get("mac_hash") and c.get("ad_host")
         ]
+        cand_rows = [
+            (c["host"], c.get("site", ""), int(c.get("hits", 0)))
+            for c in candidates
+            if isinstance(c, dict) and c.get("host")
+        ]
         if block_rows:
             store.record_ad_blocks(block_rows)
         if client_rows:
             store.record_ad_client_blocks(client_rows)
+        if cand_rows:
+            store.record_ad_candidates(cand_rows)
     except Exception as e:  # never raise into the engine's fire-and-forget POST
         log.debug("ad-event ingest failed: %s", e)
     return Response(status_code=204)

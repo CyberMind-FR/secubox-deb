@@ -26,9 +26,73 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sync"
 	"time"
 )
+
+// ── ad-candidate learning feed (#662 auto-learn loop) ─────────────────────────
+//
+// The STATIC block list never grows on its own; ad_ghost fed autolearn by
+// capturing CANDIDATES — 3rd-party requests whose PATH smells like an ad/track
+// endpoint — into ad_candidates, which secubox-toolbox-autolearn later promotes
+// into learned-trackers.txt at AD_MIN_SITES distinct sites. The Go cutover
+// dropped this feed, so new adwares (acotedemoi.com) were never observed. This
+// restores it in the engine: the allow/mitm hot path records (host,site) when
+// the request is 3rd-party AND adPathRE matches, buffered + flushed with the
+// existing ad-event machinery.
+
+// adPathRE ports ad_ghost._AD_PATH (RE2-safe, case-insensitive). Matches a path
+// that looks like an ad/track endpoint. Learning only — never a block decision.
+//
+//	Python: re.compile(r"/ads?/|/adserver|/pagead|/gampad|/doubleclick|/beacon|"
+//	                    r"/pixel|/collect|/track(ing)?|/telemetry|/metric", re.I)
+var adPathRE = regexp.MustCompile(`(?i)/ads?/|/adserver|/pagead|/gampad|/doubleclick|/beacon|/pixel|/collect|/track(ing)?|/telemetry|/metric`)
+
+// adCandMapCap bounds the candidate buffer (mirrors ad_ghost's `len(_cand) <
+// 20000` guard): NEW keys past the cap are dropped until the next flush clears
+// it, so a dead portal can never grow memory unbounded.
+const adCandMapCap = 20000
+
+// adCandidates is the lock-guarded (host,site)→hits candidate aggregator,
+// drained by the ad-stats flusher into the ad-event payload's "candidates" list.
+type adCandidates struct {
+	mu  sync.Mutex
+	hit map[adKey]int64
+}
+
+func newAdCandidates() *adCandidates { return &adCandidates{hit: map[adKey]int64{}} }
+
+// record tallies one ad-candidate (host,site). O(1); the cap drops only NEW keys
+// (existing keys keep accumulating). Empty host is ignored.
+func (a *adCandidates) record(host, site string) {
+	if host == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	k := adKey{adHost: host, site: site}
+	if _, ok := a.hit[k]; ok {
+		a.hit[k]++
+	} else if len(a.hit) < adCandMapCap {
+		a.hit[k] = 1
+	}
+}
+
+// snapshot atomically reads-and-clears the buffer, returning the candidate rows.
+func (a *adCandidates) snapshot() []adCandidateRow {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.hit) == 0 {
+		return nil
+	}
+	rows := make([]adCandidateRow, 0, len(a.hit))
+	for k, n := range a.hit {
+		rows = append(rows, adCandidateRow{Host: k.adHost, Site: k.site, Hits: n})
+	}
+	a.hit = map[adKey]int64{}
+	return rows
+}
 
 // refererSite ports the ad_ghost _site_of logic: parse the Referer header as a
 // URL, take its hostname, and return registrable(hostname). Empty Referer or a
@@ -133,9 +197,19 @@ type adClientRow struct {
 	Bytes   int64  `json:"bytes"`
 }
 
+// adCandidateRow is one learning candidate (host seen issuing ad-path requests
+// from a 1st-party site). Mirrors the portal /__toolbox/ad-event "candidates"
+// contract → store.record_ad_candidates([(host, site, hits), ...]).
+type adCandidateRow struct {
+	Host string `json:"host"`
+	Site string `json:"site"`
+	Hits int64  `json:"hits"`
+}
+
 type adEventPayload struct {
-	Blocks  []adBlockRow  `json:"blocks"`
-	Clients []adClientRow `json:"clients"`
+	Blocks     []adBlockRow     `json:"blocks"`
+	Clients    []adClientRow    `json:"clients"`
+	Candidates []adCandidateRow `json:"candidates,omitempty"`
 }
 
 // snapshot atomically reads-and-clears both maps, returning the accumulated rows.
@@ -159,7 +233,9 @@ func (a *adStats) snapshot() adEventPayload {
 }
 
 // empty reports whether a payload carries no rows (nothing to POST).
-func (p adEventPayload) empty() bool { return len(p.Blocks) == 0 && len(p.Clients) == 0 }
+func (p adEventPayload) empty() bool {
+	return len(p.Blocks) == 0 && len(p.Clients) == 0 && len(p.Candidates) == 0
+}
 
 // adEventClient is a short-timeout fire-and-forget client for the ad-event POST.
 // Sibling of portalClient (banner.go): the portal is a fixed loopback base, so
@@ -175,8 +251,15 @@ var adEventClient = &http.Client{
 // non-2xx) is swallowed with at most a debug log — the metrics are stats, not
 // security, and the engine must never block on the portal. Exposed (returns the
 // flushed payload) so the test can assert the snapshot/clear + payload shape.
-func (a *adStats) flushOnce(portal string) adEventPayload {
+//
+// cand may be nil (the CONNECT PoC / tests with no learning feed); when set its
+// candidate rows are drained into the SAME payload so the learning feed rides
+// the existing ad-event channel (one POST per 10s, not two).
+func (a *adStats) flushOnce(portal string, cand *adCandidates) adEventPayload {
 	p := a.snapshot()
+	if cand != nil {
+		p.Candidates = cand.snapshot()
+	}
 	if p.empty() {
 		return p
 	}
@@ -198,10 +281,10 @@ func (a *adStats) flushOnce(portal string) adEventPayload {
 // runAdStatsFlusher is the background flusher goroutine: every adFlushInterval it
 // drains the aggregator to the portal. Start it once from main() (like the
 // engine's other startup goroutines). It runs forever (the process lifetime).
-func (a *adStats) runAdStatsFlusher(portal string) {
+func (a *adStats) runAdStatsFlusher(portal string, cand *adCandidates) {
 	t := time.NewTicker(adFlushInterval)
 	defer t.Stop()
 	for range t.C {
-		a.flushOnce(portal)
+		a.flushOnce(portal, cand)
 	}
 }

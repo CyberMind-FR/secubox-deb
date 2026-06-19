@@ -41,7 +41,7 @@ func TestRecordAdBlockEmptyHostIgnored(t *testing.T) {
 
 func TestRecordAdBlockPerClientOnlyWhenMacSet(t *testing.T) {
 	a := newAdStats()
-	a.recordAdBlock("ads.example.com", "site", "")    // no mac → no client row
+	a.recordAdBlock("ads.example.com", "site", "")     // no mac → no client row
 	a.recordAdBlock("ads.example.com", "site", "mac1") // mac → client row
 	a.recordAdBlock("ads.example.com", "site", "mac1")
 
@@ -111,7 +111,7 @@ func TestFlushOncePayloadShapeMatchesContract(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a.flushOnce(srv.URL)
+	a.flushOnce(srv.URL, nil)
 
 	if ct != "application/json" {
 		t.Fatalf("Content-Type = %q, want application/json", ct)
@@ -145,7 +145,7 @@ func TestFlushOnceEmptySkipsPost(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
-	a.flushOnce(srv.URL)
+	a.flushOnce(srv.URL, nil)
 	if posted {
 		t.Fatalf("flushOnce on empty aggregator must not POST")
 	}
@@ -156,7 +156,7 @@ func TestFlushOnceSwallowsPortalError(t *testing.T) {
 	a.recordAdBlock("ads.example.com", "site", "")
 	// Unreachable portal → must not panic, must still clear the maps (snapshot
 	// happens before the POST).
-	a.flushOnce("http://127.0.0.1:1")
+	a.flushOnce("http://127.0.0.1:1", nil)
 	if len(a.blocks) != 0 {
 		t.Fatalf("flushOnce must clear maps even on POST failure")
 	}
