@@ -65,6 +65,17 @@ async function r3Check(host) {
   }
 }
 
+// #683 — kbin Tor egress status (public, kbin-safe endpoint).
+async function torStatus(host) {
+  try {
+    const resp = await fetch(`${baseUrl(host)}/wg/tor-status`, { credentials: "omit" });
+    if (!resp.ok) return { tor_mode: false };
+    return await resp.json();
+  } catch (_) {
+    return { tor_mode: false };
+  }
+}
+
 // graph: the per-session cartographie JSON. Throws on HTTP error so the
 // caller can show "token expired — re-pair".
 async function graph(host, token, since) {
@@ -133,6 +144,7 @@ const SbxApi = {
   setConfig,
   pair,
   r3Check,
+  torStatus,
   graph,
   wipe,
   ghost,

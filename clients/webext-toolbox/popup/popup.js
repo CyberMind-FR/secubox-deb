@@ -111,6 +111,21 @@ async function load() {
     dot.title = r.tunnel ? `Tunnel R3 actif (${r.peer_ip || "?"})` : "Hors tunnel R3";
   });
 
+  // #683 — Tor egress indicator (only visible when kbin Tor mode is on)
+  api.torStatus(cfg.host).then((t) => {
+    const dot = $("tordot");
+    if (!dot) return;
+    if (t && t.tor_mode) {
+      dot.style.display = "";
+      dot.className = "r3 " + (t.running ? "on" : "off");
+      dot.title = t.running
+        ? `Mode Tor actif — sortie anonymisée${t.exit_ip ? " (" + t.exit_ip + ")" : ""}`
+        : "Mode Tor activé — démarrage du tunnel…";
+    } else {
+      dot.style.display = "none";
+    }
+  });
+
   if (!cfg.token) {
     $("host").value = cfg.host;
     show("pair");

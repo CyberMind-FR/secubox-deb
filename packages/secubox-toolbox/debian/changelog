@@ -1,3 +1,12 @@
+secubox-toolbox (2.7.5-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#683): public kbin-safe GET /wg/tor-status ({tor_mode, running,
+    bootstrap, exit_ip}) so the clients (webext popup + Android app) can show a
+    🧅 Tor-egress indicator. Mirrors /wg/r3-check (reachable on every vhost incl.
+    public kbin; the /admin/tor/* controls stay admin-gated).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 17:00:00 +0200
+
 secubox-toolbox (2.7.4-1~bookworm1) bookworm; urgency=medium
 
   * fix(#683): Tor mode no longer torifies the box's OWN services. kbin/admin
