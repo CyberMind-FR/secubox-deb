@@ -1,3 +1,16 @@
+secubox-toolbox-ng (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * anti-bot: present a Chrome TLS fingerprint upstream via uTLS (HelloChrome_Auto)
+    + h2-over-uTLS, defeating JA3/JA4 fingerprinting (DataDome etc.) WITHOUT
+    splicing — cert chain + hostname verification stays ON (manual verifyUConn).
+  * stop downgrading Accept-Encoding (forward the browser's verbatim); decode/
+    inject/re-encode brotli + zstd so injection coverage survives the full AE.
+  * h1: bound write+response-header read (ResponseHeaderTimeout-equivalent) so a
+    stalling origin can't pin a worker. First vendored deps (utls/brotli/zstd/
+    x-net), offline arm64 build via -mod=vendor. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 09:00:00 +0000
+
 secubox-toolbox-ng (0.1.5-1~bookworm1) bookworm; urgency=medium
 
   * ad-stats: record ad-block metrics again (frozen since the #662 cutover) —
