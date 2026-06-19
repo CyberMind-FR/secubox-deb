@@ -110,9 +110,10 @@ func TestInjectIntoBodyIdentity(t *testing.T) {
 }
 
 func TestInjectIntoBodyUnknownEncodingPassthrough(t *testing.T) {
-	// br/zstd/deflate (shouldn't occur after the Accept-Encoding pin) → untouched.
-	body := []byte("\x1f\x8b some br-ish bytes")
-	out, ok := injectIntoBody(body, "br", "x", false)
+	// #662 — gzip/br/zstd are now ALL decoded+re-encoded; deflate (and any other
+	// codec / multi-value AE) remains an unknown encoding we pass through.
+	body := []byte("\x78\x9c some deflate-ish bytes")
+	out, ok := injectIntoBody(body, "deflate", "x", false)
 	if ok {
 		t.Fatal("unknown encoding must pass through (ok=false)")
 	}
