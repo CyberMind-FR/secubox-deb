@@ -63,6 +63,11 @@ var chromeHello = utls.HelloChrome_Auto
 const (
 	upstreamDialTimeout      = 10 * time.Second
 	upstreamHandshakeTimeout = 10 * time.Second
+	// upstreamResponseTimeout bounds write-request + read-response-HEADERS on the
+	// HTTP/1.1 path (mirrors stdlib http.Transport.ResponseHeaderTimeout): without
+	// it, an origin that completes TLS then never replies pins a worker goroutine
+	// forever. Cleared before body streaming so large/slow downloads aren't cut.
+	upstreamResponseTimeout = 30 * time.Second
 )
 
 // uchromeTransport is an http.RoundTripper that, for every request, opens a
@@ -240,6 +245,16 @@ func (b *h2BodyCloser) Close() error {
 // request and reading the response with the stdlib. The response body is wrapped
 // so that closing it closes the conn — single-use, no pooling, no fd leak.
 func roundTripH1(uconn *utls.UConn, req *http.Request) (*http.Response, error) {
+	// Bound write-request + read-response-HEADERS: an origin that completes the
+	// TLS handshake then stalls would otherwise pin this goroutine forever
+	// (the http.Client.Timeout in the caller does NOT reach a custom
+	// RoundTripper's raw conn I/O). Honour the request context deadline if it is
+	// sooner; clear the deadline before returning so body STREAMING isn't capped.
+	deadline := time.Now().Add(upstreamResponseTimeout)
+	if d, ok := req.Context().Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	_ = uconn.SetDeadline(deadline)
 	// Write the request over the conn. req.Write emits a valid origin-form
 	// HTTP/1.1 request (RequestURI was cleared by the caller).
 	if err := req.Write(uconn); err != nil {
@@ -251,6 +266,7 @@ func roundTripH1(uconn *utls.UConn, req *http.Request) (*http.Response, error) {
 		uconn.Close()
 		return nil, fmt.Errorf("utls h1 read: %w", err)
 	}
+	_ = uconn.SetDeadline(time.Time{}) // headers in: don't cap body streaming
 	resp.Body = &h1BodyCloser{ReadCloser: resp.Body, conn: uconn}
 	return resp, nil
 }
