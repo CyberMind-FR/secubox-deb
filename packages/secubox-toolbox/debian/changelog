@@ -1,3 +1,14 @@
+secubox-toolbox (2.7.8-1~bookworm1) bookworm; urgency=medium
+
+  * fix: landing "Ma carto" / "Mon rapport" / "Qui me piste ?" links hit
+    /social/me + /report/me with NO ?mh=, so clicking them re-resolved identity
+    at click-time and could 400 "client identity unresolved". The landing now
+    resolves the caller's mac_hash (new _client_mac_hash helper: ?mh → R3 WG peer
+    → captive ARP) and bakes ?mh= into those links, so they always open the right
+    client's view. No change to identity precedence; resolution stays server-side.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 18:40:00 +0200
+
 secubox-toolbox (2.7.7-1~bookworm1) bookworm; urgency=medium
 
   * fix: injected banner trackers/cookies counts were stuck at 0. They were
