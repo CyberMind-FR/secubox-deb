@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * demo/csp: only relax + flag 🔓 when the page's effective script directive
+    would ACTUALLY block the same-origin loader (no 'self'/'*'/scheme, or
+    'strict-dynamic'/'none'/empty). CSPs that already allow the loader are left
+    byte-for-byte untouched — the 🔓 is now honest proof of a defeated CSP, not
+    just "a CSP existed". (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 10:05:00 +0000
+
 secubox-toolbox-ng (0.1.7-1~bookworm1) bookworm; urgency=medium
 
   * demo: consented CSP-bypass for the transparency banner — on the R3 inject
