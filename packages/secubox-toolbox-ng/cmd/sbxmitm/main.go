@@ -386,6 +386,12 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		// per-client breakdown keys on the WG persona hash. recordAdBlock is
 		// O(1) and never blocks the block path.
 		px.recordAdBlock(host, refererSite(req.Header.Get("Referer")), clientHashFromConn(rawClient))
+		// #662 — the cross-site tracking evidence lives PRECISELY on the blocked
+		// trackers: the browser still SENT its 3rd-party Cookie to doubleclick/
+		// adnxs/… before we 204 it. Correlate that request-Cookie here (resp=nil,
+		// request-only) or the /social graph misses the very trackers it exists to
+		// expose. Hash-only, WG-peer only, fire-and-forget — same as the allow path.
+		px.emitSocial(peerIP(rawClient), host, req, nil)
 		writeRaw(tconn, 204, "No Content", map[string]string{"X-SecuBox-Ng": "blocked"}, nil)
 		return
 	}
