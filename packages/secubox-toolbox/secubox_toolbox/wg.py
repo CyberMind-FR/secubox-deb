@@ -233,3 +233,84 @@ def revoke_client(client_pubkey: str) -> bool:
 def _now_ts() -> float:
     import time
     return time.time()
+
+
+# Phase 6 (#662) : map each WG peer to its REAL external (pre-tunnel) endpoint IP
+# so the admin client table can show the client's true origin country flag —
+# the stored client IP is the internal 10.99.1.x which GeoIPs to nothing.
+
+import hashlib as _hashlib
+import ipaddress as _ipaddress
+
+_ENDPOINTS_CACHE: dict[str, str] = {}
+_ENDPOINTS_TS: float = 0.0
+_ENDPOINTS_TTL = 30.0  # endpoints change rarely; don't shell out per request/row
+
+
+def _is_private_or_loopback(ip: str) -> bool:
+    """True for RFC1918 / loopback / link-local / ULA — non-routable, no
+    meaningful country (a client on the local LAN has no public geo)."""
+    try:
+        a = _ipaddress.ip_address(ip)
+    except ValueError:
+        return True
+    return (
+        a.is_private        # 10/8, 172.16/12, 192.168/16, fc00::/7
+        or a.is_loopback    # 127/8, ::1
+        or a.is_link_local  # 169.254/16, fe80::/10
+        or a.is_unspecified
+    )
+
+
+def _strip_endpoint_port(endpoint: str) -> str | None:
+    """`IP:port` or `[IPv6]:port` → bare IP. None for `(none)` / malformed."""
+    ep = (endpoint or "").strip()
+    if not ep or ep == "(none)":
+        return None
+    if ep.startswith("["):  # IPv6 literal: [2001:db8::1]:51820
+        host = ep[1:].split("]", 1)[0]
+        return host or None
+    # IPv4 (or bare host): split off the last :port
+    return ep.rsplit(":", 1)[0] or None
+
+
+def wg_endpoints() -> dict[str, str]:
+    """Return {mac_hash: external_ip} for every WG peer with a real, routable
+    endpoint, derived from `wg show wg-toolbox dump`.
+
+    mac_hash = sha256(pubkey)[:16] — the SAME derivation used when the peer is
+    registered (api.wg_profile_new). The external IP is the peer's pre-tunnel
+    endpoint, i.e. its true public origin. RFC1918 / loopback / link-local
+    endpoints and `(none)` are skipped (no meaningful country).
+
+    Best-effort : empty dict on any error or if `wg` is missing. Cached ~30s.
+    """
+    global _ENDPOINTS_CACHE, _ENDPOINTS_TS
+    now = _now_ts()
+    if _ENDPOINTS_CACHE and (now - _ENDPOINTS_TS) < _ENDPOINTS_TTL:
+        return _ENDPOINTS_CACHE
+    out: dict[str, str] = {}
+    try:
+        proc = subprocess.run(
+            ["wg", "show", WG_INTERFACE, "dump"],
+            capture_output=True, text=True, timeout=2, check=False,
+        )
+        lines = proc.stdout.splitlines()
+        # First line is the interface (privkey, pubkey, port, fwmark) — skip it.
+        # Peer lines: pubkey  presharedkey  endpoint  allowed-ips  ...
+        for line in lines[1:]:
+            fields = line.split("\t")
+            if len(fields) < 3:
+                continue
+            pubkey = fields[0].strip()
+            ip = _strip_endpoint_port(fields[2])
+            if not pubkey or not ip or _is_private_or_loopback(ip):
+                continue
+            mac_hash = _hashlib.sha256(pubkey.encode()).hexdigest()[:16]
+            out[mac_hash] = ip
+    except Exception as e:  # missing wg, timeout, permission, parse error
+        log.debug("wg_endpoints unavailable: %s", e)
+        return _ENDPOINTS_CACHE or {}
+    _ENDPOINTS_CACHE = out
+    _ENDPOINTS_TS = now
+    return out
