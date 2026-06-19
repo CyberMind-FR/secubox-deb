@@ -3,6 +3,21 @@
 
 ---
 
+## 2026-06-19 — #662 post-cutover restore: ad-block metrics + popup CSS (PR #673)
+
+- **Found by verification**: the cutover ported the 204-block but NOT ad_ghost's
+  metrics recording (frozen since 2026-06-18 18:59) nor its cosmetic/popup-hiding CSS
+  (popups returned — they're 1st-party DOM, never touched by host-204).
+- **Metrics**: Go aggregates blocks in-memory (per ad_host/site + per mac_hash), flushes
+  every 10s to a new portal `POST /__toolbox/ad-event` (unauth R3-perimeter, body-bounded,
+  never 500s) → SQLite store → #ads dashboard live again (total_blocked rising).
+- **Popups**: Go injects `<style id="sbx-ghost-style">` on R3 HTML (wg-gated, idempotent,
+  on the gzip path with the banner) — ports `_COSMETIC` + ad-specific popup tokens
+  (interstitial/ad-overlay/popup-ad/popunder/exit-intent), conservative (no bare
+  modal/popup/overlay, regression-tested). Verified live on the R3 path.
+- toolbox-ng 0.1.5 deployed (rolling restart) + portal api.py hot-deployed (drift closed
+  at next .deb build). Portal uvicorn boot ~14s.
+
 ## 2026-06-18 — #662 Phase 7: Python R3 engine DECOMMISSIONED + nft persistence
 
 - **nft persistence** (master `eea46326`): the boot re-apply source is the drop-in
