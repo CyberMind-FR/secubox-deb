@@ -73,6 +73,57 @@ async def toolbox_bundle(mh: str = Query(default=""), wg: int = Query(default=0)
         headers={"Cache-Control": "no-store"},
     )
 
+
+# #662 — ad-block metrics ingest from the Go MITM engine (sbxmitm). The #662
+# cutover moved the BLOCK decision (204 on ad/tracker hosts) into the Go engine
+# but left the METRICS unported, so the #ads dashboard froze. The engine now
+# aggregates blocks in-memory and POSTs a snapshot here every ~10s; we persist it
+# to the SAME SQLite tables (ad_block_stats / ad_block_client_host) the dashboard
+# reads via store.ad_stats().
+#
+# UNAUTHENTICATED, by design — exactly like /__toolbox/loader.js + /__toolbox/
+# bundle above: the engine reaches the portal only over the R3 nft perimeter
+# (loopback / WG ingress), which is the trust boundary. No JWT is required for
+# these engine↔portal banner/metrics channels.
+_AD_EVENT_ROW_CAP = 2000  # bound each list so a misbehaving engine can't flood us
+
+
+@router.post("/__toolbox/ad-event")
+async def toolbox_ad_event(request: Request) -> Response:
+    """Ingest a batch of ad-block tallies from the Go engine. Best-effort: never
+    500s the engine (it is fire-and-forget) — always returns 204. See the trust
+    note above for why this is unauthenticated."""
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            return Response(status_code=204)
+        blocks = body.get("blocks") or []
+        clients = body.get("clients") or []
+        if not isinstance(blocks, list):
+            blocks = []
+        if not isinstance(clients, list):
+            clients = []
+        blocks = blocks[:_AD_EVENT_ROW_CAP]
+        clients = clients[:_AD_EVENT_ROW_CAP]
+
+        block_rows = [
+            (b["ad_host"], b.get("site", ""), "block", int(b.get("hits", 0)), int(b.get("bytes", 0)))
+            for b in blocks
+            if isinstance(b, dict) and b.get("ad_host")
+        ]
+        client_rows = [
+            (c["mac_hash"], c["ad_host"], int(c.get("hits", 0)), int(c.get("bytes", 0)))
+            for c in clients
+            if isinstance(c, dict) and c.get("mac_hash") and c.get("ad_host")
+        ]
+        if block_rows:
+            store.record_ad_blocks(block_rows)
+        if client_rows:
+            store.record_ad_client_blocks(client_rows)
+    except Exception as e:  # never raise into the engine's fire-and-forget POST
+        log.debug("ad-event ingest failed: %s", e)
+    return Response(status_code=204)
+
 # Cap geo/UA enrichment on /admin/clients/rich to the rows the UI actually shows
 # (top-5 + headroom). Beyond this, clients get bare fields — avoids ~51 cached
 # geo lookups per poll (ref #644).
