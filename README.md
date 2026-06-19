@@ -57,6 +57,30 @@
 
 ---
 
+## 🗡️ kbin — le premier outil du couteau suisse cyber
+
+**kbin** (`kbin.gk2.secubox.in`) est le portail public de la **ToolBoX** SecuBox — la
+*cabine numérique* et **première lame du couteau suisse cyber modulaire** de
+[cybermind.fr](https://cybermind.fr). On s'y branche, on surfe normalement, et la lame
+inspecte et protège le trafic de façon transparente :
+
+| 🗡️ | Lame |
+|----|------|
+| ⚡ | **Performance transparente** — on ne déchiffre que ce qu'on modifie (SNI-splice sélectif) |
+| 🔒 | **Full encrypted** — inspection MITM complète, forge de cert par hôte, fingerprint Chrome uTLS |
+| ☠️ | **Injection de poison & smog** — le trafic ad-tech ressort empoisonné, pas seulement bloqué |
+| 🚫 | **Bandeau anti-adware** — transparence injectée, immune au CSP, SPA-aware |
+| 🛡️ | **Safe browsing** — Vortex DNS + blacklist nft + détection anti-bot |
+
+> **Prochaine lame — 🧅 mode Tor quick-switch ([#683](https://github.com/CyberMind-FR/secubox-deb/issues/683)).**
+> Un tap → le surf ressort par le réseau Tor (egress sortant, pseudo-network) : l'inspection
+> reste intacte, seule l'**IP de sortie** devient anonyme. Fail-closed, opt-in, sans fuite DNS.
+
+- Use-case : [docs/wiki/Kbin-Toolbox.md](docs/wiki/Kbin-Toolbox.md)
+- FAQ : [docs/FAQ-KBIN-TOR.md](docs/FAQ-KBIN-TOR.md)
+
+---
+
 ## License — CyberMind Source-Disclosed (CMSD-1.0)
 
 > **Source disclosed, rights reserved.**

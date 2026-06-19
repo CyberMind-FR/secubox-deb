@@ -1,3 +1,19 @@
+secubox-toolbox (2.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * MIDDLE RELEASE — caps the 2.6.x line (ad-intelligence / Anti-Track v2 /
+    anti-bot uTLS) and opens the kbin "first tool of the Swiss-army cyber kit"
+    chapter. kbin now delivers: transparent performance, full-MITM encrypted
+    inspection, ad poison/smog injection, the adware-ban transparency banner,
+    and safe browsing.
+  * docs: kbin use-case consolidated — wiki `Kbin-Toolbox.md`, `FAQ-KBIN-TOR.md`,
+    README positioning blurb.
+  * plan(#683): next chapter staged — kbin Tor endpoint, a quick-switch that
+    re-routes consenting client surfing through Tor (outbound egress, pseudo-
+    network) so the kbin exit is anonymized. Design spec landed; no behaviour
+    change yet (default OFF, fail-closed by design).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 11:00:00 +0200
+
 secubox-toolbox (2.6.59-1~bookworm1) bookworm; urgency=medium
 
   * ui: cap all admin dashboard lists to top-5 shown — #filtres bypass hosts,

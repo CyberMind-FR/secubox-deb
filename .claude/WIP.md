@@ -1,5 +1,35 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-18*
+*Mis à jour : 2026-06-19*
+
+---
+
+## 🔄 2026-06-19 : kbin milestone — ToolBoX 2.7.0 + chapitre Tor (plan)
+
+Checkpoint de fin de session. Pas de changement de comportement runtime — docs +
+positionnement + version + plan de la lame suivante.
+
+- ✅ **ToolBoX 2.7.0** (middle release) — clôt la ligne 2.6.x (ad-intelligence /
+  Anti-Track v2 / anti-bot uTLS #662), ouvre le chapitre kbin « premier outil du
+  couteau suisse cyber ». kbin = perf transparente + full encrypted + poison/smog +
+  bandeau anti-adware + safe browsing.
+- ✅ **Docs kbin** — wiki [`Kbin-Toolbox.md`](../docs/wiki/Kbin-Toolbox.md),
+  [`FAQ-KBIN-TOR.md`](../docs/FAQ-KBIN-TOR.md), blurb README.
+- ✅ **Plan #683** — spec
+  [`2026-06-19-kbin-tor-anonymized-surfing-design.md`](../docs/superpowers/specs/2026-06-19-kbin-tor-anonymized-surfing-design.md) :
+  endpoint Tor quick-switch (egress sortant, fail-closed, opt-in, no DNS leak,
+  inspection préservée). Dépend du cœur Go #662.
+
+### ⬜ Next Up — chapitre Tor (#683)
+
+- **Décider le transport** : Option A (dialer SOCKS5 upstream via le cœur Go #662,
+  *préféré*) vs Option B (nft mark → Tor TransPort, fallback pré-#662).
+- **Profil Tor egress** dans `secubox-exposure` (ou unit `tor-egress` dédié) —
+  egress-only, pas de relay/hidden-service dans ce profil.
+- **API toolbox** : `POST /admin/tor/{on,off}` (par client, WG-hash), `GET /tor/state`,
+  `POST /tor/newnym` + état SQLite + bandeau 🧅 UI.
+- **Leak-guard nft** + DNS-over-Tor (test : exit IP + resolver ≠ Unbound local).
+- **Caveat** : en mode Tor, forcer `tls_splice` OFF pour ce client (sinon les flux
+  asset fuient l'IP réelle). Soak DARK (flag présent, UI cachée) avant flip.
 
 ---
 

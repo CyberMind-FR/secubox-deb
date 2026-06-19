@@ -3,6 +3,27 @@
 
 ---
 
+## 2026-06-19 — kbin milestone: ToolBoX 2.7.0 (middle release) + Tor chapter staged (#683)
+
+- **End-of-session checkpoint** — docs + positioning + version, no runtime behaviour change.
+- **`secubox-toolbox` 2.6.59 → 2.7.0** (middle release) — caps the 2.6.x line
+  (ad-intelligence / Anti-Track v2 / anti-bot uTLS #662) and opens the **kbin** chapter:
+  kbin (`kbin.gk2.secubox.in`, the public ToolBoX portal) framed as the *first tool of the
+  CyberMind Swiss-army cyber kit* — transparent performance, full-encrypted MITM inspection,
+  ad poison/smog injection, adware-ban transparency banner, safe browsing.
+- **Docs** — new wiki use-case `docs/wiki/Kbin-Toolbox.md`, `docs/FAQ-KBIN-TOR.md`,
+  README positioning blurb.
+- **Plan #683 (issue + spec)** — kbin **Tor endpoint**: a quick-switch re-routing consenting
+  client surfing through Tor (outbound egress, pseudo-network) so the kbin exit is anonymized.
+  Spec `docs/superpowers/specs/2026-06-19-kbin-tor-anonymized-surfing-design.md`. Invariants:
+  inspection preserved (Tor after the forging core), fail-closed, opt-in/default-OFF, no DNS
+  leak, CSPN audit-logged. Opposite direction of `secubox-exposure` (inbound hidden services);
+  reuses its Tor control. Depends on the #662 Go core for the preferred SOCKS5-dialer transport.
+- **Caveat recorded** — Tor mode must force `tls_splice` (#649) OFF per-client or asset flows
+  leak the real IP.
+
+---
+
 ## 2026-06-19 — #662 anti-bot: Chrome TLS fingerprint (uTLS) — defeat DataDome without splice (PR #674)
 
 - lemonde.fr (DataDome) blocked R3 navigation at the 2nd level: the engine re-origined
