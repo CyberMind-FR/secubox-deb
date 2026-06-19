@@ -1,3 +1,21 @@
+secubox-toolbox (2.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#683): 🧅 Tor status chip on the injected transparency banner — shown
+    first (most prominent) when kbin Tor mode is armed, so the client sees their
+    surf is anonymised. Read from filters (5s-cached) on the banner hot path.
+  * fix(#683): the Tor tunnel now SURVIVES nftables reloads. The runtime
+    toolbox_tor table was flushed by any `nft -f /etc/nftables.conf` (triggered
+    by other postinsts) → flag-on/tunnel-off leak window. Reconciler now persists
+    it as /etc/nftables.d/zz-secubox-toolbox-tor.nft (zz- = loads after the wg
+    tables). Added secubox-toolbox-tor.timer (2-min idempotent re-arm) to self-heal
+    any bare `nft flush ruleset`, and a final postinst reconcile (after the nft
+    reloads) so upgrades never leave the flag/tunnel mismatched.
+  * fix: postinst restart loop now also restarts secubox-toolbox-mitm-wg.service
+    (single-service R3 path), so mitm addon updates take effect without a manual
+    restart.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 13:05:00 +0200
+
 secubox-toolbox (2.7.1-1~bookworm1) bookworm; urgency=medium
 
   * feat(#683): kbin Tor egress quick-switch — switch + tunnel, ships DARK

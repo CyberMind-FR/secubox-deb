@@ -14,8 +14,10 @@ esac
 # NOT on upgrade — that must preserve runtime state.
 case "$1" in
   remove)
-    systemctl stop secubox-toolbox-tor.path 2>/dev/null || true
-    systemctl disable secubox-toolbox-tor.path 2>/dev/null || true
+    for u in secubox-toolbox-tor.path secubox-toolbox-tor.timer; do
+      systemctl stop "$u" 2>/dev/null || true
+      systemctl disable "$u" 2>/dev/null || true
+    done
     [ -x /usr/sbin/secubox-toolbox-tor-reconcile ] && \
       /usr/sbin/secubox-toolbox-tor-reconcile disarm 2>/dev/null || true
     ;;

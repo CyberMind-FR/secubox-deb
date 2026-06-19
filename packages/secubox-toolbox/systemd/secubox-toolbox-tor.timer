@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Belt-and-suspenders re-arm (#683). The toolbox_tor table now persists as an
+# nftables.d drop-in (survives `nft -f /etc/nftables.conf` reloads), but a bare
+# `nft flush ruleset` from elsewhere could still wipe it while tor_mode=on —
+# leaving the flag on but egress unprotected. This timer reconciles every 2 min
+# so any such drift self-heals (idempotent no-op when desired == current).
+[Unit]
+Description=SecuBox-Deb ToolBoX — periodic re-arm of kbin Tor egress (#683)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=20s
+
+[Install]
+WantedBy=timers.target

@@ -126,6 +126,26 @@ async def test_tor_state_shape_offline(api_mod, monkeypatch):
     assert "bootstrap" in st and "circuits" in st and "exit_ip" in st
 
 
+def _banner_ctx(tor_mode):
+    return {
+        "status_icon": "\U0001F50D", "status": "inspected", "flag": "", "app_emoji": "",
+        "app": "example.com", "asn": "", "grade": "A", "grade_color": "#0f0",
+        "cookies_set": 0, "cookies_sent": 0, "is_tracker_host": False,
+        "utiq_recent_count": 0, "ghost_blocked": 0, "ghost_kb": 0, "tor_mode": tor_mode,
+    }
+
+
+def test_banner_shows_tor_chip_when_armed():
+    import sys, pathlib
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "mitmproxy_addons"))
+    import importlib, inject_banner
+    importlib.reload(inject_banner)
+    on = inject_banner._banner_html_dynamic("sha", _banner_ctx(True), True, "https://kbin/r", "R3", "r3")
+    off = inject_banner._banner_html_dynamic("sha", _banner_ctx(False), True, "https://kbin/r", "R3", "r3")
+    assert b"&#x1F9C5; Tor" in on        # 🧅 chip present when armed
+    assert b"&#x1F9C5;" not in off       # absent when off
+
+
 def test_nft_tunnel_failclosed_invariants():
     """The nft tunnel MUST keep its fail-closed safety net — guard against
     accidental removal of the kill-switch / redirect / v6-leak rules."""
