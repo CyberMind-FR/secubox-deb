@@ -24,6 +24,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -107,6 +108,94 @@ func injectLoader(body []byte, clientHash string, wg, cspBypassed bool) []byte {
 		out = append(out, script...)
 		out = append(out, body[b:]...)
 		return out
+	}
+	return body
+}
+
+// ── inline banner (#662, supersedes injectLoader in the live path) ──────────
+//
+// Sites with a SERVICE WORKER (leparisien, cnn…) intercept EVERY same-origin
+// request, so the legacy <script src="/__toolbox/loader.js"> tag and the
+// fetch("/__toolbox/bundle") it makes are hijacked by the page's SW (404 /
+// app-shell) BEFORE they reach this engine → the banner never appears. The fix
+// is to INLINE the whole banner: the engine fetches the COMPLETE script body
+// from the portal server-side (once per injected HTML response) and bakes it
+// into a self-contained <script>…</script> with mh/wg/csp + the bundle as JS
+// literals — so there is NOTHING same-origin for the SW to hijack.
+//
+// injectLoader + the /__toolbox/loader.js short-circuit are KEPT (not removed)
+// for compatibility, but the live inject path now uses the inline banner.
+
+// fetchInlineBanner fetches the COMPLETE inline banner script BODY from the
+// portal's /__toolbox/inline endpoint (which bakes mh/wg/csp + the bundle as JS
+// literals). Returns (body, true) on a 2xx; FAIL-OPEN (returns "", false) on any
+// error — portal down, timeout, non-2xx, read failure — so the caller simply
+// skips the inject and serves the page intact (no banner, like today's fail-open
+// when the portal asset 204s). It NEVER breaks a navigation over a banner.
+//
+// wg → "1" else "0"; cspBypassed → csp=1 (the 🔓 proof) else 0; clientHash is
+// ascii-sanitised exactly like the data-mh attribute was.
+func fetchInlineBanner(portal, clientHash string, wg, cspBypassed bool) (string, bool) {
+	wgVal := "0"
+	if wg {
+		wgVal = "1"
+	}
+	cspVal := "0"
+	if cspBypassed {
+		cspVal = "1"
+	}
+	q := url.Values{}
+	q.Set("mh", asciiOnly(clientHash))
+	q.Set("wg", wgVal)
+	q.Set("csp", cspVal)
+	target := strings.TrimRight(portal, "/") + "/__toolbox/inline?" + q.Encode()
+	resp, err := portalClient.Get(target)
+	if err != nil {
+		log.Printf("inline banner fetch failed for %s: %v", target, err)
+		return "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("inline banner fetch non-2xx (%d) for %s", resp.StatusCode, target)
+		return "", false
+	}
+	body, rerr := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if rerr != nil {
+		log.Printf("inline banner read failed for %s: %v", target, rerr)
+		return "", false
+	}
+	return string(body), true
+}
+
+// injectInlineBanner inserts a SELF-CONTAINED <script>scriptBody</script> into an
+// HTML body once. It is idempotent via the SAME bannerGuard marker injectLoader
+// uses (so a body already carrying either form is never double-injected), and it
+// uses the SAME placement injectLoader did:
+//   - guard idempotency: body already contains bannerGuard → unchanged.
+//   - after the first (case-insensitive) "<head"'s closing '>'.
+//   - else right BEFORE the first "<body".
+//   - else return the body unchanged (no inject).
+//
+// scriptBody is the COMPLETE inline IIFE from fetchInlineBanner (NOT a src tag);
+// an empty scriptBody is a no-op (returns the body unchanged) so a failed/skipped
+// fetch is handled gracefully by the caller passing "".
+func injectInlineBanner(body []byte, scriptBody string) []byte {
+	if scriptBody == "" {
+		return body
+	}
+	if bytes.Contains(body, []byte(bannerGuard)) {
+		return body
+	}
+	script := []byte("<!-- " + bannerGuard + " --><script>" + scriptBody + "</script>")
+	low := bytes.ToLower(body)
+
+	if h := bytes.Index(low, []byte("<head")); h >= 0 {
+		if j := bytes.IndexByte(body[h:], '>'); j >= 0 {
+			return spliceAt(body, script, h+j+1)
+		}
+	}
+	if b := bytes.Index(low, []byte("<body")); b >= 0 {
+		return spliceAt(body, script, b)
 	}
 	return body
 }

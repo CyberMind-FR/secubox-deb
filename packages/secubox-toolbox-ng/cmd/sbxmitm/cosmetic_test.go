@@ -132,27 +132,32 @@ func TestInjectCosmeticCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestInjectLoaderAndCosmeticCompose(t *testing.T) {
+func TestInjectInlineBannerAndCosmeticCompose(t *testing.T) {
 	// Both markers must be present after composing the two injects (wg client).
+	// #662 — the banner is now the INLINE script (not a <script src> tag).
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := string(injectHTML(body, "deadbeef", true, false))
+	out := string(injectHTML(body, inlineTestScript, true))
 	if !strings.Contains(out, bannerGuard) {
-		t.Fatalf("loader marker missing after compose: %s", out)
+		t.Fatalf("banner marker missing after compose: %s", out)
 	}
 	if !strings.Contains(out, cosmeticGuard) {
 		t.Fatalf("cosmetic marker missing after compose: %s", out)
 	}
-	if !strings.Contains(out, `data-mh="deadbeef"`) {
-		t.Fatalf("loader data-mh missing after compose: %s", out)
+	// The inline banner is an inline <script> carrying the baked body, NOT a src.
+	if !strings.Contains(out, "<script>"+inlineTestScript+"</script>") {
+		t.Fatalf("inline banner body missing after compose: %s", out)
+	}
+	if strings.Contains(out, "<script src=") {
+		t.Fatalf("inline path must NOT emit a <script src> tag: %s", out)
 	}
 }
 
 func TestInjectHTMLNonWGSkipsCosmetic(t *testing.T) {
-	// Non-WG (non-R3) clients get the loader but NOT the cosmetic style.
+	// Non-WG (non-R3) clients get the banner but NOT the cosmetic style.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := string(injectHTML(body, "x", false, false))
+	out := string(injectHTML(body, inlineTestScript, false))
 	if !strings.Contains(out, bannerGuard) {
-		t.Fatalf("loader marker missing for non-wg: %s", out)
+		t.Fatalf("banner marker missing for non-wg: %s", out)
 	}
 	if strings.Contains(out, cosmeticGuard) {
 		t.Fatalf("cosmetic style must NOT be injected for non-wg client: %s", out)
@@ -163,7 +168,7 @@ func TestInjectIntoBodyGzipCarriesCosmetic(t *testing.T) {
 	// The gzip decompress→inject→recompress path must carry BOTH injects for wg.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
 	gz := gzipBytes(body)
-	out, ok := injectIntoBody(gz, "gzip", "mh1", true, false)
+	out, ok := injectIntoBody(gz, "gzip", inlineTestScript, true)
 	if !ok {
 		t.Fatalf("injectIntoBody(gzip) returned ok=false")
 	}
@@ -173,5 +178,9 @@ func TestInjectIntoBodyGzipCarriesCosmetic(t *testing.T) {
 	}
 	if !strings.Contains(string(plain), bannerGuard) || !strings.Contains(string(plain), cosmeticGuard) {
 		t.Fatalf("gzip path lost a marker: %s", plain)
+	}
+	// The inline banner script body survives the gzip round-trip.
+	if !strings.Contains(string(plain), "<script>"+inlineTestScript+"</script>") {
+		t.Fatalf("inline banner body lost on gzip path: %s", plain)
 	}
 }

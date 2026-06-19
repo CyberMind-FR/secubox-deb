@@ -78,6 +78,31 @@ async def toolbox_bundle(mh: str = Query(default=""), wg: int = Query(default=0)
     )
 
 
+@router.get("/__toolbox/inline")
+async def toolbox_inline(
+    mh: str = Query(default=""),
+    wg: int = Query(default=0),
+    csp: int = Query(default=0),
+) -> Response:
+    """#662 — COMPLETE self-contained inline banner script BODY.
+
+    Sites with a SERVICE WORKER (leparisien, cnn…) intercept every same-origin
+    request, so the legacy ``<script src="/__toolbox/loader.js">`` + its
+    ``fetch("/__toolbox/bundle")`` are hijacked by the SW (404 / app-shell)
+    before reaching our MITM engine → no banner. The Go engine fetches THIS
+    body server-side at inject time and bakes it into a self-contained
+    ``<script>…</script>`` — no same-origin fetch for the SW to touch.
+
+    ``mh`` / ``wg`` / ``csp`` come from the query params (baked as JS literals,
+    not data-attrs / currentScript); the bundle is ``get_bundle(mh, wg)`` baked
+    as a JSON literal (not fetched). no-store like the loader (it evolves)."""
+    return Response(
+        content=bundlemod.inline_script(mh, bool(wg), bool(csp)),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
+
+
 # #662 — ad-block metrics ingest from the Go MITM engine (sbxmitm). The #662
 # cutover moved the BLOCK decision (204 on ad/tracker hosts) into the Go engine
 # but left the METRICS unported, so the #ads dashboard froze. The engine now

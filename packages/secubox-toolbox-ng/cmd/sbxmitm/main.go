@@ -539,16 +539,26 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
 		// #662 CONSENTED-DEMONSTRATION — ONLY here, on the responses we actually
 		// inject into (2xx text/html, R3/wg gate), and ONLY when the operator
-		// left the demo on, do we relax the page's CSP so the same-origin
-		// /__toolbox/loader.js can execute even on strict-CSP sites. cspBypassed
-		// is true iff there was a real CSP to bypass — it becomes data-csp="1" on
-		// the loader tag and the portal banner renders a 🔓 as the visible proof.
-		// We never strip CSP on non-injected responses.
+		// left the demo on, do we relax the page's CSP so the inline banner can
+		// run even on strict-CSP sites. cspBypassed is true iff there was a real
+		// CSP to bypass — it becomes csp=1 on the inline script and the banner
+		// renders a 🔓 as the visible proof. We never strip CSP on non-injected
+		// responses.
 		cspBypassed := false
 		if px.cspDemo {
 			cspBypassed = relaxCSPForLoader(resp.Header)
 		}
-		if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), clientHash, wg, cspBypassed); ok {
+		// #662 — INLINE the banner (supersedes the <script src="/__toolbox/
+		// loader.js"> tag): sites with a SERVICE WORKER (leparisien, cnn…) hijack
+		// the same-origin src + its fetch("/__toolbox/bundle") before they reach
+		// this engine, so the banner never appeared. We fetch the COMPLETE script
+		// body from the portal server-side (mh/wg/csp + bundle baked as JS
+		// literals — no same-origin request for the SW to touch) and bake it into
+		// a self-contained <script>…</script>. Fail-open: a dead/slow portal →
+		// scriptBody=="" → the banner inject is skipped and the page is served
+		// intact (the cosmetic <style>, already inline, is unaffected).
+		scriptBody, _ := fetchInlineBanner(px.portal, clientHash, wg, cspBypassed)
+		if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, wg); ok {
 			body = out
 			// Keep the response framing consistent with the served bytes. The
 			// encoding is unchanged (gzip stays gzip, identity stays identity);
