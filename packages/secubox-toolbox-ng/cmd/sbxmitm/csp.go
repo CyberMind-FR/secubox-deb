@@ -65,15 +65,17 @@ func relaxCSPForLoader(h http.Header) bool {
 			continue
 		}
 		out := make([]string, 0, len(vals))
-		anyReal := false
+		anyBypass := false
 		for _, v := range vals {
-			relaxed, hadDirectives := relaxCSPValue(v)
-			out = append(out, relaxed)
-			if hadDirectives {
-				anyReal = true
+			relaxed, bypassed := relaxCSPValue(v)
+			if bypassed {
+				out = append(out, relaxed)
+				anyBypass = true
+			} else {
+				out = append(out, v) // not blocking → keep the original verbatim (minimal touch)
 			}
 		}
-		if anyReal {
+		if anyBypass {
 			h.Del(name)
 			for _, v := range out {
 				h.Add(name, v)
@@ -85,10 +87,12 @@ func relaxCSPForLoader(h http.Header) bool {
 }
 
 // relaxCSPValue relaxes a single CSP header value (one header line; a policy is
-// a ';'-separated list of directives). It returns the rewritten value and
-// whether the value carried at least one real directive (so an empty / blank
-// value is reported as "nothing to bypass").
-func relaxCSPValue(value string) (out string, hadDirectives bool) {
+// a ';'-separated list of directives). It relaxes ONLY the effective script
+// directive and ONLY when that directive would block the same-origin loader; it
+// returns the rewritten value and whether such a blocking CSP was actually
+// bypassed (the 🔓 proof condition). A value with no blocking script directive
+// is returned effectively unchanged with bypassed=false.
+func relaxCSPValue(value string) (out string, bypassed bool) {
 	rawDirectives := strings.Split(value, ";")
 
 	// Locate the script-governing directives. script-src and script-src-elem
@@ -105,7 +109,6 @@ func relaxCSPValue(value string) (out string, hadDirectives bool) {
 		if len(fields) == 0 {
 			continue // blank fragment (leading/trailing/double ';') → drop
 		}
-		hadDirectives = true
 		name := strings.ToLower(fields[0])
 		d := dir{name: name, tokens: fields[1:]}
 		switch name {
@@ -119,22 +122,27 @@ func relaxCSPValue(value string) (out string, hadDirectives bool) {
 		dirs = append(dirs, d)
 	}
 
-	// Pick which directive indices to relax. Relax both script-src and
-	// script-src-elem if present; only when NEITHER is present fall back to
-	// default-src.
-	var targets []int
-	if idxScriptSrc >= 0 {
-		targets = append(targets, idxScriptSrc)
-	}
-	if idxScriptSrcElem >= 0 {
-		targets = append(targets, idxScriptSrcElem)
-	}
-	if len(targets) == 0 && idxDefaultSrc >= 0 {
-		targets = append(targets, idxDefaultSrc)
+	// Find the EFFECTIVE directive governing a <script src> element: per CSP,
+	// script-src-elem wins, else script-src, else default-src. Only that one
+	// decides whether the same-origin loader is blocked — and only it is relaxed.
+	effective := -1
+	switch {
+	case idxScriptSrcElem >= 0:
+		effective = idxScriptSrcElem
+	case idxScriptSrc >= 0:
+		effective = idxScriptSrc
+	case idxDefaultSrc >= 0:
+		effective = idxDefaultSrc
 	}
 
-	for _, ti := range targets {
-		dirs[ti].tokens = relaxScriptTokens(dirs[ti].tokens)
+	// Relax + flag the bypass ONLY when the effective directive would actually
+	// BLOCK the same-origin loader. If the page already allows it (e.g. 'self' /
+	// '*' / https: and no 'strict-dynamic'), or imposes no script restriction at
+	// all, we touch nothing and report no bypass — so the 🔓 is honest proof that
+	// a blocking CSP was defeated, not just that a CSP existed.
+	if effective >= 0 && scriptDirectiveBlocksLoader(dirs[effective].tokens) {
+		dirs[effective].tokens = relaxScriptTokens(dirs[effective].tokens)
+		bypassed = true
 	}
 
 	// Re-serialise: "name token token; name token; ...".
@@ -146,7 +154,34 @@ func relaxCSPValue(value string) (out string, hadDirectives bool) {
 			parts = append(parts, d.name)
 		}
 	}
-	return strings.Join(parts, "; "), hadDirectives
+	return strings.Join(parts, "; "), bypassed
+}
+
+// scriptDirectiveBlocksLoader reports whether a script-governing directive (its
+// value tokens) would BLOCK a same-origin external <script src="/__toolbox/
+// loader.js">. It blocks when:
+//   - 'none' (forbids everything), or an empty directive (also forbids all), or
+//   - 'strict-dynamic' is present (host-source / 'self' / 'unsafe-inline' become
+//     IGNORED, so a plain src script with no matching nonce/hash is refused), or
+//   - none of 'self' / '*' / https: / http: is present (only specific foreign
+//     hosts are allowed, which don't cover the page's own origin).
+// It does NOT block when 'self' / '*' / a scheme-source allows same-origin AND
+// 'strict-dynamic' is absent — then the loader already runs and we leave the CSP
+// untouched (no false 🔓).
+func scriptDirectiveBlocksLoader(tokens []string) bool {
+	if len(tokens) == 0 {
+		return true // empty script directive forbids all scripts
+	}
+	allowsSameOrigin := false
+	for _, tk := range tokens {
+		switch strings.ToLower(tk) {
+		case "'none'", "'strict-dynamic'":
+			return true
+		case "'self'", "*", "https:", "http:":
+			allowsSameOrigin = true
+		}
+	}
+	return !allowsSameOrigin
 }
 
 // relaxScriptTokens rewrites the value tokens of a script-governing directive:

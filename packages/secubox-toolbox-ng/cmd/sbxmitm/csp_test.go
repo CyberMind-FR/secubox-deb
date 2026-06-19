@@ -143,15 +143,35 @@ func TestRelaxCSPMalformedNoPanic(t *testing.T) {
 }
 
 func TestRelaxCSPDefaultSrcFallback(t *testing.T) {
-	// No script-src/script-src-elem → default-src governs scripts, so it is the
-	// one relaxed.
-	h := cspHeader("Content-Security-Policy", "default-src 'self' cdn.example.com")
+	// No script-src/script-src-elem → default-src governs scripts. A BLOCKING
+	// default-src (only a foreign host, no 'self') must be relaxed.
+	h := cspHeader("Content-Security-Policy", "default-src cdn.example.com")
 	if !relaxCSPForLoader(h) {
-		t.Fatal("default-src-only CSP must be reported modified (true)")
+		t.Fatal("blocking default-src-only CSP must be reported modified (true)")
 	}
 	got := h.Get("Content-Security-Policy")
-	if !strings.Contains(got, "'unsafe-inline'") {
-		t.Fatalf("default-src must gain 'unsafe-inline' for the loader: %q", got)
+	if !strings.Contains(got, "'self'") || !strings.Contains(got, "'unsafe-inline'") {
+		t.Fatalf("default-src must gain 'self'+'unsafe-inline' for the loader: %q", got)
+	}
+}
+
+func TestRelaxCSPAlreadyAllowedNotFlagged(t *testing.T) {
+	// The honesty test: a CSP that ALREADY allows the same-origin loader (has
+	// 'self', no 'strict-dynamic') must NOT be flagged as bypassed and must be
+	// left byte-for-byte unchanged — no false 🔓.
+	for _, v := range []string{
+		"script-src 'self' 'unsafe-inline' https://js.stripe.com 'sha256-abc'",
+		"script-src * 'unsafe-eval'",
+		"default-src 'self'",
+		"img-src *; style-src 'self'", // no script governing directive at all
+	} {
+		h := cspHeader("Content-Security-Policy", v)
+		if relaxCSPForLoader(h) {
+			t.Fatalf("already-permissive CSP must NOT be flagged bypassed: %q", v)
+		}
+		if h.Get("Content-Security-Policy") != v {
+			t.Fatalf("non-blocking CSP must be left verbatim: in=%q out=%q", v, h.Get("Content-Security-Policy"))
+		}
 	}
 }
 
