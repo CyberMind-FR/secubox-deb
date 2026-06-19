@@ -51,9 +51,33 @@ arm() {
   install -d -m 0755 /etc/nftables.d
   install -m 0644 "$NFT_FILE" "$NFT_DROPIN"
   nft -f "$NFT_DROPIN"
+  populate_exempt
   systemctl restart tor 2>/dev/null || systemctl start tor 2>/dev/null || \
     log "WARN tor failed to (re)start — egress fail-closed until it does"
   log "ARMED"
+}
+
+# Fill the tor_exempt set so the box reaches its OWN services DIRECT (never via
+# Tor): loopback, board-local subnets (LAN/WG/LXC), and the board's own public
+# IP (kbin/admin resolve to it, reached via hairpin). Without this, self-views
+# round-trip Tor and load empty/slow. The Tor automap range (10.192.0.0/10) is
+# never a connected route, so it is correctly NOT added → still torified.
+populate_exempt() {
+  local net pub
+  nft add element inet toolbox_tor tor_exempt "{ 127.0.0.0/8 }" 2>/dev/null || true
+  # board-local connected RFC1918 subnets
+  for net in $(ip -4 route show scope link 2>/dev/null | awk '{print $1}' \
+               | grep -E '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)'); do
+    case "$net" in 10.19[2-9].*|10.2[0-5][0-9].*) continue ;; esac  # belt: skip automap
+    nft add element inet toolbox_tor tor_exempt "{ $net }" 2>/dev/null || true
+  done
+  # board's own public IP — detected DIRECT (root egress is not torified).
+  pub=$(timeout 6 curl -s https://api.ipify.org 2>/dev/null || true)
+  case "$pub" in
+    [0-9]*.[0-9]*.[0-9]*.[0-9]*)
+      nft add element inet toolbox_tor tor_exempt "{ $pub }" 2>/dev/null || true
+      log "exempt own public IP $pub" ;;
+  esac
 }
 
 disarm() {
