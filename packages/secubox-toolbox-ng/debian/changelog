@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * telemetry: relay per-flow metadata to the analysis sidecars (dpi /classify,
+    cookies /inject, threat-analyst /ja4) — restoring the kbin "Qui te piste?"
+    events frozen since the Phase-7 cutover. Fire-and-forget, names-only cookies,
+    gated --analysis-relay (default on). The sidecars enrich + write toolbox
+    events → cumulative-stats live again with real host classification. (ref #662)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 19 Jun 2026 10:40:00 +0000
+
 secubox-toolbox-ng (0.1.8-1~bookworm1) bookworm; urgency=medium
 
   * demo/csp: only relax + flag 🔓 when the page's effective script directive
