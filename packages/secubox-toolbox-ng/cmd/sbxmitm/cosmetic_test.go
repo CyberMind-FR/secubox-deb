@@ -135,7 +135,7 @@ func TestInjectCosmeticCaseInsensitive(t *testing.T) {
 func TestInjectLoaderAndCosmeticCompose(t *testing.T) {
 	// Both markers must be present after composing the two injects (wg client).
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := string(injectHTML(body, "deadbeef", true))
+	out := string(injectHTML(body, "deadbeef", true, false))
 	if !strings.Contains(out, bannerGuard) {
 		t.Fatalf("loader marker missing after compose: %s", out)
 	}
@@ -150,7 +150,7 @@ func TestInjectLoaderAndCosmeticCompose(t *testing.T) {
 func TestInjectHTMLNonWGSkipsCosmetic(t *testing.T) {
 	// Non-WG (non-R3) clients get the loader but NOT the cosmetic style.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := string(injectHTML(body, "x", false))
+	out := string(injectHTML(body, "x", false, false))
 	if !strings.Contains(out, bannerGuard) {
 		t.Fatalf("loader marker missing for non-wg: %s", out)
 	}
@@ -163,7 +163,7 @@ func TestInjectIntoBodyGzipCarriesCosmetic(t *testing.T) {
 	// The gzip decompress→inject→recompress path must carry BOTH injects for wg.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
 	gz := gzipBytes(body)
-	out, ok := injectIntoBody(gz, "gzip", "mh1", true)
+	out, ok := injectIntoBody(gz, "gzip", "mh1", true, false)
 	if !ok {
 		t.Fatalf("injectIntoBody(gzip) returned ok=false")
 	}
