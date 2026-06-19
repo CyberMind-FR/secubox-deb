@@ -328,6 +328,36 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+def _client_mac_hash(request: Request, salt: str) -> str | None:
+    """Resolve the caller's identity hash, same precedence as /social/me:
+    explicit ?mh= → R3 WG peer (wg-peers.json) → captive ARP. Returns None when
+    unresolvable. Used to bake ?mh= into the landing links so they never hit the
+    'identity unresolved' 400 (the page already knows who you are)."""
+    mh_qp = (request.query_params.get("mh") or "").strip().lower()
+    if mh_qp and all(c in "0123456789abcdef" for c in mh_qp) and 8 <= len(mh_qp) <= 64:
+        return mh_qp
+    ip = _client_ip(request)
+    if ip and ip.startswith("10.99.1."):
+        try:
+            import hashlib as _h
+            import json as _j
+            from pathlib import Path as _P
+            _db = _P("/var/lib/secubox/toolbox/wg-peers.json")
+            if _db.exists():
+                for pubkey, meta in _j.loads(_db.read_text()).get("peers", {}).items():
+                    if meta.get("ip") == ip:
+                        return _h.sha256(pubkey.encode()).hexdigest()[:16]
+        except Exception:
+            pass
+    try:
+        _ip, mac = _resolve(request)
+        if mac:
+            return macmod.hash_mac(mac, salt)
+    except Exception:
+        pass
+    return None
+
+
 # ───────────────── Public routes ─────────────────
 
 @router.get("/", response_class=HTMLResponse)
@@ -701,11 +731,15 @@ async def landing(request: Request) -> HTMLResponse:
     stats = _cumulative_stats()
     platform = _ua_platform(request.headers.get("user-agent") or "")
     install_panels = _install_panels_html(platform)
+    # Resolve identity now (the page knows who you are) so the report/carto links
+    # carry ?mh= and never hit the /social/me "identity unresolved" 400.
+    mac_hash = _client_mac_hash(request, _get_salt()) or ""
     return HTMLResponse(
         _env.get_template("landing.html.j2").render(
             stats=stats,
             install_panels=install_panels,
             install_platform=platform,
+            mac_hash=mac_hash,
         ),
         headers={"Cache-Control": "private, max-age=60, no-transform"},
     )
