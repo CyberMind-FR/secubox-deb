@@ -66,8 +66,18 @@ case "$1" in
  "ad_ghost_categories": {"ads": true, "consent_nag": true, "newsletter": true, "social_widgets": true}
 }
 SBXFILTERS
-      chown root:secubox-toolbox /etc/secubox/toolbox/filters.json
+      chown secubox-toolbox:secubox-toolbox /etc/secubox/toolbox/filters.json
       chmod 0664 /etc/secubox/toolbox/filters.json
+    fi
+    # #683 : the portal persists filters.json (Tor switch + mitm toggles) as its
+    # OWNER (secubox-toolbox). The operator UI is proxied to this same portal, so
+    # owner-write is sufficient — no aggregator write. Re-applied every install to
+    # repair the pre-existing root:root drift that made /admin/filters + the Tor
+    # switch silently no-op. (set_filters writes in-place; the 0750 dir blocks the
+    # atomic tmp+rename, and the service grants RW on /etc/secubox/toolbox only.)
+    if [ -f /etc/secubox/toolbox/filters.json ]; then
+      chown secubox-toolbox:secubox-toolbox /etc/secubox/toolbox/filters.json 2>/dev/null || true
+      chmod 0664 /etc/secubox/toolbox/filters.json 2>/dev/null || true
     fi
 
     # 4. Storage dir (SQLite + future PDF reports)
