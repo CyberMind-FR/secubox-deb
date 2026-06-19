@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# kbin Tor egress tunnel (#683) — torify ONLY the MITM worker uid's upstream.
+#
+# The R3 mitm-wg workers run as user `secubox-toolbox` and dial the *real*
+# upstream AFTER decrypting + inspecting + poisoning + bannering. We redirect
+# only that uid's internet egress (80/443) and ALL its DNS through Tor's
+# TransPort/DNSPort, so inspection is fully preserved and only the exit IP +
+# network identity change. Loaded/flushed by secubox-toolbox-tor-reconcile.
+#
+# Invariants: inspection preserved · no DNS leak · fail-closed (kill-switch
+# drops any worker egress that escaped the redirect — never leaks the real IP).
+table inet toolbox_tor {
+    # ── NAT: redirect the worker uid's egress into Tor (TransPort/DNSPort) ──
+    chain output_nat {
+        type nat hook output priority -100; policy accept;
+        oifname "lo" return
+        # local plumbing (captive subnet, LXC/WG perimeter, loopback) untouched
+        ip daddr { 127.0.0.0/8, 10.99.0.0/16, 10.100.0.0/16 } return
+        meta skuid "secubox-toolbox" meta l4proto { tcp, udp } th dport 53 redirect to :5353
+        meta skuid "secubox-toolbox" tcp dport { 80, 443 } redirect to :9040
+    }
+
+    # ── Kill-switch: fail-closed safety net (runs after the NAT redirect) ──
+    chain output_killswitch {
+        type filter hook output priority 0; policy accept;
+        oifname "lo" return
+        ip daddr { 127.0.0.0/8, 10.99.0.0/16, 10.100.0.0/16 } return
+        # IPv4 that escaped the redirect (Tor down / rule gap) → drop, no leak
+        meta skuid "secubox-toolbox" tcp dport { 80, 443 } ip daddr != 127.0.0.0/8 drop
+        meta skuid "secubox-toolbox" meta l4proto { tcp, udp } th dport 53 ip daddr != 127.0.0.0/8 drop
+        # IPv6 is not carried over Tor here → drop worker v6 egress (no v6 leak)
+        meta skuid "secubox-toolbox" meta nfproto ipv6 tcp dport { 80, 443 } drop
+        meta skuid "secubox-toolbox" meta nfproto ipv6 meta l4proto { tcp, udp } th dport 53 drop
+    }
+}

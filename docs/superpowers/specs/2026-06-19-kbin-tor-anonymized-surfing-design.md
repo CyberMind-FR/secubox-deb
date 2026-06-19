@@ -1,6 +1,17 @@
 # Design — kbin Tor endpoint: quick-switch anonymized web surfing
 
-*Spec · 2026-06-19 · issue [#683](https://github.com/CyberMind-FR/secubox-deb/issues/683) · status: PLAN (no code yet)*
+*Spec · 2026-06-19 · issue [#683](https://github.com/CyberMind-FR/secubox-deb/issues/683) · status: IMPLEMENTED DARK in secubox-toolbox 2.7.1*
+
+> **Implemented (Option A-variant: torify MITM egress).** Switch + tunnel shipped
+> default-OFF / fail-closed. Tunnel = nft owner-match on the `secubox-toolbox`
+> (mitm-wg) uid → Tor TransPort 9040 / DNSPort 5353; loaded by a root,
+> path-triggered reconciler (`secubox-toolbox-tor.path`) so the portal stays
+> `NoNewPrivileges=true`. API `GET/POST /admin/tor/*` (kbin-gated) + 🧅 WebUI tab.
+> Control/status/NEWNYM reuse secubox-tor's control-port code (`tor_ctl.py`).
+> **Granularity is global kbin Tor mode** (owner-match can't be per-client);
+> per-client (WG-hash) Tor needs the #662 Go-core SOCKS5 dialer — tracked as a
+> follow-up. Before flipping ON: soak + off-board leak test (real board IP must
+> never appear); `tls_splice` (#649) should be OFF for torified flows.
 
 ## Problem
 

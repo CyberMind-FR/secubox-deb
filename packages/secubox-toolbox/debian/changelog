@@ -1,3 +1,25 @@
+secubox-toolbox (2.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#683): kbin Tor egress quick-switch — switch + tunnel, ships DARK
+    (tor_mode default OFF, fail-closed). Routes ONLY the R3 mitm-wg worker uid's
+    upstream egress + DNS through Tor's TransPort(9040)/DNSPort(5353) via an nft
+    owner-match table, so inspection (ad-block/poison/banner/safe-browsing) is
+    fully preserved — only the exit IP + network identity change.
+  * New filters flags `tor_mode` / `tor_preset` (anonymous|stealth|minimal).
+  * API (kbin-gated, admin.gk2 only for actions): GET /admin/tor/state,
+    POST /admin/tor/{on,off,newnym,check-leaks}. State read-only-safe on kbin.
+  * WebUI: 🧅 Tor tab — status badge (bootstrap/circuits/exit IP), arm/disarm
+    toggle, preset selector, New-Identity (NEWNYM), SOCKS leak probe. Reuses the
+    secubox-tor control-port logic (new tor_ctl.py) — no cross-service JWT.
+  * Tunnel arms via a root, path-triggered reconciler (secubox-toolbox-tor.path
+    watches filters.json) — portal stays NoNewPrivileges=true, no sudo. nft is
+    loaded BEFORE tor starts (fail-closed: no clearnet window). IPv6 worker
+    egress dropped (no v6 leak). prerm disarms on real removal (not upgrade).
+  * Depends: jq; Recommends: tor, python3-socksio. postinst adds secubox-toolbox
+    to the debian-tor group for control-cookie access.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 19 Jun 2026 16:00:00 +0200
+
 secubox-toolbox (2.7.0-1~bookworm1) bookworm; urgency=medium
 
   * MIDDLE RELEASE — caps the 2.6.x line (ad-intelligence / Anti-Track v2 /

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# kbin Tor egress reconciler (#683) — oneshot, root. Triggered by
+# secubox-toolbox-tor.path on every filters.json change, and once at boot,
+# to make the nft+tor tunnel match `tor_mode`. The portal API only flips the
+# flag (NoNewPrivileges=true); this unit does the privileged work.
+[Unit]
+Description=SecuBox-Deb ToolBoX — reconcile kbin Tor egress tunnel (#683)
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-toolbox-tor-reconcile reconcile
+# Keep failures visible but never block the trigger chain.
+SuccessExitStatus=0
+
+[Install]
+WantedBy=multi-user.target

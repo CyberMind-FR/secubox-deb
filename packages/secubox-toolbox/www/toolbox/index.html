@@ -22,6 +22,11 @@
         .header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border:1px solid var(--border);background:var(--bg-card);margin-bottom:1rem}
         .header h1{font-size:1.4rem;color:var(--p31-hot);text-shadow:var(--bloom-text)}
         .badge{font-size:0.85rem;color:var(--p31-dim);padding:0.2rem 0.6rem;border:1px solid var(--border);border-radius:3px}
+        /* Tor switch status badges (#683) */
+        .badge-green{color:var(--p31-hot);border-color:var(--p31-peak);text-shadow:var(--bloom-soft)}
+        .badge-yellow{color:var(--p31-decay);border-color:var(--p31-decay)}
+        .badge-red{color:var(--red);border-color:var(--red)}
+        .btn-green{border-color:var(--p31-peak)!important;color:var(--p31-hot)!important}
         /* Sub-tab nav (#513) */
         .tabs{display:flex;gap:0.3rem;margin-bottom:1.2rem;border-bottom:1px solid var(--border);flex-wrap:wrap}
         .tab{font-family:inherit;font-size:0.9rem;padding:0.5rem 1rem;background:transparent;color:var(--p31-dim);border:1px solid var(--border);border-bottom:none;cursor:pointer;border-radius:3px 3px 0 0}
@@ -78,6 +83,7 @@
         <button class="tab" data-tab="filtres" onclick="switchTab('filtres')">🚦 Filtres MITM</button>
         <button class="tab" data-tab="social" onclick="switchTab('social')">🕸️ Cartographie sociale</button>
         <button class="tab" data-tab="ads" onclick="switchTab('ads')">🛑 Pubs</button>
+        <button class="tab" data-tab="tor" onclick="switchTab('tor')">🧅 Tor</button>
         <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ Config</button>
     </nav>
 
@@ -192,6 +198,37 @@
         </div>
     </section>
 
+    <!-- Tor egress quick-switch (#683) -->
+    <section class="panel" id="panel-tor">
+        <div class="toolbar">
+            <button onclick="loadTor()">🔁 Refresh</button>
+            <button type="button" onclick="torNewnym()">🔄 Nouvelle identité</button>
+            <button type="button" onclick="torLeaks()">🔍 Vérifier l'IP de sortie</button>
+        </div>
+        <div class="card" style="margin-bottom:1rem">
+            <h2>🧅 Mode Tor <span class="badge" id="tor-badge">…</span></h2>
+            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.6rem">
+                Quick-switch : route l'egress des workers MITM par le réseau Tor. L'inspection
+                (ad-block, poison, bannière, safe-browsing) reste intacte — seule l'IP de sortie
+                change. Fail-closed (pas de repli clearnet), sans fuite DNS. Armement asynchrone
+                (quelques secondes via le reconciler).
+            </p>
+            <div class="kv" id="tor-stats"><span class="k">loading…</span><span class="v"></span></div>
+            <div style="margin-top:0.8rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                <button type="button" class="btn-green" id="tor-on-btn" onclick="torSet(true)">🛡️ Activer le mode Tor</button>
+                <button type="button" id="tor-off-btn" onclick="torSet(false)">⏹ Désactiver</button>
+                <label style="font-size:0.8rem;color:var(--p31-dim,#888)">Preset
+                    <select id="tor-preset">
+                        <option value="anonymous">anonymous</option>
+                        <option value="stealth">stealth (bridges)</option>
+                        <option value="minimal">minimal (SOCKS)</option>
+                    </select>
+                </label>
+                <span id="tor-msg" style="font-size:0.8rem;color:var(--p31-peak,#0a0)"></span>
+            </div>
+        </div>
+    </section>
+
     <!-- Config -->
     <section class="panel" id="panel-config">
         <div class="toolbar">
@@ -215,6 +252,7 @@ function switchTab(name) {
     if (name === 'filtres') loadFilters();
     if (name === 'social') loadSocial();
     if (name === 'ads') loadAds();
+    if (name === 'tor') loadTor();
     location.hash = name;
 }
 
@@ -422,6 +460,69 @@ async function loadFilters() {
         const badge = BADGE[src] || esc(src);
         return `<li><code>${esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
     }).join('');
+}
+
+// ── kbin Tor egress quick-switch (#683) ──
+async function loadTor() {
+    const st = await J('/admin/tor/state');
+    const badge = document.getElementById('tor-badge');
+    const stats = document.getElementById('tor-stats');
+    if (st.__error) {
+        badge.textContent = 'err'; badge.className = 'badge badge-red';
+        stats.innerHTML = `<span class="k">err</span><span class="v">${st.__error}</span>`;
+        return;
+    }
+    const on = !!st.tor_mode;
+    badge.textContent = on ? (st.running ? `ON · ${st.bootstrap||0}%` : 'ON (tor down)') : 'OFF';
+    badge.className = 'badge ' + (on ? (st.running && st.bootstrap >= 100 ? 'badge-green' : 'badge-yellow') : '');
+    const psel = document.getElementById('tor-preset');
+    if (psel && st.tor_preset) psel.value = st.tor_preset;
+    stats.innerHTML = `
+        <span class="k">Mode Tor</span>    <span class="v">${on ? '🧅 activé' : '⚪ désactivé'}</span>
+        <span class="k">Daemon</span>      <span class="v">${st.running ? '🟢 running' : '⚪ stopped'}</span>
+        <span class="k">Bootstrap</span>   <span class="v">${st.bootstrap || 0}%</span>
+        <span class="k">Circuits</span>    <span class="v">${st.circuits || 0}</span>
+        <span class="k">IP de sortie</span><span class="v">${st.exit_ip || '— (cliquez « Vérifier »)'}</span>
+        <span class="k">Preset</span>      <span class="v">${st.tor_preset || 'anonymous'}</span>
+    `;
+}
+
+async function torSet(on) {
+    const msg = document.getElementById('tor-msg');
+    const preset = (document.getElementById('tor-preset') || {}).value || 'anonymous';
+    msg.textContent = on ? 'armement…' : 'désactivation…';
+    try {
+        const body = on ? JSON.stringify({tor_preset: preset}) : '{}';
+        const r = await fetch(`${API}/admin/tor/${on ? 'on' : 'off'}`, {
+            method: 'POST', headers: {'content-type': 'application/json'},
+            body, credentials: 'same-origin'
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status + (r.status === 403 ? ' (admin.gk2 only)' : ''));
+        msg.textContent = on ? 'armé ✓ (tunnel dans quelques secondes)' : 'désarmé ✓';
+        setTimeout(() => { msg.textContent = ''; loadTor(); }, 1500);
+    } catch (e) { msg.textContent = 'échec : ' + e.message; }
+}
+
+async function torNewnym() {
+    const msg = document.getElementById('tor-msg');
+    msg.textContent = 'nouveau circuit…';
+    try {
+        const r = await fetch(`${API}/admin/tor/newnym`, {method: 'POST', credentials: 'same-origin'});
+        const d = await r.json();
+        msg.textContent = (r.ok && d.success) ? 'nouvelle identité ✓' : 'échec NEWNYM';
+        setTimeout(() => { msg.textContent = ''; loadTor(); }, 1500);
+    } catch (e) { msg.textContent = 'échec : ' + e.message; }
+}
+
+async function torLeaks() {
+    const msg = document.getElementById('tor-msg');
+    msg.textContent = 'sonde SOCKS…';
+    try {
+        const r = await fetch(`${API}/admin/tor/check-leaks`, {method: 'POST', credentials: 'same-origin'});
+        const d = await r.json();
+        msg.textContent = d.ok ? `IP de sortie : ${d.tor_ip}` : ('échec : ' + (d.error || 'tor down'));
+        setTimeout(() => loadTor(), 800);
+    } catch (e) { msg.textContent = 'échec : ' + e.message; }
 }
 
 async function loadSocial() {

@@ -3,6 +3,32 @@
 
 ---
 
+## 2026-06-19 — kbin Tor egress quick-switch implemented DARK (#683, ToolBoX 2.7.1)
+
+- **Switch + tunnel** for routing kbin surfing through Tor, shipped **default-OFF /
+  fail-closed** on `feature/683`. Reuses existing secubox components per the user ask.
+- **Transport decision (USER): torify the MITM egress.** nft owner-match on the
+  `secubox-toolbox` (mitm-wg) uid → Tor TransPort 9040 / DNSPort 5353. Clients →
+  TPROXY → mitm decrypts/ad-blocks/poisons/banners/re-encrypts → exits via Tor.
+  **Inspection fully preserved**; only the exit IP + network identity change. (Rejected:
+  SOCKS5 Go-core dialer = blocked on #662; transparent client torify = breaks inspection.)
+- **Switch**: `filters.json` flags `tor_mode`/`tor_preset`; API (kbin-gated, admin.gk2
+  only for actions) `GET/POST /admin/tor/{state,on,off,newnym,check-leaks}`; 🧅 WebUI tab
+  (badge bootstrap/circuits/exit-IP, toggle, NEWNYM, SOCKS leak probe). `tor_ctl.py`
+  reuses secubox-tor's control-port code — no cross-service JWT.
+- **Tunnel arms via reconciler**: root, path-triggered (`secubox-toolbox-tor.path`
+  watches filters.json) → portal stays `NoNewPrivileges=true`, no sudo. nft loaded
+  BEFORE tor (no clearnet window); IPv6 worker egress dropped (no v6 leak); prerm
+  disarms on real removal (not upgrade). Depends jq; Recommends tor + python3-socksio;
+  postinst adds secubox-toolbox to debian-tor group.
+- **Verified**: 166 toolbox tests green (10 new), nft syntax valid (user-resolve only),
+  maintainer scripts `sh -n` clean, license headers OK, changelog parses 2.7.1.
+- **Granularity = global kbin Tor mode** (owner-match can't be per-client). Per-client
+  (WG-hash) Tor tracked under #662 (Go-core SOCKS5 dialer). NOT yet flipped/deployed —
+  needs soak + off-board leak test + tls_splice(#649)-OFF before arming.
+
+---
+
 ## 2026-06-19 — kbin milestone: ToolBoX 2.7.0 (middle release) + Tor chapter staged (#683)
 
 - **End-of-session checkpoint** — docs + positioning + version, no runtime behaviour change.
