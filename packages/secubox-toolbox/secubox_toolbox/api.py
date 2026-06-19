@@ -57,10 +57,14 @@ router = APIRouter(tags=["toolbox"])
 @router.get("/__toolbox/loader.js")
 async def toolbox_loader_js() -> Response:
     """Static cosmetic loader (applies the banner client-side from the bundle)."""
+    # no-store: the loader is the banner entry point and evolves (SPA re-assert,
+    # CSP proof, …). A long cache (was max-age=3600) pins stale loaders in clients
+    # for up to an hour — so loader changes never reach already-visited sites. It's
+    # 4 KB; serve it fresh every load so updates propagate immediately.
     return Response(
         content=bundlemod.LOADER_JS,
         media_type="application/javascript",
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
     )
 
 
