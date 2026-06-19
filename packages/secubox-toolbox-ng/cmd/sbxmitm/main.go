@@ -210,6 +210,14 @@ type Proxy struct {
 	// analysis sidecar sockets (#662 — restoring the "Qui te piste?" events the
 	// decommissioned Python addons fed). Default on; relay.go is the transport.
 	analysisRelay bool
+
+	// socialRelay gates the cross-site cookie-tracker correlation (#662 — restoring
+	// the kbin /social graph the decommissioned Python social_graph addon fed).
+	// Default on. social.go is the engine; edges are batched + POSTed to the
+	// portal's /__toolbox/social-event ingest. nil → off (CONNECT PoC / tests).
+	socialRelayOn bool
+	social        *socialRelay
+	consent       *consentLog
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -378,6 +386,12 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		// per-client breakdown keys on the WG persona hash. recordAdBlock is
 		// O(1) and never blocks the block path.
 		px.recordAdBlock(host, refererSite(req.Header.Get("Referer")), clientHashFromConn(rawClient))
+		// #662 — the cross-site tracking evidence lives PRECISELY on the blocked
+		// trackers: the browser still SENT its 3rd-party Cookie to doubleclick/
+		// adnxs/… before we 204 it. Correlate that request-Cookie here (resp=nil,
+		// request-only) or the /social graph misses the very trackers it exists to
+		// expose. Hash-only, WG-peer only, fire-and-forget — same as the allow path.
+		px.emitSocial(peerIP(rawClient), host, req, nil)
 		writeRaw(tconn, 204, "No Content", map[string]string{"X-SecuBox-Ng": "blocked"}, nil)
 		return
 	}
@@ -447,6 +461,17 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// relayed names byte-for-byte the origin's. Fire-and-forget, gated.
 	px.emitCookies(relayIP, clientHash, req, resp)
 
+	// #662 — cross-site cookie-tracker correlation (restores the kbin /social
+	// graph). FAITHFUL to the decommissioned Python social_graph addon: extract
+	// 3rd-party cookie edges (Set-Cookie + request Cookie), hash the identifier
+	// (cookieIDHash — NEVER the raw value), classify consent_state, and buffer
+	// them for the batched POST to the portal /__toolbox/social-event ingest.
+	// Like the addon, this ONLY fires for known R3 WG peers (macHashOf, not the
+	// raw-IP fallback): non-WG flows yield no edges. allow|mitm only (the block
+	// 204 / splice paths return before here). Gated by --social-relay; pure +
+	// non-blocking (the flush is a background goroutine).
+	px.emitSocial(relayIP, host, req, resp)
+
 	// Poison: only on MITM'd tracker flows (never on allow/own-infra), and only
 	// when the jar key is loaded. Replaces tracking-id Set-Cookie values with a
 	// stable fabricated persona; benign cookies pass through untouched.
@@ -515,6 +540,8 @@ func main() {
 		"CONSENTED DEMONSTRATION: relax a page's CSP so the injected transparency-banner loader runs even on strict-CSP sites, and flag the bypass (banner shows 🔓). Only on injected 2xx text/html R3 responses; never on non-injected responses. Set false to never touch CSP.")
 	analysisRelay := flag.Bool("analysis-relay", true,
 		"relay per-flow telemetry (dpi/cookies/ja4) to the analysis sidecar sockets so the kbin \"Qui te piste?\" events refill (#662; replaces the decommissioned Python relay addons). Fire-and-forget; a dead/slow sidecar never affects the proxy. Set false to emit nothing.")
+	socialRelay := flag.Bool("social-relay", true,
+		"compute cross-site cookie-tracker edges and POST them to the portal /__toolbox/social-event ingest so the kbin /social graph refills (#662; replaces the decommissioned Python social_graph addon). Hash-only (never raw cookie values); WG-peer flows only; batched + fire-and-forget — a dead/slow portal never affects the proxy. Set false to emit nothing.")
 	flag.Parse()
 	ca, err := loadCA(*caCert, *caKey)
 	if err != nil {
@@ -545,7 +572,16 @@ func main() {
 		cspDemo: *cspDemo,
 
 		analysisRelay: *analysisRelay,
+
+		socialRelayOn: *socialRelay,
+		social:        newSocialRelay(),
+		consent:       newConsentLog(),
 	}
+	// #662 — start the social-edge flusher: the MITM path buffers cross-site
+	// tracker edges into px.social, drained every 10s to the portal's
+	// /__toolbox/social-event (best-effort, fire-and-forget) so the kbin /social
+	// graph (frozen since the cutover) refills.
+	go px.social.runFlusher(*portal)
 	// #662 — start the ad-block metrics flusher: the block path tallies every
 	// 204 into px.ads, drained every 10s to the portal's /__toolbox/ad-event
 	// (best-effort, fire-and-forget) so the #ads dashboard sees blocks again.
