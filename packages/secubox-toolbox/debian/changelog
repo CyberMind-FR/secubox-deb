@@ -1,3 +1,15 @@
+secubox-toolbox (2.7.13-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#685): harden the ad-learner so it never 204s functional infra. The
+    aggressive promotion (AD_MIN_SITES=1) had hard-blocked www.google.com →
+    broke reCAPTCHA/consent on news sites (euronews). Now: a NEVER_LEARN guard
+    (Google/CDN/fonts/captcha/auth/payment registrables, matched on host +
+    registrable, env-extendable via SECUBOX_NEVER_LEARN), AD_MIN_SITES default
+    1 → 2, and existing never-learn/allowlisted entries are PRUNED from
+    learned-trackers.txt on each run.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 20 Jun 2026 11:00:00 +0200
+
 secubox-toolbox (2.7.12-1~bookworm1) bookworm; urgency=medium
 
   * chore: serve the new clients from kbin — bump pinned webext release tag

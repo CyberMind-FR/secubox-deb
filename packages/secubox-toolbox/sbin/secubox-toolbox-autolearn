@@ -32,10 +32,35 @@ SPLICE_MIN_HITS = int(os.environ.get("SECUBOX_SPLICE_MIN_HITS", "20"))
 SPLICE_MAX = 2000
 MIN_SITES = 2          # cross-site threshold for operator-grade trackers
 MAX_ENTRIES = 8000
-# #656 — ad-candidate promotion (aggressive: 1 distinct site by default).
-AD_MIN_SITES = int(os.environ.get("SECUBOX_AD_MIN_SITES", "1"))
+# #656 — ad-candidate promotion. #685 hardening: require >= 2 distinct sites
+# (was 1 — a single-site host got hard-blocked, e.g. www.google.com → broke
+# reCAPTCHA/consent on euronews). Env-overridable.
+AD_MIN_SITES = int(os.environ.get("SECUBOX_AD_MIN_SITES", "2"))
 AD_ALLOWLIST = os.environ.get("SECUBOX_AD_ALLOWLIST",
                               "/var/lib/secubox/toolbox/ad-allowlist.txt")
+
+# #685 — NEVER-LEARN guard: registrables that host FUNCTIONAL content (CDNs,
+# fonts, captcha, auth, OS/payment services). The learner must NEVER 204 these —
+# blocking them breaks sites (www.google.com reCAPTCHA/consent broke euronews).
+# Checked against the host AND its registrable; existing entries are also pruned.
+_NEVER_LEARN_SEED = {
+    "google.com", "gstatic.com", "googleapis.com", "googleusercontent.com",
+    "googlevideo.com", "ytimg.com", "ggpht.com", "youtube.com", "recaptcha.net",
+    "apple.com", "icloud.com", "mzstatic.com", "cdn-apple.com", "cloudflare.com",
+    "jsdelivr.net", "jquery.com", "bootstrapcdn.com", "unpkg.com", "cdnjs.com",
+    "akamaihd.net", "akamai.net", "fastly.net", "edgekey.net", "edgesuite.net",
+    "microsoft.com", "office.com", "live.com", "windows.net", "azureedge.net",
+    "msftauth.net", "paypal.com", "paypalobjects.com", "stripe.com",
+}
+NEVER_LEARN = _NEVER_LEARN_SEED | {
+    d.strip().lower()
+    for d in os.environ.get("SECUBOX_NEVER_LEARN", "").split(",") if d.strip()
+}
+
+
+def _never_learn(host: str) -> bool:
+    h = (host or "").lower().strip(".")
+    return bool(h) and (h in NEVER_LEARN or (registrable(h) or h) in NEVER_LEARN)
 COOKIE_XSITE_TOP_N = int(os.environ.get("SECUBOX_COOKIE_XSITE_TOP_N", "5"))
 
 sys.path.insert(0, os.environ.get("SECUBOX_TOOLBOX_LIB", "/usr/lib/secubox/toolbox"))
@@ -191,13 +216,16 @@ def _ad_feed() -> int:
             continue
         if reg in self_doms or any(h == d or h.endswith("." + d) for d in self_doms):
             continue
+        # #685 — never hard-block functional infra (CDN/fonts/captcha/auth).
+        if _never_learn(h):
+            continue
         # #658 — promote the EXACT host, NOT the registrable: blocking a tracker
         # subdomain (analytics.tiktok.com) must never block the parent site
         # (tiktok.com). Dedicated ad hosts are already registrable-level.
         promoted.add(h)
-    if not promoted:
-        return 0
-    # MERGE with existing learned-trackers.txt (union, dedup, cap).
+    # MERGE with existing learned-trackers.txt (union, dedup, cap). #685: also
+    # PRUNE any existing never-learn / allowlisted entries already on disk, so a
+    # previously mis-learned host (e.g. www.google.com) is cleaned on the next run.
     existing: set = set()
     try:
         if os.path.exists(OUT):
@@ -208,7 +236,11 @@ def _ad_feed() -> int:
                         existing.add(ln)
     except Exception as e:
         sys.stderr.write(f"autolearn: ad merge read failed: {e}\n")
-    merged = sorted(existing | promoted)[:MAX_ENTRIES]
+    pruned = {e for e in existing
+              if _never_learn(e) or e in allow or (registrable(e) or e) in allow}
+    if not promoted and not pruned:
+        return 0
+    merged = sorted((existing - pruned) | promoted)[:MAX_ENTRIES]
     try:
         os.makedirs(os.path.dirname(OUT), exist_ok=True)
         tmp = OUT + ".tmp"
