@@ -1632,7 +1632,7 @@ async def wg_toolbox_apk() -> Response:
 _WEBEXT_XPI = Path("/var/lib/secubox/toolbox/webext/secubox-toolbox-webext.xpi")
 _WEBEXT_XPI_RELEASE = (
     "https://github.com/CyberMind-FR/secubox-deb/releases/download/"
-    "webext-v0.1.4/secubox-toolbox-webext.xpi"
+    "webext-v0.1.5/secubox-toolbox-webext.xpi"
 )
 
 
