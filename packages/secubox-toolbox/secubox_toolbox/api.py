@@ -2342,11 +2342,12 @@ def _classify_apps(hosts: set[str]) -> list[str]:
     return apps
 
 
-def _build_report_charts(session: dict) -> dict:
-    """Graph-ready aggregates for the simplified report (trackers donut,
-    countries bars, apps bars). Defensive / fail-empty. Each list item has
-    {label, emoji/flag, count, pct}; trackers also carry cumulative start/end
-    for a CSS conic-gradient donut."""
+def _build_report_charts(graph: dict) -> dict:
+    """Graph-ready aggregates for the report, from the LIVE social graph
+    (social.fetch_graph). The events table froze at the #662 cutover, so the
+    report reads the SAME source as /social + the webext (was the bug: it read
+    the dead events → all zeros). Returns trackers donut + countries bars + sites
+    bars; trackers also carry cumulative start/end for the CSS conic-gradient."""
     def _top_pct(items: list, n: int = 6) -> list:
         items = [it for it in items if it.get("count")]
         items.sort(key=lambda x: x["count"], reverse=True)
@@ -2356,30 +2357,33 @@ def _build_report_charts(session: dict) -> dict:
             it["pct"] = round(100 * it["count"] / total)
         return items
 
-    cp = session.get("cookies_providers") or []
+    g = graph or {}
+    nodes = g.get("nodes") or []
+
     trackers = _top_pct([
-        {"label": p.get("provider", "?"), "emoji": p.get("emoji", "🍪"),
-         "count": int(p.get("count", 0) or 0)} for p in cp])
+        {"label": (n.get("domain") or n.get("id") or "?"), "emoji": "🍪",
+         "count": int(n.get("hits", 0) or 0)} for n in nodes])
     cum = 0
     for it in trackers:
         it["start"] = cum
         cum += it["pct"]
         it["end"] = cum
 
-    by_country: dict = {}
-    for h in (session.get("geo_top_hosts") or []):
-        key = (h.get("flag") or "🏴", h.get("country") or "?")
-        by_country[key] = by_country.get(key, 0) + int(h.get("count", 0) or 0)
     countries = _top_pct([
-        {"flag": k[0], "label": k[1], "count": v} for k, v in by_country.items()])
+        {"flag": c.get("flag") or "🏴", "label": (c.get("country_iso") or "?"),
+         "count": int(c.get("hits", 0) or 0)} for c in (g.get("by_country") or [])])
 
-    dc = session.get("dpi_classified") or {}
-    apps = _top_pct([
-        {"label": a.get("app", "?"), "emoji": a.get("emoji", "📦"),
-         "count": int(a.get("count", 0) or 0)}
-        for a in (dc.get("top_apps") or []) if a.get("app") not in (None, "", "?")])
+    # top tracked sites = number of DISTINCT trackers reaching each first-party
+    # site (from each node's sites list) — "where you're tracked most".
+    site_trk: dict = {}
+    for n in nodes:
+        for s in (n.get("sites") or []):
+            if s:
+                site_trk[s] = site_trk.get(s, 0) + 1
+    sites = _top_pct([{"label": s, "emoji": "🌐", "count": c}
+                      for s, c in site_trk.items()])
 
-    return {"trackers": trackers, "countries": countries, "apps": apps}
+    return {"trackers": trackers, "countries": countries, "sites": sites}
 
 
 # NOTE: route order matters in FastAPI — specific routes (/report/me,
@@ -2408,6 +2412,21 @@ async def report_me_html(request: Request) -> HTMLResponse:
         )
     ip = _client_ip(request) or (request.client.host if request.client else "?")
     session = _aggregate_session(mac_hash)
+    # #686 — the events table froze at the #662 cutover, so the report's numbers
+    # came out all-zero. The LIVE per-client data is the social graph (same source
+    # /social + the webext use). Pull it (7d) and drive the summary + graphs off it.
+    try:
+        from . import social as _social
+        graph = _social.fetch_graph(mac_hash, since_seconds=7 * 86400)
+    except Exception:
+        graph = {"stats": {}, "nodes": [], "by_country": []}
+    gs = graph.get("stats") or {}
+    # Honest exposure indicator (0-100) from the live graph: tracker breadth +
+    # operator-grade / anti-bot presence. Not a "compromise" score (events dead).
+    exposure_score = min(100, int(
+        (gs.get("total_trackers", 0) or 0) * 1.5
+        + (gs.get("opgrade_sites", 0) or 0) * 12
+        + (gs.get("antibot_sites", 0) or 0) * 8))
     # Phase 3 (#492) : pass query args + force no-cache so iPhone Safari
     # actually fetches the new template.
     # Phase 6 (#496) : also pass wg_enabled so dashboard R3 link renders
@@ -2420,7 +2439,8 @@ async def report_me_html(request: Request) -> HTMLResponse:
         current_level=store.get_client_level(mac_hash) if mac_hash else "r1",
         wg_enabled=wg_enabled,
         cumulative=cumulative,
-        charts=_build_report_charts(session),
+        graph=graph, graph_stats=gs, exposure_score=exposure_score,
+        charts=_build_report_charts(graph),
         **session,
     )
     return HTMLResponse(html, headers={

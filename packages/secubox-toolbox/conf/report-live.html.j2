@@ -75,17 +75,18 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
 <body>
 
 {% set m = metrics or {} %}
-{% set sc = risk_score|default(0) %}
-{% set rl = risk_label|default('LOW') %}
+{# #686 — summary + graphs come from the LIVE social graph (graph_stats), not the
+   frozen events table. #}
+{% set gst = graph_stats or {} %}
+{% set sc = exposure_score|default(0) %}
 {% set ch = charts or {} %}
 {% set gcol = 'var(--phos-hot)' if sc < 30 else ('var(--amber)' if sc < 70 else 'var(--red)') %}
 {% set palette = ['#00dd44','#9e76ff','#ff8866','#66bbff','#ffb347','#ff4466'] %}
-{% set dpi_cls = dpi_classified or {} %}
-{% set cookies_p = cookies_providers or [] %}
-{% set geo_h = geo_top_hosts or [] %}
-{% set n_apps = (dpi_cls.top_apps|default([])|selectattr('app','ne','?')|list|length) %}
-{% set n_trackers = (cookies_p|map(attribute='count')|sum) %}
-{% set n_countries = (geo_h|map(attribute='country')|reject('equalto','')|list|unique|list|length) %}
+{% set n_trackers = gst.total_trackers|default(0) %}
+{% set n_sites = gst.total_sites|default(0) %}
+{% set n_countries = gst.total_countries|default(0) %}
+{% set n_antibot = gst.antibot_sites|default(0) %}
+{% set n_opgrade = gst.opgrade_sites|default(0) %}
 {% set _avatar = avatar_analysis or {} %}
 
 <h1>👁️ VILLAGE3B <span style="font-size:.8rem;color:var(--dim);font-weight:400">· mon rapport</span></h1>
@@ -109,22 +110,21 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
     </div>
   </div>
   <div class="verdict" style="color:{{ gcol }}">
-    {% if sc < 30 %}🟢 Tout va bien — {{ rl }}{% elif sc < 70 %}🟡 À surveiller — {{ rl }}{% else %}🔴 Attention — {{ rl }}{% endif %}
+    {% if sc < 30 %}🟢 Exposition faible{% elif sc < 70 %}🟡 Exposition modérée{% else %}🔴 Exposition élevée{% endif %}
   </div>
-  <p class="help">Score de risque de ton appareil. Plus il est <b>bas</b>, mieux tu es protégé.</p>
-  {% if risk_explanation %}<p style="font-size:.85rem;margin-top:.5rem">{{ risk_explanation }}</p>{% endif %}
+  <p class="help">Niveau d'exposition au pistage (traceurs croisés + acteurs opérateur/anti-bot). Plus c'est <b>bas</b>, mieux c'est.</p>
 </div>
 
-{# ── KPI row ── #}
+{# ── KPI row (LIVE social graph) ── #}
 <div class="kpis">
-  <div class="kpi"><div class="e">🌐</div><div class="n">{{ m.connections|default(0) }}</div><div class="l">connexions</div></div>
-  <div class="kpi"><div class="e">📡</div><div class="n">{{ m.unique_hosts|default(0) }}</div><div class="l">hôtes</div></div>
-  <div class="kpi"><div class="e">🍪</div><div class="n">{{ n_trackers }}</div><div class="l">trackers</div></div>
+  <div class="kpi"><div class="e">🍪</div><div class="n">{{ n_trackers }}</div><div class="l">traceurs</div></div>
+  <div class="kpi"><div class="e">🌐</div><div class="n">{{ n_sites }}</div><div class="l">sites</div></div>
   <div class="kpi"><div class="e">🌍</div><div class="n">{{ n_countries }}</div><div class="l">pays</div></div>
-  <div class="kpi"><div class="e">📺</div><div class="n">{{ n_apps }}</div><div class="l">apps</div></div>
-  <div class="kpi"><div class="e">🔒</div><div class="n">{{ m.tls_pinned|default(0) }}</div><div class="l">cert-pin</div></div>
+  <div class="kpi"><div class="e">🤖</div><div class="n">{{ n_antibot }}</div><div class="l">anti-bot</div></div>
+  <div class="kpi"><div class="e">📡</div><div class="n">{{ n_opgrade }}</div><div class="l">opérateur</div></div>
+  <div class="kpi"><div class="e">🔗</div><div class="n">{{ (graph.edges|default([]))|length }}</div><div class="l">liens</div></div>
 </div>
-<p class="help" style="text-align:center;margin-bottom:1rem">Ton appareil a contacté {{ m.unique_hosts|default(0) }} serveurs dans {{ n_countries }} pays, avec {{ n_trackers }} traceurs repérés.</p>
+<p class="help" style="text-align:center;margin-bottom:1rem">{{ n_trackers }} traceurs te suivent à travers {{ n_sites }} sites, depuis {{ n_countries }} pays.{% if n_opgrade %} Dont {{ n_opgrade }} de qualité opérateur.{% endif %}</p>
 
 {# ── GRAPHS ── #}
 <div class="card">
@@ -158,18 +158,18 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
       {% else %}<div class="empty">Pas encore de données géo</div>{% endif %}
     </div>
 
-    {# apps bars #}
+    {# top tracked sites bars #}
     <div style="grid-column:1/-1">
-      <div style="font-size:.82rem;color:var(--dim);margin-bottom:.4rem">📺 Quelles apps / services</div>
-      {% if ch.apps %}
-        {% for a in ch.apps %}
-        <div class="bar-row"><span class="bar-lbl">{{ a.emoji }} {{ a.label[:16] }}</span><span class="bar-track"><span class="bar-fill" style="width:{{ a.pct }}%;background:linear-gradient(90deg,var(--violet),#c9b6ff)"></span></span><span class="bar-val" style="color:var(--violet)">{{ a.count }}</span></div>
+      <div style="font-size:.82rem;color:var(--dim);margin-bottom:.4rem">🌐 Où tu es le plus pisté (traceurs par site)</div>
+      {% if ch.sites %}
+        {% for a in ch.sites %}
+        <div class="bar-row"><span class="bar-lbl">{{ a.label[:22] }}</span><span class="bar-track"><span class="bar-fill" style="width:{{ a.pct }}%;background:linear-gradient(90deg,var(--violet),#c9b6ff)"></span></span><span class="bar-val" style="color:var(--violet)">{{ a.count }}</span></div>
         {% endfor %}
-      {% else %}<div class="empty">Aucune app classifiée</div>{% endif %}
+      {% else %}<div class="empty">Pas encore de sites pistés</div>{% endif %}
     </div>
 
   </div>
-  <p class="help">Les traceurs suivent ta navigation entre sites. Les apps cert-pinning (🔒) refusent l'analyse — c'est bon signe.</p>
+  <p class="help">Les traceurs suivent ta navigation entre sites. « opérateur » = traceurs de niveau opérateur télécom (les plus intrusifs).</p>
 </div>
 
 {# ── LEVEL SWITCHER (action) ── #}
