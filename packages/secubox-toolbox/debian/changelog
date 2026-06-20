@@ -1,3 +1,13 @@
+secubox-toolbox (2.7.16-1~bookworm1) bookworm; urgency=medium
+
+  * fix: restore banner on heavy sites (leparisien.fr). The #685 stream_large_bodies=1m
+    streamed large HTML too (streamed bodies cannot be banner-injected). Replaced
+    by the content-aware stream_binaries addon: streams only large NON-HTML
+    (APK/XPI/video/octet-stream/big downloads) verbatim, HTML always buffered so
+    inject_banner + ad_ghost work.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 20 Jun 2026 13:40:00 +0200
+
 secubox-toolbox (2.7.15-1~bookworm1) bookworm; urgency=medium
 
   * fix(#686): /report/me/html reads the LIVE social graph (social.fetch_graph)
