@@ -3,6 +3,25 @@
 
 ---
 
+## 2026-06-20 — kbin Tor shipped + client releases + ad-block/mitm hardening
+
+- **#683 MERGED (PR #684)** — kbin Tor egress quick-switch (switch + nft owner-match
+  tunnel, own-services exemption, reconciler+timer), dashboard/landing/banner metrics
+  fixes, 🧅 indicators (banner/webext/APK), APK persistent WG identity, landing+report
+  **redesign** (verdict gauge + donut/bars + collapsible details). Live on gk2; Tor armed.
+- **Client releases served from kbin**: `android-v0.4.0` (Latest) + `webext-v0.1.5`
+  published by CI; pinned webext tag bumped; board fetch-helpers pull them →
+  /wg/toolbox.apk (0.4.0) + /wg/toolbox.xpi (0.1.5). toolbox 2.7.12.
+- **#685 ad-learner hardened (2.7.13)** — NEVER_LEARN guard (Google/CDN/fonts/captcha/
+  auth/payment), AD_MIN_SITES 1→2, prune existing. Root cause of euronews breakage:
+  the learner had 204'd `www.google.com` → broke reCAPTCHA/consent. Also allowlisted
+  www.google.com/.fr live.
+- **mitm-wg stream_large_bodies=1m (2.7.14)** — large binary downloads (APK, CA) were
+  corrupted ONLY through the R3 tunnel (HTTP/2 buffer/reframe); now passed verbatim.
+- **OPEN [#686]** — android-toolbox non-root flow broken (CA auto-install needs root,
+  WG handoff → Play Store, tunnel not detected). Needs on-device dev/testing; rooted-vs-
+  non-rooted decision pending. #685 signing was a red herring (corrupt = mitm buffering).
+
 ## 2026-06-19 — kbin Tor egress quick-switch implemented DARK (#683, ToolBoX 2.7.1)
 
 - **Switch + tunnel** for routing kbin surfing through Tor, shipped **default-OFF /
