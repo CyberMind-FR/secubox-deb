@@ -1,3 +1,13 @@
+secubox-toolbox (2.7.14-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#685): mitm-wg now streams large bodies (stream_large_bodies=1m) so big
+    binary downloads (APK, CA cert) pass through the R3 forging path verbatim
+    instead of being buffered/reframed over HTTP/2 — fixes "apk corrupt" /
+    "certificat vide" seen ONLY with the WG tunnel up. No addon touches non-HTML
+    bodies, so streaming is byte-transparent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 20 Jun 2026 12:00:00 +0200
+
 secubox-toolbox (2.7.13-1~bookworm1) bookworm; urgency=medium
 
   * fix(#685): harden the ad-learner so it never 204s functional infra. The

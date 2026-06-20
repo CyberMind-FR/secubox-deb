@@ -87,6 +87,12 @@ ARGS=(
     # upstream in mitmproxy 10.4 ; with mitmproxy 11+ we can safely
     # re-enable keep-alive.  Halves TCP handshakes towards busy CDNs.
     --set keep_host_header=true
+    # #685 — STREAM large bodies verbatim instead of buffering+reframing them.
+    # Buffering a 14 MB APK / binary download through the HTTP/2 forging path
+    # corrupted/truncated it (clients reported "apk corrupt", CA "empty name" —
+    # only when the R3 tunnel was up). No addon touches non-HTML bodies (all are
+    # text/html-gated), so streaming big responses is safe and byte-transparent.
+    --set stream_large_bodies=1m
 )
 
 if [ -n "$IGNORE_REGEX" ]; then
