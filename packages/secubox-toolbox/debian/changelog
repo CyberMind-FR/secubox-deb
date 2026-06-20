@@ -1,3 +1,11 @@
+secubox-toolbox (2.7.12-1~bookworm1) bookworm; urgency=medium
+
+  * chore: serve the new clients from kbin — bump pinned webext release tag
+    v0.1.4 → v0.1.5 (/wg/toolbox.xpi fallback + secubox-toolbox-fetch-xpi). The
+    APK serve path already pulls /releases/latest (now android-v0.4.0).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 20 Jun 2026 09:00:00 +0200
+
 secubox-toolbox (2.7.11-1~bookworm1) bookworm; urgency=medium
 
   * feat: landing (kbin.gk2) restyled to match the new report — system font,
