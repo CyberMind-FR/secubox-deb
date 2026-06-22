@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/oschwald/maxminddb-golang"
 )
 
 const (
@@ -48,7 +50,51 @@ var (
 	// #705 — cumulative per-device rollup so the kbin report shows 7d history,
 	// not just the last 60s window (state.json). Same consumer schema as state.json.
 	cumulPath = env("SECUBOX_DPI_CUMUL", "/var/lib/secubox/dpi/cumulative.json")
+	// #718 — ASN DB: classify SNI-less flows (IP-only/QUIC) by destination ASN.
+	asnDBPath = env("SECUBOX_DPI_ASN", "/var/lib/GeoIP/GeoLite2-ASN.mmdb")
 )
+
+// #718 — ASN-org name fragments that mark a destination as cloud/hosting egress
+// (lowercase substring match). Used only when there is no SNI category, so a big
+// upload to an IP-only AWS/Google/etc host is still caught as cloud exfil.
+var cloudASNHints = []string{
+	"amazon", "aws", "google", "microsoft", "azure", "cloudflare", "akamai",
+	"fastly", "ovh", "hetzner", "digitalocean", "oracle", "linode", "scaleway",
+	"leaseweb", "vultr", "g-core", "gcore", "alibaba", "tencent", "contabo",
+	"upcloud", "datacamp", "hosting", "datacenter", "data center", "cloud",
+}
+
+// asnReader is opened once at startup; nil if the mmdb is absent (fail-soft).
+var asnReader *maxminddb.Reader
+
+// asnOrg returns the destination IP's autonomous-system organisation ("" on miss).
+func asnOrg(ip string) string {
+	if asnReader == nil {
+		return ""
+	}
+	p := net.ParseIP(ip)
+	if p == nil {
+		return ""
+	}
+	var rec struct {
+		Org string `maxminddb:"autonomous_system_organization"`
+	}
+	if err := asnReader.Lookup(p, &rec); err != nil {
+		return ""
+	}
+	return rec.Org
+}
+
+// cloudByASN → ("cloud", org) when org looks like a hosting/cloud provider, else "".
+func cloudByASN(org string) (string, string) {
+	o := strings.ToLower(org)
+	for _, h := range cloudASNHints {
+		if strings.Contains(o, h) {
+			return "cloud", org
+		}
+	}
+	return "", ""
+}
 
 const (
 	cumulRetention   = 7 * 24 * 3600 // drop devices/alerts not seen in 7d
@@ -230,6 +276,12 @@ func main() {
 	devmap := loadDeviceMap()
 	seen := loadSeen()
 
+	// #718 — open the ASN DB once (fail-soft: nil reader → enrichment skipped).
+	if rdr, err := maxminddb.Open(asnDBPath); err == nil {
+		asnReader = rdr
+		defer asnReader.Close()
+	}
+
 	f, err := os.Open(os.Args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "collector: open %s: %v\n", os.Args[1], err)
@@ -265,6 +317,13 @@ func main() {
 		sni := get(rec, "server_name_sni")
 		proto := get(rec, "ndpi_proto")
 		cat, service := classify(sni, dstIP)
+		// #718 — no SNI match: fall back to the destination ASN. A big upload to
+		// an IP-only AWS/Google/etc host is still cloud exfil.
+		if cat == "" && !isPrivate(dstIP) {
+			if c, org := cloudByASN(asnOrg(dstIP)); c != "" {
+				cat, service = c, org
+			}
+		}
 		cloud := ""
 		if exfilCat(cat) {
 			cloud = service // back-compat field, only set for exfil-relevant dests

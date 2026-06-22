@@ -21,7 +21,9 @@ export GOPATH  = $(CURDIR)/_gopath
 	dh $@
 
 override_dh_auto_build:
-	cd collector && go build -trimpath -ldflags=-s -o secubox-dpi-collector .
+	# #718 — maxminddb-golang is vendored into collector/vendor so the build is
+	# fully offline (GOPROXY=off, -mod=vendor); CGO off keeps the arm64 cross static.
+	cd collector && go build -mod=vendor -trimpath -ldflags=-s -o secubox-dpi-collector .
 
 # The arm64 cross-binary cannot run its tests on the build host; CI runs Go
 # unit tests on the host arch instead.

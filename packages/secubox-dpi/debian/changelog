@@ -1,3 +1,16 @@
+secubox-dpi (1.1.3-1~bookworm1) bookworm; urgency=low
+
+  * #718 Phase 3 — ASN enrichment: classify SNI-less flows (IP-only / QUIC,
+    ~half of R3 traffic) by destination ASN via GeoLite2-ASN. When a flow has no
+    SNI category and the dst ASN org is a known cloud/hosting provider
+    (Amazon/Google/Cloudflare/OVH/…), tag category=cloud (service=ASN org) so the
+    exfil_volume / new_cloud scenarios fire on it too. Closes the coverage gap
+    for uncontrolled cloud egress without a hostname.
+  * collector: vendor github.com/oschwald/maxminddb-golang (offline build,
+    -mod=vendor + GOPROXY=off). Fail-soft when the mmdb is absent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 22 Jun 2026 13:20:00 +0000
+
 secubox-dpi (1.1.2-1~bookworm1) bookworm; urgency=low
 
   * #695 dashboard: fill the four list cards (Top Applications, Top Protocols,
