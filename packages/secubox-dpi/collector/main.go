@@ -378,15 +378,24 @@ func saveSeen(m map[string]bool) {
 func writeState(aggs map[string]*agg, alerts []alert, now int64) {
 	// per-device rollup
 	type devstat struct {
-		Device   string         `json:"device"`
-		Flows    int            `json:"flows"`
-		UpBytes  int64          `json:"up_bytes"`
-		Services []*agg         `json:"services"`        // all classified egress (any category)
-		Clouds   []*agg         `json:"clouds"`          // back-compat: exfil-relevant subset
-		ByCat    map[string]int `json:"by_category"`     // category → flow count
-		Alerts   []alert        `json:"alerts"`
+		Device    string         `json:"device"`
+		Flows     int            `json:"flows"`
+		UpBytes   int64          `json:"up_bytes"`
+		DownBytes int64          `json:"down_bytes"`
+		Services  []*agg         `json:"services"`        // all classified egress (any category)
+		Clouds    []*agg         `json:"clouds"`          // back-compat: exfil-relevant subset
+		ByCat     map[string]int `json:"by_category"`     // category → flow count
+		Alerts    []alert        `json:"alerts"`
 	}
 	devs := map[string]*devstat{}
+	// global rollups (incl. uncategorised dests) for the dashboard list cards
+	type rollup struct {
+		Name  string `json:"name"`
+		Bytes int64  `json:"bytes"`
+		Flows int    `json:"flows"`
+	}
+	apps := map[string]*rollup{}   // by service||dst
+	protos := map[string]*rollup{} // by nDPI proto
 	for _, a := range aggs {
 		d := devs[a.Device]
 		if d == nil {
@@ -395,6 +404,7 @@ func writeState(aggs map[string]*agg, alerts []alert, now int64) {
 		}
 		d.Flows += a.Flows
 		d.UpBytes += a.Up
+		d.DownBytes += a.Down
 		if a.Category != "" {
 			d.Services = append(d.Services, a)
 			d.ByCat[a.Category] += a.Flows
@@ -402,6 +412,32 @@ func writeState(aggs map[string]*agg, alerts []alert, now int64) {
 		if a.Cloud != "" {
 			d.Clouds = append(d.Clouds, a)
 		}
+		// global app rollup (service name if classified, else the dst host)
+		an := a.Service
+		if an == "" {
+			an = a.Dst
+		}
+		if an != "" {
+			r := apps[an]
+			if r == nil {
+				r = &rollup{Name: an}
+				apps[an] = r
+			}
+			r.Bytes += a.Up + a.Down
+			r.Flows += a.Flows
+		}
+		// global protocol rollup
+		pn := a.Proto
+		if pn == "" {
+			pn = "unknown"
+		}
+		r := protos[pn]
+		if r == nil {
+			r = &rollup{Name: pn}
+			protos[pn] = r
+		}
+		r.Bytes += a.Up + a.Down
+		r.Flows += a.Flows
 	}
 	for _, al := range alerts {
 		if d := devs[al.Device]; d != nil {
@@ -421,11 +457,37 @@ func writeState(aggs map[string]*agg, alerts []alert, now int64) {
 		list = append(list, d)
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].UpBytes > list[j].UpBytes })
+
+	// rank the global rollups, cap at topN
+	rank := func(m map[string]*rollup) []*rollup {
+		out := make([]*rollup, 0, len(m))
+		for _, r := range m {
+			out = append(out, r)
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Bytes > out[j].Bytes })
+		if len(out) > topN {
+			out = out[:topN]
+		}
+		return out
+	}
+	// active flows = the individual aggs (incl. uncategorised), top by total bytes
+	flows := make([]*agg, 0, len(aggs))
+	for _, a := range aggs {
+		flows = append(flows, a)
+	}
+	sort.Slice(flows, func(i, j int) bool { return (flows[i].Up + flows[i].Down) > (flows[j].Up + flows[j].Down) })
+	if len(flows) > 20 {
+		flows = flows[:20]
+	}
+
 	out := map[string]any{
-		"generated_at": now,
-		"devices":      list,
-		"alerts":       alerts,
-		"alert_count":  len(alerts),
+		"generated_at":  now,
+		"devices":       list,
+		"alerts":        alerts,
+		"alert_count":   len(alerts),
+		"top_apps":      rank(apps),
+		"top_protocols": rank(protos),
+		"active_flows":  flows,
 	}
 	writeJSON(statePath, out)
 }
