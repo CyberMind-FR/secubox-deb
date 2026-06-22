@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Per-device flow-DPI on the R3 tap (#687): ndpiReader → Go collector →
+# cloud-exfiltration scenarios → /var/lib/secubox/dpi/state.json (served by the
+# secubox-dpi dashboard at /api/v1/dpi/exfil).
+[Unit]
+Description=SecuBox-Deb DPI flow capture + exfil collector (#687)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/secubox-dpi-flowcap
+Restart=always
+RestartSec=10
+# ndpiReader needs raw packet capture on wg-toolbox; nothing else.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+# Light on a saturated board (~1% CPU observed); bound memory + low priority.
+Nice=15
+CPUWeight=20
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

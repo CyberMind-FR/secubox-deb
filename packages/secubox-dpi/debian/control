@@ -2,14 +2,14 @@ Source: secubox-dpi
 Section: net
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
-Build-Depends: debhelper-compat (= 13)
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.22~)
 Standards-Version: 4.6.2
 Homepage: https://cybermind.fr/secubox
 Rules-Requires-Root: no
 
 Package: secubox-dpi
-Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2
+Architecture: arm64
+Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2, libndpi-bin
 Recommends: netifyd, secubox-netifyd
 Description: SecuBox DPI Analytics — netifyd-backed app/protocol classification
  Analytics layer on top of netifyd: top applications, top protocols,
