@@ -2734,7 +2734,10 @@ async def report_me(request: Request) -> Response:
     data["persona"] = _persona_sheet(mac_hash, _lvl, _gs, _exp, data["dpi_exfil"],
                                      data.get("device_type", ""),
                                      request.headers.get("user-agent", ""))
-    data["bestiary"] = (_build_report_charts(_graph).get("trackers") or [])[:5]
+    _charts = _build_report_charts(_graph)
+    data["charts"] = _charts                              # #711 "En un coup d'œil"
+    data["graph_stats"] = _gs
+    data["bestiary"] = (_charts.get("trackers") or [])[:5]
     data["carto_nodes"] = _graph.get("nodes") or []      # #709 carto + tables
     data["carto_country"] = _graph.get("by_country") or []
     pdf_bytes = reports.render_pdf(data)
