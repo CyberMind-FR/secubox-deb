@@ -262,7 +262,9 @@ def render_pdf(report: dict) -> bytes:
         def _donut_lines(title: str, items: list) -> None:
             if not items:
                 return
+            pdf.set_x(pdf.l_margin)  # #714 reset X so the title isn't clipped right
             pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 9)
+            pdf.set_text_color(0)
             pdf.cell(0, 5, _ascii_safe(title), ln=True)
             for it in items:
                 _bullet(pdf, f"{it.get('emoji', '')} {it.get('label', '?')} - {it.get('pct', 0)}%", font_size=8)
@@ -732,60 +734,68 @@ def _bullet(pdf, text: str, font_size: int = 9) -> None:
     pdf.multi_cell(_page_w(pdf), 5, "  - " + safe)
 
 
-# #703/#711 — visual donut charts in the PDF. Drawn as a true ring (annulus):
-# each segment is a THICK STROKED arc at a fixed radius, so the donut is a real
-# concentric ring, not a filled pie with a white hole punched in it.
-# RGB mirror of the HTML report palette.
+# #703/#711/#714 — charts are rendered with matplotlib to PNG and EMBEDDED as
+# raster images (pdf.image), because fpdf2 vector arc/ellipse donuts render in
+# poppler but blank in iOS/Chrome PDF viewers. Raster PNG displays everywhere.
 _PDF_DONUT_PALETTE = [
     (0, 221, 68), (158, 118, 255), (255, 136, 102),
     (102, 187, 255), (255, 179, 71), (255, 68, 102),
 ]
+_PDF_HEX = ["#%02x%02x%02x" % c for c in _PDF_DONUT_PALETTE]
+
+
+def _mpl_donut_png(segs: list, hole: str = ""):
+    """Render a donut ring (matplotlib) to a PNG BytesIO. None if no data/mpl."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from io import BytesIO
+    except Exception:
+        return None
+    vals, cols = [], []
+    for i, s in enumerate(segs or []):
+        v = s.get("pct") or s.get("count") or 0
+        if v:
+            vals.append(v)
+            cols.append(_PDF_HEX[i % len(_PDF_HEX)])
+    if not vals:
+        return None
+    fig, ax = plt.subplots(figsize=(1.7, 1.7), dpi=130)
+    ax.pie(vals, colors=cols, startangle=90, counterclock=False,
+           wedgeprops=dict(width=0.42, edgecolor="white", linewidth=1.2))
+    if hole:
+        ax.text(0, 0, str(hole)[:8], ha="center", va="center",
+                fontsize=9, color="#444", weight="bold")
+    ax.set(aspect="equal")
+    buf = BytesIO()
+    fig.savefig(buf, format="png", transparent=True, bbox_inches="tight", pad_inches=0.02)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
 
 
 def _pdf_donut(pdf, x: float, y: float, w: float, title: str, hole: str, segs: list) -> None:
-    """Draw one ring donut + legend inside a cell of width w at (x, y). segs carry
-    cumulative start/end percents (from _dpi_donut)."""
+    """Title + embedded donut PNG (left) + text legend (right) in a cell of width w."""
     fam = getattr(pdf, "_secubox_family", "Helvetica")
     pdf.set_xy(x, y)
     pdf.set_font(fam, "B", 9)
     pdf.set_text_color(0, 90, 64)
     pdf.cell(w, 5, _ascii_safe(title)[:30], ln=False)
-    cx, cy, rr, th = x + 15, y + 23, 9.5, 4.6  # ring mid-radius + band thickness
-    if segs:
-        prev_lw = pdf.line_width
-        pdf.set_line_width(th)
-        # faint full ring underlay so rounding gaps never show the page through
-        pdf.set_draw_color(232, 234, 238)
+    png = _mpl_donut_png(segs, hole) if segs else None
+    if png is not None:
         try:
-            pdf.arc(cx, cy, rr, 0, 359.9, clockwise=True, style="D")
+            pdf.image(png, x=x, y=y + 6, w=28, h=28)
         except Exception:
             pass
-        for i, s in enumerate(segs):
-            start, end = float(s.get("start", 0)), float(s.get("end", 0))
-            if end <= start:
-                continue
-            pdf.set_draw_color(*_PDF_DONUT_PALETTE[i % len(_PDF_DONUT_PALETTE)])
-            a0 = 90.0 - start * 3.6
-            a1 = 90.0 - end * 3.6
-            try:
-                pdf.arc(cx, cy, rr, a0, a1, clockwise=True, style="D")
-            except Exception:
-                pass
-        pdf.set_line_width(prev_lw)
-        if hole:
-            pdf.set_xy(cx - 8, cy - 2)
-            pdf.set_font(fam, "", 6)
-            pdf.set_text_color(110, 110, 110)
-            pdf.cell(16, 4, _ascii_safe(hole)[:8], align="C")
-        # legend (right of the donut)
         ly = y + 8
         for i, s in enumerate(segs[:6]):
             pdf.set_fill_color(*_PDF_DONUT_PALETTE[i % len(_PDF_DONUT_PALETTE)])
-            pdf.rect(x + 33, ly + 0.6, 2.4, 2.4, style="F")
-            pdf.set_xy(x + 37, ly)
+            pdf.rect(x + 31, ly + 0.6, 2.4, 2.4, style="F")
+            pdf.set_xy(x + 35, ly)
             pdf.set_font(fam, "", 7)
             pdf.set_text_color(40, 40, 40)
-            pdf.cell(w - 38, 3.5,
+            pdf.cell(w - 36, 3.5,
                      _ascii_safe(f"{s.get('label', '?')[:16]}  {s.get('pct', 0)}%"), ln=False)
             ly += 4
     else:
@@ -861,43 +871,56 @@ def _glance_section(pdf, family: str, charts: dict, n_trackers: int) -> None:
            for s in (ch.get("sites") or [])], col=(158, 118, 255))
 
 
-# #709 — radial "carto" network map (TOI hub → top trackers) for the PDF.
-def _carto_graph(pdf, family: str, nodes: list) -> None:
-    import math
+# #709/#714 — radial "carto" hub map rendered with matplotlib → embedded PNG.
+def _mpl_carto_png(nodes: list):
+    try:
+        import math
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from io import BytesIO
+    except Exception:
+        return None
     nodes = sorted([n for n in (nodes or []) if n.get("hits")],
                    key=lambda n: n.get("hits", 0), reverse=True)[:8]
     if not nodes:
-        return
-    _section(pdf, "🗺️ CARTO — qui te piste (carte du réseau)")
-    cx = pdf.l_margin + _page_w(pdf) / 2.0
-    cy = pdf.get_y() + 34
-    R = 27.0
+        return None
     maxh = max(n.get("hits", 1) for n in nodes) or 1
-    pdf.set_draw_color(70, 90, 120)
-    pdf.set_line_width(0.2)
-    placed = []
+    fig, ax = plt.subplots(figsize=(6.4, 3.4), dpi=130)
     for i, n in enumerate(nodes):
         ang = math.radians(-90 + i * 360.0 / len(nodes))
-        x, y = cx + R * math.cos(ang), cy + R * math.sin(ang)
-        pdf.line(cx, cy, x, y)
-        placed.append((x, y, n))
-    for (x, y, n) in placed:
-        r = 1.6 + 3.2 * (n.get("hits", 1) / maxh)
-        pdf.set_fill_color(255, 80, 110)
-        pdf.ellipse(x - r, y - r, 2 * r, 2 * r, style="F")
-        lbl = f"{n.get('country_flag','')} {(n.get('domain','') or '?')[:12]}"
-        pdf.set_font(family, "", 6)
-        pdf.set_text_color(90, 90, 90)
-        pdf.set_xy(x - 17, (y + r + 0.5) if y >= cy else (y - r - 3.5))
-        pdf.cell(34, 3, _safe(lbl), align="C")
-    pdf.set_fill_color(0, 212, 255)
-    pdf.ellipse(cx - 4.5, cy - 4.5, 9, 9, style="F")
-    pdf.set_xy(cx - 9, cy - 1.6)
-    pdf.set_font(family, "B", 6)
-    pdf.set_text_color(10, 10, 15)
-    pdf.cell(18, 3, "TOI", align="C")
-    pdf.set_text_color(0)
-    pdf.set_y(cy + R + 7)
+        x, y = math.cos(ang), math.sin(ang)
+        ax.plot([0, x], [0, y], color="#3a4a66", lw=0.8, zorder=1)
+        ax.scatter([x], [y], s=120 + 520 * (n.get("hits", 1) / maxh),
+                   color="#ff506e", edgecolors="white", linewidths=0.8, zorder=2)
+        iso = (n.get("country_iso") or "").upper()
+        lbl = f"{iso} {(n.get('domain','') or '?')[:16]}".strip()
+        ax.text(x * 1.32, y * 1.32, lbl, fontsize=7, ha="center", va="center", color="#333")
+    ax.scatter([0], [0], s=900, color="#00d4ff", edgecolors="white", linewidths=1.2, zorder=3)
+    ax.text(0, 0, "TOI", fontsize=8, ha="center", va="center", weight="bold", color="#06202a", zorder=4)
+    ax.set_xlim(-2.1, 2.1)
+    ax.set_ylim(-1.7, 1.7)
+    ax.axis("off")
+    buf = BytesIO()
+    fig.savefig(buf, format="png", transparent=True, bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _carto_graph(pdf, family: str, nodes: list) -> None:
+    png = _mpl_carto_png(nodes)
+    if png is None:
+        return
+    _section(pdf, "🗺️ CARTO — qui te piste (carte du réseau)")
+    w = _page_w(pdf)
+    h = w * 0.5
+    y0 = pdf.get_y()
+    try:
+        pdf.image(png, x=pdf.l_margin, y=y0, w=w, h=h)
+    except Exception:
+        return
+    pdf.set_y(y0 + h + 3)
 
 
 # #709 — generic emoji data table. cols = [(header, width_fraction), ...]
