@@ -45,6 +45,14 @@ var (
 	wgPeersPath = env("SECUBOX_WG_PEERS", "/var/lib/secubox/toolbox/wg-peers.json")
 	statePath   = env("SECUBOX_DPI_STATE", "/var/lib/secubox/dpi/state.json")
 	seenPath    = env("SECUBOX_DPI_SEEN", "/var/lib/secubox/dpi/seen.json")
+	// #705 — cumulative per-device rollup so the kbin report shows 7d history,
+	// not just the last 60s window (state.json). Same consumer schema as state.json.
+	cumulPath = env("SECUBOX_DPI_CUMUL", "/var/lib/secubox/dpi/cumulative.json")
+)
+
+const (
+	cumulRetention   = 7 * 24 * 3600 // drop devices/alerts not seen in 7d
+	cumulMaxServices = 80            // cap services per device to bound file size
 )
 
 // svc = (category, human service name) for a known SNI suffix. Categories are
@@ -328,7 +336,185 @@ func main() {
 	}
 	saveSeen(newseen)
 	writeState(aggs, alerts, now)
+	updateCumulative(aggs, alerts, now)
 	fmt.Printf("collector: %d flows-agg, %d alerts @ %d\n", len(aggs), len(alerts), now)
+}
+
+// cumDev is the persisted per-device cumulative rollup. Superset of the state
+// device schema (adds last_seen/first_seen) so the report's _dpi_stats reads it
+// unchanged.
+type cumDev struct {
+	Device    string         `json:"device"`
+	Flows     int            `json:"flows"`
+	UpBytes   int64          `json:"up_bytes"`
+	DownBytes int64          `json:"down_bytes"`
+	ByCat     map[string]int `json:"by_category"`
+	Services  []*agg         `json:"services"`
+	Clouds    []*agg         `json:"clouds"`
+	Alerts    []alert        `json:"alerts"`
+	FirstSeen int64          `json:"first_seen"`
+	LastSeen  int64          `json:"last_seen"`
+}
+
+// updateCumulative merges this window's aggs+alerts into the persistent 7d
+// cumulative store and rewrites it in state.json's consumer schema (devices[] +
+// top_apps/top_protocols/alerts). Idempotent-ish: best-effort, never fatal.
+func updateCumulative(aggs map[string]*agg, alerts []alert, now int64) {
+	devs := map[string]*cumDev{}
+	if b, err := os.ReadFile(cumulPath); err == nil {
+		var doc struct {
+			Devices []*cumDev `json:"devices"`
+		}
+		if json.Unmarshal(b, &doc) == nil {
+			for _, d := range doc.Devices {
+				if d.ByCat == nil {
+					d.ByCat = map[string]int{}
+				}
+				devs[d.Device] = d
+			}
+		}
+	}
+	// per-device service index (key = dst) for O(1) merge
+	svcIdx := map[string]map[string]*agg{}
+	for dev, d := range devs {
+		m := map[string]*agg{}
+		for _, s := range d.Services {
+			m[s.Dst] = s
+		}
+		svcIdx[dev] = m
+	}
+	for _, a := range aggs {
+		d := devs[a.Device]
+		if d == nil {
+			d = &cumDev{Device: a.Device, ByCat: map[string]int{}, FirstSeen: now}
+			devs[a.Device] = d
+			svcIdx[a.Device] = map[string]*agg{}
+		}
+		d.Flows += a.Flows
+		d.UpBytes += a.Up
+		d.DownBytes += a.Down
+		d.LastSeen = now
+		if a.Category != "" {
+			d.ByCat[a.Category] += a.Flows
+		}
+		si := svcIdx[a.Device]
+		if s := si[a.Dst]; s != nil {
+			s.Up += a.Up
+			s.Down += a.Down
+			s.Flows += a.Flows
+			if s.Category == "" {
+				s.Category = a.Category
+			}
+			if s.Service == "" {
+				s.Service = a.Service
+			}
+			if s.Cloud == "" {
+				s.Cloud = a.Cloud
+			}
+			if s.Proto == "" {
+				s.Proto = a.Proto
+			}
+		} else {
+			cp := *a
+			cp.iatAvg, cp.iatStd = 0, 0
+			si[a.Dst] = &cp
+		}
+	}
+	for _, al := range alerts {
+		if d := devs[al.Device]; d != nil {
+			d.Alerts = append(d.Alerts, al)
+		}
+	}
+
+	// finalise: prune stale, cap services, rebuild slices + global rollups
+	type rollup struct {
+		Name  string `json:"name"`
+		Bytes int64  `json:"bytes"`
+		Flows int    `json:"flows"`
+	}
+	apps := map[string]*rollup{}
+	protos := map[string]*rollup{}
+	var allAlerts []alert
+	list := make([]*cumDev, 0, len(devs))
+	for dev, d := range devs {
+		if now-d.LastSeen > cumulRetention {
+			continue // device idle >7d → drop
+		}
+		// rebuild services from the merged index, sort + cap
+		svcs := make([]*agg, 0, len(svcIdx[dev]))
+		for _, s := range svcIdx[dev] {
+			svcs = append(svcs, s)
+		}
+		sort.Slice(svcs, func(i, j int) bool { return svcs[i].Up > svcs[j].Up })
+		if len(svcs) > cumulMaxServices {
+			svcs = svcs[:cumulMaxServices]
+		}
+		d.Services = svcs
+		d.Clouds = d.Clouds[:0]
+		for _, s := range svcs {
+			if s.Cloud != "" {
+				d.Clouds = append(d.Clouds, s)
+			}
+			an := s.Service
+			if an == "" {
+				an = s.Dst
+			}
+			if an != "" {
+				if apps[an] == nil {
+					apps[an] = &rollup{Name: an}
+				}
+				apps[an].Bytes += s.Up + s.Down
+				apps[an].Flows += s.Flows
+			}
+			pn := s.Proto
+			if pn == "" {
+				pn = "unknown"
+			}
+			if protos[pn] == nil {
+				protos[pn] = &rollup{Name: pn}
+			}
+			protos[pn].Bytes += s.Up + s.Down
+			protos[pn].Flows += s.Flows
+		}
+		// prune old alerts, cap
+		fresh := d.Alerts[:0]
+		for _, al := range d.Alerts {
+			if now-al.TS <= cumulRetention {
+				fresh = append(fresh, al)
+			}
+		}
+		if len(fresh) > 50 {
+			fresh = fresh[len(fresh)-50:]
+		}
+		d.Alerts = fresh
+		allAlerts = append(allAlerts, fresh...)
+		if len(d.Clouds) > topN {
+			d.Clouds = d.Clouds[:topN]
+		}
+		list = append(list, d)
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].UpBytes > list[j].UpBytes })
+	rank := func(m map[string]*rollup) []*rollup {
+		out := make([]*rollup, 0, len(m))
+		for _, r := range m {
+			out = append(out, r)
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Bytes > out[j].Bytes })
+		if len(out) > topN {
+			out = out[:topN]
+		}
+		return out
+	}
+	out := map[string]any{
+		"generated_at":  now,
+		"window_days":   cumulRetention / 86400,
+		"devices":       list,
+		"alerts":        allAlerts,
+		"alert_count":   len(allAlerts),
+		"top_apps":      rank(apps),
+		"top_protocols": rank(protos),
+	}
+	writeJSON(cumulPath, out)
 }
 
 func indexCols(header []string) map[string]int {
