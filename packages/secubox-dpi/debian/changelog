@@ -1,3 +1,13 @@
+secubox-dpi (1.1.2-1~bookworm1) bookworm; urgency=low
+
+  * #695 dashboard: fill the four list cards (Top Applications, Top Protocols,
+    Bandwidth by Device, Active Flows) from the real R3 exfil engine instead of
+    the inactive netifyd backend. Collector now emits global rollups in /exfil
+    (top_apps, top_protocols by nDPI proto, per-device up+down, active_flows
+    incl. uncategorised dests).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 22 Jun 2026 10:45:00 +0000
+
 secubox-dpi (1.1.1-1~bookworm1) bookworm; urgency=low
 
   * #692 collector: beaconing scenario now requires a C2-plausible cadence
