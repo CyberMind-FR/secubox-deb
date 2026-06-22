@@ -1,5 +1,23 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-19*
+*Mis à jour : 2026-06-22*
+
+---
+
+## ✅ Clos 2026-06-22 — DPI exfil + report Netrunner + sbxmitm
+
+- ✅ **#687 DPI exfil pipeline** — flowcap + Go collector + dashboard + cumulatif 7j,
+  packagé `secubox-dpi 1.1.2` (inclut #692/#693/#695/#705).
+- ✅ **#707 report kbin = fiche Netrunner** HTML+PDF (#699/#701/#703/#709/#711/#714/#716).
+- ✅ **#689** sbxmitm cert 365d · **#697** stream >8MiB (Gmail) · **#688** splice rejeté.
+
+### ⬜ DPI Phase 3 (différé)
+- [ ] Démon **nDPId** (socket JSON) à la place du PoC ndpiReader.
+- [ ] Enrichissement **ASN** (GeoLite2-ASN) pour l'egress sans SNI.
+- [ ] Historique **SQLite** + timeline par device ; dashboard UI ; packaging.
+
+### ⬜ Cosmétique report PDF (non bloquant)
+- [ ] Glyphes drapeaux régionaux → lettres (police embarquée). Option : drapeaux PNG.
+- [ ] Chiffres espacés dans certaines cellules (fallback police).
 
 ---
 

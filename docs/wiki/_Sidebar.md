@@ -26,6 +26,8 @@
 * [[Modules|All Modules (125)]]
 * [[Modules-Security]]
 * [[Modules-Networking]]
+* [[Kbin-Toolbox|kbin ToolBoX]]
+* [[DPI-Exfiltration|DPI Exfil + Report]]
 
 ### 🔵 MESH — Dev
 * [[Developer-Guide]]

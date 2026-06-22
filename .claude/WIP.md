@@ -1,5 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-19*
+*Mis à jour : 2026-06-22*
+
+---
+
+## ✅ 2026-06-22 : DPI exfil + Netrunner report + sbxmitm fixes (tous mergés, live gk2)
+
+Session livrée intégralement sur master + déployée. Détail dans HISTORY 2026-06-22.
+
+### ✅ Fait (mergé + live)
+- **DPI exfil pipeline (#687)** — `secubox-dpi 1.1.2` : flowcap (ndpiReader) → Go
+  collector (catégories cloud/media/game/adult/ai/messaging/filehost/social + scénarios
+  exfil) → `/api/v1/dpi/exfil` ; dashboard "Cloud Exfiltration Watch" + cartes repointées ;
+  beaconing tuné (#692) ; cumulatif 7j `cumulative.json` (#705) ; packagé arm64.
+- **Report kbin = fiche Netrunner (#707)** — HTML (onglets Pistage/DPI/Overall + persona
+  néon) **et** PDF (`_persona_block` + "En un coup d'œil" + grille donuts + carto + tables
+  emoji). Charts en **PNG matplotlib** (#714, rendu universel iOS/Chrome) ; grille = une
+  image 2×2 (#716, fin des 24 pages). Classe via UA live + niveau R3 auto (wg peer).
+- **sbxmitm** — cert forgé 24h→365d (#689, fin des "certificat expiré") ; fin de la
+  troncature >8MiB (#697, Gmail OK) ; splice own-domain **rejeté** (#688, on intercepte tout).
+
+### ⬜ Next Up (différé)
+- **DPI Phase 3** — démon nDPId (socket JSON) en remplacement du PoC ndpiReader,
+  enrichissement ASN (GeoLite2-ASN) pour les flux sans SNI, historique SQLite + timeline,
+  packaging du dashboard.
+- **#685 APK on-device** — install auto CA + handoff WG + détection tunnel (en attente
+  décision rooted vs non-root du user).
+- **Cosmétique PDF** — glyphes drapeaux régionaux dégradent en lettres (police embarquée) ;
+  chiffres légèrement espacés dans certaines cellules. Non bloquant.
 
 ---
 
