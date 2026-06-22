@@ -526,57 +526,58 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		}
 	}
 
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	// Inject the transparency-banner loader only on 2xx text/html responses
-	// (mirrors the Python addon, which skips non-200). The loader's same-origin
-	// <script src="/__toolbox/loader.js"> is served by the short-circuit above.
-	//
-	// #662 — the body may be compressed in WHATEVER codec the origin chose
-	// (Accept-Encoding is now forwarded verbatim, not pinned to gzip).
-	// injectIntoBody decodes→injects→re-encodes for gzip / br / zstd (encoding
-	// unchanged), injects directly when identity, and fails open (untouched) on a
-	// corrupt/unknown encoding. Only on a successful rewrite do we update the
-	// framing: writeResponse emits Content-Length from len(body), but a stale
-	// resp.ContentLength / Content-Encoding could mislead downstream — so we
-	// keep them consistent with the bytes we actually serve.
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 &&
-		strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
-		// #662 CONSENTED-DEMONSTRATION — ONLY here, on the responses we actually
-		// inject into (2xx text/html, R3/wg gate), and ONLY when the operator
-		// left the demo on, do we relax the page's CSP so the inline banner can
-		// run even on strict-CSP sites. cspBypassed is true iff there was a real
-		// CSP to bypass — it becomes csp=1 on the inline script and the banner
-		// renders a 🔓 as the visible proof. We never strip CSP on non-injected
-		// responses.
-		cspBypassed := false
-		if px.cspDemo {
-			cspBypassed = relaxCSPForLoader(resp.Header)
-		}
-		// #662 — INLINE the banner (supersedes the <script src="/__toolbox/
-		// loader.js"> tag): sites with a SERVICE WORKER (leparisien, cnn…) hijack
-		// the same-origin src + its fetch("/__toolbox/bundle") before they reach
-		// this engine, so the banner never appeared. We fetch the COMPLETE script
-		// body from the portal server-side (mh/wg/csp + bundle baked as JS
-		// literals — no same-origin request for the SW to touch) and bake it into
-		// a self-contained <script>…</script>. Fail-open: a dead/slow portal →
-		// scriptBody=="" → the banner inject is skipped and the page is served
-		// intact (the cosmetic <style>, already inline, is unaffected).
-		scriptBody, _ := fetchInlineBanner(px.portal, clientHash, wg, cspBypassed)
-		if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, wg); ok {
-			body = out
-			// Keep the response framing consistent with the served bytes. The
-			// encoding is unchanged (gzip stays gzip, identity stays identity);
-			// only the length changed because injection grew the body. A stale
-			// Content-Length would truncate/corrupt the response.
-			resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
-			resp.ContentLength = int64(len(body))
-		}
-	}
 	// #662 — strip Alt-Svc so the browser is never told this origin offers HTTP/3
 	// (h3). With h3 unadvertised it keeps using HTTP/2 over TCP, which we MITM;
 	// otherwise it caches "h3 available" and keeps trying QUIC (UDP 443) — which
 	// bypasses this TCP proxy and is only best-effort blocked by the nft reject.
 	resp.Header.Del("Alt-Svc")
+
+	// We only ever rewrite 2xx text/html (the transparency-banner inject).
+	// EVERYTHING else — JSON/protobuf APIs, images, downloads, mail bodies,
+	// video — must pass through byte-for-byte. Buffering them capped at 8 MiB was
+	// silently TRUNCATING any larger response (#697: Gmail messages/attachments
+	// over the tunnel just stopped rendering). Stream those verbatim.
+	injectEligible := resp.StatusCode >= 200 && resp.StatusCode < 300 &&
+		strings.Contains(resp.Header.Get("Content-Type"), "text/html")
+	if !injectEligible {
+		streamResponse(tconn, resp, nil)
+		return
+	}
+
+	// Inject path: buffer up to the cap (+1 so we DETECT an oversized page instead
+	// of truncating it). The body may be compressed in whatever codec the origin
+	// chose (Accept-Encoding is forwarded verbatim). injectIntoBody
+	// decodes→injects→re-encodes for gzip/br/zstd (encoding unchanged), injects
+	// directly when identity, and fails open (untouched) on a corrupt/unknown
+	// encoding.
+	const injectCap = 8 << 20
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, injectCap+1))
+	if int64(len(body)) > injectCap {
+		// HTML larger than the inject buffer: never serve a truncated inject —
+		// stream the peeked bytes plus the remainder verbatim.
+		streamResponse(tconn, resp, body)
+		return
+	}
+	// #662 CONSENTED-DEMONSTRATION — ONLY here, on the responses we actually inject
+	// into, and ONLY when the operator left the demo on, do we relax the page's CSP
+	// so the inline banner runs even on strict-CSP sites. Never on non-injected
+	// responses. cspBypassed becomes csp=1 on the inline script (banner shows 🔓).
+	cspBypassed := false
+	if px.cspDemo {
+		cspBypassed = relaxCSPForLoader(resp.Header)
+	}
+	// #662 — INLINE the banner (supersedes the <script src="/__toolbox/loader.js">
+	// tag): sites with a SERVICE WORKER hijack the same-origin src before it
+	// reaches this engine. We fetch the COMPLETE script body from the portal
+	// server-side and bake it into a self-contained <script>. Fail-open: a
+	// dead/slow portal → scriptBody=="" → inject skipped, page served intact.
+	scriptBody, _ := fetchInlineBanner(px.portal, clientHash, wg, cspBypassed)
+	if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, wg); ok {
+		body = out
+		// Keep framing consistent with the served bytes (only the length changed).
+		resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+		resp.ContentLength = int64(len(body))
+	}
 	writeResponse(tconn, resp, body)
 }
 
