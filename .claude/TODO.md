@@ -10,9 +10,10 @@
 - ✅ **#707 report kbin = fiche Netrunner** HTML+PDF (#699/#701/#703/#709/#711/#714/#716).
 - ✅ **#689** sbxmitm cert 365d · **#697** stream >8MiB (Gmail) · **#688** splice rejeté.
 
-### ⬜ DPI Phase 3 (différé)
+### DPI Phase 3
+- [x] Enrichissement **ASN** (GeoLite2-ASN) pour l'egress sans SNI — **#719 mergé, live**
+  (`secubox-dpi 1.1.3`, maxminddb-golang vendored).
 - [ ] Démon **nDPId** (socket JSON) à la place du PoC ndpiReader.
-- [ ] Enrichissement **ASN** (GeoLite2-ASN) pour l'egress sans SNI.
 - [ ] Historique **SQLite** + timeline par device ; dashboard UI ; packaging.
 
 ### ⬜ Cosmétique report PDF (non bloquant)
