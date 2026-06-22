@@ -143,8 +143,11 @@ def render_pdf(report: dict) -> bytes:
     pdf.cell(0, 5, "Rapport d'analyse de session — Cabine numérique VILLAGE3B", ln=True, align="C")
     pdf.ln(3)
 
-    # ── HERO DASHBOARD : big global numbers ──
-    _dashboard_hero(pdf, family, report)
+    # ── HERO : Netrunner persona sheet (#707), falls back to the old dashboard ──
+    if report.get("persona"):
+        _persona_block(pdf, family, report)
+    else:
+        _dashboard_hero(pdf, family, report)
 
     # Anonymous ID
     _section(pdf, "🔑 IDENTIFIANT ANONYME")
@@ -486,6 +489,59 @@ def _widget(pdf, family: str, x: float, y: float, w: float, h: float,
     pdf.set_xy(x, y + 13.5)
     pdf.set_font(family, "", 6)
     pdf.cell(w, 3, _safe(label), ln=False, align="C")
+
+
+def _persona_bar(pdf, family: str, label: str, pct: int, col: tuple) -> None:
+    """A labelled horizontal progress bar (ICE / exposition)."""
+    pct = max(0, min(100, int(pct or 0)))
+    pdf.set_x(pdf.l_margin)
+    pdf.set_font(family, "", 8)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(40, 4, _safe(f"{label} {pct}/100"), ln=True)
+    x, y, w = pdf.l_margin, pdf.get_y(), _page_w(pdf)
+    pdf.set_fill_color(20, 22, 28)
+    pdf.rect(x, y, w, 2.6, style="F")
+    pdf.set_fill_color(*col)
+    pdf.rect(x, y, w * pct / 100.0, 2.6, style="F")
+    pdf.set_y(y + 4)
+
+
+def _persona_block(pdf, family: str, report: dict) -> None:
+    """#707 — Cyberpunk-Netrunner character sheet header for the PDF."""
+    p = report.get("persona") or {}
+    pdf.set_font(family, "B", 12)
+    pdf.set_text_color(0, 212, 255)
+    pdf.cell(0, 6, _safe("🎮 FICHE NETRUNNER"), ln=True)
+    pdf.set_font(family, "B", 11)
+    pdf.set_text_color(0, 212, 255)
+    pdf.cell(0, 6, _safe(f"{p.get('emoji','')} {p.get('tag','?')}"), ln=True)
+    pdf.set_font(family, "", 9)
+    pdf.set_text_color(150, 120, 230)
+    pdf.cell(0, 5, _safe(f"Classe {p.get('klass','?')}  ·  Niveau {p.get('level','?')}  ·  {p.get('align','')}"), ln=True)
+    pdf.ln(1)
+    _persona_bar(pdf, family, "ICE / integrite", p.get("hp", 0), (0, 255, 65))
+    _persona_bar(pdf, family, "Exposition", p.get("exposure", 0), (255, 179, 71))
+    pdf.set_font(family, "", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(0, 4, _safe(f"XP {p.get('xp',0):,} Ko echanges (7j)"), ln=True)
+    pdf.ln(1)
+    # 4 attribute widgets
+    y = pdf.get_y()
+    bw = (_page_w(pdf) - 6) / 4
+    bh = 17
+    for i, a in enumerate((p.get("attrs") or [])[:4]):
+        x = pdf.l_margin + i * (bw + 2)
+        _widget(pdf, family, x, y, bw, bh, a.get("icon", "?"),
+                str(a.get("v", 0)), a.get("name", "")[:10], (15, 30, 40), fg=(0, 212, 255))
+    pdf.set_y(y + bh + 2)
+    # inventory + bestiary
+    _kv(pdf, "Inventaire",
+        "  ".join(f"{it.get('name','')} {'OK' if it.get('on') else 'x'}" for it in (p.get("inventory") or [])))
+    best = report.get("bestiary") or []
+    if best:
+        _kv(pdf, "Bestiaire",
+            "  ·  ".join(f"{b.get('label','?')[:14]} x{b.get('count',0)}" for b in best[:4]))
+    pdf.ln(2)
 
 
 def _dashboard_hero(pdf, family: str, report: dict) -> None:
