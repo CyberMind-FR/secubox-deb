@@ -28,6 +28,18 @@
 - [ ] Glyphes drapeaux régionaux → lettres (police embarquée). Option : drapeaux PNG.
 - [ ] Chiffres espacés dans certaines cellules (fallback police).
 
+### ⬜ APK on-device #685/#686 — NON-ROOT ONLY (plan verrouillé, à faire)
+> Décision 2026-06-22 : cible **non-root uniquement** ; chemin root abandonné.
+> Plan détaillé : commentaire #685.
+- [ ] **VpnService in-app** (`com.wireguard.android:tunnel` / GoBackend wireguard-go)
+  — l'APK EST le client WG, plus de Play Store, détection tunnel in-app fiable.
+- [ ] **CA en DER** (fix « nom de cert vide » du KeyChain intent) + `network-security-config`
+  pour que la WebView in-app fasse confiance au CA ca-wg.
+- [ ] Retirer RootShell/RootOnboard/BootReceiver ; manifest VpnService + consent VPN.
+- [ ] Limite Android : pas de CA **système** sans root → MITM système impossible ;
+  surface « safe browsing » = WebView in-app. À documenter.
+- [ ] Build via CI `build-android-apk` + **test sur appareil** (gros build, itératif).
+
 ---
 
 ## 🔥 P0 — Immediate (in flight)
