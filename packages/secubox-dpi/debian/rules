@@ -1,8 +1,34 @@
 #!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-dpi — DPI dashboard (Python) + R3 exfil collector (Go)
+#
+# The per-device cloud-exfiltration collector (#687) is a pure-stdlib Go binary
+# cross-built for arm64, fully offline (no module download): the collector has
+# no external deps so no vendor tree is needed. GOTOOLCHAIN=local pins the build
+# to the distro Go; GOPROXY=off forbids any network. CI cross-builds the same.
+export DH_VERBOSE = 1
+
+export GOOS = linux
+export GOARCH = arm64
+export CGO_ENABLED = 0
+export GOPROXY = off
+export GOTOOLCHAIN = local
+# Keep the Go build/module cache inside the build tree (sandbox-friendly).
+export GOCACHE = $(CURDIR)/_gocache
+export GOPATH  = $(CURDIR)/_gopath
+
 %:
 	dh $@
 
+override_dh_auto_build:
+	cd collector && go build -trimpath -ldflags=-s -o secubox-dpi-collector .
+
+# The arm64 cross-binary cannot run its tests on the build host; CI runs Go
+# unit tests on the host arch instead.
+override_dh_auto_test:
+
 override_dh_auto_install:
+	# Python API + dashboard (arch-independent payload, shipped in the arm64 deb)
 	install -d debian/secubox-dpi/usr/lib/secubox/dpi/
 	cp -r api debian/secubox-dpi/usr/lib/secubox/dpi/
 	install -d debian/secubox-dpi/usr/share/secubox/www
@@ -12,3 +38,15 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-dpi/etc/nginx/secubox.d
 	[ -f nginx/dpi.conf ] && cp nginx/dpi.conf debian/secubox-dpi/etc/nginx/secubox.d/ || true
+	# #687 R3 exfil pipeline: Go collector + capture loop
+	install -d debian/secubox-dpi/usr/sbin
+	install -m 0755 collector/secubox-dpi-collector debian/secubox-dpi/usr/sbin/secubox-dpi-collector
+	install -m 0755 sbin/secubox-dpi-flowcap        debian/secubox-dpi/usr/sbin/secubox-dpi-flowcap
+	# flowcap unit — installed into the tree so dh_installsystemd auto-enables it
+	install -d debian/secubox-dpi/usr/lib/systemd/system
+	install -m 0644 systemd/secubox-dpi-flowcap.service \
+	  debian/secubox-dpi/usr/lib/systemd/system/secubox-dpi-flowcap.service
+
+override_dh_auto_clean:
+	rm -f collector/secubox-dpi-collector
+	rm -rf _gocache _gopath

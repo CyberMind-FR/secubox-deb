@@ -64,6 +64,23 @@ async def health_check():
     """Public health check endpoint for sidebar status."""
     return {"status": "ok", "module": "deb"}
 
+
+@app.get("/exfil")
+async def exfil_state():
+    """#687 Phase 2 — per-device cloud-exfiltration state produced by the Go
+    collector (secubox-dpi-flowcap → secubox-dpi-collector). Fail-empty so the
+    dashboard never errors before the first capture window completes."""
+    import json as _json
+    from pathlib import Path as _P
+    p = _P("/var/lib/secubox/dpi/state.json")
+    try:
+        if p.exists():
+            return _json.loads(p.read_text())
+    except Exception as e:  # pragma: no cover
+        return {"generated_at": 0, "devices": [], "alerts": [], "error": str(e)}
+    return {"generated_at": 0, "devices": [], "alerts": [], "alert_count": 0,
+            "note": "no capture window completed yet (or wg-toolbox idle)"}
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("dpi")

@@ -7,6 +7,10 @@ case "$1" in
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
+    # #687 exfil collector state dir — collector (root) writes state.json 0644,
+    # dpi API (secubox) reads it; keep 0755 so secubox can traverse.
+    install -d -o root -g root -m 0755 /var/lib/secubox/dpi
+    install -d -o root -g root -m 0755 /run/secubox/dpi
     systemctl daemon-reload
     systemctl enable secubox-dpi.service
     systemctl start  secubox-dpi.service || true

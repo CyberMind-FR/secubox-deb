@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-dpi :: flow capture loop (#687, Phase 2)
+#
+# Captures nDPI flow records off the R3 tap (wg-toolbox) in fixed windows via
+# ndpiReader (-C CSV), then hands each batch to the Go collector for device
+# attribution + cloud-exfiltration scenarios. ndpiReader = the lean C nDPI
+# engine (PoC producer; an nDPId JSON-socket daemon is the production upgrade).
+set -euo pipefail
+readonly MODULE="secubox-dpi-flowcap"
+
+IFACE="${SECUBOX_DPI_IFACE:-wg-toolbox}"
+WINDOW="${SECUBOX_DPI_WINDOW:-60}"
+CSV="${SECUBOX_DPI_CSV:-/run/secubox/dpi/flows.csv}"
+COLLECTOR="${SECUBOX_DPI_COLLECTOR:-/usr/sbin/secubox-dpi-collector}"
+
+mkdir -p "$(dirname "$CSV")" /var/lib/secubox/dpi
+
+if ! command -v ndpiReader >/dev/null 2>&1; then
+    echo "[$MODULE] ndpiReader missing (apt install libndpi-bin) — idle" >&2
+    sleep 3600; exit 0
+fi
+
+echo "[$MODULE] capturing $IFACE in ${WINDOW}s windows → $COLLECTOR"
+while true; do
+    # one capture window → CSV (niced; nDPI is ~1% CPU but the board is busy)
+    nice -n 15 ndpiReader -i "$IFACE" -s "$WINDOW" -C "$CSV" >/dev/null 2>&1 || true
+    if [ -s "$CSV" ]; then
+        nice -n 15 "$COLLECTOR" "$CSV" >/dev/null 2>&1 || \
+            echo "[$MODULE] collector run failed" >&2
+    fi
+done

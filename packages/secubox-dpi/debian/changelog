@@ -1,3 +1,19 @@
+secubox-dpi (1.1.0-1~bookworm1) bookworm; urgency=low
+
+  * #687 Phase 2/3: ship the per-device R3 cloud-exfiltration pipeline as a
+    proper package — no more manual scp deploys.
+    - Build the pure-stdlib Go collector (secubox-dpi-collector) offline for
+      arm64 in debian/rules (GOTOOLCHAIN=local, GOPROXY=off).
+    - Ship sbin/secubox-dpi-flowcap (ndpiReader capture loop) +
+      secubox-dpi-flowcap.service (auto-enabled), Nice 15 / MemoryMax 256M.
+    - GET /api/v1/dpi/exfil serves the collector state; dashboard gains the
+      "Cloud Exfiltration Watch" panel with per-device service categorization
+      (cloud/filehost/messaging/ai/media/game/social/adult).
+  * Architecture: all -> arm64 (now ships a compiled collector).
+  * Depends: libndpi-bin (provides ndpiReader); Build-Depends: golang-go.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 22 Jun 2026 09:30:00 +0000
+
 secubox-dpi (1.0.5-1~bookworm1) bookworm; urgency=low
 
   * Clarify Description: this is the netifyd-backed analytics layer
