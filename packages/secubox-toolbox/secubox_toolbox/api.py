@@ -2562,6 +2562,7 @@ async def report_me(request: Request) -> Response:
         mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
+    data["dpi_exfil"] = _dpi_stats(mac_hash)  # #701 — DPI parity with the HTML report
     pdf_bytes = reports.render_pdf(data)
     fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
     return Response(
