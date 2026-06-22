@@ -1,0 +1,4 @@
+# debian/rules build artifacts (Go collector + module caches)
+collector/secubox-dpi-collector
+_gocache/
+_gopath/
