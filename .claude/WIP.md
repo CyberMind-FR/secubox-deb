@@ -20,9 +20,9 @@ Session livrée intégralement sur master + déployée. Détail dans HISTORY 202
   troncature >8MiB (#697, Gmail OK) ; splice own-domain **rejeté** (#688, on intercepte tout).
 
 ### ⬜ Next Up (différé)
-- **DPI Phase 3** — ✅ enrichissement ASN (#719, `secubox-dpi 1.1.3`, live) ; reste :
-  démon nDPId (socket JSON) en remplacement du PoC ndpiReader, historique SQLite +
-  timeline, packaging du dashboard.
+- **DPI Phase 3** — ✅ enrichissement ASN (#719, 1.1.3) · ✅ historique + timeline
+  (#721, 1.1.4, `history.json` 14j + `/history` + panneau dashboard) ; **reste seul** :
+  démon nDPId (socket JSON) en remplacement du PoC ndpiReader.
 - **#685 APK on-device** — install auto CA + handoff WG + détection tunnel (en attente
   décision rooted vs non-root du user).
 - **Cosmétique PDF** — glyphes drapeaux régionaux dégradent en lettres (police embarquée) ;

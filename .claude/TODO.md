@@ -13,8 +13,11 @@
 ### DPI Phase 3
 - [x] Enrichissement **ASN** (GeoLite2-ASN) pour l'egress sans SNI — **#719 mergé, live**
   (`secubox-dpi 1.1.3`, maxminddb-golang vendored).
-- [ ] Démon **nDPId** (socket JSON) à la place du PoC ndpiReader.
-- [ ] Historique **SQLite** + timeline par device ; dashboard UI ; packaging.
+- [x] **Historique + timeline par device** — **#721 mergé, live** (`secubox-dpi 1.1.4`,
+  buckets quotidiens `history.json` 14j + `/api/v1/dpi/history` + panneau Timeline
+  dashboard). NB : JSON daily buckets (pas SQLite — pas de driver CGO dans le binaire
+  statique ; SQL riche reportable si besoin).
+- [ ] Démon **nDPId** (socket JSON) à la place du PoC ndpiReader — reste seul.
 
 ### ⬜ Cosmétique report PDF (non bloquant)
 - [ ] Glyphes drapeaux régionaux → lettres (police embarquée). Option : drapeaux PNG.
