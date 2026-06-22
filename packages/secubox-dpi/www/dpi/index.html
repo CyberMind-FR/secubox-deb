@@ -609,6 +609,31 @@
             foot.textContent = data.generated_at
                 ? `Last capture: ${agoStr(data.generated_at)} · ${devices.length} device(s) · ${alerts.length} alert(s)`
                 : (data.note || 'no capture window completed yet');
+
+            // #695 fill the list cards from the same /exfil rollups (real DPI engine)
+            const fillList = (id, rows, render, empty) => {
+                const el = document.getElementById(id); if (!el) return;
+                el.innerHTML = (rows && rows.length) ? rows.map(render).join('')
+                    : `<p style="color: var(--text-dim);">${empty}</p>`;
+            };
+            fillList('top-apps', data.top_apps, a => `
+                <div class="app-item"><span>${a.name}</span>
+                    <span class="bytes">${formatBytes(a.bytes)} · ${a.flows}f</span></div>`,
+                'No data');
+            fillList('top-protocols', data.top_protocols, p => `
+                <div class="app-item"><span>${p.name}</span>
+                    <span class="bytes">${formatBytes(p.bytes)} · ${p.flows}f</span></div>`,
+                'No data');
+            fillList('bandwidth-devices', devices, d => `
+                <div class="app-item"><span style="font-family:monospace;">📟 ${shortDev(d.device)}</span>
+                    <span class="bytes">↑${formatBytes(d.up_bytes)} ↓${formatBytes(d.down_bytes||0)}</span></div>`,
+                'No data');
+            fillList('active-flows', data.active_flows, f => {
+                const m = catMeta(f.category); const name = f.service || f.dst;
+                return `<div class="app-item"><span><span title="${f.category||'other'}">${m.icon}</span> ${name}
+                    <span style="color:var(--text-dim);">${f.proto||''}</span></span>
+                    <span class="bytes">↑${formatBytes(f.up_bytes)} ↓${formatBytes(f.down_bytes)}</span></div>`;
+            }, 'No active flows');
         }
 
         async function setupMirred() { const r = await api('/setup_mirred', 'POST'); alert(r.error ? 'Error: ' + r.error : 'Mirred configured'); loadStatus(); }
@@ -631,11 +656,7 @@
 
         function refreshAll() {
             loadStatus();
-            loadExfil();
-            loadTopApps();
-            loadTopProtocols();
-            loadBandwidthDevices();
-            loadActiveFlows();
+            loadExfil();   // #695: also fills Top Apps/Protocols/Bandwidth/Active-Flows from the exfil engine
             loadBlockRules();
         }
 
