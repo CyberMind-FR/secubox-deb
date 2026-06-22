@@ -1,3 +1,14 @@
+secubox-ndpid (1.1.0-1~bookworm1) bookworm; urgency=low
+
+  * #722 Phase 3 — nDPId daemon build pipeline: .github/workflows/build-ndpid.yml
+    does a QEMU arm64 native build (bundled libnDPI via cmake -DBUILD_NDPI=ON) and
+    commits nDPId + nDPIsrvd to bin/. Package now Architecture: arm64, ships those
+    to /usr/sbin (guarded), Depends libpcap0.8 (dropped the external ndpid dep).
+    Daemon service + secubox-dpi-flowcap JSON cutover land in the follow-on once
+    CI produces a validated binary.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 22 Jun 2026 14:10:00 +0000
+
 secubox-ndpid (1.0.1-1~bookworm1) bookworm; urgency=low
 
   * Rewrite Description to identify this as the nDPId-engine DPI

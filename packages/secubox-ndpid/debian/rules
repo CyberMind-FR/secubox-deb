@@ -13,3 +13,9 @@ override_dh_auto_install:
 	[ -f config/ndpid.toml ] && install -m 644 config/ndpid.toml debian/secubox-ndpid/etc/secubox/ || true
 	install -d debian/secubox-ndpid/usr/bin
 	[ -f scripts/ndpidctl ] && install -m 755 scripts/ndpidctl debian/secubox-ndpid/usr/bin/ || true
+	# #722 — nDPId daemon + JSON distributor (arm64, built by build-ndpid.yml and
+	# committed to bin/). Guarded so the package still builds before CI populates
+	# bin/; once present they ship to /usr/sbin.
+	install -d debian/secubox-ndpid/usr/sbin
+	[ -f bin/nDPId ]    && install -m 755 bin/nDPId    debian/secubox-ndpid/usr/sbin/nDPId    || true
+	[ -f bin/nDPIsrvd ] && install -m 755 bin/nDPIsrvd debian/secubox-ndpid/usr/sbin/nDPIsrvd || true
