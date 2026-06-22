@@ -346,6 +346,19 @@
                 </div>
             </div>
 
+            <!-- #687 — per-device cloud exfiltration watch (R3 DPI) -->
+            <div class="card" id="exfil-card" style="border-color: var(--p31-decay);">
+                <div class="card-header">
+                    <h2>🛰️ Cloud Exfiltration Watch <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— per-device egress on R3 (wg-toolbox)</span></h2>
+                    <span class="badge" id="exfil-badge">-</span>
+                </div>
+                <div id="exfil-alerts" style="margin-bottom: 1rem;"></div>
+                <div id="exfil-devices">
+                    <p class="empty">Loading…</p>
+                </div>
+                <p id="exfil-foot" style="color: var(--text-dim); font-size: 0.7rem; margin-top: 0.75rem;"></p>
+            </div>
+
             <div class="grid-2">
                 <div class="card">
                     <div class="card-header"><h2>📊 Top Applications</h2></div>
@@ -498,6 +511,99 @@
             `).join('') : '<p style="color: var(--text-dim);">No rules</p>';
         }
 
+        const EXFIL_KINDS = {
+            exfil_volume:           { label: 'BULK UPLOAD',   cls: 'badge-red',    icon: '⬆️' },
+            new_cloud:              { label: 'NEW DEST',      cls: 'badge-yellow', icon: '☁️' },
+            beaconing:              { label: 'BEACONING',     cls: 'badge-purple', icon: '📡' },
+            unclassified_external:  { label: 'UNCLASSIFIED',  cls: 'badge-amber',  icon: '❔' },
+        };
+
+        // service category → icon + badge class (exfil-relevant cats are warm/red)
+        const CATEGORY = {
+            cloud:     { icon: '☁️', cls: 'badge-red',    exfil: true  },
+            filehost:  { icon: '📦', cls: 'badge-red',    exfil: true  },
+            messaging: { icon: '💬', cls: 'badge-amber',  exfil: true  },
+            ai:        { icon: '🤖', cls: 'badge-purple', exfil: true  },
+            media:     { icon: '🎬', cls: 'badge-cyan',   exfil: false },
+            game:      { icon: '🎮', cls: 'badge-green',  exfil: false },
+            social:    { icon: '👥', cls: 'badge-blue',   exfil: false },
+            adult:     { icon: '🔞', cls: 'badge-purple', exfil: false },
+        };
+        function catMeta(c) { return CATEGORY[c] || { icon: '🌐', cls: 'badge-cyan', exfil: false }; }
+
+        function shortDev(d) { return d ? d.slice(0, 8) + '…' : 'unknown'; }
+        function agoStr(ts) {
+            if (!ts) return '';
+            const s = Math.max(0, Math.floor(Date.now()/1000 - ts));
+            if (s < 90) return s + 's ago';
+            if (s < 5400) return Math.round(s/60) + 'm ago';
+            return Math.round(s/3600) + 'h ago';
+        }
+
+        async function loadExfil() {
+            const data = await api('/exfil');
+            const alertsBox = document.getElementById('exfil-alerts');
+            const devBox = document.getElementById('exfil-devices');
+            const badge = document.getElementById('exfil-badge');
+            const foot = document.getElementById('exfil-foot');
+            const card = document.getElementById('exfil-card');
+
+            const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+            const devices = Array.isArray(data.devices) ? data.devices : [];
+            const count = data.alert_count || alerts.length;
+
+            badge.textContent = count > 0 ? (count + ' ALERT' + (count > 1 ? 'S' : '')) : 'CLEAR';
+            badge.className = 'badge ' + (count > 0 ? 'badge-red' : 'badge-green');
+            card.style.borderColor = count > 0 ? '#ff4466' : 'var(--p31-decay)';
+
+            // alert feed (severity-first)
+            alertsBox.innerHTML = alerts.length ? alerts.map(a => {
+                const k = EXFIL_KINDS[a.kind] || { label: (a.kind || '?').toUpperCase(), cls: 'badge-amber', icon: '⚠️' };
+                const svc = a.service || a.cloud;
+                const cm = catMeta(a.category);
+                const dest = svc ? `${cm.icon} ${svc} (${a.dst})` : a.dst;
+                return `<div class="app-item" style="border-left:3px solid #ff4466; padding-left:0.6rem;">
+                    <span><span class="badge ${k.cls}" style="margin-right:0.5rem;">${k.icon} ${k.label}</span>
+                        <span style="font-family:monospace;">${shortDev(a.device)}</span>
+                        → ${dest}
+                        <span style="color: var(--text-dim);"> · ${a.detail || ''}</span></span>
+                    <span class="bytes">↑${formatBytes(a.up_bytes)} ${agoStr(a.ts)}</span>
+                </div>`;
+            }).join('') : '<p class="empty" style="color: var(--green);">✓ No exfiltration detected</p>';
+
+            // per-device egress rollup — grouped by service category
+            devBox.innerHTML = devices.length ? devices.map(d => {
+                const svcs = d.services || d.clouds || [];
+                const rows = svcs.map(c => {
+                    const m = catMeta(c.category);
+                    const name = c.service || c.cloud || c.dst;
+                    return `<div class="app-item" style="padding:0.35rem 0.6rem; font-size:0.85rem;${m.exfil ? 'border-left:2px solid #ff4466; padding-left:0.5rem;' : ''}">
+                        <span><span title="${c.category || 'other'}">${m.icon}</span> ${name}
+                            <span style="color:var(--text-dim);">${c.proto || ''}</span></span>
+                        <span class="bytes">↑${formatBytes(c.up_bytes)} ↓${formatBytes(c.down_bytes)}</span>
+                    </div>`;
+                }).join('') || '<p class="empty" style="padding:0.35rem 0.6rem;">no classified egress</p>';
+                // category summary chips
+                const cats = d.by_category || {};
+                const chips = Object.keys(cats).sort((a,b)=>cats[b]-cats[a]).map(c => {
+                    const m = catMeta(c);
+                    return `<span class="badge ${m.cls}" style="margin-left:0.3rem; font-size:0.65rem;">${m.icon} ${c} ${cats[c]}</span>`;
+                }).join('');
+                const hot = (d.alerts && d.alerts.length) ? `<span class="badge badge-red" style="margin-left:0.5rem;">${d.alerts.length}⚠️</span>` : '';
+                return `<div style="margin-bottom:0.75rem; border:1px solid var(--tube-soft); border-radius:6px;">
+                    <div class="app-item" style="background:rgba(255,179,71,0.06); flex-wrap:wrap;">
+                        <span style="font-family:monospace; color:var(--p31-decay);">📟 ${shortDev(d.device)}${hot} ${chips}</span>
+                        <span class="bytes">${d.flows} flows · ↑${formatBytes(d.up_bytes)}</span>
+                    </div>
+                    ${rows}
+                </div>`;
+            }).join('') : '<p class="empty">No devices observed on R3 yet (tunnel idle, or first capture window pending).</p>';
+
+            foot.textContent = data.generated_at
+                ? `Last capture: ${agoStr(data.generated_at)} · ${devices.length} device(s) · ${alerts.length} alert(s)`
+                : (data.note || 'no capture window completed yet');
+        }
+
         async function setupMirred() { const r = await api('/setup_mirred', 'POST'); alert(r.error ? 'Error: ' + r.error : 'Mirred configured'); loadStatus(); }
         async function removeMirred() { await api('/remove_mirred', 'POST'); alert('Mirred removed'); loadStatus(); }
         async function restartNetifyd() { await api('/restart', 'POST'); alert('netifyd restarted'); loadStatus(); }
@@ -518,6 +624,7 @@
 
         function refreshAll() {
             loadStatus();
+            loadExfil();
             loadTopApps();
             loadTopProtocols();
             loadBandwidthDevices();

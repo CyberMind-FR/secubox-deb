@@ -42,16 +42,69 @@ var (
 	seenPath    = env("SECUBOX_DPI_SEEN", "/var/lib/secubox/dpi/seen.json")
 )
 
-// Cloud SNI suffixes that matter for exfiltration (storage / generic compute).
-var cloudSuffix = map[string]string{
-	"amazonaws.com": "AWS", "cloudfront.net": "AWS CloudFront", "s3.amazonaws.com": "AWS S3",
-	"googleapis.com": "Google", "googleusercontent.com": "Google", "storage.googleapis.com": "Google Storage",
-	"blob.core.windows.net": "Azure Blob", "core.windows.net": "Azure", "azureedge.net": "Azure CDN",
-	"digitaloceanspaces.com": "DigitalOcean", "backblazeb2.com": "Backblaze B2", "wasabisys.com": "Wasabi",
-	"dropboxusercontent.com": "Dropbox", "dropbox.com": "Dropbox", "box.com": "Box",
-	"oraclecloud.com": "Oracle Cloud", "ovh.net": "OVH", "scw.cloud": "Scaleway", "hetzner.com": "Hetzner",
-	"firebaseio.com": "Firebase", "supabase.co": "Supabase", "pastebin.com": "Pastebin",
-	"telegram.org": "Telegram", "discord.com": "Discord", "mega.nz": "MEGA", "transfer.sh": "transfer.sh",
+// svc = (category, human service name) for a known SNI suffix. Categories are
+// nDPI-style buckets so the dashboard shows *what* each device talks to, not
+// just whether it's a cloud. Exfil scenarios only fire on categories where an
+// uncontrolled upload is a real data-leak concern (see exfilCat()).
+type svc struct{ cat, name string }
+
+// SNI suffix → service. Longest matching suffix wins (deterministic), so add
+// specific suffixes (s3.amazonaws.com) alongside broad ones (amazonaws.com).
+var serviceSuffix = map[string]svc{
+	// ── cloud storage / compute (exfil-relevant) ──
+	"amazonaws.com": {"cloud", "AWS"}, "s3.amazonaws.com": {"cloud", "AWS S3"}, "cloudfront.net": {"cloud", "AWS CloudFront"},
+	"googleapis.com": {"cloud", "Google APIs"}, "googleusercontent.com": {"cloud", "Google"}, "storage.googleapis.com": {"cloud", "Google Storage"},
+	"blob.core.windows.net": {"cloud", "Azure Blob"}, "core.windows.net": {"cloud", "Azure"}, "azureedge.net": {"cloud", "Azure CDN"},
+	"digitaloceanspaces.com": {"cloud", "DigitalOcean"}, "backblazeb2.com": {"cloud", "Backblaze B2"}, "wasabisys.com": {"cloud", "Wasabi"},
+	"oraclecloud.com": {"cloud", "Oracle Cloud"}, "ovh.net": {"cloud", "OVH"}, "scw.cloud": {"cloud", "Scaleway"}, "hetzner.com": {"cloud", "Hetzner"},
+	"firebaseio.com": {"cloud", "Firebase"}, "supabase.co": {"cloud", "Supabase"},
+
+	// ── file-host / paste / drop (classic exfil channels) ──
+	"dropboxusercontent.com": {"filehost", "Dropbox"}, "dropbox.com": {"filehost", "Dropbox"}, "box.com": {"filehost", "Box"},
+	"mega.nz": {"filehost", "MEGA"}, "transfer.sh": {"filehost", "transfer.sh"}, "pastebin.com": {"filehost", "Pastebin"},
+	"wetransfer.com": {"filehost", "WeTransfer"}, "anonfiles.com": {"filehost", "AnonFiles"}, "gofile.io": {"filehost", "Gofile"},
+
+	// ── messaging (can tunnel data out) ──
+	"telegram.org": {"messaging", "Telegram"}, "t.me": {"messaging", "Telegram"}, "discord.com": {"messaging", "Discord"},
+	"discordapp.com": {"messaging", "Discord"}, "whatsapp.net": {"messaging", "WhatsApp"}, "signal.org": {"messaging", "Signal"},
+
+	// ── AI services (uploads = data egress to 3rd-party models) ──
+	"openai.com": {"ai", "OpenAI"}, "oaistatic.com": {"ai", "OpenAI"}, "anthropic.com": {"ai", "Anthropic"},
+	"claude.ai": {"ai", "Claude"}, "perplexity.ai": {"ai", "Perplexity"}, "x.ai": {"ai", "xAI"}, "mistral.ai": {"ai", "Mistral"},
+
+	// ── media / streaming ──
+	"nflxvideo.net": {"media", "Netflix"}, "netflix.com": {"media", "Netflix"}, "googlevideo.com": {"media", "YouTube"},
+	"youtube.com": {"media", "YouTube"}, "ytimg.com": {"media", "YouTube"}, "ttvnw.net": {"media", "Twitch"}, "twitch.tv": {"media", "Twitch"},
+	"spotify.com": {"media", "Spotify"}, "scdn.co": {"media", "Spotify"}, "dssott.com": {"media", "Disney+"}, "disneyplus.com": {"media", "Disney+"},
+	"primevideo.com": {"media", "Prime Video"}, "aiv-cdn.net": {"media", "Prime Video"}, "deezer.com": {"media", "Deezer"},
+	"dailymotion.com": {"media", "Dailymotion"}, "vimeo.com": {"media", "Vimeo"}, "molotov.tv": {"media", "Molotov"},
+
+	// ── gaming ──
+	"steampowered.com": {"game", "Steam"}, "steamcontent.com": {"game", "Steam"}, "steamserver.net": {"game", "Steam"},
+	"epicgames.com": {"game", "Epic"}, "playstation.net": {"game", "PlayStation"}, "playstation.com": {"game", "PlayStation"},
+	"xboxlive.com": {"game", "Xbox"}, "riotgames.com": {"game", "Riot"}, "battle.net": {"game", "Battle.net"},
+	"roblox.com": {"game", "Roblox"}, "nintendo.net": {"game", "Nintendo"}, "ea.com": {"game", "EA"}, "ubisoft.com": {"game", "Ubisoft"},
+
+	// ── social ──
+	"facebook.com": {"social", "Facebook"}, "fbcdn.net": {"social", "Facebook"}, "instagram.com": {"social", "Instagram"},
+	"tiktokcdn.com": {"social", "TikTok"}, "tiktokv.com": {"social", "TikTok"}, "tiktok.com": {"social", "TikTok"},
+	"twitter.com": {"social", "X"}, "x.com": {"social", "X"}, "twimg.com": {"social", "X"}, "snapchat.com": {"social", "Snapchat"},
+	"reddit.com": {"social", "Reddit"}, "redditmedia.com": {"social", "Reddit"}, "pinterest.com": {"social", "Pinterest"},
+
+	// ── adult ──
+	"pornhub.com": {"adult", "Pornhub"}, "phncdn.com": {"adult", "Pornhub"}, "xvideos.com": {"adult", "XVideos"},
+	"xnxx.com": {"adult", "XNXX"}, "xnxx-cdn.com": {"adult", "XNXX"}, "redtube.com": {"adult", "RedTube"},
+	"youporn.com": {"adult", "YouPorn"}, "xhamster.com": {"adult", "xHamster"}, "onlyfans.com": {"adult", "OnlyFans"},
+	"chaturbate.com": {"adult", "Chaturbate"}, "stripchat.com": {"adult", "Stripchat"},
+}
+
+// exfilCat → does an uncontrolled upload to this category constitute data egress?
+func exfilCat(cat string) bool {
+	switch cat {
+	case "cloud", "filehost", "messaging", "ai":
+		return true
+	}
+	return false
 }
 
 func env(k, d string) string {
@@ -70,17 +123,24 @@ func registrable(host string) string {
 	return strings.Join(p[len(p)-2:], ".")
 }
 
-// detectCloud → provider name ("" if not a recognised cloud).
-func detectCloud(sni, dstIP string) string {
+// classify → (category, service) for a flow's SNI. Longest matching suffix
+// wins so specific entries (s3.amazonaws.com) beat broad ones (amazonaws.com).
+// Returns ("","") when the SNI is unknown.
+func classify(sni, dstIP string) (string, string) {
 	s := strings.ToLower(strings.TrimSpace(sni))
-	if s != "" {
-		for suf, name := range cloudSuffix {
-			if s == suf || strings.HasSuffix(s, "."+suf) {
-				return name
+	if s == "" {
+		return "", ""
+	}
+	bestLen := -1
+	var bestCat, bestName string
+	for suf, v := range serviceSuffix {
+		if s == suf || strings.HasSuffix(s, "."+suf) {
+			if len(suf) > bestLen {
+				bestLen, bestCat, bestName = len(suf), v.cat, v.name
 			}
 		}
 	}
-	return ""
+	return bestCat, bestName
 }
 
 func isPrivate(ip string) bool {
@@ -116,27 +176,31 @@ func loadDeviceMap() map[string]string {
 }
 
 type agg struct {
-	Device   string  `json:"device"`
-	Dst      string  `json:"dst"`
-	Cloud    string  `json:"cloud,omitempty"`
-	Proto    string  `json:"proto"`
-	Up       int64   `json:"up_bytes"`
-	Down     int64   `json:"down_bytes"`
-	Flows    int     `json:"flows"`
+	Device   string `json:"device"`
+	Dst      string `json:"dst"`
+	Category string `json:"category,omitempty"` // cloud|filehost|messaging|ai|media|game|social|adult
+	Service  string `json:"service,omitempty"`  // human service name (Netflix, AWS S3, …)
+	Cloud    string `json:"cloud,omitempty"`    // back-compat: = Service when exfilCat(Category)
+	Proto    string `json:"proto"`
+	Up       int64  `json:"up_bytes"`
+	Down     int64  `json:"down_bytes"`
+	Flows    int    `json:"flows"`
 	iatAvg   float64 // accumulators
 	iatStd   float64
 	external bool
 }
 
 type alert struct {
-	Device  string `json:"device"`
-	Kind    string `json:"kind"`
-	Dst     string `json:"dst"`
-	Cloud   string `json:"cloud,omitempty"`
-	Up      int64  `json:"up_bytes"`
-	Down    int64  `json:"down_bytes"`
-	Detail  string `json:"detail"`
-	TS      int64  `json:"ts"`
+	Device   string `json:"device"`
+	Kind     string `json:"kind"`
+	Dst      string `json:"dst"`
+	Category string `json:"category,omitempty"`
+	Service  string `json:"service,omitempty"`
+	Cloud    string `json:"cloud,omitempty"` // back-compat
+	Up       int64  `json:"up_bytes"`
+	Down     int64  `json:"down_bytes"`
+	Detail   string `json:"detail"`
+	TS       int64  `json:"ts"`
 }
 
 func main() {
@@ -187,7 +251,11 @@ func main() {
 		dstIP := get(rec, "dst_ip")
 		sni := get(rec, "server_name_sni")
 		proto := get(rec, "ndpi_proto")
-		cloud := detectCloud(sni, dstIP)
+		cat, service := classify(sni, dstIP)
+		cloud := ""
+		if exfilCat(cat) {
+			cloud = service // back-compat field, only set for exfil-relevant dests
+		}
 		dst := sni
 		if dst == "" {
 			dst = dstIP
@@ -195,7 +263,8 @@ func main() {
 		key := dev + "|" + dst
 		a := aggs[key]
 		if a == nil {
-			a = &agg{Device: dev, Dst: dst, Cloud: cloud, Proto: proto, external: !isPrivate(dstIP)}
+			a = &agg{Device: dev, Dst: dst, Category: cat, Service: service, Cloud: cloud,
+				Proto: proto, external: !isPrivate(dstIP)}
 			aggs[key] = a
 		}
 		a.Up += atoi(get(rec, "c_to_s_bytes"))
@@ -208,18 +277,26 @@ func main() {
 	var alerts []alert
 	newseen := map[string]bool{}
 	for _, a := range aggs {
-		// 1) volume exfil: lots OUT to a cloud, more out than in
-		if a.Cloud != "" && a.Up >= upExfilBytes && a.Up > a.Down {
-			alerts = append(alerts, alert{a.Device, "exfil_volume", a.Dst, a.Cloud, a.Up, a.Down,
-				fmt.Sprintf("%s envoyé vers %s", human(a.Up), a.Cloud), now})
+		base := func(kind, detail string) alert {
+			return alert{Device: a.Device, Kind: kind, Dst: a.Dst, Category: a.Category,
+				Service: a.Service, Cloud: a.Cloud, Up: a.Up, Down: a.Down, Detail: detail, TS: now}
 		}
-		// 2) new cloud destination for this device
-		if a.Cloud != "" {
-			sk := a.Device + "|" + a.Cloud
+		exfilDest := exfilCat(a.Category)
+		label := a.Service
+		if label == "" {
+			label = a.Dst
+		}
+		// 1) volume exfil: lots OUT to a cloud/filehost/ai/messaging, more out than in
+		if exfilDest && a.Up >= upExfilBytes && a.Up > a.Down {
+			alerts = append(alerts, base("exfil_volume",
+				fmt.Sprintf("%s envoyé vers %s", human(a.Up), label)))
+		}
+		// 2) new exfil-relevant destination for this device
+		if exfilDest {
+			sk := a.Device + "|" + a.Service
 			newseen[sk] = true
 			if !seen[sk] {
-				alerts = append(alerts, alert{a.Device, "new_cloud", a.Dst, a.Cloud, a.Up, a.Down,
-					"première sortie vers " + a.Cloud, now})
+				alerts = append(alerts, base("new_cloud", "première sortie vers "+label))
 			}
 		}
 		// 3) beaconing: many flows, low inter-arrival variance
@@ -227,15 +304,14 @@ func main() {
 			avg := a.iatAvg / float64(a.Flows)
 			std := a.iatStd / float64(a.Flows)
 			if avg > 0 && std/avg <= beaconCVMax {
-				alerts = append(alerts, alert{a.Device, "beaconing", a.Dst, a.Cloud, a.Up, a.Down,
-					fmt.Sprintf("%d flux périodiques (~%.0f ms)", a.Flows, avg), now})
+				alerts = append(alerts, base("beaconing",
+					fmt.Sprintf("%d flux périodiques (~%.0f ms)", a.Flows, avg)))
 			}
 		}
 		// 4) unclassified flow to an external host with notable upload
-		if a.external && a.Up >= upExfilBytes &&
+		if a.external && a.Category == "" && a.Up >= upExfilBytes &&
 			(a.Proto == "" || strings.Contains(strings.ToLower(a.Proto), "unknown")) {
-			alerts = append(alerts, alert{a.Device, "unclassified_external", a.Dst, a.Cloud, a.Up, a.Down,
-				human(a.Up) + " sortie non classifiée", now})
+			alerts = append(alerts, base("unclassified_external", human(a.Up)+" sortie non classifiée"))
 		}
 	}
 	// merge seen (persist union so new_cloud only fires once)
@@ -294,21 +370,27 @@ func saveSeen(m map[string]bool) {
 func writeState(aggs map[string]*agg, alerts []alert, now int64) {
 	// per-device rollup
 	type devstat struct {
-		Device   string  `json:"device"`
-		Flows    int     `json:"flows"`
-		UpBytes  int64   `json:"up_bytes"`
-		Clouds   []*agg  `json:"clouds"`
-		Alerts   []alert `json:"alerts"`
+		Device   string         `json:"device"`
+		Flows    int            `json:"flows"`
+		UpBytes  int64          `json:"up_bytes"`
+		Services []*agg         `json:"services"`        // all classified egress (any category)
+		Clouds   []*agg         `json:"clouds"`          // back-compat: exfil-relevant subset
+		ByCat    map[string]int `json:"by_category"`     // category → flow count
+		Alerts   []alert        `json:"alerts"`
 	}
 	devs := map[string]*devstat{}
 	for _, a := range aggs {
 		d := devs[a.Device]
 		if d == nil {
-			d = &devstat{Device: a.Device}
+			d = &devstat{Device: a.Device, ByCat: map[string]int{}}
 			devs[a.Device] = d
 		}
 		d.Flows += a.Flows
 		d.UpBytes += a.Up
+		if a.Category != "" {
+			d.Services = append(d.Services, a)
+			d.ByCat[a.Category] += a.Flows
+		}
 		if a.Cloud != "" {
 			d.Clouds = append(d.Clouds, a)
 		}
@@ -320,6 +402,10 @@ func writeState(aggs map[string]*agg, alerts []alert, now int64) {
 	}
 	list := make([]*devstat, 0, len(devs))
 	for _, d := range devs {
+		sort.Slice(d.Services, func(i, j int) bool { return d.Services[i].Up > d.Services[j].Up })
+		if len(d.Services) > topN {
+			d.Services = d.Services[:topN]
+		}
 		sort.Slice(d.Clouds, func(i, j int) bool { return d.Clouds[i].Up > d.Clouds[j].Up })
 		if len(d.Clouds) > topN {
 			d.Clouds = d.Clouds[:topN]
