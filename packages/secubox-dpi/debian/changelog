@@ -1,3 +1,11 @@
+secubox-dpi (1.1.4-1~bookworm1) bookworm; urgency=low
+
+  * #720 Phase 3 — per-device DAILY history buckets (collector history.json, 14d)
+    + GET /api/v1/dpi/history (per-device or board-wide timeline) + dashboard
+    "Timeline" panel (flux/jour, red bar = alert day).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 22 Jun 2026 13:45:00 +0000
+
 secubox-dpi (1.1.3-1~bookworm1) bookworm; urgency=low
 
   * #718 Phase 3 — ASN enrichment: classify SNI-less flows (IP-only / QUIC,
