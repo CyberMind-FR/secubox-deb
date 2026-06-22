@@ -218,6 +218,40 @@ def render_pdf(report: dict) -> bytes:
             _bullet(pdf, f"{a.get('emoji', '?')} {a.get('app', '?')} ({a.get('category', '?')}) - {a.get('count', 0)} connexions", font_size=8)
         pdf.ln(2)
 
+    # ── DPI / EXFILTRATION (R3 per-device + overall) — #701 (parity with HTML) ──
+    dexf = report.get("dpi_exfil") or {}
+    dme = dexf.get("me") or {}
+    dall = dexf.get("all") or {}
+    if dme.get("present") or dall.get("categories"):
+        _section(pdf, "DPI / EXFILTRATION (TUNNEL R3)")
+
+        def _donut_lines(title: str, items: list) -> None:
+            if not items:
+                return
+            pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 9)
+            pdf.cell(0, 5, _ascii_safe(title), ln=True)
+            for it in items:
+                _bullet(pdf, f"{it.get('emoji', '')} {it.get('label', '?')} - {it.get('pct', 0)}%", font_size=8)
+
+        if dme.get("present"):
+            up_mo = round((dme.get("up", 0) or 0) / 1048576, 1)
+            dn_mo = round((dme.get("down", 0) or 0) / 1048576, 1)
+            _kv(pdf, "Cet appareil",
+                f"{dme.get('flows', 0)} flux | {up_mo} Mo envoyes | {dn_mo} Mo recus | {dme.get('alert_count', 0)} alertes")
+            _donut_lines("Categories de service", dme.get("categories"))
+            _donut_lines("Protocoles", dme.get("protocols"))
+            _donut_lines("Alertes exfiltration", dme.get("alerts"))
+            _donut_lines("Top destinations (envoi)", dme.get("destinations"))
+        else:
+            _bullet(pdf, "Aucune donnee DPI pour cet appareil (surfer via le tunnel R3).", font_size=8)
+
+        if dall.get("categories"):
+            pdf.ln(1)
+            _kv(pdf, "Reseau (tous appareils)",
+                f"{dall.get('devices', 0)} appareils | {dall.get('flows', 0)} flux | {dall.get('alert_count', 0)} alertes")
+            _donut_lines("Categories (global)", dall.get("categories"))
+        pdf.ln(2)
+
     # ── Geo top hosts (avec drapeaux + ASN) ──
     geo_hosts = report.get("geo_top_hosts") or []
     if geo_hosts:
