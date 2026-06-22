@@ -78,6 +78,32 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
 .tabs button:hover{color:var(--text)}
 .tab-pane{display:none}
 .tab-pane.active{display:block}
+/* ── #707 netrunner character sheet ── */
+.nr{border:1px solid #00d4ff;background:linear-gradient(135deg,rgba(0,212,255,.06),rgba(110,64,201,.06));border-radius:12px;padding:1rem;margin-bottom:1.1rem;position:relative;overflow:hidden}
+.nr::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,212,255,.025) 3px,rgba(0,212,255,.025) 4px);pointer-events:none}
+.nr>*{position:relative}
+.nr-head{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+.nr-ava{font-size:2.6rem;filter:drop-shadow(0 0 7px #00d4ff)}
+.nr-id{flex:1;min-width:160px}
+.nr-name{font-family:ui-monospace,monospace;font-size:1.15rem;color:#00d4ff;letter-spacing:.06em;text-shadow:0 0 8px rgba(0,212,255,.5)}
+.nr-class{font-size:.8rem;color:var(--violet)}
+.nr-bars{min-width:170px;flex:1}
+.nr-bar{font-size:.7rem;color:var(--dim);margin:.18rem 0}
+.nr-bar .t{height:.6rem;background:#0d0f15;border-radius:99px;overflow:hidden;margin-top:.12rem}
+.nr-bar .f{display:block;height:100%;border-radius:99px}
+.nr-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-top:.9rem}
+@media(max-width:560px){.nr-grid{grid-template-columns:1fr}}
+.nr-box{border:1px solid var(--line);border-radius:8px;padding:.6rem .7rem;background:rgba(0,0,0,.22)}
+.nr-box h3{font-size:.7rem;color:var(--violet);text-transform:uppercase;letter-spacing:.12em;margin-bottom:.4rem}
+.nr-attr{display:flex;align-items:center;gap:.4rem;font-size:.82rem;margin:.28rem 0;flex-wrap:wrap}
+.nr-attr .nm{width:6.2rem;color:var(--text)}
+.nr-attr .pips{letter-spacing:.12em;color:#00ff41;text-shadow:0 0 5px rgba(0,255,65,.4)}
+.nr-attr .vv{margin-left:auto;font-family:ui-monospace,monospace;color:#00d4ff;font-weight:700}
+.nr-attr .nt{flex-basis:100%;font-size:.64rem;color:var(--dim);padding-left:6.6rem;margin-top:-.2rem}
+.nr-inv{display:flex;flex-wrap:wrap;gap:.4rem}
+.nr-chip{font-size:.74rem;padding:.25rem .55rem;border-radius:99px;border:1px solid var(--line)}
+.nr-chip.on{border-color:#00ff41;color:#00ff41;box-shadow:0 0 8px rgba(0,255,65,.15)}
+.nr-chip.off{color:var(--dim);opacity:.55;text-decoration:line-through}
 </style></head>
 <body>
 
@@ -118,6 +144,63 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
 
 <h1>👁️ VILLAGE3B <span style="font-size:.8rem;color:var(--dim);font-weight:400">· mon rapport</span></h1>
 <p class="sub">Diagnostic live de ce que ton appareil envoie sur le réseau · anonyme · se rafraîchit tout seul</p>
+
+{# ── #707 NETRUNNER CHARACTER SHEET ── #}
+{% set p = persona or {} %}
+{% if p %}
+<div class="nr">
+  <div class="nr-head">
+    <div class="nr-ava">{{ p.emoji|default('🧑‍💻') }}</div>
+    <div class="nr-id">
+      <div class="nr-name">{{ p.tag }}</div>
+      <div class="nr-class">⟁ Classe <b style="color:var(--text)">{{ p.klass }}</b> · Niveau <b style="color:#00d4ff">{{ p.level }}</b> · {{ p.align }}</div>
+    </div>
+    <div class="nr-bars">
+      <div class="nr-bar">🧬 ICE / intégrité <b style="color:#00ff41">{{ p.hp }}</b>/100
+        <span class="t"><span class="f" style="width:{{ p.hp }}%;background:linear-gradient(90deg,#00ff41,#00d4ff)"></span></span></div>
+      <div class="nr-bar">☣️ Exposition <b style="color:var(--amber)">{{ p.exposure }}</b>/100
+        <span class="t"><span class="f" style="width:{{ p.exposure }}%;background:linear-gradient(90deg,var(--amber),var(--red))"></span></span></div>
+      <div class="nr-bar">✦ XP <b style="color:#00d4ff">{{ "{:,}".format(p.xp) }}</b> Ko échangés sur 7 j</div>
+    </div>
+  </div>
+  <div class="nr-grid">
+    <div class="nr-box">
+      <h3>⚡ Caractéristiques</h3>
+      {% for a in p.attrs %}
+      <div class="nr-attr"><span>{{ a.icon }}</span><span class="nm">{{ a.name }}</span>
+        <span class="pips">{{ '●' * a.pips }}{{ '○' * (6 - a.pips) }}</span><span class="vv">{{ a.v }}</span>
+        {% if a.note %}<span class="nt">{{ a.note }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="nr-box">
+      <h3>🎒 Inventaire · protections</h3>
+      <div class="nr-inv">
+        {% for it in p.inventory %}
+        <span class="nr-chip {{ 'on' if it.on else 'off' }}">{{ it.icon }} {{ it.name }} {{ '✓' if it.on else '✗' }}</span>
+        {% endfor %}
+      </div>
+      <h3 style="margin-top:.75rem">🐉 Bestiaire · qui te traque</h3>
+      {% if ch.trackers %}
+      <div style="font-size:.78rem">
+        {% for t in ch.trackers[:4] %}
+        <div>{{ ['👹','🧛','👺','🦠','🕷️','👾'][loop.index0 % 6] }} {{ t.label[:18] }} <b style="color:var(--violet)">×{{ t.count }}</b></div>
+        {% endfor %}
+      </div>
+      {% else %}<div class="empty">Aucun ennemi repéré 🎉</div>{% endif %}
+    </div>
+  </div>
+  {% set dme = (dpi_exfil or {}).me or {} %}
+  <div class="nr-box" style="margin-top:.8rem">
+    <h3>⚔️ Quêtes en cours · menaces</h3>
+    {% if dme.alerts %}
+      {% for q in dme.alerts[:5] %}
+      <div style="font-size:.8rem">🗡️ <b style="color:var(--amber)">{{ (q.label or q.kind or '?')|upper }}</b> — {{ q.service or q.dst or '' }} <span style="color:var(--dim)">{{ q.detail or '' }}</span></div>
+      {% endfor %}
+    {% else %}<div class="empty" style="color:var(--phos)">✓ Aucune menace active — zone sûre, runner.</div>{% endif %}
+  </div>
+</div>
+{% endif %}
 
 {# ── TABS (#699) : Pistage / DPI-Exfil / Overall ── #}
 <div class="tabs">

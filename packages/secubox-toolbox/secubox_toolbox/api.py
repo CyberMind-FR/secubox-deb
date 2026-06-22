@@ -2523,6 +2523,113 @@ def _build_pdf_donuts(mac_hash: str | None, data: dict) -> list:
     ]
 
 
+def _ua_class(ua: str) -> tuple:
+    """(emoji, label) device class from a User-Agent. Order matters: Android UAs
+    also contain 'linux', iPad desktop-mode contains 'macintosh'."""
+    u = (ua or "").lower()
+    if "android" in u:
+        return ("🤖", "Android")
+    if "iphone" in u or "ipad" in u or "ipod" in u:
+        return ("📱", "iPhone/iPad")
+    if "cros" in u:
+        return ("💻", "ChromeOS")
+    if "windows" in u:
+        return ("🪟", "PC Windows")
+    if "macintosh" in u or "mac os" in u:
+        return ("💻", "Mac")
+    if "linux" in u or "x11" in u or "ubuntu" in u or "fedora" in u:
+        return ("🐧", "Ordinateur Linux")
+    return ("🧑‍💻", "Runner")
+
+
+def _is_wg_r3_peer(mac_hash: str) -> bool:
+    """True if mac_hash == sha256(wg_pubkey)[:16] of a wg-toolbox peer → the
+    device is physically on the R3 tunnel, regardless of the stored client-level
+    preference (which can lag at r1)."""
+    import json
+    import hashlib
+    try:
+        doc = json.loads(Path("/var/lib/secubox/toolbox/wg-peers.json").read_text())
+    except Exception:
+        return False
+    for pk in (doc.get("peers") or {}):
+        if hashlib.sha256(pk.encode()).hexdigest()[:16] == mac_hash:
+            return True
+    return False
+
+
+# #707 — Cyberpunk-Netrunner character sheet. Maps the LIVE telemetry (exposure,
+# trackers, DPI cumulative, ads blocked, active protections) onto RPG stats.
+def _persona_sheet(mac_hash: str, current_level: str, gs: dict,
+                   exposure: int, dpi_e: dict, device_type: str = "",
+                   ua: str = "") -> dict:
+    me = (dpi_e or {}).get("me") or {}
+    emoji, klass = _ua_class(ua)  # live device from the request's User-Agent
+    try:
+        ads_total = int((store.ad_client_stats(mac_hash, hours=7 * 24, top=1) or {}).get("total", 0) or 0)
+    except Exception:
+        ads_total = 0
+    try:
+        from .filters import get_filters as _gf
+        tor_on = bool((_gf() or {}).get("tor_mode"))
+    except Exception:
+        tor_on = False
+
+    level = (current_level or "r1").lower()
+    if _is_wg_r3_peer(mac_hash):  # on the R3 tunnel → effective R3 regardless of stored pref
+        level = "r3"
+    lvl_bonus = {"r0": 0, "r1": 1, "r2": 3, "r3": 6}.get(level, 1)
+    inventory = [
+        {"icon": "🧅", "name": "Tunnel Tor", "on": tor_on},
+        {"icon": "🔒", "name": "Cert MITM", "on": level in ("r2", "r3")},
+        {"icon": "🛰️", "name": "WireGuard R3", "on": level == "r3"},
+        {"icon": "🚫", "name": "Ad-blocker", "on": level in ("r1", "r2", "r3")},
+    ]
+    n_prot = sum(1 for p in inventory if p["on"])
+
+    trackers = int(gs.get("total_trackers", 0) or 0)
+    n_cats = len(me.get("categories") or [])
+    n_protos = len(me.get("protocols") or [])
+    flows = int(me.get("flows", 0) or 0)
+    data_kb = int(((me.get("up", 0) or 0) + (me.get("down", 0) or 0)) / 1024)
+
+    def _clamp(v):
+        return max(3, min(20, int(v)))
+
+    defense = _clamp(6 + n_prot * 2 + lvl_bonus)
+    discretion = _clamp(20 - min(16, trackers // 2) - (0 if tor_on else 2))
+    riposte = _clamp(4 + int(ads_total ** 0.38)) if ads_total > 0 else 4
+    intel = _clamp(4 + n_cats * 2 + n_protos)
+
+    def _attr(icon, name, v, note=""):
+        return {"icon": icon, "name": name, "v": v,
+                "pips": max(0, min(6, round(v / 20 * 6))), "note": note}
+
+    hp = max(0, 100 - int(exposure or 0))
+    align = ("🛡️ Protégé" if exposure < 30 else
+             "⚖️ Exposé" if exposure < 70 else "☣️ Vulnérable")
+    return {
+        "tag": f"VILLAGE3B·#{mac_hash[:4].upper()}",
+        "id": mac_hash[:8],
+        "klass": klass,
+        "emoji": emoji,
+        "level": level.upper(),
+        "exposure": int(exposure or 0),
+        "hp": hp,
+        "xp": data_kb,
+        "align": align,
+        "attrs": [
+            _attr("🛡️", "DÉFENSE", defense),
+            _attr("👁️", "DISCRÉTION", discretion),
+            _attr("⚔️", "RIPOSTE", riposte, f"{ads_total} pubs tuées"),
+            _attr("🧠", "INTEL", intel, f"{n_cats} cat · {flows} flux"),
+        ],
+        "inventory": inventory,
+        "ads_total": ads_total,
+        "flows": flows,
+    }
+
+
 # NOTE: route order matters in FastAPI — specific routes (/report/me,
 # /report/me/html) MUST be declared BEFORE the catch-all /report/{token},
 # otherwise FastAPI matches /report/me with token="me" and returns 404.
@@ -2570,15 +2677,20 @@ async def report_me_html(request: Request) -> HTMLResponse:
     wg_enabled = Path("/etc/secubox/toolbox/wg/server.pubkey").exists()
     # Phase 6.D (#497) : cumulative anonymous stats for visual context
     cumulative = _cumulative_stats()
+    _level = store.get_client_level(mac_hash) if mac_hash else "r1"
+    _dpi_e = _dpi_stats(mac_hash)
     html = _env.get_template("report-live.html.j2").render(
         mac_hash=mac_hash, ip=ip,
         request_args=dict(request.query_params),
-        current_level=store.get_client_level(mac_hash) if mac_hash else "r1",
+        current_level=_level,
         wg_enabled=wg_enabled,
         cumulative=cumulative,
         graph=graph, graph_stats=gs, exposure_score=exposure_score,
         charts=_build_report_charts(graph),
-        dpi_exfil=_dpi_stats(mac_hash),
+        dpi_exfil=_dpi_e,
+        persona=_persona_sheet(mac_hash, _level, gs, exposure_score, _dpi_e,
+                               session.get("device_type", ""),
+                               request.headers.get("user-agent", "")),
         **session,
     )
     return HTMLResponse(html, headers={
@@ -2608,6 +2720,21 @@ async def report_me(request: Request) -> Response:
     data = reports.build_report_data(mac_hash, session)
     data["dpi_exfil"] = _dpi_stats(mac_hash)  # #701 — DPI parity with the HTML report
     data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 — visual donuts
+    # #707 — Netrunner persona sheet (live graph + DPI + ads + request UA)
+    try:
+        from . import social as _social
+        _graph = _social.fetch_graph(mac_hash, since_seconds=7 * 86400)
+    except Exception:
+        _graph = {"stats": {}, "nodes": [], "by_country": []}
+    _gs = _graph.get("stats") or {}
+    _exp = min(100, int((_gs.get("total_trackers", 0) or 0) * 1.5
+                        + (_gs.get("opgrade_sites", 0) or 0) * 12
+                        + (_gs.get("antibot_sites", 0) or 0) * 8))
+    _lvl = store.get_client_level(mac_hash) if mac_hash else "r1"
+    data["persona"] = _persona_sheet(mac_hash, _lvl, _gs, _exp, data["dpi_exfil"],
+                                     data.get("device_type", ""),
+                                     request.headers.get("user-agent", ""))
+    data["bestiary"] = (_build_report_charts(_graph).get("trackers") or [])[:5]
     pdf_bytes = reports.render_pdf(data)
     fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
     return Response(
