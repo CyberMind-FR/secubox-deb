@@ -6,8 +6,8 @@ Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 
 Package: secubox-ndpid
-Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), ndpid | ndpi-reader, python3-zmq
+Architecture: arm64
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), libpcap0.8
 Recommends: secubox-dpi
 Description: SecuBox nDPId — DPI dashboard with JA3/JA4 TLS fingerprinting
  nDPId-backed deep packet inspection dashboard: JA3/JA3S/JA4 TLS
