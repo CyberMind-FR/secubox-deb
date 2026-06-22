@@ -149,6 +149,10 @@ def render_pdf(report: dict) -> bytes:
     else:
         _dashboard_hero(pdf, family, report)
 
+    # ── #711 "En un coup d'œil" : trackers ring + countries/sites bars ──
+    _glance_section(pdf, family, report.get("charts") or {},
+                    int((report.get("graph_stats") or {}).get("total_trackers", 0) or 0))
+
     # Anonymous ID
     _section(pdf, "🔑 IDENTIFIANT ANONYME")
     _kv(pdf, "Hash session", report.get("mac_hash", "?"))
@@ -728,7 +732,9 @@ def _bullet(pdf, text: str, font_size: int = 9) -> None:
     pdf.multi_cell(_page_w(pdf), 5, "  - " + safe)
 
 
-# #703 — visual donut charts in the PDF (fpdf2 solid_arc sectors + white hole).
+# #703/#711 — visual donut charts in the PDF. Drawn as a true ring (annulus):
+# each segment is a THICK STROKED arc at a fixed radius, so the donut is a real
+# concentric ring, not a filled pie with a white hole punched in it.
 # RGB mirror of the HTML report palette.
 _PDF_DONUT_PALETTE = [
     (0, 221, 68), (158, 118, 255), (255, 136, 102),
@@ -737,31 +743,40 @@ _PDF_DONUT_PALETTE = [
 
 
 def _pdf_donut(pdf, x: float, y: float, w: float, title: str, hole: str, segs: list) -> None:
-    """Draw one donut (pie sectors + white centre hole) + legend inside a cell of
-    width w at (x, y). segs carry cumulative start/end percents (from _dpi_donut)."""
+    """Draw one ring donut + legend inside a cell of width w at (x, y). segs carry
+    cumulative start/end percents (from _dpi_donut)."""
     fam = getattr(pdf, "_secubox_family", "Helvetica")
     pdf.set_xy(x, y)
     pdf.set_font(fam, "B", 9)
     pdf.set_text_color(0, 90, 64)
     pdf.cell(w, 5, _ascii_safe(title)[:30], ln=False)
-    cx, cy, r, rh = x + 15, y + 23, 12.5, 8.0
+    cx, cy, rr, th = x + 15, y + 23, 9.5, 4.6  # ring mid-radius + band thickness
     if segs:
+        prev_lw = pdf.line_width
+        pdf.set_line_width(th)
+        # faint full ring underlay so rounding gaps never show the page through
+        pdf.set_draw_color(232, 234, 238)
+        try:
+            pdf.arc(cx, cy, rr, 0, 359.9, clockwise=True, style="D")
+        except Exception:
+            pass
         for i, s in enumerate(segs):
-            pdf.set_fill_color(*_PDF_DONUT_PALETTE[i % len(_PDF_DONUT_PALETTE)])
-            a0 = 90.0 - float(s.get("start", 0)) * 3.6
-            a1 = 90.0 - float(s.get("end", 0)) * 3.6
+            start, end = float(s.get("start", 0)), float(s.get("end", 0))
+            if end <= start:
+                continue
+            pdf.set_draw_color(*_PDF_DONUT_PALETTE[i % len(_PDF_DONUT_PALETTE)])
+            a0 = 90.0 - start * 3.6
+            a1 = 90.0 - end * 3.6
             try:
-                pdf.solid_arc(cx, cy, r, a0, a1, clockwise=True, style="F")
+                pdf.arc(cx, cy, rr, a0, a1, clockwise=True, style="D")
             except Exception:
                 pass
-        # centre hole (page is white)
-        pdf.set_fill_color(255, 255, 255)
-        pdf.ellipse(cx - rh, cy - rh, 2 * rh, 2 * rh, style="F")
+        pdf.set_line_width(prev_lw)
         if hole:
-            pdf.set_xy(cx - rh, cy - 2)
+            pdf.set_xy(cx - 8, cy - 2)
             pdf.set_font(fam, "", 6)
             pdf.set_text_color(110, 110, 110)
-            pdf.cell(2 * rh, 4, _ascii_safe(hole)[:8], align="C")
+            pdf.cell(16, 4, _ascii_safe(hole)[:8], align="C")
         # legend (right of the donut)
         ly = y + 8
         for i, s in enumerate(segs[:6]):
@@ -796,6 +811,54 @@ def _pdf_donut_grid(pdf, donuts: list) -> None:
                    d.get("title", ""), d.get("hole", ""), d.get("segments") or [])
     rows = (len(shown) + 1) // 2
     pdf.set_y(y0 + rows * row_h + 2)
+
+
+def _bars(pdf, family: str, title: str, rows: list, col: tuple = (0, 221, 68)) -> None:
+    """Horizontal percent bars (label · bar · count). rows = [(label, pct, count)]."""
+    rows = [r for r in (rows or []) if r]
+    if not rows:
+        return
+    pdf.set_x(pdf.l_margin)
+    pdf.set_font(family, "B", 9)
+    pdf.set_text_color(110, 64, 201)
+    pdf.cell(0, 5, _safe(title), ln=True)
+    w = _page_w(pdf)
+    lblw, valw = 40.0, 13.0
+    barw = w - lblw - valw
+    pdf.set_font(family, "", 8)
+    for (lbl, pct, cnt) in rows[:6]:
+        pct = max(0, min(100, int(pct or 0)))
+        pdf.set_x(pdf.l_margin)
+        pdf.set_text_color(40, 40, 40)
+        pdf.cell(lblw, 4.6, _safe(str(lbl))[:22], ln=False)
+        bx, by = pdf.get_x(), pdf.get_y()
+        pdf.set_fill_color(234, 236, 240)
+        pdf.rect(bx, by + 0.9, barw, 2.8, style="F")
+        pdf.set_fill_color(*col)
+        pdf.rect(bx, by + 0.9, barw * pct / 100.0, 2.8, style="F")
+        pdf.set_xy(bx + barw + 1, by)
+        pdf.set_text_color(0, 150, 60)
+        pdf.cell(valw, 4.6, str(cnt), ln=True)
+    pdf.ln(1)
+
+
+def _glance_section(pdf, family: str, charts: dict, n_trackers: int) -> None:
+    """#711 — '📊 En un coup d'œil' for the PDF: trackers ring + countries +
+    most-tracked sites bars (same content as the HTML report card)."""
+    ch = charts or {}
+    if not (ch.get("trackers") or ch.get("countries") or ch.get("sites")):
+        return
+    _section(pdf, "📊 EN UN COUP D'ŒIL")
+    y0 = pdf.get_y()
+    _pdf_donut(pdf, pdf.l_margin, y0, _page_w(pdf), "🍪 Qui te trace",
+               str(n_trackers), ch.get("trackers") or [])
+    pdf.set_y(y0 + 38)
+    _bars(pdf, family, "🌍 Vers quels pays",
+          [(f"{c.get('flag', '')} {c.get('label', '?')}", c.get("pct", 0), c.get("count", 0))
+           for c in (ch.get("countries") or [])], col=(0, 221, 68))
+    _bars(pdf, family, "🌐 Où tu es le plus pisté (traceurs/site)",
+          [(s.get("label", "?"), s.get("pct", 0), s.get("count", 0))
+           for s in (ch.get("sites") or [])], col=(158, 118, 255))
 
 
 # #709 — radial "carto" network map (TOI hub → top trackers) for the PDF.
