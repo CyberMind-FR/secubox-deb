@@ -744,8 +744,34 @@ _PDF_DONUT_PALETTE = [
 _PDF_HEX = ["#%02x%02x%02x" % c for c in _PDF_DONUT_PALETTE]
 
 
-def _mpl_donut_png(segs: list, hole: str = ""):
-    """Render a donut ring (matplotlib) to a PNG BytesIO. None if no data/mpl."""
+def _donut_ax(ax, segs: list, hole: str, title: str) -> None:
+    """Draw one donut + baked legend onto a matplotlib axes."""
+    vals, cols, labels = [], [], []
+    for i, s in enumerate(segs or []):
+        v = s.get("pct") or s.get("count") or 0
+        if v:
+            vals.append(v)
+            cols.append(_PDF_HEX[i % len(_PDF_HEX)])
+            labels.append(f"{str(s.get('label', '?'))[:16]} {s.get('pct', 0)}%")
+    if title:
+        ax.set_title(title, fontsize=9, color="#005a40", loc="left", pad=6)
+    if vals:
+        ax.pie(vals, colors=cols, startangle=90, counterclock=False,
+               wedgeprops=dict(width=0.42, edgecolor="white", linewidth=1.2))
+        if hole:
+            ax.text(0, 0, str(hole)[:8], ha="center", va="center",
+                    fontsize=9, color="#444", weight="bold")
+        ax.legend(labels, loc="center left", bbox_to_anchor=(1.0, 0.5),
+                  fontsize=7.5, frameon=False, handlelength=1.0)
+        ax.set(aspect="equal")
+    else:
+        ax.text(0.5, 0.5, "Pas de données", ha="center", va="center",
+                fontsize=8, color="#999", transform=ax.transAxes)
+        ax.axis("off")
+
+
+def _mpl_donut_png(segs: list, hole: str = "", title: str = ""):
+    """Single donut + legend → PNG BytesIO (wide, legend to the right)."""
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -753,74 +779,89 @@ def _mpl_donut_png(segs: list, hole: str = ""):
         from io import BytesIO
     except Exception:
         return None
-    vals, cols = [], []
-    for i, s in enumerate(segs or []):
-        v = s.get("pct") or s.get("count") or 0
-        if v:
-            vals.append(v)
-            cols.append(_PDF_HEX[i % len(_PDF_HEX)])
-    if not vals:
+    if not any((s.get("pct") or s.get("count")) for s in (segs or [])):
         return None
-    fig, ax = plt.subplots(figsize=(1.7, 1.7), dpi=130)
-    ax.pie(vals, colors=cols, startangle=90, counterclock=False,
-           wedgeprops=dict(width=0.42, edgecolor="white", linewidth=1.2))
-    if hole:
-        ax.text(0, 0, str(hole)[:8], ha="center", va="center",
-                fontsize=9, color="#444", weight="bold")
-    ax.set(aspect="equal")
+    fig, ax = plt.subplots(figsize=(3.6, 1.7), dpi=130)
+    _donut_ax(ax, segs, hole, title)
     buf = BytesIO()
-    fig.savefig(buf, format="png", transparent=True, bbox_inches="tight", pad_inches=0.02)
+    fig.savefig(buf, format="png", transparent=True, bbox_inches="tight", pad_inches=0.05)
     plt.close(fig)
     buf.seek(0)
     return buf
 
 
-def _pdf_donut(pdf, x: float, y: float, w: float, title: str, hole: str, segs: list) -> None:
-    """Title + embedded donut PNG (left) + text legend (right) in a cell of width w."""
-    fam = getattr(pdf, "_secubox_family", "Helvetica")
-    pdf.set_xy(x, y)
-    pdf.set_font(fam, "B", 9)
-    pdf.set_text_color(0, 90, 64)
-    pdf.cell(w, 5, _ascii_safe(title)[:30], ln=False)
-    png = _mpl_donut_png(segs, hole) if segs else None
+def _mpl_donut_grid_png(donuts: list):
+    """Up to 4 donuts as ONE 2x2 figure with baked legends → PNG BytesIO."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from io import BytesIO
+    except Exception:
+        return None
+    shown = (donuts or [])[:4]
+    if not shown:
+        return None
+    fig, axes = plt.subplots(2, 2, figsize=(7.4, 4.6), dpi=130)
+    axes = axes.flatten()
+    for ax, d in zip(axes, shown):
+        _donut_ax(ax, d.get("segments") or [], d.get("hole", ""), d.get("title", ""))
+    for ax in axes[len(shown):]:
+        ax.axis("off")
+    fig.tight_layout(w_pad=3.0, h_pad=2.0)
+    buf = BytesIO()
+    fig.savefig(buf, format="png", transparent=True, bbox_inches="tight", pad_inches=0.1)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _ensure_space(pdf, needed_mm: float) -> None:
+    """Add a page if less than needed_mm of vertical space remains."""
+    if pdf.get_y() + needed_mm > pdf.h - pdf.b_margin:
+        pdf.add_page()
+
+
+def _pdf_donut(pdf, title: str, hole: str, segs: list) -> None:
+    """Flow-based: embed a single donut+legend PNG at the current Y and advance."""
+    png = _mpl_donut_png(segs, hole, title) if segs else None
+    w = min(_page_w(pdf), 115.0)
+    h = w * 0.47
+    _ensure_space(pdf, h + 4)
+    x, y = pdf.l_margin, pdf.get_y()
     if png is not None:
         try:
-            pdf.image(png, x=x, y=y + 6, w=28, h=28)
+            pdf.image(png, x=x, y=y, w=w, h=h)
         except Exception:
             pass
-        ly = y + 8
-        for i, s in enumerate(segs[:6]):
-            pdf.set_fill_color(*_PDF_DONUT_PALETTE[i % len(_PDF_DONUT_PALETTE)])
-            pdf.rect(x + 31, ly + 0.6, 2.4, 2.4, style="F")
-            pdf.set_xy(x + 35, ly)
-            pdf.set_font(fam, "", 7)
-            pdf.set_text_color(40, 40, 40)
-            pdf.cell(w - 36, 3.5,
-                     _ascii_safe(f"{s.get('label', '?')[:16]}  {s.get('pct', 0)}%"), ln=False)
-            ly += 4
+        pdf.set_y(y + h + 2)
     else:
-        pdf.set_xy(x, y + 20)
-        pdf.set_font(fam, "", 8)
+        pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 9)
+        pdf.set_text_color(0, 90, 64)
+        pdf.cell(0, 5, _ascii_safe(title), ln=True)
+        pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "", 8)
         pdf.set_text_color(120, 120, 120)
-        pdf.cell(w, 5, "Pas de donnees", ln=False)
-    pdf.set_text_color(0)
+        pdf.cell(0, 5, "Pas de donnees", ln=True)
+        pdf.set_text_color(0)
 
 
 def _pdf_donut_grid(pdf, donuts: list) -> None:
-    """Render up to 4 donuts in a 2x2 grid."""
+    """The 4 device donuts as one embedded 2x2 image (robust, no page-break chaos)."""
     if not donuts:
         return
+    png = _mpl_donut_grid_png(donuts)
+    if png is None:
+        return
+    w = _page_w(pdf)
+    h = w * 0.62
+    _ensure_space(pdf, h + 14)
     _section(pdf, "📊 STATS DE TON APPAREIL (graphiques)")
-    y0 = pdf.get_y() + 2
-    col_w = _page_w(pdf) / 2.0
-    row_h = 42.0
-    shown = donuts[:4]
-    for i, d in enumerate(shown):
-        col, row = i % 2, i // 2
-        _pdf_donut(pdf, pdf.l_margin + col * col_w, y0 + row * row_h, col_w - 4,
-                   d.get("title", ""), d.get("hole", ""), d.get("segments") or [])
-    rows = (len(shown) + 1) // 2
-    pdf.set_y(y0 + rows * row_h + 2)
+    y0 = pdf.get_y()
+    try:
+        pdf.image(png, x=pdf.l_margin, y=y0, w=w, h=h)
+    except Exception:
+        return
+    pdf.set_y(y0 + h + 3)
 
 
 def _bars(pdf, family: str, title: str, rows: list, col: tuple = (0, 221, 68)) -> None:
@@ -858,11 +899,9 @@ def _glance_section(pdf, family: str, charts: dict, n_trackers: int) -> None:
     ch = charts or {}
     if not (ch.get("trackers") or ch.get("countries") or ch.get("sites")):
         return
+    _ensure_space(pdf, 70)
     _section(pdf, "📊 EN UN COUP D'ŒIL")
-    y0 = pdf.get_y()
-    _pdf_donut(pdf, pdf.l_margin, y0, _page_w(pdf), "🍪 Qui te trace",
-               str(n_trackers), ch.get("trackers") or [])
-    pdf.set_y(y0 + 38)
+    _pdf_donut(pdf, "🍪 Qui te trace", str(n_trackers), ch.get("trackers") or [])
     _bars(pdf, family, "🌍 Vers quels pays",
           [(f"{c.get('flag', '')} {c.get('label', '?')}", c.get("pct", 0), c.get("count", 0))
            for c in (ch.get("countries") or [])], col=(0, 221, 68))
@@ -912,9 +951,10 @@ def _carto_graph(pdf, family: str, nodes: list) -> None:
     png = _mpl_carto_png(nodes)
     if png is None:
         return
-    _section(pdf, "🗺️ CARTO — qui te piste (carte du réseau)")
     w = _page_w(pdf)
     h = w * 0.5
+    _ensure_space(pdf, h + 14)
+    _section(pdf, "🗺️ CARTO — qui te piste (carte du réseau)")
     y0 = pdf.get_y()
     try:
         pdf.image(png, x=pdf.l_margin, y=y0, w=w, h=h)
