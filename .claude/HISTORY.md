@@ -3,6 +3,55 @@
 
 ---
 
+## 2026-06-22 — DPI exfil engine + Netrunner report (HTML+PDF) + sbxmitm fixes
+
+Big session: full per-device DPI exfiltration pipeline, the kbin report reborn as a
+cyberpunk-netrunner character sheet, and two live-ops fixes on the Go MITM engine.
+All PRs merged to master and deployed live on gk2.
+
+### DPI — per-device cloud-exfiltration (#687, secubox-dpi 1.0.5 → 1.1.2)
+- **Phase 1** nDPI flow-DPI on `wg-toolbox` (ndpiReader, ~1% CPU on the Armada).
+- **Phase 2** Go collector (`secubox-dpi-collector`, pure stdlib, arm64): attributes
+  flows to devices via `sha256(wg_pubkey)[:16]`, classifies SNI into nDPI-style
+  **categories** (cloud/filehost/messaging/ai/media/game/social/adult), fires exfil
+  scenarios (`exfil_volume`, `new_cloud`, `beaconing`, `unclassified_external`).
+  Producer = `secubox-dpi-flowcap` (60s windows) → `GET /api/v1/dpi/exfil`.
+- **Dashboard** (#693/#695): "Cloud Exfiltration Watch" panel + stat cards + all list
+  cards repointed off the inactive netifyd to the live exfil engine.
+- **#692** beaconing tuned to a C2-plausible cadence (1s–1h, CV≤0.25, external).
+- **#705 cumulative 7d** — `cumulative.json` so the report shows history, not just the
+  last 60s window (was: idle device → all zeros).
+- **Packaged** `secubox-dpi 1.1.x` (arch arm64, Go built in debian/rules offline,
+  flowcap auto-enabled, `Depends: libndpi-bin`).
+
+### kbin report — Cyberpunk-Netrunner character sheet (#707, HTML + PDF)
+- **#699** report tabs (Pistage / DPI-Exfil / Overall) with donut charts.
+- **#701/#703** DPI stats + visual donut charts in the PDF (mitm/certs/ads/dpi).
+- **#707** persona sheet: class+emoji from the request UA (live device), level=R3 for
+  wg peers, ICE/Exposition bars, XP, 4 pip-bar CARACTÉRISTIQUES, Inventaire, Bestiaire,
+  Quêtes — HTML neon + PDF `_persona_block`.
+- **#709** carto hub map + emoji tables (Traceurs/Pays/DPI) in the PDF.
+- **#711/#712** "En un coup d'œil" added to the PDF.
+- **#714** charts switched to **matplotlib PNG** embeds (fpdf2 vector donuts were blank
+  in iOS/Chrome viewers).
+- **#716** donut grid → ONE combined 2×2 image (was spilling each donut/legend onto its
+  own page → 24 pages). Report back to a clean 4 pages. User: "report parfait".
+
+### sbxmitm (Go MITM engine, #662 line)
+- **#689** forged leaf cert TTL **24h → 365d** — root cause of recurring "certificat
+  expiré" on clients (cache never evicts; 24h leaves expired daily). Interception kept.
+- **#697** stop truncating responses >8MiB — `streamResponse()` streams non-injected
+  bodies verbatim; large **Gmail** messages/attachments rendered again over R3.
+- **#688** own-domain splice approach REJECTED (decision: intercept all vhosts) — reverted.
+
+### Ops notes
+- Surf-break incident: R3 mitm CA rotated 2026-06-05 → clients must re-import the CA root
+  (the "expired cert" was client-side trust, not the board).
+- R3 engine is the Go `sbxmitm` (`secubox-toolbox-ng-worker@1..4`, 10.99.1.1:8091-8094)
+  — NOT the Python mitm; restart THOSE for R3 changes.
+
+---
+
 ## 2026-06-20 — kbin Tor shipped + client releases + ad-block/mitm hardening
 
 - **#683 MERGED (PR #684)** — kbin Tor egress quick-switch (switch + nft owner-match
