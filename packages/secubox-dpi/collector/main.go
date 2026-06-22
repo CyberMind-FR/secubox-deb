@@ -52,7 +52,11 @@ var (
 	cumulPath = env("SECUBOX_DPI_CUMUL", "/var/lib/secubox/dpi/cumulative.json")
 	// #718 — ASN DB: classify SNI-less flows (IP-only/QUIC) by destination ASN.
 	asnDBPath = env("SECUBOX_DPI_ASN", "/var/lib/GeoIP/GeoLite2-ASN.mmdb")
+	// #720 — per-device DAILY history buckets for the timeline view.
+	historyPath = env("SECUBOX_DPI_HISTORY", "/var/lib/secubox/dpi/history.json")
 )
+
+const historyDays = 14 // keep two weeks of daily buckets
 
 // #718 — ASN-org name fragments that mark a destination as cloud/hosting egress
 // (lowercase substring match). Used only when there is no SNI category, so a big
@@ -396,7 +400,74 @@ func main() {
 	saveSeen(newseen)
 	writeState(aggs, alerts, now)
 	updateCumulative(aggs, alerts, now)
+	updateHistory(aggs, alerts, now)
 	fmt.Printf("collector: %d flows-agg, %d alerts @ %d\n", len(aggs), len(alerts), now)
+}
+
+// #720 — per-device DAILY history. Adds THIS window's increments to today's
+// bucket (exact, no double counting), prunes to historyDays. JSON-backed (the
+// static collector has no CGO SQLite driver); rich SQL can be layered later.
+func updateHistory(aggs map[string]*agg, alerts []alert, now int64) {
+	type bucket struct {
+		Day       string         `json:"day"`
+		Device    string         `json:"device"`
+		Flows     int            `json:"flows"`
+		UpBytes   int64          `json:"up_bytes"`
+		DownBytes int64          `json:"down_bytes"`
+		Alerts    int            `json:"alerts"`
+		ByCat     map[string]int `json:"by_category"`
+		TS        int64          `json:"ts"`
+	}
+	day := time.Unix(now, 0).UTC().Format("2006-01-02")
+	// load existing → index by day|device
+	idx := map[string]*bucket{}
+	if b, err := os.ReadFile(historyPath); err == nil {
+		var rows []*bucket
+		if json.Unmarshal(b, &rows) == nil {
+			for _, r := range rows {
+				if r.ByCat == nil {
+					r.ByCat = map[string]int{}
+				}
+				idx[r.Day+"|"+r.Device] = r
+			}
+		}
+	}
+	// add this window's per-device increments
+	for _, a := range aggs {
+		k := day + "|" + a.Device
+		bk := idx[k]
+		if bk == nil {
+			bk = &bucket{Day: day, Device: a.Device, ByCat: map[string]int{}}
+			idx[k] = bk
+		}
+		bk.Flows += a.Flows
+		bk.UpBytes += a.Up
+		bk.DownBytes += a.Down
+		if a.Category != "" {
+			bk.ByCat[a.Category] += a.Flows
+		}
+		bk.TS = now
+	}
+	for _, al := range alerts {
+		if bk := idx[day+"|"+al.Device]; bk != nil {
+			bk.Alerts++
+		}
+	}
+	// prune to historyDays, sort by day then device
+	cutoff := time.Unix(now, 0).UTC().AddDate(0, 0, -historyDays).Format("2006-01-02")
+	out := make([]*bucket, 0, len(idx))
+	for _, bk := range idx {
+		if bk.Day >= cutoff {
+			out = append(out, bk)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Day != out[j].Day {
+			return out[i].Day < out[j].Day
+		}
+		return out[i].Device < out[j].Device
+	})
+	writeJSON(historyPath, out)
 }
 
 // cumDev is the persisted per-device cumulative rollup. Superset of the state

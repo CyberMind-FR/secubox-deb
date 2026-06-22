@@ -81,6 +81,36 @@ async def exfil_state():
     return {"generated_at": 0, "devices": [], "alerts": [], "alert_count": 0,
             "note": "no capture window completed yet (or wg-toolbox idle)"}
 
+
+@app.get("/history")
+async def exfil_history(device: str = "", days: int = 14):
+    """#720 — per-device DAILY timeline from the collector history.json. Without
+    ?device, returns board-wide daily totals. Fail-empty."""
+    import json as _json
+    from pathlib import Path as _P
+    p = _P("/var/lib/secubox/dpi/history.json")
+    try:
+        rows = _json.loads(p.read_text()) if p.exists() else []
+    except Exception as e:  # pragma: no cover
+        return {"device": device, "days": [], "error": str(e)}
+    if device:
+        per = [r for r in rows if r.get("device") == device]
+        return {"device": device, "days": per[-days:]}
+    # board-wide: sum per day
+    by_day: dict = {}
+    for r in rows:
+        d = by_day.setdefault(r.get("day"), {
+            "day": r.get("day"), "flows": 0, "up_bytes": 0, "down_bytes": 0,
+            "alerts": 0, "devices": 0})
+        d["flows"] += int(r.get("flows", 0) or 0)
+        d["up_bytes"] += int(r.get("up_bytes", 0) or 0)
+        d["down_bytes"] += int(r.get("down_bytes", 0) or 0)
+        d["alerts"] += int(r.get("alerts", 0) or 0)
+        d["devices"] += 1
+    days_sorted = sorted(by_day.values(), key=lambda x: x["day"] or "")
+    return {"device": "", "days": days_sorted[-days:]}
+
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("dpi")
