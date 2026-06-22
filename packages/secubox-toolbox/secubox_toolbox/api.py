@@ -2479,6 +2479,43 @@ def _dpi_stats(mac_hash: str | None) -> dict:
     return {"me": me_stats, "all": all_stats}
 
 
+def _build_pdf_donuts(mac_hash: str | None, data: dict) -> list:
+    """#703 — assemble the 4 device-stat donuts for the PDF (mitm/certs/ads/dpi)
+    from LIVE sources (DPI collector + ad-block SQLite); the events table is
+    frozen post-#662 so we never read it. Each donut's segments carry pct +
+    cumulative start/end (via _dpi_donut)."""
+    me = (data.get("dpi_exfil") or {}).get("me") or {}
+    # ads — per-device blocked ad hosts (Go adstats → SQLite)
+    try:
+        ads = store.ad_client_stats(mac_hash, hours=24, top=6)
+    except Exception:
+        ads = {"total": 0, "top_hosts": []}
+    ads_segs = _dpi_donut([{"label": h.get("host", "?"), "emoji": "🚫",
+                            "count": int(h.get("hits", 0) or 0)} for h in ads.get("top_hosts", [])])
+    # certs — TLS-trust split from the protocol mix (what we could decrypt)
+    tls = quic = other = 0
+    for p in (me.get("protocols") or []):
+        nm = (p.get("label") or "").lower()
+        c = int(p.get("count", 0) or 0)
+        if "quic" in nm or "http3" in nm:
+            quic += c
+        elif "tls" in nm or "ssl" in nm or "https" in nm:
+            tls += c
+        else:
+            other += c
+    certs_segs = _dpi_donut([
+        {"label": "Inspecté (TLS)", "count": tls},
+        {"label": "Opaque (QUIC)", "count": quic},
+        {"label": "Autre", "count": other},
+    ])
+    return [
+        {"title": "🛰️ DPI — catégories", "hole": "DPI", "segments": me.get("categories") or []},
+        {"title": "🔍 MITM — protocoles", "hole": "proto", "segments": me.get("protocols") or []},
+        {"title": "🔒 Certs — confiance TLS", "hole": "certs", "segments": certs_segs},
+        {"title": "🚫 Pubs bloquées", "hole": str(ads.get("total", 0)), "segments": ads_segs},
+    ]
+
+
 # NOTE: route order matters in FastAPI — specific routes (/report/me,
 # /report/me/html) MUST be declared BEFORE the catch-all /report/{token},
 # otherwise FastAPI matches /report/me with token="me" and returns 404.
@@ -2563,6 +2600,7 @@ async def report_me(request: Request) -> Response:
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
     data["dpi_exfil"] = _dpi_stats(mac_hash)  # #701 — DPI parity with the HTML report
+    data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 — visual donuts
     pdf_bytes = reports.render_pdf(data)
     fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
     return Response(
