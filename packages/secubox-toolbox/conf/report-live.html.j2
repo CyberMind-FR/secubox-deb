@@ -71,6 +71,13 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
 .actions a{padding:.55rem 1rem;border:1px solid var(--phos);color:var(--phos-hot);text-decoration:none;border-radius:8px;font-size:.85rem}
 .footer{text-align:center;font-size:.66rem;color:var(--dim);margin-top:1.4rem;border-top:1px solid var(--line);padding-top:.7rem}
 .url{font-family:ui-monospace,monospace;font-size:.72rem;background:#0d0f15;padding:.12rem .35rem;border-radius:4px;margin:.1rem 0;display:block;word-break:break-all}
+/* ── tabs (#699) ── */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:1rem;flex-wrap:wrap}
+.tabs button{background:transparent;border:0;color:var(--dim);padding:.55rem .9rem;font-family:inherit;font-size:.85rem;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tabs button.active{color:var(--phos-hot);border-bottom-color:var(--phos);background:rgba(0,221,68,.06)}
+.tabs button:hover{color:var(--text)}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
 </style></head>
 <body>
 
@@ -89,8 +96,37 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
 {% set n_opgrade = gst.opgrade_sites|default(0) %}
 {% set _avatar = avatar_analysis or {} %}
 
+{# #699 — reusable donut (conic-gradient + legend) for the DPI-Exfil/Overall tabs #}
+{% macro donut(title, hole, items) %}
+{% set pal = ['#00dd44','#9e76ff','#ff8866','#66bbff','#ffb347','#ff4466'] %}
+<div>
+  <div style="font-size:.82rem;color:var(--dim);margin-bottom:.4rem">{{ title }}</div>
+  {% if items %}
+  <div class="donut-wrap">
+    <div class="donut" style="background:conic-gradient({% for t in items %}{{ pal[loop.index0 % pal|length] }} {{ t.start }}% {{ t.end }}%{% if not loop.last %},{% endif %}{% endfor %})">
+      <div class="donut-hole">{{ hole }}</div>
+    </div>
+    <div class="legend">
+      {% for t in items %}
+      <span class="row"><span class="dot" style="background:{{ pal[loop.index0 % pal|length] }}"></span>{{ t.emoji }} {{ t.label[:14] }} <b style="color:var(--text)">{{ t.pct }}%</b></span>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}<div class="empty">Pas de données</div>{% endif %}
+</div>
+{% endmacro %}
+
 <h1>👁️ VILLAGE3B <span style="font-size:.8rem;color:var(--dim);font-weight:400">· mon rapport</span></h1>
 <p class="sub">Diagnostic live de ce que ton appareil envoie sur le réseau · anonyme · se rafraîchit tout seul</p>
+
+{# ── TABS (#699) : Pistage / DPI-Exfil / Overall ── #}
+<div class="tabs">
+  <button class="active" data-tab="pistage">🍪 Pistage</button>
+  <button data-tab="dpi">🛰️ DPI-Exfil</button>
+  <button data-tab="overall">🌍 Overall</button>
+</div>
+
+<div class="tab-pane active" id="pane-pistage">
 
 {% if request_args and (request_args.get('welcome') or request_args.get('switched')) %}
 <div class="card" style="border-color:var(--phos)">
@@ -302,6 +338,57 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
   </div>
 </details>
 
+</div>{# /pane-pistage #}
+
+{# ── DPI-EXFIL TAB : this device's egress (secubox-dpi) ── #}
+{% set dme = (dpi_exfil or {}).me or {} %}
+<div class="tab-pane" id="pane-dpi">
+  <div class="kpis">
+    <div class="kpi"><div class="e">🌐</div><div class="n">{{ dme.flows|default(0) }}</div><div class="l">flux</div></div>
+    <div class="kpi"><div class="e">⬆️</div><div class="n">{{ (dme.up|default(0)/1048576)|round(1) }}</div><div class="l">Mo envoyés</div></div>
+    <div class="kpi"><div class="e">⬇️</div><div class="n">{{ (dme.down|default(0)/1048576)|round(1) }}</div><div class="l">Mo reçus</div></div>
+    <div class="kpi"><div class="e">🛰️</div><div class="n" style="color:{{ 'var(--red)' if dme.alert_count else 'var(--phos-hot)' }}">{{ dme.alert_count|default(0) }}</div><div class="l">alertes exfil</div></div>
+  </div>
+  <div class="card">
+    <h2>🛰️ Ce que cet appareil envoie dehors (DPI R3)</h2>
+    {% if dme.present %}
+    <div class="graphs">
+      {{ donut('🏷️ Catégories de service', 'par flux', dme.categories) }}
+      {{ donut('📡 Protocoles', 'octets', dme.protocols) }}
+      {{ donut('🛰️ Alertes exfiltration', 'alertes', dme.alerts) }}
+      {{ donut('🎯 Top destinations (envoi)', '↑ octets', dme.destinations) }}
+    </div>
+    <p class="help">Sorties observées sur le tunnel R3 (wg-toolbox), classées par le moteur DPI. Une grosse part « ☁️ cloud / 📦 fichier / 🤖 IA / 💬 messagerie » avec beaucoup d'envoi = fuite de données potentielle.</p>
+    {% else %}
+    <div class="empty">Aucune donnée DPI pour cet appareil — il faut surfer via le tunnel R3 (🧅) pour que le moteur observe ses sorties, et attendre une fenêtre de capture (~60 s).</div>
+    {% endif %}
+  </div>
+</div>{# /pane-dpi #}
+
+{# ── OVERALL TAB : board-wide DPI (all devices) ── #}
+{% set dall = (dpi_exfil or {}).all or {} %}
+<div class="tab-pane" id="pane-overall">
+  <div class="kpis">
+    <div class="kpi"><div class="e">📟</div><div class="n">{{ dall.devices|default(0) }}</div><div class="l">appareils</div></div>
+    <div class="kpi"><div class="e">🌐</div><div class="n">{{ dall.flows|default(0) }}</div><div class="l">flux</div></div>
+    <div class="kpi"><div class="e">🛰️</div><div class="n" style="color:{{ 'var(--red)' if dall.alert_count else 'var(--phos-hot)' }}">{{ dall.alert_count|default(0) }}</div><div class="l">alertes</div></div>
+  </div>
+  <div class="card">
+    <h2>🌍 Vue d'ensemble du réseau (tous appareils R3)</h2>
+    {% if dall.categories or dall.protocols or dall.destinations %}
+    <div class="graphs">
+      {{ donut('🏷️ Catégories de service', 'par flux', dall.categories) }}
+      {{ donut('📡 Protocoles', 'octets', dall.protocols) }}
+      {{ donut('🛰️ Alertes exfiltration', 'alertes', dall.alerts) }}
+      {{ donut('🎯 Top destinations', 'octets', dall.destinations) }}
+    </div>
+    <p class="help">Agrégat de tous les appareils derrière le tunnel R3 — utile pour repérer un usage anormal à l'échelle du réseau.</p>
+    {% else %}
+    <div class="empty">Pas encore de données DPI à l'échelle réseau (tunnel inactif ou première capture en cours).</div>
+    {% endif %}
+  </div>
+</div>{# /pane-overall #}
+
 <div class="actions">
   <a href="/report/me?mh={{ mac_hash }}">⬇ Télécharger le PDF</a>
   <a href="/social/me?mh={{ mac_hash }}">🕸️ Ma carto</a>
@@ -322,4 +409,18 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
   <a href="https://github.com/CyberMind-FR/secubox-deb" style="color:var(--dim)">github.com/CyberMind-FR/secubox-deb</a> · <a href="https://cybermind.fr" style="color:var(--dim)">cybermind.fr</a>
 </div>
 
+<script>
+// #699 tab switcher — persists the active tab across the 20s meta-refresh via #hash
+(function(){
+  function show(id){
+    document.querySelectorAll('.tab-pane').forEach(function(p){p.classList.toggle('active',p.id==='pane-'+id)});
+    document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('active',b.dataset.tab===id)});
+  }
+  document.querySelectorAll('.tabs button').forEach(function(b){
+    b.addEventListener('click',function(){ location.hash=b.dataset.tab; show(b.dataset.tab); });
+  });
+  var h=(location.hash||'').replace('#','');
+  if(h && document.getElementById('pane-'+h)) show(h);
+})();
+</script>
 </body></html>

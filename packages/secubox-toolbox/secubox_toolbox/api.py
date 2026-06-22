@@ -2386,6 +2386,99 @@ def _build_report_charts(graph: dict) -> dict:
     return {"trackers": trackers, "countries": countries, "sites": sites}
 
 
+# #699 — DPI exfil donuts for the kbin report (Pistage / DPI-Exfil / Overall
+# tabs). Read straight from the secubox-dpi collector state (same wg-hash
+# identity as the report's mac_hash). Fail-empty so the report renders before the
+# first capture window.
+_DPI_STATE_PATH = Path("/var/lib/secubox/dpi/state.json")
+_DPI_CAT_EMOJI = {
+    "cloud": "☁️", "filehost": "📦", "messaging": "💬", "ai": "🤖",
+    "media": "🎬", "game": "🎮", "social": "👥", "adult": "🔞",
+}
+_DPI_ALERT_EMOJI = {
+    "exfil_volume": "⬆️", "new_cloud": "☁️", "beaconing": "📡",
+    "unclassified_external": "❔",
+}
+
+
+def _dpi_donut(items: list, n: int = 6) -> list:
+    """top-N + pct + cumulative start/end for a CSS conic-gradient donut."""
+    items = [it for it in items if it.get("count")]
+    items.sort(key=lambda x: x["count"], reverse=True)
+    items = items[:n]
+    total = sum(x["count"] for x in items) or 1
+    cum = 0
+    for it in items:
+        it["pct"] = round(100 * it["count"] / total)
+        it["start"] = cum
+        cum += it["pct"]
+        it["end"] = cum
+    return items
+
+
+def _dpi_stats(mac_hash: str | None) -> dict:
+    """Build DPI donut data for THIS device (me) and board-wide (overall) from
+    the secubox-dpi collector state. Returns {me, all}, each with categories /
+    protocols / alerts / destinations donuts (+ summary counters)."""
+    import json
+    try:
+        st = json.loads(_DPI_STATE_PATH.read_text()) if _DPI_STATE_PATH.exists() else {}
+    except Exception:
+        st = {}
+    devices = st.get("devices") or []
+
+    def cats(bycat: dict) -> list:
+        return _dpi_donut([{"label": k, "emoji": _DPI_CAT_EMOJI.get(k, "🌐"),
+                            "count": v} for k, v in (bycat or {}).items()])
+
+    def alerts(alist: list) -> list:
+        by: dict = {}
+        for a in alist or []:
+            k = a.get("kind") or "?"
+            by[k] = by.get(k, 0) + 1
+        return _dpi_donut([{"label": k.replace("_", " "),
+                            "emoji": _DPI_ALERT_EMOJI.get(k, "⚠️"), "count": c}
+                           for k, c in by.items()])
+
+    # ── this device ──
+    me = next((d for d in devices if d.get("device") == mac_hash), None) or {}
+    me_protos: dict = {}
+    me_dests: list = []
+    for s in (me.get("services") or []):
+        p = s.get("proto") or "unknown"
+        me_protos[p] = me_protos.get(p, 0) + int(s.get("up_bytes", 0) or 0) + int(s.get("down_bytes", 0) or 0)
+        me_dests.append({"label": s.get("service") or s.get("dst") or "?",
+                         "emoji": _DPI_CAT_EMOJI.get(s.get("category"), "🌐"),
+                         "count": int(s.get("up_bytes", 0) or 0)})
+    me_stats = {
+        "present": bool(me),
+        "flows": me.get("flows", 0), "up": me.get("up_bytes", 0), "down": me.get("down_bytes", 0),
+        "alert_count": len(me.get("alerts") or []),
+        "categories": cats(me.get("by_category")),
+        "protocols": _dpi_donut([{"label": k, "emoji": "📡", "count": v} for k, v in me_protos.items()]),
+        "alerts": alerts(me.get("alerts")),
+        "destinations": _dpi_donut(me_dests),
+    }
+
+    # ── overall (board) ──
+    all_cats: dict = {}
+    for d in devices:
+        for k, v in (d.get("by_category") or {}).items():
+            all_cats[k] = all_cats.get(k, 0) + v
+    all_stats = {
+        "devices": len(devices),
+        "flows": sum(int(d.get("flows", 0) or 0) for d in devices),
+        "alert_count": st.get("alert_count", 0),
+        "categories": cats(all_cats),
+        "protocols": _dpi_donut([{"label": p.get("name"), "emoji": "📡",
+                                  "count": int(p.get("bytes", 0) or 0)} for p in (st.get("top_protocols") or [])]),
+        "alerts": alerts(st.get("alerts")),
+        "destinations": _dpi_donut([{"label": a.get("name"), "emoji": "🌐",
+                                     "count": int(a.get("bytes", 0) or 0)} for a in (st.get("top_apps") or [])]),
+    }
+    return {"me": me_stats, "all": all_stats}
+
+
 # NOTE: route order matters in FastAPI — specific routes (/report/me,
 # /report/me/html) MUST be declared BEFORE the catch-all /report/{token},
 # otherwise FastAPI matches /report/me with token="me" and returns 404.
@@ -2441,6 +2534,7 @@ async def report_me_html(request: Request) -> HTMLResponse:
         cumulative=cumulative,
         graph=graph, graph_stats=gs, exposure_score=exposure_score,
         charts=_build_report_charts(graph),
+        dpi_exfil=_dpi_stats(mac_hash),
         **session,
     )
     return HTMLResponse(html, headers={
