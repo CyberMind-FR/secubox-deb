@@ -327,22 +327,23 @@
                 </div>
             </div>
 
+            <!-- #693 headline metrics driven by the R3 exfil engine (/exfil) -->
             <div class="stats-row">
+                <div class="stat-card yellow">
+                    <div class="value" id="exfil-devices-count">0</div>
+                    <div class="label">📟 R3 Devices</div>
+                </div>
                 <div class="stat-card cyan">
-                    <div class="value" id="flow-count">0</div>
-                    <div class="label">Active Flows</div>
+                    <div class="value" id="exfil-flows-count">0</div>
+                    <div class="label">🌐 Flows (60s)</div>
                 </div>
                 <div class="stat-card green">
-                    <div class="value" id="apps-count">0</div>
-                    <div class="label">Applications</div>
+                    <div class="value" id="exfil-cats-count">0</div>
+                    <div class="label">🏷️ Categories</div>
                 </div>
-                <div class="stat-card purple">
-                    <div class="value" id="protocols-count">0</div>
-                    <div class="label">Protocols</div>
-                </div>
-                <div class="stat-card yellow">
-                    <div class="value" id="devices-count">0</div>
-                    <div class="label">Devices</div>
+                <div class="stat-card red">
+                    <div class="value" id="exfil-alert-count">0</div>
+                    <div class="label">🛰️ Exfil Alerts</div>
                 </div>
             </div>
 
@@ -446,7 +447,6 @@
             const data = await api('/top_apps?limit=10');
             const container = document.getElementById('top-apps');
             const apps = Array.isArray(data) ? data : [];
-            document.getElementById('apps-count').textContent = apps.length;
 
             container.innerHTML = apps.length > 0 ? apps.map(app => `
                 <div class="app-item">
@@ -460,7 +460,6 @@
             const data = await api('/top_protocols?limit=10');
             const container = document.getElementById('top-protocols');
             const protocols = Array.isArray(data) ? data : [];
-            document.getElementById('protocols-count').textContent = protocols.length;
 
             container.innerHTML = protocols.length > 0 ? protocols.map(proto => `
                 <div class="app-item">
@@ -474,7 +473,6 @@
             const data = await api('/bandwidth_by_device');
             const container = document.getElementById('bandwidth-devices');
             const devices = Array.isArray(data) ? data : [];
-            document.getElementById('devices-count').textContent = devices.length;
 
             container.innerHTML = devices.length > 0 ? devices.map(dev => `
                 <div class="app-item">
@@ -488,7 +486,6 @@
             const data = await api('/active_flows');
             const container = document.getElementById('active-flows');
             const flows = data.flows || [];
-            document.getElementById('flow-count').textContent = flows.length;
 
             container.innerHTML = flows.length > 0 ? flows.slice(0, 15).map(f => `
                 <div class="app-item">
@@ -555,6 +552,16 @@
             badge.textContent = count > 0 ? (count + ' ALERT' + (count > 1 ? 'S' : '')) : 'CLEAR';
             badge.className = 'badge ' + (count > 0 ? 'badge-red' : 'badge-green');
             card.style.borderColor = count > 0 ? '#ff4466' : 'var(--p31-decay)';
+
+            // #693 headline stat cards from the real DPI engine
+            const totalFlows = devices.reduce((n, d) => n + (d.flows || 0), 0);
+            const cats = new Set();
+            devices.forEach(d => Object.keys(d.by_category || {}).forEach(c => cats.add(c)));
+            const setCard = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+            setCard('exfil-devices-count', devices.length);
+            setCard('exfil-flows-count', totalFlows);
+            setCard('exfil-cats-count', cats.size);
+            setCard('exfil-alert-count', count);
 
             // alert feed (severity-first)
             alertsBox.innerHTML = alerts.length ? alerts.map(a => {
