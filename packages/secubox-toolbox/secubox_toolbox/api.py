@@ -2391,6 +2391,9 @@ def _build_report_charts(graph: dict) -> dict:
 # identity as the report's mac_hash). Fail-empty so the report renders before the
 # first capture window.
 _DPI_STATE_PATH = Path("/var/lib/secubox/dpi/state.json")
+# #705 — prefer the 7d cumulative rollup (so the report shows history, not just
+# the last 60s window); fall back to the live state.json.
+_DPI_CUMUL_PATH = Path("/var/lib/secubox/dpi/cumulative.json")
 _DPI_CAT_EMOJI = {
     "cloud": "☁️", "filehost": "📦", "messaging": "💬", "ai": "🤖",
     "media": "🎬", "game": "🎮", "social": "👥", "adult": "🔞",
@@ -2421,10 +2424,14 @@ def _dpi_stats(mac_hash: str | None) -> dict:
     the secubox-dpi collector state. Returns {me, all}, each with categories /
     protocols / alerts / destinations donuts (+ summary counters)."""
     import json
-    try:
-        st = json.loads(_DPI_STATE_PATH.read_text()) if _DPI_STATE_PATH.exists() else {}
-    except Exception:
-        st = {}
+    st = {}
+    for p in (_DPI_CUMUL_PATH, _DPI_STATE_PATH):  # #705 cumulative first, live fallback
+        try:
+            if p.exists():
+                st = json.loads(p.read_text())
+                break
+        except Exception:
+            continue
     devices = st.get("devices") or []
 
     def cats(bycat: dict) -> list:
