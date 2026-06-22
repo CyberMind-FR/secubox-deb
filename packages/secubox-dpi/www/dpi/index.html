@@ -360,6 +360,14 @@
                 <p id="exfil-foot" style="color: var(--text-dim); font-size: 0.7rem; margin-top: 0.75rem;"></p>
             </div>
 
+            <!-- #720 — per-day timeline (board-wide) -->
+            <div class="card">
+                <div class="card-header"><h2>📈 Timeline — flux/jour (14 j)</h2></div>
+                <div id="dpi-timeline" style="display:flex; align-items:flex-end; gap:4px; height:90px; padding-top:8px;">
+                    <p class="empty">Loading…</p>
+                </div>
+            </div>
+
             <div class="grid-2">
                 <div class="card">
                     <div class="card-header"><h2>📊 Top Applications</h2></div>
@@ -654,9 +662,27 @@
             loadBlockRules();
         }
 
+        async function loadTimeline() {
+            const data = await api('/history?days=14');
+            const box = document.getElementById('dpi-timeline');
+            const days = (data && data.days) || [];
+            if (!days.length) { box.innerHTML = '<p class="empty">Pas encore d\'historique (≥1 jour de capture).</p>'; return; }
+            const max = Math.max(1, ...days.map(d => d.flows || 0));
+            box.innerHTML = days.map(d => {
+                const h = Math.round(6 + 78 * (d.flows || 0) / max);
+                const dd = (d.day || '').slice(5);  // MM-DD
+                return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; min-width:0;">
+                    <span style="font-size:0.6rem; color:var(--p31-mid);">${d.flows||0}</span>
+                    <span title="${d.day}: ${d.flows||0} flux · ${d.alerts||0} alertes" style="display:block; width:100%; max-width:18px; height:${h}px; border-radius:3px 3px 0 0; background:${(d.alerts||0)>0 ? '#ff4466' : 'var(--p31-peak)'};"></span>
+                    <span style="font-size:0.55rem; color:var(--text-dim); white-space:nowrap;">${dd}</span>
+                </div>`;
+            }).join('');
+        }
+
         function refreshAll() {
             loadStatus();
             loadExfil();   // #695: also fills Top Apps/Protocols/Bandwidth/Active-Flows from the exfil engine
+            loadTimeline();
             loadBlockRules();
         }
 
