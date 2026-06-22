@@ -20,6 +20,9 @@ Session livrée intégralement sur master + déployée. Détail dans HISTORY 202
   troncature >8MiB (#697, Gmail OK) ; splice own-domain **rejeté** (#688, on intercepte tout).
 
 ### ⬜ Next Up (différé)
+- **#685/#686 APK on-device — NON-ROOT ONLY (plan verrouillé)** : VpnService in-app
+  (wireguard-go), CA en DER + network-security-config WebView, retrait du chemin root.
+  Gros build Android (CI + test device) → session dédiée. Détail : commentaire #685 + TODO.
 - **DPI Phase 3** — ✅ enrichissement ASN (#719, 1.1.3) · ✅ historique + timeline
   (#721, 1.1.4) · ❌ démon nDPId **écarté** (#722/#723 revertés) : risque perf
   (démon permanent vs fenêtres ndpiReader bornées) sur board saturée → **on garde
