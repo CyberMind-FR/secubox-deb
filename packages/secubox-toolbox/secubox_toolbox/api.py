@@ -2735,6 +2735,8 @@ async def report_me(request: Request) -> Response:
                                      data.get("device_type", ""),
                                      request.headers.get("user-agent", ""))
     data["bestiary"] = (_build_report_charts(_graph).get("trackers") or [])[:5]
+    data["carto_nodes"] = _graph.get("nodes") or []      # #709 carto + tables
+    data["carto_country"] = _graph.get("by_country") or []
     pdf_bytes = reports.render_pdf(data)
     fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
     return Response(

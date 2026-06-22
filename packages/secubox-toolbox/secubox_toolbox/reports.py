@@ -224,6 +224,30 @@ def render_pdf(report: dict) -> bytes:
     # ── DPI device donut charts (mitm/certs/ads/dpi) — #703 ──
     _pdf_donut_grid(pdf, report.get("pdf_donuts") or [])
 
+    # ── #709 carto network map + emoji data tables ──
+    carto = report.get("carto_nodes") or []
+    _carto_graph(pdf, family, carto)
+    if carto:
+        _emoji_table(pdf, family, "🍪 TRACEURS — qui te suit",
+                     [("Pays", 0.12), ("Domaine", 0.46), ("Hits", 0.14), ("Sites", 0.28)],
+                     [[n.get("country_flag", "🏴"), n.get("domain", "?"),
+                       n.get("hits", 0), f"{n.get('sites_count', 0)} sites"]
+                      for n in sorted(carto, key=lambda x: x.get("hits", 0), reverse=True)[:12]])
+    by_country = report.get("carto_country") or []
+    if by_country:
+        _emoji_table(pdf, family, "🌍 PAYS — destinations du pistage",
+                     [("Flag", 0.12), ("Pays", 0.30), ("Traceurs", 0.28), ("Hits", 0.30)],
+                     [[c.get("flag", "🏴"), c.get("country_iso", "?"),
+                       c.get("tracker_count", 0), c.get("hits", 0)]
+                      for c in by_country[:10]])
+    dme = (report.get("dpi_exfil") or {}).get("me") or {}
+    dests = dme.get("destinations") or []
+    if dests:
+        _emoji_table(pdf, family, "🛰️ DPI — top destinations (envoi)",
+                     [("Cat", 0.12), ("Service / hôte", 0.58), ("Part", 0.30)],
+                     [[d.get("emoji", "🌐"), d.get("label", "?"), f"{d.get('pct', 0)}%"]
+                      for d in dests[:10]])
+
     # ── DPI / EXFILTRATION (R3 per-device + overall) — #701 (parity with HTML) ──
     dexf = report.get("dpi_exfil") or {}
     dme = dexf.get("me") or {}
@@ -772,6 +796,70 @@ def _pdf_donut_grid(pdf, donuts: list) -> None:
                    d.get("title", ""), d.get("hole", ""), d.get("segments") or [])
     rows = (len(shown) + 1) // 2
     pdf.set_y(y0 + rows * row_h + 2)
+
+
+# #709 — radial "carto" network map (TOI hub → top trackers) for the PDF.
+def _carto_graph(pdf, family: str, nodes: list) -> None:
+    import math
+    nodes = sorted([n for n in (nodes or []) if n.get("hits")],
+                   key=lambda n: n.get("hits", 0), reverse=True)[:8]
+    if not nodes:
+        return
+    _section(pdf, "🗺️ CARTO — qui te piste (carte du réseau)")
+    cx = pdf.l_margin + _page_w(pdf) / 2.0
+    cy = pdf.get_y() + 34
+    R = 27.0
+    maxh = max(n.get("hits", 1) for n in nodes) or 1
+    pdf.set_draw_color(70, 90, 120)
+    pdf.set_line_width(0.2)
+    placed = []
+    for i, n in enumerate(nodes):
+        ang = math.radians(-90 + i * 360.0 / len(nodes))
+        x, y = cx + R * math.cos(ang), cy + R * math.sin(ang)
+        pdf.line(cx, cy, x, y)
+        placed.append((x, y, n))
+    for (x, y, n) in placed:
+        r = 1.6 + 3.2 * (n.get("hits", 1) / maxh)
+        pdf.set_fill_color(255, 80, 110)
+        pdf.ellipse(x - r, y - r, 2 * r, 2 * r, style="F")
+        lbl = f"{n.get('country_flag','')} {(n.get('domain','') or '?')[:12]}"
+        pdf.set_font(family, "", 6)
+        pdf.set_text_color(90, 90, 90)
+        pdf.set_xy(x - 17, (y + r + 0.5) if y >= cy else (y - r - 3.5))
+        pdf.cell(34, 3, _safe(lbl), align="C")
+    pdf.set_fill_color(0, 212, 255)
+    pdf.ellipse(cx - 4.5, cy - 4.5, 9, 9, style="F")
+    pdf.set_xy(cx - 9, cy - 1.6)
+    pdf.set_font(family, "B", 6)
+    pdf.set_text_color(10, 10, 15)
+    pdf.cell(18, 3, "TOI", align="C")
+    pdf.set_text_color(0)
+    pdf.set_y(cy + R + 7)
+
+
+# #709 — generic emoji data table. cols = [(header, width_fraction), ...]
+def _emoji_table(pdf, family: str, title: str, cols: list, rows: list) -> None:
+    if not rows:
+        return
+    _section(pdf, title)
+    w = _page_w(pdf)
+    widths = [w * f for (_, f) in cols]
+    pdf.set_font(family, "B", 8)
+    pdf.set_fill_color(16, 22, 30)
+    pdf.set_text_color(0, 212, 255)
+    pdf.set_x(pdf.l_margin)
+    for (h, _), cw in zip(cols, widths):
+        pdf.cell(cw, 5.5, _safe(h), border=0, fill=True)
+    pdf.ln()
+    pdf.set_font(family, "", 8)
+    pdf.set_text_color(35, 35, 35)
+    for r in rows:
+        pdf.set_x(pdf.l_margin)
+        for val, cw in zip(r, widths):
+            cap = max(6, int(cw / 1.7))
+            pdf.cell(cw, 5, _safe(str(val))[:cap], border="B")
+        pdf.ln()
+    pdf.ln(2)
 
 
 def _render_text_fallback(report: dict) -> str:
