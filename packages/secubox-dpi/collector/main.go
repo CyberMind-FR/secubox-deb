@@ -33,7 +33,12 @@ const (
 	upExfilBytes   = 5 << 20 // >=5 MB outbound to a cloud → volume alert
 	beaconMinFlows = 6       // >=6 flows same dst → candidate beacon
 	beaconCVMax    = 0.25    // iat coefficient-of-variation <= 0.25 → periodic
-	topN           = 12
+	// #692 — period band (ndpiReader iat is in ms). Real C2 beacons sit at
+	// seconds-to-minutes; sub-second cadence is app polling / media chunks /
+	// websocket keepalives, not exfil. Only flag a steady period in this band.
+	beaconMinIntervalMs = 1000.0    // >=1 s between flows
+	beaconMaxIntervalMs = 3600000.0 // <=1 h between flows
+	topN                = 12
 )
 
 var (
@@ -299,13 +304,16 @@ func main() {
 				alerts = append(alerts, base("new_cloud", "première sortie vers "+label))
 			}
 		}
-		// 3) beaconing: many flows, low inter-arrival variance
-		if a.Flows >= beaconMinFlows {
+		// 3) beaconing: many flows, low inter-arrival variance, at a C2-plausible
+		//    cadence (1 s–1 h), to an external dest that is exfil-relevant or
+		//    unclassified. Excludes sub-second app chatter and periodic fetches
+		//    to known media/game/social CDNs (#692).
+		if a.Flows >= beaconMinFlows && a.external && (exfilDest || a.Category == "") {
 			avg := a.iatAvg / float64(a.Flows)
 			std := a.iatStd / float64(a.Flows)
-			if avg > 0 && std/avg <= beaconCVMax {
+			if avg >= beaconMinIntervalMs && avg <= beaconMaxIntervalMs && std/avg <= beaconCVMax {
 				alerts = append(alerts, base("beaconing",
-					fmt.Sprintf("%d flux périodiques (~%.0f ms)", a.Flows, avg)))
+					fmt.Sprintf("%d flux périodiques (~%.1f s)", a.Flows, avg/1000)))
 			}
 		}
 		// 4) unclassified flow to an external host with notable upload

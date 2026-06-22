@@ -1,3 +1,15 @@
+secubox-dpi (1.1.1-1~bookworm1) bookworm; urgency=low
+
+  * #692 collector: beaconing scenario now requires a C2-plausible cadence
+    (1 s–1 h mean interval) to an external exfil-relevant/unclassified dest —
+    drops sub-second app/media chatter that previously raised false positives
+    (e.g. "~39 ms" alerts). Detail now reads in seconds.
+  * #693 dashboard: headline stat cards repointed to the real R3 exfil engine
+    (R3 devices / captured flows / categories / exfil alerts) instead of the
+    legacy netifyd widgets (netifyd is not used on the R3 boards).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 22 Jun 2026 10:15:00 +0000
+
 secubox-dpi (1.1.0-1~bookworm1) bookworm; urgency=low
 
   * #687 Phase 2/3: ship the per-device R3 cloud-exfiltration pipeline as a
