@@ -218,6 +218,9 @@ def render_pdf(report: dict) -> bytes:
             _bullet(pdf, f"{a.get('emoji', '?')} {a.get('app', '?')} ({a.get('category', '?')}) - {a.get('count', 0)} connexions", font_size=8)
         pdf.ln(2)
 
+    # ── DPI device donut charts (mitm/certs/ads/dpi) — #703 ──
+    _pdf_donut_grid(pdf, report.get("pdf_donuts") or [])
+
     # ── DPI / EXFILTRATION (R3 per-device + overall) — #701 (parity with HTML) ──
     dexf = report.get("dpi_exfil") or {}
     dme = dexf.get("me") or {}
@@ -643,6 +646,76 @@ def _bullet(pdf, text: str, font_size: int = 9) -> None:
             parts.append(word)
     safe = " ".join(parts)
     pdf.multi_cell(_page_w(pdf), 5, "  - " + safe)
+
+
+# #703 — visual donut charts in the PDF (fpdf2 solid_arc sectors + white hole).
+# RGB mirror of the HTML report palette.
+_PDF_DONUT_PALETTE = [
+    (0, 221, 68), (158, 118, 255), (255, 136, 102),
+    (102, 187, 255), (255, 179, 71), (255, 68, 102),
+]
+
+
+def _pdf_donut(pdf, x: float, y: float, w: float, title: str, hole: str, segs: list) -> None:
+    """Draw one donut (pie sectors + white centre hole) + legend inside a cell of
+    width w at (x, y). segs carry cumulative start/end percents (from _dpi_donut)."""
+    fam = getattr(pdf, "_secubox_family", "Helvetica")
+    pdf.set_xy(x, y)
+    pdf.set_font(fam, "B", 9)
+    pdf.set_text_color(0, 90, 64)
+    pdf.cell(w, 5, _ascii_safe(title)[:30], ln=False)
+    cx, cy, r, rh = x + 15, y + 23, 12.5, 8.0
+    if segs:
+        for i, s in enumerate(segs):
+            pdf.set_fill_color(*_PDF_DONUT_PALETTE[i % len(_PDF_DONUT_PALETTE)])
+            a0 = 90.0 - float(s.get("start", 0)) * 3.6
+            a1 = 90.0 - float(s.get("end", 0)) * 3.6
+            try:
+                pdf.solid_arc(cx, cy, r, a0, a1, clockwise=True, style="F")
+            except Exception:
+                pass
+        # centre hole (page is white)
+        pdf.set_fill_color(255, 255, 255)
+        pdf.ellipse(cx - rh, cy - rh, 2 * rh, 2 * rh, style="F")
+        if hole:
+            pdf.set_xy(cx - rh, cy - 2)
+            pdf.set_font(fam, "", 6)
+            pdf.set_text_color(110, 110, 110)
+            pdf.cell(2 * rh, 4, _ascii_safe(hole)[:8], align="C")
+        # legend (right of the donut)
+        ly = y + 8
+        for i, s in enumerate(segs[:6]):
+            pdf.set_fill_color(*_PDF_DONUT_PALETTE[i % len(_PDF_DONUT_PALETTE)])
+            pdf.rect(x + 33, ly + 0.6, 2.4, 2.4, style="F")
+            pdf.set_xy(x + 37, ly)
+            pdf.set_font(fam, "", 7)
+            pdf.set_text_color(40, 40, 40)
+            pdf.cell(w - 38, 3.5,
+                     _ascii_safe(f"{s.get('label', '?')[:16]}  {s.get('pct', 0)}%"), ln=False)
+            ly += 4
+    else:
+        pdf.set_xy(x, y + 20)
+        pdf.set_font(fam, "", 8)
+        pdf.set_text_color(120, 120, 120)
+        pdf.cell(w, 5, "Pas de donnees", ln=False)
+    pdf.set_text_color(0)
+
+
+def _pdf_donut_grid(pdf, donuts: list) -> None:
+    """Render up to 4 donuts in a 2x2 grid."""
+    if not donuts:
+        return
+    _section(pdf, "📊 STATS DE TON APPAREIL (graphiques)")
+    y0 = pdf.get_y() + 2
+    col_w = _page_w(pdf) / 2.0
+    row_h = 42.0
+    shown = donuts[:4]
+    for i, d in enumerate(shown):
+        col, row = i % 2, i // 2
+        _pdf_donut(pdf, pdf.l_margin + col * col_w, y0 + row * row_h, col_w - 4,
+                   d.get("title", ""), d.get("hole", ""), d.get("segments") or [])
+    rows = (len(shown) + 1) // 2
+    pdf.set_y(y0 + rows * row_h + 2)
 
 
 def _render_text_fallback(report: dict) -> str:
