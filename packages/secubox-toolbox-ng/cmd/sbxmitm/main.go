@@ -129,8 +129,12 @@ func (c *CA) forge(host string) (*tls.Certificate, error) {
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject:      pkix.Name{CommonName: host},
-		NotBefore:    time.Now().Add(-1 * time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
+		// #689 — forged leaves must outlive the (non-evicting) cert cache, else a
+		// long-running worker keeps serving an expired leaf and every client
+		// reports "certificat expiré". 365d forward + 48h back-skew = 367d span,
+		// safely under Apple's 398-day max-validity rule for server certs.
+		NotBefore:    time.Now().Add(-48 * time.Hour),
+		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		DNSNames:     []string{host},
