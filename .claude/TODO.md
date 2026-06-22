@@ -17,12 +17,12 @@
   buckets quotidiens `history.json` 14j + `/api/v1/dpi/history` + panneau Timeline
   dashboard). NB : JSON daily buckets (pas SQLite — pas de driver CGO dans le binaire
   statique ; SQL riche reportable si besoin).
-- [~] Démon **nDPId** (socket JSON) — **CI build + packaging livrés** (#723) :
-  `build-ndpid.yml` (QEMU arm64 native, `cmake -DBUILD_NDPI=ON`) commite
-  nDPId+nDPIsrvd dans `secubox-ndpid/bin/` ; paquet arm64 les embarque. **Reste**
-  (follow-on, après binaire CI validé) : service daemon (capture wg-toolbox →
-  socket JSON) + `secubox-dpi-flowcap` consomme le JSON nDPId au lieu du CSV
-  ndpiReader (PoC garde le rôle de fallback).
+- [x] Démon **nDPId** — **évalué puis ÉCARTÉ** (#722/#723 revertés). Raison perf :
+  ndpiReader tourne en fenêtres bornées (Nice 15, ~1% CPU, libère le cœur entre
+  les passes) ; nDPId = démon permanent + nDPIsrvd → CPU/RAM **continue** sur une
+  board déjà saturée (load ~4.6/4 cœurs). Gain (JSON riche, pas de respawn) <
+  risque. **Décision : on garde ndpiReader** comme producteur du pipeline exfil.
+  (Le build CI QEMU a aussi échoué au 1er essai → chemin fragile en plus.)
 
 ### ⬜ Cosmétique report PDF (non bloquant)
 - [ ] Glyphes drapeaux régionaux → lettres (police embarquée). Option : drapeaux PNG.

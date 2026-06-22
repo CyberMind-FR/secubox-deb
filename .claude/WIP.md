@@ -21,8 +21,9 @@ Session livrée intégralement sur master + déployée. Détail dans HISTORY 202
 
 ### ⬜ Next Up (différé)
 - **DPI Phase 3** — ✅ enrichissement ASN (#719, 1.1.3) · ✅ historique + timeline
-  (#721, 1.1.4, `history.json` 14j + `/history` + panneau dashboard) ; **reste seul** :
-  démon nDPId (socket JSON) en remplacement du PoC ndpiReader.
+  (#721, 1.1.4) · ❌ démon nDPId **écarté** (#722/#723 revertés) : risque perf
+  (démon permanent vs fenêtres ndpiReader bornées) sur board saturée → **on garde
+  ndpiReader**. **Phase 3 close.**
 - **#685 APK on-device** — install auto CA + handoff WG + détection tunnel (en attente
   décision rooted vs non-root du user).
 - **Cosmétique PDF** — glyphes drapeaux régionaux dégradent en lettres (police embarquée) ;
