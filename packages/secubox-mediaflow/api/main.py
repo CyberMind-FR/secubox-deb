@@ -3,6 +3,7 @@ from fastapi import FastAPI, APIRouter, Depends, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
+import os
 import httpx
 import subprocess
 import json
@@ -313,7 +314,7 @@ async def shutdown():
 # Public endpoints
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "mediaflow", "version": "2.0.0"}
+    return {"status": "ok", "module": "mediaflow", "version": "2.0.2"}
 
 
 # The DPI engine now exposes a public, category-tagged exfil view (the netifyd
@@ -334,13 +335,62 @@ def _exfil_media_flows(exfil: Dict[str, Any]):
     return rows
 
 
+# The DPI flow-capture runs in fixed windows (secubox-dpi-flowcap, 60 s default),
+# so the exfil byte counters are "bytes seen this window" — divide by the window
+# to turn them into a live rate for the dashboard cards.
+_DPI_WINDOW_S = int(os.environ.get("SECUBOX_DPI_WINDOW", "60") or "60")
+
+# Audio vs video split: the DPI collector tags everything streaming as one
+# "media" category, but the dashboard separates video / audio streams. Decide by
+# the classifier service name first, then fall back to a host substring match.
+_AUDIO_HOST_HINTS = ("spotify", "scdn.co", "sndcdn", "pscdn", "deezer", "tidal",
+                     "audio", "podcast", "music", "soundcloud")
+
+
+def _flow_bytes(f: Dict[str, Any]) -> int:
+    return int(f.get("up_bytes", 0) or 0) + int(f.get("down_bytes", 0) or 0)
+
+
+def _stream_type(f: Dict[str, Any]) -> str:
+    """Classify a media flow as 'audio' or 'video' (default video)."""
+    if (f.get("service") or "") in STREAMING_CATEGORIES["audio"]:
+        return "audio"
+    host = (f.get("dst") or "").lower()
+    if any(h in host for h in _AUDIO_HOST_HINTS):
+        return "audio"
+    return "video"
+
+
+def _mbps(total_bytes: int, window_s: int = _DPI_WINDOW_S) -> float:
+    """Bytes-over-window → Mbps (bits/s ÷ 1e6)."""
+    if window_s <= 0:
+        return 0.0
+    return round(total_bytes * 8 / window_s / 1_000_000, 2)
+
+
+def _bw_str(total_bytes: int) -> str:
+    """Human Mbps string for a per-stream / per-service bandwidth cell."""
+    m = _mbps(total_bytes)
+    return f"{m:.2f} Mbps" if m >= 0.01 else _format_bytes(total_bytes)
+
+
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
     try:
         ex = await _dpi("/exfil")
         settings = _load_settings()
         media = _exfil_media_flows(ex)
+        video = sum(1 for f in media if _stream_type(f) == "video")
+        audio = sum(1 for f in media if _stream_type(f) == "audio")
+        total_bytes = sum(_flow_bytes(f) for f in media)
+        clients = {f.get("device") for f in media if f.get("device")}
         return {
+            # ── dashboard cards (frontend contract: www/mediaflow/index.html) ──
+            "video_streams": video,
+            "audio_streams": audio,
+            "bandwidth_mbps": _mbps(total_bytes),
+            "active_clients": len(clients),
+            # ── diagnostics ──
             "running": bool(ex) and "error" not in ex,
             "source": "dpi-exfil",
             "devices": len(ex.get("devices", []) or []),
@@ -352,44 +402,61 @@ async def status(user=Depends(require_jwt)):
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        return {"running": False, "error": str(e)}
+        return {"running": False, "error": str(e),
+                "video_streams": 0, "audio_streams": 0,
+                "bandwidth_mbps": 0.0, "active_clients": 0}
+
+
+async def _media_services_list() -> List[Dict[str, Any]]:
+    """Media services from the DPI exfil view, grouped by service/host, with the
+    dashboard cells (streams / bandwidth / percent) computed."""
+    ex = await _dpi("/exfil")
+    media: Dict[str, Dict[str, Any]] = {}
+    for f in _exfil_media_flows(ex):
+        name = f.get("service") or f.get("dst") or "Unknown"
+        if name not in media:
+            media[name] = {"name": name, "category": "media",
+                           "host": f.get("dst"), "cloud": f.get("cloud"),
+                           "flows": 0, "bytes": 0, "clients": set()}
+        media[name]["flows"] += int(f.get("flows", 1) or 1)
+        media[name]["bytes"] += _flow_bytes(f)
+        if f.get("device"):
+            media[name]["clients"].add(f.get("device"))
+    total = sum(d["bytes"] for d in media.values()) or 1
+    result = []
+    for data in media.values():
+        data["clients"] = len(data["clients"])
+        data["bytes_human"] = _format_bytes(data["bytes"])
+        # frontend table cells: Service / Streams / Bandwidth / Usage %
+        data["streams"] = data["flows"]
+        data["bandwidth"] = _bw_str(data["bytes"])
+        data["percent"] = round(data["bytes"] * 100 / total, 1)
+        result.append(data)
+    result.sort(key=lambda x: x["bytes"], reverse=True)
+    return result
 
 
 @router.get("/services")
 async def services(user=Depends(require_jwt)):
-    """Active media services (from the DPI exfil view), grouped by service/host."""
+    """Active media services — {services:[…]} per the dashboard contract."""
     cached = stats_cache.get("services")
-    if cached:
-        return cached
+    if cached is not None:
+        return {"services": cached}
     try:
-        ex = await _dpi("/exfil")
-        media: Dict[str, Dict[str, Any]] = {}
-        for f in _exfil_media_flows(ex):
-            name = f.get("service") or f.get("dst") or "Unknown"
-            if name not in media:
-                media[name] = {"name": name, "category": "media",
-                               "host": f.get("dst"), "cloud": f.get("cloud"),
-                               "flows": 0, "bytes": 0, "clients": set()}
-            media[name]["flows"] += int(f.get("flows", 1) or 1)
-            media[name]["bytes"] += int(f.get("up_bytes", 0) or 0) + int(f.get("down_bytes", 0) or 0)
-            if f.get("device"):
-                media[name]["clients"].add(f.get("device"))
-        result = []
-        for data in media.values():
-            data["clients"] = len(data["clients"])
-            data["bytes_human"] = _format_bytes(data["bytes"])
-            result.append(data)
-        result.sort(key=lambda x: x["bytes"], reverse=True)
+        result = await _media_services_list()
         stats_cache.set("services", result)
-        return result
+        return {"services": result}
     except Exception:
-        return []
+        return {"services": []}
 
 
 @router.get("/services/by-category")
 async def services_by_category(user=Depends(require_jwt)):
     """Get services grouped by category."""
-    services_list = await services(user)
+    try:
+        services_list = await _media_services_list()
+    except Exception:
+        services_list = []
 
     by_category: Dict[str, List[Dict]] = {cat: [] for cat in STREAMING_CATEGORIES}
     by_category["other"] = []
@@ -436,6 +503,28 @@ async def clients(user=Depends(require_jwt)):
         return out
     except Exception:
         return []
+
+
+@router.get("/streams")
+async def streams(user=Depends(require_jwt)):
+    """Active media streams in the dashboard's table shape:
+    {streams:[{client_ip, type, service, bandwidth, duration}]}."""
+    try:
+        ex = await _dpi("/exfil")
+        rows = []
+        for f in _exfil_media_flows(ex):
+            rows.append({
+                "client_ip": f.get("device") or f.get("src") or "—",
+                "type": _stream_type(f),
+                "service": f.get("service") or f.get("dst") or "Unknown",
+                "bandwidth": _bw_str(_flow_bytes(f)),
+                "duration": "—",  # exfil windows are stateless — no per-flow age
+                "bytes": _flow_bytes(f),
+            })
+        rows.sort(key=lambda x: x["bytes"], reverse=True)
+        return {"streams": rows}
+    except Exception:
+        return {"streams": []}
 
 
 @router.get("/get_active_streams")

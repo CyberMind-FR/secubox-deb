@@ -1,3 +1,15 @@
+secubox-mediaflow (2.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Fix empty dashboard: align the API with the frontend contract that the 2.0.x
+    DPI-exfil rewrite broke. /status now returns video_streams / audio_streams /
+    bandwidth_mbps / active_clients (was devices/active_flows/...); add the missing
+    /streams endpoint ({streams:[client_ip,type,service,bandwidth,duration]}); and
+    /services now returns {services:[...]} with streams/bandwidth/percent cells
+    (was a bare array). Split media flows into video/audio and derive Mbps from the
+    DPI capture window. (#728 mediaflow)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 20:10:00 +0000
+
 secubox-mediaflow (2.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Fix: consume the DPI engine's public /exfil view (category-tagged) instead of
