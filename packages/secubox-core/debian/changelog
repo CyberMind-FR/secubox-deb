@@ -1,3 +1,16 @@
+secubox-core (1.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * #421/#494: secubox-dirs-guard now also re-asserts /run/secubox to
+    1777 root:root every minute. 90+ services declare RuntimeDirectory=secubox,
+    so systemd re-chowns the shared socket parent to secubox:secubox 0755 on
+    each (re)start — which locks out services that create their socket as a
+    non-secubox user (e.g. secubox-blacklist-attrib "Permission denied").
+    Removing the explicit chowns (#494) was necessary but not sufficient against
+    the RuntimeDirectory churn; the guard now self-heals it centrally instead of
+    patching 90+ unit files.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 11:15:00 +0000
+
 secubox-core (1.1.9-1~bookworm1) bookworm; urgency=medium
 
   * #494 fix: secubox-core.service no longer chowns /run/secubox to
