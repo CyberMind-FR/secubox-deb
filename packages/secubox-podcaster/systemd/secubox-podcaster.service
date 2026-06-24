@@ -8,7 +8,7 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/usr/share/secubox/podcaster
-ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/podcaster.sock --workers 1
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/podcaster.sock --workers 1
 # #494: only chmod/chown our OWN socket — never the shared /run/secubox parent.
 ExecStartPost=-/bin/sleep 1
 ExecStartPost=-/bin/chmod 660 /run/secubox/podcaster.sock
