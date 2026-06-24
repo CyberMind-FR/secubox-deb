@@ -3,6 +3,32 @@
 
 ---
 
+## 2026-06-24 (cont.) — Banner on nonce-CSP sites + Claude API splice + YouTube unblock (#728)
+
+Three distinct root causes behind "no banner on youtube / news", fixed in order:
+
+1. **Trusted Types** (0.1.17) — `require-trusted-types-for` blocked DOM injection. Stripped.
+2. **Nonce-based CSP** (0.1.18) — the banner is *inlined* (service-worker-proof), but a CSP
+   nonce/hash makes `'unsafe-inline'` IGNORED → the bare inline `<script>` was silently
+   blocked. `relaxCSPForLoader` now **borrows the page's own nonce** and stamps it on the
+   injected `<script nonce=…>` (surgical: page CSP/nonces/hashes untouched), falling back to
+   forcing `unsafe-inline` (drop nonce/hash/strict-dynamic) only when there's no nonce.
+   Nonce validated to base64 charset (attribute-breakout guard). Threaded nonce through
+   injectIntoBody → injectHTML → injectInlineBanner. Tests rewritten for inline semantics.
+3. **YouTube wholly blocked** (runtime) — autolearn false-positive put `youtube.com` in
+   `/var/lib/secubox/toolbox/learned-trackers.txt` → `Decide()` returned `block` (204) →
+   page never loaded. Removed from learned + added to `ad-allowlist.txt` (hot-reloaded).
+   Latent-bug tracker: **#735** (autolearn must not block apex/first-party nav targets).
+
+**Claude API splice** (user request) — `api.anthropic.com` added to `tls-splice-seed.conf`
+(+ live seed): cert-pinned Claude API/SDK clients reject the MITM CA, so pass them through;
+`claude.ai` web stays MITM'd (browser trusts the CA → still gets the banner).
+
+Verified end-to-end on gk2: YouTube 200 + banner nonce == page nonce; lemonde/lefigaro
+banner via unsafe-inline fallback. DPI confirmed healthy — collector writes to
+`/var/lib/secubox/dpi/` (state.json/cumulative.json fresh), `/exfil` returns categorized
+flows; the earlier "empty" was me checking the wrong paths (`/run/secubox/dpi`).
+
 ## 2026-06-24 — DPI YouTube bannering: strip Trusted Types CSP (#728)
 
 - **Root cause** — YouTube serves a standalone `Content-Security-Policy:
