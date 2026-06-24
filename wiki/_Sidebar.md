@@ -41,6 +41,7 @@
 ### 🟣 MIND — Modules
 
 * [[Anti-Track]] 🛡️ bloque · empoisonne · anonymise
+* [[ThreatMesh]] 🛰️ blocklist souveraine (feeds + mesh, sans CAPI)
 * [[MODULES-EN|Modules]] 🇬🇧
 * [[MODULES-FR]] 🇫🇷
 * [[MODULES-DE]] 🇩🇪
