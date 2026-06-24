@@ -10,10 +10,13 @@ User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/hub
 # Ensure /run/secubox exists before starting (fallback if secubox-core didn't run)
-# + prefix runs as root regardless of User= setting
+# + prefix runs as root regardless of User= setting.
+# #494: do NOT chown/chmod the parent here — it is owned by tmpfiles.d
+# (1777 root root) + secubox-runtime.service. This ExecStartPre ran on every
+# hub (re)start and clobbered it back to 775 secubox:secubox, breaking
+# cross-user socket traversal (nginx/www-data 502). The sticky 1777 parent
+# already lets the hub create its own socket; only mkdir as a fallback.
 ExecStartPre=+/bin/mkdir -p /run/secubox
-ExecStartPre=+/bin/chown secubox:secubox /run/secubox
-ExecStartPre=+/bin/chmod 775 /run/secubox
 # TCP binding for VM compatibility (Unix socket has issues in some VMs)
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --host 127.0.0.1 --port 8001 \

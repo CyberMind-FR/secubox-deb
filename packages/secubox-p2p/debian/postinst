@@ -8,15 +8,15 @@ case "$1" in
             adduser --system --group --home /var/lib/secubox --no-create-home secubox
         fi
 
-        # Create runtime directory
+        # Create runtime directory (fallback). #494: never chown/chmod the
+        # shared parent /run/secubox — tmpfiles.d owns it (1777 root root);
+        # overriding it breaks cross-user socket traversal.
         mkdir -p /run/secubox
-        chown secubox:secubox /run/secubox
-        chmod 755 /run/secubox
 
-        # Create log directory
+        # Log dir: own a subdir, do NOT chown the shared /var/log/secubox
+        # parent (#494/#511 — that strips other modules' log access).
         mkdir -p /var/log/secubox
-        chown secubox:secubox /var/log/secubox
-        chmod 755 /var/log/secubox
+        install -d -o secubox -g secubox -m 0750 /var/log/secubox/p2p
 
         # Enable and start the service
         systemctl daemon-reload

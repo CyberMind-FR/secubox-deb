@@ -1,3 +1,10 @@
+secubox-metrics (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * #494: postinst no longer chowns the shared /run/secubox parent
+    (tmpfiles.d owns it 1777 root root).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 10:45:00 +0000
+
 secubox-metrics (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * VisitorOrigin: add AmbientCapabilities=CAP_NET_ADMIN to the systemd
