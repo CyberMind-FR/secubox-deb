@@ -3,6 +3,28 @@
 
 ---
 
+## 2026-06-24 (cont.) — R4 analyst mode: MITM-everything + media reverse-catcher + clone (#736)
+
+New "R4" doctrine — visibility over performance. Delivered + live on gk2:
+- **Splice flip** — `tls-splice-seed.conf` reduced from a media-CDN perf list to
+  breakers-only (`api.anthropic.com`); splice now applied ONLY where MITM provably
+  breaks (cert pinning). Banner reaches every page; catcher sees media URLs. Live:
+  learned splices cleared, autolearn gated (`tls_splice=off`).
+- **sbxmitm media reverse-catcher** (`cmd/sbxmitm/mediacatch.go`, toolbox-ng 0.1.20)
+  — 2xx MITM'd flows → cloneable media URLs (HLS/DASH manifests, direct A/V,
+  googlevideo videoplayback) appended to `/run/secubox/media-catch.jsonl` (URLs
+  only, deduped, atomic, fail-open). `--media-catch` default on; worker unit
+  `ReadWritePaths=/run/secubox`.
+- **mediaflow Discovered Media + Clone** (2.1.0) — `/discovered`, `/clone`
+  (yt-dlp→ffmpeg queue, lazy worker for the aggregator), `/library`,
+  `/download/{id}`, DELETE; dashboard cards. Verified: HLS caught → ffmpeg →
+  464 MiB mp4 in library. yt-dlp installed.
+- Also fixed the empty mediaflow dashboard (2.0.2 contract + 2.0.3 cumulative
+  services): cards/streams live, Top Media Services from DPI cumulative store.
+  KEY: dashboard routes via the **aggregator** (in-process import) — restart
+  `secubox-aggregator` to pick up mediaflow code changes.
+- Phase 4 (explicit R4 topbar selector) deferred → documented in #736.
+
 ## 2026-06-24 (cont.) — Banner on nonce-CSP sites + Claude API splice + YouTube unblock (#728)
 
 Three distinct root causes behind "no banner on youtube / news", fixed in order:
