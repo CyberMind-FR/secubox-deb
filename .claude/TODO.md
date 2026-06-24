@@ -61,14 +61,18 @@
 
 ### 🟠 T1 — Plan d'enforcement sécurité (mission CSPN ; détection→action)
 - #498 Phase 7 — WAF active enforcement (mitm→CrowdSec→nft drop) *(worktree actif)*
-- #519 Phase 13 — protection enforcement plane **[vérifier→fermer]** (TODO dit COMPLETE)
-- #522 Phase 13.B — DNS-guard : domaines blocklistés → nft blacklist
+- ✅ #519 Phase 13 — enforcement plane **FERMÉ 2026-06-22** (livré + réparé :
+  blacklist-sync avortait sur NXDOMAIN + timeout unit → fix `|| true` +
+  TimeoutStartSec 600 ; vérifié live, default-off). Inclut 13.B #522.
 - #455 secubox-egress — détection egress + corrélation RDS multi-signaux
 - #500 Phase 8 — Utiq operator-grade tracking (detect/alert/bypass)
-- #514 Phase 12 — plateforme anti-human-detection (parent)
-- #515 Phase 12.A — détection CDN cache passive **[vérifier]** (partiel via social graph)
-- #516 Phase 12.B — détection anti-bot/'prove human' passive **[vérifier]** (partiel)
+- #514 Phase 12 — plateforme anti-human-detection (parent ; sous-tracks fermés)
+- ✅ #515 Phase 12.A CDN cache detection — **FERMÉ** (live, `social_host_meta.cdn_vendor`)
+- ✅ #516 Phase 12.B anti-bot detection — **FERMÉ** (live via #564/#565, `social_antibot`)
 - #525 Phase 14 — plan de déception (idée future, parké)
+- ⬜ Suivi #519 perf (non bloquant) : DNS-guard ne résout que les 2000 premiers
+  domaines/cycle (5523 en base) → couverture partielle ; résolution séquentielle
+  lourde sur board saturé. Option : résolution parallèle bornée + rotation du cap.
 
 ### 🟡 T2 — UX / Hub / conscommateurs report (worktrees actifs + polish)
 - #615 security-posture dans la sidebar Hub *(worktree actif)*
