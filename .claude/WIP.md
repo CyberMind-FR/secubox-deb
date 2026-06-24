@@ -26,10 +26,13 @@
   **CI-image-gated** (rpi400, pas gk2).
 - **#91** : `haproxy.cfg` active valide ; backup `*.broken-by-haproxyctl-*` prouve le bug
   passé ; drift-guard #627 rattrape. Root cause = generate `haproxyctl` (api/main.py l.846/896).
-- **#53** : Wazuh hors stack documenté (Suricata+CrowdSec), aucune unit sur gk2 →
-  décider **remove vs keep-masked**, pas de boucle évidente dans `api/main.py`.
+- ✅ **#53** : **FIX poussé** (`fix/53-…`) — gate `ConditionPathExists=/var/ossec/etc/ossec.conf`
+  + `RestartSec=5` ; module conservé (SIEM opt-in). Vérifié gk2 (/var/ossec absent). Bump 1.0.1.
 - **#65** : `common/nginx/webui.conf` routes hardcodées → passer à `include secubox.d/*.conf`.
-- **#121** : `scripts/metablog-ingest.sh` laisse `sites/*` en root:root → `chown -R secubox:secubox`.
+- ✅ **#121** : **FIX poussé** (`fix/121-…`) — helper `fix_perms` chown -R secubox:secubox
+  le site dir après chaque ingest .git (metablog-ingest-site.sh). Script dev, pas de deploy.
+- ⬜ Restent : **#91** (deploy WAF risqué) · **#65** (refactor include, risque 502) ·
+  **#447** (CI kiosk) · **#494/#471/#421** (worktree fix/494). Build+deploy toolbox 2.7.18 (#519) en attente.
 - **Backlog/future** : #685/#686 APK non-root (plan verrouillé) · #592 webmail-hub ·
   #514/#515/#516/#519/#522/#525 Phase 12-14 (#515 CDN / #516 anti-bot partiellement
   couverts par antibot_sites/opgrade_sites du social graph) · #500 Utiq · #497/#480/
