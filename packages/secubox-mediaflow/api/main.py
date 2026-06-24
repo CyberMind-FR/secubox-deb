@@ -41,6 +41,11 @@ STATS_FILE = DATA_DIR / "stats.json"
 
 DPI_BASE = "http+unix://%2Frun%2Fsecubox%2Fdpi.sock"
 
+# The DPI collector's 7-day cumulative store (same schema as /exfil's
+# devices[].services). /exfil itself is live-window only (~60s), so "Top Media
+# Services" reads this instead — otherwise the table blinks empty between streams.
+DPI_CUMULATIVE_PATH = Path("/var/lib/secubox/dpi/cumulative.json")
+
 MEDIA_APPS = {
     "Netflix", "YouTube", "Twitch", "Disney+", "Spotify",
     "Apple Music", "Tidal", "Zoom", "Teams", "Google Meet",
@@ -314,7 +319,7 @@ async def shutdown():
 # Public endpoints
 @router.get("/health")
 async def health():
-    return {"status": "ok", "module": "mediaflow", "version": "2.0.2"}
+    return {"status": "ok", "module": "mediaflow", "version": "2.0.3"}
 
 
 # The DPI engine now exposes a public, category-tagged exfil view (the netifyd
@@ -407,12 +412,22 @@ async def status(user=Depends(require_jwt)):
                 "bandwidth_mbps": 0.0, "active_clients": 0}
 
 
+def _cumulative_exfil() -> Dict[str, Any]:
+    """Load the DPI 7-day cumulative store (same schema as /exfil)."""
+    return _load_json(DPI_CUMULATIVE_PATH, {}) or {}
+
+
 async def _media_services_list() -> List[Dict[str, Any]]:
-    """Media services from the DPI exfil view, grouped by service/host, with the
-    dashboard cells (streams / bandwidth / percent) computed."""
-    ex = await _dpi("/exfil")
+    """Top media services, grouped by service/host, with the dashboard cells
+    (streams / bandwidth / percent). Reads the DPI CUMULATIVE store so the table
+    persists across the live 60s windows instead of blinking empty between
+    streams; falls back to the live exfil view if cumulative isn't there yet."""
+    ex = _cumulative_exfil()
+    rows = _exfil_media_flows(ex)
+    if not rows:
+        rows = _exfil_media_flows(await _dpi("/exfil"))
     media: Dict[str, Dict[str, Any]] = {}
-    for f in _exfil_media_flows(ex):
+    for f in rows:
         name = f.get("service") or f.get("dst") or "Unknown"
         if name not in media:
             media[name] = {"name": name, "category": "media",
@@ -427,9 +442,10 @@ async def _media_services_list() -> List[Dict[str, Any]]:
     for data in media.values():
         data["clients"] = len(data["clients"])
         data["bytes_human"] = _format_bytes(data["bytes"])
-        # frontend table cells: Service / Streams / Bandwidth / Usage %
+        # frontend table cells: Service / Streams / Bandwidth / Usage %.
+        # Bandwidth here is the cumulative TOTAL transferred (not a live rate).
         data["streams"] = data["flows"]
-        data["bandwidth"] = _bw_str(data["bytes"])
+        data["bandwidth"] = _format_bytes(data["bytes"])
         data["percent"] = round(data["bytes"] * 100 / total, 1)
         result.append(data)
     result.sort(key=lambda x: x["bytes"], reverse=True)

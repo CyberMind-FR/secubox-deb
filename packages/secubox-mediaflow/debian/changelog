@@ -1,3 +1,12 @@
+secubox-mediaflow (2.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Top Media Services now reads the DPI 7-day CUMULATIVE store instead of the
+    live 60s exfil window, so the table persists between streams (was blinking
+    empty whenever nothing was streaming that instant). Cards + Active Streams
+    stay live (active-now). Falls back to live exfil if cumulative is absent. (#728)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 20:40:00 +0000
+
 secubox-mediaflow (2.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Fix empty dashboard: align the API with the frontend contract that the 2.0.x
