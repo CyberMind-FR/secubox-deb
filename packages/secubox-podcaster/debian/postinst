@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  configure)
+    # Data dirs (module-owned; never touch the shared /run/secubox parent, #494).
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/podcaster
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/podcaster/media
+
+    # Config on first install only (preserve operator edits on upgrade).
+    if [ ! -f /etc/secubox/podcaster.toml ]; then
+      if [ -f /usr/share/secubox/podcaster/podcaster.toml ]; then
+        install -o secubox -g secubox -m 0640 \
+          /usr/share/secubox/podcaster/podcaster.toml /etc/secubox/podcaster.toml
+      fi
+    fi
+
+    systemctl daemon-reload 2>/dev/null || true
+    # Respect operator masking (set -e would abort on a masked enable).
+    if [ "$(systemctl is-enabled secubox-podcaster.service 2>/dev/null)" != "masked" ]; then
+      systemctl enable secubox-podcaster.service 2>/dev/null || true
+      systemctl restart secubox-podcaster.service 2>/dev/null || true
+    fi
+
+    # Reload nginx only if the resulting config is valid.
+    if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

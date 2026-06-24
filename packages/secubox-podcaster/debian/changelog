@@ -1,0 +1,13 @@
+secubox-podcaster (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release (#726). Modern podcast manager:
+    - subscribe by RSS URL / OPML import; pure-stdlib feed parsing
+    - local download queue (asyncio + httpx) with per-episode progress
+    - generated shareable RSS of the local library (/share/feed.xml) — LAN by
+      default, public via HAProxy / secubox-exposure (public_base)
+    - in-UI service status + TOML config; C3BOX WebUI with inline player
+    - FastAPI on /run/secubox/podcaster.sock; SQLite store; nginx route shipped
+      to the active secubox-routes.d/ include
+    - Lyrion integration deferred to a follow-up (standalone first)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 12:00:00 +0000

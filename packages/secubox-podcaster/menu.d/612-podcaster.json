@@ -1,0 +1,9 @@
+{
+  "id": "podcaster",
+  "name": "Podcaster",
+  "icon": "🎙️",
+  "path": "/podcaster/",
+  "category": "mesh",
+  "order": 612,
+  "description": "Subscribe, download and relay podcasts"
+}
