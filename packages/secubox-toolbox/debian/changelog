@@ -1,3 +1,14 @@
+secubox-toolbox (2.7.19-1~bookworm1) bookworm; urgency=medium
+
+  * #728 blacklist-sync confidence gate: enforce a threat_intel IP only when
+    corroborated by >= SECUBOX_BL_MIN_CONSENSUS sources (default 2) OR carried by
+    a curated high-trust feed (weight >= SECUBOX_BL_MIN_WEIGHT, default 80).
+    Arming all ~45k aggregated-feed IPs (mostly noisy single-source) risked
+    blocking legit traffic; this enforces the high-confidence ~2k set. CrowdSec
+    local decisions + DNS-guard stay always-enforced. Tunable via env.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 16:30:00 +0000
+
 secubox-toolbox (2.7.18-1~bookworm1) bookworm; urgency=medium
 
   * #519/#522 fix(blacklist-sync): the DNS-guard domain loop aborted the whole
