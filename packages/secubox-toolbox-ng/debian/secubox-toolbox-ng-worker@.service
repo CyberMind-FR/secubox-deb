@@ -58,6 +58,9 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 ReadOnlyPaths=/etc/secubox
+# #736 R4 media reverse-catcher writes its discovery log here; ProtectSystem=strict
+# otherwise mounts /run read-only. Scoped to the shared runtime dir only.
+ReadWritePaths=/run/secubox
 MemoryHigh=100M
 MemoryMax=128M
 TasksMax=128
