@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox aggregator auto-heal watchdog
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/727
+After=secubox-aggregator.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-aggregator-watchdog.sh
+Nice=10
