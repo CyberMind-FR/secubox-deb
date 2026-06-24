@@ -145,7 +145,7 @@ func TestPortalTargetURL(t *testing.T) {
 func TestInjectInlineBannerEmptyScriptNoop(t *testing.T) {
 	// scriptBody == "" (fetch failed/skipped) → no inject, body unchanged.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := injectInlineBanner(body, "")
+	out := injectInlineBanner(body, "", "")
 	if string(out) != string(body) {
 		t.Fatalf("empty scriptBody must be a no-op.\n got: %s", out)
 	}
@@ -154,7 +154,7 @@ func TestInjectInlineBannerEmptyScriptNoop(t *testing.T) {
 func TestInjectInlineBannerGuardIdempotent(t *testing.T) {
 	// Body already carrying the guard → returned byte-for-byte unchanged.
 	body := []byte("<html><head><!-- " + bannerGuard + " --><script></script></head><body>hi</body></html>")
-	out := injectInlineBanner(body, inlineTestScript)
+	out := injectInlineBanner(body, inlineTestScript, "")
 	if string(out) != string(body) {
 		t.Fatalf("guarded body must be unchanged.\n got: %s", out)
 	}
@@ -162,7 +162,7 @@ func TestInjectInlineBannerGuardIdempotent(t *testing.T) {
 
 func TestInjectInlineBannerHeadInsertion(t *testing.T) {
 	body := []byte(`<html><head lang="en"><title>x</title></head><body>hi</body></html>`)
-	out := string(injectInlineBanner(body, inlineTestScript))
+	out := string(injectInlineBanner(body, inlineTestScript, ""))
 	headOpen := `<head lang="en">`
 	idx := strings.Index(out, headOpen)
 	if idx < 0 {
@@ -185,7 +185,7 @@ func TestInjectInlineBannerHeadInsertion(t *testing.T) {
 
 func TestInjectInlineBannerBodyFallback(t *testing.T) {
 	body := []byte(`<html><body class="x">hi</body></html>`)
-	out := string(injectInlineBanner(body, inlineTestScript))
+	out := string(injectInlineBanner(body, inlineTestScript, ""))
 	wantTag := `<!-- ` + bannerGuard + ` --><script>` + inlineTestScript + `</script>`
 	if !strings.Contains(out, wantTag+`<body class="x">`) {
 		t.Fatalf("inline tag not inserted right before <body>.\n got: %s", out)
@@ -194,7 +194,7 @@ func TestInjectInlineBannerBodyFallback(t *testing.T) {
 
 func TestInjectInlineBannerNeitherHeadNorBody(t *testing.T) {
 	body := []byte(`<p>just a fragment</p>`)
-	out := injectInlineBanner(body, inlineTestScript)
+	out := injectInlineBanner(body, inlineTestScript, "")
 	if string(out) != string(body) {
 		t.Fatalf("no head/body → must be unchanged.\n got: %s", out)
 	}
@@ -202,7 +202,7 @@ func TestInjectInlineBannerNeitherHeadNorBody(t *testing.T) {
 
 func TestInjectInlineBannerCaseInsensitiveHead(t *testing.T) {
 	body := []byte(`<HTML><HEAD></HEAD><BODY>hi</BODY></HTML>`)
-	out := string(injectInlineBanner(body, inlineTestScript))
+	out := string(injectInlineBanner(body, inlineTestScript, ""))
 	if !strings.Contains(out, `<HEAD><!-- `+bannerGuard) {
 		t.Fatalf("case-insensitive <HEAD> match failed: %s", out)
 	}
