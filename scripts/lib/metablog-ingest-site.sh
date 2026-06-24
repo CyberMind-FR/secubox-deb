@@ -50,6 +50,12 @@ fi
 
 cd "\$SITE"
 
+# #121: every git op below runs as root (ssh root@host), so a freshly created
+# .git ends up root:root — but metablogizer runs as 'secubox' and must be able
+# to write the repo (webhook deploys, sub-E #113). Re-own the site dir after any
+# ingest that touches .git. Matches the chown pattern in module postinsts.
+fix_perms() { chown -R secubox:secubox "\$SITE" 2>/dev/null || true; }
+
 # Determine remote HEAD (might fail if repo doesn't exist yet — that's OK)
 remote_head=\$(git ls-remote "\$REPO_URL" main 2>/dev/null | awk '{print \$1}' || true)
 
@@ -76,6 +82,7 @@ if [[ -d .git ]]; then
     fi
     git tag -f v1.0.0
     git push --quiet --force origin v1.0.0
+    fix_perms
     echo "ingested-with-history"
     exit 0
   fi
@@ -95,6 +102,7 @@ if [[ -d .git ]]; then
   git push --quiet origin main
   git tag v1.0.0
   git push --quiet origin v1.0.0
+  fix_perms
   echo "ingested-fresh"
   exit 0
 else
@@ -113,6 +121,7 @@ else
   git push --quiet origin main
   git tag v1.0.0
   git push --quiet origin v1.0.0
+  fix_perms
   echo "ingested-fresh"
   exit 0
 fi
