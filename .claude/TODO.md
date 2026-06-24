@@ -42,6 +42,74 @@
 
 ---
 
+## 🎯 Backlog priorisé — revue 2026-06-24 (64 issues ouvertes)
+
+> Index d'autorité du triage. Les sections « Phase X » plus bas sont historiques :
+> plusieurs portent « ✅ COMPLETE » alors que l'issue est restée **ouverte** (livré
+> mais jamais fermé) → marquées **[vérifier→fermer]** ci-dessous.
+
+### 🔴 T0 — Régressions & bugs sécurité (petits, débloquants, CSPN priv-sep)
+- #494 secubox-core ExecStart écrase tmpfiles.d `/run/secubox` *(worktree actif)*
+- #468 `/etc/secubox` parent 0750 casse la traversée non-secubox *(régression récurrente)*
+- #471 secubox-mesh postinst écrase perms `/run/secubox` *(régression)*
+- #421 sockets `/run/secubox` cachés en mount-ns privé (RuntimeDirectory)
+- #447 kiosk : mot de passe admin semé par le CI (users.json shippe un hash) **← fuite**
+- #91 haproxyctl régénère haproxy.cfg avec `waf_inspector` inexistant *(intégrité WAF)*
+- #65 nginx : routes API manquantes dans webui.conf
+- #53 Wazuh uvicorn 100% CPU spin
+- #121 metablog ingest : dirs en `secubox:secubox`
+
+### 🟠 T1 — Plan d'enforcement sécurité (mission CSPN ; détection→action)
+- #498 Phase 7 — WAF active enforcement (mitm→CrowdSec→nft drop) *(worktree actif)*
+- #519 Phase 13 — protection enforcement plane **[vérifier→fermer]** (TODO dit COMPLETE)
+- #522 Phase 13.B — DNS-guard : domaines blocklistés → nft blacklist
+- #455 secubox-egress — détection egress + corrélation RDS multi-signaux
+- #500 Phase 8 — Utiq operator-grade tracking (detect/alert/bypass)
+- #514 Phase 12 — plateforme anti-human-detection (parent)
+- #515 Phase 12.A — détection CDN cache passive **[vérifier]** (partiel via social graph)
+- #516 Phase 12.B — détection anti-bot/'prove human' passive **[vérifier]** (partiel)
+- #525 Phase 14 — plan de déception (idée future, parké)
+
+### 🟡 T2 — UX / Hub / conscommateurs report (worktrees actifs + polish)
+- #615 security-posture dans la sidebar Hub *(worktree actif)*
+- #655 webext content-script banner CSP-immune *(worktree actif)*
+- #485 toolbox SOC scoring *(worktree actif)*
+- #513 ToolBox WebUI : sous-onglets + retrait UI /admin redondante
+- #69 diagramme flux trafic responsive
+- #67 cache history-aware glances/netdata
+- #68 health checks + dépendances services au démarrage
+
+### 🟢 T3 — Backlog feature (valeur, non bloquant)
+- #685 APK 'corrupt' — CI signe avec clé éphémère *(plan APK verrouillé)*
+- #686 android-toolbox flux non-root cassé *(plan APK verrouillé)*
+- #429 nextcloud dashboard : API stubs au lieu de la vraie instance *(bug)*
+- #430 nextcloud — fédération OCM (doc/outillage)
+- #472 nextcloud — Gondwana Desktop (canvas + widgets)
+- #592 secubox-webmail-hub (Gmail OAuth2 + Gandi + OVH)
+- #66 auth Google OAuth
+- #70 Health Banner System *(preplanned)*
+- #71 CDN proxy injection *(preplanned)*
+- #393 source-home des scripts health prober
+
+### 🔵 T4 — Hardware-gated (dépend de pièces ; piste parallèle ; pas de spare EP06)
+- Modem/PCIe : #254 modules kernel LTE · #255 pins mPCIe modem · #460 DTS cp0_pcie2 ·
+  #467 U-Boot comphy5 SerDes · #462 pivot HW AR9271/MT
+- Mesh/BLE : #449 WiFi 802.11s · #452 BT mesh · #453 QR multi-canaux · #454 sourcing BLE 5.x
+- GSM : #347 sentinelle-gsm
+- Smart-Strip : #33 module HMI · #42 sous-repo · #379 packaging
+- Eye-remote : #41 sous-repo · #79 buildroot · #127 variante square · #138 radar_concentric ·
+  #155 collision link-rename *(bug)* · #158 multi-gadget L3 · #478 métriques live Round Eye
+- VILLAGE3B : #480 dossier presse · #497 poster grand public
+
+### ⚪ T5 — Images / OS variants (basse urgence)
+- #446 Full Traveller OS multi-mode/arch · #125 build-live-usb +virtualbox · #422 vm-x64 cascade
+
+### ⚫ T6 — Docs / housekeeping
+- #81 headers SPDX CMSD-1.0 partout · #243 clarifier scope secubox-zkp-auth *(question)*
+- #474 ToolBoX (epic parent — garder comme tracker)
+
+---
+
 ## 🔥 P0 — Immediate (in flight)
 
 ### kbin Tor endpoint — anonymized quick-switch surfing (#683)
