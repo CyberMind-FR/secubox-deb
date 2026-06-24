@@ -1,3 +1,24 @@
+secubox-core (1.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * #494 fix: secubox-core.service no longer chowns /run/secubox to
+    secubox:secubox + chmod 775 in ExecStart. Running After=network.target,
+    it fired LAST and clobbered the canonical tmpfiles rule
+    (`d /run/secubox 1777 root root`) that secubox-runtime.service had just
+    re-applied — leaving the dir secubox:secubox so non-secubox daemons lost
+    parent +x and their sockets 502'd. /run/secubox lifecycle is now owned
+    solely by tmpfiles.d (1777 root root) + secubox-runtime.service; this unit
+    only manages the www-data group membership.
+  * Defensive: postinst removes a stale, non-dpkg-owned
+    /etc/tmpfiles.d/secubox.conf if it declares /run/secubox as
+    0775 secubox secubox (leftover from an old manual fix; /etc overrides
+    /usr/lib so it contradicted the canonical rule). The shipped canonical
+    file is /usr/lib/tmpfiles.d/secubox.conf.
+  * Also ensure /var/log/suricata exists (0755) so services with
+    ReadWritePaths=/var/log/suricata (secubox-threats/suricata) don't
+    NAMESPACE-fail at start.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 10:30:00 +0000
+
 secubox-core (1.1.6-1~bookworm1) bookworm; urgency=medium
 
   * postinst: relax /etc/secubox to 0755 (was 0750). Non-secubox daemons
