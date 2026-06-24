@@ -209,7 +209,10 @@ func injectInlineBanner(body []byte, scriptBody string) []byte {
 // match would never fire. Mirrors the Python request() p.startswith(...) checks.
 func isToolboxAssetPath(path string) bool {
 	return strings.HasPrefix(path, "/__toolbox/loader.js") ||
-		strings.HasPrefix(path, "/__toolbox/bundle")
+		strings.HasPrefix(path, "/__toolbox/bundle") ||
+		// #724 — banner R0..R3 level switch: same-origin GET from the page,
+		// reverse-proxied to the portal /__toolbox/set-level.
+		strings.HasPrefix(path, "/__toolbox/set-level")
 }
 
 // portalTargetURL builds the absolute portal URL for an intercepted asset
