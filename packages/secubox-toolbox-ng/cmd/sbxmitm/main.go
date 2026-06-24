@@ -223,6 +223,11 @@ type Proxy struct {
 	socialRelayOn bool
 	social        *socialRelay
 	consent       *consentLog
+
+	// media is the R4 media reverse-catcher (#736): records cloneable media URLs
+	// (manifests / direct audio-video) seen on MITM'd flows to a JSONL log the
+	// mediaflow "Discovered Media" view reads. nil/disabled → no-op.
+	media *mediaCatcher
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -502,6 +507,19 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// relayed names byte-for-byte the origin's. Fire-and-forget, gated.
 	px.emitCookies(relayIP, clientHash, req, resp)
 
+	// #736 R4 — media reverse-catcher: if this MITM'd response is cloneable media
+	// (HLS/DASH manifest or direct audio/video), record its URL (never the body)
+	// to the discovery log the mediaflow "Discovered Media" view reads. Best-
+	// effort + deduped; a no-op when --media-catch is off or the flow isn't media.
+	if px.media != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if kind := mediaKind(req.URL.Path, resp.Header.Get("Content-Type")); kind != "" {
+			px.media.record(clientHash, host,
+				"https://"+host+req.URL.RequestURI(), req.URL.Path,
+				req.Header.Get("Referer"), kind,
+				resp.Header.Get("Content-Type"), resp.ContentLength)
+		}
+	}
+
 	// #662 — cross-site cookie-tracker correlation (restores the kbin /social
 	// graph). FAITHFUL to the decommissioned Python social_graph addon: extract
 	// 3rd-party cookie edges (Set-Cookie + request Cookie), hash the identifier
@@ -602,6 +620,8 @@ func main() {
 		"relay per-flow telemetry (dpi/cookies/ja4) to the analysis sidecar sockets so the kbin \"Qui te piste?\" events refill (#662; replaces the decommissioned Python relay addons). Fire-and-forget; a dead/slow sidecar never affects the proxy. Set false to emit nothing.")
 	socialRelay := flag.Bool("social-relay", true,
 		"compute cross-site cookie-tracker edges and POST them to the portal /__toolbox/social-event ingest so the kbin /social graph refills (#662; replaces the decommissioned Python social_graph addon). Hash-only (never raw cookie values); WG-peer flows only; batched + fire-and-forget — a dead/slow portal never affects the proxy. Set false to emit nothing.")
+	mediaCatch := flag.Bool("media-catch", true,
+		"R4 media reverse-catcher (#736): record cloneable media URLs (HLS/DASH manifests + direct audio/video) seen on MITM'd flows to "+mediaCatchPath+" for the mediaflow \"Discovered Media\" clone view. URLs only, never bodies; deduped. Set false to disable.")
 	flag.Parse()
 	ca, err := loadCA(*caCert, *caKey)
 	if err != nil {
@@ -637,6 +657,7 @@ func main() {
 		socialRelayOn: *socialRelay,
 		social:        newSocialRelay(),
 		consent:       newConsentLog(),
+		media:         newMediaCatcher(*mediaCatch),
 	}
 	// #662 — start the social-edge flusher: the MITM path buffers cross-site
 	// tracker edges into px.social, drained every 10s to the portal's

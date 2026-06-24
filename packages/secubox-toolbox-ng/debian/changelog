@@ -1,3 +1,21 @@
+secubox-toolbox-ng (0.1.20-1~bookworm1) bookworm; urgency=medium
+
+  * media reverse-catcher: only record 2xx responses (skip redirects/errors that
+    merely had a media-looking path). Ship the worker unit ReadWritePaths=/run/
+    secubox so the catcher can write its log under ProtectSystem=strict. (#736)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 21:25:00 +0000
+
+secubox-toolbox-ng (0.1.19-1~bookworm1) bookworm; urgency=medium
+
+  * R4 media reverse-catcher (#736): on MITM'd flows, record cloneable media URLs
+    (HLS/DASH manifests + direct audio/video + googlevideo videoplayback) to
+    /run/secubox/media-catch.jsonl for the mediaflow "Discovered Media" clone
+    view. URLs only (never bodies), deduped per worker, atomic appends, best-
+    effort. Gated by --media-catch (default on).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 21:10:00 +0000
+
 secubox-toolbox-ng (0.1.18-1~bookworm1) bookworm; urgency=medium
 
   * sbxmitm CSP: make the INLINE transparency banner actually run on nonce-based
