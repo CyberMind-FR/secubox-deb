@@ -5,10 +5,26 @@ After=network.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/mkdir -p /run/secubox
-ExecStart=/bin/chown secubox:secubox /run/secubox
-ExecStart=/bin/chmod 775 /run/secubox
-# Add www-data to secubox group if not already (for nginx access)
+# Phase 3 (#494) : /run/secubox is owned by tmpfiles.d at 1777 root:root.
+# The previous ExecStart sequence (mkdir + chown secubox:secubox + chmod 775)
+# ran AFTER tmpfiles.d and silently regressed the dir to 775, breaking cross-
+# user traversal for daemons running as users other than secubox (e.g.
+# secubox-threats which 226/NAMESPACE-failed because ReadWritePaths bind
+# couldn't cross 775 secubox:secubox + missing /var/log/suricata). See
+# secubox-core/debian/changelog 1.1.7 for the failure post-mortem.
+#
+# /run/secubox lifecycle is now :
+#   1. tmpfiles.d/secubox.conf creates 1777 root:root
+#   2. this service is a no-op for /run/secubox (NOT touched)
+#   3. each module's postinst chmods its own socket via UMask if needed
+
+# /var/log/suricata must exist for any service whose ReadWritePaths references
+# it (secubox-threats, secubox-suricata). Create idempotently.
+ExecStart=/bin/mkdir -p /var/log/suricata
+ExecStart=/bin/sh -c "chown secubox:secubox /var/log/suricata 2>/dev/null || true"
+ExecStart=/bin/chmod 0755 /var/log/suricata
+
+# Add www-data to secubox group (for nginx static-file access).
 ExecStart=/bin/sh -c "id -nG www-data | grep -q secubox || usermod -aG secubox www-data"
 
 [Install]
