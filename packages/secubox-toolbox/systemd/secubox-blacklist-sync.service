@@ -14,7 +14,11 @@ ExecStart=/usr/sbin/secubox-blacklist-sync
 User=root
 Nice=10
 IOSchedulingClass=idle
-TimeoutStartSec=120
+# DNS-guard resolves up to DOMAIN_CAP blocklisted domains sequentially; on a
+# loaded board that can run a few minutes. 120s was shorter than a full sweep
+# (~3min for ~700 live resolutions) → systemd SIGTERM'd the oneshot before it
+# loaded the sets. Give it headroom (#519/#522).
+TimeoutStartSec=600
 
 [Install]
 WantedBy=multi-user.target
