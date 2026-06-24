@@ -3,6 +3,28 @@
 
 ---
 
+## 🗂️ 2026-06-22 : triage issues (30 ouvertes → revue obsolètes)
+
+- **Fermées** : #722 (nDPId — décidé contre, reverté).
+- **Recommandées à fermer (livré/superseded, commentées)** :
+  #475 ToolBoX Phase 1 (live 2.7.x) · #502/#507/#508 Social mapping (carto +
+  /social/me + report PDF live) · #495 Phase 5 mitm-LXC (superseded par #662 Go
+  sbxmitm host) · #531 APK one-tap (superseded par #685/#686 non-root).
+- **Actives (worktrees en cours)** : #655 webext banner · #615 security-posture ·
+  #494 secubox-core ExecStart · #498 Phase 7 WAF enforcement · #485 SOC scoring ·
+  #486 geoip/ASN (à vérifier vs #718 fait côté DPI).
+- **Backlog/future** : #685/#686 APK non-root (plan verrouillé) · #592 webmail-hub ·
+  #514/#515/#516/#519/#522/#525 Phase 12-14 (#515 CDN / #516 anti-bot partiellement
+  couverts par antibot_sites/opgrade_sites du social graph) · #500 Utiq · #497/#480/
+  #478 VILLAGE3B Eye/poster · #472/#430/#429 Nextcloud · #471/#468/#421 perms (à
+  vérifier si déjà corrigées) · #467/#462/#460/#255/#254 hardware/kernel · #455 egress ·
+  #454/#453/#452/#449 mesh/BLE · #448/#447/#446/#434 kiosk · #422 vm cascade ·
+  #393/#379/#347 packaging · #513 WebUI sub-tabs.
+- ⚠️ Fermeture finale = **user only** (sauf issues créées en session) ; les
+  recommandations ci-dessus sont commentées sur chaque issue.
+
+---
+
 ## ✅ 2026-06-22 : DPI exfil + Netrunner report + sbxmitm fixes (tous mergés, live gk2)
 
 Session livrée intégralement sur master + déployée. Détail dans HISTORY 2026-06-22.
