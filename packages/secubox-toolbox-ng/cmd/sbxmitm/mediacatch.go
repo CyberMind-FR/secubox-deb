@@ -88,9 +88,34 @@ func mediaKind(path, ctype string) string {
 	return ""
 }
 
+// videoPageKind reports "page" when a text/html navigation is a video PAGE that
+// yt-dlp can clone directly from its URL (YouTube watch/shorts/live, youtu.be).
+// The signed chunk URLs aren't reusable, but the watch URL is — so this is the
+// genuinely-cloneable artefact for YouTube. "" for anything else.
+func videoPageKind(host, path, ctype string) string {
+	if !strings.Contains(strings.ToLower(ctype), "text/html") {
+		return ""
+	}
+	h := strings.ToLower(host)
+	p := strings.ToLower(path)
+	if strings.HasSuffix(h, "youtu.be") {
+		return "page"
+	}
+	if strings.HasSuffix(h, "youtube.com") &&
+		(strings.HasPrefix(p, "/watch") || strings.HasPrefix(p, "/shorts/") || strings.HasPrefix(p, "/live/")) {
+		return "page"
+	}
+	return ""
+}
+
 // dedupKey collapses a media URL to host + path WITHOUT the query, so the many
-// byte-range / itag chunk requests for one stream record as a single line.
-func dedupKey(host, path string) string {
+// byte-range / itag chunk requests for one stream record as a single line. Video
+// PAGES are the exception: their query carries the video id (?v=…), so each
+// distinct video must keep its full URL as the key.
+func dedupKey(host, path, url, kind string) string {
+	if kind == "page" {
+		return url
+	}
 	if i := strings.IndexByte(path, '?'); i >= 0 {
 		path = path[:i]
 	}
@@ -103,7 +128,7 @@ func (mc *mediaCatcher) record(client, host, url, path, referer, kind, ctype str
 	if mc == nil || !mc.enabled || mc.f == nil {
 		return
 	}
-	key := dedupKey(host, path)
+	key := dedupKey(host, path, url, kind)
 	mc.mu.Lock()
 	if _, ok := mc.seen[key]; ok {
 		mc.mu.Unlock()
