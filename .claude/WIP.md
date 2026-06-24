@@ -5,8 +5,7 @@
 
 ## 🗂️ 2026-06-22 : triage issues (30 ouvertes → revue obsolètes)
 
-- **Fermées** : #722 (nDPId — décidé contre, reverté).
-- **Recommandées à fermer (livré/superseded, commentées)** :
+- **Fermées (user-validé 2026-06-22)** : #722 (nDPId — décidé contre, reverté) ·
   #475 ToolBoX Phase 1 (live 2.7.x) · #502/#507/#508 Social mapping (carto +
   /social/me + report PDF live) · #495 Phase 5 mitm-LXC (superseded par #662 Go
   sbxmitm host) · #531 APK one-tap (superseded par #685/#686 non-root).
