@@ -179,14 +179,21 @@ func fetchInlineBanner(portal, clientHash string, wg, cspBypassed bool) (string,
 // scriptBody is the COMPLETE inline IIFE from fetchInlineBanner (NOT a src tag);
 // an empty scriptBody is a no-op (returns the body unchanged) so a failed/skipped
 // fetch is handled gracefully by the caller passing "".
-func injectInlineBanner(body []byte, scriptBody string) []byte {
+func injectInlineBanner(body []byte, scriptBody, nonce string) []byte {
 	if scriptBody == "" {
 		return body
 	}
 	if bytes.Contains(body, []byte(bannerGuard)) {
 		return body
 	}
-	script := []byte("<!-- " + bannerGuard + " --><script>" + scriptBody + "</script>")
+	// #728 — on a nonce-based CSP the page's nonce is stamped here so the browser
+	// accepts our inline <script> WITHOUT us having to weaken the page's policy
+	// (csp.go validates the value is a safe base64 attribute before passing it on).
+	nonceAttr := ""
+	if nonce != "" {
+		nonceAttr = ` nonce="` + nonce + `"`
+	}
+	script := []byte("<!-- " + bannerGuard + " --><script" + nonceAttr + ">" + scriptBody + "</script>")
 	low := bytes.ToLower(body)
 
 	if h := bytes.Index(low, []byte("<head")); h >= 0 {

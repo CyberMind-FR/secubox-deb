@@ -563,16 +563,19 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// so the inline banner runs even on strict-CSP sites. Never on non-injected
 	// responses. cspBypassed becomes csp=1 on the inline script (banner shows 🔓).
 	cspBypassed := false
+	cspNonce := ""
 	if px.cspDemo {
-		cspBypassed = relaxCSPForLoader(resp.Header)
+		cspNonce, cspBypassed = relaxCSPForLoader(resp.Header)
 	}
 	// #662 — INLINE the banner (supersedes the <script src="/__toolbox/loader.js">
 	// tag): sites with a SERVICE WORKER hijack the same-origin src before it
 	// reaches this engine. We fetch the COMPLETE script body from the portal
 	// server-side and bake it into a self-contained <script>. Fail-open: a
 	// dead/slow portal → scriptBody=="" → inject skipped, page served intact.
+	// cspNonce (#728): the page's borrowed nonce, stamped on the inline <script>
+	// so a nonce-based CSP (YouTube, most news sites) accepts it.
 	scriptBody, _ := fetchInlineBanner(px.portal, clientHash, wg, cspBypassed)
-	if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, wg); ok {
+	if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, cspNonce, wg); ok {
 		body = out
 		// Keep framing consistent with the served bytes (only the length changed).
 		resp.Header.Set("Content-Length", strconv.Itoa(len(body)))

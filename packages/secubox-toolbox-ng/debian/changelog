@@ -1,3 +1,17 @@
+secubox-toolbox-ng (0.1.18-1~bookworm1) bookworm; urgency=medium
+
+  * sbxmitm CSP: make the INLINE transparency banner actually run on nonce-based
+    CSP sites (YouTube, most news sites). The banner is inlined (service-worker-
+    proof), but a CSP nonce/hash makes 'unsafe-inline' IGNORED, so the bare inline
+    script was silently blocked — banner never appeared. Now we BORROW the page's
+    own nonce and stamp it on the injected <script nonce=…> (surgical: the page's
+    CSP/nonces/hashes stay intact), falling back to forcing 'unsafe-inline'
+    (dropping nonce/hash/strict-dynamic) only when there is no nonce to borrow.
+    Nonce values are validated (base64 charset) to prevent attribute breakout.
+    (#728 youtube/news bannering)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 19:20:00 +0000
+
 secubox-toolbox-ng (0.1.17-1~bookworm1) bookworm; urgency=medium
 
   * sbxmitm CSP: drop now-empty CSP header lines after a Trusted-Types-only
