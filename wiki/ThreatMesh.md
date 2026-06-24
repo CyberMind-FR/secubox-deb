@@ -1,6 +1,6 @@
 # ThreatMesh 🛰️
 
-**[EN](ThreatMesh)** | **🔴 BOOT · 🛡️ SECURITY** | sovereign threat-intel
+**[EN](ThreatMesh)** | [FR](ThreatMesh-FR) | **🔴 BOOT · 🛡️ SECURITY** | sovereign threat-intel
 
 > Your own neighborhood watch for the internet — *free feeds + neighbor tips, no central boss, no paywall, can't be banned.*
 
