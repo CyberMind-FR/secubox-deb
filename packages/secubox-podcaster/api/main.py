@@ -16,8 +16,11 @@ import asyncio
 import html
 import os
 import re
+import shutil
+import tempfile
 import time
 import tomllib
+import zipfile
 from email.utils import parsedate_to_datetime, format_datetime
 from datetime import datetime, timezone
 from pathlib import Path
@@ -299,6 +302,29 @@ async def share_feed(request: Request):
     return Response(content=rss, media_type="application/rss+xml")
 
 
+@router.get("/public/library")
+async def public_library():
+    """Public listener library — downloaded/shared episodes only (no auth).
+    Feeds the external portal frontend; exposes nothing un-shared."""
+    _ensure_worker()
+    eps = store.downloaded_episodes()
+    feeds: dict = {}
+    for e in eps:
+        k = e.get("feed_title") or "Podcast"
+        feeds[k] = feeds.get(k, 0) + 1
+    return {
+        "title": CFG.get("share_title", "SecuBox Podcaster"),
+        "episodes": [{
+            "id": e["id"], "title": e.get("title"), "feed": e.get("feed_title"),
+            "pubdate": e.get("pubdate"), "duration": e.get("duration"),
+            "mime": e.get("mime"), "bytes": e.get("bytes"),
+            "media": f"/api/v1/podcaster/media/{e['id']}",
+        } for e in eps],
+        "feeds": feeds,
+        "share": "/api/v1/podcaster/share/feed.xml",
+    }
+
+
 @router.get("/media/{ep_id}")
 async def media(ep_id: int):
     ep = store.get_episode(ep_id)
@@ -351,6 +377,68 @@ async def import_opml(body: OPMLIn):
         except Exception as e:
             log.error(f"opml feed {u}: {e}")
     return {"added": added, "total": len(urls)}
+
+
+_AUDIO_EXT = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wav", ".mp4"}
+_AUDIO_MIME = {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".m4b": "audio/mp4",
+               ".aac": "audio/aac", ".ogg": "audio/ogg", ".opus": "audio/opus",
+               ".flac": "audio/flac", ".wav": "audio/wav", ".mp4": "audio/mp4"}
+
+
+@router.post("/audiobook/upload", dependencies=[Depends(require_jwt)])
+async def audiobook_upload(request: Request, title: str = "Audiobook"):
+    """Stream an uploaded ZIP to a temp file, extract its audio tracks, and
+    publish them as a self-contained (synthetic) feed — already 'done' so they
+    show in the library + share feed. Raw body (no python-multipart dep)."""
+    _ensure_worker()
+    title = (title or "Audiobook").strip() or "Audiobook"
+    tmp = Path(tempfile.mkstemp(suffix=".zip", dir="/var/lib/secubox/podcaster")[1])
+    try:
+        with open(tmp, "wb") as fh:
+            async for chunk in request.stream():
+                fh.write(chunk)
+        if not zipfile.is_zipfile(tmp):
+            raise HTTPException(400, "not a valid ZIP")
+        # synthetic feed
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "audiobook"
+        fid = store.add_feed(f"audiobook:{slug}:{int(time.time())}",
+                             {"title": title, "description": f"Audiobook: {title}"})
+        fdir = MEDIA / str(fid)
+        fdir.mkdir(parents=True, exist_ok=True)
+        tracks = 0
+        with zipfile.ZipFile(tmp) as z:
+            names = [n for n in z.namelist()
+                     if os.path.splitext(n)[1].lower() in _AUDIO_EXT
+                     and not n.endswith("/")]
+            names.sort()  # chapter order
+            base = int(time.time())
+            for i, n in enumerate(names):
+                ext = os.path.splitext(n)[1].lower()
+                tname = _safe_name(f"{i+1:03d}_{os.path.basename(n)}", ext)
+                dest = fdir / tname
+                with z.open(n) as src, open(dest, "wb") as out:
+                    shutil.copyfileobj(src, out, 1024 * 256)
+                store.upsert_episode(fid, {
+                    "guid": f"ab:{fid}:{i}", "title": f"{i+1:02d} · {os.path.splitext(os.path.basename(n))[0]}",
+                    "description": title, "pubdate": base + i,
+                    "enclosure": f"local:{dest}", "mime": _AUDIO_MIME.get(ext, "audio/mpeg"),
+                    "bytes": dest.stat().st_size,
+                })
+                # mark immediately downloaded (local file already present)
+                ep = store.list_episodes(feed_id=fid)
+                for e in ep:
+                    if e["guid"] == f"ab:{fid}:{i}":
+                        store.set_episode(e["id"], state="done", progress=100,
+                                          local_path=str(dest))
+                        break
+                tracks += 1
+        if not tracks:
+            store.delete_feed(fid)
+            raise HTTPException(400, "no audio files found in ZIP")
+        log.info(f"audiobook '{title}' -> feed {fid}, {tracks} tracks")
+        return {"title": title, "feed_id": fid, "tracks": tracks}
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 @router.get("/episodes", dependencies=[Depends(require_jwt)])

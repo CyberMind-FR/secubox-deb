@@ -1,3 +1,17 @@
+secubox-podcaster (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Admin WebUI: integrate the shared Hub sidebar (/shared/sidebar.js) + correct
+    auth token (sbx_token, 401 -> /login.html) — was missing the navbar and
+    falsely prompting to log in.
+  * Public listener PORTAL (no auth) at /podcaster/portal/ — standalone
+    C3BOX page driven by a new public GET /public/library endpoint; subscribe
+    (RSS) + per-feed filter + inline players. Meant to be exposed externally.
+  * Audiobook ZIP import: POST /audiobook/upload (raw body, no python-multipart)
+    streams the ZIP to a temp file, extracts audio tracks, and publishes them as
+    a self-contained synthetic feed (already 'done' -> in library + share feed).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 13:00:00 +0000
+
 secubox-podcaster (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release (#726). Modern podcast manager:
