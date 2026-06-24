@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox — refresh yt-dlp for the mediaflow R4 cloner (#736)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/736
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-yt-dlp-refresh
+Nice=15
+TimeoutStartSec=180

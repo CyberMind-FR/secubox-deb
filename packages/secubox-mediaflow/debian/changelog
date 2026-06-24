@@ -1,3 +1,12 @@
+secubox-mediaflow (2.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Persist Discovered Media off tmpfs: merge the sbxmitm catch log (/run, cleared
+    on reboot) into a durable capped store (discovered.json, 2000 max) so the
+    discovery list survives reboots. Idempotent override merge (no hit inflation).
+    Now also surfaces kind=page (YouTube watch URLs) for yt-dlp cloning. (#736)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 23:15:00 +0000
+
 secubox-mediaflow (2.1.0-1~bookworm1) bookworm; urgency=medium
 
   * R4 Discovered Media + Clone (#736): new dashboard cards. /discovered reads

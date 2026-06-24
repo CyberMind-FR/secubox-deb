@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox — weekly yt-dlp refresh for the mediaflow R4 cloner (#736)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/736
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=3600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

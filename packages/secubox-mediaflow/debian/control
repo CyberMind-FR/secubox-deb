@@ -10,6 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-mediaflow
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), secubox-dpi
+Recommends: ffmpeg, yt-dlp, curl
 Description: SecuBox Media Flow
  Détection trafic streaming et VoIP : Netflix, YouTube, Zoom, Spotify, qualité d'expérience.
  .
