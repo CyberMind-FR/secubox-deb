@@ -90,7 +90,7 @@ async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(defa
     if not (mh and all(c in "0123456789abcdef" for c in mh) and 8 <= len(mh) <= 64):
         return JSONResponse({"ok": False, "error": "bad mh"}, status_code=400,
                             headers={"Cache-Control": "no-store"})
-    if level not in ("r0", "r1", "r2", "r3"):
+    if level not in ("r0", "r1", "r2", "r3", "r4"):
         return JSONResponse({"ok": False, "error": "bad level"}, status_code=400,
                             headers={"Cache-Control": "no-store"})
     # honour the same gates as /change-level
@@ -100,7 +100,8 @@ async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(defa
             level = "r1"
     except Exception:
         pass
-    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
+    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
     try:
         store.set_client_level(mh, level)
@@ -472,13 +473,14 @@ async def accept(request: Request):
         level = (form.get("level") or "r1").lower()
     except Exception:
         level = "r1"
-    if level not in ("r0", "r1", "r2", "r3"):
+    if level not in ("r0", "r1", "r2", "r3", "r4"):
         level = "r1"
     # R2 only allowed if config enables it
     if level == "r2" and not cfg.r2.enabled:
         level = "r1"
     # R3 only allowed if WG container provisioned (presence of server.pubkey)
-    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
+    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
 
     # All levels get validated (net access)
@@ -530,11 +532,12 @@ async def change_level(request: Request):
         level = (form.get("level") or "r1").lower()
     except Exception:
         level = "r1"
-    if level not in ("r0", "r1", "r2", "r3"):
+    if level not in ("r0", "r1", "r2", "r3", "r4"):
         level = "r1"
     if level == "r2" and not cfg.r2.enabled:
         level = "r1"
-    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
+    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
 
     # Re-validate (idempotent extend)

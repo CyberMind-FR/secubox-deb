@@ -176,7 +176,10 @@ _BANNER_CORE = r"""
   // engine reverse-proxies it to the portal), then reload so the new tier applies.
   function lvlSwitch(b){
     var cur = String(b.level || "r1").toLowerCase();
-    var lv = ["r0","r1","r2","r3"], out = "<span id=\"sbx-lvl\" title=\"Niveau d'analyse — clique pour changer\">";
+    // #736 — R4 = analyst / reverse-catcher tier (deepest): everything is MITM'd
+    // and media URLs are caught for cloning. Selectable here; functionally the
+    // box already runs MITM-everything by default.
+    var lv = ["r0","r1","r2","r3","r4"], out = "<span id=\"sbx-lvl\" title=\"Niveau d'analyse — R4 = analyste/capteur média, clique pour changer\">";
     for (var i=0;i<lv.length;i++){ var on = lv[i]===cur;
       out += "<button data-lvl=\"" + lv[i] + "\" class=\"sbx-lvl\" style=\"background:"
         + (on?"#148C66":"transparent") + ";color:" + (on?"#0A0E14":"#8A9AA8")

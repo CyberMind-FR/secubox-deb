@@ -215,7 +215,7 @@ def compute() -> dict:
             out["risk_distribution_7d"] = score_buckets
 
             # Level distribution
-            level_buckets = {"r0": 0, "r1": 0, "r2": 0, "r3": 0}
+            level_buckets = {"r0": 0, "r1": 0, "r2": 0, "r3": 0, "r4": 0}
             for row in _safe_query(c,
                 "SELECT level, COUNT(*) as n FROM clients WHERE last_seen > ? GROUP BY level",
                 (d7d,)):
@@ -237,7 +237,7 @@ def _empty_stats() -> dict:
         "events": {},
         "top_hosts_7d": [],
         "risk_distribution_7d": {"low": 0, "medium": 0, "high": 0},
-        "level_distribution_7d": {"r0": 0, "r1": 0, "r2": 0, "r3": 0},
+        "level_distribution_7d": {"r0": 0, "r1": 0, "r2": 0, "r3": 0, "r4": 0},
         "computed_at": _now(),
     }
 
