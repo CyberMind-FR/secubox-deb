@@ -1,6 +1,13 @@
 [Unit]
 Description=SecuBox Wazuh API
 After=network.target secubox-core.service
+# #53: this API only does anything when a local Wazuh agent/manager is present
+# (/var/ossec, port 55000). SecuBox's documented IDS/IPS stack is Suricata +
+# CrowdSec, so on every normal board Wazuh is absent and the uvicorn worker just
+# burned 100% CPU for nothing. Gate the unit on Wazuh actually being installed:
+# systemd reports "inactive (condition failed)" and never starts it otherwise.
+# Remote-API-only integrations (no local ossec) should drop this condition.
+ConditionPathExists=/var/ossec/etc/ossec.conf
 
 [Service]
 Type=simple
@@ -9,6 +16,8 @@ WorkingDirectory=/usr/lib/secubox/wazuh
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/wazuh.sock --log-level warning
 UMask=0117
 Restart=on-failure
+# Defensive: never hot-respawn (the default ~100ms churns CPU on its own).
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
