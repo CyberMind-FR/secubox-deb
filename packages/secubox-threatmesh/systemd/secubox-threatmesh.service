@@ -1,0 +1,22 @@
+[Unit]
+Description=SecuBox ThreatMesh — sovereign threat-intel mesh API (#728)
+After=network.target secubox-runtime.service secubox-p2p.service
+Wants=secubox-p2p.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/lib/secubox/threatmesh
+# Listens on :8780 — nginx proxies the dashboard; peers POST mesh decisions
+# over the WireGuard mesh. nft drop-in restricts :8780 to wg* + loopback.
+ExecStartPre=-/usr/sbin/nft -f /usr/share/secubox/threatmesh/nftables.d/secubox-threatmesh.nft
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8780 --workers 1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=no
+ProtectSystem=full
+PrivateTmp=true
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+
+[Install]
+WantedBy=multi-user.target

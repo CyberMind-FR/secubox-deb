@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<!-- SecuBox-Deb :: ThreatMesh — sovereign threat-intel (#728) — CyberMind -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox · ThreatMesh</title>
+<link rel="stylesheet" href="/shared/crt-light.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  :root{--cosmos-black:#0a0a0f;--gold:#c9a84c;--cinnabar:#e63946;--matrix:#00ff41;
+    --void:#6e40c9;--cyan:#00d4ff;--text:#e8e6d9;--muted:#6b6b7a;--panel:#13131c;--line:#23232f}
+  body{margin:0;background:var(--cosmos-black);color:var(--text);font-family:'JetBrains Mono',ui-monospace,monospace;display:flex}
+  .main{flex:1;margin-left:220px;min-height:100vh;padding:0 0 40px}
+  @media(max-width:900px){.sidebar{display:none}.main{margin-left:0}}
+  .topbar{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(90deg,#0a0a0f,#13131c)}
+  .topbar h1{font-size:18px;margin:0;letter-spacing:1px;color:var(--gold)} .topbar .em{font-size:22px}
+  .pill{margin-left:auto;font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid var(--matrix);color:var(--matrix)}
+  .wrap{padding:20px 22px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h2{font-size:13px;color:var(--gold);margin:0 0 10px;letter-spacing:.5px}
+  .big{font-size:34px;color:var(--cyan);font-weight:700} .sub{color:var(--muted);font-size:12px}
+  .src{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line);font-size:12px}
+  .src b{color:var(--cyan)} .src.mesh b{color:var(--void)}
+  .bar{display:flex;gap:8px;padding:0 22px 16px}
+  button{font-family:inherit;font-size:13px;background:#1a1a26;color:var(--text);border:1px solid var(--line);
+    border-radius:8px;padding:9px 14px;cursor:pointer} button:hover{border-color:var(--cyan);color:var(--cyan)}
+  button.go{background:var(--void);border-color:var(--void);color:#fff}
+  table{width:100%;border-collapse:collapse;font-size:12px} td,th{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted)} .toast{position:fixed;bottom:18px;right:18px;background:#13131c;border:1px solid var(--cyan);
+    color:var(--cyan);padding:10px 14px;border-radius:8px;opacity:0;transition:.2s;font-size:12px}.toast.on{opacity:1}
+  .full{grid-column:1/-1}
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="main">
+  <div class="topbar"><span class="em">🛰️</span><h1>THREATMESH</h1>
+    <span class="pill" id="mode">sovereign · CAPI off</span></div>
+  <div class="bar">
+    <button class="go" onclick="refreshFeeds()">↻ Refresh feeds</button>
+    <button onclick="gossip()">🛰️ Gossip now</button>
+    <button onclick="load()">⟳</button>
+  </div>
+  <div class="wrap">
+    <div class="card"><h2>BLOCKED IPs (aggregate)</h2><div class="big" id="total">…</div><div class="sub">feeds + mesh + local → nft</div></div>
+    <div class="card"><h2>FREE FEEDS</h2><div class="big" id="feedtotal">…</div><div class="sub" id="feedn"></div></div>
+    <div class="card"><h2>MESH</h2><div class="big" id="meshtotal">…</div><div class="sub" id="peern"></div></div>
+    <div class="card"><h2>SOURCES</h2><div id="srclist"></div></div>
+    <div class="card full"><h2>MESH PEERS</h2><div id="peers" class="sub">…</div></div>
+    <div class="card full"><h2>TOP CONSENSUS IPs</h2><table id="agg"><thead><tr><th>IP</th><th>consensus</th><th>sources</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="/shared/sidebar.js"></script>
+<script>
+const API="/api/v1/threatmesh";
+function tok(){return localStorage.getItem("sbx_token")||""}
+async function api(p,opt={}){opt.headers=Object.assign({},opt.headers||{});const t=tok();if(t)opt.headers.Authorization="Bearer "+t;
+  const r=await fetch(API+p,opt);if(r.status===401){toast("login via Hub");throw 0}if(!r.ok)throw 0;
+  const ct=r.headers.get("content-type")||"";return ct.includes("json")?r.json():r.text()}
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._);t._=setTimeout(()=>t.classList.remove("on"),2600)}
+function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+async function load(){
+  let s;try{s=await fetch(API+"/status").then(r=>r.json())}catch(e){return}
+  document.getElementById("mode").textContent=(s.mode||"sovereign")+" · CAPI "+(s.capi?"on":"off")+" · node "+(s.node||"?");
+  document.getElementById("feedtotal").textContent=s.feed_total??0;
+  document.getElementById("feedn").textContent=Object.keys(s.feeds||{}).length+" feeds";
+  document.getElementById("meshtotal").textContent=s.mesh_total??0;
+  document.getElementById("peern").textContent=(s.peers||0)+" peers";
+  const all=s.sources||{};document.getElementById("total").textContent=Object.values(all).reduce((a,b)=>a+b,0);
+  document.getElementById("srclist").innerHTML=Object.entries(all).sort((a,b)=>b[1]-a[1]).slice(0,12)
+    .map(([k,v])=>`<div class="src ${k.startsWith('mesh:')?'mesh':''}"><span>${esc(k)}</span><b>${v}</b></div>`).join("")||'<div class="sub">no sources yet</div>';
+  try{const p=await fetch(API+"/peers").then(r=>r.json());
+    document.getElementById("peers").innerHTML=(p.peers||[]).length?p.peers.map(x=>`${esc(x.name||x.id)} <span style="color:var(--muted)">(${esc(x.address)})</span>`).join(" · "):"no mesh peers yet (single-node) — decisions will gossip when peers join";}catch(e){}
+  try{const d=await fetch(API+"/decisions?min_consensus=1&limit=40").then(r=>r.json());
+    d.sort((a,b)=>b.consensus-a.consensus);
+    document.querySelector("#agg tbody").innerHTML=d.slice(0,25).map(r=>`<tr><td>${esc(r.value)}</td><td>${r.consensus}</td><td style="color:var(--muted)">${esc((r.sources||'').slice(0,60))}</td></tr>`).join("");}catch(e){}
+}
+async function refreshFeeds(){try{await api("/feeds/refresh",{method:"POST"});toast("feed refresh started (~1 min)")}catch(e){toast("need Hub login")}}
+async function gossip(){try{const r=await api("/mesh/gossip",{method:"POST"});toast(`gossip: ${r.pushed}/${r.peers} peers, ${r.shared} shared`)}catch(e){toast("need Hub login")}}
+load();setInterval(load,8000);
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -m 0755 /var/lib/secubox/threatmesh
+    systemctl daemon-reload 2>/dev/null || true
+    # mesh-port firewall (lock :8780 to wg*/lo under DEFAULT DROP)
+    if [ -f /usr/share/secubox/threatmesh/nftables.d/secubox-threatmesh.nft ]; then
+      nft -f /usr/share/secubox/threatmesh/nftables.d/secubox-threatmesh.nft 2>/dev/null || true
+    fi
+    if [ "$(systemctl is-enabled secubox-threatmesh.service 2>/dev/null)" != "masked" ]; then
+      systemctl enable --now secubox-threatmesh.service 2>/dev/null || true
+    fi
+    systemctl enable --now secubox-threatfeed.timer 2>/dev/null || true
+    # first feed population (background; logs to /tmp to avoid /var/log perms)
+    /usr/sbin/secubox-threatfeed >/tmp/secubox-threatfeed-firstrun.log 2>&1 &
+    if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0
