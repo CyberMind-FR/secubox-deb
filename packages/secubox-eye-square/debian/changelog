@@ -1,3 +1,11 @@
+secubox-eye-square (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * #494/#511: postinst no longer chowns the shared parents /run/secubox and
+    /var/log/secubox to secubox-eye-square (it stripped every other daemon's
+    traversal/log access). Logs go to an own subdir /var/log/secubox/eye-square.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 10:45:00 +0000
+
 secubox-eye-square (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Relocate firstboot.sh from /usr/local/sbin/ to /usr/lib/secubox/

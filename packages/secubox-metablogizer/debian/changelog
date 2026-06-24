@@ -1,3 +1,10 @@
+secubox-metablogizer (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * #494: postinst no longer chowns the shared /run/secubox parent; only the
+    module's own /srv/metablogizer/sites is owned (see also #121).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 10:45:00 +0000
+
 secubox-metablogizer (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * debian/secubox-metablogizer.service: lower uvicorn --log-level from
