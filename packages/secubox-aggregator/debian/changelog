@@ -1,3 +1,14 @@
+secubox-aggregator (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * #727 auto-heal watchdog: ship secubox-aggregator-watchdog.{sh,service,timer}.
+    The in-process aggregator is the hub/auth/menu SPOF; under a host load spike
+    its event loop can wedge and the socket stops answering (board-wide 502/000:
+    sparse navbar, login errors). The timer probes aggregator.sock every 2 min
+    and restarts the service after 2 consecutive failures. Enabled in postinst
+    (respects operator masking). Packages the live fix from the 2026-06-24 incident.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 15:10:00 +0000
+
 secubox-aggregator (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Phase 7 follow-up (#498) — relax hardening for module sudoers :

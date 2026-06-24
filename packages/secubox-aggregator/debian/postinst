@@ -17,6 +17,12 @@ case "$1" in
     systemctl enable secubox-aggregator.service
     systemctl start secubox-aggregator.service || true
 
+    # Auto-heal watchdog (#727): restart the aggregator if its socket wedges
+    # under load (the hub/auth/menu SPOF). Respect operator masking.
+    if [ "$(systemctl is-enabled secubox-aggregator-watchdog.timer 2>/dev/null)" != "masked" ]; then
+        systemctl enable --now secubox-aggregator-watchdog.timer 2>/dev/null || true
+    fi
+
     echo "secubox-aggregator: to migrate all installed SecuBox modules into"
     echo "  the aggregator (replaces per-module uvicorn processes) run :"
     echo "    sudo /usr/sbin/secubox-aggregator-migrate"
