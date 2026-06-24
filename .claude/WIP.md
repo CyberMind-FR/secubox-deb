@@ -28,7 +28,9 @@
   passé ; drift-guard #627 rattrape. Root cause = generate `haproxyctl` (api/main.py l.846/896).
 - ✅ **#53** : **FIX poussé** (`fix/53-…`) — gate `ConditionPathExists=/var/ossec/etc/ossec.conf`
   + `RestartSec=5` ; module conservé (SIEM opt-in). Vérifié gk2 (/var/ossec absent). Bump 1.0.1.
-- **#65** : `common/nginx/webui.conf` routes hardcodées → passer à `include secubox.d/*.conf`.
+- ✅ **#65** : déjà résolu en prod (webui.conf déployé inclut `secubox-routes.d/*.conf`,
+  163 snippets). Template `common/nginx/webui.conf` (stale) synchronisé sur `feature/65-…`.
+  Reco fermer. Convention : `secubox-routes.d/`=actif, `secubox.d/`=legacy.
 - ✅ **#121** : **FIX poussé** (`fix/121-…`) — helper `fix_perms` chown -R secubox:secubox
   le site dir après chaque ingest .git (metablog-ingest-site.sh). Script dev, pas de deploy.
 - ⬜ Restent : **#91** (deploy WAF risqué) · **#65** (refactor include, risque 502) ·
