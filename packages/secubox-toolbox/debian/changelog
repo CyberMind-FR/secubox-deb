@@ -1,3 +1,21 @@
+secubox-toolbox (2.7.18-1~bookworm1) bookworm; urgency=medium
+
+  * #519/#522 fix(blacklist-sync): the DNS-guard domain loop aborted the whole
+    enforcement sync on the first unresolvable blocklisted domain — getent
+    returns exit 2 on NXDOMAIN and, under set -euo pipefail, the
+    `ips=$(getent ... | awk | sort)` assignment propagated that 2 (status=2,
+    INVALIDARGUMENT under systemd). Blocklisted domains are overwhelmingly
+    dead/sinkholed, so the oneshot failed every run → the nft blacklist_v4/v6
+    sets were never populated and the protection enforcement plane was inert.
+    Guard the substitution with `|| true` so a dead domain is skipped, not fatal.
+  * #519/#522 fix(blacklist-sync): a full DNS-guard sweep (~700 live resolutions)
+    runs ~3min on a loaded board but the unit's TimeoutStartSec was 120s →
+    systemd SIGTERM'd the oneshot before it loaded the sets. Raise to 600s and
+    drop the per-lookup timeout default 2s→1s so a sweep finishes well within it.
+    Verified live on gk2: sets populate (blacklist_v4=1675, blacklist_v6=207).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 09:30:00 +0000
+
 secubox-toolbox (2.7.17-1~bookworm1) bookworm; urgency=medium
 
   * #724 banner: in-banner R0..R3 level switch — the injected transparency

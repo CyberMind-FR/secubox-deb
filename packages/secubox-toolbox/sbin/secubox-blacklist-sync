@@ -61,14 +61,18 @@ fi
 # Bounded : cap on domains/cycle + per-lookup timeout so the sync never
 # hangs on a dead resolver.
 DOMAIN_CAP="${SECUBOX_BL_DOMAIN_CAP:-2000}"
-RESOLVE_TIMEOUT="${SECUBOX_BL_RESOLVE_TIMEOUT:-2}"
+RESOLVE_TIMEOUT="${SECUBOX_BL_RESOLVE_TIMEOUT:-1}"
 resolved_domains=0
 if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
     while IFS= read -r dom; do
         [ -n "$dom" ] || continue
         # getent ahosts returns both A + AAAA ; timeout guards a dead lookup.
+        # NXDOMAIN makes getent exit 2 → with pipefail+set -e the assignment
+        # would abort the whole sync on the first dead blocklisted domain
+        # (and blocklisted domains are overwhelmingly dead/sinkholed). Guard
+        # the substitution so an unresolvable domain is simply skipped.
         ips=$(timeout "$RESOLVE_TIMEOUT" getent ahosts "$dom" 2>/dev/null \
-                | awk '{print $1}' | sort -u)
+                | awk '{print $1}' | sort -u || true)
         if [ -n "$ips" ]; then
             printf '%s\n' "$ips" >> "$TMP4.raw"
             resolved_domains=$((resolved_domains + 1))
