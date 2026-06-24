@@ -1,3 +1,13 @@
+secubox-toolbox (2.7.17-1~bookworm1) bookworm; urgency=medium
+
+  * #724 banner: in-banner R0..R3 level switch — the injected transparency
+    banner now shows the real client level AND lets the client change it inline
+    (GET /__toolbox/set-level, reverse-proxied by sbxmitm like /__toolbox/bundle;
+    store.set_client_level by hash; bundle cache invalidated so it reflects at
+    once). r2 gated by config, r3 by wg server.pubkey.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 22 Jun 2026 15:10:00 +0000
+
 secubox-toolbox (2.7.16-1~bookworm1) bookworm; urgency=medium
 
   * fix: restore banner on heavy sites (leparisien.fr). The #685 stream_large_bodies=1m

@@ -78,6 +78,39 @@ async def toolbox_bundle(mh: str = Query(default=""), wg: int = Query(default=0)
     )
 
 
+@router.get("/__toolbox/set-level")
+async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(default="")) -> JSONResponse:
+    """#724 — banner self-service level switch. Reverse-proxied to the portal by
+    sbxmitm (same-origin from the page) like /__toolbox/bundle, so it carries no
+    cookies/CSRF and is identified by the client's baked ``mh`` hash. Persists the
+    analysis tier for that hash (R3 wg peers have no captive MAC, so this is the
+    by-hash setter, not the nft-based /change-level)."""
+    mh = (mh or "").strip().lower()
+    level = (level or "").strip().lower()
+    if not (mh and all(c in "0123456789abcdef" for c in mh) and 8 <= len(mh) <= 64):
+        return JSONResponse({"ok": False, "error": "bad mh"}, status_code=400,
+                            headers={"Cache-Control": "no-store"})
+    if level not in ("r0", "r1", "r2", "r3"):
+        return JSONResponse({"ok": False, "error": "bad level"}, status_code=400,
+                            headers={"Cache-Control": "no-store"})
+    # honour the same gates as /change-level
+    try:
+        cfg = _get_cfg()
+        if level == "r2" and not cfg.r2.enabled:
+            level = "r1"
+    except Exception:
+        pass
+    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+        level = "r1"
+    try:
+        store.set_client_level(mh, level)
+        bundlemod.invalidate(mh)  # drop cached bundle so the new level shows at once
+    except Exception as e:  # pragma: no cover
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500,
+                            headers={"Cache-Control": "no-store"})
+    return JSONResponse({"ok": True, "level": level}, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/__toolbox/inline")
 async def toolbox_inline(
     mh: str = Query(default=""),

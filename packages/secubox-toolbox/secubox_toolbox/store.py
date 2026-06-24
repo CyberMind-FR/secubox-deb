@@ -251,6 +251,27 @@ def upsert_client(mac_hash: str, ip: str, level: str = "r1") -> None:
         )
 
 
+def set_client_level(mac_hash: str, level: str) -> None:
+    """#724 — set a client's level by hash only (no ip needed), for the banner
+    self-service switch on R3 wg peers (which have no captive MAC/ip). Updates the
+    existing row; inserts a minimal row if the client is unknown."""
+    now = int(time.time())
+    with _conn() as c:
+        try:
+            c.execute("ALTER TABLE clients ADD COLUMN level TEXT NOT NULL DEFAULT 'r1'")
+        except sqlite3.OperationalError:
+            pass
+        cur = c.execute("UPDATE clients SET level=?, last_seen=? WHERE mac_hash=?",
+                        (level, now, mac_hash))
+        if cur.rowcount == 0:
+            c.execute(
+                "INSERT INTO clients(mac_hash, ip, level, first_seen, last_seen) "
+                "VALUES (?,?,?,?,?) ON CONFLICT(mac_hash) DO UPDATE SET "
+                "level=excluded.level, last_seen=excluded.last_seen",
+                (mac_hash, "?", level, now, now),
+            )
+
+
 def get_client_level(mac_hash: str) -> str:
     """Returns 'r0' | 'r1' | 'r2'. Default 'r1' if not found."""
     try:
