@@ -6595,3 +6595,19 @@ CONFIG_USB_NET_RNDIS_HOST=y
 - LAN interfaces scanned: lan0, lan1, lan2, lan3, br0, br-lan, eth0, eth1
 - ARP states mapped to online: REACHABLE, DELAY, PROBE, PERMANENT = online
 - STALE, FAILED = offline
+
+## 2026-06-24 — build+deploy T0 fixes (#494/#519/#53/#421) + dirs-guard /run self-heal
+
+- Merged #121/#53/#65; cherry-picked #494 onto master (versions re-bumped above
+  master's advanced core 1.1.8/hub 1.4.6 → core 1.1.9, hub 1.4.7).
+- Discovered #494 was systemic (7 pkgs chowning /run/secubox parent) AND that
+  91 services declare `RuntimeDirectory=secubox` → systemd re-chowns the parent
+  to secubox:secubox 0755 on each start (#421). Central fix: extended
+  secubox-dirs-guard to re-assert /run/secubox 1777 root:root every minute
+  (core 1.1.10) instead of editing 91 units.
+- Built + deployed to gk2 (8 pkgs): core 1.1.10, hub 1.4.7, eye-remote 1.0.1,
+  metablogizer 1.2.2, metrics 1.0.4, p2p 1.7.1, wazuh 1.0.1, toolbox 2.7.18.
+  First deploy ssh was timeout-killed mid-toolbox-postinst → recovered with
+  dpkg --configure -a (cleared stale lock). Verified: /run/secubox=1777 root:root
+  holds, 0 half-configured, all services + R3 workers active, webui/portal 200,
+  toolbox blacklist-sync (#519) carried.
