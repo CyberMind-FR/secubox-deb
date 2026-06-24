@@ -1,3 +1,15 @@
+secubox-wazuh (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * #53 fix: stop the 100% CPU spin on boards without Wazuh. The uvicorn worker
+    was started unconditionally even though SecuBox's IDS/IPS stack is
+    Suricata + CrowdSec and /var/ossec is absent, so it busy-looped for nothing.
+    Gate the unit with ConditionPathExists=/var/ossec/etc/ossec.conf — systemd
+    now reports "inactive (condition failed)" and never starts it unless a local
+    Wazuh agent/manager is installed. Add RestartSec=5 as a hot-respawn guard.
+    Module kept (opt-in SIEM integration), not removed.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 10:00:00 +0000
+
 secubox-wazuh (1.0.0-1) stable; urgency=low
 
   * Initial release
