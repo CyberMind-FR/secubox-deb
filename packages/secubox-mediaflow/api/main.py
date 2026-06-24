@@ -268,27 +268,20 @@ async def _monitor_streams():
         try:
             settings = _load_settings()
             if settings.get("detection_enabled", True):
-                flows = await _dpi("/flows")
+                ex = await _dpi("/exfil")
                 media_stats: Dict[str, Dict[str, Any]] = {}
 
-                for f in flows.get("flows", []):
-                    app_name = f.get("app_name", "Unknown")
-                    if app_name in MEDIA_APPS:
-                        if app_name not in media_stats:
-                            media_stats[app_name] = {"name": app_name, "flows": 0, "bytes": 0}
-                        media_stats[app_name]["flows"] += 1
-                        media_stats[app_name]["bytes"] += f.get("bytes", 0)
+                for f in _exfil_media_flows(ex):
+                    name = f.get("service") or f.get("dst") or "Unknown"
+                    if name not in media_stats:
+                        media_stats[name] = {"name": name, "flows": 0, "bytes": 0}
+                    media_stats[name]["flows"] += int(f.get("flows", 1) or 1)
+                    media_stats[name]["bytes"] += int(f.get("up_bytes", 0) or 0) + int(f.get("down_bytes", 0) or 0)
 
-                        # Check for new services
-                        if settings.get("alert_on_new_service") and app_name not in seen_services:
-                            seen_services.add(app_name)
-                            await _notify_webhooks("new_service", {
-                                "service": app_name,
-                                "category": next(
-                                    (cat for cat, apps in STREAMING_CATEGORIES.items() if app_name in apps),
-                                    "other"
-                                )
-                            })
+                    # Check for new services
+                    if settings.get("alert_on_new_service") and name not in seen_services:
+                        seen_services.add(name)
+                        await _notify_webhooks("new_service", {"service": name, "category": "media"})
 
                 # Check alerts
                 await _check_alerts(media_stats)
@@ -323,16 +316,40 @@ async def health():
     return {"status": "ok", "module": "mediaflow", "version": "2.0.0"}
 
 
+# The DPI engine now exposes a public, category-tagged exfil view (the netifyd
+# /flows path is dead). Media = the exfil classifier's "media" category.
+MEDIA_CATEGORIES = {"media"}
+
+
+def _exfil_media_flows(exfil: Dict[str, Any]):
+    """Flatten exfil devices->services + active_flows to category=='media' rows."""
+    rows = []
+    for dev in exfil.get("devices", []) or []:
+        for s in dev.get("services", []) or []:
+            if s.get("category") in MEDIA_CATEGORIES:
+                rows.append(s)
+    for f in exfil.get("active_flows", []) or []:
+        if f.get("category") in MEDIA_CATEGORIES:
+            rows.append(f)
+    return rows
+
+
 @router.get("/status")
 async def status(user=Depends(require_jwt)):
     try:
-        s = await _dpi("/status")
+        ex = await _dpi("/exfil")
         settings = _load_settings()
+        media = _exfil_media_flows(ex)
         return {
-            **s,
+            "running": bool(ex) and "error" not in ex,
+            "source": "dpi-exfil",
+            "devices": len(ex.get("devices", []) or []),
+            "active_flows": len(ex.get("active_flows", []) or []),
+            "media_flows": len(media),
             "media_detection": settings.get("detection_enabled", True),
-            "monitored_apps": len(MEDIA_APPS),
-            "timestamp": datetime.now().isoformat()
+            "monitored_categories": sorted(MEDIA_CATEGORIES),
+            "generated_at": ex.get("generated_at"),
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         return {"running": False, "error": str(e)}
@@ -340,42 +357,28 @@ async def status(user=Depends(require_jwt)):
 
 @router.get("/services")
 async def services(user=Depends(require_jwt)):
-    """Get active media services with statistics."""
+    """Active media services (from the DPI exfil view), grouped by service/host."""
     cached = stats_cache.get("services")
     if cached:
         return cached
-
     try:
-        flows = await _dpi("/flows")
+        ex = await _dpi("/exfil")
         media: Dict[str, Dict[str, Any]] = {}
-
-        for f in flows.get("flows", []):
-            app_name = f.get("app_name", "Unknown")
-            if app_name in MEDIA_APPS:
-                if app_name not in media:
-                    category = next(
-                        (cat for cat, apps in STREAMING_CATEGORIES.items() if app_name in apps),
-                        "other"
-                    )
-                    media[app_name] = {
-                        "name": app_name,
-                        "category": category,
-                        "flows": 0,
-                        "bytes": 0,
-                        "clients": set()
-                    }
-                media[app_name]["flows"] += 1
-                media[app_name]["bytes"] += f.get("bytes", 0)
-                if f.get("src_ip"):
-                    media[app_name]["clients"].add(f.get("src_ip"))
-
-        # Convert sets to counts
+        for f in _exfil_media_flows(ex):
+            name = f.get("service") or f.get("dst") or "Unknown"
+            if name not in media:
+                media[name] = {"name": name, "category": "media",
+                               "host": f.get("dst"), "cloud": f.get("cloud"),
+                               "flows": 0, "bytes": 0, "clients": set()}
+            media[name]["flows"] += int(f.get("flows", 1) or 1)
+            media[name]["bytes"] += int(f.get("up_bytes", 0) or 0) + int(f.get("down_bytes", 0) or 0)
+            if f.get("device"):
+                media[name]["clients"].add(f.get("device"))
         result = []
-        for name, data in media.items():
+        for data in media.values():
             data["clients"] = len(data["clients"])
             data["bytes_human"] = _format_bytes(data["bytes"])
             result.append(data)
-
         result.sort(key=lambda x: x["bytes"], reverse=True)
         stats_cache.set("services", result)
         return result
@@ -413,24 +416,38 @@ async def services_by_category(user=Depends(require_jwt)):
 
 @router.get("/clients")
 async def clients(user=Depends(require_jwt)):
-    """Get clients using media services."""
+    """Get clients (devices) seen by the DPI exfil view, with totals."""
     try:
-        devices = await _dpi("/devices")
-        return devices if isinstance(devices, list) else []
+        ex = await _dpi("/exfil")
+        out = []
+        for d in ex.get("devices", []) or []:
+            tot = int(d.get("up_bytes", 0) or 0) + int(d.get("down_bytes", 0) or 0)
+            out.append({
+                "device": d.get("device"),
+                "flows": d.get("flows", 0),
+                "up_bytes": d.get("up_bytes", 0),
+                "down_bytes": d.get("down_bytes", 0),
+                "bytes": tot,
+                "bytes_human": _format_bytes(tot),
+                "media_flows": sum(1 for s in (d.get("services") or [])
+                                   if s.get("category") in MEDIA_CATEGORIES),
+            })
+        out.sort(key=lambda x: x["bytes"], reverse=True)
+        return out
     except Exception:
         return []
 
 
 @router.get("/get_active_streams")
 async def get_active_streams(user=Depends(require_jwt)):
-    """Get active media streams."""
+    """Active media streams (category=='media') from the DPI exfil view."""
     try:
-        flows = await _dpi("/flows")
+        ex = await _dpi("/exfil")
         streams = []
-        for f in flows.get("flows", []):
-            if f.get("app_name") in MEDIA_APPS:
-                f["bytes_human"] = _format_bytes(f.get("bytes", 0))
-                streams.append(f)
+        for f in _exfil_media_flows(ex):
+            b = int(f.get("up_bytes", 0) or 0) + int(f.get("down_bytes", 0) or 0)
+            streams.append({**f, "bytes": b, "bytes_human": _format_bytes(b)})
+        streams.sort(key=lambda x: x["bytes"], reverse=True)
         return streams
     except Exception:
         return []
@@ -440,23 +457,20 @@ async def get_active_streams(user=Depends(require_jwt)):
 async def get_service_details(service: str, user=Depends(require_jwt)):
     """Get detailed info for a specific media service."""
     try:
-        flows = await _dpi("/flows")
-        service_flows = [f for f in flows.get("flows", []) if f.get("app_name") == service]
-
-        total_bytes = sum(f.get("bytes", 0) for f in service_flows)
-        clients = set(f.get("src_ip") for f in service_flows if f.get("src_ip"))
-
+        ex = await _dpi("/exfil")
+        service_flows = [f for f in _exfil_media_flows(ex)
+                         if (f.get("service") or f.get("dst")) == service]
+        total_bytes = sum(int(f.get("up_bytes", 0) or 0) + int(f.get("down_bytes", 0) or 0)
+                          for f in service_flows)
+        clients = set(f.get("device") for f in service_flows if f.get("device"))
         return {
             "service": service,
-            "category": next(
-                (cat for cat, apps in STREAMING_CATEGORIES.items() if service in apps),
-                "other"
-            ),
+            "category": "media",
             "active_flows": len(service_flows),
             "total_bytes": total_bytes,
             "total_bytes_human": _format_bytes(total_bytes),
             "unique_clients": len(clients),
-            "flows": service_flows[:50]  # Limit to 50 flows
+            "flows": service_flows[:50],
         }
     except Exception:
         return {"service": service, "error": "Failed to fetch details"}
@@ -592,8 +606,8 @@ async def stop_ndpid(user=Depends(require_jwt)):
 async def summary(user=Depends(require_jwt)):
     """Get mediaflow summary."""
     try:
-        dpi_status = await _dpi("/status")
-        dpi_running = dpi_status.get("running", False)
+        ex = await _dpi("/exfil")
+        dpi_running = bool(ex) and "error" not in ex
     except Exception:
         dpi_running = False
 

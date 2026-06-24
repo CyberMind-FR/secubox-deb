@@ -1,3 +1,13 @@
+secubox-mediaflow (2.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Fix: consume the DPI engine's public /exfil view (category-tagged) instead of
+    the dead netifyd /flows + auth-gated /status. mediaflow's internal DPI calls
+    were unauthenticated -> 401 -> empty/error dashboard. Now /status /services
+    /clients /get_active_streams /get_service_details /summary + the monitor task
+    read /exfil and filter category=="media". Dashboard works again.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 17:00:00 +0000
+
 secubox-mediaflow (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
