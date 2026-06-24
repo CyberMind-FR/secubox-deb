@@ -1,3 +1,13 @@
+secubox-toolbox (2.7.20-1~bookworm1) bookworm; urgency=medium
+
+  * R4 analyst tier (#736): add R4 to the banner topbar level switch
+    (R0..R4) + /__toolbox/set-level + the by-MAC change-level validation.
+    R4 = deepest analyst / media-reverse-catcher tier; gated to the wg path
+    like R3. Functionally the box already runs MITM-everything by default;
+    this is the selectable affordance.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 22:40:00 +0000
+
 secubox-toolbox (2.7.19-1~bookworm1) bookworm; urgency=medium
 
   * #728 blacklist-sync confidence gate: enforce a threat_intel IP only when
