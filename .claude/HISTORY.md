@@ -23,7 +23,16 @@ New "R4" doctrine — visibility over performance. Delivered + live on gk2:
   services): cards/streams live, Top Media Services from DPI cumulative store.
   KEY: dashboard routes via the **aggregator** (in-process import) — restart
   `secubox-aggregator` to pick up mediaflow code changes.
-- Phase 4 (explicit R4 topbar selector) deferred → documented in #736.
+- Phase 4 done — R4 button added to the banner topbar (R0..R4) + set-level + by-MAC
+  validation + analytics buckets; gated to the wg path like R3 (secubox-toolbox 2.7.20).
+- yt-dlp upgraded 2023.03.04 → 2026.06.09 (standalone binary; YouTube works).
+- Recos: catcher now captures YouTube watch **pages** (kind=page, toolbox-ng 0.1.22);
+  Discovered Media persisted off tmpfs into a durable capped store (mediaflow 2.1.1);
+  yt-dlp packaged (Recommends + weekly refresh timer + postinst).
+- **Catch-log ownership bug** — `/run/secubox/media-catch.jsonl` was created
+  `secubox`-owned while the worker runs as `secubox-toolbox`, so O_APPEND failed
+  silently → nothing captured. Fixed with a tmpfiles.d entry pre-creating it owned
+  by the writer every boot (zz-secubox-toolbox-ng.conf). Live: rm + worker recreate.
 
 ## 2026-06-24 (cont.) — Banner on nonce-CSP sites + Claude API splice + YouTube unblock (#728)
 
