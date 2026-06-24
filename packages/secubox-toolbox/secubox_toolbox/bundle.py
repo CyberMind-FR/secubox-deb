@@ -95,6 +95,14 @@ def build_bundle(client_id: str, is_wg: bool = False) -> dict:
     }
 
 
+def invalidate(client_id: str) -> None:
+    """#724 — drop a client's cached bundle (both wg variants) so a level switch
+    is reflected on the next banner render without waiting for the TTL."""
+    cid = client_id or ""
+    for k in ((cid, True), (cid, False)):
+        _cache.pop(k, None)
+
+
 def get_bundle(client_id: str, is_wg: bool = False) -> dict:
     """Return the cached bundle for a client, rebuilding past the TTL. Fail-open."""
     try:
@@ -163,6 +171,35 @@ _BANNER_CORE = r"""
     var c = document.getElementById("sbx-ck");
     if (c) c.textContent = "🍪 " + countCookies() + " cookies";
   }
+  // #724 — inline R0..R3 level switch. Shows the real current level (highlighted)
+  // and lets the client change it: GET /__toolbox/set-level (same-origin, the Go
+  // engine reverse-proxies it to the portal), then reload so the new tier applies.
+  function lvlSwitch(b){
+    var cur = String(b.level || "r1").toLowerCase();
+    var lv = ["r0","r1","r2","r3"], out = "<span id=\"sbx-lvl\" title=\"Niveau d'analyse — clique pour changer\">";
+    for (var i=0;i<lv.length;i++){ var on = lv[i]===cur;
+      out += "<button data-lvl=\"" + lv[i] + "\" class=\"sbx-lvl\" style=\"background:"
+        + (on?"#148C66":"transparent") + ";color:" + (on?"#0A0E14":"#8A9AA8")
+        + ";border:1px solid #148C66;border-radius:3px;padding:0 5px;margin:0 1px;"
+        + "font:inherit;font-size:11px;cursor:pointer\">" + lv[i].toUpperCase() + "</button>";
+    }
+    return out + "</span>";
+  }
+  function wireLevels(bar, b){
+    var els = bar.querySelectorAll(".sbx-lvl");
+    for (var i=0;i<els.length;i++){ (function(el){
+      el.onclick = function(){
+        var lvl = el.getAttribute("data-lvl");
+        var who = (typeof mh !== "undefined" && mh) ? mh : (b.client_id || "");
+        if (!who) return;
+        el.textContent = "…";
+        fetch("/__toolbox/set-level?mh=" + encodeURIComponent(who) + "&level=" + lvl,
+              {credentials:"omit", cache:"no-store"})
+          .then(function(r){ if (r && r.ok) { location.reload(); } else { el.textContent = lvl.toUpperCase(); } })
+          .catch(function(){ el.textContent = lvl.toUpperCase(); });
+      };
+    })(els[i]); }
+  }
   function render(b){
     if (dismissed) return;
     if (document.getElementById("sbx-banner")) return;
@@ -184,7 +221,7 @@ _BANNER_CORE = r"""
     bar.innerHTML = "<b style=\"color:#148C66\">SecuBox</b>"
       + cspProof
       + tor
-      + "<span>" + esc((b.level || "r1").toUpperCase()) + "</span>"
+      + lvlSwitch(b)
       + "<span id=\"sbx-trk\">🛰️ " + trk + " trackers</span>"
       + "<span id=\"sbx-ck\">🍪 " + ck + " cookies</span>"
       + pin
@@ -192,7 +229,8 @@ _BANNER_CORE = r"""
       + "<button aria-label=\"dismiss\" style=\"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px\">✕</button>";
     document.body.appendChild(bar);
     try { document.body.style.paddingTop = (bar.offsetHeight || 34) + "px"; } catch (_) {}
-    var btn = bar.querySelector("button");
+    wireLevels(bar, b);
+    var btn = bar.querySelector("button[aria-label=\"dismiss\"]");
     if (btn) btn.onclick = function(){ dismissed = true; try { document.body.style.paddingTop = ""; } catch (_) {} bar.remove(); };
   }
   // ensure(): (re)render the banner if it's absent and the bundle is loaded and

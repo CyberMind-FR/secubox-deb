@@ -1,3 +1,10 @@
+secubox-toolbox-ng (0.1.15-1~bookworm1) bookworm; urgency=medium
+
+  * #724 — intercept /__toolbox/set-level (banner level switch) and reverse-proxy
+    it to the portal, same as /__toolbox/loader.js + /__toolbox/bundle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 22 Jun 2026 15:10:00 +0000
+
 secubox-toolbox-ng (0.1.14-1~bookworm1) bookworm; urgency=medium
 
   * quic/banner: strip Alt-Svc response header so browsers stop learning/preferring
