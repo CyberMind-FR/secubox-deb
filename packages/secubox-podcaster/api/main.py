@@ -77,6 +77,7 @@ _worker_started = False
 # ════════════════════════════════════════════════════════════════════
 class FeedIn(BaseModel):
     url: str
+    auto_dl: bool = True
 
 
 class OPMLIn(BaseModel):
@@ -154,16 +155,34 @@ def parse_feed(xml_bytes: bytes) -> tuple[dict, list[dict]]:
     return meta, episodes
 
 
-async def fetch_and_store(url: str) -> dict:
+async def fetch_and_store(url: str, auto_dl: Optional[bool] = None) -> dict:
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as cli:
         r = await cli.get(url, headers={"User-Agent": "SecuBox-Podcaster/1.0"})
         r.raise_for_status()
         meta, eps = parse_feed(r.content)
-    fid = store.add_feed(url, meta)
+    fid = store.add_feed(url, meta, auto_dl=1 if auto_dl else 0)
     store.update_feed_meta(fid, meta)
+    if auto_dl is not None:  # explicit add/toggle; None = refresh (keep current)
+        store.set_feed_autodl(fid, 1 if auto_dl else 0)
     for ep in eps:
         store.upsert_episode(fid, ep)
-    return {"feed_id": fid, "title": meta.get("title"), "episodes": len(eps)}
+    queued = await _autoqueue(fid)
+    return {"feed_id": fid, "title": meta.get("title"),
+            "episodes": len(eps), "queued": queued}
+
+
+async def _autoqueue(fid: int) -> int:
+    """If a feed has auto_dl, enqueue its not-yet-downloaded episodes (newest
+    first, capped by keep_per_feed to avoid unbounded disk use)."""
+    if not store.feed_autodl(fid):
+        return 0
+    cap = int(CFG.get("keep_per_feed", 0) or 0)
+    n = 0
+    for ep_id in store.pending_episode_ids(fid, cap):
+        store.set_episode(ep_id, state="queued", progress=0, error=None)
+        await _queue.put(ep_id)
+        n += 1
+    return n
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -374,9 +393,19 @@ async def feeds():
 async def add_feed(body: FeedIn):
     _ensure_worker()
     try:
-        return await fetch_and_store(body.url.strip())
+        return await fetch_and_store(body.url.strip(), auto_dl=body.auto_dl)
     except Exception as e:
         raise HTTPException(400, f"feed add failed: {e}")
+
+
+@router.post("/feeds/{fid}/autodl", dependencies=[Depends(require_jwt)])
+async def toggle_autodl(fid: int, on: bool = True):
+    """Toggle auto-download for a feed. Turning it on also queues any episodes
+    not yet downloaded (so the portal/share feed sync immediately)."""
+    _ensure_worker()
+    store.set_feed_autodl(fid, 1 if on else 0)
+    queued = await _autoqueue(fid) if on else 0
+    return {"ok": True, "auto_dl": on, "queued": queued}
 
 
 @router.delete("/feeds/{fid}", dependencies=[Depends(require_jwt)])
