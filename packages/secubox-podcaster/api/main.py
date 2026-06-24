@@ -28,7 +28,7 @@ from typing import Optional
 from xml.etree import ElementTree as ET
 
 import httpx
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
+from fastapi import FastAPI, APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import Response, FileResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -316,6 +316,7 @@ async def public_library():
         "title": CFG.get("share_title", "SecuBox Podcaster"),
         "episodes": [{
             "id": e["id"], "title": e.get("title"), "feed": e.get("feed_title"),
+            "feed_id": e.get("feed_id"),
             "pubdate": e.get("pubdate"), "duration": e.get("duration"),
             "mime": e.get("mime"), "bytes": e.get("bytes"),
             "media": f"/api/v1/podcaster/media/{e['id']}",
@@ -323,6 +324,29 @@ async def public_library():
         "feeds": feeds,
         "share": "/api/v1/podcaster/share/feed.xml",
     }
+
+
+@router.get("/public/feed/{fid}/zip")
+async def public_feed_zip(fid: int, background: BackgroundTasks):
+    """Public: download all downloaded episodes of a feed as one ZIP.
+    mp3/audio are already compressed → STORED (no recompress). Built to a temp
+    file then streamed; cleaned up after send."""
+    _ensure_worker()
+    eps = [e for e in store.downloaded_episodes(limit=2000)
+           if e.get("feed_id") == fid and e.get("local_path")
+           and Path(e["local_path"]).exists()]
+    if not eps:
+        raise HTTPException(404, "no downloaded episodes for this feed")
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", (eps[0].get("feed_title") or f"feed{fid}"))[:60] or f"feed{fid}"
+    tmp = Path(tempfile.mkstemp(suffix=".zip", dir="/var/lib/secubox/podcaster")[1])
+    eps.sort(key=lambda e: e.get("pubdate") or 0)
+    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_STORED) as z:
+        for i, e in enumerate(eps):
+            p = Path(e["local_path"])
+            z.write(p, arcname=_safe_name(f"{i+1:03d}_{e.get('title') or p.stem}", p.suffix))
+    background.add_task(lambda: tmp.unlink(missing_ok=True))
+    return FileResponse(tmp, media_type="application/zip", filename=f"{name}.zip",
+                        background=background)
 
 
 @router.get("/media/{ep_id}")

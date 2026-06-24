@@ -34,7 +34,14 @@
   .ep .meta{flex:1;min-width:0}
   .ep .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
   .ep .meta span{color:var(--text-muted);font-size:12px}
-  audio{height:38px;max-width:320px}
+  audio{height:38px;max-width:300px}
+  .ep a.dl{color:var(--matrix-green);text-decoration:none;border:1px solid var(--matrix-green);
+    border-radius:8px;padding:7px 10px;font-size:13px;white-space:nowrap}
+  .ep a.dl:hover{background:rgba(0,255,65,.1)}
+  .zipbar{max-width:1000px;margin:14px auto 0;padding:0 20px}
+  .zipbar a{color:var(--gold-hermetic);text-decoration:none;border:1px solid var(--gold-hermetic);
+    border-radius:24px;padding:8px 16px;font-size:13px}
+  .zipbar a:hover{background:rgba(201,168,76,.12)}
   .empty{text-align:center;color:var(--text-muted);padding:60px}
   footer{text-align:center;color:var(--text-muted);font-size:11px;padding:24px}
   footer a{color:var(--text-muted)}
@@ -52,6 +59,7 @@
   </div>
 </header>
 <div class="filters" id="filters"></div>
+<div class="zipbar" id="zipbar"></div>
 <main><div id="list" class="empty">Loading…</div></main>
 <footer>SecuBox Podcaster · <a href="https://cybermind.fr" target="_blank">CyberMind</a></footer>
 
@@ -79,12 +87,18 @@ function render(){
   const list=document.getElementById("list");
   let eps=DATA.episodes||[];
   if(FILT) eps=eps.filter(e=>e.feed===FILT);
+  // ZIP-all button when a single feed is in view
+  const zb=document.getElementById("zipbar");
+  const fid=eps.length?eps[0].feed_id:null;
+  zb.innerHTML=(FILT&&fid!=null)
+    ? `<a href="${API}/public/feed/${fid}/zip">⬇ Download all (ZIP) · ${esc(FILT)}</a>` : "";
   if(!eps.length){list.innerHTML='<div class="empty">No episodes published yet.</div>';return}
   list.innerHTML=eps.map((e,i)=>{
     const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
     return `<div class="ep"><div class="n">${i+1}</div>
       <div class="meta"><b>${esc(e.title)}</b><span>${esc(e.feed)} · ${date} ${e.duration?'· '+esc(e.duration):''}</span></div>
-      <audio controls preload="none" src="${API}/media/${e.id}"></audio></div>`;
+      <audio controls preload="none" src="${API}/media/${e.id}"></audio>
+      <a class="dl" href="${API}/media/${e.id}" download title="Download">⬇</a></div>`;
   }).join("");
 }
 load();setInterval(load,15000);

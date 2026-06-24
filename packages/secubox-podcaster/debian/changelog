@@ -1,3 +1,12 @@
+secubox-podcaster (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Public portal: per-episode download (⬇, mp3/audio) + per-feed
+    "Download all (ZIP)" via new public GET /public/feed/{id}/zip (STORED, no
+    recompress; built to temp then streamed + cleaned up). public/library now
+    carries feed_id so the portal can zip by feed.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 13:40:00 +0000
+
 secubox-podcaster (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Admin WebUI: integrate the shared Hub sidebar (/shared/sidebar.js) + correct
