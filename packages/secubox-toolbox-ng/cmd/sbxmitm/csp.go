@@ -69,7 +69,13 @@ func relaxCSPForLoader(h http.Header) bool {
 		for _, v := range vals {
 			relaxed, bypassed := relaxCSPValue(v)
 			if bypassed {
-				out = append(out, relaxed)
+				// A policy that was ONLY a Trusted Types directive (e.g. YouTube's
+				// standalone "require-trusted-types-for 'script'" header) serialises
+				// to empty after the drop — emit no header line rather than a bare
+				// "Content-Security-Policy:" (which is harmless but untidy).
+				if strings.TrimSpace(relaxed) != "" {
+					out = append(out, relaxed)
+				}
 				anyBypass = true
 			} else {
 				out = append(out, v) // not blocking → keep the original verbatim (minimal touch)
@@ -104,12 +110,22 @@ func relaxCSPValue(value string) (out string, bypassed bool) {
 		tokens []string // raw value tokens after the name
 	}
 	dirs := make([]dir, 0, len(rawDirectives))
+	ttDropped := false
 	for _, raw := range rawDirectives {
 		fields := strings.Fields(raw)
 		if len(fields) == 0 {
 			continue // blank fragment (leading/trailing/double ';') → drop
 		}
 		name := strings.ToLower(fields[0])
+		// Trusted Types (e.g. YouTube: "require-trusted-types-for 'script'")
+		// blocks the transparency banner's DOM injection even when the loader
+		// script itself is allowed to run — the banner silently never mounts.
+		// Drop these two directives so the banner can render; the page keeps all
+		// its other CSP protections (script-src is only minimally relaxed below).
+		if name == "require-trusted-types-for" || name == "trusted-types" {
+			ttDropped = true
+			continue
+		}
 		d := dir{name: name, tokens: fields[1:]}
 		switch name {
 		case "script-src":
@@ -144,6 +160,9 @@ func relaxCSPValue(value string) (out string, bypassed bool) {
 		dirs[effective].tokens = relaxScriptTokens(dirs[effective].tokens)
 		bypassed = true
 	}
+	// Dropping Trusted Types also counts as a relax (the banner couldn't mount
+	// otherwise) — flag the bypass so the page is treated as injected.
+	bypassed = bypassed || ttDropped
 
 	// Re-serialise: "name token token; name token; ...".
 	parts := make([]string, 0, len(dirs))
