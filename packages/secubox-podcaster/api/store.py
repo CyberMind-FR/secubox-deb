@@ -66,18 +66,38 @@ def init() -> None:
 
 
 # ── feeds ──────────────────────────────────────────────────────────
-def add_feed(url: str, meta: dict) -> int:
+def add_feed(url: str, meta: dict, auto_dl: int = 0) -> int:
     with _conn() as c:
         cur = c.execute(
-            "INSERT OR IGNORE INTO feeds(url,title,description,image,site,added_ts) "
-            "VALUES(?,?,?,?,?,?)",
+            "INSERT OR IGNORE INTO feeds(url,title,description,image,site,added_ts,auto_dl) "
+            "VALUES(?,?,?,?,?,?,?)",
             (url, meta.get("title"), meta.get("description"),
-             meta.get("image"), meta.get("site"), int(time.time())),
+             meta.get("image"), meta.get("site"), int(time.time()), int(auto_dl)),
         )
         if cur.lastrowid:
             return cur.lastrowid
         row = c.execute("SELECT id FROM feeds WHERE url=?", (url,)).fetchone()
         return row["id"] if row else 0
+
+
+def set_feed_autodl(feed_id: int, on: int) -> None:
+    with _conn() as c:
+        c.execute("UPDATE feeds SET auto_dl=? WHERE id=?", (int(on), feed_id))
+
+
+def feed_autodl(feed_id: int) -> int:
+    with _conn() as c:
+        r = c.execute("SELECT auto_dl FROM feeds WHERE id=?", (feed_id,)).fetchone()
+        return int(r["auto_dl"]) if r else 0
+
+
+def pending_episode_ids(feed_id: int, limit: int = 0) -> list[int]:
+    """Episode ids in state 'new' for a feed (newest first); for auto-download."""
+    q = "SELECT id FROM episodes WHERE feed_id=? AND state='new' ORDER BY pubdate DESC"
+    if limit and limit > 0:
+        q += f" LIMIT {int(limit)}"
+    with _conn() as c:
+        return [r["id"] for r in c.execute(q, (feed_id,)).fetchall()]
 
 
 def update_feed_meta(feed_id: int, meta: dict) -> None:

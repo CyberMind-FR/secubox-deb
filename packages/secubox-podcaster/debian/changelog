@@ -1,3 +1,13 @@
+secubox-podcaster (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Auto-download: feeds can auto-queue new episodes so the portal + share feed
+    stay synced without manual downloads. New feeds default auto_dl=on (UI
+    checkbox); per-feed toggle (POST /feeds/{id}/autodl, ⏬ in admin). The
+    periodic refresher auto-queues newly published episodes; bounded by
+    keep_per_feed. (#726)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 14:20:00 +0000
+
 secubox-podcaster (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Public portal: per-episode download (⬇, mp3/audio) + per-feed
