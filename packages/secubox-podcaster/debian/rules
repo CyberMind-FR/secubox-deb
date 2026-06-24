@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API files (service WorkingDirectory = /usr/share/secubox/podcaster)
+	install -d debian/secubox-podcaster/usr/share/secubox/podcaster/
+	cp -r api debian/secubox-podcaster/usr/share/secubox/podcaster/
+	# Static www files
+	install -d debian/secubox-podcaster/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-podcaster/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-podcaster/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-podcaster/usr/share/secubox/menu.d/ || true
+	# Config template (installed by postinst on first install only)
+	install -d debian/secubox-podcaster/usr/share/secubox/podcaster
+	[ -f conf/podcaster.toml ] && cp conf/podcaster.toml debian/secubox-podcaster/usr/share/secubox/podcaster/ || true
+	# nginx route — ship to the ACTIVE include (secubox-routes.d) AND legacy
+	# secubox.d for back-compat (mirrors grafana/peertube; see #65).
+	install -d debian/secubox-podcaster/etc/nginx/secubox-routes.d
+	install -d debian/secubox-podcaster/etc/nginx/secubox.d
+	[ -f nginx/podcaster.conf ] && cp nginx/podcaster.conf debian/secubox-podcaster/etc/nginx/secubox-routes.d/ || true
+	[ -f nginx/podcaster.conf ] && cp nginx/podcaster.conf debian/secubox-podcaster/etc/nginx/secubox.d/ || true
+	# Systemd unit
+	install -d debian/secubox-podcaster/usr/lib/systemd/system
+	cp systemd/secubox-podcaster.service debian/secubox-podcaster/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	# Handled manually in postinst (respect operator masking).
+	true

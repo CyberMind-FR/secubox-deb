@@ -1,0 +1,23 @@
+# /etc/secubox/podcaster.toml — SecuBox Podcaster
+# Restart secubox-podcaster after editing.
+
+# Where downloaded episodes are stored.
+media_path = "/var/lib/secubox/podcaster/media"
+
+# Concurrent downloads.
+max_parallel = 2
+
+# Auto-refresh feeds every N minutes (background).
+refresh_minutes = 60
+
+# Public base URL for the shareable RSS enclosure links. Leave empty for
+# LAN/relative URLs. Set to your exposed vhost to relay publicly, e.g.
+#   public_base = "https://podcast.gk2.secubox.in"
+# (route it through HAProxy TLS -> mitmproxy per WAF policy; see README).
+public_base = ""
+
+# Title of the generated share feed.
+share_title = "SecuBox Podcaster"
+
+# Keep at most N downloaded episodes per feed (0 = unlimited).
+keep_per_feed = 0
