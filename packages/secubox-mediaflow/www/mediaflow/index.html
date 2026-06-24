@@ -307,6 +307,22 @@
                 <tbody id="servicesTable"><tr><td colspan="4">Loading...</td></tr></tbody>
             </table>
         </div>
+
+        <div class="card">
+            <h2>🛰️ Discovered Media <span id="catcherState" style="font-size:.7rem;color:var(--text-dim)"></span></h2>
+            <table>
+                <thead><tr><th>Host</th><th>Kind</th><th>URL</th><th>Hits</th><th></th></tr></thead>
+                <tbody id="discoveredTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>📥 Cloned Library</h2>
+            <table>
+                <thead><tr><th>Title</th><th>Status</th><th>Size</th><th></th></tr></thead>
+                <tbody id="libraryTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+            </table>
+        </div>
     </main>
 
     <script>
@@ -358,6 +374,78 @@
             } else {
                 servicesBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No media services detected</td></tr>';
             }
+
+            await renderDiscovered();
+            await renderLibrary();
+        }
+
+        function fmtBytes(n) {
+            n = +n || 0; const u = ['B','KB','MB','GB','TB']; let i = 0;
+            while (n >= 1024 && i < u.length-1) { n /= 1024; i++; }
+            return n.toFixed(1) + ' ' + u[i];
+        }
+        function esc(s) { return (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+        async function post(path, body) {
+            const res = await fetch(API + path, { method:'POST', credentials:'include',
+                headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            return res.json();
+        }
+
+        async function cloneUrl(url, kind, btn) {
+            if (btn) { btn.disabled = true; btn.textContent = '…'; }
+            await post('/clone', { url, kind });
+            await renderLibrary();
+        }
+        window.cloneUrl = cloneUrl;
+
+        async function delLib(id) {
+            await fetch(API + '/library/' + id, { method:'DELETE', credentials:'include' });
+            await renderLibrary();
+        }
+        window.delLib = delLib;
+
+        async function renderDiscovered() {
+            const d = await api('/discovered');
+            document.getElementById('catcherState').textContent =
+                d.catcher ? ('· cloner: ' + (d.downloader || 'none')) : '· catcher inactive';
+            const body = document.getElementById('discoveredTable');
+            const rows = d.discovered || [];
+            if (!rows.length) { body.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No media discovered yet (stream something over R4)</td></tr>'; return; }
+            body.innerHTML = rows.map(r => {
+                const disabled = d.downloader ? '' : 'disabled';
+                const u = esc(r.url);
+                return `<tr>
+                    <td style="font-family:monospace;font-size:.8rem">${esc(r.host||'')}</td>
+                    <td><span class="badge ${r.kind==='audio'?'audio':'video'}">${esc(r.kind||'')}</span></td>
+                    <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${u}">${u}</td>
+                    <td>${r.hits||1}</td>
+                    <td><button class="btn" ${disabled} onclick="cloneUrl('${u.replace(/'/g,"\\'")}','${esc(r.kind||'')}',this)">Clone</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function renderLibrary() {
+            const lib = await api('/library');
+            const jobs = await api('/clone/jobs');
+            const body = document.getElementById('libraryTable');
+            const all = (jobs.jobs || []);
+            if (!all.length) { body.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">Nothing cloned yet</td></tr>'; return; }
+            body.innerHTML = all.map(j => {
+                const st = j.status === 'done' ? '✅ done'
+                    : j.status === 'running' ? '⏳ running'
+                    : j.status === 'queued' ? '… queued'
+                    : '⚠️ ' + esc(j.error || 'error');
+                const act = j.status === 'done'
+                    ? `<a class="btn" href="${API}/download/${j.id}" download>Download</a> <button class="btn" onclick="delLib('${j.id}')">✕</button>`
+                    : (j.status === 'error' ? `<button class="btn" onclick="delLib('${j.id}')">✕</button>` : '');
+                return `<tr>
+                    <td title="${esc(j.url||'')}">${esc(j.title||'')}</td>
+                    <td style="font-size:.8rem">${st}</td>
+                    <td>${j.bytes ? fmtBytes(j.bytes) : '-'}</td>
+                    <td>${act}</td>
+                </tr>`;
+            }).join('');
         }
 
         refresh();

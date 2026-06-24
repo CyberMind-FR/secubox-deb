@@ -1,3 +1,13 @@
+secubox-mediaflow (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * R4 Discovered Media + Clone (#736): new dashboard cards. /discovered reads
+    the sbxmitm media-catch log; /clone enqueues a yt-dlp (or ffmpeg) download
+    into a library; /library + /download/{id} serve the cloned files; delete
+    supported. Clone worker is lazily (re)started per-request so it also runs
+    under the aggregator (which skips sub-app lifespans).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 21:55:00 +0000
+
 secubox-mediaflow (2.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Top Media Services now reads the DPI 7-day CUMULATIVE store instead of the
