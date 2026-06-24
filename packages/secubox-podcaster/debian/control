@@ -1,0 +1,22 @@
+Source: secubox-podcaster
+Section: sound
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-podcaster
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-uvicorn | python3-pip, python3-httpx | python3-pip
+Description: Modern podcast manager for SecuBox
+ Subscribe to podcast feeds, download episodes locally, and re-publish a
+ shareable RSS feed (LAN by default, public via HAProxy / secubox-exposure).
+ FastAPI backend on /api/v1/podcaster/ over a Unix socket; SQLite store; an
+ asyncio download queue. Feed parsing is pure stdlib (no feedparser dep).
+ .
+ Features:
+  - Subscribe by RSS URL or OPML import
+  - Local download queue with per-episode progress
+  - Generated shareable RSS of the local library (relay/share to the web)
+  - In-UI service status + TOML config
+  - Modern C3BOX cyberpunk WebUI with inline player
