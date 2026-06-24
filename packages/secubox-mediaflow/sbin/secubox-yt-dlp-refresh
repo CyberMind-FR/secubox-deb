@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: yt-dlp refresh (#736)
+# Keep the standalone yt-dlp binary current so the mediaflow R4 "Discovered
+# Media" cloner works on sites whose extractors change often (YouTube). The apt
+# yt-dlp is frequently months behind and cannot self-update; the standalone
+# binary in /usr/local/bin (which precedes /usr/bin on PATH) can. Best-effort:
+# this NEVER fails its unit — a missing network just leaves the existing tool.
+set -uo pipefail
+readonly MODULE="secubox-yt-dlp-refresh"
+readonly DEST="/usr/local/bin/yt-dlp"
+readonly URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+
+tmp="$(mktemp 2>/dev/null)" || exit 0
+if curl -fsSL --max-time 120 "$URL" -o "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+    chmod 0755 "$tmp"
+    # validate it actually runs (needs python3) before replacing the live binary
+    if "$tmp" --version >/dev/null 2>&1; then
+        install -m 0755 "$tmp" "$DEST"
+        echo "[$MODULE] refreshed -> $("$DEST" --version 2>/dev/null)"
+    else
+        echo "[$MODULE] downloaded binary failed to run; keeping existing" >&2
+    fi
+fi
+rm -f "$tmp"
+
+# Fallback / belt-and-braces: if a self-updatable binary is in place, let it
+# pull its own latest too (no-op for an apt copy).
+[ -x "$DEST" ] && "$DEST" -U >/dev/null 2>&1 || true
+exit 0

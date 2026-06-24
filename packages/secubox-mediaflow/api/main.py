@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-app = FastAPI(title="secubox-mediaflow", version="2.1.0", root_path="/api/v1/mediaflow")
+app = FastAPI(title="secubox-mediaflow", version="2.1.1", root_path="/api/v1/mediaflow")
 
 # ══════════════════════════════════════════════════════════════════
 # Health Check Endpoint (public, no auth)
@@ -49,6 +49,10 @@ DPI_BASE = "http+unix://%2Frun%2Fsecubox%2Fdpi.sock"
 # record/line). We read it for the "Discovered Media" view and let the operator
 # CLONE a URL (yt-dlp if present, else ffmpeg) into the durable library below.
 MEDIA_CATCH_PATH = Path("/run/secubox/media-catch.jsonl")
+# Durable, capped mirror of the discovery log (the catch log itself is on tmpfs
+# and cleared on reboot) so Discovered Media survives reboots.
+DISCOVERED_STORE = DATA_DIR / "discovered.json"
+DISCOVERED_MAX = 2000
 LIBRARY_DIR = DATA_DIR / "library"
 CLONE_JOBS_FILE = DATA_DIR / "clone_jobs.json"
 CLONE_TIMEOUT_S = int(os.environ.get("SECUBOX_CLONE_TIMEOUT", "1800") or "1800")  # 30 min hard cap
@@ -606,11 +610,11 @@ async def get_service_details(service: str, user=Depends(require_jwt)):
 # R4 Discovered Media + Clone (#736)
 # ══════════════════════════════════════════════════════════════════
 
-def _read_catch(limit: int = 200) -> List[Dict[str, Any]]:
-    """Read + group the sbxmitm media-catch log (newest first, deduped by url)."""
-    if not MEDIA_CATCH_PATH.exists():
-        return []
+def _parse_catch_log() -> Dict[str, Dict[str, Any]]:
+    """Group the current-boot sbxmitm media-catch log (tmpfs) into url -> record."""
     seen: Dict[str, Dict[str, Any]] = {}
+    if not MEDIA_CATCH_PATH.exists():
+        return seen
     try:
         with MEDIA_CATCH_PATH.open("r", encoding="utf-8", errors="ignore") as f:
             for line in f:
@@ -634,8 +638,36 @@ def _read_catch(limit: int = 200) -> List[Dict[str, Any]]:
                                  "ctype": r.get("ctype"), "bytes": r.get("bytes", 0) or 0,
                                  "referer": r.get("referer"), "ts": r.get("ts", 0), "hits": 1}
     except Exception:
-        return []
-    return sorted(seen.values(), key=lambda x: x["ts"], reverse=True)[:limit]
+        pass
+    return seen
+
+
+def _read_catch(limit: int = 200) -> List[Dict[str, Any]]:
+    """Discovered media, newest first. The live catch log is on tmpfs (cleared on
+    reboot), so we merge it into a DURABLE, capped store — discovery survives
+    reboots. Merge is idempotent OVERRIDE (not increment), so re-reading the same
+    log can't inflate hit counts."""
+    durable: Dict[str, Dict[str, Any]] = {}
+    for r in _load_json(DISCOVERED_STORE, []) or []:
+        u = r.get("url")
+        if u:
+            durable[u] = r
+    changed = False
+    for u, rec in _parse_catch_log().items():
+        old = durable.get(u)
+        if (not old) or rec["ts"] >= old.get("ts", 0) or rec["hits"] != old.get("hits"):
+            durable[u] = rec
+            changed = True
+    rows = sorted(durable.values(), key=lambda x: x.get("ts", 0), reverse=True)
+    if len(rows) > DISCOVERED_MAX:
+        rows = rows[:DISCOVERED_MAX]
+        changed = True
+    if changed:
+        try:
+            _save_json(DISCOVERED_STORE, rows)
+        except Exception:
+            pass
+    return rows[:limit]
 
 
 def _downloader() -> Optional[str]:

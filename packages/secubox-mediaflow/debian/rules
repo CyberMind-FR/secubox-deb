@@ -12,3 +12,6 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-mediaflow/etc/nginx/secubox.d
 	[ -f nginx/mediaflow.conf ] && cp nginx/mediaflow.conf debian/secubox-mediaflow/etc/nginx/secubox.d/ || true
+	# R4 cloner helper (#736): keep yt-dlp current for Discovered Media
+	install -d debian/secubox-mediaflow/usr/sbin
+	install -m 0755 sbin/secubox-yt-dlp-refresh debian/secubox-mediaflow/usr/sbin/
