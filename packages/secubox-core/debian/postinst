@@ -22,6 +22,16 @@ case "$1" in
     install -d -o secubox -g secubox -m 750 /usr/share/secubox/www
 
     # ── tmpfiles.d for persistent /run/secubox ──
+    # #494: drop a stale, non-dpkg-owned /etc/tmpfiles.d/secubox.conf left over
+    # from an old manual fix — it declares /run/secubox as 0775 secubox secubox
+    # and, because /etc overrides /usr/lib, it contradicts the canonical rule
+    # (/usr/lib/tmpfiles.d/secubox.conf: 1777 root root). Only remove it if it
+    # is NOT owned by any package and carries that bad declaration.
+    if [ -f /etc/tmpfiles.d/secubox.conf ] \
+       && ! dpkg -S /etc/tmpfiles.d/secubox.conf >/dev/null 2>&1 \
+       && grep -qE '/run/secubox[[:space:]]+0?775[[:space:]]+secubox' /etc/tmpfiles.d/secubox.conf; then
+      rm -f /etc/tmpfiles.d/secubox.conf
+    fi
     systemd-tmpfiles --create 2>/dev/null || true
 
     # ── Config initiale si absente ──
