@@ -1,3 +1,14 @@
+secubox-vhost (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Fix vhost list: use the real public FQDN (nginx server_name, HAProxy route
+    map) instead of the config filename stem, set full https:// URLs + correct
+    ssl (HAProxy terminates TLS), and append HAProxy public routes that have no
+    nginx config. The list is now the COMPLETE set of reachable vhosts with
+    working clickable links (was showing short names like "arm"/"lyrion" with
+    url=None -> broken links).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 14:00:00 +0000
+
 secubox-vhost (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add three-fold architecture (components, status, access)
