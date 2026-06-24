@@ -3,6 +3,22 @@
 
 ---
 
+## 2026-06-24 — DPI YouTube bannering: strip Trusted Types CSP (#728)
+
+- **Root cause** — YouTube serves a standalone `Content-Security-Policy:
+  require-trusted-types-for 'script'` header. sbxmitm's `relaxCSPForLoader` already
+  relaxed `script-src` (drop `strict-dynamic`, add `'self'`/`'unsafe-inline'`) so the
+  banner loader runs, but Trusted Types still blocked the banner's DOM injection →
+  banner silently never mounted on YouTube.
+- **Fix** (`cmd/sbxmitm/csp.go`, toolbox-ng 0.1.17) — drop `require-trusted-types-for`
+  and `trusted-types` directives during the relax; omit the resulting empty CSP header
+  line. Local Go unit tests cover both the relax and the empty-header drop.
+- **DPI capture half** — collector `state.json` was stale (frozen 09:44); restarted
+  `secubox-dpi-flowcap` → fresh windows, YouTube/media flows now visible in mediaflow.
+- Deployed to gk2; R3 workers `secubox-toolbox-ng-worker@1..4` restarted on 0.1.17.
+- Filed for later: #729 wireguard peers/tabs, #730 yacy, #731 lyrion, #732 magicmirror,
+  #733 firewall dashboard misreport, #734 webui.conf hardcoded-route cleanup.
+
 ## 2026-06-22 — DPI exfil engine + Netrunner report (HTML+PDF) + sbxmitm fixes
 
 Big session: full per-device DPI exfiltration pipeline, the kbin report reborn as a
