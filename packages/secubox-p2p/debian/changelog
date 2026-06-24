@@ -1,3 +1,10 @@
+secubox-p2p (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * #494/#511: postinst no longer chowns the shared parents /run/secubox and
+    /var/log/secubox; logs go to an own subdir /var/log/secubox/p2p.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 10:45:00 +0000
+
 secubox-p2p (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Absorb the master-link role from secubox-master-link (closes #384)

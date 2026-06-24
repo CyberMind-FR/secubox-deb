@@ -8,9 +8,15 @@ case "$1" in
             useradd --system --no-create-home --shell /usr/sbin/nologin secubox-eye-square
         fi
 
-        # Ensure runtime + audit dirs
+        # Ensure runtime + audit dirs.
+        # #494/#511: NEVER chown the shared parents (/run/secubox,
+        # /var/log/secubox) to a module user — that strips other daemons of
+        # traversal and 502s the whole board. The parents are owned by
+        # tmpfiles.d/secubox-core (1777 root root / 0755). This module creates
+        # its socket inside the 1777 sticky dir and logs into its OWN subdir.
         mkdir -p /run/secubox /var/log/secubox
-        chown secubox-eye-square:secubox-eye-square /run/secubox /var/log/secubox
+        install -d -o secubox-eye-square -g secubox-eye-square -m 0750 \
+            /var/log/secubox/eye-square
 
         # Activate AppArmor profile
         if command -v apparmor_parser >/dev/null 2>&1; then

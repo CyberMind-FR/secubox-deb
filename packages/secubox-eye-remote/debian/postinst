@@ -8,9 +8,10 @@ case "$1" in
         # Reload udev rules
         udevadm control --reload-rules || true
 
-        # Create runtime directory
+        # Create runtime directory (fallback). #494: never chown the shared
+        # parent — it is owned by tmpfiles.d (1777 root root); chowning it to
+        # secubox:secubox breaks cross-user socket traversal.
         mkdir -p /run/secubox
-        chown secubox:secubox /run/secubox 2>/dev/null || true
 
         # Ensure config dirs exist with correct ownership.
         # 0755 on eye-remote/ so the dnsmasq daemon (running as dnsmasq:nogroup

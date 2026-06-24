@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 mkdir -p /run/secubox /srv/metablogizer/sites
-chown secubox:secubox /run/secubox /srv/metablogizer/sites 2>/dev/null || true
+# #494: do NOT chown the shared parent /run/secubox (owned by tmpfiles.d at
+# 1777 root root). Only own this module's own data dir.
+chown secubox:secubox /srv/metablogizer/sites 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable secubox-metablogizer 2>/dev/null || true
 systemctl start secubox-metablogizer 2>/dev/null || true
