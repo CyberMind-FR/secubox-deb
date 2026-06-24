@@ -512,11 +512,15 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// to the discovery log the mediaflow "Discovered Media" view reads. Best-
 	// effort + deduped; a no-op when --media-catch is off or the flow isn't media.
 	if px.media != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		if kind := mediaKind(req.URL.Path, resp.Header.Get("Content-Type")); kind != "" {
+		ctype := resp.Header.Get("Content-Type")
+		kind := mediaKind(req.URL.Path, ctype)
+		if kind == "" {
+			kind = videoPageKind(host, req.URL.Path, ctype) // YouTube watch/shorts → cloneable page
+		}
+		if kind != "" {
 			px.media.record(clientHash, host,
 				"https://"+host+req.URL.RequestURI(), req.URL.Path,
-				req.Header.Get("Referer"), kind,
-				resp.Header.Get("Content-Type"), resp.ContentLength)
+				req.Header.Get("Referer"), kind, ctype, resp.ContentLength)
 		}
 	}
 

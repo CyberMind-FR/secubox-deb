@@ -35,6 +35,9 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -d debian/secubox-toolbox-ng/usr/sbin
 	install -m 0755 sbxmitm debian/secubox-toolbox-ng/usr/sbin/sbxmitm
+	# #736 media catcher: own its /run log so the append never fails (see conf)
+	install -d debian/secubox-toolbox-ng/usr/lib/tmpfiles.d
+	install -m 0644 tmpfiles/zz-secubox-toolbox-ng.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
 
 override_dh_auto_clean:
 	rm -f sbxmitm

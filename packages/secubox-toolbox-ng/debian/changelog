@@ -1,3 +1,20 @@
+secubox-toolbox-ng (0.1.22-1~bookworm1) bookworm; urgency=medium
+
+  * media catcher: ship a tmpfiles.d entry so /run/secubox/media-catch.jsonl is
+    pre-created owned by the writer (secubox-toolbox). A stale wrong-owner file
+    left in the sticky dir was making the worker's O_APPEND fail silently, so
+    nothing was captured (notably the new kind=page YouTube watch URLs). (#736)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 23:45:00 +0000
+
+secubox-toolbox-ng (0.1.21-1~bookworm1) bookworm; urgency=medium
+
+  * media catcher: also capture cloneable video PAGES (YouTube watch/shorts/live,
+    youtu.be) as kind=page — the watch URL is what yt-dlp clones (signed chunk
+    URLs aren't reusable). Pages dedup by full URL so each video id is kept. (#736)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 23:05:00 +0000
+
 secubox-toolbox-ng (0.1.20-1~bookworm1) bookworm; urgency=medium
 
   * media reverse-catcher: only record 2xx responses (skip redirects/errors that
