@@ -8,10 +8,11 @@
 - **Fermées (user-validé 2026-06-22)** : #722 (nDPId — décidé contre, reverté) ·
   #475 ToolBoX Phase 1 (live 2.7.x) · #502/#507/#508 Social mapping (carto +
   /social/me + report PDF live) · #495 Phase 5 mitm-LXC (superseded par #662 Go
-  sbxmitm host) · #531 APK one-tap (superseded par #685/#686 non-root).
+  sbxmitm host) · #531 APK one-tap (superseded par #685/#686 non-root) ·
+  #486 geoip/ASN+flags+catégories dans rapports (livré master : geo.py + dpi_class.py +
+  report wiring ; complémentaire de #718 ASN collector ; worktree stale nettoyé).
 - **Actives (worktrees en cours)** : #655 webext banner · #615 security-posture ·
-  #494 secubox-core ExecStart · #498 Phase 7 WAF enforcement · #485 SOC scoring ·
-  #486 geoip/ASN (à vérifier vs #718 fait côté DPI).
+  #494 secubox-core ExecStart · #498 Phase 7 WAF enforcement · #485 SOC scoring.
 - **Backlog/future** : #685/#686 APK non-root (plan verrouillé) · #592 webmail-hub ·
   #514/#515/#516/#519/#522/#525 Phase 12-14 (#515 CDN / #516 anti-bot partiellement
   couverts par antibot_sites/opgrade_sites du social graph) · #500 Utiq · #497/#480/
