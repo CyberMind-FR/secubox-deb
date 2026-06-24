@@ -8,9 +8,9 @@ case "$1" in
             useradd -r -s /usr/sbin/nologin -d /var/lib/secubox secubox
         fi
 
-        # Create runtime directory
+        # Create runtime directory (fallback). #494: never chown the shared
+        # parent /run/secubox — it is owned by tmpfiles.d (1777 root root).
         mkdir -p /run/secubox
-        chown secubox:secubox /run/secubox
 
         # Cache directory — was /tmp/secubox until #149. Now /var/cache/secubox,
         # auto-managed by systemd's CacheDirectory=secubox at unit start.

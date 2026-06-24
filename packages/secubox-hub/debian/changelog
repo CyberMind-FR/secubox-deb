@@ -1,3 +1,12 @@
+secubox-hub (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * #494: drop the ExecStartPre chown/chmod of the shared /run/secubox parent.
+    It ran on every hub start and clobbered the canonical tmpfiles rule
+    (1777 root root) back to 775 secubox:secubox, 502'ing cross-user socket
+    traversal. The 1777 sticky parent already lets the hub create its socket.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 10:45:00 +0000
+
 secubox-hub (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * api/main.py /health-monitor/summary: merge data["error"] into
