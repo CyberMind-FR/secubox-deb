@@ -10,7 +10,11 @@
   /social/me + report PDF live) · #495 Phase 5 mitm-LXC (superseded par #662 Go
   sbxmitm host) · #531 APK one-tap (superseded par #685/#686 non-root) ·
   #486 geoip/ASN+flags+catégories dans rapports (livré master : geo.py + dpi_class.py +
-  report wiring ; complémentaire de #718 ASN collector ; worktree stale nettoyé).
+  report wiring ; complémentaire de #718 ASN collector ; worktree stale nettoyé) ·
+  #515 CDN detection (live `social_host_meta.cdn_vendor`) · #516 anti-bot detection
+  (live via #564/#565) · #519 enforcement plane (livré + **réparé** : blacklist-sync
+  avortait NXDOMAIN + timeout unit → fix `|| true` + TimeoutStartSec 600, vérifié live,
+  default-off ; inclut #522). Toolbox source bumpé 2.7.18 (fix live-patché sur gk2).
 - **Actives (worktrees en cours)** : #655 webext banner · #615 security-posture ·
   #494 secubox-core ExecStart · #498 Phase 7 WAF enforcement · #485 SOC scoring.
 - **Backlog/future** : #685/#686 APK non-root (plan verrouillé) · #592 webmail-hub ·
