@@ -1,0 +1,13 @@
+secubox-threatmesh (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release (#728) — sovereign threat-intel, CrowdSec CAPI replacement.
+    - Phase 1: secubox-threatfeed timer pulls free public blocklists
+      (feodo/sslbl/firehol/spamhaus-drop/blocklist.de/cins/et/dshield) into the
+      shared threat_intel table -> secubox-blacklist-sync -> nft.
+    - Phase 2: MESH distribution — gossip locally-detected CrowdSec decisions to
+      SecuBox P2P peers over WireGuard; ingest peer decisions (tagged mesh:<node>),
+      consensus-counted. :8780 locked to wg*/loopback by an nft drop-in.
+    - Phase 3: /status, /peers, /decisions (bouncer-compatible aggregate),
+      /mesh/ingest, dashboard. CrowdSec LAPI kept; CAPI dropped.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 16:00:00 +0000
