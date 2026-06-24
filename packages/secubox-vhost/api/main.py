@@ -10,6 +10,7 @@ SecuBox is an appliance and network model - distributed peer applications.
 import subprocess
 import os
 import json
+import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
@@ -235,24 +236,62 @@ class VHostUpdate(BaseModel):
     enabled: Optional[bool] = None
 
 
+HAPROXY_ROUTES_FILE = Path("/srv/mitmproxy/haproxy-routes.json")
+HAPROXY_CERTS_DIR = Path("/data/haproxy/certs")
+
+
+def _is_public_fqdn(name: str) -> bool:
+    name = (name or "").strip().rstrip(";")
+    if not name or name in ("_", "localhost") or name.endswith(".local"):
+        return False
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", name):
+        return False
+    return "." in name
+
+
+def _server_name_fqdn(content: str):
+    """First public FQDN from any server_name directive (skips _, localhost, IPs)."""
+    for line in content.split("\n"):
+        s = line.strip()
+        if s.startswith("server_name"):
+            for tok in s[len("server_name"):].strip().rstrip(";").split():
+                if _is_public_fqdn(tok):
+                    return tok
+    return None
+
+
+def _load_haproxy_routes() -> dict:
+    """Public FQDN -> backend target from the HAProxy/mitmproxy route map."""
+    try:
+        d = json.loads(HAPROXY_ROUTES_FILE.read_text())
+        return {k: v for k, v in d.items() if _is_public_fqdn(k)}
+    except Exception:
+        return {}
+
+
 @app.get("/vhosts", dependencies=[Depends(require_jwt)])
 async def list_vhosts():
-    """List all virtual hosts"""
+    """List all virtual hosts with full, clickable public URLs.
+
+    Public vhosts are HAProxy-fronted (TLS terminated there), so the real domain
+    is the nginx server_name FQDN — NOT the config filename. We fall back to the
+    HAProxy route map for backends whose nginx config only has local names, and
+    append HAProxy public routes that have no nginx config, so the list is the
+    COMPLETE set of reachable vhosts with working https:// links.
+    """
     vhosts = []
+    routes = _load_haproxy_routes()
+    seen = set()
 
     if NGINX_VHOST_DIR.exists():
-        for conf_file in NGINX_VHOST_DIR.glob("*.conf"):
+        for conf_file in sorted(NGINX_VHOST_DIR.glob("*.conf")):
             if conf_file.name.startswith("_") or conf_file.name == "default.conf":
                 continue
-            domain = conf_file.stem
+            stem = conf_file.stem
             enabled = (NGINX_ENABLED_DIR / conf_file.name).exists()
-
-            # Parse config
             backend = ""
-            tls_mode = "off"
             websocket = False
-            ssl = False
-
+            content = ""
             try:
                 content = conf_file.read_text()
                 for line in content.split("\n"):
@@ -260,27 +299,28 @@ async def list_vhosts():
                         backend = line.split()[-1].rstrip(";")
                     if "Upgrade" in line:
                         websocket = True
-                ssl = "listen 443" in content or "ssl_certificate" in content
-
-                if ssl:
-                    if "/etc/acme/" in content:
-                        tls_mode = "acme"
-                    else:
-                        tls_mode = "manual"
-            except:
+            except Exception:
                 pass
 
-            # Check certificate
-            cert_expires = None
-            if ssl:
-                cert_path = ACME_DIR / domain / "fullchain.cer"
-                if cert_path.exists():
-                    success, out, _ = run_cmd([
-                        "openssl", "x509", "-in", str(cert_path), "-noout", "-enddate"
-                    ])
-                    if success:
-                        cert_expires = out.split("=")[-1]
+            domain = _server_name_fqdn(content)
+            if not domain:
+                domain = next((k for k in routes if k.split(".")[0] == stem), None) or stem
 
+            is_public = _is_public_fqdn(domain)
+            ssl = is_public  # HAProxy terminates TLS for every public vhost
+            url = f"https://{domain}" if is_public else None
+            tls_mode = "haproxy" if is_public else "off"
+
+            cert_expires = None
+            if is_public:
+                cert_path = HAPROXY_CERTS_DIR / f"{domain}.pem"
+                if cert_path.exists():
+                    success, out, _ = run_cmd(
+                        ["openssl", "x509", "-in", str(cert_path), "-noout", "-enddate"])
+                    if success:
+                        cert_expires = out.split("=")[-1].strip()
+
+            seen.add(domain)
             vhosts.append({
                 "domain": domain,
                 "backend": backend,
@@ -289,9 +329,34 @@ async def list_vhosts():
                 "websocket": websocket,
                 "enabled": enabled,
                 "cert_expires": cert_expires,
+                "url": url,
+                "source": "nginx",
                 "config_file": str(conf_file),
             })
 
+    # Append HAProxy public vhosts with no nginx config (complete the list).
+    for domain, target in routes.items():
+        if domain in seen:
+            continue
+        seen.add(domain)
+        try:
+            backend = f"{target[0]}:{target[1]}" if isinstance(target, (list, tuple)) else str(target)
+        except Exception:
+            backend = ""
+        vhosts.append({
+            "domain": domain,
+            "backend": backend,
+            "tls_mode": "haproxy",
+            "ssl": True,
+            "websocket": False,
+            "enabled": True,
+            "cert_expires": None,
+            "url": f"https://{domain}",
+            "source": "haproxy",
+            "config_file": None,
+        })
+
+    vhosts.sort(key=lambda v: v["domain"])
     return {"vhosts": vhosts, "count": len(vhosts)}
 
 
