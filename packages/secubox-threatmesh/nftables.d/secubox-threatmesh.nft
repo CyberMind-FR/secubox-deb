@@ -1,0 +1,10 @@
+# ThreatMesh peer port (#728): only reachable over the WireGuard mesh + loopback.
+# The base inet filter INPUT chain is DEFAULT DROP, so this only OPENS 8780 to wg.
+table inet secubox_threatmesh {
+    chain input {
+        type filter hook input priority 0; policy accept;
+        iifname "lo" tcp dport 8780 accept
+        iifname "wg*" tcp dport 8780 accept
+        tcp dport 8780 drop
+    }
+}
