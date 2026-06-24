@@ -1,3 +1,21 @@
+secubox-toolbox-ng (0.1.17-1~bookworm1) bookworm; urgency=medium
+
+  * sbxmitm CSP: drop now-empty CSP header lines after a Trusted-Types-only
+    policy is stripped (YouTube sends a standalone "require-trusted-types-for
+    'script'" header) — emit no bare header rather than an empty one. (#728)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 18:05:00 +0000
+
+secubox-toolbox-ng (0.1.16-1~bookworm1) bookworm; urgency=medium
+
+  * sbxmitm CSP: also drop Trusted Types directives (require-trusted-types-for /
+    trusted-types) when relaxing for the transparency banner. YouTube (and other
+    strict-CSP sites) enforce Trusted Types, which blocked the banner's DOM
+    injection even though the loader script ran -> banner silently never mounted.
+    Now the banner renders on those sites. (#728 youtube bannering)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 17:30:00 +0000
+
 secubox-toolbox-ng (0.1.15-1~bookworm1) bookworm; urgency=medium
 
   * #724 — intercept /__toolbox/set-level (banner level switch) and reverse-proxy
