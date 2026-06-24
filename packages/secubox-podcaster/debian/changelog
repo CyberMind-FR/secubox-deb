@@ -1,0 +1,46 @@
+secubox-podcaster (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Auto-download: feeds can auto-queue new episodes so the portal + share feed
+    stay synced without manual downloads. New feeds default auto_dl=on (UI
+    checkbox); per-feed toggle (POST /feeds/{id}/autodl, ⏬ in admin). The
+    periodic refresher auto-queues newly published episodes; bounded by
+    keep_per_feed. (#726)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 14:20:00 +0000
+
+secubox-podcaster (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Public portal: per-episode download (⬇, mp3/audio) + per-feed
+    "Download all (ZIP)" via new public GET /public/feed/{id}/zip (STORED, no
+    recompress; built to temp then streamed + cleaned up). public/library now
+    carries feed_id so the portal can zip by feed.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 13:40:00 +0000
+
+secubox-podcaster (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Admin WebUI: integrate the shared Hub sidebar (/shared/sidebar.js) + correct
+    auth token (sbx_token, 401 -> /login.html) — was missing the navbar and
+    falsely prompting to log in.
+  * Public listener PORTAL (no auth) at /podcaster/portal/ — standalone
+    C3BOX page driven by a new public GET /public/library endpoint; subscribe
+    (RSS) + per-feed filter + inline players. Meant to be exposed externally.
+  * Audiobook ZIP import: POST /audiobook/upload (raw body, no python-multipart)
+    streams the ZIP to a temp file, extracts audio tracks, and publishes them as
+    a self-contained synthetic feed (already 'done' -> in library + share feed).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 13:00:00 +0000
+
+secubox-podcaster (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release (#726). Modern podcast manager:
+    - subscribe by RSS URL / OPML import; pure-stdlib feed parsing
+    - local download queue (asyncio + httpx) with per-episode progress
+    - generated shareable RSS of the local library (/share/feed.xml) — LAN by
+      default, public via HAProxy / secubox-exposure (public_base)
+    - in-UI service status + TOML config; C3BOX WebUI with inline player
+    - FastAPI on /run/secubox/podcaster.sock; SQLite store; nginx route shipped
+      to the active secubox-routes.d/ include
+    - Lyrion integration deferred to a follow-up (standalone first)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 24 Jun 2026 12:00:00 +0000
