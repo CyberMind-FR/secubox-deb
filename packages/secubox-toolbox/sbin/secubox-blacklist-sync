@@ -37,11 +37,18 @@ fi
 TMP4=$(mktemp); TMP6=$(mktemp)
 trap 'rm -f "$TMP4" "$TMP6"' EXIT
 
-# Source 1 : threat-intel C2 IPs (feodo / threatfox / sslbl) from the
-# toolbox SQLite. ioc_type='ip'.
+# Source 1 : threat-intel IPs from the toolbox SQLite (ioc_type='ip').
+# Confidence gate (#728): aggregated public feeds carry lots of noisy
+# single-source entries (e.g. blocklist.de) — arming all of them risks blocking
+# legitimate traffic. Enforce an IP only when corroborated by >= MIN_CONSENSUS
+# distinct sources OR carried by a curated high-trust feed (weight >= MIN_WEIGHT).
+# CrowdSec local decisions (Source 2) and DNS-guard domains are always enforced.
+TI_MIN_CONSENSUS="${SECUBOX_BL_MIN_CONSENSUS:-2}"
+TI_MIN_WEIGHT="${SECUBOX_BL_MIN_WEIGHT:-80}"
 if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
     sqlite3 "$TOOLBOX_DB" \
-        "SELECT DISTINCT ioc FROM threat_intel WHERE ioc_type='ip';" \
+        "SELECT ioc FROM threat_intel WHERE ioc_type='ip' GROUP BY ioc \
+         HAVING COUNT(DISTINCT source) >= $TI_MIN_CONSENSUS OR MAX(weight) >= $TI_MIN_WEIGHT;" \
         2>/dev/null >> "$TMP4.raw" || true
 fi
 
