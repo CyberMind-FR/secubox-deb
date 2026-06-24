@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-threatmesh/usr/lib/secubox/threatmesh/api
+	cp -r api/. debian/secubox-threatmesh/usr/lib/secubox/threatmesh/api/
+	install -d debian/secubox-threatmesh/usr/sbin
+	install -m 755 sbin/secubox-threatfeed debian/secubox-threatmesh/usr/sbin/
+	install -d debian/secubox-threatmesh/usr/lib/systemd/system
+	cp systemd/*.service systemd/*.timer debian/secubox-threatmesh/usr/lib/systemd/system/
+	install -d debian/secubox-threatmesh/usr/share/secubox/www
+	cp -r www/. debian/secubox-threatmesh/usr/share/secubox/www/
+	install -d debian/secubox-threatmesh/usr/share/secubox/menu.d
+	cp menu.d/. -r debian/secubox-threatmesh/usr/share/secubox/menu.d/
+	install -d debian/secubox-threatmesh/etc/nginx/secubox-routes.d debian/secubox-threatmesh/etc/nginx/secubox.d
+	cp nginx/threatmesh.conf debian/secubox-threatmesh/etc/nginx/secubox-routes.d/
+	cp nginx/threatmesh.conf debian/secubox-threatmesh/etc/nginx/secubox.d/
+	install -d debian/secubox-threatmesh/usr/share/secubox/threatmesh/nftables.d
+	cp nftables.d/secubox-threatmesh.nft debian/secubox-threatmesh/usr/share/secubox/threatmesh/nftables.d/
+
+override_dh_installsystemd:
+	true

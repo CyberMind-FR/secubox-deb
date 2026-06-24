@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-threatmesh.service 2>/dev/null || true
+    systemctl disable secubox-threatmesh.service secubox-threatfeed.timer 2>/dev/null || true
+    nft delete table inet secubox_threatmesh 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox ThreatFeed — pull free public blocklists into threat_intel (#728)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/sbin/secubox-threatfeed
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=600
