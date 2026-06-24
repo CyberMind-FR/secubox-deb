@@ -1,9 +1,12 @@
 """SecuBox MediaFlow API - Media Stream Detection and Monitoring"""
-from fastapi import FastAPI, APIRouter, Depends, BackgroundTasks
+from fastapi import FastAPI, APIRouter, Depends, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 import os
+import shutil
+import secrets
 import httpx
 import subprocess
 import json
@@ -16,7 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-app = FastAPI(title="secubox-mediaflow", version="2.0.0", root_path="/api/v1/mediaflow")
+app = FastAPI(title="secubox-mediaflow", version="2.1.0", root_path="/api/v1/mediaflow")
 
 # ══════════════════════════════════════════════════════════════════
 # Health Check Endpoint (public, no auth)
@@ -40,6 +43,21 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 STATS_FILE = DATA_DIR / "stats.json"
 
 DPI_BASE = "http+unix://%2Frun%2Fsecubox%2Fdpi.sock"
+
+# ── R4 media reverse-catcher: Discovered Media + Clone (#736) ─────────────────
+# sbxmitm appends cloneable media URLs it sees on MITM'd flows here (JSONL, one
+# record/line). We read it for the "Discovered Media" view and let the operator
+# CLONE a URL (yt-dlp if present, else ffmpeg) into the durable library below.
+MEDIA_CATCH_PATH = Path("/run/secubox/media-catch.jsonl")
+LIBRARY_DIR = DATA_DIR / "library"
+CLONE_JOBS_FILE = DATA_DIR / "clone_jobs.json"
+CLONE_TIMEOUT_S = int(os.environ.get("SECUBOX_CLONE_TIMEOUT", "1800") or "1800")  # 30 min hard cap
+
+# Clone jobs: id -> {id,url,kind,title,status,file,bytes,error,ts}. Persisted to
+# CLONE_JOBS_FILE; an asyncio queue feeds a single background worker.
+_clone_jobs: Dict[str, Dict[str, Any]] = {}
+_clone_queue: "asyncio.Queue[str]" = asyncio.Queue()
+_clone_worker_task: Optional[asyncio.Task] = None
 
 # The DPI collector's 7-day cumulative store (same schema as /exfil's
 # devices[].services). /exfil itself is live-window only (~60s), so "Top Media
@@ -306,6 +324,9 @@ async def startup():
     """Start background monitoring."""
     global _monitoring_task
     _monitoring_task = asyncio.create_task(_monitor_streams())
+    # R4 clone worker (#736) — also lazily (re)started per-request for the
+    # aggregator, which imports this module without firing this lifespan hook.
+    _ensure_clone_worker()
 
 
 @app.on_event("shutdown")
@@ -579,6 +600,207 @@ async def get_service_details(service: str, user=Depends(require_jwt)):
         }
     except Exception:
         return {"service": service, "error": "Failed to fetch details"}
+
+
+# ══════════════════════════════════════════════════════════════════
+# R4 Discovered Media + Clone (#736)
+# ══════════════════════════════════════════════════════════════════
+
+def _read_catch(limit: int = 200) -> List[Dict[str, Any]]:
+    """Read + group the sbxmitm media-catch log (newest first, deduped by url)."""
+    if not MEDIA_CATCH_PATH.exists():
+        return []
+    seen: Dict[str, Dict[str, Any]] = {}
+    try:
+        with MEDIA_CATCH_PATH.open("r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except Exception:
+                    continue
+                url = r.get("url")
+                if not url:
+                    continue
+                e = seen.get(url)
+                if e:
+                    e["hits"] += 1
+                    e["ts"] = max(e["ts"], r.get("ts", 0))
+                    e["bytes"] = max(e.get("bytes", 0), r.get("bytes", 0) or 0)
+                else:
+                    seen[url] = {"url": url, "host": r.get("host"), "kind": r.get("kind"),
+                                 "ctype": r.get("ctype"), "bytes": r.get("bytes", 0) or 0,
+                                 "referer": r.get("referer"), "ts": r.get("ts", 0), "hits": 1}
+    except Exception:
+        return []
+    return sorted(seen.values(), key=lambda x: x["ts"], reverse=True)[:limit]
+
+
+def _downloader() -> Optional[str]:
+    """Best available cloner: yt-dlp (broadest) else ffmpeg, else None."""
+    if shutil.which("yt-dlp"):
+        return "yt-dlp"
+    if shutil.which("ffmpeg"):
+        return "ffmpeg"
+    return None
+
+
+def _save_clone_jobs():
+    try:
+        _save_json(CLONE_JOBS_FILE, list(_clone_jobs.values()))
+    except Exception:
+        pass
+
+
+def _load_clone_jobs():
+    for j in _load_json(CLONE_JOBS_FILE, []) or []:
+        if j.get("status") == "running":  # stale from a previous run
+            j["status"] = "error"; j["error"] = "interrupted (service restart)"
+        _clone_jobs[j["id"]] = j
+
+
+def _ensure_clone_worker():
+    """Lazily start the clone worker — the aggregator imports this module in-process
+    and never fires its @on_event startup, so we can't rely on a lifespan hook."""
+    global _clone_worker_task
+    if not _clone_jobs and CLONE_JOBS_FILE.exists():
+        _load_clone_jobs()
+    if _clone_worker_task is None or _clone_worker_task.done():
+        _clone_worker_task = asyncio.create_task(_clone_worker())
+
+
+async def _run_clone(job_id: str) -> None:
+    job = _clone_jobs.get(job_id)
+    if not job:
+        return
+    tool = _downloader()
+    if not tool:
+        job.update(status="error", error="no downloader (install yt-dlp or ffmpeg)"); _save_clone_jobs(); return
+    try:
+        LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        job.update(status="error", error=f"library dir: {e}"); _save_clone_jobs(); return
+    url = job["url"]
+    ext = "m4a" if job.get("kind") == "audio" else "mp4"
+    out = LIBRARY_DIR / f"{job_id}.{ext}"
+    if tool == "yt-dlp":
+        cmd = ["nice", "-n", "15", "yt-dlp", "--no-playlist", "--no-progress",
+               "--no-part", "-o", str(LIBRARY_DIR / f"{job_id}.%(ext)s"), url]
+    else:  # ffmpeg: HLS/DASH manifest or direct media → stream-copy
+        cmd = ["nice", "-n", "15", "ffmpeg", "-y", "-loglevel", "error", "-i", url, "-c", "copy", str(out)]
+    job.update(status="running", error=None); _save_clone_jobs()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=CLONE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            proc.kill(); await proc.wait()
+            job.update(status="error", error=f"timeout after {CLONE_TIMEOUT_S}s"); _save_clone_jobs(); return
+        if proc.returncode != 0:
+            err = (stderr or b"").decode("utf-8", "ignore").strip()[-400:]
+            job.update(status="error", error=err or f"exit {proc.returncode}"); _save_clone_jobs(); return
+    except Exception as e:
+        job.update(status="error", error=str(e)); _save_clone_jobs(); return
+    produced = next(iter(sorted(LIBRARY_DIR.glob(f"{job_id}.*"))), None)
+    if not produced or not produced.exists() or produced.stat().st_size == 0:
+        job.update(status="error", error="no output produced"); _save_clone_jobs(); return
+    job.update(status="done", file=produced.name, bytes=produced.stat().st_size, error=None)
+    _save_clone_jobs()
+
+
+async def _clone_worker():
+    while True:
+        job_id = await _clone_queue.get()
+        try:
+            await _run_clone(job_id)
+        except Exception as e:
+            j = _clone_jobs.get(job_id)
+            if j:
+                j.update(status="error", error=str(e)); _save_clone_jobs()
+        finally:
+            _clone_queue.task_done()
+
+
+class CloneRequest(BaseModel):
+    url: str
+    kind: Optional[str] = None
+    title: Optional[str] = None
+
+    @field_validator("url")
+    @classmethod
+    def _v(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("url must be http(s)")
+        return v
+
+
+@router.get("/discovered")
+async def discovered(limit: int = 200, user=Depends(require_jwt)):
+    """Media URLs the R4 reverse-catcher saw on MITM'd flows (newest first)."""
+    return {"discovered": _read_catch(limit), "downloader": _downloader(),
+            "catcher": MEDIA_CATCH_PATH.exists()}
+
+
+@router.post("/clone")
+async def clone(req: CloneRequest, user=Depends(require_jwt)):
+    """Enqueue a clone of a discovered media URL into the library."""
+    if not _downloader():
+        raise HTTPException(503, "no downloader available (install yt-dlp or ffmpeg)")
+    _ensure_clone_worker()
+    job_id = secrets.token_hex(6)
+    title = req.title or req.url.split("/")[-1].split("?")[0] or req.url
+    _clone_jobs[job_id] = {"id": job_id, "url": req.url, "kind": req.kind, "title": title,
+                           "status": "queued", "file": None, "bytes": 0, "error": None,
+                           "ts": int(time.time())}
+    _save_clone_jobs()
+    await _clone_queue.put(job_id)
+    return {"id": job_id, "status": "queued"}
+
+
+@router.get("/clone/jobs")
+async def clone_jobs(user=Depends(require_jwt)):
+    if not _clone_jobs and CLONE_JOBS_FILE.exists():
+        _load_clone_jobs()
+    return {"jobs": sorted(_clone_jobs.values(), key=lambda x: x["ts"], reverse=True)}
+
+
+@router.get("/library")
+async def library(user=Depends(require_jwt)):
+    """Cloned media available for download/share."""
+    if not _clone_jobs and CLONE_JOBS_FILE.exists():
+        _load_clone_jobs()
+    items = [j for j in _clone_jobs.values() if j.get("status") == "done" and j.get("file")]
+    items.sort(key=lambda x: x["ts"], reverse=True)
+    return {"library": items, "downloader": _downloader()}
+
+
+@router.get("/download/{job_id}")
+async def download(job_id: str, user=Depends(require_jwt)):
+    if not _clone_jobs and CLONE_JOBS_FILE.exists():
+        _load_clone_jobs()
+    job = _clone_jobs.get(job_id)
+    if not job or job.get("status") != "done" or not job.get("file"):
+        raise HTTPException(404, "not found")
+    fp = LIBRARY_DIR / job["file"]
+    if not fp.exists():
+        raise HTTPException(404, "file missing")
+    return FileResponse(str(fp), filename=job["file"], media_type="application/octet-stream")
+
+
+@router.delete("/library/{job_id}")
+async def library_delete(job_id: str, user=Depends(require_jwt)):
+    job = _clone_jobs.get(job_id)
+    if job and job.get("file"):
+        try:
+            (LIBRARY_DIR / job["file"]).unlink(missing_ok=True)
+        except Exception:
+            pass
+    _clone_jobs.pop(job_id, None)
+    _save_clone_jobs()
+    return {"ok": True}
 
 
 @router.get("/history")
