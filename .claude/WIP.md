@@ -20,8 +20,17 @@
   #494 secubox-core ExecStart · #498 Phase 7 WAF enforcement · #485 SOC scoring.
 
 ### 🔎 Reco T0 — recon live gk2 2026-06-24 (avant fix)
-- **#494/#471/#421** : la vraie régression live = `/run/secubox` = 1777 **secubox:secubox**
-  (règle dure = 1777 **root:root**). Possédé par le worktree `fix/494-…` → ne pas collisionner.
+- ✅ **#494** : **FIX SYSTÉMIQUE poussé** (`fix/494-…`). Pas que core : 7 units re-chownaient
+  le parent partagé `/run/secubox` (core+hub services, eye-remote/eye-square/metablogizer/
+  metrics/p2p postinsts ; eye-square chownait aussi /var/log/secubox = pire). Tous nettoyés
+  (mkdir fallback only ; logs modules en sous-dossier propre ; orphan /etc/tmpfiles.d nettoyé).
+  **Vérifié live** : /run/secubox 1777 **root:root** stable après restart core ET hub ; webui 200.
+  Bumps core 1.1.7/hub 1.4.4/eye-remote 1.0.1/eye-square 1.0.4/metablog 1.2.2/metrics 1.0.4/p2p 1.7.1.
+- ✅ **#471** (mesh /run/secubox) : déjà résolu (changelog mesh "drop install -d /run/secubox") → verify-close.
+- ⬜ **#421** : sockets cachés en mount-ns privé (RuntimeDirectory) — mécanisme distinct, non traité.
+- 🆕 Suivi (classe #511) : mesh/toolbox/admin font `install -d -o <module> /var/log/secubox`
+  (propriétaire du parent partagé = user module) → autres daemons ne peuvent créer leurs logs.
+  Séparé de #494, à traiter (sous-dossiers propres comme fait pour eye-square/p2p).
 - **#447** : pas une fuite — `password_hash=null` → lockout kiosk + user CI parasite ;
   **CI-image-gated** (rpi400, pas gk2).
 - **#91** : `haproxy.cfg` active valide ; backup `*.broken-by-haproxyctl-*` prouve le bug
