@@ -14,9 +14,22 @@
   #515 CDN detection (live `social_host_meta.cdn_vendor`) · #516 anti-bot detection
   (live via #564/#565) · #519 enforcement plane (livré + **réparé** : blacklist-sync
   avortait NXDOMAIN + timeout unit → fix `|| true` + TimeoutStartSec 600, vérifié live,
-  default-off ; inclut #522). Toolbox source bumpé 2.7.18 (fix live-patché sur gk2).
+  default-off ; inclut #522). Toolbox source bumpé 2.7.18 (fix live-patché sur gk2) ·
+  #468 /etc/secubox traversal (source+live = 0755, secrets/CA enfants restent 0750).
 - **Actives (worktrees en cours)** : #655 webext banner · #615 security-posture ·
   #494 secubox-core ExecStart · #498 Phase 7 WAF enforcement · #485 SOC scoring.
+
+### 🔎 Reco T0 — recon live gk2 2026-06-24 (avant fix)
+- **#494/#471/#421** : la vraie régression live = `/run/secubox` = 1777 **secubox:secubox**
+  (règle dure = 1777 **root:root**). Possédé par le worktree `fix/494-…` → ne pas collisionner.
+- **#447** : pas une fuite — `password_hash=null` → lockout kiosk + user CI parasite ;
+  **CI-image-gated** (rpi400, pas gk2).
+- **#91** : `haproxy.cfg` active valide ; backup `*.broken-by-haproxyctl-*` prouve le bug
+  passé ; drift-guard #627 rattrape. Root cause = generate `haproxyctl` (api/main.py l.846/896).
+- **#53** : Wazuh hors stack documenté (Suricata+CrowdSec), aucune unit sur gk2 →
+  décider **remove vs keep-masked**, pas de boucle évidente dans `api/main.py`.
+- **#65** : `common/nginx/webui.conf` routes hardcodées → passer à `include secubox.d/*.conf`.
+- **#121** : `scripts/metablog-ingest.sh` laisse `sites/*` en root:root → `chown -R secubox:secubox`.
 - **Backlog/future** : #685/#686 APK non-root (plan verrouillé) · #592 webmail-hub ·
   #514/#515/#516/#519/#522/#525 Phase 12-14 (#515 CDN / #516 anti-bot partiellement
   couverts par antibot_sites/opgrade_sites du social graph) · #500 Utiq · #497/#480/
