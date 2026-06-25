@@ -1113,8 +1113,40 @@ async def health():
 
 @app.get("/stats", dependencies=[Depends(require_jwt)])
 async def get_stats():
-    """Get ad guard statistics."""
-    return guard.get_stats()
+    """Ad-guard statistics — AUGMENTED with the REAL board-wide blocking (#740).
+
+    The module's own SQLite blocklist is empty (the curated blocking lives in the
+    Unbound DNS sinkhole + the toolbox autolearn/MITM), so the dashboard used to
+    read all-zeros. Reflect reality: blocklist = sinkhole NXDOMAIN domains +
+    auto-learned trackers; devices + MITM block tally from the toolbox store.
+    """
+    s = guard.get_stats() or {}
+    # DNS sinkhole universe.
+    sink = 0
+    try:
+        import json as _j
+        from pathlib import Path as _Pp
+        sink = int(_j.loads(_Pp("/var/lib/secubox/ad-guard/sinkhole-status.json")
+                            .read_text()).get("blocked", 0))
+    except Exception:
+        pass
+    learned = _learn_count(_LEARNED_F)
+    s["sinkhole_domains"] = sink
+    s["learned_trackers"] = learned
+    s["blocklist_domains"] = sink + learned
+    # Real MITM block tally + monitored devices from the toolbox store.
+    try:
+        import sqlite3 as _sq
+        c = _sq.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=5)
+        s["mitm_blocks_total"] = int(c.execute(
+            "SELECT COALESCE(SUM(hits),0) FROM ad_block_stats").fetchone()[0])
+        s["blocked_24h"] = s.get("mitm_blocks_total", 0)
+        s["monitored_devices"] = int(c.execute(
+            "SELECT COUNT(*) FROM clients").fetchone()[0])
+        c.close()
+    except Exception:
+        pass
+    return s
 
 
 @app.get("/stats/by-device-type", dependencies=[Depends(require_jwt)])
@@ -1298,6 +1330,100 @@ async def check_whitelist(domain: str):
         "domain": domain,
         "whitelisted": guard.is_whitelisted(domain)
     }
+
+
+# ── Auto-learning (#740 volet 5) — surface the toolbox autolearn ─────────────
+import sys as _sys
+import json as _json
+import subprocess as _sp
+from pathlib import Path as _P
+
+for _tp in ("/usr/lib/secubox/toolbox", "/usr/lib/python3/dist-packages"):
+    if _tp not in _sys.path:
+        _sys.path.append(_tp)
+
+_LEARNED_F = _P("/var/lib/secubox/toolbox/learned-trackers.txt")
+_PURE_F = _P("/var/lib/secubox/toolbox/pure-trackers.txt")
+_ADALLOW_F = _P("/var/lib/secubox/toolbox/ad-allowlist.txt")
+_FILTERS_F = _P("/etc/secubox/toolbox/filters.json")
+_LEARN_DEFAULTS = {
+    "autolearn_ad_min_sites": 2, "autolearn_social_min_sites": 3,
+    "autolearn_min_sites": 2, "autolearn_social_window_hours": 168,
+    "autolearn_ti_min_weight": 40,
+}
+
+
+def _learn_count(p: _P) -> int:
+    try:
+        return sum(1 for ln in p.read_text().splitlines()
+                   if ln.strip() and not ln.startswith("#"))
+    except Exception:
+        return 0
+
+
+@app.get("/learn/status", dependencies=[Depends(require_jwt)])
+async def learn_status():
+    """Auto-learning state: learned/pure/allowlist counts + tunable thresholds."""
+    f = {}
+    try:
+        from secubox_toolbox.filters import get_filters
+        f = get_filters() or {}
+    except Exception:
+        pass
+    thr = {k: f.get(k, d) for k, d in _LEARN_DEFAULTS.items()}
+    return {
+        "learned": _learn_count(_LEARNED_F),
+        "pure": _learn_count(_PURE_F),
+        "allowlist": _learn_count(_ADALLOW_F),
+        "ad_learn": f.get("ad_learn", True),
+        "autolearn": f.get("autolearn", True),
+        "thresholds": thr,
+    }
+
+
+@app.get("/learn/trackers", dependencies=[Depends(require_jwt)])
+async def learn_trackers(limit: int = 300):
+    """The auto-learned tracker hosts (alphabetical, capped)."""
+    try:
+        items = sorted({ln.strip() for ln in _LEARNED_F.read_text().splitlines()
+                        if ln.strip() and not ln.startswith("#")})
+    except Exception:
+        items = []
+    return {"total": len(items), "trackers": items[:limit]}
+
+
+@app.post("/learn/run", dependencies=[Depends(require_jwt)])
+async def learn_run():
+    """Trigger one autolearn cycle now (hourly otherwise)."""
+    try:
+        _sp.Popen(["sudo", "-n", "systemctl", "start",
+                   "secubox-toolbox-autolearn.service"])
+        return {"status": "started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/learn/thresholds", dependencies=[Depends(require_jwt)])
+async def learn_set_thresholds(body: dict):
+    """Tune autolearn aggressiveness (persisted to filters.json, next cycle)."""
+    cfg = {}
+    try:
+        cfg = _json.loads(_FILTERS_F.read_text())
+    except Exception:
+        pass
+    changed = {}
+    for k in _LEARN_DEFAULTS:
+        if k in body:
+            try:
+                cfg[k] = int(body[k])
+                changed[k] = cfg[k]
+            except Exception:
+                pass
+    try:
+        _FILTERS_F.write_text(_json.dumps(cfg, indent=2))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"write filters.json: {e}")
+    return {"status": "ok", "changed": changed, "note": "applies next cycle"}
 
 
 # ============================================================================
