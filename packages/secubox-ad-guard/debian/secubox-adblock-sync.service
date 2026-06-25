@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox ad/tracker DNS sinkhole sync (#740)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/740
+After=network-online.target unbound.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-adblock-sync sync
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=300
