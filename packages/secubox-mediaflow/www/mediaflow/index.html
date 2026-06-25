@@ -418,7 +418,7 @@
                 return `<tr>
                     <td style="font-family:monospace;font-size:.8rem">${esc(r.host||'')}</td>
                     <td><span class="badge ${r.kind==='audio'?'audio':'video'}">${esc(r.kind||'')}</span></td>
-                    <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${u}">${u}</td>
+                    <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${u}"><a href="${u}" target="_blank" rel="noopener noreferrer" style="color:var(--cyan,#00d4ff);text-decoration:none">${u}</a></td>
                     <td>${r.hits||1}</td>
                     <td><button class="btn" ${disabled} onclick="cloneUrl('${u.replace(/'/g,"\\'")}','${esc(r.kind||'')}',this)">Clone</button></td>
                 </tr>`;
