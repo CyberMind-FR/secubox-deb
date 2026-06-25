@@ -111,6 +111,35 @@ async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(defa
     return JSONResponse({"ok": True, "level": level}, headers={"Cache-Control": "no-store"})
 
 
+@router.get("/__toolbox/set-adguard")
+async def toolbox_set_adguard(on: int = Query(default=1)) -> JSONResponse:
+    """#740 — banner 🛡️ Ad-Guard quick-toggle (global master ad-block switch:
+    DNS sinkhole + R3 cosmetic). Same same-origin reverse-proxied path as the
+    level switch; flips the ``ad_guard`` filter and drops cached bundles."""
+    try:
+        from .filters import set_filters
+        set_filters({"ad_guard": bool(on)})
+        bundlemod.invalidate_all()
+    except Exception as e:  # pragma: no cover
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500,
+                            headers={"Cache-Control": "no-store"})
+    return JSONResponse({"ok": True, "ad_guard": bool(on)}, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/__toolbox/set-tor")
+async def toolbox_set_tor(on: int = Query(default=1)) -> JSONResponse:
+    """#740 — banner 🧅 Tor quick-toggle (toolbox-wg tunnel Tor egress). Flips the
+    ``tor_mode`` filter; the secubox-toolbox-tor path-unit re-arms the egress."""
+    try:
+        from .filters import set_filters
+        set_filters({"tor_mode": bool(on)})
+        bundlemod.invalidate_all()
+    except Exception as e:  # pragma: no cover
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500,
+                            headers={"Cache-Control": "no-store"})
+    return JSONResponse({"ok": True, "tor_mode": bool(on)}, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/__toolbox/inline")
 async def toolbox_inline(
     mh: str = Query(default=""),
