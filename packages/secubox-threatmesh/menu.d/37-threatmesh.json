@@ -3,7 +3,7 @@
   "name": "ThreatMesh",
   "icon": "🛰️",
   "path": "/threatmesh/",
-  "category": "security",
-  "order": 37,
+  "category": "wall",
+  "order": 706,
   "description": "Sovereign threat-intel (feeds + mesh, no CAPI)"
 }
