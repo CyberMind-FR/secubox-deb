@@ -1006,7 +1006,7 @@ def generate_wg_keypair() -> tuple:
 
 
 @app.get("/wireguard")
-async def get_wireguard_status():
+def get_wireguard_status():
     """Get WireGuard mesh status (public read)."""
     config = get_wg_mesh_config()
 
@@ -1097,7 +1097,7 @@ async def add_wireguard_peer(
 
 
 @app.post("/wireguard/enable")
-async def enable_wireguard(user: dict = Depends(require_jwt)):
+def enable_wireguard(user: dict = Depends(require_jwt)):
     """Enable and start WireGuard mesh interface."""
     config = get_wg_mesh_config()
 
@@ -1684,7 +1684,7 @@ async def ml_cleanup_local(request: Request):
 
 
 @app.post("/master-link/join")
-async def ml_join(req: JoinRequest, request: Request):
+def ml_join(req: JoinRequest, request: Request):
     """Handle join request from new node (token validated)."""
     # Validate token
     validation = ml_token_validate(req.token)

@@ -373,7 +373,7 @@ async def update_config(req: ConfigUpdate, user=Depends(require_jwt)):
 
 
 @router.get("/logs")
-async def get_logs(lines: int = 100, user=Depends(require_jwt)):
+def get_logs(lines: int = 100, user=Depends(require_jwt)):
     """Get rtty service logs."""
     # Try rtty log file first
     if RTTY_LOG.exists():

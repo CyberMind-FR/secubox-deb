@@ -86,7 +86,7 @@ class PingRequest(BaseModel):
 
 
 @router.post("/ping")
-async def ping(req: PingRequest, user=Depends(require_jwt)):
+def ping(req: PingRequest, user=Depends(require_jwt)):
     """Ping a host and return results."""
     # Validate host - basic sanitization
     host = _sanitize_host(req.host)
@@ -157,7 +157,7 @@ class TracerouteRequest(BaseModel):
 
 
 @router.post("/traceroute")
-async def traceroute(req: TracerouteRequest, user=Depends(require_jwt)):
+def traceroute(req: TracerouteRequest, user=Depends(require_jwt)):
     """Traceroute to a host."""
     host = _sanitize_host(req.host)
     if not host:
@@ -217,7 +217,7 @@ class DNSRequest(BaseModel):
 
 
 @router.post("/dns")
-async def dns_lookup(req: DNSRequest, user=Depends(require_jwt)):
+def dns_lookup(req: DNSRequest, user=Depends(require_jwt)):
     """DNS lookup for a domain."""
     domain = _sanitize_host(req.domain)
     if not domain:
@@ -268,7 +268,7 @@ class WhoisRequest(BaseModel):
 
 
 @router.post("/whois")
-async def whois_lookup(req: WhoisRequest, user=Depends(require_jwt)):
+def whois_lookup(req: WhoisRequest, user=Depends(require_jwt)):
     """WHOIS lookup for a domain or IP."""
     target = _sanitize_host(req.target)
     if not target:
@@ -322,7 +322,7 @@ def _parse_whois(output: str) -> dict:
 # ══════════════════════════════════════════════════════════════════
 
 @router.get("/ports")
-async def list_ports(user=Depends(require_jwt)):
+def list_ports(user=Depends(require_jwt)):
     """List listening ports on the system."""
     try:
         result = subprocess.run(
@@ -507,7 +507,7 @@ def _is_local_network(host: str) -> bool:
 # ══════════════════════════════════════════════════════════════════
 
 @router.get("/interfaces")
-async def interfaces(user=Depends(require_jwt)):
+def interfaces(user=Depends(require_jwt)):
     """List network interfaces with details."""
     try:
         result = subprocess.run(
@@ -564,7 +564,7 @@ async def interfaces(user=Depends(require_jwt)):
 # ══════════════════════════════════════════════════════════════════
 
 @router.get("/routes")
-async def routes(user=Depends(require_jwt)):
+def routes(user=Depends(require_jwt)):
     """Show routing table."""
     try:
         result = subprocess.run(
@@ -597,7 +597,7 @@ async def routes(user=Depends(require_jwt)):
 # ══════════════════════════════════════════════════════════════════
 
 @router.get("/arp")
-async def arp_table(user=Depends(require_jwt)):
+def arp_table(user=Depends(require_jwt)):
     """Show ARP table."""
     try:
         result = subprocess.run(
@@ -632,7 +632,7 @@ async def arp_table(user=Depends(require_jwt)):
 # ══════════════════════════════════════════════════════════════════
 
 @router.get("/connections")
-async def connections(user=Depends(require_jwt)):
+def connections(user=Depends(require_jwt)):
     """Show active network connections."""
     try:
         result = subprocess.run(
@@ -684,7 +684,7 @@ class MTRRequest(BaseModel):
 
 
 @router.post("/mtr")
-async def mtr(req: MTRRequest, user=Depends(require_jwt)):
+def mtr(req: MTRRequest, user=Depends(require_jwt)):
     """Run MTR (My Traceroute) to a host."""
     host = _sanitize_host(req.host)
     if not host:
@@ -747,7 +747,7 @@ class NmapRequest(BaseModel):
 
 
 @router.post("/nmap")
-async def nmap_scan(req: NmapRequest, user=Depends(require_jwt)):
+def nmap_scan(req: NmapRequest, user=Depends(require_jwt)):
     """Run basic nmap scan on a host (local network only)."""
     host = _sanitize_host(req.host)
     if not host:
@@ -815,7 +815,7 @@ class BandwidthRequest(BaseModel):
 
 
 @router.post("/bandwidth")
-async def run_bandwidth(req: BandwidthRequest, user=Depends(require_jwt)):
+def run_bandwidth(req: BandwidthRequest, user=Depends(require_jwt)):
     """Run bandwidth test using iperf3."""
     if not _tool_available("iperf3"):
         raise HTTPException(503, "iperf3 not installed")

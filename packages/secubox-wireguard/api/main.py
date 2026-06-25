@@ -484,7 +484,7 @@ async def migrate(req: MigrateRequest, user=Depends(require_jwt)):
 # === Health Check ===
 
 @app.get("/health")
-async def health():
+def health():
     """Health check endpoint."""
     try:
         result = subprocess.run(["wg", "show", "interfaces"], capture_output=True, timeout=2)

@@ -459,7 +459,7 @@ class RenameRequest(BaseModel):
 
 
 @router.post("/remove")
-async def remove(req: RemoveRequest, user=Depends(require_jwt)):
+def remove(req: RemoveRequest, user=Depends(require_jwt)):
     """Remove a droplet."""
     result = subprocess.run(
         ["dropletctl", "remove", req.name],
@@ -481,7 +481,7 @@ async def remove(req: RemoveRequest, user=Depends(require_jwt)):
 
 
 @router.post("/rename")
-async def rename(req: RenameRequest, user=Depends(require_jwt)):
+def rename(req: RenameRequest, user=Depends(require_jwt)):
     """Rename a droplet."""
     if not req.old or not req.new:
         raise HTTPException(400, "Old and new names required")

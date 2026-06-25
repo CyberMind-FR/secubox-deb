@@ -168,7 +168,7 @@ async def set_mode(req: ModeRequest, user=Depends(require_jwt)):
 
 
 @router.post("/apply_mode")
-async def apply_mode(req: ModeRequest, user=Depends(require_jwt)):
+def apply_mode(req: ModeRequest, user=Depends(require_jwt)):
     """Applique le mode réseau : backup + render template + netplan apply."""
     if req.mode not in AVAILABLE_MODES:
         raise HTTPException(400, f"Mode inconnu: {req.mode}")
@@ -222,7 +222,7 @@ async def confirm_mode(user=Depends(require_jwt)):
 
 
 @router.post("/rollback")
-async def rollback(user=Depends(require_jwt)):
+def rollback(user=Depends(require_jwt)):
     """Restaure la dernière sauvegarde netplan et réapplique."""
     backups = sorted(BACKUP_DIR.glob("00-secubox.yaml.*"))
     if not backups:
@@ -237,7 +237,7 @@ async def rollback(user=Depends(require_jwt)):
 
 
 @router.get("/validate_config")
-async def validate_config(user=Depends(require_jwt)):
+def validate_config(user=Depends(require_jwt)):
     """Valider la config netplan actuelle."""
     r = subprocess.run(["netplan", "generate"], capture_output=True, text=True, timeout=10)
     return {"valid": r.returncode == 0, "output": r.stderr[:500] if r.returncode != 0 else "OK"}
@@ -322,7 +322,7 @@ async def vpnrelay_config(user=Depends(require_jwt)):
 
 
 @router.get("/travel_scan_networks")
-async def travel_scan_networks(user=Depends(require_jwt)):
+def travel_scan_networks(user=Depends(require_jwt)):
     """Scanner les réseaux WiFi disponibles."""
     r = subprocess.run(
         ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"],
@@ -366,7 +366,7 @@ async def generate_config(req: GenerateConfigRequest, user=Depends(require_jwt))
 
 
 @router.post("/generate_wireguard_keys")
-async def generate_wireguard_keys(user=Depends(require_jwt)):
+def generate_wireguard_keys(user=Depends(require_jwt)):
     """Générer des clés WireGuard."""
     priv = subprocess.run(["wg", "genkey"], capture_output=True, text=True)
     private_key = priv.stdout.strip()
@@ -390,7 +390,7 @@ async def apply_wireguard_config(req: WireguardConfigRequest, user=Depends(requi
 
 
 @router.post("/apply_mtu_clamping")
-async def apply_mtu_clamping(mtu: int = 1280, user=Depends(require_jwt)):
+def apply_mtu_clamping(mtu: int = 1280, user=Depends(require_jwt)):
     """Appliquer le MTU clamping."""
     r = subprocess.run(
         ["iptables", "-A", "FORWARD", "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
@@ -401,7 +401,7 @@ async def apply_mtu_clamping(mtu: int = 1280, user=Depends(require_jwt)):
 
 
 @router.post("/enable_tcp_bbr")
-async def enable_tcp_bbr(user=Depends(require_jwt)):
+def enable_tcp_bbr(user=Depends(require_jwt)):
     """Activer TCP BBR."""
     subprocess.run(["sysctl", "-w", "net.core.default_qdisc=fq"], capture_output=True)
     subprocess.run(["sysctl", "-w", "net.ipv4.tcp_congestion_control=bbr"], capture_output=True)
@@ -482,7 +482,7 @@ class AutoApplyRequest(BaseModel):
 
 
 @router.post("/auto_apply")
-async def auto_apply(req: AutoApplyRequest, user=Depends(require_jwt)):
+def auto_apply(req: AutoApplyRequest, user=Depends(require_jwt)):
     """
     Auto-detect interfaces and apply network configuration.
     1. Run secubox-net-detect

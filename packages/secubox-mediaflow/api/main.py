@@ -579,25 +579,25 @@ async def update_settings(req: SettingsRequest, user=Depends(require_jwt)):
 
 # DPI service control
 @router.post("/start_netifyd")
-async def start_netifyd(user=Depends(require_jwt)):
+def start_netifyd(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "start", "netifyd"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/stop_netifyd")
-async def stop_netifyd(user=Depends(require_jwt)):
+def stop_netifyd(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "stop", "netifyd"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/start_ndpid")
-async def start_ndpid(user=Depends(require_jwt)):
+def start_ndpid(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "start", "ndpid"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/stop_ndpid")
-async def stop_ndpid(user=Depends(require_jwt)):
+def stop_ndpid(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "stop", "ndpid"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 

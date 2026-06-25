@@ -416,7 +416,7 @@ class TestEmail(BaseModel):
 
 
 @router.post("/test")
-async def test_email(email: TestEmail, user=Depends(require_jwt)):
+def test_email(email: TestEmail, user=Depends(require_jwt)):
     """Send a test email through the relay."""
     config = _load_config()
     if not config.get("smarthost"):

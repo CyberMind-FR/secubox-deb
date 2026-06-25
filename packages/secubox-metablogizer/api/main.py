@@ -428,7 +428,7 @@ async def get_access():
 
 
 @app.get("/access/detailed")
-async def get_access_detailed():
+def get_access_detailed():
     """Get all published sites with certificate info and sizes"""
     import subprocess
     from datetime import datetime
@@ -1178,7 +1178,7 @@ async def get_site_cert(name: str):
 
 
 @app.get("/site/{name}/certificate", dependencies=[Depends(require_jwt)])
-async def get_certificate_info(name: str):
+def get_certificate_info(name: str):
     """Get certificate information for a site"""
     import subprocess
     from datetime import datetime
