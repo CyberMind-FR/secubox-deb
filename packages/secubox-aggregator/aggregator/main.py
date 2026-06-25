@@ -214,6 +214,19 @@ def _build_app() -> FastAPI:
     for name in cfg.get("modules", []):
         _mount_module(app, name)
 
+    @app.on_event("startup")
+    async def _raise_threadpool() -> None:
+        """Sync (`def`) route handlers — including the blocking ones converted
+        by the #738 async-sweep — run in AnyIO's default threadpool (40 tokens).
+        With ~110 modules sharing one process, raise the cap so concurrent
+        blocking calls don't queue head-of-line behind a full pool."""
+        try:
+            import anyio
+            anyio.to_thread.current_default_thread_limiter().total_tokens = 80
+            log.info("threadpool limiter raised to 80 tokens")
+        except Exception as e:  # never let this break startup
+            log.warning("could not raise threadpool limiter: %s", e)
+
     @app.get("/health")
     def health() -> dict:
         """Aggregator health. Reports per-module load state."""
