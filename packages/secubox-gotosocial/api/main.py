@@ -215,7 +215,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Get GoToSocial service status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -543,7 +543,7 @@ async def remove_allowed_domain(domain: str, user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/media/stats")
-async def get_media_stats(user=Depends(require_jwt)):
+def get_media_stats(user=Depends(require_jwt)):
     """Get media storage statistics."""
     cfg = get_config()
     data_path = Path(cfg.get("data_path", DATA_PATH_DEFAULT))
@@ -701,7 +701,7 @@ async def list_reports(resolved: bool = False, user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/container/status")
-async def container_status(user=Depends(require_jwt)):
+def container_status(user=Depends(require_jwt)):
     """Get container status details."""
     rt = detect_runtime()
     if not rt:
@@ -732,7 +732,7 @@ async def container_status(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_gotosocial(user=Depends(require_jwt)):
+def install_gotosocial(user=Depends(require_jwt)):
     """Install GoToSocial container."""
     rt = detect_runtime()
     if not rt:
@@ -874,7 +874,7 @@ async def update_gotosocial(user=Depends(require_jwt)):
 
 
 @router.post("/container/uninstall")
-async def uninstall_gotosocial(user=Depends(require_jwt)):
+def uninstall_gotosocial(user=Depends(require_jwt)):
     """Uninstall GoToSocial container (preserves data)."""
     rt = detect_runtime()
     if not rt:
@@ -895,7 +895,7 @@ async def uninstall_gotosocial(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.post("/backup")
-async def create_backup(user=Depends(require_jwt)):
+def create_backup(user=Depends(require_jwt)):
     """Create a backup of GoToSocial data."""
     cfg = get_config()
     data_path = Path(cfg.get("data_path", DATA_PATH_DEFAULT))
@@ -930,7 +930,7 @@ async def create_backup(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(lines: int = 100, user=Depends(require_jwt)):
+def get_logs(lines: int = 100, user=Depends(require_jwt)):
     """Get container logs."""
     rt = detect_runtime()
     if not rt:

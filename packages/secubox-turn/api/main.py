@@ -560,7 +560,7 @@ async def generate_secret(user=Depends(require_jwt)):
 
 
 @router.get("/logs")
-async def get_logs(lines: int = 100, user=Depends(require_jwt)):
+def get_logs(lines: int = 100, user=Depends(require_jwt)):
     """Get TURN server logs."""
     log_file = Path("/var/log/turnserver/turnserver.log")
 

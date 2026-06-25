@@ -144,7 +144,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Get Ollama service status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -227,7 +227,7 @@ async def list_models(user=Depends(require_jwt)):
 
 
 @router.get("/models/{name}")
-async def get_model_info(name: str, user=Depends(require_jwt)):
+def get_model_info(name: str, user=Depends(require_jwt)):
     """Get model details."""
     if not is_running():
         raise HTTPException(503, "Ollama not running")
@@ -261,7 +261,7 @@ async def get_model_info(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/models/pull")
-async def pull_model(req: ModelPullRequest, user=Depends(require_jwt)):
+def pull_model(req: ModelPullRequest, user=Depends(require_jwt)):
     """Pull a model from Ollama registry."""
     if not is_running():
         raise HTTPException(503, "Ollama not running")
@@ -286,7 +286,7 @@ async def pull_model(req: ModelPullRequest, user=Depends(require_jwt)):
 
 
 @router.delete("/models/{name}")
-async def remove_model(name: str, user=Depends(require_jwt)):
+def remove_model(name: str, user=Depends(require_jwt)):
     """Remove a model."""
     if not is_running():
         raise HTTPException(503, "Ollama not running")
@@ -367,7 +367,7 @@ async def generate(req: GenerateRequest, user=Depends(require_jwt)):
 
 
 @router.get("/system")
-async def system_info(user=Depends(require_jwt)):
+def system_info(user=Depends(require_jwt)):
     """Get system resource info."""
     cfg = get_config()
     rt = detect_runtime()
@@ -431,7 +431,7 @@ async def system_info(user=Depends(require_jwt)):
 
 
 @router.get("/logs")
-async def get_logs(lines: int = 50, user=Depends(require_jwt)):
+def get_logs(lines: int = 50, user=Depends(require_jwt)):
     """Get recent container logs."""
     rt = detect_runtime()
     if not rt:

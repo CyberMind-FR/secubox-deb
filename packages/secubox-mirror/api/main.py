@@ -318,7 +318,7 @@ async def cache_stats(user=Depends(require_jwt)):
 
 
 @router.post("/cache/purge")
-async def cache_purge(path: str = "", user=Depends(require_jwt)):
+def cache_purge(path: str = "", user=Depends(require_jwt)):
     """Purge cache - all or specific path."""
     if not path:
         # Purge entire cache

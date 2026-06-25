@@ -527,7 +527,7 @@ async def components():
 
 
 @app.get("/access")
-async def access():
+def access():
     """Show connection endpoints (public, three-fold: how)."""
     import socket
     hostname = socket.getfqdn()
@@ -1012,7 +1012,7 @@ async def analyze(req: AnalyzeRequest, user=Depends(require_jwt)):
 # ============================================================================
 
 @app.get("/integrations")
-async def get_integrations(user=Depends(require_jwt)):
+def get_integrations(user=Depends(require_jwt)):
     """Get CrowdSec/Suricata integration status."""
     config = _load_config()
 

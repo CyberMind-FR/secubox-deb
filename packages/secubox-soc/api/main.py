@@ -447,7 +447,7 @@ async def get_map_threats(continent: Optional[str] = None, country: Optional[str
 
 
 @app.get("/map/attacks", dependencies=[Depends(require_jwt)])
-async def get_live_attacks():
+def get_live_attacks():
     attacks = []
     try:
         result = subprocess.run(["cscli", "decisions", "list", "-o", "json"], capture_output=True, text=True, timeout=5)

@@ -509,7 +509,7 @@ async def list_alerts(
 
 
 @app.get("/alerts/sources", dependencies=[Depends(require_jwt)])
-async def get_alert_sources():
+def get_alert_sources():
     """Get available alert sources and their status."""
     sources = []
 

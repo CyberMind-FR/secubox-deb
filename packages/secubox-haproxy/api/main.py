@@ -1036,7 +1036,7 @@ class CertBundleRequest(BaseModel):
 
 
 @router.post("/certificates/bundle", dependencies=[Depends(require_jwt)])
-async def create_cert_bundle(req: CertBundleRequest):
+def create_cert_bundle(req: CertBundleRequest):
     """Create HAProxy certificate bundle (cert + key + chain → single PEM)."""
     cert_dir = Path(CERTS_DIR)
     if not cert_dir.exists():
@@ -1157,7 +1157,7 @@ class AcmeRequest(BaseModel):
 
 
 @router.post("/certificates/acme", dependencies=[Depends(require_jwt)])
-async def request_acme_certificate(req: AcmeRequest):
+def request_acme_certificate(req: AcmeRequest):
     """Request certificate via ACME (Let's Encrypt)."""
     cert_dir = Path(CERTS_DIR)
     if not cert_dir.exists():
@@ -1218,7 +1218,7 @@ async def request_acme_certificate(req: AcmeRequest):
 
 
 @router.post("/certificates/{name}/renew", dependencies=[Depends(require_jwt)])
-async def renew_certificate(name: str):
+def renew_certificate(name: str):
     """Renew an existing ACME certificate."""
     try:
         result = subprocess.run(
@@ -1257,7 +1257,7 @@ async def renew_certificate(name: str):
 # ── Auto-Repair ───────────────────────────────────────────────────
 
 @router.post("/repair", dependencies=[Depends(require_jwt)])
-async def repair_haproxy():
+def repair_haproxy():
     """Auto-repair HAProxy: check config, fix vhosts, reload."""
     repairs = []
 
@@ -1303,7 +1303,7 @@ async def repair_haproxy():
 
 
 @router.post("/certificates/repair", dependencies=[Depends(require_jwt)])
-async def repair_certificates():
+def repair_certificates():
     """Auto-repair: renew expiring certificates."""
     cert_dir = Path(CERTS_DIR)
     if not cert_dir.exists():
@@ -1464,7 +1464,7 @@ async def crowdsec_status():
 # ── Actions ───────────────────────────────────────────────────────
 
 @router.post("/reload", dependencies=[Depends(require_jwt)])
-async def reload_haproxy():
+def reload_haproxy():
     """Reload HAProxy."""
     result = subprocess.run(
         ["systemctl", "reload", "haproxy"],
@@ -1475,7 +1475,7 @@ async def reload_haproxy():
 
 
 @router.post("/restart", dependencies=[Depends(require_jwt)])
-async def restart_haproxy():
+def restart_haproxy():
     """Restart HAProxy."""
     result = subprocess.run(
         ["systemctl", "restart", "haproxy"],
@@ -1956,7 +1956,7 @@ async def get_config_backup(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/config/restore/{name}")
-async def restore_config_backup(name: str, user=Depends(require_jwt)):
+def restore_config_backup(name: str, user=Depends(require_jwt)):
     """Restore configuration from backup."""
     backup_path = CONFIG_BACKUP_DIR / name
     if not backup_path.exists():
@@ -2005,7 +2005,7 @@ async def delete_config_backup(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/config/diff")
-async def diff_config(backup_name: str = Query(...), user=Depends(require_jwt)):
+def diff_config(backup_name: str = Query(...), user=Depends(require_jwt)):
     """Compare current config with a backup."""
     backup_path = CONFIG_BACKUP_DIR / backup_name
     if not backup_path.exists():

@@ -704,7 +704,7 @@ async def install_addon(
 
 
 @router.post("/hacs/install")
-async def install_hacs(user=Depends(require_jwt)):
+def install_hacs(user=Depends(require_jwt)):
     """Install HACS (Home Assistant Community Store)."""
     if not is_running():
         raise HTTPException(503, "Home Assistant not running")
@@ -741,7 +741,7 @@ async def install_hacs(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.post("/backup/create")
-async def create_backup(
+def create_backup(
     req: BackupCreate,
     user=Depends(require_jwt)
 ):
@@ -798,7 +798,7 @@ async def list_backups(user=Depends(require_jwt)):
 
 
 @router.post("/backup/restore")
-async def restore_backup(path: str = Query(...), user=Depends(require_jwt)):
+def restore_backup(path: str = Query(...), user=Depends(require_jwt)):
     """Restore from backup."""
     backup_path = Path(path)
     if not backup_path.exists():
@@ -837,7 +837,7 @@ async def restore_backup(path: str = Query(...), user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/container/status")
-async def container_status(user=Depends(require_jwt)):
+def container_status(user=Depends(require_jwt)):
     """Get container/LXC status."""
     rt = detect_runtime()
     cfg = get_config()
@@ -882,7 +882,7 @@ async def container_status(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_container(user=Depends(require_jwt)):
+def install_container(user=Depends(require_jwt)):
     """Pull Home Assistant container image or create LXC."""
     rt = detect_runtime()
     cfg = get_config()
@@ -1047,7 +1047,7 @@ async def restart_container(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(lines: int = 100, user=Depends(require_jwt)):
+def get_logs(lines: int = 100, user=Depends(require_jwt)):
     """Get recent logs."""
     rt = detect_runtime()
     cfg = get_config()

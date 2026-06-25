@@ -152,7 +152,7 @@ async def purge_cache(user=Depends(require_jwt)):
 
 
 @router.post("/purge_domain")
-async def purge_domain(domain: str, user=Depends(require_jwt)):
+def purge_domain(domain: str, user=Depends(require_jwt)):
     """Purger le cache d'un domaine."""
     target = CACHE_DIR / domain
     if target.exists():
@@ -276,14 +276,14 @@ async def clear_stats(user=Depends(require_jwt)):
 
 
 @router.get("/restart")
-async def restart(user=Depends(require_jwt)):
+def restart(user=Depends(require_jwt)):
     """Redémarrer le service cache."""
     r = subprocess.run(["systemctl", "reload", "nginx"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.get("/logs")
-async def logs(lines: int = 50, user=Depends(require_jwt)):
+def logs(lines: int = 50, user=Depends(require_jwt)):
     """Logs du cache."""
     r = subprocess.run(
         ["tail", "-n", str(lines), "/var/log/nginx/cache.log"],

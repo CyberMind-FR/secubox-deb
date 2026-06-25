@@ -796,7 +796,7 @@ async def scan_domain(target: str, background_tasks: BackgroundTasks):
 
 
 @app.post("/scan/ip", dependencies=[Depends(require_jwt)])
-async def scan_ip(target: str, background_tasks: BackgroundTasks):
+def scan_ip(target: str, background_tasks: BackgroundTasks):
     """Start an IP scan."""
     # Validate IP
     try:

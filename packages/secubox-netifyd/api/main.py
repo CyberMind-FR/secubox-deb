@@ -388,7 +388,7 @@ async def get_status():
 # =============================================================================
 
 @app.post("/start", dependencies=[Depends(require_jwt)])
-async def start_service():
+def start_service():
     """Start netifyd daemon."""
     result = subprocess.run(
         ["systemctl", "start", "netifyd"],
@@ -402,7 +402,7 @@ async def start_service():
 
 
 @app.post("/stop", dependencies=[Depends(require_jwt)])
-async def stop_service():
+def stop_service():
     """Stop netifyd daemon."""
     result = subprocess.run(
         ["systemctl", "stop", "netifyd"],
@@ -416,7 +416,7 @@ async def stop_service():
 
 
 @app.post("/restart", dependencies=[Depends(require_jwt)])
-async def restart_service():
+def restart_service():
     """Restart netifyd daemon."""
     result = subprocess.run(
         ["systemctl", "restart", "netifyd"],
@@ -650,7 +650,7 @@ async def clear_alerts():
 # =============================================================================
 
 @app.get("/logs", dependencies=[Depends(require_jwt)])
-async def get_logs(lines: int = 100):
+def get_logs(lines: int = 100):
     """Get recent netifyd logs."""
     try:
         result = subprocess.run(
@@ -669,7 +669,7 @@ async def get_logs(lines: int = 100):
 # =============================================================================
 
 @app.get("/interfaces", dependencies=[Depends(require_jwt)])
-async def list_interfaces():
+def list_interfaces():
     """List available network interfaces."""
     result = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
     try:
