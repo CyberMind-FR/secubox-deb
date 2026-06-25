@@ -1,3 +1,15 @@
+secubox-netboot (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Installeur B3 (#737) : installer/init (initramfs) — réseau DHCP, téléchargement
+    image+signature, VÉRIFICATION de la signature détachée (clé publique embarquée,
+    refus d'écriture si invalide), écriture eMMC (dd conv=fsync), retour boot LOCAL
+    persistant (fw_setenv factory_bootcmd) + reboot. Haltes sûres, jamais de boucle.
+  * scripts/build-installer-initrd.sh : assemble l'initramfs arm64 (busybox + openssl
+    + clé + init → cpio.gz). Validé sur gk2 (arm64) : initrd 4.1M, busybox ARM
+    aarch64, round-trip de signature « Verified OK ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 15:30:00 +0000
+
 secubox-netboot (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Rôle SERVEUR complet (#737) : secubox-netboot-serve (TFTP+HTTP non-invasif,

@@ -12,7 +12,7 @@ override_dh_auto_install:
 	install -m0755 sbin/secubox-netboot-serve    debian/secubox-netboot/usr/sbin/
 	install -m0755 sbin/secubox-netboot-publish  debian/secubox-netboot/usr/sbin/
 	install -d debian/secubox-netboot/usr/share/secubox/netboot
-	cp -r boot board scripts docs debian/secubox-netboot/usr/share/secubox/netboot/
+	cp -r boot board scripts docs installer debian/secubox-netboot/usr/share/secubox/netboot/
 	# vhost de boot + location servis par le rôle serveur (posés par 'serve up')
 	install -d debian/secubox-netboot/usr/share/secubox/netboot/nginx
 	install -m0644 nginx/boot-vhost.conf nginx/netboot-server.conf debian/secubox-netboot/usr/share/secubox/netboot/nginx/
