@@ -221,6 +221,31 @@ async def server_up(user=Depends(require_jwt)):
     return {"server": _json_or_raw(r["stdout"])}
 
 
+BOARD_DIR = Path("/usr/share/secubox/netboot/board")
+
+
+@router.get("/boards")
+async def boards(user=Depends(require_jwt)):
+    """Modèles de board supportés (depuis board/<name>/), avec leurs adresses de
+    chargement — alimente le sélecteur de modèle des profils."""
+    out: List[Dict[str, Any]] = []
+    if BOARD_DIR.exists():
+        for d in sorted(BOARD_DIR.iterdir()):
+            if not (d / "addrs.env").exists():
+                continue
+            addrs = {}
+            for line in (d / "addrs.env").read_text(errors="ignore").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    v = v.split("#", 1)[0].strip()   # retire un commentaire inline
+                    addrs[k.strip()] = v
+            out.append({"model": d.name, "defconfig": addrs.get("DEFCONFIG"),
+                        "overlay_load": addrs.get("OVERLAY_LOAD"),
+                        "has_fragment": (d / "uboot.fragment").exists()})
+    return {"boards": out}
+
+
 @router.get("/profiles")
 async def profiles_list(user=Depends(require_jwt)):
     """Profils board (remote config) : id, modèle, image assignée, mode, serveur."""
