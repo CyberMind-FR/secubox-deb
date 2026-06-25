@@ -1,3 +1,14 @@
+secubox-waf (1.2.7-1~bookworm1) bookworm; urgency=medium
+
+  * Fix zero threat metrics: the inline mitmproxy threat log is normally empty
+    (CrowdSec + the firewall bouncer do the real detection/blocking), so the
+    Threats 24h / Blocked cards and the severity/category donuts read 0. Overlay
+    CrowdSec alerts (cscli alerts list -o json, same source as the bans) into the
+    stats; set Protected = count of HAProxy->mitmproxy protected vhosts. Served
+    from the standalone warm-loop (not the aggregator, whose lifespan never runs).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 11:30:00 +0000
+
 secubox-waf (1.2.6-1~bookworm1) bookworm; urgency=medium
 
   * fix(waf): robust route propagation (#609). wafctl now uses a DIRECTORY
