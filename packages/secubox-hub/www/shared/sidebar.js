@@ -1711,26 +1711,31 @@
             // If already ok/warn/error, keep that status until new result arrives
         });
 
-        for (var i = 0; i < modules.length; i += BATCH_SIZE) {
-            var batch = modules.slice(i, i + BATCH_SIZE);
-            var results = await Promise.allSettled(batch.map(function(mod) {
-                return checkModuleHealth(mod);
-            }));
-
-            results.forEach(function(result, idx) {
-                var mod = batch[idx];
-                if (result.status === 'fulfilled') {
-                    healthCache[mod] = result.value;
-                } else {
-                    healthCache[mod] = { status: 'error', msg: 'Check failed', timestamp: Date.now() };
-                }
-            });
-
-            // Update LEDs after each batch
-            updateAllLEDs();
-        }
-
+        // #740: ONE batch call instead of one /api/v1/<mod>/health per module.
+        // The per-module loop fired ~119 requests every cycle and hammered the
+        // aggregator's single shared event loop (board-wide 502s). The hub batch
+        // endpoint returns every module's status in a single hit.
+        await applyHealthBatch(modules);
         return healthCache;
+    }
+
+    // Populate healthCache for `modules` from the single hub batch endpoint
+    // (/api/v1/hub/public/health-batch — served by the dedicated hub process,
+    // double-buffered). Replaces the per-module health storm.
+    async function applyHealthBatch(modules) {
+        var token = localStorage.getItem('sbx_token');
+        var headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+        var res = await safeFetch(BATCH_HEALTH_API, { headers: headers }, 5000);
+        if (!res.ok || !res.data || !res.data.modules) return;
+        var mods = res.data.modules;
+        modules.forEach(function(mod) {
+            var hb = mods[mod] || mods[mod.replace(/_/g, '-')] || mods[mod.replace(/-/g, '_')];
+            healthCache[mod] = hb
+                ? { status: hb.status, msg: hb.msg || '', timestamp: Date.now() }
+                : { status: 'unknown', msg: 'no health API', timestamp: Date.now() };
+        });
+        updateAllLEDs();
+        try { savePreCache(healthCache); } catch (e) {}
     }
 
     async function refreshStaleHealth() {
@@ -1744,17 +1749,9 @@
 
         if (stale.length === 0) return;
 
-        // Incremental update - update each LED as result comes in
-        for (var i = 0; i < stale.length; i += BATCH_SIZE) {
-            var batch = stale.slice(i, i + BATCH_SIZE);
-            await Promise.allSettled(batch.map(async function(mod) {
-                var result = await checkModuleHealth(mod);
-                healthCache[mod] = result;
-                // Update single LED immediately
-                var item = document.querySelector('.nav-item[data-module="' + mod + '"]');
-                if (item) updateSingleLED(item, result);
-            }));
-        }
+        // #740: refresh stale modules via the single batch endpoint, not one
+        // /health request per module.
+        await applyHealthBatch(stale);
 
         // Save cache once at end, no re-sort needed
         savePreCache(healthCache);
