@@ -81,6 +81,29 @@
 
         <div class="card">
             <div class="card-header">
+                <h2>🛡️ Sinkhole anti-pub (DNS, board-wide)</h2>
+                <div>
+                    <button class="btn btn-sm" onclick="sinkSync()">↻ Sync</button>
+                    <button class="btn btn-sm" id="sink-toggle" onclick="sinkToggle()">…</button>
+                </div>
+            </div>
+            <div id="sink-status">Chargement…</div>
+            <div class="card-header" style="margin-top:1rem;"><h2 style="font-size:1rem;">📚 Sources de filtres</h2></div>
+            <div id="sink-sources"></div>
+            <div class="input-row" style="margin-top:1rem;">
+                <input type="text" id="sink-wl-input" placeholder="Domaine à whitelister (jamais bloqué)">
+                <button class="btn btn-primary" onclick="sinkWlAdd()">+ Whitelist domaine</button>
+            </div>
+            <div id="sink-wl"></div>
+            <div class="input-row" style="margin-top:.5rem;">
+                <input type="text" id="sink-ip-input" placeholder="IP client à exempter (bypass sinkhole)">
+                <button class="btn btn-primary" onclick="sinkIpAdd()">+ IP bypass</button>
+            </div>
+            <div id="sink-ip"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
                 <h2>🔍 Check Domain</h2>
             </div>
             <div class="input-row">
@@ -206,9 +229,55 @@
             loadThreats();
         }
 
+        // ── Sinkhole anti-pub (#740) ─────────────────────────────────────
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+        async function sinkLoad() {
+            const st = await api('/sinkhole/status');
+            const box = document.getElementById('sink-status');
+            const tgl = document.getElementById('sink-toggle');
+            if (st) {
+                const on = st.enabled;
+                box.innerHTML = `<div style="padding:.8rem;border-radius:6px;background:${on?'rgba(0,221,68,.1)':'rgba(255,68,102,.1)'};border:1px solid ${on?'var(--primary)':'var(--danger)'};">
+                    <strong style="color:${on?'var(--primary)':'var(--danger)'};">${on?'🟢 ACTIF':'🔴 INACTIF'}</strong> —
+                    <b>${(st.blocked||0).toLocaleString()}</b> domaines pub/tracker NXDOMAIN'd (tout le LAN)
+                    ${st.ip_allowlist?` · ${st.ip_allowlist} IP exemptées`:''}
+                    ${st.ts?`<br><small style="color:var(--text-muted);">dernier sync : ${new Date(st.ts*1000).toLocaleString()}</small>`:''}
+                </div>`;
+                tgl.textContent = on ? '⏸ Désactiver' : '▶ Activer';
+            }
+            const src = await api('/sinkhole/sources');
+            if (src?.sources) {
+                document.getElementById('sink-sources').innerHTML = src.sources.map(s => `
+                    <label style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;">
+                        <input type="checkbox" ${s.enabled?'checked':''} onchange="sinkToggleSrc('${esc(s.name)}', this.checked)">
+                        <code>${esc(s.name)}</code>
+                        <span style="color:var(--text-muted);font-size:.85rem;">${esc(s.desc)} [${(s.kinds||[]).join(',')}]</span>
+                    </label>`).join('');
+            }
+            const wl = await api('/sinkhole/whitelist');
+            document.getElementById('sink-wl').innerHTML = (wl?.domains||[]).map(d =>
+                `<span class="chip">${esc(d)} <a href="#" onclick="sinkWlDel('${esc(d)}');return false;">✕</a></span>`).join('') || '<small style="color:var(--text-muted);">aucun domaine whitelisté</small>';
+            const ip = await api('/sinkhole/ip-allowlist');
+            document.getElementById('sink-ip').innerHTML = (ip?.ips||[]).map(i =>
+                `<span class="chip">${esc(i)} <a href="#" onclick="sinkIpDel('${esc(i)}');return false;">✕</a></span>`).join('') || '<small style="color:var(--text-muted);">aucune IP exemptée</small>';
+        }
+        async function sinkSync() { document.getElementById('sink-status').innerHTML = '⏳ Sync en cours (~60s)…'; await api('/sinkhole/sync', 'POST'); setTimeout(sinkLoad, 8000); }
+        async function sinkToggle() {
+            const on = document.getElementById('sink-toggle').textContent.includes('Désactiver');
+            await api(on ? '/sinkhole/disable' : '/sinkhole/enable', 'POST');
+            document.getElementById('sink-status').innerHTML = '⏳ Application…'; setTimeout(sinkLoad, 6000);
+        }
+        async function sinkToggleSrc(name, en) { await api(`/sinkhole/sources/${encodeURIComponent(name)}?enabled=${en}`, 'POST'); }
+        async function sinkWlAdd() { const v=document.getElementById('sink-wl-input').value.trim(); if(!v)return; await api(`/sinkhole/whitelist?domain=${encodeURIComponent(v)}`, 'POST'); document.getElementById('sink-wl-input').value=''; sinkLoad(); }
+        async function sinkWlDel(d) { await api(`/sinkhole/whitelist/${encodeURIComponent(d)}`, 'DELETE'); sinkLoad(); }
+        async function sinkIpAdd() { const v=document.getElementById('sink-ip-input').value.trim(); if(!v)return; await api(`/sinkhole/ip-allowlist?ip=${encodeURIComponent(v)}`, 'POST'); document.getElementById('sink-ip-input').value=''; sinkLoad(); }
+        async function sinkIpDel(i) { await api(`/sinkhole/ip-allowlist/${encodeURIComponent(i)}`, 'DELETE'); sinkLoad(); }
+
         loadStatus();
         loadThreats();
         loadTopBlocked();
+        sinkLoad();
         setInterval(loadStatus, 30000);
     </script>
     <script src="/shared/crt-engine.js"></script>

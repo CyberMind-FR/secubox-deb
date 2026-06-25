@@ -62,7 +62,16 @@ cookie_audit_agg   = CookieAuditAggregator(get_cookie_audit_config())
 
 @asynccontextmanager
 async def lifespan(_app):
+    # #740 — warm the system-metrics cache OFF the event loop at startup so the
+    # first request never blocks ~10s building it synchronously (the 502 window
+    # on /metrics/* + HealthBanner after a restart).
+    async def _warm():
+        try:
+            await asyncio.to_thread(build_cache)
+        except Exception as e:
+            log.warning("startup cache warm failed: %s", e) if 'log' in globals() else None
     tasks = [
+        asyncio.create_task(_warm()),
         asyncio.create_task(visitor_origin_agg.run_forever()),
         asyncio.create_task(live_hosts_agg.run_forever()),
         asyncio.create_task(cert_status_agg.run_forever()),

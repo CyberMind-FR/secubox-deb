@@ -10,6 +10,7 @@ Features:
 - dnsmasq integration for blocking
 """
 import os
+import sys
 import re
 import json
 import math
@@ -740,6 +741,144 @@ async def download_all_feeds():
 
     total_added = sum(r.get("added_to_blocklist", 0) for r in results.values() if r.get("success"))
     return {"results": results, "total_added": total_added}
+
+
+# ============================================================================
+# Ad/Tracker DNS Sinkhole (#740) — control surface over secubox-adblock-sync
+# ============================================================================
+import json as _json
+from pathlib import Path as _Path
+
+for _tp in ("/usr/lib/secubox/toolbox", "/usr/lib/python3/dist-packages"):
+    if _tp not in sys.path:
+        sys.path.append(_tp)
+
+_SINK_STATUS = _Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
+_SINK_WL_DOMAINS = _Path("/var/lib/secubox/filterlists/whitelist-domains.txt")
+_SINK_IP_ALLOW = _Path("/var/lib/secubox/ad-guard/ip-allowlist.txt")
+_SINK_SOURCES = _Path("/etc/secubox/toolbox/filter-sources.json")
+_SINK_SYNC = "/usr/sbin/secubox-adblock-sync"
+
+
+def _sink_read(p: _Path) -> list:
+    if p.exists():
+        return sorted({ln.strip() for ln in p.read_text().splitlines()
+                       if ln.strip() and not ln.startswith("#")})
+    return []
+
+
+def _sink_write(p: _Path, lines) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("\n".join(sorted(set(lines))) + "\n")
+
+
+def _sink_sudo(*args):
+    """Run the privileged sinkhole tool; background for long ops."""
+    return subprocess.Popen(["sudo", "-n", _SINK_SYNC, *args])
+
+
+@app.get("/sinkhole/status", dependencies=[Depends(require_jwt)])
+async def sinkhole_status():
+    """Last sinkhole sync state: enabled, # domains NXDOMAIN'd, per-source counts."""
+    if _SINK_STATUS.exists():
+        try:
+            return _json.loads(_SINK_STATUS.read_text())
+        except Exception:
+            pass
+    return {"ok": True, "enabled": False, "blocked": 0}
+
+
+@app.post("/sinkhole/sync", dependencies=[Depends(require_jwt)])
+async def sinkhole_sync(force: bool = False):
+    """Recompile lists + re-render Unbound. Background (compile ~60s)."""
+    _sink_sudo("sync", *(["--force"] if force else []))
+    return {"status": "started", "force": force}
+
+
+@app.post("/sinkhole/enable", dependencies=[Depends(require_jwt)])
+async def sinkhole_enable():
+    _sink_sudo("sync")
+    return {"status": "enabling"}
+
+
+@app.post("/sinkhole/disable", dependencies=[Depends(require_jwt)])
+async def sinkhole_disable():
+    _sink_sudo("disable")
+    return {"status": "disabling"}
+
+
+@app.get("/sinkhole/sources", dependencies=[Depends(require_jwt)])
+async def sinkhole_sources():
+    """Modular filter sources with their enabled state + description."""
+    try:
+        from secubox_toolbox import filterlists as _F
+        srcs = _F.load_sources()
+        return {"sources": [
+            {"name": n, "enabled": bool(c.get("enabled")), "format": c.get("format"),
+             "kinds": c.get("kinds", []), "desc": c.get("desc", "")}
+            for n, c in srcs.items()]}
+    except Exception as e:
+        return {"sources": [], "error": str(e)}
+
+
+@app.post("/sinkhole/sources/{name}", dependencies=[Depends(require_jwt)])
+async def sinkhole_toggle_source(name: str, enabled: bool):
+    """Enable/disable a filter source (persisted to filter-sources.json)."""
+    cfg = {"sources": {}}
+    if _SINK_SOURCES.exists():
+        try:
+            cfg = _json.loads(_SINK_SOURCES.read_text())
+        except Exception:
+            pass
+    cfg.setdefault("sources", {}).setdefault(name, {})["enabled"] = enabled
+    _SINK_SOURCES.parent.mkdir(parents=True, exist_ok=True)
+    _SINK_SOURCES.write_text(_json.dumps(cfg, indent=2))
+    return {"status": "ok", "name": name, "enabled": enabled,
+            "note": "run /sinkhole/sync to apply"}
+
+
+@app.get("/sinkhole/whitelist", dependencies=[Depends(require_jwt)])
+async def sinkhole_whitelist():
+    """Domains never sinkholed (applied at next sync)."""
+    return {"domains": _sink_read(_SINK_WL_DOMAINS)}
+
+
+@app.post("/sinkhole/whitelist", dependencies=[Depends(require_jwt)])
+async def sinkhole_whitelist_add(domain: str):
+    items = set(_sink_read(_SINK_WL_DOMAINS))
+    items.add(domain.strip().lower())
+    _sink_write(_SINK_WL_DOMAINS, items)
+    return {"status": "ok", "domain": domain, "note": "run /sinkhole/sync to apply"}
+
+
+@app.delete("/sinkhole/whitelist/{domain}", dependencies=[Depends(require_jwt)])
+async def sinkhole_whitelist_del(domain: str):
+    items = set(_sink_read(_SINK_WL_DOMAINS))
+    items.discard(domain.strip().lower())
+    _sink_write(_SINK_WL_DOMAINS, items)
+    return {"status": "removed", "domain": domain}
+
+
+@app.get("/sinkhole/ip-allowlist", dependencies=[Depends(require_jwt)])
+async def sinkhole_ip_allowlist():
+    """Client IPs that bypass the sinkhole (Unbound view)."""
+    return {"ips": _sink_read(_SINK_IP_ALLOW)}
+
+
+@app.post("/sinkhole/ip-allowlist", dependencies=[Depends(require_jwt)])
+async def sinkhole_ip_add(ip: str):
+    items = set(_sink_read(_SINK_IP_ALLOW))
+    items.add(ip.strip())
+    _sink_write(_SINK_IP_ALLOW, items)
+    return {"status": "ok", "ip": ip, "note": "run /sinkhole/sync to apply"}
+
+
+@app.delete("/sinkhole/ip-allowlist/{ip}", dependencies=[Depends(require_jwt)])
+async def sinkhole_ip_del(ip: str):
+    items = set(_sink_read(_SINK_IP_ALLOW))
+    items.discard(ip.strip())
+    _sink_write(_SINK_IP_ALLOW, items)
+    return {"status": "removed", "ip": ip}
 
 
 # ============================================================================
