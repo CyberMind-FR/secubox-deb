@@ -81,6 +81,15 @@ def _tor_mode() -> bool:
         return False
 
 
+def _ad_guard() -> bool:
+    """Master ad-block switch on? (#740) Read from filters; default on."""
+    try:
+        from .filters import get_filters
+        return bool(get_filters().get("ad_guard", True))
+    except Exception:
+        return True
+
+
 def build_bundle(client_id: str, is_wg: bool = False) -> dict:
     """Build the per-client cosmetic decision bundle (pure given inputs + pin file)."""
     return {
@@ -91,6 +100,7 @@ def build_bundle(client_id: str, is_wg: bool = False) -> dict:
         "report_url": _report_url(client_id, is_wg),
         "tracker_patterns": TRACKER_PATTERNS,
         "tor_mode": _tor_mode(),
+        "ad_guard": _ad_guard(),
         "ts": int(time.time()),
     }
 
@@ -101,6 +111,12 @@ def invalidate(client_id: str) -> None:
     cid = client_id or ""
     for k in ((cid, True), (cid, False)):
         _cache.pop(k, None)
+
+
+def invalidate_all() -> None:
+    """#740 — drop ALL cached bundles after a GLOBAL filter change (ad_guard /
+    tor_mode toggled from the banner) so every client picks up the new state."""
+    _cache.clear()
 
 
 def get_bundle(client_id: str, is_wg: bool = False) -> dict:
@@ -219,21 +235,48 @@ _BANNER_CORE = r"""
     // #662 — 🔓 proof: the engine relaxed this page's CSP to inject this banner.
     var cspProof = (csp === "1")
       ? "<span title=\"CSP contourné par SecuBox (démonstration)\">🔓</span>" : "";
-    // #683 — 🧅 kbin Tor mode: this session's exit is anonymised via Tor.
-    var tor = b.tor_mode
-      ? "<span title=\"Sortie anonymisée via Tor\" style=\"color:#9E76FF;font-weight:bold\">🧅 Tor</span>" : "";
-    bar.innerHTML = "<b style=\"color:#148C66\">SecuBox</b>"
+    // #683/#740 — 🧅 Tor toggle: enable/disable the toolbox-wg tunnel Tor egress.
+    var tor = "<button id=\"sbx-tor\" title=\"Tor du tunnel toolbox — clique pour basculer\" style=\"background:"
+      + (b.tor_mode?"#3D2A6B":"transparent") + ";color:" + (b.tor_mode?"#C9B8FF":"#8A9AA8")
+      + ";border:1px solid #6E40C9;border-radius:3px;padding:0 5px;margin:0 2px;font:inherit;font-size:11px;cursor:pointer\">🧅 "
+      + (b.tor_mode?"ON":"OFF") + "</button>";
+    var _bh = "<b style=\"color:#148C66\">SecuBox</b>"
       + cspProof
       + tor
       + lvlSwitch(b)
+      + "<button id=\"sbx-adg\" title=\"Ad-Guard (blocage pub) — clique pour basculer\" style=\"background:"
+        + (b.ad_guard===false?"transparent":"#148C66") + ";color:" + (b.ad_guard===false?"#8A9AA8":"#0A0E14")
+        + ";border:1px solid #148C66;border-radius:3px;padding:0 5px;margin:0 2px;font:inherit;font-size:11px;cursor:pointer\">🛡️ "
+        + (b.ad_guard===false?"OFF":"ON") + "</button>"
       + "<span id=\"sbx-trk\">🛰️ " + trk + " trackers</span>"
       + "<span id=\"sbx-ck\">🍪 " + ck + " cookies</span>"
       + pin
       + "<a href=\"" + esc(b.report_url || "#") + "\" style=\"margin-left:auto;color:#2C70C0;text-decoration:none\">report ▸</a>"
       + "<button aria-label=\"dismiss\" style=\"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px\">✕</button>";
+    // #740 — Trusted Types: innerHTML is a TT sink, so on strict sites (franceinfo,
+    // cnn, 20minutes…) it throws and the banner never renders. Route the assignment
+    // through a TT policy when present; the CSP header strip handles header-set TT,
+    // this handles the rest (incl. meta-tag TT) wherever policy creation is allowed.
+    try {
+      if (window.trustedTypes && trustedTypes.createPolicy) {
+        if (!window.__sbxTT) window.__sbxTT = trustedTypes.createPolicy("sbx-banner", {createHTML: function(s){ return s; }});
+        bar.innerHTML = window.__sbxTT.createHTML(_bh);
+      } else { bar.innerHTML = _bh; }
+    } catch (e) { try { bar.innerHTML = _bh; } catch (_) {} }
     document.body.appendChild(bar);
     try { document.body.style.paddingTop = (bar.offsetHeight || 34) + "px"; } catch (_) {}
     wireLevels(bar, b);
+    // #740 — 🛡️ Ad-Guard + 🧅 Tor quick-toggles (mirror the level switch wiring).
+    var adg = bar.querySelector("#sbx-adg");
+    if (adg) adg.onclick = function(){ var on = b.ad_guard!==false; adg.textContent="…";
+      fetch("/__toolbox/set-adguard?on=" + (on?"0":"1"), {credentials:"omit",cache:"no-store"})
+        .then(function(r){ if(r&&r.ok) location.reload(); else adg.textContent="🛡️ "+(on?"ON":"OFF"); })
+        .catch(function(){ adg.textContent="🛡️ "+(on?"ON":"OFF"); }); };
+    var tg = bar.querySelector("#sbx-tor");
+    if (tg) tg.onclick = function(){ var on = !!b.tor_mode; tg.textContent="…";
+      fetch("/__toolbox/set-tor?on=" + (on?"0":"1"), {credentials:"omit",cache:"no-store"})
+        .then(function(r){ if(r&&r.ok) location.reload(); else tg.textContent="🧅 "+(on?"ON":"OFF"); })
+        .catch(function(){ tg.textContent="🧅 "+(on?"ON":"OFF"); }); };
     var btn = bar.querySelector("button[aria-label=\"dismiss\"]");
     if (btn) btn.onclick = function(){ dismissed = true; try { document.body.style.paddingTop = ""; } catch (_) {} bar.remove(); };
   }

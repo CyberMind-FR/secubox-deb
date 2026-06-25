@@ -104,12 +104,21 @@ func relaxCSPValue(value string) (out string, bypassed bool) {
 		tokens []string // raw value tokens after the name
 	}
 	dirs := make([]dir, 0, len(rawDirectives))
+	ttStripped := false
 	for _, raw := range rawDirectives {
 		fields := strings.Fields(raw)
 		if len(fields) == 0 {
 			continue // blank fragment (leading/trailing/double ';') → drop
 		}
 		name := strings.ToLower(fields[0])
+		// #740 — Trusted Types (`require-trusted-types-for 'script'` / `trusted-types`)
+		// block the banner's DOM injection (createElement + innerHTML are TT sinks)
+		// REGARDLESS of script-src — this is why the banner vanished on strict
+		// sites like franceinfo. Drop them so the inline banner can render.
+		if name == "require-trusted-types-for" || name == "trusted-types" {
+			ttStripped = true
+			continue
+		}
 		d := dir{name: name, tokens: fields[1:]}
 		switch name {
 		case "script-src":
@@ -144,6 +153,9 @@ func relaxCSPValue(value string) (out string, bypassed bool) {
 		dirs[effective].tokens = relaxScriptTokens(dirs[effective].tokens)
 		bypassed = true
 	}
+	// Stripping Trusted Types is itself a bypass (the banner couldn't render
+	// otherwise) — report it so the page's CSP is rewritten + flagged 🔓.
+	bypassed = bypassed || ttStripped
 
 	// Re-serialise: "name token token; name token; ...".
 	parts := make([]string, 0, len(dirs))
