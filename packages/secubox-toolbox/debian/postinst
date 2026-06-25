@@ -60,6 +60,7 @@ case "$1" in
       cat > /etc/secubox/toolbox/filters.json <<'SBXFILTERS'
 {
  "banner": true,
+ "ad_guard": true,
  "protective": "spoof",
  "ad_ghost": true,
  "ad_ghost_block": true,
@@ -69,6 +70,11 @@ SBXFILTERS
       chown secubox-toolbox:secubox-toolbox /etc/secubox/toolbox/filters.json
       chmod 0664 /etc/secubox/toolbox/filters.json
     fi
+    # #740 : /etc/secubox/toolbox must be TRAVERSABLE by other secubox daemons
+    # (dns-guard reads/writes filter-sources.json for the DNS sinkhole; ad-guard
+    # reads ad_guard). 0750 root:secubox-toolbox locked them out → 0755 (the
+    # sensitive material lives in /etc/secubox/secrets, 0700).
+    chmod 0755 /etc/secubox/toolbox 2>/dev/null || true
     # #683 : the portal persists filters.json (Tor switch + mitm toggles) as its
     # OWNER (secubox-toolbox). The operator UI is proxied to this same portal, so
     # owner-write is sufficient — no aggregator write. Re-applied every install to
