@@ -24,7 +24,14 @@
 // Pure standard library — no external modules.
 package main
 
-import "bytes"
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"strings"
+	"sync"
+	"time"
+)
 
 // cosmeticGuard is the id on the injected <style>. It makes injectCosmetic
 // idempotent (skip if already present) and mirrors the Python addon's _MARK
@@ -38,7 +45,12 @@ const cosmeticGuard = "sbx-ghost-style"
 // coverage. Every selector targets an ad/popup-SPECIFIC token only (see the
 // CONSERVATISM note above). The rule mirrors the Python _style_for:
 // display:none + visibility:hidden, both !important, collapsing the slot.
-const cosmeticStyle = `<style id="sbx-ghost-style">` +
+const cosmeticStyle = `<style id="sbx-ghost-style">` + cosmeticBaseSelectors +
+	`{display:none!important;visibility:hidden!important;}</style>`
+
+// cosmeticBaseSelectors is the conservative, hand-curated base list (extracted
+// so the EasyList loader below can re-use it as the always-valid foundation).
+const cosmeticBaseSelectors = `` +
 	// ── ads (ported from _COSMETIC["ads"]) ──────────────────────────────────
 	`[id^="google_ads"],` +
 	`[id^="div-gpt-ad"],` +
@@ -85,10 +97,100 @@ const cosmeticStyle = `<style id="sbx-ghost-style">` +
 	`[id*="popup-ad"],` +
 	`[class*="popunder"],` +
 	`[class*="exit-intent"],` +
-	`[class*="-paywall-ad"]` +
-	`{display:none!important;visibility:hidden!important;}</style>`
+	`[class*="-paywall-ad"]`
 
-// injectCosmetic inserts cosmeticStyle into an HTML body once. Placement mirrors
+// ── EasyList loader (#740) ──────────────────────────────────────────────────
+// The modular filter resource compiles EasyList/EasyPrivacy element-hide rules
+// to /var/lib/secubox/filterlists/cosmetic.json ({domain|"*": [selectors]}). We
+// fold the GENERIC ("*") selectors into the injected <style>, on top of the
+// conservative base. Selectors using uBlock/ABP *procedural* pseudo-classes
+// (:has, :matches-css, :xpath, :style, :-abp-…) are NOT valid CSS — a single one
+// in a comma list makes the browser drop the WHOLE rule, so they are filtered
+// out. mtime-cached; falls back to the base when the file is absent.
+const (
+	cosmeticFilterPath = "/var/lib/secubox/filterlists/cosmetic.json"
+	cosmeticGlobalCap  = 2000
+)
+
+var (
+	cosmeticMu      sync.RWMutex
+	cosmeticCached  []byte
+	cosmeticMtime   int64
+	cosmeticChecked time.Time
+)
+
+// procedural pseudo-classes / extended syntax that are NOT plain CSS.
+var cosmeticBadTokens = []string{
+	":has(", ":has-text(", ":matches-css", ":matches-media", ":matches-path",
+	":xpath(", ":style(", ":-abp-", ":upward(", ":remove(", ":watch-attr(",
+	":min-text-length(", ":nth-ancestor(", ":contains(", ":if(", ":if-not(",
+}
+
+func cosmeticSelectorOK(s string) bool {
+	if s == "" || len(s) > 200 || strings.ContainsAny(s, "{}<>") {
+		return false
+	}
+	for _, b := range cosmeticBadTokens {
+		if strings.Contains(s, b) {
+			return false
+		}
+	}
+	return true
+}
+
+func buildCosmetic() []byte {
+	base := `<style id="sbx-ghost-style">` + cosmeticBaseSelectors
+	data, err := os.ReadFile(cosmeticFilterPath)
+	if err != nil {
+		return []byte(base + `{display:none!important;visibility:hidden!important;}</style>`)
+	}
+	var m map[string][]string
+	if json.Unmarshal(data, &m) != nil {
+		return []byte(base + `{display:none!important;visibility:hidden!important;}</style>`)
+	}
+	var sb strings.Builder
+	sb.WriteString(base)
+	n := 0
+	for _, s := range m["*"] {
+		if n >= cosmeticGlobalCap {
+			break
+		}
+		if cosmeticSelectorOK(s) {
+			sb.WriteByte(',')
+			sb.WriteString(s)
+			n++
+		}
+	}
+	sb.WriteString(`{display:none!important;visibility:hidden!important;}</style>`)
+	return []byte(sb.String())
+}
+
+// cosmeticStyleBytes returns the style to inject, refreshing from cosmetic.json
+// at most once per minute (and only when its mtime changed).
+func cosmeticStyleBytes() []byte {
+	cosmeticMu.RLock()
+	if cosmeticCached != nil && time.Since(cosmeticChecked) < time.Minute {
+		b := cosmeticCached
+		cosmeticMu.RUnlock()
+		return b
+	}
+	cosmeticMu.RUnlock()
+
+	cosmeticMu.Lock()
+	defer cosmeticMu.Unlock()
+	cosmeticChecked = time.Now()
+	if fi, err := os.Stat(cosmeticFilterPath); err == nil {
+		if cosmeticCached == nil || fi.ModTime().Unix() != cosmeticMtime {
+			cosmeticMtime = fi.ModTime().Unix()
+			cosmeticCached = buildCosmetic()
+		}
+	} else if cosmeticCached == nil {
+		cosmeticCached = []byte(cosmeticStyle)
+	}
+	return cosmeticCached
+}
+
+// injectCosmetic inserts the cosmetic <style> into an HTML body once. Placement mirrors
 // injectLoader (and the Python addon, which prefers </head>):
 //   - idempotency: if the body already contains cosmeticGuard → unchanged.
 //   - insert right BEFORE the first (case-insensitive) "</head>".
@@ -99,7 +201,7 @@ func injectCosmetic(body []byte) []byte {
 	if bytes.Contains(body, []byte(cosmeticGuard)) {
 		return body
 	}
-	style := []byte(cosmeticStyle)
+	style := cosmeticStyleBytes()
 	low := bytes.ToLower(body)
 
 	// Prefer right before </head> (the Python _RE_HEAD.sub anchor).
