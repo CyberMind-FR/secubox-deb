@@ -235,6 +235,19 @@
                 </div>
             </div>
         </div>
+
+        <!-- Auto-learning (#740 volet 5) -->
+        <div class="card" style="margin-top:1rem;">
+            <div class="card-header">
+                <h2>🧠 Auto-apprentissage</h2>
+                <button class="btn btn-primary" onclick="learnRun()">▶ Lancer un cycle</button>
+            </div>
+            <div id="learn-status">Chargement…</div>
+            <div class="card-header" style="margin-top:1rem;"><h2 style="font-size:1rem;">🎚️ Seuils (filters.json)</h2></div>
+            <div id="learn-thresholds"></div>
+            <div class="card-header" style="margin-top:1rem;"><h2 style="font-size:1rem;">📃 Trackers appris</h2></div>
+            <div id="learn-trackers"><div class="loading">Loading…</div></div>
+        </div>
     </div>
 
     <script src="/shared/sidebar.js"></script>
@@ -412,7 +425,40 @@
         }
 
         // Initial load
-        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed();
+        // ── Auto-learning (#740 volet 5) ─────────────────────────────────
+        const lesc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        const THR_LABEL = {
+            autolearn_ad_min_sites: 'Ad min. sites', autolearn_social_min_sites: 'Social min. sites',
+            autolearn_min_sites: 'Opgrade min. sites', autolearn_social_window_hours: 'Social fenêtre (h)',
+            autolearn_ti_min_weight: 'Threat-intel poids min.'
+        };
+        async function learnRender() {
+            const st = await api('/learn/status');
+            if (st) {
+                document.getElementById('learn-status').innerHTML =
+                    `<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+                        <div><b style="font-size:1.4rem;">${(st.learned||0).toLocaleString()}</b><br><small>trackers appris</small></div>
+                        <div><b style="font-size:1.4rem;">${(st.pure||0).toLocaleString()}</b><br><small>pure-trackers</small></div>
+                        <div><b style="font-size:1.4rem;">${(st.allowlist||0).toLocaleString()}</b><br><small>allowlist</small></div>
+                        <div><b>${st.autolearn?'🟢':'🔴'}</b><br><small>autolearn</small></div>
+                        <div><b>${st.ad_learn?'🟢':'🔴'}</b><br><small>ad-learn</small></div>
+                    </div>`;
+                const thr = st.thresholds || {};
+                document.getElementById('learn-thresholds').innerHTML = Object.keys(thr).map(k =>
+                    `<label style="display:inline-flex;align-items:center;gap:.4rem;margin:.3rem .8rem .3rem 0;">
+                        ${lesc(THR_LABEL[k]||k)}:
+                        <input type="number" style="width:5rem;" value="${lesc(thr[k])}" onchange="learnSave('${lesc(k)}', this.value)">
+                    </label>`).join('');
+            }
+            const tr = await api('/learn/trackers?limit=300');
+            if (tr) document.getElementById('learn-trackers').innerHTML =
+                `<small style="color:var(--text-muted);">${tr.total} au total (300 affichés)</small><div style="max-height:14rem;overflow:auto;font-family:monospace;font-size:.8rem;line-height:1.5;">`
+                + (tr.trackers||[]).map(d => lesc(d)).join('<br>') + '</div>';
+        }
+        async function learnRun() { document.getElementById('learn-status').innerHTML = '⏳ Cycle lancé…'; await api('/learn/run', 'POST'); setTimeout(learnRender, 6000); }
+        async function learnSave(k, v) { await api('/learn/thresholds', 'POST', { [k]: parseInt(v, 10) }); }
+
+        fetchStats(); fetchTopDomains(); fetchDevices(); fetchDelayed(); learnRender();
         setInterval(fetchStats, 30000);
     </script>
     <script src="/shared/crt-engine.js"></script>
