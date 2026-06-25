@@ -19,6 +19,8 @@ FILTERS_PATH = os.environ.get(
 
 DEFAULTS: Dict = {
     "banner": True,                 # inject the R2/R3 transparency banner
+    "ad_guard": True,               # #740 MASTER ad-block switch (orthogonal to R0-R4):
+                                    # gates the R3 cosmetic + 204 host-block at once
     "protective": "spoof",          # off | alert | spoof  (tracker spoofer)
     "ad_ghost": True,               # R3+/R4 silent ad/banner/widget ghosting
     "ad_ghost_block": True,         # 204 known ad/tracker hosts (save bandwidth)
@@ -100,8 +102,8 @@ def set_filters(patch: Dict) -> Dict:
             cur["tor_preset"] = v
         elif k == "fortknox_sites" and isinstance(v, list):
             cur["fortknox_sites"] = [str(s).strip().lower() for s in v if str(s).strip()]
-        elif k in ("banner", "ad_ghost", "ad_ghost_block", "media_cache", "autolearn",
-                   "privacy_enforce", "privacy_poison", "privacy_anonymize",
+        elif k in ("banner", "ad_guard", "ad_ghost", "ad_ghost_block", "media_cache",
+                   "autolearn", "privacy_enforce", "privacy_poison", "privacy_anonymize",
                    "privacy_ip_drop", "privacy_dns_feed", "ad_learn", "tor_mode"):
             cur[k] = bool(v)
     data = json.dumps(cur, indent=1)

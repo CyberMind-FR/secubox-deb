@@ -116,10 +116,14 @@ const (
 // generic (e.g. [class*="banner"] matching `sbx-banner`) can never hide our
 // transparency banner. It is appended AFTER the hide rule (later cascade) with
 // !important, so it wins for any sbx-/__toolbox element.
-const cosmeticProtect = `[id*="sbx-banner"],[class*="sbx-banner"],` +
+// `#sbx-banner` (an ID selector, specificity 1,0,0) leads so it out-ranks any
+// class/attribute hide rule; z-index:max keeps the banner ABOVE everything and
+// opacity/visibility/display force it visible whatever the cosmetic tried.
+const cosmeticProtect = `#sbx-banner,[id*="sbx-banner"],[class*="sbx-banner"],` +
 	`[id*="sbx-toolbox"],[class*="sbx-toolbox"],` +
 	`[id*="sbx-ghost"],[id*="__toolbox"],[class*="__toolbox"]` +
-	`{display:revert!important;visibility:visible!important;}`
+	`{display:revert!important;visibility:visible!important;opacity:1!important;` +
+	`z-index:2147483647!important;}`
 
 var (
 	cosmeticMu      sync.RWMutex
@@ -247,7 +251,58 @@ func cosmeticStyleFor(host string) []byte {
 //   - else insert right AFTER the first "<head ...>"'s closing '>'.
 //   - else insert right BEFORE the first "<body".
 //   - else return the body unchanged (no inject).
+// ── Master ad-guard switch (#740) ───────────────────────────────────────────
+// Orthogonal to the R0–R4 exposure level: a single `ad_guard` flag in
+// filters.json gates the whole R3 ad-blocking layer (cosmetic here + the 204
+// host-block, see main.go). Default ON; mtime-cached (5s) so the toolbox UI
+// toggle takes effect within seconds without a worker restart.
+const adGuardFiltersPath = "/etc/secubox/toolbox/filters.json"
+
+var (
+	adgMu      sync.RWMutex
+	adgOn      = true
+	adgMtime   int64
+	adgChecked time.Time
+)
+
+func adGuardEnabled() bool {
+	adgMu.RLock()
+	if !adgChecked.IsZero() && time.Since(adgChecked) < 5*time.Second {
+		v := adgOn
+		adgMu.RUnlock()
+		return v
+	}
+	adgMu.RUnlock()
+
+	adgMu.Lock()
+	defer adgMu.Unlock()
+	adgChecked = time.Now()
+	fi, err := os.Stat(adGuardFiltersPath)
+	if err != nil {
+		return adgOn
+	}
+	if fi.ModTime().Unix() == adgMtime {
+		return adgOn
+	}
+	adgMtime = fi.ModTime().Unix()
+	adgOn = true // default ON when key absent
+	if data, e := os.ReadFile(adGuardFiltersPath); e == nil {
+		var m map[string]interface{}
+		if json.Unmarshal(data, &m) == nil {
+			if v, ok := m["ad_guard"]; ok {
+				if b, ok := v.(bool); ok {
+					adgOn = b
+				}
+			}
+		}
+	}
+	return adgOn
+}
+
 func injectCosmetic(body []byte, host string) []byte {
+	if !adGuardEnabled() {
+		return body
+	}
 	if bytes.Contains(body, []byte(cosmeticGuard)) {
 		return body
 	}
