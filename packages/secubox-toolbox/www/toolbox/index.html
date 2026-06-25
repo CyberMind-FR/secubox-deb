@@ -177,6 +177,13 @@
         <div class="toolbar">
             <button onclick="loadAds()">🔁 Refresh</button>
         </div>
+        <div class="card" style="grid-column:1/-1">
+            <h2>🛡️ Ad-Guard <span id="adguard-badge" class="badge">…</span></h2>
+            <div class="kv">
+                <span class="k">Master switch du blocage pub (sinkhole DNS + cosmetic R3) — indépendant des niveaux R0→R4</span>
+                <span class="v"><button id="adguard-toggle" onclick="toggleAdGuard()">…</button></span>
+            </div>
+        </div>
         <div id="ads-section" class="grid">
             <div class="card" style="grid-column:1/-1">
                 <h2>🛑 Pubs bloquées (24h)</h2>
@@ -612,7 +619,25 @@ async function loadSocial() {
     }
 }
 
+// ── Ad-Guard master switch (#740) ──
+async function loadAdGuard() {
+    const f = await J('/admin/filters');
+    const on = !(f && f.ad_guard === false);
+    const b = document.getElementById('adguard-badge');
+    const t = document.getElementById('adguard-toggle');
+    if (b) { b.textContent = on ? '🟢 ON' : '🔴 OFF'; b.className = 'badge ' + (on ? 'badge-green' : 'badge-red'); }
+    if (t) t.textContent = on ? '⏸ Désactiver' : '▶ Activer';
+}
+async function toggleAdGuard() {
+    const f = await J('/admin/filters');
+    const on = !(f && f.ad_guard === false);
+    await fetch(`${API}/admin/filters`, { method: 'POST', headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin', body: JSON.stringify({ ad_guard: !on }) });
+    setTimeout(loadAdGuard, 400);
+}
+
 async function loadAds() {
+    loadAdGuard();
     const d = await J('/admin/ad-stats?hours=24');
     const kpi = document.getElementById('ads-kpi');
     const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

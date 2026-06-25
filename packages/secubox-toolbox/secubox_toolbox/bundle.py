@@ -207,9 +207,13 @@ _BANNER_CORE = r"""
     var ck = countCookies();
     var bar = document.createElement("div");
     bar.id = "sbx-banner";
-    bar.setAttribute("style", "position:fixed;left:0;right:0;top:0;z-index:2147483647;"
+    // #740 — !important on the visibility-critical props makes the banner IMMUNE
+    // to any stylesheet cosmetic hide (inline !important outranks author
+    // stylesheet !important): it stays ABOVE everything and visible, always.
+    bar.setAttribute("style", "position:fixed!important;left:0;right:0;top:0;z-index:2147483647!important;"
+      + "display:flex!important;visibility:visible!important;opacity:1!important;"
       + "font:12px/1.4 system-ui,-apple-system,sans-serif;background:#0A0E14;color:#E8E6E0;"
-      + "border-bottom:2px solid #148C66;padding:6px 12px;display:flex;gap:14px;align-items:center;"
+      + "border-bottom:2px solid #148C66;padding:6px 12px;gap:14px;align-items:center;"
       + "box-shadow:0 2px 12px rgba(0,0,0,.4)");
     var pin = b.pin ? "<span title=\"pinned\">📌 " + esc(b.pin) + "</span>" : "";
     // #662 — 🔓 proof: the engine relaxed this page's CSP to inject this banner.
