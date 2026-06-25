@@ -112,6 +112,15 @@ const (
 	cosmeticGlobalCap  = 2000
 )
 
+// cosmeticProtect force-shows SecuBox's OWN injected UI so a broad EasyList
+// generic (e.g. [class*="banner"] matching `sbx-banner`) can never hide our
+// transparency banner. It is appended AFTER the hide rule (later cascade) with
+// !important, so it wins for any sbx-/__toolbox element.
+const cosmeticProtect = `[id*="sbx-banner"],[class*="sbx-banner"],` +
+	`[id*="sbx-toolbox"],[class*="sbx-toolbox"],` +
+	`[id*="sbx-ghost"],[id*="__toolbox"],[class*="__toolbox"]` +
+	`{display:revert!important;visibility:visible!important;}`
+
 var (
 	cosmeticMu      sync.RWMutex
 	cosmeticCached  []byte
@@ -161,7 +170,9 @@ func buildCosmetic() []byte {
 			n++
 		}
 	}
-	sb.WriteString(`{display:none!important;visibility:hidden!important;}</style>`)
+	sb.WriteString(`{display:none!important;visibility:hidden!important;}`)
+	sb.WriteString(cosmeticProtect)
+	sb.WriteString(`</style>`)
 	return []byte(sb.String())
 }
 
