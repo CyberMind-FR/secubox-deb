@@ -11,6 +11,7 @@ Group=secubox
 
 # Service runtime directory
 RuntimeDirectory=secubox-security-posture
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0750
 
 # Remove any stale socket left by a previous run so uvicorn can re-bind
