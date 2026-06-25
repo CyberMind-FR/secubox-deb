@@ -11,7 +11,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -563,6 +563,115 @@ def _read_alerts_raw() -> List[dict]:
     return list(reversed(parsed))[:500]
 
 
+_SEV_CRIT = ("probing", "exploit", "cve", "rce", "sqli", "xss", "lfi", "rfi",
+             "backdoor", "log4j", "shellshock", "webshell")
+_SEV_HIGH = ("bruteforce", "-bf", "bf-", "scan", "crawl", "enum", "scanner", "flood")
+
+
+def _alert_severity(scenario: str) -> str:
+    """CrowdSec alerts carry no severity field — derive one from the scenario so
+    the dashboard donut has a meaningful distribution."""
+    s = (scenario or "").lower()
+    if any(k in s for k in _SEV_CRIT):
+        return "critical"
+    if any(k in s for k in _SEV_HIGH):
+        return "high"
+    return "medium"
+
+
+def _get_crowdsec_alerts() -> List[dict]:
+    """Recent CrowdSec alerts — the REAL detection layer. The inline mitmproxy WAF
+    log (THREATS_LOG) is normally empty because CrowdSec + the firewall bouncer do
+    the detection/blocking, so the threat cards must read alerts here (same source
+    the bans already use). Newest first; best-effort (empty on any cscli failure)."""
+    try:
+        result = subprocess.run(
+            ["sudo", "cscli", "alerts", "list", "-o", "json"],
+            capture_output=True, text=True, timeout=15)
+        if result.returncode != 0 or not result.stdout:
+            return []
+        raw = json.loads(result.stdout) or []
+    except Exception:
+        return []
+    out: List[dict] = []
+    for a in raw:
+        decs = a.get("decisions") or []
+        scenario = a.get("scenario") or (decs[0].get("scenario") if decs else "") or ""
+        src = a.get("source") or {}
+        ip = src.get("ip") or src.get("value") or (decs[0].get("value") if decs else "") or ""
+        country = src.get("cn") or ""
+        if not country:
+            for ev in (a.get("events") or [])[:1]:
+                for m in ev.get("meta") or []:
+                    if m.get("key") == "IsoCode":
+                        country = m.get("value", "")
+        out.append({
+            "id": a.get("id"),
+            "timestamp": a.get("created_at") or a.get("start_at") or "",
+            "ip": ip, "client_ip": ip,
+            "scenario": scenario,
+            "category": scenario.split("/")[-1] if scenario else "attack",
+            "severity": _alert_severity(scenario),
+            "country": country,
+            "vhost": "",
+            "count": a.get("events_count", 1),
+        })
+    return out
+
+
+def _protected_vhost_count() -> int:
+    """Number of vhosts protected by the WAF = the HAProxy→mitmproxy route map."""
+    for p in ("/srv/mitmproxy/haproxy-routes.json", "/srv/mitmproxy-in/haproxy-routes.json"):
+        try:
+            d = json.loads(Path(p).read_text())
+            if isinstance(d, dict) and d:
+                return len(d)
+        except Exception:
+            pass
+    return 0
+
+
+def _overlay_crowdsec_stats(stats: dict, alerts: List[dict]) -> None:
+    """Fold CrowdSec alert counts into the (usually-empty) inline-log stats so the
+    Threats/Blocked cards + severity/category donuts reflect real activity."""
+    now = datetime.now(timezone.utc)
+    today = 0
+    by_sev = defaultdict(int, stats.get("by_severity") or {})
+    by_cat = defaultdict(int, stats.get("by_category") or {})
+    by_country = defaultdict(int, stats.get("top_countries") or {})
+    for a in alerts:
+        by_sev[a["severity"]] += 1
+        by_cat[a["category"]] += 1
+        if a.get("country"):
+            by_country[a["country"]] += 1
+        ts = a.get("timestamp", "")
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if (now - dt) <= timedelta(hours=24):
+                today += 1
+        except Exception:
+            today += 1  # unparseable ts → treat as recent
+    stats["total_threats"] = stats.get("total_threats", 0) + len(alerts)
+    stats["threats_today"] = stats.get("threats_today", 0) + today
+    stats["blocked_24h"] = stats["total_threats"]
+    stats["blocked_today"] = stats["threats_today"]
+    stats["by_severity"] = dict(by_sev)
+    stats["by_category"] = dict(by_cat)
+    stats["top_countries"] = [{"country": c, "count": n}
+                              for c, n in sorted(by_country.items(), key=lambda x: -x[1])[:5]]
+    if alerts:
+        a0 = alerts[0]
+        ago = "recently"
+        try:
+            dt = datetime.fromisoformat(a0["timestamp"].replace("Z", "+00:00"))
+            mins = int((now - dt).total_seconds() / 60)
+            ago = "just now" if mins < 1 else (f"{mins}m ago" if mins < 60 else f"{mins // 60}h ago")
+        except Exception:
+            pass
+        stats["last_threat"] = {"ip": a0["ip"], "type": a0["category"],
+                                "vhost": a0.get("vhost"), "time_ago": ago}
+
+
 def _refresh_warm_caches() -> dict:
     """Compute every expensive piece of state ONCE. Called from the
     background loop via asyncio.to_thread so the event loop stays free."""
@@ -573,6 +682,17 @@ def _refresh_warm_caches() -> dict:
         new_bans = _get_bans()
     except Exception:
         new_bans = []
+    # CrowdSec is the authoritative detection layer; overlay its alerts so the
+    # threat cards/donuts aren't stuck at 0 when the inline mitmproxy log is empty.
+    try:
+        cs_alerts = _get_crowdsec_alerts()
+    except Exception:
+        cs_alerts = []
+    if cs_alerts:
+        _overlay_crowdsec_stats(new_stats, cs_alerts)
+        if not new_alerts:
+            new_alerts = cs_alerts  # feed the live feed / threat list too
+    new_stats["vhosts_count"] = _protected_vhost_count()
     duration_ms = int((time.time() - t0) * 1000)
 
     with _warm_lock:
