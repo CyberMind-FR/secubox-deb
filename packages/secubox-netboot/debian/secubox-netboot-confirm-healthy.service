@@ -1,0 +1,17 @@
+[Unit]
+Description=SecuBox NetBoot — confirme un boot OS sain (bootcount=0) [#737]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/737
+# Ne se déclenche qu'une fois le système réellement opérationnel : si on arrive
+# ici, le boot (overlay ou usine) a réussi → on remet bootcount à 0 pour ne pas
+# déclencher le rollback anti-brick. Tardif volontairement (après le multi-user).
+After=multi-user.target secubox-netboot.service
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-netboot-overlay confirm-healthy
+# best-effort : ne jamais faire échouer le boot pour ça
+SuccessExitStatus=0 1
+
+[Install]
+WantedBy=multi-user.target

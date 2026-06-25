@@ -1,0 +1,44 @@
+/dts-v1/;
+/*
+ * SecuBox-Deb :: overlay 2ᵉ U-Boot (#737, Phase 2)
+ * FIT contenant un U-Boot mainline pour la board, SIGNÉ. Chargé+vérifié par le
+ * U-Boot usine via `bootm`. Placeholders remplis par scripts/build-uboot-overlay.sh :
+ *   @UBOOT_BIN@  chemin u-boot.bin (mainline build board)
+ *   @LOAD@       adresse de chargement/entrée (board/<name>/addrs.env : OVERLAY_LOAD)
+ *   @KEYHINT@    nom de la clé (defaut: secubox-netboot)
+ */
+/ {
+    description = "SecuBox overlay U-Boot (chainload)";
+    #address-cells = <1>;
+
+    images {
+        uboot-overlay {
+            description = "U-Boot mainline overlay";
+            data = /incbin/("@UBOOT_BIN@");
+            type = "standalone";
+            arch = "arm64";
+            os = "u-boot";
+            compression = "none";
+            load = <@LOAD@>;
+            entry = <@LOAD@>;
+            hash-1 { algo = "sha256"; };
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "@KEYHINT@";
+            };
+        };
+    };
+
+    configurations {
+        default = "conf-1";
+        conf-1 {
+            description = "overlay";
+            firmware = "uboot-overlay";
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "@KEYHINT@";
+                sign-images = "firmware";
+            };
+        };
+    };
+};

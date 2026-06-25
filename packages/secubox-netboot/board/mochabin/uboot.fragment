@@ -1,0 +1,28 @@
+# SecuBox-Deb :: overlay U-Boot — fragment defconfig (#737)
+# board = Globalscale MOCHAbin (Armada 7040, AP806). À appliquer par-dessus le
+# defconfig mainline `mvebu_db_armada8k_defconfig` (ou le defconfig board upstream)
+# lors du build de l'overlay 2ᵉ U-Boot. N'active QUE le strict nécessaire P2.
+
+# --- réseau + HTTP (le manquant principal) ---
+CONFIG_CMD_DHCP=y
+CONFIG_CMD_TFTPBOOT=y
+CONFIG_CMD_WGET=y
+CONFIG_WGET=y
+CONFIG_PROT_TCP=y
+
+# --- FIT + vérification de signature (intégrité, doctrine CSPN) ---
+CONFIG_FIT=y
+CONFIG_FIT_SIGNATURE=y
+CONFIG_RSA=y
+CONFIG_SHA256=y
+CONFIG_CMD_BOOTI=y
+
+# --- menu de boot + garde-fou anti-brick ---
+CONFIG_CMD_BOOTMENU=y
+CONFIG_BOOTCOUNT_LIMIT=y
+CONFIG_BOOTCOUNT_ENV=y
+
+# --- option HTTPS (plus lourd ; activer si boot direct TLS requis) ---
+# CONFIG_WGET_HTTPS=y
+# CONFIG_MBEDTLS_LIB=y
+# CONFIG_MBEDTLS_LIB_CRYPTO=y

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-netboot-triggers (#737, Phase 2)
+# Exécute les hooks de cycle de vie déposés en /etc/secubox/netboot/hooks/<event>.d/*
+# (exécutables, lancés en ordre lexical). Best-effort: un hook qui échoue est
+# journalisé mais n'interrompt pas la chaîne. Variables d'environnement exportées
+# aux hooks : EVENT, BOARD, MODEL, UBOOT_VER, IMAGE_VER, SLOT, NETBOOT_DATA.
+set -uo pipefail
+readonly MODULE="secubox-netboot-triggers"
+readonly HOOKDIR=/etc/secubox/netboot/hooks
+readonly AUDIT=/var/log/secubox/netboot/audit.log
+
+audit() { mkdir -p "$(dirname "$AUDIT")"; printf '%s %s %s\n' "$(date -Is)" "$MODULE" "$*" >> "$AUDIT" 2>/dev/null || true; }
+
+event="${1:-}"
+[ -n "$event" ] || { echo "usage: $MODULE <event> [key=val ...]" >&2; exit 2; }
+shift || true
+
+# Événements connus (refus des inconnus pour éviter les fautes de frappe).
+case "$event" in
+  on-image-published|pre-overlay|post-overlay|pre-flash|post-flash| \
+  on-boot-success|on-boot-fail|on-version-mismatch) : ;;
+  *) echo "[$MODULE] event inconnu: $event" >&2; exit 2 ;;
+esac
+
+export EVENT="$event"
+for kv in "$@"; do
+  case "$kv" in BOARD=*|MODEL=*|UBOOT_VER=*|IMAGE_VER=*|SLOT=*|NETBOOT_DATA=*) export "${kv?}" ;; esac
+done
+
+d="$HOOKDIR/$event.d"
+[ -d "$d" ] || { audit "event=$event (aucun hook)"; exit 0; }
+rc=0
+for h in "$d"/*; do
+  [ -x "$h" ] || continue
+  if "$h"; then audit "hook OK: $event/$(basename "$h")"
+  else audit "hook KO($?): $event/$(basename "$h")"; rc=1; fi
+done
+exit $rc

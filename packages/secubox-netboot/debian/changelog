@@ -1,0 +1,13 @@
+secubox-netboot (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2 (#737) : module de provisioning réseau + overlay U-Boot chainloadé.
+    - probe (read-only) board/SoC/média/A-B + calibration fw_env + capacités U-Boot.
+    - overlay apply/revert/confirm-healthy : double-buffer /boot, détournement
+      bootcmd avec bootcount/altbootcmd (rollback usine auto anti-brick).
+    - build-uboot-overlay.sh : FIT signé (sbx-uboot.fit) + sbx-boot.scr, par board.
+    - templates FIT (.its) overlay U-Boot + boot.fit (kernel/dtb/initrd signés).
+    - API FastAPI standalone (netboot.sock) gated confirm=true + UI suivi/contrôle.
+    - triggers de cycle de vie + audit append-only CSPN.
+    Aucun flash SPI/eMMC-boot (Phase 3).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 13:00:00 +0000
