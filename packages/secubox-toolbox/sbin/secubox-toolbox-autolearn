@@ -376,7 +376,10 @@ def main() -> int:
     # promoted despite tens of thousands of domain IOCs. Gate on `weight` (the
     # confidence score, default-50) so only higher-confidence IOCs are blocked;
     # threshold tunable via filters.json / env.
-    ti_min_weight = _thr("autolearn_ti_min_weight", "SECUBOX_TI_MIN_WEIGHT", 50)
+    # Default 40: threatfox/data-broker domain IOCs land at weight 45, below the
+    # schema default 50 — a 50 gate excluded them all. 40 captures them while
+    # still letting the operator raise it via filters.json.
+    ti_min_weight = _thr("autolearn_ti_min_weight", "SECUBOX_TI_MIN_WEIGHT", 40)
     try:
         for r in c.execute(
             "SELECT DISTINCT ioc FROM threat_intel "
