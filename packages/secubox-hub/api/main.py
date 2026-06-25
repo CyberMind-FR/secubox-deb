@@ -153,24 +153,29 @@ def _load_menu_cache_from_file() -> dict:
 @public_router.get("/menu")
 async def public_menu():
     """Public menu endpoint for sidebar navigation (no auth required).
-    Returns basic menu structure without sensitive data.
-    Uses pre-computed cache for instant response.
+
+    Double-buffer cache: ALWAYS returns the current snapshot instantly and never
+    computes on the request path (a sync systemctl walk here, multiplied by the
+    sidebar's polling, is what froze the shared aggregator loop). The background
+    refresher — kicked here because mounted sub-apps get no startup/middleware —
+    fills the buffer within a few seconds; until then we serve the file snapshot
+    or an explicit `warming` placeholder.
     """
     global _menu_cache
+    _ensure_bg()
 
-    # Return from in-memory cache (instant)
+    # Active buffer (instant).
     if _menu_cache:
         return _menu_cache
 
-    # Fallback to file cache (fast startup)
+    # Cold start: last-good snapshot persisted to file (cheap read, no systemctl).
     file_cache = _load_menu_cache_from_file()
     if file_cache:
         _menu_cache = file_cache
         return file_cache
 
-    # Last resort: compute synchronously (only on first request before cache ready)
-    log.warning("Menu cache miss - computing synchronously")
-    return _compute_menu_sync()
+    # Nothing yet — never block; the background task will fill it shortly.
+    return {"categories": [], "total_installed": 0, "total_active": 0, "warming": True}
 
 
 @public_router.get("/info")
@@ -262,22 +267,20 @@ async def public_led_status():
 
 @public_router.get("/health-batch")
 async def public_health_batch():
-    """Batch health check for all modules — returns status for sidebar LEDs.
+    """Batch health snapshot for the sidebar LEDs.
 
-    Serves the TTL snapshot built by the background loop; on a cold miss it
-    builds it ONCE off the event loop. Never makes a synchronous systemctl call
-    on the request path.
+    Double-buffer cache: returns the last fully-built snapshot instantly and
+    NEVER rebuilds on the request path. The previous cold-miss rebuilt under a
+    lock, so concurrent sidebar polls serialized behind a ~3 s systemctl walk
+    and starved the shared loop. The background refresher (kicked here) swaps in
+    a complete snapshot atomically — so we never serve partial/bad counts.
     """
+    _ensure_bg()
     hb = _cache.get("health_batch")
-    if hb and (time.time() - _cache.get("health_batch_ts", 0)) < CACHE_TTL * 2:
+    if hb:
         return hb
-    async with _health_batch_lock:
-        # Re-check under the lock: a concurrent waiter may have just rebuilt it.
-        hb = _cache.get("health_batch")
-        if not hb or (time.time() - _cache.get("health_batch_ts", 0)) >= CACHE_TTL * 2:
-            await asyncio.to_thread(_refresh_health_batch)
-            hb = _cache.get("health_batch") or {"modules": {}, "count": 0}
-    return hb
+    # Not warmed yet — serve an explicit placeholder rather than block/compute.
+    return {"modules": {}, "count": 0, "warming": True}
 
 
 app.include_router(public_router)
@@ -503,17 +506,27 @@ async def startup():
     await _start_background_once()
 
 
+def _ensure_bg() -> None:
+    """Reliably kick the background warm-up + refresh loops from the request path.
+
+    Mounted in the aggregator, a sub-app receives neither startup/lifespan nor
+    `@app.middleware` events — so the navbar status endpoints trigger the warm-up
+    themselves on first hit. Fire-and-forget: never blocks or delays the request.
+    Idempotent (``_start_background_once`` guards on ``_bg_started``).
+    """
+    if _bg_started:
+        return
+    try:
+        asyncio.create_task(_start_background_once())
+    except RuntimeError:
+        # No running loop yet (e.g. import time) — a later request retries.
+        pass
+
+
+# Kept for the standalone-uvicorn path; harmless (no-op) when mounted.
 @app.middleware("http")
 async def _lazy_background_start(request, call_next):
-    """Kick the background warm-up on the first request.
-
-    Mounted sub-apps don't receive startup/lifespan events under the aggregator,
-    so the cache would otherwise stay cold and every _svc() would fall back to a
-    blocking per-module systemctl call. Fire-and-forget so this request isn't
-    delayed by the warm-up.
-    """
-    if not _bg_started:
-        asyncio.create_task(_start_background_once())
+    _ensure_bg()
     return await call_next(request)
 
 
