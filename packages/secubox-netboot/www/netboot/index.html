@@ -5,7 +5,11 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>SecuBox · NetBoot</title>
+<link rel="stylesheet" href="/shared/crt-light.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
+  .main.main-content{margin-left:220px}
+  @media (max-width:900px){.sidebar{display:none}.main.main-content{margin-left:0}}
   :root{--cosmos:#0a0a0f;--gold:#c9a84c;--cinnabar:#e63946;--matrix:#00ff41;
         --cyan:#00d4ff;--void:#6e40c9;--text:#e8e6d9;--muted:#6b6b7a;}
   *{box-sizing:border-box} body{margin:0;background:var(--cosmos);color:var(--text);
@@ -31,7 +35,8 @@
 </style>
 </head>
 <body>
-<main class="main">
+<nav class="sidebar" id="sidebar"></nav>
+<main class="main main-content">
   <h1>🛰️ NetBoot <span class="pill" id="ver"></span></h1>
   <p class="pill">Provisioning réseau · overlay U-Boot chainloadé (#737, Phase 2).
      Aucune action destructive sans confirmation. Flash A/B = Phase 3 (désactivé).</p>
@@ -192,5 +197,7 @@ async function persist(){
 }
 refresh(); setInterval(refresh, 10000);
 </script>
+<script src="/shared/sidebar.js"></script>
+<script src="/shared/health-banner.js"></script>
 </body>
 </html>

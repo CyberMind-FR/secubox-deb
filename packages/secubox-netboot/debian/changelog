@@ -1,3 +1,11 @@
+secubox-netboot (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Intégration navbar (#737) : entrée NetBoot dans la section BOOT (menu.d, order
+    40) ET sidebar partagée + health-banner intégrés dans la page /netboot/
+    (crt-light.css, sidebar-light.css, sidebar.js, health-banner.js).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 16:00:00 +0000
+
 secubox-netboot (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Installeur B3 (#737) : installer/init (initramfs) — réseau DHCP, téléchargement
