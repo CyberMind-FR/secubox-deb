@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-netboot-probe (#737, Phase 2 — DoD #1)
+# READ-ONLY discovery of the board's boot stack: model/SoC, U-Boot env layout
+# (calibrates fw_env.config WITHOUT writing the env), U-Boot version + the
+# commands the overlay needs (wget / bootm-FIT / bootcount), and the boot media
+# (SPI-NOR vs eMMC, A/B slots). Emits one JSON object on stdout. Never writes the
+# U-Boot env, never touches mtd/eMMC-boot — pure information gathering.
+set -uo pipefail
+readonly MODULE="secubox-netboot-probe"
+
+j_str() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+# ── board / SoC ──────────────────────────────────────────────────────────────
+model="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)"
+compat="$(tr '\0' ' ' < /proc/device-tree/compatible 2>/dev/null)"
+soc="unknown"
+case "$compat" in
+  *armada7040*|*armada-8k*) soc="armada-7040" ;;
+  *armada3720*)             soc="armada-3720" ;;
+esac
+
+# ── boot media ───────────────────────────────────────────────────────────────
+mtd_fw="$(grep -i '"firmware"' /proc/mtd 2>/dev/null | cut -d: -f1)"
+mtd_env="$(grep -i '"u-boot-env"' /proc/mtd 2>/dev/null | cut -d: -f1)"
+emmc_ab="no"; [ -e /dev/mmcblk0boot0 ] && [ -e /dev/mmcblk0boot1 ] && emmc_ab="yes"
+have_emmc="no";  [ -e /dev/mmcblk0 ] && have_emmc="yes"
+
+# ── U-Boot env layout calibration (READ-ONLY) ────────────────────────────────
+# Try candidate fw_env.config layouts against the env mtd until fw_printenv
+# returns a valid CRC. We write the *config file* to a temp path only — never the
+# env partition itself.
+env_layout="unknown"; uboot_ver=""; bootcmd=""; env_ok="no"
+if [ -n "${mtd_env:-}" ] && command -v fw_printenv >/dev/null 2>&1; then
+  envdev="/dev/${mtd_env}"
+  tmpc="$(mktemp)"
+  for layout in \
+      "$envdev 0x0000 0x10000 0x1000" \
+      "$envdev 0x0000 0x8000 0x1000"$'\n'"$envdev 0x8000 0x8000 0x1000" \
+      "$envdev 0x0000 0x20000 0x10000" ; do
+    printf '%s\n' "$layout" > "$tmpc"
+    if v="$(fw_printenv -c "$tmpc" ver 2>/dev/null)"; then
+      env_ok="yes"; env_layout="$layout"
+      uboot_ver="$(printf '%s' "$v" | sed 's/^ver=//')"
+      bootcmd="$(fw_printenv -c "$tmpc" bootcmd 2>/dev/null | sed 's/^bootcmd=//')"
+      break
+    fi
+  done
+  rm -f "$tmpc"
+fi
+
+# ── U-Boot version fallback (strings on the SPI firmware) ────────────────────
+if [ -z "$uboot_ver" ] && [ -n "${mtd_fw:-}" ] && [ -r "/dev/${mtd_fw/mtd/mtdblock}" ]; then
+  uboot_ver="$(strings "/dev/${mtd_fw/mtd/mtdblock}" 2>/dev/null \
+               | grep -oE 'U-Boot 20[0-9][0-9]\.[0-9]+[^ ]*' | head -1)"
+fi
+tfa_ver="$(strings "/dev/${mtd_fw/mtd/mtdblock}" 2>/dev/null | grep -oE 'v2\.[0-9]+\(release\)' | head -1)"
+
+# ── capability inference (best-effort, refined by a one-shot serial probe) ───
+# A U-Boot >= 2023.04 ships wget + FIT verify in most defconfigs; we flag it as
+# "likely" until a serial probe confirms. Empty version => unknown.
+cap_wget="unknown"; cap_fit="unknown"; cap_bootcount="unknown"
+vernum="$(printf '%s' "$uboot_ver" | grep -oE '20[0-9][0-9]\.[0-9]+' | head -1 | tr -d .)"
+if [ -n "$vernum" ]; then
+  if [ "$vernum" -ge 202304 ]; then cap_wget="likely"; cap_fit="likely"; cap_bootcount="likely";
+  else cap_wget="unlikely"; cap_fit="likely"; cap_bootcount="likely"; fi
+fi
+
+cat <<JSON
+{
+  "module": "$MODULE",
+  "board": { "model": "$(j_str "$model")", "soc": "$soc", "compatible": "$(j_str "$compat")" },
+  "firmware": { "tfa": "$(j_str "$tfa_ver")", "uboot_version": "$(j_str "$uboot_ver")" },
+  "env": { "ok": "$env_ok", "mtd": "$(j_str "${mtd_env:-}")", "layout": "$(j_str "$(printf '%s' "$env_layout" | tr '\n' ';')")" },
+  "bootcmd": "$(j_str "$bootcmd")",
+  "media": { "spi_firmware_mtd": "$(j_str "${mtd_fw:-}")", "emmc": "$have_emmc", "emmc_ab_slots": "$emmc_ab" },
+  "capabilities": { "wget": "$cap_wget", "bootm_fit": "$cap_fit", "bootcount": "$cap_bootcount" },
+  "overlay_ready": $( [ "$env_ok" = yes ] && [ "$emmc_ab" = yes -o "$have_emmc" = yes ] && echo true || echo false )
+}
+JSON
