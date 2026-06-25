@@ -572,7 +572,11 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// server-side and bake it into a self-contained <script>. Fail-open: a
 	// dead/slow portal → scriptBody=="" → inject skipped, page served intact.
 	scriptBody, _ := fetchInlineBanner(px.portal, clientHash, wg, cspBypassed)
-	if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, wg); ok {
+	injHost := ""
+	if resp.Request != nil {
+		injHost = resp.Request.Host
+	}
+	if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, wg, injHost); ok {
 		body = out
 		// Keep framing consistent with the served bytes (only the length changed).
 		resp.Header.Set("Content-Length", strconv.Itoa(len(body)))

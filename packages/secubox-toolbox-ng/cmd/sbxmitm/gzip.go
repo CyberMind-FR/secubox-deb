@@ -160,10 +160,10 @@ func zstdBytes(in []byte) ([]byte, error) {
 // same-origin request to hijack. An empty scriptBody (fetch failed/skipped) makes
 // the banner inject a no-op — fail-open, page intact. The cosmetic <style> is
 // already inline and SW-immune, so it is UNCHANGED.
-func injectHTML(plain []byte, scriptBody string, wg bool) []byte {
+func injectHTML(plain []byte, scriptBody string, wg bool, host string) []byte {
 	out := injectInlineBanner(plain, scriptBody)
 	if wg {
-		out = injectCosmetic(out)
+		out = injectCosmetic(out, host)
 	}
 	return out
 }
@@ -190,22 +190,22 @@ func injectHTML(plain []byte, scriptBody string, wg bool) []byte {
 //
 // The 32MiB decompression-bomb cap (gunzipCap) is enforced uniformly across
 // gzip/br/zstd. idempotency / placement live inside injectInlineBanner/injectCosmetic.
-func injectIntoBody(body []byte, encoding, scriptBody string, wg bool) (out []byte, ok bool) {
+func injectIntoBody(body []byte, encoding, scriptBody string, wg bool, host string) (out []byte, ok bool) {
 	switch strings.ToLower(strings.TrimSpace(encoding)) {
 	case "":
-		return injectHTML(body, scriptBody, wg), true
+		return injectHTML(body, scriptBody, wg, host), true
 	case "gzip":
 		plain, err := gunzipBytes(body)
 		if err != nil {
 			return body, false // fail open: serve the original compressed bytes
 		}
-		return gzipBytes(injectHTML(plain, scriptBody, wg)), true
+		return gzipBytes(injectHTML(plain, scriptBody, wg, host)), true
 	case "br":
 		plain, err := unbrotliBytes(body)
 		if err != nil {
 			return body, false // fail open
 		}
-		reenc, err := brotliBytes(injectHTML(plain, scriptBody, wg))
+		reenc, err := brotliBytes(injectHTML(plain, scriptBody, wg, host))
 		if err != nil {
 			return body, false // fail open: never serve a truncated br frame
 		}
@@ -215,7 +215,7 @@ func injectIntoBody(body []byte, encoding, scriptBody string, wg bool) (out []by
 		if err != nil {
 			return body, false // fail open
 		}
-		reenc, err := zstdBytes(injectHTML(plain, scriptBody, wg))
+		reenc, err := zstdBytes(injectHTML(plain, scriptBody, wg, host))
 		if err != nil {
 			return body, false // fail open: never serve a truncated zstd frame
 		}

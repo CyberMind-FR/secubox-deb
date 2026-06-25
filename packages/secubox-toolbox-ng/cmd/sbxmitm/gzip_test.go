@@ -44,7 +44,7 @@ func TestInjectIntoBodyGzip(t *testing.T) {
 	// End-to-end-ish: HTML with <head>, gzipped, run through the exact transform
 	// the inject path uses. Result must gunzip back to an injected, intact doc.
 	html := `<html><head><title>page</title></head><body>content</body></html>`
-	out, ok := injectIntoBody(gzipBytes([]byte(html)), "gzip", inlineTestScript, true)
+	out, ok := injectIntoBody(gzipBytes([]byte(html)), "gzip", inlineTestScript, true, "")
 	if !ok {
 		t.Fatal("gzip inject must report ok=true")
 	}
@@ -68,7 +68,7 @@ func TestInjectIntoBodyGzip(t *testing.T) {
 
 func TestInjectIntoBodyGzipCaseInsensitiveEncoding(t *testing.T) {
 	html := `<head></head>`
-	out, ok := injectIntoBody(gzipBytes([]byte(html)), "GZIP", inlineTestScript, false)
+	out, ok := injectIntoBody(gzipBytes([]byte(html)), "GZIP", inlineTestScript, false, "")
 	if !ok {
 		t.Fatal("Content-Encoding GZIP (upper) must be recognised → ok=true")
 	}
@@ -85,7 +85,7 @@ func TestInjectIntoBodyGzipFailOpen(t *testing.T) {
 	// Bytes labelled gzip but NOT gzip → fail open: original bytes, ok=false,
 	// no panic.
 	bad := []byte("not gzip at all <head></head>")
-	out, ok := injectIntoBody(bad, "gzip", inlineTestScript, false)
+	out, ok := injectIntoBody(bad, "gzip", inlineTestScript, false, "")
 	if ok {
 		t.Fatal("corrupt gzip body must fail open (ok=false)")
 	}
@@ -97,7 +97,7 @@ func TestInjectIntoBodyGzipFailOpen(t *testing.T) {
 func TestInjectIntoBodyIdentity(t *testing.T) {
 	// Identity (empty Content-Encoding): inject directly, grown body returned.
 	html := []byte(`<html><head></head><body>hi</body></html>`)
-	out, ok := injectIntoBody(html, "", inlineTestScript, false)
+	out, ok := injectIntoBody(html, "", inlineTestScript, false, "")
 	if !ok {
 		t.Fatal("identity inject must report ok=true")
 	}
@@ -113,7 +113,7 @@ func TestInjectIntoBodyUnknownEncodingPassthrough(t *testing.T) {
 	// #662 — gzip/br/zstd are now ALL decoded+re-encoded; deflate (and any other
 	// codec / multi-value AE) remains an unknown encoding we pass through.
 	body := []byte("\x78\x9c some deflate-ish bytes")
-	out, ok := injectIntoBody(body, "deflate", inlineTestScript, false)
+	out, ok := injectIntoBody(body, "deflate", inlineTestScript, false, "")
 	if ok {
 		t.Fatal("unknown encoding must pass through (ok=false)")
 	}
@@ -131,7 +131,7 @@ func TestGunzipBombGuard(t *testing.T) {
 		t.Fatal("gunzipBytes must reject output exceeding gunzipCap")
 	}
 	// And via the inject path: fail open, original bytes preserved.
-	out, ok := injectIntoBody(big, "gzip", inlineTestScript, false)
+	out, ok := injectIntoBody(big, "gzip", inlineTestScript, false, "")
 	if ok {
 		t.Fatal("over-cap gzip body must fail open through injectIntoBody")
 	}
