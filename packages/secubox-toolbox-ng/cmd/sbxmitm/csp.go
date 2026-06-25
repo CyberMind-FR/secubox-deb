@@ -27,8 +27,28 @@ package main
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 )
+
+// #740 — Trusted Types delivered via a <meta http-equiv="Content-Security-Policy">
+// tag (the common case on franceinfo/leparisien/20minutes/cnn) is NOT touched by
+// the response-header relax, so the banner's innerHTML still throws. Strip the
+// two TT directives out of any meta CSP so the banner (and its TT policy) renders.
+var metaCSPTagRe = regexp.MustCompile(`(?is)<meta[^>]+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>`)
+var ttDirectiveRe = regexp.MustCompile(`(?i)(?:require-trusted-types-for|trusted-types)\b[^;"'>]*;?`)
+
+// stripMetaTrustedTypes removes require-trusted-types-for / trusted-types from
+// every <meta http-equiv="Content-Security-Policy"> in the body (header CSP is
+// handled separately by relaxCSPForLoader).
+func stripMetaTrustedTypes(body []byte) []byte {
+	if !metaCSPTagRe.Match(body) {
+		return body
+	}
+	return metaCSPTagRe.ReplaceAllFunc(body, func(tag []byte) []byte {
+		return ttDirectiveRe.ReplaceAll(tag, nil)
+	})
+}
 
 // cspHeaderNames are the two response headers that carry a Content-Security-
 // Policy. Both are rewritten: a report-only policy doesn't block scripts, but

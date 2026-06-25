@@ -161,6 +161,13 @@ func zstdBytes(in []byte) ([]byte, error) {
 // the banner inject a no-op — fail-open, page intact. The cosmetic <style> is
 // already inline and SW-immune, so it is UNCHANGED.
 func injectHTML(plain []byte, scriptBody string, wg bool, host string) []byte {
+	// NOTE (#740): meta-tag Trusted Types stripping was tried here to render the
+	// banner on franceinfo/leparisien/20minutes, but rewriting a site's meta CSP
+	// regressed pages that depend on it (x/twitter banner vanished). Reverted —
+	// strict-TT sites need the banner built via DOM API (createElement/textContent,
+	// not innerHTML) so no TT bypass is needed at all. stripMetaTrustedTypes is
+	// kept (unused) for reference.
+	_ = stripMetaTrustedTypes
 	out := injectInlineBanner(plain, scriptBody)
 	if wg {
 		out = injectCosmetic(out, host)
