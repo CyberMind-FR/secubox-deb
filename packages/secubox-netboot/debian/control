@@ -1,0 +1,20 @@
+Source: secubox-netboot
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-netboot
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, u-boot-tools, mtd-utils, openssl
+Recommends: tftpd-hpa, isc-dhcp-server
+Description: SecuBox provisioning réseau + overlay U-Boot (#737)
+ Service d'installation/boot réseau pour les boards Marvell Armada (MOCHAbin,
+ ESPRESSObin). Fournit un overlay U-Boot chainloadé (HTTP + FIT-signature) sans
+ reflasher l'usine, avec rollback automatique anti-brick (bootcount/altbootcmd),
+ des triggers de cycle de vie et une interface de suivi/contrôle.
+ .
+ Phase 2 : overlay 2e U-Boot. Auto-flash A/B = Phase 3.

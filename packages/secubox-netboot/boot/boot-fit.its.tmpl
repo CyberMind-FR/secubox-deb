@@ -1,0 +1,63 @@
+/dts-v1/;
+/*
+ * SecuBox-Deb :: boot.fit servi par netboot (#737, Phase 2)
+ * kernel + dtb + initrd installeur, SIGNÉ — récupéré en HTTP par l'overlay
+ * (sbx-boot.cmd) puis vérifié par `bootm`. Un boot.fit par board (sbx_id),
+ * publié sous /netboot/<id>/boot.fit. Placeholders (build-image / publish) :
+ *   @KERNEL@ @DTB@ @INITRD@   chemins des binaires
+ *   @KLOAD@ @KENTRY@ @FDTLOAD@ @RDLOAD@  adresses (board/<name>/addrs.env)
+ *   @KEYHINT@                 nom de la clé (secubox-netboot)
+ *   @DESC@                    description (version image)
+ */
+/ {
+    description = "@DESC@";
+    #address-cells = <1>;
+
+    images {
+        kernel {
+            description = "SecuBox kernel";
+            data = /incbin/("@KERNEL@");
+            type = "kernel";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <@KLOAD@>;
+            entry = <@KENTRY@>;
+            hash-1 { algo = "sha256"; };
+        };
+        fdt {
+            description = "board DTB";
+            data = /incbin/("@DTB@");
+            type = "flat_dt";
+            arch = "arm64";
+            compression = "none";
+            load = <@FDTLOAD@>;
+            hash-1 { algo = "sha256"; };
+        };
+        ramdisk {
+            description = "installer initrd";
+            data = /incbin/("@INITRD@");
+            type = "ramdisk";
+            arch = "arm64";
+            os = "linux";
+            compression = "gzip";
+            load = <@RDLOAD@>;
+            hash-1 { algo = "sha256"; };
+        };
+    };
+
+    configurations {
+        default = "conf-1";
+        conf-1 {
+            description = "SecuBox netboot";
+            kernel = "kernel";
+            fdt = "fdt";
+            ramdisk = "ramdisk";
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "@KEYHINT@";
+                sign-images = "kernel", "fdt", "ramdisk";
+            };
+        };
+    };
+};

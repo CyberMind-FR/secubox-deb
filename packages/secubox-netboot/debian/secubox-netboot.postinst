@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -m0755 /var/lib/secubox/netboot
+    install -d -m0750 /var/log/secubox/netboot
+    install -d -m0755 /etc/secubox/netboot/hooks
+    install -d -m0755 /boot/secubox-netboot/shadow /boot/secubox-netboot/active
+    [ -f /etc/secubox/netboot.toml ] || \
+      install -m0644 /usr/share/secubox/netboot/conf/netboot.toml /etc/secubox/netboot.toml
+    install -d -m0755 /etc/nginx/secubox.d
+    systemctl daemon-reload || true
+    systemctl enable --now secubox-netboot.service || true
+    systemctl enable secubox-netboot-confirm-healthy.service || true
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
