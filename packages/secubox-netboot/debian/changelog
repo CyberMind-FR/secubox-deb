@@ -1,3 +1,17 @@
+secubox-netboot (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rôle SERVEUR complet (#737) : secubox-netboot-serve (TFTP+HTTP non-invasif,
+    vhost boot.<board>.secubox.in HTTP simple hors WAF, intégrité par signature),
+    secubox-netboot-publish (artefacts par board selon le niveau).
+  * Profils board + remote config WebUI : CRUD profils, niveaux de boot B0..B3
+    (sourcer × valider, cf docs/BOOT-LEVELS.md), publish par board, état serveur.
+  * Persistance du boot : overlay persist (verrouillage amorce permanente après
+    validation) + confirm-healthy (bootcount=0 par boot sain) → l'overlay persiste
+    tant que l'OS boote ; env en flash + artefacts /boot eMMC = persistants.
+  * docs/TEST-TOPOLOGY.md : test 2 MOCHAbin (gk2 serveur untouched + DUT).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 14:30:00 +0000
+
 secubox-netboot (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2 (#737) : module de provisioning réseau + overlay U-Boot chainloadé.
