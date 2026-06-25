@@ -90,7 +90,7 @@ func TestInjectIntoBodyBrotli(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, ok := injectIntoBody(enc, "br", inlineTestScript, true)
+	out, ok := injectIntoBody(enc, "br", inlineTestScript, true, "")
 	if !ok {
 		t.Fatal("br inject must report ok=true")
 	}
@@ -113,7 +113,7 @@ func TestInjectIntoBodyZstd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, ok := injectIntoBody(enc, "zstd", inlineTestScript, true)
+	out, ok := injectIntoBody(enc, "zstd", inlineTestScript, true, "")
 	if !ok {
 		t.Fatal("zstd inject must report ok=true")
 	}
@@ -132,7 +132,7 @@ func TestInjectIntoBodyZstd(t *testing.T) {
 
 func TestInjectIntoBodyBrotliCaseInsensitive(t *testing.T) {
 	enc, _ := brotliBytes([]byte(`<head></head>`))
-	out, ok := injectIntoBody(enc, "BR", inlineTestScript, false)
+	out, ok := injectIntoBody(enc, "BR", inlineTestScript, false, "")
 	if !ok {
 		t.Fatal("Content-Encoding BR (upper) must be recognised → ok=true")
 	}
@@ -147,7 +147,7 @@ func TestInjectIntoBodyBrotliCaseInsensitive(t *testing.T) {
 
 func TestInjectIntoBodyBrotliFailOpen(t *testing.T) {
 	bad := []byte("not brotli at all <head></head>")
-	out, ok := injectIntoBody(bad, "br", inlineTestScript, false)
+	out, ok := injectIntoBody(bad, "br", inlineTestScript, false, "")
 	if ok {
 		t.Fatal("corrupt br body must fail open (ok=false)")
 	}
@@ -158,7 +158,7 @@ func TestInjectIntoBodyBrotliFailOpen(t *testing.T) {
 
 func TestInjectIntoBodyZstdFailOpen(t *testing.T) {
 	bad := []byte("not zstd at all <head></head>")
-	out, ok := injectIntoBody(bad, "zstd", inlineTestScript, false)
+	out, ok := injectIntoBody(bad, "zstd", inlineTestScript, false, "")
 	if ok {
 		t.Fatal("corrupt zstd body must fail open (ok=false)")
 	}
@@ -177,7 +177,7 @@ func TestBrotliZstdBombGuard(t *testing.T) {
 		t.Fatal("unbrotliBytes must reject output exceeding gunzipCap")
 	}
 	// fail-open through the inject path.
-	if out, ok := injectIntoBody(brBomb, "br", inlineTestScript, false); ok || !bytes.Equal(out, brBomb) {
+	if out, ok := injectIntoBody(brBomb, "br", inlineTestScript, false, ""); ok || !bytes.Equal(out, brBomb) {
 		t.Fatal("over-cap br body must fail open with original bytes")
 	}
 
@@ -188,7 +188,7 @@ func TestBrotliZstdBombGuard(t *testing.T) {
 	if _, err := unzstdBytes(zsBomb); err == nil {
 		t.Fatal("unzstdBytes must reject output exceeding gunzipCap")
 	}
-	if out, ok := injectIntoBody(zsBomb, "zstd", inlineTestScript, false); ok || !bytes.Equal(out, zsBomb) {
+	if out, ok := injectIntoBody(zsBomb, "zstd", inlineTestScript, false, ""); ok || !bytes.Equal(out, zsBomb) {
 		t.Fatal("over-cap zstd body must fail open with original bytes")
 	}
 }

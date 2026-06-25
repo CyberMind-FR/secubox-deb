@@ -123,7 +123,8 @@ const cosmeticProtect = `[id*="sbx-banner"],[class*="sbx-banner"],` +
 
 var (
 	cosmeticMu      sync.RWMutex
-	cosmeticCached  []byte
+	cosmeticPrefix  string              // "<style…>" + base + capped generic (no closing)
+	cosmeticData    map[string][]string // full cosmetic.json (for per-domain lookup)
 	cosmeticMtime   int64
 	cosmeticChecked time.Time
 )
@@ -147,18 +148,25 @@ func cosmeticSelectorOK(s string) bool {
 	return true
 }
 
-func buildCosmetic() []byte {
-	base := `<style id="sbx-ghost-style">` + cosmeticBaseSelectors
+// buildCosmeticPrefix rebuilds the cached global prefix (style-open + base +
+// capped generic selectors, NO closing brace) and stores the full parsed map
+// for per-domain lookup. Caller holds cosmeticMu.
+func buildCosmeticPrefix() {
+	cosmeticData = nil
 	data, err := os.ReadFile(cosmeticFilterPath)
 	if err != nil {
-		return []byte(base + `{display:none!important;visibility:hidden!important;}</style>`)
+		cosmeticPrefix = `<style id="sbx-ghost-style">` + cosmeticBaseSelectors
+		return
 	}
 	var m map[string][]string
 	if json.Unmarshal(data, &m) != nil {
-		return []byte(base + `{display:none!important;visibility:hidden!important;}</style>`)
+		cosmeticPrefix = `<style id="sbx-ghost-style">` + cosmeticBaseSelectors
+		return
 	}
+	cosmeticData = m
 	var sb strings.Builder
-	sb.WriteString(base)
+	sb.WriteString(`<style id="sbx-ghost-style">`)
+	sb.WriteString(cosmeticBaseSelectors)
 	n := 0
 	for _, s := range m["*"] {
 		if n >= cosmeticGlobalCap {
@@ -170,35 +178,66 @@ func buildCosmetic() []byte {
 			n++
 		}
 	}
+	cosmeticPrefix = sb.String()
+}
+
+// cosmeticRegistrableParents yields host and its parent domains (www.x.com →
+// www.x.com, x.com) so both host- and registrable-scoped rules apply.
+func cosmeticParents(host string) []string {
+	host = strings.ToLower(strings.Trim(host, "."))
+	if i := strings.IndexByte(host, ':'); i >= 0 {
+		host = host[:i] // strip :port
+	}
+	parts := strings.Split(host, ".")
+	out := make([]string, 0, len(parts))
+	for i := 0; i+1 < len(parts); i++ {
+		out = append(out, strings.Join(parts[i:], "."))
+	}
+	return out
+}
+
+// cosmeticStyleFor returns the <style> to inject for `host`: the cached global
+// prefix + that host's per-domain EasyList selectors + hide rule + banner
+// protection. Refreshes the cache from cosmetic.json at most once a minute.
+func cosmeticStyleFor(host string) []byte {
+	cosmeticMu.RLock()
+	stale := cosmeticPrefix == "" || time.Since(cosmeticChecked) >= time.Minute
+	cosmeticMu.RUnlock()
+	if stale {
+		cosmeticMu.Lock()
+		cosmeticChecked = time.Now()
+		if fi, err := os.Stat(cosmeticFilterPath); err == nil {
+			if cosmeticPrefix == "" || fi.ModTime().Unix() != cosmeticMtime {
+				cosmeticMtime = fi.ModTime().Unix()
+				buildCosmeticPrefix()
+			}
+		} else if cosmeticPrefix == "" {
+			cosmeticPrefix = `<style id="sbx-ghost-style">` + cosmeticBaseSelectors
+		}
+		cosmeticMu.Unlock()
+	}
+
+	cosmeticMu.RLock()
+	defer cosmeticMu.RUnlock()
+	var sb strings.Builder
+	sb.WriteString(cosmeticPrefix)
+	// per-domain rules for this host (and its parents).
+	if cosmeticData != nil && host != "" {
+		seen := map[string]bool{}
+		for _, d := range cosmeticParents(host) {
+			for _, s := range cosmeticData[d] {
+				if cosmeticSelectorOK(s) && !seen[s] {
+					seen[s] = true
+					sb.WriteByte(',')
+					sb.WriteString(s)
+				}
+			}
+		}
+	}
 	sb.WriteString(`{display:none!important;visibility:hidden!important;}`)
 	sb.WriteString(cosmeticProtect)
 	sb.WriteString(`</style>`)
 	return []byte(sb.String())
-}
-
-// cosmeticStyleBytes returns the style to inject, refreshing from cosmetic.json
-// at most once per minute (and only when its mtime changed).
-func cosmeticStyleBytes() []byte {
-	cosmeticMu.RLock()
-	if cosmeticCached != nil && time.Since(cosmeticChecked) < time.Minute {
-		b := cosmeticCached
-		cosmeticMu.RUnlock()
-		return b
-	}
-	cosmeticMu.RUnlock()
-
-	cosmeticMu.Lock()
-	defer cosmeticMu.Unlock()
-	cosmeticChecked = time.Now()
-	if fi, err := os.Stat(cosmeticFilterPath); err == nil {
-		if cosmeticCached == nil || fi.ModTime().Unix() != cosmeticMtime {
-			cosmeticMtime = fi.ModTime().Unix()
-			cosmeticCached = buildCosmetic()
-		}
-	} else if cosmeticCached == nil {
-		cosmeticCached = []byte(cosmeticStyle)
-	}
-	return cosmeticCached
 }
 
 // injectCosmetic inserts the cosmetic <style> into an HTML body once. Placement mirrors
@@ -208,11 +247,11 @@ func cosmeticStyleBytes() []byte {
 //   - else insert right AFTER the first "<head ...>"'s closing '>'.
 //   - else insert right BEFORE the first "<body".
 //   - else return the body unchanged (no inject).
-func injectCosmetic(body []byte) []byte {
+func injectCosmetic(body []byte, host string) []byte {
 	if bytes.Contains(body, []byte(cosmeticGuard)) {
 		return body
 	}
-	style := cosmeticStyleBytes()
+	style := cosmeticStyleFor(host)
 	low := bytes.ToLower(body)
 
 	// Prefer right before </head> (the Python _RE_HEAD.sub anchor).
