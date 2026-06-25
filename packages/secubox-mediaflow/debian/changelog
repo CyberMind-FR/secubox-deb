@@ -1,3 +1,14 @@
+secubox-mediaflow (2.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Discovered Media: collapse multi-part HLS streams (esp. video.twimg.com) to
+    ONE reconstructed, fully-cloneable entry instead of flooding the list with
+    hundreds of .m4s/.ts segments. Reconstruction prefers the master .m3u8
+    (video+audio); when only variant playlists were seen, picks the highest-res
+    video variant + an audio variant and muxes them with ffmpeg. New audio_url on
+    clone jobs. UI shows kind=stream with a parts count. (#736)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 10:30:00 +0000
+
 secubox-mediaflow (2.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Persist Discovered Media off tmpfs: merge the sbxmitm catch log (/run, cleared

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 import os
+import re
 import shutil
 import secrets
 import httpx
@@ -19,7 +20,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-app = FastAPI(title="secubox-mediaflow", version="2.1.1", root_path="/api/v1/mediaflow")
+app = FastAPI(title="secubox-mediaflow", version="2.2.0", root_path="/api/v1/mediaflow")
 
 # ══════════════════════════════════════════════════════════════════
 # Health Check Endpoint (public, no auth)
@@ -642,20 +643,104 @@ def _parse_catch_log() -> Dict[str, Dict[str, Any]]:
     return seen
 
 
+# ── multi-part stream reconstruction (#736) ──────────────────────────────────
+# Adaptive/HLS players fetch a stream as hundreds of tiny segments (.m4s/.ts) plus
+# a few .m3u8 playlists. Recording each segment floods the list and none of them
+# is cloneable on its own. We collapse every multi-part stream to ONE entry and
+# reconstruct the fully-cloneable URL: the MASTER playlist (video+audio) if it was
+# seen, else the highest-resolution video variant + an audio variant to mux.
+_TWIMG_RE = re.compile(r"^https?://video\.twimg\.com/(amplify_video|ext_tw_video)/(\d+)/")
+
+
+def _stream_key(url: str) -> Optional[str]:
+    """A stable id for the multi-part stream a URL belongs to, or None."""
+    m = _TWIMG_RE.match(url or "")
+    if m:
+        return "twimg:" + m.group(2)  # group by Twitter/X media id
+    base = (url or "").split("?", 1)[0].lower()
+    if base.endswith(".m4s") or base.endswith(".ts"):
+        # generic HLS: group by the path with the last 2 components (range dir +
+        # segment file) stripped — collapses a variant's segment run to one key.
+        head = (url or "").split("?", 1)[0].rsplit("/", 2)[0]
+        return "hls:" + head
+    return None
+
+
+def _res_area(url: str) -> int:
+    m = re.search(r"/(\d{2,4})x(\d{2,4})/", url or "")
+    return int(m.group(1)) * int(m.group(2)) if m else 0
+
+
+def _audio_rate(url: str) -> int:
+    m = re.search(r"/mp4a/(\d+)/", url or "")
+    return int(m.group(1)) if m else 0
+
+
+def _is_master_m3u8(url: str) -> bool:
+    # Twitter master: /pl/{token}.m3u8 with NO avc1/mp4a sub-path (it references
+    # every video + audio rendition, so ffmpeg/yt-dlp get the complete A/V).
+    u = (url or "").split("?", 1)[0]
+    return bool(re.search(r"/pl/[A-Za-z0-9_-]+\.m3u8$", u)) and "/avc1/" not in u and "/mp4a/" not in u
+
+
+def _collapse_streams(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Collapse multi-part HLS streams to ONE reconstructed, cloneable entry each;
+    non-stream records (manifests-as-page, direct media, pages) pass through."""
+    groups: Dict[str, Dict[str, Any]] = {}
+    out: List[Dict[str, Any]] = []
+    for r in records:
+        url = r.get("url", "")
+        key = _stream_key(url)
+        if not key:
+            out.append(r)
+            continue
+        g = groups.get(key)
+        if not g:
+            g = {"host": r.get("host"), "ts": 0, "parts": 0,
+                 "master": None, "video": None, "audio": None, "any": url}
+            groups[key] = g
+        g["ts"] = max(g["ts"], r.get("ts", 0))
+        g["parts"] += int(r.get("hits", 1) or 1)
+        low = url.split("?", 1)[0].lower()
+        if low.endswith(".m3u8"):
+            if _is_master_m3u8(url):
+                g["master"] = url
+            elif _audio_rate(url) or "/mp4a/" in url:
+                if not g["audio"] or _audio_rate(url) > _audio_rate(g["audio"]):
+                    g["audio"] = url
+            else:  # video variant playlist
+                if not g["video"] or _res_area(url) >= _res_area(g["video"]):
+                    g["video"] = url
+    for key, g in groups.items():
+        url = g["master"] or g["video"] or g["any"]
+        audio = None if g["master"] else g["audio"]  # master already carries audio
+        out.append({
+            "url": url, "audio_url": audio, "host": g["host"], "kind": "stream",
+            "ctype": "application/vnd.apple.mpegurl", "bytes": 0, "ts": g["ts"],
+            "hits": g["parts"], "parts": g["parts"], "stream_id": key.split(":", 1)[1],
+        })
+    return out
+
+
 def _read_catch(limit: int = 200) -> List[Dict[str, Any]]:
     """Discovered media, newest first. The live catch log is on tmpfs (cleared on
     reboot), so we merge it into a DURABLE, capped store — discovery survives
-    reboots. Merge is idempotent OVERRIDE (not increment), so re-reading the same
-    log can't inflate hit counts."""
+    reboots. Multi-part HLS streams are collapsed to ONE reconstructed entry BEFORE
+    storing (so the segment flood never reaches the durable store). Merge is
+    idempotent OVERRIDE (not increment); part counts take the max, never sum."""
     durable: Dict[str, Dict[str, Any]] = {}
     for r in _load_json(DISCOVERED_STORE, []) or []:
         u = r.get("url")
         if u:
             durable[u] = r
     changed = False
-    for u, rec in _parse_catch_log().items():
+    for rec in _collapse_streams(list(_parse_catch_log().values())):
+        u = rec["url"]
         old = durable.get(u)
-        if (not old) or rec["ts"] >= old.get("ts", 0) or rec["hits"] != old.get("hits"):
+        if old and rec.get("kind") == "stream":
+            rec["parts"] = max(rec.get("parts", 0), old.get("parts", 0))
+            rec["hits"] = rec["parts"]
+        if (not old) or rec["ts"] >= old.get("ts", 0) or rec.get("hits") != old.get("hits"):
             durable[u] = rec
             changed = True
     rows = sorted(durable.values(), key=lambda x: x.get("ts", 0), reverse=True)
@@ -715,9 +800,17 @@ async def _run_clone(job_id: str) -> None:
     except Exception as e:
         job.update(status="error", error=f"library dir: {e}"); _save_clone_jobs(); return
     url = job["url"]
+    audio_url = job.get("audio_url")
     ext = "m4a" if job.get("kind") == "audio" else "mp4"
     out = LIBRARY_DIR / f"{job_id}.{ext}"
-    if tool == "yt-dlp":
+    if audio_url:
+        # Reconstructed multi-part stream with SEPARATE video + audio variant
+        # playlists (no master was seen): mux them with ffmpeg into one file. Always
+        # ffmpeg here — yt-dlp can't take two arbitrary playlist inputs like this.
+        cmd = ["nice", "-n", "15", "ffmpeg", "-y", "-loglevel", "error",
+               "-i", url, "-i", audio_url, "-c", "copy",
+               "-map", "0:v:0", "-map", "1:a:0", str(out)]
+    elif tool == "yt-dlp":
         cmd = ["nice", "-n", "15", "yt-dlp", "--no-playlist", "--no-progress",
                "--no-part", "-o", str(LIBRARY_DIR / f"{job_id}.%(ext)s"), url]
     else:  # ffmpeg: HLS/DASH manifest or direct media → stream-copy
@@ -758,13 +851,14 @@ async def _clone_worker():
 
 class CloneRequest(BaseModel):
     url: str
+    audio_url: Optional[str] = None  # separate audio playlist to mux (reconstructed streams)
     kind: Optional[str] = None
     title: Optional[str] = None
 
-    @field_validator("url")
+    @field_validator("url", "audio_url")
     @classmethod
-    def _v(cls, v: str) -> str:
-        if not v.startswith(("http://", "https://")):
+    def _v(cls, v):
+        if v is not None and not v.startswith(("http://", "https://")):
             raise ValueError("url must be http(s)")
         return v
 
@@ -784,7 +878,8 @@ async def clone(req: CloneRequest, user=Depends(require_jwt)):
     _ensure_clone_worker()
     job_id = secrets.token_hex(6)
     title = req.title or req.url.split("/")[-1].split("?")[0] or req.url
-    _clone_jobs[job_id] = {"id": job_id, "url": req.url, "kind": req.kind, "title": title,
+    _clone_jobs[job_id] = {"id": job_id, "url": req.url, "audio_url": req.audio_url,
+                           "kind": req.kind, "title": title,
                            "status": "queued", "file": None, "bytes": 0, "error": None,
                            "ts": int(time.time())}
     _save_clone_jobs()

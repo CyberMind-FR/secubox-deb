@@ -392,12 +392,14 @@
             return res.json();
         }
 
-        async function cloneUrl(url, kind, btn) {
+        async function cloneStream(idx, btn) {
+            const r = (window._discovered || [])[idx];
+            if (!r) return;
             if (btn) { btn.disabled = true; btn.textContent = '…'; }
-            await post('/clone', { url, kind });
+            await post('/clone', { url: r.url, audio_url: r.audio_url || null, kind: r.kind });
             await renderLibrary();
         }
-        window.cloneUrl = cloneUrl;
+        window.cloneStream = cloneStream;
 
         async function delLib(id) {
             await fetch(API + '/library/' + id, { method:'DELETE', credentials:'include' });
@@ -412,15 +414,19 @@
             const body = document.getElementById('discoveredTable');
             const rows = d.discovered || [];
             if (!rows.length) { body.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No media discovered yet (stream something over R4)</td></tr>'; return; }
-            body.innerHTML = rows.map(r => {
+            window._discovered = rows;
+            body.innerHTML = rows.map((r, i) => {
                 const disabled = d.downloader ? '' : 'disabled';
                 const u = esc(r.url);
+                const isStream = r.kind === 'stream';
+                const badgeCls = r.kind === 'audio' ? 'audio' : 'video';
+                const count = isStream ? ((r.parts || 0) + ' parts' + (r.audio_url ? ' +audio' : '')) : (r.hits || 1);
                 return `<tr>
                     <td style="font-family:monospace;font-size:.8rem">${esc(r.host||'')}</td>
-                    <td><span class="badge ${r.kind==='audio'?'audio':'video'}">${esc(r.kind||'')}</span></td>
+                    <td><span class="badge ${badgeCls}">${esc(r.kind||'')}</span></td>
                     <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${u}"><a href="${u}" target="_blank" rel="noopener noreferrer" style="color:var(--cyan,#00d4ff);text-decoration:none">${u}</a></td>
-                    <td>${r.hits||1}</td>
-                    <td><button class="btn" ${disabled} onclick="cloneUrl('${u.replace(/'/g,"\\'")}','${esc(r.kind||'')}',this)">Clone</button></td>
+                    <td style="white-space:nowrap">${count}</td>
+                    <td><button class="btn" ${disabled} onclick="cloneStream(${i},this)">Clone</button></td>
                 </tr>`;
             }).join('');
         }
