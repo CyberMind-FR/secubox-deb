@@ -106,7 +106,8 @@ td,th{padding:4px 6px;border-bottom:1px solid #15151f}</style>
 
 <script>
 const API='/api/v1/netboot';
-async function api(p,opt){try{const r=await fetch(API+p,Object.assign({credentials:'include'},opt||{}));return await r.json();}catch(e){return {error:String(e)};}}
+const sbxToken=()=>localStorage.getItem('sbx_token');
+async function api(p,opt){try{opt=opt||{};const t=sbxToken();opt.headers=Object.assign({},opt.headers,t?{'Authorization':'Bearer '+t}:{});const r=await fetch(API+p,Object.assign({credentials:'include'},opt));return await r.json();}catch(e){return {error:String(e)};}}
 function b(v,good){const c=v===good?'ok':(v==='unknown'||v==='likely'?'warn':'no');return `<span class="badge ${c}">${v}</span>`;}
 function kv(k,v){return `<div class="kv"><b>${k}</b>${v}</div>`;}
 
