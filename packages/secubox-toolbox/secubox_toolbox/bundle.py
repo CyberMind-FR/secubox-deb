@@ -190,16 +190,32 @@ _BANNER_CORE = r"""
   // #724 — inline R0..R3 level switch. Shows the real current level (highlighted)
   // and lets the client change it: GET /__toolbox/set-level (same-origin, the Go
   // engine reverse-proxies it to the portal), then reload so the new tier applies.
+  // #740 — mk(): build an element via DOM API only. textContent / setAttribute are
+  // NOT Trusted Types sinks (unlike innerHTML), so the banner renders on EVERY site
+  // — incl. strict-CSP/Trusted-Types ones (franceinfo, leparisien, 20minutes, cnn,
+  // x/twitter) — with ZERO CSP/TT bypass. This is the robust, permanent fix.
+  function mk(tag, opts){
+    var e = document.createElement(tag);
+    opts = opts || {};
+    if (opts.id) e.id = opts.id;
+    if (opts.cls) e.className = opts.cls;
+    if (opts.title) e.title = opts.title;
+    if (opts.text != null) e.textContent = opts.text;
+    if (opts.style) e.setAttribute("style", opts.style);
+    if (opts.attrs) for (var k in opts.attrs) if (Object.prototype.hasOwnProperty.call(opts.attrs, k)) e.setAttribute(k, opts.attrs[k]);
+    return e;
+  }
+  var BTN = "border-radius:3px;padding:0 5px;margin:0 2px;font:inherit;font-size:11px;cursor:pointer";
   function lvlSwitch(b){
     var cur = String(b.level || "r1").toLowerCase();
-    var lv = ["r0","r1","r2","r3"], out = "<span id=\"sbx-lvl\" title=\"Niveau d'analyse — clique pour changer\">";
+    var lv = ["r0","r1","r2","r3"];
+    var span = mk("span", {id:"sbx-lvl", title:"Niveau d'analyse — clique pour changer"});
     for (var i=0;i<lv.length;i++){ var on = lv[i]===cur;
-      out += "<button data-lvl=\"" + lv[i] + "\" class=\"sbx-lvl\" style=\"background:"
-        + (on?"#148C66":"transparent") + ";color:" + (on?"#0A0E14":"#8A9AA8")
-        + ";border:1px solid #148C66;border-radius:3px;padding:0 5px;margin:0 1px;"
-        + "font:inherit;font-size:11px;cursor:pointer\">" + lv[i].toUpperCase() + "</button>";
+      span.appendChild(mk("button", {cls:"sbx-lvl", text:lv[i].toUpperCase(), attrs:{"data-lvl":lv[i]},
+        style:"background:"+(on?"#148C66":"transparent")+";color:"+(on?"#0A0E14":"#8A9AA8")
+          +";border:1px solid #148C66;"+BTN}));
     }
-    return out + "</span>";
+    return span;
   }
   function wireLevels(bar, b){
     var els = bar.querySelectorAll(".sbx-lvl");
@@ -231,38 +247,24 @@ _BANNER_CORE = r"""
       + "font:12px/1.4 system-ui,-apple-system,sans-serif;background:#0A0E14;color:#E8E6E0;"
       + "border-bottom:2px solid #148C66;padding:6px 12px;gap:14px;align-items:center;"
       + "box-shadow:0 2px 12px rgba(0,0,0,.4)");
-    var pin = b.pin ? "<span title=\"pinned\">📌 " + esc(b.pin) + "</span>" : "";
-    // #662 — 🔓 proof: the engine relaxed this page's CSP to inject this banner.
-    var cspProof = (csp === "1")
-      ? "<span title=\"CSP contourné par SecuBox (démonstration)\">🔓</span>" : "";
-    // #683/#740 — 🧅 Tor toggle: enable/disable the toolbox-wg tunnel Tor egress.
-    var tor = "<button id=\"sbx-tor\" title=\"Tor du tunnel toolbox — clique pour basculer\" style=\"background:"
-      + (b.tor_mode?"#3D2A6B":"transparent") + ";color:" + (b.tor_mode?"#C9B8FF":"#8A9AA8")
-      + ";border:1px solid #6E40C9;border-radius:3px;padding:0 5px;margin:0 2px;font:inherit;font-size:11px;cursor:pointer\">🧅 "
-      + (b.tor_mode?"ON":"OFF") + "</button>";
-    var _bh = "<b style=\"color:#148C66\">SecuBox</b>"
-      + cspProof
-      + tor
-      + lvlSwitch(b)
-      + "<button id=\"sbx-adg\" title=\"Ad-Guard (blocage pub) — clique pour basculer\" style=\"background:"
-        + (b.ad_guard===false?"transparent":"#148C66") + ";color:" + (b.ad_guard===false?"#8A9AA8":"#0A0E14")
-        + ";border:1px solid #148C66;border-radius:3px;padding:0 5px;margin:0 2px;font:inherit;font-size:11px;cursor:pointer\">🛡️ "
-        + (b.ad_guard===false?"OFF":"ON") + "</button>"
-      + "<span id=\"sbx-trk\">🛰️ " + trk + " trackers</span>"
-      + "<span id=\"sbx-ck\">🍪 " + ck + " cookies</span>"
-      + pin
-      + "<a href=\"" + esc(b.report_url || "#") + "\" style=\"margin-left:auto;color:#2C70C0;text-decoration:none\">report ▸</a>"
-      + "<button aria-label=\"dismiss\" style=\"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px\">✕</button>";
-    // #740 — Trusted Types: innerHTML is a TT sink, so on strict sites (franceinfo,
-    // cnn, 20minutes…) it throws and the banner never renders. Route the assignment
-    // through a TT policy when present; the CSP header strip handles header-set TT,
-    // this handles the rest (incl. meta-tag TT) wherever policy creation is allowed.
-    try {
-      if (window.trustedTypes && trustedTypes.createPolicy) {
-        if (!window.__sbxTT) window.__sbxTT = trustedTypes.createPolicy("sbx-banner", {createHTML: function(s){ return s; }});
-        bar.innerHTML = window.__sbxTT.createHTML(_bh);
-      } else { bar.innerHTML = _bh; }
-    } catch (e) { try { bar.innerHTML = _bh; } catch (_) {} }
+    // #740 — built entirely with DOM API (no innerHTML → not a Trusted Types
+    // sink), so the banner renders identically on every site, strict-CSP/TT
+    // included, without touching the page's CSP.
+    bar.appendChild(mk("b", {text:"SecuBox", style:"color:#148C66"}));
+    if (csp === "1") bar.appendChild(mk("span", {text:"🔓", title:"CSP contourné par SecuBox (démonstration)"}));
+    bar.appendChild(mk("button", {id:"sbx-tor", text:"🧅 " + (b.tor_mode?"ON":"OFF"),
+      title:"Tor du tunnel toolbox — clique pour basculer",
+      style:"background:"+(b.tor_mode?"#3D2A6B":"transparent")+";color:"+(b.tor_mode?"#C9B8FF":"#8A9AA8")+";border:1px solid #6E40C9;"+BTN}));
+    bar.appendChild(lvlSwitch(b));
+    bar.appendChild(mk("button", {id:"sbx-adg", text:"🛡️ " + (b.ad_guard===false?"OFF":"ON"),
+      title:"Ad-Guard (blocage pub) — clique pour basculer",
+      style:"background:"+(b.ad_guard===false?"transparent":"#148C66")+";color:"+(b.ad_guard===false?"#8A9AA8":"#0A0E14")+";border:1px solid #148C66;"+BTN}));
+    bar.appendChild(mk("span", {id:"sbx-trk", text:"🛰️ " + trk + " trackers"}));
+    bar.appendChild(mk("span", {id:"sbx-ck", text:"🍪 " + ck + " cookies"}));
+    if (b.pin) bar.appendChild(mk("span", {text:"📌 " + b.pin, title:"pinned"}));
+    bar.appendChild(mk("a", {text:"report ▸", style:"margin-left:auto;color:#2C70C0;text-decoration:none", attrs:{href: b.report_url || "#"}}));
+    bar.appendChild(mk("button", {text:"✕", title:"dismiss",
+      style:"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px", attrs:{"aria-label":"dismiss"}}));
     document.body.appendChild(bar);
     try { document.body.style.paddingTop = (bar.offsetHeight || 34) + "px"; } catch (_) {}
     wireLevels(bar, b);
