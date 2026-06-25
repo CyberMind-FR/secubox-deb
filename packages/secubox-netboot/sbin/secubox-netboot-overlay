@@ -54,9 +54,10 @@ cmd_status() {
   if [ "$env_ok" = yes ]; then bc="$(fwget bootcount)"; bcmd="$(fwget bootcmd)"; fbcmd="$(fwget factory_bootcmd)"; fi
   local overlay_active=no
   printf '%s' "$bcmd" | grep -q 'sbx_overlay' && overlay_active=yes
+  local persisted=no; [ "$env_ok" = yes ] && [ "$(fwget sbx_persist)" = 1 ] && persisted=yes
   cat <<JSON
 { "module":"$MODULE","env_ok":"$env_ok","fit_deployed":"$deployed","staged":"$active",
-  "overlay_active":"$overlay_active","bootcount":"$(printf '%s' "$bc")",
+  "overlay_active":"$overlay_active","persisted":"$persisted","bootcount":"$(printf '%s' "$bc")",
   "has_factory_backup":"$( [ -n "$fbcmd" ] && echo yes || echo no )" }
 JSON
 }
@@ -120,14 +121,36 @@ cmd_revert() {
 
 cmd_confirm_healthy() {
   have_env || { log "env non calibré — confirm-healthy ignoré"; exit 0; }
+  # Si l'overlay est déjà PERSISTÉ, rien à faire (pas de compteur). Sinon on remet
+  # bootcount=0 : c'est CE qui rend l'overlay persistant tant que l'OS boote sain.
+  if [ "$(fwget sbx_persist)" = 1 ]; then log "overlay persisté — confirm-healthy no-op"; exit 0; fi
   fwset bootcount 0 2>/dev/null && audit "boot healthy (bootcount=0)" || true
-  log "bootcount remis à 0 (boot OS sain)."
+  log "bootcount remis à 0 (boot OS sain) — overlay persistant."
+}
+
+# persist : VERROUILLE l'overlay comme amorce PERMANENTE après validation. Retire
+# le garde-fou de révocation par compteur (le repli usine à l'exécution reste, via
+# 'run sbx_overlay; run factory_bootcmd' : si l'overlay rend la main, l'usine prend
+# le relais). À n'utiliser qu'une fois l'overlay prouvé au banc.
+cmd_persist() {
+  local commit=no; [ "${1:-}" = --commit ] && commit=yes
+  have_env || die "env non calibré."
+  printf '%s' "$(fwget bootcmd)" | grep -q 'sbx_overlay' || die "overlay non actif — 'apply' d'abord."
+  if [ "$commit" != yes ]; then log "DRY-RUN: verrouillerait l'overlay en amorce permanente (sans compteur)"; cmd_status; return 0; fi
+  fwset bootcmd "run sbx_overlay; run factory_bootcmd"   # overlay-first + repli usine runtime, SANS compteur
+  fwset sbx_persist 1
+  fwset bootcount 0
+  sync
+  audit "overlay persisted (permanent)"
+  log "Overlay PERSISTÉ (amorce permanente). Repli usine runtime conservé."
+  cmd_status
 }
 
 case "${1:-status}" in
   status)          cmd_status ;;
   apply)           shift; cmd_apply  "${1:-}" ;;
   revert)          shift; cmd_revert "${1:-}" ;;
+  persist)         shift; cmd_persist "${1:-}" ;;
   confirm-healthy) cmd_confirm_healthy ;;
-  *) die "usage: $MODULE {status|apply [--commit]|revert [--commit]|confirm-healthy}" ;;
+  *) die "usage: $MODULE {status|apply [--commit]|persist [--commit]|revert [--commit]|confirm-healthy}" ;;
 esac

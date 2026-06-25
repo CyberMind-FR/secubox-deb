@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-netboot-serve (#737, Phase 2 — côté SERVEUR)
+# Active CE host comme source de boot réseau (TFTP + HTTP), de façon NON-INVASIVE :
+# n'écrit AUCUN env U-Boot, ne pose AUCUN overlay sur ce host (il reste untouched
+# côté boot). Crée juste les racines, configure tftpd-hpa, vérifie la location nginx.
+#   secubox-netboot-serve up      # crée racines + tftpd-hpa pointant /srv/secubox/netboot/tftp
+#   secubox-netboot-serve status
+set -uo pipefail
+readonly MODULE="secubox-netboot-serve"
+readonly ROOT=/srv/secubox/netboot
+readonly TFTP="$ROOT/tftp" HTTP="$ROOT/http"
+readonly TFTPCONF=/etc/default/tftpd-hpa
+
+log(){ printf '[%s] %s\n' "$MODULE" "$*" >&2; }
+
+cmd_up() {
+  install -d -m0755 "$TFTP" "$HTTP"
+  log "racines: $TFTP (TFTP) , $HTTP (HTTP /sbxboot/)"
+  if command -v in.tftpd >/dev/null 2>&1 || dpkg -s tftpd-hpa >/dev/null 2>&1; then
+    cat > "$TFTPCONF" <<CFG
+# SecuBox netboot (#737) — TFTP read-only sur la racine de boot
+TFTP_USERNAME="tftp"
+TFTP_DIRECTORY="$TFTP"
+TFTP_ADDRESS="0.0.0.0:69"
+TFTP_OPTIONS="--secure --blocksize 1468"
+CFG
+    systemctl enable --now tftpd-hpa 2>/dev/null || systemctl restart tftpd-hpa 2>/dev/null || true
+    log "tftpd-hpa -> $TFTP ($(systemctl is-active tftpd-hpa 2>/dev/null))"
+  else
+    log "WARN tftpd-hpa absent : 'apt install tftpd-hpa' (repli HTTP reste possible)"
+  fi
+  # nginx : activer le VHOST de boot dédié (boot.<board>.secubox.in, HTTP simple,
+  # hors WAF) — livré par le paquet dans share/, posé ICI (install non-invasif).
+  local vsrc=/usr/share/secubox/netboot/nginx/boot-vhost.conf
+  local vdst=/etc/nginx/sites-enabled/secubox-netboot-boot.conf
+  if [ -f "$vsrc" ]; then
+    install -m0644 "$vsrc" "$vdst"
+    if nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+      log "vhost boot posé ($vdst) + nginx reload"
+    else
+      rm -f "$vdst"; log "WARN nginx -t KO → vhost boot retiré (adapter l'IP/listen)"
+    fi
+  else
+    log "WARN vhost source absent: $vsrc"
+  fi
+  cmd_status
+}
+
+cmd_status() {
+  local tftp_act=absent; command -v systemctl >/dev/null && tftp_act="$(systemctl is-active tftpd-hpa 2>/dev/null || echo absent)"
+  local http_ok=no; nginx -T 2>/dev/null | grep -q '/srv/secubox/netboot/http' && http_ok=yes
+  local boards=0; [ -d "$HTTP" ] && boards="$(find "$HTTP" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)"
+  cat <<JSON
+{ "module":"$MODULE","tftp_root":"$TFTP","http_root":"$HTTP","tftpd":"$tftp_act",
+  "nginx_sbxboot":"$http_ok","published_boards":$boards }
+JSON
+}
+
+case "${1:-status}" in
+  up) cmd_up ;;
+  status) cmd_status ;;
+  *) echo "usage: $MODULE {up|status}" >&2; exit 2 ;;
+esac

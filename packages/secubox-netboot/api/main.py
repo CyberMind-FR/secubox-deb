@@ -16,7 +16,6 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import asyncio
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -27,8 +26,12 @@ app = FastAPI(title="secubox-netboot", version="0.2.0", root_path="/api/v1/netbo
 PROBE = "/usr/sbin/secubox-netboot-probe"
 OVERLAY = "/usr/sbin/secubox-netboot-overlay"
 TRIGGERS = "/usr/sbin/secubox-netboot-triggers"
+SERVE = "/usr/sbin/secubox-netboot-serve"          # rôle SERVEUR (TFTP+HTTP)
+PUBLISH = "/usr/sbin/secubox-netboot-publish"
 SHADOW = Path("/boot/secubox-netboot/shadow")
 CATALOG = Path("/var/lib/secubox/netboot/images.json")     # catalogue release signées
+PROFILES = Path("/var/lib/secubox/netboot/profiles.json")  # profils board (remote config)
+STAGING = Path("/var/lib/secubox/netboot/staging")         # artefacts buildés par image
 AUDIT = Path("/var/log/secubox/netboot/audit.log")
 
 
@@ -139,6 +142,17 @@ async def overlay_revert(req: OverlayAction, user=Depends(require_jwt)):
     return {"committed": req.confirm, "result": r["stdout"], "error": r["stderr"] or None}
 
 
+@router.post("/overlay/persist")
+async def overlay_persist(req: OverlayAction, user=Depends(require_jwt)):
+    """Verrouille l'overlay en amorce PERMANENTE (après validation au banc) : retire
+    le compteur de révocation, garde le repli usine runtime. confirm=true requis."""
+    args = [OVERLAY, "persist"] + (["--commit"] if req.confirm else [])
+    r = await _run(*args, timeout=60)
+    if r["rc"] != 0 and req.confirm:
+        raise HTTPException(409, r["stderr"].strip() or "persist échoué")
+    return {"committed": req.confirm, "result": r["stdout"], "error": r["stderr"] or None}
+
+
 @router.post("/overlay/confirm-healthy")
 async def overlay_confirm_healthy(user=Depends(require_jwt)):
     """Marque le boot courant comme sain (bootcount=0)."""
@@ -154,6 +168,131 @@ async def shadow(user=Depends(require_jwt)):
         for p in sorted(SHADOW.glob("*")):
             items.append({"name": p.name, "size": p.stat().st_size})
     return {"shadow_dir": str(SHADOW), "items": items}
+
+
+# ── rôle SERVEUR : HTTP/TFTP + profils board (remote config WebUI) ───────────
+
+def _load_profiles() -> List[Dict[str, Any]]:
+    if PROFILES.exists():
+        try:
+            return json.loads(PROFILES.read_text())
+        except Exception:
+            pass
+    return []
+
+
+def _save_profiles(rows: List[Dict[str, Any]]) -> None:
+    PROFILES.parent.mkdir(parents=True, exist_ok=True)
+    tmp = PROFILES.with_suffix(".tmp")
+    tmp.write_text(json.dumps(rows, indent=2))
+    tmp.replace(PROFILES)
+
+
+def _norm_id(mac: str) -> str:
+    return "".join(c for c in (mac or "").lower() if c in "0123456789abcdef")
+
+
+BOOT_LEVELS = ("B0", "B1", "B2", "B3")   # cf. docs/BOOT-LEVELS.md (source × validation)
+
+
+class BoardProfile(BaseModel):
+    id: str                       # MAC (les ':' sont retirés) — clé board
+    model: Optional[str] = None   # mochabin | espressobin-v7 | ...
+    image: Optional[str] = None   # version d'image assignée (clé du catalogue)
+    boot_level: str = "B0"        # B0 local | B1 tftp-brut | B2 http-signé | B3 install-signé
+    srv: Optional[str] = None     # serveur de boot (IP/host) ; None → DHCP serverip
+    note: Optional[str] = None
+
+
+@router.get("/server")
+async def server_status(user=Depends(require_jwt)):
+    """État du rôle serveur de boot (tftpd, nginx /sbxboot, boards publiées)."""
+    r = await _run(SERVE, "status", timeout=20)
+    return {"server": _json_or_raw(r["stdout"]), "error": r["stderr"] or None}
+
+
+@router.post("/server/up")
+async def server_up(user=Depends(require_jwt)):
+    """Active ce host comme source de boot (racines + tftpd-hpa). Non-invasif:
+    n'écrit aucun env U-Boot, ne pose aucun overlay sur ce host."""
+    r = await _run(SERVE, "up", timeout=60)
+    if r["rc"] != 0:
+        raise HTTPException(500, r["stderr"].strip() or "serve up échoué")
+    return {"server": _json_or_raw(r["stdout"])}
+
+
+@router.get("/profiles")
+async def profiles_list(user=Depends(require_jwt)):
+    """Profils board (remote config) : id, modèle, image assignée, mode, serveur."""
+    return {"profiles": _load_profiles()}
+
+
+@router.post("/profiles")
+async def profiles_upsert(p: BoardProfile, user=Depends(require_jwt)):
+    """Crée/met à jour un profil board (clé = id MAC normalisé)."""
+    pid = _norm_id(p.id)
+    if not pid:
+        raise HTTPException(422, "id (MAC) invalide")
+    if p.boot_level not in BOOT_LEVELS:
+        raise HTTPException(422, f"boot_level invalide (attendu {BOOT_LEVELS})")
+    rows = _load_profiles()
+    p.id = pid
+    rows = [r for r in rows if _norm_id(r.get("id", "")) != pid]
+    rows.append(p.model_dump())
+    rows.sort(key=lambda r: r.get("id", ""))
+    _save_profiles(rows)
+    return {"ok": True, "profile": p.model_dump()}
+
+
+@router.delete("/profiles/{board_id}")
+async def profiles_delete(board_id: str, user=Depends(require_jwt)):
+    pid = _norm_id(board_id)
+    rows = [r for r in _load_profiles() if _norm_id(r.get("id", "")) != pid]
+    _save_profiles(rows)
+    return {"ok": True}
+
+
+class PublishReq(BaseModel):
+    board_id: str
+    image: Optional[str] = None   # défaut = image du profil
+
+
+@router.post("/publish")
+async def publish(req: PublishReq, user=Depends(require_jwt)):
+    """Publie les artefacts (boot.fit signé + repli TFTP) d'une board depuis le
+    staging de l'image assignée. Le staging est produit par build-uboot-overlay.sh
+    + l'étape de signature d'image (build-image CI)."""
+    pid = _norm_id(req.board_id)
+    prof = next((r for r in _load_profiles() if _norm_id(r.get("id", "")) == pid), None)
+    if not prof:
+        raise HTTPException(404, "profil board inconnu")
+    level = prof.get("boot_level", "B0")
+    if level == "B0":
+        raise HTTPException(409, "profil en B0 (boot local) — rien à publier (sourcer un niveau B1/B2/B3)")
+    image = req.image or prof.get("image")
+    if not image:
+        raise HTTPException(422, "aucune image assignée à cette board")
+    img_dir = STAGING / image
+    boot_fit = img_dir / "boot.fit"
+    args = [PUBLISH, "--id", pid]
+    if level in ("B2", "B3"):
+        # niveau SIGNÉ : boot.fit requis (cohérence niveau ↔ validation)
+        if not boot_fit.exists():
+            raise HTTPException(409, f"niveau {level} exige un boot.fit signé absent ({boot_fit}) — builder/signer d'abord")
+        args += ["--boot-fit", str(boot_fit)]
+        # B3 : l'image release signée est servie à l'installeur (servie telle quelle)
+    else:  # B1 : binaires bruts (TFTP), aucune signature
+        for opt, name in (("--kernel", "Image"), ("--dtb", "board.dtb"), ("--initrd", "initrd.img")):
+            f = img_dir / name
+            if f.exists():
+                args += [opt, str(f)]
+        if "--kernel" not in args:
+            raise HTTPException(409, f"aucun artefact B1 (Image/dtb/initrd) pour '{image}' dans {img_dir}")
+    r = await _run(*args, timeout=180)
+    if r["rc"] != 0:
+        raise HTTPException(500, r["stderr"].strip() or "publish échoué")
+    await _run(TRIGGERS, "on-image-published", f"BOARD={pid}", f"IMAGE_VER={image}", timeout=30)
+    return {"ok": True, "board": pid, "image": image, "result": r["stdout"]}
 
 
 app.include_router(router)

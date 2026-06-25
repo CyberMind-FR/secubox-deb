@@ -1,0 +1,18 @@
+[
+  {
+    "id": "f0ad4e000001",
+    "model": "mochabin",
+    "image": null,
+    "boot_level": "B0",
+    "srv": null,
+    "note": "gk2 = SERVEUR de boot, untouched (B0 local). Ne pose JAMAIS d'overlay ici."
+  },
+  {
+    "id": "REMPLACER_PAR_MAC_DUT",
+    "model": "mochabin",
+    "image": "secubox-2.39.0",
+    "boot_level": "B2",
+    "srv": "192.168.1.200",
+    "note": "2e MOCHAbin (DUT). B2 = boot.fit signé via HTTP depuis gk2. Passer B1 pour chain-proof TFTP, B3 pour install complet."
+  }
+]
