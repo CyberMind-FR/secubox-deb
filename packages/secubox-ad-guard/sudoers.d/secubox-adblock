@@ -1,0 +1,3 @@
+# SecuBox ad-block DNS sinkhole (#740): let the API user trigger the privileged
+# sync (compile lists + render Unbound + reload) without a password.
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-adblock-sync
