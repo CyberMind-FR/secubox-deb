@@ -155,6 +155,12 @@ type Server struct {
 	// the upstream); cacheable responses on a miss are stored after proxying.
 	// Nil means caching is disabled (--media-cache-dir="").
 	mediaCache *MediaCache
+
+	// visits is the #747 non-attacker visit-statistics aggregator. When non-nil,
+	// every LEGITIMATE (non-blocked, non-misdirected) response is tallied by
+	// client-type / OS / vhost / status / top-IP and flushed to a JSON snapshot
+	// the WAF API geo-maps for the dashboard Visits panel. Nil disables it.
+	visits *VisitStats
 }
 
 // handler returns an http.Handler that:
@@ -194,6 +200,20 @@ func (s *Server) handler() http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// #747 — wrap the writer so we can tally the visit's final status. The
+		// defer records every LEGITIMATE response (excludes the WAF-block 403 and
+		// the unmapped-host 421) into the visit-stats aggregator.
+		var visitHost string
+		if s.visits != nil {
+			sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+			w = sr
+			defer func() {
+				if sr.status != http.StatusForbidden && sr.status != http.StatusMisdirectedRequest {
+					s.visits.Record(visitHost, r.UserAgent(), clientIP(r), sr.status)
+				}
+			}()
+		}
+
 		// Hot-reload check: stat the routes file and swap the map if mtime changed.
 		// Cheap when nothing changed (throttle=0 means one stat per call, but stat
 		// is O(1) and not on the inner response path).
@@ -208,6 +228,7 @@ func (s *Server) handler() http.Handler {
 			host = r.Host
 		}
 		host = strings.ToLower(strings.TrimSpace(host))
+		visitHost = host
 
 		ip, port, ok := s.routeLookup(host)
 		if !ok {
@@ -534,6 +555,10 @@ func main() {
 	// Task 6.1: response media cache.
 	mediaCacheDir := flag.String("media-cache-dir", "/var/cache/secubox/waf/media",
 		"directory for the response media cache (16 MiB/obj, 2 GiB total); empty disables")
+	// #747: non-attacker visit statistics — aggregate legit traffic (client type,
+	// OS, vhost, status, top IPs) flushed to a JSON snapshot the WAF API geo-maps.
+	visitsStats := flag.String("visits-stats", "/var/log/secubox/waf/visits-stats.json",
+		"path for the non-attacker visit-stats JSON snapshot (client type/OS/vhost/geo); empty disables")
 	// Body inspection cap: only the first N bytes of the request body are scanned.
 	// Payloads beyond this offset are NOT inspected (documented parity gap vs Python full-body scan).
 	// Raise for stricter coverage; truncation events are always audit-logged regardless of this cap.
@@ -578,6 +603,13 @@ func main() {
 		log.Printf("sbxwaf: media-cache enabled → %s (maxObj=16MiB, maxTotal=2GiB)", *mediaCacheDir)
 	}
 
+	// #747: non-attacker visit statistics. Disabled when --visits-stats is empty.
+	var visits *VisitStats
+	if *visitsStats != "" {
+		visits = NewVisitStats(*visitsStats)
+		log.Printf("sbxwaf: visit-stats enabled → %s (flush %s)", *visitsStats, visitFlushInterval)
+	}
+
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
@@ -591,6 +623,8 @@ func main() {
 		cookieAudit: cookieAudit,
 		// Task 6.1: response media cache.
 		mediaCache: mediaCache,
+		// #747: non-attacker visit statistics.
+		visits: visits,
 		// Body inspection cap (--max-body-inspect).
 		maxBodyInspect: *maxBodyInspectFlag,
 		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
