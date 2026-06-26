@@ -209,6 +209,7 @@ type Proxy struct {
 	portal  string        // portal base URL for /__toolbox/* reverse-proxy (banner assets)
 	ads     *adStats      // #662 — ad-block metrics aggregator (flushed to the portal)
 	cand    *adCandidates // #662 — ad-candidate learning feed (flushed with ads to the portal)
+	pin     *pinCandidates // #740 — cert-pinning splice candidates (rides the ad-event flush)
 	cspDemo bool          // #662 CONSENTED-DEMONSTRATION: relax a page's CSP so the injected loader runs, and flag the bypass (data-csp=1 → 🔓). Default on.
 
 	// analysisRelay gates the per-flow telemetry relay to the dpi/cookies/ja4
@@ -631,6 +632,7 @@ func main() {
 		portal:  *portal,
 		ads:     newAdStats(),
 		cand:    newAdCandidates(),
+		pin:     newPinCandidates(),
 		cspDemo: *cspDemo,
 
 		analysisRelay: *analysisRelay,
@@ -649,7 +651,9 @@ func main() {
 	// (best-effort, fire-and-forget) so the #ads dashboard sees blocks again.
 	// #662 — the candidate feed (px.cand) is drained in the SAME flush so the
 	// learning candidates ride the existing ad-event channel (one POST / 10s).
-	go px.ads.runAdStatsFlusher(*portal, px.cand)
+	// #740 — px.pin (cert-pinning splice candidates, recorded on a client cert
+	// rejection in handleTransparent) is drained in the SAME flush too.
+	go px.ads.runAdStatsFlusher(*portal, px.cand, px.pin)
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
 		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The
