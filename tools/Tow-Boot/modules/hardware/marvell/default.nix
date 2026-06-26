@@ -85,6 +85,29 @@ in
 
             DM_MMC = yes;
 
+            # --- SecuBox netboot (#748): HTTP/TFTP network boot ---
+            NET = yes;
+            CMD_NET = yes;
+            CMD_DHCP = yes;
+            CMD_PING = yes;
+            CMD_TFTPBOOT = yes;
+            CMD_WGET = yes;
+            WGET = yes;
+            PROT_TCP = yes;
+            CMD_BOOTI = yes;
+
+            # --- signed FIT verification (CSPN) ---
+            FIT = yes;
+            FIT_SIGNATURE = yes;
+            RSA = yes;
+            SHA256 = yes;
+            LEGACY_IMAGE_FORMAT = yes;
+
+            # --- anti-brick boot menu + counter ---
+            CMD_BOOTMENU = yes;
+            BOOTCOUNT_LIMIT = yes;
+            BOOTCOUNT_ENV = yes;
+
             # TODO: enable the MV88E6xxx switch chip?
 
             DEFAULT_DEVICE_TREE = freeform ''"armada-7040-mochabin"'';
