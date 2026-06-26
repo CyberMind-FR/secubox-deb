@@ -702,7 +702,13 @@ def _refresh_warm_caches() -> dict:
         cs_alerts = _get_crowdsec_alerts()
     except Exception:
         cs_alerts = []
-    if cs_alerts:
+    # The Go sbxwaf engine (#744) now writes a RICH threat log, so the WAF stats
+    # are real and fresh. Only fall back to the CrowdSec overlay when the engine
+    # produced NOTHING (engine down / log unreadable) — otherwise the overlay's
+    # older, coarser CrowdSec scenarios would clobber the engine's fresh
+    # categories AND push a stale "1h ago" entry to the live attack banner.
+    engine_has_data = (new_stats.get("total_threats", 0) or 0) > 0 or bool(new_alerts)
+    if cs_alerts and not engine_has_data:
         # Defensive: a CrowdSec-overlay failure must NEVER abort the refresh and
         # leave the warm cache frozen — the WAF top_ips/top_vhosts/tracked-attacker
         # data (the dashboard's per-IP/vhost panels) lives in new_stats and must
