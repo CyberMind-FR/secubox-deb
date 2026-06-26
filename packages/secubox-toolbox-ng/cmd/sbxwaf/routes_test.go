@@ -6,7 +6,13 @@ package main
 
 import (
 	"encoding/json"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -36,7 +42,7 @@ func TestRoutesLookup(t *testing.T) {
 		"badport.example":     []any{"127.0.0.1", "notint"}, // skipped
 	})
 
-	r := LoadRoutes(path)
+	r := LoadRoutes(path, nil)
 
 	// Known host → correct backend.
 	ip, port, ok := r.Lookup("gitea.example.com")
@@ -77,7 +83,7 @@ func TestRoutesLookupCaseAndPort(t *testing.T) {
 		"gitea.example.com": []any{"127.0.0.1", 3000},
 	})
 
-	r := LoadRoutes(path)
+	r := LoadRoutes(path, nil)
 
 	// Upper-case variant.
 	_, _, ok := r.Lookup("GITEA.EXAMPLE.COM")
@@ -106,7 +112,7 @@ func TestRoutesHotReload(t *testing.T) {
 		t.Fatalf("write initial: %v", err)
 	}
 
-	r := LoadRoutes(path)
+	r := LoadRoutes(path, nil)
 
 	_, _, ok := r.Lookup("gitea.example.com")
 	if !ok {
@@ -148,4 +154,89 @@ func TestRoutesHotReload(t *testing.T) {
 	if !ok {
 		t.Fatal("after reload: gitea.example.com should still be present")
 	}
+}
+
+// sentinelTransport is a minimal http.RoundTripper that records whether it was
+// called and delegates to an inner backend (real http.DefaultTransport).
+type sentinelTransport struct {
+	called atomic.Int64
+	inner  http.RoundTripper
+}
+
+func (s *sentinelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	s.called.Add(1)
+	return s.inner.RoundTrip(req)
+}
+
+// TestRoutesInjectedTransportUsed proves that startup-built proxies use the
+// transport injected via LoadRoutes, not http.DefaultTransport.
+//
+// A sentinel RoundTripper is passed to LoadRoutes.  A request is driven
+// through the route's cached *httputil.ReverseProxy (retrieved via ProxyFor).
+// After the request the sentinel's call count must be > 0.
+func TestRoutesInjectedTransportUsed(t *testing.T) {
+	// Stand up a stub backend.
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer backend.Close()
+
+	// Write a routes file pointing "waf.example.com" at the stub backend.
+	backendHost := backend.Listener.Addr().String()
+	// backendHost is "127.0.0.1:PORT" — extract ip and port.
+	backendIP, backendPortStr, err := splitHostPortStr(backendHost)
+	if err != nil {
+		t.Fatalf("split backend addr: %v", err)
+	}
+	backendPortNum := mustParsePort(t, backendPortStr)
+
+	path := writeRoutes(t, map[string]any{
+		"waf.example.com": []any{backendIP, backendPortNum},
+	})
+
+	// Build a sentinel transport wrapping the real transport so connections
+	// actually reach the stub backend.
+	sentinel := &sentinelTransport{inner: http.DefaultTransport}
+
+	// LoadRoutes with the sentinel — startup-built proxies must use it.
+	r := LoadRoutes(path, sentinel)
+
+	// Retrieve the cached proxy for "waf.example.com" (built at LoadRoutes time,
+	// before any request).
+	proxy := r.ProxyFor("waf.example.com")
+	if proxy == nil {
+		t.Fatal("ProxyFor(waf.example.com) = nil; expected a cached proxy")
+	}
+
+	// Drive a request through the cached proxy.
+	req := httptest.NewRequest(http.MethodGet, "http://waf.example.com/", nil)
+	req.Host = "waf.example.com"
+	rec := httptest.NewRecorder()
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("proxy returned %d; want 200", rec.Code)
+	}
+
+	// THE ASSERTION: sentinel must have been called (proves the startup-built
+	// proxy uses the injected transport, not http.DefaultTransport).
+	if n := sentinel.called.Load(); n == 0 {
+		t.Fatal("sentinel transport was NOT called — startup proxy used DefaultTransport instead of the injected transport")
+	}
+}
+
+// splitHostPortStr splits "host:port" returning both as strings.
+func splitHostPortStr(addr string) (host, port string, err error) {
+	return net.SplitHostPort(addr)
+}
+
+// mustParsePort converts a port string to int, failing the test on error.
+func mustParsePort(t *testing.T, s string) int {
+	t.Helper()
+	p, err := strconv.Atoi(s)
+	if err != nil {
+		t.Fatalf("parse port %q: %v", s, err)
+	}
+	return p
 }

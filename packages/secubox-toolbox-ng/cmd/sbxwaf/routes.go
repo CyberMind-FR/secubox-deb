@@ -153,9 +153,7 @@ func (r *Routes) buildEntries(parsed map[string][2]string) map[string]routeEntry
 				Host:   net.JoinHostPort(ip, strconv.Itoa(port)),
 			}
 			p := httputil.NewSingleHostReverseProxy(target)
-			if r.transport != nil {
-				p.Transport = r.transport
-			}
+			p.Transport = r.transport
 			// ModifyResponse stamps the WAF sentinel header (mirrors handler's
 			// inline proxy; centralised here so cached proxies also stamp it).
 			p.ModifyResponse = func(resp *http.Response) error {
@@ -180,8 +178,16 @@ func (r *Routes) buildEntries(parsed map[string][2]string) map[string]routeEntry
 // ready for Lookup.  A missing or unreadable file yields an empty (but
 // functional) Routes — the caller will get ok=false for every Lookup until a
 // valid file appears and Maybe() triggers a reload.
-func LoadRoutes(path string) *Routes {
-	r := &Routes{}
+//
+// transport is the shared *http.Transport (connection pool + dial timeout) that
+// every reverse-proxy built at load time — and at each hot-reload — will use.
+// Passing nil falls back to http.DefaultTransport gracefully (useful in tests
+// that don't care about transport tuning).
+func LoadRoutes(path string, transport http.RoundTripper) *Routes {
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	r := &Routes{transport: transport}
 
 	// Initial load.
 	parsed := loadRoutesJSON(path)
