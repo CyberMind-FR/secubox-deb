@@ -115,6 +115,12 @@ type Server struct {
 	// When non-nil, ModifyResponse calls Record for every upstream response.
 	// Nil means auditing is disabled (--cookie-audit-log="").
 	cookieAudit *CookieAudit
+
+	// mediaCache is the Task 6.1 response media cache.
+	// When non-nil, GET requests are served from cache on a hit (bypassing
+	// the upstream); cacheable responses on a miss are stored after proxying.
+	// Nil means caching is disabled (--media-cache-dir="").
+	mediaCache *MediaCache
 }
 
 // handler returns an http.Handler that:
@@ -304,6 +310,72 @@ func (s *Server) handler() http.Handler {
 			}
 		}
 
+		// Task 6.1 — media cache hit: serve from disk, bypass upstream.
+		// Only for GET requests; cache is nil-safe.
+		if s.mediaCache != nil && r.Method == http.MethodGet {
+			if cachedBody, cachedHdr, hit := s.mediaCache.Get(r.URL.String()); hit {
+				for k, vs := range cachedHdr {
+					for _, v := range vs {
+						w.Header().Set(k, v)
+					}
+				}
+				w.Header().Set("X-SecuBox-Cache", "hit")
+				w.Header().Set("X-SecuBox-WAF", "inspected")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(cachedBody)
+				return
+			}
+
+			// Cache miss: wrap the proxy's ModifyResponse to capture and store the
+			// response body after proxying. We need a wrapping proxy here so we can
+			// intercept ModifyResponse without altering the cached proxy instance.
+			//
+			// Strategy: build a thin wrapper around the real proxy's transport that
+			// buffers (up to maxObj bytes) and stores the response body.  We cannot
+			// override proxy.ModifyResponse on a shared cached proxy safely, so
+			// instead we use a ResponseWriter wrapper that tees the body to cache.
+			//
+			// Use a capturing ResponseWriter: let the upstream write normally to
+			// the real ResponseWriter but simultaneously capture response headers +
+			// body for MaybeStore.  The client always receives the full body —
+			// we only buffer up to maxObj bytes for the cache and discard the rest
+			// (the real body still flows through to the client).
+			cw := &cachingResponseWriter{
+				ResponseWriter: w,
+				maxCapture:     s.mediaCache.maxObj,
+			}
+
+			// Wire a ModifyResponse on the fallback proxy path that we'll replace
+			// if using a cached proxy. For the cached-proxy path, we instead use
+			// a post-ServeHTTP hook via cw.
+			//
+			// Build an ad-hoc proxy that wraps the response via ModifyResponse.
+			// We clone the existing proxy's behaviour but intercept ModifyResponse
+			// to capture the body.  This avoids mutating the shared proxy instance.
+			//
+			// Simplest correct approach: let the real proxy handle the response
+			// (including its own ModifyResponse for WAF headers), then store
+			// whatever cw captured.
+			proxy.ServeHTTP(cw, r)
+
+			// After proxying: if the response was cacheable and we captured enough
+			// of the body, store it.  The full body was already written to the
+			// client by the real proxy — we only stored a copy.
+			// Synchronous: MaybeStore is fast (disk write) and must complete before
+			// the next request can get a cache hit.
+			sc := cw.statusCode
+			if sc == 0 {
+				sc = http.StatusOK // implicit 200 when WriteHeader was never called
+			}
+			if sc == http.StatusOK && cw.captured {
+				s.mediaCache.MaybeStore(r, &http.Response{
+					StatusCode: sc,
+					Header:     cw.respHeader,
+				}, cw.body)
+			}
+			return
+		}
+
 		proxy.ServeHTTP(w, r)
 	})
 }
@@ -341,6 +413,9 @@ func main() {
 	// Task 5.1: RGPD Set-Cookie ledger.
 	cookieAuditLog := flag.String("cookie-audit-log", DefaultCookieAuditLog,
 		"path for RGPD cookie audit JSONL ledger (one record per Set-Cookie); empty disables")
+	// Task 6.1: response media cache.
+	mediaCacheDir := flag.String("media-cache-dir", "/var/cache/secubox/waf/media",
+		"directory for the response media cache (16 MiB/obj, 2 GiB total); empty disables")
 	flag.Parse()
 
 	// rules is consumed below when --rules is provided.
@@ -366,6 +441,13 @@ func main() {
 		log.Printf("sbxwaf: cookie-audit ledger enabled → %s", *cookieAuditLog)
 	}
 
+	// Task 6.1: response media cache. Disabled when --media-cache-dir is empty.
+	var mediaCache *MediaCache
+	if *mediaCacheDir != "" {
+		mediaCache = NewMediaCache(*mediaCacheDir)
+		log.Printf("sbxwaf: media-cache enabled → %s (maxObj=16MiB, maxTotal=2GiB)", *mediaCacheDir)
+	}
+
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
@@ -377,6 +459,8 @@ func main() {
 		// crowdsec: wired below when --crowdsec-url and --crowdsec-jwt-file are set.
 		// Task 5.1: RGPD cookie-audit ledger.
 		cookieAudit: cookieAudit,
+		// Task 6.1: response media cache.
+		mediaCache: mediaCache,
 	}
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
 
