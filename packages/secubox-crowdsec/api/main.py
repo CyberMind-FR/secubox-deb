@@ -557,9 +557,15 @@ async def health():
             capture_output=True, text=True, timeout=3
         )
         nft_output = result.stdout if result.returncode == 0 else ""
-        checks["nftables_crowdsec"] = "ip crowdsec" in nft_output
-        checks["nftables_crowdsec6"] = "ip6 crowdsec6" in nft_output
-        checks["nftables_ok"] = checks["nftables_crowdsec"] and checks["nftables_crowdsec6"]
+        # The SecuBox firewall-bouncer uses a CUSTOM table name (inet
+        # secubox_blacklist), not the upstream default `ip crowdsec` / `ip6
+        # crowdsec6` — so the legacy probe always missed it and reported the
+        # firewall "not OK" even though it was active. Detect both the custom and
+        # the default names, and base nftables_ok on the GENERAL SecuBox firewall
+        # being loaded (inet filter / secubox_blacklist), not on the IPv6 anchor.
+        checks["nftables_crowdsec"] = ("ip crowdsec" in nft_output) or ("secubox_blacklist" in nft_output)
+        checks["nftables_crowdsec6"] = ("ip6 crowdsec6" in nft_output) or ("crowdsec6" in nft_output)
+        checks["nftables_ok"] = ("inet filter" in nft_output) or ("secubox_blacklist" in nft_output)
     except Exception as e:
         log.warning("nftables check failed: %s", e)
         checks["nftables_ok"] = False
