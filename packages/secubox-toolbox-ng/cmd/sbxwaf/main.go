@@ -423,7 +423,7 @@ func main() {
 	routesFile := flag.String("routes", "", "path to haproxy-routes.json (hot-reloaded on mtime change)")
 	rules := flag.String("rules", "", "path to rules file (loaded by Task 2.1)")
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
-	threatLog := flag.String("threat-log", "/var/log/secubox/waf-threats.log",
+	threatLog := flag.String("threat-log", "/var/log/secubox/waf/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
 	// Task 4.1: CrowdSec LAPI bridge flags.
 	crowdsecURL := flag.String("crowdsec-url", "",

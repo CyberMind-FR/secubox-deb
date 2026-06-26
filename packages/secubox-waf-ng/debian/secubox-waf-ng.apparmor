@@ -5,7 +5,9 @@
 # mode by the postinst (aa-enforce /etc/apparmor.d/usr.sbin.sbxwaf).
 #
 # Surface minimisation:
-#   - rw   : /var/log/secubox/**          (threat log, cookie-audit JSONL)
+#   - r    : /var/log/secubox/            (traverse shared parent only — L1 fix)
+#   - rw   : /var/log/secubox/waf/**      (threat log)
+#   - rw   : /var/log/secubox/cookie-audit/** (cookie-audit JSONL)
 #   - rw   : /var/cache/secubox/waf/**    (media response cache)
 #   - rw   : /run/secubox/**              (Unix sockets, PID files)
 #   - r    : /etc/secubox/waf/**          (routes, rules, CA cert)
@@ -35,8 +37,13 @@
   /etc/secubox/secrets/**     r,
 
   # ── Log output (read/write, append) ──────────────────────────────────────
-  /var/log/secubox/           rw,
-  /var/log/secubox/**         rw,
+  # L1 fix: shared parent needs only traverse (r), not write.
+  # WAF-owned leaf dirs get rw so the binary can create + append log files.
+  /var/log/secubox/                    r,
+  /var/log/secubox/waf/                rw,
+  /var/log/secubox/waf/**              rw,
+  /var/log/secubox/cookie-audit/       rw,
+  /var/log/secubox/cookie-audit/**     rw,
 
   # ── Media cache (read/write) ──────────────────────────────────────────────
   /var/cache/secubox/         r,

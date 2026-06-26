@@ -49,6 +49,12 @@ case "$1" in
     mkdir -p /var/log/secubox
     chmod 0755 /var/log/secubox 2>/dev/null || true
 
+    # WAF threat log leaf dir (restricted to secubox-waf, not the shared parent).
+    # Default threat log path: /var/log/secubox/waf/waf-threats.log (M1 fix).
+    mkdir -p /var/log/secubox/waf
+    chown secubox-waf:secubox-waf /var/log/secubox/waf
+    chmod 0750 /var/log/secubox/waf
+
     # Cookie-audit JSONL ledger (leaf dir — restricted to secubox-waf).
     mkdir -p /var/log/secubox/cookie-audit
     chown secubox-waf:secubox-waf /var/log/secubox/cookie-audit
