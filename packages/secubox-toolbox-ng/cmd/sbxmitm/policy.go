@@ -57,6 +57,7 @@ type PolicyOpts struct {
 	LearnedPath      string   // learned-trackers.txt    (_LEARNED_PATH)
 	SpliceSeedPath   string   // conf/tls-splice-seed.conf (SEED_PATH)
 	SpliceLearnPath  string   // splice-learned.txt      (LEARNED_PATH)
+	SpliceWlPath     string   // splice-whitelist.txt — OPERATOR splice list (#740)
 	PureTrackersPath string   // pure-trackers.txt       (PURE_PATH)
 	FortknoxSites    []string // filters.json fortknox_sites
 	SelfDomains      []string // _SELF_REGS (default {secubox.in}, env SECUBOX_SELF_DOMAINS)
@@ -70,6 +71,7 @@ func defaultPolicyOpts() PolicyOpts {
 		LearnedPath:      "/var/lib/secubox/toolbox/learned-trackers.txt",
 		SpliceSeedPath:   envOr("SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"),
 		SpliceLearnPath:  envOr("SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"),
+		SpliceWlPath:     envOr("SECUBOX_SPLICE_WHITELIST", "/var/lib/secubox/toolbox/splice-whitelist.txt"),
 		PureTrackersPath: envOr("SECUBOX_PURE_TRACKERS", "/var/lib/secubox/toolbox/pure-trackers.txt"),
 	}
 	// _SELF_REGS: env SECUBOX_SELF_DOMAINS (comma-split), default {secubox.in}.
@@ -107,6 +109,7 @@ type Policy struct {
 	allow       map[string]bool // ad-allowlist (host or registrable, lowercased)
 	spliceSeed  map[string]bool // splice seed patterns
 	spliceLearn map[string]bool // splice learned patterns
+	spliceWl    map[string]bool // OPERATOR splice whitelist (#740): force passthrough
 	never       map[string]bool // pure-trackers ∪ fortknox (splice never-set)
 	selfRegs    map[string]bool // own-infra registrable domains
 	selfDomains []string        // own-infra (for the host==d || host endswith .d guard)
@@ -240,6 +243,7 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 		allow:          loadLines(opts.AllowPath),
 		spliceSeed:     loadLines(opts.SpliceSeedPath),
 		spliceLearn:    loadLines(opts.SpliceLearnPath),
+		spliceWl:       loadLines(opts.SpliceWlPath),
 		never:          never,
 		selfRegs:       selfRegs,
 		selfDomains:    selfDomains,
@@ -263,6 +267,8 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 			apply: func(p *Policy, s map[string]bool) { p.spliceSeed = s }},
 		{path: opts.SpliceLearnPath, stripComm: true, lastMtime: statMtime(opts.SpliceLearnPath),
 			apply: func(p *Policy, s map[string]bool) { p.spliceLearn = s }},
+		{path: opts.SpliceWlPath, stripComm: true, lastMtime: statMtime(opts.SpliceWlPath),
+			apply: func(p *Policy, s map[string]bool) { p.spliceWl = s }},
 		{path: opts.PureTrackersPath, stripComm: true, lastMtime: statMtime(opts.PureTrackersPath),
 			apply: func(p *Policy, s map[string]bool) {
 				// pure-trackers ∪ fortknox → never-set (mirrors LoadPolicy above).
@@ -448,6 +454,12 @@ func (p *Policy) shouldSplice(sni string) bool {
 	s := strings.Trim(strings.ToLower(sni), ".")
 	if s == "" {
 		return false
+	}
+	// #740 — OPERATOR whitelist is authoritative: an explicitly whitelisted host
+	// (e.g. a cert-pinned app like ChatGPT, or an auth API that rejects our cert)
+	// is ALWAYS spliced (passthrough), winning even over the never-set.
+	if hostMatches(s, p.spliceWl) {
+		return true
 	}
 	if hostMatches(s, p.never) {
 		return false
