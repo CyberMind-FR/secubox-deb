@@ -161,6 +161,11 @@ type Server struct {
 	// client-type / OS / vhost / status / top-IP and flushed to a JSON snapshot
 	// the WAF API geo-maps for the dashboard Visits panel. Nil disables it.
 	visits *VisitStats
+
+	// widgetHosts are the first-party host suffixes (gk2.secubox.in, …) into whose
+	// HTML responses the WAF injects the SecuBox health/visit widget (#747). Empty
+	// disables injection. Set from --widget-hosts.
+	widgetHosts []string
 }
 
 // handler returns an http.Handler that:
@@ -259,6 +264,8 @@ func (s *Server) handler() http.Handler {
 				if ca := s.cookieAudit; ca != nil {
 					ca.Record(host, resp.Request, resp)
 				}
+				// #747: inject the SecuBox health/visit widget on first-party HTML.
+				applyWidget(resp, host, s.visits, s.widgetHosts)
 				return nil
 			}
 			proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
@@ -559,6 +566,9 @@ func main() {
 	// OS, vhost, status, top IPs) flushed to a JSON snapshot the WAF API geo-maps.
 	visitsStats := flag.String("visits-stats", "/var/log/secubox/waf/visits-stats.json",
 		"path for the non-attacker visit-stats JSON snapshot (client type/OS/vhost/geo); empty disables")
+	// #747: WAF-injected health/visit widget on FIRST-PARTY sites (HTML only).
+	widgetHosts := flag.String("widget-hosts", "gk2.secubox.in,secubox.in,cybermind.fr",
+		"comma-separated first-party host suffixes to inject the SecuBox health/visit widget into; empty disables")
 	// Body inspection cap: only the first N bytes of the request body are scanned.
 	// Payloads beyond this offset are NOT inspected (documented parity gap vs Python full-body scan).
 	// Raise for stricter coverage; truncation events are always audit-logged regardless of this cap.
@@ -625,6 +635,8 @@ func main() {
 		mediaCache: mediaCache,
 		// #747: non-attacker visit statistics.
 		visits: visits,
+		// #747: first-party host suffixes for the injected health/visit widget.
+		widgetHosts: splitCSV(*widgetHosts),
 		// Body inspection cap (--max-body-inspect).
 		maxBodyInspect: *maxBodyInspectFlag,
 		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
@@ -660,6 +672,8 @@ func main() {
 		r := LoadRoutes(*routesFile, sharedTransport)
 		// Task 5.1: inject cookie audit so Routes-built proxies also record cookies.
 		r.cookieAudit = cookieAudit
+		r.visits = srv.visits
+		r.widgetHosts = srv.widgetHosts
 		srv.routes = r
 		srv.routeLookup = r.Lookup
 		log.Printf("sbxwaf: routes loaded from %s (%d entries)", *routesFile, func() int {
