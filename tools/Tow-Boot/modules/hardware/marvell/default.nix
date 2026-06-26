@@ -116,6 +116,10 @@ in
             PHY_FIXED = yes;
             PHY_MARVELL = yes;
 
+            # --- Marvell PPv2 SoC NIC (mvpp2) — required to drive the eth ports (#748) ---
+            MVPP2 = yes;
+            PHY_GIGE = yes;
+
             DEFAULT_DEVICE_TREE = freeform ''"armada-7040-mochabin"'';
           })
         ];
