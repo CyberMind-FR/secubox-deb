@@ -50,6 +50,22 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
 )
 
+// upstreamErrorCode maps a round-trip error to the appropriate HTTP error code,
+// mirroring the Python error() hook logic (~line 1106):
+//   - net.Error with Timeout() → 504 Gateway Timeout
+//   - connection refused / dial failure → 502 Bad Gateway
+//   - all other errors → 503 Service Unavailable
+func upstreamErrorCode(err error) int {
+	if ne, ok := err.(net.Error); ok && ne.Timeout() {
+		return http.StatusGatewayTimeout // 504
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "connection refused") || strings.Contains(msg, "dial") {
+		return http.StatusBadGateway // 502
+	}
+	return http.StatusServiceUnavailable // 503
+}
+
 // CrowdSecReporter is the seam for Task 4.1 — CrowdSec LAPI bridge.
 // When a client IP is banned, the handler calls crowdsec.Report if the field
 // is non-nil.  Task 4.1 implements a concrete type (e.g. *CrowdSecClient) and
@@ -207,8 +223,14 @@ func (s *Server) handler() http.Handler {
 				return nil
 			}
 			proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-				w.Header().Set("X-SecuBox-WAF", "inspected")
-				http.Error(w, "502 Bad Gateway: "+err.Error(), http.StatusBadGateway)
+				// Task 7.1: themed error pages — mirror the Python error() hook mapping.
+				// Timeout → 504, connection refused → 502, other → 503.
+				code := upstreamErrorCode(err)
+				reqHost := r.Host
+				if bare, _, e := net.SplitHostPort(reqHost); e == nil {
+					reqHost = bare
+				}
+				writeErrorPage(w, code, reqHost)
 			}
 		}
 

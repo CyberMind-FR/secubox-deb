@@ -177,8 +177,13 @@ func (r *Routes) buildEntries(parsed map[string][2]string) map[string]routeEntry
 				return nil
 			}
 			p.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
-				w.Header().Set("X-SecuBox-WAF", "inspected")
-				http.Error(w, "502 Bad Gateway: "+err.Error(), http.StatusBadGateway)
+				// Task 7.1: themed error pages — mirror the Python error() hook mapping.
+				code := upstreamErrorCode(err)
+				reqHost := req.Host
+				if bare, _, e := net.SplitHostPort(reqHost); e == nil {
+					reqHost = bare
+				}
+				writeErrorPage(w, code, reqHost)
 			}
 			r.proxyCache.Store(key, p)
 			proxy = p
