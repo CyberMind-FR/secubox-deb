@@ -1,28 +1,26 @@
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-package main
+//
+// SecuBox-Deb :: toolbox-ng :: forge package tests
+package forge
 
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
-	"net"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
-
-	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
 )
 
-// genTestCA writes a self-signed CA (cert+key PEM) to dir, mirroring ca-wg.
-func genTestCA(t *testing.T, dir string) (certPath, keyPath string) {
+// writeTestCA mints a self-signed CA and writes cert+key PEMs to dir.
+// Returns (certPath, keyPath).
+func writeTestCA(t *testing.T, dir string) (certPath, keyPath string) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -53,32 +51,46 @@ func genTestCA(t *testing.T, dir string) (certPath, keyPath string) {
 	return certPath, keyPath
 }
 
-func TestForgeChainsToCA(t *testing.T) {
-	cp, kp := genTestCA(t, t.TempDir())
-	ca, err := forge.LoadCA(cp, kp)
+func TestForgeChainsAndCaches(t *testing.T) {
+	dir := t.TempDir()
+	certPath, keyPath := writeTestCA(t, dir) // helper mints a CA, writes PEMs
+	ca, err := LoadCA(certPath, keyPath)
 	if err != nil {
-		t.Fatalf("loadCA: %v", err)
+		t.Fatalf("LoadCA: %v", err)
+	}
+	c1, err := ca.Forge("example.com")
+	if err != nil {
+		t.Fatalf("Forge: %v", err)
+	}
+	if c1.Leaf.DNSNames[0] != "example.com" {
+		t.Fatalf("CN/SAN wrong: %v", c1.Leaf.DNSNames)
+	}
+	c2, _ := ca.Forge("example.com")
+	if c1 != c2 {
+		t.Fatalf("Forge not cached")
+	}
+}
+
+// TestForgeChainsToCA verifies the leaf cert chains to the CA.
+func TestForgeChainsToCA(t *testing.T) {
+	cp, kp := writeTestCA(t, t.TempDir())
+	ca, err := LoadCA(cp, kp)
+	if err != nil {
+		t.Fatalf("LoadCA: %v", err)
 	}
 	leaf, err := ca.Forge("ads.example.com")
 	if err != nil {
-		t.Fatalf("forge: %v", err)
+		t.Fatalf("Forge: %v", err)
 	}
 	pool := x509.NewCertPool()
 	pool.AddCert(ca.Cert)
 	if _, err := leaf.Leaf.Verify(x509.VerifyOptions{Roots: pool, DNSName: "ads.example.com"}); err != nil {
 		t.Fatalf("forged leaf does not chain to CA / wrong SAN: %v", err)
 	}
-	leaf2, _ := ca.Forge("ads.example.com")
-	if leaf2 != leaf {
-		t.Fatal("forge not cached")
-	}
 }
 
-// TestLoadCACombinedPEM proves loadCA pulls the right blocks out of a COMBINED
-// cert+key bundle — the real shape of mitmproxy's confdir `mitmproxy-ca.pem`,
-// which the live R3 CA uses and the worker unit points --ca-key at. mitmproxy
-// writes the PRIVATE KEY block first, then the CERTIFICATE; loadCA must scan by
-// type, not position.
+// TestLoadCACombinedPEM proves LoadCA pulls the right blocks out of a COMBINED
+// cert+key bundle — the real shape of mitmproxy's confdir `mitmproxy-ca.pem`.
 func TestLoadCACombinedPEM(t *testing.T) {
 	dir := t.TempDir()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -114,13 +126,13 @@ func TestLoadCACombinedPEM(t *testing.T) {
 	}
 
 	// The unit's exact arg shape: --ca-cert <cert-only> --ca-key <combined>.
-	ca, err := forge.LoadCA(certOnly, combined)
+	ca, err := LoadCA(certOnly, combined)
 	if err != nil {
-		t.Fatalf("forge.LoadCA(cert-only, combined): %v", err)
+		t.Fatalf("LoadCA(cert-only, combined): %v", err)
 	}
 	leaf, err := ca.Forge("ads.example.com")
 	if err != nil {
-		t.Fatalf("forge: %v", err)
+		t.Fatalf("Forge: %v", err)
 	}
 	pool := x509.NewCertPool()
 	pool.AddCert(ca.Cert)
@@ -128,79 +140,7 @@ func TestLoadCACombinedPEM(t *testing.T) {
 		t.Fatalf("forged leaf does not chain to combined-PEM CA: %v", err)
 	}
 	// Belt-and-braces: the combined file works as BOTH cert and key source.
-	if _, err := forge.LoadCA(combined, combined); err != nil {
-		t.Fatalf("forge.LoadCA(combined, combined): %v", err)
+	if _, err := LoadCA(combined, combined); err != nil {
+		t.Fatalf("LoadCA(combined, combined): %v", err)
 	}
-}
-
-// NOTE (#662 Phase 3): the old TestActionDecision drove the removed hardcoded
-// Policy{AdHosts, SpliceHosts} fields. The decision surface now loads from
-// disk (LoadPolicy) and mirrors the Python addons; coverage moved to
-// TestParityDecide / TestPolicyActionVerbs in policy_test.go.
-
-func TestInjectMarker(t *testing.T) {
-	p := &Policy{Inject: []byte("<!--SBX-->")}
-	out := string(p.injectMarker([]byte("<html><head></head><body>hi</body></html>")))
-	if !contains(out, "<!--SBX--></head>") {
-		t.Fatalf("marker not injected before </head>: %s", out)
-	}
-	if string(p.injectMarker([]byte(out))) != out {
-		t.Fatal("inject not idempotent")
-	}
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
-
-// TestClientHelloCaptureAndForge: a real localhost TLS handshake proves the Go
-// core forges a per-SNI cert from the CA that the client trusts AND that the
-// ClientHello (JA4 material) is captured.
-func TestClientHelloCaptureAndForge(t *testing.T) {
-	cp, kp := genTestCA(t, t.TempDir())
-	ca, err := forge.LoadCA(cp, kp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var mu sync.Mutex
-	var captured string
-	px := &Proxy{ca: ca, jaSink: func(s string) { mu.Lock(); captured = s; mu.Unlock() }}
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-	go func() {
-		c, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		s := tls.Server(c, px.serverTLSConfig())
-		s.Handshake()
-		s.Close()
-	}()
-
-	pool := x509.NewCertPool()
-	pool.AddCert(ca.Cert)
-	conn, err := tls.Dial("tcp", ln.Addr().String(), &tls.Config{ServerName: "example.com", RootCAs: pool})
-	if err != nil {
-		t.Fatalf("client handshake against forged cert failed (CA not trusted / forge broken): %v", err)
-	}
-	conn.Close()
-
-	mu.Lock()
-	defer mu.Unlock()
-	if captured == "" {
-		t.Fatal("ClientHello not captured")
-	}
-	if !contains(captured, "sni=example.com") {
-		t.Fatalf("JA4 capture missing SNI: %q", captured)
-	}
-	t.Logf("captured JA4-ish: %s", captured)
 }

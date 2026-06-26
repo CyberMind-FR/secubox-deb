@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
 )
 
 func benchCA(b *testing.B) (string, string) {
@@ -49,12 +51,12 @@ func benchCA(b *testing.B) (string, string) {
 // load (warm forge cache). req/s should rise ~linearly with -cpu (no GIL).
 func BenchmarkHandshake(b *testing.B) {
 	cp, kp := benchCA(b)
-	ca, err := loadCA(cp, kp)
+	ca, err := forge.LoadCA(cp, kp)
 	if err != nil {
 		b.Fatal(err)
 	}
 	px := &Proxy{ca: ca}
-	if _, err := ca.forge("example.com"); err != nil { // warm cache
+	if _, err := ca.Forge("example.com"); err != nil { // warm cache
 		b.Fatal(err)
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -77,7 +79,7 @@ func BenchmarkHandshake(b *testing.B) {
 		}
 	}()
 	pool := x509.NewCertPool()
-	pool.AddCert(ca.cert)
+	pool.AddCert(ca.Cert)
 	addr := ln.Addr().String()
 	ccfg := &tls.Config{ServerName: "example.com", RootCAs: pool, MinVersion: tls.VersionTLS12}
 
