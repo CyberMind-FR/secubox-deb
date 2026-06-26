@@ -109,7 +109,12 @@ in
             BOOTCOUNT_LIMIT = yes;
             BOOTCOUNT_ENV = yes;
 
-            # TODO: enable the MV88E6xxx switch chip?
+            # --- MV88E6xxx DSA switch (88E6141 Topaz) — make lan0-3 netbootable (#748) ---
+            DM_DSA = yes;
+            MV88E6XXX = yes;
+            DM_MDIO = yes;
+            PHY_FIXED = yes;
+            PHY_MARVELL = yes;
 
             DEFAULT_DEVICE_TREE = freeform ''"armada-7040-mochabin"'';
           })
