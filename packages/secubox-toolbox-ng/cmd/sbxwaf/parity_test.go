@@ -55,9 +55,14 @@ type parityFixture struct {
 	Expect string `json:"expect"`
 
 	// KnownGap marks this fixture as a documented gap (RE2 null-byte patterns
-	// that Python catches but Go cannot compile). The test asserts the current
-	// (gap) behaviour and logs a visible KNOWN GAP line.
+	// that Python catches but Go cannot compile, or corpus categories missing from
+	// the Go waf-rules.json). The test asserts the current (gap) behaviour and
+	// logs a visible KNOWN GAP line.
 	KnownGap bool `json:"known_gap"`
+
+	// Note is a human-readable explanation of the gap (ignored by test logic,
+	// parsed here so it round-trips cleanly in JSON unmarshal).
+	Note string `json:"note,omitempty"`
 }
 
 // testdataPath returns the absolute path to testdata/ relative to this test
@@ -96,7 +101,9 @@ func TestWAFParity(t *testing.T) {
 
 	// Shared ban state: accumulates across the entire test run so that
 	// ban-sequence fixtures (hit1 → hit2 → hit3 for the same IP) correctly
-	// drive the ban counter to threshold.
+	// drive the ban counter to threshold.  All other fixtures use distinct
+	// client_ip values so their per-IP ban counter stays at 0 or 1 and never
+	// accidentally flips a "warn" to "ban" due to accumulation from a prior row.
 	ban := NewBan(300*time.Second, 3)
 
 	// Counters for summary.
