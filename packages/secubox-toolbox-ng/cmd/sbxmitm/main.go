@@ -22,137 +22,19 @@ package main
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
 )
-
-// ── CA + per-host leaf forging ──────────────────────────────────────────────
-
-// CA holds the loaded forging CA (reused from ca-wg) + a per-host leaf cache.
-type CA struct {
-	cert  *x509.Certificate
-	key   crypto.Signer
-	mu    sync.Mutex
-	cache map[string]*tls.Certificate
-}
-
-func loadCA(certPath, keyPath string) (*CA, error) {
-	cpem, err := os.ReadFile(certPath)
-	if err != nil {
-		return nil, fmt.Errorf("read ca cert: %w", err)
-	}
-	kpem, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("read ca key: %w", err)
-	}
-	// Scan for the right block TYPE rather than assuming position: the live R3
-	// CA the toolbox forges with (mitmproxy confdir `mitmproxy-ca.pem`) is a
-	// COMBINED cert+key bundle, and --ca-key may point at it. Tolerate cert and
-	// key co-residing in either file, in any order.
-	cblk := firstPEMBlock(cpem, func(b *pem.Block) bool { return b.Type == "CERTIFICATE" })
-	if cblk == nil {
-		return nil, fmt.Errorf("ca cert: no CERTIFICATE PEM block")
-	}
-	cert, err := x509.ParseCertificate(cblk.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse ca cert: %w", err)
-	}
-	kblk := firstPEMBlock(kpem, func(b *pem.Block) bool { return strings.Contains(b.Type, "PRIVATE KEY") })
-	if kblk == nil {
-		return nil, fmt.Errorf("ca key: no PRIVATE KEY PEM block")
-	}
-	key, err := parseKey(kblk.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse ca key: %w", err)
-	}
-	return &CA{cert: cert, key: key, cache: map[string]*tls.Certificate{}}, nil
-}
-
-// firstPEMBlock returns the first PEM block in data satisfying want, or nil.
-// Used to pull a specific block (CERTIFICATE / PRIVATE KEY) out of a file that
-// may hold several (e.g. mitmproxy's combined CA bundle).
-func firstPEMBlock(data []byte, want func(*pem.Block) bool) *pem.Block {
-	for {
-		blk, rest := pem.Decode(data)
-		if blk == nil {
-			return nil
-		}
-		if want(blk) {
-			return blk
-		}
-		data = rest
-	}
-}
-
-func parseKey(der []byte) (crypto.Signer, error) {
-	if k, err := x509.ParsePKCS8PrivateKey(der); err == nil {
-		if s, ok := k.(crypto.Signer); ok {
-			return s, nil
-		}
-	}
-	if k, err := x509.ParsePKCS1PrivateKey(der); err == nil {
-		return k, nil
-	}
-	if k, err := x509.ParseECPrivateKey(der); err == nil {
-		return k, nil
-	}
-	return nil, fmt.Errorf("unsupported CA key format")
-}
-
-// forge returns a leaf cert for host signed by the CA, cached.
-func (c *CA) forge(host string) (*tls.Certificate, error) {
-	host = strings.ToLower(strings.TrimSpace(host))
-	c.mu.Lock()
-	if tc, ok := c.cache[host]; ok {
-		c.mu.Unlock()
-		return tc, nil
-	}
-	c.mu.Unlock()
-
-	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	tmpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: host},
-		// #689 — forged leaves must outlive the (non-evicting) cert cache, else a
-		// long-running worker keeps serving an expired leaf and every client
-		// reports "certificat expiré". 365d forward + 48h back-skew = 367d span,
-		// safely under Apple's 398-day max-validity rule for server certs.
-		NotBefore:    time.Now().Add(-48 * time.Hour),
-		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{host},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, c.cert, c.key.Public(), c.key)
-	if err != nil {
-		return nil, err
-	}
-	leaf, err := x509.ParseCertificate(der) // parsed cert has Raw populated (Verify needs it)
-	if err != nil {
-		return nil, err
-	}
-	tc := &tls.Certificate{Certificate: [][]byte{der, c.cert.Raw}, PrivateKey: c.key, Leaf: leaf}
-	c.mu.Lock()
-	c.cache[host] = tc
-	c.mu.Unlock()
-	return tc, nil
-}
 
 // ── Pure handler logic ───────────────────────────────────────────────────────
 //
@@ -201,7 +83,7 @@ func ja4ish(h *tls.ClientHelloInfo) string {
 // ── CONNECT-proxy MITM wiring ────────────────────────────────────────────────
 
 type Proxy struct {
-	ca      *CA
+	ca      *forge.CA
 	pol     *Policy
 	jaSink  func(string)  // JA4 observations (logged; a sidecar in prod)
 	jarKey  []byte        // anti-track HMAC fake-identity seed (nil → poison off)
@@ -284,7 +166,7 @@ func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo)) *tls
 			if name == "" {
 				name = "unknown.local"
 			}
-			return px.ca.forge(name)
+			return px.ca.Forge(name)
 		},
 	}
 }
@@ -600,7 +482,7 @@ func main() {
 	socialRelay := flag.Bool("social-relay", true,
 		"compute cross-site cookie-tracker edges and POST them to the portal /__toolbox/social-event ingest so the kbin /social graph refills (#662; replaces the decommissioned Python social_graph addon). Hash-only (never raw cookie values); WG-peer flows only; batched + fire-and-forget — a dead/slow portal never affects the proxy. Set false to emit nothing.")
 	flag.Parse()
-	ca, err := loadCA(*caCert, *caKey)
+	ca, err := forge.LoadCA(*caCert, *caKey)
 	if err != nil {
 		log.Fatalf("CA load: %v", err)
 	}
