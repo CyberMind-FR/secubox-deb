@@ -175,7 +175,7 @@ All endpoints require JWT (`Authorization: Bearer <token>`).
 
 ```toml
 [server]
-http_base = "http://boot.gk2.secubox.in"
+http_base = "http://boot.gk2.secubox.in:8099"
 tftp_root = "/srv/secubox/netboot/tftp"
 
 [overlay]
@@ -195,8 +195,9 @@ confirm_required   = true   # all overlay/flash actions need confirm=true
   integrity mechanism, not transport).
 - FIT signature mandatory for B2/B3 profiles; `secubox-netboot-publish`
   refuses unsigned artifacts for those levels.
-- SPI flashing (`Tow-Boot.spi.bin`) is opt-in, requires operator confirmation,
-  and is out of scope until Phase 3.
+- SPI flashing AUTOMATION (the serial-flash CLI) is Phase 2; the
+  `Tow-Boot.spi.bin` artifact itself is produced in Phase 1 for
+  operator-initiated manual flash (opt-in, requires operator confirmation).
 - Audit log: `/var/log/secubox/netboot/audit.log` (append-only, CSPN).
 - Daemon runs as `secubox-netboot` (dedicated user/group, created in
   `debian/postinst`); `fw_setenv` calls use `sudo` with a tight sudoers rule.

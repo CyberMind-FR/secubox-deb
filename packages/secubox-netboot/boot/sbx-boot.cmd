@@ -14,10 +14,11 @@ echo "== SecuBox netboot overlay =="
 if dhcp; then : ; else echo "DHCP KO"; fi
 if test -z "${sbx_srv}"; then setenv sbx_srv ${serverip}; fi
 if test -z "${sbx_id}";  then setenv sbx_id ${ethaddr}; fi
+if test -z "${sbx_port}"; then setenv sbx_port 8099; fi
 echo "server=${sbx_srv} board=${sbx_id}"
 
 # 1) HTTP : boot.fit SIGNÉ assigné à cette board
-if wget ${loadaddr} http://${sbx_srv}/${sbx_id}/boot.fit; then
+if wget ${loadaddr} http://${sbx_srv}:${sbx_port}/${sbx_id}/boot.fit; then
   echo "boot.fit (HTTP) recupere -> verif signature + boot"
   bootm ${loadaddr}
   echo "bootm KO (signature ?) -> repli TFTP"
