@@ -7,20 +7,23 @@
 // and an HTTP handler that reverse-proxies mapped hosts and stamps
 // X-SecuBox-WAF: inspected on every response.
 //
-// Later tasks wire in the real Routes loader (Task 1.2), rules engine (Task 2.1)
-// and ban table (Task 3.1). For now Server holds a routeLookup func field so
-// tests can drive it without any file I/O.
+// Task 1.2: wired the real Routes loader (LoadRoutes / *Routes) so --routes
+// parses haproxy-routes.json and the handler uses cached per-backend
+// *httputil.ReverseProxy instances (no per-request allocation).
+//
+// Later tasks wire in the rules engine (Task 2.1) and ban table (Task 3.1).
+// Server keeps the routeLookup func field so tests can still drive it without
+// file I/O; main() sets it to routes.Lookup when --routes is provided.
 //
 // Design decision — Server struct:
 //   - ca        *forge.CA          wired from --ca-cert/--ca-key (lazy: nil when
 //                                  flags are empty, so tests don't need PEM files)
-//   - routeLookup func(host)(ip,port,ok) — stub for Task 1.2 to replace with
-//                                  *Routes; kept as a field so both tests and
-//                                  cmd/main can inject it cleanly
+//   - routes    *Routes            hot-reload map; nil when --routes is empty
+//   - routeLookup func(host)(ip,port,ok) — set to routes.Lookup in main(), or
+//                                  injected directly by tests
 //   - upstreamTimeout time.Duration
 //
-//   Routes / Rules / Ban fields will be added in Tasks 1.2 / 2.1 / 3.1 as those
-//   packages are implemented. They are NOT declared here to avoid stub coupling.
+//   Rules / Ban fields will be added in Tasks 2.1 / 3.1.
 package main
 
 import (
@@ -38,16 +41,20 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
 )
 
-// Server is the sbxwaf reverse-proxy core. Fields intentionally minimal for
-// Task 1.1; later tasks will extend the struct.
+// Server is the sbxwaf reverse-proxy core.
 type Server struct {
 	// ca holds the loaded forging CA. May be nil when --ca-cert/--ca-key are not
 	// provided (tests, non-TLS deployments).
 	ca *forge.CA
 
+	// routes is the hot-reloadable route map loaded from --routes.
+	// Nil when --routes is empty (dev mode / no routes file).
+	routes *Routes
+
 	// routeLookup resolves a bare hostname (no port) to a backend ip:port.
 	// Returns ok=false for unmapped hosts (→ 421).
-	// Task 1.2 will replace this with a *Routes wrapper loaded from --routes.
+	// In main(), set to routes.Lookup when routes != nil; tests can inject
+	// a custom closure directly.
 	routeLookup func(host string) (ip string, port int, ok bool)
 
 	// upstreamTimeout is the per-request dial+response timeout for the
@@ -56,16 +63,20 @@ type Server struct {
 }
 
 // handler returns an http.Handler that:
-//  1. Strips the port from req.Host and calls routeLookup.
-//  2. Returns 421 Misdirected Request for unmapped hosts.
-//  3. Reverse-proxies matched requests to http://ip:port via httputil.ReverseProxy.
-//  4. Adds X-SecuBox-WAF: inspected to every proxied response.
+//  1. Calls routes.Maybe() (hot-reload check) if routes is set.
+//  2. Strips the port from req.Host and calls routeLookup.
+//  3. Returns 421 Misdirected Request for unmapped hosts.
+//  4. Uses the cached *httputil.ReverseProxy from Routes (no per-request
+//     allocation) when routes is set; falls back to a freshly-built proxy for
+//     test-injected routeLookup closures that bypass Routes.
+//  5. Adds X-SecuBox-WAF: inspected to every proxied response.
 func (s *Server) handler() http.Handler {
 	timeout := s.upstreamTimeout
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
 
+	// Shared transport: one connection pool for all proxied backends.
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout: timeout,
@@ -73,7 +84,21 @@ func (s *Server) handler() http.Handler {
 		ResponseHeaderTimeout: timeout,
 	}
 
+	// Inject the transport into the Routes proxy cache so cached proxies share
+	// the same pool.  Must be done before the first request; handler() is called
+	// once at startup so this is safe.
+	if s.routes != nil {
+		s.routes.transport = transport
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Hot-reload check: stat the routes file and swap the map if mtime changed.
+		// Cheap when nothing changed (throttle=0 means one stat per call, but stat
+		// is O(1) and not on the inner response path).
+		if s.routes != nil {
+			s.routes.Maybe()
+		}
+
 		// Strip port from Host header to get the bare hostname for lookup.
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
@@ -89,24 +114,29 @@ func (s *Server) handler() http.Handler {
 			return
 		}
 
-		target := &url.URL{
-			Scheme: "http",
-			Host:   net.JoinHostPort(ip, strconv.Itoa(port)),
+		// Use the cached proxy from Routes when available (Task 1.2 perf goal:
+		// no per-request *httputil.ReverseProxy allocation).
+		var proxy *httputil.ReverseProxy
+		if s.routes != nil {
+			proxy = s.routes.ProxyFor(host)
 		}
-
-		proxy := httputil.NewSingleHostReverseProxy(target)
-		proxy.Transport = transport
-
-		// ModifyResponse stamps the WAF sentinel header on every proxied response.
-		proxy.ModifyResponse = func(resp *http.Response) error {
-			resp.Header.Set("X-SecuBox-WAF", "inspected")
-			return nil
-		}
-
-		// ErrorHandler: surface transport errors as 502 with the WAF header.
-		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			w.Header().Set("X-SecuBox-WAF", "inspected")
-			http.Error(w, "502 Bad Gateway: "+err.Error(), http.StatusBadGateway)
+		if proxy == nil {
+			// Fallback: tests that inject routeLookup without a *Routes, or a
+			// race between Maybe() reload and ProxyFor (new entry not yet cached).
+			target := &url.URL{
+				Scheme: "http",
+				Host:   net.JoinHostPort(ip, strconv.Itoa(port)),
+			}
+			proxy = httputil.NewSingleHostReverseProxy(target)
+			proxy.Transport = transport
+			proxy.ModifyResponse = func(resp *http.Response) error {
+				resp.Header.Set("X-SecuBox-WAF", "inspected")
+				return nil
+			}
+			proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+				w.Header().Set("X-SecuBox-WAF", "inspected")
+				http.Error(w, "502 Bad Gateway: "+err.Error(), http.StatusBadGateway)
+			}
 		}
 
 		proxy.ServeHTTP(w, r)
@@ -131,23 +161,34 @@ func main() {
 	listen := flag.String("listen", ":8080", "address to listen on (e.g. :8080 or 0.0.0.0:8080)")
 	caCert := flag.String("ca-cert", "", "path to CA certificate PEM file (required for TLS forging)")
 	caKey := flag.String("ca-key", "", "path to CA private key PEM file (or combined cert+key bundle)")
-	routes := flag.String("routes", "", "path to routes JSON/TOML file (loaded by Task 1.2)")
+	routesFile := flag.String("routes", "", "path to haproxy-routes.json (hot-reloaded on mtime change)")
 	rules := flag.String("rules", "", "path to rules file (loaded by Task 2.1)")
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
 	flag.Parse()
 
 	// Silence "unused variable" lint for flags consumed in later tasks.
-	_ = routes
 	_ = rules
 
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
-		// routeLookup: nil-safe stub — all hosts unmapped until Task 1.2 wires
-		// in the real Routes loader. This lets the binary start without a routes
-		// file and answer 421 to every request (useful for smoke-testing).
-		routeLookup: func(host string) (string, int, bool) {
+	}
+
+	// Wire in the real Routes loader when --routes is provided.
+	if *routesFile != "" {
+		r := LoadRoutes(*routesFile)
+		srv.routes = r
+		srv.routeLookup = r.Lookup
+		log.Printf("sbxwaf: routes loaded from %s (%d entries)", *routesFile, func() int {
+			r.mu.RLock()
+			n := len(r.entries)
+			r.mu.RUnlock()
+			return n
+		}())
+	} else {
+		// No routes file: answer 421 to every request (smoke-test / dev mode).
+		srv.routeLookup = func(host string) (string, int, bool) {
 			return "", 0, false
-		},
+		}
 	}
 
 	// CA load is lazy: skip if flags are empty (dev mode / no TLS forging needed).
