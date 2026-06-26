@@ -2872,6 +2872,16 @@ async def admin_social_aggregate(hours: int = 24) -> dict:
     return _s.aggregate(hours=hours)
 
 
+@router.get("/admin/cookie-crosssite")
+async def admin_cookie_crosssite(hours: int = 24, top: int = 50) -> dict:
+    """Operator view : cross-site tracker cookies (a cookie id reused across
+    >= 2 first-party sites) with per-tracker site/client/cookie counts. Read-only
+    over social_edges; same admin gating as the sibling /admin/* routes.
+    """
+    from . import social as _s
+    return _s.cookie_xsite_detail(hours=hours, top_n=top)
+
+
 @router.get("/admin/blacklist")
 async def admin_blacklist() -> dict:
     """Phase 13.A (#521) + 13.B (#522) — enforcement-spine status :
