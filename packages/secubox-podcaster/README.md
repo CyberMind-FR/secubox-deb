@@ -1,58 +1,40 @@
-# secubox-podcaster
+# 🎙️ Podcaster
 
-Modern podcast manager for SecuBox — subscribe, download locally, and relay a
-shareable RSS feed.
+Modern podcast manager
 
-## What it does (v1, #726)
+**Category:** Media
 
-- **Subscribe** by RSS URL or **OPML import** (pure-stdlib feed parsing — no
-  `feedparser` dependency).
-- **Download locally** into `media_path` via an asyncio + httpx queue with
-  per-episode progress.
-- **Relay / share**: a generated RSS of the local library at
-  `/api/v1/podcaster/share/feed.xml`. LAN by default; set `public_base` to your
-  exposed vhost to publish externally.
-- **In-UI service status + TOML config**; modern C3BOX WebUI with inline player.
+## Screenshot
 
-Lyrion integration is deferred to a follow-up (standalone first).
+![Podcaster](../../docs/screenshots/vm/podcaster.png)
 
-## Layout
+## Features
 
-| Path | Role |
-|------|------|
-| `/usr/share/secubox/podcaster/api` | FastAPI app (uvicorn WorkingDirectory) |
-| `/run/secubox/podcaster.sock` | Unix socket |
-| `/var/lib/secubox/podcaster/podcaster.db` | SQLite store |
-| `/var/lib/secubox/podcaster/media/<feed_id>/` | downloaded episodes |
-| `/etc/secubox/podcaster.toml` | config |
-| `/etc/nginx/secubox-routes.d/podcaster.conf` | nginx route (active include) |
+- Feed management
+- Episodes
+- Transcoding
+- RSS publish
 
-## API
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/health`, `/status` | public | service + counts |
-| GET | `/share/feed.xml` | public | shareable RSS of local library |
-| GET | `/media/{id}` | public | stream a downloaded episode |
-| GET/POST/DELETE | `/feeds*` | JWT | manage feeds (+ `/feeds/import-opml`) |
-| GET | `/episodes` | JWT | list (optional `feed_id`, `state`) |
-| POST | `/episodes/{id}/download` | JWT | enqueue download |
-| GET/POST | `/config` | JWT | TOML config |
-
-## Public exposure (relay to the web)
-
-Publish the share feed externally via HAProxy TLS → mitmproxy (never bypass the
-WAF):
+## Installation
 
 ```bash
-haproxyctl vhost add podcast.gk2.secubox.in   # backend = mitmproxy_inspector
-# add the route to BOTH mitmproxy routes files -> 127.0.0.1:<nginx>
-systemctl restart mitmproxy
+# Add SecuBox repository
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+
+# Install package
+sudo apt install secubox-podcaster
 ```
 
-Then set `public_base = "https://podcast.gk2.secubox.in"` in
-`/etc/secubox/podcaster.toml` and restart `secubox-podcaster` so the generated
-feed's enclosure URLs are absolute.
+## Configuration
 
----
-*CyberMind — Gérald Kerma. LicenseRef-CMSD-1.0.*
+Configuration file: `/etc/secubox/podcaster.toml`
+
+## API Endpoints
+
+- `GET /api/v1/podcaster/status` - Module status
+- `GET /api/v1/podcaster/health` - Health check
+
+## License
+
+LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
+See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).

@@ -1,11 +1,6 @@
-# 🔬 SecuBox DPI Analytics
+# 🔬 Deep Packet Inspection
 
-Netifyd-backed analytics layer: top apps, top protocols, bandwidth
-breakdown, talkers, risks. Sets up `tc mirred` to `ifb0` for inline
-inspection. Complements `secubox-netifyd` (daemon lifecycle).
-
-For nDPId-engine analysis with TLS fingerprinting (JA3/JA4), see
-`secubox-ndpid` instead.
+DPI with netifyd/nDPId
 
 **Category:** Monitoring
 
@@ -41,4 +36,5 @@ Configuration file: `/etc/secubox/dpi.toml`
 
 ## License
 
-MIT License - CyberMind © 2024-2026
+LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
+See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).

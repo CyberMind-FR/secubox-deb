@@ -1,8 +1,8 @@
 {
-  "generated": "2026-05-09T11:16:35.123458",
-  "base_url": "https://192.168.1.200:9443",
-  "total_modules": 117,
-  "successful": 117,
+  "generated": "2026-06-26T10:11:32.453975",
+  "base_url": "https://192.168.1.200",
+  "total_modules": 126,
+  "successful": 126,
   "failed": 0,
   "modules": [
     {
@@ -15,7 +15,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:06:38.889961"
+      "timestamp": "2026-06-26T09:37:25.073292"
     },
     {
       "module_id": "admin",
@@ -27,7 +27,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:07:11.788739"
+      "timestamp": "2026-06-26T09:37:35.377419"
     },
     {
       "module_id": "ai-gateway",
@@ -39,7 +39,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:07:45.781013"
+      "timestamp": "2026-06-26T09:37:39.021729"
     },
     {
       "module_id": "ai-insights",
@@ -51,7 +51,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:08:18.772057"
+      "timestamp": "2026-06-26T09:37:57.894637"
     },
     {
       "module_id": "auth",
@@ -63,7 +63,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:08:52.975294"
+      "timestamp": "2026-06-26T09:38:16.828902"
+    },
+    {
+      "module_id": "authelia",
+      "module_name": "Authelia",
+      "category": "Other",
+      "path": "/authelia/",
+      "screenshot_path": "docs/screenshots/vm/authelia.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/authelia-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T09:38:36.021296"
     },
     {
       "module_id": "avatar",
@@ -75,7 +87,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:09:27.366001"
+      "timestamp": "2026-06-26T09:38:55.315536"
     },
     {
       "module_id": "backup",
@@ -87,7 +99,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:09:59.890337"
+      "timestamp": "2026-06-26T09:38:59.057212"
     },
     {
       "module_id": "c3box",
@@ -99,7 +111,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:10:34.338566"
+      "timestamp": "2026-06-26T09:39:18.747541"
     },
     {
       "module_id": "cdn",
@@ -111,7 +123,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:11:09.009321"
+      "timestamp": "2026-06-26T09:39:37.943938"
+    },
+    {
+      "module_id": "certs",
+      "module_name": "Certs",
+      "category": "Other",
+      "path": "/certs/",
+      "screenshot_path": "docs/screenshots/vm/certs.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/certs-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T09:39:56.944550"
     },
     {
       "module_id": "cloner",
@@ -123,7 +147,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:11:43.256589"
+      "timestamp": "2026-06-26T09:40:15.905530"
     },
     {
       "module_id": "config-advisor",
@@ -135,7 +159,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:12:17.743239"
+      "timestamp": "2026-06-26T09:40:34.949557"
     },
     {
       "module_id": "cookies",
@@ -147,7 +171,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:12:50.458000"
+      "timestamp": "2026-06-26T09:40:53.806567"
     },
     {
       "module_id": "crowdsec",
@@ -159,7 +183,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:13:24.391974"
+      "timestamp": "2026-06-26T09:41:12.729203"
     },
     {
       "module_id": "cve-triage",
@@ -171,7 +195,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:14:04.249431"
+      "timestamp": "2026-06-26T09:41:33.075749"
     },
     {
       "module_id": "cyberfeed",
@@ -183,7 +207,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:14:37.697832"
+      "timestamp": "2026-06-26T09:41:43.434114"
     },
     {
       "module_id": "device-intel",
@@ -195,7 +219,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:15:16.123215"
+      "timestamp": "2026-06-26T09:42:02.378281"
     },
     {
       "module_id": "dns",
@@ -207,7 +231,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:15:54.316338"
+      "timestamp": "2026-06-26T09:42:21.268529"
     },
     {
       "module_id": "dns-guard",
@@ -219,7 +243,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:16:34.208076"
+      "timestamp": "2026-06-26T09:42:40.886196"
     },
     {
       "module_id": "dns-provider",
@@ -231,7 +255,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:17:14.701847"
+      "timestamp": "2026-06-26T09:43:00.023915"
     },
     {
       "module_id": "domoticz",
@@ -243,7 +267,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:17:53.623892"
+      "timestamp": "2026-06-26T09:43:19.159201"
     },
     {
       "module_id": "dpi",
@@ -255,7 +279,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:18:25.515073"
+      "timestamp": "2026-06-26T09:43:38.206336"
     },
     {
       "module_id": "droplet",
@@ -267,7 +291,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:19:02.776939"
+      "timestamp": "2026-06-26T09:43:57.349705"
     },
     {
       "module_id": "exposure",
@@ -279,7 +303,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:19:37.287175"
+      "timestamp": "2026-06-26T09:44:16.534805"
     },
     {
       "module_id": "eye-remote",
@@ -291,7 +315,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:20:17.075571"
+      "timestamp": "2026-06-26T09:44:35.584260"
+    },
+    {
+      "module_id": "fmrelay",
+      "module_name": "Fmrelay",
+      "category": "Other",
+      "path": "/fmrelay/",
+      "screenshot_path": "docs/screenshots/vm/fmrelay.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/fmrelay-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T09:44:54.722131"
     },
     {
       "module_id": "gitea",
@@ -303,7 +339,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:20:56.279615"
+      "timestamp": "2026-06-26T09:45:13.982092"
     },
     {
       "module_id": "glances",
@@ -315,7 +351,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:21:28.389072"
+      "timestamp": "2026-06-26T09:45:33.100428"
     },
     {
       "module_id": "gotosocial",
@@ -327,7 +363,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:22:02.969365"
+      "timestamp": "2026-06-26T09:45:52.154006"
+    },
+    {
+      "module_id": "grafana",
+      "module_name": "Grafana",
+      "category": "Other",
+      "path": "/grafana/",
+      "screenshot_path": "docs/screenshots/vm/grafana.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/grafana-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T09:46:11.299688"
     },
     {
       "module_id": "haproxy",
@@ -339,7 +387,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:22:37.177514"
+      "timestamp": "2026-06-26T09:46:30.455680"
     },
     {
       "module_id": "hardening",
@@ -351,7 +399,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:23:15.996011"
+      "timestamp": "2026-06-26T09:46:46.327182"
     },
     {
       "module_id": "hexo",
@@ -363,7 +411,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:23:51.243132"
+      "timestamp": "2026-06-26T09:47:06.901934"
     },
     {
       "module_id": "homeassistant",
@@ -375,31 +423,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:24:28.746513"
+      "timestamp": "2026-06-26T09:47:25.918824"
     },
     {
-      "module_id": "nac",
-      "module_name": "Nac",
-      "category": "Security",
-      "path": "/nac/",
-      "screenshot_path": "docs/screenshots/vm/nac.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/nac-thumb.png",
+      "module_id": "health",
+      "module_name": "Health",
+      "category": "Other",
+      "path": "/health/",
+      "screenshot_path": "docs/screenshots/vm/health.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/health-thumb.png",
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:25:02.603689"
-    },
-    {
-      "module_id": "soc",
-      "module_name": "Soc",
-      "category": "Dashboard",
-      "path": "/soc/",
-      "screenshot_path": "docs/screenshots/vm/soc.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/soc-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-05-09T10:25:43.921892"
+      "timestamp": "2026-06-26T09:47:45.015118"
     },
     {
       "module_id": "identity",
@@ -411,7 +447,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:26:25.799463"
+      "timestamp": "2026-06-26T09:48:04.148416"
     },
     {
       "module_id": "interceptor",
@@ -423,7 +459,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:27:04.549092"
+      "timestamp": "2026-06-26T09:48:23.124705"
     },
     {
       "module_id": "iot-guard",
@@ -435,7 +471,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:27:47.332965"
+      "timestamp": "2026-06-26T09:48:42.233579"
     },
     {
       "module_id": "ipblock",
@@ -447,7 +483,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:28:19.520910"
+      "timestamp": "2026-06-26T09:48:49.336066"
     },
     {
       "module_id": "jabber",
@@ -459,7 +495,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:28:55.603842"
+      "timestamp": "2026-06-26T09:48:53.199758"
     },
     {
       "module_id": "jellyfin",
@@ -471,7 +507,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:29:31.743650"
+      "timestamp": "2026-06-26T09:49:12.314090"
     },
     {
       "module_id": "jitsi",
@@ -483,7 +519,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:30:06.758540"
+      "timestamp": "2026-06-26T09:49:31.395677"
     },
     {
       "module_id": "ksm",
@@ -495,7 +531,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:30:41.945710"
+      "timestamp": "2026-06-26T09:49:50.482331"
     },
     {
       "module_id": "localai",
@@ -507,7 +543,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:31:19.065009"
+      "timestamp": "2026-06-26T09:50:09.620394"
     },
     {
       "module_id": "localrecall",
@@ -519,7 +555,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:31:52.446291"
+      "timestamp": "2026-06-26T09:50:28.634738"
     },
     {
       "module_id": "lyrion",
@@ -531,7 +567,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:32:33.742572"
+      "timestamp": "2026-06-26T09:50:47.644527"
     },
     {
       "module_id": "mac-guard",
@@ -543,7 +579,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:33:12.085813"
+      "timestamp": "2026-06-26T09:51:06.731851"
     },
     {
       "module_id": "magicmirror",
@@ -555,7 +591,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:33:52.642354"
+      "timestamp": "2026-06-26T09:51:20.427618"
     },
     {
       "module_id": "mail",
@@ -567,31 +603,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:34:33.887131"
-    },
-    {
-      "module_id": "mail-lxc",
-      "module_name": "Mail Lxc",
-      "category": "Email",
-      "path": "/mail-lxc/",
-      "screenshot_path": "docs/screenshots/vm/mail-lxc.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/mail-lxc-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-05-09T10:35:15.399070"
-    },
-    {
-      "module_id": "master-link",
-      "module_name": "Master Link",
-      "category": "VPN",
-      "path": "/master-link/",
-      "screenshot_path": "docs/screenshots/vm/master-link.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/master-link-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-05-09T10:35:56.579903"
+      "timestamp": "2026-06-26T09:51:39.519469"
     },
     {
       "module_id": "matrix",
@@ -603,7 +615,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:36:36.932424"
+      "timestamp": "2026-06-26T09:51:49.374806"
     },
     {
       "module_id": "mcp-server",
@@ -615,7 +627,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:37:16.191412"
+      "timestamp": "2026-06-26T09:52:08.468962"
     },
     {
       "module_id": "mediaflow",
@@ -627,7 +639,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:37:56.776676"
+      "timestamp": "2026-06-26T09:52:27.362541"
     },
     {
       "module_id": "mesh",
@@ -639,7 +651,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:38:35.535064"
+      "timestamp": "2026-06-26T09:52:46.375709"
     },
     {
       "module_id": "meshname",
@@ -651,7 +663,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:39:07.712804"
+      "timestamp": "2026-06-26T09:53:05.406595"
     },
     {
       "module_id": "metablogizer",
@@ -663,7 +675,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:39:45.166027"
+      "timestamp": "2026-06-26T09:53:24.577720"
     },
     {
       "module_id": "metabolizer",
@@ -675,7 +687,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:40:22.562330"
+      "timestamp": "2026-06-26T09:53:43.716937"
     },
     {
       "module_id": "metacatalog",
@@ -687,7 +699,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:40:59.821572"
+      "timestamp": "2026-06-26T09:54:02.386596"
+    },
+    {
+      "module_id": "metoblizer",
+      "module_name": "Metoblizer",
+      "category": "Other",
+      "path": "/metoblizer/",
+      "screenshot_path": "docs/screenshots/vm/metoblizer.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/metoblizer-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T09:54:06.223576"
     },
     {
       "module_id": "metrics",
@@ -699,7 +723,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:41:35.589033"
+      "timestamp": "2026-06-26T09:54:09.379289"
     },
     {
       "module_id": "mirror",
@@ -711,7 +735,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:42:11.038221"
+      "timestamp": "2026-06-26T09:54:28.500293"
     },
     {
       "module_id": "mitmproxy",
@@ -723,19 +747,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:42:46.322015"
-    },
-    {
-      "module_id": "mmpm",
-      "module_name": "Mmpm",
-      "category": "System",
-      "path": "/mmpm/",
-      "screenshot_path": "docs/screenshots/vm/mmpm.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/mmpm-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-05-09T10:43:23.094903"
+      "timestamp": "2026-06-26T09:54:47.584109"
     },
     {
       "module_id": "modem",
@@ -747,7 +759,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:44:00.597203"
+      "timestamp": "2026-06-26T09:55:06.672463"
     },
     {
       "module_id": "mqtt",
@@ -759,7 +771,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:44:35.702122"
+      "timestamp": "2026-06-26T09:55:25.794530"
+    },
+    {
+      "module_id": "nac",
+      "module_name": "Nac",
+      "category": "Security",
+      "path": "/nac/",
+      "screenshot_path": "docs/screenshots/vm/nac.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/nac-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T09:55:44.958430"
     },
     {
       "module_id": "ndpid",
@@ -771,7 +795,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:45:07.995172"
+      "timestamp": "2026-06-26T09:56:03.961285"
     },
     {
       "module_id": "netdata",
@@ -783,7 +807,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:45:48.479718"
+      "timestamp": "2026-06-26T09:56:07.074488"
     },
     {
       "module_id": "netdiag",
@@ -795,7 +819,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:46:20.808148"
+      "timestamp": "2026-06-26T09:56:26.234208"
     },
     {
       "module_id": "netifyd",
@@ -807,7 +831,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:46:56.390075"
+      "timestamp": "2026-06-26T09:56:30.192132"
     },
     {
       "module_id": "netmodes",
@@ -819,7 +843,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:47:31.233998"
+      "timestamp": "2026-06-26T09:56:33.340447"
     },
     {
       "module_id": "nettweak",
@@ -831,7 +855,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:48:10.143250"
+      "timestamp": "2026-06-26T09:56:52.421738"
     },
     {
       "module_id": "network-anomaly",
@@ -843,7 +867,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:48:42.228833"
+      "timestamp": "2026-06-26T09:57:11.305605"
     },
     {
       "module_id": "newsbin",
@@ -855,7 +879,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:49:17.207806"
+      "timestamp": "2026-06-26T09:57:30.203628"
     },
     {
       "module_id": "nextcloud",
@@ -867,7 +891,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:49:52.775332"
+      "timestamp": "2026-06-26T09:57:49.298830"
     },
     {
       "module_id": "ollama",
@@ -879,7 +903,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:50:27.555165"
+      "timestamp": "2026-06-26T09:57:53.626104"
     },
     {
       "module_id": "openclaw",
@@ -891,7 +915,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:51:03.829190"
+      "timestamp": "2026-06-26T09:58:00.723119"
     },
     {
       "module_id": "ossec",
@@ -903,7 +927,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:51:35.866211"
+      "timestamp": "2026-06-26T09:58:19.609354"
+    },
+    {
+      "module_id": "master-link",
+      "module_name": "Master Link",
+      "category": "VPN",
+      "path": "/master-link/",
+      "screenshot_path": "docs/screenshots/vm/master-link.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/master-link-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T09:58:38.844838"
     },
     {
       "module_id": "p2p",
@@ -915,7 +951,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:52:13.988599"
+      "timestamp": "2026-06-26T09:58:42.044570"
     },
     {
       "module_id": "peertube",
@@ -927,7 +963,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:52:52.942712"
+      "timestamp": "2026-06-26T09:58:45.524893"
     },
     {
       "module_id": "photoprism",
@@ -939,7 +975,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:53:31.461603"
+      "timestamp": "2026-06-26T09:58:53.440115"
     },
     {
       "module_id": "picobrew",
@@ -951,7 +987,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:54:12.545192"
+      "timestamp": "2026-06-26T09:59:12.556344"
+    },
+    {
+      "module_id": "podcaster",
+      "module_name": "Podcaster",
+      "category": "Other",
+      "path": "/podcaster/",
+      "screenshot_path": "docs/screenshots/vm/podcaster.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/podcaster-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T09:59:31.548364"
     },
     {
       "module_id": "portal",
@@ -963,7 +1011,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:54:51.229912"
+      "timestamp": "2026-06-26T09:59:50.430545"
     },
     {
       "module_id": "publish",
@@ -975,7 +1023,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:55:31.426466"
+      "timestamp": "2026-06-26T09:59:54.619843"
     },
     {
       "module_id": "qos",
@@ -987,7 +1035,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:56:09.795942"
+      "timestamp": "2026-06-26T10:00:14.497101"
     },
     {
       "module_id": "redroid",
@@ -999,7 +1047,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:56:42.720295"
+      "timestamp": "2026-06-26T10:00:33.546239"
     },
     {
       "module_id": "repo",
@@ -1011,7 +1059,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:57:18.427819"
+      "timestamp": "2026-06-26T10:00:52.576527"
     },
     {
       "module_id": "reporter",
@@ -1023,7 +1071,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:57:52.945496"
+      "timestamp": "2026-06-26T10:01:11.660958"
     },
     {
       "module_id": "rezapp",
@@ -1035,7 +1083,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:58:25.650773"
+      "timestamp": "2026-06-26T10:01:30.288750"
     },
     {
       "module_id": "roadmap",
@@ -1047,7 +1095,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:58:57.621571"
+      "timestamp": "2026-06-26T10:01:49.390763"
     },
     {
       "module_id": "routes",
@@ -1059,7 +1107,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T10:59:38.163464"
+      "timestamp": "2026-06-26T10:02:08.479404"
     },
     {
       "module_id": "rtty",
@@ -1071,7 +1119,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:00:17.756298"
+      "timestamp": "2026-06-26T10:02:27.609925"
+    },
+    {
+      "module_id": "rustdesk",
+      "module_name": "Rustdesk",
+      "category": "Other",
+      "path": "/rustdesk/",
+      "screenshot_path": "docs/screenshots/vm/rustdesk.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/rustdesk-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T10:02:32.013815"
     },
     {
       "module_id": "saas-relay",
@@ -1083,7 +1143,31 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:00:59.041273"
+      "timestamp": "2026-06-26T10:02:51.095180"
+    },
+    {
+      "module_id": "security-posture",
+      "module_name": "Security Posture",
+      "category": "Other",
+      "path": "/security-posture/",
+      "screenshot_path": "docs/screenshots/vm/security-posture.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/security-posture-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T10:03:02.558033"
+    },
+    {
+      "module_id": "sentinelle",
+      "module_name": "Sentinelle",
+      "category": "Other",
+      "path": "/sentinelle/",
+      "screenshot_path": "docs/screenshots/vm/sentinelle.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/sentinelle-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T10:03:21.564274"
     },
     {
       "module_id": "simplex",
@@ -1095,7 +1179,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:01:41.189798"
+      "timestamp": "2026-06-26T10:03:40.570406"
     },
     {
       "module_id": "smtp-relay",
@@ -1107,7 +1191,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:02:13.229773"
+      "timestamp": "2026-06-26T10:04:10.636849"
+    },
+    {
+      "module_id": "soc",
+      "module_name": "Soc",
+      "category": "Dashboard",
+      "path": "/soc/",
+      "screenshot_path": "docs/screenshots/vm/soc.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/soc-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T10:04:13.779616"
     },
     {
       "module_id": "streamforge",
@@ -1119,7 +1215,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:02:44.472702"
+      "timestamp": "2026-06-26T10:04:32.779458"
     },
     {
       "module_id": "streamlit",
@@ -1131,7 +1227,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:03:17.509956"
+      "timestamp": "2026-06-26T10:04:52.372833"
     },
     {
       "module_id": "system",
@@ -1143,7 +1239,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:03:57.507747"
+      "timestamp": "2026-06-26T10:05:11.368098"
     },
     {
       "module_id": "threat-analyst",
@@ -1155,7 +1251,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:04:30.567233"
+      "timestamp": "2026-06-26T10:05:30.519258"
+    },
+    {
+      "module_id": "threatmesh",
+      "module_name": "Threatmesh",
+      "category": "Other",
+      "path": "/threatmesh/",
+      "screenshot_path": "docs/screenshots/vm/threatmesh.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/threatmesh-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T10:05:49.400101"
     },
     {
       "module_id": "threats",
@@ -1167,7 +1275,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:05:02.372766"
+      "timestamp": "2026-06-26T10:06:08.312541"
+    },
+    {
+      "module_id": "toolbox",
+      "module_name": "Toolbox",
+      "category": "Other",
+      "path": "/toolbox/",
+      "screenshot_path": "docs/screenshots/vm/toolbox.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/toolbox-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T10:06:27.491042"
     },
     {
       "module_id": "tor",
@@ -1179,7 +1299,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:05:34.468687"
+      "timestamp": "2026-06-26T10:06:46.398741"
     },
     {
       "module_id": "torrent",
@@ -1191,7 +1311,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:06:07.081627"
+      "timestamp": "2026-06-26T10:07:06.180622"
     },
     {
       "module_id": "traffic",
@@ -1203,7 +1323,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:06:39.227374"
+      "timestamp": "2026-06-26T10:07:25.056572"
     },
     {
       "module_id": "turn",
@@ -1215,7 +1335,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:07:11.227503"
+      "timestamp": "2026-06-26T10:07:44.051330"
     },
     {
       "module_id": "users",
@@ -1227,7 +1347,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:07:49.197292"
+      "timestamp": "2026-06-26T10:07:48.083952"
     },
     {
       "module_id": "vault",
@@ -1239,7 +1359,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:08:21.529138"
+      "timestamp": "2026-06-26T10:07:51.711365"
     },
     {
       "module_id": "vhost",
@@ -1251,7 +1371,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:08:53.809865"
+      "timestamp": "2026-06-26T10:08:10.915790"
     },
     {
       "module_id": "vm",
@@ -1263,7 +1383,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:09:25.936348"
+      "timestamp": "2026-06-26T10:08:29.851482"
     },
     {
       "module_id": "voip",
@@ -1275,7 +1395,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:09:58.041268"
+      "timestamp": "2026-06-26T10:08:48.925358"
     },
     {
       "module_id": "vortex-dns",
@@ -1287,7 +1407,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:10:30.517072"
+      "timestamp": "2026-06-26T10:09:07.884278"
     },
     {
       "module_id": "vortex-firewall",
@@ -1299,7 +1419,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:11:02.487102"
+      "timestamp": "2026-06-26T10:09:12.147762"
     },
     {
       "module_id": "waf",
@@ -1311,7 +1431,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:11:35.001185"
+      "timestamp": "2026-06-26T10:09:15.631440"
     },
     {
       "module_id": "watchdog",
@@ -1323,7 +1443,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:12:07.673149"
+      "timestamp": "2026-06-26T10:09:34.670694"
     },
     {
       "module_id": "wazuh",
@@ -1335,31 +1455,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:12:46.018143"
-    },
-    {
-      "module_id": "webmail",
-      "module_name": "Webmail",
-      "category": "Email",
-      "path": "/webmail/",
-      "screenshot_path": "docs/screenshots/vm/webmail.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/webmail-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-05-09T11:13:17.971000"
-    },
-    {
-      "module_id": "webmail-lxc",
-      "module_name": "Webmail Lxc",
-      "category": "Email",
-      "path": "/webmail-lxc/",
-      "screenshot_path": "docs/screenshots/vm/webmail-lxc.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/webmail-lxc-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-05-09T11:13:49.796615"
+      "timestamp": "2026-06-26T10:09:53.718960"
     },
     {
       "module_id": "webradio",
@@ -1371,7 +1467,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:14:21.140887"
+      "timestamp": "2026-06-26T10:10:12.791035"
     },
     {
       "module_id": "wireguard",
@@ -1383,7 +1479,19 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:14:53.678155"
+      "timestamp": "2026-06-26T10:10:31.850690"
+    },
+    {
+      "module_id": "yacy",
+      "module_name": "Yacy",
+      "category": "Other",
+      "path": "/yacy/",
+      "screenshot_path": "docs/screenshots/vm/yacy.png",
+      "thumbnail_path": "docs/screenshots/thumbnails/yacy-thumb.png",
+      "success": true,
+      "status_code": 200,
+      "error": null,
+      "timestamp": "2026-06-26T10:10:50.994127"
     },
     {
       "module_id": "zigbee",
@@ -1395,7 +1503,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:15:25.859838"
+      "timestamp": "2026-06-26T10:11:10.067578"
     },
     {
       "module_id": "zkp",
@@ -1407,7 +1515,7 @@
       "success": true,
       "status_code": 200,
       "error": null,
-      "timestamp": "2026-05-09T11:16:03.781163"
+      "timestamp": "2026-06-26T10:11:29.183543"
     }
   ]
 }
