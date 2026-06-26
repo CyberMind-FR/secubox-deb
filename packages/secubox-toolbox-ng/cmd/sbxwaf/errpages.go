@@ -34,6 +34,7 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
+	"html"
 	"net/http"
 	"time"
 )
@@ -69,7 +70,8 @@ func errorPage(code int, host string) []byte {
 	}
 
 	now := time.Now().Format("15:04:05")
-	out := bytes.ReplaceAll(tmpl, []byte("{host}"), []byte(host))
+	safeHost := html.EscapeString(host)
+	out := bytes.ReplaceAll(tmpl, []byte("{host}"), []byte(safeHost))
 	out = bytes.ReplaceAll(out, []byte("{time}"), []byte(now))
 	return out
 }
