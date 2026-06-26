@@ -48,6 +48,22 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v4
 
+      - name: Diagnose wget/TCP Kconfig deps in the U-Boot tree
+        run: |
+          set -x
+          git clone --depth 1 --branch 'tow-boot/2022.07/_all' \
+            https://github.com/Tow-Boot/U-Boot /tmp/ub 2>&1 | tail -3 \
+          || git clone --depth 1 --branch v2022.07 \
+            https://github.com/u-boot/u-boot /tmp/ub
+          echo "===== CMD_WGET ====="
+          grep -rn -A8 '^config CMD_WGET' /tmp/ub/cmd/ || echo 'CMD_WGET not in cmd/'
+          echo "===== PROT_TCP ====="
+          grep -rn -A6 '^config PROT_TCP' /tmp/ub/net/ || echo 'PROT_TCP not in net/'
+          echo "===== WGET (lib) ====="
+          grep -rn -A6 '^config WGET' /tmp/ub/ || echo 'no CONFIG_WGET (2022.07: only CMD_WGET)'
+          echo "===== wget sources ====="
+          find /tmp/ub -name 'wget.c' | head
+
       - name: Build enhanced Tow-Boot (${{ env.VARIANT }})
         working-directory: tools/Tow-Boot
         run: |
