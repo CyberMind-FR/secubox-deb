@@ -77,10 +77,10 @@ type Routes struct {
 	// LoadRoutes time; never mutated afterwards.
 	cookieAudit *CookieAudit
 
-	// #747: visit-stats aggregator + first-party host suffixes for the injected
-	// SecuBox health/visit widget. Read inside ModifyResponse; set in main().
-	visits      *VisitStats
-	widgetHosts []string
+	// #747: first-party host suffixes + Hub origin for the injected SecuBox health
+	// banner. Read inside ModifyResponse; set in main() after LoadRoutes.
+	widgetHosts  []string
+	bannerOrigin string
 
 	// watcher handles mtime tracking + Apply callbacks (throttle=0 → eager).
 	watcher *reload.Watcher
@@ -183,7 +183,7 @@ func (r *Routes) buildEntries(parsed map[string][2]string) map[string]routeEntry
 				if bare, _, e := net.SplitHostPort(reqHost); e == nil {
 					reqHost = bare
 				}
-				applyWidget(resp, strings.ToLower(reqHost), r.visits, r.widgetHosts)
+				applyWidget(resp, strings.ToLower(reqHost), r.bannerOrigin, r.widgetHosts)
 				return nil
 			}
 			p.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
