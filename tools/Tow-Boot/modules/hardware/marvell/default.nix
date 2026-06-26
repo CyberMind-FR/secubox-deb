@@ -68,6 +68,7 @@ in
       hardware.socList = armadaSOCs;
     }
     (mkIf cfgMarvell.globalscale.mochabin.enable {
+      secubox.netboot.enable = true;
       hardware.SPISize = 4 * 1024 * 1024;  # 4 MiB
       hardware.marvell = {
         arm-trusted-firmware = pkgs.Tow-Boot.armTrustedFirmwareMochabin;
