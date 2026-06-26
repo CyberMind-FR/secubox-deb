@@ -21,7 +21,7 @@
     if (window.__SBX_HEALTH_BANNER__) return;
     window.__SBX_HEALTH_BANNER__ = true;
 
-    const VERSION = '1.4.5';
+    const VERSION = '1.4.6';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
     const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
@@ -925,6 +925,30 @@
         const { banner, trigger } = createBannerElement();
         document.body.appendChild(trigger);
         document.body.appendChild(banner);
+
+        // ── SPA re-inject guard (#750) ─────────────────────────────────────
+        // SPA sites (x.com, Next.js news) rebuild <body> on hydration, wiping
+        // our appended nodes; the one-shot __SBX_HEALTH_BANNER__ guard then
+        // blocks any re-init, so the banner never returns. Re-attach the
+        // already-created nodes — and re-add the styles if <head> was cleared
+        // too — whenever they detach. The closure keeps the refs alive even
+        // after the DOM node is wiped, and re-appending the SAME nodes
+        // preserves their event listeners.
+        function ensureMounted() {
+            injectBannerStyles(); // id-guarded: no-op when the <style> is present
+            const body = document.body;
+            if (!body) return;
+            if (!trigger.isConnected) body.appendChild(trigger);
+            if (!banner.isConnected) body.appendChild(banner);
+        }
+        try {
+            // childList on <html> catches a full <body> element swap (cheap, no subtree).
+            new MutationObserver(ensureMounted)
+                .observe(document.documentElement, { childList: true });
+        } catch (_) { /* MutationObserver unsupported → the interval below covers it */ }
+        // Fallback for body.innerHTML='' (children cleared, body element kept),
+        // which a childList-only observer on <html> does not see.
+        setInterval(ensureMounted, 1500);
 
         // Toggle banner on trigger click
         trigger.addEventListener('click', () => {
