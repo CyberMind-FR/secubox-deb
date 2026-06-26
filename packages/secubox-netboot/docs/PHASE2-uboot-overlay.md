@@ -279,30 +279,30 @@ Après vérification des artefacts et validation de la signature, la commande :
 
 ```bash
 secubox-netboot-publish \
-  --id <MAC> \
+  --id overlay-mochabin \
   --overlay-fit <staging>/sbx-uboot.fit \
   --scr <staging>/sbx-boot.scr
 ```
 
-dépose les fichiers sous `/srv/secubox/netboot/{tftp,http}/overlay-<board>/` sur
+dépose les fichiers sous `/srv/secubox/netboot/{tftp,http}/overlay-mochabin/` sur
 l'hôte gk2 (serveur netboot) :
 
 ```
 /srv/secubox/netboot/
 ├── tftp/
-│   └── overlay-mochabin/
-│       ├── <MAC>/
-│       │   ├── sbx-uboot.fit
-│       │   └── sbx-boot.scr
-│       └── <autre-MAC>/
-│           └── ...
+│   ├── overlay-mochabin/
+│   │   ├── sbx-uboot.fit
+│   │   └── sbx-boot.scr
+│   └── <MAC>/                        # repli TFTP : kernel/dtb/initrd par MAC
+│       ├── Image
+│       ├── board.dtb
+│       └── initrd.img
 ├── http/
-│   └── overlay-mochabin/
-│       ├── <MAC>/
-│       │   ├── sbx-uboot.fit
-│       │   └── sbx-boot.scr
-│       └── <autre-MAC>/
-│           └── ...
+│   ├── overlay-mochabin/
+│   │   ├── sbx-uboot.fit
+│   │   └── sbx-boot.scr
+│   └── <MAC>/                        # HTTP FIT signé : per-board install image
+│       └── boot.fit
 └── active/
     └── overlay-mochabin/
         ├── live-link → pointeur vers le FIT actif
@@ -310,14 +310,14 @@ l'hôte gk2 (serveur netboot) :
 ```
 
 La **publication est idempotente** : rejouer le `secubox-netboot-publish` avec la même
-`--id` remplace l'entrée existante sans risque.
+`--id overlay-mochabin` remplace l'entrée existante sans risque.
 
 ### 10.5 Chaînage à la première mise à l'amorce (U-Boot usine)
 
 Lors du prochain démarrage, le U-Boot **usine** (SPI `mtd0`) exécute :
 
 ```bash
-load mmc 0:1 ${overlay_load} <MAC>/sbx-uboot.fit
+tftpboot ${overlay_load} overlay-mochabin/sbx-uboot.fit
 bootm ${overlay_load}
 ```
 
@@ -333,7 +333,7 @@ où `${overlay_load}=0x06000000` (ou `${loadaddr}` selon la config). Le FIT est
 |-------|--------|----------|-----------|
 | Build | `nix-build` Tow-Boot | `output/u-boot.bin` | Hôte Nix dispo |
 | Overlay | `build-uboot-overlay.sh` | `sbx-uboot.fit`, `sbx-boot.scr` | Clés + board config |
-| Publish | `secubox-netboot-publish --id <MAC>` | `/srv/.../overlay-<board>/<MAC>/` | Accès gk2 |
+| Publish | `secubox-netboot-publish --id overlay-mochabin` | `/srv/secubox/netboot/{tftp,http}/overlay-mochabin/` | Accès gk2 |
 | Boot | Chaînage usine + signature FIT | os-installer ou kernel | Connexion DHCP |
 | Confirm | `overlay --confirm-healthy` | `bootcount=0` | Boot sain vérifié |
 
