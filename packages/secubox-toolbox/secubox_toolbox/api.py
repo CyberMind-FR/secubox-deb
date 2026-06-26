@@ -3775,10 +3775,14 @@ async def admin_metrics() -> dict:
         "events_24h_total": 0,
         "mitm": {"connections": 0, "tls_pinned": 0, "unique_hosts": 0},
     }
-    # Per-source event counts (last 24h)
+    # Per-source event counts. The legacy toolbox.db `events` table was fed by the
+    # OLD Python mitmproxy addons; the current R3 path is Go sbxmitm → relay →
+    # sidecars → cumulative stats, so that table is now empty. Read the cumulative
+    # per-source totals (cookies/ja4/…) when the events table has nothing, so the
+    # Live-metrics panel shows real activity instead of zeros.
+    since = int(time.time()) - 86400
     try:
         with _sq3.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=2) as c:
-            since = int(time.time()) - 86400
             rows = c.execute(
                 "SELECT source, COUNT(*) FROM events WHERE ts > ? GROUP BY source",
                 (since,),
@@ -3791,6 +3795,17 @@ async def admin_metrics() -> dict:
             ).fetchone()[0]
     except Exception as e:
         metrics["sqlite_error"] = str(e)
+    if not metrics["events_by_source"]:
+        try:
+            ev = (cumulative.get_cached() or {}).get("events", {}) or {}
+            src = {k: int(v) for k, v in ev.items()
+                   if k != "total_7d" and isinstance(v, (int, float))}
+            if src:
+                metrics["events_by_source"] = src
+                metrics["events_24h_total"] = int(ev.get("total_7d") or sum(src.values()))
+                metrics["events_window"] = "7d"  # cumulative fallback, not strictly 24h
+        except Exception:
+            pass
     # Live MITM activity. NOTE: the old journal-scrape for "server connect"
     # NEVER worked — the workers run at --log-level warning, so those INFO lines
     # are never emitted → the trio was permanently 0. Derive from real data: the
@@ -3799,8 +3814,10 @@ async def admin_metrics() -> dict:
     try:
         cs = cumulative.get_cached() or {}
         ev = cs.get("events", {}) or {}
-        # "connections analysées" — DPI classifies one flow per upstream connection.
-        metrics["mitm"]["connections"] = int(ev.get("dpi", 0) or 0)
+        # "connections analysées" — each JA4 observation is one inspected TLS
+        # handshake/upstream connection. The cumulative stats expose ja4 (and
+        # cookies), not a `dpi` key, so the old ev.get("dpi") was always 0.
+        metrics["mitm"]["connections"] = int(ev.get("ja4") or ev.get("dpi") or 0)
         metrics["mitm"]["unique_hosts"] = len(cs.get("top_hosts_7d", []) or [])
     except Exception:
         pass
