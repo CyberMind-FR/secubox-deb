@@ -42,6 +42,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -320,6 +321,13 @@ func main() {
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
 	threatLog := flag.String("threat-log", "/var/log/secubox/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
+	// Task 4.1: CrowdSec LAPI bridge flags.
+	crowdsecURL := flag.String("crowdsec-url", "",
+		"CrowdSec LAPI base URL (e.g. http://10.100.0.1:8080); empty disables the bridge")
+	crowdsecJWTFile := flag.String("crowdsec-jwt-file", "",
+		"path to file containing the CrowdSec LAPI JWT/API key (read once at startup)")
+	crowdsecBanDuration := flag.String("crowdsec-ban-duration", "4h",
+		"ban duration forwarded to CrowdSec decisions (e.g. 4h, 24h)")
 	flag.Parse()
 
 	// rules is consumed below when --rules is provided.
@@ -346,9 +354,25 @@ func main() {
 		ban: NewBan(300*time.Second, 3),
 		// Task 3.2: append-only threat log.
 		threatLog: NewThreatLog(*threatLog),
-		// crowdsec: nil — wired in Task 4.1 via --crowdsec-* flags.
+		// crowdsec: wired below when --crowdsec-url and --crowdsec-jwt-file are set.
 	}
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
+
+	// Task 4.1: wire CrowdSec LAPI bridge when both --crowdsec-url and
+	// --crowdsec-jwt-file are provided.  The JWT is read from a file so the
+	// secret never appears in the process command line or environment.
+	if *crowdsecURL != "" && *crowdsecJWTFile != "" {
+		jwtBytes, err := os.ReadFile(*crowdsecJWTFile)
+		if err != nil {
+			log.Fatalf("sbxwaf: crowdsec: read jwt-file %q: %v", *crowdsecJWTFile, err)
+		}
+		jwt := strings.TrimSpace(string(jwtBytes))
+		srv.crowdsec = NewCrowdSecClient(*crowdsecURL, jwt, *crowdsecBanDuration)
+		log.Printf("sbxwaf: CrowdSec LAPI bridge enabled → %s (ban-duration=%s)",
+			*crowdsecURL, *crowdsecBanDuration)
+	} else if *crowdsecURL != "" || *crowdsecJWTFile != "" {
+		log.Printf("sbxwaf: crowdsec bridge disabled — both --crowdsec-url and --crowdsec-jwt-file required")
+	}
 
 	// Wire in the WAF rules engine when --rules is provided.
 	if *rules != "" {
