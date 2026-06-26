@@ -1,0 +1,19 @@
+secubox-waf-ng (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial packaging of the Go WAF reverse-proxy engine (#744 Task 8.1).
+    Ships /usr/sbin/sbxwaf built from packages/secubox-toolbox-ng/cmd/sbxwaf
+    (routing, WAF rules, ban, CrowdSec bridge, cookie-audit, media-cache,
+    themed error pages).
+  * Hardened systemd worker template secubox-waf-ng-worker@.service:
+    User=secubox-waf, NoNewPrivileges, ProtectSystem=strict, ProtectHome,
+    PrivateTmp, CapabilityBoundingSet= (drop all), RestrictAddressFamilies,
+    MemoryMax=256M, RuntimeDirectory=secubox, RuntimeDirectoryPreserve=yes
+    (prevents /run/secubox socket-wipe cascade, #741).
+  * AppArmor enforce profile for /usr/sbin/sbxwaf (rw logs/cache/run,
+    r config/secrets, deny everything else).
+  * Dedicated secubox-waf system user (CSPN privilege separation).
+  * postinst: safe dir creation (never chmod shared parents /etc/secubox,
+    /var/log/secubox, /var/cache/secubox to 0750 — traversal constraint
+    from #511/#620 board lessons). Enables @1 and @2 on install/upgrade.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 27 Jun 2026 00:00:00 +0000

@@ -1,0 +1,10 @@
+# build artifacts
+sbxwaf
+_gocache/
+*.deb
+*.buildinfo
+*.changes
+debian/secubox-waf-ng/
+debian/.debhelper/
+debian/files
+debian/*.substvars

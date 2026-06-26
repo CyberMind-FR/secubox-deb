@@ -10,3 +10,4 @@ cmd/sbxmitm/sbxmitm
 /debian/secubox-toolbox-ng/
 /debian/debhelper-build-stamp
 /debian/*.debhelper.log
+/sbxwaf

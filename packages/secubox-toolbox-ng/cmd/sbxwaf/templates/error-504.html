@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>504 - Service Unavailable | SecuBox</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #0f0a1a 100%);
+            color: #e8e6d9;
+            font-family: "JetBrains Mono", "Courier New", monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+        .container {
+            text-align: center;
+            max-width: 700px;
+            width: 100%;
+        }
+        .ascii-art {
+            font-size: clamp(6px, 1.2vw, 10px);
+            line-height: 1.15;
+            color: #6e40c9;
+            text-shadow: 0 0 15px rgba(110, 64, 201, 0.5);
+            white-space: pre;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+        .error-code {
+            font-size: clamp(4rem, 12vw, 7rem);
+            font-weight: bold;
+            color: #6e40c9;
+            text-shadow: 0 0 30px rgba(110, 64, 201, 0.6);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+            animation: flicker 3s infinite;
+        }
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 1; }
+            93% { opacity: 0.8; }
+            94% { opacity: 1; }
+            96% { opacity: 0.9; }
+            97% { opacity: 1; }
+        }
+        .error-title {
+            font-size: clamp(1.2rem, 3vw, 1.6rem);
+            color: #c9a84c;
+            margin-bottom: 1.5rem;
+        }
+        .error-box {
+            background: rgba(110, 64, 201, 0.1);
+            border: 1px solid rgba(110, 64, 201, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .error-message {
+            color: #8b949e;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .error-message code {
+            background: rgba(110, 64, 201, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #c9a84c;
+            font-size: 0.9em;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .status-item {
+            background: rgba(30, 30, 40, 0.5);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .status-label {
+            font-size: 0.75rem;
+            color: #6b6b7a;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .status-value {
+            font-size: 1rem;
+            color: #e8e6d9;
+            margin-top: 0.3rem;
+        }
+        .status-value.down { color: #e63946; }
+        .status-value.checking { color: #c9a84c; }
+        .actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #6e40c9;
+            color: white;
+            border: none;
+        }
+        .btn-primary:hover { background: #8250df; }
+        .btn-secondary {
+            background: transparent;
+            color: #8b949e;
+            border: 1px solid #30363d;
+        }
+        .btn-secondary:hover {
+            border-color: #6e40c9;
+            color: #c9a84c;
+        }
+        .footer {
+            margin-top: 3rem;
+            font-size: 0.75rem;
+            color: #6b6b7a;
+        }
+        .footer a { color: #c9a84c; text-decoration: none; }
+        .retry-timer {
+            color: #00ff41;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="ascii-art">
+ _____ _____ _____    _____         _               
+|   __|  |  |___  |  |   __|___ ___|_|___ ___       
+|__   |  |  |  _  |  |__   | -_|  _| | . |   |      
+|_____|_____|_____|  |_____|___|_|  |_|___|_|_|     
+                                                    
+    +-----------------------------------------------+
+    |  The backend service is temporarily offline  |
+    |                                               |
+    |     [ Retrying connection... ]               |
+    |                                               |
+    +-----------------------------------------------+
+        </div>
+
+        <div class="error-code">504</div>
+        <h1 class="error-title">Gateway Timeout</h1>
+
+        <div class="error-box">
+            <p class="error-message">
+                The upstream server <code>{host}</code> is not responding.<br>
+                This could be due to maintenance, high load, or a service restart.
+            </p>
+        </div>
+
+        <div class="status-grid">
+            <div class="status-item">
+                <div class="status-label">Backend</div>
+                <div class="status-value down">{host}</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">WAF Status</div>
+                <div class="status-value" style="color: #00ff41;">Active</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Time</div>
+                <div class="status-value">{time}</div>
+            </div>
+        </div>
+
+        <p class="retry-timer">Auto-retry in <span id="countdown">10</span>s...</p>
+
+        <div class="actions">
+            <a href="javascript:location.reload()" class="btn btn-primary">Retry Now</a>
+            <a href="/" class="btn btn-secondary">Go Home</a>
+        </div>
+
+        <p class="footer">
+            SecuBox WAF | <a href="https://secubox.in">secubox.in</a> | 
+            <a href="https://cybermind.fr">CyberMind</a>
+        </p>
+    </div>
+
+    <script>
+    (function() {
+        let seconds = 10;
+        const el = document.getElementById('countdown');
+        const timer = setInterval(() => {
+            seconds--;
+            el.textContent = seconds;
+            if (seconds <= 0) {
+                clearInterval(timer);
+                location.reload();
+            }
+        }, 1000);
+    })();
+    </script>
+</body>
+</html>

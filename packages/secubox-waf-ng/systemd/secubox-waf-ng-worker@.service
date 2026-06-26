@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-waf-ng — Go WAF worker template (#744)
+#
+# Each %i ∈ {1,2} listens on 127.0.0.1:808%i.  HAProxy's nft DNAT spreads
+# new TCP connections across the two workers via `numgen inc mod 2` (sticky
+# per-connection via conntrack).
+#
+# Activate:
+#   systemctl enable --now secubox-waf-ng-worker@1.service
+#   systemctl enable --now secubox-waf-ng-worker@2.service
+#
+# Rollback (disable workers, fall back to mitmproxy fleet):
+#   systemctl disable --now secubox-waf-ng-worker@{1,2}.service
+#
+# CRITICAL — RuntimeDirectory=secubox + RuntimeDirectoryPreserve=yes:
+# 95 units share RuntimeDirectory=secubox. Without Preserve=yes, any
+# unit restart wipes /run/secubox and kills every sibling's socket → board-wide
+# 502 cascade (#741, fixed 2026-06-25 on the board; Preserve=yes mandatory
+# in every new unit touching RuntimeDirectory=secubox).
+
+[Unit]
+Description=SecuBox WAF-NG Go reverse-proxy worker %i (port 808%i)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/744
+After=network.target
+ConditionPathExists=/usr/sbin/sbxwaf
+
+[Service]
+Type=simple
+User=secubox-waf
+Group=secubox-waf
+
+ExecStart=/usr/sbin/sbxwaf \
+  --listen 127.0.0.1:808%i \
+  --ca-cert /etc/secubox/waf/ca/ca-cert.pem \
+  --ca-key /etc/secubox/waf/ca/ca.pem \
+  --routes /etc/secubox/waf/haproxy-routes.json \
+  --rules /etc/secubox/waf/waf-rules.json \
+  --threat-log /var/log/secubox/waf/waf-threats.log \
+  --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
+  --media-cache-dir /var/cache/secubox/waf/media \
+  --crowdsec-url http://10.100.0.1:8080 \
+  --crowdsec-jwt-file /etc/secubox/secrets/waf-crowdsec.jwt
+
+# IMPORTANT: --crowdsec-url must be the real CrowdSec LAPI endpoint (LXC-bridge
+# gateway 10.100.0.1:8080), NOT 127.0.0.1:8080 which is the nftables DNAT VIP
+# that fans connections back into these very workers (self-loop → ban alerts
+# never reach CrowdSec LAPI). Python addon used http://10.100.0.1:8080 for this
+# reason. Verify via pre-cutover checklist §1.2 in docs/CUTOVER.md.
+
+Restart=on-failure
+RestartSec=5
+
+# ── RuntimeDirectory ──────────────────────────────────────────────────────────
+# Shared with the other 95 units. Preserve=yes prevents any restart from
+# wiping /run/secubox and killing siblings' sockets (#741 board-wide 502 lesson).
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+
+# ── Hardening ─────────────────────────────────────────────────────────────────
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+
+# Allow reading config; allow writing logs (WAF-owned leaf dirs only, not the
+# shared parent), cache, and runtime socket dir (M1 fix: scope to leaf dirs).
+ReadOnlyPaths=/etc/secubox
+ReadWritePaths=/var/log/secubox/waf /var/log/secubox/cookie-audit /var/cache/secubox/waf /run/secubox
+
+# Drop all ambient capabilities — sbxwaf binds on a non-privileged port
+# (808x) and needs no special capabilities.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Restrict to AF_INET (IPv4 upstream), AF_INET6 (IPv6), AF_UNIX (socket).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# ── Kernel hardening ──────────────────────────────────────────────────────────
+# Prevent kernel tunable / module changes and cgroup escapes.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+
+# Restrict namespace creation (sbxwaf has no need to create namespaces).
+RestrictNamespaces=yes
+
+# Prevent personality changes (e.g. 32-bit ABI emulation on 64-bit kernel).
+LockPersonality=yes
+
+# Disable setuid/setgid on new files.
+RestrictSUIDSGID=yes
+
+# Prevent real-time scheduling (not needed for a network proxy).
+RestrictRealtime=yes
+
+# ── Seccomp (syscall filter) ─────────────────────────────────────────────────
+# Go network services need the standard system-service set. @privileged and
+# @resources are denied (no raw-socket, perf_event, etc.).
+# MemoryDenyWriteExecute=yes is safe for Go (no JIT).
+# Convention mirrors secubox-mesh.service (project standard, §6 CSPN mandate).
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+MemoryDenyWriteExecute=yes
+
+# Memory and task limits per worker — Go WAF is leaner than the Python fleet.
+MemoryHigh=192M
+MemoryMax=256M
+TasksMax=256
+
+# Recycle workers after 12 h to bound memory drift from long-lived connections.
+RuntimeMaxSec=12h
+
+[Install]
+WantedBy=multi-user.target
