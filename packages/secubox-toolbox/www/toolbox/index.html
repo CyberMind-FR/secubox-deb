@@ -179,7 +179,7 @@
         </div>
         <div id="ads-section" class="grid">
             <div class="card" style="grid-column:1/-1">
-                <h2>🛑 Pubs bloquées (24h)</h2>
+                <h2>🛑 Trackers & pubs bloqués (24h)</h2>
                 <div class="kv" id="ads-kpi"><span class="k">loading…</span><span class="v"></span></div>
             </div>
             <div class="card" style="grid-column:1/-1">
@@ -191,7 +191,7 @@
                 <div id="ads-sites"><div class="empty">loading…</div></div>
             </div>
             <div class="card" style="grid-column:1/-1">
-                <h2>👤 Top visiteurs (pubs bloquées)</h2>
+                <h2>👤 Top visiteurs (trackers/pubs bloqués)</h2>
                 <div id="ads-visitors"><div class="empty">loading…</div></div>
                 <div id="ads-client-detail"></div>
             </div>
@@ -617,24 +617,24 @@ async function loadAds() {
     const kpi = document.getElementById('ads-kpi');
     const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     if (!d || d.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(d&&d.__error)||'no data'}</span>`; return; }
-    kpi.innerHTML = `<span class="k">Pubs bloquées</span> <span class="v">${d.total_blocked||0}</span>`
-      + ` <span class="k">Ko économisés</span> <span class="v">${Math.round((d.total_bytes||0)/1024)}</span>`
+    kpi.innerHTML = `<span class="k">Trackers &amp; pubs bloqués</span> <span class="v">${d.total_blocked||0}</span>`
+      + ` <span class="k" title="estimation : un contenu bloqué n'est jamais téléchargé, on ne peut pas mesurer les octets réels — ~45 Ko/blocage">Ko évités <span style="opacity:.6">(est.)</span></span> <span class="v">~${Math.round((d.total_bytes||0)/1024)}</span>`
       + ` <span class="k">Silenced</span> <span class="v">${(d.by_action&&d.by_action.silent)||0}</span>`
       + ` <span class="k">Fenêtre</span> <span class="v">${d.window_hours||24}h</span>`;
-    const hostRows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
+    const hostRows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>~${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
     const siteRows = (d.top_sites||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.site)}</code></td><td>${r.hits}</td></tr>`).join('');
     document.getElementById('ads-hosts').innerHTML = hostRows
-      ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+hostRows+'</tbody></table>'
-      : '<div class="empty">aucune pub bloquée dans la fenêtre</div>';
+      ? '<table><thead><tr><th>Tracker / pub host</th><th>bloqués</th><th>Ko (est.)</th></tr></thead><tbody>'+hostRows+'</tbody></table>'
+      : '<div class="empty">rien de bloqué dans la fenêtre</div>';
     document.getElementById('ads-sites').innerHTML = siteRows
-      ? '<table><thead><tr><th>Site</th><th>pubs bloquées</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
+      ? '<table><thead><tr><th>Site</th><th>trackers/pubs bloqués</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
       : '';
     const visRows = (d.top_visitors||[]).slice(0, 5).map(r=>{
         const mh = esc(r.mac_hash);
         return `<tr><td><a href="#" onclick="loadAdsClient('${mh}');return false;"><code>${mh}</code></a></td><td>${r.hits}</td></tr>`;
     }).join('');
     document.getElementById('ads-visitors').innerHTML = visRows
-      ? '<table><thead><tr><th>Visiteur</th><th>pubs bloquées</th></tr></thead><tbody>'+visRows+'</tbody></table>'
+      ? '<table><thead><tr><th>Visiteur</th><th>trackers/pubs</th></tr></thead><tbody>'+visRows+'</tbody></table>'
       : '<div class="empty">aucun visiteur dans la fenêtre</div>';
 }
 
@@ -645,7 +645,7 @@ async function loadAdsClient(mh) {
     const d = await J('/admin/ad-stats/client/'+encodeURIComponent(mh));
     if (!d || d.__error) { detail.innerHTML = `<div class="empty">${(d&&d.__error)||'no data'}</div>`; return; }
     const rows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
-    detail.innerHTML = `<h3>👤 <code>${esc(d.mac_hash)}</code> — ${d.total||0} pubs bloquées</h3>`
+    detail.innerHTML = `<h3>👤 <code>${esc(d.mac_hash)}</code> — ${d.total||0} trackers/pubs bloqués</h3>`
       + (rows
         ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+rows+'</tbody></table>'
         : '<div class="empty">aucune pub bloquée pour ce visiteur</div>');
