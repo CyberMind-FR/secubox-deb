@@ -110,6 +110,11 @@ type Server struct {
 	// Nil until Task 4.1 is implemented and wired in main().
 	// When non-nil: called with (ip, cat, sev) whenever an IP reaches BAN.
 	crowdsec CrowdSecReporter
+
+	// cookieAudit is the Task 5.1 RGPD Set-Cookie ledger.
+	// When non-nil, ModifyResponse calls Record for every upstream response.
+	// Nil means auditing is disabled (--cookie-audit-log="").
+	cookieAudit *CookieAudit
 }
 
 // handler returns an http.Handler that:
@@ -188,6 +193,11 @@ func (s *Server) handler() http.Handler {
 			proxy.Transport = transport
 			proxy.ModifyResponse = func(resp *http.Response) error {
 				resp.Header.Set("X-SecuBox-WAF", "inspected")
+				// Task 5.1: record Set-Cookie to RGPD ledger when enabled.
+				// host is bound per-request (outer HandlerFunc scope).
+				if ca := s.cookieAudit; ca != nil {
+					ca.Record(host, resp.Request, resp)
+				}
 				return nil
 			}
 			proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
@@ -328,6 +338,9 @@ func main() {
 		"path to file containing the CrowdSec LAPI JWT/API key (read once at startup)")
 	crowdsecBanDuration := flag.String("crowdsec-ban-duration", "4h",
 		"ban duration forwarded to CrowdSec decisions (e.g. 4h, 24h)")
+	// Task 5.1: RGPD Set-Cookie ledger.
+	cookieAuditLog := flag.String("cookie-audit-log", DefaultCookieAuditLog,
+		"path for RGPD cookie audit JSONL ledger (one record per Set-Cookie); empty disables")
 	flag.Parse()
 
 	// rules is consumed below when --rules is provided.
@@ -346,6 +359,13 @@ func main() {
 		IdleConnTimeout:       90 * time.Second,
 	}
 
+	// Task 5.1: RGPD cookie-audit ledger. Disabled when --cookie-audit-log is empty.
+	var cookieAudit *CookieAudit
+	if *cookieAuditLog != "" {
+		cookieAudit = NewCookieAudit(*cookieAuditLog)
+		log.Printf("sbxwaf: cookie-audit ledger enabled → %s", *cookieAuditLog)
+	}
+
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
@@ -355,6 +375,8 @@ func main() {
 		// Task 3.2: append-only threat log.
 		threatLog: NewThreatLog(*threatLog),
 		// crowdsec: wired below when --crowdsec-url and --crowdsec-jwt-file are set.
+		// Task 5.1: RGPD cookie-audit ledger.
+		cookieAudit: cookieAudit,
 	}
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
 
@@ -383,6 +405,8 @@ func main() {
 	// Wire in the real Routes loader when --routes is provided.
 	if *routesFile != "" {
 		r := LoadRoutes(*routesFile, sharedTransport)
+		// Task 5.1: inject cookie audit so Routes-built proxies also record cookies.
+		r.cookieAudit = cookieAudit
 		srv.routes = r
 		srv.routeLookup = r.Lookup
 		log.Printf("sbxwaf: routes loaded from %s (%d entries)", *routesFile, func() int {

@@ -72,6 +72,11 @@ type Routes struct {
 	// fine for tests that don't inject one).
 	transport http.RoundTripper
 
+	// cookieAudit is the Task 5.1 RGPD ledger. When non-nil, every
+	// ModifyResponse built by buildEntries calls Record. Set once at
+	// LoadRoutes time; never mutated afterwards.
+	cookieAudit *CookieAudit
+
 	// watcher handles mtime tracking + Apply callbacks (throttle=0 → eager).
 	watcher *reload.Watcher
 }
@@ -156,8 +161,19 @@ func (r *Routes) buildEntries(parsed map[string][2]string) map[string]routeEntry
 			p.Transport = r.transport
 			// ModifyResponse stamps the WAF sentinel header (mirrors handler's
 			// inline proxy; centralised here so cached proxies also stamp it).
+			// Task 5.1: also records Set-Cookie headers to the RGPD ledger.
+			// We read r.cookieAudit inside the closure (not captured at buildEntries
+			// call time) so that the audit wired in main() after LoadRoutes is
+			// visible to both startup-built and hot-reload-built proxies.
 			p.ModifyResponse = func(resp *http.Response) error {
 				resp.Header.Set("X-SecuBox-WAF", "inspected")
+				if ca := r.cookieAudit; ca != nil {
+					reqHost := ""
+					if resp.Request != nil {
+						reqHost = resp.Request.Host
+					}
+					ca.Record(reqHost, resp.Request, resp)
+				}
 				return nil
 			}
 			p.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
