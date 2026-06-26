@@ -18,14 +18,25 @@ on:
           - globalscale-mochabin-8gb
           - globalscale-mochabin-4gb
           - globalscale-mochabin-2gb
+  # push-triggered so it runs from the feature branch without default-branch
+  # registration (workflow_dispatch only registers from the default branch).
+  push:
+    branches:
+      - 'feature/748-enhanced-tow-boot-http-netboot-serial-fl'
+    paths:
+      - 'tools/Tow-Boot/**'
+      - '.github/workflows/build-tow-boot.yml'
 
 concurrency:
   group: build-tow-boot-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  VARIANT: ${{ github.event.inputs.variant || 'globalscale-mochabin-8gb' }}
+
 jobs:
   build:
-    name: nix-build ${{ inputs.variant }}
+    name: nix-build enhanced Tow-Boot
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     steps:
@@ -37,11 +48,11 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v4
 
-      - name: Build enhanced Tow-Boot (${{ inputs.variant }})
+      - name: Build enhanced Tow-Boot (${{ env.VARIANT }})
         working-directory: tools/Tow-Boot
         run: |
           set -euxo pipefail
-          nix-build -A ${{ inputs.variant }} -o result-towboot
+          nix-build -A ${{ env.VARIANT }} -o result-towboot
           echo "=== result tree ==="
           ls -lLR result-towboot/ | head -60
 
@@ -77,6 +88,6 @@ jobs:
       - name: Upload enhanced Tow-Boot artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: enhanced-tow-boot-${{ inputs.variant }}
+          name: enhanced-tow-boot-${{ env.VARIANT }}
           path: tools/Tow-Boot/out/*
           if-no-files-found: error
