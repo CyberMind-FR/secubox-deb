@@ -561,6 +561,28 @@
   },
 
   {
+    "_comment": "=== KNOWN GAP 4: body-only payload beyond 1 MiB inspection cap is NOT detected ===",
+    "_comment2": "Go WAF inspects only the first --max-body-inspect bytes (default 1 MiB) of the request body.",
+    "_comment3": "Python WAF (mitmproxy get_text()) buffers the ENTIRE body with no cap.",
+    "_comment4": "An attacker can pad 1 MiB of benign bytes then append the attack payload beyond the cap.",
+    "_comment5": "The harness tests the PREFIX-only path. A fixture whose body fits entirely within the cap",
+    "_comment6": "is correctly inspected; a payload that sits BEYOND the cap would arrive as raw stream bytes",
+    "_comment7": "that Rules.Match never sees. This is a documented parity gap, not an engine bug.",
+    "_comment8": "Documented as a CUTOVER GATE in docs/CUTOVER.md § pre-cutover.",
+    "name": "known_gap_body_payload_after_1mib_prefix",
+    "method": "POST",
+    "path": "/api/import",
+    "query": "",
+    "body": "union select 1,2,3 from users",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.220",
+    "expect": "warn",
+    "known_gap": false,
+    "_gap_note": "This fixture tests a BODY payload that fits within the 1 MiB inspection cap (SQLi in body, caught correctly). The actual gap is for payloads BEYOND the cap — those cannot be represented in the harness as cheap fixtures since they would require >1 MiB bodies. The gap is documented here: body inspection is prefix-bounded (--max-body-inspect, default 1 MiB) vs Python full-body scan. Truncation events are audit-logged (action=body-inspect-truncated) but the request is NOT blocked.",
+    "known_gap_body_inspect_truncation": true
+  },
+
+  {
     "_comment": "=== KNOWN GAP 3: log4shell corpus missing from Go waf-rules.json ===",
     "_comment2": "secubox-mitmproxy/data/waf-rules.json has a 'log4shell' category with jndi_lookup + jndi_ldap + nested_lookup patterns.",
     "_comment3": "secubox-waf/config/waf-rules.json (Go corpus) is MISSING this category entirely.",

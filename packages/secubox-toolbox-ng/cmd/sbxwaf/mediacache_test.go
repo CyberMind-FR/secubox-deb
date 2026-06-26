@@ -56,7 +56,7 @@ func TestMediaCacheStoreAndGet(t *testing.T) {
 	req := makeGET(testURL)
 	resp := makeResp(200, "image/png", 3600, body)
 
-	mc.MaybeStore(req, resp, body)
+	mc.MaybeStore(req, resp, body, testURL)
 
 	got, hdr, ok := mc.Get(testURL)
 	if !ok {
@@ -82,7 +82,7 @@ func TestMediaCacheRejectsNonMedia(t *testing.T) {
 	req := makeGET(testURL)
 	resp := makeResp(200, "text/html", 3600, body)
 
-	mc.MaybeStore(req, resp, body)
+	mc.MaybeStore(req, resp, body, testURL)
 
 	_, _, ok := mc.Get(testURL)
 	if ok {
@@ -103,7 +103,7 @@ func TestMediaCacheRejectsOversize(t *testing.T) {
 	req := makeGET(testURL)
 	resp := makeResp(200, "video/mp4", 3600, bigBody)
 
-	mc.MaybeStore(req, resp, bigBody)
+	mc.MaybeStore(req, resp, bigBody, testURL)
 
 	_, _, ok := mc.Get(testURL)
 	if ok {
@@ -129,7 +129,7 @@ func TestMediaCacheExpiry(t *testing.T) {
 	// TTL = 1 second
 	resp := makeResp(200, "image/png", 1, body)
 
-	mc.MaybeStore(req, resp, body)
+	mc.MaybeStore(req, resp, body, testURL)
 
 	// Before expiry: should hit.
 	if _, _, ok := mc.Get(testURL); !ok {
@@ -153,12 +153,15 @@ func TestMediaCacheHandlerServesHit(t *testing.T) {
 	mc := NewMediaCache(dir)
 
 	const testURL = "http://media.example.com/logo.png"
+	// The handler computes vhostCacheURL = "https://" + host + path, so
+	// pre-populate with the same key format to ensure a cache hit.
+	const cacheKey = "https://media.example.com/logo.png"
 	body := []byte("PNG_DATA")
 
-	// Pre-populate cache directly.
+	// Pre-populate cache directly using the same key the handler will use.
 	req := makeGET(testURL)
 	resp := makeResp(200, "image/png", 3600, body)
-	mc.MaybeStore(req, resp, body)
+	mc.MaybeStore(req, resp, body, cacheKey)
 
 	// Backend that must NOT be called.
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +218,7 @@ func TestMediaCacheNoStoreSkipped(t *testing.T) {
 	req := makeGET(testURL)
 	resp := makeResp(200, "image/png", -1, body) // -1 → no-store
 
-	mc.MaybeStore(req, resp, body)
+	mc.MaybeStore(req, resp, body, testURL)
 
 	if _, _, ok := mc.Get(testURL); ok {
 		t.Fatal("no-store response must not be cached")
@@ -233,7 +236,7 @@ func TestMediaCacheStatsIncrement(t *testing.T) {
 
 	req := makeGET(testURL)
 	resp := makeResp(200, "audio/mpeg", 3600, body)
-	mc.MaybeStore(req, resp, body)
+	mc.MaybeStore(req, resp, body, testURL)
 
 	s1 := mc.Stats()
 	if s1.Stored != 1 {
@@ -270,7 +273,7 @@ func TestMediaCacheEviction(t *testing.T) {
 		body := make([]byte, 30)
 		req := makeGET(u)
 		resp := makeResp(200, "image/png", 3600, body)
-		mc.MaybeStore(req, resp, body)
+		mc.MaybeStore(req, resp, body, u)
 	}
 
 	s := mc.Stats()
@@ -296,7 +299,7 @@ func TestMediaCacheNonGETNotCached(t *testing.T) {
 	// POST, not GET
 	req, _ := http.NewRequest(http.MethodPost, testURL, nil)
 	resp := makeResp(200, "image/png", 3600, body)
-	mc.MaybeStore(req, resp, body)
+	mc.MaybeStore(req, resp, body, testURL)
 
 	if _, _, ok := mc.Get(testURL); ok {
 		t.Fatal("POST response must not be cached")
@@ -314,7 +317,7 @@ func TestMediaCachePersistenceAcrossRestart(t *testing.T) {
 
 	req := makeGET(testURL)
 	resp := makeResp(200, "image/png", 3600, body)
-	mc1.MaybeStore(req, resp, body)
+	mc1.MaybeStore(req, resp, body, testURL)
 
 	// "Restart": new cache instance pointing at same dir.
 	mc2 := NewMediaCache(dir)
@@ -481,6 +484,73 @@ func TestMediaCacheHandlerOversizeStreamsFullBody(t *testing.T) {
 	_, _, cached := mc.Get(testURL)
 	if cached {
 		t.Fatal("oversize object must NOT be cached (exceeds 16 MiB per-object cap)")
+	}
+}
+
+// --- TestMediaCacheVhostIsolation -----------------------------------------------
+
+// TestMediaCacheVhostIsolation verifies that two different vhosts serving the
+// same asset path receive independent cache entries.  Without vhost-aware keys
+// a /logo.png stored for siteA would collide with the lookup for siteB — cross-
+// tenant content bleed.
+//
+// This mirrors the Python media_cache.py behaviour where r.pretty_url (full URL
+// including host) is used as the cache key instead of path-only.
+func TestMediaCacheVhostIsolation(t *testing.T) {
+	dir := t.TempDir()
+	mc := NewMediaCache(dir)
+
+	const path = "/x.png"
+	const hostA = "siteA.example.com"
+	const hostB = "siteB.example.com"
+
+	keyA := "https://" + hostA + path
+	keyB := "https://" + hostB + path
+
+	bodyA := []byte("LOGO_FOR_SITE_A")
+	bodyB := []byte("LOGO_FOR_SITE_B")
+
+	// Store an object for host A only.
+	reqA := makeGET("http://" + hostA + path)
+	respA := makeResp(200, "image/png", 3600, bodyA)
+	mc.MaybeStore(reqA, respA, bodyA, keyA)
+
+	// Host A should hit with its own content.
+	got, _, ok := mc.Get(keyA)
+	if !ok {
+		t.Fatal("expected cache HIT for host A")
+	}
+	if !bytes.Equal(got, bodyA) {
+		t.Fatalf("host A body mismatch: got %q want %q", got, bodyA)
+	}
+
+	// Host B — same path, different vhost — must be a MISS (vhost isolation).
+	_, _, ok = mc.Get(keyB)
+	if ok {
+		t.Fatal("expected cache MISS for host B (vhost isolation violated — cross-tenant bleed)")
+	}
+
+	// Store a different object for host B.
+	reqB := makeGET("http://" + hostB + path)
+	respB := makeResp(200, "image/png", 3600, bodyB)
+	mc.MaybeStore(reqB, respB, bodyB, keyB)
+
+	// Now host B hits with its own content, not host A's.
+	got, _, ok = mc.Get(keyB)
+	if !ok {
+		t.Fatal("expected cache HIT for host B after store")
+	}
+	if !bytes.Equal(got, bodyB) {
+		t.Fatalf("host B body mismatch: got %q want %q", got, bodyB)
+	}
+
+	// Host A must still serve its own content unchanged.
+	got, _, ok = mc.Get(keyA)
+	if !ok {
+		t.Fatal("expected cache HIT for host A to persist after host B was stored")
+	}
+	if !bytes.Equal(got, bodyA) {
+		t.Fatalf("host A body mismatch after host B store: got %q want %q", got, bodyA)
 	}
 }
 

@@ -38,8 +38,14 @@ ExecStart=/usr/sbin/sbxwaf \
   --threat-log /var/log/secubox/waf/waf-threats.log \
   --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
   --media-cache-dir /var/cache/secubox/waf/media \
-  --crowdsec-url http://127.0.0.1:8080 \
+  --crowdsec-url http://10.100.0.1:8080 \
   --crowdsec-jwt-file /etc/secubox/secrets/waf-crowdsec.jwt
+
+# IMPORTANT: --crowdsec-url must be the real CrowdSec LAPI endpoint (LXC-bridge
+# gateway 10.100.0.1:8080), NOT 127.0.0.1:8080 which is the nftables DNAT VIP
+# that fans connections back into these very workers (self-loop → ban alerts
+# never reach CrowdSec LAPI). Python addon used http://10.100.0.1:8080 for this
+# reason. Verify via pre-cutover checklist §1.2 in docs/CUTOVER.md.
 
 Restart=on-failure
 RestartSec=5
@@ -55,6 +61,7 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+PrivateDevices=yes
 
 # Allow reading config; allow writing logs (WAF-owned leaf dirs only, not the
 # shared parent), cache, and runtime socket dir (M1 fix: scope to leaf dirs).
@@ -68,6 +75,35 @@ AmbientCapabilities=
 
 # Restrict to AF_INET (IPv4 upstream), AF_INET6 (IPv6), AF_UNIX (socket).
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# ── Kernel hardening ──────────────────────────────────────────────────────────
+# Prevent kernel tunable / module changes and cgroup escapes.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+
+# Restrict namespace creation (sbxwaf has no need to create namespaces).
+RestrictNamespaces=yes
+
+# Prevent personality changes (e.g. 32-bit ABI emulation on 64-bit kernel).
+LockPersonality=yes
+
+# Disable setuid/setgid on new files.
+RestrictSUIDSGID=yes
+
+# Prevent real-time scheduling (not needed for a network proxy).
+RestrictRealtime=yes
+
+# ── Seccomp (syscall filter) ─────────────────────────────────────────────────
+# Go network services need the standard system-service set. @privileged and
+# @resources are denied (no raw-socket, perf_event, etc.).
+# MemoryDenyWriteExecute=yes is safe for Go (no JIT).
+# Convention mirrors secubox-mesh.service (project standard, §6 CSPN mandate).
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+MemoryDenyWriteExecute=yes
 
 # Memory and task limits per worker — Go WAF is leaner than the Python fleet.
 MemoryHigh=192M

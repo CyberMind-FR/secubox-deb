@@ -154,7 +154,10 @@ func clientIP(r *http.Request) string {
 	return peerHost
 }
 
-// maxBodyInspect is the maximum number of bytes read from the request body for
-// WAF inspection. Chosen to balance coverage vs. memory: 1 MiB is large enough
-// to catch typical POST-based injection payloads.
-const maxBodyInspect = 1 << 20 // 1 MiB
+// defaultMaxBodyInspect is the default cap for body inspection (1 MiB).
+// The production flag --max-body-inspect overrides this value.
+// NOTE: inspection is bounded to this prefix only; payloads injected beyond
+// this offset are NOT detected. This is a documented parity gap vs the Python
+// WAF (which buffered the entire body). See docs/CUTOVER.md §pre-cutover for
+// the arbitrated detection gap and how to raise or scope this limit.
+const defaultMaxBodyInspect = 1 << 20 // 1 MiB

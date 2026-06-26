@@ -247,11 +247,14 @@ func (m *MediaCache) Get(url string) (body []byte, hdr http.Header, ok bool) {
 }
 
 // MaybeStore conditionally stores the response body to disk.
+// The cacheURL parameter must be the full per-vhost URL composed by the caller
+// as "https://" + r.Host + r.URL.RequestURI() so that assets with the same
+// path on different vhosts get distinct cache keys (vhost isolation).
 // Checks: method==GET, status==200, no no-store/private/set-cookie, cacheable
 // content-type, size < maxObj, ttl > 0.
 // Evicts oldest-by-atime entries when total would exceed maxTotal.
 // Fail-open: any I/O error is silently ignored.
-func (m *MediaCache) MaybeStore(req *http.Request, resp *http.Response, body []byte) {
+func (m *MediaCache) MaybeStore(req *http.Request, resp *http.Response, body []byte, cacheURL string) {
 	if req == nil || resp == nil {
 		return
 	}
@@ -298,7 +301,7 @@ func (m *MediaCache) MaybeStore(req *http.Request, resp *http.Response, body []b
 		return
 	}
 
-	rawURL := req.URL.String()
+	rawURL := cacheURL
 	key := cacheKey(rawURL)
 	bodyPath, metaPath := m.paths(key)
 
