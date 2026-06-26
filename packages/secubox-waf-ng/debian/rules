@@ -1,0 +1,72 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-waf-ng — Go WAF reverse-proxy (#744)
+#
+# Builds the static arm64 binary offline from the committed vendor/ tree in
+# packages/secubox-toolbox-ng (same Go module, same vendor).  The rules file
+# sets GOFLAGS=-mod=vendor and GOPROXY=off so no network access is required.
+# CGO_ENABLED=0 ensures a fully static binary (required for arm64 cross-build
+# from an x86_64 host without an arm64 C toolchain).
+#
+# NOTE: execute_after_dh_auto_install is used (NOT override_dh_strip) to
+# install the binary — override_dh_strip is only called in the binary-arch
+# sequence and even there can silently no-op; execute_after_dh_auto_install
+# runs reliably for Architecture: arm64 packages (#521, #fault-lesson).
+
+export DH_VERBOSE = 1
+
+# Cross-build: produce a static arm64 binary.
+export GOOS        = linux
+export GOARCH      = arm64
+export CGO_ENABLED = 0
+export GOFLAGS     = -mod=vendor
+export GOPROXY     = off
+export GOTOOLCHAIN = local
+# Keep Go build/module cache inside the build tree (sandbox-friendly).
+# Note: the Go sources + vendor tree live one level up in secubox-toolbox-ng/;
+# the build is run from that directory (see override_dh_auto_build below).
+export GOCACHE = $(CURDIR)/_gocache
+export GOPATH  = $(CURDIR)/_gopath
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# Build from the toolbox-ng Go module root (where go.mod + vendor/ live).
+	# The binary is produced in the package root directory for easy install.
+	cd $(CURDIR)/../secubox-toolbox-ng && \
+	  go build -trimpath -ldflags=-s \
+	    -o $(CURDIR)/sbxwaf \
+	    ./cmd/sbxwaf
+
+# No Go unit tests at package-build time: the arm64 cross-binary cannot
+# execute its tests on an x86_64 build host. Tests run in CI on the host arch.
+override_dh_auto_test:
+
+override_dh_auto_install:
+	# Intentionally empty: actual installation handled by
+	# execute_after_dh_auto_install below (see note at top of file).
+
+override_dh_auto_clean:
+	rm -f $(CURDIR)/sbxwaf
+	rm -rf _gocache _gopath
+
+override_dh_installsystemd:
+	# Install the worker template unit manually (dh_installsystemd expects the
+	# unit file at debian/<package>.<unitname>.service or debian/<unitname>.service;
+	# ours lives in systemd/ so we install it explicitly, mirroring the toolbox
+	# package pattern for override_dh_installsystemd).
+	install -d debian/secubox-waf-ng/lib/systemd/system
+	install -m 0644 systemd/secubox-waf-ng-worker@.service \
+	  debian/secubox-waf-ng/lib/systemd/system/
+	# Let dh_installsystemd generate the enable helpers for @1 and @2.
+	# The postinst's `systemctl enable --now` handles activation.
+	dh_installsystemd --name=secubox-waf-ng-worker@
+
+execute_after_dh_auto_install:
+	install -d debian/secubox-waf-ng/usr/sbin
+	install -m 0755 sbxwaf debian/secubox-waf-ng/usr/sbin/sbxwaf
+	# AppArmor profile → /etc/apparmor.d/usr.sbin.sbxwaf
+	install -d debian/secubox-waf-ng/etc/apparmor.d
+	install -m 0644 debian/secubox-waf-ng.apparmor \
+	  debian/secubox-waf-ng/etc/apparmor.d/usr.sbin.sbxwaf

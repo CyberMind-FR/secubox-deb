@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# AppArmor enforce profile for /usr/sbin/sbxwaf (secubox-waf-ng, #744)
+#
+# Installed by dpkg to /etc/apparmor.d/usr.sbin.sbxwaf and loaded in enforce
+# mode by the postinst (aa-enforce /etc/apparmor.d/usr.sbin.sbxwaf).
+#
+# Surface minimisation:
+#   - r    : /var/log/secubox/            (traverse shared parent only — L1 fix)
+#   - rw   : /var/log/secubox/waf/**      (threat log)
+#   - rw   : /var/log/secubox/cookie-audit/** (cookie-audit JSONL)
+#   - rw   : /var/cache/secubox/waf/**    (media response cache)
+#   - rw   : /run/secubox/**              (Unix sockets, PID files)
+#   - r    : /etc/secubox/waf/**          (routes, rules, CA cert)
+#   - r    : /etc/secubox/secrets/**      (CrowdSec JWT file — read-only)
+#   - r    : /usr/sbin/sbxwaf             (binary)
+#   - r    : /proc/self/maps, /proc/self/status, /sys/kernel/mm/transparent*
+#             (Go runtime internals; read-only, kernel-granted)
+#   - ix   : inherited for Go internal forks (e.g. os.StartProcess self-exec)
+#   - network inet, inet6 : upstream TCP connections + listener
+#
+# Everything else is denied by the default-deny profile.
+
+#include <tunables/global>
+
+/usr/sbin/sbxwaf {
+  #include <abstractions/base>
+
+  # Binary
+  /usr/sbin/sbxwaf r,
+
+  # ── Config (read-only) ────────────────────────────────────────────────────
+  /etc/secubox/waf/           r,
+  /etc/secubox/waf/**         r,
+  # Secrets dir: the JWT file is read once at startup.
+  # /etc/secubox/ traversal is public (0755), only the leaf is restricted.
+  /etc/secubox/secrets/       r,
+  /etc/secubox/secrets/**     r,
+
+  # ── Log output (read/write, append) ──────────────────────────────────────
+  # L1 fix: shared parent needs only traverse (r), not write.
+  # WAF-owned leaf dirs get rw so the binary can create + append log files.
+  /var/log/secubox/                    r,
+  /var/log/secubox/waf/                rw,
+  /var/log/secubox/waf/**              rw,
+  /var/log/secubox/cookie-audit/       rw,
+  /var/log/secubox/cookie-audit/**     rw,
+
+  # ── Media cache (read/write) ──────────────────────────────────────────────
+  /var/cache/secubox/         r,
+  /var/cache/secubox/waf/     rw,
+  /var/cache/secubox/waf/**   rw,
+
+  # ── Runtime (Unix sockets, PID files) ────────────────────────────────────
+  /run/secubox/               rw,
+  /run/secubox/**             rw,
+
+  # ── Networking ───────────────────────────────────────────────────────────
+  network inet  stream,
+  network inet6 stream,
+  network unix  stream,
+
+  # ── Go runtime ───────────────────────────────────────────────────────────
+  /proc/self/maps            r,
+  /proc/self/status          r,
+  /proc/self/smaps           r,
+  /proc/sys/kernel/ngroups_max r,
+  /sys/kernel/mm/transparent_hugepage/enabled r,
+
+  # Deny everything else (default-deny profile — no explicit deny rules
+  # needed; any path not listed above is implicitly denied by AppArmor).
+}

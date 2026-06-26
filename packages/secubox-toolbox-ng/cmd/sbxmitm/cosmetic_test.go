@@ -7,6 +7,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/httpcodec"
 )
 
 // representativeSelectors covers each ported group + an EXPANDED popup token,
@@ -167,12 +169,12 @@ func TestInjectHTMLNonWGSkipsCosmetic(t *testing.T) {
 func TestInjectIntoBodyGzipCarriesCosmetic(t *testing.T) {
 	// The gzip decompress→inject→recompress path must carry BOTH injects for wg.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	gz := gzipBytes(body)
+	gz := httpcodec.GzipBytes(body)
 	out, ok := injectIntoBody(gz, "gzip", inlineTestScript, "", true)
 	if !ok {
 		t.Fatalf("injectIntoBody(gzip) returned ok=false")
 	}
-	plain, err := gunzipBytes(out)
+	plain, err := httpcodec.GunzipBytes(out)
 	if err != nil {
 		t.Fatalf("re-gzip output not gunzippable: %v", err)
 	}

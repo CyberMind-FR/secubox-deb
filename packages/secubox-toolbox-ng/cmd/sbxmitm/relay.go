@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/relay"
 )
 
 // Stable socket paths — verbatim from the Python addons' TARGET constants
@@ -65,7 +67,7 @@ func (px *Proxy) relayEmit(socketPath, route string, payload []byte) {
 	if !px.relayEnabled() || len(payload) == 0 {
 		return
 	}
-	emit(socketPath, route, payload)
+	relay.Emit(socketPath, route, payload)
 }
 
 // ── dpi payload ──────────────────────────────────────────────────────────────

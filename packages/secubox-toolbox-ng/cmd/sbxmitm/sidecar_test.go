@@ -2,6 +2,7 @@
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 //
 // Unit tests for the sidecar emit helper (#662 Phase 4).
+// Transport now delegates to internal/relay (ref #744).
 package main
 
 import (
@@ -11,10 +12,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/relay"
 )
 
-// TestEmitDelivers: emitSync to a live unix socket delivers the POST request
-// line, route and JSON body.
+// TestEmitDelivers: relay.EmitSync to a live unix socket delivers the POST
+// request line, route and JSON body.
 func TestEmitDelivers(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "emit.sock")
 	ln, err := net.Listen("unix", sock)
@@ -41,13 +44,13 @@ func TestEmitDelivers(t *testing.T) {
 				break
 			}
 		}
-		// Reply so emitSync's drain completes cleanly.
+		// Reply so EmitSync's drain completes cleanly.
 		c.Write([]byte("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
 		got <- sb.String()
 	}()
 
-	if err := emitSync(sock, "/classify", []byte(`{"k":"v"}`)); err != nil {
-		t.Fatalf("emitSync: %v", err)
+	if err := relay.EmitSync(sock, "/classify", []byte(`{"k":"v"}`)); err != nil {
+		t.Fatalf("EmitSync: %v", err)
 	}
 
 	select {
@@ -63,31 +66,31 @@ func TestEmitDelivers(t *testing.T) {
 	}
 }
 
-// TestEmitDeadSocketNoPanicNoBlock: emit() (the goroutine form) to a
-// nonexistent socket must return immediately and never panic, and emitSync
+// TestEmitDeadSocketNoPanicNoBlock: relay.Emit (the goroutine form) to a
+// nonexistent socket must return immediately and never panic, and EmitSync
 // must just return an error without blocking past the timeout.
 func TestEmitDeadSocketNoPanicNoBlock(t *testing.T) {
 	dead := filepath.Join(t.TempDir(), "nope.sock")
 
-	// emit (async) returns instantly even though the socket is dead.
+	// Emit (async) returns instantly even though the socket is dead.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		emit(dead, "/inject", []byte(`{"x":1}`)) // must not panic/block
+		relay.Emit(dead, "/inject", []byte(`{"x":1}`)) // must not panic/block
 	}()
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("emit() blocked on a dead socket")
+		t.Fatal("relay.Emit() blocked on a dead socket")
 	}
 
-	// emitSync surfaces the dial error (which emit swallows) without blocking.
+	// EmitSync surfaces the dial error (which Emit swallows) without blocking.
 	start := time.Now()
-	if err := emitSync(dead, "/inject", []byte(`{}`)); err == nil {
-		t.Error("emitSync to dead socket: expected error, got nil")
+	if err := relay.EmitSync(dead, "/inject", []byte(`{}`)); err == nil {
+		t.Error("EmitSync to dead socket: expected error, got nil")
 	}
-	if elapsed := time.Since(start); elapsed > emitTimeout+time.Second {
-		t.Errorf("emitSync blocked %v on dead socket", elapsed)
+	if elapsed := time.Since(start); elapsed > relay.EmitTimeout+time.Second {
+		t.Errorf("EmitSync blocked %v on dead socket", elapsed)
 	}
 }
 
@@ -111,8 +114,8 @@ func TestEmitEmptyRouteDefaults(t *testing.T) {
 		c.Write([]byte("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
 		got <- string(buf[:n])
 	}()
-	if err := emitSync(sock, "", nil); err != nil {
-		t.Fatalf("emitSync: %v", err)
+	if err := relay.EmitSync(sock, "", nil); err != nil {
+		t.Fatalf("EmitSync: %v", err)
 	}
 	select {
 	case raw := <-got:
