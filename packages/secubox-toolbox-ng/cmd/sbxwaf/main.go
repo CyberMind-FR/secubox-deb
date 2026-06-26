@@ -11,9 +11,14 @@
 // parses haproxy-routes.json and the handler uses cached per-backend
 // *httputil.ReverseProxy instances (no per-request allocation).
 //
-// Later tasks wire in the rules engine (Task 2.1) and ban table (Task 3.1).
-// Server keeps the routeLookup func field so tests can still drive it without
-// file I/O; main() sets it to routes.Lookup when --routes is provided.
+// Task 3.2: graduated WARNING/BAN responses + threat log.
+//   - Server gains ban *Ban and threatLog *ThreatLog fields.
+//   - On a WAF hit: ban.Record(clientIP, now) → if banned → writeBan + log
+//     "banned"; else → writeWarning + log "warning".
+//   - threatLog is set by main() via NewThreatLog(--threat-log path).
+//   - crowdsec seam: Server.crowdsec (nil-able interface, see below) is the
+//     hook point for Task 4.1 — call crowdsec.Report(ip, cat, sev) when
+//     banned, guarded by nil-check so the field is entirely optional.
 //
 // Design decision — Server struct:
 //   - ca        *forge.CA          wired from --ca-cert/--ca-key (lazy: nil when
@@ -22,8 +27,9 @@
 //   - routeLookup func(host)(ip,port,ok) — set to routes.Lookup in main(), or
 //                                  injected directly by tests
 //   - upstreamTimeout time.Duration
-//
-//   Rules / Ban fields will be added in Tasks 2.1 / 3.1.
+//   - ban       *Ban               sliding-window ban state; NewBan(300s,3) in main()
+//   - threatLog *ThreatLog         append-only JSON threat log; NewThreatLog in main()
+//   - crowdsec  CrowdSecReporter   Task 4.1 seam — nil until wired; see interface below
 package main
 
 import (
@@ -42,6 +48,20 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
 )
+
+// CrowdSecReporter is the seam for Task 4.1 — CrowdSec LAPI bridge.
+// When a client IP is banned, the handler calls crowdsec.Report if the field
+// is non-nil.  Task 4.1 implements a concrete type (e.g. *CrowdSecClient) and
+// wires it into Server.crowdsec in main().
+//
+// TODO(task-4.1): implement CrowdSecClient satisfying this interface and wire
+// it via --crowdsec-url / --crowdsec-machine-id / --crowdsec-password flags.
+type CrowdSecReporter interface {
+	// Report submits a ban alert for ip to the CrowdSec LAPI.
+	// cat and sev are the WAF category and severity strings.
+	// Must be non-blocking (should run in a goroutine if the LAPI call can block).
+	Report(ip, cat, sev string)
+}
 
 // Server is the sbxwaf reverse-proxy core.
 type Server struct {
@@ -74,6 +94,21 @@ type Server struct {
 	// Nil when --rules is empty (pass-through mode, no inspection).
 	// Wired in main() via LoadRules; tests can inject directly.
 	rules *Rules
+
+	// ban tracks per-IP threat hit counts in a sliding window.
+	// Wired in main() via NewBan(300s, 3); tests can inject directly.
+	// Nil means no ban tracking (legacy: plain 403 on WAF hit).
+	ban *Ban
+
+	// threatLog appends one JSON line per WAF hit to the threats log file.
+	// Wired in main() via NewThreatLog(--threat-log); tests can inject.
+	// Nil means no threat logging.
+	threatLog *ThreatLog
+
+	// crowdsec is the Task 4.1 CrowdSec LAPI bridge seam.
+	// Nil until Task 4.1 is implemented and wired in main().
+	// When non-nil: called with (ip, cat, sev) whenever an IP reaches BAN.
+	crowdsec CrowdSecReporter
 }
 
 // handler returns an http.Handler that:
@@ -195,7 +230,7 @@ func (s *Server) handler() http.Handler {
 					r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), r.Body))
 				}
 
-				_, _, hit := s.rules.Match(
+				cat, sev, hit := s.rules.Match(
 					r.Method,
 					rawPath,
 					r.URL.RawQuery,
@@ -203,7 +238,56 @@ func (s *Server) handler() http.Handler {
 					r.Header.Get("User-Agent"),
 				)
 				if hit {
-					http.Error(w, "403 Forbidden: WAF blocked this request", http.StatusForbidden)
+					// Task 3.2 — graduated WARNING/BAN response.
+					//
+					// When ban is wired (always in production), record the hit and
+					// return a graduated response:
+					//   count < threshold → WARNING (403, warning page)
+					//   count >= threshold → BAN    (403, ban page)
+					//
+					// When ban is nil (legacy / no ban tracking), fall back to a
+					// plain 403 so tests that don't inject ban still pass.
+					if s.ban == nil {
+						http.Error(w, "403 Forbidden: WAF blocked this request", http.StatusForbidden)
+						return
+					}
+
+					count, banned := s.ban.Record(ip, time.Now().Unix())
+					action := "warning"
+					if banned {
+						action = "banned"
+					}
+
+					// Log threat (best-effort: nil threatLog is a no-op).
+					if s.threatLog != nil {
+						s.threatLog.Record(ThreatRecord{
+							ClientIP: ip,
+							Host:     r.Host,
+							Method:   r.Method,
+							Path:     rawPath,
+							Category: cat,
+							Severity: sev,
+							// rules.Match does not return a rule ID in its current
+							// signature (returns cat, sev, hit). RuleID is left empty
+							// here; Task 2.x can extend Match to return it if needed.
+							RuleID: "",
+							Action: action,
+							UA:     r.Header.Get("User-Agent"),
+						})
+					}
+
+					log.Printf("sbxwaf: THREAT [%s] %s (%d/%d): %s",
+						sev, ip, count, 3, cat)
+
+					if banned {
+						// Task 4.1 seam — notify CrowdSec LAPI when non-nil.
+						if s.crowdsec != nil {
+							go s.crowdsec.Report(ip, cat, sev)
+						}
+						writeBan(w)
+					} else {
+						writeWarning(w, cat)
+					}
 					return
 				}
 			}
@@ -234,6 +318,8 @@ func main() {
 	routesFile := flag.String("routes", "", "path to haproxy-routes.json (hot-reloaded on mtime change)")
 	rules := flag.String("rules", "", "path to rules file (loaded by Task 2.1)")
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
+	threatLog := flag.String("threat-log", "/var/log/secubox/waf-threats.log",
+		"path for append-only WAF threat log (NDJSON, one record per hit)")
 	flag.Parse()
 
 	// rules is consumed below when --rules is provided.
@@ -255,7 +341,14 @@ func main() {
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
+		// Task 3.2: graduated ban (window=300s, threshold=3, matches Python
+		// BAN_WINDOW=300 / BAN_THRESHOLD=3 from secubox_waf.py lines 82-83).
+		ban: NewBan(300*time.Second, 3),
+		// Task 3.2: append-only threat log.
+		threatLog: NewThreatLog(*threatLog),
+		// crowdsec: nil — wired in Task 4.1 via --crowdsec-* flags.
 	}
+	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
 
 	// Wire in the WAF rules engine when --rules is provided.
 	if *rules != "" {
