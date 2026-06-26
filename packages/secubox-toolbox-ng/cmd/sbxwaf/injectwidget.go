@@ -19,7 +19,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -32,13 +31,13 @@ import (
 // Larger HTML pages (rare) are passed through untouched — never worth the memory.
 const widgetMaxBody = 4 << 20 // 4 MiB
 
-// applyWidget injects the SecuBox health/visit widget into an upstream HTML
-// response when (a) widget injection is enabled (visits + hosts non-empty),
-// (b) the request host matches a configured first-party suffix, and (c) the
-// response is text/html under the size cap. STRICTLY fail-open: any issue leaves
-// the response byte-identical. Called from the reverse-proxy ModifyResponse hook.
-func applyWidget(resp *http.Response, host string, visits *VisitStats, hosts []string) {
-	if visits == nil || len(hosts) == 0 || resp == nil || resp.Body == nil {
+// applyWidget injects the SecuBox health banner loader into an upstream HTML
+// response when (a) injection is enabled (origin + hosts non-empty), (b) the
+// request host matches a configured first-party suffix, and (c) the response is
+// text/html under the size cap. STRICTLY fail-open: any issue leaves the response
+// byte-identical. Called from the reverse-proxy ModifyResponse hook.
+func applyWidget(resp *http.Response, host string, origin string, hosts []string) {
+	if origin == "" || len(hosts) == 0 || resp == nil || resp.Body == nil {
 		return
 	}
 	if !widgetHostMatch(host, hosts) || !isHTMLResponse(resp.Header.Get("Content-Type")) {
@@ -55,7 +54,7 @@ func applyWidget(resp *http.Response, host string, visits *VisitStats, hosts []s
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return
 	}
-	out, ok := injectWidgetBody(body, resp.Header.Get("Content-Encoding"), visits.Total())
+	out, ok := injectWidgetBody(body, resp.Header.Get("Content-Encoding"), origin)
 	if !ok {
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		return
@@ -67,29 +66,46 @@ func applyWidget(resp *http.Response, host string, visits *VisitStats, hosts []s
 
 // widgetGuard marks an already-injected document so a re-proxied response is not
 // double-stamped.
-const widgetGuard = "sbxwaf-health-widget"
+const widgetGuard = "sbxwaf-health-banner-loader"
 
-// widgetHTML renders the badge with the current cumulative visit count. Inline
-// styles only (no external asset, CSP-friendly), fixed bottom-right, unobtrusive.
-func widgetHTML(total int64) string {
-	return `<div id="` + widgetGuard + `" style="position:fixed;right:12px;bottom:12px;z-index:2147483646;` +
-		`font:600 12px/1.4 system-ui,sans-serif;color:#e8e6d9;background:rgba(10,10,15,.82);` +
-		`border:1px solid #6e40c9;border-radius:9px;padding:6px 10px;box-shadow:0 2px 10px rgba(0,0,0,.4);` +
-		`backdrop-filter:blur(4px);display:flex;gap:7px;align-items:center;opacity:.92" ` +
-		`title="Site protégé par le WAF SecuBox">` +
-		`<span style="color:#00d4ff">🛡️ SecuBox</span>` +
-		`<span style="color:#6b6b7a">·</span>` +
-		`<span>👁️ ` + fmt.Sprintf("%d", total) + ` visites</span>` +
-		`<span style="width:7px;height:7px;border-radius:50%;background:#00ff41;box-shadow:0 0 6px #00ff41"></span>` +
-		`</div>`
+// healthBannerSnippet emits the loader for the SHARED SecuBox health banner
+// (shared/health-banner.js) in its CDN-injected mode: it points the banner's APIs
+// + asset at the canonical Hub origin (absolute URLs) so the SAME health widget
+// the dashboard shows also mounts on first-party content sites. The banner script
+// self-guards against double-init (window.__SBX_HEALTH_BANNER__); IS_CDN_INJECTED
+// becomes true because window.SECUBOX_HEALTH_API is set.
+func healthBannerSnippet(origin string) string {
+	o := strings.TrimRight(origin, "/")
+	return `<script id="` + widgetGuard + `">(function(){` +
+		`if(window.__SBX_HEALTH_BANNER__)return;` +
+		`var O=` + jsString(o) + `;` +
+		`window.SECUBOX_HEALTH_API=O+'/api/v1/metrics/health/summary';` +
+		`window.SECUBOX_VISITOR_ORIGIN_API=O+'/api/v1/metrics/visitor-origin';` +
+		`window.SECUBOX_LIVE_HOSTS_API=O+'/api/v1/metrics/live-hosts';` +
+		`window.SECUBOX_CERT_STATUS_API=O+'/api/v1/metrics/cert-status';` +
+		`window.SECUBOX_COOKIE_AUDIT_SUMMARY=O+'/api/v1/cookie-audit/summary';` +
+		`var s=document.createElement('script');s.src=O+'/shared/health-banner.js';s.async=true;` +
+		`document.body.appendChild(s);})();</script>`
 }
 
-// injectWidgetHTML inserts the widget just before the closing </body> tag of a
-// decompressed HTML document. Returns the original bytes unchanged if there is no
-// </body> or the document was already stamped (idempotent).
-func injectWidgetHTML(plain []byte, total int64) []byte {
-	if bytes.Contains(plain, []byte(widgetGuard)) {
-		return plain // already injected
+// jsString returns a safe single-quoted JS string literal for s (escapes the few
+// metacharacters that matter inside '...'); origins are operator-config hostnames
+// so this is belt-and-braces, not untrusted input.
+func jsString(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `'`, `\'`, "\n", `\n`, "\r", `\r`, "<", `\x3c`)
+	return "'" + r.Replace(s) + "'"
+}
+
+// injectWidgetHTML inserts the health-banner loader just before the closing
+// </body> tag of a decompressed HTML document. Returns the original bytes
+// unchanged when there is no </body>, the loader was already injected, OR the
+// page ALREADY ships the health banner itself (a dashboard page) — so we never
+// double-mount it.
+func injectWidgetHTML(plain []byte, origin string) []byte {
+	if bytes.Contains(plain, []byte(widgetGuard)) ||
+		bytes.Contains(plain, []byte("health-banner.js")) ||
+		bytes.Contains(plain, []byte("__SBX_HEALTH_BANNER__")) {
+		return plain // already has the banner (loader or first-party include)
 	}
 	// Case-insensitive search for the LAST </body>.
 	low := bytes.ToLower(plain)
@@ -97,7 +113,7 @@ func injectWidgetHTML(plain []byte, total int64) []byte {
 	if idx < 0 {
 		return plain // no body close → nothing safe to do
 	}
-	snippet := []byte(widgetHTML(total))
+	snippet := []byte(healthBannerSnippet(origin))
 	out := make([]byte, 0, len(plain)+len(snippet))
 	out = append(out, plain[:idx]...)
 	out = append(out, snippet...)
@@ -109,17 +125,17 @@ func injectWidgetHTML(plain []byte, total int64) []byte {
 // re-encodes in the SAME codec. Fail-open on any error. Returns (out, true) when
 // the body was rewritten, (body, false) otherwise — the caller updates
 // Content-Length to len(out) only when ok.
-func injectWidgetBody(body []byte, encoding string, total int64) (out []byte, ok bool) {
+func injectWidgetBody(body []byte, encoding string, origin string) (out []byte, ok bool) {
 	switch strings.ToLower(strings.TrimSpace(encoding)) {
 	case "":
-		inj := injectWidgetHTML(body, total)
+		inj := injectWidgetHTML(body, origin)
 		return inj, len(inj) != len(body)
 	case "gzip", "br", "zstd":
 		plain, err := httpcodec.Decode(encoding, body)
 		if err != nil {
 			return body, false // fail open: serve the original compressed bytes
 		}
-		inj := injectWidgetHTML(plain, total)
+		inj := injectWidgetHTML(plain, origin)
 		if len(inj) == len(plain) {
 			return body, false // nothing injected → keep original (avoid re-encode churn)
 		}
