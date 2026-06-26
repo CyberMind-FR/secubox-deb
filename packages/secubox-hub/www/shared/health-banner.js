@@ -21,7 +21,7 @@
     if (window.__SBX_HEALTH_BANNER__) return;
     window.__SBX_HEALTH_BANNER__ = true;
 
-    const VERSION = '1.4.6';
+    const VERSION = '1.4.7';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
     const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
@@ -939,7 +939,12 @@
             const body = document.body;
             if (!body) return;
             if (!trigger.isConnected) body.appendChild(trigger);
-            if (!banner.isConnected) body.appendChild(banner);
+            if (!banner.isConnected) {
+                body.appendChild(banner);
+                // Re-sync the layout-shift class: a body wiped while the banner
+                // was expanded loses 'health-banner-open' on the fresh body.
+                body.classList.toggle('health-banner-open', banner.classList.contains('expanded'));
+            }
         }
         try {
             // childList on <html> catches a full <body> element swap (cheap, no subtree).
