@@ -58,6 +58,7 @@
 | 📦 **APT Repository** | Apps | APT-Repository-Verwaltung |
 | ⚙️ **System Hub** | System | Systemkonfiguration und -verwaltung |
 | 💾 **Backup Manager** | System | System- und LXC-Backup |
+| 🥾 **Netzwerk-Boot** | System | HTTP/TFTP-Netboot-Provisionierung + signierter FIT-Installer (Tow-Boot) |
 
 ---
 

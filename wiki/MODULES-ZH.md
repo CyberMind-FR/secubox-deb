@@ -58,6 +58,7 @@
 | 📦 **APT Repository** | Apps | APT仓库管理 |
 | ⚙️ **System Hub** | System | 系统配置和管理 |
 | 💾 **Backup Manager** | System | 系统和LXC备份 |
+| 🥾 **网络启动** | System | HTTP/TFTP网络启动配置 + 签名FIT安装程序（Tow-Boot） |
 
 ---
 
