@@ -35,7 +35,7 @@ ExecStart=/usr/sbin/sbxwaf \
   --ca-key /etc/secubox/waf/ca/ca.pem \
   --routes /etc/secubox/waf/haproxy-routes.json \
   --rules /etc/secubox/waf/waf-rules.json \
-  --threat-log /var/log/secubox/waf-threats.log \
+  --threat-log /var/log/secubox/waf/waf-threats.log \
   --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
   --media-cache-dir /var/cache/secubox/waf/media \
   --crowdsec-url http://127.0.0.1:8080 \
@@ -56,9 +56,10 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 
-# Allow reading config; allow writing logs, cache, and runtime socket dir.
+# Allow reading config; allow writing logs (WAF-owned leaf dirs only, not the
+# shared parent), cache, and runtime socket dir (M1 fix: scope to leaf dirs).
 ReadOnlyPaths=/etc/secubox
-ReadWritePaths=/var/log/secubox /var/cache/secubox/waf /run/secubox
+ReadWritePaths=/var/log/secubox/waf /var/log/secubox/cookie-audit /var/cache/secubox/waf /run/secubox
 
 # Drop all ambient capabilities — sbxwaf binds on a non-privileged port
 # (808x) and needs no special capabilities.
