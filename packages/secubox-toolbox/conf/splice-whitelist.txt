@@ -1,0 +1,24 @@
+# SecuBox toolbox :: OPERATOR splice whitelist (#740)
+#
+# Hosts here are FORCE-SPLICED: the R3 MITM passes their TLS through UNTOUCHED
+# (no decrypt, no banner inject) — they keep only PASSIVE analysis (SNI/DPI) and
+# Tor egress when the tunnel's Tor mode is on. Use this for endpoints that BREAK
+# under interception, the classic case being CERTIFICATE PINNING: a mobile app
+# or native client that ships its server's public key refuses our forged leaf
+# and hard-fails ("connection error", tunnel must be cut).
+#
+# This list is AUTHORITATIVE — it wins even over the tracker never-set. It is
+# OPERATOR/WebUI-mutable and auto-learnable (a client that aborts the handshake
+# right after our cert is a pinning signal → proposed here); each entry is
+# de-whitelistable from the portal to return the host to full MITM analysis.
+#
+# Suffix-matched (subdomains included). One host suffix per line; '#' comments.
+#
+# ── ChatGPT mobile/native app (pins api.openai.com / chatgpt.com) ──
+openai.com           # ChatGPT app API + auth + assets (api/ios/chat/auth/cdn)
+chatgpt.com          # ChatGPT web/app primary domain
+oaistatic.com        # ChatGPT static assets shard
+oaiusercontent.com   # ChatGPT user content shard
+#
+# ── Operator-added cert-pinned services (add your own below or via the portal) ──
+# example: add the host of an authenticated API whose native client pins certs.

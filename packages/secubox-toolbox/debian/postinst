@@ -94,6 +94,16 @@ SBXFILTERS
     mkdir -p /var/lib/secubox/toolbox
     chown secubox-toolbox:secubox-toolbox /var/lib/secubox/toolbox 2>/dev/null || true
     chmod 0750 /var/lib/secubox/toolbox 2>/dev/null || true
+    # #740 : seed the OPERATOR splice whitelist (cert-pinned apps that break
+    # under MITM — ChatGPT et al.) from the shipped default, but ONLY on first
+    # install. It is operator/WebUI-mutable + auto-learnable, so an upgrade must
+    # NEVER clobber the live list. sbxmitm mtime-reloads it; the portal edits it.
+    if [ ! -e /var/lib/secubox/toolbox/splice-whitelist.txt ] \
+       && [ -e /usr/lib/secubox/toolbox/conf/splice-whitelist.txt ]; then
+      install -m 0640 -o secubox-toolbox -g secubox-toolbox \
+        /usr/lib/secubox/toolbox/conf/splice-whitelist.txt \
+        /var/lib/secubox/toolbox/splice-whitelist.txt 2>/dev/null || true
+    fi
     # #577 : shared media proxy-cache dir (opt-in via filters ; 2 GB LRU).
     mkdir -p /var/cache/secubox/toolbox/media
     chown secubox-toolbox:secubox-toolbox /var/cache/secubox/toolbox/media 2>/dev/null || true
