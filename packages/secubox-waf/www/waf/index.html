@@ -561,6 +561,25 @@
             <div class="stat-card"><div class="emoji">🛡️</div><div class="value" id="protectedSites">0</div><div class="label">Protected</div></div>
         </div>
 
+        <!-- #747 — dashboard tabs: Menaces / Attaquants suivis / Visites -->
+        <div class="waf-tabs" id="wafTabs">
+            <button class="waf-tab active" data-tab="overview" onclick="switchTab('overview')">🛡️ Menaces</button>
+            <button class="waf-tab" data-tab="attackers" onclick="switchTab('attackers')">🎯 Attaquants suivis</button>
+            <button class="waf-tab" data-tab="visits" onclick="switchTab('visits')">👁️ Visites</button>
+        </div>
+        <style>
+          .waf-tabs{display:flex;gap:.4rem;margin:.4rem 0 1rem;flex-wrap:wrap}
+          .waf-tab{background:rgba(110,64,201,.08);color:#c9b8ff;border:1px solid #2a2a3f;border-radius:.5rem;
+                   padding:.45rem 1rem;cursor:pointer;font-size:.88rem;font-weight:600}
+          .waf-tab.active{background:linear-gradient(90deg,#00d4ff22,#6e40c944);color:#fff;border-color:#6e40c9}
+          .vbars{display:flex;flex-direction:column;gap:.35rem}
+          .vbar{display:grid;grid-template-columns:auto 1fr auto;gap:.6rem;align-items:center;font-size:.82rem}
+          .vbar .vlabel{white-space:nowrap;max-width:16rem;overflow:hidden;text-overflow:ellipsis}
+          .vbar .vtrack{height:.6rem;border-radius:.3rem;background:rgba(255,255,255,.07);overflow:hidden}
+          .vbar .vfill{height:100%;border-radius:.3rem;background:linear-gradient(90deg,#00d4ff,#6e40c9)}
+          .vbar .vcount{font-variant-numeric:tabular-nums;color:#c9a84c}
+        </style>
+
         <div class="grid-2">
             <!-- Security Events (combined alerts/bans) -->
             <div class="glass-card">
@@ -701,9 +720,9 @@
                 </div>
             </div>
 
-            <!-- #747 — non-attacker visit statistics (client type / OS / geo) -->
-            <div class="glass-card" id="visitsCard" style="grid-column: span 2;">
-                <h2>👁️ Visites (trafic légitime) <span class="muted" style="font-size:0.8rem;">— total <b id="visitsTotal">—</b> requêtes vues par le WAF</span></h2>
+            <!-- #747 — non-attacker visit statistics (shown in the Visites tab) -->
+            <div class="glass-card" id="visitsCard" style="grid-column: 1 / -1;">
+                <h2>👁️ Visites — trafic légitime <span class="muted" style="font-size:0.8rem;">— total <b id="visitsTotal">—</b> requêtes vues par le WAF</span></h2>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-top:0.6rem">
                     <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">🧭 Type de client</h3><div id="visitsClientType" class="vbars"><span class="muted">…</span></div></div>
                     <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">💻 Système</h3><div id="visitsOS" class="vbars"><span class="muted">…</span></div></div>
@@ -712,17 +731,9 @@
                     <div style="grid-column:1/-1"><h3 style="font-size:0.85rem;margin:0 0 .4rem">🎯 Sites les plus visités</h3><div id="visitsVhosts" class="vbars"><span class="muted">…</span></div></div>
                 </div>
             </div>
+
         </div>
     </main>
-
-    <style>
-      .vbars{display:flex;flex-direction:column;gap:.3rem}
-      .vbar{display:grid;grid-template-columns:auto 1fr auto;gap:.5rem;align-items:center;font-size:.8rem}
-      .vbar .vlabel{white-space:nowrap;max-width:14rem;overflow:hidden;text-overflow:ellipsis}
-      .vbar .vtrack{height:.55rem;border-radius:.3rem;background:rgba(255,255,255,.07);overflow:hidden}
-      .vbar .vfill{height:100%;border-radius:.3rem;background:linear-gradient(90deg,#00d4ff,#6e40c9)}
-      .vbar .vcount{font-variant-numeric:tabular-nums;color:#c9a84c}
-    </style>
 
     <script>
         const API = '/api/v1/waf';
@@ -1246,6 +1257,23 @@
             _vbars('visitsVhosts', d?.by_vhost, null);
         }
 
+        // #747 — dashboard tabs (Menaces / Attaquants suivis / Visites)
+        function switchTab(name) {
+            document.querySelectorAll('#wafTabs .waf-tab').forEach(b =>
+                b.classList.toggle('active', b.dataset.tab === name));
+            const show = (sel, on) => document.querySelectorAll(sel).forEach(el =>
+                el.style.display = on ? '' : 'none');
+            const overview = name === 'overview';
+            show('.grid-2', overview);
+            show('.eyemote-card', overview);
+            const tracked = document.getElementById('trackedAttackersCard');
+            const visits = document.getElementById('visitsCard');
+            if (tracked) tracked.style.display = (name === 'attackers') ? '' : 'none';
+            if (visits) visits.style.display = (name === 'visits') ? '' : 'none';
+            if (name === 'visits') loadVisits();
+            if (name === 'attackers') loadTrackedAttackers();
+        }
+
         // WAF Toggle
         let wafActive = true;
         async function toggleWaf() {
@@ -1314,6 +1342,7 @@
             btn.innerHTML = '📤<span class="quick-btn-tooltip">Export</span>';
         }
 
+        switchTab('overview');
         refresh();
         setInterval(refresh, 30000);
         // More frequent live updates
