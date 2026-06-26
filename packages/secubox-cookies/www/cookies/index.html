@@ -817,7 +817,7 @@
                     const sites = (t.sites || []).join(', ');
                     const seen = t.last_seen ? new Date(t.last_seen * 1000).toLocaleString() : '-';
                     const pc = t.pre_consent_hits > 0
-                        ? `<span class="badge badge-red">${t.pre_consent_hits}</span>` : '0';
+                        ? `<span class="badge badge-red">${Number(t.pre_consent_hits) | 0}</span>` : '0';
                     return `<tr>
                         <td><strong>${esc(t.tracker_domain)}</strong></td>
                         <td><span class="badge badge-cyan" title="${esc(sites)}">${t.site_count}</span></td>
@@ -1002,8 +1002,7 @@
         }
 
         async function refresh() {
-            await Promise.all([loadStatus(), loadStats(), loadViolationsPreview()]);
-            loadCrossSite();
+            await Promise.all([loadStatus(), loadStats(), loadViolationsPreview(), loadCrossSite()]);
         }
 
         // Initial load
