@@ -106,6 +106,17 @@ func (v *VisitStats) Record(vhost, ua, ip string, status int) {
 	}
 }
 
+// Total returns the current cumulative visit count (lock-guarded) for the
+// WAF-injected health widget.
+func (v *VisitStats) Total() int64 {
+	if v == nil {
+		return 0
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.total
+}
+
 // bump increments an unbounded-but-tiny key set (client type / OS / status).
 func bump(m map[string]int64, k string) {
 	if k == "" {
