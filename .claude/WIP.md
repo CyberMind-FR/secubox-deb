@@ -1,5 +1,45 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-22*
+*Mis à jour : 2026-06-26*
+
+---
+
+## 🥾 2026-06-26 : netboot — test live gk2→c3q + enhanced Tow-Boot (#748)
+
+### Diagnostic test live gk2 → c3q
+
+Test netboot réel effectué entre gk2 (serveur, B0) et c3q (DUT, 2e MOCHAbin).
+Côté gk2 : chaîne OK — TFTP actif, nginx boot-vhost `:8099` opérationnel,
+`boot.fit` signé servi, API fonctionnelle. Artefacts publiés sous le MAC c3q
+`00504384fb2f`. Adresses de chargement U-Boot calibrées : kernel `0x02080000`,
+fdt `0x01000000`, ramdisk `0x06000000`. Cible eMMC c3q : 14,7 Gio.
+
+**Bloquer physique** : câble cuivre c3q (`mvpp2-2` — seul port netbootable sur
+MOCHAbin ; les 4 ports switch `lan0-3` ne sont pas visibles depuis U-Boot) doit
+atteindre le segment LAN de gk2 (`192.168.1.x` / .200). Sans ce câble, gk2
+capture 0 trame de c3q : le boot réseau ne peut pas démarrer. Par ailleurs, le
+U-Boot usine de c3q (2020.10) **n'a pas `wget`** — HTTP netboot impossible sans
+overlay ou re-flash.
+
+### #748 — Enhanced Tow-Boot (suit #737)
+
+Spec + plan Phase 1 commités dans la branche. Code Phase 1 terminé :
+- Kconfig réseau + FIT-signature dans la config Tow-Boot `mochabin-8gb` ;
+- Module Nix `secubox-netboot.nix` avec `bootcmd` HTTP `:8099` ;
+- Script `build-uboot-overlay.sh --tow-boot` testé OK sur gk2 (wrap + signature
+  `sbx-uboot.fit`, adresse overlay `0x06000000`).
+
+**Gated** : `nix-build` non disponible localement (pas de Nix sur gk2) +
+validation HW sur c3q (câble physique manquant).
+
+Phases suivantes :
+- **Phase 2** : flasher série CLI (`mvebu64boot` Armada 7040/8040, `kwboot`
+  Armada 3720) pour bootstrapper le Tow-Boot amélioré via BootROM UART.
+- **Phase 3** : modules kernel netboot (intégration image / auto-flash A/B).
+
+### ⬜ Next Up
+- Câble cuivre c3q vers LAN gk2 → validation HW boot réseau B1/B2.
+- Hôte Nix pour `nix-build globalscale-mochabin-8gb` → `sbx-uboot.fit` réel.
+- Phase 2 série : CLI flasher + intégration `sbin/secubox-netboot-flash`.
 
 ---
 
