@@ -207,9 +207,12 @@ type adCandidateRow struct {
 }
 
 type adEventPayload struct {
-	Blocks     []adBlockRow     `json:"blocks"`
-	Clients    []adClientRow    `json:"clients"`
-	Candidates []adCandidateRow `json:"candidates,omitempty"`
+	Blocks     []adBlockRow      `json:"blocks"`
+	Clients    []adClientRow     `json:"clients"`
+	Candidates []adCandidateRow  `json:"candidates,omitempty"`
+	// #740 — auto-learned cert-pinning candidates (SNIs whose client rejected our
+	// forged cert), riding the SAME flush so no extra POST/goroutine is needed.
+	PinCandidates []pinCandidateRow `json:"pinning_candidates,omitempty"`
 }
 
 // snapshot atomically reads-and-clears both maps, returning the accumulated rows.
@@ -234,7 +237,8 @@ func (a *adStats) snapshot() adEventPayload {
 
 // empty reports whether a payload carries no rows (nothing to POST).
 func (p adEventPayload) empty() bool {
-	return len(p.Blocks) == 0 && len(p.Clients) == 0 && len(p.Candidates) == 0
+	return len(p.Blocks) == 0 && len(p.Clients) == 0 &&
+		len(p.Candidates) == 0 && len(p.PinCandidates) == 0
 }
 
 // adEventClient is a short-timeout fire-and-forget client for the ad-event POST.
@@ -255,10 +259,13 @@ var adEventClient = &http.Client{
 // cand may be nil (the CONNECT PoC / tests with no learning feed); when set its
 // candidate rows are drained into the SAME payload so the learning feed rides
 // the existing ad-event channel (one POST per 10s, not two).
-func (a *adStats) flushOnce(portal string, cand *adCandidates) adEventPayload {
+func (a *adStats) flushOnce(portal string, cand *adCandidates, pin *pinCandidates) adEventPayload {
 	p := a.snapshot()
 	if cand != nil {
 		p.Candidates = cand.snapshot()
+	}
+	if pin != nil {
+		p.PinCandidates = pin.snapshot()
 	}
 	if p.empty() {
 		return p
@@ -281,10 +288,10 @@ func (a *adStats) flushOnce(portal string, cand *adCandidates) adEventPayload {
 // runAdStatsFlusher is the background flusher goroutine: every adFlushInterval it
 // drains the aggregator to the portal. Start it once from main() (like the
 // engine's other startup goroutines). It runs forever (the process lifetime).
-func (a *adStats) runAdStatsFlusher(portal string, cand *adCandidates) {
+func (a *adStats) runAdStatsFlusher(portal string, cand *adCandidates, pin *pinCandidates) {
 	t := time.NewTicker(adFlushInterval)
 	defer t.Stop()
 	for range t.C {
-		a.flushOnce(portal, cand)
+		a.flushOnce(portal, cand, pin)
 	}
 }

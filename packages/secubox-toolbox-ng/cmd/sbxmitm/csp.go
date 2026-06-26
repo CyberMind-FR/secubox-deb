@@ -50,6 +50,25 @@ func stripMetaTrustedTypes(body []byte) []byte {
 	})
 }
 
+// #740 — nonce-borrow. A nonce-based CSP (script-src 'nonce-XXX') makes
+// 'unsafe-inline' INOPERATIVE (CSP spec), so relaxing the header can never let
+// the inline banner run — and rewriting the policy breaks the page (x/twitter
+// blocked its own bundles). Instead we extract the page's nonce and stamp it on
+// the injected banner <script>: it then runs as a first-class trusted script
+// with the policy left 100% intact. THE robust fix for strict-CSP sites.
+var nonceRe = regexp.MustCompile(`(?i)'nonce-([A-Za-z0-9+/_=-]+)'`)
+
+func extractCSPNonce(h http.Header) string {
+	for _, name := range cspHeaderNames {
+		for _, v := range h.Values(name) {
+			if m := nonceRe.FindStringSubmatch(v); m != nil {
+				return m[1]
+			}
+		}
+	}
+	return ""
+}
+
 // cspHeaderNames are the two response headers that carry a Content-Security-
 // Policy. Both are rewritten: a report-only policy doesn't block scripts, but
 // relaxing it too keeps the demonstration consistent (no console violations).

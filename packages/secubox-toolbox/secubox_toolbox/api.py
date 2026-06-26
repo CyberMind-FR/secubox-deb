@@ -4,6 +4,7 @@
 """SecuBox-Deb ToolBoX :: FastAPI routes (Phase 1)."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -206,15 +207,21 @@ async def toolbox_ad_event(request: Request) -> Response:
         # heuristic), recorded as candidates here for secubox-toolbox-autolearn
         # to promote into learned-trackers.txt at AD_MIN_SITES distinct sites.
         candidates = body.get("candidates") or []
+        # #740 — auto-learned cert-pinning candidates (SNIs whose client rejected
+        # our forged cert) ride the SAME ad-event POST; persisted as splice proposals.
+        pin_candidates = body.get("pinning_candidates") or []
         if not isinstance(blocks, list):
             blocks = []
         if not isinstance(clients, list):
             clients = []
         if not isinstance(candidates, list):
             candidates = []
+        if not isinstance(pin_candidates, list):
+            pin_candidates = []
         blocks = blocks[:_AD_EVENT_ROW_CAP]
         clients = clients[:_AD_EVENT_ROW_CAP]
         candidates = candidates[:_AD_EVENT_ROW_CAP]
+        pin_candidates = pin_candidates[:_AD_EVENT_ROW_CAP]
 
         block_rows = [
             (b["ad_host"], b.get("site", ""), "block", int(b.get("hits", 0)), int(b.get("bytes", 0)))
@@ -237,6 +244,13 @@ async def toolbox_ad_event(request: Request) -> Response:
             store.record_ad_client_blocks(client_rows)
         if cand_rows:
             store.record_ad_candidates(cand_rows)
+        pin_rows = [
+            (c["host"], int(c.get("hits", 0)))
+            for c in pin_candidates
+            if isinstance(c, dict) and c.get("host")
+        ]
+        if pin_rows:
+            _record_pin_candidates(pin_rows)
     except Exception as e:  # never raise into the engine's fire-and-forget POST
         log.debug("ad-event ingest failed: %s", e)
     return Response(status_code=204)
@@ -1216,6 +1230,94 @@ def _splice_wl_remove(host: str) -> None:
         pass
 
 
+# ── #740 : auto-learned cert-pinning splice CANDIDATES ───────────────────────
+# The Go engine records an SNI whenever a client rejects our forged cert (a
+# pinning signal) and POSTs the tally on the ad-event channel. We persist it here
+# as a PROPOSAL (host → {hits, last_seen}); the operator promotes it to the real
+# whitelist (→ _splice_wl_add) or ignores it. Ignored hosts are remembered so the
+# same proposal does not keep reappearing. Already-whitelisted hosts are never
+# proposed. This file is advisory state, not security state — best-effort I/O.
+SPLICE_PIN_CAND_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_PIN_CANDIDATES",
+    "/var/lib/secubox/toolbox/splice-pinning-candidates.json"))
+SPLICE_PIN_IGNORE_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_PIN_IGNORE",
+    "/var/lib/secubox/toolbox/splice-pinning-ignore.txt"))
+_PIN_CAND_CAP = 500  # bound the proposal store regardless of engine input
+
+
+def _load_pin_ignore() -> set:
+    try:
+        return {ln.strip().lower() for ln in SPLICE_PIN_IGNORE_FILE.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("#")}
+    except OSError:
+        return set()
+
+
+def _load_pin_candidates() -> dict:
+    try:
+        data = json.loads(SPLICE_PIN_CAND_FILE.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_pin_candidates(data: dict) -> None:
+    try:
+        SPLICE_PIN_CAND_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = SPLICE_PIN_CAND_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data))
+        tmp.replace(SPLICE_PIN_CAND_FILE)
+    except OSError:
+        pass
+
+
+def _record_pin_candidates(rows: list) -> None:
+    """Merge engine-reported (host, hits) pinning candidates into the proposal
+    store, skipping hosts already whitelisted or operator-ignored."""
+    if not rows:
+        return
+    whitelisted = set(_load_splice_wl())
+    ignored = _load_pin_ignore()
+    data = _load_pin_candidates()
+    now = int(time.time())
+    for host, hits in rows:
+        h = (host or "").strip().lower()
+        if not h or "." not in h or h in whitelisted or h in ignored:
+            continue
+        ent = data.get(h) or {"hits": 0, "first_seen": now}
+        ent["hits"] = int(ent.get("hits", 0)) + max(1, int(hits))
+        ent["last_seen"] = now
+        data[h] = ent
+    # Cap: keep the most-recently-seen proposals if we somehow overflow.
+    if len(data) > _PIN_CAND_CAP:
+        keep = sorted(data.items(), key=lambda kv: kv[1].get("last_seen", 0),
+                      reverse=True)[:_PIN_CAND_CAP]
+        data = dict(keep)
+    _save_pin_candidates(data)
+
+
+def _drop_pin_candidate(host: str, *, ignore: bool = False) -> None:
+    """Remove a host from the proposal store; if ignore=True also append it to the
+    ignore list so the engine's future reports for it are suppressed."""
+    host = (host or "").strip().lower()
+    if not host:
+        return
+    data = _load_pin_candidates()
+    if host in data:
+        data.pop(host, None)
+        _save_pin_candidates(data)
+    if ignore:
+        try:
+            cur = _load_pin_ignore()
+            if host not in cur:
+                SPLICE_PIN_IGNORE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                with SPLICE_PIN_IGNORE_FILE.open("a") as f:
+                    f.write(host + "\n")
+        except OSError:
+            pass
+
+
 @router.get("/admin/filter-control", response_class=HTMLResponse)
 async def admin_filter_control(request: Request) -> HTMLResponse:
     """Whitelist control panel — VIEW always, EDIT only when reached via
@@ -1429,6 +1531,66 @@ async def admin_splice_list() -> dict:
     """JSON list of force-spliced hosts (cert-pinned apps)."""
     hosts = _load_splice_wl()
     return {"hosts": hosts, "count": len(hosts)}
+
+
+@router.get("/admin/splice-whitelist/candidates")
+async def admin_splice_candidates() -> dict:
+    """Auto-learned cert-pinning PROPOSALS (SNIs whose client rejected our cert),
+    most-recent first. Already-whitelisted/ignored hosts are excluded at ingest."""
+    data = _load_pin_candidates()
+    rows = [
+        {"host": h, "hits": int(v.get("hits", 0)), "last_seen": int(v.get("last_seen", 0))}
+        for h, v in data.items()
+    ]
+    rows.sort(key=lambda r: (r["hits"], r["last_seen"]), reverse=True)
+    return {"candidates": rows, "count": len(rows)}
+
+
+# JSON action endpoints (used by the #filtres dashboard panel; the HTML pages use
+# the form add/remove above). All editing is blocked on the public kbin vhost.
+@router.post("/admin/splice-whitelist/json-add")
+async def admin_splice_json_add(request: Request) -> dict:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice editing disabled on public vhost")
+    body = await request.json()
+    host = (str(body.get("host", "")) if isinstance(body, dict) else "").strip().lower()
+    ok = _splice_wl_add(host)
+    if ok:
+        _drop_pin_candidate(host)  # promoting clears any matching proposal
+    return {"ok": ok, "host": host}
+
+
+@router.post("/admin/splice-whitelist/json-remove")
+async def admin_splice_json_remove(request: Request) -> dict:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice editing disabled on public vhost")
+    body = await request.json()
+    host = (str(body.get("host", "")) if isinstance(body, dict) else "").strip().lower()
+    _splice_wl_remove(host)
+    return {"ok": True, "host": host}
+
+
+@router.post("/admin/splice-whitelist/promote")
+async def admin_splice_promote(request: Request) -> dict:
+    """Promote an auto-learned candidate to the real whitelist (force-splice)."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice editing disabled on public vhost")
+    body = await request.json()
+    host = (str(body.get("host", "")) if isinstance(body, dict) else "").strip().lower()
+    ok = _splice_wl_add(host)
+    _drop_pin_candidate(host)
+    return {"ok": ok, "host": host}
+
+
+@router.post("/admin/splice-whitelist/ignore")
+async def admin_splice_ignore(request: Request) -> dict:
+    """Dismiss an auto-learned candidate and suppress future proposals for it."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice editing disabled on public vhost")
+    body = await request.json()
+    host = (str(body.get("host", "")) if isinstance(body, dict) else "").strip().lower()
+    _drop_pin_candidate(host, ignore=True)
+    return {"ok": True, "host": host}
 
 
 def _ca_fp(ca_pem) -> dict:

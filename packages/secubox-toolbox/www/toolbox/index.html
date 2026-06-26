@@ -47,6 +47,8 @@
         .empty{color:var(--text-dim);font-style:italic;padding:1rem;text-align:center}
         .toolbar{display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap}
         button{font-family:inherit;font-size:0.9rem;padding:0.4rem 0.9rem;background:transparent;color:var(--p31-peak);border:1px solid var(--p31-mid);cursor:pointer;text-shadow:var(--bloom-text)}
+        button.mini{font-size:0.7rem;padding:0.1rem 0.45rem;white-space:nowrap;margin-left:0.3rem}
+        .filterlist li{flex-wrap:wrap;gap:0.2rem}
         button:hover{background:rgba(0,221,68,0.1)}
         .r2-banner{background:rgba(255,179,71,0.08);border-left:2px solid var(--p31-decay);padding:0.6rem 0.8rem;margin-bottom:1rem;font-size:0.85rem;color:#996b1a}
         .state-validated{color:var(--p31-peak);text-shadow:var(--bloom-text)}
@@ -126,11 +128,28 @@
             <button onclick="loadFilters()">🔁 Refresh</button>
         </div>
         <div class="card">
+            <h2>🔌 Splice whitelist (apps cert-pinned)</h2>
+            <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
+                Hôtes <b>force-spliced</b> : TLS passthrough, jamais déchiffrés ni injectés (apps qui cassent sous MITM — ChatGPT, clients natifs). Analyse passive (SNI/DPI) + Tor si actif conservés. Effet immédiat (moteur Go) + miroir moteur Python.
+            </p>
+            <div style="display:flex;gap:0.4rem;margin-bottom:0.6rem">
+                <input id="splice-host" type="text" placeholder="ex: openai.com" style="flex:1;background:#111;color:var(--p31-fg,#e8e6d9);border:1px solid #2a2a3f;padding:0.4rem;border-radius:4px;font-family:monospace;font-size:0.82rem">
+                <button onclick="spliceAdd()">➕ Whitelist</button>
+            </div>
+            <ul class="filterlist" id="splice-list"><li class="empty">loading…</li></ul>
+        </div>
+        <div class="card">
+            <h2>🔍 Propositions auto-apprises (cert-pinning détecté)</h2>
+            <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
+                SNIs dont le client a <b>rejeté notre certificat</b> (signal de pinning). Promouvoir = ajouter à la splice whitelist ; ignorer = ne plus proposer.
+            </p>
+            <ul class="filterlist" id="splice-cands"><li class="empty">loading…</li></ul>
+        </div>
+        <div class="card">
             <h2>🚦 Hosts bypassés (mitm ignore_hosts)</h2>
             <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
-                Hosts exclus de l'inspection TLS (cert-pinning détecté ou whitelist statique).
+                Vue regex legacy (moteur Python). Sources : 🌱 seed (paquet) · ✋ static (opérateur) · 🔍 learned (cert-pin auto).
             </p>
-            <p style="font-size:0.72rem;color:#888">Sources : 🌱 seed (paquet) · ✋ static (opérateur) · 🔍 learned (cert-pin auto)</p>
             <ul class="filterlist" id="filters"><li class="empty">loading…</li></ul>
         </div>
     </section>
@@ -453,21 +472,64 @@ async function loadHealth() {
     document.getElementById('version-badge').textContent = `v${h.version}`;
 }
 
+const _esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 async function loadFilters() {
+    loadSpliceList();
+    loadSpliceCands();
     const el = document.getElementById('filters');
     const d = await J('/admin/filter-control/list');
     const items = (d && d.hosts) ? d.hosts : (Array.isArray(d) ? d : null);
     if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
     if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
     const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned'};
-    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     el.innerHTML = items.slice(0, 5).map(h => {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
-        const badge = BADGE[src] || esc(src);
-        return `<li><code>${esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
+        const badge = BADGE[src] || _esc(src);
+        return `<li><code>${_esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
     }).join('');
 }
+
+// ── #740 splice whitelist (cert-pinned apps) ──
+async function _splicePost(url, host) {
+    try {
+        const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({host})});
+        return r.ok;
+    } catch (e) { return false; }
+}
+async function loadSpliceList() {
+    const el = document.getElementById('splice-list');
+    const d = await J('/admin/splice-whitelist/list');
+    const items = (d && d.hosts) || [];
+    if (d && d.__error) { el.innerHTML = `<li class="empty">${_esc(d.__error)}</li>`; return; }
+    if (!items.length) { el.innerHTML = '<li class="empty">aucun hôte whitelisté</li>'; return; }
+    el.innerHTML = items.map(h =>
+        `<li><code>${_esc(h)}</code> <button class="mini" title="Re-soumettre à l'analyse MITM" onclick="spliceRemove('${_esc(h)}')">✕ de-whitelist</button></li>`
+    ).join('');
+}
+async function loadSpliceCands() {
+    const el = document.getElementById('splice-cands');
+    const d = await J('/admin/splice-whitelist/candidates');
+    const items = (d && d.candidates) || [];
+    if (d && d.__error) { el.innerHTML = `<li class="empty">${_esc(d.__error)}</li>`; return; }
+    if (!items.length) { el.innerHTML = '<li class="empty">aucune proposition</li>'; return; }
+    el.innerHTML = items.map(c =>
+        `<li><code>${_esc(c.host)}</code> <span style="color:var(--p31-dim,#888);font-size:0.72rem">${c.hits}× rejet cert</span> ` +
+        `<button class="mini" onclick="splicePromote('${_esc(c.host)}')">✅ whitelist</button> ` +
+        `<button class="mini" onclick="spliceIgnore('${_esc(c.host)}')">🚫 ignorer</button></li>`
+    ).join('');
+}
+async function spliceAdd() {
+    const inp = document.getElementById('splice-host');
+    const host = (inp.value || '').trim().toLowerCase();
+    if (!host) return;
+    if (await _splicePost('/admin/splice-whitelist/json-add', host)) { inp.value=''; loadSpliceList(); }
+    else alert('hôte invalide (DNS nu requis, ex: openai.com)');
+}
+async function spliceRemove(host) { if (await _splicePost('/admin/splice-whitelist/json-remove', host)) loadSpliceList(); }
+async function splicePromote(host) { if (await _splicePost('/admin/splice-whitelist/promote', host)) { loadSpliceList(); loadSpliceCands(); } }
+async function spliceIgnore(host) { if (await _splicePost('/admin/splice-whitelist/ignore', host)) loadSpliceCands(); }
 
 // ── kbin Tor egress quick-switch (#683) ──
 async function loadTor() {
