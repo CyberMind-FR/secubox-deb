@@ -22,3 +22,8 @@ oaiusercontent.com   # ChatGPT user content shard
 #
 # ── Operator-added cert-pinned services (add your own below or via the portal) ──
 # example: add the host of an authenticated API whose native client pins certs.
+#
+# ── Signal messenger (pins certs; breaks under MITM through wg-toolbox) ──
+signal.org           # Signal chat/storage/cdn/cdsi/voip API
+whispersystems.org   # Signal legacy service domain
+signal.art           # Signal sticker packs
