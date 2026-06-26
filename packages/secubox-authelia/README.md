@@ -1,102 +1,40 @@
-# secubox-authelia
+# 🔐 Authelia SSO
 
-[Authelia](https://www.authelia.com/) SSO IdP for SecuBox, hosted in a Debian
-LXC at `10.100.0.20` on the SecuBox `br-lxc` bridge.
+Single sign-on identity provider (AUTH-BRIDGE)
 
-Follows [`docs/MODULE-GUIDELINES.md`](../../docs/MODULE-GUIDELINES.md); opens
-the **AUTH-BRIDGE** sub-layer of the AUTH layer of the SecuBox CTL grammar.
+**Category:** Access
 
-## URLs (dual-vhost split, per MODULE-GUIDELINES §4 REQUIRED)
+## Screenshot
 
-| URL | Role |
-| --- | --- |
-| `https://admin.gk2.secubox.in/authelia/` | **SecuBox admin** — components / status / cookies / access rules. Static page calling `/api/v1/authelia/*`. |
-| `https://sso.gk2.secubox.in/` | **Real Authelia login portal** at vhost root. All Authelia-gated vhosts (`*.gk2.secubox.in`) redirect 401 → here. The admin page's `Open SSO Portal →` button reads this URL from `/api/v1/authelia/access` — do NOT hardcode. |
-| `http://10.100.0.20:9091/` | Inside the LXC, behind nginx — debugging only. |
+![Authelia SSO](../../docs/screenshots/vm/authelia.png)
 
-The legacy `auth.maegia.tv` vhost is still supported via the same
-multi-cookie config (#272), but `sso.gk2.secubox.in` is the canonical
-public hostname since v1.0.9.
+## Features
 
-## Quickstart
+- SSO
+- 2FA / TOTP
+- Access policies
+- LDAP / file backend
+
+## Installation
 
 ```bash
-apt install secubox-authelia
-autheliactl install       # provisions LXC + Authelia binary + secrets
-autheliactl status        # green when LXC + daemon + host-API all up
+# Add SecuBox repository
+curl -fsSL https://apt.secubox.in/install.sh | sudo bash
+
+# Install package
+sudo apt install secubox-authelia
 ```
 
-Then point a browser at `https://sso.gk2.secubox.in/` (DNS + HAProxy
-vhost must be operator-configured first — see `nginx/authelia-vhost.conf`
-for the exact incantation).
+## Configuration
 
-## File backend = SecuBox single source of truth
+Configuration file: `/etc/secubox/authelia.toml`
 
-Authelia is configured with the **file backend** reading
-`/etc/secubox/users.json` (the same argon2id store managed by `secubox-users`).
-No LDAP, no SQL — SecuBox's canonical identity store is authoritative.
-A user enabled in `secubox-users` is enabled in Authelia.
+## API Endpoints
 
-## OIDC clients (pre-provisioned, secrets filled by wizard)
+- `GET /api/v1/authelia/status` - Module status
+- `GET /api/v1/authelia/health` - Health check
 
-| Client | Application | Redirect URI |
-|---|---|---|
-| `secubox-grafana` | Grafana | `https://grafana.maegia.tv/login/generic_oauth` |
-| `secubox-gitea` | Gitea | `https://gitea.gk2.secubox.in/user/oauth2/secubox/callback` |
-| `secubox-nextcloud` | Nextcloud (opt-in) | `https://nextcloud.maegia.tv/apps/user_oidc/code` |
+## License
 
-## nginx `auth_request` for SSO-less backends
-
-YaCy, RustDesk-web, mitmproxy-web don't speak OIDC. Their nginx vhosts can
-gate access via `auth_request /__sbx_auth_verify;` (the snippet in
-`/etc/nginx/secubox.d/authelia.conf` defines `/__sbx_auth_verify` as a
-proxy to the host FastAPI `/verify` endpoint). v1.0.0 ships the snippet but
-`/verify` is a 501 stub — full JWT validation is the v1.1.0 follow-up.
-
-## CTL — `autheliactl`
-
-```text
-autheliactl components       # LXC + authelia daemon + host-API states
-autheliactl status           # overall green/yellow/red
-autheliactl access list      # public URL(s) + auth method
-
-autheliactl install          # idempotent LXC + Authelia bootstrap
-autheliactl reload           # restart host FastAPI + authelia daemon
-autheliactl repair           # (v1.1.0)
-autheliactl wizard           # (v1.1.0) — interactive seed + install
-autheliactl uninstall        # (v1.1.0)
-
-autheliactl provider     list|add|remove|test       # (v1.1.0)
-autheliactl oidc-client  list|add|remove|rotate-secret  # (v1.1.0)
-autheliactl user         list|enable|disable|enrol-totp  # (v1.1.0)
-autheliactl session      list|kill|killall            # (v1.1.0)
-autheliactl totp         list|reset|verify             # (v1.1.0)
-```
-
-## Operator prerequisites for public exposure
-
-For `https://auth.maegia.tv/` to be reachable from outside the LAN:
-
-1. DNS `A auth.maegia.tv → <public-ip>`
-2. TLS cert at `/data/haproxy/certs/auth.maegia.tv.pem` (Let's Encrypt or manual)
-3. `haproxyctl vhost add auth.maegia.tv nginx_vhosts ssl`
-4. **Inside** the mitmproxy LXC: add `auth.maegia.tv → 192.168.1.200:9080` in
-   `/srv/mitmproxy/haproxy-routes.json` then `systemctl restart mitmproxy`
-
-Steps 3 and 4 mirror what was done for `yacy.maegia.tv` on 2026-05-20.
-
-## Files
-
-```text
-/etc/secubox/authelia.toml                  # operator config (rendered by autheliactl reload)
-/etc/secubox/secrets/authelia-jwt           # JWT signing secret (32 bytes hex)
-/etc/secubox/secrets/authelia-store         # storage encryption key
-/etc/nginx/secubox.d/authelia.conf          # /auth/ + /api/v1/authelia/ + /__sbx_auth_verify
-/etc/nginx/secubox-routes.d/authelia.conf   # idem (canonical hub vhost include)
-/etc/nginx/sites-available/authelia.conf    # auth.maegia.tv public vhost (symlink to enable)
-/usr/lib/secubox/authelia/api/              # host FastAPI
-/usr/share/secubox/lib/authelia/install-lxc.sh
-/usr/share/secubox/www/authelia/            # SecuBox-themed iframe wrapper
-/usr/share/secubox/menu.d/40-authelia.json
-/data/lxc/authelia/                         # LXC rootfs (created by autheliactl install)
-```
+LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
+See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).

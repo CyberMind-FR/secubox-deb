@@ -36,4 +36,5 @@ Configuration file: `/etc/secubox/reporter.toml`
 
 ## License
 
-MIT License - CyberMind © 2024-2026
+LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
+See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
