@@ -36,11 +36,15 @@ Le WAF de SecuBox inspecte tout le trafic externe entrant (HAProxy TLS 1.3 → b
 | Placement | **Host-native** (workers `secubox-waf-ng-worker@`), durci |
 | Approche | **A** — binaire dédié `sbxwaf`, cœur partagé extrait de `sbxmitm`, shadow→cutover |
 
-### Gains estimés (à valider par bench, = critères go/no-go)
-- Throughput : **>3×/cœur** (suppression GIL + fanout) ; cible bench `>3× req/s·cœur`.
-- Latence p99 : **<½** (regexp compilé + GC concurrent, pas de thrash refcount).
+### Gains estimés (à valider par bench, = critères go/no-go BLOQUANTS)
+- Throughput : **>5×/cœur** (suppression GIL + fanout) ; cible bench `>5× req/s·cœur`.
+- Latence p99 : **<⅓** (regexp compilé + GC concurrent, pas de thrash refcount).
 - RAM : **<¼** (1 binaire statique ~30-80 MB vs 600-800 MB).
 - Robustesse : suppression des 3 modes de panne (binaire statique, zéro runtime).
+
+Ces seuils sont **bloquants** : pas de cutover tant qu'ils ne sont pas atteints sur
+le bench de charge (§7.3). Si un cas live-dashboard incompressible empêche un seuil,
+il est documenté et arbitré explicitement avant cutover.
 
 ### Non-objectifs (YAGNI)
 - Pas d'unification immédiate des moteurs (`sbxmitm` reste séparé — approche B écartée
