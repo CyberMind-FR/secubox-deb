@@ -1,0 +1,26 @@
+Source: secubox-waf-ng
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.22~)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-waf-ng
+Architecture: arm64
+Depends: ${misc:Depends},
+ adduser,
+ apparmor
+Description: SecuBox-Deb — Go WAF reverse-proxy engine (host-native sbxwaf)
+ Host-native Go WAF reverse-proxy replacing mitmproxy/mitmdump for the
+ SecuBox-DEB WAF layer (#744). Ships the standalone sbxwaf binary plus
+ hardened systemd worker template units (secubox-waf-ng-worker@{1,2}).
+ .
+ Features: TLS-forging reverse proxy, hot-reloadable WAF rules engine,
+ graduated WARNING/BAN responses, threat log (NDJSON), CrowdSec LAPI
+ bridge, RGPD Set-Cookie ledger, media response cache, themed error pages.
+ .
+ CSPN-compliant: dedicated secubox-waf unprivileged user, AppArmor enforce
+ profile, NoNewPrivileges, ProtectSystem=strict, RuntimeDirectoryPreserve=yes
+ (avoids the /run/secubox socket-wipe cascade, #741).
