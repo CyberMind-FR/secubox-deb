@@ -68,7 +68,8 @@ in
       hardware.socList = armadaSOCs;
     }
     (mkIf cfgMarvell.globalscale.mochabin.enable {
-      secubox.netboot.enable = true;
+      # secubox.netboot.enable deferred: the EXTRA_ENV_SETTINGS string needs
+      # Kconfig-safe quote escaping before it can be embedded (#748).
       hardware.SPISize = 4 * 1024 * 1024;  # 4 MiB
       hardware.marvell = {
         arm-trusted-firmware = pkgs.Tow-Boot.armTrustedFirmwareMochabin;
@@ -86,39 +87,31 @@ in
 
             DM_MMC = yes;
 
-            # --- SecuBox netboot (#748): HTTP/TFTP network boot ---
+            # --- SecuBox netboot (#748): HTTP wget + TFTP + signed-FIT verify ---
+            # Minimal set that builds cleanly under Tow-Boot's `make oldconfig`.
+            # NOTE: `CONFIG_WGET` does not exist in U-Boot 2022.07 (only
+            # CMD_WGET, which selects PROT_TCP). The MV88E6xxx DSA switch driver
+            # and the embedded netboot env (EXTRA_ENV_SETTINGS) are DEFERRED —
+            # they need extra dep/quoting work and are not required for the WAN
+            # copper (mvpp2-2) HTTP netboot path proven on c3box.
             NET = yes;
             CMD_NET = yes;
             CMD_DHCP = yes;
-            CMD_PING = yes;
             CMD_TFTPBOOT = yes;
+            CMD_PING = yes;
             CMD_WGET = yes;
-            WGET = yes;
             PROT_TCP = yes;
             CMD_BOOTI = yes;
 
-            # --- signed FIT verification (CSPN) ---
+            # signed FIT verification (CSPN)
             FIT = yes;
             FIT_SIGNATURE = yes;
             RSA = yes;
             SHA256 = yes;
-            LEGACY_IMAGE_FORMAT = yes;
 
-            # --- anti-brick boot menu + counter ---
-            CMD_BOOTMENU = yes;
-            BOOTCOUNT_LIMIT = yes;
-            BOOTCOUNT_ENV = yes;
-
-            # --- MV88E6xxx DSA switch (88E6141 Topaz) — make lan0-3 netbootable (#748) ---
-            DM_DSA = yes;
-            MV88E6XXX = yes;
-            DM_MDIO = yes;
-            PHY_FIXED = yes;
-            PHY_MARVELL = yes;
-
-            # --- Marvell PPv2 SoC NIC (mvpp2) — required to drive the eth ports (#748) ---
+            # Marvell PPv2 SoC NIC + 88E1512 copper PHY (the WAN/mvpp2-2 port)
             MVPP2 = yes;
-            PHY_GIGE = yes;
+            PHY_MARVELL = yes;
 
             DEFAULT_DEVICE_TREE = freeform ''"armada-7040-mochabin"'';
           })
