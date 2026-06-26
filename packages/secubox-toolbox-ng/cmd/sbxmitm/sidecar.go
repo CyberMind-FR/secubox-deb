@@ -22,74 +22,7 @@
 //	  cookie values) are NOT emitted to a module socket but POSTed to the portal
 //	  /__toolbox/social-event ingest (the social store lives in the toolbox/portal).
 //
-// emit takes the full socket PATH (not an http+unix:// URL) plus the route in
-// the payload's destination; callers build the path from the table above.
-//
-// Pure standard library — no external modules, no go.sum.
+// Transport is now internal/relay. This file is retained for doc context only;
+// the emit/emitSync/emitTimeout declarations have been moved to internal/relay
+// as Emit/EmitSync/EmitTimeout (ref #744).
 package main
-
-import (
-	"context"
-	"fmt"
-	"net"
-	"time"
-)
-
-// emitTimeout caps the whole connect+write+read so a slow/dead module socket
-// can never wedge the engine. Mirrors the Python httpx timeout=2.
-const emitTimeout = 2 * time.Second
-
-// emit fires a fire-and-forget POST of payload to the given unix socket at
-// route, in a detached goroutine. It returns immediately and never blocks the
-// caller; all errors (missing socket, dead peer, timeout) are swallowed —
-// dropping a relayed signal must never break a client flow. Mirrors
-// _common.fire_forget_post + queue_async (create_task, never raise).
-//
-// route is the HTTP path on the module (e.g. "/inject", "/classify"); use the
-// addon→socket table above to pick socketPath + route together.
-func emit(socketPath, route string, payload []byte) {
-	go emitSync(socketPath, route, payload)
-}
-
-// emitSync performs the actual POST synchronously (under emitTimeout). Exposed
-// (lowercase, same-package) so tests can observe delivery deterministically
-// without racing the goroutine. Returns an error only for the test's benefit;
-// emit() discards it.
-func emitSync(socketPath, route string, payload []byte) error {
-	if route == "" {
-		route = "/"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), emitTimeout)
-	defer cancel()
-
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "unix", socketPath)
-	if err != nil {
-		return err // dead/missing socket — swallowed by emit()
-	}
-	defer conn.Close()
-
-	if dl, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(dl)
-	}
-
-	// Minimal HTTP/1.1 POST. Host is a placeholder (unix transport); the module
-	// FastAPI apps ignore it. Connection: close so the peer EOFs after replying.
-	req := fmt.Sprintf(
-		"POST %s HTTP/1.1\r\nHost: secubox.local\r\nContent-Type: application/json\r\n"+
-			"Content-Length: %d\r\nConnection: close\r\n\r\n",
-		route, len(payload))
-	if _, err := conn.Write([]byte(req)); err != nil {
-		return err
-	}
-	if len(payload) > 0 {
-		if _, err := conn.Write(payload); err != nil {
-			return err
-		}
-	}
-	// Best-effort drain so the peer sees a clean close; we don't parse the
-	// response (fire-and-forget). Errors here are irrelevant.
-	buf := make([]byte, 512)
-	_, _ = conn.Read(buf)
-	return nil
-}
