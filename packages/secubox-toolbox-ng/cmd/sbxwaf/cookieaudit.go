@@ -51,6 +51,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -87,7 +88,7 @@ type CookieAudit struct {
 	file      *os.File
 	wg        sync.WaitGroup
 	closeOnce sync.Once
-	dropCount int64 // best-effort counter; not atomic — only informational
+	dropCount atomic.Int64 // atomic counter for concurrent Record calls
 }
 
 // NewCookieAudit creates a CookieAudit that writes to path.
@@ -190,7 +191,7 @@ func (ca *CookieAudit) Record(host string, req *http.Request, resp *http.Respons
 		select {
 		case ca.ch <- rec:
 		default:
-			ca.dropCount++
+			ca.dropCount.Add(1)
 		}
 	}
 }
