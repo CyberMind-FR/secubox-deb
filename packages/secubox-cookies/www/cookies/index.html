@@ -404,6 +404,29 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>🕸️ Trackers cross-site (R3)</span>
+                    <span class="badge badge-cyan" id="crosssite-count">0</span>
+                </div>
+                <p class="empty" style="margin:0 0 .5rem">Cookies dont l'identifiant est réutilisé sur ≥2 sites first-party par le même client (source : tunnel captif R3).</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tracker</th>
+                            <th>Sites suivis</th>
+                            <th>Clients</th>
+                            <th>Cookies</th>
+                            <th>Pré-consent</th>
+                            <th>Vu</th>
+                        </tr>
+                    </thead>
+                    <tbody id="crosssite-table">
+                        <tr><td colspan="6" class="empty">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Policies Tab -->
@@ -630,7 +653,7 @@
             // Load data for tab
             switch(tab) {
                 case 'cookies': loadCookies(); break;
-                case 'trackers': loadTrackers(); break;
+                case 'trackers': loadTrackers(); loadCrossSite(); break;
                 case 'policies': loadPolicies(); break;
                 case 'violations': loadViolations(); break;
                 case 'settings': loadConfig(); break;
@@ -775,6 +798,44 @@
             `).join('');
 
             document.getElementById('trackers-table').innerHTML = html;
+        }
+
+        async function loadCrossSite() {
+            const tbody = document.getElementById('crosssite-table');
+            const countEl = document.getElementById('crosssite-count');
+            try {
+                const res = await fetch('/api/v1/toolbox/admin/cookie-crosssite?hours=24', { headers: headers() });
+                if (!res.ok) throw new Error('http ' + res.status);
+                const data = await res.json();
+                const rows = (data && data.trackers) || [];
+                countEl.textContent = rows.length;
+                if (!rows.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty">Aucune donnée R3 récente — tunnel captif inactif.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = rows.map(t => {
+                    const sites = (t.sites || []).join(', ');
+                    const seen = t.last_seen ? new Date(t.last_seen * 1000).toLocaleString() : '-';
+                    const pc = t.pre_consent_hits > 0
+                        ? `<span class="badge badge-red">${t.pre_consent_hits}</span>` : '0';
+                    return `<tr>
+                        <td><strong>${esc(t.tracker_domain)}</strong></td>
+                        <td><span class="badge badge-cyan" title="${esc(sites)}">${t.site_count}</span></td>
+                        <td>${t.client_count}</td>
+                        <td>${t.cookie_count}</td>
+                        <td>${pc}</td>
+                        <td style="white-space:nowrap">${esc(seen)}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                countEl.textContent = '0';
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">Source R3 indisponible.</td></tr>';
+            }
+        }
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
         async function loadPolicies() {
@@ -942,6 +1003,7 @@
 
         async function refresh() {
             await Promise.all([loadStatus(), loadStats(), loadViolationsPreview()]);
+            loadCrossSite();
         }
 
         // Initial load
