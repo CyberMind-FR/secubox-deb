@@ -163,8 +163,13 @@ func (m *MediaCache) loadIndex() {
 				_ = json.Unmarshal(raw, &meta)
 			}
 			e := &cacheEntry{
-				size:  info.Size(),
-				exp:   meta.Exp,
+				size: info.Size(),
+				exp:  meta.Exp,
+				// mtime is used deliberately as the LRU recency proxy.
+				// atime is unreliable on most Linux filesystems (relatime
+				// mount option suppresses most atime updates), so we use
+				// mtime which is set explicitly via os.Chtimes on every
+				// cache Get() hit — a reliable in-band atime surrogate.
 				atime: info.ModTime().Unix(),
 				ct:    meta.CT,
 			}
@@ -439,6 +444,17 @@ func (c *cachingResponseWriter) Write(b []byte) (int, error) {
 	c.body = append(c.body, b[:n]...)
 	c.captured = true
 	return n, err
+}
+
+// Flush implements http.Flusher so that httputil.ReverseProxy can flush
+// chunks incrementally to the client (important for progressive video /
+// PeerTube streaming).  It is a pure pass-through to the underlying
+// ResponseWriter's Flush method; it does not affect what bytes are
+// captured for the cache buffer.
+func (c *cachingResponseWriter) Flush() {
+	if f, ok := c.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // Stats returns a point-in-time snapshot of cache counters.
