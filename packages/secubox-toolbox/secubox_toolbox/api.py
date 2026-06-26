@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
@@ -1126,6 +1127,95 @@ def _is_public_kbin(request: Request) -> bool:
     return host.startswith("kbin.")
 
 
+# ── #740 : Go sbxmitm OPERATOR splice whitelist (host-suffix, cert-pinned apps) ──
+# The strategic R3 path is the Go sbxmitm engine, which FORCE-SPLICES (TLS
+# passthrough, no decrypt, no inject) every host in splice-whitelist.txt — the fix
+# for cert-pinned native/mobile apps (ChatGPT et al.) that hard-fail under
+# interception and force the tunnel down. The legacy Python mitm-wg uses a SEPARATE
+# regex ignore_hosts file (mitm-bypass.conf); while BOTH engines run, an operator
+# "add" must reach BOTH so the host is bypassed whichever engine handles the flow.
+# The Go file is the source of truth for the list; each host is mirrored as a
+# suffix regex into the Python file. Spliced hosts keep PASSIVE SNI/DPI analysis +
+# Tor egress; de-whitelisting returns the host to full MITM. sbxmitm mtime-reloads
+# the file live (no restart needed); the Python engine picks it up on next reload.
+SPLICE_WL_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_WHITELIST", "/var/lib/secubox/toolbox/splice-whitelist.txt"))
+_HOST_RE = re.compile(r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$")
+
+
+def _host_ok(h: str) -> bool:
+    """Accept a bare DNS host suffix only (no scheme/path/wildcard/space/regex
+    metachar) so the line stays suffix-matchable by the Go engine and safe to
+    mirror into a regex."""
+    h = h.strip().lower()
+    return bool(h) and len(h) <= 253 and "." in h and bool(_HOST_RE.fullmatch(h))
+
+
+def _load_splice_wl() -> list[str]:
+    """Active host suffixes from the Go splice whitelist (comments stripped)."""
+    try:
+        out = []
+        for ln in SPLICE_WL_FILE.read_text().splitlines():
+            s = ln.split("#", 1)[0].strip().lower()
+            if s:
+                out.append(s)
+        return out
+    except OSError:
+        return []
+
+
+def _splice_mirror_regex(host: str) -> str:
+    """Suffix regex (subdomains included) for the Python ignore_hosts mirror."""
+    return "(.+\\.)?" + host.replace(".", "\\.")
+
+
+def _splice_wl_add(host: str) -> bool:
+    """Add host to the Go splice whitelist AND mirror a suffix regex into the
+    Python ignore_hosts file. Returns True iff the host was valid and written."""
+    host = host.strip().lower()
+    if not _host_ok(host):
+        return False
+    if host not in set(_load_splice_wl()):
+        try:
+            SPLICE_WL_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with SPLICE_WL_FILE.open("a") as f:
+                f.write(host + "\n")
+        except OSError:
+            pass
+    rx = _splice_mirror_regex(host)
+    if rx not in set(_load_bypass_entries()):
+        try:
+            _ensure_bypass_file()
+            with MITM_BYPASS_FILE.open("a") as f:
+                f.write(rx + "\n")
+        except OSError:
+            pass
+    return True
+
+
+def _splice_wl_remove(host: str) -> None:
+    """De-whitelist host: drop it from the Go file AND its mirror from the Python
+    file, returning the host to full MITM analysis."""
+    host = host.strip().lower()
+    if not host:
+        return
+    try:
+        if SPLICE_WL_FILE.exists():
+            kept = [ln for ln in SPLICE_WL_FILE.read_text().splitlines()
+                    if ln.split("#", 1)[0].strip().lower() != host]
+            SPLICE_WL_FILE.write_text("\n".join(kept) + "\n")
+    except OSError:
+        pass
+    rx = _splice_mirror_regex(host)
+    try:
+        if MITM_BYPASS_FILE.exists():
+            kept = [ln for ln in MITM_BYPASS_FILE.read_text().splitlines()
+                    if ln.strip() != rx]
+            MITM_BYPASS_FILE.write_text("\n".join(kept) + "\n")
+    except OSError:
+        pass
+
+
 @router.get("/admin/filter-control", response_class=HTMLResponse)
 async def admin_filter_control(request: Request) -> HTMLResponse:
     """Whitelist control panel — VIEW always, EDIT only when reached via
@@ -1193,7 +1283,7 @@ a.back{{color:var(--purple);text-decoration:underline;font-size:0.85rem}}
 <br><b>Source de vérité :</b> <code>{MITM_BYPASS_FILE}</code> ({len(entries)} pattern{'s' if len(entries)>1 else ''})
 </div>
 
-<p style=margin-top:1.5rem><a href=/admin/ class=back>← Admin home</a></p>
+<p style=margin-top:1.5rem><a href=/admin/splice-whitelist class=back>🔌 Splice Whitelist (par hôte, apps cert-pinned)</a> &nbsp;·&nbsp; <a href=/admin/ class=back>← Admin home</a></p>
 </body></html>"""
     return HTMLResponse(html)
 
@@ -1241,6 +1331,104 @@ async def admin_filter_list() -> dict:
     """JSON for the #filtres panel — tagged bypass patterns (seed/static/learned)."""
     tagged = _load_bypass_tagged()
     return {"hosts": tagged, "count": len(tagged)}
+
+
+# ── #740 : splice-whitelist control panel (host-based, cert-pinned apps) ──────
+@router.get("/admin/splice-whitelist", response_class=HTMLResponse)
+async def admin_splice_whitelist(request: Request) -> HTMLResponse:
+    """Operator panel for the Go sbxmitm splice whitelist (cert-pinned apps).
+    VIEW always; EDIT only when reached via the auth-gated admin vhost (kbin
+    public hits are read-only). Adding a host force-splices it on BOTH engines."""
+    hosts = _load_splice_wl()
+    readonly = _is_public_kbin(request)
+    if readonly:
+        rows = "\n".join(f'<tr><td><code>{h}</code></td></tr>' for h in hosts)
+    else:
+        rows = "\n".join(
+            f'<tr><td><code>{h}</code></td><td><form method=POST action=/admin/splice-whitelist/remove style=display:inline><input type=hidden name=host value="{h}"/><button class=del title="Re-soumettre à l\'analyse MITM">✕ de-whitelist</button></form></td></tr>'
+            for h in hosts
+        )
+    readonly_banner = (
+        '<div style="background:rgba(255,179,71,0.08);border-left:3px solid #ffb347;padding:0.7rem;margin-bottom:1rem;border-radius:0 4px 4px 0;font-size:0.85rem;color:#ffd6a0">'
+        '🔒 <b>Lecture seule (vhost public kbin).</b> Pour éditer, utilise '
+        '<a href="https://admin.gk2.secubox.in/toolbox/" style="color:#ffb347;text-decoration:underline">'
+        'admin.gk2.secubox.in/toolbox/</a> (authentifié SSO).'
+        '</div>'
+    )
+    editor_form = (
+        '<form method=POST action=/admin/splice-whitelist/add class=add>'
+        '<input type=text name=host placeholder="ex: openai.com" '
+        'pattern="[A-Za-z0-9][A-Za-z0-9._-]*\\.[A-Za-z0-9._-]+" '
+        'title="hôte DNS nu, sous-domaines inclus (pas de http://, /, *, espace)" required>'
+        '<button class=add type=submit>➕ Whitelist (splice)</button></form>'
+    )
+    readonly_th = '<th>Hôte (sous-domaines inclus)</th>'
+    editor_th = '<th>Hôte (sous-domaines inclus)</th><th></th>'
+    html = f"""<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Admin :: Splice Whitelist</title>
+<style>:root{{--bg:#0a0a0f;--gold:#c9a84c;--phos:#00dd44;--purple:#9e76ff;--text:#e8e6d9;--err:#e63946;--cyan:#00d4ff}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);padding:1.2rem;max-width:780px;margin:auto;line-height:1.5}}
+h1{{color:var(--gold);font-size:1.3rem;margin-bottom:0.4rem}}
+.lead{{color:var(--purple);font-size:0.85rem;margin-bottom:1.2rem}}
+table{{width:100%;border-collapse:collapse;margin-bottom:1rem;background:rgba(110,64,201,0.03);border:1px solid #2a2a3f;border-radius:4px}}
+td,th{{padding:0.4rem 0.7rem;border-bottom:1px solid #2a2a3f;font-size:0.8rem;text-align:left}}
+th{{background:rgba(110,64,201,0.15);color:var(--purple);font-weight:bold}}
+code{{color:var(--phos);background:#111;padding:0.1rem 0.3rem;border-radius:2px}}
+.del{{background:var(--err);color:white;border:0;padding:0.2rem 0.5rem;border-radius:3px;cursor:pointer;font-weight:bold}}
+input[type=text]{{flex:1;background:#111;color:var(--text);border:1px solid #2a2a3f;padding:0.5rem;border-radius:4px;font-family:monospace;font-size:0.85rem}}
+.add{{display:flex;gap:0.5rem;margin:0.5rem 0 1rem}}
+button.add{{background:var(--cyan);color:#0a0a0f;border:0;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;font-weight:bold;white-space:nowrap}}
+.note{{font-size:0.75rem;color:#a0a0a0;background:rgba(0,212,255,0.06);border-left:2px solid var(--cyan);padding:0.6rem 0.8rem;margin-top:1rem;border-radius:0 3px 3px 0}}
+a.back{{color:var(--purple);text-decoration:underline;font-size:0.85rem}}
+</style></head><body>
+<h1>🔌 Splice Whitelist{" (lecture seule)" if readonly else ""}</h1>
+<p class=lead>Apps qui CASSENT sous MITM (certificate pinning : ChatGPT, clients natifs…). Un hôte whitelisté est <b>spliced</b> : TLS passthrough, jamais déchiffré ni injecté — il garde l'analyse passive (SNI/DPI) + sortie Tor si active.</p>
+
+{readonly_banner if readonly else editor_form}
+
+<table>
+<tr>{readonly_th if readonly else editor_th}</tr>
+{rows or '<tr><td colspan=2 style="color:#666;text-align:center;padding:1rem">Aucun hôte whitelisté.</td></tr>'}
+</table>
+
+<div class=note>
+✅ <b>Effet immédiat</b> sur le moteur Go (sbxmitm mtime-reload, aucun restart). Chaque hôte est aussi miroité dans le moteur Python legacy (<code>ignore_hosts</code>).
+<br>↩️ <b>De-whitelist</b> = ✕ → l'hôte retourne dans l'analyse MITM complète (déchiffrement + bannière).
+<br><b>Source de vérité :</b> <code>{SPLICE_WL_FILE}</code> ({len(hosts)} hôte{'s' if len(hosts)>1 else ''})
+</div>
+
+<p style=margin-top:1.5rem><a href=/admin/filter-control class=back>↔ Filter Control (regex avancé)</a> &nbsp;·&nbsp; <a href=/admin/ class=back>← Admin home</a></p>
+</body></html>"""
+    return HTMLResponse(html)
+
+
+@router.post("/admin/splice-whitelist/add")
+async def admin_splice_add(request: Request) -> Response:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice whitelist editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    form = await request.form()
+    host = (form.get("host") or "").strip().lower()
+    _splice_wl_add(host)
+    return RedirectResponse("/admin/splice-whitelist", status_code=303)
+
+
+@router.post("/admin/splice-whitelist/remove")
+async def admin_splice_remove(request: Request) -> Response:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice whitelist editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    form = await request.form()
+    host = (form.get("host") or "").strip().lower()
+    _splice_wl_remove(host)
+    return RedirectResponse("/admin/splice-whitelist", status_code=303)
+
+
+@router.get("/admin/splice-whitelist/list")
+async def admin_splice_list() -> dict:
+    """JSON list of force-spliced hosts (cert-pinned apps)."""
+    hosts = _load_splice_wl()
+    return {"hosts": hosts, "count": len(hosts)}
 
 
 def _ca_fp(ca_pem) -> dict:
