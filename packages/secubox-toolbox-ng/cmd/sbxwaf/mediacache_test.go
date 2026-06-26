@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
@@ -396,6 +397,90 @@ func TestMediaCacheHandlerMissStores(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("expected still 1 backend call (cache hit), got %d", calls)
+	}
+}
+
+// --- TestMediaCacheHandlerOversizeStreamsFullBody -------------------------------
+
+// TestMediaCacheHandlerOversizeStreamsFullBody is a regression guard for the
+// overflow branch of cachingResponseWriter.Write.  It verifies that when an
+// upstream returns a media response whose body exceeds 16 MiB (the cache object
+// cap), the FULL body is still forwarded to the client — not truncated — and that
+// the object is NOT stored in the cache (Get → ok=false).
+//
+// This test guards against any future refactor that might accidentally return
+// early or drop bytes when the overflow flag is set, silently truncating large
+// progressive-video downloads.
+func TestMediaCacheHandlerOversizeStreamsFullBody(t *testing.T) {
+	const oversizeLen = 16*1024*1024 + 64*1024 // 16 MiB + 64 KiB
+
+	// Build a deterministic body so we can checksum it end-to-end.
+	bigBody := make([]byte, oversizeLen)
+	for i := range bigBody {
+		bigBody[i] = byte(i & 0xff)
+	}
+	wantSum := sha256.Sum256(bigBody)
+
+	dir := t.TempDir()
+	mc := NewMediaCache(dir)
+
+	const testURL = "http://video.example.com/big.mp4"
+
+	// Backend returns a video/mp4 response larger than maxObj.
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Cache-Control", "max-age=3600")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(bigBody); err != nil {
+			t.Errorf("backend Write error: %v", err)
+		}
+	}))
+	defer backend.Close()
+
+	backendAddr := strings.TrimPrefix(backend.URL, "http://")
+	h, p, err := splitHostPort(backendAddr)
+	if err != nil {
+		t.Fatalf("splitHostPort: %v", err)
+	}
+
+	srv := &Server{
+		mediaCache: mc,
+		routeLookup: func(host string) (string, int, bool) {
+			if host == "video.example.com" {
+				return h, p, true
+			}
+			return "", 0, false
+		},
+	}
+	handler := srv.handler()
+
+	req := httptest.NewRequest(http.MethodGet, testURL, nil)
+	req.Host = "video.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	res := rec.Result()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+
+	// Read the FULL client body and verify nothing was truncated.
+	gotBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("ReadAll response body: %v", err)
+	}
+	if len(gotBody) != oversizeLen {
+		t.Fatalf("client received %d bytes, want %d (full body truncated!)", len(gotBody), oversizeLen)
+	}
+	gotSum := sha256.Sum256(gotBody)
+	if gotSum != wantSum {
+		t.Fatal("client body checksum mismatch — content corrupted in overflow path")
+	}
+
+	// Verify the oversize object was NOT cached.
+	_, _, cached := mc.Get(testURL)
+	if cached {
+		t.Fatal("oversize object must NOT be cached (exceeds 16 MiB per-object cap)")
 	}
 }
 
