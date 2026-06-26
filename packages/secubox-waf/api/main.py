@@ -24,7 +24,15 @@ import geoip2.errors
 
 # Paths
 RULES_PATH = "/usr/share/secubox/waf/waf-rules.json"
-THREATS_LOG = "/var/log/secubox/waf-threats.log"
+# Threat log — the WAF dashboard's sole data source. The Go engine (sbxwaf,
+# #744) writes to the sandboxed leaf dir /var/log/secubox/waf/waf-threats.log;
+# the legacy Python mitmproxy WAF used the shared-parent path. Prefer the Go
+# engine's path, fall back to the legacy one, and honour SECUBOX_WAF_THREATS_LOG.
+THREATS_LOG = os.environ.get("SECUBOX_WAF_THREATS_LOG") or next(
+    (p for p in ("/var/log/secubox/waf/waf-threats.log",
+                 "/var/log/secubox/waf-threats.log") if Path(p).exists()),
+    "/var/log/secubox/waf/waf-threats.log",
+)
 STATS_CACHE = "/tmp/secubox/waf-stats.json"
 # Phase 7+ (#509) — disk-persisted counters + log byte position for
 # the double-buffered cache.  Survives aggregator restart, populated
