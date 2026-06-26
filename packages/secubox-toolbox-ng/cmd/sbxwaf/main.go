@@ -89,8 +89,9 @@ type Server struct {
 //     - Skips inspection for private/RFC1918 CIDRs (privateCIDR).
 //     - Skips inspection for static assets and health/status paths (staticAsset).
 //     - Skips inspection for NC mobile-auth paths (ncBypass).
-//     - Reads the body (capped at maxBodyInspect) and restores it via
-//       io.NopCloser so the upstream proxy still receives the full body.
+//     - Reads up to maxBodyInspect bytes for inspection; restores the FULL
+//       body (prefix + remaining stream via io.MultiReader) so the upstream
+//       proxy always receives every byte intact — no truncation.
 //     - On WAF hit: returns 403 Forbidden (Task 3.2 refines to WARNING/BAN).
 //     - Adds Connection: close to upstream requests (#496).
 func (s *Server) handler() http.Handler {
@@ -178,14 +179,20 @@ func (s *Server) handler() http.Handler {
 
 			skip := privateCIDR(ip) || staticAsset(rawPath) || ncBypass(rawPath)
 			if !skip {
-				// Read body (capped) and restore so the upstream proxy still
-				// receives the full request body.
+				// Read up to maxBodyInspect bytes for WAF inspection, then
+				// restore the FULL body (prefix + remaining stream) so the
+				// upstream proxy receives every byte intact.
+				//
+				// Streaming approach: we buffer at most 1 MiB (the inspection
+				// window), then forward a MultiReader of that buffer + the
+				// unconsumed tail of r.Body.  This keeps memory bounded even
+				// for multi-GB uploads (PeerTube / Nextcloud file uploads).
 				var bodyBytes []byte
 				if r.Body != nil {
-					limited := io.LimitReader(r.Body, maxBodyInspect)
-					bodyBytes, _ = io.ReadAll(limited)
-					// Restore the body regardless of read error.
-					r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+					prefix, _ := io.ReadAll(io.LimitReader(r.Body, maxBodyInspect))
+					bodyBytes = prefix
+					// Restore: prefix already read + remaining stream not yet consumed.
+					r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), r.Body))
 				}
 
 				_, _, hit := s.rules.Match(

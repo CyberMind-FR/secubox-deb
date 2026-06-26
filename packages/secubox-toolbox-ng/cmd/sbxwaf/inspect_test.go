@@ -174,6 +174,97 @@ func TestInspectNCBypass(t *testing.T) {
 	}
 }
 
+// TestInspectLargeBodyForwardedIntact: a POST body larger than maxBodyInspect
+// (1 MiB + 4 KiB) must arrive at the backend byte-for-byte intact.
+// This is the regression test for the LimitReader truncation bug: the old code
+// restored only the capped prefix to r.Body, silently dropping the tail.
+func TestInspectLargeBodyForwardedIntact(t *testing.T) {
+	// Build a benign body of exactly maxBodyInspect + 4 KiB (no attack pattern).
+	// The WAF will inspect the first 1 MiB and pass it; the tail must survive too.
+	const extraBytes = 4 * 1024
+	bodySize := maxBodyInspect + extraBytes
+	fullBody := make([]byte, bodySize)
+	for i := range fullBody {
+		fullBody[i] = byte('A' + (i % 26)) // deterministic fill, no attack pattern
+	}
+
+	var receivedBody []byte
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "received")
+	}))
+	defer backend.Close()
+
+	rulesPath := buildSQLiRulesFile(t)
+	backendAddr := backend.URL[len("http://"):]
+	srv := newInspectServer(t, rulesPath, backendAddr)
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodPost, "http://app.example.com/upload", bytes.NewReader(fullBody))
+	req.Host = "app.example.com"
+	req.RemoteAddr = "1.2.3.4:12345" // public IP — inspection runs
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("benign large POST should not be blocked, got 403")
+	}
+	if len(receivedBody) != bodySize {
+		t.Fatalf("backend received %d bytes, want %d (body was truncated)", len(receivedBody), bodySize)
+	}
+	if !bytes.Equal(receivedBody, fullBody) {
+		// Find first differing byte for a useful diagnostic.
+		for i := range fullBody {
+			if i >= len(receivedBody) || receivedBody[i] != fullBody[i] {
+				t.Fatalf("body mismatch at byte %d: got 0x%02x, want 0x%02x", i,
+					func() byte {
+						if i < len(receivedBody) {
+							return receivedBody[i]
+						}
+						return 0
+					}(), fullBody[i])
+			}
+		}
+	}
+}
+
+// TestInspectLargeBodyAttackInFirstMiB: attack payload within the first 1 MiB
+// of a large body must still be caught (inspection still works with streaming).
+func TestInspectLargeBodyAttackInFirstMiB(t *testing.T) {
+	// 512 KiB of attack prefix + 512 KiB + 4 KiB of padding.
+	const extraBytes = 4 * 1024
+	bodySize := maxBodyInspect + extraBytes
+	body := make([]byte, bodySize)
+	attackSnippet := []byte("union select 1,2,3")
+	copy(body[:len(attackSnippet)], attackSnippet)
+	// Fill the rest with harmless bytes.
+	for i := len(attackSnippet); i < bodySize; i++ {
+		body[i] = 'B'
+	}
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer backend.Close()
+
+	rulesPath := buildSQLiRulesFile(t)
+	backendAddr := backend.URL[len("http://"):]
+	srv := newInspectServer(t, rulesPath, backendAddr)
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodPost, "http://app.example.com/upload", bytes.NewReader(body))
+	req.Host = "app.example.com"
+	req.RemoteAddr = "1.2.3.4:12345" // public IP
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for attack in first 1 MiB of large body, got %d", rec.Code)
+	}
+}
+
 // TestInspectBodyForwarded: a POST whose body was read for inspection is still
 // received intact by the backend.
 func TestInspectBodyForwarded(t *testing.T) {
