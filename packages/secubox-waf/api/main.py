@@ -646,7 +646,13 @@ def _overlay_crowdsec_stats(stats: dict, alerts: List[dict]) -> None:
     today = 0
     by_sev = defaultdict(int, stats.get("by_severity") or {})
     by_cat = defaultdict(int, stats.get("by_category") or {})
-    by_country = defaultdict(int, stats.get("top_countries") or {})
+    # top_countries may already have been decorated into a list of
+    # {"country","count"} dicts (the overlay can run after _decorate_dashboard_stats);
+    # accept either shape so we never crash the warm refresh and lose the WAF stats.
+    _tc = stats.get("top_countries") or {}
+    if isinstance(_tc, list):
+        _tc = {d.get("country", "??"): int(d.get("count", 0) or 0) for d in _tc}
+    by_country = defaultdict(int, _tc)
     for a in alerts:
         by_sev[a["severity"]] += 1
         by_cat[a["category"]] += 1
@@ -666,7 +672,7 @@ def _overlay_crowdsec_stats(stats: dict, alerts: List[dict]) -> None:
     stats["by_severity"] = dict(by_sev)
     stats["by_category"] = dict(by_cat)
     stats["top_countries"] = [{"country": c, "count": n}
-                              for c, n in sorted(by_country.items(), key=lambda x: -x[1])[:5]]
+                              for c, n in sorted(by_country.items(), key=lambda x: -int(x[1] or 0))[:5]]
     if alerts:
         a0 = alerts[0]
         ago = "recently"
@@ -697,7 +703,14 @@ def _refresh_warm_caches() -> dict:
     except Exception:
         cs_alerts = []
     if cs_alerts:
-        _overlay_crowdsec_stats(new_stats, cs_alerts)
+        # Defensive: a CrowdSec-overlay failure must NEVER abort the refresh and
+        # leave the warm cache frozen — the WAF top_ips/top_vhosts/tracked-attacker
+        # data (the dashboard's per-IP/vhost panels) lives in new_stats and must
+        # survive even if the optional CrowdSec donut overlay throws.
+        try:
+            _overlay_crowdsec_stats(new_stats, cs_alerts)
+        except Exception:
+            pass
         if not new_alerts:
             new_alerts = cs_alerts  # feed the live feed / threat list too
     new_stats["vhosts_count"] = _protected_vhost_count()
