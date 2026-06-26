@@ -24,6 +24,13 @@ from typing import Optional
 # Module Metadata - All 120+ modules with multilingual descriptions
 # ============================================================================
 
+# Absolute base URL for wiki screenshots — the GitHub wiki is a separate repo, so
+# images must be referenced via raw.githubusercontent (relative paths 404 there).
+SCREENSHOT_RAW_BASE = (
+    "https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/"
+    "docs/screenshots/vm"
+)
+
 MODULES = {
     # =========================================================================
     # DASHBOARD
@@ -1663,6 +1670,354 @@ MODULES = {
             "zh": ["Web终端", "SSH", "文件传输", "录制"]
         }
     },
+    # =========================================================================
+    # ADDED 2026-06-26 (#742) — modules discovered but previously undocumented
+    # =========================================================================
+    "authelia": {
+        "name": "Authelia SSO", "icon": "🔐", "category": "Access",
+        "description": {
+            "en": "Single sign-on identity provider (AUTH-BRIDGE)",
+            "fr": "Fournisseur d'identité SSO (couche AUTH-BRIDGE)",
+            "de": "Single-Sign-On-Identitätsanbieter (AUTH-BRIDGE)",
+            "zh": "单点登录身份提供商（AUTH-BRIDGE）"
+        },
+        "features": {
+            "en": ["SSO", "2FA / TOTP", "Access policies", "LDAP / file backend"],
+            "fr": ["SSO", "2FA / TOTP", "Politiques d'accès", "Backend LDAP / fichier"],
+            "de": ["SSO", "2FA / TOTP", "Zugriffsrichtlinien", "LDAP-/Datei-Backend"],
+            "zh": ["单点登录", "双因素/TOTP", "访问策略", "LDAP/文件后端"]
+        }
+    },
+    "avatar": {
+        "name": "Avatar Manager", "icon": "🧑", "category": "Apps",
+        "description": {
+            "en": "Identity and avatar manager",
+            "fr": "Gestionnaire d'identité et d'avatar",
+            "de": "Identitäts- und Avatar-Manager",
+            "zh": "身份与头像管理器"
+        },
+        "features": {
+            "en": ["Identity profiles", "Avatar generation", "Per-user assets"],
+            "fr": ["Profils d'identité", "Génération d'avatar", "Ressources par utilisateur"],
+            "de": ["Identitätsprofile", "Avatar-Generierung", "Pro-Benutzer-Assets"],
+            "zh": ["身份档案", "头像生成", "按用户资源"]
+        }
+    },
+    "certs": {
+        "name": "Certificate Manager", "icon": "📜", "category": "Security",
+        "description": {
+            "en": "ACME / TLS certificate manager",
+            "fr": "Gestionnaire de certificats ACME / TLS",
+            "de": "ACME-/TLS-Zertifikatsverwaltung",
+            "zh": "ACME / TLS 证书管理器"
+        },
+        "features": {
+            "en": ["ACME issuance", "Renewal", "SAN / wildcard", "Inventory"],
+            "fr": ["Émission ACME", "Renouvellement", "SAN / wildcard", "Inventaire"],
+            "de": ["ACME-Ausstellung", "Erneuerung", "SAN / Wildcard", "Inventar"],
+            "zh": ["ACME 签发", "续期", "SAN / 通配符", "清单"]
+        }
+    },
+    "fmrelay": {
+        "name": "FM Relay", "icon": "📻", "category": "Media",
+        "description": {
+            "en": "rtl_fm to Icecast MP3 mount with live RDS metadata",
+            "fr": "rtl_fm vers mount MP3 Icecast avec métadonnées RDS live",
+            "de": "rtl_fm zu Icecast-MP3-Mount mit Live-RDS-Metadaten",
+            "zh": "rtl_fm 转 Icecast MP3 挂载，含实时 RDS 元数据"
+        },
+        "features": {
+            "en": ["SDR FM capture", "Icecast stream", "RDS metadata", "Station presets"],
+            "fr": ["Capture FM SDR", "Flux Icecast", "Métadonnées RDS", "Préréglages stations"],
+            "de": ["SDR-FM-Empfang", "Icecast-Stream", "RDS-Metadaten", "Senderspeicher"],
+            "zh": ["SDR FM 采集", "Icecast 流", "RDS 元数据", "电台预设"]
+        }
+    },
+    "grafana": {
+        "name": "Grafana", "icon": "📊", "category": "Monitoring",
+        "description": {
+            "en": "Security metrics dashboards",
+            "fr": "Tableaux de bord métriques de sécurité",
+            "de": "Sicherheitsmetrik-Dashboards",
+            "zh": "安全指标仪表板"
+        },
+        "features": {
+            "en": ["Time-series dashboards", "Alerting", "Data sources", "Panels"],
+            "fr": ["Tableaux time-series", "Alertes", "Sources de données", "Panneaux"],
+            "de": ["Zeitreihen-Dashboards", "Alarmierung", "Datenquellen", "Panels"],
+            "zh": ["时序仪表板", "告警", "数据源", "面板"]
+        }
+    },
+    "health": {
+        "name": "Hub Health", "icon": "❤️", "category": "Dashboard",
+        "description": {
+            "en": "Service health and status board",
+            "fr": "Tableau santé et état des services",
+            "de": "Service-Gesundheits- und Statusübersicht",
+            "zh": "服务健康与状态面板"
+        },
+        "features": {
+            "en": ["Service health", "Socket checks", "Uptime", "Degradation alerts"],
+            "fr": ["Santé services", "Vérifs socket", "Uptime", "Alertes dégradation"],
+            "de": ["Service-Gesundheit", "Socket-Prüfungen", "Uptime", "Degradationswarnungen"],
+            "zh": ["服务健康", "套接字检查", "运行时间", "降级告警"]
+        }
+    },
+    "ksm": {
+        "name": "KSM Optimizer", "icon": "🧠", "category": "System",
+        "description": {
+            "en": "Kernel same-page memory optimization dashboard",
+            "fr": "Tableau d'optimisation mémoire KSM (kernel same-page)",
+            "de": "KSM-Speicheroptimierungs-Dashboard (Kernel Same-Page)",
+            "zh": "内核同页内存（KSM）优化仪表板"
+        },
+        "features": {
+            "en": ["Page sharing stats", "Memory saved", "Tuning", "Per-VM view"],
+            "fr": ["Stats partage de pages", "Mémoire économisée", "Réglage", "Vue par VM"],
+            "de": ["Page-Sharing-Statistik", "Gesparter Speicher", "Tuning", "Pro-VM-Ansicht"],
+            "zh": ["页共享统计", "节省内存", "调优", "按虚拟机视图"]
+        }
+    },
+    "magicmirror": {
+        "name": "MagicMirror", "icon": "🪞", "category": "Apps",
+        "description": {
+            "en": "MagicMirror smart-display management",
+            "fr": "Gestion de l'affichage intelligent MagicMirror",
+            "de": "MagicMirror-Smart-Display-Verwaltung",
+            "zh": "MagicMirror 智能显示管理"
+        },
+        "features": {
+            "en": ["Module layout", "Widgets", "Themes", "Remote control"],
+            "fr": ["Disposition modules", "Widgets", "Thèmes", "Contrôle distant"],
+            "de": ["Modul-Layout", "Widgets", "Themes", "Fernsteuerung"],
+            "zh": ["模块布局", "小部件", "主题", "远程控制"]
+        }
+    },
+    "metabolizer": {
+        "name": "Metabolizer", "icon": "🧪", "category": "Monitoring",
+        "description": {
+            "en": "Log processor and analyzer",
+            "fr": "Processeur et analyseur de logs",
+            "de": "Log-Prozessor und -Analysator",
+            "zh": "日志处理与分析器"
+        },
+        "features": {
+            "en": ["Log parsing", "Pattern analysis", "Pipelines", "Enrichment"],
+            "fr": ["Parsing de logs", "Analyse de motifs", "Pipelines", "Enrichissement"],
+            "de": ["Log-Parsing", "Musteranalyse", "Pipelines", "Anreicherung"],
+            "zh": ["日志解析", "模式分析", "管道", "丰富化"]
+        }
+    },
+    "metoblizer": {
+        "name": "Metoblizer", "icon": "🗄️", "category": "Monitoring",
+        "description": {
+            "en": "Centralized log aggregator",
+            "fr": "Agrégateur de logs centralisé",
+            "de": "Zentralisierter Log-Aggregator",
+            "zh": "集中式日志聚合器"
+        },
+        "features": {
+            "en": ["Log collection", "Central store", "Search", "Retention"],
+            "fr": ["Collecte de logs", "Stockage central", "Recherche", "Rétention"],
+            "de": ["Log-Sammlung", "Zentraler Speicher", "Suche", "Aufbewahrung"],
+            "zh": ["日志收集", "中央存储", "搜索", "保留"]
+        }
+    },
+    "metacatalog": {
+        "name": "Metacatalog", "icon": "📇", "category": "Services",
+        "description": {
+            "en": "Service catalog and registry",
+            "fr": "Catalogue et registre de services",
+            "de": "Servicekatalog und -registry",
+            "zh": "服务目录与注册表"
+        },
+        "features": {
+            "en": ["Service registry", "Discovery", "Metadata", "Catalog UI"],
+            "fr": ["Registre services", "Découverte", "Métadonnées", "UI catalogue"],
+            "de": ["Service-Registry", "Discovery", "Metadaten", "Katalog-UI"],
+            "zh": ["服务注册", "发现", "元数据", "目录界面"]
+        }
+    },
+    "picobrew": {
+        "name": "PicoBrew", "icon": "🍺", "category": "IoT",
+        "description": {
+            "en": "Homebrew / fermentation controller",
+            "fr": "Contrôleur de brassage / fermentation",
+            "de": "Homebrew-/Fermentationssteuerung",
+            "zh": "自酿 / 发酵控制器"
+        },
+        "features": {
+            "en": ["Temperature control", "Recipes", "Fermentation log", "Sensors"],
+            "fr": ["Contrôle température", "Recettes", "Journal fermentation", "Capteurs"],
+            "de": ["Temperatursteuerung", "Rezepte", "Fermentationslog", "Sensoren"],
+            "zh": ["温度控制", "配方", "发酵日志", "传感器"]
+        }
+    },
+    "podcaster": {
+        "name": "Podcaster", "icon": "🎙️", "category": "Media",
+        "description": {
+            "en": "Modern podcast manager",
+            "fr": "Gestionnaire de podcasts moderne",
+            "de": "Moderner Podcast-Manager",
+            "zh": "现代播客管理器"
+        },
+        "features": {
+            "en": ["Feed management", "Episodes", "Transcoding", "RSS publish"],
+            "fr": ["Gestion des flux", "Épisodes", "Transcodage", "Publication RSS"],
+            "de": ["Feed-Verwaltung", "Episoden", "Transcodierung", "RSS-Veröffentlichung"],
+            "zh": ["订阅源管理", "剧集", "转码", "RSS 发布"]
+        }
+    },
+    "redroid": {
+        "name": "ReDroid", "icon": "🤖", "category": "Apps",
+        "description": {
+            "en": "Android-in-container runtime",
+            "fr": "Runtime Android en conteneur",
+            "de": "Android-im-Container-Laufzeit",
+            "zh": "容器中的 Android 运行时"
+        },
+        "features": {
+            "en": ["Android container", "ADB", "App install", "Screen view"],
+            "fr": ["Conteneur Android", "ADB", "Installation d'apps", "Vue écran"],
+            "de": ["Android-Container", "ADB", "App-Installation", "Bildschirmansicht"],
+            "zh": ["Android 容器", "ADB", "应用安装", "屏幕查看"]
+        }
+    },
+    "rezapp": {
+        "name": "RezApp", "icon": "📦", "category": "Services",
+        "description": {
+            "en": "Application deployment and management",
+            "fr": "Déploiement et gestion d'applications",
+            "de": "Anwendungsbereitstellung und -verwaltung",
+            "zh": "应用部署与管理"
+        },
+        "features": {
+            "en": ["App deploy", "Lifecycle", "Config", "Status"],
+            "fr": ["Déploiement d'apps", "Cycle de vie", "Config", "État"],
+            "de": ["App-Deploy", "Lebenszyklus", "Konfiguration", "Status"],
+            "zh": ["应用部署", "生命周期", "配置", "状态"]
+        }
+    },
+    "rustdesk": {
+        "name": "RustDesk", "icon": "🖥️", "category": "Access",
+        "description": {
+            "en": "Self-hosted remote desktop relay",
+            "fr": "Relais de bureau distant auto-hébergé",
+            "de": "Selbstgehostetes Remote-Desktop-Relay",
+            "zh": "自托管远程桌面中继"
+        },
+        "features": {
+            "en": ["Relay server", "ID server", "Sessions", "Self-hosted"],
+            "fr": ["Serveur relais", "Serveur d'ID", "Sessions", "Auto-hébergé"],
+            "de": ["Relay-Server", "ID-Server", "Sitzungen", "Selbstgehostet"],
+            "zh": ["中继服务器", "ID 服务器", "会话", "自托管"]
+        }
+    },
+    "saas-relay": {
+        "name": "SaaS Relay", "icon": "🔌", "category": "Network",
+        "description": {
+            "en": "SaaS / API proxy relay",
+            "fr": "Relais proxy SaaS / API",
+            "de": "SaaS-/API-Proxy-Relay",
+            "zh": "SaaS / API 代理中继"
+        },
+        "features": {
+            "en": ["API proxy", "Rate limiting", "Routing", "Credentials vault"],
+            "fr": ["Proxy API", "Limitation de débit", "Routage", "Coffre identifiants"],
+            "de": ["API-Proxy", "Ratenbegrenzung", "Routing", "Anmeldedaten-Tresor"],
+            "zh": ["API 代理", "限流", "路由", "凭据保险库"]
+        }
+    },
+    "security-posture": {
+        "name": "Security Posture", "icon": "🎯", "category": "Security",
+        "description": {
+            "en": "Honest board-truthful security scorecard",
+            "fr": "Carte de score de sécurité honnête (vérité board)",
+            "de": "Ehrliche, board-wahrheitsgemäße Sicherheits-Scorecard",
+            "zh": "诚实的、基于真实状态的安全评分卡"
+        },
+        "features": {
+            "en": ["Scorecard", "Control checks", "Gaps", "Trend"],
+            "fr": ["Scorecard", "Vérifs de contrôles", "Écarts", "Tendance"],
+            "de": ["Scorecard", "Kontrollprüfungen", "Lücken", "Trend"],
+            "zh": ["评分卡", "控制检查", "差距", "趋势"]
+        }
+    },
+    "sentinelle": {
+        "name": "SENTINELLE-GSM", "icon": "📡", "category": "Security",
+        "description": {
+            "en": "Passive rogue-BTS sensor (MIND layer)",
+            "fr": "Capteur passif de fausse BTS (couche MIND)",
+            "de": "Passiver Rogue-BTS-Sensor (MIND-Schicht)",
+            "zh": "被动式伪基站传感器（MIND 层）"
+        },
+        "features": {
+            "en": ["IMSI-catcher detection", "Cell survey", "Anomaly alerts", "Passive RF"],
+            "fr": ["Détection IMSI-catcher", "Relevé cellules", "Alertes anomalies", "RF passif"],
+            "de": ["IMSI-Catcher-Erkennung", "Zell-Survey", "Anomalie-Warnungen", "Passives HF"],
+            "zh": ["IMSI 捕集器检测", "基站勘测", "异常告警", "被动射频"]
+        }
+    },
+    "threatmesh": {
+        "name": "ThreatMesh", "icon": "🕸️", "category": "Security",
+        "description": {
+            "en": "Sovereign threat-intel mesh (CrowdSec CAPI replacement)",
+            "fr": "Mesh de threat-intel souverain (remplace CrowdSec CAPI)",
+            "de": "Souveränes Threat-Intel-Mesh (CrowdSec-CAPI-Ersatz)",
+            "zh": "主权威胁情报网格（替代 CrowdSec CAPI）"
+        },
+        "features": {
+            "en": ["P2P intel sharing", "Sovereign feed", "Confidence gating", "Blocklist sync"],
+            "fr": ["Partage intel P2P", "Feed souverain", "Filtrage par confiance", "Sync blocklist"],
+            "de": ["P2P-Intel-Sharing", "Souveräner Feed", "Vertrauens-Gating", "Blocklist-Sync"],
+            "zh": ["P2P 情报共享", "主权源", "置信度门控", "黑名单同步"]
+        }
+    },
+    "toolbox": {
+        "name": "ToolBoX (Cabine)", "icon": "🧰", "category": "Security",
+        "description": {
+            "en": "Captive AP + consented MITM privacy analyzer",
+            "fr": "AP captif + analyseur MITM de vie privée consenti",
+            "de": "Captive-AP + einvernehmlicher MITM-Datenschutz-Analysator",
+            "zh": "强制门户 AP + 知情同意的 MITM 隐私分析器"
+        },
+        "features": {
+            "en": ["Captive portal", "R0-R4 levels", "Tracker exposure", "Tor egress"],
+            "fr": ["Portail captif", "Niveaux R0-R4", "Exposition trackers", "Sortie Tor"],
+            "de": ["Captive Portal", "R0-R4-Stufen", "Tracker-Aufdeckung", "Tor-Ausgang"],
+            "zh": ["强制门户", "R0-R4 等级", "追踪器暴露", "Tor 出口"]
+        }
+    },
+    "vm": {
+        "name": "VM Manager", "icon": "💻", "category": "System",
+        "description": {
+            "en": "Virtualization management",
+            "fr": "Gestion de la virtualisation",
+            "de": "Virtualisierungsverwaltung",
+            "zh": "虚拟化管理"
+        },
+        "features": {
+            "en": ["VM lifecycle", "Console", "Snapshots", "Resource limits"],
+            "fr": ["Cycle de vie VM", "Console", "Snapshots", "Limites ressources"],
+            "de": ["VM-Lebenszyklus", "Konsole", "Snapshots", "Ressourcenlimits"],
+            "zh": ["虚拟机生命周期", "控制台", "快照", "资源限制"]
+        }
+    },
+    "yacy": {
+        "name": "YaCy", "icon": "🔎", "category": "Network",
+        "description": {
+            "en": "Peer-to-peer search engine",
+            "fr": "Moteur de recherche pair-à-pair",
+            "de": "Peer-to-Peer-Suchmaschine",
+            "zh": "点对点搜索引擎"
+        },
+        "features": {
+            "en": ["P2P index", "Crawler", "Private search", "Federation"],
+            "fr": ["Index P2P", "Crawler", "Recherche privée", "Fédération"],
+            "de": ["P2P-Index", "Crawler", "Private Suche", "Föderation"],
+            "zh": ["P2P 索引", "爬虫", "私密搜索", "联邦"]
+        }
+    },
 }
 
 LANGUAGES = {
@@ -1737,7 +2092,8 @@ Configuration file: `/etc/secubox/{module_id}.toml`
 
 ## {L['license']}
 
-MIT License - CyberMind © 2024-2026
+LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
+See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 """
     return readme
 
@@ -1844,10 +2200,14 @@ def generate_wiki_page(lang: str, include_screenshots: bool = True, screenshots_
 **{L['features']}:** {', '.join(features)}
 
 """
-            # Add screenshot if exists
+            # Add screenshot if exists. Use an ABSOLUTE raw.githubusercontent URL
+            # (not a relative path): the GitHub wiki is a SEPARATE repo, so a
+            # relative screenshots/vm/ path would 404 there. This matches the
+            # convention already used by the published wiki/ pages.
             if include_screenshots:
                 if screenshots_dir and check_screenshot_exists(mid, screenshots_dir):
-                    wiki += f"![{info['name']}](screenshots/vm/{mid}.png)\n\n"
+                    wiki += (f"![{info['name']}]"
+                             f"({SCREENSHOT_RAW_BASE}/{mid}.png)\n\n")
 
         wiki += "---\n\n"
 
