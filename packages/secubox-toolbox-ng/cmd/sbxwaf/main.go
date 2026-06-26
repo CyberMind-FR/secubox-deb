@@ -27,8 +27,10 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -67,6 +69,11 @@ type Server struct {
 	// transport from upstreamTimeout (backwards-compat for test-only Servers
 	// that don't inject a transport).
 	transport http.RoundTripper
+
+	// rules is the hot-reloadable WAF rule set loaded from --rules.
+	// Nil when --rules is empty (pass-through mode, no inspection).
+	// Wired in main() via LoadRules; tests can inject directly.
+	rules *Rules
 }
 
 // handler returns an http.Handler that:
@@ -77,6 +84,15 @@ type Server struct {
 //     allocation) when routes is set; falls back to a freshly-built proxy for
 //     test-injected routeLookup closures that bypass Routes.
 //  5. Adds X-SecuBox-WAF: inspected to every proxied response.
+//  6. (Task 2.2) When rules != nil, inspects the request before proxying:
+//     - Computes clientIP (XFF when peer is a trusted proxy, else peer).
+//     - Skips inspection for private/RFC1918 CIDRs (privateCIDR).
+//     - Skips inspection for static assets and health/status paths (staticAsset).
+//     - Skips inspection for NC mobile-auth paths (ncBypass).
+//     - Reads the body (capped at maxBodyInspect) and restores it via
+//       io.NopCloser so the upstream proxy still receives the full body.
+//     - On WAF hit: returns 403 Forbidden (Task 3.2 refines to WARNING/BAN).
+//     - Adds Connection: close to upstream requests (#496).
 func (s *Server) handler() http.Handler {
 	// Use the shared transport injected at construction time (main() builds it
 	// before LoadRoutes so startup proxies already reference it).  Fall back to
@@ -143,6 +159,49 @@ func (s *Server) handler() http.Handler {
 			}
 		}
 
+		// Task 2.2 — Request inspection.
+		// Only when rules are loaded; otherwise pass through unconditionally.
+		if s.rules != nil {
+			// Add Connection: close to upstream requests (#496, mirrors Python).
+			r.Header.Set("Connection", "close")
+
+			ip := clientIP(r)
+			// Determine the path for skip-list checks. Use RawPath when available
+			// (Go only sets it when the path contains percent-encoded chars that
+			// differ from the decoded form), falling back to Path. This ensures
+			// we pass the still-encoded path to staticAsset/ncBypass (which do
+			// lowercasing but do not need decoded content for suffix/contains checks).
+			rawPath := r.URL.RawPath
+			if rawPath == "" {
+				rawPath = r.URL.Path
+			}
+
+			skip := privateCIDR(ip) || staticAsset(rawPath) || ncBypass(rawPath)
+			if !skip {
+				// Read body (capped) and restore so the upstream proxy still
+				// receives the full request body.
+				var bodyBytes []byte
+				if r.Body != nil {
+					limited := io.LimitReader(r.Body, maxBodyInspect)
+					bodyBytes, _ = io.ReadAll(limited)
+					// Restore the body regardless of read error.
+					r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				}
+
+				_, _, hit := s.rules.Match(
+					r.Method,
+					rawPath,
+					r.URL.RawQuery,
+					string(bodyBytes),
+					r.Header.Get("User-Agent"),
+				)
+				if hit {
+					http.Error(w, "403 Forbidden: WAF blocked this request", http.StatusForbidden)
+					return
+				}
+			}
+		}
+
 		proxy.ServeHTTP(w, r)
 	})
 }
@@ -170,8 +229,7 @@ func main() {
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
 	flag.Parse()
 
-	// Silence "unused variable" lint for flags consumed in later tasks.
-	_ = rules
+	// rules is consumed below when --rules is provided.
 
 	// Build the shared transport FIRST so it can be passed to LoadRoutes.
 	// Every proxy — startup-built and reload-built — will share this pool and
@@ -190,6 +248,12 @@ func main() {
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
+	}
+
+	// Wire in the WAF rules engine when --rules is provided.
+	if *rules != "" {
+		srv.rules = LoadRules(*rules)
+		log.Printf("sbxwaf: WAF rules loaded from %s", *rules)
 	}
 
 	// Wire in the real Routes loader when --routes is provided.
