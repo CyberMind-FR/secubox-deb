@@ -7,7 +7,8 @@
 //   - CIDR-based trusted-network bypass (RFC1918 + loopback)
 //   - Static-asset skip (.js/.css/.png/... and /health, /status, system_health)
 //   - NC mobile-token bypass (/index.php/login/v2/, /ocs/v2.php/core/login)
-//   - Body read (capped at 1 MiB) + io.NopCloser restore so proxy still forwards
+//   - Body read capped at 1 MiB for inspection; full body forwarded via
+//     io.MultiReader (prefix + remaining stream) — no truncation on large uploads
 //   - clientIP extraction: prefer leftmost XFF only when peer is a trusted proxy
 //
 // Ported faithfully from:
@@ -92,15 +93,6 @@ func staticAsset(path string) bool {
 			return true
 		}
 	}
-	return strings.Contains(lower, "/health") ||
-		strings.Contains(lower, "/status") ||
-		strings.Contains(lower, "system_health")
-}
-
-// healthPath is an alias kept for clarity in call-sites; delegates to staticAsset.
-// The Python code folds both static and health checks into check_request.
-func healthPath(path string) bool {
-	lower := strings.ToLower(path)
 	return strings.Contains(lower, "/health") ||
 		strings.Contains(lower, "/status") ||
 		strings.Contains(lower, "system_health")
