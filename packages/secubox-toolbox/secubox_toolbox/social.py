@@ -1139,6 +1139,89 @@ def aggregate(hours: int = 24) -> Dict:
     return out
 
 
+def _xsite_detail_from_conn(conn, since: int, top_n: int) -> list:
+    """Pure cross-site tracker detail over a social_edges connection.
+
+    A (tracker_domain, cookie_id_hash) pair is cross-site when its cookie id is
+    observed on >= 2 DISTINCT valid src_sites (src_site not in '', 'null') within
+    the window (ts >= since). For every such pair, aggregate per REGISTRABLE
+    tracker domain (IP literals dropped). Ranked by client_count, then
+    site_count, then domain; capped to top_n.
+    """
+    rows = conn.execute(
+        "SELECT ts, client_mac_hash, src_site, tracker_domain, "
+        "       cookie_id_hash, consent_state "
+        "FROM social_edges "
+        "WHERE ts >= ? "
+        "  AND cookie_id_hash IS NOT NULL AND cookie_id_hash <> '' "
+        "  AND src_site NOT IN ('', 'null') "
+        "LIMIT 50000",
+        (since,),
+    ).fetchall()
+
+    # Pass 1: which (raw tracker_domain, cookie_id_hash) pairs are cross-site.
+    sites_per_pair: dict = {}
+    for r in rows:
+        key = (r["tracker_domain"], r["cookie_id_hash"])
+        sites_per_pair.setdefault(key, set()).add(r["src_site"])
+    xsite_pairs = {k for k, s in sites_per_pair.items() if len(s) >= 2}
+    if not xsite_pairs:
+        return []
+
+    # Pass 2: aggregate the cross-site rows per registrable tracker domain.
+    agg: dict = {}
+    for r in rows:
+        if (r["tracker_domain"], r["cookie_id_hash"]) not in xsite_pairs:
+            continue
+        dom = _registrable_domain(r["tracker_domain"])
+        if not dom or _is_ip(dom):
+            continue
+        e = agg.setdefault(dom, {
+            "tracker_domain": dom, "sites": set(), "clients": set(),
+            "cookies": set(), "pre_consent_hits": 0, "last_seen": 0,
+        })
+        e["sites"].add(r["src_site"])
+        e["clients"].add(r["client_mac_hash"])
+        e["cookies"].add(r["cookie_id_hash"])
+        if r["consent_state"] == "pre_consent":
+            e["pre_consent_hits"] += 1
+        if r["ts"] > e["last_seen"]:
+            e["last_seen"] = r["ts"]
+
+    out = [{
+        "tracker_domain": e["tracker_domain"],
+        "sites": sorted(e["sites"]),
+        "site_count": len(e["sites"]),
+        "client_count": len(e["clients"]),
+        "cookie_count": len(e["cookies"]),
+        "pre_consent_hits": e["pre_consent_hits"],
+        "last_seen": e["last_seen"],
+    } for e in agg.values()]
+    out.sort(key=lambda t: (-t["client_count"], -t["site_count"],
+                            t["tracker_domain"]))
+    return out[:max(0, top_n)]
+
+
+def cookie_xsite_detail(hours: int = 24, top_n: int = 50) -> Dict:
+    """Operator view of cross-site tracker cookies over social_edges.
+
+    Mirrors aggregate()'s envelope shape. JWT-gated in the API layer.
+    """
+    if hours < 1 or hours > 24 * 31:
+        hours = 24
+    if top_n < 1 or top_n > 500:
+        top_n = 50
+    now = int(time.time())
+    since = now - hours * 3600
+    out: Dict = {"window_hours": hours, "generated_at": now, "trackers": []}
+    try:
+        with _conn() as c:
+            out["trackers"] = _xsite_detail_from_conn(c, since, top_n)
+    except sqlite3.Error as e:
+        log.warning("cookie_xsite_detail: DB error, returning empty: %s", e)
+    return out
+
+
 def evidence(mac_hash: str, since_seconds: int = 86400) -> Dict:
     """Phase 11.C evidence helper — returns the legal-grade slice
     consumed by the bilingual PDF report.
