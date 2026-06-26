@@ -213,3 +213,129 @@ Hooks = scripts drop-in dans `/etc/secubox/netboot/hooks/<event>.d/*`, exécuté
 - **Média de boot** : si la board boote réellement eMMC (pas SPI), le détournement
   `bootcmd` suffit ; si SPI, idem tant qu'on ne touche pas `mtd0`.
 - **ESPRESSObin 3720** : driver réseau + adresses différents → fragment board distinct.
+
+---
+
+## 10. Construction & publication de l'overlay Tow-Boot amélioré (#748)
+
+Le flux complet de génération et publication d'un overlay U-Boot basé sur **Tow-Boot
+amélioré** se décompose en 3 étapes : build de Tow-Boot sur un hôte Nix, signature du
+FIT chainloadé, et publication vers le serveur netboot (gk2).
+
+### 10.1 Build Tow-Boot amélioré
+
+Tow-Boot (fork SecuBox du bootloader mainline) se compile sur un **hôte Nix** 
+(Linux avec Nix Package Manager) :
+
+```bash
+cd tools/Tow-Boot
+sg nix-users -c "nix-build -A globalscale-mochabin-8gb"
+```
+
+Sorties produites dans `result/` → symlink `output/` :
+- `output/Tow-Boot.spi.bin` — image SPI complète (TF-A + Tow-Boot)
+- `output/u-boot.bin` — binaire U-Boot brut (réutilisé pour l'overlay FIT)
+- `output/tow-boot.bin` — variante compacte Tow-Boot (optionnel)
+
+> **Note** : pour ESPRESSObin v7/Ultra, remplacer `globalscale-mochabin-8gb` par
+> `globalscale-espressobin-v7` ou `globalscale-espressobin-ultra`.
+
+### 10.2 Wrapping en FIT signé chainloadé
+
+Une fois `u-boot.bin` disponible, le script `build-uboot-overlay.sh` le transforme
+en **artefact signé** (`sbx-uboot.fit`) et crée un boot script d'amorce 
+(`sbx-boot.scr`) :
+
+```bash
+packages/secubox-netboot/scripts/build-uboot-overlay.sh \
+  --board mochabin \
+  --tow-boot <chemin-output-de-nix-build> \
+  --key-dir /etc/secubox/netboot/keys \
+  --out <staging>
+```
+
+Paramètres :
+- `--board mochabin` : sélectionne la board et ses adresses de chargement
+  (`OVERLAY_LOAD=0x06000000` pour mochabin)
+- `--tow-boot <dir>` : répertoire contenant `u-boot.bin` (sortie Nix)
+- `--key-dir /etc/secubox/netboot/keys` : clés RSA pour signature FIT
+  (`secubox-netboot.key` + `secubox-netboot.pub`)
+- `--out <staging>` : répertoire de destination des artefacts
+
+Sorties :
+- `<staging>/sbx-uboot.fit` — overlay U-Boot signé (destiné à `/boot`)
+- `<staging>/sbx-boot.scr` — script de boot compilé (chainload DHCP → HTTP|TFTP)
+- `<staging>/sbx-boot.scr.sha256` — hash de vérification
+
+### 10.3 Adresse de chargement overlay
+
+L'overlay est positionné en RAM à **`OVERLAY_LOAD=0x06000000`** (mochabin), hors de
+la zone TF-A et du U-Boot usine. Cette adresse est **non-configurable par endpoint** ;
+elle doit être validée pour chaque board lors de l'audit (voir section 9 — risques).
+
+### 10.4 Publication vers le serveur netboot
+
+Après vérification des artefacts et validation de la signature, la commande :
+
+```bash
+secubox-netboot-publish \
+  --id <MAC> \
+  --overlay-fit <staging>/sbx-uboot.fit \
+  --scr <staging>/sbx-boot.scr
+```
+
+dépose les fichiers sous `/srv/secubox/netboot/{tftp,http}/overlay-<board>/` sur
+l'hôte gk2 (serveur netboot) :
+
+```
+/srv/secubox/netboot/
+├── tftp/
+│   └── overlay-mochabin/
+│       ├── <MAC>/
+│       │   ├── sbx-uboot.fit
+│       │   └── sbx-boot.scr
+│       └── <autre-MAC>/
+│           └── ...
+├── http/
+│   └── overlay-mochabin/
+│       ├── <MAC>/
+│       │   ├── sbx-uboot.fit
+│       │   └── sbx-boot.scr
+│       └── <autre-MAC>/
+│           └── ...
+└── active/
+    └── overlay-mochabin/
+        ├── live-link → pointeur vers le FIT actif
+        └── version → metadata (board, date, sha256)
+```
+
+La **publication est idempotente** : rejouer le `secubox-netboot-publish` avec la même
+`--id` remplace l'entrée existante sans risque.
+
+### 10.5 Chaînage à la première mise à l'amorce (U-Boot usine)
+
+Lors du prochain démarrage, le U-Boot **usine** (SPI `mtd0`) exécute :
+
+```bash
+load mmc 0:1 ${overlay_load} <MAC>/sbx-uboot.fit
+bootm ${overlay_load}
+```
+
+où `${overlay_load}=0x06000000` (ou `${loadaddr}` selon la config). Le FIT est
+**vérifié par signature** avant exécution ; si la signature échoue, on retombe sur
+`factory_bootcmd` (voir section 4 — rollback automatique).
+
+---
+
+## 11. Cycle complet & intégration P2 (résumé)
+
+| Phase | Action | Artefact | Condition |
+|-------|--------|----------|-----------|
+| Build | `nix-build` Tow-Boot | `output/u-boot.bin` | Hôte Nix dispo |
+| Overlay | `build-uboot-overlay.sh` | `sbx-uboot.fit`, `sbx-boot.scr` | Clés + board config |
+| Publish | `secubox-netboot-publish --id <MAC>` | `/srv/.../overlay-<board>/<MAC>/` | Accès gk2 |
+| Boot | Chaînage usine + signature FIT | os-installer ou kernel | Connexion DHCP |
+| Confirm | `overlay --confirm-healthy` | `bootcount=0` | Boot sain vérifié |
+
+Aucune étape ne modifie le SPI/eMMC-boot ; l'overlay n'est qu'un **2ᵉ U-Boot chargé**
+en RAM, sans persistance jusqu'à l'installation complète (P3 flash A/B).
