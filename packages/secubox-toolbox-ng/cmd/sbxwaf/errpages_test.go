@@ -177,6 +177,57 @@ func TestHandlerServes504OnUpstreamTimeout(t *testing.T) {
 	}
 }
 
+// TestErrorPageEscapesHost verifies that a Host value containing HTML-special
+// characters is escaped before being inserted into the page, preventing a
+// reflected XSS via an attacker-controlled Host header.
+//
+// Note: the 502 template itself contains a legitimate <script> block for the
+// retry countdown timer — that is expected.  What must NOT appear is the
+// attacker-injected payload "><script>alert(1)</script> reflected verbatim.
+// html.EscapeString escapes <, >, &, " and ' — plain text like "alert(1)"
+// within the already-escaped tags is safe and will remain in the output.
+func TestErrorPageEscapesHost(t *testing.T) {
+	maliciousHost := "\"><script>alert(1)</script>"
+	body := string(errorPage(502, maliciousHost))
+
+	// The raw, unescaped payload must not appear verbatim.
+	// If it does, the host value was reflected unescaped — XSS.
+	if strings.Contains(body, maliciousHost) {
+		t.Fatal("body contains the raw malicious Host value unescaped — reflected XSS vulnerability")
+	}
+
+	// The injected closing quote + opening angle must not appear — this is
+	// the breakout vector that allows injecting a new tag context.
+	if strings.Contains(body, "\"><script>") {
+		t.Fatal(`body contains unescaped "><script> from Host header — tag-injection XSS vulnerability`)
+	}
+
+	// Must contain the escaped form so the host value is still rendered safely.
+	if !strings.Contains(body, "&lt;script&gt;") {
+		t.Fatal("body does not contain escaped &lt;script&gt; — escaping may be missing or incorrect")
+	}
+
+	// Must not contain the bare placeholder.
+	if strings.Contains(body, "{host}") {
+		t.Fatal("body still contains literal {host} placeholder — substitution failed")
+	}
+}
+
+// TestErrorPageSubstitutesHostNormal confirms that a well-formed host (no
+// special chars) is preserved unchanged after escaping — escaping must not
+// mangle safe values.
+func TestErrorPageSubstitutesHostNormal(t *testing.T) {
+	const host = "app.example.com"
+	body := string(errorPage(502, host))
+
+	if !strings.Contains(body, host) {
+		t.Fatalf("expected body to contain %q after substitution, but it was absent", host)
+	}
+	if strings.Contains(body, "{host}") {
+		t.Fatal("body still contains literal {host} placeholder — substitution failed")
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
