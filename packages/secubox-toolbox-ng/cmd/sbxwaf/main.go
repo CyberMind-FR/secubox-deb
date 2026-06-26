@@ -60,6 +60,13 @@ type Server struct {
 	// upstreamTimeout is the per-request dial+response timeout for the
 	// reverse-proxy transport.
 	upstreamTimeout time.Duration
+
+	// transport is the shared *http.Transport used by all reverse-proxy
+	// instances.  Constructed in main() BEFORE LoadRoutes so that startup-built
+	// proxies use the same tuned pool.  When nil, handler() creates a local
+	// transport from upstreamTimeout (backwards-compat for test-only Servers
+	// that don't inject a transport).
+	transport http.RoundTripper
 }
 
 // handler returns an http.Handler that:
@@ -71,24 +78,21 @@ type Server struct {
 //     test-injected routeLookup closures that bypass Routes.
 //  5. Adds X-SecuBox-WAF: inspected to every proxied response.
 func (s *Server) handler() http.Handler {
-	timeout := s.upstreamTimeout
-	if timeout == 0 {
-		timeout = 10 * time.Second
-	}
-
-	// Shared transport: one connection pool for all proxied backends.
-	transport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: timeout,
-		}).DialContext,
-		ResponseHeaderTimeout: timeout,
-	}
-
-	// Inject the transport into the Routes proxy cache so cached proxies share
-	// the same pool.  Must be done before the first request; handler() is called
-	// once at startup so this is safe.
-	if s.routes != nil {
-		s.routes.transport = transport
+	// Use the shared transport injected at construction time (main() builds it
+	// before LoadRoutes so startup proxies already reference it).  Fall back to
+	// a fresh local transport for test Servers that don't inject one.
+	transport := s.transport
+	if transport == nil {
+		timeout := s.upstreamTimeout
+		if timeout == 0 {
+			timeout = 10 * time.Second
+		}
+		transport = &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: timeout,
+			}).DialContext,
+			ResponseHeaderTimeout: timeout,
+		}
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -169,13 +173,28 @@ func main() {
 	// Silence "unused variable" lint for flags consumed in later tasks.
 	_ = rules
 
+	// Build the shared transport FIRST so it can be passed to LoadRoutes.
+	// Every proxy — startup-built and reload-built — will share this pool and
+	// dial timeout.  The same pointer is stored in srv.transport for the
+	// handler's fallback path.
+	sharedTransport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: *upstreamTimeout,
+		}).DialContext,
+		ResponseHeaderTimeout: *upstreamTimeout,
+		MaxIdleConns:          256,
+		MaxIdleConnsPerHost:   32,
+		IdleConnTimeout:       90 * time.Second,
+	}
+
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
+		transport:       sharedTransport,
 	}
 
 	// Wire in the real Routes loader when --routes is provided.
 	if *routesFile != "" {
-		r := LoadRoutes(*routesFile)
+		r := LoadRoutes(*routesFile, sharedTransport)
 		srv.routes = r
 		srv.routeLookup = r.Lookup
 		log.Printf("sbxwaf: routes loaded from %s (%d entries)", *routesFile, func() int {
