@@ -174,15 +174,15 @@ func TestInspectNCBypass(t *testing.T) {
 	}
 }
 
-// TestInspectLargeBodyForwardedIntact: a POST body larger than maxBodyInspect
+// TestInspectLargeBodyForwardedIntact: a POST body larger than defaultMaxBodyInspect
 // (1 MiB + 4 KiB) must arrive at the backend byte-for-byte intact.
 // This is the regression test for the LimitReader truncation bug: the old code
 // restored only the capped prefix to r.Body, silently dropping the tail.
 func TestInspectLargeBodyForwardedIntact(t *testing.T) {
-	// Build a benign body of exactly maxBodyInspect + 4 KiB (no attack pattern).
+	// Build a benign body of exactly defaultMaxBodyInspect + 4 KiB (no attack pattern).
 	// The WAF will inspect the first 1 MiB and pass it; the tail must survive too.
 	const extraBytes = 4 * 1024
-	bodySize := maxBodyInspect + extraBytes
+	bodySize := defaultMaxBodyInspect + extraBytes
 	fullBody := make([]byte, bodySize)
 	for i := range fullBody {
 		fullBody[i] = byte('A' + (i % 26)) // deterministic fill, no attack pattern
@@ -234,7 +234,7 @@ func TestInspectLargeBodyForwardedIntact(t *testing.T) {
 func TestInspectLargeBodyAttackInFirstMiB(t *testing.T) {
 	// 512 KiB of attack prefix + 512 KiB + 4 KiB of padding.
 	const extraBytes = 4 * 1024
-	bodySize := maxBodyInspect + extraBytes
+	bodySize := defaultMaxBodyInspect + extraBytes
 	body := make([]byte, bodySize)
 	attackSnippet := []byte("union select 1,2,3")
 	copy(body[:len(attackSnippet)], attackSnippet)

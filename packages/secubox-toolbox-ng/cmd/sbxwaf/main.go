@@ -127,6 +127,24 @@ type Server struct {
 	// When non-nil: called with (ip, cat, sev) whenever an IP reaches BAN.
 	crowdsec CrowdSecReporter
 
+	// maxBodyInspect is the per-request body inspection cap in bytes.
+	// Only the first maxBodyInspect bytes of the request body are passed to
+	// Rules.Match; the remainder is streamed to the upstream uninspected.
+	// Payloads injected beyond this offset will NOT be detected — this is a
+	// documented parity gap vs the Python WAF (full-body scan).
+	// Set from --max-body-inspect; defaults to defaultMaxBodyInspect (1 MiB).
+	// When a body exceeds the cap an AUDIT log line is emitted (action:
+	// "body-inspect-truncated") so truncation events are operator-visible.
+	maxBodyInspect int64
+
+	// trustedHosts is the set of hostnames that bypass WAF inspection entirely.
+	// Mirrors Python check_request whitelist (secubox_waf.py:761-763):
+	// git.gk2.secubox.in, git.secubox.in, admin.gk2.secubox.in, 10.100.0.1:9080.
+	// Gitea push payloads and admin panel forms routinely contain content that
+	// would trip WAF rules — this skip prevents false-positive bans on internal
+	// services. Configurable via --waf-skip-hosts.
+	trustedHosts map[string]struct{}
+
 	// cookieAudit is the Task 5.1 RGPD Set-Cookie ledger.
 	// When non-nil, ModifyResponse calls Record for every upstream response.
 	// Nil means auditing is disabled (--cookie-audit-log="").
@@ -252,21 +270,58 @@ func (s *Server) handler() http.Handler {
 			}
 
 			skip := privateCIDR(ip) || staticAsset(rawPath) || ncBypass(rawPath)
+
+			// Trusted-host skip: bypass WAF inspection for known internal hosts
+			// (matches Python check_request whitelist in secubox_waf.py:761-763).
+			// Checked AFTER privateCIDR/static/NC so that the cheap skips run first.
+			if !skip && s.isTrustedHost(r.Host) {
+				skip = true
+			}
+
 			if !skip {
-				// Read up to maxBodyInspect bytes for WAF inspection, then
+				// Read up to s.maxBodyInspect bytes for WAF inspection, then
 				// restore the FULL body (prefix + remaining stream) so the
 				// upstream proxy receives every byte intact.
 				//
-				// Streaming approach: we buffer at most 1 MiB (the inspection
-				// window), then forward a MultiReader of that buffer + the
-				// unconsumed tail of r.Body.  This keeps memory bounded even
+				// Streaming approach: we buffer at most maxBodyInspect bytes (the
+				// inspection window), then forward a MultiReader of that buffer +
+				// the unconsumed tail of r.Body. This keeps memory bounded even
 				// for multi-GB uploads (PeerTube / Nextcloud file uploads).
+				//
+				// PARITY GAP: only the first maxBodyInspect bytes are inspected.
+				// A payload appended after that offset is NOT detected. When a body
+				// exceeds the cap, an AUDIT log line is emitted so truncation is
+				// operator-visible (action="body-inspect-truncated"). See
+				// docs/CUTOVER.md for the documented detection gap.
+				cap := s.maxBodyInspect
+				if cap <= 0 {
+					cap = defaultMaxBodyInspect
+				}
 				var bodyBytes []byte
 				if r.Body != nil {
-					prefix, _ := io.ReadAll(io.LimitReader(r.Body, maxBodyInspect))
+					prefix, _ := io.ReadAll(io.LimitReader(r.Body, cap))
 					bodyBytes = prefix
 					// Restore: prefix already read + remaining stream not yet consumed.
 					r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), r.Body))
+
+					// Emit audit log when inspection was truncated (Content-Length known
+					// or body read returned exactly cap bytes → likely more data follows).
+					if int64(len(prefix)) == cap {
+						if s.threatLog != nil {
+							s.threatLog.Record(ThreatRecord{
+								ClientIP: ip,
+								Host:     r.Host,
+								Method:   r.Method,
+								Path:     rawPath,
+								Category: "body-inspect-truncated",
+								Severity: "audit",
+								Action:   "body-inspect-truncated",
+								UA:       r.Header.Get("User-Agent"),
+							})
+						}
+						log.Printf("sbxwaf: AUDIT body-inspect-truncated host=%s path=%s ip=%s cap=%d",
+							r.Host, rawPath, ip, cap)
+					}
 				}
 
 				cat, sev, hit := s.rules.Match(
@@ -334,8 +389,14 @@ func (s *Server) handler() http.Handler {
 
 		// Task 6.1 — media cache hit: serve from disk, bypass upstream.
 		// Only for GET requests; cache is nil-safe.
+		//
+		// Cache key is composed from vhost + path+query so that two different
+		// vhosts serving the same asset path (/logo.png) get distinct keys and
+		// never cross-contaminate each other's cached content (vhost isolation;
+		// mirrors Python media_cache.py r.pretty_url which includes the host).
 		if s.mediaCache != nil && r.Method == http.MethodGet {
-			if cachedBody, cachedHdr, hit := s.mediaCache.Get(r.URL.String()); hit {
+			vhostCacheURL := "https://" + r.Host + r.URL.RequestURI()
+			if cachedBody, cachedHdr, hit := s.mediaCache.Get(vhostCacheURL); hit {
 				for k, vs := range cachedHdr {
 					for _, v := range vs {
 						w.Header().Set(k, v)
@@ -393,13 +454,48 @@ func (s *Server) handler() http.Handler {
 				s.mediaCache.MaybeStore(r, &http.Response{
 					StatusCode: sc,
 					Header:     cw.respHeader,
-				}, cw.body)
+				}, cw.body, vhostCacheURL)
 			}
 			return
 		}
 
 		proxy.ServeHTTP(w, r)
 	})
+}
+
+// parseTrustedHosts parses a comma-separated list of hostnames into a set.
+// Empty entries are silently skipped.
+func parseTrustedHosts(csv string) map[string]struct{} {
+	m := make(map[string]struct{})
+	for _, h := range strings.Split(csv, ",") {
+		h = strings.TrimSpace(h)
+		if h != "" {
+			m[strings.ToLower(h)] = struct{}{}
+		}
+	}
+	return m
+}
+
+// isTrustedHost reports whether the given Host header value (with optional port)
+// belongs to the trusted-host whitelist. Matches the Python check_request
+// trusted-host skip (secubox_waf.py:761-763). Checked before WAF inspection so
+// internal services (gitea, admin panel) are never WAF-inspected or banned.
+func (s *Server) isTrustedHost(hostHeader string) bool {
+	if len(s.trustedHosts) == 0 {
+		return false
+	}
+	lh := strings.ToLower(strings.TrimSpace(hostHeader))
+	if _, ok := s.trustedHosts[lh]; ok {
+		return true
+	}
+	// Also check bare hostname (without port) in case hostHeader includes a port.
+	bare, _, err := net.SplitHostPort(lh)
+	if err == nil {
+		if _, ok := s.trustedHosts[bare]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // splitHostPort splits "host:port" into its components, parsing port as int.
@@ -438,6 +534,18 @@ func main() {
 	// Task 6.1: response media cache.
 	mediaCacheDir := flag.String("media-cache-dir", "/var/cache/secubox/waf/media",
 		"directory for the response media cache (16 MiB/obj, 2 GiB total); empty disables")
+	// Body inspection cap: only the first N bytes of the request body are scanned.
+	// Payloads beyond this offset are NOT inspected (documented parity gap vs Python full-body scan).
+	// Raise for stricter coverage; truncation events are always audit-logged regardless of this cap.
+	maxBodyInspectFlag := flag.Int64("max-body-inspect", defaultMaxBodyInspect,
+		"max bytes of request body to inspect for WAF rules (default 1 MiB); truncation is audit-logged")
+	// Trusted-host skip: WAF inspection is bypassed for these hostnames (comma-separated).
+	// Mirrors Python check_request whitelist (secubox_waf.py:761-763).
+	// Default list matches the Python source: git.gk2.secubox.in, git.secubox.in,
+	// admin.gk2.secubox.in, 10.100.0.1:9080.
+	wafSkipHosts := flag.String("waf-skip-hosts",
+		"git.gk2.secubox.in,git.secubox.in,admin.gk2.secubox.in,10.100.0.1:9080",
+		"comma-separated hostnames to bypass WAF inspection entirely (mirrors Python trusted-host list)")
 	flag.Parse()
 
 	// rules is consumed below when --rules is provided.
@@ -483,8 +591,13 @@ func main() {
 		cookieAudit: cookieAudit,
 		// Task 6.1: response media cache.
 		mediaCache: mediaCache,
+		// Body inspection cap (--max-body-inspect).
+		maxBodyInspect: *maxBodyInspectFlag,
+		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
+		trustedHosts: parseTrustedHosts(*wafSkipHosts),
 	}
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
+	log.Printf("sbxwaf: body-inspect cap=%d bytes; trusted-skip hosts=%d", *maxBodyInspectFlag, len(srv.trustedHosts))
 
 	// Task 4.1: wire CrowdSec LAPI bridge when both --crowdsec-url and
 	// --crowdsec-jwt-file are provided.  The JWT is read from a file so the
