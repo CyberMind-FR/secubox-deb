@@ -100,7 +100,6 @@ in
             CMD_TFTPBOOT = yes;
             CMD_PING = yes;
             CMD_WGET = yes;
-            PROT_TCP = yes;
             CMD_BOOTI = yes;
 
             # signed FIT verification (CSPN)
