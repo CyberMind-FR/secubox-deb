@@ -700,8 +700,29 @@
                     </table>
                 </div>
             </div>
+
+            <!-- #747 — non-attacker visit statistics (client type / OS / geo) -->
+            <div class="glass-card" id="visitsCard" style="grid-column: span 2;">
+                <h2>👁️ Visites (trafic légitime) <span class="muted" style="font-size:0.8rem;">— total <b id="visitsTotal">—</b> requêtes vues par le WAF</span></h2>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-top:0.6rem">
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">🧭 Type de client</h3><div id="visitsClientType" class="vbars"><span class="muted">…</span></div></div>
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">💻 Système</h3><div id="visitsOS" class="vbars"><span class="muted">…</span></div></div>
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">🌍 Pays</h3><div id="visitsCountries" class="vbars"><span class="muted">…</span></div></div>
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">📊 Statut</h3><div id="visitsStatus" class="vbars"><span class="muted">…</span></div></div>
+                    <div style="grid-column:1/-1"><h3 style="font-size:0.85rem;margin:0 0 .4rem">🎯 Sites les plus visités</h3><div id="visitsVhosts" class="vbars"><span class="muted">…</span></div></div>
+                </div>
+            </div>
         </div>
     </main>
+
+    <style>
+      .vbars{display:flex;flex-direction:column;gap:.3rem}
+      .vbar{display:grid;grid-template-columns:auto 1fr auto;gap:.5rem;align-items:center;font-size:.8rem}
+      .vbar .vlabel{white-space:nowrap;max-width:14rem;overflow:hidden;text-overflow:ellipsis}
+      .vbar .vtrack{height:.55rem;border-radius:.3rem;background:rgba(255,255,255,.07);overflow:hidden}
+      .vbar .vfill{height:100%;border-radius:.3rem;background:linear-gradient(90deg,#00d4ff,#6e40c9)}
+      .vbar .vcount{font-variant-numeric:tabular-nums;color:#c9a84c}
+    </style>
 
     <script>
         const API = '/api/v1/waf';
@@ -1154,7 +1175,8 @@
                 loadStats(),
                 loadSecurityEvents(),
                 loadCategories(),
-                loadTrackedAttackers()
+                loadTrackedAttackers(),
+                loadVisits()
             ]);
             btn.innerHTML = '🔄<span class="quick-btn-tooltip">Refresh</span>';
         }
@@ -1193,6 +1215,35 @@
                     + '<td>' + state + '</td>'
                     + '</tr>';
             }).join('');
+        }
+
+        // #747 — non-attacker visit statistics
+        const _CT_EMOJI = { browser: '🌐', 'mobile-app': '📱', bot: '🤖', crawler: '🕷️', other: '❔' };
+        const _OS_EMOJI = { Windows: '🪟', macOS: '🍎', Linux: '🐧', Android: '🤖', iOS: '📱', other: '❔' };
+        function _vbars(elId, obj, emoji) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            if (!entries.length) { el.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
+            const max = entries[0][1] || 1;
+            const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            el.innerHTML = entries.map(([k, v]) => {
+                const pct = Math.max(3, Math.round((v / max) * 100));
+                const ic = emoji ? (emoji[k] || '') + ' ' : '';
+                return '<div class="vbar"><span class="vlabel" title="' + esc(k) + '">' + ic + esc(k) + '</span>'
+                    + '<span class="vtrack"><span class="vfill" style="width:' + pct + '%"></span></span>'
+                    + '<span class="vcount">' + v + '</span></div>';
+            }).join('');
+        }
+        async function loadVisits() {
+            const d = await api('/visits');
+            const tot = document.getElementById('visitsTotal');
+            if (tot) tot.textContent = (d && d.total != null) ? d.total.toLocaleString() : '—';
+            _vbars('visitsClientType', d?.by_client_type, _CT_EMOJI);
+            _vbars('visitsOS', d?.by_os, _OS_EMOJI);
+            _vbars('visitsCountries', d?.top_countries, null);
+            _vbars('visitsStatus', d?.by_status, null);
+            _vbars('visitsVhosts', d?.by_vhost, null);
         }
 
         // WAF Toggle
