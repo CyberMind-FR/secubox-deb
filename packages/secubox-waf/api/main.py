@@ -869,6 +869,43 @@ def _empty_stats_skeleton() -> dict:
     }
 
 
+VISITS_STATS = os.environ.get(
+    "SECUBOX_WAF_VISITS_STATS", "/var/log/secubox/waf/visits-stats.json")
+
+
+@app.get("/visits")
+async def get_visits():
+    """Non-attacker visit statistics (#747) — the WAF sees ALL inbound traffic,
+    so this is real 'who actually visited' data: total requests, client-type /
+    OS / per-vhost / status breakdowns, plus the busiest client IPs geo-mapped to
+    countries here (the engine ships only the IPs; the API holds the GeoIP DB).
+    Public, served straight from the engine's periodic JSON snapshot."""
+    try:
+        snap = json.loads(Path(VISITS_STATS).read_text())
+    except (OSError, ValueError):
+        return {"available": False, "total": 0, "by_client_type": {}, "by_os": {},
+                "by_status": {}, "by_vhost": {}, "top_countries": {}, "top_ips": {}}
+    reader = _get_geoip_reader()
+    top_ips = snap.get("top_ips") or {}
+    by_country: Dict[str, int] = defaultdict(int)
+    for ip, n in top_ips.items():
+        by_country[_lookup_country(ip, reader)] += int(n or 0)
+    return {
+        "available": True,
+        "total": int(snap.get("total", 0)),
+        "by_client_type": snap.get("by_client_type") or {},
+        "by_os": snap.get("by_os") or {},
+        "by_status": snap.get("by_status") or {},
+        "by_vhost": dict(sorted((snap.get("by_vhost") or {}).items(),
+                                key=lambda kv: -int(kv[1] or 0))[:10]),
+        "top_countries": dict(sorted(by_country.items(),
+                                     key=lambda kv: -kv[1])[:10]),
+        "top_ips": dict(sorted(top_ips.items(),
+                               key=lambda kv: -int(kv[1] or 0))[:10]),
+        "updated_unix": int(snap.get("updated_unix", 0)),
+    }
+
+
 @app.get("/stats")
 async def get_stats():
     """Threat statistics for the dashboard (public).
