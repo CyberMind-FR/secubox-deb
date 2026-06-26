@@ -1,0 +1,8 @@
+# Build artifacts — not committed
+_gocache/
+_gopath/
+sbxwaf
+debian/secubox-waf-ng/
+debian/.debhelper/
+debian/*.substvars
+debian/files

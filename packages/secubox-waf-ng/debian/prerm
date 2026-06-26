@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-waf-ng — prerm (#744)
+set -e
+
+case "$1" in
+  remove|upgrade|deconfigure)
+    if [ -d /run/systemd/system ]; then
+      for unit in secubox-waf-ng-worker@1.service \
+                  secubox-waf-ng-worker@2.service; do
+        systemctl stop "$unit" 2>/dev/null || true
+        systemctl disable "$unit" 2>/dev/null || true
+      done
+    fi
+    ;;
+
+  failed-upgrade)
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0
