@@ -15,12 +15,73 @@
 // writeBan — HTTP 403, minimal ban page with X-SecuBox-WAF: banned header.
 //
 //	The HTML comment "<!-- sbxwaf-banned -->" is the machine-readable marker.
+//
+// Task 7.1: synthetic upstream error pages (502/503/504).
+//
+//	errorPage(code, host) — loads the embedded themed HTML template for the
+//	given upstream error code (502/503/504), substitutes {host} and {time},
+//	and returns the rendered bytes.  Faithful port of the error() hook in
+//	secubox_waf.py (~line 1096):
+//	  - Connection refused → 502 (ERROR_502_PAGE + {host}/{time} sub)
+//	  - Timeout             → 504 (ERROR_502_PAGE with 502→504 / Bad Gateway→Gateway Timeout)
+//	  - Other              → 503 (ERROR_503_PAGE, no {host} in the Python page)
+//
+//	writeErrorPage(w, code, host) — sets Content-Type + X-SecuBox-WAF header,
+//	writes the status code, then writes errorPage output.
 package main
 
 import (
+	"bytes"
+	_ "embed"
 	"fmt"
 	"net/http"
+	"time"
 )
+
+// Embedded templates — verbatim copies of the Python secubox_waf.py pages.
+//
+//go:embed templates/error-502.html
+var tmpl502 []byte
+
+//go:embed templates/error-503.html
+var tmpl503 []byte
+
+//go:embed templates/error-504.html
+var tmpl504 []byte
+
+// errorPage returns the themed HTML body for the given upstream HTTP error code.
+// host is substituted into {host} placeholders (both the 502 and 504 templates
+// contain the upstream hostname in the error box).  The {time} placeholder is
+// replaced with the current wall-clock time (HH:MM:SS), matching the Python
+// error() hook behaviour.
+//
+// Unknown codes fall back to the 502 template (sane default — keeps tests
+// forward-compatible if new codes are added later).
+func errorPage(code int, host string) []byte {
+	var tmpl []byte
+	switch code {
+	case 503:
+		tmpl = tmpl503
+	case 504:
+		tmpl = tmpl504
+	default: // 502 and any unknown code
+		tmpl = tmpl502
+	}
+
+	now := time.Now().Format("15:04:05")
+	out := bytes.ReplaceAll(tmpl, []byte("{host}"), []byte(host))
+	out = bytes.ReplaceAll(out, []byte("{time}"), []byte(now))
+	return out
+}
+
+// writeErrorPage writes a themed upstream error response.
+// Maps the error code to the WAF header value and delegates to errorPage.
+func writeErrorPage(w http.ResponseWriter, code int, host string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-SecuBox-WAF", fmt.Sprintf("error-%d", code))
+	w.WriteHeader(code)
+	_, _ = w.Write(errorPage(code, host))
+}
 
 // writeWarning writes a 403 cyberpunk-styled warning page.
 // cat is the WAF category ID (e.g. "sqli") shown in the body.
