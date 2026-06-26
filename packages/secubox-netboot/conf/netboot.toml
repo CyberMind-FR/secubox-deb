@@ -1,7 +1,7 @@
 # /etc/secubox/netboot.toml — secubox-netboot (#737)
 [server]
 # hôte HTTP servant images/boot.fit + TFTP (réutilise apt.secubox.in ou un vhost dédié)
-http_base = "http://boot.gk2.secubox.in"
+http_base = "http://boot.gk2.secubox.in:8099"
 tftp_root = "/srv/secubox/netboot/tftp"
 
 [overlay]
