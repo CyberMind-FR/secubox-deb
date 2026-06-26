@@ -200,6 +200,7 @@ class ScreenshotCapture:
         username: str = "admin",
         password: Optional[str] = None,
         page_delay: int = 30,  # seconds to wait for cache refresh
+        token: Optional[str] = None,  # pre-minted JWT (bypass password login)
     ):
         self.base_url = base_url.rstrip("/")
         self.output_dir = Path(output_dir)
@@ -207,6 +208,7 @@ class ScreenshotCapture:
         self.username = username
         self.password = password or os.environ.get("SECUBOX_PASSWORD", "secubox")
         self.page_delay = page_delay
+        self.token = token or os.environ.get("SECUBOX_TOKEN") or None
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.thumb_dir.mkdir(parents=True, exist_ok=True)
@@ -214,7 +216,14 @@ class ScreenshotCapture:
         self.results: list[CaptureResult] = []
 
     async def login(self, page: Page) -> bool:
-        """Login to SecuBox via API and set JWT token."""
+        """Authenticate the capture session. With a pre-minted JWT (--token), the
+        token is injected into localStorage by an init-script on the context (set
+        in capture_all) BEFORE any page script runs, so every dashboard sees an
+        authenticated session on first paint — no password flow needed. Otherwise
+        fall back to the API password login."""
+        if self.token:
+            print("Auth: pre-minted JWT (injected via init-script)")
+            return True
         try:
             print(f"Logging in to {self.base_url}...")
 
@@ -285,7 +294,11 @@ class ScreenshotCapture:
         print(f"[{index:3d}/{total}] {module_name:30s} {path:25s}", end=" ", flush=True)
 
         try:
-            response = await page.goto(url, wait_until="networkidle", timeout=30000)
+            # "domcontentloaded" (NOT "networkidle"): live dashboards poll/websocket
+            # forever and never reach network-idle, so networkidle would burn the full
+            # 30s timeout on every one. We gate readiness deterministically afterwards
+            # with _wait_content_ready (loading sentinels clear + a real network lull).
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
             result.status_code = response.status if response else 0
 
             if result.status_code != 200:
@@ -293,8 +306,11 @@ class ScreenshotCapture:
                 print(f"SKIP ({result.error})")
                 return result
 
-            # Wait for cache refresh and dynamic content to load
-            await page.wait_for_timeout(self.page_delay * 1000)
+            # Wait for dynamic content to FINISH rendering (deterministic, not a
+            # blind sleep): loading sentinels clear + network settles, capped by
+            # page_delay as an upper bound. Reports how it resolved.
+            waited = await self._wait_content_ready(page, self.page_delay)
+            print(f"[{waited}]", end=" ", flush=True)
 
             # Capture screenshot
             await page.screenshot(path=screenshot_path, full_page=False)
@@ -311,6 +327,89 @@ class ScreenshotCapture:
             print(f"ERROR: {e}")
 
         return result
+
+    async def _wait_content_ready(self, page: Page, max_wait: int) -> str:
+        """Wait until a dashboard has FINISHED rendering its async content, rather
+        than sleeping a fixed delay. SecuBox panels fetch data after load (cache
+        refresh, tab-switch fetches) and paint placeholders meanwhile, so a blind
+        timeout captures half-loaded pages or wastes time.
+
+        Resolution = first of:
+          • content-ready: no loading sentinels remain ("loading…", spinners,
+            empty placeholders, "—"/"..." KPI stubs) AND the DOM has been stable
+            (no mutations) for a short quiet window;
+          • network-idle settle: no in-flight requests for the quiet window;
+          • cap: max_wait seconds elapsed (hard upper bound — never hangs).
+
+        Returns a short tag describing how it resolved (for the per-line log).
+        """
+        quiet_ms = 1200          # DOM/network must be still this long to count as "done"
+        poll_ms = 300
+        deadline = max_wait * 1000
+        # Track in-flight requests so we can detect a genuine network lull.
+        inflight = {"n": 0, "last_active_ms": 0}
+        clock = {"ms": 0}
+
+        def _req(_):
+            inflight["n"] += 1
+            inflight["last_active_ms"] = clock["ms"]
+
+        def _done(_):
+            inflight["n"] = max(0, inflight["n"] - 1)
+            inflight["last_active_ms"] = clock["ms"]
+
+        page.on("request", _req)
+        page.on("requestfinished", _done)
+        page.on("requestfailed", _done)
+
+        # JS probe: count loading sentinels still on the page. Mirrors the dashboard
+        # idioms (class "empty"/"loading"/"skeleton"/"spinner", literal "loading…",
+        # bare "—"/"..." stubs) so "content arrived" is observable, not guessed.
+        sentinel_js = r"""() => {
+            const sel = '.empty,.loading,.skeleton,.spinner,[aria-busy="true"]';
+            let n = document.querySelectorAll(sel).length;
+            const txt = (document.body && document.body.innerText) || '';
+            // count visible loading words (cheap; bounded)
+            const m = txt.match(/loading[…\.]*|chargement/gi);
+            if (m) n += m.length;
+            return n;
+        }"""
+
+        last_html_len = -1
+        stable_since = None
+        prev_sentinels = None
+        try:
+            while clock["ms"] < deadline:
+                await page.wait_for_timeout(poll_ms)
+                clock["ms"] += poll_ms
+
+                try:
+                    sentinels = await page.evaluate(sentinel_js)
+                    html_len = await page.evaluate("() => document.body ? document.body.innerHTML.length : 0")
+                except Exception:
+                    sentinels, html_len = 0, last_html_len
+
+                net_quiet = (inflight["n"] == 0 and
+                             clock["ms"] - inflight["last_active_ms"] >= quiet_ms)
+                dom_stable = (html_len == last_html_len and sentinels == prev_sentinels)
+
+                if dom_stable and net_quiet:
+                    if stable_since is None:
+                        stable_since = clock["ms"]
+                    elif clock["ms"] - stable_since >= quiet_ms:
+                        # Settled. content-ready if no sentinels remain.
+                        return f"ready {clock['ms']//1000}s" if sentinels == 0 else f"settled {clock['ms']//1000}s"
+                else:
+                    stable_since = None
+
+                last_html_len = html_len
+                prev_sentinels = sentinels
+
+            return f"cap {max_wait}s"
+        finally:
+            page.remove_listener("request", _req)
+            page.remove_listener("requestfinished", _done)
+            page.remove_listener("requestfailed", _done)
 
     def _create_thumbnail(self, src_path: Path, thumb_path: Path, size: tuple = (400, 225)):
         """Create thumbnail from screenshot."""
@@ -332,6 +431,20 @@ class ScreenshotCapture:
                 viewport={"width": 1920, "height": 1080},
                 ignore_https_errors=True,
             )
+
+            # With a pre-minted JWT, seed localStorage on EVERY document before its
+            # own scripts run (init-script fires pre-load on each navigation), so the
+            # dashboard boots already-authenticated on first paint — more robust than
+            # a one-shot setItem that a redirect/clear could drop. Keys mirror the
+            # frontend (sbx_token primary, secubox_token legacy, sbx_user).
+            if self.token:
+                await context.add_init_script(
+                    "try{localStorage.setItem('sbx_token',%r);"
+                    "localStorage.setItem('secubox_token',%r);"
+                    "localStorage.setItem('sbx_user',%r);}catch(e){}"
+                    % (self.token, self.token, self.username)
+                )
+
             page = await context.new_page()
 
             print("=" * 80)
@@ -494,6 +607,12 @@ Examples:
         help="Login username (default: admin)",
     )
     parser.add_argument(
+        "--token",
+        default=None,
+        help="Pre-minted JWT (bypass password login); injected into localStorage. "
+             "Falls back to $SECUBOX_TOKEN.",
+    )
+    parser.add_argument(
         "--headed",
         action="store_true",
         help="Run browser in headed mode (visible)",
@@ -507,7 +626,8 @@ Examples:
         "--delay",
         type=int,
         default=30,
-        help="Seconds to wait for cache refresh per page (default: 30)",
+        help="UPPER BOUND (seconds) per page; capture fires as soon as content is "
+             "rendered + network settles, this is just the cap (default: 30)",
     )
 
     args = parser.parse_args()
@@ -546,6 +666,7 @@ Examples:
         thumb_dir=args.thumb_dir,
         username=args.username,
         page_delay=args.delay,
+        token=args.token,
     )
 
     asyncio.run(capture.capture_all(modules, headless=not args.headed))
