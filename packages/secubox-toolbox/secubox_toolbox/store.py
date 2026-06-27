@@ -180,6 +180,28 @@ def ad_stats(hours: int = 24, top: int = 25) -> dict:
                 "SELECT mac_hash, SUM(hits) FROM ad_block_client_host "
                 "WHERE last_seen>=? AND mac_hash<>'' GROUP BY mac_hash "
                 "ORDER BY SUM(hits) DESC LIMIT ?", (cutoff, top))]
+            # #755 — trackers detected/poisoned by the MITM in the window: distinct
+            # cross-site cookie-identifier hashes seen on social_edges. This is the
+            # "Trackers" half of the card (the 204 ad-block is the "pubs" half).
+            out["trackers_seen"] = 0
+            try:
+                out["trackers_seen"] = int(c.execute(
+                    "SELECT COUNT(DISTINCT cookie_id_hash) FROM social_edges "
+                    "WHERE ts >= ? AND cookie_id_hash IS NOT NULL AND cookie_id_hash <> ''",
+                    (int(cutoff),),
+                ).fetchone()[0] or 0)
+            except sqlite3.Error:
+                out["trackers_seen"] = 0
+            # #755 — pages where the cosmetic ad-hide style was injected (Task 2 writes
+            # cosmetic_events; absent table → 0).
+            out["pages_cleaned"] = 0
+            try:
+                out["pages_cleaned"] = int(c.execute(
+                    "SELECT COALESCE(SUM(pages),0) FROM cosmetic_events WHERE ts >= ?",
+                    (cutoff,),
+                ).fetchone()[0] or 0)
+            except sqlite3.Error:
+                out["pages_cleaned"] = 0
     except Exception as e:
         log.debug("ad_stats failed: %s", e)
     return out
