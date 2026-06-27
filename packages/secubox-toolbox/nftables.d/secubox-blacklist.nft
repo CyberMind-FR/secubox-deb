@@ -53,18 +53,29 @@ table inet secubox_blacklist {
         flags interval, timeout
     }
 
+    # #758 — named counters for the network-stats collector. Declared at
+    # table scope so `nft list counters` exposes them by name; referenced
+    # by the enforce/doh_watch rules below. Reset to 0 on reload (collector
+    # is reset-aware).
+    counter sbx_drop_quarantine_v4 {}
+    counter sbx_drop_quarantine_v6 {}
+    counter sbx_drop_blacklist_v4 {}
+    counter sbx_drop_blacklist_v6 {}
+    counter sbx_doh_detect_v4 {}
+    counter sbx_doh_detect_v6 {}
+
     chain enforce {
         type filter hook forward priority -10; policy accept;
         # Quarantine first : a quarantined device is fully cut off.
-        ip  saddr @quarantine_v4 counter drop
-        ip6 saddr @quarantine_v6 counter drop
+        ip  saddr @quarantine_v4 counter name "sbx_drop_quarantine_v4" drop
+        ip6 saddr @quarantine_v6 counter name "sbx_drop_quarantine_v6" drop
         # C2 blacklist (13.A). Phase 13.C : rate-limited log so the
         # attribution tailer can bucket drops per source device without
         # flooding the kernel log.
-        ip  daddr @blacklist_v4 limit rate 20/second log prefix "SBX-BL-DROP " counter drop
-        ip  saddr @blacklist_v4 counter drop
-        ip6 daddr @blacklist_v6 limit rate 20/second log prefix "SBX-BL-DROP " counter drop
-        ip6 saddr @blacklist_v6 counter drop
+        ip  daddr @blacklist_v4 limit rate 20/second log prefix "SBX-BL-DROP " counter name "sbx_drop_blacklist_v4" drop
+        ip  saddr @blacklist_v4 counter name "sbx_drop_blacklist_v4" drop
+        ip6 daddr @blacklist_v6 limit rate 20/second log prefix "SBX-BL-DROP " counter name "sbx_drop_blacklist_v6" drop
+        ip6 saddr @blacklist_v6 counter name "sbx_drop_blacklist_v6" drop
     }
 
     # Phase 13.B (#522) — DoH/DoT detection. COUNT-ONLY by default : a
@@ -86,7 +97,7 @@ table inet secubox_blacklist {
         type filter hook forward priority -11; policy accept;
         # Phase 13.C : rate-limited log (new connections only) so the
         # attribution tailer can bucket DoH attempts per device.
-        ip  daddr @doh_detect_v4 tcp dport { 443, 853 } ct state new limit rate 5/second log prefix "SBX-DOH " counter
-        ip6 daddr @doh_detect_v6 tcp dport { 443, 853 } ct state new limit rate 5/second log prefix "SBX-DOH " counter
+        ip  daddr @doh_detect_v4 tcp dport { 443, 853 } ct state new limit rate 5/second log prefix "SBX-DOH " counter name "sbx_doh_detect_v4"
+        ip6 daddr @doh_detect_v6 tcp dport { 443, 853 } ct state new limit rate 5/second log prefix "SBX-DOH " counter name "sbx_doh_detect_v6"
     }
 }

@@ -2971,17 +2971,14 @@ async def admin_blacklist() -> dict:
                         out["doh_detect_v4"] = n
                     elif name == "doh_detect_v6":
                         out["doh_detect_v6"] = n
-                if "rule" in item:
-                    chain = item["rule"].get("chain", "")
-                    for ex in item["rule"].get("expr", []):
-                        c = ex.get("counter")
-                        if not c:
-                            continue
-                        pk = int(c.get("packets", 0) or 0)
-                        if chain == "doh_watch":
-                            out["doh_hits"] += pk
-                        else:
-                            out["drops"] += pk
+                if "counter" in item and isinstance(item["counter"], dict):
+                    cobj = item["counter"]
+                    cname = cobj.get("name", "")
+                    pk = int(cobj.get("packets", 0) or 0)
+                    if cname.startswith("sbx_doh_detect"):
+                        out["doh_hits"] += pk
+                    elif cname.startswith(("sbx_drop_blacklist", "sbx_drop_quarantine")):
+                        out["drops"] += pk
             out["active"] = True
     except Exception as e:  # noqa: BLE001
         log.warning("admin_blacklist nft parse failed: %s", e)
