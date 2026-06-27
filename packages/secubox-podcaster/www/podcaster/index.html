@@ -143,12 +143,20 @@ async function loadFeeds(){
     <span class="ad ${f.auto_dl?'on':''}" title="auto-download ${f.auto_dl?'on':'off'}" onclick="event.stopPropagation();toggleAd(${f.id},${f.auto_dl?0:1})">⏬</span>
     <span class="x" onclick="event.stopPropagation();delFeed(${f.id})">✕</span></div>`).join("");
 }
-async function selFeed(id){SEL=id;loadFeeds();loadEps()}
-async function loadEps(){
+async function selFeed(id){SEL=id;loadFeeds();loadEps(true)}
+let EPS_SIG="";
+function epsSig(eps){return eps.map(e=>e.id+":"+e.state+":"+(e.progress||0)).join("|")}
+async function loadEps(force){
   const el=document.getElementById("eps");const q=SEL?`?feed_id=${SEL}`:"";
   document.getElementById("title").textContent=SEL?"Episodes":"Latest episodes";
   let d; try{d=await api("/episodes"+q)}catch(e){return}
-  if(!d.episodes.length){el.innerHTML='<div class="empty">No episodes.</div>';return}
+  if(!d.episodes.length){el.innerHTML='<div class="empty">No episodes.</div>';EPS_SIG="";return}
+  // Don't rebuild the list (which would destroy a playing <audio>) when nothing
+  // changed, or while the user is actively listening — only on explicit actions.
+  const sig=(SEL||"all")+"|"+epsSig(d.episodes);
+  const playing=[...el.querySelectorAll("audio")].some(a=>!a.paused&&!a.ended);
+  if(!force && (sig===EPS_SIG || playing)) return;
+  EPS_SIG=sig;
   el.innerHTML=d.episodes.map(e=>{
     const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
     let act;
@@ -168,7 +176,7 @@ async function addFeed(){const u=document.getElementById("feedUrl").value.trim()
 async function toggleAd(id,on){try{const r=await api(`/feeds/${id}/autodl?on=${on?'true':'false'}`,{method:"POST"});
     toast(on?`auto-download on${r.queued?' · '+r.queued+' queued':''}`:"auto-download off");loadAll()}catch(e){toast("toggle failed")}}
 async function delFeed(id){if(!confirm("Remove this feed?"))return;await api("/feeds/"+id,{method:"DELETE"});if(SEL===id)SEL=null;loadAll()}
-async function dl(id){try{await api(`/episodes/${id}/download`,{method:"POST"});toast("Queued");loadEps()}catch(e){toast("Queue failed")}}
+async function dl(id){try{await api(`/episodes/${id}/download`,{method:"POST"});toast("Queued");loadEps(true)}catch(e){toast("Queue failed")}}
 async function importOpml(inp){const f=inp.files[0];if(!f)return;const opml=await f.text();
   try{const r=await api("/feeds/import-opml",{method:"POST",body:JSON.stringify({opml})});toast(`Imported ${r.added}/${r.total}`);loadAll()}catch(e){toast("OPML import failed")}inp.value=""}
 async function uploadZip(inp){const f=inp.files[0];if(!f)return;
@@ -184,7 +192,7 @@ async function openCfg(){const d=await api("/config").then(r=>r.config).catch(()
   if(d){c_media.value=d.media_path||"";c_par.value=d.max_parallel||2;c_ref.value=d.refresh_minutes||60;c_pub.value=d.public_base||"";c_title.value=d.share_title||""}
   document.getElementById("cfg").showModal()}
 async function saveCfg(){try{await api("/config",{method:"POST",body:JSON.stringify({media_path:c_media.value,max_parallel:+c_par.value,refresh_minutes:+c_ref.value,public_base:c_pub.value,share_title:c_title.value})});toast("Saved — restart to apply");document.getElementById("cfg").close()}catch(e){toast("Save failed")}}
-function loadAll(){loadStatus();loadFeeds();loadEps()}
+function loadAll(){loadStatus();loadFeeds();loadEps(true)}
 loadAll();setInterval(()=>{loadStatus();loadEps()},4000);
 </script>
 </body>
