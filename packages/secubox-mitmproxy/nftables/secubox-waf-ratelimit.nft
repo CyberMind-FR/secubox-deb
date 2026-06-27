@@ -37,6 +37,9 @@ table inet secubox_waf_ratelimit {
         elements = { 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }
     }
 
+    # #758 — named counter for the network-stats collector (attacks family).
+    counter sbx_drop_wafrl {}
+
     chain input {
         type filter hook input priority -10; policy accept;
 
@@ -44,14 +47,14 @@ table inet secubox_waf_ratelimit {
         ip saddr @whitelist_v4 accept
 
         # Drop active offenders fast (no further matching)
-        ip saddr @offenders_v4 counter drop
-        ip6 saddr @offenders_v6 counter drop
+        ip saddr @offenders_v4 counter name "sbx_drop_wafrl" drop
+        ip6 saddr @offenders_v6 counter name "sbx_drop_wafrl" drop
 
         # Rate-limit only on TCP SYN to 80/443 (new public conn attempts)
         # nft 'limit rate over X' syntax matches packets exceeding the rate.
         tcp flags syn tcp dport { 80, 443 } \
             limit rate over 30/second burst 50 packets \
             add @offenders_v4 { ip saddr timeout 5m } \
-            log prefix "[secubox-rl] " level info counter drop
+            log prefix "[secubox-rl] " level info counter name "sbx_drop_wafrl" drop
     }
 }

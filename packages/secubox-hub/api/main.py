@@ -14,6 +14,7 @@ import asyncio
 import os
 import time
 from pathlib import Path
+import netstats  # #758 — shared collector/reader module
 
 app = FastAPI(title="secubox-hub", version="1.7.0", root_path="/api/v1/hub")
 
@@ -754,6 +755,29 @@ async def network_summary(user=Depends(require_jwt)):
         "lan_ip": lan_ip,
         "wan_ip": wan_ip,
     }
+
+
+@router.get("/netstats/summary")
+async def netstats_summary(user=Depends(require_jwt)) -> dict:
+    """#758 — latest network-stats snapshot (categories, interfaces, drops).
+    Read-only; served from the collector's JSON snapshot (cheap)."""
+    return netstats.read_snapshot()
+
+
+@router.get("/netstats/series")
+async def netstats_series(window: int = 86400, step: int = 300, user=Depends(require_jwt)) -> dict:
+    """#758 — reset-aware drops/throughput time-series for the dashboard charts.
+    Read-only over the collector's SQLite DB."""
+    import sqlite3 as _sql
+    w = max(300, min(window, 7 * 86400))
+    s = max(30, min(step, 3600))
+    if not netstats.DB_PATH.exists():
+        return {"window_s": w, "step_s": s, "drops": {}, "in_bps": {}, "out_bps": {}}
+    conn = _sql.connect(f"file:{netstats.DB_PATH}?mode=ro", uri=True)
+    try:
+        return netstats.query_series(conn, window_s=w, step_s=s)
+    finally:
+        conn.close()
 
 
 @router.get("/quick_actions")
