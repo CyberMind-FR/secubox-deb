@@ -1,3 +1,11 @@
+secubox-toolbox (2.7.22-1~bookworm1) bookworm; urgency=medium
+
+  * #753 portal ingest for the SW-neuter auto-learn: POST /__toolbox/sw-candidate
+    dedup-appends SW-PWA hosts (proposed by sbxmitm) to
+    /var/lib/secubox/toolbox/sw-neuter-candidates.txt for operator review.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 08:45:00 +0000
+
 secubox-toolbox (2.7.21-1~bookworm1) bookworm; urgency=medium
 
   * #754 reconcile bundle.py to the working #740 DOM-API banner (mk() builder,

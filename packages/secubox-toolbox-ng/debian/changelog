@@ -1,3 +1,17 @@
+secubox-toolbox-ng (0.1.24-1~bookworm1) bookworm; urgency=medium
+
+  * #753 targeted Service-Worker neuter: PWA news sites (leparisien, cnn,
+    20minutes, franceinfo) serve their main HTML from a Service-Worker cache, so
+    the navigation never reaches the MITM and the transparency banner can't be
+    injected. For an operator-curated allow-list (--sw-neuter-hosts, default
+    /var/lib/secubox/toolbox/sw-neuter-hosts.txt) sbxmitm answers the SW script
+    fetch with a passive self-unregistering SW so the next navigation reaches the
+    MITM (→ banner). Auto-learn: non-listed SW hosts are flushed to the portal's
+    /__toolbox/sw-candidate for operator review. Targeted-strict: empty list =
+    no-op (ships inert until the operator adds a host).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 08:45:00 +0000
+
 secubox-toolbox-ng (0.1.23-1~bookworm1) bookworm; urgency=medium
 
   * #751 rebuild from master: the deployed 0.1.22 binary was STALE and lacked
