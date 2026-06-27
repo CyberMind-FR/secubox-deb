@@ -1,3 +1,16 @@
+secubox-toolbox-ng (0.1.25-1~bookworm1) bookworm; urgency=medium
+
+  * #756 cosmetic restores scroll: the cosmetic ad-hide <style> now prepends
+    html,body{overflow:auto!important} so a paywall's JS scroll-lock
+    (body.style.overflow='hidden') is overridden and the page scrolls again
+    (Bloomberg etc.). No-op on normal pages; modal-scroll-behind is the accepted
+    tradeoff.
+  * #755 cosmetic-pages counter: sbxmitm tallies each WG/R3 HTML page that got
+    the cosmetic style (wg-gated, atomic) and flushes it via the ad-event channel
+    (cosmetic_pages) → portal → the #ads "Pages nettoyées" metric.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 09:30:00 +0000
+
 secubox-toolbox-ng (0.1.24-1~bookworm1) bookworm; urgency=medium
 
   * #753 targeted Service-Worker neuter: PWA news sites (leparisien, cnn,
