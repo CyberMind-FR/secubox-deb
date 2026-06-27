@@ -1,5 +1,34 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-22*
+*Mis à jour : 2026-06-27*
+
+---
+
+## ✅ 2026-06-27 : c3box → SecuBox Debian — première install réussie · netboot prouvé (#748 #737)
+
+### ✅ Fait (session 2026-06-27)
+
+- **Netboot gk2→c3box prouvé** — factory U-Boot 2020.10 → TFTP → rescue shell installeur
+  (kernel 6.12.85 #5secubox). Détour cabling résolu (impasse LAB, pas logiciel).
+- **Première install SecuBox Debian sur un MOCHAbin physique (c3box)** — image CI artefact
+  `secubox-mochabin-bookworm` (run 27426515472, 8 Gio), SHA256 + signature vérifiés,
+  `gunzip|dd` en RAM → eMMC. c3box boot Debian v1.9.0 avec stack complète.
+- **boot.scr workaround déployé** — extlinux.conf charge le kernel à `0x02080000` (réservé
+  factory U-Boot → reset). Construit `/boot/boot.scr` (kernel@`0x0a000000`) ; auto-boot
+  Debian sans intervention vérifié après reboot.
+- **#748 bloquant documenté** — ciseau U-Boot : mochabin board UNIQUEMENT dans fork Tow-Boot
+  2022.07 (pas de `wget`) ↔ `wget` UNIQUEMENT dans stock ≥2023.07 (pas de board mochabin).
+  Branche `feature/748-enhanced-tow-boot-http-netboot-serial-fl` parkée (spec+CI+Kconfig en
+  place, dépend du backport wget OU port board mainline).
+
+### ⬜ Rig netboot temporaire gk2 à démonter (quand c3box autonome)
+
+- `lan1=192.168.77.1/24` avec dnsmasq DHCP + `nft iif lan1 accept` + nginx `:8099` encore actifs.
+- À retirer une fois c3box en prod (voir TODO T5 — teardown rig).
+
+### ⬜ Bootloader propre à faire (#748 ou alternative)
+
+- boot.scr = workaround ; fix durable = enhanced Tow-Boot (#748, bloqué ciseau) OU corriger
+  les adresses de boot dans l'image (extlinux.conf → `0x0a000000`). Voir TODO T5.
 
 ---
 
