@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox network-stats collector (nft named counters + /proc/net/dev → SQLite)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/758
+After=nftables.service
+ConditionPathExists=/usr/sbin/nft
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-netstats-collect
+# Runs as root via systemd — nft list + /proc throughput need privilege.
+StandardOutput=journal
+StandardError=journal

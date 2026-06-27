@@ -1,0 +1,6 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# #758 — root oneshot: sample nft named counters + /proc/net/dev into
+# /var/lib/secubox/hub/netstats.{db,json}. Runs as root via systemd timer.
+exec /usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/lib/secubox/hub/api'); import netstats; netstats.main()"

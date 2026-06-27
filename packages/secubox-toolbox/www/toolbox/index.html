@@ -83,6 +83,7 @@
         <button class="tab" data-tab="filtres" onclick="switchTab('filtres')">🚦 Filtres MITM</button>
         <button class="tab" data-tab="social" onclick="switchTab('social')">🕸️ Cartographie sociale</button>
         <button class="tab" data-tab="ads" onclick="switchTab('ads')">🛑 Pubs</button>
+        <button class="tab" data-tab="reseau" onclick="switchTab('reseau')">📡 Réseau</button>
         <button class="tab" data-tab="tor" onclick="switchTab('tor')">🧅 Tor</button>
         <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ Config</button>
     </nav>
@@ -194,6 +195,17 @@
         </div>
     </section>
 
+    <!-- #758 — network-layer stats (nft named counters + interface throughput) -->
+    <section class="panel" id="panel-reseau">
+        <h2>📡 Statistiques réseau (nftables)</h2>
+        <div id="ns-stale" style="display:none;color:var(--cinnabar,#e63946);font-size:.85em">⚠ données périmées (collecteur arrêté ?)</div>
+        <div id="ns-kpi" class="kpis"></div>
+        <h3>Débit interfaces (24h)</h3>
+        <div id="ns-throughput"></div>
+        <h3>Drops &amp; attaques par catégorie (24h)</h3>
+        <div id="ns-drops"></div>
+    </section>
+
     <!-- Tor egress quick-switch (#683) -->
     <section class="panel" id="panel-tor">
         <div class="toolbar">
@@ -248,6 +260,7 @@ function switchTab(name) {
     if (name === 'filtres') loadFilters();
     if (name === 'social') loadSocial();
     if (name === 'ads') loadAds();
+    if (name === 'reseau') loadNetstats();
     if (name === 'tor') loadTor();
     location.hash = name;
 }
@@ -643,13 +656,62 @@ async function loadAdsClient(mh) {
         : '<div class="empty">aucune pub bloquée pour ce visiteur</div>');
 }
 
+// ── Réseau tab (#758) — hub netstats endpoints ──
+async function Jhub(path) {
+    try {
+        const r = await fetch('/api/v1/hub' + path, { credentials: 'same-origin' });
+        if (!r.ok) return { __error: 'HTTP ' + r.status };
+        return await r.json();
+    } catch (e) { return { __error: String(e) }; }
+}
+
+function sparkline(points, color) {
+    // points: [[ts, value], …] → inline SVG polyline, auto-scaled.
+    if (!points || !points.length) return '<span style="opacity:.5">—</span>';
+    const W = 240, H = 40, vals = points.map(p => p[1]);
+    const max = Math.max(1, ...vals), n = points.length;
+    const path = points.map((p, i) =>
+        `${(i / Math.max(1, n - 1) * W).toFixed(1)},${(H - p[1] / max * H).toFixed(1)}`).join(' ');
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+        + `<polyline fill="none" stroke="${color}" stroke-width="1.5" points="${path}"/></svg>`;
+}
+
+function fmtBps(b) {
+    if (b > 1e6) return (b / 1e6).toFixed(1) + ' Mb/s';
+    if (b > 1e3) return (b / 1e3).toFixed(1) + ' kb/s';
+    return (b || 0) + ' b/s';
+}
+
+// Endpoints: /api/v1/hub/netstats/summary  /api/v1/hub/netstats/series
+async function loadNetstats() {
+    const sum = await Jhub('/netstats/summary');
+    const kpi = document.getElementById('ns-kpi');
+    document.getElementById('ns-stale').style.display = (sum && sum.stale) ? 'block' : 'none';
+    if (!sum || sum.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(sum && sum.__error) || 'no data'}</span>`; return; }
+    const cats = sum.categories || {};
+    kpi.innerHTML = `<span class="k">Drops réseau (total)</span> <span class="v">${sum.network_drops || 0}</span>`
+        + Object.keys(cats).map(c => ` <span class="k">${c}</span> <span class="v">${(cats[c].packets) || 0}</span>`).join('');
+
+    const ser = await Jhub('/netstats/series?window=86400&step=300');
+    const tp = document.getElementById('ns-throughput');
+    const dr = document.getElementById('ns-drops');
+    if (!ser || ser.__error) { tp.textContent = 'no data'; dr.textContent = ''; return; }
+    const inb = ser.in_bps || {}, outb = ser.out_bps || {};
+    tp.innerHTML = Object.keys(inb).map(ifc =>
+        `<div class="row"><b>${ifc}</b> ↓ ${fmtBps((inb[ifc].slice(-1)[0] || [0, 0])[1])} ${sparkline(inb[ifc], '#00d4ff')}`
+        + ` ↑ ${fmtBps(((outb[ifc] || []).slice(-1)[0] || [0, 0])[1])} ${sparkline(outb[ifc] || [], '#c9a84c')}</div>`).join('') || '<span style="opacity:.5">—</span>';
+    const drops = ser.drops || {};
+    dr.innerHTML = Object.keys(drops).map(c =>
+        `<div class="row"><b>${c}</b> ${sparkline(drops[c], '#e63946')}</div>`).join('') || '<span style="opacity:.5">—</span>';
+}
+
 async function refreshAll() {
     await Promise.all([loadCfg(), loadClients(), loadHealth(), loadMetrics()]);
 }
 
 // Deep-link : open the tab named in the URL hash on load.
 const initial = (location.hash || '').replace('#', '');
-if (['overview','clients','filtres','social','ads','config'].includes(initial)) switchTab(initial);
+if (['overview','clients','filtres','social','ads','reseau','config'].includes(initial)) switchTab(initial);
 
 refreshAll();
 setInterval(() => {

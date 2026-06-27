@@ -12,6 +12,19 @@ case "$1" in
     systemctl start  secubox-hub.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
+    # #758 — deploy + load the network-stats input policy-drop tap
+    if [ -f /usr/share/secubox/hub/nftables.d/zz-secubox-netstats-tap.nft ]; then
+        install -d -m 0755 /etc/nftables.d
+        install -m 0644 /usr/share/secubox/hub/nftables.d/zz-secubox-netstats-tap.nft \
+            /etc/nftables.d/zz-secubox-netstats-tap.nft
+        if systemctl is-active --quiet nftables.service; then
+            systemctl reload nftables.service 2>/dev/null \
+              || /usr/sbin/nft -f /etc/nftables.d/zz-secubox-netstats-tap.nft 2>/dev/null || true
+        fi
+    fi
+    # #758 — enable the collector timer (idempotent)
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable --now secubox-netstats.timer 2>/dev/null || true
     ;;
 esac
 #DEBHELPER#

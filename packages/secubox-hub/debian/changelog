@@ -1,3 +1,12 @@
+secubox-hub (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#758): nft-based network-stats collector — root oneshot+timer samples
+    nft named counters + /proc/net/dev into /var/lib/secubox/hub/netstats.{db,json};
+    new read-only endpoints /api/v1/hub/netstats/{summary,series}; inet filter
+    input policy-drop tap drop-in (zz-secubox-netstats-tap.nft).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 12:00:00 +0200
+
 secubox-hub (1.4.7-1~bookworm1) bookworm; urgency=medium
 
   * #494: drop the ExecStartPre chown/chmod of the shared /run/secubox parent.
