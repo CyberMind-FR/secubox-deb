@@ -1,3 +1,12 @@
+secubox-toolbox (2.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#758): new "Réseau" dashboard tab — interface throughput sparklines +
+    per-category drop/attack trends from the hub netstats collector; the #ads
+    "Drops réseau" KPI now reads real data. Named nft counters added to the
+    blacklist spine.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 12:00:00 +0200
+
 secubox-toolbox (2.7.24-1~bookworm1) bookworm; urgency=medium
 
   * ui: remove the redundant ♥ Liveness dashboard card (generic status/version);
