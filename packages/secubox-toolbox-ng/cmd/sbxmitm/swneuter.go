@@ -64,7 +64,7 @@ func newSWNeuter(path string) *SWNeuter {
 			s.mu.Unlock()
 		},
 	}
-	s.watcher = reload.NewWatcher(0, target)
+	s.watcher = reload.NewWatcher(reload.DefaultReloadThrottle, target)
 	return s
 }
 
