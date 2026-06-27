@@ -3,6 +3,39 @@
 
 ---
 
+## 2026-06-27 — LAN standardisé 192.168.10.0/24 + c3box/gk2 live Freebox + bump 1.10.0 (#760)
+
+Session terrain "c3box derrière Freebox" : la LAN SecuBox par défaut (`br-lan 192.168.1.1/24`)
+entrait en collision avec la LAN d'un routeur opérateur courant (Freebox/Livebox en
+`192.168.1.0/24`). En aval d'une Freebox, le WAN DHCP et la LAN se retrouvaient sur le **même
+sous-réseau** → route dupliquée, ARP ambigu, IP de management injoignable.
+
+### A. Constat live + remédiation immédiate
+- **c3box** (second MOCHAbin) derrière Freebox : WAN `eth2=192.168.1.94` (bail Freebox) +
+  `br-lan=192.168.1.1/24` → `.94` injoignable depuis le LAN. Corrigé live : `br-lan → 192.168.10.1/24`.
+  SSH root activé, webadmin `https://192.168.1.94/` OK, `/dev/sda1` (931 G) monté sur `/data`
+  (style gk2 : UUID + nofail), partition eMMC retirée (`emmc-data`).
+- **gk2** (live PoC) : uplink déplacé de `lan0` (DSA) vers le port cuivre WAN `eth2` ; netplan
+  réparé via **série** (gk2 hors-réseau le temps du switch) → `eth2 dhcp4: true`, `lan0` dépouillé.
+  Bail Freebox réservé sur le MAC eth2 `f0:ad:4e:27:88:9b` → gk2 reprend `192.168.1.200`. Persisté.
+
+### B. Standardisation source (LAN = 192.168.10.0/24, gw .10.1) — 17 fichiers
+- Netplans board : mochabin, espressobin-v7, espressobin-ultra, x64-vm, x64-live (`br-lan`),
+  + unification VM vm-x64/vm-arm64 (`192.168.100.1 → 192.168.10.1`).
+- Générateurs de netplan : `secubox-netmodes`, `secubox-hub` (preview), `secubox-net-detect`.
+- dnsmasq (`espressobin-v7.conf`) : `dhcp-range` + `option:router` + `option:dns-server`.
+- Scripts live-usb (mochabin/ebin) + SAN des certs auto-signés (`firstboot`, `build-image`,
+  `build-rpi-usb`, `build-live-usb`) → `IP:192.168.10.1`.
+- **Hors scope (intacts)** : `192.168.255.1` (whitelist mgmt/trusted-proxy WAF/mail/wg/mitm),
+  listes `GATEWAYS` de sonde WAN, exemples remote-ui/round + tests.
+
+### C. Release
+- Bump mineur (« medium ») **1.9.0 → 1.10.0** : `build-image.sh`, `build-live-usb.sh`,
+  `build-ebin-live-usb.sh`, `build-rpi-usb.sh` (mochabin-live reste sur sa piste 2.0.0).
+- Artefacts amd64 (x64) reconstruits depuis cette base.
+
+---
+
 ## 2026-06-27 — Netboot live PROUVÉ + première install SecuBox Debian sur c3box (second MOCHAbin) (#748 #737)
 
 Grande session hardware : netboot gk2→c3box validé de bout en bout, premier SecuBox Debian installé

@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.9.0"
+SECUBOX_VERSION="1.10.0"
 BUILD_DATE=$(date '+%Y-%m-%d')
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
@@ -310,7 +310,7 @@ network:
   bridges:
     br-lan:
       interfaces: [lan0, lan1]
-      addresses: [192.168.1.1/24]
+      addresses: [192.168.10.1/24]
       dhcp4: false
       parameters:
         stp: false
