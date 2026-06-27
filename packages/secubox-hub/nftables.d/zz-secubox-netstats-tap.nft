@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# #758 — network-stats tap. Counts packets that fall through to the
+# default-drop policy of the base inet filter input chain = "unsolicited
+# inbound" volume. ADDITIVE ONLY: `table inet filter { counter … }` adds the
+# counter to the pre-existing base table without deleting it; the tail
+# `add rule` appends a bare counter AFTER every accept rule. The zz- filename
+# guarantees this loads last among /etc/nftables.d/*.nft. Counter resets on
+# reload — the collector is reset-aware. Never drops or accepts; pure observe.
+table inet filter {
+    counter sbx_drop_input_policy {}
+}
+add rule inet filter input counter name "sbx_drop_input_policy" comment "sbx-netstats-input-policy-tap"
