@@ -66,10 +66,13 @@ def test_inline_csp_literal_and_proof_logic():
 
 def test_inline_has_no_currentscript_no_fetch():
     # #653 root cause: document.currentScript is null in an async context. The
-    # inline script MUST NOT read it, and MUST NOT fetch() (SW would hijack it).
+    # inline script MUST NOT read it, and MUST NOT fetch the BUNDLE at load time
+    # (a SW would hijack a same-origin /__toolbox/bundle fetch → no banner). The
+    # bundle is baked inline instead. (#740 toggle handlers DO fetch /set-level
+    # etc., but only on a user click — not a load-time SW-hijackable resource.)
     s = bundle.inline_script("x", wg=True, csp=True)
     assert "currentScript" not in s
-    assert "fetch(" not in s
+    assert "/__toolbox/bundle" not in s
 
 
 def test_inline_keeps_guards_and_spa_hooks():
@@ -133,6 +136,6 @@ def test_inline_route_returns_javascript_body():
     body = resp.body.decode("utf-8")
     assert "window.__SBX_LOADER__" in body
     assert "currentScript" not in body
-    assert "fetch(" not in body
+    assert "/__toolbox/bundle" not in body  # bundle baked inline, not fetched (#740 toggles fetch /set-* on click only)
     assert 'var mh = "abc";' in body
     assert 'var csp = "1";' in body
