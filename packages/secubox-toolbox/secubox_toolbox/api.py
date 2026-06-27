@@ -250,6 +250,11 @@ async def toolbox_ad_event(request: Request) -> Response:
             store.record_ad_client_blocks(client_rows)
         if cand_rows:
             store.record_ad_candidates(cand_rows)
+        # #755 — cosmetic-pages counter: Go engine reports how many R3 HTML pages
+        # received the cosmetic ad-hide style in this flush window.
+        cp = body.get("cosmetic_pages")
+        if cp:
+            store.record_cosmetic_pages(cp)
     except Exception as e:  # never raise into the engine's fire-and-forget POST
         log.debug("ad-event ingest failed: %s", e)
     return Response(status_code=204)
@@ -3090,7 +3095,15 @@ async def admin_protective() -> dict:
 async def admin_ad_stats(hours: int = 24) -> dict:
     """Contextual ad-block metrics for the #ads tab (read-only, kbin-safe)."""
     h = max(1, min(int(hours if hours is not None else 24), 168))
-    return store.ad_stats(hours=h)
+    out = store.ad_stats(hours=h)
+    # #755 — network-layer drops (blacklist nft sets). Best-effort; 0 when the
+    # blacklist is inert or unreadable. Reuses the admin_blacklist parse.
+    try:
+        bl = await admin_blacklist()
+        out["network_drops"] = int(bl.get("drops", 0) or 0)
+    except Exception:
+        out["network_drops"] = 0
+    return out
 
 
 @router.get("/admin/ad-stats/client/{mac_hash}")
