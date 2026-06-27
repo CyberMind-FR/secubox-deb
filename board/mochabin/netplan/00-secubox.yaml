@@ -6,16 +6,21 @@ network:
   renderer: networkd
 
   ethernets:
-    # WAN — connecté à l'opérateur
+    # WAN candidate (SFP+, eth0) — connecté à l'opérateur via fibre/module SFP.
     eth0:
       dhcp4: true
       dhcp6: false
       optional: true
 
-    # LAN — ports GbE (DSA ou directs selon la config switch)
+    # LAN — port GbE switch (DSA 88E6341)
     eth1:
       optional: true
+    # WAN candidate (RJ45 cuivre, eth2 = mvpp2-2). Sur MOCHAbin le seul RJ45
+    # direct ; sert d'uplink quand l'opérateur arrive en cuivre. Le port WAN
+    # câblé (eth0 SFP+ OU eth2 cuivre) obtient le bail DHCP ; l'autre reste idle.
     eth2:
+      dhcp4: true
+      dhcp6: false
       optional: true
     eth3:
       optional: true
@@ -31,7 +36,7 @@ network:
   bridges:
     # Bridge LAN
     br-lan:
-      interfaces: [eth1, eth2, eth3, eth4]
+      interfaces: [eth1, eth3, eth4]
       addresses: [192.168.1.1/24]
       dhcp4: false
       parameters:
