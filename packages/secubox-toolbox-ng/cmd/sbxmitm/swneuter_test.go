@@ -85,3 +85,25 @@ func TestSWFlushCandidatesClears(t *testing.T) {
 		t.Fatal("empty buffer → flush returns nil, no POST")
 	}
 }
+
+func TestRequestWantsHTML(t *testing.T) {
+	mk := func(setter func(h http.Header)) *http.Request {
+		r, _ := http.NewRequest("GET", "https://x/", nil)
+		if setter != nil {
+			setter(r.Header)
+		}
+		return r
+	}
+	if !requestWantsHTML(mk(func(h http.Header) { h.Set("Sec-Fetch-Dest", "document") })) {
+		t.Fatal("Sec-Fetch-Dest: document → true")
+	}
+	if !requestWantsHTML(mk(func(h http.Header) { h.Set("Accept", "text/html,application/xhtml+xml") })) {
+		t.Fatal("Accept text/html → true")
+	}
+	if requestWantsHTML(mk(func(h http.Header) { h.Set("Accept", "image/png") })) {
+		t.Fatal("non-html Accept → false")
+	}
+	if requestWantsHTML(nil) {
+		t.Fatal("nil → false")
+	}
+}
