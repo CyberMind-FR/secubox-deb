@@ -1,3 +1,10 @@
+secubox-mitmproxy (1.0.10-1~bookworm1) bookworm; urgency=medium
+
+  * feat(nft): named counter sbx_drop_wafrl on the WAF rate-limit drops so the
+    secubox-hub network-stats collector can attribute attack drops (ref #758).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 12:00:00 +0200
+
 secubox-mitmproxy (1.0.9-1~bookworm1) bookworm; urgency=medium
 
   * feat(robustness): self-healing WAF inspector watchdog (closes #624).
