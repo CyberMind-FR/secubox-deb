@@ -39,6 +39,13 @@ const cosmeticGuard = "sbx-ghost-style"
 // CONSERVATISM note above). The rule mirrors the Python _style_for:
 // display:none + visibility:hidden, both !important, collapsing the slot.
 const cosmeticStyle = `<style id="sbx-ghost-style">` +
+	// #756 — restore scroll. When we display:none a paywall/consent overlay, the
+	// site's JS has often already scroll-locked the page (document.body.style.
+	// overflow='hidden', no inline !important). A stylesheet !important overrides
+	// that, so scroll returns (Bloomberg etc.). Tradeoff: a legitimate modal that
+	// locks body scroll will let the page scroll behind it — acceptable for a
+	// page-cleaning MITM whose purpose includes defeating paywall/consent locks.
+	`html,body{overflow:auto!important}` +
 	// ── ads (ported from _COSMETIC["ads"]) ──────────────────────────────────
 	`[id^="google_ads"],` +
 	`[id^="div-gpt-ad"],` +
