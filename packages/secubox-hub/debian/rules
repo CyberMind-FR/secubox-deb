@@ -24,14 +24,27 @@ override_dh_auto_install:
 	install -d debian/secubox-hub/etc/systemd/system/timers.target.wants
 	ln -sf /lib/systemd/system/secubox-nft-cache.timer \
 	       debian/secubox-hub/etc/systemd/system/timers.target.wants/secubox-nft-cache.timer
+	# #758 — network-stats collector + timer
+	install -m 0755 sbin/secubox-netstats-collect debian/secubox-hub/usr/sbin/secubox-netstats-collect
+	install -m 0644 debian/secubox-netstats.service debian/secubox-hub/lib/systemd/system/
+	install -m 0644 debian/secubox-netstats.timer   debian/secubox-hub/lib/systemd/system/
+	ln -sf /lib/systemd/system/secubox-netstats.timer \
+	       debian/secubox-hub/etc/systemd/system/timers.target.wants/secubox-netstats.timer
+	# #758 — ship the inet filter input policy-drop tap drop-in
+	install -d debian/secubox-hub/usr/share/secubox/hub/nftables.d
+	install -m 0644 nftables.d/zz-secubox-netstats-tap.nft \
+	  debian/secubox-hub/usr/share/secubox/hub/nftables.d/
 	# sudoers fragment so the hub service (User=secubox) can fall back to
 	# realtime `nft list` when the cache is stale (read-only nft, no risk).
 	# Two patterns because `-j` is a global option for nft and must precede
 	# the command (`nft -j list ruleset`, not `nft list ruleset -j`).
 	install -d debian/secubox-hub/etc/sudoers.d
-	printf '%s\n%s\n%s\n' \
+	# #758 — netstats collector reads `nft -j list table inet crowdsec`
+	# (best-effort, covered by the existing `nft -j list *` grant above).
+	printf '%s\n%s\n%s\n%s\n' \
 	    'secubox ALL=(root) NOPASSWD: /usr/sbin/nft list *' \
 	    'secubox ALL=(root) NOPASSWD: /usr/sbin/nft -j list *' \
 	    'secubox ALL=(root) NOPASSWD: /usr/bin/systemctl --no-block start secubox-nft-cache.service' \
+	    'secubox ALL=(root) NOPASSWD: /usr/bin/systemctl --no-block start secubox-netstats.service' \
 	    > debian/secubox-hub/etc/sudoers.d/secubox-hub-nft
 	chmod 0440 debian/secubox-hub/etc/sudoers.d/secubox-hub-nft
