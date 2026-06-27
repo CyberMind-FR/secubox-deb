@@ -26,7 +26,7 @@ LOCAL_REPO_PORT="8080"
 SLIPSTREAM_DEBS=1     # Intégrer les .deb locaux dans l'image (default: ON)
 
 # SecuBox versioning
-SECUBOX_VERSION="1.9.0"
+SECUBOX_VERSION="1.10.0"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
@@ -989,7 +989,7 @@ openssl req -x509 -newkey rsa:2048 -days 365 \
   -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
   -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
   -nodes -subj "/CN=secubox/O=CyberMind SecuBox/C=FR" \
-  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
+  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.10.1" \
   2>/dev/null
 
 if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then

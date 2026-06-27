@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version & Build Info ──────────────────────────────────────────
-SECUBOX_VERSION="1.9.0"
+SECUBOX_VERSION="1.10.0"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 BUILD_DATE=$(date '+%Y%m%d')
 
@@ -786,7 +786,7 @@ cat > "${ROOTFS}/etc/netplan/00-secubox.yaml" <<'NETPLAN'
 # and router-mode br-lan later via secubox-net-* tools.
 #
 # Earlier versions baked an empty `br-lan` bridge with a static
-# 192.168.1.1/24 address into the bootstrap. On bare-metal real
+# 192.168.10.1/24 address into the bootstrap. On bare-metal real
 # hardware the physical NIC went silent and only the phantom br-lan
 # showed an IP — networkd was honouring the static bridge but
 # something (predictable rename? secubox-net-detect leftover?)
@@ -1226,7 +1226,7 @@ openssl req -x509 -newkey rsa:2048 -days 365 \
   -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
   -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
   -nodes -subj "/CN=secubox-live/O=CyberMind SecuBox/C=FR" \
-  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
+  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.10.1" \
   2>/dev/null
 
 if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then
