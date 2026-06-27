@@ -45,6 +45,8 @@ try:
     _HAS_TRANSPARENCY = True
 except ImportError:
     _HAS_TRANSPARENCY = False
+from pathlib import Path as _Path
+NETSTATS_SNAPSHOT = _Path("/var/lib/secubox/hub/netstats.json")
 from .config import load_config, resolve_secret
 from .models import AcceptResp, ClientRow, Config, StatusResp
 
@@ -3093,13 +3095,22 @@ async def admin_ad_stats(hours: int = 24) -> dict:
     """Contextual ad-block metrics for the #ads tab (read-only, kbin-safe)."""
     h = max(1, min(int(hours if hours is not None else 24), 168))
     out = store.ad_stats(hours=h)
-    # #755 — network-layer drops (blacklist nft sets). Best-effort; 0 when the
-    # blacklist is inert or unreadable. Reuses the admin_blacklist parse.
+    # #758 — real network-layer drops from the hub netstats collector snapshot.
+    # Fall back to the legacy blacklist nft parse when the snapshot is absent.
+    nd = None
     try:
-        bl = await admin_blacklist()
-        out["network_drops"] = int(bl.get("drops", 0) or 0)
+        import json as _json
+        snap = _json.loads(NETSTATS_SNAPSHOT.read_text())
+        nd = int(snap.get("network_drops", 0) or 0)
     except Exception:
-        out["network_drops"] = 0
+        nd = None
+    if nd is None:
+        try:
+            bl = await admin_blacklist()
+            nd = int(bl.get("drops", 0) or 0)
+        except Exception:
+            nd = 0
+    out["network_drops"] = nd
     return out
 
 
