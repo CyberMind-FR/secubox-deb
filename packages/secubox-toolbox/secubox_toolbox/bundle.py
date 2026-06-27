@@ -81,6 +81,15 @@ def _tor_mode() -> bool:
         return False
 
 
+def _ad_guard() -> bool:
+    """Master ad-block switch on? (#740) Read from filters; default on."""
+    try:
+        from .filters import get_filters
+        return bool(get_filters().get("ad_guard", True))
+    except Exception:
+        return True
+
+
 def build_bundle(client_id: str, is_wg: bool = False) -> dict:
     """Build the per-client cosmetic decision bundle (pure given inputs + pin file)."""
     return {
@@ -91,6 +100,7 @@ def build_bundle(client_id: str, is_wg: bool = False) -> dict:
         "report_url": _report_url(client_id, is_wg),
         "tracker_patterns": TRACKER_PATTERNS,
         "tor_mode": _tor_mode(),
+        "ad_guard": _ad_guard(),
         "ts": int(time.time()),
     }
 
@@ -101,6 +111,12 @@ def invalidate(client_id: str) -> None:
     cid = client_id or ""
     for k in ((cid, True), (cid, False)):
         _cache.pop(k, None)
+
+
+def invalidate_all() -> None:
+    """#740 — drop ALL cached bundles after a GLOBAL filter change (ad_guard /
+    tor_mode toggled from the banner) so every client picks up the new state."""
+    _cache.clear()
 
 
 def get_bundle(client_id: str, is_wg: bool = False) -> dict:
@@ -146,6 +162,13 @@ def get_bundle(client_id: str, is_wg: bool = False) -> dict:
 # + 2s poll; the prelude calls ensure() (inline) or sets `bundle` then ensure()s
 # (src-loader).
 _BANNER_CORE = r"""
+  // #752 — top-frame ONLY: never render inside an embedded sub-frame (3rd-party
+  // video players e.g. geo.dailymotion.com, ad/consent iframes). A same-origin
+  // iframe trips window.top !== window.self; a cross-origin one throws on the
+  // access → both bail. The transparency banner belongs on the top document,
+  // once. Returns from the IIFE before any function runs (ensure() is appended
+  // after this block by both the inline and src-loader preludes).
+  try { if (window.top !== window.self) return; } catch (_) { return; }
   function ready(fn){ if (document.body) { fn(); } else { setTimeout(function(){ready(fn);}, 30); } }
   function esc(t){ return String(t).replace(/[&<>"]/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
@@ -174,19 +197,34 @@ _BANNER_CORE = r"""
   // #724 — inline R0..R3 level switch. Shows the real current level (highlighted)
   // and lets the client change it: GET /__toolbox/set-level (same-origin, the Go
   // engine reverse-proxies it to the portal), then reload so the new tier applies.
+  // #740 — mk(): build an element via DOM API only. textContent / setAttribute are
+  // NOT Trusted Types sinks (unlike innerHTML), so the banner renders on EVERY site
+  // — incl. strict-CSP/Trusted-Types ones (franceinfo, leparisien, 20minutes, cnn,
+  // x/twitter) — with ZERO CSP/TT bypass. This is the robust, permanent fix.
+  function mk(tag, opts){
+    var e = document.createElement(tag);
+    opts = opts || {};
+    if (opts.id) e.id = opts.id;
+    if (opts.cls) e.className = opts.cls;
+    if (opts.title) e.title = opts.title;
+    if (opts.text != null) e.textContent = opts.text;
+    if (opts.style) e.setAttribute("style", opts.style);
+    if (opts.attrs) for (var k in opts.attrs) if (Object.prototype.hasOwnProperty.call(opts.attrs, k)) e.setAttribute(k, opts.attrs[k]);
+    return e;
+  }
+  var BTN = "border-radius:3px;padding:0 5px;margin:0 2px;font:inherit;font-size:11px;cursor:pointer";
   function lvlSwitch(b){
     var cur = String(b.level || "r1").toLowerCase();
-    // #736 — R4 = analyst / reverse-catcher tier (deepest): everything is MITM'd
-    // and media URLs are caught for cloning. Selectable here; functionally the
-    // box already runs MITM-everything by default.
-    var lv = ["r0","r1","r2","r3","r4"], out = "<span id=\"sbx-lvl\" title=\"Niveau d'analyse — R4 = analyste/capteur média, clique pour changer\">";
+    // #736 — R4 = analyst / reverse-catcher tier (deepest): everything MITM'd +
+    // media URLs caught for cloning. Reconciled into the #740 DOM-API switch.
+    var lv = ["r0","r1","r2","r3","r4"];
+    var span = mk("span", {id:"sbx-lvl", title:"Niveau d'analyse — R4 = analyste/capteur média, clique pour changer"});
     for (var i=0;i<lv.length;i++){ var on = lv[i]===cur;
-      out += "<button data-lvl=\"" + lv[i] + "\" class=\"sbx-lvl\" style=\"background:"
-        + (on?"#148C66":"transparent") + ";color:" + (on?"#0A0E14":"#8A9AA8")
-        + ";border:1px solid #148C66;border-radius:3px;padding:0 5px;margin:0 1px;"
-        + "font:inherit;font-size:11px;cursor:pointer\">" + lv[i].toUpperCase() + "</button>";
+      span.appendChild(mk("button", {cls:"sbx-lvl", text:lv[i].toUpperCase(), attrs:{"data-lvl":lv[i]},
+        style:"background:"+(on?"#148C66":"transparent")+";color:"+(on?"#0A0E14":"#8A9AA8")
+          +";border:1px solid #148C66;"+BTN}));
     }
-    return out + "</span>";
+    return span;
   }
   function wireLevels(bar, b){
     var els = bar.querySelectorAll(".sbx-lvl");
@@ -210,29 +248,46 @@ _BANNER_CORE = r"""
     var ck = countCookies();
     var bar = document.createElement("div");
     bar.id = "sbx-banner";
-    bar.setAttribute("style", "position:fixed;left:0;right:0;top:0;z-index:2147483647;"
+    // #740 — !important on the visibility-critical props makes the banner IMMUNE
+    // to any stylesheet cosmetic hide (inline !important outranks author
+    // stylesheet !important): it stays ABOVE everything and visible, always.
+    bar.setAttribute("style", "position:fixed!important;left:0;right:0;top:0;z-index:2147483647!important;"
+      + "display:flex!important;visibility:visible!important;opacity:1!important;"
       + "font:12px/1.4 system-ui,-apple-system,sans-serif;background:#0A0E14;color:#E8E6E0;"
-      + "border-bottom:2px solid #148C66;padding:6px 12px;display:flex;gap:14px;align-items:center;"
+      + "border-bottom:2px solid #148C66;padding:6px 12px;gap:14px;align-items:center;"
       + "box-shadow:0 2px 12px rgba(0,0,0,.4)");
-    var pin = b.pin ? "<span title=\"pinned\">📌 " + esc(b.pin) + "</span>" : "";
-    // #662 — 🔓 proof: the engine relaxed this page's CSP to inject this banner.
-    var cspProof = (csp === "1")
-      ? "<span title=\"CSP contourné par SecuBox (démonstration)\">🔓</span>" : "";
-    // #683 — 🧅 kbin Tor mode: this session's exit is anonymised via Tor.
-    var tor = b.tor_mode
-      ? "<span title=\"Sortie anonymisée via Tor\" style=\"color:#9E76FF;font-weight:bold\">🧅 Tor</span>" : "";
-    bar.innerHTML = "<b style=\"color:#148C66\">SecuBox</b>"
-      + cspProof
-      + tor
-      + lvlSwitch(b)
-      + "<span id=\"sbx-trk\">🛰️ " + trk + " trackers</span>"
-      + "<span id=\"sbx-ck\">🍪 " + ck + " cookies</span>"
-      + pin
-      + "<a href=\"" + esc(b.report_url || "#") + "\" style=\"margin-left:auto;color:#2C70C0;text-decoration:none\">report ▸</a>"
-      + "<button aria-label=\"dismiss\" style=\"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px\">✕</button>";
+    // #740 — built entirely with DOM API (no innerHTML → not a Trusted Types
+    // sink), so the banner renders identically on every site, strict-CSP/TT
+    // included, without touching the page's CSP.
+    bar.appendChild(mk("b", {text:"SecuBox", style:"color:#148C66"}));
+    if (csp === "1") bar.appendChild(mk("span", {text:"🔓", title:"CSP contourné par SecuBox (démonstration)"}));
+    bar.appendChild(mk("button", {id:"sbx-tor", text:"🧅 " + (b.tor_mode?"ON":"OFF"),
+      title:"Tor du tunnel toolbox — clique pour basculer",
+      style:"background:"+(b.tor_mode?"#3D2A6B":"transparent")+";color:"+(b.tor_mode?"#C9B8FF":"#8A9AA8")+";border:1px solid #6E40C9;"+BTN}));
+    bar.appendChild(lvlSwitch(b));
+    bar.appendChild(mk("button", {id:"sbx-adg", text:"🛡️ " + (b.ad_guard===false?"OFF":"ON"),
+      title:"Ad-Guard (blocage pub) — clique pour basculer",
+      style:"background:"+(b.ad_guard===false?"transparent":"#148C66")+";color:"+(b.ad_guard===false?"#8A9AA8":"#0A0E14")+";border:1px solid #148C66;"+BTN}));
+    bar.appendChild(mk("span", {id:"sbx-trk", text:"🛰️ " + trk + " trackers"}));
+    bar.appendChild(mk("span", {id:"sbx-ck", text:"🍪 " + ck + " cookies"}));
+    if (b.pin) bar.appendChild(mk("span", {text:"📌 " + b.pin, title:"pinned"}));
+    bar.appendChild(mk("a", {text:"report ▸", style:"margin-left:auto;color:#2C70C0;text-decoration:none", attrs:{href: b.report_url || "#"}}));
+    bar.appendChild(mk("button", {text:"✕", title:"dismiss",
+      style:"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px", attrs:{"aria-label":"dismiss"}}));
     document.body.appendChild(bar);
     try { document.body.style.paddingTop = (bar.offsetHeight || 34) + "px"; } catch (_) {}
     wireLevels(bar, b);
+    // #740 — 🛡️ Ad-Guard + 🧅 Tor quick-toggles (mirror the level switch wiring).
+    var adg = bar.querySelector("#sbx-adg");
+    if (adg) adg.onclick = function(){ var on = b.ad_guard!==false; adg.textContent="…";
+      fetch("/__toolbox/set-adguard?on=" + (on?"0":"1"), {credentials:"omit",cache:"no-store"})
+        .then(function(r){ if(r&&r.ok) location.reload(); else adg.textContent="🛡️ "+(on?"ON":"OFF"); })
+        .catch(function(){ adg.textContent="🛡️ "+(on?"ON":"OFF"); }); };
+    var tg = bar.querySelector("#sbx-tor");
+    if (tg) tg.onclick = function(){ var on = !!b.tor_mode; tg.textContent="…";
+      fetch("/__toolbox/set-tor?on=" + (on?"0":"1"), {credentials:"omit",cache:"no-store"})
+        .then(function(r){ if(r&&r.ok) location.reload(); else tg.textContent="🧅 "+(on?"ON":"OFF"); })
+        .catch(function(){ tg.textContent="🧅 "+(on?"ON":"OFF"); }); };
     var btn = bar.querySelector("button[aria-label=\"dismiss\"]");
     if (btn) btn.onclick = function(){ dismissed = true; try { document.body.style.paddingTop = ""; } catch (_) {} bar.remove(); };
   }
