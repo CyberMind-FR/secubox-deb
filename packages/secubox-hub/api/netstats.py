@@ -74,3 +74,112 @@ def reset_aware_delta(prev: int, cur: int) -> int:
     if cur < prev:
         return cur
     return cur - prev
+
+
+# ---------------------------------------------------------------------------
+# SQLite store (Task 5)
+# ---------------------------------------------------------------------------
+
+def init_db(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS counter_samples (
+            ts INTEGER NOT NULL, name TEXT NOT NULL,
+            packets INTEGER NOT NULL, bytes INTEGER NOT NULL,
+            PRIMARY KEY (ts, name)
+        );
+        CREATE TABLE IF NOT EXISTS iface_samples (
+            ts INTEGER NOT NULL, iface TEXT NOT NULL,
+            rx_bytes INTEGER NOT NULL, rx_packets INTEGER NOT NULL,
+            tx_bytes INTEGER NOT NULL, tx_packets INTEGER NOT NULL,
+            PRIMARY KEY (ts, iface)
+        );
+        CREATE INDEX IF NOT EXISTS idx_counter_ts ON counter_samples(ts);
+        CREATE INDEX IF NOT EXISTS idx_iface_ts ON iface_samples(ts);
+        """
+    )
+    conn.commit()
+
+
+def insert_sample(conn: sqlite3.Connection, ts: int, counters: dict, ifaces: dict) -> None:
+    for name, v in counters.items():
+        conn.execute(
+            "INSERT OR REPLACE INTO counter_samples(ts,name,packets,bytes) VALUES(?,?,?,?)",
+            (ts, name, int(v.get("packets", 0)), int(v.get("bytes", 0))),
+        )
+    for iface, v in ifaces.items():
+        conn.execute(
+            "INSERT OR REPLACE INTO iface_samples(ts,iface,rx_bytes,rx_packets,tx_bytes,tx_packets) "
+            "VALUES(?,?,?,?,?,?)",
+            (ts, iface, int(v["rx_bytes"]), int(v["rx_packets"]),
+             int(v["tx_bytes"]), int(v["tx_packets"])),
+        )
+    conn.commit()
+
+
+def _bucket(ts: int, step_s: int) -> int:
+    return ts - (ts % step_s)
+
+
+def query_series(conn: sqlite3.Connection, window_s: int, step_s: int) -> dict:
+    """Reset-aware deltas/rates bucketed to step_s over the last window_s.
+    Rates are attributed to the bucket of the later sample in each pair.
+    """
+    now_row = conn.execute("SELECT MAX(ts) FROM counter_samples").fetchone()
+    max_ts_c = now_row[0] if now_row and now_row[0] is not None else None
+    now_row2 = conn.execute("SELECT MAX(ts) FROM iface_samples").fetchone()
+    max_ts_i = now_row2[0] if now_row2 and now_row2[0] is not None else None
+    max_ts = max(t for t in (max_ts_c, max_ts_i) if t is not None) if (max_ts_c or max_ts_i) else 0
+    floor = max_ts - window_s
+
+    drops: dict[str, dict[int, int]] = {}
+    rows = conn.execute(
+        "SELECT ts,name,packets FROM counter_samples WHERE ts>=? ORDER BY name,ts",
+        (floor - step_s,),
+    ).fetchall()
+    prev: dict[str, tuple[int, int]] = {}
+    for ts, name, pk in rows:
+        cat = category_for(name)
+        if cat is None:
+            continue
+        if name in prev:
+            d = reset_aware_delta(prev[name][1], pk)
+            b = _bucket(ts, step_s)
+            if b >= _bucket(floor, step_s):
+                drops.setdefault(cat, {}).setdefault(b, 0)
+                drops[cat][b] += d
+        prev[name] = (ts, pk)
+
+    in_bps: dict[str, dict[int, int]] = {}
+    out_bps: dict[str, dict[int, int]] = {}
+    irows = conn.execute(
+        "SELECT ts,iface,rx_bytes,tx_bytes FROM iface_samples WHERE ts>=? ORDER BY iface,ts",
+        (floor - step_s,),
+    ).fetchall()
+    iprev: dict[str, tuple[int, int, int]] = {}
+    for ts, iface, rx, tx in irows:
+        if iface in iprev:
+            pts, prx, ptx = iprev[iface]
+            dt = ts - pts
+            if dt > 0:
+                b = _bucket(ts, step_s)
+                if b >= _bucket(floor, step_s):
+                    in_bps.setdefault(iface, {})[b] = reset_aware_delta(prx, rx) * 8 // dt
+                    out_bps.setdefault(iface, {})[b] = reset_aware_delta(ptx, tx) * 8 // dt
+        iprev[iface] = (ts, rx, tx)
+
+    def _flatten(d: dict[str, dict[int, int]]) -> dict[str, list]:
+        return {k: [[b, v[b]] for b in sorted(v)] for k, v in d.items()}
+
+    return {
+        "window_s": window_s, "step_s": step_s,
+        "drops": _flatten(drops), "in_bps": _flatten(in_bps), "out_bps": _flatten(out_bps),
+    }
+
+
+def prune(conn: sqlite3.Connection, keep_s: int) -> None:
+    for tbl in ("counter_samples", "iface_samples"):
+        row = conn.execute(f"SELECT MAX(ts) FROM {tbl}").fetchone()
+        if row and row[0] is not None:
+            conn.execute(f"DELETE FROM {tbl} WHERE ts < ?", (row[0] - keep_s,))
+    conn.commit()
