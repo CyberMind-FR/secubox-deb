@@ -3090,7 +3090,15 @@ async def admin_protective() -> dict:
 async def admin_ad_stats(hours: int = 24) -> dict:
     """Contextual ad-block metrics for the #ads tab (read-only, kbin-safe)."""
     h = max(1, min(int(hours if hours is not None else 24), 168))
-    return store.ad_stats(hours=h)
+    out = store.ad_stats(hours=h)
+    # #755 — network-layer drops (blacklist nft sets). Best-effort; 0 when the
+    # blacklist is inert or unreadable. Reuses the admin_blacklist parse.
+    try:
+        bl = await admin_blacklist()
+        out["network_drops"] = int(bl.get("drops", 0) or 0)
+    except Exception:
+        out["network_drops"] = 0
+    return out
 
 
 @router.get("/admin/ad-stats/client/{mac_hash}")

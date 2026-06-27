@@ -617,10 +617,11 @@ async function loadAds() {
     const kpi = document.getElementById('ads-kpi');
     const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     if (!d || d.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(d&&d.__error)||'no data'}</span>`; return; }
-    kpi.innerHTML = `<span class="k">Trackers &amp; pubs bloqués</span> <span class="v">${d.total_blocked||0}</span>`
-      + ` <span class="k" title="estimation : un contenu bloqué n'est jamais téléchargé, on ne peut pas mesurer les octets réels — ~45 Ko/blocage">Ko évités <span style="opacity:.6">(est.)</span></span> <span class="v">~${Math.round((d.total_bytes||0)/1024)}</span>`
-      + ` <span class="k">Silenced</span> <span class="v">${(d.by_action&&d.by_action.silent)||0}</span>`
-      + ` <span class="k">Fenêtre</span> <span class="v">${d.window_hours||24}h</span>`;
+    kpi.innerHTML = `<span class="k">Pubs bloquées (204)</span> <span class="v">${d.total_blocked||0}</span>`
+      + ` <span class="k">Trackers détectés</span> <span class="v">${d.trackers_seen||0}</span>`
+      + ` <span class="k">Pages nettoyées</span> <span class="v">${d.pages_cleaned||0}</span>`
+      + ` <span class="k">Drops réseau</span> <span class="v">${d.network_drops||0}</span>`
+      + ` <span class="k" title="estimation : un contenu bloqué n'est jamais téléchargé, on ne peut pas mesurer les octets réels — ~45 Ko/blocage">Ko évités <span style="opacity:.6">(est.)</span></span> <span class="v">~${Math.round((d.total_bytes||0)/1024)}</span>`;
     const hostRows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>~${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
     const siteRows = (d.top_sites||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.site)}</code></td><td>${r.hits}</td></tr>`).join('');
     document.getElementById('ads-hosts').innerHTML = hostRows
