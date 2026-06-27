@@ -97,10 +97,6 @@
                 <h2>📊 Live metrics (24h)</h2>
                 <div class="kv" id="metrics"><span class="k">loading…</span><span class="v"></span></div>
             </div>
-            <div class="card">
-                <h2>♥ Liveness</h2>
-                <div class="kv" id="health"><span class="k">loading…</span><span class="v"></span></div>
-            </div>
         </div>
     </section>
 
@@ -435,15 +431,10 @@ async function loadClientDetail(macHash) {
 }
 
 async function loadHealth() {
+    // Liveness card removed (redundant generic status); /health still drives the
+    // top version-badge.
     const h = await J('/health');
-    const el = document.getElementById('health');
-    if (h.__error) { el.innerHTML = `<span class="k">err</span><span class="v">${h.__error}</span>`; return; }
-    el.innerHTML = `
-        <span class="k">status</span>  <span class="v">${h.status}</span>
-        <span class="k">module</span>  <span class="v">${h.module}</span>
-        <span class="k">version</span> <span class="v">${h.version}</span>
-    `;
-    document.getElementById('version-badge').textContent = `v${h.version}`;
+    if (h && h.version) document.getElementById('version-badge').textContent = `v${h.version}`;
 }
 
 async function loadFilters() {
