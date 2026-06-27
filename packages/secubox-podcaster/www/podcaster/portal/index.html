@@ -82,8 +82,9 @@ async function load(){
     .concat(feeds.map(f=>`<span class="chip ${FILT===f?'on':''}" onclick="setF('${esc(f).replace(/'/g,"")}')">${esc(f)} · ${d.feeds[f]}</span>`)).join("");
   render();
 }
-function setF(f){FILT=f;load._render?render():render()}
-function render(){
+function setF(f){FILT=f;render(true)}
+let LIST_SIG="";
+function render(force){
   const list=document.getElementById("list");
   let eps=DATA.episodes||[];
   if(FILT) eps=eps.filter(e=>e.feed===FILT);
@@ -92,7 +93,13 @@ function render(){
   const fid=eps.length?eps[0].feed_id:null;
   zb.innerHTML=(FILT&&fid!=null)
     ? `<a href="${API}/public/feed/${fid}/zip">⬇ Download all (ZIP) · ${esc(FILT)}</a>` : "";
-  if(!eps.length){list.innerHTML='<div class="empty">No episodes published yet.</div>';return}
+  if(!eps.length){list.innerHTML='<div class="empty">No episodes published yet.</div>';LIST_SIG="";return}
+  // Don't rebuild the list (which would destroy a playing <audio>) when nothing
+  // changed, or while the user is actively listening — only on explicit actions.
+  const sig=(FILT||"all")+"|"+eps.map(e=>e.id).join(",");
+  const playing=[...list.querySelectorAll("audio")].some(a=>!a.paused&&!a.ended);
+  if(!force && (sig===LIST_SIG || playing)) return;
+  LIST_SIG=sig;
   list.innerHTML=eps.map((e,i)=>{
     const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
     return `<div class="ep"><div class="n">${i+1}</div>

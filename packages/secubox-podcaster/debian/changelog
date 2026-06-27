@@ -1,3 +1,22 @@
+secubox-podcaster (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * Service now runs unprivileged as secubox:secubox (was root) with UMask=0002,
+    matching every other module. uvicorn creates its Unix socket owned
+    secubox:secubox so nginx (www-data, in the secubox group) can connect. This
+    removes the racy "sleep 1 + chown" ExecStartPost: when uvicorn took >1s to
+    bind (it cold-starts in ~4s here), the chown ran before the socket existed,
+    silently failed, and left it root:root → nginx "Permission denied" → 502 →
+    the dashboard looked empty ("content disappeared"). ExecStartPre now clears
+    any stale root-owned socket (sticky /run/secubox). postinst reclaims
+    ownership of pre-existing root-owned DB + media. (#761)
+  * Audio player: stop rebuilding the episode list on every poll tick (every 4s
+    admin / 15s portal) — that destroyed the playing <audio> element, so
+    playback halted every few seconds. The list now only re-renders when its
+    contents change AND no <audio> is actively playing. /media is served
+    Content-Disposition: inline so iOS Safari plays it in <audio>. (#761)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 16:00:00 +0000
+
 secubox-podcaster (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Auto-download: feeds can auto-queue new episodes so the portal + share feed
