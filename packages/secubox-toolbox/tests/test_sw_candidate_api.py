@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 """Tests for POST /__toolbox/sw-candidate (ref #753)."""
 import asyncio
-import json
 from secubox_toolbox import api
 
 
