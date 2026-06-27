@@ -47,7 +47,8 @@ if [[ -z "${SKIP_CHROOT:-}" ]]; then
       log "  debootstrap failed (network?) — skipping chroot test"
     else
       sudo install -d -m 0755 "$CHROOT/etc/apt/sources.list.d" "$CHROOT/usr/share/keyrings"
-      sudo install -m 0644 "$OUT/secubox-keyring.gpg" "$CHROOT/usr/share/keyrings/secubox.gpg"
+      # dearmor: apt signed-by= needs a binary keyring, not the ASCII-armored export
+      gpg --dearmor < "$OUT/secubox-keyring.gpg" | sudo tee "$CHROOT/usr/share/keyrings/secubox.gpg" >/dev/null
       echo "deb [signed-by=/usr/share/keyrings/secubox.gpg] file://$OUT $SUITE main" \
         | sudo tee "$CHROOT/etc/apt/sources.list.d/secubox.list" >/dev/null
       sudo mkdir -p "$CHROOT$OUT"

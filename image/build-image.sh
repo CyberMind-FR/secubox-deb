@@ -643,7 +643,13 @@ EOF
     SECUBOX_REPO_OK=1
     log "Repo local SecuBox configuré (trusted=yes)"
   fi
-elif curl -sf "${APT_SECUBOX}/secubox-keyring.gpg" -o "${ROOTFS}/usr/share/keyrings/secubox.gpg" 2>/dev/null; then
+elif curl -sf "${APT_SECUBOX}/secubox-keyring.gpg" 2>/dev/null \
+       | gpg --dearmor > "${ROOTFS}/usr/share/keyrings/secubox.gpg" 2>/dev/null \
+     && [ -s "${ROOTFS}/usr/share/keyrings/secubox.gpg" ]; then
+  # apt's signed-by= requires a DEARMORED (binary) keyring; the published
+  # secubox-keyring.gpg is ASCII-armored, so dearmor it on the way in.
+  # Feeding the armored file directly yields "NO_PUBKEY 44E50F0178E8BC7E
+  # / repository not signed" even though the key is correct.
   cat > "${ROOTFS}/etc/apt/sources.list.d/secubox.list" <<EOF
 deb [signed-by=/usr/share/keyrings/secubox.gpg] ${APT_SECUBOX} ${SUITE} main
 EOF
