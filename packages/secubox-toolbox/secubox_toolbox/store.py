@@ -127,6 +127,20 @@ def ad_client_stats(mac_hash: str, hours: int = 24, top: int = 25) -> dict:
     return out
 
 
+def record_cosmetic_pages(pages: int) -> None:
+    """#755 — append one cosmetic-hide tally (pages cleaned since the last flush).
+    ad_stats sums these over the window. Best-effort; never raises."""
+    try:
+        n = int(pages)
+        if n <= 0:
+            return
+        with _conn() as c:
+            c.execute("CREATE TABLE IF NOT EXISTS cosmetic_events(ts REAL, pages INTEGER)")
+            c.execute("INSERT INTO cosmetic_events(ts, pages) VALUES(?, ?)", (time.time(), n))
+    except Exception as e:
+        log.debug("record_cosmetic_pages failed: %s", e)
+
+
 def record_ad_candidates(rows) -> None:
     """rows: iterable of (host, site, hits)."""
     rows = [r for r in rows if r and r[0]]
