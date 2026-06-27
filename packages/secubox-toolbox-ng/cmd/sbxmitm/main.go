@@ -604,6 +604,7 @@ func main() {
 	// #662 — the candidate feed (px.cand) is drained in the SAME flush so the
 	// learning candidates ride the existing ad-event channel (one POST / 10s).
 	go px.ads.runAdStatsFlusher(*portal, px.cand)
+	go px.swNeuter.runCandidateFlusher(*portal)
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
 		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The

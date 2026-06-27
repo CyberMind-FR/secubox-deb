@@ -69,3 +69,19 @@ func TestSWCandidateRecordSnapshot(t *testing.T) {
 		t.Fatal("snapshot must read-and-CLEAR (second call → nil)")
 	}
 }
+
+func TestSWFlushCandidatesClears(t *testing.T) {
+	s := &SWNeuter{cand: map[string]int64{}}
+	s.RecordCandidate("www.cnn.com")
+	// portal "" → Post fails fast (best-effort); the snapshot must still drain.
+	got := s.flushCandidatesOnce("http://127.0.0.1:0")
+	if len(got) != 1 || got[0] != "www.cnn.com" {
+		t.Fatalf("flush returned %v, want [www.cnn.com]", got)
+	}
+	if s.snapshotCandidates() != nil {
+		t.Fatal("flush must have drained the buffer")
+	}
+	if s.flushCandidatesOnce("http://127.0.0.1:0") != nil {
+		t.Fatal("empty buffer → flush returns nil, no POST")
+	}
+}

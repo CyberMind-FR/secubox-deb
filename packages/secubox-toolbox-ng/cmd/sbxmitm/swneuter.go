@@ -13,9 +13,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reload"
 )
@@ -117,4 +120,35 @@ func (s *SWNeuter) snapshotCandidates() []string {
 // register() fetch and every update check — reliable and host-agnostic.
 func isSWScriptRequest(req *http.Request) bool {
 	return req != nil && strings.EqualFold(req.Header.Get("Service-Worker"), "script")
+}
+
+// swFlushInterval is how often pending candidates are POSTed to the portal.
+const swFlushInterval = 30 * time.Second
+
+// flushCandidatesOnce drains the candidate buffer and best-effort POSTs the host
+// list to the portal's /__toolbox/sw-candidate ingest. Returns the drained hosts
+// (so a test can assert the snapshot/clear); a dead/slow portal is swallowed.
+func (s *SWNeuter) flushCandidatesOnce(portal string) []string {
+	hosts := s.snapshotCandidates()
+	if len(hosts) == 0 {
+		return nil
+	}
+	buf, err := json.Marshal(map[string][]string{"hosts": hosts})
+	if err != nil {
+		return hosts
+	}
+	url := portalTargetURL(portal, "/__toolbox/sw-candidate")
+	if resp, err := adEventClient.Post(url, "application/json", bytes.NewReader(buf)); err == nil && resp != nil {
+		resp.Body.Close()
+	}
+	return hosts
+}
+
+// runCandidateFlusher drains the candidate buffer to the portal every
+// swFlushInterval. Launched as a background goroutine from main().
+func (s *SWNeuter) runCandidateFlusher(portal string) {
+	for {
+		time.Sleep(swFlushInterval)
+		s.flushCandidatesOnce(portal)
+	}
 }

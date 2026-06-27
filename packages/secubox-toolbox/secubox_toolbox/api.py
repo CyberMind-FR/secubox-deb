@@ -137,6 +137,48 @@ async def toolbox_inline(
     )
 
 
+# #753 — SW-neuter auto-learn ingest: sbxmitm records every host it sees
+# fetching a Service Worker that is NOT on the sw-neuter allow-list, and POSTs
+# them here every 30 s. We dedup-append to a candidates file for operator review.
+# The operator promotes wanted hosts to sw-neuter-hosts.txt to activate neuter.
+# UNAUTHENTICATED — same trust perimeter as /__toolbox/ad-event (loopback / WG).
+SW_CANDIDATES_FILE = Path("/var/lib/secubox/toolbox/sw-neuter-candidates.txt")
+
+
+def _append_sw_candidates(hosts: list[str]) -> None:
+    """Append new hosts to the sw-neuter candidates file, deduped against what is
+    already there. Best-effort; never raises into the request path."""
+    try:
+        existing: set[str] = set()
+        if SW_CANDIDATES_FILE.exists():
+            existing = {l.strip() for l in SW_CANDIDATES_FILE.read_text().splitlines() if l.strip()}
+        fresh = [h for h in hosts if h not in existing]
+        if not fresh:
+            return
+        SW_CANDIDATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with SW_CANDIDATES_FILE.open("a", encoding="utf-8") as fh:
+            for h in fresh:
+                fh.write(h + "\n")
+    except OSError as e:
+        log.debug("sw-candidate append failed: %s", e)
+
+
+@router.post("/__toolbox/sw-candidate")
+async def toolbox_sw_candidate(request: Request) -> Response:
+    """#753 — record SW-PWA hosts proposed for the sw-neuter allow-list. sbxmitm
+    POSTs hosts it saw fetching a Service Worker that are NOT yet allow-listed.
+    Deduped-appends to the candidates file for operator review; the operator
+    promotes wanted hosts to sw-neuter-hosts.txt."""
+    try:
+        body = await request.json()
+        hosts = [h for h in (body.get("hosts") or []) if isinstance(h, str) and h]
+    except Exception:
+        hosts = []
+    if hosts:
+        _append_sw_candidates(hosts)
+    return Response(status_code=204)
+
+
 # #662 — ad-block metrics ingest from the Go MITM engine (sbxmitm). The #662
 # cutover moved the BLOCK decision (204 on ad/tracker hosts) into the Go engine
 # but left the METRICS unported, so the #ads dashboard froze. The engine now
