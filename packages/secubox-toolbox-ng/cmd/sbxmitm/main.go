@@ -111,6 +111,11 @@ type Proxy struct {
 	// (manifests / direct audio-video) seen on MITM'd flows to a JSONL log the
 	// mediaflow "Discovered Media" view reads. nil/disabled → no-op.
 	media *mediaCatcher
+
+	// swNeuter (#753) is the targeted Service-Worker neuter: for allow-listed
+	// hosts it answers the SW script fetch with a self-unregistering SW so PWA
+	// shells stop being SW-cached and the banner can be injected on the next nav.
+	swNeuter *SWNeuter
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -291,6 +296,25 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		servePortalAsset(tconn, px.portal, req.URL.RequestURI())
 		return
 	}
+
+	// #753 — targeted SW-neuter. For an allow-listed host, answer the
+	// Service-Worker script fetch with a self-unregistering SW (the next
+	// navigation bypasses the now-gone SW → reaches the MITM → banner). Off the
+	// list, record the host as an auto-learn candidate. Only ever fires on the
+	// `Service-Worker: script` request — normal traffic is untouched.
+	if px.swNeuter != nil && isSWScriptRequest(req) {
+		px.swNeuter.Maybe()
+		if px.swNeuter.Match(host) {
+			writeRaw(tconn, 200, "OK", map[string]string{
+				"Content-Type":  "application/javascript",
+				"Cache-Control": "no-store",
+				"X-SecuBox-Ng":  "sw-neutered",
+			}, []byte(NeuterSW))
+			return
+		}
+		px.swNeuter.RecordCandidate(host)
+	}
+
 	// Transparent: the upstream request must carry the SNI host (for Host header,
 	// SNI, and cert verification); the actual TCP dial is pinned to the captured
 	// original-dst by the uchromeTransport. We do NOT put the bare ip:port in
@@ -529,6 +553,8 @@ func main() {
 		"compute cross-site cookie-tracker edges and POST them to the portal /__toolbox/social-event ingest so the kbin /social graph refills (#662; replaces the decommissioned Python social_graph addon). Hash-only (never raw cookie values); WG-peer flows only; batched + fire-and-forget — a dead/slow portal never affects the proxy. Set false to emit nothing.")
 	mediaCatch := flag.Bool("media-catch", true,
 		"R4 media reverse-catcher (#736): record cloneable media URLs (HLS/DASH manifests + direct audio/video) seen on MITM'd flows to "+mediaCatchPath+" for the mediaflow \"Discovered Media\" clone view. URLs only, never bodies; deduped. Set false to disable.")
+	swNeuterHosts := flag.String("sw-neuter-hosts", "/var/lib/secubox/toolbox/sw-neuter-hosts.txt",
+		"#753 allow-list of PWA hosts whose Service Worker is neutered (served a self-unregistering SW) so the banner can be injected; empty/missing file = no-op")
 	flag.Parse()
 	ca, err := forge.LoadCA(*caCert, *caKey)
 	if err != nil {
@@ -565,6 +591,7 @@ func main() {
 		social:        newSocialRelay(),
 		consent:       newConsentLog(),
 		media:         newMediaCatcher(*mediaCatch),
+		swNeuter:      newSWNeuter(*swNeuterHosts),
 	}
 	// #662 — start the social-edge flusher: the MITM path buffers cross-site
 	// tracker edges into px.social, drained every 10s to the portal's
