@@ -129,7 +129,7 @@ def query_series(conn: sqlite3.Connection, window_s: int, step_s: int) -> dict:
     max_ts_c = now_row[0] if now_row and now_row[0] is not None else None
     now_row2 = conn.execute("SELECT MAX(ts) FROM iface_samples").fetchone()
     max_ts_i = now_row2[0] if now_row2 and now_row2[0] is not None else None
-    max_ts = max(t for t in (max_ts_c, max_ts_i) if t is not None) if (max_ts_c or max_ts_i) else 0
+    max_ts = max(t for t in (max_ts_c, max_ts_i) if t is not None) if any(t is not None for t in (max_ts_c, max_ts_i)) else 0
     floor = max_ts - window_s
 
     drops: dict[str, dict[int, int]] = {}
