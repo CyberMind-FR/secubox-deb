@@ -1,5 +1,53 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-22*
+*Mis à jour : 2026-06-27*
+
+---
+
+## ⚪ T5 — Images / OS variants / Hardware (ajouts 2026-06-27)
+
+### ⬜ MOCHAbin — bootloader propre (adresses réservées + extlinux)
+
+> Workaround actif : `/boot/boot.scr` compilé forçant le kernel à `0x0a000000`. Fix durable requis.
+
+- [ ] **Option A — Corriger l'image** : patcher `extlinux.conf` généré par le CI pour utiliser
+  `0x0a000000` (kernel) et `0x10000000` (initrd) au lieu de `0x02080000` (adresse réservée
+  factory U-Boot 2020.10 → reset immédiat). Boot.scr deviendrait redondant.
+- [ ] **Option B — Enhanced Tow-Boot (#748)** : bloqué par le ciseau U-Boot (voir ci-dessous) ;
+  déverrouille wget/HTTP natif dans U-Boot, supprime le besoin de TFTP pour les futures installs.
+- [ ] **Valider** que le fix d'adresse tient sur les deux MOCHAbin (gk2 + c3box).
+
+### ⬜ #748 — wget dans U-Boot pour MOCHAbin (bloquant documenté)
+
+> Bloquant dur (ciseau) confirmé 2026-06-27. Branche
+> `feature/748-enhanced-tow-boot-http-netboot-serial-fl` : spec + plan + Kconfig +
+> `build-uboot-overlay.sh --tow-boot` + CI `.github/workflows/build-tow-boot.yml` en place.
+> Problème : board mochabin UNIQUEMENT dans fork Tow-Boot U-Boot 2022.07 (pas de `wget`) ;
+> `wget`/TCP UNIQUEMENT dans stock U-Boot ≥2023.07 (pas de board mochabin/DTS).
+
+- [ ] **Voie 1** : backporter le stack TCP + `wget` de U-Boot ≥2023.07 dans le fork Tow-Boot
+  2022.07 (mochabin board natif). Diff TCP = `net/wget.c` + dépendances `CONFIG_NET_WGET`.
+- [ ] **Voie 2** : porter le board mochabin (DTS Armada 7040 + PHY + eMMC) vers U-Boot mainline
+  ≥2023.07 (sans Tow-Boot). Plus long mais durable.
+- [ ] Choisir une voie, débloquer #748.
+
+### ⬜ Packager le flow netboot + install signé (rig temporaire → procédure reproductible)
+
+> Actuellement rig manuel sur gk2 : `lan1=192.168.77.1/24`, dnsmasq DHCP, nft, nginx `:8099`.
+
+- [ ] Scripter la publication de l'image signée dans le root HTTP netboot (wget + sha256 + sig).
+- [ ] Documenter / packager la config dnsmasq + nft + nginx pour un segment `lan1` dédié.
+- [ ] Intégrer dans `scripts/deploy-netboot.sh` ou équivalent.
+
+### ⬜ Teardown rig netboot temporaire gk2
+
+> Le rig (lan1 bridge, dnsmasq, nft iif lan1 accept, nginx extra listen) reste actif jusqu'à
+> ce que c3box soit autonome en prod.
+
+- [ ] Retirer la règle nft `iif lan1 accept` (risque : tout le segment lan1 est accepté sans filtrage).
+- [ ] Désactiver / retirer dnsmasq test sur lan1.
+- [ ] Retirer le extra listen `192.168.77.1:8099` du vhost nginx netboot (ou couper le vhost si
+  plus nécessaire).
+- [ ] Vérifier que c3box auto-boot sans rig (boot.scr en place → OK).
 
 ---
 

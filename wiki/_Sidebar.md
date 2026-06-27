@@ -27,6 +27,7 @@
 * [[Live-USB]] | [FR](Live-USB-FR) | [DE](Live-USB-DE) | [中文](Live-USB-ZH)
 * [[Installation]] | [FR](Installation-FR) | [DE](Installation-DE) | [中文](Installation-ZH)
 * [[ARM-Installation]] | [FR](ARM-Installation-FR) | [DE](ARM-Installation-DE) | [中文](ARM-Installation-ZH)
+* [[Netboot-Install]] 🔧 MOCHAbin netboot + signed install
 * [[ESPRESSObin]] | [FR](ESPRESSObin-FR) | [DE](ESPRESSObin-DE) | [中文](ESPRESSObin-ZH)
 * [[Eye-Remote]] 📡
 * [[Android-ToolBox]] 📱 one-tap R3

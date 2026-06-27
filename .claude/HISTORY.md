@@ -3,6 +3,63 @@
 
 ---
 
+## 2026-06-27 — Netboot live PROUVÉ + première install SecuBox Debian sur c3box (second MOCHAbin) (#748 #737)
+
+Grande session hardware : netboot gk2→c3box validé de bout en bout, premier SecuBox Debian installé
+sur un vrai MOCHAbin, et le blocage U-Boot qui empêche #748 de fermer est formellement documenté.
+
+### A. Netboot gk2 → c3box : validé en prod
+
+- **c3box** (second MOCHAbin, Armada 7040) a booté l'installeur SecuBox Debian servi par gk2 via
+  TFTP : factory U-Boot 2020.10 → `tftpboot Image/dtb/initrd` → `booti` → rescue shell installeur,
+  kernel custom 6.12.85 #5secubox. Le FIT signé (49 Mo) était servi en HTTP sur `:8099`.
+- Le long détour cabling était une impasse LAB (prouvé via gk2 bridge-FDB + test DHCP) — aucun
+  bug logiciel.
+- **Learnings opérationnels réutilisables** (documentés dans `wiki/Netboot-Install.md`) :
+  - Factory U-Boot 2020.10 s'interrompt sur **Enter** (pas Ctrl-C), `bootdelay=2`.
+  - Son env n'est PAS dans SPI mtd2 (env étranger fossile) → `fw_setenv` depuis Linux n'a aucun
+    effet ; seule la config U-Boot interne compte.
+  - Seul le port cuivre RJ45 unique = `mvpp2-2` est bootable par le factory U-Boot (les 4 ports
+    switch nécessitent le driver MV88E6XXX DSA, absent au boot).
+  - Kernel load à `0x02080000` = adresse mémoire réservée → crash immédiat ; utiliser `0x0a000000`.
+  - `setenv tftpblocksize 1468` pour TFTP rapide.
+
+### B. #748 enhanced Tow-Boot (HTTP/wget bootloader) — DIFFÉRÉ, bloquant documenté
+
+Branche `feature/748-enhanced-tow-boot-http-netboot-serial-fl` (stackée sur #737) :
+spec+plan (`docs/superpowers/`), Kconfig Tow-Boot, `build-uboot-overlay.sh --tow-boot`,
+plan serial-flasher, CI `.github/workflows/build-tow-boot.yml` (push-triggered).
+
+**Bloquant dur (ciseau)** : le board MOCHAbin n'existe que dans le fork U-Boot 2022.07 de
+Tow-Boot (pas de `wget`) ; `wget` n'existe que dans U-Boot stock ≥2023.07 (pas de board
+mochabin/DTS). Bump à stock 2023.07 = `wget` compile mais build sans DTS. Pour débloquer :
+backporter wget/TCP dans le fork Tow-Boot 2022.07, OU porter le board mochabin vers mainline
+≥2023.07. Pas un tweak de config.
+
+### C. PREMIÈRE INSTALL — c3box → SecuBox Debian (la headline)
+
+- **Image** : artefact CI `secubox-mochabin-bookworm` (run 27426515472, 1,8 Go gzip / 8,0 Gio
+  décompressé), téléchargée sur gk2 `/data`, SHA256SUMS vérifié.
+- **Signature** : clé `secubox-netboot.key` de gk2. Vérifié : cette clé FIT == `netboot-image.pub`
+  embarquée dans l'installeur (modulus match + roundtrip sign/verify). `sbx.img.gz` + `.sig`
+  publiés dans le root HTTP netboot, servis sur `:8099` (symlink depuis `/data`).
+- **Install automatisé depuis le rescue shell** :
+  `wget sbx.img.gz` (en RAM, c3box a 8 Go) →
+  `openssl dgst -verify` contre `netboot-image.pub` (résultat : Verified OK) →
+  `gunzip | dd of=/dev/mmcblk0 bs=4M conv=fsync` (8 Gio, progression 32→62→94→100%) → sync.
+- **c3box démarre SecuBox Debian v1.9.0** — hostname `secubox-mochabin`, kernel Debian
+  6.1.0-47-arm64, stack complète : secuboxd, hub, grafana, zigbee, mqtt, authelia,
+  sentinel/rogue-BTS (layers WALL+MIND). Creds root/secubox, Web UI `:9443`.
+- **Fix auto-boot persistant** : l'image utilise `extlinux.conf` à `0x02080000` (adresse réservée
+  factory U-Boot → reset immédiat) et ne livre pas de `boot.scr` compilé. Construit
+  `/boot/boot.scr` (kernel@`0x0a000000`, initrd@`0x10000000`, `console=ttyS0` + earlycon,
+  `root=LABEL=rootfs`) : le factory U-Boot charge `boot.scr` depuis mmc et démarre Debian sans
+  intervention. **VÉRIFIÉ** : reboot sans intervention → login Debian.
+- **Layout eMMC installé** : GPT p1=boot (FAT, `/boot`) p2=ROOT (`/`) p3=DATA. c3box était
+  OpenWrt ; eMMC écrasé (install RAM-only, pas de risque sur l'OS tournant avant le `dd`).
+- **Rig netboot temporaire gk2 encore actif** : `lan1=192.168.77.1/24`, dnsmasq test (DHCP) sur
+  `lan1`, `nft iif lan1 accept`, nginx boot-vhost extra listen `192.168.77.1:8099`.
+
 ## 2026-06-24 (cont.) — R4 analyst mode: MITM-everything + media reverse-catcher + clone (#736)
 
 New "R4" doctrine — visibility over performance. Delivered + live on gk2:
