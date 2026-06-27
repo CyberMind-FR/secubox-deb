@@ -1,3 +1,13 @@
+secubox-toolbox (2.7.21-1~bookworm1) bookworm; urgency=medium
+
+  * #754 reconcile bundle.py to the working #740 DOM-API banner (mk() builder,
+    Trusted-Types-proof — renders on x.com/news/strict-CSP) + the R4 tier folded
+    into its level switch + the #752 top-frame guard (banner never renders in a
+    3rd-party iframe, e.g. the Dailymotion player on leparisien). Closes the
+    deployed-but-unmerged feature/740 banner drift. Reviewed; 179 toolbox tests.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 06:00:00 +0000
+
 secubox-toolbox (2.7.20-1~bookworm1) bookworm; urgency=medium
 
   * R4 analyst tier (#736): add R4 to the banner topbar level switch
