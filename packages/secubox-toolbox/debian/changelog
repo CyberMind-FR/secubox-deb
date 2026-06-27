@@ -1,3 +1,15 @@
+secubox-toolbox (2.7.23-1~bookworm1) bookworm; urgency=medium
+
+  * #755 #ads card → honest labeled MITM-protection breakdown: Pubs bloquées
+    (204), Trackers détectés (distinct cross-site cookie-trackers from
+    social_edges), Pages nettoyées (cosmetic-hide pages, fed by sbxmitm via the
+    new cosmetic_events table), Drops réseau (blacklist nft). store.ad_stats gains
+    trackers_seen + pages_cleaned; admin_ad_stats gains network_drops;
+    record_cosmetic_pages ingests the sbxmitm flush. No metric is summed across
+    units.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 09:30:00 +0000
+
 secubox-toolbox (2.7.22-1~bookworm1) bookworm; urgency=medium
 
   * #753 portal ingest for the SW-neuter auto-learn: POST /__toolbox/sw-candidate
