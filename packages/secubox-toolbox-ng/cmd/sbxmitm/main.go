@@ -400,6 +400,15 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		Transport:     newUchromeTransport(dialHost, host),
 	}
 	req.RequestURI = ""
+	// #757 — SW revalidation nudge: for an allow-listed (sw-neuter) host, strip the
+	// conditional headers off an HTML navigation / SW-revalidation request so the
+	// upstream returns a full 200 (not a 304) → the MITM injects the banner →
+	// a stale-while-revalidate SW caches a banner'd shell WITHOUT being neutered.
+	// Cache-first SWs that never revalidate still need the #753 neuter.
+	if px.swNeuter != nil && requestWantsHTML(req) && px.swNeuter.Match(host) {
+		req.Header.Del("If-None-Match")
+		req.Header.Del("If-Modified-Since")
+	}
 	resp, err := up.Do(req)
 	if err != nil {
 		writeRaw(tconn, 502, "Bad Gateway", nil, nil)

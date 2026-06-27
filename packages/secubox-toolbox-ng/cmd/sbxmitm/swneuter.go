@@ -115,6 +115,20 @@ func (s *SWNeuter) snapshotCandidates() []string {
 	return out
 }
 
+// requestWantsHTML reports whether req is for an HTML document (a navigation or a
+// Service-Worker document fetch) — Sec-Fetch-Dest: document, or an Accept that
+// advertises text/html. Used by the #757 revalidation nudge so we only force a
+// full 200 on document fetches, never on subresources.
+func requestWantsHTML(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	if strings.EqualFold(req.Header.Get("Sec-Fetch-Dest"), "document") {
+		return true
+	}
+	return strings.Contains(req.Header.Get("Accept"), "text/html")
+}
+
 // isSWScriptRequest reports whether req is a Service-Worker SCRIPT fetch.
 // Browsers send the spec-mandated `Service-Worker: script` header on the
 // register() fetch and every update check — reliable and host-agnostic.
