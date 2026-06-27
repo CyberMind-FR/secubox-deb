@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.23-1~bookworm1) bookworm; urgency=medium
+
+  * #751 rebuild from master: the deployed 0.1.22 binary was STALE and lacked
+    the working #728 nonce-CSP borrow, so the transparency banner was blocked on
+    nonce-CSP sites (x.com) — the inline <script> got no nonce. A fresh master
+    build restores the nonce-borrow (banner renders on x.com + news). Adds the
+    SBX_DEBUG_CSP opt-in diagnostic (logs per-injected-response CSP visibility +
+    borrow decision; off by default, zero cost when unset).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 06:30:00 +0000
+
 secubox-toolbox-ng (0.1.22-1~bookworm1) bookworm; urgency=medium
 
   * media catcher: ship a tmpfiles.d entry so /run/secubox/media-catch.jsonl is
