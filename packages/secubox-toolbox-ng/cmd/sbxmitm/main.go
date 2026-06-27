@@ -526,6 +526,9 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	scriptBody, _ := fetchInlineBanner(px.portal, clientHash, wg, cspBypassed)
 	if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, cspNonce, wg); ok {
 		body = out
+		if wg && px.ads != nil {
+			px.ads.recordCosmetic() // #755 — cosmetic style is wg-only (injectHTML gates it)
+		}
 		// Keep framing consistent with the served bytes (only the length changed).
 		resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
 		resp.ContentLength = int64(len(body))

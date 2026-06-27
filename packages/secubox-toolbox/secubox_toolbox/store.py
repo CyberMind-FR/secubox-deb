@@ -127,6 +127,20 @@ def ad_client_stats(mac_hash: str, hours: int = 24, top: int = 25) -> dict:
     return out
 
 
+def record_cosmetic_pages(pages: int) -> None:
+    """#755 — append one cosmetic-hide tally (pages cleaned since the last flush).
+    ad_stats sums these over the window. Best-effort; never raises."""
+    try:
+        n = int(pages)
+        if n <= 0:
+            return
+        with _conn() as c:
+            c.execute("CREATE TABLE IF NOT EXISTS cosmetic_events(ts REAL, pages INTEGER)")
+            c.execute("INSERT INTO cosmetic_events(ts, pages) VALUES(?, ?)", (time.time(), n))
+    except Exception as e:
+        log.debug("record_cosmetic_pages failed: %s", e)
+
+
 def record_ad_candidates(rows) -> None:
     """rows: iterable of (host, site, hits)."""
     rows = [r for r in rows if r and r[0]]
@@ -180,6 +194,28 @@ def ad_stats(hours: int = 24, top: int = 25) -> dict:
                 "SELECT mac_hash, SUM(hits) FROM ad_block_client_host "
                 "WHERE last_seen>=? AND mac_hash<>'' GROUP BY mac_hash "
                 "ORDER BY SUM(hits) DESC LIMIT ?", (cutoff, top))]
+            # #755 — trackers detected/poisoned by the MITM in the window: distinct
+            # cross-site cookie-identifier hashes seen on social_edges. This is the
+            # "Trackers" half of the card (the 204 ad-block is the "pubs" half).
+            out["trackers_seen"] = 0
+            try:
+                out["trackers_seen"] = int(c.execute(
+                    "SELECT COUNT(DISTINCT cookie_id_hash) FROM social_edges "
+                    "WHERE ts >= ? AND cookie_id_hash IS NOT NULL AND cookie_id_hash <> ''",
+                    (int(cutoff),),
+                ).fetchone()[0] or 0)
+            except sqlite3.Error:
+                out["trackers_seen"] = 0
+            # #755 — pages where the cosmetic ad-hide style was injected (Task 2 writes
+            # cosmetic_events; absent table → 0).
+            out["pages_cleaned"] = 0
+            try:
+                out["pages_cleaned"] = int(c.execute(
+                    "SELECT COALESCE(SUM(pages),0) FROM cosmetic_events WHERE ts >= ?",
+                    (cutoff,),
+                ).fetchone()[0] or 0)
+            except sqlite3.Error:
+                out["pages_cleaned"] = 0
     except Exception as e:
         log.debug("ad_stats failed: %s", e)
     return out

@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"regexp"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -132,10 +133,12 @@ type adCounter struct {
 // adStats is the lock-guarded in-memory aggregator. blocks is keyed by
 // (adHost,site); clients by (macHash,adHost). The keys are small structs so the
 // maps stay allocation-light and comparable without string concatenation.
+// cosmetic counts HTML pages where the cosmetic ad-hide style was injected (#755).
 type adStats struct {
-	mu      sync.Mutex
-	blocks  map[adKey]*adCounter
-	clients map[cliKey]*adCounter
+	mu       sync.Mutex
+	blocks   map[adKey]*adCounter
+	clients  map[cliKey]*adCounter
+	cosmetic atomic.Int64 // #755 — pages where the cosmetic ad-hide style was injected
 }
 
 type adKey struct{ adHost, site string }
@@ -181,6 +184,12 @@ func (a *adStats) recordAdBlock(adHost, site, macHash string) {
 	}
 }
 
+// recordCosmetic tallies one R3 HTML page that received the cosmetic ad-hide style.
+func (a *adStats) recordCosmetic() { a.cosmetic.Add(1) }
+
+// snapshotCosmetic atomically reads-and-clears the cosmetic page counter.
+func (a *adStats) snapshotCosmetic() int64 { return a.cosmetic.Swap(0) }
+
 // ── wire payload (mirrors the portal /__toolbox/ad-event JSON contract) ──────
 
 type adBlockRow struct {
@@ -207,9 +216,10 @@ type adCandidateRow struct {
 }
 
 type adEventPayload struct {
-	Blocks     []adBlockRow     `json:"blocks"`
-	Clients    []adClientRow    `json:"clients"`
-	Candidates []adCandidateRow `json:"candidates,omitempty"`
+	Blocks        []adBlockRow     `json:"blocks"`
+	Clients       []adClientRow    `json:"clients"`
+	Candidates    []adCandidateRow `json:"candidates,omitempty"`
+	CosmeticPages int64            `json:"cosmetic_pages,omitempty"` // #755 — pages cleaned since the last flush
 }
 
 // snapshot atomically reads-and-clears both maps, returning the accumulated rows.
@@ -234,7 +244,7 @@ func (a *adStats) snapshot() adEventPayload {
 
 // empty reports whether a payload carries no rows (nothing to POST).
 func (p adEventPayload) empty() bool {
-	return len(p.Blocks) == 0 && len(p.Clients) == 0 && len(p.Candidates) == 0
+	return len(p.Blocks) == 0 && len(p.Clients) == 0 && len(p.Candidates) == 0 && p.CosmeticPages == 0
 }
 
 // adEventClient is a short-timeout fire-and-forget client for the ad-event POST.
@@ -260,6 +270,7 @@ func (a *adStats) flushOnce(portal string, cand *adCandidates) adEventPayload {
 	if cand != nil {
 		p.Candidates = cand.snapshot()
 	}
+	p.CosmeticPages = a.snapshotCosmetic() // #755 — pages cleaned in this window
 	if p.empty() {
 		return p
 	}
