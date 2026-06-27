@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.1.26-1~bookworm1) bookworm; urgency=medium
+
+  * #757 SW revalidation nudge: for sw-neuter allow-listed hosts, strip
+    If-None-Match/If-Modified-Since on HTML document fetches so a
+    stale-while-revalidate Service Worker re-fetches a full 200 (banner injected)
+    and caches a banner'd shell WITHOUT being neutered. Cache-first SWs still use
+    the #753 neuter.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 10:00:00 +0000
+
 secubox-toolbox-ng (0.1.25-1~bookworm1) bookworm; urgency=medium
 
   * #756 cosmetic restores scroll: the cosmetic ad-hide <style> now prepends
