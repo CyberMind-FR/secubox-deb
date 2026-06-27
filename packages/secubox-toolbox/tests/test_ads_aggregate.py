@@ -29,3 +29,11 @@ def test_ad_stats_trackers_seen_distinct_in_window(tmp_path, monkeypatch):
     # distinct non-empty cookie ids in the last 24h = {A, B}; C is stale, "" excluded
     assert out["trackers_seen"] == 2
     assert out["pages_cleaned"] == 0  # no cosmetic_events table yet → 0 (Task 2 fills it)
+
+
+def test_record_cosmetic_pages_summed_in_window(tmp_path, monkeypatch):
+    _seed_db(tmp_path, monkeypatch)
+    store.record_cosmetic_pages(3)
+    store.record_cosmetic_pages(2)
+    out = store.ad_stats(hours=24)
+    assert out["pages_cleaned"] == 5

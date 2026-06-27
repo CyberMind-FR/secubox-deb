@@ -250,6 +250,11 @@ async def toolbox_ad_event(request: Request) -> Response:
             store.record_ad_client_blocks(client_rows)
         if cand_rows:
             store.record_ad_candidates(cand_rows)
+        # #755 — cosmetic-pages counter: Go engine reports how many R3 HTML pages
+        # received the cosmetic ad-hide style in this flush window.
+        cp = body.get("cosmetic_pages")
+        if cp:
+            store.record_cosmetic_pages(cp)
     except Exception as e:  # never raise into the engine's fire-and-forget POST
         log.debug("ad-event ingest failed: %s", e)
     return Response(status_code=204)
