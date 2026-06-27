@@ -29,6 +29,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -470,6 +471,26 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	cspNonce := ""
 	if px.cspDemo {
 		cspNonce, cspBypassed = relaxCSPForLoader(resp.Header)
+	}
+	// CSP diagnostic (#751) — opt-in via SBX_DEBUG_CSP, off by default (zero cost
+	// when unset). For every injected HTML response it logs what relaxCSPForLoader
+	// actually saw — the proto, the count of CSP / CSP-Report-Only headers visible
+	// in resp.Header, the borrowed nonce and the bypass decision. Kept as a
+	// permanent operator tool: it pinpoints why a banner does/doesn't render on a
+	// given site (header present? nonce-source? hash-only? strict-dynamic?), the
+	// class of problem that took an x.com-shaped CSP to surface.
+	if os.Getenv("SBX_DEBUG_CSP") != "" {
+		csps := resp.Header.Values("Content-Security-Policy")
+		cspRO := resp.Header.Values("Content-Security-Policy-Report-Only")
+		head := ""
+		if len(csps) > 0 {
+			head = csps[0]
+			if len(head) > 220 {
+				head = head[:220]
+			}
+		}
+		log.Printf("[csp-debug] host=%s proto=%s status=%d cspHdrs=%d cspRO=%d nonce=%q bypassed=%v head=%q",
+			host, resp.Proto, resp.StatusCode, len(csps), len(cspRO), cspNonce, cspBypassed, head)
 	}
 	// #662 — INLINE the banner (supersedes the <script src="/__toolbox/loader.js">
 	// tag): sites with a SERVICE WORKER hijack the same-origin src before it
