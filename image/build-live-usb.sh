@@ -1144,6 +1144,17 @@ mount_chroot_fs
 install -d "${ROOTFS}/etc/dpkg/dpkg.cfg.d"
 printf 'force-confold\nforce-confdef\n' > "${ROOTFS}/etc/dpkg/dpkg.cfg.d/90-secubox-confold"
 
+# Deny service start/stop/reload during install — the chroot has no running
+# init/dbus, so packages like dbus / the kiosk X11+chromium stack abort their
+# postinst ("Failed to connect to system message bus", invoke-rc.d errors),
+# which fails the whole build. Removed before squashfs so the real system
+# boots services normally (systemd starts enabled units regardless).
+cat > "${ROOTFS}/usr/sbin/policy-rc.d" <<'POLICY'
+#!/bin/sh
+exit 101
+POLICY
+chmod +x "${ROOTFS}/usr/sbin/policy-rc.d"
+
 cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
 deb ${APT_MIRROR} ${SUITE} main contrib non-free non-free-firmware
 deb ${APT_MIRROR} ${SUITE}-updates main contrib non-free non-free-firmware
@@ -3347,6 +3358,9 @@ umount -lf "${ROOTFS}/sys" 2>/dev/null || true
 
 log "7/8 Creating SquashFS filesystem..."
 mkdir -p "${LIVE_DIR}/live"
+
+# Remove the build-time service-deny shim so the booted system starts services.
+rm -f "${ROOTFS}/usr/sbin/policy-rc.d"
 
 mksquashfs "${ROOTFS}" "${LIVE_DIR}/live/filesystem.squashfs" \
   -comp xz -b 1M -Xdict-size 100% -e boot/grub -e boot/efi
