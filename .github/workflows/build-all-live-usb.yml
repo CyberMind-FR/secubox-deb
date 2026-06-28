@@ -48,6 +48,7 @@ jobs:
             output_pattern: "secubox-live-amd64-*.img*"
             needs_qemu: false
             embed_image: false
+            extra_args: "--kiosk"
 
           # MOCHAbin (arm64) - U-Boot distroboot
           - platform: mochabin
