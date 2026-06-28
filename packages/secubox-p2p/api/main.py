@@ -628,6 +628,10 @@ async def get_status():
     threats = load_json(THREATS_FILE, {})
 
     peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else peers_data
+    # A node is not its own peer — exclude the local entry from the counts
+    # (older versions persisted get_self_peer() into PEERS_FILE, inflating these).
+    local_id = get_node_id()
+    peers = [p for p in peers if not p.get("is_local") and p.get("id") != local_id]
     online_peers = [p for p in peers if p.get("status") == "online"]
 
     # Get master-link status
@@ -699,13 +703,12 @@ async def list_peers():
     peers_data = load_json(PEERS_FILE, {"peers": []})
     peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else peers_data
 
-    # Ensure local node is in the list
+    # A node is not its own peer: never insert/persist the local node here.
+    # (Older versions did, which inflated peer_count and listed "<host> (local)"
+    # as a phantom peer.) Drop any self entry a prior version may have saved.
+    # Use /discover/self for the local node's announcement payload instead.
     local_id = get_node_id()
-    has_local = any(p.get("id") == local_id or p.get("is_local") for p in peers)
-
-    if not has_local:
-        peers.insert(0, get_self_peer())
-        save_json(PEERS_FILE, {"peers": peers})
+    peers = [p for p in peers if not p.get("is_local") and p.get("id") != local_id]
 
     return {"peers": peers, "count": len(peers)}
 

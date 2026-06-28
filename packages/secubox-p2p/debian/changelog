@@ -1,3 +1,12 @@
+secubox-p2p (1.7.4-1~bookworm1) bookworm; urgency=medium
+
+  * Stop counting/listing the local node as a peer. /peers no longer inserts
+    and persists get_self_peer() into PEERS_FILE (it inflated peer_count and
+    showed "<host> (local)" as a phantom online peer); /status and /peers now
+    exclude the local entry. Use /discover/self for the local announcement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 28 Jun 2026 07:00:00 +0000
+
 secubox-p2p (1.7.3-1~bookworm1) bookworm; urgency=medium
 
   * Install the p2p + master-link web UIs to /usr/share/secubox/www/ (the
