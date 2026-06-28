@@ -1137,6 +1137,13 @@ mount_chroot_fs() {
 
 mount_chroot_fs
 
+# Make EVERY dpkg op in the chroot keep existing conffiles and never prompt.
+# secubox-mesh's mesh.toml is an auto-detected conffile; in the headless chroot
+# its prompt aborts with "end of file on stdin at conffile prompt", failing the
+# whole build. dpkg.cfg.d covers apt installs AND bare `dpkg --configure -a`.
+install -d "${ROOTFS}/etc/dpkg/dpkg.cfg.d"
+printf 'force-confold\nforce-confdef\n' > "${ROOTFS}/etc/dpkg/dpkg.cfg.d/90-secubox-confold"
+
 cat > "${ROOTFS}/etc/apt/sources.list" <<EOF
 deb ${APT_MIRROR} ${SUITE} main contrib non-free non-free-firmware
 deb ${APT_MIRROR} ${SUITE}-updates main contrib non-free non-free-firmware
