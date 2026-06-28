@@ -1438,7 +1438,13 @@ else
 deb [trusted=yes] ${APT_SECUBOX} ${SUITE} main
 EOF
     chroot "${ROOTFS}" apt-get update -q
-    chroot "${ROOTFS}" apt-get install -y -q secubox-full 2>/dev/null || true
+    # Non-interactive conffile handling: secubox-mesh ships mesh.toml as a
+    # conffile and triggers a dpkg prompt (*** mesh.toml [Y/I/N/O/D/Z]) during
+    # configure, which fails the whole install in the headless chroot. Keep the
+    # packaged conffile and never prompt.
+    chroot "${ROOTFS}" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+      -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef secubox-full' 2>/dev/null || true
+    chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
     # Verify secubox-core installed (dependency of secubox-full)
     if ! chroot "${ROOTFS}" dpkg -l secubox-core 2>/dev/null | grep -q "^ii"; then
