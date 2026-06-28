@@ -3216,12 +3216,16 @@ fi
 # Verify nginx config is valid
 if [[ -x "${ROOTFS}/usr/sbin/nginx" ]]; then
   if ! chroot "${ROOTFS}" nginx -t 2>&1 | grep -q "syntax is ok"; then
-    warn "nginx config still invalid after final cleanup"
-    # Show the error and try to fix
-    nginx_error=$(chroot "${ROOTFS}" nginx -t 2>&1 | head -5)
+    warn "nginx config still invalid after final cleanup (regenerated at first boot)"
+    # Show the error and try to fix. `|| true`: nginx -t returns non-zero here
+    # (config IS invalid — that's why we're in this branch), so without it the
+    # command substitution trips set -e/pipefail and aborts the whole build
+    # right after this warn. The image's nginx config is rebuilt at first boot
+    # by secubox-net-detect, so a build-time-invalid config is non-fatal.
+    nginx_error=$(chroot "${ROOTFS}" nginx -t 2>&1 | head -5 || true)
     echo "$nginx_error"
     # Extract missing file from error message and create empty config
-    missing_file=$(echo "$nginx_error" | grep -oP '"/etc/nginx/secubox\.d/\K[^"]+')
+    missing_file=$(echo "$nginx_error" | grep -oP '"/etc/nginx/secubox\.d/\K[^"]+' || true)
     if [[ -n "$missing_file" ]]; then
       log "Creating missing config: $missing_file"
       touch "${ROOTFS}/etc/nginx/secubox.d/${missing_file}"
