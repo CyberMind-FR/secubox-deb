@@ -63,6 +63,11 @@ jobs:
           # Build the flat {package, arch} matrix. Honour the workflow_dispatch
           # `arch` and `package` filters if set (empty on `push: tags` events).
           requested_arch="${REQUESTED_ARCH:-}"
+          # `both` means build every arch — same as the empty (push: tags)
+          # case. Without this the matrix filter (which only compares against
+          # amd64/arm64/empty) yields an EMPTY matrix, so no package builds and
+          # `collect` fails.
+          [ "$requested_arch" = "both" ] && requested_arch=""
           requested_pkg="${REQUESTED_PKG:-}"
 
           combos=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
