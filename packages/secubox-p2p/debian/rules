@@ -9,12 +9,12 @@ override_dh_auto_install:
 	cp -r $(CURDIR)/api/* $(CURDIR)/debian/secubox-p2p/usr/lib/secubox/p2p/api/
 
 	# Install web interface
-	install -d $(CURDIR)/debian/secubox-p2p/var/www/secubox/p2p
-	cp -r $(CURDIR)/www/p2p/* $(CURDIR)/debian/secubox-p2p/var/www/secubox/p2p/
+	install -d $(CURDIR)/debian/secubox-p2p/usr/share/secubox/www/p2p
+	cp -r $(CURDIR)/www/p2p/* $(CURDIR)/debian/secubox-p2p/usr/share/secubox/www/p2p/
 
 	# Install master-link join page
-	install -d $(CURDIR)/debian/secubox-p2p/var/www/secubox/master-link
-	cp -r $(CURDIR)/www/master-link/* $(CURDIR)/debian/secubox-p2p/var/www/secubox/master-link/
+	install -d $(CURDIR)/debian/secubox-p2p/usr/share/secubox/www/master-link
+	cp -r $(CURDIR)/www/master-link/* $(CURDIR)/debian/secubox-p2p/usr/share/secubox/www/master-link/
 
 	# Install nginx configuration
 	install -d $(CURDIR)/debian/secubox-p2p/etc/nginx/secubox.d
