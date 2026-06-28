@@ -63,6 +63,11 @@ jobs:
           # Build the flat {package, arch} matrix. Honour the workflow_dispatch
           # `arch` and `package` filters if set (empty on `push: tags` events).
           requested_arch="${REQUESTED_ARCH:-}"
+          # `both` means build every arch — same as the empty (push: tags)
+          # case. Without this the matrix filter (which only compares against
+          # amd64/arm64/empty) yields an EMPTY matrix, so no package builds and
+          # `collect` fails.
+          [ "$requested_arch" = "both" ] && requested_arch=""
           requested_pkg="${REQUESTED_PKG:-}"
 
           combos=$(find packages/secubox-* -path "*/debian/control" -not -path "*/debian/*/DEBIAN/control" \
@@ -152,7 +157,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             build-essential dpkg-dev debhelper devscripts fakeroot \
-            dh-python python3-all python3-setuptools
+            dh-python python3-all python3-setuptools golang-go
+          # golang-go satisfies Build-Depends of the pure-Go packages
+          # (secubox-dpi, secubox-toolbox-ng: CGO_ENABLED=0, GOARCH=arm64,
+          # -mod=vendor offline cross-compile). ubuntu-24.04 ships >= 1.22.
+          # Without it dpkg-checkbuilddeps aborts the arm64 build — this was
+          # the real cause of the "arm64 red" runs, not a CGO toolchain gap.
           # arm64 cross-toolchain — dh_strip and dh_makeshlibs invoke
           # aarch64-linux-gnu-{strip,objdump} when -a arm64 is passed.
           # Without these, arch-specific packages shipping prebuilt
@@ -213,7 +223,18 @@ jobs:
           # no-op; for arm64 jobs that don't compile native code (Python +
           # prebuilt arm64 binaries — like sentinelle-gsm), -a arm64 is
           # enough to cross-stamp the .deb.
-          dpkg-buildpackage -us -uc -b -a ${{ matrix.arch }}
+          #
+          # Pure-Go packages (CGO_ENABLED=0, GOARCH cross) only need the `go`
+          # toolchain, which is present via golang-1.22-go. But their
+          # `Build-Depends: golang-go (>= 1.22)` trips dpkg-checkbuilddeps
+          # because apt registers golang-1.22-go, not the golang-go
+          # metapackage, on the runner. Skip the dep check (-d) for just these
+          # — the compiler is there and the build is self-contained (-mod=vendor).
+          DEPFLAG=""
+          case "${{ matrix.package }}" in
+            secubox-dpi|secubox-toolbox-ng|secubox-waf-ng) DEPFLAG="-d" ;;
+          esac
+          dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}
 
           echo "✅ Build OK: ${{ matrix.package }} (${{ matrix.arch }})"
 

@@ -526,7 +526,7 @@ network:
   bridges:
     br-lan:
       interfaces: [{lan_list}]
-      addresses: [192.168.1.1/24]
+      addresses: [192.168.10.1/24]
       dhcp4: false
       parameters:
         stp: false

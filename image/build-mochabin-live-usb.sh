@@ -331,7 +331,7 @@ network:
   bridges:
     br-lan:
       interfaces: [eth1, eth2, eth3, eth4]
-      addresses: [192.168.1.1/24]
+      addresses: [192.168.10.1/24]
       dhcp4: false
       parameters:
         stp: false

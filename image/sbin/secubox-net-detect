@@ -337,7 +337,7 @@ generate_netplan() {
                 bridges="  bridges:
     br-lan:
       interfaces: [${lan_array}]
-      addresses: [192.168.1.1/24]
+      addresses: [192.168.10.1/24]
       dhcp4: false
       optional: true
       parameters:
@@ -346,7 +346,7 @@ generate_netplan() {
 "
             else
                 # No LAN interfaces — DON'T create an empty br-lan with
-                # 192.168.1.1/24. A member-less bridge with a static IP
+                # 192.168.10.1/24. A member-less bridge with a static IP
                 # squats the .1 address without routing anything, makes
                 # systemd-networkd think the interface is "configured",
                 # and frequently breaks DHCP on the real WAN NIC (the
