@@ -151,6 +151,14 @@ else
     echo "[$NEW_TOKEN]" > "$TOKENS_FILE"
 fi
 
+# secubox-p2p / the aggregator's in-process p2p run as user 'secubox' and read
+# this token store. sbx-mesh-invite is often run as root, which would leave
+# tokens.json root-owned -> the secubox services crash with EACCES (this took
+# down the in-process aggregator once). Re-own the store when running as root.
+if [ "$(id -u)" = "0" ]; then
+    chown -R secubox:secubox "$(dirname "$TOKENS_FILE")" 2>/dev/null || true
+fi
+
 # Output the invite
 echo ""
 echo "╔══════════════════════════════════════════════════════════════════╗"
