@@ -1754,7 +1754,7 @@ async def preview_network_mode(mode: str, user=Depends(require_jwt)):
   bridges:
     br-lan:
       interfaces: [{lan_str}]
-      addresses: [192.168.1.1/24]
+      addresses: [192.168.10.1/24]
       dhcp4: false
 """
     elif mode in ("sniffer-inline", "sniffer-passive"):

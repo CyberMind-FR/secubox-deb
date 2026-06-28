@@ -26,7 +26,7 @@ LOCAL_REPO_PORT="8080"
 SLIPSTREAM_DEBS=1     # Intégrer les .deb locaux dans l'image (default: ON)
 
 # SecuBox versioning
-SECUBOX_VERSION="1.9.0"
+SECUBOX_VERSION="1.10.0"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
@@ -643,7 +643,13 @@ EOF
     SECUBOX_REPO_OK=1
     log "Repo local SecuBox configuré (trusted=yes)"
   fi
-elif curl -sf "${APT_SECUBOX}/secubox-keyring.gpg" -o "${ROOTFS}/usr/share/keyrings/secubox.gpg" 2>/dev/null; then
+elif curl -sf "${APT_SECUBOX}/secubox-keyring.gpg" 2>/dev/null \
+       | gpg --dearmor > "${ROOTFS}/usr/share/keyrings/secubox.gpg" 2>/dev/null \
+     && [ -s "${ROOTFS}/usr/share/keyrings/secubox.gpg" ]; then
+  # apt's signed-by= requires a DEARMORED (binary) keyring; the published
+  # secubox-keyring.gpg is ASCII-armored, so dearmor it on the way in.
+  # Feeding the armored file directly yields "NO_PUBKEY 44E50F0178E8BC7E
+  # / repository not signed" even though the key is correct.
   cat > "${ROOTFS}/etc/apt/sources.list.d/secubox.list" <<EOF
 deb [signed-by=/usr/share/keyrings/secubox.gpg] ${APT_SECUBOX} ${SUITE} main
 EOF
@@ -989,7 +995,7 @@ openssl req -x509 -newkey rsa:2048 -days 365 \
   -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
   -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
   -nodes -subj "/CN=secubox/O=CyberMind SecuBox/C=FR" \
-  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
+  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.10.1" \
   2>/dev/null
 
 if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then

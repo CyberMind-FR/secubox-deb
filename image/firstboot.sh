@@ -359,7 +359,7 @@ if [[ ! -f "${TLS_DIR}/cert.pem" ]]; then
     -keyout "${TLS_DIR}/key.pem" \
     -out    "${TLS_DIR}/cert.pem" \
     -nodes -subj "/CN=${HOSTNAME}/O=CyberMind SecuBox/C=FR" \
-    -addext "subjectAltName=DNS:${HOSTNAME},DNS:secubox.local,IP:192.168.1.1" \
+    -addext "subjectAltName=DNS:${HOSTNAME},DNS:secubox.local,IP:192.168.10.1" \
     2>/dev/null
   chown -R secubox:secubox "${TLS_DIR}"
   chmod 640 "${TLS_DIR}/key.pem"
@@ -378,7 +378,7 @@ log "=== Network Detection ==="
 # Short-circuit when the image was built with --static-ip: build-live-usb.sh
 # wrote a fixed netplan AND pre-touched /var/lib/secubox/.net-configured.
 # Running net-detect here would clobber the static config with router-mode
-# defaults (WAN + br-lan 192.168.1.1/24), the exact regression in #128.
+# defaults (WAN + br-lan 192.168.10.1/24), the exact regression in #128.
 if [[ -f /var/lib/secubox/.net-configured ]]; then
   log "Static netplan in effect (.net-configured present) — skipping net-detect"
 elif [[ -x /usr/sbin/secubox-net-detect ]]; then

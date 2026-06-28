@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── Version ───────────────────────────────────────────────────────
-SECUBOX_VERSION="1.9.0"
+SECUBOX_VERSION="1.10.0"
 
 # ── Defaults ──────────────────────────────────────────────────────
 SUITE="bookworm"
@@ -702,7 +702,7 @@ openssl req -x509 -newkey rsa:2048 -days 365 \
   -keyout "${ROOTFS}/etc/secubox/tls/key.pem" \
   -out "${ROOTFS}/etc/secubox/tls/cert.pem" \
   -nodes -subj "/CN=secubox-rpi/O=CyberMind SecuBox/C=FR" \
-  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.1.1" \
+  -addext "subjectAltName=DNS:localhost,DNS:secubox.local,IP:127.0.0.1,IP:192.168.10.1" \
   2>/dev/null
 
 if [[ -f "${ROOTFS}/etc/secubox/tls/cert.pem" ]]; then

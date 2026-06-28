@@ -14,7 +14,7 @@ network:
 
     # LAN — Interface 2 VirtualBox (Internal Network ou Host-Only)
     enp0s8:
-      addresses: [192.168.100.1/24]
+      addresses: [192.168.10.1/24]
       dhcp4: false
       optional: true
 
