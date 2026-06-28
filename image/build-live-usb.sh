@@ -104,6 +104,7 @@ while [[ $# -gt 0 ]]; do
     --out)            OUT_DIR="$2";         shift 2 ;;
     --size)           IMG_SIZE="$2";        shift 2 ;;
     --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
+    --kiosk)          INCLUDE_KIOSK=1;      shift   ;;
     --no-kiosk)       INCLUDE_KIOSK=0;      shift   ;;
     --no-persistence) INCLUDE_PERSISTENCE=0; shift   ;;
     --no-compress)    NO_COMPRESS=1;        shift   ;;
