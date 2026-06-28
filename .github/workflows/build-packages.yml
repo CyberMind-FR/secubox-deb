@@ -223,7 +223,18 @@ jobs:
           # no-op; for arm64 jobs that don't compile native code (Python +
           # prebuilt arm64 binaries — like sentinelle-gsm), -a arm64 is
           # enough to cross-stamp the .deb.
-          dpkg-buildpackage -us -uc -b -a ${{ matrix.arch }}
+          #
+          # Pure-Go packages (CGO_ENABLED=0, GOARCH cross) only need the `go`
+          # toolchain, which is present via golang-1.22-go. But their
+          # `Build-Depends: golang-go (>= 1.22)` trips dpkg-checkbuilddeps
+          # because apt registers golang-1.22-go, not the golang-go
+          # metapackage, on the runner. Skip the dep check (-d) for just these
+          # — the compiler is there and the build is self-contained (-mod=vendor).
+          DEPFLAG=""
+          case "${{ matrix.package }}" in
+            secubox-dpi|secubox-toolbox-ng|secubox-waf-ng) DEPFLAG="-d" ;;
+          esac
+          dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}
 
           echo "✅ Build OK: ${{ matrix.package }} (${{ matrix.arch }})"
 
