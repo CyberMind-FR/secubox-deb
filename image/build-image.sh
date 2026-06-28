@@ -658,7 +658,13 @@ fi
 
 if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
   chroot "${ROOTFS}" apt-get update -q
-  chroot "${ROOTFS}" apt-get install -y -q secubox-full || warn "secubox-full non disponible"
+  # Non-interactive conffile handling: secubox-mesh's mesh.toml triggers a dpkg
+  # conffile prompt that fails the headless chroot install (#USB-build). Keep
+  # the packaged conffile, never prompt.
+  chroot "${ROOTFS}" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+    -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef secubox-full' \
+    || warn "secubox-full non disponible"
+  chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 else
   warn "APT repo SecuBox non disponible — skip (Phase 4)"
 fi
