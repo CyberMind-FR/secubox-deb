@@ -152,7 +152,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             build-essential dpkg-dev debhelper devscripts fakeroot \
-            dh-python python3-all python3-setuptools
+            dh-python python3-all python3-setuptools golang-go
+          # golang-go satisfies Build-Depends of the pure-Go packages
+          # (secubox-dpi, secubox-toolbox-ng: CGO_ENABLED=0, GOARCH=arm64,
+          # -mod=vendor offline cross-compile). ubuntu-24.04 ships >= 1.22.
+          # Without it dpkg-checkbuilddeps aborts the arm64 build — this was
+          # the real cause of the "arm64 red" runs, not a CGO toolchain gap.
           # arm64 cross-toolchain — dh_strip and dh_makeshlibs invoke
           # aarch64-linux-gnu-{strip,objdump} when -a arm64 is passed.
           # Without these, arch-specific packages shipping prebuilt
