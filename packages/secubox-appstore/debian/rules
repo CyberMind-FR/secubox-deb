@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API module (uvicorn api.main:app)
+	install -d $(CURDIR)/debian/secubox-appstore/usr/lib/secubox/appstore/api
+	cp -r $(CURDIR)/api/* $(CURDIR)/debian/secubox-appstore/usr/lib/secubox/appstore/api/
+
+	# Web UI
+	install -d $(CURDIR)/debian/secubox-appstore/usr/share/secubox/www/appstore
+	cp -r $(CURDIR)/www/appstore/* $(CURDIR)/debian/secubox-appstore/usr/share/secubox/www/appstore/
+
+	# nginx route + static
+	install -d $(CURDIR)/debian/secubox-appstore/etc/nginx/secubox.d
+	install -m 644 $(CURDIR)/nginx/appstore.conf $(CURDIR)/debian/secubox-appstore/etc/nginx/secubox.d/
+
+	# Hub menu entry
+	install -d $(CURDIR)/debian/secubox-appstore/etc/secubox/menu.d
+	install -m 644 $(CURDIR)/menu.d/580-appstore.json $(CURDIR)/debian/secubox-appstore/etc/secubox/menu.d/
+
+	# systemd service
+	install -d $(CURDIR)/debian/secubox-appstore/usr/lib/systemd/system
+	install -m 644 $(CURDIR)/debian/secubox-appstore.service $(CURDIR)/debian/secubox-appstore/usr/lib/systemd/system/
+
+	# Generate the catalog index from every sibling module's debian/secubox.yaml
+	install -d $(CURDIR)/debian/secubox-appstore/usr/share/secubox/appstore
+	python3 $(CURDIR)/scripts/gen-appstore-catalog.py \
+		$(CURDIR)/debian/secubox-appstore/usr/share/secubox/appstore/catalog.json
+
+	# Runtime dir
+	install -d $(CURDIR)/debian/secubox-appstore/run/secubox

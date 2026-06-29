@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecuBox · App Store</title>
+  <link rel="stylesheet" href="/shared/design-tokens.css">
+  <link rel="stylesheet" href="/shared/crt-light.css">
+  <style>
+    :root{
+      --bg:#0a0a0f; --panel:#13131c; --line:#2a2a3a; --gold:#c9a84c;
+      --cyan:#00d4ff; --green:#00ff41; --muted:#6b6b7a; --text:#e8e6d9; --cinnabar:#e63946;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:'JetBrains Mono',ui-monospace,monospace;}
+    header{padding:18px 24px;border-bottom:1px solid var(--line);
+      display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
+    header h1{font-family:'Cinzel',serif;color:var(--gold);margin:0;font-size:22px;letter-spacing:1px;}
+    header .sub{color:var(--muted);font-size:13px}
+    .bar{display:flex;gap:10px;flex-wrap:wrap;padding:14px 24px;border-bottom:1px solid var(--line);align-items:center}
+    .bar input,.bar select{background:var(--panel);border:1px solid var(--line);color:var(--text);
+      padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px}
+    .bar input{min-width:220px}
+    .stat{color:var(--muted);font-size:12px;margin-left:auto}
+    .stat b{color:var(--cyan)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;padding:24px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;
+      display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
+    .card:hover{border-color:var(--gold)}
+    .card .top{display:flex;align-items:center;gap:10px}
+    .card .icon{font-size:26px;line-height:1}
+    .card .name{font-weight:700;color:var(--text);font-size:14px;word-break:break-word}
+    .card .desc{color:var(--muted);font-size:12px;min-height:32px;line-height:1.4}
+    .badges{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .pill{font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);text-transform:uppercase;letter-spacing:.5px}
+    .pill.cat{color:var(--cyan);border-color:#1d4a55}
+    .pill.tier{color:var(--gold);border-color:#5a4a1d}
+    .pill.state-running{color:var(--green);border-color:#1d5a2a;background:rgba(0,255,65,.08)}
+    .pill.state-installed{color:var(--cyan);border-color:#1d4a55}
+    .pill.state-available{color:var(--muted)}
+    .pill.state-tier-locked{color:var(--cinnabar);border-color:#5a1d23}
+    .row{display:flex;justify-content:space-between;align-items:center;margin-top:auto}
+    .btn{background:transparent;border:1px solid var(--line);color:var(--muted);
+      padding:6px 12px;border-radius:6px;font-family:inherit;font-size:12px;cursor:not-allowed}
+    .ver{color:var(--muted);font-size:11px}
+    .empty{color:var(--muted);padding:40px;text-align:center;grid-column:1/-1}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⬢ SecuBox App Store</h1>
+    <span class="sub">module catalog · install / enable / configure — <em>Phase A: read-only</em></span>
+  </header>
+
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search modules…" oninput="render()">
+    <select id="category" onchange="render()"><option value="">All categories</option></select>
+    <select id="tier" onchange="render()">
+      <option value="">All tiers</option><option>lite</option><option>standard</option><option>pro</option><option>all</option>
+    </select>
+    <select id="state" onchange="render()">
+      <option value="">All states</option><option value="running">running</option>
+      <option value="installed">installed</option><option value="available">available</option>
+      <option value="tier-locked">tier-locked</option>
+    </select>
+    <span class="stat" id="stat">loading…</span>
+  </div>
+
+  <div class="grid" id="grid"><div class="empty">Loading catalog…</div></div>
+
+  <script>
+    const API = '/api/v1/appstore';
+    const ICONS = {media:'🎬',email:'✉️',ai:'🧠',iot:'🛰️',communication:'💬',publishing:'📰',
+      network:'🌐',security:'🛡️',system:'⚙️',vpn:'🔒',dashboard:'📊',monitoring:'📈',misc:'🧩'};
+    let ALL = [];
+
+    async function getJSON(p){ try{const r=await fetch(API+p);if(!r.ok)throw 0;return await r.json();}catch(e){return null;} }
+    function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+
+    async function load(){
+      const cats = await getJSON('/categories');
+      if(cats && cats.categories){
+        const sel=document.getElementById('category');
+        cats.categories.forEach(c=>{const o=document.createElement('option');o.value=c.name;
+          o.textContent=`${c.name} (${c.count})`;sel.appendChild(o);});
+      }
+      const data = await getJSON('/catalog');
+      ALL = (data && Array.isArray(data.modules)) ? data.modules : [];
+      render(cats && cats.board_tier);
+    }
+
+    function render(boardTier){
+      const q=document.getElementById('q').value.toLowerCase();
+      const cat=document.getElementById('category').value;
+      const tier=document.getElementById('tier').value;
+      const state=document.getElementById('state').value;
+      let items = ALL.filter(m=>{
+        if(cat && m.category!==cat) return false;
+        if(tier && m.tier!==tier) return false;
+        if(state && m.state!==state) return false;
+        if(q && !(m.name.toLowerCase().includes(q) || (m.description||'').toLowerCase().includes(q))) return false;
+        return true;
+      });
+      const grid=document.getElementById('grid');
+      const running = ALL.filter(m=>m.state==='running').length;
+      const installed = ALL.filter(m=>m.installed).length;
+      document.getElementById('stat').innerHTML =
+        `showing <b>${items.length}</b> / ${ALL.length} · installed <b>${installed}</b> · running <b>${running}</b>`;
+      if(!items.length){ grid.innerHTML='<div class="empty">No modules match.</div>'; return; }
+      grid.innerHTML = items.map(m=>{
+        const icon = ICONS[m.category]||ICONS.misc;
+        const label = m.name.replace(/^secubox-/,'');
+        const st = m.state||'available';
+        const btn = st==='running'?'Running' : st==='installed'?'Installed' :
+                    st==='tier-locked'?'Tier locked' : 'Install';
+        return `<div class="card">
+          <div class="top"><span class="icon">${icon}</span><span class="name">${esc(label)}</span></div>
+          <div class="desc">${esc(m.description||'')}</div>
+          <div class="badges">
+            <span class="pill cat">${esc(m.category)}</span>
+            <span class="pill tier">${esc(m.tier)}</span>
+            <span class="pill state-${st}">${st}</span>
+          </div>
+          <div class="row">
+            <span class="ver">${m.version?('v'+esc(m.version)):''}</span>
+            <button class="btn" title="Lifecycle actions arrive in Phase C" disabled>${btn}</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', load);
+  </script>
+</body>
+</html>

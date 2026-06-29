@@ -1,0 +1,12 @@
+secubox-appstore (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release — App Store Phase A (read-only catalog).
+    - api/main.py: GET /catalog (category/tier/state/q filters), /module/{name},
+      /categories, /health; merges the baked manifest catalog with live dpkg +
+      systemctl state (available / installed / running / tier-locked).
+    - catalog.json generated at build from every module's debian/secubox.yaml.
+    - www/appstore: categorized, tiered, searchable grid UI (read-only).
+    - Served by secubox-appstore.service on /run/secubox/appstore.sock; nginx
+      routes /api/v1/appstore/ + static /appstore/. No aggregator dependency.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 17:30:00 +0200
