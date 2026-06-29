@@ -737,7 +737,7 @@
                 document.getElementById('status-value').className = 'value ' + (status.online ? 'online' : 'offline');
                 document.getElementById('peer-count').textContent = status.total_peers || 0;
                 document.getElementById('active-peer-count').textContent = status.active_peers || 0;
-                document.getElementById('service-count').textContent = status.services || 0;
+                document.getElementById('service-count').textContent = status.service_count || status.services || 0;
             }
 
             const activity = await apiGet('/activity');
@@ -758,9 +758,10 @@
 
         // Load Peers
         async function loadPeers() {
-            const peers = await apiGet('/peers');
+            const data = await apiGet('/peers');
+            const peers = Array.isArray(data) ? data : (data && Array.isArray(data.peers) ? data.peers : []);
             const tbody = document.getElementById('peers-table');
-            if (peers && peers.length > 0) {
+            if (peers.length > 0) {
                 tbody.innerHTML = peers.map(peer => `
                     <tr>
                         <td>${escapeHtml(peer.id)}</td>
@@ -781,9 +782,10 @@
 
         // Load Services
         async function loadServices() {
-            const services = await apiGet('/services');
+            const data = await apiGet('/services');
+            const services = Array.isArray(data) ? data : (data && Array.isArray(data.services) ? data.services : []);
             const tbody = document.getElementById('services-table');
-            if (services && services.length > 0) {
+            if (services.length > 0) {
                 tbody.innerHTML = services.map(svc => `
                     <tr>
                         <td>${escapeHtml(svc.name)}</td>
@@ -803,9 +805,18 @@
 
         // Load Threats
         async function loadThreats() {
-            const threats = await apiGet('/threats');
+            const data = await apiGet('/threats');
+            let threats = [];
+            if (Array.isArray(data)) threats = data;
+            else if (data && typeof data === 'object') threats = Object.entries(data).map(([ip, t]) => ({
+                type: (t && t.type) || 'threat',
+                severity: (t && t.severity) || 'info',
+                source: (t && t.source) || ip,
+                target: (t && t.target) || ip,
+                description: (t && (t.description || t.reason)) || 'shared via mesh'
+            }));
             const container = document.getElementById('threats-list');
-            if (threats && threats.length > 0) {
+            if (threats.length > 0) {
                 container.innerHTML = threats.map(threat => `
                     <div class="threat-item ${threat.severity}">
                         <div class="threat-header">
@@ -824,48 +835,50 @@
             }
         }
 
-        // Mesh Visualization
-        function initMesh() {
+        // Mesh Visualization (wired to /mesh — real nodes from the wg-mesh)
+        async function initMesh() {
             const canvas = document.getElementById('mesh-canvas');
+            if (!canvas) return;
             const ctx = canvas.getContext('2d');
-
-            // Set canvas size
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
 
-            // Light theme colors
             const bgColor = '#f1f8f2';
             const nodeColor = '#006622';
             const lineColor = '#a7c4a0';
             const textColor = '#1b4332';
 
-            // Draw placeholder mesh
             ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.strokeStyle = lineColor;
-            ctx.fillStyle = nodeColor;
             ctx.font = '14px Courier New';
             ctx.textAlign = 'center';
 
-            // Center node
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
 
-            drawNode(ctx, centerX, centerY, 'LOCAL', true, nodeColor, textColor);
+            const data = await apiGet('/mesh');
+            const allNodes = (data && Array.isArray(data.nodes)) ? data.nodes : [];
+            const local = allNodes.find(n => n.is_local) || { name: 'LOCAL' };
+            const peers = allNodes.filter(n => !n.is_local);
 
-            // Placeholder peer nodes
-            const peers = [
-                { x: centerX - 150, y: centerY - 100, name: 'Peer 1' },
-                { x: centerX + 150, y: centerY - 100, name: 'Peer 2' },
-                { x: centerX - 150, y: centerY + 100, name: 'Peer 3' },
-                { x: centerX + 150, y: centerY + 100, name: 'Peer 4' }
-            ];
-
-            peers.forEach(peer => {
-                drawConnection(ctx, centerX, centerY, peer.x, peer.y, lineColor);
-                drawNode(ctx, peer.x, peer.y, peer.name, false, nodeColor, textColor);
+            const radius = Math.max(60, Math.min(centerX, centerY) - 60);
+            peers.forEach((peer, i) => {
+                const angle = (Math.PI * 2 * i) / Math.max(peers.length, 1) - Math.PI / 2;
+                const px = centerX + radius * Math.cos(angle);
+                const py = centerY + radius * Math.sin(angle);
+                drawConnection(ctx, centerX, centerY, px, py, lineColor);
+                const label = (peer.name || peer.address || peer.id || 'peer') +
+                    (peer.address && peer.name !== peer.address ? ' (' + peer.address + ')' : '');
+                drawNode(ctx, px, py, label, false, nodeColor, textColor);
             });
+
+            const localLabel = (local.name || 'LOCAL') + (local.address ? ' (' + local.address + ')' : '');
+            drawNode(ctx, centerX, centerY, localLabel, true, nodeColor, textColor);
+
+            if (peers.length === 0) {
+                ctx.fillStyle = textColor;
+                ctx.fillText('No mesh peers', centerX, centerY + 70);
+            }
         }
 
         function drawNode(ctx, x, y, label, isCenter, nodeColor, textColor) {
