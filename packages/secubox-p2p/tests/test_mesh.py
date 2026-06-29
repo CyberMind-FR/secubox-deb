@@ -43,3 +43,19 @@ def test_load_p2p_config_reads_wireguard_section(tmp_path):
     cfg = mesh.load_p2p_config(p)
     assert cfg["role"] == "master"
     assert cfg["master_endpoint"] == "82.67.100.75:51822"
+
+
+def test_allocate_mesh_ip_first_free_is_2():
+    assert mesh.allocate_mesh_ip("10.10.0.0/24", []) == "10.10.0.2"
+
+
+def test_allocate_mesh_ip_skips_taken_with_or_without_mask():
+    got = mesh.allocate_mesh_ip("10.10.0.0/24", ["10.10.0.2/24", "10.10.0.3"])
+    assert got == "10.10.0.4"
+
+
+def test_allocate_mesh_ip_exhausted_raises():
+    taken = [f"10.10.0.{n}" for n in range(2, 255)]
+    import pytest
+    with pytest.raises(RuntimeError):
+        mesh.allocate_mesh_ip("10.10.0.0/24", taken)
