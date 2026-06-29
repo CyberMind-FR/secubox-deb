@@ -1,5 +1,6 @@
-import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))  # repo package root
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+import pytest
 from api import mesh
 
 
@@ -56,7 +57,6 @@ def test_allocate_mesh_ip_skips_taken_with_or_without_mask():
 
 def test_allocate_mesh_ip_exhausted_raises():
     taken = [f"10.10.0.{n}" for n in range(2, 255)]
-    import pytest
     with pytest.raises(RuntimeError):
         mesh.allocate_mesh_ip("10.10.0.0/24", taken)
 
@@ -119,3 +119,7 @@ def test_adopt_state_never_overwrites_existing_key():
     conf = "[Interface]\nPrivateKey = OTHER=\n"
     out = mesh.adopt_state(state, conf)
     assert out["private_key"] == "KEEP="
+
+
+def test_ddns_name_empty_falls_back():
+    assert mesh.ddns_name("") == "node.secubox.in"

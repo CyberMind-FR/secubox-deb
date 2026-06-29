@@ -129,4 +129,5 @@ def adopt_state(state: dict, existing_conf_text: str | None) -> dict:
 def ddns_name(hostname: str, domain: str = "secubox.in") -> str:
     """Return DDNS-safe hostname: lowercased, non-[a-z0-9-] replaced by -, .domain appended."""
     slug = re.sub(r"[^a-z0-9-]", "-", hostname.lower())
+    slug = slug[:63] if slug else "node"
     return f"{slug}.{domain}"
