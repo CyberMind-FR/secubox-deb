@@ -974,10 +974,12 @@ async def remove_threat(ip: str, user: dict = Depends(require_jwt)):
 
 # ============== WireGuard Mesh ==============
 
+from . import mesh
+
 WG_MESH_CONFIG = P2P_DIR / "wg_mesh.json"
-WG_INTERFACE = "wg-mesh"
-WG_PORT = 51820
-WG_NETWORK = "10.100.0.0/24"
+WG_INTERFACE = mesh.MESH_INTERFACE
+WG_PORT = mesh.MESH_PORT
+WG_NETWORK = mesh.MESH_NETWORK
 
 
 def get_wg_mesh_config() -> Dict:
@@ -1055,11 +1057,16 @@ async def init_wireguard(user: dict = Depends(require_jwt)):
         config["private_key"] = private_key
         config["public_key"] = public_key
 
-    # Assign IP from network (based on node ID)
-    node_id = get_node_id()
-    ip_suffix = int(hashlib.md5(node_id.encode()).hexdigest()[:2], 16) % 253 + 1
-    network_prefix = WG_NETWORK.rsplit('.', 2)[0]
-    config["address"] = f"{network_prefix}.{ip_suffix}/24"
+    # Assign mesh IP: .1 for the master role, else allocate from the pool.
+    p2p_cfg = mesh.load_p2p_config(CONFIG_FILE)
+    if p2p_cfg["role"] == "master":
+        addr = "10.10.0.1"
+    else:
+        taken = [p.get("allowed_ips", "") for p in config.get("peers", [])]
+        addr = mesh.allocate_mesh_ip(WG_NETWORK, taken)
+    config["address"] = f"{addr}/24"
+    config["role"] = p2p_cfg["role"]
+    config["ddns"] = mesh.ddns_name(get_hostname())
 
     save_json(WG_MESH_CONFIG, config)
 
@@ -1075,7 +1082,7 @@ async def init_wireguard(user: dict = Depends(require_jwt)):
 async def add_wireguard_peer(
     public_key: str,
     endpoint: str,
-    allowed_ips: str = "10.100.0.0/24",
+    allowed_ips: str = "10.10.0.0/24",
     user: dict = Depends(require_jwt)
 ):
     """Add a WireGuard mesh peer."""
@@ -1106,6 +1113,11 @@ async def enable_wireguard(user: dict = Depends(require_jwt)):
 
     if not config.get("private_key"):
         raise HTTPException(status_code=400, detail="WireGuard not initialized")
+
+    bad = mesh.subnet_overlap(config.get("network", WG_NETWORK))
+    if bad:
+        raise HTTPException(status_code=409,
+            detail=f"mesh network overlaps reserved subnet {bad!r}; refusing")
 
     # Create interface config
     wg_conf = f"""[Interface]
@@ -1744,6 +1756,8 @@ async def ml_join(req: JoinRequest, request: Request):
         join_request["approved_at"] = now.isoformat()
         join_request["approved_by"] = config.get("fingerprint", get_node_id())
         join_request["depth"] = peer_depth
+        _taken = [p.get("mesh_ip", "") for p in load_json(PEERS_FILE, {"peers": []}).get("peers", [])]
+        join_request["mesh_ip"] = mesh.allocate_mesh_ip(mesh.MESH_NETWORK, _taken)
 
         # Mark token as used
         ml_token_mark_used(token_hash, req.fingerprint)
@@ -1790,6 +1804,7 @@ def _add_approved_peer(join_request: Dict):
         "fingerprint": join_request["fingerprint"],
         "name": join_request.get("hostname", "Peer"),
         "address": join_request.get("address"),
+        "mesh_ip": join_request.get("mesh_ip"),
         "depth": join_request.get("depth", 1),
         "role": join_request.get("role", "peer"),
         "added": datetime.utcnow().isoformat(),
