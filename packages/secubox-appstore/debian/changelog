@@ -1,3 +1,11 @@
+secubox-appstore (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix(menu): install the navbar entry to /usr/share/secubox/menu.d (the
+    dir the hub reads) instead of /etc/secubox/menu.d, and place it in the
+    'root' navbar section (order 10) so the App Store is prominent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 20:00:00 +0200
+
 secubox-appstore (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * fix: service needs NoNewPrivileges=no so the API can sudo the root
