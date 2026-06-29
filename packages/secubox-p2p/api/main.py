@@ -1119,10 +1119,14 @@ async def enable_wireguard(user: dict = Depends(require_jwt)):
         raise HTTPException(status_code=409,
             detail=f"mesh network overlaps reserved subnet {bad!r}; refusing")
 
+    if not config.get("address"):
+        raise HTTPException(status_code=400,
+            detail="WireGuard not initialized (no address); run /wireguard/init first")
+
     # Create interface config
     wg_conf = f"""[Interface]
 PrivateKey = {config['private_key']}
-Address = {config.get('address', '10.100.0.1/24')}
+Address = {config['address']}
 ListenPort = {config.get('listen_port', WG_PORT)}
 """
     for peer in config.get("peers", []):
@@ -1130,7 +1134,7 @@ ListenPort = {config.get('listen_port', WG_PORT)}
 [Peer]
 PublicKey = {peer['public_key']}
 Endpoint = {peer['endpoint']}
-AllowedIPs = {peer.get('allowed_ips', '10.100.0.0/24')}
+AllowedIPs = {peer.get('allowed_ips', mesh.MESH_NETWORK)}
 PersistentKeepalive = 25
 """
 
