@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-p2p :: sbx-mesh-up
+# Root provisioner: adopt existing key -> collision guard -> render -> up.
+# The secubox-p2p service runs as user `secubox` and cannot do this.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo "must run as root" >&2; exit 1; }
+
+STATE=/var/lib/secubox/p2p/wg_mesh.json
+CONF=/etc/wireguard/wg-mesh.conf
+
+python3 - "$STATE" "$CONF" <<'PY'
+import json, sys, pathlib
+sys.path.insert(0, "/usr/lib/secubox/p2p")
+from api import mesh
+
+state_path, conf_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+state = json.loads(state_path.read_text()) if state_path.exists() else {"peers": []}
+
+# Adopt the live key if state has none (preserves the gk2<->c3box handshake).
+existing = conf_path.read_text() if conf_path.exists() else None
+state = mesh.adopt_state(state, existing)
+
+net = state.get("network", mesh.MESH_NETWORK)
+bad = mesh.subnet_overlap(net)
+if bad:
+    sys.exit(f"REFUSING: mesh network {net} overlaps reserved subnet {bad!r}")
+
+if not state.get("private_key"):
+    sys.exit("no private key in state and none to adopt; run /wireguard/init first")
+
+conf_path.parent.mkdir(parents=True, exist_ok=True)
+conf_path.write_text(mesh.render_wg_conf(state))
+conf_path.chmod(0o600)
+state_path.write_text(json.dumps(state, indent=2))
+print(f"rendered {conf_path} (addr {state.get('address')}, peers {len(state.get('peers', []))})")
+PY
+
+wg-quick down wg-mesh 2>/dev/null || true
+wg-quick up wg-mesh
+wg show wg-mesh

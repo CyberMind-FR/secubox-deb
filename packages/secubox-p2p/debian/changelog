@@ -1,3 +1,17 @@
+secubox-p2p (1.7.6-1~bookworm1) bookworm; urgency=medium
+
+  * feat(gondwana P1): adopt secubox-p2p as the single mesh owner.
+    - api/mesh.py: pure mesh logic (subnet collision guard, p2p.toml
+      [wireguard] loader, master-assigned IP allocation, wg.conf
+      parse/render, key adoption, per-node DDNS name).
+    - WireGuard defaults fixed 10.100.0.0/24->10.10.0.0/24 (br-lxc
+      collision), 51820->51822. Role-aware addressing (.1 master).
+    - sbx-mesh-up: root provisioner (adopt live key -> guard -> render ->
+      wg-quick up); the service user cannot run wg-quick.
+    - Depends: wireguard-tools. Ships /etc/secubox/p2p.toml.example.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 14:00:00 +0200
+
 secubox-p2p (1.7.5-1~bookworm1) bookworm; urgency=medium
 
   * sbx-mesh-invite: re-own the master-link token store to secubox when run as
