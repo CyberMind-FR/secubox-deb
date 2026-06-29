@@ -3,6 +3,10 @@ set -e
 case "$1" in
     configure)
         install -d -m 0755 /usr/share/secubox/appstore /var/log/secubox /var/lib/secubox 2>/dev/null || true
+        # surface the App Store in the hub navbar (menu cache rebuild)
+        rm -f /var/cache/secubox/menu.json 2>/dev/null || true
+        # validate the sudoers drop-in (never leave a broken one)
+        visudo -cf /etc/sudoers.d/secubox-appstore >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-appstore
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable --now secubox-appstore.service 2>/dev/null || true
         if systemctl is-active --quiet nginx 2>/dev/null; then

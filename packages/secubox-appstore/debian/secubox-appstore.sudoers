@@ -1,0 +1,3 @@
+# secubox-appstore: allow the unprivileged API user to drive module lifecycle
+# and config writes ONLY through the validated root helper.
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-appstorectl

@@ -1,3 +1,17 @@
+secubox-appstore (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase B/C + navbar integration.
+    - UI: integrated shared sidebar (nav#sidebar + sidebar.js + crt-engine),
+      per-service quick actions (start/stop/restart/enable/disable) and a
+      config editor drawer (view/edit the module TOML, shows dependencies).
+    - api: POST /module/{name}/action/{verb}; GET/PUT /module/{name}/config.
+    - sbin/secubox-appstorectl: validated root helper (secubox-* units +
+      /etc/secubox/<name>.toml only; TOML-validates writes). Narrow sudoers
+      rule lets the unprivileged API invoke it.
+    - postinst rebuilds the hub menu cache so the App Store shows in the navbar.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 19:00:00 +0200
+
 secubox-appstore (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * fix(nginx): serve the catalog API from secubox-routes.d/ (the

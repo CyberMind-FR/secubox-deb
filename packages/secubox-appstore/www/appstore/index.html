@@ -7,130 +7,174 @@
   <link rel="stylesheet" href="/shared/design-tokens.css">
   <link rel="stylesheet" href="/shared/crt-light.css">
   <style>
-    :root{
-      --bg:#0a0a0f; --panel:#13131c; --line:#2a2a3a; --gold:#c9a84c;
-      --cyan:#00d4ff; --green:#00ff41; --muted:#6b6b7a; --text:#e8e6d9; --cinnabar:#e63946;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);
-      font-family:'JetBrains Mono',ui-monospace,monospace;}
-    header{padding:18px 24px;border-bottom:1px solid var(--line);
-      display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
-    header h1{font-family:'Cinzel',serif;color:var(--gold);margin:0;font-size:22px;letter-spacing:1px;}
-    header .sub{color:var(--muted);font-size:13px}
-    .bar{display:flex;gap:10px;flex-wrap:wrap;padding:14px 24px;border-bottom:1px solid var(--line);align-items:center}
-    .bar input,.bar select{background:var(--panel);border:1px solid var(--line);color:var(--text);
-      padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px}
-    .bar input{min-width:220px}
-    .stat{color:var(--muted);font-size:12px;margin-left:auto}
-    .stat b{color:var(--cyan)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;padding:24px}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;
-      display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
-    .card:hover{border-color:var(--gold)}
-    .card .top{display:flex;align-items:center;gap:10px}
-    .card .icon{font-size:26px;line-height:1}
-    .card .name{font-weight:700;color:var(--text);font-size:14px;word-break:break-word}
-    .card .desc{color:var(--muted);font-size:12px;min-height:32px;line-height:1.4}
-    .badges{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-    .pill{font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);text-transform:uppercase;letter-spacing:.5px}
-    .pill.cat{color:var(--cyan);border-color:#1d4a55}
-    .pill.tier{color:var(--gold);border-color:#5a4a1d}
-    .pill.state-running{color:var(--green);border-color:#1d5a2a;background:rgba(0,255,65,.08)}
-    .pill.state-installed{color:var(--cyan);border-color:#1d4a55}
-    .pill.state-available{color:var(--muted)}
-    .pill.state-tier-locked{color:var(--cinnabar);border-color:#5a1d23}
-    .row{display:flex;justify-content:space-between;align-items:center;margin-top:auto}
-    .btn{background:transparent;border:1px solid var(--line);color:var(--muted);
-      padding:6px 12px;border-radius:6px;font-family:inherit;font-size:12px;cursor:not-allowed}
-    .ver{color:var(--muted);font-size:11px}
-    .empty{color:var(--muted);padding:40px;text-align:center;grid-column:1/-1}
+    .as-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}
+    .as-bar input,.as-bar select{background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);
+      color:var(--text,#e8e6d9);padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px}
+    .as-bar input{min-width:220px}
+    .as-stat{color:var(--text-muted,#6b6b7a);font-size:12px;margin-left:auto}
+    .as-stat b{color:var(--cyber-cyan,#00d4ff)}
+    .as-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+    .as-card{background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);border-radius:10px;
+      padding:14px;display:flex;flex-direction:column;gap:8px}
+    .as-card:hover{border-color:var(--gold-hermetic,#c9a84c)}
+    .as-top{display:flex;align-items:center;gap:10px}
+    .as-ico{font-size:24px}
+    .as-name{font-weight:700;font-size:14px;word-break:break-word}
+    .as-desc{color:var(--text-muted,#6b6b7a);font-size:12px;min-height:30px;line-height:1.4}
+    .as-badges{display:flex;gap:6px;flex-wrap:wrap}
+    .pill{font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--line,#2a2a3a);text-transform:uppercase;letter-spacing:.4px}
+    .pill.cat{color:var(--cyber-cyan,#00d4ff)} .pill.tier{color:var(--gold-hermetic,#c9a84c)}
+    .pill.s-running{color:var(--matrix-green,#00ff41);border-color:#1d5a2a}
+    .pill.s-installed{color:var(--cyber-cyan,#00d4ff)}
+    .pill.s-available{color:var(--text-muted,#6b6b7a)}
+    .pill.s-tier-locked{color:var(--cinnabar,#e63946);border-color:#5a1d23}
+    .as-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+    .as-btn{background:transparent;border:1px solid var(--line,#2a2a3a);color:var(--text,#e8e6d9);
+      padding:5px 10px;border-radius:6px;font-family:inherit;font-size:11px;cursor:pointer}
+    .as-btn:hover{border-color:var(--gold-hermetic,#c9a84c)}
+    .as-btn.danger{color:var(--cinnabar,#e63946)} .as-btn:disabled{opacity:.4;cursor:not-allowed}
+    .as-over{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:1000;align-items:center;justify-content:center}
+    .as-over.on{display:flex}
+    .as-modal{background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);border-radius:12px;
+      width:min(720px,92vw);max-height:88vh;overflow:auto;padding:18px}
+    .as-modal h2{font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);margin:.2em 0}
+    .as-modal textarea{width:100%;min-height:300px;background:#0a0a0f;color:var(--text,#e8e6d9);
+      border:1px solid var(--line,#2a2a3a);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:12px;padding:10px}
+    .as-row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center}
+    .as-msg{font-size:12px;margin-right:auto;color:var(--text-muted,#6b6b7a)}
+    .as-deps{color:var(--text-muted,#6b6b7a);font-size:12px;margin:6px 0}
   </style>
 </head>
-<body>
-  <header>
-    <h1>⬢ SecuBox App Store</h1>
-    <span class="sub">module catalog · install / enable / configure — <em>Phase A: read-only</em></span>
-  </header>
+<body class="crt-light">
+  <nav class="sidebar" id="sidebar"></nav>
+  <script src="/shared/sidebar.js"></script>
 
-  <div class="bar">
-    <input id="q" type="search" placeholder="Search modules…" oninput="render()">
-    <select id="category" onchange="render()"><option value="">All categories</option></select>
-    <select id="tier" onchange="render()">
-      <option value="">All tiers</option><option>lite</option><option>standard</option><option>pro</option><option>all</option>
-    </select>
-    <select id="state" onchange="render()">
-      <option value="">All states</option><option value="running">running</option>
-      <option value="installed">installed</option><option value="available">available</option>
-      <option value="tier-locked">tier-locked</option>
-    </select>
-    <span class="stat" id="stat">loading…</span>
+  <main class="main">
+    <header class="header">
+      <div class="header-title">
+        <h1>🛍️ App Store</h1>
+        <span class="badge" id="board-badge">tier —</span>
+      </div>
+    </header>
+
+    <div class="as-bar">
+      <input id="q" type="search" placeholder="Search modules…" oninput="render()">
+      <select id="category" onchange="render()"><option value="">All categories</option></select>
+      <select id="tier" onchange="render()"><option value="">All tiers</option>
+        <option>lite</option><option>standard</option><option>pro</option><option>all</option></select>
+      <select id="state" onchange="render()"><option value="">All states</option>
+        <option value="running">running</option><option value="installed">installed</option>
+        <option value="available">available</option><option value="tier-locked">tier-locked</option></select>
+      <span class="as-stat" id="stat">loading…</span>
+    </div>
+    <div class="as-grid" id="grid"></div>
+  </main>
+
+  <!-- Config / detail drawer -->
+  <div class="as-over" id="over">
+    <div class="as-modal">
+      <h2 id="m-title">module</h2>
+      <div class="as-deps" id="m-deps"></div>
+      <div class="as-actions" id="m-actions" style="margin-bottom:10px"></div>
+      <label style="font-size:12px;color:var(--text-muted,#6b6b7a)">Config (<span id="m-path"></span>)</label>
+      <textarea id="m-config" spellcheck="false"></textarea>
+      <div class="as-row">
+        <span class="as-msg" id="m-msg"></span>
+        <button class="as-btn" onclick="closeModal()">Close</button>
+        <button class="as-btn" id="m-save" onclick="saveConfig()">Save config</button>
+      </div>
+    </div>
   </div>
 
-  <div class="grid" id="grid"><div class="empty">Loading catalog…</div></div>
-
   <script>
-    const API = '/api/v1/appstore';
-    const ICONS = {media:'🎬',email:'✉️',ai:'🧠',iot:'🛰️',communication:'💬',publishing:'📰',
+    const API='/api/v1/appstore';
+    const ICONS={media:'🎬',email:'✉️',ai:'🧠',iot:'🛰️',communication:'💬',publishing:'📰',
       network:'🌐',security:'🛡️',system:'⚙️',vpn:'🔒',dashboard:'📊',monitoring:'📈',misc:'🧩'};
-    let ALL = [];
+    let ALL=[], CUR=null;
 
-    async function getJSON(p){ try{const r=await fetch(API+p);if(!r.ok)throw 0;return await r.json();}catch(e){return null;} }
+    async function jget(p){try{const r=await fetch(API+p);if(!r.ok)throw 0;return await r.json();}catch(e){return null;}}
+    async function jsend(p,m,b){try{const r=await fetch(API+p,{method:m,headers:{'Content-Type':'application/json'},
+      body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));return{ok:r.ok,j};}catch(e){return{ok:false,j:{detail:String(e)}};}}
     function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
 
     async function load(){
-      const cats = await getJSON('/categories');
-      if(cats && cats.categories){
-        const sel=document.getElementById('category');
-        cats.categories.forEach(c=>{const o=document.createElement('option');o.value=c.name;
-          o.textContent=`${c.name} (${c.count})`;sel.appendChild(o);});
-      }
-      const data = await getJSON('/catalog');
-      ALL = (data && Array.isArray(data.modules)) ? data.modules : [];
-      render(cats && cats.board_tier);
+      const cats=await jget('/categories');
+      if(cats&&cats.categories){const sel=document.getElementById('category');
+        cats.categories.forEach(c=>{const o=document.createElement('option');o.value=c.name;o.textContent=`${c.name} (${c.count})`;sel.appendChild(o);});}
+      const data=await jget('/catalog');
+      ALL=(data&&Array.isArray(data.modules))?data.modules:[];
+      document.getElementById('board-badge').textContent='tier '+((cats&&cats.board_tier)||'?');
+      render();
     }
 
-    function render(boardTier){
+    function actionsFor(m){
+      if(!m.installed) return `<button class="as-btn" disabled title="Install arrives in a later phase">Install</button>`;
+      const b=[];
+      if(m.running){ b.push(`<button class="as-btn" onclick="act('${m.name}','restart')">Restart</button>`);
+                     b.push(`<button class="as-btn danger" onclick="act('${m.name}','stop')">Stop</button>`); }
+      else        { b.push(`<button class="as-btn" onclick="act('${m.name}','start')">Start</button>`); }
+      b.push(`<button class="as-btn" onclick="act('${m.name}','enable')">Enable</button>`);
+      b.push(`<button class="as-btn danger" onclick="act('${m.name}','disable')">Disable</button>`);
+      b.push(`<button class="as-btn" onclick="openModal('${m.name}')">Config</button>`);
+      return b.join('');
+    }
+
+    function render(){
       const q=document.getElementById('q').value.toLowerCase();
-      const cat=document.getElementById('category').value;
-      const tier=document.getElementById('tier').value;
-      const state=document.getElementById('state').value;
-      let items = ALL.filter(m=>{
-        if(cat && m.category!==cat) return false;
-        if(tier && m.tier!==tier) return false;
-        if(state && m.state!==state) return false;
-        if(q && !(m.name.toLowerCase().includes(q) || (m.description||'').toLowerCase().includes(q))) return false;
-        return true;
-      });
+      const cat=document.getElementById('category').value, tier=document.getElementById('tier').value, state=document.getElementById('state').value;
+      let items=ALL.filter(m=>{
+        if(cat&&m.category!==cat)return false; if(tier&&m.tier!==tier)return false; if(state&&m.state!==state)return false;
+        if(q&&!(m.name.toLowerCase().includes(q)||(m.description||'').toLowerCase().includes(q)))return false; return true;});
+      const running=ALL.filter(m=>m.state==='running').length, installed=ALL.filter(m=>m.installed).length;
+      document.getElementById('stat').innerHTML=`showing <b>${items.length}</b>/${ALL.length} · installed <b>${installed}</b> · running <b>${running}</b>`;
       const grid=document.getElementById('grid');
-      const running = ALL.filter(m=>m.state==='running').length;
-      const installed = ALL.filter(m=>m.installed).length;
-      document.getElementById('stat').innerHTML =
-        `showing <b>${items.length}</b> / ${ALL.length} · installed <b>${installed}</b> · running <b>${running}</b>`;
-      if(!items.length){ grid.innerHTML='<div class="empty">No modules match.</div>'; return; }
-      grid.innerHTML = items.map(m=>{
-        const icon = ICONS[m.category]||ICONS.misc;
-        const label = m.name.replace(/^secubox-/,'');
-        const st = m.state||'available';
-        const btn = st==='running'?'Running' : st==='installed'?'Installed' :
-                    st==='tier-locked'?'Tier locked' : 'Install';
-        return `<div class="card">
-          <div class="top"><span class="icon">${icon}</span><span class="name">${esc(label)}</span></div>
-          <div class="desc">${esc(m.description||'')}</div>
-          <div class="badges">
-            <span class="pill cat">${esc(m.category)}</span>
-            <span class="pill tier">${esc(m.tier)}</span>
-            <span class="pill state-${st}">${st}</span>
-          </div>
-          <div class="row">
-            <span class="ver">${m.version?('v'+esc(m.version)):''}</span>
-            <button class="btn" title="Lifecycle actions arrive in Phase C" disabled>${btn}</button>
-          </div>
-        </div>`;
-      }).join('');
+      if(!items.length){grid.innerHTML='<div style="color:var(--text-muted,#6b6b7a);padding:30px">No modules match.</div>';return;}
+      grid.innerHTML=items.map(m=>{
+        const ico=ICONS[m.category]||ICONS.misc, label=m.name.replace(/^secubox-/,''), st=m.state||'available';
+        return `<div class="as-card">
+          <div class="as-top"><span class="as-ico">${ico}</span><span class="as-name">${esc(label)}</span></div>
+          <div class="as-desc">${esc(m.description||'')}</div>
+          <div class="as-badges"><span class="pill cat">${esc(m.category)}</span>
+            <span class="pill tier">${esc(m.tier)}</span><span class="pill s-${st}">${st}</span>
+            ${m.version?`<span class="pill">v${esc(m.version)}</span>`:''}</div>
+          <div class="as-actions">${actionsFor(m)}</div>
+        </div>`;}).join('');
     }
 
-    document.addEventListener('DOMContentLoaded', load);
+    async function act(name,verb){
+      const r=await jsend(`/module/${name}/action/${verb}`,'POST');
+      if(!r.ok){alert(`${verb} failed: ${(r.j&&r.j.detail)||'error'}`);return;}
+      const data=await jget('/catalog'); ALL=(data&&Array.isArray(data.modules))?data.modules:ALL; render();
+      if(CUR&&CUR===name) renderModalActions();
+    }
+
+    async function openModal(name){
+      CUR=name; document.getElementById('m-title').textContent=name.replace(/^secubox-/,'');
+      const m=ALL.find(x=>x.name===name)||{};
+      document.getElementById('m-deps').innerHTML='Depends: '+((m.depends&&m.depends.length)?m.depends.map(esc).join(', '):'—');
+      renderModalActions();
+      document.getElementById('m-msg').textContent='loading config…';
+      document.getElementById('m-config').value='';
+      document.getElementById('over').classList.add('on');
+      const cfg=await jget(`/module/${name}/config`);
+      const ta=document.getElementById('m-config'), save=document.getElementById('m-save');
+      document.getElementById('m-path').textContent=(cfg&&cfg.path)||'';
+      if(cfg&&cfg.readable===false){ta.value='';ta.disabled=true;save.disabled=true;document.getElementById('m-msg').textContent='config not readable by appstore';}
+      else if(cfg&&!cfg.exists){ta.value='';ta.disabled=false;save.disabled=false;document.getElementById('m-msg').textContent='no config file yet — saving creates it';}
+      else{ta.value=(cfg&&cfg.content)||'';ta.disabled=false;save.disabled=false;document.getElementById('m-msg').textContent='';}
+    }
+    function renderModalActions(){const m=ALL.find(x=>x.name===CUR)||{};document.getElementById('m-actions').innerHTML=actionsFor(m);}
+    function closeModal(){document.getElementById('over').classList.remove('on');CUR=null;}
+
+    async function saveConfig(){
+      if(!CUR)return; const content=document.getElementById('m-config').value;
+      document.getElementById('m-msg').textContent='saving…';
+      const r=await jsend(`/module/${CUR}/config`,'PUT',{content});
+      document.getElementById('m-msg').textContent=r.ok?'saved ✓ (restart the service to apply)':('save failed: '+((r.j&&r.j.detail)||'error'));
+    }
+    document.getElementById('over').addEventListener('click',e=>{if(e.target.id==='over')closeModal();});
+    document.addEventListener('DOMContentLoaded',load);
   </script>
+  <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
