@@ -24,6 +24,10 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-appstore/usr/lib/systemd/system
 	install -m 644 $(CURDIR)/debian/secubox-appstore.service $(CURDIR)/debian/secubox-appstore/usr/lib/systemd/system/
 
+	# Authoritative API route (secubox-routes.d)
+	install -d $(CURDIR)/debian/secubox-appstore/etc/nginx/secubox-routes.d
+	install -m 644 $(CURDIR)/nginx/appstore-routes.conf $(CURDIR)/debian/secubox-appstore/etc/nginx/secubox-routes.d/
+
 	# Generate the catalog index from every sibling module's debian/secubox.yaml
 	install -d $(CURDIR)/debian/secubox-appstore/usr/share/secubox/appstore
 	python3 $(CURDIR)/scripts/gen-appstore-catalog.py \
