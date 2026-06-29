@@ -1,3 +1,21 @@
+secubox-authelia (1.0.10-1~bookworm1) bookworm; urgency=medium
+
+  * Remove Authelia SSO entirely.
+    - nginx/authelia.conf: reduced to a permissive no-op gate. The
+      /__sbx_auth_verify auth_request endpoint now returns 200 for every
+      request; @sbx_auth_login is a harmless fallback to the app root.
+      Retained only because grafana/lyrion/yacy/rustdesk/fmrelay/zigbee/
+      nextcloud vhosts still reference these two named locations — without
+      them nginx fails to load. No SSO portal, no session check, no
+      Authelia socket dependency. Fixes the dead-portal 302 that produced
+      a password prompt on LAN clients.
+    - debian/postinst: stop enabling the FastAPI daemon; disable + mask
+      secubox-authelia.service so it cannot be resurrected.
+    - Apps keep their own native auth; LAN/exposure boundaries are
+      enforced by HAProxy + the WAF, not by this layer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 10:00:00 +0200
+
 secubox-authelia (1.0.9-1~bookworm1) bookworm; urgency=medium
 
   * Split SSO portal from operator dashboard (#310):

@@ -25,10 +25,12 @@ case "$1" in
             nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
         fi
 
+        # Authelia SSO removed: never start/enable the daemon. Mask it so a
+        # stale unit or sibling dependency cannot resurrect it. The nginx
+        # gate is now a permissive no-op (see nginx/authelia.conf).
         systemctl daemon-reload 2>/dev/null || true
-        systemctl enable secubox-authelia.service 2>/dev/null || true
-        # Do not start the FastAPI before the LXC is provisioned;
-        # `autheliactl install` will start the service after the LXC is up.
+        systemctl disable --now secubox-authelia.service 2>/dev/null || true
+        systemctl mask secubox-authelia.service 2>/dev/null || true
         ;;
 esac
 
