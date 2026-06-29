@@ -54,3 +54,15 @@ def load_p2p_config(path: pathlib.Path) -> dict:
         if wg.get(k) is not None:
             out[k] = wg[k]
     return out
+
+
+def allocate_mesh_ip(network: str, taken: list[str]) -> str:
+    """Lowest free host >= .2 in `network` (.1 reserved for master)."""
+    taken_set = {t.split("/")[0] for t in taken}
+    net = ipaddress.ip_network(network, strict=False)
+    base = int(net.network_address)
+    for off in range(2, net.num_addresses - 1):
+        cand = str(ipaddress.ip_address(base + off))
+        if cand not in taken_set:
+            return cand
+    raise RuntimeError(f"mesh address pool {network} exhausted")
