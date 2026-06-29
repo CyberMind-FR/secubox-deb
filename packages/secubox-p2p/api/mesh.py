@@ -109,6 +109,23 @@ def render_wg_conf(state: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def adopt_state(state: dict, existing_conf_text: str | None) -> dict:
+    """Import the live wg-mesh private key so the public key is preserved.
+    Never overwrites a key already present in state."""
+    if state.get("private_key"):
+        return state
+    if not existing_conf_text:
+        return state
+    parsed = parse_wg_conf(existing_conf_text)
+    if parsed["private_key"]:
+        state["private_key"] = parsed["private_key"]
+        if not state.get("address") and parsed["address"]:
+            state["address"] = parsed["address"]
+        if parsed["listen_port"]:
+            state["listen_port"] = parsed["listen_port"]
+    return state
+
+
 def ddns_name(hostname: str, domain: str = "secubox.in") -> str:
     """Return DDNS-safe hostname: lowercased, non-[a-z0-9-] replaced by -, .domain appended."""
     slug = re.sub(r"[^a-z0-9-]", "-", hostname.lower())

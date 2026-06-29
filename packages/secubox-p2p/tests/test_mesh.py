@@ -103,3 +103,18 @@ def test_ddns_name_basic():
 
 def test_ddns_name_sanitizes():
     assert mesh.ddns_name("Secubox_Live!") == "secubox-live-.secubox.in"
+
+
+def test_adopt_state_imports_existing_key_when_absent():
+    state = {"private_key": None, "peers": []}
+    conf = "[Interface]\nPrivateKey = LIVEKEY=\nAddress = 10.10.0.1/24\nListenPort = 51822\n"
+    out = mesh.adopt_state(state, conf)
+    assert out["private_key"] == "LIVEKEY="
+    assert out["address"] == "10.10.0.1/24"
+
+
+def test_adopt_state_never_overwrites_existing_key():
+    state = {"private_key": "KEEP=", "peers": []}
+    conf = "[Interface]\nPrivateKey = OTHER=\n"
+    out = mesh.adopt_state(state, conf)
+    assert out["private_key"] == "KEEP="
