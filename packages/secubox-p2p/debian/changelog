@@ -1,3 +1,13 @@
+secubox-p2p (1.7.7-1~bookworm1) bookworm; urgency=medium
+
+  * fix(webui): P2P dashboard was empty — /peers and /status read the unused
+    legacy peers.json, while the live mesh is in wg_mesh.json (Phase 1). Both
+    endpoints now derive the mesh view from wg_mesh.json via mesh.peer_nodes();
+    /status gains total_peers/active_peers (the fields the web UI reads).
+    Per-peer name + mesh_ip surface friendly node labels.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 15:30:00 +0200
+
 secubox-p2p (1.7.6-1~bookworm1) bookworm; urgency=medium
 
   * feat(gondwana P1): adopt secubox-p2p as the single mesh owner.

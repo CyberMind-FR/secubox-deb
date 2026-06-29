@@ -131,3 +131,43 @@ def ddns_name(hostname: str, domain: str = "secubox.in") -> str:
     slug = re.sub(r"[^a-z0-9-]", "-", hostname.lower())
     slug = slug[:63] if slug else "node"
     return f"{slug}.{domain}"
+
+
+def _host_ip(allowed_ips: str) -> str:
+    """Return the single host IP from an allowed-ips value, else "".
+
+    A peer's mesh address is recoverable only when its allowed-ips is a /32
+    host route (the master's view of a spoke). A /24 (a spoke's route to the
+    hub) is not a host address, so we return "" and rely on an explicit
+    mesh_ip field instead.
+    """
+    first = (allowed_ips or "").split(",")[0].strip()
+    if first.endswith("/32"):
+        return first.split("/")[0]
+    return ""
+
+
+def peer_nodes(state: dict) -> list:
+    """Map wg_mesh.json peers to app-layer node dicts for the /peers + /status
+    API and the P2P web UI. The mesh transport (wg_mesh.json) is the source of
+    truth; the legacy peers.json registry is unused by the mesh view.
+
+    Each node carries the fields the web UI renders: id, name, address,
+    public_key, status, latency, last_seen. `status` is reported "online"
+    (the unprivileged service cannot read wg handshakes to probe liveness;
+    a privileged liveness probe is future work).
+    """
+    out = []
+    for p in state.get("peers", []):
+        ip = p.get("mesh_ip") or _host_ip(p.get("allowed_ips", ""))
+        name = p.get("name") or ip or (p.get("public_key", "")[:12] or "peer")
+        out.append({
+            "id": name,
+            "name": name,
+            "address": ip,
+            "public_key": p.get("public_key", ""),
+            "status": "online",
+            "latency": None,
+            "last_seen": None,
+        })
+    return out

@@ -636,6 +636,10 @@ async def get_status():
     peers = [p for p in peers if not p.get("is_local") and p.get("id") != local_id]
     online_peers = [p for p in peers if p.get("status") == "online"]
 
+    # Mesh view is driven by the wg-mesh transport (wg_mesh.json), which p2p
+    # now owns (Gondwana Phase 1). The web UI reads total_peers/active_peers.
+    wg_peer_count = len(mesh.peer_nodes(get_wg_mesh_config()))
+
     # Get master-link status
     ml_config = get_ml_config()
 
@@ -645,8 +649,10 @@ async def get_status():
         "hostname": get_hostname(),
         "lan_ip": get_lan_ip(),
         "wan_ip": get_wan_ip(),
-        "peer_count": len(peers),
-        "online_peers": len(online_peers),
+        "peer_count": wg_peer_count or len(peers),
+        "online_peers": wg_peer_count or len(online_peers),
+        "total_peers": wg_peer_count or len(peers),
+        "active_peers": wg_peer_count or len(online_peers),
         "service_count": len(services) if isinstance(services, list) else 0,
         "threat_count": len(threats) if isinstance(threats, dict) else 0,
         "master_link": {
@@ -700,18 +706,22 @@ async def get_self():
 
 @app.get("/peers")
 async def list_peers():
-    """List all known peers (public read)."""
+    """List all known peers (public read).
+
+    The wg-mesh transport (wg_mesh.json) is the source of truth for the mesh
+    view (Gondwana Phase 1); fall back to the legacy peers.json registry only
+    when there are no wg-mesh peers configured.
+    """
     init_dirs()
+    nodes = mesh.peer_nodes(get_wg_mesh_config())
+    if nodes:
+        return {"peers": nodes, "count": len(nodes)}
+
     peers_data = load_json(PEERS_FILE, {"peers": []})
     peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else peers_data
-
     # A node is not its own peer: never insert/persist the local node here.
-    # (Older versions did, which inflated peer_count and listed "<host> (local)"
-    # as a phantom peer.) Drop any self entry a prior version may have saved.
-    # Use /discover/self for the local node's announcement payload instead.
     local_id = get_node_id()
     peers = [p for p in peers if not p.get("is_local") and p.get("id") != local_id]
-
     return {"peers": peers, "count": len(peers)}
 
 
