@@ -17,8 +17,8 @@ override_dh_auto_install:
 	install -m 644 $(CURDIR)/nginx/appstore.conf $(CURDIR)/debian/secubox-appstore/etc/nginx/secubox.d/
 
 	# Hub menu entry
-	install -d $(CURDIR)/debian/secubox-appstore/etc/secubox/menu.d
-	install -m 644 $(CURDIR)/menu.d/580-appstore.json $(CURDIR)/debian/secubox-appstore/etc/secubox/menu.d/
+	install -d $(CURDIR)/debian/secubox-appstore/usr/share/secubox/menu.d
+	install -m 644 $(CURDIR)/menu.d/580-appstore.json $(CURDIR)/debian/secubox-appstore/usr/share/secubox/menu.d/
 
 	# systemd service
 	install -d $(CURDIR)/debian/secubox-appstore/usr/lib/systemd/system
