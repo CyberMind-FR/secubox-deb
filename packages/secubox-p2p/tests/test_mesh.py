@@ -111,6 +111,7 @@ def test_adopt_state_imports_existing_key_when_absent():
     out = mesh.adopt_state(state, conf)
     assert out["private_key"] == "LIVEKEY="
     assert out["address"] == "10.10.0.1/24"
+    assert out["listen_port"] == 51822
 
 
 def test_adopt_state_never_overwrites_existing_key():

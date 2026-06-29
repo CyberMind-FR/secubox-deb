@@ -8,10 +8,9 @@ set -euo pipefail
 
 STATE=/var/lib/secubox/p2p/wg_mesh.json
 CONF=/etc/wireguard/wg-mesh.conf
-PKG=/usr/lib/secubox/p2p
 
 python3 - "$STATE" "$CONF" <<'PY'
-import json, sys, subprocess, pathlib
+import json, sys, pathlib
 sys.path.insert(0, "/usr/lib/secubox/p2p")
 from api import mesh
 
