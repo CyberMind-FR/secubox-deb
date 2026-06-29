@@ -1,3 +1,18 @@
+secubox-metrics (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix(metrics): real data for the portal/dashboard.
+    - live_hosts: source per-vhost request counts from the nginx per-vhost
+      access logs (windowed) instead of HAProxy frontends — this topology
+      funnels all vhosts through one frontend, so HAProxy had no per-vhost
+      signal. Adds total_requests to the payload.
+    - health/summary WAF block rate now reads the live sbxwaf threat log
+      (/var/log/secubox/waf/waf-threats.log) over the last hour as a share
+      of total traffic, replacing the stale /var/log/mitmproxy path + the
+      count//10 heuristic; adds waf.blocks_1h.
+    - postinst: add the service user to 'adm' to read /var/log/nginx.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 21:30:00 +0200
+
 secubox-metrics (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * #494: postinst no longer chowns the shared /run/secubox parent

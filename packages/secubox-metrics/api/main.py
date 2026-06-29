@@ -536,6 +536,38 @@ async def get_firewall_stats(auth: None = Depends(require_jwt)):
 # For the global health banner with smart doctor advisor
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _count_waf_blocks(window_minutes: int = 60) -> int:
+    """Count Go-sbxwaf block events in the last window from the live threat
+    log (/var/log/secubox/waf/waf-threats.log, JSONL with ISO timestamps).
+    Bounded tail read so a large log can't stall the summary."""
+    from datetime import datetime, timedelta, timezone
+    p = Path("/var/log/secubox/waf/waf-threats.log")
+    try:
+        size = p.stat().st_size
+    except Exception:
+        return 0
+    if size == 0:
+        return 0
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+    n = 0
+    try:
+        with open(p, "rb") as fh:
+            if size > 3_000_000:
+                fh.seek(size - 3_000_000)
+                fh.readline()
+            for line in fh.read().decode("utf-8", errors="replace").splitlines():
+                try:
+                    e = json.loads(line)
+                    ts = datetime.fromisoformat(e["timestamp"])
+                    if ts >= cutoff:
+                        n += 1
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return n
+
+
 def build_health_summary() -> dict:
     """Build aggregated health summary for the health banner."""
 
@@ -626,16 +658,16 @@ def build_health_summary() -> dict:
     except Exception:
         pass
 
-    # Get WAF blocked percentage (estimate from recent logs)
+    # WAF block rate from the live sbxwaf threat log over the last hour,
+    # as a share of total traffic (legit nginx requests + blocks).
     blocked_pct = 0
+    waf_blocks_1h = _count_waf_blocks(60)
     try:
-        waf_log = Path('/var/log/mitmproxy/threats.jsonl')
-        if waf_log.exists():
-            # Count threats in last hour
-            result = run_cmd(['wc', '-l', str(waf_log)])
-            threat_count = int(result.split()[0]) if result else 0
-            # Rough estimate: 1000 requests/hour baseline
-            blocked_pct = min(100, threat_count // 10)
+        lh = live_hosts_agg.current()
+        total_req = int(lh.get("total_requests", 0)) if isinstance(lh, dict) else 0
+        denom = total_req + waf_blocks_1h
+        if denom > 0:
+            blocked_pct = round(waf_blocks_1h / denom * 100, 1)
     except Exception:
         pass
 
@@ -683,6 +715,7 @@ def build_health_summary() -> dict:
         "modules": modules,
         "waf": {
             "blocked_pct": blocked_pct,
+            "blocks_1h": waf_blocks_1h,
             "active": waf_stats.get("mitmproxy_running", False)
         },
         "crowdsec": {
