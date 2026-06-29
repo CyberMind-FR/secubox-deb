@@ -9,6 +9,8 @@ endpoints, runs as user secubox) and by sbx-mesh-up (root provisioner).
 """
 from __future__ import annotations
 import ipaddress
+import pathlib
+import tomllib
 
 MESH_INTERFACE = "wg-mesh"
 MESH_PORT = 51822
@@ -31,3 +33,24 @@ def subnet_overlap(network: str) -> str | None:
         if net.overlaps(ipaddress.ip_network(cidr, strict=False)):
             return name
     return None
+
+
+def load_p2p_config(path: pathlib.Path) -> dict:
+    """Read the [wireguard] section of /etc/secubox/p2p.toml, with defaults."""
+    defaults = {
+        "interface": MESH_INTERFACE,
+        "listen_port": MESH_PORT,
+        "network": MESH_NETWORK,
+        "role": "satellite",
+        "master_endpoint": None,
+    }
+    try:
+        with open(path, "rb") as f:
+            wg = (tomllib.load(f) or {}).get("wireguard", {}) or {}
+    except (FileNotFoundError, tomllib.TOMLDecodeError):
+        wg = {}
+    out = dict(defaults)
+    for k in defaults:
+        if wg.get(k) is not None:
+            out[k] = wg[k]
+    return out
