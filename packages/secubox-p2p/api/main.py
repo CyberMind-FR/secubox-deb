@@ -26,6 +26,8 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
+from . import mesh
+
 app = FastAPI(
     title="SecuBox P2P API",
     description="P2P network hub with peer discovery and master-link enrollment",
@@ -974,8 +976,6 @@ async def remove_threat(ip: str, user: dict = Depends(require_jwt)):
 
 # ============== WireGuard Mesh ==============
 
-from . import mesh
-
 WG_MESH_CONFIG = P2P_DIR / "wg_mesh.json"
 WG_INTERFACE = mesh.MESH_INTERFACE
 WG_PORT = mesh.MESH_PORT
@@ -1123,40 +1123,12 @@ async def enable_wireguard(user: dict = Depends(require_jwt)):
         raise HTTPException(status_code=400,
             detail="WireGuard not initialized (no address); run /wireguard/init first")
 
-    # Create interface config
-    wg_conf = f"""[Interface]
-PrivateKey = {config['private_key']}
-Address = {config['address']}
-ListenPort = {config.get('listen_port', WG_PORT)}
-"""
-    for peer in config.get("peers", []):
-        wg_conf += f"""
-[Peer]
-PublicKey = {peer['public_key']}
-Endpoint = {peer['endpoint']}
-AllowedIPs = {peer.get('allowed_ips', mesh.MESH_NETWORK)}
-PersistentKeepalive = 25
-"""
-
-    # Write config and bring up interface
-    conf_path = Path(f"/etc/wireguard/{WG_INTERFACE}.conf")
-    conf_path.parent.mkdir(parents=True, exist_ok=True)
-    conf_path.write_text(wg_conf)
-    conf_path.chmod(0o600)
-
-    try:
-        subprocess.run(["wg-quick", "down", WG_INTERFACE], capture_output=True, timeout=10)
-    except:
-        pass
-
-    result = subprocess.run(["wg-quick", "up", WG_INTERFACE], capture_output=True, text=True, timeout=10)
-    if result.returncode != 0:
-        raise HTTPException(status_code=500, detail=f"Failed to start WireGuard: {result.stderr}")
-
+    # Provisioning (wg-quick, /etc/wireguard write) is delegated to the root
+    # CLI sbx-mesh-up; this unprivileged endpoint only marks the intent.
     config["enabled"] = True
     save_json(WG_MESH_CONFIG, config)
 
-    return {"status": "ok", "message": "WireGuard mesh enabled"}
+    return {"status": "ok", "message": "mesh marked enabled; run 'sbx-mesh-up' as root to provision the interface"}
 
 
 # ============== Remote Announcers ==============
@@ -1760,8 +1732,7 @@ async def ml_join(req: JoinRequest, request: Request):
         join_request["approved_at"] = now.isoformat()
         join_request["approved_by"] = config.get("fingerprint", get_node_id())
         join_request["depth"] = peer_depth
-        _taken = [p.get("mesh_ip", "") for p in load_json(PEERS_FILE, {"peers": []}).get("peers", [])]
-        join_request["mesh_ip"] = mesh.allocate_mesh_ip(mesh.MESH_NETWORK, _taken)
+        _assign_mesh_ip(join_request)
 
         # Mark token as used
         ml_token_mark_used(token_hash, req.fingerprint)
@@ -1790,6 +1761,12 @@ async def ml_join(req: JoinRequest, request: Request):
         "fingerprint": req.fingerprint,
         "message": "Join request queued for approval"
     }
+
+
+def _assign_mesh_ip(join_request: Dict) -> None:
+    """Allocate the next free mesh IP, deduping against persisted peers."""
+    taken = [p.get("mesh_ip", "") for p in load_json(PEERS_FILE, {"peers": []}).get("peers", [])]
+    join_request["mesh_ip"] = mesh.allocate_mesh_ip(mesh.MESH_NETWORK, taken)
 
 
 def _add_approved_peer(join_request: Dict):
@@ -1848,6 +1825,10 @@ async def ml_approve(req: ApproveRequest, user: dict = Depends(require_jwt)):
         token_hash = join_request.get("token_hash")
         if token_hash:
             ml_token_mark_used(token_hash, req.fingerprint)
+
+        # Allocate mesh IP if not already set (handles manual-approve path)
+        if not join_request.get("mesh_ip"):
+            _assign_mesh_ip(join_request)
 
         # Add to peers
         _add_approved_peer(join_request)
