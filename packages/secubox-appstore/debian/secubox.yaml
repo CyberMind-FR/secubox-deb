@@ -1,0 +1,15 @@
+# debian/secubox.yaml
+name: secubox-appstore
+category: system
+tier: all
+description: "SecuBox App Store — module catalog, install/enable, profiles"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/appstore.sock
+  health: /api/v1/appstore/health
+
+ui:
+  path: /appstore/

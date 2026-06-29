@@ -1,0 +1,15 @@
+# debian/secubox.yaml
+name: secubox-lyrion
+category: media
+tier: lite
+description: "Lyrion Music Server (LMS / Squeezebox) in a Debian LXC"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/aggregator.sock
+  health: /api/v1/lyrion/health
+
+ui:
+  path: /lyrion/
