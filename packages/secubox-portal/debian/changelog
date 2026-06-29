@@ -1,3 +1,11 @@
+secubox-portal (2.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix(ui): 'Active bans' now reflects the live /crowdsec/decisions list
+    (includes CAPI community blocklist) instead of the local-only
+    health/summary.active_decisions; hero 'Bans active' kept consistent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 21:00:00 +0200
+
 secubox-portal (2.2.1-1~bookworm1) bookworm; urgency=medium
 
   * fix(ui): reskin the portal to the standard SecuBox template — shared
