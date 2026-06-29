@@ -1,3 +1,15 @@
+secubox-hub (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#758): hub crash-loop — `import netstats` could not resolve.
+    netstats.py ships in the api/ package, but the service runs
+    `uvicorn api.main:app` with WorkingDirectory=/usr/lib/secubox/hub,
+    so the bare top-level import failed with ModuleNotFoundError and the
+    unit restarted ~9000 times. main.py now does `from . import netstats`
+    with a fallback to the top-level import (kept for the collector, which
+    adds api/ to sys.path explicitly). No API change.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 10:30:00 +0200
+
 secubox-hub (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * feat(#758): nft-based network-stats collector — root oneshot+timer samples
