@@ -59,3 +59,39 @@ def test_allocate_mesh_ip_exhausted_raises():
     import pytest
     with pytest.raises(RuntimeError):
         mesh.allocate_mesh_ip("10.10.0.0/24", taken)
+
+
+def test_parse_wg_conf_extracts_interface_fields():
+    text = (
+        "[Interface]\n"
+        "PrivateKey = ABC123=\n"
+        "Address = 10.10.0.1/24\n"
+        "ListenPort = 51822\n"
+        "[Peer]\nPublicKey = X=\n"
+    )
+    got = mesh.parse_wg_conf(text)
+    assert got == {"private_key": "ABC123=", "address": "10.10.0.1/24", "listen_port": 51822}
+
+
+def test_render_wg_conf_master_with_roaming_peer():
+    state = {
+        "private_key": "PRIV=",
+        "address": "10.10.0.1/24",
+        "listen_port": 51822,
+        "peers": [{"public_key": "PUB2=", "allowed_ips": "10.10.0.2/32"}],
+    }
+    out = mesh.render_wg_conf(state)
+    assert "PrivateKey = PRIV=" in out
+    assert "ListenPort = 51822" in out
+    assert "AllowedIPs = 10.10.0.2/32" in out
+    assert "Endpoint" not in out  # roaming peer => no Endpoint line
+
+
+def test_render_wg_conf_satellite_with_endpoint_and_keepalive():
+    state = {
+        "private_key": "PRIV=", "address": "10.10.0.3/24", "listen_port": 51822,
+        "peers": [{"public_key": "GK2=", "endpoint": "82.67.100.75:51822", "allowed_ips": "10.10.0.0/24"}],
+    }
+    out = mesh.render_wg_conf(state)
+    assert "Endpoint = 82.67.100.75:51822" in out
+    assert "PersistentKeepalive = 25" in out

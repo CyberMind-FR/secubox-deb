@@ -10,6 +10,7 @@ endpoints, runs as user secubox) and by sbx-mesh-up (root provisioner).
 from __future__ import annotations
 import ipaddress
 import pathlib
+import re
 import tomllib
 
 MESH_INTERFACE = "wg-mesh"
@@ -66,3 +67,43 @@ def allocate_mesh_ip(network: str, taken: list[str]) -> str:
         if cand not in taken_set:
             return cand
     raise RuntimeError(f"mesh address pool {network} exhausted")
+
+
+def parse_wg_conf(text: str) -> dict:
+    """Extract Interface fields from a wg-quick config (first [Interface])."""
+    out = {"private_key": None, "address": None, "listen_port": None}
+    in_iface = False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("["):
+            in_iface = line.lower() == "[interface]"
+            continue
+        if not in_iface or "=" not in line:
+            continue
+        key, val = (p.strip() for p in line.split("=", 1))
+        kl = key.lower()
+        if kl == "privatekey":
+            out["private_key"] = val
+        elif kl == "address":
+            out["address"] = val
+        elif kl == "listenport":
+            out["listen_port"] = int(val)
+    return out
+
+
+def render_wg_conf(state: dict) -> str:
+    """Render a wg-quick config from mesh state."""
+    lines = [
+        "# Managed by secubox-p2p (sbx-mesh-up) — do not edit by hand.",
+        "[Interface]",
+        f"PrivateKey = {state['private_key']}",
+        f"Address = {state['address']}",
+        f"ListenPort = {state.get('listen_port', MESH_PORT)}",
+    ]
+    for peer in state.get("peers", []):
+        lines += ["", "[Peer]", f"PublicKey = {peer['public_key']}"]
+        if peer.get("endpoint"):
+            lines.append(f"Endpoint = {peer['endpoint']}")
+        lines.append(f"AllowedIPs = {peer.get('allowed_ips', MESH_NETWORK)}")
+        lines.append("PersistentKeepalive = 25")
+    return "\n".join(lines) + "\n"
