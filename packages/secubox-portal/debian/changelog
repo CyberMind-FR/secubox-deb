@@ -1,3 +1,13 @@
+secubox-portal (2.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix(ui): reskin the portal to the standard SecuBox template — shared
+    sidebar (nav#sidebar + sidebar.js) replacing the bespoke top navbar,
+    design-tokens + crt-light C3BOX palette replacing the P31 green theme,
+    main.main layout + crt-engine. Dashboard content, element IDs and the
+    data-fetch JS are unchanged.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 20:30:00 +0200
+
 secubox-portal (2.2.0-1~bookworm1) bookworm; urgency=medium
 
   * portal: regenerate /portal/index.html as a public-facing operational
