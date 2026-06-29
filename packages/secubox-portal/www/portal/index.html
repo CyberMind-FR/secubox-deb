@@ -355,7 +355,12 @@
     }
 
     function renderBans(h, decisions) {
-        const ban = h && h.crowdsec && h.crowdsec.active_decisions;
+        // Prefer the live /crowdsec/decisions list (includes CAPI community
+        // blocklist), falling back to health/summary's local-only count.
+        const decList = decisions && Array.isArray(decisions.decisions) ? decisions.decisions
+                      : (Array.isArray(decisions) ? decisions : null);
+        const ban = decList ? decList.filter(d => (d.type || 'ban') === 'ban').length
+                  : (h && h.crowdsec ? h.crowdsec.active_decisions : null);
         const alerts = h && h.crowdsec && h.crowdsec.alerts_today;
         const wafPct = h && h.waf && h.waf.blocked_pct;
         const wafCls = wafPct == null ? '' : (wafPct >= 25 ? 'crit' : wafPct >= 10 ? 'warn' : 'ok');
@@ -365,6 +370,8 @@
         $('t-waf').textContent    = wafPct != null ? wafPct + '%' : '—';
         $('t-waf').className      = 'v ' + wafCls;
         $('t-alerts').textContent = alerts != null ? alerts : '—';
+        // Keep the hero "Bans active" consistent with the real blocked-IP count.
+        if (ban != null && $('hero-bans')) $('hero-bans').textContent = ban;
     }
 
     function renderVhosts(d) {
