@@ -1,0 +1,19 @@
+# Installed to /etc/secubox/p2p.toml.example by secubox-p2p.
+# Copy to /etc/secubox/p2p.toml and edit per node.
+
+[wireguard]
+# Mesh transport. Do NOT change `network` to anything overlapping the LXC
+# bridge (10.100.0.0/24) or other reserved subnets — sbx-mesh-up refuses.
+interface      = "wg-mesh"
+listen_port    = 51822
+network        = "10.10.0.0/24"
+
+# "master" = this node holds the rendezvous role (publicly reachable).
+# "satellite" = this node dials the rendezvous. Rendezvous is a ROLE — any
+# node may hold it; today only gk2 is publicly reachable.
+role           = "satellite"
+
+# Satellite only: where to reach the active rendezvous. Free-form host:port —
+# a literal IP (pinned now) or a DDNS name (WireGuard re-resolves per
+# handshake, so the rendezvous can change IP without reconfiguring peers).
+master_endpoint = "82.67.100.75:51822"
