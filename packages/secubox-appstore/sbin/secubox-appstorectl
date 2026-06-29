@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: secubox-appstore :: privileged module controller.
+# Invoked by the unprivileged secubox-appstore API via a narrow sudoers
+# rule. ONLY operates on secubox-*.service units and /etc/secubox/<name>.toml.
+set -euo pipefail
+
+action="${1:-}"
+module="${2:-}"
+
+# Strict allow-list: module name must be secubox-<slug>, nothing else.
+case "$module" in
+    secubox-[a-z0-9]*) : ;;
+    *) echo "appstorectl: invalid module name" >&2; exit 2 ;;
+esac
+unit="${module}.service"
+short="${module#secubox-}"
+
+case "$action" in
+    start|stop|restart|enable|disable)
+        exec systemctl "$action" "$unit"
+        ;;
+    write-config)
+        dest="/etc/secubox/${short}.toml"
+        tmp="$(mktemp /etc/secubox/.${short}.toml.XXXXXX)"
+        trap 'rm -f "$tmp"' EXIT
+        cat > "$tmp"
+        # Reject anything that is not valid TOML.
+        python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],"rb"))' "$tmp" \
+            || { echo "appstorectl: invalid TOML, refusing to write" >&2; exit 3; }
+        # Preserve the conventional ownership/perms for SecuBox config.
+        chown root:secubox "$tmp"
+        chmod 0640 "$tmp"
+        mv -f "$tmp" "$dest"
+        trap - EXIT
+        echo "wrote $dest"
+        ;;
+    *)
+        echo "appstorectl: unknown action '$action'" >&2; exit 2 ;;
+esac

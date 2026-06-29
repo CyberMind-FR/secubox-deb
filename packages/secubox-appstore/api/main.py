@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 CATALOG_FILE = Path(os.environ.get(
     "APPSTORE_CATALOG", "/usr/share/secubox/appstore/catalog.json"))
@@ -165,3 +166,73 @@ async def module(name: str):
         else:
             raise HTTPException(status_code=404, detail=f"unknown module {name!r}")
     return dict(st[name])
+
+
+# ── Lifecycle + config (Phase B/C) ──────────────────────────────────────────
+# The API runs as the unprivileged `secubox` user; all privileged work goes
+# through the validated root helper /usr/sbin/secubox-appstorectl via a narrow
+# sudoers rule (start/stop/restart/enable/disable + write-config only).
+ACTIONS = {"start", "stop", "restart", "enable", "disable"}
+APPSTORECTL = "/usr/sbin/secubox-appstorectl"
+
+
+class ConfigIn(BaseModel):
+    content: str
+
+
+def _resolve(name: str, st: dict) -> str:
+    if name in st:
+        return name
+    alt = f"secubox-{name}"
+    if alt in st:
+        return alt
+    raise HTTPException(status_code=404, detail=f"unknown module {name!r}")
+
+
+def _appstorectl(args, input_text=None):
+    try:
+        r = subprocess.run(["sudo", "-n", APPSTORECTL, *args], input=input_text,
+                           capture_output=True, text=True, timeout=90)
+        return r.returncode, (r.stdout or "").strip(), (r.stderr or "").strip()
+    except Exception as e:  # noqa: BLE001
+        return 1, "", str(e)
+
+
+def _config_path(name: str) -> Path:
+    short = name[len("secubox-"):] if name.startswith("secubox-") else name
+    return Path(f"/etc/secubox/{short}.toml")
+
+
+@app.post("/module/{name}/action/{verb}")
+async def module_action(name: str, verb: str):
+    name = _resolve(name, compute_state())
+    if verb not in ACTIONS:
+        raise HTTPException(status_code=400, detail=f"unknown action {verb!r}")
+    rc, out, err = _appstorectl([verb, name])
+    if rc != 0:
+        raise HTTPException(status_code=500, detail=f"{verb} failed: {err or out}")
+    new = compute_state(force=True).get(name, {})
+    return {"status": "ok", "action": verb, "module": name,
+            "state": new.get("state"), "running": new.get("running"), "message": out}
+
+
+@app.get("/module/{name}/config")
+async def get_config(name: str):
+    name = _resolve(name, compute_state())
+    p = _config_path(name)
+    try:
+        return {"module": name, "path": str(p), "exists": True,
+                "readable": True, "content": p.read_text(encoding="utf-8")}
+    except FileNotFoundError:
+        return {"module": name, "path": str(p), "exists": False, "readable": True, "content": ""}
+    except PermissionError:
+        return {"module": name, "path": str(p), "exists": True, "readable": False, "content": ""}
+
+
+@app.put("/module/{name}/config")
+async def put_config(name: str, body: ConfigIn):
+    name = _resolve(name, compute_state())
+    rc, out, err = _appstorectl(["write-config", name], input_text=body.content)
+    if rc != 0:
+        raise HTTPException(status_code=400, detail=f"config write failed: {err or out}")
+    return {"status": "ok", "module": name, "message": out}
