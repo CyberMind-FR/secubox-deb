@@ -1,0 +1,10 @@
+{
+  "id": "appstore",
+  "name": "App Store",
+  "icon": "🛍️",
+  "path": "/appstore/",
+  "category": "system",
+  "order": 580,
+  "description": "Install, enable & configure SecuBox modules",
+  "requires": ["secubox-appstore"]
+}

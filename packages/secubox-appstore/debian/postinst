@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+case "$1" in
+    configure)
+        install -d -m 0755 /usr/share/secubox/appstore /var/log/secubox /var/lib/secubox 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable --now secubox-appstore.service 2>/dev/null || true
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+        ;;
+esac
+#DEBHELPER#
+exit 0
