@@ -679,7 +679,7 @@ git commit -m "feat(p2p): root sbx-mesh-up provisioner (adopt key, guard, render
 
 **Interfaces:**
 - Consumes: Tasks 1–7 artifacts.
-- Produces: installed `/etc/secubox/p2p.toml.example`, `/usr/bin/sbx-mesh-up`, runtime dep `wireguard-tools`, version `1.7.2`.
+- Produces: installed `/etc/secubox/p2p.toml.example`, `/usr/bin/sbx-mesh-up`, runtime dep `wireguard-tools`, version `1.7.6`.
 
 - [ ] **Step 1: Add install lines to `override_dh_auto_install` (debian/rules, before "Create runtime directory")**
 
@@ -701,7 +701,7 @@ Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-fastapi | pyth
 - [ ] **Step 3: Add changelog entry (top of debian/changelog)**
 
 ```
-secubox-p2p (1.7.2-1~bookworm1) bookworm; urgency=medium
+secubox-p2p (1.7.6-1~bookworm1) bookworm; urgency=medium
 
   * feat(gondwana P1): adopt secubox-p2p as the single mesh owner.
     - api/mesh.py: pure mesh logic (subnet collision guard, p2p.toml
@@ -719,13 +719,13 @@ secubox-p2p (1.7.2-1~bookworm1) bookworm; urgency=medium
 - [ ] **Step 4: Build the package (arch:all)**
 
 Run: `cd packages/secubox-p2p && dpkg-buildpackage -us -uc -b 2>&1 | tail -5`
-Expected: `dpkg-deb: building package 'secubox-p2p' in '../secubox-p2p_1.7.2-1~bookworm1_all.deb'.`
+Expected: `dpkg-deb: building package 'secubox-p2p' in '../secubox-p2p_1.7.6-1~bookworm1_all.deb'.`
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add packages/secubox-p2p/debian/
-git commit -m "build(p2p): ship p2p.toml.example + sbx-mesh-up, dep wireguard-tools, 1.7.2"
+git commit -m "build(p2p): ship p2p.toml.example + sbx-mesh-up, dep wireguard-tools, 1.7.6"
 ```
 
 ---
@@ -734,7 +734,7 @@ git commit -m "build(p2p): ship p2p.toml.example + sbx-mesh-up, dep wireguard-to
 
 **Files:** none (live operation; uses Task 8's `.deb`).
 
-**Interfaces:** Consumes the built `secubox-p2p_1.7.2` deb.
+**Interfaces:** Consumes the built `secubox-p2p_1.7.6` deb.
 
 - [ ] **Step 1: Snapshot the live wg-mesh public key BEFORE**
 
@@ -743,7 +743,7 @@ Record the public key and that c3box's handshake is recent.
 
 - [ ] **Step 2: Install the new package on gk2 (single unit, no mass restart)**
 
-Run: `scp ../secubox-p2p_1.7.2-1~bookworm1_all.deb root@192.168.1.200:/tmp/ && ssh root@192.168.1.200 'dpkg -i /tmp/secubox-p2p_1.7.2-1~bookworm1_all.deb && systemctl try-restart secubox-p2p'`
+Run: `scp ../secubox-p2p_1.7.6-1~bookworm1_all.deb root@192.168.1.200:/tmp/ && ssh root@192.168.1.200 'dpkg -i /tmp/secubox-p2p_1.7.6-1~bookworm1_all.deb && systemctl try-restart secubox-p2p'`
 Expected: unpacked + configured; only `secubox-p2p` restarts.
 
 - [ ] **Step 3: Write gk2's p2p.toml as master**
@@ -792,7 +792,7 @@ Verify from outside is optional now (amd64 is on the LAN); required when a node 
 
 - [ ] **Step 2: Install the new package on amd64 (.9)**
 
-Run: `scp ../secubox-p2p_1.7.2-1~bookworm1_all.deb root@192.168.1.9:/tmp/ && ssh root@192.168.1.9 'dpkg -i /tmp/secubox-p2p_1.7.2-1~bookworm1_all.deb'`
+Run: `scp ../secubox-p2p_1.7.6-1~bookworm1_all.deb root@192.168.1.9:/tmp/ && ssh root@192.168.1.9 'dpkg -i /tmp/secubox-p2p_1.7.6-1~bookworm1_all.deb'`
 Expected: configured.
 
 - [ ] **Step 3: Write amd64's p2p.toml as satellite + init identity**
