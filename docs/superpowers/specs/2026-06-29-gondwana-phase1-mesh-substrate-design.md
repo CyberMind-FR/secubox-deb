@@ -44,8 +44,20 @@ per-node identity that Phase 2 (ZKP/did:plc) will wrap.
   Phase 1 keeps the existing plain-auth join behind the same interface.
 - **Rendezvous:** gk2 exposed via a **dedicated Freebox UDP `51822 → .200`**
   forward (separate from the toolbox VPN on 51820).
-- **Approach:** make `secubox-p2p` the single mesh owner (vs. keep-wg-quick,
-  vs. new daemon).
+- **Rendezvous is a ROLE, not a hardwired hub (revised 2026-06-29).** Any
+  node may hold the rendezvous role; the *active* rendezvous is whichever
+  node is currently publicly reachable. Today only gk2 has a public ingress,
+  so gk2 is the active rendezvous — but config/code must not hardwire "gk2
+  is the master." Each node also carries a **DDNS name as part of its
+  identity** (`<boxname>.secubox.in`), so reachability is name-based and the
+  rendezvous can float later without reconfiguring peers. Phase 1 builds
+  only this forward-compatibility; availability-based failover between
+  multiple rendezvous nodes is Phase 4 (hub HA), and the shared state moving
+  to a distributed ledger is Phase 2/3 (see §8).
+- **Approach:** make `secubox-p2p` the mesh owner (vs. keep-wg-quick, vs. new
+  daemon). "Owner" = the component that provisions WireGuard and holds the
+  peer registry; the registry is **local-first/replicable**, not a
+  gk2-exclusive source of truth, so it can migrate to the Phase-2/3 ledger.
 
 ---
 
@@ -150,12 +162,36 @@ per-node identity that Phase 2 (ZKP/did:plc) will wrap.
 
 ## 8. Out of scope (later phases)
 
+- **Cross-cutting — Distributed directory (DNS-structured ledger, requested
+  2026-06-29).** Shared mesh state (peers, services, threat-intel, name
+  records) migrates from per-node JSON registries to a replicated,
+  append-only, hierarchically-named directory every node holds — a
+  blockchain/DID-style ledger "like DNS." This is the concrete form of the
+  CLAUDE.md `did:plc` + "Chain of Hamiltonians → HamCoin" intent. It is the
+  data-plane substrate for Phases 2–4 (identity records in P2, threat
+  records in P3, name records in P4). Phase 1 keeps the registry
+  **local-first/replicable** specifically so it can be backed by this ledger
+  later without reworking the transport.
 - **Phase 2** — GK-HAM ZKP enrollment (#762): hamiltonian ZKP join, did:plc
-  identity, auto-discover / magic-invite over wg.
+  identity, auto-discover / magic-invite over wg. Each node's
+  `(pubkey, node-id, boxname)` from Phase 1 becomes its ledger identity
+  record.
 - **Phase 3** — Zero-trust protection sharing: signed threatmesh gossip,
   N-source consensus, peer-identity-gated ingestion, WAF-rule sharing.
 - **Phase 4** — Service mirroring + access redundancy: service replication,
   multi-endpoint failover (DNS / HAProxy), hub HA.
+  - **Auto-registration + per-node naming (requested 2026-06-29):** each
+    node registers itself with the central `secubox.in` and automatically
+    gets vhosts published as `<service>.<boxname>.secubox.in`. Architecture
+    that falls out of Phase 1: DNS for `*.<boxname>.secubox.in` resolves to
+    **gk2's public IP** (the only public ingress; satellites are behind
+    NAT); gk2's HAProxy/mitmproxy routes by `Host:` **over the wg-mesh** to
+    the owning node's service. Consumes the Phase-1 node identity
+    (`boxname`/`node-id`) + mesh transport. **Open question for Phase 4
+    design:** how `*.secubox.in` DNS records are authored — gk2 as an
+    authoritative zone vs. a registrar/provider API. Must keep the
+    no-waf_bypass rule (every published vhost routes through
+    mitmproxy_inspector).
 
 ## 9. Success criteria (Phase 1)
 
