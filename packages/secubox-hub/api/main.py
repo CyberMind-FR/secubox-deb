@@ -14,7 +14,10 @@ import asyncio
 import os
 import time
 from pathlib import Path
-import netstats  # #758 — shared collector/reader module
+try:
+    from . import netstats          # uvicorn `api.main:app` / aggregator import
+except ImportError:                 # standalone with api/ on sys.path (collector)
+    import netstats  # #758 — shared collector/reader module
 
 app = FastAPI(title="secubox-hub", version="1.7.0", root_path="/api/v1/hub")
 
