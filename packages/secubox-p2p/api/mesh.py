@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: secubox-p2p :: mesh
+Pure mesh logic — no FastAPI, no privilege. Imported by api/main.py (state
+endpoints, runs as user secubox) and by sbx-mesh-up (root provisioner).
+"""
+from __future__ import annotations
+import ipaddress
+
+MESH_INTERFACE = "wg-mesh"
+MESH_PORT = 51822
+MESH_NETWORK = "10.10.0.0/24"
+
+# Reserved subnets the mesh must never overlap (name -> CIDR).
+RESERVED_SUBNETS = {
+    "br-lxc": "10.100.0.0/24",
+    "eye-br0": "10.55.0.0/24",
+    "lxcbr0": "10.0.3.0/24",
+    "wg-toolbox": "10.99.0.0/24",
+}
+
+
+def subnet_overlap(network: str) -> str | None:
+    """Return the name of the first RESERVED_SUBNETS entry that overlaps
+    `network`, or None if `network` is clear."""
+    net = ipaddress.ip_network(network, strict=False)
+    for name, cidr in RESERVED_SUBNETS.items():
+        if net.overlaps(ipaddress.ip_network(cidr, strict=False)):
+            return name
+    return None
