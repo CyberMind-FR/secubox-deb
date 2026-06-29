@@ -123,3 +123,25 @@ def test_adopt_state_never_overwrites_existing_key():
 
 def test_ddns_name_empty_falls_back():
     assert mesh.ddns_name("") == "node.secubox.in"
+
+
+def test_host_ip_only_from_slash32():
+    assert mesh._host_ip("10.10.0.2/32") == "10.10.0.2"
+    assert mesh._host_ip("10.10.0.0/24") == ""
+    assert mesh._host_ip("") == ""
+
+
+def test_peer_nodes_uses_name_and_mesh_ip():
+    state = {"peers": [
+        {"public_key": "AAA=", "name": "c3box", "mesh_ip": "10.10.0.2", "allowed_ips": "10.10.0.2/32"},
+        {"public_key": "BBB=", "allowed_ips": "10.10.0.3/32"},          # no name/mesh_ip -> derive ip
+        {"public_key": "CCC=", "name": "gk2", "mesh_ip": "10.10.0.1", "allowed_ips": "10.10.0.0/24"},
+    ]}
+    nodes = mesh.peer_nodes(state)
+    assert [n["name"] for n in nodes] == ["c3box", "10.10.0.3", "gk2"]
+    assert [n["address"] for n in nodes] == ["10.10.0.2", "10.10.0.3", "10.10.0.1"]
+    assert all(n["status"] == "online" for n in nodes)
+
+
+def test_peer_nodes_empty():
+    assert mesh.peer_nodes({"peers": []}) == []
