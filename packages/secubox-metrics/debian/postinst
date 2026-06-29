@@ -20,6 +20,8 @@ case "$1" in
         # Add secubox to haproxy group for admin-socket access (issue #92)
         if getent group haproxy >/dev/null; then
             usermod -aG haproxy secubox || true
+        # adm group: read /var/log/nginx for per-vhost live-hosts metric
+        usermod -aG adm secubox || true
         fi
 
         # Persistent cache dir for live-panel rollups
