@@ -3186,11 +3186,19 @@ ok "Rootfs cleaned"
 # ── Final nginx fix (MUST run after ALL package installs) ──────────────────
 log "Final nginx configuration cleanup..."
 
-# Remove any location-only configs from conf.d (they belong in secubox.d)
+# Remove only MISPLACED location-only configs from conf.d (a `location` block is
+# invalid at http context — it belongs in secubox.d/server). KEEP http-level
+# configs: geo / map / limit_req_zone / upstream / log_format legitimately live
+# in conf.d and define things other configs depend on. Blindly deleting them
+# removed secubox-lan-geo.conf (geo $lan_client), so authelia.conf's
+# `if ($lan_client)` hit "unknown lan_client variable" -> nginx -t fails ->
+# no web server -> blank kiosk with a connection error.
 for conf in "${ROOTFS}/etc/nginx/conf.d/"*secubox*.conf "${ROOTFS}/etc/nginx/conf.d/"*repo*.conf; do
   [[ -e "$conf" ]] || [[ -L "$conf" ]] || continue
-  log "Removing bad config from conf.d: $(basename "$conf")"
-  rm -f "$conf"
+  if grep -qE '^[[:space:]]*location[[:space:]]' "$conf" 2>/dev/null; then
+    log "Removing misplaced location config from conf.d: $(basename "$conf")"
+    rm -f "$conf"
+  fi
 done
 
 # Remove ALL broken symlinks in secubox.d (more aggressive cleanup)
