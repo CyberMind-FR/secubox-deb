@@ -1,3 +1,21 @@
+secubox-lyrion (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix(slimproto): DNAT was bound to a hardcoded "lan0" interface, which
+    is DOWN on a SecuBox deployed behind another router (e.g. gk2 behind a
+    Freebox, where LAN clients arrive on the uplink eth2). Result: 0
+    players could reach the LMS — the prerouting rule never matched.
+    install-lxc.sh ensure_slimproto_dnat() now generates an
+    interface-agnostic rule (iifname != br-lxc) so it matches players on
+    any LAN/Wi-Fi/uplink interface; SECUBOX_LAN_IFACE still pins a single
+    interface when set. Forward chain is policy accept and conntrack
+    rewrites the reply (LXC gateway = host), so DNAT alone suffices.
+    NOTE: hardware players may still need the Wi-Fi AP bridged or a manual
+    LMS-server IP — LMS advertises its LXC IP (10.100.0.100) for streaming,
+    which is not L2-reachable from the LAN; the DNAT only fixes slimproto
+    control reachability.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 12:00:00 +0200
+
 secubox-lyrion (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * /lyrion/ on the canonical hub vhost is now a SecuBox admin webui,
