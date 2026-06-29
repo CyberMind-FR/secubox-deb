@@ -95,3 +95,11 @@ def test_render_wg_conf_satellite_with_endpoint_and_keepalive():
     out = mesh.render_wg_conf(state)
     assert "Endpoint = 82.67.100.75:51822" in out
     assert "PersistentKeepalive = 25" in out
+
+
+def test_ddns_name_basic():
+    assert mesh.ddns_name("gk2") == "gk2.secubox.in"
+
+
+def test_ddns_name_sanitizes():
+    assert mesh.ddns_name("Secubox_Live!") == "secubox-live-.secubox.in"
