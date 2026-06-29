@@ -871,15 +871,39 @@ async def unregister_service(name: str, user: dict = Depends(require_jwt)):
 
 @app.get("/mesh")
 async def get_mesh_status():
-    """Get mesh network topology (public read)."""
-    init_dirs()
-    peers_data = load_json(PEERS_FILE, {"peers": []})
-    peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else peers_data
+    """Get mesh network topology (public read).
 
-    nodes = []
-    links = []
+    Derived from the wg-mesh transport (wg_mesh.json) that p2p owns
+    (Gondwana Phase 1): the local node is the center, each wg peer is a node,
+    links go from local to each peer (hub-and-spoke). Falls back to the
+    legacy peers.json registry when no wg-mesh peers are configured.
+    """
+    init_dirs()
+    wg = get_wg_mesh_config()
+    peer_views = mesh.peer_nodes(wg)
     local_id = get_node_id()
 
+    if peer_views:
+        local_addr = (wg.get("address") or "").split("/")[0]
+        local_node = {
+            "id": local_id,
+            "name": get_hostname(),
+            "address": local_addr,
+            "status": "online",
+            "is_local": True,
+        }
+        nodes = [local_node]
+        links = []
+        for pv in peer_views:
+            nodes.append({**pv, "is_local": False})
+            links.append({"source": local_id, "target": pv["id"], "status": pv.get("status", "online")})
+        return {"nodes": nodes, "links": links, "total_nodes": len(nodes), "local_node": local_id}
+
+    # Legacy fallback (peers.json registry)
+    peers_data = load_json(PEERS_FILE, {"peers": []})
+    peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else peers_data
+    nodes = []
+    links = []
     for peer in peers:
         node = {
             "id": peer.get('id', ''),
@@ -889,21 +913,9 @@ async def get_mesh_status():
             "is_local": peer.get('is_local', False) or peer.get('id') == local_id
         }
         nodes.append(node)
-
-        # Create links from local node to all peers
         if not node["is_local"]:
-            links.append({
-                "source": local_id,
-                "target": peer.get('id'),
-                "status": peer.get('status', 'unknown')
-            })
-
-    return {
-        "nodes": nodes,
-        "links": links,
-        "total_nodes": len(nodes),
-        "local_node": local_id
-    }
+            links.append({"source": local_id, "target": peer.get('id'), "status": peer.get('status', 'unknown')})
+    return {"nodes": nodes, "links": links, "total_nodes": len(nodes), "local_node": local_id}
 
 
 # ============== Profiles ==============
