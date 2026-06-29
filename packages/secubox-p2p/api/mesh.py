@@ -107,3 +107,9 @@ def render_wg_conf(state: dict) -> str:
         lines.append(f"AllowedIPs = {peer.get('allowed_ips', MESH_NETWORK)}")
         lines.append("PersistentKeepalive = 25")
     return "\n".join(lines) + "\n"
+
+
+def ddns_name(hostname: str, domain: str = "secubox.in") -> str:
+    """Return DDNS-safe hostname: lowercased, non-[a-z0-9-] replaced by -, .domain appended."""
+    slug = re.sub(r"[^a-z0-9-]", "-", hostname.lower())
+    return f"{slug}.{domain}"
