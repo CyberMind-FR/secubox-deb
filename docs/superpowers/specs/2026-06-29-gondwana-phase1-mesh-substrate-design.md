@@ -98,6 +98,12 @@ per-node identity that Phase 2 (ZKP/did:plc) will wrap.
   `role="master"|"satellite"`, `master_endpoint="<gk2-public>:51822"`
   (satellites only). Code defaults change `51820→51822` and
   `10.100.0.0/24→10.10.0.0/24`.
+  - **`master_endpoint` is a free-form host:port** — it accepts either a
+    DDNS hostname (future-proofing against a changing WAN IP) or a literal
+    IP. WireGuard re-resolves a hostname on each handshake, so a DDNS name
+    survives IP changes with no reconfig. **Current deployment pins the
+    literal public IP: `82.67.100.75:51822`**; switching to a DDNS name is a
+    one-line config change later.
 - **Adoption (critical for zero cutover):** on enable, if
   `/etc/wireguard/wg-mesh.conf` already exists with the same subnet/port,
   **import its existing private key** into `wg_mesh.json` so the public key
