@@ -16,7 +16,9 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
-NoNewPrivileges=yes
+# sudo->secubox-appstorectl bridge requires new privileges; the narrow
+# sudoers rule + helper validation are the security boundary.
+NoNewPrivileges=no
 ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=/run/secubox /var/log/secubox /var/lib/secubox
