@@ -38,10 +38,13 @@ class _UnixHTTPConnection(http.client.HTTPConnection):
         self.sock = s
 
 
-# annuaire's require_jwt validates the token's subject against the user store
-# (a session validator), so a service-principal string is rejected — the token
-# must name a real master user. `admin` is a guaranteed master user on every
-# login-capable SecuBox app; override via SBX_SERVICE_USER if needed.
+# annuaire's require_jwt is a pure presence-gate: it only checks a valid HS256
+# signature + that the token subject is an ENABLED user (user_store.is_enabled);
+# the subject carries no authorization (the real authz is the ed25519 MEMBER
+# check on the node key in the request body). So the token must merely name a
+# real enabled user — a service-principal string is rejected by is_enabled().
+# `admin` is a guaranteed master user on every login-capable SecuBox app;
+# override via SBX_SERVICE_USER if needed.
 SERVICE_USER = os.environ.get("SBX_SERVICE_USER", "admin")
 
 
@@ -50,8 +53,8 @@ def _service_token() -> Optional[str]:
 
     annuaire and secubox-p2p run on the same host and share the same
     secubox_core JWT secret, so a token minted here validates there. The
-    subject must be a real master user (SERVICE_USER) because annuaire's
-    require_jwt runs a session validator that rejects unknown principals. Used
+    subject must be a real ENABLED user (SERVICE_USER) because annuaire's
+    require_jwt rejects any subject that fails user_store.is_enabled(). Used
     for mutating calls (subscribe); the read endpoints (/services,
     /subscriptions) are public and need no token. Returns None if secubox_core
     is unavailable (e.g. in unit tests) — the caller then sends no header.
