@@ -1,3 +1,10 @@
+secubox-annuaire (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * ui: minimal shared-template dashboard (chain integrity, merkle root,
+    trust log) at /annuaire/ — also makes the module appear in the navbar.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 30 Jun 2026 09:30:00 +0200
+
 secubox-annuaire (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * security: enforce self-certifying authorship at read time (an Identity
