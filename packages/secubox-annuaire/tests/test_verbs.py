@@ -30,12 +30,16 @@ from annuaire.model import (
     Identity,
     Invitation,
     MemberState,
+    Op,
     ProposalType,
     QuorumRule,
+    RevocationScope,
     now_rfc3339,
 )
 from annuaire.resolver import can
 from annuaire.verbs import (
+    _authorized_revoked_dids,
+    _is_non_revoked_member,
     accept_invite,
     auto_add,
     emancipate,
@@ -80,7 +84,6 @@ def _make_member(journal: Journal) -> Tuple[bytes, bytes, str]:
     payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
     sig_hex = sign(priv, canonical_bytes(payload))
 
-    from annuaire.model import Op
     journal.append(
         op=Op.AUTO_ADD,
         payload_type="Identity",
@@ -429,13 +432,24 @@ def test_tally_nonexistent_proposal(journal):
 # ---------------------------------------------------------------------------
 
 
-def _seed_journal_for_emancipation(journal, n_members=3, n_witnesses=3):
+_TEST_FOUNDER_DID = "did:plc:00000000000000000000000000000000"
+
+
+def _seed_journal_for_emancipation(journal, n_members=3, n_witnesses=3,
+                                   founder_did=_TEST_FOUNDER_DID):
     """Populate journal with enough members + witnesses to meet M1/M2/M3.
 
     Journal contract: payload stored WITHOUT sig/signer_did; sig over canonical_bytes(payload).
     JuridictionTag objects must be passed as proper dicts (Pydantic validates them).
+
+    Fix 4: members are seeded with a non-empty invited_by that differs from
+    founder_did so they count as independent-domain members for M1.  The
+    invited_by is set to a stable "seed-inviter" DID that is not the founder.
     """
     from annuaire.model import JuridictionTag, Op, WitnessAttest
+
+    # A stable seed-inviter DID: not the founder, gives members a non-empty inviter
+    seed_inviter_did = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"
 
     # Create N MEMBERs from different domains (for M1 independence)
     members = []
@@ -456,7 +470,8 @@ def _seed_journal_for_emancipation(journal, n_members=3, n_witnesses=3):
                     consented=True,
                 )
             ],
-            invited_by=None,  # NOT founder-grafted → counts for M1
+            # Fix 4: non-empty invited_by, not the founder → counts for M1
+            invited_by=seed_inviter_did,
         )
         full = ident.model_dump()
         payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
@@ -523,11 +538,13 @@ def test_emancipate_level1_requires_m1(journal):
     """emancipate at level 1 requires M1 (independent domains) to be met."""
     priv, _, did = _make_member(journal)
 
-    # No witnesses or independent domains yet → M1 not met
+    # No witnesses or independent domains yet → M1 not met.
+    # founder_did required (Fix 4).
     with pytest.raises(PermissionError, match="M1"):
         emancipate(
             journal, priv, did,
             milestone_evidence={"requested_level": 1},
+            founder_did=_TEST_FOUNDER_DID,
         )
 
 
@@ -539,7 +556,7 @@ def test_emancipate_level1_succeeds_when_m1_met(journal):
     result = emancipate(
         journal, proposer_priv, proposer_did,
         milestone_evidence={"requested_level": 1},
-        founder_did="",  # no founder exclusion for test
+        founder_did=_TEST_FOUNDER_DID,  # no founder exclusion for test
     )
     assert result["emancipation_level"] == 1
     assert result["previous_level"] == 0
@@ -554,7 +571,7 @@ def test_em_monotone_level_cannot_decrease(journal):
     emancipate(
         journal, proposer_priv, proposer_did,
         milestone_evidence={"requested_level": 1},
-        founder_did="",
+        founder_did=_TEST_FOUNDER_DID,
     )
 
     # Attempting level 1 again → EM-MONOTONE violation
@@ -562,7 +579,7 @@ def test_em_monotone_level_cannot_decrease(journal):
         emancipate(
             journal, proposer_priv, proposer_did,
             milestone_evidence={"requested_level": 1},
-            founder_did="",
+            founder_did=_TEST_FOUNDER_DID,
         )
 
 
@@ -572,11 +589,11 @@ def test_em_monotone_same_level_rejected(journal):
     proposer_priv, _, proposer_did = members[0]
 
     emancipate(journal, proposer_priv, proposer_did,
-               milestone_evidence={"requested_level": 1}, founder_did="")
+               milestone_evidence={"requested_level": 1}, founder_did=_TEST_FOUNDER_DID)
 
     with pytest.raises(PermissionError, match="EM-MONOTONE"):
         emancipate(journal, proposer_priv, proposer_did,
-                   milestone_evidence={"requested_level": 1}, founder_did="")
+                   milestone_evidence={"requested_level": 1}, founder_did=_TEST_FOUNDER_DID)
 
 
 def test_em_monotone_lower_level_rejected(journal):
@@ -587,16 +604,16 @@ def test_em_monotone_lower_level_rejected(journal):
 
     # Advance to level 1 first
     emancipate(journal, proposer_priv, proposer_did,
-               milestone_evidence={"requested_level": 1}, founder_did="")
+               milestone_evidence={"requested_level": 1}, founder_did=_TEST_FOUNDER_DID)
 
     # Advance to level 2 (M2 already met)
     emancipate(journal, proposer_priv, proposer_did,
-               milestone_evidence={"requested_level": 2}, founder_did="")
+               milestone_evidence={"requested_level": 2}, founder_did=_TEST_FOUNDER_DID)
 
     # Now try level 1 → must fail EM-MONOTONE
     with pytest.raises(PermissionError, match="EM-MONOTONE"):
         emancipate(journal, proposer_priv, proposer_did,
-                   milestone_evidence={"requested_level": 1}, founder_did="")
+                   milestone_evidence={"requested_level": 1}, founder_did=_TEST_FOUNDER_DID)
 
 
 # ---------------------------------------------------------------------------
@@ -611,13 +628,13 @@ def test_remove_anchor_blocked_before_m3(journal):
 
     # Advance to level 1 first
     emancipate(journal, proposer_priv, proposer_did,
-               milestone_evidence={"requested_level": 1}, founder_did="")
+               milestone_evidence={"requested_level": 1}, founder_did=_TEST_FOUNDER_DID)
 
     # Try remove_anchor at level 2 → must fail (needs level 3)
     with pytest.raises(PermissionError, match="REMOVE_ANCHOR"):
         emancipate(journal, proposer_priv, proposer_did,
                    milestone_evidence={"requested_level": 2, "remove_anchor": True},
-                   founder_did="")
+                   founder_did=_TEST_FOUNDER_DID)
 
 
 def test_remove_anchor_allowed_at_m3(journal):
@@ -627,15 +644,15 @@ def test_remove_anchor_allowed_at_m3(journal):
 
     # Advance through levels 1 and 2
     emancipate(journal, proposer_priv, proposer_did,
-               milestone_evidence={"requested_level": 1}, founder_did="")
+               milestone_evidence={"requested_level": 1}, founder_did=_TEST_FOUNDER_DID)
     emancipate(journal, proposer_priv, proposer_did,
-               milestone_evidence={"requested_level": 2}, founder_did="")
+               milestone_evidence={"requested_level": 2}, founder_did=_TEST_FOUNDER_DID)
 
     # Level 3 with remove_anchor — M3 met (3 witnesses, threshold is 3)
     result = emancipate(
         journal, proposer_priv, proposer_did,
         milestone_evidence={"requested_level": 3, "remove_anchor": True},
-        founder_did="",
+        founder_did=_TEST_FOUNDER_DID,
     )
     assert result["emancipation_level"] == 3
     assert result["remove_anchor"] is True
@@ -647,9 +664,9 @@ def test_remove_anchor_blocked_without_witnesses(journal):
     proposer_priv, _, proposer_did = members[0]
 
     emancipate(journal, proposer_priv, proposer_did,
-               milestone_evidence={"requested_level": 1}, founder_did="")
+               milestone_evidence={"requested_level": 1}, founder_did=_TEST_FOUNDER_DID)
     emancipate(journal, proposer_priv, proposer_did,
-               milestone_evidence={"requested_level": 2}, founder_did="")
+               milestone_evidence={"requested_level": 2}, founder_did=_TEST_FOUNDER_DID)
 
     # Level 3 with remove_anchor is OK when 3 witnesses are present
     # (tested above). Now test with insufficient witnesses:
@@ -671,12 +688,12 @@ def test_remove_anchor_blocked_without_witnesses(journal):
 
         # M1 is met (2 domains), M2/M3 not (only 1 witness)
         # Level 1 should be OK
-        emancipate(j2, p2_priv, p2_did, milestone_evidence={"requested_level": 1}, founder_did="")
+        emancipate(j2, p2_priv, p2_did, milestone_evidence={"requested_level": 1}, founder_did=_TEST_FOUNDER_DID)
 
         # Level 2 requires M2 (2 witnesses) → must fail
         with pytest.raises(PermissionError, match="M2"):
             emancipate(j2, p2_priv, p2_did,
-                       milestone_evidence={"requested_level": 2}, founder_did="")
+                       milestone_evidence={"requested_level": 2}, founder_did=_TEST_FOUNDER_DID)
 
 
 # ---------------------------------------------------------------------------
@@ -684,27 +701,287 @@ def test_remove_anchor_blocked_without_witnesses(journal):
 # ---------------------------------------------------------------------------
 
 
-def test_revoke_changes_state_to_revoked(journal):
-    """revoke() posts a RevocationNotice and updates the target's state to REVOKED."""
-    revoker_priv, _, revoker_did = _make_member(journal)
-    target_priv, _, target_did = _make_member(journal)
+def _make_grafter_and_invitee(journal):
+    """Set up a grafter (MEMBER via auto-add) and an invitee grafted by the grafter.
 
-    revoke(journal, revoker_priv, revoker_did, target_did, "test revocation")
+    Returns (grafter_priv, grafter_did, invitee_priv, invitee_did).
+    The invitee's Identity has invited_by=grafter_did so the grafter is authorized
+    to revoke the invitee (Fix 2).
+    """
+    grafter_priv, grafter_pub = generate_keypair()
+    grafter_did = did_from_pubkey(grafter_pub)
+    g_digest = hashlib.sha256(grafter_pub).hexdigest()[:32]
+    g_ident = Identity(
+        did=grafter_did,
+        pubkey=grafter_pub.hex(),
+        self_cert_digest=g_digest,
+        state=MemberState.MEMBER,
+    )
+    g_full = g_ident.model_dump()
+    g_payload = {k: v for k, v in g_full.items() if k not in ("sig", "signer_did")}
+    g_sig = sign(grafter_priv, canonical_bytes(g_payload))
+    journal.append(
+        op=Op.AUTO_ADD,
+        payload_type="Identity",
+        payload=g_payload,
+        author=grafter_did,
+        sig=g_sig,
+        author_pubkey_hex=grafter_pub.hex(),
+    )
 
-    # Latest Identity for target should now be REVOKED
-    latest_state = None
+    # Invitee — MEMBER with invited_by=grafter_did
+    invitee_priv, invitee_pub = generate_keypair()
+    invitee_did = did_from_pubkey(invitee_pub)
+    i_digest = hashlib.sha256(invitee_pub).hexdigest()[:32]
+    i_ident = Identity(
+        did=invitee_did,
+        pubkey=invitee_pub.hex(),
+        self_cert_digest=i_digest,
+        state=MemberState.MEMBER,
+        invited_by=grafter_did,  # grafter is authorized to revoke
+    )
+    i_full = i_ident.model_dump()
+    i_payload = {k: v for k, v in i_full.items() if k not in ("sig", "signer_did")}
+    i_sig = sign(invitee_priv, canonical_bytes(i_payload))
+    journal.append(
+        op=Op.AUTO_ADD,
+        payload_type="Identity",
+        payload=i_payload,
+        author=invitee_did,
+        sig=i_sig,
+        author_pubkey_hex=invitee_pub.hex(),
+    )
+
+    return grafter_priv, grafter_did, invitee_priv, invitee_did
+
+
+def test_revoke_makes_target_non_member(journal):
+    """revoke() by the grafter posts a RevocationNotice; target loses member status.
+
+    Fix 5: assert revocation via _is_non_revoked_member(...) is False,
+    NOT via a REVOKED Identity entry existing.  The RevocationNotice is the
+    sole mechanism; no forged REVOKED Identity is posted.
+    """
+    from annuaire.verbs import _is_non_revoked_member
+
+    grafter_priv, grafter_did, _, target_did = _make_grafter_and_invitee(journal)
+
+    # Before revocation: target is a member
+    assert _is_non_revoked_member(journal, target_did) is True
+
+    revoke(journal, grafter_priv, grafter_did, target_did, "test revocation")
+
+    # After revocation: target is no longer a member (Fix 5: check via membership)
+    assert _is_non_revoked_member(journal, target_did) is False
+
+    # Verify NO REVOKED Identity entry was forged by the grafter (Fix 2)
+    forged_revoked_identity = False
     for entry in journal.iter_entries():
-        if entry.payload_type == "Identity" and entry.payload.get("did") == target_did:
-            latest_state = entry.payload.get("state")
-    assert latest_state == MemberState.REVOKED.value
+        if (entry.payload_type == "Identity"
+                and entry.payload.get("did") == target_did
+                and entry.author == grafter_did  # authored by grafter, not subject
+                and entry.payload.get("state") == MemberState.REVOKED.value):
+            forged_revoked_identity = True
+    assert not forged_revoked_identity, (
+        "revoke() must NOT forge a REVOKED Identity entry on behalf of the target"
+    )
 
 
 def test_revoked_member_cannot_invite(journal):
-    """A revoked MEMBER may not issue invitations."""
-    revoker_priv, _, revoker_did = _make_member(journal)
-    target_priv, _, target_did = _make_member(journal)
+    """A member revoked by their grafter may not issue invitations."""
+    grafter_priv, grafter_did, target_priv, target_did = _make_grafter_and_invitee(journal)
 
-    revoke(journal, revoker_priv, revoker_did, target_did, "test revocation")
+    revoke(journal, grafter_priv, grafter_did, target_did, "test revocation")
 
     with pytest.raises(PermissionError, match="not a non-revoked MEMBER"):
         invite(journal, target_priv, target_did, domain="test-domain")
+
+
+# ---------------------------------------------------------------------------
+# 10. Security fixes — new tests (Fix 5)
+# ---------------------------------------------------------------------------
+
+
+def test_unrelated_member_cannot_revoke(journal):
+    """Fix 5(a): an unrelated member cannot revoke a target they did not graft.
+
+    revoker != target and revoker != target.invited_by → PermissionError.
+    """
+    # grafter+invitee setup — the unrelated party is neither self nor grafter
+    grafter_priv, grafter_did, _, target_did = _make_grafter_and_invitee(journal)
+
+    # A random third member tries to revoke target — must be denied
+    third_priv, third_pub = generate_keypair()
+    third_did = did_from_pubkey(third_pub)
+    t_digest = hashlib.sha256(third_pub).hexdigest()[:32]
+    t_ident = Identity(
+        did=third_did, pubkey=third_pub.hex(), self_cert_digest=t_digest,
+        state=MemberState.MEMBER,
+    )
+    t_full = t_ident.model_dump()
+    t_payload = {k: v for k, v in t_full.items() if k not in ("sig", "signer_did")}
+    t_sig = sign(third_priv, canonical_bytes(t_payload))
+    journal.append(op=Op.AUTO_ADD, payload_type="Identity", payload=t_payload,
+                   author=third_did, sig=t_sig, author_pubkey_hex=third_pub.hex())
+
+    with pytest.raises(PermissionError, match="not authorized to revoke"):
+        revoke(journal, third_priv, third_did, target_did, "unauthorized attempt")
+
+
+def test_grafter_can_revoke_invitee(journal):
+    """Fix 5(b): the grafter can revoke their invitee; target becomes non-member; can() denies."""
+    grafter_priv, grafter_did, _, target_did = _make_grafter_and_invitee(journal)
+
+    revoke(journal, grafter_priv, grafter_did, target_did, "grafter revokes invitee")
+
+    assert _is_non_revoked_member(journal, target_did) is False, (
+        "target should no longer be a member after grafter revocation"
+    )
+    # can() must deny the revoked target
+    d = can(journal, subject_did=target_did, action="read.public",
+            target="any", domain="test")
+    assert d.allowed is False, f"can() should deny revoked target, got: {d.reasons}"
+    assert any("revoked" in r.lower() for r in d.reasons)
+
+
+def test_self_revoke_works(journal):
+    """Fix 5(c): a subject can self-revoke via revoke(subject, subject, ...)."""
+    priv, _, did = _make_member(journal)
+
+    assert _is_non_revoked_member(journal, did) is True
+
+    revoke(journal, priv, did, did, "self-revocation")
+
+    assert _is_non_revoked_member(journal, did) is False, (
+        "self-revocation must remove the subject from member set"
+    )
+
+
+def test_non_subject_identity_entry_ignored(journal):
+    """Fix 5(d) / Fix 1: an Identity entry authored by a NON-subject does NOT change state.
+
+    If a malicious party posts an Identity entry for did X but authors it as did Y
+    (their own key), the journal accepts it (Y's sig verifies), but the state
+    derivation MUST ignore it because entry.author != payload["did"].
+    """
+    from annuaire.verbs import _get_latest_identity
+
+    # victim is already a MEMBER
+    victim_priv, victim_pub, victim_did = _make_member(journal)
+
+    # attacker is also a MEMBER
+    attacker_priv, attacker_pub = generate_keypair()
+    attacker_did = did_from_pubkey(attacker_pub)
+    a_digest = hashlib.sha256(attacker_pub).hexdigest()[:32]
+    a_ident = Identity(
+        did=attacker_did, pubkey=attacker_pub.hex(), self_cert_digest=a_digest,
+        state=MemberState.MEMBER,
+    )
+    a_full = a_ident.model_dump()
+    a_payload = {k: v for k, v in a_full.items() if k not in ("sig", "signer_did")}
+    a_sig = sign(attacker_priv, canonical_bytes(a_payload))
+    journal.append(op=Op.AUTO_ADD, payload_type="Identity", payload=a_payload,
+                   author=attacker_did, sig=a_sig, author_pubkey_hex=attacker_pub.hex())
+
+    # Attacker crafts a REVOKED Identity entry FOR THE VICTIM but signs it with
+    # their OWN key.  The journal accepts it (attacker's sig is valid over the payload).
+    # State derivation must IGNORE it (author != victim_did).
+    victim_latest = _get_latest_identity(journal, victim_did)
+    assert victim_latest is not None
+    tampered_payload = {k: v for k, v in victim_latest.items() if k not in ("sig", "signer_did")}
+    tampered_payload["state"] = MemberState.REVOKED.value
+    tampered_sig = sign(attacker_priv, canonical_bytes(tampered_payload))
+    journal.append(
+        op=Op.REVOKE,
+        payload_type="Identity",
+        payload=tampered_payload,
+        author=attacker_did,  # attacker authors it, not the victim
+        sig=tampered_sig,
+        author_pubkey_hex=attacker_pub.hex(),
+    )
+
+    # Victim must STILL be a member (the attacker's non-self-authored entry is ignored)
+    assert _is_non_revoked_member(journal, victim_did) is True, (
+        "a non-subject-authored Identity entry must NOT change the subject's state"
+    )
+
+
+def test_unauthorized_revocation_notice_has_no_effect(journal):
+    """Fix 5(e) / Fix 3: an unauthorized RevocationNotice does NOT revoke the target.
+
+    A RevocationNotice where revoker is neither the target itself nor the target's
+    grafter must be ignored by _authorized_revoked_dids().
+    """
+    import os as _os
+
+    # grafter + invitee setup
+    grafter_priv, grafter_did, _, target_did = _make_grafter_and_invitee(journal)
+
+    # Third unrelated party crafts and posts a RevocationNotice directly to the journal
+    third_priv, third_pub = generate_keypair()
+    third_did = did_from_pubkey(third_pub)
+    t_digest = hashlib.sha256(third_pub).hexdigest()[:32]
+    t_ident = Identity(
+        did=third_did, pubkey=third_pub.hex(), self_cert_digest=t_digest,
+        state=MemberState.MEMBER,
+    )
+    t_full = t_ident.model_dump()
+    t_payload = {k: v for k, v in t_full.items() if k not in ("sig", "signer_did")}
+    t_sig = sign(third_priv, canonical_bytes(t_payload))
+    journal.append(op=Op.AUTO_ADD, payload_type="Identity", payload=t_payload,
+                   author=third_did, sig=t_sig, author_pubkey_hex=third_pub.hex())
+
+    # Post the unauthorized RevocationNotice directly (bypassing revoke() auth check)
+    notice_payload = {
+        "revocation_id": _os.urandom(32).hex(),
+        "revoker": third_did,
+        "target": target_did,
+        "scope": RevocationScope.SELF.value,
+        "cascade_depth": 0,
+        "reason": "unauthorized attempt",
+        "created_at": now_rfc3339(),
+    }
+    n_sig = sign(third_priv, canonical_bytes(notice_payload))
+    journal.append(
+        op=Op.REVOKE,
+        payload_type="RevocationNotice",
+        payload=notice_payload,
+        author=third_did,
+        sig=n_sig,
+        author_pubkey_hex=third_pub.hex(),
+    )
+
+    # The unauthorized notice must NOT revoke the target
+    assert _is_non_revoked_member(journal, target_did) is True, (
+        "an unauthorized RevocationNotice must NOT revoke the target"
+    )
+    assert target_did not in _authorized_revoked_dids(journal), (
+        "target must not appear in the authorized-revoked set"
+    )
+
+
+def test_emancipate_rejects_level_jump(journal):
+    """Fix 5(f) / Fix 4: emancipate rejects a level jump (current=0, request=2 → error)."""
+    members = _seed_journal_for_emancipation(journal, n_members=3, n_witnesses=3)
+    proposer_priv, _, proposer_did = members[0]
+
+    # Requesting level 2 from level 0 skips level 1 — must be rejected
+    with pytest.raises(PermissionError, match="level jump"):
+        emancipate(
+            journal, proposer_priv, proposer_did,
+            milestone_evidence={"requested_level": 2},
+            founder_did=_TEST_FOUNDER_DID,
+        )
+
+
+def test_emancipate_requires_founder_did(journal):
+    """Fix 5(f) / Fix 4: emancipate raises ValueError when founder_did is absent/empty."""
+    members = _seed_journal_for_emancipation(journal, n_members=3, n_witnesses=3)
+    proposer_priv, _, proposer_did = members[0]
+
+    with pytest.raises(ValueError, match="founder_did is required"):
+        emancipate(
+            journal, proposer_priv, proposer_did,
+            milestone_evidence={"requested_level": 1},
+            # No founder_did kwarg and none in milestone_evidence → must raise
+        )
