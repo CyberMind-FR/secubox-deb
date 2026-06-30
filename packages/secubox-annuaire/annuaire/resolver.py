@@ -86,10 +86,17 @@ def _latest_identity_for(
     journal,  # Journal instance
     subject_did: str,
 ) -> Optional[Identity]:
-    """Return the most recently logged Identity object for *subject_did*, or None."""
+    """Return the most recently logged SELF-AUTHORED Identity object for *subject_did*.
+
+    Fix 1: an Identity entry authored by someone other than its subject is
+    invalid for state purposes and must be ignored.
+    """
     best: Optional[LogEntry] = None
     for entry in journal.iter_entries():
         if entry.payload_type == "Identity" and entry.payload.get("did") == subject_did:
+            # Fix 1: only self-authored entries contribute to identity state
+            if entry.author != subject_did:
+                continue
             if best is None or entry.height > best.height:
                 best = entry
     if best is None:
@@ -100,22 +107,76 @@ def _latest_identity_for(
         return None
 
 
+def _authorized_revoked_dids_resolver(journal) -> Set[str]:
+    """Return dids revoked by an authorized RevocationNotice (for use in resolver).
+
+    Mirrors the logic in verbs._authorized_revoked_dids() — duplicated here to
+    avoid an import cycle (resolver must not import verbs if verbs imports resolver).
+
+    A RevocationNotice (op REVOKE) is authorized iff its revoker is:
+      - the target itself (self-revocation), OR
+      - the invited_by (grafter) of target's latest SELF-AUTHORED Identity.
+
+    Also honors self-authored Identity{state=REVOKED} entries (Fix 3).
+    """
+    from .model import MemberState as _MS  # local to avoid shadowing outer import
+
+    # Build {did: (latest_self_authored_invited_by, latest_self_authored_state)}
+    latest_invited_by: dict = {}
+    latest_self_state: dict = {}
+    for entry in journal.iter_entries():
+        if entry.payload_type == "Identity":
+            did = entry.payload.get("did")
+            if did and entry.author == did:
+                latest_invited_by[did] = entry.payload.get("invited_by")
+                latest_self_state[did] = entry.payload.get("state", "")
+
+    authorized_revoked: Set[str] = set()
+
+    # 1. Self-authored Identity{state=REVOKED} → self-revocation
+    for did, state in latest_self_state.items():
+        if state == _MS.REVOKED.value:
+            authorized_revoked.add(did)
+
+    # 2. Authorized RevocationNotice
+    for entry in journal.iter_entries():
+        if entry.op == Op.REVOKE and entry.payload_type == "RevocationNotice":
+            target = entry.payload.get("target")
+            revoker = entry.payload.get("revoker")
+            if not target or not revoker:
+                continue
+            if revoker == target:
+                authorized_revoked.add(target)
+                continue
+            grafter = latest_invited_by.get(target)
+            if grafter and revoker == grafter:
+                authorized_revoked.add(target)
+
+    return authorized_revoked
+
+
 def _build_log_state(journal) -> dict:
-    """Derive (members, revoked) sets from the journal for v0 NIZK."""
+    """Derive (members, revoked) sets from the journal for v0 NIZK.
+
+    Fix 1: only SELF-AUTHORED Identity entries contribute to membership state.
+    Fix 3: revoked set derived from authorized RevocationNotice entries in addition
+    to self-authored Identity{state=REVOKED} entries.
+    """
     members: Set[str] = set()
-    revoked: Set[str] = set()
     for entry in journal.iter_entries():
         if entry.payload_type == "Identity":
             did = entry.payload.get("did")
             state = entry.payload.get("state")
-            if did:
+            # Fix 1: only self-authored entries
+            if did and entry.author == did:
                 if state == MemberState.MEMBER.value:
                     members.add(did)
-                    revoked.discard(did)  # un-revoke if re-admitted
-                elif state == MemberState.REVOKED.value:
-                    revoked.add(did)
+                elif state in (MemberState.REVOKED.value, MemberState.OBSERVED.value):
                     members.discard(did)
-    return {"members": members, "revoked": revoked}
+
+    # Fix 3: derive revoked from authorized notices
+    revoked = _authorized_revoked_dids_resolver(journal)
+    return {"members": members - revoked, "revoked": revoked}
 
 
 def _has_attestation(
@@ -205,11 +266,23 @@ def can(
 
     # ------------------------------------------------------------------
     # State gate — REVOKED may do nothing; OBSERVED may only read.public
+    # Fix 3: also deny dids in the authorized-revoked set (covers the path
+    # where revocation is recorded via RevocationNotice rather than a
+    # REVOKED Identity entry authored by the revoker).
     # ------------------------------------------------------------------
     if ident.state == MemberState.REVOKED:
         return Decision(
             allowed=False,
             reasons=["revoked — this identity has been withdrawn from the trust graph"],
+        )
+
+    # Fix 3: check authorized RevocationNotice path
+    authorized_revoked = _authorized_revoked_dids_resolver(journal)
+    if subject_did in authorized_revoked:
+        return Decision(
+            allowed=False,
+            reasons=["revoked — this identity has been withdrawn from the trust graph "
+                     "(authorized revocation notice)"],
         )
 
     state_rights = RIGHTS.get(ident.state, set())

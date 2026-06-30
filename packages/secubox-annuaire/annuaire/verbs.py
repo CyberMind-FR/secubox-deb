@@ -78,22 +78,80 @@ def _get_current_emancipation_level(journal: Journal) -> int:
     return level
 
 
-def _get_member_dids(journal: Journal) -> set:
-    """Return the set of MEMBER did:plc strings (non-revoked)."""
-    members = set()
-    revoked = set()
+def _authorized_revoked_dids(journal: Journal) -> set:
+    """Return the set of dids that have been revoked by an authorized revoker.
+
+    A RevocationNotice (op REVOKE) is authorized iff its revoker is:
+      - the target itself (self-revocation), OR
+      - the invited_by (grafter) of the target's latest SELF-AUTHORED Identity.
+
+    A self-authored Identity is one where entry.author == entry.payload["did"].
+    This helper is also responsible for honoring self-authored
+    Identity{state=REVOKED} entries (a subject may self-revoke that way too).
+    """
+    # Build {did: latest_self_authored_invited_by} — only self-authored entries
+    latest_invited_by: Dict[str, Optional[str]] = {}
+    latest_self_state: Dict[str, str] = {}
     for entry in journal.iter_entries():
         if entry.payload_type == "Identity":
             did = entry.payload.get("did")
-            state = entry.payload.get("state")
-            if did:
+            if did and entry.author == did:
+                latest_invited_by[did] = entry.payload.get("invited_by")
+                latest_self_state[did] = entry.payload.get("state", "")
+
+    authorized_revoked: set = set()
+
+    # 1. Self-authored Identity{state=REVOKED} → self-revocation
+    for did, state in latest_self_state.items():
+        if state == MemberState.REVOKED.value:
+            authorized_revoked.add(did)
+
+    # 2. Authorized RevocationNotice (op=REVOKE, payload_type=RevocationNotice)
+    for entry in journal.iter_entries():
+        if entry.op == Op.REVOKE and entry.payload_type == "RevocationNotice":
+            target = entry.payload.get("target")
+            revoker = entry.payload.get("revoker")
+            if not target or not revoker:
+                continue
+            # Authorized if self-revocation
+            if revoker == target:
+                authorized_revoked.add(target)
+                continue
+            # Authorized if revoker is the grafter (invited_by) of the target's
+            # latest SELF-AUTHORED Identity
+            grafter = latest_invited_by.get(target)
+            if grafter and revoker == grafter:
+                authorized_revoked.add(target)
+
+    return authorized_revoked
+
+
+def _get_member_dids(journal: Journal) -> set:
+    """Return the set of MEMBER did:plc strings (non-revoked).
+
+    Only SELF-AUTHORED Identity entries (entry.author == payload["did"]) are
+    used to derive membership state.  An Identity entry authored by someone
+    other than its subject is invalid for state purposes (Fix 1).
+
+    Revocation is derived from _authorized_revoked_dids() which honors both
+    self-authored Identity{state=REVOKED} and authorized RevocationNotice
+    entries (Fix 3).
+    """
+    members = set()
+    for entry in journal.iter_entries():
+        if entry.payload_type == "Identity":
+            did = entry.payload.get("did")
+            # Fix 1: only honor self-authored Identity entries
+            if did and entry.author == did:
+                state = entry.payload.get("state")
                 if state == MemberState.MEMBER.value:
                     members.add(did)
-                    revoked.discard(did)
-                elif state == MemberState.REVOKED.value:
-                    revoked.add(did)
+                elif state in (MemberState.REVOKED.value, MemberState.OBSERVED.value):
                     members.discard(did)
-    return members - revoked
+
+    # Fix 3: subtract authorized-revoked dids (covers RevocationNotice path too)
+    authorized_revoked = _authorized_revoked_dids(journal)
+    return members - authorized_revoked
 
 
 def _get_witness_count(journal: Journal) -> int:
@@ -112,35 +170,40 @@ def _get_independent_domain_count(journal: Journal, founder_did: str) -> int:
 
     For milestone M1: ≥ N independent domains.
     Here we just return the count so callers can compare to their threshold.
+
+    Fix 1: only SELF-AUTHORED Identity entries are used to derive membership.
+    Fix 4: a member counts toward an independent domain only if its invited_by
+    is a non-empty did AND != founder_did.  Founder-grafted and
+    ungrafted/seed/None members never inflate plurality.
     """
-    # Collect {did: (domain, invited_by)} for MEMBER identities
+    # Collect {did: latest self-authored MEMBER entry info}
     member_info: Dict[str, Dict] = {}
     for entry in journal.iter_entries():
         if entry.payload_type == "Identity":
             state = entry.payload.get("state")
             did = entry.payload.get("did")
-            if did and state == MemberState.MEMBER.value:
+            # Fix 1: only self-authored entries
+            if did and entry.author == did and state == MemberState.MEMBER.value:
                 member_info[did] = {
                     "invited_by": entry.payload.get("invited_by"),
                     "jurisdiction": entry.payload.get("jurisdiction", []),
                 }
 
-    # Collect revoked
-    revoked: set = set()
-    for entry in journal.iter_entries():
-        if entry.payload_type == "Identity":
-            if entry.payload.get("state") == MemberState.REVOKED.value:
-                revoked.add(entry.payload.get("did"))
+    # Subtract authorized-revoked (Fix 3)
+    revoked = _authorized_revoked_dids(journal)
 
     independent_domains: set = set()
     for did, info in member_info.items():
         if did in revoked:
             continue
-        if info.get("invited_by") != founder_did:
-            for j in info.get("jurisdiction", []):
-                dom = j.get("isolation_domain") if isinstance(j, dict) else None
-                if dom:
-                    independent_domains.add(dom)
+        invited_by = info.get("invited_by")
+        # Fix 4: must have a non-empty invited_by AND it must not be the founder
+        if not invited_by or invited_by == founder_did:
+            continue
+        for j in info.get("jurisdiction", []):
+            dom = j.get("isolation_domain") if isinstance(j, dict) else None
+            if dom:
+                independent_domains.add(dom)
     return len(independent_domains)
 
 
@@ -169,11 +232,18 @@ def _check_milestones(journal: Journal, founder_did: Optional[str] = None) -> Di
 
 
 def _get_latest_identity(journal: Journal, did: str) -> Optional[Dict]:
-    """Return the latest Identity payload dict for *did*, or None."""
+    """Return the latest SELF-AUTHORED Identity payload dict for *did*, or None.
+
+    Fix 1: an Identity entry authored by someone other than its subject (did)
+    is invalid for state purposes and must be ignored when deriving state.
+    """
     best = None
     best_height = -1
     for entry in journal.iter_entries():
         if entry.payload_type == "Identity" and entry.payload.get("did") == did:
+            # Fix 1: only self-authored entries contribute to identity state
+            if entry.author != did:
+                continue
             if entry.height > best_height:
                 best_height = entry.height
                 best = entry.payload
@@ -753,6 +823,16 @@ def revoke(
 ) -> RevocationNotice:
     """REVOKE: post a RevocationNotice; bounded cascade (never blind-transitive).
 
+    Authorization (Fix 2): the revoker may only revoke target_did iff:
+      - revoker_did == target_did (self-revocation), OR
+      - revoker_did == the invited_by (grafter) of target's latest SELF-AUTHORED Identity.
+    Any other caller raises PermissionError before writing to the journal.
+
+    The signed RevocationNotice is the SOLE revocation mechanism.  No REVOKED
+    Identity entry is forged on behalf of the target (Fix 2).  Membership state
+    is derived from authorized RevocationNotice entries by _authorized_revoked_dids()
+    (Fix 3) and by can() which also consults that set (Fix 3).
+
     Args:
         journal: the append-only Journal.
         revoker_priv: revoker's 32-byte raw Ed25519 private key.
@@ -763,7 +843,21 @@ def revoke(
 
     Returns:
         The signed RevocationNotice.
+
+    Raises:
+        PermissionError: if the revoker is not authorized to revoke target_did.
     """
+    # Fix 2: authorization check BEFORE writing
+    if revoker_did != target_did:
+        # Revoker must be the grafter (invited_by) of the target's latest self-authored Identity
+        target_ident = _get_latest_identity(journal, target_did)
+        grafter = target_ident.get("invited_by") if target_ident else None
+        if not grafter or revoker_did != grafter:
+            raise PermissionError(
+                f"not authorized to revoke {target_did} "
+                "(only self or the grafting inviter may revoke)"
+            )
+
     cascade_depth = min(cascade_depth, 8)  # hard cap
     scope = RevocationScope.CASCADE if cascade_depth > 0 else RevocationScope.SELF
     revocation_id = _rand_hex(32)
@@ -790,21 +884,9 @@ def revoke(
         author_pubkey_hex=revoker_pubkey,
     )
 
-    # Apply the revocation to the target: post REVOKED Identity entry
-    target_ident = _get_latest_identity(journal, target_did)
-    if target_ident:
-        # Build revoked identity payload (no sig/signer_did — revoker signs it)
-        revoked_payload = {k: v for k, v in target_ident.items() if k not in ("sig", "signer_did")}
-        revoked_payload["state"] = MemberState.REVOKED.value
-        revoked_sig = sign(revoker_priv, canonical_bytes(revoked_payload))
-        journal.append(
-            op=Op.REVOKE,
-            payload_type="Identity",
-            payload=revoked_payload,
-            author=revoker_did,
-            sig=revoked_sig,
-            author_pubkey_hex=revoker_pubkey,
-        )
+    # Fix 2: do NOT forge a REVOKED Identity entry signed by the revoker.
+    # The RevocationNotice above is the sole revocation mechanism.
+    # State is derived by _authorized_revoked_dids() in the readers.
 
     return RevocationNotice(**{**payload, "sig": sig_hex, "signer_did": revoker_did})
 
@@ -852,7 +934,7 @@ def emancipate(
     if not isinstance(requested_level, int) or requested_level < 1:
         raise ValueError(f"emancipate: requested_level must be a positive int, got {requested_level!r}")
 
-    # EM-MONOTONE: level may only increase
+    # EM-MONOTONE: level may only increase (Fix 4: single-step increments only)
     current_level = _get_current_emancipation_level(journal)
     if requested_level <= current_level:
         raise PermissionError(
@@ -861,8 +943,21 @@ def emancipate(
             "Emancipation is one-way and may only increase."
         )
 
-    # Milestone gate
-    _founder_did = milestone_evidence.get("founder_did") or founder_did or ""
+    # Fix 4: single-step increment only (no level jumps)
+    if requested_level != current_level + 1:
+        raise PermissionError(
+            f"emancipate: level jump rejected — requested level {requested_level} "
+            f"is not exactly current level {current_level} + 1. "
+            "Emancipation must proceed one step at a time."
+        )
+
+    # Fix 4: require a real founder_did (do not default to "")
+    _founder_did = milestone_evidence.get("founder_did") or founder_did
+    if not _founder_did:
+        raise ValueError(
+            "emancipate: founder_did is required to evaluate milestones"
+        )
+
     milestones = _check_milestones(journal, _founder_did)
 
     if requested_level >= 1 and not milestones["M1"]:
