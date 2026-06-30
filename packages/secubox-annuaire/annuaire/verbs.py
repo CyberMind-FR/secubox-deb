@@ -35,6 +35,7 @@ from .crypto import canonical_bytes, did_from_pubkey, sign, verify
 from .log import Journal
 from .model import (
     GENESIS_HASH,
+    ApprovalMode,
     Identity,
     Invitation,
     MemberState,
@@ -44,6 +45,9 @@ from .model import (
     QuorumRule,
     RevocationNotice,
     RevocationScope,
+    ServiceOffer,
+    Subscription,
+    SubscriptionState,
     now_rfc3339,
 )
 
@@ -1023,3 +1027,484 @@ def emancipate(
         "remove_anchor": remove_anchor,
         "milestones": milestones,
     }
+
+
+# ---------------------------------------------------------------------------
+# Service offers + subscriptions
+# ---------------------------------------------------------------------------
+
+def _get_offers(journal: Journal) -> List[Dict]:
+    """Return a list of the latest non-revoked, self-authored ServiceOffer payloads.
+
+    Self-authored: entry.author == offer.provider.
+    Non-revoked: no SERVICE_REVOKE_OFFER authored by the same provider exists after
+    the offer entry at the same service_id.
+
+    Returns one entry per service_id (the latest self-authored SERVICE_OFFER that has
+    not been revoked by its provider).
+    """
+    # Collect latest self-authored offer per service_id (by height)
+    offers: Dict[str, Dict] = {}      # service_id -> payload
+    offer_heights: Dict[str, int] = {}
+    revoked_ids: set = set()
+
+    for entry in journal.iter_entries():
+        if entry.op == Op.SERVICE_OFFER and entry.payload_type == "ServiceOffer":
+            sid = entry.payload.get("service_id")
+            provider = entry.payload.get("provider")
+            if sid and provider and entry.author == provider:
+                if entry.height > offer_heights.get(sid, -1):
+                    offers[sid] = entry.payload
+                    offer_heights[sid] = entry.height
+        elif entry.op == Op.SERVICE_REVOKE_OFFER:
+            sid = entry.payload.get("service_id")
+            provider = entry.payload.get("provider")
+            if sid and provider:
+                # Only count as revoked if authored by the provider of the offer
+                offer = offers.get(sid)
+                if offer and offer.get("provider") == entry.author:
+                    revoked_ids.add(sid)
+
+    return [v for k, v in offers.items() if k not in revoked_ids]
+
+
+def _get_offer(journal: Journal, service_id: str) -> Optional[Dict]:
+    """Return the latest non-revoked self-authored ServiceOffer for service_id, or None."""
+    for offer in _get_offers(journal):
+        if offer.get("service_id") == service_id:
+            return offer
+    return None
+
+
+def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionState:
+    """Derive the current SubscriptionState for subscription_id from the log.
+
+    Rules (in priority order):
+      1. REVOKED  — a SERVICE_REVOKE_SUB entry exists authored by the subscriber.
+      2. REJECTED — a SERVICE_REJECT entry exists authored by the offer's provider.
+      3. APPROVED — offer.approval_mode == AUTO, OR a SERVICE_APPROVE entry authored
+                    by the offer's provider exists.
+      4. PENDING  — otherwise.
+
+    Entries authored by the wrong party do NOT count (defense in depth).
+    """
+    # Find the subscription entry
+    sub_payload: Optional[Dict] = None
+    for entry in journal.iter_entries():
+        if (entry.op == Op.SERVICE_SUBSCRIBE
+                and entry.payload_type == "Subscription"
+                and entry.payload.get("subscription_id") == subscription_id):
+            sub_payload = entry.payload
+            break
+
+    if sub_payload is None:
+        raise ValueError(f"subscription_state: subscription {subscription_id!r} not found")
+
+    subscriber = sub_payload.get("subscriber")
+    service_id = sub_payload.get("service_id")
+
+    # Resolve the offer (may be revoked — we still need provider for auth checks)
+    offer_provider: Optional[str] = None
+    offer_approval_mode: str = ApprovalMode.PENDING.value
+    for entry in journal.iter_entries():
+        if (entry.op == Op.SERVICE_OFFER
+                and entry.payload_type == "ServiceOffer"
+                and entry.payload.get("service_id") == service_id):
+            provider = entry.payload.get("provider")
+            if provider and entry.author == provider:
+                offer_provider = provider
+                offer_approval_mode = entry.payload.get(
+                    "approval_mode", ApprovalMode.PENDING.value
+                )
+    # (Use the latest found — could be overridden by a newer offer for same service_id;
+    #  iterate the full log so the last match wins.)
+
+    approved = False
+    rejected = False
+    revoked_sub = False
+
+    for entry in journal.iter_entries():
+        payload = entry.payload
+        if payload.get("subscription_id") != subscription_id:
+            continue
+
+        if entry.op == Op.SERVICE_REVOKE_SUB and entry.author == subscriber:
+            revoked_sub = True
+
+        if entry.op == Op.SERVICE_APPROVE and offer_provider and entry.author == offer_provider:
+            approved = True
+
+        if entry.op == Op.SERVICE_REJECT and offer_provider and entry.author == offer_provider:
+            rejected = True
+
+    if revoked_sub:
+        return SubscriptionState.REVOKED
+    if rejected:
+        return SubscriptionState.REJECTED
+    if offer_approval_mode == ApprovalMode.AUTO.value or approved:
+        return SubscriptionState.APPROVED
+    return SubscriptionState.PENDING
+
+
+def offer_service(
+    journal: Journal,
+    provider_priv: bytes,
+    provider_did: str,
+    *,
+    name: str,
+    kind: str,
+    endpoint: str,
+    scope: Optional[Dict] = None,
+    approval_mode: str = "auto",
+    description: str = "",
+) -> ServiceOffer:
+    """SERVICE_OFFER: publish a signed service offer.
+
+    Self-certifying: entry.author == provider_did.
+
+    Args:
+        journal: the append-only Journal.
+        provider_priv: provider's 32-byte raw Ed25519 private key.
+        provider_did: provider's did:plc.
+        name: human-readable name.
+        kind: service kind (e.g. "module", "api", "mirror").
+        endpoint: mesh URL or local path.
+        scope: optional scope dict.
+        approval_mode: "auto" or "pending" (default: "auto").
+        description: human-readable description.
+
+    Returns:
+        The signed ServiceOffer.
+    """
+    service_id = _rand_hex(32)
+    offer = ServiceOffer(
+        service_id=service_id,
+        provider=provider_did,
+        name=name,
+        kind=kind,
+        endpoint=endpoint,
+        scope=scope or {},
+        approval_mode=ApprovalMode(approval_mode),
+        description=description,
+    )
+    full = offer.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(provider_priv, canonical_bytes(payload))
+
+    provider_pubkey = _get_inviter_pubkey(journal, provider_did)
+    journal.append(
+        op=Op.SERVICE_OFFER,
+        payload_type="ServiceOffer",
+        payload=payload,
+        author=provider_did,
+        sig=sig_hex,
+        author_pubkey_hex=provider_pubkey,
+    )
+
+    return ServiceOffer(**{**payload, "sig": sig_hex, "signer_did": provider_did})
+
+
+def revoke_offer(
+    journal: Journal,
+    provider_priv: bytes,
+    provider_did: str,
+    service_id: str,
+) -> Dict[str, Any]:
+    """SERVICE_REVOKE_OFFER: withdraw a service offer.
+
+    Only the offer's original provider may revoke it.
+
+    Args:
+        journal: the append-only Journal.
+        provider_priv: provider's 32-byte raw Ed25519 private key.
+        provider_did: provider's did:plc.
+        service_id: the service to revoke.
+
+    Returns:
+        Dict with revocation record.
+
+    Raises:
+        PermissionError: if provider_did is not the offer's provider.
+        ValueError: if the offer does not exist.
+    """
+    offer = _get_offer(journal, service_id)
+    if offer is None:
+        raise ValueError(f"revoke_offer: service {service_id!r} not found or already revoked")
+    if offer.get("provider") != provider_did:
+        raise PermissionError(
+            f"revoke_offer: {provider_did} is not the provider of service {service_id!r}"
+        )
+
+    revoke_payload: Dict[str, Any] = {
+        "service_id": service_id,
+        "provider": provider_did,
+        "revoked_at": now_rfc3339(),
+    }
+    sig_hex = sign(provider_priv, canonical_bytes(revoke_payload))
+
+    provider_pubkey = _get_inviter_pubkey(journal, provider_did)
+    journal.append(
+        op=Op.SERVICE_REVOKE_OFFER,
+        payload_type="ServiceRevokeOffer",
+        payload=revoke_payload,
+        author=provider_did,
+        sig=sig_hex,
+        author_pubkey_hex=provider_pubkey,
+    )
+
+    return {"status": "revoked", "service_id": service_id, "provider": provider_did}
+
+
+def subscribe(
+    journal: Journal,
+    subscriber_priv: bytes,
+    subscriber_did: str,
+    service_id: str,
+) -> Subscription:
+    """SERVICE_SUBSCRIBE: request access to a service offer.
+
+    Preconditions:
+      - The offer must exist and not be revoked.
+      - The subscriber must be a non-revoked MEMBER.
+
+    Args:
+        journal: the append-only Journal.
+        subscriber_priv: subscriber's 32-byte raw Ed25519 private key.
+        subscriber_did: subscriber's did:plc.
+        service_id: the service to subscribe to.
+
+    Returns:
+        The signed Subscription.
+
+    Raises:
+        ValueError: if the offer does not exist or is revoked.
+        PermissionError: if the subscriber is not a non-revoked MEMBER.
+    """
+    offer = _get_offer(journal, service_id)
+    if offer is None:
+        raise ValueError(f"subscribe: service {service_id!r} does not exist or has been revoked")
+
+    if not _is_non_revoked_member(journal, subscriber_did):
+        raise PermissionError(
+            f"subscribe: {subscriber_did} is not a non-revoked MEMBER — "
+            "only MEMBERs may subscribe to services"
+        )
+
+    subscription_id = _rand_hex(32)
+    sub = Subscription(
+        subscription_id=subscription_id,
+        subscriber=subscriber_did,
+        service_id=service_id,
+    )
+    full = sub.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(subscriber_priv, canonical_bytes(payload))
+
+    subscriber_pubkey = _get_inviter_pubkey(journal, subscriber_did)
+    journal.append(
+        op=Op.SERVICE_SUBSCRIBE,
+        payload_type="Subscription",
+        payload=payload,
+        author=subscriber_did,
+        sig=sig_hex,
+        author_pubkey_hex=subscriber_pubkey,
+    )
+
+    return Subscription(**{**payload, "sig": sig_hex, "signer_did": subscriber_did})
+
+
+def approve_subscription(
+    journal: Journal,
+    approver_priv: bytes,
+    approver_did: str,
+    subscription_id: str,
+) -> Dict[str, Any]:
+    """SERVICE_APPROVE: approve a pending subscription.
+
+    Only the provider of the subscribed service may approve.
+
+    Args:
+        journal: the append-only Journal.
+        approver_priv: approver's 32-byte raw Ed25519 private key.
+        approver_did: approver's did:plc.
+        subscription_id: the subscription to approve.
+
+    Returns:
+        Dict with approval record.
+
+    Raises:
+        PermissionError: if approver_did is not the service provider.
+        ValueError: if the subscription does not exist.
+    """
+    sub_payload = _get_subscription_payload(journal, subscription_id)
+    if sub_payload is None:
+        raise ValueError(f"approve_subscription: subscription {subscription_id!r} not found")
+
+    service_id = sub_payload.get("service_id")
+    offer = _get_offer(journal, service_id)
+    if offer is None:
+        # Offer may have been revoked — still resolve the provider for auth
+        offer = _find_any_offer(journal, service_id)
+    if offer is None or offer.get("provider") != approver_did:
+        raise PermissionError(
+            f"approve_subscription: {approver_did} is not the provider of service {service_id!r}"
+        )
+
+    approve_payload: Dict[str, Any] = {
+        "subscription_id": subscription_id,
+        "service_id": service_id,
+        "approver": approver_did,
+        "approved_at": now_rfc3339(),
+    }
+    sig_hex = sign(approver_priv, canonical_bytes(approve_payload))
+
+    approver_pubkey = _get_inviter_pubkey(journal, approver_did)
+    journal.append(
+        op=Op.SERVICE_APPROVE,
+        payload_type="ServiceApprove",
+        payload=approve_payload,
+        author=approver_did,
+        sig=sig_hex,
+        author_pubkey_hex=approver_pubkey,
+    )
+
+    return {"status": "approved", "subscription_id": subscription_id, "approver": approver_did}
+
+
+def reject_subscription(
+    journal: Journal,
+    rejecter_priv: bytes,
+    rejecter_did: str,
+    subscription_id: str,
+) -> Dict[str, Any]:
+    """SERVICE_REJECT: reject a pending subscription.
+
+    Only the provider of the subscribed service may reject.
+
+    Args:
+        journal: the append-only Journal.
+        rejecter_priv: rejecter's 32-byte raw Ed25519 private key.
+        rejecter_did: rejecter's did:plc.
+        subscription_id: the subscription to reject.
+
+    Returns:
+        Dict with rejection record.
+
+    Raises:
+        PermissionError: if rejecter_did is not the service provider.
+        ValueError: if the subscription does not exist.
+    """
+    sub_payload = _get_subscription_payload(journal, subscription_id)
+    if sub_payload is None:
+        raise ValueError(f"reject_subscription: subscription {subscription_id!r} not found")
+
+    service_id = sub_payload.get("service_id")
+    offer = _get_offer(journal, service_id)
+    if offer is None:
+        offer = _find_any_offer(journal, service_id)
+    if offer is None or offer.get("provider") != rejecter_did:
+        raise PermissionError(
+            f"reject_subscription: {rejecter_did} is not the provider of service {service_id!r}"
+        )
+
+    reject_payload: Dict[str, Any] = {
+        "subscription_id": subscription_id,
+        "service_id": service_id,
+        "rejecter": rejecter_did,
+        "rejected_at": now_rfc3339(),
+    }
+    sig_hex = sign(rejecter_priv, canonical_bytes(reject_payload))
+
+    rejecter_pubkey = _get_inviter_pubkey(journal, rejecter_did)
+    journal.append(
+        op=Op.SERVICE_REJECT,
+        payload_type="ServiceReject",
+        payload=reject_payload,
+        author=rejecter_did,
+        sig=sig_hex,
+        author_pubkey_hex=rejecter_pubkey,
+    )
+
+    return {"status": "rejected", "subscription_id": subscription_id, "rejecter": rejecter_did}
+
+
+def ingest_offer(
+    journal: Journal,
+    offer: ServiceOffer,
+    provider_pubkey_hex: str,
+) -> Dict[str, Any]:
+    """Federate a remote signed ServiceOffer into the local journal.
+
+    Verifies the offer's signature against the provider's public key BEFORE
+    writing anything to the log.  A bad or missing sig raises ValueError.
+
+    The offer is stored as authored by offer.provider (self-certifying
+    federation — the remote node's signature is the authority).
+
+    Args:
+        journal: the append-only Journal.
+        offer: a ServiceOffer received from a remote node.
+        provider_pubkey_hex: the provider's hex Ed25519 public key (for sig verification).
+
+    Returns:
+        Dict with ingestion record.
+
+    Raises:
+        ValueError: if the offer has no signature or the signature is invalid.
+    """
+    if not offer.sig:
+        raise ValueError("ingest_offer: offer carries no signature — cannot federate unsigned offer")
+
+    # Reconstruct the canonical payload that was signed: model_dump minus sig/signer_did
+    full = offer.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+
+    if not verify(provider_pubkey_hex, canonical_bytes(payload), offer.sig):
+        raise ValueError(
+            f"ingest_offer: signature verification failed for service {offer.service_id!r} "
+            "from provider {offer.provider!r} — offer rejected"
+        )
+
+    journal.append(
+        op=Op.SERVICE_OFFER,
+        payload_type="ServiceOffer",
+        payload=payload,
+        author=offer.provider,
+        sig=offer.sig,
+        author_pubkey_hex=provider_pubkey_hex,
+    )
+
+    return {"status": "ingested", "service_id": offer.service_id, "provider": offer.provider}
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers for service verbs
+# ---------------------------------------------------------------------------
+
+def _get_subscription_payload(journal: Journal, subscription_id: str) -> Optional[Dict]:
+    """Return the Subscription payload dict for subscription_id, or None."""
+    for entry in journal.iter_entries():
+        if (entry.op == Op.SERVICE_SUBSCRIBE
+                and entry.payload_type == "Subscription"
+                and entry.payload.get("subscription_id") == subscription_id):
+            return entry.payload
+    return None
+
+
+def _find_any_offer(journal: Journal, service_id: str) -> Optional[Dict]:
+    """Return the latest self-authored ServiceOffer for service_id (even if revoked).
+
+    Used for provider-authority checks where the offer may already be revoked.
+    """
+    best: Optional[Dict] = None
+    best_height = -1
+    for entry in journal.iter_entries():
+        if (entry.op == Op.SERVICE_OFFER
+                and entry.payload_type == "ServiceOffer"
+                and entry.payload.get("service_id") == service_id):
+            provider = entry.payload.get("provider")
+            if provider and entry.author == provider:
+                if entry.height > best_height:
+                    best_height = entry.height
+                    best = entry.payload
+    return best
