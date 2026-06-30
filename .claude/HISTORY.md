@@ -23,6 +23,31 @@ Page admin `https://admin.gk2.secubox.in/yacy/` cassée sur deux points, corrig�
 Déployé live sur gk2 (`/usr/share/secubox/www/yacy/index.html`, backup `.bak-pre-fix`),
 copie debian stagée synchronisée, bump 1.0.11 → 1.0.12. Assets `/shared/*` 200, JS
 `node --check` OK.
+
+**Cause racine réelle des cartes « unavailable » + « no search results »** : drift nginx
+live. `/etc/nginx/secubox-routes.d/yacy.conf` (inclus par le vhost admin) avait dérivé vers
+`proxy_pass …/aggregator.sock` en gardant le `rewrite` qui dénude le préfixe → l'aggregator
+(modules montés sur le chemin **complet** `/api/v1/yacy/*`) recevait `/access` nu → 404 →
+`.catch()` du JS → iframe jamais construit → pas d'UI YaCy. Réaligné sur la config livrée
+(`yacy.sock`, ~0,2 s vs 11-20 s via l'aggregator qui bloquait sa boucle). YaCy jamais cassé
+(freeworld, 352 global / 466 local pour « debian »). Même pattern que Lyrion #763 ci-dessous.
+
+**Phase 2 — yacyctl detection + sudoers + postinst + .deb** :
+- `yacyctl` reportait lxc « absent » / daemon « stopped » / overall **red** alors que tout
+  tournait : `secubox-yacy.service` tourne en `User=secubox` + `NoNewPrivileges=true`, et
+  `lxc-info`/`lxc-attach` exigent root (NNP bloque sudo). Remplacé par une **sonde réseau
+  privilège-free** (`curl http://$LXC_IP:$HTTP_PORT/`) — préserve le durcissement, signal
+  plus vrai. `lxc-info` gardé en enrichissement best-effort root-only. → vert via l'API.
+- Ship `/etc/sudoers.d/secubox-yacy` (lxc-*) pour `yacyctl reload` (restart daemon in-LXC).
+- `postinst` : `systemctl restart` inconditionnel — `deb-systemd-invoke restart` de
+  dh_installsystemd **refuse** de démarrer une unité *disabled* → upgrade laissait
+  `yacy.sock` absent → 502. (Piège de test : dpkg s'arrête sur un **prompt conffile** quand
+  on a édité les `/etc` à la main → `--force-confnew` pour aligner.)
+- Construit + installé `secubox-yacy_1.0.12-1~bookworm1_all.deb` (output/debs/). Upgrade
+  propre validé : service active+enabled, dashboard vert, recherche 466, route `yacy.sock`.
+
+---
+
 ## 2026-06-30 — Lyrion admin 404 → dedicated-socket extraction (#763)
 
 Page `https://admin.gk2.secubox.in/lyrion/` : tous les widgets en **HTTP 404**.

@@ -23,6 +23,14 @@ secubox-yacy (1.0.12-1~bookworm1) bookworm; urgency=medium
   * Ship /etc/sudoers.d/secubox-yacy (lxc-info/attach/start/stop) for
     `yacyctl reload`, which restarts the in-container daemon. Sibling
     pattern: secubox-streamlit, secubox-lxc.
+  * postinst: always `systemctl restart secubox-yacy.service`. The
+    maintainer scripts SIGTERM the unit on upgrade, but postinst only ran
+    `enable` — and dh_installsystemd's `deb-systemd-invoke restart` REFUSES
+    to start a disabled unit ("disabled ... not starting it"). On a board
+    where the unit was disabled, an upgrade left /run/secubox/yacy.sock gone
+    and nginx serving 502 until a manual restart. Plain systemctl restart
+    starts it regardless of enabled state; the host API does not need the
+    LXC, so it is safe on fresh installs too.
   * NOTE (live board drift, not a packaging change): on gk2 the installed
     /etc/nginx/secubox-routes.d/yacy.conf had drifted to
     `proxy_pass .../aggregator.sock` while keeping the prefix-stripping
