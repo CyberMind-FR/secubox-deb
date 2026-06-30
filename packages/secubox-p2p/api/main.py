@@ -62,16 +62,7 @@ ML_DEFAULT_MAX_DEPTH = 3
 
 
 def init_dirs():
-    try:
-        P2P_DIR.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        pass
-    # Also ensure dirs for patched paths (e.g. in tests via monkeypatch)
-    for _p in (ACTIVATION_FILE, SERVICES_FILE):
-        try:
-            _p.parent.mkdir(parents=True, exist_ok=True)
-        except (PermissionError, AttributeError):
-            pass
+    P2P_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def load_json(path: Path, default: Any = None) -> Any:

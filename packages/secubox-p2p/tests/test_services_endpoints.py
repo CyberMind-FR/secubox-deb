@@ -13,6 +13,7 @@ async def _override_jwt():
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "ACTIVATION_FILE", tmp_path / "activation.json")
     monkeypatch.setattr(main, "SERVICES_FILE", tmp_path / "services.json")
+    monkeypatch.setattr(main, "init_dirs", lambda: None)
     local = "did:plc:" + "a" * 32
     remote = "did:plc:" + "b" * 32
     monkeypatch.setattr(annuaire_client, "node_identity", lambda *a, **k: (local, "11" * 32))
