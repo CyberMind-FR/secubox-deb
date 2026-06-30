@@ -24,7 +24,16 @@ case "$1" in
 
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable secubox-yacy.service 2>/dev/null || true
-        # yacyctl install will start the FastAPI after the LXC is provisioned.
+        # Always (re)start the host API. The maintainer scripts SIGTERM the
+        # unit on upgrade, and the dh_installsystemd snippet below uses
+        # `deb-systemd-invoke restart`, which REFUSES to start a disabled
+        # unit ("disabled ... not starting it") — so on any board where the
+        # unit ended up disabled, an upgrade would leave /run/secubox/
+        # yacy.sock gone and nginx serving 502. Plain `systemctl restart`
+        # starts the unit regardless of enabled state (CSPN guideline:
+        # postinst must preserve runtime state). The host API (uvicorn) does
+        # not depend on the LXC, so this is safe on fresh installs too.
+        systemctl restart secubox-yacy.service 2>/dev/null || true
         ;;
 esac
 
