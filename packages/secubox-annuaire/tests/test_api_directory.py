@@ -30,7 +30,8 @@ def _seed_member(journal):
 
 
 @pytest.fixture
-def client(tmp_path):
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANNUAIRE_DIR_SYNC", "0")  # no background loop in tests
     from fastapi.testclient import TestClient
     from api import main as apimain
     apimain._journal = None

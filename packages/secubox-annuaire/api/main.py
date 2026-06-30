@@ -772,3 +772,37 @@ async def pull_log(req: PullLogRequest):
         return {"ingested": 0, "skipped": 0, "rejected": 0, "error": str(e)}
 
     return import_entries(get_journal(), entries)
+
+
+# ---------------------------------------------------------------------------
+# Directory replication background loop (gondwana P1, #768)
+#
+# Runs IN-PROCESS (this service owns the journal → no JWT, no second writer).
+# secubox-p2p owns the peer list (wg_mesh.json); we only read it. Disabled via
+# ANNUAIRE_DIR_SYNC=0 (tests / off-box). The blocking fetch+merge runs in a
+# worker thread so it never stalls the event loop.
+# ---------------------------------------------------------------------------
+
+
+@app.on_event("startup")
+async def _start_dir_sync():
+    import asyncio  # noqa: PLC0415
+    if os.environ.get("ANNUAIRE_DIR_SYNC", "1") != "1":
+        return
+    asyncio.create_task(_dir_sync_loop())
+
+
+async def _dir_sync_loop():
+    import asyncio  # noqa: PLC0415
+    from annuaire.mesh_sync import read_mesh_peers, sync_once  # noqa: PLC0415
+
+    interval = int(os.environ.get("ANNUAIRE_DIR_SYNC_INTERVAL", "120"))
+    peers_path = os.environ.get("ANNUAIRE_PEERS_PATH", "/var/lib/secubox/p2p/wg_mesh.json")
+    while True:
+        try:
+            peers = read_mesh_peers(peers_path)
+            if peers:
+                await asyncio.to_thread(sync_once, get_journal(), peers)
+        except Exception:
+            pass
+        await asyncio.sleep(interval)
