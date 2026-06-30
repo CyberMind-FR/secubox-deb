@@ -1,3 +1,18 @@
+secubox-annuaire (0.2.6-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#768): P2 config distribution — replica-side 4R apply.
+    - annuaire/config_apply.py: apply a signed ConfigBlob (payload carries the
+      config TEXT) to <dir>/<scope>.toml through a CSPN 4R double-buffer
+      (shadow -> validate content_hash + TOML parse -> atomic swap -> keep
+      .sbx-rollback). Idempotent by version; rejects hash-mismatch / unparseable
+      without touching the live file. Allowlist + single-writer gating (a node
+      never applies a scope it published).
+    - annuairectl: `publish-config` (primary publishes a TOML file as a signed,
+      versioned blob) and `apply` (replica applies allowed blobs, run as root).
+    - +7 tests; suite 177 green.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 18:30:00 +0200
+
 secubox-annuaire (0.2.5-1~bookworm1) bookworm; urgency=medium
 
   * fix(#768): correct the satellite-dashboard guard. The 0.2.4 check
