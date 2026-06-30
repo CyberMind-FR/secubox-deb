@@ -788,9 +788,6 @@
             const data = await apiGet('/services');
             const services = Array.isArray(data) ? data : (data && Array.isArray(data.services) ? data.services : []);
             const tbody = document.getElementById('services-table');
-            if (data && data.catalog_unavailable) {
-                console.log('[secubox-p2p] Annuaire catalog unavailable — showing local services only');
-            }
             if (services.length > 0) {
                 tbody.innerHTML = services.map(svc => {
                     const state = svc.subscription_state || 'n/a';
@@ -800,11 +797,11 @@
                     if (svc.source === 'p2p-local') {
                         actions = `<button class="btn btn-small btn-danger" onclick="unregisterService('${encodeURIComponent(svc.name)}')">Unregister</button>`;
                     } else if (svc.provider_label !== 'local' && state === 'not-subscribed') {
-                        actions = `<button class="btn btn-small" onclick="requestAccess('${escapeHtml(svc.service_id)}')">Request access</button>`;
+                        actions = `<button class="btn btn-small" onclick="requestAccess('${encodeURIComponent(svc.service_id)}')">Request access</button>`;
                     } else if (state === 'pending') {
                         actions = `<span class="text-muted">awaiting approval</span>`;
                     } else if (!svc.active) {
-                        actions = `<button class="btn btn-small" onclick="activateService('${escapeHtml(svc.service_id)}')">Activate</button>`;
+                        actions = `<button class="btn btn-small" onclick="activateService('${encodeURIComponent(svc.service_id)}')">Activate</button>`;
                     } else {
                         actions = `<span class="status-badge active">active</span>`;
                     }
@@ -820,6 +817,12 @@
                 }).join('');
             } else {
                 tbody.innerHTML = '<tr><td colspan="6">No services in catalog</td></tr>';
+            }
+            if (data && data.catalog_unavailable) {
+                console.log('[secubox-p2p] Annuaire catalog unavailable — showing local services only');
+                const noticeRow = document.createElement('tr');
+                noticeRow.innerHTML = '<td colspan="6" style="color:var(--cinnabar,#e63946)">⚠ Annuaire catalog unavailable — showing local services only</td>';
+                tbody.prepend(noticeRow);
             }
         }
 
