@@ -17,3 +17,21 @@ role           = "satellite"
 # a literal IP (pinned now) or a DDNS name (WireGuard re-resolves per
 # handshake, so the rendezvous can change IP without reconfiguring peers).
 master_endpoint = "82.67.100.75:51822"
+
+# ---------------------------------------------------------------------------
+# [mesh] — distributed directory placement (gondwana P1, #768)
+#
+# Distinct from [wireguard].role (the TRANSPORT rendezvous role,
+# master|satellite). This is the SERVICE-placement role consumed by the
+# directory / config-apply / routing layers:
+#   primary  — this node WRITES the directory record / config for its services
+#              (single-writer per service; the home node).
+#   replica  — this node only READS & applies what a primary publishes
+#              (config pulled, applied via the 4R double-buffer).
+#   gateway  — this node fronts egress / relay for peers (Tor, exit, mirror).
+#
+# sbx-dir-sync (timer) pulls peers' signed /log over the wg-mesh on every node
+# regardless of role; `role` governs who may PUBLISH vs only CONSUME.
+# ---------------------------------------------------------------------------
+[mesh]
+role = "replica"

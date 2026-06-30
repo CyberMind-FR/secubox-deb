@@ -31,14 +31,16 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .crypto import canonical_bytes, did_from_pubkey, sign, verify
+from .crypto import canonical_bytes, did_from_pubkey, public_from_private, sign, verify
 from .log import Journal
 from .model import (
     GENESIS_HASH,
     ApprovalMode,
+    ConfigBlob,
     Identity,
     Invitation,
     MemberState,
+    NodeRecord,
     Op,
     Proposal,
     ProposalType,
@@ -330,6 +332,73 @@ def _make_identity_payload(
 # ---------------------------------------------------------------------------
 # Public verbs
 # ---------------------------------------------------------------------------
+
+def genesis(
+    journal: Journal,
+    node_priv: bytes,
+    *,
+    jurisdiction: Optional[List] = None,
+    hardware_attest: Optional[Dict] = None,
+) -> Identity:
+    """GENESIS: a node self-attests as a founding MEMBER (root of trust).
+
+    The substrate has a bootstrap paradox: invite() and subscribe() require a
+    non-revoked MEMBER, but join() needs an invitation issued by a MEMBER — so
+    the very first member can be created by no one. genesis() breaks the cycle:
+    a node mints its own self-signed MEMBER Identity. The DID is derived from
+    the node's public key (self-certifying: did == sha256(pubkey)[:32]), so the
+    identity needs no external authority to be trusted — anyone can recompute
+    the binding.
+
+    `invited_by` is left empty: a founder is grafted by no one. This is
+    deliberate — _count_independent_domains() ignores empty `invited_by`, so a
+    founder never inflates emancipation plurality (Fix 4).
+
+    Idempotent: if a self-authored Identity already exists for this node's DID,
+    genesis() returns it unchanged rather than forking the chain. A node
+    bootstraps exactly once.
+
+    Args:
+        journal: the append-only Journal.
+        node_priv: the node's 32-byte raw Ed25519 private key.
+        jurisdiction: optional coordinate-free JuridictionTag list.
+        hardware_attest: optional hardware attestation dict.
+
+    Returns:
+        The node's MEMBER Identity (existing one if already bootstrapped).
+    """
+    pub_bytes = public_from_private(node_priv)
+    pub_hex = pub_bytes.hex()
+    did = did_from_pubkey(pub_bytes)
+
+    # Idempotency guard — never fork an already-bootstrapped node.
+    existing = _get_latest_identity(journal, did)
+    if existing is not None and existing.get("did") == did:
+        return Identity(**existing)
+
+    ident = Identity(
+        did=did,
+        pubkey=pub_hex,
+        self_cert_digest=did.split(":")[-1],
+        state=MemberState.MEMBER,
+        jurisdiction=jurisdiction or [],
+        hardware_attest=hardware_attest,
+        invited_by=None,
+    )
+    full = ident.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(node_priv, canonical_bytes(payload))
+
+    journal.append(
+        op=Op.GENESIS,
+        payload_type="Identity",
+        payload=payload,
+        author=did,
+        sig=sig_hex,
+        author_pubkey_hex=pub_hex,   # bootstrap: pubkey not yet in the log
+    )
+    return Identity(**{**payload, "sig": sig_hex, "signer_did": did})
+
 
 def auto_add(journal: Journal, peer_identity: Identity) -> Identity:
     """AUTO-ADD: post an OBSERVED entry for a peer.
@@ -1043,8 +1112,12 @@ def _get_offers(journal: Journal) -> List[Dict]:
     Returns one entry per service_id (the latest self-authored SERVICE_OFFER that has
     not been revoked by its provider).
     """
-    # Collect latest self-authored offer per service_id (by height)
-    offers: Dict[str, Dict] = {}      # service_id -> payload
+    # Collect the latest self-authored offer entry per service_id (by height).
+    # We keep the whole LogEntry (not just .payload) so we can re-attach the
+    # signature — the stored payload deliberately omits sig/signer_did (they
+    # are not part of the signed bytes), but a federation consumer needs the
+    # signature to verify the offer. See _enrich_offer below.
+    offer_entries: Dict[str, "object"] = {}   # service_id -> LogEntry
     offer_heights: Dict[str, int] = {}
     revoked_ids: set = set()
 
@@ -1054,18 +1127,48 @@ def _get_offers(journal: Journal) -> List[Dict]:
             provider = entry.payload.get("provider")
             if sid and provider and entry.author == provider:
                 if entry.height > offer_heights.get(sid, -1):
-                    offers[sid] = entry.payload
+                    offer_entries[sid] = entry
                     offer_heights[sid] = entry.height
         elif entry.op == Op.SERVICE_REVOKE_OFFER:
             sid = entry.payload.get("service_id")
             provider = entry.payload.get("provider")
             if sid and provider:
                 # Only count as revoked if authored by the provider of the offer
-                offer = offers.get(sid)
-                if offer and offer.get("provider") == entry.author:
+                ent = offer_entries.get(sid)
+                if ent and ent.payload.get("provider") == entry.author:
                     revoked_ids.add(sid)
 
-    return [v for k, v in offers.items() if k not in revoked_ids]
+    return [
+        _enrich_offer(journal, ent)
+        for sid, ent in offer_entries.items()
+        if sid not in revoked_ids
+    ]
+
+
+def _enrich_offer(journal: Journal, entry) -> Dict:
+    """Return a self-contained, verifiable offer dict for federation/export.
+
+    The stored payload omits ``sig``/``signer_did`` (they are not part of the
+    signed canonical bytes) and never carried the provider's public key. A
+    remote consumer needs all three to verify an offer trustlessly:
+
+      * ``sig``            — the provider's signature over the canonical payload
+      * ``signer_did``     — the authoring DID (== provider)
+      * ``provider_pubkey``— the provider's Ed25519 public key, so the consumer
+                             can check both that the sig is valid AND that
+                             ``did_from_pubkey(pubkey) == provider`` (the
+                             self-certifying binding). ``provider_pubkey`` is
+                             transport metadata only — it is NOT part of the
+                             signed payload and must be stripped before the
+                             ServiceOffer model is reconstructed (extra=forbid).
+    """
+    out = dict(entry.payload)
+    out["sig"] = entry.sig
+    out["signer_did"] = entry.author
+    pubkey = _get_inviter_pubkey(journal, entry.author)
+    if pubkey:
+        out["provider_pubkey"] = pubkey
+    return out
 
 
 def _get_offer(journal: Journal, service_id: str) -> Optional[Dict]:
@@ -1455,6 +1558,22 @@ def ingest_offer(
     if not offer.sig:
         raise ValueError("ingest_offer: offer carries no signature — cannot federate unsigned offer")
 
+    # Self-certifying binding: the provider DID MUST be the hash of the pubkey
+    # we are about to trust. Without this, a caller could present their own
+    # keypair plus a matching signature and claim ANY provider DID — the sig
+    # check alone only proves "whoever owns this pubkey signed it", not that
+    # the pubkey belongs to offer.provider. did:plc is sha256(pubkey)[:32], so
+    # this check needs no directory and no prior trust in the provider.
+    try:
+        derived_did = did_from_pubkey(bytes.fromhex(provider_pubkey_hex))
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"ingest_offer: invalid provider pubkey hex — {exc}")
+    if derived_did != offer.provider:
+        raise ValueError(
+            f"ingest_offer: self-certification failed — pubkey hashes to {derived_did!r} "
+            f"but offer claims provider {offer.provider!r}; offer rejected"
+        )
+
     # Reconstruct the canonical payload that was signed: model_dump minus sig/signer_did
     full = offer.model_dump()
     payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
@@ -1475,6 +1594,270 @@ def ingest_offer(
     )
 
     return {"status": "ingested", "service_id": offer.service_id, "provider": offer.provider}
+
+
+# ---------------------------------------------------------------------------
+# Directory verbs — NodeRecord + ConfigBlob (gondwana P1, #768)
+#
+# The annuaire is the distributed directory: nodes publish their own signed
+# NodeRecord (mesh peer registry, public wg key only), and a service's home node
+# publishes signed, versioned ConfigBlobs. Both are self-certifying
+# (entry.author == subject). Federation reuses the verify-before-append pattern.
+# ---------------------------------------------------------------------------
+
+def publish_node(
+    journal: Journal,
+    node_priv: bytes,
+    node_did: str,
+    *,
+    node_id: str,
+    boxname: str,
+    pubkey_wg: str,
+    mesh_ip: str,
+    ddns: str,
+    endpoint: Optional[str] = None,
+) -> NodeRecord:
+    """NODE_PUBLISH: publish this node's signed registry record (self-certifying)."""
+    rec = NodeRecord(
+        did=node_did, node_id=node_id, boxname=boxname, pubkey_wg=pubkey_wg,
+        mesh_ip=mesh_ip, ddns=ddns, endpoint=endpoint,
+    )
+    full = rec.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(node_priv, canonical_bytes(payload))
+    node_pubkey = _get_inviter_pubkey(journal, node_did)
+    journal.append(
+        op=Op.NODE_PUBLISH, payload_type="NodeRecord", payload=payload,
+        author=node_did, sig=sig_hex, author_pubkey_hex=node_pubkey,
+    )
+    return NodeRecord(**{**payload, "sig": sig_hex, "signer_did": node_did})
+
+
+def _get_nodes(journal: Journal) -> List[Dict]:
+    """Return the latest self-authored NodeRecord payload per did."""
+    nodes: Dict[str, Dict] = {}
+    heights: Dict[str, int] = {}
+    for entry in journal.iter_entries():
+        if entry.op == Op.NODE_PUBLISH and entry.payload_type == "NodeRecord":
+            d = entry.payload.get("did")
+            if d and entry.author == d and entry.height > heights.get(d, -1):
+                nodes[d] = entry.payload
+                heights[d] = entry.height
+    return list(nodes.values())
+
+
+def publish_config(
+    journal: Journal,
+    publisher_priv: bytes,
+    publisher_did: str,
+    *,
+    scope: str,
+    version: int,
+    content_hash: str,
+    payload: Optional[Dict] = None,
+    payload_uri: Optional[str] = None,
+    valid_until: Optional[str] = None,
+    config_id: Optional[str] = None,
+) -> ConfigBlob:
+    """CONFIG_PUBLISH: publish a signed, versioned config blob (self-certifying).
+
+    config_id defaults to ``cfg-<scope>`` so later versions supersede earlier
+    ones for the same scope (single-writer, last-writer-wins by version).
+    """
+    cid = config_id or f"cfg-{scope}"
+    blob = ConfigBlob(
+        config_id=cid, publisher=publisher_did, scope=scope, version=version,
+        content_hash=content_hash, payload=payload, payload_uri=payload_uri,
+        valid_until=valid_until,
+    )
+    full = blob.model_dump()
+    p = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(publisher_priv, canonical_bytes(p))
+    pub = _get_inviter_pubkey(journal, publisher_did)
+    journal.append(
+        op=Op.CONFIG_PUBLISH, payload_type="ConfigBlob", payload=p,
+        author=publisher_did, sig=sig_hex, author_pubkey_hex=pub,
+    )
+    return ConfigBlob(**{**p, "sig": sig_hex, "signer_did": publisher_did})
+
+
+def revoke_config(
+    journal: Journal,
+    publisher_priv: bytes,
+    publisher_did: str,
+    config_id: str,
+) -> Dict[str, Any]:
+    """CONFIG_REVOKE: withdraw a config blob. Only its publisher may revoke."""
+    blob = _get_config(journal, config_id)
+    if blob is None:
+        raise ValueError(f"revoke_config: config {config_id!r} not found or already revoked")
+    if blob.get("publisher") != publisher_did:
+        raise PermissionError(
+            f"revoke_config: {publisher_did} is not the publisher of config {config_id!r}"
+        )
+    revoke_payload: Dict[str, Any] = {
+        "config_id": config_id,
+        "publisher": publisher_did,
+        "revoked_at": now_rfc3339(),
+    }
+    sig_hex = sign(publisher_priv, canonical_bytes(revoke_payload))
+    pub = _get_inviter_pubkey(journal, publisher_did)
+    journal.append(
+        op=Op.CONFIG_REVOKE, payload_type="ConfigRevoke", payload=revoke_payload,
+        author=publisher_did, sig=sig_hex, author_pubkey_hex=pub,
+    )
+    return {"status": "revoked", "config_id": config_id, "publisher": publisher_did}
+
+
+def _get_configs(journal: Journal) -> List[Dict]:
+    """Return latest non-revoked self-authored ConfigBlob payloads.
+
+    Last-writer-wins by (version, height) so the result converges across the
+    mesh regardless of the order in which peers ingested entries. A revocation
+    counts only when authored by the blob's publisher.
+    """
+    blobs: Dict[str, Dict] = {}
+    best: Dict[str, tuple] = {}
+    revoked: Dict[str, str] = {}
+    for entry in journal.iter_entries():
+        if entry.op == Op.CONFIG_PUBLISH and entry.payload_type == "ConfigBlob":
+            cid = entry.payload.get("config_id")
+            publisher = entry.payload.get("publisher")
+            if cid and publisher and entry.author == publisher:
+                key = (entry.payload.get("version", 0), entry.height)
+                if key > best.get(cid, (-1, -1)):
+                    blobs[cid] = entry.payload
+                    best[cid] = key
+        elif entry.op == Op.CONFIG_REVOKE:
+            cid = entry.payload.get("config_id")
+            if cid:
+                revoked[cid] = entry.author
+    return [
+        payload for cid, payload in blobs.items()
+        if not (cid in revoked and revoked[cid] == payload.get("publisher"))
+    ]
+
+
+def _get_config(journal: Journal, config_id: str) -> Optional[Dict]:
+    """Return the latest non-revoked self-authored ConfigBlob for config_id, or None."""
+    for blob in _get_configs(journal):
+        if blob.get("config_id") == config_id:
+            return blob
+    return None
+
+
+def ingest_config(
+    journal: Journal,
+    blob: ConfigBlob,
+    publisher_pubkey_hex: str,
+) -> Dict[str, Any]:
+    """Federate a remote signed ConfigBlob into the local journal.
+
+    Verifies the signature against the publisher's public key BEFORE writing.
+    A bad or missing sig raises ValueError. Stored as authored by blob.publisher.
+    """
+    if not blob.sig:
+        raise ValueError("ingest_config: blob carries no signature — cannot federate unsigned config")
+    full = blob.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    if not verify(publisher_pubkey_hex, canonical_bytes(payload), blob.sig):
+        raise ValueError(
+            f"ingest_config: signature verification failed for config {blob.config_id!r} "
+            f"from publisher {blob.publisher!r} — rejected"
+        )
+    journal.append(
+        op=Op.CONFIG_PUBLISH, payload_type="ConfigBlob", payload=payload,
+        author=blob.publisher, sig=blob.sig, author_pubkey_hex=publisher_pubkey_hex,
+    )
+    return {"status": "ingested", "config_id": blob.config_id, "publisher": blob.publisher}
+
+
+# ---------------------------------------------------------------------------
+# Federation gossip — generic log replication (the /log pull core, #768)
+#
+# Every annuaire entry is self-certifying: its author is a did:plc and the
+# author's sig covers canonical_bytes(payload). Replication therefore does NOT
+# copy chain structure (prev_hash/entry_hash are local) — it re-appends each
+# foreign entry's payload+sig into the LOCAL chain, preserving the author's
+# signature. Dedup is by (author, sig): the sig is over the canonical payload,
+# so it identifies a logical record independently of chain position. Pull-only,
+# last-writer-wins at the state layer (_get_nodes/_get_configs/_get_offers).
+# ---------------------------------------------------------------------------
+
+def export_entries(journal: Journal) -> List[Dict[str, Any]]:
+    """Serialize the local log for a peer to pull.
+
+    Each item: {op, payload_type, payload, author, author_pubkey, sig}. The
+    author_pubkey is resolved from the author's Identity entry so a consumer
+    can verify without prior knowledge (and check the self-certifying binding).
+    Entries are emitted in height order so version ties resolve consistently.
+    """
+    out: List[Dict[str, Any]] = []
+    for entry in journal.iter_entries():
+        out.append({
+            "op": entry.op.value if hasattr(entry.op, "value") else entry.op,
+            "payload_type": entry.payload_type,
+            "payload": entry.payload,
+            "author": entry.author,
+            "author_pubkey": _get_inviter_pubkey(journal, entry.author),
+            "sig": entry.sig,
+        })
+    return out
+
+
+def _seen_author_sig(journal: Journal) -> set:
+    return {(e.author, e.sig) for e in journal.iter_entries()}
+
+
+def import_entries(journal: Journal, entries: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Merge remote log entries into the local journal (federation pull).
+
+    For each entry not already present (by (author, sig)):
+      1. self-certifying check: did_from_pubkey(author_pubkey) == author
+      2. signature verification over canonical_bytes(payload)
+      3. re-append locally (re-chained; the author's sig is preserved)
+
+    A malformed, forged, or author-spoofed entry is counted in `rejected` and
+    skipped — never appended. Idempotent: a re-pull skips everything.
+    """
+    seen = _seen_author_sig(journal)
+    ingested = skipped = rejected = 0
+    for e in entries:
+        author = e.get("author")
+        sig = e.get("sig")
+        pub = e.get("author_pubkey")
+        payload = e.get("payload")
+        op = e.get("op")
+        ptype = e.get("payload_type")
+        if not (author and sig and pub and payload is not None and op and ptype):
+            rejected += 1
+            continue
+        if (author, sig) in seen:
+            skipped += 1
+            continue
+        # Self-certifying binding: the did MUST hash to the supplied pubkey.
+        try:
+            if did_from_pubkey(bytes.fromhex(pub)) != author:
+                rejected += 1
+                continue
+        except (ValueError, TypeError):
+            rejected += 1
+            continue
+        if not verify(pub, canonical_bytes(payload), sig):
+            rejected += 1
+            continue
+        try:
+            op_enum = Op(op)
+        except ValueError:
+            rejected += 1
+            continue
+        journal.append(
+            op=op_enum, payload_type=ptype, payload=payload,
+            author=author, sig=sig, author_pubkey_hex=pub,
+        )
+        seen.add((author, sig))
+        ingested += 1
+    return {"ingested": ingested, "skipped": skipped, "rejected": rejected}
 
 
 # ---------------------------------------------------------------------------
