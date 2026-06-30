@@ -103,3 +103,30 @@ def test_log_pull_unreachable_is_graceful(client):
     assert r.status_code == 200
     body = r.json()
     assert body["ingested"] == 0 and "error" in body
+
+
+def test_publish_self_node_idempotent(tmp_path, monkeypatch):
+    from annuaire import mesh_sync
+    from annuaire.verbs import _get_nodes
+    from api import main as apimain
+
+    monkeypatch.setenv("ANNUAIRE_DIR_SYNC", "0")
+    apimain._journal = None
+    apimain._DB_PATH = str(tmp_path / "j.db")
+    j = apimain.get_journal()
+    priv, _pub, did = _seed_member(j)  # node key == the member's key → identity resolves
+
+    keyp = tmp_path / "node.key"
+    keyp.write_text(priv.hex())
+    monkeypatch.setenv("ANNUAIRE_KEY_PATH", str(keyp))
+    meta = {"node_id": "sb-x", "boxname": "gk2", "pubkey_wg": "W",
+            "mesh_ip": "10.10.0.1", "ddns": "gk2.secubox.in", "endpoint": None}
+    monkeypatch.setattr(mesh_sync, "read_self_meta", lambda *a, **k: dict(meta))
+
+    apimain._publish_self_node()
+    nodes = [n for n in _get_nodes(j) if n["did"] == did]
+    assert len(nodes) == 1 and nodes[0]["mesh_ip"] == "10.10.0.1"
+
+    h1 = j.tip().height
+    apimain._publish_self_node()  # unchanged metadata → no new log entry
+    assert j.tip().height == h1

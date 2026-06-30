@@ -46,6 +46,45 @@ def read_mesh_peers(path: str = DEFAULT_PEERS_PATH) -> List[Dict[str, str]]:
     return peers
 
 
+def read_self_meta(
+    wg_path: str = DEFAULT_PEERS_PATH,
+    node_id_path: str = "/var/lib/secubox/p2p/node.id",
+    hostname: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Build this node's NodeRecord fields from secubox-p2p's local state.
+
+    Returns {node_id, boxname, pubkey_wg, mesh_ip, ddns, endpoint} or None when
+    the mesh isn't provisioned (no wg_mesh.json / no self address) — the node
+    then simply doesn't publish a record. boxname falls back to the DDNS label,
+    then the hostname. We don't know our own public IP here, so reachability is
+    name-based via ddns and endpoint stays None.
+    """
+    try:
+        d = json.loads(Path(wg_path).read_text())
+    except (OSError, ValueError):
+        return None
+    addr = (d.get("address") or "").split("/")[0]
+    if not addr:
+        return None
+    ddns = d.get("ddns") or ""
+    if hostname is None:
+        import socket  # noqa: PLC0415
+        hostname = socket.gethostname()
+    boxname = (ddns.split(".")[0] if ddns else "") or hostname
+    try:
+        node_id = Path(node_id_path).read_text().strip()
+    except OSError:
+        node_id = f"sb-{boxname}"
+    return {
+        "node_id": node_id,
+        "boxname": boxname,
+        "pubkey_wg": d.get("public_key") or "",
+        "mesh_ip": addr,
+        "ddns": ddns or f"{boxname}.secubox.in",
+        "endpoint": None,
+    }
+
+
 def http_fetch(url: str, timeout: int = 5) -> List[Dict[str, Any]]:
     """Fetch a peer's /log/export and return its `entries` list (production fetcher)."""
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
