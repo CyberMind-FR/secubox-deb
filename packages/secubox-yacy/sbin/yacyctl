@@ -77,10 +77,17 @@ daemon_running() {
 }
 host_api_running() { systemctl is-active --quiet secubox-yacy.service 2>/dev/null; }
 
+# Probe-aware lxc cell: running (probe or lxc-info), else stopped if defined,
+# else absent — without requiring root.
+lxc_display_state() {
+    if lxc_running; then echo "running"
+    elif lxc_exists; then local s; s=$(lxc_state); echo "${s:-stopped}"
+    else echo "absent"; fi
+}
+
 emit_components_json() {
     local lxc_st daemon_st api_st
-    if lxc_exists; then lxc_st=$(lxc_state); [ -z "$lxc_st" ] && lxc_st="absent"
-    else lxc_st="absent"; fi
+    lxc_st=$(lxc_display_state)
     daemon_running && daemon_st="running" || daemon_st="stopped"
     host_api_running && api_st="running" || api_st="stopped"
     cat <<EOF
@@ -98,9 +105,9 @@ EOF
 
 emit_components_text() {
     printf '%-12s %-12s %s\n' "COMPONENT" "STATE" "DETAIL"
-    local s
-    if lxc_exists; then s=$(lxc_state); [ -z "$s" ] && s="absent"; printf '%-12s %-12s %s\n' "lxc" "$s" "$LXC_NAME @ $LXC_IP on br-lxc"
-    else printf '%-12s %-12s %s\n' "lxc" "absent" "$LXC_NAME — run 'yacyctl install'"; fi
+    local s; s=$(lxc_display_state)
+    if [ "$s" = "absent" ]; then printf '%-12s %-12s %s\n' "lxc" "absent" "$LXC_NAME — run 'yacyctl install'"
+    else printf '%-12s %-12s %s\n' "lxc" "$s" "$LXC_NAME @ $LXC_IP on br-lxc"; fi
     daemon_running && printf '%-12s %-12s %s\n' "daemon" "running" "yacy ($PEER_MODE), port $HTTP_PORT" \
                    || printf '%-12s %-12s %s\n' "daemon" "stopped" "yacy ($PEER_MODE), port $HTTP_PORT"
     host_api_running && printf '%-12s %-12s %s\n' "host-api" "running" "secubox-yacy.service (uvicorn)" \

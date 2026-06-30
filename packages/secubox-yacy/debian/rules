@@ -20,3 +20,7 @@ override_dh_auto_install:
 	[ -f conf/yacy.toml.example ] && cp conf/yacy.toml.example debian/secubox-yacy/etc/secubox/yacy.toml.example || true
 	install -d debian/secubox-yacy/usr/share/secubox/lib/yacy
 	[ -d lib/yacy ] && cp -r lib/yacy/. debian/secubox-yacy/usr/share/secubox/lib/yacy/ || true
+	# sudoers: let the secubox-run FastAPI restart the in-container daemon
+	# (yacyctl reload → lxc-attach needs root). Sibling: secubox-streamlit.
+	install -d debian/secubox-yacy/etc/sudoers.d
+	[ -f sudoers.d/secubox-yacy ] && install -m 440 sudoers.d/secubox-yacy debian/secubox-yacy/etc/sudoers.d/ || true
