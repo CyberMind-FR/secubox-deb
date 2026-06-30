@@ -11,16 +11,80 @@ carries signed NodeRecords (the mesh peer registry) and signed ConfigBlobs
 (versioned config distribution). This first slice covers the models + Op enum;
 verbs, /log pull federation and the p2p publisher land in later slices.
 """
+import hashlib
+
 import pytest
 from pydantic import ValidationError
 
-from annuaire.crypto import did_from_pubkey, generate_keypair
+from annuaire.crypto import (
+    canonical_bytes,
+    did_from_pubkey,
+    generate_keypair,
+    sign,
+)
+from annuaire.log import Journal
 from annuaire.model import (
     ConfigBlob,
+    Identity,
+    MemberState,
     NodeRecord,
     Op,
     now_rfc3339,
 )
+from annuaire.resolver import can
+from annuaire.verbs import (
+    _get_config,
+    _get_configs,
+    _get_nodes,
+    ingest_config,
+    publish_config,
+    publish_node,
+    revoke_config,
+)
+
+
+# ---------------------------------------------------------------------------
+# Fixtures / helpers (mirror tests/test_services.py)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def tmp_journal(tmp_path):
+    return Journal(str(tmp_path / "test.db"))
+
+
+def _make_member(journal: Journal):
+    """Bootstrap a MEMBER node; returns (priv, pub, did)."""
+    priv, pub = generate_keypair()
+    did = did_from_pubkey(pub)
+    digest = hashlib.sha256(pub).hexdigest()[:32]
+    ident = Identity(did=did, pubkey=pub.hex(), self_cert_digest=digest, state=MemberState.MEMBER)
+    full = ident.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    journal.append(
+        op=Op.INVITE_ACCEPT, payload_type="Identity", payload=payload,
+        author=did, sig=sign(priv, canonical_bytes(payload)), author_pubkey_hex=pub.hex(),
+    )
+    return priv, pub, did
+
+
+def _make_observed(journal: Journal):
+    """Bootstrap an OBSERVED node; returns (priv, pub, did)."""
+    priv, pub = generate_keypair()
+    did = did_from_pubkey(pub)
+    digest = hashlib.sha256(pub).hexdigest()[:32]
+    ident = Identity(did=did, pubkey=pub.hex(), self_cert_digest=digest, state=MemberState.OBSERVED)
+    full = ident.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    payload["state"] = MemberState.OBSERVED.value
+    journal.append(
+        op=Op.AUTO_ADD, payload_type="Identity", payload=payload,
+        author=did, sig=sign(priv, canonical_bytes(payload)), author_pubkey_hex=pub.hex(),
+    )
+    return priv, pub, did
+
+
+def _h(s: str) -> str:
+    return hashlib.blake2b(s.encode(), digest_size=32).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -158,3 +222,115 @@ def test_config_blob_rejects_bad_publisher():
             version=1,
             content_hash="d" * 64,
         )
+
+
+# ---------------------------------------------------------------------------
+# publish_node → directory peer registry
+# ---------------------------------------------------------------------------
+
+def test_publish_node_appears_in_registry(tmp_journal):
+    priv, pub, did = _make_member(tmp_journal)
+    rec = publish_node(
+        tmp_journal, priv, did,
+        node_id="sb-aabbccddeeff", boxname="gk2",
+        pubkey_wg="W" * 44, mesh_ip="10.10.0.1", ddns="gk2.secubox.in",
+        endpoint="82.67.100.75:51822",
+    )
+    assert rec.sig is not None
+    nodes = _get_nodes(tmp_journal)
+    assert any(n["did"] == did and n["mesh_ip"] == "10.10.0.1" for n in nodes)
+
+
+def test_publish_node_latest_supersedes(tmp_journal):
+    priv, pub, did = _make_member(tmp_journal)
+    publish_node(tmp_journal, priv, did, node_id="sb-x", boxname="gk2",
+                 pubkey_wg="W" * 44, mesh_ip="10.10.0.1", ddns="gk2.secubox.in")
+    publish_node(tmp_journal, priv, did, node_id="sb-x", boxname="gk2",
+                 pubkey_wg="W" * 44, mesh_ip="10.10.0.7", ddns="gk2.secubox.in")
+    nodes = [n for n in _get_nodes(tmp_journal) if n["did"] == did]
+    assert len(nodes) == 1 and nodes[0]["mesh_ip"] == "10.10.0.7"
+
+
+# ---------------------------------------------------------------------------
+# publish_config → versioned config distribution
+# ---------------------------------------------------------------------------
+
+def test_publish_config_appears(tmp_journal):
+    priv, pub, did = _make_member(tmp_journal)
+    blob = publish_config(tmp_journal, priv, did, scope="yacy", version=1,
+                          content_hash=_h("v1"), payload={"peer": {"mode": "freeworld"}})
+    assert blob.sig is not None
+    got = _get_config(tmp_journal, blob.config_id)
+    assert got is not None and got["version"] == 1
+    assert got["payload"] == {"peer": {"mode": "freeworld"}}
+
+
+def test_publish_config_higher_version_wins_regardless_of_height(tmp_journal):
+    # Last-writer-wins is by VERSION, not by log height — convergence across the
+    # mesh requires this (peers ingest in different orders).
+    priv, pub, did = _make_member(tmp_journal)
+    b1 = publish_config(tmp_journal, priv, did, scope="dns", version=5, content_hash=_h("v5"))
+    # a later-appended entry with a LOWER version must NOT win
+    publish_config(tmp_journal, priv, did, scope="dns", version=2,
+                   content_hash=_h("v2"), config_id=b1.config_id)
+    got = _get_config(tmp_journal, b1.config_id)
+    assert got["version"] == 5
+
+
+def test_revoke_config_by_publisher(tmp_journal):
+    priv, pub, did = _make_member(tmp_journal)
+    blob = publish_config(tmp_journal, priv, did, scope="dns", version=1, content_hash=_h("v1"))
+    revoke_config(tmp_journal, priv, did, blob.config_id)
+    assert _get_config(tmp_journal, blob.config_id) is None
+    assert all(c["config_id"] != blob.config_id for c in _get_configs(tmp_journal))
+
+
+def test_revoke_config_by_non_publisher_denied(tmp_journal):
+    priv, pub, did = _make_member(tmp_journal)
+    other_priv, other_pub, other_did = _make_member(tmp_journal)
+    blob = publish_config(tmp_journal, priv, did, scope="dns", version=1, content_hash=_h("v1"))
+    with pytest.raises(PermissionError):
+        revoke_config(tmp_journal, other_priv, other_did, blob.config_id)
+
+
+# ---------------------------------------------------------------------------
+# ingest_config → federation (sig-verify-before-append)
+# ---------------------------------------------------------------------------
+
+def test_ingest_config_valid_sig(tmp_journal, tmp_path):
+    # Producer journal publishes; a separate consumer journal ingests the blob.
+    prod = tmp_journal
+    priv, pub, did = _make_member(prod)
+    blob = publish_config(prod, priv, did, scope="yacy", version=3, content_hash=_h("v3"),
+                          payload={"a": 1})
+
+    consumer = Journal(str(tmp_path / "consumer.db"))
+    res = ingest_config(consumer, blob, pub.hex())
+    assert res["status"] == "ingested"
+    assert _get_config(consumer, blob.config_id)["version"] == 3
+
+
+def test_ingest_config_forged_sig_rejected(tmp_journal):
+    priv, pub, did = _make_member(tmp_journal)
+    blob = publish_config(tmp_journal, priv, did, scope="yacy", version=1, content_hash=_h("v1"))
+    # tamper: flip the payload after signing
+    forged = blob.model_copy(update={"version": 999})
+    consumer = Journal(":memory:")
+    with pytest.raises(ValueError):
+        ingest_config(consumer, forged, pub.hex())
+
+
+# ---------------------------------------------------------------------------
+# can() — config.publish right
+# ---------------------------------------------------------------------------
+
+def test_can_config_publish_member_allowed(tmp_journal):
+    priv, pub, did = _make_member(tmp_journal)
+    d = can(tmp_journal, did, "config.publish", "mesh.config", domain="fr-chambery")
+    assert d.allowed is True
+
+
+def test_can_config_publish_observed_denied(tmp_journal):
+    priv, pub, did = _make_observed(tmp_journal)
+    d = can(tmp_journal, did, "config.publish", "mesh.config", domain="fr-chambery")
+    assert d.allowed is False

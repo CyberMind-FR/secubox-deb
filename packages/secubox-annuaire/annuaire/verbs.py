@@ -36,9 +36,11 @@ from .log import Journal
 from .model import (
     GENESIS_HASH,
     ApprovalMode,
+    ConfigBlob,
     Identity,
     Invitation,
     MemberState,
+    NodeRecord,
     Op,
     Proposal,
     ProposalType,
@@ -1475,6 +1477,182 @@ def ingest_offer(
     )
 
     return {"status": "ingested", "service_id": offer.service_id, "provider": offer.provider}
+
+
+# ---------------------------------------------------------------------------
+# Directory verbs — NodeRecord + ConfigBlob (gondwana P1, #768)
+#
+# The annuaire is the distributed directory: nodes publish their own signed
+# NodeRecord (mesh peer registry, public wg key only), and a service's home node
+# publishes signed, versioned ConfigBlobs. Both are self-certifying
+# (entry.author == subject). Federation reuses the verify-before-append pattern.
+# ---------------------------------------------------------------------------
+
+def publish_node(
+    journal: Journal,
+    node_priv: bytes,
+    node_did: str,
+    *,
+    node_id: str,
+    boxname: str,
+    pubkey_wg: str,
+    mesh_ip: str,
+    ddns: str,
+    endpoint: Optional[str] = None,
+) -> NodeRecord:
+    """NODE_PUBLISH: publish this node's signed registry record (self-certifying)."""
+    rec = NodeRecord(
+        did=node_did, node_id=node_id, boxname=boxname, pubkey_wg=pubkey_wg,
+        mesh_ip=mesh_ip, ddns=ddns, endpoint=endpoint,
+    )
+    full = rec.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(node_priv, canonical_bytes(payload))
+    node_pubkey = _get_inviter_pubkey(journal, node_did)
+    journal.append(
+        op=Op.NODE_PUBLISH, payload_type="NodeRecord", payload=payload,
+        author=node_did, sig=sig_hex, author_pubkey_hex=node_pubkey,
+    )
+    return NodeRecord(**{**payload, "sig": sig_hex, "signer_did": node_did})
+
+
+def _get_nodes(journal: Journal) -> List[Dict]:
+    """Return the latest self-authored NodeRecord payload per did."""
+    nodes: Dict[str, Dict] = {}
+    heights: Dict[str, int] = {}
+    for entry in journal.iter_entries():
+        if entry.op == Op.NODE_PUBLISH and entry.payload_type == "NodeRecord":
+            d = entry.payload.get("did")
+            if d and entry.author == d and entry.height > heights.get(d, -1):
+                nodes[d] = entry.payload
+                heights[d] = entry.height
+    return list(nodes.values())
+
+
+def publish_config(
+    journal: Journal,
+    publisher_priv: bytes,
+    publisher_did: str,
+    *,
+    scope: str,
+    version: int,
+    content_hash: str,
+    payload: Optional[Dict] = None,
+    payload_uri: Optional[str] = None,
+    valid_until: Optional[str] = None,
+    config_id: Optional[str] = None,
+) -> ConfigBlob:
+    """CONFIG_PUBLISH: publish a signed, versioned config blob (self-certifying).
+
+    config_id defaults to ``cfg-<scope>`` so later versions supersede earlier
+    ones for the same scope (single-writer, last-writer-wins by version).
+    """
+    cid = config_id or f"cfg-{scope}"
+    blob = ConfigBlob(
+        config_id=cid, publisher=publisher_did, scope=scope, version=version,
+        content_hash=content_hash, payload=payload, payload_uri=payload_uri,
+        valid_until=valid_until,
+    )
+    full = blob.model_dump()
+    p = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(publisher_priv, canonical_bytes(p))
+    pub = _get_inviter_pubkey(journal, publisher_did)
+    journal.append(
+        op=Op.CONFIG_PUBLISH, payload_type="ConfigBlob", payload=p,
+        author=publisher_did, sig=sig_hex, author_pubkey_hex=pub,
+    )
+    return ConfigBlob(**{**p, "sig": sig_hex, "signer_did": publisher_did})
+
+
+def revoke_config(
+    journal: Journal,
+    publisher_priv: bytes,
+    publisher_did: str,
+    config_id: str,
+) -> Dict[str, Any]:
+    """CONFIG_REVOKE: withdraw a config blob. Only its publisher may revoke."""
+    blob = _get_config(journal, config_id)
+    if blob is None:
+        raise ValueError(f"revoke_config: config {config_id!r} not found or already revoked")
+    if blob.get("publisher") != publisher_did:
+        raise PermissionError(
+            f"revoke_config: {publisher_did} is not the publisher of config {config_id!r}"
+        )
+    revoke_payload: Dict[str, Any] = {
+        "config_id": config_id,
+        "publisher": publisher_did,
+        "revoked_at": now_rfc3339(),
+    }
+    sig_hex = sign(publisher_priv, canonical_bytes(revoke_payload))
+    pub = _get_inviter_pubkey(journal, publisher_did)
+    journal.append(
+        op=Op.CONFIG_REVOKE, payload_type="ConfigRevoke", payload=revoke_payload,
+        author=publisher_did, sig=sig_hex, author_pubkey_hex=pub,
+    )
+    return {"status": "revoked", "config_id": config_id, "publisher": publisher_did}
+
+
+def _get_configs(journal: Journal) -> List[Dict]:
+    """Return latest non-revoked self-authored ConfigBlob payloads.
+
+    Last-writer-wins by (version, height) so the result converges across the
+    mesh regardless of the order in which peers ingested entries. A revocation
+    counts only when authored by the blob's publisher.
+    """
+    blobs: Dict[str, Dict] = {}
+    best: Dict[str, tuple] = {}
+    revoked: Dict[str, str] = {}
+    for entry in journal.iter_entries():
+        if entry.op == Op.CONFIG_PUBLISH and entry.payload_type == "ConfigBlob":
+            cid = entry.payload.get("config_id")
+            publisher = entry.payload.get("publisher")
+            if cid and publisher and entry.author == publisher:
+                key = (entry.payload.get("version", 0), entry.height)
+                if key > best.get(cid, (-1, -1)):
+                    blobs[cid] = entry.payload
+                    best[cid] = key
+        elif entry.op == Op.CONFIG_REVOKE:
+            cid = entry.payload.get("config_id")
+            if cid:
+                revoked[cid] = entry.author
+    return [
+        payload for cid, payload in blobs.items()
+        if not (cid in revoked and revoked[cid] == payload.get("publisher"))
+    ]
+
+
+def _get_config(journal: Journal, config_id: str) -> Optional[Dict]:
+    """Return the latest non-revoked self-authored ConfigBlob for config_id, or None."""
+    for blob in _get_configs(journal):
+        if blob.get("config_id") == config_id:
+            return blob
+    return None
+
+
+def ingest_config(
+    journal: Journal,
+    blob: ConfigBlob,
+    publisher_pubkey_hex: str,
+) -> Dict[str, Any]:
+    """Federate a remote signed ConfigBlob into the local journal.
+
+    Verifies the signature against the publisher's public key BEFORE writing.
+    A bad or missing sig raises ValueError. Stored as authored by blob.publisher.
+    """
+    if not blob.sig:
+        raise ValueError("ingest_config: blob carries no signature — cannot federate unsigned config")
+    full = blob.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    if not verify(publisher_pubkey_hex, canonical_bytes(payload), blob.sig):
+        raise ValueError(
+            f"ingest_config: signature verification failed for config {blob.config_id!r} "
+            f"from publisher {blob.publisher!r} — rejected"
+        )
+    journal.append(
+        op=Op.CONFIG_PUBLISH, payload_type="ConfigBlob", payload=payload,
+        author=blob.publisher, sig=blob.sig, author_pubkey_hex=publisher_pubkey_hex,
+    )
+    return {"status": "ingested", "config_id": blob.config_id, "publisher": blob.publisher}
 
 
 # ---------------------------------------------------------------------------
