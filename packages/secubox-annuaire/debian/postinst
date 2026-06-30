@@ -58,6 +58,25 @@ case "$1" in
             fi
         fi
 
+        # Satellite dashboards (#768): the legacy nginx vhost
+        # (/etc/nginx/sites-available/secubox) includes /etc/nginx/secubox.d/
+        # but NOT secubox-routes.d/, so the Annuaire dashboard's
+        # /api/v1/annuaire/ calls fall through to the SPA shell (empty UI). On
+        # such nodes, drop the API route into secubox.d/ (which IS included). On
+        # hub nodes whose ACTIVE config already includes secubox-routes.d this
+        # would double-define the location, so only add it when secubox-routes.d
+        # is not already active. Validated with `nginx -t`; reverted on failure.
+        API_DROPIN=/etc/nginx/secubox.d/annuaire-api.conf
+        ROUTES_SRC=/etc/nginx/secubox-routes.d/annuaire-routes.conf
+        if [ -f "$ROUTES_SRC" ] && command -v nginx >/dev/null 2>&1; then
+            if nginx -T 2>/dev/null | grep -q 'secubox-routes.d'; then
+                rm -f "$API_DROPIN" 2>/dev/null || true   # hub: routes already active
+            else
+                cp "$ROUTES_SRC" "$API_DROPIN"
+                nginx -t >/dev/null 2>&1 || rm -f "$API_DROPIN"
+            fi
+        fi
+
         # Invalidate hub menu cache so Annuaire appears in the navbar
         rm -f /var/cache/secubox/menu.json 2>/dev/null || true
         systemctl daemon-reload 2>/dev/null || true
