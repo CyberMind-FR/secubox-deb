@@ -77,9 +77,20 @@ case "$1" in
 
         # Invalidate hub menu cache so Annuaire appears in the navbar
         rm -f /var/cache/secubox/menu.json 2>/dev/null || true
+        # P2 config-apply (#768): seed the opt-in allow-list (empty = no-op) and
+        # enable the timer. With no scopes configured the periodic apply does
+        # nothing, so enabling it by default is safe; the operator opts in by
+        # listing scopes in /etc/secubox/annuaire-apply.conf.
+        if [ ! -f /etc/secubox/annuaire-apply.conf ] \
+           && [ -f /etc/secubox/annuaire-apply.conf.example ]; then
+            cp /etc/secubox/annuaire-apply.conf.example /etc/secubox/annuaire-apply.conf
+            chmod 644 /etc/secubox/annuaire-apply.conf
+        fi
+
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable --now secubox-annuaire.service 2>/dev/null || true
         systemctl try-restart secubox-annuaire.service 2>/dev/null || true
+        systemctl enable --now secubox-annuaire-apply.timer 2>/dev/null || true
         if systemctl is-active --quiet nginx 2>/dev/null; then
             nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
         fi
