@@ -31,7 +31,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .crypto import canonical_bytes, did_from_pubkey, sign, verify
+from .crypto import canonical_bytes, did_from_pubkey, public_from_private, sign, verify
 from .log import Journal
 from .model import (
     GENESIS_HASH,
@@ -330,6 +330,73 @@ def _make_identity_payload(
 # ---------------------------------------------------------------------------
 # Public verbs
 # ---------------------------------------------------------------------------
+
+def genesis(
+    journal: Journal,
+    node_priv: bytes,
+    *,
+    jurisdiction: Optional[List] = None,
+    hardware_attest: Optional[Dict] = None,
+) -> Identity:
+    """GENESIS: a node self-attests as a founding MEMBER (root of trust).
+
+    The substrate has a bootstrap paradox: invite() and subscribe() require a
+    non-revoked MEMBER, but join() needs an invitation issued by a MEMBER — so
+    the very first member can be created by no one. genesis() breaks the cycle:
+    a node mints its own self-signed MEMBER Identity. The DID is derived from
+    the node's public key (self-certifying: did == sha256(pubkey)[:32]), so the
+    identity needs no external authority to be trusted — anyone can recompute
+    the binding.
+
+    `invited_by` is left empty: a founder is grafted by no one. This is
+    deliberate — _count_independent_domains() ignores empty `invited_by`, so a
+    founder never inflates emancipation plurality (Fix 4).
+
+    Idempotent: if a self-authored Identity already exists for this node's DID,
+    genesis() returns it unchanged rather than forking the chain. A node
+    bootstraps exactly once.
+
+    Args:
+        journal: the append-only Journal.
+        node_priv: the node's 32-byte raw Ed25519 private key.
+        jurisdiction: optional coordinate-free JuridictionTag list.
+        hardware_attest: optional hardware attestation dict.
+
+    Returns:
+        The node's MEMBER Identity (existing one if already bootstrapped).
+    """
+    pub_bytes = public_from_private(node_priv)
+    pub_hex = pub_bytes.hex()
+    did = did_from_pubkey(pub_bytes)
+
+    # Idempotency guard — never fork an already-bootstrapped node.
+    existing = _get_latest_identity(journal, did)
+    if existing is not None and existing.get("did") == did:
+        return Identity(**existing)
+
+    ident = Identity(
+        did=did,
+        pubkey=pub_hex,
+        self_cert_digest=did.split(":")[-1],
+        state=MemberState.MEMBER,
+        jurisdiction=jurisdiction or [],
+        hardware_attest=hardware_attest,
+        invited_by=None,
+    )
+    full = ident.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(node_priv, canonical_bytes(payload))
+
+    journal.append(
+        op=Op.GENESIS,
+        payload_type="Identity",
+        payload=payload,
+        author=did,
+        sig=sig_hex,
+        author_pubkey_hex=pub_hex,   # bootstrap: pubkey not yet in the log
+    )
+    return Identity(**{**payload, "sig": sig_hex, "signer_did": did})
+
 
 def auto_add(journal: Journal, peer_identity: Identity) -> Identity:
     """AUTO-ADD: post an OBSERVED entry for a peer.
@@ -1043,8 +1110,12 @@ def _get_offers(journal: Journal) -> List[Dict]:
     Returns one entry per service_id (the latest self-authored SERVICE_OFFER that has
     not been revoked by its provider).
     """
-    # Collect latest self-authored offer per service_id (by height)
-    offers: Dict[str, Dict] = {}      # service_id -> payload
+    # Collect the latest self-authored offer entry per service_id (by height).
+    # We keep the whole LogEntry (not just .payload) so we can re-attach the
+    # signature — the stored payload deliberately omits sig/signer_did (they
+    # are not part of the signed bytes), but a federation consumer needs the
+    # signature to verify the offer. See _enrich_offer below.
+    offer_entries: Dict[str, "object"] = {}   # service_id -> LogEntry
     offer_heights: Dict[str, int] = {}
     revoked_ids: set = set()
 
@@ -1054,18 +1125,48 @@ def _get_offers(journal: Journal) -> List[Dict]:
             provider = entry.payload.get("provider")
             if sid and provider and entry.author == provider:
                 if entry.height > offer_heights.get(sid, -1):
-                    offers[sid] = entry.payload
+                    offer_entries[sid] = entry
                     offer_heights[sid] = entry.height
         elif entry.op == Op.SERVICE_REVOKE_OFFER:
             sid = entry.payload.get("service_id")
             provider = entry.payload.get("provider")
             if sid and provider:
                 # Only count as revoked if authored by the provider of the offer
-                offer = offers.get(sid)
-                if offer and offer.get("provider") == entry.author:
+                ent = offer_entries.get(sid)
+                if ent and ent.payload.get("provider") == entry.author:
                     revoked_ids.add(sid)
 
-    return [v for k, v in offers.items() if k not in revoked_ids]
+    return [
+        _enrich_offer(journal, ent)
+        for sid, ent in offer_entries.items()
+        if sid not in revoked_ids
+    ]
+
+
+def _enrich_offer(journal: Journal, entry) -> Dict:
+    """Return a self-contained, verifiable offer dict for federation/export.
+
+    The stored payload omits ``sig``/``signer_did`` (they are not part of the
+    signed canonical bytes) and never carried the provider's public key. A
+    remote consumer needs all three to verify an offer trustlessly:
+
+      * ``sig``            — the provider's signature over the canonical payload
+      * ``signer_did``     — the authoring DID (== provider)
+      * ``provider_pubkey``— the provider's Ed25519 public key, so the consumer
+                             can check both that the sig is valid AND that
+                             ``did_from_pubkey(pubkey) == provider`` (the
+                             self-certifying binding). ``provider_pubkey`` is
+                             transport metadata only — it is NOT part of the
+                             signed payload and must be stripped before the
+                             ServiceOffer model is reconstructed (extra=forbid).
+    """
+    out = dict(entry.payload)
+    out["sig"] = entry.sig
+    out["signer_did"] = entry.author
+    pubkey = _get_inviter_pubkey(journal, entry.author)
+    if pubkey:
+        out["provider_pubkey"] = pubkey
+    return out
 
 
 def _get_offer(journal: Journal, service_id: str) -> Optional[Dict]:
@@ -1454,6 +1555,22 @@ def ingest_offer(
     """
     if not offer.sig:
         raise ValueError("ingest_offer: offer carries no signature — cannot federate unsigned offer")
+
+    # Self-certifying binding: the provider DID MUST be the hash of the pubkey
+    # we are about to trust. Without this, a caller could present their own
+    # keypair plus a matching signature and claim ANY provider DID — the sig
+    # check alone only proves "whoever owns this pubkey signed it", not that
+    # the pubkey belongs to offer.provider. did:plc is sha256(pubkey)[:32], so
+    # this check needs no directory and no prior trust in the provider.
+    try:
+        derived_did = did_from_pubkey(bytes.fromhex(provider_pubkey_hex))
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"ingest_offer: invalid provider pubkey hex — {exc}")
+    if derived_did != offer.provider:
+        raise ValueError(
+            f"ingest_offer: self-certification failed — pubkey hashes to {derived_did!r} "
+            f"but offer claims provider {offer.provider!r}; offer rejected"
+        )
 
     # Reconstruct the canonical payload that was signed: model_dump minus sig/signer_did
     full = offer.model_dump()

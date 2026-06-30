@@ -479,7 +479,14 @@ def test_ingest_offer_valid_sig_succeeds(tmp_journal):
 
 
 def test_ingest_offer_wrong_pubkey_raises_value_error(tmp_journal):
-    """ingest_offer with a mismatched pubkey must raise ValueError."""
+    """ingest_offer with a pubkey that doesn't hash to the provider DID is rejected.
+
+    This is the self-certifying guard: a supplied pubkey must satisfy
+    did_from_pubkey(pubkey) == offer.provider. A completely different keypair's
+    pubkey hashes to a different DID, so the offer is rejected BEFORE the
+    signature is even checked — closing the "bring your own key, claim any DID"
+    forgery.
+    """
     priv_remote, pub_remote = generate_keypair()
     did_remote = did_from_pubkey(pub_remote)
 
@@ -489,7 +496,7 @@ def test_ingest_offer_wrong_pubkey_raises_value_error(tmp_journal):
     _, wrong_pub = generate_keypair()
     wrong_pub_hex = wrong_pub.hex()
 
-    with pytest.raises(ValueError, match="signature verification failed"):
+    with pytest.raises(ValueError, match="self-certification failed"):
         ingest_offer(tmp_journal, signed_offer, wrong_pub_hex)
 
 

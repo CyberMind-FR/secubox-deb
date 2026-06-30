@@ -1,3 +1,40 @@
+secubox-annuaire (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: trustless cross-node service federation (#766)
+    - ingest_offer now enforces the self-certifying binding
+      did_from_pubkey(pubkey) == offer.provider BEFORE checking the signature.
+      Closes the "bring your own key, claim any provider DID" forgery: the sig
+      alone only proves key-ownership, not that the key belongs to the claimed
+      provider. did:plc is sha256(pubkey)[:32], so the check needs no directory
+      and no prior trust in the provider.
+    - _get_offers / GET /services now emit self-contained, verifiable offers:
+      the stored payload omits sig/signer_did (not part of the signed bytes) and
+      never carried the pubkey, so a stranger could not verify at all. Offers now
+      carry sig + signer_did + provider_pubkey (transport metadata, stripped
+      before model reconstruction — ServiceOffer is extra=forbid).
+    - pull_services uses the carried provider_pubkey and feeds the now
+      self-certifying ingest_offer.
+  * feat: node bootstrap — genesis() verb + annuairectl CLI.
+    - genesis(): a node self-attests as a founding MEMBER (root of trust),
+      breaking the invite/join/subscribe chicken-and-egg. Self-certifying DID,
+      empty invited_by (never inflates emancipation plurality), idempotent.
+    - Op.GENESIS added (additive, chain-compatible).
+    - crypto.public_from_private(): derive pubkey from the persisted private key.
+    - /usr/sbin/annuairectl: init | whoami | status | offer | services | pull.
+      Operates the journal directly as the secubox user (no JWT for the one-time
+      privileged bootstrap); node key persisted 0600 in
+      /etc/secubox/secrets/annuaire/node.key.
+  * feat: Gondwana mesh federation listener (postinst-rendered).
+    - nginx/annuaire-mesh.conf.tpl: binds ONLY the node wg-mesh IPv4:8799,
+      allow 10.10.0.0/24 + deny all, exposes ONLY GET /api/v1/annuaire/services.
+      postinst substitutes the detected wg-mesh IP; skips install when no mesh
+      interface exists. postrm removes it on uninstall.
+  * tests: +7 federation tests (genesis member/idempotent, offer enrichment,
+    trustless round-trip pull, forged-pubkey + tampered-payload + bad-hex
+    rejection). 134 passing.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 16:00:00 +0200
+
 secubox-annuaire (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * feat: service offers + subscription verbs, API and UI + pull federation

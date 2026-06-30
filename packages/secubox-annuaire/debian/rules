@@ -20,6 +20,14 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox-routes.d
 	install -m 644 $(CURDIR)/nginx/annuaire-routes.conf $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox-routes.d/
 
+	# Mesh federation listener template (rendered with the wg-mesh IP by postinst)
+	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/annuaire
+	install -m 644 $(CURDIR)/nginx/annuaire-mesh.conf.tpl $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/annuaire/
+
+	# Operator CLI
+	install -d $(CURDIR)/debian/secubox-annuaire/usr/sbin
+	install -m 755 $(CURDIR)/sbin/annuairectl $(CURDIR)/debian/secubox-annuaire/usr/sbin/annuairectl
+
 		# Web UI (static)
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/annuaire
 	cp -r $(CURDIR)/www/annuaire/* $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/annuaire/
