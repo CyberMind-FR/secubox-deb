@@ -44,15 +44,36 @@ HTTP_PORT=$(config_get "http_port" "8090")
 PEER_MODE=$(config_get "mode" "standalone")
 PUBLIC_HOSTNAME=$(config_get "public_hostname" "yacy.gk2.secubox.in")
 
+# Introspection must work from the host FastAPI (secubox-yacy.service),
+# which runs as User=secubox with NoNewPrivileges=true. lxc-info / lxc-attach
+# on the unprivileged /data/lxc/yacy container need root, and NNP blocks sudo
+# from elevating — so liveness is PROBED directly over the br-lxc network
+# (the host routes to $LXC_IP), which needs no privilege and is a truer
+# "is YaCy actually serving" signal. lxc-info is kept only as a best-effort
+# enrichment when yacyctl runs as root (CLI / reload). Before this,
+# component/status wrongly reported the LXC "absent" + daemon "stopped"
+# while both were running (overall red).
+if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo -n"; fi
+lxc_info()   { $SUDO lxc-info   -n "$LXC_NAME" -P "$LXC_PATH" "$@"; }
+lxc_attach() { $SUDO lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" "$@"; }
+
+# Privilege-free liveness probe: does the YaCy daemon answer on its port?
+daemon_reachable() {
+    curl -s -o /dev/null --max-time 3 "http://$LXC_IP:$HTTP_PORT/" 2>/dev/null
+}
+
 lxc_state() {
-    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+    lxc_info 2>/dev/null \
         | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
 }
-lxc_running() { [ "$(lxc_state)" = "running" ]; }
-lxc_exists()  { [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
+# A reachable daemon implies the container is up; fall back to lxc-info when
+# privileged (covers the rare container-up / daemon-down case).
+lxc_running() { daemon_reachable || [ "$(lxc_state)" = "running" ]; }
+lxc_exists()  { daemon_reachable || lxc_info >/dev/null 2>&1 || [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; }
 daemon_running() {
-    lxc_running || return 1
-    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-active --quiet yacy 2>/dev/null
+    daemon_reachable && return 0
+    # Privileged fallback (root / CLI): ask systemd inside the container.
+    [ "$(lxc_state)" = "running" ] && lxc_attach -- systemctl is-active --quiet yacy 2>/dev/null
 }
 host_api_running() { systemctl is-active --quiet secubox-yacy.service 2>/dev/null; }
 
@@ -128,7 +149,7 @@ cmd_install() {
 
 cmd_reload() {
     systemctl restart secubox-yacy.service 2>/dev/null || true
-    lxc_running && lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart yacy 2>/dev/null || true
+    lxc_running && lxc_attach -- systemctl restart yacy 2>/dev/null || true
     log "Reloaded."
 }
 
