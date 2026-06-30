@@ -1,3 +1,16 @@
+secubox-annuaire (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#768): durable wg-mesh nft allow for the :8799 federation listener.
+    postinst inserts `iifname wg-mesh ip saddr 10.10.0.0/24 tcp dport 8799
+    accept` BEFORE the terminal drop in /etc/nftables.conf on vortex-firewall
+    nodes (table inet secubox_filter) so it survives reboot — a rule appended
+    after the drop is dead. Idempotent; guarded to mesh nodes; validated with
+    `nft -c` and reverted on failure. Legacy `inet filter` hubs (broad 10/8
+    accept) are skipped. Closes the cross-node gap where gk2 could not pull a
+    peer's /log/export after the peer rebooted.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 15:30:00 +0200
+
 secubox-annuaire (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * feat: gondwana P1 distributed directory, on top of #766 (#768)
