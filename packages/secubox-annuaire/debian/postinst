@@ -37,6 +37,27 @@ case "$1" in
             rm -f "$MESH_CONF" 2>/dev/null || true
         fi
 
+        # Durable wg-mesh nft allow for the federation listener (:8799).
+        # On vortex-firewall nodes /etc/nftables.conf holds `table inet
+        # secubox_filter` with a terminal `drop` in chain input; a rule added
+        # anywhere after it is dead. Insert the accept BEFORE the drop in the
+        # boot source so it survives reboot. Legacy `inet filter` nodes (broad
+        # 10/8 accept, e.g. the hub) need nothing → skipped. Validated with
+        # `nft -c` and reverted on failure (board-wide nft blast radius).
+        NFT_CONF=/etc/nftables.conf
+        if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
+           && grep -q 'table inet secubox_filter' "$NFT_CONF" \
+           && ! grep -q 'tcp dport 8799' "$NFT_CONF"; then
+            awk '/^[[:space:]]*drop[[:space:]]*$/ && !d {print "        iifname \"wg-mesh\" ip saddr 10.10.0.0/24 tcp dport 8799 accept"; d=1} {print}' \
+                "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
+            if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
+                mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
+                nft -f "$NFT_CONF" >/dev/null 2>&1 || true
+            else
+                rm -f "$NFT_CONF.sbxtmp" 2>/dev/null || true
+            fi
+        fi
+
         # Invalidate hub menu cache so Annuaire appears in the navbar
         rm -f /var/cache/secubox/menu.json 2>/dev/null || true
         systemctl daemon-reload 2>/dev/null || true
