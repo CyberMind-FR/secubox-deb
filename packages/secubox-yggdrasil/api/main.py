@@ -531,7 +531,7 @@ async def probe_secubox_peer(ipv6: str, timeout: float = 3.0) -> dict:
 
 
 @app.get("/status")
-async def get_status():
+def get_status():
     """Get mesh network status (public)."""
     ygg_info = get_yggdrasil_info()
     peers = get_yggdrasil_peers()
@@ -809,7 +809,7 @@ async def remove_secubox_peer(ipv6: str, user=Depends(require_jwt)):
 
 
 @app.get("/secubox/self")
-async def get_self_info(user=Depends(require_jwt)):
+def get_self_info(user=Depends(require_jwt)):
     """Get this node's SecuBox info for mesh announcement."""
     ygg_info = get_yggdrasil_info()
 
@@ -1196,7 +1196,7 @@ async def test_webhook(webhook_id: str, user=Depends(require_jwt)):
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.get("/services/health")
-async def get_services_health(user=Depends(require_jwt)):
+def get_services_health(user=Depends(require_jwt)):
     """Check health of all announced services."""
     data = load_json(SERVICES_FILE, {"services": []})
     ygg_info = get_yggdrasil_info()
@@ -1233,7 +1233,7 @@ async def get_services_health(user=Depends(require_jwt)):
 
 
 @app.post("/services/{name}/health")
-async def check_service_health(name: str, user=Depends(require_jwt)):
+def check_service_health(name: str, user=Depends(require_jwt)):
     """Check health of a specific service."""
     data = load_json(SERVICES_FILE, {"services": []})
 

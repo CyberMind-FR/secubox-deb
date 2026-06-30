@@ -316,7 +316,7 @@ async def status(user=Depends(require_jwt)):
 # ══════════════════════════════════════════════════════════════════
 
 @app.post("/install")
-async def install(
+def install(
     server_name: str = Query(..., description="Matrix server domain"),
     user=Depends(require_jwt)
 ):
@@ -457,7 +457,7 @@ async def restart(user=Depends(require_jwt)):
 
 
 @app.delete("/uninstall")
-async def uninstall(user=Depends(require_jwt)):
+def uninstall(user=Depends(require_jwt)):
     """Remove Matrix container (keeps data)."""
     if lxc_running():
         lxc_stop()
@@ -781,7 +781,7 @@ pip3 install mautrix-{bridge_id}
 # ══════════════════════════════════════════════════════════════════
 
 @app.post("/backup")
-async def create_backup(user=Depends(require_jwt)):
+def create_backup(user=Depends(require_jwt)):
     """Create Matrix data backup."""
     backup_dir = Path("/var/lib/secubox/backups/matrix")
     backup_dir.mkdir(parents=True, exist_ok=True)

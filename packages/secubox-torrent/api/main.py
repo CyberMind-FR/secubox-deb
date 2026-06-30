@@ -342,7 +342,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Get torrent service status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -751,7 +751,7 @@ async def container_status(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_container(user=Depends(require_jwt)):
+def install_container(user=Depends(require_jwt)):
     """Install torrent container."""
     rt = detect_runtime()
     if not rt:
@@ -862,7 +862,7 @@ async def restart_container(user=Depends(require_jwt)):
 
 
 @router.post("/container/uninstall")
-async def uninstall_container(user=Depends(require_jwt)):
+def uninstall_container(user=Depends(require_jwt)):
     """Uninstall torrent container."""
     rt = detect_runtime()
     if not rt:
@@ -883,7 +883,7 @@ async def uninstall_container(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(lines: int = 100, user=Depends(require_jwt)):
+def get_logs(lines: int = 100, user=Depends(require_jwt)):
     """Get container logs."""
     rt = detect_runtime()
     if not rt:

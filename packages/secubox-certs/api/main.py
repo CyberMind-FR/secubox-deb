@@ -349,7 +349,7 @@ async def cert_status():
 
 
 @router.get("/details/{domain}")
-async def cert_details(domain: str):
+def cert_details(domain: str):
     """Get detailed info for a specific certificate."""
     # Find the cert file
     pem_path = CERTS_DIR / f"{domain}.pem"
@@ -401,7 +401,7 @@ class CertRequest(BaseModel):
 
 
 @router.post("/check")
-async def check_domain(req: CertRequest):
+def check_domain(req: CertRequest):
     """Pre-flight checks before issuing certificate."""
     checks = []
     domain = req.domain
@@ -462,7 +462,7 @@ async def check_domain(req: CertRequest):
 
 
 @router.post("/issue")
-async def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks):
+def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks):
     """Issue a new certificate via ACME."""
     domain = req.domain
 
@@ -593,7 +593,7 @@ async def renew_all_expiring():
 
 
 @router.delete("/revoke/{domain}")
-async def revoke_certificate(domain: str):
+def revoke_certificate(domain: str):
     """Revoke and delete a certificate."""
     pem_path = CERTS_DIR / f"{domain}.pem"
     if not pem_path.exists():

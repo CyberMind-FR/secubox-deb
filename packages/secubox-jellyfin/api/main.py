@@ -176,7 +176,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Get Jellyfin service status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -315,7 +315,7 @@ async def remove_media_path(media_id: str, user=Depends(require_jwt)):
 # ============================================================================
 
 @router.post("/install")
-async def install_jellyfin(user=Depends(require_jwt)):
+def install_jellyfin(user=Depends(require_jwt)):
     """Install Jellyfin container."""
     rt = detect_runtime()
     if not rt:
@@ -435,7 +435,7 @@ async def restart_jellyfin(user=Depends(require_jwt)):
 
 
 @router.post("/uninstall")
-async def uninstall_jellyfin(user=Depends(require_jwt)):
+def uninstall_jellyfin(user=Depends(require_jwt)):
     """Uninstall Jellyfin container."""
     rt = detect_runtime()
     if not rt:
@@ -485,7 +485,7 @@ async def update_jellyfin(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.post("/backup")
-async def backup_jellyfin(user=Depends(require_jwt)):
+def backup_jellyfin(user=Depends(require_jwt)):
     """Backup Jellyfin configuration."""
     cfg = get_config()
     data_path = Path(cfg.get("data_path", "/srv/jellyfin"))
@@ -542,7 +542,7 @@ async def restore_jellyfin(req: RestoreRequest, user=Depends(require_jwt)):
 
 
 @router.get("/logs")
-async def get_logs(lines: int = 50, user=Depends(require_jwt)):
+def get_logs(lines: int = 50, user=Depends(require_jwt)):
     """Get container logs."""
     rt = detect_runtime()
     if not rt:

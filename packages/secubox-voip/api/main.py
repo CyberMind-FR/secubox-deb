@@ -252,7 +252,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Get VoIP service status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -676,7 +676,7 @@ async def get_container_info(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_voip(user=Depends(require_jwt)):
+def install_voip(user=Depends(require_jwt)):
     """Install FreePBX container."""
     rt = detect_runtime()
     if not rt:
@@ -794,7 +794,7 @@ async def restart_voip(user=Depends(require_jwt)):
 
 
 @router.post("/container/uninstall")
-async def uninstall_voip(user=Depends(require_jwt)):
+def uninstall_voip(user=Depends(require_jwt)):
     """Uninstall FreePBX container."""
     rt = detect_runtime()
     if not rt:
@@ -815,7 +815,7 @@ async def uninstall_voip(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(
+def get_logs(
     lines: int = Query(50, ge=1, le=500),
     log_type: str = Query("all", pattern="^(all|asterisk|freepbx)$"),
     user=Depends(require_jwt)

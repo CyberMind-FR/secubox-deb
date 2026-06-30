@@ -509,7 +509,7 @@ async def get_processes(
 
 
 @router.post("/reboot")
-async def reboot_system(request: SystemActionRequest, user=Depends(require_jwt)):
+def reboot_system(request: SystemActionRequest, user=Depends(require_jwt)):
     """Reboot the system (requires confirmation)."""
     if not request.confirm:
         raise HTTPException(status_code=400, detail="Confirmation required for reboot")
@@ -528,7 +528,7 @@ async def reboot_system(request: SystemActionRequest, user=Depends(require_jwt))
 
 
 @router.post("/shutdown")
-async def shutdown_system(request: SystemActionRequest, user=Depends(require_jwt)):
+def shutdown_system(request: SystemActionRequest, user=Depends(require_jwt)):
     """Shutdown the system (requires confirmation)."""
     if not request.confirm:
         raise HTTPException(status_code=400, detail="Confirmation required for shutdown")

@@ -706,7 +706,7 @@ async def sign_message(message: str):
 
 
 @app.post("/identity/verify", dependencies=[Depends(require_jwt)])
-async def verify_signature(message: str, signature: str, public_key: str):
+def verify_signature(message: str, signature: str, public_key: str):
     """Verify a signature."""
     valid = identity_manager.verify(message, signature, public_key)
     return {"valid": valid}

@@ -266,7 +266,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Get Hexo service status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -333,7 +333,7 @@ async def get_blogs(user=Depends(require_jwt)):
 
 
 @router.post("/blog/create")
-async def create_blog(blog: BlogCreate, user=Depends(require_jwt)):
+def create_blog(blog: BlogCreate, user=Depends(require_jwt)):
     """Create a new Hexo blog."""
     rt = detect_runtime()
     if not rt:
@@ -730,7 +730,7 @@ async def get_blog_themes(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/blog/{name}/theme/install")
-async def install_theme(name: str, theme: ThemeInstall, user=Depends(require_jwt)):
+def install_theme(name: str, theme: ThemeInstall, user=Depends(require_jwt)):
     """Install a theme."""
     blogs_path = get_blogs_path()
     blog_path = blogs_path / name
@@ -842,7 +842,7 @@ async def get_blog_plugins(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/blog/{name}/plugin/install")
-async def install_plugin(name: str, plugin: PluginInstall, user=Depends(require_jwt)):
+def install_plugin(name: str, plugin: PluginInstall, user=Depends(require_jwt)):
     """Install a plugin."""
     blogs_path = get_blogs_path()
     blog_path = blogs_path / name
@@ -879,7 +879,7 @@ async def install_plugin(name: str, plugin: PluginInstall, user=Depends(require_
 
 
 @router.delete("/blog/{name}/plugin/{plugin_name}")
-async def remove_plugin(name: str, plugin_name: str, user=Depends(require_jwt)):
+def remove_plugin(name: str, plugin_name: str, user=Depends(require_jwt)):
     """Remove a plugin."""
     blogs_path = get_blogs_path()
     blog_path = blogs_path / name
@@ -920,7 +920,7 @@ async def remove_plugin(name: str, plugin_name: str, user=Depends(require_jwt)):
 # ============================================================================
 
 @router.post("/blog/{name}/generate")
-async def generate_blog(name: str, user=Depends(require_jwt)):
+def generate_blog(name: str, user=Depends(require_jwt)):
     """Generate static files."""
     blogs_path = get_blogs_path()
     blog_path = blogs_path / name
@@ -957,7 +957,7 @@ async def generate_blog(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/blog/{name}/clean")
-async def clean_blog(name: str, user=Depends(require_jwt)):
+def clean_blog(name: str, user=Depends(require_jwt)):
     """Clean generated files."""
     blogs_path = get_blogs_path()
     blog_path = blogs_path / name
@@ -991,7 +991,7 @@ async def clean_blog(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/blog/{name}/deploy")
-async def deploy_blog(name: str, config: DeployConfig = None, user=Depends(require_jwt)):
+def deploy_blog(name: str, config: DeployConfig = None, user=Depends(require_jwt)):
     """Deploy the blog."""
     blogs_path = get_blogs_path()
     blog_path = blogs_path / name
@@ -1085,7 +1085,7 @@ async def start_preview(name: str, user=Depends(require_jwt)):
 
 
 @router.post("/blog/{name}/preview/stop")
-async def stop_preview(name: str, user=Depends(require_jwt)):
+def stop_preview(name: str, user=Depends(require_jwt)):
     """Stop preview server."""
     rt = detect_runtime()
     if not rt:
@@ -1104,7 +1104,7 @@ async def stop_preview(name: str, user=Depends(require_jwt)):
 
 
 @router.get("/blog/{name}/preview/status")
-async def get_preview_status(name: str, user=Depends(require_jwt)):
+def get_preview_status(name: str, user=Depends(require_jwt)):
     """Get preview server status."""
     rt = detect_runtime()
     if not rt:
@@ -1141,7 +1141,7 @@ async def container_status(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_container(user=Depends(require_jwt)):
+def install_container(user=Depends(require_jwt)):
     """Pull Node.js image for Hexo."""
     rt = detect_runtime()
     if not rt:
@@ -1170,7 +1170,7 @@ async def install_container(user=Depends(require_jwt)):
 
 
 @router.get("/logs")
-async def get_logs(lines: int = 50, user=Depends(require_jwt)):
+def get_logs(lines: int = 50, user=Depends(require_jwt)):
     """Get container logs."""
     rt = detect_runtime()
     if not rt:

@@ -723,7 +723,7 @@ async def ban_client(mac: str, user=Depends(require_jwt)):
 
 
 @router.post("/unban_client")
-async def unban_client(mac: str, user=Depends(require_jwt)):
+def unban_client(mac: str, user=Depends(require_jwt)):
     """Unban a client."""
     mac_lower = mac.lower()
 
@@ -860,7 +860,7 @@ async def get_history(limit: int = 100, mac: Optional[str] = None, user=Depends(
 
 
 @router.get("/logs")
-async def logs(lines: int = 100, user=Depends(require_jwt)):
+def logs(lines: int = 100, user=Depends(require_jwt)):
     """Get dnsmasq logs."""
     try:
         r = subprocess.run(
@@ -998,7 +998,7 @@ async def set_parental_rule_compat(req: ParentalRule, user=Depends(require_jwt))
 
 
 @router.get("/sync_zones")
-async def sync_zones(user=Depends(require_jwt)):
+def sync_zones(user=Depends(require_jwt)):
     for zone_id, info in ZONES.items():
         subprocess.run(
             ["nft", "add", "set", "inet", "secubox_nac", info["nft_set"],

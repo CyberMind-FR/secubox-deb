@@ -116,7 +116,7 @@ async def list_keys():
     return {"keys": keys}
 
 @app.post("/keygen")
-async def generate_key(req: KeygenRequest, user: dict = Depends(require_jwt)):
+def generate_key(req: KeygenRequest, user: dict = Depends(require_jwt)):
     """Generate a new ZKP key pair."""
     init_dirs()
 
@@ -164,7 +164,7 @@ async def generate_key(req: KeygenRequest, user: dict = Depends(require_jwt)):
         raise HTTPException(status_code=500, detail="Key generation failed")
 
 @app.post("/prove")
-async def generate_proof(req: KeyRequest, user: dict = Depends(require_jwt)):
+def generate_proof(req: KeyRequest, user: dict = Depends(require_jwt)):
     """Generate a ZKP proof."""
     init_dirs()
 
@@ -199,7 +199,7 @@ async def generate_proof(req: KeyRequest, user: dict = Depends(require_jwt)):
         raise HTTPException(status_code=500, detail=f"Proof failed: {result.stderr}")
 
 @app.post("/verify")
-async def verify_proof(req: KeyRequest, user: dict = Depends(require_jwt)):
+def verify_proof(req: KeyRequest, user: dict = Depends(require_jwt)):
     """Verify a ZKP proof."""
     init_dirs()
 

@@ -426,7 +426,7 @@ async def health():
 
 
 @router.get("/status")
-async def status(user=Depends(require_jwt)):
+def status(user=Depends(require_jwt)):
     """Get Jitsi Meet comprehensive status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -669,7 +669,7 @@ async def set_auth_config(auth: AuthConfig, user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/prosody/status")
-async def prosody_status(user=Depends(require_jwt)):
+def prosody_status(user=Depends(require_jwt)):
     """Get Prosody XMPP server status."""
     container = get_container_status(JITSI_CONTAINERS["prosody"])
 
@@ -734,7 +734,7 @@ async def enable_jibri(user=Depends(require_jwt)):
 
 
 @router.post("/jibri/disable")
-async def disable_jibri(user=Depends(require_jwt)):
+def disable_jibri(user=Depends(require_jwt)):
     """Disable Jibri recording service."""
     cfg = get_config()
     cfg["jibri_enabled"] = False
@@ -858,7 +858,7 @@ async def restart_jitsi(user=Depends(require_jwt)):
 
 
 @router.post("/container/uninstall")
-async def uninstall_jitsi(user=Depends(require_jwt)):
+def uninstall_jitsi(user=Depends(require_jwt)):
     """Uninstall Jitsi (keeps data)."""
     log.info(f"Uninstalling Jitsi by {user.get('sub', 'unknown')}")
 
@@ -880,7 +880,7 @@ async def uninstall_jitsi(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(
+def get_logs(
     service: str = Query("web", enum=["web", "prosody", "jicofo", "jvb", "jibri"]),
     lines: int = Query(100, ge=10, le=1000),
     user=Depends(require_jwt)

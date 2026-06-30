@@ -550,7 +550,7 @@ class WakeResult(BaseModel):
 
 
 @router.post("/apps/{name}/wake", response_model=WakeResult)
-async def wake_app(name: str, user=Depends(require_jwt)) -> WakeResult:
+def wake_app(name: str, user=Depends(require_jwt)) -> WakeResult:
     """Wake an idle-stopped streamlit app.
 
     Blocks until the port comes up or 30 s elapse. Idempotent — returns

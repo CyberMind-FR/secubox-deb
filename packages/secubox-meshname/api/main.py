@@ -269,7 +269,7 @@ async def get_service_status():
 
 
 @app.post("/enable", dependencies=[Depends(require_jwt)])
-async def enable_meshname(enabled: bool = True):
+def enable_meshname(enabled: bool = True):
     """Enable or disable mesh DNS."""
     state = _load_state()
     state["enabled"] = enabled
@@ -468,7 +468,7 @@ async def set_config(mesh_config: MeshConfig):
 
 
 @app.get("/resolve/{hostname}", dependencies=[Depends(require_jwt)])
-async def resolve_hostname(hostname: str):
+def resolve_hostname(hostname: str):
     """Resolve a hostname through mesh DNS."""
     state = _load_state()
     mesh_domain = state.get("mesh_domain", "mesh.local")
