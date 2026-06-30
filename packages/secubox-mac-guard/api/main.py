@@ -475,7 +475,7 @@ async def health():
 
 
 @router.get("/status")
-async def status(user=Depends(require_jwt)):
+def status(user=Depends(require_jwt)):
     """Get MAC Guard status."""
     cached = stats_cache.get("status")
     if cached:
@@ -853,7 +853,7 @@ async def get_unknown(user=Depends(require_jwt)):
 
 # Scan endpoint
 @router.post("/scan")
-async def scan_network(background_tasks: BackgroundTasks, user=Depends(require_jwt)):
+def scan_network(background_tasks: BackgroundTasks, user=Depends(require_jwt)):
     """Trigger network scan."""
     try:
         # Use arping or nmap if available

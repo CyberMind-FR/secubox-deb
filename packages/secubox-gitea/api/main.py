@@ -296,7 +296,7 @@ def lxc_attach(command: str, timeout: int = 30) -> tuple:
 # =============================================================================
 
 @app.get("/status")
-async def status():
+def status():
     """Get unified Gitea status (public endpoint)"""
     running = lxc_running()
     installed = lxc_exists()
@@ -818,7 +818,7 @@ async def get_stats_history(hours: int = Query(default=24, le=168)):
 # =============================================================================
 
 @app.get("/repos/{owner}/{repo}", dependencies=[Depends(require_jwt)])
-async def get_repo_details(owner: str, repo: str):
+def get_repo_details(owner: str, repo: str):
     """Get detailed repository information."""
     repo_path = DATA_PATH / "git" / "repositories" / owner / f"{repo}.git"
 

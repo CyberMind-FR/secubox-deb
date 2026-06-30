@@ -542,7 +542,7 @@ async def network_interfaces(user=Depends(require_jwt)):
 
 # Service control
 @router.post("/start")
-async def start_glances(user=Depends(require_jwt)):
+def start_glances(user=Depends(require_jwt)):
     """Start glances daemon."""
     try:
         # Start glances in web server mode
@@ -562,7 +562,7 @@ async def start_glances(user=Depends(require_jwt)):
 
 
 @router.post("/stop")
-async def stop_glances(user=Depends(require_jwt)):
+def stop_glances(user=Depends(require_jwt)):
     """Stop glances daemon."""
     try:
         result = subprocess.run(
@@ -581,7 +581,7 @@ async def stop_glances(user=Depends(require_jwt)):
 
 
 @router.post("/restart")
-async def restart_glances(user=Depends(require_jwt)):
+def restart_glances(user=Depends(require_jwt)):
     """Restart glances daemon."""
     try:
         result = subprocess.run(
@@ -657,7 +657,7 @@ async def update_config(config: GlancesConfig, user=Depends(require_jwt)):
 
 
 @router.get("/logs")
-async def get_logs(lines: int = Query(100, ge=1, le=1000), user=Depends(require_jwt)):
+def get_logs(lines: int = Query(100, ge=1, le=1000), user=Depends(require_jwt)):
     """Get glances service logs."""
     try:
         result = subprocess.run(

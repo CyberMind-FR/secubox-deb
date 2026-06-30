@@ -463,7 +463,7 @@ async def get_user(username: str):
     raise HTTPException(status_code=404, detail="User not found")
 
 @app.post("/user", dependencies=[Depends(require_jwt)])
-async def create_user(user: UserCreate):
+def create_user(user: UserCreate):
     """Create a new user and provision to services."""
     # Delegate identity creation to engine.
     # The legacy API role "user" maps to engine role "viewer" (least privilege).
@@ -577,7 +577,7 @@ async def enable_user(username: str):
     return {"ok": True}
 
 @app.delete("/user/{username}", dependencies=[Depends(require_jwt)])
-async def delete_user(username: str):
+def delete_user(username: str):
     """Delete user and deprovision from services."""
     # Read services before deleting (engine will remove the record)
     user_record = _engine.get_user(username)
@@ -630,7 +630,7 @@ async def sync_user(username: str):
     raise HTTPException(status_code=404, detail="User not found")
 
 @app.post("/user/{username}/password", dependencies=[Depends(require_permission("users.password", allow_self_for_param="username"))])
-async def change_password(username: str, pwd: PasswordChange):
+def change_password(username: str, pwd: PasswordChange):
     """Change user password (admin path — caller holds users.password permission).
     Sets the internal password hash via engine and propagates to external services."""
     user_record = _engine.get_user(username)
@@ -1111,7 +1111,7 @@ async def get_sessions():
 
 
 @app.delete("/session/{session_id}", dependencies=[Depends(require_jwt)])
-async def revoke_session(session_id: str):
+def revoke_session(session_id: str):
     """Revoke a specific session."""
     try:
         result = subprocess.run(
@@ -1128,7 +1128,7 @@ async def revoke_session(session_id: str):
 
 
 @app.post("/sessions/revoke-all", dependencies=[Depends(require_jwt)])
-async def revoke_all_sessions():
+def revoke_all_sessions():
     """EMERGENCY: Revoke ALL active sessions immediately.
     This is a panic button - all users will be logged out.
     """

@@ -194,7 +194,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Get webradio service status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -453,7 +453,7 @@ async def list_recordings(user=Depends(require_jwt)):
 
 
 @router.post("/record/start")
-async def start_recording(station_id: str, format: str = "mp3", user=Depends(require_jwt)):
+def start_recording(station_id: str, format: str = "mp3", user=Depends(require_jwt)):
     """Start recording a station."""
     stations = load_stations()
     station = None
@@ -650,7 +650,7 @@ async def container_status(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_containers(user=Depends(require_jwt)):
+def install_containers(user=Depends(require_jwt)):
     """Pull required container images."""
     rt = detect_runtime()
     if not rt:
@@ -733,7 +733,7 @@ memory_limit = "{config.memory_limit}"
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(lines: int = 50, user=Depends(require_jwt)):
+def get_logs(lines: int = 50, user=Depends(require_jwt)):
     """Get container logs."""
     rt = detect_runtime()
     if not rt:

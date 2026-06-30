@@ -375,7 +375,7 @@ async def status(user=Depends(require_jwt)):
 
 
 @router.get("/info")
-async def info():
+def info():
     """System info for dashboard (public)."""
     import platform
     import datetime
@@ -402,7 +402,7 @@ async def info():
 
 
 @router.get("/metrics")
-async def metrics():
+def metrics():
     """System metrics for Eye Remote dashboard (public).
 
     Returns metrics in format expected by Eye Remote display.
@@ -448,7 +448,7 @@ async def resources():
 
 
 @router.get("/metrics")
-async def metrics_public():
+def metrics_public():
     """
     Public metrics endpoint for Eye Remote Dashboard (no JWT required).
     Returns all metrics needed by the HyperPixel 2.1 Round display.
@@ -551,7 +551,7 @@ async def network():
 
 
 @router.get("/security")
-async def security():
+def security():
     """Security status for dashboard (public)."""
     # nftables always active on SecuBox (rules loaded at boot)
     firewall = "Active"
@@ -586,7 +586,7 @@ async def security():
 
 
 @router.get("/packages")
-async def packages():
+def packages():
     """Installed SecuBox packages (public)."""
     r = subprocess.run(
         ["dpkg-query", "-W", "-f", "${Package} ${Version}\n"],
@@ -601,7 +601,7 @@ async def packages():
 
 
 @router.post("/restart_services")
-async def restart_services(user=Depends(require_jwt)):
+def restart_services(user=Depends(require_jwt)):
     """Restart all SecuBox services."""
     for svc in SECUBOX_SERVICES[:12]:
         if svc.startswith("secubox-"):
@@ -610,21 +610,21 @@ async def restart_services(user=Depends(require_jwt)):
 
 
 @router.post("/reload_firewall")
-async def reload_firewall(user=Depends(require_jwt)):
+def reload_firewall(user=Depends(require_jwt)):
     """Reload nftables firewall."""
     r = subprocess.run(["systemctl", "reload", "nftables"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/sync_time")
-async def sync_time(user=Depends(require_jwt)):
+def sync_time(user=Depends(require_jwt)):
     """Sync system time with NTP."""
     r = subprocess.run(["timedatectl", "set-ntp", "true"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/clear_cache")
-async def clear_cache(user=Depends(require_jwt)):
+def clear_cache(user=Depends(require_jwt)):
     """Clear system caches."""
     subprocess.run(["sync"], timeout=5)
     Path("/proc/sys/vm/drop_caches").write_text("3")
@@ -632,7 +632,7 @@ async def clear_cache(user=Depends(require_jwt)):
 
 
 @router.get("/check_updates")
-async def check_updates(user=Depends(require_jwt)):
+def check_updates(user=Depends(require_jwt)):
     """Check for package updates."""
     subprocess.run(["apt-get", "update", "-qq"], capture_output=True, timeout=60)
     r = subprocess.run(["apt-get", "-s", "upgrade"], capture_output=True, text=True, timeout=30)
@@ -642,7 +642,7 @@ async def check_updates(user=Depends(require_jwt)):
 
 
 @router.post("/apply_updates")
-async def apply_updates(user=Depends(require_jwt)):
+def apply_updates(user=Depends(require_jwt)):
     """Apply package updates."""
     r = subprocess.run(
         ["apt-get", "upgrade", "-y", "-qq"],
@@ -652,7 +652,7 @@ async def apply_updates(user=Depends(require_jwt)):
 
 
 @router.post("/shutdown")
-async def shutdown(user=Depends(require_jwt)):
+def shutdown(user=Depends(require_jwt)):
     """Shutdown the system."""
     log.warning("Shutdown requested by user")
     subprocess.Popen(["shutdown", "-h", "+1"], stdout=subprocess.DEVNULL)
@@ -660,7 +660,7 @@ async def shutdown(user=Depends(require_jwt)):
 
 
 @router.post("/settings")
-async def settings(data: dict, user=Depends(require_jwt)):
+def settings(data: dict, user=Depends(require_jwt)):
     """Save system settings."""
     if "hostname" in data and data["hostname"]:
         subprocess.run(["hostnamectl", "set-hostname", data["hostname"]], timeout=10)
@@ -689,7 +689,7 @@ async def logs(unit: str = "", lines: int = 100, user=Depends(require_jwt)):
 
 
 @router.get("/secubox_logs")
-async def secubox_logs():
+def secubox_logs():
     """Get latest secubox log messages with criticality and emojis (public for dashboard).
 
     Returns 5 most recent messages from secubox-* services with:
@@ -924,7 +924,7 @@ async def get_denoise_stats(user=Depends(require_jwt)):
 
 
 @router.post("/reboot")
-async def reboot(user=Depends(require_jwt)):
+def reboot(user=Depends(require_jwt)):
     """Redémarrer le système."""
     log.warning("Reboot requested by user")
     subprocess.Popen(["shutdown", "-r", "+1"], stdout=subprocess.DEVNULL)
@@ -1014,7 +1014,7 @@ async def delete_diagnostic(name: str, user=Depends(require_jwt)):
 
 
 @router.get("/run_diagnostic_test")
-async def run_diagnostic_test(test: str, user=Depends(require_jwt)):
+def run_diagnostic_test(test: str, user=Depends(require_jwt)):
     """Exécuter un test de diagnostic."""
     tests = {
         "network": ["ping", "-c", "3", "1.1.1.1"],
@@ -1142,7 +1142,7 @@ async def board_info_endpoint():
 
 
 @router.post("/board/detect")
-async def run_board_detection(user=Depends(require_jwt)):
+def run_board_detection(user=Depends(require_jwt)):
     """
     Run secubox-net-detect script to refresh board detection.
     Requires authentication.

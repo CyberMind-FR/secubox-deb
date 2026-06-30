@@ -305,7 +305,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Real native-LXC status: LXC state + PeerTube HTTP reachability + disk."""
     cfg = get_config()
     state = get_lxc_state()
@@ -680,7 +680,7 @@ async def update_transcoding_settings(settings: TranscodingSettings, user=Depend
 # ============================================================================
 
 @router.get("/storage/stats")
-async def get_storage_stats(user=Depends(require_jwt)):
+def get_storage_stats(user=Depends(require_jwt)):
     cfg = get_config()
     data_path = Path(cfg.get("data_path", "/data/peertube"))
     stats = {"total": "", "videos": "", "thumbnails": "",
@@ -771,7 +771,7 @@ async def container_status():
 
 
 @router.post("/container/install")
-async def install_peertube(user=Depends(require_jwt)):
+def install_peertube(user=Depends(require_jwt)):
     """Provision the LXC + native PeerTube install. Long-running → detached."""
     if not Path(INSTALL_LIB).exists():
         return {"success": False, "error": f"install script missing at {INSTALL_LIB}"}
@@ -825,7 +825,7 @@ async def uninstall_peertube(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(lines: int = 100, user=Depends(require_jwt)):
+def get_logs(lines: int = 100, user=Depends(require_jwt)):
     """Tail peertube.service journal inside the LXC."""
     cfg = get_config()
     try:

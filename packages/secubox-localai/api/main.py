@@ -433,7 +433,7 @@ systemctl start localai
 
 
 @app.delete("/uninstall", dependencies=[Depends(require_jwt)])
-async def uninstall_localai():
+def uninstall_localai():
     """Remove LocalAI LXC container."""
     if lxc_running():
         subprocess.run(["lxc-stop", "-n", LXC_NAME], capture_output=True, timeout=30)

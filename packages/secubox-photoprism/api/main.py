@@ -381,7 +381,7 @@ async def get_library_statistics(user=Depends(require_jwt)):
 
 
 @router.post("/library/index")
-async def start_indexing(user=Depends(require_jwt)):
+def start_indexing(user=Depends(require_jwt)):
     """Start library indexing."""
     if not is_running():
         return {"success": False, "error": "PhotoPrism is not running"}
@@ -405,7 +405,7 @@ async def start_indexing(user=Depends(require_jwt)):
 
 
 @router.post("/library/import")
-async def import_photos(user=Depends(require_jwt)):
+def import_photos(user=Depends(require_jwt)):
     """Import photos from import folder."""
     if not is_running():
         return {"success": False, "error": "PhotoPrism is not running"}
@@ -515,7 +515,7 @@ async def disable_face_recognition(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/storage")
-async def get_storage_info(user=Depends(require_jwt)):
+def get_storage_info(user=Depends(require_jwt)):
     """Get storage information."""
     cfg = get_config()
     data_path = Path(cfg.get("data_path", "/srv/photoprism"))
@@ -636,7 +636,7 @@ async def container_status(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_photoprism(user=Depends(require_jwt)):
+def install_photoprism(user=Depends(require_jwt)):
     """Provision the LXC + podman + PhotoPrism. Long-running → detached."""
     if not Path(INSTALL_LIB).exists():
         return {"success": False, "error": f"install script missing at {INSTALL_LIB}"}
@@ -687,7 +687,7 @@ async def uninstall_photoprism(user=Depends(require_jwt)):
 
 
 @router.post("/container/update")
-async def update_photoprism(user=Depends(require_jwt)):
+def update_photoprism(user=Depends(require_jwt)):
     """Pull the latest image inside the LXC + restart."""
     cfg = get_config()
     image = cfg.get("image", "docker.io/photoprism/photoprism:latest")
@@ -707,7 +707,7 @@ async def update_photoprism(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(lines: int = 50, user=Depends(require_jwt)):
+def get_logs(lines: int = 50, user=Depends(require_jwt)):
     """Tail photoprism.service journal inside the LXC."""
     cfg = get_config()
     try:
@@ -727,7 +727,7 @@ async def get_logs(lines: int = 50, user=Depends(require_jwt)):
 # ============================================================================
 
 @router.post("/backup")
-async def backup_photoprism(user=Depends(require_jwt)):
+def backup_photoprism(user=Depends(require_jwt)):
     """Backup PhotoPrism configuration and database."""
     cfg = get_config()
     data_path = Path(cfg.get("data_path", "/srv/photoprism"))

@@ -779,28 +779,28 @@ async def get_realtime_stats():
 # ============================================================================
 
 @app.post("/control/start", dependencies=[Depends(require_jwt)])
-async def start_ndpid():
+def start_ndpid():
     """Start nDPId daemon."""
     result = subprocess.run(["systemctl", "start", "ndpid"], capture_output=True, text=True)
     return {"success": result.returncode == 0, "error": result.stderr if result.returncode != 0 else None}
 
 
 @app.post("/control/stop", dependencies=[Depends(require_jwt)])
-async def stop_ndpid():
+def stop_ndpid():
     """Stop nDPId daemon."""
     result = subprocess.run(["systemctl", "stop", "ndpid"], capture_output=True, text=True)
     return {"success": result.returncode == 0}
 
 
 @app.post("/control/restart", dependencies=[Depends(require_jwt)])
-async def restart_ndpid():
+def restart_ndpid():
     """Restart nDPId daemon."""
     result = subprocess.run(["systemctl", "restart", "ndpid"], capture_output=True, text=True)
     return {"success": result.returncode == 0, "error": result.stderr if result.returncode != 0 else None}
 
 
 @app.get("/logs", dependencies=[Depends(require_jwt)])
-async def get_logs(lines: int = 100):
+def get_logs(lines: int = 100):
     """Get nDPId daemon logs."""
     result = subprocess.run(
         ["journalctl", "-u", "ndpid", "-n", str(lines), "--no-pager"],
@@ -853,7 +853,7 @@ async def save_settings(settings: NDPIdSettings):
 
 
 @app.get("/interfaces", dependencies=[Depends(require_jwt)])
-async def list_interfaces():
+def list_interfaces():
     """List available network interfaces."""
     result = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
     try:
@@ -873,7 +873,7 @@ async def list_interfaces():
 # ============================================================================
 
 @app.get("/mirred/status", dependencies=[Depends(require_jwt)])
-async def mirred_status():
+def mirred_status():
     """Get tc mirred status."""
     cfg = get_config("ndpid")
     iface = cfg.get("interface", "eth0")
@@ -890,7 +890,7 @@ async def mirred_status():
 
 
 @app.post("/mirred/setup", dependencies=[Depends(require_jwt)])
-async def setup_mirred():
+def setup_mirred():
     """Setup tc mirred for DPI."""
     cfg = get_config("ndpid")
     iface = cfg.get("interface", "eth0")
@@ -917,7 +917,7 @@ async def setup_mirred():
 
 
 @app.post("/mirred/remove", dependencies=[Depends(require_jwt)])
-async def remove_mirred():
+def remove_mirred():
     """Remove tc mirred configuration."""
     cfg = get_config("ndpid")
     iface = cfg.get("interface", "eth0")
