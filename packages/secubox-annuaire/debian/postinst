@@ -61,20 +61,18 @@ case "$1" in
         # Satellite dashboards (#768): the legacy nginx vhost
         # (/etc/nginx/sites-available/secubox) includes /etc/nginx/secubox.d/
         # but NOT secubox-routes.d/, so the Annuaire dashboard's
-        # /api/v1/annuaire/ calls fall through to the SPA shell (empty UI). On
-        # such nodes, drop the API route into secubox.d/ (which IS included). On
-        # hub nodes whose ACTIVE config already includes secubox-routes.d this
-        # would double-define the location, so only add it when secubox-routes.d
-        # is not already active. Validated with `nginx -t`; reverted on failure.
+        # /api/v1/annuaire/ calls fall through to the SPA shell (empty UI). Drop
+        # the API route into secubox.d/ (included by that vhost). `nginx -t` is
+        # the sole arbiter: if this DUPLICATES a location already active in the
+        # same server (a hub vhost that includes both dirs), the test fails and
+        # we drop it back — leaving nginx valid either way. Starts from a valid
+        # baseline so a pre-existing error is never blamed on us.
         API_DROPIN=/etc/nginx/secubox.d/annuaire-api.conf
         ROUTES_SRC=/etc/nginx/secubox-routes.d/annuaire-routes.conf
-        if [ -f "$ROUTES_SRC" ] && command -v nginx >/dev/null 2>&1; then
-            if nginx -T 2>/dev/null | grep -q 'secubox-routes.d'; then
-                rm -f "$API_DROPIN" 2>/dev/null || true   # hub: routes already active
-            else
-                cp "$ROUTES_SRC" "$API_DROPIN"
-                nginx -t >/dev/null 2>&1 || rm -f "$API_DROPIN"
-            fi
+        if [ -f "$ROUTES_SRC" ] && command -v nginx >/dev/null 2>&1 \
+           && nginx -t >/dev/null 2>&1; then
+            cp "$ROUTES_SRC" "$API_DROPIN"
+            nginx -t >/dev/null 2>&1 || rm -f "$API_DROPIN"
         fi
 
         # Invalidate hub menu cache so Annuaire appears in the navbar

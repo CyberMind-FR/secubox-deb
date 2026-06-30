@@ -1,3 +1,14 @@
+secubox-annuaire (0.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#768): correct the satellite-dashboard guard. The 0.2.4 check
+    `nginx -T | grep secubox-routes.d` matched config-file *comments*, not real
+    includes, so it wrongly removed the API drop-in and re-broke satellite
+    dashboards. Replaced with the robust approach: add the route, then let
+    `nginx -t` arbitrate — drop it back only if it duplicates a location already
+    active in the same (hub) vhost. nginx stays valid either way.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 17:45:00 +0200
+
 secubox-annuaire (0.2.4-1~bookworm1) bookworm; urgency=medium
 
   * fix(#768): satellite Annuaire dashboards. The legacy nginx vhost
