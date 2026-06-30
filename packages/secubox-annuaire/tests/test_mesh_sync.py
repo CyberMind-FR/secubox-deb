@@ -64,7 +64,7 @@ def test_sync_once_converges(tmp_path):
     consumer = Journal(str(tmp_path / "consumer.db"))
 
     def fake_fetch(url):
-        assert url == "http://10.10.0.2:9080/api/v1/annuaire/log/export"
+        assert url == "http://10.10.0.2:8799/api/v1/annuaire/log/export"
         return prod_entries
 
     totals = sync_once(consumer, [{"mesh_ip": "10.10.0.2", "name": "c3box"}], fetch=fake_fetch)
