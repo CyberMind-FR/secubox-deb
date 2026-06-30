@@ -1,3 +1,18 @@
+secubox-annuaire (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat: service offers + subscription verbs, API and UI + pull federation
+    - annuaire/verbs.py: offer_service, revoke_offer, subscribe,
+      approve_subscription, reject_subscription, ingest_offer,
+      subscription_state, _get_offers, _get_offer helpers.
+    - api/main.py: GET /services, POST /service/offer,
+      POST /service/{id}/revoke, POST /service/{id}/subscribe,
+      GET /subscriptions, POST /subscription/{id}/approve,
+      POST /subscription/{id}/reject, POST /services/pull.
+    - www/annuaire/index.html: Services section + My subscriptions panel.
+    - tests/test_services.py: 28 new tests covering all security invariants.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 30 Jun 2026 12:00:00 +0200
+
 secubox-annuaire (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * ui: minimal shared-template dashboard (chain integrity, merkle root,
