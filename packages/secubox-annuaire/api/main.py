@@ -790,11 +790,46 @@ async def pull_log(req: PullLogRequest):
 # ---------------------------------------------------------------------------
 
 
+def _publish_self_node():
+    """Publish this node's signed NodeRecord into the directory (idempotent).
+
+    In-process (journal owner → no JWT, no write race). Requires the node
+    identity key from `annuairectl init`; a no-op if absent. Skips when the
+    latest record for this DID already matches the current mesh metadata, so a
+    restart does not spam the log.
+    """
+    key_path = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
+    if not os.path.exists(key_path):
+        return
+    try:
+        from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+        from annuaire.mesh_sync import read_self_meta  # noqa: PLC0415
+        from annuaire.verbs import _get_nodes, publish_node  # noqa: PLC0415
+
+        with open(key_path, "r", encoding="ascii") as fh:
+            priv = bytes.fromhex(fh.read().strip())
+        if len(priv) != 32:
+            return
+        meta = read_self_meta()
+        if not meta:
+            return
+        did = did_from_pubkey(public_from_private(priv))
+        j = get_journal()
+        fields = ("node_id", "boxname", "pubkey_wg", "mesh_ip", "ddns", "endpoint")
+        existing = next((n for n in _get_nodes(j) if n.get("did") == did), None)
+        if existing and all(existing.get(k) == meta[k] for k in fields):
+            return
+        publish_node(j, priv, did, **meta)
+    except Exception:
+        pass
+
+
 @app.on_event("startup")
 async def _start_dir_sync():
     import asyncio  # noqa: PLC0415
     if os.environ.get("ANNUAIRE_DIR_SYNC", "1") != "1":
         return
+    await asyncio.to_thread(_publish_self_node)
     asyncio.create_task(_dir_sync_loop())
 
 

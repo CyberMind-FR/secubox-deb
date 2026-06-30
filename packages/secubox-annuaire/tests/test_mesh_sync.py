@@ -14,7 +14,7 @@ import pytest
 
 from annuaire.crypto import canonical_bytes, did_from_pubkey, generate_keypair, sign
 from annuaire.log import Journal
-from annuaire.mesh_sync import read_mesh_peers, sync_once
+from annuaire.mesh_sync import read_mesh_peers, read_self_meta, sync_once
 from annuaire.model import Identity, MemberState, Op
 from annuaire.verbs import _get_config, export_entries, publish_config
 
@@ -28,6 +28,34 @@ def _make_member(journal):
     journal.append(op=Op.INVITE_ACCEPT, payload_type="Identity", payload=payload,
                    author=did, sig=sign(priv, canonical_bytes(payload)), author_pubkey_hex=pub.hex())
     return priv, pub, did
+
+
+# ---------------------------------------------------------------------------
+# read_self_meta
+# ---------------------------------------------------------------------------
+
+def test_read_self_meta_parses(tmp_path):
+    wg = tmp_path / "wg_mesh.json"
+    wg.write_text(json.dumps({
+        "address": "10.10.0.1/24", "role": "master",
+        "ddns": "gk2.secubox.in", "public_key": "WGPUB",
+    }))
+    nid = tmp_path / "node.id"
+    nid.write_text("sb-aabbccddeeff\n")
+    m = read_self_meta(str(wg), str(nid), hostname="gk2")
+    assert m["mesh_ip"] == "10.10.0.1"
+    assert m["boxname"] == "gk2"
+    assert m["pubkey_wg"] == "WGPUB"
+    assert m["ddns"] == "gk2.secubox.in"
+    assert m["node_id"] == "sb-aabbccddeeff"
+    assert m["endpoint"] is None
+
+
+def test_read_self_meta_missing_or_no_address(tmp_path):
+    assert read_self_meta(str(tmp_path / "nope.json")) is None
+    bad = tmp_path / "wg.json"
+    bad.write_text(json.dumps({"role": "satellite"}))  # no address
+    assert read_self_meta(str(bad)) is None
 
 
 # ---------------------------------------------------------------------------
