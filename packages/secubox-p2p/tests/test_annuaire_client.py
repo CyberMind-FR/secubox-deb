@@ -161,3 +161,36 @@ def test_node_identity_missing(tmp_path):
     did, priv = ac.node_identity(key_path=str(tmp_path / "nope"))
     assert did is None
     assert priv is None
+
+
+def test_subscribe_attaches_service_token(monkeypatch):
+    """subscribe must mint + attach a service JWT (annuaire's subscribe is JWT-gated)."""
+    captured = {}
+
+    def fake_request(method, path, sock, body=None, auth_token=None):
+        captured["method"] = method
+        captured["auth_token"] = auth_token
+        captured["body"] = body
+        return {"subscription_id": "x", "state": "approved"}, None
+
+    monkeypatch.setattr(ac, "_request", fake_request)
+    monkeypatch.setattr(ac, "_service_token", lambda: "TESTTOKEN")
+    res, err = ac.subscribe("svc1", "did:plc:" + "a" * 32, "11" * 32)
+    assert err is None
+    assert captured["method"] == "POST"
+    assert captured["auth_token"] == "TESTTOKEN"
+    assert captured["body"]["subscriber_did"].startswith("did:plc:")
+
+
+def test_service_token_returns_none_without_secubox_core(monkeypatch):
+    """_service_token degrades to None when secubox_core is unavailable (unit env)."""
+    import builtins
+    real_import = builtins.__import__
+
+    def blocked_import(name, *a, **k):
+        if name == "secubox_core.auth" or name.startswith("secubox_core"):
+            raise ImportError("blocked for test")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", blocked_import)
+    assert ac._service_token() is None

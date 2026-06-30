@@ -37,19 +37,40 @@ class _UnixHTTPConnection(http.client.HTTPConnection):
         self.sock = s
 
 
+def _service_token() -> Optional[str]:
+    """Mint a short service JWT so we can call annuaire's JWT-gated endpoints.
+
+    annuaire and secubox-p2p run on the same host and share the same
+    secubox_core JWT secret, so a token minted here validates there. Used for
+    mutating calls (subscribe); the read endpoints (/services, /subscriptions)
+    are public and need no token. Returns None if secubox_core is unavailable
+    (e.g. in unit tests) — the caller then sends no Authorization header.
+    """
+    try:
+        from secubox_core.auth import create_token  # noqa: PLC0415
+        return create_token("secubox-p2p")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _request(
     method: str,
     path: str,
     sock: str,
     body: Optional[dict] = None,
+    auth_token: Optional[str] = None,
 ) -> Tuple[Optional[Any], Optional[str]]:
     """Issue a single HTTP request over the given unix socket.
 
     Returns (parsed_json_or_None, error_string_or_None). Never raises.
+    When auth_token is set, an Authorization: Bearer header is attached (needed
+    for annuaire's JWT-gated mutating endpoints).
     """
     try:
         conn = _UnixHTTPConnection(sock)
         headers: Dict[str, str] = {"Accept": "application/json"}
+        if auth_token:
+            headers["Authorization"] = f"Bearer {auth_token}"
         data: Optional[bytes] = None
         if body is not None:
             data = json.dumps(body).encode()
@@ -142,11 +163,13 @@ def subscribe(
 
     Returns (response_dict, None) on success, or (None, error_string).
     The `priv_hex` is forwarded to the annuaire so it can verify the
-    subscriber's identity (annuaire validates the ed25519 key pair).
+    subscriber's identity (annuaire validates the ed25519 key pair). annuaire's
+    subscribe endpoint is JWT-gated, so a service token is also attached.
     """
     return _request(
         "POST",
         f"/api/v1/annuaire/service/{service_id}/subscribe",
         sock,
         body={"subscriber_did": did, "subscriber_priv_hex": priv_hex},
+        auth_token=_service_token(),
     )
