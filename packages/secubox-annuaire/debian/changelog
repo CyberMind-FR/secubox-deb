@@ -32,6 +32,12 @@ secubox-annuaire (0.2.0-1~bookworm1) bookworm; urgency=medium
   * tests: +7 federation tests (genesis member/idempotent, offer enrichment,
     trustless round-trip pull, forged-pubkey + tampered-payload + bad-hex
     rejection). 134 passing.
+  * hardening (security review): postinst validates the rendered mesh listener
+    with `nginx -t` and reverts it on failure so a broken render can never
+    persist (board-wide nginx blast radius); ship
+    /etc/sysctl.d/30-secubox-nonlocal-bind.conf (net.ipv4.ip_nonlocal_bind=1)
+    so nginx can bind the wg-mesh IP even if wg-quick@wg-mesh starts after
+    nginx at boot.
 
  -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 16:00:00 +0200
 
