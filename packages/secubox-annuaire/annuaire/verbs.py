@@ -1656,6 +1656,94 @@ def ingest_config(
 
 
 # ---------------------------------------------------------------------------
+# Federation gossip — generic log replication (the /log pull core, #768)
+#
+# Every annuaire entry is self-certifying: its author is a did:plc and the
+# author's sig covers canonical_bytes(payload). Replication therefore does NOT
+# copy chain structure (prev_hash/entry_hash are local) — it re-appends each
+# foreign entry's payload+sig into the LOCAL chain, preserving the author's
+# signature. Dedup is by (author, sig): the sig is over the canonical payload,
+# so it identifies a logical record independently of chain position. Pull-only,
+# last-writer-wins at the state layer (_get_nodes/_get_configs/_get_offers).
+# ---------------------------------------------------------------------------
+
+def export_entries(journal: Journal) -> List[Dict[str, Any]]:
+    """Serialize the local log for a peer to pull.
+
+    Each item: {op, payload_type, payload, author, author_pubkey, sig}. The
+    author_pubkey is resolved from the author's Identity entry so a consumer
+    can verify without prior knowledge (and check the self-certifying binding).
+    Entries are emitted in height order so version ties resolve consistently.
+    """
+    out: List[Dict[str, Any]] = []
+    for entry in journal.iter_entries():
+        out.append({
+            "op": entry.op.value if hasattr(entry.op, "value") else entry.op,
+            "payload_type": entry.payload_type,
+            "payload": entry.payload,
+            "author": entry.author,
+            "author_pubkey": _get_inviter_pubkey(journal, entry.author),
+            "sig": entry.sig,
+        })
+    return out
+
+
+def _seen_author_sig(journal: Journal) -> set:
+    return {(e.author, e.sig) for e in journal.iter_entries()}
+
+
+def import_entries(journal: Journal, entries: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Merge remote log entries into the local journal (federation pull).
+
+    For each entry not already present (by (author, sig)):
+      1. self-certifying check: did_from_pubkey(author_pubkey) == author
+      2. signature verification over canonical_bytes(payload)
+      3. re-append locally (re-chained; the author's sig is preserved)
+
+    A malformed, forged, or author-spoofed entry is counted in `rejected` and
+    skipped — never appended. Idempotent: a re-pull skips everything.
+    """
+    seen = _seen_author_sig(journal)
+    ingested = skipped = rejected = 0
+    for e in entries:
+        author = e.get("author")
+        sig = e.get("sig")
+        pub = e.get("author_pubkey")
+        payload = e.get("payload")
+        op = e.get("op")
+        ptype = e.get("payload_type")
+        if not (author and sig and pub and payload is not None and op and ptype):
+            rejected += 1
+            continue
+        if (author, sig) in seen:
+            skipped += 1
+            continue
+        # Self-certifying binding: the did MUST hash to the supplied pubkey.
+        try:
+            if did_from_pubkey(bytes.fromhex(pub)) != author:
+                rejected += 1
+                continue
+        except (ValueError, TypeError):
+            rejected += 1
+            continue
+        if not verify(pub, canonical_bytes(payload), sig):
+            rejected += 1
+            continue
+        try:
+            op_enum = Op(op)
+        except ValueError:
+            rejected += 1
+            continue
+        journal.append(
+            op=op_enum, payload_type=ptype, payload=payload,
+            author=author, sig=sig, author_pubkey_hex=pub,
+        )
+        seen.add((author, sig))
+        ingested += 1
+    return {"ingested": ingested, "skipped": skipped, "rejected": rejected}
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers for service verbs
 # ---------------------------------------------------------------------------
 

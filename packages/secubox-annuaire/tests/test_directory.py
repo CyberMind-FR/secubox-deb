@@ -36,6 +36,8 @@ from annuaire.verbs import (
     _get_config,
     _get_configs,
     _get_nodes,
+    export_entries,
+    import_entries,
     ingest_config,
     publish_config,
     publish_node,
@@ -334,3 +336,70 @@ def test_can_config_publish_observed_denied(tmp_journal):
     priv, pub, did = _make_observed(tmp_journal)
     d = can(tmp_journal, did, "config.publish", "mesh.config", domain="fr-chambery")
     assert d.allowed is False
+
+
+# ---------------------------------------------------------------------------
+# export_entries / import_entries — federation gossip (the /log pull core)
+# ---------------------------------------------------------------------------
+
+def test_export_import_round_trip(tmp_journal, tmp_path):
+    prod = tmp_journal
+    priv, pub, did = _make_member(prod)
+    publish_node(prod, priv, did, node_id="sb-x", boxname="gk2",
+                 pubkey_wg="W" * 44, mesh_ip="10.10.0.1", ddns="gk2.secubox.in")
+    publish_config(prod, priv, did, scope="yacy", version=2, content_hash=_h("v2"),
+                   payload={"k": "v"})
+
+    consumer = Journal(str(tmp_path / "consumer.db"))
+    res = import_entries(consumer, export_entries(prod))
+    assert res["ingested"] >= 3 and res["rejected"] == 0
+
+    # State converges: consumer sees the same node + config
+    cnodes = _get_nodes(consumer)
+    assert any(n["did"] == did and n["mesh_ip"] == "10.10.0.1" for n in cnodes)
+    cfg = _get_config(consumer, "cfg-yacy")
+    assert cfg is not None and cfg["version"] == 2
+
+
+def test_import_idempotent(tmp_journal, tmp_path):
+    prod = tmp_journal
+    priv, pub, did = _make_member(prod)
+    publish_config(prod, priv, did, scope="dns", version=1, content_hash=_h("v1"))
+    entries = export_entries(prod)
+
+    consumer = Journal(str(tmp_path / "consumer.db"))
+    import_entries(consumer, entries)
+    res2 = import_entries(consumer, entries)  # second pull: nothing new
+    assert res2["ingested"] == 0 and res2["skipped"] == len(entries)
+    # no duplicate config
+    assert len([c for c in _get_configs(consumer) if c["config_id"] == "cfg-dns"]) == 1
+
+
+def test_import_rejects_forged_payload(tmp_journal, tmp_path):
+    prod = tmp_journal
+    priv, pub, did = _make_member(prod)
+    publish_config(prod, priv, did, scope="dns", version=1, content_hash=_h("v1"))
+    entries = export_entries(prod)
+    # tamper the ConfigBlob payload after it was signed
+    for e in entries:
+        if e["payload_type"] == "ConfigBlob":
+            e["payload"]["version"] = 999
+    consumer = Journal(str(tmp_path / "consumer.db"))
+    res = import_entries(consumer, entries)
+    assert res["rejected"] >= 1
+    assert _get_config(consumer, "cfg-dns") is None  # forged blob never landed
+
+
+def test_import_rejects_spoofed_author(tmp_journal, tmp_path):
+    prod = tmp_journal
+    priv, pub, did = _make_member(prod)
+    publish_node(prod, priv, did, node_id="sb-x", boxname="gk2",
+                 pubkey_wg="W" * 44, mesh_ip="10.10.0.1", ddns="gk2.secubox.in")
+    entries = export_entries(prod)
+    # swap in a different pubkey that does NOT hash to the claimed author
+    _op, other_pub = generate_keypair()
+    for e in entries:
+        e["author_pubkey"] = other_pub.hex()
+    consumer = Journal(str(tmp_path / "consumer.db"))
+    res = import_entries(consumer, entries)
+    assert res["ingested"] == 0 and res["rejected"] == len(entries)
