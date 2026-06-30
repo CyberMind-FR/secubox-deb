@@ -1,3 +1,29 @@
+secubox-annuaire (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * feat: gondwana P1 distributed directory, on top of #766 (#768)
+    - model: NodeRecord (signed mesh peer registry, public wg key only) +
+      ConfigBlob (signed, versioned, single-writer config) + Op NODE_PUBLISH /
+      CONFIG_PUBLISH / CONFIG_REVOKE. Coexists with #766's Op.GENESIS.
+    - verbs: publish_node / publish_config / revoke_config + _get_nodes /
+      _get_configs (last-writer-wins by version → convergent across the mesh);
+      ingest_config; export_entries / import_entries generic log federation
+      (dedup by (author,sig), self-certifying binding + sig verified before
+      append — same defense #766 added to ingest_offer, generalized to the
+      whole log). resolver: config.publish right (MEMBER).
+    - api: GET /nodes, /config, /log/export; POST /node/publish,
+      /config/publish, /config/revoke, /log/pull.
+    - mesh_sync: in-process replication loop (the annuaire service owns the
+      journal → no JWT, no write race) pulling each peer's /log/export from the
+      #766 Gondwana mesh listener (wg-mesh-ip:8799). ANNUAIRE_DIR_SYNC=0
+      disables. secubox-p2p stays the peer-list owner (wg_mesh.json).
+    - nginx/annuaire-mesh.conf.tpl: the mesh listener now also serves
+      GET /log/export (signed, self-certifying, read-only) for replication —
+      not just /services.
+    - node identity reuses #766's genesis()/annuairectl/node.key (no new key
+      path invented). 40 directory/sync tests; full suite 167 green.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 14:30:00 +0200
+
 secubox-annuaire (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: trustless cross-node service federation (#766)

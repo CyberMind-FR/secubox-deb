@@ -22,7 +22,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 DEFAULT_PEERS_PATH = "/var/lib/secubox/p2p/wg_mesh.json"
-DEFAULT_NGINX_PORT = 9080  # nginx listens on 0.0.0.0:9080 → reachable on the mesh IP
+# The dedicated Gondwana mesh listener (#766) binds <wg-mesh-ip>:8799, allow
+# 10.10.0.0/24 + deny all, and serves only the signed read paths
+# (/services, /log/export). We pull /log/export from it — never the main :9080.
+DEFAULT_MESH_PORT = 8799
 
 
 def read_mesh_peers(path: str = DEFAULT_PEERS_PATH) -> List[Dict[str, str]]:
@@ -55,7 +58,7 @@ def sync_once(
     journal: Any,
     peers: List[Dict[str, str]],
     fetch: Callable[[str], List[Dict[str, Any]]] = http_fetch,
-    port: int = DEFAULT_NGINX_PORT,
+    port: int = DEFAULT_MESH_PORT,
 ) -> Dict[str, int]:
     """Pull /log/export from each peer and merge. Never raises — an unreachable
     or malformed peer is counted in `errors` and skipped. `fetch` is injectable
