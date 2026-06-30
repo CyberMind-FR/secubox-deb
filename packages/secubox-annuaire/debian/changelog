@@ -1,3 +1,14 @@
+secubox-annuaire (0.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#768): satellite Annuaire dashboards. The legacy nginx vhost
+    (sites-available/secubox) includes secubox.d/ but not secubox-routes.d/, so
+    the dashboard's /api/v1/annuaire/ calls fell through to the SPA shell (empty
+    UI on non-hub nodes). postinst now drops the API route into secubox.d/ on
+    those nodes (idempotent, nginx -t validated, reverted on failure); hub nodes
+    whose active config already includes secubox-routes.d are left untouched.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 17:15:00 +0200
+
 secubox-annuaire (0.2.3-1~bookworm1) bookworm; urgency=medium
 
   * feat(#768): each node auto-publishes its own NodeRecord on startup.
