@@ -394,3 +394,242 @@ async def emancipate(req: EmancipateRequest):
     except ValueError as e:
         raise HTTPException(400, str(e))
     return result
+
+
+# ---------------------------------------------------------------------------
+# Service offer + subscription request/response models
+# ---------------------------------------------------------------------------
+
+
+class ServiceOfferRequest(BaseModel):
+    provider_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    provider_priv_hex: str
+    name: str
+    kind: str
+    endpoint: str
+    scope: Optional[Dict[str, Any]] = None
+    approval_mode: str = "auto"
+    description: str = ""
+
+
+class RevokeOfferRequest(BaseModel):
+    provider_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    provider_priv_hex: str
+
+
+class SubscribeRequest(BaseModel):
+    subscriber_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    subscriber_priv_hex: str
+
+
+class SubscriptionActionRequest(BaseModel):
+    actor_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    actor_priv_hex: str
+
+
+class PullServicesRequest(BaseModel):
+    base_url: str
+
+
+# ---------------------------------------------------------------------------
+# Service offer + subscription endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/services")
+async def list_services():
+    """List all non-revoked service offers (public)."""
+    from annuaire.verbs import _get_offers  # noqa: PLC0415
+    j = get_journal()
+    return {"services": _get_offers(j)}
+
+
+@app.post("/service/offer", dependencies=[Depends(_require_jwt)])
+async def post_service_offer(req: ServiceOfferRequest):
+    """SERVICE_OFFER: publish a signed service offer."""
+    from annuaire.verbs import offer_service  # noqa: PLC0415
+    priv = _priv_from_hex(req.provider_priv_hex)
+    j = get_journal()
+    try:
+        offer = offer_service(
+            j,
+            priv,
+            req.provider_did,
+            name=req.name,
+            kind=req.kind,
+            endpoint=req.endpoint,
+            scope=req.scope,
+            approval_mode=req.approval_mode,
+            description=req.description,
+        )
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return offer.model_dump()
+
+
+@app.post("/service/{service_id}/revoke", dependencies=[Depends(_require_jwt)])
+async def revoke_service_offer(service_id: str, req: RevokeOfferRequest):
+    """SERVICE_REVOKE_OFFER: withdraw a service offer (provider only)."""
+    from annuaire.verbs import revoke_offer  # noqa: PLC0415
+    priv = _priv_from_hex(req.provider_priv_hex)
+    j = get_journal()
+    try:
+        result = revoke_offer(j, priv, req.provider_did, service_id)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    return result
+
+
+@app.post("/service/{service_id}/subscribe", dependencies=[Depends(_require_jwt)])
+async def subscribe_to_service(service_id: str, req: SubscribeRequest):
+    """SERVICE_SUBSCRIBE: subscribe to a service offer (MEMBER only)."""
+    from annuaire.verbs import subscribe, subscription_state  # noqa: PLC0415
+    priv = _priv_from_hex(req.subscriber_priv_hex)
+    j = get_journal()
+    try:
+        sub = subscribe(j, priv, req.subscriber_did, service_id)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    state = subscription_state(j, sub.subscription_id)
+    result = sub.model_dump()
+    result["state"] = state.value
+    return result
+
+
+@app.get("/subscriptions")
+async def list_subscriptions(mine: Optional[str] = None, pending_for: Optional[str] = None):
+    """List subscriptions with derived state (public read).
+
+    Optional filters:
+      ?mine=<subscriber_did>       — subscriptions by this subscriber
+      ?pending_for=<provider_did>  — pending subscriptions for this provider
+    """
+    from annuaire.verbs import subscription_state, _find_any_offer  # noqa: PLC0415
+    from annuaire.model import Op as _Op, SubscriptionState as _SS  # noqa: PLC0415
+    j = get_journal()
+
+    # Collect all subscription entries
+    subs = []
+    for entry in j.iter_entries():
+        if entry.op == _Op.SERVICE_SUBSCRIBE and entry.payload_type == "Subscription":
+            sub_id = entry.payload.get("subscription_id")
+            if sub_id is None:
+                continue
+            try:
+                state = subscription_state(j, sub_id)
+            except ValueError:
+                continue
+            record = dict(entry.payload)
+            record["state"] = state.value
+            # Resolve provider for this subscription
+            offer = _find_any_offer(j, entry.payload.get("service_id", ""))
+            record["provider"] = offer.get("provider") if offer else None
+            subs.append(record)
+
+    # Apply filters
+    if mine:
+        subs = [s for s in subs if s.get("subscriber") == mine]
+    if pending_for:
+        subs = [s for s in subs
+                if s.get("provider") == pending_for
+                and s.get("state") == _SS.PENDING.value]
+
+    return {"subscriptions": subs}
+
+
+@app.post("/subscription/{subscription_id}/approve", dependencies=[Depends(_require_jwt)])
+async def approve_sub(subscription_id: str, req: SubscriptionActionRequest):
+    """SERVICE_APPROVE: approve a subscription (provider only)."""
+    from annuaire.verbs import approve_subscription  # noqa: PLC0415
+    priv = _priv_from_hex(req.actor_priv_hex)
+    j = get_journal()
+    try:
+        result = approve_subscription(j, priv, req.actor_did, subscription_id)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    return result
+
+
+@app.post("/subscription/{subscription_id}/reject", dependencies=[Depends(_require_jwt)])
+async def reject_sub(subscription_id: str, req: SubscriptionActionRequest):
+    """SERVICE_REJECT: reject a subscription (provider only)."""
+    from annuaire.verbs import reject_subscription  # noqa: PLC0415
+    priv = _priv_from_hex(req.actor_priv_hex)
+    j = get_journal()
+    try:
+        result = reject_subscription(j, priv, req.actor_did, subscription_id)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    return result
+
+
+@app.post("/services/pull", dependencies=[Depends(_require_jwt)])
+async def pull_services(req: PullServicesRequest):
+    """Federation pull: fetch /services from a remote node and ingest valid offers.
+
+    Fetches <base_url>/api/v1/annuaire/services with a 5s timeout.
+    For each offer, verifies the signature and ingests into the local journal.
+    Never crashes on offline targets — returns partial results with errors.
+    """
+    import urllib.request  # noqa: PLC0415
+    import urllib.error   # noqa: PLC0415
+    from annuaire.model import ServiceOffer as _ServiceOffer  # noqa: PLC0415
+    from annuaire.verbs import ingest_offer  # noqa: PLC0415
+    from annuaire.verbs import _get_offers  # noqa: PLC0415
+
+    j = get_journal()
+    ingested = 0
+    rejected = 0
+    error_msg: Optional[str] = None
+
+    try:
+        url = req.base_url.rstrip("/") + "/api/v1/annuaire/services"
+        req_http = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req_http, timeout=5) as resp:
+            import json as _json  # noqa: PLC0415
+            data = _json.loads(resp.read())
+        remote_offers: List[Dict[str, Any]] = data.get("services", [])
+    except Exception as e:
+        return {"ingested": 0, "rejected": 0, "error": str(e)}
+
+    # Skip offers we already have (by service_id) to avoid duplicate key errors
+    known_sids = {o.get("service_id") for o in _get_offers(j)}
+
+    for raw in remote_offers:
+        sid = raw.get("service_id")
+        if sid in known_sids:
+            continue  # already ingested
+        try:
+            provider_pubkey_hex = raw.get("pubkey") or raw.get("provider_pubkey")
+            # The offer payload carries no pubkey directly — we need to resolve it.
+            # For now, try to find the pubkey from the local identity store.
+            # If the provider is unknown locally, we cannot verify — skip safely.
+            if not provider_pubkey_hex:
+                # Try resolving from local log
+                from annuaire.verbs import _get_inviter_pubkey  # noqa: PLC0415
+                provider_pubkey_hex = _get_inviter_pubkey(j, raw.get("provider", ""))
+            if not provider_pubkey_hex:
+                rejected += 1
+                continue
+            # Reconstruct ServiceOffer (sig must be present)
+            offer_obj = _ServiceOffer(**raw)
+            ingest_offer(j, offer_obj, provider_pubkey_hex)
+            ingested += 1
+            known_sids.add(sid)
+        except Exception as exc:
+            rejected += 1
+
+    result: Dict[str, Any] = {"ingested": ingested, "rejected": rejected}
+    if error_msg:
+        result["error"] = error_msg
+    return result
