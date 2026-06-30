@@ -4,76 +4,77 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — YaCy</title>
+<link rel="stylesheet" href="/shared/design-tokens.css">
 <link rel="stylesheet" href="/shared/crt-light.css">
-<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; }
-  .layout { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
-  .yacy-frame { border: 0; width: 100%; height: 100%; background: var(--bg-1, #0f1320); }
+  /* Module-scoped styles. Layout (sidebar fixed, .main margin) is provided by
+     hybrid-skin.css, injected at runtime by /shared/sidebar.js. */
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0.5rem 1rem; background: var(--bg-2, #181c2c);
-    border-bottom: 1px solid var(--border, #2a3354);
+    gap: 1rem; flex-wrap: wrap;
+    padding: 0.5rem 0.75rem; margin-bottom: 1rem;
+    background: var(--panel, #181c2c);
+    border: 1px solid var(--line, #2a3354); border-radius: 6px;
     color: var(--mesh-main, #2080c0);
     font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
   }
-  .topbar .actions a { color: var(--mesh-main); margin-left: 1rem; text-decoration: none; }
+  .topbar .actions a { color: var(--mesh-main, #2080c0); margin-left: 1rem; text-decoration: none; }
   .topbar .actions a:hover { text-decoration: underline; }
   .threefold {
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 1rem; padding: 1rem; background: var(--bg-1);
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem; margin-bottom: 1rem;
   }
   .threefold article {
-    background: var(--bg-2); border: 1px solid var(--border);
-    padding: 0.75rem 1rem; border-radius: 4px;
+    background: var(--panel, #181c2c); border: 1px solid var(--line, #2a3354);
+    padding: 0.75rem 1rem; border-radius: 6px;
   }
   .threefold h3 {
-    margin: 0 0 0.5rem 0; color: var(--mesh-main);
+    margin: 0 0 0.5rem 0; color: var(--mesh-main, #2080c0);
     font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
   }
   .threefold .v { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
-  .container { display: flex; flex-direction: column; height: 100vh; }
-  .iframe-wrap { flex: 1; }
+  .iframe-wrap {
+    border: 1px solid var(--line, #2a3354); border-radius: 6px; overflow: hidden;
+    background: var(--bg-1, #0f1320);
+  }
+  .yacy-frame { display: block; border: 0; width: 100%; height: 72vh; min-height: 480px; background: var(--bg-1, #0f1320); }
+  .frame-notice {
+    padding: 1.5rem; color: var(--text-muted, #6b6b7a);
+    font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; text-align: center;
+  }
+  .frame-notice a { color: var(--mesh-main, #2080c0); }
 </style>
 </head>
 <body class="crt-light">
 
-<div class="layout">
-  <nav class="sidebar" id="sidebar"></nav>
-  <div class="container">
-    <div class="topbar">
-      <div><strong>SecuBox</strong> · YaCy — peer-to-peer search</div>
-      <div class="actions">
-        <a href="/" title="Back to SecuBox hub">← hub</a>
-        <a href="#" id="open-native" title="Open native YaCy in this tab">native UI</a>
-      </div>
-    </div>
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
 
-    <section class="threefold">
-      <article><h3>Components</h3><div class="v" id="components-v">loading…</div></article>
-      <article><h3>Status</h3><div class="v" id="status-v">loading…</div></article>
-      <article><h3>Access</h3><div class="v" id="access-v">loading…</div></article>
-    </section>
-
-    <div class="iframe-wrap">
-      <iframe class="yacy-frame" src="/yacy/" title="YaCy admin UI" referrerpolicy="no-referrer"></iframe>
+<main class="main">
+  <div class="topbar">
+    <div><strong>SecuBox</strong> · YaCy — peer-to-peer search</div>
+    <div class="actions">
+      <a href="/" title="Back to SecuBox hub">← hub</a>
+      <a href="#" id="open-native" title="Open native YaCy in a new tab">native UI ↗</a>
     </div>
   </div>
-</div>
 
-<script src="/shared/sidebar.js"></script>
+  <section class="threefold">
+    <article><h3>Components</h3><div class="v" id="components-v">loading…</div></article>
+    <article><h3>Status</h3><div class="v" id="status-v">loading…</div></article>
+    <article><h3>Access</h3><div class="v" id="access-v">loading…</div></article>
+  </section>
+
+  <div class="iframe-wrap" id="iframe-wrap">
+    <div class="frame-notice" id="frame-notice">Locating YaCy admin UI…</div>
+  </div>
+</main>
+
 <script>
 (function() {
   function getToken() { return localStorage.getItem('sbx_token'); }
-  function checkAuth() {
-    if (!getToken()) {
-      window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-      return false;
-    }
-    return true;
-  }
-  if (!checkAuth()) {
-    document.body.innerHTML = '<div style="padding:2rem;color:var(--mesh-main);">Redirecting to login...</div>';
+  if (!getToken()) {
+    window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
     return;
   }
 
@@ -83,28 +84,59 @@
     }).then(r => r.ok ? r.json() : Promise.reject(r.status));
   }
 
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
   get('/components').then(d => {
     document.getElementById('components-v').innerHTML =
-      d.components.map(c => '<div>' + c.name + ': <strong>' + c.state + '</strong></div>').join('');
+      (d.components || []).map(c => '<div>' + esc(c.name) + ': <strong>' + esc(c.state) + '</strong></div>').join('');
   }).catch(() => { document.getElementById('components-v').textContent = 'unavailable'; });
 
   get('/status').then(d => {
     const colourVar = d.overall === 'green' ? 'mesh-main' : d.overall === 'yellow' ? 'wall-main' : 'auth-main';
     document.getElementById('status-v').innerHTML =
-      '<span style="color:var(--' + colourVar + ')">' + (d.overall || 'unknown').toUpperCase() + '</span>';
+      '<span style="color:var(--' + colourVar + ')">' + esc((d.overall || 'unknown')).toUpperCase() + '</span>';
   }).catch(() => { document.getElementById('status-v').textContent = 'unavailable'; });
 
   get('/access').then(d => {
     var access = d.access || [];
     document.getElementById('access-v').innerHTML =
-      access.map(a => '<div>' + a.scope + ': <a href="' + a.url + '">' + a.url + '</a></div>').join('');
-    // Single source of truth for the "native UI" button.
+      access.map(a => '<div>' + esc(a.scope) + ': <a href="' + esc(a.url) + '">' + esc(a.url) + '</a></div>').join('');
+
+    // Single source of truth for both the "native UI" button and the embed.
     var pub = access.find(a => a.scope === 'public');
     var lan = access.find(a => a.scope === 'lan');
-    var target = (pub && pub.url) || (lan && lan.url) || '#';
+    var target = (pub && pub.url) || (lan && lan.url) || '';
+
     var btn = document.getElementById('open-native');
-    if (btn) { btn.href = target; btn.target = '_blank'; btn.rel = 'noopener'; }
-  }).catch(() => { document.getElementById('access-v').textContent = 'unavailable'; });
+    if (btn && target) { btn.href = target; btn.target = '_blank'; btn.rel = 'noopener'; }
+
+    // Embed the live YaCy admin UI. The iframe must NOT point at /yacy/
+    // (that is THIS page). Prefer an https URL so it loads inside the
+    // https admin page without mixed-content blocking.
+    var wrap = document.getElementById('iframe-wrap');
+    var httpsTarget = (pub && /^https:/.test(pub.url) ? pub.url : null)
+                   || (target && /^https:/.test(target) ? target : null);
+    var pageHttps = window.location.protocol === 'https:';
+
+    if (httpsTarget || (!pageHttps && target)) {
+      var src = httpsTarget || target;
+      var f = document.createElement('iframe');
+      f.className = 'yacy-frame';
+      f.src = src;
+      f.title = 'YaCy admin UI';
+      f.setAttribute('referrerpolicy', 'no-referrer');
+      wrap.innerHTML = '';
+      wrap.appendChild(f);
+    } else {
+      wrap.innerHTML = '<div class="frame-notice">The YaCy admin UI is only reachable over an insecure (http) LAN address, '
+        + 'which cannot be embedded inside this secure page.<br><br>'
+        + (target ? '<a href="' + esc(target) + '" target="_blank" rel="noopener">Open YaCy in a new tab ↗</a>'
+                  : 'No reachable YaCy endpoint was reported.') + '</div>';
+    }
+  }).catch(() => {
+    document.getElementById('access-v').textContent = 'unavailable';
+    document.getElementById('frame-notice').textContent = 'YaCy access information unavailable.';
+  });
 })();
 </script>
 </body>
