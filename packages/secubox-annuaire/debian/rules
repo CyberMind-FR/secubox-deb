@@ -28,6 +28,10 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/sbin
 	install -m 755 $(CURDIR)/sbin/annuairectl $(CURDIR)/debian/secubox-annuaire/usr/sbin/annuairectl
 
+	# Non-local bind sysctl (nginx binds the wg-mesh IP even if iface is late)
+	install -d $(CURDIR)/debian/secubox-annuaire/etc/sysctl.d
+	install -m 644 $(CURDIR)/sysctl/30-secubox-nonlocal-bind.conf $(CURDIR)/debian/secubox-annuaire/etc/sysctl.d/
+
 		# Web UI (static)
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/annuaire
 	cp -r $(CURDIR)/www/annuaire/* $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/annuaire/

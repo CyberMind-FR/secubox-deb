@@ -11,6 +11,14 @@ case "$1" in
         install -d -m 0700 /etc/secubox/secrets/annuaire 2>/dev/null || true
         chown secubox:secubox /etc/secubox/secrets/annuaire 2>/dev/null || true
 
+        # Allow nginx to bind the wg-mesh IP even when the interface is down at
+        # boot (wg-quick@wg-mesh may start after nginx). Without this, a
+        # specific-IP `listen` fails and takes nginx down board-wide. This is
+        # the canonical VIP/non-local-bind sysctl (HAProxy uses it too).
+        if [ -f /etc/sysctl.d/30-secubox-nonlocal-bind.conf ]; then
+            sysctl -p /etc/sysctl.d/30-secubox-nonlocal-bind.conf >/dev/null 2>&1 || true
+        fi
+
         # Render the Gondwana mesh federation listener IFF a wg-mesh exists.
         # Bind only the node's wg-mesh IPv4 — never 0.0.0.0 (minimal surface).
         MESH_TPL=/usr/share/secubox/annuaire/annuaire-mesh.conf.tpl
@@ -18,6 +26,12 @@ case "$1" in
         MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
         if [ -n "$MESH_IP" ] && [ -f "$MESH_TPL" ]; then
             sed "s/__MESH_IP__/$MESH_IP/g" "$MESH_TPL" > "$MESH_CONF"
+            # A broken render must NEVER persist on disk — the next nginx -t by
+            # ANY actor (reboot, another package's postinst) would otherwise
+            # fail board-wide. Validate now; revert immediately on failure.
+            if ! nginx -t >/dev/null 2>&1; then
+                rm -f "$MESH_CONF" 2>/dev/null || true
+            fi
         else
             # No mesh interface (or template missing) → ensure no stale listener.
             rm -f "$MESH_CONF" 2>/dev/null || true
