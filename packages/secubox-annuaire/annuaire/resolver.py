@@ -47,6 +47,7 @@ RIGHTS: dict[MemberState, Set[str]] = {
         "report.threat",
         "name.bind",
         "service.publish",
+        "config.publish",   # gondwana P1 (#768): publish signed config/node records
     },
     MemberState.REVOKED: set(),
 }
