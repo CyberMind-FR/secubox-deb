@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecuBox · Annuaire·Miroir</title>
+  <link rel="stylesheet" href="/shared/design-tokens.css">
+  <link rel="stylesheet" href="/shared/crt-light.css">
+  <style>
+    .an-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:14px 0}
+    .an-card{background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);border-radius:10px;padding:14px}
+    .an-card .l{color:var(--text-muted,#6b6b7a);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+    .an-card .v{font-size:22px;font-weight:700;margin-top:4px;word-break:break-all}
+    .v.ok{color:var(--matrix-green,#00ff41)} .v.bad{color:var(--cinnabar,#e63946)}
+    .mono{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted,#6b6b7a)}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+    th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line,#2a2a3a)}
+    th{color:var(--gold-hermetic,#c9a84c);text-transform:uppercase;font-size:10px;letter-spacing:.5px}
+    td{color:var(--text,#e8e6d9)} .empty{color:var(--text-muted,#6b6b7a);padding:24px;text-align:center}
+    .op{font-size:10px;padding:2px 7px;border-radius:12px;border:1px solid var(--line,#2a2a3a);color:var(--cyber-cyan,#00d4ff)}
+    h2{font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);margin:.6em 0 .2em}
+  </style>
+</head>
+<body class="crt-light">
+  <nav class="sidebar" id="sidebar"></nav>
+  <script src="/shared/sidebar.js"></script>
+  <main class="main">
+    <header class="header">
+      <div class="header-title"><h1>🪞 Annuaire·Miroir</h1>
+        <span class="badge" id="chain-badge">chain —</span></div>
+    </header>
+    <p class="mono">Federated self-certifying trust substrate — append-only BLAKE2b-chained log. The legibility of trust is the deepest form of respect.</p>
+
+    <div class="an-grid">
+      <div class="an-card"><div class="l">Chain integrity</div><div class="v" id="chain">—</div></div>
+      <div class="an-card"><div class="l">Tip height</div><div class="v" id="height">—</div></div>
+      <div class="an-card"><div class="l">Merkle root</div><div class="v mono" id="merkle" style="font-size:11px">—</div></div>
+    </div>
+
+    <h2>Trust log</h2>
+    <table><thead><tr><th>#</th><th>op</th><th>type</th><th>author</th><th>when</th></tr></thead>
+      <tbody id="log"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table>
+  </main>
+
+  <script>
+    const API='/api/v1/annuaire';
+    async function j(p){try{const r=await fetch(API+p);if(!r.ok)throw 0;return await r.json();}catch(e){return null;}}
+    function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+    function shortdid(s){s=String(s||'');return s.length>22?s.slice(0,14)+'…'+s.slice(-5):s;}
+    async function load(){
+      const st=await j('/status');
+      if(st){
+        const ok=st.chain_ok!==false;
+        const cb=document.getElementById('chain'); cb.textContent=ok?'VERIFIED':('BROKEN @'+st.chain_broken_at);
+        cb.className='v '+(ok?'ok':'bad');
+        document.getElementById('chain-badge').textContent='chain '+(ok?'✓':'✗');
+        document.getElementById('height').textContent=(st.tip_height==null||st.tip_height<0)?'0 (empty)':st.tip_height;
+        document.getElementById('merkle').textContent=st.merkle_root||'—';
+      }
+      const log=await j('/log');
+      const tb=document.getElementById('log');
+      const rows=Array.isArray(log)?log:(log&&Array.isArray(log.entries)?log.entries:[]);
+      if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="empty">No log entries yet — the trust graph is empty.</td></tr>';return;}
+      tb.innerHTML=rows.slice(-50).reverse().map(e=>`<tr>
+        <td>${esc(e.height)}</td><td><span class="op">${esc(e.op||(e.payload&&e.payload_type)||'?')}</span></td>
+        <td>${esc(e.payload_type||'')}</td><td class="mono" title="${esc(e.author)}">${esc(shortdid(e.author))}</td>
+        <td class="mono">${esc((e.ts||e.timestamp||'').toString().replace('T',' ').slice(0,19))}</td></tr>`).join('');
+    }
+    document.addEventListener('DOMContentLoaded',load);
+    setInterval(load,15000);
+  </script>
+  <script src="/shared/crt-engine.js"></script>
+</body>
+</html>

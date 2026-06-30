@@ -20,7 +20,11 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox-routes.d
 	install -m 644 $(CURDIR)/nginx/annuaire-routes.conf $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox-routes.d/
 
-	# Hub menu entry
+		# Web UI (static)
+	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/annuaire
+	cp -r $(CURDIR)/www/annuaire/* $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/annuaire/
+
+# Hub menu entry
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d
 	install -m 644 $(CURDIR)/menu.d/575-annuaire.json $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d/
 
