@@ -553,7 +553,10 @@
         <div id="tab-services" class="tab-content">
             <div class="section-header">
                 <h2>Service Registry</h2>
-                <button class="btn" onclick="showRegisterServiceModal()">+ Register Service</button>
+                <div>
+                    <button class="btn" onclick="autoRegisterAll()">Auto register all</button>
+                    <button class="btn" onclick="showRegisterServiceModal()">+ Register Service</button>
+                </div>
             </div>
             <table class="data-table">
                 <thead>
@@ -785,22 +788,63 @@
             const data = await apiGet('/services');
             const services = Array.isArray(data) ? data : (data && Array.isArray(data.services) ? data.services : []);
             const tbody = document.getElementById('services-table');
-            if (services.length > 0) {
-                tbody.innerHTML = services.map(svc => `
-                    <tr>
-                        <td>${escapeHtml(svc.name)}</td>
-                        <td>${escapeHtml(svc.type)}</td>
-                        <td>${escapeHtml(svc.provider || 'local')}</td>
-                        <td>${svc.port}</td>
-                        <td><span class="status-badge ${svc.status}">${svc.status}</span></td>
-                        <td>
-                            <button class="btn btn-small btn-danger" onclick="unregisterService('${svc.name}')">Unregister</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="6">No services registered</td></tr>';
+            if (data && data.catalog_unavailable) {
+                console.log('[secubox-p2p] Annuaire catalog unavailable — showing local services only');
             }
+            if (services.length > 0) {
+                tbody.innerHTML = services.map(svc => {
+                    const state = svc.subscription_state || 'n/a';
+                    const statusLabel = svc.active ? 'active' : (state === 'n/a' ? 'inactive' : state);
+                    const badge = svc.automatable ? ' <span class="status-badge">automatable</span>' : '';
+                    let actions = '';
+                    if (svc.source === 'p2p-local') {
+                        actions = `<button class="btn btn-small btn-danger" onclick="unregisterService('${encodeURIComponent(svc.name)}')">Unregister</button>`;
+                    } else if (svc.provider_label !== 'local' && state === 'not-subscribed') {
+                        actions = `<button class="btn btn-small" onclick="requestAccess('${escapeHtml(svc.service_id)}')">Request access</button>`;
+                    } else if (state === 'pending') {
+                        actions = `<span class="text-muted">awaiting approval</span>`;
+                    } else if (!svc.active) {
+                        actions = `<button class="btn btn-small" onclick="activateService('${escapeHtml(svc.service_id)}')">Activate</button>`;
+                    } else {
+                        actions = `<span class="status-badge active">active</span>`;
+                    }
+                    return `
+                    <tr>
+                        <td>${escapeHtml(svc.name)}${badge}</td>
+                        <td>${escapeHtml(svc.type || '')}</td>
+                        <td>${escapeHtml(svc.provider_label || 'local')}</td>
+                        <td>${svc.port != null ? svc.port : '&mdash;'}</td>
+                        <td><span class="status-badge ${svc.active ? 'active' : ''}">${escapeHtml(statusLabel)}</span></td>
+                        <td>${actions}</td>
+                    </tr>`;
+                }).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6">No services in catalog</td></tr>';
+            }
+        }
+
+        async function autoRegisterAll() {
+            const res = await apiPost('/services/auto-register', {});
+            if (!res) { console.error('[secubox-p2p] autoRegisterAll: API error'); return; }
+            const msg = `[secubox-p2p] Auto-register: activated ${res.activated||0}, requested ${res.requested||0}` +
+                        (res.pending ? `, ${res.pending} pending approval` : '') +
+                        (res.errors && res.errors.length ? `, ${res.errors.length} error(s)` : '');
+            console.log(msg);
+            loadServices();
+        }
+
+        async function requestAccess(sid) {
+            const res = await apiPost('/services/' + encodeURIComponent(sid) + '/request', {});
+            if (!res) { console.error('[secubox-p2p] requestAccess: API error'); return; }
+            console.log('[secubox-p2p] requestAccess:', res.status === 'ok' ? 'Subscription requested' : (res.error || 'failed'));
+            loadServices();
+        }
+
+        async function activateService(sid) {
+            const res = await apiPost('/services/' + encodeURIComponent(sid) + '/activate', {});
+            if (!res) { console.error('[secubox-p2p] activateService: API error'); return; }
+            console.log('[secubox-p2p] activateService:', res.status === 'ok' ? 'Activated' : (res.error || 'failed'));
+            loadServices();
         }
 
         // Load Threats
