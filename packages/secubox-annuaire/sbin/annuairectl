@@ -225,6 +225,55 @@ def cmd_pull(args) -> int:
     return 0
 
 
+def cmd_publish_config(args) -> int:
+    from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+    from annuaire.verbs import publish_config  # noqa: PLC0415
+
+    priv = _load_priv()
+    did = did_from_pubkey(public_from_private(priv))
+    text = open(args.file, "r", encoding="utf-8").read() if args.file else sys.stdin.read()
+    import hashlib  # noqa: PLC0415
+    chash = hashlib.blake2b(text.encode("utf-8"), digest_size=32).hexdigest()
+    j = _journal()
+    blob = publish_config(
+        j, priv, did, scope=args.scope, version=args.version,
+        content_hash=chash, payload={"format": "toml", "text": text},
+    )
+    print(json.dumps({"config_id": blob.config_id, "scope": blob.scope,
+                      "version": blob.version, "content_hash": chash}, indent=2))
+    return 0
+
+
+def cmd_apply(args) -> int:
+    from annuaire.config_apply import apply_pending  # noqa: PLC0415
+    from annuaire.verbs import _get_configs  # noqa: PLC0415
+
+    self_did = None
+    if os.path.exists(KEY_PATH):
+        from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+        self_did = did_from_pubkey(public_from_private(_load_priv()))
+
+    if args.all:
+        scopes = {"*"}
+    elif args.scope:
+        scopes = set(args.scope)
+    else:
+        env = os.environ.get("ANNUAIRE_APPLY_SCOPES", "")
+        scopes = {s.strip() for s in env.split(",") if s.strip()}
+
+    j = _journal()
+    results = apply_pending(
+        _get_configs(j), allow_scopes=scopes, self_did=self_did,
+        target_dir=args.target_dir, state_path=args.state_path,
+    )
+    print(json.dumps({
+        "allow_scopes": sorted(scopes),
+        "applied": [r for r in results if r["status"] == "applied"],
+        "results": results,
+    }, indent=2))
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="annuairectl", description="Annuaire·Miroir node operator CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -254,6 +303,19 @@ def main(argv=None) -> int:
     pp.add_argument("base_url", help="e.g. http://10.10.0.1:8799")
     pp.add_argument("--timeout", type=float, default=5.0)
     pp.set_defaults(fn=cmd_pull)
+
+    pc = sub.add_parser("publish-config", help="publish a signed config blob (primary/home node)")
+    pc.add_argument("--scope", required=True, help="module name the config configures, e.g. yacy")
+    pc.add_argument("--version", type=int, required=True, help="monotonic; higher wins")
+    pc.add_argument("--file", help="TOML file to publish (default: read stdin)")
+    pc.set_defaults(fn=cmd_publish_config)
+
+    pa = sub.add_parser("apply", help="apply replicated config blobs via 4R (replica; run as root)")
+    pa.add_argument("--scope", action="append", help="allow this scope (repeatable)")
+    pa.add_argument("--all", action="store_true", help="allow all scopes (use with care)")
+    pa.add_argument("--target-dir", default="/etc/secubox")
+    pa.add_argument("--state-path", default="/var/lib/secubox/annuaire/applied-config.json")
+    pa.set_defaults(fn=cmd_apply)
 
     args = p.parse_args(argv)
     return args.fn(args)
