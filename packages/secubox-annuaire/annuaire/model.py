@@ -69,6 +69,10 @@ class Op(str, Enum):
     SERVICE_APPROVE      = "service_approve"
     SERVICE_REJECT       = "service_reject"
     SERVICE_REVOKE_SUB   = "service_revoke_sub"
+    # Gondwana P1 directory (#768): the annuaire is the distributed directory.
+    NODE_PUBLISH         = "node_publish"     # signed mesh peer registry entry
+    CONFIG_PUBLISH       = "config_publish"   # signed, versioned config distribution
+    CONFIG_REVOKE        = "config_revoke"
 
 
 class ProposalType(str, Enum):
@@ -421,6 +425,75 @@ class Subscription(BaseModel):
     requested_at:    str = Field(default_factory=now_rfc3339)
     sig:             Optional[str] = None
     signer_did:      Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# NodeRecord — the signed mesh peer registry entry (gondwana P1, #768)
+# ---------------------------------------------------------------------------
+
+class NodeRecord(BaseModel):
+    """A signed record of one mesh node, published into the directory.
+
+    Self-certifying: authored by the node itself (entry.author == did). This is
+    the replicated form of secubox-p2p's local wg_mesh.json/peers.json — the
+    Phase-1 identity (pubkey_wg, node_id, boxname, DDNS) becomes a ledger
+    record (gondwana §8 "distributed directory"). NO secret material here: only
+    the WireGuard PUBLIC key. The sig covers canonical_bytes(payload_without_sig).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    did:       str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    node_id:   str = Field(..., description="stable node id, e.g. 'sb-<mac12>'")
+    boxname:   str = Field(..., description="human node name, e.g. 'gk2'")
+    pubkey_wg: str = Field(..., description="WireGuard PUBLIC key (base64) — never the private key")
+    mesh_ip:   str = Field(..., description="assigned mesh address, e.g. '10.10.0.1'")
+    ddns:      str = Field(..., description="name-based reachability, e.g. '<boxname>.secubox.in'")
+    endpoint:  Optional[str] = Field(
+        default=None,
+        description="public host:port if this node is reachable (rendezvous); None for NAT'd satellites",
+    )
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = Field(
+        default=None,
+        description="Ed25519 sig over canonical_bytes(payload_without_sig)",
+    )
+    signer_did: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# ConfigBlob — signed, versioned config distribution entry (gondwana P1, #768)
+# ---------------------------------------------------------------------------
+
+class ConfigBlob(BaseModel):
+    """A signed, versioned configuration blob published by a service's home node.
+
+    Self-certifying: authored by the publisher (entry.author == publisher).
+    `version` is a monotonic integer driving last-writer-wins ordering across
+    the mesh (single-writer per scope by design). Small configs travel inline
+    in `payload`; large ones are referenced by `payload_uri` + `content_hash`
+    (BLAKE2b-256 hex). Secrets are NEVER carried — config only. The sig covers
+    canonical_bytes(payload_without_sig).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    config_id:    str = Field(..., description="stable id for this config stream, e.g. 'cfg-<scope>'")
+    publisher:    str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    scope:        str = Field(..., description="what this configures, e.g. a module name 'yacy'")
+    version:      int = Field(..., ge=0, description="monotonic; higher wins (last-writer-wins)")
+    content_hash: str = Field(..., description="BLAKE2b-256 hex of the canonical config content")
+    payload:      Optional[Dict[str, Any]] = Field(
+        default=None, description="inline config (small blobs); mutually exclusive with payload_uri"
+    )
+    payload_uri:  Optional[str] = Field(
+        default=None, description="fetch location for large blobs; content verified against content_hash"
+    )
+    valid_from:   str = Field(default_factory=now_rfc3339)
+    valid_until:  Optional[str] = None
+    sig:          Optional[str] = Field(
+        default=None,
+        description="Ed25519 sig over canonical_bytes(payload_without_sig)",
+    )
+    signer_did:   Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
