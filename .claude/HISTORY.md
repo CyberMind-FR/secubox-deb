@@ -3,6 +3,43 @@
 
 ---
 
+## 2026-06-30 — secubox-annuaire 0.2.0 : trustless cross-node service federation (#766)
+
+Le `/services/pull` de 0.1.3 n'était **pas** réellement sans-confiance ni opérable :
+`ingest_offer` vérifiait la signature contre une pubkey *fournie par l'appelant* sans
+jamais contrôler `did_from_pubkey(pubkey) == provider` (forge « apporte ta clé, réclame
+n'importe quel DID ») ; et `GET /services` renvoyait des offres **sans signature ni
+pubkey** (le payload stocké les omet), donc un pair inconnu ne pouvait rien vérifier.
+
+Corrigé :
+- **Ingest sans-confiance** : `ingest_offer` impose `did_from_pubkey(pubkey)==provider`
+  AVANT la vérif de signature. did:plc = sha256(pubkey)[:32] → liaison auto-certifiante,
+  aucun annuaire, aucune confiance préalable.
+- **Offres auto-portées** : `_get_offers`/`GET /services` ré-attachent `sig` + `signer_did`
+  + `provider_pubkey` (métadonnée de transport, retirée avant reconstruction du modèle
+  extra=forbid). `pull_services` les consomme.
+- **Bootstrap de nœud** : verbe `genesis()` (un nœud s'auto-atteste MEMBER fondateur,
+  brise le paradoxe invite/join ; DID auto-certifiant, `invited_by` vide → n'inflige
+  jamais la pluralité d'émancipation ; idempotent). `Op.GENESIS` (additif). CLI
+  `/usr/sbin/annuairectl` (init|whoami|status|offer|services|pull) opérant le journal
+  directement en tant que `secubox` (pas de JWT pour le bootstrap privilégié) ; clé 0600
+  dans `/etc/secubox/secrets/annuaire/node.key`.
+- **Écouteur mesh** : `annuaire-mesh.conf.tpl` rendu par postinst sur l'IP wg-mesh du
+  nœud uniquement (`10.10.0.1:8799` sur gk2), `allow 10.10.0.0/24 + deny all`, GET
+  `/services` seul.
+- **Tests** : +7 (forge, payload altéré, hex invalide, round-trip), 134 passants.
+- **Revue sécurité** : aucune forge exploitable. Deux durcissements board-wide :
+  postinst valide l'écouteur rendu via `nginx -t` et le retire si échec (un rendu cassé
+  ne persiste jamais) ; livraison de `ip_nonlocal_bind=1` (nginx lie l'IP mesh même si
+  wg-quick@wg-mesh démarre après nginx).
+
+Déployé sur gk2 (0.1.3 → 0.2.0) : service actif, `nginx -t` OK, écouteur live, genesis
+gk2 (DID `0463…`) + offre « WAF mirror ». **Démo live** : un second nœud (fondateur
+distinct, gk2 inconnu) `annuairectl pull http://10.10.0.1:8799` → ingested 1, chain_ok.
+Reste : pull live gk2→c3box bloqué (clé SSH non autorisée sur .94) ; NIZK/PSI GK·HAM à venir.
+
+---
+
 ## 2026-06-30 — secubox-yacy 1.0.12 : repair webui embed + navbar integration
 
 Page admin `https://admin.gk2.secubox.in/yacy/` cassée sur deux points, corrigés dans
