@@ -633,3 +633,142 @@ async def pull_services(req: PullServicesRequest):
     if error_msg:
         result["error"] = error_msg
     return result
+
+
+# ---------------------------------------------------------------------------
+# Directory endpoints — NodeRecord + ConfigBlob + log federation (gondwana P1, #768)
+# ---------------------------------------------------------------------------
+
+
+class PublishNodeRequest(BaseModel):
+    node_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    node_priv_hex: str
+    node_id: str
+    boxname: str
+    pubkey_wg: str
+    mesh_ip: str
+    ddns: str
+    endpoint: Optional[str] = None
+
+
+class PublishConfigRequest(BaseModel):
+    publisher_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    publisher_priv_hex: str
+    scope: str
+    version: int = Field(..., ge=0)
+    content_hash: str
+    payload: Optional[Dict[str, Any]] = None
+    payload_uri: Optional[str] = None
+    valid_until: Optional[str] = None
+    config_id: Optional[str] = None
+
+
+class RevokeConfigRequest(BaseModel):
+    publisher_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    publisher_priv_hex: str
+
+
+class PullLogRequest(BaseModel):
+    base_url: str
+
+
+@app.get("/nodes")
+async def list_nodes():
+    """List the latest self-authored NodeRecord per node (public — the peer registry)."""
+    from annuaire.verbs import _get_nodes  # noqa: PLC0415
+    return {"nodes": _get_nodes(get_journal())}
+
+
+@app.get("/config")
+async def list_config(scope: Optional[str] = None):
+    """List current (non-revoked) config blobs, optionally filtered by scope (public)."""
+    from annuaire.verbs import _get_configs  # noqa: PLC0415
+    configs = _get_configs(get_journal())
+    if scope is not None:
+        configs = [c for c in configs if c.get("scope") == scope]
+    return {"configs": configs}
+
+
+@app.get("/log/export")
+async def export_log():
+    """Export the full signed log for a peer to pull (public).
+
+    Distinct from GET /log (a truncated recent view): this returns every entry
+    with its author_pubkey so a consumer can verify and re-append.
+    """
+    from annuaire.verbs import export_entries  # noqa: PLC0415
+    return {"entries": export_entries(get_journal())}
+
+
+@app.post("/node/publish", dependencies=[Depends(_require_jwt)])
+async def post_node_publish(req: PublishNodeRequest):
+    """NODE_PUBLISH: publish this node's signed registry record into the directory."""
+    from annuaire.verbs import publish_node  # noqa: PLC0415
+    priv = _priv_from_hex(req.node_priv_hex)
+    try:
+        rec = publish_node(
+            get_journal(), priv, req.node_did,
+            node_id=req.node_id, boxname=req.boxname, pubkey_wg=req.pubkey_wg,
+            mesh_ip=req.mesh_ip, ddns=req.ddns, endpoint=req.endpoint,
+        )
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return rec.model_dump()
+
+
+@app.post("/config/publish", dependencies=[Depends(_require_jwt)])
+async def post_config_publish(req: PublishConfigRequest):
+    """CONFIG_PUBLISH: publish a signed, versioned config blob."""
+    from annuaire.verbs import publish_config  # noqa: PLC0415
+    priv = _priv_from_hex(req.publisher_priv_hex)
+    try:
+        blob = publish_config(
+            get_journal(), priv, req.publisher_did,
+            scope=req.scope, version=req.version, content_hash=req.content_hash,
+            payload=req.payload, payload_uri=req.payload_uri,
+            valid_until=req.valid_until, config_id=req.config_id,
+        )
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return blob.model_dump()
+
+
+@app.post("/config/revoke", dependencies=[Depends(_require_jwt)])
+async def post_config_revoke(req: RevokeConfigRequest, config_id: str):
+    """CONFIG_REVOKE: withdraw a config blob (publisher only). config_id is a query param."""
+    from annuaire.verbs import revoke_config  # noqa: PLC0415
+    priv = _priv_from_hex(req.publisher_priv_hex)
+    try:
+        result = revoke_config(get_journal(), priv, req.publisher_did, config_id)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    return result
+
+
+@app.post("/log/pull", dependencies=[Depends(_require_jwt)])
+async def pull_log(req: PullLogRequest):
+    """Federation pull: fetch /log/export from a peer and merge valid entries.
+
+    Mirrors /services/pull but for the whole directory. Never crashes on an
+    offline peer — returns {ingested, skipped, rejected, error?}.
+    """
+    import json as _json          # noqa: PLC0415
+    import urllib.request         # noqa: PLC0415
+    from annuaire.verbs import import_entries  # noqa: PLC0415
+
+    try:
+        url = req.base_url.rstrip("/") + "/api/v1/annuaire/log/export"
+        http_req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(http_req, timeout=5) as resp:
+            data = _json.loads(resp.read())
+        entries = data.get("entries", [])
+    except Exception as e:
+        return {"ingested": 0, "skipped": 0, "rejected": 0, "error": str(e)}
+
+    return import_entries(get_journal(), entries)
