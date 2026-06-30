@@ -63,6 +63,12 @@ class Op(str, Enum):
     WITNESS        = "witness"
     NAME_BIND      = "name_bind"    # Gondwana human name → did:plc binding
     NAME_REVOKE    = "name_revoke"
+    SERVICE_OFFER        = "service_offer"
+    SERVICE_REVOKE_OFFER = "service_revoke_offer"
+    SERVICE_SUBSCRIBE    = "service_subscribe"
+    SERVICE_APPROVE      = "service_approve"
+    SERVICE_REJECT       = "service_reject"
+    SERVICE_REVOKE_SUB   = "service_revoke_sub"
 
 
 class ProposalType(str, Enum):
@@ -87,6 +93,20 @@ class RevocationScope(str, Enum):
     SELF      = "self"       # revoke only this subject
     CASCADE   = "cascade"    # revoke subject + entities it grafted (bounded)
     NAME_ONLY = "name_only"  # revoke a Gondwana name binding, leave the key alone
+
+
+class ApprovalMode(str, Enum):
+    """Whether a service subscription is approved automatically or requires provider action."""
+    AUTO    = "auto"
+    PENDING = "pending"
+
+
+class SubscriptionState(str, Enum):
+    """Derived state of a Subscription (computed from the log, never stored)."""
+    PENDING  = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    REVOKED  = "revoked"
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +371,56 @@ class WitnessAttest(BaseModel):
         description="witness Ed25519 sig over (domain, height, root)",
     )
     signer_did: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# ServiceOffer — a provider advertising a service to the trust graph
+# ---------------------------------------------------------------------------
+
+class ServiceOffer(BaseModel):
+    """A signed offer of a service by a provider node.
+
+    Self-certifying: authored by the provider (entry.author == provider).
+    The sig covers canonical_bytes(payload_without_sig).
+    approval_mode=AUTO: subscription is APPROVED immediately (derived).
+    approval_mode=PENDING: requires an explicit SERVICE_APPROVE from the provider.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    service_id:    str = Field(..., description="random hex id")
+    provider:      str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    name:          str
+    kind:          str = Field(..., description="e.g. 'module', 'api', 'mirror'")
+    endpoint:      str = Field(..., description="mesh URL or local path")
+    scope:         Dict[str, Any] = Field(default_factory=dict)
+    approval_mode: ApprovalMode = ApprovalMode.AUTO
+    description:   str = ""
+    created_at:    str = Field(default_factory=now_rfc3339)
+    sig:           Optional[str] = Field(
+        default=None,
+        description="Ed25519 sig over canonical_bytes(payload_without_sig)",
+    )
+    signer_did:    Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Subscription — a subscriber requesting access to a ServiceOffer
+# ---------------------------------------------------------------------------
+
+class Subscription(BaseModel):
+    """A signed subscription request from a subscriber node.
+
+    Self-certifying: authored by the subscriber (entry.author == subscriber).
+    State is DERIVED from the log — see subscription_state() in verbs.py.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    subscription_id: str = Field(..., description="random hex id")
+    subscriber:      str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    service_id:      str
+    requested_at:    str = Field(default_factory=now_rfc3339)
+    sig:             Optional[str] = None
+    signer_did:      Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
