@@ -1,3 +1,14 @@
+secubox-annuaire (0.2.7-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#768): hands-off config apply — secubox-annuaire-apply.timer.
+    A root oneshot (secubox-annuaire-apply.service) runs `annuairectl apply`
+    every ~2 min for the scopes listed in /etc/secubox/annuaire-apply.conf
+    (ANNUAIRE_APPLY_SCOPES, comma list or *). EMPTY = no-op, so the timer is
+    enabled by default safely; the operator opts in per scope. prerm
+    disables the timer on removal.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 19:00:00 +0200
+
 secubox-annuaire (0.2.6-1~bookworm1) bookworm; urgency=medium
 
   * feat(#768): P2 config distribution — replica-side 4R apply.

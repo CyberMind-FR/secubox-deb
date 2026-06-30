@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox Annuaire — apply replicated config via 4R (gondwana P2, #768)
+Documentation=file:///usr/share/doc/secubox-annuaire/README
+After=secubox-annuaire.service
+Wants=secubox-annuaire.service
+
+[Service]
+Type=oneshot
+# Opt-in allow-list. Empty ANNUAIRE_APPLY_SCOPES = no-op (safe default).
+EnvironmentFile=-/etc/secubox/annuaire-apply.conf
+# Runs as root: apply writes /etc/secubox/<scope>.toml through the 4R buffer
+# (shadow -> validate -> atomic swap -> .sbx-rollback). Idempotent by version.
+ExecStart=/usr/sbin/annuairectl apply

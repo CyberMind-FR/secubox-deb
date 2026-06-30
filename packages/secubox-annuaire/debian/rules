@@ -44,6 +44,12 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system
 	install -m 644 $(CURDIR)/debian/secubox-annuaire.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 
+	# P2 config-apply timer + oneshot (#768) + opt-in allow-list config
+	install -m 644 $(CURDIR)/systemd/secubox-annuaire-apply.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/secubox-annuaire-apply.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	install -d $(CURDIR)/debian/secubox-annuaire/etc/secubox
+	install -m 644 $(CURDIR)/conf/annuaire-apply.conf.example $(CURDIR)/debian/secubox-annuaire/etc/secubox/
+
 	# Module manifest
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/modules
 	install -m 644 $(CURDIR)/debian/secubox.yaml $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/modules/secubox-annuaire.yaml

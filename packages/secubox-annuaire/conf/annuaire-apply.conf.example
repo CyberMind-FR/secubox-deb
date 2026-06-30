@@ -1,0 +1,11 @@
+# /etc/secubox/annuaire-apply.conf — gondwana P2 config-apply allow-list.
+#
+# Scopes this node applies from the replicated directory: comma-separated, or
+# "*" for all. EMPTY = apply nothing (safe default). A node never applies a
+# scope it published itself (single-writer). Applied config lands at
+# /etc/secubox/<scope>.toml via the 4R double-buffer (previous kept as
+# .sbx-rollback). The secubox-annuaire-apply.timer re-checks every ~2 min.
+#
+# Enable hands-off distribution by listing the scopes you trust this node to
+# follow, e.g.:  ANNUAIRE_APPLY_SCOPES=dns,vortex-firewall
+ANNUAIRE_APPLY_SCOPES=

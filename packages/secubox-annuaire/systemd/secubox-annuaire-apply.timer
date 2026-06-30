@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox Annuaire — periodic config apply (gondwana P2, #768)
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=120s
+RandomizedDelaySec=20s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
