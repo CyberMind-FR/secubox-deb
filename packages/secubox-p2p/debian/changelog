@@ -1,3 +1,22 @@
+secubox-p2p (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: Service Registry is now a live view of the secubox-annuaire catalog
+    (#769). New api/registry.py (pure merge of annuaire catalog + my
+    subscriptions + a thin activation overlay + legacy local services) and
+    api/annuaire_client.py (reads /run/secubox/annuaire.sock — never the
+    aggregator — and subscribes as the node using the 0600 node key shared by
+    the secubox user). New endpoints: GET /services (live merge, degrades to
+    catalog_unavailable when annuaire is down — never 500s), POST
+    /services/auto-register (activate local offers + subscribe to remote ones
+    per each offer's auto/pending approval mode), /services/{id}/request,
+    /services/{id}/activate (gated on approved subscription). UI: "Auto
+    register all" button + per-service Request access / Activate + state
+    badges + an "automatable" forward-hint badge; service_id is injected into
+    onclick via encodeURIComponent (XSS-safe for federated IDs). annuaire is
+    unchanged; provider-side macro execution deferred to Milestone 2.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 19:00:00 +0200
+
 secubox-p2p (1.7.8-1~bookworm1) bookworm; urgency=medium
 
   * fix(webui): P2P dashboard rendered empty due to API-contract drift.
