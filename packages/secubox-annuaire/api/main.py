@@ -610,23 +610,29 @@ async def pull_services(req: PullServicesRequest):
         if sid in known_sids:
             continue  # already ingested
         try:
-            provider_pubkey_hex = raw.get("pubkey") or raw.get("provider_pubkey")
-            # The offer payload carries no pubkey directly — we need to resolve it.
-            # For now, try to find the pubkey from the local identity store.
-            # If the provider is unknown locally, we cannot verify — skip safely.
+            # The remote /services response carries the provider's pubkey as
+            # transport metadata (see verbs._enrich_offer). This is what makes
+            # trustless federation between strangers possible: ingest_offer
+            # checks did_from_pubkey(pubkey) == provider, so a carried pubkey
+            # cannot lie about whose offer this is.
+            provider_pubkey_hex = raw.get("provider_pubkey") or raw.get("pubkey")
             if not provider_pubkey_hex:
-                # Try resolving from local log
+                # Fallback: a provider we already host locally (re-export).
+                # A stranger with no carried pubkey cannot be verified → skip.
                 from annuaire.verbs import _get_inviter_pubkey  # noqa: PLC0415
                 provider_pubkey_hex = _get_inviter_pubkey(j, raw.get("provider", ""))
             if not provider_pubkey_hex:
                 rejected += 1
                 continue
-            # Reconstruct ServiceOffer (sig must be present)
-            offer_obj = _ServiceOffer(**raw)
-            ingest_offer(j, offer_obj, provider_pubkey_hex)
+            # Reconstruct the ServiceOffer from model fields only — provider_pubkey
+            # is transport metadata (not a model field, not in the signed bytes)
+            # and would trip the model's extra=forbid.
+            allowed = set(_ServiceOffer.model_fields)
+            offer_obj = _ServiceOffer(**{k: v for k, v in raw.items() if k in allowed})
+            ingest_offer(j, offer_obj, provider_pubkey_hex)  # self-certifies + verifies sig
             ingested += 1
             known_sids.add(sid)
-        except Exception as exc:
+        except Exception:
             rejected += 1
 
     result: Dict[str, Any] = {"ingested": ingested, "rejected": rejected}

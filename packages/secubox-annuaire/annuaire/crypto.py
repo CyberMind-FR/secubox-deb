@@ -78,6 +78,26 @@ def sign(priv_bytes: bytes, msg: bytes) -> str:
     return sig_bytes.hex()
 
 
+def public_from_private(priv_bytes: bytes) -> bytes:
+    """Derive the raw 32-byte Ed25519 public key from a raw private key.
+
+    Used by node bootstrap (genesis) where only the persisted private key is
+    held: the DID and the offer-signing pubkey are both derived from it, so the
+    node never needs to store its public key separately.
+
+    Args:
+        priv_bytes: 32-byte raw private key.
+
+    Returns:
+        32-byte raw public key.
+    """
+    priv_key = _ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
+    return priv_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+
+
 def verify(pub_hex: str, msg: bytes, sig_hex: str) -> bool:
     """Verify an Ed25519 signature.
 

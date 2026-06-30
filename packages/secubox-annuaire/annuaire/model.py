@@ -51,6 +51,7 @@ class MemberState(str, Enum):
 
 class Op(str, Enum):
     """Log operation types — the four verbs plus bookkeeping."""
+    GENESIS        = "genesis"      # founder self-attests MEMBER (root of trust)
     AUTO_ADD       = "auto_add"
     INVITE_ISSUE   = "invite_issue"
     INVITE_ACCEPT  = "invite_accept"
