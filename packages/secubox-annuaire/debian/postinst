@@ -5,6 +5,24 @@ case "$1" in
         # Runtime data directories
         install -d -m 0755 /var/lib/secubox/annuaire /var/log/secubox/annuaire 2>/dev/null || true
         chown -R secubox:secubox /var/lib/secubox/annuaire /var/log/secubox/annuaire 2>/dev/null || true
+
+        # Node-key secret dir (annuairectl init writes node.key here, 0600 secubox).
+        # CSPN: secrets under /etc/secubox/secrets/, 0700, owned by the service user.
+        install -d -m 0700 /etc/secubox/secrets/annuaire 2>/dev/null || true
+        chown secubox:secubox /etc/secubox/secrets/annuaire 2>/dev/null || true
+
+        # Render the Gondwana mesh federation listener IFF a wg-mesh exists.
+        # Bind only the node's wg-mesh IPv4 — never 0.0.0.0 (minimal surface).
+        MESH_TPL=/usr/share/secubox/annuaire/annuaire-mesh.conf.tpl
+        MESH_CONF=/etc/nginx/conf.d/annuaire-mesh.conf
+        MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
+        if [ -n "$MESH_IP" ] && [ -f "$MESH_TPL" ]; then
+            sed "s/__MESH_IP__/$MESH_IP/g" "$MESH_TPL" > "$MESH_CONF"
+        else
+            # No mesh interface (or template missing) → ensure no stale listener.
+            rm -f "$MESH_CONF" 2>/dev/null || true
+        fi
+
         # Invalidate hub menu cache so Annuaire appears in the navbar
         rm -f /var/cache/secubox/menu.json 2>/dev/null || true
         systemctl daemon-reload 2>/dev/null || true

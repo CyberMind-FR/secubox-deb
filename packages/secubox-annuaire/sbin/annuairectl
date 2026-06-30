@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: annuairectl — node operator CLI for Annuaire·Miroir
+
+Bootstrap and operate a node's trust journal directly (as the `secubox` user,
+which owns the journal and the secrets). Bootstrap is a one-time privileged
+operation, so it does NOT go through the JWT-gated HTTP API — it operates the
+SQLite journal in-process. Federation pull is read-only over HTTP and needs no
+local key.
+
+Commands:
+  init [--jurisdiction TAG ...]   Generate the node keypair (if absent) and
+                                  create the GENESIS self-identity (founder
+                                  MEMBER). Idempotent. Prints the node DID.
+  whoami                          Print the node DID + public key.
+  status                          Print chain status (height, merkle, ok).
+  offer  --name --kind --endpoint [--mode auto|pending] [--scope-key=val ...]
+                                  Publish a signed service offer with the node
+                                  key.
+  services                        List the node's live (non-revoked) offers.
+  pull   BASE_URL                 Fetch BASE_URL/api/v1/annuaire/services and
+                                  ingest valid, self-certifying offers.
+
+Paths (override via env):
+  ANNUAIRE_DB_PATH   default /var/lib/secubox/annuaire/journal.db
+  ANNUAIRE_KEY_PATH  default /etc/secubox/secrets/annuaire/node.key
+  ANNUAIRE_LIB       default /usr/lib/secubox/annuaire  (import root)
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import urllib.request
+
+LIB = os.environ.get("ANNUAIRE_LIB", "/usr/lib/secubox/annuaire")
+if LIB not in sys.path:
+    sys.path.insert(0, LIB)
+
+DB_PATH = os.environ.get("ANNUAIRE_DB_PATH", "/var/lib/secubox/annuaire/journal.db")
+KEY_PATH = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
+
+
+def _die(msg: str, code: int = 1) -> "None":
+    print(f"annuairectl: {msg}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def _load_priv() -> bytes:
+    if not os.path.exists(KEY_PATH):
+        _die(f"no node key at {KEY_PATH} — run `annuairectl init` first")
+    with open(KEY_PATH, "r", encoding="ascii") as fh:
+        hexstr = fh.read().strip()
+    try:
+        priv = bytes.fromhex(hexstr)
+    except ValueError:
+        _die(f"node key at {KEY_PATH} is not valid hex")
+    if len(priv) != 32:
+        _die(f"node key must be 32 bytes, got {len(priv)}")
+    return priv
+
+
+def _save_priv(priv: bytes) -> None:
+    d = os.path.dirname(KEY_PATH)
+    os.makedirs(d, exist_ok=True)
+    # Tight perms: secret material. The directory and file should be owned by
+    # the secubox user (this CLI is expected to run as secubox).
+    try:
+        os.chmod(d, 0o700)
+    except PermissionError:
+        pass
+    # Write atomically with 0600.
+    fd = os.open(KEY_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, priv.hex().encode("ascii") + b"\n")
+    finally:
+        os.close(fd)
+    os.chmod(KEY_PATH, 0o600)
+
+
+def _journal():
+    from annuaire.log import Journal  # noqa: PLC0415
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    return Journal(DB_PATH)
+
+
+# --------------------------------------------------------------------------- #
+# commands
+# --------------------------------------------------------------------------- #
+
+def cmd_init(args) -> int:
+    from annuaire.crypto import generate_keypair, public_from_private, did_from_pubkey  # noqa: PLC0415
+    from annuaire.verbs import genesis  # noqa: PLC0415
+
+    if os.path.exists(KEY_PATH):
+        priv = _load_priv()
+    else:
+        priv, _pub = generate_keypair()
+        _save_priv(priv)
+
+    did = did_from_pubkey(public_from_private(priv))
+    j = _journal()
+    jurisdiction = []
+    if args.isolation_domain:
+        # Coordinate-free jurisdiction tag (no GPS, no civil address) — see spec.
+        jurisdiction = [{
+            "isolation_domain": args.isolation_domain,
+            "legal_regime": args.legal_regime,
+            "consented": True,
+        }]
+    ident = genesis(j, priv, jurisdiction=jurisdiction)
+    ok, broken = j.verify_chain()
+    print(json.dumps({
+        "did": ident.did,
+        "state": ident.state.value if hasattr(ident.state, "value") else str(ident.state),
+        "pubkey": ident.pubkey,
+        "key_path": KEY_PATH,
+        "db_path": DB_PATH,
+        "chain_ok": ok,
+        "bootstrapped": did == ident.did,
+    }, indent=2))
+    return 0
+
+
+def cmd_whoami(args) -> int:
+    from annuaire.crypto import public_from_private, did_from_pubkey  # noqa: PLC0415
+    priv = _load_priv()
+    pub = public_from_private(priv)
+    print(json.dumps({"did": did_from_pubkey(pub), "pubkey": pub.hex()}, indent=2))
+    return 0
+
+
+def cmd_status(args) -> int:
+    j = _journal()
+    ok, broken = j.verify_chain()
+    tip = j.tip()
+    print(json.dumps({
+        "chain_ok": ok,
+        "chain_broken_at": broken,
+        "merkle_root": j.merkle_root(),
+        "tip_height": tip.height if tip is not None else -1,
+    }, indent=2))
+    return 0
+
+
+def cmd_offer(args) -> int:
+    from annuaire.crypto import public_from_private, did_from_pubkey  # noqa: PLC0415
+    from annuaire.verbs import offer_service  # noqa: PLC0415
+    priv = _load_priv()
+    did = did_from_pubkey(public_from_private(priv))
+    scope = {}
+    for kv in args.scope or []:
+        if "=" not in kv:
+            _die(f"--scope expects key=value, got {kv!r}")
+        k, v = kv.split("=", 1)
+        scope[k] = v
+    j = _journal()
+    try:
+        offer = offer_service(
+            j, priv, did,
+            name=args.name, kind=args.kind, endpoint=args.endpoint,
+            scope=scope or None, approval_mode=args.mode, description=args.description or "",
+        )
+    except Exception as e:  # noqa: BLE001
+        _die(f"offer failed: {e}")
+    print(json.dumps({"service_id": offer.service_id, "provider": offer.provider,
+                      "name": offer.name, "approval_mode": offer.approval_mode.value
+                      if hasattr(offer.approval_mode, "value") else str(offer.approval_mode)},
+                     indent=2))
+    return 0
+
+
+def cmd_services(args) -> int:
+    from annuaire.verbs import _get_offers  # noqa: PLC0415
+    j = _journal()
+    offers = _get_offers(j)
+    # Strip the verbose pubkey for human listing unless --raw
+    if not args.raw:
+        for o in offers:
+            o.pop("provider_pubkey", None)
+    print(json.dumps({"services": offers}, indent=2))
+    return 0
+
+
+def cmd_pull(args) -> int:
+    from annuaire.model import ServiceOffer  # noqa: PLC0415
+    from annuaire.verbs import ingest_offer, _get_offers, _get_inviter_pubkey  # noqa: PLC0415
+
+    url = args.base_url.rstrip("/") + "/api/v1/annuaire/services"
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=args.timeout) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:  # noqa: BLE001
+        _die(f"fetch {url} failed: {e}")
+    remote = data.get("services", [])
+
+    j = _journal()
+    known = {o.get("service_id") for o in _get_offers(j)}
+    allowed = set(ServiceOffer.model_fields)
+    ingested = rejected = skipped = 0
+    for raw in remote:
+        if raw.get("service_id") in known:
+            skipped += 1
+            continue
+        pub = raw.get("provider_pubkey") or raw.get("pubkey") \
+            or _get_inviter_pubkey(j, raw.get("provider", ""))
+        if not pub:
+            rejected += 1
+            continue
+        try:
+            offer = ServiceOffer(**{k: v for k, v in raw.items() if k in allowed})
+            ingest_offer(j, offer, pub)
+            ingested += 1
+        except Exception:  # noqa: BLE001
+            rejected += 1
+    print(json.dumps({"from": args.base_url, "ingested": ingested,
+                      "rejected": rejected, "already_had": skipped}, indent=2))
+    return 0
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(prog="annuairectl", description="Annuaire·Miroir node operator CLI")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    pi = sub.add_parser("init", help="generate node key + GENESIS self-identity (idempotent)")
+    pi.add_argument("--isolation-domain", help="coordinate-free jurisdiction domain (e.g. gondwana)")
+    pi.add_argument("--legal-regime", default="self-sovereign", help="legal regime label")
+    pi.set_defaults(fn=cmd_init)
+
+    sub.add_parser("whoami", help="print node DID + pubkey").set_defaults(fn=cmd_whoami)
+    sub.add_parser("status", help="print chain status").set_defaults(fn=cmd_status)
+
+    po = sub.add_parser("offer", help="publish a signed service offer")
+    po.add_argument("--name", required=True)
+    po.add_argument("--kind", required=True, help="module|api|mirror|...")
+    po.add_argument("--endpoint", required=True, help="mesh URL or local path")
+    po.add_argument("--mode", default="auto", choices=["auto", "pending"])
+    po.add_argument("--description", default="")
+    po.add_argument("--scope", action="append", help="scope key=value (repeatable)")
+    po.set_defaults(fn=cmd_offer)
+
+    ps = sub.add_parser("services", help="list this node's live offers")
+    ps.add_argument("--raw", action="store_true", help="include provider_pubkey")
+    ps.set_defaults(fn=cmd_services)
+
+    pp = sub.add_parser("pull", help="federate offers from a remote node")
+    pp.add_argument("base_url", help="e.g. http://10.10.0.1:8799")
+    pp.add_argument("--timeout", type=float, default=5.0)
+    pp.set_defaults(fn=cmd_pull)
+
+    args = p.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
