@@ -3,6 +3,29 @@
 
 ---
 
+## 2026-06-30 — secubox-yacy 1.0.12 : repair webui embed + navbar integration
+
+Page admin `https://admin.gk2.secubox.in/yacy/` cassée sur deux points, corrigés dans
+[`www/yacy/index.html`](../packages/secubox-yacy/www/yacy/index.html) :
+
+- **webui (iframe récursif)** : l'`<iframe src="/yacy/">` pointait sur **cette même page**
+  (nginx sert `/yacy/` en `alias` statique, pas en proxy) → le panneau s'affichait
+  récursivement au lieu de l'UI YaCy. Le `src` est désormais construit au runtime depuis
+  `/api/v1/yacy/access`, en préférant l'URL **publique https** (`yacy.gk2.secubox.in`,
+  vérifiée sans X-Frame-Options/CSP → framable) pour éviter le blocage mixed-content ;
+  repli sur un lien « ouvrir dans un nouvel onglet » si seule une URL http LAN est joignable.
+- **navbar** : la page utilisait une grille CSS `.layout` custom + `sidebar-light.css`
+  legacy, en conflit avec `sidebar.js` v2.33 (injecteur hybrid-skin). Migration vers le
+  pattern canonique (annuaire/cookies) : `design-tokens.css` + `crt-light.css`,
+  `<nav class="sidebar">` + `sidebar.js`, contenu dans `<main class="main">`. Strings
+  issues de l'API échappées avant injection.
+
+Déployé live sur gk2 (`/usr/share/secubox/www/yacy/index.html`, backup `.bak-pre-fix`),
+copie debian stagée synchronisée, bump 1.0.11 → 1.0.12. Assets `/shared/*` 200, JS
+`node --check` OK.
+
+---
+
 ## 2026-06-27 — LAN standardisé 192.168.10.0/24 + c3box/gk2 live Freebox + bump 1.10.0 (#760)
 
 Session terrain "c3box derrière Freebox" : la LAN SecuBox par défaut (`br-lan 192.168.1.1/24`)

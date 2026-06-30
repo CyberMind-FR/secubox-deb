@@ -40,6 +40,20 @@
     <h2>Trust log</h2>
     <table><thead><tr><th>#</th><th>op</th><th>type</th><th>author</th><th>when</th></tr></thead>
       <tbody id="log"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table>
+
+    <h2>Services</h2>
+    <p class="mono" style="margin:4px 0 8px">Non-revoked service offers published on this node. Subscribe requires a MEMBER identity and JWT.</p>
+    <table>
+      <thead><tr><th>Name</th><th>Kind</th><th>Provider</th><th>Approval</th><th>Action</th></tr></thead>
+      <tbody id="svc-list"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+    </table>
+    <div id="svc-msg" style="font-size:12px;margin:6px 0;color:var(--cyber-cyan,#00d4ff)"></div>
+
+    <h2>My subscriptions</h2>
+    <table>
+      <thead><tr><th>Service</th><th>Subscription ID</th><th>State</th></tr></thead>
+      <tbody id="sub-list"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+    </table>
   </main>
 
   <script>
@@ -47,6 +61,60 @@
     async function j(p){try{const r=await fetch(API+p);if(!r.ok)throw 0;return await r.json();}catch(e){return null;}}
     function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
     function shortdid(s){s=String(s||'');return s.length>22?s.slice(0,14)+'…'+s.slice(-5):s;}
+
+    function stateColor(st){
+      const m={approved:'var(--matrix-green,#00ff41)',pending:'var(--gold-hermetic,#c9a84c)',
+               rejected:'var(--cinnabar,#e63946)',revoked:'var(--text-muted,#6b6b7a)'};
+      return m[st]||'inherit';
+    }
+
+    async function subscribe(serviceId){
+      const msg=document.getElementById('svc-msg');
+      msg.textContent='';
+      const subDid=prompt('Your subscriber did:plc (leave blank to skip):');
+      if(!subDid||!subDid.startsWith('did:plc:')){msg.textContent='Subscribe cancelled (no valid DID entered).';return;}
+      const subPriv=prompt('Your raw Ed25519 private key hex (32 bytes = 64 hex chars):');
+      if(!subPriv||subPriv.length!==64){msg.textContent='Subscribe cancelled (invalid key length).';return;}
+      try{
+        const r=await fetch(API+'/service/'+serviceId+'/subscribe',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({subscriber_did:subDid,subscriber_priv_hex:subPriv})
+        });
+        const data=await r.json();
+        if(!r.ok){msg.textContent='Error: '+(data.detail||JSON.stringify(data));return;}
+        msg.textContent='Subscribed — state: '+(data.state||'?')+' (subscription_id: '+shortdid(data.subscription_id||'')+')';
+        loadSubscriptions(subDid);
+      }catch(e){msg.textContent='Error: '+e;}
+    }
+
+    async function loadServices(){
+      const tb=document.getElementById('svc-list');
+      const data=await j('/services');
+      const svcs=data&&Array.isArray(data.services)?data.services:[];
+      if(!svcs.length){tb.innerHTML='<tr><td colspan="5" class="empty">No service offers yet.</td></tr>';return;}
+      tb.innerHTML=svcs.map(s=>`<tr>
+        <td>${esc(s.name||'')}</td>
+        <td><span class="op">${esc(s.kind||'')}</span></td>
+        <td class="mono" title="${esc(s.provider)}">${esc(shortdid(s.provider))}</td>
+        <td><span style="color:${s.approval_mode==='auto'?'var(--matrix-green,#00ff41)':'var(--gold-hermetic,#c9a84c)'}">${esc(s.approval_mode||'')}</span></td>
+        <td><button style="font-size:11px;padding:3px 10px;cursor:pointer;background:var(--panel,#13131c);border:1px solid var(--line,#2a2a3a);color:var(--cyber-cyan,#00d4ff);border-radius:6px"
+            onclick="subscribe('${esc(s.service_id||'')}')">Subscribe</button></td>
+        </tr>`).join('');
+    }
+
+    async function loadSubscriptions(filterDid){
+      const tb=document.getElementById('sub-list');
+      const params=filterDid?'?mine='+encodeURIComponent(filterDid):'';
+      const data=await j('/subscriptions'+params);
+      const subs=data&&Array.isArray(data.subscriptions)?data.subscriptions:[];
+      if(!subs.length){tb.innerHTML='<tr><td colspan="3" class="empty">No subscriptions'+(filterDid?' for this DID':'')+' yet.</td></tr>';return;}
+      tb.innerHTML=subs.map(s=>`<tr>
+        <td class="mono">${esc(shortdid(s.service_id))}</td>
+        <td class="mono">${esc(shortdid(s.subscription_id))}</td>
+        <td><span style="color:${stateColor(s.state)};font-weight:600">${esc(s.state||'?')}</span></td>
+        </tr>`).join('');
+    }
+
     async function load(){
       const st=await j('/status');
       if(st){
@@ -65,6 +133,8 @@
         <td>${esc(e.height)}</td><td><span class="op">${esc(e.op||(e.payload&&e.payload_type)||'?')}</span></td>
         <td>${esc(e.payload_type||'')}</td><td class="mono" title="${esc(e.author)}">${esc(shortdid(e.author))}</td>
         <td class="mono">${esc((e.ts||e.timestamp||'').toString().replace('T',' ').slice(0,19))}</td></tr>`).join('');
+      await loadServices();
+      await loadSubscriptions();
     }
     document.addEventListener('DOMContentLoaded',load);
     setInterval(load,15000);
