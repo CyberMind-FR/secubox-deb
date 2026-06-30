@@ -27,8 +27,24 @@ case "$1" in
 
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable secubox-lyrion.service 2>/dev/null || true
-        # Do not start the FastAPI before the LXC is provisioned;
-        # `lyrionctl install` will start the service after the LXC is up.
+
+        # The nginx route proxies /api/v1/lyrion/ to our dedicated socket
+        # /run/secubox/lyrion.sock (NOT the aggregator — see nginx/lyrion.conf
+        # invariant, #763), so the admin page is blank/502 unless this service
+        # runs. Preserve runtime state across upgrades, and on a fresh install
+        # start only once the LMS LXC answers (otherwise defer to
+        # `lyrionctl install`, which provisions the LXC then starts us).
+        if systemctl is-active --quiet secubox-lyrion.service 2>/dev/null; then
+            systemctl try-restart secubox-lyrion.service 2>/dev/null || true
+        else
+            lms_ip="$(sed -n 's/^[[:space:]]*ip[[:space:]]*=[[:space:]]*"\([0-9.]*\)".*/\1/p' \
+                /etc/secubox/lyrion.toml 2>/dev/null | head -n1)"
+            lms_ip="${lms_ip:-10.100.0.100}"
+            if command -v curl >/dev/null 2>&1 && \
+               curl -s -m 3 -o /dev/null "http://${lms_ip}:9000/" 2>/dev/null; then
+                systemctl start secubox-lyrion.service 2>/dev/null || true
+            fi
+        fi
         ;;
 esac
 
