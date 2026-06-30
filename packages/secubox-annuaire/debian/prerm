@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+case "$1" in
+    remove|deconfigure)
+        systemctl stop secubox-annuaire.service 2>/dev/null || true
+        ;;
+esac
+#DEBHELPER#
+exit 0

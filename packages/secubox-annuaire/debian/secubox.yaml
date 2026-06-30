@@ -1,0 +1,15 @@
+# debian/secubox.yaml
+name: secubox-annuaire
+category: mesh
+tier: all
+description: "Annuaire-Miroir — federated self-certifying trust substrate (AUTO-ADD/INVITE/PROPOSAL/EMANCIPATE)"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/annuaire.sock
+  health: /api/v1/annuaire/health
+
+ui:
+  path: /annuaire/

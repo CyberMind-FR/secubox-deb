@@ -1,0 +1,13 @@
+secubox-annuaire (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release — Annuaire-Miroir trust substrate.
+    - annuaire/verbs.py: auto_add / invite / accept_invite / propose / vote /
+      tally / revoke / emancipate — the four protocols from spec §3.
+    - annuaire/model.py, crypto.py, log.py, resolver.py: BLAKE2b-chained
+      SQLite-WAL journal + Ed25519 signing + can() resolver (pre-existing core).
+    - api/main.py: FastAPI on /run/secubox/annuaire.sock, JWT-gated mutating
+      endpoints; read endpoints public.
+    - Packaging: secubox-annuaire.service (User=secubox, RuntimeDirectoryPreserve=yes,
+      NoNewPrivileges=yes), nginx routes + static conf, menu.d, secubox.yaml.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 30 Jun 2026 08:00:00 +0200
