@@ -250,7 +250,7 @@ async def mesh_ingest(request: Request):
 
 
 @router.post("/feeds/refresh", dependencies=[Depends(require_jwt)])
-async def feeds_refresh():
+def feeds_refresh():
     """Trigger the feed fetcher now (normally on a timer)."""
     try:
         subprocess.Popen(["/usr/sbin/secubox-threatfeed"])

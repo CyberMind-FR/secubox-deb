@@ -354,7 +354,7 @@ async def components():
 
 
 @app.get("/access")
-async def access():
+def access():
     """Show connection endpoints (public, three-fold: how)."""
     import socket
     hostname = socket.getfqdn()
@@ -464,7 +464,7 @@ async def console_enroll(req: ConsoleEnrollRequest, user=Depends(require_jwt)):
 
 
 @app.post("/capi/enroll")
-async def capi_enroll(user=Depends(require_jwt)):
+def capi_enroll(user=Depends(require_jwt)):
     """Auto-enroll to CAPI (Central API) for community blocklists."""
     log.info("Auto-enrolling to CAPI")
     try:
@@ -596,7 +596,7 @@ async def health():
 
 
 @app.get("/doctor")
-async def doctor():
+def doctor():
     """Layer 2: Diagnostic détaillé + can_repair."""
     issues = []
 
@@ -1241,7 +1241,7 @@ async def export_decisions(format: str = Query(default="json", enum=["json", "cs
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.get("/decisions_stats")
-async def decisions_stats():
+def decisions_stats():
     """Get decision statistics for SOC dashboard (public).
 
     Returns counts, bouncers, and categories for the dashboard cards.
@@ -1311,7 +1311,7 @@ class BanRequest(BaseModel):
 
 
 @app.post("/ban")
-async def ban_ip(req: BanRequest, user=Depends(require_jwt)):
+def ban_ip(req: BanRequest, user=Depends(require_jwt)):
     """Ban an IP address (manual ban from SOC dashboard)."""
     log.info("Manual ban requested for %s by %s", req.ip, user.get("sub", "unknown"))
 
@@ -1353,7 +1353,7 @@ class UnbanRequest(BaseModel):
 
 
 @app.post("/unban")
-async def unban_ip(req: UnbanRequest, user=Depends(require_jwt)):
+def unban_ip(req: UnbanRequest, user=Depends(require_jwt)):
     """Remove ban for an IP address."""
     log.info("Unban requested for %s by %s", req.ip, user.get("sub", "unknown"))
 

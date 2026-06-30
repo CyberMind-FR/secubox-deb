@@ -28,6 +28,20 @@ err() { printf '[%s] ERROR: %s\n' "$MODULE" "$*" >&2; exit 1; }
 [ -d /run/secubox ] || err "no /run/secubox runtime dir — secubox-core required"
 command -v curl >/dev/null || err "curl required"
 
+# ── Dedicated-socket modules — never fold into the aggregator ─────────────
+# These modules' handlers do blocking external I/O (e.g. lyrion → LMS
+# JSON-RPC on every request). On the shared single-loop aggregator a slow
+# call wedges the whole gateway → board-wide 502 SPOF (#763). They keep
+# their own secubox-<name>.service + /run/secubox/<name>.sock + nginx route
+# (mirrors how auth/metrics already run standalone). Space-separated list.
+readonly AGG_EXCLUDE="lyrion"
+
+_is_excluded() {
+    local n="$1" e
+    for e in $AGG_EXCLUDE; do [ "$n" = "$e" ] && return 0; done
+    return 1
+}
+
 log "Phase 7 ASGI migration — v${VERSION}"
 
 # ── Step 1+2 : Discover modules + write aggregator.toml ──────────────────
@@ -46,6 +60,10 @@ TOML_TMP=$(mktemp)
     for f in /usr/lib/secubox/*/api/main.py; do
         [ -f "$f" ] || continue
         m=$(basename "$(dirname "$(dirname "$f")")")
+        if _is_excluded "$m"; then
+            log "skip ${m} (dedicated-socket module, stays standalone — #763)"
+            continue
+        fi
         case "$m" in
             secubox-*)
                 # legacy prefixed dir — canonical unprefixed twin wins
@@ -129,6 +147,7 @@ _rewrite_file() {
 }
 
 for name in $MOUNTED; do
+    _is_excluded "$name" && continue
     found_any=0
     for dir in /etc/nginx/secubox.d /etc/nginx/secubox-routes.d; do
         cfg="${dir}/${name}.conf"
@@ -160,6 +179,7 @@ if [ -f "$WEBUI" ]; then
     # auto-includes anything matching sites-enabled/* and would crash on
     # duplicate-default-server.
     for name in $MOUNTED; do
+        _is_excluded "$name" && continue
         sed -i -E \
           -e "s|proxy_pass http://unix:/run/secubox/${name}\.sock(:/[^;]*)?;|proxy_pass http://unix:/run/secubox/aggregator.sock:/api/v1/${name}/;|g" \
           "$WEBUI"
@@ -180,6 +200,7 @@ log "nginx reloaded"
 # ── Step 6 : Disable migrated per-module systemd units ───────────────────
 STOPPED=0
 for name in $MOUNTED; do
+    _is_excluded "$name" && continue
     svc=secubox-${name}.service
     systemctl is-active "$svc" >/dev/null 2>&1 || continue
     systemctl stop "$svc" 2>/dev/null || true

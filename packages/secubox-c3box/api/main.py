@@ -366,7 +366,7 @@ async def get_service(name: str):
 
 
 @app.post("/services/{name}/control", dependencies=[Depends(require_jwt)])
-async def control_service(name: str, action: ServiceAction, background_tasks: BackgroundTasks):
+def control_service(name: str, action: ServiceAction, background_tasks: BackgroundTasks):
     """Start, stop, or restart a service."""
     svc = next((s for s in SERVICES if s["name"] == name), None)
     if not svc:

@@ -25,11 +25,15 @@
         return r.json();
     }
 
+    // Status → emoji indicator (replaces the CSS LED dot).
+    const EMOJI = { ok: '🟢', warn: '🟡', error: '🔴', unknown: '⚪' };
+    const emo = (status) => EMOJI[status] || EMOJI.unknown;
+
     function chip(id, st) {
         const status = (st && st.status) || 'unknown';
         const msg = (st && st.msg) || '';
         return `<div class="svc ${status}" title="${esc(id)}: ${esc(msg)}">
-            <span class="led"></span>
+            <span class="led">${emo(status)}</span>
             <span class="svc-name">${esc(id)}</span>
             <span class="svc-msg">${esc(msg)}</span>
         </div>`;
@@ -44,10 +48,10 @@
         });
 
         $('summary').innerHTML =
-            `<div class="sum ok"><b>${ok}</b><span>healthy</span></div>` +
-            `<div class="sum warn"><b>${warn}</b><span>degraded</span></div>` +
-            `<div class="sum err"><b>${err}</b><span>down</span></div>` +
-            `<div class="sum total"><b>${ids.length}</b><span>services</span></div>`;
+            `<div class="sum ok"><b>${ok}</b><span>🟢 healthy</span></div>` +
+            `<div class="sum warn"><b>${warn}</b><span>🟡 degraded</span></div>` +
+            `<div class="sum err"><b>${err}</b><span>🔴 down</span></div>` +
+            `<div class="sum total"><b>${ids.length}</b><span>📊 services</span></div>`;
 
         const vital = ids.filter((id) => VITAL_SET.has(id));
         const common = ids.filter((id) => !VITAL_SET.has(id));

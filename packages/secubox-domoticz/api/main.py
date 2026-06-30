@@ -658,7 +658,7 @@ async def update_notifications(settings: NotificationSettings, user=Depends(requ
 # ============================================================================
 
 @router.get("/container/status")
-async def container_status(user=Depends(require_jwt)):
+def container_status(user=Depends(require_jwt)):
     """Get container status."""
     rt = detect_runtime()
     running = is_running()
@@ -688,7 +688,7 @@ async def container_status(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_container(user=Depends(require_jwt)):
+def install_container(user=Depends(require_jwt)):
     """Pull and install Domoticz container."""
     rt = detect_runtime()
     if not rt:
@@ -810,7 +810,7 @@ async def restart_container(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(lines: int = Query(100, ge=10, le=500), user=Depends(require_jwt)):
+def get_logs(lines: int = Query(100, ge=10, le=500), user=Depends(require_jwt)):
     """Get container logs."""
     rt = detect_runtime()
     logs = []
