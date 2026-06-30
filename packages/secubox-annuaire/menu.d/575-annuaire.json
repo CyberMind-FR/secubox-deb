@@ -1,0 +1,10 @@
+{
+  "id": "annuaire",
+  "name": "Annuaire",
+  "icon": "🪞",
+  "path": "/annuaire/",
+  "category": "mesh",
+  "order": 12,
+  "description": "Annuaire-Miroir — federated trust substrate (AUTO-ADD/INVITE/PROPOSAL/EMANCIPATE)",
+  "requires": ["secubox-annuaire"]
+}

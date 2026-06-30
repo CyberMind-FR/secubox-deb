@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+case "$1" in
+    configure)
+        # Runtime data directories
+        install -d -m 0755 /var/lib/secubox/annuaire /var/log/secubox/annuaire 2>/dev/null || true
+        chown -R secubox:secubox /var/lib/secubox/annuaire /var/log/secubox/annuaire 2>/dev/null || true
+        # Invalidate hub menu cache so Annuaire appears in the navbar
+        rm -f /var/cache/secubox/menu.json 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable --now secubox-annuaire.service 2>/dev/null || true
+        systemctl try-restart secubox-annuaire.service 2>/dev/null || true
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+        ;;
+esac
+#DEBHELPER#
+exit 0
