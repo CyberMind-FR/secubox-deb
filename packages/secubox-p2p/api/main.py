@@ -26,7 +26,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh
+from . import mesh, registry, annuaire_client
 
 app = FastAPI(
     title="SecuBox P2P API",
@@ -43,6 +43,7 @@ SERVICES_FILE = P2P_DIR / "services.json"
 PROFILES_FILE = P2P_DIR / "profiles.json"
 THREATS_FILE = P2P_DIR / "threats.json"
 NODE_ID_FILE = P2P_DIR / "node.id"
+ACTIVATION_FILE = P2P_DIR / "activation.json"
 CONFIG_FILE = Path("/etc/secubox/p2p.toml")
 
 # Master-Link paths
@@ -61,7 +62,16 @@ ML_DEFAULT_MAX_DEPTH = 3
 
 
 def init_dirs():
-    P2P_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        P2P_DIR.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        pass
+    # Also ensure dirs for patched paths (e.g. in tests via monkeypatch)
+    for _p in (ACTIVATION_FILE, SERVICES_FILE):
+        try:
+            _p.parent.mkdir(parents=True, exist_ok=True)
+        except (PermissionError, AttributeError):
+            pass
 
 
 def load_json(path: Path, default: Any = None) -> Any:
@@ -829,10 +839,20 @@ async def probe_peer(peer_id: str, user: dict = Depends(require_jwt)):
 
 @app.get("/services")
 async def list_services():
-    """List all P2P services (public read)."""
+    """Live view: annuaire catalog ⨝ my subscriptions ⨝ activation overlay ⨝ legacy."""
     init_dirs()
-    services = load_json(SERVICES_FILE, [])
-    return {"services": services if isinstance(services, list) else []}
+    local_did, _ = annuaire_client.node_identity()
+    catalog, cat_err = annuaire_client.get_catalog()
+    subs, _ = annuaire_client.get_subscriptions(local_did)
+    overlay = registry.load_overlay(str(ACTIVATION_FILE))
+    legacy = load_json(SERVICES_FILE, [])
+    legacy = legacy if isinstance(legacy, list) else []
+    rows = registry.merge_services(catalog, subs, overlay, legacy, local_did)
+    out = {"services": rows}
+    if cat_err:
+        out["catalog_unavailable"] = True
+        out["catalog_error"] = cat_err
+    return out
 
 
 @app.post("/services")
@@ -864,6 +884,80 @@ async def unregister_service(name: str, user: dict = Depends(require_jwt)):
     if isinstance(services, list):
         services = [s for s in services if s.get('name') != name]
         save_json(SERVICES_FILE, services)
+    return {"status": "ok"}
+
+
+@app.post("/services/auto-register")
+async def auto_register(user: dict = Depends(require_jwt)):
+    """Activate local catalog services + subscribe to remote ones (per approval mode)."""
+    init_dirs()
+    local_did, priv = annuaire_client.node_identity()
+    catalog, cat_err = annuaire_client.get_catalog()
+    if cat_err:
+        return {"activated": 0, "requested": 0, "pending": 0, "already": 0,
+                "errors": [cat_err]}
+    subs, _ = annuaire_client.get_subscriptions(local_did)
+    subscribed = {s.get("service_id") for s in subs}
+    overlay = registry.load_overlay(str(ACTIVATION_FILE))
+    activated = requested = pending = already = 0
+    errors = []
+    for offer in catalog:
+        sid = offer.get("service_id")
+        if not sid:
+            continue
+        if offer.get("provider") == local_did:
+            registry.set_active(str(ACTIVATION_FILE), sid,
+                                registry.port_from_endpoint(offer.get("endpoint", "")))
+            activated += 1
+            continue
+        if sid in subscribed or (overlay.get(sid, {}).get("subscription_id")):
+            already += 1
+            continue
+        if not priv or not local_did:
+            errors.append(f"{sid}: node has no annuaire identity (run annuairectl init)")
+            continue
+        res, err = annuaire_client.subscribe(sid, local_did, priv)
+        if err:
+            errors.append(f"{sid}: {err}")
+            continue
+        registry.set_subscription(str(ACTIVATION_FILE), sid, res.get("subscription_id", ""))
+        requested += 1
+        if res.get("state") == "pending":
+            pending += 1
+    return {"activated": activated, "requested": requested, "pending": pending,
+            "already": already, "errors": errors}
+
+
+@app.post("/services/{service_id}/request")
+async def request_access(service_id: str, user: dict = Depends(require_jwt)):
+    """Subscribe to a single remote service offer."""
+    init_dirs()
+    local_did, priv = annuaire_client.node_identity()
+    if not priv or not local_did:
+        return {"status": "error", "error": "node has no annuaire identity (run annuairectl init)"}
+    res, err = annuaire_client.subscribe(service_id, local_did, priv)
+    if err:
+        return {"status": "error", "error": err}
+    registry.set_subscription(str(ACTIVATION_FILE), service_id, res.get("subscription_id", ""))
+    return {"status": "ok", "subscription": res}
+
+
+@app.post("/services/{service_id}/activate")
+async def activate_service(service_id: str, user: dict = Depends(require_jwt)):
+    """Mark a catalog service locally active (binds the derived local port)."""
+    init_dirs()
+    catalog, _ = annuaire_client.get_catalog()
+    offer = next((o for o in catalog if o.get("service_id") == service_id), None)
+    if offer is None:
+        return {"status": "error", "error": "service not in catalog"}
+    local_did, _ = annuaire_client.node_identity()
+    if offer.get("provider") != local_did:
+        subs, _ = annuaire_client.get_subscriptions(local_did)
+        st = next((s.get("state") for s in subs if s.get("service_id") == service_id), None)
+        if st != "approved":
+            return {"status": "error", "error": f"remote service not approved (state={st})"}
+    registry.set_active(str(ACTIVATION_FILE), service_id,
+                        registry.port_from_endpoint(offer.get("endpoint", "")))
     return {"status": "ok"}
 
 
