@@ -1,0 +1,17 @@
+Source: secubox-annuaire
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), python3
+Standards-Version: 4.6.2
+
+Package: secubox-annuaire
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, python3-pydantic, python3-cryptography
+Description: SecuBox Annuaire-Miroir — federated self-certifying trust substrate
+ The Annuaire-Miroir is the trust directory for SecuBox-DEB, providing a
+ BLAKE2b-chained, CONIKS-style append-only audit journal with four protocols:
+ AUTO-ADD (provisional discovery), INVITE (capability-based membership),
+ PROPOSAL (anti-plutocratic governance), and EMANCIPATE (staged anchor removal).
+ All objects are Ed25519-signed, RFC 3339-timestamped, and access-gated by
+ the can() resolver. Served on /run/secubox/annuaire.sock, JWT-gated.
