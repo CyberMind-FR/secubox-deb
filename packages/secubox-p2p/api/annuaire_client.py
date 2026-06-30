@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import os
 import socket as _socket
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -37,18 +38,27 @@ class _UnixHTTPConnection(http.client.HTTPConnection):
         self.sock = s
 
 
+# annuaire's require_jwt validates the token's subject against the user store
+# (a session validator), so a service-principal string is rejected — the token
+# must name a real master user. `admin` is a guaranteed master user on every
+# login-capable SecuBox app; override via SBX_SERVICE_USER if needed.
+SERVICE_USER = os.environ.get("SBX_SERVICE_USER", "admin")
+
+
 def _service_token() -> Optional[str]:
     """Mint a short service JWT so we can call annuaire's JWT-gated endpoints.
 
     annuaire and secubox-p2p run on the same host and share the same
-    secubox_core JWT secret, so a token minted here validates there. Used for
-    mutating calls (subscribe); the read endpoints (/services, /subscriptions)
-    are public and need no token. Returns None if secubox_core is unavailable
-    (e.g. in unit tests) — the caller then sends no Authorization header.
+    secubox_core JWT secret, so a token minted here validates there. The
+    subject must be a real master user (SERVICE_USER) because annuaire's
+    require_jwt runs a session validator that rejects unknown principals. Used
+    for mutating calls (subscribe); the read endpoints (/services,
+    /subscriptions) are public and need no token. Returns None if secubox_core
+    is unavailable (e.g. in unit tests) — the caller then sends no header.
     """
     try:
         from secubox_core.auth import create_token  # noqa: PLC0415
-        return create_token("secubox-p2p")
+        return create_token(SERVICE_USER)
     except Exception:  # noqa: BLE001
         return None
 
