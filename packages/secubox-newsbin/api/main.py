@@ -254,7 +254,7 @@ async def health():
 
 
 @router.get("/status")
-async def status():
+def status():
     """Get Newsbin service status."""
     cfg = get_config()
     rt = detect_runtime()
@@ -651,7 +651,7 @@ async def get_container_status_endpoint(user=Depends(require_jwt)):
 
 
 @router.post("/container/install")
-async def install_container(user=Depends(require_jwt)):
+def install_container(user=Depends(require_jwt)):
     """Install SABnzbd container."""
     rt = detect_runtime()
     if not rt:
@@ -763,7 +763,7 @@ async def restart_container(user=Depends(require_jwt)):
 
 
 @router.delete("/container")
-async def uninstall_container(user=Depends(require_jwt)):
+def uninstall_container(user=Depends(require_jwt)):
     """Uninstall SABnzbd container."""
     rt = detect_runtime()
     if not rt:
@@ -811,7 +811,7 @@ async def update_container(user=Depends(require_jwt)):
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(lines: int = 50, user=Depends(require_jwt)):
+def get_logs(lines: int = 50, user=Depends(require_jwt)):
     """Get container logs."""
     rt = detect_runtime()
     if not rt:
@@ -833,7 +833,7 @@ async def get_logs(lines: int = 50, user=Depends(require_jwt)):
 # ============================================================================
 
 @router.post("/backup")
-async def create_backup(user=Depends(require_jwt)):
+def create_backup(user=Depends(require_jwt)):
     """Backup SABnzbd configuration."""
     cfg = get_config()
     data_path = Path(cfg.get("data_path", "/srv/newsbin"))

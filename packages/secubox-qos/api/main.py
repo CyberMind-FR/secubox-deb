@@ -352,7 +352,7 @@ async def usage(user=Depends(require_jwt)):
 
 
 @router.get("/clients")
-async def clients(user=Depends(require_jwt)):
+def clients(user=Depends(require_jwt)):
     """Statistiques par client via nftables accounting (si configuré)."""
     r = subprocess.run(
         ["nft", "-j", "list", "table", "inet", "secubox_qos"],
@@ -379,7 +379,7 @@ class QosConfig(BaseModel):
 
 
 @router.post("/apply_qos")
-async def apply_qos(req: QosConfig, user=Depends(require_jwt)):
+def apply_qos(req: QosConfig, user=Depends(require_jwt)):
     conf = _load_conf()
     conf.update(req.dict())
     _save_conf(conf)
@@ -685,7 +685,7 @@ async def delete_parental(mac: str, user=Depends(require_jwt)):
 # ── Analytics / Realtime ───────────────────────────────────────────
 
 @router.get("/realtime")
-async def realtime(user=Depends(require_jwt)):
+def realtime(user=Depends(require_jwt)):
     """Bande passante en temps réel."""
     conf = _load_conf()
     iface = conf.get("interface", "eth0")
@@ -703,7 +703,7 @@ async def realtime(user=Depends(require_jwt)):
 
 
 @router.get("/bandwidth_history")
-async def bandwidth_history(hours: int = 24, user=Depends(require_jwt)):
+def bandwidth_history(hours: int = 24, user=Depends(require_jwt)):
     """Historique de bande passante (via vnstat si disponible)."""
     r = subprocess.run(
         ["vnstat", "--json", "-h", str(hours)],
@@ -716,7 +716,7 @@ async def bandwidth_history(hours: int = 24, user=Depends(require_jwt)):
 
 
 @router.get("/top_talkers")
-async def top_talkers(user=Depends(require_jwt)):
+def top_talkers(user=Depends(require_jwt)):
     """Top consommateurs de bande passante (via nftables accounting)."""
     r = subprocess.run(
         ["nft", "-j", "list", "set", "inet", "secubox_qos", "client_bytes"],
@@ -775,7 +775,7 @@ async def reset_quota(mac: str, user=Depends(require_jwt)):
 # ── DPI Integration ────────────────────────────────────────────────
 
 @router.get("/dpi_apps")
-async def dpi_apps(user=Depends(require_jwt)):
+def dpi_apps(user=Depends(require_jwt)):
     """Applications détectées par DPI."""
     r = subprocess.run(
         ["curl", "-s", "--unix-socket", "/run/secubox/dpi.sock",
@@ -821,7 +821,7 @@ async def delete_dpi_rule(app_id: str, user=Depends(require_jwt)):
 # ── Advanced ───────────────────────────────────────────────────────
 
 @router.get("/tc_raw")
-async def tc_raw(user=Depends(require_jwt)):
+def tc_raw(user=Depends(require_jwt)):
     """Configuration tc brute."""
     conf = _load_conf()
     iface = conf.get("interface", "eth0")
@@ -839,7 +839,7 @@ async def tc_raw(user=Depends(require_jwt)):
 
 
 @router.post("/tc_command")
-async def tc_command(command: str, user=Depends(require_jwt)):
+def tc_command(command: str, user=Depends(require_jwt)):
     """Exécuter une commande tc (admin only)."""
     if not command.startswith("tc "):
         return {"error": "Must start with 'tc '"}
@@ -848,7 +848,7 @@ async def tc_command(command: str, user=Depends(require_jwt)):
 
 
 @router.get("/interface_list")
-async def interface_list(user=Depends(require_jwt)):
+def interface_list(user=Depends(require_jwt)):
     """Liste des interfaces réseau."""
     r = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
     try:
@@ -912,7 +912,7 @@ async def import_config(req: ImportRequest, user=Depends(require_jwt)):
 
 
 @router.get("/logs")
-async def logs(lines: int = 100, user=Depends(require_jwt)):
+def logs(lines: int = 100, user=Depends(require_jwt)):
     """Logs QoS."""
     r = subprocess.run(
         ["journalctl", "-u", "secubox-qos", "-n", str(lines), "--no-pager"],
@@ -1015,7 +1015,7 @@ async def set_vlan_policy(interface: str, req: VlanPolicyRequest, user=Depends(r
 
 
 @router.delete("/vlan/{interface}/policy")
-async def delete_vlan_policy(interface: str, user=Depends(require_jwt)):
+def delete_vlan_policy(interface: str, user=Depends(require_jwt)):
     """Remove QoS policy from a VLAN interface."""
     conf = _load_conf()
 
@@ -1249,7 +1249,7 @@ async def add_managed_interface(req: AddInterfaceRequest, user=Depends(require_j
 
 
 @router.delete("/interface/{interface}")
-async def remove_managed_interface(interface: str, user=Depends(require_jwt)):
+def remove_managed_interface(interface: str, user=Depends(require_jwt)):
     """Remove an interface from QoS management."""
     conf = _load_conf()
 
@@ -1270,7 +1270,7 @@ async def remove_managed_interface(interface: str, user=Depends(require_jwt)):
 
 
 @router.get("/interface/{interface}/stats")
-async def get_interface_stats(interface: str, user=Depends(require_jwt)):
+def get_interface_stats(interface: str, user=Depends(require_jwt)):
     """Get detailed stats for a specific interface."""
     if not Path(f"/sys/class/net/{interface}").exists():
         raise HTTPException(status_code=404, detail=f"Interface {interface} not found")

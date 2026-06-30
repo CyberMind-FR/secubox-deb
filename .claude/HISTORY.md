@@ -23,6 +23,35 @@ Page admin `https://admin.gk2.secubox.in/yacy/` cassée sur deux points, corrig�
 Déployé live sur gk2 (`/usr/share/secubox/www/yacy/index.html`, backup `.bak-pre-fix`),
 copie debian stagée synchronisée, bump 1.0.11 → 1.0.12. Assets `/shared/*` 200, JS
 `node --check` OK.
+## 2026-06-30 — Lyrion admin 404 → dedicated-socket extraction (#763)
+
+Page `https://admin.gk2.secubox.in/lyrion/` : tous les widgets en **HTTP 404**.
+
+### Cause racine
+La route nginx `/api/v1/lyrion/` avait dérivé sur la board vers
+`rewrite … /$1 break;` + `proxy_pass …/aggregator.sock;` (sans suffixe `/api/v1/lyrion/`).
+L'aggregator monte les modules au chemin **complet** `/api/v1/lyrion/…`, donc le `/status`
+dénudé → 404. (`curl aggregator.sock /api/v1/lyrion/status` → 200 ; `/status` → 404.)
+
+### Décision — extraction socket dédié (comme auth/metrics)
+Les handlers `now-playing` / `players` font du JSON-RPC LMS **bloquant** à chaque requête.
+Sur la boucle unique de l'aggregator (~110 modules) un appel LMS lent fige toute la
+passerelle → 502 board-wide (SPOF observé). lyrion repasse sur son propre
+`secubox-lyrion.service` + `/run/secubox/lyrion.sock` + route nginx dédiée.
+
+### Changements
+- **source** `packages/secubox-lyrion/nginx/lyrion.conf` : invariant documenté (dedicated
+  socket, ne jamais folder dans l'aggregator).
+- **source** `packages/secubox-lyrion/debian/postinst` : préserve l'état runtime sur upgrade
+  (`try-restart`), démarre au fresh install si le LXC LMS répond.
+- **source** `packages/secubox-aggregator/sbin/secubox-aggregator-migrate` : `AGG_EXCLUDE`
+  (lyrion) → discovery + switch route + disable service le sautent (durabilité).
+- **board** : `secubox-lyrion.service` enable --now ; route nginx (secubox.d +
+  secubox-routes.d) → `lyrion.sock` ; reload. 5 endpoints à 200, stream live affiché.
+- **gotcha** : le 1er `enable --now` a re-chown `/run/secubox` (1777 root:root →
+  755 secubox:secubox) car le drop-in `no-runtime-dir.conf` (`RuntimeDirectory=`) n'était pas
+  rechargé en mémoire systemd. `daemon-reload` + restaure le parent à 1777 root:root → restart
+  ne le re-casse plus (boot-safe).
 
 ---
 

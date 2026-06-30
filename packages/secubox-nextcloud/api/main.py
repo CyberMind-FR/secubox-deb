@@ -184,7 +184,7 @@ async def restart_service():
 
 
 @app.post("/install", dependencies=[Depends(require_jwt)])
-async def install():
+def install():
     """Install Nextcloud (background)"""
     if lxc_installed():
         raise HTTPException(400, "Already installed")
@@ -211,7 +211,7 @@ async def uninstall():
 
 
 @app.post("/update", dependencies=[Depends(require_jwt)])
-async def update():
+def update():
     """Update Nextcloud"""
     subprocess.Popen(
         ["/usr/sbin/nextcloudctl", "update"],
@@ -374,7 +374,7 @@ async def delete_backup(name: str):
 
 
 @app.post("/restore/{name}", dependencies=[Depends(require_jwt)])
-async def restore_backup(name: str):
+def restore_backup(name: str):
     """Restore from backup"""
     subprocess.Popen(
         ["/usr/sbin/nextcloudctl", "restore", name],

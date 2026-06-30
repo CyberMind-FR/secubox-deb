@@ -211,7 +211,7 @@ def _check_scope(authorization: Optional[str], expected_scope: str) -> dict:
 
 
 @_login_router.post("/login")
-async def _login_v2(req: _LoginIn, request: _Request, response: _Response):
+def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
     ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
           or request.headers.get("X-Real-IP", "")
@@ -298,7 +298,7 @@ async def _totp_enroll(request: _Request):
 
 
 @_login_router.post("/totp/confirm")
-async def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
+def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
     payload = _check_scope(request.headers.get("Authorization"), "totp-enroll")
     username = payload["sub"]
     secret = _pending.get(payload["jti"])
@@ -321,7 +321,7 @@ async def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
 
 
 @_login_router.post("/set-password")
-async def _set_password(req: _SetPasswordIn, request: _Request):
+def _set_password(req: _SetPasswordIn, request: _Request):
     auth_h = request.headers.get("Authorization", "")
     if not auth_h.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Token Bearer manquant")
@@ -888,7 +888,7 @@ async def get_history(limit: int = 100, event: Optional[str] = None, user=Depend
 
 
 @router.get("/logs")
-async def get_logs(lines: int = 100, user=Depends(require_jwt)):
+def get_logs(lines: int = 100, user=Depends(require_jwt)):
     """Get auth service logs."""
     try:
         r = subprocess.run(

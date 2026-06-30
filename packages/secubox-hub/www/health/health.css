@@ -39,10 +39,10 @@ h2 { font-size: 16px; font-weight: 600; margin: var(--sp-xl) 0 var(--sp-m); }
 .svc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--sp-s); }
 .svc { display: flex; align-items: center; gap: var(--sp-s); background: var(--bg1); border: 1px solid var(--bd);
     border-radius: 8px; padding: 10px 12px; min-width: 0; }
-.svc .led { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 6px currentColor; }
-.svc.ok .led { background: #2ecc8f; color: #2ecc8f; }
-.svc.warn .led, .svc.unknown .led { background: #f0b94c; color: #f0b94c; }
-.svc.error .led { background: #ff7a6b; color: #ff7a6b; animation: pulse 1.2s infinite; }
+/* .led now carries the status emoji (🟢🟡🔴) instead of a CSS dot. */
+.svc .led { flex: none; width: auto; height: auto; background: none; box-shadow: none;
+    font-size: 14px; line-height: 1; font-family: "Noto Color Emoji", "Apple Color Emoji", sans-serif; }
+.svc.error .led { animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .4; } }
 .svc.error { border-left: 3px solid #803018; }
 .svc-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

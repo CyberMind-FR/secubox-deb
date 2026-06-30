@@ -999,7 +999,7 @@ async def probe_mesh_device(ip_address: str):
 
 
 @app.post("/discover/full", dependencies=[Depends(require_jwt)])
-async def full_discovery(
+def full_discovery(
     network: Optional[str] = None,
     include_mesh: bool = True,
     use_arping: bool = True,
@@ -1377,7 +1377,7 @@ async def find_cast_devices():
 
 
 @app.get("/cast/diagnose/{ip_address}", dependencies=[Depends(require_jwt)])
-async def diagnose_cast_device(ip_address: str):
+def diagnose_cast_device(ip_address: str):
     """Run full diagnostic on a Cast device.
 
     Checks:
@@ -1459,7 +1459,7 @@ async def diagnose_cast_device(ip_address: str):
 
 
 @app.post("/cast/whitelist/{ip_address}", dependencies=[Depends(require_jwt)])
-async def whitelist_cast_device(ip_address: str, apply_crowdsec: bool = True):
+def whitelist_cast_device(ip_address: str, apply_crowdsec: bool = True):
     """Whitelist a Cast device in CrowdSec.
 
     Args:
@@ -1493,7 +1493,7 @@ async def whitelist_cast_device(ip_address: str, apply_crowdsec: bool = True):
 
 
 @app.get("/cast/capture/{ip_address}", dependencies=[Depends(require_jwt)])
-async def start_cast_capture(ip_address: str, duration: int = 60):
+def start_cast_capture(ip_address: str, duration: int = 60):
     """Start a packet capture for Cast device debugging.
 
     Args:
