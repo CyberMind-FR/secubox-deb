@@ -1,8 +1,8 @@
-# SecuBox YaCy — allow the secubox user to introspect/control the LXC.
-# secubox-yacy.service (host FastAPI) runs as User=secubox, but lxc-info /
-# lxc-attach on the unprivileged /data/lxc/yacy container need root. Without
-# this, yacyctl component/status checks wrongly report the LXC "absent" and
-# the daemon "stopped" while both are running. Sibling: secubox-streamlit,
+# SecuBox YaCy — allow the secubox user to control the LXC.
+# secubox-yacy.service (host FastAPI) runs as User=secubox. Read-only
+# component/status introspection no longer needs this (it probes the daemon
+# port directly), but `yacyctl reload` still uses lxc-attach to restart the
+# in-container YaCy daemon, which needs root. Sibling: secubox-streamlit,
 # secubox-lxc.
 secubox ALL=(root) NOPASSWD: /usr/bin/lxc-info
 secubox ALL=(root) NOPASSWD: /usr/bin/lxc-attach

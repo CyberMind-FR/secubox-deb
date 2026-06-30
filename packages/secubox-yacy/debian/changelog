@@ -1,3 +1,41 @@
+secubox-yacy (1.0.12-1~bookworm1) bookworm; urgency=medium
+
+  * www/yacy/index.html: repair embedded webui + navbar integration.
+    - Fix recursive embed: the iframe pointed at `/yacy/`, which is THIS
+      admin page (nginx serves it as a static alias, not a proxy), so the
+      panel rendered itself recursively. The iframe src is now built at
+      runtime from /api/v1/yacy/access, preferring the public https URL
+      (yacy.gk2.secubox.in) to avoid mixed-content blocking; falls back to
+      an "open in new tab" notice when only an http LAN URL is reachable.
+    - Fix navbar: drop the custom `.layout` CSS grid and the legacy
+      sidebar-light.css, which collided with sidebar.js v2.33 (hybrid-skin
+      injector). Adopt the canonical pattern — design-tokens.css +
+      crt-light.css in head, `<nav class="sidebar">` + sidebar.js, content
+      in `<main class="main">`. Escape API-derived strings before injection.
+  * yacyctl: fix component/status introspection from the host FastAPI.
+    secubox-yacy.service runs as User=secubox with NoNewPrivileges=true, so
+    lxc-info/lxc-attach (which need root, NNP blocks sudo) silently failed
+    and every check reported the LXC "absent" + daemon "stopped" + overall
+    "red" while both were running. Liveness is now PROBED over the br-lxc
+    network (curl http://$LXC_IP:$HTTP_PORT/) — privilege-free, preserves
+    the hardened unit, and is a truer "is YaCy serving" signal. lxc-info is
+    kept as a best-effort root-only enrichment.
+  * Ship /etc/sudoers.d/secubox-yacy (lxc-info/attach/start/stop) for
+    `yacyctl reload`, which restarts the in-container daemon. Sibling
+    pattern: secubox-streamlit, secubox-lxc.
+  * NOTE (live board drift, not a packaging change): on gk2 the installed
+    /etc/nginx/secubox-routes.d/yacy.conf had drifted to
+    `proxy_pass .../aggregator.sock` while keeping the prefix-stripping
+    rewrite, so the aggregator (which mounts modules at the FULL
+    /api/v1/yacy/* path) got bare /access → 404 → "unavailable" cards AND an
+    empty panel (no YaCy UI → "no search results"). The shipped
+    nginx/yacy.conf already routes to yacy.sock (fast ~0.2s vs 11-20s via
+    the aggregator, which blocked its shared loop); realigned the board.
+    yacyctl/search itself was never broken (freeworld global + local index
+    both return results).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Tue, 30 Jun 2026 12:00:00 +0200
+
 secubox-yacy (1.0.11-1~bookworm1) bookworm; urgency=medium
 
   * Apply dual-vhost MUST pattern (docs/MODULE-GUIDELINES.md §4):
