@@ -11,7 +11,7 @@ activate: (consumer side) record the SOCKS endpoint for the operator.
 Run only via secubox-macroctl (root, AppArmor-confined). No shell on inputs.
 """
 from __future__ import annotations
-import argparse, json, os, subprocess, sys
+import argparse, json, os, re, subprocess, sys
 
 NFT = os.environ.get("TOREXIT_NFT", "nft")
 MESH_IP = os.environ.get("TOREXIT_MESH_IP") or ""
@@ -42,9 +42,14 @@ def main() -> int:
     p.add_argument("--params", default="{}"); p.add_argument("--cred", default="{}")
     a = p.parse_args()
     params = json.loads(a.params)
-    port = int(params.get("socks_port", 9050))
 
     if a.verb == "grant":
+        try:
+            port = int(params.get("socks_port", 9050))
+            if not (1 <= port <= 65535):
+                raise ValueError("port out of range")
+        except (ValueError, TypeError) as e:
+            print(json.dumps({"error": f"invalid socks_port: {e}"})); return 4
         ip = _mesh_ip()
         if not ip:
             print(json.dumps({"error": "no wg-mesh ip / tor-exit not provisioned"})); return 2
@@ -55,12 +60,15 @@ def main() -> int:
         print(json.dumps({"kind": "tor-exit", "endpoint": f"{ip}:{port}"}))
         return 0
     if a.verb == "revoke":
-        _nft("delete", "element", *TABLE.split(), SET, "{", a.src_ip, "}")
+        rc = _nft("delete", "element", *TABLE.split(), SET, "{", a.src_ip, "}")
+        if rc != 0:
+            sys.stderr.write(json.dumps({"warn": "nft delete non-zero (element absent or set missing)"}) + "\n")
         print(json.dumps({"ok": True})); return 0
     if a.verb == "activate":
         cred = json.loads(a.cred)
         os.makedirs(STATE_DIR, exist_ok=True)
-        sid = cred.get("service_id", "unknown")
+        raw_sid = str(cred.get("service_id", "unknown"))
+        sid = re.sub(r"[^A-Za-z0-9_-]", "_", raw_sid)[:64] or "unknown"
         with open(os.path.join(STATE_DIR, f"{sid}.json"), "w") as fh:
             json.dump(cred, fh)
         print(json.dumps({"ok": True, "socks": cred.get("endpoint")})); return 0
