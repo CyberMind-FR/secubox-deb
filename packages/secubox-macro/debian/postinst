@@ -13,9 +13,14 @@ case "$1" in
         # #494/#511: NEVER chown the shared parents (/var/lib/secubox,
         # /var/log/secubox) — owned by tmpfiles.d/secubox-core at 0755.
         # This module creates only its own subdirectories.
-        install -d -m 0750 /var/lib/secubox/macro/active
-        install -d -m 0750 /var/lib/secubox/macro/grants
-        chown -R secubox:secubox /var/lib/secubox/macro 2>/dev/null || true
+        # State dirs are ROOT-owned: secubox-macroctl runs as root (via sudo) and
+        # is the only writer. The AppArmor profile grants no dac_override, so root
+        # must OWN these dirs to write into them — a secubox-owned dir would make
+        # the plugin's activate state-write fail with EACCES. Nothing running as
+        # secubox reads them (p2p uses its own /var/lib/secubox/p2p overlay).
+        install -d -m 0755 -o root -g root /var/lib/secubox/macro
+        install -d -m 0750 -o root -g root /var/lib/secubox/macro/active
+        install -d -m 0750 -o root -g root /var/lib/secubox/macro/grants
 
         # Pre-create the audit log so the AppArmor profile's append-only ('a')
         # permission suffices — 'a' cannot CREATE a missing file, so macroctl's
