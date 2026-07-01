@@ -1,3 +1,15 @@
+secubox-exposure (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#768): real Mesh egress channel — appstore federation phase 1.
+    api/mesh_egress.py: emancipating a service over the MESH channel now (1)
+    durably opens its port to the wg-mesh (nft allow before the terminal drop
+    on vortex nodes; hub 10/8-accept nodes need nothing) and (2) publishes a
+    signed "emancipated" ServiceOffer into the annuaire directory (annuairectl,
+    as secubox) so it federates into every node's mesh-wide catalog. Wired into
+    /emancipate (was a no-op stub for mesh). +4 unit tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 10:00:00 +0200
+
 secubox-exposure (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release
