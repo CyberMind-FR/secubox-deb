@@ -7,6 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+import logging
 import subprocess
 import asyncio
 import json
@@ -17,6 +18,8 @@ import hashlib
 import secrets
 from pathlib import Path
 from datetime import datetime, timedelta
+
+log = logging.getLogger("secubox.p2p")
 
 import sys
 sys.path.insert(0, '/usr/lib/python3/dist-packages')
@@ -2231,7 +2234,13 @@ async def macro_grant_endpoint(service_id: str, req: Request):
     """
     from api import macro_grant, annuaire_client  # noqa: PLC0415
 
-    body = await req.json()
+    try:
+        body = await req.json()
+    except json.JSONDecodeError:
+        return JSONResponse({"error": "request body must be valid JSON"}, status_code=400)
+
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a JSON object"}, status_code=400)
 
     # Look up the service offer in the annuaire catalog.
     catalog, _err = annuaire_client.get_catalog()
@@ -2262,7 +2271,8 @@ async def macro_grant_endpoint(service_id: str, req: Request):
         macro.get("params", {}),
     )
     if err:
-        return JSONResponse({"error": err}, status_code=502)
+        log.warning("macro grant failed for %s: %s", service_id, err)  # server-side detail
+        return JSONResponse({"error": "macro grant failed"}, status_code=502)
 
     cred = cred or {}
     cred["service_id"] = service_id
