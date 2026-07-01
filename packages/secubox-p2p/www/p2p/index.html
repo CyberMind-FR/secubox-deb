@@ -802,6 +802,9 @@
                         actions = `<span class="text-muted">awaiting approval</span>`;
                     } else if (!svc.active) {
                         actions = `<button class="btn btn-small" onclick="activateService('${encodeURIComponent(svc.service_id)}')">Activate</button>`;
+                    } else if (svc.automatable && svc.active && svc.endpoint) {
+                        actions = `<span style="font-family:monospace;font-size:12px;color:var(--accent-light)">SOCKS ${escapeHtml(svc.endpoint)}</span> ` +
+                                  `<button class="btn btn-small btn-danger" onclick="revokeAccess('${encodeURIComponent(svc.service_id)}')">Revoke access</button>`;
                     } else {
                         actions = `<span class="status-badge active">active</span>`;
                     }
@@ -847,6 +850,13 @@
             const res = await apiPost('/services/' + encodeURIComponent(sid) + '/activate', {});
             if (!res) { console.error('[secubox-p2p] activateService: API error'); return; }
             console.log('[secubox-p2p] activateService:', res.status === 'ok' ? 'Activated' : (res.error || 'failed'));
+            loadServices();
+        }
+
+        async function revokeAccess(sid) {
+            const res = await apiPost('/services/' + encodeURIComponent(sid) + '/revoke-access', {});
+            if (!res) { console.error('[secubox-p2p] revokeAccess: API error'); return; }
+            console.log('[secubox-p2p] revokeAccess:', res.status === 'ok' ? 'Revoked' : (res.error || 'failed'));
             loadServices();
         }
 

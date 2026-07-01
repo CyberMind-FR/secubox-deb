@@ -1,3 +1,13 @@
+secubox-annuaire (0.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat: optional signed ServiceOffer.macro descriptor {kind, params} — lets an
+    offer propose a vetted access macro (e.g. tor-exit). Federates in the signed
+    payload; annuaire executes nothing. annuairectl offer gains --macro-kind /
+    --macro-param. Consumed by secubox-macro + secubox-p2p 1.9.0. (Renumbered
+    0.3.0 -> 0.3.3 to sit above the parallel #768 threatmesh entries.)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 17:00:00 +0200
+
 secubox-annuaire (0.3.2-1~bookworm1) bookworm; urgency=medium
 
   * feat(#768): threatmesh WAF hook — crowdsec -> mesh bridge.

@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+case "$1" in
+    remove|purge)
+        # Remove the rendered mesh macro grant listener (postinst generated it
+        # from a template, so dpkg does not track it as a conffile).
+        rm -f /etc/nginx/conf.d/p2p-macro-mesh.conf 2>/dev/null || true
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+        ;;
+esac
+#DEBHELPER#
+exit 0

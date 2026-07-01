@@ -160,12 +160,26 @@ def cmd_offer(args) -> int:
             _die(f"--scope expects key=value, got {kv!r}")
         k, v = kv.split("=", 1)
         scope[k] = v
+    macro = None
+    if args.macro_kind:
+        params = {}
+        for kv in (args.macro_param or []):
+            if "=" not in kv:
+                _die(f"--macro-param expects k=v, got {kv!r}")
+            k, v = kv.split("=", 1)
+            if v.isdigit():
+                v = int(v)
+            elif v.lower() in ("true", "false"):
+                v = v.lower() == "true"
+            params[k] = v
+        macro = {"kind": args.macro_kind, "params": params}
     j = _journal()
     try:
         offer = offer_service(
             j, priv, did,
             name=args.name, kind=args.kind, endpoint=args.endpoint,
             scope=scope or None, approval_mode=args.mode, description=args.description or "",
+            macro=macro,
         )
     except Exception as e:  # noqa: BLE001
         _die(f"offer failed: {e}")
@@ -329,6 +343,9 @@ def main(argv=None) -> int:
     po.add_argument("--mode", default="auto", choices=["auto", "pending"])
     po.add_argument("--description", default="")
     po.add_argument("--scope", action="append", help="scope key=value (repeatable)")
+    po.add_argument("--macro-kind", help="macro kind, e.g. tor-exit")
+    po.add_argument("--macro-param", action="append", metavar="k=v",
+                    help="macro param key=value (repeatable; ints/bools auto-typed)")
     po.set_defaults(fn=cmd_offer)
 
     ps = sub.add_parser("services", help="list this node's live offers")

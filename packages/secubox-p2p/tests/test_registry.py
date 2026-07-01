@@ -64,3 +64,39 @@ def test_load_overlay_missing_or_corrupt(tmp_path):
     assert registry.load_overlay(str(tmp_path / "nope.json")) == {}
     bad = tmp_path / "bad.json"; bad.write_text("{not json")
     assert registry.load_overlay(str(bad)) == {}
+
+
+def test_overlay_endpoint_surfaces_in_merged_row(tmp_path):
+    """Overlay entry with endpoint set by _macroctl_activate should appear in the merged row."""
+    p = tmp_path / "activation.json"
+    socks_ep = "10.10.0.1:9050"
+    registry.set_active(str(p), "tor-s1", 9050, endpoint=socks_ep)
+    data = registry.load_overlay(str(p))
+    assert data["tor-s1"]["endpoint"] == socks_ep
+
+    remote_did = "did:plc:" + "c" * 32
+    catalog = [
+        {"service_id": "tor-s1", "name": "Tor exit", "kind": "tor-exit",
+         "provider": remote_did, "endpoint": "http://10.10.0.1/tor",
+         "approval_mode": "auto"},
+    ]
+    rows = registry.merge_services(catalog, [], data, [], None)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["active"] is True
+    assert row["automatable"] is True
+    assert row.get("endpoint") == socks_ep
+
+
+def test_overlay_endpoint_absent_when_not_set():
+    """Rows without an overlay endpoint must NOT carry an 'endpoint' key."""
+    remote_did = "did:plc:" + "d" * 32
+    catalog = [
+        {"service_id": "wg-s1", "name": "WG relay", "kind": "wg-relay",
+         "provider": remote_did, "endpoint": "10.10.0.2:51820",
+         "approval_mode": "auto"},
+    ]
+    overlay = {"wg-s1": {"active": True, "local_port": 51820}}
+    rows = registry.merge_services(catalog, [], overlay, [], None)
+    assert len(rows) == 1
+    assert "endpoint" not in rows[0]
