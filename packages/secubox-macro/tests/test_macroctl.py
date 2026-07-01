@@ -56,3 +56,19 @@ def test_refuses_non_root_owned_or_world_writable_plugin(tmp_path):
     plug.chmod(0o777)  # world-writable → tamper risk
     r = _run(["echo", "grant", "--src-ip", "10.10.0.2"], env)
     assert r.returncode != 0
+
+
+def test_grant_requires_src_ip(tmp_path):
+    r = _run(["echo", "grant"], _env(tmp_path))  # no --src-ip
+    assert r.returncode != 0
+    assert "src-ip" in (r.stdout + r.stderr).lower()
+
+
+def test_revoke_requires_src_ip(tmp_path):
+    r = _run(["echo", "revoke"], _env(tmp_path))
+    assert r.returncode != 0
+
+
+def test_activate_does_not_require_src_ip(tmp_path):
+    r = _run(["echo", "activate", "--cred", "{}"], _env(tmp_path))
+    assert r.returncode == 0  # activate needs no src-ip
