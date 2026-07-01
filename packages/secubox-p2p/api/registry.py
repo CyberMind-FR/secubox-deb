@@ -57,7 +57,8 @@ def save_overlay(path: str, data: Dict[str, Any]) -> None:
 
 
 def set_active(path: str, service_id: str, local_port: Optional[int],
-               subscription_id: Optional[str] = None) -> Dict[str, Any]:
+               subscription_id: Optional[str] = None,
+               endpoint: Optional[str] = None) -> Dict[str, Any]:
     data = load_overlay(path)
     entry = data.get(service_id, {})
     entry["active"] = True
@@ -65,6 +66,8 @@ def set_active(path: str, service_id: str, local_port: Optional[int],
     if subscription_id is not None:
         entry["subscription_id"] = subscription_id
     entry.setdefault("subscription_id", None)
+    if endpoint is not None:
+        entry["endpoint"] = endpoint
     entry["activated_at"] = datetime.now(timezone.utc).isoformat()
     data[service_id] = entry
     save_overlay(path, data)
@@ -100,7 +103,7 @@ def merge_services(catalog: List[Dict], subscriptions: List[Dict],
         is_local = bool(local_did) and provider == local_did
         ov = overlay.get(sid, {})
         kind = offer.get("kind", "")
-        rows.append({
+        row: Dict = {
             "service_id": sid,
             "name": offer.get("name", ""),
             "type": kind,
@@ -112,7 +115,10 @@ def merge_services(catalog: List[Dict], subscriptions: List[Dict],
             "active": bool(ov.get("active", False)),
             "source": "annuaire",
             "automatable": kind in MACRO_KINDS,
-        })
+        }
+        if ov.get("endpoint"):
+            row["endpoint"] = ov["endpoint"]
+        rows.append(row)
 
     for svc in legacy or []:
         rows.append({
