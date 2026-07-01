@@ -1,0 +1,3 @@
+# Rendered by postinst into /etc/tor/torrc.d/secubox-macro-tor-exit.conf with the
+# node wg-mesh IP substituted. A DEDICATED SocksPort — does not touch existing Tor config.
+SocksPort __MESH_IP__:9050

@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# AppArmor enforce profile for /usr/sbin/secubox-macroctl (secubox-macro, #771)
+#
+# Installed by dpkg to /etc/apparmor.d/secubox-macroctl and loaded in enforce
+# mode by the postinst (apparmor_parser -r /etc/apparmor.d/secubox-macroctl).
+#
+# Surface minimisation:
+#   - rix  : /usr/sbin/secubox-macroctl (binary)
+#   - rix  : /usr/bin/python3* (interpreter)
+#   - rix  : /usr/lib/secubox/macro/macros.d/* (vetted plugin scripts)
+#   - rix  : /usr/sbin/nft, /sbin/nft (nftables manipulation)
+#   - rix  : /usr/bin/ip (mesh IP discovery)
+#   - r    : /etc/tor/torrc.d/ (directory traversal only — read-only)
+#   - rw   : /var/lib/secubox/macro/** (active grants state store)
+#   - w    : /var/log/secubox/audit.log (append-only audit trail)
+#   - network netlink raw: nft kernel communication
+#   - network inet stream: socket for mesh IP resolution
+#
+# Everything else is denied by the default-deny profile (no explicit deny rules
+# needed; any path not listed above is implicitly denied by AppArmor).
+
+#include <tunables/global>
+
+/usr/sbin/secubox-macroctl {
+  #include <abstractions/base>
+  #include <abstractions/python>
+
+  # ── Binary + interpreter ──────────────────────────────────────────────────
+  /usr/sbin/secubox-macroctl r,
+  /usr/bin/python3*           rix,
+
+  # ── Macro plugins (vetted allowlist under dispatcher control) ────────────
+  /usr/lib/secubox/macro/macros.d/* rix,
+
+  # ── nftables (set manipulation for secubox_macro_torexit) ────────────────
+  /usr/sbin/nft rix,
+  /sbin/nft     rix,
+
+  # ── ip (mesh IP discovery for SocksPort) ─────────────────────────────────
+  /usr/bin/ip rix,
+
+  # ── Tor config dir (read dir entry only; postinst writes the file) ────────
+  /etc/tor/torrc.d/ r,
+
+  # ── Persistent state (active grants, rollback snapshots) ─────────────────
+  /var/lib/secubox/macro/     rw,
+  /var/lib/secubox/macro/**   rw,
+
+  # ── Audit log (append-only; parent dir traversal is 0755 per CMSD policy) ─
+  /var/log/secubox/audit.log  w,
+
+  # ── Networking (nft netlink + mesh socket) ───────────────────────────────
+  network inet   stream,
+  network netlink raw,
+
+  # Deny everything else (default-deny — implicit in AppArmor).
+}
