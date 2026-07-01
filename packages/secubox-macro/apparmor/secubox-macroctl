@@ -37,8 +37,11 @@
   /usr/lib/secubox/macro/macros.d/* rix,
 
   # ── nftables (set manipulation for secubox_macro_torexit) ────────────────
+  /usr/sbin/ r,               # dir read (plugin/realpath + exec lookup)
   /usr/sbin/nft rix,
   /sbin/nft     rix,
+  /etc/iproute2/ r,           # nft reads iproute2 name tables at startup
+  /etc/iproute2/* r,
 
   # ── ip (mesh IP discovery for SocksPort) ─────────────────────────────────
   /usr/bin/ip rix,
