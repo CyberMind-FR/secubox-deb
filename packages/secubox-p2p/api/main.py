@@ -1189,7 +1189,10 @@ async def revoke_access(service_id: str, user: dict = Depends(require_jwt)):
 
     kind = macro.get("kind", "")
     local_did, _ = annuaire_client.node_identity()
-    our_mesh_ip = _get_our_mesh_ip() or "0.0.0.0"
+    our_mesh_ip = _get_our_mesh_ip()
+
+    if not (our_mesh_ip and our_mesh_ip.startswith("10.10.0.")):
+        return JSONResponse({"error": "node has no wg-mesh IP; cannot revoke"}, status_code=409)
 
     ok, err = _macroctl_revoke(kind, local_did or "", our_mesh_ip)
     if not ok:

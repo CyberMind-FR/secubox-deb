@@ -148,3 +148,11 @@ def test_revoke_access_unknown_service(client, monkeypatch):
     r = client.post("/services/nonexistent/revoke-access")
     assert r.status_code == 200
     assert r.json().get("status") == "error"
+
+
+def test_revoke_access_no_mesh_ip_returns_409(client, monkeypatch):
+    """revoke-access returns 409 when node has no valid wg-mesh IP."""
+    monkeypatch.setattr(main, "_get_our_mesh_ip", lambda: None)
+    r = client.post("/services/s2/revoke-access")
+    assert r.status_code == 409
+    assert "wg-mesh" in r.json().get("error", "").lower() or "mesh" in r.json().get("error", "")
