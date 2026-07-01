@@ -681,12 +681,22 @@ async def emancipate(req: EmancipateRequest, user: dict = Depends(require_jwt)):
         "mesh": req.mesh
     }
 
-    # If Tor requested, create hidden service
+    # If Tor requested, create hidden service + register the onion in the
+    # directory so the anonymous egress endpoint federates (gondwana #768 P3).
     if req.tor:
         tor_req = TorAddRequest(service=req.service, local_port=req.port)
         tor_result = await tor_add(tor_req, user)
         if tor_result.get("onion"):
             result["onion"] = tor_result["onion"]
+            try:
+                from api.mesh_egress import apply_tor  # noqa: PLC0415
+                tr = apply_tor(req.service, req.port, tor_result["onion"])
+                result["tor_registered"] = bool(tr.get("ok"))
+                if not tr.get("ok"):
+                    result["tor_error"] = tr.get("error")
+            except Exception as e:  # noqa: BLE001
+                result["tor_registered"] = False
+                result["tor_error"] = str(e)
 
     # If Mesh requested, make it real (gondwana #768): open the port over the
     # wg-mesh + register a signed emancipated offer into the annuaire directory
@@ -703,6 +713,21 @@ async def emancipate(req: EmancipateRequest, user: dict = Depends(require_jwt)):
         except Exception as e:  # noqa: BLE001 — a mesh hiccup must not fail emancipate
             result["mesh_registered"] = False
             result["mesh_error"] = str(e)
+
+    # Public channel (gondwana #768 P4): federate a public offer + emit the WAF
+    # vhost recipe. Real reach is completed by the operator (DNS + cert); we do
+    # not auto-mutate the live HAProxy/mitmproxy chain.
+    if req.dns and req.domain:
+        try:
+            from api.mesh_egress import apply_public  # noqa: PLC0415
+            pub = apply_public(req.service, req.port, req.domain)
+            result["public_registered"] = bool(pub.get("ok"))
+            result["public_recipe"] = pub.get("recipe")
+            if not pub.get("ok"):
+                result["public_error"] = pub.get("error")
+        except Exception as e:  # noqa: BLE001
+            result["public_registered"] = False
+            result["public_error"] = str(e)
 
     config["emancipated"].append(result)
     save_config(config)
