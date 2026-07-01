@@ -4,6 +4,7 @@ case "$1" in
     remove|deconfigure)
         systemctl disable --now secubox-annuaire-apply.timer 2>/dev/null || true
         systemctl disable --now secubox-annuaire-bans-apply.timer 2>/dev/null || true
+        systemctl disable --now secubox-threatmesh-bridge.timer 2>/dev/null || true
         nft delete table inet secubox_meshban 2>/dev/null || true
         systemctl stop secubox-annuaire-apply.service 2>/dev/null || true
         systemctl stop secubox-annuaire.service 2>/dev/null || true

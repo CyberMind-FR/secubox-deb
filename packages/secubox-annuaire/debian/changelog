@@ -1,3 +1,15 @@
+secubox-annuaire (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#768): threatmesh WAF hook — crowdsec -> mesh bridge.
+    /usr/sbin/sbx-threatmesh-bridge reads local `cscli decisions list` and
+    publishes each NEW ban into the mesh via `annuairectl ban` (TTL = the
+    crowdsec duration; reason = the scenario), idempotent via a state file. A
+    timer runs it ~90s. Net: crowdsec detects on one node -> signed ban federates
+    -> every peer enforces it in the secubox_meshban nft set -> auto-expires.
+    Safe no-op where crowdsec is absent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 16:30:00 +0200
+
 secubox-annuaire (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * feat(#768): threatmesh — bidirectional WAF/threat ban federation.
