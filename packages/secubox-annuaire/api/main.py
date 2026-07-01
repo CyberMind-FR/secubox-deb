@@ -695,6 +695,14 @@ async def list_config(scope: Optional[str] = None):
     return {"configs": configs}
 
 
+@app.get("/bans")
+async def list_bans():
+    """The federated ban union (public read) — every node's active bans (#768)."""
+    from annuaire.verbs import _get_bans, banned_ips  # noqa: PLC0415
+    j = get_journal()
+    return {"banned_ips": banned_ips(j), "bans": _get_bans(j)}
+
+
 @app.get("/log/export")
 async def export_log():
     """Export the full signed log for a peer to pull (public).

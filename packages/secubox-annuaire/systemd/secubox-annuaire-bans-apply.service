@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox Annuaire — enforce the federated ban union into nft (#768)
+After=secubox-annuaire.service
+Wants=secubox-annuaire.service
+
+[Service]
+Type=oneshot
+# Runs as root: rebuilds the self-contained `inet secubox_meshban` table from
+# the convergent ban union. Never touches the main firewall.
+ExecStart=/usr/sbin/annuairectl bans-apply

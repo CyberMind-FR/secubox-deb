@@ -28,12 +28,13 @@ import hashlib
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from .crypto import canonical_bytes, did_from_pubkey, public_from_private, sign, verify
 from .log import Journal
 from .model import (
+    BanRecord,
     GENESIS_HASH,
     ApprovalMode,
     ConfigBlob,
@@ -1770,6 +1771,95 @@ def ingest_config(
         author=blob.publisher, sig=blob.sig, author_pubkey_hex=publisher_pubkey_hex,
     )
     return {"status": "ingested", "config_id": blob.config_id, "publisher": blob.publisher}
+
+
+# ---------------------------------------------------------------------------
+# Threatmesh — bidirectional WAF/threat ban federation (#768)
+#
+# Each node signs its own bans; they gossip over the same convergent log as node
+# and config records, so a ban on ANY node reaches ALL nodes (no master). The
+# enforcement view is the UNION of active bans across publishers; a node lifts
+# only its own ban, and each ban carries a TTL so stale entries drop out.
+# ---------------------------------------------------------------------------
+
+def publish_ban(
+    journal: Journal,
+    node_priv: bytes,
+    node_did: str,
+    *,
+    ip: str,
+    reason: str = "",
+    severity: str = "medium",
+    ttl_s: Optional[int] = None,
+    ban_id: Optional[str] = None,
+) -> BanRecord:
+    """BAN_PUBLISH: sign an IP ban and append it (self-certifying)."""
+    expires = None
+    if ttl_s:
+        expires = (datetime.now(timezone.utc) + timedelta(seconds=int(ttl_s))).isoformat()
+    rec = BanRecord(
+        ban_id=ban_id or f"ban-{ip}", publisher=node_did, ip=ip,
+        reason=reason, severity=severity, expires_at=expires,
+    )
+    full = rec.model_dump()
+    p = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(node_priv, canonical_bytes(p))
+    journal.append(
+        op=Op.BAN_PUBLISH, payload_type="BanRecord", payload=p,
+        author=node_did, sig=sig_hex, author_pubkey_hex=_get_inviter_pubkey(journal, node_did),
+    )
+    return BanRecord(**{**p, "sig": sig_hex, "signer_did": node_did})
+
+
+def revoke_ban(journal: Journal, node_priv: bytes, node_did: str, ip: str) -> Dict[str, Any]:
+    """BAN_REVOKE: a node lifts ITS OWN ban for ip (others' bans still stand)."""
+    payload = {"ip": ip, "publisher": node_did, "revoked_at": now_rfc3339()}
+    sig_hex = sign(node_priv, canonical_bytes(payload))
+    journal.append(
+        op=Op.BAN_REVOKE, payload_type="BanRevoke", payload=payload,
+        author=node_did, sig=sig_hex, author_pubkey_hex=_get_inviter_pubkey(journal, node_did),
+    )
+    return {"status": "unbanned", "ip": ip, "publisher": node_did}
+
+
+def _get_bans(journal: Journal, now: Optional[datetime] = None) -> List[Dict]:
+    """Active self-authored bans (latest per (publisher, ip), not revoked-after,
+    not expired). This is the convergent union enforced on every node."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    ban_h: Dict[tuple, tuple] = {}   # (pub, ip) -> (height, payload)
+    rev_h: Dict[tuple, int] = {}     # (pub, ip) -> revoke height
+    for e in journal.iter_entries():
+        if e.op == Op.BAN_PUBLISH and e.payload_type == "BanRecord":
+            ip = e.payload.get("ip"); pub = e.payload.get("publisher")
+            if ip and pub and e.author == pub:
+                k = (pub, ip)
+                if e.height > ban_h.get(k, (-1, None))[0]:
+                    ban_h[k] = (e.height, e.payload)
+        elif e.op == Op.BAN_REVOKE:
+            ip = e.payload.get("ip")
+            if ip:
+                k = (e.author, ip)
+                if e.height > rev_h.get(k, -1):
+                    rev_h[k] = e.height
+    out = []
+    for k, (h, p) in ban_h.items():
+        if rev_h.get(k, -1) > h:
+            continue  # revoked after the latest ban
+        exp = p.get("expires_at")
+        if exp:
+            try:
+                if _parse_rfc3339(exp) <= now:
+                    continue  # expired
+            except Exception:  # noqa: BLE001
+                pass
+        out.append(p)
+    return out
+
+
+def banned_ips(journal: Journal) -> List[str]:
+    """The union of currently-banned IPs across the whole mesh (deduped)."""
+    return sorted({b["ip"] for b in _get_bans(journal)})
 
 
 # ---------------------------------------------------------------------------
