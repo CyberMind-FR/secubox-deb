@@ -1161,7 +1161,8 @@ async def activate_service(service_id: str, user: dict = Depends(require_jwt)):
                 return {"status": "error", "error": f"macroctl activate failed: {aerr}"}
             endpoint = cred.get("endpoint", offer.get("endpoint", ""))
             registry.set_active(str(ACTIVATION_FILE), service_id,
-                                registry.port_from_endpoint(endpoint))
+                                registry.port_from_endpoint(endpoint),
+                                endpoint=endpoint or None)
             return {"status": "ok", "endpoint": endpoint}
 
     # M1 path: local service or non-macro remote approved service.
