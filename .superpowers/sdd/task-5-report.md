@@ -82,3 +82,61 @@ The brief cited `packages/secubox-eye-square/debian/secubox-eye-square/etc/appar
 2. **`#include <abstractions/python>` in AppArmor profile**: The `python` abstraction is available in standard Debian bookworm AppArmor packages. No concern for target platform.
 3. **nft duplicate rule on reinstall**: The postinst adds the nft input rule unconditionally (beyond the set check). A `dpkg --reinstall` will add a duplicate rule. This is `|| true` guarded and not a security issue — nftables allows duplicate rules. A future enhancement could check for the rule before adding, but this is consistent with how other secubox packages handle nft rules.
 4. **`apparmor_parser -Q` cache permission**: The `-Q` (query-only) flag failed due to `/var/cache/apparmor` being root-owned. This is a dev environment constraint, not a parse error. `--preprocess` confirmed syntax is valid.
+
+---
+
+## Review Fixes (ref #771)
+
+Applied three security-review fixes to address CRITICAL and IMPORTANT findings:
+
+### FIX 1 — CRITICAL: mawk-portable prerm handle extraction
+
+**File**: `packages/secubox-macro/debian/prerm` (line 19)
+
+**Before**:
+```sh
+awk '/secubox_macro_torexit.*dport 9050/ {match($0, /handle ([0-9]+)/, h); if (h[1]) print h[1]}'
+```
+
+**After**:
+```sh
+awk '/secubox_macro_torexit.*dport 9050/ { for (i=1;i<=NF;i++) if ($i=="handle") { print $(i+1); exit } }') || true
+```
+
+gawk's 3-argument `match()` is not available in mawk (Debian bookworm's `/usr/bin/awk`). The replacement iterates fields portably. The `|| true` prevents `set -e` from aborting prerm on awk/nft failure.
+
+**Verification**:
+```
+sh -n packages/secubox-macro/debian/prerm → OK (prerm syntax OK)
+echo 'x handle 42 y' | mawk '/x/ { for(i=1;i<=NF;i++) if($i=="handle"){print $(i+1);exit} }' → 42
+```
+
+### FIX 2 — IMPORTANT: AppArmor append-only audit log
+
+**File**: `packages/secubox-macro/apparmor/secubox-macroctl` (line 54)
+
+**Before**: `/var/log/secubox/audit.log  w,`
+
+**After**: `/var/log/secubox/audit.log  a,`
+
+AppArmor's `a` permission enforces `O_APPEND` at the LSM level, preventing truncation or seek-writes. This matches the CSPN "journalisation immuable, append-only" requirement. The Python side already opens in `"a"` mode.
+
+**Verification**:
+```
+grep 'audit.log' apparmor/secubox-macroctl
+  #   - w    : /var/log/secubox/audit.log (append-only audit trail)
+  /var/log/secubox/audit.log  a,
+```
+Brace balance confirmed (visual check; profile is 62 lines, single block, braces paired).
+
+### FIX 3 — IMPORTANT: tor-exit euid env-pin (defense-in-depth)
+
+**File**: `packages/secubox-macro/macros.d/tor-exit` (inserted at start of `main()`, line 39)
+
+Added `if os.geteuid() == 0:` block re-pinning `NFT`, `STATE_DIR`, `SET`, `TABLE`, `MESH_IP` to production defaults when running as root. Prevents a leaked `TOREXIT_NFT=/tmp/evil` from becoming root-RCE. Non-root euid (test harness) continues to honor env overrides.
+
+**Verification**:
+```
+grep -n 'geteuid' macros.d/tor-exit → 40:    if os.geteuid() == 0:
+python3 -m pytest tests/ -q → 14 passed in 0.52s
+```

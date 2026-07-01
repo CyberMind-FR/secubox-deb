@@ -51,7 +51,7 @@
   /var/lib/secubox/macro/**   rw,
 
   # ── Audit log (append-only; parent dir traversal is 0755 per CMSD policy) ─
-  /var/log/secubox/audit.log  w,
+  /var/log/secubox/audit.log  a,
 
   # ── Networking (nft netlink + mesh socket) ───────────────────────────────
   network inet   stream,
