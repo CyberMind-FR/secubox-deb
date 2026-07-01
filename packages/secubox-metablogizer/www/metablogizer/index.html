@@ -411,17 +411,14 @@
 
         async function api(path, opts = {}) {
             try {
-                let res = await fetch(API + path, { ...opts, headers: headers() });
+                let res = await fetch(API + path, { ...opts, headers: headers(), credentials: 'same-origin' });
                 if (res.status === 401) {
-                    // A stale localStorage token shadows the valid SSO session
-                    // cookie (require_jwt prefers the Bearer when present). Drop
-                    // it and retry cookie-only. Retry on EVERY 401 (not gated on
-                    // token() still being set) — parallel dashboard calls race:
-                    // the first clears the token, so others must still retry via
-                    // cookie rather than bounce to login.
-                    localStorage.removeItem('sbx_token');
-                    localStorage.removeItem('secubox_token');
-                    res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json' } });
+                    // A stale localStorage Bearer can shadow a valid SSO session
+                    // cookie (require_jwt prefers the Bearer when present). Retry
+                    // cookie-only WITHOUT destroying the token — the shared
+                    // sidebar and other components rely on it; nuking it on a
+                    // transient 401 cascades everything to the login page.
+                    res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' });
                 }
                 if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
                 const ct = res.headers.get('content-type') || '';

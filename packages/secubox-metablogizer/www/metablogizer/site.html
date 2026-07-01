@@ -138,14 +138,11 @@
 
         async function api(path) {
             try {
-                let res = await fetch(API + path, { headers: headers() });
+                let res = await fetch(API + path, { headers: headers(), credentials: 'same-origin' });
                 if (res.status === 401) {
-                    // Stale token shadows the valid SSO cookie — drop both keys
-                    // and retry cookie-only before login (retry on EVERY 401 so
-                    // parallel calls don't bounce after the first clears it).
-                    localStorage.removeItem('sbx_token');
-                    localStorage.removeItem('secubox_token');
-                    res = await fetch(API + path);
+                    // Stale Bearer may shadow a valid SSO cookie — retry
+                    // cookie-only WITHOUT destroying the token (non-destructive).
+                    res = await fetch(API + path, { credentials: 'same-origin' });
                 }
                 if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
                 const ct = res.headers.get('content-type') || '';
