@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: macros.d/tor-exit — offer a node's Tor SOCKS to mesh peers.
+
+grant   : nft-allow the subscriber's mesh IP into the Tor SocksPort; emit endpoint.
+revoke  : remove that allow.
+activate: (consumer side) record the SOCKS endpoint for the operator.
+Run only via secubox-macroctl (root, AppArmor-confined). No shell on inputs.
+"""
+from __future__ import annotations
+import argparse, json, os, subprocess, sys
+
+NFT = os.environ.get("TOREXIT_NFT", "nft")
+MESH_IP = os.environ.get("TOREXIT_MESH_IP") or ""
+STATE_DIR = os.environ.get("TOREXIT_STATE_DIR", "/var/lib/secubox/macro/active")
+SET = os.environ.get("TOREXIT_SET", "secubox_macro_torexit")
+TABLE = os.environ.get("TOREXIT_TABLE", "inet secubox_filter")
+
+
+def _mesh_ip() -> str:
+    if MESH_IP:
+        return MESH_IP
+    out = subprocess.run(["ip", "-4", "-o", "addr", "show", "wg-mesh"],
+                         capture_output=True, text=True).stdout
+    for tok in out.split():
+        if "/" in tok and tok.split("/")[0].startswith("10.10.0."):
+            return tok.split("/")[0]
+    return ""
+
+
+def _nft(*args) -> int:
+    return subprocess.run([NFT, *args]).returncode
+
+
+def main() -> int:
+    p = argparse.ArgumentParser()
+    p.add_argument("verb")
+    p.add_argument("--sub", default=""); p.add_argument("--src-ip", default="")
+    p.add_argument("--params", default="{}"); p.add_argument("--cred", default="{}")
+    a = p.parse_args()
+    params = json.loads(a.params)
+    port = int(params.get("socks_port", 9050))
+
+    if a.verb == "grant":
+        ip = _mesh_ip()
+        if not ip:
+            print(json.dumps({"error": "no wg-mesh ip / tor-exit not provisioned"})); return 2
+        # named set element add (idempotent); the base set + rule are created by postinst
+        rc = _nft("add", "element", *TABLE.split(), SET, "{", a.src_ip, "}")
+        if rc != 0:
+            print(json.dumps({"error": "nft add failed"})); return 3
+        print(json.dumps({"kind": "tor-exit", "endpoint": f"{ip}:{port}"}))
+        return 0
+    if a.verb == "revoke":
+        _nft("delete", "element", *TABLE.split(), SET, "{", a.src_ip, "}")
+        print(json.dumps({"ok": True})); return 0
+    if a.verb == "activate":
+        cred = json.loads(a.cred)
+        os.makedirs(STATE_DIR, exist_ok=True)
+        sid = cred.get("service_id", "unknown")
+        with open(os.path.join(STATE_DIR, f"{sid}.json"), "w") as fh:
+            json.dump(cred, fh)
+        print(json.dumps({"ok": True, "socks": cred.get("endpoint")})); return 0
+    print(json.dumps({"error": f"unknown verb {a.verb}"})); return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
