@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -379,6 +379,23 @@ class WitnessAttest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# MacroDescriptor — optional access macro for a ServiceOffer
+# ---------------------------------------------------------------------------
+
+class MacroDescriptor(BaseModel):
+    """An access macro descriptor that can be federated as part of a ServiceOffer.
+
+    The macro describes a reusable access pattern (e.g., tor-exit, cache-config).
+    The kind field follows the pattern ^[a-z][a-z0-9-]{1,31}$ to ensure portable,
+    federated kind names across nodes.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(..., pattern=r"^[a-z][a-z0-9-]{1,31}$")
+    params: Dict[str, Union[str, int, bool]] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
 # ServiceOffer — a provider advertising a service to the trust graph
 # ---------------------------------------------------------------------------
 
@@ -400,6 +417,7 @@ class ServiceOffer(BaseModel):
     scope:         Dict[str, Any] = Field(default_factory=dict)
     approval_mode: ApprovalMode = ApprovalMode.AUTO
     description:   str = ""
+    macro:         Optional[MacroDescriptor] = None
     created_at:    str = Field(default_factory=now_rfc3339)
     sig:           Optional[str] = Field(
         default=None,

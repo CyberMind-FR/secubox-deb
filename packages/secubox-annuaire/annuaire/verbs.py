@@ -1260,6 +1260,7 @@ def offer_service(
     scope: Optional[Dict] = None,
     approval_mode: str = "auto",
     description: str = "",
+    macro: Optional[Dict] = None,
 ) -> ServiceOffer:
     """SERVICE_OFFER: publish a signed service offer.
 
@@ -1275,6 +1276,7 @@ def offer_service(
         scope: optional scope dict.
         approval_mode: "auto" or "pending" (default: "auto").
         description: human-readable description.
+        macro: optional macro descriptor dict with keys "kind" and "params".
 
     Returns:
         The signed ServiceOffer.
@@ -1289,6 +1291,7 @@ def offer_service(
         scope=scope or {},
         approval_mode=ApprovalMode(approval_mode),
         description=description,
+        macro=macro,
     )
     full = offer.model_dump()
     payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
