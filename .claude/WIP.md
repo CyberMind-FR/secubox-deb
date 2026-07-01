@@ -1,5 +1,42 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-06-27*
+*Mis à jour : 2026-07-01*
+
+---
+
+## ✅ 2026-06-30 → 07-01 : Substrat de confiance Gondwana — fédération + registry + macros (#766 #769 #771)
+
+Trois features complètes (brainstorm → spec → plan → SDD subagent-driven avec revue
+adversariale), **toutes mergées sur master**, déployées gk2 + c3box, prouvées live :
+
+- **#766 — annuaire fédération sans-confiance (0.2.0→0.3.x)** ✅ CLOSED/master.
+  `ingest_offer` impose `did_from_pubkey(pubkey)==provider` avant la vérif sig
+  (auto-certifiant, aucune confiance préalable) ; offres portent `sig`+`signer_did`+
+  `provider_pubkey` ; verbe `genesis()` + CLI `annuairectl` (init/whoami/status/offer/
+  services/pull) ; écouteur mesh (postinst, IP-mesh only, `ip_nonlocal_bind`, validate-or-
+  revert). Live : un 2e nœud (fondateur distinct) `annuairectl pull` → ingest sans-confiance.
+- **#769/#770 — p2p Service Registry = vue live du catalogue annuaire (secubox-p2p 1.8.0)** ✅
+  MERGED. `/services` fusionne catalogue annuaire + abonnements + overlay d'activation +
+  services p2p-locaux ; « Auto register all » (active locaux + s'abonne aux distants selon
+  auto/pending) ; s'abonne EN TANT QUE nœud (clé 0600). Live gk2+c3box.
+- **#771/#773 — sous-système macro + tor-exit (secubox-macro 0.1.0 NEW, p2p 1.9.0, annuaire 0.3.3)** ✅
+  MERGED (+#772 auto-fermé). Un service propose une **macro d'accès** vettée, confinée
+  AppArmor : `macroctl` dispatcher root (allowlist kind, tamper-guard plugin, euid env-pin,
+  audit append-only) + `macros.d/tor-exit` (nft SOCKS-over-mesh grant/revoke) + sudoers
+  (env_reset) + auto-détection table firewall (`secubox_filter`|`filter` via
+  `/etc/secubox/macro.conf`). Endpoint grant p2p (auth Subscription auto-signée, self-cert,
+  auto-mode). **Démo live end-to-end** : gk2 propose son exit Tor → fédère → c3box s'abonne+
+  active → pull grant sur le mesh → gk2 nft-autorise l'IP mesh de c3box → **c3box route via
+  l'exit Tor de gk2** (`IsTor:true`). La boucle de revue SDD a attrapé ~10 Criticals avant merge.
+
+### ⬜ Next Up (déféré, non bloquant)
+
+- **Liaison NIZK/PSI GK·HAM** — les verbes annuaire utilisent encore les stubs documentés
+  (`ZKP-HAM-v1`) ; brancher `zkp-hamiltonian` cffi.
+- **Nouveaux kinds macro** — `wg-relay`, `dns-resolver`, `http-mirror` (chacun = un plugin
+  `macros.d/<kind>` vetté + profil AppArmor, même framework).
+- **Macros en mode `pending`** — nécessite la fédération cross-nœud des Subscription/APPROVE.
+- **Mesh gk2→c3box (sens inverse)** — pull satellite→master OK ; master→satellite bloqué
+  (nft c3box) ; + installer Tor sur c3box pour un provider tor-exit natif.
 
 ---
 
