@@ -1,0 +1,14 @@
+Source: secubox-macro
+Section: admin
+Priority: optional
+Maintainer: Gerald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-macro
+Architecture: all
+Depends: ${misc:Depends}, python3, nftables, secubox-core
+Recommends: tor
+Description: SecuBox vetted access-macro framework + tor-exit kind
+ Root dispatcher secubox-macroctl and the vetted tor-exit macro that offers a
+ node's Tor SOCKS port to approved mesh peers.

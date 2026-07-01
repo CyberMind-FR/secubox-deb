@@ -1,0 +1,11 @@
+secubox-macro (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial packaging of the SecuBox vetted access-macro framework.
+    - secubox-macroctl root dispatcher: validates kind against macros.d
+      allowlist, tamper-guards plugins (world-writable check), validates
+      --src-ip within mesh CIDR, execs plugin verb without a shell, appends
+      audit line to /var/log/secubox/audit.log.
+    - tor-exit reference kind: offers node's Tor SOCKS port to approved
+      mesh peers via grant/activate/revoke verbs with nftables integration.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 01 Jul 2026 00:00:00 +0200
