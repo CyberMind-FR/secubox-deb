@@ -688,6 +688,22 @@ async def emancipate(req: EmancipateRequest, user: dict = Depends(require_jwt)):
         if tor_result.get("onion"):
             result["onion"] = tor_result["onion"]
 
+    # If Mesh requested, make it real (gondwana #768): open the port over the
+    # wg-mesh + register a signed emancipated offer into the annuaire directory
+    # so it federates into every node's mesh-wide catalog.
+    if req.mesh:
+        try:
+            from api.mesh_egress import apply_mesh  # noqa: PLC0415
+            mesh_result = apply_mesh(req.service, req.port)
+            result["mesh_endpoint"] = mesh_result.get("endpoint")
+            result["mesh_registered"] = bool(mesh_result.get("ok"))
+            result["mesh_nft"] = mesh_result.get("nft")
+            if not mesh_result.get("ok"):
+                result["mesh_error"] = mesh_result.get("error")
+        except Exception as e:  # noqa: BLE001 — a mesh hiccup must not fail emancipate
+            result["mesh_registered"] = False
+            result["mesh_error"] = str(e)
+
     config["emancipated"].append(result)
     save_config(config)
 
