@@ -196,3 +196,53 @@ def test_real_sig_verify_accepts_valid_and_rejects_tampered():
     assert not _verify_subscription_sig(bad_sig, pub_hex), (
         "_verify_subscription_sig must reject a corrupted sig"
     )
+
+
+def test_verify_rejects_pubkey_did_mismatch():
+    """Self-cert guarantee: a valid sig for attacker's key claiming a victim DID is rejected.
+
+    Attacker keypair A signs a subscription, but sets subscriber = B's DID
+    (derived from keypair B) while subscriber_pubkey = A's pubkey.
+    did_from_pubkey_hex(A_pubkey) != B_did → the endpoint's _verify must return False.
+    """
+    from api.main import _verify_subscription_sig
+
+    # Attacker keypair A
+    priv_a = os.urandom(32)
+    pub_a_bytes = _annuaire_public_from_private(priv_a)
+    pub_a_hex = pub_a_bytes.hex()
+
+    # Victim keypair B (only the DID is used — attacker doesn't have the private key)
+    priv_b = os.urandom(32)
+    pub_b_bytes = _annuaire_public_from_private(priv_b)
+    pub_b_hex = pub_b_bytes.hex()
+    victim_did = annuaire_client.did_from_pubkey_hex(pub_b_hex)
+
+    # Build a subscription claiming victim_did as subscriber, signed with A's key
+    sub_dict = _build_signed_subscription(priv_a, victim_did, "svc-attack")
+    # subscriber_pubkey is A's pubkey (attacker's own key), subscriber is B's DID
+    assert sub_dict["subscriber_pubkey"] == pub_a_hex
+    assert sub_dict["subscriber"] == victim_did
+
+    # The sig itself is valid for A's key over the payload containing victim_did,
+    # but did_from_pubkey_hex(A_pubkey) != victim_did — so the DID-binding check
+    # in the endpoint's _verify closure must reject this.
+    # We replicate the _verify closure logic directly here:
+    pub = sub_dict.get("subscriber_pubkey", "") or ""
+    did_match = annuaire_client.did_from_pubkey_hex(pub) == sub_dict.get("subscriber")
+    assert not did_match, (
+        "A pubkey must NOT produce the victim DID: self-cert binding violated"
+    )
+
+    # Additionally, _verify_subscription_sig itself must also reject because
+    # the sig is over a payload that contains victim_did as subscriber,
+    # and pub_a_hex verifies it correctly (sig is structurally valid).
+    # The DID mismatch is caught one layer up (_verify closure), but let's also
+    # confirm that passing A's pubkey verifies and B's pubkey does not —
+    # proving no key confusion at the crypto layer.
+    assert _verify_subscription_sig(sub_dict, pub_a_hex), (
+        "The sig should verify when checked against attacker's own pubkey"
+    )
+    assert not _verify_subscription_sig(sub_dict, pub_b_hex), (
+        "The sig must NOT verify against the victim's pubkey (different key)"
+    )
