@@ -409,7 +409,14 @@
 
         async function api(path, opts = {}) {
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
+                let res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401 && token()) {
+                    // A stale localStorage token shadows the valid SSO session
+                    // cookie (require_jwt prefers the Bearer when present). Drop
+                    // it and retry cookie-only before bouncing to login.
+                    localStorage.removeItem('sbx_token');
+                    res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json' } });
+                }
                 if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
                 const ct = res.headers.get('content-type') || '';
                 if (!res.ok || !ct.includes('application/json')) {

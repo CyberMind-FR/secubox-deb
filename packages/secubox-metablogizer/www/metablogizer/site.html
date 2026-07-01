@@ -137,7 +137,13 @@
 
         async function api(path) {
             try {
-                const res = await fetch(API + path, { headers: headers() });
+                let res = await fetch(API + path, { headers: headers() });
+                if (res.status === 401 && localStorage.getItem('sbx_token')) {
+                    // Stale localStorage token shadows the valid SSO session
+                    // cookie — drop it and retry cookie-only before login.
+                    localStorage.removeItem('sbx_token');
+                    res = await fetch(API + path);
+                }
                 if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
                 const ct = res.headers.get('content-type') || '';
                 if (!res.ok || !ct.includes('application/json')) {
