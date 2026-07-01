@@ -31,6 +31,8 @@ override_dh_auto_install:
 	# Privileged controller + narrow sudoers rule
 	install -d $(CURDIR)/debian/secubox-appstore/usr/sbin
 	install -m 755 $(CURDIR)/sbin/secubox-appstorectl $(CURDIR)/debian/secubox-appstore/usr/sbin/
+	# P2P apt: install SecuBox packages from the rendezvous over the wg-mesh (#768 P5)
+	install -m 755 $(CURDIR)/sbin/sbx-apt-mesh $(CURDIR)/debian/secubox-appstore/usr/sbin/
 	install -d $(CURDIR)/debian/secubox-appstore/etc/sudoers.d
 	install -m 440 $(CURDIR)/debian/secubox-appstore.sudoers $(CURDIR)/debian/secubox-appstore/etc/sudoers.d/secubox-appstore
 

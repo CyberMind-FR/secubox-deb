@@ -1,3 +1,34 @@
+secubox-appstore (0.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#768): sbx-apt-mesh resolves apt.secubox.in to the rendezvous wg-mesh IP
+    via /etc/hosts, so the existing signed https source installs over WireGuard
+    (correct SNI/cert, GPG-verified) — including from off-LAN nodes. Replaces the
+    earlier bare-http source that hit the wrong vhost (NOSPLIT).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 13:30:00 +0200
+
+secubox-appstore (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#768): P2P apt over the mesh (appstore federation phase 5).
+    /usr/sbin/sbx-apt-mesh points a node's apt at the rendezvous's signed repo
+    over the wg-mesh (http://<master>:9080/apt, GPG-verified against the existing
+    secubox keyring), so packages install from the mesh instead of the public
+    apt.secubox.in — faster and resilient to the public ingress/DNS being down.
+    enable|disable|status; the rendezvous node self-skips (repo is local).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 13:00:00 +0200
+
+secubox-appstore (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#768): federated Mesh Catalog (appstore federation phase 2).
+    GET /mesh-catalog reads this node's converged annuaire directory (read-only)
+    and joins each ServiceOffer to the publishing node's NodeRecord, so the app
+    store shows a fleet-wide view: which service is offered/emancipated, by which
+    node, over which channel, and how to reach it. New "Mesh Catalog" panel in
+    the UI. Graceful no-op when secubox-annuaire is absent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 11:00:00 +0200
+
 secubox-appstore (0.2.2-1~bookworm1) bookworm; urgency=medium
 
   * fix(menu): install the navbar entry to /usr/share/secubox/menu.d (the

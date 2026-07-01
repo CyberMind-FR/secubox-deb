@@ -1,3 +1,17 @@
+secubox-exposure (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#768): Tor + public egress channels federated (phases 3-4).
+    - Tor: emancipating with tor now also registers the .onion into the annuaire
+      directory (channel=tor) so the anonymous endpoint appears in every node's
+      mesh catalog.
+    - Public: --dns/domain federates a public-channel offer and emits the exact
+      WAF vhost recipe (DNS + acme cert + haproxyctl vhost via mitmproxy_inspector
+      — never waf_bypass). Deliberately NOT auto-applied (board-wide WAF blast
+      radius; real reach needs operator DNS+cert).
+    - offer_argv generalized to any channel. +2 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 12:00:00 +0200
+
 secubox-exposure (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * feat(#768): real Mesh egress channel — appstore federation phase 1.

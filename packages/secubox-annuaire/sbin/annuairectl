@@ -288,6 +288,42 @@ def cmd_apply(args) -> int:
     return 0
 
 
+def cmd_ban(args) -> int:
+    from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+    from annuaire.verbs import publish_ban  # noqa: PLC0415
+    priv = _load_priv()
+    did = did_from_pubkey(public_from_private(priv))
+    b = publish_ban(_journal(), priv, did, ip=args.ip, reason=args.reason or "",
+                    severity=args.severity, ttl_s=args.ttl)
+    print(json.dumps({"ban_id": b.ban_id, "ip": b.ip, "severity": b.severity,
+                      "expires_at": b.expires_at}, indent=2))
+    return 0
+
+
+def cmd_unban(args) -> int:
+    from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+    from annuaire.verbs import revoke_ban  # noqa: PLC0415
+    priv = _load_priv()
+    did = did_from_pubkey(public_from_private(priv))
+    print(json.dumps(revoke_ban(_journal(), priv, did, args.ip), indent=2))
+    return 0
+
+
+def cmd_bans(args) -> int:
+    from annuaire.verbs import _get_bans, banned_ips  # noqa: PLC0415
+    j = _journal()
+    ips = banned_ips(j)
+    print(json.dumps({"banned_ips": ips, "count": len(ips), "bans": _get_bans(j)}, indent=2))
+    return 0
+
+
+def cmd_bans_apply(args) -> int:
+    from annuaire.threatmesh import apply_bans  # noqa: PLC0415
+    from annuaire.verbs import banned_ips  # noqa: PLC0415
+    print(json.dumps(apply_bans(banned_ips(_journal())), indent=2))
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="annuairectl", description="Annuaire·Miroir node operator CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -333,6 +369,21 @@ def main(argv=None) -> int:
     pa.add_argument("--target-dir", default="/etc/secubox")
     pa.add_argument("--state-path", default="/var/lib/secubox/annuaire/applied-config.json")
     pa.set_defaults(fn=cmd_apply)
+
+    # Threatmesh — bidirectional WAF/threat ban federation (#768)
+    pbn = sub.add_parser("ban", help="publish a signed IP ban (federates to the whole mesh)")
+    pbn.add_argument("ip")
+    pbn.add_argument("--reason", default="")
+    pbn.add_argument("--severity", default="medium", choices=["low", "medium", "high", "critical"])
+    pbn.add_argument("--ttl", type=int, default=None, help="seconds until the ban auto-expires")
+    pbn.set_defaults(fn=cmd_ban)
+
+    pun = sub.add_parser("unban", help="lift THIS node's ban for an IP (others' bans still stand)")
+    pun.add_argument("ip")
+    pun.set_defaults(fn=cmd_unban)
+
+    sub.add_parser("bans", help="list the federated ban union").set_defaults(fn=cmd_bans)
+    sub.add_parser("bans-apply", help="enforce the ban union into nft (run as root)").set_defaults(fn=cmd_bans_apply)
 
     args = p.parse_args(argv)
     return args.fn(args)

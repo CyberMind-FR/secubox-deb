@@ -47,6 +47,13 @@ override_dh_auto_install:
 	# P2 config-apply timer + oneshot (#768) + opt-in allow-list config
 	install -m 644 $(CURDIR)/systemd/secubox-annuaire-apply.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/secubox-annuaire-apply.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	# Threatmesh ban-apply timer + oneshot (#768)
+	install -m 644 $(CURDIR)/systemd/secubox-annuaire-bans-apply.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/secubox-annuaire-bans-apply.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	# Threatmesh crowdsec->mesh bridge (the WAF hook) + timer (#768)
+	install -m 755 $(CURDIR)/sbin/sbx-threatmesh-bridge $(CURDIR)/debian/secubox-annuaire/usr/sbin/sbx-threatmesh-bridge
+	install -m 644 $(CURDIR)/systemd/secubox-threatmesh-bridge.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/secubox-threatmesh-bridge.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/secubox
 	install -m 644 $(CURDIR)/conf/annuaire-apply.conf.example $(CURDIR)/debian/secubox-annuaire/etc/secubox/
 
