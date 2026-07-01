@@ -68,6 +68,18 @@
       <span class="as-stat" id="stat">loading…</span>
     </div>
     <div class="as-grid" id="grid"></div>
+
+    <section id="mesh-panel" style="margin-top:24px">
+      <h2 style="font-family:'Cinzel',serif;color:var(--gold-hermetic,#c9a84c);font-size:1rem;margin:0">
+        🌐 Mesh Catalog <span id="mesh-stat" style="font-size:12px;color:var(--text-muted,#6b6b7a);font-family:'JetBrains Mono',monospace">—</span></h2>
+      <p style="font-size:11px;color:var(--text-muted,#6b6b7a);margin:3px 0 8px;font-family:'JetBrains Mono',monospace">
+        Services federated across the gondwana mesh (annuaire directory) — which node offers each, over which channel, and how to reach it.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="text-align:left;color:var(--gold-hermetic,#c9a84c)">
+          <th style="padding:6px 8px">Service</th><th>Kind</th><th>Node</th><th>Channel</th><th>Reach</th></tr></thead>
+        <tbody id="mesh-list"><tr><td colspan="5" style="padding:10px;color:var(--text-muted,#6b6b7a)">loading…</td></tr></tbody>
+      </table>
+    </section>
   </main>
 
   <!-- Config / detail drawer -->
@@ -105,6 +117,25 @@
       ALL=(data&&Array.isArray(data.modules))?data.modules:[];
       document.getElementById('board-badge').textContent='tier '+((cats&&cats.board_tier)||'?');
       render();
+      loadMesh();
+    }
+
+    async function loadMesh(){
+      const d=await jget('/mesh-catalog');
+      const tb=document.getElementById('mesh-list'), st=document.getElementById('mesh-stat');
+      const items=(d&&Array.isArray(d.catalog))?d.catalog:[];
+      st.textContent=items.length?(items.length+' service(s) · '+(d.node_count||0)+' node(s)'):'no federated services';
+      if(!items.length){tb.innerHTML='<tr><td colspan="5" style="padding:10px;color:var(--text-muted,#6b6b7a)">No services emancipated across the mesh yet.</td></tr>';return;}
+      tb.innerHTML=items.map(s=>{
+        const reach=s.endpoint?('<a href="'+esc(s.endpoint)+'" target="_blank" rel="noopener" style="color:var(--cyber-cyan,#00d4ff)">'+esc(s.endpoint)+'</a>'):'—';
+        const ip=s.provider_mesh_ip?(' <span style="color:var(--text-muted,#6b6b7a)">('+esc(s.provider_mesh_ip)+')</span>'):'';
+        return '<tr style="border-top:1px solid var(--line,#2a2a3a)">'
+          +'<td style="padding:6px 8px">'+esc(s.name)+'</td>'
+          +'<td><span style="font-size:10px;padding:1px 6px;border:1px solid var(--line,#2a2a3a);border-radius:10px;color:var(--cyber-cyan,#00d4ff)">'+esc(s.kind||'')+'</span></td>'
+          +'<td style="font-family:\'JetBrains Mono\',monospace">'+esc(s.provider_node||'?')+ip+'</td>'
+          +'<td>'+esc(s.channel||'—')+'</td>'
+          +'<td style="font-family:\'JetBrains Mono\',monospace">'+reach+'</td></tr>';
+      }).join('');
     }
 
     function actionsFor(m){
