@@ -1,3 +1,19 @@
+secubox-annuaire (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#768): threatmesh — bidirectional WAF/threat ban federation.
+    - model: BanRecord + Op BAN_PUBLISH/BAN_REVOKE. verbs: publish_ban,
+      revoke_ban, _get_bans (convergent UNION of active bans across publishers,
+      TTL + per-publisher revoke), banned_ips. Bans gossip over the same
+      convergent log as node/config records — a ban on ANY node reaches ALL
+      nodes, no master.
+    - threatmesh.apply_bans: rebuilds a self-contained `inet secubox_meshban`
+      nft table (own table, never touches the main firewall) dropping the union.
+    - annuairectl ban/unban/bans/bans-apply; GET /bans; a bans-apply timer
+      (~60s, enabled by default — empty set is a no-op).
+    - +8 tests; suite 185 green.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 15:30:00 +0200
+
 secubox-annuaire (0.2.7-1~bookworm1) bookworm; urgency=medium
 
   * feat(#768): hands-off config apply — secubox-annuaire-apply.timer.
