@@ -156,6 +156,63 @@ async def catalog(category: Optional[str] = None, tier: Optional[str] = None,
     return {"modules": items, "count": len(items), "total": len(st), "board_tier": board_tier()}
 
 
+# ── Mesh catalog — federated view over the annuaire directory (#768, phase 2) ──
+# Every node holds the converged gondwana directory. We read it read-only (the
+# journal is owned by `secubox`, our own user) and join each ServiceOffer to the
+# publishing node's NodeRecord, so the appstore shows a fleet-wide catalog:
+# which service is offered/emancipated, by which node, over which channel, and
+# how to reach it. Graceful no-op when secubox-annuaire is not installed.
+
+ANNUAIRE_LIB = "/usr/lib/secubox/annuaire"
+ANNUAIRE_DB = os.environ.get("ANNUAIRE_DB_PATH", "/var/lib/secubox/annuaire/journal.db")
+
+
+def _read_directory():
+    import sys  # noqa: PLC0415
+    if ANNUAIRE_LIB not in sys.path:
+        sys.path.insert(0, ANNUAIRE_LIB)
+    try:
+        from annuaire.log import Journal  # noqa: PLC0415
+        from annuaire.verbs import _get_nodes, _get_offers  # noqa: PLC0415
+    except Exception:
+        return [], {}
+    if not os.path.exists(ANNUAIRE_DB):
+        return [], {}
+    try:
+        j = Journal(ANNUAIRE_DB)
+        return _get_offers(j), {n["did"]: n for n in _get_nodes(j)}
+    except Exception:
+        return [], {}
+
+
+@app.get("/mesh-catalog")
+async def mesh_catalog():
+    offers, nodes = _read_directory()
+    items = []
+    for o in offers:
+        prov = o.get("provider")
+        node = nodes.get(prov, {})
+        scope = o.get("scope") or {}
+        items.append({
+            "name": o.get("name"),
+            "kind": o.get("kind"),
+            "endpoint": o.get("endpoint"),
+            "channel": scope.get("channel"),
+            "port": scope.get("port"),
+            "approval_mode": o.get("approval_mode"),
+            "provider_did": prov,
+            "provider_node": node.get("boxname") or "?",
+            "provider_mesh_ip": node.get("mesh_ip"),
+        })
+    items.sort(key=lambda x: (x.get("provider_node") or "", x.get("name") or ""))
+    return {
+        "catalog": items,
+        "nodes": [{"boxname": n.get("boxname"), "mesh_ip": n.get("mesh_ip"),
+                   "ddns": n.get("ddns"), "did": n.get("did")} for n in nodes.values()],
+        "count": len(items), "node_count": len(nodes),
+    }
+
+
 @app.get("/module/{name}")
 async def module(name: str):
     st = compute_state()
