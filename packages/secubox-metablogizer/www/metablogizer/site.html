@@ -131,17 +131,20 @@
         const API = '/api/v1/metablogizer';
 
         function headers() {
-            const t = localStorage.getItem('sbx_token');
+            // Read BOTH token keys like every working module (hub/portal set both).
+            const t = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
             return t ? { 'Authorization': `Bearer ${t}` } : {};
         }
 
         async function api(path) {
             try {
                 let res = await fetch(API + path, { headers: headers() });
-                if (res.status === 401 && localStorage.getItem('sbx_token')) {
-                    // Stale localStorage token shadows the valid SSO session
-                    // cookie — drop it and retry cookie-only before login.
+                if (res.status === 401) {
+                    // Stale token shadows the valid SSO cookie — drop both keys
+                    // and retry cookie-only before login (retry on EVERY 401 so
+                    // parallel calls don't bounce after the first clears it).
                     localStorage.removeItem('sbx_token');
+                    localStorage.removeItem('secubox_token');
                     res = await fetch(API + path);
                 }
                 if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
