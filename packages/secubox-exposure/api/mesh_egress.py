@@ -43,16 +43,17 @@ def mesh_endpoint(ip: str, port: int) -> str:
     return f"http://{ip}:{int(port)}/"
 
 
-def offer_argv(service: str, port: int, ip: str) -> List[str]:
-    """Args to publish the emancipated service as a signed directory offer."""
-    return [
-        "annuairectl", "offer",
-        "--name", service,
-        "--kind", EMANCIPATED_KIND,
-        "--endpoint", mesh_endpoint(ip, port),
-        "--scope", f"port={int(port)}",
-        "--scope", "channel=mesh",
-    ]
+def offer_argv(service: str, endpoint: str, scopes: dict) -> List[str]:
+    """Args to publish an emancipated service (one channel) as a signed offer.
+
+    `scopes` becomes repeated --scope key=value pairs (e.g. {'channel':'mesh',
+    'port':8090} or {'channel':'tor','onion':'abc.onion'}). Sorted for
+    determinism (testable)."""
+    argv = ["annuairectl", "offer", "--name", service,
+            "--kind", EMANCIPATED_KIND, "--endpoint", endpoint]
+    for k in sorted(scopes):
+        argv += ["--scope", f"{k}={scopes[k]}"]
+    return argv
 
 
 def insert_before_drop(conf_text: str, rule: str) -> str:
@@ -139,20 +140,65 @@ def remove_mesh_port(port: int) -> bool:
     return True
 
 
-def register_offer(service: str, port: int, ip: str) -> tuple:
-    """Publish the emancipated service into the directory (as user secubox)."""
-    return _run(["sudo", "-u", "secubox", *offer_argv(service, port, ip)])
+def _publish(service: str, endpoint: str, scopes: dict) -> tuple:
+    """Publish one emancipated-channel offer into the directory (as secubox)."""
+    return _run(["sudo", "-u", "secubox", *offer_argv(service, endpoint, scopes)])
 
 
 def apply_mesh(service: str, port: int) -> dict:
-    """Full mesh emancipation: open the port + register in the directory."""
+    """Mesh emancipation: open the port over wg-mesh + register in the directory."""
     ip = mesh_ip()
     if not ip:
         return {"channel": "mesh", "ok": False, "error": "no wg-mesh interface"}
     nft = ensure_mesh_port(port)
-    ok, out, err = register_offer(service, port, ip)
+    endpoint = mesh_endpoint(ip, port)
+    ok, out, err = _publish(service, endpoint, {"channel": "mesh", "port": int(port)})
     return {
-        "channel": "mesh", "ok": ok, "mesh_ip": ip,
-        "endpoint": mesh_endpoint(ip, port), "nft": nft,
+        "channel": "mesh", "ok": ok, "mesh_ip": ip, "endpoint": endpoint, "nft": nft,
+        "error": None if ok else (err or out).strip(),
+    }
+
+
+def public_vhost_recipe(domain: str, port: int) -> dict:
+    """The operator steps to route <domain> to a local :<port> through the WAF.
+
+    Deliberately NOT auto-applied: the live HAProxy/mitmproxy chain has a
+    board-wide blast radius, and real reachability needs an operator DNS record
+    + TLS cert. We emit the exact recipe (no waf_bypass — always via
+    mitmproxy_inspector) so it can be reviewed/applied deliberately.
+    """
+    return {
+        "dns": f"A record {domain} -> the public ingress IP",
+        "cert": f"acme.sh --issue -d {domain} -w /usr/share/secubox/www --keylength ec-256",
+        "haproxy": f"haproxyctl vhost add {domain} nginx_vhosts ssl   # backend stays mitmproxy_inspector",
+        "mitmproxy_route": {domain: ["127.0.0.1", int(port)]},
+        "mitmproxy_files": ["/srv/mitmproxy/haproxy-routes.json",
+                            "/srv/mitmproxy-in/haproxy-routes.json"],
+        "reload": "systemctl restart mitmproxy",
+    }
+
+
+def apply_public(service: str, port: int, domain: str) -> dict:
+    """Public emancipation (#768 phase 4): federate a public-channel offer and
+    return the WAF/vhost recipe. Reachability is completed by the operator
+    (DNS + cert) — we never blindly reconfigure the live WAF."""
+    endpoint = f"https://{domain}/"
+    ok, out, err = _publish(service, endpoint, {"channel": "public", "domain": domain, "port": int(port)})
+    return {
+        "channel": "public", "ok": ok, "endpoint": endpoint, "domain": domain,
+        "recipe": public_vhost_recipe(domain, port),
+        "note": "offer federated; complete public reach with the recipe (DNS + cert + WAF vhost).",
+        "error": None if ok else (err or out).strip(),
+    }
+
+
+def apply_tor(service: str, port: int, onion: str) -> dict:
+    """Tor emancipation (#768 phase 3): register the .onion into the directory so
+    the anonymous egress endpoint federates into every node's catalog. The onion
+    itself is created by secubox-tor (exposure's tor_add) before this call."""
+    endpoint = f"http://{onion}/"
+    ok, out, err = _publish(service, endpoint, {"channel": "tor", "onion": onion, "port": int(port)})
+    return {
+        "channel": "tor", "ok": ok, "endpoint": endpoint, "onion": onion,
         "error": None if ok else (err or out).strip(),
     }
