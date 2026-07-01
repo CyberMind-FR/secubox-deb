@@ -1295,6 +1295,8 @@ def offer_service(
     )
     full = offer.model_dump()
     payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    if payload.get("macro") is None:
+        payload.pop("macro", None)
     sig_hex = sign(provider_priv, canonical_bytes(payload))
 
     provider_pubkey = _get_inviter_pubkey(journal, provider_did)
@@ -1580,6 +1582,8 @@ def ingest_offer(
     # Reconstruct the canonical payload that was signed: model_dump minus sig/signer_did
     full = offer.model_dump()
     payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    if payload.get("macro") is None:
+        payload.pop("macro", None)
 
     if not verify(provider_pubkey_hex, canonical_bytes(payload), offer.sig):
         raise ValueError(

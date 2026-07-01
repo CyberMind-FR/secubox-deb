@@ -453,6 +453,8 @@ def _build_signed_offer(priv: bytes, did: str, **kwargs) -> tuple:
     )
     full = offer.model_dump()
     payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    if payload.get("macro") is None:
+        payload.pop("macro", None)
     sig_hex = sign(priv, canonical_bytes(payload))
     signed_offer = ServiceOffer(**{**payload, "sig": sig_hex, "signer_did": did})
     return signed_offer, pub_hex

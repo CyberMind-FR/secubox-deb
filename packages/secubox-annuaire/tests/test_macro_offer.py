@@ -35,6 +35,27 @@ def test_offer_without_macro_still_valid():
     assert o.macro is None
 
 
+def test_macroless_offer_signature_is_stable_no_macro_in_signed_bytes():
+    """A macro-less offer must NOT carry `macro` in its signed payload, so it is
+    byte-identical to pre-0.3.0 offers and cross-version federation still verifies."""
+    import tempfile
+    from annuaire.log import Journal
+    from annuaire.crypto import generate_keypair
+    from annuaire.verbs import genesis, offer_service, _get_offers, ingest_offer
+    from annuaire.model import ServiceOffer
+    ja = Journal(tempfile.mktemp(suffix=".db"))
+    pa, _ = generate_keypair(); ida = genesis(ja, pa)
+    offer_service(ja, pa, ida.did, name="plain", kind="api",
+                  endpoint="http://x/y", approval_mode="auto")  # NO macro
+    wire = _get_offers(ja)[0]
+    assert "macro" not in wire or wire.get("macro") is None
+    # and it federates/verifies into a fresh node
+    jb = Journal(tempfile.mktemp(suffix=".db")); genesis(jb, generate_keypair()[0])
+    allowed = set(ServiceOffer.model_fields)
+    ingest_offer(jb, ServiceOffer(**{k: v for k, v in wire.items() if k in allowed}), wire["provider_pubkey"])
+    assert _get_offers(jb)[0]["service_id"] == wire["service_id"]
+
+
 def test_macro_round_trips_through_offer_and_federation():
     ja = Journal(tempfile.mktemp(suffix=".db"))
     pa, pub = generate_keypair()
