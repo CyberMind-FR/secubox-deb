@@ -2068,7 +2068,120 @@ async def ml_join_upstream(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "secubox-p2p", "version": "1.3.0"}
+    return {"status": "ok", "service": "secubox-p2p", "version": "1.9.0"}
+
+
+# ============== Macro Grant (M2) ==============
+#
+# POST /api/v1/p2p-macro/grant/{service_id}
+#
+# Body (JSON): full self-signed Subscription dict + subscriber_pubkey field:
+#   {subscription_id, subscriber, service_id, requested_at,
+#    sig, signer_did, subscriber_pubkey}
+#
+# The endpoint authorizes self-certifyingly:
+#   (a) subscriber_pubkey hashes to subscriber DID (did_from_pubkey_hex)
+#   (b) ed25519 sig verifies over the canonical Subscription payload
+#       (model_dump minus sig/signer_did/subscriber_pubkey, sort_keys)
+#   (c) service_id matches the URL slug
+#   (d) the local offer has approval_mode=="auto" and carries a macro descriptor
+#
+# On success → 200 {<credential from macroctl>, service_id}
+# On auth failure → 403 {error: ...}
+# On macroctl failure → 502 {error: ...}
+# Unknown service → 404 {error: ...}
+
+
+def _verify_subscription_sig(sub: Dict[str, Any], pub_hex: str) -> bool:
+    """Verify an Ed25519 self-signature on a Subscription dict.
+
+    Mirrors the signing logic in packages/secubox-annuaire/annuaire/verbs.py::subscribe():
+
+        full = sub.model_dump()
+        payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+        sig_hex = sign(subscriber_priv, canonical_bytes(payload))
+
+    canonical_bytes (from annuaire/crypto.py):
+        json.dumps(obj, sort_keys=True, separators=(",",":")).encode("utf-8")
+
+    The ``subscriber_pubkey`` field is NOT part of the Subscription model so it
+    is absent from ``model_dump()`` and therefore NOT included in the signed
+    payload — we explicitly exclude it here too.
+
+    Args:
+        sub:     Full Subscription dict including sig, signer_did, subscriber_pubkey.
+        pub_hex: Hex-encoded raw 32-byte Ed25519 public key to verify against.
+
+    Returns:
+        True if the sig verifies, False on any failure.
+    """
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        # Reconstruct the exact payload that was signed: strip sig, signer_did,
+        # and subscriber_pubkey (not part of the Subscription model).
+        _STRIP = frozenset(("sig", "signer_did", "subscriber_pubkey"))
+        payload = {k: v for k, v in sub.items() if k not in _STRIP}
+
+        # canonical_bytes — identical to annuaire/crypto.py::canonical_bytes.
+        msg = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+        sig_hex: str = sub.get("sig", "") or ""
+        pub_bytes = bytes.fromhex(pub_hex)
+        sig_bytes = bytes.fromhex(sig_hex)
+
+        pub_key = Ed25519PublicKey.from_public_bytes(pub_bytes)
+        pub_key.verify(sig_bytes, msg)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@app.post("/api/v1/p2p-macro/grant/{service_id}")
+async def macro_grant_endpoint(service_id: str, req: Request):
+    """Provider-side macro grant endpoint.
+
+    The consumer (subscriber) POSTs its self-signed Subscription; we verify
+    self-certifyingly and, on success, invoke macroctl to provision the macro.
+    """
+    from api import macro_grant, annuaire_client  # noqa: PLC0415
+
+    body = await req.json()
+
+    # Look up the service offer in the annuaire catalog.
+    catalog, _err = annuaire_client.get_catalog()
+    offer = next((o for o in catalog if o.get("service_id") == service_id), None)
+    if offer is None:
+        return JSONResponse({"error": "unknown service"}, status_code=404)
+
+    def _verify(sub: Dict[str, Any]) -> bool:
+        pub = sub.get("subscriber_pubkey", "") or ""
+        if not pub:
+            return False
+        # (a) pubkey must hash to subscriber DID.
+        if annuaire_client.did_from_pubkey_hex(pub) != sub.get("subscriber"):
+            return False
+        # (b) Ed25519 sig over canonical payload.
+        return _verify_subscription_sig(sub, pub)
+
+    ok, why = macro_grant.authorize_grant(offer, body, _verify)
+    if not ok:
+        return JSONResponse({"error": why}, status_code=403)
+
+    src_ip = (req.client.host if req.client else "") or req.headers.get("x-real-ip", "")
+    macro = offer.get("macro", {})
+    cred, err = macro_grant.run_grant(
+        macro.get("kind", ""),
+        body.get("subscriber", ""),
+        src_ip,
+        macro.get("params", {}),
+    )
+    if err:
+        return JSONResponse({"error": err}, status_code=502)
+
+    cred = cred or {}
+    cred["service_id"] = service_id
+    return cred
 
 
 if __name__ == "__main__":
