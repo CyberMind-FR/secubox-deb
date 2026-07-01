@@ -1,4 +1,4 @@
-secubox-appstore (0.3.2-1~bookworm1) bookworm; urgency=medium
+secubox-appstore (0.3.3-1~bookworm1) bookworm; urgency=medium
 
   * fix(#768): sbx-apt-mesh resolves apt.secubox.in to the rendezvous wg-mesh IP
     via /etc/hosts, so the existing signed https source installs over WireGuard
