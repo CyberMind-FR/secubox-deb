@@ -20,8 +20,12 @@ cmd="${1:-status}"; ip="${2:-$(_rv_ip)}"
 case "$cmd" in
   enable)
     [ "$(_self_ip)" = "$ip" ] && { echo "this node is the rendezvous ($ip) — repo is local"; exit 0; }
-    sed -i "/$TAG\$/d" "$HOSTS"                       # drop our previous line
-    echo "$ip $DOMAIN $TAG" >> "$HOSTS"               # resolve over the mesh
+    # Prepend our line so it WINS over any pre-existing apt.secubox.in entry
+    # (getent returns the first match); the original stays and resumes on
+    # disable. Resolves the signed https repo over the mesh.
+    tmp=$(mktemp)
+    { echo "$ip $DOMAIN $TAG"; grep -v "$TAG\$" "$HOSTS"; } > "$tmp"
+    cat "$tmp" > "$HOSTS"; rm -f "$tmp"
     echo "$DOMAIN -> $(getent hosts $DOMAIN | awk '{print $1}' | head -1) (mesh)"
     apt-get update >/dev/null 2>&1 && echo "apt-get update OK — packages now install over the mesh, GPG-verified" \
       || { echo "apt-get update FAILED — check mesh reach to $ip:443"; exit 3; }
