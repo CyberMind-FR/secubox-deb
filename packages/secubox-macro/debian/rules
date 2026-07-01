@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-macro/usr/sbin
+	install -m 755 sbin/secubox-macroctl $(CURDIR)/debian/secubox-macro/usr/sbin/
+	install -d $(CURDIR)/debian/secubox-macro/usr/lib/secubox/macro/macros.d
+	install -m 755 macros.d/tor-exit $(CURDIR)/debian/secubox-macro/usr/lib/secubox/macro/macros.d/
+	install -d $(CURDIR)/debian/secubox-macro/etc/sudoers.d
+	install -m 440 sudoers.d/secubox-macro $(CURDIR)/debian/secubox-macro/etc/sudoers.d/
+	install -d $(CURDIR)/debian/secubox-macro/etc/apparmor.d
+	install -m 644 apparmor/secubox-macroctl $(CURDIR)/debian/secubox-macro/etc/apparmor.d/
+	install -d $(CURDIR)/debian/secubox-macro/etc/tor/torrc.d
+	install -m 644 conf/secubox-macro-tor-exit.conf.example $(CURDIR)/debian/secubox-macro/usr/share/secubox/macro/
