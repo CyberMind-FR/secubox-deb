@@ -57,5 +57,11 @@
   network inet   stream,
   network netlink raw,
 
+  # ── Capabilities: nft needs CAP_NET_ADMIN to read/modify the ruleset. The
+  #    inherited (rix) nft process runs under THIS profile, so the capability
+  #    must be granted here or nft fails with "netlink: cache initialization
+  #    failed: Operation not permitted". Nothing else needs a capability.
+  capability net_admin,
+
   # Deny everything else (default-deny — implicit in AppArmor).
 }
