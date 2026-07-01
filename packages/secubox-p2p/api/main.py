@@ -936,22 +936,273 @@ async def request_access(service_id: str, user: dict = Depends(require_jwt)):
     return {"status": "ok", "subscription": res}
 
 
+def _get_our_mesh_ip() -> Optional[str]:
+    """Return the local wg-mesh IP (10.10.0.x), or None if not configured."""
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "-o", "addr", "show", mesh.MESH_INTERFACE],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)/", result.stdout)
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+    # Fall back to wg_mesh.json address field
+    cfg = get_wg_mesh_config()
+    addr = (cfg.get("address") or "").split("/")[0]
+    return addr if addr and addr.startswith("10.") else None
+
+
+def _provider_mesh_ip_from_offer(offer: Dict) -> Optional[str]:
+    """Derive the provider's mesh IP from the offer endpoint or the wg_mesh peers list.
+
+    Priority:
+    1. If the offer endpoint host is already 10.10.0.x use it directly.
+    2. Otherwise scan wg_mesh.json peers for one whose mesh_ip matches the
+       endpoint host (LAN/WAN IP).  Not implemented here — provider mesh IP
+       resolution via offer endpoint host is the canonical path for M2.
+    """
+    endpoint = offer.get("endpoint", "")
+    # Strip scheme
+    host = endpoint
+    if "://" in host:
+        host = host.split("://", 1)[1]
+    host = host.split("/")[0].split(":")[0]
+    if re.match(r"^10\.10\.0\.\d+$", host):
+        return host
+    # Try wg_mesh peers: find a peer whose allowed_ips /32 host matches endpoint host
+    try:
+        cfg = get_wg_mesh_config()
+        for p in cfg.get("peers", []):
+            peer_ip = p.get("mesh_ip") or ""
+            if peer_ip and peer_ip == host:
+                return peer_ip
+            # Try /32 host from allowed_ips
+            aips = p.get("allowed_ips", "")
+            if aips:
+                h = aips.split(",")[0].strip()
+                if h.endswith("/32") and h.split("/")[0] == host:
+                    return h.split("/")[0]
+    except Exception:
+        pass
+    return None
+
+
+def _pull_grant(offer: Dict) -> tuple:
+    """Pull a macro grant credential from the provider over the mesh.
+
+    Builds a self-signed Subscription and POSTs it to the provider's mesh
+    endpoint at :8798/api/v1/p2p-macro/grant/<service_id>.
+
+    The Subscription signing exactly mirrors annuaire/verbs.py::subscribe():
+      payload = sub.model_dump() minus {"sig","signer_did"}
+      sig_hex = ed25519_sign(priv, canonical_bytes(payload))
+    canonical_bytes = json.dumps(payload, sort_keys=True, separators=(",",":")).encode("utf-8")
+
+    subscriber_pubkey is added to the POST body but NOT included in the signed
+    payload (it is not part of the Subscription model — mirrors _verify_subscription_sig).
+
+    Returns:
+        (cred_dict, None) on success, or (None, error_string) on any failure.
+        Never raises.
+    """
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+
+        service_id = offer.get("service_id", "")
+
+        # 1. Get our node identity.
+        did, priv_hex = annuaire_client.node_identity()
+        if not did or not priv_hex:
+            return None, "node has no annuaire identity (run annuairectl init)"
+
+        # 2. Derive the provider mesh IP.
+        provider_ip = _provider_mesh_ip_from_offer(offer)
+        if not provider_ip:
+            return None, f"cannot resolve provider mesh IP from offer endpoint: {offer.get('endpoint')!r}"
+
+        # 3. Build the Subscription payload (mirrors Subscription model fields).
+        now_utc = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        subscription_id = secrets.token_hex(32)
+        payload: Dict = {
+            "subscription_id": subscription_id,
+            "subscriber": did,
+            "service_id": service_id,
+            "requested_at": now_utc,
+            "sig": None,
+            "signer_did": None,
+        }
+        # Strip sig/signer_did for signing (mirrors verbs.py subscribe()).
+        to_sign = {k: v for k, v in payload.items() if k not in ("sig", "signer_did")}
+        canonical = json.dumps(to_sign, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+        # 4. Sign with ed25519.
+        priv_bytes = bytes.fromhex(priv_hex)
+        priv_key = Ed25519PrivateKey.from_private_bytes(priv_bytes)
+        sig_bytes = priv_key.sign(canonical)
+        sig_hex = sig_bytes.hex()
+        pub_bytes = priv_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        pub_hex = pub_bytes.hex()
+
+        # 5. POST to provider mesh grant endpoint (TCP HTTP, 5s timeout).
+        body_dict = {
+            **to_sign,
+            "sig": sig_hex,
+            "signer_did": did,
+            "subscriber_pubkey": pub_hex,
+        }
+        body_bytes = json.dumps(body_dict).encode("utf-8")
+        import http.client as _http
+        conn = _http.HTTPConnection(provider_ip, 8798, timeout=5)
+        conn.request(
+            "POST",
+            f"/api/v1/p2p-macro/grant/{service_id}",
+            body=body_bytes,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        resp = conn.getresponse()
+        raw = resp.read()
+        conn.close()
+        if resp.status >= 400:
+            try:
+                err_body = json.loads(raw)
+                return None, f"provider returned HTTP {resp.status}: {err_body.get('error', raw.decode()[:200])}"
+            except Exception:
+                return None, f"provider returned HTTP {resp.status}"
+        cred = json.loads(raw)
+        return cred, None
+    except Exception as exc:  # noqa: BLE001
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def _macroctl_activate(kind: str, cred: Dict) -> tuple:
+    """Run ``sudo -n secubox-macroctl <kind> activate --cred <json>``.
+
+    Mirrors macro_grant.run_grant() pattern.
+
+    Returns:
+        (True, None) on success, or (False, error_string) on failure.
+        Never raises.
+    """
+    cmd = [
+        "sudo", "-n", "/usr/sbin/secubox-macroctl",
+        kind, "activate",
+        "--cred", json.dumps(cred),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{type(exc).__name__}: {exc}"
+    if proc.returncode != 0:
+        return False, (proc.stderr or proc.stdout or "macroctl activate failed").strip()
+    return True, None
+
+
+def _macroctl_revoke(kind: str, sub_did: str, src_ip: str) -> tuple:
+    """Run ``sudo -n secubox-macroctl <kind> revoke --sub <did> --src-ip <ip>``.
+
+    Returns:
+        (True, None) on success, or (False, error_string) on failure.
+        Never raises.
+    """
+    cmd = [
+        "sudo", "-n", "/usr/sbin/secubox-macroctl",
+        kind, "revoke",
+        "--sub", sub_did,
+        "--src-ip", src_ip,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{type(exc).__name__}: {exc}"
+    if proc.returncode != 0:
+        return False, (proc.stderr or proc.stdout or "macroctl revoke failed").strip()
+    return True, None
+
+
 @app.post("/services/{service_id}/activate")
 async def activate_service(service_id: str, user: dict = Depends(require_jwt)):
-    """Mark a catalog service locally active (binds the derived local port)."""
+    """Mark a catalog service locally active (binds the derived local port).
+
+    M1 path (local own service, or non-macro remote approved): sets overlay active.
+    M2 path (remote macro offer, approved): pulls grant credential from provider
+    over the mesh, runs macroctl activate, stores endpoint in overlay.
+    """
     init_dirs()
     catalog, _ = annuaire_client.get_catalog()
     offer = next((o for o in catalog if o.get("service_id") == service_id), None)
     if offer is None:
         return {"status": "error", "error": "service not in catalog"}
     local_did, _ = annuaire_client.node_identity()
-    if offer.get("provider") != local_did:
+
+    is_remote = offer.get("provider") != local_did
+    has_macro = bool(offer.get("macro"))
+
+    if is_remote:
         subs, _ = annuaire_client.get_subscriptions(local_did)
         st = next((s.get("state") for s in subs if s.get("service_id") == service_id), None)
         if st != "approved":
             return {"status": "error", "error": f"remote service not approved (state={st})"}
+
+        # M2: remote macro offer with approved subscription → pull credential + activate.
+        if has_macro:
+            cred, err = _pull_grant(offer)
+            if err:
+                return {"status": "error", "error": f"pull grant failed: {err}"}
+            kind = offer["macro"].get("kind", "")
+            ok, aerr = _macroctl_activate(kind, cred)
+            if not ok:
+                return {"status": "error", "error": f"macroctl activate failed: {aerr}"}
+            endpoint = cred.get("endpoint", offer.get("endpoint", ""))
+            registry.set_active(str(ACTIVATION_FILE), service_id,
+                                registry.port_from_endpoint(endpoint))
+            return {"status": "ok", "endpoint": endpoint}
+
+    # M1 path: local service or non-macro remote approved service.
     registry.set_active(str(ACTIVATION_FILE), service_id,
                         registry.port_from_endpoint(offer.get("endpoint", "")))
+    return {"status": "ok"}
+
+
+@app.post("/services/{service_id}/revoke-access")
+async def revoke_access(service_id: str, user: dict = Depends(require_jwt)):
+    """Revoke consumer access to a macro service (consumer-side).
+
+    Runs ``sudo macroctl <kind> revoke --sub <our-did> --src-ip <our-mesh-ip>``
+    and clears the local active state in the overlay.
+    """
+    init_dirs()
+    catalog, _ = annuaire_client.get_catalog()
+    offer = next((o for o in catalog if o.get("service_id") == service_id), None)
+    if offer is None:
+        return {"status": "error", "error": "service not in catalog"}
+
+    macro = offer.get("macro")
+    if not macro:
+        return {"status": "error", "error": "service has no macro descriptor"}
+
+    kind = macro.get("kind", "")
+    local_did, _ = annuaire_client.node_identity()
+    our_mesh_ip = _get_our_mesh_ip() or "0.0.0.0"
+
+    ok, err = _macroctl_revoke(kind, local_did or "", our_mesh_ip)
+    if not ok:
+        log.warning("macroctl revoke failed for %s: %s", service_id, err)
+        return {"status": "error", "error": f"macroctl revoke failed: {err}"}
+
+    # Clear the active state in the overlay.
+    overlay = registry.load_overlay(str(ACTIVATION_FILE))
+    entry = overlay.get(service_id, {})
+    entry["active"] = False
+    overlay[service_id] = entry
+    registry.save_overlay(str(ACTIVATION_FILE), overlay)
+
     return {"status": "ok"}
 
 
