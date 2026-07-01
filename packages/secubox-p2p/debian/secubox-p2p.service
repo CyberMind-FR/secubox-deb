@@ -17,7 +17,11 @@ StandardOutput=journal
 StandardError=journal
 
 # Security hardening
-NoNewPrivileges=yes
+# NoNewPrivileges=no: the macro grant endpoint invokes `sudo -n secubox-macroctl`
+# (root, AppArmor-confined, sudoers-restricted to that one binary). NNP=yes would
+# block sudo. Matches the secubox-appstore/aggregator precedent for services that
+# shell out to a tightly-scoped root helper.
+NoNewPrivileges=no
 
 ProtectHome=yes
 PrivateTmp=yes

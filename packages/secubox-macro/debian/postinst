@@ -1,0 +1,72 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-macro postinst — Tor SocksPort on mesh IP, nft base set, AppArmor
+set -e
+
+case "$1" in
+    configure)
+        # ── Runtime state directories (secubox user, 0750) ──────────────────
+        # #494/#511: NEVER chown the shared parents (/var/lib/secubox,
+        # /var/log/secubox) — owned by tmpfiles.d/secubox-core at 0755.
+        # This module creates only its own subdirectories.
+        # State dirs are ROOT-owned: secubox-macroctl runs as root (via sudo) and
+        # is the only writer. The AppArmor profile grants no dac_override, so root
+        # must OWN these dirs to write into them — a secubox-owned dir would make
+        # the plugin's activate state-write fail with EACCES. Nothing running as
+        # secubox reads them (p2p uses its own /var/lib/secubox/p2p overlay).
+        install -d -m 0755 -o root -g root /var/lib/secubox/macro
+        install -d -m 0750 -o root -g root /var/lib/secubox/macro/active
+        install -d -m 0750 -o root -g root /var/lib/secubox/macro/grants
+
+        # Pre-create the audit log so the AppArmor profile's append-only ('a')
+        # permission suffices — 'a' cannot CREATE a missing file, so macroctl's
+        # first grant would otherwise be denied create and write no audit line.
+        if [ ! -e /var/log/secubox/audit.log ]; then
+            install -d -m 0755 /var/log/secubox 2>/dev/null || true
+            : > /var/log/secubox/audit.log 2>/dev/null || true
+            chmod 0640 /var/log/secubox/audit.log 2>/dev/null || true
+        fi
+
+        # ── nft base set + input rule in the board's firewall table ─────────
+        # Boards differ: c3box carries the input hook in `inet secubox_filter`,
+        # gk2 in the stock `inet filter`. The gating allow must live in whichever
+        # table holds the input hook, so detect it (prefer secubox_filter) and
+        # persist it to /etc/secubox/macro.conf for the plugin (root reads it;
+        # sudo env_reset strips env, so config passes via this file).
+        MACRO_TABLE=""
+        for t in "inet secubox_filter" "inet filter"; do
+            if nft list table $t >/dev/null 2>&1; then MACRO_TABLE="$t"; break; fi
+        done
+        if [ -n "$MACRO_TABLE" ]; then
+            install -d -m 0755 /etc/secubox 2>/dev/null || true
+            printf 'TOREXIT_TABLE=%s\n' "$MACRO_TABLE" > /etc/secubox/macro.conf
+            chmod 0644 /etc/secubox/macro.conf 2>/dev/null || true
+            nft list set $MACRO_TABLE secubox_macro_torexit >/dev/null 2>&1 || \
+              nft add set $MACRO_TABLE secubox_macro_torexit '{ type ipv4_addr; }' 2>/dev/null || true
+            nft list chain $MACRO_TABLE input 2>/dev/null | grep -q secubox_macro_torexit || \
+              nft add rule $MACRO_TABLE input iifname "wg-mesh" ip saddr @secubox_macro_torexit tcp dport 9050 accept 2>/dev/null || true
+        fi
+
+        # ── Tor SocksPort on the wg-mesh IP (dedicated torrc.d file) ────────
+        MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
+        if [ -n "$MESH_IP" ] && [ -f /usr/share/secubox/macro/secubox-macro-tor-exit.conf.example ]; then
+            mkdir -p /etc/tor/torrc.d
+            sed "s/__MESH_IP__/$MESH_IP/g" \
+                /usr/share/secubox/macro/secubox-macro-tor-exit.conf.example \
+                > /etc/tor/torrc.d/secubox-macro-tor-exit.conf
+            systemctl reload tor 2>/dev/null || systemctl restart tor 2>/dev/null || true
+        fi
+
+        # ── AppArmor profile (enforce mode) ─────────────────────────────────
+        if command -v apparmor_parser >/dev/null 2>&1; then
+            apparmor_parser -r -W /etc/apparmor.d/secubox-macroctl 2>/dev/null || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

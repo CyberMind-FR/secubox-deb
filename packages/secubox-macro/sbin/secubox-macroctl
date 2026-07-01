@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-macroctl — root dispatcher for vetted access macros.
+
+Validates the kind against the installed macros.d allowlist, checks the plugin
+is root-owned and not world-writable, validates --src-ip is inside the mesh
+CIDR, execs the plugin verb (never via a shell, never eval'ing params), and
+appends an audit line. Offers never supply code — only an allowlisted kind and
+typed params.
+"""
+from __future__ import annotations
+import argparse, ipaddress, json, os, stat, subprocess, sys, time
+
+PLUGIN_DIR = os.environ.get("MACRO_PLUGIN_DIR", "/usr/lib/secubox/macro/macros.d")
+AUDIT_LOG = os.environ.get("MACRO_AUDIT_LOG", "/var/log/secubox/audit.log")
+MESH_CIDR = os.environ.get("MACRO_MESH_CIDR", "10.10.0.0/24")
+KIND_RE = __import__("re").compile(r"^[a-z][a-z0-9-]{1,31}$")
+VERBS = {"grant", "activate", "revoke"}
+
+
+def _die(msg, code=1):
+    sys.stderr.write(json.dumps({"error": msg}) + "\n")
+    raise SystemExit(code)
+
+
+def _audit(rec: dict):
+    try:
+        os.makedirs(os.path.dirname(AUDIT_LOG), exist_ok=True)
+        with open(AUDIT_LOG, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec) + "\n")
+    except Exception:
+        pass  # audit best-effort; never block the operation on log failure
+
+
+def _plugin_path(kind: str) -> str:
+    if not KIND_RE.match(kind):
+        _die(f"invalid kind {kind!r}")
+    p = os.path.join(PLUGIN_DIR, kind)
+    if os.path.dirname(os.path.realpath(p)) != os.path.realpath(PLUGIN_DIR):
+        _die("kind escapes plugin dir")
+    if not os.path.isfile(p):
+        _die(f"unknown kind {kind!r}")
+    st = os.stat(p)
+    if st.st_mode & stat.S_IWOTH:
+        _die("plugin is world-writable — refusing (tamper guard)")
+    if os.geteuid() == 0:
+        if st.st_uid != 0:
+            _die("plugin not owned by root — refusing (tamper guard)")
+        if st.st_mode & stat.S_IWGRP:
+            _die("plugin is group-writable — refusing (tamper guard)")
+    if not (st.st_mode & stat.S_IXUSR):
+        _die("plugin not executable")
+    return p
+
+
+def main(argv=None) -> int:
+    global PLUGIN_DIR, MESH_CIDR, AUDIT_LOG
+    if os.geteuid() == 0:
+        # In production (root via sudo) IGNORE env overrides — they exist only
+        # for the non-root test harness. This defeats env-injection attacks
+        # (e.g. MACRO_PLUGIN_DIR=/tmp/evil) independent of the sudoers config.
+        PLUGIN_DIR = "/usr/lib/secubox/macro/macros.d"
+        MESH_CIDR = "10.10.0.0/24"
+        AUDIT_LOG = "/var/log/secubox/audit.log"
+    p = argparse.ArgumentParser(prog="secubox-macroctl")
+    p.add_argument("kind")
+    p.add_argument("verb")
+    p.add_argument("--sub", default="")
+    p.add_argument("--src-ip", default="")
+    p.add_argument("--params", default="{}")
+    p.add_argument("--cred", default="{}")
+    a = p.parse_args(argv)
+    if a.verb not in VERBS:
+        _die(f"invalid verb {a.verb!r}")
+    if a.verb in ("grant", "revoke") and not a.src_ip:
+        _die(f"--src-ip is required for {a.verb}")
+    if a.src_ip:
+        try:
+            ip = ipaddress.ip_address(a.src_ip)
+            if ip not in ipaddress.ip_network(MESH_CIDR):
+                _die(f"--src-ip {a.src_ip} not in mesh {MESH_CIDR}")
+        except ValueError:
+            _die(f"--src-ip {a.src_ip!r} is not a valid IPv4")
+    try:
+        json.loads(a.params); json.loads(a.cred)
+    except ValueError:
+        _die("--params/--cred must be JSON")
+    plugin = _plugin_path(a.kind)
+    cmd = [plugin, a.verb, "--sub", a.sub, "--src-ip", a.src_ip,
+           "--params", a.params, "--cred", a.cred]
+    proc = subprocess.run(cmd, capture_output=True, text=True)  # no shell
+    _audit({"ts": int(time.time()), "kind": a.kind, "verb": a.verb,
+            "sub": a.sub, "src_ip": a.src_ip, "rc": proc.returncode})
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.returncode != 0 and proc.stderr:
+        sys.stderr.write(proc.stderr)
+    return proc.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

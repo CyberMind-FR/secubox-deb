@@ -20,6 +20,11 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-p2p/etc/nginx/secubox.d
 	install -m 644 $(CURDIR)/nginx/p2p.conf $(CURDIR)/debian/secubox-p2p/etc/nginx/secubox.d/
 
+	# Install mesh listener template (rendered by postinst with wg-mesh IP).
+	install -d $(CURDIR)/debian/secubox-p2p/usr/share/secubox/p2p
+	install -m 644 $(CURDIR)/nginx/p2p-macro-mesh.conf.tpl \
+		$(CURDIR)/debian/secubox-p2p/usr/share/secubox/p2p/
+
 	# Install menu entry
 	install -d $(CURDIR)/debian/secubox-p2p/etc/secubox/menu.d
 	install -m 644 $(CURDIR)/menu.d/590-p2p.json $(CURDIR)/debian/secubox-p2p/etc/secubox/menu.d/

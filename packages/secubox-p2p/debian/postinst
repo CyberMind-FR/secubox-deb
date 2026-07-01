@@ -28,14 +28,49 @@ case "$1" in
         install -d -o secubox -g secubox -m 0755 /var/lib/secubox/p2p/master-link
         chown secubox:secubox /var/lib/secubox/p2p /var/lib/secubox/p2p/master-link 2>/dev/null || true
 
+        # Render the Gondwana mesh macro grant listener IFF a wg-mesh exists.
+        # Mirrors the annuaire-mesh.conf.tpl pattern (#766).
+        # Bind only the node's wg-mesh IPv4 — never 0.0.0.0 (minimal surface).
+        # X-Real-IP=$remote_addr is set in the template so macroctl sees the
+        # provider-observed mesh source IP, not a client-supplied value.
+        MACRO_TPL=/usr/share/secubox/p2p/p2p-macro-mesh.conf.tpl
+        MACRO_CONF=/etc/nginx/conf.d/p2p-macro-mesh.conf
+        MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
+        if [ -n "$MESH_IP" ] && [ -f "$MACRO_TPL" ]; then
+            sed "s/__MESH_IP__/$MESH_IP/g" "$MACRO_TPL" > "$MACRO_CONF"
+            # A broken render must NEVER persist on disk — validate now; revert on failure.
+            if ! nginx -t >/dev/null 2>&1; then
+                rm -f "$MACRO_CONF" 2>/dev/null || true
+            fi
+        else
+            # No mesh interface (or template missing) → ensure no stale listener.
+            rm -f "$MACRO_CONF" 2>/dev/null || true
+        fi
+
+        # Durable wg-mesh nft allow for the macro grant listener (:8798).
+        # Same pattern as annuaire postinst for :8799.
+        NFT_CONF=/etc/nftables.conf
+        if [ -n "$MESH_IP" ] && [ -f "$NFT_CONF" ] \
+           && grep -q 'table inet secubox_filter' "$NFT_CONF" \
+           && ! grep -q 'tcp dport 8798' "$NFT_CONF"; then
+            awk '/^[[:space:]]*drop[[:space:]]*$/ && !d {print "        iifname \"wg-mesh\" ip saddr 10.10.0.0/24 tcp dport 8798 accept"; d=1} {print}' \
+                "$NFT_CONF" > "$NFT_CONF.sbxtmp" 2>/dev/null || true
+            if [ -s "$NFT_CONF.sbxtmp" ] && nft -c -f "$NFT_CONF.sbxtmp" >/dev/null 2>&1; then
+                mv "$NFT_CONF.sbxtmp" "$NFT_CONF"
+                nft -f "$NFT_CONF" >/dev/null 2>&1 || true
+            else
+                rm -f "$NFT_CONF.sbxtmp" 2>/dev/null || true
+            fi
+        fi
+
         # Enable and start the service
         systemctl daemon-reload
         systemctl enable secubox-p2p.service
         systemctl start secubox-p2p.service || true
 
-        # Reload nginx if running
+        # Reload nginx if running (picks up p2p-macro-mesh.conf if rendered above)
         if systemctl is-active --quiet nginx; then
-            systemctl reload nginx || true
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
         fi
         ;;
 esac

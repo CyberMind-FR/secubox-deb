@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: macros.d/tor-exit — offer a node's Tor SOCKS to mesh peers.
+
+grant   : nft-allow the subscriber's mesh IP into the Tor SocksPort; emit endpoint.
+revoke  : remove that allow.
+activate: (consumer side) record the SOCKS endpoint for the operator.
+Run only via secubox-macroctl (root, AppArmor-confined). No shell on inputs.
+"""
+from __future__ import annotations
+import argparse, json, os, re, subprocess, sys
+
+NFT = os.environ.get("TOREXIT_NFT", "nft")
+MESH_IP = os.environ.get("TOREXIT_MESH_IP") or ""
+STATE_DIR = os.environ.get("TOREXIT_STATE_DIR", "/var/lib/secubox/macro/active")
+SET = os.environ.get("TOREXIT_SET", "secubox_macro_torexit")
+TABLE = os.environ.get("TOREXIT_TABLE", "inet secubox_filter")
+
+
+def _mesh_ip() -> str:
+    if MESH_IP:
+        return MESH_IP
+    out = subprocess.run(["ip", "-4", "-o", "addr", "show", "wg-mesh"],
+                         capture_output=True, text=True).stdout
+    for tok in out.split():
+        if "/" in tok and tok.split("/")[0].startswith("10.10.0."):
+            return tok.split("/")[0]
+    return ""
+
+
+def _nft(*args) -> int:
+    return subprocess.run([NFT, *args]).returncode
+
+
+def _conf_table(path: str = "/etc/secubox/macro.conf") -> str:
+    """Board firewall table for the gating set, read from the root-owned
+    /etc/secubox/macro.conf (postinst detects and writes it). Boards differ:
+    c3box uses `inet secubox_filter`, gk2 uses the stock `inet filter`. Env is
+    stripped by sudo env_reset, so the table is passed via this conf, not env.
+    The value is validated (family + alphanumeric name) to prevent injection
+    into the nft argv; defaults to inet secubox_filter."""
+    try:
+        with open(path, "r", encoding="ascii") as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith("TOREXIT_TABLE="):
+                    v = line.split("=", 1)[1].strip()
+                    parts = v.split()
+                    if (len(parts) == 2 and parts[0] in ("inet", "ip", "ip6")
+                            and parts[1].replace("_", "").isalnum()):
+                        return v
+    except Exception:
+        pass
+    return "inet secubox_filter"
+
+
+def main() -> int:
+    global NFT, STATE_DIR, SET, TABLE, MESH_IP
+    if os.geteuid() == 0:
+        # In production (root via macroctl) IGNORE env overrides — they exist
+        # only for the non-root test harness (defense-in-depth vs a leaked
+        # TOREXIT_NFT=/tmp/evil).
+        NFT = "nft"
+        STATE_DIR = "/var/lib/secubox/macro/active"
+        SET = "secubox_macro_torexit"
+        TABLE = _conf_table()   # board-detected table (validated), default secubox_filter
+        MESH_IP = ""   # force re-derivation via `ip`, ignore any override
+
+    p = argparse.ArgumentParser()
+    p.add_argument("verb")
+    p.add_argument("--sub", default=""); p.add_argument("--src-ip", default="")
+    p.add_argument("--params", default="{}"); p.add_argument("--cred", default="{}")
+    a = p.parse_args()
+    params = json.loads(a.params)
+
+    if a.verb == "grant":
+        try:
+            port = int(params.get("socks_port", 9050))
+            if not (1 <= port <= 65535):
+                raise ValueError("port out of range")
+        except (ValueError, TypeError) as e:
+            print(json.dumps({"error": f"invalid socks_port: {e}"})); return 4
+        ip = _mesh_ip()
+        if not ip:
+            print(json.dumps({"error": "no wg-mesh ip / tor-exit not provisioned"})); return 2
+        # named set element add (idempotent); the base set + rule are created by postinst
+        rc = _nft("add", "element", *TABLE.split(), SET, "{", a.src_ip, "}")
+        if rc != 0:
+            print(json.dumps({"error": "nft add failed"})); return 3
+        print(json.dumps({"kind": "tor-exit", "endpoint": f"{ip}:{port}"}))
+        return 0
+    if a.verb == "revoke":
+        rc = _nft("delete", "element", *TABLE.split(), SET, "{", a.src_ip, "}")
+        if rc != 0:
+            sys.stderr.write(json.dumps({"warn": "nft delete non-zero (element absent or set missing)"}) + "\n")
+        print(json.dumps({"ok": True})); return 0
+    if a.verb == "activate":
+        cred = json.loads(a.cred)
+        os.makedirs(STATE_DIR, exist_ok=True)
+        raw_sid = str(cred.get("service_id", "unknown"))
+        sid = re.sub(r"[^A-Za-z0-9_-]", "_", raw_sid)[:64] or "unknown"
+        with open(os.path.join(STATE_DIR, f"{sid}.json"), "w") as fh:
+            json.dump(cred, fh)
+        print(json.dumps({"ok": True, "socks": cred.get("endpoint")})); return 0
+    print(json.dumps({"error": f"unknown verb {a.verb}"})); return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

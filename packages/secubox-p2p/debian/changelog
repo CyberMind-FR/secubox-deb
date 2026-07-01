@@ -1,3 +1,26 @@
+secubox-p2p (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(macro): M2 macro grant + consumer activate + UI SOCKS endpoint + revoke.
+    Provider side: self-certifying Subscription auth over auto offers — consumer
+    builds a signed Subscription (ed25519, mirrors verbs.py), POSTs it to the
+    provider's mesh listener on wg-mesh :8798 (X-Real-IP validated against the
+    consumer's wg-mesh IP). Provider verifies signature, runs macroctl grant,
+    returns a credential with the SOCKS endpoint.
+    Consumer side: POST /services/{id}/activate pulls the credential over the
+    mesh and runs ``sudo -n secubox-macroctl <kind> activate --cred <json>``
+    (NoNewPrivileges=no for the sudo macroctl path); the resolved SOCKS endpoint
+    is stored in the activation overlay.
+    Revoke: POST /services/{id}/revoke-access runs macroctl revoke and clears
+    the active state from the overlay.
+    Registry: merge_services now surfaces overlay[sid]["endpoint"] in the row
+    when present; set_active accepts an optional endpoint= kwarg to persist it.
+    UI: for automatable + active + endpoint rows, loadServices() displays the
+    SOCKS endpoint (e.g. ``SOCKS 10.10.0.1:9050``) and a "Revoke access" button
+    calling revokeAccess() → POST /services/{id}/revoke-access.
+    Depends: secubox-annuaire (annuaire catalog + subscription verbs).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 18:00:00 +0200
+
 secubox-p2p (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: Service Registry is now a live view of the secubox-annuaire catalog
