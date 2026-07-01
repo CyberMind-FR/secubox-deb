@@ -3,6 +3,36 @@
 
 ---
 
+## 2026-07-01 — Macro subsystem (M2) + tor-exit reference kind (#771)
+
+Services can now propose a vetted, AppArmor-confined **access macro** so an approved peer
+consumes them. First increment: framework + `tor-exit` (SOCKS-over-mesh). Three packages:
+- **secubox-annuaire 0.3.3** — optional signed `ServiceOffer.macro {kind, params}` that
+  federates in the signed payload (byte-stability guard keeps macro-less offers compatible
+  with pre-0.3.0 signatures); `annuairectl offer --macro-kind/--macro-param`.
+- **secubox-macro 0.1.0 (NEW)** — `secubox-macroctl` root dispatcher (kind allowlist, plugin
+  root-owned+non-writable tamper guard, src-ip mesh-CIDR check, euid-gated env-ignore,
+  append-only audit) + `macros.d/tor-exit` (nft grant/revoke, service_id path-traversal
+  sanitize, socks_port bound) + tight sudoers (env_reset) + AppArmor enforce (net_admin) +
+  postinst (Tor SocksPort on mesh IP, nft base set, audit pre-create).
+- **secubox-p2p 1.9.0** — provider grant endpoint (self-signed Subscription auth: self-cert
+  DID + ed25519 over annuaire's canonical bytes; auto-mode only), consumer activate pulls
+  the credential over the mesh + runs macroctl activate, mesh listener :8798 (mesh-IP-only,
+  X-Real-IP), revoke-access, NNP=no for the sudo path, UI SOCKS endpoint + Revoke.
+
+Built via SDD (8 tasks, per-task + final opus review = READY TO MERGE). The review loop caught
+and fixed **6 Criticals**: offer-signature wire-break (macro:null changed signed bytes),
+tor-exit root path-traversal (service_id as root filename), prerm mawk-bricks-dpkg, macroctl
+NNP-blocks-sudo, macroctl env-injection root-RCE + missing root-ownership guard. Deployed the
+3 debs to gk2 + c3box; **proven live on c3box under AppArmor enforce**: macroctl→tor-exit grant
+adds a mesh IP to the `secubox_macro_torexit` nft set + returns the endpoint + writes an
+append-only audit line; revoke empties it; bad-kind/non-mesh-IP/missing-src-ip all rejected.
+Full cross-node federation + real Tor routing is env-blocked (Tor not installed on c3box; gk2
+uses `inet filter` not `secubox_filter`) — not a code issue. Suites: annuaire 189, p2p 49,
+macro 14.
+
+---
+
 ## 2026-06-30 — secubox-p2p 1.8.0 : Service Registry = live view of annuaire catalog (#769)
 
 Le registre de services p2p (`/p2p/`) affichait « No services registered » (JSON local
