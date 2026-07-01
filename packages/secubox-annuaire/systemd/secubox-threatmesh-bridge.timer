@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox threatmesh bridge — periodic crowdsec->mesh federation (#768)
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=90s
+RandomizedDelaySec=15s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

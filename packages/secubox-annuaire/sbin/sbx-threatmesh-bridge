@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: sbx-threatmesh-bridge (#768)
+# Federate this node's LOCAL crowdsec ban decisions into the gondwana threatmesh
+# so every peer enforces them too. Reads `cscli decisions list`, publishes each
+# NEW ban via `annuairectl ban` (TTL = the crowdsec duration, so it auto-expires
+# in the mesh in step). Idempotent via a small state file; safe no-op without
+# crowdsec or annuairectl. This is the WAF -> mesh hook: detect once, block fleet.
+set -euo pipefail
+command -v cscli >/dev/null 2>&1 || exit 0
+command -v annuairectl >/dev/null 2>&1 || exit 0
+STATE=/var/lib/secubox/annuaire/threatmesh-bridge.json
+
+cscli decisions list -o json 2>/dev/null | python3 - "$STATE" <<'PY'
+import json, os, re, subprocess, sys, time
+state_path = sys.argv[1]
+try:
+    state = json.load(open(state_path))
+except Exception:
+    state = {}
+now = time.time()
+state = {ip: exp for ip, exp in state.items() if float(exp) > now}   # prune expired
+
+def dur_to_s(d):
+    mult = {"h": 3600, "m": 60, "s": 1}
+    return sum(int(n) * mult[u] for n, u in re.findall(r"(\d+)([hms])", d or "")) or 3600
+
+try:
+    data = json.load(sys.stdin) or []
+except Exception:
+    sys.exit(0)
+
+published = 0
+for alert in data:
+    for dec in alert.get("decisions", []):
+        if dec.get("type") != "ban" or str(dec.get("scope", "")).lower() != "ip":
+            continue
+        ip = dec.get("value")
+        if not ip or ip in state:
+            continue
+        ttl = dur_to_s(dec.get("duration"))
+        reason = "crowdsec:" + (dec.get("scenario") or "").split("/")[-1]
+        r = subprocess.run(["annuairectl", "ban", ip, "--ttl", str(ttl),
+                            "--reason", reason[:64], "--severity", "high"],
+                           capture_output=True)
+        if r.returncode == 0:
+            state[ip] = now + ttl * 0.9   # refresh a little before expiry
+            published += 1
+
+os.makedirs(os.path.dirname(state_path), exist_ok=True)
+json.dump(state, open(state_path, "w"))
+print(f"threatmesh-bridge: +{published} new, {len(state)} tracked")
+PY

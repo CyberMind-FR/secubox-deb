@@ -1,0 +1,8 @@
+[Unit]
+Description=SecuBox threatmesh bridge — federate local crowdsec bans (#768)
+After=secubox-annuaire.service crowdsec.service
+Wants=secubox-annuaire.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/sbx-threatmesh-bridge

@@ -95,6 +95,9 @@ case "$1" in
         # table, so enabling by default is safe). Bans a node under attack
         # shares reach every peer within ~1 min.
         systemctl enable --now secubox-annuaire-bans-apply.timer 2>/dev/null || true
+        # The WAF hook: bridge local crowdsec bans into the mesh. Safe no-op
+        # where crowdsec is absent, so enabling by default is fine.
+        systemctl enable --now secubox-threatmesh-bridge.timer 2>/dev/null || true
         if systemctl is-active --quiet nginx 2>/dev/null; then
             nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
         fi
