@@ -404,17 +404,23 @@
 
     <script>
         const API = '/api/v1/metablogizer';
-        const token = () => localStorage.getItem('sbx_token');
+        // Read BOTH token keys like every working module (hub/portal set both);
+        // reading only sbx_token missed a valid token stored under secubox_token.
+        const token = () => localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
         async function api(path, opts = {}) {
             try {
                 let res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401 && token()) {
+                if (res.status === 401) {
                     // A stale localStorage token shadows the valid SSO session
                     // cookie (require_jwt prefers the Bearer when present). Drop
-                    // it and retry cookie-only before bouncing to login.
+                    // it and retry cookie-only. Retry on EVERY 401 (not gated on
+                    // token() still being set) — parallel dashboard calls race:
+                    // the first clears the token, so others must still retry via
+                    // cookie rather than bounce to login.
                     localStorage.removeItem('sbx_token');
+                    localStorage.removeItem('secubox_token');
                     res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json' } });
                 }
                 if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
