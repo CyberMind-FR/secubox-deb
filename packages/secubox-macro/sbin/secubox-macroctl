@@ -46,12 +46,25 @@ def _plugin_path(kind: str) -> str:
     st = os.stat(p)
     if st.st_mode & stat.S_IWOTH:
         _die("plugin is world-writable — refusing (tamper guard)")
+    if os.geteuid() == 0:
+        if st.st_uid != 0:
+            _die("plugin not owned by root — refusing (tamper guard)")
+        if st.st_mode & stat.S_IWGRP:
+            _die("plugin is group-writable — refusing (tamper guard)")
     if not (st.st_mode & stat.S_IXUSR):
         _die("plugin not executable")
     return p
 
 
 def main(argv=None) -> int:
+    global PLUGIN_DIR, MESH_CIDR, AUDIT_LOG
+    if os.geteuid() == 0:
+        # In production (root via sudo) IGNORE env overrides — they exist only
+        # for the non-root test harness. This defeats env-injection attacks
+        # (e.g. MACRO_PLUGIN_DIR=/tmp/evil) independent of the sudoers config.
+        PLUGIN_DIR = "/usr/lib/secubox/macro/macros.d"
+        MESH_CIDR = "10.10.0.0/24"
+        AUDIT_LOG = "/var/log/secubox/audit.log"
     p = argparse.ArgumentParser(prog="secubox-macroctl")
     p.add_argument("kind")
     p.add_argument("verb")
@@ -62,6 +75,8 @@ def main(argv=None) -> int:
     a = p.parse_args(argv)
     if a.verb not in VERBS:
         _die(f"invalid verb {a.verb!r}")
+    if a.verb in ("grant", "revoke") and not a.src_ip:
+        _die(f"--src-ip is required for {a.verb}")
     if a.src_ip:
         try:
             ip = ipaddress.ip_address(a.src_ip)
