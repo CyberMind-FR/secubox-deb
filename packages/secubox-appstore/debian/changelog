@@ -1,3 +1,12 @@
+secubox-appstore (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#768): sbx-apt-mesh resolves apt.secubox.in to the rendezvous wg-mesh IP
+    via /etc/hosts, so the existing signed https source installs over WireGuard
+    (correct SNI/cert, GPG-verified) — including from off-LAN nodes. Replaces the
+    earlier bare-http source that hit the wrong vhost (NOSPLIT).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 01 Jul 2026 13:30:00 +0200
+
 secubox-appstore (0.3.1-1~bookworm1) bookworm; urgency=medium
 
   * feat(#768): P2P apt over the mesh (appstore federation phase 5).

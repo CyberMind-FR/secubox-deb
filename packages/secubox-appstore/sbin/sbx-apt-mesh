@@ -1,33 +1,32 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
-# SecuBox-Deb :: sbx-apt-mesh — install SecuBox packages from the gondwana mesh.
+# SecuBox-Deb :: sbx-apt-mesh — resolve the SecuBox apt repo over the wg-mesh.
 #
-# Points apt at the rendezvous node's signed repo over the wg-mesh
-# (http://<master>:9080/apt) so a node installs from the mesh instead of the
-# public apt.secubox.in — faster, and it survives the public ingress/DNS being
-# down (appstore federation, #768 phase 5). GPG-verified against the existing
-# secubox keyring; never trusts an unsigned source.
+# Points apt.secubox.in at the rendezvous node's wg-mesh IP via /etc/hosts, so
+# the EXISTING signed https source installs over WireGuard (correct Host/SNI/
+# cert, GPG-verified) instead of the public ingress. Works even when the node
+# is NOT on the rendezvous LAN — the appstore rides the mesh (#768 phase 5).
+# Managed as a marked /etc/hosts line; `disable` removes only our line.
 set -euo pipefail
 WG=/var/lib/secubox/p2p/wg_mesh.json
-LIST=/etc/apt/sources.list.d/secubox-mesh.list
-KEY=/usr/share/keyrings/secubox.gpg
-PORT=9080; SUITE=bookworm; COMP=main
+HOSTS=/etc/hosts
+DOMAIN=apt.secubox.in
+TAG="# sbx-apt-mesh"
 
-_rv_ip() {  # master is always .1 of the mesh network (gondwana addressing)
-  python3 -c "import json;n=json.load(open('$WG')).get('network','10.10.0.0/24').split('/')[0].rsplit('.',1)[0];print(n+'.1')" 2>/dev/null || echo 10.10.0.1
-}
+_rv_ip() { python3 -c "import json;n=json.load(open('$WG')).get('network','10.10.0.0/24').split('/')[0].rsplit('.',1)[0];print(n+'.1')" 2>/dev/null || echo 10.10.0.1; }
 _self_ip() { python3 -c "import json;print(json.load(open('$WG')).get('address','').split('/')[0])" 2>/dev/null || true; }
 
 cmd="${1:-status}"; ip="${2:-$(_rv_ip)}"
 case "$cmd" in
   enable)
-    [ "$(_self_ip)" = "$ip" ] && { echo "this node is the rendezvous ($ip) — repo is local, no mesh source needed"; exit 0; }
-    [ -f "$KEY" ] || { echo "missing keyring $KEY — install a secubox package first"; exit 2; }
-    echo "deb [signed-by=$KEY] http://$ip:$PORT/apt $SUITE $COMP" > "$LIST"
-    echo "wrote $LIST"
-    apt-get update >/dev/null 2>&1 && echo "apt-get update OK (mesh repo reachable + GPG-verified)" || { echo "apt-get update FAILED — check mesh reachability to $ip:$PORT"; exit 3; }
+    [ "$(_self_ip)" = "$ip" ] && { echo "this node is the rendezvous ($ip) — repo is local"; exit 0; }
+    sed -i "/$TAG\$/d" "$HOSTS"                       # drop our previous line
+    echo "$ip $DOMAIN $TAG" >> "$HOSTS"               # resolve over the mesh
+    echo "$DOMAIN -> $(getent hosts $DOMAIN | awk '{print $1}' | head -1) (mesh)"
+    apt-get update >/dev/null 2>&1 && echo "apt-get update OK — packages now install over the mesh, GPG-verified" \
+      || { echo "apt-get update FAILED — check mesh reach to $ip:443"; exit 3; }
     ;;
-  disable) rm -f "$LIST"; echo "removed $LIST"; apt-get update >/dev/null 2>&1 || true; ;;
-  status) if [ -f "$LIST" ]; then cat "$LIST"; else echo "no mesh apt source (rendezvous would be $(_rv_ip):$PORT)"; fi; ;;
+  disable) sed -i "/$TAG\$/d" "$HOSTS"; echo "removed mesh resolution for $DOMAIN"; apt-get update >/dev/null 2>&1 || true; ;;
+  status) grep -q "$TAG\$" "$HOSTS" && grep "$TAG\$" "$HOSTS" || echo "off ($DOMAIN resolves to $(getent hosts $DOMAIN | awk '{print \$1}' | head -1); rendezvous mesh = $(_rv_ip))"; ;;
   *) echo "usage: sbx-apt-mesh enable|disable|status [rendezvous-ip]"; exit 1;;
 esac
