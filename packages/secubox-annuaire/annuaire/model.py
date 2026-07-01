@@ -74,6 +74,9 @@ class Op(str, Enum):
     NODE_PUBLISH         = "node_publish"     # signed mesh peer registry entry
     CONFIG_PUBLISH       = "config_publish"   # signed, versioned config distribution
     CONFIG_REVOKE        = "config_revoke"
+    # Gondwana threatmesh (#768): bidirectional WAF/threat ban federation.
+    BAN_PUBLISH          = "ban_publish"      # a node signs an IP ban → federates
+    BAN_REVOKE           = "ban_revoke"       # the publisher lifts its own ban
 
 
 class ProposalType(str, Enum):
@@ -513,6 +516,34 @@ class ConfigBlob(BaseModel):
         description="Ed25519 sig over canonical_bytes(payload_without_sig)",
     )
     signer_did:   Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# BanRecord — a signed WAF/threat ban (gondwana threatmesh, #768)
+# ---------------------------------------------------------------------------
+
+class BanRecord(BaseModel):
+    """A signed IP ban published by a node, federated to the whole mesh.
+
+    Self-certifying: authored by the node that observed the threat
+    (entry.author == publisher). Bans gossip over the same convergent log as
+    node/config records, so a ban on ANY node reaches ALL nodes (bidirectional,
+    no master). The enforcement view is the UNION of active bans; a node lifts
+    only its own ban (BAN_REVOKE). `expires_at` gives each ban a TTL so stale
+    bans fall out of the set automatically. No secrets, just an address + reason.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    ban_id:     str = Field(..., description="stable id per (publisher, ip), e.g. 'ban-<ip>'")
+    publisher:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    ip:         str = Field(..., description="the banned IPv4/IPv6 address")
+    reason:     str = ""
+    severity:   str = Field(default="medium", description="low|medium|high|critical")
+    created_at: str = Field(default_factory=now_rfc3339)
+    expires_at: Optional[str] = Field(default=None, description="RFC3339 TTL; None = no expiry")
+    sig:        Optional[str] = Field(
+        default=None, description="Ed25519 sig over canonical_bytes(payload_without_sig)")
+    signer_did: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

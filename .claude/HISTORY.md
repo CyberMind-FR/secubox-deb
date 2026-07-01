@@ -3,6 +3,30 @@
 
 ---
 
+## 2026-06-30 — secubox-p2p 1.8.0 : Service Registry = live view of annuaire catalog (#769)
+
+Le registre de services p2p (`/p2p/`) affichait « No services registered » (JSON local
+isolé), déconnecté du catalogue fédéré secubox-annuaire 0.2.0. Désormais c'est une **vue
+live** : `GET /services` fusionne le catalogue annuaire + mes abonnements + un mince
+*activation overlay* + les services p2p-locaux hérités (sans duplication, sans dérive).
+`api/registry.py` (fusion pure, testable) + `api/annuaire_client.py` (lit
+`/run/secubox/annuaire.sock`, jamais l'aggregator ; s'abonne EN TANT QUE nœud via la clé
+0600 ; frappe un JWT de service car le subscribe annuaire est JWT-gated). 4 endpoints :
+`GET /services` (dégrade en `catalog_unavailable`, ne 500 jamais), `POST
+/services/auto-register` (active les offres locales + s'abonne aux distantes selon
+auto/pending), `/{id}/request`, `/{id}/activate`. UI : bouton « Auto register all » +
+Request access / Activate + badges d'état (service_id en encodeURIComponent — XSS-safe).
+annuaire inchangé ; exécution des macros déférée au Milestone 2.
+
+Construit via SDD (5 tâches TDD + revues par tâche + revue finale opus = READY TO MERGE).
+Bug trouvé au déploiement : le subscribe annuaire est JWT-gated ET vérifie que le sujet est
+un user activé → token de service frappé pour `admin` (override SBX_SERVICE_USER). 34 tests.
+Déployé gk2 + c3box : `GET /services` = WAF mirror (local) + Suricata (fédéré de c3box) sur
+gk2, image miroir sur c3box ; `auto-register` gk2 = {activated:1, requested:1} → Suricata
+fédéré **approved**. 
+
+---
+
 ## 2026-06-30 — secubox-annuaire 0.2.0 : trustless cross-node service federation (#766)
 
 Le `/services/pull` de 0.1.3 n'était **pas** réellement sans-confiance ni opérable :

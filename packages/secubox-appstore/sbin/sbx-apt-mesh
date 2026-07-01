@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: sbx-apt-mesh — resolve the SecuBox apt repo over the wg-mesh.
+#
+# Points apt.secubox.in at the rendezvous node's wg-mesh IP via /etc/hosts, so
+# the EXISTING signed https source installs over WireGuard (correct Host/SNI/
+# cert, GPG-verified) instead of the public ingress. Works even when the node
+# is NOT on the rendezvous LAN — the appstore rides the mesh (#768 phase 5).
+# Managed as a marked /etc/hosts line; `disable` removes only our line.
+set -euo pipefail
+WG=/var/lib/secubox/p2p/wg_mesh.json
+HOSTS=/etc/hosts
+DOMAIN=apt.secubox.in
+TAG="# sbx-apt-mesh"
+
+_rv_ip() { python3 -c "import json;n=json.load(open('$WG')).get('network','10.10.0.0/24').split('/')[0].rsplit('.',1)[0];print(n+'.1')" 2>/dev/null || echo 10.10.0.1; }
+_self_ip() { python3 -c "import json;print(json.load(open('$WG')).get('address','').split('/')[0])" 2>/dev/null || true; }
+
+cmd="${1:-status}"; ip="${2:-$(_rv_ip)}"
+case "$cmd" in
+  enable)
+    [ "$(_self_ip)" = "$ip" ] && { echo "this node is the rendezvous ($ip) — repo is local"; exit 0; }
+    # Prepend our line so it WINS over any pre-existing apt.secubox.in entry
+    # (getent returns the first match); the original stays and resumes on
+    # disable. Resolves the signed https repo over the mesh.
+    tmp=$(mktemp)
+    { echo "$ip $DOMAIN $TAG"; grep -v "$TAG\$" "$HOSTS"; } > "$tmp"
+    cat "$tmp" > "$HOSTS"; rm -f "$tmp"
+    echo "$DOMAIN -> $(getent hosts $DOMAIN | awk '{print $1}' | head -1) (mesh)"
+    apt-get update >/dev/null 2>&1 && echo "apt-get update OK — packages now install over the mesh, GPG-verified" \
+      || { echo "apt-get update FAILED — check mesh reach to $ip:443"; exit 3; }
+    ;;
+  disable) sed -i "/$TAG\$/d" "$HOSTS"; echo "removed mesh resolution for $DOMAIN"; apt-get update >/dev/null 2>&1 || true; ;;
+  status) grep -q "$TAG\$" "$HOSTS" && grep "$TAG\$" "$HOSTS" || echo "off ($DOMAIN resolves to $(getent hosts $DOMAIN | awk '{print \$1}' | head -1); rendezvous mesh = $(_rv_ip))"; ;;
+  *) echo "usage: sbx-apt-mesh enable|disable|status [rendezvous-ip]"; exit 1;;
+esac
