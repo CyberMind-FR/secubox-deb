@@ -1,0 +1,28 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-macro prerm — remove Tor SocksPort torrc.d entry, drop nft rule
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        # ── Remove dedicated Tor SocksPort config (best-effort) ─────────────
+        rm -f /etc/tor/torrc.d/secubox-macro-tor-exit.conf || true
+        systemctl reload tor 2>/dev/null || true
+
+        # ── Drop the nft input rule for mesh→SocksPort (best-effort) ────────
+        if nft list table inet secubox_filter >/dev/null 2>&1; then
+            RULE_HANDLE=$(nft -a list chain inet secubox_filter input 2>/dev/null | \
+                awk '/secubox_macro_torexit.*dport 9050/ {match($0, /handle ([0-9]+)/, h); if (h[1]) print h[1]}')
+            if [ -n "$RULE_HANDLE" ]; then
+                nft delete rule inet secubox_filter input handle "$RULE_HANDLE" 2>/dev/null || true
+            fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

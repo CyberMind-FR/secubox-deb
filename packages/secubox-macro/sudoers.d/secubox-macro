@@ -1,0 +1,3 @@
+# Allow the secubox service user to invoke ONLY the macro dispatcher as root.
+# Relies on sudo's default env_reset (do NOT add SETENV/env_keep — env-injection defense).
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-macroctl

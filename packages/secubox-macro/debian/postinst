@@ -1,0 +1,45 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-macro postinst — Tor SocksPort on mesh IP, nft base set, AppArmor
+set -e
+
+case "$1" in
+    configure)
+        # ── Runtime state directories (secubox user, 0750) ──────────────────
+        # #494/#511: NEVER chown the shared parents (/var/lib/secubox,
+        # /var/log/secubox) — owned by tmpfiles.d/secubox-core at 0755.
+        # This module creates only its own subdirectories.
+        install -d -m 0750 /var/lib/secubox/macro/active
+        install -d -m 0750 /var/lib/secubox/macro/grants
+        chown -R secubox:secubox /var/lib/secubox/macro 2>/dev/null || true
+
+        # ── nft base set + input rule (only if inet secubox_filter exists) ──
+        if nft list table inet secubox_filter >/dev/null 2>&1; then
+            nft list set inet secubox_filter secubox_macro_torexit >/dev/null 2>&1 || \
+              nft add set inet secubox_filter secubox_macro_torexit '{ type ipv4_addr; }' 2>/dev/null || true
+            nft add rule inet secubox_filter input iifname "wg-mesh" ip saddr @secubox_macro_torexit tcp dport 9050 accept 2>/dev/null || true
+        fi
+
+        # ── Tor SocksPort on the wg-mesh IP (dedicated torrc.d file) ────────
+        MESH_IP=$(ip -4 -o addr show wg-mesh 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)
+        if [ -n "$MESH_IP" ] && [ -f /usr/share/secubox/macro/secubox-macro-tor-exit.conf.example ]; then
+            mkdir -p /etc/tor/torrc.d
+            sed "s/__MESH_IP__/$MESH_IP/g" \
+                /usr/share/secubox/macro/secubox-macro-tor-exit.conf.example \
+                > /etc/tor/torrc.d/secubox-macro-tor-exit.conf
+            systemctl reload tor 2>/dev/null || systemctl restart tor 2>/dev/null || true
+        fi
+
+        # ── AppArmor profile (enforce mode) ─────────────────────────────────
+        if command -v apparmor_parser >/dev/null 2>&1; then
+            apparmor_parser -r -W /etc/apparmor.d/secubox-macroctl 2>/dev/null || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
