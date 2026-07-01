@@ -78,3 +78,75 @@ user-controlled input.
 
 None. Implementation is a faithful transcription of the brief. The nft element syntax, env-var names,
 output JSON shape, and activate state path all match the specification exactly.
+
+---
+
+## Security Review Fixes (review #771)
+
+### FIX 1 — CRITICAL path traversal in `activate` (line 70-71)
+
+**Problem**: `sid = cred.get("service_id", "unknown")` fed untrusted input directly into
+`os.path.join(STATE_DIR, f"{sid}.json")`. An absolute path like `/etc/cron.d/evil` discards
+STATE_DIR entirely; a traversal like `../../etc/evil` escapes it. Running as root this is a
+direct root write primitive.
+
+**Change** (`macros.d/tor-exit`, lines 70-71):
+- Added `import re` to imports line 14.
+- Replaced `sid = cred.get(...)` with:
+  ```python
+  raw_sid = str(cred.get("service_id", "unknown"))
+  sid = re.sub(r"[^A-Za-z0-9_-]", "_", raw_sid)[:64] or "unknown"
+  ```
+- Strips all chars that are not `[A-Za-z0-9_-]` (eliminates `/`, `.`, whitespace, etc.), bounds to 64 chars.
+- Result: `os.path.join(STATE_DIR, f"{sid}.json")` can only produce a path inside STATE_DIR.
+
+**Without fix**: `os.path.join("/var/lib/secubox/macro/active", "../../etc/evil.json")` →
+`/etc/evil.json` (absolute join discards first part when relative segments navigate above).
+Actually Python's `os.path.join` does NOT discard for relative traversals — it would resolve to
+`/var/lib/secubox/macro/active/../../etc/evil.json` = `/var/lib/secubox/etc/evil.json`, which still
+escapes the intended `active/` leaf. The absolute path case (`/etc/cron.d/evil`) does fully discard.
+Both cases are eliminated by the sanitize.
+
+### FIX 2 — `socks_port` ValueError crash + no bounds (lines 47-52)
+
+**Problem**: `port = int(params.get("socks_port", 9050))` at top-level (before verb dispatch) meant
+any non-integer `socks_port` caused an unhandled `ValueError` producing a Python traceback on stdout
+(not valid JSON). Also affected activate/revoke unnecessarily; no bounds check.
+
+**Change** (`macros.d/tor-exit`):
+- Removed top-level `port = int(...)` line (was after `params = json.loads(...)`).
+- Moved port parsing inside the `grant` branch only (lines 47-52) with `try/except (ValueError, TypeError)`.
+- Added `if not (1 <= port <= 65535): raise ValueError("port out of range")`.
+- On failure: emits clean JSON `{"error": "invalid socks_port: ..."}` and returns 4.
+
+### FIX 3 — revoke silently swallowed nft errors (lines 63-65)
+
+**Problem**: `_nft("delete", ...)` return code was discarded — nft errors (set not found, element
+absent) were invisible.
+
+**Change** (`macros.d/tor-exit`):
+- Captured rc: `rc = _nft("delete", ...)`
+- Added: `if rc != 0: sys.stderr.write(json.dumps({"warn": "nft delete non-zero ..."}) + "\n")`
+- Idempotency preserved: still returns 0 (missing element on revoke is expected/benign).
+- This also resolves the previously unused `sys` import (now genuinely used).
+
+### Adversarial tests added (`tests/test_tor_exit.py`)
+
+Three new tests added after `test_activate_writes_state`:
+
+1. **`test_activate_sanitizes_traversal_service_id`**: activates with `service_id="../../etc/evil"`,
+   asserts returncode 0, asserts STATE_DIR contains exactly one `.json` file, asserts filename
+   contains no `/` or `..`, asserts sanitized name is `______etc_evil.json`.
+
+2. **`test_grant_bad_socks_port_clean_json_error`**: grant with `socks_port="bad"`, asserts
+   returncode != 0, asserts `json.loads(r.stdout)["error"]` contains `"socks_port"` (clean JSON,
+   no traceback).
+
+3. **`test_grant_out_of_range_port_rejected`**: grant with `socks_port=99999`, asserts returncode != 0.
+
+### pytest output (all 14 tests)
+
+```
+14 passed in 0.48s
+```
+(11 existing + 3 new adversarial = 14 total)

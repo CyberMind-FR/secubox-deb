@@ -53,3 +53,37 @@ def test_activate_writes_state(tmp_path):
     assert r.returncode == 0
     st = pathlib.Path(env["TOREXIT_STATE_DIR"]) / "svc1.json"
     assert st.exists() and "10.10.0.1:9050" in st.read_text()
+
+
+def test_activate_sanitizes_traversal_service_id(tmp_path):
+    env, _ = _env(tmp_path)
+    r = _run(["activate", "--cred", json.dumps({"endpoint": "10.10.0.1:9050",
+              "service_id": "../../etc/evil"})], env)
+    assert r.returncode == 0
+    state_dir = pathlib.Path(env["TOREXIT_STATE_DIR"])
+    json_files = list(state_dir.glob("*.json"))
+    # Exactly one .json file must exist inside STATE_DIR
+    assert len(json_files) == 1, f"expected 1 json in state dir, got {json_files}"
+    fname = json_files[0].name
+    # The filename must not contain path separators or dots
+    assert "/" not in fname
+    assert ".." not in fname
+    # The sanitized name must be the clean form of the traversal input
+    assert fname == "______etc_evil.json"
+
+
+def test_grant_bad_socks_port_clean_json_error(tmp_path):
+    env, _ = _env(tmp_path)
+    r = _run(["grant", "--src-ip", "10.10.0.2",
+              "--params", json.dumps({"socks_port": "bad"})], env)
+    assert r.returncode != 0
+    out = json.loads(r.stdout)
+    assert "socks_port" in out.get("error", ""), \
+        f"expected 'socks_port' in error JSON, got: {r.stdout!r}"
+
+
+def test_grant_out_of_range_port_rejected(tmp_path):
+    env, _ = _env(tmp_path)
+    r = _run(["grant", "--src-ip", "10.10.0.2",
+              "--params", json.dumps({"socks_port": 99999})], env)
+    assert r.returncode != 0
