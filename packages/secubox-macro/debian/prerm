@@ -16,7 +16,7 @@ case "$1" in
         # ── Drop the nft input rule for mesh→SocksPort (best-effort) ────────
         if nft list table inet secubox_filter >/dev/null 2>&1; then
             RULE_HANDLE=$(nft -a list chain inet secubox_filter input 2>/dev/null | \
-                awk '/secubox_macro_torexit.*dport 9050/ {match($0, /handle ([0-9]+)/, h); if (h[1]) print h[1]}')
+                awk '/secubox_macro_torexit.*dport 9050/ { for (i=1;i<=NF;i++) if ($i=="handle") { print $(i+1); exit } }') || true
             if [ -n "$RULE_HANDLE" ]; then
                 nft delete rule inet secubox_filter input handle "$RULE_HANDLE" 2>/dev/null || true
             fi
