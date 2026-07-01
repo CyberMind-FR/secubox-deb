@@ -49,6 +49,9 @@
   # ── Tor config dir (read dir entry only; postinst writes the file) ────────
   /etc/tor/torrc.d/ r,
 
+  # ── Macro conf (board firewall table for the gating set; root-owned) ──────
+  /etc/secubox/macro.conf r,
+
   # ── Persistent state (active grants, rollback snapshots) ─────────────────
   /var/lib/secubox/macro/     rw,
   /var/lib/secubox/macro/**   rw,

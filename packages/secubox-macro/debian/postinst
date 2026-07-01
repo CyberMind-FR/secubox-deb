@@ -31,11 +31,24 @@ case "$1" in
             chmod 0640 /var/log/secubox/audit.log 2>/dev/null || true
         fi
 
-        # ── nft base set + input rule (only if inet secubox_filter exists) ──
-        if nft list table inet secubox_filter >/dev/null 2>&1; then
-            nft list set inet secubox_filter secubox_macro_torexit >/dev/null 2>&1 || \
-              nft add set inet secubox_filter secubox_macro_torexit '{ type ipv4_addr; }' 2>/dev/null || true
-            nft add rule inet secubox_filter input iifname "wg-mesh" ip saddr @secubox_macro_torexit tcp dport 9050 accept 2>/dev/null || true
+        # ── nft base set + input rule in the board's firewall table ─────────
+        # Boards differ: c3box carries the input hook in `inet secubox_filter`,
+        # gk2 in the stock `inet filter`. The gating allow must live in whichever
+        # table holds the input hook, so detect it (prefer secubox_filter) and
+        # persist it to /etc/secubox/macro.conf for the plugin (root reads it;
+        # sudo env_reset strips env, so config passes via this file).
+        MACRO_TABLE=""
+        for t in "inet secubox_filter" "inet filter"; do
+            if nft list table $t >/dev/null 2>&1; then MACRO_TABLE="$t"; break; fi
+        done
+        if [ -n "$MACRO_TABLE" ]; then
+            install -d -m 0755 /etc/secubox 2>/dev/null || true
+            printf 'TOREXIT_TABLE=%s\n' "$MACRO_TABLE" > /etc/secubox/macro.conf
+            chmod 0644 /etc/secubox/macro.conf 2>/dev/null || true
+            nft list set $MACRO_TABLE secubox_macro_torexit >/dev/null 2>&1 || \
+              nft add set $MACRO_TABLE secubox_macro_torexit '{ type ipv4_addr; }' 2>/dev/null || true
+            nft list chain $MACRO_TABLE input 2>/dev/null | grep -q secubox_macro_torexit || \
+              nft add rule $MACRO_TABLE input iifname "wg-mesh" ip saddr @secubox_macro_torexit tcp dport 9050 accept 2>/dev/null || true
         fi
 
         # ── Tor SocksPort on the wg-mesh IP (dedicated torrc.d file) ────────
