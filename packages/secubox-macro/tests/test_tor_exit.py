@@ -87,3 +87,31 @@ def test_grant_out_of_range_port_rejected(tmp_path):
     r = _run(["grant", "--src-ip", "10.10.0.2",
               "--params", json.dumps({"socks_port": 99999})], env)
     assert r.returncode != 0
+
+
+def _load_plugin_module():
+    """Import the tor-exit plugin (a shebang script, no .py) as a module so we
+    can unit-test its pure helpers."""
+    import pathlib
+    from importlib.machinery import SourceFileLoader
+    p = pathlib.Path(__file__).resolve().parents[1] / "macros.d" / "tor-exit"
+    return SourceFileLoader("torexit_plugin", str(p)).load_module()
+
+
+def test_conf_table_reads_valid(tmp_path):
+    mod = _load_plugin_module()
+    conf = tmp_path / "macro.conf"
+    conf.write_text("TOREXIT_TABLE=inet filter\n")
+    assert mod._conf_table(str(conf)) == "inet filter"
+
+
+def test_conf_table_rejects_injection(tmp_path):
+    mod = _load_plugin_module()
+    conf = tmp_path / "macro.conf"
+    conf.write_text("TOREXIT_TABLE=inet filter; rm -rf /\n")  # malicious
+    assert mod._conf_table(str(conf)) == "inet secubox_filter"  # rejected → default
+
+
+def test_conf_table_default_when_absent(tmp_path):
+    mod = _load_plugin_module()
+    assert mod._conf_table(str(tmp_path / "nope.conf")) == "inet secubox_filter"
