@@ -17,6 +17,15 @@ case "$1" in
         install -d -m 0750 /var/lib/secubox/macro/grants
         chown -R secubox:secubox /var/lib/secubox/macro 2>/dev/null || true
 
+        # Pre-create the audit log so the AppArmor profile's append-only ('a')
+        # permission suffices — 'a' cannot CREATE a missing file, so macroctl's
+        # first grant would otherwise be denied create and write no audit line.
+        if [ ! -e /var/log/secubox/audit.log ]; then
+            install -d -m 0755 /var/log/secubox 2>/dev/null || true
+            : > /var/log/secubox/audit.log 2>/dev/null || true
+            chmod 0640 /var/log/secubox/audit.log 2>/dev/null || true
+        fi
+
         # ── nft base set + input rule (only if inet secubox_filter exists) ──
         if nft list table inet secubox_filter >/dev/null 2>&1; then
             nft list set inet secubox_filter secubox_macro_torexit >/dev/null 2>&1 || \
