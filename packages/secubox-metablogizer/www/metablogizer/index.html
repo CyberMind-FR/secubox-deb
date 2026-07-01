@@ -410,7 +410,7 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
                 const ct = res.headers.get('content-type') || '';
                 if (!res.ok || !ct.includes('application/json')) {
                     console.warn('api()', path, 'status=' + res.status, 'content-type=' + ct);
