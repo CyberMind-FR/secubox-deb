@@ -408,7 +408,7 @@ function handleLogin(e) {
       localStorage.setItem('secubox_role', 'admin');
       showMsg('Login successful!', 'success');
       setTimeout(function() {
-        window.location.href = '/';
+        window.location.href = _sbxRedirect();
       }, 500);
     } else {
       throw new Error(data.detail || 'Login failed');
@@ -421,6 +421,17 @@ function handleLogin(e) {
   });
 
   return false;
+}
+
+// Honor ?redirect=<same-origin path> so login returns to the page that sent us
+// here (e.g. /metablogizer/) instead of always landing at the hub root. Only a
+// single-slash absolute path is accepted (never //host or /\host) — open-redirect safe.
+function _sbxRedirect() {
+  try {
+    var p = new URLSearchParams(window.location.search).get('redirect');
+    if (p && /^\/(?![\/\\])/.test(p)) return p;
+  } catch (e) {}
+  return '/';
 }
 
 // Load device-specific theme
@@ -450,7 +461,7 @@ if (token) {
     headers: {'Authorization': 'Bearer ' + token}
   })
   .then(function(r) {
-    if (r.ok) window.location.href = '/';
+    if (r.ok) window.location.href = _sbxRedirect();
   })
   .catch(function() {});
 }
