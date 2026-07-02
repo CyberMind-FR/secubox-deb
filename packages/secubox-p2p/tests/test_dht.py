@@ -350,3 +350,72 @@ async def test_find_peer_survives_malformed_contact_in_reply(monkeypatch):
     assert result["did"] == C.did
     assert result["endpoint"] == c_ep
     assert dht.verify_record(result) is True
+
+
+# Task 8b: UDP transport + routing persistence + bootstrap
+
+
+def test_save_and_load_routing_roundtrip(tmp_path):
+    """save_routing writes 0600 JSON; a fresh network's load_routing reinserts
+    the same contacts and reports how many were inserted."""
+    net = DHTNetwork("did:self", "ii", "aa", "10.10.0.1:51823")
+    b = DHTNode(node_id_for("did:b"), "did:b", ("10.10.0.2", 51823))
+    c = DHTNode(node_id_for("did:c"), "did:c", ("10.10.0.3", 51823))
+    net.routing.insert(b)
+    net.routing.insert(c)
+
+    path = tmp_path / "r.json"
+    net.save_routing(path)
+
+    assert path.exists()
+    mode = path.stat().st_mode & 0o777
+    assert mode == 0o600
+
+    net2 = DHTNetwork("did:other", "ii2", "aa2", "10.10.0.9:51823")
+    count = net2.load_routing(path)
+
+    assert count == 2
+    loaded_ids = {n.node_id for n in net2.routing.all_nodes()}
+    assert b.node_id in loaded_ids and c.node_id in loaded_ids
+
+
+def test_load_routing_missing_file_returns_zero(tmp_path):
+    net = DHTNetwork("did:self", "ii", "aa", "10.10.0.1:51823")
+    count = net.load_routing(tmp_path / "does-not-exist.json")
+    assert count == 0
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_real_udp_bootstrap_and_find_peer(monkeypatch):
+    """End-to-end over real loopback UDP sockets (ephemeral ports): B announces
+    its signed record; A bootstraps off B's address alone (no identity known in
+    advance) and must resolve B's record via find_peer. This targets the
+    transport wiring, not the crypto — so the sign/verify seams are
+    monkeypatched to a trivial always-true scheme, same pattern as the other
+    Task 7 in-process tests."""
+    _crypto_identity(monkeypatch)
+
+    A = DHTNetwork("did:A", "did:A", "wg:A", "127.0.0.1:0")
+    B = DHTNetwork("did:B", "did:B", "wg:B", "127.0.0.1:0")
+
+    try:
+        await A.start(host="127.0.0.1", port=0)
+        await B.start(host="127.0.0.1", port=0)
+
+        a_port = A._transport.get_extra_info("socket").getsockname()[1]
+        b_port = B._transport.get_extra_info("socket").getsockname()[1]
+        A.endpoint = f"127.0.0.1:{a_port}"
+        B.endpoint = f"127.0.0.1:{b_port}"
+
+        await B.announce()
+        inserted = await A.bootstrap(seeds=[B.endpoint])
+
+        assert inserted >= 1
+        result = await A.find_peer(B.did)
+        assert result is not None
+        assert result["did"] == B.did
+        assert result["endpoint"] == B.endpoint
+    finally:
+        await A.stop()
+        await B.stop()

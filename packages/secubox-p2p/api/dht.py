@@ -7,10 +7,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json as _json
+import logging
+import os
 import time
 import uuid
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from . import annuaire_client as _annuaire
 
@@ -22,6 +25,9 @@ PEER_TIMEOUT = 900
 DHT_TTL = 3600
 DHT_PORT = 51823
 MAX_DGRAM = 8192
+DHT_ROUTING_PATH = Path("/var/lib/secubox/p2p/dht-routing.json")
+
+log = logging.getLogger("secubox.p2p.dht")
 
 
 def node_id_for(did: str) -> bytes:
@@ -220,6 +226,7 @@ class DHTNetwork:
         self.routing = RoutingTable(self.self_id)
         self.store: dict = {}  # key_hex -> (record, expiry_ts)
         self.pending: dict = {}  # rpc_id -> asyncio.Future, resolved by handle_message
+        self._transport = None
 
     def _sender_dict(self) -> dict:
         return {"node_id_hex": self.self_id.hex(), "did": self.did, "endpoint": self.endpoint}
@@ -397,8 +404,16 @@ class DHTNetwork:
 
     async def announce(self) -> None:
         """Sign our own reachability record, store it locally, then push it to
-        the k nodes closest to our own id (as discovered via iterative_find)."""
-        record = sign_record(self.did, self.id_pubkey, self.wg_pubkey, self.endpoint, int(self._clock()))
+        the k nodes closest to our own id (as discovered via iterative_find).
+
+        If the local node identity key is unavailable, `sign_record` raises a
+        RuntimeError from `_sign_sig`. That is not fatal to the caller: log a
+        warning and return without announcing rather than crashing."""
+        try:
+            record = sign_record(self.did, self.id_pubkey, self.wg_pubkey, self.endpoint, int(self._clock()))
+        except RuntimeError as exc:
+            log.warning("announce: cannot sign local record: %s", exc)
+            return
         key_hex = self.self_id.hex()
         self.local_store_put(key_hex, record)
         closest = await self.iterative_find(self.self_id, "node")
@@ -406,3 +421,111 @@ class DHTNetwork:
             rpc_id = uuid.uuid4().hex
             msg = msg_store(rpc_id, self._sender_dict(), key_hex, record)
             await self._rpc(node, msg)
+
+    # -- Task 8b: UDP transport + routing persistence + bootstrap --
+
+    async def start(self, host: str = "0.0.0.0", port: int = None) -> None:
+        """Bind a real UDP transport and wire it as this network's send_fn."""
+        if port is None:
+            try:
+                port = self._parse_endpoint(self.endpoint)[1]
+            except (ValueError, AttributeError):
+                port = DHT_PORT
+        loop = asyncio.get_running_loop()
+        self._transport, _ = await loop.create_datagram_endpoint(
+            lambda: _DHTProtocol(self), local_addr=(host, port)
+        )
+        self.send_fn = lambda data, addr: self._transport.sendto(data, addr)
+
+    async def stop(self) -> None:
+        """Close the real UDP transport, if any."""
+        if self._transport is not None:
+            self._transport.close()
+            self._transport = None
+
+    def save_routing(self, path=None) -> None:
+        """Persist the current routing table contacts to a JSON file (0600)."""
+        target = Path(path) if path is not None else DHT_ROUTING_PATH
+        target.parent.mkdir(parents=True, exist_ok=True)
+        contacts = [
+            {"node_id_hex": n.node_id.hex(), "did": n.did,
+             "endpoint": f"{n.endpoint[0]}:{n.endpoint[1]}"}
+            for n in self.routing.all_nodes()
+        ]
+        target.write_text(_json.dumps(contacts))
+        os.chmod(target, 0o600)
+
+    def load_routing(self, path=None) -> int:
+        """Load persisted contacts into the routing table. Returns count inserted.
+        Missing file -> 0. Malformed entries are skipped, like _merge_contact."""
+        target = Path(path) if path is not None else DHT_ROUTING_PATH
+        if not target.exists():
+            return 0
+        try:
+            contacts = _json.loads(target.read_text())
+        except (ValueError, OSError):
+            return 0
+        if not isinstance(contacts, list):
+            return 0
+        count = 0
+        for contact in contacts:
+            before = len(self.routing.all_nodes())
+            self._merge_contact_into_routing(contact)
+            if len(self.routing.all_nodes()) > before:
+                count += 1
+        return count
+
+    def _merge_contact_into_routing(self, contact) -> None:
+        """Parse a {node_id_hex,did,endpoint} contact dict and insert it into
+        the routing table directly (skip malformed, like _merge_contact)."""
+        try:
+            node_id = bytes.fromhex(contact["node_id_hex"])
+            did = contact["did"]
+            endpoint = self._parse_endpoint(contact["endpoint"])
+        except (ValueError, KeyError, TypeError):
+            return
+        if node_id == self.self_id:
+            return
+        self.routing.insert(DHTNode(node_id, did, endpoint))
+
+    async def bootstrap(self, seeds: list = None, annuaire_nodes: list = None) -> int:
+        """Populate the routing table from known annuaire nodes and/or seed
+        addresses, then run an iterative_find(self_id) to fill buckets.
+        Returns the number of contacts in the routing table afterwards."""
+        for entry in annuaire_nodes or []:
+            try:
+                did = entry["did"]
+                endpoint = self._parse_endpoint(entry["endpoint"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            self.routing.insert(DHTNode(node_id_for(did), did, endpoint))
+
+        for seed in seeds or []:
+            try:
+                host, port_s = seed.rsplit(":", 1)
+                addr = (host, int(port_s))
+            except ValueError:
+                continue
+            seed_node = DHTNode(b"\x00" * 20, "", addr)
+            rpc_id = uuid.uuid4().hex
+            msg = msg_find_node(rpc_id, self._sender_dict(), self.self_id.hex())
+            await self._rpc(seed_node, msg)   # reply (if any) populates routing via handle_message
+
+        await self.iterative_find(self.self_id, "node")
+        return len(self.routing.all_nodes())
+
+
+class _DHTProtocol(asyncio.DatagramProtocol):
+    """asyncio UDP protocol that hands datagrams to a DHTNetwork instance."""
+
+    def __init__(self, net: "DHTNetwork"):
+        self.net = net
+
+    def datagram_received(self, data: bytes, addr) -> None:
+        self.net.handle_message(data, addr)
+
+    def error_received(self, exc) -> None:
+        log.debug("DHT UDP error_received: %s", exc)
+
+    def connection_lost(self, exc) -> None:
+        log.debug("DHT UDP connection_lost: %s", exc)
