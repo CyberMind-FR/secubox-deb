@@ -7,6 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+import functools
 import logging
 import subprocess
 import asyncio
@@ -2561,9 +2562,12 @@ async def _federation_startup():
         if getattr(app.state, "dht", None):
             publish_fn = federation.make_dht_publisher(app.state.dht)
 
+        probe_fn = functools.partial(
+            federation.default_probe, timeout=cfg["federation"]["probe_timeout"]
+        )
         checker = federation.HealthChecker(
             federation.services_from_registry,
-            federation.default_probe,
+            probe_fn,
             store,
             interval=cfg["federation"]["interval"],
             max_concurrency=cfg["federation"]["max_concurrency"],

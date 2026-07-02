@@ -326,3 +326,47 @@ def test_make_dht_publisher_writes_health():
     assert key_hex == node_id_for("health:svc-a").hex()
     assert blob["service_id"] == "svc-a"
     assert blob["status"] == "up"
+
+
+@pytest.mark.asyncio
+async def test_sweep_survives_publish_fn_exception():
+    """A publish_fn that raises must not break sweep_once() — the probe
+    results are still recorded into the store before publishing runs."""
+
+    def services_fn():
+        return [{"id": "a"}]
+
+    async def probe_fn(svc):
+        return True, 1.0
+
+    def publish_fn(snapshot):
+        raise RuntimeError("boom")
+
+    store = HealthStore()
+    checker = HealthChecker(
+        services_fn, probe_fn, store, enabled=True, publish_fn=publish_fn
+    )
+
+    n = await checker.sweep_once()
+
+    assert n == 1
+    assert store.status_of("a")["status"] == "up"
+
+
+@pytest.mark.asyncio
+async def test_dht_health_ttl_expiry():
+    """put_health()/get_health() honor DHT_TTL against the injected clock,
+    the same way local_store_put()/local_store_get() do (test_dht.py's
+    test_store_ttl_expiry pattern)."""
+    from api.dht import DHT_TTL, DHTNetwork
+
+    t = [1000.0]
+    net = DHTNetwork(
+        "did:self", "ii", "aa", "10.10.0.1:51823", clock=lambda: t[0]
+    )
+
+    net.put_health("k", {"status": "up"})
+    assert net.get_health("k") is not None
+
+    t[0] += DHT_TTL + 1
+    assert net.get_health("k") is None
