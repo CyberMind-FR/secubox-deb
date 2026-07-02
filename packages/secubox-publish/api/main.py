@@ -21,13 +21,38 @@ import io
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+import contextvars
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
 app = FastAPI(title="SecuBox Publishing Platform", version="3.0.0")
+
+# Auth-forwarding for inter-module calls. Sibling module endpoints are all
+# require_jwt, so _call_module must present the ORIGINAL caller's credentials —
+# a freshly minted service token would carry a jti absent from sessions.json and
+# be rejected ("Session révoquée"). A middleware stashes the caller's bearer/
+# cookie into this ContextVar for the duration of the request; _call_module
+# reads it. Background tasks (health/status polling) run with no token — fine,
+# those sibling endpoints are public.
+_caller_token: contextvars.ContextVar = contextvars.ContextVar("sbx_caller_token", default="")
+
+
+@app.middleware("http")
+async def _capture_caller_token(request: Request, call_next):
+    tok = ""
+    auth = request.headers.get("authorization", "")
+    if auth[:7].lower() == "bearer ":
+        tok = auth[7:].strip()
+    if not tok:
+        tok = request.cookies.get("secubox_session", "")
+    reset = _caller_token.set(tok)
+    try:
+        return await call_next(request)
+    finally:
+        _caller_token.reset(reset)
 
 # Configuration
 DATA_DIR = Path("/var/lib/secubox/publish")
@@ -40,13 +65,12 @@ BUNDLES_DIR.mkdir(parents=True, exist_ok=True)
 PLUGINS_DIR = Path("/srv/secubox/modules/publish/plugins")
 PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Module socket paths
-MODULES = {
-    "streamlit": "/run/secubox/streamlit.sock",
-    "streamforge": "/run/secubox/streamforge.sock",
-    "droplet": "/run/secubox/droplet.sock",
-    "metablogizer": "/run/secubox/metablogizer.sock",
-}
+# Sibling modules are served in-process by the aggregator; we reach them with an
+# authenticated call to the aggregator socket at /api/v1/<module>/... The old
+# per-module standalone sockets (droplet.sock, streamlit.sock, …) are not
+# running, so targeting them directly always failed (connection refused).
+AGGREGATOR_SOCK = "/run/secubox/aggregator.sock"
+MODULES = {"streamlit", "streamforge", "droplet", "metablogizer"}
 
 # Content type detection patterns
 CONTENT_SIGNATURES = {
@@ -321,22 +345,33 @@ async def _notify_webhooks(event: str, data: Dict[str, Any]):
 
 async def _call_module(module: str, path: str, method: str = "GET", data: dict = None, timeout: int = 30) -> dict:
     """Call a module's API via Unix socket."""
-    socket_path = MODULES.get(module)
-    if not socket_path:
+    if module not in MODULES:
         return {"error": f"Unknown module: {module}"}
 
+    # Route through the aggregator at /api/v1/<module><path>, forwarding the
+    # caller's credentials so the sibling's require_jwt accepts the call.
+    url = f"/api/v1/{module}{path}"
+    headers = {}
+    tok = _caller_token.get()
+    if tok:
+        headers["Authorization"] = f"Bearer {tok}"
+
     try:
-        transport = httpx.AsyncHTTPTransport(uds=socket_path)
-        async with httpx.AsyncClient(transport=transport, base_url="http://localhost", timeout=timeout) as client:
+        transport = httpx.AsyncHTTPTransport(uds=AGGREGATOR_SOCK)
+        async with httpx.AsyncClient(transport=transport, base_url="http://localhost",
+                                     timeout=timeout, headers=headers) as client:
             if method == "GET":
-                resp = await client.get(path)
+                resp = await client.get(url)
             elif method == "POST":
-                resp = await client.post(path, json=data or {})
+                resp = await client.post(url, json=data or {})
             elif method == "DELETE":
-                resp = await client.delete(path)
+                resp = await client.delete(url)
             else:
                 return {"error": f"Unsupported method: {method}"}
-            return resp.json()
+            try:
+                return resp.json()
+            except Exception:
+                return {"error": f"non-json response {resp.status_code}", "status": resp.status_code}
     except Exception as e:
         return {"error": str(e), "module": module}
 
