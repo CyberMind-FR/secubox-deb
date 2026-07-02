@@ -84,6 +84,45 @@ See [#34](https://github.com/CyberMind-FR/secubox-deb/issues/34) for full discus
 
 **GitHub Issue #34 Status**: ✅ **RESOLVED** (Session 73-74, 2026-04-29)
 
+### Endless login loop — "Session révoquée" on every module (metablogizer, publish, service-catalog, device-intel…)
+
+**Symptom**: A module loads its public widgets (metrics), then bounces back to
+the login page. Logging in appears to succeed but you land right back on the
+login form — forever, on every box. Auth-required endpoints return
+`401 {"detail":"Session révoquée"}`.
+
+**Root cause**: `login.html` posted to `/api/v1/hub/auth/login` (its `API` const
+was `/api/v1/hub`). The hub includes `secubox_core.auth`'s router
+(`include_router(auth_router, prefix="/auth")`) **but never registers
+`set_session_callback`**, so a login routed through the hub mints a JWT whose
+`jti` is **never written to `sessions.json`**. Every later request then fails
+`require_jwt`'s jti-in-sessions check → 401 "Session révoquée" → bounce to login.
+
+**Status**: ✅ **FIXED** — `login.html` now posts straight to the canonical auth
+service `/api/v1/auth/login` (→ `auth.sock`), which records the session.
+
+**Why it surfaced "after Authelia was disabled"**: the Authelia `auth_request`
+gate used to satisfy auth at the nginx layer before `require_jwt` ever saw the
+token. Disabling Authelia exposed the strict jti validation, revealing the
+long-latent hub-login defect. After the fix, force one hard-refresh
+(`Ctrl-Shift-R`) on the login page so the browser picks up the corrected JS.
+
+### Authelia SSO — decommissioned (⚠️ failed / half-baked PoC)
+
+**Verdict**: the `secubox-authelia` SSO IdP layer (auth-bridge, `#239`) was more
+trouble than value and is being **removed**. It was masked as a service but its
+mounted module + nginx `auth_request /__sbx_auth_verify` gate lingered, and its
+partial teardown is what masked (then unmasked) the login-loop bug above.
+
+**Guidance**:
+- Do **not** re-enable `secubox-authelia`. Auth is handled by `secubox-auth`
+  (JWT + `sessions.json` + SSO-lite cookie), not by an external IdP.
+- The nginx gate (`/__sbx_auth_verify`) already short-circuits to `return 200`
+  for LAN clients; remaining WAN-gated vhosts must move to app-native auth or a
+  simple allow-list, not Authelia.
+- If you see an "auth bridge" / Authelia reference in a vhost, treat it as dead
+  weight to strip.
+
 ---
 
 ## Network Issues
