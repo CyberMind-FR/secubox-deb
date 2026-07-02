@@ -77,10 +77,10 @@ def test_canonical_is_stable_and_sorted():
     """canonical_record produces deterministic sorted JSON."""
     import json
     from api.dht import canonical_record
-    a = canonical_record("did:x", "aa", "10.10.0.5:51823", 100)
-    b = canonical_record("did:x", "aa", "10.10.0.5:51823", 100)
+    a = canonical_record("did:x", "ii", "aa", "10.10.0.5:51823", 100)
+    b = canonical_record("did:x", "ii", "aa", "10.10.0.5:51823", 100)
     assert a == b and b"did" in a and a == json.dumps(
-        {"did":"did:x","endpoint":"10.10.0.5:51823","ts":100,"wg_pubkey":"aa"},
+        {"did":"did:x","endpoint":"10.10.0.5:51823","id_pubkey":"ii","ts":100,"wg_pubkey":"aa"},
         sort_keys=True, separators=(",", ":")).encode()
 
 
@@ -91,10 +91,10 @@ def test_verify_rejects_tampered(monkeypatch):
 
     monkeypatch.setattr(dht, "_did_from_pubkey", lambda hexstr: "did:x")
 
-    rec = {"did":"did:x","wg_pubkey":"aa","endpoint":"10.10.0.5:51823","ts":100,"sig":"deadbeef"}
+    rec = {"did":"did:x","id_pubkey":"ii","wg_pubkey":"aa","endpoint":"10.10.0.5:51823","ts":100,"sig":"deadbeef"}
     # verify_fn returns True only for the exact canonical bytes:
     monkeypatch.setattr(dht, "_verify_sig",
-        lambda body, sig, pub: sig == "deadbeef" and body == canonical_record("did:x","aa","10.10.0.5:51823",100))
+        lambda body, sig, pub: sig == "deadbeef" and body == canonical_record("did:x","ii","aa","10.10.0.5:51823",100))
     assert verify_record(rec) is True
 
     rec2 = dict(rec, endpoint="10.10.0.9:51823")   # tamper
@@ -102,6 +102,49 @@ def test_verify_rejects_tampered(monkeypatch):
 
     rec3 = dict(rec); rec3.pop("sig")              # unsigned
     assert verify_record(rec3) is False
+
+
+def test_real_ed25519_sign_and_verify_roundtrip(monkeypatch):
+    """End-to-end with the REAL cryptography Ed25519 seams (no monkeypatch of
+    _sign_sig/_verify_sig/_did_from_pubkey): sign a record with a real key,
+    verify it, then show tampering and identity-mismatch both fail closed."""
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, PublicFormat, NoEncryption
+    import api.annuaire_client as annuaire_client
+    from api.dht import sign_record, verify_record
+
+    priv_key = ed25519.Ed25519PrivateKey.generate()
+    priv_hex = priv_key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()
+    pub_hex = priv_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+    did = annuaire_client.did_from_pubkey_hex(pub_hex)
+
+    monkeypatch.setattr(annuaire_client, "node_identity", lambda *a, **kw: (did, priv_hex))
+
+    rec = sign_record(did, pub_hex, "wg-pubkey-hex", "10.10.0.5:51823", 100)
+    assert verify_record(rec) is True
+
+    tampered = dict(rec, endpoint="10.10.0.9:51823")
+    assert verify_record(tampered) is False
+
+    other_pub_hex = ed25519.Ed25519PrivateKey.generate().public_key().public_bytes(
+        Encoding.Raw, PublicFormat.Raw).hex()
+    wrong_identity = dict(rec, id_pubkey=other_pub_hex)   # did no longer matches id_pubkey
+    assert verify_record(wrong_identity) is False
+
+
+def test_real_ed25519_verify_rejects_garbage_signature():
+    """A malformed/garbage sig must fail closed, not raise."""
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    from api.dht import verify_record
+    import api.annuaire_client as annuaire_client
+
+    pub_hex = ed25519.Ed25519PrivateKey.generate().public_key().public_bytes(
+        Encoding.Raw, PublicFormat.Raw).hex()
+    did = annuaire_client.did_from_pubkey_hex(pub_hex)
+    rec = {"did": did, "id_pubkey": pub_hex, "wg_pubkey": "wg", "endpoint": "10.10.0.5:51823",
+           "ts": 100, "sig": "deadbeef"}   # too short to be a valid 64-byte Ed25519 sig
+    assert verify_record(rec) is False
 
 
 # Task 5: JSON UDP RPC codec + datagram hardening
@@ -130,7 +173,7 @@ def _net(monkeypatch, sent, verified=True):
     monkeypatch.setattr(dht, "_did_from_pubkey", lambda h: "did:self")
     monkeypatch.setattr(dht, "_verify_sig", lambda b,s,p: verified)
     monkeypatch.setattr(dht, "_sign_sig", lambda b: "sig")
-    return DHTNetwork("did:self","aa","10.10.0.1:51823", send_fn=lambda d,a: sent.append((d,a)))
+    return DHTNetwork("did:self","ii","aa","10.10.0.1:51823", send_fn=lambda d,a: sent.append((d,a)))
 
 
 def test_ping_gets_pong(monkeypatch):
@@ -142,7 +185,7 @@ def test_ping_gets_pong(monkeypatch):
 
 def test_store_rejects_unverified(monkeypatch):
     sent=[]; net=_net(monkeypatch, sent, verified=False)
-    ok = net.local_store_put("aa"*20, {"did":"did:peer","wg_pubkey":"bb","endpoint":"10.10.0.2:51823","ts":1,"sig":"x"})
+    ok = net.local_store_put("aa"*20, {"did":"did:peer","id_pubkey":"ii","wg_pubkey":"bb","endpoint":"10.10.0.2:51823","ts":1,"sig":"x"})
     assert ok is False and "aa"*20 not in net.store
 
 
@@ -151,9 +194,9 @@ def test_store_ttl_expiry(monkeypatch):
     monkeypatch.setattr(dht,"_did_from_pubkey",lambda h:"did:peer")
     monkeypatch.setattr(dht,"_verify_sig",lambda b,s,p:True)
     monkeypatch.setattr(dht,"_sign_sig",lambda b:"sig")
-    net=DHTNetwork("did:self","aa","10.10.0.1:51823",send_fn=lambda d,a:sent.append((d,a)),clock=lambda:t[0])
+    net=DHTNetwork("did:self","ii","aa","10.10.0.1:51823",send_fn=lambda d,a:sent.append((d,a)),clock=lambda:t[0])
     key="bb"*20
-    assert net.local_store_put(key, {"did":"did:peer","wg_pubkey":"cc","endpoint":"10.10.0.2:51823","ts":1,"sig":"s"})
+    assert net.local_store_put(key, {"did":"did:peer","id_pubkey":"ii","wg_pubkey":"cc","endpoint":"10.10.0.2:51823","ts":1,"sig":"s"})
     assert net.local_store_get(key) is not None
     t[0]+=dht.DHT_TTL+1
     assert net.local_store_get(key) is None
@@ -204,9 +247,9 @@ async def test_find_peer_resolves_indirect_node_via_bootstrap(monkeypatch):
     nets: dict = {}
     a_ep, b_ep, c_ep = "10.10.0.1:51823", "10.10.0.2:51823", "10.10.0.3:51823"
 
-    A = DHTNetwork("did:A", "did:A", a_ep, send_fn=_make_send_fn(nets, a_ep))
-    B = DHTNetwork("did:B", "did:B", b_ep, send_fn=_make_send_fn(nets, b_ep))
-    C = DHTNetwork("did:C", "did:C", c_ep, send_fn=_make_send_fn(nets, c_ep))
+    A = DHTNetwork("did:A", "did:A", "wg:A", a_ep, send_fn=_make_send_fn(nets, a_ep))
+    B = DHTNetwork("did:B", "did:B", "wg:B", b_ep, send_fn=_make_send_fn(nets, b_ep))
+    C = DHTNetwork("did:C", "did:C", "wg:C", c_ep, send_fn=_make_send_fn(nets, c_ep))
     nets[a_ep] = A; nets[b_ep] = B; nets[c_ep] = C
 
     A.routing.insert(DHTNode(B.self_id, B.did, _ep(b_ep)))
@@ -242,10 +285,10 @@ async def test_iterative_find_dedup_across_merged_contacts(monkeypatch):
     )
     counts: dict = {}
 
-    A = DHTNetwork("did:A", "did:A", a_ep, send_fn=_make_send_fn(nets, a_ep, counts))
-    B = DHTNetwork("did:B", "did:B", b_ep, send_fn=_make_send_fn(nets, b_ep, counts))
-    D = DHTNetwork("did:D", "did:D", d_ep, send_fn=_make_send_fn(nets, d_ep, counts))
-    E = DHTNetwork("did:E", "did:E", e_ep, send_fn=_make_send_fn(nets, e_ep, counts))
+    A = DHTNetwork("did:A", "did:A", "wg:A", a_ep, send_fn=_make_send_fn(nets, a_ep, counts))
+    B = DHTNetwork("did:B", "did:B", "wg:B", b_ep, send_fn=_make_send_fn(nets, b_ep, counts))
+    D = DHTNetwork("did:D", "did:D", "wg:D", d_ep, send_fn=_make_send_fn(nets, d_ep, counts))
+    E = DHTNetwork("did:E", "did:E", "wg:E", e_ep, send_fn=_make_send_fn(nets, e_ep, counts))
     nets[a_ep] = A; nets[b_ep] = B; nets[d_ep] = D; nets[e_ep] = E
 
     A.routing.insert(DHTNode(B.self_id, B.did, _ep(b_ep)))
@@ -273,9 +316,9 @@ async def test_find_peer_survives_malformed_contact_in_reply(monkeypatch):
     nets: dict = {}
     a_ep, b_ep, c_ep = "10.10.0.1:51823", "10.10.0.2:51823", "10.10.0.3:51823"
 
-    A = DHTNetwork("did:A", "did:A", a_ep, send_fn=_make_send_fn(nets, a_ep))
-    B = DHTNetwork("did:B", "did:B", b_ep, send_fn=_make_send_fn(nets, b_ep))
-    C = DHTNetwork("did:C", "did:C", c_ep, send_fn=_make_send_fn(nets, c_ep))
+    A = DHTNetwork("did:A", "did:A", "wg:A", a_ep, send_fn=_make_send_fn(nets, a_ep))
+    B = DHTNetwork("did:B", "did:B", "wg:B", b_ep, send_fn=_make_send_fn(nets, b_ep))
+    C = DHTNetwork("did:C", "did:C", "wg:C", c_ep, send_fn=_make_send_fn(nets, c_ep))
     nets[a_ep] = A; nets[b_ep] = B; nets[c_ep] = C
 
     A.routing.insert(DHTNode(B.self_id, B.did, _ep(b_ep)))
@@ -283,7 +326,7 @@ async def test_find_peer_survives_malformed_contact_in_reply(monkeypatch):
 
     # C holds its own signed record locally (no announce/push — this keeps
     # B's find_value reply on the "nodes" branch, below, so we can poison it).
-    record = dht.sign_record(C.did, C.wg_pubkey, C.endpoint, int(C._clock()))
+    record = dht.sign_record(C.did, C.id_pubkey, C.wg_pubkey, C.endpoint, int(C._clock()))
     C.local_store_put(C.self_id.hex(), record)
 
     # Wrap B's outgoing reply: whenever it would send a "nodes" message,

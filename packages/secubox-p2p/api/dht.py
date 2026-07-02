@@ -104,34 +104,57 @@ class RoutingTable:
         return nodes[:count]
 
 
-def canonical_record(did: str, wg_pubkey: str, endpoint: str, ts: int) -> bytes:
-    """Deterministic signed reachability record (canonical JSON form)."""
+def canonical_record(did: str, id_pubkey: str, wg_pubkey: str, endpoint: str, ts: int) -> bytes:
+    """Deterministic signed reachability record (canonical JSON form).
+
+    `id_pubkey` is the node's Ed25519 identity public key (hex), from which
+    `did` derives and against which `sig` is verified. `wg_pubkey` is the
+    node's separate WireGuard X25519 public key (hex) — it cannot sign, it
+    is merely advertised as the mesh endpoint's transport key.
+    """
     return _json.dumps(
-        {"did": did, "wg_pubkey": wg_pubkey, "endpoint": endpoint, "ts": ts},
+        {"did": did, "endpoint": endpoint, "id_pubkey": id_pubkey,
+         "ts": ts, "wg_pubkey": wg_pubkey},
         sort_keys=True, separators=(",", ":"),
     ).encode()
 
 
 def _did_from_pubkey(pub_hex: str) -> str:
-    """Seam: convert wg_pubkey hex to DID. Real impl in Task 8 via annuaire_client."""
+    """Convert an Ed25519 identity pubkey (hex) to its did:plc identifier."""
     return _annuaire.did_from_pubkey_hex(pub_hex)
 
 
-def _verify_sig(body: bytes, sig_hex: str, pub_hex: str) -> bool:
-    """Seam: verify Ed25519 signature. Real impl in Task 8."""
-    raise NotImplementedError
+def _verify_sig(body: bytes, sig_hex: str, id_pub_hex: str) -> bool:
+    """Verify an Ed25519 signature over `body` using the given identity pubkey (hex)."""
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    try:
+        pub_key = ed25519.Ed25519PublicKey.from_public_bytes(bytes.fromhex(id_pub_hex))
+        pub_key.verify(bytes.fromhex(sig_hex), body)
+        return True
+    except InvalidSignature:
+        return False
+    except (ValueError, TypeError):
+        return False
 
 
 def _sign_sig(body: bytes) -> str:
-    """Seam: sign body with local key. Real impl in Task 8."""
-    raise NotImplementedError
+    """Sign `body` with the local node's Ed25519 identity key (hex signature)."""
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    _did, priv_hex = _annuaire.node_identity()
+    if priv_hex is None:
+        raise RuntimeError("node identity unavailable: cannot sign DHT record")
+    priv_key = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(priv_hex))
+    return priv_key.sign(body).hex()
 
 
-def sign_record(did: str, wg_pubkey: str, endpoint: str, ts: int) -> dict:
+def sign_record(did: str, id_pubkey: str, wg_pubkey: str, endpoint: str, ts: int) -> dict:
     """Sign a reachability record and return with sig field."""
-    body = canonical_record(did, wg_pubkey, endpoint, ts)
-    return {"did": did, "wg_pubkey": wg_pubkey, "endpoint": endpoint,
-            "ts": ts, "sig": _sign_sig(body)}
+    body = canonical_record(did, id_pubkey, wg_pubkey, endpoint, ts)
+    return {"did": did, "id_pubkey": id_pubkey, "wg_pubkey": wg_pubkey,
+            "endpoint": endpoint, "ts": ts, "sig": _sign_sig(body)}
 
 
 def verify_record(rec: dict) -> bool:
@@ -139,10 +162,11 @@ def verify_record(rec: dict) -> bool:
     try:
         if "sig" not in rec:
             return False
-        body = canonical_record(rec["did"], rec["wg_pubkey"], rec["endpoint"], rec["ts"])
-        if _did_from_pubkey(rec["wg_pubkey"]) != rec["did"]:
+        body = canonical_record(rec["did"], rec["id_pubkey"], rec["wg_pubkey"],
+                                 rec["endpoint"], rec["ts"])
+        if _did_from_pubkey(rec["id_pubkey"]) != rec["did"]:
             return False
-        return bool(_verify_sig(body, rec["sig"], rec["wg_pubkey"]))
+        return bool(_verify_sig(body, rec["sig"], rec["id_pubkey"]))
     except (KeyError, TypeError, ValueError):
         return False
 
@@ -184,10 +208,11 @@ class DHTNetwork:
     UDP transport are added in later tasks.
     """
 
-    def __init__(self, did: str, wg_pubkey: str, endpoint: str,
+    def __init__(self, did: str, id_pubkey: str, wg_pubkey: str, endpoint: str,
                  send_fn=None, clock=time.time):
         self.did = did
         self.self_id = node_id_for(did)
+        self.id_pubkey = id_pubkey
         self.wg_pubkey = wg_pubkey
         self.endpoint = endpoint
         self.send_fn = send_fn
@@ -373,7 +398,7 @@ class DHTNetwork:
     async def announce(self) -> None:
         """Sign our own reachability record, store it locally, then push it to
         the k nodes closest to our own id (as discovered via iterative_find)."""
-        record = sign_record(self.did, self.wg_pubkey, self.endpoint, int(self._clock()))
+        record = sign_record(self.did, self.id_pubkey, self.wg_pubkey, self.endpoint, int(self._clock()))
         key_hex = self.self_id.hex()
         self.local_store_put(key_hex, record)
         closest = await self.iterative_find(self.self_id, "node")
