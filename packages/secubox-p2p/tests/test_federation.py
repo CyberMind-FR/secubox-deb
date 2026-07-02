@@ -269,3 +269,10 @@ def test_services_from_registry_raises_returns_empty(monkeypatch):
     monkeypatch.setattr(federation_mod.annuaire_client, "get_catalog", fake_get_catalog_raises)
 
     assert federation_mod.services_from_registry() == []
+
+
+@pytest.mark.asyncio
+async def test_probe_non_dict_service_returns_false():
+    """A non-dict service (None, str, ...) never raises — reported as (False, None)."""
+    assert await default_probe(None) == (False, None)
+    assert await default_probe("nope") == (False, None)

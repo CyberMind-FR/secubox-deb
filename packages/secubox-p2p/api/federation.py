@@ -237,6 +237,9 @@ async def default_probe(
     Returns:
         (ok, latency_ms) — latency_ms is None when ok is False.
     """
+    if not isinstance(service, dict):
+        return (False, None)
+
     endpoint = service.get("url") or service.get("endpoint") or ""
     health_path = service.get("health_path", "/health")
     if not endpoint:
@@ -262,7 +265,7 @@ async def default_probe(
             reader, writer = await asyncio.wait_for(fut, timeout)
             writer.close()
             try:
-                await writer.wait_closed()
+                await asyncio.wait_for(writer.wait_closed(), 1.0)
             except Exception:  # noqa: BLE001
                 pass
             return (True, (time.monotonic() - t0) * 1000.0)
