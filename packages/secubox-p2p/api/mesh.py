@@ -53,6 +53,16 @@ FEDERATION_DEFAULTS = {
     "fail_threshold": 3,
 }
 
+MASTERLINK_DEFAULTS = {
+    "enabled": False,
+    "role_preference": "auto",
+    "priority": 100,
+    "heartbeat_interval": 5,
+    "election_timeout": 15,
+    "port": 51824,
+    "peer_addrs": [],
+}
+
 
 def load_p2p_config(path: pathlib.Path) -> dict:
     """Read /etc/secubox/p2p.toml, with defaults.
@@ -92,6 +102,13 @@ def load_p2p_config(path: pathlib.Path) -> dict:
         if federation.get(k) is not None:
             out_federation[k] = federation[k]
     out["federation"] = out_federation
+
+    masterlink = doc.get("masterlink", {}) or {}
+    out_masterlink = dict(MASTERLINK_DEFAULTS)
+    for k in MASTERLINK_DEFAULTS:
+        if masterlink.get(k) is not None:
+            out_masterlink[k] = masterlink[k]
+    out["masterlink"] = out_masterlink
     return out
 
 

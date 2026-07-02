@@ -328,6 +328,33 @@ class MasterLink:
                 self.master_id = winner  # report the elected winner immediately
             self._last_hb = now  # avoid immediate re-election spam
 
+    def request_promotion(self) -> dict:
+        """On-demand promotion attempt (driven by an operator/API call rather
+        than an election-timeout tick).
+
+        Bumps the term (monotonic, via TermStore.bump()) and runs an
+        election over the current candidate set. If this node wins, it
+        becomes MASTER immediately and emits a heartbeat announcing itself.
+        Otherwise a higher-priority peer would win the election, so this
+        node steps down to CANDIDATE — that peer's own tick()/heartbeat
+        flow is expected to claim MASTER.
+        """
+        self._terms.bump()
+        winner = elect(self._candidates())
+        if winner == self.self_id_hex:
+            self.role = Role.MASTER
+            self.master_id = self.self_id_hex
+            self._last_hb = self._clock()
+            self._emit_heartbeat()
+        else:
+            self.role = Role.CANDIDATE
+        return {
+            "promoted": self.role == Role.MASTER,
+            "term": self.term,
+            "master": self.master_id,
+            "role": self.role.value,
+        }
+
     def topology(self) -> dict:
         """Snapshot of this node's view of the master-link topology."""
         return {

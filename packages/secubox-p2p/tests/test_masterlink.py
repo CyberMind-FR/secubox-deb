@@ -417,6 +417,41 @@ def test_peers_from_mesh_defensive():
     assert peers_from_mesh("not-a-dict") == []
 
 
+def test_request_promotion_self_wins(tmp_path):
+    """Alone (no peers), request_promotion() bumps the term, wins its own
+    election, and becomes MASTER while emitting a heartbeat."""
+    sends = []
+    ml = MasterLink(
+        "aa", 100, lambda: [], sends.append,
+        TermStore(tmp_path / "term_promote_alone"), election_timeout=15,
+    )
+    initial_term = ml.term
+
+    result = ml.request_promotion()
+
+    assert result == {"promoted": True, "term": ml.term, "master": "aa", "role": "master"}
+    assert ml.term == initial_term + 1
+    assert ml.role == Role.MASTER
+    assert ml.master_id == "aa"
+    assert len(sends) == 1  # the promotion heartbeat
+
+
+def test_request_promotion_loses_to_higher_priority(tmp_path):
+    """A peer with a lower priority value wins the election; we step down to
+    CANDIDATE, but the term is still bumped (monotonic election attempt)."""
+    ml = MasterLink(
+        "aa", 100, lambda: [{"node_id_hex": "bb", "priority": 1}], lambda msg: None,
+        TermStore(tmp_path / "term_promote_lose"), election_timeout=15,
+    )
+    initial_term = ml.term
+
+    result = ml.request_promotion()
+
+    assert result == {"promoted": False, "term": ml.term, "master": ml.master_id, "role": "candidate"}
+    assert ml.term == initial_term + 1
+    assert ml.role == Role.CANDIDATE
+
+
 # -- Real UDP transport + tick loop (integration) ---------------------------
 
 

@@ -30,7 +30,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client, dht, federation
+from . import mesh, registry, annuaire_client, dht, federation, masterlink
 
 app = FastAPI(
     title="SecuBox P2P API",
@@ -2624,6 +2624,97 @@ async def federation_healthcheck(user: dict = Depends(require_jwt)):
         raise HTTPException(status_code=400, detail="health checks disabled")
     n = await checker.sweep_once()
     return {"ok": True, "probed": n}
+
+
+# ============== Master-Link election/heartbeat (feature-flagged) — Issue #774 Task 16b ====
+#
+# Backward compatible by construction: with [masterlink].enabled = false (the
+# default when the section is absent from p2p.toml), _masterlink_startup sets
+# app.state.masterlink = None and nothing new is started. Every endpoint below
+# checks app.state.masterlink is not None before touching it.
+
+@app.on_event("startup")
+async def _masterlink_startup():
+    """Start the master-link election/heartbeat state machine iff
+    [masterlink].enabled — never break app startup."""
+    app.state.masterlink = None
+    try:
+        cfg = mesh.load_p2p_config(CONFIG_FILE)
+        if not cfg["masterlink"]["enabled"]:
+            return
+
+        did, priv_hex = annuaire_client.node_identity()
+        if not did or not priv_hex:
+            log.warning("masterlink enabled but node has no annuaire identity; not starting")
+            return
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+
+        priv_key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(priv_hex))
+        id_pubkey = priv_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        ).hex()
+
+        self_id_hex = dht.node_id_for(did).hex()
+
+        peer_addrs = []
+        for a in cfg["masterlink"]["peer_addrs"]:
+            try:
+                host, port_s = a.rsplit(":", 1)
+                peer_addrs.append((host, int(port_s)))
+            except (ValueError, AttributeError):
+                log.warning("masterlink: skipping malformed peer_addrs entry %r", a)
+
+        term_store = masterlink.TermStore()
+        ml = masterlink.MasterLink(
+            self_id_hex, cfg["masterlink"]["priority"], lambda: [], lambda msg: None,
+            term_store, id_pubkey=id_pubkey,
+            heartbeat_interval=cfg["masterlink"]["heartbeat_interval"],
+            election_timeout=cfg["masterlink"]["election_timeout"],
+            peer_addrs=peer_addrs,
+        )
+        await ml.start(host="0.0.0.0", port=cfg["masterlink"]["port"])
+        ml.start_ticking()
+        app.state.masterlink = ml
+        log.info("masterlink started self_id=%s port=%s", self_id_hex, cfg["masterlink"]["port"])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("masterlink startup failed (continuing without masterlink): %s", exc)
+        app.state.masterlink = None
+
+
+@app.on_event("shutdown")
+async def _masterlink_shutdown():
+    """Stop the master-link tick loop and close its UDP transport, best-effort."""
+    ml = getattr(app.state, "masterlink", None)
+    if not ml:
+        return
+    try:
+        await ml.stop()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("masterlink stop failed: %s", exc)
+
+
+@app.get("/masterlink/topology")
+async def masterlink_topology():
+    """Snapshot of this node's master-link topology (public read).
+    Disabled -> {"enabled": false}."""
+    ml = getattr(app.state, "masterlink", None)
+    if ml is None:
+        return {"enabled": False}
+    return {"enabled": True, **ml.topology()}
+
+
+@app.post("/masterlink/promote")
+async def masterlink_promote(user: dict = Depends(require_jwt)):
+    """Force an on-demand promotion attempt (auth required)."""
+    ml = getattr(app.state, "masterlink", None)
+    if ml is None:
+        raise HTTPException(status_code=400, detail="masterlink disabled")
+    result = ml.request_promotion()
+    _dht_audit("masterlink_promote", **result)
+    return result
 
 
 # ============== Macro Grant (M2) ==============
