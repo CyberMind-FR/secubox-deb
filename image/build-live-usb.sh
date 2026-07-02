@@ -2778,7 +2778,6 @@ INCOMPLETE_MODULES=(
   secubox-yacy
   secubox-rustdesk
   secubox-lyrion
-  secubox-authelia
   secubox-mail
   secubox-gitea
   secubox-matrix
