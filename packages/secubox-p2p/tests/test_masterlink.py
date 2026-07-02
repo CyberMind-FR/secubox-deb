@@ -185,3 +185,117 @@ def test_master_tick_emits_heartbeat(tmp_path):
 
     assert len(sends) == 1
     assert sends[0]["master_id"] == "aa"
+
+
+def test_equal_term_collision_leaves_exactly_one_master(tmp_path):
+    """Two nodes self-electing at the same term must not both demote on cross-delivery."""
+    t = [1000.0]
+    clock = lambda: t[0]
+
+    sends_a = []
+    ml_a = MasterLink(
+        "aa", 100, lambda: [], sends_a.append,
+        TermStore(tmp_path / "term_a"), clock, election_timeout=15,
+    )
+    sends_b = []
+    ml_b = MasterLink(
+        "bb", 50, lambda: [], sends_b.append,
+        TermStore(tmp_path / "term_b"), clock, election_timeout=15,
+    )
+
+    t[0] += 20  # advance past election_timeout for both
+    ml_a.tick()
+    ml_b.tick()
+
+    assert ml_a.role == Role.MASTER
+    assert ml_b.role == Role.MASTER
+    assert ml_a.term == ml_b.term == 1
+
+    hb_from_a = sends_a[-1]
+    hb_from_b = sends_b[-1]
+
+    # Cross-deliver: each hears the other's heartbeat at the same term.
+    ml_a.on_heartbeat(hb_from_b)
+    ml_b.on_heartbeat(hb_from_a)
+
+    # bb has lower priority (50 < 100) -> bb wins the tie, aa demotes.
+    assert ml_b.role == Role.MASTER
+    assert ml_a.role == Role.SATELLITE
+    assert ml_a.master_id == "bb"
+
+
+def test_equal_term_winner_ignores_loser_heartbeat(tmp_path):
+    """The tie-break winner stays MASTER and does not adopt the loser as master."""
+    t = [1000.0]
+    clock = lambda: t[0]
+
+    sends_a = []
+    ml_a = MasterLink(
+        "aa", 100, lambda: [], sends_a.append,
+        TermStore(tmp_path / "term_a2"), clock, election_timeout=15,
+    )
+    sends_b = []
+    ml_b = MasterLink(
+        "bb", 50, lambda: [], sends_b.append,
+        TermStore(tmp_path / "term_b2"), clock, election_timeout=15,
+    )
+
+    t[0] += 20
+    ml_a.tick()
+    ml_b.tick()
+
+    hb_from_a = sends_a[-1]
+
+    ml_b.on_heartbeat(hb_from_a)
+
+    assert ml_b.role == Role.MASTER
+    assert ml_b.master_id == "bb"
+
+
+def test_candidates_skips_malformed_peer(tmp_path):
+    """A malformed peer dict from peers_fn is skipped, not raised."""
+    t = [1000.0]
+    clock = lambda: t[0]
+    peers = [{"node_id_hex": "bb", "priority": 10}, {"garbage": 1}]
+    ml = MasterLink(
+        "aa", 100, lambda: peers, lambda msg: None,
+        TermStore(tmp_path / "term_mp"), clock, election_timeout=15,
+    )
+
+    t[0] += 20
+    ml.tick()  # must not raise
+
+    assert ml.role == Role.SATELLITE
+    assert ml.master_id == "bb"
+
+
+def test_losing_election_sets_master_id(tmp_path):
+    """On losing an election, master_id is updated to the elected winner immediately."""
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [{"node_id_hex": "bb", "priority": 1}], lambda msg: None,
+        TermStore(tmp_path / "term_mi"), clock, election_timeout=15,
+    )
+
+    t[0] += 20
+    ml.tick()
+
+    assert ml.role == Role.SATELLITE
+    assert ml.master_id == "bb"
+
+
+def test_malformed_heartbeat_ignored(tmp_path):
+    """A malformed heartbeat dict does not raise and does not change role/master_id."""
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [], lambda msg: None,
+        TermStore(tmp_path / "term_bad_hb"), clock, election_timeout=15,
+    )
+    role_before, master_before = ml.role, ml.master_id
+
+    ml.on_heartbeat({"bogus": 1})  # must not raise
+
+    assert ml.role == role_before
+    assert ml.master_id == master_before

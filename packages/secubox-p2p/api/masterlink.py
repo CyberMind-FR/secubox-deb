@@ -141,34 +141,66 @@ class MasterLink:
     def _candidates(self) -> list:
         """Build the deduplicated candidate set, including ourselves."""
         peers = list(self._peers_fn() or [])
-        peers.append({"node_id_hex": self.self_id_hex, "priority": self.priority})
         seen = {}
         for p in peers:
-            seen[p["node_id_hex"]] = p
+            try:
+                node_id = p["node_id_hex"]
+                priority = p["priority"]
+            except (KeyError, TypeError):
+                continue  # malformed peer entry — skip defensively
+            seen[node_id] = {"node_id_hex": node_id, "priority": priority}
+        seen[self.self_id_hex] = {"node_id_hex": self.self_id_hex, "priority": self.priority}
         return list(seen.values())
 
     def _emit_heartbeat(self) -> None:
         """Broadcast a heartbeat announcing ourselves as master at the current term."""
-        self._send_fn({"t": "heartbeat", "term": self.term, "master_id": self.self_id_hex, "ts": self._clock()})
+        self._send_fn({
+            "t": "heartbeat",
+            "term": self.term,
+            "master_id": self.self_id_hex,
+            "priority": self.priority,
+            "ts": self._clock(),
+        })
 
     def on_heartbeat(self, hb: dict) -> None:
         """
-        Process an incoming heartbeat {term, master_id, ts}.
+        Process an incoming heartbeat {term, master_id, priority, ts}.
 
         A heartbeat carrying a term strictly lower than ours is stale and
         ignored (split-brain avoidance: an old/partitioned master cannot
-        demote a node that has already moved to a newer term). Otherwise
-        we adopt the term (monotonic, via set_min), record the announced
-        master, reset our heartbeat timer, and become SATELLITE unless the
-        announced master is us.
+        demote a node that has already moved to a newer term).
+
+        When two nodes self-elect at the same term (their heartbeats cross
+        in flight), a naive "any term >= ours demotes us" rule makes BOTH
+        masters demote to SATELLITE simultaneously — a zero-master window
+        until the next election_timeout. Instead, on an equal-term collision
+        between two masters we apply the same deterministic tie-break as
+        elect(): (priority, node_id_hex), lower wins. Exactly one side
+        demotes; the winner ignores the loser's heartbeat and stays MASTER.
+
+        Otherwise (strictly higher term, or equal term while we are not
+        master) we adopt the term (monotonic, via set_min), record the
+        announced master, reset our heartbeat timer, and become SATELLITE
+        unless the announced master is us.
         """
         try:
             hb_term = int(hb["term"])
             master_id = hb["master_id"]
         except (KeyError, TypeError, ValueError):
             return
+        pri = int(hb.get("priority", 1 << 30))  # missing -> large value, loses ties
         if hb_term < self.term:
             return  # stale heartbeat from a lower term — ignore
+        if hb_term == self.term and self.role == Role.MASTER and master_id != self.self_id_hex:
+            # Equal-term collision between two masters: exactly one survives.
+            if (pri, master_id) < (self.priority, self.self_id_hex):
+                # The other node wins the tie — we demote.
+                self._terms.set_min(hb_term)
+                self.master_id = master_id
+                self._last_hb = self._clock()
+                self.role = Role.SATELLITE
+            # else: we win the tie — ignore their heartbeat, stay MASTER.
+            return
         self._terms.set_min(hb_term)
         self.master_id = master_id
         self._last_hb = self._clock()
@@ -199,6 +231,7 @@ class MasterLink:
                 self._emit_heartbeat()
             else:
                 self.role = Role.SATELLITE
+                self.master_id = winner  # report the elected winner immediately
             self._last_hb = now  # avoid immediate re-election spam
 
     def topology(self) -> dict:
