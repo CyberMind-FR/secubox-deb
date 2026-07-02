@@ -454,16 +454,25 @@ function loadTheme() {
   .catch(function() {});
 }
 
-// Check if already authenticated
-var token = localStorage.getItem('sbx_token');
-if (token) {
-  fetch('/api/v1/hub/status', {
-    headers: {'Authorization': 'Bearer ' + token}
-  })
-  .then(function(r) {
-    if (r.ok) window.location.href = _sbxRedirect();
-  })
-  .catch(function() {});
+// Check if already authenticated — but ONLY on a direct visit. If we were
+// bounced here by a module (a ?redirect= is present), that module REJECTED the
+// current token, so auto-redirecting back on a lenient hub/status check creates
+// an infinite login<->module loop where the form never shows. In that case,
+// drop the stale token(s) and show the form so the user can actually re-auth.
+if (new URLSearchParams(window.location.search).has('redirect')) {
+  localStorage.removeItem('sbx_token');
+  localStorage.removeItem('secubox_token');
+} else {
+  var token = localStorage.getItem('sbx_token');
+  if (token) {
+    fetch('/api/v1/hub/status', {
+      headers: {'Authorization': 'Bearer ' + token}
+    })
+    .then(function(r) {
+      if (r.ok) window.location.href = _sbxRedirect();
+    })
+    .catch(function() {});
+  }
 }
 
 loadTheme();
