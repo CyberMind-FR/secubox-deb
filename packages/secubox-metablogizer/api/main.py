@@ -691,6 +691,66 @@ async def unpublish_site(name: str):
     return {"success": True, "name": name}
 
 
+@app.post("/site/{name}/deploy", dependencies=[Depends(require_jwt)])
+async def deploy_site(name: str):
+    """Manually pull a site's latest content from its git repo and redeploy.
+
+    Same operation as the Gitea push webhook, but triggered on demand from the
+    dashboard's per-site update icon. Serialized against webhook deploys via the
+    shared per-site lock.
+    """
+    import asyncio
+    import time
+
+    site_dir = SITES_ROOT / name
+    if not site_dir.exists():
+        raise HTTPException(404, "Site not found")
+    if not (site_dir / ".git").exists():
+        raise HTTPException(400, "Site has no git repo — nothing to update")
+
+    # Pull whatever branch the working tree is on (webhook uses default_branch;
+    # for a manual refresh the currently checked-out branch is the right target).
+    try:
+        branch = subprocess.run(
+            ["git", "-c", f"safe.directory={site_dir}", "-C", str(site_dir),
+             "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=15, check=True,
+        ).stdout.strip() or "main"
+    except subprocess.CalledProcessError:
+        raise HTTPException(500, "cannot determine git branch")
+
+    lock = await site_lock(name)
+    loop = asyncio.get_running_loop()
+    t0 = time.monotonic()
+    try:
+        async with lock:
+            old_domain = _read_domain(site_dir)
+            old, new = await loop.run_in_executor(None, git_pull, site_dir, branch)
+            new_domain = _read_domain(site_dir)
+            _invalidate_sites_cache()
+            domain_changed = old_domain != new_domain
+            if domain_changed:
+                await loop.run_in_executor(None, regenerate_nginx_config)
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        _record_deploy({
+            "site": name, "from": old, "to": new,
+            "duration_ms": duration_ms, "timestamp": time.time(),
+            "domain_changed": domain_changed, "source": "manual",
+        })
+        logger.info(
+            f"manual deploy site={name} from={old[:8]} to={new[:8]} "
+            f"duration_ms={duration_ms} domain_changed={domain_changed}"
+        )
+        return {"success": True, "deployed": name, "from": old, "to": new,
+                "updated": old != new, "duration_ms": duration_ms,
+                "domain_changed": domain_changed}
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "git-timeout")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"manual deploy git failed site={name}: {e.stderr}")
+        raise HTTPException(500, "git-failed")
+
+
 @app.post("/republish-all", dependencies=[Depends(require_jwt)])
 async def republish_all():
     """Republish all sites by regenerating nginx config"""
@@ -807,7 +867,7 @@ def _read_domain(site_dir: Path) -> str:
 
 @app.post("/site/{name}/upload", dependencies=[Depends(require_jwt)])
 async def upload_content(name: str, file: UploadFile = File(...)):
-    """Upload content to a site (zip/tar.gz)"""
+    """Upload content to a site (.zip / .tar.gz archive, or a single .html)."""
     site_dir = SITES_ROOT / name
     if not site_dir.exists():
         site_dir.mkdir(parents=True)
@@ -815,28 +875,41 @@ async def upload_content(name: str, file: UploadFile = File(...)):
     public_dir = site_dir / "public"
     public_dir.mkdir(exist_ok=True)
 
+    fname = (file.filename or "").lower()
+
+    # A bare HTML page becomes the site's index — no temp file / extraction.
+    if fname.endswith((".html", ".htm")):
+        content = await file.read()
+        (public_dir / "index.html").write_bytes(content)
+        _invalidate_sites_cache()
+        return {"success": True, "name": name, "kind": "html"}
+
     content = await file.read()
     temp_file = site_dir / f"_upload_{file.filename}"
     temp_file.write_bytes(content)
 
     try:
-        if file.filename.endswith(".zip"):
+        if fname.endswith(".zip"):
             import zipfile
             with zipfile.ZipFile(temp_file, 'r') as zf:
                 zf.extractall(public_dir)
-        elif file.filename.endswith((".tar.gz", ".tgz")):
+        elif fname.endswith((".tar.gz", ".tgz")):
             import tarfile
             with tarfile.open(temp_file, 'r:gz') as tf:
                 tf.extractall(public_dir)
         else:
-            raise HTTPException(400, "Unsupported format. Use .zip or .tar.gz")
+            temp_file.unlink(missing_ok=True)
+            raise HTTPException(400, "Unsupported format. Use .zip, .tar.gz or .html")
 
         temp_file.unlink()
+    except HTTPException:
+        raise
     except Exception as e:
         temp_file.unlink(missing_ok=True)
         raise HTTPException(400, f"Failed to extract: {e}")
 
-    return {"success": True, "name": name}
+    _invalidate_sites_cache()
+    return {"success": True, "name": name, "kind": "archive"}
 
 
 # =============================================================================

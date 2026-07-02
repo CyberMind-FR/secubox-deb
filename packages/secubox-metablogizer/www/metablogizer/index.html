@@ -558,6 +558,8 @@
                             `<a href="${url}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">View</a>
                              <button class="btn" onclick="unpublishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Unpublish</button>` :
                             `<button class="btn success" onclick="publishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Publish</button>`}
+                        <button class="btn" onclick="deploySite('${s.name}')" title="Update content — git pull from repo" style="padding:2px 8px;font-size:0.7rem">🔄</button>
+                        <button class="btn" onclick="uploadSiteContent('${s.name}')" title="Upgrade content — upload .zip / .tar.gz / .html" style="padding:2px 8px;font-size:0.7rem">⬆</button>
                         <button class="btn danger" onclick="deleteSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
                     </td>
                 </tr>`;
@@ -592,6 +594,53 @@
             if (!confirm('Delete site ' + name + '?')) return;
             const r = await api('/site/' + name, { method: 'DELETE' });
             if (r.success) refresh();
+        }
+
+        // Quick-access: pull latest content from the site's git repo (same as
+        // the Gitea webhook, triggered on demand).
+        async function deploySite(name) {
+            const r = await api('/site/' + name + '/deploy', { method: 'POST' });
+            if (r && r.success) {
+                alert(r.updated
+                    ? '✓ ' + name + ' updated: ' + String(r.from).slice(0, 8) + ' → ' + String(r.to).slice(0, 8)
+                    : '• ' + name + ' already up to date');
+                refresh();
+            } else {
+                alert('Update failed for ' + name + (r && r.detail ? ': ' + r.detail : ''));
+            }
+        }
+
+        // Quick-access: upgrade content by uploading a .zip / .tar.gz / .html.
+        // Uses a transient hidden file input; the multipart POST needs the raw
+        // FormData body (no JSON Content-Type), so it calls fetch directly with
+        // the same auth headers/cookie strategy as api().
+        function uploadSiteContent(name) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.zip,.tar.gz,.tgz,.html,.htm';
+            input.onchange = async () => {
+                const f = input.files && input.files[0];
+                if (!f) return;
+                const fd = new FormData();
+                fd.append('file', f);
+                const t = token();
+                const auth = t ? { 'Authorization': 'Bearer ' + t } : {};
+                try {
+                    let res = await fetch(API + '/site/' + name + '/upload',
+                        { method: 'POST', headers: auth, body: fd, credentials: 'same-origin' });
+                    if (res.status === 401) {
+                        res = await fetch(API + '/site/' + name + '/upload',
+                            { method: 'POST', body: fd, credentials: 'same-origin' });
+                    }
+                    if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
+                    const d = await res.json().catch(() => ({}));
+                    if (res.ok && d.success) { alert('✓ ' + name + ' content upgraded (' + (d.kind || 'ok') + ')'); refresh(); }
+                    else alert('Upload failed for ' + name + (d.detail ? ': ' + d.detail : ''));
+                } catch (e) {
+                    alert('Upload failed for ' + name + ': ' + e);
+                }
+            };
+            input.click();
         }
 
         async function republishAll() {
