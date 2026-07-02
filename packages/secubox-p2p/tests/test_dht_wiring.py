@@ -48,3 +48,42 @@ def test_dht_peers_endpoint_disabled():
         r = client.get("/dht/peers")
         assert r.status_code == 200
         assert r.json() == {"enabled": False, "peers": [], "buckets": 0}
+
+
+# -- Final-review fix (Issue #774): audit log must target a writable path --
+#
+# DHT_AUDIT_LOG used to point at /var/log/secubox/p2p-audit.log, i.e. directly
+# under the shared 0755 root:root /var/log/secubox/ parent — every write there
+# raised PermissionError (silently swallowed by _dht_audit), so the CSPN audit
+# trail for /dht/announce and /masterlink/promote was never actually written.
+# debian/postinst provisions a writable /var/log/secubox/p2p/ (0750
+# secubox:secubox); DHT_AUDIT_LOG must live under it.
+
+def test_dht_audit_log_path_under_writable_p2p_subdir():
+    from api.main import DHT_AUDIT_LOG
+
+    assert str(DHT_AUDIT_LOG).startswith("/var/log/secubox/p2p/")
+
+
+def test_dht_audit_writes_json_line(tmp_path, monkeypatch):
+    import json as _json
+
+    import api.main as main_mod
+
+    log_path = tmp_path / "p2p-audit.log"
+    monkeypatch.setattr(main_mod, "DHT_AUDIT_LOG", log_path)
+
+    main_mod._dht_audit("test_event", foo="bar")
+
+    assert log_path.exists()
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    rec = _json.loads(lines[0])
+    assert rec["event"] == "test_event"
+    assert rec["foo"] == "bar"
+    assert "ts" in rec
+
+    # A second call appends rather than truncating.
+    main_mod._dht_audit("second_event")
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 2

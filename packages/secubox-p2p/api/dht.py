@@ -254,7 +254,15 @@ class DHTNetwork:
             return
         sender = msg.get("sender")
         if isinstance(sender, dict):
-            self._touch_sender(sender)
+            try:
+                self._touch_sender(sender)
+            except (ValueError, KeyError, TypeError):
+                # Malformed sender contact (bad node_id_hex, endpoint missing
+                # a port, wrong field types, ...) — a peer-controlled datagram
+                # must never crash the handler. Skip the routing-table insert
+                # but keep dispatching: the message body itself may still be
+                # well-formed and worth replying to.
+                pass
         rpc_id = msg.get("rpc_id")
         t = msg.get("t")
         if t == "ping":

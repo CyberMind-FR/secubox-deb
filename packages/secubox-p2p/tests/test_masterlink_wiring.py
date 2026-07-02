@@ -2,9 +2,10 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """Issue #774 Task 16b: wire the MasterLink into api/main.py +
 [masterlink] config section."""
+import pytest
 from fastapi.testclient import TestClient
 
-from api import mesh
+from api import masterlink, mesh
 
 
 def test_load_p2p_config_masterlink_defaults(tmp_path):
@@ -69,3 +70,88 @@ def test_masterlink_promote_endpoint_disabled():
             assert r.status_code == 400
     finally:
         app.dependency_overrides.clear()
+
+
+# -- Final-review fix (Issue #774): peers_fn must reflect the real mesh --
+#
+# _masterlink_startup used to wire peers_fn=lambda: [], so every node's
+# _candidates() only ever contained itself and it trivially self-elected
+# regardless of any real peers. peers_fn must be built from the live wg-mesh
+# state (wg_mesh.json) via masterlink.peers_from_mesh(), the adapter that
+# already existed but was never called.
+
+def test_masterlink_peers_fn_uses_real_mesh_state(monkeypatch):
+    import api.main as main_mod
+
+    fake_mesh = {
+        "peers": [
+            {"public_key": "peerpubkey1", "endpoint": "10.10.0.2:51822",
+             "allowed_ips": "10.10.0.2/32"},
+        ]
+    }
+    monkeypatch.setattr(main_mod, "get_wg_mesh_config", lambda: fake_mesh)
+
+    peers = main_mod._masterlink_peers_fn()
+
+    assert peers == masterlink.peers_from_mesh(fake_mesh)
+    assert peers != []
+    assert peers[0]["priority"] == 100
+    assert "node_id_hex" in peers[0]
+
+
+def test_masterlink_peers_fn_never_raises_on_bad_mesh_state(monkeypatch):
+    """peers_fn must degrade to an empty candidate list (self-election),
+    never raise, when the mesh-state accessor is unavailable/broken."""
+    import api.main as main_mod
+
+    def _boom():
+        raise RuntimeError("wg_mesh.json unreadable")
+
+    monkeypatch.setattr(main_mod, "get_wg_mesh_config", _boom)
+
+    assert main_mod._masterlink_peers_fn() == []
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_masterlink_startup_wires_real_peers_fn(tmp_path, monkeypatch):
+    """End-to-end: _masterlink_startup must wire the MasterLink's peers_fn to
+    _masterlink_peers_fn (real mesh state), not a `lambda: []` closure."""
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding, NoEncryption, PrivateFormat,
+    )
+
+    import api.annuaire_client as annuaire_client
+    import api.main as main_mod
+
+    priv_key = ed25519.Ed25519PrivateKey.generate()
+    priv_hex = priv_key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()
+    monkeypatch.setattr(annuaire_client, "node_identity", lambda *a, **kw: ("did:x", priv_hex))
+
+    toml = tmp_path / "p2p.toml"
+    toml.write_text(
+        '[wireguard]\nrole = "satellite"\n'
+        "[masterlink]\nenabled = true\nport = 0\n"
+    )
+    monkeypatch.setattr(main_mod, "CONFIG_FILE", toml)
+
+    fake_mesh = {
+        "peers": [
+            {"public_key": "peerpubkey1", "endpoint": "10.10.0.2:51822",
+             "allowed_ips": "10.10.0.2/32"},
+        ]
+    }
+    monkeypatch.setattr(main_mod, "get_wg_mesh_config", lambda: fake_mesh)
+
+    await main_mod._masterlink_startup()
+    ml = main_mod.app.state.masterlink
+    try:
+        assert ml is not None
+        assert ml._peers_fn is main_mod._masterlink_peers_fn
+        peers = ml._peers_fn()
+        assert peers == masterlink.peers_from_mesh(fake_mesh)
+        assert peers != []
+    finally:
+        await ml.stop()
+        main_mod.app.state.masterlink = None

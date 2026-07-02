@@ -2422,7 +2422,7 @@ async def health():
 # app.state.dht = None and nothing new is started. Every endpoint below
 # checks app.state.dht is not None before touching the DHT.
 
-DHT_AUDIT_LOG = Path("/var/log/secubox/p2p-audit.log")
+DHT_AUDIT_LOG = Path("/var/log/secubox/p2p/p2p-audit.log")
 
 
 def _dht_audit(event: str, **fields):
@@ -2461,8 +2461,8 @@ async def _dht_startup():
 
         wg_pubkey = ""
         try:
-            wg_pubkey = cfg.get("wireguard", {}).get("pubkey", "") or ""
-        except AttributeError:
+            wg_pubkey = get_wg_mesh_config().get("public_key") or ""
+        except Exception:  # noqa: BLE001
             wg_pubkey = ""
 
         advertise_host = cfg["dht"].get("advertise_host", "") or "0.0.0.0"
@@ -2633,6 +2633,19 @@ async def federation_healthcheck(user: dict = Depends(require_jwt)):
 # app.state.masterlink = None and nothing new is started. Every endpoint below
 # checks app.state.masterlink is not None before touching it.
 
+def _masterlink_peers_fn() -> list:
+    """Real peers_fn for MasterLink: derive election candidates from the
+    live wg-mesh state (wg_mesh.json), via masterlink.peers_from_mesh().
+    Never raises — any error (missing/malformed wg_mesh.json, etc.) yields
+    an empty candidate list, so a broken mesh state degrades to
+    self-election rather than crashing the tick loop."""
+    try:
+        return masterlink.peers_from_mesh(get_wg_mesh_config())
+    except Exception as exc:  # noqa: BLE001
+        log.warning("masterlink peers_fn failed (mesh state unavailable): %s", exc)
+        return []
+
+
 @app.on_event("startup")
 async def _masterlink_startup():
     """Start the master-link election/heartbeat state machine iff
@@ -2669,7 +2682,7 @@ async def _masterlink_startup():
 
         term_store = masterlink.TermStore()
         ml = masterlink.MasterLink(
-            self_id_hex, cfg["masterlink"]["priority"], lambda: [], lambda msg: None,
+            self_id_hex, cfg["masterlink"]["priority"], _masterlink_peers_fn, lambda msg: None,
             term_store, id_pubkey=id_pubkey,
             heartbeat_interval=cfg["masterlink"]["heartbeat_interval"],
             election_timeout=cfg["masterlink"]["election_timeout"],

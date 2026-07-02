@@ -183,6 +183,36 @@ def test_ping_gets_pong(monkeypatch):
     assert sent and decode_msg(sent[0][0])["t"]=="pong" and decode_msg(sent[0][0])["rpc_id"]=="r1"
 
 
+def test_handle_message_malformed_sender_no_raise(monkeypatch):
+    """Final-review fix (Issue #774): a malformed sender contact (bad
+    node_id_hex, endpoint without a port, or missing fields) inside an
+    otherwise well-formed datagram must not raise — mirrors _merge_contact's
+    hardening. Only the routing-table insert is skipped; the message itself
+    (a well-formed ping) is still dispatched and replied to."""
+    sent = []
+    net = _net(monkeypatch, sent)
+    before = len(net.routing.all_nodes())
+
+    bad_hex_sender = {"node_id_hex": "not-hex!!", "did": "did:peer",
+                       "endpoint": "10.10.0.2:51823"}
+    net.handle_message(encode_msg(msg_ping("r1", bad_hex_sender)), ("10.10.0.2", 51823))
+    assert len(net.routing.all_nodes()) == before
+    assert sent and decode_msg(sent[-1][0])["t"] == "pong"
+
+    sent.clear()
+    bad_endpoint_sender = {"node_id_hex": node_id_for("peer2").hex(), "did": "did:peer2",
+                            "endpoint": "no-port-here"}
+    net.handle_message(encode_msg(msg_ping("r2", bad_endpoint_sender)), ("10.10.0.3", 51823))
+    assert len(net.routing.all_nodes()) == before
+    assert sent and decode_msg(sent[-1][0])["t"] == "pong"
+
+    sent.clear()
+    missing_field_sender = {"node_id_hex": node_id_for("peer3").hex()}  # no did/endpoint
+    net.handle_message(encode_msg(msg_ping("r3", missing_field_sender)), ("10.10.0.4", 51823))
+    assert len(net.routing.all_nodes()) == before
+    assert sent and decode_msg(sent[-1][0])["t"] == "pong"
+
+
 def test_store_rejects_unverified(monkeypatch):
     sent=[]; net=_net(monkeypatch, sent, verified=False)
     ok = net.local_store_put("aa"*20, {"did":"did:peer","id_pubkey":"ii","wg_pubkey":"bb","endpoint":"10.10.0.2:51823","ts":1,"sig":"x"})
