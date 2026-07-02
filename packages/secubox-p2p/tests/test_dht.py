@@ -157,3 +157,106 @@ def test_store_ttl_expiry(monkeypatch):
     assert net.local_store_get(key) is not None
     t[0]+=dht.DHT_TTL+1
     assert net.local_store_get(key) is None
+
+
+# Task 7: iterative lookup (find_node/find_value), find_peer, announce, _rpc
+
+import asyncio
+from api.dht import DHTNode
+
+
+def _ep(endpoint: str) -> tuple:
+    host, port = endpoint.rsplit(":", 1)
+    return (host, int(port))
+
+
+def _make_send_fn(nets: dict, own_endpoint: str, counts: dict | None = None):
+    """In-process UDP router: delivers datagrams via call_soon (never inline),
+    so awaited RPC futures resolve on a later loop turn, not by re-entrance."""
+    own_addr = _ep(own_endpoint)
+
+    def send_fn(data: bytes, addr):
+        dest = nets.get(f"{addr[0]}:{addr[1]}")
+        if dest is None:
+            return
+        if counts is not None:
+            msg = decode_msg(data)
+            if msg is not None and msg.get("t") in ("find_node", "find_value"):
+                counts[f"{addr[0]}:{addr[1]}"] = counts.get(f"{addr[0]}:{addr[1]}", 0) + 1
+        asyncio.get_event_loop().call_soon(dest.handle_message, data, own_addr)
+
+    return send_fn
+
+
+def _crypto_identity(monkeypatch):
+    """Make verify_record trivially true: wg_pubkey == did, sig checking is a no-op."""
+    monkeypatch.setattr(dht, "_did_from_pubkey", lambda pub_hex: pub_hex)
+    monkeypatch.setattr(dht, "_verify_sig", lambda body, sig, pub: True)
+    monkeypatch.setattr(dht, "_sign_sig", lambda body: "sig")
+
+
+@pytest.mark.asyncio
+async def test_find_peer_resolves_indirect_node_via_bootstrap(monkeypatch):
+    """A only knows B; B knows C; C bootstraps off B. C announces its signed
+    record; A.find_peer(C.did) must resolve it despite never knowing C directly."""
+    _crypto_identity(monkeypatch)
+
+    nets: dict = {}
+    a_ep, b_ep, c_ep = "10.10.0.1:51823", "10.10.0.2:51823", "10.10.0.3:51823"
+
+    A = DHTNetwork("did:A", "did:A", a_ep, send_fn=_make_send_fn(nets, a_ep))
+    B = DHTNetwork("did:B", "did:B", b_ep, send_fn=_make_send_fn(nets, b_ep))
+    C = DHTNetwork("did:C", "did:C", c_ep, send_fn=_make_send_fn(nets, c_ep))
+    nets[a_ep] = A; nets[b_ep] = B; nets[c_ep] = C
+
+    A.routing.insert(DHTNode(B.self_id, B.did, _ep(b_ep)))
+    B.routing.insert(DHTNode(C.self_id, C.did, _ep(c_ep)))
+    C.routing.insert(DHTNode(B.self_id, B.did, _ep(b_ep)))  # C's bootstrap contact
+
+    await C.announce()
+
+    counts: dict = {}
+    for net, ep in ((A, a_ep), (B, b_ep), (C, c_ep)):
+        net.send_fn = _make_send_fn(nets, ep, counts)
+
+    result = await A.find_peer(C.did)
+
+    assert result is not None
+    assert result["did"] == C.did
+    assert result["endpoint"] == c_ep
+    assert dht.verify_record(result) is True
+    # A never had C directly in its routing table before the lookup:
+    assert all(v <= 1 for v in counts.values())  # no node queried twice
+    assert counts.get(b_ep, 0) >= 1
+
+
+@pytest.mark.asyncio
+async def test_iterative_find_dedup_across_merged_contacts(monkeypatch):
+    """A knows B and D; both B and D know E. E is introduced into A's shortlist
+    twice (once via B's reply, once via D's), but must be queried only once."""
+    _crypto_identity(monkeypatch)
+
+    nets: dict = {}
+    a_ep, b_ep, d_ep, e_ep = (
+        "10.10.0.1:51823", "10.10.0.2:51823", "10.10.0.4:51823", "10.10.0.5:51823",
+    )
+    counts: dict = {}
+
+    A = DHTNetwork("did:A", "did:A", a_ep, send_fn=_make_send_fn(nets, a_ep, counts))
+    B = DHTNetwork("did:B", "did:B", b_ep, send_fn=_make_send_fn(nets, b_ep, counts))
+    D = DHTNetwork("did:D", "did:D", d_ep, send_fn=_make_send_fn(nets, d_ep, counts))
+    E = DHTNetwork("did:E", "did:E", e_ep, send_fn=_make_send_fn(nets, e_ep, counts))
+    nets[a_ep] = A; nets[b_ep] = B; nets[d_ep] = D; nets[e_ep] = E
+
+    A.routing.insert(DHTNode(B.self_id, B.did, _ep(b_ep)))
+    A.routing.insert(DHTNode(D.self_id, D.did, _ep(d_ep)))
+    B.routing.insert(DHTNode(E.self_id, E.did, _ep(e_ep)))
+    D.routing.insert(DHTNode(E.self_id, E.did, _ep(e_ep)))
+
+    target = E.self_id  # guarantees E strictly improves distance once merged
+    result = await A.iterative_find(target, "node")
+
+    assert any(n.node_id == E.self_id for n in result)
+    assert counts.get(e_ep, 0) == 1     # merged twice (via B and via D), queried once
+    assert counts.get(b_ep, 0) == 1
+    assert counts.get(d_ep, 0) == 1

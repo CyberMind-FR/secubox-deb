@@ -4,9 +4,11 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """SecuBox-Deb :: secubox-p2p :: Kademlia DHT (custom, asyncio/UDP). Issue #774."""
 from __future__ import annotations
+import asyncio
 import hashlib
 import json as _json
 import time
+import uuid
 from collections import OrderedDict
 from dataclasses import dataclass, field
 
@@ -192,6 +194,7 @@ class DHTNetwork:
         self._clock = clock
         self.routing = RoutingTable(self.self_id)
         self.store: dict = {}  # key_hex -> (record, expiry_ts)
+        self.pending: dict = {}  # rpc_id -> asyncio.Future, resolved by handle_message
 
     def _sender_dict(self) -> dict:
         return {"node_id_hex": self.self_id.hex(), "did": self.did, "endpoint": self.endpoint}
@@ -239,6 +242,10 @@ class DHTNetwork:
         elif t == "store":
             self.local_store_put(msg["key"], msg["value"])
             self._reply(msg_ok(rpc_id, self._sender_dict()), addr)
+        elif t in ("pong", "nodes", "value", "ok"):
+            fut = self.pending.get(rpc_id)
+            if fut is not None and not fut.done():
+                fut.set_result(msg)
 
     def _reply(self, msg: dict, addr) -> None:
         if self.send_fn is not None:
@@ -259,3 +266,102 @@ class DHTNetwork:
             del self.store[key_hex]
             return None
         return record
+
+    # -- Task 7: iterative lookup / find_peer / announce (injected transport) --
+
+    async def _rpc(self, node: "DHTNode", msg: dict):
+        """Send `msg` to `node` and await the matching reply, or None on timeout."""
+        loop = asyncio.get_event_loop()
+        fut = loop.create_future()
+        rpc_id = msg["rpc_id"]
+        self.pending[rpc_id] = fut
+        try:
+            self.send_fn(encode_msg(msg), node.endpoint)
+            return await asyncio.wait_for(fut, RPC_TIMEOUT)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            self.pending.pop(rpc_id, None)
+
+    def _merge_contact(self, shortlist: list, contact: dict) -> None:
+        """Parse a {node_id_hex,did,endpoint} contact dict and merge into shortlist
+        (dedup by node_id, skip self)."""
+        node_id = bytes.fromhex(contact["node_id_hex"])
+        if node_id == self.self_id:
+            return
+        if any(n.node_id == node_id for n in shortlist):
+            return
+        shortlist.append(DHTNode(node_id, contact["did"], self._parse_endpoint(contact["endpoint"])))
+
+    async def iterative_find(self, target_id: bytes, mode: str):
+        """Classic Kademlia iterative lookup, alpha-parallel, over the injected
+        transport. mode == "node" -> return the k closest DHTNode's found.
+        mode == "value" -> return the first verified record found, or None."""
+        shortlist: list = list(self.routing.closest(target_id, KAD_K))
+        queried: set = {self.self_id}
+        best_dist = min((xor_distance(n.node_id, target_id) for n in shortlist), default=None)
+
+        while True:
+            candidates = [
+                n for n in sorted(shortlist, key=lambda n: xor_distance(n.node_id, target_id))
+                if n.node_id not in queried
+            ][:KAD_ALPHA]
+            if not candidates:
+                break
+            for n in candidates:
+                queried.add(n.node_id)
+
+            tasks = []
+            for n in candidates:
+                rpc_id = uuid.uuid4().hex
+                if mode == "value":
+                    msg = msg_find_value(rpc_id, self._sender_dict(), target_id.hex())
+                else:
+                    msg = msg_find_node(rpc_id, self._sender_dict(), target_id.hex())
+                tasks.append(self._rpc(n, msg))
+            replies = await asyncio.gather(*tasks)
+
+            found_value = None
+            for reply in replies:
+                if reply is None:
+                    continue
+                sender = reply.get("sender")
+                if isinstance(sender, dict):
+                    self._touch_sender(sender)
+                if mode == "value" and reply.get("t") == "value":
+                    rec = reply.get("value")
+                    if rec is not None and verify_record(rec):
+                        found_value = rec
+                    continue
+                if reply.get("t") == "nodes":
+                    for contact in reply.get("nodes", []):
+                        self._merge_contact(shortlist, contact)
+
+            if found_value is not None:
+                return found_value
+
+            new_best = min((xor_distance(n.node_id, target_id) for n in shortlist), default=best_dist)
+            if best_dist is not None and (new_best is None or new_best >= best_dist):
+                break
+            best_dist = new_best
+
+        if mode == "value":
+            return None
+        shortlist.sort(key=lambda n: xor_distance(n.node_id, target_id))
+        return shortlist[:KAD_K]
+
+    async def find_peer(self, did: str):
+        """Resolve a DID to its verified reachability record via iterative_find."""
+        return await self.iterative_find(node_id_for(did), "value")
+
+    async def announce(self) -> None:
+        """Sign our own reachability record, store it locally, then push it to
+        the k nodes closest to our own id (as discovered via iterative_find)."""
+        record = sign_record(self.did, self.wg_pubkey, self.endpoint, int(self._clock()))
+        key_hex = self.self_id.hex()
+        self.local_store_put(key_hex, record)
+        closest = await self.iterative_find(self.self_id, "node")
+        for node in closest:
+            rpc_id = uuid.uuid4().hex
+            msg = msg_store(rpc_id, self._sender_dict(), key_hex, record)
+            await self._rpc(node, msg)
