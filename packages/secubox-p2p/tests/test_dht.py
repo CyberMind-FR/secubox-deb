@@ -419,3 +419,16 @@ async def test_real_udp_bootstrap_and_find_peer(monkeypatch):
     finally:
         await A.stop()
         await B.stop()
+
+
+def test_put_get_health():
+    """put_health/get_health is an advisory store: no signature verification,
+    unknown keys return None."""
+    from api.dht import DHTNetwork
+
+    net = DHTNetwork("did:self", "ii", "aa", "10.10.0.1:51823")
+
+    net.put_health("k", {"status": "up"})
+    assert net.get_health("k") == {"status": "up"}
+
+    assert net.get_health("unknown-key") is None

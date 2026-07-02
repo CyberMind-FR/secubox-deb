@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 from . import annuaire_client
+from .dht import node_id_for
 
 
 class HealthStore:
@@ -148,6 +149,7 @@ class HealthChecker:
         interval: int = 30,
         max_concurrency: int = 20,
         enabled: bool = False,
+        publish_fn=None,
     ):
         """
         Initialize HealthChecker.
@@ -161,6 +163,10 @@ class HealthChecker:
             interval: Seconds between sweeps in the background run() loop.
             max_concurrency: Maximum number of probes in flight at once.
             enabled: Opt-in flag; sweep_once() is a no-op while False.
+            publish_fn: Optional `callable(snapshot: dict)` invoked at the end
+                of every sweep_once() with the store's current snapshot(). Any
+                exception it raises is swallowed — publishing must never break
+                the sweep. None (default) disables publishing.
         """
         self._services_fn = services_fn
         self._probe_fn = probe_fn
@@ -170,6 +176,7 @@ class HealthChecker:
         self._max_concurrency = max_concurrency
         self._sem = asyncio.Semaphore(max_concurrency)
         self._task = None
+        self._publish_fn = publish_fn
 
     async def sweep_once(self) -> int:
         """
@@ -193,6 +200,13 @@ class HealthChecker:
                 self._store.record(svc["id"], ok, latency)
 
         await asyncio.gather(*[_one(s) for s in services])
+
+        if self._publish_fn is not None:
+            try:
+                self._publish_fn(self._store.snapshot())
+            except Exception:
+                pass
+
         return len(services)
 
     async def run(self):
@@ -306,3 +320,33 @@ def services_from_registry() -> list[dict]:
         return out
     except Exception:  # noqa: BLE001
         return []
+
+
+def make_dht_publisher(dht):
+    """
+    Build a `publish_fn(snapshot)` (for HealthChecker) that mirrors a
+    HealthStore.snapshot() into the DHT's advisory health_store.
+
+    Each (service_id, entry) is stored under key
+    `node_id_for("health:"+service_id).hex()` via `dht.put_health()`.
+    Health blobs are deliberately unsigned/advisory (see DHTNetwork.put_health)
+    — they are liveness telemetry, not identity-bearing reachability claims.
+
+    Args:
+        dht: A DHTNetwork instance (or any object exposing put_health).
+
+    Returns:
+        A callable `publish_fn(snapshot: dict) -> None`.
+    """
+
+    def publish_fn(snapshot: dict) -> None:
+        for sid, entry in snapshot.items():
+            key_hex = node_id_for("health:" + sid).hex()
+            blob = {
+                "service_id": sid,
+                "status": entry.get("status"),
+                "ts": entry.get("last_check"),
+            }
+            dht.put_health(key_hex, blob)
+
+    return publish_fn

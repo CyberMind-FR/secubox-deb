@@ -29,7 +29,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client, dht
+from . import mesh, registry, annuaire_client, dht, federation
 
 app = FastAPI(
     title="SecuBox P2P API",
@@ -2532,6 +2532,94 @@ async def dht_find(did: str):
     if rec is None:
         raise HTTPException(status_code=404, detail="not found")
     return rec
+
+
+# ============== Federation health-checks (feature-flagged) — Issue #774 Task 13 ==============
+#
+# Backward compatible by construction: with [federation].health_checks = false
+# (the default when the section is absent from p2p.toml), _federation_startup
+# sets app.state.health_store = app.state.health_checker = None and nothing
+# new is started. Every endpoint below checks app.state.health_checker is not
+# None before touching it.
+
+@app.on_event("startup")
+async def _federation_startup():
+    """Start the federation health-checker iff [federation].health_checks —
+    never break app startup. When app.state.dht is set (DHT enabled), each
+    sweep also publishes the store snapshot into the DHT's advisory
+    health_store (make_dht_publisher)."""
+    app.state.health_store = None
+    app.state.health_checker = None
+    try:
+        cfg = mesh.load_p2p_config(CONFIG_FILE)
+        if not cfg["federation"]["health_checks"]:
+            return
+
+        store = federation.HealthStore(fail_threshold=cfg["federation"]["fail_threshold"])
+
+        publish_fn = None
+        if getattr(app.state, "dht", None):
+            publish_fn = federation.make_dht_publisher(app.state.dht)
+
+        checker = federation.HealthChecker(
+            federation.services_from_registry,
+            federation.default_probe,
+            store,
+            interval=cfg["federation"]["interval"],
+            max_concurrency=cfg["federation"]["max_concurrency"],
+            enabled=True,
+            publish_fn=publish_fn,
+        )
+        checker.start()
+
+        app.state.health_store = store
+        app.state.health_checker = checker
+        log.info("federation health-checker started interval=%s", cfg["federation"]["interval"])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("federation startup failed (continuing without health-checks): %s", exc)
+        app.state.health_store = None
+        app.state.health_checker = None
+
+
+@app.on_event("shutdown")
+async def _federation_shutdown():
+    """Stop the federation health-checker's background sweep loop, best-effort."""
+    checker = getattr(app.state, "health_checker", None)
+    if not checker:
+        return
+    try:
+        await checker.stop()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("federation checker stop failed: %s", exc)
+
+
+@app.get("/federation/services")
+async def federation_services():
+    """Federated services + their current health status (public read).
+    Disabled -> enabled: false, but the service list is still returned
+    (health reported as 'unknown' for each)."""
+    store = getattr(app.state, "health_store", None)
+    checker = getattr(app.state, "health_checker", None)
+    return {
+        "enabled": checker is not None,
+        "services": [
+            {
+                **svc,
+                "health": store.status_of(svc["id"]) if store else {"status": "unknown"},
+            }
+            for svc in federation.services_from_registry()
+        ],
+    }
+
+
+@app.post("/federation/healthcheck")
+async def federation_healthcheck(user: dict = Depends(require_jwt)):
+    """Force an immediate health-check sweep (auth required)."""
+    checker = getattr(app.state, "health_checker", None)
+    if checker is None:
+        raise HTTPException(status_code=400, detail="health checks disabled")
+    n = await checker.sweep_once()
+    return {"ok": True, "probed": n}
 
 
 # ============== Macro Grant (M2) ==============

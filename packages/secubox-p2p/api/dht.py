@@ -225,6 +225,7 @@ class DHTNetwork:
         self._clock = clock
         self.routing = RoutingTable(self.self_id)
         self.store: dict = {}  # key_hex -> (record, expiry_ts)
+        self.health_store: dict = {}  # key_hex -> (blob, expiry_ts) — advisory, unsigned
         self.pending: dict = {}  # rpc_id -> asyncio.Future, resolved by handle_message
         self._transport = None
 
@@ -298,6 +299,26 @@ class DHTNetwork:
             del self.store[key_hex]
             return None
         return record
+
+    def put_health(self, key_hex: str, blob: dict) -> None:
+        """Store an advisory (unsigned) federation-health blob.
+
+        Health records are not identity-bearing, so unlike local_store_put()
+        this never runs verify_record() — a health snapshot is best-effort
+        telemetry, not a reachability claim. Shares DHT_TTL with the signed
+        store."""
+        self.health_store[key_hex] = (blob, self._clock() + DHT_TTL)
+
+    def get_health(self, key_hex: str):
+        """Fetch an advisory health blob, or None if absent/expired."""
+        entry = self.health_store.get(key_hex)
+        if entry is None:
+            return None
+        blob, expiry = entry
+        if self._clock() >= expiry:
+            del self.health_store[key_hex]
+            return None
+        return blob
 
     # -- Task 7: iterative lookup / find_peer / announce (injected transport) --
 

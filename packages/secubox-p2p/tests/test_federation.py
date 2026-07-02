@@ -276,3 +276,53 @@ async def test_probe_non_dict_service_returns_false():
     """A non-dict service (None, str, ...) never raises — reported as (False, None)."""
     assert await default_probe(None) == (False, None)
     assert await default_probe("nope") == (False, None)
+
+
+@pytest.mark.asyncio
+async def test_publish_fn_called_after_sweep():
+    """When a publish_fn is passed, it is called once per sweep_once() with
+    the store's snapshot, after every service has been probed."""
+
+    def services_fn():
+        return [{"id": "a"}]
+
+    async def probe_fn(svc):
+        return True, 5.0
+
+    published = []
+    store = HealthStore(fail_threshold=1)
+    checker = HealthChecker(
+        services_fn, probe_fn, store, enabled=True, publish_fn=published.append
+    )
+
+    n = await checker.sweep_once()
+
+    assert n == 1
+    assert len(published) == 1
+    assert published[0]["a"]["status"] == "up"
+
+
+def test_make_dht_publisher_writes_health():
+    """make_dht_publisher(dht) returns a publish_fn that stores each service's
+    health under node_id_for('health:'+service_id).hex() via dht.put_health."""
+    from api.dht import node_id_for
+    from api.federation import make_dht_publisher
+
+    class FakeDHT:
+        def __init__(self):
+            self.calls = []
+
+        def put_health(self, key_hex, blob):
+            self.calls.append((key_hex, blob))
+
+    fake = FakeDHT()
+    publish_fn = make_dht_publisher(fake)
+
+    snapshot = {"svc-a": {"status": "up", "last_check": 123.0}}
+    publish_fn(snapshot)
+
+    assert len(fake.calls) == 1
+    key_hex, blob = fake.calls[0]
+    assert key_hex == node_id_for("health:svc-a").hex()
+    assert blob["service_id"] == "svc-a"
+    assert blob["status"] == "up"

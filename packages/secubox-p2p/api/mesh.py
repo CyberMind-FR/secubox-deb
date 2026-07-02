@@ -45,13 +45,22 @@ DHT_DEFAULTS = {
     "rps": 50,
 }
 
+FEDERATION_DEFAULTS = {
+    "health_checks": False,
+    "interval": 30,
+    "probe_timeout": 5,
+    "max_concurrency": 20,
+    "fail_threshold": 3,
+}
+
 
 def load_p2p_config(path: pathlib.Path) -> dict:
     """Read /etc/secubox/p2p.toml, with defaults.
 
     Returns a dict with the legacy [wireguard]-derived keys at the top level
     (unchanged, for backward compatibility) plus a `dht` sub-dict built from
-    the [dht] section (Issue #774 Task 9)."""
+    the [dht] section (Issue #774 Task 9) and a `federation` sub-dict built
+    from the [federation] section (Issue #774 Task 13)."""
     defaults = {
         "interface": MESH_INTERFACE,
         "listen_port": MESH_PORT,
@@ -76,6 +85,13 @@ def load_p2p_config(path: pathlib.Path) -> dict:
         if dht.get(k) is not None:
             out_dht[k] = dht[k]
     out["dht"] = out_dht
+
+    federation = doc.get("federation", {}) or {}
+    out_federation = dict(FEDERATION_DEFAULTS)
+    for k in FEDERATION_DEFAULTS:
+        if federation.get(k) is not None:
+            out_federation[k] = federation[k]
+    out["federation"] = out_federation
     return out
 
 
