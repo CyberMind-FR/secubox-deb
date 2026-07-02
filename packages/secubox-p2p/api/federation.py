@@ -8,6 +8,7 @@ Federation health-check store — debounced up/down status with persistence.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -126,3 +127,91 @@ class HealthStore:
             self._svc = json.loads(p.read_text())
         except (ValueError, OSError):
             pass
+
+
+class HealthChecker:
+    """
+    Async sweeper that probes a set of federation services and records
+    liveness into a HealthStore.
+
+    The probe itself is injected (real network probing is a later task);
+    this class only owns the sweep loop, concurrency bound, and opt-in gate.
+    """
+
+    def __init__(
+        self,
+        services_fn,
+        probe_fn,
+        store,
+        interval: int = 30,
+        max_concurrency: int = 20,
+        enabled: bool = False,
+    ):
+        """
+        Initialize HealthChecker.
+
+        Args:
+            services_fn: Callable returning a list of service dicts
+                (each with at least an "id" key).
+            probe_fn: `async def probe(service) -> tuple[bool, float | None]`
+                returning (ok, latency_ms).
+            store: HealthStore instance to record results into.
+            interval: Seconds between sweeps in the background run() loop.
+            max_concurrency: Maximum number of probes in flight at once.
+            enabled: Opt-in flag; sweep_once() is a no-op while False.
+        """
+        self._services_fn = services_fn
+        self._probe_fn = probe_fn
+        self._store = store
+        self._interval = interval
+        self._enabled = enabled
+        self._max_concurrency = max_concurrency
+        self._sem = asyncio.Semaphore(max_concurrency)
+        self._task = None
+
+    async def sweep_once(self) -> int:
+        """
+        Probe every service returned by services_fn(), bounded by the
+        concurrency semaphore, and record each result into the store.
+
+        Returns:
+            The number of services probed (0 if disabled).
+        """
+        if not self._enabled:
+            return 0
+
+        services = self._services_fn() or []
+
+        async def _one(svc):
+            async with self._sem:
+                try:
+                    ok, latency = await self._probe_fn(svc)
+                except Exception:
+                    ok, latency = False, None
+                self._store.record(svc["id"], ok, latency)
+
+        await asyncio.gather(*[_one(s) for s in services])
+        return len(services)
+
+    async def run(self):
+        """Background loop: sweep on interval while enabled; cancel-safe."""
+        while True:
+            if self._enabled:
+                try:
+                    await self.sweep_once()
+                except Exception:
+                    pass
+            await asyncio.sleep(self._interval)
+
+    def start(self):
+        """Start the background sweep loop as an asyncio task."""
+        self._task = asyncio.create_task(self.run())
+
+    async def stop(self):
+        """Cancel the background sweep loop, swallowing CancelledError."""
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
