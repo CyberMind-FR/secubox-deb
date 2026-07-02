@@ -12,6 +12,15 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-hub/etc/nginx/secubox.d
 	[ -f nginx/hub.conf ] && cp nginx/hub.conf debian/secubox-hub/etc/nginx/secubox.d/ || true
+	# Authelia-free auth-gate stub + LAN geo (moved here from the decommissioned
+	# secubox-authelia). Ships $lan_client and the /__sbx_auth_verify +
+	# @sbx_auth_login named locations into BOTH include dirs so SSO-gated vhosts
+	# keep resolving them; LAN passes, everything else is denied.
+	install -d debian/secubox-hub/etc/nginx/secubox-routes.d
+	[ -f nginx/zz-sbx-authgate.conf ] && cp nginx/zz-sbx-authgate.conf debian/secubox-hub/etc/nginx/secubox.d/ || true
+	[ -f nginx/zz-sbx-authgate.conf ] && cp nginx/zz-sbx-authgate.conf debian/secubox-hub/etc/nginx/secubox-routes.d/ || true
+	install -d debian/secubox-hub/etc/nginx/conf.d
+	[ -f nginx/secubox-lan-geo.conf ] && cp nginx/secubox-lan-geo.conf debian/secubox-hub/etc/nginx/conf.d/ || true
 	# Nginx snippets (shared CORS config)
 	install -d debian/secubox-hub/etc/nginx/snippets
 	[ -d nginx/snippets ] && cp -r nginx/snippets/. debian/secubox-hub/etc/nginx/snippets/ || true
