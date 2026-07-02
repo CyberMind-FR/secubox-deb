@@ -68,3 +68,32 @@ class DHTBucket:
     def nodes(self):
         """Return a list of all nodes in order."""
         return list(self._nodes.values())
+
+
+class RoutingTable:
+    """160 buckets indexed by the shared-prefix length with self_id."""
+    def __init__(self, self_id: bytes):
+        self.self_id = self_id
+        self.buckets = [DHTBucket() for _ in range(KAD_ID_BITS)]
+
+    def _bucket_index(self, node_id: bytes) -> int:
+        d = xor_distance(self.self_id, node_id)
+        if d == 0:
+            return 0
+        return KAD_ID_BITS - 1 - (d.bit_length() - 1)
+
+    def insert(self, node: DHTNode) -> bool:
+        if node.node_id == self.self_id:
+            return False
+        return self.buckets[self._bucket_index(node.node_id)].add(node)
+
+    def all_nodes(self):
+        out = []
+        for b in self.buckets:
+            out.extend(b.nodes)
+        return out
+
+    def closest(self, target_id: bytes, count: int = KAD_K):
+        nodes = self.all_nodes()
+        nodes.sort(key=lambda n: xor_distance(n.node_id, target_id))
+        return nodes[:count]

@@ -45,3 +45,27 @@ def test_bucket_full_rejects_new_and_reports_oldest():
     assert b.add(a)
     assert b.add(c) is False             # full
     assert b.oldest().did == "did:a"
+
+
+# Task 3: RoutingTable
+
+def test_closest_orders_by_xor_distance():
+    from api.dht import RoutingTable
+    me = node_id_for("me")
+    rt = RoutingTable(me)
+    for name in ("a", "b", "c", "d", "e"):
+        nid = node_id_for(name)
+        rt.insert(DHTNode(nid, f"did:{name}", ("10.10.0.9", 51823)))
+    target = node_id_for("c")
+    got = rt.closest(target, count=3)
+    assert len(got) == 3
+    dists = [xor_distance(n.node_id, target) for n in got]
+    assert dists == sorted(dists)        # nearest first
+    assert got[0].did == "did:c"         # exact target is nearest
+
+
+def test_insert_ignores_self():
+    from api.dht import RoutingTable
+    me = node_id_for("me")
+    rt = RoutingTable(me)
+    assert rt.insert(DHTNode(me, "did:me", ("10.10.0.1", 51823))) is False
