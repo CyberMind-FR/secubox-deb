@@ -118,3 +118,42 @@ def test_decode_rejects_malformed_and_oversized():
     assert decode_msg(b"[1,2,3]") is None            # not a dict
     assert decode_msg(b"{}") is None                  # missing required 't'
     assert decode_msg(b"x" * (MAX_DGRAM + 1)) is None # oversized
+
+
+# Task 6: DHTNetwork core — value store with TTL + handle_message (transport-injected)
+
+import api.dht as dht
+from api.dht import DHTNetwork, node_id_for, encode_msg, decode_msg, msg_ping
+
+
+def _net(monkeypatch, sent, verified=True):
+    monkeypatch.setattr(dht, "_did_from_pubkey", lambda h: "did:self")
+    monkeypatch.setattr(dht, "_verify_sig", lambda b,s,p: verified)
+    monkeypatch.setattr(dht, "_sign_sig", lambda b: "sig")
+    return DHTNetwork("did:self","aa","10.10.0.1:51823", send_fn=lambda d,a: sent.append((d,a)))
+
+
+def test_ping_gets_pong(monkeypatch):
+    sent=[]; net=_net(monkeypatch, sent)
+    sender={"node_id_hex": node_id_for("peer").hex(),"did":"did:peer","endpoint":"10.10.0.2:51823"}
+    net.handle_message(encode_msg(msg_ping("r1", sender)), ("10.10.0.2",51823))
+    assert sent and decode_msg(sent[0][0])["t"]=="pong" and decode_msg(sent[0][0])["rpc_id"]=="r1"
+
+
+def test_store_rejects_unverified(monkeypatch):
+    sent=[]; net=_net(monkeypatch, sent, verified=False)
+    ok = net.local_store_put("aa"*20, {"did":"did:peer","wg_pubkey":"bb","endpoint":"10.10.0.2:51823","ts":1,"sig":"x"})
+    assert ok is False and "aa"*20 not in net.store
+
+
+def test_store_ttl_expiry(monkeypatch):
+    t=[1000.0]; sent=[]
+    monkeypatch.setattr(dht,"_did_from_pubkey",lambda h:"did:peer")
+    monkeypatch.setattr(dht,"_verify_sig",lambda b,s,p:True)
+    monkeypatch.setattr(dht,"_sign_sig",lambda b:"sig")
+    net=DHTNetwork("did:self","aa","10.10.0.1:51823",send_fn=lambda d,a:sent.append((d,a)),clock=lambda:t[0])
+    key="bb"*20
+    assert net.local_store_put(key, {"did":"did:peer","wg_pubkey":"cc","endpoint":"10.10.0.2:51823","ts":1,"sig":"s"})
+    assert net.local_store_get(key) is not None
+    t[0]+=dht.DHT_TTL+1
+    assert net.local_store_get(key) is None

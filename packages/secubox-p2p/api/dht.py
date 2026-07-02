@@ -172,3 +172,90 @@ def msg_find_value(rpc_id, sender, key_hex):      return {**_base("find_value", 
 def msg_value(rpc_id, sender, record):            return {**_base("value", rpc_id, sender), "value": record}
 def msg_store(rpc_id, sender, key_hex, record):   return {**_base("store", rpc_id, sender), "key": key_hex, "value": record}
 def msg_ok(rpc_id, sender):                       return _base("ok", rpc_id, sender)
+
+
+class DHTNetwork:
+    """Kademlia DHT node: routing table + local value store + message dispatch.
+
+    The UDP transport is injected via `send_fn(data: bytes, addr: tuple)` so this
+    class is unit-testable without real sockets. Iterative lookup and the real
+    UDP transport are added in later tasks.
+    """
+
+    def __init__(self, did: str, wg_pubkey: str, endpoint: str,
+                 send_fn=None, clock=time.time):
+        self.did = did
+        self.self_id = node_id_for(did)
+        self.wg_pubkey = wg_pubkey
+        self.endpoint = endpoint
+        self.send_fn = send_fn
+        self._clock = clock
+        self.routing = RoutingTable(self.self_id)
+        self.store: dict = {}  # key_hex -> (record, expiry_ts)
+
+    def _sender_dict(self) -> dict:
+        return {"node_id_hex": self.self_id.hex(), "did": self.did, "endpoint": self.endpoint}
+
+    def _parse_endpoint(self, endpoint: str) -> tuple:
+        host, port = endpoint.rsplit(":", 1)
+        return (host, int(port))
+
+    def _touch_sender(self, sender: dict) -> None:
+        node = DHTNode(
+            node_id=bytes.fromhex(sender["node_id_hex"]),
+            did=sender["did"],
+            endpoint=self._parse_endpoint(sender["endpoint"]),
+        )
+        self.routing.insert(node)
+
+    def _contact_dicts(self, nodes) -> list:
+        return [{"node_id_hex": n.node_id.hex(), "did": n.did,
+                  "endpoint": f"{n.endpoint[0]}:{n.endpoint[1]}"} for n in nodes]
+
+    def handle_message(self, data: bytes, addr) -> None:
+        msg = decode_msg(data)
+        if msg is None:
+            return
+        sender = msg.get("sender")
+        if isinstance(sender, dict):
+            self._touch_sender(sender)
+        rpc_id = msg.get("rpc_id")
+        t = msg.get("t")
+        if t == "ping":
+            self._reply(msg_pong(rpc_id, self._sender_dict()), addr)
+        elif t == "find_node":
+            target = bytes.fromhex(msg["target"])
+            closest = self.routing.closest(target, KAD_K)
+            self._reply(msg_nodes(rpc_id, self._sender_dict(), self._contact_dicts(closest)), addr)
+        elif t == "find_value":
+            key = msg["key"]
+            record = self.local_store_get(key)
+            if record is not None:
+                self._reply(msg_value(rpc_id, self._sender_dict(), record), addr)
+            else:
+                target = bytes.fromhex(key)
+                closest = self.routing.closest(target, KAD_K)
+                self._reply(msg_nodes(rpc_id, self._sender_dict(), self._contact_dicts(closest)), addr)
+        elif t == "store":
+            self.local_store_put(msg["key"], msg["value"])
+            self._reply(msg_ok(rpc_id, self._sender_dict()), addr)
+
+    def _reply(self, msg: dict, addr) -> None:
+        if self.send_fn is not None:
+            self.send_fn(encode_msg(msg), addr)
+
+    def local_store_put(self, key_hex: str, record: dict) -> bool:
+        if not verify_record(record):
+            return False
+        self.store[key_hex] = (record, self._clock() + DHT_TTL)
+        return True
+
+    def local_store_get(self, key_hex: str):
+        entry = self.store.get(key_hex)
+        if entry is None:
+            return None
+        record, expiry = entry
+        if self._clock() >= expiry:
+            del self.store[key_hex]
+            return None
+        return record
