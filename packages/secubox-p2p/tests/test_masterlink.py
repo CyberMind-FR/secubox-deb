@@ -7,7 +7,7 @@ SecuBox-Deb :: secubox-p2p :: masterlink tests
 Tests for master election function, role enum, and term store.
 """
 import pytest
-from api.masterlink import Role, elect, TermStore
+from api.masterlink import Role, elect, TermStore, MasterLink
 
 
 def test_elect_lowest_priority_wins():
@@ -87,3 +87,101 @@ def test_role_enum_values():
     assert Role.MASTER.value == "master"
     assert Role.SATELLITE.value == "satellite"
     assert Role.CANDIDATE.value == "candidate"
+
+
+def test_silent_master_triggers_self_election(tmp_path):
+    """A lone node with no peers elects itself master after the election timeout."""
+    sends = []
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [], sends.append,
+        TermStore(tmp_path / "term1"), clock, election_timeout=15,
+    )
+    assert ml.role == Role.SATELLITE
+
+    t[0] += 20  # advance past election_timeout
+    ml.tick()
+
+    assert ml.role == Role.MASTER
+    assert ml.term > 0
+    assert len(sends) == 1
+    assert sends[0]["master_id"] == "aa"
+
+
+def test_stale_heartbeat_ignored(tmp_path):
+    """A heartbeat with a lower term than ours is ignored."""
+    sends = []
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [], sends.append,
+        TermStore(tmp_path / "term2"), clock, election_timeout=15,
+    )
+    t[0] += 20
+    ml.tick()
+    assert ml.role == Role.MASTER
+    term_after_election = ml.term
+
+    ml.on_heartbeat({"term": term_after_election - 1, "master_id": "bb", "ts": 1})
+
+    assert ml.role == Role.MASTER
+    assert ml.master_id == "aa"
+
+
+def test_higher_term_heartbeat_demotes_master(tmp_path):
+    """A heartbeat carrying a strictly higher term demotes us and adopts the new master."""
+    sends = []
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [], sends.append,
+        TermStore(tmp_path / "term3"), clock, election_timeout=15,
+    )
+    t[0] += 20
+    ml.tick()
+    assert ml.role == Role.MASTER
+
+    higher_term = ml.term + 1
+    ml.on_heartbeat({"term": higher_term, "master_id": "bb", "ts": 1})
+
+    assert ml.role == Role.SATELLITE
+    assert ml.master_id == "bb"
+    assert ml.term == higher_term
+
+
+def test_election_picks_lowest_priority_peer_not_self(tmp_path):
+    """When a peer has lower priority than us, it wins the election, not us."""
+    sends = []
+    t = [1000.0]
+    clock = lambda: t[0]
+    ts = TermStore(tmp_path / "term4")
+    ml = MasterLink(
+        "aa", 100, lambda: [{"node_id_hex": "bb", "priority": 10}], sends.append,
+        ts, clock, election_timeout=15,
+    )
+    initial_term = ml.term
+
+    t[0] += 20
+    ml.tick()
+
+    assert ml.role == Role.SATELLITE
+    assert ml.term > initial_term
+
+
+def test_master_tick_emits_heartbeat(tmp_path):
+    """A node already in MASTER role emits exactly one heartbeat per tick()."""
+    sends = []
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [], sends.append,
+        TermStore(tmp_path / "term5"), clock, election_timeout=15,
+    )
+    ml.role = Role.MASTER
+    sends.clear()
+
+    ml.tick()
+
+    assert len(sends) == 1
+    assert sends[0]["master_id"] == "aa"
