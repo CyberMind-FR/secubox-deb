@@ -6,8 +6,15 @@
 SecuBox-Deb :: secubox-p2p :: masterlink tests
 Tests for master election function, role enum, and term store.
 """
+import asyncio
+
 import pytest
-from api.masterlink import Role, elect, TermStore, MasterLink
+
+import api.dht as dht
+from api.masterlink import (
+    Role, elect, TermStore, MasterLink,
+    sign_heartbeat, verify_heartbeat, peers_from_mesh,
+)
 
 
 def test_elect_lowest_priority_wins():
@@ -299,3 +306,171 @@ def test_malformed_heartbeat_ignored(tmp_path):
 
     assert ml.role == role_before
     assert ml.master_id == master_before
+
+
+def test_malformed_priority_ignored(tmp_path):
+    """A heartbeat with a non-numeric priority does not raise and is ignored
+    (Minor fix: the int(priority) cast must be inside the same try/except
+    that guards term/master_id parsing)."""
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [], lambda msg: None,
+        TermStore(tmp_path / "term_bad_pri"), clock, election_timeout=15,
+    )
+    role_before, master_before, term_before = ml.role, ml.master_id, ml.term
+
+    ml.on_heartbeat({"term": 1, "master_id": "bb", "priority": "nope"})  # must not raise
+
+    assert ml.role == role_before
+    assert ml.master_id == master_before
+    assert ml.term == term_before
+
+
+# -- Signed heartbeats (Ed25519 via api.dht seams) --------------------------
+
+
+def test_sign_and_verify_heartbeat(monkeypatch):
+    """Real Ed25519 roundtrip: sign a heartbeat, verify it, then show tampering
+    and a missing sig both fail closed."""
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding, PrivateFormat, PublicFormat, NoEncryption,
+    )
+    import api.annuaire_client as annuaire_client
+
+    priv_key = ed25519.Ed25519PrivateKey.generate()
+    priv_hex = priv_key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()
+    pub_hex = priv_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+
+    monkeypatch.setattr(annuaire_client, "node_identity", lambda *a, **kw: ("did:x", priv_hex))
+
+    hb = sign_heartbeat(1, "aa", 100, 123.0, id_pubkey=pub_hex)
+    assert verify_heartbeat(hb) is True
+
+    tampered = dict(hb, term=2)
+    assert verify_heartbeat(tampered) is False
+
+    dropped_sig = dict(hb)
+    dropped_sig.pop("sig")
+    assert verify_heartbeat(dropped_sig) is False
+
+
+def test_on_heartbeat_rejects_bad_signature(monkeypatch, tmp_path):
+    """A signed heartbeat with a garbage/invalid signature is ignored outright —
+    no state change — even though its term/master_id fields look well-formed."""
+    monkeypatch.setattr(dht, "_verify_sig", lambda body, sig, pub: False)
+
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [], lambda msg: None,
+        TermStore(tmp_path / "term_bad_sig"), clock, election_timeout=15,
+    )
+    role_before, master_before, term_before = ml.role, ml.master_id, ml.term
+
+    forged = {
+        "t": "heartbeat", "term": term_before + 1, "master_id": "bb",
+        "priority": 1, "ts": 1.0, "id_pubkey": "deadbeef", "sig": "garbage",
+    }
+    ml.on_heartbeat(forged)
+
+    assert ml.role == role_before
+    assert ml.master_id == master_before
+    assert ml.term == term_before
+
+
+def test_unsigned_heartbeat_still_processed(tmp_path):
+    """A heartbeat without a 'sig' field (the pure-logic path) is processed
+    normally — backward compat is preserved for callers that never sign."""
+    t = [1000.0]
+    clock = lambda: t[0]
+    ml = MasterLink(
+        "aa", 100, lambda: [], lambda msg: None,
+        TermStore(tmp_path / "term_unsigned"), clock, election_timeout=15,
+    )
+
+    ml.on_heartbeat({"term": 1, "master_id": "bb", "priority": 10, "ts": 1.0})
+
+    assert ml.role == Role.SATELLITE
+    assert ml.master_id == "bb"
+    assert ml.term == 1
+
+
+def test_peers_from_mesh_defensive():
+    """peers_from_mesh() is a thin, defensive adapter: a well-formed stub
+    yields candidates; unknown/malformed shapes degrade to []."""
+    mesh_state = {
+        "peers": [
+            {"public_key": "pk-a", "priority": 50},
+            {"public_key": "pk-b"},  # no priority -> default 100
+            {"garbage": True},        # no usable key -> skipped
+        ]
+    }
+    peers = peers_from_mesh(mesh_state)
+    assert len(peers) == 2
+    assert all("node_id_hex" in p and "priority" in p for p in peers)
+    assert {p["priority"] for p in peers} == {50, 100}
+
+    assert peers_from_mesh({}) == []
+    assert peers_from_mesh(None) == []
+    assert peers_from_mesh("not-a-dict") == []
+
+
+# -- Real UDP transport + tick loop (integration) ---------------------------
+
+
+def _crypto_seams(monkeypatch):
+    """Trivial always-true sign/verify seam, same pattern as test_dht.py's
+    _crypto_identity — this test targets transport wiring, not crypto."""
+    monkeypatch.setattr(dht, "_sign_sig", lambda body: "sig")
+    monkeypatch.setattr(dht, "_verify_sig", lambda body, sig, pub: True)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_udp_transport_propagates_master_via_real_sockets(monkeypatch, tmp_path):
+    """Two MasterLinks talk over real loopback UDP sockets (ephemeral ports).
+    The lower-priority node ticks itself into MASTER and broadcasts signed
+    heartbeats; the other must adopt it as master within a short bounded wait."""
+    _crypto_seams(monkeypatch)
+
+    t = [1000.0]
+    clock = lambda: t[0]
+
+    ml_master = MasterLink(
+        "aa", 10, lambda: [], lambda msg: None,
+        TermStore(tmp_path / "term_udp_a"), clock,
+        election_timeout=15, id_pubkey="pub-aa",
+    )
+    ml_sat = MasterLink(
+        "bb", 100, lambda: [], lambda msg: None,
+        TermStore(tmp_path / "term_udp_b"), clock,
+        election_timeout=15, id_pubkey="pub-bb",
+    )
+
+    try:
+        await ml_master.start(host="127.0.0.1", port=0)
+        await ml_sat.start(host="127.0.0.1", port=0)
+
+        master_port = ml_master._transport.get_extra_info("socket").getsockname()[1]
+        sat_port = ml_sat._transport.get_extra_info("socket").getsockname()[1]
+        ml_master._peer_addrs = [("127.0.0.1", sat_port)]
+        ml_sat._peer_addrs = [("127.0.0.1", master_port)]
+
+        # Force ml_master straight into MASTER role and let it broadcast.
+        ml_master.role = Role.MASTER
+        ml_master._terms.bump()
+        ml_master.master_id = "aa"
+
+        ml_master.start_ticking()
+
+        deadline = asyncio.get_event_loop().time() + 5.0
+        while ml_sat.master_id != "aa" and asyncio.get_event_loop().time() < deadline:
+            await asyncio.sleep(0.05)
+
+        assert ml_sat.master_id == "aa"
+        assert ml_sat.role == Role.SATELLITE
+    finally:
+        await ml_master.stop()
+        await ml_sat.stop()
