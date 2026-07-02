@@ -14,6 +14,8 @@ import os
 import time
 from pathlib import Path
 
+from . import annuaire_client
+
 
 class HealthStore:
     """
@@ -215,3 +217,89 @@ class HealthChecker:
                 await self._task
             except asyncio.CancelledError:
                 pass
+
+
+async def default_probe(
+    service: dict, timeout: float = 5.0
+) -> tuple[bool, float | None]:
+    """
+    Liveness probe for a federated service.
+
+    HTTP(S) GET of <base><health_path> when the service carries an http(s)
+    url/endpoint; otherwise a TCP connect to host:port. Any error or timeout
+    is swallowed and reported as (False, None) — this function never raises.
+
+    Args:
+        service: Service dict with "url" or "endpoint" (and optional
+            "health_path", default "/health").
+        timeout: Overall timeout in seconds for the probe.
+
+    Returns:
+        (ok, latency_ms) — latency_ms is None when ok is False.
+    """
+    endpoint = service.get("url") or service.get("endpoint") or ""
+    health_path = service.get("health_path", "/health")
+    if not endpoint:
+        return (False, None)
+
+    t0 = time.monotonic()
+    try:
+        if endpoint.startswith("http://") or endpoint.startswith("https://"):
+            import aiohttp  # noqa: PLC0415
+
+            url = endpoint.rstrip("/") + health_path
+            timeout_cfg = aiohttp.ClientTimeout(total=timeout)
+            async with aiohttp.ClientSession(timeout=timeout_cfg) as sess:
+                async with sess.get(url, ssl=False) as resp:
+                    ok = 200 <= resp.status < 400
+                    await resp.read()
+            return (ok, (time.monotonic() - t0) * 1000.0)
+        else:
+            host, _, port = endpoint.rpartition(":")
+            if not host or not port.isdigit():
+                return (False, None)
+            fut = asyncio.open_connection(host, int(port))
+            reader, writer = await asyncio.wait_for(fut, timeout)
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:  # noqa: BLE001
+                pass
+            return (True, (time.monotonic() - t0) * 1000.0)
+    except Exception:  # noqa: BLE001
+        return (False, None)
+
+
+def services_from_registry() -> list[dict]:
+    """
+    Best-effort list of federated services to health-check, sourced from the
+    local annuaire catalog.
+
+    Each returned dict has at least "id" and "endpoint" (health_path is
+    included with a "/health" default). If the annuaire is unreachable or
+    the catalog is empty, returns []. Never raises.
+    """
+    try:
+        catalog, err = annuaire_client.get_catalog()
+        if err or not catalog:
+            return []
+        # get_catalog() returns a list of service dicts; tolerate a dict
+        # wrapper ({"services": [...]}) too, in case the shape evolves.
+        services = catalog.get("services", catalog) if isinstance(catalog, dict) else catalog
+        out = []
+        for s in services or []:
+            if not isinstance(s, dict):
+                continue
+            sid = s.get("id") or s.get("service_id") or s.get("name")
+            if not sid:
+                continue
+            out.append(
+                {
+                    "id": sid,
+                    "endpoint": s.get("endpoint") or s.get("url") or "",
+                    "health_path": s.get("health_path", "/health"),
+                }
+            )
+        return out
+    except Exception:  # noqa: BLE001
+        return []

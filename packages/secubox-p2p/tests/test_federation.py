@@ -2,8 +2,10 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 import asyncio
 
+import aiohttp
+import aiohttp.web
 import pytest
-from api.federation import HealthChecker, HealthStore
+from api.federation import HealthChecker, HealthStore, default_probe, services_from_registry
 
 
 def test_debounce_up_down_up():
@@ -154,3 +156,116 @@ async def test_probe_exception_marks_down():
 
     assert n == 1
     assert store.status_of("a")["status"] == "down"
+
+
+async def _run_health_server(status: int):
+    """Start a real aiohttp server with a single /health route returning
+    `status`, bound to an ephemeral port. Returns (runner, site, port) —
+    caller must site.stop() / runner.cleanup()."""
+    import socket as _socket
+
+    async def handler(_request):
+        return aiohttp.web.Response(status=status, text="ok" if status < 400 else "nope")
+
+    app = aiohttp.web.Application()
+    app.router.add_get("/health", handler)
+    runner = aiohttp.web.AppRunner(app)
+    await runner.setup()
+
+    sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+
+    site = aiohttp.web.SockSite(runner, sock)
+    await site.start()
+    return runner, site, port
+
+
+@pytest.mark.asyncio
+async def test_probe_http_200_ok():
+    """A service whose /health handler returns 200 probes as (True, latency>0)."""
+    runner, site, port = await _run_health_server(200)
+    try:
+        ok, latency = await default_probe({"endpoint": f"http://127.0.0.1:{port}"})
+        assert ok is True
+        assert isinstance(latency, float)
+        assert latency > 0
+    finally:
+        await site.stop()
+        await runner.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_probe_http_500_down():
+    """A service whose /health handler returns 500 probes as not-ok."""
+    runner, site, port = await _run_health_server(500)
+    try:
+        ok, _latency = await default_probe({"endpoint": f"http://127.0.0.1:{port}"})
+        assert ok is False
+    finally:
+        await site.stop()
+        await runner.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_probe_tcp_closed_port_down():
+    """A TCP probe against a closed/unbound port fails fast with (False, None)."""
+    ok, latency = await default_probe({"endpoint": "127.0.0.1:1"}, timeout=1.0)
+    assert ok is False
+    assert latency is None
+
+
+@pytest.mark.asyncio
+async def test_probe_no_endpoint_down():
+    """A service with neither url nor endpoint never raises and reports down."""
+    ok, latency = await default_probe({})
+    assert ok is False
+    assert latency is None
+
+
+def test_services_from_registry_maps_ids(monkeypatch):
+    """services_from_registry() normalizes the annuaire catalog shape into
+    {"id", "endpoint", "health_path"} dicts."""
+    import api.federation as federation_mod
+
+    fake_catalog = [
+        {"service_id": "svc-a", "endpoint": "http://127.0.0.1:9001", "name": "A"},
+        {"service_id": "svc-b", "endpoint": "127.0.0.1:9002", "health_path": "/healthz"},
+    ]
+
+    def fake_get_catalog():
+        return fake_catalog, None
+
+    monkeypatch.setattr(federation_mod.annuaire_client, "get_catalog", fake_get_catalog)
+
+    services = federation_mod.services_from_registry()
+
+    assert services == [
+        {"id": "svc-a", "endpoint": "http://127.0.0.1:9001", "health_path": "/health"},
+        {"id": "svc-b", "endpoint": "127.0.0.1:9002", "health_path": "/healthz"},
+    ]
+
+
+def test_services_from_registry_annuaire_error_returns_empty(monkeypatch):
+    """When the local annuaire is unreachable (error string set), return []."""
+    import api.federation as federation_mod
+
+    def fake_get_catalog_error():
+        return [], "ConnectionRefusedError: [Errno 111]"
+
+    monkeypatch.setattr(federation_mod.annuaire_client, "get_catalog", fake_get_catalog_error)
+
+    assert federation_mod.services_from_registry() == []
+
+
+def test_services_from_registry_raises_returns_empty(monkeypatch):
+    """If get_catalog itself raises, services_from_registry never propagates."""
+    import api.federation as federation_mod
+
+    def fake_get_catalog_raises():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(federation_mod.annuaire_client, "get_catalog", fake_get_catalog_raises)
+
+    assert federation_mod.services_from_registry() == []
