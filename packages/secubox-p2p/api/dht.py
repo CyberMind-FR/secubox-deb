@@ -143,3 +143,32 @@ def verify_record(rec: dict) -> bool:
         return bool(_verify_sig(body, rec["sig"], rec["wg_pubkey"]))
     except (KeyError, TypeError, ValueError):
         return False
+
+
+def encode_msg(msg: dict) -> bytes:
+    return _json.dumps(msg, separators=(",", ":")).encode()
+
+
+def decode_msg(data: bytes):
+    if not data or len(data) > MAX_DGRAM:
+        return None
+    try:
+        obj = _json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(obj, dict) or "t" not in obj:
+        return None
+    return obj
+
+
+def _base(t: str, rpc_id: str, sender: dict) -> dict:
+    return {"t": t, "rpc_id": rpc_id, "sender": sender}
+
+def msg_ping(rpc_id, sender):                     return _base("ping", rpc_id, sender)
+def msg_pong(rpc_id, sender):                     return _base("pong", rpc_id, sender)
+def msg_find_node(rpc_id, sender, target_hex):    return {**_base("find_node", rpc_id, sender), "target": target_hex}
+def msg_nodes(rpc_id, sender, contacts):          return {**_base("nodes", rpc_id, sender), "nodes": contacts}
+def msg_find_value(rpc_id, sender, key_hex):      return {**_base("find_value", rpc_id, sender), "key": key_hex}
+def msg_value(rpc_id, sender, record):            return {**_base("value", rpc_id, sender), "value": record}
+def msg_store(rpc_id, sender, key_hex, record):   return {**_base("store", rpc_id, sender), "key": key_hex, "value": record}
+def msg_ok(rpc_id, sender):                       return _base("ok", rpc_id, sender)

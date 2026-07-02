@@ -102,3 +102,19 @@ def test_verify_rejects_tampered(monkeypatch):
 
     rec3 = dict(rec); rec3.pop("sig")              # unsigned
     assert verify_record(rec3) is False
+
+
+# Task 5: JSON UDP RPC codec + datagram hardening
+
+def test_roundtrip():
+    from api.dht import encode_msg, decode_msg
+    m = {"t":"ping","rpc_id":"ab","sender":{"node_id_hex":"00","did":"did:a","endpoint":"10.10.0.5:51823"}}
+    assert decode_msg(encode_msg(m)) == m
+
+
+def test_decode_rejects_malformed_and_oversized():
+    from api.dht import encode_msg, decode_msg, MAX_DGRAM
+    assert decode_msg(b"not json") is None
+    assert decode_msg(b"[1,2,3]") is None            # not a dict
+    assert decode_msg(b"{}") is None                  # missing required 't'
+    assert decode_msg(b"x" * (MAX_DGRAM + 1)) is None # oversized
