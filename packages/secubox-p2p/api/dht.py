@@ -271,7 +271,7 @@ class DHTNetwork:
 
     async def _rpc(self, node: "DHTNode", msg: dict):
         """Send `msg` to `node` and await the matching reply, or None on timeout."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         fut = loop.create_future()
         rpc_id = msg["rpc_id"]
         self.pending[rpc_id] = fut
@@ -285,13 +285,20 @@ class DHTNetwork:
 
     def _merge_contact(self, shortlist: list, contact: dict) -> None:
         """Parse a {node_id_hex,did,endpoint} contact dict and merge into shortlist
-        (dedup by node_id, skip self)."""
-        node_id = bytes.fromhex(contact["node_id_hex"])
+        (dedup by node_id, skip self). Malformed/peer-controlled contacts (bad hex,
+        endpoint without a port, missing fields, wrong types) are discarded rather
+        than allowed to raise — a single bad peer must never crash a lookup."""
+        try:
+            node_id = bytes.fromhex(contact["node_id_hex"])
+            did = contact["did"]
+            endpoint = self._parse_endpoint(contact["endpoint"])
+        except (ValueError, KeyError, TypeError):
+            return
         if node_id == self.self_id:
             return
         if any(n.node_id == node_id for n in shortlist):
             return
-        shortlist.append(DHTNode(node_id, contact["did"], self._parse_endpoint(contact["endpoint"])))
+        shortlist.append(DHTNode(node_id, did, endpoint))
 
     async def iterative_find(self, target_id: bytes, mode: str):
         """Classic Kademlia iterative lookup, alpha-parallel, over the injected
@@ -319,11 +326,14 @@ class DHTNetwork:
                 else:
                     msg = msg_find_node(rpc_id, self._sender_dict(), target_id.hex())
                 tasks.append(self._rpc(n, msg))
-            replies = await asyncio.gather(*tasks)
+            replies = await asyncio.gather(*tasks, return_exceptions=True)
 
             found_value = None
             for reply in replies:
-                if reply is None:
+                if reply is None or isinstance(reply, BaseException):
+                    # No reply, timeout, or a transport-level exception (e.g. a
+                    # future real-UDP send_fn failure): treat like a no-reply
+                    # and keep going with the rest of the lookup.
                     continue
                 sender = reply.get("sender")
                 if isinstance(sender, dict):
@@ -336,6 +346,12 @@ class DHTNetwork:
                 if reply.get("t") == "nodes":
                     for contact in reply.get("nodes", []):
                         self._merge_contact(shortlist, contact)
+
+            # Cap the shortlist to the KAD_K closest-to-target contacts so a
+            # peer returning many fabricated "close" contacts can't inflate
+            # it and force extra RPC rounds.
+            shortlist.sort(key=lambda n: xor_distance(n.node_id, target_id))
+            del shortlist[KAD_K:]
 
             if found_value is not None:
                 return found_value

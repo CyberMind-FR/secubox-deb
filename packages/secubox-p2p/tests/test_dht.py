@@ -260,3 +260,50 @@ async def test_iterative_find_dedup_across_merged_contacts(monkeypatch):
     assert counts.get(e_ep, 0) == 1     # merged twice (via B and via D), queried once
     assert counts.get(b_ep, 0) == 1
     assert counts.get(d_ep, 0) == 1
+
+
+@pytest.mark.asyncio
+async def test_find_peer_survives_malformed_contact_in_reply(monkeypatch):
+    """B replies to A's find_value with a shortlist containing one MALFORMED
+    contact (bad hex node_id_hex, bogus did, endpoint with no port) alongside
+    one good contact (C) that leads to the target. A single bad peer/contact
+    must never crash the lookup — find_peer must still resolve C's record."""
+    _crypto_identity(monkeypatch)
+
+    nets: dict = {}
+    a_ep, b_ep, c_ep = "10.10.0.1:51823", "10.10.0.2:51823", "10.10.0.3:51823"
+
+    A = DHTNetwork("did:A", "did:A", a_ep, send_fn=_make_send_fn(nets, a_ep))
+    B = DHTNetwork("did:B", "did:B", b_ep, send_fn=_make_send_fn(nets, b_ep))
+    C = DHTNetwork("did:C", "did:C", c_ep, send_fn=_make_send_fn(nets, c_ep))
+    nets[a_ep] = A; nets[b_ep] = B; nets[c_ep] = C
+
+    A.routing.insert(DHTNode(B.self_id, B.did, _ep(b_ep)))
+    B.routing.insert(DHTNode(C.self_id, C.did, _ep(c_ep)))
+
+    # C holds its own signed record locally (no announce/push — this keeps
+    # B's find_value reply on the "nodes" branch, below, so we can poison it).
+    record = dht.sign_record(C.did, C.wg_pubkey, C.endpoint, int(C._clock()))
+    C.local_store_put(C.self_id.hex(), record)
+
+    # Wrap B's outgoing reply: whenever it would send a "nodes" message,
+    # splice a malformed contact in ahead of the real (good) contacts.
+    real_reply = B._reply
+
+    def poisoned_reply(msg, addr):
+        if msg.get("t") == "nodes":
+            msg = dict(msg)
+            msg["nodes"] = [
+                {"node_id_hex": "zz", "did": "did:bad", "endpoint": "noport"},
+                *msg["nodes"],
+            ]
+        real_reply(msg, addr)
+
+    B._reply = poisoned_reply
+
+    result = await A.find_peer(C.did)
+
+    assert result is not None
+    assert result["did"] == C.did
+    assert result["endpoint"] == c_ep
+    assert dht.verify_record(result) is True
