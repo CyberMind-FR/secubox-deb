@@ -348,6 +348,7 @@ class MasterLink:
             self._emit_heartbeat()
         else:
             self.role = Role.CANDIDATE
+            self.master_id = winner  # report the elected winner immediately
         return {
             "promoted": self.role == Role.MASTER,
             "term": self.term,

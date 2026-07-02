@@ -447,9 +447,10 @@ def test_request_promotion_loses_to_higher_priority(tmp_path):
 
     result = ml.request_promotion()
 
-    assert result == {"promoted": False, "term": ml.term, "master": ml.master_id, "role": "candidate"}
+    assert result == {"promoted": False, "term": ml.term, "master": "bb", "role": "candidate"}
     assert ml.term == initial_term + 1
     assert ml.role == Role.CANDIDATE
+    assert ml.master_id == "bb"
 
 
 # -- Real UDP transport + tick loop (integration) ---------------------------
