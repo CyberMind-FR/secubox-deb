@@ -5,6 +5,9 @@
 """SecuBox-Deb :: secubox-p2p :: Kademlia DHT (custom, asyncio/UDP). Issue #774."""
 from __future__ import annotations
 import hashlib
+import time
+from collections import OrderedDict
+from dataclasses import dataclass, field
 
 KAD_K = 20
 KAD_ALPHA = 3
@@ -24,3 +27,44 @@ def node_id_for(did: str) -> bytes:
 def xor_distance(a: bytes, b: bytes) -> int:
     """XOR metric over the 160-bit id space, as an int."""
     return int.from_bytes(a, "big") ^ int.from_bytes(b, "big")
+
+
+@dataclass
+class DHTNode:
+    """A Kademlia DHT contact: node_id, DID, endpoint, last_seen."""
+    node_id: bytes
+    did: str
+    endpoint: tuple  # (host, port)
+    last_seen: float = 0.0
+
+
+class DHTBucket:
+    """A Kademlia k-bucket: LRU-ordered contacts, most-recent at the tail."""
+    def __init__(self, k: int = KAD_K):
+        self.k = k
+        self._nodes: OrderedDict[bytes, DHTNode] = OrderedDict()
+
+    def add(self, node: DHTNode) -> bool:
+        """Add or refresh a node. Returns True if stored/refreshed, False if full."""
+        node.last_seen = time.time()
+        if node.node_id in self._nodes:
+            self._nodes.move_to_end(node.node_id)   # refresh → tail (most-recent)
+            self._nodes[node.node_id] = node
+            return True
+        if len(self._nodes) >= self.k:
+            return False
+        self._nodes[node.node_id] = node
+        return True
+
+    def remove(self, node_id: bytes) -> None:
+        """Remove a node by id."""
+        self._nodes.pop(node_id, None)
+
+    def oldest(self):
+        """Return the oldest (head) node, or None if empty."""
+        return next(iter(self._nodes.values())) if self._nodes else None
+
+    @property
+    def nodes(self):
+        """Return a list of all nodes in order."""
+        return list(self._nodes.values())
