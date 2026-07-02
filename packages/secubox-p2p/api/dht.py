@@ -5,9 +5,12 @@
 """SecuBox-Deb :: secubox-p2p :: Kademlia DHT (custom, asyncio/UDP). Issue #774."""
 from __future__ import annotations
 import hashlib
+import json as _json
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
+
+from . import annuaire_client as _annuaire
 
 KAD_K = 20
 KAD_ALPHA = 3
@@ -97,3 +100,46 @@ class RoutingTable:
         nodes = self.all_nodes()
         nodes.sort(key=lambda n: xor_distance(n.node_id, target_id))
         return nodes[:count]
+
+
+def canonical_record(did: str, wg_pubkey: str, endpoint: str, ts: int) -> bytes:
+    """Deterministic signed reachability record (canonical JSON form)."""
+    return _json.dumps(
+        {"did": did, "wg_pubkey": wg_pubkey, "endpoint": endpoint, "ts": ts},
+        sort_keys=True, separators=(",", ":"),
+    ).encode()
+
+
+def _did_from_pubkey(pub_hex: str) -> str:
+    """Seam: convert wg_pubkey hex to DID. Real impl in Task 8 via annuaire_client."""
+    return _annuaire.did_from_pubkey_hex(pub_hex)
+
+
+def _verify_sig(body: bytes, sig_hex: str, pub_hex: str) -> bool:
+    """Seam: verify Ed25519 signature. Real impl in Task 8."""
+    raise NotImplementedError
+
+
+def _sign_sig(body: bytes) -> str:
+    """Seam: sign body with local key. Real impl in Task 8."""
+    raise NotImplementedError
+
+
+def sign_record(did: str, wg_pubkey: str, endpoint: str, ts: int) -> dict:
+    """Sign a reachability record and return with sig field."""
+    body = canonical_record(did, wg_pubkey, endpoint, ts)
+    return {"did": did, "wg_pubkey": wg_pubkey, "endpoint": endpoint,
+            "ts": ts, "sig": _sign_sig(body)}
+
+
+def verify_record(rec: dict) -> bool:
+    """Verify a reachability record: check sig, DID validity, and canonical bytes."""
+    try:
+        if "sig" not in rec:
+            return False
+        body = canonical_record(rec["did"], rec["wg_pubkey"], rec["endpoint"], rec["ts"])
+        if _did_from_pubkey(rec["wg_pubkey"]) != rec["did"]:
+            return False
+        return bool(_verify_sig(body, rec["sig"], rec["wg_pubkey"]))
+    except (KeyError, TypeError, ValueError):
+        return False

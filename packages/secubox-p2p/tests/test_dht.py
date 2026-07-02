@@ -69,3 +69,36 @@ def test_insert_ignores_self():
     me = node_id_for("me")
     rt = RoutingTable(me)
     assert rt.insert(DHTNode(me, "did:me", ("10.10.0.1", 51823))) is False
+
+
+# Task 4: Signed reachability records
+
+def test_canonical_is_stable_and_sorted():
+    """canonical_record produces deterministic sorted JSON."""
+    import json
+    from api.dht import canonical_record
+    a = canonical_record("did:x", "aa", "10.10.0.5:51823", 100)
+    b = canonical_record("did:x", "aa", "10.10.0.5:51823", 100)
+    assert a == b and b"did" in a and a == json.dumps(
+        {"did":"did:x","endpoint":"10.10.0.5:51823","ts":100,"wg_pubkey":"aa"},
+        sort_keys=True, separators=(",", ":")).encode()
+
+
+def test_verify_rejects_tampered(monkeypatch):
+    """verify_record checks signature and DID validity."""
+    import api.dht as dht
+    from api.dht import canonical_record, verify_record
+
+    monkeypatch.setattr(dht, "_did_from_pubkey", lambda hexstr: "did:x")
+
+    rec = {"did":"did:x","wg_pubkey":"aa","endpoint":"10.10.0.5:51823","ts":100,"sig":"deadbeef"}
+    # verify_fn returns True only for the exact canonical bytes:
+    monkeypatch.setattr(dht, "_verify_sig",
+        lambda body, sig, pub: sig == "deadbeef" and body == canonical_record("did:x","aa","10.10.0.5:51823",100))
+    assert verify_record(rec) is True
+
+    rec2 = dict(rec, endpoint="10.10.0.9:51823")   # tamper
+    assert verify_record(rec2) is False
+
+    rec3 = dict(rec); rec3.pop("sig")              # unsigned
+    assert verify_record(rec3) is False
