@@ -29,7 +29,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client
+from . import mesh, registry, annuaire_client, dht
 
 app = FastAPI(
     title="SecuBox P2P API",
@@ -2412,6 +2412,126 @@ async def ml_join_upstream(
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "secubox-p2p", "version": "1.9.0"}
+
+
+# ============== DHT (Kademlia, feature-flagged) — Issue #774 Task 9 ==============
+#
+# Backward compatible by construction: with [dht].enabled = false (the
+# default when the section is absent from p2p.toml), _dht_startup sets
+# app.state.dht = None and nothing new is started. Every endpoint below
+# checks app.state.dht is not None before touching the DHT.
+
+DHT_AUDIT_LOG = Path("/var/log/secubox/p2p-audit.log")
+
+
+def _dht_audit(event: str, **fields):
+    """Best-effort append-only audit line; never raises."""
+    try:
+        DHT_AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps({"ts": datetime.utcnow().isoformat(), "event": event, **fields})
+        with open(DHT_AUDIT_LOG, "a") as f:
+            f.write(line + "\n")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dht audit log write failed: %s", exc)
+
+
+@app.on_event("startup")
+async def _dht_startup():
+    """Start the Kademlia DHT iff [dht].enabled — never break app startup."""
+    app.state.dht = None
+    try:
+        cfg = mesh.load_p2p_config(CONFIG_FILE)
+        if not cfg["dht"]["enabled"]:
+            return
+
+        did, priv_hex = annuaire_client.node_identity()
+        if not did or not priv_hex:
+            log.warning("dht enabled but node has no annuaire identity; not starting")
+            return
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+
+        priv_key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(priv_hex))
+        id_pubkey = priv_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        ).hex()
+
+        wg_pubkey = ""
+        try:
+            wg_pubkey = cfg.get("wireguard", {}).get("pubkey", "") or ""
+        except AttributeError:
+            wg_pubkey = ""
+
+        advertise_host = cfg["dht"].get("advertise_host", "") or "0.0.0.0"
+        endpoint = f'{advertise_host}:{cfg["dht"]["port"]}'
+
+        net = dht.DHTNetwork(did, id_pubkey, wg_pubkey, endpoint)
+        await net.start(host="0.0.0.0", port=cfg["dht"]["port"])
+        net.load_routing()
+        asyncio.create_task(net.bootstrap(seeds=cfg["dht"]["bootstrap"], annuaire_nodes=[]))
+        app.state.dht = net
+        log.info("DHT started did=%s port=%s", did, cfg["dht"]["port"])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dht startup failed (continuing without DHT): %s", exc)
+        app.state.dht = None
+
+
+@app.on_event("shutdown")
+async def _dht_shutdown():
+    """Persist the routing table and close the DHT transport, best-effort."""
+    net = getattr(app.state, "dht", None)
+    if not net:
+        return
+    try:
+        net.save_routing()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dht save_routing failed: %s", exc)
+    try:
+        await net.stop()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dht stop failed: %s", exc)
+
+
+@app.get("/dht/peers")
+async def dht_peers():
+    """Routing table snapshot (public read). Disabled -> empty/zeroed shape."""
+    net = getattr(app.state, "dht", None)
+    if net is None:
+        return {"enabled": False, "peers": [], "buckets": 0}
+    return {
+        "enabled": True,
+        "peers": [
+            {"node_id_hex": n.node_id.hex(), "did": n.did,
+             "endpoint": f"{n.endpoint[0]}:{n.endpoint[1]}"}
+            for n in net.routing.all_nodes()
+        ],
+        "buckets": len([b for b in net.routing.buckets if b.nodes]),
+    }
+
+
+@app.post("/dht/announce")
+async def dht_announce(user: dict = Depends(require_jwt)):
+    """Sign + publish our own reachability record to the DHT (auth required)."""
+    net = getattr(app.state, "dht", None)
+    if net is None:
+        raise HTTPException(status_code=400, detail="dht disabled")
+    await net.announce()
+    _dht_audit("dht_announce", did=net.did)
+    return {"ok": True, "key": net.self_id.hex()}
+
+
+@app.get("/dht/find/{did}")
+async def dht_find(did: str):
+    """Resolve a DID to its verified reachability record via the DHT (public read)."""
+    net = getattr(app.state, "dht", None)
+    if net is None:
+        raise HTTPException(status_code=400, detail="dht disabled")
+    rec = await net.find_peer(did)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return rec
 
 
 # ============== Macro Grant (M2) ==============

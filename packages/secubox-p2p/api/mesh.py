@@ -36,8 +36,22 @@ def subnet_overlap(network: str) -> str | None:
     return None
 
 
+DHT_DEFAULTS = {
+    "enabled": False,
+    "port": 51823,
+    "bootstrap": [],
+    "announce": False,
+    "announce_interval": 900,
+    "rps": 50,
+}
+
+
 def load_p2p_config(path: pathlib.Path) -> dict:
-    """Read the [wireguard] section of /etc/secubox/p2p.toml, with defaults."""
+    """Read /etc/secubox/p2p.toml, with defaults.
+
+    Returns a dict with the legacy [wireguard]-derived keys at the top level
+    (unchanged, for backward compatibility) plus a `dht` sub-dict built from
+    the [dht] section (Issue #774 Task 9)."""
     defaults = {
         "interface": MESH_INTERFACE,
         "listen_port": MESH_PORT,
@@ -47,13 +61,21 @@ def load_p2p_config(path: pathlib.Path) -> dict:
     }
     try:
         with open(path, "rb") as f:
-            wg = (tomllib.load(f) or {}).get("wireguard", {}) or {}
+            doc = tomllib.load(f) or {}
     except (FileNotFoundError, tomllib.TOMLDecodeError):
-        wg = {}
+        doc = {}
+    wg = doc.get("wireguard", {}) or {}
     out = dict(defaults)
     for k in defaults:
         if wg.get(k) is not None:
             out[k] = wg[k]
+
+    dht = doc.get("dht", {}) or {}
+    out_dht = dict(DHT_DEFAULTS)
+    for k in DHT_DEFAULTS:
+        if dht.get(k) is not None:
+            out_dht[k] = dht[k]
+    out["dht"] = out_dht
     return out
 
 
