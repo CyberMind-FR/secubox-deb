@@ -390,7 +390,13 @@ function handleLogin(e) {
   btn.classList.add('loading');
   btn.textContent = 'Authenticating...';
 
-  fetch(API + '/auth/login', {
+  // MUST hit the canonical auth service (/api/v1/auth → auth.sock), NOT the
+  // hub-proxied copy (/api/v1/hub/auth/login). The hub includes the auth
+  // router but does NOT register the session callback, so a login through the
+  // hub mints a token whose jti is never written to sessions.json — every
+  // later request then fails require_jwt with "Session révoquée". Going
+  // straight to auth.sock records the session, so the token actually works.
+  fetch('/api/v1/auth/login', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({username: username, password: password}),
