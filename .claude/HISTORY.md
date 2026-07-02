@@ -6942,3 +6942,30 @@ CONFIG_USB_NET_RNDIS_HOST=y
   dpkg --configure -a (cleared stale lock). Verified: /run/secubox=1777 root:root
   holds, 0 half-configured, all services + R3 workers active, webui/portal 200,
   toolbox blacklist-sync (#519) carried.
+
+## 2026-07-02 — secubox-p2p: DHT + federation health-checks + master-link (#774, docs)
+
+- Documented the three feature-flagged, OPAD opt-in evolutions delivered by
+  Tasks 1-16 on `feature/p2p-dht-federation` (126 tests passing), built on
+  the existing WireGuard mesh + annuaire-backed registry — no new code in
+  this pass, docs only (Task 17, finalization).
+- **DHT discovery** (`api/dht.py`): custom Kademlia DHT (asyncio/UDP, JSON
+  wire), Ed25519-signed reachability records, iterative lookup, bootstrap,
+  routing-table persistence, advisory health store. Endpoints:
+  `GET /dht/peers`, `POST /dht/announce` (JWT), `GET /dht/find/{did}`.
+- **Service federation health-checks** (`api/federation.py`): debounced
+  up/down `HealthStore`, async `HealthChecker` sweep (semaphore-capped),
+  `default_probe` (HTTP GET /health, TCP fallback), publishes into the DHT
+  when both subsystems are enabled. Endpoints: `GET /federation/services`,
+  `POST /federation/healthcheck` (JWT).
+- **Hierarchical master-link** (`api/masterlink.py`): deterministic
+  `elect()`, monotonic `TermStore`, `MasterLink` heartbeat/election-timeout
+  state machine with Ed25519-signed heartbeats and equal-term tie-break.
+  Endpoints: `GET /masterlink/topology`, `POST /masterlink/promote` (JWT).
+- Config: `[dht]`, `[federation]`, `[masterlink]` sections in `p2p.toml`, all
+  disabled by default (`DHT_DEFAULTS`/`FEDERATION_DEFAULTS`/
+  `MASTERLINK_DEFAULTS` in `api/mesh.py`). Audit events (`dht_announce`,
+  `masterlink_promote`) append to `/var/log/secubox/p2p-audit.log`.
+- Updated `packages/secubox-p2p/README.md` with an "Evolutions (#774)"
+  section covering all of the above (endpoints, real config defaults,
+  audit log). No `.py` files touched, no tests run/modified.
