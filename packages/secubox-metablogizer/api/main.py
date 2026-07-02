@@ -867,22 +867,29 @@ def _read_domain(site_dir: Path) -> str:
 
 @app.post("/site/{name}/upload", dependencies=[Depends(require_jwt)])
 async def upload_content(name: str, file: UploadFile = File(...)):
-    """Upload content to a site (.zip / .tar.gz archive, or a single .html)."""
+    """Upload content to a site (.zip / .tar.gz archive, or a single .html).
+
+    Content is written to the directory nginx actually serves for the site.
+    The served-root convention (matching regenerate_nginx_config / publish) is
+    `<site>/public` when that dir already exists, else the site dir root — so we
+    must NOT create public/ here, or we'd silently move the served root out from
+    under an already-published site and the upload wouldn't show up.
+    """
     site_dir = SITES_ROOT / name
     if not site_dir.exists():
         site_dir.mkdir(parents=True)
 
     public_dir = site_dir / "public"
-    public_dir.mkdir(exist_ok=True)
+    target_dir = public_dir if public_dir.exists() else site_dir
 
     fname = (file.filename or "").lower()
 
     # A bare HTML page becomes the site's index — no temp file / extraction.
     if fname.endswith((".html", ".htm")):
         content = await file.read()
-        (public_dir / "index.html").write_bytes(content)
+        (target_dir / "index.html").write_bytes(content)
         _invalidate_sites_cache()
-        return {"success": True, "name": name, "kind": "html"}
+        return {"success": True, "name": name, "kind": "html", "target": str(target_dir)}
 
     content = await file.read()
     temp_file = site_dir / f"_upload_{file.filename}"
@@ -892,11 +899,11 @@ async def upload_content(name: str, file: UploadFile = File(...)):
         if fname.endswith(".zip"):
             import zipfile
             with zipfile.ZipFile(temp_file, 'r') as zf:
-                zf.extractall(public_dir)
+                zf.extractall(target_dir)
         elif fname.endswith((".tar.gz", ".tgz")):
             import tarfile
             with tarfile.open(temp_file, 'r:gz') as tf:
-                tf.extractall(public_dir)
+                tf.extractall(target_dir)
         else:
             temp_file.unlink(missing_ok=True)
             raise HTTPException(400, "Unsupported format. Use .zip, .tar.gz or .html")
@@ -909,7 +916,7 @@ async def upload_content(name: str, file: UploadFile = File(...)):
         raise HTTPException(400, f"Failed to extract: {e}")
 
     _invalidate_sites_cache()
-    return {"success": True, "name": name, "kind": "archive"}
+    return {"success": True, "name": name, "kind": "archive", "target": str(target_dir)}
 
 
 # =============================================================================
