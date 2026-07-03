@@ -399,6 +399,22 @@ class MacroDescriptor(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# PacDescriptor — optional PAC routing hint for a ServiceOffer
+# ---------------------------------------------------------------------------
+
+class PacDescriptor(BaseModel):
+    """Optional PAC routing hint federated with a ServiceOffer (#784).
+
+    Declares which hosts this service handles and how a client proxies them.
+    Absent pac ⇒ the service contributes no client routing rule.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    match: List[str] = Field(..., min_length=1, description="host globs, e.g. ['*.onion']")
+    proxy: Literal["socks5", "http", "gateway", "direct"] = Field(...)
+
+
+# ---------------------------------------------------------------------------
 # ServiceOffer — a provider advertising a service to the trust graph
 # ---------------------------------------------------------------------------
 
@@ -421,6 +437,7 @@ class ServiceOffer(BaseModel):
     approval_mode: ApprovalMode = ApprovalMode.AUTO
     description:   str = ""
     macro:         Optional[MacroDescriptor] = None
+    pac:           Optional[PacDescriptor] = None
     created_at:    str = Field(default_factory=now_rfc3339)
     sig:           Optional[str] = Field(
         default=None,

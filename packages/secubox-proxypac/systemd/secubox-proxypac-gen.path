@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox ProxyPAC — watch rules.d for changes
+
+[Path]
+PathModified=/etc/secubox/proxypac/rules.d
+Unit=secubox-proxypac-gen.service
+
+[Install]
+WantedBy=multi-user.target

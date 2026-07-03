@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox ProxyPAC — regenerate proxy.pac
+After=network.target
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/proxypac-gen
