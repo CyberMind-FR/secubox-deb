@@ -36,10 +36,23 @@ def parse_rules_dir(path):
 
 
 def compose(overrides, services, toolbox):
-    """Precedence: overrides, then services, then toolbox catch-all. First host wins."""
+    """Compose the final ordered (host, directive) rule list.
+
+    Cross-source precedence: overrides beat services beat the toolbox catch-all
+    (they are emitted in that order, and PAC matches first-listed host first).
+
+    Within the overrides, the LAST definition of a host wins, so an operator's
+    later file (e.g. 50-webui.rules written by the WebUI) overrides a shipped seed
+    (e.g. 00-onion.rules) for the same host glob — explicit policy beats defaults.
+    Each host keeps the position of its first appearance so glob ordering is stable.
+    """
+    # Overrides: last definition per host wins (dict keeps last value, first-seen order).
+    ov = {}
+    for r in overrides:
+        ov[r.host] = r
     seen = set()
     out = []
-    ordered = list(overrides) + list(services) + ([toolbox] if toolbox else [])
+    ordered = list(ov.values()) + list(services) + ([toolbox] if toolbox else [])
     for r in ordered:
         if r.host in seen:
             continue

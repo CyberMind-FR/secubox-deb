@@ -60,9 +60,16 @@ for static seeds instead.
 
 **Precedence recap**: `override` (rules.d, including `50-webui.rules`)
 > `service:<id>` (active catalog entry) > `toolbox` (catch-all) >
-implicit `DIRECT`. Within overrides, rules from files that sort earlier
-win on conflicting hosts (first-host-wins, `override` source generally
-wins over anything with the same host from `services`/`toolbox`).
+implicit `DIRECT`. Within overrides, the **last** definition of a host wins,
+so a later file (e.g. the WebUI's `50-webui.rules`) overrides an earlier seed
+(e.g. `00-onion.rules`) for the same host glob — explicit operator policy beats
+shipped defaults. The `override` source as a whole still wins over anything with
+the same host from `services`/`toolbox`.
+
+**Dependency note**: the `/proxy.pac` nginx `allow`/`deny` gate matches on
+`$remote_addr`; behind HAProxy that is `127.0.0.1` unless the `real_ip` rewrite
+(`set_real_ip_from` / `real_ip_header X-Forwarded-For`) shipped by **secubox-hub**
+is loaded — hence `Depends: secubox-hub`.
 
 ## Annuaire `pac` field
 

@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-proxypac
 Architecture: all
-Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, secubox-core, nginx
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, secubox-core, secubox-hub, nginx
 Description: SecuBox WPAD/PAC auto-config routing to mesh services
  Generates a proxy.pac from the active p2p /services catalog + operator policy,
  served via WPAD for zero-config client routing to mesh tools.

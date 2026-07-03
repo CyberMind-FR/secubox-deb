@@ -6,6 +6,8 @@ def test_control_metadata():
     assert "Package: secubox-proxypac" in c
     assert "Standards-Version: 4.6.2" in c
     assert "Depends:" in c and "secubox-core" in c
+    # /proxy.pac LAN gate relies on secubox-hub's real_ip rewrite behind HAProxy
+    assert "secubox-hub" in c
 
 def test_rules_installs_all_artifacts():
     r = (ROOT / "debian" / "rules").read_text()

@@ -20,3 +20,10 @@ def test_compose_precedence_override_beats_service():
 
 def test_compose_no_toolbox():
     assert compose([], [], None) == []
+
+def test_compose_override_last_file_wins():
+    # A later operator override (e.g. 50-webui.rules) must beat an earlier seed
+    # (e.g. 00-onion.rules) for the same host glob.
+    ov = [Rule("*.onion", "SOCKS5 10.10.0.1:9050; DIRECT", "override"),  # 00-onion seed
+          Rule("*.onion", "DIRECT", "override")]                         # 50-webui (later)
+    assert compose(ov, [], None) == [("*.onion", "DIRECT")]
