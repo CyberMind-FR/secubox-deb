@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 if [ "$1" = "configure" ]; then
-    getent passwd secubox >/dev/null || useradd --system --group secubox || true
+    getent group secubox >/dev/null || groupadd --system secubox
+    getent passwd secubox >/dev/null || useradd --system --gid secubox --no-create-home --shell /usr/sbin/nologin secubox
     install -d -o secubox -g secubox /var/lib/secubox/proxypac
     /usr/sbin/proxypac-gen || true   # initial generation (fail-safe)
     systemctl daemon-reload || true

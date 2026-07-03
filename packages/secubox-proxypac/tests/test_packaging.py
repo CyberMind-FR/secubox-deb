@@ -18,3 +18,8 @@ def test_postinst_enables_regen_and_seeds_rules():
     assert "systemctl enable --now secubox-proxypac-gen.path" in p
     assert "systemctl enable --now secubox-proxypac-gen.timer" in p
     assert "proxypac-gen" in p  # initial generation
+
+def test_no_conflicting_compat_file():
+    # debhelper forbids both debian/compat AND Build-Depends: debhelper-compat
+    assert not (ROOT / "debian" / "compat").exists()
+    assert "debhelper-compat (= 13)" in (ROOT / "debian" / "control").read_text()
