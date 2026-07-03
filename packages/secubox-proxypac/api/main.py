@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/secubox/proxypac")
 from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 try:
     from secubox_core.auth import require_jwt
@@ -35,6 +35,13 @@ class Override(BaseModel):
     host: str
     proxy: str
     address: str = ""
+
+    @field_validator("host")
+    @classmethod
+    def _no_whitespace(cls, v):
+        if not v or any(c.isspace() for c in v):
+            raise ValueError("host must be non-empty and contain no whitespace")
+        return v
 
 
 def _audit(action, host, user):
@@ -72,7 +79,7 @@ def add_override(o: Override, user=Depends(require_jwt)):
     lines.append(line)
     _write_webui_lines(lines)
     _audit("override-add", o.host, user.get("sub"))
-    run_once()
+    run_once(rules_dir=str(RULES_DIR))
     return {"ok": True, "directive": directive(o.proxy, o.address)}
 
 
@@ -81,7 +88,7 @@ def del_override(host: str, user=Depends(require_jwt)):
     lines = [ln for ln in _read_webui_lines() if ln.split()[0] != host]
     _write_webui_lines(lines)
     _audit("override-del", host, user.get("sub"))
-    run_once()
+    run_once(rules_dir=str(RULES_DIR))
     return {"ok": True}
 
 

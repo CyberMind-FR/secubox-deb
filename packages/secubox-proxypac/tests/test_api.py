@@ -27,3 +27,8 @@ def test_delete_override(tmp_path, monkeypatch):
     c.post("/override", json={"host": "x.com", "proxy": "socks5", "address": "10.10.0.1:9050"})
     assert c.delete("/override/x.com").status_code == 200
     assert all(r["host"] != "x.com" for r in c.get("/rules").json()["rules"])
+
+def test_reject_host_with_whitespace(tmp_path, monkeypatch):
+    c, _ = _client(tmp_path, monkeypatch)
+    r = c.post("/override", json={"host": "bad host\ninject", "proxy": "direct", "address": ""})
+    assert r.status_code == 422
