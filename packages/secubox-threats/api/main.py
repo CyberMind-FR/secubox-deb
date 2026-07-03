@@ -207,11 +207,18 @@ def _generate_id() -> str:
 # ══════════════════════════════════════════════════════════════
 
 def _fetch_crowdsec_alerts() -> List[Dict]:
-    """Fetch alerts from CrowdSec."""
+    """Fetch alerts from CrowdSec.
+
+    The module runs as the `secubox` user, which cannot read CrowdSec's LAPI
+    socket directly, so cscli is invoked through sudo (exact-command sudoers grant
+    in secubox-threats' drop-in). This elevates only under the aggregator
+    (NoNewPrivileges=no); on a hardened standalone unit sudo is neutralized and the
+    fetch simply returns [] (fail-open — the endpoint still serves stored alerts).
+    """
     alerts = []
     try:
         result = subprocess.run(
-            ["cscli", "alerts", "list", "-o", "json"],
+            ["sudo", "-n", "/usr/bin/cscli", "alerts", "list", "-o", "json"],
             capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0 and result.stdout:
@@ -269,9 +276,13 @@ def _fetch_suricata_alerts() -> List[Dict]:
 
 
 def _fetch_waf_alerts() -> List[Dict]:
-    """Fetch alerts from HAProxy/mitmproxy WAF logs."""
+    """Fetch alerts from the sbxwaf threat log.
+
+    Reads /var/log/secubox/waf/waf-threats.log (JSON-per-line), whose schema is
+    {timestamp, client_ip, host, method, path, category, severity, rule_id, action}.
+    """
     alerts = []
-    waf_log = Path("/var/log/secubox/waf.json")
+    waf_log = Path("/var/log/secubox/waf/waf-threats.log")
     if waf_log.exists():
         try:
             result = subprocess.run(
@@ -284,13 +295,19 @@ def _fetch_waf_alerts() -> List[Dict]:
                         continue
                     try:
                         event = json.loads(line)
+                        ts = event.get("timestamp", "")
+                        ip = event.get("client_ip", "")
+                        cat = event.get("category", "waf")
+                        # sbxwaf lines carry no unique id; a stable per-event id
+                        # (ts+ip+path) lets /alerts dedupe on re-scan.
+                        eid = event.get("rule_id") or f"{ts}-{ip}-{event.get('path','')}"
                         alerts.append({
-                            "id": f"waf-{event.get('id', _generate_id())}",
+                            "id": f"waf-{eid}",
                             "source": "waf",
                             "severity": event.get("severity", "medium"),
-                            "message": event.get("rule", event.get("message", "Unknown")),
-                            "value": event.get("client_ip", ""),
-                            "timestamp": event.get("timestamp", ""),
+                            "message": f"{cat}: {event.get('method','')} {event.get('path','')}".strip(),
+                            "value": ip,
+                            "timestamp": ts,
                             "raw": event
                         })
                     except Exception:
