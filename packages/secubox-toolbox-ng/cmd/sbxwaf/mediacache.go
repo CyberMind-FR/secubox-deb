@@ -35,6 +35,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 // Cache constants — mirror media_cache.py.
@@ -199,11 +200,28 @@ func isCacheable(ct string) bool {
 }
 
 // hasGzipMagic reports whether b begins with the gzip magic number (0x1F 0x8B).
-// Used as a defensive self-heal signal: a stored body carrying this magic while
-// the entry records no Content-Encoding is a corrupt/legacy entry that must not
-// be served as identity (that is the U+001F corruption bug this cache had).
 func hasGzipMagic(b []byte) bool {
 	return len(b) >= 2 && b[0] == 0x1f && b[1] == 0x8b
+}
+
+// isCorruptIdentity reports whether a body recorded as identity (ce=="") is in
+// fact compressed — a pre-fix legacy entry whose Content-Encoding was dropped.
+// gzip is caught by magic. brotli/deflate/zstd have no reliable magic, so they
+// are caught for text/script content-types: an identity JS/CSS body must be
+// valid UTF-8, and a compressed one is (almost) never valid UTF-8. Binary media
+// (images/video/fonts) is left alone — its identity form is legitimately
+// non-UTF-8. Serving any such corrupt body as identity is the U+001F-class bug.
+func isCorruptIdentity(ct string, data []byte) bool {
+	if hasGzipMagic(data) {
+		return true
+	}
+	ct = strings.ToLower(ct)
+	if strings.Contains(ct, "javascript") ||
+		strings.Contains(ct, "ecmascript") ||
+		strings.Contains(ct, "css") {
+		return !utf8.Valid(data)
+	}
+	return false
 }
 
 // encodingAccepted reports whether the client's Accept-Encoding header permits
@@ -221,7 +239,12 @@ func encodingAccepted(acceptEncoding, coding string) bool {
 		if i := strings.IndexByte(tok, ';'); i >= 0 {
 			base = strings.TrimSpace(tok[:i])
 			if j := strings.Index(tok[i+1:], "q="); j >= 0 {
-				if v, err := strconv.ParseFloat(strings.TrimSpace(tok[i+1+j+2:]), 64); err == nil {
+				qstr := tok[i+1+j+2:]
+				// stop at any further parameter (e.g. "q=0;x=y" → "0")
+				if k := strings.IndexByte(qstr, ';'); k >= 0 {
+					qstr = qstr[:k]
+				}
+				if v, err := strconv.ParseFloat(strings.TrimSpace(qstr), 64); err == nil {
 					q = v
 				}
 			}
@@ -278,11 +301,11 @@ func (m *MediaCache) Get(url, acceptEncoding string) (body []byte, hdr http.Head
 		return nil, nil, false
 	}
 
-	// Defensive self-heal: an entry with no recorded Content-Encoding whose body
-	// carries the gzip magic is a corrupt legacy entry (stored by the pre-fix
-	// cache that dropped Content-Encoding). Serving it as identity is exactly the
-	// U+001F bug — evict it and miss instead.
-	if e.ce == "" && hasGzipMagic(data) {
+	// Defensive self-heal: an entry recorded as identity (ce=="") whose body is
+	// actually compressed is a corrupt legacy entry (stored by the pre-fix cache
+	// that dropped Content-Encoding — gzip, brotli, deflate or zstd). Serving it
+	// as identity is exactly the U+001F bug — evict it and miss instead.
+	if e.ce == "" && isCorruptIdentity(e.ct, data) {
 		metaPath := bodyPath + ".m"
 		m.mu.Lock()
 		if ex, ok := m.index[key]; ok {

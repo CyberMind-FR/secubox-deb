@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // makeResp builds a minimal *http.Response suitable for MaybeStore.
@@ -634,5 +635,77 @@ func TestMediaCacheEvictsCorruptLegacyGzip(t *testing.T) {
 	}
 	if _, _, ok := mc.Get(testURL, "gzip"); ok {
 		t.Fatal("entry should remain evicted on the second lookup")
+	}
+}
+
+// --- encodingAccepted table (M1: trailing-param q-value) ------------------------
+
+func TestEncodingAcceptedTable(t *testing.T) {
+	cases := []struct {
+		ae, coding string
+		want       bool
+	}{
+		{"gzip, deflate, br", "gzip", true},
+		{"gzip, deflate, br", "br", true},
+		{"gzip, deflate", "zstd", false},
+		{"*", "gzip", true},
+		{"*;q=0", "gzip", false},
+		{"gzip;q=0, identity", "gzip", false},
+		{"gzip;q=0;x=y, identity", "gzip", false}, // trailing param after q= must still reject
+		{"gzip;q=1.0", "gzip", true},
+		{"  GZIP ;q=0.5 ", "gzip", true},          // case + whitespace
+		{"", "gzip", false},
+		{"anything", "", true},        // identity coding always ok
+		{"", "identity", true},        // identity coding always ok
+	}
+	for _, c := range cases {
+		if got := encodingAccepted(c.ae, c.coding); got != c.want {
+			t.Errorf("encodingAccepted(%q, %q) = %v, want %v", c.ae, c.coding, got, c.want)
+		}
+	}
+}
+
+// --- I1: legacy non-gzip (brotli/deflate/zstd) text entry must self-heal --------
+
+func TestMediaCacheEvictsCorruptLegacyNonGzipText(t *testing.T) {
+	dir := t.TempDir()
+	mc := NewMediaCache(dir)
+
+	const testURL = "https://yacy.example/js/legacy-br.js"
+	// A brotli/zstd body has no gzip magic but is not valid UTF-8 — simulate with
+	// raw bytes that are invalid UTF-8 and don't start 0x1f8b.
+	brBody := []byte{0x8b, 0x02, 0x80, 0xff, 0xfe, 0x00, 0x41}
+	if utf8.Valid(brBody) {
+		t.Fatal("test body must be invalid UTF-8")
+	}
+	mc.MaybeStore(makeGET(testURL),
+		makeResp(200, "application/javascript", 3600, brBody), brBody, testURL)
+
+	// Recorded ce="" (makeResp sets none) + non-UTF-8 JS body → corrupt legacy →
+	// must be evicted, not served as identity.
+	if _, _, ok := mc.Get(testURL, "br"); ok {
+		t.Fatal("expected corrupt legacy non-gzip text entry to be evicted, got hit")
+	}
+}
+
+// A legitimate identity JS body (valid UTF-8, ce="") must still be served.
+func TestMediaCacheServesValidIdentityText(t *testing.T) {
+	dir := t.TempDir()
+	mc := NewMediaCache(dir)
+
+	const testURL = "https://yacy.example/js/plain.js"
+	body := []byte("/* hello */ console.log('héllo');") // valid UTF-8
+	mc.MaybeStore(makeGET(testURL),
+		makeResp(200, "application/javascript", 3600, body), body, testURL)
+
+	got, hdr, ok := mc.Get(testURL, "gzip")
+	if !ok {
+		t.Fatal("expected hit for valid identity JS body")
+	}
+	if !bytes.Equal(got, body) {
+		t.Fatal("body mismatch")
+	}
+	if ce := hdr.Get("Content-Encoding"); ce != "" {
+		t.Fatalf("identity body must have no Content-Encoding, got %q", ce)
 	}
 }
