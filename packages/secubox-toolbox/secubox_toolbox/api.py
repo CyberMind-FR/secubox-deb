@@ -2575,8 +2575,8 @@ def _media_stats(mac_hash: str | None) -> dict:
     """#785 — media-type donut data (MIME captured by sbxmitm R4) for THIS
     device (me) and board-wide (all). Reuses _dpi_donut for pct/start/end so the
     donuts render identically to the DPI-exfil ones. Fail-empty."""
-    from secubox_core import media_catch
     try:
+        from secubox_core import media_catch
         agg = media_catch.aggregate(path=media_catch.MEDIA_CATCH_PATH, mac_hash=mac_hash)
     except Exception:  # pragma: no cover — helper is fail-empty, this is belt+braces
         agg = {"me": {}, "all": {}}

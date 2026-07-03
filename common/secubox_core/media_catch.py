@@ -17,10 +17,15 @@ toolbox-ng MITM workers in R4/analyst mode:
 produce a per-device (`me`) view alongside the board-wide (`all`) view. Pure /
 stdlib only — no FastAPI, no I/O beyond reading the file. Fail-empty: a missing
 file, empty file, or corrupt lines never raise.
+
+`max_bytes` bounds how much of the file is actually read off disk (a bounded
+tail read), while `max_lines` bounds how many records are kept/processed after
+that read — the two are independent caps.
 """
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -29,13 +34,30 @@ MEDIA_CATCH_PATH = "/run/secubox/media-catch.jsonl"
 _KIND_EMOJI = {"video": "📺", "audio": "🎵", "manifest": "🎞️", "page": "▶️"}
 
 
-def _tail_lines(path: Path, max_lines: int) -> list[str]:
-    """Return up to the last `max_lines` decoded lines, best-effort."""
+def _tail_lines(path: Path, max_lines: int,
+                 max_bytes: int = 16 * 1024 * 1024) -> list[str]:
+    """Return up to the last `max_lines` decoded lines, best-effort.
+
+    Only the tail `max_bytes` of the file are ever read off disk — on a busy
+    board the log can grow large, so this bounds memory/IO regardless of
+    `max_lines`. If the seek lands mid-line, the (possibly partial) first
+    line of the read is dropped.
+    """
     try:
-        raw = path.read_bytes()
+        with path.open("rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            if size > max_bytes:
+                f.seek(size - max_bytes)
+                raw = f.read()
+                parts = raw.splitlines()
+                # Drop the first (possibly partial) line from the mid-file seek.
+                parts = parts[1:]
+            else:
+                f.seek(0)
+                raw = f.read()
+                parts = raw.splitlines()
     except OSError:
         return []
-    parts = raw.splitlines()
     if len(parts) > max_lines:
         parts = parts[-max_lines:]
     out: list[str] = []
@@ -88,12 +110,13 @@ def _summarize(records: list[dict]) -> dict:
 
 
 def aggregate(path: str = MEDIA_CATCH_PATH, mac_hash: str | None = None,
-              max_lines: int = 50_000) -> dict:
+              max_lines: int = 50_000,
+              max_bytes: int = 16 * 1024 * 1024) -> dict:
     """Aggregate the media-catch log into {all, me} views. Fail-empty."""
     p = Path(path)
     all_records: list[dict] = []
     me_records: list[dict] = []
-    for line in _tail_lines(p, max_lines):
+    for line in _tail_lines(p, max_lines, max_bytes=max_bytes):
         line = line.strip()
         if not line:
             continue

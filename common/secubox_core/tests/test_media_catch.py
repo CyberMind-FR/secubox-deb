@@ -60,6 +60,35 @@ def test_no_mac_hash_me_empty(tmp_path):
     assert out["me"]["present"] is False
 
 
+def test_bounded_tail_read_drops_partial_first_line(tmp_path):
+    """Regression test (Fix 1): _tail_lines/aggregate must only read the tail
+    `max_bytes` of the file, not the whole thing — and must drop the partial
+    first line produced by a mid-line seek.
+
+    20 records, each JSON-encoded to an identical 63-byte line (+1 newline =
+    64 bytes/line, 1280 bytes total) so the math is deterministic:
+    with max_bytes=200, the read starts at offset size-200=1080, which lands
+    56 bytes into record #16's line (a 7-byte partial tail), followed by the
+    3 full trailing lines (#17, #18, #19). After dropping the partial first
+    line, exactly 3 valid records remain.
+    """
+    records = [{"client": "aa", "host": f"h{i:03d}", "kind": "video", "bytes": 100}
+               for i in range(20)]
+    path = _write(tmp_path, records)
+
+    out = media_catch.aggregate(path=path, mac_hash="aa", max_bytes=200)
+
+    # (a) does not raise (implicit — call above completed)
+    # (b) only tail records returned — far fewer than the 20 written
+    assert out["all"]["present"] is True
+    assert out["all"]["flows"] == 3
+    assert out["all"]["bytes"] == 300
+    hosts = {h["host"] for h in out["all"]["top_hosts"]}
+    assert hosts == {"h017", "h018", "h019"}
+    # (c) the partial first line from the seek was dropped, not miscounted
+    assert "h016" not in hosts
+
+
 def test_malformed_field_skipped_not_fatal(tmp_path):
     """Regression test: malformed bytes value must not crash aggregate (Finding 1 fix)."""
     path = _write(tmp_path, [
