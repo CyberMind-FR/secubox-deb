@@ -24,6 +24,7 @@ def test_write_atomic_swaps_and_validates(tmp_path):
     out = tmp_path / "proxy.pac"
     write_atomic('function FindProxyForURL(url, host) {\n  return "DIRECT";\n}\n', out)
     assert out.read_text().startswith("function FindProxyForURL")
+    assert not (tmp_path / "proxy.pac.shadow").exists()
 
 
 def test_write_atomic_rejects_invalid_keeps_lastgood(tmp_path):

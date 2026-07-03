@@ -28,7 +28,7 @@ def write_atomic(pac_str, out=DEFAULT_OUT):
     if "function FindProxyForURL" not in pac_str or 'return "DIRECT"' not in pac_str:
         raise ValueError("refusing to write PAC without FindProxyForURL/terminal DIRECT")
     out.parent.mkdir(parents=True, exist_ok=True)
-    shadow = out.with_suffix(".shadow")
+    shadow = out.parent / (out.name + ".shadow")
     shadow.write_text(pac_str)
     os.replace(shadow, out)
 
