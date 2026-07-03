@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+if [ "$1" = "configure" ]; then
+    getent passwd secubox >/dev/null || useradd --system --group secubox || true
+    install -d -o secubox -g secubox /var/lib/secubox/proxypac
+    /usr/sbin/proxypac-gen || true   # initial generation (fail-safe)
+    systemctl daemon-reload || true
+    systemctl enable --now secubox-proxypac-gen.path || true
+    systemctl enable --now secubox-proxypac-gen.timer || true
+    nginx -t && systemctl reload nginx || true
+fi
+#DEBHELPER#

@@ -1,0 +1,5 @@
+secubox-proxypac (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: WPAD/PAC auto-config routing to active mesh services (#784).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 03 Jul 2026 00:00:00 +0200

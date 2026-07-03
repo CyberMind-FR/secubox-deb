@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+if [ "$1" = "remove" ]; then
+    systemctl disable --now secubox-proxypac-gen.path secubox-proxypac-gen.timer || true
+fi
+#DEBHELPER#
