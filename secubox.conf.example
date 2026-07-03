@@ -21,6 +21,9 @@ sso_cookie_domain = ""
 
 # Utilisateurs locaux (fallback si pas d'OAuth)
 [auth]
+# Force TOTP (2FA) enrollment for admin accounts on login. Default: true
+# (secure/CSPN). Set to false to allow password-only admin login on this node.
+require_admin_totp = true
 
 [auth.users.admin]
 password = "secubox"            # À changer impérativement !

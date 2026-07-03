@@ -246,8 +246,15 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _append_audit("mfa_challenge_issued", req.username, {"ip": ip})
         return {"mfa_required": True, "mfa_token": mfa_tok}
 
-    # Admin without TOTP → force enrollment
-    if user.get("role") == "admin":
+    # Admin without TOTP → force enrollment, unless disabled by config.
+    # [auth] require_admin_totp defaults to true (secure/CSPN default); set it to
+    # false in /etc/secubox/secubox.conf to allow password-only admin login on a
+    # given node. Fail-secure: any config error keeps enrollment mandatory.
+    try:
+        _require_admin_totp = bool((get_config("auth") or {}).get("require_admin_totp", True))
+    except Exception:
+        _require_admin_totp = True
+    if user.get("role") == "admin" and _require_admin_totp:
         enroll_tok = create_token(req.username, scope="totp-enroll", expires_in=900)
         _append_audit("totp_enrollment_required", req.username, {"ip": ip})
         return {"enrollment_required": True, "enrollment_token": enroll_tok}
