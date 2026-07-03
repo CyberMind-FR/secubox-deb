@@ -1,4 +1,8 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """Tests for the shared media-catch JSONL aggregator (ref #785)."""
 import json
 from secubox_core import media_catch
@@ -54,3 +58,21 @@ def test_no_mac_hash_me_empty(tmp_path):
     out = media_catch.aggregate(path=path)
     assert out["all"]["present"] is True
     assert out["me"]["present"] is False
+
+
+def test_malformed_field_skipped_not_fatal(tmp_path):
+    """Regression test: malformed bytes value must not crash aggregate (Finding 1 fix)."""
+    path = _write(tmp_path, [
+        {"client": "aa", "host": "good", "kind": "video", "bytes": 1000},
+        {"client": "aa", "host": "bad", "kind": "video", "bytes": "oops"},  # non-numeric bytes
+        {"client": "aa", "host": "good", "kind": "audio", "bytes": 500},
+    ])
+    # aggregate() must NOT raise; malformed record skipped in _summarize processing
+    out = media_catch.aggregate(path=path, mac_hash="aa")
+    # All 3 records pass JSON parsing, so flows=3; but malformed one is skipped in aggregation
+    # so bytes only count the 2 good records (1000 + 500 = 1500)
+    assert out["all"]["present"] is True
+    assert out["all"]["flows"] == 3
+    assert out["all"]["bytes"] == 1500
+    assert out["me"]["flows"] == 3
+    assert out["me"]["bytes"] == 1500

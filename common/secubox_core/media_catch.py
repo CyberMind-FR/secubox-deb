@@ -61,16 +61,20 @@ def _summarize(records: list[dict]) -> dict:
     host_kind: dict = {}
     total_bytes = 0
     for r in records:
-        kind = r.get("kind") or "?"
-        kinds[kind] += 1
-        ct = r.get("ctype") or ""
-        if ct:
-            ctypes[ct] += 1
-        b = int(r.get("bytes") or 0)
-        total_bytes += b
-        host = r.get("host") or "?"
-        host_bytes[host] += b
-        host_kind.setdefault(host, kind)
+        try:
+            kind = r.get("kind") or "?"
+            kinds[kind] += 1
+            ct = r.get("ctype") or ""
+            if ct:
+                ctypes[ct] += 1
+            b = int(r.get("bytes") or 0)
+            total_bytes += b
+            host = r.get("host") or "?"
+            host_bytes[host] += b
+            host_kind.setdefault(host, kind)
+        except (ValueError, TypeError):
+            # Skip malformed-field record; continue with next
+            continue
     kinds_out = [{"label": k, "emoji": _KIND_EMOJI.get(k, "🎬"), "count": c}
                  for k, c in kinds.most_common()]
     ctypes_out = [{"label": k, "emoji": "🏷️", "count": c}
