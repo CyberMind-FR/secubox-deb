@@ -8,6 +8,9 @@ def test_pac_route_sets_content_type_and_serves_state():
     assert "application/x-ns-proxy-autoconfig" in conf
     assert "/var/lib/secubox/proxypac/proxy.pac" in conf
     assert "/api/v1/proxypac/" in conf and "aggregator.sock" in conf
+    # /proxy.pac must be LAN/mesh-gated even in the shared (public) server
+    assert "deny all;" in conf
+    assert "allow 10.10.0.0/24;" in conf
 
 def test_wpad_vhost_is_lan_mesh_only():
     conf = (ROOT / "nginx" / "wpad-vhost.conf").read_text()
