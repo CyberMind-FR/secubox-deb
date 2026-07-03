@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-proxypac/usr/lib/secubox/proxypac
+	cp -r proxypac api debian/secubox-proxypac/usr/lib/secubox/proxypac/
+	install -D -m 755 sbin/proxypac-gen debian/secubox-proxypac/usr/sbin/proxypac-gen
+	install -d debian/secubox-proxypac/etc/nginx/secubox.d
+	cp nginx/proxypac.conf debian/secubox-proxypac/etc/nginx/secubox.d/
+	install -d debian/secubox-proxypac/etc/nginx/sites-available
+	cp nginx/wpad-vhost.conf debian/secubox-proxypac/etc/nginx/sites-available/
+	install -d debian/secubox-proxypac/usr/lib/systemd/system
+	cp systemd/secubox-proxypac.service systemd/secubox-proxypac-gen.service systemd/secubox-proxypac-gen.path systemd/secubox-proxypac-gen.timer debian/secubox-proxypac/usr/lib/systemd/system/
+	install -d debian/secubox-proxypac/etc/secubox/proxypac/rules.d
+	cp conf/rules.d/*.rules debian/secubox-proxypac/etc/secubox/proxypac/rules.d/
+	install -d debian/secubox-proxypac/usr/share/secubox/www
+	cp -r www/. debian/secubox-proxypac/usr/share/secubox/www/
+	install -d debian/secubox-proxypac/usr/share/secubox/menu.d
+	cp menu.d/*.json debian/secubox-proxypac/usr/share/secubox/menu.d/

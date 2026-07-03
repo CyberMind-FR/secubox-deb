@@ -1,0 +1,4 @@
+# secubox-proxypac seed: route .onion via a mesh tor-exit when one is active.
+# The service catalog also emits *.onion; this seed guarantees it even before
+# the operator subscribes (address is the local mesh gateway SocksPort).
+*.onion socks5 10.10.0.1:9050
