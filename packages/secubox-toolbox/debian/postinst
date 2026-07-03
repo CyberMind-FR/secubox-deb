@@ -92,6 +92,12 @@ SBXFILTERS
     mkdir -p /var/cache/secubox/toolbox/media
     chown secubox-toolbox:secubox-toolbox /var/cache/secubox/toolbox/media 2>/dev/null || true
     chmod 0750 /var/cache/secubox/toolbox/media 2>/dev/null || true
+    # #785 : persistent matplotlib config/font cache (MPLCONFIGDIR). Without it,
+    # HOME=/nonexistent forces a font-cache rebuild on every process start, which
+    # makes the first report render pathologically slow. See 30-mplcache.conf.
+    mkdir -p /var/cache/secubox/toolbox/mpl
+    chown secubox-toolbox:secubox-toolbox /var/cache/secubox/toolbox/mpl 2>/dev/null || true
+    chmod 0750 /var/cache/secubox/toolbox/mpl 2>/dev/null || true
     # Keep the shared parents traversable for other daemons.
     [ -d /var/lib/secubox ] && chmod 0755 /var/lib/secubox 2>/dev/null || true
     [ -d /var/cache/secubox ] && chmod 0755 /var/cache/secubox 2>/dev/null || true

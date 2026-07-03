@@ -86,6 +86,8 @@ execute_after_dh_auto_install:
 	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox.service.d/
 	install -m 0644 systemd/secubox-toolbox.service.d/20-bind-all.conf \
 	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox.service.d/
+	install -m 0644 systemd/secubox-toolbox.service.d/30-mplcache.conf \
+	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox.service.d/
 	# Phase 7 (#498) : boot-survival — nft drop-in (loaded by nftables.service
 	# at boot) + peer-restore script + oneshot service + unbound listener
 	install -d debian/secubox-toolbox/usr/share/secubox/toolbox/nftables.d

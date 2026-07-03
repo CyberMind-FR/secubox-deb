@@ -4,6 +4,7 @@
 """SecuBox-Deb ToolBoX :: FastAPI routes (Phase 1)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -11,7 +12,57 @@ from pathlib import Path
 
 import jinja2
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+
+# #785 — PDF rendering (fpdf2 + matplotlib) is CPU-heavy (~9 s on the board) and
+# matplotlib's pyplot API is NOT thread-safe. Three defences, together, keep a
+# slow render — or a 504-page auto-retry storm hammering the PDF URL — from
+# wedging the single uvicorn worker:
+#   1. run the render OFF the event loop (threadpool) so other routes stay live;
+#   2. serialize renders through one lock so pyplot's global state can't race and
+#      concurrent renders can't starve the CPU in parallel;
+#   3. cache the rendered bytes per key for a short TTL, with a double-checked
+#      lock, so a retry storm triggers exactly ONE render, not one per retry.
+_pdf_render_lock = asyncio.Lock()
+_pdf_cache: dict = {}          # key -> (expires_at_epoch, pdf_bytes)
+_PDF_CACHE_TTL = 120           # seconds — a report is a live snapshot; 2 min stale is fine
+
+
+def _pdf_cache_get(key: str):
+    ent = _pdf_cache.get(key)
+    if ent and ent[0] > time.time():
+        return ent[1]
+    return None
+
+
+def _pdf_cache_put(key: str, blob: bytes) -> None:
+    _pdf_cache[key] = (time.time() + _PDF_CACHE_TTL, blob)
+    if len(_pdf_cache) > 64:    # bound memory: drop expired entries
+        now = time.time()
+        for k in [k for k, v in _pdf_cache.items() if v[0] <= now]:
+            _pdf_cache.pop(k, None)
+
+
+async def _render_pdf_offloaded(render_fn, data, cache_key: str | None = None):
+    """Render a PDF off the event loop, one at a time, with a short per-key cache.
+
+    The cache re-check INSIDE the lock is the storm defence: the first request
+    renders and caches; every request queued behind it on the lock then finds the
+    fresh entry and returns instantly instead of re-rendering."""
+    if cache_key:
+        cached = _pdf_cache_get(cache_key)
+        if cached is not None:
+            return cached
+    async with _pdf_render_lock:
+        if cache_key:
+            cached = _pdf_cache_get(cache_key)
+            if cached is not None:
+                return cached
+        blob = await run_in_threadpool(render_fn, data)
+        if cache_key:
+            _pdf_cache_put(cache_key, blob)
+        return blob
 
 from . import (
     avatar_analysis,
@@ -2851,7 +2902,7 @@ async def report_me(request: Request) -> Response:
     data["bestiary"] = (_charts.get("trackers") or [])[:5]
     data["carto_nodes"] = _graph.get("nodes") or []      # #709 carto + tables
     data["carto_country"] = _graph.get("by_country") or []
-    pdf_bytes = reports.render_pdf(data)
+    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"me:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
     return Response(
         content=pdf_bytes,
@@ -2870,7 +2921,7 @@ async def report(token: str) -> Response:
         raise HTTPException(404, "report not found or expired")
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    pdf_bytes = reports.render_pdf(data)
+    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"tok:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}-{int(time.time())}.pdf"
     return Response(
         content=pdf_bytes,
@@ -3537,7 +3588,7 @@ async def social_report_pdf(token: str) -> Response:
         raise HTTPException(404, "report not found or expired")
     data = _sr.build_social_report(mac_hash, since_seconds=7 * 86400)
     data["generated_at"] = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
-    pdf_bytes = _sr.render_social_pdf(data)
+    pdf_bytes = await _render_pdf_offloaded(_sr.render_social_pdf, data, cache_key=f"soc:{mac_hash}")
     fname = f"village3b-carto-{mac_hash[:8]}-{int(time.time())}.pdf"
     return Response(
         content=pdf_bytes,
@@ -3936,7 +3987,7 @@ async def admin_client_report(mac_hash: str) -> Response:
     """Admin endpoint : download PDF for a specific client by mac_hash."""
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    pdf_bytes = reports.render_pdf(data)
+    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"adm:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}-admin.pdf"
     return Response(
         content=pdf_bytes,
