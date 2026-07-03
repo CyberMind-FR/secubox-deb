@@ -12,3 +12,5 @@ def test_menu_entry_points_to_panel():
     import json
     m = json.loads((ROOT / "menu.d" / "580-proxypac.json").read_text())
     assert m.get("path") == "/proxypac/" or m.get("url") == "/proxypac/"
+    assert m.get("name") == "ProxyPAC"
+    assert m.get("category") in ("auth","wall","boot","mind","root","mesh")

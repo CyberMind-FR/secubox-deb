@@ -9,11 +9,12 @@
 <input id="address" placeholder="ip:port (socks5/http)">
 <button onclick="addOverride()">Ajouter</button>
 <script>
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function headers(){return {'Content-Type':'application/json'};}
 async function load(){
   const d = await (await fetch('/api/v1/proxypac/rules',{headers:headers()})).json();
   document.getElementById('rules').innerHTML =
-    d.rules.map(r=>`<li>${r.host} → ${r.directive} <button onclick="del('${r.host}')">x</button></li>`).join('');
+    d.rules.map(r=>`<li>${esc(r.host)} → ${esc(r.directive)} <button onclick="del('${esc(r.host)}')">x</button></li>`).join('');
 }
 async function addOverride(){
   await fetch('/api/v1/proxypac/override',{method:'POST',headers:headers(),
