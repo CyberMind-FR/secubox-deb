@@ -14,6 +14,7 @@ readonly CONFIG_FILE="${SECUBOX_YACY_CONFIG:-/etc/secubox/yacy.toml}"
 readonly STATE_DIR="${SECUBOX_YACY_STATE:-/var/lib/secubox/yacy}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
 readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/yacy/install-lxc.sh}"
+readonly YACY_CONF="/opt/yacy/DATA/SETTINGS/yacy.conf"
 
 readonly RED='\033[0;31m'; readonly GREEN='\033[0;32m'; readonly YELLOW='\033[1;33m'; readonly NC='\033[0m'
 log()  { printf '%b[yacy]%b %s\n' "$GREEN" "$NC" "$*"; }
@@ -160,6 +161,50 @@ cmd_reload() {
     log "Reloaded."
 }
 
+cmd_set_admin_password() {
+    # Push a new plaintext admin password into YaCy's single admin account.
+    #
+    # The password is read from STDIN (never argv) so it cannot leak via `ps`,
+    # the shell history, or sudo's command log. This is the sync target invoked
+    # by secubox-users when the master 'admin' user's password changes (over
+    # `sudo -n yacyctl set-admin-password`), and it is safe to run by hand.
+    #
+    # Requires root: it writes the root-owned secret file and drives the
+    # in-container daemon via lxc-attach. When invoked through sudo, id -u == 0
+    # so lxc_attach() runs lxc-attach directly.
+    if [ "$(id -u)" -ne 0 ]; then err "set-admin-password requires root"; exit 2; fi
+
+    local pw; pw=$(cat)
+    [ -n "$pw" ] || { err "empty password on stdin"; exit 2; }
+
+    install -d -m 0700 "$SECRETS_DIR"
+    printf '%s\n' "$pw" > "$SECRETS_DIR/yacy-admin"
+    chmod 600 "$SECRETS_DIR/yacy-admin"
+
+    # YaCy HTTP Digest hash: md5("admin:<adminRealm>:<password>"). Mirrors YaCy's
+    # own bin/passwd.sh and configure_yacy_admin() in install-lxc.sh — keep the
+    # three in lock-step if the format ever changes.
+    local realm hash
+    realm=$(lxc_attach -- sh -c "grep '^adminRealm=' $YACY_CONF | cut -d= -f2-" 2>/dev/null || true)
+    [ -n "$realm" ] || realm="YaCy"
+    hash=$(printf 'admin:%s:%s' "$realm" "$pw" | md5sum | cut -d' ' -f1)
+    [ -n "$hash" ] || { err "hash computation failed"; exit 2; }
+
+    # Idempotent: skip the daemon restart when the hash is already current.
+    if lxc_attach -- grep -q "^adminAccountBase64MD5=MD5:${hash}$" "$YACY_CONF" 2>/dev/null; then
+        log "YaCy admin password already up to date — no change."
+        return 0
+    fi
+
+    # YaCy rewrites yacy.conf on shutdown, so it must be stopped before editing.
+    log "Updating YaCy admin password (restarting daemon) ..."
+    lxc_attach -- systemctl stop yacy 2>/dev/null || true
+    lxc_attach -- sed -i \
+        "s|^adminAccountBase64MD5=.*|adminAccountBase64MD5=MD5:${hash}|" "$YACY_CONF"
+    lxc_attach -- systemctl start yacy 2>/dev/null || true
+    log "YaCy admin password updated."
+}
+
 cmd_help() {
     cat <<'HELP'
 yacyctl — SecuBox YaCy controller (SEARCH layer)
@@ -172,6 +217,7 @@ Three-fold introspection:
 Lifecycle:
   yacyctl install                  # idempotent LXC + JVM + YaCy bootstrap
   yacyctl reload                   # restart host FastAPI + yacy daemon
+  yacyctl set-admin-password       # read new admin password from STDIN, apply + restart
 
 Search-engine nouns:
   yacyctl peer       list|add <url>|remove <hash>|status <hash>
@@ -191,6 +237,7 @@ main() {
     shift || true
     case "$noun" in
         components|status|access|install|reload) "cmd_${noun}" "$@" ;;
+        set-admin-password) cmd_set_admin_password "$@" ;;
         peer|index|query|blacklist|crawler)
             err "noun '$noun' not yet implemented in v$VERSION — see #232 follow-up task"
             exit 2 ;;

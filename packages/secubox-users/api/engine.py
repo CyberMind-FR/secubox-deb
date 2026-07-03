@@ -61,14 +61,38 @@ class Engine:
         return json.loads(self.users_path.read_text())
 
     def _save(self, doc: Dict[str, Any]) -> None:
-        """Atomic write: temp + os.replace in the same dir."""
+        """Atomic write: temp + os.replace in the same dir.
+
+        Preserves the existing file's owner + mode. Without this, a root-run CLI
+        (``sudo usersctl set-password``) would leave users.json as root:root 0600
+        — unreadable by the secubox-owned auth service, which then falls back to
+        the auth.toml emergency users and rejects every login. Mirrors
+        secubox_core.user_store.set_password's owner-preservation.
+        """
         self.users_path.parent.mkdir(parents=True, exist_ok=True)
+        prev_stat = None
+        try:
+            prev_stat = self.users_path.stat()
+        except FileNotFoundError:
+            pass
         fd, tmp_path = tempfile.mkstemp(
             prefix=".users.json.", dir=str(self.users_path.parent)
         )
         try:
             with os.fdopen(fd, "w") as f:
                 json.dump(doc, f, indent=2, sort_keys=True)
+            if prev_stat is not None:
+                # Re-apply the prior owner/mode so a root writer does not strip
+                # the secubox service's access. Fail-open: a non-root writer that
+                # cannot chown keeps its own (identical) ownership.
+                try:
+                    os.chown(tmp_path, prev_stat.st_uid, prev_stat.st_gid)
+                except OSError:
+                    pass
+                try:
+                    os.chmod(tmp_path, prev_stat.st_mode & 0o777)
+                except OSError:
+                    pass
             os.replace(tmp_path, self.users_path)
         except Exception:
             try:

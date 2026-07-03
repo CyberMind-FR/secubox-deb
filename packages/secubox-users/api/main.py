@@ -39,6 +39,10 @@ USERSCTL = "/usr/sbin/usersctl"
 USERS_FILE = os.environ.get("USERS_FILE", "/etc/secubox/users.json")
 ROLES_FILE = os.environ.get("ROLES_FILE", "/etc/secubox/roles.json")
 SERVICES = ["nextcloud", "gitea", "email", "matrix", "jellyfin", "peertube", "jabber"]
+# YaCy has a single admin account (no per-user accounts), so its password is
+# synced from exactly one SecuBox user: the master "admin". Changing that user's
+# password propagates to YaCy when the module is installed and active.
+YACY_SYNC_USER = "admin"
 SESSIONS_FILE = os.environ.get("SECUBOX_AUTH_SESSIONS", "/var/lib/secubox/auth/sessions.json")
 
 # Single engine instance — all mutations go through here
@@ -324,6 +328,44 @@ def get_service_ctl(name: str) -> Optional[str]:
     ctl = f"/usr/sbin/{name}ctl"
     return ctl if os.path.exists(ctl) else None
 
+
+def _yacy_available() -> bool:
+    """True when the YaCy module is installed and its host service is active."""
+    if not os.path.exists("/usr/sbin/yacyctl"):
+        return False
+    try:
+        r = subprocess.run(
+            ["systemctl", "is-active", "--quiet", "secubox-yacy.service"],
+            timeout=5,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _sync_yacy_admin_password(username: str, password: str) -> Optional[bool]:
+    """Propagate the master admin user's password to YaCy's single admin account.
+
+    Returns True/False on an attempt, or None when skipped (not the sync user, or
+    YaCy not installed/active). The password is handed to `yacyctl set-admin-password`
+    over STDIN (never argv) so it cannot leak via ps/sudo logs. yacyctl needs root
+    (secret file + lxc-attach); the secubox user is granted exactly this one command
+    via secubox-yacy's sudoers drop-in.
+    """
+    if username != YACY_SYNC_USER:
+        return None
+    if not _yacy_available():
+        return None
+    try:
+        r = subprocess.run(
+            ["sudo", "-n", "/usr/sbin/yacyctl", "set-admin-password"],
+            input=password,
+            capture_output=True, text=True, timeout=90,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
 def load_roles() -> List[dict]:
     """Load roles from JSON file or return defaults."""
     if os.path.exists(ROLES_FILE):
@@ -508,6 +550,11 @@ def create_user(user: UserCreate):
         else:
             provision_results[svc] = False
 
+    # YaCy single-admin sync (only fires for the master 'admin' user).
+    yacy_synced = _sync_yacy_admin_password(user.username, user.password)
+    if yacy_synced is not None:
+        provision_results["yacy"] = yacy_synced
+
     # Persist services list via engine's atomic I/O
     if user.services:
         doc = _engine._load()
@@ -669,6 +716,13 @@ def change_password(username: str, pwd: PasswordChange):
                 results[svc] = result.returncode == 0
             except Exception:
                 results[svc] = False
+
+    # YaCy has a single admin account, synced from the master 'admin' user only.
+    # Independent of the per-user services list above.
+    yacy_synced = _sync_yacy_admin_password(username, pwd.password)
+    if yacy_synced is not None:
+        results["yacy"] = yacy_synced
+
     return {"success": True, "password_results": results}
 
 

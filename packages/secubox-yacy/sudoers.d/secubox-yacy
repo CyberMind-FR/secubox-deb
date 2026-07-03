@@ -8,3 +8,9 @@ secubox ALL=(root) NOPASSWD: /usr/bin/lxc-info
 secubox ALL=(root) NOPASSWD: /usr/bin/lxc-attach
 secubox ALL=(root) NOPASSWD: /usr/bin/lxc-start
 secubox ALL=(root) NOPASSWD: /usr/bin/lxc-stop
+
+# Password sync: secubox-users (User=secubox) pushes the master 'admin' user's
+# password into YaCy's single admin account. The password is read from STDIN
+# (never argv), so it cannot leak via ps/sudo logs. Exact-command match — no
+# wildcard args — so only the bare subcommand is permitted.
+secubox ALL=(root) NOPASSWD: /usr/sbin/yacyctl set-admin-password
