@@ -5,6 +5,7 @@ Roles, Permissions, Access Control Lists, and Active Sessions
 """
 import subprocess
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -43,6 +44,8 @@ SERVICES = ["nextcloud", "gitea", "email", "matrix", "jellyfin", "peertube", "ja
 # synced from exactly one SecuBox user: the master "admin". Changing that user's
 # password propagates to YaCy when the module is installed and active.
 YACY_SYNC_USER = "admin"
+
+_log = logging.getLogger("secubox.users")
 SESSIONS_FILE = os.environ.get("SECUBOX_AUTH_SESSIONS", "/var/lib/secubox/auth/sessions.json")
 
 # Single engine instance — all mutations go through here
@@ -351,6 +354,14 @@ def _sync_yacy_admin_password(username: str, password: str) -> Optional[bool]:
     over STDIN (never argv) so it cannot leak via ps/sudo logs. yacyctl needs root
     (secret file + lxc-attach); the secubox user is granted exactly this one command
     via secubox-yacy's sudoers drop-in.
+
+    Runtime requirement: this uses `sudo`, which is neutralized by
+    `NoNewPrivileges=true` (the kernel drops the setuid bit regardless of sudoers).
+    It therefore only elevates when secubox-users runs with NNP disabled — which is
+    the case when the module is served in-process by secubox-aggregator
+    (NoNewPrivileges=no). On a hardened standalone unit the sudo call fails; we log
+    it loudly and return False (never a silent success) so the operator sees that
+    YaCy was NOT updated.
     """
     if username != YACY_SYNC_USER:
         return None
@@ -362,8 +373,15 @@ def _sync_yacy_admin_password(username: str, password: str) -> Optional[bool]:
             input=password,
             capture_output=True, text=True, timeout=90,
         )
-        return r.returncode == 0
-    except Exception:
+        if r.returncode != 0:
+            _log.warning(
+                "YaCy admin password sync failed (rc=%s): %s",
+                r.returncode, (r.stderr or "").strip()[:300],
+            )
+            return False
+        return True
+    except Exception as exc:
+        _log.warning("YaCy admin password sync errored: %s", exc)
         return False
 
 def load_roles() -> List[dict]:
