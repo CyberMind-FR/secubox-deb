@@ -66,6 +66,35 @@ def test_admin_password_login_returns_enrollment_token(client):
     assert "enrollment_token" in body
 
 
+def test_admin_login_session_when_totp_not_required(client, monkeypatch):
+    """require_admin_totp=false → admin logs in with password only (no enrollment)."""
+    c, _users_path, _ = client
+    from api import main as auth_main
+    monkeypatch.setattr(
+        auth_main, "get_config",
+        lambda section="": {"require_admin_totp": False} if section == "auth" else {},
+    )
+    r = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("access_token"), body
+    assert not body.get("enrollment_required")
+
+
+def test_admin_totp_forced_when_config_errors(client, monkeypatch):
+    """Fail-secure: a get_config error keeps admin enrollment mandatory."""
+    c, _users_path, _ = client
+    from api import main as auth_main
+
+    def _boom(section=""):
+        raise RuntimeError("config unreadable")
+
+    monkeypatch.setattr(auth_main, "get_config", _boom)
+    r = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
+    assert r.status_code == 200
+    assert r.json().get("enrollment_required") is True
+
+
 def test_wrong_password_returns_401(client):
     c, *_ = client
     r = c.post("/auth/login", json={"username": "admin", "password": "wrong"})
