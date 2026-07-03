@@ -679,6 +679,10 @@
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 btn.classList.add('active');
                 document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+                // Lazy-load per-tab content on activation. The mesh canvas MUST be
+                // drawn only once its tab is visible — a hidden tab has clientWidth 0,
+                // which previously left the canvas blank ("broken" mesh tab).
+                if (btn.dataset.tab === 'mesh') setTimeout(initMesh, 40);
             });
         });
 
@@ -896,46 +900,93 @@
         async function initMesh() {
             const canvas = document.getElementById('mesh-canvas');
             if (!canvas) return;
+            const parent = canvas.parentElement;
+            const w = parent.clientWidth, h = parent.clientHeight;
+            // The tab may not be laid out yet (clientWidth 0) — retry shortly.
+            if (w < 20 || h < 20) { setTimeout(initMesh, 80); return; }
             const ctx = canvas.getContext('2d');
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
+            canvas.width = w; canvas.height = h;
 
             const bgColor = '#f1f8f2';
-            const nodeColor = '#006622';
             const lineColor = '#a7c4a0';
             const textColor = '#1b4332';
+            const satColor = '#00838f';       // satellite / online peer (cyan)
+            const masterColor = '#b8860b';    // master (gold)
+            const offlineColor = '#b0b0b0';
 
             ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.font = '14px Courier New';
+            ctx.fillRect(0, 0, w, h);
+            ctx.font = '13px Courier New';
             ctx.textAlign = 'center';
 
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
+            const centerX = w / 2, centerY = h / 2;
 
-            const data = await apiGet('/mesh');
-            const allNodes = (data && Array.isArray(data.nodes)) ? data.nodes : [];
+            // Pull mesh membership + the live master-link role/DHT state in parallel.
+            const [mesh, topo, dht] = await Promise.all([
+                apiGet('/mesh'), apiGet('/masterlink/topology'), apiGet('/dht/peers')
+            ]);
+            const allNodes = (mesh && Array.isArray(mesh.nodes)) ? mesh.nodes : [];
             const local = allNodes.find(n => n.is_local) || { name: 'LOCAL' };
             const peers = allNodes.filter(n => !n.is_local);
+            const selfRole = (topo && topo.self_role) || 'unknown';
+            const isMaster = selfRole === 'master';
+            const term = (topo && topo.term != null) ? topo.term : '—';
+            const masterShort = (topo && topo.master) ? String(topo.master).slice(0, 10) : '—';
+            const dhtPeers = (dht && Array.isArray(dht.peers)) ? dht.peers.length : 0;
 
-            const radius = Math.max(60, Math.min(centerX, centerY) - 60);
+            // Header: live master-link + DHT state.
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 13px Courier New';
+            ctx.fillStyle = textColor;
+            ctx.fillText('Master-link: role=' + selfRole + '  term=' + term +
+                '  master=' + masterShort + '   ·   DHT peers=' + dhtPeers, 14, 22);
+            ctx.textAlign = 'center';
+            ctx.font = '13px Courier New';
+
+            const radius = Math.max(70, Math.min(centerX, centerY) - 70);
             peers.forEach((peer, i) => {
                 const angle = (Math.PI * 2 * i) / Math.max(peers.length, 1) - Math.PI / 2;
                 const px = centerX + radius * Math.cos(angle);
                 const py = centerY + radius * Math.sin(angle);
                 drawConnection(ctx, centerX, centerY, px, py, lineColor);
-                const label = (peer.name || peer.address || peer.id || 'peer') +
-                    (peer.address && peer.name !== peer.address ? ' (' + peer.address + ')' : '');
-                drawNode(ctx, px, py, label, false, nodeColor, textColor);
+                const online = peer.status === 'online';
+                drawMeshNode(ctx, px, py, (peer.name || peer.id || 'peer'), peer.address || '',
+                    false, online ? satColor : offlineColor, textColor);
             });
 
-            const localLabel = (local.name || 'LOCAL') + (local.address ? ' (' + local.address + ')' : '');
-            drawNode(ctx, centerX, centerY, localLabel, true, nodeColor, textColor);
+            // Center = local node, coloured by its master-link role.
+            drawMeshNode(ctx, centerX, centerY, (local.name || 'LOCAL'), (local.address || ''),
+                true, isMaster ? masterColor : satColor, textColor);
+            ctx.fillStyle = isMaster ? masterColor : satColor;
+            ctx.font = 'bold 11px Courier New';
+            ctx.fillText(isMaster ? '★ MASTER' : 'SATELLITE', centerX, centerY - 36);
+            ctx.font = '13px Courier New';
 
             if (peers.length === 0) {
                 ctx.fillStyle = textColor;
-                ctx.fillText('No mesh peers', centerX, centerY + 70);
+                ctx.fillText('No mesh peers', centerX, centerY + 80);
             }
+        }
+
+        // Mesh node with a coloured ring + name and address on two lines.
+        function drawMeshNode(ctx, x, y, name, addr, isCenter, ringColor, textColor) {
+            ctx.beginPath();
+            ctx.arc(x, y, isCenter ? 25 : 16, 0, Math.PI * 2);
+            ctx.strokeStyle = ringColor;
+            ctx.lineWidth = isCenter ? 3 : 2;
+            ctx.stroke();
+            ctx.fillStyle = isCenter ? 'rgba(184,134,11,0.12)' : 'rgba(0,131,143,0.10)';
+            ctx.fill();
+            ctx.fillStyle = textColor;
+            ctx.font = (isCenter ? 'bold ' : '') + '13px Courier New';
+            ctx.fillText(name, x, y + (isCenter ? 44 : 32));
+            if (addr) {
+                ctx.font = '11px Courier New';
+                ctx.fillStyle = '#4a6a4a';
+                ctx.fillText(addr, x, y + (isCenter ? 60 : 46));
+            }
+            ctx.font = '13px Courier New';
+            ctx.fillStyle = textColor;
         }
 
         function drawNode(ctx, x, y, label, isCenter, nodeColor, textColor) {
