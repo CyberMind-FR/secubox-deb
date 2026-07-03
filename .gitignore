@@ -82,3 +82,4 @@ backups/*.img.xz
 # MetaBlogizer site backfill artifacts (regenerated each run)
 /output/metablog-backfill-report.json
 /output/metablog-backfill.log
+.superpowers/sdd/

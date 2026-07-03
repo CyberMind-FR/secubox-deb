@@ -446,6 +446,26 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
     <div class="empty">Aucune donnée DPI pour cet appareil — il faut surfer via le tunnel R3 (🧅) pour que le moteur observe ses sorties, et attendre une fenêtre de capture (~60 s).</div>
     {% endif %}
   </div>
+  {% set mme = (media_exfil or {}).me or {} %}
+  <div class="card">
+    <h2>🎬 Types de médias captés (MITM R4)</h2>
+    {% if mme.present %}
+    <div class="graphs">
+      {{ donut('📺 Types de médias', 'média', mme.kinds) }}
+      {{ donut('🏷️ Content-Type', 'MIME', mme.ctypes) }}
+    </div>
+    {% if mme.top_hosts %}
+    <table style="margin-top:.6rem"><thead><tr><th>Type</th><th>Hôte</th><th style="text-align:right">Mo</th></tr></thead><tbody>
+      {% for h in mme.top_hosts[:8] %}
+      <tr><td>{{ h.kind }}</td><td><code>{{ h.host[:36] }}</code></td><td style="text-align:right;color:var(--phos)">{{ (h.bytes/1048576)|round(1) }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    {% endif %}
+    <p class="help">Types de contenu réellement captés par le MITM (vidéo/audio/manifests HLS·DASH/pages). Distinct de la catégorie de service « media » (SNI streaming).</p>
+    {% else %}
+    <div class="empty">Aucun média capté — surfer via le tunnel R3 (🧅) et lire une vidéo/audio pour alimenter cette vue.</div>
+    {% endif %}
+  </div>
 </div>{# /pane-dpi #}
 
 {# ── OVERALL TAB : board-wide DPI (all devices) ── #}
@@ -468,6 +488,26 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
     <p class="help">Agrégat de tous les appareils derrière le tunnel R3 — utile pour repérer un usage anormal à l'échelle du réseau.</p>
     {% else %}
     <div class="empty">Pas encore de données DPI à l'échelle réseau (tunnel inactif ou première capture en cours).</div>
+    {% endif %}
+  </div>
+  {% set mall = (media_exfil or {}).all or {} %}
+  <div class="card">
+    <h2>🎬 Types de médias captés — réseau</h2>
+    {% if mall.present %}
+    <div class="graphs">
+      {{ donut('📺 Types de médias', 'média', mall.kinds) }}
+      {{ donut('🏷️ Content-Type', 'MIME', mall.ctypes) }}
+    </div>
+    {% if mall.top_hosts %}
+    <table style="margin-top:.6rem"><thead><tr><th>Type</th><th>Hôte</th><th style="text-align:right">Mo</th></tr></thead><tbody>
+      {% for h in mall.top_hosts[:8] %}
+      <tr><td>{{ h.kind }}</td><td><code>{{ h.host[:36] }}</code></td><td style="text-align:right;color:var(--phos)">{{ (h.bytes/1048576)|round(1) }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    {% endif %}
+    <p class="help">Contenus média captés à l'échelle du réseau (tous appareils R3/R4).</p>
+    {% else %}
+    <div class="empty">Aucun média capté à l'échelle réseau (tunnel R3/R4 inactif ou première capture en cours).</div>
     {% endif %}
   </div>
 </div>{# /pane-overall #}

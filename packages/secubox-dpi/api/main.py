@@ -111,6 +111,24 @@ async def exfil_history(device: str = "", days: int = 14):
     return {"device": "", "days": days_sorted[-days:]}
 
 
+@app.get("/media_types")
+async def media_types():
+    """#785 — board-wide MIME media-type breakdown captured by the sbxmitm R4
+    media-catcher (/run/secubox/media-catch.jsonl). Distinct from the DPI service
+    category 'media' (SNI). Read-only, no auth (like /exfil), fail-empty."""
+    try:
+        from secubox_core import media_catch
+        agg = media_catch.aggregate(path=media_catch.MEDIA_CATCH_PATH)
+        view = agg.get("all") or {}
+        return {"present": bool(view.get("present")),
+                "flows": view.get("flows", 0), "bytes": view.get("bytes", 0),
+                "kinds": view.get("kinds", []), "ctypes": view.get("ctypes", []),
+                "top_hosts": view.get("top_hosts", [])}
+    except Exception as e:  # pragma: no cover
+        return {"present": False, "flows": 0, "bytes": 0,
+                "kinds": [], "ctypes": [], "top_hosts": [], "error": str(e)}
+
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("dpi")
@@ -405,7 +423,7 @@ def _setup_mirred(iface: str, mirror_if: str = "ifb0") -> dict:
     return {"steps": results, "interface": iface, "mirror": mirror_if}
 
 @router.get("/status")
-def status(user=Depends(require_jwt)):
+async def status(user=Depends(require_jwt)):
     cfg = get_config("dpi")
     netifyd_up = subprocess.run(["pgrep", "netifyd"], capture_output=True).returncode == 0
     iface = cfg.get("interface", "eth0")
@@ -653,26 +671,26 @@ async def save_settings(req: DpiSettingsRequest, user=Depends(require_jwt)):
 
 
 @router.post("/restart")
-def restart(user=Depends(require_jwt)):
+async def restart(user=Depends(require_jwt)):
     """Redémarrer netifyd."""
     r = subprocess.run(["systemctl", "restart", "netifyd"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/start")
-def start(user=Depends(require_jwt)):
+async def start(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "start", "netifyd"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/stop")
-def stop(user=Depends(require_jwt)):
+async def stop(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "stop", "netifyd"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.get("/logs")
-def logs(lines: int = 100, user=Depends(require_jwt)):
+async def logs(lines: int = 100, user=Depends(require_jwt)):
     r = subprocess.run(
         ["journalctl", "-u", "netifyd", "-n", str(lines), "--no-pager"],
         capture_output=True, text=True, timeout=10
@@ -681,7 +699,7 @@ def logs(lines: int = 100, user=Depends(require_jwt)):
 
 
 @router.get("/interface_list")
-def interface_list(user=Depends(require_jwt)):
+async def interface_list(user=Depends(require_jwt)):
     """Liste des interfaces."""
     r = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
     try:
@@ -692,7 +710,7 @@ def interface_list(user=Depends(require_jwt)):
 
 
 @router.get("/tc_status")
-def tc_status(user=Depends(require_jwt)):
+async def tc_status(user=Depends(require_jwt)):
     """État tc mirred."""
     cfg = get_config("dpi")
     iface = cfg.get("interface", "eth0")
@@ -708,7 +726,7 @@ def tc_status(user=Depends(require_jwt)):
 
 
 @router.post("/remove_mirred")
-def remove_mirred(user=Depends(require_jwt)):
+async def remove_mirred(user=Depends(require_jwt)):
     """Supprimer la configuration mirred."""
     cfg = get_config("dpi")
     iface = cfg.get("interface", "eth0")

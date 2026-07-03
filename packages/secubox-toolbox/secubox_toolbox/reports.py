@@ -75,6 +75,7 @@ def _setup_fonts(pdf) -> str:
     Returns the font family name to use for set_font() calls.
     """
     family = "Helvetica"
+    pdf._secubox_italic_ok = False
     if Path(DEJAVU_PATH).exists():
         try:
             pdf.add_font("DejaVu", style="", fname=DEJAVU_PATH)
@@ -82,6 +83,10 @@ def _setup_fonts(pdf) -> str:
                 pdf.add_font("DejaVu", style="B", fname=DEJAVU_BOLD_PATH)
             if Path(DEJAVU_OBLIQUE_PATH).exists():
                 pdf.add_font("DejaVu", style="I", fname=DEJAVU_OBLIQUE_PATH)
+                # fonts-dejavu-core (debian/control dep) ships Regular+Bold only —
+                # the Oblique glyph is NOT guaranteed present (pre-existing latent
+                # bug: unconditional "I" style footer would crash render_pdf()).
+                pdf._secubox_italic_ok = True
             family = "DejaVu"
             # Fallback chain :
             #   NotoColorEmoji  : COLOR CBDT/CBLC, covers ALL emojis including
@@ -252,41 +257,61 @@ def render_pdf(report: dict) -> bytes:
                      [[d.get("emoji", "🌐"), d.get("label", "?"), f"{d.get('pct', 0)}%"]
                       for d in dests[:10]])
 
-    # ── DPI / EXFILTRATION (R3 per-device + overall) — #701 (parity with HTML) ──
+    # ── DPI / EXFILTRATION (R3 per-device + overall) — donut grids (#785 parité HTML) ──
     dexf = report.get("dpi_exfil") or {}
     dme = dexf.get("me") or {}
     dall = dexf.get("all") or {}
     if dme.get("present") or dall.get("categories"):
         _section(pdf, "DPI / EXFILTRATION (TUNNEL R3)")
-
-        def _donut_lines(title: str, items: list) -> None:
-            if not items:
-                return
-            pdf.set_x(pdf.l_margin)  # #714 reset X so the title isn't clipped right
-            pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "B", 9)
-            pdf.set_text_color(0)
-            pdf.cell(0, 5, _ascii_safe(title), ln=True)
-            for it in items:
-                _bullet(pdf, f"{it.get('emoji', '')} {it.get('label', '?')} - {it.get('pct', 0)}%", font_size=8)
-
         if dme.get("present"):
             up_mo = round((dme.get("up", 0) or 0) / 1048576, 1)
             dn_mo = round((dme.get("down", 0) or 0) / 1048576, 1)
             _kv(pdf, "Cet appareil",
                 f"{dme.get('flows', 0)} flux | {up_mo} Mo envoyes | {dn_mo} Mo recus | {dme.get('alert_count', 0)} alertes")
-            _donut_lines("Categories de service", dme.get("categories"))
-            _donut_lines("Protocoles", dme.get("protocols"))
-            _donut_lines("Alertes exfiltration", dme.get("alerts"))
-            _donut_lines("Top destinations (envoi)", dme.get("destinations"))
+            _pdf_donut_grid(pdf, [
+                {"title": "🏷️ Catégories de service", "hole": "flux", "segments": dme.get("categories") or []},
+                {"title": "📡 Protocoles", "hole": "octets", "segments": dme.get("protocols") or []},
+                {"title": "🛰️ Alertes exfil", "hole": "alertes", "segments": dme.get("alerts") or []},
+                {"title": "🎯 Top destinations", "hole": "envoi", "segments": dme.get("destinations") or []},
+            ], caption="🛰️ DPI — sorties de cet appareil")
         else:
             _bullet(pdf, "Aucune donnee DPI pour cet appareil (surfer via le tunnel R3).", font_size=8)
-
-        if dall.get("categories"):
-            pdf.ln(1)
+        if dall.get("categories") or dall.get("protocols") or dall.get("destinations"):
             _kv(pdf, "Reseau (tous appareils)",
                 f"{dall.get('devices', 0)} appareils | {dall.get('flows', 0)} flux | {dall.get('alert_count', 0)} alertes")
-            _donut_lines("Categories (global)", dall.get("categories"))
+            _pdf_donut_grid(pdf, [
+                {"title": "🏷️ Catégories (global)", "hole": "flux", "segments": dall.get("categories") or []},
+                {"title": "📡 Protocoles (global)", "hole": "octets", "segments": dall.get("protocols") or []},
+                {"title": "🛰️ Alertes (global)", "hole": "alertes", "segments": dall.get("alerts") or []},
+                {"title": "🎯 Top destinations (global)", "hole": "octets", "segments": dall.get("destinations") or []},
+            ], caption="🌍 DPI — réseau (tous appareils)")
         pdf.ln(2)
+
+    # ── TYPES DE MÉDIAS CAPTÉS (MIME — MITM R4) — #785 ──
+    mexf = report.get("media_exfil") or {}
+    mme = mexf.get("me") or {}
+    mall = mexf.get("all") or {}
+    if mme.get("present") or mall.get("present"):
+        _section(pdf, "TYPES DE MEDIAS CAPTES (MIME - MITM R4)")
+        if mme.get("present"):
+            _kv(pdf, "Cet appareil",
+                f"{mme.get('flows', 0)} flux media | {round((mme.get('bytes', 0) or 0) / 1048576, 1)} Mo")
+        if mall.get("present"):
+            _kv(pdf, "Reseau",
+                f"{mall.get('flows', 0)} flux media | {round((mall.get('bytes', 0) or 0) / 1048576, 1)} Mo")
+        _pdf_donut_grid(pdf, [
+            {"title": "📺 Types (cet appareil)", "hole": "média", "segments": mme.get("kinds") or []},
+            {"title": "🏷️ Content-Type (appareil)", "hole": "MIME", "segments": mme.get("ctypes") or []},
+            {"title": "📺 Types (réseau)", "hole": "média", "segments": mall.get("kinds") or []},
+            {"title": "🏷️ Content-Type (réseau)", "hole": "MIME", "segments": mall.get("ctypes") or []},
+        ], caption="🎬 Types de médias — graphiques")
+        hosts = mme.get("top_hosts") or mall.get("top_hosts") or []
+        if hosts:
+            _emoji_table(pdf, family, "🎬 TOP HÔTES MÉDIA",
+                         [("Type", 0.16), ("Hôte", 0.56), ("Mo", 0.28)],
+                         [[h.get("kind", "?"), h.get("host", "?"),
+                           round((h.get("bytes", 0) or 0) / 1048576, 2)]
+                          for h in hosts[:10]])
 
     # ── Geo top hosts (avec drapeaux + ASN) ──
     geo_hosts = report.get("geo_top_hosts") or []
@@ -467,7 +492,11 @@ def render_pdf(report: dict) -> bytes:
     pdf.ln(4)
 
     # Footer
-    pdf.set_font(getattr(pdf, "_secubox_family", "Helvetica"), "I", 8)
+    # Standard PDF fonts (Helvetica fallback) always ship an italic variant;
+    # DejaVu only has one if DEJAVU_OBLIQUE_PATH was actually registered above.
+    footer_family = getattr(pdf, "_secubox_family", "Helvetica")
+    footer_style = "I" if (footer_family != "DejaVu" or getattr(pdf, "_secubox_italic_ok", False)) else ""
+    pdf.set_font(footer_family, footer_style, 8)
     pdf.set_text_color(110, 64, 201)
     pdf.cell(0, 4, "Gondwana ToolBoX  -  LicenseRef-CMSD-1.0 (Source-Disclosed License)", ln=True, align="C")
     pdf.cell(0, 4, "Source : github.com/CyberMind-FR/secubox-deb (issues #474 #475 #477)", ln=True, align="C")
@@ -845,7 +874,7 @@ def _pdf_donut(pdf, title: str, hole: str, segs: list) -> None:
         pdf.set_text_color(0)
 
 
-def _pdf_donut_grid(pdf, donuts: list) -> None:
+def _pdf_donut_grid(pdf, donuts: list, caption: str = "📊 STATS DE TON APPAREIL (graphiques)") -> None:
     """The 4 device donuts as one embedded 2x2 image (robust, no page-break chaos)."""
     if not donuts:
         return
@@ -855,7 +884,8 @@ def _pdf_donut_grid(pdf, donuts: list) -> None:
     w = _page_w(pdf)
     h = w * 0.62
     _ensure_space(pdf, h + 14)
-    _section(pdf, "📊 STATS DE TON APPAREIL (graphiques)")
+    if caption:
+        _section(pdf, caption)
     y0 = pdf.get_y()
     try:
         pdf.image(png, x=pdf.l_margin, y=y0, w=w, h=h)
