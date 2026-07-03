@@ -111,6 +111,24 @@ async def exfil_history(device: str = "", days: int = 14):
     return {"device": "", "days": days_sorted[-days:]}
 
 
+@app.get("/media_types")
+async def media_types():
+    """#785 — board-wide MIME media-type breakdown captured by the sbxmitm R4
+    media-catcher (/run/secubox/media-catch.jsonl). Distinct from the DPI service
+    category 'media' (SNI). Read-only, no auth (like /exfil), fail-empty."""
+    try:
+        from secubox_core import media_catch
+        agg = media_catch.aggregate(path=media_catch.MEDIA_CATCH_PATH)
+        view = agg.get("all") or {}
+        return {"present": bool(view.get("present")),
+                "flows": view.get("flows", 0), "bytes": view.get("bytes", 0),
+                "kinds": view.get("kinds", []), "ctypes": view.get("ctypes", []),
+                "top_hosts": view.get("top_hosts", [])}
+    except Exception as e:  # pragma: no cover
+        return {"present": False, "flows": 0, "bytes": 0,
+                "kinds": [], "ctypes": [], "top_hosts": [], "error": str(e)}
+
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("dpi")
