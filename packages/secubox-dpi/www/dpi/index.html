@@ -366,6 +366,12 @@
                 <div class="app-list" id="svc-categories"><p class="empty">Loading…</p></div>
             </div>
 
+            <!-- #785 — MIME media types captured by sbxmitm R4 -->
+            <div class="card">
+                <div class="card-header"><h2>🎬 Types de médias captés <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— Content-Type réels (MITM R4)</span></h2></div>
+                <div class="app-list" id="media-types"><p class="empty">Loading…</p></div>
+            </div>
+
             <!-- #720 — per-day timeline (board-wide) -->
             <div class="card">
                 <div class="card-header"><h2>📈 Timeline — flux/jour (14 j)</h2></div>
@@ -688,6 +694,30 @@
             loadBlockRules();
         }
 
+        async function loadMediaTypes() {
+            const data = await api('/media_types');
+            const box = document.getElementById('media-types');
+            if (!box) return;
+            const KIND_ICON = { video: '📺', audio: '🎵', manifest: '🎞️', page: '▶️' };
+            const kinds = (data && data.kinds) || [];
+            const ctypes = (data && data.ctypes) || [];
+            const hosts = (data && data.top_hosts) || [];
+            if (!kinds.length && !ctypes.length) {
+                box.innerHTML = '<p class="empty">Aucun média capté (tunnel R3/R4 requis + lecture vidéo/audio).</p>';
+                return;
+            }
+            const kindRows = kinds.map(k =>
+                `<div class="app-item"><span>${KIND_ICON[k.label] || '🎬'} ${k.label}</span><span class="bytes">${k.count}</span></div>`).join('');
+            const ctypeRows = ctypes.slice(0, 6).map(c =>
+                `<div class="app-item"><span style="font-family:monospace; font-size:0.78rem;">${c.label}</span><span class="bytes">${c.count}</span></div>`).join('');
+            const hostRows = hosts.slice(0, 6).map(h =>
+                `<div class="app-item"><span>${KIND_ICON[h.kind] || '🎬'} <span style="font-family:monospace; font-size:0.78rem;">${(h.host || '').slice(0, 32)}</span></span><span class="bytes">${formatBytes(h.bytes)}</span></div>`).join('');
+            box.innerHTML =
+                `<div style="color:var(--text-dim); font-size:0.7rem; margin-bottom:0.3rem;">Types</div>${kindRows}` +
+                `<div style="color:var(--text-dim); font-size:0.7rem; margin:0.5rem 0 0.3rem;">Content-Type (MIME)</div>${ctypeRows}` +
+                (hostRows ? `<div style="color:var(--text-dim); font-size:0.7rem; margin:0.5rem 0 0.3rem;">Top hôtes</div>${hostRows}` : '');
+        }
+
         async function loadTimeline() {
             const data = await api('/history?days=14');
             const box = document.getElementById('dpi-timeline');
@@ -708,6 +738,7 @@
         function refreshAll() {
             loadStatus();
             loadExfil();   // #695: also fills Top Apps/Protocols/Bandwidth/Active-Flows from the exfil engine
+            loadMediaTypes();  // #785: MIME media types captured by sbxmitm R4
             loadTimeline();
             loadBlockRules();
         }
