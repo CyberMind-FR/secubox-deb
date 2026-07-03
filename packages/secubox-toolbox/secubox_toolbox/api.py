@@ -2571,6 +2571,30 @@ def _dpi_stats(mac_hash: str | None) -> dict:
     return {"me": me_stats, "all": all_stats}
 
 
+def _media_stats(mac_hash: str | None) -> dict:
+    """#785 — media-type donut data (MIME captured by sbxmitm R4) for THIS
+    device (me) and board-wide (all). Reuses _dpi_donut for pct/start/end so the
+    donuts render identically to the DPI-exfil ones. Fail-empty."""
+    from secubox_core import media_catch
+    try:
+        agg = media_catch.aggregate(path=media_catch.MEDIA_CATCH_PATH, mac_hash=mac_hash)
+    except Exception:  # pragma: no cover — helper is fail-empty, this is belt+braces
+        agg = {"me": {}, "all": {}}
+
+    def _shape(view: dict) -> dict:
+        view = view or {}
+        return {
+            "present": bool(view.get("present")),
+            "flows": view.get("flows", 0),
+            "bytes": view.get("bytes", 0),
+            "kinds": _dpi_donut(list(view.get("kinds") or [])),
+            "ctypes": _dpi_donut(list(view.get("ctypes") or [])),
+            "top_hosts": view.get("top_hosts") or [],
+        }
+
+    return {"me": _shape(agg.get("me")), "all": _shape(agg.get("all"))}
+
+
 def _build_pdf_donuts(mac_hash: str | None, data: dict) -> list:
     """#703 — assemble the 4 device-stat donuts for the PDF (mitm/certs/ads/dpi)
     from LIVE sources (DPI collector + ad-block SQLite); the events table is
@@ -2773,6 +2797,7 @@ async def report_me_html(request: Request) -> HTMLResponse:
         graph=graph, graph_stats=gs, exposure_score=exposure_score,
         charts=_build_report_charts(graph),
         dpi_exfil=_dpi_e,
+        media_exfil=_media_stats(mac_hash),
         persona=_persona_sheet(mac_hash, _level, gs, exposure_score, _dpi_e,
                                session.get("device_type", ""),
                                request.headers.get("user-agent", "")),
@@ -2804,6 +2829,7 @@ async def report_me(request: Request) -> Response:
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
     data["dpi_exfil"] = _dpi_stats(mac_hash)  # #701 — DPI parity with the HTML report
+    data["media_exfil"] = _media_stats(mac_hash)  # #785 — media-type (MIME) donuts
     data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 — visual donuts
     # #707 — Netrunner persona sheet (live graph + DPI + ads + request UA)
     try:
