@@ -252,6 +252,29 @@ configure_yacy_admin() {
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl start yacy 2>/dev/null || true
 }
 
+# Public/LAN search must render results for anonymous visitors. YaCy's
+# adminAccountForLocalhost=true makes every request from a local/proxy IP
+# (127.*, 10.*, 192.168.* — see the proxyClient pref) be treated as a pseudo
+# admin. The search page then sets authSearch=1 and appends `&auth` to the
+# yacysearchitem.html AJAX that renders each hit; those requests demand a real
+# admin credential the anonymous browser doesn't carry, get 401, and NO result
+# ever renders — the box shows an empty result list to LAN users while the raw
+# index (yacysearch.json) is full. Turning it off keeps admin behind the
+# password we set (configure_yacy_admin) and lets anonymous search render.
+configure_search_access() {
+    local yacy_conf="/opt/yacy/DATA/SETTINGS/yacy.conf"
+    if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        grep -q '^adminAccountForLocalhost=false$' "$yacy_conf" 2>/dev/null; then
+        log "adminAccountForLocalhost already disabled — skipping"
+        return
+    fi
+    log "Disabling adminAccountForLocalhost (public search render fix) ..."
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl stop yacy 2>/dev/null || true
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sed -i \
+        "s|^adminAccountForLocalhost=.*|adminAccountForLocalhost=false|" "$yacy_conf"
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl start yacy 2>/dev/null || true
+}
+
 mark_provisioned() {
     install -d -m 0755 -o secubox -g secubox "$STATE_DIR"
     date -Iseconds > "$SENTINEL"
@@ -270,6 +293,7 @@ main() {
     install_yacy_in_lxc
     generate_admin_password
     configure_yacy_admin
+    configure_search_access
     provision_yacy
     mark_provisioned
     log "OK — LXC '$LXC_NAME' at $LXC_IP, yacy provisioned + running on port 8090."
