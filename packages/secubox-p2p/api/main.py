@@ -7,6 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+import functools
 import logging
 import subprocess
 import asyncio
@@ -29,7 +30,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client
+from . import mesh, registry, annuaire_client, dht, federation, masterlink
 
 app = FastAPI(
     title="SecuBox P2P API",
@@ -2412,6 +2413,321 @@ async def ml_join_upstream(
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "secubox-p2p", "version": "1.9.0"}
+
+
+# ============== DHT (Kademlia, feature-flagged) — Issue #774 Task 9 ==============
+#
+# Backward compatible by construction: with [dht].enabled = false (the
+# default when the section is absent from p2p.toml), _dht_startup sets
+# app.state.dht = None and nothing new is started. Every endpoint below
+# checks app.state.dht is not None before touching the DHT.
+
+DHT_AUDIT_LOG = Path("/var/log/secubox/p2p/p2p-audit.log")
+
+
+def _dht_audit(event: str, **fields):
+    """Best-effort append-only audit line; never raises."""
+    try:
+        DHT_AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps({"ts": datetime.utcnow().isoformat(), "event": event, **fields})
+        with open(DHT_AUDIT_LOG, "a") as f:
+            f.write(line + "\n")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dht audit log write failed: %s", exc)
+
+
+@app.on_event("startup")
+async def _dht_startup():
+    """Start the Kademlia DHT iff [dht].enabled — never break app startup."""
+    app.state.dht = None
+    try:
+        cfg = mesh.load_p2p_config(CONFIG_FILE)
+        if not cfg["dht"]["enabled"]:
+            return
+
+        did, priv_hex = annuaire_client.node_identity()
+        if not did or not priv_hex:
+            log.warning("dht enabled but node has no annuaire identity; not starting")
+            return
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+
+        priv_key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(priv_hex))
+        id_pubkey = priv_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        ).hex()
+
+        wg_pubkey = ""
+        try:
+            wg_pubkey = get_wg_mesh_config().get("public_key") or ""
+        except Exception:  # noqa: BLE001
+            wg_pubkey = ""
+
+        advertise_host = cfg["dht"].get("advertise_host", "") or "0.0.0.0"
+        endpoint = f'{advertise_host}:{cfg["dht"]["port"]}'
+
+        net = dht.DHTNetwork(did, id_pubkey, wg_pubkey, endpoint)
+        await net.start(host="0.0.0.0", port=cfg["dht"]["port"])
+        net.load_routing()
+        asyncio.create_task(net.bootstrap(seeds=cfg["dht"]["bootstrap"], annuaire_nodes=[]))
+        app.state.dht = net
+        log.info("DHT started did=%s port=%s", did, cfg["dht"]["port"])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dht startup failed (continuing without DHT): %s", exc)
+        app.state.dht = None
+
+
+@app.on_event("shutdown")
+async def _dht_shutdown():
+    """Persist the routing table and close the DHT transport, best-effort."""
+    net = getattr(app.state, "dht", None)
+    if not net:
+        return
+    try:
+        net.save_routing()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dht save_routing failed: %s", exc)
+    try:
+        await net.stop()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dht stop failed: %s", exc)
+
+
+@app.get("/dht/peers")
+async def dht_peers():
+    """Routing table snapshot (public read). Disabled -> empty/zeroed shape."""
+    net = getattr(app.state, "dht", None)
+    if net is None:
+        return {"enabled": False, "peers": [], "buckets": 0}
+    return {
+        "enabled": True,
+        "peers": [
+            {"node_id_hex": n.node_id.hex(), "did": n.did,
+             "endpoint": f"{n.endpoint[0]}:{n.endpoint[1]}"}
+            for n in net.routing.all_nodes()
+        ],
+        "buckets": len([b for b in net.routing.buckets if b.nodes]),
+    }
+
+
+@app.post("/dht/announce")
+async def dht_announce(user: dict = Depends(require_jwt)):
+    """Sign + publish our own reachability record to the DHT (auth required)."""
+    net = getattr(app.state, "dht", None)
+    if net is None:
+        raise HTTPException(status_code=400, detail="dht disabled")
+    await net.announce()
+    _dht_audit("dht_announce", did=net.did)
+    return {"ok": True, "key": net.self_id.hex()}
+
+
+@app.get("/dht/find/{did}")
+async def dht_find(did: str):
+    """Resolve a DID to its verified reachability record via the DHT (public read)."""
+    net = getattr(app.state, "dht", None)
+    if net is None:
+        raise HTTPException(status_code=400, detail="dht disabled")
+    rec = await net.find_peer(did)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return rec
+
+
+# ============== Federation health-checks (feature-flagged) — Issue #774 Task 13 ==============
+#
+# Backward compatible by construction: with [federation].health_checks = false
+# (the default when the section is absent from p2p.toml), _federation_startup
+# sets app.state.health_store = app.state.health_checker = None and nothing
+# new is started. Every endpoint below checks app.state.health_checker is not
+# None before touching it.
+
+@app.on_event("startup")
+async def _federation_startup():
+    """Start the federation health-checker iff [federation].health_checks —
+    never break app startup. When app.state.dht is set (DHT enabled), each
+    sweep also publishes the store snapshot into the DHT's advisory
+    health_store (make_dht_publisher)."""
+    app.state.health_store = None
+    app.state.health_checker = None
+    try:
+        cfg = mesh.load_p2p_config(CONFIG_FILE)
+        if not cfg["federation"]["health_checks"]:
+            return
+
+        store = federation.HealthStore(fail_threshold=cfg["federation"]["fail_threshold"])
+
+        publish_fn = None
+        if getattr(app.state, "dht", None):
+            publish_fn = federation.make_dht_publisher(app.state.dht)
+
+        probe_fn = functools.partial(
+            federation.default_probe, timeout=cfg["federation"]["probe_timeout"]
+        )
+        checker = federation.HealthChecker(
+            federation.services_from_registry,
+            probe_fn,
+            store,
+            interval=cfg["federation"]["interval"],
+            max_concurrency=cfg["federation"]["max_concurrency"],
+            enabled=True,
+            publish_fn=publish_fn,
+        )
+        checker.start()
+
+        app.state.health_store = store
+        app.state.health_checker = checker
+        log.info("federation health-checker started interval=%s", cfg["federation"]["interval"])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("federation startup failed (continuing without health-checks): %s", exc)
+        app.state.health_store = None
+        app.state.health_checker = None
+
+
+@app.on_event("shutdown")
+async def _federation_shutdown():
+    """Stop the federation health-checker's background sweep loop, best-effort."""
+    checker = getattr(app.state, "health_checker", None)
+    if not checker:
+        return
+    try:
+        await checker.stop()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("federation checker stop failed: %s", exc)
+
+
+@app.get("/federation/services")
+async def federation_services():
+    """Federated services + their current health status (public read).
+    Disabled -> enabled: false, but the service list is still returned
+    (health reported as 'unknown' for each)."""
+    store = getattr(app.state, "health_store", None)
+    checker = getattr(app.state, "health_checker", None)
+    return {
+        "enabled": checker is not None,
+        "services": [
+            {
+                **svc,
+                "health": store.status_of(svc["id"]) if store else {"status": "unknown"},
+            }
+            for svc in federation.services_from_registry()
+        ],
+    }
+
+
+@app.post("/federation/healthcheck")
+async def federation_healthcheck(user: dict = Depends(require_jwt)):
+    """Force an immediate health-check sweep (auth required)."""
+    checker = getattr(app.state, "health_checker", None)
+    if checker is None:
+        raise HTTPException(status_code=400, detail="health checks disabled")
+    n = await checker.sweep_once()
+    return {"ok": True, "probed": n}
+
+
+# ============== Master-Link election/heartbeat (feature-flagged) — Issue #774 Task 16b ====
+#
+# Backward compatible by construction: with [masterlink].enabled = false (the
+# default when the section is absent from p2p.toml), _masterlink_startup sets
+# app.state.masterlink = None and nothing new is started. Every endpoint below
+# checks app.state.masterlink is not None before touching it.
+
+def _masterlink_peers_fn() -> list:
+    """Real peers_fn for MasterLink: derive election candidates from the
+    live wg-mesh state (wg_mesh.json), via masterlink.peers_from_mesh().
+    Never raises — any error (missing/malformed wg_mesh.json, etc.) yields
+    an empty candidate list, so a broken mesh state degrades to
+    self-election rather than crashing the tick loop."""
+    try:
+        return masterlink.peers_from_mesh(get_wg_mesh_config())
+    except Exception as exc:  # noqa: BLE001
+        log.warning("masterlink peers_fn failed (mesh state unavailable): %s", exc)
+        return []
+
+
+@app.on_event("startup")
+async def _masterlink_startup():
+    """Start the master-link election/heartbeat state machine iff
+    [masterlink].enabled — never break app startup."""
+    app.state.masterlink = None
+    try:
+        cfg = mesh.load_p2p_config(CONFIG_FILE)
+        if not cfg["masterlink"]["enabled"]:
+            return
+
+        did, priv_hex = annuaire_client.node_identity()
+        if not did or not priv_hex:
+            log.warning("masterlink enabled but node has no annuaire identity; not starting")
+            return
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+
+        priv_key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(priv_hex))
+        id_pubkey = priv_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        ).hex()
+
+        self_id_hex = dht.node_id_for(did).hex()
+
+        peer_addrs = []
+        for a in cfg["masterlink"]["peer_addrs"]:
+            try:
+                host, port_s = a.rsplit(":", 1)
+                peer_addrs.append((host, int(port_s)))
+            except (ValueError, AttributeError):
+                log.warning("masterlink: skipping malformed peer_addrs entry %r", a)
+
+        term_store = masterlink.TermStore()
+        ml = masterlink.MasterLink(
+            self_id_hex, cfg["masterlink"]["priority"], _masterlink_peers_fn, lambda msg: None,
+            term_store, id_pubkey=id_pubkey,
+            heartbeat_interval=cfg["masterlink"]["heartbeat_interval"],
+            election_timeout=cfg["masterlink"]["election_timeout"],
+            peer_addrs=peer_addrs,
+        )
+        await ml.start(host="0.0.0.0", port=cfg["masterlink"]["port"])
+        ml.start_ticking()
+        app.state.masterlink = ml
+        log.info("masterlink started self_id=%s port=%s", self_id_hex, cfg["masterlink"]["port"])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("masterlink startup failed (continuing without masterlink): %s", exc)
+        app.state.masterlink = None
+
+
+@app.on_event("shutdown")
+async def _masterlink_shutdown():
+    """Stop the master-link tick loop and close its UDP transport, best-effort."""
+    ml = getattr(app.state, "masterlink", None)
+    if not ml:
+        return
+    try:
+        await ml.stop()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("masterlink stop failed: %s", exc)
+
+
+@app.get("/masterlink/topology")
+async def masterlink_topology():
+    """Snapshot of this node's master-link topology (public read).
+    Disabled -> {"enabled": false}."""
+    ml = getattr(app.state, "masterlink", None)
+    if ml is None:
+        return {"enabled": False}
+    return {"enabled": True, **ml.topology()}
+
+
+@app.post("/masterlink/promote")
+async def masterlink_promote(user: dict = Depends(require_jwt)):
+    """Force an on-demand promotion attempt (auth required)."""
+    ml = getattr(app.state, "masterlink", None)
+    if ml is None:
+        raise HTTPException(status_code=400, detail="masterlink disabled")
+    result = ml.request_promotion()
+    _dht_audit("masterlink_promote", **result)
+    return result
 
 
 # ============== Macro Grant (M2) ==============

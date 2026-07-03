@@ -36,8 +36,41 @@ def subnet_overlap(network: str) -> str | None:
     return None
 
 
+DHT_DEFAULTS = {
+    "enabled": False,
+    "port": 51823,
+    "bootstrap": [],
+    "announce": False,
+    "announce_interval": 900,
+    "rps": 50,
+}
+
+FEDERATION_DEFAULTS = {
+    "health_checks": False,
+    "interval": 30,
+    "probe_timeout": 5,
+    "max_concurrency": 20,
+    "fail_threshold": 3,
+}
+
+MASTERLINK_DEFAULTS = {
+    "enabled": False,
+    "role_preference": "auto",
+    "priority": 100,
+    "heartbeat_interval": 5,
+    "election_timeout": 15,
+    "port": 51824,
+    "peer_addrs": [],
+}
+
+
 def load_p2p_config(path: pathlib.Path) -> dict:
-    """Read the [wireguard] section of /etc/secubox/p2p.toml, with defaults."""
+    """Read /etc/secubox/p2p.toml, with defaults.
+
+    Returns a dict with the legacy [wireguard]-derived keys at the top level
+    (unchanged, for backward compatibility) plus a `dht` sub-dict built from
+    the [dht] section (Issue #774 Task 9) and a `federation` sub-dict built
+    from the [federation] section (Issue #774 Task 13)."""
     defaults = {
         "interface": MESH_INTERFACE,
         "listen_port": MESH_PORT,
@@ -47,13 +80,35 @@ def load_p2p_config(path: pathlib.Path) -> dict:
     }
     try:
         with open(path, "rb") as f:
-            wg = (tomllib.load(f) or {}).get("wireguard", {}) or {}
+            doc = tomllib.load(f) or {}
     except (FileNotFoundError, tomllib.TOMLDecodeError):
-        wg = {}
+        doc = {}
+    wg = doc.get("wireguard", {}) or {}
     out = dict(defaults)
     for k in defaults:
         if wg.get(k) is not None:
             out[k] = wg[k]
+
+    dht = doc.get("dht", {}) or {}
+    out_dht = dict(DHT_DEFAULTS)
+    for k in DHT_DEFAULTS:
+        if dht.get(k) is not None:
+            out_dht[k] = dht[k]
+    out["dht"] = out_dht
+
+    federation = doc.get("federation", {}) or {}
+    out_federation = dict(FEDERATION_DEFAULTS)
+    for k in FEDERATION_DEFAULTS:
+        if federation.get(k) is not None:
+            out_federation[k] = federation[k]
+    out["federation"] = out_federation
+
+    masterlink = doc.get("masterlink", {}) or {}
+    out_masterlink = dict(MASTERLINK_DEFAULTS)
+    for k in MASTERLINK_DEFAULTS:
+        if masterlink.get(k) is not None:
+            out_masterlink[k] = masterlink[k]
+    out["masterlink"] = out_masterlink
     return out
 
 

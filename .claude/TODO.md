@@ -1,5 +1,43 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-06-27*
+*Mis à jour : 2026-07-02*
+
+---
+
+## 🟢 P2P — Roadmap post-DHT/Federation/Master-link (#774 · PR #775)
+
+> Socle livré & live sur le mesh 3 nœuds (voir HISTORY 2026-07-02 +
+> `docs/P2P-EVOLUTIONS-POSTER-PROMPT.md`). Suites, par priorité :
+
+### 🔜 Pont bans mesh → moteur sbxwaf
+
+- [ ] Alimenter sbxwaf (bouncer CrowdSec) avec les bans fédérés threatmesh (#768) :
+  `cscli decisions add --ip <IP> -R "secubox-mesh" -d 4h` en plus du nft
+  `inet secubox_meshban` actuel.
+- [ ] Anti-boucle : dans `secubox-threatmesh-bridge`, filtrer les décisions de *reason*
+  `secubox-mesh` pour ne pas re-fédérer une décision déjà reçue par le mesh.
+- [ ] Vérifier que sbxwaf applique bien (403 + `X-SecuBox-WAF: banned`) sur une IP reçue
+  uniquement via le mesh (0 décision crowdsec locale).
+
+### 🔜 macroctl sur satellites (chemin privilégié)
+
+- [ ] `secubox-p2p` standalone tourne `NoNewPrivileges=yes` → `sudo macroctl activate`
+  refusé (« NNP flag is set »). OK sur gk2 (p2p dans l'aggregator NNP=no).
+- [ ] Fixer sans affaiblir le durcissement satellite : drop-in ciblé ou helper vetté
+  (pas de `NoNewPrivileges=no` global sur l'unité durcie).
+
+### 🔜 Fenêtre transitoire du socket p2p
+
+- [ ] Restart de `secubox-p2p` → webui satellite 502/504 le temps de recréer `p2p.sock`.
+  Lisser via socket-wait / `RuntimeDirectoryPreserve=yes` pour supprimer les erreurs
+  `apiGet` visibles.
+
+### 🌀 Horizon (conçu, non construit)
+
+- [ ] Mesh phases 2–4 (`project_mesh_gk2_c3box`).
+- [ ] Liaison NIZK/PSI GK·HAM : remplacer les stubs `ZKP-HAM-v1` par `zkp-hamiltonian` cffi.
+- [ ] Nouveaux kinds macro (`wg-relay`, `dns-resolver`, `http-mirror`).
+- [ ] Macros en mode `pending` (fédération cross-nœud des Subscription/APPROVE).
+- [ ] Mesh master→satellite (nft c3box) + Freebox forward UDP 51822 pour le remote.
 
 ---
 

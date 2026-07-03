@@ -3,6 +3,42 @@
 
 ---
 
+## 2026-07-02 — P2P DHT + Federation + Master-link, LIVE on the 3-node mesh (#774 · PR #775)
+
+Rebuilt the P2P evolutions cleanly (the non-integrating Mistral draft was removed) via
+subagent-driven TDD — **17 tasks, 132 tests**, per-task review + final opus review. Branch
+`feature/p2p-dht-federation`, **PR #775 open**.
+
+- **secubox-p2p DHT** — custom Kademlia over asyncio/UDP `:51823`, JSON wire, Ed25519-signed
+  reachability records `{did,id_pubkey,wg_pubkey,endpoint,ts,sig}`, iterative α-parallel
+  lookup, routing persistence, advisory `put_health`/`get_health` store.
+- **Federation health-checks** — `HealthStore` (debounce up/down) + `HealthChecker`
+  (semaphore-capped async sweep) + `default_probe` (aiohttp GET `/health`, TCP fallback),
+  published over the DHT.
+- **Master-link** — `Role` enum, deterministic `elect()` (min priority, node_id_hex),
+  monotonic `TermStore`, term-based failover with equal-term tie-break (no zero-master
+  window), Ed25519-signed heartbeats over UDP `:51824`, `request_promotion()`.
+- Feature-flagged OFF by default (OPAD); `[dht]/[federation]/[masterlink]` in
+  `/etc/secubox/p2p.toml` via `mesh.load_p2p_config`.
+
+**Live-activated on all 3 mesh nodes:** gk2 `10.10.0.1` (MASTER, term 1, prio 10), c3box
+`10.10.0.2` + amd64 `10.10.0.3` (satellites). Each DHT discovered the other two (peers=2),
+no split-brain. Also shipped: **Mesh visualization tab** (p2p dashboard canvas: role/term/
+DHT peers), **login-bounce auth fix** (3 boxes), gk2 nginx `/api/v1/p2p/` re-routed to
+`p2p.sock` so the endpoint mirrors the running daemon (was showing the aggregator's
+`enabled:false`), and reboot-persistent nft `wg-mesh udp {51823,51824}` on c3box+amd64.
+
+The SDD review loop caught and fixed: malformed-contact crash (Task 7), id/wg key schema
+conflation (Task 8a), equal-term split-brain (Task 15), audit-log PermissionError + unwired
+`peers_fn` (final review).
+
+**Follow-ups (roadmap):** mesh-bans → sbxwaf engine bridge (currently nft-only); macroctl on
+satellites (standalone `NoNewPrivileges=yes` blocks the sudo path — works on gk2 via
+aggregator); smooth the p2p-socket restart window (satellite 502/504). See
+`docs/P2P-EVOLUTIONS-POSTER-PROMPT.md` for the poster prompt + full roadmap.
+
+---
+
 ## 2026-07-01 — Macro subsystem (M2) + tor-exit reference kind (#771)
 
 Services can now propose a vetted, AppArmor-confined **access macro** so an approved peer
@@ -6942,3 +6978,30 @@ CONFIG_USB_NET_RNDIS_HOST=y
   dpkg --configure -a (cleared stale lock). Verified: /run/secubox=1777 root:root
   holds, 0 half-configured, all services + R3 workers active, webui/portal 200,
   toolbox blacklist-sync (#519) carried.
+
+## 2026-07-02 — secubox-p2p: DHT + federation health-checks + master-link (#774, docs)
+
+- Documented the three feature-flagged, OPAD opt-in evolutions delivered by
+  Tasks 1-16 on `feature/p2p-dht-federation` (126 tests passing), built on
+  the existing WireGuard mesh + annuaire-backed registry — no new code in
+  this pass, docs only (Task 17, finalization).
+- **DHT discovery** (`api/dht.py`): custom Kademlia DHT (asyncio/UDP, JSON
+  wire), Ed25519-signed reachability records, iterative lookup, bootstrap,
+  routing-table persistence, advisory health store. Endpoints:
+  `GET /dht/peers`, `POST /dht/announce` (JWT), `GET /dht/find/{did}`.
+- **Service federation health-checks** (`api/federation.py`): debounced
+  up/down `HealthStore`, async `HealthChecker` sweep (semaphore-capped),
+  `default_probe` (HTTP GET /health, TCP fallback), publishes into the DHT
+  when both subsystems are enabled. Endpoints: `GET /federation/services`,
+  `POST /federation/healthcheck` (JWT).
+- **Hierarchical master-link** (`api/masterlink.py`): deterministic
+  `elect()`, monotonic `TermStore`, `MasterLink` heartbeat/election-timeout
+  state machine with Ed25519-signed heartbeats and equal-term tie-break.
+  Endpoints: `GET /masterlink/topology`, `POST /masterlink/promote` (JWT).
+- Config: `[dht]`, `[federation]`, `[masterlink]` sections in `p2p.toml`, all
+  disabled by default (`DHT_DEFAULTS`/`FEDERATION_DEFAULTS`/
+  `MASTERLINK_DEFAULTS` in `api/mesh.py`). Audit events (`dht_announce`,
+  `masterlink_promote`) append to `/var/log/secubox/p2p-audit.log`.
+- Updated `packages/secubox-p2p/README.md` with an "Evolutions (#774)"
+  section covering all of the above (endpoints, real config defaults,
+  audit log). No `.py` files touched, no tests run/modified.

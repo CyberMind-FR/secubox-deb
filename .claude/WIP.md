@@ -1,5 +1,44 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-01*
+*Mis à jour : 2026-07-02*
+
+---
+
+## ✅ 2026-07-02 : P2P évolutions — DHT + Federation + Master-link LIVE sur le mesh 3 nœuds (#774 · PR #775)
+
+Reprise et refonte propre du chantier P2P (le code Mistral non-intégrant a été supprimé),
+puis construction **subagent-driven TDD** (17 tâches, 132 tests, revue par tâche + revue
+finale opus). Branche `feature/p2p-dht-federation`, **PR #775 ouverte**.
+
+- **Kademlia DHT custom** — asyncio/UDP `:51823`, records de joignabilité signés Ed25519
+  `{did,id_pubkey,wg_pubkey,endpoint,ts,sig}`, lookup itératif α-parallèle, persistance
+  routing, store `put_health`/`get_health`.
+- **Federation health-checks** — probe aiohttp GET `/health` + fallback TCP, debounce
+  up/down, publication via DHT.
+- **Master-link hiérarchique** — UDP `:51824`, élection déterministe `(priorité, node_id)`,
+  failover par *term* monotone avec tie-break (pas de fenêtre zéro-master), heartbeats
+  signés Ed25519.
+- **OPAD** — feature-flag OFF par défaut ; config `/etc/secubox/p2p.toml`
+  `[dht]/[federation]/[masterlink]`.
+
+**Live-activé sur les 3 nœuds** : gk2 `10.10.0.1` (MASTER, term 1, prio 10) · c3box
+`10.10.0.2` + amd64 `10.10.0.3` (satellites). Chaque DHT découvre les 2 autres (peers=2),
+pas de split-brain. Déployés aussi : **onglet Mesh viz** du dashboard p2p, **fix du rebond
+de login** (3 box), **nginx gk2** re-routé `/api/v1/p2p/` → `p2p.sock` (l'endpoint reflète
+le vrai daemon), **nft reboot-persist** `wg-mesh udp {51823,51824}` (c3box+amd64).
+
+> Poster de synthèse + roadmap détaillée : `docs/P2P-EVOLUTIONS-POSTER-PROMPT.md`.
+
+### ⬜ Next Up (roadmap P2P, non bloquant)
+
+- **Pont bans mesh → moteur sbxwaf** — les bans fédérés (threatmesh #768) s'appliquent au
+  nft (`inet secubox_meshban`) seulement ; les faire alimenter sbxwaf via
+  `cscli decisions add --ip X -R "secubox-mesh" -d 4h` (anti-boucle : filtre *reason*
+  `secubox-mesh` dans `secubox-threatmesh-bridge`).
+- **macroctl sur satellites** — `secubox-p2p` standalone tourne `NoNewPrivileges=yes` ⇒
+  `sudo macroctl activate` refusé ; OK sur gk2 (aggregator NNP=no). Fixer le chemin
+  privilégié satellite sans casser le durcissement.
+- **Fenêtre transitoire du socket p2p** — 502/504 webui satellite pendant un restart de
+  `secubox-p2p` (recréation `p2p.sock`) ; lisser (socket-wait / `RuntimeDirectoryPreserve`).
 
 ---
 
