@@ -429,7 +429,7 @@ func (s *Server) handler() http.Handler {
 		// mirrors Python media_cache.py r.pretty_url which includes the host).
 		if s.mediaCache != nil && r.Method == http.MethodGet {
 			vhostCacheURL := "https://" + r.Host + r.URL.RequestURI()
-			if cachedBody, cachedHdr, hit := s.mediaCache.Get(vhostCacheURL); hit {
+			if cachedBody, cachedHdr, hit := s.mediaCache.Get(vhostCacheURL, r.Header.Get("Accept-Encoding")); hit {
 				for k, vs := range cachedHdr {
 					for _, v := range vs {
 						w.Header().Set(k, v)

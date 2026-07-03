@@ -65,6 +65,7 @@ type cacheEntry struct {
 	exp   int64 // unix timestamp; 0 = never expire
 	atime int64 // unix timestamp of last access (for LRU eviction)
 	ct    string
+	ce    string // Content-Encoding of the stored body ("" = identity)
 }
 
 // CacheStats is a snapshot of MediaCache counters.
@@ -157,6 +158,7 @@ func (m *MediaCache) loadIndex() {
 			metaPath := bodyPath + ".m"
 			var meta struct {
 				CT  string `json:"ct"`
+				CE  string `json:"ce"`
 				Exp int64  `json:"exp"`
 			}
 			if raw, err := os.ReadFile(metaPath); err == nil {
@@ -172,6 +174,7 @@ func (m *MediaCache) loadIndex() {
 				// cache Get() hit — a reliable in-band atime surrogate.
 				atime: info.ModTime().Unix(),
 				ct:    meta.CT,
+				ce:    meta.CE,
 			}
 			m.index[key] = e
 			m.total += info.Size()
@@ -195,9 +198,46 @@ func isCacheable(ct string) bool {
 	return false
 }
 
+// hasGzipMagic reports whether b begins with the gzip magic number (0x1F 0x8B).
+// Used as a defensive self-heal signal: a stored body carrying this magic while
+// the entry records no Content-Encoding is a corrupt/legacy entry that must not
+// be served as identity (that is the U+001F corruption bug this cache had).
+func hasGzipMagic(b []byte) bool {
+	return len(b) >= 2 && b[0] == 0x1f && b[1] == 0x8b
+}
+
+// encodingAccepted reports whether the client's Accept-Encoding header permits
+// the given content coding. Identity (empty coding) is always acceptable. A
+// token with an explicit q=0 is treated as "not acceptable" per RFC 7231.
+func encodingAccepted(acceptEncoding, coding string) bool {
+	coding = strings.TrimSpace(strings.ToLower(coding))
+	if coding == "" || coding == "identity" {
+		return true
+	}
+	for _, part := range strings.Split(strings.ToLower(acceptEncoding), ",") {
+		tok := strings.TrimSpace(part)
+		base := tok
+		q := 1.0
+		if i := strings.IndexByte(tok, ';'); i >= 0 {
+			base = strings.TrimSpace(tok[:i])
+			if j := strings.Index(tok[i+1:], "q="); j >= 0 {
+				if v, err := strconv.ParseFloat(strings.TrimSpace(tok[i+1+j+2:]), 64); err == nil {
+					q = v
+				}
+			}
+		}
+		if (base == coding || base == "*") && q > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Get returns the cached body + headers for url if a valid (non-expired) entry
-// exists. ok=false means cache miss (or expired). Fail-open: I/O errors → miss.
-func (m *MediaCache) Get(url string) (body []byte, hdr http.Header, ok bool) {
+// exists that the client can decode. ok=false means cache miss (or expired, or
+// the stored representation is encoded in a way the client did not advertise via
+// acceptEncoding). Fail-open: I/O errors → miss.
+func (m *MediaCache) Get(url, acceptEncoding string) (body []byte, hdr http.Header, ok bool) {
 	key := cacheKey(url)
 	now := m.nowFn().Unix()
 
@@ -211,6 +251,15 @@ func (m *MediaCache) Get(url string) (body []byte, hdr http.Header, ok bool) {
 	}
 	if e.exp != 0 && e.exp < now {
 		// Expired: treat as miss (evict lazily on next store).
+		m.misses.Add(1)
+		return nil, nil, false
+	}
+
+	// If the stored representation is content-encoded, only serve it to a client
+	// that advertised that coding — otherwise the browser would receive bytes it
+	// cannot decode. Treat as a miss so the caller proxies upstream and negotiates
+	// an acceptable encoding.
+	if e.ce != "" && !encodingAccepted(acceptEncoding, e.ce) {
 		m.misses.Add(1)
 		return nil, nil, false
 	}
@@ -229,6 +278,24 @@ func (m *MediaCache) Get(url string) (body []byte, hdr http.Header, ok bool) {
 		return nil, nil, false
 	}
 
+	// Defensive self-heal: an entry with no recorded Content-Encoding whose body
+	// carries the gzip magic is a corrupt legacy entry (stored by the pre-fix
+	// cache that dropped Content-Encoding). Serving it as identity is exactly the
+	// U+001F bug — evict it and miss instead.
+	if e.ce == "" && hasGzipMagic(data) {
+		metaPath := bodyPath + ".m"
+		m.mu.Lock()
+		if ex, ok := m.index[key]; ok {
+			m.total -= ex.size
+			delete(m.index, key)
+		}
+		m.mu.Unlock()
+		_ = os.Remove(bodyPath)
+		_ = os.Remove(metaPath)
+		m.misses.Add(1)
+		return nil, nil, false
+	}
+
 	// Update atime in index and on-disk (mirrors Python e["atime"] = time.time()).
 	m.mu.Lock()
 	if ex, ok := m.index[key]; ok {
@@ -240,6 +307,9 @@ func (m *MediaCache) Get(url string) (body []byte, hdr http.Header, ok bool) {
 	h := http.Header{}
 	if e.ct != "" {
 		h.Set("Content-Type", e.ct)
+	}
+	if e.ce != "" {
+		h.Set("Content-Encoding", e.ce)
 	}
 
 	m.hits.Add(1)
@@ -307,6 +377,10 @@ func (m *MediaCache) MaybeStore(req *http.Request, resp *http.Response, body []b
 
 	// Strip params from ct for storage.
 	ctClean := strings.TrimSpace(strings.SplitN(ct, ";", 2)[0])
+	// Preserve the body's Content-Encoding so a HIT can replay it. Without this,
+	// a gzip body would be served as identity → the client reads 0x1F as text and
+	// the asset is corrupted (dead JS/CSS).
+	ceClean := strings.TrimSpace(resp.Header.Get("Content-Encoding"))
 
 	now := m.nowFn().Unix()
 	exp := now + ttl
@@ -326,10 +400,12 @@ func (m *MediaCache) MaybeStore(req *http.Request, resp *http.Response, body []b
 	}
 	meta := struct {
 		CT  string `json:"ct"`
+		CE  string `json:"ce"`
 		Exp int64  `json:"exp"`
 		URL string `json:"url"`
 	}{
 		CT:  ctClean,
+		CE:  ceClean,
 		Exp: exp,
 		URL: func() string {
 			if len(rawURL) > 300 {
@@ -356,6 +432,7 @@ func (m *MediaCache) MaybeStore(req *http.Request, resp *http.Response, body []b
 		exp:   exp,
 		atime: now,
 		ct:    ctClean,
+		ce:    ceClean,
 	}
 	m.evictIfNeeded()
 	m.mu.Unlock()
