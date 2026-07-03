@@ -360,6 +360,12 @@
                 <p id="exfil-foot" style="color: var(--text-dim); font-size: 0.7rem; margin-top: 0.75rem;"></p>
             </div>
 
+            <!-- #785 — services aggregated by category (up/down bytes board-wide) -->
+            <div class="card">
+                <div class="card-header"><h2>🏷️ Types de services captés <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— octets par catégorie (SNI)</span></h2></div>
+                <div class="app-list" id="svc-categories"><p class="empty">Loading…</p></div>
+            </div>
+
             <!-- #720 — per-day timeline (board-wide) -->
             <div class="card">
                 <div class="card-header"><h2>📈 Timeline — flux/jour (14 j)</h2></div>
@@ -617,6 +623,26 @@
             foot.textContent = data.generated_at
                 ? `Last capture: ${agoStr(data.generated_at)} · ${devices.length} device(s) · ${alerts.length} alert(s)`
                 : (data.note || 'no capture window completed yet');
+
+            // #785 Card A — services aggregated by category (bytes, board-wide)
+            const byCat = {};
+            devices.forEach(d => (d.services || d.clouds || []).forEach(c => {
+                const cat = c.category || 'other';
+                const e = byCat[cat] || (byCat[cat] = { up: 0, down: 0, flows: 0 });
+                e.up += c.up_bytes || 0; e.down += c.down_bytes || 0; e.flows += (c.flows || 1);
+            }));
+            const svcBox = document.getElementById('svc-categories');
+            if (svcBox) {
+                const catRows = Object.keys(byCat).sort((a, b) => (byCat[b].up + byCat[b].down) - (byCat[a].up + byCat[a].down));
+                svcBox.innerHTML = catRows.length ? catRows.map(cat => {
+                    const m = catMeta(cat); const e = byCat[cat];
+                    return `<div class="app-item"${m.exfil ? ' style="border-left:2px solid #ff4466; padding-left:0.5rem;"' : ''}>
+                        <span><span class="badge ${m.cls}" style="margin-right:0.4rem;">${m.icon} ${cat}</span>
+                            <span style="color:var(--text-dim);">${e.flows}f</span></span>
+                        <span class="bytes">↑${formatBytes(e.up)} ↓${formatBytes(e.down)}</span>
+                    </div>`;
+                }).join('') : '<p class="empty">no classified egress yet</p>';
+            }
 
             // #695 fill the list cards from the same /exfil rollups (real DPI engine)
             const fillList = (id, rows, render, empty) => {
