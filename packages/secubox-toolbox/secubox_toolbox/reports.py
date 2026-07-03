@@ -273,7 +273,7 @@ def render_pdf(report: dict) -> bytes:
                 {"title": "📡 Protocoles", "hole": "octets", "segments": dme.get("protocols") or []},
                 {"title": "🛰️ Alertes exfil", "hole": "alertes", "segments": dme.get("alerts") or []},
                 {"title": "🎯 Top destinations", "hole": "envoi", "segments": dme.get("destinations") or []},
-            ])
+            ], caption="🛰️ DPI — sorties de cet appareil")
         else:
             _bullet(pdf, "Aucune donnee DPI pour cet appareil (surfer via le tunnel R3).", font_size=8)
         if dall.get("categories") or dall.get("protocols") or dall.get("destinations"):
@@ -284,7 +284,7 @@ def render_pdf(report: dict) -> bytes:
                 {"title": "📡 Protocoles (global)", "hole": "octets", "segments": dall.get("protocols") or []},
                 {"title": "🛰️ Alertes (global)", "hole": "alertes", "segments": dall.get("alerts") or []},
                 {"title": "🎯 Top destinations (global)", "hole": "octets", "segments": dall.get("destinations") or []},
-            ])
+            ], caption="🌍 DPI — réseau (tous appareils)")
         pdf.ln(2)
 
     # ── TYPES DE MÉDIAS CAPTÉS (MIME — MITM R4) — #785 ──
@@ -304,7 +304,7 @@ def render_pdf(report: dict) -> bytes:
             {"title": "🏷️ Content-Type (appareil)", "hole": "MIME", "segments": mme.get("ctypes") or []},
             {"title": "📺 Types (réseau)", "hole": "média", "segments": mall.get("kinds") or []},
             {"title": "🏷️ Content-Type (réseau)", "hole": "MIME", "segments": mall.get("ctypes") or []},
-        ])
+        ], caption="🎬 Types de médias — graphiques")
         hosts = mme.get("top_hosts") or mall.get("top_hosts") or []
         if hosts:
             _emoji_table(pdf, family, "🎬 TOP HÔTES MÉDIA",
@@ -874,7 +874,7 @@ def _pdf_donut(pdf, title: str, hole: str, segs: list) -> None:
         pdf.set_text_color(0)
 
 
-def _pdf_donut_grid(pdf, donuts: list) -> None:
+def _pdf_donut_grid(pdf, donuts: list, caption: str = "📊 STATS DE TON APPAREIL (graphiques)") -> None:
     """The 4 device donuts as one embedded 2x2 image (robust, no page-break chaos)."""
     if not donuts:
         return
@@ -884,7 +884,8 @@ def _pdf_donut_grid(pdf, donuts: list) -> None:
     w = _page_w(pdf)
     h = w * 0.62
     _ensure_space(pdf, h + 14)
-    _section(pdf, "📊 STATS DE TON APPAREIL (graphiques)")
+    if caption:
+        _section(pdf, caption)
     y0 = pdf.get_y()
     try:
         pdf.image(png, x=pdf.l_margin, y=y0, w=w, h=h)
