@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>ProxyPAC</title></head>
+<body>
+<h1>ProxyPAC — routage mesh</h1>
+<h2>Règles actives</h2><ul id="rules"></ul>
+<h2>Ajouter un override</h2>
+<input id="host" placeholder="host glob (ex: bank.example)">
+<select id="proxy"><option>direct</option><option>socks5</option><option>http</option><option>gateway</option></select>
+<input id="address" placeholder="ip:port (socks5/http)">
+<button onclick="addOverride()">Ajouter</button>
+<script>
+function headers(){return {'Content-Type':'application/json'};}
+async function load(){
+  const d = await (await fetch('/api/v1/proxypac/rules',{headers:headers()})).json();
+  document.getElementById('rules').innerHTML =
+    d.rules.map(r=>`<li>${r.host} → ${r.directive} <button onclick="del('${r.host}')">x</button></li>`).join('');
+}
+async function addOverride(){
+  await fetch('/api/v1/proxypac/override',{method:'POST',headers:headers(),
+    body:JSON.stringify({host:host.value,proxy:proxy.value,address:address.value})});
+  load();
+}
+async function del(h){ await fetch('/api/v1/proxypac/override/'+encodeURIComponent(h),{method:'DELETE',headers:headers()}); load(); }
+load();
+</script>
+</body></html>
