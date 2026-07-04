@@ -111,6 +111,11 @@ func (b *MediaBuffer) IsMedia(ctype, path string) bool {
 // disabled, the content isn't media, or a sane guard trips (empty root,
 // session/object creation failure) — in every nil case the caller is expected
 // to skip teeing entirely, so the proxied flow is completely unaffected.
+//
+// contentLen is reserved (unused in Phase 1 — no upfront size guard against
+// the advertised Content-Length; the per-object ceiling is enforced only as
+// bytes actually arrive, in drain). A later phase may use it to skip Capture
+// outright for declared-oversized objects.
 func (b *MediaBuffer) Capture(mac, host, url, path, ctype, direction string, contentLen int64) *ObjectWriter {
 	if b == nil || !b.enabled || b.root == "" {
 		return nil
@@ -235,12 +240,11 @@ type ObjectWriter struct {
 	ch   chan []byte   // bounded queue of copied body chunks (Write → drain)
 	done chan struct{} // closed by drain when it has exited (flushed + sink closed)
 
-	// mu guards closed / truncated / dropped and serialises the channel send
-	// against Close's close(ch) so Write never sends on a closed channel.
+	// mu guards closed / truncated and serialises the channel send against
+	// Close's close(ch) so Write never sends on a closed channel.
 	mu        sync.Mutex
 	closed    bool
 	truncated bool
-	dropped   bool
 
 	// sink, written are owned exclusively by the drain goroutine after Capture
 	// (no other goroutine touches them) → no locking needed for the hot write.
@@ -318,7 +322,7 @@ func (w *ObjectWriter) setTruncated() {
 
 // Write copies p and enqueues it for the background drainer, then returns
 // immediately. It NEVER blocks and NEVER errors: a full queue (slow disk) drops
-// the chunk and flags truncated/dropped; a closed writer is a silent no-op. The
+// the chunk and flags truncated; a closed writer is a silent no-op. The
 // caller (an io.TeeReader in front of the real proxied stream) always sees the
 // full len(p) written with a nil error, so the client stream is never disturbed.
 func (w *ObjectWriter) Write(p []byte) (int, error) {
@@ -340,7 +344,6 @@ func (w *ObjectWriter) Write(p []byte) (int, error) {
 	default:
 		// Queue full: the disk can't keep up. Drop this chunk rather than block
 		// or slow the proxied flow (design §7). The object becomes partial.
-		w.dropped = true
 		w.truncated = true
 	}
 	w.mu.Unlock()
@@ -355,6 +358,13 @@ func (w *ObjectWriter) Write(p []byte) (int, error) {
 // called concurrently/after Close (that Write becomes a no-op, never a
 // send-on-closed-channel panic). Never deadlocks: drain always terminates once
 // ch is closed, and Close is the sole closer of ch.
+//
+// Close is intentionally allowed to BLOCK here (waiting on <-done to drain
+// whatever is still queued) — unlike Write, which must never block the live
+// proxied stream. By the time Close runs, the body has already been fully
+// streamed to the client (it is invoked from the tee's Close, itself deferred
+// until the response/request is done), so blocking here only delays this
+// flow's own finalisation/metatag, never the client's bytes.
 func (w *ObjectWriter) Close(finalBytes int64) {
 	if w == nil {
 		return

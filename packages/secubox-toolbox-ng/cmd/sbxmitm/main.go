@@ -436,7 +436,17 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		writeRaw(tconn, 502, "Bad Gateway", nil, nil)
 		return
 	}
-	defer resp.Body.Close()
+	// defer binds a plain method-value expression AT THE DEFER STATEMENT, not at
+	// return time — `defer resp.Body.Close()` would capture the ORIGINAL upstream
+	// body here, before the #812 media-buffer tee below reassigns resp.Body to a
+	// teeReadCloser. That would leave the tee's Close() (and therefore w.Close(),
+	// which flushes the sink + appends the metatag + unblocks the drain goroutine)
+	// never called — a silent goroutine/fd leak with zero captures. Wrapping in a
+	// closure defers evaluation of `resp.Body` to when the closure RUNS (return),
+	// so it always closes whatever resp.Body currently is — the tee when a capture
+	// was armed, the original body otherwise. resp itself is never reassigned, so
+	// this remains the single, sole closer (teeReadCloser.Close is once-guarded).
+	defer func() { resp.Body.Close() }()
 
 	// #662 — relay the cookie metadata for this MITM'd response (allow|mitm only).
 	// NAMES ONLY (never values — privacy/CSPN); no-op unless ≥1 Set-Cookie OR ≥1

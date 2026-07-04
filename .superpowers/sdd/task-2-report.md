@@ -1,101 +1,121 @@
-# Task 2 Report: DHTNode + DHTBucket (k-bucket with LRU)
+# Task 2 report — Tee download + upload bodies (non-blocking async writer)
 
-## Status
-**DONE**
+**Status:** DONE_WITH_CONCERNS (one minor test-scope deviation, see below)
 
-## Commit Hash
-`5843ca7e`
+**Commit:** `0a5e71abfd417b97c35cbf4f5121720911cbfbc9`
+`feat(sbxmitm): tee media up/download bodies into the buffer (ref #812)`
 
-## Test Summary
-All 5 tests passing (3 from Task 1 + 2 from Task 2):
-- test_node_id_is_sha1_of_did ✅
-- test_xor_distance_symmetry_and_zero ✅
-- test_constants ✅
-- test_bucket_add_and_refresh_moves_to_tail ✅ (Task 2)
-- test_bucket_full_rejects_new_and_reports_oldest ✅ (Task 2)
+## Test commands + results
 
-**Test command:** `cd packages/secubox-p2p && python3 -m pytest tests/test_dht.py -v`
-**Result:** 5 passed in 0.04s
+Run from `packages/secubox-toolbox-ng/`:
 
----
+| Command | Result |
+|---|---|
+| `go build ./cmd/sbxmitm` | PASS (no output) |
+| `go vet ./cmd/sbxmitm` | PASS (no output) |
+| `go test ./cmd/sbxmitm/ -run 'TestTee' -v` | PASS — `TestTeeDownloadStreamsAndCaptures`, `TestTeeNonBlockingDropsWhenFull` |
+| `go test ./cmd/sbxmitm/ -run 'TestMediaBuffer' -v` | PASS — all 4 existing TestMediaBuffer* still green |
+| `go test ./cmd/sbxmitm/` (whole package) | PASS — `ok ... 1.518s` (WS/banner/uchrome/csp/etc. unaffected) |
+| `go test -race ./cmd/sbxmitm/ -run 'TestTee\|TestMediaBuffer'` | PASS — `ok ... 1.063s`, **no data races** |
 
-## Implementation Summary
+`gofmt -w` applied to `main.go`, `mediabuffer.go`, `mediabuffer_test.go`.
 
-### Files Modified
-- `packages/secubox-p2p/api/dht.py` — appended imports + DHTNode + DHTBucket classes
-- `packages/secubox-p2p/tests/test_dht.py` — appended 2 new test cases
+## Non-blocking async writer implementation
 
-### What Was Implemented
+- **Bounded channel:** `ObjectWriter.ch chan []byte`, capacity `mediaBufferChanCap = 64` (overridable via `MediaBuffer.chanCap` for tests). Chunks are copies of the reader buffer (io.TeeReader reuses it), so ≤~2 MiB in flight worst case.
+- **Write is I/O-free:** copies `p` and does a **non-blocking** `select { case ch<-cp: default: }`. On the `default` branch it sets `dropped=true`/`truncated=true` and returns `len(p), nil`. It never touches the disk, never blocks, never errors — proven by `TestTeeNonBlockingDropsWhenFull` (depth-1 queue + a `blockingWriteCloser` pinning the drain goroutine; a 5000-write burst is bounded by a 3s timeout that would fail if any Write blocked).
+- **Background goroutine:** `drain()` started in `Capture` (`go w.drain()`). It exclusively owns `sink`/`written` (no lock on the hot write → clean under `-race`), enforces `perObjectCeil` (truncate + close sink), keeps receiving after a ceiling/IO error so senders never wedge, and on channel close fsyncs (real files only) + closes the sink, then `close(w.done)`.
+- **Drop policy:** full channel drops that chunk, flags `truncated`; object becomes partial; flow proceeds unaffected.
+- **Close(finalBytes):** mutex-guards idempotency (`closed`), then `close(ch)` (sole closer) → waits `<-done` so the metatag is appended only after all queued bytes are flushed + file closed (a reader seeing the metatag sees complete bytes).
+- **Deadlock/leak avoidance:** `drain` always terminates once `ch` is closed; `Close` is the only closer of `ch`. Write serialises its send against `close(ch)` under `mu` (checks `closed` first) → no send-on-closed panic. Safe if Write is never called (empty file, metatag written) or called after/concurrent with Close (becomes a no-op). Goroutine cannot leak because `teeReadCloser.Close` (invoked by `defer resp.Body.Close()` for download and by the Transport closing `req.Body` for upload — the http.Client closes the request body even on error) always calls `w.Close`.
 
-**DHTNode (dataclass):**
-```python
-@dataclass
-class DHTNode:
-    node_id: bytes
-    did: str
-    endpoint: tuple  # (host, port)
-    last_seen: float = 0.0
-```
+## main.go wiring
 
-**DHTBucket (k-bucket with LRU via OrderedDict):**
-- `__init__(k: int = KAD_K)` — initializes empty OrderedDict
-- `add(node: DHTNode) -> bool` — updates node.last_seen, returns True if stored/refreshed, False if full; refresh moves node to tail (most-recent)
-- `remove(node_id: bytes) -> None` — removes node from bucket
-- `oldest() -> DHTNode|None` — returns head node (oldest), or None if empty
-- `nodes` property — returns list of all nodes in LRU order
+- `mbuf *MediaBuffer` field added beside `media *mediaCatcher`.
+- Constructed in `main()`: `NewMediaBuffer(*mediaBufferRoot, *mediaBuffer, *mediaBufferPerObj)`.
+- Flags added: `--media-buffer` (bool, **default false**), `--media-buffer-root` (`/data/secubox/media-buffer`), `--media-buffer-per-object` (`512<<20`). Task 6 formalises retention/size-ceil flags + janitor + packaging.
+- **Download tee:** right after the `px.media.record(...)` block; 2xx + `IsMedia` → `resp.Body = teeReadCloser(resp.Body, Capture(..., "down", resp.ContentLength))`. Consumed by `streamResponse`'s `io.Copy`; finalised by the existing `defer resp.Body.Close()`.
+- **Upload tee:** just before `resp, err := up.Do(req)`; `req.Body != nil` + `IsMedia` → `req.Body = teeReadCloser(req.Body, Capture(..., "up", req.ContentLength))`.
+- `teeReadCloser(rc, w)` added in mediabuffer.go: `io.TeeReader` for reads, tracks `total`, `Close()` closes the underlying body AND calls `w.Close(total)` (once); nil-safe, error-swallowing.
 
-**Imports Added:**
-```python
-import time
-from collections import OrderedDict
-from dataclasses import dataclass, field
-```
+## Deviation / concern
 
-### Test Behavior
-
-**test_bucket_add_and_refresh_moves_to_tail:**
-- Creates bucket with k=2
-- Adds nodes a, c → stored in order [a, c]
-- Adds a again (refresh) → moves to tail, now [c, a]
-- Tests OrderedDict.move_to_end() semantics
-
-**test_bucket_full_rejects_new_and_reports_oldest:**
-- Creates bucket with k=1 (capacity 1)
-- Adds node a → stored
-- Adds node c → returns False (full), c not stored
-- oldest() returns a (the head/oldest)
-- Tests full bucket rejection and oldest() accessor
+- **Test scope (minor):** the plan's Task-2 Step-1 says to "drive the proxy handler" through an httptest upstream. `mitmPipeline` cannot be driven end-to-end against a test upstream with the existing helpers: it constructs `newUchromeTransport(...)` internally with **no RootCAs override seam** (unlike `uchrome_test.go`, which sets `tr.rootCAs`), so a self-signed httptest TLS origin is rejected by cert verification and there's no CONNECT/TLS handler harness. This is not a blocker for the deliverable: `TestTeeDownloadStreamsAndCaptures` uses a real `httptest` upstream and wires the download tee **exactly as `mitmPipeline` does** (`teeReadCloser(resp.Body, mbuf.Capture(...))` → `io.ReadAll` → `Close`), asserting (a) full byte-for-byte client body, (b) captured object == body, (c) metatag line. It exercises the identical capture/tee/async-writer path; only the surrounding TLS plumbing is not re-driven (already covered by uchrome/transparent tests).
+- **Janitor not started** (correct — Task 3). Buffer dir tmpfiles/packaging not added (correct — Task 6).
+- No other concerns: build/vet/full-package/-race all clean.
 
 ---
 
-## TDD Workflow Completed
+## Review fix pass (2026-07-04)
 
-1. ✅ **Step 1:** Appended failing tests (ImportError: DHTNode)
-2. ✅ **Step 2:** Ran pytest → confirmed failure
-3. ✅ **Step 3:** Implemented DHTNode + DHTBucket
-4. ✅ **Step 4:** Ran pytest → all 5 tests pass
-5. ✅ **Step 5:** Committed with message `feat(p2p): DHT k-bucket with LRU (#774)`
+**Status:** DONE — CRITICAL correctness bug fixed + regression test added + 3 minor cleanups.
 
----
+### CRITICAL fix: defer-before-reassignment goroutine/capture leak
 
-## Quality Notes
+`main.go`'s `mitmPipeline` had `defer resp.Body.Close()` (line ~439) registered
+*before* the #812 download tee (line ~477) reassigns `resp.Body =
+teeReadCloser(resp.Body, w)`. A plain `defer resp.Body.Close()` binds the
+method-value receiver **at the defer statement**, so it closed the *original*
+upstream body only — the tee's `Close()` (and therefore `w.Close(total)`,
+which flushes the sink, appends the metatag, and closes `w.done` to unblock
+`drain`) never ran on any media download. Net effect: every media download
+capture silently produced zero bytes on disk, no metatag line, and leaked the
+`drain` goroutine + open sink fd forever.
 
-### Correctness
-- OrderedDict provides O(1) LRU operations: insertion, lookup, move_to_end, iteration order
-- DHTNode matches brief signature exactly
-- LRU semantics: new adds to tail, refresh moves to tail, oldest() reads head
-- add() properly handles both new insertion (capacity check) and refresh (move_to_end)
+**Fix:** `defer func() { resp.Body.Close() }()` — the closure defers
+evaluation of `resp.Body` to return time, so it always closes whatever
+`resp.Body` currently is (the tee when armed, the original body otherwise).
+Added an inline comment explaining the defer-binding-time gotcha. Confirmed
+`resp` is never reassigned (only `.Body` is), `streamResponse` only
+`io.Copy`s and the inject path only `io.ReadAll`s — this deferred close
+remains the sole closer; `teeReadCloser.Close` is `sync.Once`-guarded so no
+double-close risk.
 
-### No Regressions
-- All 3 Task 1 tests still pass
-- Test helper `_n()` isolates test setup
+### Regression test
 
-### Code Quality
-- SPDX header preserved (did not modify)
-- Follows existing module conventions
-- Concise implementation (~40 lines for both classes)
+Added `TestTeeDeferOrderingMatchesMainGo` to `mediabuffer_test.go`: drives a
+real `httptest` media response through the exact same statement order as
+`mitmPipeline` (defer registered on `resp.Body` *before* it is reassigned to
+`teeReadCloser(...)`, inside an inner func so the deferred close actually
+fires before assertions run), then asserts (a) the `drain` goroutine's `done`
+channel closes within a bounded timeout (no leak) and (b) the metatag line
+was appended with the right fields, and (c) the captured object on disk
+matches the streamed body byte-for-byte.
 
----
+**Verified the test catches the regression**: temporarily replaced the
+closure with the buggy plain `defer resp.Body.Close()` form (same position,
+before reassignment) — the test failed with `drain goroutine never exited —
+w.Close was never called (defer captured the wrong body)` (timed out after
+2s). Restored the closure form afterwards; `git diff` on the test file shows
+only the intended addition (leftover edit fully reverted).
 
-## Concerns
-None. Implementation straightforward and tested.
+### Minor cleanups (mediabuffer.go)
+
+1. Removed the dead write-only `dropped` field from `ObjectWriter` (only
+   `truncated` was ever read, in the metatag record) — updated the two
+   comments that referenced it (`mu` field-group comment, `Write` doc-comment).
+2. `Capture`'s `contentLen` parameter: added a doc-comment noting it's
+   reserved for a future Phase (no upfront size guard in Phase 1; the
+   per-object ceiling is enforced only as bytes actually arrive in `drain`).
+3. `ObjectWriter.Close`: added a comment explaining it is intentionally
+   allowed to block on `<-done` — unlike `Write`, which must never block the
+   live proxied stream — because by the time `Close` runs the body has
+   already been fully streamed to the client.
+
+### Test commands + results (from `packages/secubox-toolbox-ng/`)
+
+| Command | Result |
+|---|---|
+| `gofmt -w cmd/sbxmitm/{main,mediabuffer,mediabuffer_test}.go` | clean, no diffs after |
+| `go build ./cmd/sbxmitm` | PASS |
+| `go vet ./cmd/sbxmitm` | PASS |
+| `go test -count=1 ./cmd/sbxmitm/` | PASS — `ok ... 1.359s`, whole package green |
+| `go test -race -count=1 ./cmd/sbxmitm/ -run 'TestTee\|TestMediaBuffer'` | PASS — `ok ... 1.077s`, no data races |
+| Manual: buggy plain-defer form in new test | **FAILS** as expected (goroutine-leak timeout) — confirms the test is a real regression guard |
+
+### Concerns
+
+None. The fix is minimal (one `defer` line + comment), the regression test
+reproduces the exact bug ordering from `main.go` rather than a synthetic
+approximation, and the minor cleanups are comment/dead-field only — no
+behavioural change to the non-blocking write contract.

@@ -231,6 +231,94 @@ func TestTeeDownloadStreamsAndCaptures(t *testing.T) {
 	}
 }
 
+// TestTeeDeferOrderingMatchesMainGo replicates the EXACT statement ordering
+// from main.go's mitmPipeline download hook: a defer is registered against
+// resp.Body BEFORE the body is reassigned to teeReadCloser(...). A plain
+// `defer resp.Body.Close()` binds the method value AT THE DEFER STATEMENT,
+// capturing the ORIGINAL (pre-tee) body — so the tee's Close (and therefore
+// w.Close, which flushes the sink, appends the metatag and unblocks the
+// drain goroutine) would never run: a silent goroutine/fd leak and zero
+// captures. This test uses the closure form `defer func() { resp.Body.Close()
+// }()` that main.go now uses (the fix for #812's regression), and asserts
+// both symptoms are absent: the metatag line is appended (proving w.Close
+// ran) and the drain goroutine has exited (proving no leak).
+//
+// To confirm this test actually catches the regression: temporarily replace
+// the closure below with a plain `defer resp.Body.Close()` (still registered
+// before the `resp.Body = teeReadCloser(...)` line) — this test fails (drain
+// goroutine never signals done, metatag log never appears). Restore the
+// closure form afterwards.
+func TestTeeDeferOrderingMatchesMainGo(t *testing.T) {
+	root := t.TempDir()
+	b := NewMediaBuffer(root, true, 512<<20)
+
+	body := bytes.Repeat([]byte("DEFER-ORDER-CHECK-"), 2000) // ~38 KiB, several chunks
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/clip.mp4")
+	if err != nil {
+		t.Fatalf("upstream GET: %v", err)
+	}
+
+	w := b.Capture("macD", "cdn.host", "https://cdn.host/clip.mp4", "/clip.mp4", "video/mp4", "down", resp.ContentLength)
+	if w == nil {
+		t.Fatal("Capture returned nil for a media download")
+	}
+
+	// Inner func so the deferred Close actually fires before we assert below —
+	// mirrors mitmPipeline's function-scoped defer running out at return.
+	func() {
+		// Registered BEFORE resp.Body is reassigned — the closure form is what
+		// makes this safe (see the defer comment on main.go's download path).
+		// Replacing this with a plain `defer resp.Body.Close()` reproduces
+		// #812's bug and fails this test.
+		defer func() { resp.Body.Close() }()
+
+		resp.Body = teeReadCloser(resp.Body, w)
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+			t.Fatalf("stream body: %v", err)
+		}
+	}()
+
+	// (a) the drain goroutine must have exited (w.Close ran -> close(ch) ->
+	// drain drained the queue, closed the sink and closed done). Bounded
+	// wait: if the bug regresses, done never closes — this times out,
+	// surfacing the goroutine leak instead of hanging the test suite.
+	select {
+	case <-w.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("drain goroutine never exited — w.Close was never called (defer captured the wrong body)")
+	}
+
+	// (b) the metatag line must have been appended (only happens at the very
+	// end of Close, after done is signalled).
+	metaPath := filepath.Join(root, "media-buffer.jsonl")
+	if _, err := os.Stat(metaPath); err != nil {
+		t.Fatalf("metatag log missing — w.Close never ran: %v", err)
+	}
+	m := lastJSONL(t, metaPath)
+	if m["mac_hash"] != "macD" || m["direction"] != "down" {
+		t.Fatalf("metatag fields wrong: %v", m)
+	}
+	if m["truncated"] == true {
+		t.Error("healthy capture must not be truncated")
+	}
+
+	// (c) the captured object holds the full body — proves the sink was
+	// flushed and closed, not left half-written or never opened.
+	objBytes, err := os.ReadFile(findObject(t, root))
+	if err != nil {
+		t.Fatalf("read captured object: %v", err)
+	}
+	if !bytes.Equal(objBytes, body) {
+		t.Fatalf("captured bytes mismatch: got %d want %d", len(objBytes), len(body))
+	}
+}
+
 // TestTeeNonBlockingDropsWhenFull proves the non-blocking guarantee: with a
 // tiny queue and a drain goroutine pinned inside a blocked disk write, Write
 // must return immediately (never block on the stuck disk) and the flow still
