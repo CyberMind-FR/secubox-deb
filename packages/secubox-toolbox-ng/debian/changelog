@@ -1,3 +1,17 @@
+secubox-toolbox-ng (0.1.27-1~bookworm1) bookworm; urgency=medium
+
+  * #812 R4 media buffer (Phase 1): sbxmitm tees whole-file media up/downloads on
+    non-splice MITM'd flows into a time-bounded rolling buffer on /data via a
+    non-blocking bounded-channel writer (drop-if-full, never slows the proxied
+    stream), with a janitor that evicts the bytes after the retention window while
+    the metatag survives. New flags --media-buffer (default OFF),
+    --media-buffer-root/-per-object/-retention/-size-ceil; opt-in via
+    SBX_MEDIA_BUFFER_ARGS in the worker env file. Buffer dir shipped via tmpfiles
+    2750 secubox-toolbox:secubox (setgid) so the secubox dpi reader can read what
+    the secubox-toolbox writer creates.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 04 Jul 2026 15:00:00 +0000
+
 secubox-toolbox-ng (0.1.26-1~bookworm1) bookworm; urgency=medium
 
   * #757 SW revalidation nudge: for sw-neuter allow-listed hosts, strip

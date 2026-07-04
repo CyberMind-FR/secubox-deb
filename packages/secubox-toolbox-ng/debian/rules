@@ -38,6 +38,9 @@ override_dh_auto_install:
 	# #736 media catcher: own its /run log so the append never fails (see conf)
 	install -d debian/secubox-toolbox-ng/usr/lib/tmpfiles.d
 	install -m 0644 tmpfiles/zz-secubox-toolbox-ng.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
+	# #812 R4 media buffer: pre-create /data/secubox/media-buffer (0750) so the
+	# feature works the moment an operator flips --media-buffer on, no manual step
+	install -m 0644 tmpfiles/zz-secubox-media-buffer.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
 
 override_dh_auto_clean:
 	rm -f sbxmitm

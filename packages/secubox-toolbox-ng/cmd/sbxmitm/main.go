@@ -22,6 +22,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -111,6 +112,12 @@ type Proxy struct {
 	// (manifests / direct audio-video) seen on MITM'd flows to a JSONL log the
 	// mediaflow "Discovered Media" view reads. nil/disabled → no-op.
 	media *mediaCatcher
+
+	// mbuf is the R4 media BUFFER (#812): tees the actual bytes of whole-file
+	// media up/downloads into a time-bounded rolling buffer on /data so an
+	// admin/owner can replay a recent capture. Non-blocking (async writer +
+	// drop-if-full) — never slows the proxied flow. nil/disabled → no-op.
+	mbuf *MediaBuffer
 
 	// swNeuter (#753) is the targeted Service-Worker neuter: for allow-listed
 	// hosts it answers the SW script fetch with a self-unregistering SW so PWA
@@ -409,12 +416,50 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		req.Header.Del("If-None-Match")
 		req.Header.Del("If-Modified-Since")
 	}
+	// #812 R4 media buffer (upload) — if this MITM'd REQUEST is media, tee the
+	// request body into the rolling buffer as the upstream reads it. Non-blocking:
+	// the tee's ObjectWriter never errors/blocks, so a stuck buffer never affects
+	// the upload; a nil writer is a no-op. The upstream transport closes req.Body,
+	// which finalises the capture (w.Close). Only on non-splice allow|mitm flows
+	// (splice returns far earlier).
+	//
+	// I1 whole-branch-review fix — req.Body is NEVER nil for a proxied request,
+	// even a bodyless GET (net/http gives it http.NoBody), so a nil check alone
+	// doesn't tell us there is an uploaded body. And IsMedia's mediaKind falls
+	// back to classifying by PATH EXTENSION when the request Content-Type is
+	// empty — so a plain media DOWNLOAD GET (e.g. GET /v.mp4) used to match
+	// this UPLOAD branch on path alone, producing a phantom session dir, an
+	// empty object-0.mp4 and a direction:"up", bytes:0 metatag on every
+	// download. Require BOTH a real request body (ContentLength > 0 — a GET
+	// download has no request body; this is the primary guard) AND a
+	// non-empty request Content-Type that IsMedia matches ON THE CONTENT-TYPE,
+	// so the path-extension fallback never drives the upload direction.
+	if px.mbuf != nil && req.ContentLength > 0 {
+		rct := req.Header.Get("Content-Type")
+		if rct != "" && px.mbuf.IsMedia(rct, req.URL.Path) {
+			if w := px.mbuf.Capture(clientHash, host,
+				"https://"+host+req.URL.RequestURI(), req.URL.Path, rct, "up",
+				req.ContentLength); w != nil {
+				req.Body = teeReadCloser(req.Body, w)
+			}
+		}
+	}
 	resp, err := up.Do(req)
 	if err != nil {
 		writeRaw(tconn, 502, "Bad Gateway", nil, nil)
 		return
 	}
-	defer resp.Body.Close()
+	// defer binds a plain method-value expression AT THE DEFER STATEMENT, not at
+	// return time — `defer resp.Body.Close()` would capture the ORIGINAL upstream
+	// body here, before the #812 media-buffer tee below reassigns resp.Body to a
+	// teeReadCloser. That would leave the tee's Close() (and therefore w.Close(),
+	// which flushes the sink + appends the metatag + unblocks the drain goroutine)
+	// never called — a silent goroutine/fd leak with zero captures. Wrapping in a
+	// closure defers evaluation of `resp.Body` to when the closure RUNS (return),
+	// so it always closes whatever resp.Body currently is — the tee when a capture
+	// was armed, the original body otherwise. resp itself is never reassigned, so
+	// this remains the single, sole closer (teeReadCloser.Close is once-guarded).
+	defer func() { resp.Body.Close() }()
 
 	// #662 — relay the cookie metadata for this MITM'd response (allow|mitm only).
 	// NAMES ONLY (never values — privacy/CSPN); no-op unless ≥1 Set-Cookie OR ≥1
@@ -437,6 +482,30 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 			px.media.record(clientHash, host,
 				"https://"+host+req.URL.RequestURI(), req.URL.Path,
 				req.Header.Get("Referer"), kind, ctype, resp.ContentLength)
+		}
+	}
+
+	// #812 R4 media buffer (download) — tee the FULL response body into the
+	// rolling buffer so it can be replayed for a short window. Non-blocking: the
+	// ObjectWriter behind the TeeReader copies chunks to a bounded channel and
+	// drops-if-full, so it NEVER slows or fails the client stream; a nil writer
+	// is a no-op. resp.Body's deferred Close (above) finalises the capture.
+	// splice/passthrough flows never reach here.
+	//
+	// I2 whole-branch-review fix — 200 ONLY, not the whole 2xx range. Browser
+	// <video>/<audio> elements fetch media via Range requests, which the
+	// origin answers with a stream of 206 Partial Content responses; capturing
+	// each 206 as its own "whole" object produced a pile of unrelated byte
+	// fragments (never a replayable file). Phase 1 is whole-file capture only
+	// — Range/partial (206) + HLS segment reassembly is Phase 2.
+	if px.mbuf != nil && resp.StatusCode == 200 {
+		rctype := resp.Header.Get("Content-Type")
+		if px.mbuf.IsMedia(rctype, req.URL.Path) {
+			if w := px.mbuf.Capture(clientHash, host,
+				"https://"+host+req.URL.RequestURI(), req.URL.Path, rctype, "down",
+				resp.ContentLength); w != nil {
+				resp.Body = teeReadCloser(resp.Body, w)
+			}
 		}
 	}
 
@@ -567,6 +636,19 @@ func main() {
 		"R4 media reverse-catcher (#736): record cloneable media URLs (HLS/DASH manifests + direct audio/video) seen on MITM'd flows to "+mediaCatchPath+" for the mediaflow \"Discovered Media\" clone view. URLs only, never bodies; deduped. Set false to disable.")
 	swNeuterHosts := flag.String("sw-neuter-hosts", "/var/lib/secubox/toolbox/sw-neuter-hosts.txt",
 		"#753 allow-list of PWA hosts whose Service Worker is neutered (served a self-unregistering SW) so the banner can be injected; empty/missing file = no-op")
+	// #812 R4 media buffer — capture whole-file media bytes (up + download) into a
+	// short rolling buffer on /data for admin/owner replay. Default OFF (Task 6
+	// formalises the flag docs + janitor wiring); the tee is a no-op when off.
+	mediaBuffer := flag.Bool("media-buffer", false,
+		"R4 media buffer (#812): tee whole-file media up/downloads into a time-bounded rolling buffer on /data for admin/owner replay. Non-blocking (async writer, drop-if-full). Default off.")
+	mediaBufferRoot := flag.String("media-buffer-root", "/data/secubox/media-buffer",
+		"root directory for the R4 media buffer (0750 secubox:secubox); per-session subdirs + media-buffer.jsonl metatag log live here")
+	mediaBufferPerObj := flag.Int64("media-buffer-per-object", 512<<20,
+		"per-object byte ceiling for the R4 media buffer; a media object exceeding this is truncated (metatag flagged) rather than persisted whole")
+	mediaBufferRetention := flag.Int64("media-buffer-retention", defaultRetentionSecs,
+		"seconds the R4 media buffer's captured bytes are kept before the janitor evicts them (the metatag survives eviction)")
+	mediaBufferSizeCeil := flag.Int64("media-buffer-size-ceil", defaultSizeCeilBytes,
+		"hard byte ceiling for the R4 media buffer on /data; the janitor LRU-evicts the oldest sessions first when exceeded")
 	flag.Parse()
 	ca, err := forge.LoadCA(*caCert, *caKey)
 	if err != nil {
@@ -603,7 +685,16 @@ func main() {
 		social:        newSocialRelay(),
 		consent:       newConsentLog(),
 		media:         newMediaCatcher(*mediaCatch),
+		mbuf:          NewMediaBuffer(*mediaBufferRoot, *mediaBuffer, *mediaBufferPerObj),
 		swNeuter:      newSWNeuter(*swNeuterHosts),
+	}
+	// #812 Task 6 — apply the retention/size-ceil overrides on top of
+	// NewMediaBuffer's defaults. Same-package unexported field access (see
+	// mediabuffer.go); the constructor signature stays (root, enabled,
+	// perObjectCeil) — do not add params there instead.
+	if px.mbuf != nil {
+		px.mbuf.retentionSecs = *mediaBufferRetention
+		px.mbuf.sizeCeilBytes = *mediaBufferSizeCeil
 	}
 	// #662 — start the social-edge flusher: the MITM path buffers cross-site
 	// tracker edges into px.social, drained every 10s to the portal's
@@ -617,6 +708,14 @@ func main() {
 	// learning candidates ride the existing ad-event channel (one POST / 10s).
 	go px.ads.runAdStatsFlusher(*portal, px.cand)
 	go px.swNeuter.runCandidateFlusher(*portal)
+	if *mediaBuffer {
+		// #812 R4 media buffer janitor — evicts bytes past retention (time) or
+		// under disk pressure (LRU size ceiling), leaving only the metatag.
+		// Process-lifetime background goroutine (mirrors the flushers above);
+		// each of the 4 sbxmitm worker processes runs its own — SweepOnce is
+		// written to be safe under that concurrency (see mediabuffer_janitor.go).
+		go px.mbuf.RunJanitor(context.Background())
+	}
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
 		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The

@@ -38,6 +38,20 @@ Type=simple
 User=secubox-toolbox
 Group=secubox-toolbox
 
+# #812 R4 media buffer — opt-in via env, default OFF. The unit ships unchanged
+# and is never edited by an operator: to turn the feature on, create
+# /etc/secubox/toolbox-ng.env (root:root 0644, absent by default — the leading
+# "-" makes EnvironmentFile optional, so a missing file is not an error) with:
+#
+#   SBX_MEDIA_BUFFER_ARGS=--media-buffer
+#   # optionally also override retention/ceilings, e.g.:
+#   # SBX_MEDIA_BUFFER_ARGS=--media-buffer --media-buffer-retention 600
+#
+# $SBX_MEDIA_BUFFER_ARGS expands unquoted at the end of ExecStart (systemd
+# command-line variable substitution); unset/empty → no extra args → the
+# --media-buffer default (false, see main.go) applies and the tee is a no-op.
+EnvironmentFile=-/etc/secubox/toolbox-ng.env
+
 # Forge with the LIVE R3 CA the clients trust: cert = mitmproxy-ca-cert.pem,
 # key = mitmproxy-ca.pem (a combined cert+key bundle — loadCA scans for the
 # PRIVATE KEY block). Both are group-readable by secubox-toolbox. The anti-track
@@ -47,7 +61,8 @@ ExecStart=/usr/sbin/sbxmitm \
   --listen 10.99.1.1:809%i \
   --ca-cert /etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem \
   --ca-key /etc/secubox/toolbox/ca-wg/mitmproxy-ca.pem \
-  --jar-key /etc/secubox/secrets/privacy-jar.key
+  --jar-key /etc/secubox/secrets/privacy-jar.key \
+  $SBX_MEDIA_BUFFER_ARGS
 
 Restart=on-failure
 RestartSec=5
@@ -61,6 +76,10 @@ ReadOnlyPaths=/etc/secubox
 # #736 R4 media reverse-catcher writes its discovery log here; ProtectSystem=strict
 # otherwise mounts /run read-only. Scoped to the shared runtime dir only.
 ReadWritePaths=/run/secubox
+# #812 R4 media buffer (opt-in, see SBX_MEDIA_BUFFER_ARGS above) writes captured
+# bytes + the metatag log under /data/secubox/media-buffer; harmless to grant
+# even while the feature is off (tmpfiles pre-creates the dir 0750 secubox).
+ReadWritePaths=/data/secubox/media-buffer
 MemoryHigh=100M
 MemoryMax=128M
 TasksMax=128
