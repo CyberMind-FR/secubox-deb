@@ -468,7 +468,8 @@ async function loadFilters() {
     if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
     if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
     const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned',
-                   'splice-seed': '🔀 splice', 'splice-learned': '🔀 splice·auto'};
+                   'splice-seed': '🔀 splice', 'splice-learned': '🔀 splice·auto',
+                   'mesh-splice': '🌐 mesh', 'mesh-bypass': '🌐 mesh', 'mesh-disabled': '🌐 mesh'};
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // Show ALL entries (bypass + splice) — every explicit splicing must be
     // displayed + known. The <ul> scrolls (see .filterlist max-height).
