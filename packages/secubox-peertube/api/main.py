@@ -979,4 +979,20 @@ async def version_info(user=Depends(require_jwt)):
     return {"installed": installed, "latest": latest, "upgrade_available": up}
 
 
+# ============================================================================
+# Upgrade (issue #798)
+# ============================================================================
+
+class UpgradeBody(BaseModel):
+    target: Optional[str] = "latest"
+
+
+@router.post("/upgrade")
+async def upgrade_op(body: UpgradeBody, user=Depends(require_admin)):
+    """Upgrade PeerTube in the LXC (backup → download → migrate → restart) via the
+    root spool. Poll GET /admin/op/{id}; the op reports running/done/error."""
+    op_id = _spool_op("upgrade", target=body.target or "latest")
+    return {"success": True, "id": op_id}
+
+
 app.include_router(router)

@@ -703,6 +703,30 @@
             });
         }
 
+        async function upgradePeerTube() {
+            if (!confirm('Upgrade PeerTube now?\n\nThis stops PeerTube, backs up the DB, downloads the new release and runs migrations (several minutes of downtime). A pre-upgrade DB backup is taken automatically.')) return;
+            const r = await api('/upgrade', { method: 'POST', body: JSON.stringify({ target: 'latest' }) });
+            if (!r || !r.id) { toast('Upgrade failed to start: ' + ((r && r.error) || 'no id'), 'error'); return; }
+            toast('Upgrade started — this takes several minutes…');
+            document.getElementById('btnUpgrade').disabled = true;
+            // Own longer poll loop (300×2s = 10 min) — pollOp's 60×2s (2 min) cap
+            // would cut off a multi-minute upgrade.
+            (async () => {
+                for (let i = 0; i < 300; i++) {
+                    const res = await api('/admin/op/' + r.id);
+                    if (res.status && res.status !== 'pending' && res.status !== 'running') {
+                        document.getElementById('btnUpgrade').disabled = false;
+                        if (res.status === 'done') { toast('Upgrade complete. Backup: ' + (res.backup || ''), 'success'); loadVersion(); }
+                        else toast('Upgrade failed: ' + (res.detail || 'unknown') + (res.backup ? ' (backup: ' + res.backup + ')' : ''), 'error');
+                        return;
+                    }
+                    await new Promise(res => setTimeout(res, 2000));
+                }
+                document.getElementById('btnUpgrade').disabled = false;
+                toast('Upgrade timed out waiting for completion (check logs)', 'error');
+            })();
+        }
+
         function getRoleName(role) {
             const roles = { 0: 'Admin', 1: 'Moderator', 2: 'User' };
             return roles[role] || 'User';

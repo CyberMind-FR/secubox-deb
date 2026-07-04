@@ -184,8 +184,56 @@ cmd_reset_admin_password() {
     fi
 }
 
-# Temporary stub — Task 5 (#798) replaces this with the real upgrade implementation.
-cmd_upgrade()              { local id="${2:-}"; [ -n "$id" ] && _write_result "$id" '{"status":"error","detail":"upgrade not implemented yet"}'; }
+cmd_upgrade() {
+    # args: <request-file> <id>  (called by process-ops)
+    local reqf="${1:-}" id="${2:-}"
+    [ -n "$id" ] || { err "usage: upgrade <request-file> <id>"; return 1; }
+    lxc_running || { _write_result "$id" '{"status":"error","detail":"LXC not running"}'; return; }
+    _write_result "$id" '{"status":"running","detail":"backup + download"}'
+    local ts; ts="$(date +%Y%m%d-%H%M%S)"
+    local backup="/var/lib/secubox/peertube/backups/pre-upgrade-$ts.sql.gz"
+
+    # 1. Mandatory DB backup (abort on failure). The backups dir is created by
+    #    postinst on the HOST, but pg_dump runs INSIDE the LXC — that host path
+    #    is not the same filesystem in the container, so ensure it exists there
+    #    too before dumping (otherwise gzip silently writes to a missing dir).
+    if ! lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- bash -lc \
+        "install -d -o peertube -g peertube -m 0750 /var/lib/secubox/peertube/backups && sudo -u postgres pg_dump peertube_prod | gzip > '$backup'" 2>/dev/null; then
+        _write_result "$id" "{\"status\":\"error\",\"detail\":\"DB backup failed — upgrade aborted\"}"
+        return
+    fi
+
+    # 2-5. Run PeerTube's official upgrade inside the LXC. PeerTube ships an
+    #      upgrade script that downloads the latest release, installs deps, and
+    #      runs migrations; the service is restarted after. It keeps the previous
+    #      versions/ dir, so a failed run leaves peertube-latest on the old build.
+    #      NOTE: verify this entrypoint live for v8.2.0 — some PeerTube releases
+    #      use `npm run upgrade-peertube` instead of scripts/upgrade.sh. If it
+    #      differs, adjust only this single command.
+    if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        sudo -u peertube env NODE_ENV=production NODE_CONFIG_DIR=/var/www/peertube/config \
+        bash -lc 'cd /var/www/peertube && ./peertube-latest/scripts/upgrade.sh' >/dev/null 2>&1
+    then
+        # 6. Health-check: PeerTube answers /api/v1/config once back up.
+        svc restart
+        local ok=0 i
+        for i in $(seq 1 30); do
+            if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+                curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${HTTP_PORT}/api/v1/config" 2>/dev/null | grep -q 200
+            then ok=1; break; fi
+            sleep 2
+        done
+        if [ "$ok" = 1 ]; then
+            _write_result "$id" "{\"status\":\"done\",\"detail\":\"upgraded\",\"backup\":$(printf '%s' "$backup" | jq -Rs .)}"
+        else
+            _write_result "$id" "{\"status\":\"error\",\"detail\":\"upgraded but health-check failed — restore from backup if needed\",\"backup\":$(printf '%s' "$backup" | jq -Rs .)}"
+        fi
+    else
+        # Upgrade script failed — the old peertube-latest is untouched; restart it.
+        svc restart
+        _write_result "$id" "{\"status\":\"error\",\"detail\":\"upgrade script failed — running version unchanged\",\"backup\":$(printf '%s' "$backup" | jq -Rs .)}"
+    fi
+}
 
 cmd_help() {
     cat <<EOF

@@ -46,3 +46,23 @@ def test_reset_password_generates_when_absent(tmp_path, monkeypatch):
     out = asyncio.run(m.reset_password_op(m.ResetPasswordBody(password=None), user={"role": "admin"}))
     req = json.loads((tmp_path / f"{out['id']}.request.json").read_text())
     assert len(req["password"]) >= 16  # generated strong password
+
+
+def test_upgrade_spools_op(tmp_path, monkeypatch):
+    monkeypatch.setattr(m, "OPS_DIR", tmp_path)
+    import asyncio, json
+    out = asyncio.run(m.upgrade_op(m.UpgradeBody(target="latest"), user={"role": "admin"}))
+    assert out["success"] and "id" in out
+    req = json.loads((tmp_path / f"{out['id']}.request.json").read_text())
+    assert req["op"] == "upgrade" and req["target"] == "latest"
+
+
+def test_upgrade_requires_admin(tmp_path, monkeypatch):
+    monkeypatch.setattr(m, "OPS_DIR", tmp_path)
+    import asyncio
+    from fastapi import HTTPException
+    try:
+        asyncio.run(m.require_admin(user={"role": "user"}))
+        assert False, "require_admin should reject non-admin"
+    except HTTPException as e:
+        assert e.status_code == 403
