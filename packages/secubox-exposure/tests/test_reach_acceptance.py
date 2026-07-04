@@ -64,6 +64,17 @@ def test_lan_plus_mesh_allows_mesh_denies_external():
     assert _would_allow(s, "203.0.113.7") is False
 
 
+def test_localhost_plus_mesh_allows_mesh_denies_lan_and_external():
+    # 10.10.0.5 already falls inside lan's 10.0.0.0/8, so the lan+mesh case
+    # above would pass even without the mesh allow line. localhost does NOT
+    # admit LAN, so this case uniquely isolates the mesh allow's effect.
+    s = reach_snippet("localhost", True)
+    assert _would_allow(s, "10.10.0.5") is True        # mesh — allowed
+    assert _would_allow(s, "10.20.30.40") is False      # LAN — still denied
+    assert _would_allow(s, "203.0.113.7") is False      # external — denied
+    assert _would_allow(s, "127.0.0.1") is True         # localhost — allowed
+
+
 def test_wan_snippet_allows_external():
     s = reach_snippet("wan", False)
     assert _would_allow(s, "203.0.113.7") is True
