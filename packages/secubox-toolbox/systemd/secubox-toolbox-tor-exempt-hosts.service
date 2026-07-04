@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox ToolBoX — exempt cert-pinned/spliced hosts from Tor egress (#799)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/799
+After=secubox-toolbox.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-toolbox-tor-exempt-hosts
+Nice=10
+# no-op when Tor egress is not armed; best-effort, never block
+TimeoutStartSec=60

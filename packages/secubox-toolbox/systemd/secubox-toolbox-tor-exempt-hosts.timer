@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox ToolBoX — refresh Tor-egress host exemptions (#799)
+
+[Timer]
+OnBootSec=12min
+OnUnitActiveSec=30min
+Persistent=true
+RandomizedDelaySec=3min
+
+[Install]
+WantedBy=timers.target
