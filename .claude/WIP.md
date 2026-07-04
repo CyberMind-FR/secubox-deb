@@ -28,6 +28,32 @@ whole-branch adversariale), **toutes mergées sur master**, déployées + valid�
 Wiki : nouvelle page **[[ToolBox]]** (cas d'usage cabine numérique + features rapport). 202
 tests toolbox verts. Backups board `/root/backup-785-*` + `/root/backup-790-062856`.
 
+---
+
+## ✅ 2026-07-04 : Zigbee WebSocket (#796 · PR #805) + PeerTube admin ops (#798 · PR #800/#804)
+
+- **#796 — sbxwaf laissait tomber les upgrades WebSocket** ✅ FIXÉ + live, **PR #805 ouverte**.
+  `wss://zigbee.gk2.secubox.in/api` cassait (close 1006 + boucle de reconnexion) alors que
+  `http://10.100.0.111:8080` LXC-direct marchait. 3 couches : `main.go` forçait `Connection: close`
+  écrasant `Connection: Upgrade` ; `statusRecorder` + `cachingResponseWriter` n'implémentaient pas
+  `http.Hijacker`. Fix : `isWebSocketUpgrade()` + `Hijack()` forwardé sur les 2 wrappers + log
+  d'erreur upstream (qui a épinglé la couche Hijacker). `websocket_test.go` neuf. Live gk2 :
+  `wss://zigbee → 101 Switching Protocols`, dashboard stable. `go test ./cmd/sbxwaf/` vert,
+  merge propre avec master.
+
+- **#798 — PeerTube WebUI admin ops** (reset-password + version check + upgrade) ✅ MERGÉ (PR #800),
+  spool→root (#407) : API non-privilégiée dépose un intent, `peertube-ops.path` root le draine via
+  `peertubectl` (pas de sudo, NoNewPrivileges intact). **Bug de boucle corrigé, PR #804 ouverte** :
+  `.path` surveille `OPS_DIR` en `DirectoryNotEmpty=` mais `process-ops` écrivait les résultats
+  DANS `OPS_DIR` → jamais vide → `.path` re-déclenche `.service` en boucle → `start-limit-hit`
+  tue le mécanisme après la 1re op. Fix : résultats dans `/run/secubox/peertube/results/` dédié ;
+  `ops/` se vide après drain. Vérifié live gk2 (2 pings consécutifs drainent, `NRestarts=0`,
+  résultat `root:secubox 0640` lisible secubox). Delta `main.py` posé en préservant les 4 endpoints
+  async board.
+
+> ⚠️ Stray non commité sur master (hors session) : `secubox-toolbox-autolearn` — miroir
+> splice-learned → bypass webui MITM. À committer ou jeter (non lié à #796/#798).
+
 ### ⬜ Next Up ToolBox (déféré, non bloquant)
 
 - **#786 — double-caching de l'agrégation media-catch** : `/media_types` + `_media_stats`
