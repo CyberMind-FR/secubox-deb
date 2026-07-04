@@ -136,8 +136,9 @@ def _audit_exposure(vhost: str, rec: dict, user: str) -> None:
 
 @app.get("/exposure/{vhost}")
 async def get_exposure(vhost: str, user: dict = Depends(require_jwt)):
-    # is_public_now: unknown here without the vhost list; default False (→ lan) when
-    # no snippet — the vhost module seeds public vhosts to wan on first adoption.
+    _validate_vhost(vhost)
+    # is_public_now no longer affects the missing-snippet result (see reach.load_record):
+    # ungated == effectively public → 'wan'. Kept for API compatibility.
     return _reach.load_record(vhost, is_public_now=False)
 
 
