@@ -149,6 +149,115 @@ STATS_INTERVAL = 60
 MAX_HISTORY_ENTRIES = 1440  # 24 hours at 1-minute intervals
 
 
+# ============================================================================
+# Media Buffer — list / replay / thumb (ref #812)
+#
+# Reads the sbxmitm media-buffer metatag log and serves a short-lived replay
+# link per capture. Every handler is a plain `def` — this module is mounted
+# in-process by secubox-aggregator, so a blocking `async def` would wedge the
+# shared event loop (ref #808); FastAPI runs plain `def` handlers in a
+# threadpool. Path resolution is derived from the RECORD's session_id under
+# MEDIA_BUFFER_ROOT, never from client input, and confirmed to stay inside the
+# root via realpath (defense-in-depth against traversal).
+# ============================================================================
+import os  # noqa: E402
+import re  # noqa: E402
+import glob  # noqa: E402
+from datetime import timezone  # noqa: E402
+from fastapi import Request  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+from secubox_core import media_buffer  # noqa: E402
+from secubox_core import user_store  # noqa: E402
+
+MEDIA_BUFFER_ROOT = "/data/secubox/media-buffer"
+AUDIT_LOG = "/var/log/secubox/audit.log"
+# \Z (not $) so a trailing newline can't sneak past — $ matches before a final \n.
+_REC_ID_RE = re.compile(r"^[0-9a-f]{8,32}\Z")
+
+
+def _media_log_path() -> str:
+    """Path to the metatag JSONL, derived from MEDIA_BUFFER_ROOT (monkeypatched
+    in tests)."""
+    return os.path.join(MEDIA_BUFFER_ROOT, "media-buffer.jsonl")
+
+
+def _user_is_admin(user) -> bool:
+    """True if the caller has the admin role.
+
+    The JWT carries only sub/jti (see secubox_core.auth.require_jwt), so the
+    role lives in the user store — resolved the same way secubox-peertube's
+    require_admin does. An explicit `role` on the identity short-circuits the
+    lookup — SECURITY: only ever populate identity["role"] from a
+    server-VERIFIED source. require_jwt today returns only sub/jti (no role), so
+    in production the store lookup always runs; the short-circuit currently only
+    serves tests. Do NOT start trusting a `role` claim carried in the token
+    without verifying it, or this becomes an authority-without-verification path.
+    """
+    if not isinstance(user, dict):
+        return False
+    role = user.get("role")
+    if not role:
+        sub = user.get("sub")
+        try:
+            u = user_store.get_user(sub) or {}
+            role = u.get("role", "") if isinstance(u, dict) else ""
+        except Exception:
+            role = ""
+    return role == "admin"
+
+
+def require_admin_or_owner(user=Depends(require_jwt)):
+    """Gate replay/thumb to admin — or, eventually, the capture's owner.
+
+    Phase 1 has NO JWT->persona(mac_hash) mapping, so a non-admin is the owner
+    of nothing and is rejected outright. The owner path lands with the Phase 3
+    persona mapping.
+
+    # TODO(phase3): scope to the caller's persona mac_hash — allow a non-admin
+    # only when the requested record's mac_hash == their persona.
+    """
+    if _user_is_admin(user):
+        return user
+    raise HTTPException(status_code=403, detail="admin role required")
+
+
+def _resolve_object_path(rec: dict) -> Optional[str]:
+    """Resolve the on-disk buffer object for a record, path-traversal-safe.
+
+    The object lives at <MEDIA_BUFFER_ROOT>/<session_id>/object-0.* — session_id
+    is validated against the hex regex, and the resolved realpath is confirmed
+    to stay inside MEDIA_BUFFER_ROOT before returning. Returns None if the id is
+    malformed, the file is gone, or resolution escapes the root.
+    """
+    session_id = (rec or {}).get("session_id")
+    if not session_id or not _REC_ID_RE.match(str(session_id)):
+        return None
+    root = os.path.realpath(MEDIA_BUFFER_ROOT)
+    session_dir = os.path.realpath(os.path.join(root, session_id))
+    if session_dir != root and not session_dir.startswith(root + os.sep):
+        return None
+    for cand in sorted(glob.glob(os.path.join(session_dir, "object-0.*"))):
+        real = os.path.realpath(cand)
+        if (real == root or real.startswith(root + os.sep)) and os.path.isfile(real):
+            return real
+    return None
+
+
+def _audit_replay(sub: str, rec_id: str, host: str, ip: str) -> None:
+    """Append one RFC3339 audit line for a successful replay. Best-effort:
+    swallow every error so auditing never breaks the response."""
+    try:
+        ts = datetime.now(timezone.utc).isoformat()
+        line = f"{ts} media-replay sub={sub} rec_id={rec_id} host={host} ip={ip}\n"
+        fd = os.open(AUDIT_LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o640)
+        try:
+            os.write(fd, line.encode("utf-8", "replace"))
+        finally:
+            os.close(fd)
+    except Exception:
+        pass
+
+
 class QuotaType(str, Enum):
     DAILY = "daily"
     WEEKLY = "weekly"
@@ -421,6 +530,65 @@ def _setup_mirred(iface: str, mirror_if: str = "ifb0") -> dict:
         results.append({"cmd": " ".join(cmd[-3:]), "ok": r.returncode == 0,
                         "err": r.stderr.strip()[:100] if r.returncode != 0 else ""})
     return {"steps": results, "interface": iface, "mirror": mirror_if}
+
+@router.get("/media/buffer")
+def media_buffer_list(user=Depends(require_jwt)):
+    """List media-buffer captures. Admin sees every record; a non-admin sees
+    nothing in Phase 1 (no persona mapping yet). Plain `def` — bounded file
+    read runs off the shared loop in a threadpool (ref #808). Fail-empty."""
+    if _user_is_admin(user):
+        items = media_buffer.read_records(path=_media_log_path())
+    else:
+        # TODO(phase3): scope to the caller's persona mac_hash via a JWT->persona
+        # mapping. Until that exists a non-admin owns nothing.
+        items = []
+    return {"items": items, "count": len(items)}
+
+
+@router.get("/media/replay/{rec_id}")
+def media_replay(rec_id: str, request: Request = None,
+                 user=Depends(require_admin_or_owner)):
+    """Stream the buffered bytes for a capture, admin/owner-gated and audited.
+
+    410 once the janitor has evicted the bytes (metatag-only). The object path
+    is resolved from the RECORD's session_id under MEDIA_BUFFER_ROOT — never
+    from `rec_id`, which is additionally validated against a strict hex regex.
+    """
+    if not _REC_ID_RE.match(rec_id or ""):
+        raise HTTPException(status_code=400, detail="invalid record id")
+    rec = media_buffer.record_by_id(rec_id, path=_media_log_path())
+    if not rec or rec.get("expired") or rec.get("buffer_ref") is None:
+        raise HTTPException(status_code=410, detail="media evicted — metatag only")
+    path = _resolve_object_path(rec)
+    if not path:
+        raise HTTPException(status_code=410, detail="media evicted — metatag only")
+    sub = (user or {}).get("sub") if isinstance(user, dict) else None
+    ip = ""
+    try:
+        if request is not None and request.client is not None:
+            ip = request.client.host or ""
+    except Exception:
+        ip = ""
+    _audit_replay(sub, rec_id, rec.get("host") or "", ip)
+    return FileResponse(path, media_type=rec.get("ctype") or "application/octet-stream")
+
+
+@router.get("/media/thumb/{rec_id}")
+def media_thumb(rec_id: str, user=Depends(require_admin_or_owner)):
+    """Serve <session>/thumb.jpg for a capture. Phase 1 has no thumbnail
+    generation (that's Phase 2), so this 404s until a thumb exists. Same strict
+    id validation + traversal-safe resolution as replay."""
+    if not _REC_ID_RE.match(rec_id or ""):
+        raise HTTPException(status_code=400, detail="invalid record id")
+    rec = media_buffer.record_by_id(rec_id, path=_media_log_path())
+    session_id = (rec or {}).get("session_id")
+    if rec and session_id and _REC_ID_RE.match(str(session_id)):
+        root = os.path.realpath(MEDIA_BUFFER_ROOT)
+        thumb = os.path.realpath(os.path.join(root, session_id, "thumb.jpg"))
+        if (thumb == root or thumb.startswith(root + os.sep)) and os.path.isfile(thumb):
+            return FileResponse(thumb, media_type="image/jpeg")
+    raise HTTPException(status_code=404, detail="no thumbnail (Phase 2)")
+
 
 @router.get("/status")
 def status(user=Depends(require_jwt)):
