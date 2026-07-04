@@ -137,5 +137,5 @@ Für sicherheitskritische Änderungen verwendet SecuBox ein Double-Buffer-System
 
 - [[Installation]] — Ersteinrichtung
 - [[API-Reference]] — REST API-Dokumentation
-- [[MODULES-DE|Module]] — Verfügbare Module
+- [[Module|MODULES-DE]] — Verfügbare Module
 - [[Troubleshooting]] — Häufige Probleme

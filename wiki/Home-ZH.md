@@ -139,7 +139,7 @@ sudo apt install secubox-full   # 或 secubox-lite
 - [[Live-USB-VirtualBox]] - **VirtualBox 快速入门** ⭐
 - [[Live-USB-ZH]] - USB 启动盘指南
 - [[Installation-ZH]] - 完整安装
-- [[MODULES-ZH|模块]] - 所有 93 个模块
+- [[模块|MODULES-ZH]] - 所有 93 个模块
 - [[API-Reference-ZH]] - REST API（2000+ 端点）
 - [[Troubleshooting-ZH]] - 常见问题
 

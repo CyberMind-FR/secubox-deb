@@ -92,14 +92,14 @@ Voir [[Installation-FR]] pour les instructions détaillées.
 
 **Total : 125 paquets**
 
-Voir [[MODULES-FR|Modules]] pour la documentation complète des modules.
+Voir [[Modules|MODULES-FR]] pour la documentation complète des modules.
 
 ---
 
 ## 🔵 MESH — Documentation
 
 ### Pour Commencer
-- [[Live-USB-VirtualBox|Démarrage rapide VirtualBox]] ⭐
+- [[Démarrage rapide VirtualBox|Live-USB-VirtualBox]] ⭐
 - [[Live-USB-FR]] — Guide USB bootable
 - [[ARM-Installation-FR]] — Cartes ARM & U-Boot ⚡
 - [[QEMU-ARM64]] — Émulation ARM sur x86 🖥️
@@ -109,7 +109,7 @@ Voir [[MODULES-FR|Modules]] pour la documentation complète des modules.
 - [[Troubleshooting-FR]] — Problèmes courants
 
 ### Référence
-- [[MODULES-FR|Modules]] — Les 125 modules
+- [[Modules|MODULES-FR]] — Les 125 modules
 - [[API-Reference-FR]] — API REST (2000+ endpoints)
 
 ---

@@ -44,7 +44,7 @@
 * [[ToolBox]] 👁️ cabine numérique · rapport vie privée
 * [[Anti-Track]] 🛡️ bloque · empoisonne · anonymise
 * [[ThreatMesh]] 🛰️ blocklist souveraine (feeds + mesh, sans CAPI) | [FR](ThreatMesh-FR)
-* [[MODULES-EN|Modules]] 🇬🇧
+* [[Modules|MODULES-EN]] 🇬🇧
 * [[MODULES-FR]] 🇫🇷
 * [[MODULES-DE]] 🇩🇪
 * [[MODULES-ZH]] 🇨🇳

@@ -227,7 +227,7 @@ cat /etc/resolv.conf
 ## Hilfe erhalten
 
 1. Logs prüfen: `journalctl -xe`
-2. Wiki prüfen: [[MODULES-DE|Module]] für modulspezifische Hilfe
+2. Wiki prüfen: [[Module|MODULES-DE]] für modulspezifische Hilfe
 3. GitHub Issues: [Fehler melden](https://github.com/CyberMind-FR/secubox-deb/issues)
 
 ## Siehe auch

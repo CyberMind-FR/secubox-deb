@@ -128,6 +128,6 @@ scripts/run-qemu.sh -s 2223 -w 9444
 
 ## See Also
 
-- [[Live-USB-VirtualBox|VirtualBox Setup]]
-- [[Installation|Full Installation]]
+- [[VirtualBox Setup|Live-USB-VirtualBox]]
+- [[Full Installation|Installation]]
 - [[Troubleshooting]]

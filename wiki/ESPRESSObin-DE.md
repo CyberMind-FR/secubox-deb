@@ -332,6 +332,6 @@ secubox-status
 - [[ARM-Installation]] — Allgemeine ARM-Installationsanleitung
 - [[Installation]] — x86/VM Installation
 - [[Live-USB]] — Ausprobieren ohne Installation
-- [[MODULES-DE|Module]] — Verfügbare SecuBox-Module
+- [[Module|MODULES-DE]] — Verfügbare SecuBox-Module
 - [ESPRESSObin Wiki](http://wiki.espressobin.net/) — Offizielles Hardware-Wiki
 - [Marvell Armada 3720](https://www.marvell.com/embedded-processors/armada-3700/) — SoC-Dokumentation

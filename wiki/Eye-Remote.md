@@ -246,7 +246,7 @@ The Eye Remote supports the Pimoroni HyperPixel 2.1 Round (480×480) for a dedic
 
 ## See Also
 
-- [[Multiboot|Multi-Boot Live OS]] — Full multiboot documentation
+- [[Multi-Boot Live OS|Multiboot]] — Full multiboot documentation
 - [[ARM-Installation]] — ARM64 installation guide
 - [[ESPRESSObin]] — ESPRESSObin specific setup
 - [[Live-USB]] — Standard Live USB guide
