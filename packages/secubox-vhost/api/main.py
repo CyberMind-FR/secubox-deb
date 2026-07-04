@@ -17,6 +17,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from api.exposure_read import read_exposure
 
 app = FastAPI(title="SecuBox VHost", version="1.1.0")
 config = get_config("vhost")
@@ -332,6 +333,7 @@ async def list_vhosts():
                 "url": url,
                 "source": "nginx",
                 "config_file": str(conf_file),
+                "exposure": read_exposure(domain),
             })
 
     # Append HAProxy public vhosts with no nginx config (complete the list).
@@ -354,6 +356,7 @@ async def list_vhosts():
             "url": f"https://{domain}",
             "source": "haproxy",
             "config_file": None,
+            "exposure": read_exposure(domain),
         })
 
     vhosts.sort(key=lambda v: v["domain"])
