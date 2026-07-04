@@ -1159,6 +1159,21 @@ TLS_SPLICE_SEED_FILE = Path(os.environ.get(
     "SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"))
 SPLICE_LEARNED_FILE = Path(os.environ.get(
     "SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"))
+# #809 — operator-disabled filter patterns (Filtres MITM uncheck). The R3 engine
+# reads this SAME file and suppresses matching per-pattern, so unchecking has
+# real effect on ALL sources incl. the package seed.
+MITM_FILTER_DISABLED_FILE = Path(os.environ.get(
+    "SECUBOX_FILTER_DISABLED", "/var/lib/secubox/toolbox/mitm-filter-disabled.txt"))
+
+
+def _load_disabled() -> set:
+    """Set of operator-disabled patterns (exact strings; # comments stripped)."""
+    try:
+        return {ln.split("#", 1)[0].strip()
+                for ln in MITM_FILTER_DISABLED_FILE.read_text().splitlines()
+                if ln.split("#", 1)[0].strip()}
+    except OSError:
+        return set()
 
 
 def _read_splice(path) -> list:
@@ -1219,7 +1234,14 @@ def _load_bypass_tagged() -> list:
         for pat in _read_splice(path):
             if pat not in seen:
                 seen[pat] = source
-    return [{"pattern": p, "source": s} for p, s in sorted(seen.items())]
+    # #809 — tag each row: enabled (not operator-disabled) + editable (in a
+    # writable file, so 🗑 delete can remove the line; package seeds can only be
+    # disabled, not deleted).
+    disabled = _load_disabled()
+    editable = {"static", "learned", "splice-learned"}
+    return [{"pattern": p, "source": s, "enabled": p not in disabled,
+             "editable": s in editable}
+            for p, s in sorted(seen.items())]
 
 
 def _is_public_kbin(request: Request) -> bool:
@@ -1326,6 +1348,67 @@ async def admin_filter_remove(request: Request) -> Response:
         new_lines = [ln for ln in lines if ln.strip() != entry]
         MITM_BYPASS_FILE.write_text("\n".join(new_lines) + "\n")
     return RedirectResponse("/admin/filter-control", status_code=303)
+
+
+def _write_disabled(patterns: set) -> None:
+    MITM_FILTER_DISABLED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    MITM_FILTER_DISABLED_FILE.write_text(
+        "# SecuBox ToolBoX :: operator-disabled filter patterns (#809).\n"
+        "# Managed via the Filtres MITM webui checkbox. One pattern per line.\n"
+        "# The R3 engine reads this file and suppresses matching per-pattern.\n"
+        + "".join(sorted(p + "\n" for p in patterns)))
+
+
+@router.post("/admin/filter-control/toggle")
+async def admin_filter_toggle(request: Request) -> dict:
+    """#809 — enable/disable a filter pattern (webui checkbox). Toggling adds/
+    removes it from the disabled file; the engine hot-reloads and suppresses it.
+    Works for ANY source (incl. package seed)."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "filter editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    body = await request.json()
+    pat = (body.get("pattern") or "").strip()
+    if not pat or "\n" in pat:
+        raise HTTPException(400, "invalid pattern")
+    disabled = _load_disabled()
+    if pat in disabled:
+        disabled.discard(pat)
+        enabled = True
+    else:
+        disabled.add(pat)
+        enabled = False
+    _write_disabled(disabled)
+    return {"pattern": pat, "enabled": enabled}
+
+
+@router.post("/admin/filter-control/delete")
+async def admin_filter_delete(request: Request) -> dict:
+    """#809 — delete a filter entry. Removes the line from any EDITABLE file
+    (static/dynamic/splice-learned); a package-seed entry can't be deleted (file
+    is read-only) → it is disabled instead."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "filter editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    body = await request.json()
+    pat = (body.get("pattern") or "").strip()
+    if not pat:
+        raise HTTPException(400, "invalid pattern")
+    removed = False
+    for f in (MITM_BYPASS_FILE, MITM_BYPASS_DYNAMIC_FILE, SPLICE_LEARNED_FILE):
+        try:
+            lines = f.read_text().splitlines()
+        except OSError:
+            continue
+        new = [ln for ln in lines if ln.split("#", 1)[0].strip() != pat]
+        if len(new) != len(lines):
+            f.write_text("\n".join(new) + ("\n" if new else ""))
+            removed = True
+    disabled_fallback = False
+    if not removed:
+        d = _load_disabled()
+        d.add(pat)
+        _write_disabled(d)
+        disabled_fallback = True
+    return {"pattern": pat, "deleted": removed, "disabled": disabled_fallback}
 
 
 @router.get("/admin/filter-control/regex")

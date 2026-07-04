@@ -66,6 +66,7 @@ type PolicyOpts struct {
 	BypassSeedPath    string  // conf/mitm-bypass-seed.conf     (package)
 	BypassStaticPath  string  // mitm-bypass.conf               (operator/webui)
 	BypassDynamicPath string  // mitm-bypass-dynamic.conf       (autolearn)
+	DisabledPath      string  // mitm-filter-disabled.txt       (webui uncheck, #809)
 	FortknoxSites    []string // filters.json fortknox_sites
 	SelfDomains      []string // _SELF_REGS (default {secubox.in}, env SECUBOX_SELF_DOMAINS)
 }
@@ -82,6 +83,7 @@ func defaultPolicyOpts() PolicyOpts {
 		BypassSeedPath:    envOr("SECUBOX_BYPASS_SEED", "/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf"),
 		BypassStaticPath:  envOr("SECUBOX_BYPASS_STATIC", "/var/lib/secubox/toolbox/mitm-bypass.conf"),
 		BypassDynamicPath: envOr("SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"),
+		DisabledPath:      envOr("SECUBOX_FILTER_DISABLED", "/var/lib/secubox/toolbox/mitm-filter-disabled.txt"),
 	}
 	// _SELF_REGS: env SECUBOX_SELF_DOMAINS (comma-split), default {secubox.in}.
 	self := os.Getenv("SECUBOX_SELF_DOMAINS")
@@ -119,9 +121,13 @@ type Policy struct {
 	spliceSeed  map[string]bool // splice seed patterns
 	spliceLearn map[string]bool // splice learned patterns
 	// mitm-bypass (ignore_hosts) compiled regexes (#803) — a match splices.
-	bypassSeedRe   []*regexp.Regexp
-	bypassStaticRe []*regexp.Regexp
-	bypassDynRe    []*regexp.Regexp
+	bypassSeedRe   []bypassEntry
+	bypassStaticRe []bypassEntry
+	bypassDynRe    []bypassEntry
+	// #809 — operator-disabled filter patterns (Filtres MITM webui): an entry
+	// whose SOURCE pattern is in this set is suppressed in BOTH the bypass and
+	// splice paths, so unchecking it in the webui has real engine effect.
+	disabled    map[string]bool
 	never       map[string]bool // pure-trackers ∪ fortknox (splice never-set)
 	selfRegs    map[string]bool // own-infra registrable domains
 	selfDomains []string        // own-infra (for the host==d || host endswith .d guard)
@@ -191,6 +197,9 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 	if opts.BypassDynamicPath == "" {
 		opts.BypassDynamicPath = def.BypassDynamicPath
 	}
+	if opts.DisabledPath == "" {
+		opts.DisabledPath = def.DisabledPath
+	}
 
 	re, err := regexp.Compile(adHostPattern)
 	if err != nil {
@@ -225,6 +234,7 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 		bypassSeedRe:   loadBypassRegex(opts.BypassSeedPath),
 		bypassStaticRe: loadBypassRegex(opts.BypassStaticPath),
 		bypassDynRe:    loadBypassRegex(opts.BypassDynamicPath),
+		disabled:       reload.LoadLines(opts.DisabledPath, true),
 		never:          never,
 		selfRegs:       selfRegs,
 		selfDomains:    selfDomains,
@@ -305,7 +315,7 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 			Load:      func(path string) any { return loadBypassRegex(path) },
 			Apply: func(v any) {
 				p.mu.Lock()
-				p.bypassSeedRe = v.([]*regexp.Regexp)
+				p.bypassSeedRe = v.([]bypassEntry)
 				p.mu.Unlock()
 			},
 		},
@@ -315,7 +325,7 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 			Load:      func(path string) any { return loadBypassRegex(path) },
 			Apply: func(v any) {
 				p.mu.Lock()
-				p.bypassStaticRe = v.([]*regexp.Regexp)
+				p.bypassStaticRe = v.([]bypassEntry)
 				p.mu.Unlock()
 			},
 		},
@@ -325,7 +335,17 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 			Load:      func(path string) any { return loadBypassRegex(path) },
 			Apply: func(v any) {
 				p.mu.Lock()
-				p.bypassDynRe = v.([]*regexp.Regexp)
+				p.bypassDynRe = v.([]bypassEntry)
+				p.mu.Unlock()
+			},
+		},
+		{
+			Path:      opts.DisabledPath,
+			LastMtime: reload.StatMtime(opts.DisabledPath),
+			Load:      func(path string) any { return reload.LoadLines(path, true) },
+			Apply: func(v any) {
+				p.mu.Lock()
+				p.disabled = v.(map[string]bool)
 				p.mu.Unlock()
 			},
 		},
@@ -472,21 +492,53 @@ func (p *Policy) shouldSplice(sni string) bool {
 	if hostMatches(s, p.never) {
 		return false
 	}
-	return hostMatches(s, p.spliceSeed) || hostMatches(s, p.spliceLearn)
+	// #809 — a splice suffix the operator disabled in the webui must NOT match.
+	return hostMatchesEnabled(s, p.spliceSeed, p.disabled) ||
+		hostMatchesEnabled(s, p.spliceLearn, p.disabled)
+}
+
+// bypassEntry keeps the SOURCE pattern next to its compiled regex so a #809
+// operator-disabled entry can be skipped by pattern.
+type bypassEntry struct {
+	pat string
+	re  *regexp.Regexp
 }
 
 // matchesBypass reports whether host matches any compiled mitm-bypass regex
-// (seed ∪ static ∪ dynamic). Callers hold p.mu.RLock (Decide does).
+// (seed ∪ static ∪ dynamic), skipping operator-disabled patterns (#809).
+// Callers hold p.mu.RLock (Decide does).
 func (p *Policy) matchesBypass(host string) bool {
 	host = strings.Trim(strings.ToLower(host), ".")
 	if host == "" {
 		return false
 	}
-	for _, group := range [][]*regexp.Regexp{p.bypassSeedRe, p.bypassStaticRe, p.bypassDynRe} {
-		for _, re := range group {
-			if re.MatchString(host) {
+	for _, group := range [][]bypassEntry{p.bypassSeedRe, p.bypassStaticRe, p.bypassDynRe} {
+		for _, e := range group {
+			if p.disabled[e.pat] {
+				continue
+			}
+			if e.re.MatchString(host) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// hostMatchesEnabled is hostMatches but skips suffix patterns in `disabled`
+// (#809): the exact host or a ".pattern" suffix matches only if the matching
+// pattern is not operator-disabled.
+func hostMatchesEnabled(host string, patterns, disabled map[string]bool) bool {
+	h := strings.Trim(strings.ToLower(host), ".")
+	if h == "" || len(patterns) == 0 {
+		return false
+	}
+	if patterns[h] && !disabled[h] {
+		return true
+	}
+	for p := range patterns {
+		if !disabled[p] && strings.HasSuffix(h, "."+p) {
+			return true
 		}
 	}
 	return false
@@ -497,12 +549,12 @@ func (p *Policy) matchesBypass(host string) bool {
 // so `(.+\.)?signal\.org` matches signal.org and chat.signal.org but NOT
 // evilsignal.org. A malformed entry is skipped, never fatal (best-effort like
 // the Python addons). Returns nil on a missing/unreadable file.
-func loadBypassRegex(path string) []*regexp.Regexp {
-	var out []*regexp.Regexp
+func loadBypassRegex(path string) []bypassEntry {
+	var out []bypassEntry
 	for pat := range reload.LoadLines(path, true) {
 		re, err := regexp.Compile("(?i)^(?:" + pat + ")$")
 		if err == nil {
-			out = append(out, re)
+			out = append(out, bypassEntry{pat: pat, re: re})
 		}
 	}
 	return out
