@@ -2600,6 +2600,9 @@ def _dpi_stats(mac_hash: str | None) -> dict:
         "categories": cats(me.get("by_category")),
         "protocols": _dpi_donut([{"label": k, "emoji": "📡", "count": v} for k, v in me_protos.items()]),
         "alerts": alerts(me.get("alerts")),
+        # #792 — donut 'alerts' loses the per-alert fields; keep the RAW collector
+        # alerts (kind/service/dst/detail) for the persona Quêtes section.
+        "alerts_raw": me.get("alerts") or [],
         "destinations": _dpi_donut(me_dests),
     }
 

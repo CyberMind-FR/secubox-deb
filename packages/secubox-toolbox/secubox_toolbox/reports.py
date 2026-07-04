@@ -653,17 +653,21 @@ def _persona_block(pdf, family: str, report: dict) -> None:
             _bullet(pdf, f"{b.get('emoji', '👾')} {b.get('label', '?')[:24]}  x{b.get('count', 0)}", font_size=8)
 
     # ⚔️ Quetes en cours · menaces — from dpi_exfil alerts (#790)
-    alerts = ((report.get("dpi_exfil") or {}).get("me") or {}).get("alerts") or []
+    # #792 — prefer the RAW collector alerts (kind/service/dst/detail); the donut
+    # 'alerts' only carries {label,count} so it can't fill the dest/detail line.
+    _me_dpi = (report.get("dpi_exfil") or {}).get("me") or {}
+    alerts = _me_dpi.get("alerts_raw") or _me_dpi.get("alerts") or []
     pdf.set_x(pdf.l_margin)
     pdf.set_font(family, "B", 9)
     pdf.set_text_color(0, 212, 255)
     pdf.cell(0, 5, _safe("⚔️ QUETES EN COURS · MENACES"), ln=True)
     if alerts:
         for q in alerts[:5]:
-            label = q.get("label") or q.get("kind") or "?"
+            label = str(q.get("label") or q.get("kind") or "?").replace("_", " ")
             dest = q.get("service") or q.get("dst") or ""
             detail = q.get("detail") or ""
-            _bullet(pdf, f"🗡️ {str(label).upper()} — {dest} {detail}".strip(), font_size=8)
+            tail = " ".join(x for x in (dest, detail) if x)
+            _bullet(pdf, f"🗡️ {label.upper()} — {tail}" if tail else f"🗡️ {label.upper()}", font_size=8)
     else:
         pdf.set_x(pdf.l_margin)
         pdf.set_font(family, "", 8)
