@@ -1,98 +1,109 @@
-# Task 4 — Python metatag reader (`common/secubox_core/media_buffer.py`)
+# Task 4 Report: exposure API — GET/POST /exposure/{vhost} + apply
 
-**Status:** DONE
+## Status
+COMPLETE
 
-**Commit:** `d6ef7d25` — "feat(core): media-buffer metatag reader (dedup by id, fail-empty) (ref #812)"
-(local only, not pushed, per instructions)
+## Commit Hash
+`3c08acf4` — feat(exposure): /exposure/{vhost} get+set with fail-safe apply + audit (ref #793)
 
-## Test command + result
+## Test Summary
+3 passed (`tests/test_exposure_api.py`): POST writes snippet + returns record, GET reflects
+written state, POST rejects invalid `reach` with 422.
 
-```
-cd common && PYTHONPATH=. python3 -m pytest secubox_core/tests/test_media_buffer.py -q
-```
-Result: **8 passed** (0 failed).
+## Blocking Concerns
+None for the implementation itself. Two environment notes worth flagging:
 
-Full `secubox_core/tests/` suite also run for regression check: 31 passed, 5
-pre-existing failures in `test_auth_rewire.py` — unrelated to this task
-(local-env `/etc/secubox` 0750-parent traversal `PermissionError`, a known
-issue per project memory, not touched by this change).
+1. **Local sandbox permission quirk (not code-related):** on this dev worktree host,
+   `/var/lib/secubox` is `0750 secubox:secubox`, and `api/main.py`'s pre-existing
+   module-level `DATA_DIR.mkdir(parents=True, exist_ok=True)` (line ~52, predates this
+   task) raises `PermissionError` on import when run as the non-root worktree user. I
+   ran the test command via passwordless `sudo` (already provisioned in sudoers) to get
+   past it; no repo files or permissions were modified to work around it. Whoever runs
+   this in CI/on the board as `secubox`/root won't hit it.
+2. **Pre-existing test-order leakage:** running the whole `tests/` directory
+   alphabetically (`test_exposure_api.py` before `test_reach.py`) makes
+   `test_reach.py::test_snippet_path` fail, because `test_exposure_api.py`'s fixture
+   reloads `api.reach` with a monkeypatched `EXPOSURE_SNIPPET_DIR` and nothing restores
+   the module-level `SNIPPET_DIR` afterward. Running either file alone, or
+   `test_reach.py` before `test_exposure_api.py`, passes cleanly. This is inherent to
+   the reload-based test pattern from tasks 2/3, not introduced here, and out of this
+   task's scope. The brief's specified command (`pytest tests/test_exposure_api.py -q`)
+   is unaffected and passes 3/3.
 
-## What was built
+## Implementation Summary
 
-- `common/secubox_core/media_buffer.py`:
-  - `MEDIA_BUFFER_PATH = "/data/secubox/media-buffer/media-buffer.jsonl"`
-  - `_tail_lines` — copied verbatim in structure/behavior from
-    `media_catch.py` (bounded `max_bytes` tail read off disk, drops a
-    partial first line on a mid-file seek, swallows `OSError`/decode
-    errors).
-  - `_deduped_records(path, max_lines, max_bytes)` — internal helper: parses
-    the tail into `{id: record}`, later lines overwrite earlier ones
-    (last-writer-wins), skipping records without an `id` and swallowing
-    per-line JSON errors.
-  - `read_records(path, mac_hash=None, max_lines=2000, max_bytes=16MiB)` —
-    deduped, optionally filtered by `mac_hash`, sorted newest-first by
-    `first_ts` descending. Fail-empty on any file error.
-  - `record_by_id(rec_id, path, max_lines, max_bytes)` — deduped single
-    lookup, `None` on missing/absent file.
-  - SPDX header copied from `media_catch.py`.
-  - Pure stdlib (`json`, `os`, `pathlib`) — no FastAPI/third-party.
+### Files Modified
+- `packages/secubox-exposure/api/main.py`:
+  - Added `Literal` to the `typing` import, `timezone` to the `datetime` import, and
+    `from api import reach as _reach` (matching the file's existing `from api.X import Y`
+    style used elsewhere for `mesh_egress`).
+  - Added `ExposureSet` pydantic model (`reach: Literal["localhost","lan","wan"]`,
+    `mesh: bool = False`, `tor: bool = False`).
+  - Added `_reload_nginx()` — runs `nginx -t`, then `systemctl reload nginx` on success;
+    fail-safe (catches all exceptions, returns `False`, never raises).
+  - Added `_audit_exposure(vhost, rec, user)` — appends a line to
+    `/var/log/secubox/audit.log` (best-effort, swallows `OSError`).
+  - Added `GET /exposure/{vhost}` — JWT-protected, returns `_reach.load_record(vhost,
+    is_public_now=False)`.
+  - Added `POST /exposure/{vhost}` — JWT-protected, body validated via `ExposureSet`
+    (invalid `reach` → 422 automatically via pydantic `Literal`), writes the snippet via
+    `_reach.write_snippet`, calls `_reload_nginx()`, audits, returns the new record.
+  - Used the brief's code verbatim.
+- `packages/secubox-exposure/tests/test_exposure_api.py` — new, brief's exact 3 tests.
 
-- `common/secubox_core/tests/test_media_buffer.py` — 8 tests covering:
-  dedup keeps the janitor's expired flip (plan's exact test case),
-  `record_by_id` missing → `None`, mac_hash filter, fail-empty on missing
-  file, fail-empty on corrupt/partial lines mixed with valid ones,
-  fail-empty on a genuinely empty file, newest-first ordering, and an
-  extra case verifying `max_lines` bounds the tail-read result count
-  (kept most-recently-appended lines).
-
-## Deviations from the plan
-
-- Added `max_bytes` as an explicit parameter (default `16 * 1024 * 1024`,
-  matching `media_catch.py`'s default) on both public functions and on the
-  internal `_deduped_records` helper, rather than hardcoding it — mirrors
-  `media_catch.aggregate`'s signature style and gives callers/tests the
-  same knob `media_catch.py` exposes. Not requested explicitly by the
-  Task 4 spec but consistent with the "mirror media_catch.py" instruction.
-  No other deviations; all four required test cases from the plan (dedup
-  + expired flip, mac_hash filter, fail-empty variants, newest-first) are
-  present verbatim or as closely-mirrored variants.
+### TDD Workflow
+1. Wrote the failing test file first.
+2. Ran it — got `PermissionError` from the pre-existing `DATA_DIR.mkdir` at import time
+   (local sandbox quirk, see above), re-ran via `sudo` and confirmed the expected
+   `AttributeError: ... has no attribute '_reload_nginx'` (red, as specified in the brief).
+3. Implemented the endpoints/helpers per the brief.
+4. Re-ran — 3 passed (green).
+5. Committed with the brief's exact message.
 
 ## Concerns
+None regarding correctness or scope. No files outside `packages/secubox-exposure/` were
+modified; `reach.py` was not touched.
 
-None blocking. Note for Task 5 (DPI API) implementer: `record_by_id`
-returns `None` for a missing id (no exception) — matches the plan's stated
-`-> dict | None` signature. The API layer will need to turn that into its
-own `HTTPException(410, …)` as specified in Task 5; this module does not
-raise.
+---
 
-Note: found a stale `task-4-report.md` already in this directory belonging
-to an unrelated feature (exposure API, #793) — overwritten per the parent
-task's explicit instruction to ignore/replace stale same-numbered reports
-from other features.
+## Follow-up: test-isolation fix (2026-07-04)
 
-## Addendum — regression tests for copy-pasted `_tail_lines` (test-only, ref #812)
+### Status
+DONE
 
-`_tail_lines` in `media_buffer.py` is a byte-for-byte copy of the
-previously-buggy-then-fixed version in `media_catch.py` (ref #785 Fix 1),
-but the original 8 media_buffer tests never drove the `size > max_bytes`
-seek branch. Added two tests to
-`common/secubox_core/tests/test_media_buffer.py`:
+### Problem
+The concern #2 above ("Pre-existing test-order leakage") was confirmed as a real bug:
+`_client`'s `monkeypatch.setenv("EXPOSURE_SNIPPET_DIR", ...)` followed by
+`importlib.reload(api.reach)` permanently mutated the module-level `SNIPPET_DIR`
+attribute — `monkeypatch`'s teardown restores env vars, not the effects of a `reload()`,
+so the leak persisted into `test_reach.py::test_snippet_path` when running the full
+suite alphabetically. Confirmed before the fix: `pytest tests/` → 1 failed, 23 passed.
 
-- `test_bounded_tail_read_drops_partial_first_line` — 20 fixed-width JSONL
-  records (byte-identical 87-byte lines) read with `max_bytes=200`; asserts
-  the mid-line seek's partial first record (`r017`) is dropped and only the
-  2 full trailing records (`r018`, `r019`) are returned, newest-first, with
-  no crash.
-- `test_valid_json_missing_id_or_first_ts` — a record missing `id` is
-  excluded (can't be deduped), a record missing `first_ts` is still
-  returned and sorts as if `first_ts=0`; asserts `read_records` does not
-  raise either way.
+### Fix
+Test-only change to `packages/secubox-exposure/tests/test_exposure_api.py`: the
+`_client` fixture no longer sets the env var or reloads modules. Instead it does
+`monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path / "snip")` directly on the imported
+`api.reach` module object — `monkeypatch.setattr` auto-restores the original attribute
+at teardown, mirroring the safe pattern already used in `test_reach.py`. Removed the
+now-unused `importlib` import. The three test functions were left unchanged; they still
+assert against `tmp_path / "snip" / "z.example.conf"`, which still matches because
+`api.reach.write_snippet` reads the module-global `SNIPPET_DIR` directly and
+`api/main.py` calls it via `_reach.write_snippet(...)` (module-reference, not a
+re-bound import), so the monkeypatched attribute is honored.
 
-Both were verified against the current implementation before being added
-(manual repro scripts) — no production code was touched.
+No production code (`reach.py` / `main.py`) was modified.
 
-- Status: done
-- Commit: (see below)
-- Test summary: 10 passed (8 original + 2 new) — `pytest secubox_core/tests/test_media_buffer.py -q`
-- Bug surfaced by new tests: none — both target already-correct behavior (regression lock-in only)
-- Concerns: none blocking
+### Verification
+Command (prefixed with `sudo -E` per the documented `/var/lib/secubox` host-permission
+quirk — `DATA_DIR.mkdir` in `api/main.py` raises `PermissionError` for a non-root user
+on this dev host, unrelated to this fix):
+
+```
+cd packages/secubox-exposure && sudo -E env "PATH=$PATH" bash -c \
+  'PYTHONPATH="$(git rev-parse --show-toplevel)/common:." python -m pytest tests/ -q'
+```
+
+Result: **24 passed, 5 warnings in 0.29s** — 0 failures, leak confirmed gone.
+
+### Commit
+`fix(exposure): test fixture uses setattr not env-reload — no SNIPPET_DIR leak (ref #793)`
