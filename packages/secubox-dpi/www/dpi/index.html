@@ -840,7 +840,7 @@
             const sizeSpan = document.createElement('span');
             sizeSpan.textContent = formatBytes(item.bytes || 0);
             const ageSpan = document.createElement('span');
-            ageSpan.textContent = agoStr(item.first_ts || item.ts);
+            ageSpan.textContent = agoStr(item.first_ts);
             metaRow2.appendChild(sizeSpan);
             metaRow2.appendChild(ageSpan);
             card.appendChild(metaRow2);

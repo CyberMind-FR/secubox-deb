@@ -374,3 +374,157 @@ func TestTeeNonBlockingDropsWhenFull(t *testing.T) {
 		t.Errorf("expected truncated=true after dropped chunks, got %v", m["truncated"])
 	}
 }
+
+// TestUploadTeeSkipsBodylessMediaGet is the regression test for the
+// whole-branch-review I1 finding: main.go's mitmPipeline used to gate the
+// upload tee on `req.Body != nil && IsMedia(ctype, path)`. But req.Body is
+// NEVER nil for a proxied request — even a bodyless GET carries a non-nil
+// (empty) body — and IsMedia/mediaKind classifies by PATH EXTENSION when the
+// request Content-Type is empty. So a plain media DOWNLOAD GET (no request
+// body, no request Content-Type) used to match the UPLOAD branch on path
+// alone, creating a phantom session dir, a 0-byte object-0.mp4 and a
+// direction:"up", bytes:0 metatag on every download.
+//
+// tryUploadTee below mirrors main.go's fixed guard byte-for-byte: require
+// BOTH a real body (ContentLength > 0 — the primary guard, since a GET
+// download never carries a request body) AND a non-empty request
+// Content-Type that IsMedia matches ON THE CONTENT-TYPE, so the
+// path-extension fallback can never drive the upload direction.
+//
+// Confirmed this test catches the regression: temporarily restoring the old
+// guard (`contentLength >= 0` i.e. drop the ContentLength>0 requirement, and
+// allow ctype == "" through to IsMedia(ctype, path) which then falls back to
+// the path-extension match) makes the first assertion below fail — a
+// bodyless GET to /v.mp4 gets captured as "up". Restored to the fixed guard
+// afterwards.
+func TestUploadTeeSkipsBodylessMediaGet(t *testing.T) {
+	root := t.TempDir()
+	b := NewMediaBuffer(root, true, 512<<20)
+
+	tryUploadTee := func(contentLength int64, ctype, path string) *ObjectWriter {
+		if b == nil || contentLength <= 0 {
+			return nil
+		}
+		if ctype == "" || !b.IsMedia(ctype, path) {
+			return nil
+		}
+		return b.Capture("mac1", "cdn.example", "https://cdn.example"+path, path, ctype, "up", contentLength)
+	}
+
+	// A GET download of a media path: no request body (ContentLength == 0),
+	// no request Content-Type — must NOT start an upload capture.
+	if w := tryUploadTee(0, "", "/v.mp4"); w != nil {
+		t.Fatal("bodyless GET to a media path must not start an upload capture")
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("ReadDir(%s): %v", root, err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("phantom capture artifacts created for a bodyless GET: %v", entries)
+	}
+
+	// Conversely, a genuine upload — non-zero request body + a real media
+	// Content-Type — must still be captured as "up".
+	w := tryUploadTee(1024, "video/mp4", "/v.mp4")
+	if w == nil {
+		t.Fatal("a real upload (ContentLength>0, media Content-Type) must be captured")
+	}
+	if _, err := w.Write(bytes.Repeat([]byte("U"), 1024)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	w.Close(1024)
+
+	m := lastJSONL(t, filepath.Join(root, "media-buffer.jsonl"))
+	if m["direction"] != "up" {
+		t.Fatalf("expected direction=up in metatag, got %v", m["direction"])
+	}
+}
+
+// TestDownloadTeeSkips206 is the regression test for the whole-branch-review
+// I2 finding: main.go's mitmPipeline used to gate the download tee on
+// `resp.StatusCode >= 200 && resp.StatusCode < 300`, which includes 206
+// Partial Content. Browser <video>/<audio> elements fetch media via Range
+// requests, so a real playback session is a STREAM of 206 responses — each
+// one used to be captured as its own "whole" object, producing a pile of
+// unrelated byte fragments that are never replayable. Phase 1 is whole-file
+// capture only; Range/partial (206) + HLS segment reassembly is Phase 2.
+//
+// Confirmed this test catches the regression: temporarily widening the guard
+// below back to `resp.StatusCode >= 200 && resp.StatusCode < 300` makes the
+// 206 assertion fail (a capture is started for the partial response).
+// Restored to the fixed `== 200` guard afterwards.
+func TestDownloadTeeSkips206(t *testing.T) {
+	root := t.TempDir()
+	b := NewMediaBuffer(root, true, 512<<20)
+
+	body := bytes.Repeat([]byte("RANGE-FRAGMENT-"), 100)
+
+	// A 206 Partial Content response (Range fetch) must NOT be captured.
+	srv206 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Content-Range", "bytes 0-1499/3000")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(body)
+	}))
+	defer srv206.Close()
+
+	resp, err := http.Get(srv206.URL + "/movie.mp4")
+	if err != nil {
+		t.Fatalf("upstream GET: %v", err)
+	}
+	var w206 *ObjectWriter
+	if resp.StatusCode == 200 { // mirrors main.go's fixed #812/I2 guard
+		ctype := resp.Header.Get("Content-Type")
+		if b.IsMedia(ctype, "/movie.mp4") {
+			w206 = b.Capture("mac206", "cdn.host", "https://cdn.host/movie.mp4", "/movie.mp4", ctype, "down", resp.ContentLength)
+		}
+	}
+	if w206 != nil {
+		t.Fatal("a 206 Partial Content response must not be captured")
+	}
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		t.Fatalf("stream body: %v", err)
+	}
+	resp.Body.Close()
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("ReadDir(%s): %v", root, err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("phantom capture artifacts created for a 206 response: %v", entries)
+	}
+
+	// Conversely, a 200 media response IS captured.
+	srv200 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write(body)
+	}))
+	defer srv200.Close()
+
+	resp2, err := http.Get(srv200.URL + "/movie.mp4")
+	if err != nil {
+		t.Fatalf("upstream GET: %v", err)
+	}
+	var w200 *ObjectWriter
+	if resp2.StatusCode == 200 {
+		ctype := resp2.Header.Get("Content-Type")
+		if b.IsMedia(ctype, "/movie.mp4") {
+			w200 = b.Capture("mac200", "cdn.host", "https://cdn.host/movie.mp4", "/movie.mp4", ctype, "down", resp2.ContentLength)
+		}
+	}
+	if w200 == nil {
+		t.Fatal("a 200 media response must be captured")
+	}
+	resp2.Body = teeReadCloser(resp2.Body, w200)
+	if _, err := io.Copy(io.Discard, resp2.Body); err != nil {
+		t.Fatalf("stream body: %v", err)
+	}
+	resp2.Body.Close()
+
+	m := lastJSONL(t, filepath.Join(root, "media-buffer.jsonl"))
+	if m["mac_hash"] != "mac200" || m["direction"] != "down" {
+		t.Fatalf("expected 200 download captured with mac_hash=mac200, got %v", m)
+	}
+}

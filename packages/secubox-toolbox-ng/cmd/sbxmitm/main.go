@@ -422,9 +422,21 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// the upload; a nil writer is a no-op. The upstream transport closes req.Body,
 	// which finalises the capture (w.Close). Only on non-splice allow|mitm flows
 	// (splice returns far earlier).
-	if px.mbuf != nil && req.Body != nil {
+	//
+	// I1 whole-branch-review fix — req.Body is NEVER nil for a proxied request,
+	// even a bodyless GET (net/http gives it http.NoBody), so a nil check alone
+	// doesn't tell us there is an uploaded body. And IsMedia's mediaKind falls
+	// back to classifying by PATH EXTENSION when the request Content-Type is
+	// empty — so a plain media DOWNLOAD GET (e.g. GET /v.mp4) used to match
+	// this UPLOAD branch on path alone, producing a phantom session dir, an
+	// empty object-0.mp4 and a direction:"up", bytes:0 metatag on every
+	// download. Require BOTH a real request body (ContentLength > 0 — a GET
+	// download has no request body; this is the primary guard) AND a
+	// non-empty request Content-Type that IsMedia matches ON THE CONTENT-TYPE,
+	// so the path-extension fallback never drives the upload direction.
+	if px.mbuf != nil && req.ContentLength > 0 {
 		rct := req.Header.Get("Content-Type")
-		if px.mbuf.IsMedia(rct, req.URL.Path) {
+		if rct != "" && px.mbuf.IsMedia(rct, req.URL.Path) {
 			if w := px.mbuf.Capture(clientHash, host,
 				"https://"+host+req.URL.RequestURI(), req.URL.Path, rct, "up",
 				req.ContentLength); w != nil {
@@ -477,9 +489,16 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// rolling buffer so it can be replayed for a short window. Non-blocking: the
 	// ObjectWriter behind the TeeReader copies chunks to a bounded channel and
 	// drops-if-full, so it NEVER slows or fails the client stream; a nil writer
-	// is a no-op. resp.Body's deferred Close (above) finalises the capture. 2xx
-	// only; splice/passthrough flows never reach here.
-	if px.mbuf != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	// is a no-op. resp.Body's deferred Close (above) finalises the capture.
+	// splice/passthrough flows never reach here.
+	//
+	// I2 whole-branch-review fix — 200 ONLY, not the whole 2xx range. Browser
+	// <video>/<audio> elements fetch media via Range requests, which the
+	// origin answers with a stream of 206 Partial Content responses; capturing
+	// each 206 as its own "whole" object produced a pile of unrelated byte
+	// fragments (never a replayable file). Phase 1 is whole-file capture only
+	// — Range/partial (206) + HLS segment reassembly is Phase 2.
+	if px.mbuf != nil && resp.StatusCode == 200 {
 		rctype := resp.Header.Get("Content-Type")
 		if px.mbuf.IsMedia(rctype, req.URL.Path) {
 			if w := px.mbuf.Capture(clientHash, host,
