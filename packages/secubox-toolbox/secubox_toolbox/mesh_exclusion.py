@@ -153,3 +153,49 @@ def _atomic_write(path: Path, lines: list) -> bool:
     tmp.write_text(new, encoding="utf-8")
     os.replace(tmp, path)
     return True
+
+
+def _verify_blob(cfg: dict) -> dict | None:
+    """Return the payload dict if the blob's content_hash matches its payload.
+    Signature/author verification is done by the annuaire on ingest (only
+    validly-signed blobs enter the journal that /config lists), so here we
+    re-check the content_hash binds the payload we apply. Skip on mismatch."""
+    payload = cfg.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    if cfg.get("content_hash") != content_hash(payload):
+        return None
+    return payload
+
+
+def pull_blobs() -> list:
+    """All current mitm-exclusion:* blob payloads (content-hash-verified)."""
+    resp = _annuaire("GET", "/config")
+    out = []
+    for cfg in (resp or {}).get("configs", []):
+        scope = cfg.get("scope") or ""
+        if not scope.startswith(SCOPE_PREFIX):
+            continue
+        p = _verify_blob(cfg)
+        if p is not None:
+            out.append(p)
+    return out
+
+
+def union_blobs(blobs: list) -> dict:
+    s, b, d = set(), set(), set()
+    for p in blobs:
+        s.update(x for x in (p.get("splice") or []) if isinstance(x, str))
+        b.update(x for x in (p.get("bypass") or []) if isinstance(x, str))
+        d.update(x for x in (p.get("disabled") or []) if isinstance(x, str))
+    return {"splice": sorted(s)[:FED_MAX], "bypass": sorted(b)[:FED_MAX],
+            "disabled": sorted(d)[:FED_MAX]}
+
+
+def sync() -> dict:
+    u = union_blobs(pull_blobs())
+    c1 = _atomic_write(FED_SPLICE, u["splice"])
+    c2 = _atomic_write(FED_BYPASS, u["bypass"])
+    c3 = _atomic_write(FED_DISABLED, u["disabled"])
+    return {"splice": len(u["splice"]), "bypass": len(u["bypass"]),
+            "disabled": len(u["disabled"]), "changed": c1 or c2 or c3}
