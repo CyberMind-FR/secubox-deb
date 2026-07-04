@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+"""#806 — pull all nodes' mitm-exclusion blobs → union → federated files."""
+import sys
+sys.path.insert(0, "/usr/lib/secubox/toolbox")
+from secubox_toolbox import mesh_exclusion as mx
+
+def main() -> int:
+    r = mx.sync()
+    sys.stderr.write("mesh-exclusion-sync: splice=%d bypass=%d disabled=%d changed=%s\n"
+                     % (r["splice"], r["bypass"], r["disabled"], r["changed"]))
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
