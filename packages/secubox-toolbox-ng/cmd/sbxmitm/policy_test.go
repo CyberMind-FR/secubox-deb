@@ -155,7 +155,8 @@ func TestBypassRegexSplices(t *testing.T) {
 	}
 	empty := write("empty", "")
 	seed := write("mitm-bypass-seed.conf",
-		"(.+\\.)?signal\\.org   # Signal\n(.+\\.)?ca-.*\\.fr   # Credit Agricole regional\n")
+		"(.+\\.)?signal\\.org   # Signal\n(.+\\.)?ca-.*\\.fr   # Credit Agricole regional\n"+
+			"(.+\\.)?adform\\.net   # ad net ALSO in bypass — ad-block must still win\n")
 	pol, err := LoadPolicy(PolicyOpts{
 		AllowPath: empty, LearnedPath: empty, SpliceSeedPath: empty,
 		SpliceLearnPath: empty, PureTrackersPath: empty,
@@ -169,6 +170,7 @@ func TestBypassRegexSplices(t *testing.T) {
 		{"signal.org", "splice"},
 		{"chat.signal.org", "splice"},
 		{"ca-toulouse.fr", "splice"},   // regex-wildcard bank now covered
+		{"adform.net", "block"},        // ad net in bypass → ad-block WINS (regression guard)
 		{"evilsignal.org", "mitm"},     // anchored → no substring over-match
 		{"example.com", "mitm"},
 	} {

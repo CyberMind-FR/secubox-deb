@@ -472,18 +472,16 @@ func (p *Policy) shouldSplice(sni string) bool {
 	if hostMatches(s, p.never) {
 		return false
 	}
-	if hostMatches(s, p.spliceSeed) || hostMatches(s, p.spliceLearn) {
-		return true
-	}
-	// #803 — a mitm-bypass (ignore_hosts) regex match also splices, so the R3
-	// engine honours the SAME cert-pinned exclusion list the Filtres MITM webui
-	// manages (Signal/WhatsApp/banks…). never-set still wins (checked above).
-	return p.matchesBypass(s)
+	return hostMatches(s, p.spliceSeed) || hostMatches(s, p.spliceLearn)
 }
 
 // matchesBypass reports whether host matches any compiled mitm-bypass regex
-// (seed ∪ static ∪ dynamic). Callers hold p.mu.RLock (shouldSplice does).
+// (seed ∪ static ∪ dynamic). Callers hold p.mu.RLock (Decide does).
 func (p *Policy) matchesBypass(host string) bool {
+	host = strings.Trim(strings.ToLower(host), ".")
+	if host == "" {
+		return false
+	}
 	for _, group := range [][]*regexp.Regexp{p.bypassSeedRe, p.bypassStaticRe, p.bypassDynRe} {
 		for _, re := range group {
 			if re.MatchString(host) {
@@ -562,6 +560,13 @@ func (p *Policy) Decide(host, sni string) string {
 	}
 	if p.blockedByAd(host) {
 		return "block"
+	}
+	// #803 — mitm-bypass (ignore_hosts) match splices cert-pinned APPS
+	// (Signal/WhatsApp/banks…). Checked AFTER ad-block so ad networks that also
+	// appear in the bypass list (adform, amazon-adsystem, rubiconproject…) are
+	// still BLOCKED, not passed through — ad-blocking wins over app-bypass.
+	if p.matchesBypass(sni) {
+		return "splice"
 	}
 	return "mitm"
 }
