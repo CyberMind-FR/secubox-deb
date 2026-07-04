@@ -161,4 +161,4 @@ systemctl enable --now nftables
 
 - [[Live-USB]] - Ausprobieren ohne Installation
 - [[Configuration]] - Systemkonfiguration
-- [[MODULES-DE|Module]] - Moduldetails
+- [[Module|MODULES-DE]] - Moduldetails

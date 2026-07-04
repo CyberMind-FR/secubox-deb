@@ -245,6 +245,6 @@ Alle Endpunkte geben konsistente Fehlerantworten zurück:
 
 ## Siehe auch
 
-- [[MODULES-DE|Module]] — Vollständige Modulliste
+- [[Module|MODULES-DE]] — Vollständige Modulliste
 - [[Configuration]] — Systemkonfiguration
 - [[Troubleshooting]] — Fehlerbehebung

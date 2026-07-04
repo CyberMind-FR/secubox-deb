@@ -282,4 +282,4 @@ Nach dem Flashen bootet das Board SecuBox automatisch.
 
 - [[Installation]] - Allgemeine Installationsanleitung
 - [[Live-USB]] - Ausprobieren ohne Installation
-- [[MODULES-DE|Module]] - Verfügbare Module
+- [[Module|MODULES-DE]] - Verfügbare Module
