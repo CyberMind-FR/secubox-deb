@@ -3229,6 +3229,23 @@ async def admin_ad_stats(hours: int = 24) -> dict:
         except Exception:
             nd = 0
     out["network_drops"] = nd
+    # DNS-layer ad-blocking (secubox-adblock-sync #740): the Unbound sinkhole
+    # kills most ads BEFORE they reach the engine, so total_blocked (204s) reads
+    # low/0. Surface the real DNS blocking so the tab isn't misleading — "0
+    # engine blocks" ≠ "no ad-blocking".
+    try:
+        import json as _json
+        s = _json.loads(Path("/var/lib/secubox/ad-guard/sinkhole-status.json").read_text())
+        comp = s.get("compile", {}) or {}
+        out["dns_sinkhole"] = {
+            "enabled": bool(s.get("enabled")),
+            "domains": int(s.get("blocked", 0) or 0),
+            "net_rules": int(comp.get("net_rules", 0) or 0),
+            "cosmetic_domains": int(comp.get("cosmetic_domains", 0) or 0),
+            "sources": sorted((comp.get("sources") or {}).keys()),
+        }
+    except Exception:
+        out["dns_sinkhole"] = {"enabled": None}
     return out
 
 

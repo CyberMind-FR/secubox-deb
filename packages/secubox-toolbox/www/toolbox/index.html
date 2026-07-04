@@ -177,8 +177,13 @@
             <button onclick="loadAds()">🔁 Refresh</button>
         </div>
         <div id="ads-section" class="grid">
+            <div class="card" style="grid-column:1/-1;border-left:3px solid var(--matrix-green,#00ff41)">
+                <h2>🛡️ Blocage DNS (couche principale)</h2>
+                <div class="kv" id="ads-dns"><span class="k">loading…</span><span class="v"></span></div>
+                <p style="font-size:.72rem;color:var(--p31-dim,#888);margin-top:.4rem">La plupart des pubs sont tuées ICI, au DNS, avant d'atteindre le moteur MITM — le compteur « 204 » ci-dessous ne mesure QUE ce qui passe le DNS.</p>
+            </div>
             <div class="card" style="grid-column:1/-1">
-                <h2>🛑 Trackers & pubs bloqués (24h)</h2>
+                <h2>🛑 Bloqués par le moteur MITM (204, 24h)</h2>
                 <div class="kv" id="ads-kpi"><span class="k">loading…</span><span class="v"></span></div>
             </div>
             <div class="card" style="grid-column:1/-1">
@@ -631,6 +636,19 @@ async function loadAds() {
     const kpi = document.getElementById('ads-kpi');
     const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     if (!d || d.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(d&&d.__error)||'no data'}</span>`; return; }
+    // #ads — DNS-layer blocking (the real ad-blocker; engine 204s are secondary)
+    const dns = d.dns_sinkhole || {};
+    const dnsEl = document.getElementById('ads-dns');
+    if (dnsEl) {
+      dnsEl.innerHTML = dns.enabled
+        ? `<span class="k">État</span> <span class="v" style="color:var(--matrix-green,#00ff41)">🟢 actif</span>`
+          + ` <span class="k">Domaines pub/tracker sinkholés</span> <span class="v">${(dns.domains||0).toLocaleString('fr-FR')}</span>`
+          + ` <span class="k">Règles réseau</span> <span class="v">${(dns.net_rules||0).toLocaleString('fr-FR')}</span>`
+          + ` <span class="k">Sources</span> <span class="v">${(dns.sources||[]).join(', ')||'—'}</span>`
+        : (dns.enabled === false
+            ? `<span class="k">État</span> <span class="v" style="color:var(--cinnabar,#e63946)">⚪ désactivé</span>`
+            : `<span class="k">État</span> <span class="v">indisponible</span>`);
+    }
     kpi.innerHTML = `<span class="k">Pubs bloquées (204)</span> <span class="v">${d.total_blocked||0}</span>`
       + ` <span class="k">Trackers détectés</span> <span class="v">${d.trackers_seen||0}</span>`
       + ` <span class="k">Pages nettoyées</span> <span class="v">${d.pages_cleaned||0}</span>`
