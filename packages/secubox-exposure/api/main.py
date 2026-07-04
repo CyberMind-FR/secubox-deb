@@ -158,11 +158,26 @@ async def get_exposure(vhost: str, user: dict = Depends(require_jwt)):
 @app.post("/exposure/{vhost}")
 async def set_exposure(vhost: str, body: ExposureSet, user: dict = Depends(require_jwt)):
     _validate_vhost(vhost)
+    p = _reach.snippet_path(vhost)
+    try:
+        prev = p.read_text()                    # last-good content (may not exist)
+    except OSError:
+        prev = None
     _reach.write_snippet(vhost, body.reach, body.mesh)
-    _reload_nginx()
+    if not _reload_nginx():                      # nginx -t failed → roll back
+        try:
+            if prev is not None:
+                p.write_text(prev)
+            else:
+                p.unlink(missing_ok=True)
+        finally:
+            _reload_nginx()                      # best-effort restore of last-good
+        raise HTTPException(status_code=500,
+                             detail="nginx validation failed; exposure unchanged")
+    # nginx reloaded OK — now apply Tor, then audit the confirmed change.
+    await _apply_tor(vhost, body.tor, user)
     rec = {"vhost": vhost, "reach": body.reach, "mesh": body.mesh, "tor": body.tor}
     _audit_exposure(vhost, rec, user.get("sub", "?"))
-    # tor toggle reuses existing /tor/add|remove; wired by the webui, not duplicated here.
     return rec
 
 
