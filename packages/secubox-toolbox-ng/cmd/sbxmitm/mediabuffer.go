@@ -59,6 +59,15 @@ const mediaBufferLineMax = 4096
 // memory, large enough that a healthy /data never drops.
 const mediaBufferChanCap = 64
 
+// defaultRetentionSecs is the Phase 1 time-eviction window (design §Global
+// Constraints: "Retention: time-only, default RETENTION_SECS=1200 (20 min)").
+const defaultRetentionSecs int64 = 1200
+
+// defaultSizeCeilBytes is the Phase 1 LRU pressure valve (24 GiB) — the
+// janitor (mediabuffer_janitor.go) only evicts early, by oldest first_ts, when
+// the buffer root exceeds this even before an object's retention has elapsed.
+const defaultSizeCeilBytes int64 = 24 << 30
+
 // MediaBuffer is the buffer store: it decides whether a flow is capturable
 // media and, if so, opens a per-object file under a fresh session directory
 // and returns a writer for it. It holds no long-lived resources of its own
@@ -68,6 +77,23 @@ type MediaBuffer struct {
 	root          string
 	enabled       bool
 	perObjectCeil int64
+
+	// retentionSecs / sizeCeilBytes are the janitor's (mediabuffer_janitor.go)
+	// eviction knobs — time-window and LRU size ceiling respectively. Wired
+	// with sane Phase 1 defaults here so NewMediaBuffer's signature never has
+	// to change for other callers/tasks; tests may poke them directly (they
+	// are unexported, same-package fields, e.g. `b.retentionSecs = 60`).
+	retentionSecs int64
+	sizeCeilBytes int64
+
+	// nowFn is the janitor's clock seam: defaults to the real wall clock but
+	// is replaceable in tests so eviction timing is deterministic.
+	nowFn func() int64
+
+	// janitorTick overrides RunJanitor's ticker period; zero means the real
+	// default (30s). Test-only seam so RunJanitor's ticking behaviour itself
+	// (not just SweepOnce) can be exercised without a real 30s wait.
+	janitorTick time.Duration
 
 	// chanCap is the per-object write-queue depth (default mediaBufferChanCap).
 	// Overridable in tests to force the drop-when-full path deterministically.
@@ -90,6 +116,9 @@ func NewMediaBuffer(root string, enabled bool, perObjectCeil int64) *MediaBuffer
 		enabled:       enabled,
 		perObjectCeil: perObjectCeil,
 		chanCap:       mediaBufferChanCap,
+		retentionSecs: defaultRetentionSecs,
+		sizeCeilBytes: defaultSizeCeilBytes,
+		nowFn:         func() int64 { return time.Now().Unix() },
 	}
 }
 

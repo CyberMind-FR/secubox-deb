@@ -22,6 +22,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -676,6 +677,14 @@ func main() {
 	// learning candidates ride the existing ad-event channel (one POST / 10s).
 	go px.ads.runAdStatsFlusher(*portal, px.cand)
 	go px.swNeuter.runCandidateFlusher(*portal)
+	if *mediaBuffer {
+		// #812 R4 media buffer janitor — evicts bytes past retention (time) or
+		// under disk pressure (LRU size ceiling), leaving only the metatag.
+		// Process-lifetime background goroutine (mirrors the flushers above);
+		// each of the 4 sbxmitm worker processes runs its own — SweepOnce is
+		// written to be safe under that concurrency (see mediabuffer_janitor.go).
+		go px.mbuf.RunJanitor(context.Background())
+	}
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
 		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The
