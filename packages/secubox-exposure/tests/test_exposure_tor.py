@@ -21,6 +21,27 @@ sys.path.insert(0, str(ROOT / "packages" / "secubox-exposure"))
 import api.main as m
 
 
+def test_tor_add_endpoint_refuses_excluded_host(tmp_path, monkeypatch):
+    """The cert-pin gate must cover the direct /tor/add path (and /emancipate,
+    which routes through it), not only POST /exposure — else it is bypassable."""
+    import pytest
+    from fastapi import HTTPException
+    monkeypatch.setattr(m, "TOR_DATA", tmp_path)
+    monkeypatch.setattr(m._excl, "exclusion_reason",
+                        lambda h: (True, "MITM-bypass (cert-pinned): test") if "signal" in h else (False, ""))
+    called = []
+    monkeypatch.setattr(m, "_tor_add_sync",
+                        lambda name, local_port, onion_port: called.append(name) or {"success": True})
+
+    with pytest.raises(HTTPException) as ei:
+        asyncio.run(m.tor_add(m.TorAddRequest(service="signal.org", local_port=80), {"sub": "admin"}))
+    assert ei.value.status_code == 400
+    assert called == []                                    # never created the hidden service
+
+    asyncio.run(m.tor_add(m.TorAddRequest(service="myblog", local_port=80), {"sub": "admin"}))
+    assert called == ["myblog"]                            # non-excluded proceeds
+
+
 def test_apply_tor_add_calls_sync_helper_when_hs_absent(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "TOR_DATA", tmp_path)
     calls = []
