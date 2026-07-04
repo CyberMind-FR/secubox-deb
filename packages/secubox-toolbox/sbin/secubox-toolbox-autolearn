@@ -28,6 +28,11 @@ PURE_OUT = os.environ.get("SECUBOX_AUTOLEARN_PURE_OUT",
 SPLICE_LEARNED_OUT = os.environ.get(
     "SECUBOX_SPLICE_LEARNED_OUT",
     "/var/lib/secubox/toolbox/splice-learned.txt")
+# The webui Filtres MITM "🔍 learned" source — splice-learned hosts are mirrored
+# here as bypass regex so they show up + are honoured on the ignore_hosts path.
+BYPASS_DYNAMIC_OUT = os.environ.get(
+    "SECUBOX_BYPASS_DYNAMIC",
+    "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf")
 SPLICE_MIN_HITS = int(os.environ.get("SECUBOX_SPLICE_MIN_HITS", "20"))
 SPLICE_MAX = 2000
 MIN_SITES = 2          # cross-site threshold for operator-grade trackers
@@ -157,6 +162,31 @@ def _splice_feed() -> int:
     except Exception as e:
         sys.stderr.write(f"autolearn: splice write failed: {e}\n")
         return -1
+    # Mirror into the webui MITM filter list (the "🔍 learned" source shown in
+    # Filtres MITM), as bypass regex, so a splice-learned host is ALSO visible +
+    # editable in the webui and honoured by the ignore_hosts path. Merge, never
+    # clobber operator/other-autolearn entries. Best-effort — never fails the run.
+    try:
+        import re as _re
+        want = {"(.+\\.)?" + _re.escape(h) for h in hosts}
+        existing, keep = set(), []
+        try:
+            for ln in open(BYPASS_DYNAMIC_OUT, encoding="utf-8"):
+                keep.append(ln.rstrip("\n"))
+                s = ln.split("#", 1)[0].strip()
+                if s:
+                    existing.add(s)
+        except OSError:
+            pass
+        add = sorted(want - existing)
+        if add:
+            os.makedirs(os.path.dirname(BYPASS_DYNAMIC_OUT), exist_ok=True)
+            btmp = BYPASS_DYNAMIC_OUT + ".tmp"
+            with open(btmp, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(keep + add).strip("\n") + "\n")
+            os.replace(btmp, BYPASS_DYNAMIC_OUT)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: bypass-dynamic mirror failed: {e}\n")
     return len(hosts)
 
 
