@@ -1,5 +1,25 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-07-02*
+*Mis à jour : 2026-07-04*
+
+---
+
+## 🟣 MIND — ToolBox rapport vie privée (suivis #785/#790, ajouts 2026-07-04)
+
+> Contexte : rapport kbin fidèle PDF↔web (donut-grids, media types, fiche de personnage,
+> Quêtes réelles) mergé (#785 #787 · #790 #794 · #792). Voir [[ToolBox]] wiki + HISTORY 07-04.
+
+- [ ] **#786 — double-caching de l'agrégation media-catch** (non bloquant, dormant hors R3/R4).
+  `/media_types` (secubox-dpi) + `_media_stats` (toolbox) agrègent `/run/secubox/media-catch.jsonl`
+  **par requête** (borné mémoire par tail-read, mais pas de cache 60 s comme la règle
+  double-caching CLAUDE.md). Option préférée : sbxmitm émet un `media-stats.json` pré-roulé
+  (pattern producteur→static→lecture, comme `/exfil`) ; sinon cache asyncio 60 s dans chaque
+  process consommateur. Fichiers : `common/secubox_core/media_catch.py`, `secubox-dpi/api/main.py`,
+  `secubox-toolbox/.../api.py`.
+- [ ] **Cosmétique HTML Quêtes** : double-espace quand une menace a un `detail` mais pas de
+  `service`/`dst` (`report-live.html.j2`, garde `{% if _dest or q.detail %}`).
+- [ ] **Nettoyage post-`.deb`** : le board gk2 a un drop-in MPLCONFIGDIR manuel
+  `/etc/systemd/system/secubox-toolbox.service.d/50-mplconfigdir.conf` ; le paquet livre
+  l'équivalent `30-mplcache.conf` → retirer le `/etc` manuel au prochain install du `.deb`.
 
 ---
 

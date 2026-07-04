@@ -7005,3 +7005,39 @@ CONFIG_USB_NET_RNDIS_HOST=y
 - Updated `packages/secubox-p2p/README.md` with an "Evolutions (#774)"
   section covering all of the above (endpoints, real config defaults,
   audit log). No `.py` files touched, no tests run/modified.
+
+## 2026-07-03 → 07-04 — ToolBox privacy report: fidelity, media types, character sheet (#785 #790 #792 · +incident)
+
+Three features, brainstorm → spec → plan → subagent-driven SDD with two-stage
+review + adversarial whole-branch review, **all merged to master**, deployed +
+validated live on gk2.
+
+- **#785 — kbin report PDF fidelity + media types + WebUI DPI** (PR #787). The
+  report PDF now mirrors its (excellent) HTML page: DPI-Exfil (me) + Overall (all)
+  render as matplotlib **donut-grids** instead of text bullets; new **🎬 media-types**
+  block (real MIME captured by sbxmitm — video/audio/HLS·DASH — *and* the DPI service
+  category `media`), me + overall, in PDF **and** web. New shared
+  `secubox_core.media_catch` aggregator (bounded tail-read, fail-empty). Two DPI WebUI
+  cards (services-by-category bytes + MIME media types) + public `/media_types` endpoint.
+  Follow-up **#786** filed (double-caching invariant for the media aggregation).
+- **Incident (during #785 deploy):** heavier PDFs (more matplotlib grids, ~9 s render)
+  ran **synchronously on the single-worker event loop** and the WAF 504-page auto-retry
+  storm wedged the whole toolbox vhost (board-wide 504). Hardened live + in source:
+  render off-loop (threadpool) + serialized (asyncio lock; pyplot isn't thread-safe) +
+  **per-device PDF cache** (double-checked → a retry storm = 1 render, rest instant) +
+  persistent **MPLCONFIGDIR** (drop-in `30-mplcache.conf` + postinst). See memory
+  project_toolbox_pdf_render_eventloop.
+- **#790 — rich Netrunner character sheet + route parity** (PR #794). The PDF
+  *fiche de personnage* is now faithful to the HTML `.nr` card: ⚡ Caractéristiques with
+  pips `●●●○○○` + notes, 🎒 Inventaire ✓/✗, 🐉 Bestiaire, and a new ⚔️ Quêtes/menaces
+  section. `_enrich_report_data(mac_hash, data, ua="")` factored out of `report_me` and
+  applied to `/report/{token}` + `/admin/.../report` → all PDF routes now emit the same
+  rich content (were bare before). Full-fpdf, no new matplotlib.
+- **#792 (folded into #790) — real Quêtes.** `_dpi_stats` now exposes `alerts_raw`
+  (kind/service/dst/detail) beside the donut `alerts` ({label,count}); the Quêtes section
+  (HTML + PDF) shows each threat's destination + detail (`🗡️ NEW CLOUD — AWS S3`,
+  `🗡️ BEACONING — Google LLC · 15 flux périodiques`) instead of a dangling em-dash.
+
+Live on gk2: real device renders a 5-page PDF with pip bars, ✓/✗ inventory, and populated
+Quêtes; token route enriched; board stable (offload+lock+cache intact). 202 toolbox tests
+green. New wiki page [[ToolBox]] documenting the cabine use case + report features.

@@ -1,5 +1,40 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-02*
+*Mis à jour : 2026-07-04*
+
+---
+
+## ✅ 2026-07-03 → 07-04 : ToolBox — rapport vie privée fidèle + media types + fiche de personnage (#785 #790 #792)
+
+Trois features (brainstorm → spec → plan → SDD subagent-driven, revue two-stage +
+whole-branch adversariale), **toutes mergées sur master**, déployées + validées live gk2.
+
+- **#785 — PDF kbin fidèle à la page web + media types + WebUI DPI** ✅ MERGED (PR #787).
+  Onglets DPI-Exfil (me) + Overall en **donut-grids** matplotlib (fini les puces) ; bloc
+  **🎬 media types** (MIME réels capté sbxmitm + catégorie DPI `media`), me+overall, PDF+web ;
+  `secubox_core.media_catch` (tail-read borné, fail-empty) ; 2 cards WebUI DPI + endpoint
+  `/media_types`.
+- **Incident déploiement** ✅ résolu : rendu PDF matplotlib **sync sur l'event-loop** du
+  worker unique + tempête auto-retry de la page 504 WAF → 504 board-wide. Durci (live+source) :
+  threadpool + asyncio.Lock (pyplot pas thread-safe) + **cache PDF par device** (double-check →
+  1 rendu par tempête) + **MPLCONFIGDIR** persistant.
+- **#790 — fiche de personnage riche + parité routes** ✅ MERGED (PR #794). Fiche PDF fidèle
+  à la carte `.nr` : ⚡ pips `●●●○○○`+notes, 🎒 inventaire ✓/✗, 🐉 bestiaire, ⚔️ Quêtes/menaces.
+  `_enrich_report_data` factorisé → `/report/{token}` + `/admin/.../report` = même PDF riche
+  que `/report/me` (avant : PDF nu). Full-fpdf.
+- **#792 (replié dans #790) — Quêtes réelles** ✅ CLOSED. `_dpi_stats` expose `alerts_raw`
+  (kind/service/dst/detail) → les menaces montrent destination + détail (`🗡️ NEW CLOUD — AWS S3`)
+  au lieu d'un « — » orphelin, côté HTML + PDF.
+
+Wiki : nouvelle page **[[ToolBox]]** (cas d'usage cabine numérique + features rapport). 202
+tests toolbox verts. Backups board `/root/backup-785-*` + `/root/backup-790-062856`.
+
+### ⬜ Next Up ToolBox (déféré, non bloquant)
+
+- **#786 — double-caching de l'agrégation media-catch** : `/media_types` + `_media_stats`
+  agrègent le JSONL par requête (borné mémoire par tail-read, mais pas de cache 60 s comme la
+  règle CLAUDE.md). Option préférée : sbxmitm émet un `media-stats.json` pré-roulé. Dormant
+  hors R3/R4.
+- **Cosmétique HTML Quêtes** : double-espace quand une menace a un détail mais pas de destination.
 
 ---
 
