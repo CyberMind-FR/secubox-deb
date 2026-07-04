@@ -103,3 +103,43 @@ def test_set_exposure_happy_path_writes_new_content_and_returns_record(tmp_path,
     assert r.status_code == 200
     assert r.json() == {"vhost": "z.example", "reach": "wan", "mesh": False, "tor": False}
     assert (tmp_path / "snip" / "z.example.conf").read_text() == ""
+
+
+def test_tor_hard_refused_for_excluded_host_but_reach_applied(tmp_path, monkeypatch):
+    """Requesting Tor for a cert-pinned host → 400, but the reach snippet is
+    still written + reloaded (Tor is the only channel refused). Never calls
+    _apply_tor for an excluded host."""
+    import api.main as m
+    tor_calls = []
+
+    async def _spy_tor(vhost, want, user):
+        tor_calls.append(vhost)
+
+    monkeypatch.setattr(m, "_apply_tor", _spy_tor)
+    monkeypatch.setattr(m._excl, "exclusion_reason",
+                        lambda h: (True, "MITM-bypass (cert-pinned): test"))
+    c = _client(tmp_path, monkeypatch, reload_ok=True)
+    monkeypatch.setattr(m, "_apply_tor", _spy_tor)  # _client re-noops it; re-install spy
+
+    r = c.post("/exposure/api.anthropic.com", json={"reach": "lan", "mesh": False, "tor": True})
+    assert r.status_code == 400
+    assert "exclu" in r.json()["detail"].lower()
+    assert tor_calls == []                                  # never created a hidden service
+    assert (tmp_path / "snip" / "api.anthropic.com.conf").read_text() != ""  # reach applied
+
+
+def test_tor_allowed_for_non_excluded_host(tmp_path, monkeypatch):
+    import api.main as m
+    tor_calls = []
+
+    async def _spy_tor(vhost, want, user):
+        tor_calls.append((vhost, want))
+
+    monkeypatch.setattr(m._excl, "exclusion_reason", lambda h: (False, ""))
+    c = _client(tmp_path, monkeypatch, reload_ok=True)
+    monkeypatch.setattr(m, "_apply_tor", _spy_tor)
+
+    r = c.post("/exposure/blog.example", json={"reach": "wan", "mesh": False, "tor": True})
+    assert r.status_code == 200
+    assert r.json()["tor"] is True
+    assert tor_calls == [("blog.example", True)]

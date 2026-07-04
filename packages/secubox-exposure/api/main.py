@@ -36,6 +36,7 @@ except ImportError:
         return {"sub": "dev"}
 
 from api import reach as _reach
+from api import exclusion as _excl
 
 app = FastAPI(title="SecuBox Exposure Manager API", version="2.0.0")
 
@@ -174,7 +175,19 @@ async def set_exposure(vhost: str, body: ExposureSet, user: dict = Depends(requi
             await asyncio.to_thread(_reload_nginx)   # best-effort restore of last-good
         raise HTTPException(status_code=500,
                              detail="nginx validation failed; exposure unchanged")
-    # nginx reloaded OK — now apply Tor, then audit the confirmed change.
+    # nginx reloaded OK — reach is applied. Tor is HARD-REFUSED for cert-pinned /
+    # MITM-bypassed hosts (shared toolbox exclusion list — Filtres MITM + splice +
+    # autolearn): never anonymously re-expose an endpoint that clients pin.
+    if body.tor:
+        excluded, why = _excl.exclusion_reason(vhost)
+        if excluded:
+            rec = {"vhost": vhost, "reach": body.reach, "mesh": body.mesh, "tor": False}
+            _audit_exposure(vhost, rec, user.get("sub", "?"))
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tor refusé pour {vhost} : domaine exclu — {why}. "
+                       f"Reach '{body.reach}' appliqué.")
+    # not excluded — now apply Tor, then audit the confirmed change.
     await _apply_tor(vhost, body.tor, user)
     rec = {"vhost": vhost, "reach": body.reach, "mesh": body.mesh, "tor": body.tor}
     _audit_exposure(vhost, rec, user.get("sub", "?"))
