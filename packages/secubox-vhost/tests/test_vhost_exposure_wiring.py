@@ -81,3 +81,27 @@ def test_create_vhost_stays_ungated_but_loadable_when_seed_fails(tmp_path, monke
     conf = (tmp_path / "available" / "broken.example.conf").read_text()
     # no include emitted — nginx stays loadable even though the seed failed
     assert "include /etc/nginx/snippets/exposure/broken.example.conf;" not in conf
+
+
+def test_update_vhost_preserves_exposure_include_on_regenerated_config(tmp_path, monkeypatch):
+    """Fix B (ref #793 re-review): update_vhost must not silently drop the
+    exposure include for a vhost that already has a gating snippet on disk —
+    otherwise editing the vhost re-opens it to the world while the dashboard
+    badge still shows the old (gated) state."""
+    seed_dir = tmp_path / "snip"
+    c = _client(tmp_path, monkeypatch, seed_dir=seed_dir)
+
+    # create — seeds the lan snippet and wires the include
+    r = c.post("/vhost", json={"domain": "gated.example", "backend": "http://127.0.0.1:9100"})
+    assert r.status_code == 200
+    conf = (tmp_path / "available" / "gated.example.conf").read_text()
+    assert "include /etc/nginx/snippets/exposure/gated.example.conf;" in conf
+    assert (seed_dir / "gated.example.conf").exists()
+
+    # update — must regenerate WITH the include still present (ensure_snippet
+    # is idempotent, so the existing snippet is left untouched, not overwritten)
+    r = c.put("/vhost/gated.example", json={"backend": "http://127.0.0.1:9101"})
+    assert r.status_code == 200
+    conf = (tmp_path / "available" / "gated.example.conf").read_text()
+    assert "include /etc/nginx/snippets/exposure/gated.example.conf;" in conf
+    assert "proxy_pass http://127.0.0.1:9101;" in conf

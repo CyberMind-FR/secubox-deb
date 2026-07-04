@@ -538,8 +538,15 @@ async def update_vhost(domain: str, update: VHostUpdate):
     tls_mode = update.tls_mode or current["tls_mode"]
     websocket = update.websocket if update.websocket is not None else current["websocket"]
 
+    # Re-seed (idempotent, never overwrites an existing snippet) and re-wire the
+    # exposure include exactly like create_vhost — otherwise regenerating the
+    # config here would silently drop the include line for a previously-gated
+    # vhost while the on-disk snippet still restricts it (ref #793 Fix B).
+    seeded = ensure_snippet(domain)
+
     # Regenerate config
-    conf_content = generate_vhost_config(domain, backend, tls_mode, websocket)
+    conf_content = generate_vhost_config(domain, backend, tls_mode, websocket,
+                                          exposure_include=seeded)
     conf_file.write_text(conf_content)
 
     # Handle enable/disable
