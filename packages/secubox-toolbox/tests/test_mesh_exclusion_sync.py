@@ -24,3 +24,15 @@ def test_sync_writes_fed_files_only_on_change(tmp_path, monkeypatch):
     assert r1["changed"] is True
     r2 = mx.sync()                # same content → no rewrite
     assert r2["changed"] is False
+
+
+def test_union_blobs_tolerates_malformed_fields():
+    # a verified-but-malformed blob (non-list field) must be skipped, not crash
+    blobs = [
+        {"node": "bad", "splice": 123, "bypass": True, "disabled": None},
+        {"node": "ok", "splice": ["a.com"], "bypass": [], "disabled": ["d.com"]},
+    ]
+    u = mx.union_blobs(blobs)          # must not raise
+    assert u["splice"] == ["a.com"]
+    assert u["disabled"] == ["d.com"]
+    assert u["bypass"] == []
