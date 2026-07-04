@@ -507,13 +507,23 @@ def scan_services() -> list:
 
 
 def get_tor_services() -> list:
-    """Get Tor hidden services"""
+    """Get Tor hidden services.
+
+    Degrades gracefully when the caller (e.g. the web-serving `secubox` user in
+    the aggregator) cannot read Tor's 0700 hidden-service dir — that dir holds
+    onion PRIVATE KEYS and must NOT be world-readable, so a PermissionError is
+    expected and correct. Return an empty list rather than 500 the /status page.
+    """
     services = []
 
-    if not TOR_DATA.exists():
+    try:
+        if not TOR_DATA.exists():
+            return services
+        entries = list(TOR_DATA.iterdir())
+    except OSError:
         return services
 
-    for dir_path in TOR_DATA.iterdir():
+    for dir_path in entries:
         if not dir_path.is_dir():
             continue
 
