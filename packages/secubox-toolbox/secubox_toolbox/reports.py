@@ -565,8 +565,35 @@ def _persona_bar(pdf, family: str, label: str, pct: int, col: tuple) -> None:
     pdf.set_y(y + 4)
 
 
+def _attr_row(pdf, family: str, a: dict) -> None:
+    """#790 — one character-sheet attribute line: icon+name · pips · value · note."""
+    pips = max(0, min(6, int(a.get("pips", 0) or 0)))
+    pdf.set_x(pdf.l_margin)
+    pdf.set_font(family, "", 9)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(42, 5, _safe(f"{a.get('icon', '')} {a.get('name', '')[:12]}"), ln=False)
+    pdf.set_text_color(0, 200, 80)
+    pdf.cell(26, 5, _safe("●" * pips + "○" * (6 - pips)), ln=False)
+    pdf.set_font(family, "B", 9)
+    pdf.set_text_color(0, 120, 255)
+    pdf.cell(12, 5, _safe(str(a.get("v", 0))), ln=False)
+    note = a.get("note") or ""
+    if note:
+        # Guard against fonts-dejavu-core shipping Regular+Bold only (no Oblique) —
+        # same pre-existing hazard already handled for the footer (see _setup_fonts).
+        note_style = "I" if (family != "DejaVu" or getattr(pdf, "_secubox_italic_ok", False)) else ""
+        pdf.set_font(family, note_style, 7)
+        pdf.set_text_color(140, 140, 140)
+        pdf.cell(0, 5, _safe(str(note)[:48]), ln=True)
+    else:
+        pdf.ln()
+    pdf.set_text_color(0)
+
+
 def _persona_block(pdf, family: str, report: dict) -> None:
-    """#707 — Cyberpunk-Netrunner character sheet header for the PDF."""
+    """#707/#790 — Cyberpunk-Netrunner character sheet for the PDF, faithful to
+    the HTML .nr card: pip attributes + notes, on/off inventory, bestiary, and
+    the active-threats (Quêtes) section from dpi_exfil alerts."""
     p = report.get("persona") or {}
     pdf.set_font(family, "B", 12)
     pdf.set_text_color(0, 212, 255)
@@ -584,22 +611,65 @@ def _persona_block(pdf, family: str, report: dict) -> None:
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 4, _safe(f"XP {p.get('xp',0):,} Ko echanges (7j)"), ln=True)
     pdf.ln(1)
-    # 4 attribute widgets
-    y = pdf.get_y()
-    bw = (_page_w(pdf) - 6) / 4
-    bh = 17
-    for i, a in enumerate((p.get("attrs") or [])[:4]):
-        x = pdf.l_margin + i * (bw + 2)
-        _widget(pdf, family, x, y, bw, bh, a.get("icon", "?"),
-                str(a.get("v", 0)), a.get("name", "")[:10], (15, 30, 40), fg=(0, 212, 255))
-    pdf.set_y(y + bh + 2)
-    # inventory + bestiary
-    _kv(pdf, "Inventaire",
-        "  ".join(f"{it.get('name','')} {'OK' if it.get('on') else 'x'}" for it in (p.get("inventory") or [])))
+
+    # ⚡ Caracteristiques — pip rows (mirror of the HTML .nr attributes)
+    pdf.set_x(pdf.l_margin)
+    pdf.set_font(family, "B", 9)
+    pdf.set_text_color(0, 212, 255)
+    pdf.cell(0, 5, _safe("⚡ CARACTERISTIQUES"), ln=True)
+    for a in (p.get("attrs") or [])[:4]:
+        _attr_row(pdf, family, a)
+
+    # 🎒 Inventaire · protections — on/off checks
+    inv = p.get("inventory") or []
+    if inv:
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font(family, "B", 9)
+        pdf.set_text_color(0, 212, 255)
+        pdf.cell(0, 5, _safe("🎒 INVENTAIRE · PROTECTIONS"), ln=True)
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font(family, "", 8)
+        for it in inv:
+            seg = _safe(f"{it.get('icon','')} {it.get('name','')}  ")
+            pdf.set_text_color(40, 40, 40)
+            pdf.cell(pdf.get_string_width(seg) + 1, 5, seg, ln=False)
+            if it.get("on"):
+                pdf.set_text_color(0, 180, 70)
+                mark = _safe("✓   ")
+            else:
+                pdf.set_text_color(170, 170, 170)
+                mark = _safe("✗   ")
+            pdf.cell(pdf.get_string_width(mark) + 2, 5, mark, ln=False)
+        pdf.ln(6)
+
+    # 🐉 Bestiaire · qui te traque — top trackers
     best = report.get("bestiary") or []
     if best:
-        _kv(pdf, "Bestiaire",
-            "  ·  ".join(f"{b.get('label','?')[:14]} x{b.get('count',0)}" for b in best[:4]))
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font(family, "B", 9)
+        pdf.set_text_color(0, 212, 255)
+        pdf.cell(0, 5, _safe("🐉 BESTIAIRE · QUI TE TRAQUE"), ln=True)
+        for b in best[:5]:
+            _bullet(pdf, f"{b.get('emoji', '👾')} {b.get('label', '?')[:24]}  x{b.get('count', 0)}", font_size=8)
+
+    # ⚔️ Quetes en cours · menaces — from dpi_exfil alerts (#790)
+    alerts = ((report.get("dpi_exfil") or {}).get("me") or {}).get("alerts") or []
+    pdf.set_x(pdf.l_margin)
+    pdf.set_font(family, "B", 9)
+    pdf.set_text_color(0, 212, 255)
+    pdf.cell(0, 5, _safe("⚔️ QUETES EN COURS · MENACES"), ln=True)
+    if alerts:
+        for q in alerts[:5]:
+            label = q.get("label") or q.get("kind") or "?"
+            dest = q.get("service") or q.get("dst") or ""
+            detail = q.get("detail") or ""
+            _bullet(pdf, f"🗡️ {str(label).upper()} — {dest} {detail}".strip(), font_size=8)
+    else:
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font(family, "", 8)
+        pdf.set_text_color(0, 150, 60)
+        pdf.cell(0, 5, _safe("✓ Aucune menace active — zone sure, runner."), ln=True)
+    pdf.set_text_color(0)
     pdf.ln(2)
 
 
