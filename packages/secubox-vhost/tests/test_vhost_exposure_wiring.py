@@ -105,3 +105,34 @@ def test_update_vhost_preserves_exposure_include_on_regenerated_config(tmp_path,
     conf = (tmp_path / "available" / "gated.example.conf").read_text()
     assert "include /etc/nginx/snippets/exposure/gated.example.conf;" in conf
     assert "proxy_pass http://127.0.0.1:9101;" in conf
+
+
+# ── redirect vhost support (ref: www.ganimed.fr → ganimed.fr) ─────────────────
+
+def test_generate_redirect_vhost_emits_301_no_proxy():
+    conf = m.generate_vhost_config(
+        "www.example.com", "", "off", False, True, redirect_to="https://example.com")
+    assert "return 301 https://example.com$request_uri;" in conf
+    assert "proxy_pass" not in conf
+    # a pure redirect vhost is never exposure-gated
+    assert "include /etc/nginx/snippets/exposure/" not in conf
+
+
+def test_generate_proxy_vhost_unaffected_when_no_redirect():
+    conf = m.generate_vhost_config(
+        "app.example.com", "http://127.0.0.1:9000", "off", False, True)
+    assert "proxy_pass http://127.0.0.1:9000;" in conf
+    assert "return 301" not in conf
+
+
+def test_redirect_vhost_needs_no_backend_but_proxy_does(monkeypatch, tmp_path):
+    monkeypatch.setattr(m, "NGINX_VHOST_DIR", tmp_path / "va")
+    monkeypatch.setattr(m, "NGINX_ENABLED_DIR", tmp_path / "ve")
+    import asyncio
+    from fastapi import HTTPException
+    # proxy vhost with no backend → 400
+    try:
+        asyncio.run(m.create_vhost(m.VHostCreate(domain="a.example")))
+        assert False, "expected HTTPException"
+    except HTTPException as e:
+        assert e.status_code == 400
