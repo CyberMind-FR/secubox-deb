@@ -31,3 +31,28 @@ def test_snippet_path():
 
 def test_reach_levels():
     assert REACH_LEVELS == ("localhost", "lan", "wan")
+
+def test_write_and_read_roundtrip(tmp_path, monkeypatch):
+    import api.reach as r
+    monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path)
+    r.write_snippet("a.example", "lan", True)
+    got = r.read_snippet_reach("a.example")
+    assert got == {"reach": "lan", "mesh": True}
+
+def test_read_missing_is_wan(tmp_path, monkeypatch):
+    import api.reach as r
+    monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path)
+    assert r.read_snippet_reach("nope.example") == {"reach": "wan", "mesh": False}
+
+def test_write_wan_then_read(tmp_path, monkeypatch):
+    import api.reach as r
+    monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path)
+    r.write_snippet("b.example", "wan", False)
+    assert r.read_snippet_reach("b.example") == {"reach": "wan", "mesh": False}
+
+def test_write_localhost(tmp_path, monkeypatch):
+    import api.reach as r
+    monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path)
+    r.write_snippet("c.example", "localhost", False)
+    assert r.read_snippet_reach("c.example") == {"reach": "localhost", "mesh": False}
+    assert not (tmp_path / "c.example.conf.tmp").exists()
