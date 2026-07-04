@@ -43,6 +43,21 @@ LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "9000")
 PUBLIC_HOSTNAME=$(config_get "public_hostname" "peertube.gk2.secubox.in")
 
+OPS_DIR="${SECUBOX_PEERTUBE_OPS_DIR:-/run/secubox/peertube/ops}"
+ADMIN_SECRET="${SECUBOX_PEERTUBE_ADMIN_SECRET:-/etc/secubox/secrets/peertube-admin}"
+
+# _write_result <id> <json-string> — atomic result file for the API to poll.
+_write_result() {
+    local id="$1" body="$2"
+    printf '%s' "$body" > "$OPS_DIR/$id.result.json.tmp"
+    chown root:secubox "$OPS_DIR/$id.result.json.tmp" 2>/dev/null || true
+    chmod 0640 "$OPS_DIR/$id.result.json.tmp" 2>/dev/null || true
+    mv -f "$OPS_DIR/$id.result.json.tmp" "$OPS_DIR/$id.result.json"
+}
+
+# _jq <file> <filter> — read a field from a request file (jq is available on the host).
+_jq() { jq -r "$2" < "$1" 2>/dev/null; }
+
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
@@ -130,6 +145,100 @@ PY
     log "Done. Retry the import from the PeerTube 'Import with URL' page."
 }
 
+cmd_process_ops() {
+    # Root-only: the peertube-ops.path unit runs this when a request appears.
+    [ -d "$OPS_DIR" ] || return 0
+    local f id op
+    for f in "$OPS_DIR"/*.request.json; do
+        [ -e "$f" ] || continue
+        id="$(basename "$f" .request.json)"
+        op="$(_jq "$f" '.op')"
+        case "$op" in
+            ping)                 _write_result "$id" '{"status":"done","detail":"pong"}' ;;
+            reset-admin-password) cmd_reset_admin_password "$f" "$id" ;;
+            upgrade)              cmd_upgrade "$f" "$id" ;;
+            *)                    _write_result "$id" "$(jq -nc --arg o "$op" '{status:"error",detail:("unknown op: "+$o)}')" ;;
+        esac
+        rm -f "$f"
+    done
+}
+
+cmd_reset_admin_password() {
+    # args: <request-file> <id>  (called by process-ops)
+    local reqf="${1:-}" id="${2:-}"
+    [ -n "$reqf" ] && [ -n "$id" ] || { err "usage: reset-admin-password <request-file> <id>"; return 1; }
+    local pw; pw="$(_jq "$reqf" '.password')"
+    [ -n "$pw" ] || { _write_result "$id" '{"status":"error","detail":"no password in request"}'; return; }
+    lxc_running || { _write_result "$id" '{"status":"error","detail":"LXC not running"}'; return; }
+    # PeerTube reset-password CLI is interactive (prompts once for the new
+    # password). Feed it on stdin as the peertube user with the service's env.
+    if printf '%s\n' "$pw" | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        sudo -u peertube env NODE_ENV=production NODE_CONFIG_DIR=/var/www/peertube/config \
+        bash -lc 'cd /var/www/peertube/peertube-latest && npm run reset-password -- -u root' >/dev/null 2>&1
+    then
+        # Keep the dashboard's stored admin secret in sync (get_admin_token()).
+        printf '%s' "$pw" > "$ADMIN_SECRET" && chmod 0600 "$ADMIN_SECRET"
+        chown secubox:secubox "$ADMIN_SECRET" 2>/dev/null || true
+        _write_result "$id" "{\"status\":\"done\",\"detail\":\"password reset\",\"password\":$(printf '%s' "$pw" | jq -Rs .)}"
+    else
+        _write_result "$id" '{"status":"error","detail":"peertube reset-password CLI failed"}'
+    fi
+}
+
+cmd_upgrade() {
+    # args: <request-file> <id>  (called by process-ops)
+    # NOTE: `target` (from the request) is currently ignored — upgrade.sh always
+    # fetches the latest PeerTube release; pinning to a specific target is not
+    # wired up yet.
+    local reqf="${1:-}" id="${2:-}"
+    [ -n "$id" ] || { err "usage: upgrade <request-file> <id>"; return 1; }
+    lxc_running || { _write_result "$id" '{"status":"error","detail":"LXC not running"}'; return; }
+    _write_result "$id" '{"status":"running","detail":"backup + download"}'
+    local ts; ts="$(date +%Y%m%d-%H%M%S)"
+    local backup="/var/lib/secubox/peertube/backups/pre-upgrade-$ts.sql.gz"
+
+    # 1. Mandatory DB backup (abort on failure). The backups dir is created by
+    #    postinst on the HOST, but pg_dump runs INSIDE the LXC — that host path
+    #    is not the same filesystem in the container, so ensure it exists there
+    #    too before dumping (otherwise gzip silently writes to a missing dir).
+    if ! lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- bash -lc \
+        "install -d -o peertube -g peertube -m 0750 /var/lib/secubox/peertube/backups && sudo -u postgres pg_dump peertube_prod | gzip > '$backup'" 2>/dev/null; then
+        _write_result "$id" "{\"status\":\"error\",\"detail\":\"DB backup failed — upgrade aborted\"}"
+        return
+    fi
+
+    # 2-5. Run PeerTube's official upgrade inside the LXC. PeerTube ships an
+    #      upgrade script that downloads the latest release, installs deps, and
+    #      runs migrations; the service is restarted after. It keeps the previous
+    #      versions/ dir, so a failed run leaves peertube-latest on the old build.
+    #      NOTE: verify this entrypoint live for v8.2.0 — some PeerTube releases
+    #      use `npm run upgrade-peertube` instead of scripts/upgrade.sh. If it
+    #      differs, adjust only this single command.
+    if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        sudo -u peertube env NODE_ENV=production NODE_CONFIG_DIR=/var/www/peertube/config \
+        bash -lc 'cd /var/www/peertube && ./peertube-latest/scripts/upgrade.sh' >/dev/null 2>&1
+    then
+        # 6. Health-check: PeerTube answers /api/v1/config once back up.
+        svc restart
+        local ok=0
+        for _ in $(seq 1 30); do
+            if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+                curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${HTTP_PORT}/api/v1/config" 2>/dev/null | grep -q 200
+            then ok=1; break; fi
+            sleep 2
+        done
+        if [ "$ok" = 1 ]; then
+            _write_result "$id" "{\"status\":\"done\",\"detail\":\"upgraded\",\"backup\":$(printf '%s' "$backup" | jq -Rs .)}"
+        else
+            _write_result "$id" "{\"status\":\"error\",\"detail\":\"upgraded but health-check failed — restore from backup if needed\",\"backup\":$(printf '%s' "$backup" | jq -Rs .)}"
+        fi
+    else
+        # Upgrade script failed — the old peertube-latest is untouched; restart it.
+        svc restart
+        _write_result "$id" "{\"status\":\"error\",\"detail\":\"upgrade script failed — running version unchanged\",\"backup\":$(printf '%s' "$backup" | jq -Rs .)}"
+    fi
+}
+
 cmd_help() {
     cat <<EOF
 peertubectl $VERSION — SecuBox PeerTube (native-LXC) controller
@@ -143,6 +252,7 @@ Usage: peertubectl <verb> [args]
                                 yt-dlp import works (YouTube blocks server IPs)
   logs [N]                      Tail N lines of peertube journal (default 50)
   reload                        Reload host nginx (after vhost changes)
+  process-ops                   (root) drain the /run ops spool
   help                          This message
 
 Config: $CONFIG_FILE  (name/ip/path/http_port/public_hostname)
@@ -155,6 +265,9 @@ main() {
     case "$noun" in
         install|status|start|stop|restart|logs|reload) "cmd_${noun}" "$@" ;;
         set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
+        process-ops) cmd_process_ops "$@" ;;
+        reset-admin-password) cmd_reset_admin_password "$@" ;;
+        upgrade) cmd_upgrade "$@" ;;
         help|-h|--help) cmd_help ;;
         *) err "unknown verb: $noun"; cmd_help; exit 1 ;;
     esac

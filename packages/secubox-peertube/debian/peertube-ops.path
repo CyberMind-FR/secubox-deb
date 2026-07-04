@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Watch for spooled PeerTube admin ops (reset-password / upgrade)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/798
+
+[Path]
+# The unprivileged dashboard drops <id>.request.json here; this root service
+# runs peertubectl process-ops to execute them inside the LXC — no sudo, so the
+# dashboard keeps NoNewPrivileges (CSPN privilege separation, mirrors #407).
+DirectoryNotEmpty=/run/secubox/peertube/ops
+Unit=peertube-ops.service
+
+[Install]
+WantedBy=paths.target

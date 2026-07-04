@@ -13,14 +13,18 @@ License: Proprietary / ANSSI CSPN candidate
 """
 import json
 import os
+import re
+import secrets
 import subprocess
+import time
 from pathlib import Path
 from typing import List, Optional, Dict
 
-from fastapi import FastAPI, APIRouter, Depends, Request
+from fastapi import FastAPI, APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core import user_store
 from secubox_core.logger import get_logger
 
 app = FastAPI(title="secubox-peertube", version="1.1.0", root_path="/api/v1/peertube")
@@ -121,6 +125,10 @@ class TranscodingSettings(BaseModel):
 
 class PluginInstall(BaseModel):
     npm_name: str  # e.g., peertube-plugin-auth-ldap
+
+
+class ResetPasswordBody(BaseModel):
+    password: Optional[str] = None
 
 
 class VideoImport(BaseModel):
@@ -293,6 +301,55 @@ def default_channel_id(token: str) -> Optional[int]:
         if chans:
             return chans[0].get("id")
     return None
+
+
+# ============================================================================
+# Admin Ops Spool Plumbing (issue #798)
+# ============================================================================
+
+OPS_DIR = Path("/run/secubox/peertube/ops")
+_OP_ID_RE = re.compile(r"^[0-9a-f]{8,32}$")
+
+
+async def require_admin(user=Depends(require_jwt)):
+    """Gate destructive ops to admin-role identities. require_jwt validated the
+    token; the role lives in the user store (JWT carries only sub/jti), so look
+    it up like auth.py's verify handler does."""
+    sub = (user or {}).get("sub") if isinstance(user, dict) else None
+    role = ""
+    try:
+        u = user_store.get_user(sub) or {}
+        role = u.get("role", "") if isinstance(u, dict) else ""
+    except Exception:
+        role = ""
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="admin role required")
+    return user
+
+
+def _spool_op(op: str, **args) -> str:
+    """Write an intent file the root peertube-ops.path unit will pick up. Returns
+    the op id; the caller polls GET /admin/op/{id}. Unprivileged (no lxc-attach)."""
+    op_id = secrets.token_hex(8)
+    OPS_DIR.mkdir(parents=True, exist_ok=True)
+    req = OPS_DIR / f"{op_id}.request.json"
+    fd = os.open(str(req), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.write(fd, json.dumps({"op": op, "id": op_id, **args}).encode())
+    os.close(fd)
+    return op_id
+
+
+def _read_op_result(op_id: str) -> dict:
+    """Read <id>.result.json; {status: pending} until the root unit writes it."""
+    if not _OP_ID_RE.match(op_id or ""):
+        return {"status": "error", "detail": "bad op id"}
+    res = OPS_DIR / f"{op_id}.result.json"
+    if not res.exists():
+        return {"status": "pending"}
+    try:
+        return json.loads(res.read_text())
+    except Exception as e:  # pragma: no cover
+        return {"status": "error", "detail": f"unreadable result: {e}"}
 
 
 # ============================================================================
@@ -855,6 +912,95 @@ async def set_peertube_config(config: PeerTubeConfig, user=Depends(require_jwt))
     save_config(cfg)
     log.info(f"Config updated by {user.get('sub', 'unknown')}")
     return {"success": True}
+
+
+# ============================================================================
+# Admin Operations (Spool-Based)
+# ============================================================================
+
+@router.get("/admin/op/{op_id}")
+async def get_op_result(op_id: str, user=Depends(require_jwt)):
+    """Poll the result of a spooled admin op (reset-password / upgrade)."""
+    return _read_op_result(op_id)
+
+
+@router.post("/admin/reset-password")
+async def reset_password_op(body: ResetPasswordBody, user=Depends(require_admin)):
+    """Reset the PeerTube admin (root) password. Lockout-safe: runs the PeerTube
+    CLI in the LXC via the root spool, then rewrites the admin secret. If no
+    password is given, a strong one is generated and returned in the op result."""
+    pw = body.password or secrets.token_urlsafe(18)
+    op_id = _spool_op("reset-admin-password", password=pw)
+    return {"success": True, "id": op_id}
+
+
+# ============================================================================
+# Version Check (issue #798)
+# ============================================================================
+
+def _semver_lt(a: str, b: str) -> bool:
+    """True if version a < b (numeric field compare; tolerates a leading 'v')."""
+    def parts(v):
+        v = (v or "").lstrip("vV").split("-")[0]
+        return [int(x) for x in re.findall(r"\d+", v)] or [0]
+    pa, pb = parts(a), parts(b)
+    n = max(len(pa), len(pb))
+    pa += [0] * (n - len(pa)); pb += [0] * (n - len(pb))
+    return pa < pb
+
+
+def _installed_version() -> Optional[str]:
+    r = pt_api("/config")
+    if r.get("success") and isinstance(r.get("data"), dict):
+        return r["data"].get("serverVersion")
+    return None
+
+
+def _latest_version() -> Optional[str]:
+    """Latest PeerTube release tag from GitHub, cached ~1h in /run. Best-effort:
+    returns None offline / on rate-limit (never blocks the dashboard)."""
+    cache = OPS_DIR.parent / "latest-version.json"
+    try:
+        if cache.exists() and (time.time() - cache.stat().st_mtime) < 3600:
+            return json.loads(cache.read_text()).get("latest")
+    except Exception:
+        pass
+    try:
+        out = subprocess.run(
+            ["curl", "-s", "--max-time", "8",
+             "https://api.github.com/repos/Chocobozzz/PeerTube/releases/latest"],
+            capture_output=True, text=True, timeout=12)
+        tag = json.loads(out.stdout).get("tag_name")
+        if tag:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps({"latest": tag}))
+        return tag
+    except Exception:
+        return None
+
+
+@router.get("/version")
+async def version_info(user=Depends(require_jwt)):
+    installed = _installed_version()
+    latest = _latest_version()
+    up = bool(installed and latest and _semver_lt(installed, latest))
+    return {"installed": installed, "latest": latest, "upgrade_available": up}
+
+
+# ============================================================================
+# Upgrade (issue #798)
+# ============================================================================
+
+class UpgradeBody(BaseModel):
+    target: Optional[str] = "latest"
+
+
+@router.post("/upgrade")
+async def upgrade_op(body: UpgradeBody, user=Depends(require_admin)):
+    """Upgrade PeerTube in the LXC (backup → download → migrate → restart) via the
+    root spool. Poll GET /admin/op/{id}; the op reports running/done/error."""
+    op_id = _spool_op("upgrade", target=body.target or "latest")
+    return {"success": True, "id": op_id}
 
 
 app.include_router(router)
