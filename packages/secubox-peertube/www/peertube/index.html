@@ -638,7 +638,7 @@
         let containerStatus = 'not_installed';
 
         function getToken() {
-            return localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token') || localStorage.getItem('jwt_token') || localStorage.getItem('token') || '';
         }
 
         async function api(endpoint, options = {}) {
