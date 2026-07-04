@@ -173,7 +173,7 @@ def ad_stats(hours: int = 24, top: int = 25) -> dict:
     cutoff = time.time() - hours * 3600
     out = {"window_hours": hours, "total_blocked": 0, "total_bytes": 0,
            "by_action": {"block": 0, "silent": 0}, "top_hosts": [], "top_sites": [],
-           "top_visitors": []}
+           "top_visitors": [], "total_candidates": 0, "top_candidates": []}
     try:
         with _conn() as c:
             for action, hits in c.execute(
@@ -194,6 +194,18 @@ def ad_stats(hours: int = 24, top: int = 25) -> dict:
                 "SELECT mac_hash, SUM(hits) FROM ad_block_client_host "
                 "WHERE last_seen>=? AND mac_hash<>'' GROUP BY mac_hash "
                 "ORDER BY SUM(hits) DESC LIMIT ?", (cutoff, top))]
+            # #802 — DETECTED ad/tracker hosts (ad_candidates: observed, awaiting
+            # autolearn promotion to active 204-blocking). Surface them so the
+            # dashboard reflects real detection even when nothing is blocked yet.
+            try:
+                out["top_candidates"] = [{"host": h, "hits": int(n)} for h, n in c.execute(
+                    "SELECT host, SUM(hits) FROM ad_candidates WHERE last_seen>=? "
+                    "GROUP BY host ORDER BY SUM(hits) DESC LIMIT ?", (cutoff, top))]
+                r = c.execute("SELECT COUNT(DISTINCT host) FROM ad_candidates WHERE last_seen>=?",
+                              (cutoff,)).fetchone()
+                out["total_candidates"] = int((r and r[0]) or 0)
+            except sqlite3.Error:
+                pass
             # #755 — trackers detected/poisoned by the MITM in the window: distinct
             # cross-site cookie-identifier hashes seen on social_edges. This is the
             # "Trackers" half of the card (the 204 ad-block is the "pubs" half).
