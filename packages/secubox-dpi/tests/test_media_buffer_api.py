@@ -296,3 +296,42 @@ def test_manifest_replay_phase1_invariants_hold(tmp_path, monkeypatch):
     with pytest.raises(HTTPException) as e3:
         m.require_admin_or_owner(user=NONADMIN)
     assert e3.value.status_code == 403
+
+
+def test_manifest_replay_fallback_on_read_error(tmp_path, monkeypatch):
+    """A read/parse error inside `_replay_manifest` (e.g. the manifest object
+    becomes unreadable after the record/path lookup already succeeded) must
+    NEVER bubble up as a 500 — `_replay_manifest` catches it and returns
+    None, and `media_replay` falls back to the Phase-1 raw FileResponse."""
+    _seed_hls_buffer(tmp_path)
+    monkeypatch.setattr(m, "MEDIA_BUFFER_ROOT", str(tmp_path))
+
+    def _boom(*args, **kwargs):
+        raise OSError("simulated read failure")
+
+    # `_replay_manifest` calls builtin `open()` directly; shadowing it on the
+    # module namespace only affects that call site, not media_buffer's own
+    # (separate-module) reads of the metatag log.
+    monkeypatch.setattr(m, "open", _boom, raising=False)
+
+    resp = m.media_replay(MANIFEST_ID, request=None, user=ADMIN)
+    assert isinstance(resp, FileResponse)
+    assert resp.path.endswith("object-0.m3u8")
+
+
+def test_manifest_branch_does_not_swallow_denials(tmp_path, monkeypatch):
+    """Guard: `_replay_manifest`'s broad `except Exception: return None`
+    fail-safe must never turn a *denial* into a 200. A bad `rec_id` and an
+    expired/evicted manifest-or-segment record both raise their
+    HTTPException BEFORE `media_replay` ever calls `_replay_manifest`, so
+    the try/except added for the read-truncation logging cannot mask them."""
+    _seed_hls_buffer(tmp_path)
+    monkeypatch.setattr(m, "MEDIA_BUFFER_ROOT", str(tmp_path))
+
+    with pytest.raises(HTTPException) as e:
+        m.media_replay("not-hex!", request=None, user=ADMIN)
+    assert e.value.status_code == 400
+
+    with pytest.raises(HTTPException) as e2:
+        m.media_replay(SEG2_EXP_ID, request=None, user=ADMIN)
+    assert e2.value.status_code == 410

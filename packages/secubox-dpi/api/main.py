@@ -273,6 +273,7 @@ def _audit_replay(sub: str, rec_id: str, host: str, ip: str) -> None:
 # ============================================================================
 MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_SEGMENT_INDEX = 5000
+MAX_MANIFEST_SEGMENTS = 5000
 
 
 def _segment_index(mac_hash: Optional[str], host: Optional[str]) -> Dict[str, str]:
@@ -305,6 +306,10 @@ def _segment_index(mac_hash: Optional[str], host: Optional[str]) -> Dict[str, st
                 continue
             out[url] = seg_id
             if len(out) >= MAX_SEGMENT_INDEX:
+                log.warning(
+                    "dpi media: segment index for %s capped at %d",
+                    host, MAX_SEGMENT_INDEX,
+                )
                 break
     except Exception:
         return out
@@ -325,7 +330,14 @@ def _replay_manifest(rec: dict, path: str) -> Optional[Response]:
     """
     try:
         with open(path, "rb") as f:
-            raw = f.read(MAX_MANIFEST_BYTES)
+            raw = f.read(MAX_MANIFEST_BYTES + 1)
+        if len(raw) > MAX_MANIFEST_BYTES:
+            log.warning(
+                "dpi media: manifest %s truncated at %d bytes",
+                rec.get("id") or rec.get("url") or "?",
+                MAX_MANIFEST_BYTES,
+            )
+            raw = raw[:MAX_MANIFEST_BYTES]
         text = raw.decode("utf-8", errors="replace")
 
         if hls.is_master_playlist(text) or hls.is_encrypted(text):
@@ -336,7 +348,14 @@ def _replay_manifest(rec: dict, path: str) -> Optional[Response]:
             seg_url: f"/api/v1/dpi/media/replay/{seg_id}"
             for seg_url, seg_id in _segment_index(rec.get("mac_hash"), rec.get("host")).items()
         }
-        rewritten, matched, total = hls.rewrite(text, mapping, rec.get("url") or "")
+        rewritten, matched, total = hls.rewrite(
+            text, mapping, rec.get("url") or "", max_segments=MAX_MANIFEST_SEGMENTS
+        )
+        if total >= MAX_MANIFEST_SEGMENTS:
+            log.warning(
+                "dpi media: manifest rewrite hit segment cap %d (total=%d matched=%d)",
+                MAX_MANIFEST_SEGMENTS, total, matched,
+            )
         return Response(
             content=rewritten,
             media_type="application/vnd.apple.mpegurl",
