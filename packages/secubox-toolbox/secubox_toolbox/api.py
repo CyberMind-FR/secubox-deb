@@ -1152,6 +1152,28 @@ MITM_BYPASS_SEED_FILE = Path(os.environ.get(
     "SECUBOX_BYPASS_SEED", "/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf"))
 MITM_BYPASS_DYNAMIC_FILE = Path(os.environ.get(
     "SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"))
+# TLS-splice lists (host SUFFIX, inline # comments) — the OTHER half of the
+# exclusion set: what the R3 engine actually splices. Surfaced in the Filtres
+# MITM list so ALL explicit splicing is displayed + known (#803).
+TLS_SPLICE_SEED_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"))
+SPLICE_LEARNED_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"))
+
+
+def _read_splice(path) -> list:
+    """Splice list lines — strips INLINE # comments (the seed uses them)."""
+    try:
+        out = []
+        for ln in path.read_text().splitlines():
+            s = ln.split("#", 1)[0].strip()
+            if s:
+                out.append(s)
+        return out
+    except OSError:
+        return []
+
+
 def _ensure_bypass_file() -> None:
     if not MITM_BYPASS_FILE.exists():
         MITM_BYPASS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -1188,6 +1210,14 @@ def _load_bypass_tagged() -> list:
                          ("learned", MITM_BYPASS_DYNAMIC_FILE)):
         for pat in _read_patterns(path):
             if pat not in seen:        # first wins → seed > static > learned
+                seen[pat] = source
+    # ALSO surface the TLS-splice list (the R3 engine's actual passthrough set) so
+    # every explicitly-spliced host is displayed + known (#803). Bypass wins the
+    # tag if a pattern somehow appears in both.
+    for source, path in (("splice-seed", TLS_SPLICE_SEED_FILE),
+                         ("splice-learned", SPLICE_LEARNED_FILE)):
+        for pat in _read_splice(path):
+            if pat not in seen:
                 seen[pat] = source
     return [{"pattern": p, "source": s} for p, s in sorted(seen.items())]
 
