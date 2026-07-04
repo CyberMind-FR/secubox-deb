@@ -1,3 +1,9 @@
+secubox-vhost (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#793): read-only exposure badge on /vhosts + webui; seed-on-create and include-wiring into generated vhosts (create + update), so the per-vhost reach gate is emitted safely.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 04 Jul 2026 07:41:45 +0200
+
 secubox-vhost (1.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Fix vhost list: use the real public FQDN (nginx server_name, HAProxy route

@@ -465,7 +465,10 @@
     <div id="toast"></div>
 
     <script>
-        const EXP_API = '/api/v1/exposure/';
+        // The aggregator mounts this module under /api/v1/exposure; the switch
+        // handler is the app route /exposure/{vhost}, so the effective path
+        // repeats the segment (matches the other calls' API base below).
+        const EXP_API = '/api/v1/exposure/exposure/';
         async function applyExposure() {
             const vhost = document.getElementById('exp-vhost').value.trim();
             const body = {
