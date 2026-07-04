@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: toolbox :: Tor-egress host exemption (#799).
+
+When kbin Tor egress is armed (nft table `inet toolbox_tor` present), the MITM
+worker uid's 80/443 egress is redirected through Tor. Cert-pinned hosts are
+SPLICED (raw passthrough) by sbxmitm — but the passthrough dial STILL leaves via
+the worker uid, so it is torified too, and Tor exits break pinned APIs (Claude,
+Signal, banks). This resolver adds the SPLICED hosts' real IPs to the
+`tor_exempt` nft set so those upstreams egress DIRECT — same exclusion list that
+drives MITM-splice + the exposure Tor-exclusion (#797/#803).
+
+Root runs this; root egress is NOT torified, so its own DNS resolves normally.
+Best-effort + fail-open: any error leaves the set as-is (never un-arms Tor).
+"""
+import os
+import re
+import socket
+import sqlite3
+import subprocess
+import sys
+
+TABLE = "inet toolbox_tor"
+SET = "tor_exempt"
+DB = os.environ.get("SECUBOX_TOOLBOX_DB", "/var/lib/secubox/toolbox/toolbox.db")
+SPLICE_FILES = (
+    os.environ.get("SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"),
+    os.environ.get("SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"),
+)
+# Critical pinned FQDNs kept exempt even before they are observed/spliced, so the
+# very FIRST connection through a fresh Tor-egress session already works.
+CRITICAL = (
+    "api.anthropic.com", "s-cdn.anthropic.com", "statsig.anthropic.com", "claude.ai",
+    "chat.signal.org", "storage.signal.org", "cdn.signal.org", "cdn2.signal.org",
+    "ud-chat.signal.org", "textsecure-service.whispersystems.org",
+)
+MAX_HOSTS = 4000
+
+
+def _armed() -> bool:
+    return subprocess.run(["nft", "list", "table", TABLE],
+                          capture_output=True).returncode == 0
+
+
+def _splice_suffixes() -> set:
+    out = set()
+    for f in SPLICE_FILES:
+        try:
+            for raw in open(f, encoding="utf-8"):
+                s = raw.split("#", 1)[0].strip().lower().strip(".")
+                if s:
+                    out.add(s)
+        except OSError:
+            pass
+    return out
+
+
+def _matches(host: str, suffixes: set) -> bool:
+    h = (host or "").lower().strip(".")
+    return bool(h) and (h in suffixes or any(h.endswith("." + s) for s in suffixes))
+
+
+def _observed_spliced(suffixes: set) -> set:
+    """Concrete FQDNs seen as non-HTML (asset/API) that match a splice suffix."""
+    out = set()
+    try:
+        con = sqlite3.connect(DB, timeout=5)
+        for (host,) in con.execute("SELECT host FROM splice_host_obs WHERE html_hits=0"):
+            if host and _matches(host, suffixes):
+                out.add(host.lower().strip("."))
+        con.close()
+    except sqlite3.Error:
+        pass
+    return out
+
+
+def _resolve(host: str) -> set:
+    ips = set()
+    try:
+        for fam, _, _, _, sa in socket.getaddrinfo(host, 443, socket.AF_INET, socket.SOCK_STREAM):
+            ips.add(sa[0])
+    except (socket.gaierror, OSError):
+        pass
+    return ips
+
+
+def main() -> int:
+    if not _armed():
+        return 0  # Tor egress not armed → nothing to do
+    suffixes = _splice_suffixes()
+    hosts = set(CRITICAL) | _observed_spliced(suffixes)
+    # concrete FQDN entries straight from the splice list (skip bare 2-label apex
+    # suffixes like anthropic.com — their subdomains come from CRITICAL/observed)
+    for s in suffixes:
+        if s.count(".") >= 2 and re.fullmatch(r"[a-z0-9.-]+", s):
+            hosts.add(s)
+    hosts = set(list(hosts)[:MAX_HOSTS])
+
+    ips = set()
+    for h in hosts:
+        ips |= _resolve(h)
+    if not ips:
+        return 0
+    # add in one batch; nft ignores dup interval elements
+    elems = ", ".join(sorted(ips))
+    subprocess.run(["nft", "add", "element", "inet", "toolbox_tor", SET, "{ %s }" % elems],
+                   capture_output=True)
+    sys.stderr.write("tor-exempt-hosts: exempted %d ip(s) for %d pinned host(s)\n"
+                     % (len(ips), len(hosts)))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

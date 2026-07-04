@@ -61,6 +61,7 @@
         .lvlbtn{font-size:0.68rem;padding:0.12rem 0.4rem;margin-right:0.15rem;border:1px solid var(--p31-dim)}
         code{background:rgba(0,0,0,0.05);padding:0.1rem 0.3rem;border-radius:2px;font-size:0.78rem}
         a.link{color:var(--p31-mid);text-decoration:underline}
+        .filterlist{max-height:60vh;overflow-y:auto;margin:0;padding:0}
         .filterlist li{font-size:0.82rem;padding:0.2rem 0;border-bottom:1px solid var(--border);list-style:none;display:flex;justify-content:space-between;align-items:center}
     </style>
 </head>
@@ -457,9 +458,12 @@ async function loadFilters() {
     const items = (d && d.hosts) ? d.hosts : (Array.isArray(d) ? d : null);
     if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
     if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
-    const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned'};
+    const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned',
+                   'splice-seed': '🔀 splice', 'splice-learned': '🔀 splice·auto'};
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    el.innerHTML = items.slice(0, 5).map(h => {
+    // Show ALL entries (bypass + splice) — every explicit splicing must be
+    // displayed + known. The <ul> scrolls (see .filterlist max-height).
+    el.innerHTML = `<li style="opacity:.6;font-size:.72rem">${items.length} hôtes exclus (MITM-bypass + splice)</li>` + items.map(h => {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
         const badge = BADGE[src] || esc(src);
