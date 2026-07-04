@@ -128,6 +128,7 @@
                 Hosts exclus de l'inspection TLS (cert-pinning détecté ou whitelist statique).
             </p>
             <p style="font-size:0.72rem;color:#888">Sources : 🌱 seed (paquet) · ✋ static (opérateur) · 🔍 learned (cert-pin auto)</p>
+            <p style="font-size:0.72rem;color:var(--p31-gold,#c9a84c)">🧅 Ces hosts (+ la liste TLS-splice) sont aussi <b>refusés à l'exposition Tor</b> par le module exposure — on ne ré-expose jamais anonymement un endpoint que les clients épinglent.</p>
             <ul class="filterlist" id="filters"><li class="empty">loading…</li></ul>
         </div>
     </section>
@@ -462,7 +463,8 @@ async function loadFilters() {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
         const badge = BADGE[src] || esc(src);
-        return `<li><code>${esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
+        const tor = ` <span title="refusé à l'exposition Tor" style="color:var(--p31-gold,#c9a84c);font-size:0.72rem">🧅 Tor-exclu</span>`;
+        return `<li><code>${esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}${tor}</li>`;
     }).join('');
 }
 
