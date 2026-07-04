@@ -473,12 +473,21 @@
                 mesh: document.getElementById('exp-mesh').checked,
                 tor: document.getElementById('exp-tor').checked
             };
-            const r = await fetch(`${EXP_API}${encodeURIComponent(vhost)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            document.getElementById('exp-out').textContent = JSON.stringify(await r.json(), null, 2);
+            try {
+                const r = await fetch(`${EXP_API}${encodeURIComponent(vhost)}`, {
+                    method: 'POST',
+                    headers: headers(),
+                    body: JSON.stringify(body)
+                });
+                if (!r.ok) {
+                    const errorBody = await r.text();
+                    document.getElementById('exp-out').textContent = `Erreur ${r.status}: ${errorBody}`;
+                    return;
+                }
+                document.getElementById('exp-out').textContent = JSON.stringify(await r.json(), null, 2);
+            } catch (e) {
+                document.getElementById('exp-out').textContent = 'Erreur: ' + e.message;
+            }
         }
     </script>
 
