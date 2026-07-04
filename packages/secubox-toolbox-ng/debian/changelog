@@ -1,3 +1,17 @@
+secubox-toolbox-ng (0.1.28-1~bookworm1) bookworm; urgency=medium
+
+  * #812 R4 media buffer (Phase 2): HLS reassembly — segments (.ts/.m4s) are
+    captured tagged kind=segment alongside whole-file media/manifest capture;
+    the DPI manifest replay branch parses a captured .m3u8, joins each segment
+    URI to its captured segment by resolved absolute URL (read-time join, no
+    live session state in sbxmitm), and serves a rewritten playlist whose
+    segment URIs point at their captured segments' replay URLs. Master/ABR
+    (multivariant) and AES-128-encrypted playlists, and DASH .mpd, are
+    detected and served raw with an X-SecuBox-Media: unsupported-variant
+    header rather than a broken rewrite — deferred to Phase 2b.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 04 Jul 2026 16:00:00 +0000
+
 secubox-toolbox-ng (0.1.27-1~bookworm1) bookworm; urgency=medium
 
   * #812 R4 media buffer (Phase 1): sbxmitm tees whole-file media up/downloads on
