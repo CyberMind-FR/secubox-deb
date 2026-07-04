@@ -1,3 +1,16 @@
+secubox-exposure (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#793): exposure webui posts to /api/v1/exposure/exposure/{vhost} — the
+    aggregator mount doubles the segment; the previous single-segment path 404'd.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 04 Jul 2026 07:49:04 +0200
+
+secubox-exposure (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#793): per-vhost exposure switch — localhost/LAN/WAN reach snippet + mesh/Tor toggles, fail-safe apply (nginx -t + rollback), thread-offloaded reload/Tor, vhost-name validation, real_ip acceptance test.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 04 Jul 2026 07:41:45 +0200
+
 secubox-exposure (1.2.0-1~bookworm1) bookworm; urgency=medium
 
   * feat(#768): Tor + public egress channels federated (phases 3-4).
