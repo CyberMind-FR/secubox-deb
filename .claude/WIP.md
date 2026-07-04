@@ -51,8 +51,8 @@ tests toolbox verts. Backups board `/root/backup-785-*` + `/root/backup-790-0628
   résultat `root:secubox 0640` lisible secubox). Delta `main.py` posé en préservant les 4 endpoints
   async board.
 
-> ⚠️ Stray non commité sur master (hors session) : `secubox-toolbox-autolearn` — miroir
-> splice-learned → bypass webui MITM. À committer ou jeter (non lié à #796/#798).
+> ℹ️ Session parallèle : `secubox-toolbox-autolearn` (miroir splice-learned → bypass webui
+> MITM) + rename « WAF Filters → Filtres MITM » commités hors session sur master (`872be8c7`).
 
 ### ⬜ Next Up ToolBox (déféré, non bloquant)
 
