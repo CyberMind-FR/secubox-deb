@@ -62,6 +62,13 @@ if [ "$1" = "configure" ]; then
     # Root path-unit (#407) that installs spooled YouTube cookies without sudo.
     systemctl enable --now peertube-cookie-install.path 2>/dev/null || true
 
+    # Root ops spool (#798): reset-admin-password / upgrade requests dropped by
+    # the unprivileged dashboard, drained by peertube-ops.path (no sudo, CSPN).
+    install -d -o secubox -g secubox -m 0750 /run/secubox/peertube/ops 2>/dev/null || true
+    install -d -o peertube -g peertube -m 0750 /var/lib/secubox/peertube/backups 2>/dev/null || true
+    deb-systemd-helper enable peertube-ops.path >/dev/null 2>&1 || true
+    deb-systemd-invoke start peertube-ops.path >/dev/null 2>&1 || true
+
     # Reload nginx to pick up the /api/v1/peertube/ + /peertube/ locations
     # and the public vhost. NOTE: PeerTube itself is NOT installed by this
     # postinst — run `peertubectl install` to provision the LXC.

@@ -1,0 +1,2 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+d /run/secubox/peertube/ops 0750 secubox secubox -
