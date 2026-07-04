@@ -38,3 +38,8 @@ override_dh_auto_install:
 	install -m 644 debian/secubox-peertube.service debian/secubox-peertube/usr/lib/systemd/system/
 	install -m 644 debian/peertube-cookie-install.path debian/secubox-peertube/usr/lib/systemd/system/
 	install -m 644 debian/peertube-cookie-install.service debian/secubox-peertube/usr/lib/systemd/system/
+	install -m 644 debian/peertube-ops.path debian/secubox-peertube/usr/lib/systemd/system/
+	install -m 644 debian/peertube-ops.service debian/secubox-peertube/usr/lib/systemd/system/
+	# tmpfiles.d: recreate the /run ops spool dir across reboots (tmpfs)
+	install -d debian/secubox-peertube/usr/lib/tmpfiles.d
+	install -m 644 debian/secubox-peertube.tmpfiles debian/secubox-peertube/usr/lib/tmpfiles.d/secubox-peertube.conf

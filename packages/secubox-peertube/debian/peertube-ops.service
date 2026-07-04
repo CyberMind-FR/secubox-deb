@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Drain the PeerTube admin-ops spool (root, #798)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/798
+
+[Service]
+Type=oneshot
+# Root (no User=) so peertubectl can lxc-attach into the container. Upgrade can
+# take several minutes (download + npm install + DB migration).
+TimeoutStartSec=1800
+ExecStart=/usr/sbin/peertubectl process-ops
