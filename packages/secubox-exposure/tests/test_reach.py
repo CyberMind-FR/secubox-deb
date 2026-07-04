@@ -56,3 +56,22 @@ def test_write_localhost(tmp_path, monkeypatch):
     r.write_snippet("c.example", "localhost", False)
     assert r.read_snippet_reach("c.example") == {"reach": "localhost", "mesh": False}
     assert not (tmp_path / "c.example.conf.tmp").exists()
+
+def test_load_record_defaults_public_to_wan(tmp_path, monkeypatch):
+    import api.reach as r
+    monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path)
+    rec = r.load_record("pub.example", is_public_now=True)
+    assert rec == {"vhost": "pub.example", "reach": "wan", "mesh": False, "tor": False}
+
+def test_load_record_defaults_private_to_lan(tmp_path, monkeypatch):
+    import api.reach as r
+    monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path)
+    rec = r.load_record("priv.example", is_public_now=False)
+    assert rec == {"vhost": "priv.example", "reach": "lan", "mesh": False, "tor": False}
+
+def test_load_record_reads_existing_snippet(tmp_path, monkeypatch):
+    import api.reach as r
+    monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path)
+    r.write_snippet("x.example", "localhost", True)
+    rec = r.load_record("x.example", is_public_now=True)
+    assert rec["reach"] == "localhost" and rec["mesh"] is True
