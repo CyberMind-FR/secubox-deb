@@ -41,15 +41,21 @@ _SPLICE_FILES = (
 
 
 def _lines(path: str) -> List[str]:
-    """Non-comment, non-empty stripped lines; missing/unreadable → []."""
+    """Non-comment, non-empty stripped lines; missing/unreadable/undecodable → [].
+
+    Fail-open on availability: a missing toolbox, a permission error, OR a
+    non-UTF-8 byte (corruption / bad operator paste) must never raise into the
+    request path — the file simply contributes nothing. UnicodeDecodeError is a
+    ValueError, not an OSError, so both are caught.
+    """
     try:
         out = []
-        for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        for raw in Path(path).read_text(encoding="utf-8", errors="strict").splitlines():
             line = raw.split("#", 1)[0].strip()
             if line:
                 out.append(line)
         return out
-    except OSError:
+    except (OSError, ValueError):
         return []
 
 
@@ -72,6 +78,31 @@ def _load_splice_suffixes() -> Set[str]:
     return out
 
 
+# mtime-keyed cache: recompiling every bypass regex on each Tor request would
+# add avoidable work on the shared aggregator loop. Reload only when a list file
+# changes (autolearn append, webui edit) — cheap stat() vs full recompile.
+_cache: dict = {"key": None, "regex": [], "suffix": set()}
+
+
+def _list_key():
+    key = []
+    for f in _BYPASS_FILES + _SPLICE_FILES:
+        try:
+            key.append((f, Path(f).stat().st_mtime))
+        except OSError:
+            key.append((f, None))
+    return tuple(key)
+
+
+def _loaded():
+    key = _list_key()
+    if key != _cache["key"]:
+        _cache["regex"] = _load_bypass_regex()
+        _cache["suffix"] = _load_splice_suffixes()
+        _cache["key"] = key
+    return _cache["regex"], _cache["suffix"]
+
+
 def _suffix_match(host: str, suffixes: Set[str]) -> bool:
     h = (host or "").lower().strip(".")
     if not h or not suffixes:
@@ -86,11 +117,11 @@ def exclusion_reason(host: str) -> Tuple[bool, str]:
     h = (host or "").strip()
     if not h:
         return (False, "")
-    for pat in _load_bypass_regex():
+    regex, suffix = _loaded()
+    for pat in regex:
         if pat.fullmatch(h):
             return (True, f"MITM-bypass (cert-pinned): {pat.pattern}")
-    suf = _load_splice_suffixes()
-    if _suffix_match(h, suf):
+    if _suffix_match(h, suffix):
         return (True, "TLS-splice (cert-pinned API)")
     return (False, "")
 

@@ -743,6 +743,13 @@ async def _apply_tor(vhost: str, want: bool, user: dict) -> None:
 @app.post("/tor/add")
 async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
     """Add Tor hidden service"""
+    # Cert-pin / MITM-bypass gate — check the ORIGINAL host before sanitisation
+    # strips its dots. Covers /emancipate too (it calls this). Never anonymously
+    # re-expose an endpoint clients pin.
+    excluded, why = _excl.exclusion_reason(req.service)
+    if excluded:
+        raise HTTPException(status_code=400,
+                            detail=f"Tor refusé pour {req.service} : domaine exclu — {why}.")
     # Sanitize service name
     name = "".join(c for c in req.service if c.isalnum() or c in "_-")
 

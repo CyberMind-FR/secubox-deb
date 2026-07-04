@@ -51,6 +51,21 @@ def test_malformed_regex_is_skipped_not_fatal(tmp_path, monkeypatch):
     assert ex.is_excluded("signal.org")
 
 
+def test_non_utf8_bytes_fail_open_not_500(tmp_path, monkeypatch):
+    """A corrupt / non-UTF-8 byte in a list file must not raise into the request
+    path (UnicodeDecodeError is a ValueError, not OSError)."""
+    b = tmp_path / "mitm-bypass-seed.conf"
+    b.write_bytes(b"(.+\\.)?signal\\.org\n\xff\xfe garbage\n")
+    s = tmp_path / "tls-splice-seed.conf"
+    s.write_text("api.anthropic.com\n")
+    monkeypatch.setattr(ex, "_BYPASS_FILES", (str(b),))
+    monkeypatch.setattr(ex, "_SPLICE_FILES", (str(s),))
+    # must not raise; the undecodable bypass file contributes nothing, but the
+    # splice file still gates.
+    assert ex.is_excluded("api.anthropic.com") is True
+    assert ex.is_excluded("signal.org") is False   # bypass file unreadable → not seen
+
+
 def test_reason_names_the_matching_list(tmp_path, monkeypatch):
     _seed(tmp_path, monkeypatch, bypass=r"(.+\.)?signal\.org", splice="api.anthropic.com\n")
     ok, why = ex.exclusion_reason("signal.org")
