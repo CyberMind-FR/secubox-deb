@@ -3,6 +3,37 @@
 
 ---
 
+## 2026-07-04 — ToolBox privacy report (#785 #790 #792), Zigbee WS fix (#796), PeerTube admin ops (#798)
+
+- **#785 / #790 / #792 — ToolBox kbin report** ✅ MERGED (PR #787, #794). Faithful-to-page PDF:
+  DPI-Exfil (me) + Overall donut-grids, `🎬 media types` block (real sbxmitm MIME + DPI `media`
+  category) in web + PDF, rich Netrunner character sheet (`_enrich_report_data` → parity across
+  all 3 PDF routes), real Quêtes from `_dpi_stats.alerts_raw`. Deploy incident fixed: matplotlib
+  PDF render was sync on the single uvicorn loop + WAF 504 auto-retry storm → board-wide 504;
+  hardened with threadpool + `asyncio.Lock` + per-device PDF cache + persistent `MPLCONFIGDIR`.
+
+- **#796 — sbxwaf dropped WebSocket upgrades** ✅ FIXED, live, **PR #805 open**. `wss://zigbee`
+  broke (close 1006 + reconnect loop) via 3 layers: `main.go` forced `Connection: close`
+  clobbering `Connection: Upgrade`; `statusRecorder` + `cachingResponseWriter` didn't implement
+  `http.Hijacker`. Added `isWebSocketUpgrade()` guard + `Hijack()` forwarding on both wrappers +
+  upstream-error logging (which pinned the Hijacker layer). New `websocket_test.go` (token matrix,
+  Hijack forwarding, real 101 handshake through the handler, non-WS regression). Live on gk2:
+  `wss://zigbee.gk2.secubox.in/api → 101 Switching Protocols`, dashboard stable.
+
+- **#798 — PeerTube WebUI admin ops** (reset-password + version check + upgrade) ✅ MERGED
+  (PR #800), spool→root privilege-separation (#407 pattern): unprivileged API drops an intent
+  file, root `peertube-ops.path` drains it via `peertubectl` (no sudo, NoNewPrivileges intact).
+  **Follow-up loop bug fixed, PR #804 open**: `peertube-ops.path` watches `OPS_DIR` with
+  `DirectoryNotEmpty=`, but `process-ops` wrote results back into `OPS_DIR` → the dir was never
+  empty → `.path` re-triggered `.service` in a loop until `start-limit-hit` killed the mechanism
+  after the first op. Fix: results go to a dedicated `/run/secubox/peertube/results/`; `ops/`
+  empties after draining. Live-verified on gk2 (two consecutive pings drain, `NRestarts=0`).
+
+- **Wiki** — new `ToolBox` page (numeric-cabin use cases + report features), poster image,
+  Authelia stale entries removed from MODULES, sidebar/navbar link fixes (Gollum `[[Text|Page]]`).
+
+---
+
 ## 2026-07-02 — P2P DHT + Federation + Master-link, LIVE on the 3-node mesh (#774 · PR #775)
 
 Rebuilt the P2P evolutions cleanly (the non-integrating Mistral draft was removed) via
