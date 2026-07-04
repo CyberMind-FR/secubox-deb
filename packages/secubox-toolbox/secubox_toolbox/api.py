@@ -1159,6 +1159,11 @@ TLS_SPLICE_SEED_FILE = Path(os.environ.get(
     "SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"))
 SPLICE_LEARNED_FILE = Path(os.environ.get(
     "SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"))
+# #806 — federated (mesh-union) lists the R3 engine also reads; surfaced in the
+# Filtres MITM list tagged mesh-* (edit on the origin node).
+FED_SPLICE_FILE = Path(os.environ.get("SECUBOX_FED_SPLICE", "/var/lib/secubox/toolbox/mitm-exclusion-fed-splice.txt"))
+FED_BYPASS_FILE = Path(os.environ.get("SECUBOX_FED_BYPASS", "/var/lib/secubox/toolbox/mitm-exclusion-fed-bypass.txt"))
+FED_DISABLED_FILE = Path(os.environ.get("SECUBOX_FED_DISABLED", "/var/lib/secubox/toolbox/mitm-exclusion-fed-disabled.txt"))
 # #809 — operator-disabled filter patterns (Filtres MITM uncheck). The R3 engine
 # reads this SAME file and suppresses matching per-pattern, so unchecking has
 # real effect on ALL sources incl. the package seed.
@@ -1231,6 +1236,15 @@ def _load_bypass_tagged() -> list:
     # tag if a pattern somehow appears in both.
     for source, path in (("splice-seed", TLS_SPLICE_SEED_FILE),
                          ("splice-learned", SPLICE_LEARNED_FILE)):
+        for pat in _read_splice(path):
+            if pat not in seen:
+                seen[pat] = source
+    # #806 — surface federated (mesh-union) filter entries from the 3 fed files
+    # that the R3 engine also reads; tagged mesh-* so the operator knows they're
+    # federation-sourced (edit on the origin node, not here).
+    for source, path in (("mesh-splice", FED_SPLICE_FILE),
+                         ("mesh-bypass", FED_BYPASS_FILE),
+                         ("mesh-disabled", FED_DISABLED_FILE)):
         for pat in _read_splice(path):
             if pat not in seen:
                 seen[pat] = source
