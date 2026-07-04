@@ -14,9 +14,9 @@ Enhanced features:
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import subprocess
 import os
@@ -34,6 +34,8 @@ try:
 except ImportError:
     async def require_jwt():
         return {"sub": "dev"}
+
+from api import reach as _reach
 
 app = FastAPI(title="SecuBox Exposure Manager API", version="2.0.0")
 
@@ -98,6 +100,85 @@ DEFAULT_CONFIG = {
     "health_check_enabled": True,
     "health_check_interval": 300
 }
+
+
+# ============================================================================
+# Per-vhost exposure switch (localhost / lan / wan) — ref #793
+# ============================================================================
+
+class ExposureSet(BaseModel):
+    reach: Literal["localhost", "lan", "wan"]
+    mesh: bool = False
+    tor: bool = False
+
+
+_VHOST_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _validate_vhost(vhost: str) -> None:
+    """Reject anything that isn't a plausible hostname. Defense-in-depth: Starlette
+    already blocks '/' in a single path segment; this additionally rejects
+    whitespace, empty strings, '..' traversal markers, and over-long names, so a
+    crafted {vhost} can't be used to write a snippet outside intent."""
+    if (not vhost or len(vhost) > 253 or ".." in vhost
+            or not _VHOST_RE.match(vhost)):
+        raise HTTPException(status_code=400, detail="invalid vhost")
+
+
+def _reload_nginx() -> bool:
+    """nginx -t then reload. Returns True on success (fail-safe: no raise)."""
+    try:
+        if subprocess.run(["nginx", "-t"], capture_output=True, timeout=10).returncode != 0:
+            return False
+        subprocess.run(["systemctl", "reload", "nginx"], capture_output=True, timeout=15)
+        return True
+    except Exception:
+        return False
+
+
+def _audit_exposure(vhost: str, rec: dict, user: str) -> None:
+    try:
+        ap = Path("/var/log/secubox/audit.log")
+        ap.parent.mkdir(parents=True, exist_ok=True)
+        with ap.open("a") as f:
+            f.write(f"{datetime.now(timezone.utc).isoformat()} exposure {vhost} "
+                    f"reach={rec['reach']} mesh={rec['mesh']} tor={rec['tor']} by={user}\n")
+    except OSError:
+        pass
+
+
+@app.get("/exposure/{vhost}")
+async def get_exposure(vhost: str, user: dict = Depends(require_jwt)):
+    _validate_vhost(vhost)
+    # is_public_now no longer affects the missing-snippet result (see reach.load_record):
+    # ungated == effectively public → 'wan'. Kept for API compatibility.
+    return _reach.load_record(vhost, is_public_now=False)
+
+
+@app.post("/exposure/{vhost}")
+async def set_exposure(vhost: str, body: ExposureSet, user: dict = Depends(require_jwt)):
+    _validate_vhost(vhost)
+    p = _reach.snippet_path(vhost)
+    try:
+        prev = p.read_text()                    # last-good content (may not exist)
+    except OSError:
+        prev = None
+    _reach.write_snippet(vhost, body.reach, body.mesh)
+    if not await asyncio.to_thread(_reload_nginx):   # nginx -t failed → roll back
+        try:
+            if prev is not None:
+                p.write_text(prev)
+            else:
+                p.unlink(missing_ok=True)
+        finally:
+            await asyncio.to_thread(_reload_nginx)   # best-effort restore of last-good
+        raise HTTPException(status_code=500,
+                             detail="nginx validation failed; exposure unchanged")
+    # nginx reloaded OK — now apply Tor, then audit the confirmed change.
+    await _apply_tor(vhost, body.tor, user)
+    rec = {"vhost": vhost, "reach": body.reach, "mesh": body.mesh, "tor": body.tor}
+    _audit_exposure(vhost, rec, user.get("sub", "?"))
+    return rec
 
 
 # ============================================================================
@@ -551,15 +632,12 @@ async def get_emancipated():
 
 
 # Protected endpoints
-@app.post("/tor/add")
-async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
-    """Add Tor hidden service"""
-    # Sanitize service name
-    name = "".join(c for c in req.service if c.isalnum() or c in "_-")
-
+def _tor_add_sync(name: str, local_port: int, onion_port: int) -> dict:
+    """Blocking torrc-edit + reload + poll-for-onion mechanics (up to 10s).
+    Plain sync function — callers on an event loop MUST offload via
+    asyncio.to_thread (see _apply_tor). Does not check hs existence; that's
+    the caller's responsibility (tor_add's 400, _apply_tor's `not hs.exists()`)."""
     hs_dir = TOR_DATA / name
-    if hs_dir.exists():
-        raise HTTPException(status_code=400, detail="Hidden service already exists")
 
     # Add to torrc
     if TOR_CONFIG.exists():
@@ -569,7 +647,7 @@ async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
 
     torrc += f"\n# Hidden service: {name}\n"
     torrc += f"HiddenServiceDir {hs_dir}\n"
-    torrc += f"HiddenServicePort {req.onion_port} 127.0.0.1:{req.local_port}\n"
+    torrc += f"HiddenServicePort {onion_port} 127.0.0.1:{local_port}\n"
 
     TOR_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     TOR_CONFIG.write_text(torrc)
@@ -577,7 +655,7 @@ async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
     # Reload Tor
     run_cmd(["systemctl", "reload", "tor"])
 
-    # Wait for onion address (Tor generates it on reload)
+    # Wait for onion address (Tor generates it on reload) — bounded, blocking.
     import time
     for _ in range(10):
         time.sleep(1)
@@ -596,14 +674,11 @@ async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
     }
 
 
-@app.post("/tor/remove")
-async def tor_remove(req: TorRemoveRequest, user: dict = Depends(require_jwt)):
-    """Remove Tor hidden service"""
-    name = "".join(c for c in req.service if c.isalnum() or c in "_-")
+def _tor_remove_sync(name: str) -> dict:
+    """Blocking torrc-edit + directory removal + reload mechanics. Plain sync
+    function — callers on an event loop MUST offload via asyncio.to_thread.
+    Does not check hs existence; that's the caller's responsibility."""
     hs_dir = TOR_DATA / name
-
-    if not hs_dir.exists():
-        raise HTTPException(status_code=404, detail="Hidden service not found")
 
     # Remove from torrc
     if TOR_CONFIG.exists():
@@ -621,6 +696,50 @@ async def tor_remove(req: TorRemoveRequest, user: dict = Depends(require_jwt)):
     run_cmd(["systemctl", "reload", "tor"])
 
     return {"success": True, "message": "Hidden service removed"}
+
+
+async def _apply_tor(vhost: str, want: bool, user: dict) -> None:
+    """Apply/remove a Tor hidden service for this vhost. Thread-offloaded so the
+    blocking torrc reload/poll never stalls the shared event loop. Best-effort:
+    a Tor hiccup must not fail the reach change (which already succeeded)."""
+    name = "".join(c for c in vhost if c.isalnum() or c in "_-")
+
+    def _work():
+        hs = TOR_DATA / name
+        try:
+            if want and not hs.exists():
+                _tor_add_sync(name, local_port=80, onion_port=80)
+            elif not want and hs.exists():
+                _tor_remove_sync(name)
+        except Exception:
+            pass
+
+    await asyncio.to_thread(_work)
+
+
+@app.post("/tor/add")
+async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
+    """Add Tor hidden service"""
+    # Sanitize service name
+    name = "".join(c for c in req.service if c.isalnum() or c in "_-")
+
+    hs_dir = TOR_DATA / name
+    if hs_dir.exists():
+        raise HTTPException(status_code=400, detail="Hidden service already exists")
+
+    return _tor_add_sync(name, req.local_port, req.onion_port)
+
+
+@app.post("/tor/remove")
+async def tor_remove(req: TorRemoveRequest, user: dict = Depends(require_jwt)):
+    """Remove Tor hidden service"""
+    name = "".join(c for c in req.service if c.isalnum() or c in "_-")
+    hs_dir = TOR_DATA / name
+
+    if not hs_dir.exists():
+        raise HTTPException(status_code=404, detail="Hidden service not found")
+
+    return _tor_remove_sync(name)
 
 
 @app.post("/ssl/add")
