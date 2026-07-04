@@ -177,7 +177,7 @@ cmd_reset_admin_password() {
     then
         # Keep the dashboard's stored admin secret in sync (get_admin_token()).
         printf '%s' "$pw" > "$ADMIN_SECRET" && chmod 0600 "$ADMIN_SECRET"
-        chown secubox-peertube:secubox-peertube "$ADMIN_SECRET" 2>/dev/null || true
+        chown secubox:secubox "$ADMIN_SECRET" 2>/dev/null || true
         _write_result "$id" "{\"status\":\"done\",\"detail\":\"password reset\",\"password\":$(printf '%s' "$pw" | jq -Rs .)}"
     else
         _write_result "$id" '{"status":"error","detail":"peertube reset-password CLI failed"}'

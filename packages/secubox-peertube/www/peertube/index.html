@@ -693,7 +693,7 @@
             const pw = prompt('New admin password (leave empty to generate a strong one):', '');
             if (pw === null) return;
             const r = await api('/admin/reset-password', { method: 'POST', body: JSON.stringify({ password: pw || null }) });
-            if (!r || !r.id) { toast('Reset failed: ' + ((r && r.error) || 'no id'), 'error'); return; }
+            if (!r || !r.id) { toast('Reset failed: ' + ((r && (r.detail || r.error)) || 'no id'), 'error'); return; }
             toast('Resetting admin password…');
             pollOp(r.id, (res) => {
                 if (res.status === 'done') toast('Password reset. ' + (res.password ? 'New password: ' + res.password : ''), 'success');
