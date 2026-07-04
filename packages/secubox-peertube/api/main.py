@@ -308,6 +308,9 @@ def default_channel_id(token: str) -> Optional[int]:
 # ============================================================================
 
 OPS_DIR = Path("/run/secubox/peertube/ops")
+# Results live in a separate dir from requests so the root peertube-ops.path
+# (DirectoryNotEmpty= on OPS_DIR) isn't re-triggered by a lingering result (#798).
+RESULTS_DIR = Path("/run/secubox/peertube/results")
 _OP_ID_RE = re.compile(r"^[0-9a-f]{8,32}$")
 
 
@@ -343,7 +346,7 @@ def _read_op_result(op_id: str) -> dict:
     """Read <id>.result.json; {status: pending} until the root unit writes it."""
     if not _OP_ID_RE.match(op_id or ""):
         return {"status": "error", "detail": "bad op id"}
-    res = OPS_DIR / f"{op_id}.result.json"
+    res = RESULTS_DIR / f"{op_id}.result.json"
     if not res.exists():
         return {"status": "pending"}
     try:
