@@ -2,7 +2,7 @@
 
 *Documentation complète des modules*
 
-**Total des modules:** 128
+**Total des modules:** 127
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -117,7 +117,6 @@
 | 📀 **System Cloner** | System | Clonage image système |
 | 👁️ **Eye Remote** | System | Interface de gestion à distance |
 | 🖥️ **RTTY Console** | System | Accès terminal distant |
-| 🔐 **Authelia SSO** | Access | Fournisseur d'identité SSO (couche AUTH-BRIDGE) |
 | 🧑 **Avatar Manager** | Apps | Gestionnaire d'identité et d'avatar |
 | 📜 **Certificate Manager** | Security | Gestionnaire de certificats ACME / TLS |
 | 📻 **FM Relay** | Media | rtl_fm vers mount MP3 Icecast avec métadonnées RDS live |
@@ -222,14 +221,6 @@ Fournisseur d'identité SAML/OIDC
 **Fonctionnalités:** SAML 2.0, OpenID Connect, Fédération, SSO
 
 ![Identity Provider](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/identity.png)
-
-#### 🔐 Authelia SSO
-
-Fournisseur d'identité SSO (couche AUTH-BRIDGE)
-
-**Fonctionnalités:** SSO, 2FA / TOTP, Politiques d'accès, Backend LDAP / fichier
-
-![Authelia SSO](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/authelia.png)
 
 #### 🖥️ RustDesk
 

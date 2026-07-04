@@ -2,7 +2,7 @@
 
 *完整的模块文档*
 
-**模块总数:** 128
+**模块总数:** 127
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -117,7 +117,6 @@
 | 📀 **System Cloner** | System | 系统镜像克隆 |
 | 👁️ **Eye Remote** | System | 远程管理界面 |
 | 🖥️ **RTTY Console** | System | 远程终端访问 |
-| 🔐 **Authelia SSO** | Access | 单点登录身份提供商（AUTH-BRIDGE） |
 | 🧑 **Avatar Manager** | Apps | 身份与头像管理器 |
 | 📜 **Certificate Manager** | Security | ACME / TLS 证书管理器 |
 | 📻 **FM Relay** | Media | rtl_fm 转 Icecast MP3 挂载，含实时 RDS 元数据 |
@@ -222,14 +221,6 @@ SAML/OIDC身份提供者
 **功能:** SAML 2.0, OpenID Connect, 联邦, SSO
 
 ![Identity Provider](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/identity.png)
-
-#### 🔐 Authelia SSO
-
-单点登录身份提供商（AUTH-BRIDGE）
-
-**功能:** 单点登录, 双因素/TOTP, 访问策略, LDAP/文件后端
-
-![Authelia SSO](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/authelia.png)
 
 #### 🖥️ RustDesk
 
