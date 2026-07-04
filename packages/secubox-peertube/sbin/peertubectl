@@ -50,6 +50,7 @@ ADMIN_SECRET="${SECUBOX_PEERTUBE_ADMIN_SECRET:-/etc/secubox/secrets/peertube-adm
 _write_result() {
     local id="$1" body="$2"
     printf '%s' "$body" > "$OPS_DIR/$id.result.json.tmp"
+    chown root:secubox "$OPS_DIR/$id.result.json.tmp" 2>/dev/null || true
     chmod 0640 "$OPS_DIR/$id.result.json.tmp" 2>/dev/null || true
     mv -f "$OPS_DIR/$id.result.json.tmp" "$OPS_DIR/$id.result.json"
 }
@@ -156,7 +157,7 @@ cmd_process_ops() {
             ping)                 _write_result "$id" '{"status":"done","detail":"pong"}' ;;
             reset-admin-password) cmd_reset_admin_password "$f" "$id" ;;
             upgrade)              cmd_upgrade "$f" "$id" ;;
-            *)                    _write_result "$id" "{\"status\":\"error\",\"detail\":\"unknown op: $op\"}" ;;
+            *)                    _write_result "$id" "$(jq -nc --arg o "$op" '{status:"error",detail:("unknown op: "+$o)}')" ;;
         esac
         rm -f "$f"
     done
@@ -186,6 +187,9 @@ cmd_reset_admin_password() {
 
 cmd_upgrade() {
     # args: <request-file> <id>  (called by process-ops)
+    # NOTE: `target` (from the request) is currently ignored — upgrade.sh always
+    # fetches the latest PeerTube release; pinning to a specific target is not
+    # wired up yet.
     local reqf="${1:-}" id="${2:-}"
     [ -n "$id" ] || { err "usage: upgrade <request-file> <id>"; return 1; }
     lxc_running || { _write_result "$id" '{"status":"error","detail":"LXC not running"}'; return; }
@@ -216,8 +220,8 @@ cmd_upgrade() {
     then
         # 6. Health-check: PeerTube answers /api/v1/config once back up.
         svc restart
-        local ok=0 i
-        for i in $(seq 1 30); do
+        local ok=0
+        for _ in $(seq 1 30); do
             if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
                 curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${HTTP_PORT}/api/v1/config" 2>/dev/null | grep -q 200
             then ok=1; break; fi

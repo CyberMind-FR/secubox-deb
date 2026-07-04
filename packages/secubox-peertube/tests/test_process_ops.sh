@@ -11,3 +11,9 @@ bash "$here/sbin/peertubectl" process-ops
 grep -q '"status": *"done"' "$SECUBOX_PEERTUBE_OPS_DIR/deadbeef.result.json" || { echo "ping not done"; exit 1; }
 [ -f "$SECUBOX_PEERTUBE_OPS_DIR/deadbeef.request.json" ] && { echo "request not removed"; exit 1; }
 echo "PASS process-ops ping"
+
+printf '{"op":"reset-admin-password","id":"cafe0001","password":"x"}' > "$SECUBOX_PEERTUBE_OPS_DIR/cafe0001.request.json"
+bash "$here/sbin/peertubectl" process-ops
+grep -q '"status"' "$SECUBOX_PEERTUBE_OPS_DIR/cafe0001.result.json" || { echo "reset op produced no result"; exit 1; }
+grep -q 'unknown op' "$SECUBOX_PEERTUBE_OPS_DIR/cafe0001.result.json" && { echo "reset op fell through to unknown-op (dispatch mismatch)"; exit 1; }
+echo "PASS reset-admin-password dispatches"

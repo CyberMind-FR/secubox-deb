@@ -24,6 +24,7 @@ from fastapi import FastAPI, APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core import user_store
 from secubox_core.logger import get_logger
 
 app = FastAPI(title="secubox-peertube", version="1.1.0", root_path="/api/v1/peertube")
@@ -311,10 +312,16 @@ _OP_ID_RE = re.compile(r"^[0-9a-f]{8,32}$")
 
 
 async def require_admin(user=Depends(require_jwt)):
-    """Gate destructive ops to admin-role JWTs. require_jwt already validated the
-    token; here we additionally require role == admin (the module otherwise
-    accepts any valid SecuBox JWT)."""
-    role = (user or {}).get("role") if isinstance(user, dict) else None
+    """Gate destructive ops to admin-role identities. require_jwt validated the
+    token; the role lives in the user store (JWT carries only sub/jti), so look
+    it up like auth.py's verify handler does."""
+    sub = (user or {}).get("sub") if isinstance(user, dict) else None
+    role = ""
+    try:
+        u = user_store.get_user(sub) or {}
+        role = u.get("role", "") if isinstance(u, dict) else ""
+    except Exception:
+        role = ""
     if role != "admin":
         raise HTTPException(status_code=403, detail="admin role required")
     return user
@@ -326,8 +333,9 @@ def _spool_op(op: str, **args) -> str:
     op_id = secrets.token_hex(8)
     OPS_DIR.mkdir(parents=True, exist_ok=True)
     req = OPS_DIR / f"{op_id}.request.json"
-    req.write_text(json.dumps({"op": op, "id": op_id, **args}))
-    os.chmod(req, 0o600)
+    fd = os.open(str(req), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.write(fd, json.dumps({"op": op, "id": op_id, **args}).encode())
+    os.close(fd)
     return op_id
 
 
@@ -922,7 +930,7 @@ async def reset_password_op(body: ResetPasswordBody, user=Depends(require_admin)
     CLI in the LXC via the root spool, then rewrites the admin secret. If no
     password is given, a strong one is generated and returned in the op result."""
     pw = body.password or secrets.token_urlsafe(18)
-    op_id = _spool_op("reset-password", password=pw)
+    op_id = _spool_op("reset-admin-password", password=pw)
     return {"success": True, "id": op_id}
 
 

@@ -10,10 +10,10 @@ from api import main as m
 
 def test_spool_op_writes_request(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "OPS_DIR", tmp_path)
-    op_id = m._spool_op("reset-password", password="s3cr3t")
+    op_id = m._spool_op("reset-admin-password", password="s3cr3t")
     assert len(op_id) >= 8 and all(c in "0123456789abcdef" for c in op_id)
     req = json.loads((tmp_path / f"{op_id}.request.json").read_text())
-    assert req["op"] == "reset-password" and req["id"] == op_id and req["password"] == "s3cr3t"
+    assert req["op"] == "reset-admin-password" and req["id"] == op_id and req["password"] == "s3cr3t"
     assert (tmp_path / f"{op_id}.request.json").stat().st_mode & 0o777 == 0o600
 
 
@@ -37,7 +37,7 @@ def test_reset_password_spools_op(tmp_path, monkeypatch):
     assert out["success"] is True and "id" in out
     import json
     req = json.loads((tmp_path / f"{out['id']}.request.json").read_text())
-    assert req["op"] == "reset-password" and req["password"] == "hunter2"
+    assert req["op"] == "reset-admin-password" and req["password"] == "hunter2"
 
 
 def test_reset_password_generates_when_absent(tmp_path, monkeypatch):
@@ -59,10 +59,19 @@ def test_upgrade_spools_op(tmp_path, monkeypatch):
 
 def test_upgrade_requires_admin(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "OPS_DIR", tmp_path)
+    from secubox_core import user_store
+    monkeypatch.setattr(user_store, "get_user", lambda s: {"role": "user"})
     import asyncio
     from fastapi import HTTPException
     try:
-        asyncio.run(m.require_admin(user={"role": "user"}))
+        asyncio.run(m.require_admin(user={"sub": "bob"}))
         assert False, "require_admin should reject non-admin"
     except HTTPException as e:
         assert e.status_code == 403
+
+
+def test_require_admin_allows_admin(monkeypatch):
+    from secubox_core import user_store
+    monkeypatch.setattr(user_store, "get_user", lambda s: {"role": "admin"})
+    import asyncio
+    assert asyncio.run(m.require_admin(user={"sub": "root"})) == {"sub": "root"}
