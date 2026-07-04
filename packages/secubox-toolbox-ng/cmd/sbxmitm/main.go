@@ -112,6 +112,12 @@ type Proxy struct {
 	// mediaflow "Discovered Media" view reads. nil/disabled → no-op.
 	media *mediaCatcher
 
+	// mbuf is the R4 media BUFFER (#812): tees the actual bytes of whole-file
+	// media up/downloads into a time-bounded rolling buffer on /data so an
+	// admin/owner can replay a recent capture. Non-blocking (async writer +
+	// drop-if-full) — never slows the proxied flow. nil/disabled → no-op.
+	mbuf *MediaBuffer
+
 	// swNeuter (#753) is the targeted Service-Worker neuter: for allow-listed
 	// hosts it answers the SW script fetch with a self-unregistering SW so PWA
 	// shells stop being SW-cached and the banner can be injected on the next nav.
@@ -409,6 +415,22 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		req.Header.Del("If-None-Match")
 		req.Header.Del("If-Modified-Since")
 	}
+	// #812 R4 media buffer (upload) — if this MITM'd REQUEST is media, tee the
+	// request body into the rolling buffer as the upstream reads it. Non-blocking:
+	// the tee's ObjectWriter never errors/blocks, so a stuck buffer never affects
+	// the upload; a nil writer is a no-op. The upstream transport closes req.Body,
+	// which finalises the capture (w.Close). Only on non-splice allow|mitm flows
+	// (splice returns far earlier).
+	if px.mbuf != nil && req.Body != nil {
+		rct := req.Header.Get("Content-Type")
+		if px.mbuf.IsMedia(rct, req.URL.Path) {
+			if w := px.mbuf.Capture(clientHash, host,
+				"https://"+host+req.URL.RequestURI(), req.URL.Path, rct, "up",
+				req.ContentLength); w != nil {
+				req.Body = teeReadCloser(req.Body, w)
+			}
+		}
+	}
 	resp, err := up.Do(req)
 	if err != nil {
 		writeRaw(tconn, 502, "Bad Gateway", nil, nil)
@@ -437,6 +459,23 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 			px.media.record(clientHash, host,
 				"https://"+host+req.URL.RequestURI(), req.URL.Path,
 				req.Header.Get("Referer"), kind, ctype, resp.ContentLength)
+		}
+	}
+
+	// #812 R4 media buffer (download) — tee the FULL response body into the
+	// rolling buffer so it can be replayed for a short window. Non-blocking: the
+	// ObjectWriter behind the TeeReader copies chunks to a bounded channel and
+	// drops-if-full, so it NEVER slows or fails the client stream; a nil writer
+	// is a no-op. resp.Body's deferred Close (above) finalises the capture. 2xx
+	// only; splice/passthrough flows never reach here.
+	if px.mbuf != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		rctype := resp.Header.Get("Content-Type")
+		if px.mbuf.IsMedia(rctype, req.URL.Path) {
+			if w := px.mbuf.Capture(clientHash, host,
+				"https://"+host+req.URL.RequestURI(), req.URL.Path, rctype, "down",
+				resp.ContentLength); w != nil {
+				resp.Body = teeReadCloser(resp.Body, w)
+			}
 		}
 	}
 
@@ -567,6 +606,15 @@ func main() {
 		"R4 media reverse-catcher (#736): record cloneable media URLs (HLS/DASH manifests + direct audio/video) seen on MITM'd flows to "+mediaCatchPath+" for the mediaflow \"Discovered Media\" clone view. URLs only, never bodies; deduped. Set false to disable.")
 	swNeuterHosts := flag.String("sw-neuter-hosts", "/var/lib/secubox/toolbox/sw-neuter-hosts.txt",
 		"#753 allow-list of PWA hosts whose Service Worker is neutered (served a self-unregistering SW) so the banner can be injected; empty/missing file = no-op")
+	// #812 R4 media buffer — capture whole-file media bytes (up + download) into a
+	// short rolling buffer on /data for admin/owner replay. Default OFF (Task 6
+	// formalises the flag docs + janitor wiring); the tee is a no-op when off.
+	mediaBuffer := flag.Bool("media-buffer", false,
+		"R4 media buffer (#812): tee whole-file media up/downloads into a time-bounded rolling buffer on /data for admin/owner replay. Non-blocking (async writer, drop-if-full). Default off.")
+	mediaBufferRoot := flag.String("media-buffer-root", "/data/secubox/media-buffer",
+		"root directory for the R4 media buffer (0750 secubox:secubox); per-session subdirs + media-buffer.jsonl metatag log live here")
+	mediaBufferPerObj := flag.Int64("media-buffer-per-object", 512<<20,
+		"per-object byte ceiling for the R4 media buffer; a media object exceeding this is truncated (metatag flagged) rather than persisted whole")
 	flag.Parse()
 	ca, err := forge.LoadCA(*caCert, *caKey)
 	if err != nil {
@@ -603,6 +651,7 @@ func main() {
 		social:        newSocialRelay(),
 		consent:       newConsentLog(),
 		media:         newMediaCatcher(*mediaCatch),
+		mbuf:          NewMediaBuffer(*mediaBufferRoot, *mediaBuffer, *mediaBufferPerObj),
 		swNeuter:      newSWNeuter(*swNeuterHosts),
 	}
 	// #662 — start the social-edge flusher: the MITM path buffers cross-site

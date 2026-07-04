@@ -7,13 +7,52 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
+
+// findObject walks root and returns the path of the single object-* file.
+func findObject(t *testing.T, root string) string {
+	t.Helper()
+	var found string
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, _ error) error {
+		if d != nil && !d.IsDir() && strings.HasPrefix(d.Name(), "object-") {
+			found = p
+		}
+		return nil
+	})
+	if found == "" {
+		t.Fatalf("no object-* file under %s", root)
+	}
+	return found
+}
+
+// blockingWriteCloser is an object sink whose Write blocks until release is
+// closed, used to pin the drain goroutine so the write queue fills and the
+// non-blocking drop path is exercised deterministically.
+type blockingWriteCloser struct {
+	release chan struct{}
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (b *blockingWriteCloser) Write(p []byte) (int, error) {
+	b.once.Do(func() { close(b.entered) })
+	<-b.release
+	return len(p), nil
+}
+
+func (b *blockingWriteCloser) Close() error { return nil }
 
 // lastJSONL reads path and returns the last non-empty line parsed as a JSON
 // object. Fails the test on any read/parse error (the file is expected to
@@ -121,5 +160,129 @@ func TestMediaBufferNotMediaReturnsNil(t *testing.T) {
 	b := NewMediaBuffer(t.TempDir(), true, 512<<20)
 	if w := b.Capture("mac1", "h", "https://h/page", "/page", "text/html", "down", 100); w != nil {
 		t.Error("Capture should return nil for non-media content")
+	}
+}
+
+// TestTeeDownloadStreamsAndCaptures wires the download hook exactly as
+// main.go's mitmPipeline does — an httptest upstream serves video/mp4, the
+// response body is wrapped with teeReadCloser(resp.Body, Capture(...)) — and
+// proves (a) the client still reads the FULL body byte-for-byte and (b) after
+// Close the buffer object holds the same bytes plus a metatag line.
+func TestTeeDownloadStreamsAndCaptures(t *testing.T) {
+	// A body large enough to span many Reads (and channel chunks) but well under
+	// the default queue cap so nothing is dropped in this healthy-disk path.
+	body := bytes.Repeat([]byte("SECUBOX-MEDIA-0123456789"), 5000) // ~120 KiB
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	root := t.TempDir()
+	b := NewMediaBuffer(root, true, 512<<20)
+
+	resp, err := http.Get(srv.URL + "/movie.mp4")
+	if err != nil {
+		t.Fatalf("upstream GET: %v", err)
+	}
+
+	// Mirror the mitmPipeline download hook wiring.
+	ctype := resp.Header.Get("Content-Type")
+	if !b.IsMedia(ctype, "/movie.mp4") {
+		t.Fatalf("IsMedia should be true for %q", ctype)
+	}
+	w := b.Capture("macX", "cdn.host", "https://cdn.host/movie.mp4", "/movie.mp4", ctype, "down", resp.ContentLength)
+	if w == nil {
+		t.Fatal("Capture returned nil for a media download")
+	}
+	resp.Body = teeReadCloser(resp.Body, w)
+
+	// The proxy streams the body to the client (streamResponse → io.Copy).
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("client read: %v", err)
+	}
+	resp.Body.Close() // defer resp.Body.Close() in main.go → w.Close(total)
+
+	// (a) client saw the full body byte-for-byte.
+	if !bytes.Equal(got, body) {
+		t.Fatalf("client body mismatch: got %d bytes want %d", len(got), len(body))
+	}
+
+	// (b) the captured object holds the same bytes.
+	objBytes, err := os.ReadFile(findObject(t, root))
+	if err != nil {
+		t.Fatalf("read captured object: %v", err)
+	}
+	if !bytes.Equal(objBytes, body) {
+		t.Fatalf("captured bytes mismatch: got %d want %d", len(objBytes), len(body))
+	}
+
+	// metatag line present, coherent, not truncated (nothing dropped).
+	m := lastJSONL(t, filepath.Join(root, "media-buffer.jsonl"))
+	if m["direction"] != "down" || m["mac_hash"] != "macX" || m["host"] != "cdn.host" {
+		t.Errorf("metatag fields wrong: %v", m)
+	}
+	if m["truncated"] == true {
+		t.Error("healthy capture must not be truncated")
+	}
+	if m["kind"] == "" {
+		t.Error("kind should be set")
+	}
+}
+
+// TestTeeNonBlockingDropsWhenFull proves the non-blocking guarantee: with a
+// tiny queue and a drain goroutine pinned inside a blocked disk write, Write
+// must return immediately (never block on the stuck disk) and the flow still
+// completes, with truncated flagged from the dropped chunks.
+func TestTeeNonBlockingDropsWhenFull(t *testing.T) {
+	root := t.TempDir()
+	b := NewMediaBuffer(root, true, 512<<20)
+	b.chanCap = 1 // depth-1 queue → trivially fills once the drainer is stuck
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	b.openSink = func(string) (io.WriteCloser, error) {
+		return &blockingWriteCloser{release: release, entered: entered}, nil
+	}
+
+	w := b.Capture("mac", "h", "https://h/v.mp4", "/v.mp4", "video/mp4", "down", -1)
+	if w == nil {
+		t.Fatal("Capture returned nil")
+	}
+
+	// Chunk 1 → queue → drainer picks it up → blocks inside sink.Write.
+	w.Write([]byte("A"))
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("drain goroutine never reached the sink write")
+	}
+	// Chunk 2 fills the depth-1 queue (drainer is stuck holding chunk 1).
+	w.Write([]byte("B"))
+
+	// Every further Write must now DROP and return immediately — prove it never
+	// blocks on the pinned disk by bounding the whole burst with a timeout.
+	burstDone := make(chan struct{})
+	go func() {
+		for i := 0; i < 5000; i++ {
+			if n, err := w.Write([]byte("X")); n != 1 || err != nil {
+				t.Errorf("Write must always report len(p),nil: n=%d err=%v", n, err)
+			}
+		}
+		close(burstDone)
+	}()
+	select {
+	case <-burstDone:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Write blocked while the disk was stuck — non-blocking guarantee violated")
+	}
+
+	// Release the disk and finalise; Close must drain + not deadlock.
+	close(release)
+	w.Close(5002)
+
+	m := lastJSONL(t, filepath.Join(root, "media-buffer.jsonl"))
+	if m["truncated"] != true {
+		t.Errorf("expected truncated=true after dropped chunks, got %v", m["truncated"])
 	}
 }
