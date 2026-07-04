@@ -1,142 +1,140 @@
-# Task 5 Report — Security + Provisioning Glue
+# Task 5 Report: Packaging mesh-exclusion timers (#806)
 
-**Date**: 2026-07-01
-**Status**: DONE
-
----
-
-## Files Created
-
-| File | Mode (installed) | Note |
-|------|-----------------|------|
-| `packages/secubox-macro/sudoers.d/secubox-macro` | 440 | No SETENV / env_keep |
-| `packages/secubox-macro/apparmor/secubox-macroctl` | 644 | Enforce profile |
-| `packages/secubox-macro/conf/secubox-macro-tor-exit.conf.example` | 644 | `__MESH_IP__` token |
-| `packages/secubox-macro/debian/postinst` | 755 | configure block |
-| `packages/secubox-macro/debian/prerm` | 755 | remove/upgrade/deconfigure |
-
-## Files Modified
-
-| File | Change |
-|------|--------|
-| `packages/secubox-macro/debian/rules` | Dropped unused `/etc/tor/torrc.d` dir; added `install -d usr/share/secubox/macro` before conf install |
+**Date**: 2026-07-04  
+**Status**: ✅ **COMPLETE**
 
 ---
 
-## Verification Outputs
+## Summary
 
-### visudo -cf
-```
-packages/secubox-macro/sudoers.d/secubox-macro : analyse réussie
-```
-(French locale: "analyse réussie" = "parsed OK")
+Successfully packaged the mesh-exclusion publish + sync CLI scripts as systemd timers with installation and enablement on postinst.
 
-### sh -n postinst / prerm
-```
-postinst: OK
-prerm: OK
-```
+## Commit
 
-### AppArmor profile
-- `apparmor_parser -Q` failed only on policy cache (permission denied) — not a parse error
-- `apparmor_parser --preprocess` succeeded: full expanded output printed, profile body parsed correctly
-- Profile covers `/usr/sbin/secubox-macroctl` as the confined binary
-- Braces balanced; all includes resolved
-
-### Macro unit suite
-```
-14 passed in 0.51s
-```
-No regressions.
-
-### Rules-referenced files (all present)
-```
-OK: sbin/secubox-macroctl
-OK: macros.d/tor-exit
-OK: sudoers.d/secubox-macro
-OK: apparmor/secubox-macroctl
-OK: conf/secubox-macro-tor-exit.conf.example
-```
+**Hash:** `d6076912`  
+**Message:** `feat(toolbox): package mesh-exclusion publish+sync timers (ref #806)`
 
 ---
 
-## AppArmor Example Mirrored
+## Changes Made
 
-The brief cited `packages/secubox-eye-square/debian/secubox-eye-square/etc/apparmor.d/secubox-eye-square-helper` but that path does not exist in this worktree (secubox-eye-square has no apparmor.d directory). Structure was mirrored instead from `packages/secubox-waf-ng/debian/secubox-waf-ng.apparmor`, which is the most complete enforce-profile in this worktree. The section layout (header comments → tunables include → abstractions → capability-grouped rules → deny comment) matches the WAF-ng profile exactly.
+### 1. Created 4 systemd unit files
 
----
+Under `packages/secubox-toolbox/systemd/`:
 
-## Self-Review
+- `secubox-toolbox-mesh-exclusion-publish.service`
+- `secubox-toolbox-mesh-exclusion-publish.timer`
+- `secubox-toolbox-mesh-exclusion-sync.service`
+- `secubox-toolbox-mesh-exclusion-sync.timer`
 
-- **sudoers**: Exact required line, no SETENV, no env_keep. Default `env_reset` is the only env control. Validated by visudo.
-- **AppArmor**: DEFAULT-DENY (implicit AppArmor). All permitted surfaces explicitly listed. `rix` for all executables (including plugins and nft/ip so sub-processes inherit confinement). `rw` for state store. `w` (not `rw`) for audit log (write-only, matches append intent). `/etc/tor/torrc.d/` gets only `r` (dir read; postinst writes the file as root, not under this profile). Network: `inet stream` + `netlink raw` only (no `inet6`, no `unix`).
-- **postinst**: All operations guarded with `|| true`. No shared-parent chown (respects #494/#511 CMSD policy). nft operations conditioned on `inet secubox_filter` table existence. Tor reload attempted (reload first, then restart fallback). AppArmor load conditioned on `command -v apparmor_parser`.
-- **prerm**: `remove|upgrade|deconfigure` cases. Tor file removed best-effort. nft rule deletion uses handle lookup (robust to rule order changes).
-- **rules fix**: The Task-3 rules had `install -d .../etc/tor/torrc.d` (unused — torrc.d is not shipped in the deb, it's created by postinst at runtime) and was missing `install -d .../usr/share/secubox/macro` before the conf.example install. Both corrected.
+All unit files created with exact specifications from brief:
 
----
+- Service units with `Type=oneshot`, `ExecStart` pointing to `/usr/sbin/` scripts
+- Timer units with `OnBootSec`, `OnUnitActiveSec=30min`, `Persistent=true`, `RandomizedDelaySec=3min`
+- Proper `After=` dependencies on `secubox-toolbox.service` and `secubox-annuaire.service`
 
-## Concerns
+### 2. Modified `packages/secubox-toolbox/debian/rules`
 
-1. **`/var/log/secubox/audit.log` AppArmor mode**: The profile uses `w` (write) which covers append. If the binary ever uses `O_RDWR` on the log file (it opens with `"a"` in Python which maps to `O_WRONLY|O_CREAT|O_APPEND`), `w` is sufficient. No concern.
-2. **`#include <abstractions/python>` in AppArmor profile**: The `python` abstraction is available in standard Debian bookworm AppArmor packages. No concern for target platform.
-3. **nft duplicate rule on reinstall**: The postinst adds the nft input rule unconditionally (beyond the set check). A `dpkg --reinstall` will add a duplicate rule. This is `|| true` guarded and not a security issue — nftables allows duplicate rules. A future enhancement could check for the rule before adding, but this is consistent with how other secubox packages handle nft rules.
-4. **`apparmor_parser -Q` cache permission**: The `-Q` (query-only) flag failed due to `/var/cache/apparmor` being root-owned. This is a dev environment constraint, not a parse error. `--preprocess` confirmed syntax is valid.
+Added 6 install lines in `override_dh_installsystemd` after autolearn timer lines:
 
----
+- 2 lines to install the sbin scripts (publish, sync)
+- 4 lines to install the systemd unit files (.service and .timer files)
 
-## Review Fixes (ref #771)
+Placement matches existing patterns for similar helpers (autolearn, tor, blacklist).
 
-Applied three security-review fixes to address CRITICAL and IMPORTANT findings:
+### 3. Modified `packages/secubox-toolbox/debian/postinst`
 
-### FIX 1 — CRITICAL: mawk-portable prerm handle extraction
+Added 4 enable+start lines inside the systemd conditional block:
 
-**File**: `packages/secubox-macro/debian/prerm` (line 19)
-
-**Before**:
 ```sh
-awk '/secubox_macro_torexit.*dport 9050/ {match($0, /handle ([0-9]+)/, h); if (h[1]) print h[1]}'
+systemctl enable secubox-toolbox-mesh-exclusion-publish.timer 2>/dev/null || true
+systemctl start  secubox-toolbox-mesh-exclusion-publish.timer 2>/dev/null || true
+systemctl enable secubox-toolbox-mesh-exclusion-sync.timer 2>/dev/null || true
+systemctl start  secubox-toolbox-mesh-exclusion-sync.timer 2>/dev/null || true
 ```
 
-**After**:
-```sh
-awk '/secubox_macro_torexit.*dport 9050/ { for (i=1;i<=NF;i++) if ($i=="handle") { print $(i+1); exit } }') || true
+Placement after autolearn timer enables, following existing convention with `2>/dev/null || true` guards.
+
+---
+
+## Verification
+
+**Command executed:**
+
+```bash
+ls packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-*.{service,timer}
+grep -c mesh-exclusion packages/secubox-toolbox/debian/rules packages/secubox-toolbox/debian/postinst
 ```
 
-gawk's 3-argument `match()` is not available in mawk (Debian bookworm's `/usr/bin/awk`). The replacement iterates fields portably. The `|| true` prevents `set -e` from aborting prerm on awk/nft failure.
+**Output:**
 
-**Verification**:
 ```
-sh -n packages/secubox-macro/debian/prerm → OK (prerm syntax OK)
-echo 'x handle 42 y' | mawk '/x/ { for(i=1;i<=NF;i++) if($i=="handle"){print $(i+1);exit} }' → 42
+packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-publish.service
+packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-publish.timer
+packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-sync.service
+packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-sync.timer
+---
+packages/secubox-toolbox/debian/rules:6
+packages/secubox-toolbox/debian/postinst:4
 ```
 
-### FIX 2 — IMPORTANT: AppArmor append-only audit log
+**Result**: ✅ **PASSED**
 
-**File**: `packages/secubox-macro/apparmor/secubox-macroctl` (line 54)
+- 4 unit files present
+- rules: 6 matches (exactly required)
+- postinst: 4 matches (exactly required)
 
-**Before**: `/var/log/secubox/audit.log  w,`
+---
 
-**After**: `/var/log/secubox/audit.log  a,`
+## Integration Notes
 
-AppArmor's `a` permission enforces `O_APPEND` at the LSM level, preventing truncation or seek-writes. This matches the CSPN "journalisation immuable, append-only" requirement. The Python side already opens in `"a"` mode.
+- The 2 CLI scripts (`secubox-toolbox-mesh-exclusion-publish` and `secubox-toolbox-mesh-exclusion-sync`) from Tasks 2–3 exist and are correctly referenced by the service units
+- Install paths follow exact pattern of nearby helpers (e.g., `debian/secubox-toolbox/usr/sbin/`, `debian/secubox-toolbox/lib/systemd/system/`)
+- Postinst enable/start lines placed in same conditional block as existing timer enables
+- No modifications outside `packages/secubox-toolbox/` per requirements
 
-**Verification**:
+---
+
+## Ready for Deploy
+
+Task 5 is complete and committed. The systemd timer units are now:
+
+1. Packaged into `secubox-toolbox.deb`
+2. Installed at `dpkg install` time
+3. Enabled and started in postinst
+
+Next steps (manual, per brief Deploy section):
+
+1. Cross-compile sbxmitm arm64 binary
+2. Deploy sbxmitm binary to gk2/c3box/amd64
+3. Rsync the 2 CLI scripts to all nodes
+4. `systemctl daemon-reload` on all nodes
+5. Verify timers fire: `systemctl status secubox-toolbox-mesh-exclusion-*.timer`
+
+---
+
+## #806 Final Whole-Branch Review — Fix Wave
+
+**Date**: 2026-07-04
+**Status**: ✅ **COMPLETE**
+**Commit**: `c6257154` — `fix(toolbox): mesh-exclusion churn guard + never-raises + env overrides + fed-disabled enabled flag (ref #806)`
+
+### Test command + result
+
 ```
-grep 'audit.log' apparmor/secubox-macroctl
-  #   - w    : /var/log/secubox/audit.log (append-only audit trail)
-  /var/log/secubox/audit.log  a,
+cd packages/secubox-toolbox && PYTHONPATH=. python -m pytest tests/test_mesh_exclusion_publish.py tests/test_mesh_exclusion_sync.py tests/test_filter_list_mesh_tag.py -q
 ```
-Brace balance confirmed (visual check; profile is 62 lines, single block, braces paired).
-
-### FIX 3 — IMPORTANT: tor-exit euid env-pin (defense-in-depth)
-
-**File**: `packages/secubox-macro/macros.d/tor-exit` (inserted at start of `main()`, line 39)
-
-Added `if os.geteuid() == 0:` block re-pinning `NFT`, `STATE_DIR`, `SET`, `TABLE`, `MESH_IP` to production defaults when running as root. Prevents a leaked `TOREXIT_NFT=/tmp/evil` from becoming root-RCE. Non-root euid (test harness) continues to honor env overrides.
-
-**Verification**:
 ```
-grep -n 'geteuid' macros.d/tor-exit → 40:    if os.geteuid() == 0:
-python3 -m pytest tests/ -q → 14 passed in 0.52s
+..........                                                               [100%]
+10 passed in 0.36s
 ```
+(full `tests/` run: 209 passed, 3 pre-existing/unrelated failures confirmed present before this change via `git stash` — `test_bypass_sources.py::test_load_bypass_tagged_missing_source_skipped` (stale pre-#809 assertion shape) and 2x `test_media_stats.py` (`ModuleNotFoundError: secubox_core` in this local venv) — not touched, out of scope.)
+
+### Fixes applied
+
+1. **Publish churn guard** — `mesh_exclusion.py`: added `LAST_PUBLISHED` path + `_read_last_published()`/`_write_last_published()`; `publish()` now computes the content hash first and returns `True` without POSTing when it matches the last successfully-published hash, only persisting the new fingerprint after a successful POST. TDD: added `test_publish_skips_when_payload_unchanged` (red → green).
+2. **`_atomic_write` + decode safety** — wrapped `_atomic_write`'s write/replace body in try/except (returns `False` on any error instead of raising); broadened `except OSError` → `except Exception` in `_read_list` and `node_id` so a non-UTF-8/decode error can't escape the best-effort boundary.
+3. **Env overrides in `mesh_exclusion.py`** — `LOCAL_SPLICE`/`LOCAL_BYPASS`/`LOCAL_DISABLED`/`FED_SPLICE`/`FED_BYPASS`/`FED_DISABLED` now read `os.environ.get(...)` with the same var names as `policy.go`/`api.py` (`SECUBOX_SPLICE_LEARNED`, `SECUBOX_BYPASS_DYNAMIC`, `SECUBOX_FILTER_DISABLED`, `SECUBOX_FED_SPLICE`, `SECUBOX_FED_BYPASS`, `SECUBOX_FED_DISABLED`), same default paths, no divergence possible.
+4. **Fed-disabled → `enabled` flag** — `api.py`: factored `_read_disabled_file(path)` and made `_load_disabled()` return the union of the local `MITM_FILTER_DISABLED_FILE` and `FED_DISABLED_FILE`, so a fleet-wide-disabled pattern (mesh-disabled row) now renders `enabled=False` in Filtres MITM, matching the R3 engine's `disabledLocal ∪ disabledFed`. TDD: added `test_fed_disabled_pattern_shows_enabled_false`.
+
+No public names/signatures changed. Scope limited to `packages/secubox-toolbox/`.
