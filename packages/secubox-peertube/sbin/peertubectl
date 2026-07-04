@@ -44,15 +44,21 @@ HTTP_PORT=$(config_get "http_port" "9000")
 PUBLIC_HOSTNAME=$(config_get "public_hostname" "peertube.gk2.secubox.in")
 
 OPS_DIR="${SECUBOX_PEERTUBE_OPS_DIR:-/run/secubox/peertube/ops}"
+# Results go in a SEPARATE dir from requests: the peertube-ops.path unit watches
+# OPS_DIR with DirectoryNotEmpty=, so a result left in OPS_DIR would re-trigger
+# process-ops in a loop (→ start-limit-hit). process-ops removes each request and
+# writes its result here, leaving OPS_DIR empty so the watcher goes idle (#798).
+RESULTS_DIR="${SECUBOX_PEERTUBE_RESULTS_DIR:-/run/secubox/peertube/results}"
 ADMIN_SECRET="${SECUBOX_PEERTUBE_ADMIN_SECRET:-/etc/secubox/secrets/peertube-admin}"
 
 # _write_result <id> <json-string> — atomic result file for the API to poll.
 _write_result() {
     local id="$1" body="$2"
-    printf '%s' "$body" > "$OPS_DIR/$id.result.json.tmp"
-    chown root:secubox "$OPS_DIR/$id.result.json.tmp" 2>/dev/null || true
-    chmod 0640 "$OPS_DIR/$id.result.json.tmp" 2>/dev/null || true
-    mv -f "$OPS_DIR/$id.result.json.tmp" "$OPS_DIR/$id.result.json"
+    mkdir -p "$RESULTS_DIR" 2>/dev/null || true
+    printf '%s' "$body" > "$RESULTS_DIR/$id.result.json.tmp"
+    chown root:secubox "$RESULTS_DIR/$id.result.json.tmp" 2>/dev/null || true
+    chmod 0640 "$RESULTS_DIR/$id.result.json.tmp" 2>/dev/null || true
+    mv -f "$RESULTS_DIR/$id.result.json.tmp" "$RESULTS_DIR/$id.result.json"
 }
 
 # _jq <file> <filter> — read a field from a request file (jq is available on the host).
