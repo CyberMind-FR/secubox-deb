@@ -2600,6 +2600,9 @@ def _dpi_stats(mac_hash: str | None) -> dict:
         "categories": cats(me.get("by_category")),
         "protocols": _dpi_donut([{"label": k, "emoji": "📡", "count": v} for k, v in me_protos.items()]),
         "alerts": alerts(me.get("alerts")),
+        # #792 — donut 'alerts' loses the per-alert fields; keep the RAW collector
+        # alerts (kind/service/dst/detail) for the persona Quêtes section.
+        "alerts_raw": me.get("alerts") or [],
         "destinations": _dpi_donut(me_dests),
     }
 
@@ -2860,6 +2863,35 @@ async def report_me_html(request: Request) -> HTMLResponse:
     })
 
 
+def _enrich_report_data(mac_hash: str, data: dict, ua: str = "") -> dict:
+    """#790 — attach the live enrichment (DPI, media, persona, charts, carto) to
+    a report `data` dict. Factored out of report_me so /report/{token} and the
+    admin route produce the SAME rich PDF. `ua` drives the persona device class;
+    "" is fine for non-HTTP callers (falls back to a generic Runner class)."""
+    data["dpi_exfil"] = _dpi_stats(mac_hash)          # #701 DPI parity
+    data["media_exfil"] = _media_stats(mac_hash)      # #785 media-type donuts
+    data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 visual donuts
+    try:
+        from . import social as _social
+        _graph = _social.fetch_graph(mac_hash, since_seconds=7 * 86400)
+    except Exception:
+        _graph = {"stats": {}, "nodes": [], "by_country": []}
+    _gs = _graph.get("stats") or {}
+    _exp = min(100, int((_gs.get("total_trackers", 0) or 0) * 1.5
+                        + (_gs.get("opgrade_sites", 0) or 0) * 12
+                        + (_gs.get("antibot_sites", 0) or 0) * 8))
+    _lvl = store.get_client_level(mac_hash) if mac_hash else "r1"
+    data["persona"] = _persona_sheet(mac_hash, _lvl, _gs, _exp, data["dpi_exfil"],
+                                     data.get("device_type", ""), ua)
+    _charts = _build_report_charts(_graph)
+    data["charts"] = _charts                          # #711 "En un coup d'œil"
+    data["graph_stats"] = _gs
+    data["bestiary"] = (_charts.get("trackers") or [])[:5]
+    data["carto_nodes"] = _graph.get("nodes") or []   # #709 carto + tables
+    data["carto_country"] = _graph.get("by_country") or []
+    return data
+
+
 @router.get("/report/me")
 async def report_me(request: Request) -> Response:
     """Generate + serve PDF report for the CURRENT requesting client.
@@ -2879,29 +2911,7 @@ async def report_me(request: Request) -> Response:
         mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    data["dpi_exfil"] = _dpi_stats(mac_hash)  # #701 — DPI parity with the HTML report
-    data["media_exfil"] = _media_stats(mac_hash)  # #785 — media-type (MIME) donuts
-    data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 — visual donuts
-    # #707 — Netrunner persona sheet (live graph + DPI + ads + request UA)
-    try:
-        from . import social as _social
-        _graph = _social.fetch_graph(mac_hash, since_seconds=7 * 86400)
-    except Exception:
-        _graph = {"stats": {}, "nodes": [], "by_country": []}
-    _gs = _graph.get("stats") or {}
-    _exp = min(100, int((_gs.get("total_trackers", 0) or 0) * 1.5
-                        + (_gs.get("opgrade_sites", 0) or 0) * 12
-                        + (_gs.get("antibot_sites", 0) or 0) * 8))
-    _lvl = store.get_client_level(mac_hash) if mac_hash else "r1"
-    data["persona"] = _persona_sheet(mac_hash, _lvl, _gs, _exp, data["dpi_exfil"],
-                                     data.get("device_type", ""),
-                                     request.headers.get("user-agent", ""))
-    _charts = _build_report_charts(_graph)
-    data["charts"] = _charts                              # #711 "En un coup d'œil"
-    data["graph_stats"] = _gs
-    data["bestiary"] = (_charts.get("trackers") or [])[:5]
-    data["carto_nodes"] = _graph.get("nodes") or []      # #709 carto + tables
-    data["carto_country"] = _graph.get("by_country") or []
+    _enrich_report_data(mac_hash, data, ua=request.headers.get("user-agent", ""))
     pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"me:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
     return Response(
@@ -2921,6 +2931,7 @@ async def report(token: str) -> Response:
         raise HTTPException(404, "report not found or expired")
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
+    _enrich_report_data(mac_hash, data)  # #790 — same rich content as /report/me
     pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"tok:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}-{int(time.time())}.pdf"
     return Response(
@@ -3987,6 +3998,7 @@ async def admin_client_report(mac_hash: str) -> Response:
     """Admin endpoint : download PDF for a specific client by mac_hash."""
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
+    _enrich_report_data(mac_hash, data)  # #790 — same rich content as /report/me
     pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"adm:{mac_hash}")
     fname = f"gondwana-toolbox-{mac_hash[:8]}-admin.pdf"
     return Response(
