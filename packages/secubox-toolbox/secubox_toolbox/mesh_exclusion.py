@@ -15,6 +15,7 @@ import json
 import os
 import socket
 from pathlib import Path
+from typing import Optional
 
 LOCAL_SPLICE = Path("/var/lib/secubox/toolbox/splice-learned.txt")
 LOCAL_BYPASS = Path("/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf")
@@ -25,6 +26,12 @@ FED_DISABLED = Path("/var/lib/secubox/toolbox/mitm-exclusion-fed-disabled.txt")
 ANNUAIRE_SOCK = "/run/secubox/annuaire.sock"
 SCOPE_PREFIX = "mitm-exclusion:"
 FED_MAX = 2000
+
+# annuaire's require_jwt only checks a valid HS256 signature + that the
+# subject is an ENABLED user (user_store.is_enabled) — mirrors
+# secubox-p2p/api/annuaire_client.py SERVICE_USER / _service_token() verbatim
+# so the minted token is accepted the same way.
+SERVICE_USER = os.environ.get("SBX_SERVICE_USER", "admin")
 
 
 def _read_list(path: Path) -> list:
@@ -80,19 +87,44 @@ class _UnixHTTP(http.client.HTTPConnection):
         self.sock = s
 
 
+def _service_token() -> Optional[str]:
+    """Mint a short service JWT so we can call annuaire's JWT-gated endpoints.
+
+    Mirrors secubox-p2p/api/annuaire_client._service_token() exactly: annuaire
+    and toolbox run on the same host and share the same secubox_core JWT
+    secret, so a token minted here validates there. Best-effort — returns
+    None if secubox_core is unavailable (e.g. in unit tests), in which case
+    the caller sends no Authorization header.
+    """
+    try:
+        from secubox_core.auth import create_token  # noqa: PLC0415
+        return create_token(SERVICE_USER)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _annuaire(method: str, path: str, body: dict | None = None) -> dict | None:
+    c = None
     try:
         c = _UnixHTTP(ANNUAIRE_SOCK)
         hdr = {"Content-Type": "application/json"} if body else {}
+        token = _service_token()
+        if token:
+            hdr["Authorization"] = f"Bearer {token}"
         c.request(method, path, json.dumps(body) if body else None, hdr)
         r = c.getresponse()
         raw = r.read()
-        c.close()
         if r.status >= 400:
             return None
         return json.loads(raw) if raw else {}
     except Exception:
         return None
+    finally:
+        if c is not None:
+            try:
+                c.close()
+            except Exception:
+                pass
 
 
 def _version() -> int:

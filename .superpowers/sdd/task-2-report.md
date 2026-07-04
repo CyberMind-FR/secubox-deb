@@ -1,101 +1,75 @@
-# Task 2 Report: DHTNode + DHTBucket (k-bucket with LRU)
+# Task 2 Report — Mesh-Exclusion Payload Builder + Publisher
 
-## Status
-**DONE**
+**Status:** ✅ COMPLETE
 
-## Commit Hash
-`5843ca7e`
+**Commit:** `9be001ee` — feat(toolbox): mesh-exclusion payload builder + publisher (ref #806)
 
-## Test Summary
-All 5 tests passing (3 from Task 1 + 2 from Task 2):
-- test_node_id_is_sha1_of_did ✅
-- test_xor_distance_symmetry_and_zero ✅
-- test_constants ✅
-- test_bucket_add_and_refresh_moves_to_tail ✅ (Task 2)
-- test_bucket_full_rejects_new_and_reports_oldest ✅ (Task 2)
+**Test Result:** 2 passed in 0.04s
 
-**Test command:** `cd packages/secubox-p2p && python3 -m pytest tests/test_dht.py -v`
-**Result:** 5 passed in 0.04s
+## Summary
 
----
+Implemented the complete Python module + CLI for #806 mesh-federation, following strict TDD:
 
-## Implementation Summary
+1. ✅ Created failing test (`test_mesh_exclusion_publish.py`) — 2 test cases
+2. ✅ Implemented module (`mesh_exclusion.py`) with:
+   - `local_lists()` — reads + dedupes + sorts + caps 3 exclusion files
+   - `build_payload(nid, lists)` — constructs signed blob
+   - `content_hash(payload)` — blake2b-256 deterministic hash
+   - `publish(payload, priv_hex, did, nid)` — annuaire socket POST
+   - Helper functions: `_read_list()`, `_annuaire()`, `_atomic_write()`, `node_id()`, `_version()`
+   - Constants: `FED_MAX=2000`, `ANNUAIRE_SOCK`, `SCOPE_PREFIX`, local/federated paths
 
-### Files Modified
-- `packages/secubox-p2p/api/dht.py` — appended imports + DHTNode + DHTBucket classes
-- `packages/secubox-p2p/tests/test_dht.py` — appended 2 new test cases
+3. ✅ Cleanup applied: Replaced obfuscated `_version()` with clean `import time; return int(time.time())`
+4. ✅ Created CLI script (`secubox-toolbox-mesh-exclusion-publish`, chmod 755)
+5. ✅ SPDX headers added to all 3 new files
+6. ✅ Tests pass: 2/2
 
-### What Was Implemented
+## No Concerns
 
-**DHTNode (dataclass):**
-```python
-@dataclass
-class DHTNode:
-    node_id: bytes
-    did: str
-    endpoint: tuple  # (host, port)
-    last_seen: float = 0.0
-```
-
-**DHTBucket (k-bucket with LRU via OrderedDict):**
-- `__init__(k: int = KAD_K)` — initializes empty OrderedDict
-- `add(node: DHTNode) -> bool` — updates node.last_seen, returns True if stored/refreshed, False if full; refresh moves node to tail (most-recent)
-- `remove(node_id: bytes) -> None` — removes node from bucket
-- `oldest() -> DHTNode|None` — returns head node (oldest), or None if empty
-- `nodes` property — returns list of all nodes in LRU order
-
-**Imports Added:**
-```python
-import time
-from collections import OrderedDict
-from dataclasses import dataclass, field
-```
-
-### Test Behavior
-
-**test_bucket_add_and_refresh_moves_to_tail:**
-- Creates bucket with k=2
-- Adds nodes a, c → stored in order [a, c]
-- Adds a again (refresh) → moves to tail, now [c, a]
-- Tests OrderedDict.move_to_end() semantics
-
-**test_bucket_full_rejects_new_and_reports_oldest:**
-- Creates bucket with k=1 (capacity 1)
-- Adds node a → stored
-- Adds node c → returns False (full), c not stored
-- oldest() returns a (the head/oldest)
-- Tests full bucket rejection and oldest() accessor
+All code transcribed exactly per brief; cleanup applied as instructed. Ready for Task 3 (sync-side consumer of these exports).
 
 ---
 
-## TDD Workflow Completed
+## Fix Report — Critical + Minor Review Findings (2026-07-04)
 
-1. ✅ **Step 1:** Appended failing tests (ImportError: DHTNode)
-2. ✅ **Step 2:** Ran pytest → confirmed failure
-3. ✅ **Step 3:** Implemented DHTNode + DHTBucket
-4. ✅ **Step 4:** Ran pytest → all 5 tests pass
-5. ✅ **Step 5:** Committed with message `feat(p2p): DHT k-bucket with LRU (#774)`
+**Status:** ✅ COMPLETE
 
----
+**Commit:** `<see below>` — fix(toolbox): mesh-exclusion publish sends JWT bearer + fd-safe annuaire call (ref #806)
 
-## Quality Notes
+**Test command:** `cd packages/secubox-toolbox && PYTHONPATH=. python -m pytest tests/test_mesh_exclusion_publish.py -q`
+**Result:** `4 passed in 0.05s`
 
-### Correctness
-- OrderedDict provides O(1) LRU operations: insertion, lookup, move_to_end, iteration order
-- DHTNode matches brief signature exactly
-- LRU semantics: new adds to tail, refresh moves to tail, oldest() reads head
-- add() properly handles both new insertion (capacity check) and refresh (move_to_end)
+### Critical fixed — publish() sent no JWT (401 forever)
 
-### No Regressions
-- All 3 Task 1 tests still pass
-- Test helper `_n()` isolates test setup
+`_annuaire()` called `POST /config/publish` on secubox-annuaire, which is
+`Depends(_require_jwt)` — with no `Authorization` header every publish would
+403/401 in production. Fixed by mirroring the deployed pattern in
+`packages/secubox-p2p/api/annuaire_client.py` (`SERVICE_USER` env-overridable,
+default `"admin"`, `_service_token()` calling `secubox_core.auth.create_token(SERVICE_USER)`
+in a try/except returning `None` on any failure). `_annuaire()` now attaches
+`Authorization: Bearer <token>` to both GET and POST when a token is
+mintable; when `secubox_core` is unavailable (unit tests) it silently sends
+no header, matching the mirrored module's documented behavior.
 
-### Code Quality
-- SPDX header preserved (did not modify)
-- Follows existing module conventions
-- Concise implementation (~40 lines for both classes)
+### Minor fixed — fd leak in `_annuaire()`
 
----
+`c.close()` was only reached after a successful `r.read()`; any exception
+between `_UnixHTTP(...)` and `read()` (e.g. `getresponse()` raising) leaked
+the socket. Moved `c.close()` into a `finally:` block (itself exception-safe)
+so the connection is always closed, while still swallowing all errors and
+returning `None`.
 
-## Concerns
-None. Implementation straightforward and tested.
+### Tests added
+
+`tests/test_mesh_exclusion_publish.py`:
+- `test_annuaire_attaches_bearer_token_when_available` — monkeypatches
+  `mesh_exclusion._service_token` → `"tok"` and `mesh_exclusion._UnixHTTP` →
+  a fake connection capturing the `headers` dict passed to `.request(...)`;
+  asserts `headers["Authorization"] == "Bearer tok"`.
+- `test_annuaire_closes_connection_on_read_error` — fake connection whose
+  `getresponse()` raises; asserts `close()` still ran and `_annuaire()`
+  returned `None`.
+
+No public names/signatures changed (`publish`, `local_lists`, `build_payload`,
+`content_hash`, `_read_list`, `_atomic_write`, `FED_*`, `SCOPE_PREFIX`,
+`FED_MAX` all untouched) — Task 3 imports remain valid.
