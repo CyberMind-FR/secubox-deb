@@ -48,7 +48,18 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
+	"golang.org/x/net/http/httpguts"
 )
+
+// isWebSocketUpgrade reports whether r is a WebSocket handshake, using the same
+// header semantics as net/http/httputil.ReverseProxy: the Connection header must
+// contain the "Upgrade" token (comma list, case-insensitive) AND Upgrade must be
+// "websocket". #796 — we must NOT rewrite Connection on these requests, or the
+// ReverseProxy stops tunnelling the WebSocket.
+func isWebSocketUpgrade(h http.Header) bool {
+	return httpguts.HeaderValuesContainsToken(h["Connection"], "Upgrade") &&
+		strings.EqualFold(h.Get("Upgrade"), "websocket")
+}
 
 // upstreamErrorCode maps a round-trip error to the appropriate HTTP error code,
 // mirroring the Python error() hook logic (~line 1106):
@@ -288,8 +299,13 @@ func (s *Server) handler() http.Handler {
 		// Task 2.2 — Request inspection.
 		// Only when rules are loaded; otherwise pass through unconditionally.
 		if s.rules != nil {
-			// Add Connection: close to upstream requests (#496, mirrors Python).
-			r.Header.Set("Connection", "close")
+			// Add Connection: close to upstream requests (#496, mirrors Python) —
+			// but NEVER on a WebSocket upgrade: that would clobber Connection:
+			// Upgrade and stop httputil.ReverseProxy from tunnelling the WS,
+			// turning wss:// vhosts into a plain GET → 404/1006 (#796).
+			if !isWebSocketUpgrade(r.Header) {
+				r.Header.Set("Connection", "close")
+			}
 
 			ip := clientIP(r)
 			// Determine the path for skip-list checks. Use RawPath when available

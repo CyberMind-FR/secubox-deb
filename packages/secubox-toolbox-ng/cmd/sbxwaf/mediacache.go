@@ -22,9 +22,11 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -558,6 +560,18 @@ func (c *cachingResponseWriter) Flush() {
 	if f, ok := c.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// Hijack forwards to the underlying ResponseWriter so httputil.ReverseProxy can
+// tunnel WebSocket upgrades through this cache wrapper (#796). Without it, the
+// media-cache tee shadows the underlying Hijacker and WS upgrades return 503
+// ("can't switch protocols using non-Hijacker ResponseWriter"). A hijacked
+// connection is raw-tunnelled, so nothing is cached — correct for a WS.
+func (c *cachingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := c.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, fmt.Errorf("cachingResponseWriter: underlying ResponseWriter does not support Hijack")
 }
 
 // Stats returns a point-in-time snapshot of cache counters.
