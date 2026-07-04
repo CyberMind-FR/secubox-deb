@@ -626,6 +626,10 @@ func main() {
 		"root directory for the R4 media buffer (0750 secubox:secubox); per-session subdirs + media-buffer.jsonl metatag log live here")
 	mediaBufferPerObj := flag.Int64("media-buffer-per-object", 512<<20,
 		"per-object byte ceiling for the R4 media buffer; a media object exceeding this is truncated (metatag flagged) rather than persisted whole")
+	mediaBufferRetention := flag.Int64("media-buffer-retention", defaultRetentionSecs,
+		"seconds the R4 media buffer's captured bytes are kept before the janitor evicts them (the metatag survives eviction)")
+	mediaBufferSizeCeil := flag.Int64("media-buffer-size-ceil", defaultSizeCeilBytes,
+		"hard byte ceiling for the R4 media buffer on /data; the janitor LRU-evicts the oldest sessions first when exceeded")
 	flag.Parse()
 	ca, err := forge.LoadCA(*caCert, *caKey)
 	if err != nil {
@@ -664,6 +668,14 @@ func main() {
 		media:         newMediaCatcher(*mediaCatch),
 		mbuf:          NewMediaBuffer(*mediaBufferRoot, *mediaBuffer, *mediaBufferPerObj),
 		swNeuter:      newSWNeuter(*swNeuterHosts),
+	}
+	// #812 Task 6 — apply the retention/size-ceil overrides on top of
+	// NewMediaBuffer's defaults. Same-package unexported field access (see
+	// mediabuffer.go); the constructor signature stays (root, enabled,
+	// perObjectCeil) — do not add params there instead.
+	if px.mbuf != nil {
+		px.mbuf.retentionSecs = *mediaBufferRetention
+		px.mbuf.sizeCeilBytes = *mediaBufferSizeCeil
 	}
 	// #662 — start the social-edge flusher: the MITM path buffers cross-site
 	// tracker edges into px.social, drained every 10s to the portal's
