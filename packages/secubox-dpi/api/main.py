@@ -171,7 +171,8 @@ from secubox_core import user_store  # noqa: E402
 
 MEDIA_BUFFER_ROOT = "/data/secubox/media-buffer"
 AUDIT_LOG = "/var/log/secubox/audit.log"
-_REC_ID_RE = re.compile(r"^[0-9a-f]{8,32}$")
+# \Z (not $) so a trailing newline can't sneak past — $ matches before a final \n.
+_REC_ID_RE = re.compile(r"^[0-9a-f]{8,32}\Z")
 
 
 def _media_log_path() -> str:
@@ -185,8 +186,12 @@ def _user_is_admin(user) -> bool:
 
     The JWT carries only sub/jti (see secubox_core.auth.require_jwt), so the
     role lives in the user store — resolved the same way secubox-peertube's
-    require_admin does. An explicit `role` on the identity (tests / future
-    enriched tokens) short-circuits the lookup.
+    require_admin does. An explicit `role` on the identity short-circuits the
+    lookup — SECURITY: only ever populate identity["role"] from a
+    server-VERIFIED source. require_jwt today returns only sub/jti (no role), so
+    in production the store lookup always runs; the short-circuit currently only
+    serves tests. Do NOT start trusting a `role` claim carried in the token
+    without verifying it, or this becomes an authority-without-verification path.
     """
     if not isinstance(user, dict):
         return False
