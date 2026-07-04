@@ -179,3 +179,50 @@ func TestBypassRegexSplices(t *testing.T) {
 		}
 	}
 }
+
+// #809 — an operator-disabled pattern (Filtres MITM uncheck) is suppressed in
+// BOTH the bypass and splice paths, so the entry stops taking effect.
+func TestDisabledSuppressesMatch(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	empty := write("empty", "")
+	bypass := write("mitm-bypass-seed.conf", "(.+\\.)?signal\\.org\n")
+	splice := write("tls-splice-seed.conf", "api.anthropic.com\n")
+	disabled := write("mitm-filter-disabled.txt",
+		"(.+\\.)?signal\\.org   # unchecked in webui\napi.anthropic.com\n")
+
+	base := PolicyOpts{
+		AllowPath: empty, LearnedPath: empty, SpliceLearnPath: empty,
+		PureTrackersPath: empty, BypassStaticPath: empty, BypassDynamicPath: empty,
+		SelfDomains: []string{"secubox.in"},
+	}
+	// enabled → both splice
+	on := base
+	on.BypassSeedPath, on.SpliceSeedPath, on.DisabledPath = bypass, splice, empty
+	polOn, _ := LoadPolicy(on)
+	// disabled → neither splices (falls through to mitm)
+	off := base
+	off.BypassSeedPath, off.SpliceSeedPath, off.DisabledPath = bypass, splice, disabled
+	polOff, _ := LoadPolicy(off)
+
+	for _, c := range []struct {
+		host, onWant, offWant string
+	}{
+		{"signal.org", "splice", "mitm"},        // bypass entry disabled
+		{"chat.signal.org", "splice", "mitm"},   // subdomain of disabled bypass
+		{"api.anthropic.com", "splice", "mitm"}, // splice-seed entry disabled
+	} {
+		if got := polOn.Decide(c.host, c.host); got != c.onWant {
+			t.Errorf("enabled Decide(%q)=%q want %q", c.host, got, c.onWant)
+		}
+		if got := polOff.Decide(c.host, c.host); got != c.offWant {
+			t.Errorf("disabled Decide(%q)=%q want %q", c.host, got, c.offWant)
+		}
+	}
+}

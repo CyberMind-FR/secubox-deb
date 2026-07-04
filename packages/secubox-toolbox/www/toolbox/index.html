@@ -472,13 +472,43 @@ async function loadFilters() {
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // Show ALL entries (bypass + splice) — every explicit splicing must be
     // displayed + known. The <ul> scrolls (see .filterlist max-height).
-    el.innerHTML = `<li style="opacity:.6;font-size:.72rem">${items.length} hôtes exclus (MITM-bypass + splice)</li>` + items.map(h => {
+    el.innerHTML = `<li style="opacity:.6;font-size:.72rem">${items.length} hôtes exclus (MITM-bypass + splice) — ✅ = appliqué</li>` + items.map(h => {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
         const badge = BADGE[src] || esc(src);
+        const enabled = (typeof h === 'object') ? h.enabled !== false : true;
+        const editable = (typeof h === 'object') ? !!h.editable : false;
+        const pd = esc(host).replace(/"/g, '&quot;');
+        const chk = `<input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleFilter(this)" data-pattern="${pd}" title="appliqué ? (décocher = présent mais non appliqué)">`;
+        const del = `<button onclick="deleteFilter(this)" data-pattern="${pd}" title="${editable ? 'supprimer' : 'seed paquet : sera désactivé (non supprimable)'}" style="background:none;border:0;cursor:pointer;color:var(--cinnabar,#e63946);font-size:.8rem">🗑</button>`;
         const tor = ` <span title="refusé à l'exposition Tor" style="color:var(--p31-gold,#c9a84c);font-size:0.72rem">🧅 Tor-exclu</span>`;
-        return `<li><code>${esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}${tor}</li>`;
+        const dim = enabled ? '' : 'opacity:.45;text-decoration:line-through';
+        return `<li style="${dim}"><span style="display:flex;align-items:center;gap:.35rem;min-width:0"><span>${chk}</span><code style="overflow:hidden;text-overflow:ellipsis">${esc(host)}</code>${badge ? `<span style="color:var(--p31-dim,#888);font-size:0.72rem;white-space:nowrap">${badge}</span>` : ''}${tor}</span>${del}</li>`;
     }).join('');
+}
+
+async function toggleFilter(el) {
+    const pattern = el.dataset.pattern;
+    try {
+        const r = await fetch('/admin/filter-control/toggle', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pattern }) });
+        if (!r.ok) { el.checked = !el.checked; return; }
+        loadFilters();
+    } catch (e) { el.checked = !el.checked; }
+}
+
+async function deleteFilter(el) {
+    const pattern = el.dataset.pattern;
+    if (!confirm('Supprimer / désactiver « ' + pattern + ' » ?')) return;
+    try {
+        await fetch('/admin/filter-control/delete', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pattern }) });
+        loadFilters();
+    } catch (e) {}
 }
 
 // ── kbin Tor egress quick-switch (#683) ──
