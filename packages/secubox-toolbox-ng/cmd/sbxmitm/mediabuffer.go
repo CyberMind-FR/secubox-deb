@@ -38,10 +38,11 @@ import (
 const mediaBufferLogName = "media-buffer.jsonl"
 
 // mediaBufferLineMax keeps each metatag line small: URLs are the only
-// unbounded field here, so this is generous but still bounds a single
-// misbehaving line from corrupting the atomic-append assumption other
-// readers/writers rely on.
-const mediaBufferLineMax = 8192
+// unbounded field here. Matches mediacatch.go's 4096 cap, which is the size
+// that keeps an O_APPEND write atomic across the 4 concurrent worker processes
+// (PIPE_BUF); a longer line risks torn/interleaved appends corrupting the log.
+// Over-long lines (very long signed CDN URLs) are dropped rather than written.
+const mediaBufferLineMax = 4096
 
 // MediaBuffer is the buffer store: it decides whether a flow is capturable
 // media and, if so, opens a per-object file under a fresh session directory
@@ -170,8 +171,11 @@ type mediaBufferRecord struct {
 	Bytes     int64  `json:"bytes"`
 	Segments  int    `json:"segments"`
 	Truncated bool   `json:"truncated"`
-	BufferRef string `json:"buffer_ref"`
-	Expired   bool   `json:"expired"`
+	// BufferRef is the session id while the bytes are on disk, and JSON null once
+	// the janitor (Task 3) evicts them — hence *string (a plain string can only
+	// marshal to "" , never null). Set to &sessionID at write time.
+	BufferRef *string `json:"buffer_ref"`
+	Expired   bool    `json:"expired"`
 }
 
 // ObjectWriter is the per-object capture in progress. It implements
@@ -277,7 +281,7 @@ func (w *ObjectWriter) Close(finalBytes int64) {
 		Bytes:     finalBytes,
 		Segments:  0,
 		Truncated: w.truncated,
-		BufferRef: w.sessionID,
+		BufferRef: &w.sessionID,
 		Expired:   false,
 	}
 	buf := w.buf
