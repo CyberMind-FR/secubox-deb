@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
 # 👁️ ToolBox — the digital phone booth (*cabine numérique*)
 
+![Le Café Quantique — VILLAGE3B, la cabine numérique : que dit ton téléphone sur toi ?](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/wiki/images/toolbox-poster.png)
+
 > 🟣 **MIND** · 🟡 **WALL** — a public SecuBox access point that shows any
 > passer-by, in plain language, exactly what their phone leaks on the network —
 > then hands them an ephemeral, anonymous report they can keep.
