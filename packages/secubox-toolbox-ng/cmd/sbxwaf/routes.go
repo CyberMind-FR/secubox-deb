@@ -193,6 +193,7 @@ func (r *Routes) buildEntries(parsed map[string][2]string) map[string]routeEntry
 				if bare, _, e := net.SplitHostPort(reqHost); e == nil {
 					reqHost = bare
 				}
+				log.Printf("sbxwaf: upstream error host=%s path=%s -> %d: %v", reqHost, req.URL.Path, code, err)
 				writeErrorPage(w, code, reqHost)
 			}
 			r.proxyCache.Store(key, p)

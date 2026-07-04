@@ -20,7 +20,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -46,6 +49,17 @@ func (s *statusRecorder) Flush() {
 	if f, ok := s.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// Hijack forwards to the underlying ResponseWriter so that httputil.ReverseProxy
+// can tunnel WebSocket upgrades through this wrapper (#796). Without it, the
+// embedded http.ResponseWriter interface does not expose Hijack, so a wrapped
+// writer fails the http.Hijacker type assertion and WS upgrades return 503.
+func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := s.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, errors.New("statusRecorder: underlying ResponseWriter does not support Hijack")
 }
 
 // visitMapCap bounds each per-key map so a flood of distinct vhosts/IPs cannot
