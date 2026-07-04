@@ -11,6 +11,10 @@ override_dh_auto_install:
 	cp -r mitmproxy_addons      debian/secubox-toolbox/usr/lib/secubox/toolbox/
 	cp -r conf                  debian/secubox-toolbox/usr/lib/secubox/toolbox/
 	cp -r data                  debian/secubox-toolbox/usr/lib/secubox/toolbox/
+	# #801 : media-catch /run file owned by the worker uid (created at boot)
+	install -d debian/secubox-toolbox/usr/lib/tmpfiles.d
+	install -m 0644 tmpfiles.d/secubox-toolbox.conf \
+	  debian/secubox-toolbox/usr/lib/tmpfiles.d/
 	# Config par défaut (conffile)
 	install -d debian/secubox-toolbox/etc/secubox
 	install -m 0644 conf/toolbox.toml debian/secubox-toolbox/etc/secubox/
