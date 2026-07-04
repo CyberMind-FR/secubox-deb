@@ -242,8 +242,7 @@ func (s *Server) handler() http.Handler {
 
 		ip, port, ok := s.routeLookup(host)
 		if !ok {
-			http.Error(w, "421 Misdirected Request: no route for host "+host,
-				http.StatusMisdirectedRequest)
+			writeMisdirected(w, host)
 			return
 		}
 
