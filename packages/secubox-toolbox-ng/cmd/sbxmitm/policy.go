@@ -59,6 +59,13 @@ type PolicyOpts struct {
 	SpliceSeedPath   string   // conf/tls-splice-seed.conf (SEED_PATH)
 	SpliceLearnPath  string   // splice-learned.txt      (LEARNED_PATH)
 	PureTrackersPath string   // pure-trackers.txt       (PURE_PATH)
+	// mitm-bypass (ignore_hosts) REGEX lists (#803): cert-pinned apps managed via
+	// the Filtres MITM webui + autolearn. A match here also splices (passthrough)
+	// so the R3 engine honours the SAME exclusion list the webui shows — else
+	// Signal/WhatsApp/banks etc. get MITM'd and break through the tunnel.
+	BypassSeedPath    string  // conf/mitm-bypass-seed.conf     (package)
+	BypassStaticPath  string  // mitm-bypass.conf               (operator/webui)
+	BypassDynamicPath string  // mitm-bypass-dynamic.conf       (autolearn)
 	FortknoxSites    []string // filters.json fortknox_sites
 	SelfDomains      []string // _SELF_REGS (default {secubox.in}, env SECUBOX_SELF_DOMAINS)
 }
@@ -72,6 +79,9 @@ func defaultPolicyOpts() PolicyOpts {
 		SpliceSeedPath:   envOr("SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"),
 		SpliceLearnPath:  envOr("SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"),
 		PureTrackersPath: envOr("SECUBOX_PURE_TRACKERS", "/var/lib/secubox/toolbox/pure-trackers.txt"),
+		BypassSeedPath:    envOr("SECUBOX_BYPASS_SEED", "/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf"),
+		BypassStaticPath:  envOr("SECUBOX_BYPASS_STATIC", "/var/lib/secubox/toolbox/mitm-bypass.conf"),
+		BypassDynamicPath: envOr("SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"),
 	}
 	// _SELF_REGS: env SECUBOX_SELF_DOMAINS (comma-split), default {secubox.in}.
 	self := os.Getenv("SECUBOX_SELF_DOMAINS")
@@ -108,6 +118,10 @@ type Policy struct {
 	allow       map[string]bool // ad-allowlist (host or registrable, lowercased)
 	spliceSeed  map[string]bool // splice seed patterns
 	spliceLearn map[string]bool // splice learned patterns
+	// mitm-bypass (ignore_hosts) compiled regexes (#803) — a match splices.
+	bypassSeedRe   []*regexp.Regexp
+	bypassStaticRe []*regexp.Regexp
+	bypassDynRe    []*regexp.Regexp
 	never       map[string]bool // pure-trackers ∪ fortknox (splice never-set)
 	selfRegs    map[string]bool // own-infra registrable domains
 	selfDomains []string        // own-infra (for the host==d || host endswith .d guard)
@@ -168,6 +182,15 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 	if len(opts.SelfDomains) == 0 {
 		opts.SelfDomains = def.SelfDomains
 	}
+	if opts.BypassSeedPath == "" {
+		opts.BypassSeedPath = def.BypassSeedPath
+	}
+	if opts.BypassStaticPath == "" {
+		opts.BypassStaticPath = def.BypassStaticPath
+	}
+	if opts.BypassDynamicPath == "" {
+		opts.BypassDynamicPath = def.BypassDynamicPath
+	}
 
 	re, err := regexp.Compile(adHostPattern)
 	if err != nil {
@@ -199,6 +222,9 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 		allow:          reload.LoadLines(opts.AllowPath, true),
 		spliceSeed:     reload.LoadLines(opts.SpliceSeedPath, true),
 		spliceLearn:    reload.LoadLines(opts.SpliceLearnPath, true),
+		bypassSeedRe:   loadBypassRegex(opts.BypassSeedPath),
+		bypassStaticRe: loadBypassRegex(opts.BypassStaticPath),
+		bypassDynRe:    loadBypassRegex(opts.BypassDynamicPath),
 		never:          never,
 		selfRegs:       selfRegs,
 		selfDomains:    selfDomains,
@@ -270,6 +296,36 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 				}
 				p.mu.Lock()
 				p.never = s
+				p.mu.Unlock()
+			},
+		},
+		{
+			Path:      opts.BypassSeedPath,
+			LastMtime: reload.StatMtime(opts.BypassSeedPath),
+			Load:      func(path string) any { return loadBypassRegex(path) },
+			Apply: func(v any) {
+				p.mu.Lock()
+				p.bypassSeedRe = v.([]*regexp.Regexp)
+				p.mu.Unlock()
+			},
+		},
+		{
+			Path:      opts.BypassStaticPath,
+			LastMtime: reload.StatMtime(opts.BypassStaticPath),
+			Load:      func(path string) any { return loadBypassRegex(path) },
+			Apply: func(v any) {
+				p.mu.Lock()
+				p.bypassStaticRe = v.([]*regexp.Regexp)
+				p.mu.Unlock()
+			},
+		},
+		{
+			Path:      opts.BypassDynamicPath,
+			LastMtime: reload.StatMtime(opts.BypassDynamicPath),
+			Load:      func(path string) any { return loadBypassRegex(path) },
+			Apply: func(v any) {
+				p.mu.Lock()
+				p.bypassDynRe = v.([]*regexp.Regexp)
 				p.mu.Unlock()
 			},
 		},
@@ -416,7 +472,42 @@ func (p *Policy) shouldSplice(sni string) bool {
 	if hostMatches(s, p.never) {
 		return false
 	}
-	return hostMatches(s, p.spliceSeed) || hostMatches(s, p.spliceLearn)
+	if hostMatches(s, p.spliceSeed) || hostMatches(s, p.spliceLearn) {
+		return true
+	}
+	// #803 — a mitm-bypass (ignore_hosts) regex match also splices, so the R3
+	// engine honours the SAME cert-pinned exclusion list the Filtres MITM webui
+	// manages (Signal/WhatsApp/banks…). never-set still wins (checked above).
+	return p.matchesBypass(s)
+}
+
+// matchesBypass reports whether host matches any compiled mitm-bypass regex
+// (seed ∪ static ∪ dynamic). Callers hold p.mu.RLock (shouldSplice does).
+func (p *Policy) matchesBypass(host string) bool {
+	for _, group := range [][]*regexp.Regexp{p.bypassSeedRe, p.bypassStaticRe, p.bypassDynRe} {
+		for _, re := range group {
+			if re.MatchString(host) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// loadBypassRegex reads a mitm-bypass list (regex, one per line, # comments) and
+// compiles each entry FULLY ANCHORED + case-insensitive against the bare host,
+// so `(.+\.)?signal\.org` matches signal.org and chat.signal.org but NOT
+// evilsignal.org. A malformed entry is skipped, never fatal (best-effort like
+// the Python addons). Returns nil on a missing/unreadable file.
+func loadBypassRegex(path string) []*regexp.Regexp {
+	var out []*regexp.Regexp
+	for pat := range reload.LoadLines(path, true) {
+		re, err := regexp.Compile("(?i)^(?:" + pat + ")$")
+		if err == nil {
+			out = append(out, re)
+		}
+	}
+	return out
 }
 
 // blockedByAd: port of the ad_ghost requestheaders block decision (sans the

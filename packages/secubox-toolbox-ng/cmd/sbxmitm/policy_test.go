@@ -140,3 +140,40 @@ func TestRegistrable(t *testing.T) {
 		}
 	}
 }
+
+// #803 — a mitm-bypass (ignore_hosts) regex match must splice, so the R3 engine
+// honours the SAME cert-pinned list the Filtres MITM webui manages, including
+// the regex-wildcard bank patterns a plain suffix list can't express.
+func TestBypassRegexSplices(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	empty := write("empty", "")
+	seed := write("mitm-bypass-seed.conf",
+		"(.+\\.)?signal\\.org   # Signal\n(.+\\.)?ca-.*\\.fr   # Credit Agricole regional\n")
+	pol, err := LoadPolicy(PolicyOpts{
+		AllowPath: empty, LearnedPath: empty, SpliceSeedPath: empty,
+		SpliceLearnPath: empty, PureTrackersPath: empty,
+		BypassSeedPath: seed, BypassStaticPath: empty, BypassDynamicPath: empty,
+		SelfDomains: []string{"secubox.in"},
+	})
+	if err != nil {
+		t.Fatalf("LoadPolicy: %v", err)
+	}
+	for _, c := range []struct{ host, want string }{
+		{"signal.org", "splice"},
+		{"chat.signal.org", "splice"},
+		{"ca-toulouse.fr", "splice"},   // regex-wildcard bank now covered
+		{"evilsignal.org", "mitm"},     // anchored → no substring over-match
+		{"example.com", "mitm"},
+	} {
+		if got := pol.Decide(c.host, c.host); got != c.want {
+			t.Errorf("Decide(%q)=%q want %q", c.host, got, c.want)
+		}
+	}
+}
