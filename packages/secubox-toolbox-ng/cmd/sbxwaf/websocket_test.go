@@ -102,7 +102,8 @@ func TestHandlerPreservesWebSocketUpgrade(t *testing.T) {
 	bHost, bPort := splitHostPortInt(t, backend.URL)
 
 	srv := &Server{
-		rules: LoadRules("/tmp/nonexistent-waf-rules-796.json"), // non-nil, matches nothing → clobber path active
+		rules:  LoadRules("/tmp/nonexistent-waf-rules-796.json"), // non-nil, matches nothing → clobber path active
+		visits: NewVisitStats(t.TempDir() + "/visits.json"),      // non-nil → statusRecorder wraps w (board path; must still Hijack)
 		routeLookup: func(host string) (string, int, bool) {
 			return bHost, bPort, true
 		},
