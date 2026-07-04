@@ -335,6 +335,18 @@
             color: var(--text-dim);
             font-style: italic;
         }
+        .media-note {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            font-style: italic;
+            margin-top: 0.15rem;
+        }
+        .media-note.warn { color: var(--red); }
+        .media-actions .btn.disabled {
+            opacity: 0.45;
+            pointer-events: none;
+            cursor: default;
+        }
 
         @media (max-width: 768px) {
             .main { margin-left: 0; }
@@ -845,6 +857,18 @@
             metaRow2.appendChild(ageSpan);
             card.appendChild(metaRow2);
 
+            // #812 Phase 2: manifest segment-count hint. `item.segments` is a
+            // display hint set by the replay-time join (hls.py/media_replay),
+            // not authoritative — never rendered except as plain text.
+            if (item.kind === 'manifest' && typeof item.segments === 'number' && item.segments > 0) {
+                const segRow = document.createElement('div');
+                segRow.className = 'media-meta-row';
+                const segSpan = document.createElement('span');
+                segSpan.textContent = '🧩 ' + item.segments + ' segment' + (item.segments === 1 ? '' : 's');
+                segRow.appendChild(segSpan);
+                card.appendChild(segRow);
+            }
+
             const actions = document.createElement('div');
             actions.className = 'media-actions';
             if (item.expired) {
@@ -856,22 +880,79 @@
                 // `id` is hex-validated server-side, but encodeURIComponent defensively
                 // anyway — never build this URL by string-concatenating raw input.
                 const replayUrl = API + '/media/replay/' + encodeURIComponent(item.id);
-                const playBtn = document.createElement('a');
-                playBtn.className = 'btn primary';
-                playBtn.href = replayUrl;
-                playBtn.target = '_blank';
-                playBtn.rel = 'noopener';
-                playBtn.textContent = '▶ Play';
-                const dlBtn = document.createElement('a');
-                dlBtn.className = 'btn';
-                dlBtn.href = replayUrl;
-                dlBtn.setAttribute('download', '');
-                dlBtn.textContent = '⬇ Download';
-                actions.appendChild(playBtn);
-                actions.appendChild(dlBtn);
+                if (item.kind === 'manifest') {
+                    buildManifestActions(card, actions, replayUrl);
+                } else {
+                    const playBtn = document.createElement('a');
+                    playBtn.className = 'btn primary';
+                    playBtn.href = replayUrl;
+                    playBtn.target = '_blank';
+                    playBtn.rel = 'noopener';
+                    playBtn.textContent = '▶ Play';
+                    const dlBtn = document.createElement('a');
+                    dlBtn.className = 'btn';
+                    dlBtn.href = replayUrl;
+                    dlBtn.setAttribute('download', '');
+                    dlBtn.textContent = '⬇ Download';
+                    actions.appendChild(playBtn);
+                    actions.appendChild(dlBtn);
+                }
             }
             card.appendChild(actions);
             return card;
+        }
+
+        // #812 Phase 2 — a manifest's Play action targets the rewritten playlist
+        // (`/media/replay/{id}`, the manifest branch of the replay endpoint).
+        // No external hls.js is bundled here (self-contained CSP, no CDN scripts
+        // allowed), so a native <video>/in-tab HLS view only works reliably on
+        // Safari; every other browser gets a Download link for the rewritten
+        // .m3u8 plus a short hint. The Play button also best-effort probes the
+        // response for the `X-SecuBox-Media: unsupported-variant` header (set
+        // by the backend when the manifest is master/ABR or AES-encrypted and
+        // therefore cannot be reassembled) and, if present, disables further
+        // inline play attempts while leaving the raw-manifest Download intact.
+        function buildManifestActions(card, actions, replayUrl) {
+            const playBtn = document.createElement('a');
+            playBtn.className = 'btn primary';
+            playBtn.href = replayUrl;
+            playBtn.target = '_blank';
+            playBtn.rel = 'noopener';
+            playBtn.textContent = '🎞️ Ouvrir (Safari/HLS)';
+
+            const dlBtn = document.createElement('a');
+            dlBtn.className = 'btn';
+            dlBtn.href = replayUrl;
+            dlBtn.setAttribute('download', '');
+            dlBtn.textContent = '⬇ Download';
+
+            const note = document.createElement('div');
+            note.className = 'media-note';
+            note.textContent = 'Lecture HLS native limitée à Safari — sinon, téléchargez le manifeste réécrit.';
+
+            let checked = false; // avoid re-probing on every click once resolved
+            playBtn.addEventListener('click', function (ev) {
+                if (checked) return;
+                ev.preventDefault();
+                checked = true;
+                fetch(replayUrl).then(function (res) {
+                    if (res.headers.get('X-SecuBox-Media') === 'unsupported-variant') {
+                        playBtn.classList.add('disabled');
+                        playBtn.removeAttribute('href');
+                        note.classList.add('warn');
+                        note.textContent = 'Flux non réassemblable (ABR/chiffré) — téléchargement du manifeste brut uniquement.';
+                    } else {
+                        window.open(replayUrl, '_blank', 'noopener');
+                    }
+                }).catch(function () {
+                    // network hiccup on the probe — fall back to opening it directly
+                    window.open(replayUrl, '_blank', 'noopener');
+                });
+            });
+
+            actions.appendChild(playBtn);
+            actions.appendChild(dlBtn);
+            card.appendChild(note);
         }
 
         async function loadMediaBuffer() {
@@ -879,7 +960,11 @@
             const badge = document.getElementById('media-buffer-badge');
             if (!box) return;
             const data = await apiAuthed(API + '/media/buffer');
-            const items = (data && Array.isArray(data.items)) ? data.items : [];
+            const allItems = (data && Array.isArray(data.items)) ? data.items : [];
+            // #812 Phase 2: HLS segments are join fodder for manifest replay,
+            // never a gallery entry on their own — hide them here, not server-side,
+            // so the count badge below still reflects the API's raw total.
+            const items = allItems.filter(item => item.kind !== 'segment');
             if (badge) {
                 badge.textContent = (data && typeof data.count === 'number')
                     ? (data.count + ' capture' + (data.count === 1 ? '' : 's')) : '-';

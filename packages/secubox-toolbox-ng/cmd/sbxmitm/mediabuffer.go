@@ -128,12 +128,47 @@ func NewMediaBuffer(root string, enabled bool, perObjectCeil int64) *MediaBuffer
 // should be considered capturable media. It reuses mediaKind (mediacatch.go),
 // which already covers ctype prefixes ("video/", "audio/"), manifest
 // mimetypes/extensions (HLS .m3u8, DASH .mpd) and known media file
-// extensions — any non-empty classification counts as media. nil-safe.
+// extensions — any non-empty classification counts as media. Also true for
+// segmentKind (Phase 2, #812): an HLS/DASH segment chunk is media that should
+// be buffered even in the ambiguous-ctype cases (e.g. a .m4s served as
+// application/octet-stream) that mediaKind's coarser rules don't recognise on
+// their own. nil-safe.
 func (b *MediaBuffer) IsMedia(ctype, path string) bool {
 	if b == nil {
 		return false
 	}
-	return mediaKind(path, ctype) != ""
+	return mediaKind(path, ctype) != "" || segmentKind(path, ctype)
+}
+
+// segmentKind reports whether path/ctype identify an HLS/DASH segment CHUNK
+// (as opposed to a whole-file video/audio download or a manifest). Segments
+// are ordinary 200 downloads like any other media object (Phase 1's ==200
+// gate already applies) but must be tagged kind="segment" — not "video" — so
+// the DPI gallery can hide them and Phase 2's replay-time URL join can find
+// them (see Capture below, which gives segmentKind precedence over
+// mediaKind's video/audio classification).
+//
+// True for: path ending .ts, .m4s or .m4v (HLS transport-stream / fMP4 /
+// DASH chunk extensions), or ctype video/mp2t (a.k.a. video/MP2T) or
+// video/iso.segment. Deliberately FALSE for whole-file .mp4/.webm/.mkv/.mov
+// and for .m3u8/.mpd manifests — those must keep classifying as "video" /
+// "manifest" via mediaKind, unchanged. When ctype is ambiguous (e.g.
+// application/octet-stream, or empty) only the path extension decides — a
+// bare "some binary blob" ctype must NOT be guessed into "segment" without a
+// segment-shaped path.
+func segmentKind(path, ctype string) bool {
+	p := strings.ToLower(path)
+	if i := strings.IndexByte(p, '?'); i >= 0 {
+		p = p[:i]
+	}
+	if strings.HasSuffix(p, ".ts") || strings.HasSuffix(p, ".m4s") || strings.HasSuffix(p, ".m4v") {
+		return true
+	}
+	switch strings.ToLower(ctype) {
+	case "video/mp2t", "video/iso.segment":
+		return true
+	}
+	return false
 }
 
 // Capture decides whether to start recording a flow's body and, if so,
@@ -185,6 +220,17 @@ func (b *MediaBuffer) Capture(mac, host, url, path, ctype, direction string, con
 		qcap = mediaBufferChanCap
 	}
 
+	// kind: mediaKind's coarser ctype-prefix rule ("video/" → "video") would
+	// otherwise misclassify an HLS/DASH segment (e.g. .ts served video/mp2t)
+	// as a whole video. segmentKind takes precedence when it matches — Phase
+	// 2 (#812) needs kind="segment" so the DPI gallery can hide it and the
+	// replay-time manifest join can find it — but whole-file .mp4/video/*
+	// and .m3u8/.mpd manifests are unaffected (segmentKind is false for both).
+	kind := mediaKind(path, ctype)
+	if segmentKind(path, ctype) {
+		kind = "segment"
+	}
+
 	w := &ObjectWriter{
 		buf:           b,
 		sink:          sink,
@@ -196,7 +242,7 @@ func (b *MediaBuffer) Capture(mac, host, url, path, ctype, direction string, con
 		host:          host,
 		url:           url,
 		direction:     direction,
-		kind:          mediaKind(path, ctype),
+		kind:          kind,
 		ctype:         ctype,
 		firstTS:       time.Now().Unix(),
 		perObjectCeil: b.perObjectCeil,

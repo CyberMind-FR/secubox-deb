@@ -165,9 +165,11 @@ import re  # noqa: E402
 import glob  # noqa: E402
 from datetime import timezone  # noqa: E402
 from fastapi import Request  # noqa: E402
+from fastapi import Response  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from secubox_core import media_buffer  # noqa: E402
 from secubox_core import user_store  # noqa: E402
+from secubox_core import hls  # noqa: E402
 
 MEDIA_BUFFER_ROOT = "/data/secubox/media-buffer"
 AUDIT_LOG = "/var/log/secubox/audit.log"
@@ -256,6 +258,111 @@ def _audit_replay(sub: str, rec_id: str, host: str, ip: str) -> None:
             os.close(fd)
     except Exception:
         pass
+
+
+# ============================================================================
+# Phase 2 (#812) — HLS manifest reassembly.
+#
+# Segments are ordinary Phase-1 buffer objects (kind="segment") served
+# unchanged by GET /media/replay/{id}. When the requested record is a
+# manifest, media_replay() parses the stored playlist bytes with
+# secubox_core.hls and rewrites each segment URI to point at the matching
+# captured segment's replay URL — a pure read-time join by absolute URL,
+# never live cross-request session state (see the Phase 2 plan's Global
+# Constraints).
+# ============================================================================
+MAX_MANIFEST_BYTES = 8 * 1024 * 1024
+MAX_SEGMENT_INDEX = 5000
+MAX_MANIFEST_SEGMENTS = 5000
+
+
+def _segment_index(mac_hash: Optional[str], host: Optional[str]) -> Dict[str, str]:
+    """Map a captured segment's absolute `url` -> its record `id`.
+
+    Scoped to the SAME mac_hash + host as the manifest being replayed (never
+    joins across personas/hosts); only live (non-expired) `kind=="segment"`
+    records are eligible. Bounded to MAX_SEGMENT_INDEX entries so a
+    pathological session can't blow up the join. Fail-empty: any read error
+    yields {}.
+    """
+    try:
+        records = media_buffer.read_records(mac_hash=mac_hash, path=_media_log_path())
+    except Exception:
+        return {}
+    out: Dict[str, str] = {}
+    try:
+        for rec in records:
+            if not isinstance(rec, dict):
+                continue
+            if rec.get("kind") != "segment":
+                continue
+            if rec.get("expired"):
+                continue
+            if rec.get("host") != host:
+                continue
+            url = rec.get("url")
+            seg_id = rec.get("id")
+            if not url or not seg_id:
+                continue
+            out[url] = seg_id
+            if len(out) >= MAX_SEGMENT_INDEX:
+                log.warning(
+                    "dpi media: segment index for %s capped at %d",
+                    host, MAX_SEGMENT_INDEX,
+                )
+                break
+    except Exception:
+        return out
+    return out
+
+
+def _replay_manifest(rec: dict, path: str) -> Optional[Response]:
+    """Manifest replay branch: parse the captured playlist and rewrite
+    segment URIs to the matching captured segments' replay URLs.
+
+    Master/multivariant (ABR) and encrypted (#EXT-X-KEY) playlists are out of
+    scope for Phase 2 — the raw manifest is returned unchanged with an
+    `X-SecuBox-Media: unsupported-variant` header rather than attempting a
+    broken rewrite.
+
+    Fail-safe: any parse/read error returns None so the caller falls back to
+    the Phase-1 raw FileResponse — this branch must NEVER 500.
+    """
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(MAX_MANIFEST_BYTES + 1)
+        if len(raw) > MAX_MANIFEST_BYTES:
+            log.warning(
+                "dpi media: manifest %s truncated at %d bytes",
+                rec.get("id") or rec.get("url") or "?",
+                MAX_MANIFEST_BYTES,
+            )
+            raw = raw[:MAX_MANIFEST_BYTES]
+        text = raw.decode("utf-8", errors="replace")
+
+        if hls.is_master_playlist(text) or hls.is_encrypted(text):
+            return Response(content=text, media_type="application/vnd.apple.mpegurl",
+                             headers={"X-SecuBox-Media": "unsupported-variant"})
+
+        mapping = {
+            seg_url: f"/api/v1/dpi/media/replay/{seg_id}"
+            for seg_url, seg_id in _segment_index(rec.get("mac_hash"), rec.get("host")).items()
+        }
+        rewritten, matched, total = hls.rewrite(
+            text, mapping, rec.get("url") or "", max_segments=MAX_MANIFEST_SEGMENTS
+        )
+        if total >= MAX_MANIFEST_SEGMENTS:
+            log.warning(
+                "dpi media: manifest rewrite hit segment cap %d (total=%d matched=%d)",
+                MAX_MANIFEST_SEGMENTS, total, matched,
+            )
+        return Response(
+            content=rewritten,
+            media_type="application/vnd.apple.mpegurl",
+            headers={"X-SecuBox-Media": f"hls-reassembled; matched={matched}; total={total}"},
+        )
+    except Exception:
+        return None
 
 
 class QuotaType(str, Enum):
@@ -553,6 +660,13 @@ def media_replay(rec_id: str, request: Request = None,
     410 once the janitor has evicted the bytes (metatag-only). The object path
     is resolved from the RECORD's session_id under MEDIA_BUFFER_ROOT — never
     from `rec_id`, which is additionally validated against a strict hex regex.
+
+    Phase 2 (#812): when the record is a captured HLS manifest
+    (kind=="manifest"), the response is a REWRITTEN playlist whose segment
+    URIs point at their matching captured `kind=="segment"` records' replay
+    URLs (see `_replay_manifest`) instead of the raw manifest bytes. Every
+    other kind (video/audio/file/segment) keeps the unchanged Phase-1
+    FileResponse path.
     """
     if not _REC_ID_RE.match(rec_id or ""):
         raise HTTPException(status_code=400, detail="invalid record id")
@@ -569,6 +683,15 @@ def media_replay(rec_id: str, request: Request = None,
             ip = request.client.host or ""
     except Exception:
         ip = ""
+
+    if rec.get("kind") == "manifest":
+        manifest_resp = _replay_manifest(rec, path)
+        if manifest_resp is not None:
+            _audit_replay(sub, rec_id, rec.get("host") or "", ip)
+            return manifest_resp
+        # Fail-safe: parse/read error in the manifest branch falls through to
+        # the raw Phase-1 FileResponse below — never a 500.
+
     _audit_replay(sub, rec_id, rec.get("host") or "", ip)
     return FileResponse(path, media_type=rec.get("ctype") or "application/octet-stream")
 
