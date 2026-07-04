@@ -18,15 +18,21 @@ def test_spool_op_writes_request(tmp_path, monkeypatch):
 
 
 def test_read_op_result_pending_then_done(tmp_path, monkeypatch):
-    monkeypatch.setattr(m, "OPS_DIR", tmp_path)
+    # Requests and results live in separate dirs (#798): _read_op_result reads
+    # RESULTS_DIR, not OPS_DIR, so a lingering result can't re-trigger the watcher.
+    ops, results = tmp_path / "ops", tmp_path / "results"
+    ops.mkdir(); results.mkdir()
+    monkeypatch.setattr(m, "OPS_DIR", ops)
+    monkeypatch.setattr(m, "RESULTS_DIR", results)
     assert m._read_op_result("abc12345")["status"] == "pending"
-    (tmp_path / "abc12345.result.json").write_text(json.dumps({"status": "done", "detail": "ok"}))
+    (results / "abc12345.result.json").write_text(json.dumps({"status": "done", "detail": "ok"}))
     r = m._read_op_result("abc12345")
     assert r["status"] == "done" and r["detail"] == "ok"
 
 
 def test_read_op_result_rejects_bad_id(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "OPS_DIR", tmp_path)
+    monkeypatch.setattr(m, "RESULTS_DIR", tmp_path)
     assert m._read_op_result("../etc/passwd")["status"] == "error"
 
 

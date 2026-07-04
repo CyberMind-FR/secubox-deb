@@ -65,6 +65,9 @@ if [ "$1" = "configure" ]; then
     # Root ops spool (#798): reset-admin-password / upgrade requests dropped by
     # the unprivileged dashboard, drained by peertube-ops.path (no sudo, CSPN).
     install -d -o secubox -g secubox -m 0750 /run/secubox/peertube/ops 2>/dev/null || true
+    # Results land in a separate dir so a lingering result doesn't keep the
+    # DirectoryNotEmpty= watcher on ops/ firing in a loop (start-limit-hit, #798).
+    install -d -o secubox -g secubox -m 0750 /run/secubox/peertube/results 2>/dev/null || true
     install -d -o peertube -g peertube -m 0750 /var/lib/secubox/peertube/backups 2>/dev/null || true
     deb-systemd-helper enable peertube-ops.path >/dev/null 2>&1 || true
     deb-systemd-invoke start peertube-ops.path >/dev/null 2>&1 || true

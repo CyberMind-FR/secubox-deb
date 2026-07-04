@@ -44,15 +44,21 @@ HTTP_PORT=$(config_get "http_port" "9000")
 PUBLIC_HOSTNAME=$(config_get "public_hostname" "peertube.gk2.secubox.in")
 
 OPS_DIR="${SECUBOX_PEERTUBE_OPS_DIR:-/run/secubox/peertube/ops}"
+# Results go in a SEPARATE dir from requests: the peertube-ops.path unit watches
+# OPS_DIR with DirectoryNotEmpty=, so a result left in OPS_DIR would re-trigger
+# process-ops in a loop (→ start-limit-hit). process-ops removes each request and
+# writes its result here, leaving OPS_DIR empty so the watcher goes idle (#798).
+RESULTS_DIR="${SECUBOX_PEERTUBE_RESULTS_DIR:-/run/secubox/peertube/results}"
 ADMIN_SECRET="${SECUBOX_PEERTUBE_ADMIN_SECRET:-/etc/secubox/secrets/peertube-admin}"
 
 # _write_result <id> <json-string> — atomic result file for the API to poll.
 _write_result() {
     local id="$1" body="$2"
-    printf '%s' "$body" > "$OPS_DIR/$id.result.json.tmp"
-    chown root:secubox "$OPS_DIR/$id.result.json.tmp" 2>/dev/null || true
-    chmod 0640 "$OPS_DIR/$id.result.json.tmp" 2>/dev/null || true
-    mv -f "$OPS_DIR/$id.result.json.tmp" "$OPS_DIR/$id.result.json"
+    mkdir -p "$RESULTS_DIR" 2>/dev/null || true
+    printf '%s' "$body" > "$RESULTS_DIR/$id.result.json.tmp"
+    chown root:secubox "$RESULTS_DIR/$id.result.json.tmp" 2>/dev/null || true
+    chmod 0640 "$RESULTS_DIR/$id.result.json.tmp" 2>/dev/null || true
+    mv -f "$RESULTS_DIR/$id.result.json.tmp" "$RESULTS_DIR/$id.result.json"
 }
 
 # _jq <file> <filter> — read a field from a request file (jq is available on the host).
@@ -207,16 +213,22 @@ cmd_upgrade() {
         return
     fi
 
-    # 2-5. Run PeerTube's official upgrade inside the LXC. PeerTube ships an
-    #      upgrade script that downloads the latest release, installs deps, and
-    #      runs migrations; the service is restarted after. It keeps the previous
-    #      versions/ dir, so a failed run leaves peertube-latest on the old build.
-    #      NOTE: verify this entrypoint live for v8.2.0 — some PeerTube releases
-    #      use `npm run upgrade-peertube` instead of scripts/upgrade.sh. If it
-    #      differs, adjust only this single command.
+    # 2-5. Run PeerTube's official upgrade inside the LXC. It downloads the latest
+    #      release, installs deps, runs migrations, keeps the previous versions/
+    #      dir (a failed run leaves peertube-latest on the old build), then asks
+    #      for a restart (done in step 6).
+    #      CWD MATTERS: PeerTube's v8 shim peertube-latest/scripts/upgrade.sh execs
+    #      `../dist/scripts/upgrade.sh` RELATIVE to CWD, and that dist script runs
+    #      `node -e "require('js-yaml')…"` whose module resolution is ALSO CWD-relative.
+    #      Both resolve only when CWD is peertube-latest/scripts/ (../dist points there,
+    #      and require() walks up to peertube-latest/node_modules). Running from
+    #      /var/www/peertube fails "cannot open ../dist/scripts/upgrade.sh"; from a
+    #      neutral dir it fails "Cannot find module 'js-yaml'". Output is captured so a
+    #      failure is diagnosable (was previously discarded to /dev/null).
+    local ulog="/run/secubox/peertube/upgrade-$id.log"
     if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
         sudo -u peertube env NODE_ENV=production NODE_CONFIG_DIR=/var/www/peertube/config \
-        bash -lc 'cd /var/www/peertube && ./peertube-latest/scripts/upgrade.sh' >/dev/null 2>&1
+        bash -lc 'cd /var/www/peertube/peertube-latest/scripts && ./upgrade.sh' >"$ulog" 2>&1
     then
         # 6. Health-check: PeerTube answers /api/v1/config once back up.
         svc restart
@@ -234,9 +246,12 @@ cmd_upgrade() {
         fi
     else
         # Upgrade script failed — the old peertube-latest is untouched; restart it.
+        # Surface the last lines of the captured log so the failure is diagnosable.
         svc restart
-        _write_result "$id" "{\"status\":\"error\",\"detail\":\"upgrade script failed — running version unchanged\",\"backup\":$(printf '%s' "$backup" | jq -Rs .)}"
+        local tail_err; tail_err="$(tail -n 3 "$ulog" 2>/dev/null | tr '\n\r' '  ')"
+        _write_result "$id" "{\"status\":\"error\",\"detail\":$(printf 'upgrade script failed — running version unchanged: %s' "$tail_err" | jq -Rs .),\"backup\":$(printf '%s' "$backup" | jq -Rs .)}"
     fi
+    rm -f "$ulog"
 }
 
 cmd_help() {
