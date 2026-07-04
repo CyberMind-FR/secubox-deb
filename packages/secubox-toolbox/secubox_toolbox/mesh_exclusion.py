@@ -185,9 +185,10 @@ def pull_blobs() -> list:
 def union_blobs(blobs: list) -> dict:
     s, b, d = set(), set(), set()
     for p in blobs:
-        s.update(x for x in (p.get("splice") or []) if isinstance(x, str))
-        b.update(x for x in (p.get("bypass") or []) if isinstance(x, str))
-        d.update(x for x in (p.get("disabled") or []) if isinstance(x, str))
+        for key, acc in (("splice", s), ("bypass", b), ("disabled", d)):
+            v = p.get(key)
+            if isinstance(v, list):
+                acc.update(x for x in v if isinstance(x, str))
     return {"splice": sorted(s)[:FED_MAX], "bypass": sorted(b)[:FED_MAX],
             "disabled": sorted(d)[:FED_MAX]}
 
