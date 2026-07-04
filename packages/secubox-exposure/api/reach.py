@@ -65,13 +65,15 @@ def read_snippet_reach(vhost: str) -> dict:
 def load_record(vhost: str, is_public_now: bool) -> dict:
     """Current exposure record for a vhost.
 
-    If a snippet exists, derive from it. Otherwise the DEFAULT is 'lan' — except
-    a currently-public vhost defaults to 'wan' so first adoption never silently
-    re-confines a live public service. tor is False here (the API overlays state).
+    If a snippet exists, derive from it. A missing snippet means ungated ==
+    effectively public, so the current-effective report is 'wan' — matching
+    read_snippet_reach and the vhost dashboard. Secure-by-default 'lan' is
+    enforced at WRITE time (create-time seeding), not at read time.
+    `is_public_now` is kept in the signature for API compatibility but no
+    longer changes the missing-case result.
     """
     p = SNIPPET_DIR / f"{vhost}.conf"
     if p.exists():
         rr = read_snippet_reach(vhost)
         return {"vhost": vhost, "reach": rr["reach"], "mesh": rr["mesh"], "tor": False}
-    return {"vhost": vhost, "reach": "wan" if is_public_now else "lan",
-            "mesh": False, "tor": False}
+    return {"vhost": vhost, "reach": "wan", "mesh": False, "tor": False}

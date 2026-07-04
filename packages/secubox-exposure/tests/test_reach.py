@@ -63,11 +63,14 @@ def test_load_record_defaults_public_to_wan(tmp_path, monkeypatch):
     rec = r.load_record("pub.example", is_public_now=True)
     assert rec == {"vhost": "pub.example", "reach": "wan", "mesh": False, "tor": False}
 
-def test_load_record_defaults_private_to_lan(tmp_path, monkeypatch):
+def test_load_record_missing_snippet_is_wan_regardless_of_is_public_now(tmp_path, monkeypatch):
+    # ungated == effectively public; secure-default-lan is applied by create-time
+    # seeding (Fix 3), not by this read-side default. is_public_now no longer
+    # changes the missing-case result — kept in the signature for API compat.
     import api.reach as r
     monkeypatch.setattr(r, "SNIPPET_DIR", tmp_path)
     rec = r.load_record("priv.example", is_public_now=False)
-    assert rec == {"vhost": "priv.example", "reach": "lan", "mesh": False, "tor": False}
+    assert rec == {"vhost": "priv.example", "reach": "wan", "mesh": False, "tor": False}
 
 def test_load_record_reads_existing_snippet(tmp_path, monkeypatch):
     import api.reach as r
