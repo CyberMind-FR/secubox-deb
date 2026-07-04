@@ -63,6 +63,33 @@ def test_annuaire_attaches_bearer_token_when_available(monkeypatch):
     assert captured["closed"] is True
 
 
+def test_publish_skips_when_payload_unchanged(tmp_path, monkeypatch):
+    """#806 fix — publish() must no-op (not POST) when the payload is
+    byte-identical to the last one successfully published, so the shared
+    append-only annuaire journal doesn't grow unbounded every 30-min tick."""
+    calls = {"n": 0}
+
+    def _fake_annuaire(method, path, body=None):
+        calls["n"] += 1
+        return {}
+
+    monkeypatch.setattr(mx, "_annuaire", _fake_annuaire)
+    monkeypatch.setattr(mx, "LAST_PUBLISHED", tmp_path / "last-published.json")
+
+    payload1 = {"node": "gk2", "splice": ["a.com"], "bypass": [], "disabled": []}
+    assert mx.publish(payload1, "priv", "did:gk2", "gk2") is True
+    assert calls["n"] == 1
+
+    # same payload again → skipped, no second POST
+    assert mx.publish(payload1, "priv", "did:gk2", "gk2") is True
+    assert calls["n"] == 1
+
+    # different payload → published again
+    payload2 = {"node": "gk2", "splice": ["a.com", "b.com"], "bypass": [], "disabled": []}
+    assert mx.publish(payload2, "priv", "did:gk2", "gk2") is True
+    assert calls["n"] == 2
+
+
 def test_annuaire_closes_connection_on_read_error(monkeypatch):
     """fd-leak fix: c.close() must run even if getresponse()/read() raises."""
     captured = {}
