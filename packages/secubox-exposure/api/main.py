@@ -164,14 +164,14 @@ async def set_exposure(vhost: str, body: ExposureSet, user: dict = Depends(requi
     except OSError:
         prev = None
     _reach.write_snippet(vhost, body.reach, body.mesh)
-    if not _reload_nginx():                      # nginx -t failed → roll back
+    if not await asyncio.to_thread(_reload_nginx):   # nginx -t failed → roll back
         try:
             if prev is not None:
                 p.write_text(prev)
             else:
                 p.unlink(missing_ok=True)
         finally:
-            _reload_nginx()                      # best-effort restore of last-good
+            await asyncio.to_thread(_reload_nginx)   # best-effort restore of last-good
         raise HTTPException(status_code=500,
                              detail="nginx validation failed; exposure unchanged")
     # nginx reloaded OK — now apply Tor, then audit the confirmed change.
