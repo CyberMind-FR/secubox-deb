@@ -17,15 +17,20 @@ import socket
 from pathlib import Path
 from typing import Optional
 
-LOCAL_SPLICE = Path("/var/lib/secubox/toolbox/splice-learned.txt")
-LOCAL_BYPASS = Path("/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf")
-LOCAL_DISABLED = Path("/var/lib/secubox/toolbox/mitm-filter-disabled.txt")
-FED_SPLICE = Path("/var/lib/secubox/toolbox/mitm-exclusion-fed-splice.txt")
-FED_BYPASS = Path("/var/lib/secubox/toolbox/mitm-exclusion-fed-bypass.txt")
-FED_DISABLED = Path("/var/lib/secubox/toolbox/mitm-exclusion-fed-disabled.txt")
+# Env-overridable so this module can never diverge from policy.go / api.py,
+# which honour the same var names for the same files (#806 fix wave).
+LOCAL_SPLICE = Path(os.environ.get("SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"))
+LOCAL_BYPASS = Path(os.environ.get("SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"))
+LOCAL_DISABLED = Path(os.environ.get("SECUBOX_FILTER_DISABLED", "/var/lib/secubox/toolbox/mitm-filter-disabled.txt"))
+FED_SPLICE = Path(os.environ.get("SECUBOX_FED_SPLICE", "/var/lib/secubox/toolbox/mitm-exclusion-fed-splice.txt"))
+FED_BYPASS = Path(os.environ.get("SECUBOX_FED_BYPASS", "/var/lib/secubox/toolbox/mitm-exclusion-fed-bypass.txt"))
+FED_DISABLED = Path(os.environ.get("SECUBOX_FED_DISABLED", "/var/lib/secubox/toolbox/mitm-exclusion-fed-disabled.txt"))
 ANNUAIRE_SOCK = "/run/secubox/annuaire.sock"
 SCOPE_PREFIX = "mitm-exclusion:"
 FED_MAX = 2000
+# #806 — last-published content-hash fingerprint, so publish() can skip a POST
+# when nothing changed since the last successful publish (churn guard).
+LAST_PUBLISHED = Path("/var/lib/secubox/toolbox/mesh-exclusion-last-published.json")
 
 # annuaire's require_jwt only checks a valid HS256 signature + that the
 # subject is an ENABLED user (user_store.is_enabled) — mirrors
@@ -43,7 +48,7 @@ def _read_list(path: Path) -> list:
             if s and s not in seen:
                 seen.append(s)
         return sorted(seen)[:FED_MAX]
-    except OSError:
+    except Exception:
         return []
 
 
@@ -58,7 +63,7 @@ def node_id() -> str:
         n = Path("/etc/secubox/node.id").read_text(encoding="utf-8").strip()
         if n:
             return n
-    except OSError:
+    except Exception:
         pass
     return socket.gethostname()
 
@@ -132,12 +137,42 @@ def _version() -> int:
     return int(time.time())
 
 
+def _read_last_published() -> Optional[str]:
+    """Best-effort read of the last-published content hash. Never raises."""
+    try:
+        data = json.loads(LAST_PUBLISHED.read_text(encoding="utf-8"))
+        h = data.get("hash")
+        return h if isinstance(h, str) else None
+    except Exception:
+        return None
+
+
+def _write_last_published(h: str) -> None:
+    """Best-effort persist of the last-published content hash. Never raises."""
+    try:
+        LAST_PUBLISHED.parent.mkdir(parents=True, exist_ok=True)
+        LAST_PUBLISHED.write_text(json.dumps({"hash": h}), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def publish(payload: dict, priv_hex: str, did: str, nid: str) -> bool:
-    """POST /config/publish under scope mitm-exclusion:<node_id>. Best-effort."""
+    """POST /config/publish under scope mitm-exclusion:<node_id>. Best-effort.
+
+    Churn guard (#806): skips the POST entirely when the payload is
+    byte-identical to the last one successfully published — otherwise every
+    30-min tick appends a fresh ConfigBlob to the shared append-only annuaire
+    journal even when nothing changed."""
+    h = content_hash(payload)
+    if h == _read_last_published():
+        return True
     body = {"publisher_did": did, "publisher_priv_hex": priv_hex,
             "scope": SCOPE_PREFIX + nid, "version": _version(),
-            "content_hash": content_hash(payload), "payload": payload}
-    return _annuaire("POST", "/config/publish", body) is not None
+            "content_hash": h, "payload": payload}
+    ok = _annuaire("POST", "/config/publish", body) is not None
+    if ok:
+        _write_last_published(h)
+    return ok
 
 
 def _atomic_write(path: Path, lines: list) -> bool:
@@ -147,12 +182,15 @@ def _atomic_write(path: Path, lines: list) -> bool:
     try:
         if path.exists() and path.read_text(encoding="utf-8") == new:
             return False
-    except OSError:
+    except Exception:
         pass
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(new, encoding="utf-8")
-    os.replace(tmp, path)
-    return True
+    try:
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(new, encoding="utf-8")
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        return False
 
 
 def _verify_blob(cfg: dict) -> dict | None:

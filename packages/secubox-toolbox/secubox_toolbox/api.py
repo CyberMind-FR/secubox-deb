@@ -1171,14 +1171,22 @@ MITM_FILTER_DISABLED_FILE = Path(os.environ.get(
     "SECUBOX_FILTER_DISABLED", "/var/lib/secubox/toolbox/mitm-filter-disabled.txt"))
 
 
-def _load_disabled() -> set:
-    """Set of operator-disabled patterns (exact strings; # comments stripped)."""
+def _read_disabled_file(path) -> set:
     try:
         return {ln.split("#", 1)[0].strip()
-                for ln in MITM_FILTER_DISABLED_FILE.read_text().splitlines()
+                for ln in path.read_text().splitlines()
                 if ln.split("#", 1)[0].strip()}
     except OSError:
         return set()
+
+
+def _load_disabled() -> set:
+    """Set of operator-disabled patterns (exact strings; # comments stripped).
+
+    #806 fix — union of the LOCAL disabled file with the FEDERATED (mesh-union)
+    disabled file: a pattern disabled elsewhere in the fleet must also show
+    enabled=false here, matching the R3 engine's disabledLocal ∪ disabledFed."""
+    return _read_disabled_file(MITM_FILTER_DISABLED_FILE) | _read_disabled_file(FED_DISABLED_FILE)
 
 
 def _read_splice(path) -> list:
