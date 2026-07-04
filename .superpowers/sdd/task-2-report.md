@@ -34,7 +34,7 @@ All code transcribed exactly per brief; cleanup applied as instructed. Ready for
 
 **Status:** ✅ COMPLETE
 
-**Commit:** `<see below>` — fix(toolbox): mesh-exclusion publish sends JWT bearer + fd-safe annuaire call (ref #806)
+**Commit:** `b13314d7` — fix(toolbox): mesh-exclusion publish sends JWT bearer + fd-safe annuaire call (ref #806)
 
 **Test command:** `cd packages/secubox-toolbox && PYTHONPATH=. python -m pytest tests/test_mesh_exclusion_publish.py -q`
 **Result:** `4 passed in 0.05s`
