@@ -1673,21 +1673,8 @@ MODULES = {
     # =========================================================================
     # ADDED 2026-06-26 (#742) — modules discovered but previously undocumented
     # =========================================================================
-    "authelia": {
-        "name": "Authelia SSO", "icon": "🔐", "category": "Access",
-        "description": {
-            "en": "Single sign-on identity provider (AUTH-BRIDGE)",
-            "fr": "Fournisseur d'identité SSO (couche AUTH-BRIDGE)",
-            "de": "Single-Sign-On-Identitätsanbieter (AUTH-BRIDGE)",
-            "zh": "单点登录身份提供商（AUTH-BRIDGE）"
-        },
-        "features": {
-            "en": ["SSO", "2FA / TOTP", "Access policies", "LDAP / file backend"],
-            "fr": ["SSO", "2FA / TOTP", "Politiques d'accès", "Backend LDAP / fichier"],
-            "de": ["SSO", "2FA / TOTP", "Zugriffsrichtlinien", "LDAP-/Datei-Backend"],
-            "zh": ["单点登录", "双因素/TOTP", "访问策略", "LDAP/文件后端"]
-        }
-    },
+    # authelia removed 2026-07 — secubox-authelia SSO IdP decommissioned (#64768978,
+    # package removed; nginx gate is now a permissive no-op). Do not re-add.
     "avatar": {
         "name": "Avatar Manager", "icon": "🧑", "category": "Apps",
         "description": {

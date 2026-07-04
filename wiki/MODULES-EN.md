@@ -2,7 +2,7 @@
 
 *Complete module documentation*
 
-**Total modules:** 128
+**Total modules:** 127
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -117,7 +117,6 @@
 | 📀 **System Cloner** | System | System image cloning |
 | 👁️ **Eye Remote** | System | Remote management interface |
 | 🖥️ **RTTY Console** | System | Remote terminal access |
-| 🔐 **Authelia SSO** | Access | Single sign-on identity provider (AUTH-BRIDGE) |
 | 🧑 **Avatar Manager** | Apps | Identity and avatar manager |
 | 📜 **Certificate Manager** | Security | ACME / TLS certificate manager |
 | 📻 **FM Relay** | Media | rtl_fm to Icecast MP3 mount with live RDS metadata |
@@ -222,14 +221,6 @@ SAML/OIDC identity provider
 **Features:** SAML 2.0, OpenID Connect, Federation, SSO
 
 ![Identity Provider](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/identity.png)
-
-#### 🔐 Authelia SSO
-
-Single sign-on identity provider (AUTH-BRIDGE)
-
-**Features:** SSO, 2FA / TOTP, Access policies, LDAP / file backend
-
-![Authelia SSO](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/authelia.png)
 
 #### 🖥️ RustDesk
 
