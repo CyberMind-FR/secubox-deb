@@ -14,9 +14,9 @@ Enhanced features:
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import subprocess
 import os
@@ -34,6 +34,8 @@ try:
 except ImportError:
     async def require_jwt():
         return {"sub": "dev"}
+
+from api import reach as _reach
 
 app = FastAPI(title="SecuBox Exposure Manager API", version="2.0.0")
 
@@ -98,6 +100,55 @@ DEFAULT_CONFIG = {
     "health_check_enabled": True,
     "health_check_interval": 300
 }
+
+
+# ============================================================================
+# Per-vhost exposure switch (localhost / lan / wan) — ref #793
+# ============================================================================
+
+class ExposureSet(BaseModel):
+    reach: Literal["localhost", "lan", "wan"]
+    mesh: bool = False
+    tor: bool = False
+
+
+def _reload_nginx() -> bool:
+    """nginx -t then reload. Returns True on success (fail-safe: no raise)."""
+    try:
+        if subprocess.run(["nginx", "-t"], capture_output=True, timeout=10).returncode != 0:
+            return False
+        subprocess.run(["systemctl", "reload", "nginx"], capture_output=True, timeout=15)
+        return True
+    except Exception:
+        return False
+
+
+def _audit_exposure(vhost: str, rec: dict, user: str) -> None:
+    try:
+        ap = Path("/var/log/secubox/audit.log")
+        ap.parent.mkdir(parents=True, exist_ok=True)
+        with ap.open("a") as f:
+            f.write(f"{datetime.now(timezone.utc).isoformat()} exposure {vhost} "
+                    f"reach={rec['reach']} mesh={rec['mesh']} tor={rec['tor']} by={user}\n")
+    except OSError:
+        pass
+
+
+@app.get("/exposure/{vhost}")
+async def get_exposure(vhost: str, user: dict = Depends(require_jwt)):
+    # is_public_now: unknown here without the vhost list; default False (→ lan) when
+    # no snippet — the vhost module seeds public vhosts to wan on first adoption.
+    return _reach.load_record(vhost, is_public_now=False)
+
+
+@app.post("/exposure/{vhost}")
+async def set_exposure(vhost: str, body: ExposureSet, user: dict = Depends(require_jwt)):
+    _reach.write_snippet(vhost, body.reach, body.mesh)
+    _reload_nginx()
+    rec = {"vhost": vhost, "reach": body.reach, "mesh": body.mesh, "tor": body.tor}
+    _audit_exposure(vhost, rec, user.get("sub", "?"))
+    # tor toggle reuses existing /tor/add|remove; wired by the webui, not duplicated here.
+    return rec
 
 
 # ============================================================================
