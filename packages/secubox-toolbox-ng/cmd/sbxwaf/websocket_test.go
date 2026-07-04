@@ -20,6 +20,44 @@ import (
 	"time"
 )
 
+// hijackableRW is a ResponseWriter that records whether Hijack was called on it.
+type hijackableRW struct {
+	http.ResponseWriter
+	hijacked bool
+}
+
+func (h *hijackableRW) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h.hijacked = true
+	return nil, nil, nil
+}
+
+// TestResponseWrappersForwardHijack guards #796: every ResponseWriter wrapper in
+// the sbxwaf handler chain (visit-stats + media-cache) must forward Hijack, or
+// httputil.ReverseProxy can't tunnel WebSocket upgrades ("can't switch protocols
+// using non-Hijacker ResponseWriter type …").
+func TestResponseWrappersForwardHijack(t *testing.T) {
+	base := &hijackableRW{ResponseWriter: httptest.NewRecorder()}
+
+	sr := &statusRecorder{ResponseWriter: base}
+	if _, ok := interface{}(sr).(http.Hijacker); !ok {
+		t.Fatal("statusRecorder does not implement http.Hijacker")
+	}
+	sr.Hijack()
+	if !base.hijacked {
+		t.Fatal("statusRecorder.Hijack did not forward to the underlying writer")
+	}
+
+	base.hijacked = false
+	cw := &cachingResponseWriter{ResponseWriter: base}
+	if _, ok := interface{}(cw).(http.Hijacker); !ok {
+		t.Fatal("cachingResponseWriter does not implement http.Hijacker")
+	}
+	cw.Hijack()
+	if !base.hijacked {
+		t.Fatal("cachingResponseWriter.Hijack did not forward to the underlying writer")
+	}
+}
+
 func TestIsWebSocketUpgrade(t *testing.T) {
 	cases := []struct {
 		conn, upg string
