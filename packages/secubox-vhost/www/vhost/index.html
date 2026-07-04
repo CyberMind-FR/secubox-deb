@@ -396,8 +396,8 @@
             <div class="card">
                 <h2>Virtual Hosts</h2>
                 <table>
-                    <thead><tr><th>Domain</th><th>Backend</th><th>TLS</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody id="vhost-list"><tr><td colspan="5">Loading...</td></tr></tbody>
+                    <thead><tr><th>Domain</th><th>Backend</th><th>TLS</th><th>Exposition</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="vhost-list"><tr><td colspan="6">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -560,19 +560,25 @@
             const list = document.getElementById('vhost-list');
             const vhosts = d.vhosts || [];
             if (!vhosts.length) {
-                list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No vhosts configured</td></tr>';
+                list.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No vhosts configured</td></tr>';
                 return;
             }
-            list.innerHTML = vhosts.map(v => `<tr>
+            list.innerHTML = vhosts.map(v => {
+                const exp = v.exposure || { reach: '?', mesh: false };
+                const reachLabel = exp.reach === 'localhost' ? 'localhost' : (exp.reach || '?').toUpperCase();
+                const reachClass = exp.reach === 'wan' ? 'ssl' : (exp.reach === 'lan' ? 'enabled' : 'disabled');
+                return `<tr>
                 <td><a href="${v.ssl ? 'https' : 'http'}://${v.domain}" target="_blank" style="color:var(--primary)">${v.domain}</a></td>
                 <td style="color:var(--text-dim);font-family:monospace;font-size:0.8rem">${v.backend || '-'}</td>
                 <td>${v.ssl ? '<span class="badge ssl">' + (v.tls_mode || 'SSL') + '</span>' : '-'}</td>
+                <td><span class="badge ${reachClass}">${reachLabel}${exp.mesh ? ' 🕸️' : ''}</span></td>
                 <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}">${v.enabled ? '✅ Enabled' : '⏸️ Disabled'}</span></td>
                 <td>
                     <button class="btn" onclick="toggleVhost('${v.domain}', ${!v.enabled})" style="padding:2px 8px;font-size:0.7rem">${v.enabled ? 'Disable' : 'Enable'}</button>
                     <button class="btn danger" onclick="deleteVhost('${v.domain}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
                 </td>
-            </tr>`).join('');
+            </tr>`;
+            }).join('');
         }
 
         async function loadCerts() {
