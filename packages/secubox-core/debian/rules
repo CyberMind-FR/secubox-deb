@@ -17,6 +17,11 @@ override_dh_auto_install:
 	cp ../../common/nginx/secubox-proxy.conf \
 	   debian/secubox-core/usr/share/secubox-core/nginx/
 
+	# Styled nginx error page (5xx) — served via error_page alias in secubox.conf
+	install -d debian/secubox-core/usr/share/secubox-core/www
+	cp ../../common/nginx/errors/50x.html \
+	   debian/secubox-core/usr/share/secubox-core/www/
+
 	# Config example
 	cp ../../secubox.conf.example \
 	   debian/secubox-core/usr/share/secubox-core/
