@@ -28,3 +28,21 @@ def test_read_op_result_pending_then_done(tmp_path, monkeypatch):
 def test_read_op_result_rejects_bad_id(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "OPS_DIR", tmp_path)
     assert m._read_op_result("../etc/passwd")["status"] == "error"
+
+
+def test_reset_password_spools_op(tmp_path, monkeypatch):
+    monkeypatch.setattr(m, "OPS_DIR", tmp_path)
+    import asyncio
+    out = asyncio.run(m.reset_password_op(m.ResetPasswordBody(password="hunter2"), user={"role": "admin"}))
+    assert out["success"] is True and "id" in out
+    import json
+    req = json.loads((tmp_path / f"{out['id']}.request.json").read_text())
+    assert req["op"] == "reset-password" and req["password"] == "hunter2"
+
+
+def test_reset_password_generates_when_absent(tmp_path, monkeypatch):
+    monkeypatch.setattr(m, "OPS_DIR", tmp_path)
+    import asyncio, json
+    out = asyncio.run(m.reset_password_op(m.ResetPasswordBody(password=None), user={"role": "admin"}))
+    req = json.loads((tmp_path / f"{out['id']}.request.json").read_text())
+    assert len(req["password"]) >= 16  # generated strong password

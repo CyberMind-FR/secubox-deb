@@ -125,6 +125,10 @@ class PluginInstall(BaseModel):
     npm_name: str  # e.g., peertube-plugin-auth-ldap
 
 
+class ResetPasswordBody(BaseModel):
+    password: Optional[str] = None
+
+
 class VideoImport(BaseModel):
     """Import a video from a remote URL (YouTube, Vimeo, direct .mp4, …).
 
@@ -909,6 +913,16 @@ async def set_peertube_config(config: PeerTubeConfig, user=Depends(require_jwt))
 async def get_op_result(op_id: str, user=Depends(require_jwt)):
     """Poll the result of a spooled admin op (reset-password / upgrade)."""
     return _read_op_result(op_id)
+
+
+@router.post("/admin/reset-password")
+async def reset_password_op(body: ResetPasswordBody, user=Depends(require_admin)):
+    """Reset the PeerTube admin (root) password. Lockout-safe: runs the PeerTube
+    CLI in the LXC via the root spool, then rewrites the admin secret. If no
+    password is given, a strong one is generated and returned in the op result."""
+    pw = body.password or secrets.token_urlsafe(18)
+    op_id = _spool_op("reset-password", password=pw)
+    return {"success": True, "id": op_id}
 
 
 app.include_router(router)

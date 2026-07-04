@@ -162,9 +162,29 @@ cmd_process_ops() {
     done
 }
 
-# Temporary stubs — Tasks 3 (#798) and 5 (#798) replace these with the real
-# reset-admin-password / upgrade implementations.
-cmd_reset_admin_password() { local id="${2:-}"; [ -n "$id" ] && _write_result "$id" '{"status":"error","detail":"reset not implemented yet"}'; }
+cmd_reset_admin_password() {
+    # args: <request-file> <id>  (called by process-ops)
+    local reqf="${1:-}" id="${2:-}"
+    [ -n "$reqf" ] && [ -n "$id" ] || { err "usage: reset-admin-password <request-file> <id>"; return 1; }
+    local pw; pw="$(_jq "$reqf" '.password')"
+    [ -n "$pw" ] || { _write_result "$id" '{"status":"error","detail":"no password in request"}'; return; }
+    lxc_running || { _write_result "$id" '{"status":"error","detail":"LXC not running"}'; return; }
+    # PeerTube reset-password CLI is interactive (prompts once for the new
+    # password). Feed it on stdin as the peertube user with the service's env.
+    if printf '%s\n' "$pw" | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        sudo -u peertube env NODE_ENV=production NODE_CONFIG_DIR=/var/www/peertube/config \
+        bash -lc 'cd /var/www/peertube/peertube-latest && npm run reset-password -- -u root' >/dev/null 2>&1
+    then
+        # Keep the dashboard's stored admin secret in sync (get_admin_token()).
+        printf '%s' "$pw" > "$ADMIN_SECRET" && chmod 0600 "$ADMIN_SECRET"
+        chown secubox-peertube:secubox-peertube "$ADMIN_SECRET" 2>/dev/null || true
+        _write_result "$id" "{\"status\":\"done\",\"detail\":\"password reset\",\"password\":$(printf '%s' "$pw" | jq -Rs .)}"
+    else
+        _write_result "$id" '{"status":"error","detail":"peertube reset-password CLI failed"}'
+    fi
+}
+
+# Temporary stub — Task 5 (#798) replaces this with the real upgrade implementation.
 cmd_upgrade()              { local id="${2:-}"; [ -n "$id" ] && _write_result "$id" '{"status":"error","detail":"upgrade not implemented yet"}'; }
 
 cmd_help() {
