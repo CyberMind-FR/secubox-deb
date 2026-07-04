@@ -286,6 +286,56 @@
         /* Empty states */
         .empty { color: var(--p31-dim); }
 
+        /* #812 — Media Buffer gallery (live captures, admin-gated replay/download) */
+        .media-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+        .media-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            border-radius: 8px;
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .media-card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.08);
+        }
+        .media-card.expired { opacity: 0.55; filter: grayscale(70%); }
+        .media-card-head { display: flex; justify-content: space-between; align-items: center; font-size: 1.15rem; }
+        .media-host {
+            font-family: 'JetBrains Mono', 'Courier Prime', monospace;
+            font-size: 0.82rem;
+            color: var(--p31-mid);
+            word-break: break-all;
+        }
+        .media-meta-row {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'JetBrains Mono', 'Courier Prime', monospace;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+        }
+        .media-actions { display: flex; gap: 0.5rem; margin-top: 0.35rem; }
+        .media-actions .btn {
+            flex: 1;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.72rem;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .media-expired-label {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
         @media (max-width: 768px) {
             .main { margin-left: 0; }
         }
@@ -370,6 +420,16 @@
             <div class="card">
                 <div class="card-header"><h2>🎬 Types de médias captés <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— Content-Type réels (MITM R4)</span></h2></div>
                 <div class="app-list" id="media-types"><p class="empty">Loading…</p></div>
+            </div>
+
+            <!-- #812 — Media Buffer gallery: live whole-file captures (R3/R4), replay/download
+                 while the bytes are still on /data; greys to "métatag seul" after eviction. -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🎥 Media Buffer <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— captures live, replay avant expiration (admin)</span></h2>
+                    <span class="badge" id="media-buffer-badge">-</span>
+                </div>
+                <div class="media-gallery" id="media-buffer-gallery"><p class="empty">Loading…</p></div>
             </div>
 
             <!-- #720 — per-day timeline (board-wide) -->
@@ -718,6 +778,123 @@
                 (hostRows ? `<div style="color:var(--text-dim); font-size:0.7rem; margin:0.5rem 0 0.3rem;">Top hôtes</div>${hostRows}` : '');
         }
 
+        // #812 — Media Buffer gallery. `host`/`url`/`mac_hash` are ATTACKER-CONTROLLED
+        // (they come from captured live traffic — a malicious page can cause any
+        // hostname/URL to be observed). Every card is built with createElement +
+        // textContent (or the `.title` IDL property, which is never HTML-parsed) —
+        // never innerHTML string-concatenation of these fields — so a captured
+        // value like `<img onerror=...>` renders as inert text.
+        const MEDIA_KIND_ICON = { video: '📺', audio: '🎵', manifest: '🎞️', file: '📄' };
+        function mediaKindIcon(k) { return MEDIA_KIND_ICON[k] || '📄'; }
+        function mediaDirArrow(d) { return d === 'up' ? '⬆' : (d === 'down' ? '⬇' : '↔'); }
+
+        // Dedicated authed fetch: the media-buffer endpoints require a JWT (unlike
+        // most other /api/v1/dpi/* routes on this page, which currently ride the
+        // SSO-lite session cookie only). Reads the CANONICAL token key `sbx_token`
+        // (ref #810 — `jwt_token`/`token` cause a login loop) and redirects to
+        // /login.html on 401, matching sibling dashboards (e.g. crowdsec's api()).
+        async function apiAuthed(path) {
+            const token = localStorage.getItem('sbx_token');
+            const opts = { headers: {} };
+            if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+            try {
+                const res = await fetch(path, opts);
+                if (res.status === 401) { window.location = '/login.html'; return null; }
+                if (!res.ok) return null;
+                return await res.json();
+            } catch (e) { return null; }
+        }
+
+        function buildMediaCard(item) {
+            const card = document.createElement('div');
+            card.className = 'media-card' + (item.expired ? ' expired' : '');
+
+            const head = document.createElement('div');
+            head.className = 'media-card-head';
+            const kindSpan = document.createElement('span');
+            kindSpan.textContent = mediaKindIcon(item.kind);
+            const dirSpan = document.createElement('span');
+            dirSpan.textContent = mediaDirArrow(item.direction);
+            head.appendChild(kindSpan);
+            head.appendChild(dirSpan);
+            card.appendChild(head);
+
+            const hostEl = document.createElement('div');
+            hostEl.className = 'media-host';
+            hostEl.textContent = item.host || '(unknown host)';
+            if (item.url) hostEl.title = item.url; // IDL property assignment — not HTML-parsed, safe
+            card.appendChild(hostEl);
+
+            const metaRow1 = document.createElement('div');
+            metaRow1.className = 'media-meta-row';
+            const devSpan = document.createElement('span');
+            devSpan.textContent = '📟 ' + shortDev(item.mac_hash);
+            const kindLabel = document.createElement('span');
+            kindLabel.textContent = item.kind || 'file';
+            metaRow1.appendChild(devSpan);
+            metaRow1.appendChild(kindLabel);
+            card.appendChild(metaRow1);
+
+            const metaRow2 = document.createElement('div');
+            metaRow2.className = 'media-meta-row';
+            const sizeSpan = document.createElement('span');
+            sizeSpan.textContent = formatBytes(item.bytes || 0);
+            const ageSpan = document.createElement('span');
+            ageSpan.textContent = agoStr(item.first_ts || item.ts);
+            metaRow2.appendChild(sizeSpan);
+            metaRow2.appendChild(ageSpan);
+            card.appendChild(metaRow2);
+
+            const actions = document.createElement('div');
+            actions.className = 'media-actions';
+            if (item.expired) {
+                const label = document.createElement('span');
+                label.className = 'media-expired-label';
+                label.textContent = 'métatag seul (expiré)';
+                actions.appendChild(label);
+            } else if (item.id) {
+                // `id` is hex-validated server-side, but encodeURIComponent defensively
+                // anyway — never build this URL by string-concatenating raw input.
+                const replayUrl = API + '/media/replay/' + encodeURIComponent(item.id);
+                const playBtn = document.createElement('a');
+                playBtn.className = 'btn primary';
+                playBtn.href = replayUrl;
+                playBtn.target = '_blank';
+                playBtn.rel = 'noopener';
+                playBtn.textContent = '▶ Play';
+                const dlBtn = document.createElement('a');
+                dlBtn.className = 'btn';
+                dlBtn.href = replayUrl;
+                dlBtn.setAttribute('download', '');
+                dlBtn.textContent = '⬇ Download';
+                actions.appendChild(playBtn);
+                actions.appendChild(dlBtn);
+            }
+            card.appendChild(actions);
+            return card;
+        }
+
+        async function loadMediaBuffer() {
+            const box = document.getElementById('media-buffer-gallery');
+            const badge = document.getElementById('media-buffer-badge');
+            if (!box) return;
+            const data = await apiAuthed(API + '/media/buffer');
+            const items = (data && Array.isArray(data.items)) ? data.items : [];
+            if (badge) {
+                badge.textContent = (data && typeof data.count === 'number')
+                    ? (data.count + ' capture' + (data.count === 1 ? '' : 's')) : '-';
+            }
+            box.innerHTML = '';
+            if (!items.length) {
+                const p = document.createElement('p');
+                p.className = 'empty';
+                p.textContent = 'Aucune capture média en tampon (R3/R4 requis, admin uniquement).';
+                box.appendChild(p);
+                return;
+            }
+            items.forEach(item => box.appendChild(buildMediaCard(item)));
+        }
+
         async function loadTimeline() {
             const data = await api('/history?days=14');
             const box = document.getElementById('dpi-timeline');
@@ -739,12 +916,14 @@
             loadStatus();
             loadExfil();   // #695: also fills Top Apps/Protocols/Bandwidth/Active-Flows from the exfil engine
             loadMediaTypes();  // #785: MIME media types captured by sbxmitm R4
+            loadMediaBuffer(); // #812: live media-buffer gallery (replay/download)
             loadTimeline();
             loadBlockRules();
         }
 
         refreshAll();
         setInterval(refreshAll, 10000);
+        setInterval(loadMediaBuffer, 15000); // #812: dedicated ~15s cadence per the buffer's own churn
     </script>
     <script src="/shared/crt-engine.js"></script>
 </body>
