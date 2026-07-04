@@ -193,9 +193,11 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
   {% set dme = (dpi_exfil or {}).me or {} %}
   <div class="nr-box" style="margin-top:.8rem">
     <h3>⚔️ Quêtes en cours · menaces</h3>
-    {% if dme.alerts %}
-      {% for q in dme.alerts[:5] %}
-      <div style="font-size:.8rem">🗡️ <b style="color:var(--amber)">{{ (q.label or q.kind or '?')|upper }}</b> — {{ q.service or q.dst or '' }} <span style="color:var(--dim)">{{ q.detail or '' }}</span></div>
+    {% set _quests = dme.alerts_raw or dme.alerts %}
+    {% if _quests %}
+      {% for q in _quests[:5] %}
+      {% set _dest = q.service or q.dst or '' %}
+      <div style="font-size:.8rem">🗡️ <b style="color:var(--amber)">{{ (q.label or q.kind or '?')|replace('_',' ')|upper }}</b>{% if _dest or q.detail %} — {{ _dest }} <span style="color:var(--dim)">{{ q.detail or '' }}</span>{% endif %}</div>
       {% endfor %}
     {% else %}<div class="empty" style="color:var(--phos)">✓ Aucune menace active — zone sûre, runner.</div>{% endif %}
   </div>
