@@ -33,3 +33,30 @@ def reach_snippet(reach: str, mesh: bool) -> str:
 
 def snippet_path(vhost: str) -> Path:
     return SNIPPET_DIR / f"{vhost}.conf"
+
+
+def write_snippet(vhost: str, reach: str, mesh: bool) -> None:
+    """Atomically write the vhost's exposure snippet (temp + os.replace)."""
+    content = reach_snippet(reach, mesh)
+    SNIPPET_DIR.mkdir(parents=True, exist_ok=True)
+    dst = SNIPPET_DIR / f"{vhost}.conf"
+    tmp = SNIPPET_DIR / f"{vhost}.conf.tmp"
+    tmp.write_text(content)
+    os.replace(tmp, dst)
+
+
+def read_snippet_reach(vhost: str) -> dict:
+    """Derive {reach, mesh} from the on-disk snippet. Missing/empty → wan."""
+    p = SNIPPET_DIR / f"{vhost}.conf"
+    try:
+        content = p.read_text()
+    except OSError:
+        return {"reach": "wan", "mesh": False}
+    mesh = MESH_CIDR in content
+    if content.strip() == "":
+        reach = "wan"
+    elif any(c in content for c in LAN_CIDRS):
+        reach = "lan"
+    else:
+        reach = "localhost"
+    return {"reach": reach, "mesh": mesh}
