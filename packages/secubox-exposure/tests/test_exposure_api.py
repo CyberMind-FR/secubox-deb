@@ -35,3 +35,13 @@ def test_get_reflects_written_state(tmp_path, monkeypatch):
 def test_post_rejects_bad_reach(tmp_path, monkeypatch):
     c = _client(tmp_path, monkeypatch)
     assert c.post("/exposure/z.example", json={"reach": "moon", "mesh": False, "tor": False}).status_code == 422
+
+def test_post_rejects_vhost_with_dot_dot(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.post("/exposure/foo..bar", json={"reach": "lan", "mesh": False, "tor": False})
+    assert r.status_code == 400
+
+def test_get_rejects_invalid_vhost_name(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.get("/exposure/foo bar")
+    assert r.status_code == 400

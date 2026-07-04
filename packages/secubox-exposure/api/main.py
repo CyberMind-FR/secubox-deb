@@ -112,6 +112,19 @@ class ExposureSet(BaseModel):
     tor: bool = False
 
 
+_VHOST_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _validate_vhost(vhost: str) -> None:
+    """Reject anything that isn't a plausible hostname. Defense-in-depth: Starlette
+    already blocks '/' in a single path segment; this additionally rejects
+    whitespace, empty strings, '..' traversal markers, and over-long names, so a
+    crafted {vhost} can't be used to write a snippet outside intent."""
+    if (not vhost or len(vhost) > 253 or ".." in vhost
+            or not _VHOST_RE.match(vhost)):
+        raise HTTPException(status_code=400, detail="invalid vhost")
+
+
 def _reload_nginx() -> bool:
     """nginx -t then reload. Returns True on success (fail-safe: no raise)."""
     try:
@@ -144,6 +157,7 @@ async def get_exposure(vhost: str, user: dict = Depends(require_jwt)):
 
 @app.post("/exposure/{vhost}")
 async def set_exposure(vhost: str, body: ExposureSet, user: dict = Depends(require_jwt)):
+    _validate_vhost(vhost)
     _reach.write_snippet(vhost, body.reach, body.mesh)
     _reload_nginx()
     rec = {"vhost": vhost, "reach": body.reach, "mesh": body.mesh, "tor": body.tor}
