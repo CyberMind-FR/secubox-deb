@@ -16,6 +16,7 @@ import os
 import re
 import secrets
 import subprocess
+import time
 from pathlib import Path
 from typing import List, Optional, Dict
 
@@ -923,6 +924,59 @@ async def reset_password_op(body: ResetPasswordBody, user=Depends(require_admin)
     pw = body.password or secrets.token_urlsafe(18)
     op_id = _spool_op("reset-password", password=pw)
     return {"success": True, "id": op_id}
+
+
+# ============================================================================
+# Version Check (issue #798)
+# ============================================================================
+
+def _semver_lt(a: str, b: str) -> bool:
+    """True if version a < b (numeric field compare; tolerates a leading 'v')."""
+    def parts(v):
+        v = (v or "").lstrip("vV").split("-")[0]
+        return [int(x) for x in re.findall(r"\d+", v)] or [0]
+    pa, pb = parts(a), parts(b)
+    n = max(len(pa), len(pb))
+    pa += [0] * (n - len(pa)); pb += [0] * (n - len(pb))
+    return pa < pb
+
+
+def _installed_version() -> Optional[str]:
+    r = pt_api("/config")
+    if r.get("success") and isinstance(r.get("data"), dict):
+        return r["data"].get("serverVersion")
+    return None
+
+
+def _latest_version() -> Optional[str]:
+    """Latest PeerTube release tag from GitHub, cached ~1h in /run. Best-effort:
+    returns None offline / on rate-limit (never blocks the dashboard)."""
+    cache = OPS_DIR.parent / "latest-version.json"
+    try:
+        if cache.exists() and (time.time() - cache.stat().st_mtime) < 3600:
+            return json.loads(cache.read_text()).get("latest")
+    except Exception:
+        pass
+    try:
+        out = subprocess.run(
+            ["curl", "-s", "--max-time", "8",
+             "https://api.github.com/repos/Chocobozzz/PeerTube/releases/latest"],
+            capture_output=True, text=True, timeout=12)
+        tag = json.loads(out.stdout).get("tag_name")
+        if tag:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps({"latest": tag}))
+        return tag
+    except Exception:
+        return None
+
+
+@router.get("/version")
+async def version_info(user=Depends(require_jwt)):
+    installed = _installed_version()
+    latest = _latest_version()
+    up = bool(installed and latest and _semver_lt(installed, latest))
+    return {"installed": installed, "latest": latest, "upgrade_available": up}
 
 
 app.include_router(router)

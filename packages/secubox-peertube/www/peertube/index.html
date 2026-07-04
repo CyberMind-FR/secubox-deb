@@ -622,9 +622,11 @@
             </div>
             <div class="card">
                 <h3>Maintenance</h3>
+                <div id="ptVersion" style="margin:0.5rem 0;color:var(--text-muted);">version…</div>
                 <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                     <button class="btn" onclick="restartPeerTube()">Restart LXC</button>
                     <button class="btn btn-danger" onclick="uninstallPeerTube()">Stop LXC (keep data)</button>
+                    <button class="btn" id="btnUpgrade" style="display:none;" onclick="upgradePeerTube()">⬆️ Upgrade</button>
                 </div>
             </div>
         </div>
@@ -706,6 +708,18 @@
             return roles[role] || 'User';
         }
 
+        async function loadVersion() {
+            const v = await api('/version');
+            const el = document.getElementById('ptVersion');
+            if (!v || !v.installed) { el.textContent = 'version: unknown'; return; }
+            if (v.upgrade_available) {
+                el.innerHTML = 'PeerTube <b>v' + v.installed + '</b> · ⬆️ <b>' + v.latest + '</b> available';
+                const b = document.getElementById('btnUpgrade'); b.style.display = ''; b.textContent = '⬆️ Upgrade to ' + v.latest;
+            } else {
+                el.innerHTML = 'PeerTube <b>v' + v.installed + '</b> · ✅ up to date';
+            }
+        }
+
         async function refresh() {
             try {
                 const status = await api('/status');
@@ -754,6 +768,7 @@
                 // Load current tab data
                 const activeTab = document.querySelector('.tab.active').textContent.toLowerCase();
                 showTab(activeTab);
+                loadVersion();
 
             } catch (e) {
                 console.error(e);
