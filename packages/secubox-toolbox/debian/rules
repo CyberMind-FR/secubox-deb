@@ -57,6 +57,13 @@ override_dh_installsystemd:
 	# ship via the `cp -r conf` above (→ /usr/lib/secubox/toolbox/conf/).
 	install -m 0755 sbin/secubox-toolbox-tor-reconcile \
 	  debian/secubox-toolbox/usr/sbin/
+	# #799 : exempt cert-pinned/spliced hosts from Tor egress + refresh timer
+	install -m 0755 sbin/secubox-toolbox-tor-exempt-hosts \
+	  debian/secubox-toolbox/usr/sbin/
+	install -m 0644 systemd/secubox-toolbox-tor-exempt-hosts.service \
+	  debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-toolbox-tor-exempt-hosts.timer \
+	  debian/secubox-toolbox/lib/systemd/system/
 	install -m 0644 systemd/secubox-toolbox-tor.service \
 	  debian/secubox-toolbox/lib/systemd/system/
 	install -m 0644 systemd/secubox-toolbox-tor.path \

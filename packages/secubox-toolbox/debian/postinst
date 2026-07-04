@@ -207,6 +207,9 @@ fi
       systemctl start  secubox-toolbox-tor.path 2>/dev/null || true
       systemctl enable secubox-toolbox-tor.timer 2>/dev/null || true
       systemctl start  secubox-toolbox-tor.timer 2>/dev/null || true
+      # #799 : refresh cert-pinned Tor-egress exemptions (no-op until Tor armed)
+      systemctl enable secubox-toolbox-tor-exempt-hosts.timer 2>/dev/null || true
+      systemctl start  secubox-toolbox-tor-exempt-hosts.timer 2>/dev/null || true
       # Pas de start auto — l'opérateur doit configurer mesh.toml et lancer toolbox-up
     fi
 
