@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+"""#806 — publish this node's local exclusion lists as a signed ConfigBlob."""
+import sys
+sys.path.insert(0, "/usr/lib/secubox/toolbox")
+sys.path.insert(0, "/usr/lib/secubox/p2p")  # annuaire_client.node_identity
+from secubox_toolbox import mesh_exclusion as mx
+
+def main() -> int:
+    try:
+        from api.annuaire_client import node_identity  # secubox-p2p
+        did, priv = node_identity()
+    except Exception:
+        did, priv = None, None
+    if not did or not priv:
+        sys.stderr.write("mesh-exclusion-publish: no node identity — skip\n")
+        return 0
+    nid = mx.node_id()
+    ok = mx.publish(mx.build_payload(nid, mx.local_lists()), priv, did, nid)
+    sys.stderr.write("mesh-exclusion-publish: %s scope=%s%s\n"
+                     % ("ok" if ok else "FAILED (retry next tick)", mx.SCOPE_PREFIX, nid))
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
