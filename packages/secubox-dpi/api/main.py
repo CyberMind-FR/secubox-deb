@@ -66,7 +66,7 @@ async def health_check():
 
 
 @app.get("/exfil")
-async def exfil_state():
+def exfil_state():
     """#687 Phase 2 — per-device cloud-exfiltration state produced by the Go
     collector (secubox-dpi-flowcap → secubox-dpi-collector). Fail-empty so the
     dashboard never errors before the first capture window completes."""
@@ -83,7 +83,7 @@ async def exfil_state():
 
 
 @app.get("/history")
-async def exfil_history(device: str = "", days: int = 14):
+def exfil_history(device: str = "", days: int = 14):
     """#720 — per-device DAILY timeline from the collector history.json. Without
     ?device, returns board-wide daily totals. Fail-empty."""
     import json as _json
@@ -423,7 +423,7 @@ def _setup_mirred(iface: str, mirror_if: str = "ifb0") -> dict:
     return {"steps": results, "interface": iface, "mirror": mirror_if}
 
 @router.get("/status")
-async def status(user=Depends(require_jwt)):
+def status(user=Depends(require_jwt)):
     cfg = get_config("dpi")
     netifyd_up = subprocess.run(["pgrep", "netifyd"], capture_output=True).returncode == 0
     iface = cfg.get("interface", "eth0")
@@ -556,7 +556,7 @@ async def device_flows(mac: str, user=Depends(require_jwt)):
 
 
 @router.get("/realtime")
-async def realtime(user=Depends(require_jwt)):
+def realtime(user=Depends(require_jwt)):
     """Statistiques temps réel."""
     cfg = get_config("dpi")
     iface = cfg.get("interface", "eth0")
@@ -587,7 +587,7 @@ class BlockRuleRequest(BaseModel):
 
 
 @router.get("/block_rules")
-async def block_rules(user=Depends(require_jwt)):
+def block_rules(user=Depends(require_jwt)):
     """Règles de blocage."""
     rules_file = Path("/etc/secubox/dpi-rules.json")
     if rules_file.exists():
@@ -596,7 +596,7 @@ async def block_rules(user=Depends(require_jwt)):
 
 
 @router.post("/add_block_rule")
-async def add_block_rule(req: BlockRuleRequest, user=Depends(require_jwt)):
+def add_block_rule(req: BlockRuleRequest, user=Depends(require_jwt)):
     rules_file = Path("/etc/secubox/dpi-rules.json")
     rules_file.parent.mkdir(parents=True, exist_ok=True)
     rules = json.loads(rules_file.read_text()) if rules_file.exists() else []
@@ -607,7 +607,7 @@ async def add_block_rule(req: BlockRuleRequest, user=Depends(require_jwt)):
 
 
 @router.post("/delete_block_rule")
-async def delete_block_rule(app_or_category: str, user=Depends(require_jwt)):
+def delete_block_rule(app_or_category: str, user=Depends(require_jwt)):
     rules_file = Path("/etc/secubox/dpi-rules.json")
     if rules_file.exists():
         rules = json.loads(rules_file.read_text())
@@ -671,26 +671,26 @@ async def save_settings(req: DpiSettingsRequest, user=Depends(require_jwt)):
 
 
 @router.post("/restart")
-async def restart(user=Depends(require_jwt)):
+def restart(user=Depends(require_jwt)):
     """Redémarrer netifyd."""
     r = subprocess.run(["systemctl", "restart", "netifyd"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/start")
-async def start(user=Depends(require_jwt)):
+def start(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "start", "netifyd"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.post("/stop")
-async def stop(user=Depends(require_jwt)):
+def stop(user=Depends(require_jwt)):
     r = subprocess.run(["systemctl", "stop", "netifyd"], capture_output=True, text=True)
     return {"success": r.returncode == 0}
 
 
 @router.get("/logs")
-async def logs(lines: int = 100, user=Depends(require_jwt)):
+def logs(lines: int = 100, user=Depends(require_jwt)):
     r = subprocess.run(
         ["journalctl", "-u", "netifyd", "-n", str(lines), "--no-pager"],
         capture_output=True, text=True, timeout=10
@@ -699,7 +699,7 @@ async def logs(lines: int = 100, user=Depends(require_jwt)):
 
 
 @router.get("/interface_list")
-async def interface_list(user=Depends(require_jwt)):
+def interface_list(user=Depends(require_jwt)):
     """Liste des interfaces."""
     r = subprocess.run(["ip", "-j", "link", "show"], capture_output=True, text=True)
     try:
@@ -710,7 +710,7 @@ async def interface_list(user=Depends(require_jwt)):
 
 
 @router.get("/tc_status")
-async def tc_status(user=Depends(require_jwt)):
+def tc_status(user=Depends(require_jwt)):
     """État tc mirred."""
     cfg = get_config("dpi")
     iface = cfg.get("interface", "eth0")
@@ -726,7 +726,7 @@ async def tc_status(user=Depends(require_jwt)):
 
 
 @router.post("/remove_mirred")
-async def remove_mirred(user=Depends(require_jwt)):
+def remove_mirred(user=Depends(require_jwt)):
     """Supprimer la configuration mirred."""
     cfg = get_config("dpi")
     iface = cfg.get("interface", "eth0")
