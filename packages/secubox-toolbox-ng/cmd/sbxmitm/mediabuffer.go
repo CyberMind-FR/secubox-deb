@@ -106,10 +106,12 @@ type MediaBuffer struct {
 }
 
 // NewMediaBuffer constructs a MediaBuffer rooted at root (expected to already
-// exist as /data/secubox/media-buffer, 0750 secubox:secubox — this
-// constructor does not create it; Capture creates only the per-session
-// subdirectories). enabled false is the feature-flagged-off default: every
-// method becomes a safe no-op (Capture always returns nil).
+// exist as /data/secubox/media-buffer, 2750 secubox-toolbox:secubox with the
+// setgid bit — the workers write as secubox-toolbox, the dpi reader is group
+// secubox, and setgid propagates group `secubox` to the objects we create; see
+// the tmpfiles file. This constructor does not create root; Capture creates only
+// the per-session subdirectories). enabled false is the feature-flagged-off
+// default: every method becomes a safe no-op (Capture always returns nil).
 func NewMediaBuffer(root string, enabled bool, perObjectCeil int64) *MediaBuffer {
 	return &MediaBuffer{
 		root:          root,
