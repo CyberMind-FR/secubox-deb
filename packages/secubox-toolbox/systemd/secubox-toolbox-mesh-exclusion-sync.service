@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox ToolBoX — sync federated MITM-exclusion lists from the mesh (#806)
+After=secubox-toolbox.service secubox-annuaire.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-toolbox-mesh-exclusion-sync
+Nice=10
+TimeoutStartSec=60

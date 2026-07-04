@@ -44,6 +44,13 @@ override_dh_installsystemd:
 	install -m 0755 sbin/secubox-toolbox-autolearn debian/secubox-toolbox/usr/sbin/
 	install -m 0644 systemd/secubox-toolbox-autolearn.service debian/secubox-toolbox/lib/systemd/system/
 	install -m 0644 systemd/secubox-toolbox-autolearn.timer debian/secubox-toolbox/lib/systemd/system/
+	# #806 : mesh-federate the exclusion lists (publish + sync + timers)
+	install -m 0755 sbin/secubox-toolbox-mesh-exclusion-publish debian/secubox-toolbox/usr/sbin/
+	install -m 0755 sbin/secubox-toolbox-mesh-exclusion-sync debian/secubox-toolbox/usr/sbin/
+	install -m 0644 systemd/secubox-toolbox-mesh-exclusion-publish.service debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-toolbox-mesh-exclusion-publish.timer debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-toolbox-mesh-exclusion-sync.service debian/secubox-toolbox/lib/systemd/system/
+	install -m 0644 systemd/secubox-toolbox-mesh-exclusion-sync.timer debian/secubox-toolbox/lib/systemd/system/
 	# Phase 6.P (#496) : systemd drop-ins for RuntimeMaxSec=6h on mitm + mitm-wg
 	install -d debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm.service.d
 	install -m 0644 systemd/secubox-toolbox-mitm.service.d/10-runtime-max.conf \

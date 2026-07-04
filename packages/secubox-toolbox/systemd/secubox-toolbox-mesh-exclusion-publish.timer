@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox ToolBoX — periodic mesh-exclusion publish (#806)
+
+[Timer]
+OnBootSec=8min
+OnUnitActiveSec=30min
+Persistent=true
+RandomizedDelaySec=3min
+
+[Install]
+WantedBy=timers.target

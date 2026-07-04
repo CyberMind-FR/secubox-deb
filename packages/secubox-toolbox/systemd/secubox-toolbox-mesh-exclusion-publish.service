@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox ToolBoX — publish local MITM-exclusion lists to the mesh (#806)
+After=secubox-toolbox.service secubox-annuaire.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-toolbox-mesh-exclusion-publish
+Nice=10
+TimeoutStartSec=60

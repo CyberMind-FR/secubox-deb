@@ -274,6 +274,11 @@ fi
         systemctl enable secubox-toolbox-autolearn.timer 2>/dev/null || true
         systemctl start secubox-toolbox-autolearn.timer 2>/dev/null || true
         /usr/sbin/secubox-toolbox-autolearn 2>&1 | head -1 || true
+        # #806 : mesh-federation publish + sync timers
+        systemctl enable secubox-toolbox-mesh-exclusion-publish.timer 2>/dev/null || true
+        systemctl start  secubox-toolbox-mesh-exclusion-publish.timer 2>/dev/null || true
+        systemctl enable secubox-toolbox-mesh-exclusion-sync.timer 2>/dev/null || true
+        systemctl start  secubox-toolbox-mesh-exclusion-sync.timer 2>/dev/null || true
       fi
     fi
 
