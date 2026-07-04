@@ -13,11 +13,13 @@ License: Proprietary / ANSSI CSPN candidate
 """
 import json
 import os
+import re
+import secrets
 import subprocess
 from pathlib import Path
 from typing import List, Optional, Dict
 
-from fastapi import FastAPI, APIRouter, Depends, Request
+from fastapi import FastAPI, APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from secubox_core.auth import router as auth_router, require_jwt
@@ -293,6 +295,48 @@ def default_channel_id(token: str) -> Optional[int]:
         if chans:
             return chans[0].get("id")
     return None
+
+
+# ============================================================================
+# Admin Ops Spool Plumbing (issue #798)
+# ============================================================================
+
+OPS_DIR = Path("/run/secubox/peertube/ops")
+_OP_ID_RE = re.compile(r"^[0-9a-f]{8,32}$")
+
+
+async def require_admin(user=Depends(require_jwt)):
+    """Gate destructive ops to admin-role JWTs. require_jwt already validated the
+    token; here we additionally require role == admin (the module otherwise
+    accepts any valid SecuBox JWT)."""
+    role = (user or {}).get("role") if isinstance(user, dict) else None
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="admin role required")
+    return user
+
+
+def _spool_op(op: str, **args) -> str:
+    """Write an intent file the root peertube-ops.path unit will pick up. Returns
+    the op id; the caller polls GET /admin/op/{id}. Unprivileged (no lxc-attach)."""
+    op_id = secrets.token_hex(8)
+    OPS_DIR.mkdir(parents=True, exist_ok=True)
+    req = OPS_DIR / f"{op_id}.request.json"
+    req.write_text(json.dumps({"op": op, "id": op_id, **args}))
+    os.chmod(req, 0o600)
+    return op_id
+
+
+def _read_op_result(op_id: str) -> dict:
+    """Read <id>.result.json; {status: pending} until the root unit writes it."""
+    if not _OP_ID_RE.match(op_id or ""):
+        return {"status": "error", "detail": "bad op id"}
+    res = OPS_DIR / f"{op_id}.result.json"
+    if not res.exists():
+        return {"status": "pending"}
+    try:
+        return json.loads(res.read_text())
+    except Exception as e:  # pragma: no cover
+        return {"status": "error", "detail": f"unreadable result: {e}"}
 
 
 # ============================================================================
@@ -855,6 +899,16 @@ async def set_peertube_config(config: PeerTubeConfig, user=Depends(require_jwt))
     save_config(cfg)
     log.info(f"Config updated by {user.get('sub', 'unknown')}")
     return {"success": True}
+
+
+# ============================================================================
+# Admin Operations (Spool-Based)
+# ============================================================================
+
+@router.get("/admin/op/{op_id}")
+async def get_op_result(op_id: str, user=Depends(require_jwt)):
+    """Poll the result of a spooled admin op (reset-password / upgrade)."""
+    return _read_op_result(op_id)
 
 
 app.include_router(router)
