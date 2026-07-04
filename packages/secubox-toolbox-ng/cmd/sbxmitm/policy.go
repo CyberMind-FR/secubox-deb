@@ -54,36 +54,42 @@ var twoLevelTLD = map[string]bool{
 // PolicyOpts holds the on-disk paths the loaders read. Empty fields fall back
 // to the real production defaults (or the env override) in LoadPolicy.
 type PolicyOpts struct {
-	AllowPath        string   // ad-allowlist.txt        (_ALLOW_PATH)
-	LearnedPath      string   // learned-trackers.txt    (_LEARNED_PATH)
-	SpliceSeedPath   string   // conf/tls-splice-seed.conf (SEED_PATH)
-	SpliceLearnPath  string   // splice-learned.txt      (LEARNED_PATH)
-	PureTrackersPath string   // pure-trackers.txt       (PURE_PATH)
+	AllowPath        string // ad-allowlist.txt        (_ALLOW_PATH)
+	LearnedPath      string // learned-trackers.txt    (_LEARNED_PATH)
+	SpliceSeedPath   string // conf/tls-splice-seed.conf (SEED_PATH)
+	SpliceLearnPath  string // splice-learned.txt      (LEARNED_PATH)
+	PureTrackersPath string // pure-trackers.txt       (PURE_PATH)
 	// mitm-bypass (ignore_hosts) REGEX lists (#803): cert-pinned apps managed via
 	// the Filtres MITM webui + autolearn. A match here also splices (passthrough)
 	// so the R3 engine honours the SAME exclusion list the webui shows — else
 	// Signal/WhatsApp/banks etc. get MITM'd and break through the tunnel.
-	BypassSeedPath    string  // conf/mitm-bypass-seed.conf     (package)
-	BypassStaticPath  string  // mitm-bypass.conf               (operator/webui)
-	BypassDynamicPath string  // mitm-bypass-dynamic.conf       (autolearn)
-	DisabledPath      string  // mitm-filter-disabled.txt       (webui uncheck, #809)
-	FortknoxSites    []string // filters.json fortknox_sites
-	SelfDomains      []string // _SELF_REGS (default {secubox.in}, env SECUBOX_SELF_DOMAINS)
+	BypassSeedPath        string   // conf/mitm-bypass-seed.conf     (package)
+	BypassStaticPath      string   // mitm-bypass.conf               (operator/webui)
+	BypassDynamicPath     string   // mitm-bypass-dynamic.conf       (autolearn)
+	DisabledPath          string   // mitm-filter-disabled.txt       (webui uncheck, #809)
+	SpliceFederatedPath   string   // mitm-exclusion-fed-splice.txt   (#806 mesh union)
+	BypassFederatedPath   string   // mitm-exclusion-fed-bypass.txt   (#806)
+	DisabledFederatedPath string   // mitm-exclusion-fed-disabled.txt (#806)
+	FortknoxSites         []string // filters.json fortknox_sites
+	SelfDomains           []string // _SELF_REGS (default {secubox.in}, env SECUBOX_SELF_DOMAINS)
 }
 
 // defaultPolicyOpts returns the production defaults, honoring the same env vars
 // the Python addons read.
 func defaultPolicyOpts() PolicyOpts {
 	o := PolicyOpts{
-		AllowPath:        "/var/lib/secubox/toolbox/ad-allowlist.txt",
-		LearnedPath:      "/var/lib/secubox/toolbox/learned-trackers.txt",
-		SpliceSeedPath:   envOr("SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"),
-		SpliceLearnPath:  envOr("SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"),
-		PureTrackersPath: envOr("SECUBOX_PURE_TRACKERS", "/var/lib/secubox/toolbox/pure-trackers.txt"),
-		BypassSeedPath:    envOr("SECUBOX_BYPASS_SEED", "/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf"),
-		BypassStaticPath:  envOr("SECUBOX_BYPASS_STATIC", "/var/lib/secubox/toolbox/mitm-bypass.conf"),
-		BypassDynamicPath: envOr("SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"),
-		DisabledPath:      envOr("SECUBOX_FILTER_DISABLED", "/var/lib/secubox/toolbox/mitm-filter-disabled.txt"),
+		AllowPath:             "/var/lib/secubox/toolbox/ad-allowlist.txt",
+		LearnedPath:           "/var/lib/secubox/toolbox/learned-trackers.txt",
+		SpliceSeedPath:        envOr("SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"),
+		SpliceLearnPath:       envOr("SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"),
+		PureTrackersPath:      envOr("SECUBOX_PURE_TRACKERS", "/var/lib/secubox/toolbox/pure-trackers.txt"),
+		BypassSeedPath:        envOr("SECUBOX_BYPASS_SEED", "/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf"),
+		BypassStaticPath:      envOr("SECUBOX_BYPASS_STATIC", "/var/lib/secubox/toolbox/mitm-bypass.conf"),
+		BypassDynamicPath:     envOr("SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"),
+		DisabledPath:          envOr("SECUBOX_FILTER_DISABLED", "/var/lib/secubox/toolbox/mitm-filter-disabled.txt"),
+		SpliceFederatedPath:   envOr("SECUBOX_FED_SPLICE", "/var/lib/secubox/toolbox/mitm-exclusion-fed-splice.txt"),
+		BypassFederatedPath:   envOr("SECUBOX_FED_BYPASS", "/var/lib/secubox/toolbox/mitm-exclusion-fed-bypass.txt"),
+		DisabledFederatedPath: envOr("SECUBOX_FED_DISABLED", "/var/lib/secubox/toolbox/mitm-exclusion-fed-disabled.txt"),
 	}
 	// _SELF_REGS: env SECUBOX_SELF_DOMAINS (comma-split), default {secubox.in}.
 	self := os.Getenv("SECUBOX_SELF_DOMAINS")
@@ -127,7 +133,14 @@ type Policy struct {
 	// #809 — operator-disabled filter patterns (Filtres MITM webui): an entry
 	// whose SOURCE pattern is in this set is suppressed in BOTH the bypass and
 	// splice paths, so unchecking it in the webui has real engine effect.
-	disabled    map[string]bool
+	// #809/#806 — effective disabled = local ∪ federated. Kept split so either
+	// source hot-reloads independently; disabled is the recomputed union.
+	disabledLocal map[string]bool
+	disabledFed   map[string]bool
+	disabled      map[string]bool
+	// #806 — federated (mesh-union) sources, read as ADDITIONAL inputs.
+	spliceFed   map[string]bool
+	bypassFedRe []bypassEntry
 	never       map[string]bool // pure-trackers ∪ fortknox (splice never-set)
 	selfRegs    map[string]bool // own-infra registrable domains
 	selfDomains []string        // own-infra (for the host==d || host endswith .d guard)
@@ -151,10 +164,10 @@ type Policy struct {
 	// the first batch completes. Parity tests confirm Decide semantics are
 	// identical.
 	watcher        *reload.Watcher
-	fortknoxSites  []string       // kept for rebuilding the never-set on pure-trackers reload
-	reloadMu       sync.Mutex     // guards lastReloadID (throttle bookkeeping)
-	lastReloadID   int64          // unix-nano of the last throttle pass (0 = never)
-	reloadThrottle time.Duration  // min interval between stat passes (0 in tests = eager)
+	fortknoxSites  []string      // kept for rebuilding the never-set on pure-trackers reload
+	reloadMu       sync.Mutex    // guards lastReloadID (throttle bookkeeping)
+	lastReloadID   int64         // unix-nano of the last throttle pass (0 = never)
+	reloadThrottle time.Duration // min interval between stat passes (0 in tests = eager)
 
 	// Legacy PoC fields kept so non-policy behaviour is unchanged.
 	Inject []byte // banner / ad-CSS marker injected before </head> or </body>
@@ -164,6 +177,18 @@ type Policy struct {
 // (autolearn runs hourly; a promotion is rare) is observed within ~15s, and the
 // hot path stats at most ~4×/minute regardless of request rate.
 const defaultReloadThrottle = 15 * time.Second
+
+// mergeSets returns the union of two string-sets (nil-safe).
+func mergeSets(a, b map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(a)+len(b))
+	for k := range a {
+		out[k] = true
+	}
+	for k := range b {
+		out[k] = true
+	}
+	return out
+}
 
 // LoadPolicy loads all backing files from opts (defaults applied for empty
 // fields) and compiles the ad-host regex. It never returns an error for missing
@@ -200,6 +225,15 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 	if opts.DisabledPath == "" {
 		opts.DisabledPath = def.DisabledPath
 	}
+	if opts.SpliceFederatedPath == "" {
+		opts.SpliceFederatedPath = def.SpliceFederatedPath
+	}
+	if opts.BypassFederatedPath == "" {
+		opts.BypassFederatedPath = def.BypassFederatedPath
+	}
+	if opts.DisabledFederatedPath == "" {
+		opts.DisabledFederatedPath = def.DisabledFederatedPath
+	}
 
 	re, err := regexp.Compile(adHostPattern)
 	if err != nil {
@@ -234,13 +268,17 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 		bypassSeedRe:   loadBypassRegex(opts.BypassSeedPath),
 		bypassStaticRe: loadBypassRegex(opts.BypassStaticPath),
 		bypassDynRe:    loadBypassRegex(opts.BypassDynamicPath),
-		disabled:       reload.LoadLines(opts.DisabledPath, true),
+		disabledLocal:  reload.LoadLines(opts.DisabledPath, true),
+		disabledFed:    reload.LoadLines(opts.DisabledFederatedPath, true),
+		spliceFed:      reload.LoadLines(opts.SpliceFederatedPath, true),
+		bypassFedRe:    loadBypassRegex(opts.BypassFederatedPath),
 		never:          never,
 		selfRegs:       selfRegs,
 		selfDomains:    selfDomains,
 		fortknoxSites:  append([]string(nil), opts.FortknoxSites...),
 		reloadThrottle: defaultReloadThrottle,
 	}
+	p.disabled = mergeSets(p.disabledLocal, p.disabledFed)
 
 	// ── register the live-reloadable backing files (#662 auto-learn loop) ─────
 	//
@@ -345,9 +383,33 @@ func LoadPolicy(opts PolicyOpts) (*Policy, error) {
 			Load:      func(path string) any { return reload.LoadLines(path, true) },
 			Apply: func(v any) {
 				p.mu.Lock()
-				p.disabled = v.(map[string]bool)
+				p.disabledLocal = v.(map[string]bool)
+				p.disabled = mergeSets(p.disabledLocal, p.disabledFed)
 				p.mu.Unlock()
 			},
+		},
+		{
+			Path:      opts.DisabledFederatedPath,
+			LastMtime: reload.StatMtime(opts.DisabledFederatedPath),
+			Load:      func(path string) any { return reload.LoadLines(path, true) },
+			Apply: func(v any) {
+				p.mu.Lock()
+				p.disabledFed = v.(map[string]bool)
+				p.disabled = mergeSets(p.disabledLocal, p.disabledFed)
+				p.mu.Unlock()
+			},
+		},
+		{
+			Path:      opts.SpliceFederatedPath,
+			LastMtime: reload.StatMtime(opts.SpliceFederatedPath),
+			Load:      func(path string) any { return reload.LoadLines(path, true) },
+			Apply:     func(v any) { p.mu.Lock(); p.spliceFed = v.(map[string]bool); p.mu.Unlock() },
+		},
+		{
+			Path:      opts.BypassFederatedPath,
+			LastMtime: reload.StatMtime(opts.BypassFederatedPath),
+			Load:      func(path string) any { return loadBypassRegex(path) },
+			Apply:     func(v any) { p.mu.Lock(); p.bypassFedRe = v.([]bypassEntry); p.mu.Unlock() },
 		},
 	}
 	// The Watcher is created with throttle=0: the Policy-level reloadThrottle
@@ -494,7 +556,8 @@ func (p *Policy) shouldSplice(sni string) bool {
 	}
 	// #809 — a splice suffix the operator disabled in the webui must NOT match.
 	return hostMatchesEnabled(s, p.spliceSeed, p.disabled) ||
-		hostMatchesEnabled(s, p.spliceLearn, p.disabled)
+		hostMatchesEnabled(s, p.spliceLearn, p.disabled) ||
+		hostMatchesEnabled(s, p.spliceFed, p.disabled)
 }
 
 // bypassEntry keeps the SOURCE pattern next to its compiled regex so a #809
@@ -512,7 +575,7 @@ func (p *Policy) matchesBypass(host string) bool {
 	if host == "" {
 		return false
 	}
-	for _, group := range [][]bypassEntry{p.bypassSeedRe, p.bypassStaticRe, p.bypassDynRe} {
+	for _, group := range [][]bypassEntry{p.bypassSeedRe, p.bypassStaticRe, p.bypassDynRe, p.bypassFedRe} {
 		for _, e := range group {
 			if p.disabled[e.pat] {
 				continue

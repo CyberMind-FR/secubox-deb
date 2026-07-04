@@ -108,12 +108,12 @@ func TestPolicyActionVerbs(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := map[string]string{
-		"ads.doubleclick.net":          "block",
-		"r1.googlevideo.com":           "splice",
-		"news.example.com":             "mitm",
-		"notdoubleclick.net":           "mitm",
+		"ads.doubleclick.net":           "block",
+		"r1.googlevideo.com":            "splice",
+		"news.example.com":              "mitm",
+		"notdoubleclick.net":            "mitm",
 		"analytics.example-allowed.com": "mitm", // allow → normal interception (mitm verb)
-		"hub.secubox.in":               "mitm", // own-infra → normal interception
+		"hub.secubox.in":                "mitm", // own-infra → normal interception
 	}
 	for host, want := range cases {
 		if got := pol.action(host); got != want {
@@ -125,14 +125,14 @@ func TestPolicyActionVerbs(t *testing.T) {
 // TestRegistrable exercises the _registrable port incl. the 2-level TLD list.
 func TestRegistrable(t *testing.T) {
 	cases := map[string]string{
-		"a.b.example.com":    "example.com",
-		"example.com":        "example.com",
-		"com":                "com",
-		"a.b.example.co.uk":  "example.co.uk",
-		"example.co.uk":      "example.co.uk", // 2 labels → returned as-is
-		"x.y.z.example.com":  "example.com",
-		"1.2.3.4":            "",
-		"":                   "",
+		"a.b.example.com":   "example.com",
+		"example.com":       "example.com",
+		"com":               "com",
+		"a.b.example.co.uk": "example.co.uk",
+		"example.co.uk":     "example.co.uk", // 2 labels → returned as-is
+		"x.y.z.example.com": "example.com",
+		"1.2.3.4":           "",
+		"":                  "",
 	}
 	for in, want := range cases {
 		if got := registrable(in); got != want {
@@ -169,9 +169,9 @@ func TestBypassRegexSplices(t *testing.T) {
 	for _, c := range []struct{ host, want string }{
 		{"signal.org", "splice"},
 		{"chat.signal.org", "splice"},
-		{"ca-toulouse.fr", "splice"},   // regex-wildcard bank now covered
-		{"adform.net", "block"},        // ad net in bypass → ad-block WINS (regression guard)
-		{"evilsignal.org", "mitm"},     // anchored → no substring over-match
+		{"ca-toulouse.fr", "splice"}, // regex-wildcard bank now covered
+		{"adform.net", "block"},      // ad net in bypass → ad-block WINS (regression guard)
+		{"evilsignal.org", "mitm"},   // anchored → no substring over-match
 		{"example.com", "mitm"},
 	} {
 		if got := pol.Decide(c.host, c.host); got != c.want {
@@ -224,5 +224,56 @@ func TestDisabledSuppressesMatch(t *testing.T) {
 		if got := polOff.Decide(c.host, c.host); got != c.offWant {
 			t.Errorf("disabled Decide(%q)=%q want %q", c.host, got, c.offWant)
 		}
+	}
+}
+
+// #806 — federated exclusion sources: fed-splice/fed-bypass splice; fed-disabled
+// unions with local disabled to suppress a match.
+func TestFederatedSources(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	empty := write("empty", "")
+	fedSplice := write("fed-splice.txt", "api.anthropic.com\n")
+	fedBypass := write("fed-bypass.txt", "(.+\\.)?whatsapp\\.net\n")
+	fedDisabled := write("fed-disabled.txt", "api.anthropic.com\n") // will re-suppress below
+
+	pol, err := LoadPolicy(PolicyOpts{
+		AllowPath: empty, LearnedPath: empty, SpliceSeedPath: empty,
+		SpliceLearnPath: empty, PureTrackersPath: empty,
+		BypassSeedPath: empty, BypassStaticPath: empty, BypassDynamicPath: empty,
+		SpliceFederatedPath: fedSplice, BypassFederatedPath: fedBypass,
+		DisabledPath: empty, DisabledFederatedPath: empty,
+		SelfDomains: []string{"secubox.in"},
+	})
+	if err != nil {
+		t.Fatalf("LoadPolicy: %v", err)
+	}
+	for _, c := range []struct{ host, want string }{
+		{"api.anthropic.com", "splice"}, // fed-splice source
+		{"chat.whatsapp.net", "splice"}, // fed-bypass regex
+		{"example.com", "mitm"},
+	} {
+		if got := pol.Decide(c.host, c.host); got != c.want {
+			t.Errorf("Decide(%q)=%q want %q", c.host, got, c.want)
+		}
+	}
+
+	// fed-disabled unions with local disabled → fed-splice entry suppressed.
+	pol2, _ := LoadPolicy(PolicyOpts{
+		AllowPath: empty, LearnedPath: empty, SpliceSeedPath: empty,
+		SpliceLearnPath: empty, PureTrackersPath: empty,
+		BypassSeedPath: empty, BypassStaticPath: empty, BypassDynamicPath: empty,
+		SpliceFederatedPath: fedSplice, BypassFederatedPath: empty,
+		DisabledPath: empty, DisabledFederatedPath: fedDisabled,
+		SelfDomains: []string{"secubox.in"},
+	})
+	if got := pol2.Decide("api.anthropic.com", "api.anthropic.com"); got != "mitm" {
+		t.Errorf("fed-disabled: Decide(api.anthropic.com)=%q want mitm", got)
 	}
 }
