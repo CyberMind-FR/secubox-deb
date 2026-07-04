@@ -1,3 +1,15 @@
+secubox-dpi (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * #812 Media Buffer — DPI side. Phase 1: media-buffer list/replay/thumb API
+    (admin/owner-gated, audited, 410-on-evict, hex-id + realpath traversal-safe,
+    all plain def) + a Media gallery tab in the dashboard (escaped fields, sbx_token,
+    expired greying). Phase 2 (HLS): manifest replay rewrites captured segment URIs to
+    their replay URLs (read-time URL join); master/ABR + AES-encrypted playlists detected
+    and served raw as unsupported-variant; segments hidden from the gallery. Truncation
+    of oversized manifests/segment-indexes is logged.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 04 Jul 2026 16:30:00 +0000
+
 secubox-dpi (1.1.4-1~bookworm1) bookworm; urgency=low
 
   * #720 Phase 3 — per-device DAILY history buckets (collector history.json, 14d)

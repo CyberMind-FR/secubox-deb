@@ -528,3 +528,60 @@ func TestDownloadTeeSkips206(t *testing.T) {
 		t.Fatalf("expected 200 download captured with mac_hash=mac200, got %v", m)
 	}
 }
+
+// TestSegmentClassification is the Phase 2 (#812) unit test for segmentKind:
+// HLS transport-stream (.ts) and fMP4/DASH (.m4s) chunks — by extension OR by
+// a segment-shaped Content-Type (video/mp2t) — must classify as a segment,
+// while whole-file video (.mp4) and manifests (.m3u8) must NOT, and an
+// ambiguous Content-Type (application/octet-stream) with a non-segment path
+// must not be guessed into a segment either.
+func TestSegmentClassification(t *testing.T) {
+	cases := []struct {
+		path, ctype string
+		want        bool
+	}{
+		{"/x.ts", "video/mp2t", true},
+		{"/x.m4s", "", true},
+		{"/v.mp4", "video/mp4", false},
+		{"/i.m3u8", "application/vnd.apple.mpegurl", false},
+		{"/x.ts", "", true},
+		{"/data", "application/octet-stream", false},
+	}
+	for _, c := range cases {
+		if got := segmentKind(c.path, c.ctype); got != c.want {
+			t.Errorf("segmentKind(%q,%q)=%v want %v", c.path, c.ctype, got, c.want)
+		}
+	}
+}
+
+// TestCaptureTagsSegmentKind is the Phase 2 (#812) Capture-level test: a
+// captured HLS segment (.ts served video/mp2t) must be tagged kind="segment"
+// in its metatag — NOT "video", which mediaKind's ctype-prefix rule would
+// otherwise assign — while a whole-file video download and an HLS manifest
+// keep their Phase 1 classifications unchanged.
+func TestCaptureTagsSegmentKind(t *testing.T) {
+	cases := []struct {
+		name, path, ctype, wantKind string
+	}{
+		{"segment", "/seg0.ts", "video/mp2t", "segment"},
+		{"video", "/movie.mp4", "video/mp4", "video"},
+		{"manifest", "/index.m3u8", "application/vnd.apple.mpegurl", "manifest"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			b := NewMediaBuffer(root, true, 512<<20)
+			w := b.Capture("mac1", "cdn.example", "https://cdn.example"+c.path, c.path, c.ctype, "down", 16)
+			if w == nil {
+				t.Fatalf("Capture returned nil for %s (%s)", c.path, c.ctype)
+			}
+			w.Write([]byte("0123456789ABCDEF"))
+			w.Close(16)
+
+			m := lastJSONL(t, filepath.Join(root, "media-buffer.jsonl"))
+			if m["kind"] != c.wantKind {
+				t.Errorf("kind=%v want %q", m["kind"], c.wantKind)
+			}
+		})
+	}
+}
