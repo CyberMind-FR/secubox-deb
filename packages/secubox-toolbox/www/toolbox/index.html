@@ -186,6 +186,10 @@
                 <div id="ads-hosts"><div class="empty">loading…</div></div>
             </div>
             <div class="card" style="grid-column:1/-1">
+                <h2>🔎 Trackers/pubs détectés <span style="font-size:.72rem;opacity:.6">(candidats — observés, pas encore promus au blocage)</span></h2>
+                <div id="ads-candidates"><div class="empty">loading…</div></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
                 <h2>🌐 Top sites visités</h2>
                 <div id="ads-sites"><div class="empty">loading…</div></div>
             </div>
@@ -640,6 +644,11 @@ async function loadAds() {
     document.getElementById('ads-sites').innerHTML = siteRows
       ? '<table><thead><tr><th>Site</th><th>trackers/pubs bloqués</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
       : '';
+    // #802 — detected candidates (observed, awaiting promotion to active blocking)
+    const candRows = (d.top_candidates||[]).slice(0, 15).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td></tr>`).join('');
+    document.getElementById('ads-candidates').innerHTML = candRows
+      ? `<div style="font-size:.78rem;opacity:.7;margin-bottom:.4rem">${d.total_candidates||0} hôtes détectés dans la fenêtre</div><table><thead><tr><th>Hôte détecté</th><th>observations</th></tr></thead><tbody>${candRows}</tbody></table>`
+      : '<div class="empty">aucun tracker/pub détecté dans la fenêtre</div>';
     const visRows = (d.top_visitors||[]).slice(0, 5).map(r=>{
         const mh = esc(r.mac_hash);
         return `<tr><td><a href="#" onclick="loadAdsClient('${mh}');return false;"><code>${mh}</code></a></td><td>${r.hits}</td></tr>`;
