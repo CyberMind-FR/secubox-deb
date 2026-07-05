@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
 """
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sqlite3
 import time
@@ -45,7 +47,6 @@ _BEST_VALUE_COLUMNS = (
     "allow_state",
     "quarantined",
     "parental_profile",
-    "first_seen",
     "tags",
     "notes",
     "group_id",
@@ -57,7 +58,14 @@ _BEST_VALUE_COLUMNS = (
 
 _ALWAYS_SET_COLUMNS = ("ip", "last_seen", "source")
 
-_ALL_UPSERT_COLUMNS = _BEST_VALUE_COLUMNS + _ALWAYS_SET_COLUMNS
+# `first_seen` is set-once: the FIRST value ever recorded wins, so it is
+# handled separately from the generic best-value columns (which let a
+# later non-null incoming value win). Here the *existing* stored value
+# wins whenever a row already exists; the incoming value is only used to
+# seed a brand-new row.
+_FIRST_SEEN_COLUMN = "first_seen"
+
+_ALL_UPSERT_COLUMNS = _BEST_VALUE_COLUMNS + _ALWAYS_SET_COLUMNS + (_FIRST_SEEN_COLUMN,)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS devices(
@@ -122,6 +130,9 @@ class DeviceStore:
         data. `ip`/`last_seen`/`source` are always overwritten with the
         incoming value (or kept if the incoming value is falsy/None, via
         COALESCE too, since a sighting always carries at least last_seen/ip).
+        `first_seen` is set-once: the existing stored value always wins over
+        the incoming one, so it can never be pushed forward (or backward) by
+        a later sighting — it only gets set on first insert.
         """
         mac = dev.get("mac")
         if not mac:
@@ -137,6 +148,9 @@ class DeviceStore:
             set_clauses.append(f"{c} = COALESCE(excluded.{c}, devices.{c})")
         for c in _ALWAYS_SET_COLUMNS:
             set_clauses.append(f"{c} = COALESCE(excluded.{c}, devices.{c})")
+        set_clauses.append(
+            f"{_FIRST_SEEN_COLUMN} = COALESCE(devices.{_FIRST_SEEN_COLUMN}, excluded.{_FIRST_SEEN_COLUMN})"
+        )
         set_sql = ", ".join(set_clauses)
 
         sql = (
@@ -273,7 +287,12 @@ def _migrate_deviceintel(store: DeviceStore, path: str) -> int:
 def _migrate_iotguard(store: DeviceStore, path: str) -> int:
     """iot-guard SQLite `devices` table: `mac_address` (lowercase),
     `ip`, `hostname`, `device_type`, `risk_score`."""
-    conn = sqlite3.connect(path)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"iot-guard db not found: {path}")
+    # Open read-only: sqlite3.connect() on a plain path creates an empty
+    # file if it doesn't exist, and we must never leave stray junk on
+    # disk when iot-guard was never installed on this board.
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(devices)").fetchall()}
