@@ -340,7 +340,14 @@
             const clients = await api('/clients');
             const tbody = document.getElementById('clientsTable');
             if (clients.clients && clients.clients.length > 0) {
-                tbody.innerHTML = clients.clients.map(c => {
+                // Sort: online/alive devices first, then most-recently-detected
+                // (last_seen desc) at the top of each group.
+                const rows = clients.clients.slice().sort((a, b) => {
+                    const ao = a.online ? 1 : 0, bo = b.online ? 1 : 0;
+                    if (ao !== bo) return bo - ao;                 // alive first
+                    return (b.last_seen || 0) - (a.last_seen || 0); // newest detected first
+                });
+                tbody.innerHTML = rows.map(c => {
                     const statusEmoji = c.status === 'online' ? '🟢' : c.status === 'offline' ? '🔴' : c.status === 'quarantine' ? '🟠' : '⚪';
                     const statusLabel = c.status === 'online' ? 'Online' : c.status === 'offline' ? 'Offline' : c.status === 'quarantine' ? 'Quarantine' : c.status;
                     const vendor = c.oui_vendor ? `<br><span style="color:var(--text-dim);font-size:.85em">${esc(c.oui_vendor)}</span>` : '';
