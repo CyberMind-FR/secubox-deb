@@ -550,9 +550,9 @@ detector = AnomalyDetector(DATA_DIR)
 # API Endpoints
 # ============================================================================
 
-@app.get("/status")
+@app.get("/status", dependencies=[Depends(require_jwt)])
 async def status():
-    """Public status endpoint."""
+    """Status endpoint (ref #817: was public, now JWT-gated like every other data route)."""
     stats = detector.get_stats()
     return {
         "module": "network-anomaly",
