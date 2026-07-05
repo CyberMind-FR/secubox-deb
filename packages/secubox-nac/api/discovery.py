@@ -33,8 +33,10 @@ DEFAULT_DNSMASQ_LEASES = "/var/lib/misc/dnsmasq.leases"
 DEFAULT_ISC_LEASES = "/var/lib/dhcp/dhcpd.leases"
 
 # Interfaces to scan for ARP entries (LAN interfaces only) — lifted
-# verbatim from secubox-nac's `api/main.py` `_parse_arp`.
-LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "eth0", "eth1"}
+# from secubox-nac's `api/main.py` `_parse_arp`. `eth2` added because on the
+# reference board the LAN (192.168.1.0/24) rides eth2 (the previous set omitted
+# it, so ARP discovery found nothing and every device stayed a stale import).
+LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "eth0", "eth1", "eth2"}
 
 # Confidence ranking used to decide which source's data wins a merge:
 # a lease-backed sighting (dnsmasq, then isc) always beats a bare ARP
