@@ -54,13 +54,20 @@ def load_oui(path: str = "/usr/share/ieee-data/oui.txt") -> dict:
     return oui
 
 
-def oui_vendor(mac: str, oui_map: dict) -> str:
-    """Look up the vendor for `mac`'s first-3-octet prefix in `oui_map`."""
+def oui_vendor(mac: str, oui_map: dict) -> str | None:
+    """Look up the vendor for `mac`'s first-3-octet prefix in `oui_map`.
+
+    #817 whole-branch fix (I4): returns `None` on a miss (bad MAC or
+    unknown prefix), NOT the sentinel string "Unknown". A non-null
+    "Unknown" would overwrite a real, previously-migrated vendor through
+    `upsert`'s best-value COALESCE merge; `None` lets the stored value
+    survive (and callers omit the field entirely when it is None).
+    """
     mac = canon_mac(mac)
     if not mac:
-        return "Unknown"
+        return None
     prefix = ":".join(mac.split(":")[:3])
-    return oui_map.get(prefix, "Unknown")
+    return oui_map.get(prefix)
 
 
 # --- Device-type classification + risk scoring (from secubox-iot-guard) ---

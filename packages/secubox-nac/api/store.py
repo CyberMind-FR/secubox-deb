@@ -23,6 +23,7 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 import time
 
 logger = logging.getLogger("secubox.nac.store")
@@ -111,6 +112,15 @@ class DeviceStore:
 
     def __init__(self, db_path: str):
         self.db_path = db_path
+        # #817 whole-branch fix (I1): the single shared connection
+        # (`check_same_thread=False`) is now written by the collector's
+        # executor thread AND FastAPI's threadpooled `def` handlers AND
+        # read by handlers — concurrent execute/commit across threads on
+        # one sqlite3 connection is unsafe. WAL is on, but this lock
+        # serializes every SQL method so no two threads touch the
+        # connection at once. Held for the whole execute+commit of each
+        # method; all public methods below acquire it.
+        self._lock = threading.Lock()
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -118,7 +128,8 @@ class DeviceStore:
         self._conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     @staticmethod
     def _row_to_dict(row: sqlite3.Row | None) -> dict | None:
@@ -142,32 +153,49 @@ class DeviceStore:
         if not mac:
             raise ValueError("upsert requires a canon 'mac' key")
 
-        cols = ["mac"] + list(_ALL_UPSERT_COLUMNS)
-        values = [mac] + [dev.get(c) for c in _ALL_UPSERT_COLUMNS]
+        # #817 whole-branch fix (I4): build the INSERT column list from the
+        # keys ACTUALLY present in the incoming dict (plus `mac`), never the
+        # full column set. Binding an explicit NULL for an absent column
+        # defeats the SQL DEFAULT (so a brand-new device with no
+        # `device_type` used to land as NULL instead of DEFAULT 'unknown'
+        # / 50). Omitting the column lets the DEFAULT apply on INSERT, and
+        # leaves the stored value untouched on UPDATE.
+        present = [c for c in _ALL_UPSERT_COLUMNS if c in dev]
+
+        cols = ["mac"] + present
+        values = [mac] + [dev.get(c) for c in present]
         placeholders = ", ".join("?" for _ in cols)
         col_list = ", ".join(cols)
 
         set_clauses = []
-        for c in _BEST_VALUE_COLUMNS:
-            set_clauses.append(f"{c} = COALESCE(excluded.{c}, devices.{c})")
-        for c in _ALWAYS_SET_COLUMNS:
-            set_clauses.append(f"{c} = COALESCE(excluded.{c}, devices.{c})")
-        set_clauses.append(
-            f"{_FIRST_SEEN_COLUMN} = COALESCE(devices.{_FIRST_SEEN_COLUMN}, excluded.{_FIRST_SEEN_COLUMN})"
-        )
-        set_sql = ", ".join(set_clauses)
+        for c in present:
+            if c == _FIRST_SEEN_COLUMN:
+                # set-once: the existing stored value always wins.
+                set_clauses.append(f"{c} = COALESCE(devices.{c}, excluded.{c})")
+            else:
+                # best-value / always-set: a later non-null value wins, but
+                # a NULL never wipes a previously stored non-null value.
+                set_clauses.append(f"{c} = COALESCE(excluded.{c}, devices.{c})")
+
+        if set_clauses:
+            conflict_sql = f"ON CONFLICT(mac) DO UPDATE SET {', '.join(set_clauses)}"
+        else:
+            # Only `mac` was supplied — nothing to merge on an existing row.
+            conflict_sql = "ON CONFLICT(mac) DO NOTHING"
 
         sql = (
             f"INSERT INTO devices ({col_list}) VALUES ({placeholders}) "
-            f"ON CONFLICT(mac) DO UPDATE SET {set_sql}"
+            f"{conflict_sql}"
         )
-        self._conn.execute(sql, values)
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(sql, values)
+            self._conn.commit()
 
     def get(self, mac: str) -> dict | None:
-        row = self._conn.execute(
-            "SELECT * FROM devices WHERE mac = ?", (mac,)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM devices WHERE mac = ?", (mac,)
+            ).fetchone()
         return self._row_to_dict(row)
 
     def list(self, *, zone=None, device_type=None, risk_min=None, limit=1000) -> list:
@@ -188,31 +216,35 @@ class DeviceStore:
             f"SELECT * FROM devices {where} "
             f"ORDER BY last_seen DESC LIMIT ?"
         )
-        rows = self._conn.execute(sql, params).fetchall()
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
     def count(self) -> int:
-        row = self._conn.execute("SELECT COUNT(*) AS n FROM devices").fetchone()
+        with self._lock:
+            row = self._conn.execute("SELECT COUNT(*) AS n FROM devices").fetchone()
         return int(row["n"])
 
     def record_event(self, mac: str, event: str, detail: str = "") -> None:
-        self._conn.execute(
-            "INSERT INTO device_history (mac, ts, event, detail) VALUES (?, ?, ?, ?)",
-            (mac, int(time.time()), event, detail),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO device_history (mac, ts, event, detail) VALUES (?, ?, ?, ?)",
+                (mac, int(time.time()), event, detail),
+            )
+            self._conn.commit()
 
     def history(self, mac: str | None = None, limit: int = 200) -> list:
-        if mac is not None:
-            rows = self._conn.execute(
-                "SELECT * FROM device_history WHERE mac = ? ORDER BY ts DESC LIMIT ?",
-                (mac, limit),
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT * FROM device_history ORDER BY ts DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+        with self._lock:
+            if mac is not None:
+                rows = self._conn.execute(
+                    "SELECT * FROM device_history WHERE mac = ? ORDER BY ts DESC LIMIT ?",
+                    (mac, limit),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM device_history ORDER BY ts DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
         return [dict(r) for r in rows]
 
     # --- Device groups (#817 Task 6 — device-intel `/groups*` absorption) ---
@@ -223,15 +255,17 @@ class DeviceStore:
     # consolidation plan. `device_groups` holds only group metadata.
 
     def list_groups(self) -> list:
-        rows = self._conn.execute(
-            "SELECT * FROM device_groups ORDER BY created_at"
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM device_groups ORDER BY created_at"
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def get_group(self, group_id: str) -> dict | None:
-        row = self._conn.execute(
-            "SELECT * FROM device_groups WHERE id = ?", (group_id,)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM device_groups WHERE id = ?", (group_id,)
+            ).fetchone()
         return self._row_to_dict(row)
 
     def create_group(
@@ -239,35 +273,39 @@ class DeviceStore:
         color: str = "#3498db", icon: str = "devices",
     ) -> dict:
         now = _iso_now()
-        self._conn.execute(
-            "INSERT INTO device_groups (id, name, description, color, icon, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (group_id, name, description, color, icon, now, now),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO device_groups (id, name, description, color, icon, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (group_id, name, description, color, icon, now, now),
+            )
+            self._conn.commit()
         return {
             "id": group_id, "name": name, "description": description,
             "color": color, "icon": icon, "created_at": now, "updated_at": now,
         }
 
     def delete_group(self, group_id: str) -> None:
-        self._conn.execute("DELETE FROM device_groups WHERE id = ?", (group_id,))
-        self._conn.execute(
-            "UPDATE devices SET group_id = NULL WHERE group_id = ?", (group_id,)
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute("DELETE FROM device_groups WHERE id = ?", (group_id,))
+            self._conn.execute(
+                "UPDATE devices SET group_id = NULL WHERE group_id = ?", (group_id,)
+            )
+            self._conn.commit()
 
     def assign_group(self, mac: str, group_id: str | None) -> None:
         """Assign (or clear, if `group_id` is None) the group for `mac`."""
-        self._conn.execute(
-            "UPDATE devices SET group_id = ? WHERE mac = ?", (group_id, mac)
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "UPDATE devices SET group_id = ? WHERE mac = ?", (group_id, mac)
+            )
+            self._conn.commit()
 
     def group_members(self, group_id: str) -> list:
-        rows = self._conn.execute(
-            "SELECT * FROM devices WHERE group_id = ?", (group_id,)
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM devices WHERE group_id = ?", (group_id,)
+            ).fetchall()
         return [dict(r) for r in rows]
 
 

@@ -60,6 +60,60 @@ def test_first_seen_preserved(tmp_path):
     assert d["source"] == "dnsmasq"
 
 
+def test_insert_omitted_column_uses_sql_default(tmp_path):
+    """#817 whole-branch fix (I4): a brand-new device inserted WITHOUT a
+    `device_type` must read back the SQL DEFAULT ('unknown'/50), not NULL —
+    upsert must not bind None for columns absent from the incoming dict."""
+    from api.store import DeviceStore
+    s = DeviceStore(str(tmp_path / "d.db"))
+    s.upsert({"mac": "aa:bb:cc:00:00:50", "ip": "10.0.0.50", "last_seen": 1, "source": "arp"})
+    d = s.get("aa:bb:cc:00:00:50")
+    assert d["device_type"] == "unknown"  # DEFAULT applied, not NULL
+    assert d["risk_score"] == 50          # DEFAULT applied, not NULL
+    assert d["allow_state"] == "unknown"  # DEFAULT applied, not NULL
+
+
+def test_omitted_field_preserves_migrated_value(tmp_path):
+    """#817 whole-branch fix (I4): a migrated device_type='phone' re-upserted
+    WITHOUT device_type (the field omitted) must keep 'phone' — the omit +
+    COALESCE-only-on-present-columns combination preserves it."""
+    from api.store import DeviceStore
+    s = DeviceStore(str(tmp_path / "d.db"))
+    s.upsert({"mac": "aa:bb:cc:00:00:51", "device_type": "phone", "last_seen": 1, "source": "mac-guard"})
+    # re-seen later with no device_type (opaque hostname -> enricher omits it)
+    s.upsert({"mac": "aa:bb:cc:00:00:51", "ip": "10.0.0.51", "last_seen": 2, "source": "arp"})
+    d = s.get("aa:bb:cc:00:00:51")
+    assert d["device_type"] == "phone"  # migrated value survives
+    assert d["ip"] == "10.0.0.51" and d["last_seen"] == 2
+
+
+def test_concurrent_upserts_are_thread_safe(tmp_path):
+    """#817 whole-branch fix (I1): the single shared sqlite3 connection is
+    written from the collector's executor thread AND threadpooled handlers.
+    Two threads hammering `upsert`/`record_event` concurrently must not
+    raise or corrupt — the DeviceStore lock serializes access."""
+    import threading
+    from api.store import DeviceStore
+    s = DeviceStore(str(tmp_path / "d.db"))
+    errors = []
+
+    def worker(base):
+        try:
+            for i in range(200):
+                mac = f"aa:bb:cc:{base:02x}:{(i >> 8) & 0xff:02x}:{i & 0xff:02x}"
+                s.upsert({"mac": mac, "ip": "10.0.0.1", "last_seen": i, "source": "arp"})
+                s.record_event(mac, "seen")
+        except Exception as exc:  # pragma: no cover - failure path
+            errors.append(exc)
+
+    t1 = threading.Thread(target=worker, args=(1,))
+    t2 = threading.Thread(target=worker, args=(2,))
+    t1.start(); t2.start(); t1.join(); t2.join()
+
+    assert not errors, f"concurrent upserts raised: {errors}"
+    assert s.count() == 400  # 200 distinct MACs per thread, no corruption/loss
+
+
 def test_migrate_skips_corrupt_sources(tmp_path):
     """A truncated/invalid-JSON legacy file, a non-SQLite garbage file, and
     a missing path must each be logged and skipped — migrate_legacy must

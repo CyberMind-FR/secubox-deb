@@ -176,6 +176,17 @@ collector: Optional[Collector] = None
 # captured in the Collector's closure) so `/vendors` can read it directly.
 oui_map: Optional[Dict[str, str]] = None
 
+# #817 whole-branch fix (C1): on the board, `/api/v1/nac` is served by the
+# AGGREGATOR in-process (nac is in aggregator.toml; its own service is
+# inactive). The aggregator does NOT run mounted sub-apps'
+# `@app.on_event("startup")`, so the store/collector/migration would never
+# init and the whole feature would be inert. These two flags let an
+# idempotent lazy initializer (`_do_init`) + an HTTP middleware bring the
+# feature up on the first request under EITHER mount (aggregator or nac's
+# own uvicorn), without double-initializing.
+_initialized: bool = False
+_collector_started: bool = False
+
 
 def _load_json(filepath: Path, default=None):
     """Load JSON file safely."""
@@ -455,6 +466,37 @@ def _get_client_zone(mac: str) -> str:
     return "quarantine"
 
 
+def _zone_map() -> Dict[str, str]:
+    """Build a `mac -> zone` dict by listing each of the 4 zone nft sets
+    ONCE (+ the JSON fallback read once), instead of the per-device
+    `_get_client_zone` (which lists every set for every device).
+
+    #817 whole-branch fix (I3): `status`/`clients`/`list_quarantine` iterate
+    the whole store (~280 devices on the merged board). Calling
+    `_get_client_zone(mac)` per device meant ~280×4 ≈ 1120 `nft list set`
+    subprocesses per request. This lists each set once (4 subprocesses)
+    and resolves every device's zone from the resulting dict.
+
+    Resolution order matches `_get_client_zone`: an nft-set membership wins
+    over the JSON fallback, and among nft sets the first zone in `ZONES`
+    order wins (so the map never disagrees with the per-device helper).
+    Devices absent from every set/assignment default to "quarantine" at
+    lookup time (`.get(mac, "quarantine")`).
+    """
+    nft_assigned: Dict[str, str] = {}
+    for zone_id, zone_info in ZONES.items():
+        for mac in _nft_list_set(zone_info["nft_set"]):
+            m = mac.lower()
+            if m not in nft_assigned:  # first zone in ZONES order wins
+                nft_assigned[m] = zone_id
+
+    mapping: Dict[str, str] = {}
+    for mac, zone in _load_zone_assignments().items():
+        mapping[mac.lower()] = zone
+    mapping.update(nft_assigned)  # nft wins over JSON fallback
+    return mapping
+
+
 def _set_client_zone(mac: str, zone: str):
     """Set client zone in both nft and JSON fallback."""
     mac_lower = mac.lower()
@@ -506,19 +548,22 @@ def _fire_webhook_sync(event: str, data: Dict[str, Any]) -> None:
         pass
 
 
-@app.on_event("startup")
-async def startup():
-    """Build the canonical device store + background collector (#817 Task 4).
+def _do_init() -> None:
+    """Idempotent, synchronous feature init (#817 whole-branch fix C1).
 
-    Replaces the old `_discover_clients()`-per-request pattern and the
-    `_monitor_clients()` task: one background `Collector.run_forever()`
-    loop now owns all discovery/enrich/upsert work, and handlers read
-    its double-cache (`collector.snapshot()`) or the SQLite store
-    instead of scanning inline on every request.
+    Builds the canonical device store, runs the one-shot legacy migration
+    (wrapped so a corrupt/missing source never aborts), loads the OUI map,
+    and constructs the background `Collector`. Guarded by `_initialized`
+    so it is a no-op after the first successful call — safe to invoke from
+    `startup()` (nac's own uvicorn) AND from the HTTP middleware (the
+    in-aggregator mount, whose `startup` event never fires). Does NOT
+    start the collector task: that needs the running loop and is done by
+    whichever entrypoint holds it (`startup`/middleware).
     """
-    global _monitoring_task, store, collector, _main_loop, oui_map
+    global store, collector, oui_map, _initialized
+    if _initialized:
+        return
 
-    _main_loop = asyncio.get_running_loop()
     store = DeviceStore(DEVICES_DB_PATH)
 
     try:
@@ -529,20 +574,65 @@ async def startup():
             iot_db=IOTGUARD_DEVICES_DB,
         )
         log.info(
-            "NAC startup: legacy migration imported=%d skipped=%d",
+            "NAC init: legacy migration imported=%d skipped=%d",
             migration.get("imported", 0), migration.get("skipped", 0),
         )
     except Exception:
         # Migration must never abort boot — a corrupt/missing legacy
         # source is logged and the collector still starts.
-        log.exception("NAC startup: legacy migration failed (non-fatal)")
+        log.exception("NAC init: legacy migration failed (non-fatal)")
 
     oui_map = load_oui()
     collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL)
     collector._emit = _fire_collector_webhook
 
-    log.info("NAC startup: device store at %s, %d device(s) known", DEVICES_DB_PATH, store.count())
+    _initialized = True
+    log.info("NAC init: device store at %s, %d device(s) known", DEVICES_DB_PATH, store.count())
+
+
+def _ensure_collector_started() -> None:
+    """Capture the running loop and start the collector task exactly once.
+
+    #817 whole-branch fix (C1): MUST be called from the loop thread (the
+    `startup` coroutine or the HTTP middleware) — `asyncio.get_running_loop`
+    and `asyncio.create_task` are invalid in the threadpool threads that
+    run the plain-`def` handlers. Guarded by `_collector_started`.
+    """
+    global _monitoring_task, _main_loop, _collector_started
+    if _collector_started or collector is None:
+        return
+    _main_loop = asyncio.get_running_loop()
     _monitoring_task = asyncio.create_task(collector.run_forever())
+    _collector_started = True
+
+
+@app.middleware("http")
+async def _lazy_init_middleware(request, call_next):
+    """Initialize the feature on the first request (#817 whole-branch C1).
+
+    Under the aggregator's in-process mount, `@app.on_event("startup")`
+    never fires, so without this the store/collector/migration would never
+    init and every handler would return empty. This middleware runs on the
+    loop thread, so it can both `_do_init()` (idempotent) and start the
+    collector task via `_ensure_collector_started()`. Under nac's own
+    uvicorn, `startup()` already did both and both are no-ops here.
+    """
+    if not _initialized:
+        _do_init()
+    _ensure_collector_started()
+    return await call_next(request)
+
+
+@app.on_event("startup")
+async def startup():
+    """Own-service path: init the feature + start the collector (#817 Task 4).
+
+    Delegates to the shared idempotent `_do_init()` / `_ensure_collector_started()`
+    so nac's own uvicorn and the in-aggregator mount take the exact same
+    code path (the latter via `_lazy_init_middleware`).
+    """
+    _do_init()
+    _ensure_collector_started()
 
 
 @app.on_event("shutdown")
@@ -591,10 +681,12 @@ def status(user=Depends(require_jwt)):
     except Exception:
         dnsmasq_ok = False
 
-    # Count by zone
+    # Count by zone — #817 whole-branch fix (I3): one batched `_zone_map()`
+    # (4 `nft list set` calls) instead of `_get_client_zone` per device.
+    zmap = _zone_map()
     by_zone: Dict[str, int] = {z: 0 for z in ZONES}
     for device in devices:
-        zone = _get_client_zone(device["mac"])
+        zone = zmap.get(device["mac"], "quarantine")
         by_zone[zone] = by_zone.get(zone, 0) + 1
 
     # Count online clients (present in the latest completed collector cycle)
@@ -646,11 +738,13 @@ def clients(
     devices = store.list(device_type=device_type, risk_min=risk_min, limit=5000) if store else []
     online_macs = {d["mac"] for d in (collector.snapshot() if collector else [])}
     meta = _load_clients_meta()
+    # #817 whole-branch fix (I3): batched zone lookup, once per request.
+    zmap = _zone_map()
     result = []
 
     for d in devices:
         mac = d["mac"]
-        zone = _get_client_zone(mac)
+        zone = zmap.get(mac, "quarantine")
         client_meta = meta.get(mac, {})
 
         is_online = mac in online_macs
@@ -1158,11 +1252,13 @@ def list_quarantine(user=Depends(require_jwt)):
     """
     devices = store.list(limit=5000) if store else []
     meta = _load_clients_meta()
+    # #817 whole-branch fix (I3): batched zone lookup, once per request.
+    zmap = _zone_map()
 
     clients = []
     for d in devices:
         mac = d["mac"]
-        zone = _get_client_zone(mac)
+        zone = zmap.get(mac, "quarantine")
         if zone == "quarantine":
             client_meta = meta.get(mac, {})
             clients.append({
@@ -1369,21 +1465,30 @@ def scan(subnet: str = DEFAULT_SCAN_SUBNET, user=Depends(require_jwt)):
             vendor = oui_vendor(mac, oui_map or {})
             device_type = classify_device_type(hostname, vendor)
             fp = openwrt_fingerprint(hostname, mac)
-            score, level = risk_score(device_type, fp["is_router"])
 
-            store.upsert({
+            # #817 whole-branch fix (I4): OMIT fields the enricher couldn't
+            # determine (None vendor, "unknown" device_type + its derived
+            # risk) so a re-scanned migrated device isn't clobbered by a
+            # sentinel through `upsert`'s best-value merge; a brand-new
+            # device still gets the column DEFAULT.
+            upsert_dev = {
                 "mac": mac,
                 "ip": d.get("ip"),
                 "hostname": hostname or None,
                 "last_seen": now,
                 "source": "scan",
-                "oui_vendor": vendor,
-                "device_type": device_type,
-                "risk_score": score,
-                "risk_level": level,
                 "is_router": int(fp["is_router"]),
                 "is_openwrt": int(fp["is_openwrt"]),
-            })
+            }
+            if vendor:
+                upsert_dev["oui_vendor"] = vendor
+            if device_type != "unknown":
+                score, level = risk_score(device_type, fp["is_router"])
+                upsert_dev["device_type"] = device_type
+                upsert_dev["risk_score"] = score
+                upsert_dev["risk_level"] = level
+
+            store.upsert(upsert_dev)
             merged += 1
 
     stats_cache.clear()
