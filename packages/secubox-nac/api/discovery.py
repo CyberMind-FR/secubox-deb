@@ -201,17 +201,27 @@ def discover(*, dnsmasq_leases=DEFAULT_DNSMASQ_LEASES, isc_leases=DEFAULT_ISC_LE
             merged[mac] = dict(s)
             continue
 
-        # Winning source: prefer higher confidence rank, but never let a
-        # higher-rank sighting with no hostname clobber an already-known
-        # hostname from a lower-rank sighting.
+        # Winning source: prefer higher confidence rank; on a tie, the
+        # later sighting wins (latest ISC lease block supersedes an
+        # earlier one for the same MAC). Never let a higher-rank
+        # sighting with no hostname clobber an already-known hostname
+        # from a lower-rank sighting.
         incoming_rank = _SOURCE_RANK.get(s["source"], 0)
         existing_rank = _SOURCE_RANK.get(existing["source"], 0)
 
         if s.get("hostname"):
             existing["hostname"] = s["hostname"]
-        if incoming_rank > existing_rank:
+        if incoming_rank >= existing_rank:
+            # Equal-rank sightings arrive in fixed dnsmasq -> isc -> arp
+            # order, so multiple same-rank sightings for one MAC are
+            # successive blocks of the *same* source (e.g. repeated ISC
+            # `dhcpd.leases` blocks emitted on every lease renewal). The
+            # latest one reflects the current IP and must win, mirroring
+            # secubox-device-intel's `_get_dhcp_leases` (`leases[mac] =
+            # {...}` — last block wins outright).
             existing["source"] = s["source"]
-            existing["ip"] = s.get("ip", existing.get("ip"))
+            if s.get("ip"):
+                existing["ip"] = s["ip"]
         elif not existing.get("ip"):
             existing["ip"] = s.get("ip")
 
