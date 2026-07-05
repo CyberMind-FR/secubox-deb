@@ -35,6 +35,7 @@ from .enrich import classify_device_type, load_oui, openwrt_fingerprint, oui_ven
 from .presence.geo import enrich_origin
 from .presence.kbin import collect_kbin
 from .presence.local import collect_local
+from .presence.reports import build_report
 from .presence.store import PresenceStore
 from .presence.wan import collect_wan
 from .store import DeviceStore, canon_mac, migrate_legacy
@@ -2043,6 +2044,23 @@ def presence_sync(user=Depends(require_jwt)):
 
     stats_cache.clear()
     return {"synced": synced}
+
+
+@router.post("/presence/report/now")
+def presence_report_now(fmt: str = "html", user=Depends(require_jwt)):
+    """Generate the cross-plane presence report on demand (Task 7).
+
+    Plain `def` (#808): `build_report` only reads from the already-open
+    `PresenceStore` (short indexed SQLite queries), so FastAPI's threadpool
+    is enough — nothing here runs on the shared aggregator loop. Guarded
+    like every other `/presence*` handler: `presence_store` is `None`
+    before first lazy-init, in which case `build_report(None, ...)` still
+    renders a valid "no presences" report rather than 500ing.
+    """
+    fmt_norm = "text" if fmt == "text" else "html"
+    body = build_report(presence_store, fmt=fmt_norm)
+    media_type = "text/plain; charset=utf-8" if fmt_norm == "text" else "text/html; charset=utf-8"
+    return Response(content=body, media_type=media_type)
 
 
 @router.get("/presence/{pid:path}")
