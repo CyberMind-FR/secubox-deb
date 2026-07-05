@@ -5,9 +5,12 @@ Manages client zones, parental controls, and network policies.
 """
 from __future__ import annotations
 import csv
+import http.client
 import io
 import ipaddress
+import os
 import re
+import socket
 import subprocess
 import json
 import threading
@@ -1466,6 +1469,17 @@ def scan(subnet: str = DEFAULT_SCAN_SUBNET, user=Depends(require_jwt)):
             device_type = classify_device_type(hostname, vendor)
             fp = openwrt_fingerprint(hostname, mac)
 
+            # #817 addendum (Part B): mirrors the same reclassification in
+            # `Collector.cycle_once` — a router-vendor MAC (tp-link/asus/
+            # linksys/d-link/gl.inet/xiaomi/huawei/... in `ROUTER_VENDORS`)
+            # with a hostname that misses `classify_device_type`'s much
+            # smaller "router" keyword list would otherwise stay "unknown"
+            # and skip risk scoring below (the omit-unknown guard), so the
+            # rogue-AP HIGH signal would never fire for the most common
+            # case. Reclassify it as "router" so it reaches `risk_score`.
+            if device_type == "unknown" and fp["is_router"]:
+                device_type = "router"
+
             # #817 addendum (Task 10): a device already in the store, or
             # explicitly allow-listed, is "known" -> trusted; a
             # never-before-seen device is unknown. For a router this is
@@ -1795,6 +1809,139 @@ def export_csv(user=Depends(require_jwt)):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=devices.csv"},
     )
+
+
+# ══════════════════════════════════════════════════════════════════
+# #817 addendum Part A — mesh-sync (iot-guard P2P mesh absorption)
+#
+# The Device Guardian consolidation spec listed "mesh-sync" as absorbed
+# from `secubox-iot-guard` but it was missed in Task 6/9. iot-guard's
+# `/mesh/peers` + `/mesh/sync` (`packages/secubox-iot-guard/api/main.py`,
+# now retired to a 308-redirect shim whose catch-all already forwards
+# `/mesh/*` here) read live peers from the P2P daemon over its Unix
+# socket (`fetch_p2p_peers`: HTTP-over-UDS `GET /peers` on
+# `/run/secubox/p2p.sock`) and synthesize one device per peer, keyed by
+# a `sb:`-prefixed MAC hashed from the peer id
+# (`sync_p2p_peers_to_devices`). Folded in verbatim here.
+# ══════════════════════════════════════════════════════════════════
+
+P2P_SOCKET = "/run/secubox/p2p.sock"
+
+
+class _UnixHTTPConnection(http.client.HTTPConnection):
+    """`http.client.HTTPConnection` over a Unix domain socket instead of
+    TCP — same shape as iot-guard's private helper of the same name."""
+
+    def __init__(self, path: str, timeout: float = 2.0):
+        super().__init__("localhost", timeout=timeout)
+        self._unix_path = path
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self._unix_path)
+
+
+def _fetch_mesh_peers() -> List[Dict[str, Any]]:
+    """`GET /peers` from the P2P daemon over `P2P_SOCKET`.
+
+    Factored into its own module-level function so tests can monkeypatch
+    this single call point instead of touching a real socket. Fail-safe:
+    a missing socket file, connection refusal, timeout, or any other
+    error yields `[]` — never raises (mirrors iot-guard's
+    `fetch_p2p_peers`, which is likewise best-effort).
+    """
+    if not os.path.exists(P2P_SOCKET):
+        return []
+    try:
+        conn = _UnixHTTPConnection(P2P_SOCKET, timeout=2.0)
+        try:
+            conn.request("GET", "/peers")
+            response = conn.getresponse()
+            if response.status != 200:
+                return []
+            data = json.loads(response.read().decode())
+            return data.get("peers", [])
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
+def _peer_synthetic_mac(peer_id: str) -> str:
+    """`sb:xx:xx:xx:xx:xx` synthetic MAC hashed from the peer id — the
+    exact scheme from iot-guard's `sync_p2p_peers_to_devices` (md5 hex
+    digest, first 10 hex chars, colon-paired)."""
+    peer_hash = hashlib.md5(peer_id.encode()).hexdigest()[:10]
+    return f"sb:{peer_hash[0:2]}:{peer_hash[2:4]}:{peer_hash[4:6]}:{peer_hash[6:8]}:{peer_hash[8:10]}"
+
+
+@router.get("/mesh/peers")
+def mesh_peers(user=Depends(require_jwt)):
+    """List the mesh peers already synced into the device store.
+
+    Reads the store's `source="mesh"` devices (populated by `/mesh/sync`)
+    rather than re-hitting the P2P socket on every read — simpler than
+    iot-guard's live-only read, and consistent with every other absorbed
+    listing endpoint here (`/clients`, `/vendors`, ...) reading the
+    canonical store.
+    """
+    devices = store.list(limit=5000) if store else []
+    peers = [d for d in devices if d.get("source") == "mesh"]
+    return {"peers": peers, "count": len(peers)}
+
+
+@router.post("/mesh/sync")
+def mesh_sync(user=Depends(require_jwt)):
+    """Sync P2P mesh peers into the device store as synthetic devices.
+
+    Reads live peers via `_fetch_mesh_peers()` (fail-safe: `[]` on any
+    error, including a monkeypatched replacement that raises — the `try`
+    below is belt-and-braces on top of that function's own internal
+    fail-safety) and `store.upsert()`s one synthetic device per peer:
+    `mac` is the `sb:`-prefixed hash of the peer id, `hostname` is the
+    peer's name/did, `device_type="mesh_node"`, `source="mesh"`. The
+    local node and any peer without an id are skipped. Trusted mesh
+    peers are marked `allow_state="allow"` (SecuBox nodes, not
+    rogue/unknown devices). Plain `def`: the socket read is blocking,
+    threadpooled off the shared aggregator loop (#808 constraint).
+    """
+    try:
+        peers = _fetch_mesh_peers()
+    except Exception:
+        peers = []
+
+    now = int(time.time())
+    synced = 0
+
+    for peer in peers:
+        if not isinstance(peer, dict) or peer.get("is_local"):
+            continue
+        peer_id = peer.get("id") or peer.get("peer_id") or ""
+        if not peer_id:
+            continue
+
+        mac = _peer_synthetic_mac(peer_id)
+        hostname = peer.get("name") or peer.get("did") or peer_id
+        address = peer.get("address") or peer.get("endpoint") or peer.get("ip")
+        if address in (None, "", "unknown"):
+            address = None
+
+        if store:
+            store.upsert({
+                "mac": mac,
+                "ip": address,
+                "hostname": hostname,
+                "device_type": "mesh_node",
+                "source": "mesh",
+                "allow_state": "allow",
+                "last_seen": now,
+            })
+            store.record_event(mac, "mesh_synced", peer_id)
+        synced += 1
+
+    stats_cache.clear()
+    return {"synced": synced}
 
 
 app.include_router(router)

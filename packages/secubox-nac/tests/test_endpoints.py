@@ -229,6 +229,28 @@ def test_scan_enriches_before_upsert(tmp_path, monkeypatch):
     assert d["risk_level"] is not None
 
 
+def test_scan_router_vendor_generic_hostname_classifies_as_router(tmp_path, monkeypatch):
+    """#817 addendum Part B, mirrored in `/scan`: a router-vendor MAC with
+    a hostname that misses `classify_device_type`'s keyword list must
+    still land as `device_type == "router"` (not "unknown") with a HIGH
+    risk_level (never-before-seen router -> rogue-AP signal)."""
+    main, _ = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(main, "oui_map", {})
+
+    monkeypatch.setattr(main, "_scan_subprocess", lambda subnet=main.DEFAULT_SCAN_SUBNET: "Host: 10.0.0.91 ()\tStatus: Up\n")
+    monkeypatch.setattr(main, "_parse_arp", lambda: [
+        {"mac": "ec:08:6b:00:00:02", "ip": "10.0.0.91", "hostname": "generic-device", "source": "arp"},
+    ])
+
+    result = main.scan(user=USER)
+
+    assert result["success"] is True
+    d = main.store.get("ec:08:6b:00:00:02")
+    assert d is not None
+    assert d["device_type"] == "router"
+    assert d["risk_level"] == "high"
+
+
 def test_scan_rejects_invalid_subnet(tmp_path, monkeypatch):
     """#817 Task 6 review fix 2: an argv-injection-shaped or otherwise
     invalid `subnet` must be rejected with 400 before ever reaching the
@@ -346,3 +368,67 @@ def test_export_csv_neutralizes_formula_injection(tmp_path, monkeypatch):
 
     assert not device_row[hostname_idx].startswith("=")
     assert device_row[hostname_idx] == "'=cmd()"
+
+
+# --- /mesh/peers + /mesh/sync (#817 addendum Part A: iot-guard mesh-sync absorption) ---
+
+_FAKE_PEERS = [
+    {"id": "peer-c3box", "name": "node-c3box", "address": "10.10.0.2"},
+    {"id": "peer-amd64", "name": "node-amd64", "address": "10.10.0.9"},
+]
+
+
+def test_mesh_sync_creates_synthetic_devices(tmp_path, monkeypatch):
+    main, _ = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(main, "_fetch_mesh_peers", lambda: _FAKE_PEERS)
+
+    result = main.mesh_sync(user=USER)
+    assert result == {"synced": 2}
+
+    devices = main.store.list(limit=100)
+    mesh_devices = [d for d in devices if d["source"] == "mesh"]
+    assert len(mesh_devices) == 2
+    assert all(d["mac"].startswith("sb:") for d in mesh_devices)
+    assert all(d["device_type"] == "mesh_node" for d in mesh_devices)
+
+    listed = main.mesh_peers(user=USER)
+    assert listed["count"] == 2
+    assert {d["mac"] for d in listed["peers"]} == {d["mac"] for d in mesh_devices}
+
+
+def test_mesh_sync_skips_local_node_and_peers_without_id(tmp_path, monkeypatch):
+    main, _ = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(main, "_fetch_mesh_peers", lambda: [
+        {"id": "peer-local", "name": "self", "is_local": True},
+        {"name": "no-id-peer"},
+        {"id": "peer-real", "name": "node-real", "address": "10.10.0.3"},
+    ])
+
+    result = main.mesh_sync(user=USER)
+    assert result == {"synced": 1}
+    assert len(main.mesh_peers(user=USER)["peers"]) == 1
+
+
+def test_mesh_sync_fails_safe_when_fetch_raises(tmp_path, monkeypatch):
+    """A hung/absent p2p.sock (or any other failure inside
+    `_fetch_mesh_peers`) must never crash `/mesh/sync` — it returns
+    `{synced: 0}` instead."""
+    main, _ = _setup(tmp_path, monkeypatch)
+
+    def _boom():
+        raise RuntimeError("p2p.sock unreachable")
+
+    monkeypatch.setattr(main, "_fetch_mesh_peers", _boom)
+
+    result = main.mesh_sync(user=USER)
+    assert result == {"synced": 0}
+    assert main.store.list(limit=100) == []
+
+
+def test_fetch_mesh_peers_returns_empty_when_socket_missing(tmp_path, monkeypatch):
+    """The real `_fetch_mesh_peers` (no monkeypatch) must not raise when
+    `P2P_SOCKET` doesn't exist on disk — it returns `[]`."""
+    main, _ = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(main, "P2P_SOCKET", str(tmp_path / "no-such.sock"))
+
+    assert main._fetch_mesh_peers() == []
