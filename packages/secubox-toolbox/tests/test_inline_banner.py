@@ -85,6 +85,44 @@ def test_inline_keeps_guards_and_spa_hooks():
     assert "countTrackers" in s
 
 
+def test_inline_no_innerhtml_trusted_types_invariant():
+    # #740 hard invariant: the client renderer is built ENTIRELY via mk() (DOM
+    # API). NO innerHTML anywhere → not a Trusted-Types sink → renders on strict
+    # CSP / Trusted-Types sites without any bypass. Do NOT regress this.
+    s = bundle.inline_script("x", wg=True, csp=True)
+    assert "innerHTML" not in s
+
+
+def test_inline_arcade_hud_ids_and_toggles_preserved():
+    # #620 redesign keeps every interactive control + live-count node id.
+    s = bundle.inline_script("x", wg=True, csp=True)
+    assert 'id:"sbx-lvl"' in s and 'cls:"sbx-lvl"' in s   # R0..R4 rank switch
+    assert '"data-lvl"' in s and "/__toolbox/set-level" in s
+    assert 'id:"sbx-tor"' in s and "/__toolbox/set-tor" in s      # Tor toggle
+    assert 'id:"sbx-adg"' in s and "/__toolbox/set-adguard" in s  # Ad-Guard toggle
+    assert 'id:"sbx-trk"' in s and "trackers" in s   # live tracker count node
+    assert 'id:"sbx-ck"' in s and "cookies" in s     # live cookie count node
+    # updateCounts still writes the exact text into the same ids (live 2s poll).
+    assert '"🛰️ " + countTrackers' in s
+    assert '"🍪 " + countCookies()' in s
+
+
+def test_inline_three_cluster_responsive_fix():
+    # The bug fix is structural: LEFT + RIGHT clusters are flex:0 0 auto (never
+    # shrink); the MIDDLE evidence cluster is flex:1 1 auto; min-width:0;
+    # overflow-x:auto (scrolls instead of pushing) → the close ✕ is ALWAYS on
+    # screen. box-sizing:border-box keeps padding from overflowing the width.
+    s = bundle.inline_script("x", wg=True, csp=True)
+    assert "box-sizing:border-box" in s
+    assert "flex:0 0 auto" in s      # pinned clusters
+    assert "flex:1 1 auto" in s      # middle grows
+    assert "min-width:0" in s        # middle can shrink to nothing
+    assert "overflow-x:auto" in s    # middle scrolls
+    # the dismiss control sits in the RIGHT pinned cluster (built just before it).
+    right = s[s.index("flex:0 0 auto;display:flex;align-items:center;gap:8px"):]
+    assert 'aria-label":"dismiss"' in right   # ✕ lives in the right-pinned cluster
+
+
 def test_inline_escapes_script_breakout():
     # A bundle value that literally contains </script> must NOT close the inline
     # <script> — it must be escaped to <\/script>.
