@@ -21,6 +21,10 @@ from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 
+from .collector import Collector
+from .enrich import load_oui
+from .store import DeviceStore, canon_mac, migrate_legacy
+
 app = FastAPI(title="secubox-nac", version="2.0.0", root_path="/api/v1/nac")
 
 # ══════════════════════════════════════════════════════════════════
@@ -47,6 +51,13 @@ CLIENTS_META_FILE = DATA_DIR / "clients.json"
 PARENTAL_FILE = Path("/etc/secubox/nac-parental.json")
 
 NFT_TABLE = "inet secubox_nac"
+
+# #817 Task 4: canonical SQLite device store + legacy migration sources.
+DEVICES_DB_PATH = str(DATA_DIR / "devices.db")
+MACGUARD_DEVICES_JSON = "/var/lib/secubox/mac-guard/devices.json"
+DEVICEINTEL_DEVICES_JSON = "/var/lib/secubox/device-intel/devices.json"
+IOTGUARD_DEVICES_DB = "/var/lib/secubox/iot-guard/devices.db"
+COLLECTOR_INTERVAL = 30
 
 # Zones → nftables set names
 ZONES = {
@@ -139,7 +150,14 @@ class WebhookConfig(BaseModel):
 
 # State
 _monitoring_task: Optional[asyncio.Task] = None
-_known_clients: set = set()
+
+# #817 Task 4: canonical store + background collector (replaces
+# `_discover_clients()`-per-request + `_monitor_clients()`). Populated at
+# `startup`; `status`/`clients`/`client/{mac}` read them as plain `def`
+# handlers — never re-run discovery inline (that was the aggregator
+# SPOF, #808).
+store: Optional[DeviceStore] = None
+collector: Optional[Collector] = None
 
 
 def _load_json(filepath: Path, default=None):
@@ -438,48 +456,57 @@ def _set_client_zone(mac: str, zone: str):
     _save_zone_assignments(assignments)
 
 
-async def _monitor_clients():
-    """Background task to monitor new clients."""
-    global _known_clients
-
-    while True:
-        try:
-            clients = _discover_clients()
-            current_macs = {c["mac"].lower() for c in clients}
-
-            # Check for new clients
-            new_clients = current_macs - _known_clients
-            for mac in new_clients:
-                client = next((c for c in clients if c["mac"].lower() == mac), None)
-                if client:
-                    _record_event("client_joined", {
-                        "mac": mac,
-                        "ip": client.get("ip"),
-                        "hostname": client.get("hostname")
-                    })
-                    await _notify_webhooks("client_joined", {
-                        "mac": mac,
-                        "ip": client.get("ip"),
-                        "hostname": client.get("hostname")
-                    })
-
-            _known_clients = current_macs
-
-        except Exception:
-            pass
-
-        await asyncio.sleep(30)
+def _fire_collector_webhook(event: str, dev: Dict[str, Any]) -> None:
+    """`Collector._emit` override: schedule the existing async webhook
+    fire-and-forget without blocking `cycle_once()` (which is sync and
+    may run outside a request context). Only called from within
+    `run_forever()`, which is always executing on the running loop, so
+    `asyncio.create_task` is safe here.
+    """
+    payload = {"mac": dev.get("mac"), "ip": dev.get("ip"), "hostname": dev.get("hostname")}
+    try:
+        asyncio.create_task(_notify_webhooks(event, payload))
+    except RuntimeError:
+        # No running loop (e.g. collector driven outside FastAPI) — drop.
+        pass
 
 
 @app.on_event("startup")
 async def startup():
-    """Start background monitoring."""
-    global _monitoring_task, _known_clients
-    # Initialize known clients from all discovery sources
-    clients = _discover_clients()
-    _known_clients = {c["mac"].lower() for c in clients}
-    log.info("NAC startup: discovered %d clients", len(_known_clients))
-    _monitoring_task = asyncio.create_task(_monitor_clients())
+    """Build the canonical device store + background collector (#817 Task 4).
+
+    Replaces the old `_discover_clients()`-per-request pattern and the
+    `_monitor_clients()` task: one background `Collector.run_forever()`
+    loop now owns all discovery/enrich/upsert work, and handlers read
+    its double-cache (`collector.snapshot()`) or the SQLite store
+    instead of scanning inline on every request.
+    """
+    global _monitoring_task, store, collector
+
+    store = DeviceStore(DEVICES_DB_PATH)
+
+    try:
+        migration = migrate_legacy(
+            store,
+            macguard_json=MACGUARD_DEVICES_JSON,
+            deviceintel_json=DEVICEINTEL_DEVICES_JSON,
+            iot_db=IOTGUARD_DEVICES_DB,
+        )
+        log.info(
+            "NAC startup: legacy migration imported=%d skipped=%d",
+            migration.get("imported", 0), migration.get("skipped", 0),
+        )
+    except Exception:
+        # Migration must never abort boot — a corrupt/missing legacy
+        # source is logged and the collector still starts.
+        log.exception("NAC startup: legacy migration failed (non-fatal)")
+
+    oui_map = load_oui()
+    collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL)
+    collector._emit = _fire_collector_webhook
+
+    log.info("NAC startup: device store at %s, %d device(s) known", DEVICES_DB_PATH, store.count())
+    _monitoring_task = asyncio.create_task(collector.run_forever())
 
 
 @app.on_event("shutdown")
@@ -497,13 +524,20 @@ async def health():
 
 
 @router.get("/status")
-async def status(user=Depends(require_jwt)):
-    """Get NAC status."""
+def status(user=Depends(require_jwt)):
+    """Get NAC status.
+
+    #817 Task 4: reads the SQLite store + the collector's double-cache
+    instead of calling `_discover_clients()` inline — that blocking
+    subprocess-heavy scan on every request was the aggregator SPOF
+    (#808). Plain `def` so FastAPI threadpools it.
+    """
     cached = stats_cache.get("status")
     if cached:
         return cached
 
-    clients_list = _discover_clients()
+    devices = store.list(limit=5000) if store else []
+    online_macs = {d["mac"] for d in (collector.snapshot() if collector else [])}
 
     try:
         nft_ok = subprocess.run(
@@ -523,16 +557,16 @@ async def status(user=Depends(require_jwt)):
 
     # Count by zone
     by_zone: Dict[str, int] = {z: 0 for z in ZONES}
-    for client in clients_list:
-        zone = _get_client_zone(client["mac"])
+    for device in devices:
+        zone = _get_client_zone(device["mac"])
         by_zone[zone] = by_zone.get(zone, 0) + 1
 
-    # Count online clients
-    online_count = sum(1 for c in clients_list if c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT"))
+    # Count online clients (present in the latest completed collector cycle)
+    online_count = sum(1 for d in devices if d["mac"] in online_macs)
 
     result = {
-        "client_count": len(clients_list),
-        "total_clients": len(clients_list),  # Alias for frontend compatibility
+        "client_count": len(devices),
+        "total_clients": len(devices),  # Alias for frontend compatibility
         "online_count": online_count,
         "online": online_count,  # Alias for frontend compatibility
         "nftables_ok": nft_ok,
@@ -549,22 +583,28 @@ async def status(user=Depends(require_jwt)):
 
 
 @router.get("/clients")
-async def clients(user=Depends(require_jwt)):
-    """Get all clients with zone info."""
+def clients(user=Depends(require_jwt)):
+    """Get all known clients with zone info.
+
+    #817 Task 4: reads the SQLite store (populated by the background
+    `Collector`) instead of scanning DHCP leases/ARP inline on every
+    request. Plain `def` so FastAPI threadpools it.
+    """
     cached = stats_cache.get("clients")
     if cached:
         return cached
 
-    discovered = _discover_clients()
+    devices = store.list(limit=5000) if store else []
+    online_macs = {d["mac"] for d in (collector.snapshot() if collector else [])}
     meta = _load_clients_meta()
     result = []
 
-    for c in discovered:
-        mac = c["mac"].lower()
+    for d in devices:
+        mac = d["mac"]
         zone = _get_client_zone(mac)
         client_meta = meta.get(mac, {})
 
-        is_online = c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT")
+        is_online = mac in online_macs
         # Status for frontend badge
         if zone == "quarantine":
             status = "quarantine"
@@ -574,14 +614,13 @@ async def clients(user=Depends(require_jwt)):
             status = zone
 
         result.append({
-            **c,
+            **d,
             "zone": zone,
             "zone_color": ZONES[zone]["color"],
             "zone_name": ZONES[zone]["desc"],
             "custom_hostname": client_meta.get("hostname", ""),
-            "notes": client_meta.get("notes", ""),
-            "first_seen": client_meta.get("first_seen"),
-            "last_seen": datetime.now().isoformat(),
+            "notes": client_meta.get("notes") or d.get("notes") or "",
+            "first_seen": client_meta.get("first_seen") or d.get("first_seen"),
             "online": is_online,
             "status": status,  # For frontend badge
         })
@@ -597,36 +636,40 @@ async def clients(user=Depends(require_jwt)):
 
 
 @router.get("/client/{mac}")
-async def get_client(mac: str, user=Depends(require_jwt)):
-    """Get details for a specific client."""
-    discovered = _discover_clients()
+def get_client(mac: str, user=Depends(require_jwt)):
+    """Get details for a specific client.
+
+    #817 Task 4: reads the SQLite store instead of re-scanning
+    `_discover_clients()` inline. Plain `def` so FastAPI threadpools it.
+    """
+    mac_lower = canon_mac(mac) or mac.lower()
+    d = store.get(mac_lower) if store else None
+    if not d:
+        raise HTTPException(404, "Client not found")
+
+    zone = _get_client_zone(mac_lower)
     meta = _load_clients_meta()
-    mac_lower = mac.lower()
+    client_meta = meta.get(mac_lower, {})
 
-    for c in discovered:
-        if c["mac"].lower() == mac_lower:
-            zone = _get_client_zone(mac_lower)
-            client_meta = meta.get(mac_lower, {})
+    # Recent history: the JSON event log (client_moved/banned/etc, still
+    # written by `_record_event`); collector-fired `client_joined`
+    # events land in `store.history()` instead (see Task 4 Collector).
+    history = _load_history()
+    client_history = [
+        h for h in history[-100:]
+        if h.get("details", {}).get("mac", "").lower() == mac_lower
+    ][-10:]
 
-            # Get recent history
-            history = _load_history()
-            client_history = [
-                h for h in history[-100:]
-                if h.get("details", {}).get("mac", "").lower() == mac_lower
-            ][-10:]
-
-            return {
-                **c,
-                "zone": zone,
-                "zone_color": ZONES[zone]["color"],
-                "zone_name": ZONES[zone]["desc"],
-                "custom_hostname": client_meta.get("hostname", ""),
-                "notes": client_meta.get("notes", ""),
-                "first_seen": client_meta.get("first_seen"),
-                "recent_events": client_history
-            }
-
-    raise HTTPException(404, "Client not found")
+    return {
+        **d,
+        "zone": zone,
+        "zone_color": ZONES[zone]["color"],
+        "zone_name": ZONES[zone]["desc"],
+        "custom_hostname": client_meta.get("hostname", ""),
+        "notes": client_meta.get("notes") or d.get("notes") or "",
+        "first_seen": client_meta.get("first_seen") or d.get("first_seen"),
+        "recent_events": client_history
+    }
 
 
 @router.get("/zones")
@@ -900,7 +943,7 @@ async def delete_webhook(webhook_id: str, user=Depends(require_jwt)):
 @router.get("/summary")
 async def summary(user=Depends(require_jwt)):
     """Get NAC summary."""
-    status_info = await status(user)
+    status_info = status(user)  # plain def (#817 Task 4) — no await
     alerts_info = await alerts(user)
 
     return {
@@ -979,7 +1022,7 @@ async def unquarantine(req: MacRequest, user=Depends(require_jwt)):
 
 @router.get("/get_client")
 async def get_client_compat(mac: str, user=Depends(require_jwt)):
-    return await get_client(mac, user)
+    return get_client(mac, user)  # plain def (#817 Task 4) — no await
 
 
 @router.get("/get_policy")
