@@ -12,3 +12,19 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-nac/etc/nginx/secubox.d
 	[ -f nginx/nac.conf ] && cp nginx/nac.conf debian/secubox-nac/etc/nginx/secubox.d/ || true
+	# Project B (#820 Task 9): presence report timer/service + a commented
+	# alert-config .example (never the live /etc/secubox path — see
+	# postinst / the .example file's own header for the off-by-default
+	# rationale).
+	install -d debian/secubox-nac/usr/sbin
+	[ -f sbin/secubox-presence-report ] && install -m 0755 sbin/secubox-presence-report \
+	  debian/secubox-nac/usr/sbin/secubox-presence-report || true
+	install -d debian/secubox-nac/lib/systemd/system
+	[ -f debian/secubox-presence-report.service ] && install -m 0644 \
+	  debian/secubox-presence-report.service debian/secubox-nac/lib/systemd/system/ || true
+	[ -f debian/secubox-presence-report.timer ] && install -m 0644 \
+	  debian/secubox-presence-report.timer debian/secubox-nac/lib/systemd/system/ || true
+	install -d debian/secubox-nac/usr/share/secubox/nac
+	[ -f debian/presence-alerts.toml.example ] && install -m 0644 \
+	  debian/presence-alerts.toml.example \
+	  debian/secubox-nac/usr/share/secubox/nac/presence-alerts.toml.example || true

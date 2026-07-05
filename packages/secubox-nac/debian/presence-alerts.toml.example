@@ -1,0 +1,40 @@
+# SecuBox NAC — Presence Guardian tiered alerts (Project B, #820, Task 6)
+#
+# THIS FEATURE IS OFF BY DEFAULT.
+#
+# `api.presence.alerts.load_config()` only ever reads
+# `/etc/secubox/presence-alerts.toml`. This file ships as a `.example`
+# under /usr/share/secubox/nac/ — it is NEVER copied to the live path by
+# the package. As long as `/etc/secubox/presence-alerts.toml` does not
+# exist, `evaluate()` computes/records/emails nothing: no mail storms,
+# no surprise thresholds on a fresh install.
+#
+# To enable tiered presence alerts:
+#   1. cp /usr/share/secubox/nac/presence-alerts.toml.example \
+#         /etc/secubox/presence-alerts.toml
+#   2. Uncomment + tune the settings below to taste.
+#   3. Fired alerts are ALWAYS recorded to the presence_alerts table /
+#      webui regardless of `recipient` — only the EMAIL is gated on it
+#      and is deduped/rate-limited per (tier, plane) per `window_seconds`.
+#
+# recipient = "admin@example.com"
+#
+# Lookback window (seconds) used by the checks below AND the email
+# dedup/coalescing window. Defaults to 3600 (1h) if omitted.
+# window_seconds = 3600
+#
+# [wan]
+# More than N bot/crawler `wan` presences last-seen within
+# `window_seconds` fires a "warn" tier alert.
+# bot_surge = 50
+#
+# A `geo_cc` (country) never seen before on the `wan` plane fires a
+# "notice" tier alert (once ever per process lifetime, not once per
+# window).
+# new_country = true
+#
+# [wg]
+# A `wg`/`lan` presence linked to a device Project A (#817) scored
+# risk_level == "high" (the rogue-AP / unknown-router signal) fires a
+# "warn" tier alert.
+# rogue_router = true

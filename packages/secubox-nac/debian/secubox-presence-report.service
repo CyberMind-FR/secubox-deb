@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox NAC cross-plane presence report (Project B, #820)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/820
+After=secubox-nac.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/secubox-presence-report
+StandardOutput=journal
+StandardError=journal
