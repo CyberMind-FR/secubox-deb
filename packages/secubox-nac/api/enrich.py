@@ -187,6 +187,6 @@ def openwrt_fingerprint(hostname: str, mac: str = "") -> dict:
     is_router, vendor = _is_router_vendor(mac) if mac else (False, "")
     return {
         "is_openwrt": is_openwrt,
-        "is_router": is_openwrt or is_router,
+        "is_router": is_router,
         "router_vendor": vendor or None,
     }
