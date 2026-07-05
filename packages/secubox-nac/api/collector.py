@@ -86,6 +86,7 @@ class Collector:
                 "risk_level": level,
                 "is_router": int(fp["is_router"]),
                 "is_openwrt": int(fp["is_openwrt"]),
+                "first_seen": now,
                 "last_seen": now,
             }
             self.store.upsert(enriched)
