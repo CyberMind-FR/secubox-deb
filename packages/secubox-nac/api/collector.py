@@ -25,6 +25,11 @@ import time
 
 from .discovery import discover
 from .enrich import classify_device_type, openwrt_fingerprint, oui_vendor, risk_score
+from .presence.geo import enrich_origin
+from .presence.kbin import collect_kbin
+from .presence.local import collect_local
+from .presence.store import PresenceStore
+from .presence.wan import collect_wan
 from .store import DeviceStore
 
 logger = logging.getLogger("secubox.nac.collector")
@@ -38,12 +43,25 @@ class Collector:
     `run_forever()` is the async wrapper that calls it every `interval`
     seconds until cancelled — this is the task started at FastAPI
     `startup`, replacing the old `_monitor_clients()`.
+
+    Project B (#820 Task 5): when constructed with a `presence_store`,
+    the SAME off-loop `cycle_once()` also runs the cross-plane presence
+    collectors (`collect_local`/`collect_wan`/`collect_kbin`) — no second
+    loop, no separate executor hop, so the off-loop guarantee `run_forever`
+    already provides for device discovery covers presence collection too.
     """
 
-    def __init__(self, store: DeviceStore, oui_map: dict, interval: int = 30):
+    def __init__(
+        self,
+        store: DeviceStore,
+        oui_map: dict,
+        interval: int = 30,
+        presence_store: PresenceStore | None = None,
+    ):
         self.store = store
         self.oui_map = oui_map
         self.interval = interval
+        self.presence_store = presence_store
         self._snapshot: list[dict] = []
 
     def cycle_once(self) -> None:
@@ -128,6 +146,29 @@ class Collector:
             snapshot.append(enriched)
 
         self._snapshot = snapshot
+
+        # Project B (#820 Task 5): run the cross-plane presence collectors
+        # in this SAME off-loop cycle — `cycle_once` is only ever invoked
+        # inline (tests) or via `run_forever`'s `run_in_executor` (the
+        # board path), so no new blocking surface is introduced on the
+        # shared aggregator loop. Each plane is independently wrapped: a
+        # single collector already fails safe internally (never raises),
+        # but this belt-and-braces try/except guarantees a genuinely
+        # unexpected exception in one plane can never skip the others nor
+        # abort device discovery above.
+        if self.presence_store is not None:
+            try:
+                collect_local(self.presence_store, self.store)
+            except Exception:  # noqa: BLE001 - one failing plane must not sink the cycle
+                logger.warning("collector: collect_local failed", exc_info=True)
+            try:
+                collect_wan(self.presence_store, geo_enrich=enrich_origin)
+            except Exception:  # noqa: BLE001
+                logger.warning("collector: collect_wan failed", exc_info=True)
+            try:
+                collect_kbin(self.presence_store)
+            except Exception:  # noqa: BLE001
+                logger.warning("collector: collect_kbin failed", exc_info=True)
 
     async def run_forever(self) -> None:
         """Call `cycle_once()` every `interval` seconds until cancelled.
