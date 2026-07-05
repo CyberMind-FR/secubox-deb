@@ -1,3 +1,36 @@
+secubox-nac (3.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Device Guardian consolidation (#817): secubox-nac becomes the single
+    canonical Device Guardian, replacing secubox-mac-guard,
+    secubox-device-intel and secubox-iot-guard.
+  * New normalized SQLite device store (devices.db, WAL) with an
+    idempotent legacy-store migration (mac-guard JSON, device-intel
+    JSON, iot-guard SQLite) — MAC-canonical, per-column best-value
+    merge, lossless.
+  * One unified discovery pipeline (dnsmasq + ISC + ARP merge) replaces
+    the four separate legacy pollers.
+  * Absorbed enrichment: OUI vendor lookup (ieee-data), device-type /
+    risk classification, OpenWrt/router fingerprinting.
+  * Background collector + double-cache; all API handlers are now
+    non-blocking plain `def` reading the cache/store — no inline
+    discovery/scan work on the shared aggregator loop (#808).
+  * mac-guard's whitelist/blacklist folded into nac's existing
+    `allow_state` / `inet secubox_nac` zones (blocked / lan_allowed);
+    its separate `inet secubox_mac_guard` nft sets are migrated into
+    `secubox_nac` by a one-shot idempotent postinst step.
+  * Absorbed endpoints: vendors, on-demand scan, OpenWrt LuCI probe,
+    mDNS, device groups, JSON/CSV export.
+  * WebUI: vendor/device-type/risk columns + fingerprint badges, groups
+    view, CSV export.
+  * secubox-mac-guard, secubox-device-intel and secubox-iot-guard now
+    308-redirect their API surface to the nac equivalents (retained as
+    thin compatibility shims); secubox-network-anomaly's previously
+    open /status is now JWT-gated. Package removal is a separate gated
+    follow-up, not part of this release.
+  * Depends: add ieee-data (OUI vendor DB at /usr/share/ieee-data/oui.txt).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 05 Jul 2026 18:00:00 +0000
+
 secubox-nac (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Add dynamic menu system with menu.d JSON definitions
