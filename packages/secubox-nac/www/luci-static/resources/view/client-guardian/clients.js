@@ -60,7 +60,7 @@ function getDeviceIcon(hostname, mac) {
 // above whenever the store has already classified the device).
 var DEVICE_TYPE_ICON = {
 	router: '📡', phone: '📱', mobile: '📱', computer: '💻', laptop: '💻',
-	camera: '📷', tv: '📺', media: '📺', game_console: '🎮', printer: '🖨️',
+	tablet: '📱', camera: '📷', tv: '📺', media: '📺', game_console: '🎮', printer: '🖨️',
 	nas: '🗄️', iot: '🔌', speaker: '🔊', wearable: '⌚', unknown: '🔌'
 };
 
@@ -68,7 +68,7 @@ var DEVICE_TYPE_ICON = {
 var SOURCE_ICON = {
 	dnsmasq: '📶', isc: '📶', dhcp: '📶', arp: '🔎', 'mac-guard': '🏷️',
 	'device-intel': '🔬', 'iot-guard': '🔌', mesh: '🕸️', nmap: '🛰️',
-	mdns: '📣', manual: '✍️'
+	mdns: '📣', manual: '✍️', imported: '📦'
 };
 
 function sourceBadge(src) {

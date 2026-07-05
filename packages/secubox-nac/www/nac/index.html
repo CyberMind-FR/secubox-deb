@@ -310,8 +310,8 @@
         const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
         // device_type from classify_device_type: camera/smart_tv/smart_speaker/
         // smart_home/printer/router/phone/unknown (+ forward-compat aliases).
-        const TYPE_ICON = {router:'📡',phone:'📱',mobile:'📱',computer:'💻',laptop:'💻',camera:'📷',smart_tv:'📺',tv:'📺',media:'📺',smart_speaker:'🔊',speaker:'🔊',smart_home:'🏡',game_console:'🎮',printer:'🖨️',nas:'🗄️',iot:'🔌',wearable:'⌚',unknown:'❔'};
-        const SOURCE_ICON = {dnsmasq:'📶',isc:'📶',dhcp:'📶',arp:'🔎','mac-guard':'🏷️','device-intel':'🔬','iot-guard':'🔌',mesh:'🕸️',nmap:'🛰️',mdns:'📣',manual:'✍️'};
+        const TYPE_ICON = {router:'📡',phone:'📱',mobile:'📱',computer:'💻',laptop:'💻',tablet:'📱',camera:'📷',smart_tv:'📺',tv:'📺',media:'📺',smart_speaker:'🔊',speaker:'🔊',smart_home:'🏡',game_console:'🎮',printer:'🖨️',nas:'🗄️',iot:'🔌',wearable:'⌚',unknown:'❔'};
+        const SOURCE_ICON = {dnsmasq:'📶',isc:'📶',dhcp:'📶',arp:'🔎','mac-guard':'🏷️','device-intel':'🔬','iot-guard':'🔌',mesh:'🕸️',nmap:'🛰️',mdns:'📣',manual:'✍️',imported:'📦'};
         // zone = SHORT ZONES keys from /clients (lan/iot/guest/quarantine) + blocked.
         const ZONE_ICON = {lan:'🏠',iot:'🤖',guest:'👥',quarantine:'🚧',blocked:'⛔',unknown:'❔'};
         const ZONE_LABEL = {lan:'LAN',iot:'IoT',guest:'Invités',quarantine:'Quarantaine',blocked:'Bloqué',unknown:'—'};
