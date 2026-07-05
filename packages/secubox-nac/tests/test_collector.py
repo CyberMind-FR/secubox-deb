@@ -85,3 +85,29 @@ def test_run_forever_offloads_cycle_off_the_loop(tmp_path, monkeypatch):
     loop_thread = asyncio.run(drive())
     assert cycle_threads, "cycle_once never ran"
     assert all(t != loop_thread for t in cycle_threads), "cycle_once ran on the loop thread (not offloaded)"
+
+
+def test_router_vendor_generic_hostname_classifies_as_router_high_risk(tmp_path, monkeypatch):
+    """#817 addendum Part B: a router-vendor MAC (in `ROUTER_VENDORS`,
+    e.g. TP-Link's `EC:08:6B`) paired with a hostname that hits none of
+    `classify_device_type`'s much smaller "router" keyword list must
+    still enrich to `device_type == "router"` (not "unknown") via
+    `openwrt_fingerprint`'s `is_router` flag. Left as "unknown", the
+    omit-unknown guard would skip risk scoring entirely and the
+    known-router-vs-rogue-AP HIGH signal would never fire — the bug this
+    fix closes. A never-before-seen ("unknown"/not-yet-in-store) such
+    router must land at `risk_level == "high"`."""
+    from api.store import DeviceStore
+    from api.collector import Collector
+    s = DeviceStore(str(tmp_path / "d.db"))
+    import api.collector as C
+    monkeypatch.setattr(C, "discover", lambda **k: [
+        {"mac": "ec:08:6b:00:00:01", "ip": "10.0.0.90", "hostname": "generic-device", "source": "arp"},
+    ])
+    col = Collector(s, oui_map={}, interval=0)
+    col.cycle_once()
+
+    d = s.get("ec:08:6b:00:00:01")
+    assert d["device_type"] == "router"
+    assert d["is_router"] == 1
+    assert d["risk_level"] == "high"

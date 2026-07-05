@@ -87,6 +87,18 @@ class Collector:
             device_type = classify_device_type(hostname, vendor)
             fp = openwrt_fingerprint(hostname, mac)
 
+            # #817 addendum (Part B): `classify_device_type`'s "router"
+            # keyword list is much smaller than `ROUTER_VENDORS` (it misses
+            # tp-link/asus/linksys/d-link/gl.inet/xiaomi/huawei — the most
+            # common rogue-AP candidates), so a router-vendor MAC with a
+            # generic hostname fingerprints `is_router=True` but classifies
+            # as "unknown". Left as "unknown", the omit-unknown guard right
+            # below would skip risk scoring entirely and the
+            # known-router-vs-rogue-AP HIGH signal (`risk_score`) would
+            # never fire. Reclassify it as "router" here so it does.
+            if device_type == "unknown" and fp["is_router"]:
+                device_type = "router"
+
             # #817 whole-branch fix (I4): OMIT fields the enricher couldn't
             # determine so a re-seen migrated device isn't clobbered by a
             # sentinel through `upsert`'s best-value merge. A None vendor,
