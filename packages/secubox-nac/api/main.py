@@ -6,6 +6,7 @@ Manages client zones, parental controls, and network policies.
 from __future__ import annotations
 import csv
 import io
+import ipaddress
 import re
 import subprocess
 import json
@@ -27,7 +28,7 @@ from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 
 from .collector import Collector
-from .enrich import load_oui, oui_vendor
+from .enrich import classify_device_type, load_oui, openwrt_fingerprint, oui_vendor, risk_score
 from .store import DeviceStore, canon_mac, migrate_legacy
 
 app = FastAPI(title="secubox-nac", version="2.0.0", root_path="/api/v1/nac")
@@ -1337,7 +1338,24 @@ def scan(subnet: str = DEFAULT_SCAN_SUBNET, user=Depends(require_jwt)):
     #817 Task 6 (mac-guard absorption): plain `def` — FastAPI threadpools
     the blocking nmap/ARP subprocess calls below off the shared aggregator
     loop (#808); this never runs on the passive collector's own loop.
+
+    #817 Task 6 review fix 1: enriches each discovered device (oui_vendor,
+    device_type, risk_score/risk_level, is_router/is_openwrt) before
+    `store.upsert()` — mirrors `Collector.cycle_once`'s enrichment block —
+    so scan-only devices no longer land with NULL device_type/risk columns
+    (`upsert` binds `None` for every listed column, and the SQLite
+    `DEFAULT` never fires on an explicit `NULL`).
+
+    #817 Task 6 review fix 2: `subnet` is validated as an IP network
+    (`ipaddress.ip_network`) before it ever reaches the `nmap` argv — an
+    authenticated caller could otherwise pass an argv-injection token
+    (e.g. `--script=...`) or an arbitrary external range.
     """
+    try:
+        ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        raise HTTPException(400, "invalid subnet")
+
     devices = _scan_devices(subnet)
     now = int(time.time())
     merged = 0
@@ -1347,12 +1365,24 @@ def scan(subnet: str = DEFAULT_SCAN_SUBNET, user=Depends(require_jwt)):
         if not mac:
             continue
         if store:
+            hostname = d.get("hostname") or ""
+            vendor = oui_vendor(mac, oui_map or {})
+            device_type = classify_device_type(hostname, vendor)
+            fp = openwrt_fingerprint(hostname, mac)
+            score, level = risk_score(device_type, fp["is_router"])
+
             store.upsert({
                 "mac": mac,
                 "ip": d.get("ip"),
-                "hostname": d.get("hostname") or None,
+                "hostname": hostname or None,
                 "last_seen": now,
                 "source": "scan",
+                "oui_vendor": vendor,
+                "device_type": device_type,
+                "risk_score": score,
+                "risk_level": level,
+                "is_router": int(fp["is_router"]),
+                "is_openwrt": int(fp["is_openwrt"]),
             })
             merged += 1
 
@@ -1474,7 +1504,18 @@ def probe_openwrt(user=Depends(require_jwt)):
 @router.post("/probe/openwrt/{ip}")
 def probe_openwrt_single(ip: str, user=Depends(require_jwt)):
     """Probe a single IP for LuCI/OpenWrt/SecuBox and update the matching
-    device's fingerprint columns, if a device with that IP is known."""
+    device's fingerprint columns, if a device with that IP is known.
+
+    #817 Task 6 review fix 3 (SSRF): `ip` is validated as an IP literal
+    (`ipaddress.ip_address`) before it reaches `_probe_ip` -> `curl` — a
+    non-IP value (a hostname, or an argv-like token) is rejected with 400
+    rather than handed to the subprocess.
+    """
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        raise HTTPException(400, "invalid ip")
+
     probe = _probe_ip(ip, 5.0)
 
     mac = None
@@ -1597,6 +1638,21 @@ _EXPORT_COLUMNS = [
     "model", "luci_version", "first_seen", "last_seen", "source",
 ]
 
+# #817 Task 6 review fix 4: hostname/model/oui_vendor are attacker-influenceable
+# (a device can announce any hostname). A leading =/+/-/@ (or tab/CR) is how
+# spreadsheet apps (Excel, LibreOffice, Google Sheets) trigger formula
+# evaluation on CSV import — prefix such cells with a single quote so they
+# import as inert text instead.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe_cell(value: Any) -> Any:
+    """Neutralize a CSV cell that would otherwise be interpreted as a
+    spreadsheet formula on import."""
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
 
 @router.get("/export/json")
 def export_json(user=Depends(require_jwt)):
@@ -1618,7 +1674,7 @@ def export_csv(user=Depends(require_jwt)):
     writer = csv.writer(output)
     writer.writerow(_EXPORT_COLUMNS)
     for d in devices:
-        writer.writerow([d.get(c, "") for c in _EXPORT_COLUMNS])
+        writer.writerow([_csv_safe_cell(d.get(c, "")) for c in _EXPORT_COLUMNS])
 
     return Response(
         content=output.getvalue(),
