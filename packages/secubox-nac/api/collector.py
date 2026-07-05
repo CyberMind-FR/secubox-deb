@@ -70,7 +70,17 @@ class Collector:
             if not mac:
                 continue
 
-            is_new = self.store.get(mac) is None
+            existing_row = self.store.get(mac)
+            is_new = existing_row is None
+            # #817 addendum (Task 10): a device is "known" (trusted) if it
+            # already existed in the store, or was explicitly allow-listed
+            # (allow_state lives on that same existing row, so the second
+            # clause is belt-and-braces if that ever changes). A device
+            # seen for the first time is unknown; for a router that turns
+            # into risk_score()'s rogue-AP/high-risk signal.
+            is_known = (existing_row is not None) or (
+                bool(existing_row) and existing_row.get("allow_state") == "allow"
+            )
 
             hostname = dev.get("hostname", "")
             vendor = oui_vendor(mac, self.oui_map)
@@ -93,7 +103,7 @@ class Collector:
             if vendor:
                 enriched["oui_vendor"] = vendor
             if device_type != "unknown":
-                score, level = risk_score(device_type, fp["is_router"])
+                score, level = risk_score(device_type, fp["is_router"], is_known)
                 enriched["device_type"] = device_type
                 enriched["risk_score"] = score
                 enriched["risk_level"] = level

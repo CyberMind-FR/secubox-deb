@@ -1466,6 +1466,15 @@ def scan(subnet: str = DEFAULT_SCAN_SUBNET, user=Depends(require_jwt)):
             device_type = classify_device_type(hostname, vendor)
             fp = openwrt_fingerprint(hostname, mac)
 
+            # #817 addendum (Task 10): a device already in the store, or
+            # explicitly allow-listed, is "known" -> trusted; a
+            # never-before-seen device is unknown. For a router this is
+            # the known-router-vs-rogue-AP signal risk_score() acts on.
+            existing_row = store.get(mac)
+            is_known = (existing_row is not None) or (
+                bool(existing_row) and existing_row.get("allow_state") == "allow"
+            )
+
             # #817 whole-branch fix (I4): OMIT fields the enricher couldn't
             # determine (None vendor, "unknown" device_type + its derived
             # risk) so a re-scanned migrated device isn't clobbered by a
@@ -1483,7 +1492,7 @@ def scan(subnet: str = DEFAULT_SCAN_SUBNET, user=Depends(require_jwt)):
             if vendor:
                 upsert_dev["oui_vendor"] = vendor
             if device_type != "unknown":
-                score, level = risk_score(device_type, fp["is_router"])
+                score, level = risk_score(device_type, fp["is_router"], is_known)
                 upsert_dev["device_type"] = device_type
                 upsert_dev["risk_score"] = score
                 upsert_dev["risk_level"] = level
