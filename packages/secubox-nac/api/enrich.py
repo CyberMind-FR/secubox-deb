@@ -19,12 +19,19 @@ Lifts the pure logic from the three legacy modules being retired:
 
 Pure stdlib, no FastAPI import. Import of this module has no side
 effects: `load_oui()` only touches disk when called.
+
+#820 (ref #817 follow-up): `classify_device_type` coverage expanded +
+`reclassify_all()` backfill added — see the two sections below.
 """
 from __future__ import annotations
 
+import logging
 import re
 
+from .discovery import discover
 from .store import canon_mac
+
+logger = logging.getLogger("secubox.nac.enrich")
 
 # --- OUI vendor lookup (from secubox-mac-guard's `_load_oui_db`/`_get_vendor`) ---
 
@@ -72,16 +79,116 @@ def oui_vendor(mac: str, oui_map: dict) -> str | None:
 
 # --- Device-type classification + risk scoring (from secubox-iot-guard) ---
 
-# Keyword map, order matters (first match wins) — from IoTGuard.type_indicators
+# Keyword map, order matters (first match wins) — from IoTGuard.type_indicators,
+# greatly expanded (#820, ref #817) to cut the "unknown" rate on the live
+# 277-device board inventory. Categories are ordered deliberately, not
+# alphabetically, to resolve substring-shadowing between them:
+#   - camera before smart_speaker/smart_home so "nest-cam" wins over the
+#     broader "nest-" (smart_home) / "nest-audio" (smart_speaker) patterns.
+#   - tablet before phone so "galaxy-tab" wins over phone's bare "galaxy".
+# `router` was NARROWED (not just expanded): the pre-820 list included
+# "netgear", which directly regresses risk_score's rogue-AP signal (a
+# generic Netgear device is common consumer gear, not necessarily a
+# router) — see the RISK NOTE on `classify_device_type` below. Every
+# other pre-820 indicator is kept verbatim; only new indicators were
+# added to the remaining categories.
 _TYPE_INDICATORS = {
-    "camera": ["camera", "ipcam", "hikvision", "dahua", "axis", "wyze", "ring", "nest"],
-    "smart_tv": ["tv", "roku", "firetv", "chromecast", "appletv", "samsung", "lg", "sony"],
-    "smart_speaker": ["echo", "alexa", "google-home", "homepod", "sonos"],
-    "smart_home": ["philips-hue", "wemo", "smartthings", "tuya", "zigbee", "zwave"],
-    "printer": ["printer", "hp", "epson", "canon", "brother", "xerox"],
-    "router": ["router", "gateway", "ubiquiti", "mikrotik", "cisco", "netgear"],
-    "phone": ["iphone", "android", "pixel", "samsung", "oneplus", "xiaomi"],
+    "camera": [
+        "camera", "cam", "ipcam", "hikvision", "dahua", "axis", "wyze", "ring",
+        "nest-cam", "reolink", "foscam", "doorbell",
+    ],
+    "smart_tv": [
+        "tv", "roku", "firetv", "chromecast", "appletv", "samsung", "lg", "sony",
+        "bravia", "aquos", "fire-tv", "apple-tv", "shield", "googletv",
+        "lg-webos", "samsung-tizen",
+    ],
+    "smart_speaker": [
+        "echo", "alexa", "google-home", "homepod", "sonos",
+        "nest-audio", "nest-mini", "speaker",
+    ],
+    "smart_home": [
+        "philips-hue", "wemo", "smartthings", "tuya", "zigbee", "zwave",
+        "hue", "lifx", "tasmota", "shelly", "sonoff", "esphome", "esp32",
+        "esp8266", "tradfri", "meross", "nest-", "thermostat", "doorlock",
+        "smartplug",
+    ],
+    "printer": [
+        "printer", "hp", "epson", "canon", "brother", "xerox",
+        "print", "officejet", "laserjet", "lexmark", "kyocera",
+    ],
+    # RISK NOTE: keep this CONSERVATIVE — `risk_score()` treats
+    # device_type=="router" as the rogue-AP signal (a newly-seen router
+    # scores HIGH regardless of ports). Only unambiguous
+    # networking-vendor/hostname indicators belong here. Generic
+    # consumer-router brands (tp-link/netgear/asus/samsung/...) make many
+    # kinds of devices and must NOT land here — see `_VENDOR_TYPE` below,
+    # which deliberately omits them too (or routes them elsewhere, e.g.
+    # tp-link -> iot).
+    "router": [
+        "router", "gateway", "ubiquiti", "mikrotik", "cisco",
+        "openwrt", "dd-wrt", "access-point", "accesspoint", "-ap-",
+        "unifi", "ubnt", "edgerouter",
+    ],
+    "nas": ["nas", "synology", "diskstation", "qnap", "truenas", "freenas", "unraid"],
+    "game_console": ["playstation", "ps4", "ps5", "xbox", "nintendo", "switch-", "steamdeck"],
+    "wearable": ["watch", "fitbit", "garmin", "wearable", "smartband", "mi-band"],
+    # tablet before phone: "ipad"/"galaxy-tab" must win over phone's bare
+    # "galaxy" (Galaxy Tab hostnames contain both substrings).
+    "tablet": ["ipad", "tablet", "galaxy-tab", "kindle"],
+    "phone": [
+        "iphone", "android", "pixel", "samsung", "oneplus", "xiaomi",
+        "galaxy", "samsung-", "redmi", "huawei", "oppo", "mobile", "phone",
+    ],
+    "laptop": ["laptop", "notebook", "macbook", "thinkpad", "xps", "zenbook"],
+    "computer": [
+        "pc", "desktop", "imac", "windows", "ubuntu", "linux", "fedora",
+        "debian", "workstation", "hackintosh", "raspberrypi", "raspberry-pi", "raspi",
+    ],
+    "iot": ["iot", "sensor", "plc", "homeassistant", "hassio", "printer-scale"],
 }
+
+# OUI-vendor -> type fallback (#820), consulted ONLY when the hostname/
+# vendor keyword pass above matched nothing at all. Ordered list (first
+# match wins), substrings matched against the lowercased vendor string
+# alone. Deliberately conservative on `router` — see the RISK NOTE above;
+# generic multi-purpose brands (tp-link, asus, netgear, ...) are routed
+# to a non-router type (or omitted entirely, falling through to
+# `unknown`) rather than `router`.
+_VENDOR_TYPE = [
+    ("hikvision", "camera"),
+    ("dahua", "camera"),
+    ("axis", "camera"),
+    ("reolink", "camera"),
+    ("sonos", "smart_speaker"),
+    ("amazon", "smart_speaker"),
+    ("google", "smart_home"),
+    ("hewlett", "printer"),
+    ("canon", "printer"),
+    ("epson", "printer"),
+    ("brother", "printer"),
+    ("ubiquiti", "router"),
+    ("mikrotik", "router"),
+    ("cisco", "router"),
+    ("synology", "nas"),
+    ("qnap", "nas"),
+    ("sony interactive", "game_console"),
+    ("nintendo", "game_console"),
+    ("microsoft", "game_console"),
+    ("espressif", "iot"),
+    ("tuya", "iot"),
+    ("shelly", "iot"),
+    ("sonoff", "iot"),
+    ("tp-link", "iot"),  # NOTE: tp-link makes routers AND iot gear — default iot, never router.
+    ("raspberry", "computer"),
+    ("intel", "computer"),
+    ("dell", "computer"),
+    ("lenovo", "computer"),
+    ("asustek", "computer"),
+    ("fitbit", "wearable"),
+    ("garmin", "wearable"),
+    ("apple", "phone"),
+    ("samsung", "phone"),
+]
 
 # Device-type risk contribution — from IoTGuard.calculate_risk_score's type_risk
 _TYPE_RISK = {
@@ -98,12 +205,30 @@ _RISKY_PORTS = {23, 21, 80, 8080, 8443, 554}
 
 def classify_device_type(hostname: str, vendor: str) -> str:
     """Classify a device from hostname + OUI vendor into a lowercase type
-    string (e.g. "camera", "phone", "unknown")."""
+    string (e.g. "camera", "phone", "unknown").
+
+    Two passes (#820, ref #817): the hostname/vendor keyword pass
+    (`_TYPE_INDICATORS`) runs first, as before. Only when it matches
+    NOTHING does an OUI-vendor-only fallback (`_VENDOR_TYPE`) run — this
+    keeps a hostname-level match always authoritative, and only guesses
+    from the vendor brand when the hostname gave no signal at all.
+    Return value is always one of the fixed set the webui `TYPE_ICON`
+    maps understand (router, phone, computer, laptop, tablet, camera,
+    smart_tv, smart_speaker, smart_home, printer, nas, game_console,
+    wearable, iot, unknown).
+    """
     combined = f"{hostname or ''} {vendor or ''}".lower()
     for device_type, indicators in _TYPE_INDICATORS.items():
         for indicator in indicators:
             if indicator in combined:
                 return device_type
+
+    vendor_lower = (vendor or "").lower()
+    if vendor_lower:
+        for indicator, device_type in _VENDOR_TYPE:
+            if indicator in vendor_lower:
+                return device_type
+
     return "unknown"
 
 
@@ -210,3 +335,112 @@ def openwrt_fingerprint(hostname: str, mac: str = "") -> dict:
         "is_router": is_router,
         "router_vendor": vendor or None,
     }
+
+
+# --- Backfill: reclassify + resolve source for every stored device (#820, ref #817) ---
+
+# Legacy-module source tags migrated by `store.migrate_legacy()`. These
+# modules are being retired, so any row still carrying one of these tags
+# has never been re-confirmed by a live discovery cycle since migration.
+_LEGACY_SOURCE_TAGS = {"mac-guard", "device-intel", "iot-guard"}
+
+
+def reclassify_all(store, *, discover_kwargs: dict | None = None) -> dict:
+    """Backfill `device_type`/`risk_score`/`risk_level`/`source` for every
+    device already in `store`.
+
+    Mirrors exactly how `Collector.cycle_once()` enriches a freshly
+    discovered device (`api/collector.py`): `classify_device_type()` on
+    the stored `hostname`/`oui_vendor`, then `openwrt_fingerprint()`'s
+    `is_router` promotes an "unknown" classification to "router" (the
+    same Part-B rogue-AP fallback), then `risk_score()`. `is_known` is
+    always `True` here — every row processed already exists in the
+    store, which is exactly `Collector`'s own definition of "known".
+    `device_type`/`risk_score`/`risk_level` are only WRITTEN when the
+    freshly computed `device_type` isn't "unknown" (same omit-on-unknown
+    rule `Collector` and `upsert()`'s best-value merge already rely on)
+    so a device that no longer matches any indicator keeps whatever
+    classification it already had — never regresses a good, previously
+    learned value to "unknown".
+
+    Source resolution (#820 Task 2b): a single live `discovery.discover()`
+    merge builds a `{mac: source}` map (dnsmasq/isc/arp). For each stored
+    device: if its mac is in that live map, `source` becomes the live
+    value (the device is still on the network, just seen through a
+    different lens than whatever wrote it originally). Otherwise, if the
+    CURRENT stored `source` is one of the retired legacy-module tags
+    (`_LEGACY_SOURCE_TAGS`), it is relabelled `'imported'` — the device
+    isn't currently visible, so a live source can no longer be
+    attributed. Any other current source (already a live value like
+    'arp', or already 'imported') is left untouched. `discover()` itself
+    is fail-safe (never raises) and returns `[]` off-board; when that
+    happens every legacy-tagged row just becomes 'imported', never a
+    crash.
+
+    Uses ONLY `store.get`/`store.list`/`store.upsert` — the store's own
+    `threading.Lock`-protected public API, never a raw connection.
+    Idempotent: re-running with no new discovery data or code changes
+    yields `changed == 0`. Fail-safe per device: a device whose row can't
+    be processed is skipped (and logged), never aborting the loop.
+
+    Returns `{"total": N, "changed": N, "skipped": N}`.
+    """
+    try:
+        live_devices = discover(**(discover_kwargs or {}))
+    except Exception:  # noqa: BLE001 - discovery must never abort the backfill
+        logger.warning("reclassify_all: discover() failed", exc_info=True)
+        live_devices = []
+
+    live_source_by_mac = {
+        d["mac"]: d.get("source") for d in live_devices if d.get("mac")
+    }
+
+    total = 0
+    changed = 0
+    skipped = 0
+
+    for row in store.list(limit=1_000_000):
+        total += 1
+        mac = row.get("mac")
+        try:
+            if not mac:
+                continue
+
+            hostname = row.get("hostname") or ""
+            vendor = row.get("oui_vendor") or ""
+            device_type = classify_device_type(hostname, vendor)
+            fp = openwrt_fingerprint(hostname, mac)
+            if device_type == "unknown" and fp["is_router"]:
+                device_type = "router"
+
+            update: dict = {"mac": mac}
+            row_changed = False
+
+            if device_type != "unknown":
+                score, level = risk_score(device_type, fp["is_router"], True)
+                if (
+                    device_type != row.get("device_type")
+                    or score != row.get("risk_score")
+                    or level != row.get("risk_level")
+                ):
+                    update["device_type"] = device_type
+                    update["risk_score"] = score
+                    update["risk_level"] = level
+                    row_changed = True
+
+            current_source = row.get("source")
+            new_source = live_source_by_mac.get(mac)
+            if new_source is None and current_source in _LEGACY_SOURCE_TAGS:
+                new_source = "imported"
+            if new_source is not None and new_source != current_source:
+                update["source"] = new_source
+                row_changed = True
+
+            if row_changed:
+                store.upsert(update)
+                changed += 1
+        except Exception:  # noqa: BLE001 - one bad row must never abort the backfill
+            skipped += 1
+            logger.warning("reclassify_all: skipping device mac=%r", mac, exc_info=True)
+
+    return {"total": total, "changed": changed, "skipped": skipped}
