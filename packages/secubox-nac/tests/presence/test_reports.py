@@ -83,8 +83,8 @@ class _RecordingMailer:
         self.result = result
         self.calls = []
 
-    def __call__(self, subject, body, *, to):
-        self.calls.append((subject, body, to))
+    def __call__(self, subject, body, *, to, html=False):
+        self.calls.append((subject, body, to, html))
         return self.result
 
 
@@ -119,10 +119,14 @@ def test_run_scheduled_due_emails(tmp_path):
 
     assert ran is True
     assert len(mailer.calls) == 1
-    subject, body, to = mailer.calls[0]
+    subject, body, to, html = mailer.calls[0]
     assert to == "admin@example.com"
     assert "Presence Report" in subject
     assert len(body) > 0
+    # #820 whole-branch fix M1: the report body is HTML — run_scheduled
+    # must tell the mailer so it is sent as text/html, not raw markup
+    # source as text/plain.
+    assert html is True
 
     saved = json.loads(schedule_path.read_text())
     assert saved["last_run"] == now

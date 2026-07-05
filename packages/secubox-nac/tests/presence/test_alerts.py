@@ -329,3 +329,46 @@ def test_send_alert_no_recipient_is_false():
     ok = send_alert("s", "b", to="", runner=lambda *a, **k: _FakeCompletedProcess(0))
 
     assert ok is False
+
+
+def test_send_alert_default_is_text_plain():
+    import email
+
+    from api.presence.mailer import send_alert
+
+    calls = []
+
+    def fake_runner(cmd, *, input, capture_output, timeout):
+        calls.append(input)
+        return _FakeCompletedProcess(0)
+
+    ok = send_alert("s", "plain body", to="admin@example.com", runner=fake_runner)
+
+    assert ok is True
+    msg = email.message_from_bytes(calls[0])
+    assert msg.get_content_type() == "text/plain"
+
+
+def test_send_alert_html_true_sets_text_html_subtype():
+    """#820 whole-branch fix M1: `html=True` must send `text/html`, not
+    `text/plain` (a `run_scheduled` daily/weekly report body is already a
+    rendered HTML document — sent as `text/plain` it arrives in the
+    recipient's inbox as raw markup source instead of a rendered page)."""
+    import email
+
+    from api.presence.mailer import send_alert
+
+    calls = []
+
+    def fake_runner(cmd, *, input, capture_output, timeout):
+        calls.append(input)
+        return _FakeCompletedProcess(0)
+
+    ok = send_alert(
+        "s", "<html><body>hi</body></html>", to="admin@example.com",
+        html=True, runner=fake_runner,
+    )
+
+    assert ok is True
+    msg = email.message_from_bytes(calls[0])
+    assert msg.get_content_type() == "text/html"

@@ -72,6 +72,8 @@ def test_collect_wan(tmp_path):
     assert bot_row["geo_cc"] == "US"
     assert bot_row["geo_asn"] == "AS13335"
     assert bot_row["provenance"] == "geo"
+    # #820 whole-branch fix M3: first_seen must be populated on insert.
+    assert bot_row["first_seen"] is not None
     extra = json.loads(bot_row["extra"])
     assert extra["host"] == "example.com"
     assert extra["category"] == "scan"
@@ -80,6 +82,29 @@ def test_collect_wan(tmp_path):
     assert browser_row["client_type"] == "browser"
     assert browser_row["provenance"] == "private"
     assert not browser_row["geo_cc"]
+
+
+def test_collect_wan_first_seen_set_once(tmp_path):
+    """#820 whole-branch fix M3: `first_seen` is populated on the initial
+    upsert and must NOT move forward on a later re-sighting of the same
+    IP (the store's set-once COALESCE semantics)."""
+    from api.presence.store import PresenceStore
+    from api.presence.wan import collect_wan
+
+    log = tmp_path / "waf-threats.log"
+    log.write_text(_line("1.1.1.1", BOT_UA, ts="2026-07-04T12:00:00Z"))
+
+    store = PresenceStore(str(tmp_path / "devices.db"))
+    collect_wan(store, _fake_geo_enrich, threat_log=str(log))
+    row1 = store.get("wan:1.1.1.1")
+    assert row1["first_seen"] is not None
+    first_seen = row1["first_seen"]
+
+    log.write_text(_line("1.1.1.1", BOT_UA, ts="2026-07-04T13:00:00Z"))
+    collect_wan(store, _fake_geo_enrich, threat_log=str(log))
+    row2 = store.get("wan:1.1.1.1")
+    assert row2["first_seen"] == first_seen
+    assert row2["last_seen"] > first_seen
 
 
 def test_collect_wan_missing_log(tmp_path):

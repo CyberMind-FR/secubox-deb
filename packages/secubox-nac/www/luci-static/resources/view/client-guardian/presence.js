@@ -240,7 +240,7 @@ return view.extend({
 		var originCell;
 		if (item.geo_cc) {
 			var originParts = [countryFlag(item.geo_cc) + ' ', String(item.geo_cc)];
-			if (item.geo_asn) originParts.push(' · AS' + String(item.geo_asn));
+			if (item.geo_asn) originParts.push(' · ' + String(item.geo_asn));
 			originCell = E('div', {}, [
 				E('span', {}, originParts),
 				item.geo_org ? E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted);' }, [String(item.geo_org)]) : E('span')
@@ -312,7 +312,7 @@ return view.extend({
 				asns.length
 					? asns.map(function(a) {
 						return E('div', { 'style': 'display: flex; justify-content: space-between; padding: 3px 0;' }, [
-							E('span', { 'style': 'font-family: monospace; font-size: 12px;' }, ['AS' + String(a.asn)]),
+							E('span', { 'style': 'font-family: monospace; font-size: 12px;' }, [String(a.asn)]),
 							E('span', { 'class': 'kiss-badge kiss-badge-blue' }, [String(a.n)])
 						]);
 					})

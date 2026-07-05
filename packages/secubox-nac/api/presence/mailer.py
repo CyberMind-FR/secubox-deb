@@ -40,9 +40,18 @@ def send_alert(
     sendmail_bin: str = DEFAULT_SENDMAIL_BIN,
     from_addr: str = DEFAULT_FROM_ADDR,
     timeout: int = DEFAULT_TIMEOUT,
+    html: bool = False,
     runner=subprocess.run,
 ) -> bool:
-    """Send a plain-text alert email via `sendmail -t -oi`. Never raises.
+    """Send an alert email via `sendmail -t -oi`. Never raises.
+
+    `html` (#820 whole-branch fix M1, default `False`) selects the MIME
+    subtype of the message body: `False` (default, tiered alert emails)
+    sends `text/plain`; `True` sends `text/html` for a caller (the daily/
+    weekly presence report, `reports.run_scheduled`) that hands over an
+    already-rendered HTML document — without this, an HTML body sent as
+    `text/plain` arrives in the recipient's inbox as raw markup source
+    instead of a rendered report.
 
     Returns `True` only when the subprocess exits with return code 0.
     Any exception (missing binary -> `FileNotFoundError`, a timeout ->
@@ -64,7 +73,10 @@ def send_alert(
         msg["From"] = from_addr
         msg["To"] = to
         msg["Subject"] = subject
-        msg.set_content(body or "")
+        if html:
+            msg.set_content(body or "", subtype="html")
+        else:
+            msg.set_content(body or "")
 
         proc = runner(
             [sendmail_bin, "-t", "-oi"],
