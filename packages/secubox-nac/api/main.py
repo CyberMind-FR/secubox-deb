@@ -1247,6 +1247,26 @@ def summary(user=Depends(require_jwt)):
     }
 
 
+@router.get("/stats")
+def stats(user=Depends(require_jwt)):
+    """Top-level aggregation badge for the shared sidebar (`sidebar.js`).
+
+    #820: the sidebar polls `/api/v1/nac/stats` for `devices`/`blocked`/
+    `quarantine` — nac only had `/summary`, so this 404'd (missing
+    aggregation badge). Reuses `status()` (already cached/cheap) plus a
+    single indexed GROUP-BY per aggregation via `DeviceStore.count_by()`.
+    Plain `def` — no blocking work on the shared aggregator loop.
+    """
+    s = status(user)
+    return {
+        "devices": s["client_count"],
+        "blocked": s["by_zone"].get("blocked", 0),
+        "quarantine": s["quarantine_count"],
+        "by_source": store.count_by("source") if store else {},
+        "by_type": store.count_by("device_type") if store else {},
+    }
+
+
 # Compatibility aliases
 @router.get("/portal_config")
 async def portal_config(user=Depends(require_jwt)):

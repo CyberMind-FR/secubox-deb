@@ -31,6 +31,10 @@ async function callQuarantineClient(params) {
     return sbxFetch('/api/v1/nac/quarantine_client', params, 'GET');
 }
 
+async function callGetStats(params) {
+    return sbxFetch('/api/v1/nac/stats', params, 'GET');
+}
+
 function formatBytes(bytes) {
 	if (!bytes || bytes === 0) return '0 B';
 	var units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -50,6 +54,28 @@ function getDeviceIcon(hostname, mac) {
 	if (hostname.match(/router|switch|ap|access[-_]?point|bridge/)) return '🌐';
 	if (hostname.match(/printer|print|hp-|canon-|epson-/)) return '🖨️';
 	return '🔌';
+}
+
+// #820: classified device_type → icon (preferred over the hostname guess
+// above whenever the store has already classified the device).
+var DEVICE_TYPE_ICON = {
+	router: '📡', phone: '📱', mobile: '📱', computer: '💻', laptop: '💻',
+	camera: '📷', tv: '📺', media: '📺', game_console: '🎮', printer: '🖨️',
+	nas: '🗄️', iot: '🔌', speaker: '🔊', wearable: '⌚', unknown: '🔌'
+};
+
+// #820: discovery-source → icon (source was previously rendered nowhere).
+var SOURCE_ICON = {
+	dnsmasq: '📶', isc: '📶', dhcp: '📶', arp: '🔎', 'mac-guard': '🏷️',
+	'device-intel': '🔬', 'iot-guard': '🔌', mesh: '🕸️', nmap: '🛰️',
+	mdns: '📣', manual: '✍️'
+};
+
+function sourceBadge(src) {
+	var ic = SOURCE_ICON[src] || '❔';
+	// src is attacker-influenceable (device-announced) — array-wrap so
+	// dom.js treats it as a Text node, never innerHTML.
+	return E('span', { 'class': 'kiss-badge kiss-badge-blue', 'title': _('Source') }, [ic + ' ' + fmtOrDash(src)]);
 }
 
 // #817 Task 8 — vendor/type/risk rendering helpers. All values below come
@@ -90,13 +116,17 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			callGetClients(),
-			callGetZones()
+			callGetZones(),
+			// #820: aggregation panel is best-effort — a /stats failure
+			// must never break the client list, so swallow it here.
+			callGetStats().catch(function() { return null; })
 		]);
 	},
 
 	render: function(data) {
 		var clients = Array.isArray(data[0]) ? data[0] : (data[0].clients || []);
 		var zones = Array.isArray(data[1]) ? data[1] : (data[1].zones || []);
+		var stats = data[2] || null;
 		var self = this;
 
 		var content = [
@@ -122,6 +152,11 @@ return view.extend({
 			]),
 
 			CgNav.renderTabs('clients'),
+
+			// #820: by-source / by-type aggregation panel (fed by /stats).
+			// Fail-safe: renderAggPanel returns an empty node when stats
+			// is null (fetch failed) or both breakdowns are empty.
+			this.renderAggPanel(stats),
 
 			// Filter tabs
 			E('div', { 'class': 'kiss-grid kiss-grid-auto', 'style': 'margin-bottom: 20px' }, [
@@ -149,6 +184,41 @@ return view.extend({
 		return KissTheme.wrap(content, 'client-guardian/clients');
 	},
 
+	renderAggChips: function(iconMap, breakdown) {
+		var keys = Object.keys(breakdown || {});
+		if (!keys.length) return [E('span', { 'style': 'color: var(--kiss-muted);' }, '—')];
+		return keys.map(function(key) {
+			var icon = iconMap[key] || '❔';
+			var count = breakdown[key];
+			// key/count come from the device-announced source/device_type
+			// columns (attacker-influenceable) — array-wrap so dom.js
+			// renders a Text node, never innerHTML.
+			return E('span', {
+				'class': 'kiss-badge kiss-badge-blue',
+				'style': 'margin-right: 6px; margin-bottom: 4px;'
+			}, [icon + ' ' + key + ': ' + count]);
+		});
+	},
+
+	renderAggPanel: function(stats) {
+		if (!stats) return E('span');
+		var bySource = stats.by_source || {};
+		var byType = stats.by_type || {};
+		if (!Object.keys(bySource).length && !Object.keys(byType).length) return E('span');
+
+		return E('div', { 'class': 'kiss-card', 'style': 'margin-bottom: 20px;' }, [
+			E('div', { 'class': 'kiss-card-title' }, 'Agregations'),
+			E('div', { 'style': 'margin-top: 8px;' }, [
+				E('div', { 'style': 'color: var(--kiss-muted); margin-bottom: 4px;' }, 'Par source'),
+				E('div', { 'style': 'display: flex; flex-wrap: wrap;' }, this.renderAggChips(SOURCE_ICON, bySource))
+			]),
+			E('div', { 'style': 'margin-top: 8px;' }, [
+				E('div', { 'style': 'color: var(--kiss-muted); margin-bottom: 4px;' }, 'Par type'),
+				E('div', { 'style': 'display: flex; flex-wrap: wrap;' }, this.renderAggChips(DEVICE_TYPE_ICON, byType))
+			])
+		]);
+	},
+
 	renderFilterTab: function(filter, label, count, active) {
 		var tab = E('div', {
 			'class': 'kiss-stat' + (active ? ' kiss-panel-green' : ''),
@@ -168,7 +238,7 @@ return view.extend({
 		if (client.status === 'unknown') statusClass += ' quarantine';
 		if (client.status === 'banned') statusClass += ' banned';
 
-		var deviceIcon = getDeviceIcon(client.hostname || client.name, client.mac);
+		var deviceIcon = DEVICE_TYPE_ICON[client.device_type] || getDeviceIcon(client.hostname || client.name, client.mac);
 		var zoneClass = (client.zone || 'unknown').replace('lan_', '');
 		var self = this;
 
@@ -202,7 +272,7 @@ return view.extend({
 				])
 			]),
 			E('div', { 'class': 'cg-client-fingerprint', 'style': 'display: flex; flex-direction: column; gap: 4px; min-width: 100px;' },
-				renderFingerprintBadges(client)
+				renderFingerprintBadges(client).concat([sourceBadge(client.source)])
 			),
 			E('div', { 'class': 'cg-client-traffic' }, [
 				E('div', { 'class': 'cg-client-traffic-value' }, '↓ ' + formatBytes(client.rx_bytes || 0)),
@@ -379,7 +449,8 @@ return view.extend({
 	handleRefresh: function() {
 		return Promise.all([
 			callGetClients(),
-			callGetZones()
+			callGetZones(),
+			callGetStats().catch(function() { return null; })
 		]).then(L.bind(function(data) {
 			var container = document.querySelector('.kiss-main');
 			if (container) {
