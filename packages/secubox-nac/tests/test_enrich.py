@@ -49,5 +49,10 @@ def test_load_oui_missing_file():
 
 
 def test_oui_vendor_unmatched():
+    """#817 whole-branch fix (I4): a miss returns None, not the sentinel
+    string "Unknown" (a non-null value would clobber a migrated vendor
+    through the store's best-value COALESCE merge)."""
     from api.enrich import oui_vendor
-    assert oui_vendor("11:22:33:44:55:66", {}) == "Unknown"
+    assert oui_vendor("11:22:33:44:55:66", {}) is None
+    # A malformed MAC is also a miss -> None (was "Unknown").
+    assert oui_vendor("not-a-mac", {}) is None

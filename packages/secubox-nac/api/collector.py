@@ -76,19 +76,27 @@ class Collector:
             vendor = oui_vendor(mac, self.oui_map)
             device_type = classify_device_type(hostname, vendor)
             fp = openwrt_fingerprint(hostname, mac)
-            score, level = risk_score(device_type, fp["is_router"])
 
+            # #817 whole-branch fix (I4): OMIT fields the enricher couldn't
+            # determine so a re-seen migrated device isn't clobbered by a
+            # sentinel through `upsert`'s best-value merge. A None vendor,
+            # an "unknown" device_type (and therefore its derived risk) are
+            # left out entirely — `upsert` then keeps the stored value on
+            # an existing row, and the SQL DEFAULT applies for a new one.
             enriched = {
                 **dev,
-                "oui_vendor": vendor,
-                "device_type": device_type,
-                "risk_score": score,
-                "risk_level": level,
                 "is_router": int(fp["is_router"]),
                 "is_openwrt": int(fp["is_openwrt"]),
                 "first_seen": now,
                 "last_seen": now,
             }
+            if vendor:
+                enriched["oui_vendor"] = vendor
+            if device_type != "unknown":
+                score, level = risk_score(device_type, fp["is_router"])
+                enriched["device_type"] = device_type
+                enriched["risk_score"] = score
+                enriched["risk_level"] = level
             self.store.upsert(enriched)
 
             if is_new:
@@ -100,10 +108,21 @@ class Collector:
         self._snapshot = snapshot
 
     async def run_forever(self) -> None:
-        """Call `cycle_once()` every `interval` seconds until cancelled."""
+        """Call `cycle_once()` every `interval` seconds until cancelled.
+
+        #817 whole-branch fix (I2, now board-critical): `cycle_once()` runs
+        a blocking `subprocess.run(["ip","neigh",...])` discovery plus ~280
+        SQLite upserts. On the board, nac is mounted in-process by the
+        aggregator, so this loop shares its single event loop with ~110
+        other modules — running `cycle_once()` inline would block ALL of
+        them for the duration of every cycle (#808). Offload it to the
+        default threadpool via `run_in_executor` so only a worker thread
+        blocks, never the shared loop.
+        """
+        loop = asyncio.get_running_loop()
         try:
             while True:
-                self.cycle_once()
+                await loop.run_in_executor(None, self.cycle_once)
                 await asyncio.sleep(self.interval)
         except asyncio.CancelledError:
             logger.info("collector: run_forever cancelled, exiting cleanly")

@@ -156,6 +156,49 @@ def test_add_to_zone_and_approve_client_are_plain_def(tmp_path, monkeypatch):
     assert "aa:bb:cc:00:00:44" in sets.get("lan_allowed", set())
 
 
+def test_zone_map_builds_from_nft_sets(tmp_path, monkeypatch):
+    """#817 whole-branch fix (I3): `_zone_map` resolves each MAC's zone from
+    the nft sets (listed once each), preserving `_get_client_zone` semantics
+    (nft membership wins, first zone in ZONES order wins on a tie)."""
+    main, sets = _setup(tmp_path, monkeypatch)
+
+    main._nft_add_element("lan_allowed", "aa:bb:cc:00:08:01")
+    main._nft_add_element("quarantine_zone", "aa:bb:cc:00:08:02")
+
+    zmap = main._zone_map()
+    assert zmap["aa:bb:cc:00:08:01"] == "lan"
+    assert zmap["aa:bb:cc:00:08:02"] == "quarantine"
+    # a MAC in no set is absent from the map (callers default to quarantine)
+    assert "aa:bb:cc:00:08:99" not in zmap
+
+
+def test_clients_uses_batched_zone_map(tmp_path, monkeypatch):
+    """#817 whole-branch fix (I3): `/clients` must resolve zones via one
+    batched `_zone_map()` — 4 `nft list set` calls (one per zone), NOT one
+    per device. With N devices the old path was N×4 subprocesses."""
+    main, sets = _setup(tmp_path, monkeypatch)
+    user = {"sub": "tester"}
+
+    calls = {"n": 0}
+    inner = main._nft_list_set
+
+    def counting(set_name):
+        calls["n"] += 1
+        return inner(set_name)
+
+    monkeypatch.setattr(main, "_nft_list_set", counting)
+
+    for i in range(6):
+        main.store.upsert({
+            "mac": f"aa:bb:cc:00:09:0{i}", "ip": f"10.0.0.{i}",
+            "last_seen": 1, "source": "arp",
+        })
+
+    main.clients(user=user)
+    # exactly one list per zone, independent of the 6 devices
+    assert calls["n"] == len(main.ZONES)
+
+
 def test_ban_client_and_unban_client_are_plain_def(tmp_path, monkeypatch):
     """`ban_client` (converted async def -> def, #808) fires the webhook
     via `_fire_webhook_sync` instead of `await`, and must not raise even

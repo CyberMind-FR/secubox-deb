@@ -44,3 +44,44 @@ def test_collector_no_dup_join(tmp_path, monkeypatch):
     assert events.count("client_joined") == 1  # unchanged on the second cycle
     assert s.count() == 1
     assert col.snapshot()[0]["mac"] == "aa:bb:cc:00:00:31"
+
+
+def test_run_forever_offloads_cycle_off_the_loop(tmp_path, monkeypatch):
+    """#817 whole-branch fix (I2): `run_forever` must run the blocking
+    `cycle_once()` in a threadpool executor, NEVER inline on the event
+    loop thread — otherwise the shared aggregator loop stalls for every
+    cycle (#808). Assert it ran, and always on a thread other than the
+    loop thread."""
+    import asyncio
+    import threading
+    from api.store import DeviceStore
+    from api.collector import Collector
+    import api.collector as C
+
+    s = DeviceStore(str(tmp_path / "d.db"))
+    monkeypatch.setattr(C, "discover", lambda **k: [])
+    col = Collector(s, oui_map={}, interval=0.01)
+
+    cycle_threads: list[int] = []
+    orig_cycle = col.cycle_once
+
+    def tracking_cycle():
+        cycle_threads.append(threading.get_ident())
+        orig_cycle()
+
+    col.cycle_once = tracking_cycle
+
+    async def drive():
+        loop_thread = threading.get_ident()
+        task = asyncio.create_task(col.run_forever())
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        return loop_thread
+
+    loop_thread = asyncio.run(drive())
+    assert cycle_threads, "cycle_once never ran"
+    assert all(t != loop_thread for t in cycle_threads), "cycle_once ran on the loop thread (not offloaded)"
