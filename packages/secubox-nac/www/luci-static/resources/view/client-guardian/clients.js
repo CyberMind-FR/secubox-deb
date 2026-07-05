@@ -255,20 +255,20 @@ return view.extend({
 					client.name || client.hostname || 'Unknown'
 				]),
 				E('div', { 'class': 'cg-client-meta' }, [
-					E('span', {}, client.mac),
-					E('span', {}, client.ip || 'N/A'),
-					client.first_seen ? E('span', {}, '📅 ' + client.first_seen.split(' ')[0]) : E('span')
+					E('span', {}, [client.mac]),
+					E('span', {}, [client.ip || 'N/A']),
+					client.first_seen ? E('span', {}, ['📅 ' + client.first_seen.split(' ')[0]]) : E('span')
 				])
 			]),
-			E('span', { 'class': 'cg-client-zone ' + zoneClass }, client.zone || 'unknown'),
+			E('span', { 'class': 'cg-client-zone ' + zoneClass }, [client.zone || 'unknown']),
 			E('div', { 'class': 'cg-client-vendor-info', 'style': 'min-width: 130px; font-size: 12px;' }, [
-				E('div', { 'style': 'color: var(--kiss-muted);', 'title': _('OUI vendor') }, fmtOrDash(client.oui_vendor)),
-				E('div', { 'title': _('Device type') }, fmtDeviceType(client.device_type)),
+				E('div', { 'style': 'color: var(--kiss-muted);', 'title': _('OUI vendor') }, [fmtOrDash(client.oui_vendor)]),
+				E('div', { 'title': _('Device type') }, [fmtDeviceType(client.device_type)]),
 				E('div', { 'style': 'margin-top: 4px;' }, [
 					E('span', {
 						'class': riskBadgeClass(client.risk_level),
 						'title': _('Risk score') + ': ' + fmtOrDash(client.risk_score)
-					}, fmtOrDash(client.risk_level))
+					}, [fmtOrDash(client.risk_level)])
 				])
 			]),
 			E('div', { 'class': 'cg-client-fingerprint', 'style': 'display: flex; flex-direction: column; gap: 4px; min-width: 100px;' },
