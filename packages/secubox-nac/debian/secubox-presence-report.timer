@@ -1,0 +1,12 @@
+[Unit]
+Description=SecuBox NAC cross-plane presence report timer (daily, #820)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/820
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+AccuracySec=5min
+Unit=secubox-presence-report.service
+
+[Install]
+WantedBy=timers.target

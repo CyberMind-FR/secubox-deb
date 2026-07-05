@@ -25,6 +25,23 @@ case "$1" in
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
 
+    # Project B (#820 Task 9): enable the presence-report TIMER only — the
+    # .service is a oneshot the timer invokes, never enabled/started
+    # directly. This is safe to enable unconditionally: the timer's
+    # oneshot calls `secubox-presence-report`, which delegates to Task 7's
+    # `run_scheduled()` — that itself no-ops (returns without emailing)
+    # unless an operator has separately configured
+    # `/etc/secubox/reporter-schedule.json` with a `frequency`+`recipient`.
+    # This is UNRELATED to Task 6's tiered EMAIL ALERTS, which stay OFF by
+    # design: only a commented `.example` is shipped
+    # (/usr/share/secubox/nac/presence-alerts.toml.example) — it is never
+    # copied to the live `/etc/secubox/presence-alerts.toml` path here, so
+    # `load_config()` keeps returning "no config" (no alerts) until an
+    # operator opts in by hand.
+    systemctl daemon-reload
+    systemctl enable secubox-presence-report.timer 2>/dev/null || true
+    systemctl start  secubox-presence-report.timer 2>/dev/null || true
+
     # #817 Task 9: one-shot, idempotent, best-effort nft element migration.
     # mac-guard's separate `inet secubox_mac_guard` table is being retired
     # (Task 7 reduced its API to redirect stubs); fold its allow/deny

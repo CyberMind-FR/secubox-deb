@@ -1,3 +1,44 @@
+secubox-nac (3.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Cross-plane Presence Guardian (#820, Project B) — stacked on the
+    #817 Device Guardian consolidation.
+  * New `presences`/`presence_alerts` tables (same `devices.db`, WAL) fed
+    by four fail-safe, off-loop collectors: WAN (sbxwaf threat-log +
+    User-Agent bot/crawler classification), LAN/WG (mirrors A's device
+    store), and kbin (R3 toolbox tunnel `mac_hash` personas + report
+    token deep-link).
+  * Geo/provenance enrichment (`geo_cc`/`geo_asn`/`geo_org` for public
+    IPs via the existing mmdb readers; `provenance` always set —
+    geo/private/lan/tunnel/mesh/bot — even with no mmdb present).
+  * Tiered alert engine (`api/presence/alerts.py`): WAN bot-surge,
+    WAN new-country, and WG/LAN rogue-router (#817 risk_level=="high")
+    checks; every fired condition is always recorded, while the EMAIL
+    (sendmail, deduped/rate-limited per tier+plane+window) stays OFF
+    until an operator supplies `/etc/secubox/presence-alerts.toml` — a
+    commented `.example` ships under `/usr/share/secubox/nac/`, never
+    the live path.
+  * Scheduled presence report (`api/presence/reports.py`): a
+    self-contained HTML/text report (per-plane counts, top geo/ASN,
+    recent presences + alerts) plus `run_scheduled()`, wired to a new
+    `secubox-presence-report.timer` (daily) → oneshot
+    `secubox-presence-report.service` (`User=secubox`), and an
+    on-demand `POST /presence/report/now`. The timer is enabled by
+    default — it stays a harmless no-op until
+    `/etc/secubox/reporter-schedule.json` is configured with a
+    `frequency`+`recipient`.
+  * New read-only `/presence`, `/presence/{id}`, `/presence/geo`,
+    `/presence/alerts` (JWT-gated, plain `def`) and `POST
+    /presence/sync` (forced collect) endpoints.
+  * WebUI: new "Présence" cross-plane view (geo/provenance badges,
+    tier-colored rows, geo/ASN aggregate panel, alerts panel, LAN/WG
+    device deep-link, kbin report deep-link); all dynamic content via
+    `E()`/`textContent`, no `innerHTML` of attacker-influenceable
+    fields.
+  * Tor collection and VLAN/Tor/mesh emancipation are explicitly NOT
+    part of this release (deferred to Project C).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 05 Jul 2026 20:00:00 +0000
+
 secubox-nac (3.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Device Guardian consolidation (#817): secubox-nac becomes the single
