@@ -425,7 +425,11 @@ def run_scheduled(
         subject = f"SecuBox Presence Report ({frequency}) — {datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat()}"
 
         try:
-            sent = bool(mailer_send(subject, body, to=effective_recipient))
+            # #820 whole-branch fix M1: this body is always an HTML
+            # document (`build_report(..., fmt="html", ...)` above) — tell
+            # the mailer so it sends `text/html`, not `text/plain` raw
+            # markup source.
+            sent = bool(mailer_send(subject, body, to=effective_recipient, html=True))
         except Exception:
             sent = False
 

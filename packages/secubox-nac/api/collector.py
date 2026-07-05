@@ -25,9 +25,11 @@ import time
 
 from .discovery import discover
 from .enrich import classify_device_type, openwrt_fingerprint, oui_vendor, risk_score
+from .presence.alerts import evaluate, load_config
 from .presence.geo import enrich_origin
 from .presence.kbin import collect_kbin
 from .presence.local import collect_local
+from .presence.mailer import send_alert
 from .presence.store import PresenceStore
 from .presence.wan import collect_wan
 from .store import DeviceStore
@@ -63,6 +65,12 @@ class Collector:
         self.interval = interval
         self.presence_store = presence_store
         self._snapshot: list[dict] = []
+        # Project B (#820) whole-branch fix C1: the SAME dict is reused
+        # across every `cycle_once()` call for this process's lifetime, so
+        # `alerts.evaluate()`'s per-`(tier,plane)` email dedup window and
+        # its `seen_countries` novelty memory actually span cycles instead
+        # of resetting (and re-emailing) on every tick.
+        self._alert_state: dict = {}
 
     def cycle_once(self) -> None:
         """Run one discover -> enrich -> upsert cycle, synchronously.
@@ -169,6 +177,36 @@ class Collector:
                 collect_kbin(self.presence_store)
             except Exception:  # noqa: BLE001
                 logger.warning("collector: collect_kbin failed", exc_info=True)
+
+            # #820 whole-branch fix I1: bound the `wan` plane's unbounded
+            # growth (spec §9 age-out) once per cycle, after this cycle's
+            # collection so a just-seen IP is never pruned out from under
+            # itself. Fail-safe: never allowed to sink the cycle.
+            try:
+                self.presence_store.prune_wan()
+            except Exception:  # noqa: BLE001
+                logger.warning("collector: prune_wan failed", exc_info=True)
+
+            # #820 whole-branch fix C1: `alerts.evaluate()`/`load_config()`
+            # were dead code — never called in production, so the tiered
+            # alert engine never fired. Wire it into this SAME off-loop
+            # cycle. `load_config() is None` (file absent/malformed) is the
+            # feature's off-switch and must remain a silent no-op; any
+            # other exception here (a malformed store row, a raising
+            # mailer, ...) must never crash the cycle — `evaluate()` is
+            # already internally fail-safe, this is belt-and-braces.
+            try:
+                config = load_config()
+                if config is not None:
+                    evaluate(
+                        self.presence_store,
+                        config,
+                        send_alert,
+                        now=time.time(),
+                        state=self._alert_state,
+                    )
+            except Exception:  # noqa: BLE001
+                logger.warning("collector: alert evaluate failed", exc_info=True)
 
     async def run_forever(self) -> None:
         """Call `cycle_once()` every `interval` seconds until cancelled.

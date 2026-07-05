@@ -157,6 +157,7 @@ def collect_kbin(
                 "identity": mac_hash,
                 "provenance": "tunnel",
                 "client_type": "persona",
+                "first_seen": last_seen,
                 "last_seen": last_seen,
                 "extra": json.dumps(extra),
             })

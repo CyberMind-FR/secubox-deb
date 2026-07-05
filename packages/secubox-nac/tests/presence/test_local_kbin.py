@@ -57,6 +57,8 @@ def test_collect_local(tmp_path):
     assert lan_row["device_mac"] == "aa:bb:cc:00:00:01"
     assert lan_row["client_type"] == "laptop"
     assert lan_row["last_seen"] == 1000
+    # #820 whole-branch fix M3: first_seen must be populated on insert.
+    assert lan_row["first_seen"] == 1000
     extra = json.loads(lan_row["extra"])
     assert extra["hostname"] == "laptop"
     assert extra["risk_level"] == "low"
@@ -67,8 +69,32 @@ def test_collect_local(tmp_path):
     assert wg_row["device_mac"] == "aa:bb:cc:00:00:02"
     assert wg_row["client_type"] == "mesh_node"
     assert wg_row["last_seen"] == 2000
+    assert wg_row["first_seen"] == 2000
 
     assert store.count() == 2
+
+
+def test_collect_local_first_seen_set_once(tmp_path):
+    """#820 whole-branch fix M3: a later re-sighting of the same device
+    must not move `first_seen` forward (store's set-once semantics)."""
+    from api.presence.store import PresenceStore
+    from api.presence.local import collect_local
+
+    store = PresenceStore(str(tmp_path / "devices.db"))
+    dstore = _FakeDeviceStore([
+        {"mac": "aa:bb:cc:00:00:09", "source": "arp", "last_seen": 1000},
+    ])
+    collect_local(store, dstore)
+    row1 = store.get("lan:aa:bb:cc:00:00:09")
+    assert row1["first_seen"] == 1000
+
+    dstore._rows = [
+        {"mac": "aa:bb:cc:00:00:09", "source": "arp", "last_seen": 5000},
+    ]
+    collect_local(store, dstore)
+    row2 = store.get("lan:aa:bb:cc:00:00:09")
+    assert row2["first_seen"] == 1000
+    assert row2["last_seen"] == 5000
 
 
 def test_collect_local_failsafe(tmp_path):
@@ -126,6 +152,10 @@ def test_collect_kbin(tmp_path):
     # Last occurrence in tail order wins last_seen.
     assert by_identity["hash-aaa"]["last_seen"] == 300
     assert by_identity["hash-bbb"]["last_seen"] == 200
+    # #820 whole-branch fix M3: first_seen populated on this (first-ever)
+    # insert with the same value as last_seen.
+    assert by_identity["hash-aaa"]["first_seen"] == 300
+    assert by_identity["hash-bbb"]["first_seen"] == 200
 
     # No token source given -> no report_token key stored.
     extra = json.loads(by_identity["hash-aaa"]["extra"])
@@ -148,6 +178,26 @@ def test_collect_kbin_with_report_token(tmp_path):
     row = store.get("kbin:hash-ccc")
     extra = json.loads(row["extra"])
     assert extra["report_token"] == "tok-xyz"
+
+
+def test_collect_kbin_first_seen_set_once(tmp_path):
+    """#820 whole-branch fix M3: a later re-sighting of the same persona
+    must not move `first_seen` forward (store's set-once semantics)."""
+    from api.presence.store import PresenceStore
+    from api.presence.kbin import collect_kbin
+
+    catch = tmp_path / "media-catch.jsonl"
+    catch.write_text(_catch_line("hash-eee", ts=100) + "\n")
+    store = PresenceStore(str(tmp_path / "devices.db"))
+    collect_kbin(store, personas_source=str(catch))
+    row1 = store.get("kbin:hash-eee")
+    assert row1["first_seen"] == 100
+
+    catch.write_text(_catch_line("hash-eee", ts=900) + "\n")
+    collect_kbin(store, personas_source=str(catch))
+    row2 = store.get("kbin:hash-eee")
+    assert row2["first_seen"] == 100
+    assert row2["last_seen"] == 900
 
 
 def test_collect_kbin_missing(tmp_path):

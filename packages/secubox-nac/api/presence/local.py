@@ -97,6 +97,7 @@ def collect_local(store, device_store, *, limit: int = DEFAULT_LIMIT) -> int:
                 "device_mac": mac,
                 "provenance": provenance,
                 "client_type": client_type,
+                "first_seen": last_seen,
                 "last_seen": last_seen,
                 "extra": extra,
             })

@@ -212,6 +212,7 @@ def collect_wan(
                 "plane": "wan",
                 "identity": ip,
                 "client_type": client_type,
+                "first_seen": last_seen,
                 "last_seen": last_seen,
                 "geo_cc": origin.get("geo_cc"),
                 "geo_asn": origin.get("geo_asn"),

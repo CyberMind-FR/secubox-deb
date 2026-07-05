@@ -211,3 +211,31 @@ class PresenceStore:
                 "SELECT * FROM presence_alerts ORDER BY ts DESC LIMIT ?", (limit,)
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def prune_wan(self, *, max_age_days: int = 7, min_hits: int = 5) -> int:
+        """Age out stale, low-value WAN presences (Project B, #820 whole-
+        branch fix I1, spec §9).
+
+        `collect_wan` upserts one row per distinct `client_ip` EVER seen,
+        so the `presences` table grows unbounded for the `wan` plane in
+        particular (a one-off scanner/bot IP is never seen again but its
+        row lives forever). This deletes only rows where
+        `plane = 'wan' AND last_seen < (now - max_age_days*86400) AND
+        hits < min_hits` — a stale row that was ALSO seen repeatedly
+        (`hits >= min_hits`) is kept, on the theory that a recurring
+        visitor is worth keeping counts for even once quiet. Only the
+        `wan` plane is ever touched here: `lan`/`wg` (mirrors of Project
+        A's own bounded `devices` table) and `kbin` (bounded by the
+        toolbox's own persona set) are never pruned by this method.
+
+        Returns the number of rows deleted. Uses the same lock + a single
+        parameterized `DELETE` as every other method here.
+        """
+        cutoff = int(time.time()) - max_age_days * 86400
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM presences WHERE plane = 'wan' AND last_seen < ? AND hits < ?",
+                (cutoff, min_hits),
+            )
+            self._conn.commit()
+        return cur.rowcount

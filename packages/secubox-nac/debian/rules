@@ -2,6 +2,14 @@
 %:
 	dh $@
 
+# #820 whole-branch fix M4: dh's auto-generated systemd snippet may
+# enable/start units on install by default. postinst hand-manages ONLY the
+# presence-report TIMER (enable+start) and the main secubox-nac.service —
+# `dh_installsystemd` must install the unit files verbatim and leave every
+# enable/start decision to postinst, never take it over itself.
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
+
 override_dh_auto_install:
 	install -d debian/secubox-nac/usr/lib/secubox/nac/
 	cp -r api debian/secubox-nac/usr/lib/secubox/nac/
