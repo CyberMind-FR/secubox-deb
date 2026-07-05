@@ -208,6 +208,45 @@ def test_scan_falls_back_to_arp_when_nmap_empty(tmp_path, monkeypatch):
     assert main.store.get("aa:bb:cc:00:04:03") is not None
 
 
+def test_scan_enriches_before_upsert(tmp_path, monkeypatch):
+    """#817 Task 6 review fix 1: a `/scan`-discovered device must land in
+    the store with a non-NULL device_type/risk_level — not just the raw
+    mac/ip/hostname/last_seen/source columns."""
+    main, _ = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(main, "oui_map", {})
+
+    monkeypatch.setattr(main, "_scan_subprocess", lambda subnet=main.DEFAULT_SCAN_SUBNET: "Host: 10.0.0.80 ()\tStatus: Up\n")
+    monkeypatch.setattr(main, "_parse_arp", lambda: [
+        {"mac": "aa:bb:cc:00:06:01", "ip": "10.0.0.80", "hostname": "hikvision-cam", "source": "arp"},
+    ])
+
+    result = main.scan(user=USER)
+
+    assert result["success"] is True
+    d = main.store.get("aa:bb:cc:00:06:01")
+    assert d is not None
+    assert d["device_type"] == "camera"
+    assert d["risk_level"] is not None
+
+
+def test_scan_rejects_invalid_subnet(tmp_path, monkeypatch):
+    """#817 Task 6 review fix 2: an argv-injection-shaped or otherwise
+    invalid `subnet` must be rejected with 400 before ever reaching the
+    `nmap` argv."""
+    main, _ = _setup(tmp_path, monkeypatch)
+
+    def _boom(subnet=main.DEFAULT_SCAN_SUBNET):
+        raise AssertionError("nmap must never be invoked with an invalid subnet")
+
+    monkeypatch.setattr(main, "_scan_subprocess", _boom)
+
+    try:
+        main.scan(subnet="--script=x", user=USER)
+        assert False, "expected HTTPException(400)"
+    except main.HTTPException as exc:
+        assert exc.status_code == 400
+
+
 # --- /probe/openwrt[/{ip}] (curl mocked) ---
 
 
@@ -250,6 +289,23 @@ def test_probe_openwrt_single_ip(tmp_path, monkeypatch):
     assert d["is_openwrt"] == 1 and d["model"] == "GL-MT3000"
 
 
+def test_probe_openwrt_single_rejects_non_ip(tmp_path, monkeypatch):
+    """#817 Task 6 review fix 3 (SSRF): a non-IP `ip` path param must be
+    rejected with 400 before it ever reaches `_probe_ip` -> `curl`."""
+    main, _ = _setup(tmp_path, monkeypatch)
+
+    def _boom(ip, timeout=2.0):
+        raise AssertionError("curl must never be invoked with a non-IP target")
+
+    monkeypatch.setattr(main, "_probe_ip", _boom)
+
+    try:
+        main.probe_openwrt_single("{ip}", user=USER)
+        assert False, "expected HTTPException(400)"
+    except main.HTTPException as exc:
+        assert exc.status_code == 400
+
+
 # --- /mdns (avahi-browse mocked) ---
 
 
@@ -263,3 +319,30 @@ def test_mdns_parses_avahi_browse_output(tmp_path, monkeypatch):
     assert result["total"] == 1
     assert result["services"][0]["hostname"] == "printer.local"
     assert result["services"][0]["ip"] == "10.0.0.70"
+
+
+# --- /export/csv formula-injection guard ---
+
+
+def test_export_csv_neutralizes_formula_injection(tmp_path, monkeypatch):
+    """#817 Task 6 review fix 4: a device whose hostname is attacker-chosen
+    (e.g. `=cmd()`) must not export as a bare spreadsheet formula."""
+    import csv as _csv
+    import io as _io
+
+    main, _ = _setup(tmp_path, monkeypatch)
+    main.store.upsert({
+        "mac": "aa:bb:cc:00:07:01", "ip": "10.0.0.90",
+        "hostname": "=cmd()", "last_seen": 1, "source": "arp",
+    })
+
+    response = main.export_csv(user=USER)
+    body = response.body.decode() if isinstance(response.body, bytes) else response.body
+
+    rows = list(_csv.reader(_io.StringIO(body)))
+    header = rows[0]
+    hostname_idx = header.index("hostname")
+    device_row = next(r for r in rows[1:] if r[header.index("mac")] == "aa:bb:cc:00:07:01")
+
+    assert not device_row[hostname_idx].startswith("=")
+    assert device_row[hostname_idx] == "'=cmd()"
