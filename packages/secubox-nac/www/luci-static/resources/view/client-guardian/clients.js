@@ -104,6 +104,30 @@ function riskBadgeClass(level) {
 	}
 }
 
+// #820: nft zone membership → emoji + readable label. The raw zone value comes
+// from the store (server-assigned), but treat it as untrusted and array-wrap
+// wherever rendered.
+var ZONE_ICON = {
+	lan_allowed: '🏠', lan: '🏠', iot_zone: '🤖', iot: '🤖',
+	guest_zone: '👥', guest: '👥', quarantine_zone: '🚧', quarantine: '🚧',
+	blocked: '⛔', unknown: '❔'
+};
+var ZONE_LABEL = {
+	lan_allowed: 'LAN', iot_zone: 'IoT', guest_zone: 'Invités',
+	quarantine_zone: 'Quarantaine', blocked: 'Bloqué', unknown: 'Inconnu'
+};
+function zoneLabel(zone) {
+	var z = String(zone || 'unknown');
+	return (ZONE_ICON[z] || '❔') + ' ' + (ZONE_LABEL[z] || z);
+}
+
+// #820: risk level → traffic-light emoji.
+var RISK_ICON = { low: '🟢', medium: '🟡', high: '🔴' };
+function riskLabel(level) {
+	var l = String(level || '').toLowerCase();
+	return (RISK_ICON[l] || '⚪') + ' ' + fmtOrDash(level);
+}
+
 function renderFingerprintBadges(client) {
 	var badges = [];
 	if (client.is_openwrt) badges.push(E('span', { 'class': 'kiss-badge kiss-badge-blue', 'title': _('OpenWrt device') }, '🐧 OpenWrt'));
@@ -160,17 +184,17 @@ return view.extend({
 
 			// Filter tabs
 			E('div', { 'class': 'kiss-grid kiss-grid-auto', 'style': 'margin-bottom: 20px' }, [
-				this.renderFilterTab('all', 'Tous', clients.length, true),
-				this.renderFilterTab('online', 'En Ligne', clients.filter(function(c) { return c.online; }).length),
-				this.renderFilterTab('approved', 'Approuves', clients.filter(function(c) { return c.status === 'approved'; }).length),
-				this.renderFilterTab('quarantine', 'Quarantaine', clients.filter(function(c) { return c.status === 'unknown'; }).length),
-				this.renderFilterTab('banned', 'Bannis', clients.filter(function(c) { return c.status === 'banned'; }).length)
+				this.renderFilterTab('all', '📋 Tous', clients.length, true),
+				this.renderFilterTab('online', '🟢 En Ligne', clients.filter(function(c) { return c.online; }).length),
+				this.renderFilterTab('approved', '✅ Approuvés', clients.filter(function(c) { return c.status === 'approved'; }).length),
+				this.renderFilterTab('quarantine', '🚧 Quarantaine', clients.filter(function(c) { return c.status === 'unknown'; }).length),
+				this.renderFilterTab('banned', '⛔ Bannis', clients.filter(function(c) { return c.status === 'banned'; }).length)
 			]),
 
 			// Clients list
 			E('div', { 'class': 'kiss-card' }, [
 				E('div', { 'class': 'kiss-card-title' }, [
-					'Liste des Clients',
+					'📇 Liste des Clients',
 					E('span', { 'class': 'kiss-badge kiss-badge-blue', 'style': 'margin-left: 12px;' }, clients.length + ' total')
 				]),
 				E('div', { 'id': 'clients-list' }, [
@@ -207,13 +231,13 @@ return view.extend({
 		if (!Object.keys(bySource).length && !Object.keys(byType).length) return E('span');
 
 		return E('div', { 'class': 'kiss-card', 'style': 'margin-bottom: 20px;' }, [
-			E('div', { 'class': 'kiss-card-title' }, 'Agregations'),
+			E('div', { 'class': 'kiss-card-title' }, '📊 Agrégations'),
 			E('div', { 'style': 'margin-top: 8px;' }, [
-				E('div', { 'style': 'color: var(--kiss-muted); margin-bottom: 4px;' }, 'Par source'),
+				E('div', { 'style': 'color: var(--kiss-muted); margin-bottom: 4px;' }, '🔍 Par source'),
 				E('div', { 'style': 'display: flex; flex-wrap: wrap;' }, this.renderAggChips(SOURCE_ICON, bySource))
 			]),
 			E('div', { 'style': 'margin-top: 8px;' }, [
-				E('div', { 'style': 'color: var(--kiss-muted); margin-bottom: 4px;' }, 'Par type'),
+				E('div', { 'style': 'color: var(--kiss-muted); margin-bottom: 4px;' }, '🏷️ Par type'),
 				E('div', { 'style': 'display: flex; flex-wrap: wrap;' }, this.renderAggChips(DEVICE_TYPE_ICON, byType))
 			])
 		]);
@@ -260,7 +284,7 @@ return view.extend({
 					client.first_seen ? E('span', {}, ['📅 ' + client.first_seen.split(' ')[0]]) : E('span')
 				])
 			]),
-			E('span', { 'class': 'cg-client-zone ' + zoneClass }, [client.zone || 'unknown']),
+			E('span', { 'class': 'cg-client-zone ' + zoneClass }, [zoneLabel(client.zone)]),
 			E('div', { 'class': 'cg-client-vendor-info', 'style': 'min-width: 130px; font-size: 12px;' }, [
 				E('div', { 'style': 'color: var(--kiss-muted);', 'title': _('OUI vendor') }, [fmtOrDash(client.oui_vendor)]),
 				E('div', { 'title': _('Device type') }, [fmtDeviceType(client.device_type)]),
@@ -268,7 +292,7 @@ return view.extend({
 					E('span', {
 						'class': riskBadgeClass(client.risk_level),
 						'title': _('Risk score') + ': ' + fmtOrDash(client.risk_score)
-					}, [fmtOrDash(client.risk_level)])
+					}, [riskLabel(client.risk_level)])
 				])
 			]),
 			E('div', { 'class': 'cg-client-fingerprint', 'style': 'display: flex; flex-direction: column; gap: 4px; min-width: 100px;' },
