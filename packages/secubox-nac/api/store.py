@@ -83,6 +83,10 @@ CREATE INDEX IF NOT EXISTS idx_dev_last ON devices(last_seen);
 CREATE INDEX IF NOT EXISTS idx_dev_zone ON devices(zone);
 CREATE INDEX IF NOT EXISTS idx_dev_type ON devices(device_type);
 CREATE TABLE IF NOT EXISTS device_history(id INTEGER PRIMARY KEY AUTOINCREMENT, mac TEXT, ts INTEGER, event TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS device_groups(
+  id TEXT PRIMARY KEY, name TEXT, description TEXT, color TEXT, icon TEXT,
+  created_at TEXT, updated_at TEXT
+);
 """
 
 
@@ -210,6 +214,67 @@ class DeviceStore:
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- Device groups (#817 Task 6 — device-intel `/groups*` absorption) ---
+    #
+    # Simplified to one group per device (reuses the `devices.group_id`
+    # column already reserved in the schema) rather than device-intel's
+    # many-to-many membership list — "keep it simple" per the
+    # consolidation plan. `device_groups` holds only group metadata.
+
+    def list_groups(self) -> list:
+        rows = self._conn.execute(
+            "SELECT * FROM device_groups ORDER BY created_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_group(self, group_id: str) -> dict | None:
+        row = self._conn.execute(
+            "SELECT * FROM device_groups WHERE id = ?", (group_id,)
+        ).fetchone()
+        return self._row_to_dict(row)
+
+    def create_group(
+        self, group_id: str, name: str, description: str = "",
+        color: str = "#3498db", icon: str = "devices",
+    ) -> dict:
+        now = _iso_now()
+        self._conn.execute(
+            "INSERT INTO device_groups (id, name, description, color, icon, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (group_id, name, description, color, icon, now, now),
+        )
+        self._conn.commit()
+        return {
+            "id": group_id, "name": name, "description": description,
+            "color": color, "icon": icon, "created_at": now, "updated_at": now,
+        }
+
+    def delete_group(self, group_id: str) -> None:
+        self._conn.execute("DELETE FROM device_groups WHERE id = ?", (group_id,))
+        self._conn.execute(
+            "UPDATE devices SET group_id = NULL WHERE group_id = ?", (group_id,)
+        )
+        self._conn.commit()
+
+    def assign_group(self, mac: str, group_id: str | None) -> None:
+        """Assign (or clear, if `group_id` is None) the group for `mac`."""
+        self._conn.execute(
+            "UPDATE devices SET group_id = ? WHERE mac = ?", (group_id, mac)
+        )
+        self._conn.commit()
+
+    def group_members(self, group_id: str) -> list:
+        rows = self._conn.execute(
+            "SELECT * FROM devices WHERE group_id = ?", (group_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def _iso_now() -> str:
+    """RFC-3339-ish UTC timestamp for `device_groups` created_at/updated_at."""
+    import datetime as _dt
+    return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
 def _to_epoch(v) -> int | None:

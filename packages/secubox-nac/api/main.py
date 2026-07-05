@@ -4,25 +4,30 @@ Port of luci-app-client-guardian with production features.
 Manages client zones, parental controls, and network policies.
 """
 from __future__ import annotations
+import csv
+import io
+import re
 import subprocess
 import json
 import threading
 import time
+import uuid
 import asyncio
 import hashlib
 import hmac
 import httpx
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 
 from .collector import Collector
-from .enrich import load_oui
+from .enrich import load_oui, oui_vendor
 from .store import DeviceStore, canon_mac, migrate_legacy
 
 app = FastAPI(title="secubox-nac", version="2.0.0", root_path="/api/v1/nac")
@@ -165,6 +170,10 @@ _main_loop: Optional[asyncio.AbstractEventLoop] = None
 # SPOF, #808).
 store: Optional[DeviceStore] = None
 collector: Optional[Collector] = None
+
+# #817 Task 6: OUI vendor map, also exposed at module level (not just
+# captured in the Collector's closure) so `/vendors` can read it directly.
+oui_map: Optional[Dict[str, str]] = None
 
 
 def _load_json(filepath: Path, default=None):
@@ -506,7 +515,7 @@ async def startup():
     its double-cache (`collector.snapshot()`) or the SQLite store
     instead of scanning inline on every request.
     """
-    global _monitoring_task, store, collector, _main_loop
+    global _monitoring_task, store, collector, _main_loop, oui_map
 
     _main_loop = asyncio.get_running_loop()
     store = DeviceStore(DEVICES_DB_PATH)
@@ -609,18 +618,31 @@ def status(user=Depends(require_jwt)):
 
 
 @router.get("/clients")
-def clients(user=Depends(require_jwt)):
+def clients(
+    device_type: Optional[str] = None,
+    risk_min: Optional[int] = None,
+    user=Depends(require_jwt),
+):
     """Get all known clients with zone info.
 
     #817 Task 4: reads the SQLite store (populated by the background
     `Collector`) instead of scanning DHCP leases/ARP inline on every
     request. Plain `def` so FastAPI threadpools it.
-    """
-    cached = stats_cache.get("clients")
-    if cached:
-        return cached
 
-    devices = store.list(limit=5000) if store else []
+    #817 Task 6: `?device_type=`/`?risk_min=` are forwarded straight to
+    `store.list()`'s indexed filters (device-intel/iot-guard absorption).
+    The 15s stats cache is keyed on the unfiltered call only — a filtered
+    request always re-queries the store (still a short indexed SQLite
+    query, not a rescan) so two different filters never collide on one
+    cache slot.
+    """
+    use_cache = device_type is None and risk_min is None
+    if use_cache:
+        cached = stats_cache.get("clients")
+        if cached:
+            return cached
+
+    devices = store.list(device_type=device_type, risk_min=risk_min, limit=5000) if store else []
     online_macs = {d["mac"] for d in (collector.snapshot() if collector else [])}
     meta = _load_clients_meta()
     result = []
@@ -657,7 +679,8 @@ def clients(user=Depends(require_jwt)):
         "by_zone": {z: sum(1 for c in result if c["zone"] == z) for z in ZONES}
     }
 
-    stats_cache.set("clients", response)
+    if use_cache:
+        stats_cache.set("clients", response)
     return response
 
 
@@ -1230,6 +1253,378 @@ async def send_test_alert(user=Depends(require_jwt)):
 async def update_zone(req: UpdateZoneRequest, user=Depends(require_jwt)):
     log.info("update_zone: %s", req.zone_id)
     return {"success": True, "zone": req.zone_id}
+
+
+# ══════════════════════════════════════════════════════════════════
+# #817 Task 6 — absorbed endpoints: vendors, scan, probe, mDNS, groups, export
+#
+# mac-guard (`/scan`, `/vendors`) and device-intel (`_probe_luci`,
+# `_discover_mdns_services`, groups CRUD, `/export/*`) are folded in here.
+# Every handler below is plain `def`; the actual subprocess call in each
+# is factored into its own module-level function so tests can
+# monkeypatch it and never shell out for real (#808 constraint: nothing
+# heavy runs inline on the aggregator's shared loop — `def` handlers are
+# already threadpooled by FastAPI, and bounded `ThreadPoolExecutor`s are
+# used where a single request fans out to many subprocess calls).
+# ══════════════════════════════════════════════════════════════════
+
+# --- /vendors (mac-guard absorption) ---
+
+
+@router.get("/vendors")
+def vendors(mac: Optional[str] = None, user=Depends(require_jwt)):
+    """OUI vendor lookup. With no `?mac=`, report the loaded OUI map size."""
+    om = oui_map or {}
+    if mac:
+        mac_c = canon_mac(mac) or mac.lower()
+        return {"mac": mac_c, "vendor": oui_vendor(mac_c, om)}
+    return {"oui_entries": len(om)}
+
+
+# --- /scan (mac-guard absorption) ---
+
+DEFAULT_SCAN_SUBNET = "192.168.1.0/24"
+
+
+def _scan_subprocess(subnet: str = DEFAULT_SCAN_SUBNET) -> str:
+    """Run `nmap -sn -PR` (ARP ping sweep) and return its grepable stdout,
+    or "" if nmap isn't installed / fails. Factored out so tests
+    monkeypatch this instead of shelling out for real.
+    """
+    try:
+        result = subprocess.run(
+            ["nmap", "-sn", "-PR", subnet, "-oG", "-"],
+            capture_output=True, text=True, timeout=60,
+        )
+        return result.stdout
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return ""
+
+
+def _parse_nmap_hosts(output: str) -> List[str]:
+    """Extract the IPs from nmap `-oG` `Host: <ip> (...)` lines."""
+    ips = []
+    for line in output.splitlines():
+        if line.startswith("Host:"):
+            parts = line.split()
+            if len(parts) >= 2:
+                ips.append(parts[1])
+    return ips
+
+
+def _scan_devices(subnet: str = DEFAULT_SCAN_SUBNET) -> List[Dict[str, Any]]:
+    """On-demand active scan: nmap ARP sweep to find live IPs, then
+    cross-reference the ARP/neighbor table (`_parse_arp`, already blocking
+    subprocess) for the MAC — nmap's grepable output doesn't reliably
+    carry it. No nmap / no hits at all -> fall back to whatever's already
+    in the ARP table (mac-guard's original fallback behaviour).
+    """
+    stdout = _scan_subprocess(subnet)
+    found_ips = set(_parse_nmap_hosts(stdout))
+    arp = _parse_arp()
+
+    if not found_ips:
+        return arp
+
+    by_ip = {c["ip"]: c for c in arp}
+    return [by_ip[ip] for ip in found_ips if ip in by_ip]
+
+
+@router.post("/scan")
+def scan(subnet: str = DEFAULT_SCAN_SUBNET, user=Depends(require_jwt)):
+    """Trigger an on-demand network scan and merge findings into the store.
+
+    #817 Task 6 (mac-guard absorption): plain `def` — FastAPI threadpools
+    the blocking nmap/ARP subprocess calls below off the shared aggregator
+    loop (#808); this never runs on the passive collector's own loop.
+    """
+    devices = _scan_devices(subnet)
+    now = int(time.time())
+    merged = 0
+
+    for d in devices:
+        mac = canon_mac(d.get("mac", ""))
+        if not mac:
+            continue
+        if store:
+            store.upsert({
+                "mac": mac,
+                "ip": d.get("ip"),
+                "hostname": d.get("hostname") or None,
+                "last_seen": now,
+                "source": "scan",
+            })
+            merged += 1
+
+    stats_cache.clear()
+    return {"success": True, "devices_found": len(devices), "merged": merged}
+
+
+# --- /probe/openwrt[/{ip}] (device-intel `_probe_luci` absorption) ---
+
+_SECUBOX_MARKERS = (
+    "data-secubox-theme", "luci-static/secubox", "secubox-auth-hook",
+    "secubox-portal", "secubox-public", "luci-app-secubox",
+    "/luci/admin/secubox", "secubox-dashboard",
+)
+
+
+def _curl_body(url: str, timeout: float) -> str:
+    """Blocking `curl` GET, returns the response body (or "" on any
+    failure/timeout). Factored so `_probe_ip` tests can monkeypatch this
+    single function instead of touching subprocess/network.
+    """
+    try:
+        r = subprocess.run(
+            ["curl", "-s", "--connect-timeout", str(max(1, int(timeout))), "-k", url],
+            capture_output=True, text=True, timeout=timeout + 1,
+        )
+        return r.stdout or ""
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+
+def _probe_ip(ip: str, timeout: float = 2.0) -> Dict[str, Any]:
+    """Active LuCI/OpenWrt/SecuBox fingerprint of a single IP (device-intel
+    `_probe_luci` absorption, synchronous form). Tests monkeypatch this
+    function directly to avoid any real curl/network call.
+    """
+    result: Dict[str, Any] = {
+        "luci_detected": False, "secubox_detected": False,
+        "version": None, "model": None,
+    }
+
+    for scheme in ("http", "https"):
+        if result["luci_detected"]:
+            break
+        body = _curl_body(f"{scheme}://{ip}/cgi-bin/luci", timeout)
+        if not body:
+            continue
+
+        result["luci_detected"] = True
+        body_lower = body.lower()
+
+        model_match = re.search(r"<title>([^<]+)</title>", body, re.IGNORECASE)
+        if model_match:
+            title = model_match.group(1)
+            if " - " in title:
+                result["model"] = title.split(" - ")[0].strip()
+
+        ver_match = re.search(r"git-[\d.]+-[a-f0-9]+", body)
+        if ver_match:
+            result["version"] = ver_match.group(0)
+        elif "luci.js?v=" in body:
+            alt_ver = re.search(r"luci\.js\?v=([\d.~a-f0-9-]+)", body)
+            if alt_ver:
+                result["version"] = alt_ver.group(1)
+
+        for marker in _SECUBOX_MARKERS:
+            if marker in body_lower:
+                result["secubox_detected"] = True
+                break
+
+    return result
+
+
+def _apply_probe_result(mac: str, probe: Dict[str, Any]) -> None:
+    """Persist a positive probe result's fingerprint columns into the store."""
+    if not store or not probe.get("luci_detected"):
+        return
+    store.upsert({
+        "mac": mac,
+        "is_openwrt": 1,
+        "is_secubox": int(bool(probe.get("secubox_detected"))),
+        "model": probe.get("model"),
+        "luci_version": probe.get("version"),
+    })
+    store.record_event(mac, "openwrt_probed")
+
+
+@router.post("/probe/openwrt")
+def probe_openwrt(user=Depends(require_jwt)):
+    """Probe every known device with an IP for LuCI/OpenWrt (bounded
+    concurrency), updating the store's fingerprint columns for matches.
+
+    #817 Task 6 (device-intel absorption): plain `def`; the
+    `ThreadPoolExecutor` bounds concurrency across many IPs within this
+    one request — it never runs on the collector's own async loop.
+    """
+    devices = store.list(limit=5000) if store else []
+    targets = [d for d in devices if d.get("ip")]
+    results: List[Dict[str, Any]] = []
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_probe_ip, d["ip"], 3.0): d for d in targets}
+        for fut in as_completed(futures):
+            d = futures[fut]
+            probe = fut.result()
+            _apply_probe_result(d["mac"], probe)
+            results.append({"ip": d["ip"], "mac": d["mac"], **probe})
+
+    stats_cache.clear()
+    return {
+        "success": True,
+        "total_probed": len(results),
+        "openwrt_detected": sum(1 for r in results if r.get("luci_detected")),
+        "secubox_detected": sum(1 for r in results if r.get("secubox_detected")),
+        "results": results,
+    }
+
+
+@router.post("/probe/openwrt/{ip}")
+def probe_openwrt_single(ip: str, user=Depends(require_jwt)):
+    """Probe a single IP for LuCI/OpenWrt/SecuBox and update the matching
+    device's fingerprint columns, if a device with that IP is known."""
+    probe = _probe_ip(ip, 5.0)
+
+    mac = None
+    for d in (store.list(limit=5000) if store else []):
+        if d.get("ip") == ip:
+            mac = d["mac"]
+            break
+
+    if mac:
+        _apply_probe_result(mac, probe)
+        stats_cache.clear()
+
+    return {"ip": ip, "mac": mac, **probe}
+
+
+# --- /mdns (device-intel `_discover_mdns_services` absorption) ---
+
+
+def _mdns_subprocess() -> str:
+    """Blocking `avahi-browse` call, returns stdout (or "" on any
+    failure/timeout/missing binary). Factored so tests monkeypatch this
+    instead of shelling out for real.
+    """
+    try:
+        r = subprocess.run(
+            ["avahi-browse", "-t", "-r", "-p", "_http._tcp"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return r.stdout or ""
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+
+def _parse_mdns(output: str) -> List[Dict[str, Any]]:
+    """Parse `avahi-browse -p` machine-readable lines (`=;iface;proto;
+    name;type;domain;hostname;address;port;txt`) into service dicts."""
+    services = []
+    for line in output.split("\n"):
+        if not line.startswith("="):
+            continue
+        parts = line.split(";")
+        if len(parts) >= 8:
+            services.append({
+                "name": parts[3],
+                "type": parts[4],
+                "hostname": parts[6],
+                "ip": parts[7],
+                "port": int(parts[8]) if parts[8].isdigit() else 80,
+            })
+    return services
+
+
+@router.get("/mdns")
+def mdns(user=Depends(require_jwt)):
+    """Discover devices/services via mDNS/Avahi."""
+    services = _parse_mdns(_mdns_subprocess())
+    return {"services": services, "total": len(services)}
+
+
+# --- /groups CRUD (device-intel absorption, simplified) ---
+
+
+class GroupRequest(BaseModel):
+    name: str
+    description: str = ""
+    color: str = "#3498db"
+    icon: str = "devices"
+
+
+class GroupMemberRequest(BaseModel):
+    mac: str
+
+
+@router.get("/groups")
+def list_groups(user=Depends(require_jwt)):
+    """List all device groups with their members.
+
+    #817 Task 6: simplified to one group per device (the `devices.group_id`
+    column already reserved in the schema) rather than device-intel's
+    many-to-many membership list — see `store.py`'s device-groups section.
+    """
+    groups = store.list_groups() if store else []
+    result = []
+    for g in groups:
+        members = [d["mac"] for d in (store.group_members(g["id"]) if store else [])]
+        result.append({**g, "members": members, "member_count": len(members)})
+    return {"groups": result, "count": len(result)}
+
+
+@router.post("/groups")
+def create_group(req: GroupRequest, user=Depends(require_jwt)):
+    """Create a new device group."""
+    group_id = uuid.uuid4().hex[:8]
+    group = store.create_group(group_id, req.name, req.description, req.color, req.icon) if store else {}
+    return {"success": True, "group": group}
+
+
+@router.delete("/groups/{group_id}")
+def delete_group(group_id: str, user=Depends(require_jwt)):
+    """Delete a device group; member devices are unassigned, not deleted."""
+    if store:
+        store.delete_group(group_id)
+    return {"success": True}
+
+
+@router.post("/groups/{group_id}/members")
+def add_group_member(group_id: str, req: GroupMemberRequest, user=Depends(require_jwt)):
+    """Assign a device (by MAC) to a group."""
+    mac = canon_mac(req.mac) or req.mac.lower()
+    if store:
+        store.assign_group(mac, group_id)
+    return {"success": True, "mac": mac, "group_id": group_id}
+
+
+# --- /export/json + /export/csv (device-intel absorption) ---
+
+_EXPORT_COLUMNS = [
+    "mac", "ip", "hostname", "oui_vendor", "device_type", "risk_level",
+    "risk_score", "zone", "allow_state", "is_router", "is_openwrt",
+    "model", "luci_version", "first_seen", "last_seen", "source",
+]
+
+
+@router.get("/export/json")
+def export_json(user=Depends(require_jwt)):
+    """Export the full device store as JSON."""
+    devices = store.list(limit=100000) if store else []
+    return {
+        "exported_at": datetime.now().isoformat(),
+        "device_count": len(devices),
+        "devices": devices,
+    }
+
+
+@router.get("/export/csv")
+def export_csv(user=Depends(require_jwt)):
+    """Export the full device store as CSV (header row + one row per device)."""
+    devices = store.list(limit=100000) if store else []
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(_EXPORT_COLUMNS)
+    for d in devices:
+        writer.writerow([d.get(c, "") for c in _EXPORT_COLUMNS])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=devices.csv"},
+    )
 
 
 app.include_router(router)
