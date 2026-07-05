@@ -24,3 +24,30 @@ def test_oui_and_openwrt(tmp_path):
     assert oui_vendor("aa:bb:cc:00:00:20", m) == "Acme Corp"
     fp = openwrt_fingerprint("OpenWrt")
     assert fp["is_openwrt"] is True
+
+
+def test_openwrt_hostname_not_router():
+    """A hostname matching an OpenWrt pattern but with a non-router-vendor
+    MAC is an OpenWrt-flagged device, not automatically a router. Router
+    status must come strictly from the vendor-MAC check (#817 review fix).
+    """
+    from api.enrich import openwrt_fingerprint
+    fp = openwrt_fingerprint("router-guest", mac="AA:BB:CC:00:00:20")
+    assert fp["is_openwrt"] is True
+    assert fp["is_router"] is False
+    assert fp["router_vendor"] is None
+
+
+def test_classify_unknown():
+    from api.enrich import classify_device_type
+    assert classify_device_type("random-host", "NoVendor") == "unknown"
+
+
+def test_load_oui_missing_file():
+    from api.enrich import load_oui
+    assert load_oui("/nonexistent/oui.txt") == {}
+
+
+def test_oui_vendor_unmatched():
+    from api.enrich import oui_vendor
+    assert oui_vendor("11:22:33:44:55:66", {}) == "Unknown"
