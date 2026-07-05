@@ -289,8 +289,8 @@
         <div class="card">
             <h2>Connected Clients</h2>
             <table>
-                <thead><tr><th>MAC</th><th>IP</th><th>Hostname</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="clientsTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+                <thead><tr><th>MAC</th><th>IP</th><th>Device</th><th>Zone</th><th>Risk</th><th>Source</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="clientsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
             </table>
         </div>
 
@@ -305,6 +305,18 @@
 
     <script>
         const API = '/api/v1/nac';
+
+        // #817/#820 — icon/emoji maps for the consolidated device fields.
+        const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        const TYPE_ICON = {router:'📡',phone:'📱',mobile:'📱',computer:'💻',laptop:'💻',camera:'📷',tv:'📺',media:'📺',game_console:'🎮',printer:'🖨️',nas:'🗄️',iot:'🔌',speaker:'🔊',wearable:'⌚',unknown:'🔌'};
+        const SOURCE_ICON = {dnsmasq:'📶',isc:'📶',dhcp:'📶',arp:'🔎','mac-guard':'🏷️','device-intel':'🔬','iot-guard':'🔌',mesh:'🕸️',nmap:'🛰️',mdns:'📣',manual:'✍️'};
+        const ZONE_ICON = {lan_allowed:'🏠',iot_zone:'🤖',guest_zone:'👥',quarantine_zone:'🚧',blocked:'⛔',unknown:'❔'};
+        const ZONE_LABEL = {lan_allowed:'LAN',iot_zone:'IoT',guest_zone:'Invités',quarantine_zone:'Quarantaine',blocked:'Bloqué',unknown:'—'};
+        const RISK_ICON = {low:'🟢',medium:'🟡',high:'🔴'};
+        const typeIcon = t => TYPE_ICON[t] || '🔌';
+        const srcBadge = s => s ? `${SOURCE_ICON[s]||'❔'} ${esc(s)}` : '<span style="color:var(--text-dim)">—</span>';
+        const zoneBadge = z => `${ZONE_ICON[z]||'❔'} ${ZONE_LABEL[z]||esc(z||'—')}`;
+        const riskBadge = r => r ? `${RISK_ICON[String(r).toLowerCase()]||'⚪'} ${esc(r)}` : '<span style="color:var(--text-dim)">—</span>';
 
         async function api(path, opts = {}) {
             const token = localStorage.getItem('sbx_token');
@@ -328,10 +340,14 @@
                 tbody.innerHTML = clients.clients.map(c => {
                     const statusEmoji = c.status === 'online' ? '🟢' : c.status === 'offline' ? '🔴' : c.status === 'quarantine' ? '🟠' : '⚪';
                     const statusLabel = c.status === 'online' ? 'Online' : c.status === 'offline' ? 'Offline' : c.status === 'quarantine' ? 'Quarantine' : c.status;
+                    const vendor = c.oui_vendor ? `<br><span style="color:var(--text-dim);font-size:.85em">${esc(c.oui_vendor)}</span>` : '';
                     return `<tr>
-                        <td style="font-family:monospace">${c.mac}</td>
-                        <td style="font-family:monospace">${c.ip}</td>
-                        <td>${c.hostname || '-'}</td>
+                        <td style="font-family:monospace">${esc(c.mac)}</td>
+                        <td style="font-family:monospace">${esc(c.ip)}</td>
+                        <td>${typeIcon(c.device_type)} ${esc(c.hostname || '-')}${vendor}</td>
+                        <td><span class="badge">${zoneBadge(c.zone)}</span></td>
+                        <td>${riskBadge(c.risk_level)}</td>
+                        <td>${srcBadge(c.source)}</td>
                         <td><span class="badge ${c.status}">${statusEmoji} ${statusLabel}</span></td>
                         <td>
                             ${c.status === 'quarantine'
@@ -341,7 +357,7 @@
                     </tr>`;
                 }).join('');
             } else {
-                tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No clients connected</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim)">No clients connected</td></tr>';
             }
 
             const quarantine = await api('/quarantine');
