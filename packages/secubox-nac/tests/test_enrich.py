@@ -16,6 +16,24 @@ def test_classify_and_risk():
     assert lvl in {"low", "medium", "high"}
 
 
+def test_risk_router_known_low():
+    """#817 addendum (Task 10): a KNOWN router (allow-listed or already in
+    the store) is trusted infrastructure -> LOW risk."""
+    from api.enrich import risk_score
+    score, level = risk_score("router", is_router=True, is_known=True)
+    assert level == "low"
+    assert 0 <= score <= 100
+
+
+def test_risk_router_unknown_high():
+    """#817 addendum (Task 10): a NEWLY-seen/unknown router is a rogue-AP
+    signal -> HIGH risk, regardless of open ports."""
+    from api.enrich import risk_score
+    score, level = risk_score("router", is_router=True, is_known=False)
+    assert level == "high"
+    assert 0 <= score <= 100
+
+
 def test_oui_and_openwrt(tmp_path):
     from api.enrich import load_oui, oui_vendor, openwrt_fingerprint
     ouif = tmp_path / "oui.txt"

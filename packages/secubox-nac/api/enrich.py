@@ -107,17 +107,30 @@ def classify_device_type(hostname: str, vendor: str) -> str:
     return "unknown"
 
 
-def risk_score(device_type: str, is_router: bool, open_ports=None) -> tuple:
+def risk_score(device_type: str, is_router: bool, is_known: bool = False, open_ports=None) -> tuple:
     """Score a device 0-100 and bucket it into low/medium/high.
 
-    Base 50 + device-type risk + open-ports risk; a device already
-    known to be a router is treated as trusted infrastructure and gets
-    a discount rather than a penalty.
+    #817 addendum (Task 10): routers are scored on a dedicated axis —
+    trust, not device-type/port heuristics. A router/gateway already
+    KNOWN (allow-listed or already present in the store) is trusted
+    infrastructure -> LOW risk. A NEWLY-seen/unknown router is a
+    rogue-AP signal -> HIGH risk, regardless of open ports. The old flat
+    -10 "trusted router" discount is removed; non-router devices keep
+    the existing base-50 + type-risk + open-ports scoring unchanged.
     """
+    if is_router or device_type == "router":
+        score = 20 if is_known else 85
+        score = min(100, max(0, score))
+        if score < 34:
+            level = "low"
+        elif score < 67:
+            level = "medium"
+        else:
+            level = "high"
+        return score, level
+
     score = 50
     score += _TYPE_RISK.get(device_type, 0)
-    if is_router:
-        score -= 10
     for port in (open_ports or []):
         if port in _RISKY_PORTS:
             score += 5
