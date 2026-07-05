@@ -22,6 +22,7 @@ def test_collector_cycle(tmp_path, monkeypatch):
     d = s.get("aa:bb:cc:00:00:30")
     assert d["device_type"] in {"camera", "unknown"}  # classified during enrich
     assert col.snapshot()[0]["mac"] == "aa:bb:cc:00:00:30"
+    assert d["first_seen"] is not None  # freshly discovered device gets first_seen set (#817 minor fix 1)
 
 
 def test_collector_no_dup_join(tmp_path, monkeypatch):

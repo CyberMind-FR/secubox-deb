@@ -651,14 +651,29 @@ def get_client(mac: str, user=Depends(require_jwt)):
     meta = _load_clients_meta()
     client_meta = meta.get(mac_lower, {})
 
-    # Recent history: the JSON event log (client_moved/banned/etc, still
-    # written by `_record_event`); collector-fired `client_joined`
-    # events land in `store.history()` instead (see Task 4 Collector).
+    # Recent history: merge the JSON event log (client_moved/banned/etc,
+    # still written by `_record_event`) with the SQLite `device_history`
+    # events the collector writes directly (`client_joined`, see Task 4
+    # Collector.cycle_once) — #817 Minor fix 2, so a device's join event
+    # shows up here again instead of being silently dropped.
     history = _load_history()
-    client_history = [
-        h for h in history[-100:]
+    json_events = [
+        h for h in history[-200:]
         if h.get("details", {}).get("mac", "").lower() == mac_lower
-    ][-10:]
+    ]
+    sqlite_events = [
+        {
+            "timestamp": datetime.fromtimestamp(h["ts"]).isoformat(),
+            "event": h["event"],
+            "details": {"mac": mac_lower, "detail": h.get("detail", "")},
+        }
+        for h in (store.history(mac_lower, limit=20) if store else [])
+    ]
+    client_history = sorted(
+        json_events + sqlite_events,
+        key=lambda h: h.get("timestamp", ""),
+        reverse=True,
+    )[:10]
 
     return {
         **d,
@@ -844,21 +859,29 @@ async def delete_parental_rule(mac: str, user=Depends(require_jwt)):
 
 # Alerts
 @router.get("/alerts")
-async def alerts(user=Depends(require_jwt)):
-    """Get current alerts."""
+def alerts(user=Depends(require_jwt)):
+    """Get current alerts.
+
+    #817 Task 4 fix (#808): converted from `async def` — the previous
+    body called blocking `_discover_clients()` inline on the shared
+    aggregator loop. Now reads the SQLite store (populated by the
+    background `Collector`) and is a plain `def`, so FastAPI threadpools
+    it off the loop.
+    """
     quarantine = _nft_list_set("quarantine_zone")
-    discovered = _discover_clients()
+    devices = store.list(limit=5000) if store else []
     alerts_list = []
 
-    for c in discovered:
-        if c["mac"].lower() in quarantine:
+    for d in devices:
+        mac = d["mac"]
+        if mac in quarantine:
             alerts_list.append({
                 "type": "new_client",
                 "severity": "warning",
-                "mac": c["mac"],
-                "ip": c["ip"],
-                "hostname": c["hostname"],
-                "message": f"New client in quarantine: {c['hostname'] or c['mac']}"
+                "mac": mac,
+                "ip": d.get("ip"),
+                "hostname": d.get("hostname"),
+                "message": f"New client in quarantine: {d.get('hostname') or mac}"
             })
 
     return {"alerts": alerts_list, "count": len(alerts_list)}
@@ -941,10 +964,16 @@ async def delete_webhook(webhook_id: str, user=Depends(require_jwt)):
 
 
 @router.get("/summary")
-async def summary(user=Depends(require_jwt)):
-    """Get NAC summary."""
-    status_info = status(user)  # plain def (#817 Task 4) — no await
-    alerts_info = await alerts(user)
+def summary(user=Depends(require_jwt)):
+    """Get NAC summary.
+
+    #817 Task 4 fix (#808): converted from `async def` to plain `def` —
+    it only calls other now-`def` handlers (`status`, `alerts`), which
+    FastAPI threadpools off the shared aggregator loop, so no `await` is
+    needed (or valid) here anymore.
+    """
+    status_info = status(user)
+    alerts_info = alerts(user)
 
     return {
         "clients": {
@@ -984,20 +1013,27 @@ async def parental(user=Depends(require_jwt)):
 
 
 @router.get("/quarantine")
-async def list_quarantine(user=Depends(require_jwt)):
-    """List all quarantined clients (frontend compatibility endpoint)."""
-    discovered = _discover_clients()
+def list_quarantine(user=Depends(require_jwt)):
+    """List all quarantined clients (frontend compatibility endpoint).
+
+    #817 Task 4 fix (#808): converted from `async def` — the previous
+    body called blocking `_discover_clients()` inline on the shared
+    aggregator loop. Now reads the SQLite store instead and is a plain
+    `def`, so FastAPI threadpools it off the loop.
+    """
+    devices = store.list(limit=5000) if store else []
     meta = _load_clients_meta()
 
     clients = []
-    for c in discovered:
-        zone = _get_client_zone(c["mac"])
+    for d in devices:
+        mac = d["mac"]
+        zone = _get_client_zone(mac)
         if zone == "quarantine":
-            client_meta = meta.get(c["mac"].lower(), {})
+            client_meta = meta.get(mac, {})
             clients.append({
-                "mac": c["mac"],
-                "ip": c.get("ip", ""),
-                "hostname": c.get("hostname", "") or client_meta.get("hostname", ""),
+                "mac": mac,
+                "ip": d.get("ip", ""),
+                "hostname": d.get("hostname", "") or client_meta.get("hostname", ""),
                 "reason": "New device" if not client_meta.get("first_seen") else "Quarantined",
                 "since": client_meta.get("first_seen", datetime.now().isoformat()),
             })
