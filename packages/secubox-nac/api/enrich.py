@@ -104,7 +104,7 @@ _TYPE_INDICATORS = {
     ],
     "smart_speaker": [
         "echo", "alexa", "google-home", "homepod", "sonos",
-        "nest-audio", "nest-mini", "speaker",
+        "nest-audio", "nest-mini", "speaker", "squeezebox",
     ],
     "smart_home": [
         "philips-hue", "wemo", "smartthings", "tuya", "zigbee", "zwave",
@@ -143,6 +143,7 @@ _TYPE_INDICATORS = {
     "computer": [
         "pc", "desktop", "imac", "windows", "ubuntu", "linux", "fedora",
         "debian", "workstation", "hackintosh", "raspberrypi", "raspberry-pi", "raspi",
+        "pop-os", "pop_os", "popos",
     ],
     "iot": ["iot", "sensor", "plc", "homeassistant", "hassio", "printer-scale"],
 }

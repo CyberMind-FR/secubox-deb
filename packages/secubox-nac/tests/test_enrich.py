@@ -183,3 +183,20 @@ def test_router_stays_conservative_generic_vendors():
 def test_router_mikrotik_vendor_classifies_router():
     from api.enrich import classify_device_type
     assert classify_device_type("unnamed-device", "MikroTikls SIA") == "router"
+
+
+# --- #820 (ref #817): keywords for reverse-DNS-resolved hostnames ---
+
+
+def test_classify_pop_os_is_computer():
+    """`pop-os.home` -> `pop-os` short hostname (via resolve_hostname)
+    must classify as computer."""
+    from api.enrich import classify_device_type
+    assert classify_device_type("pop-os", "") == "computer"
+
+
+def test_classify_squeezebox_is_smart_speaker():
+    """`squeezeboxradio.home` -> `squeezeboxradio` short hostname must
+    classify as smart_speaker."""
+    from api.enrich import classify_device_type
+    assert classify_device_type("squeezeboxradio", "") == "smart_speaker"
