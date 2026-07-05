@@ -15,12 +15,16 @@
 // identity/device_mac/provenance/client_type are learned from untrusted
 // network traffic, and `extra` is a JSON string that may carry a raw
 // WAN request Host header / User-Agent (`extra.host`/`extra.ua`) or a
-// kbin report token (`extra.report_token`). ALL of these are rendered
-// exclusively via E()/textContent (LuCI's E() appends string children as
-// text nodes) — this file NEVER builds innerHTML/insertAdjacentHTML from
-// a presence-derived value. `extra` is parsed with JSON.parse (never
-// eval) inside a try/catch that falls back to `{}` on any malformed or
-// unexpected payload.
+// kbin report token (`extra.report_token`). LuCI's dom.append() only
+// renders a string child as a safe Text node when it is wrapped in an
+// ARRAY — a BARE (non-array) string 3rd argument to E() is instead
+// assigned to `node.innerHTML` and HTML-parsed. Every dynamic value in
+// this file is therefore always passed to E() wrapped in an array (e.g.
+// `E('div', {}, [value])`), never as a bare 3rd argument, so it can only
+// ever become inert text — this file NEVER builds innerHTML/
+// insertAdjacentHTML directly from a presence-derived value either.
+// `extra` is parsed with JSON.parse (never eval) inside a try/catch that
+// falls back to `{}` on any malformed or unexpected payload.
 
 async function callGetPresence(params) {
 	return sbxFetch('/api/v1/nac/presence', params, 'GET');
@@ -165,7 +169,7 @@ return view.extend({
 				E('div', { 'class': 'kiss-card' }, [
 					E('div', { 'class': 'kiss-card-title' }, [
 						'Présences',
-						E('span', { 'class': 'kiss-badge kiss-badge-blue', 'style': 'margin-left: 12px;', 'id': 'presence-count-badge' }, items.length + ' total')
+						E('span', { 'class': 'kiss-badge kiss-badge-blue', 'style': 'margin-left: 12px;', 'id': 'presence-count-badge' }, [items.length + ' total'])
 					]),
 					E('div', { 'style': 'overflow-x: auto;' }, [
 						E('table', { 'class': 'kiss-table', 'id': 'presence-table' }, [
@@ -204,8 +208,8 @@ return view.extend({
 			'data-filter': filter,
 			'style': 'cursor: pointer; transition: all 0.2s;'
 		}, [
-			E('div', { 'class': 'kiss-stat-value' }, String(count)),
-			E('div', { 'class': 'kiss-stat-label' }, label)
+			E('div', { 'class': 'kiss-stat-value' }, [String(count)]),
+			E('div', { 'class': 'kiss-stat-label' }, [label])
 		]);
 
 		tab.addEventListener('click', L.bind(this.handleFilter, this));
@@ -217,19 +221,20 @@ return view.extend({
 		var extra = parseExtra(item.extra);
 
 		var identityCell = [
-			E('div', { 'style': 'font-family: monospace; font-size: 12px;' }, fmtOrDash(item.identity))
+			E('div', { 'style': 'font-family: monospace; font-size: 12px;' }, [fmtOrDash(item.identity)])
 		];
 		// extra.host / extra.ua are attacker-influenceable (WAN Host header /
-		// User-Agent) — always appended as their own text node, never merged
-		// into a bigger markup string.
+		// User-Agent) — always array-wrapped so E()/dom.append renders them
+		// as their own inert Text node, never merged into a bigger markup
+		// string and never assigned to innerHTML as a bare string.
 		if (extra.host) {
-			identityCell.push(E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted);', 'title': 'Host' }, String(extra.host)));
+			identityCell.push(E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted);', 'title': 'Host' }, [String(extra.host)]));
 		}
 		if (extra.ua) {
-			identityCell.push(E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted);', 'title': 'User-Agent' }, String(extra.ua)));
+			identityCell.push(E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted);', 'title': 'User-Agent' }, [String(extra.ua)]));
 		}
 		if (extra.category) {
-			identityCell.push(E('span', { 'class': 'kiss-badge kiss-badge-blue', 'style': 'font-size: 10px; margin-top: 2px; display: inline-block;' }, String(extra.category)));
+			identityCell.push(E('span', { 'class': 'kiss-badge kiss-badge-blue', 'style': 'font-size: 10px; margin-top: 2px; display: inline-block;' }, [String(extra.category)]));
 		}
 
 		var originCell;
@@ -238,10 +243,10 @@ return view.extend({
 			if (item.geo_asn) originParts.push(' · AS' + String(item.geo_asn));
 			originCell = E('div', {}, [
 				E('span', {}, originParts),
-				item.geo_org ? E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted);' }, String(item.geo_org)) : E('span')
+				item.geo_org ? E('div', { 'style': 'font-size: 11px; color: var(--kiss-muted);' }, [String(item.geo_org)]) : E('span')
 			]);
 		} else {
-			originCell = E('span', { 'class': 'kiss-badge kiss-badge-blue', 'title': 'Provenance' }, fmtOrDash(item.provenance));
+			originCell = E('span', { 'class': 'kiss-badge kiss-badge-blue', 'title': 'Provenance' }, [fmtOrDash(item.provenance)]);
 		}
 
 		var linkCell;
@@ -256,7 +261,7 @@ return view.extend({
 			linkCell = E('a', {
 				'href': kbinHref,
 				'target': '_blank',
-				'rel': 'noopener',
+				'rel': 'noopener noreferrer',
 				'class': 'kiss-btn',
 				'style': 'padding: 2px 8px; font-size: 11px;',
 				'title': token ? 'Rapport kbin (token)' : 'Rapport kbin (mac_hash, best-effort)'
@@ -266,13 +271,13 @@ return view.extend({
 		}
 
 		return E('tr', { 'data-plane': item.plane || '' }, [
-			E('td', {}, E('span', { 'class': 'kiss-badge ' + meta.badge }, meta.icon + ' ' + meta.label)),
+			E('td', {}, E('span', { 'class': 'kiss-badge ' + meta.badge }, [meta.icon + ' ' + meta.label])),
 			E('td', {}, identityCell),
 			E('td', {}, originCell),
-			E('td', {}, fmtOrDash(item.client_type)),
-			E('td', { 'style': 'font-family: monospace;' }, String(item.hits || 0)),
-			E('td', {}, E('span', { 'class': 'kiss-badge ' + tierBadgeClass(item.tier) }, fmtOrDash(item.tier))),
-			E('td', { 'style': 'color: var(--kiss-muted); font-size: 12px;' }, fmtAge(item.last_seen)),
+			E('td', {}, [fmtOrDash(item.client_type)]),
+			E('td', { 'style': 'font-family: monospace;' }, [String(item.hits || 0)]),
+			E('td', {}, E('span', { 'class': 'kiss-badge ' + tierBadgeClass(item.tier) }, [fmtOrDash(item.tier)])),
+			E('td', { 'style': 'color: var(--kiss-muted); font-size: 12px;' }, [fmtAge(item.last_seen)]),
 			E('td', {}, linkCell)
 		]);
 	},
@@ -297,7 +302,7 @@ return view.extend({
 					? countries.map(function(c) {
 						return E('div', { 'style': 'display: flex; justify-content: space-between; padding: 3px 0;' }, [
 							E('span', {}, [countryFlag(c.cc) + ' ', String(c.cc)]),
-							E('span', { 'class': 'kiss-badge kiss-badge-blue' }, String(c.n))
+							E('span', { 'class': 'kiss-badge kiss-badge-blue' }, [String(c.n)])
 						]);
 					})
 					: [E('div', { 'style': 'color: var(--kiss-muted); font-size: 12px;' }, 'Aucune donnée.')]
@@ -307,8 +312,8 @@ return view.extend({
 				asns.length
 					? asns.map(function(a) {
 						return E('div', { 'style': 'display: flex; justify-content: space-between; padding: 3px 0;' }, [
-							E('span', { 'style': 'font-family: monospace; font-size: 12px;' }, 'AS' + String(a.asn)),
-							E('span', { 'class': 'kiss-badge kiss-badge-blue' }, String(a.n))
+							E('span', { 'style': 'font-family: monospace; font-size: 12px;' }, ['AS' + String(a.asn)]),
+							E('span', { 'class': 'kiss-badge kiss-badge-blue' }, [String(a.n)])
 						]);
 					})
 					: [E('div', { 'style': 'color: var(--kiss-muted); font-size: 12px;' }, 'Aucune donnée.')]
@@ -322,18 +327,18 @@ return view.extend({
 		return E('div', { 'class': 'kiss-card' }, [
 			E('div', { 'class': 'kiss-card-title' }, [
 				'Alertes',
-				E('span', { 'class': 'kiss-badge kiss-badge-blue', 'style': 'margin-left: 12px;' }, String((alerts || []).length))
+				E('span', { 'class': 'kiss-badge kiss-badge-blue', 'style': 'margin-left: 12px;' }, [String((alerts || []).length)])
 			]),
 			E('div', { 'style': 'max-height: 320px; overflow-y: auto;' },
 				recent.length
 					? recent.map(function(a) {
 						return E('div', { 'style': 'padding: 6px 0; border-bottom: 1px solid var(--kiss-border, rgba(128,128,128,0.2));' }, [
 							E('div', { 'style': 'display: flex; justify-content: space-between; align-items: center;' }, [
-								E('span', { 'class': 'kiss-badge ' + tierBadgeClass(a.tier) }, fmtOrDash(a.tier)),
-								E('span', { 'style': 'font-size: 11px; color: var(--kiss-muted);' }, fmtTs(a.ts))
+								E('span', { 'class': 'kiss-badge ' + tierBadgeClass(a.tier) }, [fmtOrDash(a.tier)]),
+								E('span', { 'style': 'font-size: 11px; color: var(--kiss-muted);' }, [fmtTs(a.ts)])
 							]),
 							E('div', { 'style': 'font-size: 12px; margin-top: 2px;' }, [
-								E('span', { 'style': 'font-weight: 700;' }, fmtOrDash(a.plane)),
+								E('span', { 'style': 'font-weight: 700;' }, [fmtOrDash(a.plane)]),
 								': ',
 								fmtOrDash(a.detail)
 							])
