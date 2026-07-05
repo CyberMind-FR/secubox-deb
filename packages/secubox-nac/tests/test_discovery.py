@@ -27,3 +27,17 @@ def test_discover_failsafe(tmp_path):
     from api.discovery import discover
     out = discover(dnsmasq_leases=str(tmp_path/"missing"), isc_leases=str(tmp_path/"missing2"), arp_cmd=lambda: (_ for _ in ()).throw(OSError()))
     assert out == []
+
+def test_isc_latest_lease_wins(tmp_path):
+    # dhcpd.leases appends a fresh `lease` block on every renewal; the
+    # LATEST block for a MAC must win the ip/hostname, not the first.
+    from api.discovery import discover
+    isc = tmp_path/"dhcpd.leases"
+    isc.write_text(
+        'lease 10.0.0.20 {\n hardware ethernet AA:BB:CC:00:00:20;\n client-hostname "old-host";\n}\n'
+        'lease 10.0.0.21 {\n hardware ethernet AA:BB:CC:00:00:20;\n client-hostname "new-host";\n}\n'
+    )
+    out = {d["mac"]: d for d in discover(dnsmasq_leases=str(tmp_path/"missing"), isc_leases=str(isc), arp_cmd=lambda: "")}
+    assert set(out) == {"aa:bb:cc:00:00:20"}
+    assert out["aa:bb:cc:00:00:20"]["ip"] == "10.0.0.21"
+    assert out["aa:bb:cc:00:00:20"]["hostname"] == "new-host"
