@@ -151,6 +151,13 @@ class WebhookConfig(BaseModel):
 # State
 _monitoring_task: Optional[asyncio.Task] = None
 
+# #817 Task 5 (finishing #808): the main event loop, captured at
+# `startup`, so plain `def` action handlers — threadpooled off that loop
+# by FastAPI — can fire-and-forget `_notify_webhooks` via
+# `asyncio.run_coroutine_threadsafe` instead of `await`ing it (which
+# would be a SyntaxError in a non-async function).
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
+
 # #817 Task 4: canonical store + background collector (replaces
 # `_discover_clients()`-per-request + `_monitor_clients()`). Populated at
 # `startup`; `status`/`clients`/`client/{mac}` read them as plain `def`
@@ -471,6 +478,24 @@ def _fire_collector_webhook(event: str, dev: Dict[str, Any]) -> None:
         pass
 
 
+def _fire_webhook_sync(event: str, data: Dict[str, Any]) -> None:
+    """Fire `_notify_webhooks` from a plain `def` action handler (#817
+    Task 5, finishing #808).
+
+    Plain `def` handlers are threadpooled off the main event loop by
+    FastAPI, so there is no running loop in the calling thread to
+    `await` on — only `asyncio.run_coroutine_threadsafe` against the
+    loop captured at `startup` is safe here. Fire-and-forget, mirrors
+    `_fire_collector_webhook`; never blocks the handler nor raises.
+    """
+    if _main_loop is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_notify_webhooks(event, data), _main_loop)
+    except RuntimeError:
+        pass
+
+
 @app.on_event("startup")
 async def startup():
     """Build the canonical device store + background collector (#817 Task 4).
@@ -481,8 +506,9 @@ async def startup():
     its double-cache (`collector.snapshot()`) or the SQLite store
     instead of scanning inline on every request.
     """
-    global _monitoring_task, store, collector
+    global _monitoring_task, store, collector, _main_loop
 
+    _main_loop = asyncio.get_running_loop()
     store = DeviceStore(DEVICES_DB_PATH)
 
     try:
@@ -688,8 +714,13 @@ def get_client(mac: str, user=Depends(require_jwt)):
 
 
 @router.get("/zones")
-async def zones(user=Depends(require_jwt)):
-    """Get all zones with members."""
+def zones(user=Depends(require_jwt)):
+    """Get all zones with members.
+
+    #817 Task 5 fix (#808): converted from `async def` — `_nft_list_set`
+    is a blocking `subprocess.run` call; plain `def` lets FastAPI
+    threadpool it off the shared aggregator loop.
+    """
     result = []
     for zone_id, info in ZONES.items():
         members = _nft_list_set(info["nft_set"])
@@ -705,8 +736,17 @@ async def zones(user=Depends(require_jwt)):
 
 
 @router.post("/add_to_zone")
-async def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
-    """Move a client to a zone."""
+def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
+    """Move a client to a zone.
+
+    #817 Task 5 fix (#808): converted from `async def` — `_get_client_zone`
+    / `_set_client_zone` are blocking `subprocess.run` calls; plain `def`
+    lets FastAPI threadpool it off the shared aggregator loop. The
+    webhook notify can no longer be `await`ed from a non-async function,
+    so it is fired via `_fire_webhook_sync` (schedules onto the main
+    loop captured at startup, fire-and-forget — same event, same
+    payload, just no longer blocking the handler on the HTTP POST).
+    """
     if req.zone not in ZONES:
         raise HTTPException(400, f"Zone invalide: {req.zone}")
 
@@ -723,7 +763,7 @@ async def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
         "to_zone": req.zone,
         "by": user.get("sub", "unknown")
     })
-    await _notify_webhooks("client_moved", {
+    _fire_webhook_sync("client_moved", {
         "mac": mac_lower,
         "from_zone": old_zone,
         "to_zone": req.zone
@@ -734,8 +774,13 @@ async def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
 
 
 @router.post("/remove_from_zone")
-async def remove_from_zone(mac: str, user=Depends(require_jwt)):
-    """Remove client from all zones (to quarantine)."""
+def remove_from_zone(mac: str, user=Depends(require_jwt)):
+    """Remove client from all zones (to quarantine).
+
+    #817 Task 5 fix (#808): converted from `async def` — `_get_client_zone`
+    / `_nft_*` are blocking `subprocess.run` calls; plain `def` lets
+    FastAPI threadpool it off the shared aggregator loop.
+    """
     mac_lower = mac.lower()
     old_zone = _get_client_zone(mac_lower)
 
@@ -751,14 +796,25 @@ async def remove_from_zone(mac: str, user=Depends(require_jwt)):
 
 
 @router.post("/approve_client")
-async def approve_client(mac: str, zone: str = "lan", user=Depends(require_jwt)):
-    """Approve a client (move from quarantine)."""
-    return await add_to_zone(ZoneRequest(mac=mac, zone=zone), user)
+def approve_client(mac: str, zone: str = "lan", user=Depends(require_jwt)):
+    """Approve a client (move from quarantine).
+
+    #817 Task 5 fix (#808): converted from `async def` — it only delegates
+    to `add_to_zone`, which is now plain `def` too, so the `await` on it
+    is no longer valid (or needed).
+    """
+    return add_to_zone(ZoneRequest(mac=mac, zone=zone), user)
 
 
 @router.post("/ban_client")
-async def ban_client(mac: str, user=Depends(require_jwt)):
-    """Ban a client completely."""
+def ban_client(mac: str, user=Depends(require_jwt)):
+    """Ban a client completely.
+
+    #817 Task 5 fix (#808): converted from `async def` — the body is all
+    blocking `subprocess.run`/`_nft_*` calls; plain `def` lets FastAPI
+    threadpool it off the shared aggregator loop. The webhook notify is
+    fired via `_fire_webhook_sync` instead of `await`ed (see `add_to_zone`).
+    """
     mac_lower = mac.lower()
 
     for info in ZONES.values():
@@ -774,7 +830,7 @@ async def ban_client(mac: str, user=Depends(require_jwt)):
 
     log.info("Client banned: %s", mac_lower)
     _record_event("client_banned", {"mac": mac_lower, "by": user.get("sub", "unknown")})
-    await _notify_webhooks("client_banned", {"mac": mac_lower})
+    _fire_webhook_sync("client_banned", {"mac": mac_lower})
     stats_cache.clear()
 
     return {"success": True, "mac": mac_lower, "status": "banned"}
@@ -800,9 +856,64 @@ def unban_client(mac: str, user=Depends(require_jwt)):
     return {"success": True, "mac": mac_lower, "status": "quarantine"}
 
 
+@router.post("/deny/{mac}")
+def deny(mac: str, user=Depends(require_jwt)):
+    """Deny a client — mac-guard `allow_state` absorption (#817 Task 5).
+
+    Sets `allow_state="deny"` in the canonical SQLite store and mirrors
+    it into nft on nac's existing `inet secubox_nac` table: add the MAC
+    to `blocked` and remove it from `lan_allowed`. Reuses `_nft_add_element`
+    / `_nft_delete_element` — mac-guard's separate `inet secubox_mac_guard`
+    table is retired; migrating its elements into `secubox_nac` is
+    Task 9, not here. Plain `def` (#808): all work below is blocking
+    subprocess/SQLite, threadpooled off the shared aggregator loop.
+    """
+    mac_lower = canon_mac(mac) or mac.lower()
+
+    _nft_add_element("blocked", mac_lower)
+    _nft_delete_element("lan_allowed", mac_lower)
+
+    if store:
+        store.upsert({"mac": mac_lower, "allow_state": "deny"})
+        store.record_event(mac_lower, "client_denied")
+
+    _record_event("client_denied", {"mac": mac_lower, "by": user.get("sub", "unknown")})
+    stats_cache.clear()
+
+    return {"success": True, "mac": mac_lower, "allow_state": "deny"}
+
+
+@router.post("/allow/{mac}")
+def allow(mac: str, user=Depends(require_jwt)):
+    """Allow a client — mac-guard `allow_state` absorption (#817 Task 5).
+
+    Sets `allow_state="allow"` in the canonical SQLite store and mirrors
+    it into nft: remove the MAC from `blocked` and add it to `lan_allowed`.
+    Reverse of `deny`; see its docstring for the nft-table/migration notes.
+    """
+    mac_lower = canon_mac(mac) or mac.lower()
+
+    _nft_delete_element("blocked", mac_lower)
+    _nft_add_element("lan_allowed", mac_lower)
+
+    if store:
+        store.upsert({"mac": mac_lower, "allow_state": "allow"})
+        store.record_event(mac_lower, "client_allowed")
+
+    _record_event("client_allowed", {"mac": mac_lower, "by": user.get("sub", "unknown")})
+    stats_cache.clear()
+
+    return {"success": True, "mac": mac_lower, "allow_state": "allow"}
+
+
 @router.post("/update_client")
-async def update_client(req: UpdateClientRequest, user=Depends(require_jwt)):
-    """Update client metadata."""
+def update_client(req: UpdateClientRequest, user=Depends(require_jwt)):
+    """Update client metadata.
+
+    #817 Task 5 fix (#808): converted from `async def` — it delegates to
+    `add_to_zone`, which is now plain `def` too, so the `await` on it is
+    no longer valid (or needed).
+    """
     mac_lower = req.mac.lower()
     meta = _load_clients_meta()
 
@@ -817,7 +928,7 @@ async def update_client(req: UpdateClientRequest, user=Depends(require_jwt)):
     _save_clients_meta(meta)
 
     if req.zone:
-        await add_to_zone(ZoneRequest(mac=req.mac, zone=req.zone), user)
+        add_to_zone(ZoneRequest(mac=req.mac, zone=req.zone), user)
 
     _record_event("client_updated", {"mac": mac_lower})
     stats_cache.clear()
@@ -1042,8 +1153,10 @@ def list_quarantine(user=Depends(require_jwt)):
 
 
 @router.post("/quarantine_client")
-async def quarantine_client(mac: str, user=Depends(require_jwt)):
-    return await add_to_zone(ZoneRequest(mac=mac, zone="quarantine"), user)
+def quarantine_client(mac: str, user=Depends(require_jwt)):
+    """#817 Task 5 fix (#808): converted from `async def` — delegates to
+    the now-`def` `add_to_zone`, so `await` is no longer valid (or needed)."""
+    return add_to_zone(ZoneRequest(mac=mac, zone="quarantine"), user)
 
 
 class MacRequest(BaseModel):
@@ -1051,9 +1164,13 @@ class MacRequest(BaseModel):
 
 
 @router.post("/unquarantine")
-async def unquarantine(req: MacRequest, user=Depends(require_jwt)):
-    """Move client from quarantine to LAN (frontend compatibility endpoint)."""
-    return await add_to_zone(ZoneRequest(mac=req.mac, zone="lan"), user)
+def unquarantine(req: MacRequest, user=Depends(require_jwt)):
+    """Move client from quarantine to LAN (frontend compatibility endpoint).
+
+    #817 Task 5 fix (#808): converted from `async def` — delegates to the
+    now-`def` `add_to_zone`, so `await` is no longer valid (or needed).
+    """
+    return add_to_zone(ZoneRequest(mac=req.mac, zone="lan"), user)
 
 
 @router.get("/get_client")
