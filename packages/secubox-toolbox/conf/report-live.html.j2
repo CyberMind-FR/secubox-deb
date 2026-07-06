@@ -517,7 +517,7 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
 
 {# ── COMPROMISSION TAB : per-device Sentinel assessment (#823) ── #}
 <div class="tab-pane" id="pane-sentinel">
-  {% set s = report.sentinel or {} %}
+  {% set s = (report or {}).sentinel or {} %}
   {% set a = s.assess or {} %}
   {% if not s.active %}
   <div class="card"><span style="color:var(--dim)">🛡️ Sentinelle inactive — aucune donnée de détection réseau.</span></div>
