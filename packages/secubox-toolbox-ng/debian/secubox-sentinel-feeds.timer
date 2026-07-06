@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: toolbox-ng — Sentinel threat-feed refresh timer (#823)
+#
+# Daily refresh of the Sentinel live-feed overlays. Persistent=true so a missed
+# run (box powered off at the scheduled time) fires on next boot;
+# RandomizedDelaySec spreads load and is polite to the upstream feed servers.
+#
+# DARK: installed but not enabled by the maintainer scripts — enable at cutover:
+#   systemctl enable --now secubox-sentinel-feeds.timer
+
+[Unit]
+Description=SecuBox Sentinel — daily threat-feed overlay refresh (#823)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/823
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=3600
+Persistent=true
+Unit=secubox-sentinel-feeds.service
+
+[Install]
+WantedBy=timers.target
