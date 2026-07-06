@@ -1,3 +1,33 @@
+secubox-toolbox-ng (0.1.29-1~bookworm1) bookworm; urgency=medium
+
+  * #823 Sentinel defensive threat engine — final wiring + packaging. Ships the
+    async analyzer daemon sbx-sentinel (/usr/sbin), wired with the three real
+    analyzers (commercial-spyware IOC correlator, behavioral heuristics,
+    YARA — the cgo-free stub in the DEFAULT build), plus a fail-safe live-feed
+    fetcher secubox-sentinel-feeds that materialises Amnesty-MVT / Citizen Lab /
+    abuse.ch (ThreatFox/Feodo/SSLBL) indicators as overlay packs, only ever
+    replacing a live overlay after the freshly-built pack validates as non-empty
+    JSON (a bad fetch keeps the last-good overlay, never wipes it).
+  * New reporter internal/sentinel.RenderReport(Verdict): a human-readable
+    proposal/solution report (detection class, matched-IOC evidence,
+    neutralized-vs-reported disposition, class-keyed mitigation) carrying no PII
+    beyond mac_hash.
+  * sbx-sentinel gains an optional read-only status HTTP surface (off unless
+    SENTINEL_HTTP_ADDR set): GET /stats {detections,blocked,spyware} + /verdicts.
+  * Packaging: sbx-sentinel.service, secubox-sentinel-feeds.{service,timer}
+    (daily), the shipped base pack under /usr/share/secubox/sentinel/packs/base,
+    the shared /etc/secubox/sentinel.env conffile (SENTINEL_*), and tmpfiles for
+    /var/lib/secubox/sentinel{,/overlay}. All DARK — installed but NOT enabled;
+    the inline gate + daemon + feed timer are turned on only at the human-gated
+    cutover (see debian/README.sentinel.md). Default build stays cgo-free
+    (CGO_ENABLED=0); the YARA-enabled variant (-tags yara + libyara-dev) is
+    documented, not the default.
+  * The rich operator WebUI/API belongs in the separate Python secubox-toolbox
+    portal and is a documented follow-up (intended /api/v1/toolbox/sentinel/*
+    routes in debian/README.sentinel.md) — no waf_bypass.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 06 Jul 2026 12:00:00 +0000
+
 secubox-toolbox-ng (0.1.28-1~bookworm1) bookworm; urgency=medium
 
   * #812 R4 media buffer (Phase 2): HLS reassembly — segments (.ts/.m4s) are
