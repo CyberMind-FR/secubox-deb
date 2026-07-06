@@ -628,7 +628,7 @@ async function loadSentinel() {
         `${esc(a.dominant_class || '—')}</div>`;
 
     const rows = (data.detections || []).map(d => {
-        const when = d.ts ? new Date(d.ts * 1000).toISOString().replace('T', ' ').slice(0, 19) : '?';
+        const when = Number.isFinite(d.ts) ? new Date(d.ts * 1000).toISOString().replace('T', ' ').slice(0, 19) : '?';
         return `<tr>
             <td>${esc(d.class)}</td>
             <td>${d.severity || 0}/${d.confidence || 0}</td>
