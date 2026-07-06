@@ -8,8 +8,13 @@ readonly LIMIT="${SECUBOX_FRIGATE_DISK_LIMIT:-90}"     # percent
 if [ -n "${SECUBOX_FRIGATE_DF_PCT:-}" ]; then
     pct="$SECUBOX_FRIGATE_DF_PCT"
 else
-    pct="$(df --output=pcent "$DATA_DIR" 2>/dev/null | tail -1 | tr -dc '0-9')"
-    pct="${pct:-0}"
+    # df fails if DATA_DIR is missing/unmounted (normal before provisioning) —
+    # never let that abort the guard under set -e/pipefail.
+    pct="$(df --output=pcent "$DATA_DIR" 2>/dev/null | tail -1 | tr -dc '0-9' || true)"
+    if [ -z "$pct" ]; then
+        echo "disk guard: ${DATA_DIR} unavailable — nothing to guard yet"
+        exit 0
+    fi
 fi
 if [ "$pct" -ge "$LIMIT" ]; then
     logger -t secubox-frigate "disk pressure: ${pct}% >= ${LIMIT}% on ${DATA_DIR} — reduce retention"
