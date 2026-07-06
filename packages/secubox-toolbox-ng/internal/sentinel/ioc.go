@@ -80,17 +80,27 @@ type IOCSet struct {
 	certs   map[string]*IOC
 	hashes  map[string]*IOC
 	urls    []*compiledURL
+
+	// urlIndex maps a url_regex IOC's raw pattern (Value) to its index in
+	// urls, so re-adding the same pattern (e.g. a live overlay re-declaring a
+	// base pack's url_regex with a different Action) REPLACES the existing
+	// slice entry in place — matching the override-by-value semantics every
+	// other IOC type already gets for free from its map — instead of
+	// appending a duplicate that MatchURL's first-match iteration would never
+	// reach because the original (base) entry, matched first, wins.
+	urlIndex map[string]int
 }
 
 // NewIOCSet returns an empty, ready-to-use IOCSet.
 func NewIOCSet() *IOCSet {
 	return &IOCSet{
-		domains: make(map[string]*IOC),
-		ips:     make(map[string]*IOC),
-		ja3:     make(map[string]*IOC),
-		ja4:     make(map[string]*IOC),
-		certs:   make(map[string]*IOC),
-		hashes:  make(map[string]*IOC),
+		domains:  make(map[string]*IOC),
+		ips:      make(map[string]*IOC),
+		ja3:      make(map[string]*IOC),
+		ja4:      make(map[string]*IOC),
+		certs:    make(map[string]*IOC),
+		hashes:   make(map[string]*IOC),
+		urlIndex: make(map[string]int),
 	}
 }
 
@@ -118,7 +128,13 @@ func (s *IOCSet) Add(ioc IOC) error {
 		if err != nil {
 			return fmt.Errorf("sentinel: compile url_regex IOC %q: %w", ioc.Value, err)
 		}
-		s.urls = append(s.urls, &compiledURL{re: re, ioc: &entry})
+		cu := &compiledURL{re: re, ioc: &entry}
+		if idx, ok := s.urlIndex[ioc.Value]; ok {
+			s.urls[idx] = cu
+		} else {
+			s.urlIndex[ioc.Value] = len(s.urls)
+			s.urls = append(s.urls, cu)
+		}
 	case IOCYara:
 		// YARA rule bodies are handled by the (build-tagged) yara matcher,
 		// not by IOCSet; nothing to index here.

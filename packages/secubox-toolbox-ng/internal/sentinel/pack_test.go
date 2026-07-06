@@ -6,8 +6,11 @@
 package sentinel
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -259,5 +262,136 @@ func TestNewLoaderCorruptBaseFails(t *testing.T) {
 
 	if _, err := NewLoader(baseDir, ""); err == nil {
 		t.Fatal("expected error constructing Loader from a corrupt base pack")
+	}
+}
+
+// TestLoaderBaseWipeFailsClosed covers the Critical fix: a base pack
+// directory that had content and then vanishes (deleted dir, mount blip,
+// mid-dpkg-upgrade window) must NOT result in MaybeReload swapping in an
+// empty/degraded base — the prior good state must be retained, and a warning
+// must be logged.
+func TestLoaderBaseWipeFailsClosed(t *testing.T) {
+	baseDir := t.TempDir()
+	writeFile(t, filepath.Join(baseDir, "base.json"), basePackJSON)
+
+	l, err := NewLoader(baseDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := l.Set().MatchDomain("c2.example"); !ok {
+		t.Fatal("base pack IOC did not load before wipe")
+	}
+
+	var logBuf bytes.Buffer
+	prevOut := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(prevOut)
+
+	if err := os.RemoveAll(baseDir); err != nil {
+		t.Fatal(err)
+	}
+	l.MaybeReload()
+
+	if _, ok := l.Set().MatchDomain("c2.example"); !ok {
+		t.Fatal("base IOC lost after baseDir vanished — must fail CLOSED and keep prior state")
+	}
+	if !strings.Contains(logBuf.String(), "refusing to swap") {
+		t.Fatalf("expected a fail-closed warning to be logged, got: %q", logBuf.String())
+	}
+}
+
+// TestLoaderGenuineEmptyBaseIsFine ensures the fail-closed guard only fires
+// when a PRIOR non-empty base is at risk of being dropped — a base pack
+// directory that is legitimately empty from the start (or stays empty across
+// a reload) must not be treated as an error.
+func TestLoaderGenuineEmptyBaseIsFine(t *testing.T) {
+	baseDir := t.TempDir() // empty: no *.json files at all.
+	overlayDir := t.TempDir()
+
+	l, err := NewLoader(baseDir, overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	overlayPath := filepath.Join(overlayDir, "live.json")
+	writeFile(t, overlayPath, overlayPackJSON)
+	touch(t, overlayPath, time.Second)
+
+	l.MaybeReload()
+
+	if _, ok := l.Set().MatchDomain("pegasus.example"); !ok {
+		t.Fatal("overlay IOC should have loaded fine with a genuinely empty (never populated) base dir")
+	}
+}
+
+// TestLoaderMaybeReloadThrottled covers the Important fix: MaybeReload must
+// not re-stat/rebuild on every call — Task 3's inline gate calls it per-flow.
+// A tiny throttle set directly on the unexported field lets this test run
+// fast without a real production-length sleep.
+func TestLoaderMaybeReloadThrottled(t *testing.T) {
+	baseDir := t.TempDir()
+	overlayDir := t.TempDir()
+	writeFile(t, filepath.Join(baseDir, "base.json"), basePackJSON)
+
+	l, err := NewLoader(baseDir, overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.reloadThrottle = 100 * time.Millisecond
+
+	// First MaybeReload call after construction always runs (lastCheck is
+	// zero) — nothing has changed yet, so this just establishes lastCheck.
+	l.MaybeReload()
+
+	// Write the overlay pack and call MaybeReload again immediately — within
+	// the throttle window, so this call must be a pure no-op: no glob/stat,
+	// no reload, even though the overlay file is new on disk.
+	overlayPath := filepath.Join(overlayDir, "live.json")
+	writeFile(t, overlayPath, overlayPackJSON)
+	touch(t, overlayPath, time.Second)
+	l.MaybeReload()
+	if _, ok := l.Set().MatchDomain("pegasus.example"); ok {
+		t.Fatal("MaybeReload picked up the overlay within the throttle window — should have been throttled")
+	}
+
+	// Wait out the throttle window, then call again — this time it must
+	// actually reload and pick up the overlay.
+	time.Sleep(150 * time.Millisecond)
+	l.MaybeReload()
+	if _, ok := l.Set().MatchDomain("pegasus.example"); !ok {
+		t.Fatal("MaybeReload did not pick up the overlay after the throttle window elapsed")
+	}
+}
+
+// TestLoaderYaraRulesDedup covers the Minor fix: the same YARA rule body
+// shipped in both the base pack and an overlay must be emitted only once.
+func TestLoaderYaraRulesDedup(t *testing.T) {
+	baseDir := t.TempDir()
+	overlayDir := t.TempDir()
+	const dupRule = `rule dup_rule { condition: true }`
+	writeFile(t, filepath.Join(baseDir, "base.json"), `{
+		"version": "1",
+		"iocs": [],
+		"yara_rules": ["`+dupRule+`"]
+	}`)
+	writeFile(t, filepath.Join(overlayDir, "live.json"), `{
+		"version": "live-1",
+		"iocs": [],
+		"yara_rules": ["`+dupRule+`"]
+	}`)
+
+	l, err := NewLoader(baseDir, overlayDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := l.YaraRules()
+	count := 0
+	for _, r := range rules {
+		if r == dupRule {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("YaraRules() contains %d copies of the duplicated rule, want 1: %v", count, rules)
 	}
 }

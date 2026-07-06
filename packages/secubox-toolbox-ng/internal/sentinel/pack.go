@@ -88,7 +88,21 @@ func addPackTo(set *IOCSet, p *Pack) {
 type loaderState struct {
 	set  *IOCSet
 	yara []string
+
+	// baseCount is the number of raw IOC entries parsed from base pack files
+	// (fs.base) that produced this state — NOT the merged/deduped count, just
+	// "did the base pack directory have any content at all". MaybeReload uses
+	// it to detect a base-pack disappearance (vanished dir, mount blip,
+	// dpkg-upgrade window) and refuse to swap in a degraded/empty base rather
+	// than silently losing detection coverage. See MaybeReload.
+	baseCount int
 }
+
+// defaultReloadThrottle bounds how often MaybeReload actually stats the pack
+// directories. Task 3's inline gate calls MaybeReload() on every flow, so
+// without a throttle every packet pays a directory-glob + per-file stat;
+// mirrors cmd/sbxmitm/policy.go's Policy.reloadThrottle pattern.
+const defaultReloadThrottle = 5 * time.Second
 
 // Loader watches a base pack directory and an (optional) live-overlay pack
 // directory, merging every *.json pack file found in either into a single
@@ -101,11 +115,21 @@ type Loader struct {
 	overlayDir string
 
 	// mu serialises concurrent MaybeReload passes (mirrors reload.Watcher.mu)
-	// and guards mtimes. It is NOT held by Set()/YaraRules() — those read the
-	// atomic state pointer only, so a reload swap never blocks or torn-reads
-	// a concurrent hot-path lookup.
+	// and guards mtimes, reloadThrottle and lastCheck. It is NOT held by
+	// Set()/YaraRules() — those read the atomic state pointer only, so a
+	// reload swap never blocks or torn-reads a concurrent hot-path lookup.
 	mu     sync.Mutex
 	mtimes map[string]time.Time
+
+	// reloadThrottle/lastCheck gate MaybeReload's disk I/O: a call within
+	// reloadThrottle of the last check returns immediately with no glob/stat
+	// at all (not even a cheap one) — required because MaybeReload is called
+	// per-flow on the inline gate hot path. lastCheck zero means "never
+	// checked", so the very first MaybeReload call after NewLoader always
+	// runs regardless of reloadThrottle. Tests in this package may lower
+	// reloadThrottle directly (unexported field) to avoid a real sleep.
+	reloadThrottle time.Duration
+	lastCheck      time.Time
 
 	state atomic.Pointer[loaderState]
 }
@@ -128,7 +152,7 @@ type fileSet struct {
 // real packaging bug, not a transient live-feed hiccup) and is returned as
 // an error here since there is no prior good state yet to fall back on.
 func NewLoader(baseDir, overlayDir string) (*Loader, error) {
-	l := &Loader{baseDir: baseDir, overlayDir: overlayDir}
+	l := &Loader{baseDir: baseDir, overlayDir: overlayDir, reloadThrottle: defaultReloadThrottle}
 
 	fs, err := l.scan()
 	if err != nil {
@@ -166,12 +190,31 @@ func (l *Loader) YaraRules() []string {
 // and atomically swaps in the newly merged state. When nothing changed this
 // is a cheap no-op: a directory listing plus a stat per file, no JSON
 // parsing. Fail-safe: a scan error or a corrupt BASE pack is logged and the
-// prior good state is kept — MaybeReload never panics and never blocks a
-// caller on the hot path (it is expected to be called at a throttled
-// cadence, not per-flow; see Global Constraints — hot-path budget).
+// prior good state is kept.
+//
+// Throttled: MaybeReload is called per-flow by Task 3's inline gate, so a
+// call within l.reloadThrottle of the last check returns immediately without
+// touching disk at all — the caller pays no cost on the hot path beyond a
+// time comparison under l.mu.
+//
+// Fail-closed on base-pack disappearance: if the rebuilt state's base pack
+// contributed ZERO IOCs while the prior state's base pack had contributed at
+// least one, the vanished/degraded base is assumed to be a transient
+// problem (deleted dir, mount blip, mid-dpkg-upgrade window) rather than a
+// deliberate empty base — the swap is refused, the prior state is kept, and
+// a warning is logged. A genuine first-ever empty base (no prior state, or a
+// prior state that was already empty) is not blocked. This is a
+// security-detection engine: silently emptying the detection set is never
+// acceptable, so this case fails CLOSED (keeps the last-known-good set)
+// rather than open.
 func (l *Loader) MaybeReload() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	if l.reloadThrottle > 0 && !l.lastCheck.IsZero() && time.Since(l.lastCheck) < l.reloadThrottle {
+		return
+	}
+	l.lastCheck = time.Now()
 
 	fs, err := l.scan()
 	if err != nil {
@@ -187,6 +230,12 @@ func (l *Loader) MaybeReload() {
 		log.Printf("sentinel: pack reload failed, keeping prior set: %v", err)
 		return
 	}
+
+	if prior := l.state.Load(); prior != nil && prior.baseCount > 0 && state.baseCount == 0 {
+		log.Printf("sentinel: pack reload would drop the base IOC set from %d entries to 0 (baseDir=%q missing or empty — vanished directory, mount blip, or mid-upgrade window?); refusing to swap, keeping prior state", prior.baseCount, l.baseDir)
+		return
+	}
+
 	l.state.Store(state)
 	l.mtimes = fs.mtimes
 }
@@ -229,12 +278,14 @@ func (l *Loader) scan() (fileSet, error) {
 // skipped (logged) and does not affect the rest of the merge.
 func buildState(fs fileSet) (*loaderState, error) {
 	var packs []*Pack
+	baseCount := 0
 
 	for _, p := range fs.base {
 		pk, err := LoadBasePack(p)
 		if err != nil {
 			return nil, fmt.Errorf("sentinel: base pack %s: %w", p, err)
 		}
+		baseCount += len(pk.IOCs)
 		packs = append(packs, pk)
 	}
 	for _, p := range fs.overlay {
@@ -246,16 +297,26 @@ func buildState(fs fileSet) (*loaderState, error) {
 		packs = append(packs, pk)
 	}
 
+	// Dedup YARA rule bodies by exact string so the same rule shipped in both
+	// the base pack and an overlay (or repeated across overlay fragments)
+	// isn't emitted twice to the YARA compiler/scanner.
 	var yara []string
+	seenYara := make(map[string]bool)
 	for _, pk := range packs {
-		yara = append(yara, pk.YaraRules...)
+		for _, r := range pk.YaraRules {
+			if seenYara[r] {
+				continue
+			}
+			seenYara[r] = true
+			yara = append(yara, r)
+		}
 	}
 
 	// MergePacks(nil, packs...) applies every pack in order with the same
 	// add/override-by-(Type,Value) semantics MergePacks documents for
 	// base+overlays — there is no distinct "base" argument needed here since
 	// fs.base's entries were already placed first in packs.
-	return &loaderState{set: MergePacks(nil, packs...), yara: yara}, nil
+	return &loaderState{set: MergePacks(nil, packs...), yara: yara, baseCount: baseCount}, nil
 }
 
 // listPackFiles resolves root to a sorted list of *.json pack file paths.
