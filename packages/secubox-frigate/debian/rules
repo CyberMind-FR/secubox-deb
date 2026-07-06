@@ -27,6 +27,7 @@ override_dh_auto_install:
 	install -d debian/secubox-frigate/etc/nginx/secubox-routes.d
 	[ -f conf/frigate.nginx.conf ] && cp conf/frigate.nginx.conf debian/secubox-frigate/etc/nginx/secubox.d/ || true
 	[ -f conf/frigate.nginx.conf ] && cp conf/frigate.nginx.conf debian/secubox-frigate/etc/nginx/secubox-routes.d/ || true
-	# Config example
-	install -d debian/secubox-frigate/etc/secubox
-	[ -f conf/frigate.config.yml.example ] && cp conf/frigate.config.yml.example debian/secubox-frigate/etc/secubox/frigate.config.yml.example || true
+	# Config example — canonical path read by lib/frigate/install-lxc.sh
+	# (install_config() seeds the live LXC config from here on first install).
+	install -d debian/secubox-frigate/usr/share/secubox/frigate
+	[ -f conf/frigate.config.yml.example ] && cp conf/frigate.config.yml.example debian/secubox-frigate/usr/share/secubox/frigate/frigate.config.yml.example || true

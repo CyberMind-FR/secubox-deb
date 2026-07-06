@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Frigate config (Foundation). Copied to /etc/secubox/frigate/config.yml
+# on first install (never clobbered). OpenVINO CPU detector; a go2rtc demo source
+# validates the pipeline with no real camera. Add real cameras under `cameras:`.
+mqtt:
+  enabled: false            # deferred (sub-project follow-up)
+
+detectors:
+  ov:
+    type: openvino
+    device: CPU
+
+model:
+  path: /openvino-model/ssdlite_mobilenet_v2.xml
+  input_tensor: nhwc
+  input_pixel_format: bgr
+  width: 300
+  height: 300
+
+# SQLite DB on /data/frigate (bind-mounted to /media/frigate) — NOT the
+# Frigate default /config/frigate.db, so the DB lives with recordings/clips
+# on bulk storage rather than the (smaller) config bind mount.
+database:
+  path: /media/frigate/db/frigate.db
+
+# go2rtc restream — a bundled demo/test source so Frigate runs with no camera.
+go2rtc:
+  streams:
+    demo:
+      # Frigate/go2rtc ships an ffmpeg test-pattern generator; replace with rtsp://... for a real camera.
+      - "ffmpeg:device?video=testsrc#video=h264"
+
+record:
+  enabled: true
+  retain:
+    days: 3
+    mode: motion
+
+snapshots:
+  enabled: true
+  retain:
+    default: 5
+
+cameras:
+  demo:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/demo
+          input_args: preset-rtsp-restream
+          roles: [detect, record]
+    detect:
+      width: 1280
+      height: 720
+      fps: 5
+
+# ── Add real cameras later, e.g.:
+# cameras:
+#   frontdoor:
+#     ffmpeg:
+#       inputs:
+#         - path: rtsp://USER:PASS@192.168.1.50:554/stream
+#           roles: [detect, record]

@@ -43,7 +43,7 @@ la() { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- "$@"; }
 
 # ── Preflight ────────────────────────────────────────────────────────────────
 require_cmds() {
-    for c in lxc-create lxc-info lxc-start lxc-attach openssl; do
+    for c in lxc-create lxc-info lxc-start lxc-attach; do
         command -v "$c" >/dev/null 2>&1 || fail "$c not installed"
     done
 }
@@ -171,6 +171,16 @@ install_frigate_in_lxc() {
     log "Dropping frigate.service unit into '$LXC_NAME' rootfs ..."
     install -D -m 0644 "$SCRIPT_DIR/frigate.container" \
         "$LXC_PATH/$LXC_NAME/rootfs/etc/systemd/system/frigate.service"
+
+    # Template the image tag from $IMAGE — the static unit ships the pinned
+    # default (:0.14.1); honor SECUBOX_FRIGATE_IMAGE overrides here so the
+    # unit that actually runs matches what we `podman pull` below (idempotent:
+    # re-running with the same $IMAGE is a no-op sed).
+    log "Templating Frigate image tag ($IMAGE) into installed unit ..."
+    sed -i "s|ghcr.io/blakeblackshear/frigate:[^[:space:]]*|$IMAGE|" \
+        "$LXC_PATH/$LXC_NAME/rootfs/etc/systemd/system/frigate.service"
+    grep -qF "$IMAGE" "$LXC_PATH/$LXC_NAME/rootfs/etc/systemd/system/frigate.service" \
+        || fail "failed to template Frigate image into frigate.service"
 
     log "Installing podman + Frigate in '$LXC_NAME' ..."
     la env \
