@@ -1,0 +1,17 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-frigate
+category: misc
+tier: lite
+description: "Frigate NVR for SecuBox"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/frigate.sock
+  health: /api/v1/frigate/status
+
+ui:
+  path: /srv/secubox/www/frigate

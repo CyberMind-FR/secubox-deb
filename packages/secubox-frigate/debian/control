@@ -1,0 +1,23 @@
+Source: secubox-frigate
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-frigate
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip,
+ lxc, lxc-templates, podman, nftables, openssl
+Description: Frigate NVR for SecuBox (native LXC, podman)
+ SecuBox module for the Frigate NVR (frigate.video) running as the official
+ podman container inside a dedicated Debian LXC on the amd64 node. `frigatectl
+ install` provisions the LXC + container on demand; the host shim daemon stays
+ lightweight and always reachable on /run/secubox/frigate.sock.
+ .
+ Foundation scope: OpenVINO CPU detector, go2rtc demo source (no camera yet),
+ storage + retention on /data/frigate, /api/v1/frigate/* shim, and cross-node
+ exposure through gk2's WAF (mitmproxy — no bypass). The C3BOX dashboard, MQTT,
+ and 4R config double-buffer are deferred (sub-project 2 / follow-ups).
+ .
+ Provides FastAPI backend on /api/v1/frigate/ via a Unix socket.

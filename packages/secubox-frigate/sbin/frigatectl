@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: frigatectl
+# CyberMind — https://cybermind.fr
+#
+# Frigate host-side controller. Frigate runs as a podman container inside a
+# dedicated Debian LXC (default 10.100.0.140 on br-lxc, --network=host).
+# Recordings/clips/exports live on /data/frigate (bind-mounted into the LXC).
+#
+# Conventions: docs/MODULE-GUIDELINES.md §7 (mirror of photoprismctl).
+
+set -u
+
+readonly VERSION="1.0.0"
+readonly CONFIG_FILE="${SECUBOX_FRIGATE_CTL_CONFIG:-/etc/secubox/frigate.toml}"
+readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/frigate/install-lxc.sh}"
+
+readonly RED='\033[0;31m'; readonly GREEN='\033[0;32m'; readonly YELLOW='\033[1;33m'; readonly NC='\033[0m'
+log()  { printf '%b[frigate]%b %s\n' "$GREEN" "$NC" "$*"; }
+warn() { printf '%b[warn]%b %s\n'  "$YELLOW" "$NC" "$*" >&2; }
+err()  { printf '%b[error]%b %s\n' "$RED"    "$NC" "$*" >&2; }
+
+config_get() {
+    local key="$1" default="${2:-}" raw=""
+    [ -f "$CONFIG_FILE" ] && raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null | head -1)
+    [ -z "$raw" ] && { echo "$default"; return; }
+    local val
+    val=$(echo "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
+        | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | tr -d '"' | tr -d "'")
+    [ -z "$val" ] && echo "$default" || echo "$val"
+}
+
+LXC_NAME=$(config_get "name" "frigate")
+LXC_IP=$(config_get "ip" "10.100.0.140")
+LXC_PATH=$(config_get "path" "/data/lxc")
+HTTP_PORT=$(config_get "http_port" "5000")
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "frigate.gk2.secubox.in")
+
+lxc_state() {
+    lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
+        | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }'
+}
+lxc_running() { [ "$(lxc_state)" = "running" ]; }
+svc() { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl "$@" frigate; }
+
+cmd_install() {
+    [ -f "$INSTALL_LIB" ] || { err "install script not found at $INSTALL_LIB"; exit 1; }
+    log "Running LXC bootstrap from $INSTALL_LIB ..."
+    SECUBOX_LXC_NAME="$LXC_NAME" SECUBOX_LXC_IP="$LXC_IP" SECUBOX_LXC_PATH="$LXC_PATH" \
+        bash "$INSTALL_LIB"
+    log "Done. Try 'frigatectl status'."
+}
+
+cmd_status() {
+    printf 'LXC %s          : %s\n' "$LXC_NAME" "$(lxc_state || echo absent)"
+    if lxc_running; then
+        printf 'frigate.service    : %s\n' "$(svc is-active 2>/dev/null || echo unknown)"
+        if curl -fsS -o /dev/null --max-time 3 "http://$LXC_IP:$HTTP_PORT/" 2>/dev/null; then
+            printf 'HTTP %s:%s     : responding\n' "$LXC_IP" "$HTTP_PORT"
+        else
+            printf 'HTTP %s:%s     : NOT responding\n' "$LXC_IP" "$HTTP_PORT"
+        fi
+    fi
+    printf 'public URL         : https://%s/\n' "$PUBLIC_HOSTNAME"
+}
+
+cmd_start()   { lxc_running || lxc-start -n "$LXC_NAME" -P "$LXC_PATH"; svc start;   log "started"; }
+cmd_stop()    { lxc_running && svc stop || true;                                    log "stopped"; }
+cmd_restart() { lxc_running || lxc-start -n "$LXC_NAME" -P "$LXC_PATH"; svc restart; log "restarted"; }
+cmd_logs()    { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- journalctl -u frigate -n "${1:-50}" --no-pager; }
+
+cmd_help() {
+    cat <<EOF
+frigatectl $VERSION — SecuBox Frigate NVR (podman-in-LXC) controller
+
+Usage: frigatectl <verb> [args]
+
+  install            Provision the LXC + podman + Frigate (idempotent)
+  status             LXC + service + HTTP reachability
+  start|stop|restart Control frigate.service inside the LXC
+  logs [N]           Tail N lines of frigate journal (default 50)
+  help               This message
+
+Config: $CONFIG_FILE  — LXC $LXC_NAME @ $LXC_IP, public https://$PUBLIC_HOSTNAME/
+EOF
+}
+
+main() {
+    local noun="${1:-help}"; shift || true
+    case "$noun" in
+        install|status|start|stop|restart|logs) "cmd_${noun}" "$@" ;;
+        help|-h|--help) cmd_help ;;
+        *) err "unknown verb: $noun"; cmd_help; exit 1 ;;
+    esac
+}
+
+main "$@"
