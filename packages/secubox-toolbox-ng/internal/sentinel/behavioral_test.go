@@ -198,6 +198,30 @@ func TestLooksLikeOneTimeTokenRejectsOrdinaryPaths(t *testing.T) {
 	}
 }
 
+// TestLooksLikeOneTimeTokenExcludesMediaAndBase64Shapes is the regression
+// test for the false-positive review: ordinary timestamped camera filenames,
+// base64-encoded blobs, and CDN asset URLs must NOT be flagged as one-time
+// tokens even though they can otherwise clear the length/charset/entropy
+// gates — only a genuinely extension-less, non-base64 random token should
+// still fire, so the heuristic isn't over-tightened into uselessness either.
+func TestLooksLikeOneTimeTokenExcludesMediaAndBase64Shapes(t *testing.T) {
+	notTokens := []string{
+		"IMG_20260704_142233.jpg",      // ordinary camera filename (has an extension)
+		"MzE0NTY3ODkwMTIzNDU2Nzg5MA==", // base64 blob with padding
+		"app.4f8a9c2b.js",              // ordinary CDN asset (has an extension)
+	}
+	for _, seg := range notTokens {
+		if looksLikeOneTimeToken(seg) {
+			t.Errorf("looksLikeOneTimeToken(%q) = true, want false (ordinary media/asset shape, not a one-time token)", seg)
+		}
+	}
+
+	genuine := "k7Qm2Xp9Rt4Wz8Bn1Lv6Yc3Ha5Fd0Jg" // 31-char mixed-case+digit, no extension, no padding
+	if !looksLikeOneTimeToken(genuine) {
+		t.Errorf("looksLikeOneTimeToken(%q) = false, want true (genuine one-time-token shape must still fire)", genuine)
+	}
+}
+
 // TestBehavioralLRUBounded feeds far more than maxTrackedKeys distinct
 // (macHash,host) pairs — one message each — and asserts the internal timing
 // state never grows past the cap: Behavioral must evict least-recently-used

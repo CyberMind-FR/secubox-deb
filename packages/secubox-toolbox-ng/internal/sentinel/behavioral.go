@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -60,9 +61,21 @@ const (
 	// bits/char) a candidate segment must have. A genuinely random token
 	// has close to one distinct value per character, so its own-frequency
 	// entropy sits near log2(distinct-chars) — well above ordinary words or
-	// slugs, which repeat characters heavily.
-	oneTimeMinEntropy = 3.5
+	// slugs, which repeat characters heavily. Raised from 3.5 to 4.0 (on top
+	// of the extension/base64 exclusions below) after a false-positive review
+	// found timestamped filenames and base64 blobs clearing 3.5 despite being
+	// structured, not random.
+	oneTimeMinEntropy = 4.0
 )
+
+// oneTimeExtensionRe matches a plausible trailing file extension (".jpg",
+// ".js", ".png", ...) on a path segment. A genuine one-time delivery link is
+// an extension-less random path — real zero-click/spyware delivery links
+// never end in a file extension, since the whole point is that the path
+// itself carries no semantic hint about content type. A segment that does
+// end in one is an ordinary media/asset URL (camera filenames, CDN bundles,
+// etc.), not a one-time token, no matter how random the rest of it looks.
+var oneTimeExtensionRe = regexp.MustCompile(`\.[A-Za-z0-9]{1,5}$`)
 
 // hostState is the bounded per-(macHash,host) timing state used to detect
 // beaconing. times holds at most beaconMinHits recent timestamps (oldest
@@ -265,11 +278,23 @@ func lastPathSegment(rawURL string) string {
 // looksLikeOneTimeToken reports whether seg has the shape of a random
 // single-use token: long enough, a mix of upper-case, lower-case AND digit
 // characters (a plain English word or slug practically never has all
-// three), and high own-distribution Shannon entropy (a genuinely random
-// token rarely repeats characters, so its entropy sits well above ordinary
-// text of the same length).
+// three), high own-distribution Shannon entropy (a genuinely random token
+// rarely repeats characters, so its entropy sits well above ordinary text of
+// the same length) — AND, critically, does NOT look like an ordinary
+// extension-bearing asset URL or an encoded base64 blob. Both of those shapes
+// can pass the length/charset/entropy gates on their own (a timestamped
+// camera filename, a base64 query blob) while being routine, non-token
+// traffic; excluding them is what keeps this heuristic from flooding the
+// ClassZeroClick report stream on an ordinary media-heavy network (photo
+// sync, CDN assets).
 func looksLikeOneTimeToken(seg string) bool {
 	if len(seg) < oneTimeMinLen {
+		return false
+	}
+	if oneTimeExtensionRe.MatchString(seg) {
+		return false
+	}
+	if looksLikeBase64Blob(seg) {
 		return false
 	}
 
@@ -289,6 +314,63 @@ func looksLikeOneTimeToken(seg string) bool {
 	}
 
 	return shannonEntropy(seg) >= oneTimeMinEntropy
+}
+
+// looksLikeBase64Blob reports whether seg has the shape of an encoded
+// base64/base64url payload (an asset reference, a query parameter, an
+// embedded blob) rather than a random single-use token. Two independent,
+// deliberately conservative signals are checked so a genuine token is never
+// mistaken for base64 just because it happens to share the alphabet:
+//
+//   - Trailing '=' or '==' padding is unambiguous — only base64 encoding
+//     pads a value; a random token generator never appends '='.
+//   - Absent padding, a segment is only treated as unpadded base64 when it
+//     both has a length that is a multiple of 4 AND contains at least one
+//     character ('+', '/', '-', '_') that lies outside plain alphanumeric.
+//     Requiring that extra character is what keeps this from rejecting
+//     ordinary alnum-only tokens (hex/base62), which very often happen to
+//     have a length that is a multiple of 4 too.
+func looksLikeBase64Blob(seg string) bool {
+	if seg == "" {
+		return false
+	}
+
+	if trimmed := strings.TrimRight(seg, "="); len(trimmed) < len(seg) {
+		if len(seg)-len(trimmed) > 2 {
+			return false // more than "==" padding is not valid base64
+		}
+		for _, r := range trimmed {
+			if !isBase64Rune(r) {
+				return false
+			}
+		}
+		return true
+	}
+
+	hasBase64OnlyRune := false
+	for _, r := range seg {
+		if !isBase64Rune(r) {
+			return false
+		}
+		if r == '+' || r == '/' || r == '-' || r == '_' {
+			hasBase64OnlyRune = true
+		}
+	}
+	return hasBase64OnlyRune && len(seg)%4 == 0
+}
+
+// isBase64Rune reports whether r is a member of the standard or URL-safe
+// base64 alphabet (letters, digits, '+', '/', '-', '_'). It does not include
+// '=' — padding is handled separately by looksLikeBase64Blob.
+func isBase64Rune(r rune) bool {
+	switch {
+	case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		return true
+	case r == '+' || r == '/' || r == '-' || r == '_':
+		return true
+	default:
+		return false
+	}
 }
 
 // shannonEntropy returns the own-distribution Shannon entropy of s, in
