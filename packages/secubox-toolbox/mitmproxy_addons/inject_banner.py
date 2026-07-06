@@ -523,9 +523,10 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     for _i, _p in enumerate(right_parts):
         _c = _GUIRLANDE[_i % len(_GUIRLANDE)]
         _chips.append(
-            f"<span style=\"background:{_c};color:#0a0a0f;padding:1px 7px;"
-            f"margin:0 2px;border-radius:9px;font-weight:bold;white-space:nowrap;"
-            f"box-shadow:0 0 6px {_c},0 0 2px {_c}\">{_p}</span>")
+            f"<span style=\"flex:0 0 auto;display:inline-flex;align-items:center;"
+            f"background:{_c};color:#0a0a0f;padding:2px 8px;border-radius:999px;"
+            f"font-weight:bold;white-space:nowrap;box-shadow:0 0 7px {_c},"
+            f"inset 0 0 4px rgba(255,255,255,.3)\">{_p}</span>")
     right_text = "".join(_chips)
     grade = ctx["grade"]
     grade_color = ctx["grade_color"]
@@ -534,12 +535,17 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
 
     # ── theme resolution (#545) : R3/R4 neon tube, R2 amber flat ──
     th = _LEVEL_THEME.get(level, _LEVEL_THEME["r2"])
+    # #620 redesign — three-cluster arcade HUD. box-sizing:border-box so the
+    # padding never overflows the viewport width; overflow:hidden clips the
+    # scrolling middle cluster. No justify-content: the middle (flex:1) does the
+    # spacing, keeping the left rank+grade and the right report+close pinned.
     _base = (
         "position:fixed!important;top:0!important;left:0!important;right:0!important;"
         "z-index:2147483647!important;font-family:Menlo,Consolas,monospace!important;"
-        "padding:6px 12px!important;font-size:11px!important;line-height:1.4!important;"
-        "text-align:left!important;display:flex!important;justify-content:space-between!important;"
-        "align-items:center!important;gap:8px!important;"
+        "box-sizing:border-box!important;overflow:hidden!important;"
+        "padding:5px 10px!important;font-size:11px!important;line-height:1.4!important;"
+        "text-align:left!important;display:flex!important;"
+        "align-items:center!important;gap:10px!important;"
     )
     if th["neon"]:
         # glowing glass tube : outer + inset accent glow, neon edge
@@ -564,39 +570,63 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     link_css = f"color:{th['link']};text-decoration:underline;font-weight:bold"
     title_attr = f" style=\"{title_css}\"" if title_css else ""
 
+    # ── #620 three clusters, shared by both paths ──────────────────────────
+    th_glow = th["glow"] or th["accent"]
+    # LEFT pinned : rank chip (📡 ToolBoX <level>) + grade shield + CA SHA1 proof.
+    # This is the "score" — the tier accent + grade colour drive the whole HUD.
+    left_html = (
+        f"<span style=\"flex:0 0 auto;display:flex;align-items:center;gap:6px\">"
+        f"<span{title_attr} style=\"display:inline-flex;align-items:center;gap:4px;box-sizing:border-box;"
+        f"padding:2px 8px;border-radius:6px;font-weight:800;color:#0a0a0f;background:{th['accent']};"
+        f"box-shadow:0 0 10px {th_glow},inset 0 0 6px rgba(255,255,255,.4)\">"
+        f"{SAT_EMOJI} ToolBoX {level_label}</span>"
+        f"<span title=\"grade\" style=\"display:inline-flex;align-items:center;justify-content:center;"
+        f"min-width:20px;height:20px;box-sizing:border-box;padding:0 4px;font-weight:900;border-radius:5px;"
+        f"color:#0a0a0f;background:{grade_color};box-shadow:0 0 9px {grade_color},inset 0 0 5px rgba(0,0,0,.25)\">{grade}</span>"
+        f"<code style=\"{code_css}\">{sha1[:23]}</code>"
+        f"</span>"
+    )
+    # MIDDLE : scrolling evidence pills — flex:1, min-width:0, overflow-x:auto so
+    # it shrinks/scrolls instead of pushing the report+close cluster off-screen.
+    mid_html = (
+        f"<span style=\"flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:5px;"
+        f"overflow-x:auto;white-space:nowrap\">{right_text}</span>"
+    )
+    # RIGHT : report CTA (both paths) + close ✕ (JS path only). flex:0 0 auto.
+    report_css = (
+        f"flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;text-decoration:none;"
+        f"font-weight:800;white-space:nowrap;color:{th['accent']};border:1px solid {th['accent']};"
+        f"background:rgba(10,10,15,.55);padding:3px 9px;border-radius:6px;box-shadow:0 0 8px {th_glow}"
+    )
+    report_html = f"<a href=\"{report_url}\" style=\"{report_css}\">&#x1F4C4; Mon rapport</a>"
+    close_css = (
+        "flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;"
+        "width:24px;height:24px;box-sizing:border-box;border-radius:6px;cursor:pointer;"
+        f"text-decoration:none;font-weight:900;line-height:1;color:{th['fg']};"
+        f"background:rgba(255,255,255,0.08);border:1px solid {th['accent']}"
+    )
+
     if csp_strict:
-        # JS-less HTML banner — visible only, no close button. !important
-        # everywhere so page CSS can't override the fixed positioning.
+        # JS-less HTML banner — visible only, no close button (non-dismissible).
+        # !important everywhere so page CSS can't override the fixed positioning.
         # NCRs work even when page charset is iso-8859-1.
         html = (
             f"<div id=\"gondwana-mitm-banner\" role=\"status\" style=\"{bar_css}\">"
-            f"<span><b{title_attr}>{SAT_EMOJI} ToolBoX {level_label}</b> &#xB7; CA SHA1: "
-            f"<code style=\"{code_css}\">{sha1[:23]}</code>"
-            f" &#xB7; <a href=\"{report_url}\" style=\"{link_css}\">Mon rapport</a></span>"
-            f"<span style=\"color:#e8e6d9;background:rgba(0,0,0,0.4);padding:3px 8px;border-radius:3px\">"
-            f"{right_text}"
-            f" &#xB7; <b style=\"color:{grade_color};background:#0a0a0f;padding:1px 5px;border-radius:2px\">{grade}</b>"
-            f"</span></div>"
+            + left_html + mid_html
+            + f"<span style=\"flex:0 0 auto;display:flex;align-items:center;gap:8px\">{report_html}</span>"
+            + "</div>"
         )
         return (b"<!-- " + _GUARD + b" -->" + html.encode("ascii"))
 
-    # Interactive JS version. We assemble innerHTML with NCRs already in place
-    # so the resulting DOM text is charset-agnostic.
+    # Interactive JS version. The cluster HTML already carries NCRs; json.dumps
+    # (ensure_ascii=True) escapes any raw non-ASCII (geo flag) so `js.encode("ascii")`
+    # stays valid. The close ✕ lives in the RIGHT pinned cluster (the responsive fix).
     import json as _json
-    right_js = _json.dumps(right_text)             # already NCR-encoded
-    grade_js = _json.dumps(grade)
-    grade_col_js = _json.dumps(grade_color)
-    sha1_js = _json.dumps(sha1[:23])
-    report_js = _json.dumps(report_url)
-    level_js = _json.dumps(level_label)
-    sat_js = _json.dumps(SAT_EMOJI)
-    mid_js = _json.dumps(" &#xB7; ")
-    # theme (#545) — JS-encoded so the same neon/amber styling applies here
     bar_css_js = _json.dumps(bar_css)
-    title_attr_js = _json.dumps(title_attr)
-    code_css_js = _json.dumps(code_css)
-    link_css_js = _json.dumps(link_css)
-    close_col_js = _json.dumps(th["fg"])
+    left_js = _json.dumps(left_html)
+    mid_js = _json.dumps(mid_html)
+    report_js = _json.dumps(report_html)
+    close_css_js = _json.dumps(close_css)
 
     js = f"""
 (function(){{
@@ -608,26 +638,13 @@ def _banner_html_dynamic(sha1: str, ctx: dict, csp_strict: bool,
     b.id='gondwana-mitm-banner';
     b.setAttribute('role','status');
     b.style.cssText={bar_css_js};
-    var rightText={right_js};
-    var grade={grade_js};
-    var gradeCol={grade_col_js};
-    var sha1={sha1_js};
-    var reportUrl={report_js};
-    var level={level_js};
-    var SAT={sat_js};
+    var LEFT={left_js};
     var MID={mid_js};
-    var TITLE_ATTR={title_attr_js};
-    var CODE_CSS={code_css_js};
-    var LINK_CSS={link_css_js};
-    var CLOSE_COL={close_col_js};
-    b.innerHTML='<span><b'+TITLE_ATTR+'>'+SAT+' ToolBoX '+level+'</b>'+MID+'CA SHA1: '+
-      '<code style=\"'+CODE_CSS+'\">'+sha1+'</code>'+
-      MID+'<a href=\"'+reportUrl+'\" style=\"'+LINK_CSS+'\">Mon rapport</a></span>'+
-      '<span style=\"display:flex;align-items:center;gap:8px\">'+
-        '<span style=\"color:#e8e6d9;background:rgba(0,0,0,0.4);padding:3px 8px;border-radius:3px\">'+
-          rightText+MID+'<b style=\"color:'+gradeCol+';background:#0a0a0f;padding:1px 5px;border-radius:2px\">'+grade+'</b>'+
-        '</span>'+
-        '<a href=\"javascript:void(0)\" onclick=\"document.getElementById(\\'gondwana-mitm-banner\\').style.display=\\'none\\';document.body.style.paddingTop=0\" style=\"color:'+CLOSE_COL+';text-decoration:none;font-weight:bold;cursor:pointer\">[&#xD7;]</a>'+
+    var REPORT={report_js};
+    var CLOSE={close_css_js};
+    b.innerHTML=LEFT+MID+
+      '<span style=\"flex:0 0 auto;display:flex;align-items:center;gap:8px\">'+REPORT+
+        '<a href=\"javascript:void(0)\" aria-label=\"dismiss\" onclick=\"document.getElementById(\\'gondwana-mitm-banner\\').style.display=\\'none\\';document.body.style.paddingTop=0\" style=\"'+CLOSE+'\">&#x2715;</a>'+
       '</span>';
     if(document.body.firstChild){{document.body.insertBefore(b,document.body.firstChild)}}
     else{{document.body.appendChild(b)}}
