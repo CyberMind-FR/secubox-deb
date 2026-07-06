@@ -21,7 +21,7 @@
       "type": "ja3",
       "value": "deadbeefcafebabefeedfacefeedface",
       "class": "botnet_c2",
-      "severity": 80,
+      "severity": 90,
       "source": "abuse.ch",
       "action": "block"
     }

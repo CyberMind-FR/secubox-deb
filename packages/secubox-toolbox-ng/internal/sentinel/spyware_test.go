@@ -116,6 +116,43 @@ func TestBasePackIOCsHaveSource(t *testing.T) {
 	}
 }
 
+// TestBasePackDeclaredBlockIsHighSeverity is the general form of the guard
+// TestBasePackKnownInfraIsHighSeverity enforces only for the known-infra
+// spyware classes: ANY base pack IOC that declares an auto-neutralize action
+// (block, strip, or sinkhole) must carry Severity >= HighConfidenceThreshold.
+// scorer.go's FinalizeAction silently downgrades a Confidence below that
+// threshold to report-only regardless of the declared Action — so a shipped
+// "block" entry with too-low severity never actually blocks anything, the
+// exact footgun previously found in the YARA Confidence=80 bug and, before
+// this fix, in three base-pack IOCs (malware.json ip/cert_sha1, botnet.json
+// ja3) that shipped Severity=80 < HighConfidenceThreshold=85. This test
+// covers every current and future base pack file/entry generically rather
+// than re-deriving the offending list by hand.
+func TestBasePackDeclaredBlockIsHighSeverity(t *testing.T) {
+	iocs := loadAllBasePackIOCs(t)
+
+	autoNeutralize := map[Action]bool{
+		ActionBlock:    true,
+		ActionStrip:    true,
+		ActionSinkhole: true,
+	}
+
+	var checked int
+	for _, ioc := range iocs {
+		if !autoNeutralize[ioc.Action] {
+			continue
+		}
+		checked++
+		if ioc.Severity < HighConfidenceThreshold {
+			t.Errorf("base pack IOC %+v declares auto-neutralize Action=%q but Severity=%d < %d (HighConfidenceThreshold) — FinalizeAction will silently downgrade this to report-only and it will never actually %s",
+				ioc, ioc.Action, ioc.Severity, HighConfidenceThreshold, ioc.Action)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no auto-neutralize (block/strip/sinkhole) IOCs found across the base packs — this test would otherwise pass vacuously")
+	}
+}
+
 // TestSpywareKnownInfraDomainBlocks exercises the brief's Step-1 scenario
 // against the REAL shipped base pack: a MirrorMsg whose FlowMeta.Host equals
 // a shipped Pegasus domain IOC must produce a ClassSpywarePegasus verdict
