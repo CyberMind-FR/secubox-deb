@@ -24,6 +24,17 @@ def test_stats_inactive_when_daemon_down(monkeypatch):
     assert body["detections"] == 0 and body["blocked"] == 0 and body["spyware"] == 0
 
 
+def test_stats_malformed_daemon_value_does_not_500(monkeypatch):
+    monkeypatch.setattr(sl, "fetch_stats",
+                        lambda: {"detections": "not-a-number", "blocked": 1, "spyware": 2})
+    r = client.get("/admin/sentinel/stats")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["active"] is True
+    assert body["detections"] == 0  # coerced safely
+    assert body["blocked"] == 1 and body["spyware"] == 2
+
+
 def test_verdicts_shape_and_failsafe(monkeypatch):
     monkeypatch.setattr(sl, "fetch_verdicts", lambda limit=50: [
         {"class": "spyware_pegasus", "severity": 95, "confidence": 95,

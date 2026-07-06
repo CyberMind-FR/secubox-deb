@@ -3697,9 +3697,9 @@ async def admin_sentinel_stats() -> dict:
         return {"active": False, "detections": 0, "blocked": 0, "spyware": 0}
     return {
         "active": True,
-        "detections": int(stats.get("detections", 0)),
-        "blocked": int(stats.get("blocked", 0)),
-        "spyware": int(stats.get("spyware", 0)),
+        "detections": sentinel_link._safe_int(stats.get("detections", 0)),
+        "blocked": sentinel_link._safe_int(stats.get("blocked", 0)),
+        "spyware": sentinel_link._safe_int(stats.get("spyware", 0)),
     }
 
 
