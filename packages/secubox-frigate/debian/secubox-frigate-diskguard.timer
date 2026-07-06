@@ -1,0 +1,9 @@
+[Unit]
+Description=Run SecuBox Frigate disk-pressure guard periodically
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target

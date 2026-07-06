@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-frigate :: /data disk-pressure guard.
+set -euo pipefail
+readonly DATA_DIR="${SECUBOX_FRIGATE_DATA:-/data/frigate}"
+readonly LIMIT="${SECUBOX_FRIGATE_DISK_LIMIT:-90}"     # percent
+# Testable: SECUBOX_FRIGATE_DF_PCT overrides the measured value.
+if [ -n "${SECUBOX_FRIGATE_DF_PCT:-}" ]; then
+    pct="$SECUBOX_FRIGATE_DF_PCT"
+else
+    pct="$(df --output=pcent "$DATA_DIR" 2>/dev/null | tail -1 | tr -dc '0-9')"
+    pct="${pct:-0}"
+fi
+if [ "$pct" -ge "$LIMIT" ]; then
+    logger -t secubox-frigate "disk pressure: ${pct}% >= ${LIMIT}% on ${DATA_DIR} — reduce retention"
+    echo "disk pressure: ${pct}% >= ${LIMIT}%" >&2
+    exit 2
+fi
+echo "disk ok: ${pct}% < ${LIMIT}%"
+exit 0
