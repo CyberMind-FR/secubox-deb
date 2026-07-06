@@ -78,6 +78,7 @@ from . import (
     nft,
     reports,
     scoring,
+    sentinel_link,
     store,
     threat_intel,
 )
@@ -3685,6 +3686,32 @@ async def admin_tor_check_leaks(request: Request) -> dict:
         result["tor_ip"] = None
         result["error"] = "SOCKS probe failed (python3-socksio installed? tor bootstrapped?)"
     return result
+
+
+@router.get("/admin/sentinel/stats")
+async def admin_sentinel_stats() -> dict:
+    """Fleet Sentinel counters for the WebUI tab. Fail-safe: a dark daemon
+    yields active=false with zeroed counters (HTTP 200), never a 5xx."""
+    stats = sentinel_link.fetch_stats()
+    if not stats:
+        return {"active": False, "detections": 0, "blocked": 0, "spyware": 0}
+    return {
+        "active": True,
+        "detections": int(stats.get("detections", 0)),
+        "blocked": int(stats.get("blocked", 0)),
+        "spyware": int(stats.get("spyware", 0)),
+    }
+
+
+@router.get("/admin/sentinel/verdicts")
+async def admin_sentinel_verdicts(limit: int = 50) -> dict:
+    """Recent fleet detections + the compromise assessment for the WebUI tab."""
+    dets = sentinel_link.fetch_verdicts(limit)
+    return {
+        "active": bool(dets),
+        "assess": sentinel_link.assess(dets),
+        "detections": dets,
+    }
 
 
 @router.get("/admin/filters/ui", response_class=HTMLResponse)
