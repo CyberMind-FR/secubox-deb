@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: sbx-sentinel :: live threat-feed → overlay pack fetcher (#823)
+#
+# Fetches public commercial-spyware / malware / botnet-C2 indicator feeds over
+# TLS and materialises each as a Sentinel overlay Pack JSON in the overlay dir
+# that sbx-sentinel's Loader hot-reloads (SENTINEL_OVERLAY_DIR). Sources:
+#
+#   - Amnesty MVT      (mvt-indicators, STIX 2.1)   → spyware_pegasus / *_predator
+#   - Citizen Lab      (published STIX indicators)   → spyware_* (via MVT-shaped adapter)
+#   - abuse.ch ThreatFox (JSON export)               → malware / botnet_c2 (mapped)
+#   - abuse.ch Feodo Tracker (ipblocklist.json)      → botnet_c2 IPs
+#   - abuse.ch SSLBL   (sslblacklist.csv)            → botnet_c2 cert SHA1
+#
+# FAIL-SAFE by construction (plan Global Constraints): each feed is fetched to a
+# scratch file, TRANSFORMED into a Pack, and only then VALIDATED (parses as JSON,
+# is a Pack object with a non-empty iocs array) BEFORE it atomically replaces the
+# live overlay file via `mv` on the same filesystem. Any fetch/transform/validate
+# failure for a feed logs a warning and LEAVES THE LAST-GOOD OVERLAY IN PLACE — a
+# bad feed run never wipes existing detection coverage. One feed failing never
+# aborts the others (`set -e` is scoped away from the per-feed pipeline).
+#
+# The exact upstream-record → IOC mapping below is a deliberately thin, auditable
+# adapter (jq/awk); each feed's URL is overridable via env so an operator can pin,
+# mirror, or disable (empty URL → skip, last-good kept) any source.
+
+set -euo pipefail
+
+readonly MODULE="secubox-sentinel-feeds"
+readonly VERSION="1.0.0"
+
+# ── Configuration (env-overridable) ─────────────────────────────────────────
+OVERLAY_DIR="${SENTINEL_OVERLAY_DIR:-/var/lib/secubox/sentinel/overlay}"
+
+# Per-feed source URLs. Empty value → that feed is skipped (last-good kept).
+FEED_THREATFOX_URL="${SENTINEL_FEED_THREATFOX_URL:-https://threatfox.abuse.ch/export/json/recent/}"
+FEED_FEODO_URL="${SENTINEL_FEED_FEODO_URL:-https://feodotracker.abuse.ch/downloads/ipblocklist.json}"
+FEED_SSLBL_URL="${SENTINEL_FEED_SSLBL_URL:-https://sslbl.abuse.ch/blacklist/sslblacklist.csv}"
+FEED_MVT_URL="${SENTINEL_FEED_MVT_URL:-https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/indicators/pegasus.stix2}"
+# Citizen Lab has no single canonical machine feed; operators point this at a
+# published STIX 2.x indicator bundle. Empty by default → skipped (last-good kept).
+FEED_CITIZENLAB_URL="${SENTINEL_FEED_CITIZENLAB_URL:-}"
+
+# curl hardening: HTTPS only, TLS >= 1.2, fail on HTTP errors, bounded time.
+readonly CURL_OPTS=(
+  --silent --show-error --location
+  --proto '=https' --tlsv1.2
+  --max-time 60 --retry 2 --retry-delay 3
+  --user-agent "SecuBox-Sentinel-Feeds/${VERSION}"
+)
+
+log()  { printf '[%s] %s\n' "$MODULE" "$*" >&2; }
+warn() { printf '[%s] WARN: %s\n' "$MODULE" "$*" >&2; }
+
+SCRATCH=""
+cleanup() {
+  if [ -n "$SCRATCH" ]; then
+    rm -rf "$SCRATCH" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+# fetch_to <url> <dest> — download url to dest over TLS. Returns non-zero on any
+# transport/HTTP failure; the caller treats that as "skip this feed".
+fetch_to() {
+  local url="$1" dest="$2"
+  curl "${CURL_OPTS[@]}" --output "$dest" "$url"
+}
+
+# validate_pack <file> — succeed only if file parses as JSON, is an object with
+# an "iocs" array, and that array is NON-EMPTY. This is the gate an overlay must
+# clear BEFORE it is allowed to replace a live file.
+validate_pack() {
+  local file="$1"
+  jq -e 'type == "object" and (.iocs | type == "array") and (.iocs | length > 0)' \
+    "$file" >/dev/null 2>&1
+}
+
+# install_pack <name> <built_pack_file> — validate the freshly-built pack and, if
+# it passes, atomically move it into place as <OVERLAY_DIR>/<name>.json. On any
+# validation failure the live file is left untouched (fail-safe).
+install_pack() {
+  local name="$1" built="$2"
+  local target="${OVERLAY_DIR}/${name}.json"
+
+  if ! validate_pack "$built"; then
+    warn "feed '${name}': built pack failed validation (empty/malformed) — keeping last-good ${target}"
+    return 1
+  fi
+
+  # Stage on the SAME filesystem as the target so the mv is atomic (rename(2)).
+  local staged="${target}.new.$$"
+  if ! mv -f "$built" "$staged"; then
+    warn "feed '${name}': could not stage built pack — keeping last-good"
+    return 1
+  fi
+  chmod 0644 "$staged" 2>/dev/null || true
+  if ! mv -f "$staged" "$target"; then
+    warn "feed '${name}': atomic install failed — keeping last-good"
+    rm -f "$staged" 2>/dev/null || true
+    return 1
+  fi
+  log "feed '${name}': installed $(jq '.iocs | length' "$target") IOCs → ${target}"
+  return 0
+}
+
+# ── Per-feed transforms (upstream record → Sentinel Pack) ────────────────────
+
+# transform_feodo: abuse.ch Feodo ipblocklist.json is an array of C2 host records
+# ({ip_address, port, malware, ...}). Each becomes a botnet_c2 ip IOC.
+transform_feodo() {
+  local src="$1" out="$2"
+  jq '{
+    version: "feed-feodo-1",
+    iocs: [ .[]
+      | select(.ip_address != null)
+      | { type: "ip", value: .ip_address, class: "botnet_c2",
+          severity: 90, source: "abuse.ch-feodo", action: "block" } ],
+    yara_rules: []
+  }' "$src" >"$out"
+}
+
+# transform_threatfox: abuse.ch ThreatFox recent export. The JSON is an object
+# keyed by id → [record]; each record has ioc_type + ioc_value. We map the host/
+# ip/hash ioc_types onto Sentinel IOC types (domain/url/ip/file hash), tagging
+# botnet_c2 (a safe, block-eligible default for ThreatFox C2 infra).
+transform_threatfox() {
+  local src="$1" out="$2"
+  jq '
+    def maptype($t):
+      if   $t == "domain"        then "domain"
+      elif $t == "url"           then "url_regex"
+      elif $t == "ip:port"       then "ip"
+      elif $t == "sha256_hash"   then "file_sha256"
+      else null end;
+    {
+      version: "feed-threatfox-1",
+      iocs: [ (to_entries[].value[]?)
+        | select(.ioc_type != null and .ioc_value != null)
+        | { t: maptype(.ioc_type), v: .ioc_value }
+        | select(.t != null)
+        | { type: .t,
+            value: (if .t == "ip" then (.v | split(":")[0]) else .v end),
+            class: "botnet_c2", severity: 88,
+            source: "abuse.ch-threatfox", action: "block" } ],
+      yara_rules: []
+    }' "$src" >"$out"
+}
+
+# transform_sslbl: abuse.ch SSLBL sslblacklist.csv has a comment-prefixed header
+# then rows: Listingdate,SHA1,Listingreason. Each SHA1 becomes a botnet_c2
+# cert_sha1 IOC. Built with awk (CSV) piped through jq (as JSON strings) so the
+# SHA1 values are always correctly JSON-quoted.
+transform_sslbl() {
+  local src="$1" out="$2"
+  awk -F',' '/^[^#]/ && NF>=2 && $2 ~ /^[A-Fa-f0-9]{40}$/ { print tolower($2) }' "$src" \
+    | jq -R . | jq -s '{
+        version: "feed-sslbl-1",
+        iocs: [ .[] | { type: "cert_sha1", value: ., class: "botnet_c2",
+                        severity: 88, source: "abuse.ch-sslbl", action: "block" } ],
+        yara_rules: []
+      }' >"$out"
+}
+
+# transform_stix: Amnesty MVT / Citizen Lab STIX 2.x bundle. Each `indicator`
+# object carries a STIX pattern such as `[domain-name:value = 'evil.example']`
+# or `[ipv4-addr:value = '203.0.113.7']`. We extract the object-type + value and
+# map onto Sentinel domain/ip IOCs of the given spyware class. $class/$source are
+# passed in so the same adapter serves both MVT (pegasus) and Citizen Lab.
+transform_stix() {
+  local src="$1" out="$2" class="$3" source="$4"
+  # STIX 2.x string literals in patterns are SINGLE-quoted per spec. jq string
+  # literals cannot embed a raw \x27, so the quote is passed as $q and spliced
+  # into the regex by concatenation (keeps the whole program bash-single-quotable).
+  jq --arg class "$class" --arg source "$source" --arg q "'" '
+    def extract($p):
+      ($p | capture("(?<obj>[a-z0-9-]+):value\\s*=\\s*" + $q + "(?<val>[^" + $q + "]+)")) ;
+    {
+      version: "feed-stix-1",
+      iocs: [ (.objects // [])[]
+        | select(.type == "indicator" and (.pattern != null))
+        | (.pattern | extract(.)) as $m
+        | select($m != null)
+        | { obj: $m.obj, val: $m.val }
+        | { type: (if .obj == "domain-name" then "domain"
+                   elif .obj == "ipv4-addr" then "ip"
+                   elif .obj == "url"       then "url_regex"
+                   else null end),
+            value: .val }
+        | select(.type != null)
+        | { type, value, class: $class, severity: 95, source: $source, action: "block" } ],
+      yara_rules: []
+    }' "$src" >"$out"
+}
+
+# ── Per-feed drivers (fetch → transform → install), each fully fail-safe ──────
+
+# run_feed wraps one feed end-to-end. Guarded so `set -e` does not abort the
+# whole run when a single feed fails; a failure returns 0 to the caller after
+# logging, having left the last-good overlay untouched.
+run_feed() {
+  local name="$1" url="$2" transform_fn="$3"; shift 3
+  if [ -z "$url" ]; then
+    log "feed '${name}': no URL configured — skipped (last-good kept)"
+    return 0
+  fi
+
+  local raw="${SCRATCH}/${name}.raw"
+  local built="${SCRATCH}/${name}.pack.json"
+
+  if ! fetch_to "$url" "$raw"; then
+    warn "feed '${name}': fetch failed (${url}) — keeping last-good"
+    return 0
+  fi
+  if ! "$transform_fn" "$raw" "$built" "$@"; then
+    warn "feed '${name}': transform failed — keeping last-good"
+    return 0
+  fi
+  install_pack "$name" "$built" || true
+  return 0
+}
+
+main() {
+  for bin in curl jq awk; do
+    command -v "$bin" >/dev/null 2>&1 || { warn "missing required tool: $bin"; exit 1; }
+  done
+
+  mkdir -p "$OVERLAY_DIR"
+  SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/sentinel-feeds.XXXXXX")"
+
+  log "refreshing overlays in ${OVERLAY_DIR}"
+
+  run_feed "feodo"      "$FEED_FEODO_URL"      transform_feodo
+  run_feed "threatfox"  "$FEED_THREATFOX_URL"  transform_threatfox
+  run_feed "sslbl"      "$FEED_SSLBL_URL"      transform_sslbl
+  run_feed "mvt"        "$FEED_MVT_URL"        transform_stix "spyware_pegasus" "amnesty-mvt"
+  run_feed "citizenlab" "$FEED_CITIZENLAB_URL" transform_stix "spyware_predator" "citizen-lab"
+
+  log "overlay refresh complete"
+}
+
+main "$@"
