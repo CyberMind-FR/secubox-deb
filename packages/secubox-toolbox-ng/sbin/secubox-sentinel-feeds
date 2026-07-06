@@ -48,6 +48,7 @@ FEED_CITIZENLAB_URL="${SENTINEL_FEED_CITIZENLAB_URL:-}"
 # curl hardening: HTTPS only, TLS >= 1.2, fail on HTTP errors, bounded time.
 readonly CURL_OPTS=(
   --silent --show-error --location
+  --fail
   --proto '=https' --tlsv1.2
   --max-time 60 --retry 2 --retry-delay 3
   --user-agent "SecuBox-Sentinel-Feeds/${VERSION}"
