@@ -41,6 +41,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -83,6 +84,13 @@ type Config struct {
 	// MirrorMsg, in order. Nil/empty is a valid scaffold — no verdicts are
 	// produced, but the socket/store/prune plumbing still runs.
 	Analyzers []Analyzer
+
+	// HTTPAddr, when non-empty, stands up a read-only status HTTP server
+	// (see http.go: /stats and /verdicts) bound to this address. Empty (the
+	// default) means no HTTP surface — the daemon is socket-only. Exposed
+	// solely for a local operator/portal read; carries no PII beyond
+	// mac_hash and never accepts writes.
+	HTTPAddr string
 
 	// onStoreOpen, if set, is called once with the daemon's own *Store
 	// handle right after it is opened (before the listener is stood up).
@@ -144,6 +152,15 @@ func run(ctx context.Context, cfg Config) error {
 		defer wg.Done()
 		prunLoop(ctx, store, cfg.PruneInterval, cfg.TTL)
 	}()
+
+	// Optional read-only status HTTP surface (off unless HTTPAddr is set).
+	if cfg.HTTPAddr != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			serveStatus(ctx, cfg.HTTPAddr, store)
+		}()
+	}
 
 	var connWG sync.WaitGroup
 	for {
@@ -259,16 +276,95 @@ func getenvDefault(key, def string) string {
 	return def
 }
 
-func main() {
-	cfg := Config{
+// envDurationDefault parses key as a Go duration (e.g. "72h"), falling back to
+// def on an unset/empty/unparsable value.
+func envDurationDefault(key string, def time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		log.Printf("sbx-sentinel: bad %s=%q (%v), using default %s", key, v, err, def)
+		return def
+	}
+	return d
+}
+
+// splitPaths splits an os-path-list-style value (":"-separated) into a clean
+// slice, dropping empty entries. Used for SENTINEL_YARA_RULES.
+func splitPaths(v string) []string {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(v, ":") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// buildAnalyzers constructs the production detection pipeline: the
+// commercial-spyware IOC correlator (backed by a pack Loader over
+// packDir/overlayDir), the behavioral heuristic engine, and the YARA engine
+// (the no-cgo stub in the default build; the libyara-backed engine under
+// `-tags yara`). It is resilient: a failure to build the pack loader or the
+// YARA engine is returned (joined) but does NOT drop the analyzers that could
+// be built — a bad base pack must not silently disable the behavioral engine,
+// which needs no pack. The happy path (readable/empty dirs) returns all three.
+func buildAnalyzers(packDir, overlayDir string, yaraRules []string) ([]Analyzer, error) {
+	var analyzers []Analyzer
+	var errs []error
+
+	loader, err := sentinel.NewLoader(packDir, overlayDir)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("pack loader (spyware analyzer disabled): %w", err))
+	} else {
+		analyzers = append(analyzers, sentinel.NewSpyware(loader))
+	}
+
+	analyzers = append(analyzers, sentinel.NewBehavioral())
+
+	yara, err := sentinel.NewYaraEngine(yaraRules)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("yara engine (yara analyzer disabled): %w", err))
+	} else {
+		analyzers = append(analyzers, yara)
+	}
+
+	return analyzers, errors.Join(errs...)
+}
+
+// defaultConfig assembles the production Config from the environment
+// (SENTINEL_* — same names sbxmitm's gate reads, so a single env file
+// configures both binaries) and constructs the real analyzer pipeline. An
+// analyzer-construction error is logged (fail-safe) but never aborts the
+// daemon: the socket/store/prune plumbing plus whatever analyzers were built
+// still run.
+func defaultConfig() Config {
+	packDir := getenvDefault("SENTINEL_PACK_DIR", "/usr/share/secubox/sentinel/packs/base")
+	overlayDir := getenvDefault("SENTINEL_OVERLAY_DIR", "/var/lib/secubox/sentinel/overlay")
+	yaraRules := splitPaths(os.Getenv("SENTINEL_YARA_RULES"))
+
+	analyzers, err := buildAnalyzers(packDir, overlayDir, yaraRules)
+	if err != nil {
+		log.Printf("sbx-sentinel: analyzer construction degraded (fail-safe, daemon continues): %v", err)
+	}
+
+	return Config{
 		SocketPath:    getenvDefault("SENTINEL_MIRROR_SOCK", "/run/secubox/sentinel-mirror.sock"),
 		DBPath:        getenvDefault("SENTINEL_STORE_DB", "/var/lib/secubox/sentinel/verdicts.db"),
-		TTL:           defaultTTL,
+		TTL:           envDurationDefault("SENTINEL_TTL", defaultTTL),
 		PruneInterval: defaultPruneInterval,
-		// Analyzers is intentionally empty in this scaffold — Tasks 9/10/11
-		// append their engines here once implemented.
-		Analyzers: nil,
+		Analyzers:     analyzers,
+		HTTPAddr:      os.Getenv("SENTINEL_HTTP_ADDR"),
 	}
+}
+
+func main() {
+	cfg := defaultConfig()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
