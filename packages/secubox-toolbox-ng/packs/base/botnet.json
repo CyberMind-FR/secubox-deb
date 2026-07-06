@@ -1,0 +1,30 @@
+{
+  "version": "1",
+  "iocs": [
+    {
+      "type": "domain",
+      "value": "botnet-c2-relay.example",
+      "class": "botnet_c2",
+      "severity": 85,
+      "source": "abuse.ch",
+      "action": "block"
+    },
+    {
+      "type": "ip",
+      "value": "192.0.2.77",
+      "class": "botnet_c2",
+      "severity": 85,
+      "source": "abuse.ch",
+      "action": "block"
+    },
+    {
+      "type": "ja3",
+      "value": "deadbeefcafebabefeedfacefeedface",
+      "class": "botnet_c2",
+      "severity": 80,
+      "source": "abuse.ch",
+      "action": "block"
+    }
+  ],
+  "yara_rules": []
+}
