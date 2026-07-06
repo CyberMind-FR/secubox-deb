@@ -101,10 +101,11 @@ func (y *YaraEngine) Scan(body []byte) (matches []string) {
 
 // Analyze implements the sbx-sentinel Analyzer interface: it scans the
 // mirrored message body and turns every matched rule name into a Verdict.
-// A YARA hit is treated as a high-confidence, known-bad signature match —
-// Class malware, strip action — but this Analyzer runs only in the async
-// path (never inline), so "strip" here means "recommended", subject to
-// sentinel.FinalizeAction's defense-in-depth downgrade in the daemon.
+// A YARA hit is a high-confidence, known-bad signature match — Class malware,
+// strip action. Confidence is set to 90 (>= sentinel.HighConfidenceThreshold),
+// so a confirmed rule match survives the daemon's FinalizeAction and actually
+// strips rather than being silently downgraded to report-only. A YARA match is
+// among the highest-certainty detections in the engine, so it warrants acting.
 func (y *YaraEngine) Analyze(m MirrorMsg) []*Verdict {
 	names := y.Scan(m.Body)
 	if len(names) == 0 {
@@ -115,8 +116,8 @@ func (y *YaraEngine) Analyze(m MirrorMsg) []*Verdict {
 	for _, name := range names {
 		verdicts = append(verdicts, &Verdict{
 			Class:      ClassMalware,
-			Severity:   80,
-			Confidence: 80,
+			Severity:   90,
+			Confidence: 90,
 			Action:     ActionStrip,
 			Evidence:   map[string]string{"yara_rule": name},
 			MacHash:    m.Meta.MacHash,
