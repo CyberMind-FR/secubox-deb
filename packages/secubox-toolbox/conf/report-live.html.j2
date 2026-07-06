@@ -209,6 +209,7 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
   <button class="active" data-tab="pistage">🍪 Pistage</button>
   <button data-tab="dpi">🛰️ DPI-Exfil</button>
   <button data-tab="overall">🌍 Overall</button>
+  <button data-tab="sentinel">🛡️ Compromission</button>
 </div>
 
 <div class="tab-pane active" id="pane-pistage">
@@ -513,6 +514,48 @@ ul{list-style:none;padding-left:.2rem}li{padding:.12rem 0;font-size:.82rem}li::b
     {% endif %}
   </div>
 </div>{# /pane-overall #}
+
+{# ── COMPROMISSION TAB : per-device Sentinel assessment (#823) ── #}
+<div class="tab-pane" id="pane-sentinel">
+  {% set s = report.sentinel or {} %}
+  {% set a = s.assess or {} %}
+  {% if not s.active %}
+  <div class="card"><span style="color:var(--dim)">🛡️ Sentinelle inactive — aucune donnée de détection réseau.</span></div>
+  {% else %}
+  {% set tier = a.tier or 'clean' %}
+  <div class="card">
+    <h2>
+      {% if tier == 'compromised' %}🔴 Compromission confirmée
+      {% elif tier == 'suspicious' %}🟠 Activité suspecte
+      {% else %}🟢 Aucune compromission détectée{% endif %}
+    </h2>
+    <div style="color:var(--dim);font-size:.85rem;margin-top:.3rem">
+      Sévérité max {{ a.worst_severity or 0 }}/100 · Confiance {{ a.worst_confidence or 0 }}/100 ·
+      {{ a.count or 0 }} détection(s) · {{ a.dominant_class or '—' }}
+    </div>
+  </div>
+  <div class="card">
+    <h2>Détections</h2>
+    {% if s.detections %}
+    <table><thead><tr><th>Menace</th><th>Sév/Conf</th><th>Disposition</th><th>Vu</th></tr></thead><tbody>
+      {% for d in s.detections %}
+      <tr>
+        <td>{{ d.class }}</td>
+        <td>{{ d.severity or 0 }}/{{ d.confidence or 0 }}</td>
+        <td>{% if d.action == 'block' %}Bloquée{% else %}Détectée — observée{% endif %}</td>
+        <td>{{ d.ts }}</td>
+      </tr>
+      {% if d.report %}
+      <tr><td colspan="4"><details><summary style="cursor:pointer;color:var(--dim)">rapport</summary><pre style="white-space:pre-wrap;font-size:.72rem">{{ d.report }}</pre></details></td></tr>
+      {% endif %}
+      {% endfor %}
+    </tbody></table>
+    {% else %}
+    <span style="color:var(--dim)">Aucune détection récente sur cet appareil.</span>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>{# /pane-sentinel #}
 
 <div class="actions">
   <a href="/report/me?mh={{ mac_hash }}">⬇ Télécharger le PDF</a>
