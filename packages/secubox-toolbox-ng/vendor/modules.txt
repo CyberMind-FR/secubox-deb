@@ -43,6 +43,9 @@ github.com/cloudflare/circl/sign/schemes
 github.com/cloudflare/circl/simd/keccakf1600
 github.com/cloudflare/circl/xof
 github.com/cloudflare/circl/xof/k12
+# github.com/hillu/go-yara/v4 v4.3.2
+## explicit; go 1.15
+github.com/hillu/go-yara/v4
 # github.com/klauspost/compress v1.17.4
 ## explicit; go 1.19
 github.com/klauspost/compress
