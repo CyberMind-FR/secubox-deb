@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/sentinel"
 )
 
 // ── Pure handler logic ───────────────────────────────────────────────────────
@@ -123,6 +124,12 @@ type Proxy struct {
 	// hosts it answers the SW script fetch with a self-unregistering SW so PWA
 	// shells stop being SW-cached and the banner can be injected on the next nav.
 	swNeuter *SWNeuter
+
+	// sentinel (#823) is the inline threat-detection gate: it neutralizes
+	// high-confidence known-infra IOC hits (block/strip/sinkhole) and mirrors the
+	// rest to the async sbx-sentinel analyzer. nil-safe and fail-open — a
+	// disabled/erroring hook is a transparent passthrough. See sentinel.go.
+	sentinel *sentinelHook
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -461,6 +468,39 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// this remains the single, sole closer (teeReadCloser.Close is once-guarded).
 	defer func() { resp.Body.Close() }()
 
+	// #823 — inline Sentinel gate. host + the client identity are known here and
+	// the upstream response headers are in hand. Match the flow's observable
+	// metadata against the loaded IOC set: a HIGH-CONFIDENCE known-infra hit
+	// neutralizes inline (block/sinkhole → serve a Sentinel block page instead of
+	// the upstream response; strip → serve the response with an emptied body),
+	// everything else is mirrored to the async analyzer and proceeds unchanged.
+	// Fail-open + nil-safe (see sentinel.go): a disabled/erroring/absent hook is a
+	// transparent passthrough, so this can never break a normal flow. JA4/JA3 are
+	// captured during the handshake but not plumbed to this shared pipeline, so
+	// they are left empty — the domain/IP/URL/hash vectors drive inline matching.
+	switch action, blockPage := px.sentinel.inspect(sentinel.FlowMeta{
+		Host:     host,
+		URL:      "https://" + host + req.URL.RequestURI(),
+		ClientIP: relayIP,
+		MacHash:  clientHash,
+	}, nil); action {
+	case sentinel.ActionBlock, sentinel.ActionSinkhole:
+		writeRaw(tconn, 403, "Forbidden", map[string]string{
+			"Content-Type":       "text/html; charset=utf-8",
+			"Cache-Control":      "no-store",
+			"X-SecuBox-Sentinel": "blocked",
+		}, blockPage)
+		return
+	case sentinel.ActionStrip:
+		// Neutralize the payload: serve the upstream status + headers with an
+		// emptied body. Drop Content-Encoding so the zero-length body is not
+		// mis-decoded as a truncated compressed stream.
+		resp.Header.Del("Content-Encoding")
+		resp.Header.Set("X-SecuBox-Sentinel", "stripped")
+		writeResponse(tconn, resp, nil)
+		return
+	}
+
 	// #662 — relay the cookie metadata for this MITM'd response (allow|mitm only).
 	// NAMES ONLY (never values — privacy/CSPN); no-op unless ≥1 Set-Cookie OR ≥1
 	// request Cookie is present. Emitted before poison rewrites Set-Cookie VALUES,
@@ -687,6 +727,11 @@ func main() {
 		media:         newMediaCatcher(*mediaCatch),
 		mbuf:          NewMediaBuffer(*mediaBufferRoot, *mediaBuffer, *mediaBufferPerObj),
 		swNeuter:      newSWNeuter(*swNeuterHosts),
+		// #823 — inline Sentinel gate. Construction reads the environment
+		// (SENTINEL_ENABLED / SENTINEL_PACK_DIR / SENTINEL_OVERLAY_DIR /
+		// SENTINEL_MIRROR_SOCK); unset/false or a failed pack load yields a
+		// disabled no-op hook, so the default build is byte-identical to today.
+		sentinel: newSentinelHook(),
 	}
 	// #812 Task 6 — apply the retention/size-ceil overrides on top of
 	// NewMediaBuffer's defaults. Same-package unexported field access (see
