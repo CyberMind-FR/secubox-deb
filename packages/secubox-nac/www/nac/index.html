@@ -287,7 +287,12 @@
         </div>
 
         <div class="card">
-            <h2>Connected Clients</h2>
+            <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <span>Connected Clients</span>
+                <label style="font-size:0.75rem;font-weight:400;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:6px;cursor:pointer">
+                    <input type="checkbox" id="onlineOnly" checked onchange="refresh()"> 🟢 Online only
+                </label>
+            </h2>
             <table>
                 <thead><tr><th>MAC</th><th>IP</th><th>Device</th><th>Zone</th><th>Risk</th><th>Source</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody id="clientsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
@@ -339,10 +344,13 @@
 
             const clients = await api('/clients');
             const tbody = document.getElementById('clientsTable');
-            if (clients.clients && clients.clients.length > 0) {
+            const onlineOnly = (document.getElementById('onlineOnly') || {}).checked !== false;
+            let list = clients.clients || [];
+            if (onlineOnly) list = list.filter(c => c.online);
+            if (list.length > 0) {
                 // Sort: online/alive devices first, then most-recently-detected
                 // (last_seen desc) at the top of each group.
-                const rows = clients.clients.slice().sort((a, b) => {
+                const rows = list.slice().sort((a, b) => {
                     const ao = a.online ? 1 : 0, bo = b.online ? 1 : 0;
                     if (ao !== bo) return bo - ao;                 // alive first
                     return (b.last_seen || 0) - (a.last_seen || 0); // newest detected first
@@ -367,7 +375,10 @@
                     </tr>`;
                 }).join('');
             } else {
-                tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim)">No clients connected</td></tr>';
+                const msg = onlineOnly
+                    ? 'No online devices — untick “Online only” to show all ' + ((clients.clients || []).length) + ' known devices'
+                    : 'No clients connected';
+                tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim)">' + msg + '</td></tr>';
             }
 
             const quarantine = await api('/quarantine');
