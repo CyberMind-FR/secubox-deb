@@ -6,6 +6,7 @@ require (
 	github.com/andybalholm/brotli v1.0.6
 	github.com/klauspost/compress v1.17.4
 	github.com/refraction-networking/utls v1.6.7
+	go.etcd.io/bbolt v1.3.11
 	golang.org/x/net v0.23.0
 )
 
