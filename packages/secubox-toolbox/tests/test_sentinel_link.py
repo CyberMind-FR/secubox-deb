@@ -55,3 +55,16 @@ def test_fetch_stats_none_base_returns_empty(monkeypatch):
     monkeypatch.setattr(sl, "daemon_base", lambda: None)
     assert sl.fetch_stats() == {}
     assert sl.fetch_verdicts() == []
+
+
+def test_assess_never_raises_on_malformed_detection():
+    dets = [{"class": "malware_generic", "severity": None, "confidence": "n/a",
+             "action": "block", "evidence": {}, "mac_hash": "aa", "ts": 1}]
+    a = sl.assess(dets)  # must not raise
+    assert a["tier"] in ("suspicious", "compromised", "clean")
+    assert a["count"] == 1
+
+
+def test_fetch_verdicts_bad_limit_does_not_raise(monkeypatch):
+    monkeypatch.setattr(sl, "daemon_base", lambda: None)
+    assert sl.fetch_verdicts(limit="oops") == []

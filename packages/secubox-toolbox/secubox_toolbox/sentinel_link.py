@@ -36,6 +36,14 @@ _HEURISTIC_CLASSES = {"zero_click"}
 _HIGH_CONFIDENCE = 85  # mirrors Go HighConfidenceThreshold
 
 
+def _safe_int(value, default: int = 0) -> int:
+    """Coerce daemon/caller-supplied values to int, never raising."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def daemon_base() -> str | None:
     """Resolve the daemon status-HTTP base URL, or None if unconfigured.
 
@@ -89,7 +97,7 @@ def fetch_stats() -> dict:
 
 
 def fetch_verdicts(limit: int = 50) -> list[dict]:
-    limit = max(1, min(int(limit), 500))
+    limit = max(1, min(_safe_int(limit, 50), 500))
     data = _get_json(f"/verdicts?limit={limit}")
     return data if isinstance(data, list) else []
 
@@ -97,7 +105,7 @@ def fetch_verdicts(limit: int = 50) -> list[dict]:
 def fetch_detections(mac_hash: str, limit: int = 50) -> list[dict]:
     if not mac_hash or not re.fullmatch(r"[0-9a-fA-F]{1,64}", mac_hash):
         return []
-    limit = max(1, min(int(limit), 500))
+    limit = max(1, min(_safe_int(limit, 50), 500))
     data = _get_json(f"/verdicts?mac={mac_hash}&limit={limit}")
     return data if isinstance(data, list) else []
 
@@ -113,7 +121,7 @@ def _is_confirmed_compromise(d: dict) -> bool:
         return False
     return (
         d.get("action") == "block"
-        and int(d.get("confidence", 0)) >= _HIGH_CONFIDENCE
+        and _safe_int(d.get("confidence", 0)) >= _HIGH_CONFIDENCE
     )
 
 
@@ -127,15 +135,15 @@ def assess(detections: list[dict]) -> dict:
     if not dets:
         return {"tier": "clean", "worst_severity": 0, "worst_confidence": 0,
                 "count": 0, "dominant_class": "", "strongest": None}
-    strongest = max(dets, key=lambda d: (int(d.get("severity", 0)),
-                                          int(d.get("confidence", 0))))
+    strongest = max(dets, key=lambda d: (_safe_int(d.get("severity", 0)),
+                                          _safe_int(d.get("confidence", 0))))
     tier = "compromised" if any(_is_confirmed_compromise(d) for d in dets) else "suspicious"
     classes = Counter(str(d.get("class", "")) for d in dets if d.get("class"))
     dominant = classes.most_common(1)[0][0] if classes else ""
     return {
         "tier": tier,
-        "worst_severity": max(int(d.get("severity", 0)) for d in dets),
-        "worst_confidence": max(int(d.get("confidence", 0)) for d in dets),
+        "worst_severity": max(_safe_int(d.get("severity", 0)) for d in dets),
+        "worst_confidence": max(_safe_int(d.get("confidence", 0)) for d in dets),
         "count": len(dets),
         "dominant_class": dominant,
         "strongest": strongest,
