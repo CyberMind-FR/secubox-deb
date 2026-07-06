@@ -188,6 +188,9 @@ def render_pdf(report: dict) -> bytes:
         _bullet(pdf, sig)
     pdf.ln(2)
 
+    # 🛡️ Sentinel per-device compromise + detections (#823)
+    _sentinel_section(pdf, report)
+
     # Score breakdown — per-category transparency (Phase 2a)
     scoring_data = report.get("scoring") or {}
     breakdown = scoring_data.get("breakdown") or []
@@ -828,6 +831,34 @@ def _kv(pdf, key: str, value: str) -> None:
     pdf.cell(_page_w(pdf) - 45, 5, _ascii_safe(value)[:100], ln=True)
 
 
+def _sentinel_section(pdf, report: dict) -> None:
+    """🛡️ Sentinel per-device compromise + detections (#823). Safe when the
+    key is absent or the daemon was dark — renders an 'inactive' line, never
+    raises."""
+    sen = report.get("sentinel") or {}
+    _section(pdf, "🛡️ SENTINELLE - DETECTION DE COMPROMISSION")
+    if not sen.get("active"):
+        _kv(pdf, "Etat", "Sentinelle inactive - aucune detection reseau")
+        return
+    a = sen.get("assess") or {}
+    tier = a.get("tier", "clean")
+    verdict = {"compromised": "COMPROMISSION CONFIRMEE",
+               "suspicious": "ACTIVITE SUSPECTE",
+               "clean": "Aucune compromission detectee"}.get(tier, "?")
+    _kv(pdf, "Verdict", verdict)
+    _kv(pdf, "Severite max", f"{a.get('worst_severity', 0)}/100")
+    _kv(pdf, "Confiance", f"{a.get('worst_confidence', 0)}/100")
+    _kv(pdf, "Detections", str(a.get("count", 0)))
+    _kv(pdf, "Classe dominante", a.get("dominant_class") or "-")
+    dets = sen.get("detections") or []
+    if dets:
+        _section(pdf, "SENTINELLE - DETECTIONS")
+        for d in dets[:20]:
+            disp = "Bloquee" if d.get("action") == "block" else "Detectee - observee"
+            _kv(pdf, d.get("class", "?"),
+                f"sev {d.get('severity', 0)}/conf {d.get('confidence', 0)} - {disp}")
+
+
 def _bullet(pdf, text: str, font_size: int = 9) -> None:
     """Render a bullet line. multi_cell with hard truncation to avoid fpdf
     'Not enough horizontal space' errors on long tokens/URLs."""
@@ -1112,6 +1143,24 @@ def _render_text_fallback(report: dict) -> str:
         f"Type appareil  : {report.get('device_type', '?')}",
         f"Date           : {report.get('generated_at', '?')}",
         "",
-        "fpdf2 not installed -- text fallback. apt install python3-fpdf2",
     ]
+
+    # 🛡️ SENTINELLE - detection de compromission (#823) — safe when the key
+    # is absent or the daemon was dark: never raises, always a valid line.
+    sen = report.get("sentinel") or {}
+    lines.append("")
+    lines.append("SENTINELLE - DETECTION DE COMPROMISSION")
+    if not sen.get("active"):
+        lines.append("  Sentinelle inactive - aucune detection reseau")
+    else:
+        a = sen.get("assess") or {}
+        lines.append(f"  Verdict: {a.get('tier', 'clean')} "
+                     f"(sev {a.get('worst_severity', 0)}/conf {a.get('worst_confidence', 0)}, "
+                     f"{a.get('count', 0)} detection(s))")
+        for d in (sen.get("detections") or [])[:20]:
+            disp = "Bloquee" if d.get("action") == "block" else "Detectee"
+            lines.append(f"  - {d.get('class', '?')}: sev {d.get('severity', 0)} [{disp}]")
+    lines.append("")
+
+    lines.append("fpdf2 not installed -- text fallback. apt install python3-fpdf2")
     return "\n".join(lines)
