@@ -2978,6 +2978,10 @@ async def report_me_html(request: Request) -> HTMLResponse:
     cumulative = _cumulative_stats()
     _level = store.get_client_level(mac_hash) if mac_hash else "r1"
     _dpi_e = _dpi_stats(mac_hash)
+    # #823 — fold in the per-device Sentinel compromission assessment (same
+    # data source the PDF routes already use via build_report_data) so the
+    # "🛡️ Compromission" tab (report.sentinel) is fed instead of Undefined.
+    report_data = reports.build_report_data(mac_hash, session)
     html = _env.get_template("report-live.html.j2").render(
         mac_hash=mac_hash, ip=ip,
         request_args=dict(request.query_params),
@@ -2991,6 +2995,7 @@ async def report_me_html(request: Request) -> HTMLResponse:
         persona=_persona_sheet(mac_hash, _level, gs, exposure_score, _dpi_e,
                                session.get("device_type", ""),
                                request.headers.get("user-agent", "")),
+        report=report_data,
         **session,
     )
     return HTMLResponse(html, headers={
