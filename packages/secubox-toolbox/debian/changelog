@@ -1,3 +1,16 @@
+secubox-toolbox (2.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * #823 Sentinel surfaces — surface the sbx-sentinel compromise-detection
+    engine to the ToolBoX user & admin: a new WebUI "Sentinelle" fleet tab
+    (/admin/sentinel/{stats,verdicts} proxy), a per-device Compromission tab in
+    the kbin live HTML report, and a per-device Sentinelle section in the PDF
+    report (+ text fallback). New fail-safe stdlib bridge secubox_toolbox.
+    sentinel_link (daemon fetch + compromise/evaluation assess). All surfaces
+    are report-only, mac_hash-only, and degrade to a calm "inactive" state when
+    the daemon is dark — never a 5xx, never a broken report/PDF.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 06 Jul 2026 18:00:00 +0200
+
 secubox-toolbox (2.8.0-1~bookworm1) bookworm; urgency=medium
 
   * feat(#758): new "Réseau" dashboard tab — interface throughput sparklines +
