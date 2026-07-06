@@ -7,7 +7,9 @@ def test_loader_renders_top_bar():
     assert "top:0" in js                       # banner pinned to top
     assert "bottom:0" not in js                # not a bottom bar anymore
     assert "paddingTop" in js                  # pushes content down
-    assert "border-bottom:2px solid #148C66" in js  # divider now on the bottom edge
+    # #620 arcade redesign — the bottom-edge divider is now the tier accent
+    # (colour derived from b.level at render time), not a fixed brand green.
+    assert 'border-bottom:2px solid " + acc' in js  # divider on the bottom edge, tier-accent
 
 
 def test_loader_dismiss_resets_padding():

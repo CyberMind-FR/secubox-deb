@@ -110,7 +110,15 @@ func newStatusMux(store *sentinel.Store) *http.ServeMux {
 				limit = n
 			}
 		}
-		recent, err := store.Recent(limit)
+		var (
+			recent []sentinel.Verdict
+			err    error
+		)
+		if mac := r.URL.Query().Get("mac"); mac != "" {
+			recent, err = store.ByMac(mac, limit)
+		} else {
+			recent, err = store.Recent(limit)
+		}
 		if err != nil {
 			http.Error(w, "store error", http.StatusInternalServerError)
 			return

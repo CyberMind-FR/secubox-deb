@@ -78,6 +78,7 @@ from . import (
     nft,
     reports,
     scoring,
+    sentinel_link,
     store,
     threat_intel,
 )
@@ -2977,6 +2978,10 @@ async def report_me_html(request: Request) -> HTMLResponse:
     cumulative = _cumulative_stats()
     _level = store.get_client_level(mac_hash) if mac_hash else "r1"
     _dpi_e = _dpi_stats(mac_hash)
+    # #823 — fold in the per-device Sentinel compromission assessment (same
+    # data source the PDF routes already use via build_report_data) so the
+    # "🛡️ Compromission" tab (report.sentinel) is fed instead of Undefined.
+    report_data = reports.build_report_data(mac_hash, session)
     html = _env.get_template("report-live.html.j2").render(
         mac_hash=mac_hash, ip=ip,
         request_args=dict(request.query_params),
@@ -2990,6 +2995,7 @@ async def report_me_html(request: Request) -> HTMLResponse:
         persona=_persona_sheet(mac_hash, _level, gs, exposure_score, _dpi_e,
                                session.get("device_type", ""),
                                request.headers.get("user-agent", "")),
+        report=report_data,
         **session,
     )
     return HTMLResponse(html, headers={
@@ -3685,6 +3691,32 @@ async def admin_tor_check_leaks(request: Request) -> dict:
         result["tor_ip"] = None
         result["error"] = "SOCKS probe failed (python3-socksio installed? tor bootstrapped?)"
     return result
+
+
+@router.get("/admin/sentinel/stats")
+async def admin_sentinel_stats() -> dict:
+    """Fleet Sentinel counters for the WebUI tab. Fail-safe: a dark daemon
+    yields active=false with zeroed counters (HTTP 200), never a 5xx."""
+    stats = sentinel_link.fetch_stats()
+    if not stats:
+        return {"active": False, "detections": 0, "blocked": 0, "spyware": 0}
+    return {
+        "active": True,
+        "detections": sentinel_link._safe_int(stats.get("detections", 0)),
+        "blocked": sentinel_link._safe_int(stats.get("blocked", 0)),
+        "spyware": sentinel_link._safe_int(stats.get("spyware", 0)),
+    }
+
+
+@router.get("/admin/sentinel/verdicts")
+async def admin_sentinel_verdicts(limit: int = 50) -> dict:
+    """Recent fleet detections + the compromise assessment for the WebUI tab."""
+    dets = sentinel_link.fetch_verdicts(limit)
+    return {
+        "active": bool(dets),
+        "assess": sentinel_link.assess(dets),
+        "detections": dets,
+    }
 
 
 @router.get("/admin/filters/ui", response_class=HTMLResponse)

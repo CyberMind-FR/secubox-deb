@@ -101,6 +101,49 @@ func TestStatusVerdicts(t *testing.T) {
 	}
 }
 
+func TestVerdictsFilterByMac(t *testing.T) {
+	store := openTestStore(t)
+	store.Record(&sentinel.Verdict{
+		Class: sentinel.ClassSpywarePegasus, Action: sentinel.ActionBlock,
+		Evidence: map[string]string{"ioc_value": "a.example"},
+		MacHash:  "aaaa", TS: time.Now().Unix(),
+	})
+	store.Record(&sentinel.Verdict{
+		Class: sentinel.ClassSpywarePredator, Action: sentinel.ActionReport,
+		Evidence: map[string]string{"ioc_value": "b.example"},
+		MacHash:  "bbbb", TS: time.Now().Unix(),
+	})
+	mux := newStatusMux(store)
+
+	req := httptest.NewRequest(http.MethodGet, "/verdicts?mac=aaaa", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	var got []verdictView
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 1 || got[0].MacHash != "aaaa" {
+		t.Fatalf("want 1 verdict for aaaa, got %d: %+v", len(got), got)
+	}
+
+	// Unknown mac → empty list, still 200.
+	req = httptest.NewRequest(http.MethodGet, "/verdicts?mac=zzzz", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unknown-mac status %d", rec.Code)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode2: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("want 0 for unknown mac, got %d", len(got))
+	}
+}
+
 func TestStatusRejectsNonGet(t *testing.T) {
 	store := openTestStore(t)
 	mux := newStatusMux(store)

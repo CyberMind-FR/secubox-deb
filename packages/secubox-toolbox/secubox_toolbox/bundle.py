@@ -198,7 +198,7 @@ _BANNER_CORE = r"""
   // and lets the client change it: GET /__toolbox/set-level (same-origin, the Go
   // engine reverse-proxies it to the portal), then reload so the new tier applies.
   // #740 — mk(): build an element via DOM API only. textContent / setAttribute are
-  // NOT Trusted Types sinks (unlike innerHTML), so the banner renders on EVERY site
+  // NOT Trusted Types sinks (unlike a raw-HTML string sink), so the banner renders on EVERY site
   // — incl. strict-CSP/Trusted-Types ones (franceinfo, leparisien, 20minutes, cnn,
   // x/twitter) — with ZERO CSP/TT bypass. This is the robust, permanent fix.
   function mk(tag, opts){
@@ -212,17 +212,38 @@ _BANNER_CORE = r"""
     if (opts.attrs) for (var k in opts.attrs) if (Object.prototype.hasOwnProperty.call(opts.attrs, k)) e.setAttribute(k, opts.attrs[k]);
     return e;
   }
-  var BTN = "border-radius:3px;padding:0 5px;margin:0 2px;font:inherit;font-size:11px;cursor:pointer";
+  var BTN = "border-radius:3px;padding:0 5px;margin:0 1px;font:inherit;font-size:11px;cursor:pointer";
+  // #620 redesign — C3BOX tier palette. The R0..R4 rank IS the score, so its
+  // accent drives the whole arcade HUD (border, glow, rank chip, level switch).
+  // [accent, glow-rgba]. r0 gold, r1 green, r2 amber, r3 cyan, r4 pink.
+  function tierTheme(lvl){
+    var T = {r0:["#c9a84c","rgba(201,168,76,.55)"], r1:["#00ff41","rgba(0,255,65,.45)"],
+             r2:["#ffb347","rgba(255,179,71,.5)"],  r3:["#00d4ff","rgba(0,212,255,.5)"],
+             r4:["#ff3df0","rgba(255,61,240,.5)"]};
+    return T[String(lvl||"r1").toLowerCase()] || T.r1;
+  }
+  // neon evidence pill — reused for the middle-cluster chips + toggles. opts:
+  // {tag,id,text,title,bg,fg,glow,cur,attrs}. Built via mk() (DOM API only).
+  function pill(opts){
+    var st = "flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"
+      + "box-sizing:border-box;padding:2px 8px;border-radius:999px;font:inherit;font-weight:700;border:0;"
+      + "cursor:" + (opts.cur || "default") + ";color:" + (opts.fg || "#0a0a0f") + ";background:" + opts.bg + ";"
+      + "box-shadow:0 0 7px " + (opts.glow || opts.bg) + ",inset 0 0 4px rgba(255,255,255,.3)";
+    return mk(opts.tag || "span", {id:opts.id, cls:"sbx-pill", text:opts.text, title:opts.title, style:st, attrs:opts.attrs});
+  }
   function lvlSwitch(b){
     var cur = String(b.level || "r1").toLowerCase();
+    var th = tierTheme(cur), acc = th[0], glow = th[1];
     // #736 — R4 = analyst / reverse-catcher tier (deepest): everything MITM'd +
     // media URLs caught for cloning. Reconciled into the #740 DOM-API switch.
     var lv = ["r0","r1","r2","r3","r4"];
-    var span = mk("span", {id:"sbx-lvl", title:"Niveau d'analyse — R4 = analyste/capteur média, clique pour changer"});
+    var span = mk("span", {id:"sbx-lvl", title:"Niveau d'analyse — R4 = analyste/capteur média, clique pour changer",
+      style:"display:inline-flex;align-items:center"});
     for (var i=0;i<lv.length;i++){ var on = lv[i]===cur;
+      // current level = filled tier-accent glowing (the "score"); others = dim outline.
       span.appendChild(mk("button", {cls:"sbx-lvl", text:lv[i].toUpperCase(), attrs:{"data-lvl":lv[i]},
-        style:"background:"+(on?"#148C66":"transparent")+";color:"+(on?"#0A0E14":"#8A9AA8")
-          +";border:1px solid #148C66;"+BTN}));
+        style:"background:"+(on?acc:"transparent")+";color:"+(on?"#0a0a0f":"#8A9AA8")
+          +";border:1px solid "+acc+";"+(on?"box-shadow:0 0 8px "+glow+";":"")+"font-weight:"+(on?"800":"600")+";"+BTN}));
     }
     return span;
   }
@@ -246,34 +267,81 @@ _BANNER_CORE = r"""
     if (document.getElementById("sbx-banner")) return;
     var trk = countTrackers(b.tracker_patterns);
     var ck = countCookies();
+    var th = tierTheme(b.level), acc = th[0], glow = th[1];
     var bar = document.createElement("div");
     bar.id = "sbx-banner";
     // #740 — !important on the visibility-critical props makes the banner IMMUNE
     // to any stylesheet cosmetic hide (inline !important outranks author
     // stylesheet !important): it stays ABOVE everything and visible, always.
+    // #620 redesign — arcade-HUD skin: C3BOX dark ground, tier-accent bottom
+    // edge + glow. box-sizing:border-box so padding never overflows the width.
     bar.setAttribute("style", "position:fixed!important;left:0;right:0;top:0;z-index:2147483647!important;"
       + "display:flex!important;visibility:visible!important;opacity:1!important;"
-      + "font:12px/1.4 system-ui,-apple-system,sans-serif;background:#0A0E14;color:#E8E6E0;"
-      + "border-bottom:2px solid #148C66;padding:6px 12px;gap:14px;align-items:center;"
-      + "box-shadow:0 2px 12px rgba(0,0,0,.4)");
-    // #740 — built entirely with DOM API (no innerHTML → not a Trusted Types
+      + "box-sizing:border-box;align-items:center;gap:10px;overflow:hidden;"
+      + "font:600 11px/1.3 Menlo,Consolas,ui-monospace,monospace;color:#e8e6d9;padding:5px 10px;"
+      + "background:linear-gradient(180deg,rgba(20,20,30,.65),rgba(10,10,15,.96)),#0a0a0f;"
+      + "border-bottom:2px solid " + acc + ";"
+      + "box-shadow:0 0 12px " + glow + ",0 4px 22px rgba(0,0,0,.55),inset 0 -1px 8px " + glow);
+    // #740 — built entirely with DOM API (no raw-HTML string → not a Trusted Types
     // sink), so the banner renders identically on every site, strict-CSP/TT
-    // included, without touching the page's CSP.
-    bar.appendChild(mk("b", {text:"SecuBox", style:"color:#148C66"}));
-    if (csp === "1") bar.appendChild(mk("span", {text:"🔓", title:"CSP contourné par SecuBox (démonstration)"}));
-    bar.appendChild(mk("button", {id:"sbx-tor", text:"🧅 " + (b.tor_mode?"ON":"OFF"),
+    // included, without touching the page's CSP. #620 — three clusters:
+    // LEFT pinned (rank), MIDDLE scrolling evidence, RIGHT pinned (report + ✕).
+    // LEFT — rank chip (brand + tier accent glow) wrapping the R0..R4 switch. Never shrinks.
+    var left = mk("div", {style:"flex:0 0 auto;display:flex;align-items:center;gap:7px"});
+    var rank = mk("span", {style:"display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;"
+      + "padding:2px 8px;border-radius:6px;font-weight:800;color:#0a0a0f;background:" + acc + ";"
+      + "box-shadow:0 0 10px " + glow + ",inset 0 0 6px rgba(255,255,255,.4)"});
+    rank.appendChild(mk("span", {text:"📡"}));
+    rank.appendChild(mk("b", {text:"SecuBox"}));
+    left.appendChild(rank);
+    left.appendChild(lvlSwitch(b));
+    bar.appendChild(left);
+    // MIDDLE — evidence + toggles as neon pills. Grows, shrinks to nothing,
+    // scrolls horizontally (fade mask, hidden scrollbar) instead of pushing the
+    // right cluster off-screen. This is the responsive fix.
+    var mid = mk("div", {style:"flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;"
+      + "overflow-x:auto;scrollbar-width:none;padding:1px 2px;"
+      + "-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%);"
+      + "mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%)"});
+    if (csp === "1") mid.appendChild(pill({text:"🔓", title:"CSP contourné par SecuBox (démonstration)",
+      bg:"#0a0a0f", fg:"#ff3df0", glow:"rgba(255,61,240,.6)"}));
+    var torOn = !!b.tor_mode;
+    mid.appendChild(pill({tag:"button", id:"sbx-tor", cur:"pointer", text:"🧅 Tor " + (torOn?"ON":"OFF"),
       title:"Tor du tunnel toolbox — clique pour basculer",
-      style:"background:"+(b.tor_mode?"#3D2A6B":"transparent")+";color:"+(b.tor_mode?"#C9B8FF":"#8A9AA8")+";border:1px solid #6E40C9;"+BTN}));
-    bar.appendChild(lvlSwitch(b));
-    bar.appendChild(mk("button", {id:"sbx-adg", text:"🛡️ " + (b.ad_guard===false?"OFF":"ON"),
+      bg:(torOn?"#9e76ff":"#0a0a0f"), fg:(torOn?"#0a0a0f":"#8A9AA8"), glow:(torOn?"rgba(158,118,255,.6)":"rgba(158,118,255,.25)")}));
+    var adgOn = b.ad_guard!==false;
+    mid.appendChild(pill({tag:"button", id:"sbx-adg", cur:"pointer", text:"🛡️ Ad-Guard " + (adgOn?"ON":"OFF"),
       title:"Ad-Guard (blocage pub) — clique pour basculer",
-      style:"background:"+(b.ad_guard===false?"transparent":"#148C66")+";color:"+(b.ad_guard===false?"#8A9AA8":"#0A0E14")+";border:1px solid #148C66;"+BTN}));
-    bar.appendChild(mk("span", {id:"sbx-trk", text:"🛰️ " + trk + " trackers"}));
-    bar.appendChild(mk("span", {id:"sbx-ck", text:"🍪 " + ck + " cookies"}));
-    if (b.pin) bar.appendChild(mk("span", {text:"📌 " + b.pin, title:"pinned"}));
-    bar.appendChild(mk("a", {text:"report ▸", style:"margin-left:auto;color:#2C70C0;text-decoration:none", attrs:{href: b.report_url || "#"}}));
-    bar.appendChild(mk("button", {text:"✕", title:"dismiss",
-      style:"background:none;border:0;color:#8A9AA8;cursor:pointer;font-size:14px", attrs:{"aria-label":"dismiss"}}));
+      bg:(adgOn?"#00ff41":"#0a0a0f"), fg:(adgOn?"#0a0a0f":"#8A9AA8"), glow:(adgOn?"rgba(0,255,65,.5)":"rgba(0,255,65,.2)")}));
+    mid.appendChild(pill({id:"sbx-trk", text:"🛰️ " + trk + " trackers", bg:"#00d4ff", glow:"rgba(0,212,255,.5)"}));
+    mid.appendChild(pill({id:"sbx-ck", text:"🍪 " + ck + " cookies", bg:"#c9a84c", glow:"rgba(201,168,76,.5)"}));
+    if (b.pin) mid.appendChild(pill({text:"📌 " + b.pin, title:"pinned", bg:"#ffb347", glow:"rgba(255,179,71,.5)"}));
+    bar.appendChild(mid);
+    // RIGHT — report CTA + dismiss ✕. flex:0 0 auto → the ✕ is ALWAYS on-screen.
+    var right = mk("div", {style:"flex:0 0 auto;display:flex;align-items:center;gap:8px"});
+    right.appendChild(mk("a", {text:"report ▸", attrs:{href: b.report_url || "#"},
+      style:"display:inline-flex;align-items:center;gap:4px;text-decoration:none;font-weight:800;white-space:nowrap;"
+        + "color:#0a0a0f;background:linear-gradient(92deg,#00d4ff,#9e76ff);padding:3px 9px;border-radius:6px;box-shadow:0 0 10px rgba(0,212,255,.45)"}));
+    right.appendChild(mk("button", {text:"✕", title:"dismiss", attrs:{"aria-label":"dismiss"},
+      style:"flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;"
+        + "box-sizing:border-box;border-radius:6px;cursor:pointer;background:rgba(255,255,255,.06);"
+        + "border:1px solid rgba(255,255,255,.14);color:#e8e6d9;font-size:14px;font-weight:900;line-height:1"}));
+    bar.appendChild(right);
+    // #620 — ONE scoped <style> (textContent on <style> is NOT a Trusted-Types
+    // sink) for a sheen sweep + pill hover, ALL selectors scoped under
+    // #sbx-banner and gated on prefers-reduced-motion. Layout NEVER depends on
+    // it: if a site's style-src blocks it, the HUD still renders from the inline
+    // style attributes above and the ✕ stays visible.
+    bar.appendChild(mk("style", {text:
+        "#sbx-banner>div{position:relative;z-index:2}"
+      + "#sbx-banner ::-webkit-scrollbar{width:0;height:0}"
+      + "@media (prefers-reduced-motion:no-preference){"
+      + "#sbx-banner::after{content:'';position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;"
+      + "background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.12) 47%,rgba(255,255,255,.24) 50%,rgba(255,255,255,.12) 53%,transparent 70%);"
+      + "transform:translateX(-120%);animation:sbxSheen 5.5s ease-in-out 1.2s infinite}"
+      + "@keyframes sbxSheen{0%{transform:translateX(-120%)}18%,100%{transform:translateX(120%)}}"
+      + "#sbx-banner .sbx-pill{transition:transform .12s ease,box-shadow .12s ease}"
+      + "#sbx-banner .sbx-pill:hover{transform:translateY(-1px) scale(1.06)}}"}));
     document.body.appendChild(bar);
     try { document.body.style.paddingTop = (bar.offsetHeight || 34) + "px"; } catch (_) {}
     wireLevels(bar, b);
@@ -281,13 +349,13 @@ _BANNER_CORE = r"""
     var adg = bar.querySelector("#sbx-adg");
     if (adg) adg.onclick = function(){ var on = b.ad_guard!==false; adg.textContent="…";
       fetch("/__toolbox/set-adguard?on=" + (on?"0":"1"), {credentials:"omit",cache:"no-store"})
-        .then(function(r){ if(r&&r.ok) location.reload(); else adg.textContent="🛡️ "+(on?"ON":"OFF"); })
-        .catch(function(){ adg.textContent="🛡️ "+(on?"ON":"OFF"); }); };
+        .then(function(r){ if(r&&r.ok) location.reload(); else adg.textContent="🛡️ Ad-Guard "+(on?"ON":"OFF"); })
+        .catch(function(){ adg.textContent="🛡️ Ad-Guard "+(on?"ON":"OFF"); }); };
     var tg = bar.querySelector("#sbx-tor");
     if (tg) tg.onclick = function(){ var on = !!b.tor_mode; tg.textContent="…";
       fetch("/__toolbox/set-tor?on=" + (on?"0":"1"), {credentials:"omit",cache:"no-store"})
-        .then(function(r){ if(r&&r.ok) location.reload(); else tg.textContent="🧅 "+(on?"ON":"OFF"); })
-        .catch(function(){ tg.textContent="🧅 "+(on?"ON":"OFF"); }); };
+        .then(function(r){ if(r&&r.ok) location.reload(); else tg.textContent="🧅 Tor "+(on?"ON":"OFF"); })
+        .catch(function(){ tg.textContent="🧅 Tor "+(on?"ON":"OFF"); }); };
     var btn = bar.querySelector("button[aria-label=\"dismiss\"]");
     if (btn) btn.onclick = function(){ dismissed = true; try { document.body.style.paddingTop = ""; } catch (_) {} bar.remove(); };
   }
