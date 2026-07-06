@@ -55,12 +55,12 @@ const (
 
 // IOC is a single indicator-of-compromise entry.
 type IOC struct {
-	Type     IOCType
-	Value    string
-	Class    ThreatClass
-	Severity int
-	Source   string
-	Action   Action
+	Type     IOCType     `json:"type"`
+	Value    string      `json:"value"`
+	Class    ThreatClass `json:"class"`
+	Severity int         `json:"severity"`
+	Source   string      `json:"source"`
+	Action   Action      `json:"action"`
 }
 
 // compiledURL pairs a compiled URL-matching regex with the IOC it belongs to.
