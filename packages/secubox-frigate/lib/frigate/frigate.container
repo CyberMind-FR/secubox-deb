@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Installed INTO the frigate LXC by install-lxc.sh; runs the official Frigate
+# image. --network=host (unprivileged LXC podman has no CNI bridge). Config +
+# media are bind-mounted from the host through the LXC.
+[Unit]
+Description=Frigate NVR (podman)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10
+ExecStartPre=-/usr/bin/podman rm -f frigate
+ExecStart=/usr/bin/podman run --rm --name frigate --network=host \
+  --shm-size=128m \
+  -e FRIGATE_RTSP_PASSWORD_FILE=/run/secrets/frigate-rtsp \
+  -v /config:/config \
+  -v /media/frigate:/media/frigate \
+  --tmpfs /tmp/cache:size=256000000 \
+  ghcr.io/blakeblackshear/frigate:0.14.1
+ExecStop=/usr/bin/podman stop -t 10 frigate
+
+[Install]
+WantedBy=multi-user.target
