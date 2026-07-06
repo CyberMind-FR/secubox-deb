@@ -68,3 +68,23 @@ def test_assess_never_raises_on_malformed_detection():
 def test_fetch_verdicts_bad_limit_does_not_raise(monkeypatch):
     monkeypatch.setattr(sl, "daemon_base", lambda: None)
     assert sl.fetch_verdicts(limit="oops") == []
+
+
+def test_assess_ignores_non_dict_elements():
+    # a malformed daemon array must not raise and must count only dicts
+    dets = [None, 1, "x", {"class": "spyware_pegasus", "severity": 95,
+            "confidence": 95, "action": "report", "evidence": {}, "mac_hash": "aa", "ts": 1}]
+    a = sl.assess(dets)  # must not raise
+    assert a["count"] == 1
+    assert a["tier"] == "suspicious"
+
+
+def test_assess_all_non_dict_is_clean():
+    assert sl.assess([None, 1, "x"])["tier"] == "clean"
+
+
+def test_fetch_verdicts_filters_non_dict_elements(monkeypatch):
+    monkeypatch.setattr(sl, "_get_json", lambda path: [None, {"class": "malware_generic",
+        "severity": 10, "confidence": 10, "action": "report", "evidence": {}, "mac_hash": "aa", "ts": 1}])
+    out = sl.fetch_verdicts()
+    assert len(out) == 1 and out[0]["class"] == "malware_generic"

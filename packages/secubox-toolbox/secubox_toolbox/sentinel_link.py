@@ -99,7 +99,7 @@ def fetch_stats() -> dict:
 def fetch_verdicts(limit: int = 50) -> list[dict]:
     limit = max(1, min(_safe_int(limit, 50), 500))
     data = _get_json(f"/verdicts?limit={limit}")
-    return data if isinstance(data, list) else []
+    return [d for d in data if isinstance(d, dict)] if isinstance(data, list) else []
 
 
 def fetch_detections(mac_hash: str, limit: int = 50) -> list[dict]:
@@ -107,7 +107,7 @@ def fetch_detections(mac_hash: str, limit: int = 50) -> list[dict]:
         return []
     limit = max(1, min(_safe_int(limit, 50), 500))
     data = _get_json(f"/verdicts?mac={mac_hash}&limit={limit}")
-    return data if isinstance(data, list) else []
+    return [d for d in data if isinstance(d, dict)] if isinstance(data, list) else []
 
 
 def disposition(action: str) -> str:
@@ -131,7 +131,7 @@ def assess(detections: list[dict]) -> dict:
     tier: clean (none) · suspicious (report-only/heuristic) · compromised
     (a high-confidence, non-heuristic, block-action detection).
     """
-    dets = detections or []
+    dets = [d for d in (detections or []) if isinstance(d, dict)]
     if not dets:
         return {"tier": "clean", "worst_severity": 0, "worst_confidence": 0,
                 "count": 0, "dominant_class": "", "strongest": None}
