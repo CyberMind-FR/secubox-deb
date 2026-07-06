@@ -27,6 +27,10 @@ export GOPATH  = $(CURDIR)/_gopath
 
 override_dh_auto_build:
 	go build -trimpath -ldflags=-s -o sbxmitm ./cmd/sbxmitm
+	# #823 Sentinel async analyzer daemon. DEFAULT build is cgo-free (YARA stub);
+	# a YARA-enabled build is the explicit `-tags yara` variant against
+	# libyara-dev (see debian/README.sentinel.md) — NOT the default .deb.
+	go build -trimpath -ldflags=-s -o sbx-sentinel ./cmd/sbx-sentinel
 
 # No Go unit tests at package-build time (run in CI on the host arch; the
 # arm64 cross-binary cannot execute its tests here).
@@ -35,20 +39,37 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -d debian/secubox-toolbox-ng/usr/sbin
 	install -m 0755 sbxmitm debian/secubox-toolbox-ng/usr/sbin/sbxmitm
+	# #823 Sentinel: the async analyzer daemon + the fail-safe feed fetcher.
+	install -m 0755 sbx-sentinel debian/secubox-toolbox-ng/usr/sbin/sbx-sentinel
+	install -m 0755 sbin/secubox-sentinel-feeds debian/secubox-toolbox-ng/usr/sbin/secubox-sentinel-feeds
+	# #823 Sentinel: shipped base IOC/YARA content pack (read-only content).
+	install -d debian/secubox-toolbox-ng/usr/share/secubox/sentinel/packs/base
+	install -m 0644 packs/base/*.json debian/secubox-toolbox-ng/usr/share/secubox/sentinel/packs/base/
+	install -m 0644 packs/base/README.md debian/secubox-toolbox-ng/usr/share/secubox/sentinel/packs/base/
+	# #823 Sentinel: shared SENTINEL_* config (dpkg conffile under /etc).
+	install -d debian/secubox-toolbox-ng/etc/secubox
+	install -m 0644 debian/sentinel.env debian/secubox-toolbox-ng/etc/secubox/sentinel.env
 	# #736 media catcher: own its /run log so the append never fails (see conf)
 	install -d debian/secubox-toolbox-ng/usr/lib/tmpfiles.d
 	install -m 0644 tmpfiles/zz-secubox-toolbox-ng.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
 	# #812 R4 media buffer: pre-create /data/secubox/media-buffer (0750) so the
 	# feature works the moment an operator flips --media-buffer on, no manual step
 	install -m 0644 tmpfiles/zz-secubox-media-buffer.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
+	# #823 Sentinel: pre-create the verdict-store + overlay dirs (0750 secubox-toolbox)
+	install -m 0644 tmpfiles/zz-secubox-sentinel.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/
 
 override_dh_auto_clean:
-	rm -f sbxmitm
+	rm -f sbxmitm sbx-sentinel
 	rm -rf _gocache _gopath
 
-# DARK: install the unit file into the catalogue but DO NOT enable or start it.
-# This is the Phase-6 cutover target; the live R3 tunnel stays on the Python
-# workers until the operator enables it manually. The postinst still reloads the
-# unit catalogue so `systemctl` knows the template exists.
+# DARK: install the unit files into the catalogue but DO NOT enable or start
+# them. This is the Phase-6 cutover target; the live R3 tunnel stays on the
+# Python workers until the operator enables everything manually. The postinst
+# still reloads the unit catalogue so `systemctl` knows the units exist.
+#   - worker@   : the Go MITM fanout (#662)
+#   - sbx-sentinel + secubox-sentinel-feeds{.service,.timer} : the #823 engine
 override_dh_installsystemd:
 	dh_installsystemd --no-enable --no-start --name=secubox-toolbox-ng-worker@
+	dh_installsystemd --no-enable --no-start --name=sbx-sentinel sbx-sentinel.service
+	dh_installsystemd --no-enable --no-start --name=secubox-sentinel-feeds secubox-sentinel-feeds.service
+	dh_installsystemd --no-enable --no-start --name=secubox-sentinel-feeds secubox-sentinel-feeds.timer

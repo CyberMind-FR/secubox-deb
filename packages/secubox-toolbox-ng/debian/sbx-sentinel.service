@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: toolbox-ng — sbx-sentinel async threat analyzer (#823)
+#
+# ── DISABLED BY DESIGN (DARK, mirrors the worker@ unit) ──────────────────────
+# Installed into the unit catalogue but NOT enabled/started by the maintainer
+# scripts. sbx-sentinel is the async counterpart to sbxmitm's inline Sentinel
+# gate: it listens on the mirror socket the sbxmitm workers ship flow
+# observations to, runs the spyware/behavioral/YARA analyzers, and records
+# verdicts + reports. Enabling it is part of the human-gated #823 cutover
+# (see debian/README.sentinel.md), alongside setting SENTINEL_ENABLED=1 in the
+# workers' /etc/secubox/toolbox-ng.env.
+#
+# Enable at cutover:
+#   systemctl enable --now sbx-sentinel.service
+#
+# Runs as the SAME user as the sbxmitm workers (secubox-toolbox) so the workers
+# can connect to the mirror socket this daemon creates in /run/secubox without
+# any cross-user socket-permission dance.
+
+[Unit]
+Description=SecuBox Sentinel — async threat analyzer (#823)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/823
+After=network.target
+
+[Service]
+Type=simple
+User=secubox-toolbox
+Group=secubox-toolbox
+
+# Shared config for the daemon AND the sbxmitm gate (same SENTINEL_* names).
+# Leading "-": absent file is not an error (built-in defaults then apply).
+EnvironmentFile=-/etc/secubox/sentinel.env
+
+ExecStart=/usr/sbin/sbx-sentinel
+Restart=on-failure
+RestartSec=5
+
+# Own /run/secubox WITHOUT wiping it on restart: RuntimeDirectoryPreserve=yes is
+# mandatory — many secubox units share this runtime dir and a Preserve=no unit
+# restarting wipes every sibling's socket. See project memory
+# (RuntimeDirectory socket wipe = root cause of cascading 502s).
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+
+# Hardening (mirrors the worker envelope).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/secubox
+# The mirror socket lives in /run/secubox; the verdict store + live-feed overlay
+# live under /var/lib/secubox/sentinel (pre-created 0750 secubox-toolbox by
+# tmpfiles). ProtectSystem=strict otherwise mounts both read-only.
+ReadWritePaths=/run/secubox
+ReadWritePaths=/var/lib/secubox/sentinel
+MemoryHigh=96M
+MemoryMax=128M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target
