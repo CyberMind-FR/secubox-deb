@@ -12,6 +12,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from secubox_toolbox import sentinel_link
+
 from .models import ReportToken
 
 log = logging.getLogger("secubox.toolbox.reports")
@@ -60,11 +62,18 @@ def verify_token(token: str, salt: str) -> tuple[bool, str | None]:
 def build_report_data(mac_hash: str, session_data: dict) -> dict:
     """Aggregate session data into the structure consumed by render_pdf().
     session_data is expected to be the dict produced by api._aggregate_session()."""
-    return {
+    report = {
         "mac_hash": mac_hash,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         **session_data,
     }
+    detections = sentinel_link.fetch_detections(mac_hash)
+    report["sentinel"] = {
+        "active": bool(detections),
+        "assess": sentinel_link.assess(detections),
+        "detections": detections,
+    }
+    return report
 
 
 def _setup_fonts(pdf) -> str:
