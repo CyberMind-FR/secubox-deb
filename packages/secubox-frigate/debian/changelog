@@ -1,0 +1,8 @@
+secubox-frigate (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Foundation (#821): Frigate NVR in a podman-in-LXC on amd64; /api/v1/frigate
+    shim (status/cameras/events/storage/stats); go2rtc demo source; OpenVINO CPU
+    detector; storage + disk-pressure guard; cross-node WAF exposure (no bypass);
+    menu.d + sidebar /stats. Dashboard/MQTT/4R deferred.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 06 Jul 2026 00:00:00 +0000
