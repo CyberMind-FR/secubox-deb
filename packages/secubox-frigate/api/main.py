@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, FastAPI
 
 try:
     from secubox_core.auth import require_jwt
-except Exception:  # test/offline fallback
+except ImportError:  # test/offline fallback — only when the lib is absent
     def require_jwt():  # noqa: D401
         return {"sub": "anon"}
 
@@ -19,6 +19,7 @@ EVENTS_LIMIT = 50
 app = FastAPI(title="secubox-frigate")
 router = APIRouter(prefix="/api/v1/frigate")
 _cache: dict = {}
+_storage_cache: dict = {}
 _lock = threading.Lock()
 
 
@@ -31,8 +32,10 @@ def _frigate_get(path: str):
         return None, False
 
 
-def _compute_status() -> dict:
-    data, ok = _frigate_get("/api/stats")
+def _compute_status(fetched=None) -> dict:
+    """fetched: optional pre-fetched (data, ok) tuple from `_frigate_get("/api/stats")`,
+    to avoid a redundant round-trip when the caller already has it (see _compute_stats)."""
+    data, ok = fetched if fetched is not None else _frigate_get("/api/stats")
     if not ok or not data:
         return {"up": False, "version": None, "uptime": None, "detector_fps": None}
     svc = data.get("service", {})
@@ -41,8 +44,9 @@ def _compute_status() -> dict:
             "detector_fps": det.get("inference_speed")}
 
 
-def _compute_cameras() -> list:
-    data, ok = _frigate_get("/api/stats")
+def _compute_cameras(fetched=None) -> list:
+    """fetched: optional pre-fetched (data, ok) tuple, see _compute_status."""
+    data, ok = fetched if fetched is not None else _frigate_get("/api/stats")
     if not ok or not data:
         return []
     out = []
@@ -54,7 +58,7 @@ def _compute_cameras() -> list:
 
 
 def _compute_events() -> list:
-    data, ok = _frigate_get("/api/events")
+    data, ok = _frigate_get(f"/api/events?limit={EVENTS_LIMIT}")
     if not ok or not data:
         return []
     out = []
@@ -82,9 +86,10 @@ def _compute_storage() -> dict:
 
 
 def _compute_stats() -> dict:
-    cams = _compute_cameras()
+    fetched = _frigate_get("/api/stats")  # single round-trip, shared by cameras + status
+    cams = _compute_cameras(fetched=fetched)
     evs = _compute_events()
-    det = _compute_status().get("detector_fps")
+    det = _compute_status(fetched=fetched).get("detector_fps")
     # TOP-LEVEL keys the sidebar reads directly (nac /stats contract).
     return {"cameras": len(cams), "events": len(evs), "fps": det,
             "by_camera": {c["name"]: c.get("detection_fps") for c in cams}}
@@ -96,8 +101,10 @@ def refresh_cache():
             data = _compute_stats()
             CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             CACHE_FILE.write_text(json.dumps(data))
+            storage_data = _compute_storage()
             with _lock:
                 _cache.update(data)
+                _storage_cache.update(storage_data)
         except Exception:
             pass
         time.sleep(60)
@@ -125,6 +132,9 @@ def events(user=Depends(require_jwt)):
 
 @router.get("/storage")
 def storage(user=Depends(require_jwt)):
+    with _lock:
+        if _storage_cache:
+            return dict(_storage_cache)
     return _compute_storage()
 
 

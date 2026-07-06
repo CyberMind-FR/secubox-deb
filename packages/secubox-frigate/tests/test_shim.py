@@ -14,7 +14,7 @@ def _app(monkeypatch, frigate_stats=None, frigate_events=None, up=True):
             return frigate_stats or {"cameras": {"demo": {"camera_fps": 5, "detection_fps": 4.9, "process_fps": 5}},
                                      "detectors": {"ov": {"inference_speed": 12.3}},
                                      "service": {"version": "0.14.1", "uptime": 3600}}, True
-        if path == "/api/events":
+        if path.startswith("/api/events"):
             return frigate_events or [{"id": "1", "label": "person", "camera": "demo", "start_time": 1, "zones": []}], True
         return {}, True
     monkeypatch.setattr(m, "_frigate_get", fake_get)
