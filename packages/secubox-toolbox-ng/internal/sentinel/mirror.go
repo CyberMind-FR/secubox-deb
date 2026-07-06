@@ -76,16 +76,25 @@ func NewMirror(socketPath string, queue int, bodyCap int) *Mirror {
 }
 
 // Emit queues msg for delivery to the analyzer. It NEVER blocks: msg.Body is
-// truncated to bodyCap first, then the message is offered to the internal
+// always copied (and truncated to bodyCap if needed) into a fresh
+// right-sized slice first, so the queued MirrorMsg never aliases the
+// caller's backing array — sbxmitm's hot path may reuse/pool that buffer
+// the instant Emit returns. The message is then offered to the internal
 // channel with a non-blocking select — on a full channel (queue saturated,
 // e.g. analyzer down/slow) Emit increments the dropped counter and returns
 // immediately. This is best-effort mirroring only; a dropped or later
 // send-failed message is simply lost, never retried.
 func (m *Mirror) Emit(msg MirrorMsg) {
-	if m.bodyCap >= 0 && len(msg.Body) > m.bodyCap {
-		body := make([]byte, m.bodyCap)
-		copy(body, msg.Body)
-		msg.Body = body
+	n := len(msg.Body)
+	if m.bodyCap >= 0 && n > m.bodyCap {
+		n = m.bodyCap
+	}
+	if n > 0 {
+		b := make([]byte, n)
+		copy(b, msg.Body)
+		msg.Body = b
+	} else {
+		msg.Body = nil
 	}
 
 	select {

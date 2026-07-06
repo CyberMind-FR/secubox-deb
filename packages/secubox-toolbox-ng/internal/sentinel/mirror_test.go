@@ -132,3 +132,39 @@ func TestMirrorEmitNeverBlocksOnOverflow(t *testing.T) {
 		t.Fatal("expected Dropped() > 0 after overflowing an undrained queue of size 1")
 	}
 }
+
+// TestMirrorEmitCopiesBodyNoAliasing guards against a buffer-aliasing bug:
+// Emit must copy msg.Body into a fresh slice before queueing it, because
+// sbxmitm's hot path may reuse/pool the backing array the instant Emit
+// returns. If Emit queued msg.Body as-is (no copy), mutating the caller's
+// buffer right after Emit would corrupt the message the writer goroutine
+// later encodes — a genuine data race on the underlying array.
+func TestMirrorEmitCopiesBodyNoAliasing(t *testing.T) {
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "sentinel.sock")
+	received := startMirrorListener(t, sock)
+
+	m := NewMirror(sock, 8, 1024)
+	defer m.Close()
+
+	const want = "SENSITIVE-PAYLOAD"
+	orig := []byte(want)
+	m.Emit(MirrorMsg{Meta: FlowMeta{Host: "alias.example"}, Body: orig, TS: time.Now().Unix()})
+
+	// Mutate the caller's buffer immediately — as sbxmitm's hot path would
+	// do by reusing a pooled read buffer right after Emit returns. If Emit
+	// queued the slice as-is (aliasing), the listener will observe this
+	// mutated content instead of the original payload.
+	for i := range orig {
+		orig[i] = 'X'
+	}
+
+	select {
+	case msg := <-received:
+		if got := string(msg.Body); got != want {
+			t.Fatalf("Emit aliased caller buffer: got %q, want %q", got, want)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for message")
+	}
+}
