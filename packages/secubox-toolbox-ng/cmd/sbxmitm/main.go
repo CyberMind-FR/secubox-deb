@@ -475,14 +475,17 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// the upstream response; strip → serve the response with an emptied body),
 	// everything else is mirrored to the async analyzer and proceeds unchanged.
 	// Fail-open + nil-safe (see sentinel.go): a disabled/erroring/absent hook is a
-	// transparent passthrough, so this can never break a normal flow. JA4/JA3 are
-	// captured during the handshake but not plumbed to this shared pipeline, so
-	// they are left empty — the domain/IP/URL/hash vectors drive inline matching.
+	// transparent passthrough, so this can never break a normal flow. Only the
+	// domain + URL vectors drive inline matching today: JA4/JA3 (captured at
+	// handshake) and cert/file-hash are not plumbed to this shared pipeline, and
+	// ClientIP is DELIBERATELY left empty — IP IOCs are malicious *destination*
+	// IPs, so matching them against the client's own source IP is wrong and could
+	// auto-block the client. The destination-IP vector is a follow-up (plumb the
+	// resolved upstream IP here); until then IP matching stays inert inline.
 	switch action, blockPage := px.sentinel.inspect(sentinel.FlowMeta{
-		Host:     host,
-		URL:      "https://" + host + req.URL.RequestURI(),
-		ClientIP: relayIP,
-		MacHash:  clientHash,
+		Host:    host,
+		URL:     "https://" + host + req.URL.RequestURI(),
+		MacHash: clientHash,
 	}, nil); action {
 	case sentinel.ActionBlock, sentinel.ActionSinkhole:
 		writeRaw(tconn, 403, "Forbidden", map[string]string{
