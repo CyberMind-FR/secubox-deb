@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -m 0755 -o secubox -g secubox /var/cache/secubox/frigate 2>/dev/null || true
+    systemctl daemon-reload || true
+    deb-systemd-helper enable secubox-frigate.service >/dev/null 2>&1 || true
+    deb-systemd-invoke restart secubox-frigate.service >/dev/null 2>&1 || true
+    systemctl enable --now secubox-frigate-diskguard.timer >/dev/null 2>&1 || true
+    # Provision the LXC only where LXC is available (the amd64 host). Never fail install.
+    if command -v lxc-create >/dev/null 2>&1; then
+        /usr/sbin/frigatectl install || echo "frigatectl install deferred — run manually on the frigate host" >&2
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0
