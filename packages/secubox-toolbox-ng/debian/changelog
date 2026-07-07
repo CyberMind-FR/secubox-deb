@@ -1,3 +1,15 @@
+secubox-toolbox-ng (0.1.30-1~bookworm1) bookworm; urgency=medium
+
+  * #826 Sentinel C2/botnet auto-learning — the daemon now promotes sustained,
+    corroborated beaconing into a report-only learned-indicator set, gated by a
+    high-precision false-positive filter (box-vhost/first-party-LAN/seeded
+    allowlist + rare/non-browser-JA4/DGA corroboration + candidate->confirm over
+    >=3 windows / >=30min). New /c2/{learned,candidates,allow} status endpoints,
+    seeded c2-allow.txt + browser-ja4.txt, and ReadWritePaths for the operator
+    allowlist. Report-only, mac_hash-only, fail-safe, bounded memory.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 12:00:00 +0200
+
 secubox-toolbox-ng (0.1.29-1~bookworm1) bookworm; urgency=medium
 
   * #823 Sentinel defensive threat engine — final wiring + packaging. Ships the
