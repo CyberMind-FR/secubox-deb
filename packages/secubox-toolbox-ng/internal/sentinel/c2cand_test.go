@@ -6,6 +6,7 @@
 package sentinel
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -57,5 +58,31 @@ func TestC2CandPersistRoundTrip(t *testing.T) {
 	c2 := NewC2Cand(path)
 	if len(c2.Snapshot()) != 1 {
 		t.Errorf("expected 1 candidate after reload, got %d", len(c2.Snapshot()))
+	}
+}
+
+func TestC2CandSnapshotIsolated(t *testing.T) {
+	c := NewC2Cand(filepath.Join(t.TempDir(), "cand.json"))
+	c.Record("h.example", "devA", 100, 30, []string{"rare"})
+	snap := c.Snapshot()
+	// mutating the snapshot's maps must not affect the live candidate
+	snap[0].Devices["injected"] = true
+	c.Record("h.example", "devB", 200, 30, []string{"dga"})
+	for _, cd := range c.Snapshot() {
+		if cd.Devices["injected"] {
+			t.Error("snapshot map aliases live candidate map (race risk)")
+		}
+	}
+}
+
+func TestC2CandDevicesCapped(t *testing.T) {
+	c := NewC2Cand(filepath.Join(t.TempDir(), "cand.json"))
+	for i := 0; i < c2MaxDevicesPerHost+50; i++ {
+		c.Record("h.example", fmt.Sprintf("dev%d", i), int64(100+i), 30, []string{"rare"})
+	}
+	for _, cd := range c.Snapshot() {
+		if len(cd.Devices) > c2MaxDevicesPerHost {
+			t.Errorf("devices not capped: %d", len(cd.Devices))
+		}
 	}
 }
