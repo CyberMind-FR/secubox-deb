@@ -55,6 +55,13 @@ func (r *IOCReporter) Analyze(m MirrorMsg) (verdicts []*Verdict) {
 	if ioc, ok := set.MatchDomain(m.Meta.Host); ok && !spywareClasses[ioc.Class] {
 		hits = append(hits, ioc)
 	}
+	// MatchIP is against Host, NOT ClientIP: Host is the DESTINATION (an IP
+	// literal for a direct-IP / no-SNI flow), so it matches a C2-IP IOC
+	// correctly. ClientIP is the client's SOURCE address — matching that
+	// against destination-C2 IP IOCs is a known false-positive vector
+	// (deliberately dropped from the inline gate), so it must NOT be used here.
+	// For an ordinary domain Host, MatchIP simply misses (domains aren't IPs)
+	// and MatchDomain above covers it.
 	if ioc, ok := set.MatchIP(m.Meta.Host); ok && !spywareClasses[ioc.Class] {
 		hits = append(hits, ioc)
 	}
