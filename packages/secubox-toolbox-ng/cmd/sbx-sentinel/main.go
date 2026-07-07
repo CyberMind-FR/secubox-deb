@@ -355,6 +355,10 @@ func buildAnalyzers(packDir, overlayDir string, yaraRules []string) ([]Analyzer,
 		errs = append(errs, fmt.Errorf("pack loader (spyware analyzer disabled): %w", err))
 	} else {
 		analyzers = append(analyzers, sentinel.NewSpyware(loader))
+		// #826 report-only feed surfacing: correlate the non-spyware IOC
+		// classes (botnet_c2/malware/… from the live threat feeds) that the
+		// Spyware analyzer skips, as REPORT-ONLY (the daemon never blocks).
+		analyzers = append(analyzers, sentinel.NewIOCReporter(loader))
 	}
 
 	c2 := sentinel.NewC2Learner(sentinel.NewBehavioral(), sentinel.C2Config{
