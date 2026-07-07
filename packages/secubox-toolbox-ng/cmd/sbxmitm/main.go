@@ -89,6 +89,12 @@ func ja4ish(h *tls.ClientHelloInfo) string {
 // host), ja4stack is stable across every flow from the same client stack, so
 // it can distinguish a browser from a non-browser client — the input the
 // Sentinel C2 auto-learn "non_browser_ja" signal (and browser-ja4.txt) needs.
+//
+// NOTE: this is an ad-hoc "stack" fingerprint (crypto/tls exposes no raw
+// ClientHello bytes, so a spec-compliant JA4 hash isn't computable in pure
+// Go here). It is self-consistent — the SENTINEL_JA4_CAPTURE recorder writes
+// this exact format into browser-ja4.txt and the signal compares against it —
+// but it is NOT interchangeable with a public JA4 blocklist's hashes.
 func ja4stack(h *tls.ClientHelloInfo) string {
 	if h == nil {
 		return ""
