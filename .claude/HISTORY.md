@@ -3,6 +3,20 @@
 
 ---
 
+## 2026-07-06/07 — Sentinel threat engine + activation + 3 surfaces + C2 auto-learning (#821 #823–#828)
+
+Brainstorm → spec → plan → subagent-driven (per-task two-stage review + adversarial whole-branch review) throughout. All merged; all deployed + verified live on gk2.
+
+- **#821 / #822 — Frigate NVR foundation** ✅ MERGED. podman-in-LXC (amd64/OpenVINO), go2rtc, `/api/v1/frigate/*` shim, WAF-fronted no-bypass.
+- **#823 / #824 — sbxmitm Sentinel engine** ✅ MERGED (dark). Inline IOC gate + async `sbx-sentinel` daemon (bbolt store, YARA cgo build-tag + no-cgo stub), commercial-spyware base packs (Pegasus/Predator/Intellexa) + live-feed overlay, `FinalizeAction` report-only guard.
+- **#825 — Sentinel activation + 3 surfaces** ✅ MERGED (PR #825). Activated on gk2 (daemon enabled, `SENTINEL_HTTP_ADDR=127.0.0.1:8790`, worker mirror wired). Surfaced on the WebUI ToolBoX **🛡️ Sentinelle** fleet tab, the kbin per-device **Compromission** report tab, and the **PDF** report section — all report-only, `mac_hash`-only, fail-safe. Fixed a `RuntimeDirectory=secubox` clobber of the shared `/run/secubox` (drop-in). Proven e2e (Pegasus/Predator).
+- **#826 / #827 — C2/botnet auto-learning** ✅ MERGED (PR #827). Sustained + gated + strong-corroborated beaconing → report-only learned indicators. High-precision FP gate (box-vhost/first-party-LAN/seeded allowlist) + multi-signal (rare/non-browser-JA4/DGA) + candidate→confirm (≥3 windows/≥30 min). New `/c2/*` endpoints + portal proxy + WebUI **C2 appris** view with one-click **Ignorer**.
+- **#828 — C2 false-positive fix** ⏳ OPEN (PR #828, deployed to board as toolbox-ng 0.1.31). Live testing learned an admin dashboard on rarity alone → promotion now requires a STRONG signal (`dga`/`non_browser_ja`), `rare` is supporting-only; `non_browser_ja` disabled when the browser-JA4 set is unconfigured. Re-verified live: real DGA-C2 learned, admin dashboard + mail suppressed. Follow-up: populate `browser-ja4.txt` (empty seed → `dga`-only out-of-box).
+
+Deployed versions on gk2: toolbox-ng **0.1.31**, toolbox **2.8.2**.
+
+---
+
 ## 2026-07-04 — ToolBox privacy report (#785 #790 #792), Zigbee WS fix (#796), PeerTube admin ops (#798)
 
 - **#785 / #790 / #792 — ToolBox kbin report** ✅ MERGED (PR #787, #794). Faithful-to-page PDF:

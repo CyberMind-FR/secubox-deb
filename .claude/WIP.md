@@ -1,5 +1,23 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-04*
+*Mis à jour : 2026-07-07*
+
+---
+
+## ✅ 2026-07-06 → 07-07 : Sentinel — moteur de menaces, activation, 3 surfaces + C2 auto-learn (#821 #823–#828)
+
+Toutes mergées + déployées + validées live gk2 (sauf #828 en attente de merge, déjà déployé). Détail complet dans HISTORY.md.
+
+- **#821/#822 Frigate NVR foundation** ✅ MERGED (podman-in-LXC amd64/OpenVINO).
+- **#823/#824 moteur Sentinel** ✅ MERGED (dark) — gate IOC inline + daemon async `sbx-sentinel` (bbolt, YARA build-tag), packs spyware commercial (Pegasus/Predator/Intellexa), report-only.
+- **#825 activation + 3 surfaces** ✅ MERGED — onglet WebUI **🛡️ Sentinelle** (flotte) + onglet **Compromission** rapport kbin + section **PDF**. Live gk2, e2e prouvé. Fix clobber `RuntimeDirectory=secubox` sur `/run/secubox` (drop-in).
+- **#826/#827 C2 auto-learn** ✅ MERGED — apprentissage beaconing haute-précision (gate allowlist + multi-signal rare/non-browser-JA4/DGA + candidate→confirm ≥3 fenêtres/≥30min), `/c2/*` + vue **C2 appris** + bouton **Ignorer**. Report-only.
+- **#828 fix faux-positif C2** ⏳ **OPEN (PR #828)** — dashboard admin appris sur rareté seule → exige désormais un signal FORT (`dga`/`non_browser_ja`), `rare` = support seul. Déployé board (toolbox-ng 0.1.31), validé live (vrai C2 appris, dashboard+mail supprimés).
+
+### ⬜ Next / follow-ups
+- Merger **PR #828** (aligne master 0.1.31 = board, ferme la dérive).
+- Peupler `browser-ja4.txt` (seed vide → `dga` seul signal fort out-of-box ; besoin de vraies empreintes JA4 navigateur capturées).
+- Optionnel : activer `secubox-sentinel-feeds.timer` (détection C2 réelle via overlay MVT/CitizenLab/abuse.ch — opt-in opérateur).
+- Audit-log append-only pour les mutations `/c2/allow` (convention CSPN).
 
 ---
 
