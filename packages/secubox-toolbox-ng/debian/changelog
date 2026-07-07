@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.1.36-1~bookworm1) bookworm; urgency=medium
+
+  * #826 move browser-ja4.txt to /etc/secubox/sentinel (a conffile, like
+    c2-allow.txt) so an operator's captured fingerprints survive package
+    upgrades; default SENTINEL_C2_BROWSER_JA4 points there; postinst chowns it
+    to secubox-toolbox. Seed is a documented empty template (values are
+    board-specific, captured via SENTINEL_JA4_CAPTURE).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 18:00:00 +0200
+
 secubox-toolbox-ng (0.1.35-1~bookworm1) bookworm; urgency=medium
 
   * #826 exclude TLS GREASE (RFC 8701) from ja4stack — browsers inject random
