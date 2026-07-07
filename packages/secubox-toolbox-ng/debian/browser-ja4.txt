@@ -1,0 +1,7 @@
+# Known browser JA4/JA3 fingerprints (one per line). A destination polled with
+# one of these is treated as browser-driven (an admin dashboard), so the
+# non_browser_ja corroborating signal does NOT fire for it.
+#
+# Empty by default: operators/feeds extend this list; an empty file simply
+# disables the non_browser_ja signal shortcut (the other C2 corroborating
+# signals — rarity, DGA-looking labels, etc. — still apply).

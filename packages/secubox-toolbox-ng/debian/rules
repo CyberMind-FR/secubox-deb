@@ -49,6 +49,11 @@ override_dh_auto_install:
 	# #823 Sentinel: shared SENTINEL_* config (dpkg conffile under /etc).
 	install -d debian/secubox-toolbox-ng/etc/secubox
 	install -m 0644 debian/sentinel.env debian/secubox-toolbox-ng/etc/secubox/sentinel.env
+	# #826 C2 auto-learn: seeded operator allowlist (dpkg conffile) + the
+	# shipped browser-JA4 corroborating-signal seed (read-only content).
+	install -d debian/secubox-toolbox-ng/etc/secubox/sentinel
+	install -m 0644 debian/c2-allow.txt debian/secubox-toolbox-ng/etc/secubox/sentinel/c2-allow.txt
+	install -m 0644 debian/browser-ja4.txt debian/secubox-toolbox-ng/usr/share/secubox/sentinel/browser-ja4.txt
 	# #736 media catcher: own its /run log so the append never fails (see conf)
 	install -d debian/secubox-toolbox-ng/usr/lib/tmpfiles.d
 	install -m 0644 tmpfiles/zz-secubox-toolbox-ng.conf debian/secubox-toolbox-ng/usr/lib/tmpfiles.d/

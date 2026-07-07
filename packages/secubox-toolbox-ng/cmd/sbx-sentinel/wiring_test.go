@@ -14,9 +14,10 @@ import (
 )
 
 // TestBuildAnalyzersReturnsThree asserts the production analyzer construction
-// wires exactly the three real engines (spyware, behavioral, YARA) — this is
-// the path defaultConfig()/main() use, distinct from the tests' injected
-// stubAnalyzer path.
+// wires exactly the three real engines (spyware, the behavioral engine
+// wrapped in the #826 C2 auto-learn orchestrator, YARA) — this is the path
+// defaultConfig()/main() use, distinct from the tests' injected stubAnalyzer
+// path.
 func TestBuildAnalyzersReturnsThree(t *testing.T) {
 	// Empty/missing dirs are best-effort (no error) — NewLoader tolerates
 	// them — so the happy path returns all three analyzers with no error.
@@ -28,19 +29,19 @@ func TestBuildAnalyzersReturnsThree(t *testing.T) {
 		t.Fatalf("expected 3 analyzers, got %d", len(analyzers))
 	}
 
-	var haveSpyware, haveBehavioral, haveYara bool
+	var haveSpyware, haveC2Learner, haveYara bool
 	for _, a := range analyzers {
 		switch a.(type) {
 		case *sentinel.Spyware:
 			haveSpyware = true
-		case *sentinel.Behavioral:
-			haveBehavioral = true
+		case *sentinel.C2Learner:
+			haveC2Learner = true
 		case *sentinel.YaraEngine:
 			haveYara = true
 		}
 	}
-	if !haveSpyware || !haveBehavioral || !haveYara {
-		t.Fatalf("missing an analyzer type: spyware=%v behavioral=%v yara=%v", haveSpyware, haveBehavioral, haveYara)
+	if !haveSpyware || !haveC2Learner || !haveYara {
+		t.Fatalf("missing an analyzer type: spyware=%v c2learner=%v yara=%v", haveSpyware, haveC2Learner, haveYara)
 	}
 }
 
