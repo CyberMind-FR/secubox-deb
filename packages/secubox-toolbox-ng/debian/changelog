@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.31-1~bookworm1) bookworm; urgency=medium
+
+  * #826 fix: C2 autolearn false-positive — a first-seen browser-driven host
+    (e.g. an admin dashboard) was learnable on rarity alone, and non_browser_ja
+    over-fired when the browser-JA4 set was unconfigured. Promotion now requires
+    a STRONG signal (DGA host or confirmed non-browser fingerprint); "rare" is a
+    supporting signal only. non_browser_ja is disabled when no browser set is
+    configured (empty seed) rather than flagging every fingerprinted flow.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 14:00:00 +0200
+
 secubox-toolbox-ng (0.1.30-1~bookworm1) bookworm; urgency=medium
 
   * #826 Sentinel C2/botnet auto-learning — the daemon now promotes sustained,
