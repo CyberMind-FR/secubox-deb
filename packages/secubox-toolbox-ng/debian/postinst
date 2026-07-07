@@ -25,6 +25,7 @@ case "$1" in
       chown secubox-toolbox:secubox-toolbox /etc/secubox/sentinel 2>/dev/null || true
       chmod 0750 /etc/secubox/sentinel 2>/dev/null || true
       [ -f /etc/secubox/sentinel/c2-allow.txt ] && chown secubox-toolbox:secubox-toolbox /etc/secubox/sentinel/c2-allow.txt 2>/dev/null || true
+      [ -f /etc/secubox/sentinel/browser-ja4.txt ] && chown secubox-toolbox:secubox-toolbox /etc/secubox/sentinel/browser-ja4.txt 2>/dev/null || true
     fi
     ;;
   abort-upgrade|abort-remove|abort-deconfigure)

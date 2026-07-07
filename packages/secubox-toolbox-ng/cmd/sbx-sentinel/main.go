@@ -372,7 +372,7 @@ func buildAnalyzers(packDir, overlayDir string, yaraRules []string) ([]Analyzer,
 		BoxFile:     getenvDefault("SENTINEL_C2_BOX_DOMAINS", "/etc/secubox/waf/haproxy-routes.json"),
 		CandFile:    getenvDefault("SENTINEL_C2_CANDIDATES", "/var/lib/secubox/sentinel/c2-candidates.json"),
 		LearnedFile: getenvDefault("SENTINEL_C2_LEARNED", "/var/lib/secubox/sentinel/c2-learned.json"),
-		BrowserJA4:  readLinesFile(getenvDefault("SENTINEL_C2_BROWSER_JA4", "/usr/share/secubox/sentinel/browser-ja4.txt")),
+		BrowserJA4:  readLinesFile(getenvDefault("SENTINEL_C2_BROWSER_JA4", "/etc/secubox/sentinel/browser-ja4.txt")),
 	})
 	analyzers = append(analyzers, c2)
 	c2Learner = c2 // package-level handle for the status mux (see http.go wiring)
