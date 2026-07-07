@@ -99,17 +99,35 @@ func ja4stack(h *tls.ClientHelloInfo) string {
 	if h == nil {
 		return ""
 	}
+	// GREASE values (RFC 8701) are randomly injected by browsers into the
+	// version and cipher lists; they MUST be excluded or the fingerprint jitters
+	// per handshake (e.g. max version flips between 0x0304 and a GREASE 0xfafa).
 	maxVer := uint16(0)
 	for _, v := range h.SupportedVersions {
+		if isGREASE(v) {
+			continue
+		}
 		if v > maxVer {
 			maxVer = v
+		}
+	}
+	nCiphers := 0
+	for _, c := range h.CipherSuites {
+		if !isGREASE(c) {
+			nCiphers++
 		}
 	}
 	alpn := "none"
 	if len(h.SupportedProtos) > 0 {
 		alpn = h.SupportedProtos[0]
 	}
-	return fmt.Sprintf("t%04x_c%02d_a%s", maxVer, len(h.CipherSuites), alpn)
+	return fmt.Sprintf("t%04x_c%02d_a%s", maxVer, nCiphers, alpn)
+}
+
+// isGREASE reports whether v is a TLS GREASE placeholder (RFC 8701): the 16
+// values 0x0a0a, 0x1a1a, … 0xfafa — both bytes equal, each low nibble 0xa.
+func isGREASE(v uint16) bool {
+	return (v>>8) == (v&0xff) && (v&0x0f) == 0x0a
 }
 
 // ── CONNECT-proxy MITM wiring ────────────────────────────────────────────────
