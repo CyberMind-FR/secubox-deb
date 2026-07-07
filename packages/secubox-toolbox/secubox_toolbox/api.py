@@ -3719,6 +3719,25 @@ async def admin_sentinel_verdicts(limit: int = 50) -> dict:
     }
 
 
+def _c2_signals(s):
+    """Normalize Signals to a list: Go map[string]bool -> JSON object; []string -> JSON array."""
+    if isinstance(s, dict):
+        return sorted(k for k, v in s.items() if v)
+    if isinstance(s, list):
+        return s
+    return []
+
+
+def _c2_norm_learned(h):
+    return {"host": h.get("host", ""), "signals": _c2_signals(h.get("signals")),
+            "interval_s": h.get("interval_s"), "devices": h.get("devices")}
+
+
+def _c2_norm_cand(c):
+    return {"host": c.get("host", ""), "signals": _c2_signals(c.get("signals")),
+            "interval_s": c.get("interval_s"), "windows": c.get("windows")}
+
+
 @router.get("/admin/sentinel/c2")
 async def admin_sentinel_c2() -> dict:
     """Learned + candidate C2 hosts for the WebUI 'C2 appris' view. Fail-safe."""
@@ -3726,8 +3745,8 @@ async def admin_sentinel_c2() -> dict:
     if not data:
         return {"active": False, "learned": [], "candidates": []}
     return {"active": True,
-            "learned": data.get("learned", []),
-            "candidates": data.get("candidates", [])}
+            "learned": [_c2_norm_learned(h) for h in data.get("learned", [])],
+            "candidates": [_c2_norm_cand(c) for c in data.get("candidates", [])]}
 
 
 @router.post("/admin/sentinel/c2/allow")
