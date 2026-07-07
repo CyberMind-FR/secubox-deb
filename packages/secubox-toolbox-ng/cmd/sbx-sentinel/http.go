@@ -16,9 +16,11 @@
 //
 //   - GET  /c2/learned     → the confirmed learned-C2 set ([]sentinel.LearnedC2).
 //   - GET  /c2/candidates  → the in-progress candidate set ([]sentinel.C2Candidate).
-//   - POST /c2/allow       → operator "Ignorer": form/JSON `host` moves a
-//     learned/candidate host onto the allowlist. The only write this surface
-//     accepts — it edits the local allow-list file only, never the network.
+//   - POST /c2/allow       → operator "Ignorer": an x-www-form-urlencoded (or
+//     query-string) `host` param moves a learned/candidate host onto the
+//     allowlist. NOT a JSON body — r.FormValue only parses form/query values.
+//     The only write this surface accepts — it edits the local allow-list
+//     file only, never the network.
 //
 // This is a minimal local read for an operator/portal; carries no PII beyond
 // mac_hash and does NOT route through the WAF-bypass path. The richer

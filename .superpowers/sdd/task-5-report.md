@@ -1,140 +1,101 @@
-# Task 5 Report: Packaging mesh-exclusion timers (#806)
+# Task 5 Report: C2 learner daemon wiring + `/c2` endpoints + seeded config (#826)
 
-**Date**: 2026-07-04  
-**Status**: ✅ **COMPLETE**
+**Status**: COMPLETE
+**Commit**: `db22668f` — `feat(sentinel): wire C2 learner into daemon + /c2 endpoints + seeded allowlist (ref #826)`
+
+## Test summary
+
+```
+cd packages/secubox-toolbox-ng && go test ./cmd/sbx-sentinel/... ./internal/sentinel/...
+ok  	.../secubox-toolbox-ng/cmd/sbx-sentinel	0.453s
+ok  	.../secubox-toolbox-ng/internal/sentinel	0.886s
+```
+`go build ./...` clean. `gofmt -l` clean.
+
+## What changed
+
+- `cmd/sbx-sentinel/main.go`: `buildAnalyzers` now wraps `sentinel.NewBehavioral()` in `sentinel.NewC2Learner(..., sentinel.C2Config{...5 SENTINEL_C2_* env vars via getenvDefault...})` and appends the `C2Learner` (not the raw `Behavioral`) to the pipeline — analyzer count is still 3 (spyware, c2-learner, yara). Added package-level `var c2Learner *sentinel.C2Learner` (set inside `buildAnalyzers`) so `run()`'s optional status-HTTP goroutine can pass it to `serveStatus`. Added fail-safe `readLinesFile(path) []string` (missing/unreadable → nil; skips blank/`#`-comment lines) used for `SENTINEL_C2_BROWSER_JA4`.
+- `cmd/sbx-sentinel/http.go`: `newStatusMux(store, c2)` and `serveStatus(ctx, addr, store, c2)` signatures extended with `*sentinel.C2Learner`. When `c2 != nil`, registers `GET /c2/learned`, `GET /c2/candidates`, `POST /c2/allow` (form/JSON `host`, 400 on empty, 500 on `c2.Allow` error, else `{"ok":true}`). Nil `c2` → routes simply not registered (no panic, no behavior change for existing `/stats`/`/verdicts`).
+- `cmd/sbx-sentinel/http_test.go`: updated the 4 pre-existing `newStatusMux(store)` call sites to `newStatusMux(store, nil)`; added `TestC2Endpoints` (GET learned/candidates → 200, POST allow with `host=fp.example` → 200).
+- `cmd/sbx-sentinel/wiring_test.go`: **incidental fix required to keep tests green** — `TestBuildAnalyzersReturnsThree` asserted a `*sentinel.Behavioral` type was present in the returned slice; since `buildAnalyzers` now appends the wrapping `*sentinel.C2Learner` instead, updated the type-switch case to check for `*sentinel.C2Learner`. Not in the original brief's file list but necessary for the existing test suite to still compile/pass — `TestBuildAnalyzersLoadsBasePack` and `TestDefaultConfigWiresPipeline` needed no changes (analyzer count stays 3; the spyware verdict path they exercise is unaffected).
+- `debian/c2-allow.txt` (new) + `debian/browser-ja4.txt` (new): seed files, verbatim per brief.
+- `debian/rules`: added `install -d .../etc/secubox/sentinel` + two `install -m 0644` lines for the two seeds (allow file under `/etc/secubox/sentinel/`, browser-JA4 under the already-created `/usr/share/secubox/sentinel/`).
+- `debian/sentinel.env`: appended the 5 `SENTINEL_C2_*` vars with defaults matching the code, inserted before the "Live feed source URLs" section.
+- No tmpfiles change needed: `/var/lib/secubox/sentinel` (candidates/learned JSON) is already created 0750 secubox-toolbox by the existing `tmpfiles/zz-secubox-sentinel.conf`.
+
+## Blocking concerns
+
+None. `git add` was scoped to only `cmd/sbx-sentinel/` and the `debian/` files touched — two unrelated pre-existing modified files in this worktree (`.superpowers/sdd/task-2-report.md`, `task-4-report.md`, apparently from a different/earlier session reusing this worktree) were left untouched and unstaged.
 
 ---
 
-## Summary
+## Review-fix pass — `/c2/allow` writability in packaged deploy (2026-07-07)
 
-Successfully packaged the mesh-exclusion publish + sync CLI scripts as systemd timers with installation and enablement on postinst.
+**Status**: COMPLETE
+**Commit**: `<see final report below>` — `fix(sentinel): make /c2/allow writable in packaged deploy (RW path + ownership) + sanitize Add (ref #826)`
 
-## Commit
+Three review findings on the Task 5 work fixed:
 
-**Hash:** `d6076912`  
-**Message:** `feat(toolbox): package mesh-exclusion publish+sync timers (ref #806)`
+### Finding 1 (CRITICAL) — `/c2/allow` could never write in production
 
----
+`sbx-sentinel.service` runs `User=secubox-toolbox` under `ProtectSystem=strict` with
+`ReadOnlyPaths=/etc/secubox`, and the seeded `c2-allow.txt` ships root:root — so
+`C2Allow.Add`'s write to `/etc/secubox/sentinel/c2-allow.txt` would fail (EROFS from
+the mount namespace and/or EACCES from ownership). Fixed both halves:
 
-## Changes Made
+- `debian/sbx-sentinel.service`: added `ReadWritePaths=/etc/secubox/sentinel` (nested
+  under the existing `ReadOnlyPaths=/etc/secubox`, which systemd allows — re-grants
+  write to just that subtree, rest of `/etc/secubox` stays read-only).
+- `debian/postinst` (`configure` branch, right after the existing daemon-reload /
+  no-enable comment block): added a fail-safe block that `chown`s
+  `/etc/secubox/sentinel` + `c2-allow.txt` to `secubox-toolbox:secubox-toolbox` and
+  `chmod 0750` the dir. **`/etc/secubox` itself is never touched** — only the
+  `sentinel/` subdir and its file, consistent with the project's shared-parent
+  traversal constraint (parent must stay 0755).
 
-### 1. Created 4 systemd unit files
+### Finding 2 (Important) — doc comment claimed JSON support that doesn't exist
 
-Under `packages/secubox-toolbox/systemd/`:
+`cmd/sbx-sentinel/http.go`'s package doc said `POST /c2/allow` accepts "form/JSON
+`host`", but the handler only calls `r.FormValue("host")` (form-encoded/query only,
+no JSON body parsing — and none was added, since the portal already posts
+form-encoded). Corrected the comment to say x-www-form-urlencoded/query only.
 
-- `secubox-toolbox-mesh-exclusion-publish.service`
-- `secubox-toolbox-mesh-exclusion-publish.timer`
-- `secubox-toolbox-mesh-exclusion-sync.service`
-- `secubox-toolbox-mesh-exclusion-sync.timer`
+### Finding 3 (Minor) — newline injection in `C2Allow.Add`
 
-All unit files created with exact specifications from brief:
+`internal/sentinel/c2allow.go`'s `Add` wrote `host` as a raw line with no
+sanitization, so a network caller posting `host=good.com\nevil.com` could inject a
+second allowlist entry. Since this is now reachable over the network via
+`POST /c2/allow`, added a guard: `Add` rejects (returns nil, no write — fail-safe,
+not an error) any host containing `\n`, `\r`, or a space. Added regression test
+`TestC2AllowAddRejectsInjection` to `c2allow_test.go`.
 
-- Service units with `Type=oneshot`, `ExecStart` pointing to `/usr/sbin/` scripts
-- Timer units with `OnBootSec`, `OnUnitActiveSec=30min`, `Persistent=true`, `RandomizedDelaySec=3min`
-- Proper `After=` dependencies on `secubox-toolbox.service` and `secubox-annuaire.service`
-
-### 2. Modified `packages/secubox-toolbox/debian/rules`
-
-Added 6 install lines in `override_dh_installsystemd` after autolearn timer lines:
-
-- 2 lines to install the sbin scripts (publish, sync)
-- 4 lines to install the systemd unit files (.service and .timer files)
-
-Placement matches existing patterns for similar helpers (autolearn, tor, blacklist).
-
-### 3. Modified `packages/secubox-toolbox/debian/postinst`
-
-Added 4 enable+start lines inside the systemd conditional block:
-
-```sh
-systemctl enable secubox-toolbox-mesh-exclusion-publish.timer 2>/dev/null || true
-systemctl start  secubox-toolbox-mesh-exclusion-publish.timer 2>/dev/null || true
-systemctl enable secubox-toolbox-mesh-exclusion-sync.timer 2>/dev/null || true
-systemctl start  secubox-toolbox-mesh-exclusion-sync.timer 2>/dev/null || true
-```
-
-Placement after autolearn timer enables, following existing convention with `2>/dev/null || true` guards.
-
----
-
-## Verification
-
-**Command executed:**
-
-```bash
-ls packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-*.{service,timer}
-grep -c mesh-exclusion packages/secubox-toolbox/debian/rules packages/secubox-toolbox/debian/postinst
-```
-
-**Output:**
+### Verification
 
 ```
-packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-publish.service
-packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-publish.timer
-packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-sync.service
-packages/secubox-toolbox/systemd/secubox-toolbox-mesh-exclusion-sync.timer
----
-packages/secubox-toolbox/debian/rules:6
-packages/secubox-toolbox/debian/postinst:4
+cd packages/secubox-toolbox-ng && go test ./internal/sentinel/ -run TestC2Allow -race -v
+=== RUN   TestC2AllowSuffixAndLan
+--- PASS: TestC2AllowSuffixAndLan (0.00s)
+=== RUN   TestC2AllowFailSafeMissingFiles
+--- PASS: TestC2AllowFailSafeMissingFiles (0.00s)
+=== RUN   TestC2AllowAddAppends
+--- PASS: TestC2AllowAddAppends (0.00s)
+=== RUN   TestC2AllowAddRejectsInjection
+--- PASS: TestC2AllowAddRejectsInjection (0.00s)
+=== RUN   TestC2AllowAddConcurrent
+--- PASS: TestC2AllowAddConcurrent (0.00s)
+PASS
+ok  	github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/sentinel	1.017s
 ```
 
-**Result**: ✅ **PASSED**
+`go build ./...` clean (exit 0). Confirmed via grep:
+`ReadWritePaths=/etc/secubox/sentinel` present in `debian/sbx-sentinel.service`;
+`etc/secubox/sentinel` chown/chmod block present in `debian/postinst`'s `configure`
+branch, guarded fail-safe (`|| true` throughout, dir-existence check first).
 
-- 4 unit files present
-- rules: 6 matches (exactly required)
-- postinst: 4 matches (exactly required)
+### Files changed
 
----
-
-## Integration Notes
-
-- The 2 CLI scripts (`secubox-toolbox-mesh-exclusion-publish` and `secubox-toolbox-mesh-exclusion-sync`) from Tasks 2–3 exist and are correctly referenced by the service units
-- Install paths follow exact pattern of nearby helpers (e.g., `debian/secubox-toolbox/usr/sbin/`, `debian/secubox-toolbox/lib/systemd/system/`)
-- Postinst enable/start lines placed in same conditional block as existing timer enables
-- No modifications outside `packages/secubox-toolbox/` per requirements
-
----
-
-## Ready for Deploy
-
-Task 5 is complete and committed. The systemd timer units are now:
-
-1. Packaged into `secubox-toolbox.deb`
-2. Installed at `dpkg install` time
-3. Enabled and started in postinst
-
-Next steps (manual, per brief Deploy section):
-
-1. Cross-compile sbxmitm arm64 binary
-2. Deploy sbxmitm binary to gk2/c3box/amd64
-3. Rsync the 2 CLI scripts to all nodes
-4. `systemctl daemon-reload` on all nodes
-5. Verify timers fire: `systemctl status secubox-toolbox-mesh-exclusion-*.timer`
-
----
-
-## #806 Final Whole-Branch Review — Fix Wave
-
-**Date**: 2026-07-04
-**Status**: ✅ **COMPLETE**
-**Commit**: `c6257154` — `fix(toolbox): mesh-exclusion churn guard + never-raises + env overrides + fed-disabled enabled flag (ref #806)`
-
-### Test command + result
-
-```
-cd packages/secubox-toolbox && PYTHONPATH=. python -m pytest tests/test_mesh_exclusion_publish.py tests/test_mesh_exclusion_sync.py tests/test_filter_list_mesh_tag.py -q
-```
-```
-..........                                                               [100%]
-10 passed in 0.36s
-```
-(full `tests/` run: 209 passed, 3 pre-existing/unrelated failures confirmed present before this change via `git stash` — `test_bypass_sources.py::test_load_bypass_tagged_missing_source_skipped` (stale pre-#809 assertion shape) and 2x `test_media_stats.py` (`ModuleNotFoundError: secubox_core` in this local venv) — not touched, out of scope.)
-
-### Fixes applied
-
-1. **Publish churn guard** — `mesh_exclusion.py`: added `LAST_PUBLISHED` path + `_read_last_published()`/`_write_last_published()`; `publish()` now computes the content hash first and returns `True` without POSTing when it matches the last successfully-published hash, only persisting the new fingerprint after a successful POST. TDD: added `test_publish_skips_when_payload_unchanged` (red → green).
-2. **`_atomic_write` + decode safety** — wrapped `_atomic_write`'s write/replace body in try/except (returns `False` on any error instead of raising); broadened `except OSError` → `except Exception` in `_read_list` and `node_id` so a non-UTF-8/decode error can't escape the best-effort boundary.
-3. **Env overrides in `mesh_exclusion.py`** — `LOCAL_SPLICE`/`LOCAL_BYPASS`/`LOCAL_DISABLED`/`FED_SPLICE`/`FED_BYPASS`/`FED_DISABLED` now read `os.environ.get(...)` with the same var names as `policy.go`/`api.py` (`SECUBOX_SPLICE_LEARNED`, `SECUBOX_BYPASS_DYNAMIC`, `SECUBOX_FILTER_DISABLED`, `SECUBOX_FED_SPLICE`, `SECUBOX_FED_BYPASS`, `SECUBOX_FED_DISABLED`), same default paths, no divergence possible.
-4. **Fed-disabled → `enabled` flag** — `api.py`: factored `_read_disabled_file(path)` and made `_load_disabled()` return the union of the local `MITM_FILTER_DISABLED_FILE` and `FED_DISABLED_FILE`, so a fleet-wide-disabled pattern (mesh-disabled row) now renders `enabled=False` in Filtres MITM, matching the R3 engine's `disabledLocal ∪ disabledFed`. TDD: added `test_fed_disabled_pattern_shows_enabled_false`.
-
-No public names/signatures changed. Scope limited to `packages/secubox-toolbox/`.
+- `packages/secubox-toolbox-ng/debian/sbx-sentinel.service`
+- `packages/secubox-toolbox-ng/debian/postinst`
+- `packages/secubox-toolbox-ng/internal/sentinel/c2allow.go`
+- `packages/secubox-toolbox-ng/internal/sentinel/c2allow_test.go`
+- `packages/secubox-toolbox-ng/cmd/sbx-sentinel/http.go` (doc comment only)
