@@ -13,35 +13,39 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/sentinel"
 )
 
-// TestBuildAnalyzersReturnsThree asserts the production analyzer construction
-// wires exactly the three real engines (spyware, the behavioral engine
-// wrapped in the #826 C2 auto-learn orchestrator, YARA) — this is the path
+// TestBuildAnalyzersReturnsFour asserts the production analyzer construction
+// wires exactly the four real engines (spyware, the #826 report-only IOC
+// reporter for non-spyware feed classes, the behavioral engine wrapped in the
+// #826 C2 auto-learn orchestrator, YARA) — this is the path
 // defaultConfig()/main() use, distinct from the tests' injected stubAnalyzer
 // path.
-func TestBuildAnalyzersReturnsThree(t *testing.T) {
+func TestBuildAnalyzersReturnsFour(t *testing.T) {
 	// Empty/missing dirs are best-effort (no error) — NewLoader tolerates
-	// them — so the happy path returns all three analyzers with no error.
+	// them — so the happy path returns all four analyzers with no error.
 	analyzers, err := buildAnalyzers("", "", nil)
 	if err != nil {
 		t.Fatalf("buildAnalyzers returned error on empty dirs: %v", err)
 	}
-	if len(analyzers) != 3 {
-		t.Fatalf("expected 3 analyzers, got %d", len(analyzers))
+	if len(analyzers) != 4 {
+		t.Fatalf("expected 4 analyzers, got %d", len(analyzers))
 	}
 
-	var haveSpyware, haveC2Learner, haveYara bool
+	var haveSpyware, haveReporter, haveC2Learner, haveYara bool
 	for _, a := range analyzers {
 		switch a.(type) {
 		case *sentinel.Spyware:
 			haveSpyware = true
+		case *sentinel.IOCReporter:
+			haveReporter = true
 		case *sentinel.C2Learner:
 			haveC2Learner = true
 		case *sentinel.YaraEngine:
 			haveYara = true
 		}
 	}
-	if !haveSpyware || !haveC2Learner || !haveYara {
-		t.Fatalf("missing an analyzer type: spyware=%v c2learner=%v yara=%v", haveSpyware, haveC2Learner, haveYara)
+	if !haveSpyware || !haveReporter || !haveC2Learner || !haveYara {
+		t.Fatalf("missing an analyzer type: spyware=%v reporter=%v c2learner=%v yara=%v",
+			haveSpyware, haveReporter, haveC2Learner, haveYara)
 	}
 }
 
@@ -86,8 +90,8 @@ func TestDefaultConfigWiresPipeline(t *testing.T) {
 	t.Setenv("SENTINEL_TTL", "24h")
 
 	cfg := defaultConfig()
-	if len(cfg.Analyzers) != 3 {
-		t.Fatalf("expected 3 analyzers wired, got %d", len(cfg.Analyzers))
+	if len(cfg.Analyzers) != 4 {
+		t.Fatalf("expected 4 analyzers wired, got %d", len(cfg.Analyzers))
 	}
 	if cfg.TTL.Hours() != 24 {
 		t.Fatalf("expected TTL 24h from env, got %s", cfg.TTL)
