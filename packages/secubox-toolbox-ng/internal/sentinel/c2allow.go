@@ -15,6 +15,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -25,6 +26,8 @@ type C2Allow struct {
 
 	mu     sync.RWMutex
 	suffix map[string]bool // host suffixes (allow entries + box vhosts), lowercased
+
+	addMu sync.Mutex // serializes Add's read-modify-write of allowFile
 }
 
 // NewC2Allow builds the gate from an operator allowlist file (one host/suffix
@@ -85,6 +88,8 @@ func (a *C2Allow) Allowed(host string) bool {
 // in-memory set is refreshed by a subsequent Reload (caller's responsibility,
 // so a batch of Adds costs one reload).
 func (a *C2Allow) Add(host string) error {
+	a.addMu.Lock()
+	defer a.addMu.Unlock()
 	host = strings.ToLower(strings.TrimSpace(host))
 	if host == "" || a.allowFile == "" {
 		return nil
@@ -135,7 +140,7 @@ func readBoxDomainsSafe(path string) []string {
 
 // atomicWriteFile writes data to path via a temp file + rename in the same dir.
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
-	dir := path[:strings.LastIndex(path, "/")+1]
+	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, ".c2tmp-*")
 	if err != nil {
 		return err
@@ -155,5 +160,9 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }

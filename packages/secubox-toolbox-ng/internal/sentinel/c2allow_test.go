@@ -1,8 +1,11 @@
 package sentinel
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -71,5 +74,46 @@ func TestC2AllowAddAppends(t *testing.T) {
 	}
 	if !a.Allowed("seed.example") {
 		t.Error("seed host must remain allowed")
+	}
+}
+
+func TestC2AllowAddConcurrent(t *testing.T) {
+	dir := t.TempDir()
+	allow := filepath.Join(dir, "c2-allow.txt")
+	writeLines(t, allow, "seed.example")
+	a := NewC2Allow(allow, "")
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(n int) { defer wg.Done(); a.Add(fmt.Sprintf("h%d.example", n)) }(i)
+	}
+	wg.Wait()
+	a.Reload()
+	for i := 0; i < 20; i++ {
+		if !a.Allowed(fmt.Sprintf("h%d.example", i)) {
+			t.Errorf("concurrent Add lost h%d.example", i)
+		}
+	}
+}
+
+func TestAtomicWriteFileRelativePathAndNoLeak(t *testing.T) {
+	dir := t.TempDir()
+	// relative path (no slash) must still write correctly next to CWD-safe temp
+	p := filepath.Join(dir, "sub.json")
+	if err := atomicWriteFile(p, []byte("x"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "x" {
+		t.Error("atomicWriteFile did not write content")
+	}
+	// rename onto an existing directory fails → temp must be cleaned up
+	d := filepath.Join(dir, "adir")
+	os.Mkdir(d, 0o755)
+	_ = atomicWriteFile(d, []byte("y"), 0o640) // rename file→dir fails
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".c2tmp-") {
+			t.Errorf("leaked temp file %s after failed rename", e.Name())
+		}
 	}
 }
