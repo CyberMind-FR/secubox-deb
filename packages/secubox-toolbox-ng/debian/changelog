@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.32-1~bookworm1) bookworm; urgency=medium
+
+  * #826 report-only feed surfacing: new daemon IOCReporter analyzer correlates
+    the non-spyware IOC classes (botnet_c2/malware/… from the live abuse.ch/
+    ThreatFox/Feodo feeds) that the Spyware analyzer skips, and records them
+    REPORT-ONLY (action forced to report, evidence disposition=observed) — the
+    async daemon observes, it never blocks. Feed detections now surface in the
+    Sentinelle tab / reports without any inline blocking.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 15:00:00 +0200
+
 secubox-toolbox-ng (0.1.31-1~bookworm1) bookworm; urgency=medium
 
   * #826 fix: C2 autolearn false-positive — a first-seen browser-driven host
