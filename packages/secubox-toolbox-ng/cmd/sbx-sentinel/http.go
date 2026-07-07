@@ -5,16 +5,28 @@
 
 // Optional read-only status HTTP surface for sbx-sentinel. It is OFF by
 // default (only stood up when Config.HTTPAddr / SENTINEL_HTTP_ADDR is set) and
-// serves two GET-only endpoints backed by the verdict Store:
+// serves GET-only endpoints backed by the verdict Store:
 //
 //   - GET /stats    → {"detections":N,"blocked":N,"spyware":N} for a sidebar.
 //   - GET /verdicts → the recent verdicts, each with its RenderReport text.
 //
-// This is a minimal local read for an operator/portal; it accepts no writes,
-// carries no PII beyond mac_hash, and does NOT route through the WAF-bypass
-// path. The richer operator UI (verdicts panel, per-report view) belongs in
-// the separate Python secubox-toolbox portal — see debian/README.sentinel.md
-// for the intended /api/v1/toolbox/sentinel/* routes it should expose.
+// When the daemon was built with the #826 C2 auto-learn analyzer wired
+// (production default — see buildAnalyzers in main.go), three more routes
+// are registered:
+//
+//   - GET  /c2/learned     → the confirmed learned-C2 set ([]sentinel.LearnedC2).
+//   - GET  /c2/candidates  → the in-progress candidate set ([]sentinel.C2Candidate).
+//   - POST /c2/allow       → operator "Ignorer": an x-www-form-urlencoded (or
+//     query-string) `host` param moves a learned/candidate host onto the
+//     allowlist. NOT a JSON body — r.FormValue only parses form/query values.
+//     The only write this surface accepts — it edits the local allow-list
+//     file only, never the network.
+//
+// This is a minimal local read for an operator/portal; carries no PII beyond
+// mac_hash and does NOT route through the WAF-bypass path. The richer
+// operator UI (verdicts panel, per-report view) belongs in the separate
+// Python secubox-toolbox portal — see debian/README.sentinel.md for the
+// intended /api/v1/toolbox/sentinel/* routes it should expose.
 package main
 
 import (
@@ -83,7 +95,11 @@ func computeStats(vs []sentinel.Verdict) sentinelStats {
 // newStatusMux builds the read-only status router over store. Exposed
 // (unexported to the package) so http_test.go can exercise the handlers
 // directly with httptest, independent of run()'s listener lifecycle.
-func newStatusMux(store *sentinel.Store) *http.ServeMux {
+//
+// c2 is the C2 auto-learn analyzer (#826); when nil (the daemon was built
+// without one, e.g. a test-injected pipeline) the /c2/* routes are simply
+// not registered — a request to them 404s rather than panicking.
+func newStatusMux(store *sentinel.Store, c2 *sentinel.C2Learner) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +155,42 @@ func newStatusMux(store *sentinel.Store) *http.ServeMux {
 		writeJSON(w, out)
 	})
 
+	// Read-only C2 auto-learn views + the operator "Ignorer" allow-list
+	// write (#826). Registered only when a C2Learner is actually wired —
+	// the daemon still runs fine without one (fail-safe).
+	if c2 != nil {
+		mux.HandleFunc("/c2/learned", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			writeJSON(w, c2.Learned())
+		})
+		mux.HandleFunc("/c2/candidates", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			writeJSON(w, c2.Candidates())
+		})
+		mux.HandleFunc("/c2/allow", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			host := r.FormValue("host")
+			if host == "" {
+				http.Error(w, "host required", http.StatusBadRequest)
+				return
+			}
+			if err := c2.Allow(host); err != nil {
+				http.Error(w, "allow failed", http.StatusInternalServerError)
+				return
+			}
+			writeJSON(w, map[string]bool{"ok": true})
+		})
+	}
+
 	return mux
 }
 
@@ -154,10 +206,10 @@ func writeJSON(w http.ResponseWriter, v any) {
 // cancelled, then shuts it down gracefully. A ListenAndServe error other than
 // the expected post-Shutdown ErrServerClosed is logged (the daemon's core
 // socket/store keeps running regardless — the status surface is non-critical).
-func serveStatus(ctx context.Context, addr string, store *sentinel.Store) {
+func serveStatus(ctx context.Context, addr string, store *sentinel.Store, c2 *sentinel.C2Learner) {
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newStatusMux(store),
+		Handler:           newStatusMux(store, c2),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

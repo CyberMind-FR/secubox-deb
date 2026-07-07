@@ -257,6 +257,7 @@
         </div>
         <div id="sentinel-verdict" class="card" style="margin-bottom:.8rem"></div>
         <div id="sentinel-detections"></div>
+        <div id="sentinel-c2" style="margin-top:1rem"></div>
     </section>
 
     <!-- Config -->
@@ -640,6 +641,38 @@ async function loadSentinel() {
     dEl.innerHTML = rows
         ? `<table><thead><tr><th>Menace</th><th>Sév/Conf</th><th>Disposition</th><th>Vu</th><th>Détail</th></tr></thead><tbody>${rows}</tbody></table>`
         : '<span class="v">Aucune détection récente.</span>';
+
+    if (!stats.__error && data.active) loadSentinelC2();
+}
+
+async function loadSentinelC2() {
+    const el = document.getElementById('sentinel-c2');
+    if (!el) return;
+    const d = await J('/admin/sentinel/c2');
+    if (d.__error || !d.active) { el.innerHTML = ''; return; }
+    const row = (h, kind) => `<tr>
+        <td>${esc(h.host)}</td>
+        <td>${esc((h.signals || []).join(', '))}</td>
+        <td>${h.interval_s ? Math.round(h.interval_s) + 's' : '—'}</td>
+        <td>${h.devices || (h.windows ? 'w' + h.windows : '')}</td>
+        <td>${kind === 'learned'
+            ? `<button class="c2-ign" data-host="${esc(h.host)}">Ignorer</button>`
+            : '<span class="v">candidat</span>'}</td></tr>`;
+    const learned = (d.learned || []).map(h => row(h, 'learned')).join('');
+    const cand = (d.candidates || []).map(h => row(h, 'candidate')).join('');
+    el.innerHTML = `<h3>🕸️ C2 appris</h3>` + ((learned || cand)
+        ? `<table><thead><tr><th>Hôte</th><th>Signaux</th><th>Intervalle</th><th>Vu</th><th></th></tr></thead><tbody>${learned}${cand}</tbody></table>`
+        : '<span class="v">Aucun C2 appris ni candidat.</span>');
+    el.querySelectorAll('.c2-ign').forEach(b => b.addEventListener('click', () => c2Ignore(b.dataset.host)));
+}
+
+async function c2Ignore(host) {
+    await fetch(`${API}/admin/sentinel/c2/allow`, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'host=' + encodeURIComponent(host),
+    });
+    loadSentinelC2();
 }
 
 async function loadSocial() {

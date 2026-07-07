@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 import jinja2
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
@@ -3717,6 +3717,42 @@ async def admin_sentinel_verdicts(limit: int = 50) -> dict:
         "assess": sentinel_link.assess(dets),
         "detections": dets,
     }
+
+
+def _c2_signals(s):
+    """Normalize Signals to a list: Go map[string]bool -> JSON object; []string -> JSON array."""
+    if isinstance(s, dict):
+        return sorted(k for k, v in s.items() if v)
+    if isinstance(s, list):
+        return s
+    return []
+
+
+def _c2_norm_learned(h):
+    return {"host": h.get("host", ""), "signals": _c2_signals(h.get("signals")),
+            "interval_s": h.get("interval_s"), "devices": h.get("devices")}
+
+
+def _c2_norm_cand(c):
+    return {"host": c.get("host", ""), "signals": _c2_signals(c.get("signals")),
+            "interval_s": c.get("interval_s"), "windows": c.get("windows")}
+
+
+@router.get("/admin/sentinel/c2")
+async def admin_sentinel_c2() -> dict:
+    """Learned + candidate C2 hosts for the WebUI 'C2 appris' view. Fail-safe."""
+    data = sentinel_link.fetch_c2()
+    if not data:
+        return {"active": False, "learned": [], "candidates": []}
+    return {"active": True,
+            "learned": [_c2_norm_learned(h) for h in data.get("learned", [])],
+            "candidates": [_c2_norm_cand(c) for c in data.get("candidates", [])]}
+
+
+@router.post("/admin/sentinel/c2/allow")
+async def admin_sentinel_c2_allow(host: str = Form(...)) -> dict:
+    """Operator 'Ignorer' — allowlist a host so it is never learned as C2."""
+    return {"ok": sentinel_link.c2_allow(host)}
 
 
 @router.get("/admin/filters/ui", response_class=HTMLResponse)
