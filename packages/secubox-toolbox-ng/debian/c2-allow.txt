@@ -1,0 +1,15 @@
+# Seeded C2-autolearn allowlist — legitimate periodic traffic that must never
+# be learned as C2. Operators may append hosts (also via the WebUI "Ignorer").
+# Mail / webmail
+mail.google.com
+imap.gmail.com
+outlook.office365.com
+# OS / browser update + telemetry
+clients2.google.com
+update.googleapis.com
+push.services.mozilla.com
+# Time / connectivity checks
+connectivitycheck.gstatic.com
+time.cloudflare.com
+# Monitoring / CDN keep-alives
+ping.chartbeat.net

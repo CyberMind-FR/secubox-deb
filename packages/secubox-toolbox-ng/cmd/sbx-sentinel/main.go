@@ -59,6 +59,16 @@ type Analyzer interface {
 	Analyze(sentinel.MirrorMsg) []*sentinel.Verdict
 }
 
+// c2Learner is the package-level handle to the production C2 auto-learn
+// analyzer (#826), set by buildAnalyzers when it wires the real pipeline
+// (defaultConfig()'s path). It exists purely so run()'s optional status HTTP
+// surface can wire the read-only /c2/* endpoints (see http.go) without
+// threading a new field through Config for a single production caller.
+// Tests that build their own Config/analyzers directly (bypassing
+// buildAnalyzers) leave it nil, and newStatusMux/serveStatus treat a nil
+// *sentinel.C2Learner as "endpoints disabled" — fail-safe.
+var c2Learner *sentinel.C2Learner
+
 // Default tuning, overridable via Config for production and tests alike.
 const (
 	defaultTTL           = 72 * time.Hour
@@ -158,7 +168,7 @@ func run(ctx context.Context, cfg Config) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			serveStatus(ctx, cfg.HTTPAddr, store)
+			serveStatus(ctx, cfg.HTTPAddr, store, c2Learner)
 		}()
 	}
 
@@ -306,14 +316,36 @@ func splitPaths(v string) []string {
 	return out
 }
 
+// readLinesFile reads path as a list of newline-separated entries, trimming
+// whitespace and skipping blank lines and "#"-prefixed comments. Fail-safe by
+// construction: a missing or unreadable file (the common case — the seed
+// ships empty/absent until an operator/feed populates it) returns nil rather
+// than an error, so callers never need special-case "file not found".
+func readLinesFile(path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
 // buildAnalyzers constructs the production detection pipeline: the
 // commercial-spyware IOC correlator (backed by a pack Loader over
-// packDir/overlayDir), the behavioral heuristic engine, and the YARA engine
-// (the no-cgo stub in the default build; the libyara-backed engine under
-// `-tags yara`). It is resilient: a failure to build the pack loader or the
-// YARA engine is returned (joined) but does NOT drop the analyzers that could
-// be built — a bad base pack must not silently disable the behavioral engine,
-// which needs no pack. The happy path (readable/empty dirs) returns all three.
+// packDir/overlayDir), the behavioral heuristic engine wrapped in the C2
+// auto-learn orchestrator (#826), and the YARA engine (the no-cgo stub in the
+// default build; the libyara-backed engine under `-tags yara`). It is
+// resilient: a failure to build the pack loader or the YARA engine is
+// returned (joined) but does NOT drop the analyzers that could be built — a
+// bad base pack must not silently disable the behavioral/C2 engine, which
+// needs no pack. The happy path (readable/empty dirs) returns all three.
 func buildAnalyzers(packDir, overlayDir string, yaraRules []string) ([]Analyzer, error) {
 	var analyzers []Analyzer
 	var errs []error
@@ -325,7 +357,15 @@ func buildAnalyzers(packDir, overlayDir string, yaraRules []string) ([]Analyzer,
 		analyzers = append(analyzers, sentinel.NewSpyware(loader))
 	}
 
-	analyzers = append(analyzers, sentinel.NewBehavioral())
+	c2 := sentinel.NewC2Learner(sentinel.NewBehavioral(), sentinel.C2Config{
+		AllowFile:   getenvDefault("SENTINEL_C2_ALLOW_FILE", "/etc/secubox/sentinel/c2-allow.txt"),
+		BoxFile:     getenvDefault("SENTINEL_C2_BOX_DOMAINS", "/etc/secubox/waf/haproxy-routes.json"),
+		CandFile:    getenvDefault("SENTINEL_C2_CANDIDATES", "/var/lib/secubox/sentinel/c2-candidates.json"),
+		LearnedFile: getenvDefault("SENTINEL_C2_LEARNED", "/var/lib/secubox/sentinel/c2-learned.json"),
+		BrowserJA4:  readLinesFile(getenvDefault("SENTINEL_C2_BROWSER_JA4", "/usr/share/secubox/sentinel/browser-ja4.txt")),
+	})
+	analyzers = append(analyzers, c2)
+	c2Learner = c2 // package-level handle for the status mux (see http.go wiring)
 
 	yara, err := sentinel.NewYaraEngine(yaraRules)
 	if err != nil {

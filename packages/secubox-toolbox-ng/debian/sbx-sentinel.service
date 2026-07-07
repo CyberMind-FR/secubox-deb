@@ -53,6 +53,12 @@ ReadOnlyPaths=/etc/secubox
 # tmpfiles). ProtectSystem=strict otherwise mounts both read-only.
 ReadWritePaths=/run/secubox
 ReadWritePaths=/var/lib/secubox/sentinel
+# #826 C2 auto-learn: POST /c2/allow appends to c2-allow.txt under
+# /etc/secubox/sentinel. ReadOnlyPaths=/etc/secubox above would otherwise make
+# this EROFS; a ReadWritePaths nested under a ReadOnlyPaths ancestor re-grants
+# write access to just this subtree (systemd path-mangling rule), so the rest
+# of /etc/secubox stays read-only to this daemon.
+ReadWritePaths=/etc/secubox/sentinel
 MemoryHigh=96M
 MemoryMax=128M
 TasksMax=64
