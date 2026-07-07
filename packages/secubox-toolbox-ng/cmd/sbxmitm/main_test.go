@@ -204,3 +204,17 @@ func TestClientHelloCaptureAndForge(t *testing.T) {
 	}
 	t.Logf("captured JA4-ish: %s", captured)
 }
+
+func TestJA4StackIsSNIIndependent(t *testing.T) {
+	h1 := &tls.ClientHelloInfo{SupportedVersions: []uint16{0x0304}, CipherSuites: []uint16{1, 2, 3}, SupportedProtos: []string{"h2"}, ServerName: "a.example"}
+	h2 := &tls.ClientHelloInfo{SupportedVersions: []uint16{0x0304}, CipherSuites: []uint16{1, 2, 3}, SupportedProtos: []string{"h2"}, ServerName: "b.example"}
+	if ja4stack(h1) != ja4stack(h2) {
+		t.Errorf("ja4stack must be SNI-independent: %q vs %q", ja4stack(h1), ja4stack(h2))
+	}
+	if ja4stack(h1) == ja4ish(h1) {
+		t.Error("ja4stack must differ from ja4ish (which embeds SNI)")
+	}
+	if ja4stack(nil) != "" {
+		t.Error("ja4stack(nil) must be empty")
+	}
+}
