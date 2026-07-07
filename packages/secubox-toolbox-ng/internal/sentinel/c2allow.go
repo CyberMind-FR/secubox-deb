@@ -87,11 +87,19 @@ func (a *C2Allow) Allowed(host string) bool {
 // Add appends host to the operator allowlist file (atomic rewrite). The
 // in-memory set is refreshed by a subsequent Reload (caller's responsibility,
 // so a batch of Adds costs one reload).
+//
+// host is reachable over the network (POST /c2/allow), so it is sanitized:
+// anything containing a newline, carriage return, or space is rejected
+// (fail-safe — the invalid host is simply ignored, no error, no write) to
+// prevent a single call from injecting extra allowlist lines.
 func (a *C2Allow) Add(host string) error {
 	a.addMu.Lock()
 	defer a.addMu.Unlock()
 	host = strings.ToLower(strings.TrimSpace(host))
 	if host == "" || a.allowFile == "" {
+		return nil
+	}
+	if strings.ContainsAny(host, "\n\r ") {
 		return nil
 	}
 	existing := readLinesSafe(a.allowFile)

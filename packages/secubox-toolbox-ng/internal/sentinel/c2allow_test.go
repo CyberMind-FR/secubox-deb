@@ -77,6 +77,18 @@ func TestC2AllowAddAppends(t *testing.T) {
 	}
 }
 
+func TestC2AllowAddRejectsInjection(t *testing.T) {
+	dir := t.TempDir()
+	allow := filepath.Join(dir, "c2-allow.txt")
+	writeLines(t, allow, "seed.example")
+	a := NewC2Allow(allow, "")
+	a.Add("good.com\nevil.com")
+	a.Reload()
+	if a.Allowed("evil.com") {
+		t.Error("newline-injected second host must not be added")
+	}
+}
+
 func TestC2AllowAddConcurrent(t *testing.T) {
 	dir := t.TempDir()
 	allow := filepath.Join(dir, "c2-allow.txt")
