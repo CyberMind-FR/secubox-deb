@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.33-1~bookworm1) bookworm; urgency=medium
+
+  * #826 fix the MVT/Pegasus feed URL (moved to AmnestyTech/investigations) so
+    the live spyware feed materialises (1438 Pegasus IOCs) — surfaced report-only.
+  * #826 new env-gated JA4 capture (SENTINEL_JA4_CAPTURE=<file>): records
+    observed host<TAB>ja4 pairs from live traffic so an operator can bootstrap
+    the browser-ja4.txt fingerprint set (needed to enable non_browser_ja) from
+    real browser handshakes rather than guessed values. Off by default.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 16:00:00 +0200
+
 secubox-toolbox-ng (0.1.32-1~bookworm1) bookworm; urgency=medium
 
   * #826 report-only feed surfacing: new daemon IOCReporter analyzer correlates

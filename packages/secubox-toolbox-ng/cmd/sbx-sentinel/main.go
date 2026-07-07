@@ -69,6 +69,10 @@ type Analyzer interface {
 // *sentinel.C2Learner as "endpoints disabled" — fail-safe.
 var c2Learner *sentinel.C2Learner
 
+// ja4Capture is the optional operator JA4 recorder (SENTINEL_JA4_CAPTURE);
+// nil (the default) is a safe no-op. Set in buildAnalyzers.
+var ja4Capture *sentinel.JA4Capture
+
 // Default tuning, overridable via Config for production and tests alike.
 const (
 	defaultTTL           = 72 * time.Hour
@@ -254,6 +258,8 @@ func handleConn(ctx context.Context, conn net.Conn, store *sentinel.Store, analy
 // Verdict's Action (defense in depth against a misbehaving analyzer — see
 // sentinel.FinalizeAction), and records it to store.
 func processMsg(store *sentinel.Store, analyzers []Analyzer, msg sentinel.MirrorMsg) {
+	// Optional operator JA4 capture (SENTINEL_JA4_CAPTURE) — no-op when off.
+	ja4Capture.Observe(msg.Meta.Host, msg.Meta.JA4)
 	for _, a := range analyzers {
 		for _, v := range safeAnalyze(a, msg) {
 			if v == nil {
@@ -370,6 +376,8 @@ func buildAnalyzers(packDir, overlayDir string, yaraRules []string) ([]Analyzer,
 	})
 	analyzers = append(analyzers, c2)
 	c2Learner = c2 // package-level handle for the status mux (see http.go wiring)
+	// Optional operator JA4 capture — off unless SENTINEL_JA4_CAPTURE is set.
+	ja4Capture = sentinel.NewJA4Capture(getenvDefault("SENTINEL_JA4_CAPTURE", ""))
 
 	yara, err := sentinel.NewYaraEngine(yaraRules)
 	if err != nil {
