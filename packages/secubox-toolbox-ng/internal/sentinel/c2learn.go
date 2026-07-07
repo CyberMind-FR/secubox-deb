@@ -154,6 +154,23 @@ func (l *C2Learner) startBeaconing(m MirrorMsg, beacon *Verdict) {
 	interval := parseIntervalSec(beacon.Evidence["interval_s"])
 
 	l.beaconMu.Lock()
+	if _, exists := l.beaconing[host]; !exists && len(l.beaconing) >= c2MaxEntries {
+		// Bound l.beaconing the same way C2Cand bounds candidates: evict the
+		// oldest-tracked entry (by last recorded window) before inserting a
+		// new one. Simple linear scan — the map is small.
+		var victim string
+		var oldest int64
+		first := true
+		for h, st := range l.beaconing {
+			if first || st.lastWindow < oldest {
+				victim, oldest = h, st.lastWindow
+				first = false
+			}
+		}
+		if victim != "" {
+			delete(l.beaconing, victim)
+		}
+	}
 	l.beaconing[host] = &beaconState{intervalS: interval, lastWindow: m.TS}
 	l.beaconMu.Unlock()
 
@@ -167,6 +184,16 @@ func (l *C2Learner) startBeaconing(m MirrorMsg, beacon *Verdict) {
 func (l *C2Learner) tickWindow(m MirrorMsg) {
 	host := m.Meta.Host
 	if host == "" {
+		return
+	}
+	// A learned host is handled by recontact — don't keep re-recording /
+	// re-persisting candidate windows for it. Check under mu and release
+	// before ever touching beaconMu (sequential, never nested) so lock
+	// ordering stays identical to the rest of this file.
+	l.mu.Lock()
+	_, isLearned := l.learned[host]
+	l.mu.Unlock()
+	if isLearned {
 		return
 	}
 	l.beaconMu.Lock()
@@ -226,7 +253,35 @@ func (l *C2Learner) promote(cd C2Candidate) {
 		Host: cd.Host, Signals: sigs, IntervalS: cd.IntervalS,
 		Devices: len(cd.Devices), FirstSeen: cd.FirstSeen, LastSeen: cd.LastSeen,
 	}
+	// Hard cap: evict the oldest-contacted entry (by LastSeen) if promotion
+	// pushed the learned set over budget.
+	if len(l.learned) > c2MaxEntries {
+		var victim string
+		var oldest int64
+		first := true
+		for h, le := range l.learned {
+			if first || le.LastSeen < oldest {
+				victim, oldest = h, le.LastSeen
+				first = false
+			}
+		}
+		if victim != "" {
+			delete(l.learned, victim)
+		}
+	}
 	l.mu.Unlock()
+
+	// A promoted host is covered by recontact from here on — its beacon-
+	// window tracker is dead weight. Acquire/release beaconMu separately
+	// (never nested inside mu) to preserve the existing lock ordering.
+	l.beaconMu.Lock()
+	delete(l.beaconing, cd.Host)
+	l.beaconMu.Unlock()
+
+	// The promoted host leaves the candidate store too, so it stops showing
+	// in both the learned AND candidate WebUI rows.
+	l.cand.Remove(cd.Host)
+
 	l.persistLearned()
 }
 
@@ -342,6 +397,7 @@ func (l *C2Learner) persistLearned() {
 	for h, le := range l.learned {
 		if newest-le.LastSeen > c2LearnedTTLSec {
 			delete(l.learned, h)
+			delete(l.reported, h) // drop the paired throttle entry too
 			continue
 		}
 		list = append(list, le)

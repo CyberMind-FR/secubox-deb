@@ -59,6 +59,55 @@ func TestC2LearnerPromotesRealC2(t *testing.T) {
 	}
 }
 
+// TestC2LearnerPromotedHostLeavesCandidates proves a promoted host is moved
+// wholly out of the candidate store: it must appear in Learned() and NOT in
+// Candidates() (no double-render in the WebUI), and continued flows to the
+// now-learned host must not keep growing/re-persisting the candidate
+// snapshot (tickWindow's early-return on a learned host).
+func TestC2LearnerPromotedHostLeavesCandidates(t *testing.T) {
+	l := c2TestLearner(t)
+	host := "x7f3q9zk2vw8plmn.example"
+	mac := "devhashaa"
+	ts := int64(1_000_000)
+	learned := false
+	for w := 0; w < 4 && !learned; w++ {
+		for i := 0; i < 7; i++ {
+			l.Analyze(MirrorMsg{Meta: FlowMeta{Host: host, MacHash: mac, JA4: "botfp99"}, TS: ts})
+			ts += 300
+		}
+		if len(l.Learned()) > 0 {
+			learned = true
+		}
+	}
+	if !learned {
+		t.Fatalf("expected host to be learned; candidates=%v", l.Candidates())
+	}
+
+	for _, cd := range l.Candidates() {
+		if cd.Host == host {
+			t.Fatalf("promoted host %q must not remain in Candidates(), got %+v", host, cd)
+		}
+	}
+	foundLearned := false
+	for _, le := range l.Learned() {
+		if le.Host == host {
+			foundLearned = true
+		}
+	}
+	if !foundLearned {
+		t.Fatalf("promoted host %q must be present in Learned()", host)
+	}
+
+	snapshotBefore := len(l.Candidates())
+	for i := 0; i < 20; i++ {
+		l.Analyze(MirrorMsg{Meta: FlowMeta{Host: host, MacHash: mac, JA4: "botfp99"}, TS: ts})
+		ts += 300
+	}
+	if got := len(l.Candidates()); got != snapshotBefore {
+		t.Errorf("continued flows to a learned host must not grow candidates: before=%d after=%d", snapshotBefore, got)
+	}
+}
+
 // An allowlisted host (box vhost / mail) beaconing with a browser JA4 is never
 // learned.
 func TestC2LearnerSuppressesAllowlisted(t *testing.T) {
@@ -123,10 +172,13 @@ func TestC2LearnerWindowAdvanceOwnTiming(t *testing.T) {
 		}
 		ts += interval
 
-		if firstFireSeen {
-			// After the first Behavioral fire, candidate windows must still
-			// be climbing on the learner's own timing even though Behavioral
-			// itself will never fire "beaconing" for this key again.
+		if firstFireSeen && len(l.Learned()) == 0 {
+			// After the first Behavioral fire (and before promotion),
+			// candidate windows must still be climbing on the learner's own
+			// timing even though Behavioral itself will never fire
+			// "beaconing" for this key again. Once promoted, the host
+			// deliberately leaves the candidate store (M4) — recontact
+			// takes over — so the check no longer applies past that point.
 			cds := l.Candidates()
 			if len(cds) == 0 {
 				t.Fatalf("iteration %d: expected a tracked candidate after first beacon fire", i)

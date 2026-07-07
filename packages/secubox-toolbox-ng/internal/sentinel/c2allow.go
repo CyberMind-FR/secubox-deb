@@ -91,7 +91,9 @@ func (a *C2Allow) Allowed(host string) bool {
 // host is reachable over the network (POST /c2/allow), so it is sanitized:
 // anything containing a newline, carriage return, or space is rejected
 // (fail-safe — the invalid host is simply ignored, no error, no write) to
-// prevent a single call from injecting extra allowlist lines.
+// prevent a single call from injecting extra allowlist lines. A bare
+// single-label host (no ".") is also rejected: Allowed's progressive-suffix
+// match would let it blind-match an entire TLD.
 func (a *C2Allow) Add(host string) error {
 	a.addMu.Lock()
 	defer a.addMu.Unlock()
@@ -100,6 +102,13 @@ func (a *C2Allow) Add(host string) error {
 		return nil
 	}
 	if strings.ContainsAny(host, "\n\r ") {
+		return nil
+	}
+	if !strings.Contains(host, ".") {
+		// A bare label (e.g. "com", "localhost") would suffix-match an
+		// entire TLD (or worse) via the progressive-suffix check in
+		// Allowed, blinding detection far beyond the intended host.
+		// Fail-safe ignore — no write.
 		return nil
 	}
 	existing := readLinesSafe(a.allowFile)
