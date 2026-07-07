@@ -40,7 +40,7 @@ OVERLAY_DIR="${SENTINEL_OVERLAY_DIR:-/var/lib/secubox/sentinel/overlay}"
 FEED_THREATFOX_URL="${SENTINEL_FEED_THREATFOX_URL:-https://threatfox.abuse.ch/export/json/recent/}"
 FEED_FEODO_URL="${SENTINEL_FEED_FEODO_URL:-https://feodotracker.abuse.ch/downloads/ipblocklist.json}"
 FEED_SSLBL_URL="${SENTINEL_FEED_SSLBL_URL:-https://sslbl.abuse.ch/blacklist/sslblacklist.csv}"
-FEED_MVT_URL="${SENTINEL_FEED_MVT_URL:-https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/indicators/pegasus.stix2}"
+FEED_MVT_URL="${SENTINEL_FEED_MVT_URL:-https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/pegasus.stix2}"
 # Citizen Lab has no single canonical machine feed; operators point this at a
 # published STIX 2.x indicator bundle. Empty by default → skipped (last-good kept).
 FEED_CITIZENLAB_URL="${SENTINEL_FEED_CITIZENLAB_URL:-}"
