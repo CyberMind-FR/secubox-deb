@@ -37,3 +37,16 @@ def test_c2_allow_route(monkeypatch):
     assert r.status_code == 200
     assert r.json()["ok"] is True
     assert called["host"] == "fp.example"
+
+
+def test_c2_route_normalizes_candidate_maps(monkeypatch):
+    monkeypatch.setattr(sl, "fetch_c2", lambda: {
+        "learned": [{"host": "l.example", "signals": ["dga"], "interval_s": 300.0, "devices": 2}],
+        "candidates": [{"host": "c.example", "signals": {"dga": True, "rare": True},
+                        "interval_s": 120.0, "windows": 2}],
+    })
+    r = client.get("/admin/sentinel/c2")
+    body = r.json()
+    assert body["candidates"][0]["signals"] == ["dga", "rare"]  # object → sorted list
+    assert body["candidates"][0]["windows"] == 2
+    assert body["learned"][0]["signals"] == ["dga"]  # list passthrough

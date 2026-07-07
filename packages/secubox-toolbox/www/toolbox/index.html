@@ -656,20 +656,21 @@ async function loadSentinelC2() {
         <td>${h.interval_s ? Math.round(h.interval_s) + 's' : '—'}</td>
         <td>${h.devices || (h.windows ? 'w' + h.windows : '')}</td>
         <td>${kind === 'learned'
-            ? `<button onclick="c2Ignore('${encodeURIComponent(h.host)}')">Ignorer</button>`
+            ? `<button class="c2-ign" data-host="${esc(h.host)}">Ignorer</button>`
             : '<span class="v">candidat</span>'}</td></tr>`;
     const learned = (d.learned || []).map(h => row(h, 'learned')).join('');
     const cand = (d.candidates || []).map(h => row(h, 'candidate')).join('');
     el.innerHTML = `<h3>🕸️ C2 appris</h3>` + ((learned || cand)
         ? `<table><thead><tr><th>Hôte</th><th>Signaux</th><th>Intervalle</th><th>Vu</th><th></th></tr></thead><tbody>${learned}${cand}</tbody></table>`
         : '<span class="v">Aucun C2 appris ni candidat.</span>');
+    el.querySelectorAll('.c2-ign').forEach(b => b.addEventListener('click', () => c2Ignore(b.dataset.host)));
 }
 
-async function c2Ignore(hostEnc) {
+async function c2Ignore(host) {
     await fetch(`${API}/admin/sentinel/c2/allow`, {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'host=' + hostEnc,
+        body: 'host=' + encodeURIComponent(host),
     });
     loadSentinelC2();
 }
