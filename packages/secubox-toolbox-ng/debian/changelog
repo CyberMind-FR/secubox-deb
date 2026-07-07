@@ -1,3 +1,12 @@
+secubox-toolbox-ng (0.1.35-1~bookworm1) bookworm; urgency=medium
+
+  * #826 exclude TLS GREASE (RFC 8701) from ja4stack — browsers inject random
+    GREASE into the version/cipher lists, which was making the client-stack
+    fingerprint jitter per handshake (max version flipping to a GREASE 0xfafa).
+    Now stable per client stack, so non_browser_ja + browser-ja4 capture work.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 17:30:00 +0200
+
 secubox-toolbox-ng (0.1.34-1~bookworm1) bookworm; urgency=medium
 
   * #826 plumb a SNI-independent client-TLS-stack fingerprint (ja4stack) from
