@@ -64,3 +64,21 @@ func TestIOCReporterNoMatchNoVerdict(t *testing.T) {
 		t.Error("nil reporter must be a no-op")
 	}
 }
+
+func TestIOCReporterMatchesDestinationIP(t *testing.T) {
+	// a bare C2 IP IOC (Feodo-style) matches when the flow's Host IS that IP
+	// (direct-IP / no-SNI). ClientIP is never consulted (source-IP match would
+	// be a false-positive vector).
+	l := iocReportLoader(t, `{"version":"1","iocs":[
+		{"type":"ip","value":"192.0.2.77","class":"botnet_c2","severity":90,"source":"abuse.ch-feodo","action":"block"}]}`)
+	r := NewIOCReporter(l)
+	vs := r.Analyze(MirrorMsg{Meta: FlowMeta{Host: "192.0.2.77", ClientIP: "10.0.0.5", MacHash: "aa"}, TS: 1})
+	if len(vs) != 1 || vs[0].Class != ClassBotnetC2 || vs[0].Action != ActionReport {
+		t.Fatalf("destination-IP C2 must surface report-only, got %+v", vs)
+	}
+	// the client's own source IP must NOT match a destination-C2 IP IOC
+	vs = r.Analyze(MirrorMsg{Meta: FlowMeta{Host: "benign.example", ClientIP: "192.0.2.77", MacHash: "aa"}, TS: 1})
+	if len(vs) != 0 {
+		t.Errorf("client source IP must never match a destination-C2 IP IOC, got %+v", vs)
+	}
+}
