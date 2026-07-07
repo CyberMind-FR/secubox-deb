@@ -89,6 +89,32 @@ func TestC2AllowAddRejectsInjection(t *testing.T) {
 	}
 }
 
+func TestC2AllowAddRejectsBareTLD(t *testing.T) {
+	dir := t.TempDir()
+	allow := filepath.Join(dir, "c2-allow.txt")
+	writeLines(t, allow, "seed.example")
+	a := NewC2Allow(allow, "")
+
+	if err := a.Add("com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Add("localhost"); err != nil {
+		t.Fatal(err)
+	}
+	a.Reload()
+
+	if a.Allowed("anything.com") {
+		t.Error("bare TLD 'com' must not have been added — it would blind-match the entire TLD")
+	}
+	if a.Allowed("evil.localhost") {
+		t.Error("bare single-label 'localhost' must not have been added")
+	}
+	// existing dotted entry still works
+	if !a.Allowed("seed.example") {
+		t.Error("seed host must remain allowed after rejected bare-TLD Adds")
+	}
+}
+
 func TestC2AllowAddConcurrent(t *testing.T) {
 	dir := t.TempDir()
 	allow := filepath.Join(dir, "c2-allow.txt")
