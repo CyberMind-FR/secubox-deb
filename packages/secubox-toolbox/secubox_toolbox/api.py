@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 import jinja2
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
@@ -3717,6 +3717,23 @@ async def admin_sentinel_verdicts(limit: int = 50) -> dict:
         "assess": sentinel_link.assess(dets),
         "detections": dets,
     }
+
+
+@router.get("/admin/sentinel/c2")
+async def admin_sentinel_c2() -> dict:
+    """Learned + candidate C2 hosts for the WebUI 'C2 appris' view. Fail-safe."""
+    data = sentinel_link.fetch_c2()
+    if not data:
+        return {"active": False, "learned": [], "candidates": []}
+    return {"active": True,
+            "learned": data.get("learned", []),
+            "candidates": data.get("candidates", [])}
+
+
+@router.post("/admin/sentinel/c2/allow")
+async def admin_sentinel_c2_allow(host: str = Form(...)) -> dict:
+    """Operator 'Ignorer' — allowlist a host so it is never learned as C2."""
+    return {"ok": sentinel_link.c2_allow(host)}
 
 
 @router.get("/admin/filters/ui", response_class=HTMLResponse)
