@@ -204,3 +204,41 @@ func TestClientHelloCaptureAndForge(t *testing.T) {
 	}
 	t.Logf("captured JA4-ish: %s", captured)
 }
+
+func TestJA4StackIsSNIIndependent(t *testing.T) {
+	h1 := &tls.ClientHelloInfo{SupportedVersions: []uint16{0x0304}, CipherSuites: []uint16{1, 2, 3}, SupportedProtos: []string{"h2"}, ServerName: "a.example"}
+	h2 := &tls.ClientHelloInfo{SupportedVersions: []uint16{0x0304}, CipherSuites: []uint16{1, 2, 3}, SupportedProtos: []string{"h2"}, ServerName: "b.example"}
+	if ja4stack(h1) != ja4stack(h2) {
+		t.Errorf("ja4stack must be SNI-independent: %q vs %q", ja4stack(h1), ja4stack(h2))
+	}
+	if ja4stack(h1) == ja4ish(h1) {
+		t.Error("ja4stack must differ from ja4ish (which embeds SNI)")
+	}
+	if ja4stack(nil) != "" {
+		t.Error("ja4stack(nil) must be empty")
+	}
+}
+
+func TestJA4StackFiltersGREASE(t *testing.T) {
+	// same browser stack, different GREASE injected each handshake → SAME fp.
+	withGrease1 := &tls.ClientHelloInfo{
+		SupportedVersions: []uint16{0xfafa, 0x0304, 0x0303},
+		CipherSuites:      []uint16{0x1a1a, 0x1301, 0x1302, 0x1303},
+		SupportedProtos:   []string{"h2"}, ServerName: "a.example",
+	}
+	withGrease2 := &tls.ClientHelloInfo{
+		SupportedVersions: []uint16{0x0a0a, 0x0304, 0x0303},
+		CipherSuites:      []uint16{0xdada, 0x1301, 0x1302, 0x1303},
+		SupportedProtos:   []string{"h2"}, ServerName: "b.example",
+	}
+	if ja4stack(withGrease1) != ja4stack(withGrease2) {
+		t.Errorf("GREASE must not jitter the fp: %q vs %q", ja4stack(withGrease1), ja4stack(withGrease2))
+	}
+	// must resolve to the real max version (0x0304) + real cipher count (3), not GREASE
+	if got := ja4stack(withGrease1); got != "t0304_c03_ah2" {
+		t.Errorf("ja4stack = %q, want t0304_c03_ah2 (GREASE excluded)", got)
+	}
+	if !isGREASE(0xfafa) || !isGREASE(0x0a0a) || isGREASE(0x0304) || isGREASE(0x1301) {
+		t.Error("isGREASE misclassified a value")
+	}
+}

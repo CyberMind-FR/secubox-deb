@@ -83,6 +83,53 @@ func ja4ish(h *tls.ClientHelloInfo) string {
 	return fmt.Sprintf("t%04x_c%02d_a%s_sni=%s", maxVer, len(h.CipherSuites), alpn, h.ServerName)
 }
 
+// ja4stack is the SNI-INDEPENDENT part of ja4ish: a client-TLS-stack
+// fingerprint (max version, cipher-suite count, first ALPN) with NO server
+// name. Unlike ja4ish (which embeds the destination SNI, so it varies per
+// host), ja4stack is stable across every flow from the same client stack, so
+// it can distinguish a browser from a non-browser client — the input the
+// Sentinel C2 auto-learn "non_browser_ja" signal (and browser-ja4.txt) needs.
+//
+// NOTE: this is an ad-hoc "stack" fingerprint (crypto/tls exposes no raw
+// ClientHello bytes, so a spec-compliant JA4 hash isn't computable in pure
+// Go here). It is self-consistent — the SENTINEL_JA4_CAPTURE recorder writes
+// this exact format into browser-ja4.txt and the signal compares against it —
+// but it is NOT interchangeable with a public JA4 blocklist's hashes.
+func ja4stack(h *tls.ClientHelloInfo) string {
+	if h == nil {
+		return ""
+	}
+	// GREASE values (RFC 8701) are randomly injected by browsers into the
+	// version and cipher lists; they MUST be excluded or the fingerprint jitters
+	// per handshake (e.g. max version flips between 0x0304 and a GREASE 0xfafa).
+	maxVer := uint16(0)
+	for _, v := range h.SupportedVersions {
+		if isGREASE(v) {
+			continue
+		}
+		if v > maxVer {
+			maxVer = v
+		}
+	}
+	nCiphers := 0
+	for _, c := range h.CipherSuites {
+		if !isGREASE(c) {
+			nCiphers++
+		}
+	}
+	alpn := "none"
+	if len(h.SupportedProtos) > 0 {
+		alpn = h.SupportedProtos[0]
+	}
+	return fmt.Sprintf("t%04x_c%02d_a%s", maxVer, nCiphers, alpn)
+}
+
+// isGREASE reports whether v is a TLS GREASE placeholder (RFC 8701): the 16
+// values 0x0a0a, 0x1a1a, … 0xfafa — both bytes equal, each low nibble 0xa.
+func isGREASE(v uint16) bool {
+	return (v>>8) == (v&0xff) && (v&0x0f) == 0x0a
+}
+
 // ── CONNECT-proxy MITM wiring ────────────────────────────────────────────────
 
 type Proxy struct {
@@ -169,7 +216,7 @@ func (px *Proxy) maybeRecordAdCandidate(host, site, path string) {
 }
 
 func (px *Proxy) serverTLSConfig() *tls.Config {
-	return px.serverTLSConfigCapture(nil)
+	return px.serverTLSConfigCapture(nil, nil)
 }
 
 // serverTLSConfigCapture is serverTLSConfig with an extra per-handshake hook:
@@ -178,11 +225,14 @@ func (px *Proxy) serverTLSConfig() *tls.Config {
 // handlers use it to relay the ja4 ClientHello payload (relay.go) WITH the
 // client conn's peer IP — which is known at the handler, not inside the TLS
 // config. Passing nil yields the plain forging config (CONNECT PoC, tests).
-func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo)) *tls.Config {
+func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo), onJA4 func(string)) *tls.Config {
 	return &tls.Config{
 		GetCertificate: func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			if px.jaSink != nil {
 				px.jaSink(ja4ish(h)) // capture handshake fingerprint
+			}
+			if onJA4 != nil {
+				onJA4(ja4stack(h)) // SNI-independent stack fp → Sentinel FlowMeta.JA4
 			}
 			if capture != nil {
 				capture(h) // ja4 relay material (peer IP threaded in by the handler)
@@ -261,7 +311,9 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// MITM: TLS-terminate the client with a forged cert (+ ClientHello capture).
 	// The capture hook relays the ja4 ClientHello payload for this handshake,
 	// tagged with the client's peer IP (#662). nil when the relay gate is off.
-	tconn := tls.Server(client, px.serverTLSConfigCapture(px.captureAndEmitJA4(client)))
+	var ja4 string // SNI-independent client-stack fp, captured at handshake below
+	tconn := tls.Server(client, px.serverTLSConfigCapture(px.captureAndEmitJA4(client),
+		func(s string) { ja4 = s }))
 	if err := tconn.Handshake(); err != nil {
 		return
 	}
@@ -270,7 +322,7 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// Shared post-TLS pipeline. CONNECT dials upstream by the request URL host
 	// (req.URL.Host set inside), so dialHost is "" → mitmPipeline derives it.
 	// CONNECT PoC is never an R3 WG client → wg=false.
-	px.mitmPipeline(tconn, client, host, verdict, "", false)
+	px.mitmPipeline(tconn, client, host, verdict, "", false, ja4)
 }
 
 // mitmPipeline runs the shared post-TLS-handshake MITM logic used by BOTH the
@@ -290,7 +342,7 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 //     ServerName=host and verifying the cert against host (not the bare IP).
 //   - wg         : the client is an R3 WireGuard peer (10.99.1.0/24); threaded
 //     into the injected loader's data-wg attribute. CONNECT path passes false.
-func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string, wg bool) {
+func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string, wg bool, ja4 string) {
 	br := newReader(tconn)
 	req, err := http.ReadRequest(br)
 	if err != nil {
@@ -486,6 +538,7 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		Host:    host,
 		URL:     "https://" + host + req.URL.RequestURI(),
 		MacHash: clientHash,
+		JA4:     ja4, // SNI-independent client-stack fp (feeds non_browser_ja)
 	}, nil); action {
 	case sentinel.ActionBlock, sentinel.ActionSinkhole:
 		writeRaw(tconn, 403, "Forbidden", map[string]string{
