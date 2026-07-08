@@ -1,3 +1,11 @@
+secubox-nextcloud (1.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * #429: /status,/storage cache is now stale-while-revalidate — an expired poll
+    returns the last value instantly and refreshes in a background thread, so the
+    dashboard never blocks on the ~6s lxc/occ compute after its first load.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:50:00 +0200
+
 secubox-nextcloud (1.4.6-1~bookworm1) bookworm; urgency=medium
 
   * #429 CRITICAL: /status,/storage cache is now single-flight + serve-stale.
