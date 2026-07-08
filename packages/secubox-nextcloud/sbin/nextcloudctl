@@ -460,29 +460,36 @@ user_add() {
         echo "Usage: nextcloudctl user add <username> <password> [display_name]"
         return 1
     fi
+    _valid_uid "$username" || { echo "invalid uid" >&2; return 2; }
+    if ! lxc_running; then error "Container not running"; return 1; fi
 
     log "Creating user: $username"
-    lxc_attach "export OC_PASS='$password' && sudo -u www-data php /var/www/nextcloud/occ user:add --password-from-env --display-name='$display_name' '$username'"
+    # Password travels via stdin → OC_PASS (export + sudo --preserve-env, since
+    # sudo otherwise strips it); username/display passed as argv, not embedded
+    # into the command string — safe against quote-breakout/injection, mirrors
+    # the pattern used by user_provision below.
+    printf '%s' "$password" | lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c \
+        'IFS= read -r OC_PASS; export OC_PASS; sudo --preserve-env=OC_PASS -u www-data php /var/www/nextcloud/occ user:add --password-from-env --display-name="$1" "$2"' _ "$display_name" "$username"
 }
 
 user_del() {
     local username="$1"
     [ -z "$username" ] && { echo "Usage: nextcloudctl user del <username>"; return 1; }
+    _valid_uid "$username" || { echo "invalid uid" >&2; return 2; }
     log "Deleting user: $username"
     occ user:delete "$username"
 }
 
-user_list() {
-    occ user:list --output=json
-}
-
 # #429 injection guard: a Nextcloud uid is limited to a safe charset before it
-# is ever interpolated into an occ shell command inside the container.
+# is ever interpolated into an occ shell command inside the container. Uses
+# bash's `[[ =~ ]]` whole-string match (anchors the ENTIRE string, unlike
+# `grep ^...$` which anchors per-LINE and lets a value with an embedded
+# newline slip through with -q on any matching line).
 _valid_uid() {
-    printf '%s' "$1" | grep -qE '^[A-Za-z0-9._@-]+$'
+    [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]
 }
 _valid_quota() {
-    printf '%s' "$1" | grep -qiE '^(none|default|[0-9]+(\.[0-9]+)?[KMGT]?B?)$'
+    [[ "$1" =~ ^([Nn][Oo][Nn][Ee]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt]|[0-9]+(\.[0-9]+)?([KMGTkmgt])?[Bb]?)$ ]]
 }
 
 # user_list_detailed: real users with enabled state + quota + last login, JSON.
