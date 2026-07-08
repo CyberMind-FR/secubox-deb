@@ -318,10 +318,23 @@ async def get_users():
         data = json.loads(out)
     except Exception:
         data = []
-    # nextcloudctl's `user list` normally emits a detailed list already; fall
-    # back to normalising a bare {uid: displayname} map defensively.
+    # `user list` (occ user:list --info) emits a map {uid: {display_name, enabled,
+    # quota, last_seen, email, …}}. Older/fallback occ emits a bare {uid: displayname}.
+    # Normalise both to the flat rows the dashboard renders.
     if isinstance(data, dict):
-        users = [{"uid": k, "displayname": v, "enabled": True, "quota": ""} for k, v in data.items()]
+        users = []
+        for k, v in data.items():
+            if isinstance(v, dict):
+                users.append({
+                    "uid": k,
+                    "displayname": v.get("display_name") or v.get("displayname") or k,
+                    "enabled": v.get("enabled", True),
+                    "quota": v.get("quota") or "",
+                    "last_seen": v.get("last_seen", ""),
+                    "email": v.get("email", ""),
+                })
+            else:
+                users.append({"uid": k, "displayname": v, "enabled": True, "quota": ""})
     else:
         users = data
     return {"users": users}
