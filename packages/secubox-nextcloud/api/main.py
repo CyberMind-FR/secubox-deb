@@ -83,23 +83,33 @@ def _cached(key: str, ttl: float, producer):
     now = time.monotonic()
     hit = _STATS_CACHE.get(key)
     if hit and (now - hit[0]) < ttl:
-        return hit[1]
+        return hit[1]                       # fresh → instant
 
     lock = _cache_lock(key)
-    if not lock.acquire(blocking=False):
-        # another thread is refreshing this key right now
-        if hit is not None:
-            return hit[1]          # serve stale, do not pile on
-        lock.acquire()             # cold cache: must wait for the first compute
-    try:
-        hit = _STATS_CACHE.get(key)  # double-check: someone may have just filled it
+    if hit is not None:
+        # Expired but usable: serve the stale value IMMEDIATELY and refresh in a
+        # background thread. A dashboard poll never blocks on the ~6s compute
+        # after the first load, and single-flight (non-blocking acquire) means
+        # only one refresh runs regardless of how many polls arrive.
+        if lock.acquire(blocking=False):
+            def _bg():
+                try:
+                    _STATS_CACHE[key] = (time.monotonic(), producer())
+                except Exception:           # pragma: no cover - defensive
+                    pass
+                finally:
+                    lock.release()
+            threading.Thread(target=_bg, name=f"nc-cache-{key}", daemon=True).start()
+        return hit[1]
+
+    # Cold cache (no value yet): block once, single-flight, double-checked.
+    with lock:
+        hit = _STATS_CACHE.get(key)
         if hit and (time.monotonic() - hit[0]) < ttl:
             return hit[1]
         val = producer()
         _STATS_CACHE[key] = (time.monotonic(), val)
         return val
-    finally:
-        lock.release()
 
 
 def _invalidate_stats():
