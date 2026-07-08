@@ -1,3 +1,13 @@
+secubox-nextcloud (1.4.5-1~bookworm1) bookworm; urgency=medium
+
+  * #429 CRITICAL: request handlers were async def calling blocking subprocess,
+    freezing the shared aggregator event loop for ~6s per /status poll →
+    board-wide 502s. Convert all handlers to plain def (threadpooled) + add a
+    TTL cache (status 15s, storage 30s) to the auto-polled read endpoints,
+    invalidated on lifecycle actions.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:15:00 +0200
+
 secubox-nextcloud (1.4.4-1~bookworm1) bookworm; urgency=medium
 
   * #429 fix: real detailed users — NC has no `user:list:detailed`; use
