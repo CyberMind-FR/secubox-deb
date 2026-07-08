@@ -837,3 +837,39 @@ git commit -m "feat(nextcloud): dashboard rework — real status/URLs, user CRUD
 **Placeholder scan:** No TBD/TODO. One deliberate implementer-decision note (Task 3 Step 3: match `ctl(["user","add",...])` trailing args to `user_add`'s real signature) — grounded (read the function first), with the test asserting only the stable prefix.
 
 **Type consistency:** `ctl(subcmd:list,...)->(ok,out,err)` used identically in Tasks 2+3. `lxc_running()->bool`, `container_reachable()->bool`, `public_url()->str` defined in Task 2, consumed in 3. `/users` returns `{users:[...]}` (Task 3) consumed by `loadUsers()` (Task 5). `/status` fields (`running,reachable,installed,version,web_url`) produced in Task 2, consumed in Task 5's `loadStatus()`. uid/quota regexes identical between bash (Task 1) and Python (Task 3).
+
+---
+
+## Addendum: real `/storage` (folded from the archived b715 #429 attempt)
+
+The host's `DATA_PATH` can't see the NC data inside the unprivileged LXC, so
+`/storage` reports 0% today (the frontend storage bar needs real numbers).
+Fold this into the existing tasks:
+
+- **Task 1 (`nextcloudctl`)** — add a `storage --json` subcommand that runs
+  `du`/`df` INSIDE the container via `lxc_attach` and prints
+  `{"used":"..","total":"..","used_pct":N,"data":".."}`:
+  ```bash
+  cmd_storage() {  # dispatched: storage) shift; cmd_storage "$@" ;;
+      if [ "$1" = "--json" ]; then
+          local used total pct data
+          data=$(lxc_attach "du -sh /var/www/nextcloud/data 2>/dev/null | cut -f1")
+          used=$(lxc_attach "df -h /var/www/nextcloud 2>/dev/null | awk 'NR==2{print \$3}'")
+          total=$(lxc_attach "df -h /var/www/nextcloud 2>/dev/null | awk 'NR==2{print \$2}'")
+          pct=$(lxc_attach "df /var/www/nextcloud 2>/dev/null | awk 'NR==2{gsub(\"%\",\"\",\$5);print \$5}'")
+          printf '{"used":"%s","total":"%s","used_pct":%s,"data":"%s"}\n' \
+              "${used:-0}" "${total:-0}" "${pct:-0}" "${data:-0}"
+          return 0
+      fi
+  }
+  ```
+- **Task 3 (API `/storage`)** — replace the host-side `du` body with
+  `ok,out,_ = ctl(["storage","--json"]); json.loads(out)` (fail-safe → zeros on
+  error), returning `{used,total,used_pct,data}`.
+- **Test** — extend `test_status_urls.py`: monkeypatch `ctl` to return the JSON,
+  assert `/storage` surfaces `used_pct`.
+- **Frontend (Task 5)** — the storage bar reads `used_pct`/`used`/`total` from
+  `/storage`.
+
+`/backups` improvements from b715 (extra dump-location patterns) are NOT in
+scope here — tracked as a follow-up; the existing backups card keeps working.
