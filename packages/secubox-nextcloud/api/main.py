@@ -28,10 +28,39 @@ def run_cmd(cmd: list, timeout: int = 30) -> tuple:
         return False, "", str(e)
 
 
+CTL = "/usr/sbin/nextcloudctl"
+CONTAINER_IP = config.get("container_ip", "10.100.0.21")
+HTTP_PORT = int(config.get("http_port", 8080) or 8080)
+DOMAIN = config.get("domain", "nc.gk2.secubox.in")
+
+
+def ctl(subcmd: list, timeout: int = 60, stdin: str = None) -> tuple:
+    """Run `sudo -n nextcloudctl <subcmd...>`. The ONLY privileged path: the
+    aggregator runs as `secubox` (NNP=no) with a NOPASSWD sudoers entry for
+    nextcloudctl. Fail-safe: returns (ok, out, err), never raises."""
+    cmd = ["sudo", "-n", CTL, *subcmd]
+    if stdin is None:
+        return run_cmd(cmd, timeout)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                timeout=timeout, input=stdin)
+        return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
+    except subprocess.TimeoutExpired:
+        return False, "", "timed out"
+    except Exception as e:  # pragma: no cover - defensive
+        return False, "", str(e)
+
+
 def lxc_running() -> bool:
-    """Check if LXC container is running"""
-    success, out, _ = run_cmd(["lxc-info", "-n", LXC_NAME, "-s"])
-    return success and "RUNNING" in out
+    """Authoritative container state via the privileged helper."""
+    ok, out, _ = ctl(["status", "--json"], timeout=20)
+    if not ok:
+        return False
+    try:
+        import json
+        return bool(json.loads(out).get("running"))
+    except Exception:
+        return False
 
 
 def lxc_installed() -> bool:
@@ -47,62 +76,71 @@ def lxc_attach(command: str, timeout: int = 30) -> tuple:
 
 
 def occ_cmd(command: str, timeout: int = 60) -> tuple:
-    """Run Nextcloud OCC command"""
-    full_cmd = f"su -s /bin/bash www-data -c 'php /var/www/nextcloud/occ {command}'"
-    return lxc_attach(full_cmd, timeout)
+    """Run an occ command via the privileged helper's occ passthrough."""
+    return ctl(["occ", *command.split()], timeout=timeout)
+
+
+def container_reachable() -> bool:
+    """True if the Nextcloud container is actually serving on its HTTP port.
+    Bounded + fail-safe (never raises)."""
+    import socket
+    try:
+        with socket.create_connection((CONTAINER_IP, 80), timeout=1.5):
+            return True
+    except Exception:
+        return False
+
+
+def public_url() -> str:
+    """The real, user-facing base URL (the WAF-fronted vhost), never localhost."""
+    u = config.get("public_url")
+    if u:
+        return u.rstrip("/")
+    return f"https://{DOMAIN}"
 
 
 # Public endpoints
 @app.get("/status")
 async def status():
     """Get Nextcloud service status"""
-    running = lxc_running()
     installed = lxc_installed()
-
+    running = False
     version = ""
     user_count = 0
-    disk_used = "0"
-
-    if running:
-        # Get Nextcloud version
-        success, out, _ = occ_cmd("-V")
-        if success:
-            import re
-            match = re.search(r'(\d+\.\d+\.\d+)', out)
-            if match:
-                version = match.group(1)
-
-        # Get user count
-        success, out, _ = occ_cmd("user:list --output=json")
-        if success:
-            try:
-                import json
-                users = json.loads(out)
-                user_count = len(users)
-            except:
-                pass
+    ok, out, _ = ctl(["status", "--json"], timeout=20)
+    if ok:
+        try:
+            import json
+            s = json.loads(out)
+            running = bool(s.get("running"))
+            installed = installed or bool(s.get("installed"))
+            version = s.get("version", "") or ""
+            user_count = int(s.get("user_count", 0) or 0)
+        except Exception:
+            pass
+    reachable = container_reachable() if running else False
 
     # Get disk usage
+    disk_used = "0"
     data_dir = DATA_PATH / "data"
     if data_dir.exists():
         success, out, _ = run_cmd(["du", "-sh", str(data_dir)])
         if success:
             disk_used = out.split()[0]
 
-    http_port = config.get("http_port", 8080)
-
     return {
         "module": "nextcloud",
         "enabled": config.get("enabled", True),
         "running": running,
+        "reachable": reachable,
         "installed": installed,
         "version": version,
-        "http_port": http_port,
+        "http_port": HTTP_PORT,
         "data_path": str(DATA_PATH),
-        "domain": config.get("domain", "cloud.local"),
+        "domain": DOMAIN,
         "user_count": user_count,
         "disk_used": disk_used,
-        "web_url": f"http://localhost:{http_port}",
+        "web_url": public_url(),
         "ssl_enabled": config.get("ssl_enabled", False),
         "container_name": LXC_NAME,
     }
@@ -262,48 +300,39 @@ async def reset_password(req: ResetPassword):
 
 @app.get("/storage", dependencies=[Depends(require_jwt)])
 async def get_storage():
-    """Get storage statistics"""
-    total_size = "0"
-    data_size = "0"
+    """Get real storage usage from INSIDE the container via the privileged
+    helper (the host can't see the unprivileged LXC's data). Fail-safe:
+    degrades to zeros on any ctl/parse error, never raises/500s."""
+    used = "0"
+    total = "0"
+    used_pct = 0
+    data = "0"
+
+    ok, out, _ = ctl(["storage", "--json"], timeout=30)
+    if ok:
+        try:
+            import json
+            s = json.loads(out)
+            used = s.get("used", "0") or "0"
+            total = s.get("total", "0") or "0"
+            used_pct = int(s.get("used_pct", 0) or 0)
+            data = s.get("data", "0") or "0"
+        except Exception:
+            pass
+
     backup_size = "0"
-    disk_free = "0"
-    disk_total = "0"
-    disk_used_pct = 0
-
-    if DATA_PATH.exists():
-        success, out, _ = run_cmd(["du", "-sh", str(DATA_PATH)])
-        if success:
-            total_size = out.split()[0]
-
-    data_dir = DATA_PATH / "data"
-    if data_dir.exists():
-        success, out, _ = run_cmd(["du", "-sh", str(data_dir)])
-        if success:
-            data_size = out.split()[0]
-
     backup_dir = DATA_PATH / "backups"
     if backup_dir.exists():
         success, out, _ = run_cmd(["du", "-sh", str(backup_dir)])
         if success:
             backup_size = out.split()[0]
 
-    success, out, _ = run_cmd(["df", "-h", str(DATA_PATH)])
-    if success:
-        lines = out.split("\n")
-        if len(lines) > 1:
-            parts = lines[1].split()
-            if len(parts) >= 5:
-                disk_total = parts[1]
-                disk_free = parts[3]
-                disk_used_pct = int(parts[4].rstrip("%"))
-
     return {
-        "total_size": total_size,
-        "data_size": data_size,
+        "used": used,
+        "total": total,
+        "used_pct": used_pct,
+        "data": data,
         "backup_size": backup_size,
-        "disk_free": disk_free,
-        "disk_total": disk_total,
-        "disk_used_percent": disk_used_pct
     }
 
 
@@ -387,13 +416,7 @@ def restore_backup(name: str):
 @app.get("/connections", dependencies=[Depends(require_jwt)])
 async def get_connections():
     """Get connection URLs (CalDAV, CardDAV, WebDAV)"""
-    http_port = config.get("http_port", 8080)
-    ssl_enabled = config.get("ssl_enabled", False)
-    ssl_domain = config.get("ssl_domain", "")
-
-    base_url = f"http://localhost:{http_port}"
-    if ssl_enabled and ssl_domain:
-        base_url = f"https://{ssl_domain}"
+    base_url = public_url()
 
     return {
         "base_url": base_url,
