@@ -1,3 +1,11 @@
+secubox-nextcloud (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * #429 fix: brand-agnostic version parse — this NC instance rebrands the
+    product string to "SecuBox", so status/version now report 32.0.10 instead
+    of empty.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 13:00:00 +0200
+
 secubox-nextcloud (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * #429 real dashboard: route container ops via sudo nextcloudctl (+ sudoers
