@@ -274,8 +274,6 @@
           transform:translateY(8px);transition:all .2s;z-index:50;max-width:min(90vw,360px)}
         .toast.show{opacity:1;transform:none}
         .toast.success{border-color:var(--green)} .toast.error{border-color:var(--red)}
-        .bar{height:10px;border-radius:6px;background:var(--border);overflow:hidden}
-        .bar>span{display:block;height:100%;background:var(--primary)}
         .err{color:var(--red);font-size:.8rem} .muted{color:var(--text-dim);font-size:.8rem}
         .copy-btn { padding: 2px 8px; font-size: .7rem; }
         pre.log-out { background: var(--tube-light); border: 1px solid var(--border); border-radius: 6px; padding: .75rem; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: .78rem; margin: 0; }
@@ -456,8 +454,9 @@
             else if (s.installed) { label = 'stopped'; cls = 'error'; }
             pill.textContent = label; pill.className = 'pill ' + cls;
             document.getElementById('nc-version').textContent = esc(s.version || '—');
-            document.getElementById('nc-url').innerHTML = s.web_url
-                ? `<a href="${esc(s.web_url)}" target="_blank" rel="noopener">${esc(s.web_url)}</a>` : '—';
+            const webUrl = s.web_url || '';
+            document.getElementById('nc-url').innerHTML = /^https?:\/\//i.test(webUrl)
+                ? `<a href="${esc(webUrl)}" target="_blank" rel="noopener">${esc(webUrl)}</a>` : (esc(webUrl) || '—');
             document.getElementById('user-count').textContent = s.user_count != null ? s.user_count : '-';
             document.getElementById('version').textContent = esc(s.version || '-');
             document.getElementById('btn-install').style.display = s.installed ? 'none' : '';
@@ -502,13 +501,13 @@
                 <div class="url-label">${esc(label)}</div>
                 <div class="url-box" style="display:flex;justify-content:space-between;gap:.5rem;align-items:center">
                     <span>${esc(url || '-')}</span>
-                    <button class="btn copy-btn" onclick="copyText('${encodeURIComponent(url || '')}')">Copy</button>
+                    <button class="btn copy-btn c-act" data-url="${esc(url || '')}">Copy</button>
                 </div>`).join('');
+            el.querySelectorAll('.c-act').forEach(b => b.addEventListener('click', () => copyText(b.dataset.url)));
             document.getElementById('ios-link').href = d.ios_app || '#';
             document.getElementById('android-link').href = d.android_app || '#';
         }
-        function copyText(enc) {
-            const text = decodeURIComponent(enc);
+        function copyText(text) {
             if (!text) return;
             navigator.clipboard.writeText(text).then(() => toast('Copied', 'success')).catch(() => toast('Copy failed', 'error'));
         }
@@ -525,13 +524,20 @@
                 <td>${esc(u.quota || 'default')}</td>
                 <td>
                   ${u.enabled === false
-                    ? `<button class="btn" onclick="userOp('${encodeURIComponent(u.uid)}','enable')">Enable</button>`
-                    : `<button class="btn" onclick="userOp('${encodeURIComponent(u.uid)}','disable')">Disable</button>`}
-                  <button class="btn" onclick="userQuota('${encodeURIComponent(u.uid)}')">Quota</button>
-                  <button class="btn" onclick="userReset('${encodeURIComponent(u.uid)}')">Reset pw</button>
-                  <button class="btn danger" onclick="userDelete('${encodeURIComponent(u.uid)}')">Delete</button>
+                    ? `<button class="btn u-act" data-uid="${esc(u.uid)}" data-op="enable">Enable</button>`
+                    : `<button class="btn u-act" data-uid="${esc(u.uid)}" data-op="disable">Disable</button>`}
+                  <button class="btn u-act" data-uid="${esc(u.uid)}" data-op="quota">Quota</button>
+                  <button class="btn u-act" data-uid="${esc(u.uid)}" data-op="reset">Reset pw</button>
+                  <button class="btn danger u-act" data-uid="${esc(u.uid)}" data-op="delete">Delete</button>
                 </td></tr>`).join('');
             el.innerHTML = rows || '<tr><td colspan="5" class="muted">No users.</td></tr>';
+            el.querySelectorAll('.u-act').forEach(b => b.addEventListener('click', () => {
+                const uid = b.dataset.uid, op = b.dataset.op;
+                if (op === 'enable' || op === 'disable') userOp(uid, op);
+                else if (op === 'quota') userQuota(uid);
+                else if (op === 'reset') userReset(uid);
+                else if (op === 'delete') userDelete(uid);
+            }));
         }
         async function addUser() {
             const uid = document.getElementById('nu-uid').value.trim();
@@ -547,31 +553,29 @@
                 loadUsers();
             } else { toast((r && r.__error) || 'failed', 'error'); }
         }
-        async function userOp(uidEnc, op) {
-            if (op === 'disable' && !confirm('Disable user ' + decodeURIComponent(uidEnc) + '?')) return;
-            const r = await api('/user/' + uidEnc + '/' + op, { method: 'POST' });
+        async function userOp(uid, op) {
+            if (op === 'disable' && !confirm('Disable user ' + uid + '?')) return;
+            const r = await api('/user/' + encodeURIComponent(uid) + '/' + op, { method: 'POST' });
             toast(r && !r.__error ? op + 'd' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
             loadUsers();
         }
-        async function userQuota(uidEnc) {
+        async function userQuota(uid) {
             const q = prompt('Quota (e.g. 5GB, none, default):', 'default');
             if (q == null) return;
-            const r = await api('/user/' + uidEnc + '/quota', { method: 'POST', body: JSON.stringify({ quota: q }) });
+            const r = await api('/user/' + encodeURIComponent(uid) + '/quota', { method: 'POST', body: JSON.stringify({ quota: q }) });
             toast(r && !r.__error ? 'Quota set' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
             loadUsers();
         }
-        async function userReset(uidEnc) {
-            const uid = decodeURIComponent(uidEnc);
+        async function userReset(uid) {
             if (!confirm('Reset password for ' + uid + '?')) return;
             const pw = prompt('New password for ' + uid + ':');
             if (!pw) return;
             const r = await api('/user/password', { method: 'POST', body: JSON.stringify({ uid, password: pw }) });
             toast(r && !r.__error ? 'Password reset' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
         }
-        async function userDelete(uidEnc) {
-            const uid = decodeURIComponent(uidEnc);
+        async function userDelete(uid) {
             if (!confirmTyped(uid)) return;
-            const r = await api('/user/' + uidEnc, { method: 'DELETE' });
+            const r = await api('/user/' + encodeURIComponent(uid), { method: 'DELETE' });
             toast(r && !r.__error ? 'User deleted' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
             loadUsers();
         }
@@ -591,27 +595,30 @@
                 <td>${esc(b.size)}</td>
                 <td>${esc(b.timestamp ? new Date(b.timestamp * 1000).toLocaleDateString() : '-')}</td>
                 <td>
-                    <button class="btn" style="padding:2px 8px;font-size:0.7rem" onclick="restoreBackup('${encodeURIComponent(b.name)}')">Restore</button>
-                    <button class="btn danger" style="padding:2px 8px;font-size:0.7rem" onclick="deleteBackup('${encodeURIComponent(b.name)}')">Delete</button>
+                    <button class="btn b-act" data-name="${esc(b.name)}" data-op="restore" style="padding:2px 8px;font-size:0.7rem">Restore</button>
+                    <button class="btn danger b-act" data-name="${esc(b.name)}" data-op="delete" style="padding:2px 8px;font-size:0.7rem">Delete</button>
                 </td>
             </tr>`).join('');
+            list.querySelectorAll('.b-act').forEach(b => b.addEventListener('click', () => {
+                const name = b.dataset.name, op = b.dataset.op;
+                if (op === 'restore') restoreBackup(name);
+                else if (op === 'delete') deleteBackup(name);
+            }));
         }
         async function createBackup() {
             const r = await api('/backup', { method: 'POST' });
             toast(r && !r.__error ? 'Backup created' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
             if (r && !r.__error) loadBackups();
         }
-        async function deleteBackup(nameEnc) {
-            const name = decodeURIComponent(nameEnc);
+        async function deleteBackup(name) {
             if (!confirmTyped(name)) return;
-            const r = await api('/backup/' + nameEnc, { method: 'DELETE' });
+            const r = await api('/backup/' + encodeURIComponent(name), { method: 'DELETE' });
             toast(r && !r.__error ? 'Backup deleted' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
             loadBackups();
         }
-        async function restoreBackup(nameEnc) {
-            const name = decodeURIComponent(nameEnc);
+        async function restoreBackup(name) {
             if (!confirmTyped(name)) return;
-            const r = await api('/restore/' + nameEnc, { method: 'POST' });
+            const r = await api('/restore/' + encodeURIComponent(name), { method: 'POST' });
             toast(r && !r.__error ? 'Restore started in background' : ((r && r.__error) || 'failed'), r && !r.__error ? 'success' : 'error');
         }
 
