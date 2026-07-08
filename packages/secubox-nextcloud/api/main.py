@@ -3,6 +3,7 @@ import re as _re
 import subprocess
 import os
 import time
+import threading
 from pathlib import Path
 from typing import Optional, List
 from fastapi import FastAPI, Depends, HTTPException
@@ -54,24 +55,51 @@ def ctl(subcmd: list, timeout: int = 60, stdin: str = None) -> tuple:
 
 
 _STATS_CACHE: dict = {}
+_CACHE_LOCKS: dict = {}
+_CACHE_LOCKS_GUARD = threading.Lock()
+
+
+def _cache_lock(key: str) -> threading.Lock:
+    with _CACHE_LOCKS_GUARD:
+        return _CACHE_LOCKS.setdefault(key, threading.Lock())
 
 
 def _cached(key: str, ttl: float, producer):
-    """Tiny in-process TTL cache for the expensive, auto-polled read endpoints.
-    The dashboard refreshes /status and /storage on a timer; each does several
-    seconds of lxc-attach/occ work, so uncached every poll (× every open tab)
-    spawns sudo+lxc-attach and piles load on a memory-tight board. Stale-by-≤ttl
-    is fine for dashboard stats (CLAUDE.md double-caching rule). Handlers run in
-    FastAPI's threadpool (plain def), so this cache is shared across worker
-    threads for the single-process aggregator — good enough; a rare duplicate
-    compute on a cold race is harmless."""
+    """Single-flight, serve-stale TTL cache for the expensive auto-polled read
+    endpoints (/status, /storage). Each producer does several seconds of
+    lxc-attach/occ; the dashboard auto-refreshes them and multiple tabs poll in
+    parallel. A plain TTL cache does NOT help here: every poll arriving during
+    the ~6s compute window misses (the cache only fills when the producer
+    returns) and they ALL spawn the helper at once → thundering herd →
+    congestion collapse on a memory-tight board (observed: load avg 9+, status
+    timing out).
+
+    So: (1) fresh cache → return it; (2) stale/empty but another thread is
+    already refreshing → return the last value immediately (serve-stale,
+    non-blocking) so concurrent polls never pile on; (3) only ONE thread at a
+    time runs the producer (single-flight), double-checking under the lock.
+    Stale-by-≤ttl+one-compute is fine for dashboard stats (CLAUDE.md
+    double-caching). Handlers are plain def (threadpool) → threading.Lock."""
     now = time.monotonic()
     hit = _STATS_CACHE.get(key)
     if hit and (now - hit[0]) < ttl:
         return hit[1]
-    val = producer()
-    _STATS_CACHE[key] = (now, val)
-    return val
+
+    lock = _cache_lock(key)
+    if not lock.acquire(blocking=False):
+        # another thread is refreshing this key right now
+        if hit is not None:
+            return hit[1]          # serve stale, do not pile on
+        lock.acquire()             # cold cache: must wait for the first compute
+    try:
+        hit = _STATS_CACHE.get(key)  # double-check: someone may have just filled it
+        if hit and (time.monotonic() - hit[0]) < ttl:
+            return hit[1]
+        val = producer()
+        _STATS_CACHE[key] = (time.monotonic(), val)
+        return val
+    finally:
+        lock.release()
 
 
 def _invalidate_stats():
