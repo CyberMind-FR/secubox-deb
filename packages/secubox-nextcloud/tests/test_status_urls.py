@@ -42,6 +42,31 @@ def test_status_running_and_reachable(monkeypatch):
     assert b["web_url"].startswith("https://") and "localhost" not in b["web_url"]
 
 
+def test_status_is_cached_and_invalidated(monkeypatch):
+    # /status is heavy (lxc/occ) and auto-polled; it must be cached so repeat
+    # polls don't re-run the privileged helper (which would block the shared
+    # aggregator loop's threadpool and storm the board). A lifecycle action
+    # invalidates the cache so the next poll is fresh.
+    m = _load(monkeypatch)
+    calls = {"n": 0}
+
+    def counting_ctl(sub, *a, **k):
+        if list(sub[:1]) == ["status"]:
+            calls["n"] += 1
+        return (True, '{"running":true,"installed":true,"version":"1","user_count":1}', "")
+
+    monkeypatch.setattr(m, "ctl", counting_ctl)
+    monkeypatch.setattr(m, "container_reachable", lambda: True)
+    monkeypatch.setattr(m, "lxc_installed", lambda: True)
+    c = TestClient(m.app)
+    c.get("/status")
+    c.get("/status")
+    assert calls["n"] == 1, "second poll must be served from cache"
+    m._invalidate_stats()
+    c.get("/status")
+    assert calls["n"] == 2, "invalidation must force a fresh compute"
+
+
 def test_connections_uses_real_vhost(monkeypatch):
     m = _load(monkeypatch)
     monkeypatch.setattr(m, "public_url", lambda: "https://nc.gk2.secubox.in")

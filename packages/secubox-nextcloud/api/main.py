@@ -2,6 +2,7 @@
 import re as _re
 import subprocess
 import os
+import time
 from pathlib import Path
 from typing import Optional, List
 from fastapi import FastAPI, Depends, HTTPException
@@ -50,6 +51,33 @@ def ctl(subcmd: list, timeout: int = 60, stdin: str = None) -> tuple:
         return False, "", "timed out"
     except Exception as e:  # pragma: no cover - defensive
         return False, "", str(e)
+
+
+_STATS_CACHE: dict = {}
+
+
+def _cached(key: str, ttl: float, producer):
+    """Tiny in-process TTL cache for the expensive, auto-polled read endpoints.
+    The dashboard refreshes /status and /storage on a timer; each does several
+    seconds of lxc-attach/occ work, so uncached every poll (× every open tab)
+    spawns sudo+lxc-attach and piles load on a memory-tight board. Stale-by-≤ttl
+    is fine for dashboard stats (CLAUDE.md double-caching rule). Handlers run in
+    FastAPI's threadpool (plain def), so this cache is shared across worker
+    threads for the single-process aggregator — good enough; a rare duplicate
+    compute on a cold race is harmless."""
+    now = time.monotonic()
+    hit = _STATS_CACHE.get(key)
+    if hit and (now - hit[0]) < ttl:
+        return hit[1]
+    val = producer()
+    _STATS_CACHE[key] = (now, val)
+    return val
+
+
+def _invalidate_stats():
+    """Drop cached status/storage after a lifecycle action so the dashboard
+    reflects start/stop/restart/user changes immediately, not after the TTL."""
+    _STATS_CACHE.clear()
 
 
 def lxc_running() -> bool:
@@ -136,8 +164,12 @@ class QuotaReq(BaseModel):
 
 # Public endpoints
 @app.get("/status")
-async def status():
-    """Get Nextcloud service status"""
+def status():
+    """Get Nextcloud service status (cached 15s — heavy lxc/occ, auto-polled)."""
+    return _cached("status", 15.0, _compute_status)
+
+
+def _compute_status():
     installed = lxc_installed()
     running = False
     version = ""
@@ -182,13 +214,13 @@ async def status():
 
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "ok", "module": "nextcloud"}
 
 
 # Protected endpoints
 @app.get("/config", dependencies=[Depends(require_jwt)])
-async def get_config_endpoint():
+def get_config_endpoint():
     """Get Nextcloud configuration"""
     return {
         "enabled": config.get("enabled", True),
@@ -214,13 +246,13 @@ class ConfigUpdate(BaseModel):
 
 
 @app.post("/config", dependencies=[Depends(require_jwt)])
-async def save_config(update: ConfigUpdate):
+def save_config(update: ConfigUpdate):
     """Save Nextcloud configuration"""
     return {"success": True, "message": "Configuration saved"}
 
 
 @app.post("/start", dependencies=[Depends(require_jwt)])
-async def start_service():
+def start_service():
     """Start Nextcloud container"""
     if lxc_running():
         raise HTTPException(400, "Service is already running")
@@ -229,28 +261,31 @@ async def start_service():
 
     success, _, err = ctl(["start"])
     if success:
+        _invalidate_stats()
         return {"success": True, "message": "Service started"}
     raise HTTPException(500, f"Failed to start: {err}")
 
 
 @app.post("/stop", dependencies=[Depends(require_jwt)])
-async def stop_service():
+def stop_service():
     """Stop Nextcloud container"""
     if not lxc_running():
         raise HTTPException(400, "Service is not running")
 
     success, _, err = ctl(["stop"])
     if success:
+        _invalidate_stats()
         return {"success": True, "message": "Service stopped"}
     raise HTTPException(500, f"Failed to stop: {err}")
 
 
 @app.post("/restart", dependencies=[Depends(require_jwt)])
-async def restart_service():
+def restart_service():
     """Restart Nextcloud container. `nextcloudctl restart` does its own
     stop-then-start internally, so a single ctl() call covers it."""
     success, _, err = ctl(["restart"])
     if success:
+        _invalidate_stats()
         return {"success": True, "message": "Service restarted"}
     raise HTTPException(500, f"Restart failed: {err}")
 
@@ -278,7 +313,7 @@ def install():
 
 
 @app.post("/uninstall", dependencies=[Depends(require_jwt)])
-async def uninstall():
+def uninstall():
     """Uninstall Nextcloud (preserves data). `nextcloudctl uninstall` prompts
     for a yes/no confirmation on stdin; the API call already gates this
     action behind JWT auth, so the confirmation is answered automatically."""
@@ -307,7 +342,7 @@ def update():
 
 
 @app.get("/users", dependencies=[Depends(require_jwt)])
-async def get_users():
+def get_users():
     """List Nextcloud users, detailed (uid/displayname/enabled/quota)."""
     _require_running()
     ok, out, err = ctl(["user", "list"], timeout=30)
@@ -341,7 +376,7 @@ async def get_users():
 
 
 @app.post("/user", dependencies=[Depends(require_jwt)])
-async def create_user(req: NewUser):
+def create_user(req: NewUser):
     """Create a Nextcloud user. Password travels via stdin only — never argv
     (which would leak it in `ps`)."""
     _require_running()
@@ -355,7 +390,7 @@ async def create_user(req: NewUser):
 
 
 @app.delete("/user/{uid}", dependencies=[Depends(require_jwt)])
-async def delete_user(uid: str):
+def delete_user(uid: str):
     _require_running()
     if not _valid_uid(uid):
         raise HTTPException(400, "invalid uid")
@@ -366,7 +401,7 @@ async def delete_user(uid: str):
 
 
 @app.post("/user/{uid}/enable", dependencies=[Depends(require_jwt)])
-async def enable_user(uid: str):
+def enable_user(uid: str):
     _require_running()
     if not _valid_uid(uid):
         raise HTTPException(400, "invalid uid")
@@ -377,7 +412,7 @@ async def enable_user(uid: str):
 
 
 @app.post("/user/{uid}/disable", dependencies=[Depends(require_jwt)])
-async def disable_user(uid: str):
+def disable_user(uid: str):
     _require_running()
     if not _valid_uid(uid):
         raise HTTPException(400, "invalid uid")
@@ -388,7 +423,7 @@ async def disable_user(uid: str):
 
 
 @app.post("/user/{uid}/quota", dependencies=[Depends(require_jwt)])
-async def set_quota(uid: str, req: QuotaReq):
+def set_quota(uid: str, req: QuotaReq):
     _require_running()
     if not _valid_uid(uid):
         raise HTTPException(400, "invalid uid")
@@ -406,7 +441,7 @@ class ResetPassword(BaseModel):
 
 
 @app.post("/user/password", dependencies=[Depends(require_jwt)])
-async def reset_password(req: ResetPassword):
+def reset_password(req: ResetPassword):
     """Reset a Nextcloud user's password. Password travels via stdin only —
     never argv/interpolated shell string (ref #429: the old implementation
     built `OC_PASS='{password}'` into a `su -c` command string, leaking the
@@ -422,7 +457,12 @@ async def reset_password(req: ResetPassword):
 
 
 @app.get("/storage", dependencies=[Depends(require_jwt)])
-async def get_storage():
+def get_storage():
+    """Storage usage (cached 30s — heavy in-container du, auto-polled)."""
+    return _cached("storage", 30.0, _compute_storage)
+
+
+def _compute_storage():
     """Get real storage usage from INSIDE the container via the privileged
     helper (the host can't see the unprivileged LXC's data). Fail-safe:
     degrades to zeros on any ctl/parse error, never raises/500s."""
@@ -460,7 +500,7 @@ async def get_storage():
 
 
 @app.get("/backups", dependencies=[Depends(require_jwt)])
-async def list_backups():
+def list_backups():
     """List available backups"""
     backups = []
     backup_dir = DATA_PATH / "backups"
@@ -498,7 +538,7 @@ class BackupRequest(BaseModel):
 
 
 @app.post("/backup", dependencies=[Depends(require_jwt)])
-async def create_backup(req: BackupRequest):
+def create_backup(req: BackupRequest):
     """Create a backup"""
     if req.name and not _valid_backup_name(req.name):
         raise HTTPException(400, "invalid backup name")
@@ -514,7 +554,7 @@ async def create_backup(req: BackupRequest):
 
 
 @app.delete("/backup/{name}", dependencies=[Depends(require_jwt)])
-async def delete_backup(name: str):
+def delete_backup(name: str):
     """Delete a backup"""
     if not _valid_backup_name(name):
         raise HTTPException(400, "invalid backup name")
@@ -558,7 +598,7 @@ def restore_backup(name: str):
 
 
 @app.get("/connections", dependencies=[Depends(require_jwt)])
-async def get_connections():
+def get_connections():
     """Get connection URLs (CalDAV, CardDAV, WebDAV)"""
     base_url = public_url()
 
@@ -579,7 +619,7 @@ class OccCommand(BaseModel):
 
 
 @app.post("/occ", dependencies=[Depends(require_jwt)])
-async def run_occ(req: OccCommand):
+def run_occ(req: OccCommand):
     """Run OCC command"""
     if not lxc_running():
         raise HTTPException(400, "Container not running")
@@ -591,7 +631,7 @@ async def run_occ(req: OccCommand):
 
 
 @app.get("/logs", dependencies=[Depends(require_jwt)])
-async def get_logs(lines: int = 100):
+def get_logs(lines: int = 100):
     """Get Nextcloud logs"""
     logs = []
 
@@ -610,7 +650,7 @@ class SSLEnable(BaseModel):
 
 
 @app.post("/ssl/enable", dependencies=[Depends(require_jwt)])
-async def ssl_enable(req: SSLEnable):
+def ssl_enable(req: SSLEnable):
     """Enable SSL for domain.
 
     NOTE (ref #429 I3): nextcloudctl has no `ssl-enable`/`ssl enable`
@@ -628,7 +668,7 @@ async def ssl_enable(req: SSLEnable):
 
 
 @app.post("/ssl/disable", dependencies=[Depends(require_jwt)])
-async def ssl_disable():
+def ssl_disable():
     """Disable SSL. See NOTE on /ssl/enable -- no matching nextcloudctl
     subcommand exists; left as-is (ref #429 I3)."""
     success, _, err = run_cmd(["/usr/sbin/nextcloudctl", "ssl-disable"])
