@@ -1,0 +1,3 @@
+# #429 — the aggregator (user secubox) drives the Nextcloud LXC container
+# through nextcloudctl. This is the ONLY privileged surface for the module.
+secubox ALL=(root) NOPASSWD: /usr/sbin/nextcloudctl
