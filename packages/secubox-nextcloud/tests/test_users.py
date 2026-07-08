@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+import importlib
+from fastapi.testclient import TestClient
+
+
+def _load(monkeypatch, running=True):
+    import api.main as m
+    importlib.reload(m)
+    from secubox_core.auth import require_jwt
+    m.app.dependency_overrides[require_jwt] = lambda: {"sub": "admin"}
+    monkeypatch.setattr(m, "lxc_running", lambda: running)
+    return m
+
+
+def test_users_list_detailed(monkeypatch):
+    m = _load(monkeypatch)
+    monkeypatch.setattr(m, "ctl", lambda *a, **k: (True,
+        '[{"uid":"alice","displayname":"Alice","enabled":true,"quota":"5 GB"}]', ""))
+    c = TestClient(m.app)
+    r = c.get("/users")
+    assert r.status_code == 200
+    assert r.json()["users"][0]["uid"] == "alice"
+
+
+def test_create_user_calls_ctl(monkeypatch):
+    m = _load(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(m, "ctl", lambda sub, **k: (seen.setdefault("sub", sub), (True, "created", ""))[1])
+    c = TestClient(m.app)
+    r = c.post("/user", json={"uid": "bob", "display_name": "Bob", "password": "s3cret!!"})
+    assert r.status_code == 200 and r.json()["success"] is True
+    assert seen["sub"][:2] == ["user", "add"]
+
+
+def test_bad_uid_rejected_400(monkeypatch):
+    m = _load(monkeypatch)
+    monkeypatch.setattr(m, "ctl", lambda *a, **k: (True, "", ""))
+    c = TestClient(m.app)
+    for path in ["/user/a;rm/enable", "/user/a b/disable"]:
+        assert c.post(path).status_code == 400
+
+
+def test_user_ops_409_when_not_running(monkeypatch):
+    m = _load(monkeypatch, running=False)
+    c = TestClient(m.app)
+    assert c.post("/user/alice/enable").status_code == 409
+    assert c.post("/user", json={"uid": "x", "display_name": "X", "password": "yyyyyyyy"}).status_code == 409
+
+
+def test_quota_validation(monkeypatch):
+    m = _load(monkeypatch)
+    monkeypatch.setattr(m, "ctl", lambda *a, **k: (True, "", ""))
+    c = TestClient(m.app)
+    assert c.post("/user/alice/quota", json={"quota": "5GB"}).status_code == 200
+    assert c.post("/user/alice/quota", json={"quota": "$(x)"}).status_code == 400

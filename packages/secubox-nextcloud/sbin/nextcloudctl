@@ -453,21 +453,30 @@ link_photos() {
 
 user_add() {
     local username="$1"
-    local password="$2"
-    local display_name="${3:-$username}"
+    local display_name="${2:-$username}"
+    local password
 
-    if [ -z "$username" ] || [ -z "$password" ]; then
-        echo "Usage: nextcloudctl user add <username> <password> [display_name]"
+    if [ -z "$username" ]; then
+        echo "Usage: nextcloudctl user add <username> [display_name]  (password read from stdin)"
         return 1
     fi
     _valid_uid "$username" || { echo "invalid uid" >&2; return 2; }
     if ! lxc_running; then error "Container not running"; return 1; fi
 
+    # Password comes from THIS process's stdin — never argv, so it never
+    # shows up in `ps`/argv (ref #429: the FastAPI layer pipes it via
+    # ctl(..., stdin=password)).
+    IFS= read -r password
+    if [ -z "$password" ]; then
+        error "password required on stdin"
+        return 1
+    fi
+
     log "Creating user: $username"
-    # Password travels via stdin → OC_PASS (export + sudo --preserve-env, since
-    # sudo otherwise strips it); username/display passed as argv, not embedded
-    # into the command string — safe against quote-breakout/injection, mirrors
-    # the pattern used by user_provision below.
+    # Re-pipe the password into the container as OC_PASS (export +
+    # sudo --preserve-env, since sudo otherwise strips it); username/display
+    # passed as argv, not embedded into the command string — safe against
+    # quote-breakout/injection, mirrors the pattern used by user_provision below.
     printf '%s' "$password" | lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c \
         'IFS= read -r OC_PASS; export OC_PASS; sudo --preserve-env=OC_PASS -u www-data php /var/www/nextcloud/occ user:add --password-from-env --display-name="$1" "$2"' _ "$display_name" "$username"
 }
@@ -895,7 +904,7 @@ Service:
   restart              Restart Nextcloud
 
 Users:
-  user add <user> <pass> [name]   Add user
+  user add <user> [name]          Add user (password read from stdin)
   user del <user>                 Delete user
   user list                       List users, detailed (JSON)
   user enable <user>              Enable user
@@ -917,7 +926,7 @@ Maintenance:
 Examples:
   nextcloudctl install
   nextcloudctl setup mypassword
-  nextcloudctl user add alice secret123 "Alice Smith"
+  echo secret123 | nextcloudctl user add alice "Alice Smith"
   nextcloudctl app install calendar
   nextcloudctl occ status
 EOF
