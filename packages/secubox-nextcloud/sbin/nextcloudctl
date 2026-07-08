@@ -746,7 +746,9 @@ cmd_status() {
         lxc_running && running=true
         lxc_exists && installed=true
         if [ "$running" = true ]; then
-            version=$(occ --version 2>/dev/null | grep -oP 'Nextcloud \K[0-9.]+' || echo "")
+            # brand-agnostic: this instance rebrands "Nextcloud" → "SecuBox", so
+            # match the dotted version number regardless of the product name.
+            version=$(occ --version 2>/dev/null | grep -oP '[0-9]+(\.[0-9]+)+' | head -1 || echo "")
             ucount=$(occ user:list 2>/dev/null | wc -l)
         fi
         printf '{"running":%s,"installed":%s,"version":"%s","user_count":%s}\n' \
@@ -820,7 +822,7 @@ cmd_components() {
     local user_count=0
 
     if lxc_running; then
-        nc_version=$(occ --version 2>/dev/null | grep -oP 'Nextcloud \K[0-9.]+' || echo "unknown")
+        nc_version=$(occ --version 2>/dev/null | grep -oP '[0-9]+(\.[0-9]+)+' | head -1 || echo "unknown")
         [ -n "$nc_version" ] && nc_installed=true
         php_version=$(lxc_attach "php -v 2>/dev/null | head -1 | grep -oP 'PHP \K[0-9.]+'" || echo "")
         user_count=$(occ user:list 2>/dev/null | wc -l)
