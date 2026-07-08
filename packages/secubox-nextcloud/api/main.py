@@ -100,11 +100,15 @@ def public_url() -> str:
     return f"https://{DOMAIN}"
 
 
-# #429 injection guards: a Nextcloud uid/quota is validated against a safe
-# charset BEFORE it ever reaches `ctl()`/argv, mirroring nextcloudctl's own
-# `_valid_uid`/`_valid_quota` (defense in depth, not a substitute for it).
+# #429 injection guards: a Nextcloud uid/quota/backup-name is validated against
+# a safe charset BEFORE it ever reaches `ctl()`/argv or a filesystem path,
+# mirroring nextcloudctl's own `_valid_uid`/`_valid_quota` (defense in depth,
+# not a substitute for it). `.fullmatch` (not `.match`) so a trailing
+# newline (which `$` in Python regexes tolerates) can't sneak a valid-looking
+# string past the guard.
 _UID_RE = _re.compile(r"^[A-Za-z0-9._@-]+$")
 _QUOTA_RE = _re.compile(r"^(none|default|[0-9]+(\.[0-9]+)?[KMGT]?B?)$", _re.I)
+_BACKUP_RE = _re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def _require_running():
@@ -113,7 +117,11 @@ def _require_running():
 
 
 def _valid_uid(uid: str) -> bool:
-    return bool(uid) and bool(_UID_RE.match(uid))
+    return bool(uid) and bool(_UID_RE.fullmatch(uid))
+
+
+def _valid_backup_name(name: str) -> bool:
+    return bool(name) and bool(_BACKUP_RE.fullmatch(name))
 
 
 class NewUser(BaseModel):
@@ -219,7 +227,7 @@ async def start_service():
     if not lxc_installed():
         raise HTTPException(400, "Container not installed")
 
-    success, _, err = run_cmd(["lxc-start", "-n", LXC_NAME, "-d"])
+    success, _, err = ctl(["start"])
     if success:
         return {"success": True, "message": "Service started"}
     raise HTTPException(500, f"Failed to start: {err}")
@@ -231,7 +239,7 @@ async def stop_service():
     if not lxc_running():
         raise HTTPException(400, "Service is not running")
 
-    success, _, err = run_cmd(["lxc-stop", "-n", LXC_NAME])
+    success, _, err = ctl(["stop"])
     if success:
         return {"success": True, "message": "Service stopped"}
     raise HTTPException(500, f"Failed to stop: {err}")
@@ -239,10 +247,9 @@ async def stop_service():
 
 @app.post("/restart", dependencies=[Depends(require_jwt)])
 async def restart_service():
-    """Restart Nextcloud container"""
-    if lxc_running():
-        run_cmd(["lxc-stop", "-n", LXC_NAME])
-    success, _, err = run_cmd(["lxc-start", "-n", LXC_NAME, "-d"])
+    """Restart Nextcloud container. `nextcloudctl restart` does its own
+    stop-then-start internally, so a single ctl() call covers it."""
+    success, _, err = ctl(["restart"])
     if success:
         return {"success": True, "message": "Service restarted"}
     raise HTTPException(500, f"Restart failed: {err}")
@@ -250,12 +257,16 @@ async def restart_service():
 
 @app.post("/install", dependencies=[Depends(require_jwt)])
 def install():
-    """Install Nextcloud (background)"""
+    """Install Nextcloud (background). `nextcloudctl install` takes several
+    minutes (debootstrap + apt + nextcloud download) so it's detached rather
+    than run through the blocking `ctl()` helper -- but it still goes through
+    the same `sudo -n nextcloudctl` privileged path (ref #429 I3), never a
+    bare non-sudo invocation."""
     if lxc_installed():
         raise HTTPException(400, "Already installed")
 
     subprocess.Popen(
-        ["/usr/sbin/nextcloudctl", "install"],
+        ["sudo", "-n", CTL, "install"],
         stdout=open("/var/log/nextcloud-install.log", "w"),
         stderr=subprocess.STDOUT
     )
@@ -268,16 +279,25 @@ def install():
 
 @app.post("/uninstall", dependencies=[Depends(require_jwt)])
 async def uninstall():
-    """Uninstall Nextcloud (preserves data)"""
-    success, _, err = run_cmd(["/usr/sbin/nextcloudctl", "uninstall"])
+    """Uninstall Nextcloud (preserves data). `nextcloudctl uninstall` prompts
+    for a yes/no confirmation on stdin; the API call already gates this
+    action behind JWT auth, so the confirmation is answered automatically."""
+    success, out, err = ctl(["uninstall"], stdin="yes\n", timeout=120)
     if success:
         return {"success": True, "message": "Uninstalled (data preserved)"}
-    raise HTTPException(500, f"Uninstall failed: {err}")
+    raise HTTPException(500, f"Uninstall failed: {err or out}")
 
 
 @app.post("/update", dependencies=[Depends(require_jwt)])
 def update():
-    """Update Nextcloud"""
+    """Update Nextcloud.
+
+    NOTE (ref #429 I3): nextcloudctl has no `update` subcommand (checked the
+    full `case "$1" in ... esac` dispatch in sbin/nextcloudctl) so this
+    endpoint is left calling the standalone binary directly, unrouted through
+    ctl()/sudo, as instructed -- it will keep failing under the unprivileged
+    aggregator until a real `nextcloudctl update` arm exists. Not invented
+    here."""
     subprocess.Popen(
         ["/usr/sbin/nextcloudctl", "update"],
         stdout=open("/var/log/nextcloud-update.log", "w"),
@@ -359,7 +379,7 @@ async def set_quota(uid: str, req: QuotaReq):
     _require_running()
     if not _valid_uid(uid):
         raise HTTPException(400, "invalid uid")
-    if not _QUOTA_RE.match(req.quota or ""):
+    if not _QUOTA_RE.fullmatch(req.quota or ""):
         raise HTTPException(400, "invalid quota")
     ok, _, err = ctl(["user", "quota", uid, req.quota])
     if not ok:
@@ -467,19 +487,25 @@ class BackupRequest(BaseModel):
 @app.post("/backup", dependencies=[Depends(require_jwt)])
 async def create_backup(req: BackupRequest):
     """Create a backup"""
-    cmd = ["/usr/sbin/nextcloudctl", "backup"]
-    if req.name:
-        cmd.append(req.name)
+    if req.name and not _valid_backup_name(req.name):
+        raise HTTPException(400, "invalid backup name")
 
-    success, out, err = run_cmd(cmd, timeout=300)
+    sub = ["backup"]
+    if req.name:
+        sub.append(req.name)
+
+    success, out, err = ctl(sub, timeout=300)
     if success:
         return {"success": True, "message": "Backup created"}
-    raise HTTPException(500, f"Backup failed: {err}")
+    raise HTTPException(500, f"Backup failed: {err or out}")
 
 
 @app.delete("/backup/{name}", dependencies=[Depends(require_jwt)])
 async def delete_backup(name: str):
     """Delete a backup"""
+    if not _valid_backup_name(name):
+        raise HTTPException(400, "invalid backup name")
+
     backup_dir = DATA_PATH / "backups"
     db_file = backup_dir / f"{name}-db.sql"
     data_file = backup_dir / f"{name}-data.tar.gz"
@@ -494,12 +520,27 @@ async def delete_backup(name: str):
 
 @app.post("/restore/{name}", dependencies=[Depends(require_jwt)])
 def restore_backup(name: str):
-    """Restore from backup"""
-    subprocess.Popen(
-        ["/usr/sbin/nextcloudctl", "restore", name],
+    """Restore from backup (background). `nextcloudctl restore` takes long
+    enough (tar extraction + in-container chown) to stay detached rather
+    than go through the blocking `ctl()` helper, but it still runs via
+    `sudo -n nextcloudctl` (ref #429 I3), never a bare non-sudo invocation.
+    `nextcloudctl restore` also prompts yes/no on stdin -- answered here so
+    the background job doesn't hang waiting on a TTY that will never come."""
+    if not _valid_backup_name(name):
+        raise HTTPException(400, "invalid backup name")
+
+    proc = subprocess.Popen(
+        ["sudo", "-n", CTL, "restore", name],
+        stdin=subprocess.PIPE,
         stdout=open("/var/log/nextcloud-restore.log", "w"),
         stderr=subprocess.STDOUT
     )
+    try:
+        if proc.stdin:
+            proc.stdin.write(b"yes\n")
+            proc.stdin.close()
+    except Exception:
+        pass
     return {"success": True, "message": "Restore started in background"}
 
 
@@ -557,7 +598,14 @@ class SSLEnable(BaseModel):
 
 @app.post("/ssl/enable", dependencies=[Depends(require_jwt)])
 async def ssl_enable(req: SSLEnable):
-    """Enable SSL for domain"""
+    """Enable SSL for domain.
+
+    NOTE (ref #429 I3): nextcloudctl has no `ssl-enable`/`ssl enable`
+    subcommand at all (checked the full dispatch in sbin/nextcloudctl --
+    there is no "ssl" case, only vhost/TLS termination is handled upstream by
+    HAProxy). Left calling the standalone binary directly, unrouted through
+    ctl()/sudo, as instructed -- it will keep failing (unknown command) until
+    a real `nextcloudctl ssl-*` arm exists. Not invented here."""
     success, _, err = run_cmd(
         ["/usr/sbin/nextcloudctl", "ssl-enable", req.domain]
     )
@@ -568,7 +616,8 @@ async def ssl_enable(req: SSLEnable):
 
 @app.post("/ssl/disable", dependencies=[Depends(require_jwt)])
 async def ssl_disable():
-    """Disable SSL"""
+    """Disable SSL. See NOTE on /ssl/enable -- no matching nextcloudctl
+    subcommand exists; left as-is (ref #429 I3)."""
     success, _, err = run_cmd(["/usr/sbin/nextcloudctl", "ssl-disable"])
     if success:
         return {"success": True, "message": "SSL disabled"}
