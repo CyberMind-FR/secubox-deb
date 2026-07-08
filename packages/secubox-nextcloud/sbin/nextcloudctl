@@ -514,10 +514,12 @@ _valid_quota() {
     [[ "$1" =~ ^([Nn][Oo][Nn][Ee]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt]|[0-9]+(\.[0-9]+)?([KMGTkmgt])?[Bb]?)$ ]]
 }
 
-# user_list_detailed: real users with enabled state + quota + last login, JSON.
-# occ user:list:detailed emits a YAML-ish structure; prefer its --output=json.
+# user_list_detailed: real users with enabled state + quota + last seen + email,
+# as a JSON map {uid: {user_id,display_name,email,enabled,groups,quota,last_seen,…}}.
+# NC has no `user:list:detailed`; the detail lives behind `user:list --info`.
+# Fall back to the plain uid→displayname map if --info is unsupported.
 user_list_detailed() {
-    occ user:list:detailed --output=json 2>/dev/null || occ user:list --output=json
+    occ user:list --info --output=json 2>/dev/null || occ user:list --output=json
 }
 
 user_enable() {

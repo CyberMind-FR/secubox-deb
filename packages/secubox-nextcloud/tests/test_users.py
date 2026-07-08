@@ -22,6 +22,35 @@ def test_users_list_detailed(monkeypatch):
     assert r.json()["users"][0]["uid"] == "alice"
 
 
+def test_users_list_info_map(monkeypatch):
+    # occ user:list --info shape: {uid: {display_name, enabled, quota, last_seen}}
+    m = _load(monkeypatch)
+    monkeypatch.setattr(m, "ctl", lambda *a, **k: (True,
+        '{"admin":{"user_id":"admin","display_name":"Admin","enabled":true,'
+        '"quota":"none","last_seen":"2026-06-01T04:48:17+00:00"},'
+        '"bob":{"user_id":"bob","display_name":"Bob","enabled":false,"quota":"5 GB"}}', ""))
+    c = TestClient(m.app)
+    r = c.get("/users")
+    assert r.status_code == 200
+    users = {u["uid"]: u for u in r.json()["users"]}
+    assert users["admin"]["displayname"] == "Admin"
+    assert users["admin"]["enabled"] is True
+    assert users["admin"]["quota"] == "none"
+    assert users["bob"]["enabled"] is False
+
+
+def test_users_list_bare_map_fallback(monkeypatch):
+    # fallback occ user:list --output=json shape: {uid: displayname}
+    m = _load(monkeypatch)
+    monkeypatch.setattr(m, "ctl", lambda *a, **k: (True, '{"admin":"admin","gk2":"gk2"}', ""))
+    c = TestClient(m.app)
+    r = c.get("/users")
+    assert r.status_code == 200
+    users = {u["uid"]: u for u in r.json()["users"]}
+    assert users["gk2"]["displayname"] == "gk2"
+    assert users["gk2"]["enabled"] is True
+
+
 def test_create_user_calls_ctl(monkeypatch):
     m = _load(monkeypatch)
     seen = {}
