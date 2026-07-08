@@ -476,6 +476,35 @@ user_list() {
     occ user:list --output=json
 }
 
+# #429 injection guard: a Nextcloud uid is limited to a safe charset before it
+# is ever interpolated into an occ shell command inside the container.
+_valid_uid() {
+    printf '%s' "$1" | grep -qE '^[A-Za-z0-9._@-]+$'
+}
+_valid_quota() {
+    printf '%s' "$1" | grep -qiE '^(none|default|[0-9]+(\.[0-9]+)?[KMGT]?B?)$'
+}
+
+# user_list_detailed: real users with enabled state + quota + last login, JSON.
+# occ user:list:detailed emits a YAML-ish structure; prefer its --output=json.
+user_list_detailed() {
+    occ user:list:detailed --output=json 2>/dev/null || occ user:list --output=json
+}
+
+user_enable() {
+    _valid_uid "$1" || { echo "invalid uid" >&2; return 2; }
+    occ user:enable "$1"
+}
+user_disable() {
+    _valid_uid "$1" || { echo "invalid uid" >&2; return 2; }
+    occ user:disable "$1"
+}
+user_quota() {
+    _valid_uid "$1" || { echo "invalid uid" >&2; return 2; }
+    _valid_quota "$2" || { echo "invalid quota" >&2; return 2; }
+    occ user:setting "$1" files quota "$2"
+}
+
 # Provisioning push entry point (#410): called by secubox-user-sync. Password
 # arrives via $SECUBOX_USER_PASSWORD (never argv). Idempotent: creates the user
 # or resets the password, then ensures a per-user photo folder + a Photos
@@ -683,6 +712,19 @@ cmd_restart() {
 }
 
 cmd_status() {
+    if [ "${1:-}" = "--json" ]; then
+        local running=false installed=false version="" ucount=0
+        lxc_running && running=true
+        lxc_exists && installed=true
+        if [ "$running" = true ]; then
+            version=$(occ --version 2>/dev/null | grep -oP 'Nextcloud \K[0-9.]+' || echo "")
+            ucount=$(occ user:list 2>/dev/null | wc -l)
+        fi
+        printf '{"running":%s,"installed":%s,"version":"%s","user_count":%s}\n' \
+            "$running" "$installed" "$version" "$ucount"
+        return 0
+    fi
+
     echo ""
     echo "Nextcloud File Sync v${VERSION}"
     echo "=============================="
@@ -704,6 +746,21 @@ cmd_status() {
         echo -e "Status: ${YELLOW}Stopped${NC}"
     fi
     echo ""
+}
+
+# #429 addendum: real /storage numbers, computed INSIDE the container (the
+# host can't see the unprivileged LXC's data, so host-side du/df reports 0).
+cmd_storage() {
+    if [ "${1:-}" = "--json" ]; then
+        local used total pct data
+        data=$(lxc_attach "du -sh /var/www/nextcloud/data 2>/dev/null | cut -f1")
+        used=$(lxc_attach "df -h /var/www/nextcloud 2>/dev/null | awk 'NR==2{print \$3}'")
+        total=$(lxc_attach "df -h /var/www/nextcloud 2>/dev/null | awk 'NR==2{print \$2}'")
+        pct=$(lxc_attach "df /var/www/nextcloud 2>/dev/null | awk 'NR==2{gsub(\"%\",\"\",\$5);print \$5}'")
+        printf '{"used":"%s","total":"%s","used_pct":%s,"data":"%s"}\n' \
+            "${used:-0}" "${total:-0}" "${pct:-0}" "${data:-0}"
+        return 0
+    fi
 }
 
 cmd_logs() {
@@ -816,7 +873,8 @@ Usage: nextcloudctl <command> [options]
 
 Information (Three-fold):
   components           List system components (JSON)
-  status               Show status
+  status [--json]      Show status
+  storage --json       Show storage usage (JSON)
   access               Show connection info (JSON)
 
 Setup:
@@ -832,7 +890,10 @@ Service:
 Users:
   user add <user> <pass> [name]   Add user
   user del <user>                 Delete user
-  user list                       List users (JSON)
+  user list                       List users, detailed (JSON)
+  user enable <user>              Enable user
+  user disable <user>             Disable user
+  user quota <user> <quota>       Set user quota (e.g. 5GB, none, default)
 
 Apps:
   app install <name>   Install app
@@ -857,7 +918,8 @@ EOF
 
 case "${1:-}" in
     components) cmd_components ;;
-    status) cmd_status ;;
+    status) shift; cmd_status "$@" ;;
+    storage) shift; cmd_storage "$@" ;;
     access) cmd_access ;;
     install) cmd_install ;;
     setup) shift; cmd_setup "$@" ;;
@@ -869,8 +931,11 @@ case "${1:-}" in
         case "${2:-}" in
             add) shift 2; user_add "$@" ;;
             del|delete) shift 2; user_del "$@" ;;
-            list) user_list ;;
-            *) echo "Usage: nextcloudctl user {add|del|list}"; exit 1 ;;
+            list) user_list_detailed ;;
+            enable) shift 2; user_enable "$@" ;;
+            disable) shift 2; user_disable "$@" ;;
+            quota) shift 2; user_quota "$@" ;;
+            *) echo "Usage: nextcloudctl user {add|del|list|enable|disable|quota}"; exit 1 ;;
         esac
         ;;
     app)
