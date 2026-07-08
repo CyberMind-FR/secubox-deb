@@ -11,6 +11,8 @@ container_name = "nextcloud"
 # v2.11.1 canonical layout — match secubox-authelia and siblings.
 lxc_path  = "/data/lxc"
 data_path = "/data/volumes/nextcloud"
+# LXC container's LAN IP, used for the reachability probe (container_reachable()).
+container_ip = "10.100.0.21"
 
 # ── Public app URL ───────────────────────────────────────────────────
 # Used by /api/v1/nextcloud/connections to build WebDAV/CalDAV/CardDAV
@@ -21,6 +23,10 @@ data_path = "/data/volumes/nextcloud"
 ssl_enabled = true
 ssl_domain  = "nc.gk2.secubox.in"
 http_port   = 80
+
+# Real user-facing base URL (the WAF-fronted vhost). Overrides the derived
+# https://<domain>. Set this to the operator's public Nextcloud URL.
+# public_url = "https://nc.gk2.secubox.in"
 
 # ── Nextcloud install knobs (used by `nextcloudctl install`) ─────────
 domain     = "nc.gk2.secubox.in"

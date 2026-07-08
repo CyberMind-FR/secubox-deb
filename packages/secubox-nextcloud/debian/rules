@@ -12,6 +12,11 @@ override_dh_auto_install:
 	install -d debian/secubox-nextcloud/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-nextcloud/usr/sbin/ || true
 
+	# Sudoers drop-in: lets the aggregator (user secubox) drive nextcloudctl
+	# as root without a password — the ONLY privileged surface (#429).
+	install -D -m 0440 debian/secubox-nextcloud.sudoers \
+		debian/secubox-nextcloud/etc/sudoers.d/secubox-nextcloud
+
 	# nginx canonical-hub snippet (SecuBox config module + API). Installed to
 	# both secubox.d/ and secubox-routes.d/ (the canonical hub vhost includes
 	# both via /etc/nginx/snippets/secubox-routes.conf — same convention as

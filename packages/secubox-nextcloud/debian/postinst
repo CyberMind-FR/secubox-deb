@@ -1,6 +1,12 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
+    if [ -f /etc/sudoers.d/secubox-nextcloud ]; then
+        visudo -cf /etc/sudoers.d/secubox-nextcloud >/dev/null || {
+            echo "secubox-nextcloud: invalid sudoers, removing" >&2
+            rm -f /etc/sudoers.d/secubox-nextcloud
+        }
+    fi
     systemctl daemon-reload
     systemctl enable secubox-nextcloud.service || true
     systemctl start secubox-nextcloud.service || true
