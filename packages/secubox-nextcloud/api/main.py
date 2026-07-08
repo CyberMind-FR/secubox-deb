@@ -1,4 +1,5 @@
 """SecuBox Nextcloud API - File Sync & Cloud Storage with LXC"""
+import re as _re
 import subprocess
 import os
 from pathlib import Path
@@ -97,6 +98,32 @@ def public_url() -> str:
     if u:
         return u.rstrip("/")
     return f"https://{DOMAIN}"
+
+
+# #429 injection guards: a Nextcloud uid/quota is validated against a safe
+# charset BEFORE it ever reaches `ctl()`/argv, mirroring nextcloudctl's own
+# `_valid_uid`/`_valid_quota` (defense in depth, not a substitute for it).
+_UID_RE = _re.compile(r"^[A-Za-z0-9._@-]+$")
+_QUOTA_RE = _re.compile(r"^(none|default|[0-9]+(\.[0-9]+)?[KMGT]?B?)$", _re.I)
+
+
+def _require_running():
+    if not lxc_running():
+        raise HTTPException(409, "Nextcloud container is not running")
+
+
+def _valid_uid(uid: str) -> bool:
+    return bool(uid) and bool(_UID_RE.match(uid))
+
+
+class NewUser(BaseModel):
+    uid: str
+    display_name: str = ""
+    password: str
+
+
+class QuotaReq(BaseModel):
+    quota: str
 
 
 # Public endpoints
@@ -260,22 +287,84 @@ def update():
 
 
 @app.get("/users", dependencies=[Depends(require_jwt)])
-async def list_users():
-    """List Nextcloud users"""
-    if not lxc_running():
-        return {"users": []}
+async def get_users():
+    """List Nextcloud users, detailed (uid/displayname/enabled/quota)."""
+    _require_running()
+    ok, out, err = ctl(["user", "list"], timeout=30)
+    if not ok:
+        raise HTTPException(500, f"user list failed: {err}")
+    import json
+    try:
+        data = json.loads(out)
+    except Exception:
+        data = []
+    # nextcloudctl's `user list` normally emits a detailed list already; fall
+    # back to normalising a bare {uid: displayname} map defensively.
+    if isinstance(data, dict):
+        users = [{"uid": k, "displayname": v, "enabled": True, "quota": ""} for k, v in data.items()]
+    else:
+        users = data
+    return {"users": users}
 
-    success, out, _ = occ_cmd("user:list --output=json")
-    if success:
-        try:
-            import json
-            data = json.loads(out)
-            users = [{"uid": k, "displayname": v} for k, v in data.items()]
-            return {"users": users}
-        except:
-            pass
 
-    return {"users": []}
+@app.post("/user", dependencies=[Depends(require_jwt)])
+async def create_user(req: NewUser):
+    """Create a Nextcloud user. Password travels via stdin only — never argv
+    (which would leak it in `ps`)."""
+    _require_running()
+    if not _valid_uid(req.uid):
+        raise HTTPException(400, "invalid uid")
+    ok, out, err = ctl(["user", "add", req.uid, req.display_name or req.uid],
+                        stdin=req.password + "\n", timeout=60)
+    if not ok:
+        raise HTTPException(500, f"create failed: {err or out}")
+    return {"success": True}
+
+
+@app.delete("/user/{uid}", dependencies=[Depends(require_jwt)])
+async def delete_user(uid: str):
+    _require_running()
+    if not _valid_uid(uid):
+        raise HTTPException(400, "invalid uid")
+    ok, _, err = ctl(["user", "del", uid], timeout=60)
+    if not ok:
+        raise HTTPException(500, f"delete failed: {err}")
+    return {"success": True}
+
+
+@app.post("/user/{uid}/enable", dependencies=[Depends(require_jwt)])
+async def enable_user(uid: str):
+    _require_running()
+    if not _valid_uid(uid):
+        raise HTTPException(400, "invalid uid")
+    ok, _, err = ctl(["user", "enable", uid])
+    if not ok:
+        raise HTTPException(500, f"enable failed: {err}")
+    return {"success": True}
+
+
+@app.post("/user/{uid}/disable", dependencies=[Depends(require_jwt)])
+async def disable_user(uid: str):
+    _require_running()
+    if not _valid_uid(uid):
+        raise HTTPException(400, "invalid uid")
+    ok, _, err = ctl(["user", "disable", uid])
+    if not ok:
+        raise HTTPException(500, f"disable failed: {err}")
+    return {"success": True}
+
+
+@app.post("/user/{uid}/quota", dependencies=[Depends(require_jwt)])
+async def set_quota(uid: str, req: QuotaReq):
+    _require_running()
+    if not _valid_uid(uid):
+        raise HTTPException(400, "invalid uid")
+    if not _QUOTA_RE.match(req.quota or ""):
+        raise HTTPException(400, "invalid quota")
+    ok, _, err = ctl(["user", "quota", uid, req.quota])
+    if not ok:
+        raise HTTPException(500, f"quota failed: {err}")
+    return {"success": True}
 
 
 class ResetPassword(BaseModel):
