@@ -1,3 +1,12 @@
+secubox-nextcloud (1.4.6-1~bookworm1) bookworm; urgency=medium
+
+  * #429 CRITICAL: /status,/storage cache is now single-flight + serve-stale.
+    The plain TTL cache still let concurrent polls during the ~6s compute all
+    miss and spawn the helper at once (thundering herd → load 9+, status 000).
+    One compute per key at a time; concurrent callers get the last value.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:35:00 +0200
+
 secubox-nextcloud (1.4.5-1~bookworm1) bookworm; urgency=medium
 
   * #429 CRITICAL: request handlers were async def calling blocking subprocess,
