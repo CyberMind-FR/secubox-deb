@@ -1,3 +1,11 @@
+secubox-nextcloud (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * #429 fix: real detailed users — NC has no `user:list:detailed`; use
+    `occ user:list --info --output=json` (enabled/quota/last_seen/email) and
+    normalize the {uid:{…}} map to the dashboard's flat rows.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 13:30:00 +0200
+
 secubox-nextcloud (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * #429 fix: brand-agnostic version parse — this NC instance rebrands the
