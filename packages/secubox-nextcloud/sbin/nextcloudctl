@@ -489,6 +489,19 @@ user_del() {
     occ user:delete "$username"
 }
 
+# #429: password comes from THIS process's stdin — never argv (ref #429: the
+# FastAPI layer pipes it via ctl(..., stdin=password)). Mirrors user_add.
+user_setpass() {
+    local username="$1"
+    _valid_uid "$username" || { echo "invalid uid" >&2; return 2; }
+    if ! lxc_running; then error "Container not running"; return 1; fi
+    local password
+    IFS= read -r password
+    [ -z "$password" ] && { error "password required on stdin"; return 1; }
+    printf '%s' "$password" | lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c \
+        'IFS= read -r OC_PASS; export OC_PASS; sudo --preserve-env=OC_PASS -u www-data php /var/www/nextcloud/occ user:resetpassword --password-from-env "$1"' _ "$username"
+}
+
 # #429 injection guard: a Nextcloud uid is limited to a safe charset before it
 # is ever interpolated into an occ shell command inside the container. Uses
 # bash's `[[ =~ ]]` whole-string match (anchors the ENTIRE string, unlike
@@ -910,6 +923,7 @@ Users:
   user enable <user>              Enable user
   user disable <user>             Disable user
   user quota <user> <quota>       Set user quota (e.g. 5GB, none, default)
+  user setpass <user>              Reset password (password read from stdin)
 
 Apps:
   app install <name>   Install app
@@ -951,7 +965,8 @@ case "${1:-}" in
             enable) shift 2; user_enable "$@" ;;
             disable) shift 2; user_disable "$@" ;;
             quota) shift 2; user_quota "$@" ;;
-            *) echo "Usage: nextcloudctl user {add|del|list|enable|disable|quota}"; exit 1 ;;
+            setpass) shift 2; user_setpass "$@" ;;
+            *) echo "Usage: nextcloudctl user {add|del|list|enable|disable|quota|setpass}"; exit 1 ;;
         esac
         ;;
     app)

@@ -374,17 +374,18 @@ class ResetPassword(BaseModel):
 
 @app.post("/user/password", dependencies=[Depends(require_jwt)])
 async def reset_password(req: ResetPassword):
-    """Reset user password"""
-    if not lxc_running():
-        raise HTTPException(400, "Container not running")
-
-    cmd = f"OC_PASS='{req.password}' php /var/www/nextcloud/occ user:resetpassword --password-from-env '{req.uid}'"
-    full_cmd = f"su -s /bin/bash www-data -c \"{cmd}\""
-    success, out, err = lxc_attach(full_cmd)
-
-    if success:
-        return {"success": True, "message": f"Password reset for {req.uid}"}
-    raise HTTPException(500, f"Failed: {err}")
+    """Reset a Nextcloud user's password. Password travels via stdin only —
+    never argv/interpolated shell string (ref #429: the old implementation
+    built `OC_PASS='{password}'` into a `su -c` command string, leaking the
+    password to `ps` and letting an embedded `'` break out of the quoting)."""
+    _require_running()
+    if not _valid_uid(req.uid):
+        raise HTTPException(400, "invalid uid")
+    ok, out, err = ctl(["user", "setpass", req.uid],
+                        stdin=req.password + "\n", timeout=60)
+    if not ok:
+        raise HTTPException(500, f"Failed: {err or out}")
+    return {"success": True, "message": f"Password reset for {req.uid}"}
 
 
 @app.get("/storage", dependencies=[Depends(require_jwt)])

@@ -53,3 +53,35 @@ def test_quota_validation(monkeypatch):
     c = TestClient(m.app)
     assert c.post("/user/alice/quota", json={"quota": "5GB"}).status_code == 200
     assert c.post("/user/alice/quota", json={"quota": "$(x)"}).status_code == 400
+
+
+def test_reset_password_uses_stdin_not_argv(monkeypatch):
+    m = _load(monkeypatch)  # running=True
+    seen = {}
+    def fake_ctl(sub, timeout=60, stdin=None):
+        seen["sub"] = sub; seen["stdin"] = stdin
+        return True, "", ""
+    monkeypatch.setattr(m, "ctl", fake_ctl)
+    c = TestClient(m.app)
+    r = c.post("/user/password", json={"uid": "alice", "password": "it's a s3cret"})
+    assert r.status_code == 200
+    assert seen["sub"][:2] == ["user", "setpass"]
+    # the password must NOT appear anywhere in the argv subcmd
+    assert not any("OC_PASS" in str(x) or "resetpassword" in str(x) or "s3cret" in str(x) for x in seen["sub"])
+    assert seen["stdin"] is not None  # password went via stdin
+    assert "s3cret" in seen["stdin"]
+
+
+def test_reset_password_bad_uid_rejected_400(monkeypatch):
+    m = _load(monkeypatch)
+    monkeypatch.setattr(m, "ctl", lambda *a, **k: (True, "", ""))
+    c = TestClient(m.app)
+    r = c.post("/user/password", json={"uid": "a;rm -rf /", "password": "x"})
+    assert r.status_code == 400
+
+
+def test_reset_password_409_when_not_running(monkeypatch):
+    m = _load(monkeypatch, running=False)
+    c = TestClient(m.app)
+    r = c.post("/user/password", json={"uid": "alice", "password": "x"})
+    assert r.status_code == 409
