@@ -1,3 +1,9 @@
+secubox-tor (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * /tor/ Control Panel now arms the transparent Tor egress (tor_mode) + shows state.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 20:30:00 +0200
+
 secubox-tor (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Tor control panels on the /tor/ page (exit-country, VPN clients, obfs4 bridges,
