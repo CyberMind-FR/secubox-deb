@@ -350,9 +350,11 @@
                 <button class="btn btn-purple tor-mode-btn" data-preset="stealth">🥷 Stealth Mode</button>
                 <button class="btn tor-mode-btn" data-preset="minimal">⚡ Minimal Mode</button>
                 <button class="btn btn-red" id="btn-disable-tor">⏹️ Disable Tor</button>
+                <span id="tor-egress-state" style="margin-left:1rem; font-weight:600; font-family:'JetBrains Mono',monospace;">○ Tor egress OFF</span>
             </div>
             <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-dim);">
-                <strong>Exit IP:</strong> <span id="exit-ip">-</span>
+                Any of the mode buttons <strong>arms the transparent Tor egress</strong> (the switch that actually routes traffic); Disable turns it off.
+                <br><strong>Exit IP:</strong> <span id="exit-ip">-</span>
             </p>
         </div>
 
@@ -609,28 +611,42 @@
                 b.addEventListener('click', () => removeHiddenService(b.dataset.name)));
         }
 
-        async function enableTor(preset) {
-            showToast(`Enabling Tor (${preset} mode)...`);
-            const res = await api('/enable', {
-                method: 'POST',
-                body: JSON.stringify({ preset })
-            });
+        // The master Tor-egress switch (tor_mode) lives in the toolbox portal,
+        // cookie-gated on this same admin vhost. Arming it is what actually
+        // routes traffic through Tor — without it, "Anonymous mode" does nothing.
+        async function torEgressSet(on) {
+            try {
+                const r = await fetch(`${TOOLBOX_API}/admin/tor/${on ? 'on' : 'off'}`,
+                    { method: 'POST', credentials: 'same-origin' });
+                return r.ok;
+            } catch (e) { return false; }
+        }
+        async function loadTorEgressState() {
+            const el = document.getElementById('tor-egress-state');
+            if (!el) return;
+            try {
+                const r = await fetch(`${TOOLBOX_API}/admin/tor/state`, { credentials: 'same-origin' });
+                const s = r.ok ? await r.json() : {};
+                const on = !!s.tor_mode;
+                el.textContent = on ? '● Tor egress ARMED' : '○ Tor egress OFF';
+                el.style.color = on ? 'var(--green)' : 'var(--text-dim)';
+            } catch (e) { el.textContent = '○ Tor egress unknown'; }
+        }
 
-            if (res && res.success) {
-                showToast('Tor enabled');
-            } else {
-                showToast((res && (res.error || res.__error)) || 'Failed to enable Tor', 'error');
-            }
+        async function enableTor(preset) {
+            showToast(`Enabling Tor (${preset} mode) + arming egress…`);
+            await api('/enable', { method: 'POST', body: JSON.stringify({ preset }) });
+            const armed = await torEgressSet(true);   // the part that actually routes traffic
+            showToast(armed ? 'Tor enabled + egress ARMED' : 'Tor enabled but egress arm failed', armed ? '' : 'error');
+            loadTorEgressState();
             refresh();
         }
 
         async function disableTor() {
-            const res = await api('/disable', { method: 'POST' });
-            if (res && res.success) {
-                showToast('Tor disabled');
-            } else {
-                showToast((res && (res.error || res.__error)) || 'Failed to disable Tor', 'error');
-            }
+            await api('/disable', { method: 'POST' });
+            await torEgressSet(false);
+            showToast('Tor disabled + egress OFF');
+            loadTorEgressState();
             refresh();
         }
 
@@ -907,7 +923,7 @@
         async function refresh() {
             await Promise.all([
                 loadStatus(), loadCircuits(), loadHiddenServices(), loadOnionDns(),
-                loadExitCountry(), loadVpnClients(), loadBridges(),
+                loadExitCountry(), loadVpnClients(), loadBridges(), loadTorEgressState(),
             ]);
         }
 
