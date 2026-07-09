@@ -1,3 +1,9 @@
+secubox-reality (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * fleet crt-light skin + shared sidebar + navbar menu entry.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 21:30:00 +0200
+
 secubox-reality (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release: VLESS+Reality+Vision egress-point manager (Xray-core).
