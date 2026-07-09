@@ -1,3 +1,9 @@
+secubox-toolbox (2.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * Tor-VPN panel: NAC online-clients one-click routing toggle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 00:00:00 +0200
+
 secubox-toolbox (2.8.3-1~bookworm1) bookworm; urgency=medium
 
   * Tor Phase-1 enhancement: exit-country, per-client Tor-VPN (leak-proof kill-switch),
