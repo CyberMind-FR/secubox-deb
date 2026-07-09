@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox - Reality</title>
+<style>
+/* ============================================================
+   SecuBox Reality — self-contained WebUI.
+   Zero CDN / zero external assets: fonts fall back gracefully to
+   local system faces when Space Grotesk / JetBrains Mono are not
+   installed on the client. Palette per DESIGN-CHARTER.md — MESH
+   (#104A88) is the module accent; AUTH/WALL/BOOT/MIND/ROOT tints
+   are used for the Hamiltonian-path breadcrumbs and status pills.
+   ============================================================ */
+:root {
+  --auth-main:#C04E24; --auth-xlt:#FAECE7;
+  --wall-main:#9A6010; --wall-xlt:#FDF3E0;
+  --boot-main:#803018; --boot-xlt:#FAECE7;
+  --mind-main:#3D35A0; --mind-xlt:#EEEDFE;
+  --root-main:#0A5840; --root-xlt:#E1F5EE;
+  --mesh-main:#104A88; --mesh-light:#2C70C0; --mesh-xlt:#E6F1FB; --mesh-dark:#08305A;
+
+  --accent: var(--mesh-main);
+  --accent-light: var(--mesh-light);
+
+  --bg:#FFFFFF; --surface:#FAFAF8; --surface2:#F4F3EF;
+  --border:#E2E0D8; --border2:#C8C6BE;
+  --text:#1A1A18; --muted:#6B6963;
+  --green:#0A5840; --yellow:#9A6010; --red:#803018;
+  --sidebar-w: 220px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Space Grotesk', 'Segoe UI', -apple-system, sans-serif;
+  background: var(--bg); color: var(--text);
+  display: flex; min-height: 100vh; font-size: 14px; line-height: 1.6;
+}
+code, .mono, .val, input, textarea, select, button, table { font-family: 'JetBrains Mono', 'Consolas', monospace; }
+
+/* ---- sidebar: ROOT -> MESH -> MIND (this module's slice of the
+   AUTH->WALL->BOOT->MIND->ROOT->MESH Hamiltonian path) ---- */
+.sidebar {
+  position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+  background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden; z-index: 100;
+}
+.sidebar::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+  background: linear-gradient(180deg, var(--root-main), var(--mesh-main), var(--mind-main));
+}
+.sidebar-header { padding: 1.25rem 1rem 1rem 1.5rem; border-bottom: 1px solid var(--border); }
+.sidebar-header .logo { font-size: 1rem; font-weight: 700; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; }
+.sidebar-header .sub { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.1em; margin-top: 0.2rem; }
+.sidebar-nav { flex: 1; padding: 0.75rem 0; overflow-y: auto; }
+.nav-step { display: block; padding: 0.6rem 1rem 0.6rem 1.5rem; text-decoration: none; border-left: 3px solid transparent; color: var(--text); }
+.nav-step .code { font-size: 0.6rem; letter-spacing: 0.15em; display: block; font-weight: 700; }
+.nav-step .label { font-size: 0.8rem; color: var(--muted); }
+.nav-step.root  { border-left-color: var(--root-main); }
+.nav-step.root  .code { color: var(--root-main); }
+.nav-step.mesh  { border-left-color: var(--mesh-main); }
+.nav-step.mesh  .code { color: var(--mesh-main); }
+.nav-step.mind  { border-left-color: var(--mind-main); }
+.nav-step.mind  .code { color: var(--mind-main); }
+.nav-step:hover { background: var(--mesh-xlt); }
+.sidebar-footer { padding: 0.75rem 1rem 0.75rem 1.5rem; border-top: 1px solid var(--border); font-size: 0.65rem; color: var(--muted); }
+
+.main { flex: 1; margin-left: var(--sidebar-w); padding: 1.5rem 1.75rem 3rem; min-width: 0; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
+.header h1 { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -0.3px; }
+.header .desc { font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem; }
+
+#errbar { display: none; background: var(--boot-xlt); border: 1px solid var(--boot-main); color: var(--boot-main); padding: 0.6rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.8rem; }
+#errbar.show { display: block; }
+
+section.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.4rem; margin-bottom: 1.25rem; }
+section.card h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+section.card h2 .tag { font-size: 9px; padding: 0.1rem 0.4rem; border-radius: 4px; letter-spacing: 0.1em; }
+.tag.root { background: var(--root-xlt); color: var(--root-main); }
+.tag.mesh { background: var(--mesh-xlt); color: var(--mesh-main); }
+.tag.mind { background: var(--mind-xlt); color: var(--mind-main); }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } .main { margin-left: 0; } .sidebar { display: none; } }
+
+label { display: block; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0.6rem 0 0.25rem; }
+input, select { width: 100%; padding: 0.45rem 0.6rem; border: 1px solid var(--border2); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.85rem; }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+.btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border2); background: var(--surface); color: var(--text); cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 0.8rem; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-light); color: #fff; }
+.btn.danger { border-color: var(--boot-main); color: var(--boot-main); background: transparent; }
+.btn.danger:hover { background: var(--boot-xlt); }
+.btn.small { padding: 0.3rem 0.6rem; font-size: 0.7rem; }
+.actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+.mono-cell { font-size: 11px; word-break: break-all; }
+.empty { color: var(--muted); font-style: italic; padding: 0.6rem 0; font-size: 0.8rem; }
+
+.pill { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.pill.green  { background: rgba(10,88,64,0.1); color: var(--green); }
+.pill.yellow { background: rgba(154,96,16,0.1); color: var(--yellow); }
+.pill.red    { background: rgba(128,48,24,0.1); color: var(--red); }
+.pill.blue   { background: var(--mesh-xlt); color: var(--mesh-main); }
+.pill.gray   { background: rgba(107,105,99,0.1); color: var(--muted); }
+
+.qr-box { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem; }
+.qr-box svg { width: 160px; height: 160px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.uri-box { flex: 1; min-width: 240px; word-break: break-all; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; }
+
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 0.75rem; }
+.stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0.9rem; }
+.stat .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.stat .v { font-size: 18px; font-weight: 700; color: var(--accent); margin-top: 0.2rem; }
+@media (max-width: 700px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">SecuBox // Reality</div>
+    <div class="sub">VLESS + Reality + Vision</div>
+  </div>
+  <div class="sidebar-nav">
+    <a class="nav-step root" href="#servers"><span class="code">05 · ROOT</span><span class="label">Egress points (storage)</span></a>
+    <a class="nav-step mesh" href="#apply"><span class="code">06 · MESH</span><span class="label">Transport / apply / clients</span></a>
+    <a class="nav-step mind" href="#guard"><span class="code">04 · MIND</span><span class="label">Validation / volume-guard</span></a>
+  </div>
+  <div class="sidebar-footer">CyberMind — secubox-reality</div>
+</nav>
+
+<main class="main">
+  <div class="header">
+    <div>
+      <h1>Reality egress manager</h1>
+      <div class="desc">Provision, validate and monitor VLESS+Reality+Vision (Xray-core) egress points.</div>
+    </div>
+    <button class="btn" id="refreshAll">Refresh</button>
+  </div>
+
+  <div id="errbar"></div>
+
+  <!-- ROOT: server list + create -->
+  <section class="card" id="servers">
+    <h2><span class="tag root">ROOT</span> Egress points</h2>
+    <table id="serversTable">
+      <thead><tr><th>Remark</th><th>dest / SNI</th><th>Port</th><th>Status</th><th>Public key</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="empty" id="serversEmpty" style="display:none;">No egress point provisioned yet.</div>
+
+    <h2 style="margin-top:1.5rem;"><span class="tag root">ROOT</span> Provision new server</h2>
+    <form id="createServerForm">
+      <div class="grid2">
+        <div>
+          <label>Remark</label>
+          <input name="remark" required maxlength="128" placeholder="edge-eu-1">
+          <label>Reality dest (camouflage target)</label>
+          <input name="dest" required placeholder="www.microsoft.com">
+          <label>SNI</label>
+          <input name="sni" required placeholder="www.microsoft.com">
+        </div>
+        <div>
+          <label>Listen port</label>
+          <input name="listen_port" type="number" value="443" min="1" max="65535">
+          <label>Dest port</label>
+          <input name="dest_port" type="number" value="443" min="1" max="65535">
+          <label>shortId count</label>
+          <input name="short_id_count" type="number" value="1" min="1" max="8">
+        </div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Provision (AUTH: keys + UUID)</button></div>
+    </form>
+  </section>
+
+  <!-- MIND: validate target -->
+  <section class="card" id="validate">
+    <h2><span class="tag mind">MIND</span> Validate target (TLS1.3 + X25519 sanity gate)</h2>
+    <form id="validateForm">
+      <div class="grid2">
+        <div><label>Host</label><input name="host" required placeholder="www.microsoft.com"></div>
+        <div><label>Port</label><input name="port" type="number" value="443" min="1" max="65535"></div>
+      </div>
+      <div class="actions"><button class="btn" type="submit">Validate</button></div>
+    </form>
+    <div id="validateResult" style="margin-top:0.75rem;"></div>
+  </section>
+
+  <!-- MESH: apply + clients + link -->
+  <section class="card" id="apply">
+    <h2><span class="tag mesh">MESH</span> Apply (write config + start instance)</h2>
+    <div class="grid2">
+      <div>
+        <label>Server</label>
+        <select id="applyServerSelect"></select>
+        <label><input type="checkbox" id="applyForce" style="width:auto;display:inline-block;"> force (skip target sanity gate)</label>
+      </div>
+      <div style="align-self:end;">
+        <div class="actions"><button class="btn primary" id="applyBtn" type="button">Apply</button></div>
+      </div>
+    </div>
+    <div id="applyResult" style="margin-top:0.75rem;"></div>
+  </section>
+
+  <section class="card" id="clients">
+    <h2><span class="tag mesh">MESH</span> Clients + link</h2>
+    <div class="grid2">
+      <div>
+        <label>Server</label>
+        <select id="clientServerSelect"></select>
+        <label>Client email / remark</label>
+        <input id="clientEmail" placeholder="alice@example.com">
+        <div class="actions"><button class="btn" id="createClientBtn" type="button">Add client</button></div>
+      </div>
+      <div>
+        <table id="clientsTable">
+          <thead><tr><th>Email</th><th>shortId</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty" id="clientsEmpty" style="display:none;">No clients for this server.</div>
+      </div>
+    </div>
+    <div class="qr-box" id="linkBox" style="display:none;">
+      <div id="qrHolder"></div>
+      <div class="uri-box" id="uriHolder"></div>
+    </div>
+  </section>
+
+  <!-- MIND: volume guard -->
+  <section class="card" id="guard">
+    <h2><span class="tag mind">MIND</span> Volume guard (sliding window)</h2>
+    <form id="guardForm">
+      <div class="grid2">
+        <div>
+          <label>Window (hours)</label>
+          <input name="window_hours" type="number" min="1" value="48">
+          <label>Soft limit (GB)</label>
+          <input name="soft_gb" type="number" min="0" step="0.1" value="80">
+        </div>
+        <div>
+          <label>Hard limit (GB, action = disable)</label>
+          <input name="hard_gb" type="number" min="0" step="0.1" value="100">
+        </div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Save guard config</button></div>
+    </form>
+  </section>
+
+  <section class="card" id="stats">
+    <h2><span class="tag mind">MIND</span> Stats (per-window delta)</h2>
+    <div id="statsBox" class="empty">No stats yet — click Refresh.</div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var API_BASE = '/api/mesh/reality';
+
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function showError(msg) {
+    var bar = document.getElementById('errbar');
+    bar.textContent = msg;
+    bar.classList.add('show');
+    setTimeout(function () { bar.classList.remove('show'); }, 6000);
+  }
+
+  // Fail-safe fetch: never throws to the caller's caller; always resolves
+  // to {ok, status, data} so UI code can render a graceful error instead
+  // of a blank/broken panel.
+  function api(path, opts) {
+    opts = opts || {};
+    var token = window.localStorage.getItem('sbx_token') || '';
+    var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    return fetch(API_BASE + path, {
+      method: opts.method || 'GET',
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      credentials: 'same-origin',
+    }).then(function (resp) {
+      if (resp.status === 401) {
+        window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+        return { ok: false, status: 401, data: null };
+      }
+      return resp.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON body */ }
+        return { ok: resp.ok, status: resp.status, data: data };
+      });
+    }).catch(function (err) {
+      showError('Network error: ' + err.message);
+      return { ok: false, status: 0, data: null };
+    });
+  }
+
+  function statusPill(status) {
+    var cls = 'gray';
+    if (status === 'running') cls = 'green';
+    else if (status === 'applied') cls = 'blue';
+    else if (status === 'disabled_volume_guard') cls = 'red';
+    else if (status === 'new') cls = 'yellow';
+    return '<span class="pill ' + cls + '">' + esc(status) + '</span>';
+  }
+
+  var STATE = { servers: [], selectedClientServer: null };
+
+  function loadServers() {
+    return api('/servers').then(function (r) {
+      if (!r.ok || !r.data) { showError('Failed to load servers'); return; }
+      STATE.servers = r.data;
+      renderServers();
+      renderServerSelects();
+    });
+  }
+
+  function renderServers() {
+    var tbody = document.querySelector('#serversTable tbody');
+    tbody.innerHTML = '';
+    document.getElementById('serversEmpty').style.display = STATE.servers.length ? 'none' : 'block';
+    STATE.servers.forEach(function (s) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + esc(s.remark) + '</td>' +
+        '<td class="mono-cell">' + esc(s.dest) + ' / ' + esc(s.sni) + '</td>' +
+        '<td>' + esc(s.listen_port) + '</td>' +
+        '<td>' + statusPill(s.status) + '</td>' +
+        '<td class="mono-cell">' + esc((s.public_key || '').slice(0, 16)) + '…</td>' +
+        '<td><button class="btn small danger" data-del="' + esc(s.id) + '">Delete</button></td>';
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('[data-del]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!confirm('Delete this egress point? Keys and config are destroyed.')) return;
+        api('/servers/' + encodeURIComponent(btn.getAttribute('data-del')), { method: 'DELETE' })
+          .then(function (r) { if (r.ok) { loadServers(); } else { showError('Delete failed'); } });
+      });
+    });
+  }
+
+  function renderServerSelects() {
+    ['applyServerSelect', 'clientServerSelect'].forEach(function (id) {
+      var sel = document.getElementById(id);
+      var prev = sel.value;
+      sel.innerHTML = '';
+      STATE.servers.forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.remark + ' (' + s.status + ')';
+        sel.appendChild(opt);
+      });
+      if (prev) sel.value = prev;
+    });
+    if (document.getElementById('clientServerSelect').value) {
+      loadClients(document.getElementById('clientServerSelect').value);
+    }
+  }
+
+  document.getElementById('createServerForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var fd = new FormData(ev.target);
+    api('/servers', {
+      method: 'POST',
+      body: {
+        remark: fd.get('remark'),
+        dest: fd.get('dest'),
+        sni: fd.get('sni'),
+        listen_port: parseInt(fd.get('listen_port'), 10),
+        dest_port: parseInt(fd.get('dest_port'), 10),
+        short_id_count: parseInt(fd.get('short_id_count'), 10),
+      },
+    }).then(function (r) {
+      if (r.ok) { ev.target.reset(); loadServers(); }
+      else { showError('Provision failed: ' + esc(r.data && r.data.detail || r.status)); }
+    });
+  });
+
+  document.getElementById('validateForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var fd = new FormData(ev.target);
+    var box = document.getElementById('validateResult');
+    box.innerHTML = 'Validating…';
+    api('/validate-target', { method: 'POST', body: { host: fd.get('host'), port: parseInt(fd.get('port'), 10) } })
+      .then(function (r) {
+        if (!r.ok || !r.data) { box.innerHTML = '<span class="pill red">error</span>'; return; }
+        var d = r.data;
+        box.innerHTML =
+          (d.ok ? '<span class="pill green">SANE</span>' : '<span class="pill red">INSANE</span>') + ' ' +
+          '<span class="pill ' + (d.reachable ? 'green' : 'red') + '">reachable=' + d.reachable + '</span> ' +
+          '<span class="pill ' + (d.tls13 ? 'green' : 'red') + '">TLS1.3=' + d.tls13 + '</span> ' +
+          '<span class="pill ' + (d.x25519 ? 'green' : 'red') + '">X25519=' + d.x25519 + '</span> ' +
+          '<span class="pill blue">ALPN=' + esc((d.alpn || []).join(',') || '-') + '</span>' +
+          (d.reason ? '<div class="empty">' + esc(d.reason) + '</div>' : '');
+      });
+  });
+
+  document.getElementById('applyBtn').addEventListener('click', function () {
+    var id = document.getElementById('applyServerSelect').value;
+    if (!id) { showError('No server selected'); return; }
+    var force = document.getElementById('applyForce').checked;
+    var box = document.getElementById('applyResult');
+    box.innerHTML = 'Applying…';
+    api('/apply?force=' + (force ? 'true' : 'false'), { method: 'POST', body: { server_id: id } })
+      .then(function (r) {
+        if (!r.ok || !r.data) {
+          box.innerHTML = '<span class="pill red">' + esc(r.data && r.data.detail || 'apply failed') + '</span>';
+          return;
+        }
+        var inst = r.data.instance || {};
+        box.innerHTML = '<span class="pill ' + (inst.running ? 'green' : 'yellow') + '">' +
+          esc(inst.unit) + ' — ' + esc(inst.active) + '</span>';
+        loadServers();
+      });
+  });
+
+  document.getElementById('createClientBtn').addEventListener('click', function () {
+    var id = document.getElementById('clientServerSelect').value;
+    var email = document.getElementById('clientEmail').value.trim();
+    if (!id || !email) { showError('Select a server and enter a client email/remark'); return; }
+    api('/clients', { method: 'POST', body: { server_id: id, email: email } })
+      .then(function (r) {
+        if (r.ok) { document.getElementById('clientEmail').value = ''; loadClients(id); }
+        else { showError('Create client failed'); }
+      });
+  });
+
+  function loadClients(serverId) {
+    STATE.selectedClientServer = serverId;
+    return api('/clients?server_id=' + encodeURIComponent(serverId)).then(function (r) {
+      var tbody = document.querySelector('#clientsTable tbody');
+      tbody.innerHTML = '';
+      var clients = (r.ok && r.data) ? r.data : [];
+      document.getElementById('clientsEmpty').style.display = clients.length ? 'none' : 'block';
+      clients.forEach(function (c) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + esc(c.email) + '</td>' +
+          '<td class="mono-cell">' + esc(c.short_id) + '</td>' +
+          '<td>' +
+            '<button class="btn small" data-link="' + esc(c.id) + '">Link</button> ' +
+            '<button class="btn small danger" data-delc="' + esc(c.id) + '">Del</button>' +
+          '</td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('[data-link]').forEach(function (btn) {
+        btn.addEventListener('click', function () { showLink(btn.getAttribute('data-link')); });
+      });
+      tbody.querySelectorAll('[data-delc]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          api('/clients/' + encodeURIComponent(btn.getAttribute('data-delc')), { method: 'DELETE' })
+            .then(function (r2) { if (r2.ok) loadClients(serverId); });
+        });
+      });
+    });
+  }
+  document.getElementById('clientServerSelect').addEventListener('change', function (ev) {
+    loadClients(ev.target.value);
+  });
+
+  function showLink(clientId) {
+    api('/link?client_id=' + encodeURIComponent(clientId)).then(function (r) {
+      if (!r.ok || !r.data) { showError('Failed to build link'); return; }
+      var box = document.getElementById('linkBox');
+      box.style.display = 'flex';
+      document.getElementById('uriHolder').textContent = r.data.uri || '';
+      var qrHolder = document.getElementById('qrHolder');
+      // qr_svg is generated server-side (segno) from a URI we built
+      // ourselves — not raw user input — so it's safe to insert as markup.
+      qrHolder.innerHTML = r.data.qr_svg || '<div class="empty">QR unavailable (segno not installed)</div>';
+    });
+  }
+
+  document.getElementById('guardForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var fd = new FormData(ev.target);
+    api('/guard', {
+      method: 'PUT',
+      body: {
+        window_hours: parseInt(fd.get('window_hours'), 10),
+        soft_gb: parseFloat(fd.get('soft_gb')),
+        hard_gb: parseFloat(fd.get('hard_gb')),
+        action: 'disable',
+      },
+    }).then(function (r) {
+      if (r.ok) { loadStats(); } else { showError('Save guard failed: ' + esc(r.data && r.data.detail || r.status)); }
+    });
+  });
+
+  function loadGuard() {
+    api('/guard').then(function (r) {
+      if (!r.ok || !r.data) return;
+      var f = document.getElementById('guardForm');
+      f.window_hours.value = r.data.window_hours;
+      f.soft_gb.value = r.data.soft_gb;
+      f.hard_gb.value = r.data.hard_gb;
+    });
+  }
+
+  function loadStats() {
+    var box = document.getElementById('statsBox');
+    api('/stats').then(function (r) {
+      if (!r.ok || !r.data || !r.data.servers || !r.data.servers.length) {
+        box.className = 'empty';
+        box.textContent = 'No stats yet.';
+        return;
+      }
+      box.className = '';
+      box.innerHTML = r.data.servers.map(function (s) {
+        return '<div class="stat-row">' +
+          '<div class="stat"><div class="l">' + esc(s.server_id.slice(0, 8)) + '</div><div class="v">' + esc(s.total_gb) + ' GB</div></div>' +
+          '<div class="stat"><div class="l">window</div><div class="v">' + esc(s.window_hours) + 'h</div></div>' +
+          '<div class="stat"><div class="l">soft/hard</div><div class="v">' + esc(s.soft_gb) + '/' + esc(s.hard_gb) + '</div></div>' +
+          '<div class="stat"><div class="l">action</div><div class="v">' + (s.action_taken ? '<span class="pill red">' + esc(s.action_taken) + '</span>' : '<span class="pill green">ok</span>') + '</div></div>' +
+          '</div>';
+      }).join('');
+    });
+  }
+
+  document.getElementById('refreshAll').addEventListener('click', function () {
+    loadServers(); loadGuard(); loadStats();
+  });
+
+  // initial load
+  loadServers();
+  loadGuard();
+  loadStats();
+})();
+</script>
+</body>
+</html>
