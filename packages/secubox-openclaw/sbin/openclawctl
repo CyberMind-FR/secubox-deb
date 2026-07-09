@@ -111,7 +111,12 @@ cmd_scan() {
         # domain/email are OSINT aggregates: partial data is expected and the
         # trailing head/grep would mask the real tool rc, so always report done.
         domain) raw="$(lxc_attach 'echo "== DNS =="; dig +noall +answer ANY "$1"; echo "== WHOIS =="; whois -- "$1" 2>/dev/null | head -40; echo "== CERTS =="; curl -s --max-time 20 "https://crt.sh/?q=$1&output=json" | head -c 20000' "$target" 2>&1)"; rc=0 ;;
-        email)  raw="$(lxc_attach 'd="${1#*@}"; echo "== MX =="; dig +short MX "$d"; echo "== SPF =="; dig +short TXT "$d" | grep -i spf' "$target" 2>&1)"; rc=0 ;;
+        # Derive the post-@ domain ON THE HOST and re-validate it: _valid_target
+        # anchors only the first char of the whole string, so 'a@-f/etc/hostname'
+        # passes as an email but its domain '-f/etc/hostname' would be a dig flag.
+        email)  local _d="${target#*@}"
+                _valid_target "$_d" || { err "bad email domain"; return 2; }
+                raw="$(lxc_attach 'echo "== MX =="; dig +short MX "$1"; echo "== SPF =="; dig +short TXT "$1" | grep -i spf' "$_d" 2>&1)"; rc=0 ;;
         *) err "unhandled type"; return 2 ;;
     esac
     local status="completed"; [ "$rc" -ne 0 ] && status="failed"
