@@ -9,6 +9,19 @@ case "$1" in
         # Create run directory
         mkdir -p /run/secubox
 
+        # Tor hidden-service PARENT dir. _tor_add_sync writes
+        # `HiddenServiceDir /var/lib/tor/hidden_services/<name>` into torrc, but
+        # tor only creates the LEAF dir — if the parent is missing tor errors
+        # "No such file or directory" AND fails to load its whole config
+        # (breaking the egress; found live in Tor Phase-1 e2e). Create it owned
+        # by debian-tor (so tor can make the leaf) and setgid + group-traversable
+        # so secubox-tor (SupplementaryGroups=debian-tor) can discover .onions.
+        if getent passwd debian-tor >/dev/null 2>&1; then
+            mkdir -p /var/lib/tor/hidden_services
+            chown debian-tor:debian-tor /var/lib/tor/hidden_services
+            chmod 2750 /var/lib/tor/hidden_services
+        fi
+
         # Enable and start service
         systemctl daemon-reload
         systemctl enable secubox-exposure.service
