@@ -175,12 +175,14 @@ def _spawn_worker(scan_type: str, target: str, scan_id: str):
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      stdin=subprocess.DEVNULL, start_new_session=True)
 
-def _audit(op, scan_type, target, authorized, scan_id):
+def _audit(operator, scan_type, target, authorized, scan_id, action="scan"):
+    # Append-only — never truncate. `operator` = JWT sub (WHO), `action` = WHAT.
     try:
         AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
         with AUDIT_LOG.open("a") as f:
             f.write(json.dumps({"ts": datetime.now(timezone.utc).isoformat(),
-                                "module": "openclaw", "op": op, "operator": op,
+                                "module": "openclaw", "action": action,
+                                "operator": operator,
                                 "type": scan_type, "target": target,
                                 "authorized": authorized, "scan_id": scan_id}) + "\n")
     except Exception:  # pragma: no cover - audit must never break a scan
@@ -194,7 +196,7 @@ def _start_scan(scan_type, req: ScanReq, operator: str):
         raise HTTPException(409, "external active scan requires authorized=true")
     scan_id = _new_id()
     if scan_type in _ACTIVE_TYPES:
-        _audit(operator, scan_type, req.target, req.authorized, scan_id)
+        _audit(operator, scan_type, req.target, req.authorized, scan_id, action="scan")
     _spawn_worker(scan_type, req.target, scan_id)
     return {"status": "started", "scan_id": scan_id, "type": scan_type, "target": req.target}
 
@@ -239,14 +241,22 @@ def _sync_lookup(scan_type, target):
     _require_installed()
     if not _valid_target(target):
         raise HTTPException(400, "invalid target")
-    ok, out, err = ctl(["scan", scan_type, target, "00000000"], timeout=45)
-    # the sync path reuses the same helper but we read the record it wrote
-    f = SCANS_DIR / "00000000.json"
-    if f.exists():
-        try: return json.loads(f.read_text())
-        except Exception: pass
-    return {"status": "failed" if not ok else "completed", "results": {"raw": out or err}}
+    # Per-request id: two concurrent (threadpooled) lookups must not race on one
+    # file and read back each other's result. Transient — cleaned up, never
+    # persisted in /scans.
+    tmp_id = _new_id()
+    ctl(["scan", scan_type, target, tmp_id], timeout=45)
+    f = SCANS_DIR / f"{tmp_id}.json"
+    try:
+        if f.exists():
+            data = json.loads(f.read_text())
+            return data
+        return {"status": "failed", "results": {"raw": ""}}
+    finally:
+        try: f.unlink()
+        except OSError: pass
 
+# Passive OSINT quick-lookups — unrestricted (no active probing).
 @app.get("/dns/{domain}", dependencies=[Depends(require_jwt)])
 def dns_lookup(domain: str): return _sync_lookup("dns", domain)
 
@@ -256,8 +266,17 @@ def whois_lookup(target: str): return _sync_lookup("whois", target)
 @app.get("/certs/{domain}", dependencies=[Depends(require_jwt)])
 def certs_lookup(domain: str): return _sync_lookup("certs", domain)
 
+# Active quick-lookup — `ports` is a real nmap probe, so it is policy-gated and
+# audited. External targets must go through the gated POST /scan/ip (authorized=true).
 @app.get("/ports/{ip}", dependencies=[Depends(require_jwt)])
-def ports_lookup(ip: str): return _sync_lookup("ports", ip)
+def ports_lookup(ip: str, claims: dict = Depends(require_jwt)):
+    _require_installed()
+    if not _valid_target(ip):
+        raise HTTPException(400, "invalid target")
+    if not _is_local_or_owned(ip):
+        raise HTTPException(409, "external active port scan requires POST /scan/ip with authorized=true")
+    _audit(claims.get("sub", "?"), "ports", ip, False, "quicklook", action="scan")
+    return _sync_lookup("ports", ip)
 
 @app.post("/install", dependencies=[Depends(require_jwt)])
 def install():

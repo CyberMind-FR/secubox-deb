@@ -58,3 +58,18 @@ def test_install_detached_when_absent(monkeypatch):
 def test_install_refused_when_present(monkeypatch):
     m = _load(monkeypatch, installed=True)
     assert TestClient(m.app).post("/install").status_code == 400
+
+def test_ports_lookup_external_refused_409(monkeypatch):
+    m = _load(monkeypatch)
+    monkeypatch.setattr(m, "_sync_lookup", lambda *a, **k: {"status": "completed"})
+    c = TestClient(m.app)
+    assert c.get("/ports/8.8.8.8").status_code == 409
+
+def test_ports_lookup_lan_allowed(monkeypatch):
+    m = _load(monkeypatch); audited = {}
+    monkeypatch.setattr(m, "_sync_lookup", lambda t, tgt: {"status": "completed", "type": t, "target": tgt})
+    monkeypatch.setattr(m, "_audit", lambda *a, **k: audited.update(args=a, kwargs=k))
+    c = TestClient(m.app)
+    r = c.get("/ports/192.168.1.5")
+    assert r.status_code == 200 and r.json()["status"] == "completed"
+    assert audited["args"][1] == "ports" and audited["args"][2] == "192.168.1.5"
