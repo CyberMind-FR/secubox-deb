@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|deconfigure)
+        systemctl stop secubox-reality-monitor.timer 2>/dev/null || true
+        systemctl stop secubox-reality.service 2>/dev/null || true
+        # Running secubox-xray@<id> egress instances are left alone here —
+        # they are independent operational entities (an operator's live
+        # egress points); removing the API/monitor must not silently take
+        # traffic down. Use `secubox-reality` API DELETE /servers/<id> (or
+        # `systemctl stop secubox-xray@<id>` manually) before purge if a
+        # full teardown is intended.
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
