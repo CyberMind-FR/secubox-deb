@@ -383,7 +383,7 @@ def test_hidden_services_autodiscovers_onion(monkeypatch, tmp_path):
 
 - [ ] **Step 1: Implement** — add to the existing toolbox `#tor` tab (`data-tab="tor"` in `www/toolbox/index.html`, alongside the Tor-egress switch; keep skin). The tab calls toolbox's own country/VPN endpoints, plus `/api/v1/exposure/tor/emancipate_webui` and `/api/v1/tor/hidden_services` cross-module (via the aggregator/nginx):
   - **Exit-country** panel: multi-select of ISO countries (static list) → `POST …/exit_country`; shows current + the live exit relay country; a warning banner when `StrictNodes` is on and no circuit has an exit (fail-closed).
-  - **Tor-VPN clients** table: add selector (kind ip/cidr/mac + value, client-validated) → `POST …/vpn/client`; per-row remove; shows routed state.
+  - **Tor-VPN clients** table: add selector (kind ip/cidr/mac + value, client-validated) → `POST …/vpn/client`; per-row remove; shows routed state. **Show a prominent IPv6 warning** in this panel: routed clients' IPv6 is NOT tunneled (Phase-1 v4-only kill-switch) — advise disabling IPv6 on routed clients or the box's RA to avoid a v6 leak. (IPv6 selectors are rejected by the API with 400 — surface that message cleanly.)
   - **Emancipate** button ("Publish this dashboard as a .onion") → `POST …/emancipate_webui`; shows the resulting `.onion` with copy.
   - **Hidden services** list from `/hidden_services` (auto-detected) + **.onion-DNS status** from `/onion_dns`.
   - **obfs4 bridges** panel: paste/add a `Bridge obfs4 …` line, list, remove (`/tor/bridges`, `/tor/bridge`); a short hint on where to get bridges (Tor Browser moat / BridgeDB).
