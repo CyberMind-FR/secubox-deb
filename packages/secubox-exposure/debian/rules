@@ -21,3 +21,13 @@ override_dh_auto_install:
 	install -d debian/secubox-exposure/etc/nginx/snippets/exposure
 	install -m 644 conf/nginx-exposure-default.conf \
 	   debian/secubox-exposure/etc/nginx/snippets/exposure/default.conf
+
+	# tor-enhancement-phase1 (FINAL-REVIEW packaging fix): boot-time Tor
+	# hidden-service persist reconciler (root sbin script + oneshot unit).
+	# Without these, tor_reconcile_persist() never runs on boot and an
+	# emancipated .onion doesn't survive a torrc reset / fresh image flash.
+	install -d $(CURDIR)/debian/secubox-exposure/usr/sbin
+	install -m 755 sbin/secubox-exposure-tor-reconcile \
+	   $(CURDIR)/debian/secubox-exposure/usr/sbin/secubox-exposure-tor-reconcile
+	install -m 644 systemd/secubox-exposure-tor-reconcile.service \
+	   $(CURDIR)/debian/secubox-exposure/usr/lib/systemd/system/

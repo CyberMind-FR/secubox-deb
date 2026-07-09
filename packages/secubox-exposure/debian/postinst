@@ -13,6 +13,12 @@ case "$1" in
         systemctl daemon-reload
         systemctl enable secubox-exposure.service
         systemctl start secubox-exposure.service || true
+
+        # tor-enhancement-phase1 (FINAL-REVIEW packaging fix): enable the
+        # boot-time Tor hidden-service persist reconciler (oneshot, runs on
+        # every boot via multi-user.target). Idempotent / no-op until a
+        # service is actually emancipated with active=true.
+        systemctl enable secubox-exposure-tor-reconcile.service || true
         ;;
 esac
 
