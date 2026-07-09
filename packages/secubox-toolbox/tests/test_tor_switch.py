@@ -191,7 +191,7 @@ def test_nft_tunnel_failclosed_invariants():
     text = nft.read_text()
     # redirect into Tor TransPort + DNSPort
     assert "redirect to :9040" in text
-    assert "redirect to :5353" in text
+    assert "redirect to :9053" in text
     # kill-switch drops (fail-closed) for v4 escape + v6 leak
     assert "ip daddr != 127.0.0.0/8 drop" in text
     assert "meta nfproto ipv6" in text and "drop" in text
