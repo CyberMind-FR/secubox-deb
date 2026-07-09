@@ -4,158 +4,163 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox - Reality</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/crt-light.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
-/* ============================================================
-   SecuBox Reality — self-contained WebUI.
-   Zero CDN / zero external assets: fonts fall back gracefully to
-   local system faces when Space Grotesk / JetBrains Mono are not
-   installed on the client. Palette per DESIGN-CHARTER.md — MESH
-   (#104A88) is the module accent; AUTH/WALL/BOOT/MIND/ROOT tints
-   are used for the Hamiltonian-path breadcrumbs and status pills.
-   ============================================================ */
-:root {
-  --auth-main:#C04E24; --auth-xlt:#FAECE7;
-  --wall-main:#9A6010; --wall-xlt:#FDF3E0;
-  --boot-main:#803018; --boot-xlt:#FAECE7;
-  --mind-main:#3D35A0; --mind-xlt:#EEEDFE;
-  --root-main:#0A5840; --root-xlt:#E1F5EE;
-  --mesh-main:#104A88; --mesh-light:#2C70C0; --mesh-xlt:#E6F1FB; --mesh-dark:#08305A;
+    :root {
+        /* P31 Phosphor spectrum */
+        --p31-peak: #00dd44;
+        --p31-hot: #00ff55;
+        --p31-mid: #009933;
+        --p31-dim: #006622;
+        --p31-ghost: #003311;
+        --p31-decay: #ffb347;
+        --p31-decay-dim: #cc7722;
+        /* Tube glass */
+        --tube-light: #e8f5e9;
+        --tube-pale: #c8e6c9;
+        --tube-soft: #a5d6a7;
+        /* Legacy mappings */
+        --bg-dark: var(--tube-light);
+        --bg-card: var(--tube-pale);
+        --bg-sidebar: var(--tube-black);
+        --border: var(--tube-soft);
+        --text: var(--tube-dark);
+        --text-dim: var(--p31-dim);
+        --primary: var(--p31-peak);
+        --cyan: var(--p31-peak);
+        --green: var(--p31-peak);
+        --red: #ff4466;
+        --yellow: var(--p31-decay);
+        --orange: var(--p31-decay-dim);
+        --purple: #a371f7;
+        /* Bloom effects */
+        --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+        --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+        --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background: var(--tube-light);
+        background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+        color: var(--tube-dark);
+        display: flex;
+        min-height: 100vh;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    code, .mono, input, textarea, select, button, table { font-family: 'Courier Prime', 'Courier New', monospace; }
 
-  --accent: var(--mesh-main);
-  --accent-light: var(--mesh-light);
+    .main { flex: 1; margin-left: 220px; padding: 1.5rem; min-width: 0; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
+    .header h1 {
+        font-size: 1.4rem; font-weight: 700; letter-spacing: 0.05em;
+        color: var(--p31-hot); text-shadow: var(--bloom-text);
+        display: flex; align-items: center; gap: 0.5rem;
+    }
+    .header .desc { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.2rem; }
 
-  --bg:#FFFFFF; --surface:#FAFAF8; --surface2:#F4F3EF;
-  --border:#E2E0D8; --border2:#C8C6BE;
-  --text:#1A1A18; --muted:#6B6963;
-  --green:#0A5840; --yellow:#9A6010; --red:#803018;
-  --sidebar-w: 220px;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'Space Grotesk', 'Segoe UI', -apple-system, sans-serif;
-  background: var(--bg); color: var(--text);
-  display: flex; min-height: 100vh; font-size: 14px; line-height: 1.6;
-}
-code, .mono, .val, input, textarea, select, button, table { font-family: 'JetBrains Mono', 'Consolas', monospace; }
+    #errbar { display: none; background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); padding: 0.6rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.8rem; }
+    #errbar.show { display: block; }
 
-/* ---- sidebar: ROOT -> MESH -> MIND (this module's slice of the
-   AUTH->WALL->BOOT->MIND->ROOT->MESH Hamiltonian path) ---- */
-.sidebar {
-  position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
-  background: var(--surface); border-right: 1px solid var(--border);
-  display: flex; flex-direction: column; overflow: hidden; z-index: 100;
-}
-.sidebar::before {
-  content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
-  background: linear-gradient(180deg, var(--root-main), var(--mesh-main), var(--mind-main));
-}
-.sidebar-header { padding: 1.25rem 1rem 1rem 1.5rem; border-bottom: 1px solid var(--border); }
-.sidebar-header .logo { font-size: 1rem; font-weight: 700; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; }
-.sidebar-header .sub { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.1em; margin-top: 0.2rem; }
-.sidebar-nav { flex: 1; padding: 0.75rem 0; overflow-y: auto; }
-.nav-step { display: block; padding: 0.6rem 1rem 0.6rem 1.5rem; text-decoration: none; border-left: 3px solid transparent; color: var(--text); }
-.nav-step .code { font-size: 0.6rem; letter-spacing: 0.15em; display: block; font-weight: 700; }
-.nav-step .label { font-size: 0.8rem; color: var(--muted); }
-.nav-step.root  { border-left-color: var(--root-main); }
-.nav-step.root  .code { color: var(--root-main); }
-.nav-step.mesh  { border-left-color: var(--mesh-main); }
-.nav-step.mesh  .code { color: var(--mesh-main); }
-.nav-step.mind  { border-left-color: var(--mind-main); }
-.nav-step.mind  .code { color: var(--mind-main); }
-.nav-step:hover { background: var(--mesh-xlt); }
-.sidebar-footer { padding: 0.75rem 1rem 0.75rem 1.5rem; border-top: 1px solid var(--border); font-size: 0.65rem; color: var(--muted); }
+    .card {
+        background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px;
+        padding: 1.25rem 1.4rem; margin-bottom: 1.25rem;
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+    }
+    .card:hover { border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3); }
+    .card h2 {
+        font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+        color: var(--p31-decay); text-shadow: var(--bloom-amber);
+        margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
+    }
 
-.main { flex: 1; margin-left: var(--sidebar-w); padding: 1.5rem 1.75rem 3rem; min-width: 0; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
-.header h1 { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -0.3px; }
-.header .desc { font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .main { margin-left: 0; } }
 
-#errbar { display: none; background: var(--boot-xlt); border: 1px solid var(--boot-main); color: var(--boot-main); padding: 0.6rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.8rem; }
-#errbar.show { display: block; }
+    label { display: block; font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 0.6rem 0 0.25rem; }
+    input, select {
+        width: 100%; padding: 0.45rem 0.6rem; border-radius: 6px; font-size: 0.85rem;
+        font-family: 'Courier Prime', monospace;
+        background: var(--tube-light); border: 1px solid var(--tube-soft); color: var(--p31-mid);
+    }
+    input:focus, select:focus { outline: none; border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.1); }
 
-section.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.4rem; margin-bottom: 1.25rem; }
-section.card h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-section.card h2 .tag { font-size: 9px; padding: 0.1rem 0.4rem; border-radius: 4px; letter-spacing: 0.1em; }
-.tag.root { background: var(--root-xlt); color: var(--root-main); }
-.tag.mesh { background: var(--mesh-xlt); color: var(--mesh-main); }
-.tag.mind { background: var(--mind-xlt); color: var(--mind-main); }
+    .btn {
+        padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+        font-family: 'Courier Prime', monospace; letter-spacing: 0.06em; text-transform: uppercase;
+        border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid);
+        transition: all 0.2s;
+    }
+    .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); text-shadow: var(--bloom-soft); box-shadow: 0 0 12px rgba(51,255,102,0.1); }
+    .btn.primary { border-color: var(--p31-peak); color: var(--p31-peak); background: rgba(51,255,102,0.1); }
+    .btn.primary:hover { background: rgba(51,255,102,0.2); box-shadow: 0 0 16px rgba(51,255,102,0.2); color: var(--p31-peak); }
+    .btn.danger { border-color: var(--red); color: var(--red); background: transparent; }
+    .btn.danger:hover { background: rgba(255,68,102,0.15); }
+    .btn.small { padding: 0.3rem 0.6rem; font-size: 0.7rem; }
+    .actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; align-items: center; }
 
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
-@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } .main { margin-left: 0; } .sidebar { display: none; } }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'Courier Prime', monospace; }
+    th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); vertical-align: top; }
+    th { color: var(--p31-decay); text-shadow: var(--bloom-amber); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; }
+    td { color: var(--p31-mid); }
+    tr:hover { background: rgba(51,255,102,0.03); }
+    .mono-cell { font-size: 11px; word-break: break-all; }
+    .empty { color: var(--p31-dim); font-style: italic; padding: 0.6rem 0; font-size: 0.8rem; }
 
-label { display: block; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0.6rem 0 0.25rem; }
-input, select { width: 100%; padding: 0.45rem 0.6rem; border: 1px solid var(--border2); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.85rem; }
-input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .pill { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid; }
+    .pill.green  { background: rgba(51,255,102,0.12); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+    .pill.yellow { background: rgba(255,179,71,0.12); border-color: var(--p31-decay); color: var(--p31-decay-dim); }
+    .pill.red    { background: rgba(255,68,102,0.12); border-color: var(--red); color: var(--red); }
+    .pill.blue   { background: rgba(51,255,102,0.08); border-color: var(--p31-mid); color: var(--p31-mid); }
+    .pill.gray   { background: rgba(0,102,34,0.08); border-color: var(--p31-ghost); color: var(--p31-dim); }
 
-.btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border2); background: var(--surface); color: var(--text); cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 0.8rem; }
-.btn:hover { border-color: var(--accent); color: var(--accent); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn.primary:hover { background: var(--accent-light); color: #fff; }
-.btn.danger { border-color: var(--boot-main); color: var(--boot-main); background: transparent; }
-.btn.danger:hover { background: var(--boot-xlt); }
-.btn.small { padding: 0.3rem 0.6rem; font-size: 0.7rem; }
-.actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+    .qr-box { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem; }
+    .qr-box svg { width: 160px; height: 160px; border: 1px solid var(--tube-soft); border-radius: 8px; background: #fff; }
+    .uri-box { flex: 1; min-width: 240px; word-break: break-all; font-size: 11px; background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 0.6rem; color: var(--p31-mid); }
 
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
-th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
-.mono-cell { font-size: 11px; word-break: break-all; }
-.empty { color: var(--muted); font-style: italic; padding: 0.6rem 0; font-size: 0.8rem; }
+    .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 0.75rem; }
+    .stat { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 0.75rem 0.9rem; }
+    .stat .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--p31-dim); }
+    .stat .v { font-size: 18px; font-weight: 700; color: var(--p31-peak); text-shadow: 0 0 10px currentColor; margin-top: 0.2rem; }
+    @media (max-width: 700px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 
-.pill { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
-.pill.green  { background: rgba(10,88,64,0.1); color: var(--green); }
-.pill.yellow { background: rgba(154,96,16,0.1); color: var(--yellow); }
-.pill.red    { background: rgba(128,48,24,0.1); color: var(--red); }
-.pill.blue   { background: var(--mesh-xlt); color: var(--mesh-main); }
-.pill.gray   { background: rgba(107,105,99,0.1); color: var(--muted); }
-
-.qr-box { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem; }
-.qr-box svg { width: 160px; height: 160px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
-.uri-box { flex: 1; min-width: 240px; word-break: break-all; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; }
-
-.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 0.75rem; }
-.stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0.9rem; }
-.stat .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-.stat .v { font-size: 18px; font-weight: 700; color: var(--accent); margin-top: 0.2rem; }
-@media (max-width: 700px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--tube-light); }
+    ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
 </style>
 </head>
-<body>
-
-<nav class="sidebar">
-  <div class="sidebar-header">
-    <div class="logo">SecuBox // Reality</div>
-    <div class="sub">VLESS + Reality + Vision</div>
-  </div>
-  <div class="sidebar-nav">
-    <a class="nav-step root" href="#servers"><span class="code">05 · ROOT</span><span class="label">Egress points (storage)</span></a>
-    <a class="nav-step mesh" href="#apply"><span class="code">06 · MESH</span><span class="label">Transport / apply / clients</span></a>
-    <a class="nav-step mind" href="#guard"><span class="code">04 · MIND</span><span class="label">Validation / volume-guard</span></a>
-  </div>
-  <div class="sidebar-footer">CyberMind — secubox-reality</div>
-</nav>
+<body class="crt-light">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
 
 <main class="main">
   <div class="header">
     <div>
-      <h1>Reality egress manager</h1>
+      <h1>🕶️ Reality egress manager</h1>
       <div class="desc">Provision, validate and monitor VLESS+Reality+Vision (Xray-core) egress points.</div>
     </div>
-    <button class="btn" id="refreshAll">Refresh</button>
+    <button class="btn" id="refreshAll">↻ Refresh</button>
   </div>
 
   <div id="errbar"></div>
 
-  <!-- ROOT: server list + create -->
+  <!-- server list + create -->
   <section class="card" id="servers">
-    <h2><span class="tag root">ROOT</span> Egress points</h2>
+    <h2>Egress points</h2>
     <table id="serversTable">
       <thead><tr><th>Remark</th><th>dest / SNI</th><th>Port</th><th>Status</th><th>Public key</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
     <div class="empty" id="serversEmpty" style="display:none;">No egress point provisioned yet.</div>
 
-    <h2 style="margin-top:1.5rem;"><span class="tag root">ROOT</span> Provision new server</h2>
+    <h2 style="margin-top:1.5rem;">Provision new server</h2>
     <form id="createServerForm">
       <div class="grid2">
         <div>
@@ -175,13 +180,13 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
           <input name="short_id_count" type="number" value="1" min="1" max="8">
         </div>
       </div>
-      <div class="actions"><button class="btn primary" type="submit">Provision (AUTH: keys + UUID)</button></div>
+      <div class="actions"><button class="btn primary" type="submit">Provision (keys + UUID)</button></div>
     </form>
   </section>
 
-  <!-- MIND: validate target -->
+  <!-- validate target -->
   <section class="card" id="validate">
-    <h2><span class="tag mind">MIND</span> Validate target (TLS1.3 + X25519 sanity gate)</h2>
+    <h2>Validate target (TLS1.3 + X25519 sanity gate)</h2>
     <form id="validateForm">
       <div class="grid2">
         <div><label>Host</label><input name="host" required placeholder="www.microsoft.com"></div>
@@ -192,9 +197,9 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
     <div id="validateResult" style="margin-top:0.75rem;"></div>
   </section>
 
-  <!-- MESH: apply + clients + link -->
+  <!-- apply + clients + link -->
   <section class="card" id="apply">
-    <h2><span class="tag mesh">MESH</span> Apply (write config + start instance)</h2>
+    <h2>Apply (write config + start instance)</h2>
     <div class="grid2">
       <div>
         <label>Server</label>
@@ -209,7 +214,7 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
   </section>
 
   <section class="card" id="clients">
-    <h2><span class="tag mesh">MESH</span> Clients + link</h2>
+    <h2>Clients + link</h2>
     <div class="grid2">
       <div>
         <label>Server</label>
@@ -232,9 +237,9 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
     </div>
   </section>
 
-  <!-- MIND: volume guard -->
+  <!-- volume guard -->
   <section class="card" id="guard">
-    <h2><span class="tag mind">MIND</span> Volume guard (sliding window)</h2>
+    <h2>Volume guard (sliding window)</h2>
     <form id="guardForm">
       <div class="grid2">
         <div>
@@ -253,7 +258,7 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
   </section>
 
   <section class="card" id="stats">
-    <h2><span class="tag mind">MIND</span> Stats (per-window delta)</h2>
+    <h2>Stats (per-window delta)</h2>
     <div id="statsBox" class="empty">No stats yet — click Refresh.</div>
   </section>
 </main>
@@ -540,5 +545,6 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
   loadStats();
 })();
 </script>
+<script src="/shared/crt-engine.js"></script>
 </body>
 </html>
