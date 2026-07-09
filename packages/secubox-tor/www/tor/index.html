@@ -436,6 +436,15 @@
                 <span id="tor-vpn-msg" style="font-size: 0.8rem;"></span>
             </div>
             <div id="tor-vpn-list"><div class="empty">Loading...</div></div>
+
+            <div style="margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px dashed var(--border);">
+                <div class="card-title" style="font-size: 0.85rem;"><span>🖧 LAN clients (from NAC)</span></div>
+                <p class="subcard-p" style="margin-top: -0.2rem;">
+                    Online + allowed LAN clients from NAC — flip the switch to route a client's
+                    entire 80/443 traffic via Tor without typing its IP by hand.
+                </p>
+                <div id="tor-vpn-nac-list"><div class="empty">Loading...</div></div>
+            </div>
         </div>
 
         <!-- obfs4 bridges -->
@@ -462,6 +471,7 @@
         const API = '/api/v1/tor';
         const TOOLBOX_API = '/api/v1/toolbox';
         const EXPOSURE_API = '/api/v1/exposure';
+        const NAC_API = '/api/v1/nac';
 
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
@@ -496,6 +506,14 @@
         async function api(path, opts = {}) { return fetchJson(API + path, opts); }
         async function toolboxApi(path, opts = {}) { return fetchJson(TOOLBOX_API + path, opts); }
         async function exposureApi(path, opts = {}) { return fetchJson(EXPOSURE_API + path, opts); }
+        async function nacApi(path, opts = {}) { return fetchJson(NAC_API + path, opts); }
+
+        // IPv4-only guard for the NAC → Tor-VPN toggle list: the VPN backend
+        // rejects IPv6 selectors with a 400 (Phase 1, v4-only routing) — never
+        // even offer a toggle for a v6-looking address.
+        function isIPv4(ip) {
+            return /^(\d{1,3}\.){3}\d{1,3}$/.test(String(ip || ''));
+        }
 
         function showToast(msg, type = 'success') {
             const toast = document.getElementById('toast');
@@ -841,6 +859,7 @@
             input.value = '';
             setTimeout(() => { msg.textContent = ''; }, 1500);
             loadVpnClients();
+            loadNacVpnClients();
         }
 
         async function removeVpnClient(kind, selector) {
@@ -851,6 +870,66 @@
             });
             if (d.__error) { msg.textContent = 'failed: ' + d.__error; return; }
             loadVpnClients();
+            loadNacVpnClients();
+        }
+
+        // NAC online-clients → one-click Tor-VPN toggle. Cross-references
+        // secubox-nac's "online AND allowed" clients (not banned/quarantined)
+        // against the current /toolbox/vpn/clients selector set to derive the
+        // toggle's ON/OFF state, so the operator never has to hand-type IPs.
+        async function loadNacVpnClients() {
+            const el = document.getElementById('tor-vpn-nac-list');
+            if (!el) return;
+            const [nacData, vpnData] = await Promise.all([
+                nacApi('/clients'),
+                toolboxApi('/vpn/clients'),
+            ]);
+            if (nacData.__error) { el.innerHTML = `<div class="empty">${esc(nacData.__error)}</div>`; return; }
+            const routedIps = new Set(
+                (vpnData.clients || []).filter(c => c.kind === 'ip').map(c => c.selector)
+            );
+            const allClients = nacData.clients || [];
+            const clients = allClients.filter(c =>
+                c.online === true && c.zone !== 'quarantine' && c.status !== 'quarantine'
+            );
+            const v4Clients = clients.filter(c => isIPv4(c.ip));
+            const v6Skipped = clients.length - v4Clients.length;
+            if (!v4Clients.length) {
+                el.innerHTML = `<div class="empty">no online/allowed LAN client${v6Skipped ? ` (${v6Skipped} IPv6-only client(s) hidden — v4-only routing)` : ''}</div>`;
+                return;
+            }
+            el.innerHTML = '<table><thead><tr><th>Host</th><th>IP</th><th>MAC</th><th>Tor-VPN</th></tr></thead><tbody>' +
+                v4Clients.map(c => {
+                    const ip = c.ip || '';
+                    const on = routedIps.has(ip);
+                    const hostname = c.custom_hostname || c.hostname || '(no hostname)';
+                    return `<tr>
+                        <td>${esc(hostname)}</td>
+                        <td><code>${esc(ip)}</code></td>
+                        <td><code>${esc(c.mac || '')}</code></td>
+                        <td><label style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;">
+                            <input type="checkbox" class="nac-vpn-toggle" data-ip="${esc(ip)}" ${on ? 'checked' : ''}>
+                            ${on ? '🟢 routed' : '⚪ off'}
+                        </label></td>
+                    </tr>`;
+                }).join('') + '</tbody></table>' +
+                (v6Skipped ? `<p style="font-size: 0.75rem; color: var(--text-muted, #888); margin-top: 0.3rem;">${v6Skipped} IPv6-only client(s) hidden (v4-only routing).</p>` : '');
+            el.querySelectorAll('.nac-vpn-toggle').forEach(chk =>
+                chk.addEventListener('change', () => toggleNacVpnClient(chk)));
+        }
+
+        async function toggleNacVpnClient(chk) {
+            const ip = chk.dataset.ip;
+            const turnOn = chk.checked;
+            chk.disabled = true;
+            const d = await toolboxApi('/vpn/client', {
+                method: turnOn ? 'POST' : 'DELETE',
+                body: JSON.stringify({ kind: 'ip', selector: ip }),
+            });
+            if (d.__error) {
+                showToast('Tor-VPN toggle failed: ' + d.__error, 'error');
+            }
+            await Promise.all([loadVpnClients(), loadNacVpnClients()]);
         }
 
         async function loadBridges() {
@@ -923,7 +1002,7 @@
         async function refresh() {
             await Promise.all([
                 loadStatus(), loadCircuits(), loadHiddenServices(), loadOnionDns(),
-                loadExitCountry(), loadVpnClients(), loadBridges(), loadTorEgressState(),
+                loadExitCountry(), loadVpnClients(), loadNacVpnClients(), loadBridges(), loadTorEgressState(),
             ]);
         }
 
