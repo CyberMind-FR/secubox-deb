@@ -3,6 +3,23 @@
 
 ---
 
+## 2026-07-09 — OpenClaw OSINT scanner: LXC module live end-to-end on gk2 (branch `feature/openclaw-lxc-scanner`)
+
+8-task subagent-driven build (async-job scan endpoints dropping the old sync-shell-out machinery,
+target-policy/audit gate, packaging with sudoers+visudo, aggregator-in-process wiring, XSS-hardened
+dashboard) — Task 8 deployed + verified. `secubox-openclaw` 1.0.1-1~bookworm1 built and installed on
+gk2 over the existing 1.0.0 (LXC container `openclaw`/10.100.0.41 with nmap/dig/whois/curl already
+provisioned in earlier tasks reused as-is). `sudo -u secubox sudo -n openclawctl status --json` proves
+the sudoers grant; `secubox-aggregator` restarted once to load the new in-process `api/main.py`.
+**SPOF proof**: kicked a real `openclawctl scan ip 127.0.0.1` in the background — a concurrent
+`/api/v1/cookies/status` call through the aggregator socket returned in **6ms**, and the scan itself
+reached `status: completed`, confirming the async-job design does not block the shared aggregator
+loop the way the old sync-shell-out path would have. Dashboard (`/openclaw/`) verified 200 with wired
+markup via the generic static-root fallback (no per-module nginx alias needed — same pattern as
+`/cookies/`). Board confirmed healthy after the single restart (all sampled vhosts/APIs 200/401, no 502).
+
+---
+
 ## 2026-07-06/07 — Sentinel threat engine + activation + 3 surfaces + C2 auto-learning (#821 #823–#828)
 
 Brainstorm → spec → plan → subagent-driven (per-task two-stage review + adversarial whole-branch review) throughout. All merged; all deployed + verified live on gk2.
