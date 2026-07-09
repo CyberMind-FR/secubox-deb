@@ -1,3 +1,9 @@
+secubox-exposure (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * .onion webui discovery via root-written cache (tor forces /var/lib/tor 0700).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 23:00:00 +0200
+
 secubox-exposure (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * tor-reconcile: make HS leaf dirs + hostname group-readable (debian-tor) so
