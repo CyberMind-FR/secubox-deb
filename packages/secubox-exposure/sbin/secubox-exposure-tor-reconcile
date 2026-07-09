@@ -11,4 +11,19 @@
 # .onion addresses survive reboots unchanged. Runs as root (torrc + systemctl
 # reload tor need privilege), invoked by
 # secubox-exposure-tor-reconcile.service on boot.
-exec /usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/lib/secubox/exposure'); import api.main as m; m.tor_reconcile_persist()"
+set -e
+/usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/lib/secubox/exposure'); import api.main as m; m.tor_reconcile_persist()"
+
+# Discovery perms: tor creates each HS leaf dir 0700 and hostname 0600, so the
+# secubox-tor API (running with SupplementaryGroups=debian-tor) can't read the
+# .onion to list it. The .onion address is PUBLIC info (unlike private_key, left
+# untouched at 0600), so make the leaf dirs group-traversable and the hostname
+# group-readable for the debian-tor group. Best-effort, root-only, idempotent.
+HS_DIR=/var/lib/tor/hidden_services
+if [ -d "$HS_DIR" ] && getent group debian-tor >/dev/null 2>&1; then
+    chgrp debian-tor "$HS_DIR" 2>/dev/null || true
+    find "$HS_DIR" -mindepth 1 -maxdepth 1 -type d \
+        -exec chgrp debian-tor {} + -exec chmod 0750 {} + 2>/dev/null || true
+    find "$HS_DIR" -mindepth 2 -maxdepth 2 -name hostname \
+        -exec chgrp debian-tor {} + -exec chmod 0640 {} + 2>/dev/null || true
+fi
