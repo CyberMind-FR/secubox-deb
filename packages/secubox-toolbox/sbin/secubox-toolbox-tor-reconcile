@@ -77,6 +77,38 @@ want_from_flag() {
   jq -r '.tor_mode // false' "$FILTERS" 2>/dev/null || echo false
 }
 
+# ATOMICALLY replace the contents of an nft set. Reads a comma-joined member
+# list on stdin. A single `nft -f -` batch (flush + add in ONE netlink txn)
+# means the set is NEVER momentarily empty — so a `@set`-gated redirect/drop
+# rule can never fall through to `policy accept` between flush and re-add
+# (which would leak a routed VPN client's forward traffic in the clear). Empty
+# member list → bare flush (set legitimately becomes empty). Fail-safe: never
+# aborts under `set -e`.
+_apply_set() {  # $1=setname; members comma-joined on stdin
+  local m; m="$(cat)"
+  if [ -n "$m" ]; then
+    printf 'flush set inet toolbox_tor %s\nadd element inet toolbox_tor %s { %s }\n' \
+      "$1" "$1" "$m" | nft -f - 2>/dev/null || true
+  else
+    nft flush set inet toolbox_tor "$1" 2>/dev/null || true
+  fi
+}
+
+# Write (or remove) the exit-country + obfs4-bridges torrc drop-ins from the
+# current state files. MUST run BEFORE tor is (re)started/reloaded, else tor
+# boots reading %include torrc.d/*.conf with neither present → a direct,
+# unbridged connection (fails in exactly the censored network obfs4 exists
+# for), with nothing to reload it afterwards.
+_write_torrc_dropins() {
+  local cc_stanza br
+  cc_stanza="$(_emit_exit_country "$EXIT_CC_STATE")"
+  if [ -n "$cc_stanza" ]; then printf '# SecuBox exit-country\n%s\n' "$cc_stanza" > "$EXIT_CC_DROPIN"
+  else rm -f "$EXIT_CC_DROPIN"; fi
+  br="$(_emit_bridges "$BRIDGES_STATE")"
+  if [ -n "$br" ]; then printf '# SecuBox obfs4 bridges\n%s' "$br" > "$BRIDGES_DROPIN"
+  else rm -f "$BRIDGES_DROPIN"; fi
+}
+
 arm() {
   log "arming kbin Tor egress (TransPort 9040 / DNSPort 9053)"
   mkdir -p /etc/tor/torrc.d
@@ -90,8 +122,12 @@ arm() {
   install -d -m 0755 /etc/nftables.d
   install -m 0644 "$NFT_FILE" "$NFT_DROPIN"
   nft -f "$NFT_DROPIN"
-  populate_exempt
-  populate_vpn_clients
+  populate_exempt      | _apply_set tor_exempt
+  populate_exempt_dynamic_hosts
+  populate_vpn_clients | _apply_set tor_vpn_src
+  # torrc drop-ins (exit-country + obfs4 bridges) MUST land BEFORE tor starts —
+  # otherwise tor boots direct/unbridged and nothing reloads it (see helper).
+  _write_torrc_dropins
   systemctl restart tor 2>/dev/null || systemctl start tor 2>/dev/null || \
     log "WARN tor failed to (re)start — egress fail-closed until it does"
   # Resolve .onion via the egress DNSPort (automap). Fail-safe: never abort
@@ -101,59 +137,64 @@ arm() {
     unbound-checkconf >/dev/null 2>&1 && systemctl reload unbound 2>/dev/null || \
       { rm -f "$UNBOUND_ONION_DST"; log "WARN unbound .onion forward-zone rejected — removed"; }
   fi
-  local cc_stanza; cc_stanza="$(_emit_exit_country "$EXIT_CC_STATE")"
-  if [ -n "$cc_stanza" ]; then printf '# SecuBox exit-country\n%s\n' "$cc_stanza" > "$EXIT_CC_DROPIN"
-  else rm -f "$EXIT_CC_DROPIN"; fi
-  local br; br="$(_emit_bridges "$BRIDGES_STATE")"
-  if [ -n "$br" ]; then printf '# SecuBox obfs4 bridges\n%s' "$br" > "$BRIDGES_DROPIN"
-  else rm -f "$BRIDGES_DROPIN"; fi
   log "ARMED"
 }
 
-# Fill the tor_exempt set so the box reaches its OWN services DIRECT (never via
-# Tor): loopback, board-local subnets (LAN/WG/LXC), and the board's own public
-# IP (kbin/admin resolve to it, reached via hairpin). Without this, self-views
-# round-trip Tor and load empty/slow. The Tor automap range (10.192.0.0/10) is
-# never a connected route, so it is correctly NOT added → still torified.
+# COLLECT the tor_exempt members so the box reaches its OWN services DIRECT
+# (never via Tor): loopback, board-local subnets (LAN/WG/LXC), and the board's
+# own public IP (kbin/admin resolve to it, reached via hairpin). Without this,
+# self-views round-trip Tor and load empty/slow. The Tor automap range
+# (10.192.0.0/10) is never a connected route, so it is correctly NOT added →
+# still torified. Echoes a comma-joined member list on stdout (consumed by
+# _apply_set for an atomic flush+add); all logging goes to stderr so it never
+# pollutes the member list. The dynamic spliced-hosts set is applied
+# separately (populate_exempt_dynamic_hosts) — it only ADDS, never flushes,
+# so there is no atomicity window to protect there.
 populate_exempt() {
-  local net pub
-  nft add element inet toolbox_tor tor_exempt "{ 127.0.0.0/8 }" 2>/dev/null || true
+  local net pub out="127.0.0.0/8"
   # board-local connected RFC1918 subnets
   for net in $(ip -4 route show scope link 2>/dev/null | awk '{print $1}' \
                | grep -E '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)'); do
     case "$net" in 10.19[2-9].*|10.2[0-5][0-9].*) continue ;; esac  # belt: skip automap
-    nft add element inet toolbox_tor tor_exempt "{ $net }" 2>/dev/null || true
+    out="${out},${net}"
   done
   # board's own public IP — detected DIRECT (root egress is not torified).
   pub=$(timeout 6 curl -s https://api.ipify.org 2>/dev/null || true)
   case "$pub" in
     [0-9]*.[0-9]*.[0-9]*.[0-9]*)
-      nft add element inet toolbox_tor tor_exempt "{ $pub }" 2>/dev/null || true
-      log "exempt own public IP $pub" ;;
+      out="${out},${pub}"
+      log "exempt own public IP $pub" >&2 ;;
   esac
-  # Cert-pinned / spliced hosts (Claude, Signal, banks…) must egress DIRECT too,
-  # else the spliced passthrough is torified and the pinned API breaks (#799).
-  # Resolves the splice list → IPs → tor_exempt. Best-effort; a periodic timer
-  # refreshes it as CDN IPs rotate.
+  printf '%s' "$out"
+}
+
+# Cert-pinned / spliced hosts (Claude, Signal, banks…) must egress DIRECT too,
+# else the spliced passthrough is torified and the pinned API breaks (#799).
+# Resolves the splice list → IPs → tor_exempt. Best-effort; a periodic timer
+# refreshes it as CDN IPs rotate. This helper only ADDS elements (never
+# flushes), so it runs AFTER the atomic base-set apply without a leak window.
+populate_exempt_dynamic_hosts() {
   if [ -x /usr/sbin/secubox-toolbox-tor-exempt-hosts ]; then
     /usr/sbin/secubox-toolbox-tor-exempt-hosts 2>&1 | while read -r l; do log "$l"; done || true
   fi
 }
 
-# Fill tor_vpn_src from `kind:selector` lines (ip:/cidr:) in
+# COLLECT tor_vpn_src members from `kind:selector` lines (ip:/cidr:) in
 # VPN_CLIENTS_STATE. MAC selectors are resolved to current IPs via the neigh
 # table (best-effort). Invalid/unresolvable entries are skipped, never abort.
+# Echoes a comma-joined member list on stdout (consumed by _apply_set).
 populate_vpn_clients() {
   [ -f "$VPN_CLIENTS_STATE" ] || return 0
-  local line kind sel ip
+  local line kind sel ip out=""
   while IFS= read -r line; do
     kind="${line%%:*}"; sel="${line#*:}"
     case "$kind" in
-      ip|cidr) [[ "$sel" =~ ^[0-9./]+$ ]] && nft add element inet toolbox_tor tor_vpn_src "{ $sel }" 2>/dev/null || true ;;
+      ip|cidr) if [[ "$sel" =~ ^[0-9./]+$ ]]; then out="${out:+$out,}$sel"; fi ;;
       mac) ip="$(ip neigh 2>/dev/null | awk -v m="${sel,,}" 'tolower($5)==m{print $1; exit}')" || true
-           [ -n "$ip" ] && nft add element inet toolbox_tor tor_vpn_src "{ $ip }" 2>/dev/null || true ;;
+           if [ -n "$ip" ]; then out="${out:+$out,}$ip"; fi ;;
     esac
   done < "$VPN_CLIENTS_STATE"
+  printf '%s' "$out"
 }
 
 disarm() {
@@ -177,16 +218,14 @@ disarm() {
 # then reload tor so the new torrc actually takes effect. Never disarms.
 reapply() {
   log "reapplying (already armed) — refreshing torrc drop-ins + nft sets"
-  local cc_stanza; cc_stanza="$(_emit_exit_country "$EXIT_CC_STATE")"
-  if [ -n "$cc_stanza" ]; then printf '# SecuBox exit-country\n%s\n' "$cc_stanza" > "$EXIT_CC_DROPIN"
-  else rm -f "$EXIT_CC_DROPIN"; fi
-  local br; br="$(_emit_bridges "$BRIDGES_STATE")"
-  if [ -n "$br" ]; then printf '# SecuBox obfs4 bridges\n%s' "$br" > "$BRIDGES_DROPIN"
-  else rm -f "$BRIDGES_DROPIN"; fi
-  nft flush set inet toolbox_tor tor_vpn_src 2>/dev/null || true
-  populate_vpn_clients
-  nft flush set inet toolbox_tor tor_exempt 2>/dev/null || true
-  populate_exempt
+  # torrc first (before the reload below), then ATOMIC set swaps (flush+add in
+  # one txn — never an empty @set window → no clearnet fall-through). Both sets
+  # are gated by @-membership in the redirect/kill-switch rules, so a bare
+  # flush-then-repopulate would leak a routed client's forward traffic.
+  _write_torrc_dropins
+  populate_vpn_clients | _apply_set tor_vpn_src
+  populate_exempt      | _apply_set tor_exempt
+  populate_exempt_dynamic_hosts
   systemctl reload tor 2>/dev/null || systemctl restart tor 2>/dev/null || \
     log "WARN tor failed to reload/restart during reapply"
   log "REAPPLIED"
