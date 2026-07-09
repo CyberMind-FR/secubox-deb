@@ -30,8 +30,24 @@ TORRC_DROPIN=/etc/tor/torrc.d/10-secubox-toolbox-egress.conf
 TORRC_MAIN=/etc/tor/torrc
 UNBOUND_ONION_SRC=/usr/lib/secubox/toolbox/conf/48-secubox-onion.conf
 UNBOUND_ONION_DST=/etc/unbound/unbound.conf.d/48-secubox-onion.conf
+EXIT_CC_STATE=/etc/secubox/toolbox/tor-exit-country.txt
+EXIT_CC_DROPIN=/etc/tor/torrc.d/11-secubox-exit-country.conf
 
 log() { logger -t "secubox-${MODULE}" -- "$*" 2>/dev/null || true; echo "[$MODULE] $*"; }
+
+# Emit an ExitNodes/StrictNodes stanza from a CC-per-line file. Invalid codes
+# (not exactly 2 ASCII letters) are dropped. Empty result → emit nothing.
+_emit_exit_country() {
+  local f="$1" cc list=""
+  [ -f "$f" ] || return 0
+  while IFS= read -r cc; do
+    cc="$(echo "$cc" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    [[ "$cc" =~ ^[a-z]{2}$ ]] || continue
+    list="${list:+$list,}{$cc}"
+  done < "$f"
+  [ -n "$list" ] || return 0
+  printf 'ExitNodes %s\nStrictNodes 1\n' "$list"
+}
 
 table_present() { nft list table inet toolbox_tor >/dev/null 2>&1; }
 
@@ -63,6 +79,9 @@ arm() {
     unbound-checkconf >/dev/null 2>&1 && systemctl reload unbound 2>/dev/null || \
       { rm -f "$UNBOUND_ONION_DST"; log "WARN unbound .onion forward-zone rejected — removed"; }
   fi
+  local cc_stanza; cc_stanza="$(_emit_exit_country "$EXIT_CC_STATE")"
+  if [ -n "$cc_stanza" ]; then printf '# SecuBox exit-country\n%s\n' "$cc_stanza" > "$EXIT_CC_DROPIN"
+  else rm -f "$EXIT_CC_DROPIN"; fi
   log "ARMED"
 }
 
@@ -101,6 +120,7 @@ disarm() {
   rm -f "$NFT_DROPIN"
   if table_present; then nft delete table inet toolbox_tor 2>/dev/null || true; fi
   rm -f "$TORRC_DROPIN"
+  rm -f "$EXIT_CC_DROPIN"
   if [ -f "$UNBOUND_ONION_DST" ]; then rm -f "$UNBOUND_ONION_DST"; systemctl reload unbound 2>/dev/null || true; fi
   # Stop tor to minimise attack surface when not in use (no hidden services
   # are owned by this drop-in; secubox-tor manages those separately).
@@ -114,6 +134,7 @@ main() {
     arm)     want=true ;;
     disarm)  want=false ;;
     reconcile) want="$(want_from_flag)" ;;
+    __emit_exit_country) _emit_exit_country "${2:-}"; exit 0 ;;
     *) echo "usage: $0 {arm|disarm|reconcile}" >&2; exit 1 ;;
   esac
 
