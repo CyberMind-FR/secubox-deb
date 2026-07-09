@@ -1,0 +1,68 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox OpenClaw controller — privileged LXC tool-runner control plane.
+# The ONLY privileged surface for the openclaw module (invoked via sudo).
+set -uo pipefail
+
+CONFIG_FILE="/etc/secubox/openclaw.toml"
+LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+CONTAINER="${SECUBOX_LXC_NAME:-openclaw}"
+LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
+LXC_IP="${SECUBOX_LXC_IP:-10.100.0.41}"
+LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
+SCANS_DIR="${SECUBOX_OPENCLAW_SCANS:-/var/lib/secubox/openclaw/scans}"
+
+err() { echo "[ERROR] $*" >&2; }
+
+# ---- injection guards (defense in depth; API validates too) ----
+_valid_target() { [[ "$1" =~ ^[A-Za-z0-9._:@/-]+$ ]]; }
+_valid_scanid() { [[ "$1" =~ ^[a-f0-9]{8}$ ]]; }
+_valid_type()   { case "$1" in domain|ip|email|dns|whois|certs|ports) return 0;; *) return 1;; esac; }
+
+# ---- lxc helpers (mirror nextcloudctl) ----
+lxc_running() { lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null | grep -q "State:.*RUNNING"; }
+lxc_exists()  { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
+# Run a command in the container. Extra args after the command string are
+# passed as positional $1.. to `sh -c` — NEVER interpolate targets into the
+# command string.
+lxc_attach()  { local cmd="$1"; shift; lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "$cmd" _ "$@"; }
+
+has_tool() { lxc_running && lxc_attach 'command -v "$1" >/dev/null' "$1"; }
+
+cmd_status() {
+    local running=false installed=false
+    lxc_exists && installed=true
+    lxc_running && running=true
+    local nmap=false dig=false whois=false curl=false
+    if [ "$running" = true ]; then
+        has_tool nmap  && nmap=true
+        has_tool dig   && dig=true
+        has_tool whois && whois=true
+        has_tool curl  && curl=true
+    fi
+    printf '{"running":%s,"installed":%s,"ip":"%s","tools":{"nmap":%s,"dig":%s,"whois":%s,"curl":%s}}\n' \
+        "$running" "$installed" "$LXC_IP" "$nmap" "$dig" "$whois" "$curl"
+}
+
+cmd_start() { lxc_exists || { err "not installed"; return 1; }; lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; sleep 1; lxc_running; }
+cmd_stop()  { lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; ! lxc_running; }
+cmd_selftest() { lxc_running || { err "container not running"; return 1; }; lxc_attach 'nmap --version && dig -v 2>&1 | head -1 && whois --version 2>&1 | head -1'; }
+
+usage() { echo "usage: openclawctl {install|start|stop|status [--json]|scan <type> <target> <id>|selftest}" >&2; }
+
+case "${1:-}" in
+    __guard) # hidden: validate a value, exit 0/1 (for tests)
+        case "${2:-}" in
+            target) _valid_target "${3:-}";;
+            scanid) _valid_scanid "${3:-}";;
+            type)   _valid_type "${3:-}";;
+            *) exit 2;;
+        esac ;;
+    status)   shift; cmd_status ;;
+    start)    cmd_start ;;
+    stop)     cmd_stop ;;
+    selftest) cmd_selftest ;;
+    install)  cmd_install ;;          # Task 2
+    scan)     shift; cmd_scan "$@" ;; # Task 3
+    *) usage; exit 2 ;;
+esac
