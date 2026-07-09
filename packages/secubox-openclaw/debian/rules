@@ -2,6 +2,13 @@
 %:
 	dh $@
 
+# The aggregator serves this module in-process (imports api/main.py as user
+# secubox). The dedicated secubox-openclaw.service unit still ships (dormant,
+# as an operator fallback) but must NOT be auto-enabled/started by dpkg —
+# doing so double-binds openclaw.sock against the aggregator.
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
+
 override_dh_auto_install:
 	install -d debian/secubox-openclaw/usr/lib/secubox/openclaw
 	cp -r api debian/secubox-openclaw/usr/lib/secubox/openclaw/

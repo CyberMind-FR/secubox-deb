@@ -8,7 +8,6 @@ Standards-Version: 4.6.2
 Package: secubox-openclaw
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0), debootstrap, lxc, jq
-Recommends: nmap
 Description: SecuBox OpenClaw OSINT Module
  Open Source Intelligence (OSINT) tool for reconnaissance and
  information gathering. Features include:
