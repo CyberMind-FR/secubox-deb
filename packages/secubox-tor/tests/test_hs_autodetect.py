@@ -121,6 +121,60 @@ def test_discover_unreadable_hostname_skipped_not_raised(monkeypatch, tmp_path):
     assert svcs[0]["has_address"] is False
 
 
+def test_discover_finds_exposure_nested_layout(monkeypatch, tmp_path):
+    """secubox-exposure's emancipate flow (tor_emancipate_webui et al.) creates
+    hidden services under TOR_DATA/"hidden_services"/<name>/hostname — e.g.
+    /var/lib/tor/hidden_services/webui/hostname — NOT directly under TOR_DATA
+    like this module's own legacy add_hidden_service(). Discovery must find
+    those too, bare name (no hidden_service_ prefix to strip)."""
+    m = _load(monkeypatch)
+    nested = tmp_path / "hidden_services" / "webui"
+    nested.mkdir(parents=True)
+    (nested / "hostname").write_text("webuionion123.onion\n")
+    monkeypatch.setattr(m, "TOR_DATA", tmp_path)
+    monkeypatch.setattr(m, "load_config", lambda: {"hidden_services": []})
+
+    svcs = m._discover_hidden_services()
+
+    assert len(svcs) == 1
+    assert svcs[0]["name"] == "webui"
+    assert svcs[0]["onion_address"] == "webuionion123.onion"
+    assert svcs[0]["has_address"] is True
+
+
+def test_discover_merges_both_layouts_without_duplicating(monkeypatch, tmp_path):
+    """A service present under the legacy flat layout AND one under the
+    nested exposure layout must both surface, with no name collision."""
+    m = _load(monkeypatch)
+    (tmp_path / "hidden_service_ssh").mkdir()
+    (tmp_path / "hidden_service_ssh" / "hostname").write_text("sshbox.onion\n")
+    nested = tmp_path / "hidden_services" / "webui"
+    nested.mkdir(parents=True)
+    (nested / "hostname").write_text("webuionion123.onion\n")
+    monkeypatch.setattr(m, "TOR_DATA", tmp_path)
+    monkeypatch.setattr(m, "load_config", lambda: {"hidden_services": []})
+
+    svcs = m._discover_hidden_services()
+
+    names = {s["name"] for s in svcs}
+    assert names == {"ssh", "webui"}
+
+
+def test_discover_nested_layout_missing_returns_only_flat(monkeypatch, tmp_path):
+    """No TOR_DATA/hidden_services dir at all must not raise — just no extra
+    entries from that layout."""
+    m = _load(monkeypatch)
+    (tmp_path / "hidden_service_ssh").mkdir()
+    (tmp_path / "hidden_service_ssh" / "hostname").write_text("sshbox.onion\n")
+    monkeypatch.setattr(m, "TOR_DATA", tmp_path)
+    monkeypatch.setattr(m, "load_config", lambda: {"hidden_services": []})
+
+    svcs = m._discover_hidden_services()
+
+    assert len(svcs) == 1
+    assert svcs[0]["name"] == "ssh"
+
+
 def test_discover_broken_config_falls_back_to_empty_map(monkeypatch, tmp_path):
     m = _load(monkeypatch)
     (tmp_path / "hidden_service_webui").mkdir()

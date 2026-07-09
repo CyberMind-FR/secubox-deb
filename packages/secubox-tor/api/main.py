@@ -305,12 +305,29 @@ def _discover_hidden_services() -> List[Dict]:
         except Exception:
             continue
 
+    hostname_files = []
     try:
-        hostname_files = sorted(TOR_DATA.glob("*/hostname"))
+        hostname_files += list(TOR_DATA.glob("*/hostname"))
     except Exception:
-        hostname_files = []
+        pass
+    try:
+        # secubox-exposure (the actual "publish this .onion" / emancipate
+        # flow, incl. tor_emancipate_webui) creates every hidden service
+        # under TOR_DATA/"hidden_services" (its own TOR_DATA constant IS
+        # /var/lib/tor/hidden_services) — e.g.
+        # /var/lib/tor/hidden_services/webui/hostname — NOT directly under
+        # TOR_DATA like this module's own legacy add_hidden_service() does.
+        # Scan both layouts; skipped gracefully if the nested dir doesn't
+        # exist or isn't traversable (also keeps tests hermetic since it's
+        # derived from TOR_DATA at call time, so monkeypatching TOR_DATA
+        # relocates this too).
+        hostname_files += list((TOR_DATA / "hidden_services").glob("*/hostname"))
+    except Exception:
+        pass
+    hostname_files = sorted(set(hostname_files))
 
     services = []
+    seen_names = set()
     for hostname_file in hostname_files:
         try:
             dir_name = hostname_file.parent.name
@@ -318,6 +335,12 @@ def _discover_hidden_services() -> List[Dict]:
             continue
 
         name = dir_name[len("hidden_service_"):] if dir_name.startswith("hidden_service_") else dir_name
+
+        if name in seen_names:
+            # Same service surfaced by both layouts (or two hostname files
+            # resolving to the same name) — keep the first hit only.
+            continue
+        seen_names.add(name)
 
         try:
             onion_address = hostname_file.read_text().strip()
