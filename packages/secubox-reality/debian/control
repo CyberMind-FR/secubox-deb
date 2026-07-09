@@ -1,0 +1,24 @@
+Source: secubox-reality
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper (>= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-reality
+Architecture: all
+Depends: ${misc:Depends},
+ secubox-core (>= 1.0.0),
+ python3,
+ python3-fastapi,
+ python3-pydantic,
+ python3-segno,
+ openssl
+Recommends: xray
+Description: SecuBox Reality — VLESS+Reality+Vision egress-point manager
+ Manages VLESS+Reality+Vision egress points backed by Xray-core: x25519
+ identity provisioning, Reality dest/SNI sanity validation (TLS1.3 +
+ X25519), per-instance hardened systemd units, client vless:// links with
+ QR codes, and a sliding-window volume-guard (soft warn / hard disable)
+ that preserves egress identity across a stop.

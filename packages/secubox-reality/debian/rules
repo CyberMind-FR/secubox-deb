@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Python package: secubox_reality/*.py -> /usr/lib/secubox/reality/secubox_reality/
+	install -d $(CURDIR)/debian/secubox-reality/usr/lib/secubox/reality/secubox_reality
+	install -m 644 secubox_reality/*.py \
+	   $(CURDIR)/debian/secubox-reality/usr/lib/secubox/reality/secubox_reality/
+
+	# WebUI (static, self-contained — no build step)
+	install -d $(CURDIR)/debian/secubox-reality/usr/share/secubox/www/reality
+	install -m 644 webui/reality.html \
+	   $(CURDIR)/debian/secubox-reality/usr/share/secubox/www/reality/reality.html
+
+	# systemd units: main API + templated per-egress-point instance + monitor timer
+	install -d $(CURDIR)/debian/secubox-reality/usr/lib/systemd/system
+	install -m 644 debian/secubox-reality.service \
+	   $(CURDIR)/debian/secubox-reality/usr/lib/systemd/system/
+	install -m 644 debian/secubox-xray@.service \
+	   $(CURDIR)/debian/secubox-reality/usr/lib/systemd/system/
+	install -m 644 debian/secubox-reality-monitor.service \
+	   $(CURDIR)/debian/secubox-reality/usr/lib/systemd/system/
+	install -m 644 debian/secubox-reality-monitor.timer \
+	   $(CURDIR)/debian/secubox-reality/usr/lib/systemd/system/
+
+override_dh_auto_test:
+	# No network / systemd / xray binary available in the build chroot —
+	# unit tests for this module are run out-of-band (see docs).

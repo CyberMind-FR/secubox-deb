@@ -1,0 +1,16 @@
+[Unit]
+Description=SecuBox Reality volume-guard sweep (oneshot)
+After=secubox-reality.service
+Wants=secubox-reality.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/reality
+ExecStart=/usr/bin/python3 -m secubox_reality.monitor
+
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=/var/lib/secubox/reality /etc/secubox/reality
