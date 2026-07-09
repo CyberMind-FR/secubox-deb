@@ -305,6 +305,31 @@ def _discover_hidden_services() -> List[Dict]:
         except Exception:
             continue
 
+    # Primary source: the root-written .onion cache. tor forces /var/lib/tor to
+    # 0700 on every start, so this secubox-user process cannot read HS hostnames
+    # directly; secubox-exposure-tor-reconcile (root) publishes the (public)
+    # .onion addresses here where we CAN read them. Fail-safe: fall through to
+    # the direct-glob path below if the cache is absent/unreadable.
+    cache_services: List[Dict] = []
+    try:
+        import json as _json
+        cache = _json.loads(Path("/var/lib/secubox/tor/onions.json").read_text())
+        for entry in (cache.get("services") or []):
+            name = entry.get("name")
+            onion = entry.get("onion", "")
+            if not name or not onion:
+                continue
+            hs = cfg_map.get(name, {})
+            cache_services.append({
+                "name": name, "onion_address": onion, "has_address": True,
+                "local_port": hs.get("local_port"), "virtual_port": hs.get("virtual_port"),
+                "enabled": hs.get("enabled", True),
+            })
+    except Exception:
+        cache_services = []
+    if cache_services:
+        return cache_services
+
     hostname_files = []
     try:
         hostname_files += list(TOR_DATA.glob("*/hostname"))

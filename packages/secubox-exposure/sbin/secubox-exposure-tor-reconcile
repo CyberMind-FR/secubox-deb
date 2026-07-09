@@ -19,11 +19,30 @@ set -e
 # .onion to list it. The .onion address is PUBLIC info (unlike private_key, left
 # untouched at 0600), so make the leaf dirs group-traversable and the hostname
 # group-readable for the debian-tor group. Best-effort, root-only, idempotent.
-HS_DIR=/var/lib/tor/hidden_services
-if [ -d "$HS_DIR" ] && getent group debian-tor >/dev/null 2>&1; then
-    chgrp debian-tor "$HS_DIR" 2>/dev/null || true
-    find "$HS_DIR" -mindepth 1 -maxdepth 1 -type d \
-        -exec chgrp debian-tor {} + -exec chmod 0750 {} + 2>/dev/null || true
-    find "$HS_DIR" -mindepth 2 -maxdepth 2 -name hostname \
-        -exec chgrp debian-tor {} + -exec chmod 0640 {} + 2>/dev/null || true
-fi
+# tor forces /var/lib/tor to 0700 on every start, so the secubox-user modules
+# (aggregator/tor/exposure) can't read HS hostnames directly regardless of group.
+# As root, publish a secubox-readable cache of the (public) .onion addresses that
+# the secubox-tor discovery/webui reads. private_key is never touched/exported.
+CACHE_DIR=/var/lib/secubox/tor
+mkdir -p "$CACHE_DIR"
+/usr/bin/python3 - <<'PY' 2>/dev/null || true
+import json, glob, os
+out = []
+seen = set()
+for hf in sorted(glob.glob('/var/lib/tor/hidden_services/*/hostname') +
+                 glob.glob('/var/lib/tor/*/hostname')):
+    try:
+        name = os.path.basename(os.path.dirname(hf)).replace('hidden_service_', '')
+        if name in seen:
+            continue
+        onion = open(hf).read().strip()
+        if onion.endswith('.onion'):
+            out.append({"name": name, "onion": onion}); seen.add(name)
+    except Exception:
+        pass
+os.makedirs('/var/lib/secubox/tor', exist_ok=True)
+with open('/var/lib/secubox/tor/onions.json', 'w') as f:
+    json.dump({"services": out}, f)
+PY
+chmod 0755 "$CACHE_DIR" 2>/dev/null || true
+chmod 0644 "$CACHE_DIR/onions.json" 2>/dev/null || true
