@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Own only OUR subdirectories — never touch the shared /etc/secubox
+        # or /var/lib/secubox parents (traversal perms for sibling modules
+        # depend on those staying 0755; see project history #494/#511).
+        mkdir -p /etc/secubox/reality
+        chown secubox:secubox /etc/secubox/reality
+        chmod 0750 /etc/secubox/reality
+
+        mkdir -p /var/lib/secubox/reality
+        chown secubox:secubox /var/lib/secubox/reality
+        chmod 0750 /var/lib/secubox/reality
+
+        # /run/secubox itself is provisioned by secubox-runtime /
+        # RuntimeDirectory=secubox on the unit — never mkdir/chown it here.
+
+        systemctl daemon-reload || true
+
+        systemctl enable secubox-reality.service || true
+        systemctl try-restart secubox-reality.service 2>/dev/null || systemctl start secubox-reality.service || true
+
+        # Non-package-name units are not auto-handled by dh_installsystemd —
+        # enable the monitor timer explicitly. The secubox-xray@ template is
+        # deliberately NOT enabled/started here: instances are started
+        # per-egress-point only when an operator calls POST /apply.
+        systemctl enable secubox-reality-monitor.timer || true
+        systemctl try-restart secubox-reality-monitor.timer 2>/dev/null || systemctl start secubox-reality-monitor.timer || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
