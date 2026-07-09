@@ -15,7 +15,7 @@
 - **Toolchain in container:** `nmap` (+ NSE), `dnsutils`, `whois`, `curl`, `ca-certificates`. Host adds `debootstrap`, `lxc` deps only — scan tools live in the container, never on the host.
 - **Privilege:** API runs as `secubox` under the aggregator (`NoNewPrivileges=no`). The ONLY privileged surface is `sudo -n /usr/sbin/openclawctl`, granted by `/etc/sudoers.d/secubox-openclaw`: `secubox ALL=(root) NOPASSWD: /usr/sbin/openclawctl` (`0440 root:root`).
 - **Aggregator safety:** every FastAPI route handler is plain `def` (threadpooled) — never `async def`. No handler runs a scan inline; scans are detached workers. `/status` and `/scans`-heavy reads use the single-flight + stale-while-revalidate cache.
-- **Injection:** targets validated `^[A-Za-z0-9._:@/-]+$` and scan_id `^[a-f0-9]{8}$` **before** any shell/`lxc-attach`; inner `sh -c '…"$1"'` takes positional args, never string interpolation. Same rule in bash (`openclawctl`) and Python (`api/main.py`).
+- **Injection:** targets validated `^[A-Za-z0-9][A-Za-z0-9._:@/-]*$` (leading alphanumeric — blocks leading-dash flag-injection) and scan_id `^[a-f0-9]{8}$` **before** any shell/`lxc-attach`; inner `sh -c '…"$1"'` takes positional args, never string interpolation. Same rule in bash (`openclawctl`) and Python (`api/main.py`).
 - **Target policy:** passive OSINT unrestricted; active `nmap` allowed for RFC1918/LAN + box-owned domains, else requires `authorized: true` (409 otherwise) and every active scan is appended to `/var/log/secubox/audit.log`.
 - **Paths that must NOT be re-chowned/loosened:** `/run/secubox` (1777 root:root), `/etc/secubox` (0755), `/var/log/secubox` (0755) parents. Scan store `/var/lib/secubox/openclaw/scans/` owned `secubox`, created with `mkdir(parents=True, exist_ok=True)`.
 - **Copy/naming:** module id `openclaw`; API base `/api/v1/openclaw`; dashboard at `/openclaw/`.
@@ -390,7 +390,7 @@ SCANS_DIR = DATA_DIR / "scans"
 AUDIT_LOG = Path("/var/log/secubox/audit.log")
 SCANS_DIR.mkdir(parents=True, exist_ok=True)
 
-_UID_RE = _re.compile(r"^[A-Za-z0-9._:@/-]+$")
+_UID_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@/-]*$")
 _ID_RE = _re.compile(r"^[a-f0-9]{8}$")
 OWNED = [d.lower().lstrip(".") for d in config.get("owned_domains", ["gk2.secubox.in"])]
 
