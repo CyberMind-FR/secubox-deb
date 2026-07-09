@@ -459,7 +459,9 @@ In `disarm()`: `rm -f "$BRIDGES_DROPIN"`.
 
 - [ ] **Step 5: Run tests → PASS**; `bash -n`; full toolbox suite has no NEW failures (same 3 pre-existing).
 
-- [ ] **Step 6: Commit** — `feat(toolbox): obfs4 bridges drop-in (Niveau-1 anti-censorship, UseBridges/ClientTransportPlugin)`.
+- [ ] **Step 5c: Reapply-when-armed (fixes edits not applying live)** — currently `main()` no-ops when already armed (`table_present && exit 0`), so exit-country/VPN/bridge edits made while Tor is ON don't apply until a disarm→arm cycle. Add a `reapply()` that (only when armed) re-emits the country + bridges torrc drop-ins, flushes + re-populates the nft sets (`nft flush set inet toolbox_tor tor_vpn_src; populate_vpn_clients; nft flush set inet toolbox_tor tor_exempt; populate_exempt`), and `systemctl reload tor 2>/dev/null || systemctl restart tor` (torrc drop-in changes need a reload). Change `main()`'s armed branch from no-op to `reapply`. VERIFY the API trigger path (`set_filters({})` → `.path` → `reconcile`) still evaluates `want=true` when armed (it must NOT disarm on an edit — confirm `set_filters({})` preserves `tor_mode`; if it doesn't, have the reconcile's `reconcile` action treat "table present" as want=true regardless, so an edit reapplies rather than disarms). Add a test that a second `reconcile` while armed re-runs the emit helpers (stub them, assert called).
+
+- [ ] **Step 6: Commit** — `feat(toolbox): obfs4 bridges drop-in + reapply-when-armed (edits apply live)`.
 
 **Note:** the bridge **API** (add/list/remove validated `Bridge` lines → writes `tor-bridges.txt` + triggers reconcile) folds into Task 4's toolbox API, and the bridge **webui panel** folds into Task 7's `/toolbox/#tor` tab — those tasks' scope includes bridges (see their bullets).
 
