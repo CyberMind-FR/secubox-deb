@@ -5,14 +5,13 @@ in-process by the aggregator, so an async handler running subprocess would
 freeze the shared loop. Container ops go through `sudo -n openclawctl`.
 """
 import re as _re
-import os
 import json
 import time
 import ipaddress
 import threading
 import subprocess
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
@@ -196,18 +195,6 @@ class ScanRequest(BaseModel):
     target: str
     scan_type: ScanType = ScanType.DOMAIN
     options: Optional[Dict[str, Any]] = None
-
-
-class ConfigUpdate(BaseModel):
-    shodan_api_key: Optional[str] = None
-    censys_api_id: Optional[str] = None
-    censys_api_secret: Optional[str] = None
-    virustotal_api_key: Optional[str] = None
-    securitytrails_api_key: Optional[str] = None
-    max_concurrent_scans: Optional[int] = None
-    scan_timeout: Optional[int] = None
-    cache_ttl: Optional[int] = None
-    dns_servers: Optional[List[str]] = None
 
 
 class ExportRequest(BaseModel):
@@ -833,18 +820,10 @@ async def _run_scan(scan_id: str, target: str, scan_type: ScanType, options: Dic
 # ============================================================================
 # Legacy scan API Endpoints — replaced in Task 5
 # ============================================================================
-
-@app.post("/config", dependencies=[Depends(require_jwt)])
-async def update_config(update: ConfigUpdate):
-    """Update configuration."""
-    cfg = _load_config()
-
-    updates = update.dict(exclude_none=True)
-    cfg.update(updates)
-    _save_config(cfg)
-
-    return {"status": "updated", "updated_fields": list(updates.keys())}
-
+# NOTE: no POST /config here — config is operator-edited TOML/secrets (GET /config
+# in the core is read-only). The old writable POST /config wrote a stale
+# config.json that GET /config never read; removed to avoid a silently
+# diverging endpoint.
 
 @app.post("/scan/domain", dependencies=[Depends(require_jwt)])
 async def scan_domain(target: str, background_tasks: BackgroundTasks):
