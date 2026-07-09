@@ -294,7 +294,9 @@ Endpoints write the state files (dedup, one entry per line), `_audit(...)` to `/
 
 - [ ] **Step 4: Run tests → PASS.**
 
-- [ ] **Step 5: Commit** — `feat(toolbox): exit-country + Tor-VPN-client API (validated, audited, reconcile-triggered)`.
+- [ ] **Step 4b: Bridges endpoints** — also add `GET /tor/bridges`, `POST /tor/bridge {line}`, `DELETE /tor/bridge {line}` writing `/etc/secubox/toolbox/tor-bridges.txt` (validate each line starts `Bridge obfs4 ` with a safe charset, reject else 400), audited + reconcile-triggered. Same validator style as the selectors.
+
+- [ ] **Step 5: Commit** — `feat(toolbox): exit-country + Tor-VPN-client + obfs4-bridge API (validated, audited, reconcile-triggered)`.
 
 ---
 
@@ -384,6 +386,7 @@ def test_hidden_services_autodiscovers_onion(monkeypatch, tmp_path):
   - **Tor-VPN clients** table: add selector (kind ip/cidr/mac + value, client-validated) → `POST …/vpn/client`; per-row remove; shows routed state.
   - **Emancipate** button ("Publish this dashboard as a .onion") → `POST …/emancipate_webui`; shows the resulting `.onion` with copy.
   - **Hidden services** list from `/hidden_services` (auto-detected) + **.onion-DNS status** from `/onion_dns`.
+  - **obfs4 bridges** panel: paste/add a `Bridge obfs4 …` line, list, remove (`/tor/bridges`, `/tor/bridge`); a short hint on where to get bridges (Tor Browser moat / BridgeDB).
   - Robustness (mirror nextcloud/openclaw dashboards): `esc()` every rendered `.onion`/country/selector; `data-*`+delegated listeners (no `onclick="${…}"`); `sbx_token` auth; fail-safe fetch, 401→login.
 
 - [ ] **Step 2: Validate** — extract inline `<script>`, `node --check` (must pass); grep no `onclick="…${`; `esc(` wraps rendered values.
@@ -392,7 +395,77 @@ def test_hidden_services_autodiscovers_onion(monkeypatch, tmp_path):
 
 ---
 
-### Task 8: Live end-to-end on gk2
+### Task 8: ⑥ obfs4 bridges (Niveau-1 entry-side anti-censorship)
+
+**Files:**
+- Modify: `packages/secubox-toolbox/sbin/secubox-toolbox-tor-reconcile`
+- Modify: `packages/secubox-toolbox/debian/control` (add `obfs4proxy`)
+- Test: `packages/secubox-toolbox/tests/test_bridges.py`
+
+**Interfaces:**
+- Consumes: reconcile arm/disarm. Produces: `arm` reads `/etc/secubox/toolbox/tor-bridges.txt` (one `Bridge obfs4 …` per line); if any VALID lines, writes `/etc/tor/torrc.d/12-secubox-bridges.conf` with `UseBridges 1` + `ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy` + the bridge lines; empty/all-invalid → no drop-in (direct Tor). Bash helper `_emit_bridges`.
+
+- [ ] **Step 1: Failing test** — `tests/test_bridges.py` (drives the helper via a hidden `__emit_bridges` subcommand):
+```python
+import subprocess
+from pathlib import Path
+CTL = Path(__file__).resolve().parents[1] / "sbin" / "secubox-toolbox-tor-reconcile"
+def _emit(lines, tmp_path):
+    f = tmp_path / "b.txt"; f.write_text(lines)
+    return subprocess.run(["bash", str(CTL), "__emit_bridges", str(f)],
+                          capture_output=True, text=True).stdout
+def test_valid_bridge_emits_usebridges(tmp_path):
+    out = _emit("Bridge obfs4 192.0.2.3:80 ABCD cert=xyz iat-mode=0\n", tmp_path)
+    assert "UseBridges 1" in out
+    assert "ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy" in out
+    assert "Bridge obfs4 192.0.2.3:80 ABCD cert=xyz iat-mode=0" in out
+def test_empty_emits_nothing(tmp_path):
+    assert _emit("\n", tmp_path).strip() == ""
+def test_injection_line_skipped(tmp_path):
+    # a line not starting with 'Bridge obfs4 ' (torrc-injection attempt) is dropped
+    out = _emit("HiddenServiceDir /evil\nBridge obfs4 192.0.2.3:80 AB cert=x iat-mode=0\n", tmp_path)
+    assert "HiddenServiceDir" not in out
+    assert "192.0.2.3:80" in out
+```
+
+- [ ] **Step 2: Run — FAIL.**
+
+- [ ] **Step 3: Implement `_emit_bridges` + dispatch + arm/disarm** — in the reconcile:
+```bash
+BRIDGES_STATE=/etc/secubox/toolbox/tor-bridges.txt
+BRIDGES_DROPIN=/etc/tor/torrc.d/12-secubox-bridges.conf
+# Emit a UseBridges stanza from a file of `Bridge obfs4 …` lines. Only lines
+# beginning `Bridge obfs4 ` and containing no torrc-breaking chars are kept.
+# Empty result → emit nothing (direct Tor).
+_emit_bridges() {
+  local f="$1" line valid=""
+  [ -f "$f" ] || return 0
+  while IFS= read -r line; do
+    [[ "$line" =~ ^Bridge\ obfs4\ [][A-Za-z0-9:._=+/,-]+$ ]] || continue
+    valid="${valid}${line}"$'\n'
+  done < "$f"
+  [ -n "$valid" ] || return 0
+  printf 'UseBridges 1\nClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy\n%s' "$valid"
+}
+```
+Add dispatch arm BEFORE `*)`: `__emit_bridges) _emit_bridges "${2:-}"; exit 0 ;;`. In `arm()` (after exit-country):
+```bash
+  local br; br="$(_emit_bridges "$BRIDGES_STATE")"
+  if [ -n "$br" ]; then printf '# SecuBox obfs4 bridges\n%s' "$br" > "$BRIDGES_DROPIN"; else rm -f "$BRIDGES_DROPIN"; fi
+```
+In `disarm()`: `rm -f "$BRIDGES_DROPIN"`.
+
+- [ ] **Step 4: control dep** — add `obfs4proxy` to `packages/secubox-toolbox/debian/control` `Depends:` (or `Recommends:` if you prefer soft — `Depends` is fine, it's small).
+
+- [ ] **Step 5: Run tests → PASS**; `bash -n`; full toolbox suite has no NEW failures (same 3 pre-existing).
+
+- [ ] **Step 6: Commit** — `feat(toolbox): obfs4 bridges drop-in (Niveau-1 anti-censorship, UseBridges/ClientTransportPlugin)`.
+
+**Note:** the bridge **API** (add/list/remove validated `Bridge` lines → writes `tor-bridges.txt` + triggers reconcile) folds into Task 4's toolbox API, and the bridge **webui panel** folds into Task 7's `/toolbox/#tor` tab — those tasks' scope includes bridges (see their bullets).
+
+---
+
+### Task 9: Live end-to-end on gk2
 
 **Files:** none (integration). Packaging note: bump changelogs + build the three debs; deploy; restore prior Tor-egress state at the end.
 
@@ -401,6 +474,8 @@ def test_hidden_services_autodiscovers_onion(monkeypatch, tmp_path):
 - [ ] **Step 3: Exit-country** — write `DE` to `tor-exit-country.txt`, reconcile, confirm `11-secubox-exit-country.conf` has `ExitNodes {de} StrictNodes 1`; check a Tor circuit exits via DE (`tor_control` GETINFO / a curl through the transport geolocating to DE). If DE has no exit, confirm the fail-closed state is visible.
 - [ ] **Step 4: Tor-VPN client** — add a throwaway test client IP to `tor-vpn-clients.txt`, reconcile, confirm that source is in `tor_vpn_src` and its 80/443 redirects (a non-listed client stays direct). Remove it after.
 - [ ] **Step 5: Emancipate + persist + .onion DNS** — `POST /emancipate_webui`; confirm a `.onion` appears and the webui loads over it (via `torsocks curl` or the tor SOCKS); `systemctl restart tor`, confirm the `.onion` is unchanged (persist); resolve a known `.onion` through the box resolver → automap IP.
+- [ ] **Step 5b: obfs4 bridges** — add a (test) obfs4 `Bridge` line to `tor-bridges.txt`, reconcile, confirm `12-secubox-bridges.conf` has `UseBridges 1` + `ClientTransportPlugin obfs4 …` and `obfs4proxy` is installed; a bad line is rejected. Remove the test bridge after.
+
 - [ ] **Step 6: Restore** — return the box to its prior Tor-egress state (disarm if it started disarmed); confirm no residual drop-ins leak. Record `.claude/HISTORY.md`.
 - [ ] **Step 7: Commit** tracking — `docs(tor): Phase-1 enhancement live-verified on gk2`.
 
