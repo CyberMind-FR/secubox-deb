@@ -1,6 +1,13 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
+    if [ -f /etc/sudoers.d/secubox-openclaw ]; then
+        visudo -cf /etc/sudoers.d/secubox-openclaw >/dev/null || {
+            echo "secubox-openclaw: invalid sudoers, removing" >&2
+            rm -f /etc/sudoers.d/secubox-openclaw
+        }
+    fi
+
     # Create data directories. The openclaw FastAPI imports a module that
     # touches /var/lib/secubox/openclaw/scans at import time, so the user
     # that loads it MUST be able to traverse the parent dir. Under
@@ -14,10 +21,9 @@ if [ "$1" = "configure" ]; then
     chmod 0755 /var/lib/secubox/openclaw
     chmod 0750 /var/lib/secubox/openclaw/scans
 
-    # Enable and start service
+    # The aggregator serves this module in-process (imports api/main.py as
+    # user secubox) — do NOT enable the dedicated secubox-openclaw.service.
     systemctl daemon-reload
-    systemctl enable secubox-openclaw.service || true
-    systemctl start secubox-openclaw.service || true
 
     # Reload nginx if available
     if systemctl is-active --quiet nginx; then

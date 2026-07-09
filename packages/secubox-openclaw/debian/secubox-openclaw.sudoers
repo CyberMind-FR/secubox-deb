@@ -1,0 +1,3 @@
+# The aggregator (user secubox) drives the OpenClaw LXC through openclawctl.
+# This is the ONLY privileged surface for the module.
+secubox ALL=(root) NOPASSWD: /usr/sbin/openclawctl
