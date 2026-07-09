@@ -41,7 +41,7 @@ A persistent **`openclaw` LXC** provides the tools; **orchestration, storage,
 and policy stay host-side** in the module.
 
 - **Container:** debootstrap `--variant=minbase` bookworm rootfs at
-  `/srv/lxc/openclaw/rootfs`, veth on `br-lxc`, static IP **`10.100.0.30/24`**,
+  `/data/lxc/openclaw/rootfs`, veth on `br-lxc`, static IP **`10.100.0.41/24`**,
   gateway `10.100.0.1`, SecuBox DNS — identical bootstrap to `nextcloudctl`.
   Installed toolchain: `nmap` (+ its NSE scripts), `dnsutils` (`dig`), `whois`,
   `curl`, `ca-certificates`. No app data lives in the container; it is a pure
@@ -52,7 +52,7 @@ and policy stay host-side** in the module.
   (unchanged); the dedicated `secubox-openclaw.service`/`openclaw.sock` stays
   present but unused (aggregator serves it), matching nextcloud.
 
-Container IP `10.100.0.30` is free (nextcloud=`.21`; `.30` unused).
+Container IP `10.100.0.41` is free (nextcloud=`.21`; `.30` unused).
 
 ---
 
@@ -63,7 +63,7 @@ Container IP `10.100.0.30` is free (nextcloud=`.21`; `.30` unused).
 - `install` — debootstrap rootfs, write LXC config, install the toolchain,
   start the container. Idempotent (`lxc_exists` guard). Long-running →
   driven detached by the API (like `nextcloudctl install`).
-- `start` / `stop` — `lxc-start`/`lxc-stop -n openclaw -P /srv/lxc`.
+- `start` / `stop` — `lxc-start`/`lxc-stop -n openclaw -P /data/lxc`.
 - `status --json` — `{running, installed, tools:{nmap,dig,whois,curl}, ip}`.
   Authoritative + privileged; used by the module's `lxc_running()`/status.
 - `scan <type> <target> <scan_id>` — `openclawctl` runs **on the host** and
@@ -163,7 +163,7 @@ robustness:
 
 ## Data / files
 
-- `/srv/lxc/openclaw/` — container rootfs + config (created by `openclawctl
+- `/data/lxc/openclaw/` — container rootfs + config (created by `openclawctl
   install`).
 - `/var/lib/secubox/openclaw/scans/<id>.json` — scan records (host-side, owner
   `secubox`; the module mkdir's it at import like other modules, honoring the
