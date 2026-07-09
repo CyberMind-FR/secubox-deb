@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk '/^const SIM=/{flag=1} flag{print; if\\(flag && /^function simStep/\\){in_func=1} if\\(in_func && /^}$/\\){exit}}' remote-ui/round/index.html)",
+      "Bash(awk '/^const SIM=/{flag=1} flag{print; if\\(flag && /^function simStep/\\){in_func=1} if\\(in_func && /^}$/\\){exit}}' remote-ui/common/js/sim.js)",
+      "Bash(sh -n packages/secubox-users/debian/postinst)",
+      "Bash(lintian -I packages/secubox-users/debian/control)",
+      "Bash(sh -n /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so/packages/secubox-users/debian/postinst)",
+      "Bash(sh -n /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so/tests/scripts/test-users-auth-live.sh)",
+      "Bash(awk '/96/ {print NR\": \"$0}' remote-ui/common/js/icons.js)",
+      "Bash(git -C /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so status)",
+      "Bash(git -C /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so log --oneline -5)",
+      "Bash(git -C /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so log --oneline -2 -- packages/secubox-hub/www/login.html)",
+      "Bash(git -C /home/reepost/CyberMindStudio/secubox-deb-worktrees/120-auth-rework-secubox-users-as-identity-so diff HEAD -- packages/secubox-hub/www/login.html)",
+      "Bash(pip show *)"
+    ],
+    "additionalDirectories": [
+      "/home/reepost/CyberMindStudio/secubox-deb-worktrees/127-add-remote-ui-square-variant-for-pi-4b-7/remote-ui/common/shell"
+    ]
+  }
+}
