@@ -1,3 +1,10 @@
+secubox-threat-analyst (1.4.7-1~bookworm1) bookworm; urgency=medium
+
+  * webui: remove the "Endpoint status" diagnostic panel (diag footer + diagSet
+    plumbing) from the dashboard.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 09:00:00 +0200
+
 secubox-threat-analyst (1.4.6-1~bookworm1) bookworm; urgency=medium
 
   * ui: add country flag emoji to the Top source countries list (#613) —
