@@ -28,6 +28,8 @@ NFT_DROPIN=/etc/nftables.d/zz-secubox-toolbox-tor.nft
 TORRC_DROPIN_SRC=/usr/lib/secubox/toolbox/conf/torrc-toolbox-egress.conf
 TORRC_DROPIN=/etc/tor/torrc.d/10-secubox-toolbox-egress.conf
 TORRC_MAIN=/etc/tor/torrc
+UNBOUND_ONION_SRC=/usr/lib/secubox/toolbox/conf/48-secubox-onion.conf
+UNBOUND_ONION_DST=/etc/unbound/unbound.conf.d/48-secubox-onion.conf
 
 log() { logger -t "secubox-${MODULE}" -- "$*" 2>/dev/null || true; echo "[$MODULE] $*"; }
 
@@ -39,7 +41,7 @@ want_from_flag() {
 }
 
 arm() {
-  log "arming kbin Tor egress (TransPort 9040 / DNSPort 5353)"
+  log "arming kbin Tor egress (TransPort 9040 / DNSPort 9053)"
   mkdir -p /etc/tor/torrc.d
   install -m 0644 "$TORRC_DROPIN_SRC" "$TORRC_DROPIN"
   # Debian's torrc does not %include torrc.d by default — add it idempotently.
@@ -54,6 +56,13 @@ arm() {
   populate_exempt
   systemctl restart tor 2>/dev/null || systemctl start tor 2>/dev/null || \
     log "WARN tor failed to (re)start — egress fail-closed until it does"
+  # Resolve .onion via the egress DNSPort (automap). Fail-safe: never abort
+  # arm() on a rejected drop-in — just remove it and keep going.
+  if [ -f "$UNBOUND_ONION_SRC" ] && [ -d /etc/unbound/unbound.conf.d ]; then
+    install -m 0644 "$UNBOUND_ONION_SRC" "$UNBOUND_ONION_DST"
+    unbound-checkconf >/dev/null 2>&1 && systemctl reload unbound 2>/dev/null || \
+      { rm -f "$UNBOUND_ONION_DST"; log "WARN unbound .onion forward-zone rejected — removed"; }
+  fi
   log "ARMED"
 }
 
@@ -92,6 +101,7 @@ disarm() {
   rm -f "$NFT_DROPIN"
   if table_present; then nft delete table inet toolbox_tor 2>/dev/null || true; fi
   rm -f "$TORRC_DROPIN"
+  if [ -f "$UNBOUND_ONION_DST" ]; then rm -f "$UNBOUND_ONION_DST"; systemctl reload unbound 2>/dev/null || true; fi
   # Stop tor to minimise attack surface when not in use (no hidden services
   # are owned by this drop-in; secubox-tor manages those separately).
   systemctl stop tor 2>/dev/null || true
