@@ -1,80 +1,52 @@
-STATUS: DONE
-COMMIT: 692081f9af3cea70020ac132872ff23b77c007f1
-TESTS: 16 passed (14 prior + 2 new) — `cd packages/secubox-p2p && python3 -m pytest tests/test_dht.py -v`
-CONCERNS: none blocking. `.superpowers/sdd/task-5-report.md` shows as modified in `git status` but was not touched by this task (pre-existing uncommitted drift from an earlier session in this worktree) — left untouched/uncommitted, not part of this commit.
+# Task 7 report — Tor enhancement Phase 1 — webui `#tor` tab
 
----
+**Status:** DONE
 
-## Fix pass — issue #774 review findings (Task 7 hardening)
+**Branch:** `feature/tor-enhancement-phase1`
+**Commit:** `b8d4e1b6` — `feat(toolbox): #tor tab — exit-country, Tor-VPN clients, obfs4 bridges, emancipate, .onion list + DNS status`
+**File touched:** `packages/secubox-toolbox/www/toolbox/index.html` (only file, as instructed) — 355 insertions / 2 deletions.
 
-Reviewer found 4 real defects in the Task 7 iterative-lookup code in
-`packages/secubox-p2p/api/dht.py`. All four fixed, plus one new regression
-test.
+(Note: this file previously held an unrelated stale Task-7 report from a different plan/openclaw dashboard — overwritten per instruction.)
 
-### Fixes applied
+## Panels added (inside the existing `#panel-tor` section, below the Tor-egress switch card, same P31-light skin)
 
-1. **`_merge_contact` uncaught ValueError on malformed peer contacts**
-   (Important, CONFIRMED). A single bad contact (bad hex `node_id_hex`, or
-   `endpoint` without a `":"`) raised uncaught `ValueError`/`KeyError`/
-   `TypeError` out of `iterative_find` → `find_peer`/`announce`, crashing the
-   whole lookup for one malicious/buggy peer. Fixed by wrapping the parse
-   (`bytes.fromhex`, `contact["did"]`, `self._parse_endpoint(...)`) in
-   `try/except (ValueError, KeyError, TypeError): return` — the malformed
-   contact is now silently discarded and the rest of the shortlist/lookup
-   proceeds normally.
+1. **Exit-country** — `<select multiple>` populated from a curated static ISO 3166-1 alpha-2 list (`ISO_COUNTRIES`, ~72 countries, French labels, sorted). "Sélection actuelle" kv line + fail-closed warning banner (`StrictNodes 1` = no traffic if no exit exists in the chosen countries). Wired to `GET/POST /api/v1/toolbox/exit_country`.
+2. **Tor-VPN clients** — kind selector (ip/cidr/mac) + selector input + add button; table with per-row 🗑 remove. Prominent IPv6 warning banner (v4-only tunnel, advise disabling IPv6 on routed clients/RA). Client-side heuristic (selector contains `:` and kind≠mac) short-circuits with a clean IPv6-specific message before hitting the API; the error path also recognizes a `:`-selector 400 and rewords it, since the backend's generic `"invalid kind/selector"` detail isn't IPv6-specific. Wired to `GET /vpn/clients`, `POST/DELETE /vpn/client`.
+3. **obfs4 bridges** — paste-a-line input + add; list with per-row remove; hint pointing to Tor Browser moat / bridges.torproject.org. Wired to `GET /tor/bridges`, `POST/DELETE /tor/bridge`.
+4. **Emancipate** — "🚀 Publier en .onion" button → `POST /api/v1/exposure/tor/emancipate_webui` (cross-module, JWT-gated); shows the returned `.onion` (from `output.onion` / `tor.onion`) with a clipboard copy button.
+5. **Hidden services + .onion-DNS status** — `GET /api/v1/tor/hidden_services` table (name / onion / local port / state) and `GET /api/v1/tor/onion_dns` kv (dnsport_up / forward_zone_installed / resolves), fetched together via `Promise.all`.
 
-2. **Unbounded `shortlist`** (Important). A peer returning many fabricated
-   "close" contacts could inflate `shortlist` indefinitely, forcing extra RPC
-   rounds. Fixed: after merging all contacts from a round's replies,
-   `shortlist` is sorted by `xor_distance` to `target_id` and truncated to
-   `KAD_K` (`shortlist.sort(...); del shortlist[KAD_K:]`) before the
-   round's convergence check.
+## Endpoints wired (confirmed against source, not guessed)
 
-3. **`asyncio.gather(*tasks)` without `return_exceptions=True`** (Important).
-   A non-timeout exception from `send_fn` (relevant once real UDP lands)
-   would propagate out of `gather` and abort the entire lookup. Fixed:
-   `asyncio.gather(*tasks, return_exceptions=True)`, and the reply-processing
-   loop now treats `isinstance(reply, BaseException)` the same as
-   `reply is None` (skip and continue).
+- Toolbox-native (same origin, cookie/vhost-gated exactly like the existing `torSet()`/`loadTor()` — `_require_tor_admin` blocks the public kbin vhost, no bearer needed): `/api/v1/toolbox/exit_country`, `/api/v1/toolbox/vpn/clients`, `/api/v1/toolbox/vpn/client`, `/api/v1/toolbox/tor/bridges`, `/api/v1/toolbox/tor/bridge`.
+- Cross-module (nginx-routed, confirmed via each module's `nginx/*.conf` location block): `/api/v1/exposure/tor/emancipate_webui` (requires JWT — `Depends(require_jwt)` in `packages/secubox-exposure/api/main.py`), `/api/v1/tor/hidden_services`, `/api/v1/tor/onion_dns` (no auth required server-side, bearer sent anyway for consistency).
 
-4. **`asyncio.get_event_loop()`** (Minor). Replaced with
-   `asyncio.get_running_loop()` in `_rpc` — correct inside an already-running
-   async context, avoids the deprecated/ambiguous fallback behavior of
-   `get_event_loop()`.
+## Auth approach
 
-### New regression test
+Two helpers, matching two different auth realities found in the source:
+- `Tj(path, opts)` — toolbox's own tor-* routes: `credentials: 'same-origin'`, no bearer (mirrors existing `torSet`/`torLeaks`/`loadFilters`).
+- `Xj(base, path, opts)` — cross-module (exposure + tor): reads `localStorage.getItem('sbx_token')`, sends `Authorization: Bearer <token>`, redirects to `/login.html` on 401 — this is the same pattern used by `packages/secubox-exposure/www/exposure/index.html` (`token()`/`headers()`/`api()`), and matches the fleet-wide `sbx_token` convention (a wrong localStorage key produces a login loop on other modules).
 
-`tests/test_dht.py::test_find_peer_survives_malformed_contact_in_reply` —
-A knows only B; B knows C. C holds its own signed record locally (without
-pushing it to B via `announce`, so B's `find_value` reply stays on the
-"nodes" branch). B's `_reply` is wrapped so that any outgoing `"nodes"`
-message gets a malformed contact
-(`{"node_id_hex": "zz", "did": "did:bad", "endpoint": "noport"}`) spliced in
-ahead of the real, good contact (C). Asserts `A.find_peer(C.did)` still
-resolves C's verified record and does not raise.
+## XSS / robustness approach
 
-Verified the test is load-bearing: temporarily reverted the try/except in
-`_merge_contact` and confirmed this exact test fails with an uncaught
-`ValueError: non-hexadecimal number found in fromhex() arg at position 0`
-(see traceback origin `api.dht.DHTNetwork._merge_contact`); restored the fix
-and the test (and the full suite) went green again.
+- Every backend-derived string rendered into `innerHTML` goes through the existing global `esc()` (declared later in the file but hoisted — safe, since `function esc(s){}` statements hoist ahead of all script execution): error messages (`d.__error`/`dns.__error`/`hs.__error`), country codes, VPN client kind/selector, bridge lines, hidden-service name/onion_address, the emancipated `.onion` address.
+- No `onclick="fn('${…}')"` was introduced. Static buttons (apply/clear/add-client/add-bridge/emancipate) use `addEventListener` wired once near the bottom of the script. Per-row dynamic elements (VPN-client remove, bridge remove, onion copy) use `data-*` attributes + `.querySelectorAll(...).forEach(b => b.addEventListener(...))` immediately after each render — the exact idiom already used by the file's existing `loadSentinelC2()`/`c2Ignore()` pair.
+- Grep confirms the only `onclick="…${…}"` occurrences left in the file are pre-existing (lines for `setLevel`, `loadClientDetail`, `resetClient`, the "tout afficher" toggle, `quarantine`, `loadAdsClient`) — none are part of this change.
+- `switchTab('tor')` and the tab's "🔁 Refresh" button now call a new `refreshTorTab()` which loads all five new panels plus the existing egress state, so nothing is left stuck on `loading…` after a tab switch.
 
-### Test run
+## Validation
 
-```bash
-cd packages/secubox-p2p && python3 -m pytest tests/test_dht.py -v
-```
+- `node --check` on the extracted `<script>` block: **PASS**.
+- `grep -n 'onclick="[^"]*\${'` across the whole file: only pre-existing matches, none in the new code region.
+- Manual read-through confirms every dynamic value hitting `innerHTML` is `esc()`-wrapped; numeric fields (`local_port`) and boolean-derived static strings are not (not attacker-controlled free text, no escaping needed).
+- Not deployed to a board — that is Task 9's scope, explicitly excluded here.
 
-Result: **17 passed** (16 prior + 1 new regression test), 0.05s. Full package
-suite (`pytest tests/ -q`) also green: 66 passed.
+## Concerns / follow-ups for later tasks
 
-### Commit
+- The exit-country panel does not show a "live exit relay country" via geoIP (no such endpoint exists in the backend); it instead points the operator at the existing "Vérifier l'IP de sortie" button in the egress card above. Documented simplification, not a missing wire-up.
+- The IPv6-selector 400 from the toolbox API returns a generic `"invalid kind/selector"` detail (not IPv6-specific) — the client-side heuristic (colon-in-selector) covers the common case cleanly, but a genuinely malformed non-IPv6 selector will still show the generic backend message, which is correct behavior, just not IPv6-labeled.
+- The pre-existing deep-link array (`if (['overview','clients','filtres','social','ads','reseau','config'].includes(initial))`) still excludes `tor` and `sentinel` — a pre-existing gap unrelated to Task 7, left untouched per the "only touch this file for this task's scope" instruction (flagging it here rather than silently fixing it).
 
-`fix(p2p): harden DHT iterative lookup — skip malformed contacts, cap shortlist, tolerate rpc exceptions (#774)`
+## Files touched
 
-### Concerns
-
-None blocking. No public signatures changed; behavior change is strictly
-additive hardening (skip-bad-contact, cap shortlist size, tolerate RPC
-exceptions) — none of the 16 prior tests needed modification, all still pass
-unchanged.
+- `packages/secubox-toolbox/www/toolbox/index.html` (extended, commit `b8d4e1b6`)

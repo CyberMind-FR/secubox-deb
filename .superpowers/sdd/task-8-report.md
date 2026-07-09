@@ -189,3 +189,117 @@ modified.
 ## 7. Commit
 
 `feat(toolbox): obfs4 bridges drop-in + reapply-when-armed (edits apply live)`
+commit `7672b39d`.
+
+---
+
+# Review follow-up — two Critical fail-closed bugs fixed
+
+Review found two Critical bugs in the fail-closed network path. Both fixed
+in a second commit; only `sbin/secubox-toolbox-tor-reconcile` +
+`tests/test_bridges.py` touched.
+
+## CRITICAL 1 — `reapply()` opened a clearnet leak window on every call
+
+**Bug:** `reapply()` did `nft flush set … tor_vpn_src` then
+`populate_vpn_clients` (per-line `nft add element`) as SEPARATE netlink
+transactions. Between the flush and a client's IP being re-added, that IP
+was in neither `prerouting_vpn` (Tor redirect, gated on `@tor_vpn_src`) nor
+`forward_vpn_killswitch`'s `drop` (also `@tor_vpn_src`-gated) → the forward
+chain fell through to `policy accept` → a routed VPN client's forward
+traffic passed DIRECT in the clear. Same window for `tor_exempt`.
+
+**Fix:** atomic set swap. Added `_apply_set <setname>` (members comma-joined
+on stdin) that emits a single `nft -f -` batch —
+`flush set … ; add element … { m1,m2,… }` in ONE netlink transaction — so
+the set is never momentarily empty. Refactored `populate_vpn_clients` and
+`populate_exempt` into **collect mode**: they now echo the comma-joined,
+identically-validated member list on stdout instead of doing per-line
+`nft add`. Both `arm()` and `reapply()` now do
+`populate_vpn_clients | _apply_set tor_vpn_src` and
+`populate_exempt | _apply_set tor_exempt`. Empty member list → bare flush
+(set legitimately empties). All `set -euo pipefail`-safe (`|| true` on the
+nft calls; collect functions end on a `printf` returning 0).
+
+Sub-points handled:
+- `populate_exempt`'s own-public-IP `log` line now goes to **stderr**
+  (`log … >&2`) so it never contaminates the stdout member list captured by
+  the pipe.
+- The dynamic spliced-hosts step (external
+  `secubox-toolbox-tor-exempt-hosts`, which only **adds**, never flushes —
+  so no atomicity window) was split into `populate_exempt_dynamic_hosts`,
+  called AFTER the atomic base-set apply in both `arm()` and `reapply()`.
+
+## CRITICAL 2 — torrc drop-ins written AFTER `systemctl restart tor`
+
+**Bug:** in `arm()`, `systemctl restart tor` ran BEFORE the lines writing
+`EXIT_CC_DROPIN`/`BRIDGES_DROPIN`, and `disarm()` always removes them — so
+on every arm, tor (re)started reading `%include torrc.d/*.conf` with NO
+bridges/exit-country present → a direct, unbridged connection (the exact
+failure case obfs4 exists to defeat in a censored network), with nothing
+reloading tor afterwards.
+
+**Fix:** extracted `_write_torrc_dropins()` (emits both the exit-country
+stanza via `_emit_exit_country` and the bridges stanza via `_emit_bridges`,
+writing/removing `EXIT_CC_DROPIN` + `BRIDGES_DROPIN`) and call it BEFORE
+`systemctl restart tor` in `arm()`. `reapply()` calls the same helper before
+its `systemctl reload tor`. This fixes the new bridges ordering AND the
+pre-existing exit-country ordering bug in one place, and removes the
+duplicated inline blocks the reviewer flagged (Minor).
+
+## Reasoning on the two design choices
+
+- **Why a single `nft -f -` batch is atomic:** nftables applies one
+  `nft -f` ruleset file as a single atomic transaction (all-or-nothing
+  commit to the kernel). Putting `flush set` and `add element` in the same
+  batch means the kernel never observes the intermediate empty-set state —
+  there is no scheduling point where a packet could be evaluated against a
+  half-updated set. Two separate `nft` invocations are two transactions
+  with a real (arbitrarily long, under load) gap between them.
+- **Why `_write_torrc_dropins` before the (re)start, not a post-hoc
+  reload:** a post-restart reload would still leave a bootstrap window where
+  tor dials out directly/unbridged; in a censored network that first
+  unbridged attempt is precisely what gets the connection fingerprinted or
+  blocked. Ordering the drop-ins first means tor's very first bootstrap
+  already uses the bridges.
+
+## Tests (adjusted)
+
+`tests/test_bridges.py` now 6 tests (was 5): the 4 `_emit_bridges` tests
+unchanged; the single old reapply test replaced by two:
+- `test_reapply_writes_torrc_before_tor_reload` — stubs the helpers to an
+  ordered marker log and asserts `_write_torrc_dropins`,
+  `_apply_set tor_vpn_src`, `_apply_set tor_exempt`, and the dynamic-hosts
+  step all ran, AND that `write_torrc_dropins`'s marker index precedes the
+  `systemctl reload tor` marker index (stub-order proof of the CRITICAL 2
+  fix).
+- `test_reapply_uses_atomic_set_swap` — feeds a real `ip:10.0.0.5` VPN
+  state file, stubs `nft` to capture args + stdin, and asserts the
+  tor_vpn_src update went through `nft -f -` carrying a
+  `flush set … tor_vpn_src` + `add element … tor_vpn_src { 10.0.0.5 }`
+  batch, and that NO bare `flush set … tor_vpn_src` invocation was left
+  standing (proof of the CRITICAL 1 fix — atomic, no empty window).
+
+Both stub sets return 0 throughout because sourcing the reconciler
+propagates its `set -euo pipefail` into the test harness.
+
+```
+$ python3 -m pytest tests/test_bridges.py -q
+......
+6 passed in 0.09s
+
+$ python3 -m pytest tests/ -q
+... 3 failed, 272 passed ...   # same 3 pre-existing (bypass_sources/media_stats), no new
+
+$ bash -n sbin/secubox-toolbox-tor-reconcile
+(no output — syntax OK)
+```
+
+`test_tor_switch.py::test_reconcile_populates_exempt_and_excludes_automap`
+(greps the script for `tor_exempt`/`127.0.0.0/8`/`api.ipify.org`/
+`scope link`/`10.19`) still passes — the collect-mode refactor preserved
+all those tokens.
+
+## Fix commit
+
+`fix(toolbox): atomic nft set swap in reapply (no clearnet window) + write torrc drop-ins before tor restart`
