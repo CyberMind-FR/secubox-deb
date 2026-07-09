@@ -3722,13 +3722,14 @@ def _valid_cc(c: str) -> bool:
 
 
 def _valid_selector(kind: str, sel: str) -> bool:
+    # IPv4-only: the backend tor_vpn_src nft set is `type ipv4_addr` and
+    # populate_vpn_clients silently skips non-v4, so accepting an IPv6
+    # selector would be a false success (200 + audit, nothing enforced).
     try:
         if kind == "ip":
-            _ipaddress.ip_address(sel)
-            return True
+            return _ipaddress.ip_address(sel).version == 4
         if kind == "cidr":
-            _ipaddress.ip_network(sel, strict=False)
-            return True
+            return _ipaddress.ip_network(sel, strict=False).version == 4
         if kind == "mac":
             return bool(_MAC_RE.fullmatch(sel))
     except ValueError:

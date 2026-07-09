@@ -35,6 +35,15 @@ def test_vpn_selector_validated(monkeypatch, tmp_path):
     assert not m._valid_selector("bad", "x")
 
 
+def test_vpn_selector_rejects_ipv6(monkeypatch, tmp_path):
+    # The tor_vpn_src nft set is `type ipv4_addr` and populate_vpn_clients
+    # skips non-v4 — accepting v6 would be a false success (200 + audit,
+    # nothing enforced). v6 selectors must be rejected.
+    m = _load(monkeypatch, tmp_path)
+    assert m._valid_selector("ip", "2001:db8::1") is False
+    assert m._valid_selector("cidr", "2001:db8::/32") is False
+
+
 def test_bridge_line_validated(monkeypatch, tmp_path):
     m = _load(monkeypatch, tmp_path)
     assert m._valid_bridge("Bridge obfs4 1.2.3.4:443 ABCDEF0123456789 cert=xyz iat-mode=0")
@@ -102,6 +111,16 @@ def test_vpn_client_rejects_bad_selector(client):
     c, m = client
     r = c.post("/vpn/client", json={"kind": "mac", "selector": "not-a-mac"})
     assert r.status_code == 400
+    assert not m.TOR_VPN_CLIENTS.exists()
+
+
+def test_vpn_client_rejects_ipv6(client):
+    c, m = client
+    r = c.post("/vpn/client", json={"kind": "ip", "selector": "2001:db8::1"})
+    assert r.status_code == 400
+    assert not m.TOR_VPN_CLIENTS.exists()  # no state write on reject
+    r2 = c.post("/vpn/client", json={"kind": "cidr", "selector": "2001:db8::/32"})
+    assert r2.status_code == 400
     assert not m.TOR_VPN_CLIENTS.exists()
 
 
