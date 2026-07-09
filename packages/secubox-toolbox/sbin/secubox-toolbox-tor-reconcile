@@ -32,6 +32,7 @@ UNBOUND_ONION_SRC=/usr/lib/secubox/toolbox/conf/48-secubox-onion.conf
 UNBOUND_ONION_DST=/etc/unbound/unbound.conf.d/48-secubox-onion.conf
 EXIT_CC_STATE=/etc/secubox/toolbox/tor-exit-country.txt
 EXIT_CC_DROPIN=/etc/tor/torrc.d/11-secubox-exit-country.conf
+VPN_CLIENTS_STATE=/etc/secubox/toolbox/tor-vpn-clients.txt
 
 log() { logger -t "secubox-${MODULE}" -- "$*" 2>/dev/null || true; echo "[$MODULE] $*"; }
 
@@ -70,6 +71,7 @@ arm() {
   install -m 0644 "$NFT_FILE" "$NFT_DROPIN"
   nft -f "$NFT_DROPIN"
   populate_exempt
+  populate_vpn_clients
   systemctl restart tor 2>/dev/null || systemctl start tor 2>/dev/null || \
     log "WARN tor failed to (re)start — egress fail-closed until it does"
   # Resolve .onion via the egress DNSPort (automap). Fail-safe: never abort
@@ -113,6 +115,22 @@ populate_exempt() {
   if [ -x /usr/sbin/secubox-toolbox-tor-exempt-hosts ]; then
     /usr/sbin/secubox-toolbox-tor-exempt-hosts 2>&1 | while read -r l; do log "$l"; done || true
   fi
+}
+
+# Fill tor_vpn_src from `kind:selector` lines (ip:/cidr:) in
+# VPN_CLIENTS_STATE. MAC selectors are resolved to current IPs via the neigh
+# table (best-effort). Invalid/unresolvable entries are skipped, never abort.
+populate_vpn_clients() {
+  [ -f "$VPN_CLIENTS_STATE" ] || return 0
+  local line kind sel ip
+  while IFS= read -r line; do
+    kind="${line%%:*}"; sel="${line#*:}"
+    case "$kind" in
+      ip|cidr) [[ "$sel" =~ ^[0-9./]+$ ]] && nft add element inet toolbox_tor tor_vpn_src "{ $sel }" 2>/dev/null || true ;;
+      mac) ip="$(ip neigh 2>/dev/null | awk -v m="${sel,,}" 'tolower($5)==m{print $1; exit}')"
+           [ -n "$ip" ] && nft add element inet toolbox_tor tor_vpn_src "{ $ip }" 2>/dev/null || true ;;
+    esac
+  done < "$VPN_CLIENTS_STATE"
 }
 
 disarm() {

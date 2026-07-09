@@ -49,4 +49,22 @@ table inet toolbox_tor {
         meta skuid "secubox-toolbox" meta nfproto ipv6 tcp dport { 80, 443 } drop
         meta skuid "secubox-toolbox" meta nfproto ipv6 meta l4proto { tcp, udp } th dport 53 drop
     }
+
+    # ── Per-client Tor-VPN: redirect selected LAN client SOURCE IPs (not the
+    # skuid) into Tor. Distinct from output_nat/output_killswitch above, which
+    # torify the mitm worker's own egress. Populated by
+    # secubox-toolbox-tor-reconcile's populate_vpn_clients from
+    # /etc/secubox/toolbox/tor-vpn-clients.txt. Empty set → no client routed.
+    set tor_vpn_src {
+        type ipv4_addr
+        flags interval
+    }
+
+    chain prerouting_vpn {
+        type nat hook prerouting priority -100; policy accept;
+        iifname "lo" return
+        ip daddr @tor_exempt return
+        ip saddr @tor_vpn_src meta l4proto { tcp, udp } th dport 53 redirect to :9053
+        ip saddr @tor_vpn_src tcp dport { 80, 443 } redirect to :9040
+    }
 }
