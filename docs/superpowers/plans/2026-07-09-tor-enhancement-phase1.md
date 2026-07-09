@@ -33,7 +33,7 @@
 - `packages/secubox-toolbox/api/…` (the toolbox portal API) — exit-country + VPN-client CRUD writing the state files + audit.
 - `packages/secubox-exposure/api/main.py` — `federate` flag on the emancipate path; `secubox-exposure-tor-reconcile` persist-on-boot + unit; webui-emancipate endpoint.
 - `packages/secubox-tor/api/main.py` — filesystem-discovering `/hidden_services`; `.onion`-DNS status; proxy/read of toolbox exit-country + VPN state for the UI.
-- `packages/secubox-tor/www/tor/index.html` — country picker, VPN-client table, emancipate button, `.onion` list, DNS status.
+- `packages/secubox-toolbox/www/toolbox/index.html` (the existing `#tor` tab, `data-tab="tor"`) — add country picker, VPN-client table, emancipate button, `.onion` list, DNS status ALONGSIDE the existing Tor-egress switch. (The Tor UI lives in `/toolbox/#tor`, not a separate `/tor/` page.)
 
 ---
 
@@ -245,7 +245,7 @@ Call `populate_vpn_clients` in `arm()` right after `populate_exempt`.
 ### Task 4: ①⑤ Toolbox API — exit-country + VPN-client CRUD (validated, audited)
 
 **Files:**
-- Modify: the toolbox portal API (read `packages/secubox-toolbox/` for the FastAPI app that serves `/api/v1/toolbox/…` and writes `filters.json`; add the endpoints there — mirror its existing style, `def` if it's aggregator-mounted).
+- Modify: `packages/secubox-toolbox/secubox_toolbox/api.py` — the toolbox FastAPI app (serves `/api/v1/toolbox/…`, writes `filters.json`). Add the exit-country + VPN-client endpoints here; mirror its existing style, `def` if aggregator-mounted.
 - Test: `packages/secubox-toolbox/tests/test_tor_vpn_api.py`
 
 **Interfaces:**
@@ -255,7 +255,7 @@ Call `populate_vpn_clients` in `arm()` right after `populate_exempt`.
 ```python
 import importlib
 def _load(monkeypatch, tmp_path):
-    import <toolbox_api_module> as m; importlib.reload(m)
+    import secubox_toolbox.api as m; importlib.reload(m)
     monkeypatch.setattr(m, "TOR_EXIT_CC", tmp_path/"cc.txt")
     monkeypatch.setattr(m, "TOR_VPN_CLIENTS", tmp_path/"vpn.txt")
     monkeypatch.setattr(m, "_trigger_reconcile", lambda: None)
@@ -271,7 +271,7 @@ def test_vpn_selector_validated(monkeypatch, tmp_path):
     assert not m._valid_selector("ip","1.2.3.999") and not m._valid_selector("mac","zz")
     assert not m._valid_selector("bad","x")
 ```
-(Replace `<toolbox_api_module>` with the actual module the implementer finds.)
+(Module is `secubox_toolbox.api`; run tests from `packages/secubox-toolbox/` with its conftest.)
 
 - [ ] **Step 2: Run — FAIL.**
 
@@ -374,12 +374,12 @@ def test_hidden_services_autodiscovers_onion(monkeypatch, tmp_path):
 ### Task 7: Webui — country picker, VPN-client table, emancipate button, `.onion` list, DNS status
 
 **Files:**
-- Modify: `packages/secubox-tor/www/tor/index.html`
+- Modify: `packages/secubox-toolbox/www/toolbox/index.html` — the existing `#tor` tab (`data-tab="tor"`), extending the Tor-egress section
 - Test: `node --check` on the extracted script.
 
 **Interfaces:** consumes all Task 4/5/6 endpoints.
 
-- [ ] **Step 1: Implement** — add to the existing `/tor/` dashboard (keep skin):
+- [ ] **Step 1: Implement** — add to the existing toolbox `#tor` tab (`data-tab="tor"` in `www/toolbox/index.html`, alongside the Tor-egress switch; keep skin). The tab calls toolbox's own country/VPN endpoints, plus `/api/v1/exposure/tor/emancipate_webui` and `/api/v1/tor/hidden_services` cross-module (via the aggregator/nginx):
   - **Exit-country** panel: multi-select of ISO countries (static list) → `POST …/exit_country`; shows current + the live exit relay country; a warning banner when `StrictNodes` is on and no circuit has an exit (fail-closed).
   - **Tor-VPN clients** table: add selector (kind ip/cidr/mac + value, client-validated) → `POST …/vpn/client`; per-row remove; shows routed state.
   - **Emancipate** button ("Publish this dashboard as a .onion") → `POST …/emancipate_webui`; shows the resulting `.onion` with copy.
@@ -418,4 +418,4 @@ Per-service exit-country override. `ExitNodes` is global to a tor instance and h
 - **Reconcile is the single privileged choke point** — the APIs (Task 4) only write state files + trigger it; never let an API escalate directly.
 - **`nft -c -f`** validates the nft file offline; use it in Tasks 1/3 before the live arm.
 - **Live tasks must restore state** — the box's Tor egress was OFF at start; leave it as found unless the operator asks otherwise.
-- **The toolbox API module + its trigger mechanism** (Task 4) must be discovered by reading the package — mirror exactly how the existing egress arm/disarm flag is written + path-triggered; do not invent a new privilege path.
+- **The toolbox API is `secubox_toolbox/api.py`; its trigger mechanism** (Task 4): mirror exactly how the existing egress arm/disarm flag (`filters.json` `tor_mode`) is written + path-triggered (`secubox-toolbox-tor.path`); do not invent a new privilege path. The Tor UI is the `/toolbox/#tor` tab, calling toolbox + exposure + secubox-tor endpoints cross-module.
