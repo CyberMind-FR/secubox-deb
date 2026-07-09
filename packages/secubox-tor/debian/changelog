@@ -1,3 +1,17 @@
+secubox-tor (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Tor control panels on the /tor/ page (exit-country, VPN clients, obfs4 bridges,
+    emancipate, .onion list + DNS status); fix hidden-service discovery perms.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 19:30:00 +0200
+
+secubox-tor (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Tor Phase-1 enhancement: exit-country, per-client Tor-VPN (leak-proof kill-switch),
+    emancipate webui .onion (standalone+persist), .onion DNS (9053), obfs4 bridges.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 18:00:00 +0200
+
 secubox-tor (1.0.1-1~bookworm1) bookworm; urgency=low
 
   * Rewrite Description to identify this as the Tor relay + hidden-

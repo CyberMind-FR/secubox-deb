@@ -1,3 +1,10 @@
+secubox-toolbox (2.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * Tor Phase-1 enhancement: exit-country, per-client Tor-VPN (leak-proof kill-switch),
+    emancipate webui .onion (standalone+persist), .onion DNS (9053), obfs4 bridges.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 18:00:00 +0200
+
 secubox-toolbox (2.8.2-1~bookworm1) bookworm; urgency=medium
 
   * #826 Sentinel C2 auto-learning WebUI — new "C2 appris" sub-view in the

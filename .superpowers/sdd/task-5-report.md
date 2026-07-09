@@ -1,101 +1,55 @@
-# Task 5 Report: C2 learner daemon wiring + `/c2` endpoints + seeded config (#826)
+### Task 5 report — Emancipate the webui `.onion`, standalone + persist-on-boot (Tor enhancement Phase 1)
 
-**Status**: COMPLETE
-**Commit**: `db22668f` — `feat(sentinel): wire C2 learner into daemon + /c2 endpoints + seeded allowlist (ref #826)`
+**Status:** COMPLETE
+**Branch:** `feature/tor-enhancement-phase1` (verified, not switched)
 
-## Test summary
+**Files changed:**
+- `packages/secubox-exposure/api/main.py` (+107 lines)
+- `packages/secubox-exposure/sbin/secubox-exposure-tor-reconcile` (new, executable)
+- `packages/secubox-exposure/systemd/secubox-exposure-tor-reconcile.service` (new)
+- `packages/secubox-exposure/tests/test_emancipate_webui.py` (new, 8 tests)
 
+**Functions added to `api/main.py`:**
+- `_hs_dir_exists(name)` — `(TOR_DATA / name).exists()`.
+- `_load_emancipated()` / `_save_emancipated(services)` — thin wrappers over the existing `load_config()`/`save_config()` for the `emancipated` list.
+- `_mesh_present()` — best-effort mesh detection (lazy `from api.mesh_egress import mesh_ip`), wrapped in try/except, returns `False` on any error (no wg-mesh iface, import failure, etc.).
+- `emancipate_webui(federate=False)` — calls `_tor_add_sync(name="webui", local_port=9080, onion_port=80)` (keyword call — required so the brief's `**k`-only-lambda test stub works), records `{name:"webui", local_port:9080, onion_port:80, active:True[, onion:...]}` in the exposure config (replacing any prior `webui` entry). When `federate=True` **and** `_mesh_present()`, publishes via `_publish("webui", f"http://{onion}/", {...})` — the whole federation block is wrapped in `try/except Exception: pass`, so a mesh/annuaire hiccup can never raise out of or block the call. When `federate=False` (default/standalone), the federation block is skipped entirely — `_publish` is never invoked.
+- `tor_reconcile_persist()` — iterates `_load_emancipated()`, skips any entry that isn't `active`, skips entries missing `name`/`local_port`/`onion_port`, skips any whose `_hs_dir_exists(name)` is already `True` (idempotency — never re-creates an existing HS dir, so the `.onion` survives reboots), and `_tor_add_sync`s the rest, collecting applied names. Each iteration is wrapped in try/except so one bad entry can't abort the reconcile of the others. Returns `{"success": True, "applied": [...]}`.
+
+**Import added:** `from api.mesh_egress import _publish` at module top level (unlike the other `mesh_egress` call sites in this file, which import lazily inside their function bodies) — needed so `_publish` is a stable `main` module attribute the tests (and `emancipate_webui`) can reference/monkeypatch as `m._publish`.
+
+**Endpoint added:**
+- `POST /tor/emancipate_webui?federate=<bool>` (JWT-gated via `Depends(require_jwt)`). Handler is `async def`; offloads the blocking call via `await asyncio.to_thread(emancipate_webui, federate)`, following the module's `_apply_tor` thread-offload convention for blocking Tor mechanics on the shared aggregator loop. (Note: the pre-existing `/tor/add` calls `_tor_add_sync` inline without offload — an existing inconsistency, left untouched as out of scope; the new endpoint follows the safer offloaded pattern per the brief's explicit instruction.)
+
+**Standalone vs federation handling:**
+- Default `federate=False` → pure standalone: HS created, config recorded, **zero** annuaire calls. Verified by `test_emancipate_webui_standalone_skips_federation`.
+- `federate=True` only calls `_publish` when `_mesh_present()` is also true (no mesh ⇒ no publish attempt at all). Verified by `test_emancipate_webui_federate_true_publishes_when_mesh_present`.
+- Federation failures (annuaire down, etc.) are swallowed — `emancipate_webui` still returns `{"success": True, ...}`. Verified by `test_emancipate_webui_federation_never_raises`.
+
+**Idempotency approach (persist-on-boot):**
+- `tor_reconcile_persist()` gates every re-apply on `_hs_dir_exists(name)` — if the directory (and therefore the onion keypair) is already on disk, the entry is skipped untouched; `_tor_add_sync` (and therefore `systemctl reload tor`) is only invoked for genuinely-missing HS dirs. Verified by `test_reconcile_never_recreates_existing_hs_dir` and `test_reconcile_reapplies_active_only` (inactive `old` entry never re-added).
+- New `sbin/secubox-exposure-tor-reconcile` — thin `exec python3 -c "...; m.tor_reconcile_persist()"`, mirroring the existing `secubox-hub` sbin one-liner style (root, needs torrc + `systemctl reload tor` privilege).
+- New `systemd/secubox-exposure-tor-reconcile.service` — `Type=oneshot`, `After=tor.service network.target`, `Wants=tor.service`, `ConditionPathExists=/etc/secubox/exposure.json`, `WantedBy=multi-user.target`. No `.path` unit added: a path-unit watching `/var/lib/tor` or `/etc/tor/torrc` risks a self-trigger loop the moment the reconcile (or Tor itself) touches those paths; since the boot-time oneshot restores state after a reboot/reprovision and the reconcile is already idempotent (no-op when nothing is missing), the extra unit wasn't added. Flagged here in case the operator wants belt-and-suspenders re-triggering on live torrc edits.
+- Not wired into `debian/rules`/`debian/control`/postinst — out of scope per the task's explicit file-touch constraint (main.py + new sbin/systemd/tests files only); packaging wiring is a follow-up task.
+
+**Test output:**
 ```
-cd packages/secubox-toolbox-ng && go test ./cmd/sbx-sentinel/... ./internal/sentinel/...
-ok  	.../secubox-toolbox-ng/cmd/sbx-sentinel	0.453s
-ok  	.../secubox-toolbox-ng/internal/sentinel	0.886s
+cd packages/secubox-exposure && python3 -m pytest tests/test_emancipate_webui.py -q
+........
+8 passed, 5 warnings in 0.31s
+
+python3 -m pytest tests/ -q
+.................................................................
+65 passed, 5 warnings in 0.42s
 ```
-`go build ./...` clean. `gofmt -l` clean.
+Confirmed red before implementation (all 8 new tests failed — `AttributeError: module 'api.main' has no attribute ...`). No pre-existing failures in the package's `tests/` directory before or after this change; no new failures introduced.
 
-## What changed
+**Concerns / follow-ups:**
+- `POST /tor/emancipate_webui` and `tor_reconcile_persist()` are not yet wired into `debian/rules`/`debian/control` (sbin script install, systemd unit enable in postinst) — packaging is a separate task.
+- The pre-existing `/tor/add` endpoint calls `_tor_add_sync` inline on the event loop without `asyncio.to_thread` offload (same class of SPOF flagged elsewhere in this project for blocking aggregator handlers); left untouched since out of this task's scope, worth a follow-up issue.
+- No `.path` unit for live-torrc-triggered re-reconcile (see idempotency section above) — boot-time-only for now.
+- No board deployment performed (explicitly out of scope for this task).
 
-- `cmd/sbx-sentinel/main.go`: `buildAnalyzers` now wraps `sentinel.NewBehavioral()` in `sentinel.NewC2Learner(..., sentinel.C2Config{...5 SENTINEL_C2_* env vars via getenvDefault...})` and appends the `C2Learner` (not the raw `Behavioral`) to the pipeline — analyzer count is still 3 (spyware, c2-learner, yara). Added package-level `var c2Learner *sentinel.C2Learner` (set inside `buildAnalyzers`) so `run()`'s optional status-HTTP goroutine can pass it to `serveStatus`. Added fail-safe `readLinesFile(path) []string` (missing/unreadable → nil; skips blank/`#`-comment lines) used for `SENTINEL_C2_BROWSER_JA4`.
-- `cmd/sbx-sentinel/http.go`: `newStatusMux(store, c2)` and `serveStatus(ctx, addr, store, c2)` signatures extended with `*sentinel.C2Learner`. When `c2 != nil`, registers `GET /c2/learned`, `GET /c2/candidates`, `POST /c2/allow` (form/JSON `host`, 400 on empty, 500 on `c2.Allow` error, else `{"ok":true}`). Nil `c2` → routes simply not registered (no panic, no behavior change for existing `/stats`/`/verdicts`).
-- `cmd/sbx-sentinel/http_test.go`: updated the 4 pre-existing `newStatusMux(store)` call sites to `newStatusMux(store, nil)`; added `TestC2Endpoints` (GET learned/candidates → 200, POST allow with `host=fp.example` → 200).
-- `cmd/sbx-sentinel/wiring_test.go`: **incidental fix required to keep tests green** — `TestBuildAnalyzersReturnsThree` asserted a `*sentinel.Behavioral` type was present in the returned slice; since `buildAnalyzers` now appends the wrapping `*sentinel.C2Learner` instead, updated the type-switch case to check for `*sentinel.C2Learner`. Not in the original brief's file list but necessary for the existing test suite to still compile/pass — `TestBuildAnalyzersLoadsBasePack` and `TestDefaultConfigWiresPipeline` needed no changes (analyzer count stays 3; the spyware verdict path they exercise is unaffected).
-- `debian/c2-allow.txt` (new) + `debian/browser-ja4.txt` (new): seed files, verbatim per brief.
-- `debian/rules`: added `install -d .../etc/secubox/sentinel` + two `install -m 0644` lines for the two seeds (allow file under `/etc/secubox/sentinel/`, browser-JA4 under the already-created `/usr/share/secubox/sentinel/`).
-- `debian/sentinel.env`: appended the 5 `SENTINEL_C2_*` vars with defaults matching the code, inserted before the "Live feed source URLs" section.
-- No tmpfiles change needed: `/var/lib/secubox/sentinel` (candidates/learned JSON) is already created 0750 secubox-toolbox by the existing `tmpfiles/zz-secubox-sentinel.conf`.
+**Commit:** `217628ce` — `feat(exposure): emancipate webui .onion (standalone federate-optional) + persist-on-boot reconcile`
 
-## Blocking concerns
-
-None. `git add` was scoped to only `cmd/sbx-sentinel/` and the `debian/` files touched — two unrelated pre-existing modified files in this worktree (`.superpowers/sdd/task-2-report.md`, `task-4-report.md`, apparently from a different/earlier session reusing this worktree) were left untouched and unstaged.
-
----
-
-## Review-fix pass — `/c2/allow` writability in packaged deploy (2026-07-07)
-
-**Status**: COMPLETE
-**Commit**: `<see final report below>` — `fix(sentinel): make /c2/allow writable in packaged deploy (RW path + ownership) + sanitize Add (ref #826)`
-
-Three review findings on the Task 5 work fixed:
-
-### Finding 1 (CRITICAL) — `/c2/allow` could never write in production
-
-`sbx-sentinel.service` runs `User=secubox-toolbox` under `ProtectSystem=strict` with
-`ReadOnlyPaths=/etc/secubox`, and the seeded `c2-allow.txt` ships root:root — so
-`C2Allow.Add`'s write to `/etc/secubox/sentinel/c2-allow.txt` would fail (EROFS from
-the mount namespace and/or EACCES from ownership). Fixed both halves:
-
-- `debian/sbx-sentinel.service`: added `ReadWritePaths=/etc/secubox/sentinel` (nested
-  under the existing `ReadOnlyPaths=/etc/secubox`, which systemd allows — re-grants
-  write to just that subtree, rest of `/etc/secubox` stays read-only).
-- `debian/postinst` (`configure` branch, right after the existing daemon-reload /
-  no-enable comment block): added a fail-safe block that `chown`s
-  `/etc/secubox/sentinel` + `c2-allow.txt` to `secubox-toolbox:secubox-toolbox` and
-  `chmod 0750` the dir. **`/etc/secubox` itself is never touched** — only the
-  `sentinel/` subdir and its file, consistent with the project's shared-parent
-  traversal constraint (parent must stay 0755).
-
-### Finding 2 (Important) — doc comment claimed JSON support that doesn't exist
-
-`cmd/sbx-sentinel/http.go`'s package doc said `POST /c2/allow` accepts "form/JSON
-`host`", but the handler only calls `r.FormValue("host")` (form-encoded/query only,
-no JSON body parsing — and none was added, since the portal already posts
-form-encoded). Corrected the comment to say x-www-form-urlencoded/query only.
-
-### Finding 3 (Minor) — newline injection in `C2Allow.Add`
-
-`internal/sentinel/c2allow.go`'s `Add` wrote `host` as a raw line with no
-sanitization, so a network caller posting `host=good.com\nevil.com` could inject a
-second allowlist entry. Since this is now reachable over the network via
-`POST /c2/allow`, added a guard: `Add` rejects (returns nil, no write — fail-safe,
-not an error) any host containing `\n`, `\r`, or a space. Added regression test
-`TestC2AllowAddRejectsInjection` to `c2allow_test.go`.
-
-### Verification
-
-```
-cd packages/secubox-toolbox-ng && go test ./internal/sentinel/ -run TestC2Allow -race -v
-=== RUN   TestC2AllowSuffixAndLan
---- PASS: TestC2AllowSuffixAndLan (0.00s)
-=== RUN   TestC2AllowFailSafeMissingFiles
---- PASS: TestC2AllowFailSafeMissingFiles (0.00s)
-=== RUN   TestC2AllowAddAppends
---- PASS: TestC2AllowAddAppends (0.00s)
-=== RUN   TestC2AllowAddRejectsInjection
---- PASS: TestC2AllowAddRejectsInjection (0.00s)
-=== RUN   TestC2AllowAddConcurrent
---- PASS: TestC2AllowAddConcurrent (0.00s)
-PASS
-ok  	github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/sentinel	1.017s
-```
-
-`go build ./...` clean (exit 0). Confirmed via grep:
-`ReadWritePaths=/etc/secubox/sentinel` present in `debian/sbx-sentinel.service`;
-`etc/secubox/sentinel` chown/chmod block present in `debian/postinst`'s `configure`
-branch, guarded fail-safe (`|| true` throughout, dir-existence check first).
-
-### Files changed
-
-- `packages/secubox-toolbox-ng/debian/sbx-sentinel.service`
-- `packages/secubox-toolbox-ng/debian/postinst`
-- `packages/secubox-toolbox-ng/internal/sentinel/c2allow.go`
-- `packages/secubox-toolbox-ng/internal/sentinel/c2allow_test.go`
-- `packages/secubox-toolbox-ng/cmd/sbx-sentinel/http.go` (doc comment only)
+Note: an earlier commit attempt (`135f4ab9`) accidentally swept up an unrelated pre-staged file (`.superpowers/sdd/task-4-report.md`, staged by a prior/different session in this worktree before this task started). That commit was soft-reset and redone scoped to only the 4 intended files; `task-4-report.md` is left as an unstaged modification, untouched, exactly as it was found.

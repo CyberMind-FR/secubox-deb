@@ -19,6 +19,9 @@ control surface, driven from the `/tor/` dashboard:
 4. **Auto `.onion` DNS** — LAN clients resolve+reach `.onion` transparently.
 5. **Tor-as-VPN** — route **selectable LAN clients** (per IP/MAC/subnet) out
    through Tor with the chosen exit country; the rest of the LAN stays direct.
+6. **obfs4 bridges (Niveau-1 anti-censorship)** — operator-provided obfs4
+   bridge lines let Tor connect when direct Tor is DPI-blocked (entry side).
+   Just Niveau-1; Snowflake/webtunnel/conjure/Reality are a later spec.
 
 Built on existing infra (no greenfield): the transparent egress
 (`torrc-toolbox-egress.conf`: `TransPort 9040`, `DNSPort`, `AutomapHostsOnResolve`,
@@ -168,6 +171,21 @@ sync path), never ad-hoc root.
   simply fails fast, acceptable).
 - Webui: a `.onion`-DNS status line (DNSPort up? forward-zone installed?
   resolves a canary `.onion`?).
+
+### ⑥ obfs4 bridges (Niveau-1 entry-side anti-censorship)
+
+Distinct from ①⑤ (exit side): this is how Tor *reaches* the network when direct
+Tor is DPI-blocked. Operator pastes obfs4 `Bridge` lines (from BridgeDB / Tor
+Browser's moat / a private bridge). State in
+`/etc/secubox/toolbox/tor-bridges.txt` (one `Bridge obfs4 <ip:port> <fp>
+cert=… iat-mode=…` per line). When non-empty, the reconcile emits
+`/etc/tor/torrc.d/12-secubox-bridges.conf` with `UseBridges 1`,
+`ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy`, and the validated Bridge
+lines; empty → no drop-in (direct Tor). Adds `obfs4proxy` as a toolbox dep.
+Each bridge line is validated (`^Bridge obfs4 ` + a safe charset, no newline
+injection into torrc). Webui `#tor` panel to add/list/remove bridges. Snowflake
+(WebRTC), webtunnel, conjure, and out-of-Tor Reality/Xray are explicitly a
+LATER spec (the full escalation ladder) — see the anti-censorship design.
 
 ---
 
