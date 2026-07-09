@@ -33,6 +33,8 @@ UNBOUND_ONION_DST=/etc/unbound/unbound.conf.d/48-secubox-onion.conf
 EXIT_CC_STATE=/etc/secubox/toolbox/tor-exit-country.txt
 EXIT_CC_DROPIN=/etc/tor/torrc.d/11-secubox-exit-country.conf
 VPN_CLIENTS_STATE=/etc/secubox/toolbox/tor-vpn-clients.txt
+BRIDGES_STATE=/etc/secubox/toolbox/tor-bridges.txt
+BRIDGES_DROPIN=/etc/tor/torrc.d/12-secubox-bridges.conf
 
 log() { logger -t "secubox-${MODULE}" -- "$*" 2>/dev/null || true; echo "[$MODULE] $*"; }
 
@@ -48,6 +50,24 @@ _emit_exit_country() {
   done < "$f"
   [ -n "$list" ] || return 0
   printf 'ExitNodes %s\nStrictNodes 1\n' "$list"
+}
+
+# Emit a UseBridges stanza from a file of `Bridge obfs4 …` lines. Only lines
+# beginning `Bridge obfs4 ` and containing no torrc-breaking chars are kept
+# (prevents torrc-injection via a crafted bridge line — no newline/other
+# directives can smuggle in since the whole line must match the charset).
+# Empty result → emit nothing (direct Tor).
+_emit_bridges() {
+  local f="$1" line valid=""
+  [ -f "$f" ] || return 0
+  while IFS= read -r line; do
+    # charset matches api.py's _BRIDGE_RE (allows the space that separates
+    # addr/fingerprint/cert=…/iat-mode=… tokens in a real bridge line).
+    [[ "$line" =~ ^Bridge\ obfs4\ [][A-Za-z0-9:._=+/,\ -]+$ ]] || continue
+    valid="${valid}${line}"$'\n'
+  done < "$f"
+  [ -n "$valid" ] || return 0
+  printf 'UseBridges 1\nClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy\n%s' "$valid"
 }
 
 table_present() { nft list table inet toolbox_tor >/dev/null 2>&1; }
@@ -84,6 +104,9 @@ arm() {
   local cc_stanza; cc_stanza="$(_emit_exit_country "$EXIT_CC_STATE")"
   if [ -n "$cc_stanza" ]; then printf '# SecuBox exit-country\n%s\n' "$cc_stanza" > "$EXIT_CC_DROPIN"
   else rm -f "$EXIT_CC_DROPIN"; fi
+  local br; br="$(_emit_bridges "$BRIDGES_STATE")"
+  if [ -n "$br" ]; then printf '# SecuBox obfs4 bridges\n%s' "$br" > "$BRIDGES_DROPIN"
+  else rm -f "$BRIDGES_DROPIN"; fi
   log "ARMED"
 }
 
@@ -139,11 +162,34 @@ disarm() {
   if table_present; then nft delete table inet toolbox_tor 2>/dev/null || true; fi
   rm -f "$TORRC_DROPIN"
   rm -f "$EXIT_CC_DROPIN"
+  rm -f "$BRIDGES_DROPIN"
   if [ -f "$UNBOUND_ONION_DST" ]; then rm -f "$UNBOUND_ONION_DST"; systemctl reload unbound 2>/dev/null || true; fi
   # Stop tor to minimise attack surface when not in use (no hidden services
   # are owned by this drop-in; secubox-tor manages those separately).
   systemctl stop tor 2>/dev/null || true
   log "DISARMED"
+}
+
+# Already armed and reconcile fired again (e.g. an operator edit to
+# exit-country/VPN-clients/bridges state files touches filters.json to
+# re-trigger the .path watcher — see api.py _trigger_reconcile). Re-emit the
+# torrc drop-ins and repopulate the nft sets from the current state files,
+# then reload tor so the new torrc actually takes effect. Never disarms.
+reapply() {
+  log "reapplying (already armed) — refreshing torrc drop-ins + nft sets"
+  local cc_stanza; cc_stanza="$(_emit_exit_country "$EXIT_CC_STATE")"
+  if [ -n "$cc_stanza" ]; then printf '# SecuBox exit-country\n%s\n' "$cc_stanza" > "$EXIT_CC_DROPIN"
+  else rm -f "$EXIT_CC_DROPIN"; fi
+  local br; br="$(_emit_bridges "$BRIDGES_STATE")"
+  if [ -n "$br" ]; then printf '# SecuBox obfs4 bridges\n%s' "$br" > "$BRIDGES_DROPIN"
+  else rm -f "$BRIDGES_DROPIN"; fi
+  nft flush set inet toolbox_tor tor_vpn_src 2>/dev/null || true
+  populate_vpn_clients
+  nft flush set inet toolbox_tor tor_exempt 2>/dev/null || true
+  populate_exempt
+  systemctl reload tor 2>/dev/null || systemctl restart tor 2>/dev/null || \
+    log "WARN tor failed to reload/restart during reapply"
+  log "REAPPLIED"
 }
 
 main() {
@@ -153,11 +199,12 @@ main() {
     disarm)  want=false ;;
     reconcile) want="$(want_from_flag)" ;;
     __emit_exit_country) _emit_exit_country "${2:-}"; exit 0 ;;
+    __emit_bridges) _emit_bridges "${2:-}"; exit 0 ;;
     *) echo "usage: $0 {arm|disarm|reconcile}" >&2; exit 1 ;;
   esac
 
   if [ "$want" = "true" ]; then
-    table_present && { log "already armed — no-op"; exit 0; }
+    table_present && { reapply; exit 0; }
     arm
   else
     if ! table_present && [ ! -f "$TORRC_DROPIN" ]; then
@@ -167,4 +214,9 @@ main() {
   fi
 }
 
-main "$@"
+# Only auto-run when executed directly (`bash secubox-toolbox-tor-reconcile
+# ...` / systemd path unit). Sourcing (used by tests to stub nft/systemctl/
+# populate_*/_emit_* and drive main() in-process) must NOT trigger a run.
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+  main "$@"
+fi
