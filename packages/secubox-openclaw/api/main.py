@@ -1,49 +1,168 @@
-"""SecuBox OpenClaw API - OSINT Intelligence Gathering
+"""SecuBox OpenClaw API — OSINT + active scanner driven through a sandboxed LXC.
 
-Open Source Intelligence (OSINT) tool for reconnaissance and information gathering:
-- Domain reconnaissance
-- IP intelligence
-- Email harvesting detection
-- Social media footprint
-- DNS enumeration
-- Whois lookup
-- Subdomain discovery
-- Certificate transparency
-- Shodan/Censys integration
+Every handler is plain `def` (FastAPI threadpools it) — the module is mounted
+in-process by the aggregator, so an async handler running subprocess would
+freeze the shared loop. Container ops go through `sudo -n openclawctl`.
 """
-import asyncio
-import subprocess
-import re
+import re as _re
 import os
 import json
-import socket
 import time
-import uuid
-import hashlib
+import ipaddress
+import threading
+import subprocess
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
-from enum import Enum
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query
-from fastapi.responses import Response
-from pydantic import BaseModel, Field
-import httpx
+from datetime import datetime, timezone
+from typing import Optional
+from fastapi import FastAPI, Depends, HTTPException
+from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox OpenClaw", version="1.0.0")
+app = FastAPI(title="SecuBox OpenClaw", version="2.0.0")
 config = get_config("openclaw")
 
-# Data directories
+CTL = "/usr/sbin/openclawctl"
+CONTAINER_IP = config.get("lxc_ip", "10.100.0.41")
 DATA_DIR = Path("/var/lib/secubox/openclaw")
 SCANS_DIR = DATA_DIR / "scans"
-CONFIG_FILE = DATA_DIR / "config.json"
-CACHE_DIR = Path("/var/cache/secubox/openclaw")
-
-# Ensure directories exist
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+AUDIT_LOG = Path("/var/log/secubox/audit.log")
 SCANS_DIR.mkdir(parents=True, exist_ok=True)
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+_UID_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@/-]*$")
+_ID_RE = _re.compile(r"^[a-f0-9]{8}$")
+OWNED = [d.lower().lstrip(".") for d in config.get("owned_domains", ["gk2.secubox.in"])]
+
+
+def run_cmd(cmd, timeout=60):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return r.returncode == 0, r.stdout.strip(), r.stderr.strip()
+    except subprocess.TimeoutExpired:
+        return False, "", "timed out"
+    except Exception as e:  # pragma: no cover
+        return False, "", str(e)
+
+
+def ctl(subcmd, timeout=60, stdin=None):
+    """`sudo -n openclawctl <subcmd...>` — the only privileged path. Fail-safe."""
+    cmd = ["sudo", "-n", CTL, *subcmd]
+    if stdin is None:
+        return run_cmd(cmd, timeout)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, input=stdin)
+        return r.returncode == 0, r.stdout.strip(), r.stderr.strip()
+    except Exception as e:  # pragma: no cover
+        return False, "", str(e)
+
+
+def _valid_target(t): return bool(t) and bool(_UID_RE.fullmatch(t))
+def _valid_scanid(i): return bool(i) and bool(_ID_RE.fullmatch(i))
+
+
+def _is_local_or_owned(target: str) -> bool:
+    """True if target is RFC1918/loopback/link-local (IP or CIDR) or a box-owned
+    domain suffix. Used to gate active scans without an explicit authorization."""
+    t = target.strip().lower()
+    host = t.split("/")[0].split("@")[-1]
+    try:
+        ip = ipaddress.ip_address(host)
+        return ip.is_private or ip.is_loopback or ip.is_link_local
+    except ValueError:
+        pass
+    try:
+        net = ipaddress.ip_network(t, strict=False)
+        return net.is_private or net.is_loopback
+    except ValueError:
+        pass
+    return any(host == d or host.endswith("." + d) for d in OWNED)
+
+
+# ---- single-flight, stale-while-revalidate cache (ported from nextcloud) ----
+_STATS_CACHE: dict = {}
+_CACHE_LOCKS: dict = {}
+_CACHE_LOCKS_GUARD = threading.Lock()
+
+def _cache_lock(key):
+    with _CACHE_LOCKS_GUARD:
+        return _CACHE_LOCKS.setdefault(key, threading.Lock())
+
+def _cached(key, ttl, producer):
+    now = time.monotonic(); hit = _STATS_CACHE.get(key)
+    if hit and (now - hit[0]) < ttl:
+        return hit[1]
+    lock = _cache_lock(key)
+    if hit is not None:
+        if lock.acquire(blocking=False):
+            def _bg():
+                try: _STATS_CACHE[key] = (time.monotonic(), producer())
+                except Exception: pass
+                finally: lock.release()
+            threading.Thread(target=_bg, name=f"oc-cache-{key}", daemon=True).start()
+        return hit[1]
+    with lock:
+        hit = _STATS_CACHE.get(key)
+        if hit and (time.monotonic() - hit[0]) < ttl:
+            return hit[1]
+        val = producer(); _STATS_CACHE[key] = (time.monotonic(), val); return val
+
+def _invalidate_stats(): _STATS_CACHE.clear()
+
+
+def _ctl_status():
+    ok, out, _ = ctl(["status", "--json"], timeout=25)
+    if not ok:
+        return {"running": False, "installed": False, "ip": CONTAINER_IP,
+                "tools": {"nmap": False, "dig": False, "whois": False, "curl": False}}
+    try:
+        return json.loads(out)
+    except Exception:
+        return {"running": False, "installed": False, "ip": CONTAINER_IP, "tools": {}}
+
+def lxc_running() -> bool:
+    return bool(_ctl_status().get("running"))
+
+def _require_installed():
+    if not _ctl_status().get("installed"):
+        raise HTTPException(409, "OpenClaw container is not installed")
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "module": "openclaw"}
+
+@app.get("/status")
+def status():
+    return _cached("status", 15.0, _compute_status)
+
+def _compute_status():
+    s = _ctl_status()
+    return {"module": "openclaw", "enabled": config.get("enabled", True),
+            "running": s.get("running", False), "installed": s.get("installed", False),
+            "ip": s.get("ip", CONTAINER_IP), "tools": s.get("tools", {}),
+            "total_scans": len(list(SCANS_DIR.glob("*.json")))}
+
+@app.get("/config", dependencies=[Depends(require_jwt)])
+def get_config_endpoint():
+    return {"enabled": config.get("enabled", True), "owned_domains": OWNED,
+            "integrations": {k: bool(config.get(k)) for k in
+                             ("shodan_api_key", "censys_api_id", "virustotal_api_key")}}
+
+
+# ============================================================================
+# Legacy OSINT scan code — TEMPORARY, replaced in Task 5.
+# ============================================================================
+import asyncio
+import re
+import socket
+import uuid
+from typing import List, Dict, Any
+from enum import Enum
+from fastapi import BackgroundTasks, Query
+from fastapi.responses import Response
+import httpx
+
+CONFIG_FILE = DATA_DIR / "config.json"
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -712,52 +831,8 @@ async def _run_scan(scan_id: str, target: str, scan_type: ScanType, options: Dic
 
 
 # ============================================================================
-# API Endpoints
+# Legacy scan API Endpoints — replaced in Task 5
 # ============================================================================
-
-@app.get("/health")
-async def health():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "secubox-openclaw", "version": "1.0.0"}
-
-
-@app.get("/status")
-async def status():
-    """Status endpoint with statistics."""
-    scans = _list_scans(1000)
-    cfg = _load_config()
-
-    return {
-        "module": "openclaw",
-        "status": "ok",
-        "version": "1.0.0",
-        "total_scans": len(scans),
-        "completed_scans": sum(1 for s in scans if s.get("status") == "completed"),
-        "integrations": {
-            "shodan": bool(cfg.get("shodan_api_key")),
-            "censys": bool(cfg.get("censys_api_id")),
-            "virustotal": bool(cfg.get("virustotal_api_key")),
-            "securitytrails": bool(cfg.get("securitytrails_api_key"))
-        }
-    }
-
-
-@app.get("/config", dependencies=[Depends(require_jwt)])
-async def get_config_endpoint():
-    """Get current configuration (sensitive values masked)."""
-    cfg = _load_config()
-
-    # Mask sensitive values
-    masked = cfg.copy()
-    for key in ["shodan_api_key", "censys_api_id", "censys_api_secret",
-                "virustotal_api_key", "securitytrails_api_key"]:
-        if masked.get(key):
-            masked[key] = "***configured***"
-        else:
-            masked[key] = ""
-
-    return masked
-
 
 @app.post("/config", dependencies=[Depends(require_jwt)])
 async def update_config(update: ConfigUpdate):
