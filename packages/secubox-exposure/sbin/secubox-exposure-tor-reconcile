@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Task 5 (tor-enhancement-phase1): boot-time Tor hidden-service persist
+# reconcile. Re-applies the torrc HiddenService* stanza for every `active`
+# emancipated service (see api/main.py: tor_reconcile_persist) whose HS dir
+# is currently absent — idempotent, never re-creates an existing HS dir, so
+# .onion addresses survive reboots unchanged. Runs as root (torrc + systemctl
+# reload tor need privilege), invoked by
+# secubox-exposure-tor-reconcile.service on boot.
+exec /usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/lib/secubox/exposure'); import api.main as m; m.tor_reconcile_persist()"

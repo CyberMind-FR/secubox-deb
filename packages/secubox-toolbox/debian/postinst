@@ -80,6 +80,22 @@ SBXFILTERS
       chmod 0664 /etc/secubox/toolbox/filters.json 2>/dev/null || true
     fi
 
+    # tor-enhancement-phase1 (FINAL-REVIEW Critical 1) : exit-country /
+    # Tor-VPN-clients / obfs4-bridges state files. /etc/secubox/toolbox is
+    # 0750 root:secubox-toolbox — the group has no write bit on the dir, so
+    # the portal (running as secubox-toolbox) cannot create these files on
+    # a fresh install; the first POST /exit_country|/vpn/client|/tor/bridge
+    # raised PermissionError -> 500. Root pre-creates + chowns the file (like
+    # filters.json above) so the API user can truncate-write the EXISTING
+    # inode without needing dir-create perms. Idempotent; never clobbers
+    # operator-set content on upgrade.
+    for f in tor-exit-country.txt tor-vpn-clients.txt tor-bridges.txt; do
+      p="/etc/secubox/toolbox/$f"
+      [ -f "$p" ] || : > "$p"
+      chown secubox-toolbox:secubox-toolbox "$p" 2>/dev/null || true
+      chmod 0640 "$p" 2>/dev/null || true
+    done
+
     # 4. Storage dir (SQLite + future PDF reports)
     # NOTE: `install -d -m 0750 /var/lib/secubox/<leaf>` re-modes the SHARED
     # parent /var/lib/secubox to 0750, breaking traversal for every other

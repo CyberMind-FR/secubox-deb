@@ -7,6 +7,14 @@ Requires=secubox-core.service
 Type=simple
 User=secubox
 Group=secubox
+# Discovery (_discover_hidden_services) reads .onion hostname files under
+# /var/lib/tor and /var/lib/tor/hidden_services, which the Debian tor
+# package owns as debian-tor:debian-tor and keeps at 0700. Being in the
+# debian-tor group is necessary but NOT sufficient by itself — the parent
+# directories also need group-traverse/read bits granted operator-side
+# (chmod 750 + chgrp debian-tor); discovery stays fail-safe (empty list)
+# until that's done, it never 500s.
+SupplementaryGroups=debian-tor
 WorkingDirectory=/usr/lib/secubox/tor
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/tor.sock --log-level warning
 Restart=on-failure
