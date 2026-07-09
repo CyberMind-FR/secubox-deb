@@ -127,7 +127,7 @@ populate_vpn_clients() {
     kind="${line%%:*}"; sel="${line#*:}"
     case "$kind" in
       ip|cidr) [[ "$sel" =~ ^[0-9./]+$ ]] && nft add element inet toolbox_tor tor_vpn_src "{ $sel }" 2>/dev/null || true ;;
-      mac) ip="$(ip neigh 2>/dev/null | awk -v m="${sel,,}" 'tolower($5)==m{print $1; exit}')"
+      mac) ip="$(ip neigh 2>/dev/null | awk -v m="${sel,,}" 'tolower($5)==m{print $1; exit}')" || true
            [ -n "$ip" ] && nft add element inet toolbox_tor tor_vpn_src "{ $ip }" 2>/dev/null || true ;;
     esac
   done < "$VPN_CLIENTS_STATE"
