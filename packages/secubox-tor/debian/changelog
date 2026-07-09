@@ -1,3 +1,9 @@
+secubox-tor (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * Tor-VPN panel: NAC online-clients one-click routing toggle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 00:00:00 +0200
+
 secubox-tor (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * .onion webui discovery via root-written cache (tor forces /var/lib/tor 0700).
