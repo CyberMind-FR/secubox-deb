@@ -301,23 +301,20 @@
         async function loadPeers(name, peerCount) {
             const host = document.getElementById('peers-' + name);
             if (!host) return;
-            if (peerCount > PEER_AUTOLOAD_MAX && !forcedPeers.has(name)) {
-                host.innerHTML = '<div class="peer-note">🧰 <b>' + peerCount + ' peers</b> on this tunnel — listing suppressed to keep the page fast ' +
-                    '(these are transient transparent-proxy clients).<br><br>' +
-                    '<button class="btn sm" data-act="force" data-iface="' + esc(name) + '" data-count="' + peerCount + '">Load anyway (slow)</button></div>';
-                return;
-            }
+            // Big tunnels (the transparent-proxy tunnel accrues one peer per
+            // client) are shown ONLINE-ONLY by default — offline/never-connected
+            // peers are noise. "Show all" opts into the full list.
+            const onlineOnly = peerCount > PEER_AUTOLOAD_MAX && !forcedPeers.has(name);
             // Only show the loading note on a cold drawer; on the 15s auto-refresh
-            // the drawer already holds a peer list, so leave it in place (no blink,
-            // no scroll reset) until the new data replaces it.
-            if (!host.querySelector('.peer-list')) {
+            // the drawer already holds content, so leave it (no blink / scroll reset).
+            if (!host.hasChildNodes()) {
                 host.innerHTML = '<div class="peer-note">Loading peers…</div>';
             }
             try {
                 const res = await fetch(API + '/peers?interface=' + encodeURIComponent(name));
                 const data = await res.json();
                 if (data.success === false) throw new Error(data.error || 'command failed');
-                renderPeers(host, data.peers || []);
+                renderPeers(host, data.peers || [], onlineOnly, name, peerCount);
             } catch (e) {
                 host.innerHTML = '<div class="peer-note">⚠️ Could not load peers — ' + esc(e.message) + '</div>';
             }
@@ -328,11 +325,24 @@
             loadPeers(name, count);
         }
 
-        function renderPeers(host, peers) {
-            if (!peers.length) { host.innerHTML = '<div class="peer-note">No peers on this tunnel.</div>'; return; }
+        function renderPeers(host, peers, onlineOnly, name, totalCount) {
+            let list = peers;
+            let note = '';
+            if (onlineOnly) {
+                // "online" = active (handshake < 3 min) or recent (< 10 min).
+                list = peers.filter(p => p.status === 'active' || p.status === 'recent');
+                note = '<div class="peer-note">🧰 Showing <b>' + list.length + ' connected</b> of ' +
+                    (totalCount != null ? totalCount : peers.length) + ' peers — idle transparent-proxy clients hidden. ' +
+                    '<button class="btn sm" data-act="force" data-iface="' + esc(name) + '" data-count="' +
+                    (totalCount != null ? totalCount : peers.length) + '">Show all</button></div>';
+            }
+            if (!list.length) {
+                host.innerHTML = note + '<div class="peer-note">No ' + (onlineOnly ? 'connected ' : '') + 'peers on this tunnel.</div>';
+                return;
+            }
             // active first, then by last handshake
-            peers.sort((a, b) => (b.status === 'active') - (a.status === 'active') || (b.last_handshake || 0) - (a.last_handshake || 0));
-            host.innerHTML = '<div class="peer-list">' + peers.map(p => {
+            list = list.slice().sort((a, b) => (b.status === 'active') - (a.status === 'active') || (b.last_handshake || 0) - (a.last_handshake || 0));
+            host.innerHTML = note + '<div class="peer-list">' + list.map(p => {
                 const active = p.status === 'active';
                 const ip = (p.allowed_ips || '').split(',')[0] || '—';
                 return '<div class="peer ' + (active ? 'active' : '') + '">' +

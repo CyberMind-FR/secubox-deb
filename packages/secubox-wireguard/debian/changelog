@@ -1,3 +1,12 @@
+secubox-wireguard (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * webui: large tunnels (transparent-proxy) now render CONNECTED peers only by
+    default (active/recent handshake) with a "Show all" toggle, instead of
+    fully suppressing the list — the backend peers call is now fast enough to
+    fetch-and-filter. hasChildNodes() loading guard replaces the .peer-list one.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 10 Jul 2026 08:15:00 +0200
+
 secubox-wireguard (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * webui: full rewrite — interface-card dashboard (role-labelled tunnels,
