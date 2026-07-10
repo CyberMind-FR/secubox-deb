@@ -357,7 +357,16 @@
         }
 
         async function ifaceToggle(name, dir) {
-            if (!confirm((dir === 'up' ? 'Bring up' : 'Bring down') + ' ' + name + '?')) return;
+            // Self-lockout guard: taking down the tunnel you may be reaching this
+            // panel through cuts your own access — and you can't bring it back up
+            // from a panel you can no longer load. Warn hard on the admin/mesh
+            // tunnels before a bring-down.
+            const critical = /admin|mesh/i.test(name);
+            if (dir === 'down' && critical) {
+                if (!confirm('⚠️ Bring DOWN ' + name + '?\n\nIf you are connected through this tunnel this WILL cut your access to SecuBox, and you will not be able to bring it back up from here. Only continue from a connection that does NOT depend on ' + name + '.\n\nType-check: continue?')) return;
+            } else if (!confirm((dir === 'up' ? 'Bring up' : 'Bring down') + ' ' + name + '?')) {
+                return;
+            }
             toast((dir === 'up' ? 'Starting ' : 'Stopping ') + name + '…');
             try {
                 const res = await fetch(API + '/interface/' + encodeURIComponent(name) + '/' + dir, { method: 'POST', headers: authHeaders() });
