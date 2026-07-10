@@ -1,3 +1,9 @@
+secubox-wazuh (1.0.1-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-wazuh (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * #53 fix: stop the 100% CPU spin on boards without Wazuh. The uvicorn worker

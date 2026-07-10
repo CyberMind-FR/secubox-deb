@@ -1,3 +1,9 @@
+secubox-users (1.4.2-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-users (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Fix (#498) : postinst now also chowns /etc/secubox/auth.toml to

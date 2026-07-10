@@ -1,3 +1,9 @@
+secubox-mesh (2.0.4-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-mesh (2.0.4-1~bookworm1) bookworm; urgency=high
 
   * postinst: drop the `install -d /run/secubox` line. The parent runtime
