@@ -34,6 +34,15 @@ Two-stage subagent review ran on the diff; both findings (private-key disclosure
 before the durable .deb install. Board recovered: load 56→4, all vhosts 200. Commits local on `master`
 (unpushed).
 
+**Follow-ups same day:** (1) 1.0.3 — large tunnels render **connected-only** peers by default (active/recent
+handshake) with a "Show all" toggle instead of suppressing. (2) **Pruned wg-toolbox peers**: it had 543
+runtime peers but **540 had never handshaked** (phantom enrollments — the R3 transparent-proxy enrolls one
+wg peer per client browser-UA into `/var/lib/secubox/toolbox/wg-peers.json`, re-applied on boot by
+`secubox-toolbox-wg-restore`; never-connected ones accumulate). Backed up the store, pruned runtime + store
+to the 3 ever-handshaked live clients (`wg set … peer … remove` in one call + JSON filter). **Open item:**
+no GC prunes these automatically → they will re-accumulate; a `secubox-toolbox` timer that drops peers with
+no handshake older than N days is the durable fix (not yet built).
+
 ---
 
 ## 2026-07-09 — OpenClaw OSINT scanner: LXC module live end-to-end on gk2 (branch `feature/openclaw-lxc-scanner`)
