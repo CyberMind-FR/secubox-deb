@@ -1,3 +1,40 @@
 <!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
 <!-- Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
-<h1>Frigate — dashboard coming in sub-project 2. API at /api/v1/frigate/</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Frigate NVR</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <style>
+        :root { --cyan: #00d4ff; --bg-dark: #0d1117; --bg-card: rgba(30,40,55,0.8); --border: rgba(100,150,200,0.2); --text: #e8e6d9; --p31-dim: #6b7b8b; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 2.5rem; max-width: 480px; text-align: center; backdrop-filter: blur(10px); }
+        .card .icon { font-size: 3rem; }
+        .card h1 { color: var(--cyan); text-shadow: 0 0 10px rgba(0,212,255,0.4); font-size: 1.3rem; margin: 0.75rem 0; }
+        .card p { color: var(--p31-dim); font-size: 0.85rem; line-height: 1.6; }
+        .card code { color: var(--cyan); background: rgba(20,30,45,0.6); padding: 0.15rem 0.4rem; border-radius: 4px; }
+        .pill { display: inline-block; margin-top: 1rem; font-size: 0.62rem; padding: 0.2rem 0.6rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.08em; background: rgba(255,204,0,0.12); color: #ffcc00; border: 1px solid #ffcc00; }
+        @media (max-width: 768px) { .main { margin-left: 0; } }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <div class="card">
+            <div class="icon">📹</div>
+            <h1>Frigate NVR</h1>
+            <p>The camera dashboard arrives in sub-project 2. The API is already live at <code>/api/v1/frigate/</code>.</p>
+            <span class="pill">🚧 coming soon</span>
+        </div>
+    </main>
+</body>
+</html>
