@@ -1,5 +1,22 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-07*
+*Mis à jour : 2026-07-10*
+
+---
+
+## ✅ 2026-07-10 : WireGuard — refonte WebUI + fix avalanche perf + purge peers (secubox-wireguard 1.0.3)
+
+`/wireguard/` était inopérant + bruyant. Corrigé end-to-end (board + source), **commits sur master** (poussés). Détail dans HISTORY.md.
+
+- **Privilège** : API (secubox) lit l'état WG via `sudo -n wgctl` (root requis pour `wg show dump`) ; sudoers scellé + `visudo`, unit `NoNewPrivileges=false` (bloquait sudo).
+- **Avalanche perf (load 56 → board starved)** : `wgctl status`/`peers` faisaient ~8 subprocess **par peer** → 30s+ sur le tunnel wg-toolbox (542 peers) ; `asyncio.wait_for` ne tuait pas l'enfant → zombies. Fix : passes uniques `wg show dump`/awk (542 peers 30s→0.07s), kill-on-timeout, cache single-flight.
+- **Sécurité (revue)** : le passage sudo activait une fuite de clé privée tronquée dans `_parse_wg_show` (parse all-dump par nombre de champs, ne lit jamais la privkey) ; handlers WebUI en `data-*`+délégation (plus d'interpolation onclick).
+- **WebUI** : dashboard cartes-interfaces (rôles 🧰🕸️🛡️, status live, drawers peers lazy, up/down + add-peer/QR), skin certs + navbar partagée. Grands tunnels = peers **connectés seulement** par défaut (toggle "Show all").
+- **Purge wg-toolbox** : 543 peers dont **540 jamais connectés** (R3 enrôle 1 peer/navigateur dans `/var/lib/secubox/toolbox/wg-peers.json`, re-appliqué au boot par `secubox-toolbox-wg-restore`). Store sauvegardé, purgé runtime+store aux 3 clients vivants.
+
+### ⬜ Next / follow-ups
+- **Reskin `/users/` en hybrid-skin (certs/wireguard) + doc "WebUI Panel Guidelines"** — demandé, en cours (users utilise crt-light light-green, à convertir dark-cyan).
+- GC `secubox-toolbox` : timer purgeant les peers wg-toolbox sans handshake > N jours (sinon ré-accumulation).
+- Merger PR nextcloud #429 (attend restauration gh auth).
 
 ---
 
