@@ -1,3 +1,9 @@
+secubox-modem (1.0.0-2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-modem (1.0.0-1) bookworm; urgency=medium
 
   * Initial release

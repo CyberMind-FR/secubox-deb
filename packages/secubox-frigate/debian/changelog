@@ -1,3 +1,9 @@
+secubox-frigate (0.1.0-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-frigate (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Foundation (#821): Frigate NVR in a podman-in-LXC on amd64; /api/v1/frigate
