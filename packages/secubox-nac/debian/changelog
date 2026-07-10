@@ -1,3 +1,12 @@
+secubox-nac (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * feat: add an LXC Containers zone and auto-classify clients by the interface
+    they were seen on (br-lxc to lxc), configurable via nac interface_zones.
+    Operator moves (nft sets) still take priority. gk2: 10 containers land in
+    the lxc zone, 3 upstream devices in lan.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 11:45:00 +0200
+
 secubox-nac (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * fix: Zones tab was empty because /zones reported only raw nftables set

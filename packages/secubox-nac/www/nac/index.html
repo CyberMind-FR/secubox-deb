@@ -241,7 +241,7 @@
         let zonesCache = null;
         let clientsData = [];
         let currentTab = 'clients';
-        const ZONE_COLOR = { lan: 'green', iot: 'purple', guest: 'blue', quarantine: 'orange' };
+        const ZONE_COLOR = { lan: 'green', lxc: 'cyan', iot: 'purple', guest: 'blue', quarantine: 'orange' };
 
         function token() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
         function authHeaders(extra) {
