@@ -1,0 +1,172 @@
+/*
+ * ═══════════════════════════════════════════════════════════════
+ *  SECUBOX HYBRID-DARK — fleet reskin overlay
+ *  Load AFTER crt-light.css + sidebar-light.css, and add
+ *  `hybrid-dark` to <body>. This overlay remaps the shared design
+ *  tokens (which crt-light.css, sidebar-light.css and every module's
+ *  inline styles consume via var()) to the cyan "hybrid-dark"
+ *  palette from /certs/ + /wireguard/ (see .claude/WEBUI-PANEL-GUIDELINES.md).
+ *
+ *  Mechanism: `body.hybrid-dark` (specificity 0,1,1) redefining a
+ *  custom property beats both :root and a module's inline `:root`
+ *  (0,1,0), so a single token remap flips the whole tree to dark —
+ *  no per-panel rewrite. Direct element overrides below use
+ *  !important only where a module hardcodes a light colour.
+ *
+ *  CyberMind — https://cybermind.fr · LicenseRef-CMSD-1.0
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+/* ── (1) Token remap : the whole shared palette → cyan hybrid-dark ── */
+body.hybrid-dark {
+    /* base surfaces */
+    --bg:        #0d1117 !important;
+    --surface:   rgba(30, 40, 55, 0.80) !important;
+    --surface2:  rgba(20, 30, 45, 0.60) !important;
+    --border:    rgba(100, 150, 200, 0.20) !important;
+    --border2:   rgba(100, 150, 200, 0.35) !important;
+    --text:      #e8e6d9 !important;
+    --muted:     #6b7b8b !important;
+
+    /* dark-token aliases some modules reference directly */
+    --bg-dark:       #0d1117 !important;
+    --surface-dark:  rgba(30, 40, 55, 0.80) !important;
+    --surface2-dark: rgba(20, 30, 45, 0.60) !important;
+    --border-dark:   rgba(100, 150, 200, 0.20) !important;
+    --text-dark:     #e8e6d9 !important;
+    --muted-dark:    #6b7b8b !important;
+    --bg-deep:       #050810 !important;
+
+    /* six-module accents → cyan primary, semantic colours kept for state */
+    --root-main:  #00d4ff !important; --root-light: #33e0ff !important; --root-dark: #0088aa !important;
+    --auth-main:  #00d4ff !important; --auth-light: #33e0ff !important; --auth-dark: #0088aa !important;
+    --mesh-main:  #4488ff !important; --mesh-light: #66a0ff !important; --mesh-dark: #2c70c0 !important;
+    --mind-main:  #a371f7 !important; --mind-light: #b98cff !important; --mind-dark: #6e40c9 !important;
+    --wall-main:  #ffcc00 !important; --wall-light: #ffd633 !important; --wall-dark: #cc9900 !important;
+    --boot-main:  #ff4466 !important; --boot-light: #ff6680 !important; --boot-dark: #cc3350 !important;
+
+    /* the "extra-light" tints become dark translucent so light chips read dark */
+    --root-xlt: rgba(0,212,255,0.10) !important;
+    --auth-xlt: rgba(0,212,255,0.10) !important;
+    --mesh-xlt: rgba(68,136,255,0.10) !important;
+    --mind-xlt: rgba(163,113,247,0.10) !important;
+    --wall-xlt: rgba(255,204,0,0.10) !important;
+    --boot-xlt: rgba(255,68,102,0.10) !important;
+
+    /* status + convenience aliases used across modules */
+    --status-ok: #00dd44 !important; --status-warn: #ffcc00 !important;
+    --status-err: #ff4466 !important; --status-info: #00d4ff !important;
+    --color-success: #00dd44 !important; --color-warning: #ffcc00 !important;
+    --color-error: #ff4466 !important; --color-danger: #ff4466 !important; --color-info: #00d4ff !important;
+    --cyan: #00d4ff !important; --green: #00dd44 !important; --red: #ff4466 !important;
+    --yellow: #ffcc00 !important; --orange: #ff9944 !important; --blue: #4488ff !important;
+    --purple: #a371f7 !important; --primary: #00d4ff !important; --accent: #00d4ff !important;
+
+    /* legacy light-tube / P31-green vars some panels declare inline */
+    --tube-light: #0d1117 !important; --tube-pale: rgba(30,40,55,0.8) !important;
+    --tube-soft: rgba(100,150,200,0.2) !important; --tube-dark: #e8e6d9 !important;
+    --tube-black: #0a0e14 !important;
+    --p31-peak: #00d4ff !important; --p31-hot: #33e0ff !important; --p31-mid: #00b8e0 !important;
+    --p31-dim: #6b7b8b !important; --p31-ghost: #2a3a4a !important;
+    --bg-card: rgba(30,40,55,0.8) !important; --bg-row: rgba(20,30,45,0.6) !important;
+    --bg-sidebar: #0a0e14 !important; --text-primary: #e8e6d9 !important; --text-muted: #6b7b8b !important;
+}
+
+/* ── (2) Page ground ── */
+body.hybrid-dark, html body.hybrid-dark {
+    background: #0d1117 !important;
+    background-image:
+        radial-gradient(ellipse at 30% 15%, rgba(0,212,255,0.05) 0%, transparent 55%),
+        radial-gradient(ellipse at 75% 85%, rgba(68,136,255,0.04) 0%, transparent 55%) !important;
+    background-attachment: fixed !important;
+    color: #e8e6d9 !important;
+    font-family: 'Courier Prime', var(--font-body, monospace) !important;
+}
+body.hybrid-dark .main, body.hybrid-dark .main-content, body.hybrid-dark main {
+    background: transparent !important;
+}
+
+/* ── (3) Headings — cyan with glow ── */
+body.hybrid-dark h1, body.hybrid-dark h2, body.hybrid-dark .page-title, body.hybrid-dark .header h1 {
+    color: #00d4ff !important;
+    text-shadow: 0 0 10px rgba(0,212,255,0.4) !important;
+}
+body.hybrid-dark h3, body.hybrid-dark h4, body.hybrid-dark .card h3 { color: #00d4ff !important; }
+
+/* ── (4) Light surfaces → dark glass ──
+ * Broad but scoped to common container class names; !important beats
+ * a module's hardcoded light background. */
+body.hybrid-dark .card, body.hybrid-dark .panel, body.hybrid-dark .box,
+body.hybrid-dark .widget, body.hybrid-dark .tile, body.hybrid-dark .stat,
+body.hybrid-dark .stat-card, body.hybrid-dark .metric, body.hybrid-dark .section,
+body.hybrid-dark .glass-card, body.hybrid-dark .matrix-panel, body.hybrid-dark .crt-card,
+body.hybrid-dark .grid > div, body.hybrid-dark table, body.hybrid-dark .modal-content,
+body.hybrid-dark .dialog, body.hybrid-dark details, body.hybrid-dark fieldset {
+    background: rgba(30, 40, 55, 0.80) !important;
+    border-color: rgba(100, 150, 200, 0.20) !important;
+    color: #e8e6d9 !important;
+    backdrop-filter: blur(10px);
+}
+body.hybrid-dark thead th, body.hybrid-dark th {
+    background: rgba(20, 30, 45, 0.80) !important;
+    color: #00d4ff !important;
+    border-color: rgba(100, 150, 200, 0.20) !important;
+}
+body.hybrid-dark td, body.hybrid-dark tr { border-color: rgba(100, 150, 200, 0.15) !important; color: #e8e6d9 !important; }
+body.hybrid-dark tbody tr:hover { background: rgba(0, 212, 255, 0.06) !important; }
+
+/* ── (5) Inputs / selects / textareas ── */
+body.hybrid-dark input, body.hybrid-dark select, body.hybrid-dark textarea {
+    background: rgba(20, 30, 45, 0.80) !important;
+    color: #e8e6d9 !important;
+    border-color: rgba(100, 150, 200, 0.20) !important;
+}
+body.hybrid-dark input:focus, body.hybrid-dark select:focus, body.hybrid-dark textarea:focus {
+    border-color: #00d4ff !important;
+    outline: none !important;
+    box-shadow: 0 0 6px rgba(0, 212, 255, 0.3) !important;
+}
+body.hybrid-dark ::placeholder { color: #6b7b8b !important; }
+
+/* ── (6) Buttons ── */
+body.hybrid-dark button, body.hybrid-dark .btn, body.hybrid-dark .button, body.hybrid-dark a.btn {
+    background: rgba(30, 40, 55, 0.80) !important;
+    border-color: rgba(100, 150, 200, 0.20) !important;
+    color: #e8e6d9 !important;
+}
+body.hybrid-dark button:hover, body.hybrid-dark .btn:hover, body.hybrid-dark .button:hover {
+    border-color: #00d4ff !important; color: #00d4ff !important;
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.3) !important;
+}
+body.hybrid-dark .btn.primary, body.hybrid-dark .btn-primary, body.hybrid-dark button.primary {
+    background: rgba(0, 212, 255, 0.15) !important; border-color: #00d4ff !important; color: #00d4ff !important;
+}
+body.hybrid-dark .btn.danger, body.hybrid-dark .btn-danger, body.hybrid-dark button.danger {
+    background: rgba(255, 68, 102, 0.15) !important; border-color: #ff4466 !important; color: #ff4466 !important;
+}
+
+/* ── (7) Sidebar (shared #sidebar rendered by sidebar.js) ── */
+body.hybrid-dark .sidebar {
+    background: rgba(10, 14, 20, 0.96) !important;
+    border-right: 1px solid rgba(100, 150, 200, 0.20) !important;
+}
+body.hybrid-dark .sidebar-header, body.hybrid-dark .sidebar-header a { background: transparent !important; color: #00d4ff !important; }
+body.hybrid-dark .nav-section-title { color: #6b7b8b !important; }
+body.hybrid-dark .sidebar a, body.hybrid-dark .nav-item, body.hybrid-dark .sidebar-nav a { color: #b8c4d0 !important; }
+body.hybrid-dark .sidebar a:hover, body.hybrid-dark .nav-item:hover {
+    color: #00d4ff !important; background: rgba(0, 212, 255, 0.08) !important;
+}
+body.hybrid-dark .sidebar a.active, body.hybrid-dark .nav-item.active {
+    color: #00d4ff !important; background: rgba(0, 212, 255, 0.12) !important;
+    border-left-color: #00d4ff !important;
+}
+
+/* ── (8) Links + code + muted + scrollbar ── */
+body.hybrid-dark a { color: #00d4ff; }
+body.hybrid-dark code, body.hybrid-dark pre, body.hybrid-dark .mono {
+    background: rgba(20, 30, 45, 0.6) !important; color: #00dd44 !important;
+}
+body.hybrid-dark .muted, body.hybrid-dark .text-muted, body.hybrid-dark small { color: #6b7b8b !important; }
+body.hybrid-dark ::-webkit-scrollbar-thumb { background: #6b7b8b !important; }
+body.hybrid-dark ::-webkit-scrollbar-thumb:hover { background: #00d4ff !important; }
+body.hybrid-dark ::-webkit-scrollbar-track { background: rgba(20, 30, 45, 0.5) !important; }
