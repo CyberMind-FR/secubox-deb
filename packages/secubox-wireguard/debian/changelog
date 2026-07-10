@@ -1,3 +1,18 @@
+secubox-wireguard (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * webui: full rewrite — interface-card dashboard (role-labelled tunnels,
+    live status, lazy per-interface peer drawers, up/down + add-peer), certs
+    skin, shared sidebar navbar.
+  * perf: rewrite wgctl status active-peer count and wgctl peers as single
+    awk/`wg show dump` passes (was ~8 subprocesses per peer → minutes and a
+    load-average avalanche on the 500+ peer transparent-proxy tunnel).
+  * perf: single-flight + short-TTL cache on read-only wgctl endpoints so
+    concurrent dashboard polls collapse to one wgctl run.
+  * fix: kill the wgctl child on API timeout (asyncio.wait_for left it running
+    → zombie CPU pileup); service NoNewPrivileges=false so sudo -n wgctl works.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 10 Jul 2026 07:30:00 +0200
+
 secubox-wireguard (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * webui: sudo-route wgctl/wg so interfaces + peers (wg-toolbox/admin/mesh) show
