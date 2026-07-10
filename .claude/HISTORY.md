@@ -3,6 +3,22 @@
 
 ---
 
+## 2026-07-10 — wg-toolbox VPN surf blackhole after reboot (nft drop-in aborted every boot)
+
+User: "surf stopped when wg-toolbox VPN activated". Root cause was NOT the peer prune (restored the 540
+from backup as a precaution) but the **wg-toolbox nft DNAT missing entirely**. `nftables.service` was
+**failed**: the persistent drop-in `/etc/nftables.d/secubox-toolbox-wg.nft` (+ zz-fanout) aborts the whole
+atomic `include` load at boot for two reasons — (1) it added the UDP-51820 accept to `inet filter input`,
+a table that does not exist on gk2 at that point; (2) it used `iif "wg-toolbox"`, which resolves an
+interface index at LOAD time and fails because nftables.service runs before `wg-quick@wg-toolbox` creates
+the iface. Either abort → `table inet wg-toolbox` never applied → all tunnel traffic blackholed → no surf.
+Fix (source + board): fold the handshake accept into the wg-toolbox table's own `input` base chain
+(self-contained, no `inet filter` dependency) and switch to `iifname`/`oifname` (per-packet name match,
+load-order independent). `nft -c -f /etc/nftables.conf` now passes. Restored runtime live via
+`secubox-toolbox-wg-provision` + fanout (DNAT 443/80 → round-robin 10.99.1.1:8091-8094, the 4 live
+Go sbxmitm ng-workers). Did NOT restart nftables.service (its `flush ruleset` would wipe live
+crowdsec/waf/lxc tables); reset-failed instead, next boot loads clean.
+
 ## 2026-07-10 — WireGuard webui full rewrite + status/peers perf avalanche fix (`secubox-wireguard` 1.0.2)
 
 `/wireguard/` was inoperative (`{"interfaces":["` truncated) and noisy. Root causes, fixed end-to-end on
