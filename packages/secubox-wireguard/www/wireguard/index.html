@@ -247,7 +247,7 @@
                 const open = openIfaces.has(i.name);
                 return '' +
                 '<div class="iface ' + (isUp ? 'up' : 'down') + (open ? ' open' : '') + '" id="if-' + esc(i.name) + '">' +
-                  '<div class="iface-head" onclick="toggleIface(\'' + esc(i.name) + '\')">' +
+                  '<div class="iface-head" data-act="toggle" data-iface="' + esc(i.name) + '">' +
                     '<div class="iface-emoji">' + meta.emoji + '</div>' +
                     '<div class="iface-id"><div class="name">' + esc(i.name) + '</div><div class="role">' + esc(meta.role) + '</div></div>' +
                     '<div class="iface-meta">' +
@@ -266,9 +266,9 @@
                     '</div>' +
                     '<div class="iface-actions">' +
                       (isUp
-                        ? '<button class="btn danger sm" onclick="ifaceToggle(\'' + esc(i.name) + '\',\'down\')">⏹ Bring down</button>'
-                        : '<button class="btn good sm" onclick="ifaceToggle(\'' + esc(i.name) + '\',\'up\')">▶ Bring up</button>') +
-                      '<button class="btn primary sm" onclick="event.stopPropagation();showAddPeer(\'' + esc(i.name) + '\')">+ Add peer</button>' +
+                        ? '<button class="btn danger sm" data-act="down" data-iface="' + esc(i.name) + '">⏹ Bring down</button>'
+                        : '<button class="btn good sm" data-act="up" data-iface="' + esc(i.name) + '">▶ Bring up</button>') +
+                      '<button class="btn primary sm" data-act="addpeer" data-iface="' + esc(i.name) + '">+ Add peer</button>' +
                     '</div>' +
                     '<div class="peer-host" id="peers-' + esc(i.name) + '"></div>' +
                   '</div>' +
@@ -304,10 +304,15 @@
             if (peerCount > PEER_AUTOLOAD_MAX && !forcedPeers.has(name)) {
                 host.innerHTML = '<div class="peer-note">🧰 <b>' + peerCount + ' peers</b> on this tunnel — listing suppressed to keep the page fast ' +
                     '(these are transient transparent-proxy clients).<br><br>' +
-                    '<button class="btn sm" onclick="forcePeers(\'' + esc(name) + '\',' + peerCount + ')">Load anyway (slow)</button></div>';
+                    '<button class="btn sm" data-act="force" data-iface="' + esc(name) + '" data-count="' + peerCount + '">Load anyway (slow)</button></div>';
                 return;
             }
-            host.innerHTML = '<div class="peer-note">Loading peers…</div>';
+            // Only show the loading note on a cold drawer; on the 15s auto-refresh
+            // the drawer already holds a peer list, so leave it in place (no blink,
+            // no scroll reset) until the new data replaces it.
+            if (!host.querySelector('.peer-list')) {
+                host.innerHTML = '<div class="peer-note">Loading peers…</div>';
+            }
             try {
                 const res = await fetch(API + '/peers?interface=' + encodeURIComponent(name));
                 const data = await res.json();
@@ -361,8 +366,12 @@
                 '<div class="form-group"><label>Peer name</label>' +
                 '<input id="peerName" placeholder="alice-phone" autocomplete="off"></div>' +
                 '<div class="btn-group" style="margin-top:1rem">' +
-                '<button class="btn primary" onclick="createPeer(\'' + esc(iface) + '\')">Generate config</button>' +
-                '<button class="btn" onclick="hideModal()">Cancel</button></div>';
+                '<button class="btn primary" id="peerGenBtn">Generate config</button>' +
+                '<button class="btn" id="peerCancelBtn">Cancel</button></div>';
+            // Bind via closures so the interface name never gets interpolated
+            // into an inline handler string (avoids any JS-string breakout).
+            mc.querySelector('#peerGenBtn').addEventListener('click', () => createPeer(iface));
+            mc.querySelector('#peerCancelBtn').addEventListener('click', hideModal);
             document.getElementById('modal').classList.add('show');
             setTimeout(() => { const el = document.getElementById('peerName'); if (el) el.focus(); }, 50);
         }
@@ -408,6 +417,20 @@
 
         function hideModal() { document.getElementById('modal').classList.remove('show'); }
         document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') hideModal(); });
+
+        // Delegated handler for the interface list. Actions carry data-act /
+        // data-iface attributes instead of inline onclick, so interface names
+        // (and any future peer-derived values) never enter a JS-string context.
+        document.getElementById('ifaceList').addEventListener('click', e => {
+            const t = e.target.closest('[data-act]');
+            if (!t) return;
+            const name = t.getAttribute('data-iface');
+            const act = t.getAttribute('data-act');
+            if (act === 'toggle') toggleIface(name);
+            else if (act === 'up' || act === 'down') ifaceToggle(name, act);
+            else if (act === 'addpeer') showAddPeer(name);
+            else if (act === 'force') forcePeers(name, parseInt(t.getAttribute('data-count'), 10) || 0);
+        });
 
         async function renderConnect() {
             if (!accessData) {

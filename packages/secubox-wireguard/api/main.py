@@ -150,7 +150,16 @@ def _human_bytes(b: int) -> str:
 
 
 def _parse_wg_show() -> Dict[str, Any]:
-    """Parse wg show output for all interfaces."""
+    """Parse `wg show all dump` for all interfaces.
+
+    With the `all` prefix, every line begins with the interface name:
+      interface line (5 fields): iface, private-key, public-key, listen-port, fwmark
+      peer line      (9 fields): iface, public-key, preshared-key, endpoint,
+                                 allowed-ips, latest-handshake, rx, tx, keepalive
+    The interface private key (field 2 of the interface line) is deliberately
+    never read into the result — this runs as root, so the dump contains the
+    real key and any of it in a response would be a disclosure.
+    """
     result = {"interfaces": {}}
     try:
         proc = subprocess.run(
@@ -160,35 +169,33 @@ def _parse_wg_show() -> Dict[str, Any]:
         if proc.returncode != 0:
             return result
 
-        current_iface = None
         for line in proc.stdout.strip().split("\n"):
             if not line:
                 continue
             parts = line.split("\t")
+            iface = parts[0]
 
-            if len(parts) >= 4 and parts[1] != "(none)":
-                # Interface line
-                iface = parts[0]
-                current_iface = iface
+            if len(parts) == 5:
+                # Interface line — private key (parts[1]) intentionally dropped.
                 result["interfaces"][iface] = {
-                    "private_key": parts[1][:8] + "...",
                     "public_key": parts[2],
-                    "listen_port": int(parts[3]) if parts[3] != "(none)" else None,
+                    "listen_port": int(parts[3]) if parts[3] not in ("(none)", "off") else None,
                     "peers": []
                 }
-            elif len(parts) >= 8 and current_iface:
-                # Peer line
-                peer = {
-                    "public_key": parts[0],
-                    "preshared_key": parts[1] != "(none)",
-                    "endpoint": parts[2] if parts[2] != "(none)" else None,
-                    "allowed_ips": parts[3].split(",") if parts[3] != "(none)" else [],
-                    "last_handshake": int(parts[4]) if parts[4] != "0" else None,
-                    "rx_bytes": int(parts[5]),
-                    "tx_bytes": int(parts[6]),
-                    "persistent_keepalive": int(parts[7]) if parts[7] != "off" else None
-                }
-                result["interfaces"][current_iface]["peers"].append(peer)
+            elif len(parts) == 9:
+                entry = result["interfaces"].setdefault(
+                    iface, {"public_key": "", "listen_port": None, "peers": []}
+                )
+                entry["peers"].append({
+                    "public_key": parts[1],
+                    "preshared_key": parts[2] != "(none)",
+                    "endpoint": parts[3] if parts[3] != "(none)" else None,
+                    "allowed_ips": parts[4].split(",") if parts[4] != "(none)" else [],
+                    "last_handshake": int(parts[5]) if parts[5] != "0" else None,
+                    "rx_bytes": int(parts[6]),
+                    "tx_bytes": int(parts[7]),
+                    "persistent_keepalive": int(parts[8]) if parts[8] != "off" else None,
+                })
     except Exception as e:
         log.error("Error parsing wg show: %s", e)
 
@@ -391,6 +398,13 @@ async def _run_ctl_cached(*args, ttl: float = 8.0, timeout: int = 30) -> dict:
         return value
 
 
+def _invalidate_ctl_cache() -> None:
+    """Drop all cached wgctl reads. Called after a mutation (interface up/down,
+    peer add/remove) so the next /status /interfaces /peers reflects it
+    immediately instead of serving the pre-mutation snapshot for up to the TTL."""
+    _CTL_CACHE.clear()
+
+
 # === Three-Fold Architecture Endpoints ===
 
 @app.get("/components")
@@ -424,14 +438,18 @@ async def list_interfaces():
 async def interface_up(name: str, user=Depends(require_jwt)):
     """Bring interface up."""
     log.info("Bringing up interface: %s", name)
-    return await _run_ctl("interface", "up", name)
+    result = await _run_ctl("interface", "up", name)
+    _invalidate_ctl_cache()
+    return result
 
 
 @app.post("/interface/{name}/down")
 async def interface_down(name: str, user=Depends(require_jwt)):
     """Bring interface down."""
     log.info("Bringing down interface: %s", name)
-    return await _run_ctl("interface", "down", name)
+    result = await _run_ctl("interface", "down", name)
+    _invalidate_ctl_cache()
+    return result
 
 
 # === Peer Management ===
@@ -453,7 +471,9 @@ class PeerAddRequest(BaseModel):
 async def add_peer(req: PeerAddRequest, user=Depends(require_jwt)):
     """Add new peer with auto-generated config."""
     log.info("Adding peer: %s to %s", req.name, req.interface)
-    return await _run_ctl("peer", "add", req.name, req.interface)
+    result = await _run_ctl("peer", "add", req.name, req.interface)
+    _invalidate_ctl_cache()
+    return result
 
 
 class PeerRemoveRequest(BaseModel):
@@ -466,8 +486,11 @@ async def remove_peer(req: PeerRemoveRequest, user=Depends(require_jwt)):
     """Remove peer by name or public key."""
     log.info("Removing peer: %s", req.identifier)
     if req.interface:
-        return await _run_ctl("peer", "remove", req.identifier, req.interface)
-    return await _run_ctl("peer", "remove", req.identifier)
+        result = await _run_ctl("peer", "remove", req.identifier, req.interface)
+    else:
+        result = await _run_ctl("peer", "remove", req.identifier)
+    _invalidate_ctl_cache()
+    return result
 
 
 @app.get("/peer/{name}/config")
