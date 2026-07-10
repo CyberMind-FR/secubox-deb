@@ -51,10 +51,30 @@ NFT_TABLE = "inet secubox_nac"
 # Zones → nftables set names
 ZONES = {
     "lan": {"nft_set": "lan_allowed", "desc": "LAN principal", "color": "green"},
+    "lxc": {"nft_set": "lxc_zone", "desc": "LXC Containers", "color": "cyan"},
     "iot": {"nft_set": "iot_zone", "desc": "IoT isolé", "color": "orange"},
     "guest": {"nft_set": "guest_zone", "desc": "Invités", "color": "blue"},
     "quarantine": {"nft_set": "quarantine_zone", "desc": "Quarantaine", "color": "red"},
 }
+
+# Auto-classify discovered clients into a zone by the interface they were seen
+# on, so e.g. every container on the LXC bridge lands in the `lxc` zone without
+# manual assignment. Operator moves (which write the nft sets) still win; this
+# only fills the gap for clients not explicitly placed. Overridable via nac
+# config `interface_zones` (a {iface: zone} table).
+_DEFAULT_IFACE_ZONES = {"br-lxc": "lxc"}
+
+
+def _interface_zones() -> dict:
+    try:
+        cfg = get_config("nac") or {}
+        m = dict(_DEFAULT_IFACE_ZONES)
+        extra = cfg.get("interface_zones") or {}
+        if isinstance(extra, dict):
+            m.update({str(k): str(v) for k, v in extra.items()})
+        return m
+    except Exception:
+        return dict(_DEFAULT_IFACE_ZONES)
 
 
 class StatsCache:
@@ -420,16 +440,29 @@ def _nft_delete_element(set_name: str, element: str) -> bool:
         return False
 
 
-def _get_client_zone(mac: str) -> str:
-    """Find a client's zone by MAC address (checks nft sets + JSON fallback)."""
+def _get_client_zone(mac: str, iface: str = "") -> str:
+    """Resolve a client's zone.
+
+    Order: explicit operator assignment (nft set membership) > interface
+    auto-classification (e.g. br-lxc → lxc) > legacy JSON assignment > default.
+    Passing the interface the client was seen on lets containers on the LXC
+    bridge populate the `lxc` zone automatically.
+    """
     mac_lower = mac.lower()
 
-    # First check nft sets
+    # 1. Explicit operator assignment (the UI's "move to zone" writes the nft set)
     for zone_id, zone_info in ZONES.items():
         if mac_lower in _nft_list_set(zone_info["nft_set"]):
             return zone_id
 
-    # Fallback to JSON assignments
+    # 2. Auto-classify by interface (br-lxc → lxc, etc.)
+    if iface:
+        izmap = _interface_zones()
+        z = izmap.get(iface)
+        if z in ZONES:
+            return z
+
+    # 3. Legacy JSON assignment
     assignments = _load_zone_assignments()
     if mac_lower in assignments:
         return assignments[mac_lower]
@@ -541,7 +574,7 @@ async def status(user=Depends(require_jwt)):
     # Count by zone
     by_zone: Dict[str, int] = {z: 0 for z in ZONES}
     for client in clients_list:
-        zone = _get_client_zone(client["mac"])
+        zone = _get_client_zone(client["mac"], client.get("interface", ""))
         by_zone[zone] = by_zone.get(zone, 0) + 1
 
     # Count online clients
@@ -578,7 +611,7 @@ async def clients(user=Depends(require_jwt)):
 
     for c in discovered:
         mac = c["mac"].lower()
-        zone = _get_client_zone(mac)
+        zone = _get_client_zone(mac, c.get("interface", ""))
         client_meta = meta.get(mac, {})
 
         is_online = c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT")
@@ -659,16 +692,22 @@ async def zones(user=Depends(require_jwt)):
     """
     nft_members = {zid: set(_nft_list_set(info["nft_set"])) for zid, info in ZONES.items()}
     assignments = _load_zone_assignments()
+    izmap = _interface_zones()
 
-    def _resolve(mac: str) -> str:
+    def _resolve(mac: str, iface: str) -> str:
+        # Same order as _get_client_zone, but with the nft sets pre-fetched.
         for zid in ZONES:
             if mac in nft_members[zid]:
                 return zid
+        z = izmap.get(iface)
+        if z in ZONES:
+            return z
         return assignments.get(mac, "quarantine")
 
     by_zone: dict[str, list[str]] = {zid: [] for zid in ZONES}
     for c in _discover_clients():
-        by_zone[_resolve(c["mac"].lower())].append(c["mac"].lower())
+        mac = c["mac"].lower()
+        by_zone[_resolve(mac, c.get("interface", ""))].append(mac)
 
     result = []
     for zone_id, info in ZONES.items():
@@ -986,7 +1025,7 @@ async def list_quarantine(user=Depends(require_jwt)):
 
     clients = []
     for c in discovered:
-        zone = _get_client_zone(c["mac"])
+        zone = _get_client_zone(c["mac"], c.get("interface", ""))
         if zone == "quarantine":
             client_meta = meta.get(c["mac"].lower(), {})
             clients.append({
