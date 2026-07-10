@@ -154,7 +154,7 @@ def _parse_wg_show() -> Dict[str, Any]:
     result = {"interfaces": {}}
     try:
         proc = subprocess.run(
-            ["wg", "show", "all", "dump"],
+            ["sudo", "-n", "wg", "show", "all", "dump"],
             capture_output=True, text=True, timeout=5
         )
         if proc.returncode != 0:
@@ -329,7 +329,7 @@ async def shutdown_event():
 # === Helper: run wgctl ===
 async def _run_ctl(*args, timeout: int = 30) -> dict:
     """Run wgctl and return JSON output."""
-    cmd = ["/usr/sbin/wgctl"] + list(args)
+    cmd = ["sudo", "-n", "/usr/sbin/wgctl"] + list(args)
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -487,7 +487,7 @@ async def migrate(req: MigrateRequest, user=Depends(require_jwt)):
 def health():
     """Health check endpoint."""
     try:
-        result = subprocess.run(["wg", "show", "interfaces"], capture_output=True, timeout=2)
+        result = subprocess.run(["sudo", "-n", "wg", "show", "interfaces"], capture_output=True, timeout=2)
         interfaces = result.stdout.decode().strip().split() if result.returncode == 0 else []
         return {
             "status": "ok",

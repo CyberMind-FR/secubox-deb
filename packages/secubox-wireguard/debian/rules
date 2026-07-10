@@ -15,5 +15,7 @@ override_dh_auto_install:
 	# Install control scripts
 	install -d debian/secubox-wireguard/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-wireguard/usr/sbin/ || true
+	install -d debian/secubox-wireguard/etc/sudoers.d
+	install -m 440 debian/secubox-wireguard.sudoers debian/secubox-wireguard/etc/sudoers.d/secubox-wireguard
 	# Create data directories
 	install -d debian/secubox-wireguard/var/lib/secubox/wireguard/peers
