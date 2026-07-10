@@ -567,9 +567,82 @@ MALICIOUS_JA3 = {
 }
 
 
+# ── DPI bridge ──────────────────────────────────────────────────────────
+# nDPId's zmq distributor is not run on this board (rejected for perf,
+# #722/#723). The live DPI engine is ndpiReader, whose Go collector writes
+# /var/lib/secubox/dpi/{cumulative,state}.json. When the nDPId database is
+# empty, serve flows/protocols/applications/stats from that collector output so
+# the dashboard shows real data. JA3/JA4 fingerprints and per-flow risks have
+# no equivalent there and remain empty.
+class DpiBridge:
+    DIR = Path("/var/lib/secubox/dpi")
+
+    def __init__(self):
+        self._cache: dict = {}
+        self._exp = 0.0
+
+    def _load(self, name: str) -> dict:
+        now = time.monotonic()
+        if now >= self._exp:
+            self._cache = {}
+            self._exp = now + 10.0
+        if name not in self._cache:
+            try:
+                self._cache[name] = json.loads((self.DIR / name).read_text())
+            except Exception:
+                self._cache[name] = {}
+        return self._cache[name]
+
+    def available(self) -> bool:
+        cum = self._load("cumulative.json")
+        return bool(cum.get("top_protocols") or cum.get("devices"))
+
+    def top_protocols(self, limit: int = 20) -> List[dict]:
+        cum = self._load("cumulative.json")
+        return [{"protocol": p.get("name", ""), "flow_count": p.get("flows", 0),
+                 "bytes_total": p.get("bytes", 0)}
+                for p in (cum.get("top_protocols") or [])[:limit]]
+
+    def top_applications(self, limit: int = 20) -> List[dict]:
+        cum = self._load("cumulative.json")
+        return [{"application": a.get("name", ""), "flow_count": a.get("flows", 0),
+                 "bytes_total": a.get("bytes", 0)}
+                for a in (cum.get("top_apps") or [])[:limit]]
+
+    def flows(self, limit: int = 100) -> List[dict]:
+        st = self._load("state.json")
+        out = []
+        for f in (st.get("active_flows") or [])[:limit]:
+            out.append({
+                "src_ip": f.get("device", ""),
+                "dst_ip": f.get("dst", ""),
+                "l7_protocol": f.get("proto", ""),
+                "application": f.get("service") or f.get("cloud") or f.get("category") or "",
+                "bytes_sent": f.get("up_bytes", 0),
+                "bytes_recv": f.get("down_bytes", 0),
+                "flow_count": f.get("flows", 1),
+                "active": True,
+            })
+        return out
+
+    def stats(self) -> dict:
+        cum = self._load("cumulative.json")
+        total_flows = sum(p.get("flows", 0) for p in (cum.get("top_protocols") or []))
+        return {
+            "total_flows": total_flows,
+            "total_fingerprints": 0,
+            "total_risk_events": cum.get("alert_count", 0),
+            "flows_24h": total_flows,
+            "risks_24h": cum.get("alert_count", 0),
+            "source": "ndpiReader/dpi",
+            "window_days": cum.get("window_days"),
+        }
+
+
 # Global instances
 ndpid_client = NDPIdClient()
 flow_db = FlowDatabase(DB_FILE)
+dpi_bridge = DpiBridge()
 
 
 # ============================================================================
@@ -636,6 +709,10 @@ async def status():
     """Public status endpoint."""
     daemon_status = ndpid_client.get_status()
     db_stats = flow_db.get_stats()
+    # nDPId not feeding? surface the ndpiReader/dpi collector as the live source.
+    if not db_stats.get("total_flows") and dpi_bridge.available():
+        db_stats = dpi_bridge.stats()
+        daemon_status = {**daemon_status, "running": True, "source": "ndpiReader/dpi"}
     return {
         "module": "ndpid",
         "daemon": daemon_status,
@@ -653,6 +730,8 @@ async def health():
 async def get_flows(active_only: bool = True, limit: int = 100):
     """Get current network flows."""
     flows = ndpid_client.get_flows(active_only)[:limit]
+    if not flows and dpi_bridge.available():
+        flows = dpi_bridge.flows(limit)
     return {"flows": flows, "count": len(flows)}
 
 
@@ -667,26 +746,38 @@ async def get_flow(flow_id: str):
 
 @app.get("/protocols", dependencies=[Depends(require_jwt)])
 async def get_protocols():
-    """Get supported nDPI protocols."""
-    return {"protocols": ndpid_client.get_protocols()}
+    """Get detected protocols by traffic."""
+    protocols = ndpid_client.get_protocols()
+    if not protocols and dpi_bridge.available():
+        protocols = dpi_bridge.top_protocols(100)
+    return {"protocols": protocols}
 
 
 @app.get("/applications", dependencies=[Depends(require_jwt)])
 async def get_applications():
     """Get detected applications."""
-    return {"applications": ndpid_client.get_applications()}
+    applications = ndpid_client.get_applications()
+    if not applications and dpi_bridge.available():
+        applications = dpi_bridge.top_applications(100)
+    return {"applications": applications}
 
 
 @app.get("/top/protocols", dependencies=[Depends(require_jwt)])
 async def get_top_protocols(hours: int = 24, limit: int = 20):
     """Get top protocols by traffic."""
-    return {"protocols": flow_db.get_top_protocols(hours, limit)}
+    data = flow_db.get_top_protocols(hours, limit)
+    if not data and dpi_bridge.available():
+        data = dpi_bridge.top_protocols(limit)
+    return {"protocols": data}
 
 
 @app.get("/top/applications", dependencies=[Depends(require_jwt)])
 async def get_top_applications(hours: int = 24, limit: int = 20):
     """Get top applications by traffic."""
-    return {"applications": flow_db.get_top_applications(hours, limit)}
+    data = flow_db.get_top_applications(hours, limit)
+    if not data and dpi_bridge.available():
+        data = dpi_bridge.top_applications(limit)
+    return {"applications": data}
 
 
 @app.get("/fingerprints", dependencies=[Depends(require_jwt)])
