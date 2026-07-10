@@ -12,17 +12,29 @@
 # Loaded by /etc/nftables.conf via `include "/etc/nftables.d/*.nft"` so
 # nftables.service replays it at every boot.
 
-# ── (1) Allow incoming WG handshake on UDP 51820 ──
-# inet filter input has policy=drop ; this rule MUST exist or no peer ever
-# completes a handshake.
-add rule inet filter input udp dport 51820 accept comment "secubox-toolbox wg-toolbox"
-
-# ── (2) inet wg-toolbox table : NAT + forward + interception DNAT ──
+# ── inet wg-toolbox table : WG ingress accept + NAT + forward + DNAT ──
+# Self-contained: this table owns every rule it needs, so the file loads
+# atomically at boot regardless of what other firewall tables exist. The old
+# version added the UDP-51820 accept to `inet filter input`, but that table
+# does not exist on every deployment (e.g. gk2) — its absence aborted the
+# WHOLE `include`d ruleset, so the wg-toolbox DNAT silently vanished on every
+# reboot and tunnel surf blackholed. Interface matches use `iifname`/`oifname`
+# (name match, evaluated per packet) rather than `iif`/`oif` (which resolve an
+# interface index at LOAD time and fail if wg-quick@wg-toolbox has not created
+# the interface yet — the second boot-time abort).
 table inet wg-toolbox {
+    chain input {
+        # Accept the incoming WG handshake so peers can connect even when a
+        # base input chain elsewhere defaults to drop. Own base chain → no
+        # dependency on an external `inet filter` table.
+        type filter hook input priority filter; policy accept;
+        udp dport 51820 accept comment "secubox-toolbox wg-toolbox handshake"
+    }
+
     chain postrouting {
         type nat hook postrouting priority srcnat; policy accept;
         # Source-NAT tunnel egress to lan0 so peers can reach the internet
-        ip saddr 10.99.1.0/24 oif "lan0" masquerade
+        ip saddr 10.99.1.0/24 oifname "lan0" masquerade
     }
 
     chain prerouting {
@@ -32,21 +44,21 @@ table inet wg-toolbox {
         # ignore_hosts whitelist (static + dynamic, cert_pin_detect addon)
         # bypasses pinned hosts transparently so banner injection works
         # everywhere else.
-        iif "wg-toolbox" tcp dport 443 dnat ip to 10.99.1.1:8081
-        iif "wg-toolbox" tcp dport 80  dnat ip to 10.99.1.1:8081
+        iifname "wg-toolbox" tcp dport 443 dnat ip to 10.99.1.1:8081
+        iifname "wg-toolbox" tcp dport 80  dnat ip to 10.99.1.1:8081
         # Phase 7 (#498) — DNS backward-compat. Existing peer configs hand
         # out DNS = 10.99.0.1 (captive-AP IP). When the wlan AP is down,
         # iPhone gets ICMP port unreachable and stops resolving names.
         # Redirect such queries to unbound on 10.99.1.1:53 so legacy peer
         # configs keep working without re-provisioning. New peer configs
         # should use 10.99.1.1 directly (see wg.py).
-        iif "wg-toolbox" ip daddr 10.99.0.1 udp dport 53 dnat ip to 10.99.1.1:53
-        iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 53 dnat ip to 10.99.1.1:53
+        iifname "wg-toolbox" ip daddr 10.99.0.1 udp dport 53 dnat ip to 10.99.1.1:53
+        iifname "wg-toolbox" ip daddr 10.99.0.1 tcp dport 53 dnat ip to 10.99.1.1:53
         # Captive-portal HTTP probe : R3 verification page on kbin.gk2.secubox.in
         # JS-loads http://10.99.0.1:8088/qr/splash.png — route it to the toolbox
         # FastAPI which Phase 7 binds on 0.0.0.0:8088 (see secubox-toolbox
         # service drop-in 20-bind-all.conf).
-        iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 8088 dnat ip to 10.99.1.1:8088
+        iifname "wg-toolbox" ip daddr 10.99.0.1 tcp dport 8088 dnat ip to 10.99.1.1:8088
     }
 
     chain forward {
@@ -60,10 +72,10 @@ table inet wg-toolbox {
         # seconds (observed 199 retry packets, never falling back) — an ICMP
         # port-unreachable tells it "no QUIC here" at once. First in the chain so
         # it also breaks existing QUIC sessions (outbound). ORDER IS LOAD-BEARING.
-        iif "wg-toolbox" udp dport 443 counter reject
+        iifname "wg-toolbox" udp dport 443 counter reject
         # Outbound from tunnel → internet
-        iif "wg-toolbox" oif "lan0" accept
+        iifname "wg-toolbox" oifname "lan0" accept
         # Return traffic
-        iif "lan0" oif "wg-toolbox" ct state established,related accept
+        iifname "lan0" oifname "wg-toolbox" ct state established,related accept
     }
 }

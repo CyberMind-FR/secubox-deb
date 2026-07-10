@@ -31,14 +31,14 @@ table inet wg-toolbox {
         # 0..3 ; the map sends each to one of the 4 worker ports on
         # 10.99.1.1.  Conntrack pins the choice for the whole flow.
         # #662: ports are 809x (Go engine), was 808x (Python).
-        iif "wg-toolbox" tcp dport 443 dnat ip to 10.99.1.1 \
+        iifname "wg-toolbox" tcp dport 443 dnat ip to 10.99.1.1 \
             : numgen inc mod 4 map {
                 0 : 8091,
                 1 : 8092,
                 2 : 8093,
                 3 : 8094
             }
-        iif "wg-toolbox" tcp dport 80 dnat ip to 10.99.1.1 \
+        iifname "wg-toolbox" tcp dport 80 dnat ip to 10.99.1.1 \
             : numgen inc mod 4 map {
                 0 : 8091,
                 1 : 8092,
@@ -49,11 +49,11 @@ table inet wg-toolbox {
         # Phase 7 (#498) — DNS DNAT for legacy peer configs that hand out
         # DNS = 10.99.0.1.  Single target — these queries are tiny and
         # don't need worker fanout.
-        iif "wg-toolbox" ip daddr 10.99.0.1 udp dport 53 dnat ip to 10.99.1.1:53
-        iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 53 dnat ip to 10.99.1.1:53
+        iifname "wg-toolbox" ip daddr 10.99.0.1 udp dport 53 dnat ip to 10.99.1.1:53
+        iifname "wg-toolbox" ip daddr 10.99.0.1 tcp dport 53 dnat ip to 10.99.1.1:53
 
         # Phase 7 (#498) — captive-portal HTTP probe from the R3
         # verification page.
-        iif "wg-toolbox" ip daddr 10.99.0.1 tcp dport 8088 dnat ip to 10.99.1.1:8088
+        iifname "wg-toolbox" ip daddr 10.99.0.1 tcp dport 8088 dnat ip to 10.99.1.1:8088
     }
 }
