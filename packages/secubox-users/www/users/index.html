@@ -3,428 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - User Management</title>
+    <title>SecuBox — User Management</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
             --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
             --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --cyan: #00d4ff;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .header .subtitle { font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; font-size: 0.85rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.15); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
-
-        /* Panic Button */
-        .btn-panic {
-            padding: 0.6rem 1rem;
-            border-radius: 6px;
-            border: 2px solid #ff4466;
-            background: linear-gradient(135deg, rgba(255,68,102,0.2) 0%, rgba(255,0,0,0.3) 100%);
-            color: #ff4466;
-            font-family: 'Courier Prime', monospace;
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .btn.panic {
+            border: 2px solid var(--red);
             font-weight: bold;
-            font-size: 0.8rem;
             letter-spacing: 0.1em;
-            cursor: pointer;
             animation: panic-pulse 2s ease-in-out infinite;
-            text-shadow: 0 0 8px rgba(255,68,102,0.5);
-        }
-        .btn-panic:hover {
-            background: linear-gradient(135deg, rgba(255,68,102,0.4) 0%, rgba(255,0,0,0.5) 100%);
-            box-shadow: 0 0 20px rgba(255,68,102,0.4);
-            transform: scale(1.05);
         }
         @keyframes panic-pulse {
             0%, 100% { box-shadow: 0 0 5px rgba(255,68,102,0.3); }
             50% { box-shadow: 0 0 15px rgba(255,68,102,0.6); }
         }
 
-        /* Stats row */
-        .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--mauve); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1.2rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.25rem; text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.blue .value { color: var(--blue); }
+        .stat-card.purple .value { color: var(--purple); }
+        .stat-card.orange .value { color: var(--orange); }
 
-        /* Services */
-        .services-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-        .service-chip { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; font-size: 0.8rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h3 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.75rem; }
+
+        .services-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+        .service-chip { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 20px; font-size: 0.75rem; }
         .service-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
-        .service-chip .dot.active { background: var(--green); }
-        .service-chip .dot.inactive { background: var(--text-dim); opacity: 0.5; }
+        .service-chip .dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .service-chip .dot.inactive { background: var(--p31-dim); opacity: 0.6; }
         .service-chip.active { border-color: var(--green); }
-        .service-chip.inactive { opacity: 0.6; }
+        .service-chip.inactive { opacity: 0.55; }
 
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
+        .tab { padding: 0.5rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.7rem; text-transform: uppercase; transition: all 0.2s; }
+        .tab:hover { color: var(--cyan); }
+        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
 
-        /* Table */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; background: var(--bg-dark); }
-        tr:hover { background: rgba(255,255,255,0.02); }
+        .pill { font-size: 0.62rem; padding: 0.18rem 0.5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+        .pill.up { background: rgba(0,221,68,0.15); color: var(--green); border: 1px solid var(--green); }
+        .pill.down { background: rgba(255,68,102,0.15); color: var(--red); border: 1px solid var(--red); }
 
-        .user-info { display: flex; align-items: center; gap: 0.75rem; }
-        .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--mauve); color: var(--bg-dark); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.875rem; }
-        .user-info .name { font-weight: 500; }
-        .user-info .email { font-size: 0.8rem; color: var(--text-dim); }
+        .user-list, .session-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 520px; overflow-y: auto; }
+        .user-row, .session-row {
+            display: grid;
+            grid-template-columns: 1.6em 1.6fr auto 1.6fr auto auto;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 0.6rem;
+            background: var(--bg-row);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            border-left: 3px solid var(--p31-dim);
+            transition: all 0.15s;
+        }
+        .session-row { grid-template-columns: 1.6em 1.6fr auto 1fr auto auto; }
+        .user-row:hover, .session-row:hover { background: rgba(0,212,255,0.08); }
+        .user-row.enabled { border-left-color: var(--green); }
+        .user-row.disabled { border-left-color: var(--red); background: rgba(255,68,102,0.06); }
+        .session-row.current { border-left-color: var(--cyan); }
+        .user-row .dot, .session-row .dot { text-align: center; }
+        .who { overflow: hidden; display: flex; flex-direction: column; }
+        .who .name { color: var(--cyan); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .who .email { color: var(--p31-dim); font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .services { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+        .service-tag { padding: 0.12rem 0.45rem; background: rgba(0,212,255,0.08); border: 1px solid var(--border); border-radius: 4px; font-size: 0.62rem; color: var(--p31-dim); white-space: nowrap; }
+        .created, .started { font-size: 0.65rem; color: var(--p31-dim); text-align: right; white-space: nowrap; }
+        .ip code { color: var(--cyan); background: rgba(0,0,0,0.2); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.68rem; }
+        .device { font-size: 0.65rem; color: var(--p31-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .actions { display: flex; gap: 0.3rem; justify-content: flex-end; flex-wrap: wrap; }
+        .empty, .empty-state { color: var(--p31-dim); text-align: center; padding: 1.5rem; font-size: 0.8rem; }
 
-        .badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 12px; font-size: 0.7rem; font-weight: 500; }
-        .badge.enabled { background: rgba(63,185,80,0.15); color: var(--green); }
-        .badge.disabled { background: rgba(248,81,73,0.15); color: var(--red); }
-
-        .service-tags { display: flex; gap: 0.25rem; flex-wrap: wrap; }
-        .service-tag { padding: 0.15rem 0.5rem; background: var(--bg-dark); border-radius: 4px; font-size: 0.7rem; color: var(--text-dim); }
-
-        .action-btns { display: flex; gap: 0.5rem; }
-        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.7rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); cursor: pointer; }
-        .btn-sm:hover { background: var(--bg-card); }
-        .btn-sm.edit { border-color: var(--primary); color: var(--primary); }
-        .btn-sm.sync { border-color: var(--cyan); color: var(--cyan); }
-        .btn-sm.delete { border-color: var(--red); color: var(--red); }
-
-        .empty-state { text-align: center; padding: 3rem; color: var(--text-dim); }
-        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
-
-        /* Modal */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
         .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; max-width: 90vw; }
+        .modal-content { background: rgba(20,30,45,0.97); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 460px; max-width: 92vw; max-height: 88vh; overflow-y: auto; backdrop-filter: blur(10px); }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h3 { font-size: 1.1rem; }
-        .modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.35rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group input, .form-group select { width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); font-size: 0.9rem; }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
-        .checkbox-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
-        .checkbox-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-dark); border-radius: 4px; font-size: 0.85rem; }
+        .modal-header h3, .modal-content > h3 { color: var(--cyan); font-size: 1rem; }
+        .modal-close { background: none; border: none; color: var(--p31-dim); cursor: pointer; font-size: 1.3rem; line-height: 1; }
+        .modal-close:hover { color: var(--red); }
+        .form-group { margin-bottom: 0.7rem; }
+        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-group input, .form-group select { width: 100%; padding: 0.45rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
+        .checkbox-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
+        .checkbox-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-size: 0.72rem; }
         .checkbox-item input { width: auto; }
         .checkbox-item.disabled { opacity: 0.5; }
         .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+        .modal-content p.hint { font-size: 0.7rem; color: var(--p31-dim); margin-bottom: 1rem; }
 
-        /* Toast */
-        .toast { position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; border-radius: 8px; color: #fff; font-weight: 500; z-index: 200; animation: slideIn 0.3s ease; }
-        .toast.success { background: var(--green); }
-        .toast.error { background: var(--red); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 340px; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; }
 
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
         @media (max-width: 768px) {
             .main { margin-left: 0; }
+            .user-row { grid-template-columns: 1.4em 1fr auto auto; }
+            .user-row .services, .user-row .created { display: none; }
+            .session-row { grid-template-columns: 1.4em 1fr auto auto; }
+            .session-row .device, .session-row .started { display: none; }
         }
     </style>
 </head>
-<body class="crt-light">
+<body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <header class="header">
-            <div style="display:flex;align-items:center;gap:1rem;">
-                <button class="btn-panic" onclick="revokeAllSessions()" title="Revoke ALL sessions immediately">🚨 REVOKE ALL</button>
-                <div>
-                    <h1>👥 User Management</h1>
-                    <p class="subtitle">Unified identity across all services</p>
-                </div>
-            </div>
             <div>
-                <button class="btn" onclick="showImportModal()">Import</button>
-                <button class="btn" onclick="exportUsers()">Export</button>
-                <button class="btn primary" onclick="showAddUserModal()">+ Add User</button>
+                <h1>👥 User Management</h1>
+                <div class="sub" id="subline">Unified identity across all services</div>
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
+                <button class="btn" onclick="showModal('import-modal')">⬆️ Import</button>
+                <button class="btn" onclick="exportUsers()">⬇️ Export</button>
+                <button class="btn primary" onclick="showModal('add-user-modal')">➕ Add User</button>
+                <button class="btn danger panic" onclick="revokeAllSessions()" title="Revoke ALL sessions immediately">🚨 Revoke All</button>
             </div>
         </header>
 
-        <div class="stats-row">
-            <div class="stat-card">
-                <div class="value" id="user-count">-</div>
-                <div class="label">Total Users</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="active-services">-</div>
-                <div class="label">Active Services</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="domain" style="font-size:1.2rem">-</div>
-                <div class="label">Domain</div>
-            </div>
-            <div class="stat-card">
-                <div class="value" id="group-count">0</div>
-                <div class="label">Groups</div>
-            </div>
-            <div class="stat-card" style="cursor:pointer" onclick="document.getElementById('sessions-card').scrollIntoView({behavior:'smooth'})">
-                <div class="value" id="session-count">-</div>
-                <div class="label">Active Sessions</div>
-            </div>
+        <div class="grid" id="statGrid">
+            <div class="stat-card cyan"><div class="value" id="userCount">–</div><div class="label">👥 Total Users</div></div>
+            <div class="stat-card green"><div class="value" id="activeServices">–</div><div class="label">🟢 Active Services</div></div>
+            <div class="stat-card blue"><div class="value" id="domainVal" style="font-size:1.05rem">–</div><div class="label">🌐 Domain</div></div>
+            <div class="stat-card purple"><div class="value" id="groupCount">0</div><div class="label">🗂️ Groups</div></div>
+            <div class="stat-card orange" style="cursor:pointer" onclick="switchTab('sessions')"><div class="value" id="sessionCount">–</div><div class="label">🔐 Sessions</div></div>
         </div>
 
         <div class="card">
-            <h2>Connected Services</h2>
-            <div class="services-row" id="services-row">Loading...</div>
+            <h3>📦 Connected Services</h3>
+            <div class="services-row" id="servicesRow">Loading…</div>
         </div>
 
         <div class="card">
-            <h2>Users</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>User</th>
-                        <th>Status</th>
-                        <th>Services</th>
-                        <th>Created</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="users-list">
-                    <tr><td colspan="5" class="empty-state">Loading...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="card" id="sessions-card">
-            <h2>🔐 Active Sessions</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>User</th>
-                        <th>IP Address</th>
-                        <th>Device</th>
-                        <th>Started</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="sessions-list">
-                    <tr><td colspan="5" class="empty-state">Loading sessions...</td></tr>
-                </tbody>
-            </table>
+            <div class="tabs">
+                <div class="tab active" data-tab="users">👥 Users</div>
+                <div class="tab" data-tab="sessions">🔐 Sessions</div>
+            </div>
+            <div id="users" class="tab-content active">
+                <div class="user-list" id="userList">Loading…</div>
+            </div>
+            <div id="sessions" class="tab-content">
+                <div class="session-list" id="sessionList">Loading…</div>
+            </div>
         </div>
     </main>
 
@@ -432,13 +195,13 @@
     <div class="modal" id="add-user-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Add New User</h3>
+                <h3>➕ Add New User</h3>
                 <button class="modal-close" onclick="hideModal('add-user-modal')">&times;</button>
             </div>
-            <form id="add-user-form" onsubmit="addUser(event)">
+            <form id="add-user-form">
                 <div class="form-group">
                     <label>Username</label>
-                    <input type="text" id="new-username" placeholder="johndoe" required minlength="3">
+                    <input type="text" id="new-username" placeholder="johndoe" required minlength="3" autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label>Email</label>
@@ -450,7 +213,7 @@
                 </div>
                 <div class="form-group">
                     <label>Provision to Services</label>
-                    <div class="checkbox-grid" id="service-checkboxes"></div>
+                    <div class="checkbox-grid" id="serviceCheckboxes"></div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn" onclick="hideModal('add-user-modal')">Cancel</button>
@@ -464,10 +227,10 @@
     <div class="modal" id="edit-user-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Edit User: <span id="edit-username-title"></span></h3>
+                <h3>✏️ Edit User: <span id="edit-username-title"></span></h3>
                 <button class="modal-close" onclick="hideModal('edit-user-modal')">&times;</button>
             </div>
-            <form id="edit-user-form" onsubmit="updateUser(event)">
+            <form id="edit-user-form">
                 <input type="hidden" id="edit-username">
                 <div class="form-group">
                     <label>Email</label>
@@ -496,17 +259,15 @@
     <div class="modal" id="import-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Import Users</h3>
+                <h3>⬆️ Import Users</h3>
                 <button class="modal-close" onclick="hideModal('import-modal')">&times;</button>
             </div>
-            <form id="import-form" onsubmit="importUsers(event)">
+            <form id="import-form">
                 <div class="form-group">
                     <label>JSON File</label>
                     <input type="file" id="import-file" accept=".json" required>
                 </div>
-                <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:1rem;">
-                    Import users from a previously exported JSON file. Existing users will be skipped.
-                </p>
+                <p class="hint">Import users from a previously exported JSON file. Existing users will be skipped.</p>
                 <div class="form-actions">
                     <button type="button" class="btn" onclick="hideModal('import-modal')">Cancel</button>
                     <button type="submit" class="btn primary">Import</button>
@@ -515,159 +276,223 @@
         </div>
     </div>
 
+    <div class="toast" id="toast"></div>
+
     <script>
         const API = '/api/v1/users';
-        const getToken = () => localStorage.getItem('jwt_token') || localStorage.getItem('sbx_token');
-        const headers = () => ({
-            'Content-Type': 'application/json',
-            ...(getToken() ? { 'Authorization': 'Bearer ' + getToken() } : {})
-        });
-
         const SERVICE_ICONS = {
             nextcloud: '☁️', matrix: '💬', gitea: '🦊', email: '📧',
             jellyfin: '🎬', peertube: '📹', jabber: '💭'
         };
-
         let servicesData = {};
+        let usersData = [];
 
-        function showToast(message, type = 'success') {
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.textContent = message;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+        function token() {
+            try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
+        }
+        function authHeaders(extra) {
+            const h = Object.assign({}, extra || {});
+            const t = token();
+            if (t) h['Authorization'] = 'Bearer ' + t;
+            return h;
+        }
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
-        async function api(path, opts = {}) {
+        // Generic JSON call helper. Adds the bearer token when present, toasts on
+        // 401 instead of hard-redirecting, and never throws past the caller.
+        async function api(path, opts) {
+            opts = opts || {};
+            const isFormBody = opts.body instanceof FormData;
+            const baseHeaders = isFormBody ? {} : { 'Content-Type': 'application/json' };
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) {
-                    window.location = '/login.html';
-                    return null;
-                }
-                return res.json();
+                const res = await fetch(API + path, Object.assign({}, opts, {
+                    headers: authHeaders(Object.assign(baseHeaders, opts.headers || {}))
+                }));
+                if (res.status === 401) { toast('🔒 Login required', true); return null; }
+                let data = null;
+                try { data = await res.json(); } catch (e) {}
+                if (!res.ok && !data) { toast('❌ request failed (' + res.status + ')', true); }
+                return data;
             } catch (e) {
-                showToast('API error: ' + e.message, 'error');
+                toast('❌ ' + e.message, true);
                 return null;
             }
         }
 
+        function toast(msg, isError) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show' + (isError ? ' error' : '');
+            setTimeout(() => t.classList.remove('show'), 3200);
+        }
+
         function showModal(id) { document.getElementById(id).classList.add('show'); }
         function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showAddUserModal() { showModal('add-user-modal'); }
-        function showImportModal() { showModal('import-modal'); }
+        document.querySelectorAll('.modal').forEach(m => {
+            m.addEventListener('click', e => { if (e.target === m) hideModal(m.id); });
+        });
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const tabEl = document.querySelector('[data-tab="' + name + '"]');
+            if (tabEl) tabEl.classList.add('active');
+            const content = document.getElementById(name);
+            if (content) content.classList.add('active');
+        }
+        document.querySelectorAll('.tab').forEach(t => {
+            t.addEventListener('click', () => switchTab(t.getAttribute('data-tab')));
+        });
 
         async function loadStatus() {
             const data = await api('/status');
             if (!data) return;
-            document.getElementById('user-count').textContent = data.user_count || 0;
-            document.getElementById('domain').textContent = data.domain || 'secubox.local';
-            document.getElementById('active-services').textContent = data.active_services || 0;
-            document.getElementById('group-count').textContent = data.group_count || 0;
-            servicesData = data.services || {};
+            document.getElementById('userCount').textContent = data.user_count || 0;
+            document.getElementById('domainVal').textContent = data.domain || 'secubox.local';
+            document.getElementById('activeServices').textContent = data.active_services || 0;
+            document.getElementById('groupCount').textContent = data.group_count || 0;
         }
 
         async function loadServices() {
             const data = await api('/services');
             if (!data) return;
-            const container = document.getElementById('services-row');
             const services = data.services || {};
-
-            container.innerHTML = Object.entries(services).map(([name, info]) => `
-                <div class="service-chip ${info.running ? 'active' : 'inactive'}">
-                    <span class="dot ${info.running ? 'active' : 'inactive'}"></span>
-                    ${SERVICE_ICONS[name] || '📦'} ${name}
-                </div>
-            `).join('');
-
-            const checkboxes = document.getElementById('service-checkboxes');
-            checkboxes.innerHTML = Object.entries(services).map(([name, info]) => `
-                <label class="checkbox-item ${info.running ? '' : 'disabled'}">
-                    <input type="checkbox" name="services" value="${name}" ${info.running ? '' : 'disabled'}>
-                    ${SERVICE_ICONS[name] || '📦'} ${name}
-                </label>
-            `).join('');
-
             servicesData = services;
+            const entries = Object.entries(services);
+
+            const row = document.getElementById('servicesRow');
+            row.innerHTML = entries.length ? entries.map(([name, info]) =>
+                '<div class="service-chip ' + (info.running ? 'active' : 'inactive') + '">' +
+                    '<span class="dot ' + (info.running ? 'active' : 'inactive') + '"></span>' +
+                    (SERVICE_ICONS[name] || '📦') + ' ' + esc(name) +
+                '</div>'
+            ).join('') : '<div class="empty">No services registered.</div>';
+
+            const boxes = document.getElementById('serviceCheckboxes');
+            boxes.innerHTML = entries.map(([name, info]) =>
+                '<label class="checkbox-item' + (info.running ? '' : ' disabled') + '">' +
+                    '<input type="checkbox" name="services" value="' + esc(name) + '"' + (info.running ? '' : ' disabled') + '>' +
+                    (SERVICE_ICONS[name] || '📦') + ' ' + esc(name) +
+                '</label>'
+            ).join('');
         }
 
         async function loadUsers() {
             const data = await api('/users');
             if (!data) return;
-            const tbody = document.getElementById('users-list');
-            const users = data.users || [];
+            usersData = data.users || [];
+            const el = document.getElementById('userList');
 
-            if (!users.length) {
-                tbody.innerHTML = `
-                    <tr><td colspan="5">
-                        <div class="empty-state">
-                            <div class="icon">👥</div>
-                            <div>No users yet</div>
-                            <button class="btn primary" style="margin-top:1rem" onclick="showAddUserModal()">Add First User</button>
-                        </div>
-                    </td></tr>
-                `;
+            if (!usersData.length) {
+                el.innerHTML = '<div class="empty-state">👥<br>No users yet<br>' +
+                    '<button class="btn primary sm" id="firstUserBtn" style="margin-top:0.6rem">➕ Add First User</button></div>';
+                const btn = document.getElementById('firstUserBtn');
+                if (btn) btn.addEventListener('click', () => showModal('add-user-modal'));
                 return;
             }
 
-            tbody.innerHTML = users.map(u => `
-                <tr>
-                    <td>
-                        <div class="user-info">
-                            <div class="user-avatar">${(u.username || '?')[0].toUpperCase()}</div>
-                            <div>
-                                <div class="name">${u.username}</div>
-                                <div class="email">${u.email}</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="badge ${u.enabled !== false ? 'enabled' : 'disabled'}">${u.enabled !== false ? 'Active' : 'Disabled'}</span></td>
-                    <td>
-                        <div class="service-tags">
-                            ${(u.services || []).map(s => `<span class="service-tag">${SERVICE_ICONS[s] || ''} ${s}</span>`).join('')}
-                        </div>
-                    </td>
-                    <td style="font-size:0.8rem;color:var(--text-dim)">${u.created ? new Date(u.created).toLocaleDateString() : '-'}</td>
-                    <td>
-                        <div class="action-btns">
-                            <button class="btn-sm edit" onclick="showEditUser('${u.username}')">Edit</button>
-                            <button class="btn-sm sync" onclick="syncUser('${u.username}')">Sync</button>
-                            <button class="btn-sm delete" onclick="deleteUser('${u.username}')">Delete</button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+            el.innerHTML = usersData.map(u => {
+                const enabled = u.enabled !== false;
+                const services = (u.services || []).map(s =>
+                    '<span class="service-tag">' + (SERVICE_ICONS[s] || '') + ' ' + esc(s) + '</span>'
+                ).join('');
+                const created = u.created ? new Date(u.created).toLocaleDateString() : '—';
+                return '<div class="user-row ' + (enabled ? 'enabled' : 'disabled') + '">' +
+                    '<span class="dot">' + (enabled ? '🟢' : '⚪') + '</span>' +
+                    '<span class="who"><span class="name">' + esc(u.username) + '</span><span class="email">' + esc(u.email || '') + '</span></span>' +
+                    '<span class="pill ' + (enabled ? 'up' : 'down') + '">' + (enabled ? '● ACTIVE' : '○ DISABLED') + '</span>' +
+                    '<span class="services">' + (services || '<span class="empty" style="padding:0">—</span>') + '</span>' +
+                    '<span class="created">' + esc(created) + '</span>' +
+                    '<span class="actions">' +
+                        '<button class="btn sm" data-act="edit" data-username="' + esc(u.username) + '">✏️ Edit</button>' +
+                        '<button class="btn sm" data-act="sync" data-username="' + esc(u.username) + '">🔄 Sync</button>' +
+                        '<button class="btn sm danger" data-act="delete" data-username="' + esc(u.username) + '">🗑️ Delete</button>' +
+                    '</span>' +
+                '</div>';
+            }).join('');
         }
+
+        async function loadSessions() {
+            const data = await api('/sessions');
+            const sessions = (data && data.sessions) || [];
+            document.getElementById('sessionCount').textContent = sessions.length;
+            const el = document.getElementById('sessionList');
+
+            if (!sessions.length) {
+                el.innerHTML = '<div class="empty-state">🔐<br>No active sessions</div>';
+                return;
+            }
+
+            el.innerHTML = sessions.map(s => {
+                const started = s.created_at ? new Date(s.created_at).toLocaleString() : '—';
+                const device = s.user_agent || 'Unknown';
+                const deviceShort = device.length > 34 ? device.slice(0, 34) + '…' : device;
+                return '<div class="session-row' + (s.current ? ' current' : '') + '">' +
+                    '<span class="dot">' + (s.current ? '🟢' : '⚪') + '</span>' +
+                    '<span class="who"><span class="name">' + esc(s.username) +
+                        (s.current ? ' <span class="pill up">current</span>' : '') + '</span>' +
+                        '<span class="email">' + esc(s.email || '') + '</span></span>' +
+                    '<span class="ip"><code>' + esc(s.ip || 'unknown') + '</code></span>' +
+                    '<span class="device">' + esc(deviceShort) + '</span>' +
+                    '<span class="started">' + esc(started) + '</span>' +
+                    '<span class="actions">' +
+                        (s.current ? '' : '<button class="btn sm danger" data-act="revoke-session" data-id="' + esc(s.id) + '">🗑️ Revoke</button>') +
+                    '</span>' +
+                '</div>';
+            }).join('');
+        }
+
+        // Delegated handlers — usernames/session ids never touch an inline
+        // onclick string, they travel via data-* attributes only.
+        document.getElementById('userList').addEventListener('click', e => {
+            const t = e.target.closest('[data-act]');
+            if (!t) return;
+            const username = t.getAttribute('data-username');
+            const act = t.getAttribute('data-act');
+            if (act === 'edit') showEditUser(username);
+            else if (act === 'sync') syncUser(username);
+            else if (act === 'delete') deleteUser(username);
+        });
+        document.getElementById('sessionList').addEventListener('click', e => {
+            const t = e.target.closest('[data-act]');
+            if (!t || t.getAttribute('data-act') !== 'revoke-session') return;
+            revokeSession(t.getAttribute('data-id'));
+        });
+
+        document.getElementById('add-user-form').addEventListener('submit', addUser);
+        document.getElementById('edit-user-form').addEventListener('submit', updateUser);
+        document.getElementById('import-form').addEventListener('submit', importUsers);
 
         async function addUser(e) {
             e.preventDefault();
             const username = document.getElementById('new-username').value.trim();
             const email = document.getElementById('new-email').value.trim();
             const password = document.getElementById('new-password').value;
-            const serviceBoxes = document.querySelectorAll('#service-checkboxes input:checked');
-            const services = Array.from(serviceBoxes).map(cb => cb.value);
+            const services = Array.from(document.querySelectorAll('#serviceCheckboxes input:checked')).map(cb => cb.value);
 
             const result = await api('/user', {
                 method: 'POST',
                 body: JSON.stringify({ username, email, password, services })
             });
 
-            if (result?.success) {
-                showToast('User created successfully');
+            if (result && result.success) {
+                toast('✅ User created');
                 hideModal('add-user-modal');
                 document.getElementById('add-user-form').reset();
                 refresh();
-            } else {
-                showToast(result?.detail || 'Failed to create user', 'error');
+            } else if (result) {
+                toast('❌ ' + (result.detail || 'Failed to create user'), true);
             }
         }
 
         async function showEditUser(username) {
-            const user = await api(`/user/${encodeURIComponent(username)}`);
+            const user = await api('/user/' + encodeURIComponent(username));
             if (!user) return;
             document.getElementById('edit-username').value = user.username;
             document.getElementById('edit-username-title').textContent = user.username;
-            document.getElementById('edit-email').value = user.email;
+            document.getElementById('edit-email').value = user.email || '';
             document.getElementById('edit-enabled').value = user.enabled !== false ? 'true' : 'false';
             document.getElementById('edit-password').value = '';
             showModal('edit-user-modal');
@@ -680,44 +505,44 @@
             const enabled = document.getElementById('edit-enabled').value === 'true';
             const password = document.getElementById('edit-password').value;
 
-            const result = await api(`/user/${encodeURIComponent(username)}`, {
+            const result = await api('/user/' + encodeURIComponent(username), {
                 method: 'PUT',
                 body: JSON.stringify({ email, enabled })
             });
 
             if (password) {
-                const pwResult = await api(`/user/${encodeURIComponent(username)}/password`, {
+                const pwResult = await api('/user/' + encodeURIComponent(username) + '/password', {
                     method: 'POST',
                     body: JSON.stringify({ password })
                 });
                 if (pwResult && pwResult.detail) {
-                    showToast('Password change failed: ' + pwResult.detail, 'error');
+                    toast('❌ Password change failed: ' + pwResult.detail, true);
                     return;
                 }
             }
 
-            if (result?.success) {
-                showToast('User updated');
+            if (result && result.success) {
+                toast('✅ User updated');
                 hideModal('edit-user-modal');
                 refresh();
-            } else {
-                showToast(result?.detail || 'Failed to update', 'error');
+            } else if (result) {
+                toast('❌ ' + (result.detail || 'Failed to update'), true);
             }
         }
 
         async function syncUser(username) {
-            const result = await api(`/user/${encodeURIComponent(username)}/sync`, { method: 'POST' });
-            showToast(result?.success ? 'User synced to services' : 'Sync failed', result?.success ? 'success' : 'error');
+            const result = await api('/user/' + encodeURIComponent(username) + '/sync', { method: 'POST' });
+            toast(result && result.success ? '✅ User synced to services' : '❌ Sync failed', !(result && result.success));
         }
 
         async function deleteUser(username) {
-            if (!confirm(`Delete user "${username}" and remove from all services?`)) return;
-            const result = await api(`/user/${encodeURIComponent(username)}`, { method: 'DELETE' });
-            if (result?.success) {
-                showToast('User deleted');
+            if (!confirm('Delete user "' + username + '" and remove from all services?')) return;
+            const result = await api('/user/' + encodeURIComponent(username), { method: 'DELETE' });
+            if (result && result.success) {
+                toast('🗑️ User deleted');
                 refresh();
-            } else {
-                showToast(result?.detail || 'Failed to delete', 'error');
+            } else if (result) {
+                toast('❌ ' + (result.detail || 'Failed to delete'), true);
             }
         }
 
@@ -728,10 +553,10 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `secubox-users-${new Date().toISOString().split('T')[0]}.json`;
+            a.download = 'secubox-users-' + new Date().toISOString().split('T')[0] + '.json';
             a.click();
             URL.revokeObjectURL(url);
-            showToast('Users exported');
+            toast('✅ Users exported');
         }
 
         async function importUsers(e) {
@@ -745,69 +570,32 @@
             try {
                 const res = await fetch(API + '/import', {
                     method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + getToken() },
+                    headers: authHeaders(),
                     body: formData
                 });
+                if (res.status === 401) { toast('🔒 Login required', true); return; }
                 const result = await res.json();
 
                 if (result.success) {
-                    showToast(`Imported ${result.imported} users, ${result.skipped} skipped`);
+                    toast('✅ Imported ' + result.imported + ' users, ' + result.skipped + ' skipped');
                     hideModal('import-modal');
                     refresh();
                 } else {
-                    showToast(result.detail || 'Import failed', 'error');
+                    toast(result.detail || 'Import failed', true);
                 }
-            } catch (e) {
-                showToast('Import failed: ' + e.message, 'error');
+            } catch (err) {
+                toast('❌ Import failed: ' + err.message, true);
             }
-        }
-
-        async function loadSessions() {
-            const data = await api('/sessions');
-            const tbody = document.getElementById('sessions-list');
-            const sessions = data?.sessions || [];
-
-            document.getElementById('session-count').textContent = sessions.length;
-
-            if (!sessions.length) {
-                tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No active sessions</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = sessions.map(s => {
-                const isCurrentBadge = s.current ? '<span class="badge enabled" style="margin-left:0.5rem">current</span>' : '';
-                const started = s.created_at ? new Date(s.created_at).toLocaleString() : '-';
-                const deviceShort = (s.user_agent || 'Unknown').substring(0, 30) + (s.user_agent?.length > 30 ? '...' : '');
-
-                return `
-                <tr>
-                    <td>
-                        <div class="user-info">
-                            <div class="user-avatar">${(s.username || '?')[0].toUpperCase()}</div>
-                            <div>
-                                <div class="name">${s.username}${isCurrentBadge}</div>
-                                <div class="email">${s.email || ''}</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><code style="font-size:0.8rem">${s.ip || 'unknown'}</code></td>
-                    <td style="font-size:0.75rem;color:var(--text-dim)">${deviceShort}</td>
-                    <td style="font-size:0.8rem;color:var(--text-dim)">${started}</td>
-                    <td>
-                        ${s.current ? '' : `<button class="btn-sm delete" onclick="revokeSession('${s.id}')">Revoke</button>`}
-                    </td>
-                </tr>
-            `}).join('');
         }
 
         async function revokeSession(sessionId) {
             if (!confirm('Revoke this session? User will be logged out.')) return;
-            const result = await api(`/session/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
-            if (result?.success) {
-                showToast('Session revoked');
+            const result = await api('/session/' + encodeURIComponent(sessionId), { method: 'DELETE' });
+            if (result && result.success) {
+                toast('✅ Session revoked');
                 loadSessions();
             } else {
-                showToast(result?.error || 'Failed to revoke session', 'error');
+                toast('❌ ' + ((result && result.error) || 'Failed to revoke session'), true);
             }
         }
 
@@ -817,17 +605,14 @@
 
             try {
                 const result = await api('/sessions/revoke-all', { method: 'POST' });
-                if (result?.success) {
-                    showToast(`REVOKED ${result.revoked || 'all'} sessions`, 'warning');
-                    // Redirect to login after short delay
-                    setTimeout(() => {
-                        window.location.href = '/login';
-                    }, 1500);
+                if (result && result.success) {
+                    toast('🚨 REVOKED ' + (result.revoked || 'all') + ' sessions', true);
+                    setTimeout(() => { window.location.href = '/login'; }, 1500);
                 } else {
-                    showToast(result?.error || 'Failed to revoke sessions', 'error');
+                    toast('❌ ' + ((result && result.error) || 'Failed to revoke sessions'), true);
                 }
             } catch (e) {
-                showToast('Revoke failed: ' + e.message, 'error');
+                toast('❌ Revoke failed: ' + e.message, true);
             }
         }
 
@@ -838,8 +623,8 @@
             loadSessions();
         }
 
-        document.addEventListener('DOMContentLoaded', refresh);
+        refresh();
+        setInterval(refresh, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
