@@ -4,6 +4,24 @@ mkdir -p /run/secubox /srv/metablogizer/sites
 # #494: do NOT chown the shared parent /run/secubox (owned by tmpfiles.d at
 # 1777 root root). Only own this module's own data dir.
 chown secubox:secubox /srv/metablogizer/sites 2>/dev/null || true
+
+# Metablog uploads are versioned back into each site's Gitea repo (git commit +
+# push in api/webhook.py:git_commit_push). The site remotes use the PUBLIC gitea
+# host, which NAT-hairpins from the board — the SSH handshake succeeds but the
+# pack transfer stalls. Rewrite it to Gitea's internal LXC endpoint for the
+# metablogizer service user so pushes go direct. Idempotent. Override the two
+# vars in the environment if the topology differs.
+GITEA_PUBLIC_URL="${GITEA_PUBLIC_URL:-ssh://gitea@gitea.gk2.secubox.in:2222/}"
+GITEA_PUSH_TARGET="${GITEA_PUSH_TARGET:-ssh://gitea@10.100.0.40:2222/}"
+if getent passwd secubox >/dev/null 2>&1; then
+    sudo -u secubox git config --global "url.${GITEA_PUSH_TARGET}.insteadOf" "$GITEA_PUBLIC_URL" 2>/dev/null || true
+    SECU_HOME="$(getent passwd secubox | cut -d: -f6)"
+    if [ -n "$SECU_HOME" ]; then
+        install -d -o secubox -g secubox -m 700 "$SECU_HOME/.ssh" 2>/dev/null || true
+        sudo -u secubox sh -c "ssh-keyscan -p 2222 10.100.0.40 2>/dev/null >> '$SECU_HOME/.ssh/known_hosts' && sort -u '$SECU_HOME/.ssh/known_hosts' -o '$SECU_HOME/.ssh/known_hosts'" 2>/dev/null || true
+    fi
+fi
+
 systemctl daemon-reload
 systemctl enable secubox-metablogizer 2>/dev/null || true
 systemctl start secubox-metablogizer 2>/dev/null || true

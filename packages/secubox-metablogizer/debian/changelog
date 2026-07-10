@@ -1,3 +1,15 @@
+secubox-metablogizer (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * feature: uploads are now versioned back into each site's Gitea repo — every
+    /site/{name}/upload auto commits + pushes to origin (git_commit_push),
+    serialized under the per-site lock, best-effort (a Gitea failure never fails
+    the upload). Response carries a "gitea" status object.
+  * postinst: configure the metablogizer service user to push to Gitea's
+    internal LXC endpoint (the public host NAT-hairpins and stalls the pack
+    transfer).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 09:00:00 +0200
+
 secubox-metablogizer (1.2.2-1~bookworm1) bookworm; urgency=medium
 
   * #494: postinst no longer chowns the shared /run/secubox parent; only the
