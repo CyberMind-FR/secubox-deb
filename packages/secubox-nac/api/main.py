@@ -247,13 +247,30 @@ def _parse_leases() -> list[dict]:
     return clients
 
 
-# Interfaces to scan for ARP entries (LAN interfaces only)
-LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "eth0", "eth1"}
+# Interfaces to scan for ARP entries. Defaults cover the DSA switch LAN ports,
+# common bridges, and the secubox LXC bridge (br-lxc — its containers are
+# managed clients). A board whose clients reach it on another interface (e.g.
+# gk2 sits transparently on the upstream 192.168.1.0/24 via eth2) extends this
+# via nac config `lan_interfaces` (list or comma string) — WITHOUT this, ARP
+# discovery filters every neighbour out and the dashboard shows no clients.
+_DEFAULT_LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "br-lxc", "eth0", "eth1"}
+
+
+def _lan_interfaces() -> set:
+    try:
+        cfg = get_config("nac") or {}
+        extra = cfg.get("lan_interfaces") or []
+        if isinstance(extra, str):
+            extra = [x.strip() for x in extra.split(",") if x.strip()]
+        return _DEFAULT_LAN_INTERFACES | set(extra)
+    except Exception:
+        return _DEFAULT_LAN_INTERFACES
 
 
 def _parse_arp() -> list[dict]:
     """Parse ARP table for network clients (fallback when DHCP leases unavailable)."""
     clients = []
+    lan_ifs = _lan_interfaces()
     try:
         # Use ip neigh for more reliable ARP parsing
         r = subprocess.run(
@@ -287,7 +304,7 @@ def _parse_arp() -> list[dict]:
                 continue
 
             # Only include clients from LAN interfaces
-            if iface and iface not in LAN_INTERFACES:
+            if iface and iface not in lan_ifs:
                 continue
 
             # Skip IPv6 link-local
