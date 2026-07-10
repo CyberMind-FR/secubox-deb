@@ -3,6 +3,39 @@
 
 ---
 
+## 2026-07-10 — WireGuard webui full rewrite + status/peers perf avalanche fix (`secubox-wireguard` 1.0.2)
+
+`/wireguard/` was inoperative (`{"interfaces":["` truncated) and noisy. Root causes, fixed end-to-end on
+gk2 + source:
+
+- **Privilege**: the API (user `secubox`) reads WG state via `wgctl`, which needs root (`wg show dump`
+  exposes private keys). Added a `sudo -n /usr/sbin/wgctl` route + `/etc/sudoers.d/secubox-wireguard`
+  (wgctl + `wg show *` only) with `visudo -cf` guard in postinst. The service had `NoNewPrivileges=true`
+  which **blocks sudo** → flipped to `false` in the packaged unit (same tradeoff as the aggregator).
+- **Perf avalanche (the real incident)**: `wgctl status`/`peers` ran ~8 `wg show | grep` subprocesses
+  **per peer**. On the 542-peer `wg-toolbox` transparent-proxy tunnel that took 30s+ and — because
+  `asyncio.wait_for` in `_run_ctl` **never killed the timed-out child** — every slow `/peers` left a
+  churning `wgctl`. They piled up to **load avg 56** and starved the whole board (cached `/status` still
+  slow). Fixes: rewrote both as single `awk` / `wg show <iface> dump` passes (O(interfaces); 542 peers
+  now **0.07s**, was >30s), added `proc.kill()` on timeout, and a single-flight + short-TTL cache on the
+  read endpoints (invalidated after up/down/peer add/remove).
+- **Security (review-caught)**: the sudo route activated a dormant bug in `_parse_wg_show` — it parsed
+  `wg show all dump` with the wrong layout, emitting a truncated **private key** via `/stats,/summary,
+  /peers/status` and dropping all peers. Rewrote to parse by field count (5=iface/9=peer) and never read
+  the private key.
+- **webui**: full rewrite — interface-card dashboard (role-labelled tunnels 🧰🕸️🛡️, live status, lazy
+  per-interface peer drawers with the 542-peer tunnel gated behind "Load anyway", up/down + add-peer/QR),
+  certs `hybrid-skin` + shared sidebar navbar (already registered in `menu.d`, category `mesh`).
+  Actions use `data-*` + event delegation (no name interpolated into inline handlers).
+- Also backported the post-reboot netplan fix to source `board/mochabin/netplan/00-secubox.yaml`
+  (WAN=eth2 DHCP metric100; lan0-3/eth1 optional; drop the stray lan3 static that wedged boot).
+
+Two-stage subagent review ran on the diff; both findings (private-key disclosure, onclick breakout) fixed
+before the durable .deb install. Board recovered: load 56→4, all vhosts 200. Commits local on `master`
+(unpushed).
+
+---
+
 ## 2026-07-09 — OpenClaw OSINT scanner: LXC module live end-to-end on gk2 (branch `feature/openclaw-lxc-scanner`)
 
 8-task subagent-driven build (async-job scan endpoints dropping the old sync-shell-out machinery,
