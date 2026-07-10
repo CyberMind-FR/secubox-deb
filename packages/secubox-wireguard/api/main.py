@@ -336,7 +336,19 @@ async def _run_ctl(*args, timeout: int = 30) -> dict:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            # asyncio.wait_for only cancels the await — the wgctl child keeps
+            # running (and on a 500+ peer tunnel churns CPU for minutes). Kill
+            # it, or timed-out calls pile up into a load-average avalanche that
+            # starves the whole board.
+            try:
+                proc.kill()
+                await proc.wait()
+            except ProcessLookupError:
+                pass
+            raise
         output = stdout.decode().strip()
         if proc.returncode == 0 and output:
             try:
@@ -351,24 +363,53 @@ async def _run_ctl(*args, timeout: int = 30) -> dict:
         return {"success": False, "error": str(e)}
 
 
+# Single-flight + short-TTL cache for read-only wgctl calls. Dashboards poll
+# /status (and friends) concurrently, and each wgctl run spawns ~15 `wg show`
+# processes; without this the low-power board serializes under CPU contention
+# (30s+, WAF 504) once the transparent-proxy tunnel has hundreds of peers.
+# Concurrent callers within the TTL share one result, and at most one wgctl per
+# key runs at a time.
+_CTL_CACHE: Dict[tuple, tuple] = {}          # key -> (expires_at_monotonic, value)
+_CTL_LOCKS: Dict[tuple, asyncio.Lock] = {}
+
+
+async def _run_ctl_cached(*args, ttl: float = 8.0, timeout: int = 30) -> dict:
+    key = tuple(args)
+    cached = _CTL_CACHE.get(key)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
+    lock = _CTL_LOCKS.setdefault(key, asyncio.Lock())
+    async with lock:
+        # Another caller may have refreshed the entry while we waited.
+        cached = _CTL_CACHE.get(key)
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
+        value = await _run_ctl(*args, timeout=timeout)
+        # Cache successful reads only; let errors/timeouts retry next call.
+        if not (isinstance(value, dict) and value.get("success") is False):
+            _CTL_CACHE[key] = (time.monotonic() + ttl, value)
+        return value
+
+
 # === Three-Fold Architecture Endpoints ===
 
 @app.get("/components")
 async def components():
     """List system components (public, three-fold: what)."""
-    return await _run_ctl("components")
+    return await _run_ctl_cached("components", ttl=60.0)
 
 
 @app.get("/status")
 async def status():
     """Show health status (public, three-fold: health)."""
-    return await _run_ctl("status")
+    return await _run_ctl_cached("status", ttl=8.0)
 
 
 @app.get("/access")
 async def access():
     """Show connection endpoints (public, three-fold: how)."""
-    return await _run_ctl("access")
+    # wgctl access queries an external IP service (curl, 5s), so cache longer.
+    return await _run_ctl_cached("access", ttl=60.0)
 
 
 # === Interface Management ===
@@ -376,7 +417,7 @@ async def access():
 @app.get("/interfaces")
 async def list_interfaces():
     """List all WireGuard interfaces (public)."""
-    return await _run_ctl("interfaces")
+    return await _run_ctl_cached("interfaces", ttl=8.0)
 
 
 @app.post("/interface/{name}/up")
@@ -399,8 +440,8 @@ async def interface_down(name: str, user=Depends(require_jwt)):
 async def list_peers(interface: Optional[str] = None):
     """List all peers (public)."""
     if interface:
-        return await _run_ctl("peers", interface)
-    return await _run_ctl("peers")
+        return await _run_ctl_cached("peers", interface, ttl=8.0)
+    return await _run_ctl_cached("peers", ttl=8.0)
 
 
 class PeerAddRequest(BaseModel):

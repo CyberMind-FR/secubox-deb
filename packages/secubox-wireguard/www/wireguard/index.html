@@ -3,659 +3,440 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - WireGuard VPN</title>
+    <title>SecuBox — WireGuard VPN</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
             --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
             --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --cyan: #00d4ff;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
-        .main { flex: 1; margin-left: 220px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 { font-size: 1.5rem; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; }
-        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-card); padding: 0 1rem; }
-        .tab { padding: 0.75rem 1.25rem; cursor: pointer; color: var(--text-dim); border-bottom: 2px solid transparent; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .tab-content { display: none; padding: 1.5rem; }
-        .tab-content.active { display: block; }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1.2rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.25rem; text-transform: uppercase; }
         .stat-card.cyan .value { color: var(--cyan); }
         .stat-card.green .value { color: var(--green); }
-        .stat-card.yellow .value { color: var(--yellow); }
+        .stat-card.blue .value { color: var(--blue); }
         .stat-card.purple .value { color: var(--purple); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 1rem; font-weight: 600; }
-        .table { width: 100%; border-collapse: collapse; }
-        .table th { text-align: left; padding: 0.75rem; color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
-        .table td { padding: 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        .table tr:hover { background: rgba(255,255,255,0.02); }
-        .scroll-list { max-height: 400px; overflow-y: auto; }
-        .input-group { display: flex; gap: 0.5rem; margin-top: 1rem; }
-        .input-group input, .input-group select { flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
-        .status-dot.inactive { background: var(--red); }
-        .status-dot.recent { background: var(--yellow); }
-        .component-list { display: grid; gap: 1rem; }
-        .component-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; display: flex; align-items: flex-start; gap: 1rem; }
-        .component-info h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
-        .component-info p { font-size: 0.8rem; color: var(--text-dim); }
-        .endpoint-card { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-        .endpoint-card h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
-        .endpoint-card .url { font-family: monospace; color: var(--cyan); font-size: 0.85rem; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+        .stat-card.orange .value { color: var(--orange); }
+
+        .section-title { font-size: 0.8rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.1em; margin: 0.5rem 0 0.75rem; display: flex; align-items: center; gap: 0.4rem; }
+
+        .iface-list { display: flex; flex-direction: column; gap: 0.9rem; margin-bottom: 1.5rem; }
+        .iface { background: var(--bg-card); border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 8px; backdrop-filter: blur(10px); overflow: hidden; transition: border-color 0.2s; }
+        .iface.up { border-left-color: var(--green); }
+        .iface.down { border-left-color: var(--red); }
+        .iface-head { display: grid; grid-template-columns: 2.2em 1fr auto; align-items: center; gap: 0.75rem; padding: 0.85rem 1rem; cursor: pointer; }
+        .iface-head:hover { background: rgba(0,212,255,0.05); }
+        .iface-emoji { font-size: 1.6rem; text-align: center; }
+        .iface-id .name { font-size: 1rem; font-weight: bold; color: var(--cyan); }
+        .iface-id .role { font-size: 0.68rem; color: var(--p31-dim); margin-top: 0.1rem; }
+        .iface-meta { display: flex; gap: 1.3rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+        .iface-meta .m { text-align: right; }
+        .iface-meta .m .mv { font-size: 0.9rem; font-weight: bold; font-variant-numeric: tabular-nums; }
+        .iface-meta .m .ml { font-size: 0.55rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+        .iface-meta .m.rx .mv { color: var(--blue); }
+        .iface-meta .m.tx .mv { color: var(--purple); }
+        .iface-meta .m.peers .mv { color: var(--text); }
+        .pill { font-size: 0.62rem; padding: 0.18rem 0.5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+        .pill.up { background: rgba(0,221,68,0.15); color: var(--green); border: 1px solid var(--green); }
+        .pill.down { background: rgba(255,68,102,0.15); color: var(--red); border: 1px solid var(--red); }
+        .chev { color: var(--p31-dim); font-size: 0.8rem; transition: transform 0.2s; }
+        .iface.open .chev { transform: rotate(90deg); }
+
+        .iface-body { display: none; border-top: 1px solid var(--border); padding: 0.85rem 1rem; }
+        .iface.open .iface-body { display: block; }
+        .iface-sub { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.7rem; color: var(--p31-dim); margin-bottom: 0.75rem; align-items: center; }
+        .iface-sub code { color: var(--cyan); background: var(--bg-row); padding: 0.1rem 0.4rem; border-radius: 4px; }
+        .iface-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+
+        .peer-note { padding: 0.9rem; text-align: center; color: var(--p31-dim); font-size: 0.75rem; background: rgba(255,153,68,0.06); border: 1px dashed var(--orange); border-radius: 6px; }
+        .peer-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 380px; overflow-y: auto; }
+        .peer { display: grid; grid-template-columns: 1.4em 1fr auto auto; align-items: center; gap: 0.5rem; padding: 0.4rem 0.55rem; background: var(--bg-row); border-radius: 4px; font-size: 0.72rem; border-left: 3px solid var(--p31-dim); }
+        .peer.active { border-left-color: var(--green); }
+        .peer .dot { text-align: center; }
+        .peer .who { overflow: hidden; }
+        .peer .who .ip { color: var(--cyan); font-weight: bold; }
+        .peer .who .key { color: var(--p31-dim); font-size: 0.6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .peer .hs { font-size: 0.62rem; color: var(--p31-dim); text-align: right; white-space: nowrap; }
+        .peer .xfer { font-size: 0.62rem; text-align: right; white-space: nowrap; }
+        .peer .xfer .rx { color: var(--blue); }
+        .peer .xfer .tx { color: var(--purple); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h3 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.75rem; }
+        .kv { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem; font-size: 0.75rem; }
+        .kv .k { color: var(--p31-dim); }
+        .kv .v { color: var(--text); font-variant-numeric: tabular-nums; }
+        .kv .v code { color: var(--cyan); }
+        pre.cli { background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px; padding: 0.7rem; font-size: 0.7rem; color: var(--green); overflow-x: auto; margin-top: 0.5rem; }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
         .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 500px; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-dim); }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
-        .qr-container { text-align: center; padding: 1rem; background: white; border-radius: 8px; margin: 1rem 0; }
-        .qr-container img { max-width: 200px; }
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
+        .modal-content { background: rgba(20,30,45,0.97); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 480px; max-width: 92vw; max-height: 88vh; overflow-y: auto; backdrop-filter: blur(10px); }
+        .modal-content h3 { margin-bottom: 1rem; color: var(--cyan); }
+        .modal-content pre { background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px; padding: 0.7rem; font-size: 0.68rem; color: var(--text); overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+        .modal-content img { display: block; margin: 1rem auto; background: #fff; padding: 8px; border-radius: 6px; max-width: 240px; }
+        .form-group { margin-bottom: 0.7rem; }
+        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; }
+        .form-group input, .form-group select { width: 100%; padding: 0.45rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); }
 
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 340px; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; }
 
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
         @media (max-width: 768px) {
             .main { margin-left: 0; }
+            .iface-head { grid-template-columns: 2em 1fr auto; }
+            .iface-meta { display: none; }
+            .peer { grid-template-columns: 1.2em 1fr auto; }
+            .peer .xfer { display: none; }
         }
     </style>
 </head>
-<body class="crt-light">
+<body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
-
     <main class="main">
         <header class="header">
-            <div class="header-title">
-                <h1>WireGuard VPN</h1>
-                <span class="badge" id="status-badge">-</span>
+            <div>
+                <h1>🔐 WireGuard VPN</h1>
+                <div class="sub" id="subline">Kernel-native tunnels · live status</div>
             </div>
-            <div class="header-actions">
-                <button class="btn" onclick="showMigrateModal()">Import from OpenWrt</button>
-                <button class="btn primary" onclick="showAddPeerModal()">+ Add Peer</button>
+            <div class="btn-group">
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
             </div>
         </header>
 
-        <div class="tabs">
-            <div class="tab active" data-tab="status">Status</div>
-            <div class="tab" data-tab="components">Components</div>
-            <div class="tab" data-tab="access">Access</div>
-            <div class="tab" data-tab="interfaces">Interfaces</div>
-            <div class="tab" data-tab="peers">Peers</div>
-            <div class="tab" data-tab="actions">Actions</div>
+        <div class="grid" id="statGrid">
+            <div class="stat-card cyan"><div class="value" id="sIfaces">–</div><div class="label">🔌 Interfaces</div></div>
+            <div class="stat-card green"><div class="value" id="sActive">–</div><div class="label">🟢 Active Peers</div></div>
+            <div class="stat-card blue"><div class="value" id="sPeers">–</div><div class="label">👥 Total Peers</div></div>
+            <div class="stat-card purple"><div class="value" id="sRx">–</div><div class="label">⬇️ RX</div></div>
+            <div class="stat-card orange"><div class="value" id="sTx">–</div><div class="label">⬆️ TX</div></div>
         </div>
 
-        <div class="content">
-            <!-- Status Tab -->
-            <div id="tab-status" class="tab-content active">
-                <div class="stats-row">
-                    <div class="stat-card cyan">
-                        <div class="value" id="interface-count">0</div>
-                        <div class="label">Interfaces</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="value" id="total-peers">0</div>
-                        <div class="label">Total Peers</div>
-                    </div>
-                    <div class="stat-card purple">
-                        <div class="value" id="active-peers">0</div>
-                        <div class="label">Active Peers</div>
-                    </div>
-                    <div class="stat-card yellow">
-                        <div class="value" id="total-traffic">0</div>
-                        <div class="label">Total Traffic</div>
-                    </div>
-                </div>
+        <div class="section-title">🔌 Tunnels <span style="color:var(--p31-dim);font-size:0.65rem">(click to expand peers)</span></div>
+        <div class="iface-list" id="ifaceList">Loading…</div>
 
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header"><h2>Interfaces</h2></div>
-                        <div id="interfaces-quick"></div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><h2>Recent Peers</h2></div>
-                        <div id="peers-quick"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Components Tab -->
-            <div id="tab-components" class="tab-content">
-                <div class="component-list" id="components-list"></div>
-            </div>
-
-            <!-- Access Tab -->
-            <div id="tab-access" class="tab-content">
-                <div id="access-endpoints"></div>
-            </div>
-
-            <!-- Interfaces Tab -->
-            <div id="tab-interfaces" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>WireGuard Interfaces</h2>
-                    </div>
-                    <div class="scroll-list">
-                        <table class="table" id="interfaces-table">
-                            <thead><tr><th>Name</th><th>State</th><th>IP</th><th>Port</th><th>Peers</th><th>Traffic</th><th>Actions</th></tr></thead>
-                            <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Peers Tab -->
-            <div id="tab-peers" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Connected Peers</h2>
-                        <button class="btn primary" onclick="showAddPeerModal()">+ Add Peer</button>
-                    </div>
-                    <div class="scroll-list">
-                        <table class="table" id="peers-table">
-                            <thead><tr><th>Name</th><th>Status</th><th>Endpoint</th><th>Allowed IPs</th><th>Transfer</th><th>Actions</th></tr></thead>
-                            <tbody><tr><td colspan="6">Loading...</td></tr></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Actions Tab -->
-            <div id="tab-actions" class="tab-content">
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header"><h2>Key Generation</h2></div>
-                        <button class="btn" onclick="generateKeyPair()" style="width: 100%; margin-bottom: 0.5rem;">Generate Key Pair</button>
-                        <button class="btn" onclick="generatePSK()" style="width: 100%;">Generate PSK</button>
-                        <div id="key-output" style="margin-top: 1rem; font-family: monospace; font-size: 0.8rem;"></div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header"><h2>Migration</h2></div>
-                        <p style="margin-bottom: 1rem; color: var(--text-dim);">Import WireGuard configuration from OpenWrt.</p>
-                        <button class="btn" onclick="showMigrateModal()" style="width: 100%;">Start Migration</button>
-                    </div>
-                </div>
-            </div>
+        <div class="card" id="connectCard" style="display:none">
+            <h3>🔗 Connect</h3>
+            <div class="kv" id="connectKv"></div>
+            <pre class="cli" id="cliBlock"></pre>
         </div>
     </main>
 
-    <!-- Add Peer Modal -->
-    <div id="add-peer-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Add New Peer</h2>
-                <button class="modal-close" onclick="closeAddPeerModal()">&times;</button>
-            </div>
-            <div class="form-group">
-                <label>Peer Name</label>
-                <input type="text" id="peer-name" placeholder="e.g., myphone, laptop">
-            </div>
-            <div class="form-group">
-                <label>Interface</label>
-                <select id="peer-interface"></select>
-            </div>
-            <button class="btn primary" onclick="addPeer()" style="width: 100%;">Create Peer</button>
-            <div id="peer-result" style="margin-top: 1rem; display: none;"></div>
-        </div>
+    <!-- Peer config / add modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content" id="modalContent"></div>
     </div>
 
-    <!-- QR Modal -->
-    <div id="qr-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Peer QR Code</h2>
-                <button class="modal-close" onclick="closeQRModal()">&times;</button>
-            </div>
-            <div class="qr-container" id="qr-container"></div>
-            <p style="text-align: center; color: var(--text-dim);">Scan with WireGuard mobile app</p>
-        </div>
-    </div>
-
-    <!-- Migrate Modal -->
-    <div id="migrate-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Migrate from OpenWrt</h2>
-                <button class="modal-close" onclick="closeMigrateModal()">&times;</button>
-            </div>
-            <div class="form-group">
-                <label>Source IP Address</label>
-                <input type="text" id="migrate-source" value="192.168.255.1">
-            </div>
-            <div class="form-group">
-                <label><input type="checkbox" id="migrate-dry-run"> Dry run</label>
-            </div>
-            <button class="btn primary" onclick="runMigration()" style="width: 100%;">Start Migration</button>
-            <div id="migrate-result" style="margin-top: 1rem; display: none;"></div>
-        </div>
-    </div>
+    <div class="toast" id="toast"></div>
 
     <script>
         const API = '/api/v1/wireguard';
-        async function api(endpoint, method = 'GET', data = null) {
-            const opts = { method, headers: { 'Content-Type': 'application/json' } };
-            if (data) opts.body = JSON.stringify(data);
-            try { const res = await fetch(API + endpoint, opts); return res.json(); }
-            catch (e) { console.error('API error:', e); return {}; }
+        const PEER_AUTOLOAD_MAX = 60;   // interfaces bigger than this: gate the peer list
+        let statusData = null;
+        let accessData = null;
+        const openIfaces = new Set();     // interface names currently expanded
+        const forcedPeers = new Set();    // large interfaces the user chose to load anyway
+
+        function token() {
+            try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
+        }
+        function authHeaders(extra) {
+            const h = Object.assign({}, extra || {});
+            const t = token();
+            if (t) h['Authorization'] = 'Bearer ' + t;
+            return h;
         }
 
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        function ifaceMeta(name) {
+            const n = (name || '').toLowerCase();
+            if (n.includes('toolbox')) return { emoji: '🧰', role: 'Toolbox — transparent MITM proxy clients' };
+            if (n.includes('mesh'))    return { emoji: '🕸️', role: 'Gondwana mesh — inter-node P2P' };
+            if (n.includes('admin'))   return { emoji: '🛡️', role: 'Admin VPN — secure management access' };
+            return { emoji: '🔐', role: 'WireGuard tunnel' };
+        }
+
+        function fmtBytes(b) {
+            b = Number(b) || 0;
+            if (b < 1024) return b + ' B';
+            const u = ['KB', 'MB', 'GB', 'TB'];
+            let i = -1;
+            do { b /= 1024; i++; } while (b >= 1024 && i < u.length - 1);
+            return b.toFixed(b < 10 ? 1 : 0) + ' ' + u[i];
+        }
+        function fmtAgo(sec) {
+            sec = Number(sec) || 0;
+            if (sec <= 0) return 'never';
+            if (sec < 60) return sec + 's ago';
+            if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
+            if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
+            return Math.floor(sec / 86400) + 'd ago';
+        }
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        async function refresh() {
+            try {
+                const res = await fetch(API + '/status');
+                if (!res.ok) throw new Error('status ' + res.status);
+                statusData = await res.json();
+                renderStatus();
+            } catch (e) {
+                document.getElementById('ifaceList').innerHTML =
+                    '<div class="peer-note">⚠️ Unable to read WireGuard status — ' + esc(e.message) + '</div>';
+            }
+        }
+
+        function renderStatus() {
+            const d = statusData || {};
+            const ifaces = d.interfaces || [];
+            document.getElementById('sIfaces').textContent = d.interface_count != null ? d.interface_count : ifaces.length;
+            document.getElementById('sActive').textContent = d.active_peers != null ? d.active_peers : '–';
+            document.getElementById('sPeers').textContent = d.total_peers != null ? d.total_peers : '–';
+            document.getElementById('sRx').textContent = fmtBytes(d.total_rx_bytes);
+            document.getElementById('sTx').textContent = fmtBytes(d.total_tx_bytes);
+
+            const up = ifaces.filter(i => i.state === 'up').length;
+            document.getElementById('subline').textContent =
+                ifaces.length + ' tunnel' + (ifaces.length === 1 ? '' : 's') + ' · ' + up + ' up · kernel-native';
+
+            const el = document.getElementById('ifaceList');
+            if (!ifaces.length) { el.innerHTML = '<div class="peer-note">No WireGuard interfaces configured.</div>'; return; }
+
+            el.innerHTML = ifaces.map(i => {
+                const meta = ifaceMeta(i.name);
+                const isUp = i.state === 'up';
+                const open = openIfaces.has(i.name);
+                return '' +
+                '<div class="iface ' + (isUp ? 'up' : 'down') + (open ? ' open' : '') + '" id="if-' + esc(i.name) + '">' +
+                  '<div class="iface-head" onclick="toggleIface(\'' + esc(i.name) + '\')">' +
+                    '<div class="iface-emoji">' + meta.emoji + '</div>' +
+                    '<div class="iface-id"><div class="name">' + esc(i.name) + '</div><div class="role">' + esc(meta.role) + '</div></div>' +
+                    '<div class="iface-meta">' +
+                      '<div class="m peers"><div class="mv">' + (i.peers != null ? i.peers : '?') + '</div><div class="ml">peers</div></div>' +
+                      '<div class="m rx"><div class="mv">' + fmtBytes(i.rx_bytes) + '</div><div class="ml">rx</div></div>' +
+                      '<div class="m tx"><div class="mv">' + fmtBytes(i.tx_bytes) + '</div><div class="ml">tx</div></div>' +
+                      '<span class="pill ' + (isUp ? 'up' : 'down') + '">' + (isUp ? '● UP' : '○ DOWN') + '</span>' +
+                      '<span class="chev">▶</span>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="iface-body">' +
+                    '<div class="iface-sub">' +
+                      '<span>📍 <code>' + esc(i.ip || '—') + '</code></span>' +
+                      '<span>🎧 port <code>' + esc(i.listen_port || '—') + '</code></span>' +
+                      '<span>👥 <code>' + (i.peers != null ? i.peers : '?') + '</code> peers</span>' +
+                    '</div>' +
+                    '<div class="iface-actions">' +
+                      (isUp
+                        ? '<button class="btn danger sm" onclick="ifaceToggle(\'' + esc(i.name) + '\',\'down\')">⏹ Bring down</button>'
+                        : '<button class="btn good sm" onclick="ifaceToggle(\'' + esc(i.name) + '\',\'up\')">▶ Bring up</button>') +
+                      '<button class="btn primary sm" onclick="event.stopPropagation();showAddPeer(\'' + esc(i.name) + '\')">+ Add peer</button>' +
+                    '</div>' +
+                    '<div class="peer-host" id="peers-' + esc(i.name) + '"></div>' +
+                  '</div>' +
+                '</div>';
+            }).join('');
+
+            // repopulate any expanded drawers
+            openIfaces.forEach(name => {
+                const iface = ifaces.find(x => x.name === name);
+                if (iface) loadPeers(name, iface.peers);
             });
-        });
 
-        function formatBytes(bytes) {
-            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
-            if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + ' MB';
-            if (bytes >= 1024) return (bytes / 1024).toFixed(2) + ' KB';
-            return bytes + ' B';
+            renderConnect();
         }
 
-        async function loadStatus() {
-            const data = await api('/status');
-            document.getElementById('interface-count').textContent = data.interface_count || 0;
-            document.getElementById('total-peers').textContent = data.total_peers || 0;
-            document.getElementById('active-peers').textContent = data.active_peers || 0;
-            document.getElementById('total-traffic').textContent = formatBytes((data.total_rx_bytes || 0) + (data.total_tx_bytes || 0));
-            
-            const badge = document.getElementById('status-badge');
-            if (data.interface_count > 0) {
-                badge.className = 'badge active';
-                badge.textContent = data.interface_count + ' interfaces';
+        function toggleIface(name) {
+            const box = document.getElementById('if-' + name);
+            if (!box) return;
+            if (openIfaces.has(name)) {
+                openIfaces.delete(name);
+                box.classList.remove('open');
             } else {
-                badge.className = 'badge inactive';
-                badge.textContent = 'No interfaces';
-            }
-
-            // Quick interfaces
-            const ifaces = data.interfaces || [];
-            document.getElementById('interfaces-quick').innerHTML = ifaces.length > 0 ?
-                ifaces.map(i => '<div style="padding: 0.5rem; border-bottom: 1px solid var(--border);"><strong>' + i.name + '</strong> - ' + 
-                    '<span class="status-dot ' + (i.state === 'up' ? 'active' : 'inactive') + '"></span> ' + i.state + 
-                    ', ' + i.peers + ' peers</div>').join('') :
-                '<p style="color: var(--text-dim);">No interfaces configured</p>';
-        }
-
-        async function loadInterfaces() {
-            const data = await api('/interfaces');
-            const ifaces = data.interfaces || [];
-            const tbody = document.querySelector('#interfaces-table tbody');
-            const select = document.getElementById('peer-interface');
-            
-            select.innerHTML = ifaces.map(i => '<option value="' + i.name + '">' + i.name + '</option>').join('');
-            
-            tbody.innerHTML = ifaces.length > 0 ? ifaces.map(i => 
-                '<tr><td>' + i.name + '</td>' +
-                '<td><span class="status-dot ' + (i.state === 'up' ? 'active' : 'inactive') + '"></span> ' + i.state + '</td>' +
-                '<td style="font-family: monospace;">' + (i.ipv4 || '-') + '</td>' +
-                '<td>' + (i.listen_port || '-') + '</td>' +
-                '<td>' + i.peer_count + '</td>' +
-                '<td>' + formatBytes(i.rx_bytes) + ' / ' + formatBytes(i.tx_bytes) + '</td>' +
-                '<td>' + (i.state === 'up' ? 
-                    '<button class="btn danger" onclick="interfaceDown(\'' + i.name + '\')">Down</button>' :
-                    '<button class="btn success" onclick="interfaceUp(\'' + i.name + '\')">Up</button>') + '</td></tr>'
-            ).join('') : '<tr><td colspan="7">No interfaces</td></tr>';
-        }
-
-        async function loadPeers() {
-            const data = await api('/peers');
-            const peers = data.peers || [];
-            const tbody = document.querySelector('#peers-table tbody');
-            
-            tbody.innerHTML = peers.length > 0 ? peers.map(p => {
-                const statusClass = p.status === 'active' ? 'active' : (p.status === 'recent' ? 'recent' : 'inactive');
-                return '<tr><td>' + (p.name || p.public_key.substring(0, 8) + '...') + '</td>' +
-                    '<td><span class="status-dot ' + statusClass + '"></span> ' + p.status + '</td>' +
-                    '<td style="font-family: monospace; font-size: 0.8rem;">' + (p.endpoint || '-') + '</td>' +
-                    '<td style="font-family: monospace; font-size: 0.8rem;">' + (p.allowed_ips || '-') + '</td>' +
-                    '<td>' + formatBytes(p.rx_bytes) + ' / ' + formatBytes(p.tx_bytes) + '</td>' +
-                    '<td>' + (p.name ? '<button class="btn" onclick="showQR(\'' + p.name + '\')">QR</button> ' : '') +
-                    '<button class="btn danger" onclick="removePeer(\'' + (p.name || p.public_key) + '\')">Remove</button></td></tr>';
-            }).join('') : '<tr><td colspan="6">No peers</td></tr>';
-
-            // Quick peers
-            document.getElementById('peers-quick').innerHTML = peers.slice(0, 5).map(p =>
-                '<div style="padding: 0.5rem; border-bottom: 1px solid var(--border);"><strong>' + 
-                (p.name || p.public_key.substring(0, 8) + '...') + '</strong> - ' +
-                '<span class="status-dot ' + (p.status === 'active' ? 'active' : 'inactive') + '"></span></div>'
-            ).join('') || '<p style="color: var(--text-dim);">No peers</p>';
-        }
-
-        async function loadComponents() {
-            const data = await api('/components');
-            document.getElementById('components-list').innerHTML = (data.components || []).map(c =>
-                '<div class="component-card"><div class="component-info"><h3>' + c.name + '</h3>' +
-                '<p>' + c.description + '</p></div></div>'
-            ).join('');
-        }
-
-        async function loadAccess() {
-            const data = await api('/access');
-            document.getElementById('access-endpoints').innerHTML = (data.endpoints || []).map(e =>
-                '<div class="endpoint-card"><h3>' + e.name + '</h3>' +
-                '<div class="url">' + (e.url || e.host + ':' + e.port) + '</div></div>'
-            ).join('');
-        }
-
-        async function interfaceUp(name) { await api('/interface/' + name + '/up', 'POST'); loadInterfaces(); loadStatus(); }
-        async function interfaceDown(name) { await api('/interface/' + name + '/down', 'POST'); loadInterfaces(); loadStatus(); }
-
-        function showAddPeerModal() { document.getElementById('add-peer-modal').classList.add('show'); }
-        function closeAddPeerModal() { document.getElementById('add-peer-modal').classList.remove('show'); document.getElementById('peer-result').style.display = 'none'; }
-
-        async function addPeer() {
-            const name = document.getElementById('peer-name').value.trim();
-            const iface = document.getElementById('peer-interface').value;
-            if (!name) return alert('Enter peer name');
-            
-            const result = await api('/peer', 'POST', { name, interface: iface });
-            const div = document.getElementById('peer-result');
-            div.style.display = 'block';
-            
-            if (result.success) {
-                div.innerHTML = '<p style="color: var(--green);">Peer created!</p><p>Config: ' + result.config_file + '</p>';
-                loadPeers();
-                loadStatus();
-            } else {
-                div.innerHTML = '<p style="color: var(--red);">Failed: ' + (result.error || 'Unknown error') + '</p>';
+                openIfaces.add(name);
+                box.classList.add('open');
+                const iface = (statusData.interfaces || []).find(x => x.name === name);
+                loadPeers(name, iface ? iface.peers : 0);
             }
         }
 
-        async function removePeer(id) {
-            if (!confirm('Remove peer ' + id + '?')) return;
-            await api('/peer', 'DELETE', { identifier: id });
-            loadPeers();
-            loadStatus();
-        }
-
-        async function showQR(name) {
-            const result = await api('/peer/' + name + '/qr');
-            const container = document.getElementById('qr-container');
-            if (result.qr_base64) {
-                container.innerHTML = '<img src="data:image/png;base64,' + result.qr_base64 + '" alt="QR Code">';
-                document.getElementById('qr-modal').classList.add('show');
-            } else {
-                alert('QR code not available');
+        async function loadPeers(name, peerCount) {
+            const host = document.getElementById('peers-' + name);
+            if (!host) return;
+            if (peerCount > PEER_AUTOLOAD_MAX && !forcedPeers.has(name)) {
+                host.innerHTML = '<div class="peer-note">🧰 <b>' + peerCount + ' peers</b> on this tunnel — listing suppressed to keep the page fast ' +
+                    '(these are transient transparent-proxy clients).<br><br>' +
+                    '<button class="btn sm" onclick="forcePeers(\'' + esc(name) + '\',' + peerCount + ')">Load anyway (slow)</button></div>';
+                return;
+            }
+            host.innerHTML = '<div class="peer-note">Loading peers…</div>';
+            try {
+                const res = await fetch(API + '/peers?interface=' + encodeURIComponent(name));
+                const data = await res.json();
+                if (data.success === false) throw new Error(data.error || 'command failed');
+                renderPeers(host, data.peers || []);
+            } catch (e) {
+                host.innerHTML = '<div class="peer-note">⚠️ Could not load peers — ' + esc(e.message) + '</div>';
             }
         }
-        function closeQRModal() { document.getElementById('qr-modal').classList.remove('show'); }
 
-        async function generateKeyPair() {
-            const result = await api('/genkey', 'POST');
-            document.getElementById('key-output').innerHTML = 
-                '<p><strong>Private:</strong> ' + result.private_key + '</p>' +
-                '<p><strong>Public:</strong> ' + result.public_key + '</p>';
+        function forcePeers(name, count) {
+            forcedPeers.add(name);
+            loadPeers(name, count);
         }
 
-        async function generatePSK() {
-            const result = await api('/genpsk', 'POST');
-            document.getElementById('key-output').innerHTML = '<p><strong>PSK:</strong> ' + result.preshared_key + '</p>';
+        function renderPeers(host, peers) {
+            if (!peers.length) { host.innerHTML = '<div class="peer-note">No peers on this tunnel.</div>'; return; }
+            // active first, then by last handshake
+            peers.sort((a, b) => (b.status === 'active') - (a.status === 'active') || (b.last_handshake || 0) - (a.last_handshake || 0));
+            host.innerHTML = '<div class="peer-list">' + peers.map(p => {
+                const active = p.status === 'active';
+                const ip = (p.allowed_ips || '').split(',')[0] || '—';
+                return '<div class="peer ' + (active ? 'active' : '') + '">' +
+                    '<span class="dot">' + (active ? '🟢' : '⚪') + '</span>' +
+                    '<span class="who"><span class="ip">' + esc(ip) + '</span>' +
+                        (p.name ? ' <span style="color:var(--text)">' + esc(p.name) + '</span>' : '') +
+                        '<div class="key">' + esc(p.public_key) + '</div></span>' +
+                    '<span class="hs">🤝 ' + fmtAgo(p.handshake_ago) + '</span>' +
+                    '<span class="xfer"><span class="rx">⬇' + fmtBytes(p.rx_bytes) + '</span> <span class="tx">⬆' + fmtBytes(p.tx_bytes) + '</span></span>' +
+                    '</div>';
+            }).join('') + '</div>';
         }
 
-        function showMigrateModal() { document.getElementById('migrate-modal').classList.add('show'); }
-        function closeMigrateModal() { document.getElementById('migrate-modal').classList.remove('show'); }
-
-        async function runMigration() {
-            const source = document.getElementById('migrate-source').value.trim();
-            const dryRun = document.getElementById('migrate-dry-run').checked;
-            const result = await api('/migrate', 'POST', { source, dry_run: dryRun });
-            const div = document.getElementById('migrate-result');
-            div.style.display = 'block';
-            div.innerHTML = result.success ? 
-                '<p style="color: var(--green);">Migration complete!</p>' :
-                '<p style="color: var(--red);">Failed: ' + (result.error || 'Unknown error') + '</p>';
+        async function ifaceToggle(name, dir) {
+            if (!confirm((dir === 'up' ? 'Bring up' : 'Bring down') + ' ' + name + '?')) return;
+            toast((dir === 'up' ? 'Starting ' : 'Stopping ') + name + '…');
+            try {
+                const res = await fetch(API + '/interface/' + encodeURIComponent(name) + '/' + dir, { method: 'POST', headers: authHeaders() });
+                if (res.status === 401) { toast('🔒 Login required for this action', true); return; }
+                const data = await res.json();
+                if (data.success === false) { toast('❌ ' + (data.error || 'failed'), true); return; }
+                toast('✅ ' + name + ' ' + dir);
+                setTimeout(refresh, 800);
+            } catch (e) { toast('❌ ' + e.message, true); }
         }
 
-        function refresh() { loadStatus(); loadInterfaces(); loadPeers(); loadComponents(); loadAccess(); }
+        function showAddPeer(iface) {
+            const mc = document.getElementById('modalContent');
+            mc.innerHTML =
+                '<h3>➕ Add peer to ' + esc(iface) + '</h3>' +
+                '<div class="form-group"><label>Peer name</label>' +
+                '<input id="peerName" placeholder="alice-phone" autocomplete="off"></div>' +
+                '<div class="btn-group" style="margin-top:1rem">' +
+                '<button class="btn primary" onclick="createPeer(\'' + esc(iface) + '\')">Generate config</button>' +
+                '<button class="btn" onclick="hideModal()">Cancel</button></div>';
+            document.getElementById('modal').classList.add('show');
+            setTimeout(() => { const el = document.getElementById('peerName'); if (el) el.focus(); }, 50);
+        }
+
+        async function createPeer(iface) {
+            const name = (document.getElementById('peerName').value || '').trim();
+            if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) { toast('Name: letters, digits, . _ - only', true); return; }
+            toast('Generating ' + name + '…');
+            try {
+                const res = await fetch(API + '/peer', {
+                    method: 'POST',
+                    headers: authHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ name: name, interface: iface })
+                });
+                if (res.status === 401) { toast('🔒 Login required', true); return; }
+                const data = await res.json();
+                if (data.success === false) { toast('❌ ' + (data.error || 'failed'), true); return; }
+                await showPeerConfig(name, iface);
+                setTimeout(refresh, 800);
+            } catch (e) { toast('❌ ' + e.message, true); }
+        }
+
+        async function showPeerConfig(name, iface) {
+            const mc = document.getElementById('modalContent');
+            mc.innerHTML = '<h3>✅ ' + esc(name) + '</h3><div class="peer-note">Loading config…</div>';
+            let cfg = '', qr = '';
+            try {
+                const c = await fetch(API + '/peer/' + encodeURIComponent(name) + '/config', { headers: authHeaders() });
+                const cj = await c.json();
+                cfg = cj.config || cj.output || (cj.error ? '(' + cj.error + ')' : '');
+            } catch (e) { cfg = '(config unavailable)'; }
+            try {
+                const q = await fetch(API + '/peer/' + encodeURIComponent(name) + '/qr', { headers: authHeaders() });
+                const qj = await q.json();
+                if (qj.qr_base64) qr = 'data:image/png;base64,' + qj.qr_base64;
+            } catch (e) {}
+            mc.innerHTML =
+                '<h3>✅ ' + esc(name) + ' on ' + esc(iface) + '</h3>' +
+                (qr ? '<img src="' + qr + '" alt="QR">' : '') +
+                (cfg ? '<pre>' + esc(cfg) + '</pre>' : '<div class="peer-note">No config returned.</div>') +
+                '<div class="btn-group" style="margin-top:1rem"><button class="btn" onclick="hideModal()">Close</button></div>';
+        }
+
+        function hideModal() { document.getElementById('modal').classList.remove('show'); }
+        document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') hideModal(); });
+
+        async function renderConnect() {
+            if (!accessData) {
+                try { accessData = await (await fetch(API + '/access')).json(); } catch (e) { return; }
+            }
+            const card = document.getElementById('connectCard');
+            const ep = (accessData.endpoints || []).find(e => e.host);
+            const kv = [];
+            if (ep) {
+                kv.push(['Endpoint', '<code>' + esc(ep.host) + ':' + esc(ep.port) + '/' + esc(ep.protocol || 'udp') + '</code>']);
+            }
+            const dash = (accessData.endpoints || []).find(e => e.url);
+            if (dash) kv.push(['Dashboard', '<code>' + esc(dash.url) + '</code>']);
+            document.getElementById('connectKv').innerHTML = kv.map(r =>
+                '<div class="k">' + r[0] + '</div><div class="v">' + r[1] + '</div>').join('');
+            const ex = (accessData.cli && accessData.cli.examples) || [];
+            document.getElementById('cliBlock').textContent = ex.map(x => '$ ' + x).join('\n');
+            card.style.display = kv.length || ex.length ? 'block' : 'none';
+        }
+
+        function toast(msg, isError) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show' + (isError ? ' error' : '');
+            setTimeout(() => t.classList.remove('show'), 3200);
+        }
+
         refresh();
-        setInterval(refresh, 30000);
+        setInterval(refresh, 15000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

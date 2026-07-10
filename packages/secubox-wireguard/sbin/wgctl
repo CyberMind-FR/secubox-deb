@@ -148,21 +148,14 @@ cmd_status() {
             total_rx=$((total_rx + rx_bytes))
             total_tx=$((total_tx + tx_bytes))
 
-            # Count active peers (handshake in last 3 minutes)
-            local now
-            now=$(date +%s)
-            local handshakes
-            handshakes=$(wg show "$iface" latest-handshakes 2>/dev/null || echo "")
-            while IFS= read -r line; do
-                local hs_time
-                hs_time=$(echo "$line" | awk '{print $2}')
-                if [ -n "$hs_time" ] && [ "$hs_time" != "0" ]; then
-                    local age=$((now - hs_time))
-                    if [ "$age" -lt 180 ]; then
-                        active_peers=$((active_peers + 1))
-                    fi
-                fi
-            done <<< "$handshakes"
+            # Count active peers (handshake in last 3 minutes) in a single awk
+            # pass. The previous bash while-loop spawned ~2 subprocesses per
+            # peer, so `status` took >30s on the 500+ peer transparent-proxy
+            # tunnel (wg-toolbox) and 504'd behind the WAF.
+            local iface_active
+            iface_active=$(wg show "$iface" latest-handshakes 2>/dev/null | \
+                awk -v now="$(date +%s)" '$2 != 0 && (now - $2) < 180 { c++ } END { print c+0 }')
+            active_peers=$((active_peers + iface_active))
 
             [ "$first" = "true" ] && first=false || interfaces_json="${interfaces_json},"
             interfaces_json="${interfaces_json}{\"name\":\"$iface\",\"state\":\"$state\",\"listen_port\":$port,\"ip\":\"$ip\",\"peers\":$peers,\"rx_bytes\":$rx_bytes,\"tx_bytes\":$tx_bytes}"
@@ -318,64 +311,60 @@ cmd_peers() {
         interfaces=$(wg show interfaces 2>/dev/null)
     fi
 
-    echo '{"peers":['
-    local first=true
+    # Friendly-name map (pubkey-prefix -> name). Only manually registered peers
+    # have files; the transparent-proxy tunnel's hundreds of peers do not, so
+    # this stays cheap.
+    local names_tmp
+    names_tmp=$(mktemp)
+    if [ -d "$PEERS_DIR" ]; then
+        local pf base nm
+        for pf in "$PEERS_DIR"/*.json; do
+            [ -f "$pf" ] || continue
+            base=$(basename "$pf" .json)
+            nm=$(jq -r '.name // ""' "$pf" 2>/dev/null)
+            [ -n "$nm" ] && printf '%s\t%s\n' "$base" "$nm" >> "$names_tmp"
+        done
+    fi
+
     local now
     now=$(date +%s)
 
-    for iface in $interfaces; do
-        local peers
-        peers=$(wg show "$iface" peers 2>/dev/null)
-
-        for peer_pubkey in $peers; do
-            local endpoint
-            endpoint=$(wg show "$iface" endpoints 2>/dev/null | grep "^$peer_pubkey" | awk '{print $2}')
-            local allowed_ips
-            allowed_ips=$(wg show "$iface" allowed-ips 2>/dev/null | grep "^$peer_pubkey" | cut -f2)
-            local handshake
-            handshake=$(wg show "$iface" latest-handshakes 2>/dev/null | grep "^$peer_pubkey" | awk '{print $2}')
-            local transfer
-            transfer=$(wg show "$iface" transfer 2>/dev/null | grep "^$peer_pubkey")
-            local rx_bytes
-            rx_bytes=$(echo "$transfer" | awk '{print $2}')
-            local tx_bytes
-            tx_bytes=$(echo "$transfer" | awk '{print $3}')
-            local keepalive
-            keepalive=$(wg show "$iface" persistent-keepalive 2>/dev/null | grep "^$peer_pubkey" | awk '{print $2}')
-            local psk_set="false"
-            if wg show "$iface" preshared-keys 2>/dev/null | grep -q "^$peer_pubkey"; then
-                local psk_val
-                psk_val=$(wg show "$iface" preshared-keys 2>/dev/null | grep "^$peer_pubkey" | awk '{print $2}')
-                [ "$psk_val" != "(none)" ] && psk_set="true"
-            fi
-
-            # Calculate handshake age and status
-            local status="inactive"
-            local handshake_ago=0
-            if [ -n "$handshake" ] && [ "$handshake" != "0" ]; then
-                handshake_ago=$((now - handshake))
-                if [ "$handshake_ago" -lt 180 ]; then
-                    status="active"
-                elif [ "$handshake_ago" -lt 600 ]; then
-                    status="recent"
-                fi
-            fi
-
-            # Look up friendly name from peers database
-            local friendly_name=""
-            local peer_file="$PEERS_DIR/${peer_pubkey:0:8}.json"
-            if [ -f "$peer_file" ]; then
-                friendly_name=$(jq -r '.name // ""' "$peer_file" 2>/dev/null)
-            fi
-
-            [ "$first" = "true" ] && first=false || echo ","
-            cat <<EOF
-{"interface":"$iface","public_key":"$peer_pubkey","name":"$friendly_name","endpoint":"${endpoint:-(none)}","allowed_ips":"$allowed_ips","status":"$status","last_handshake":${handshake:-0},"handshake_ago":$handshake_ago,"rx_bytes":${rx_bytes:-0},"tx_bytes":${tx_bytes:-0},"persistent_keepalive":"${keepalive:-off}","preshared_key":$psk_set}
-EOF
+    # One `wg show <iface> dump` call yields every peer field at once. The old
+    # path ran ~8 `wg show | grep` subprocesses PER peer, so on the 500+ peer
+    # transparent-proxy tunnel it took minutes and — combined with the API
+    # timeout not killing the child — piled up into a load-average avalanche.
+    # This is now O(interfaces): a handful of processes regardless of peer count.
+    {
+        for iface in $interfaces; do
+            wg show "$iface" dump 2>/dev/null | awk -v i="$iface" 'NR>1 { print i"\t"$0 }'
         done
-    done
-
-    echo ']}'
+    } | awk -F'\t' -v now="$now" -v names="$names_tmp" '
+        BEGIN {
+            while ((getline line < names) > 0) {
+                n = split(line, a, "\t"); if (n >= 2) nm[a[1]] = a[2];
+            }
+            printf "{\"peers\":[";
+            first = 1;
+        }
+        {
+            iface=$1; pubkey=$2; psk=$3; endpoint=$4; allowed=$5; hs=$6; rx=$7; tx=$8; ka=$9;
+            if (endpoint == "") endpoint = "(none)";
+            if (allowed == "(none)") allowed = "";
+            if (ka == "" || ka == "off") ka = "off";
+            psk_set = (psk != "(none)" && psk != "") ? "true" : "false";
+            status = "inactive"; ago = 0;
+            if (hs != "" && hs != "0") { ago = now - hs; if (ago < 180) status = "active"; else if (ago < 600) status = "recent"; }
+            fname = ""; pfx = substr(pubkey, 1, 8); if (pfx in nm) fname = nm[pfx];
+            gsub(/\\/, "\\\\", fname);    gsub(/"/, "\\\"", fname);
+            gsub(/\\/, "\\\\", endpoint); gsub(/"/, "\\\"", endpoint);
+            gsub(/\\/, "\\\\", allowed);  gsub(/"/, "\\\"", allowed);
+            if (!first) printf ","; first = 0;
+            printf "{\"interface\":\"%s\",\"public_key\":\"%s\",\"name\":\"%s\",\"endpoint\":\"%s\",\"allowed_ips\":\"%s\",\"status\":\"%s\",\"last_handshake\":%s,\"handshake_ago\":%d,\"rx_bytes\":%s,\"tx_bytes\":%s,\"persistent_keepalive\":\"%s\",\"preshared_key\":%s}", \
+                iface, pubkey, fname, endpoint, allowed, status, (hs=="" ? "0" : hs), ago, (rx=="" ? "0" : rx), (tx=="" ? "0" : tx), ka, psk_set;
+        }
+        END { print "]}"; }
+    '
+    rm -f "$names_tmp"
 }
 
 cmd_peer_add() {
