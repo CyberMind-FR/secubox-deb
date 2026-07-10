@@ -10,6 +10,13 @@ secubox-wireguard (1.0.2-1~bookworm1) bookworm; urgency=medium
     concurrent dashboard polls collapse to one wgctl run.
   * fix: kill the wgctl child on API timeout (asyncio.wait_for left it running
     → zombie CPU pileup); service NoNewPrivileges=false so sudo -n wgctl works.
+  * security: fix _parse_wg_show — parse `wg show all dump` by field count and
+    never read the interface private key (the sudo route had activated a
+    truncated-key disclosure via /stats,/summary,/peers/status); also fixes
+    peers being dropped by the old interface/peer line misdetection.
+  * webui: interface-list actions via data-attrs + event delegation (no name
+    interpolated into inline handlers); peer drawers no longer blink on refresh.
+  * api: invalidate the read cache after interface up/down and peer add/remove.
 
  -- Gerald KERMA <devel@cybermind.fr>  Fri, 10 Jul 2026 07:30:00 +0200
 
