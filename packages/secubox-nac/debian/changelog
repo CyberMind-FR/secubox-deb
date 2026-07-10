@@ -1,3 +1,12 @@
+secubox-nac (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * fix: Zones tab was empty because /zones reported only raw nftables set
+    members (0), not discovered clients. It now groups discovered clients by
+    their resolved zone (nft set > JSON assignment > fallback), so populated
+    zones show their members.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 11:20:00 +0200
+
 secubox-nac (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * fix: NAC discovered 0 clients when devices live on br-lxc or an interface
