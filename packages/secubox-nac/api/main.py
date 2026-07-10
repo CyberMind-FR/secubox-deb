@@ -648,10 +648,31 @@ async def get_client(mac: str, user=Depends(require_jwt)):
 
 @router.get("/zones")
 async def zones(user=Depends(require_jwt)):
-    """Get all zones with members."""
+    """Get all zones with their members.
+
+    Members are the DISCOVERED clients grouped by their resolved zone, not just
+    the raw nftables set — a client discovered by ARP defaults to a zone (via
+    JSON assignment / nft set / fallback) but may not be in the nft set, so
+    reporting only nft members left every zone showing 0 and the dashboard's
+    Zones tab looked empty. The nft sets + assignments are fetched once, not per
+    client, to keep this cheap on the shared aggregator loop.
+    """
+    nft_members = {zid: set(_nft_list_set(info["nft_set"])) for zid, info in ZONES.items()}
+    assignments = _load_zone_assignments()
+
+    def _resolve(mac: str) -> str:
+        for zid in ZONES:
+            if mac in nft_members[zid]:
+                return zid
+        return assignments.get(mac, "quarantine")
+
+    by_zone: dict[str, list[str]] = {zid: [] for zid in ZONES}
+    for c in _discover_clients():
+        by_zone[_resolve(c["mac"].lower())].append(c["mac"].lower())
+
     result = []
     for zone_id, info in ZONES.items():
-        members = _nft_list_set(info["nft_set"])
+        members = by_zone.get(zone_id, [])
         result.append({
             "id": zone_id,
             "name": info["desc"],
