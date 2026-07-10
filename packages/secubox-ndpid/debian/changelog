@@ -1,3 +1,12 @@
+secubox-ndpid (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix: service crash-looped (226/NAMESPACE) because ReadWritePaths listed
+    /run/ndpid, which does not exist (the socket is /run/secubox/ndpid.sock);
+    dropped it. Add the nginx API dropin (proxy /api/v1/ndpid/ to the module
+    socket) so the dashboard data path works.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 12:10:00 +0200
+
 secubox-ndpid (1.0.1-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

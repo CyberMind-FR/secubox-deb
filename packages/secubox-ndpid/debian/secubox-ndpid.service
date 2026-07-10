@@ -19,7 +19,7 @@ RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /run/ndpid
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
 
 [Install]
 WantedBy=multi-user.target
