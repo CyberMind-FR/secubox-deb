@@ -25,4 +25,13 @@ fi
 systemctl daemon-reload
 systemctl enable secubox-metablogizer 2>/dev/null || true
 systemctl start secubox-metablogizer 2>/dev/null || true
+
+# Publisher wizard: the sbxwaf/haproxy/cert steps run through the
+# secubox-publishctl root helper, authorized by this sudoers drop-in.
+chmod 0755 /usr/sbin/secubox-publishctl 2>/dev/null || true
+if [ -f /etc/sudoers.d/secubox-publish-wizard ]; then
+  chmod 0440 /etc/sudoers.d/secubox-publish-wizard
+  visudo -cf /etc/sudoers.d/secubox-publish-wizard >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-publish-wizard
+fi
+
 exit 0
