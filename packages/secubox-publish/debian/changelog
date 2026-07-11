@@ -1,3 +1,13 @@
+secubox-publish (2.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix: delegate vhost/WAF/cert provisioning to metablogizer's new
+    POST /publish/route instead of writing /etc/haproxy + /etc/nginx and
+    reloading services directly — those writes silently failed because this
+    hub runs as unprivileged `secubox` (#832). Routing now goes through the
+    audited secubox-publishctl root helper, THROUGH the WAF (no bypass).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 11 Jul 2026 14:00:00 +0200
+
 secubox-publish (2.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
