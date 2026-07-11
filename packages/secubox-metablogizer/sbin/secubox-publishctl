@@ -13,7 +13,7 @@ BACKEND_IP="192.168.1.200"
 GK2_SUFFIX=".gk2.secubox.in"
 DOMAIN_RE='^(([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)$'
 
-emit() { printf '{"ok":%s,"detail":"%s"}\n' "$1" "$2"; }
+emit() { python3 -c 'import json,sys; print(json.dumps({"ok": sys.argv[1]=="true", "detail": sys.argv[2]}))' "$1" "$2"; }
 die()  { emit false "$1"; exit 1; }
 
 valid_domain() { [[ "$1" =~ $DOMAIN_RE && ${#1} -le 253 ]]; }
@@ -29,7 +29,7 @@ waf_route() {
   valid_domain "$domain" || die "invalid domain"
   valid_port "$port"     || die "invalid port"
   # Merge with python3 (present) so we never hand-roll JSON.
-  python3 - "$WAF_ROUTES_FILE" "$domain" "$BACKEND_IP" "$port" <<'PY'
+  { python3 - "$WAF_ROUTES_FILE" "$domain" "$BACKEND_IP" "$port" <<'PY'
 import json, sys, os
 path, domain, ip, port = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 try:
@@ -42,19 +42,26 @@ tmp = path + ".tmp"
 json.dump(data, open(tmp, "w"), indent=2, sort_keys=True)
 os.replace(tmp, path)
 PY
+  } || die "route write failed"
   reload_sbxwaf
   emit true "routed $domain -> $BACKEND_IP:$port"
 }
 
 vhost_add() {
   local domain="$1"; valid_domain "$domain" || die "invalid domain"
-  haproxyctl vhost add "$domain" >/dev/null 2>&1 || true   # additive, idempotent
-  emit true "vhost $domain"
+  local out
+  if out=$(haproxyctl vhost add "$domain" 2>&1); then
+    emit true "vhost $domain"
+  elif printf '%s' "$out" | grep -qiE 'exist|already'; then
+    emit true "vhost $domain (exists)"
+  else
+    emit false "haproxyctl: $out"
+  fi
 }
 
 vhost_del() {
   local domain="$1"; valid_domain "$domain" || die "invalid domain"
-  python3 - "$WAF_ROUTES_FILE" "$domain" <<'PY'
+  { python3 - "$WAF_ROUTES_FILE" "$domain" <<'PY'
 import json, sys, os
 path, domain = sys.argv[1], sys.argv[2]
 try: data = json.load(open(path))
@@ -62,9 +69,17 @@ except Exception: data = {}
 data.pop(domain, None)
 tmp = path + ".tmp"; json.dump(data, open(tmp,"w"), indent=2, sort_keys=True); os.replace(tmp, path)
 PY
-  haproxyctl vhost del "$domain" >/dev/null 2>&1 || true
-  reload_sbxwaf
-  emit true "removed $domain"
+  } || die "route write failed"
+  local out
+  if out=$(haproxyctl vhost del "$domain" 2>&1); then
+    reload_sbxwaf
+    emit true "removed $domain"
+  elif printf '%s' "$out" | grep -qiE 'exist|absent|not found|no such|unknown'; then
+    reload_sbxwaf
+    emit true "removed $domain (already absent)"
+  else
+    emit false "haproxyctl: $out"
+  fi
 }
 
 cert() {
@@ -72,7 +87,7 @@ cert() {
   if [[ "$domain" == *"$GK2_SUFFIX" ]]; then
     emit true "wildcard"; return 0
   fi
-  mkdir -p "$HAPROXY_CERTS_DIR"
+  mkdir -p "$HAPROXY_CERTS_DIR" || die "cannot create $HAPROXY_CERTS_DIR"
   if ! certbot certonly --non-interactive --agree-tos --standalone \
         --preferred-challenges http -d "$domain" >/dev/null 2>&1; then
     die "certbot failed for $domain"

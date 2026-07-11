@@ -65,3 +65,11 @@ def test_unknown_verb_fails(tmp_path):
     env, _ = _env(tmp_path)
     r = _run(["frobnicate", "x"], env)
     assert r.returncode != 0
+    assert json.loads(r.stdout)["ok"] is False
+
+
+def test_unknown_verb_emits_valid_json(tmp_path):
+    env, _ = _env(tmp_path)
+    r = _run(['a"b', "x"], env)
+    assert r.returncode != 0
+    assert json.loads(r.stdout)["ok"] is False
