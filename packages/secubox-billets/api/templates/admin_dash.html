@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>billets — admin</title><link rel="stylesheet" href="/static/billets.css">
+</head><body>
+<header class="site-header">
+  <span class="site-title">billets</span><span class="tagline">admin · {{ author.username }}</span>
+  <form method="post" action="/admin/logout" style="margin-left:auto">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Déconnexion</button>
+  </form>
+</header>
+<main>
+<p><a href="/admin/billets/new">+ Nouveau billet</a> ·
+  <a href="/admin/comments">Modération commentaires</a> ·
+  filtres : <a href="/admin">tous</a>
+  <a href="/admin?status=draft">brouillons</a>
+  <a href="/admin?status=published">publiés</a>
+  <a href="/admin?status=archived">archivés</a></p>
+<table class="admin-list">
+  <thead><tr><th>Statut</th><th>Billet</th><th>Vues</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for b in billets %}
+  <tr>
+    <td><span class="pill {{ b.status }}">{{ b.status }}</span></td>
+    <td><a href="/admin/billets/{{ b.id }}/edit">{{ b.body[:60] }}</a></td>
+    <td>{{ b.view_count }}</td>
+    <td class="row-actions">
+      <a href="/b/{{ b.slug }}">voir</a>
+      <form method="post" action="/admin/billets/{{ b.id }}/delete"
+            onsubmit="return confirm('Supprimer ce billet ?')">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit" class="danger">suppr</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="empty">Aucun billet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</main></body></html>

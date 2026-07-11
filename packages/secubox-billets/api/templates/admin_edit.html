@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>billets — {{ 'éditer' if billet else 'nouveau' }}</title>
+<link rel="stylesheet" href="/static/billets.css">
+</head><body>
+<header class="site-header"><a class="site-title" href="/admin">billets</a><span class="tagline">éditeur</span></header>
+<main>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="{{ '/admin/billets/' ~ billet.id if billet else '/admin/billets' }}" class="admin-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Billet (markdown restreint)
+    <textarea name="body" rows="8" required>{{ billet.body if billet else '' }}</textarea></label>
+  <label>URL (référence ou embed)
+    <input name="url" type="url" placeholder="https://…"
+           value="{{ (billet.embed_url or billet.ref_url) if billet else '' }}"></label>
+  <fieldset class="url-kind">
+    <label><input type="radio" name="url_kind" value="ref"
+      {{ 'checked' if not billet or not billet.embed_url else '' }}> référence</label>
+    <label><input type="radio" name="url_kind" value="embed"
+      {{ 'checked' if billet and billet.embed_url else '' }}> embed</label>
+  </fieldset>
+  <div class="editor-actions">
+    {% if billet %}
+      <button type="submit" name="action" value="save">Enregistrer</button>
+      <button type="submit" name="action" value="publish">Publier</button>
+      <button type="submit" name="action" value="archive">Archiver</button>
+    {% else %}
+      <button type="submit" name="action" value="draft">Brouillon</button>
+      <button type="submit" name="action" value="publish">Publier</button>
+    {% endif %}
+  </div>
+</form>
+</main></body></html>
