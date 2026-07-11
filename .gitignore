@@ -83,3 +83,4 @@ backups/*.img.xz
 /output/metablog-backfill-report.json
 /output/metablog-backfill.log
 .superpowers/sdd/
+packages/*/debian/*.postinst.debhelper
