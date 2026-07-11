@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[project]
+name = "secubox-billets"
+version = "0.1.0"
+description = "billets — micro-blog gateway inter-médias sociaux (SecuBox module)"
+requires-python = ">=3.11"
+authors = [{ name = "Gérald Kerma", email = "devel@cybermind.fr" }]
+dependencies = [
+  "fastapi==0.115.6",
+  "uvicorn==0.34.0",
+  "pydantic==2.10.4",
+  "aiosqlite==0.20.0",
+  "jinja2==3.1.5",
+  "argon2-cffi==23.1.0",
+  "nh3==0.2.20",            # HTML sanitizer (ammonia/rust) — embed + comment safety
+  "httpx==0.28.1",         # oEmbed / OpenGraph fetches (with SSRF guard)
+  "pyotp==2.9.0",          # optional author TOTP
+  "itsdangerous==2.2.0",   # signed cookies / timestamp tokens / CSRF
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.4", "pytest-asyncio==0.25.0", "anyio==4.7.0"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
