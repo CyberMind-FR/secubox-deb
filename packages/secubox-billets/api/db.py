@@ -19,7 +19,11 @@ from pathlib import Path
 import aiosqlite
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
-DEFAULT_DB_PATH = os.environ.get("BILLETS_DB", "/var/lib/secubox/billets/billets.db")
+
+
+def default_db_path() -> str:
+    # Resolved at call time (not import) so BILLETS_DB is honoured after import.
+    return os.environ.get("BILLETS_DB", "/var/lib/secubox/billets/billets.db")
 
 _MIGRATION_RE = re.compile(r"^(\d{4})_.+\.sql$")
 
@@ -64,7 +68,7 @@ async def run_migrations(conn: aiosqlite.Connection, *, now: str) -> int:
 async def connect(db_path: str | None = None, *, now: str) -> aiosqlite.Connection:
     """Open (creating the parent dir), set WAL + FK enforcement, migrate, return
     a connection with `row_factory = aiosqlite.Row`."""
-    path = db_path or DEFAULT_DB_PATH
+    path = db_path or default_db_path()
     if path != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
     conn = await aiosqlite.connect(path)
