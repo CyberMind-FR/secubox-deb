@@ -26,3 +26,35 @@
     }).catch(function () { form.submit(); });
   });
 })();
+
+// Republier: Mastodon needs the visitor's instance (remembered in localStorage),
+// and "copy link" uses the clipboard. Both are progressive — the other share
+// links are plain server-rendered anchors that work with JS off.
+(function () {
+  "use strict";
+  document.addEventListener("click", function (e) {
+    var btn = e.target;
+    if (!btn || !btn.classList) return;
+    var menu = btn.closest ? btn.closest(".share-menu") : null;
+    if (!menu) return;
+    var url = menu.getAttribute("data-url") || location.href;
+    var title = menu.getAttribute("data-title") || document.title;
+    if (btn.classList.contains("share-mastodon")) {
+      var inst = null;
+      try { inst = localStorage.getItem("billets_mastodon"); } catch (x) {}
+      inst = prompt("Votre instance Mastodon (ex : mastodon.social)", inst || "");
+      if (!inst) return;
+      inst = inst.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+      try { localStorage.setItem("billets_mastodon", inst); } catch (x) {}
+      var text = encodeURIComponent(title + " " + url);
+      window.open("https://" + inst + "/share?text=" + text, "_blank", "noopener");
+    } else if (btn.classList.contains("share-copy")) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(function () {
+          btn.textContent = "Lien copié ✓";
+          setTimeout(function () { btn.textContent = "Copier le lien"; }, 1500);
+        });
+      }
+    }
+  });
+})();
