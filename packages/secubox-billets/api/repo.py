@@ -174,3 +174,88 @@ async def set_embed(conn: aiosqlite.Connection, billet_id: str, *, html: str,
         (html or None, provider, fetched_at, billet_id),
     )
     await conn.commit()
+
+
+# ── comments ────────────────────────────────────────────────────────────────
+async def add_comment(conn: aiosqlite.Connection, billet_id: str, *, author_name: str,
+                      email_hash: Optional[str], body: str, ip_hash: str, honeypot: bool,
+                      status: str, now: str, ulid: Optional[str] = None) -> str:
+    cid = ulid or new_ulid()
+    await conn.execute(
+        "INSERT INTO comment(id,billet_id,created_at,author_name,author_email,body,"
+        "status,ip_hash,honeypot_tripped) VALUES (?,?,?,?,?,?,?,?,?)",
+        (cid, billet_id, now, author_name, email_hash, body, status, ip_hash,
+         1 if honeypot else 0),
+    )
+    await conn.commit()
+    return cid
+
+
+async def list_approved_comments(conn: aiosqlite.Connection, billet_id: str) -> list[aiosqlite.Row]:
+    async with conn.execute(
+        "SELECT id, author_name, body, created_at FROM comment "
+        "WHERE billet_id=? AND status='approved' ORDER BY created_at ASC", (billet_id,)
+    ) as cur:
+        return await cur.fetchall()
+
+
+async def list_pending_comments(conn: aiosqlite.Connection, *, limit: int = 200) -> list[aiosqlite.Row]:
+    async with conn.execute(
+        "SELECT id, billet_id, author_name, body, created_at FROM comment "
+        "WHERE status='pending' ORDER BY created_at ASC LIMIT ?", (limit,)
+    ) as cur:
+        return await cur.fetchall()
+
+
+async def get_comment(conn: aiosqlite.Connection, comment_id: str) -> Optional[aiosqlite.Row]:
+    async with conn.execute(
+        "SELECT id, billet_id, author_name, ip_hash, status FROM comment WHERE id=?",
+        (comment_id,)) as cur:
+        return await cur.fetchone()
+
+
+async def moderate_comment(conn: aiosqlite.Connection, comment_id: str, status: str) -> None:
+    await conn.execute("UPDATE comment SET status=? WHERE id=?", (status, comment_id))
+    await conn.commit()
+
+
+async def has_prior_approved(conn: aiosqlite.Connection, ip_hash: str, author_name: str) -> bool:
+    """True if this (ip_hash, name) pair already has an approved comment — used
+    to auto-approve returning, already-vetted visitors."""
+    async with conn.execute(
+        "SELECT 1 FROM comment WHERE ip_hash=? AND author_name=? AND status='approved' LIMIT 1",
+        (ip_hash, author_name)) as cur:
+        return await cur.fetchone() is not None
+
+
+# ── reactions ───────────────────────────────────────────────────────────────
+async def toggle_reaction(conn: aiosqlite.Connection, billet_id: str, emoji: str,
+                          visitor_hash: str, *, now: str, ulid: Optional[str] = None) -> str:
+    async with conn.execute(
+        "SELECT id FROM reaction WHERE billet_id=? AND emoji=? AND visitor_token_hash=?",
+        (billet_id, emoji, visitor_hash)) as cur:
+        existing = await cur.fetchone()
+    if existing:
+        await conn.execute("DELETE FROM reaction WHERE id=?", (existing[0],))
+        await conn.commit()
+        return "removed"
+    await conn.execute(
+        "INSERT INTO reaction(id,billet_id,emoji,visitor_token_hash,created_at) VALUES (?,?,?,?,?)",
+        (ulid or new_ulid(), billet_id, emoji, visitor_hash, now))
+    await conn.commit()
+    return "added"
+
+
+async def reaction_counts(conn: aiosqlite.Connection, billet_id: str) -> dict[str, int]:
+    async with conn.execute(
+        "SELECT emoji, COUNT(*) FROM reaction WHERE billet_id=? GROUP BY emoji", (billet_id,)
+    ) as cur:
+        return {r[0]: r[1] for r in await cur.fetchall()}
+
+
+async def visitor_reactions(conn: aiosqlite.Connection, billet_id: str,
+                            visitor_hash: str) -> set[str]:
+    async with conn.execute(
+        "SELECT emoji FROM reaction WHERE billet_id=? AND visitor_token_hash=?",
+        (billet_id, visitor_hash)) as cur:
+        return {r[0] for r in await cur.fetchall()}

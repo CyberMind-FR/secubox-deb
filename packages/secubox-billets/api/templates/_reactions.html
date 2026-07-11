@@ -1,0 +1,13 @@
+<div class="reactions" id="reactions">
+{% for e in reactions.emojis %}
+  <form class="react" method="post" action="/b/{{ reactions.slug }}/react">
+    <input type="hidden" name="csrf" value="{{ reactions.pcsrf }}">
+    <input type="hidden" name="emoji" value="{{ e }}">
+    <button type="submit" class="react-btn{{ ' on' if e in reactions.mine else '' }}"
+            aria-pressed="{{ 'true' if e in reactions.mine else 'false' }}">
+      <span class="emoji">{{ e }}</span>
+      <span class="count">{{ reactions.counts.get(e, 0) }}</span>
+    </button>
+  </form>
+{% endfor %}
+</div>

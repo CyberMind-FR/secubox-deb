@@ -13,6 +13,30 @@
     <a class="u-url" href="/b/{{ billet.slug }}">permalien</a>
   </footer>
 </article>
-{% block reactions %}{% endblock %}
-{% block comments %}{% endblock %}
+{% if reactions %}{% include "_reactions.html" %}{% endif %}
+
+<section id="comments" class="comments">
+  <h2>Commentaires</h2>
+  {% if flash == 'pending' %}<p class="note">Merci — votre commentaire est en attente de modération.</p>{% endif %}
+  {% if flash == 'ok' %}<p class="note">Commentaire publié.</p>{% endif %}
+  {% if flash == 'rate' %}<p class="note err">Trop de commentaires — réessayez plus tard.</p>{% endif %}
+  {% for c in comments %}
+  <article class="comment">
+    <p class="c-meta"><strong>{{ c.author_name }}</strong>
+      <time datetime="{{ c.created_at }}">{{ c.created_at[:10] }}</time></p>
+    <p class="c-body">{{ c.body_html|safe }}</p>
+  </article>
+  {% else %}<p class="empty">Aucun commentaire pour l'instant.</p>{% endfor %}
+
+  <form method="post" action="/b/{{ billet.slug }}/comment" class="comment-form">
+    <input type="hidden" name="csrf" value="{{ pcsrf }}">
+    <input type="hidden" name="ts_token" value="{{ ts_token }}">
+    <p class="hp"><label>Laissez ce champ vide
+      <input name="website" tabindex="-1" autocomplete="off"></label></p>
+    <label>Nom<input name="author_name" required minlength="2" maxlength="40"></label>
+    <label>Email (optionnel, jamais affiché)<input name="author_email" type="email" maxlength="254"></label>
+    <label>Commentaire<textarea name="body" rows="4" required minlength="2" maxlength="2000"></textarea></label>
+    <button type="submit">Envoyer</button>
+  </form>
+</section>
 {% endblock %}
