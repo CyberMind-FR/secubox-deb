@@ -11,6 +11,8 @@ override_dh_auto_install:
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-metablogizer/usr/share/secubox/menu.d/ || true
 	install -d debian/secubox-metablogizer/usr/sbin
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-metablogizer/usr/sbin/ || true
+	install -d debian/secubox-metablogizer/etc/sudoers.d
+	[ -f debian/secubox-publish-wizard.sudoers ] && install -m 0440 debian/secubox-publish-wizard.sudoers debian/secubox-metablogizer/etc/sudoers.d/secubox-publish-wizard || true
 	# Example config
 	install -d debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples
 	[ -f config/metablogizer.toml.example ] && install -m 644 config/metablogizer.toml.example debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples/ || true

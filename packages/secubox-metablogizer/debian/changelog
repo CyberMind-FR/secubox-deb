@@ -1,3 +1,13 @@
+secubox-metablogizer (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Publisher wizard: upload zip/html -> gitea version -> sbxwaf route via new
+    secubox-publishctl root helper (+ sudoers) -> cert (wildcard for *.gk2,
+    certbot for custom) -> portable .sbxsite backup. Retires the dead
+    mitmproxy-LXC route sync (the zem 421). New POST
+    /publish/{wizard,route,export,import} endpoints.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 11 Jul 2026 13:00:00 +0200
+
 secubox-metablogizer (1.2.3-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

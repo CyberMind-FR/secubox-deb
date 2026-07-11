@@ -3,6 +3,29 @@
 
 ---
 
+## 2026-07-11 — MetaBlogizer Publisher Wizard (#832): publish is fixed end-to-end
+
+The publish ecosystem was broken: `zem.gk2` answered a bare 421, droplet PermissionError'd on
+`/etc/secubox/droplet.toml`, and `secubox-publish` wrote `/etc/haproxy`+`/etc/nginx` directly as
+unprivileged `secubox` (silent failure). Root cause of the 421: metablogizer's route-sync wrote the
+**retired mitmproxy-LXC** file, not the live sbxwaf host file.
+
+Built a guided **Publisher Wizard** in secubox-metablogizer (subagent-driven, 11 tasks, TDD, 63 tests):
+upload zip/html (zip-slip guarded) → gitea version → **sbxwaf host-file route** + advisory HAProxy vhost
+via a new audited root helper `secubox-publishctl` (tight sudoers) → cert (wildcard `*.gk2` / certbot
+custom) → portable `.sbxsite` backup (git bundle + manifest, traversal-safe import). `secubox-publish`
+now delegates to a new metablogizer `POST /publish/route` (no more illegal root writes); droplet.toml
+owned `secubox:secubox 0640`.
+
+**Live-verified on gk2**: publish → `ok:True`, `https://wiztest3.gk2.secubox.in/` → **200** (was 421),
+route landed `["192.168.1.200",8900]` in `/etc/secubox/waf/haproxy-routes.json`, backup export→import
+round-trip recreated the site. Live-driven fixes: real `haproxyctl vhost add <domain> <backend>` signature;
+`route_ok` gates on the WAF route (vhost advisory — blocked by haproxyctl drift-guard + redundant with
+`default_backend mitmproxy_inspector`); portable safe tar-extract (board is Python 3.11.2, no `filter=`).
+Whole-branch review: READY TO MERGE, all 5 security invariants held. metablogizer 1.3.0.
+
+---
+
 ## 2026-07-11 — Admin-TOTP toggle from webui + per-user 2FA reset (default OFF)
 
 User: "totp disableable by options from webui and default absent ok" / "or permit totp reset from webui".
