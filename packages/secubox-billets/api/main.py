@@ -21,9 +21,35 @@ from . import repo
 from .routes.admin import register_admin
 from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
                             register_public, _visitor)
-from .services import antispam
+from .services import antispam, feeds
 from .services import security as sec
 from .services.render import linkify_plain, render_markdown
+
+SITE_URL = os.environ.get("BILLETS_SITE_URL", "")
+
+
+def _base(request: Request) -> str:
+    if SITE_URL:
+        return SITE_URL.rstrip("/")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("host", request.url.netloc)
+    return f"{proto}://{host}"
+
+
+def _share_intents(url: str, title: str) -> dict:
+    from urllib.parse import quote_plus
+    u, t = quote_plus(url), quote_plus(title)
+    ut = quote_plus(f"{title} {url}")
+    return {
+        "bluesky": f"https://bsky.app/intent/compose?text={ut}",
+        "x": f"https://twitter.com/intent/tweet?url={u}&text={t}",
+        "facebook": f"https://www.facebook.com/sharer/sharer.php?u={u}",
+        "linkedin": f"https://www.linkedin.com/sharing/share-offsite/?url={u}",
+        "whatsapp": f"https://wa.me/?text={ut}",
+        "telegram": f"https://t.me/share/url?url={u}&text={t}",
+        "reddit": f"https://www.reddit.com/submit?url={u}&title={t}",
+        "email": f"mailto:?subject={t}&body={u}",
+    }
 
 _HERE = Path(__file__).resolve().parent
 TEMPLATES_DIR = _HERE / "templates"
@@ -123,11 +149,17 @@ def create_app(conn: aiosqlite.Connection, *, secret: str | None = None,
         rctx["pcsrf"] = pcsrf
         comments = await repo.list_approved_comments(app.state.conn, row["id"])
         comment_views = [{**dict(c), "body_html": linkify_plain(c["body"])} for c in comments]
+        base = _base(request)
+        permalink_url = f"{base}/b/{row['slug']}"
         resp = templates.TemplateResponse(request, "billet.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
             "billet": _billet_view(row), "reactions": rctx,
             "comments": comment_views, "pcsrf": pcsrf,
             "ts_token": ts_token, "flash": request.query_params.get("c"),
+            "og": {"title": feeds.billet_title(row["body"]),
+                   "desc": feeds.excerpt(row["body"]), "url": permalink_url},
+            "oembed_url": f"{base}/oembed?url={permalink_url}&format=json",
+            "share": _share_intents(permalink_url, feeds.billet_title(row["body"])),
         })
         resp.set_cookie(PCSRF_COOKIE, pcsrf, httponly=True, samesite="lax",
                         secure=(request.headers.get("x-forwarded-proto", request.url.scheme) == "https"),
@@ -144,5 +176,65 @@ def create_app(conn: aiosqlite.Connection, *, secret: str | None = None,
             if host and not any(host == d or host.endswith("." + d) for d in _FRAME_HOSTS):
                 resp.headers["Content-Security-Policy"] = _csp(_frame_src((host,)))
         return resp
+
+    async def _feed_rows() -> list[aiosqlite.Row]:
+        rows, _ = await repo.list_published(app.state.conn, limit=30)
+        return rows
+
+    @app.get("/feed.xml")
+    async def feed_atom(request: Request):
+        from fastapi.responses import Response
+        base = _base(request)
+        rows = await _feed_rows()
+        entries = [{
+            "title": feeds.billet_title(r["body"]),
+            "url": f"{base}/b/{r['slug']}", "id": f"{base}/b/{r['slug']}",
+            "updated": r["updated_at"], "published": r["published_at"] or r["updated_at"],
+            "content_html": render_markdown(r["body"]),
+        } for r in rows]
+        updated = rows[0]["updated_at"] if rows else "1970-01-01T00:00:00Z"
+        xml = feeds.build_atom(site_title=SITE_TITLE, base_url=base,
+                               self_url=f"{base}/feed.xml", entries=entries, updated=updated)
+        return Response(xml, media_type="application/atom+xml")
+
+    @app.get("/feed.json")
+    async def feed_json(request: Request):
+        base = _base(request)
+        rows = await _feed_rows()
+        items = [{
+            "id": f"{base}/b/{r['slug']}", "url": f"{base}/b/{r['slug']}",
+            "title": feeds.billet_title(r["body"]),
+            "content_html": render_markdown(r["body"]),
+            "date_published": r["published_at"] or r["updated_at"],
+        } for r in rows]
+        return feeds.build_jsonfeed(site_title=SITE_TITLE, base_url=base,
+                                    feed_url=f"{base}/feed.json", items=items)
+
+    @app.get("/oembed")
+    async def oembed_out(request: Request, url: str, format: str = "json",
+                         maxwidth: int | None = None, maxheight: int | None = None):
+        # Outbound oEmbed so billets embed elsewhere. Only OUR own permalinks.
+        from urllib.parse import urlparse
+        from fastapi import HTTPException as _HE
+        p = urlparse(url)
+        parts = [seg for seg in p.path.split("/") if seg]
+        if len(parts) != 2 or parts[0] != "b":
+            raise _HE(status_code=404, detail="not an oembeddable billet URL")
+        row = await repo.get_by_slug(app.state.conn, parts[1])
+        if row is None or row["status"] != "published":
+            raise _HE(status_code=404, detail="billet not found")
+        base = _base(request)
+        title = feeds.billet_title(row["body"])
+        from html import escape as _esc
+        permalink = f"{base}/b/{row['slug']}"
+        html = (f'<blockquote class="billet-embed" lang="fr">'
+                f'<p>{_esc(feeds.excerpt(row["body"]))}</p>'
+                f'<cite>— <a href="{_esc(permalink)}">{_esc(SITE_TITLE)}</a></cite>'
+                f'</blockquote>')
+        return {
+            "type": "rich", "version": "1.0", "provider_name": SITE_TITLE,
+            "provider_url": f"{base}/", "title": title,
+            "html": html, "width": maxwidth or 480, "height": maxheight or 180,
+        }
 
     return app
