@@ -51,3 +51,11 @@ def test_wizard_runs_all_steps(client):
     assert body["steps"]["content"]["index_present"] is True
     assert body["steps"]["route"]["route_ok"] is True
     assert body["steps"]["cert"]["mode"] == "wildcard"
+
+
+def test_publish_route_endpoint(client):
+    r = client.post("/publish/route", json={"domain": "zem.gk2.secubox.in"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["cert"]["mode"] == "wildcard"

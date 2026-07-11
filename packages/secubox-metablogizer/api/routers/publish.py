@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -63,6 +64,21 @@ async def publish_wizard(
 
     ok = bool(steps["content"].get("index_present")) and bool(steps["route"].get("route_ok"))
     return {"ok": ok, "domain": domain, "steps": steps}
+
+
+class RouteRequest(BaseModel):
+    domain: str
+    port: int = BASE_PORT
+
+
+@router.post("/publish/route")
+async def publish_route(req: RouteRequest, user=Depends(require_jwt)):
+    """Route an already-created site's domain through the WAF and provision its
+    cert, WITHOUT a content upload. Used by the secubox-publish hub so it never
+    writes /etc/nginx or /etc/haproxy itself (it runs unprivileged)."""
+    route = apply_route(req.domain, req.port)
+    cert = provision_cert(req.domain)
+    return {"ok": bool(route.get("route_ok")), "route": route, "cert": cert}
 
 
 @router.get("/publish/export/{name}")

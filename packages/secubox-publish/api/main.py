@@ -824,95 +824,25 @@ async def _prepare_infrastructure(name: str, domain: str, content_type: str) -> 
     except Exception as e:
         infra_status["metablogizer"] = {"status": "error", "error": str(e)}
 
-    # 2. Create nginx vhost — served on :8900 (the metablog nginx port), keyed
-    #    by the site's real domain. Matches the live per-site vhost pattern and
-    #    the WAF route in step 4 (both point at 192.168.1.200:8900).
+    # 2-5. Routing + cert are owned by metablogizer's publisher wizard, which
+    #      performs them through the secubox-publishctl root helper. This hub
+    #      runs as unprivileged `secubox` and MUST NOT write /etc/nginx or
+    #      /etc/haproxy or the WAF route file directly (those writes silently
+    #      failed — the root cause of published sites answering 421).
     try:
-        import subprocess
-        nginx_conf = f"/etc/nginx/sites-available/{domain}.conf"
-        nginx_link = f"/etc/nginx/sites-enabled/{domain}.conf"
-        site_root = f"/srv/metablogizer/sites/{name}"
-
-        nginx_content = f"""server {{
-    listen 0.0.0.0:8900;
-    server_name {domain};
-    root {site_root};
-    index index.html index.htm;
-
-    location ^~ /.well-known/acme-challenge/ {{ root /var/www/html; default_type text/plain; }}
-    location / {{
-        try_files $uri $uri/ /index.html;
-    }}
-    access_log /var/log/nginx/{domain}_access.log;
-}}
-"""
-        Path(nginx_conf).write_text(nginx_content)
-        if not Path(nginx_link).exists():
-            Path(nginx_link).symlink_to(nginx_conf)
-
-        subprocess.run(["nginx", "-t"], check=True, capture_output=True)
-        subprocess.run(["systemctl", "reload", "nginx"], check=True)
-        infra_status["vhost"] = {"status": "ok", "details": f"Created {nginx_conf} (:8900 {domain})"}
-    except Exception as e:
+        route = await _call_module("metablogizer", "/publish/route", "POST",
+                                   {"domain": domain}, timeout=60)
+        rok = bool(route.get("ok"))
+        cert = route.get("cert") or {}
+        infra_status["vhost"] = {"status": "ok" if rok else "error", "details": route.get("route")}
+        infra_status["haproxy"] = {"status": "ok" if rok else "error", "details": "routed via metablogizer wizard"}
+        infra_status["mitmproxy"] = {"status": "ok" if rok else "error", "details": route.get("route")}
+        infra_status["certificate"] = {
+            "status": "ok" if cert.get("mode") in ("wildcard", "issued") else "pending",
+            "details": cert,
+        }
+    except Exception as e:  # noqa: BLE001 — never let provisioning break the response
         infra_status["vhost"] = {"status": "error", "error": str(e)}
-
-    # 3. HAProxy: additive ACL -> mitmproxy_inspector in BOTH http-in and
-    #    https-in (the live backend/anchors; the old bk_nginx/host_admin sed no
-    #    longer matched). Validated with `haproxy -c`, rolled back on failure.
-    try:
-        import subprocess, re, shutil
-        haproxy_cfg = "/etc/haproxy/haproxy.cfg"
-        cfg = Path(haproxy_cfg).read_text()
-        aclid = "host_" + re.sub(r"[^a-z0-9]+", "_", domain.lower()).strip("_")
-        if aclid not in cfg:
-            backup = haproxy_cfg + ".bak.publish-autosetup"
-            shutil.copy(haproxy_cfg, backup)
-            block = (f"    acl {aclid} hdr(host) -i {domain}\n"
-                     f"    use_backend mitmproxy_inspector if {aclid}\n")
-            cfg2 = cfg.replace("frontend http-in\n    bind *:80\n",
-                               "frontend http-in\n    bind *:80\n" + block, 1)
-            cfg2 = re.sub(r"(frontend https-in\n    bind \*:443 ssl crt /data/haproxy/certs/\n)",
-                          r"\1" + block, cfg2, count=1)
-            Path(haproxy_cfg).write_text(cfg2)
-            chk = subprocess.run(["haproxy", "-c", "-f", haproxy_cfg],
-                                 capture_output=True, text=True)
-            if chk.returncode != 0:
-                shutil.copy(backup, haproxy_cfg)
-                raise RuntimeError(f"haproxy -c failed, rolled back: {chk.stderr[-300:]}")
-            subprocess.run(["systemctl", "reload", "haproxy"], check=True)
-            infra_status["haproxy"] = {"status": "ok", "details": f"ACL {aclid} added (http+https)"}
-        else:
-            infra_status["haproxy"] = {"status": "ok", "details": "Already configured"}
-    except Exception as e:
-        infra_status["haproxy"] = {"status": "error", "error": str(e)}
-
-    # 4. WAF route -> the LIVE sbxwaf routes file (the old /srv/mitmproxy path is
-    #    dead). Points the domain at the metablog nginx on 192.168.1.200:8900.
-    try:
-        import json, subprocess
-        routes_file = Path("/etc/secubox/waf/haproxy-routes.json")
-        routes = json.loads(routes_file.read_text()) if routes_file.exists() else {}
-        routes[domain] = ["192.168.1.200", 8900]
-        routes_file.write_text(json.dumps(routes, indent=2))
-        subprocess.run(["systemctl", "reload", "secubox-waf"], capture_output=True)
-        infra_status["mitmproxy"] = {"status": "ok", "details": f"WAF route {domain} -> 192.168.1.200:8900"}
-    except Exception as e:
-        infra_status["mitmproxy"] = {"status": "error", "error": str(e)}
-
-    # 5. SSL certificate. Wildcard covers *.gk2.secubox.in; a matching cert in
-    #    HAProxy's cert dir covers anything else. Real issuance for a brand-new
-    #    external domain needs DNS-01 for that domain's zone (operator step) —
-    #    reported as pending rather than silently "ok".
-    try:
-        if domain.endswith(".gk2.secubox.in") or Path(f"/data/haproxy/certs/{domain}.pem").exists():
-            infra_status["certificate"] = {"status": "ok", "details": "Covered by existing cert/wildcard"}
-        else:
-            infra_status["certificate"] = {
-                "status": "pending",
-                "details": f"No cert for {domain} — issue via DNS-01 for its zone, "
-                           f"then drop {domain}.pem in /data/haproxy/certs/ and reload haproxy",
-            }
-    except Exception as e:
         infra_status["certificate"] = {"status": "error", "error": str(e)}
 
     # 6. DNS - gk2.secubox.in domains use wildcard DNS
