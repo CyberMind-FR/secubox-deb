@@ -94,3 +94,14 @@ async def test_og_and_oembed_discovery_on_page(client):
     assert 'name="twitter:card"' in r.text
     assert 'type="application/json+oembed"' in r.text
     assert "↗ Republier" in r.text and "bsky.app/intent" in r.text
+
+
+async def test_stats_json_cors(client):
+    c, slug = client
+    r = await c.get("/stats.json")
+    assert r.status_code == 200
+    assert r.headers.get("access-control-allow-origin") == "*"
+    d = r.json()
+    assert d["billets_published"] >= 1
+    assert "reactions_by" in d and isinstance(d["latest"], list)
+    assert d["latest"][0]["url"].endswith(f"/b/{slug}")
