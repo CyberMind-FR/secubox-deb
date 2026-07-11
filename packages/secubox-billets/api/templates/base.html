@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ site_title }}{% endblock %}</title>
+<link rel="stylesheet" href="/static/billets.css">
+<link rel="alternate" type="application/atom+xml" title="{{ site_title }}" href="/feed.xml">
+<link rel="alternate" type="application/feed+json" title="{{ site_title }}" href="/feed.json">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="site-header">
+  <a class="site-title" href="/">{{ site_title }}</a>
+  <span class="tagline">{{ tagline }}</span>
+</header>
+<main id="main">
+{% block content %}{% endblock %}
+</main>
+<footer class="site-footer">
+  <a href="/feed.xml">Atom</a> · <a href="/feed.json">JSON</a> · billets
+</footer>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ site_title }} — billet{% endblock %}
+{% block head %}
+<link rel="canonical" href="/b/{{ billet.slug }}">
+{% block og %}{% endblock %}
+{% endblock %}
+{% block content %}
+<article class="h-entry billet billet-full">
+  <div class="e-content">{{ billet.body_html|safe }}</div>
+  {% if billet.embed_html %}<div class="embed">{{ billet.embed_html|safe }}</div>{% endif %}
+  <footer class="billet-meta">
+    {% if billet.published_at %}<time class="dt-published" datetime="{{ billet.published_at }}">{{ billet.published_at[:19]|replace('T',' ') }} UTC</time>{% endif %}
+    <a class="u-url" href="/b/{{ billet.slug }}">permalien</a>
+  </footer>
+</article>
+{% block reactions %}{% endblock %}
+{% block comments %}{% endblock %}
+{% endblock %}
