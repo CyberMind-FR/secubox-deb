@@ -12,8 +12,10 @@ from __future__ import annotations
 import nh3
 from markdown_it import MarkdownIt
 
-_MD = MarkdownIt("commonmark", {"html": False, "linkify": True, "typographer": False})
-_MD.enable("linkify")
+# linkify (bare-URL autolinking) is intentionally OFF: it needs the optional
+# linkify-it-py package, and the spec only requires markdown links [text](url).
+# Bare URLs in *comments* are autolinked separately in `linkify_plain`.
+_MD = MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": False})
 
 _ALLOWED_TAGS = {
     "p", "br", "strong", "em", "b", "i", "a",
