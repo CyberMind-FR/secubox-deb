@@ -42,9 +42,11 @@ def import_site(sbxsite: Path, dest_root: Path) -> dict:
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
         with tarfile.open(sbxsite, "r:gz") as t:
-            t.extractall(tdp)  # trusted operator artifact
+            t.extractall(tdp, filter="data")
         manifest = json.loads((tdp / "manifest.json").read_text())
-        name = manifest["name"]
+        name = manifest.get("name")
+        if not name or "/" in name or "\\" in name or name in (".", ".."):
+            raise ValueError(f"invalid site name in manifest: {name!r}")
         target = dest_root / name
         if (tdp / "repo.bundle").exists():
             subprocess.run(["git", "clone", "-q", str(tdp / "repo.bundle"), str(target)],
@@ -52,5 +54,5 @@ def import_site(sbxsite: Path, dest_root: Path) -> dict:
         else:
             target.mkdir(parents=True, exist_ok=True)
             with tarfile.open(tdp / "content.tar", "r") as ct:
-                ct.extractall(target)
+                ct.extractall(target, filter="data")
     return manifest
