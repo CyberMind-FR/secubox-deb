@@ -259,3 +259,23 @@ async def visitor_reactions(conn: aiosqlite.Connection, billet_id: str,
         "SELECT emoji FROM reaction WHERE billet_id=? AND visitor_token_hash=?",
         (billet_id, visitor_hash)) as cur:
         return {r[0] for r in await cur.fetchall()}
+
+
+async def stats(conn: aiosqlite.Connection) -> dict:
+    """Aggregate counts for the SecuBox webui panel (all public/derived data)."""
+    async def _one(sql: str) -> int:
+        async with conn.execute(sql) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+    reactions_by = {}
+    async with conn.execute("SELECT emoji, COUNT(*) FROM reaction GROUP BY emoji") as cur:
+        for emoji, n in await cur.fetchall():
+            reactions_by[emoji] = int(n)
+    return {
+        "billets_published": await _one("SELECT COUNT(*) FROM billet WHERE status='published'"),
+        "billets_drafts": await _one("SELECT COUNT(*) FROM billet WHERE status='draft'"),
+        "comments_approved": await _one("SELECT COUNT(*) FROM comment WHERE status='approved'"),
+        "comments_pending": await _one("SELECT COUNT(*) FROM comment WHERE status='pending'"),
+        "reactions_total": await _one("SELECT COUNT(*) FROM reaction"),
+        "reactions_by": reactions_by,
+    }

@@ -11,3 +11,7 @@ override_dh_auto_install:
 	install -m 0644 requirements.txt debian/secubox-billets/usr/lib/secubox/billets/requirements.txt
 	install -d debian/secubox-billets/etc/nginx/sites-available
 	install -m 0644 deploy/nginx.conf debian/secubox-billets/etc/nginx/sites-available/billets.conf
+	install -d debian/secubox-billets/usr/share/secubox/menu.d
+	cp menu.d/*.json debian/secubox-billets/usr/share/secubox/menu.d/
+	install -d debian/secubox-billets/usr/share/secubox/www/billets
+	cp -r www/billets/. debian/secubox-billets/usr/share/secubox/www/billets/

@@ -214,6 +214,20 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         return feeds.build_jsonfeed(site_title=SITE_TITLE, base_url=base,
                                     feed_url=f"{base}/feed.json", items=items)
 
+    @app.get("/stats.json")
+    async def stats_json(request: Request):
+        # Public aggregate counts for the SecuBox admin panel (cross-origin).
+        from fastapi.responses import JSONResponse
+        base = _base(request)
+        s = await repo.stats(app.state.conn)
+        rows, _ = await repo.list_published(app.state.conn, limit=6)
+        s["latest"] = [{"title": feeds.billet_title(r["body"]),
+                        "url": f"{base}/b/{r['slug']}",
+                        "date": (r["published_at"] or r["updated_at"])[:10]} for r in rows]
+        s["site_url"] = f"{base}/"
+        return JSONResponse(s, headers={"Access-Control-Allow-Origin": "*",
+                                        "Cache-Control": "public, max-age=30"})
+
     @app.get("/oembed")
     async def oembed_out(request: Request, url: str, format: str = "json",
                          maxwidth: int | None = None, maxheight: int | None = None):
