@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 import jinja2
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
@@ -78,6 +78,7 @@ from . import (
     nft,
     reports,
     scoring,
+    sentinel_link,
     store,
     threat_intel,
 )
@@ -2977,6 +2978,10 @@ async def report_me_html(request: Request) -> HTMLResponse:
     cumulative = _cumulative_stats()
     _level = store.get_client_level(mac_hash) if mac_hash else "r1"
     _dpi_e = _dpi_stats(mac_hash)
+    # #823 — fold in the per-device Sentinel compromission assessment (same
+    # data source the PDF routes already use via build_report_data) so the
+    # "🛡️ Compromission" tab (report.sentinel) is fed instead of Undefined.
+    report_data = reports.build_report_data(mac_hash, session)
     html = _env.get_template("report-live.html.j2").render(
         mac_hash=mac_hash, ip=ip,
         request_args=dict(request.query_params),
@@ -2990,6 +2995,7 @@ async def report_me_html(request: Request) -> HTMLResponse:
         persona=_persona_sheet(mac_hash, _level, gs, exposure_score, _dpi_e,
                                session.get("device_type", ""),
                                request.headers.get("user-agent", "")),
+        report=report_data,
         **session,
     )
     return HTMLResponse(html, headers={
@@ -3685,6 +3691,293 @@ async def admin_tor_check_leaks(request: Request) -> dict:
         result["tor_ip"] = None
         result["error"] = "SOCKS probe failed (python3-socksio installed? tor bootstrapped?)"
     return result
+
+
+
+# ── Tor exit-country / VPN-client / obfs4-bridge CRUD (#683 follow-up) ──
+# Validated, audited state files consumed by
+# sbin/secubox-toolbox-tor-reconcile (root, path-triggered). This layer
+# never escalates privilege — it only writes /etc/secubox/toolbox/tor-*.txt
+# and re-triggers the SAME secubox-toolbox-tor.path watcher that
+# admin_tor_on/off use (touch filters.json), so the privileged reconciler
+# picks up the change exactly like a tor_mode flip (#683).
+import ipaddress as _ipaddress
+import re as _re
+
+TOR_EXIT_CC = Path(os.environ.get(
+    "SECUBOX_TOR_EXIT_CC_PATH", "/etc/secubox/toolbox/tor-exit-country.txt"))
+TOR_VPN_CLIENTS = Path(os.environ.get(
+    "SECUBOX_TOR_VPN_CLIENTS_PATH", "/etc/secubox/toolbox/tor-vpn-clients.txt"))
+TOR_BRIDGES = Path(os.environ.get(
+    "SECUBOX_TOR_BRIDGES_PATH", "/etc/secubox/toolbox/tor-bridges.txt"))
+_TOR_AUDIT_LOG = Path("/var/log/secubox/audit.log")
+
+_CC_RE = _re.compile(r"^[A-Za-z]{2}$")
+_MAC_RE = _re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
+_BRIDGE_RE = _re.compile(r"^Bridge obfs4 [][A-Za-z0-9:._=+/, -]+$")
+
+
+def _valid_cc(c: str) -> bool:
+    return bool(_CC_RE.fullmatch(c or ""))
+
+
+def _valid_selector(kind: str, sel: str) -> bool:
+    # IPv4-only: the backend tor_vpn_src nft set is `type ipv4_addr` and
+    # populate_vpn_clients silently skips non-v4, so accepting an IPv6
+    # selector would be a false success (200 + audit, nothing enforced).
+    try:
+        if kind == "ip":
+            return _ipaddress.ip_address(sel).version == 4
+        if kind == "cidr":
+            return _ipaddress.ip_network(sel, strict=False).version == 4
+        if kind == "mac":
+            return bool(_MAC_RE.fullmatch(sel))
+    except ValueError:
+        return False
+    return False
+
+
+def _valid_bridge(line: str) -> bool:
+    return bool(_BRIDGE_RE.fullmatch(line or ""))
+
+
+def _tor_audit(action: str, target: str, request: Request | None = None) -> None:
+    """Append-only CSPN audit trail (mirrors escalate.py's _audit)."""
+    try:
+        _TOR_AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        operator = (request.client.host if request and request.client else "admin")
+        with _TOR_AUDIT_LOG.open("a") as f:
+            f.write(f"{ts} secubox-toolbox operator={operator} action={action} target={target}\n")
+    except Exception as e:  # pragma: no cover
+        log.warning("tor audit write failed: %s", e)
+
+
+def _trigger_reconcile() -> None:
+    """Fire the privileged reconciler the same way tor_mode on/off does
+    (#683): touch filters.json so secubox-toolbox-tor.path re-runs
+    secubox-toolbox-tor-reconcile. The portal itself never escalates."""
+    try:
+        from .filters import set_filters
+        set_filters({})
+    except Exception as e:  # pragma: no cover
+        log.warning("tor reconcile trigger failed: %s", e)
+
+
+def _read_state_lines(path: Path) -> list[str]:
+    try:
+        return [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    except Exception:
+        return []
+
+
+def _write_state_lines(path: Path, lines: list[str]) -> None:
+    """Same atomic-tmp-then-fallback-in-place write as filters.set_filters,
+    since /etc/secubox/toolbox is 0750 and the serving user may not be able
+    to create a tmp file in the parent dir."""
+    data = "\n".join(lines) + ("\n" if lines else "")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    try:
+        tmp = str(path) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except OSError:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(data)
+
+
+@router.get("/exit_country")
+async def get_exit_country(request: Request) -> dict:
+    _require_tor_admin(request)
+    return {"countries": [c.upper() for c in _read_state_lines(TOR_EXIT_CC)]}
+
+
+@router.post("/exit_country")
+async def set_exit_country(request: Request) -> dict:
+    """Replaces the WHOLE exit-country list. One validated ISO cc per line."""
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    countries = (body or {}).get("countries")
+    if not isinstance(countries, list):
+        raise HTTPException(status_code=400, detail="countries: list expected")
+    clean: list[str] = []
+    for c in countries:
+        if not isinstance(c, str) or not _valid_cc(c):
+            raise HTTPException(status_code=400, detail=f"invalid country code: {c!r}")
+        cc = c.upper()
+        if cc not in clean:
+            clean.append(cc)
+    _write_state_lines(TOR_EXIT_CC, clean)
+    _tor_audit("exit_country_set", ",".join(clean) or "(cleared)", request)
+    _trigger_reconcile()
+    return {"countries": clean}
+
+
+@router.get("/vpn/clients")
+async def get_vpn_clients(request: Request) -> dict:
+    _require_tor_admin(request)
+    out = []
+    for ln in _read_state_lines(TOR_VPN_CLIENTS):
+        kind, _, sel = ln.partition(":")
+        out.append({"kind": kind, "selector": sel})
+    return {"clients": out}
+
+
+@router.post("/vpn/client")
+async def add_vpn_client(request: Request) -> dict:
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    kind = (body or {}).get("kind")
+    sel = (body or {}).get("selector")
+    if not isinstance(kind, str) or not isinstance(sel, str) or not _valid_selector(kind, sel):
+        raise HTTPException(status_code=400, detail="invalid kind/selector")
+    entry = f"{kind}:{sel}"
+    lines = _read_state_lines(TOR_VPN_CLIENTS)
+    if entry not in lines:
+        lines.append(entry)
+        _write_state_lines(TOR_VPN_CLIENTS, lines)
+        _tor_audit("vpn_client_add", entry, request)
+        _trigger_reconcile()
+    return {"clients": [{"kind": k, "selector": s} for k, _, s in
+                         (ln.partition(":") for ln in lines)]}
+
+
+@router.delete("/vpn/client")
+async def remove_vpn_client(request: Request) -> dict:
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    kind = (body or {}).get("kind")
+    sel = (body or {}).get("selector")
+    if not isinstance(kind, str) or not isinstance(sel, str) or not _valid_selector(kind, sel):
+        raise HTTPException(status_code=400, detail="invalid kind/selector")
+    entry = f"{kind}:{sel}"
+    lines = _read_state_lines(TOR_VPN_CLIENTS)
+    if entry in lines:
+        lines = [ln for ln in lines if ln != entry]
+        _write_state_lines(TOR_VPN_CLIENTS, lines)
+        _tor_audit("vpn_client_remove", entry, request)
+        _trigger_reconcile()
+    return {"clients": [{"kind": k, "selector": s} for k, _, s in
+                         (ln.partition(":") for ln in lines)]}
+
+
+@router.get("/tor/bridges")
+async def get_tor_bridges(request: Request) -> dict:
+    _require_tor_admin(request)
+    return {"bridges": _read_state_lines(TOR_BRIDGES)}
+
+
+@router.post("/tor/bridge")
+async def add_tor_bridge(request: Request) -> dict:
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    line = (body or {}).get("line")
+    if not isinstance(line, str) or not _valid_bridge(line):
+        raise HTTPException(status_code=400, detail="invalid bridge line")
+    lines = _read_state_lines(TOR_BRIDGES)
+    if line not in lines:
+        lines.append(line)
+        _write_state_lines(TOR_BRIDGES, lines)
+        _tor_audit("tor_bridge_add", line, request)
+        _trigger_reconcile()
+    return {"bridges": lines}
+
+
+@router.delete("/tor/bridge")
+async def remove_tor_bridge(request: Request) -> dict:
+    _require_tor_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    line = (body or {}).get("line")
+    if not isinstance(line, str) or not _valid_bridge(line):
+        raise HTTPException(status_code=400, detail="invalid bridge line")
+    lines = _read_state_lines(TOR_BRIDGES)
+    if line in lines:
+        lines = [ln for ln in lines if ln != line]
+        _write_state_lines(TOR_BRIDGES, lines)
+        _tor_audit("tor_bridge_remove", line, request)
+        _trigger_reconcile()
+    return {"bridges": lines}
+
+
+@router.get("/admin/sentinel/stats")
+async def admin_sentinel_stats() -> dict:
+    """Fleet Sentinel counters for the WebUI tab. Fail-safe: a dark daemon
+    yields active=false with zeroed counters (HTTP 200), never a 5xx."""
+    stats = sentinel_link.fetch_stats()
+    if not stats:
+        return {"active": False, "detections": 0, "blocked": 0, "spyware": 0}
+    return {
+        "active": True,
+        "detections": sentinel_link._safe_int(stats.get("detections", 0)),
+        "blocked": sentinel_link._safe_int(stats.get("blocked", 0)),
+        "spyware": sentinel_link._safe_int(stats.get("spyware", 0)),
+    }
+
+
+@router.get("/admin/sentinel/verdicts")
+async def admin_sentinel_verdicts(limit: int = 50) -> dict:
+    """Recent fleet detections + the compromise assessment for the WebUI tab."""
+    dets = sentinel_link.fetch_verdicts(limit)
+    return {
+        "active": bool(dets),
+        "assess": sentinel_link.assess(dets),
+        "detections": dets,
+    }
+
+
+def _c2_signals(s):
+    """Normalize Signals to a list: Go map[string]bool -> JSON object; []string -> JSON array."""
+    if isinstance(s, dict):
+        return sorted(k for k, v in s.items() if v)
+    if isinstance(s, list):
+        return s
+    return []
+
+
+def _c2_norm_learned(h):
+    return {"host": h.get("host", ""), "signals": _c2_signals(h.get("signals")),
+            "interval_s": h.get("interval_s"), "devices": h.get("devices")}
+
+
+def _c2_norm_cand(c):
+    return {"host": c.get("host", ""), "signals": _c2_signals(c.get("signals")),
+            "interval_s": c.get("interval_s"), "windows": c.get("windows")}
+
+
+@router.get("/admin/sentinel/c2")
+async def admin_sentinel_c2() -> dict:
+    """Learned + candidate C2 hosts for the WebUI 'C2 appris' view. Fail-safe."""
+    data = sentinel_link.fetch_c2()
+    if not data:
+        return {"active": False, "learned": [], "candidates": []}
+    return {"active": True,
+            "learned": [_c2_norm_learned(h) for h in data.get("learned", [])],
+            "candidates": [_c2_norm_cand(c) for c in data.get("candidates", [])]}
+
+
+@router.post("/admin/sentinel/c2/allow")
+async def admin_sentinel_c2_allow(host: str = Form(...)) -> dict:
+    """Operator 'Ignorer' — allowlist a host so it is never learned as C2."""
+    return {"ok": sentinel_link.c2_allow(host)}
 
 
 @router.get("/admin/filters/ui", response_class=HTMLResponse)

@@ -1,3 +1,31 @@
+secubox-toolbox (2.8.4-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
+secubox-toolbox (2.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * Tor-VPN panel: NAC online-clients one-click routing toggle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 00:00:00 +0200
+
+secubox-toolbox (2.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * Tor Phase-1 enhancement: exit-country, per-client Tor-VPN (leak-proof kill-switch),
+    emancipate webui .onion (standalone+persist), .onion DNS (9053), obfs4 bridges.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 18:00:00 +0200
+
+secubox-toolbox (2.8.2-1~bookworm1) bookworm; urgency=medium
+
+  * #826 Sentinel C2 auto-learning WebUI — new "C2 appris" sub-view in the
+    Sentinelle tab listing learned + candidate C2 hosts (signals, interval,
+    devices) via a fail-safe /admin/sentinel/c2 proxy, with a one-click
+    "Ignorer" allowlist safety valve. XSS-safe (data-host, escaped).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 12:00:00 +0200
+
 secubox-toolbox (2.8.0-1~bookworm1) bookworm; urgency=medium
 
   * feat(#758): new "Réseau" dashboard tab — interface throughput sparklines +

@@ -29,6 +29,38 @@ def test_upsert_best_value(tmp_path):
     assert s.count() == 1
 
 
+def test_interface_persisted_best_value(tmp_path):
+    """`interface` round-trips and is best-value: a later interface-less
+    sighting keeps the stored value (feeds the `lxc` zone reliably)."""
+    from api.store import DeviceStore
+    s = DeviceStore(str(tmp_path/"d.db"))
+    s.upsert({"mac": "aa:bb:cc:00:00:50", "ip":"10.1.0.9", "interface":"br-lxc", "last_seen":1, "source":"arp"})
+    assert s.get("aa:bb:cc:00:00:50")["interface"] == "br-lxc"
+    s.upsert({"mac": "aa:bb:cc:00:00:50", "ip":"10.1.0.9", "last_seen":2, "source":"dnsmasq"})
+    assert s.get("aa:bb:cc:00:00:50")["interface"] == "br-lxc"  # not clobbered
+
+
+def test_interface_column_migrated_onto_old_db(tmp_path):
+    """A devices.db created before the `interface` column exists is patched by
+    `_migrate_columns` (ALTER TABLE) on open — additive and idempotent."""
+    import sqlite3
+    from api.store import DeviceStore, _SCHEMA
+    dbp = str(tmp_path/"old.db")
+    # Realistic pre-interface DB: the full schema minus the interface column.
+    old_schema = _SCHEMA.replace("  interface TEXT,\n", "")
+    assert "interface" not in old_schema
+    c = sqlite3.connect(dbp)
+    c.executescript(old_schema)
+    c.execute("INSERT INTO devices(mac,ip) VALUES('aa:bb:cc:00:00:51','10.1.0.10')")
+    c.commit(); c.close()
+    s = DeviceStore(dbp)  # opening runs _migrate_columns
+    cols = {r["name"] for r in s._conn.execute("PRAGMA table_info(devices)")}
+    assert "interface" in cols
+    s.upsert({"mac": "aa:bb:cc:00:00:51", "interface":"br-lxc", "last_seen":1, "source":"arp"})
+    assert s.get("aa:bb:cc:00:00:51")["interface"] == "br-lxc"
+    DeviceStore(dbp)  # second open is a no-op (idempotent)
+
+
 def test_migrate_idempotent(tmp_path):
     import json, sqlite3
     from api.store import DeviceStore, migrate_legacy

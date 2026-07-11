@@ -112,6 +112,13 @@ class Collector:
                 "first_seen": now,
                 "last_seen": now,
             }
+            # #817 addendum: `interface` (from the ARP pass) is a best-value
+            # store column feeding the `lxc` zone auto-classification. An
+            # empty value must be OMITTED, not upserted — COALESCE treats ''
+            # as a real value and would clobber a device's previously-recorded
+            # br-lxc interface on a later lease-only (interface-less) sighting.
+            if not enriched.get("interface"):
+                enriched.pop("interface", None)
             if vendor:
                 enriched["oui_vendor"] = vendor
             if device_type != "unknown":

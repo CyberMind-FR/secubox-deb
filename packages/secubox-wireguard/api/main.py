@@ -150,45 +150,52 @@ def _human_bytes(b: int) -> str:
 
 
 def _parse_wg_show() -> Dict[str, Any]:
-    """Parse wg show output for all interfaces."""
+    """Parse `wg show all dump` for all interfaces.
+
+    With the `all` prefix, every line begins with the interface name:
+      interface line (5 fields): iface, private-key, public-key, listen-port, fwmark
+      peer line      (9 fields): iface, public-key, preshared-key, endpoint,
+                                 allowed-ips, latest-handshake, rx, tx, keepalive
+    The interface private key (field 2 of the interface line) is deliberately
+    never read into the result — this runs as root, so the dump contains the
+    real key and any of it in a response would be a disclosure.
+    """
     result = {"interfaces": {}}
     try:
         proc = subprocess.run(
-            ["wg", "show", "all", "dump"],
+            ["sudo", "-n", "wg", "show", "all", "dump"],
             capture_output=True, text=True, timeout=5
         )
         if proc.returncode != 0:
             return result
 
-        current_iface = None
         for line in proc.stdout.strip().split("\n"):
             if not line:
                 continue
             parts = line.split("\t")
+            iface = parts[0]
 
-            if len(parts) >= 4 and parts[1] != "(none)":
-                # Interface line
-                iface = parts[0]
-                current_iface = iface
+            if len(parts) == 5:
+                # Interface line — private key (parts[1]) intentionally dropped.
                 result["interfaces"][iface] = {
-                    "private_key": parts[1][:8] + "...",
                     "public_key": parts[2],
-                    "listen_port": int(parts[3]) if parts[3] != "(none)" else None,
+                    "listen_port": int(parts[3]) if parts[3] not in ("(none)", "off") else None,
                     "peers": []
                 }
-            elif len(parts) >= 8 and current_iface:
-                # Peer line
-                peer = {
-                    "public_key": parts[0],
-                    "preshared_key": parts[1] != "(none)",
-                    "endpoint": parts[2] if parts[2] != "(none)" else None,
-                    "allowed_ips": parts[3].split(",") if parts[3] != "(none)" else [],
-                    "last_handshake": int(parts[4]) if parts[4] != "0" else None,
-                    "rx_bytes": int(parts[5]),
-                    "tx_bytes": int(parts[6]),
-                    "persistent_keepalive": int(parts[7]) if parts[7] != "off" else None
-                }
-                result["interfaces"][current_iface]["peers"].append(peer)
+            elif len(parts) == 9:
+                entry = result["interfaces"].setdefault(
+                    iface, {"public_key": "", "listen_port": None, "peers": []}
+                )
+                entry["peers"].append({
+                    "public_key": parts[1],
+                    "preshared_key": parts[2] != "(none)",
+                    "endpoint": parts[3] if parts[3] != "(none)" else None,
+                    "allowed_ips": parts[4].split(",") if parts[4] != "(none)" else [],
+                    "last_handshake": int(parts[5]) if parts[5] != "0" else None,
+                    "rx_bytes": int(parts[6]),
+                    "tx_bytes": int(parts[7]),
+                    "persistent_keepalive": int(parts[8]) if parts[8] != "off" else None,
+                })
     except Exception as e:
         log.error("Error parsing wg show: %s", e)
 
@@ -329,14 +336,26 @@ async def shutdown_event():
 # === Helper: run wgctl ===
 async def _run_ctl(*args, timeout: int = 30) -> dict:
     """Run wgctl and return JSON output."""
-    cmd = ["/usr/sbin/wgctl"] + list(args)
+    cmd = ["sudo", "-n", "/usr/sbin/wgctl"] + list(args)
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            # asyncio.wait_for only cancels the await — the wgctl child keeps
+            # running (and on a 500+ peer tunnel churns CPU for minutes). Kill
+            # it, or timed-out calls pile up into a load-average avalanche that
+            # starves the whole board.
+            try:
+                proc.kill()
+                await proc.wait()
+            except ProcessLookupError:
+                pass
+            raise
         output = stdout.decode().strip()
         if proc.returncode == 0 and output:
             try:
@@ -351,24 +370,60 @@ async def _run_ctl(*args, timeout: int = 30) -> dict:
         return {"success": False, "error": str(e)}
 
 
+# Single-flight + short-TTL cache for read-only wgctl calls. Dashboards poll
+# /status (and friends) concurrently, and each wgctl run spawns ~15 `wg show`
+# processes; without this the low-power board serializes under CPU contention
+# (30s+, WAF 504) once the transparent-proxy tunnel has hundreds of peers.
+# Concurrent callers within the TTL share one result, and at most one wgctl per
+# key runs at a time.
+_CTL_CACHE: Dict[tuple, tuple] = {}          # key -> (expires_at_monotonic, value)
+_CTL_LOCKS: Dict[tuple, asyncio.Lock] = {}
+
+
+async def _run_ctl_cached(*args, ttl: float = 8.0, timeout: int = 30) -> dict:
+    key = tuple(args)
+    cached = _CTL_CACHE.get(key)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
+    lock = _CTL_LOCKS.setdefault(key, asyncio.Lock())
+    async with lock:
+        # Another caller may have refreshed the entry while we waited.
+        cached = _CTL_CACHE.get(key)
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
+        value = await _run_ctl(*args, timeout=timeout)
+        # Cache successful reads only; let errors/timeouts retry next call.
+        if not (isinstance(value, dict) and value.get("success") is False):
+            _CTL_CACHE[key] = (time.monotonic() + ttl, value)
+        return value
+
+
+def _invalidate_ctl_cache() -> None:
+    """Drop all cached wgctl reads. Called after a mutation (interface up/down,
+    peer add/remove) so the next /status /interfaces /peers reflects it
+    immediately instead of serving the pre-mutation snapshot for up to the TTL."""
+    _CTL_CACHE.clear()
+
+
 # === Three-Fold Architecture Endpoints ===
 
 @app.get("/components")
 async def components():
     """List system components (public, three-fold: what)."""
-    return await _run_ctl("components")
+    return await _run_ctl_cached("components", ttl=60.0)
 
 
 @app.get("/status")
 async def status():
     """Show health status (public, three-fold: health)."""
-    return await _run_ctl("status")
+    return await _run_ctl_cached("status", ttl=8.0)
 
 
 @app.get("/access")
 async def access():
     """Show connection endpoints (public, three-fold: how)."""
-    return await _run_ctl("access")
+    # wgctl access queries an external IP service (curl, 5s), so cache longer.
+    return await _run_ctl_cached("access", ttl=60.0)
 
 
 # === Interface Management ===
@@ -376,21 +431,25 @@ async def access():
 @app.get("/interfaces")
 async def list_interfaces():
     """List all WireGuard interfaces (public)."""
-    return await _run_ctl("interfaces")
+    return await _run_ctl_cached("interfaces", ttl=8.0)
 
 
 @app.post("/interface/{name}/up")
 async def interface_up(name: str, user=Depends(require_jwt)):
     """Bring interface up."""
     log.info("Bringing up interface: %s", name)
-    return await _run_ctl("interface", "up", name)
+    result = await _run_ctl("interface", "up", name)
+    _invalidate_ctl_cache()
+    return result
 
 
 @app.post("/interface/{name}/down")
 async def interface_down(name: str, user=Depends(require_jwt)):
     """Bring interface down."""
     log.info("Bringing down interface: %s", name)
-    return await _run_ctl("interface", "down", name)
+    result = await _run_ctl("interface", "down", name)
+    _invalidate_ctl_cache()
+    return result
 
 
 # === Peer Management ===
@@ -399,8 +458,8 @@ async def interface_down(name: str, user=Depends(require_jwt)):
 async def list_peers(interface: Optional[str] = None):
     """List all peers (public)."""
     if interface:
-        return await _run_ctl("peers", interface)
-    return await _run_ctl("peers")
+        return await _run_ctl_cached("peers", interface, ttl=8.0)
+    return await _run_ctl_cached("peers", ttl=8.0)
 
 
 class PeerAddRequest(BaseModel):
@@ -412,7 +471,9 @@ class PeerAddRequest(BaseModel):
 async def add_peer(req: PeerAddRequest, user=Depends(require_jwt)):
     """Add new peer with auto-generated config."""
     log.info("Adding peer: %s to %s", req.name, req.interface)
-    return await _run_ctl("peer", "add", req.name, req.interface)
+    result = await _run_ctl("peer", "add", req.name, req.interface)
+    _invalidate_ctl_cache()
+    return result
 
 
 class PeerRemoveRequest(BaseModel):
@@ -425,8 +486,11 @@ async def remove_peer(req: PeerRemoveRequest, user=Depends(require_jwt)):
     """Remove peer by name or public key."""
     log.info("Removing peer: %s", req.identifier)
     if req.interface:
-        return await _run_ctl("peer", "remove", req.identifier, req.interface)
-    return await _run_ctl("peer", "remove", req.identifier)
+        result = await _run_ctl("peer", "remove", req.identifier, req.interface)
+    else:
+        result = await _run_ctl("peer", "remove", req.identifier)
+    _invalidate_ctl_cache()
+    return result
 
 
 @app.get("/peer/{name}/config")
@@ -487,7 +551,7 @@ async def migrate(req: MigrateRequest, user=Depends(require_jwt)):
 def health():
     """Health check endpoint."""
     try:
-        result = subprocess.run(["wg", "show", "interfaces"], capture_output=True, timeout=2)
+        result = subprocess.run(["sudo", "-n", "wg", "show", "interfaces"], capture_output=True, timeout=2)
         interfaces = result.stdout.decode().strip().split() if result.returncode == 0 else []
         return {
             "status": "ok",

@@ -3,6 +3,124 @@
 
 ---
 
+## 2026-07-11 — Admin-TOTP toggle from webui + per-user 2FA reset (default OFF)
+
+User: "totp disableable by options from webui and default absent ok" / "or permit totp reset from webui".
+Two iPhone login failures traced to admin accounts being unconditionally forced into TOTP while
+`login.html` has no TOTP UI. Immediate unblock was a non-admin `operator` account; the durable fix
+makes the requirement **opt-in**.
+
+**secubox-auth 1.0.4** — `require_admin_totp` now defaults **OFF** so a node stays reachable. New
+admin-gated `GET/POST /api/v1/auth/settings` persist the flag to `/etc/secubox/auth-runtime.json`.
+Login enforcement reads `_get_require_admin_totp()` (runtime file > `[auth]` config > default False) and
+is **fail-open** — a config read error no longer locks admins out. Verified live on gk2: default-off admin
+login returns `access_token`; toggle on→enrollment_required, off→session; non-admin POST 403. Tests
+realigned from the old default-ON/fail-secure contract to the reachability-first one, fixture isolates the
+config + runtime paths (10 passing).
+
+**secubox-users 1.4.3** — `/users/` gained an "Admin 2FA: ON/OFF" toolbar toggle (wired to the auth
+`/settings` endpoint) and a per-user "🔑 Reset 2FA" button (POST `/user/<u>/totp/disable`), shown only for
+TOTP-enrolled users. Deployed live.
+
+---
+
+**secubox-portal 2.2.3** — `login.html` now completes the TOTP flow in-browser: the login
+response branches to a code step (`mfa_required`), a QR + manual-key enrollment step
+(`enrollment_required` → `/totp/enroll` + `/totp/confirm`) with one-time backup-code display,
+or straight through on `access_token`. So turning the toggle **ON** is now fully usable from a
+phone. Verified live end-to-end on gk2 (enroll→confirm→re-login→mfa, 10 backup codes).
+
+---
+
+## 2026-07-10 — wg-toolbox VPN surf blackhole after reboot (nft drop-in aborted every boot)
+
+User: "surf stopped when wg-toolbox VPN activated". Root cause was NOT the peer prune (restored the 540
+from backup as a precaution) but the **wg-toolbox nft DNAT missing entirely**. `nftables.service` was
+**failed**: the persistent drop-in `/etc/nftables.d/secubox-toolbox-wg.nft` (+ zz-fanout) aborts the whole
+atomic `include` load at boot for two reasons — (1) it added the UDP-51820 accept to `inet filter input`,
+a table that does not exist on gk2 at that point; (2) it used `iif "wg-toolbox"`, which resolves an
+interface index at LOAD time and fails because nftables.service runs before `wg-quick@wg-toolbox` creates
+the iface. Either abort → `table inet wg-toolbox` never applied → all tunnel traffic blackholed → no surf.
+Fix (source + board): fold the handshake accept into the wg-toolbox table's own `input` base chain
+(self-contained, no `inet filter` dependency) and switch to `iifname`/`oifname` (per-packet name match,
+load-order independent). `nft -c -f /etc/nftables.conf` now passes. Restored runtime live via
+`secubox-toolbox-wg-provision` + fanout (DNAT 443/80 → round-robin 10.99.1.1:8091-8094, the 4 live
+Go sbxmitm ng-workers). Did NOT restart nftables.service (its `flush ruleset` would wipe live
+crowdsec/waf/lxc tables); reset-failed instead, next boot loads clean.
+
+## 2026-07-10 — WireGuard webui full rewrite + status/peers perf avalanche fix (`secubox-wireguard` 1.0.2)
+
+`/wireguard/` was inoperative (`{"interfaces":["` truncated) and noisy. Root causes, fixed end-to-end on
+gk2 + source:
+
+- **Privilege**: the API (user `secubox`) reads WG state via `wgctl`, which needs root (`wg show dump`
+  exposes private keys). Added a `sudo -n /usr/sbin/wgctl` route + `/etc/sudoers.d/secubox-wireguard`
+  (wgctl + `wg show *` only) with `visudo -cf` guard in postinst. The service had `NoNewPrivileges=true`
+  which **blocks sudo** → flipped to `false` in the packaged unit (same tradeoff as the aggregator).
+- **Perf avalanche (the real incident)**: `wgctl status`/`peers` ran ~8 `wg show | grep` subprocesses
+  **per peer**. On the 542-peer `wg-toolbox` transparent-proxy tunnel that took 30s+ and — because
+  `asyncio.wait_for` in `_run_ctl` **never killed the timed-out child** — every slow `/peers` left a
+  churning `wgctl`. They piled up to **load avg 56** and starved the whole board (cached `/status` still
+  slow). Fixes: rewrote both as single `awk` / `wg show <iface> dump` passes (O(interfaces); 542 peers
+  now **0.07s**, was >30s), added `proc.kill()` on timeout, and a single-flight + short-TTL cache on the
+  read endpoints (invalidated after up/down/peer add/remove).
+- **Security (review-caught)**: the sudo route activated a dormant bug in `_parse_wg_show` — it parsed
+  `wg show all dump` with the wrong layout, emitting a truncated **private key** via `/stats,/summary,
+  /peers/status` and dropping all peers. Rewrote to parse by field count (5=iface/9=peer) and never read
+  the private key.
+- **webui**: full rewrite — interface-card dashboard (role-labelled tunnels 🧰🕸️🛡️, live status, lazy
+  per-interface peer drawers with the 542-peer tunnel gated behind "Load anyway", up/down + add-peer/QR),
+  certs `hybrid-skin` + shared sidebar navbar (already registered in `menu.d`, category `mesh`).
+  Actions use `data-*` + event delegation (no name interpolated into inline handlers).
+- Also backported the post-reboot netplan fix to source `board/mochabin/netplan/00-secubox.yaml`
+  (WAN=eth2 DHCP metric100; lan0-3/eth1 optional; drop the stray lan3 static that wedged boot).
+
+Two-stage subagent review ran on the diff; both findings (private-key disclosure, onclick breakout) fixed
+before the durable .deb install. Board recovered: load 56→4, all vhosts 200. Commits local on `master`
+(unpushed).
+
+**Follow-ups same day:** (1) 1.0.3 — large tunnels render **connected-only** peers by default (active/recent
+handshake) with a "Show all" toggle instead of suppressing. (2) **Pruned wg-toolbox peers**: it had 543
+runtime peers but **540 had never handshaked** (phantom enrollments — the R3 transparent-proxy enrolls one
+wg peer per client browser-UA into `/var/lib/secubox/toolbox/wg-peers.json`, re-applied on boot by
+`secubox-toolbox-wg-restore`; never-connected ones accumulate). Backed up the store, pruned runtime + store
+to the 3 ever-handshaked live clients (`wg set … peer … remove` in one call + JSON filter). **Open item:**
+no GC prunes these automatically → they will re-accumulate; a `secubox-toolbox` timer that drops peers with
+no handshake older than N days is the durable fix (not yet built).
+
+---
+
+## 2026-07-09 — OpenClaw OSINT scanner: LXC module live end-to-end on gk2 (branch `feature/openclaw-lxc-scanner`)
+
+8-task subagent-driven build (async-job scan endpoints dropping the old sync-shell-out machinery,
+target-policy/audit gate, packaging with sudoers+visudo, aggregator-in-process wiring, XSS-hardened
+dashboard) — Task 8 deployed + verified. `secubox-openclaw` 1.0.1-1~bookworm1 built and installed on
+gk2 over the existing 1.0.0 (LXC container `openclaw`/10.100.0.41 with nmap/dig/whois/curl already
+provisioned in earlier tasks reused as-is). `sudo -u secubox sudo -n openclawctl status --json` proves
+the sudoers grant; `secubox-aggregator` restarted once to load the new in-process `api/main.py`.
+**SPOF proof**: kicked a real `openclawctl scan ip 127.0.0.1` in the background — a concurrent
+`/api/v1/cookies/status` call through the aggregator socket returned in **6ms**, and the scan itself
+reached `status: completed`, confirming the async-job design does not block the shared aggregator
+loop the way the old sync-shell-out path would have. Dashboard (`/openclaw/`) verified 200 with wired
+markup via the generic static-root fallback (no per-module nginx alias needed — same pattern as
+`/cookies/`). Board confirmed healthy after the single restart (all sampled vhosts/APIs 200/401, no 502).
+
+---
+
+## 2026-07-06/07 — Sentinel threat engine + activation + 3 surfaces + C2 auto-learning (#821 #823–#828)
+
+Brainstorm → spec → plan → subagent-driven (per-task two-stage review + adversarial whole-branch review) throughout. All merged; all deployed + verified live on gk2.
+
+- **#821 / #822 — Frigate NVR foundation** ✅ MERGED. podman-in-LXC (amd64/OpenVINO), go2rtc, `/api/v1/frigate/*` shim, WAF-fronted no-bypass.
+- **#823 / #824 — sbxmitm Sentinel engine** ✅ MERGED (dark). Inline IOC gate + async `sbx-sentinel` daemon (bbolt store, YARA cgo build-tag + no-cgo stub), commercial-spyware base packs (Pegasus/Predator/Intellexa) + live-feed overlay, `FinalizeAction` report-only guard.
+- **#825 — Sentinel activation + 3 surfaces** ✅ MERGED (PR #825). Activated on gk2 (daemon enabled, `SENTINEL_HTTP_ADDR=127.0.0.1:8790`, worker mirror wired). Surfaced on the WebUI ToolBoX **🛡️ Sentinelle** fleet tab, the kbin per-device **Compromission** report tab, and the **PDF** report section — all report-only, `mac_hash`-only, fail-safe. Fixed a `RuntimeDirectory=secubox` clobber of the shared `/run/secubox` (drop-in). Proven e2e (Pegasus/Predator).
+- **#826 / #827 — C2/botnet auto-learning** ✅ MERGED (PR #827). Sustained + gated + strong-corroborated beaconing → report-only learned indicators. High-precision FP gate (box-vhost/first-party-LAN/seeded allowlist) + multi-signal (rare/non-browser-JA4/DGA) + candidate→confirm (≥3 windows/≥30 min). New `/c2/*` endpoints + portal proxy + WebUI **C2 appris** view with one-click **Ignorer**.
+- **#828 — C2 false-positive fix** ⏳ OPEN (PR #828, deployed to board as toolbox-ng 0.1.31). Live testing learned an admin dashboard on rarity alone → promotion now requires a STRONG signal (`dga`/`non_browser_ja`), `rare` is supporting-only; `non_browser_ja` disabled when the browser-JA4 set is unconfigured. Re-verified live: real DGA-C2 learned, admin dashboard + mail suppressed. Follow-up: populate `browser-ja4.txt` (empty seed → `dga`-only out-of-box).
+
+Deployed versions on gk2: toolbox-ng **0.1.31**, toolbox **2.8.2**.
+
+---
+
 ## 2026-07-04 — ToolBox privacy report (#785 #790 #792), Zigbee WS fix (#796), PeerTube admin ops (#798)
 
 - **#785 / #790 / #792 — ToolBox kbin report** ✅ MERGED (PR #787, #794). Faithful-to-page PDF:

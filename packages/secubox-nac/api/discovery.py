@@ -32,9 +32,11 @@ logger = logging.getLogger("secubox.nac.discovery")
 DEFAULT_DNSMASQ_LEASES = "/var/lib/misc/dnsmasq.leases"
 DEFAULT_ISC_LEASES = "/var/lib/dhcp/dhcpd.leases"
 
-# Interfaces to scan for ARP entries (LAN interfaces only) — lifted
+# Interfaces to scan for ARP entries (LAN interfaces only, + the secubox LXC
+# bridge br-lxc so containers are discovered and can auto-classify into the
+# `lxc` zone — see main.py `_interface_zones`) — lifted
 # verbatim from secubox-nac's `api/main.py` `_parse_arp`.
-LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "eth0", "eth1"}
+LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "br-lxc", "eth0", "eth1"}
 
 # Confidence ranking used to decide which source's data wins a merge:
 # a lease-backed sighting (dnsmasq, then isc) always beats a bare ARP
@@ -158,6 +160,7 @@ def _parse_arp(arp_text: str) -> list[dict]:
             "mac": canon,
             "ip": ip,
             "hostname": "",
+            "interface": iface,
             "source": "arp",
         })
     return out
@@ -211,6 +214,13 @@ def discover(*, dnsmasq_leases=DEFAULT_DNSMASQ_LEASES, isc_leases=DEFAULT_ISC_LE
 
         if s.get("hostname"):
             existing["hostname"] = s["hostname"]
+        # Interface comes only from the ARP pass (lowest rank), but it must
+        # survive even when a higher-rank lease sighting owns the record —
+        # otherwise a br-lxc container that also has a DHCP lease loses the
+        # interface and never auto-classifies into the `lxc` zone. Same
+        # "keep any non-empty value" rule as hostname.
+        if s.get("interface"):
+            existing["interface"] = s["interface"]
         if incoming_rank >= existing_rank:
             # Equal-rank sightings arrive in fixed dnsmasq -> isc -> arp
             # order, so multiple same-rank sightings for one MAC are

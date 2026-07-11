@@ -1,3 +1,22 @@
+secubox-portal (2.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * login.html: full TOTP flow in the browser so the admin-2FA "ON" state is
+    usable without the API. Login now branches on the auth response:
+    - mfa_required  → 6-digit code step (POST /login/mfa; backup codes accepted)
+    - enrollment_required → QR + manual-entry key + confirm step
+      (POST /totp/enroll then /totp/confirm), then one-time backup codes
+    - access_token  → straight in (unchanged)
+    setup_required surfaces a clear message instead of a dead "Login failed".
+    Verified live end-to-end on gk2 (enroll→confirm→re-login→mfa).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 11 Jul 2026 13:00:00 +0200
+
+secubox-portal (2.2.2-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-portal (2.2.2-1~bookworm1) bookworm; urgency=medium
 
   * fix(ui): 'Active bans' now reflects the live /crowdsec/decisions list

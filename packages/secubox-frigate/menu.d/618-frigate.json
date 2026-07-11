@@ -1,0 +1,9 @@
+{
+  "id": "frigate",
+  "name": "Frigate",
+  "path": "/frigate/",
+  "icon": "📹",
+  "category": "mesh",
+  "order": 618,
+  "description": "AI-powered NVR — cameras, events, detection"
+}

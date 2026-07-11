@@ -393,10 +393,12 @@ func (px *Proxy) handleTransparent(client net.Conn) {
 	// tagged with the REAL transparent peer IP from the raw client conn (#662).
 	// nil when the relay gate is off. Emitted around Decide → blocked/allowed
 	// alike, matching the Python addon's per-tls_clienthello behaviour.
-	tconn := tls.Server(replay, px.serverTLSConfigCapture(px.captureAndEmitJA4(client)))
+	var ja4 string // SNI-independent client-stack fp, captured at handshake below
+	tconn := tls.Server(replay, px.serverTLSConfigCapture(px.captureAndEmitJA4(client),
+		func(s string) { ja4 = s }))
 	if err := tconn.Handshake(); err != nil {
 		return
 	}
 	defer tconn.Close()
-	px.mitmPipeline(tconn, client, decisionHost, verdict, dialAddr, wg)
+	px.mitmPipeline(tconn, client, decisionHost, verdict, dialAddr, wg, ja4)
 }

@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: toolbox-ng — Sentinel threat-feed overlay fetch (#823)
+#
+# Oneshot: fetch the public MVT / Citizen Lab / abuse.ch indicator feeds and
+# materialise them as Sentinel overlay packs under SENTINEL_OVERLAY_DIR, which
+# sbx-sentinel's Loader hot-reloads. Fail-safe: a bad fetch keeps the last-good
+# overlay (see /usr/sbin/secubox-sentinel-feeds). Driven by the .timer (daily).
+#
+# DARK: installed but not enabled by the maintainer scripts — the operator
+# enables the timer at the #823 cutover.
+
+[Unit]
+Description=SecuBox Sentinel — threat-feed overlay fetch (#823)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/823
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=secubox-toolbox
+Group=secubox-toolbox
+EnvironmentFile=-/etc/secubox/sentinel.env
+ExecStart=/usr/sbin/secubox-sentinel-feeds
+
+# Hardening: the fetcher only needs to write the overlay dir.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/secubox
+ReadWritePaths=/var/lib/secubox/sentinel

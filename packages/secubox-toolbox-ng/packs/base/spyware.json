@@ -1,0 +1,86 @@
+{
+  "version": "1",
+  "iocs": [
+    {
+      "type": "domain",
+      "value": "notif-alert-news.example",
+      "class": "spyware_pegasus",
+      "severity": 95,
+      "source": "amnesty-mvt",
+      "action": "block"
+    },
+    {
+      "type": "domain",
+      "value": "secure-mail-verify.example",
+      "class": "spyware_pegasus",
+      "severity": 92,
+      "source": "amnesty-mvt",
+      "action": "block"
+    },
+    {
+      "type": "cert_sha1",
+      "value": "aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00",
+      "class": "spyware_pegasus",
+      "severity": 95,
+      "source": "amnesty-mvt",
+      "action": "block"
+    },
+    {
+      "type": "domain",
+      "value": "weather-update-push.example",
+      "class": "spyware_predator",
+      "severity": 93,
+      "source": "citizen-lab",
+      "action": "block"
+    },
+    {
+      "type": "domain",
+      "value": "cdn-media-refresh.example",
+      "class": "spyware_predator",
+      "severity": 90,
+      "source": "citizen-lab",
+      "action": "block"
+    },
+    {
+      "type": "ja4",
+      "value": "t13d1516h2_beadbead0001_beadbead0002",
+      "class": "spyware_predator",
+      "severity": 90,
+      "source": "citizen-lab",
+      "action": "block"
+    },
+    {
+      "type": "domain",
+      "value": "intellexa-shared-relay.example",
+      "class": "spyware_intellexa",
+      "severity": 92,
+      "source": "citizen-lab",
+      "action": "block"
+    },
+    {
+      "type": "ip",
+      "value": "203.0.113.42",
+      "class": "spyware_intellexa",
+      "severity": 90,
+      "source": "citizen-lab",
+      "action": "block"
+    },
+    {
+      "type": "url_regex",
+      "value": "https://[a-z0-9]+\\.notif-push\\.example/t/[A-Za-z0-9]{16,32}",
+      "class": "zero_click",
+      "severity": 65,
+      "source": "amnesty-mvt",
+      "action": "report"
+    },
+    {
+      "type": "url_regex",
+      "value": "https://[a-z0-9]+\\.short-verify\\.example/s/[A-Za-z0-9]{10,24}",
+      "class": "zero_click",
+      "severity": 60,
+      "source": "citizen-lab",
+      "action": "report"
+    }
+  ],
+  "yara_rules": []
+}

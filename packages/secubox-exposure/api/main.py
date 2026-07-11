@@ -37,6 +37,10 @@ except ImportError:
 
 from api import reach as _reach
 from api import exclusion as _excl
+# Top-level (not lazy, unlike the other mesh_egress call sites below) so
+# emancipate_webui's federation call resolves the module-global at call time
+# and tests can monkeypatch it directly as `main._publish`.
+from api.mesh_egress import _publish
 
 app = FastAPI(title="SecuBox Exposure Manager API", version="2.0.0")
 
@@ -137,15 +141,31 @@ def _reload_nginx() -> bool:
         return False
 
 
-def _audit_exposure(vhost: str, rec: dict, user: str) -> None:
+_AUDIT_LOG = Path("/var/log/secubox/audit.log")
+
+
+def _audit_write(line: str) -> None:
+    """Append-only CSPN audit trail. Shared by every exposure audit call site
+    so the log format/location stays single-sourced. Best-effort: an audit
+    write failure must never fail the (already-applied) exposure change."""
     try:
-        ap = Path("/var/log/secubox/audit.log")
-        ap.parent.mkdir(parents=True, exist_ok=True)
-        with ap.open("a") as f:
-            f.write(f"{datetime.now(timezone.utc).isoformat()} exposure {vhost} "
-                    f"reach={rec['reach']} mesh={rec['mesh']} tor={rec['tor']} by={user}\n")
+        _AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with _AUDIT_LOG.open("a") as f:
+            f.write(line)
     except OSError:
         pass
+
+
+def _audit_exposure(vhost: str, rec: dict, user: str) -> None:
+    _audit_write(f"{datetime.now(timezone.utc).isoformat()} exposure {vhost} "
+                 f"reach={rec['reach']} mesh={rec['mesh']} tor={rec['tor']} by={user}\n")
+
+
+def _audit_exposure_action(action: str, detail: str, user: str) -> None:
+    """Generic audit entry for exposure actions that aren't a per-vhost reach
+    change (e.g. emancipating the admin webui itself as a hidden service)."""
+    _audit_write(f"{datetime.now(timezone.utc).isoformat()} exposure action={action} "
+                 f"{detail} by={user}\n")
 
 
 @app.get("/exposure/{vhost}")
@@ -740,6 +760,132 @@ async def _apply_tor(vhost: str, want: bool, user: dict) -> None:
     await asyncio.to_thread(_work)
 
 
+# ----------------------------------------------------------------------------
+# Task 5 (tor-enhancement-phase1): emancipate the webui itself, standalone +
+# persist-on-boot. Mirrors the _tor_add_sync mechanic above; annuaire
+# federation (mesh_egress._publish) is opt-in via `federate=True` and always
+# best-effort — a mesh/annuaire hiccup must never fail a plain, single-node
+# webui emancipation.
+# ----------------------------------------------------------------------------
+
+def _hs_dir_exists(name: str) -> bool:
+    """Whether the Tor HS key/hostname dir already exists for `name`."""
+    return (TOR_DATA / name).exists()
+
+
+def _torrc_has_stanza(name: str) -> bool:
+    """Whether torrc still contains the HiddenServiceDir stanza for `name`.
+
+    `_tor_add_sync` appends `HiddenServiceDir`/`HiddenServicePort` lines into
+    TOR_CONFIG; those lines are what actually keeps the hidden service alive
+    after a `systemctl reload tor`. If torrc gets reset/regenerated while the
+    key dir under TOR_DATA survives, the stanza is gone but the HS dir check
+    alone would report "already provisioned" — leaving the .onion dark with
+    no repair path. Never raises."""
+    if not TOR_CONFIG.exists():
+        return False
+    try:
+        hs_dir = TOR_DATA / name
+        return f"HiddenServiceDir {hs_dir}" in TOR_CONFIG.read_text()
+    except OSError:
+        return False
+
+
+def _load_emancipated() -> list:
+    return load_config().get("emancipated", [])
+
+
+def _save_emancipated(services: list) -> None:
+    config = load_config()
+    config["emancipated"] = services
+    save_config(config)
+
+
+def _mesh_present() -> bool:
+    """Best-effort mesh detection for the federation gate — never raises."""
+    try:
+        from api.mesh_egress import mesh_ip  # noqa: PLC0415
+        return mesh_ip() is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def emancipate_webui(federate: bool = False, user: Optional[dict] = None) -> dict:
+    """Emancipate the SecuBox webui itself as a Tor hidden service.
+
+    Standalone by default: creates HS `name="webui"`, `local_port=9080`
+    (the nginx canonical hub), `onion_port=80`, and records it `active` in the
+    exposure config so `tor_reconcile_persist()` can restore it on reboot.
+
+    `federate=True` additionally publishes a signed annuaire offer — but ONLY
+    when a mesh is actually present, and always wrapped so a federation
+    failure can never raise out of (or block) this call; the HS itself has
+    already been created by that point.
+
+    `user` is the JWT principal from the calling endpoint — recorded in the
+    CSPN audit trail (FINAL-REVIEW: publishing the admin webui as a hidden
+    service is at least as security-relevant as an exit-country/VPN/bridge
+    change, which are already audited via `_audit_exposure`).
+    """
+    tor_result = _tor_add_sync(name="webui", local_port=9080, onion_port=80)
+
+    entry = {"name": "webui", "local_port": 9080, "onion_port": 80, "active": True}
+    if tor_result.get("onion"):
+        entry["onion"] = tor_result["onion"]
+
+    services = [s for s in _load_emancipated() if s.get("name") != "webui"]
+    services.append(entry)
+    _save_emancipated(services)
+
+    _audit_exposure_action(
+        action="emancipate_webui",
+        detail=f"onion={entry.get('onion', '(pending)')} local_port=9080 federate={federate}",
+        user=(user or {}).get("sub", "?"),
+    )
+
+    if federate and tor_result.get("onion"):
+        try:
+            if _mesh_present():
+                endpoint = f"http://{tor_result['onion']}/"
+                _publish("webui", endpoint,
+                         {"channel": "tor", "onion": tor_result["onion"], "port": 9080})
+        except Exception:  # noqa: BLE001 — federation is best-effort, never fatal
+            pass
+
+    return {"success": True, "message": "webui emancipated", "output": entry, "tor": tor_result}
+
+
+def tor_reconcile_persist() -> dict:
+    """Boot-time reconcile: re-apply the torrc HiddenService* stanza for every
+    `active` emancipated service that is missing EITHER its HS key dir OR its
+    torrc stanza (e.g. after a fresh provisioning, an image flash, an
+    operator wipe of /var/lib/tor, OR a torrc reset that left the key dir
+    untouched). A service is skipped only when BOTH the key dir exists AND
+    torrc already contains its HiddenServiceDir stanza — the only state in
+    which the .onion is actually being served. When the key dir survives but
+    the stanza is missing, `_tor_add_sync` re-appends it and reloads Tor;
+    since the private key is unchanged, the `.onion` address is preserved.
+    """
+    applied = []
+    for svc in _load_emancipated():
+        if not svc.get("active"):
+            continue
+        name = svc.get("name")
+        local_port = svc.get("local_port")
+        onion_port = svc.get("onion_port")
+        if not name or local_port is None or onion_port is None:
+            continue
+        if _hs_dir_exists(name) and _torrc_has_stanza(name):
+            continue
+        try:
+            _tor_add_sync(name=name, local_port=local_port, onion_port=onion_port)
+            applied.append(name)
+        except Exception:  # noqa: BLE001 — one bad entry must not abort the rest
+            continue
+
+    return {"success": True, "applied": applied}
+
+
 @app.post("/tor/add")
 async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
     """Add Tor hidden service"""
@@ -770,6 +916,16 @@ async def tor_remove(req: TorRemoveRequest, user: dict = Depends(require_jwt)):
         raise HTTPException(status_code=404, detail="Hidden service not found")
 
     return _tor_remove_sync(name)
+
+
+@app.post("/tor/emancipate_webui")
+async def tor_emancipate_webui(federate: bool = False, user: dict = Depends(require_jwt)):
+    """Emancipate the SecuBox webui itself as a standalone Tor hidden service
+    (opt-in `?federate=true` to also publish an annuaire offer, best-effort).
+    Offloaded to a thread — emancipate_webui blocks for up to 10s (torrc
+    reload + onion poll) via _tor_add_sync, and this runs on the shared
+    aggregator event loop."""
+    return await asyncio.to_thread(emancipate_webui, federate, user)
 
 
 @app.post("/ssl/add")

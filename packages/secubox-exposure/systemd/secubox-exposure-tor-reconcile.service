@@ -1,0 +1,17 @@
+[Unit]
+Description=SecuBox Tor hidden-service persist reconcile (Task 5, tor-enhancement-phase1)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues
+After=tor.service network.target
+Wants=tor.service
+ConditionPathExists=/etc/secubox/exposure.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-exposure-tor-reconcile
+# Root: torrc edit + `systemctl reload tor` need privilege, matching
+# secubox-exposure.service itself.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

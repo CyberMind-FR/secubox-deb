@@ -221,8 +221,9 @@
         .diag .ok  { color: var(--root-main); font-weight: 700; }
         .diag .bad { color: var(--boot-main); font-weight: 700; }
     </style>
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
 </head>
-<body class="module-wall">
+<body class="module-wall hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <main class="main">
 
@@ -345,14 +346,6 @@
             <div id="analyze-out" class="msg msg-empty">Enter an indicator above.</div>
         </section>
 
-        <!-- Diagnostic footer -->
-        <div class="diag">
-            <h3>Endpoint status</h3>
-            <table id="diag-table">
-                <tr><td colspan="3" class="msg-loading">probing…</td></tr>
-            </table>
-        </div>
-
     </main>
 
     <script src="/shared/sidebar.js"></script>
@@ -441,7 +434,6 @@
         // Loaders
         async function loadStats() {
             const r = await get('/api/v1/threat-analyst/stats');
-            diagSet('/stats', r);
             if (!r.ok) {
                 document.getElementById('s-alerts').textContent = '?';
                 document.getElementById('s-pending').textContent = '?';
@@ -457,7 +449,6 @@
         async function loadAlerts() {
             const hours = document.getElementById('alerts-window').value;
             const r = await get(`/api/v1/threat-analyst/alerts?hours=${hours}`);
-            diagSet('/alerts', r);
             const c = document.getElementById('alerts-body');
             if (!r.ok) { c.innerHTML = `<div class="msg msg-error">${esc(r.err)}</div>`; return; }
             const alerts = r.data.alerts || [];
@@ -512,7 +503,6 @@
 
         async function loadRules() {
             const r = await get('/api/v1/threat-analyst/rules?status=pending');
-            diagSet('/rules', r);
             const c = document.getElementById('rules-body');
             if (!r.ok) { c.innerHTML = `<div class="msg msg-error">${esc(r.err)}</div>`; return; }
             const rules = r.data.rules || [];
@@ -533,7 +523,6 @@
 
         async function loadEmancipated() {
             const r = await get('/api/v1/exposure/emancipated');
-            diagSet('/exposure/emancipated', r);
             const c = document.getElementById('ema-body');
             if (!r.ok) { c.innerHTML = `<div class="msg msg-error">${esc(r.err)}</div>`; return; }
             const svcs = r.data.services || [];
@@ -583,7 +572,6 @@
         async function collectThen() {
             setAutoStatus('stale', 'collecting…');
             const r = await post('/api/v1/threat-analyst/collect');
-            diagSet('/collect', r);
             if (!r.ok) { setAutoStatus('err', 'collect failed: ' + r.err); await loadAll(); return; }
             const c = r.data.collected || {};
             setAutoStatus('', `collected ${c.crowdsec ?? 0} cs · ${c.waf ?? 0} waf — ${new Date().toLocaleTimeString()}`);
@@ -592,7 +580,6 @@
         // #597 — global overview from WAF + CrowdSec + firewall
         async function loadOverview() {
             const r = await get('/api/v1/threat-analyst/overview');
-            diagSet('/overview', r);
             if (!r.ok) return;
             const o = r.data || {}, w = o.waf || {}, c = o.crowdsec || {}, f = o.firewall || {};
             const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
@@ -612,23 +599,6 @@
         }
         async function loadAll() {
             await Promise.all([loadOverview(), loadStats(), loadAlerts(), loadRules(), loadEmancipated()]);
-        }
-
-        // Diagnostic
-        const diagState = {};
-        function diagSet(endpoint, r) {
-            diagState[endpoint] = r; renderDiag();
-        }
-        function renderDiag() {
-            const t = document.getElementById('diag-table');
-            const rows = Object.entries(diagState).map(([ep, r]) => `
-                <tr>
-                    <td>${esc(ep)}</td>
-                    <td class="${r.ok ? 'ok' : 'bad'}">${r.ok ? 'OK ' + r.status : 'FAIL ' + (r.status || '?')}</td>
-                    <td>${esc(r.err || '')}</td>
-                </tr>
-            `).join('');
-            t.innerHTML = rows || '<tr><td colspan="3" class="msg-loading">probing…</td></tr>';
         }
 
         // Boot

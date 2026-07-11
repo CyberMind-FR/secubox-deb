@@ -37,6 +37,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
  debian-archive-keyring
 Recommends: bridge-utils,
  tor,
+ obfs4proxy,
  python3-socksio
 Description: SecuBox-DEB ToolBoX — Gondwana Cabine Numérique (captive AP + MITM analyzer)
  Phase 1 du parent #474 (ToolBoX Pipeline). Productionize le PoC captive

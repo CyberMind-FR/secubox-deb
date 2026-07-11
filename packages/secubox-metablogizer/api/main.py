@@ -47,6 +47,7 @@ from rmtree import force_remove as _rmtree_force
 from webhook import (
     classify_payload,
     git_pull,
+    git_commit_push,
     list_deploys as _list_deploys,
     load_secret,
     site_lock,
@@ -875,6 +876,8 @@ async def upload_content(name: str, file: UploadFile = File(...)):
     must NOT create public/ here, or we'd silently move the served root out from
     under an already-published site and the upload wouldn't show up.
     """
+    import asyncio
+
     site_dir = SITES_ROOT / name
     if not site_dir.exists():
         site_dir.mkdir(parents=True)
@@ -889,7 +892,8 @@ async def upload_content(name: str, file: UploadFile = File(...)):
         content = await file.read()
         (target_dir / "index.html").write_bytes(content)
         _invalidate_sites_cache()
-        return {"success": True, "name": name, "kind": "html", "target": str(target_dir)}
+        version = await _version_upload(name, site_dir, file.filename or "index.html")
+        return {"success": True, "name": name, "kind": "html", "target": str(target_dir), "gitea": version}
 
     content = await file.read()
     temp_file = site_dir / f"_upload_{file.filename}"
@@ -916,7 +920,29 @@ async def upload_content(name: str, file: UploadFile = File(...)):
         raise HTTPException(400, f"Failed to extract: {e}")
 
     _invalidate_sites_cache()
-    return {"success": True, "name": name, "kind": "archive", "target": str(target_dir)}
+    version = await _version_upload(name, site_dir, file.filename or "archive")
+    return {"success": True, "name": name, "kind": "archive", "target": str(target_dir), "gitea": version}
+
+
+async def _version_upload(name: str, site_dir: Path, filename: str) -> dict:
+    """Commit + push this upload into the site's Gitea repo as a new version.
+
+    Runs under the shared per-site lock so it serializes against webhook/manual
+    deploy pulls, and off the event loop (git blocks). Best-effort: a Gitea
+    failure is reported in the response but never fails the upload itself.
+    """
+    import time
+    lock = await site_lock(name)
+    loop = asyncio.get_running_loop()
+    # A monotonic stamp keeps commit messages unique/ordered without needing
+    # wall-clock parsing; the operator sees "upload: <file>" + a counter.
+    message = f"upload: {filename}"
+    try:
+        async with lock:
+            return await loop.run_in_executor(None, git_commit_push, site_dir, message)
+    except Exception as e:  # never let versioning break the upload response
+        logger.warning(f"gitea version wrapper failed site={name}: {e}")
+        return {"pushed": False, "committed": False, "commit": None, "reason": "error"}
 
 
 # =============================================================================

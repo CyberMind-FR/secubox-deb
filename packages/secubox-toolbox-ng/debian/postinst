@@ -17,6 +17,16 @@ case "$1" in
     fi
     # Intentionally NO `systemctl enable --now`. See the unit header and
     # debian/changelog: enabled only at the Phase 6 cutover.
+
+    # #826 C2 autolearn: the daemon (secubox-toolbox) appends operator-allowlisted
+    # hosts to c2-allow.txt via POST /c2/allow. Make the dir + file writable by it
+    # WITHOUT touching the shared /etc/secubox parent (stays 0755).
+    if [ -d /etc/secubox/sentinel ]; then
+      chown secubox-toolbox:secubox-toolbox /etc/secubox/sentinel 2>/dev/null || true
+      chmod 0750 /etc/secubox/sentinel 2>/dev/null || true
+      [ -f /etc/secubox/sentinel/c2-allow.txt ] && chown secubox-toolbox:secubox-toolbox /etc/secubox/sentinel/c2-allow.txt 2>/dev/null || true
+      [ -f /etc/secubox/sentinel/browser-ja4.txt ] && chown secubox-toolbox:secubox-toolbox /etc/secubox/sentinel/browser-ja4.txt 2>/dev/null || true
+    fi
     ;;
   abort-upgrade|abort-remove|abort-deconfigure)
     ;;

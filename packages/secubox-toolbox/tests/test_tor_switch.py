@@ -135,15 +135,52 @@ def _banner_ctx(tor_mode):
     }
 
 
-def test_banner_shows_tor_chip_when_armed():
-    import sys, pathlib
+def _inject_banner_mod():
+    import sys, pathlib, importlib
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "mitmproxy_addons"))
-    import importlib, inject_banner
+    import inject_banner
     importlib.reload(inject_banner)
+    return inject_banner
+
+
+def test_banner_shows_tor_chip_when_armed():
+    inject_banner = _inject_banner_mod()
     on = inject_banner._banner_html_dynamic("sha", _banner_ctx(True), True, "https://kbin/r", "R3", "r3")
     off = inject_banner._banner_html_dynamic("sha", _banner_ctx(False), True, "https://kbin/r", "R3", "r3")
     assert b"&#x1F9C5; Tor" in on        # 🧅 chip present when armed
     assert b"&#x1F9C5;" not in off       # absent when off
+
+
+def test_inject_banner_output_is_ascii_encodable():
+    # #620 invariant — both render paths must stay ASCII-encodable (NCR-encoded
+    # emoji). The csp_strict path html.encode("ascii") and the JS-path
+    # js.encode("ascii") are exercised here; a raw non-ASCII byte would raise.
+    inject_banner = _inject_banner_mod()
+    for csp_strict in (True, False):
+        out = inject_banner._banner_html_dynamic(
+            "3A:9F:C1", _banner_ctx(True), csp_strict, "https://kbin/r", "R3", "r3")
+        assert isinstance(out, bytes)
+        out.decode("ascii")                         # must not raise
+        assert b"__GONDWANA_MITM_BANNER__" in out   # _GUARD idempotency marker
+        assert b"gondwana-mitm-banner" in out       # banner id preserved
+
+
+def test_inject_banner_three_cluster_and_close():
+    # Structural responsive fix — left rank+grade pinned, middle chips scroll,
+    # right report+close pinned. The JS (dismissible) path carries the close ✕
+    # in the right-pinned cluster; the csp_strict path has NO close (non-dismiss).
+    inject_banner = _inject_banner_mod()
+    js = inject_banner._banner_html_dynamic(
+        "sha", _banner_ctx(False), False, "https://kbin/r", "R3", "r3").decode("ascii")
+    assert "box-sizing:border-box" in js
+    assert "flex:0 0 auto" in js and "flex:1 1 auto" in js  # pinned + growing clusters
+    assert "min-width:0" in js and "overflow-x:auto" in js  # middle scrolls
+    assert 'aria-label="dismiss"' in js                    # close control present
+    assert "&#x2715;" in js                                 # ✕ glyph
+    # csp_strict path is non-dismissible → no close control.
+    strict = inject_banner._banner_html_dynamic(
+        "sha", _banner_ctx(False), True, "https://kbin/r", "R3", "r3").decode("ascii")
+    assert "&#x2715;" not in strict and "aria-label" not in strict
 
 
 def test_nft_tunnel_failclosed_invariants():
@@ -154,7 +191,7 @@ def test_nft_tunnel_failclosed_invariants():
     text = nft.read_text()
     # redirect into Tor TransPort + DNSPort
     assert "redirect to :9040" in text
-    assert "redirect to :5353" in text
+    assert "redirect to :9053" in text
     # kill-switch drops (fail-closed) for v4 escape + v6 leak
     assert "ip daddr != 127.0.0.0/8 drop" in text
     assert "meta nfproto ipv6" in text and "drop" in text

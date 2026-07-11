@@ -29,7 +29,46 @@ secubox-nac (3.0.0-1~bookworm1) bookworm; urgency=medium
     follow-up, not part of this release.
   * Depends: add ieee-data (OUI vendor DB at /usr/share/ieee-data/oui.txt).
 
+  * Carries the LXC Containers zone + interface auto-classification
+    (br-lxc -> lxc) forward into the consolidated store: ARP discovery
+    now records the interface, the store persists it (best-value column),
+    and zone resolution falls back to it (nft set > interface > JSON >
+    quarantine). Folds in the standalone 1.0.5-1.0.7 releases below.
+
  -- Gerald KERMA <devel@cybermind.fr>  Sat, 05 Jul 2026 18:00:00 +0000
+
+secubox-nac (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * feat: add an LXC Containers zone and auto-classify clients by the interface
+    they were seen on (br-lxc to lxc), configurable via nac interface_zones.
+    Operator moves (nft sets) still take priority. gk2: 10 containers land in
+    the lxc zone, 3 upstream devices in lan.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 11:45:00 +0200
+
+secubox-nac (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * fix: Zones tab was empty because /zones reported only raw nftables set
+    members (0), not discovered clients. It now groups discovered clients by
+    their resolved zone (nft set > JSON assignment > fallback), so populated
+    zones show their members.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 11:20:00 +0200
+
+secubox-nac (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix: NAC discovered 0 clients when devices live on br-lxc or an interface
+    outside the hardcoded LAN set (dashboard showed only the template). ARP
+    discovery now includes br-lxc by default and reads extra interfaces from
+    nac config  (gk2: eth2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 11:00:00 +0200
+
+secubox-nac (1.0.4-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
 
 secubox-nac (1.0.4-1~bookworm1) bookworm; urgency=medium
 
