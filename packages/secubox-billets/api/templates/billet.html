@@ -17,6 +17,7 @@
 {% block content %}
 <article class="h-entry billet billet-full">
   <div class="e-content">{{ billet.body_html|safe }}</div>
+  {% if billet.ref_host %}<a class="ref-chip u-url" href="{{ billet.ref_url }}" target="_blank" rel="noopener nofollow ugc">{{ billet.ref_host }}</a>{% endif %}
   {% if billet.embed_html %}<div class="embed">{{ billet.embed_html|safe }}</div>{% endif %}
   <footer class="billet-meta">
     {% if billet.published_at %}<time class="dt-published" datetime="{{ billet.published_at }}">{{ billet.published_at[:19]|replace('T',' ') }} UTC</time>{% endif %}
@@ -25,22 +26,8 @@
 </article>
 {% if reactions %}{% include "_reactions.html" %}{% endif %}
 
-{% if share %}
-<details class="share">
-  <summary>↗ Republier</summary>
-  <div class="share-menu" data-url="{{ og.url }}" data-title="{{ og.title }}">
-    <a href="{{ share.bluesky }}" target="_blank" rel="noopener nofollow">Bluesky</a>
-    <a href="{{ share.x }}" target="_blank" rel="noopener nofollow">X</a>
-    <a href="{{ share.facebook }}" target="_blank" rel="noopener nofollow">Facebook</a>
-    <a href="{{ share.linkedin }}" target="_blank" rel="noopener nofollow">LinkedIn</a>
-    <a href="{{ share.whatsapp }}" target="_blank" rel="noopener nofollow">WhatsApp</a>
-    <a href="{{ share.telegram }}" target="_blank" rel="noopener nofollow">Telegram</a>
-    <a href="{{ share.reddit }}" target="_blank" rel="noopener nofollow">Reddit</a>
-    <a href="{{ share.email }}">Email</a>
-    <button type="button" class="share-mastodon">Mastodon</button>
-    <button type="button" class="share-copy">Copier le lien</button>
-  </div>
-</details>
+{% if billet.share %}
+  {% with share=billet.share, permalink=billet.permalink, title=billet.title %}{% include "_share_quick.html" %}{% endwith %}
 {% endif %}
 
 <section id="comments" class="comments">

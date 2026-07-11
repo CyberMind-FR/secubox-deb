@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ site_title }}{% endblock %}</title>
-<link rel="stylesheet" href="/static/billets.css">
+<link rel="stylesheet" href="/static/billets.css?v=2">
 <link rel="alternate" type="application/atom+xml" title="{{ site_title }}" href="/feed.xml">
 <link rel="alternate" type="application/feed+json" title="{{ site_title }}" href="/feed.json">
 {% block head %}{% endblock %}
@@ -20,6 +20,6 @@
 <footer class="site-footer">
   <a href="/feed.xml">Atom</a> · <a href="/feed.json">JSON</a> · billets
 </footer>
-<script src="/static/billets.js" defer></script>
+<script src="/static/billets.js?v=2" defer></script>
 </body>
 </html>
