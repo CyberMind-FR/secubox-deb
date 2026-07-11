@@ -37,12 +37,27 @@ def export_site(site_dir: Path, manifest: dict, out_dir: Path) -> Path:
     return art
 
 
+def _safe_extractall(tar: tarfile.TarFile, dest: Path) -> None:
+    """Extract every member into `dest`, refusing traversal, absolute paths, and
+    links/devices. A portable equivalent of `extractall(filter="data")` — the
+    `filter=` kwarg only exists on Python >= 3.11.4/3.12, and the target board
+    runs 3.11.2, so we validate members ourselves (works on every version)."""
+    base = dest.resolve()
+    for m in tar.getmembers():
+        if m.issym() or m.islnk() or m.ischr() or m.isblk() or m.isfifo() or m.isdev():
+            raise ValueError(f"unsafe tar member type: {m.name}")
+        target = (base / m.name).resolve()
+        if base != target and base not in target.parents:
+            raise ValueError(f"tar member escapes destination: {m.name}")
+    tar.extractall(base)
+
+
 def import_site(sbxsite: Path, dest_root: Path) -> dict:
     dest_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
         with tarfile.open(sbxsite, "r:gz") as t:
-            t.extractall(tdp, filter="data")
+            _safe_extractall(t, tdp)
         manifest = json.loads((tdp / "manifest.json").read_text())
         name = manifest.get("name")
         if not name or "/" in name or "\\" in name or name in (".", ".."):
@@ -54,5 +69,5 @@ def import_site(sbxsite: Path, dest_root: Path) -> dict:
         else:
             target.mkdir(parents=True, exist_ok=True)
             with tarfile.open(tdp / "content.tar", "r") as ct:
-                ct.extractall(target, filter="data")
+                _safe_extractall(ct, target)
     return manifest

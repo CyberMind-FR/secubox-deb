@@ -28,8 +28,20 @@ def test_apply_route_calls_vhost_then_waf():
     assert res["route_ok"] is True
 
 
-def test_apply_route_reports_failure():
+def test_apply_route_fails_when_waf_route_fails():
+    # The WAF route is the operative mechanism: if it fails, route_ok is False.
     def runner(verb, *args):
         return {"ok": verb == "vhost-add", "detail": "boom" if verb == "waf-route" else "ok"}
     res = apply_route("zem.gk2.secubox.in", 8900, runner=runner)
     assert res["route_ok"] is False
+
+
+def test_apply_route_vhost_is_advisory():
+    # vhost-add is blocked by haproxyctl's drift-guard on a hand-migrated board
+    # and is redundant with default_backend — its failure must NOT fail route_ok
+    # as long as the WAF route succeeded. The vhost detail is still surfaced.
+    def runner(verb, *args):
+        return {"ok": verb == "waf-route", "detail": "drift-guard" if verb == "vhost-add" else "routed"}
+    res = apply_route("zem.gk2.secubox.in", 8900, runner=runner)
+    assert res["route_ok"] is True
+    assert res["vhost"]["ok"] is False  # surfaced, not hidden
