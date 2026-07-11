@@ -4,12 +4,15 @@
 """MetaBlogizer publisher wizard: upload -> version -> route -> cert -> backup."""
 from __future__ import annotations
 
+import shutil
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from secubox_core.auth import require_jwt
+from secubox_core.config import get_config
 
 from publish.content import extract_archive, ContentError
 from publish.routing import apply_route
@@ -17,8 +20,11 @@ from publish.certs import provision_cert
 from publish.backup import export_site, import_site
 from webhook import git_commit_push
 
-# Mirror the constants owned by api/main.py (kept in sync intentionally).
-SITES_ROOT = Path("/srv/metablogizer/sites")
+# Derive sites_root from config the same way api/main.py does (importing from
+# main would be circular since main imports this router).
+_config = get_config("metablogizer")
+SITES_ROOT = Path(_config.get("sites_root", "/srv/metablogizer/sites") if _config else "/srv/metablogizer/sites")
+# Mirror the literal constants owned by api/main.py (kept in sync intentionally).
 DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 BASE_PORT = 8900
 
@@ -68,7 +74,10 @@ async def publish_export(name: str, user=Depends(require_jwt)):
                 "base_port": BASE_PORT}
     out = Path(tempfile.mkdtemp())
     art = export_site(site, manifest, out)
-    return FileResponse(str(art), filename=art.name, media_type="application/octet-stream")
+    return FileResponse(
+        str(art), filename=art.name, media_type="application/octet-stream",
+        background=BackgroundTask(shutil.rmtree, str(out), True),
+    )
 
 
 @router.post("/publish/import")
@@ -81,4 +90,6 @@ async def publish_import(file: UploadFile = File(...), user=Depends(require_jwt)
         manifest = import_site(art, SITES_ROOT)
     except Exception as e:  # noqa: BLE001 — surface a clean 400
         raise HTTPException(400, f"import failed: {e}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
     return JSONResponse({"ok": True, "manifest": manifest})

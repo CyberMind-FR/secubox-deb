@@ -28,7 +28,11 @@ def extract_archive(docroot: Path, data: bytes, filename: str) -> dict:
     name = (filename or "").lower()
     if name.endswith(".zip"):
         # Validate ALL members before writing anything.
-        with zipfile.ZipFile(io.BytesIO(data)) as z:
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile as e:
+            raise ContentError(f"not a valid zip archive: {e}")
+        with zf as z:
             members = [m for m in z.infolist() if not m.is_dir()]
             targets = [_safe_join(docroot, m.filename) for m in members]
             # Clear previous content (a zip is a fresh publish; history is in gitea).
