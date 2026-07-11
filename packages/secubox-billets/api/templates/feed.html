@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="h-feed">
+  {% for b in billets %}
+  <article class="h-entry billet">
+    <div class="e-content">{{ b.body_html|safe }}</div>
+    <footer class="billet-meta">
+      {% if b.published_at %}<time class="dt-published" datetime="{{ b.published_at }}">{{ b.published_at[:10] }}</time>{% endif %}
+      <a class="u-url" href="/b/{{ b.slug }}">permalien</a>
+    </footer>
+  </article>
+  {% else %}
+  <p class="empty">Aucun billet pour le moment.</p>
+  {% endfor %}
+</div>
+{% if next_cursor %}
+<nav class="pager"><a rel="next" href="/?cursor={{ next_cursor }}">Billets plus anciens →</a></nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,10 @@
+secubox-billets (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: billets micro-blog gateway. Public feed (cursor pagination,
+    permalinks, Atom/JSON), admin (argon2id + optional TOTP, CSRF, billet CRUD),
+    SSRF-guarded oEmbed + nh3 sanitization + OpenGraph link cards, moderated
+    comments (honeypot + timed token + rate-limit) and emoji reactions, outbound
+    oEmbed + Republier share menu. Per-billet Gitea revisioning; BLAKE2b-chained
+    event log. FastAPI + aiosqlite (WAL) on a Unix socket behind nginx.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 11 Jul 2026 15:00:00 +0200

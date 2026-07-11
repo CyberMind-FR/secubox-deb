@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/secubox-billets/usr/lib/secubox/billets
+	cp -r api debian/secubox-billets/usr/lib/secubox/billets/
+	install -m 0644 requirements.txt debian/secubox-billets/usr/lib/secubox/billets/requirements.txt
+	install -d debian/secubox-billets/etc/nginx/sites-available
+	install -m 0644 deploy/nginx.conf debian/secubox-billets/etc/nginx/sites-available/billets.conf

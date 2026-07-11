@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ site_title }} — billet{% endblock %}
+{% block head %}
+<link rel="canonical" href="/b/{{ billet.slug }}">
+{% if og %}
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="{{ site_title }}">
+<meta property="og:title" content="{{ og.title }}">
+<meta property="og:description" content="{{ og.desc }}">
+<meta property="og:url" content="{{ og.url }}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{{ og.title }}">
+<meta name="twitter:description" content="{{ og.desc }}">
+{% endif %}
+{% if oembed_url %}<link rel="alternate" type="application/json+oembed" href="{{ oembed_url }}">{% endif %}
+{% endblock %}
+{% block content %}
+<article class="h-entry billet billet-full">
+  <div class="e-content">{{ billet.body_html|safe }}</div>
+  {% if billet.embed_html %}<div class="embed">{{ billet.embed_html|safe }}</div>{% endif %}
+  <footer class="billet-meta">
+    {% if billet.published_at %}<time class="dt-published" datetime="{{ billet.published_at }}">{{ billet.published_at[:19]|replace('T',' ') }} UTC</time>{% endif %}
+    <a class="u-url" href="/b/{{ billet.slug }}">permalien</a>
+  </footer>
+</article>
+{% if reactions %}{% include "_reactions.html" %}{% endif %}
+
+{% if share %}
+<details class="share">
+  <summary>↗ Republier</summary>
+  <div class="share-menu" data-url="{{ og.url }}" data-title="{{ og.title }}">
+    <a href="{{ share.bluesky }}" target="_blank" rel="noopener nofollow">Bluesky</a>
+    <a href="{{ share.x }}" target="_blank" rel="noopener nofollow">X</a>
+    <a href="{{ share.facebook }}" target="_blank" rel="noopener nofollow">Facebook</a>
+    <a href="{{ share.linkedin }}" target="_blank" rel="noopener nofollow">LinkedIn</a>
+    <a href="{{ share.whatsapp }}" target="_blank" rel="noopener nofollow">WhatsApp</a>
+    <a href="{{ share.telegram }}" target="_blank" rel="noopener nofollow">Telegram</a>
+    <a href="{{ share.reddit }}" target="_blank" rel="noopener nofollow">Reddit</a>
+    <a href="{{ share.email }}">Email</a>
+    <button type="button" class="share-mastodon">Mastodon</button>
+    <button type="button" class="share-copy">Copier le lien</button>
+  </div>
+</details>
+{% endif %}
+
+<section id="comments" class="comments">
+  <h2>Commentaires</h2>
+  {% if flash == 'pending' %}<p class="note">Merci — votre commentaire est en attente de modération.</p>{% endif %}
+  {% if flash == 'ok' %}<p class="note">Commentaire publié.</p>{% endif %}
+  {% if flash == 'rate' %}<p class="note err">Trop de commentaires — réessayez plus tard.</p>{% endif %}
+  {% for c in comments %}
+  <article class="comment">
+    <p class="c-meta"><strong>{{ c.author_name }}</strong>
+      <time datetime="{{ c.created_at }}">{{ c.created_at[:10] }}</time></p>
+    <p class="c-body">{{ c.body_html|safe }}</p>
+  </article>
+  {% else %}<p class="empty">Aucun commentaire pour l'instant.</p>{% endfor %}
+
+  <form method="post" action="/b/{{ billet.slug }}/comment" class="comment-form">
+    <input type="hidden" name="csrf" value="{{ pcsrf }}">
+    <input type="hidden" name="ts_token" value="{{ ts_token }}">
+    <p class="hp"><label>Laissez ce champ vide
+      <input name="website" tabindex="-1" autocomplete="off"></label></p>
+    <label>Nom<input name="author_name" required minlength="2" maxlength="40"></label>
+    <label>Email (optionnel, jamais affiché)<input name="author_email" type="email" maxlength="254"></label>
+    <label>Commentaire<textarea name="body" rows="4" required minlength="2" maxlength="2000"></textarea></label>
+    <button type="submit">Envoyer</button>
+  </form>
+</section>
+{% endblock %}
