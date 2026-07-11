@@ -35,6 +35,7 @@ _HEX_RE = re.compile(r"[0-9a-fA-F]")
 # last_seen, source) are handled separately in the SQL below.
 _BEST_VALUE_COLUMNS = (
     "hostname",
+    "interface",
     "oui_vendor",
     "is_router",
     "is_openwrt",
@@ -71,6 +72,7 @@ _ALL_UPSERT_COLUMNS = _BEST_VALUE_COLUMNS + _ALWAYS_SET_COLUMNS + (_FIRST_SEEN_C
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS devices(
   mac TEXT PRIMARY KEY, ip TEXT, hostname TEXT,
+  interface TEXT,
   oui_vendor TEXT,
   is_router INTEGER DEFAULT 0, is_openwrt INTEGER DEFAULT 0, is_secubox INTEGER DEFAULT 0,
   model TEXT, luci_version TEXT,
@@ -125,7 +127,22 @@ class DeviceStore:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
+        self._migrate_columns()
         self._conn.commit()
+
+    def _migrate_columns(self) -> None:
+        """Add columns introduced after a devices.db was first created.
+
+        `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a DB
+        built before a column existed (e.g. the live board's, or one produced
+        by `migrate_legacy`) is patched here with `ALTER TABLE ADD COLUMN`.
+        Additive and idempotent — a fresh DB already has every column and this
+        is a no-op.
+        """
+        have = {r["name"] for r in self._conn.execute("PRAGMA table_info(devices)")}
+        for col, decl in (("interface", "TEXT"),):
+            if col not in have:
+                self._conn.execute(f"ALTER TABLE devices ADD COLUMN {col} {decl}")
 
     def close(self) -> None:
         with self._lock:

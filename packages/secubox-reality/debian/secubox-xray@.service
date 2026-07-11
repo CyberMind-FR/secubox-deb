@@ -1,0 +1,39 @@
+[Unit]
+Description=SecuBox Reality egress point %i (Xray-core, VLESS+Reality+Vision)
+Documentation=https://xtls.github.io/
+After=network-online.target secubox-reality.service
+Wants=network-online.target
+PartOf=secubox-reality.service
+
+[Service]
+Type=simple
+
+# The per-instance config lives at /etc/secubox/reality/%i.json and holds
+# the x25519 private key + client UUIDs — never world-readable. LoadCredential
+# copies it (mode 0400) into a private per-unit credentials directory instead
+# of relying on DAC group membership for the DynamicUser below.
+LoadCredential=config:/etc/secubox/reality/%i.json
+ExecStart=/usr/bin/xray run -config %d/config
+
+Restart=on-failure
+RestartSec=5
+
+# --- CSPN-oriented hardening ---
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/sentinel"
 )
 
 // ── Pure handler logic ───────────────────────────────────────────────────────
@@ -82,6 +83,53 @@ func ja4ish(h *tls.ClientHelloInfo) string {
 	return fmt.Sprintf("t%04x_c%02d_a%s_sni=%s", maxVer, len(h.CipherSuites), alpn, h.ServerName)
 }
 
+// ja4stack is the SNI-INDEPENDENT part of ja4ish: a client-TLS-stack
+// fingerprint (max version, cipher-suite count, first ALPN) with NO server
+// name. Unlike ja4ish (which embeds the destination SNI, so it varies per
+// host), ja4stack is stable across every flow from the same client stack, so
+// it can distinguish a browser from a non-browser client — the input the
+// Sentinel C2 auto-learn "non_browser_ja" signal (and browser-ja4.txt) needs.
+//
+// NOTE: this is an ad-hoc "stack" fingerprint (crypto/tls exposes no raw
+// ClientHello bytes, so a spec-compliant JA4 hash isn't computable in pure
+// Go here). It is self-consistent — the SENTINEL_JA4_CAPTURE recorder writes
+// this exact format into browser-ja4.txt and the signal compares against it —
+// but it is NOT interchangeable with a public JA4 blocklist's hashes.
+func ja4stack(h *tls.ClientHelloInfo) string {
+	if h == nil {
+		return ""
+	}
+	// GREASE values (RFC 8701) are randomly injected by browsers into the
+	// version and cipher lists; they MUST be excluded or the fingerprint jitters
+	// per handshake (e.g. max version flips between 0x0304 and a GREASE 0xfafa).
+	maxVer := uint16(0)
+	for _, v := range h.SupportedVersions {
+		if isGREASE(v) {
+			continue
+		}
+		if v > maxVer {
+			maxVer = v
+		}
+	}
+	nCiphers := 0
+	for _, c := range h.CipherSuites {
+		if !isGREASE(c) {
+			nCiphers++
+		}
+	}
+	alpn := "none"
+	if len(h.SupportedProtos) > 0 {
+		alpn = h.SupportedProtos[0]
+	}
+	return fmt.Sprintf("t%04x_c%02d_a%s", maxVer, nCiphers, alpn)
+}
+
+// isGREASE reports whether v is a TLS GREASE placeholder (RFC 8701): the 16
+// values 0x0a0a, 0x1a1a, … 0xfafa — both bytes equal, each low nibble 0xa.
+func isGREASE(v uint16) bool {
+	return (v>>8) == (v&0xff) && (v&0x0f) == 0x0a
+}
+
 // ── CONNECT-proxy MITM wiring ────────────────────────────────────────────────
 
 type Proxy struct {
@@ -123,6 +171,12 @@ type Proxy struct {
 	// hosts it answers the SW script fetch with a self-unregistering SW so PWA
 	// shells stop being SW-cached and the banner can be injected on the next nav.
 	swNeuter *SWNeuter
+
+	// sentinel (#823) is the inline threat-detection gate: it neutralizes
+	// high-confidence known-infra IOC hits (block/strip/sinkhole) and mirrors the
+	// rest to the async sbx-sentinel analyzer. nil-safe and fail-open — a
+	// disabled/erroring hook is a transparent passthrough. See sentinel.go.
+	sentinel *sentinelHook
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -162,7 +216,7 @@ func (px *Proxy) maybeRecordAdCandidate(host, site, path string) {
 }
 
 func (px *Proxy) serverTLSConfig() *tls.Config {
-	return px.serverTLSConfigCapture(nil)
+	return px.serverTLSConfigCapture(nil, nil)
 }
 
 // serverTLSConfigCapture is serverTLSConfig with an extra per-handshake hook:
@@ -171,11 +225,14 @@ func (px *Proxy) serverTLSConfig() *tls.Config {
 // handlers use it to relay the ja4 ClientHello payload (relay.go) WITH the
 // client conn's peer IP — which is known at the handler, not inside the TLS
 // config. Passing nil yields the plain forging config (CONNECT PoC, tests).
-func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo)) *tls.Config {
+func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo), onJA4 func(string)) *tls.Config {
 	return &tls.Config{
 		GetCertificate: func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			if px.jaSink != nil {
 				px.jaSink(ja4ish(h)) // capture handshake fingerprint
+			}
+			if onJA4 != nil {
+				onJA4(ja4stack(h)) // SNI-independent stack fp → Sentinel FlowMeta.JA4
 			}
 			if capture != nil {
 				capture(h) // ja4 relay material (peer IP threaded in by the handler)
@@ -254,7 +311,9 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// MITM: TLS-terminate the client with a forged cert (+ ClientHello capture).
 	// The capture hook relays the ja4 ClientHello payload for this handshake,
 	// tagged with the client's peer IP (#662). nil when the relay gate is off.
-	tconn := tls.Server(client, px.serverTLSConfigCapture(px.captureAndEmitJA4(client)))
+	var ja4 string // SNI-independent client-stack fp, captured at handshake below
+	tconn := tls.Server(client, px.serverTLSConfigCapture(px.captureAndEmitJA4(client),
+		func(s string) { ja4 = s }))
 	if err := tconn.Handshake(); err != nil {
 		return
 	}
@@ -263,7 +322,7 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// Shared post-TLS pipeline. CONNECT dials upstream by the request URL host
 	// (req.URL.Host set inside), so dialHost is "" → mitmPipeline derives it.
 	// CONNECT PoC is never an R3 WG client → wg=false.
-	px.mitmPipeline(tconn, client, host, verdict, "", false)
+	px.mitmPipeline(tconn, client, host, verdict, "", false, ja4)
 }
 
 // mitmPipeline runs the shared post-TLS-handshake MITM logic used by BOTH the
@@ -283,7 +342,7 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 //     ServerName=host and verifying the cert against host (not the bare IP).
 //   - wg         : the client is an R3 WireGuard peer (10.99.1.0/24); threaded
 //     into the injected loader's data-wg attribute. CONNECT path passes false.
-func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string, wg bool) {
+func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string, wg bool, ja4 string) {
 	br := newReader(tconn)
 	req, err := http.ReadRequest(br)
 	if err != nil {
@@ -460,6 +519,43 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// was armed, the original body otherwise. resp itself is never reassigned, so
 	// this remains the single, sole closer (teeReadCloser.Close is once-guarded).
 	defer func() { resp.Body.Close() }()
+
+	// #823 — inline Sentinel gate. host + the client identity are known here and
+	// the upstream response headers are in hand. Match the flow's observable
+	// metadata against the loaded IOC set: a HIGH-CONFIDENCE known-infra hit
+	// neutralizes inline (block/sinkhole → serve a Sentinel block page instead of
+	// the upstream response; strip → serve the response with an emptied body),
+	// everything else is mirrored to the async analyzer and proceeds unchanged.
+	// Fail-open + nil-safe (see sentinel.go): a disabled/erroring/absent hook is a
+	// transparent passthrough, so this can never break a normal flow. Only the
+	// domain + URL vectors drive inline matching today: JA4/JA3 (captured at
+	// handshake) and cert/file-hash are not plumbed to this shared pipeline, and
+	// ClientIP is DELIBERATELY left empty — IP IOCs are malicious *destination*
+	// IPs, so matching them against the client's own source IP is wrong and could
+	// auto-block the client. The destination-IP vector is a follow-up (plumb the
+	// resolved upstream IP here); until then IP matching stays inert inline.
+	switch action, blockPage := px.sentinel.inspect(sentinel.FlowMeta{
+		Host:    host,
+		URL:     "https://" + host + req.URL.RequestURI(),
+		MacHash: clientHash,
+		JA4:     ja4, // SNI-independent client-stack fp (feeds non_browser_ja)
+	}, nil); action {
+	case sentinel.ActionBlock, sentinel.ActionSinkhole:
+		writeRaw(tconn, 403, "Forbidden", map[string]string{
+			"Content-Type":       "text/html; charset=utf-8",
+			"Cache-Control":      "no-store",
+			"X-SecuBox-Sentinel": "blocked",
+		}, blockPage)
+		return
+	case sentinel.ActionStrip:
+		// Neutralize the payload: serve the upstream status + headers with an
+		// emptied body. Drop Content-Encoding so the zero-length body is not
+		// mis-decoded as a truncated compressed stream.
+		resp.Header.Del("Content-Encoding")
+		resp.Header.Set("X-SecuBox-Sentinel", "stripped")
+		writeResponse(tconn, resp, nil)
+		return
+	}
 
 	// #662 — relay the cookie metadata for this MITM'd response (allow|mitm only).
 	// NAMES ONLY (never values — privacy/CSPN); no-op unless ≥1 Set-Cookie OR ≥1
@@ -687,6 +783,11 @@ func main() {
 		media:         newMediaCatcher(*mediaCatch),
 		mbuf:          NewMediaBuffer(*mediaBufferRoot, *mediaBuffer, *mediaBufferPerObj),
 		swNeuter:      newSWNeuter(*swNeuterHosts),
+		// #823 — inline Sentinel gate. Construction reads the environment
+		// (SENTINEL_ENABLED / SENTINEL_PACK_DIR / SENTINEL_OVERLAY_DIR /
+		// SENTINEL_MIRROR_SOCK); unset/false or a failed pack load yields a
+		// disabled no-op hook, so the default build is byte-identical to today.
+		sentinel: newSentinelHook(),
 	}
 	// #812 Task 6 — apply the retention/size-ceil overrides on top of
 	// NewMediaBuffer's defaults. Same-package unexported field access (see

@@ -44,6 +44,16 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("SECUBOX_AUTH_AUDIT", str(audit_path))
     monkeypatch.setenv("SECUBOX_AUTH_TOTP_PENDING", str(pending_path))
     monkeypatch.setenv("SECUBOX_JWT_SECRET", "test-secret")
+    # Webui-toggleable runtime settings live here; isolate to tmp so a test
+    # never reads/writes the real /etc/secubox/auth-runtime.json.
+    monkeypatch.setenv("SECUBOX_AUTH_RUNTIME", str(tmp_path / "auth-runtime.json"))
+
+    # Isolate config: the real /etc/secubox/secubox.conf may exist but be
+    # unreadable to the test user (0640 secubox:secubox). Force the in-code
+    # dev defaults so _load() never touches it.
+    from secubox_core import config as sbx_config
+    monkeypatch.setattr(sbx_config, "_CONF_PATHS", [])
+    monkeypatch.setattr(sbx_config, "_CONFIG", None)
 
     # Point user_store at the temp file
     from secubox_core import user_store
@@ -57,8 +67,25 @@ def client(tmp_path: Path, monkeypatch):
     return TestClient(auth_main.app), users_path, sessions_path
 
 
-def test_admin_password_login_returns_enrollment_token(client):
+def test_admin_password_login_default_off_returns_session(client):
+    """Default (require_admin_totp unset) → admin logs in with password only.
+
+    The requirement now defaults OFF so a node stays reachable; it is opted
+    back in from the webui, which writes /etc/secubox/auth-runtime.json.
+    """
     c, users_path, _ = client
+    r = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("access_token"), body
+    assert not body.get("enrollment_required")
+
+
+def test_admin_enrollment_forced_when_runtime_requires_totp(client):
+    """require_admin_totp=true (webui toggle → runtime file) forces enrollment."""
+    c, users_path, _ = client
+    from api import main as auth_main
+    auth_main._AUTH_RUNTIME_FILE.write_text(json.dumps({"require_admin_totp": True}))
     r = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
     assert r.status_code == 200
     body = r.json()
@@ -67,7 +94,7 @@ def test_admin_password_login_returns_enrollment_token(client):
 
 
 def test_admin_login_session_when_totp_not_required(client, monkeypatch):
-    """require_admin_totp=false → admin logs in with password only (no enrollment)."""
+    """require_admin_totp=false in [auth] config → admin logs in with password only."""
     c, _users_path, _ = client
     from api import main as auth_main
     monkeypatch.setattr(
@@ -81,8 +108,12 @@ def test_admin_login_session_when_totp_not_required(client, monkeypatch):
     assert not body.get("enrollment_required")
 
 
-def test_admin_totp_forced_when_config_errors(client, monkeypatch):
-    """Fail-secure: a get_config error keeps admin enrollment mandatory."""
+def test_admin_login_allowed_when_config_errors(client, monkeypatch):
+    """Reachability-first: a get_config error must NOT lock admins out.
+
+    With no runtime override present, a config read error falls through to the
+    default-OFF value (fail-open), so the admin still gets a session.
+    """
     c, _users_path, _ = client
     from api import main as auth_main
 
@@ -92,7 +123,28 @@ def test_admin_totp_forced_when_config_errors(client, monkeypatch):
     monkeypatch.setattr(auth_main, "get_config", _boom)
     r = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
     assert r.status_code == 200
-    assert r.json().get("enrollment_required") is True
+    assert r.json().get("access_token")
+    assert not r.json().get("enrollment_required")
+
+
+def test_settings_endpoint_roundtrip(client):
+    """GET reflects the toggle; an admin POST flips and persists it."""
+    c, _users_path, _ = client
+    tok = c.post(
+        "/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"}
+    ).json()["access_token"]
+    h = {"Authorization": f"Bearer {tok}"}
+
+    assert c.get("/settings", headers=h).json() == {"require_admin_totp": False}
+
+    r_on = c.post("/settings", json={"require_admin_totp": True}, headers=h)
+    assert r_on.status_code == 200
+    assert r_on.json() == {"require_admin_totp": True}
+    assert c.get("/settings", headers=h).json() == {"require_admin_totp": True}
+
+    # An admin whose session predates the toggle can still turn it back off.
+    r_off = c.post("/settings", json={"require_admin_totp": False}, headers=h)
+    assert r_off.json() == {"require_admin_totp": False}
 
 
 def test_wrong_password_returns_401(client):
@@ -113,6 +165,9 @@ def test_disabled_user_blocked(client):
 
 def test_full_totp_enrollment_then_login(client):
     c, users_path, sessions_path = client
+    # Enrollment only triggers when the admin-TOTP requirement is on.
+    from api import main as auth_main
+    auth_main._AUTH_RUNTIME_FILE.write_text(json.dumps({"require_admin_totp": True}))
 
     # 1. Login → enrollment_token
     r1 = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})
@@ -168,6 +223,9 @@ def test_totp_widened_window_accepts_drifted_code(client, monkeypatch):
     import time as _time
     import pyotp
     c, users_path, _ = client
+    # Enrollment only triggers when the admin-TOTP requirement is on.
+    from api import main as auth_main
+    auth_main._AUTH_RUNTIME_FILE.write_text(json.dumps({"require_admin_totp": True}))
 
     # Enroll admin
     r1 = c.post("/auth/login", json={"username": "admin", "password": "GoodPass!42xyz"})

@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-frigate-diskguard.timer >/dev/null 2>&1 || true
+    deb-systemd-invoke stop secubox-frigate.service >/dev/null 2>&1 || true
+    # Leave the frigate LXC, /data/frigate, and /etc/secubox/frigate intact (data-preserving).
+    ;;
+esac
+#DEBHELPER#
+exit 0

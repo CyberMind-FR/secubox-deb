@@ -1,3 +1,32 @@
+secubox-auth (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * feat: admin-TOTP requirement is now toggleable from the webui and defaults
+    OFF so a node stays reachable (was: implicitly forced for every admin).
+    - New GET/POST /api/v1/auth/settings (admin-gated) exposing require_admin_totp;
+      the value persists to /etc/secubox/auth-runtime.json.
+    - Login enforcement gated on _get_require_admin_totp(): runtime file >
+      [auth] config > default False. Fail-open: a config read error no longer
+      locks admins out.
+    - Tests realigned to the reachability-first contract + /settings roundtrip;
+      fixture isolates config + runtime paths (10 passing).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 11 Jul 2026 12:00:00 +0200
+
+secubox-auth (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * fix: login failed and /status 500d with NameError: the sessions file was
+    defined as __SESSIONS_FILE (dunder) but every handler referenced
+    _SESSIONS_FILE (single underscore). Normalised to _SESSIONS_FILE so session
+    persistence + status work; logins succeed again.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 11 Jul 2026 08:00:00 +0200
+
+secubox-auth (1.0.2-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-auth (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Fix (#498) : ntp_health.probe() falls back to timedatectl/systemd-

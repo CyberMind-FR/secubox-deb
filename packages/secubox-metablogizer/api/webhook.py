@@ -77,6 +77,55 @@ def git_pull(site_dir: Path, branch: str) -> tuple[str, str]:
     return old, new
 
 
+# Commit identity for dashboard-originated versions. The push key itself is
+# registered in Gitea (as the repo owner); the author line only labels history.
+COMMIT_NAME = "SecuBox MetaBlogizer"
+COMMIT_EMAIL = "metablogizer@secubox.in"
+
+
+def git_commit_push(site_dir: Path, message: str) -> dict:
+    """Version a dashboard upload into the site's Gitea repo: stage all, commit,
+    and push the current branch to origin.
+
+    Best-effort and side-effect-only — the caller has already written the
+    content locally (the primary success). This returns a status dict and never
+    raises for the normal "no repo" / "nothing changed" / "push rejected" cases,
+    so a Gitea hiccup never fails an upload:
+      {"pushed": bool, "committed": bool, "commit": <sha|None>, "reason": <str>}
+    """
+    if not (site_dir / ".git").is_dir():
+        return {"pushed": False, "committed": False, "commit": None, "reason": "no-git-repo"}
+
+    safe_dir = f"safe.directory={site_dir}"
+
+    def _git(*args: str, timeout: int = GIT_OP_TIMEOUT, check: bool = True):
+        return subprocess.run(
+            ["git", "-c", safe_dir, "-c", f"user.name={COMMIT_NAME}",
+             "-c", f"user.email={COMMIT_EMAIL}", "-C", str(site_dir), *args],
+            capture_output=True, text=True, timeout=timeout, check=check,
+        )
+
+    try:
+        _git("add", "-A")
+        # Nothing staged → no new version to cut.
+        if _git("diff", "--cached", "--quiet", check=False).returncode == 0:
+            return {"pushed": False, "committed": False, "commit": None, "reason": "no-changes"}
+        _git("commit", "-m", message)
+        sha = _git("rev-parse", "HEAD").stdout.strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.error("gitea version commit failed site=%s: %s", site_dir.name, e)
+        return {"pushed": False, "committed": False, "commit": None, "reason": "commit-failed"}
+
+    try:
+        _git("push", "origin", "HEAD", timeout=GIT_FETCH_TIMEOUT)
+        return {"pushed": True, "committed": True, "commit": sha, "reason": "ok"}
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        # Commit is preserved locally; a later deploy/reconcile can push it.
+        logger.warning("gitea version push rejected site=%s (commit %s kept local): %s",
+                       site_dir.name, sha[:8], e)
+        return {"pushed": False, "committed": True, "commit": sha, "reason": "push-rejected"}
+
+
 # ─── Deploy ring buffer ──────────────────────────────────────────
 _deploys: list[dict] = []
 _DEPLOYS_MAX = 50

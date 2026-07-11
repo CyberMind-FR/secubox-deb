@@ -10,6 +10,14 @@ case "$1" in
         mkdir -p /var/lib/secubox/wireguard/peers
         chown -R secubox:secubox /var/lib/secubox/wireguard
         
+        # Validate the sudoers drop-in (remove on invalid, never abort).
+        if [ -f /etc/sudoers.d/secubox-wireguard ]; then
+            visudo -cf /etc/sudoers.d/secubox-wireguard >/dev/null || {
+                echo "secubox-wireguard: invalid sudoers, removing" >&2
+                rm -f /etc/sudoers.d/secubox-wireguard
+            }
+        fi
+
         # Enable and start service
         systemctl daemon-reload
         systemctl enable secubox-wireguard.service

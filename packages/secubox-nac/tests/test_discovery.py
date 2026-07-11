@@ -41,3 +41,24 @@ def test_isc_latest_lease_wins(tmp_path):
     assert set(out) == {"aa:bb:cc:00:00:20"}
     assert out["aa:bb:cc:00:00:20"]["ip"] == "10.0.0.21"
     assert out["aa:bb:cc:00:00:20"]["hostname"] == "new-host"
+
+
+def test_arp_records_interface_and_includes_br_lxc(tmp_path):
+    """ARP sightings carry the interface, and br-lxc is a scanned LAN bridge
+    (so LXC containers are discovered and can auto-classify into `lxc`)."""
+    from api.discovery import discover
+    arp = lambda: "10.1.0.5 dev br-lxc lladdr aa:bb:cc:00:00:30 REACHABLE\n"
+    out = {d["mac"]: d for d in discover(dnsmasq_leases=str(tmp_path/"missing"), isc_leases=str(tmp_path/"missing2"), arp_cmd=arp)}
+    assert out["aa:bb:cc:00:00:30"]["interface"] == "br-lxc"
+
+
+def test_interface_survives_higher_rank_lease(tmp_path):
+    """A br-lxc container that also has a dnsmasq lease keeps its ARP interface
+    (the lease sighting owns source/hostname but must not drop the interface)."""
+    from api.discovery import discover
+    dns = tmp_path/"dnsmasq.leases"; dns.write_text("1700000000 aa:bb:cc:00:00:31 10.1.0.6 ct-a *\n")
+    arp = lambda: "10.1.0.6 dev br-lxc lladdr aa:bb:cc:00:00:31 REACHABLE\n"
+    out = {d["mac"]: d for d in discover(dnsmasq_leases=str(dns), isc_leases=str(tmp_path/"missing"), arp_cmd=arp)}
+    d = out["aa:bb:cc:00:00:31"]
+    assert d["source"] == "dnsmasq" and d["hostname"] == "ct-a"  # lease still wins these
+    assert d["interface"] == "br-lxc"                            # ...but interface survives

@@ -216,3 +216,42 @@ def test_ban_client_and_unban_client_are_plain_def(tmp_path, monkeypatch):
     result2 = main.unban_client("AA:BB:CC:00:00:45", user=user)
     assert result2["status"] == "quarantine"
     assert "aa:bb:cc:00:00:45" not in sets.get("blocked", set())
+
+
+def test_interface_autoclassifies_lxc(tmp_path, monkeypatch):
+    """A client seen on br-lxc with no explicit assignment resolves to the
+    `lxc` zone (interface auto-classification), but an operator's nft-set
+    assignment still wins over the interface."""
+    main, sets = _setup(tmp_path, monkeypatch)
+
+    # no nft membership, no JSON: interface decides
+    assert main._get_client_zone("aa:bb:cc:00:0a:01", "br-lxc") == "lxc"
+    # unknown interface falls through to quarantine
+    assert main._get_client_zone("aa:bb:cc:00:0a:02", "br-lan") == "quarantine"
+    # operator move (nft set) wins over the interface hint
+    main._nft_add_element("guest_zone", "aa:bb:cc:00:0a:01")
+    assert main._get_client_zone("aa:bb:cc:00:0a:01", "br-lxc") == "guest"
+
+
+def test_resolve_zone_batched_uses_interface(tmp_path, monkeypatch):
+    """`_resolve_zone` (batched list path) applies the same interface fallback
+    as `_get_client_zone`: nft map wins, else interface, else quarantine."""
+    main, sets = _setup(tmp_path, monkeypatch)
+    main._nft_add_element("lan_allowed", "aa:bb:cc:00:0b:01")
+    zmap = main._zone_map()
+    assert main._resolve_zone("aa:bb:cc:00:0b:01", "br-lxc", zmap) == "lan"   # nft wins
+    assert main._resolve_zone("aa:bb:cc:00:0b:02", "br-lxc", zmap) == "lxc"   # interface
+    assert main._resolve_zone("aa:bb:cc:00:0b:03", "", zmap) == "quarantine"  # nothing
+
+
+def test_clients_endpoint_shows_lxc_zone_from_stored_interface(tmp_path, monkeypatch):
+    """End-to-end: a device upserted with interface=br-lxc surfaces in the
+    `lxc` zone through `/clients` without any manual assignment."""
+    main, sets = _setup(tmp_path, monkeypatch)
+    main.store.upsert({
+        "mac": "aa:bb:cc:00:0c:01", "ip": "10.1.0.5",
+        "interface": "br-lxc", "last_seen": 1, "source": "arp",
+    })
+    result = main.clients(user={"sub": "tester"})
+    row = next(c for c in result["clients"] if c["mac"] == "aa:bb:cc:00:0c:01")
+    assert row["zone"] == "lxc"

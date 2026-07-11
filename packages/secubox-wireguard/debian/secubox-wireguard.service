@@ -15,7 +15,11 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
 Restart=on-failure
 RestartSec=5
 
-NoNewPrivileges=true
+# API runs as `secubox` but reads live WireGuard state via `sudo -n wgctl`
+# (wg show all dump needs root for private keys); NoNewPrivileges must be off
+# so sudo can elevate. Elevation is constrained to the wgctl allow-list in
+# /etc/sudoers.d/secubox-wireguard.
+NoNewPrivileges=false
 RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775

@@ -6,6 +6,7 @@
     <title>SecuBox - OpenClaw OSINT</title>
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
         :root {
             --p31-peak: #00dd44; --p31-hot: #00ff55; --p31-mid: #009933; --p31-dim: #006622; --p31-ghost: #003311;
@@ -21,15 +22,16 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Courier Prime', monospace; background: var(--tube-light); color: var(--tube-dark); display: flex; min-height: 100vh; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 1rem; }
         .header h1 { font-size: 1.5rem; color: var(--purple); }
-        .header-actions { display: flex; gap: 0.5rem; }
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
         .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
         .btn:hover { background: var(--bg-dark); }
         .btn.primary { background: rgba(139,92,246,0.1); border-color: var(--purple); color: var(--purple); }
         .btn.primary:hover { background: rgba(139,92,246,0.2); }
         .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
         .btn.danger { background: rgba(239,68,68,0.1); border-color: #ef4444; color: #ef4444; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
         .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; color: var(--purple); }
         .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
@@ -51,48 +53,31 @@
         .badge.running { background: rgba(139,92,246,0.2); color: var(--purple); }
         .badge.pending { background: rgba(210,153,34,0.2); color: var(--yellow); }
         .badge.failed { background: rgba(248,81,73,0.2); color: var(--red); }
-        .badge.info { background: rgba(139,92,246,0.2); color: var(--purple); }
-        .badge.low { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.medium { background: rgba(210,153,34,0.2); color: #d97706; }
-        .badge.high { background: rgba(248,81,73,0.2); color: #ef4444; }
         .form-group { margin-bottom: 1rem; }
         .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-dim); font-size: 0.875rem; }
-        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--purple); }
-        .scan-form { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .scan-form { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
         .scan-form input { flex: 1; min-width: 200px; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); font-size: 1rem; }
-        .scan-form select { padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); }
         .scan-form button { padding: 0.75rem 1.5rem; }
-        .results-section { margin-top: 1rem; }
-        .results-section h3 { font-size: 0.9rem; color: var(--purple); margin-bottom: 0.5rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(139,92,246,0.1); border-radius: 4px; }
-        .results-section h3:hover { background: rgba(139,92,246,0.15); }
-        .results-section .content { padding: 0.75rem; background: var(--bg-dark); border-radius: 4px; margin-bottom: 1rem; max-height: 300px; overflow: auto; }
-        .results-section .content.collapsed { display: none; }
-        .results-section pre { font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; }
-        .integration-card { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 6px; margin-bottom: 0.75rem; }
-        .integration-card .icon { font-size: 1.5rem; }
-        .integration-card .info { flex: 1; }
-        .integration-card .name { font-weight: bold; color: var(--text); }
-        .integration-card .desc { font-size: 0.8rem; color: var(--text-dim); }
-        .integration-card .status { font-size: 0.8rem; }
-        .integration-card .status.configured { color: var(--green); }
-        .integration-card .status.not-configured { color: var(--text-dim); }
-        .finding-card { padding: 0.75rem; background: var(--bg-dark); border-radius: 6px; margin-bottom: 0.5rem; border-left: 3px solid var(--purple); }
-        .finding-card.high { border-left-color: #ef4444; }
-        .finding-card.medium { border-left-color: #d97706; }
-        .finding-card.low { border-left-color: var(--green); }
-        .finding-card .title { font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        .finding-card .details { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.25rem; }
         .empty-state { text-align: center; padding: 3rem; color: var(--text-dim); }
         .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .modal-header h3 { font-size: 1.1rem; color: var(--purple); }
-        .close-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5rem; }
         .loader { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--purple); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* pill / toast / helpers (matches nextcloud dashboard pattern) */
+        .pill { display: inline-flex; align-items: center; gap: .4rem; padding: 4px 12px; border-radius: 12px; font-size: .8rem; border: 1px solid var(--border); }
+        .pill.ok { background: rgba(51,255,102,0.15); color: var(--green); border-color: var(--green); }
+        .pill.warn { background: rgba(255,179,71,0.15); color: var(--yellow); border-color: var(--yellow); }
+        .pill.error { background: rgba(255,68,102,0.15); color: var(--red); border-color: var(--red); }
+        .pill.muted { background: rgba(107,107,122,0.1); color: var(--text-dim); border-color: var(--border); }
+        .toast{position:fixed;bottom:1.2rem;right:1.2rem;padding:.7rem 1.1rem;border-radius:10px;
+          background:var(--bg-card);border:1px solid var(--border);color:var(--text);opacity:0;
+          transform:translateY(8px);transition:all .2s;z-index:50;max-width:min(90vw,360px)}
+        .toast.show{opacity:1;transform:none}
+        .toast.success{border-color:var(--green)} .toast.error{border-color:var(--red)}
+        .err{color:var(--red);font-size:.8rem} .muted{color:var(--text-dim);font-size:.8rem}
+        pre.log-out { background: var(--tube-light); border: 1px solid var(--border); border-radius: 6px; padding: .75rem; max-height: 400px; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: .78rem; margin: 0; }
+        .tool-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+        .subhead { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.5rem; }
     </style>
 </head>
 <body>
@@ -102,17 +87,21 @@
         <header class="header">
             <h1>OpenClaw OSINT</h1>
             <div class="header-actions">
-                <button class="btn" onclick="refresh()">Refresh</button>
+                <span class="pill muted" id="status-pill">Loading…</span>
+                <button class="btn primary" id="btn-install" style="display:none">Install</button>
+                <button class="btn" id="btn-refresh">Refresh</button>
             </div>
         </header>
+        <div class="muted" style="margin:0 0 1.25rem">
+            Sandbox IP: <span id="oc-ip">—</span>
+        </div>
 
         <div class="tabs">
             <button class="tab active" data-tab="dashboard">Dashboard</button>
             <button class="tab" data-tab="scan">Scan</button>
             <button class="tab" data-tab="results">Results</button>
             <button class="tab" data-tab="history">History</button>
-            <button class="tab" data-tab="integrations">Integrations</button>
-            <button class="tab" data-tab="settings">Settings</button>
+            <button class="tab" data-tab="config">Config</button>
         </div>
 
         <!-- Dashboard Tab -->
@@ -123,25 +112,12 @@
                     <div class="label">Total Scans</div>
                 </div>
                 <div class="stat-card">
-                    <div class="value" id="statCompleted">-</div>
-                    <div class="label">Completed</div>
+                    <div class="value" id="statTools">-</div>
+                    <div class="label">Tools Available</div>
                 </div>
                 <div class="stat-card">
-                    <div class="value" id="statIntegrations">-</div>
-                    <div class="label">Integrations</div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Quick Scan</h2>
-                <div class="scan-form">
-                    <input type="text" id="quickTarget" placeholder="Enter domain, IP, or email...">
-                    <select id="quickType">
-                        <option value="domain">Domain</option>
-                        <option value="ip">IP Address</option>
-                        <option value="email">Email</option>
-                    </select>
-                    <button class="btn primary" onclick="quickScan()">Scan</button>
+                    <div class="value" id="statSandbox">-</div>
+                    <div class="label">Sandbox</div>
                 </div>
             </div>
 
@@ -153,12 +129,11 @@
                             <th>Target</th>
                             <th>Type</th>
                             <th>Status</th>
-                            <th>Findings</th>
-                            <th>Date</th>
+                            <th>Started</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="recentScans"></tbody>
+                    <tbody id="recentScans"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -166,69 +141,64 @@
         <!-- Scan Tab -->
         <div class="tab-content" id="tab-scan">
             <div class="card">
-                <h2>Domain Reconnaissance</h2>
-                <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Comprehensive domain analysis including DNS records, subdomains, WHOIS, and SSL certificates.
+                <h2>Launch Scan</h2>
+                <p class="subhead">
+                    Enter a domain, IP/CIDR, or email — the type is auto-detected. Domain and email scans are
+                    passive OSINT. IP scans are active (nmap) — external targets require typed authorization.
                 </p>
                 <div class="scan-form">
-                    <input type="text" id="domainTarget" placeholder="example.com">
-                    <button class="btn primary" onclick="scanDomain()">Scan Domain</button>
+                    <input type="text" id="scanTarget" placeholder="example.com / 192.168.1.10 / user@example.com">
+                    <span class="pill muted" id="scanTypePill">domain</span>
+                    <button class="btn primary" id="btn-start-scan">Scan</button>
                 </div>
             </div>
 
             <div class="card">
-                <h2>IP Intelligence</h2>
-                <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.9rem;">
-                    IP analysis including reverse DNS, geolocation, ASN info, port scanning, and reputation check.
-                </p>
-                <div class="scan-form">
-                    <input type="text" id="ipTarget" placeholder="192.168.1.1">
-                    <button class="btn primary" onclick="scanIP()">Scan IP</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Email Intelligence</h2>
-                <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Email validation, MX records, SPF/DMARC checks, and domain security analysis.
-                </p>
-                <div class="scan-form">
-                    <input type="text" id="emailTarget" placeholder="user@example.com">
-                    <button class="btn primary" onclick="scanEmail()">Scan Email</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Quick Lookups</h2>
+                <h2>Quick Lookups (passive)</h2>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
                     <div>
-                        <h3 style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.5rem;">DNS Lookup</h3>
+                        <div class="subhead">DNS Lookup</div>
                         <div class="scan-form">
                             <input type="text" id="dnsTarget" placeholder="example.com" style="min-width: 100px;">
-                            <button class="btn" onclick="dnsLookup()">Lookup</button>
+                            <button class="btn" id="btn-dns">Lookup</button>
                         </div>
                     </div>
                     <div>
-                        <h3 style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.5rem;">WHOIS Lookup</h3>
+                        <div class="subhead">WHOIS Lookup</div>
                         <div class="scan-form">
                             <input type="text" id="whoisTarget" placeholder="example.com" style="min-width: 100px;">
-                            <button class="btn" onclick="whoisLookup()">Lookup</button>
+                            <button class="btn" id="btn-whois">Lookup</button>
                         </div>
                     </div>
                     <div>
-                        <h3 style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.5rem;">Subdomains</h3>
-                        <div class="scan-form">
-                            <input type="text" id="subdomainTarget" placeholder="example.com" style="min-width: 100px;">
-                            <button class="btn" onclick="subdomainLookup()">Discover</button>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 0.5rem;">SSL Certificates</h3>
+                        <div class="subhead">SSL Certificates</div>
                         <div class="scan-form">
                             <input type="text" id="certTarget" placeholder="example.com" style="min-width: 100px;">
-                            <button class="btn" onclick="certLookup()">Search</button>
+                            <button class="btn" id="btn-certs">Search</button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Port Scan (active)</h2>
+                <p class="subhead">
+                    Real nmap probe. LAN/owned targets run without confirmation; external IPs require typed
+                    authorization or return 409 — use the launcher above with authorization in that case.
+                </p>
+                <div class="scan-form">
+                    <input type="text" id="portsTarget" placeholder="192.168.1.10" style="min-width: 100px;">
+                    <button class="btn" id="btn-ports">Scan Ports</button>
+                </div>
+            </div>
+
+            <div class="modal" id="lookupModal" style="display:none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 id="lookupTitle" style="color: var(--purple);">Lookup Results</h3>
+                        <button class="btn" id="btn-close-lookup">Close</button>
+                    </div>
+                    <div id="lookupContent"><div class="loader"></div> Loading...</div>
                 </div>
             </div>
         </div>
@@ -256,82 +226,24 @@
                             <th>Target</th>
                             <th>Type</th>
                             <th>Status</th>
-                            <th>Findings</th>
-                            <th>Created</th>
+                            <th>Started</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="historyTable"></tbody>
+                    <tbody id="historyTable"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- Integrations Tab -->
-        <div class="tab-content" id="tab-integrations">
+        <!-- Config Tab (read-only — no POST /config endpoint) -->
+        <div class="tab-content" id="tab-config">
             <div class="card">
-                <h2>API Integrations</h2>
-                <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Configure external API integrations to enhance OSINT capabilities.
-                </p>
-                <div id="integrationsList"></div>
+                <h2>Module Configuration</h2>
+                <div id="configBody" class="muted">Loading…</div>
             </div>
-        </div>
-
-        <!-- Settings Tab -->
-        <div class="tab-content" id="tab-settings">
             <div class="card">
-                <h2>API Keys</h2>
-                <div class="form-group">
-                    <label>Shodan API Key</label>
-                    <input type="password" id="cfgShodan" placeholder="Enter Shodan API key...">
-                </div>
-                <div class="form-group">
-                    <label>Censys API ID</label>
-                    <input type="password" id="cfgCensysId" placeholder="Enter Censys API ID...">
-                </div>
-                <div class="form-group">
-                    <label>Censys API Secret</label>
-                    <input type="password" id="cfgCensysSecret" placeholder="Enter Censys API secret...">
-                </div>
-                <div class="form-group">
-                    <label>VirusTotal API Key</label>
-                    <input type="password" id="cfgVirusTotal" placeholder="Enter VirusTotal API key...">
-                </div>
-                <div class="form-group">
-                    <label>SecurityTrails API Key</label>
-                    <input type="password" id="cfgSecurityTrails" placeholder="Enter SecurityTrails API key...">
-                </div>
-                <button class="btn primary" onclick="saveConfig()">Save Configuration</button>
-            </div>
-
-            <div class="card">
-                <h2>Scan Settings</h2>
-                <div class="form-group">
-                    <label>Max Concurrent Scans</label>
-                    <input type="number" id="cfgMaxScans" min="1" max="10" value="3">
-                </div>
-                <div class="form-group">
-                    <label>Scan Timeout (seconds)</label>
-                    <input type="number" id="cfgTimeout" min="60" max="600" value="300">
-                </div>
-                <div class="form-group">
-                    <label>Cache TTL (seconds)</label>
-                    <input type="number" id="cfgCacheTTL" min="60" max="86400" value="3600">
-                </div>
-                <button class="btn primary" onclick="saveConfig()">Save Settings</button>
-            </div>
-        </div>
-
-        <!-- Quick Lookup Modal -->
-        <div class="modal" id="lookupModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 id="lookupTitle">Lookup Results</h3>
-                    <button class="close-btn" onclick="closeLookupModal()">&times;</button>
-                </div>
-                <div id="lookupContent">
-                    <div class="loader"></div> Loading...
-                </div>
+                <h2>Sandbox Tools</h2>
+                <div class="tool-row" id="toolsBody"><span class="muted">Loading…</span></div>
             </div>
         </div>
     </main>
@@ -341,19 +253,61 @@
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
-        let currentScanId = null;
+        // --- XSS-hardening helpers ---------------------------------------
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function toast(msg, kind) {
+            let t = document.getElementById('toast');
+            if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+            t.textContent = msg;
+            t.className = 'toast ' + (kind || 'info') + ' show';
+            clearTimeout(window.__toastT);
+            window.__toastT = setTimeout(() => t.classList.remove('show'), 3500);
+        }
+        function confirmTyped(word) {
+            return prompt('Type "' + word + '" to confirm this action:') === word;
+        }
 
+        // --- fail-safe fetch: never throws to the UI, 401 -> login --------
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
-                if (!res.ok) return {};
-                const text = await res.text();
-                return text ? JSON.parse(text) : {};
-            } catch { return {}; }
+                if (res.status === 401) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
+                const ct = res.headers.get('content-type') || '';
+                const body = ct.includes('json') ? await res.json().catch(() => ({})) : await res.text();
+                if (!res.ok) throw new Error((body && body.detail) || ('HTTP ' + res.status));
+                return body;
+            } catch (e) {
+                return { __error: e.message || 'request failed' };
+            }
         }
 
-        // Tab navigation
+        // --- target-type auto-detect + local/owned heuristic --------------
+        let ownedDomains = ['gk2.secubox.in'];
+
+        function detectType(target) {
+            const t = (target || '').trim();
+            if (t.includes('@')) return 'email';
+            if (/^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(t)) return 'ip';
+            return 'domain';
+        }
+
+        function isLocalOrOwned(target) {
+            const t = (target || '').trim().toLowerCase();
+            if (!t) return true;
+            const host = t.split('/')[0].split('@').pop();
+            if (host === 'localhost' || host === '::1' || /^127\./.test(host)) return true;
+            if (/^10\.(\d{1,3}\.){2}\d{1,3}$/.test(host)) return true;
+            if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+            if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+            if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+            if (/^fe80:/i.test(host)) return true;
+            return ownedDomains.some(d => host === d || host.endsWith('.' + d));
+        }
+
+        // --- tab navigation -------------------------------------------------
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -363,295 +317,303 @@
             });
         });
 
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
+        }
+
+        // --- status / install ------------------------------------------------
+        let installing = false;
+        let installPollTimer = null;
+
         async function loadStatus() {
-            const d = await api('/status');
-            document.getElementById('statTotal').textContent = d.total_scans || 0;
-            document.getElementById('statCompleted').textContent = d.completed_scans || 0;
-            const intCount = d.integrations ? Object.values(d.integrations).filter(v => v).length : 0;
-            document.getElementById('statIntegrations').textContent = intCount + '/5';
+            const s = await api('/status');
+            const pill = document.getElementById('status-pill');
+            const installBtn = document.getElementById('btn-install');
+            if (!s || s.__error) {
+                pill.textContent = 'error'; pill.className = 'pill error';
+                document.getElementById('statTools').textContent = '-';
+                document.getElementById('statSandbox').textContent = '-';
+                document.getElementById('oc-ip').textContent = '—';
+                installBtn.style.display = 'none';
+                return;
+            }
+            document.getElementById('statTotal').textContent = s.total_scans != null ? s.total_scans : 0;
+            document.getElementById('oc-ip').textContent = esc(s.ip || '—');
+
+            const tools = s.tools || {};
+            const toolKeys = Object.keys(tools);
+            const toolsOk = toolKeys.filter(k => tools[k]).length;
+            document.getElementById('statTools').textContent = toolKeys.length ? (toolsOk + '/' + toolKeys.length) : '-';
+
+            if (!s.installed) {
+                document.getElementById('statSandbox').textContent = installing ? 'installing' : 'not installed';
+                pill.textContent = installing ? 'installing…' : 'not installed';
+                pill.className = 'pill ' + (installing ? 'warn' : 'muted');
+                installBtn.style.display = installing ? 'none' : '';
+            } else if (s.running) {
+                document.getElementById('statSandbox').textContent = 'running';
+                pill.textContent = 'running'; pill.className = 'pill ok';
+                installBtn.style.display = 'none';
+                if (installing) { installing = false; stopInstallPoll(); toast('OpenClaw sandbox installed', 'success'); }
+            } else {
+                document.getElementById('statSandbox').textContent = 'stopped';
+                pill.textContent = 'installed (stopped)'; pill.className = 'pill warn';
+                installBtn.style.display = 'none';
+            }
+        }
+
+        async function doInstall() {
+            const r = await api('/install', { method: 'POST' });
+            if (!r || r.__error) { toast((r && r.__error) || 'install failed', 'error'); return; }
+            installing = true;
+            toast('Installing OpenClaw sandbox — this can take several minutes', 'success');
+            loadStatus();
+            startInstallPoll();
+        }
+        function startInstallPoll() {
+            if (installPollTimer) return;
+            installPollTimer = setInterval(loadStatus, 8000);
+        }
+        function stopInstallPoll() {
+            if (installPollTimer) { clearInterval(installPollTimer); installPollTimer = null; }
+        }
+
+        // --- scan launcher ---------------------------------------------------
+        async function doScan(type, target, authorized) {
+            const r = await api('/scan/' + type, { method: 'POST', body: JSON.stringify({ target, authorized: !!authorized }) });
+            if (!r || r.__error) {
+                const msg = (r && r.__error) || 'scan failed';
+                if (!authorized && /authorized/i.test(msg)) {
+                    if (confirmTyped('I am authorized')) return doScan(type, target, true);
+                    toast('Cancelled — external active scans require authorization', 'error');
+                    return;
+                }
+                toast(msg, 'error');
+                return;
+            }
+            toast('Scan started: ' + r.scan_id, 'success');
+            loadScans();
+        }
+
+        async function startScan() {
+            const el = document.getElementById('scanTarget');
+            const target = el.value.trim();
+            if (!target) { toast('Enter a target', 'error'); return; }
+            const type = detectType(target);
+            let authorized = false;
+            if (type === 'ip' && !isLocalOrOwned(target)) {
+                if (!confirmTyped('I am authorized')) {
+                    toast('Cancelled — external IP scans require authorization', 'error');
+                    return;
+                }
+                authorized = true;
+            }
+            await doScan(type, target, authorized);
+            el.value = '';
+            document.getElementById('scanTypePill').textContent = 'domain';
+        }
+
+        document.getElementById('scanTarget').addEventListener('input', (e) => {
+            document.getElementById('scanTypePill').textContent = detectType(e.target.value);
+        });
+
+        // --- scan history / results ------------------------------------------
+        let historyPollTimer = null;
+
+        function statusBadge(s) {
+            return `<span class="badge ${esc(s || 'pending')}">${esc(s || 'pending')}</span>`;
+        }
+        function fmtDate(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            return isNaN(d.getTime()) ? esc(iso) : d.toLocaleString();
+        }
+
+        function renderScanRow(s, withDelete) {
+            return `<tr>
+                <td><code>${esc(s.id)}</code></td>
+                <td><code>${esc(s.target)}</code></td>
+                <td>${esc(s.type)}</td>
+                <td>${statusBadge(s.status)}</td>
+                <td>${fmtDate(s.started_at)}</td>
+                <td>
+                    <button class="btn scan-act" style="padding:0.25rem 0.5rem;font-size:0.75rem" data-id="${esc(s.id)}" data-op="view">View</button>
+                    ${withDelete ? `<button class="btn danger scan-act" style="padding:0.25rem 0.5rem;font-size:0.75rem" data-id="${esc(s.id)}" data-op="delete">Delete</button>` : ''}
+                </td>
+            </tr>`;
         }
 
         async function loadScans() {
-            const d = await api('/scans?limit=10');
+            const d = await api('/scans');
+            const recentEl = document.getElementById('recentScans');
+            const histEl = document.getElementById('historyTable');
+            if (!d || d.__error) {
+                const msg = `<tr><td colspan="6" class="err">${esc((d && d.__error) || 'error')}</td></tr>`;
+                recentEl.innerHTML = msg; histEl.innerHTML = msg;
+                stopHistoryPoll();
+                return;
+            }
             const scans = d.scans || [];
+            recentEl.innerHTML = scans.slice(0, 5).map(s => renderScanRow(s, false)).join('')
+                || '<tr><td colspan="5" class="muted">No scans yet</td></tr>';
+            histEl.innerHTML = scans.map(s => renderScanRow(s, true)).join('')
+                || '<tr><td colspan="6" class="muted">No scans yet</td></tr>';
 
-            document.getElementById('recentScans').innerHTML = scans.map(s => `
-                <tr>
-                    <td><code>${s.target}</code></td>
-                    <td>${s.type}</td>
-                    <td><span class="badge ${s.status}">${s.status}</span></td>
-                    <td>${s.findings_count || 0}</td>
-                    <td>${s.created_at ? new Date(s.created_at).toLocaleString() : '-'}</td>
-                    <td>
-                        <button class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="viewScan('${s.id}')">View</button>
-                    </td>
-                </tr>
-            `).join('') || '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No scans yet</td></tr>';
+            document.querySelectorAll('.scan-act').forEach(b => b.addEventListener('click', () => {
+                const id = b.dataset.id, op = b.dataset.op;
+                if (op === 'view') viewScan(id);
+                else if (op === 'delete') deleteScan(id);
+            }));
+
+            const active = scans.some(s => s.status === 'pending' || s.status === 'running');
+            if (active) startHistoryPoll(); else stopHistoryPoll();
         }
-
-        async function loadHistory() {
-            const d = await api('/scans?limit=50');
-            const scans = d.scans || [];
-
-            document.getElementById('historyTable').innerHTML = scans.map(s => `
-                <tr>
-                    <td><code>${s.id}</code></td>
-                    <td><code>${s.target}</code></td>
-                    <td>${s.type}</td>
-                    <td><span class="badge ${s.status}">${s.status}</span></td>
-                    <td>${s.findings_count || 0}</td>
-                    <td>${s.created_at ? new Date(s.created_at).toLocaleString() : '-'}</td>
-                    <td>
-                        <button class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="viewScan('${s.id}')">View</button>
-                        <button class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="deleteScan('${s.id}')">Delete</button>
-                    </td>
-                </tr>
-            `).join('') || '<tr><td colspan="7" style="text-align: center; color: var(--text-dim);">No scans yet</td></tr>';
+        function startHistoryPoll() {
+            if (historyPollTimer) return;
+            historyPollTimer = setInterval(loadScans, 5000);
         }
-
-        async function loadIntegrations() {
-            const d = await api('/integrations');
-            const integrations = d.integrations || [];
-
-            document.getElementById('integrationsList').innerHTML = integrations.map(i => `
-                <div class="integration-card">
-                    <div class="icon">${i.id === 'shodan' ? '--' : i.id === 'censys' ? '--' : i.id === 'virustotal' ? '--' : i.id === 'securitytrails' ? '--' : '--'}</div>
-                    <div class="info">
-                        <div class="name">${i.name}</div>
-                        <div class="desc">${i.description}</div>
-                    </div>
-                    <div class="status ${i.configured ? 'configured' : 'not-configured'}">
-                        ${i.configured ? 'Configured' : 'Not Configured'}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function loadConfig() {
-            const d = await api('/config');
-            if (d.shodan_api_key) document.getElementById('cfgShodan').placeholder = '***configured***';
-            if (d.censys_api_id) document.getElementById('cfgCensysId').placeholder = '***configured***';
-            if (d.censys_api_secret) document.getElementById('cfgCensysSecret').placeholder = '***configured***';
-            if (d.virustotal_api_key) document.getElementById('cfgVirusTotal').placeholder = '***configured***';
-            if (d.securitytrails_api_key) document.getElementById('cfgSecurityTrails').placeholder = '***configured***';
-            if (d.max_concurrent_scans) document.getElementById('cfgMaxScans').value = d.max_concurrent_scans;
-            if (d.scan_timeout) document.getElementById('cfgTimeout').value = d.scan_timeout;
-            if (d.cache_ttl) document.getElementById('cfgCacheTTL').value = d.cache_ttl;
-        }
-
-        async function saveConfig() {
-            const config = {};
-            const shodan = document.getElementById('cfgShodan').value;
-            const censysId = document.getElementById('cfgCensysId').value;
-            const censysSecret = document.getElementById('cfgCensysSecret').value;
-            const virustotal = document.getElementById('cfgVirusTotal').value;
-            const securitytrails = document.getElementById('cfgSecurityTrails').value;
-
-            if (shodan) config.shodan_api_key = shodan;
-            if (censysId) config.censys_api_id = censysId;
-            if (censysSecret) config.censys_api_secret = censysSecret;
-            if (virustotal) config.virustotal_api_key = virustotal;
-            if (securitytrails) config.securitytrails_api_key = securitytrails;
-
-            config.max_concurrent_scans = parseInt(document.getElementById('cfgMaxScans').value);
-            config.scan_timeout = parseInt(document.getElementById('cfgTimeout').value);
-            config.cache_ttl = parseInt(document.getElementById('cfgCacheTTL').value);
-
-            await api('/config', { method: 'POST', body: JSON.stringify(config) });
-            alert('Configuration saved');
-            loadConfig();
-            loadIntegrations();
-        }
-
-        async function quickScan() {
-            const target = document.getElementById('quickTarget').value.trim();
-            const type = document.getElementById('quickType').value;
-            if (!target) { alert('Please enter a target'); return; }
-
-            const d = await api(`/scan/${type}?target=${encodeURIComponent(target)}`, { method: 'POST' });
-            if (d.scan_id) {
-                alert(`Scan started: ${d.scan_id}`);
-                document.getElementById('quickTarget').value = '';
-                refresh();
-            }
-        }
-
-        async function scanDomain() {
-            const target = document.getElementById('domainTarget').value.trim();
-            if (!target) { alert('Please enter a domain'); return; }
-            const d = await api(`/scan/domain?target=${encodeURIComponent(target)}`, { method: 'POST' });
-            if (d.scan_id) {
-                alert(`Domain scan started: ${d.scan_id}`);
-                document.getElementById('domainTarget').value = '';
-                refresh();
-            }
-        }
-
-        async function scanIP() {
-            const target = document.getElementById('ipTarget').value.trim();
-            if (!target) { alert('Please enter an IP address'); return; }
-            const d = await api(`/scan/ip?target=${encodeURIComponent(target)}`, { method: 'POST' });
-            if (d.scan_id) {
-                alert(`IP scan started: ${d.scan_id}`);
-                document.getElementById('ipTarget').value = '';
-                refresh();
-            }
-        }
-
-        async function scanEmail() {
-            const target = document.getElementById('emailTarget').value.trim();
-            if (!target) { alert('Please enter an email address'); return; }
-            const d = await api(`/scan/email?target=${encodeURIComponent(target)}`, { method: 'POST' });
-            if (d.scan_id) {
-                alert(`Email scan started: ${d.scan_id}`);
-                document.getElementById('emailTarget').value = '';
-                refresh();
-            }
+        function stopHistoryPoll() {
+            if (historyPollTimer) { clearInterval(historyPollTimer); historyPollTimer = null; }
         }
 
         async function viewScan(scanId) {
-            currentScanId = scanId;
-            const d = await api('/scan/' + scanId);
-
+            const d = await api('/scan/' + encodeURIComponent(scanId));
             document.getElementById('noResults').style.display = 'none';
             const content = document.getElementById('resultsContent');
             content.style.display = 'block';
 
-            let html = `
-                <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 6px;">
-                    <div><strong>Target:</strong> ${d.target}</div>
-                    <div><strong>Type:</strong> ${d.type}</div>
-                    <div><strong>Status:</strong> <span class="badge ${d.status}">${d.status}</span></div>
-                    <div><strong>Created:</strong> ${d.created_at ? new Date(d.created_at).toLocaleString() : '-'}</div>
-                </div>
-            `;
-
-            if (d.results) {
-                // Findings
-                if (d.results.findings && d.results.findings.length) {
-                    html += '<h3 style="color: var(--purple); margin: 1rem 0 0.5rem;">Findings</h3>';
-                    d.results.findings.forEach(f => {
-                        html += `
-                            <div class="finding-card ${f.severity}">
-                                <div class="title">
-                                    <span>${f.title}</span>
-                                    <span class="badge ${f.severity}">${f.severity}</span>
-                                </div>
-                                <div class="details">${JSON.stringify({...f, title: undefined, severity: undefined, type: undefined})}</div>
-                            </div>
-                        `;
-                    });
-                }
-
-                // Data sections
-                if (d.results.data) {
-                    Object.keys(d.results.data).forEach(key => {
-                        html += `
-                            <div class="results-section">
-                                <h3 onclick="toggleSection(this)">${key.toUpperCase()} <span>-</span></h3>
-                                <div class="content">
-                                    <pre>${JSON.stringify(d.results.data[key], null, 2)}</pre>
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
+            if (!d || d.__error) {
+                content.innerHTML = `<p class="err">${esc((d && d.__error) || 'failed to load scan')}</p>`;
+                switchTab('results');
+                return;
             }
 
-            html += `
-                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-                    <button class="btn" onclick="exportScan('${scanId}', 'json')">Export JSON</button>
-                    <button class="btn" onclick="exportScan('${scanId}', 'csv')">Export CSV</button>
+            const raw = (d.results && d.results.raw) || '';
+            content.innerHTML = `
+                <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 6px;">
+                    <div><strong>ID:</strong> <code>${esc(d.id)}</code></div>
+                    <div><strong>Target:</strong> ${esc(d.target)}</div>
+                    <div><strong>Type:</strong> ${esc(d.type)}</div>
+                    <div><strong>Status:</strong> ${statusBadge(d.status)}</div>
+                    <div><strong>Started:</strong> ${fmtDate(d.started_at)}</div>
+                    <div><strong>Finished:</strong> ${fmtDate(d.finished_at)}</div>
+                    ${d.error ? `<div class="err"><strong>Error:</strong> ${esc(d.error)}</div>` : ''}
                 </div>
+                <h3 style="color: var(--purple); margin-bottom: 0.5rem;">Raw Output</h3>
+                <pre class="log-out">${raw ? esc(raw) : '<span class="muted">(no output)</span>'}</pre>
             `;
-
-            content.innerHTML = html;
-
-            // Switch to results tab
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector('[data-tab="results"]').classList.add('active');
-            document.getElementById('tab-results').classList.add('active');
-        }
-
-        function toggleSection(elem) {
-            const content = elem.nextElementSibling;
-            const icon = elem.querySelector('span');
-            content.classList.toggle('collapsed');
-            icon.textContent = content.classList.contains('collapsed') ? '+' : '-';
+            switchTab('results');
         }
 
         async function deleteScan(scanId) {
-            if (!confirm('Delete this scan?')) return;
-            await api('/scan/' + scanId, { method: 'DELETE' });
-            refresh();
+            if (!confirmTyped(scanId)) return;
+            const r = await api('/scan/' + encodeURIComponent(scanId), { method: 'DELETE' });
+            toast(r && !r.__error ? 'Scan deleted' : ((r && r.__error) || 'delete failed'), r && !r.__error ? 'success' : 'error');
+            loadScans();
         }
 
-        async function exportScan(scanId, format) {
-            const d = await api('/export', {
-                method: 'POST',
-                body: JSON.stringify({ scan_id: scanId, format: format })
-            });
-            // The response is actually handled differently for downloads
-            window.open(API + `/export?scan_id=${scanId}&format=${format}`, '_blank');
+        // --- quick lookups -----------------------------------------------
+        function showLookupModal(title) {
+            document.getElementById('lookupTitle').textContent = title;
+            document.getElementById('lookupContent').innerHTML = '<div class="loader"></div> Loading...';
+            document.getElementById('lookupModal').style.display = 'flex';
+        }
+        function closeLookupModal() {
+            document.getElementById('lookupModal').style.display = 'none';
+        }
+        function renderLookupResult(d, externalActiveHint) {
+            const content = document.getElementById('lookupContent');
+            if (!d || d.__error) {
+                const msg = (d && d.__error) || 'lookup failed';
+                if (externalActiveHint && /authorized/i.test(msg)) {
+                    content.innerHTML = `<p class="err">External target — use the Scan launcher (Scan tab) with typed authorization to port-scan this target.</p>`;
+                } else {
+                    content.innerHTML = `<p class="err">${esc(msg)}</p>`;
+                }
+                return;
+            }
+            const raw = (d.results && d.results.raw) || '';
+            content.innerHTML = `<div class="muted" style="margin-bottom:.5rem">status: ${esc(d.status || '-')}</div>
+                <pre class="log-out">${raw ? esc(raw) : '<span class="muted">(no output)</span>'}</pre>`;
         }
 
-        // Quick lookups
         async function dnsLookup() {
             const target = document.getElementById('dnsTarget').value.trim();
             if (!target) return;
             showLookupModal('DNS Lookup: ' + target);
-            const d = await api('/dns/' + encodeURIComponent(target));
-            document.getElementById('lookupContent').innerHTML = `<pre>${JSON.stringify(d, null, 2)}</pre>`;
+            renderLookupResult(await api('/dns/' + encodeURIComponent(target)), false);
         }
-
         async function whoisLookup() {
             const target = document.getElementById('whoisTarget').value.trim();
             if (!target) return;
             showLookupModal('WHOIS Lookup: ' + target);
-            const d = await api('/whois/' + encodeURIComponent(target));
-            document.getElementById('lookupContent').innerHTML = `<pre>${JSON.stringify(d, null, 2)}</pre>`;
+            renderLookupResult(await api('/whois/' + encodeURIComponent(target)), false);
         }
-
-        async function subdomainLookup() {
-            const target = document.getElementById('subdomainTarget').value.trim();
-            if (!target) return;
-            showLookupModal('Subdomains: ' + target);
-            const d = await api('/subdomains/' + encodeURIComponent(target));
-            document.getElementById('lookupContent').innerHTML = `<pre>${JSON.stringify(d, null, 2)}</pre>`;
-        }
-
         async function certLookup() {
             const target = document.getElementById('certTarget').value.trim();
             if (!target) return;
             showLookupModal('SSL Certificates: ' + target);
-            const d = await api('/certs/' + encodeURIComponent(target));
-            document.getElementById('lookupContent').innerHTML = `<pre>${JSON.stringify(d, null, 2)}</pre>`;
+            renderLookupResult(await api('/certs/' + encodeURIComponent(target)), false);
+        }
+        async function portsLookup() {
+            const target = document.getElementById('portsTarget').value.trim();
+            if (!target) return;
+            if (!isLocalOrOwned(target)) {
+                toast('External IP — use the Scan launcher with authorization instead', 'error');
+                return;
+            }
+            showLookupModal('Port Scan: ' + target);
+            renderLookupResult(await api('/ports/' + encodeURIComponent(target)), true);
         }
 
-        function showLookupModal(title) {
-            document.getElementById('lookupTitle').textContent = title;
-            document.getElementById('lookupContent').innerHTML = '<div class="loader"></div> Loading...';
-            document.getElementById('lookupModal').classList.add('active');
+        // --- config (read-only — no POST /config in this API) ----------------
+        async function loadConfig() {
+            const el = document.getElementById('configBody');
+            const d = await api('/config');
+            if (!d || d.__error) { el.innerHTML = `<span class="err">${esc((d && d.__error) || 'error')}</span>`; return; }
+            const integ = d.integrations || {};
+            const owned = d.owned_domains || [];
+            if (owned.length) ownedDomains = owned.map(x => String(x).toLowerCase());
+            el.innerHTML = `
+                <div style="margin-bottom:.5rem">Enabled: <strong>${d.enabled ? 'yes' : 'no'}</strong></div>
+                <div style="margin-bottom:.5rem">Owned domains: ${owned.length ? owned.map(o => `<code>${esc(o)}</code>`).join(', ') : '<span class="muted">none</span>'}</div>
+                <div>Integrations configured: ${Object.keys(integ).length
+                    ? Object.keys(integ).map(k => `<span class="pill ${integ[k] ? 'ok' : 'muted'}">${esc(k)}: ${integ[k] ? 'yes' : 'no'}</span>`).join(' ')
+                    : '<span class="muted">none</span>'}</div>
+            `;
         }
 
-        function closeLookupModal() {
-            document.getElementById('lookupModal').classList.remove('active');
+        async function loadTools() {
+            const el = document.getElementById('toolsBody');
+            const s = await api('/status');
+            if (!s || s.__error) { el.innerHTML = `<span class="err">${esc((s && s.__error) || 'error')}</span>`; return; }
+            const tools = s.tools || {};
+            const keys = Object.keys(tools);
+            el.innerHTML = keys.length
+                ? keys.map(k => `<span class="pill ${tools[k] ? 'ok' : 'muted'}">${esc(k)}: ${tools[k] ? 'available' : 'missing'}</span>`).join('')
+                : '<span class="muted">Sandbox not running</span>';
         }
+
+        // --- wiring --------------------------------------------------------
+        document.getElementById('btn-refresh').addEventListener('click', refresh);
+        document.getElementById('btn-install').addEventListener('click', doInstall);
+        document.getElementById('btn-start-scan').addEventListener('click', startScan);
+        document.getElementById('btn-dns').addEventListener('click', dnsLookup);
+        document.getElementById('btn-whois').addEventListener('click', whoisLookup);
+        document.getElementById('btn-certs').addEventListener('click', certLookup);
+        document.getElementById('btn-ports').addEventListener('click', portsLookup);
+        document.getElementById('btn-close-lookup').addEventListener('click', closeLookupModal);
 
         function refresh() {
             loadStatus();
             loadScans();
-            loadHistory();
-            loadIntegrations();
+            loadConfig();
+            loadTools();
         }
 
         // Initial load
-        loadStatus();
-        loadScans();
-        loadHistory();
-        loadIntegrations();
-        loadConfig();
+        refresh();
     </script>
 </body>
 </html>

@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox - Reality</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/crt-light.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+    :root {
+        /* P31 Phosphor spectrum */
+        --p31-peak: #00dd44;
+        --p31-hot: #00ff55;
+        --p31-mid: #009933;
+        --p31-dim: #006622;
+        --p31-ghost: #003311;
+        --p31-decay: #ffb347;
+        --p31-decay-dim: #cc7722;
+        /* Tube glass */
+        --tube-light: #e8f5e9;
+        --tube-pale: #c8e6c9;
+        --tube-soft: #a5d6a7;
+        /* Legacy mappings */
+        --bg-dark: var(--tube-light);
+        --bg-card: var(--tube-pale);
+        --bg-sidebar: var(--tube-black);
+        --border: var(--tube-soft);
+        --text: var(--tube-dark);
+        --text-dim: var(--p31-dim);
+        --primary: var(--p31-peak);
+        --cyan: var(--p31-peak);
+        --green: var(--p31-peak);
+        --red: #ff4466;
+        --yellow: var(--p31-decay);
+        --orange: var(--p31-decay-dim);
+        --purple: #a371f7;
+        /* Bloom effects */
+        --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+        --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+        --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Courier Prime', 'Courier New', monospace;
+        background: var(--tube-light);
+        background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+        color: var(--tube-dark);
+        display: flex;
+        min-height: 100vh;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    code, .mono, input, textarea, select, button, table { font-family: 'Courier Prime', 'Courier New', monospace; }
+
+    .main { flex: 1; margin-left: 220px; padding: 1.5rem; min-width: 0; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
+    .header h1 {
+        font-size: 1.4rem; font-weight: 700; letter-spacing: 0.05em;
+        color: var(--p31-hot); text-shadow: var(--bloom-text);
+        display: flex; align-items: center; gap: 0.5rem;
+    }
+    .header .desc { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.2rem; }
+
+    #errbar { display: none; background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); padding: 0.6rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.8rem; }
+    #errbar.show { display: block; }
+
+    .card {
+        background: var(--tube-pale); border: 1px solid var(--tube-soft); border-radius: 8px;
+        padding: 1.25rem 1.4rem; margin-bottom: 1.25rem;
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+    }
+    .card:hover { border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3); }
+    .card h2 {
+        font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+        color: var(--p31-decay); text-shadow: var(--bloom-amber);
+        margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .main { margin-left: 0; } }
+
+    label { display: block; font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 0.6rem 0 0.25rem; }
+    input, select {
+        width: 100%; padding: 0.45rem 0.6rem; border-radius: 6px; font-size: 0.85rem;
+        font-family: 'Courier Prime', monospace;
+        background: var(--tube-light); border: 1px solid var(--tube-soft); color: var(--p31-mid);
+    }
+    input:focus, select:focus { outline: none; border-color: var(--p31-dim); box-shadow: 0 0 8px rgba(51,255,102,0.1); }
+
+    .btn {
+        padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+        font-family: 'Courier Prime', monospace; letter-spacing: 0.06em; text-transform: uppercase;
+        border: 1px solid var(--tube-soft); background: var(--tube-pale); color: var(--p31-mid);
+        transition: all 0.2s;
+    }
+    .btn:hover { border-color: var(--p31-dim); color: var(--p31-peak); text-shadow: var(--bloom-soft); box-shadow: 0 0 12px rgba(51,255,102,0.1); }
+    .btn.primary { border-color: var(--p31-peak); color: var(--p31-peak); background: rgba(51,255,102,0.1); }
+    .btn.primary:hover { background: rgba(51,255,102,0.2); box-shadow: 0 0 16px rgba(51,255,102,0.2); color: var(--p31-peak); }
+    .btn.danger { border-color: var(--red); color: var(--red); background: transparent; }
+    .btn.danger:hover { background: rgba(255,68,102,0.15); }
+    .btn.small { padding: 0.3rem 0.6rem; font-size: 0.7rem; }
+    .actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; align-items: center; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'Courier Prime', monospace; }
+    th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--p31-ghost); vertical-align: top; }
+    th { color: var(--p31-decay); text-shadow: var(--bloom-amber); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; }
+    td { color: var(--p31-mid); }
+    tr:hover { background: rgba(51,255,102,0.03); }
+    .mono-cell { font-size: 11px; word-break: break-all; }
+    .empty { color: var(--p31-dim); font-style: italic; padding: 0.6rem 0; font-size: 0.8rem; }
+
+    .pill { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid; }
+    .pill.green  { background: rgba(51,255,102,0.12); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+    .pill.yellow { background: rgba(255,179,71,0.12); border-color: var(--p31-decay); color: var(--p31-decay-dim); }
+    .pill.red    { background: rgba(255,68,102,0.12); border-color: var(--red); color: var(--red); }
+    .pill.blue   { background: rgba(51,255,102,0.08); border-color: var(--p31-mid); color: var(--p31-mid); }
+    .pill.gray   { background: rgba(0,102,34,0.08); border-color: var(--p31-ghost); color: var(--p31-dim); }
+
+    .qr-box { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem; }
+    .qr-box svg { width: 160px; height: 160px; border: 1px solid var(--tube-soft); border-radius: 8px; background: #fff; }
+    .uri-box { flex: 1; min-width: 240px; word-break: break-all; font-size: 11px; background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 6px; padding: 0.6rem; color: var(--p31-mid); }
+
+    .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 0.75rem; }
+    .stat { background: var(--tube-light); border: 1px solid var(--tube-soft); border-radius: 8px; padding: 0.75rem 0.9rem; }
+    .stat .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--p31-dim); }
+    .stat .v { font-size: 18px; font-weight: 700; color: var(--p31-peak); text-shadow: 0 0 10px currentColor; margin-top: 0.2rem; }
+    @media (max-width: 700px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--tube-light); }
+    ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
+</style>
+</head>
+<body class="crt-light">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+
+<main class="main">
+  <div class="header">
+    <div>
+      <h1>🕶️ Reality egress manager</h1>
+      <div class="desc">Provision, validate and monitor VLESS+Reality+Vision (Xray-core) egress points.</div>
+    </div>
+    <button class="btn" id="refreshAll">↻ Refresh</button>
+  </div>
+
+  <div id="errbar"></div>
+
+  <!-- server list + create -->
+  <section class="card" id="servers">
+    <h2>Egress points</h2>
+    <table id="serversTable">
+      <thead><tr><th>Remark</th><th>dest / SNI</th><th>Port</th><th>Status</th><th>Public key</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="empty" id="serversEmpty" style="display:none;">No egress point provisioned yet.</div>
+
+    <h2 style="margin-top:1.5rem;">Provision new server</h2>
+    <form id="createServerForm">
+      <div class="grid2">
+        <div>
+          <label>Remark</label>
+          <input name="remark" required maxlength="128" placeholder="edge-eu-1">
+          <label>Reality dest (camouflage target)</label>
+          <input name="dest" required placeholder="www.microsoft.com">
+          <label>SNI</label>
+          <input name="sni" required placeholder="www.microsoft.com">
+        </div>
+        <div>
+          <label>Listen port</label>
+          <input name="listen_port" type="number" value="443" min="1" max="65535">
+          <label>Dest port</label>
+          <input name="dest_port" type="number" value="443" min="1" max="65535">
+          <label>shortId count</label>
+          <input name="short_id_count" type="number" value="1" min="1" max="8">
+        </div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Provision (keys + UUID)</button></div>
+    </form>
+  </section>
+
+  <!-- validate target -->
+  <section class="card" id="validate">
+    <h2>Validate target (TLS1.3 + X25519 sanity gate)</h2>
+    <form id="validateForm">
+      <div class="grid2">
+        <div><label>Host</label><input name="host" required placeholder="www.microsoft.com"></div>
+        <div><label>Port</label><input name="port" type="number" value="443" min="1" max="65535"></div>
+      </div>
+      <div class="actions"><button class="btn" type="submit">Validate</button></div>
+    </form>
+    <div id="validateResult" style="margin-top:0.75rem;"></div>
+  </section>
+
+  <!-- apply + clients + link -->
+  <section class="card" id="apply">
+    <h2>Apply (write config + start instance)</h2>
+    <div class="grid2">
+      <div>
+        <label>Server</label>
+        <select id="applyServerSelect"></select>
+        <label><input type="checkbox" id="applyForce" style="width:auto;display:inline-block;"> force (skip target sanity gate)</label>
+      </div>
+      <div style="align-self:end;">
+        <div class="actions"><button class="btn primary" id="applyBtn" type="button">Apply</button></div>
+      </div>
+    </div>
+    <div id="applyResult" style="margin-top:0.75rem;"></div>
+  </section>
+
+  <section class="card" id="clients">
+    <h2>Clients + link</h2>
+    <div class="grid2">
+      <div>
+        <label>Server</label>
+        <select id="clientServerSelect"></select>
+        <label>Client email / remark</label>
+        <input id="clientEmail" placeholder="alice@example.com">
+        <div class="actions"><button class="btn" id="createClientBtn" type="button">Add client</button></div>
+      </div>
+      <div>
+        <table id="clientsTable">
+          <thead><tr><th>Email</th><th>shortId</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty" id="clientsEmpty" style="display:none;">No clients for this server.</div>
+      </div>
+    </div>
+    <div class="qr-box" id="linkBox" style="display:none;">
+      <div id="qrHolder"></div>
+      <div class="uri-box" id="uriHolder"></div>
+    </div>
+  </section>
+
+  <!-- volume guard -->
+  <section class="card" id="guard">
+    <h2>Volume guard (sliding window)</h2>
+    <form id="guardForm">
+      <div class="grid2">
+        <div>
+          <label>Window (hours)</label>
+          <input name="window_hours" type="number" min="1" value="48">
+          <label>Soft limit (GB)</label>
+          <input name="soft_gb" type="number" min="0" step="0.1" value="80">
+        </div>
+        <div>
+          <label>Hard limit (GB, action = disable)</label>
+          <input name="hard_gb" type="number" min="0" step="0.1" value="100">
+        </div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Save guard config</button></div>
+    </form>
+  </section>
+
+  <section class="card" id="stats">
+    <h2>Stats (per-window delta)</h2>
+    <div id="statsBox" class="empty">No stats yet — click Refresh.</div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var API_BASE = '/api/mesh/reality';
+
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function showError(msg) {
+    var bar = document.getElementById('errbar');
+    bar.textContent = msg;
+    bar.classList.add('show');
+    setTimeout(function () { bar.classList.remove('show'); }, 6000);
+  }
+
+  // Fail-safe fetch: never throws to the caller's caller; always resolves
+  // to {ok, status, data} so UI code can render a graceful error instead
+  // of a blank/broken panel.
+  function api(path, opts) {
+    opts = opts || {};
+    var token = window.localStorage.getItem('sbx_token') || '';
+    var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    return fetch(API_BASE + path, {
+      method: opts.method || 'GET',
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      credentials: 'same-origin',
+    }).then(function (resp) {
+      if (resp.status === 401) {
+        window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+        return { ok: false, status: 401, data: null };
+      }
+      return resp.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON body */ }
+        return { ok: resp.ok, status: resp.status, data: data };
+      });
+    }).catch(function (err) {
+      showError('Network error: ' + err.message);
+      return { ok: false, status: 0, data: null };
+    });
+  }
+
+  function statusPill(status) {
+    var cls = 'gray';
+    if (status === 'running') cls = 'green';
+    else if (status === 'applied') cls = 'blue';
+    else if (status === 'disabled_volume_guard') cls = 'red';
+    else if (status === 'new') cls = 'yellow';
+    return '<span class="pill ' + cls + '">' + esc(status) + '</span>';
+  }
+
+  var STATE = { servers: [], selectedClientServer: null };
+
+  function loadServers() {
+    return api('/servers').then(function (r) {
+      if (!r.ok || !r.data) { showError('Failed to load servers'); return; }
+      STATE.servers = r.data;
+      renderServers();
+      renderServerSelects();
+    });
+  }
+
+  function renderServers() {
+    var tbody = document.querySelector('#serversTable tbody');
+    tbody.innerHTML = '';
+    document.getElementById('serversEmpty').style.display = STATE.servers.length ? 'none' : 'block';
+    STATE.servers.forEach(function (s) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + esc(s.remark) + '</td>' +
+        '<td class="mono-cell">' + esc(s.dest) + ' / ' + esc(s.sni) + '</td>' +
+        '<td>' + esc(s.listen_port) + '</td>' +
+        '<td>' + statusPill(s.status) + '</td>' +
+        '<td class="mono-cell">' + esc((s.public_key || '').slice(0, 16)) + '…</td>' +
+        '<td><button class="btn small danger" data-del="' + esc(s.id) + '">Delete</button></td>';
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('[data-del]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!confirm('Delete this egress point? Keys and config are destroyed.')) return;
+        api('/servers/' + encodeURIComponent(btn.getAttribute('data-del')), { method: 'DELETE' })
+          .then(function (r) { if (r.ok) { loadServers(); } else { showError('Delete failed'); } });
+      });
+    });
+  }
+
+  function renderServerSelects() {
+    ['applyServerSelect', 'clientServerSelect'].forEach(function (id) {
+      var sel = document.getElementById(id);
+      var prev = sel.value;
+      sel.innerHTML = '';
+      STATE.servers.forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.remark + ' (' + s.status + ')';
+        sel.appendChild(opt);
+      });
+      if (prev) sel.value = prev;
+    });
+    if (document.getElementById('clientServerSelect').value) {
+      loadClients(document.getElementById('clientServerSelect').value);
+    }
+  }
+
+  document.getElementById('createServerForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var fd = new FormData(ev.target);
+    api('/servers', {
+      method: 'POST',
+      body: {
+        remark: fd.get('remark'),
+        dest: fd.get('dest'),
+        sni: fd.get('sni'),
+        listen_port: parseInt(fd.get('listen_port'), 10),
+        dest_port: parseInt(fd.get('dest_port'), 10),
+        short_id_count: parseInt(fd.get('short_id_count'), 10),
+      },
+    }).then(function (r) {
+      if (r.ok) { ev.target.reset(); loadServers(); }
+      else { showError('Provision failed: ' + esc(r.data && r.data.detail || r.status)); }
+    });
+  });
+
+  document.getElementById('validateForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var fd = new FormData(ev.target);
+    var box = document.getElementById('validateResult');
+    box.innerHTML = 'Validating…';
+    api('/validate-target', { method: 'POST', body: { host: fd.get('host'), port: parseInt(fd.get('port'), 10) } })
+      .then(function (r) {
+        if (!r.ok || !r.data) { box.innerHTML = '<span class="pill red">error</span>'; return; }
+        var d = r.data;
+        box.innerHTML =
+          (d.ok ? '<span class="pill green">SANE</span>' : '<span class="pill red">INSANE</span>') + ' ' +
+          '<span class="pill ' + (d.reachable ? 'green' : 'red') + '">reachable=' + d.reachable + '</span> ' +
+          '<span class="pill ' + (d.tls13 ? 'green' : 'red') + '">TLS1.3=' + d.tls13 + '</span> ' +
+          '<span class="pill ' + (d.x25519 ? 'green' : 'red') + '">X25519=' + d.x25519 + '</span> ' +
+          '<span class="pill blue">ALPN=' + esc((d.alpn || []).join(',') || '-') + '</span>' +
+          (d.reason ? '<div class="empty">' + esc(d.reason) + '</div>' : '');
+      });
+  });
+
+  document.getElementById('applyBtn').addEventListener('click', function () {
+    var id = document.getElementById('applyServerSelect').value;
+    if (!id) { showError('No server selected'); return; }
+    var force = document.getElementById('applyForce').checked;
+    var box = document.getElementById('applyResult');
+    box.innerHTML = 'Applying…';
+    api('/apply?force=' + (force ? 'true' : 'false'), { method: 'POST', body: { server_id: id } })
+      .then(function (r) {
+        if (!r.ok || !r.data) {
+          box.innerHTML = '<span class="pill red">' + esc(r.data && r.data.detail || 'apply failed') + '</span>';
+          return;
+        }
+        var inst = r.data.instance || {};
+        box.innerHTML = '<span class="pill ' + (inst.running ? 'green' : 'yellow') + '">' +
+          esc(inst.unit) + ' — ' + esc(inst.active) + '</span>';
+        loadServers();
+      });
+  });
+
+  document.getElementById('createClientBtn').addEventListener('click', function () {
+    var id = document.getElementById('clientServerSelect').value;
+    var email = document.getElementById('clientEmail').value.trim();
+    if (!id || !email) { showError('Select a server and enter a client email/remark'); return; }
+    api('/clients', { method: 'POST', body: { server_id: id, email: email } })
+      .then(function (r) {
+        if (r.ok) { document.getElementById('clientEmail').value = ''; loadClients(id); }
+        else { showError('Create client failed'); }
+      });
+  });
+
+  function loadClients(serverId) {
+    STATE.selectedClientServer = serverId;
+    return api('/clients?server_id=' + encodeURIComponent(serverId)).then(function (r) {
+      var tbody = document.querySelector('#clientsTable tbody');
+      tbody.innerHTML = '';
+      var clients = (r.ok && r.data) ? r.data : [];
+      document.getElementById('clientsEmpty').style.display = clients.length ? 'none' : 'block';
+      clients.forEach(function (c) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + esc(c.email) + '</td>' +
+          '<td class="mono-cell">' + esc(c.short_id) + '</td>' +
+          '<td>' +
+            '<button class="btn small" data-link="' + esc(c.id) + '">Link</button> ' +
+            '<button class="btn small danger" data-delc="' + esc(c.id) + '">Del</button>' +
+          '</td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('[data-link]').forEach(function (btn) {
+        btn.addEventListener('click', function () { showLink(btn.getAttribute('data-link')); });
+      });
+      tbody.querySelectorAll('[data-delc]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          api('/clients/' + encodeURIComponent(btn.getAttribute('data-delc')), { method: 'DELETE' })
+            .then(function (r2) { if (r2.ok) loadClients(serverId); });
+        });
+      });
+    });
+  }
+  document.getElementById('clientServerSelect').addEventListener('change', function (ev) {
+    loadClients(ev.target.value);
+  });
+
+  function showLink(clientId) {
+    api('/link?client_id=' + encodeURIComponent(clientId)).then(function (r) {
+      if (!r.ok || !r.data) { showError('Failed to build link'); return; }
+      var box = document.getElementById('linkBox');
+      box.style.display = 'flex';
+      document.getElementById('uriHolder').textContent = r.data.uri || '';
+      var qrHolder = document.getElementById('qrHolder');
+      // qr_svg is generated server-side (segno) from a URI we built
+      // ourselves — not raw user input — so it's safe to insert as markup.
+      qrHolder.innerHTML = r.data.qr_svg || '<div class="empty">QR unavailable (segno not installed)</div>';
+    });
+  }
+
+  document.getElementById('guardForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var fd = new FormData(ev.target);
+    api('/guard', {
+      method: 'PUT',
+      body: {
+        window_hours: parseInt(fd.get('window_hours'), 10),
+        soft_gb: parseFloat(fd.get('soft_gb')),
+        hard_gb: parseFloat(fd.get('hard_gb')),
+        action: 'disable',
+      },
+    }).then(function (r) {
+      if (r.ok) { loadStats(); } else { showError('Save guard failed: ' + esc(r.data && r.data.detail || r.status)); }
+    });
+  });
+
+  function loadGuard() {
+    api('/guard').then(function (r) {
+      if (!r.ok || !r.data) return;
+      var f = document.getElementById('guardForm');
+      f.window_hours.value = r.data.window_hours;
+      f.soft_gb.value = r.data.soft_gb;
+      f.hard_gb.value = r.data.hard_gb;
+    });
+  }
+
+  function loadStats() {
+    var box = document.getElementById('statsBox');
+    api('/stats').then(function (r) {
+      if (!r.ok || !r.data || !r.data.servers || !r.data.servers.length) {
+        box.className = 'empty';
+        box.textContent = 'No stats yet.';
+        return;
+      }
+      box.className = '';
+      box.innerHTML = r.data.servers.map(function (s) {
+        return '<div class="stat-row">' +
+          '<div class="stat"><div class="l">' + esc(s.server_id.slice(0, 8)) + '</div><div class="v">' + esc(s.total_gb) + ' GB</div></div>' +
+          '<div class="stat"><div class="l">window</div><div class="v">' + esc(s.window_hours) + 'h</div></div>' +
+          '<div class="stat"><div class="l">soft/hard</div><div class="v">' + esc(s.soft_gb) + '/' + esc(s.hard_gb) + '</div></div>' +
+          '<div class="stat"><div class="l">action</div><div class="v">' + (s.action_taken ? '<span class="pill red">' + esc(s.action_taken) + '</span>' : '<span class="pill green">ok</span>') + '</div></div>' +
+          '</div>';
+      }).join('');
+    });
+  }
+
+  document.getElementById('refreshAll').addEventListener('click', function () {
+    loadServers(); loadGuard(); loadStats();
+  });
+
+  // initial load
+  loadServers();
+  loadGuard();
+  loadStats();
+})();
+</script>
+<script src="/shared/crt-engine.js"></script>
+</body>
+</html>

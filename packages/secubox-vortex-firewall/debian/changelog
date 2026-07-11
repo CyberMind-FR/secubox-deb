@@ -1,3 +1,9 @@
+secubox-vortex-firewall (1.0.2-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-vortex-firewall (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * postinst: unmask + enable nftables.service (closes #150). It was found

@@ -36,10 +36,12 @@ app = FastAPI(title="SecuBox Tor Shield API", version="2.0.0")
 # Configuration
 TOR_CONTROL_PORT = 9051
 TOR_SOCKS_PORT = 9050
+TOR_DNS_PORT = 9053
 TOR_DATA = Path("/var/lib/tor")
 TOR_CONTROL_SOCKET = Path("/run/tor/control")
 DATA_DIR = Path("/var/lib/secubox/tor")
 CONFIG_FILE = Path("/etc/secubox/tor.json")
+ONION_FORWARD_ZONE = Path("/etc/unbound/unbound.conf.d/48-secubox-onion.conf")
 HISTORY_FILE = DATA_DIR / "history.json"
 WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
 STATS_FILE = DATA_DIR / "stats_history.json"
@@ -282,6 +284,156 @@ def get_traffic_stats() -> tuple:
     return bytes_read, bytes_written
 
 
+def _discover_hidden_services() -> List[Dict]:
+    """Auto-discover every on-disk hidden service under TOR_DATA (not just the
+    ones listed in secubox config). Cross-references config for local_port /
+    enabled where a matching entry exists.
+
+    Fail-safe: a missing TOR_DATA, an unreadable/broken config, or an
+    unreadable hostname file must never raise — the offending entry (or the
+    whole scan) is simply skipped.
+    """
+    try:
+        config = load_config()
+    except Exception:
+        config = {}
+
+    cfg_map: Dict[str, Dict] = {}
+    for hs in (config.get("hidden_services") or []):
+        try:
+            cfg_map[hs["name"]] = hs
+        except Exception:
+            continue
+
+    # Primary source: the root-written .onion cache. tor forces /var/lib/tor to
+    # 0700 on every start, so this secubox-user process cannot read HS hostnames
+    # directly; secubox-exposure-tor-reconcile (root) publishes the (public)
+    # .onion addresses here where we CAN read them. Fail-safe: fall through to
+    # the direct-glob path below if the cache is absent/unreadable.
+    cache_services: List[Dict] = []
+    try:
+        import json as _json
+        cache = _json.loads(Path("/var/lib/secubox/tor/onions.json").read_text())
+        for entry in (cache.get("services") or []):
+            name = entry.get("name")
+            onion = entry.get("onion", "")
+            if not name or not onion:
+                continue
+            hs = cfg_map.get(name, {})
+            cache_services.append({
+                "name": name, "onion_address": onion, "has_address": True,
+                "local_port": hs.get("local_port"), "virtual_port": hs.get("virtual_port"),
+                "enabled": hs.get("enabled", True),
+            })
+    except Exception:
+        cache_services = []
+    if cache_services:
+        return cache_services
+
+    hostname_files = []
+    try:
+        hostname_files += list(TOR_DATA.glob("*/hostname"))
+    except Exception:
+        pass
+    try:
+        # secubox-exposure (the actual "publish this .onion" / emancipate
+        # flow, incl. tor_emancipate_webui) creates every hidden service
+        # under TOR_DATA/"hidden_services" (its own TOR_DATA constant IS
+        # /var/lib/tor/hidden_services) — e.g.
+        # /var/lib/tor/hidden_services/webui/hostname — NOT directly under
+        # TOR_DATA like this module's own legacy add_hidden_service() does.
+        # Scan both layouts; skipped gracefully if the nested dir doesn't
+        # exist or isn't traversable (also keeps tests hermetic since it's
+        # derived from TOR_DATA at call time, so monkeypatching TOR_DATA
+        # relocates this too).
+        hostname_files += list((TOR_DATA / "hidden_services").glob("*/hostname"))
+    except Exception:
+        pass
+    hostname_files = sorted(set(hostname_files))
+
+    services = []
+    seen_names = set()
+    for hostname_file in hostname_files:
+        try:
+            dir_name = hostname_file.parent.name
+        except Exception:
+            continue
+
+        name = dir_name[len("hidden_service_"):] if dir_name.startswith("hidden_service_") else dir_name
+
+        if name in seen_names:
+            # Same service surfaced by both layouts (or two hostname files
+            # resolving to the same name) — keep the first hit only.
+            continue
+        seen_names.add(name)
+
+        try:
+            onion_address = hostname_file.read_text().strip()
+        except Exception:
+            onion_address = ""
+
+        cfg_entry = cfg_map.get(name)
+        services.append({
+            "name": name,
+            "onion_address": onion_address,
+            "local_port": cfg_entry.get("local_port", 80) if cfg_entry else None,
+            "virtual_port": cfg_entry.get("virtual_port", 80) if cfg_entry else None,
+            "enabled": cfg_entry.get("enabled", True) if cfg_entry else None,
+            "has_address": bool(onion_address)
+        })
+
+    return services
+
+
+def _port_listening(port: int) -> bool:
+    """Bounded, non-blocking check: is anything bound to local port `port`
+    (tcp or udp, v4 or v6)? Reads /proc/net/{tcp,udp}[6] directly — fast,
+    local-only, never touches the network, never hangs. Fails closed (False)
+    on any error (missing /proc, permissions, unexpected format, ...)."""
+    try:
+        target_hex = format(port, "04X").upper()
+    except Exception:
+        return False
+
+    for proc_file in ("/proc/net/tcp", "/proc/net/tcp6", "/proc/net/udp", "/proc/net/udp6"):
+        try:
+            with open(proc_file) as f:
+                next(f, None)  # header line
+                for line in f:
+                    parts = line.split()
+                    if len(parts) < 2 or ":" not in parts[1]:
+                        continue
+                    port_hex = parts[1].rsplit(":", 1)[-1]
+                    if port_hex.upper() == target_hex:
+                        return True
+        except Exception:
+            continue
+    return False
+
+
+def _onion_dns_canary(timeout: float = 1.5) -> bool:
+    """Best-effort, tightly bounded canary DNS query sent straight to the Tor
+    DNSPort over UDP. Returns True only if *something* answered before the
+    timeout; any exception/timeout fails closed to False. Never raises."""
+    try:
+        import struct
+        qname = "check.torproject.org"
+        labels = b"".join(bytes([len(p)]) + p.encode() for p in qname.split(".")) + b"\x00"
+        header = struct.pack(">HHHHHH", 0x5EC5, 0x0100, 1, 0, 0, 0)
+        query = header + labels + struct.pack(">HH", 1, 1)  # QTYPE=A QCLASS=IN
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(timeout)
+        try:
+            sock.sendto(query, ("127.0.0.1", TOR_DNS_PORT))
+            data, _ = sock.recvfrom(512)
+            return len(data) > len(header)
+        finally:
+            sock.close()
+    except Exception:
+        return False
+
+
 # ============================================================================
 # Public Endpoints
 # ============================================================================
@@ -432,26 +584,42 @@ async def get_circuits():
 
 @app.get("/hidden_services")
 async def get_hidden_services():
-    """Get configured hidden services."""
-    config = load_config()
-    services = []
-
-    for hs in config.get("hidden_services", []):
-        hostname_file = TOR_DATA / f"hidden_service_{hs['name']}" / "hostname"
-        onion_address = ""
-        if hostname_file.exists():
-            onion_address = hostname_file.read_text().strip()
-
-        services.append({
-            "name": hs["name"],
-            "enabled": hs.get("enabled", True),
-            "local_port": hs.get("local_port", 80),
-            "virtual_port": hs.get("virtual_port", 80),
-            "onion_address": onion_address,
-            "has_address": bool(onion_address)
-        })
-
+    """Get every on-disk hidden service (auto-discovered from TOR_DATA),
+    annotated with config-known local_port/enabled where available. This
+    surfaces .onions that exist on disk but aren't (or are no longer) tracked
+    by secubox config."""
+    services = _discover_hidden_services()
     return {"services": services, "total": len(services)}
+
+
+@app.get("/onion_dns")
+async def get_onion_dns():
+    """.onion-DNS status: is the (moved) Tor DNSPort up on 127.0.0.1:9053,
+    is the unbound forward-zone drop-in installed, and — only if both of
+    those hold — does a bounded canary resolution actually succeed. Always
+    fail-safe: never raises, never blocks past the canary's short timeout."""
+    try:
+        dnsport_up = _port_listening(TOR_DNS_PORT)
+    except Exception:
+        dnsport_up = False
+
+    try:
+        forward_zone_installed = ONION_FORWARD_ZONE.exists()
+    except Exception:
+        forward_zone_installed = False
+
+    resolves = False
+    if dnsport_up and forward_zone_installed:
+        try:
+            resolves = _onion_dns_canary()
+        except Exception:
+            resolves = False
+
+    return {
+        "dnsport_up": dnsport_up,
+        "forward_zone_installed": forward_zone_installed,
+        "resolves": resolves
+    }
 
 
 @app.get("/history")

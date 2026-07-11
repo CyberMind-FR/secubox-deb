@@ -1,0 +1,9 @@
+{
+  "id": "reality",
+  "name": "Reality",
+  "category": "mesh",
+  "icon": "🕶️",
+  "path": "/reality/",
+  "order": 562,
+  "description": "VLESS+Reality+Vision egress-point manager (Xray-core)"
+}

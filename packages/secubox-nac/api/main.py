@@ -71,10 +71,31 @@ COLLECTOR_INTERVAL = 30
 # Zones → nftables set names
 ZONES = {
     "lan": {"nft_set": "lan_allowed", "desc": "LAN principal", "color": "green"},
+    "lxc": {"nft_set": "lxc_zone", "desc": "LXC Containers", "color": "cyan"},
     "iot": {"nft_set": "iot_zone", "desc": "IoT isolé", "color": "orange"},
     "guest": {"nft_set": "guest_zone", "desc": "Invités", "color": "blue"},
     "quarantine": {"nft_set": "quarantine_zone", "desc": "Quarantaine", "color": "red"},
 }
+
+# Auto-classify a device into a zone by the interface it was seen on, so e.g.
+# every container on the LXC bridge lands in the `lxc` zone without manual
+# assignment. Operator moves (which write the nft sets) still win; this only
+# fills the gap for devices not explicitly placed. Overridable via nac config
+# `interface_zones` (a {iface: zone} table). The interface is recorded by the
+# ARP discovery pass and persisted on the device row (store `interface` column).
+_DEFAULT_IFACE_ZONES = {"br-lxc": "lxc"}
+
+
+def _interface_zones() -> dict:
+    try:
+        cfg = get_config("nac") or {}
+        m = dict(_DEFAULT_IFACE_ZONES)
+        extra = cfg.get("interface_zones") or {}
+        if isinstance(extra, dict):
+            m.update({str(k): str(v) for k, v in extra.items()})
+        return m
+    except Exception:
+        return dict(_DEFAULT_IFACE_ZONES)
 
 
 class StatsCache:
@@ -452,20 +473,48 @@ def _nft_delete_element(set_name: str, element: str) -> bool:
         return False
 
 
-def _get_client_zone(mac: str) -> str:
-    """Find a client's zone by MAC address (checks nft sets + JSON fallback)."""
+def _get_client_zone(mac: str, iface: str = "") -> str:
+    """Resolve a client's zone.
+
+    Order: explicit operator assignment (nft set membership) > interface
+    auto-classification (e.g. br-lxc → lxc) > legacy JSON assignment >
+    quarantine. Passing the interface the client was seen on lets containers
+    on the LXC bridge populate the `lxc` zone automatically.
+    """
     mac_lower = mac.lower()
 
-    # First check nft sets
+    # 1. Explicit operator assignment (the UI's "move to zone" writes the nft set)
     for zone_id, zone_info in ZONES.items():
         if mac_lower in _nft_list_set(zone_info["nft_set"]):
             return zone_id
 
-    # Fallback to JSON assignments
+    # 2. Auto-classify by interface (br-lxc → lxc, etc.)
+    if iface:
+        z = _interface_zones().get(iface)
+        if z in ZONES:
+            return z
+
+    # 3. Legacy JSON assignment
     assignments = _load_zone_assignments()
     if mac_lower in assignments:
         return assignments[mac_lower]
 
+    return "quarantine"
+
+
+def _resolve_zone(mac: str, iface: str, zmap: Dict[str, str]) -> str:
+    """Batched-path twin of `_get_client_zone`: resolve one device's zone from
+    a prebuilt `_zone_map()` (nft + JSON), then fall back to interface
+    auto-classification, then quarantine. Keeps the O(devices) list endpoints
+    off the per-device nft subprocess path while still honouring `interface_zones`.
+    """
+    z = zmap.get(mac.lower())
+    if z:
+        return z
+    if iface:
+        z = _interface_zones().get(iface)
+        if z in ZONES:
+            return z
     return "quarantine"
 
 
@@ -689,7 +738,7 @@ def status(user=Depends(require_jwt)):
     zmap = _zone_map()
     by_zone: Dict[str, int] = {z: 0 for z in ZONES}
     for device in devices:
-        zone = zmap.get(device["mac"], "quarantine")
+        zone = _resolve_zone(device["mac"], device.get("interface", ""), zmap)
         by_zone[zone] = by_zone.get(zone, 0) + 1
 
     # Count online clients (present in the latest completed collector cycle)
@@ -747,7 +796,7 @@ def clients(
 
     for d in devices:
         mac = d["mac"]
-        zone = zmap.get(mac, "quarantine")
+        zone = _resolve_zone(mac, d.get("interface", ""), zmap)
         client_meta = meta.get(mac, {})
 
         is_online = mac in online_macs
@@ -794,7 +843,7 @@ def get_client(mac: str, user=Depends(require_jwt)):
     if not d:
         raise HTTPException(404, "Client not found")
 
-    zone = _get_client_zone(mac_lower)
+    zone = _get_client_zone(mac_lower, d.get("interface", ""))
     meta = _load_clients_meta()
     client_meta = meta.get(mac_lower, {})
 
@@ -872,7 +921,8 @@ def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
         raise HTTPException(400, f"Zone invalide: {req.zone}")
 
     mac_lower = req.mac.lower()
-    old_zone = _get_client_zone(mac_lower)
+    _dev = store.get(mac_lower) if store else None
+    old_zone = _get_client_zone(mac_lower, (_dev or {}).get("interface", ""))
 
     # Set client zone (handles both nft and JSON fallback)
     _set_client_zone(mac_lower, req.zone)
@@ -903,7 +953,8 @@ def remove_from_zone(mac: str, user=Depends(require_jwt)):
     FastAPI threadpool it off the shared aggregator loop.
     """
     mac_lower = mac.lower()
-    old_zone = _get_client_zone(mac_lower)
+    _dev = store.get(mac_lower) if store else None
+    old_zone = _get_client_zone(mac_lower, (_dev or {}).get("interface", ""))
 
     for info in ZONES.values():
         _nft_delete_element(info["nft_set"], mac_lower)
@@ -1261,7 +1312,7 @@ def list_quarantine(user=Depends(require_jwt)):
     clients = []
     for d in devices:
         mac = d["mac"]
-        zone = zmap.get(mac, "quarantine")
+        zone = _resolve_zone(mac, d.get("interface", ""), zmap)
         if zone == "quarantine":
             client_meta = meta.get(mac, {})
             clients.append({

@@ -13,3 +13,5 @@ override_dh_auto_install:
 	[ -f config/ndpid.toml ] && install -m 644 config/ndpid.toml debian/secubox-ndpid/etc/secubox/ || true
 	install -d debian/secubox-ndpid/usr/bin
 	[ -f scripts/ndpidctl ] && install -m 755 scripts/ndpidctl debian/secubox-ndpid/usr/bin/ || true
+	install -d debian/secubox-ndpid/etc/nginx/secubox.d
+	[ -f nginx/ndpid.conf ] && install -m 644 nginx/ndpid.conf debian/secubox-ndpid/etc/nginx/secubox.d/ || true

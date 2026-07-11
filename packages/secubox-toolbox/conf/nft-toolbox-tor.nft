@@ -30,7 +30,7 @@ table inet toolbox_tor {
         oifname "lo" return
         # DNS always via Tor (no leak), even to local resolvers — before the
         # tor_exempt return so own-subnet resolvers don't bypass it.
-        ip daddr != 127.0.0.0/8 meta skuid "secubox-toolbox" meta l4proto { tcp, udp } th dport 53 redirect to :5353
+        ip daddr != 127.0.0.0/8 meta skuid "secubox-toolbox" meta l4proto { tcp, udp } th dport 53 redirect to :9053
         # Own services / LAN / loopback → DIRECT (never torified).
         ip daddr @tor_exempt return
         # Everything else from the worker uid → Tor TransPort.
@@ -48,5 +48,42 @@ table inet toolbox_tor {
         # IPv6 is not carried over Tor here → drop worker v6 egress (no v6 leak)
         meta skuid "secubox-toolbox" meta nfproto ipv6 tcp dport { 80, 443 } drop
         meta skuid "secubox-toolbox" meta nfproto ipv6 meta l4proto { tcp, udp } th dport 53 drop
+    }
+
+    # ── Per-client Tor-VPN: redirect selected LAN client SOURCE IPs (not the
+    # skuid) into Tor. Distinct from output_nat/output_killswitch above, which
+    # torify the mitm worker's own egress. Populated by
+    # secubox-toolbox-tor-reconcile's populate_vpn_clients from
+    # /etc/secubox/toolbox/tor-vpn-clients.txt. Empty set → no client routed.
+    set tor_vpn_src {
+        type ipv4_addr
+        flags interval
+    }
+
+    chain prerouting_vpn {
+        type nat hook prerouting priority -100; policy accept;
+        iifname "lo" return
+        # DNS via Tor FIRST (no leak) — before the tor_exempt return, else a
+        # client's DNS server (usually the box's own LAN IP, which lives in
+        # tor_exempt) returns early and resolves over the clear WAN. Mirrors
+        # output_nat's ordering. Excludes loopback dest.
+        ip saddr @tor_vpn_src ip daddr != 127.0.0.0/8 meta l4proto { tcp, udp } th dport 53 redirect to :9053
+        ip daddr @tor_exempt return
+        ip saddr @tor_vpn_src tcp dport { 80, 443 } redirect to :9040
+    }
+
+    # ── Fail-closed kill-switch for routed clients: only 80/443/DNS are
+    # redirected into Tor above; QUIC (UDP/443), any other port, and all other
+    # egress from a tor_vpn_src client would otherwise leave DIRECT with the
+    # box's real WAN identity — the opposite of a VPN. Drop it (browsers drop
+    # QUIC and fall back to TCP-443 over Tor). The redirected 80/443/DNS flows
+    # were DNAT'd to the local box in prerouting → they hit INPUT, not FORWARD,
+    # so they are unaffected here.
+    # IPv6 from routed clients is NOT tunneled (tor_vpn_src is v4-only) —
+    # disable IPv6 on routed clients or on the box's RA; Phase-1 limitation.
+    chain forward_vpn_killswitch {
+        type filter hook forward priority 0; policy accept;
+        ip saddr @tor_vpn_src ip daddr @tor_exempt return
+        ip saddr @tor_vpn_src drop
     }
 }

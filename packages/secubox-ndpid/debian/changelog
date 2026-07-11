@@ -1,3 +1,29 @@
+secubox-ndpid (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat: bridge the dashboard to the ndpiReader/dpi collector output. nDPId is
+    not run on this board (perf, #722/#723), so its DB is empty; when it is,
+    flows/protocols/applications/top/stats now serve from
+    /var/lib/secubox/dpi/{cumulative,state}.json so the panel shows real data.
+    JA3/JA4 fingerprints and per-flow risks have no equivalent there and stay
+    empty. The nDPId path is preserved and preferred if it ever has data.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 12:40:00 +0200
+
+secubox-ndpid (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix: service crash-looped (226/NAMESPACE) because ReadWritePaths listed
+    /run/ndpid, which does not exist (the socket is /run/secubox/ndpid.sock);
+    dropped it. Add the nginx API dropin (proxy /api/v1/ndpid/ to the module
+    socket) so the dashboard data path works.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 12:10:00 +0200
+
+secubox-ndpid (1.0.1-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
 secubox-ndpid (1.0.1-1~bookworm1) bookworm; urgency=low
 
   * Rewrite Description to identify this as the nDPId-engine DPI

@@ -1,3 +1,108 @@
+secubox-toolbox-ng (0.1.36-1~bookworm1) bookworm; urgency=medium
+
+  * #826 move browser-ja4.txt to /etc/secubox/sentinel (a conffile, like
+    c2-allow.txt) so an operator's captured fingerprints survive package
+    upgrades; default SENTINEL_C2_BROWSER_JA4 points there; postinst chowns it
+    to secubox-toolbox. Seed is a documented empty template (values are
+    board-specific, captured via SENTINEL_JA4_CAPTURE).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 18:00:00 +0200
+
+secubox-toolbox-ng (0.1.35-1~bookworm1) bookworm; urgency=medium
+
+  * #826 exclude TLS GREASE (RFC 8701) from ja4stack — browsers inject random
+    GREASE into the version/cipher lists, which was making the client-stack
+    fingerprint jitter per handshake (max version flipping to a GREASE 0xfafa).
+    Now stable per client stack, so non_browser_ja + browser-ja4 capture work.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 17:30:00 +0200
+
+secubox-toolbox-ng (0.1.34-1~bookworm1) bookworm; urgency=medium
+
+  * #826 plumb a SNI-independent client-TLS-stack fingerprint (ja4stack) from
+    the sbxmitm handshake into the Sentinel FlowMeta, so the C2 auto-learn
+    non_browser_ja signal works on real traffic (JA4 was never reaching the
+    mirror before). Enables SENTINEL_JA4_CAPTURE to record real browser
+    fingerprints for browser-ja4.txt. sbxmitm hot-path: nil-safe, no blocking,
+    empty on the (unreachable here) PSK-resumption path — degrades gracefully.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 17:00:00 +0200
+
+secubox-toolbox-ng (0.1.33-1~bookworm1) bookworm; urgency=medium
+
+  * #826 fix the MVT/Pegasus feed URL (moved to AmnestyTech/investigations) so
+    the live spyware feed materialises (1438 Pegasus IOCs) — surfaced report-only.
+  * #826 new env-gated JA4 capture (SENTINEL_JA4_CAPTURE=<file>): records
+    observed host<TAB>ja4 pairs from live traffic so an operator can bootstrap
+    the browser-ja4.txt fingerprint set (needed to enable non_browser_ja) from
+    real browser handshakes rather than guessed values. Off by default.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 16:00:00 +0200
+
+secubox-toolbox-ng (0.1.32-1~bookworm1) bookworm; urgency=medium
+
+  * #826 report-only feed surfacing: new daemon IOCReporter analyzer correlates
+    the non-spyware IOC classes (botnet_c2/malware/… from the live abuse.ch/
+    ThreatFox/Feodo feeds) that the Spyware analyzer skips, and records them
+    REPORT-ONLY (action forced to report, evidence disposition=observed) — the
+    async daemon observes, it never blocks. Feed detections now surface in the
+    Sentinelle tab / reports without any inline blocking.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 15:00:00 +0200
+
+secubox-toolbox-ng (0.1.31-1~bookworm1) bookworm; urgency=medium
+
+  * #826 fix: C2 autolearn false-positive — a first-seen browser-driven host
+    (e.g. an admin dashboard) was learnable on rarity alone, and non_browser_ja
+    over-fired when the browser-JA4 set was unconfigured. Promotion now requires
+    a STRONG signal (DGA host or confirmed non-browser fingerprint); "rare" is a
+    supporting signal only. non_browser_ja is disabled when no browser set is
+    configured (empty seed) rather than flagging every fingerprinted flow.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 14:00:00 +0200
+
+secubox-toolbox-ng (0.1.30-1~bookworm1) bookworm; urgency=medium
+
+  * #826 Sentinel C2/botnet auto-learning — the daemon now promotes sustained,
+    corroborated beaconing into a report-only learned-indicator set, gated by a
+    high-precision false-positive filter (box-vhost/first-party-LAN/seeded
+    allowlist + rare/non-browser-JA4/DGA corroboration + candidate->confirm over
+    >=3 windows / >=30min). New /c2/{learned,candidates,allow} status endpoints,
+    seeded c2-allow.txt + browser-ja4.txt, and ReadWritePaths for the operator
+    allowlist. Report-only, mac_hash-only, fail-safe, bounded memory.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 12:00:00 +0200
+
+secubox-toolbox-ng (0.1.29-1~bookworm1) bookworm; urgency=medium
+
+  * #823 Sentinel defensive threat engine — final wiring + packaging. Ships the
+    async analyzer daemon sbx-sentinel (/usr/sbin), wired with the three real
+    analyzers (commercial-spyware IOC correlator, behavioral heuristics,
+    YARA — the cgo-free stub in the DEFAULT build), plus a fail-safe live-feed
+    fetcher secubox-sentinel-feeds that materialises Amnesty-MVT / Citizen Lab /
+    abuse.ch (ThreatFox/Feodo/SSLBL) indicators as overlay packs, only ever
+    replacing a live overlay after the freshly-built pack validates as non-empty
+    JSON (a bad fetch keeps the last-good overlay, never wipes it).
+  * New reporter internal/sentinel.RenderReport(Verdict): a human-readable
+    proposal/solution report (detection class, matched-IOC evidence,
+    neutralized-vs-reported disposition, class-keyed mitigation) carrying no PII
+    beyond mac_hash.
+  * sbx-sentinel gains an optional read-only status HTTP surface (off unless
+    SENTINEL_HTTP_ADDR set): GET /stats {detections,blocked,spyware} + /verdicts.
+  * Packaging: sbx-sentinel.service, secubox-sentinel-feeds.{service,timer}
+    (daily), the shipped base pack under /usr/share/secubox/sentinel/packs/base,
+    the shared /etc/secubox/sentinel.env conffile (SENTINEL_*), and tmpfiles for
+    /var/lib/secubox/sentinel{,/overlay}. All DARK — installed but NOT enabled;
+    the inline gate + daemon + feed timer are turned on only at the human-gated
+    cutover (see debian/README.sentinel.md). Default build stays cgo-free
+    (CGO_ENABLED=0); the YARA-enabled variant (-tags yara + libyara-dev) is
+    documented, not the default.
+  * The rich operator WebUI/API belongs in the separate Python secubox-toolbox
+    portal and is a documented follow-up (intended /api/v1/toolbox/sentinel/*
+    routes in debian/README.sentinel.md) — no waf_bypass.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 06 Jul 2026 12:00:00 +0000
+
 secubox-toolbox-ng (0.1.28-1~bookworm1) bookworm; urgency=medium
 
   * #812 R4 media buffer (Phase 2): HLS reassembly — segments (.ts/.m4s) are

@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API files (host shim daemon)
+	install -d debian/secubox-frigate/usr/lib/secubox/frigate/
+	cp -r api debian/secubox-frigate/usr/lib/secubox/frigate/
+	# Host control plane CLI
+	install -d debian/secubox-frigate/usr/sbin
+	[ -f sbin/frigatectl ] && install -m 755 sbin/frigatectl debian/secubox-frigate/usr/sbin/frigatectl || true
+	[ -f sbin/secubox-frigate-diskguard ] && install -m 755 sbin/secubox-frigate-diskguard debian/secubox-frigate/usr/sbin/secubox-frigate-diskguard || true
+	# Native-LXC bootstrap (run on demand by `frigatectl install`)
+	install -d debian/secubox-frigate/usr/share/secubox/lib/frigate
+	[ -d lib/frigate ] && cp -r lib/frigate/. debian/secubox-frigate/usr/share/secubox/lib/frigate/ || true
+	# Static www files
+	install -d debian/secubox-frigate/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-frigate/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-frigate/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-frigate/usr/share/secubox/menu.d/ || true
+	# Dashboard-API route. The ACTIVE include is secubox-routes.d/ (webui.conf);
+	# secubox.d/ is legacy/back-compat. Ship to BOTH (mirror secubox-grafana) so
+	# /api/v1/frigate/ is routed — installing only to secubox.d/ silently
+	# drops the route (regression that broke the dashboard tile).
+	install -d debian/secubox-frigate/etc/nginx/secubox.d
+	install -d debian/secubox-frigate/etc/nginx/secubox-routes.d
+	[ -f conf/frigate.nginx.conf ] && cp conf/frigate.nginx.conf debian/secubox-frigate/etc/nginx/secubox.d/ || true
+	[ -f conf/frigate.nginx.conf ] && cp conf/frigate.nginx.conf debian/secubox-frigate/etc/nginx/secubox-routes.d/ || true
+	# Config example — canonical path read by lib/frigate/install-lxc.sh
+	# (install_config() seeds the live LXC config from here on first install).
+	install -d debian/secubox-frigate/usr/share/secubox/frigate
+	[ -f conf/frigate.config.yml.example ] && cp conf/frigate.config.yml.example debian/secubox-frigate/usr/share/secubox/frigate/frigate.config.yml.example || true
+	# Disk-pressure guard unit + timer. dh_installsystemd only auto-detects the
+	# package-named unit (secubox-frigate.service); extra units need to be
+	# placed in the install tree explicitly (mirror secubox-mitmproxy's
+	# waf-watchdog pattern) so dh_installsystemd picks them up for enable/start.
+	install -d debian/secubox-frigate/usr/lib/systemd/system
+	install -m 644 debian/secubox-frigate-diskguard.service debian/secubox-frigate/usr/lib/systemd/system/
+	install -m 644 debian/secubox-frigate-diskguard.timer debian/secubox-frigate/usr/lib/systemd/system/

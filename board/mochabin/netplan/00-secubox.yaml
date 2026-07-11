@@ -1,46 +1,26 @@
-# /etc/netplan/00-secubox.yaml — MOCHAbin — Mode Router (défaut)
-# Généré par build-image.sh · Modifié par secubox-netmodes lors du changement de mode
-# Marvell Armada 7040 : mvpp2 (SFP+) + mvneta (GbE) + DSA (switch 88E6341)
+# SecuBox MOCHAbin base network (router mode).
+# WAN = eth2 (DHCP from upstream, e.g. Freebox), reliably the default route.
+# lan0-3 = DSA switch ports (optional so a link-down port never wedges boot).
+# br-lxc = LXC container bridge.
 network:
   version: 2
   renderer: networkd
-
   ethernets:
-    # WAN candidate (SFP+, eth0) — connecté à l'opérateur via fibre/module SFP.
-    eth0:
-      dhcp4: true
-      dhcp6: false
-      optional: true
-
-    # LAN — port GbE switch (DSA 88E6341)
     eth1:
       optional: true
-    # WAN candidate (RJ45 cuivre, eth2 = mvpp2-2). Sur MOCHAbin le seul RJ45
-    # direct ; sert d'uplink quand l'opérateur arrive en cuivre. Le port WAN
-    # câblé (eth0 SFP+ OU eth2 cuivre) obtient le bail DHCP ; l'autre reste idle.
     eth2:
       dhcp4: true
       dhcp6: false
       optional: true
-    eth3:
-      optional: true
-    eth4:
-      optional: true
-
-    # SFP+ 10GbE
-    eth5:
-      optional: true
-    eth6:
-      optional: true
-
+      dhcp4-overrides:
+        use-routes: true
+        route-metric: 100
+    lan0: {optional: true}
+    lan1: {optional: true}
+    lan2: {optional: true}
+    lan3: {optional: true}
   bridges:
-    # Bridge LAN
-    br-lan:
-      interfaces: [eth1, eth3, eth4]
-      addresses: [192.168.10.1/24]
-      dhcp4: false
-      parameters:
-        stp: false
-        forward-delay: 0
-
-  # DHCP server sur br-lan géré par dnsmasq (secubox-nac)
+    br-lxc:
+      interfaces: []
+      addresses: [10.100.0.1/24]
+      optional: true

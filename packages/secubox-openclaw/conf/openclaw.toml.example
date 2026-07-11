@@ -1,0 +1,12 @@
+# /etc/secubox/openclaw.toml — cp from this example.
+enabled = true
+container_name = "openclaw"
+lxc_ip = "10.100.0.41"
+# Active nmap scans are auto-allowed for RFC1918/LAN + these owned suffixes;
+# any other external active target needs an explicit authorized=true per scan.
+owned_domains = ["gk2.secubox.in"]
+# Optional OSINT integrations (leave blank to disable). Put real keys in
+# /etc/secubox/secrets/ (chmod 600) if you prefer them off the TOML.
+# shodan_api_key = ""
+# censys_api_id = ""
+# virustotal_api_key = ""
