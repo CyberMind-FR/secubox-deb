@@ -319,6 +319,78 @@ body::after {
 .module-dot.mesh { background: var(--mesh-main); }
 .module-dot.wall { background: var(--wall-main); }
 
+/* TOTP / MFA steps */
+.step { display: none; }
+.step.active { display: block; }
+.step-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.totp-input {
+  text-align: center;
+  letter-spacing: 0.5em;
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+  padding-left: 0.5em;
+}
+.qr-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  width: 188px;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.qr-box img { width: 160px; height: 160px; image-rendering: pixelated; display: block; }
+.secret-line {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--auth-light);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+  word-break: break-all;
+  margin-bottom: 22px;
+  cursor: pointer;
+}
+.secret-line small { display: block; color: var(--muted); font-size: 0.6rem; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 4px; }
+.backup-codes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  margin: 18px 0 22px;
+}
+.backup-codes code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+  color: var(--text);
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-top: 16px;
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+.link-btn:hover { color: var(--text); }
+
 /* Responsive */
 @media (max-width: 480px) {
   .card {
@@ -354,7 +426,8 @@ body::after {
 
     <div id="msg" class="msg"></div>
 
-    <form id="login-form" onsubmit="return handleLogin(event)">
+    <!-- Step 1: password -->
+    <form id="login-form" class="step active" onsubmit="return handleLogin(event)">
       <div class="form-group">
         <label class="form-label">Username</label>
         <input type="text" id="username" class="form-input" placeholder="admin" required autocomplete="username">
@@ -365,6 +438,37 @@ body::after {
       </div>
       <button type="submit" id="btn-submit" class="btn">Sign In</button>
     </form>
+
+    <!-- Step 2: TOTP challenge (already-enrolled users) -->
+    <form id="mfa-form" class="step" onsubmit="return handleMfa(event)">
+      <p class="step-hint">🔐 Two-factor required.<br>Enter the 6-digit code from your authenticator (a backup code also works).</p>
+      <div class="form-group">
+        <label class="form-label">Verification Code</label>
+        <input type="text" id="mfa-code" class="form-input totp-input" placeholder="······" inputmode="numeric" autocomplete="one-time-code" maxlength="14" required>
+      </div>
+      <button type="submit" id="btn-mfa" class="btn">Verify</button>
+      <button type="button" class="link-btn" onclick="resetToLogin()">← Back to sign in</button>
+    </form>
+
+    <!-- Step 3: TOTP enrollment (admin forced to enrol) -->
+    <form id="enroll-form" class="step" onsubmit="return handleEnroll(event)">
+      <p class="step-hint">🛡️ Two-factor setup required for this account.<br>Scan the code with your authenticator app, then enter the 6-digit code it shows.</p>
+      <div class="qr-box"><img id="enroll-qr" alt="TOTP QR code"></div>
+      <div class="secret-line" id="enroll-secret" title="Tap to copy"><small>Manual entry key</small><span id="enroll-secret-val"></span></div>
+      <div class="form-group">
+        <label class="form-label">Verification Code</label>
+        <input type="text" id="enroll-code" class="form-input totp-input" placeholder="······" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+      </div>
+      <button type="submit" id="btn-enroll" class="btn">Confirm &amp; Enable</button>
+      <button type="button" class="link-btn" onclick="resetToLogin()">← Cancel</button>
+    </form>
+
+    <!-- Step 4: one-time backup codes -->
+    <div id="backup-step" class="step">
+      <p class="step-hint">✅ Two-factor enabled.<br><strong>Save these backup codes</strong> — each works once and they are shown only now.</p>
+      <div class="backup-codes" id="backup-codes"></div>
+      <button type="button" id="btn-backup" class="btn" onclick="finishBackup()">I've saved them — Continue</button>
+    </div>
 
     <div class="footer">
       <p>SecuBox &copy; <a href="https://cybermind.fr">CyberMind</a></p>
@@ -381,14 +485,46 @@ function showMsg(text, type) {
   msg.className = 'msg ' + type;
 }
 
+// Cross-step state. mfaToken / enrollToken are short-lived scoped tokens the
+// server hands back mid-login; username is remembered so a code step knows who
+// it is finishing for.
+var _username = '';
+var _mfaToken = '';
+var _enrollToken = '';
+
+function showStep(id) {
+  var steps = document.querySelectorAll('.step');
+  for (var i = 0; i < steps.length; i++) steps[i].classList.remove('active');
+  document.getElementById(id).classList.add('active');
+}
+
+function resetToLogin() {
+  _mfaToken = ''; _enrollToken = '';
+  document.getElementById('msg').className = 'msg';
+  var pw = document.getElementById('password'); if (pw) pw.value = '';
+  showStep('login-form');
+}
+
+function setBtn(id, loading, label) {
+  var b = document.getElementById(id);
+  if (!b) return;
+  if (loading) { b.classList.add('loading'); b.textContent = label; }
+  else { b.classList.remove('loading'); b.textContent = label; }
+}
+
+// Persist the real session token and go where we came from.
+function finalizeToken(token) {
+  localStorage.setItem('sbx_token', token);
+  localStorage.setItem('secubox_token', token);
+  localStorage.setItem('secubox_user', _username);
+  localStorage.setItem('secubox_role', 'admin');
+}
+
 function handleLogin(e) {
   e.preventDefault();
-  var btn = document.getElementById('btn-submit');
-  var username = document.getElementById('username').value.trim();
+  _username = document.getElementById('username').value.trim();
   var password = document.getElementById('password').value;
-
-  btn.classList.add('loading');
-  btn.textContent = 'Authenticating...';
+  setBtn('btn-submit', true, 'Authenticating...');
 
   // MUST hit the canonical auth service (/api/v1/auth → auth.sock), NOT the
   // hub-proxied copy (/api/v1/hub/auth/login). The hub includes the auth
@@ -399,35 +535,152 @@ function handleLogin(e) {
   fetch('/api/v1/auth/login', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({username: username, password: password}),
+    body: JSON.stringify({username: _username, password: password}),
     credentials: 'include'
   })
   .then(function(r) {
-    if (!r.ok) throw new Error('Invalid credentials');
-    return r.json();
+    return r.json().then(function(d) {
+      if (!r.ok) throw new Error(d.detail || 'Invalid credentials');
+      return d;
+    });
   })
   .then(function(data) {
-    if (data.access_token) {
-      localStorage.setItem('sbx_token', data.access_token);
-      localStorage.setItem('secubox_token', data.access_token);
-      localStorage.setItem('secubox_user', username);
-      localStorage.setItem('secubox_role', 'admin');
+    setBtn('btn-submit', false, 'Sign In');
+    if (data.access_token) {                 // password-only login
+      finalizeToken(data.access_token);
       showMsg('Login successful!', 'success');
-      setTimeout(function() {
-        window.location.href = _sbxRedirect();
-      }, 500);
+      setTimeout(function() { window.location.href = _sbxRedirect(); }, 500);
+    } else if (data.mfa_required) {          // enrolled user → ask for code
+      _mfaToken = data.mfa_token;
+      document.getElementById('msg').className = 'msg';
+      showStep('mfa-form');
+      document.getElementById('mfa-code').focus();
+    } else if (data.enrollment_required) {   // admin must set up 2FA now
+      _enrollToken = data.enrollment_token;
+      startEnrollment();
+    } else if (data.setup_required) {         // must change password first
+      throw new Error('Password change required — please contact an administrator.');
     } else {
       throw new Error(data.detail || 'Login failed');
     }
   })
   .catch(function(err) {
+    setBtn('btn-submit', false, 'Sign In');
     showMsg(err.message || 'Authentication failed', 'error');
-    btn.classList.remove('loading');
-    btn.textContent = 'Sign In';
   });
-
   return false;
 }
+
+// Step 2 — verify a code for an already-enrolled account.
+function handleMfa(e) {
+  e.preventDefault();
+  var code = document.getElementById('mfa-code').value.trim();
+  setBtn('btn-mfa', true, 'Verifying...');
+  fetch('/api/v1/auth/login/mfa', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _mfaToken},
+    body: JSON.stringify({code: code}),
+    credentials: 'include'
+  })
+  .then(function(r) {
+    return r.json().then(function(d) {
+      if (!r.ok) throw new Error(d.detail || 'Invalid code');
+      return d;
+    });
+  })
+  .then(function(data) {
+    setBtn('btn-mfa', false, 'Verify');
+    finalizeToken(data.access_token);
+    showMsg('Login successful!', 'success');
+    setTimeout(function() { window.location.href = _sbxRedirect(); }, 500);
+  })
+  .catch(function(err) {
+    setBtn('btn-mfa', false, 'Verify');
+    showMsg(err.message || 'Verification failed', 'error');
+    var f = document.getElementById('mfa-code'); f.value = ''; f.focus();
+  });
+  return false;
+}
+
+// Step 3a — ask the server to mint a secret + QR for this enrollment token.
+function startEnrollment() {
+  document.getElementById('msg').className = 'msg';
+  fetch('/api/v1/auth/totp/enroll', {
+    method: 'POST',
+    headers: {'Authorization': 'Bearer ' + _enrollToken},
+    credentials: 'include'
+  })
+  .then(function(r) {
+    return r.json().then(function(d) {
+      if (!r.ok) throw new Error(d.detail || 'Enrollment failed');
+      return d;
+    });
+  })
+  .then(function(data) {
+    var qr = data.qr_png_b64 || '';
+    document.getElementById('enroll-qr').src =
+      (qr.indexOf('data:') === 0) ? qr : 'data:image/png;base64,' + qr;
+    document.getElementById('enroll-secret-val').textContent = data.secret || '';
+    showStep('enroll-form');
+    document.getElementById('enroll-code').focus();
+  })
+  .catch(function(err) {
+    showMsg(err.message || 'Could not start 2FA setup', 'error');
+    showStep('login-form');
+  });
+}
+
+// Step 3b — confirm the first code, enabling TOTP; server returns a real token.
+function handleEnroll(e) {
+  e.preventDefault();
+  var code = document.getElementById('enroll-code').value.trim();
+  setBtn('btn-enroll', true, 'Enabling...');
+  fetch('/api/v1/auth/totp/confirm', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _enrollToken},
+    body: JSON.stringify({code: code}),
+    credentials: 'include'
+  })
+  .then(function(r) {
+    return r.json().then(function(d) {
+      if (!r.ok) throw new Error(d.detail || 'Invalid code');
+      return d;
+    });
+  })
+  .then(function(data) {
+    setBtn('btn-enroll', false, 'Confirm & Enable');
+    finalizeToken(data.access_token);      // logged in; hold the redirect until
+    _enrollToken = '';                      // the user acknowledges backup codes
+    var codes = data.backup_codes || [];
+    var box = document.getElementById('backup-codes');
+    box.innerHTML = '';
+    for (var i = 0; i < codes.length; i++) {
+      var c = document.createElement('code');
+      c.textContent = codes[i];
+      box.appendChild(c);
+    }
+    document.getElementById('msg').className = 'msg';
+    showStep('backup-step');
+  })
+  .catch(function(err) {
+    setBtn('btn-enroll', false, 'Confirm & Enable');
+    showMsg(err.message || 'Verification failed', 'error');
+    var f = document.getElementById('enroll-code'); f.value = ''; f.focus();
+  });
+  return false;
+}
+
+function finishBackup() {
+  window.location.href = _sbxRedirect();
+}
+
+// Tap the manual-entry key to copy it.
+document.getElementById('enroll-secret').addEventListener('click', function() {
+  var val = document.getElementById('enroll-secret-val').textContent;
+  if (val && navigator.clipboard) {
+    navigator.clipboard.writeText(val).then(function() { showMsg('Key copied', 'success'); });
+  }
+});
 
 // Honor ?redirect=<same-origin path> so login returns to the page that sent us
 // here (e.g. /metablogizer/) instead of always landing at the hub root. Only a

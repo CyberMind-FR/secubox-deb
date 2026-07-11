@@ -24,6 +24,14 @@ TOTP-enrolled users. Deployed live.
 
 ---
 
+**secubox-portal 2.2.3** — `login.html` now completes the TOTP flow in-browser: the login
+response branches to a code step (`mfa_required`), a QR + manual-key enrollment step
+(`enrollment_required` → `/totp/enroll` + `/totp/confirm`) with one-time backup-code display,
+or straight through on `access_token`. So turning the toggle **ON** is now fully usable from a
+phone. Verified live end-to-end on gk2 (enroll→confirm→re-login→mfa, 10 backup codes).
+
+---
+
 ## 2026-07-10 — wg-toolbox VPN surf blackhole after reboot (nft drop-in aborted every boot)
 
 User: "surf stopped when wg-toolbox VPN activated". Root cause was NOT the peer prune (restored the 540
