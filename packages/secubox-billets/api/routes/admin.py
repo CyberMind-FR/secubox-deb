@@ -15,8 +15,9 @@ from pydantic import ValidationError
 
 from .. import repo
 from ..models import BilletIn
-from ..services import eventlog, revisions
+from ..services import eventlog, linkcard, revisions
 from ..services import security as sec
+from ..services import ssrf as ssrf_mod
 
 SESSION_COOKIE = "billets_session"
 CSRF_COOKIE = "billets_csrf"
@@ -75,6 +76,18 @@ async def _log_and_revision(request: Request, event_type: str, billet_row, *, ac
     msg = f"{event_type} {billet_row['slug']} by {actor}"
     await asyncio.to_thread(revisions.commit_revision, repo_dir, billet_row["id"],
                             billet_row["body"], meta, msg)
+
+
+async def _resolve_and_store_embed(request: Request, billet_id: str, embed_url: str | None):
+    """Resolve an embed_url (oEmbed → link-card, SSRF-guarded, sanitized) and
+    cache the HTML on the row. Never raises — embedding must not break a save."""
+    if not embed_url:
+        return
+    client = request.app.state.http_client
+    resolver = getattr(request.app.state, "resolver", ssrf_mod._default_resolver)
+    res = await linkcard.resolve_embed(embed_url, client=client, resolver=resolver)
+    await repo.set_embed(request.app.state.conn, billet_id, html=res["html"],
+                         provider=res["provider"], fetched_at=_now(request))
 
 
 def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
@@ -172,6 +185,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
                  "csrf": request.cookies.get(CSRF_COOKIE) or ""})
             return resp
         billet_id = await repo.create_billet(request.app.state.conn, data, now=_now(request))
+        await _resolve_and_store_embed(request, billet_id, data.embed_url)
         row = await repo.get_by_id(request.app.state.conn, billet_id)
         event = "billet.published" if data.publish else "billet.edited"
         await _log_and_revision(request, event, row, actor=author["username"])
@@ -218,10 +232,23 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             await repo.set_status(conn, billet_id,
                                   "published" if action == "publish" else "archived",
                                   now=_now(request))
+        await _resolve_and_store_embed(request, billet_id, embed_url)
         row = await repo.get_by_id(conn, billet_id)
         event = "billet.published" if action == "publish" else "billet.edited"
         await _log_and_revision(request, event, row, actor=author["username"])
         return _redirect("/admin")
+
+    @app.post("/admin/billets/{billet_id}/refetch")
+    async def refetch(request: Request, billet_id: str, csrf: str = Form("")):
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        if not sec.csrf_ok(request.cookies.get(CSRF_COOKIE), csrf):
+            return _redirect("/admin/login?error=csrf")
+        row = await repo.get_by_id(request.app.state.conn, billet_id)
+        if row is not None and row["embed_url"]:
+            await _resolve_and_store_embed(request, billet_id, row["embed_url"])
+        return _redirect(f"/admin/billets/{billet_id}/edit")
 
     @app.post("/admin/billets/{billet_id}/delete")
     async def delete(request: Request, billet_id: str, csrf: str = Form("")):
