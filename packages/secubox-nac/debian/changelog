@@ -34,6 +34,10 @@ secubox-nac (3.0.0-1~bookworm1) bookworm; urgency=medium
     now records the interface, the store persists it (best-value column),
     and zone resolution falls back to it (nft set > interface > JSON >
     quarantine). Folds in the standalone 1.0.5-1.0.7 releases below.
+  * postinst now ensures the `inet secubox_nac` table + all zone sets
+    (incl. `lxc_zone`) exist, idempotently, so operator "move to zone"
+    works on a fresh install and the mac-guard element migration has its
+    destination sets (the live board had no such table).
 
  -- Gerald KERMA <devel@cybermind.fr>  Sat, 05 Jul 2026 18:00:00 +0000
 
