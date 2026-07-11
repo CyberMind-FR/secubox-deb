@@ -1,52 +1,92 @@
-# Task 7 report — Tor enhancement Phase 1 — webui `#tor` tab
+# Task 7 Report — MetaBlogizer Publish Wizard UI
 
-**Status:** DONE
+**Status:** Done.
 
-**Branch:** `feature/tor-enhancement-phase1`
-**Commit:** `b8d4e1b6` — `feat(toolbox): #tor tab — exit-country, Tor-VPN clients, obfs4 bridges, emancipate, .onion list + DNS status`
-**File touched:** `packages/secubox-toolbox/www/toolbox/index.html` (only file, as instructed) — 355 insertions / 2 deletions.
+(Note: this file previously held an unrelated stale Task-7 report for a
+different plan — "Tor enhancement Phase 1 — webui #tor tab" — overwritten
+here since it did not belong to this plan.)
 
-(Note: this file previously held an unrelated stale Task-7 report from a different plan/openclaw dashboard — overwritten per instruction.)
+## What was added
 
-## Panels added (inside the existing `#panel-tor` section, below the Tor-egress switch card, same P31-light skin)
+- `packages/secubox-metablogizer/www/metablogizer/index.html`:
+  - New `<section class="card" id="publish-wizard">` placed right after the
+    existing Sites card, inside `<main>` (before `</main>`), with the
+    5-step stepper (`#wiz-steps`), name/domain/file inputs, Publish +
+    Download-backup buttons, and a `<pre id="wiz-result" class="result">`
+    output area.
+  - New CSS block appended inside the page's existing `<style>` (after the
+    touch-friendly-buttons media query): `.wizard-steps`, `.wizard-steps
+    span.ok/.fail`, `#wiz-result.result`. Colors for ok/fail reuse the
+    page's existing `var(--green)` / `var(--red)` tokens (the CRT phosphor
+    palette) instead of the brief's hardcoded hex (`#148C66` / `#C04E24`),
+    which would have clashed visually with the rest of the page.
+  - New `<script>` block placed after the page's main `<script>` (which
+    declares `token()` / `API` / `headers()` / `refresh()`) and before
+    `crt-engine.js`. It is an IIFE that:
+    - Reuses the page's real `token()` helper (reads both `sbx_token` and
+      `secubox_token`) instead of the brief's illustrative `tok()` that
+      only reads `sbx_token`.
+    - Reuses the page's `API` constant (`/api/v1/metablogizer`) for the
+      wizard/export URLs rather than hardcoding the full path.
+    - Mirrors the exact multipart-fetch + 401-retry-without-header +
+      redirect-to-login pattern already used by `uploadSiteContent()`
+      elsewhere in the same file, for consistency.
+    - Renders the JSON result via `out.textContent = JSON.stringify(...)`
+      (never `innerHTML`) — safe against XSS from server data.
+    - Calls the page's existing `refresh()` on successful publish so the
+      Sites table picks up the new/updated site immediately.
+  - Inputs use the page's existing bare `<input>` inside `.form-group`
+    (no invented `form-input` class — the file's existing CSS rule
+    `.form-group input { ... }` already styles any `<input>` inside a
+    `.form-group`, so adding an unused class would have been dead weight).
 
-1. **Exit-country** — `<select multiple>` populated from a curated static ISO 3166-1 alpha-2 list (`ISO_COUNTRIES`, ~72 countries, French labels, sorted). "Sélection actuelle" kv line + fail-closed warning banner (`StrictNodes 1` = no traffic if no exit exists in the chosen countries). Wired to `GET/POST /api/v1/toolbox/exit_country`.
-2. **Tor-VPN clients** — kind selector (ip/cidr/mac) + selector input + add button; table with per-row 🗑 remove. Prominent IPv6 warning banner (v4-only tunnel, advise disabling IPv6 on routed clients/RA). Client-side heuristic (selector contains `:` and kind≠mac) short-circuits with a clean IPv6-specific message before hitting the API; the error path also recognizes a `:`-selector 400 and rewords it, since the backend's generic `"invalid kind/selector"` detail isn't IPv6-specific. Wired to `GET /vpn/clients`, `POST/DELETE /vpn/client`.
-3. **obfs4 bridges** — paste-a-line input + add; list with per-row remove; hint pointing to Tor Browser moat / bridges.torproject.org. Wired to `GET /tor/bridges`, `POST/DELETE /tor/bridge`.
-4. **Emancipate** — "🚀 Publier en .onion" button → `POST /api/v1/exposure/tor/emancipate_webui` (cross-module, JWT-gated); shows the returned `.onion` (from `output.onion` / `tor.onion`) with a clipboard copy button.
-5. **Hidden services + .onion-DNS status** — `GET /api/v1/tor/hidden_services` table (name / onion / local port / state) and `GET /api/v1/tor/onion_dns` kv (dnsport_up / forward_zone_installed / resolves), fetched together via `Promise.all`.
+## Endpoint contract verified against source (read-only, no `.py` touched)
 
-## Endpoints wired (confirmed against source, not guessed)
-
-- Toolbox-native (same origin, cookie/vhost-gated exactly like the existing `torSet()`/`loadTor()` — `_require_tor_admin` blocks the public kbin vhost, no bearer needed): `/api/v1/toolbox/exit_country`, `/api/v1/toolbox/vpn/clients`, `/api/v1/toolbox/vpn/client`, `/api/v1/toolbox/tor/bridges`, `/api/v1/toolbox/tor/bridge`.
-- Cross-module (nginx-routed, confirmed via each module's `nginx/*.conf` location block): `/api/v1/exposure/tor/emancipate_webui` (requires JWT — `Depends(require_jwt)` in `packages/secubox-exposure/api/main.py`), `/api/v1/tor/hidden_services`, `/api/v1/tor/onion_dns` (no auth required server-side, bearer sent anyway for consistency).
-
-## Auth approach
-
-Two helpers, matching two different auth realities found in the source:
-- `Tj(path, opts)` — toolbox's own tor-* routes: `credentials: 'same-origin'`, no bearer (mirrors existing `torSet`/`torLeaks`/`loadFilters`).
-- `Xj(base, path, opts)` — cross-module (exposure + tor): reads `localStorage.getItem('sbx_token')`, sends `Authorization: Bearer <token>`, redirects to `/login.html` on 401 — this is the same pattern used by `packages/secubox-exposure/www/exposure/index.html` (`token()`/`headers()`/`api()`), and matches the fleet-wide `sbx_token` convention (a wrong localStorage key produces a login loop on other modules).
-
-## XSS / robustness approach
-
-- Every backend-derived string rendered into `innerHTML` goes through the existing global `esc()` (declared later in the file but hoisted — safe, since `function esc(s){}` statements hoist ahead of all script execution): error messages (`d.__error`/`dns.__error`/`hs.__error`), country codes, VPN client kind/selector, bridge lines, hidden-service name/onion_address, the emancipated `.onion` address.
-- No `onclick="fn('${…}')"` was introduced. Static buttons (apply/clear/add-client/add-bridge/emancipate) use `addEventListener` wired once near the bottom of the script. Per-row dynamic elements (VPN-client remove, bridge remove, onion copy) use `data-*` attributes + `.querySelectorAll(...).forEach(b => b.addEventListener(...))` immediately after each render — the exact idiom already used by the file's existing `loadSentinelC2()`/`c2Ignore()` pair.
-- Grep confirms the only `onclick="…${…}"` occurrences left in the file are pre-existing (lines for `setLevel`, `loadClientDetail`, `resetClient`, the "tout afficher" toggle, `quarantine`, `loadAdsClient`) — none are part of this change.
-- `switchTab('tor')` and the tab's "🔁 Refresh" button now call a new `refreshTorTab()` which loads all five new panels plus the existing egress state, so nothing is left stuck on `loading…` after a tab switch.
+Confirmed field names/response shape against
+`packages/secubox-metablogizer/api/routers/publish.py`:
+- `POST {API}/publish/wizard` — multipart fields `name`, `domain` (optional),
+  `file`; JWT via `Depends(require_jwt)` (accepts Bearer **or** SSO session
+  cookie, per `common/secubox_core/auth.py`). Response:
+  `{ok, domain, steps: {content: {index_present}, version, route: {route_ok},
+  cert}}` — matches the JS's `d.steps.content.index_present` /
+  `d.steps.route.route_ok` reads exactly.
+- `GET {API}/publish/export/{name}` — also JWT-gated but accepts the SSO
+  session cookie, so the plain `window.location = ...` navigation (no
+  Authorization header possible on a top-level nav) works because the
+  browser sends the session cookie automatically.
 
 ## Validation
 
-- `node --check` on the extracted `<script>` block: **PASS**.
-- `grep -n 'onclick="[^"]*\${'` across the whole file: only pre-existing matches, none in the new code region.
-- Manual read-through confirms every dynamic value hitting `innerHTML` is `esc()`-wrapped; numeric fields (`local_port`) and boolean-derived static strings are not (not attacker-controlled free text, no escaping needed).
-- Not deployed to a board — that is Task 9's scope, explicitly excluded here.
+- Extracted the new `<script>` block (the one containing `wiz-go`) via a
+  small Python regex script into a standalone `.js` file and ran
+  `node --check` (node v22.20.0, available in this environment) —
+  **no syntax error**.
+- Also checked: no duplicate `id=` attributes introduced anywhere in the
+  file; `<section>`, `<script>`, `<style>` tag counts balanced
+  (open == close) after the edit.
+- Did not run the app live (Task 11 is the manual/live verification step
+  per the brief); this task's scope is UI-only markup/JS/CSS, and the API
+  side (Task 6) was not modified.
 
-## Concerns / follow-ups for later tasks
+## Helpers reused (per the "match existing conventions" instruction)
 
-- The exit-country panel does not show a "live exit relay country" via geoIP (no such endpoint exists in the backend); it instead points the operator at the existing "Vérifier l'IP de sortie" button in the egress card above. Documented simplification, not a missing wire-up.
-- The IPv6-selector 400 from the toolbox API returns a generic `"invalid kind/selector"` detail (not IPv6-specific) — the client-side heuristic (colon-in-selector) covers the common case cleanly, but a genuinely malformed non-IPv6 selector will still show the generic backend message, which is correct behavior, just not IPv6-labeled.
-- The pre-existing deep-link array (`if (['overview','clients','filtres','social','ads','reseau','config'].includes(initial))`) still excludes `tor` and `sentinel` — a pre-existing gap unrelated to Task 7, left untouched per the "only touch this file for this task's scope" instruction (flagging it here rather than silently fixing it).
+- `token()` — the page's real dual-key localStorage reader (`sbx_token` /
+  `secubox_token`), not the brief's single-key illustrative `tok()`.
+- `API` constant and the existing `refresh()` function.
+- The `uploadSiteContent()` multipart-fetch/401-retry/login-redirect idiom.
+- Existing `.card` / `.btn` / `.btn.primary` / `.form-group` classes; no new
+  classes introduced beyond the wizard-specific `.wizard-steps` / `.result`
+  that the brief itself calls for.
 
-## Files touched
+## Concerns
 
-- `packages/secubox-toolbox/www/toolbox/index.html` (extended, commit `b8d4e1b6`)
+- None blocking. Two intentional, documented deviations from the brief's
+  literal snippet (both strict improvements for matching the page's real
+  conventions, not functional gaps): `var(--green)`/`var(--red)` instead of
+  hardcoded hex, and reuse of the page's `API` constant instead of a
+  hardcoded absolute path.
+- The wizard's `content`/`route`/`cert` step markers assume the response
+  shapes from `publish/routing.py` / `publish/certs.py` always include the
+  keys the JS reads (`index_present`, `route_ok`); this mirrors the brief's
+  own snippet verbatim and was cross-checked against the actual
+  `publish_wizard()` handler in `api/routers/publish.py`, so no gap found.

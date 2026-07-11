@@ -34,8 +34,6 @@ DATA_PATH = Path(config.get("data_path", "/srv/metablogizer") if config else "/s
 NGINX_VHOST_DIR = Path("/etc/nginx/sites-available")
 NGINX_ENABLED_DIR = Path("/etc/nginx/sites-enabled")
 NGINX_METABLOGS_CONF = Path("/etc/nginx/sites-enabled/metablogizer")
-MITMPROXY_ROUTES = Path("/srv/mitmproxy/haproxy-routes.json")
-MITMPROXY_IN_ROUTES = Path("/srv/mitmproxy-in/haproxy-routes.json")
 BASE_PORT = 8900
 DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 # Internal IP where nginx listens for metablogizer sites
@@ -54,6 +52,8 @@ from webhook import (
     verify_signature,
     _record_deploy,
 )
+from routers.publish import router as publish_router
+app.include_router(publish_router)
 
 logger = logging.getLogger("metablogizer")
 
@@ -73,63 +73,6 @@ def nginx_running() -> bool:
     """Check if nginx is running"""
     success, _, _ = run_cmd(["pgrep", "nginx"])
     return success
-
-
-def sync_mitmproxy_routes(sites: List[dict]) -> bool:
-    """Sync metablogizer sites to mitmproxy haproxy-routes.json
-
-    Mitmproxy runs in LXC container (10.100.0.60), so we need to:
-    1. Use 10.100.0.1 as the backend IP (host from container perspective)
-    2. Use BASE_PORT (8900) for all sites (nginx listens on this port)
-    3. Write routes to the LXC container via lxc-attach
-
-    Returns True if sync successful.
-    """
-    # IP address of host from mitmproxy container perspective
-    CONTAINER_BACKEND_IP = "10.100.0.1"
-    LXC_CONTAINER = "mitmproxy"
-    LXC_ROUTES_FILE = "/srv/mitmproxy/haproxy-routes.json"
-
-    try:
-        # Read existing routes from container
-        existing_routes = {}
-        result = subprocess.run(
-            ["lxc-attach", "-n", LXC_CONTAINER, "--", "cat", LXC_ROUTES_FILE],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            existing_routes = json.loads(result.stdout)
-
-        # Add/update metablogizer site routes - ALL use BASE_PORT (8900)
-        for site in sites:
-            domain = site["domain"]
-            # All metablogizer sites use BASE_PORT (8900) - nginx multiplexes by hostname
-            existing_routes[domain] = [CONTAINER_BACKEND_IP, BASE_PORT]
-
-        # Write routes to container
-        routes_json = json.dumps(existing_routes, indent=2)
-
-        # Use lxc-attach to write the file
-        write_cmd = subprocess.run(
-            ["lxc-attach", "-n", LXC_CONTAINER, "--", "sh", "-c",
-             f"cat > {LXC_ROUTES_FILE}"],
-            input=routes_json, capture_output=True, text=True, timeout=10
-        )
-        if write_cmd.returncode != 0:
-            logger.warning(f"Failed to write routes to container: {write_cmd.stderr}")
-            return False
-
-        # Reload mitmproxy in container
-        subprocess.run(
-            ["lxc-attach", "-n", LXC_CONTAINER, "--", "systemctl", "reload", "mitmproxy"],
-            capture_output=True, text=True, timeout=10
-        )
-
-        logger.info(f"Synced {len(sites)} sites to mitmproxy container routes")
-        return True
-    except Exception as e:
-        logger.warning(f"Failed to sync mitmproxy routes: {e}")
-        return False
 
 
 def _load_site_json(site_dir):
@@ -305,9 +248,6 @@ server {{
         success, _, _ = run_cmd(["sudo", "-n", "systemctl", "reload", "nginx"])
         if not success:
             run_cmd(["systemctl", "reload", "nginx"])
-
-        # Sync routes to mitmproxy for WAF protection
-        sync_mitmproxy_routes(sites)
 
         logger.info(f"Published {len(sites)} metablogizer sites")
         return True, len(sites), f"Published {len(sites)} sites"
