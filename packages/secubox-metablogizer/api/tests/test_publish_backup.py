@@ -36,3 +36,22 @@ def test_export_without_git_uses_content_tar(tmp_path):
     dest = tmp_path / "r2"; dest.mkdir()
     import_site(art, dest)
     assert (dest / "plain" / "public" / "index.html").read_text() == "<h1>plain</h1>"
+
+
+def test_import_rejects_traversal_name(tmp_path):
+    import json, tarfile
+    from publish.backup import import_site
+    staging = tmp_path / "s"; staging.mkdir()
+    (staging / "public").mkdir()
+    (staging / "public" / "i.html").write_text("x")
+    with tarfile.open(staging / "content.tar", "w") as t:
+        t.add(staging / "public", arcname="public")
+    (staging / "manifest.json").write_text(json.dumps({"name": "../../etc"}))
+    art = tmp_path / "evil.sbxsite"
+    with tarfile.open(art, "w:gz") as t:
+        t.add(staging / "content.tar", arcname="content.tar")
+        t.add(staging / "manifest.json", arcname="manifest.json")
+    dest = tmp_path / "dest"; dest.mkdir()
+    import pytest
+    with pytest.raises(ValueError):
+        import_site(art, dest)
