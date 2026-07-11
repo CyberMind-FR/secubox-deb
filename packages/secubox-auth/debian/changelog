@@ -1,3 +1,12 @@
+secubox-auth (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * fix: login failed and /status 500d with NameError: the sessions file was
+    defined as __SESSIONS_FILE (dunder) but every handler referenced
+    _SESSIONS_FILE (single underscore). Normalised to _SESSIONS_FILE so session
+    persistence + status work; logins succeed again.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 11 Jul 2026 08:00:00 +0200
+
 secubox-auth (1.0.2-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
