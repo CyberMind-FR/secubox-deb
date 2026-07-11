@@ -55,3 +55,27 @@ def test_import_rejects_traversal_name(tmp_path):
     import pytest
     with pytest.raises(ValueError):
         import_site(art, dest)
+
+
+def test_import_rejects_tar_member_traversal(tmp_path):
+    """A content.tar whose member escapes the destination is rejected
+    (portable safe-extract, not the 3.12-only filter= kwarg)."""
+    import json, tarfile, io, pytest
+    from publish.backup import import_site
+    staging = tmp_path / "s"; staging.mkdir()
+    # craft a content.tar with a traversal member
+    evil = staging / "content.tar"
+    with tarfile.open(evil, "w") as t:
+        data = b"pwned"
+        info = tarfile.TarInfo(name="../../escape.html")
+        info.size = len(data)
+        t.addfile(info, io.BytesIO(data))
+    (staging / "manifest.json").write_text(json.dumps({"name": "site1"}))
+    art = tmp_path / "evil.sbxsite"
+    with tarfile.open(art, "w:gz") as t:
+        t.add(evil, arcname="content.tar")
+        t.add(staging / "manifest.json", arcname="manifest.json")
+    dest = tmp_path / "dest"; dest.mkdir()
+    with pytest.raises(ValueError):
+        import_site(art, dest)
+    assert not (tmp_path / "escape.html").exists()

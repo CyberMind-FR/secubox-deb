@@ -32,5 +32,11 @@ def _sudo_publishctl(verb: str, *args: str) -> dict:
 def apply_route(domain: str, port: int = 8900, runner=_sudo_publishctl) -> dict:
     vhost = runner("vhost-add", domain)
     waf = runner("waf-route", domain, str(port))
-    return {"route_ok": bool(vhost.get("ok")) and bool(waf.get("ok")),
+    # The WAF route file is the OPERATIVE mechanism: sbxwaf serves a host iff it
+    # is in that file, and HAProxy's `default_backend mitmproxy_inspector` already
+    # sends TLS traffic to the WAF backend. `haproxyctl vhost add` is advisory
+    # (belt-and-braces for setups without that default) and is blocked by
+    # haproxyctl's drift-guard on a hand-migrated board — so it must NOT gate
+    # success. route_ok reflects the WAF route only; vhost detail is still returned.
+    return {"route_ok": bool(waf.get("ok")),
             "vhost": vhost, "waf": waf}
