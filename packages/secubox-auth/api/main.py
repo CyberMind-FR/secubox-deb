@@ -110,7 +110,7 @@ try:
 except PermissionError:
     # Running as non-root in dev/test — caller is responsible for env-overriding to a writable path.
     pass
-__SESSIONS_FILE = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", str(_DATA_DIR / "sessions.json")))
+_SESSIONS_FILE = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", str(_DATA_DIR / "sessions.json")))
 _AUDIT_FILE    = Path(os.environ.get("SECUBOX_AUTH_AUDIT",    str(_DATA_DIR / "audit.log")))
 _TOTP_PENDING_FILE = Path(os.environ.get("SECUBOX_AUTH_TOTP_PENDING", str(_DATA_DIR / "totp-pending.json")))
 _USERS_FILE    = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
@@ -120,16 +120,16 @@ _users_engine = _users_engine_mod.Engine(users_path=_USERS_FILE)
 
 
 def _read_sessions() -> list:
-    if not __SESSIONS_FILE.exists():
+    if not _SESSIONS_FILE.exists():
         return []
     try:
-        return json.loads(__SESSIONS_FILE.read_text())
+        return json.loads(_SESSIONS_FILE.read_text())
     except Exception:
         return []
 
 
 def _write_sessions(rows: list) -> None:
-    __SESSIONS_FILE.write_text(json.dumps(rows))
+    _SESSIONS_FILE.write_text(json.dumps(rows))
 
 
 def _append_audit(event: str, username: str, details: dict) -> None:
