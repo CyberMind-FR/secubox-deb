@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# SecuBox-Deb :: secubox-publishctl — the ONLY privileged entry point for the
+# MetaBlogizer publisher wizard. Runs as root via a tight sudoers rule; the
+# FastAPI process (user secubox) never writes root config directly.
+set -euo pipefail
+
+WAF_ROUTES_FILE="${SBX_WAF_ROUTES_FILE:-/etc/secubox/waf/haproxy-routes.json}"
+HAPROXY_CERTS_DIR="${SBX_HAPROXY_CERTS_DIR:-/etc/haproxy/certs}"
+BACKEND_IP="192.168.1.200"
+GK2_SUFFIX=".gk2.secubox.in"
+DOMAIN_RE='^(([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)$'
+
+emit() { printf '{"ok":%s,"detail":"%s"}\n' "$1" "$2"; }
+die()  { emit false "$1"; exit 1; }
+
+valid_domain() { [[ "$1" =~ $DOMAIN_RE && ${#1} -le 253 ]]; }
+valid_port()   { [[ "$1" =~ ^[0-9]+$ && "$1" -ge 1 && "$1" -le 65535 ]]; }
+
+reload_sbxwaf() {
+  # sbxwaf hot-reloads the route file; nudge it best-effort, never fatal.
+  systemctl reload secubox-waf 2>/dev/null || systemctl reload sbxwaf 2>/dev/null || true
+}
+
+waf_route() {
+  local domain="$1" port="$2"
+  valid_domain "$domain" || die "invalid domain"
+  valid_port "$port"     || die "invalid port"
+  # Merge with python3 (present) so we never hand-roll JSON.
+  python3 - "$WAF_ROUTES_FILE" "$domain" "$BACKEND_IP" "$port" <<'PY'
+import json, sys, os
+path, domain, ip, port = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+try:
+    data = json.load(open(path))
+    if not isinstance(data, dict): raise ValueError
+except Exception:
+    data = {}
+data[domain] = [ip, port]
+tmp = path + ".tmp"
+json.dump(data, open(tmp, "w"), indent=2, sort_keys=True)
+os.replace(tmp, path)
+PY
+  reload_sbxwaf
+  emit true "routed $domain -> $BACKEND_IP:$port"
+}
+
+vhost_add() {
+  local domain="$1"; valid_domain "$domain" || die "invalid domain"
+  haproxyctl vhost add "$domain" >/dev/null 2>&1 || true   # additive, idempotent
+  emit true "vhost $domain"
+}
+
+vhost_del() {
+  local domain="$1"; valid_domain "$domain" || die "invalid domain"
+  python3 - "$WAF_ROUTES_FILE" "$domain" <<'PY'
+import json, sys, os
+path, domain = sys.argv[1], sys.argv[2]
+try: data = json.load(open(path))
+except Exception: data = {}
+data.pop(domain, None)
+tmp = path + ".tmp"; json.dump(data, open(tmp,"w"), indent=2, sort_keys=True); os.replace(tmp, path)
+PY
+  haproxyctl vhost del "$domain" >/dev/null 2>&1 || true
+  reload_sbxwaf
+  emit true "removed $domain"
+}
+
+cert() {
+  local domain="$1"; valid_domain "$domain" || die "invalid domain"
+  if [[ "$domain" == *"$GK2_SUFFIX" ]]; then
+    emit true "wildcard"; return 0
+  fi
+  mkdir -p "$HAPROXY_CERTS_DIR"
+  if ! certbot certonly --non-interactive --agree-tos --standalone \
+        --preferred-challenges http -d "$domain" >/dev/null 2>&1; then
+    die "certbot failed for $domain"
+  fi
+  local live="/etc/letsencrypt/live/$domain"
+  cat "$live/fullchain.pem" "$live/privkey.pem" > "$HAPROXY_CERTS_DIR/$domain.pem"
+  systemctl reload haproxy 2>/dev/null || true
+  emit true "issued"
+}
+
+[[ $# -ge 1 ]] || die "usage: secubox-publishctl <verb> ..."
+verb="$1"; shift
+case "$verb" in
+  waf-route) [[ $# -eq 2 ]] || die "waf-route <domain> <port>"; waf_route "$1" "$2" ;;
+  vhost-add) [[ $# -eq 1 ]] || die "vhost-add <domain>";       vhost_add "$1" ;;
+  vhost-del) [[ $# -eq 1 ]] || die "vhost-del <domain>";       vhost_del "$1" ;;
+  cert)      [[ $# -eq 1 ]] || die "cert <domain>";            cert "$1" ;;
+  *) die "unknown verb: $verb" ;;
+esac

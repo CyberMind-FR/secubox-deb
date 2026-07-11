@@ -1,0 +1,2 @@
+# Installed to /etc/sudoers.d/secubox-publish-wizard (mode 0440).
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-publishctl
