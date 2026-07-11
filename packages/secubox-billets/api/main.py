@@ -85,6 +85,19 @@ def _csp(frame_src: str) -> str:
     )
 
 
+def _extra_frame_hosts(rows) -> tuple[str, ...]:
+    """Self-hosted embed hosts (Mastodon/PeerTube) among the given billet rows,
+    to add to frame-src beyond the static provider allowlist."""
+    from urllib.parse import urlparse
+    hosts: list[str] = []
+    for r in rows:
+        if r["embed_html"] and r["embed_url"]:
+            h = urlparse(r["embed_url"]).hostname
+            if h and h not in hosts and not any(h == d or h.endswith("." + d) for d in _FRAME_HOSTS):
+                hosts.append(h)
+    return tuple(hosts)
+
+
 _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -93,9 +106,15 @@ _SECURITY_HEADERS = {
 }
 
 
-def _billet_view(row: aiosqlite.Row) -> dict:
+def _billet_view(row: aiosqlite.Row, base: str = "") -> dict:
+    from urllib.parse import urlparse
     d = dict(row)
     d["body_html"] = render_markdown(d["body"])
+    d["ref_host"] = (urlparse(d["ref_url"]).hostname if d.get("ref_url") else None)
+    title = feeds.billet_title(d["body"])
+    d["title"] = title
+    d["permalink"] = f"{base}/b/{d['slug']}" if base else f"/b/{d['slug']}"
+    d["share"] = _share_intents(d["permalink"], title) if base else {}
     return d
 
 
@@ -135,10 +154,15 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
     @app.get("/", response_class=HTMLResponse)
     async def feed(request: Request, cursor: str | None = None):
         rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE, cursor=cursor)
-        return templates.TemplateResponse(request, "feed.html", {
+        base = _base(request)
+        resp = templates.TemplateResponse(request, "feed.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billets": [_billet_view(r) for r in rows], "next_cursor": next_cursor,
+            "billets": [_billet_view(r, base) for r in rows], "next_cursor": next_cursor,
         })
+        # Embeds render inline in the feed too; allow any self-hosted embed hosts
+        # of the shown billets in frame-src (static providers already covered).
+        resp.headers["Content-Security-Policy"] = _csp(_frame_src(_extra_frame_hosts(rows)))
+        return resp
 
     @app.get("/b/{slug}", response_class=HTMLResponse)
     async def permalink(request: Request, slug: str):
@@ -157,7 +181,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         permalink_url = f"{base}/b/{row['slug']}"
         resp = templates.TemplateResponse(request, "billet.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billet": _billet_view(row), "reactions": rctx,
+            "billet": _billet_view(row, base), "reactions": rctx,
             "comments": comment_views, "pcsrf": pcsrf,
             "ts_token": ts_token, "flash": request.query_params.get("c"),
             "og": {"title": feeds.billet_title(row["body"]),

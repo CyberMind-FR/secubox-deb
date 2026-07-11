@@ -87,3 +87,18 @@ async def test_permalink_increments_view(client, conn):
     await client.get(f"/b/{row['slug']}")
     after = await repo.get_by_id(conn, ids[0])
     assert after["view_count"] == 1
+
+
+async def test_feed_renders_embed_inline(client, conn):
+    await repo.create_billet(conn, BilletIn(body="ma video", publish=True),
+                             now="2026-07-11T12:30:00Z", ulid="01EMBED00000000000000000AA")
+    await conn.execute(
+        "UPDATE billet SET embed_html=?, embed_url=? WHERE id='01EMBED00000000000000000AA'",
+        ('<iframe src="https://www.youtube.com/embed/z" sandbox="allow-scripts" loading="lazy"></iframe>',
+         'https://youtube.com/watch?v=z'))
+    await conn.commit()
+    r = await client.get("/")
+    assert 'class="embed"' in r.text
+    assert 'youtube.com/embed/z' in r.text          # real iframe inline in the feed
+    csp = r.headers["Content-Security-Policy"]
+    assert "frame-src" in csp and "youtube.com" in csp
