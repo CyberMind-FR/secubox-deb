@@ -50,3 +50,11 @@ def test_zip_replaces_previous_content(tmp_path):
     (doc / "old.html").write_text("old")
     extract_archive(doc, _zip({"index.html": "new"}), "s.zip")
     assert not (doc / "old.html").exists()
+
+
+def test_corrupt_zip_raises_contenterror(tmp_path):
+    from publish.content import extract_archive, ContentError
+    import pytest
+    doc = tmp_path / "public"; doc.mkdir()
+    with pytest.raises(ContentError):
+        extract_archive(doc, b"this is not a zip", "broken.zip")
