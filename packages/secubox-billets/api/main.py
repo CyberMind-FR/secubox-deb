@@ -7,6 +7,7 @@ connection (tests pass a fixture conn; the runtime opens one in a lifespan).
 The public feed is server-rendered Jinja2 with keyset pagination."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import aiosqlite
@@ -16,11 +17,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import repo
+from .routes.admin import register_admin
+from .services import security as sec
 from .services.render import render_markdown
 
 _HERE = Path(__file__).resolve().parent
 TEMPLATES_DIR = _HERE / "templates"
 STATIC_DIR = _HERE / "static"
+DEFAULT_REVISIONS_DIR = os.environ.get(
+    "BILLETS_REVISIONS_DIR", "/var/lib/secubox/billets/revisions")
 
 SITE_TITLE = "billets"
 SITE_TAGLINE = "micro-blog gateway"
@@ -45,12 +50,16 @@ def _billet_view(row: aiosqlite.Row) -> dict:
     return d
 
 
-def create_app(conn: aiosqlite.Connection) -> FastAPI:
+def create_app(conn: aiosqlite.Connection, *, secret: str | None = None,
+               revisions_dir: str | None = None) -> FastAPI:
     app = FastAPI(title="billets", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.conn = conn
+    app.state.secret = secret or sec.get_secret()
+    app.state.revisions_dir = revisions_dir or DEFAULT_REVISIONS_DIR
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    register_admin(app, templates)
 
     @app.middleware("http")
     async def _security_headers(request: Request, call_next):

@@ -92,3 +92,75 @@ async def list_published(conn: aiosqlite.Connection, *, limit: int = 20,
 async def increment_view(conn: aiosqlite.Connection, billet_id: str) -> None:
     await conn.execute("UPDATE billet SET view_count = view_count + 1 WHERE id = ?", (billet_id,))
     await conn.commit()
+
+
+# ── author ────────────────────────────────────────────────────────────────
+async def create_author(conn: aiosqlite.Connection, username: str, password_hash: str,
+                        *, now: str, totp_secret: Optional[str] = None,
+                        author_id: Optional[str] = None) -> str:
+    aid = author_id or new_ulid()
+    await conn.execute(
+        "INSERT INTO author(id, username, password_hash, totp_secret, created_at) "
+        "VALUES (?,?,?,?,?)",
+        (aid, username, password_hash, totp_secret, now),
+    )
+    await conn.commit()
+    return aid
+
+
+async def get_author_by_username(conn: aiosqlite.Connection, username: str) -> Optional[aiosqlite.Row]:
+    async with conn.execute(
+        "SELECT id, username, password_hash, totp_secret, created_at FROM author WHERE username = ?",
+        (username,),
+    ) as cur:
+        return await cur.fetchone()
+
+
+async def get_author_by_id(conn: aiosqlite.Connection, author_id: str) -> Optional[aiosqlite.Row]:
+    async with conn.execute(
+        "SELECT id, username, password_hash, totp_secret, created_at FROM author WHERE id = ?",
+        (author_id,),
+    ) as cur:
+        return await cur.fetchone()
+
+
+# ── admin billet mutations ─────────────────────────────────────────────────
+async def list_all(conn: aiosqlite.Connection, *, status: Optional[str] = None,
+                   limit: int = 100) -> list[aiosqlite.Row]:
+    if status:
+        q = f"SELECT {_FEED_COLUMNS} FROM billet WHERE status = ? ORDER BY created_at DESC LIMIT ?"
+        params: tuple = (status, limit)
+    else:
+        q = f"SELECT {_FEED_COLUMNS} FROM billet ORDER BY created_at DESC LIMIT ?"
+        params = (limit,)
+    async with conn.execute(q, params) as cur:
+        return await cur.fetchall()
+
+
+async def update_billet(conn: aiosqlite.Connection, billet_id: str, *, body: str,
+                        ref_url: Optional[str], embed_url: Optional[str], now: str) -> None:
+    """Update content (slug/permalink stays stable) + bump updated_at."""
+    await conn.execute(
+        "UPDATE billet SET body=?, ref_url=?, embed_url=?, updated_at=? WHERE id=?",
+        (body, ref_url, embed_url, now, billet_id),
+    )
+    await conn.commit()
+
+
+async def set_status(conn: aiosqlite.Connection, billet_id: str, status: str, *, now: str) -> None:
+    """Change status. Publishing sets published_at once (never overwrites it)."""
+    if status == "published":
+        await conn.execute(
+            "UPDATE billet SET status='published', updated_at=?, "
+            "published_at=COALESCE(published_at, ?) WHERE id=?",
+            (now, now, billet_id),
+        )
+    else:
+        await conn.execute(
+            "UPDATE billet SET status=?, updated_at=? WHERE id=?", (status, now, billet_id))
+    await conn.commit()
+
+
+async def delete_billet(conn: aiosqlite.Connection, billet_id: str) -> None:
+    await conn.execute("DELETE FROM billet WHERE id=?", (billet_id,))
+    await conn.commit()
