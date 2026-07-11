@@ -49,8 +49,12 @@ PY
 
 vhost_add() {
   local domain="$1"; valid_domain "$domain" || die "invalid domain"
+  # haproxyctl signature: `vhost add <domain> <backend> [ssl]`. Route every
+  # published host to the WAF backend (mitmproxy_inspector = sbxwaf) — never a
+  # bypass. On gk2 this is belt-and-braces (https-in already default_backends
+  # to mitmproxy_inspector); for a custom domain it adds the explicit ACL.
   local out
-  if out=$(haproxyctl vhost add "$domain" 2>&1); then
+  if out=$(haproxyctl vhost add "$domain" mitmproxy_inspector 2>&1); then
     emit true "vhost $domain"
   elif printf '%s' "$out" | grep -qiE 'exist|already'; then
     emit true "vhost $domain (exists)"
@@ -71,7 +75,7 @@ tmp = path + ".tmp"; json.dump(data, open(tmp,"w"), indent=2, sort_keys=True); o
 PY
   } || die "route write failed"
   local out
-  if out=$(haproxyctl vhost del "$domain" 2>&1); then
+  if out=$(haproxyctl vhost remove "$domain" 2>&1); then
     reload_sbxwaf
     emit true "removed $domain"
   elif printf '%s' "$out" | grep -qiE 'exist|absent|not found|no such|unknown'; then
