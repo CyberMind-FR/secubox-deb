@@ -1,3 +1,9 @@
+secubox-droplet (1.1.1-1~bookworm3) bookworm; urgency=medium
+
+  * postinst now owns /etc/secubox/droplet.toml as secubox:secubox 0640 (was root:root 0600 -> PermissionError).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 11 Jul 2026 13:00:00 +0200
+
 secubox-droplet (1.1.1-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
