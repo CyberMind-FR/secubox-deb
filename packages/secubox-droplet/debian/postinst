@@ -7,6 +7,16 @@ case "$1" in
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
 
+    # The daemon runs as `secubox`; its config must be owned by it, not root.
+    # (Shipped historically as root:root 0600 → PermissionError at runtime.)
+    if [ ! -e /etc/secubox/droplet.toml ]; then
+      install -d -o secubox -g secubox -m 0755 /etc/secubox
+      install -o secubox -g secubox -m 0640 /dev/null /etc/secubox/droplet.toml
+    else
+      chown secubox:secubox /etc/secubox/droplet.toml || true
+      chmod 0640 /etc/secubox/droplet.toml || true
+    fi
+
     # Create runtime directories
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
