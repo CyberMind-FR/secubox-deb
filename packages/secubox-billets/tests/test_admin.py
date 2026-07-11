@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+import json
 from pathlib import Path
 
 import httpx
@@ -20,6 +21,12 @@ async def admin(conn, tmp_path):
                              author_id="01AUTHOR0000000000000000AA")
     app = create_app(conn, secret="test-secret-xyz", revisions_dir=str(tmp_path / "revs"))
     app.state.clock = lambda: NOW
+    # Deterministic embed resolution: mock oEmbed HTTP + a public resolver.
+    def _embed_handler(request):
+        return httpx.Response(200, headers={"content-type": "application/json"},
+            content=json.dumps({"html": '<iframe src="https://www.youtube.com/embed/z"></iframe>'}).encode())
+    app.state.http_client = httpx.AsyncClient(transport=httpx.MockTransport(_embed_handler))
+    app.state.resolver = lambda host, port: [(0, 0, 0, "", ("93.184.216.34", port))]
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://t",
                                  follow_redirects=False) as c:
@@ -120,6 +127,34 @@ async def test_delete_removes_and_logs(admin):
     assert await repo.get_by_id(conn, bid) is None
     async with conn.execute("SELECT COUNT(*) FROM event_log WHERE event_type='billet.deleted'") as cur:
         assert (await cur.fetchone())[0] == 1
+
+
+async def test_create_with_embed_stores_sanitized_html(admin):
+    c, conn, _ = admin
+    await _login(c)
+    csrf = c.cookies.get("billets_csrf")
+    await c.post("/admin/billets",
+                 data={"body": "vidéo", "url": "https://youtube.com/watch?v=z",
+                       "url_kind": "embed", "action": "publish", "csrf": csrf})
+    row = (await repo.list_all(conn))[0]
+    assert row["embed_provider"] == "youtube"
+    assert 'sandbox="' in row["embed_html"] and "youtube.com/embed/z" in row["embed_html"]
+
+
+async def test_refetch_embed(admin):
+    c, conn, _ = admin
+    await _login(c)
+    csrf = c.cookies.get("billets_csrf")
+    await c.post("/admin/billets",
+                 data={"body": "v", "url": "https://youtube.com/watch?v=z",
+                       "url_kind": "embed", "action": "draft", "csrf": csrf})
+    bid = (await repo.list_all(conn))[0]["id"]
+    await conn.execute("UPDATE billet SET embed_html=NULL WHERE id=?", (bid,))
+    await conn.commit()
+    r = await c.post(f"/admin/billets/{bid}/refetch", data={"csrf": csrf})
+    assert r.status_code == 303
+    row = await repo.get_by_id(conn, bid)
+    assert row["embed_html"] and "sandbox=" in row["embed_html"]
 
 
 async def test_totp_enforced_when_enrolled(admin, conn):

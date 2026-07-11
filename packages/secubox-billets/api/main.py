@@ -31,16 +31,35 @@ SITE_TITLE = "billets"
 SITE_TAGLINE = "micro-blog gateway"
 PAGE_SIZE = 20
 
+# frame-src is limited to the embed provider allowlist (spec). Registrable
+# domains → "https://d https://*.d" so provider embed subdomains match.
+_FRAME_HOSTS = [
+    "youtube.com", "youtube-nocookie.com", "vimeo.com", "twitter.com",
+    "bsky.app", "soundcloud.com", "bandcamp.com", "flickr.com",
+]
+
+
+def _frame_src(extra_hosts: tuple[str, ...] = ()) -> str:
+    parts = []
+    for d in list(_FRAME_HOSTS) + [h for h in extra_hosts if h]:
+        parts.append(f"https://{d}")
+        parts.append(f"https://*.{d}")
+    return " ".join(parts)
+
+
+def _csp(frame_src: str) -> str:
+    return (
+        "default-src 'self'; img-src 'self' https: data:; "
+        "style-src 'self'; script-src 'self'; base-uri 'none'; "
+        f"form-action 'self'; frame-ancestors 'none'; frame-src {frame_src}"
+    )
+
+
 _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Cross-Origin-Opener-Policy": "same-origin",
-    # No inline scripts anywhere; htmx is served from /static.
-    "Content-Security-Policy": (
-        "default-src 'self'; img-src 'self' https: data:; "
-        "style-src 'self'; script-src 'self'; base-uri 'none'; "
-        "form-action 'self'; frame-ancestors 'none'"
-    ),
+    "Content-Security-Policy": _csp(_frame_src()),
 }
 
 
@@ -56,6 +75,12 @@ def create_app(conn: aiosqlite.Connection, *, secret: str | None = None,
     app.state.conn = conn
     app.state.secret = secret or sec.get_secret()
     app.state.revisions_dir = revisions_dir or DEFAULT_REVISIONS_DIR
+    # Outbound HTTP for oEmbed/OpenGraph (SSRF-guarded in services.ssrf). Tests
+    # override app.state.http_client with a MockTransport client + resolver.
+    import httpx as _httpx
+    app.state.http_client = _httpx.AsyncClient(headers={"user-agent": "billets/0.1 (+secubox)"})
+    from .services import ssrf as _ssrf
+    app.state.resolver = _ssrf._default_resolver
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -86,9 +111,17 @@ def create_app(conn: aiosqlite.Connection, *, secret: str | None = None,
         if row is None or row["status"] != "published":
             raise HTTPException(status_code=404, detail="Billet introuvable")
         await repo.increment_view(app.state.conn, row["id"])
-        return templates.TemplateResponse(request, "billet.html", {
+        resp = templates.TemplateResponse(request, "billet.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
             "billet": _billet_view(row),
         })
+        # A self-hosted embed (Mastodon/PeerTube) needs its instance host in
+        # frame-src; add it for this page only.
+        if row["embed_html"] and row["embed_url"]:
+            from urllib.parse import urlparse
+            host = urlparse(row["embed_url"]).hostname
+            if host and not any(host == d or host.endswith("." + d) for d in _FRAME_HOSTS):
+                resp.headers["Content-Security-Policy"] = _csp(_frame_src((host,)))
+        return resp
 
     return app

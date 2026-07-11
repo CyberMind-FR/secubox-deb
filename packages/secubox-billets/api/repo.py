@@ -164,3 +164,13 @@ async def set_status(conn: aiosqlite.Connection, billet_id: str, status: str, *,
 async def delete_billet(conn: aiosqlite.Connection, billet_id: str) -> None:
     await conn.execute("DELETE FROM billet WHERE id=?", (billet_id,))
     await conn.commit()
+
+
+async def set_embed(conn: aiosqlite.Connection, billet_id: str, *, html: str,
+                    provider: Optional[str], fetched_at: str) -> None:
+    """Cache a resolved embed (sanitized HTML) on the billet row."""
+    await conn.execute(
+        "UPDATE billet SET embed_html=?, embed_provider=?, embed_fetched_at=? WHERE id=?",
+        (html or None, provider, fetched_at, billet_id),
+    )
+    await conn.commit()
