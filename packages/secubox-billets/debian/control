@@ -1,0 +1,23 @@
+Source: secubox-billets
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-billets
+Architecture: all
+Depends: ${misc:Depends},
+         python3 (>= 3.11),
+         python3-venv,
+         adduser,
+         nginx
+Description: billets — micro-blog gateway inter-médias sociaux (SecuBox)
+ Self-hosted micro-blog with an author admin, a public read feed with comments
+ and emoji reactions, and inbound/outbound social-media gateway features:
+ SSRF-guarded oEmbed ingestion (sanitized, iframe-allowlisted), OpenGraph link
+ cards, Atom/JSON feeds, an outbound oEmbed endpoint and share intents.
+ FastAPI + aiosqlite (WAL) + Jinja2, served on a Unix socket behind nginx.
+ Every billet's content and style are versioned in a Gitea repo; every security
+ decision is written to an append-only BLAKE2b-chained event log.

@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Installed as /etc/systemd/system/secubox-billets.service
+[Unit]
+Description=SecuBox billets — micro-blog gateway inter-médias sociaux
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/billets
+Environment=BILLETS_DB=/var/lib/secubox/billets/billets.db
+Environment=BILLETS_REVISIONS_DIR=/var/lib/secubox/billets/revisions
+Environment=BILLETS_SECRET_FILE=/etc/secubox/secrets/billets
+# Set BILLETS_SITE_URL to the public https origin so feeds/oEmbed emit absolute URLs.
+# Environment=BILLETS_SITE_URL=https://billets.example.com
+ExecStartPre=/usr/bin/install -d -o secubox -g secubox -m 1777 /run/secubox
+ExecStart=/usr/lib/secubox/billets/venv/bin/uvicorn api.asgi:app \
+  --uds /run/secubox/billets.sock --no-access-log --workers 1
+Restart=on-failure
+RestartSec=2
+
+# Hardening (CSPN posture)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/secubox/billets /run/secubox
+UMask=0007
+
+[Install]
+WantedBy=multi-user.target

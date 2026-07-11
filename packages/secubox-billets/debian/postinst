@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+PREFIX=/usr/lib/secubox/billets
+DATA=/var/lib/secubox/billets
+case "$1" in
+  configure)
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home --home /var/lib/secubox \
+        --shell /usr/sbin/nologin secubox
+
+    install -d -o root -g root -m 1777 /run/secubox
+    install -d -o secubox -g secubox -m 0755 "$DATA" "$DATA/revisions"
+    # Parent 0755 (traversable), secrets dir 0700 secubox.
+    install -d -o secubox -g secubox -m 0755 /etc/secubox
+    install -d -o secubox -g secubox -m 0700 /etc/secubox/secrets
+
+    # Signing secret, once, 0600 secubox.
+    if [ ! -s /etc/secubox/secrets/billets ]; then
+      ( umask 077; head -c 48 /dev/urandom | base64 | tr -d '\n' > /etc/secubox/secrets/billets )
+      chown secubox:secubox /etc/secubox/secrets/billets
+      chmod 0600 /etc/secubox/secrets/billets
+    fi
+
+    # Python venv with pinned deps (needs network or a local wheelhouse).
+    if [ ! -x "$PREFIX/venv/bin/python" ]; then
+      python3 -m venv "$PREFIX/venv"
+    fi
+    "$PREFIX/venv/bin/pip" install --upgrade pip >/dev/null 2>&1 || true
+    "$PREFIX/venv/bin/pip" install -r "$PREFIX/requirements.txt" \
+      || echo "billets: pip install failed — install deps into $PREFIX/venv then 'systemctl restart secubox-billets'" >&2
+    chown -R secubox:secubox "$PREFIX"
+
+    # nginx must read the uvicorn socket (group secubox).
+    getent group secubox >/dev/null && adduser www-data secubox >/dev/null 2>&1 || true
+    if [ ! -e /etc/nginx/sites-enabled/billets.conf ] && [ -e /etc/nginx/sites-available/billets.conf ]; then
+      ln -s ../sites-available/billets.conf /etc/nginx/sites-enabled/billets.conf 2>/dev/null || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+case "$1" in
+  configure)
+    systemctl reload nginx 2>/dev/null || true
+    echo "billets: create the first author with:" >&2
+    echo "  sudo -u secubox $PREFIX/venv/bin/python -m api.manage create-author admin  (run in $PREFIX)" >&2
+    ;;
+esac
+exit 0

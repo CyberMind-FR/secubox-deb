@@ -99,9 +99,13 @@ def _billet_view(row: aiosqlite.Row) -> dict:
     return d
 
 
-def create_app(conn: aiosqlite.Connection, *, secret: str | None = None,
-               revisions_dir: str | None = None) -> FastAPI:
-    app = FastAPI(title="billets", docs_url=None, redoc_url=None, openapi_url=None)
+def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None = None,
+               revisions_dir: str | None = None, lifespan=None) -> FastAPI:
+    # `conn` may be None when a `lifespan` opens the DB at startup (runtime);
+    # tests pass a live connection and no lifespan. Routes read
+    # `app.state.conn` at request time, so either wiring works.
+    app = FastAPI(title="billets", docs_url=None, redoc_url=None, openapi_url=None,
+                  lifespan=lifespan)
     app.state.conn = conn
     app.state.secret = secret or sec.get_secret()
     app.state.revisions_dir = revisions_dir or DEFAULT_REVISIONS_DIR
