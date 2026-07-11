@@ -1,0 +1,9 @@
+{
+  "id": "billets",
+  "name": "Billets",
+  "category": "mind",
+  "icon": "📮",
+  "path": "/billets/",
+  "order": 415,
+  "description": "Micro-blog gateway inter-médias sociaux"
+}
