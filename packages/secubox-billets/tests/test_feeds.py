@@ -93,7 +93,7 @@ async def test_og_and_oembed_discovery_on_page(client):
     assert '<meta property="og:title" content="Titre du billet">' in r.text
     assert 'name="twitter:card"' in r.text
     assert 'type="application/json+oembed"' in r.text
-    assert "↗ Republier" in r.text and "bsky.app/intent" in r.text
+    assert "↗ Partager" in r.text and "bsky.app/intent" in r.text
 
 
 async def test_stats_json_cors(client):
