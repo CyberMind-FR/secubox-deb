@@ -265,3 +265,33 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
                                          "by": author["username"]}, ts=_now(request))
             await repo.delete_billet(conn, billet_id)
         return _redirect("/admin")
+
+    @app.get("/admin/comments", response_class=HTMLResponse)
+    async def comments_queue(request: Request):
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        pending = await repo.list_pending_comments(request.app.state.conn)
+        token = _csrf_token(request)
+        resp = templates.TemplateResponse(request, "admin_comments.html",
+                                          {"pending": [dict(c) for c in pending], "csrf": token})
+        _set_csrf(resp, request, token)
+        return resp
+
+    @app.post("/admin/comments/{comment_id}/moderate")
+    async def moderate(request: Request, comment_id: str, decision: str = Form(...),
+                       csrf: str = Form("")):
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        if not sec.csrf_ok(request.cookies.get(CSRF_COOKIE), csrf):
+            return _redirect("/admin/login?error=csrf")
+        conn = request.app.state.conn
+        row = await repo.get_comment(conn, comment_id)
+        if row is not None and decision in ("approve", "reject"):
+            status = "approved" if decision == "approve" else "rejected"
+            await repo.moderate_comment(conn, comment_id, status)
+            await eventlog.append_event(
+                conn, "comment.approved" if decision == "approve" else "comment.rejected",
+                {"id": comment_id, "by": author["username"]}, ts=_now(request))
+        return _redirect("/admin/comments")

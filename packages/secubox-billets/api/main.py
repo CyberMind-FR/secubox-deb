@@ -8,6 +8,7 @@ The public feed is server-rendered Jinja2 with keyset pagination."""
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import aiosqlite
@@ -18,8 +19,11 @@ from fastapi.templating import Jinja2Templates
 
 from . import repo
 from .routes.admin import register_admin
+from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
+                            register_public, _visitor)
+from .services import antispam
 from .services import security as sec
-from .services.render import render_markdown
+from .services.render import linkify_plain, render_markdown
 
 _HERE = Path(__file__).resolve().parent
 TEMPLATES_DIR = _HERE / "templates"
@@ -85,6 +89,7 @@ def create_app(conn: aiosqlite.Connection, *, secret: str | None = None,
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     register_admin(app, templates)
+    register_public(app, templates)
 
     @app.middleware("http")
     async def _security_headers(request: Request, call_next):
@@ -111,10 +116,26 @@ def create_app(conn: aiosqlite.Connection, *, secret: str | None = None,
         if row is None or row["status"] != "published":
             raise HTTPException(status_code=404, detail="Billet introuvable")
         await repo.increment_view(app.state.conn, row["id"])
+        vhash, new_vtoken = _visitor(request)
+        pcsrf = request.cookies.get(PCSRF_COOKIE) or sec.new_csrf_token()
+        ts_token = antispam.issue_form_token(app.state.secret, now_epoch=int(time.time()))
+        rctx = await reactions_context(request, row["id"], vhash, slug=row["slug"])
+        rctx["pcsrf"] = pcsrf
+        comments = await repo.list_approved_comments(app.state.conn, row["id"])
+        comment_views = [{**dict(c), "body_html": linkify_plain(c["body"])} for c in comments]
         resp = templates.TemplateResponse(request, "billet.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billet": _billet_view(row),
+            "billet": _billet_view(row), "reactions": rctx,
+            "comments": comment_views, "pcsrf": pcsrf,
+            "ts_token": ts_token, "flash": request.query_params.get("c"),
         })
+        resp.set_cookie(PCSRF_COOKIE, pcsrf, httponly=True, samesite="lax",
+                        secure=(request.headers.get("x-forwarded-proto", request.url.scheme) == "https"),
+                        path="/")
+        if new_vtoken:
+            resp.set_cookie(VISITOR_COOKIE, new_vtoken, httponly=True, samesite="lax",
+                            secure=(request.headers.get("x-forwarded-proto", request.url.scheme) == "https"),
+                            max_age=31536000, path="/")
         # A self-hosted embed (Mastodon/PeerTube) needs its instance host in
         # frame-src; add it for this page only.
         if row["embed_html"] and row["embed_url"]:

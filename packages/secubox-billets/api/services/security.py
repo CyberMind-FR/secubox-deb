@@ -86,6 +86,15 @@ def hash_ip(ip: str, salt: str) -> str:
     return hashlib.blake2b(f"{salt}\x1f{ip}".encode("utf-8"), digest_size=16).hexdigest()
 
 
+# ── anonymous visitor identity (reactions) ───────────────────────────────
+def new_visitor_token() -> str:
+    return secrets.token_urlsafe(24)
+
+
+def visitor_hash(token: str, secret: str) -> str:
+    return hashlib.blake2b(f"{secret}\x1fv\x1f{token}".encode("utf-8"), digest_size=16).hexdigest()
+
+
 # ── login rate limiter (in-memory sliding window) ────────────────────────
 @dataclass
 class RateLimiter:

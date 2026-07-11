@@ -157,6 +157,27 @@ async def test_refetch_embed(admin):
     assert row["embed_html"] and "sandbox=" in row["embed_html"]
 
 
+async def test_moderate_comment_queue(admin):
+    c, conn, _ = admin
+    await _login(c)
+    csrf = c.cookies.get("billets_csrf")
+    # seed a published billet + a pending comment
+    from api.models import BilletIn
+    bid = await repo.create_billet(conn, BilletIn(body="post", publish=True),
+                                   now=NOW, ulid="01POST000000000000000000AA")
+    cid = await repo.add_comment(conn, bid, author_name="Zoe", email_hash=None,
+                                 body="à modérer", ip_hash="h", honeypot=False,
+                                 status="pending", now=NOW)
+    queue = await c.get("/admin/comments")
+    assert queue.status_code == 200 and "à modérer" in queue.text
+    r = await c.post(f"/admin/comments/{cid}/moderate", data={"decision": "approve", "csrf": csrf})
+    assert r.status_code == 303
+    got = await repo.get_comment(conn, cid)
+    assert got["status"] == "approved"
+    async with conn.execute("SELECT COUNT(*) FROM event_log WHERE event_type='comment.approved'") as cur:
+        assert (await cur.fetchone())[0] == 1
+
+
 async def test_totp_enforced_when_enrolled(admin, conn):
     c, conn2, _ = admin
     import pyotp

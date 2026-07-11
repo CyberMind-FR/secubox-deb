@@ -33,3 +33,21 @@ def render_markdown(text: str) -> str:
         link_rel=_LINK_REL,
         url_schemes={"http", "https", "mailto"},
     )
+
+
+import html as _htmlmod  # noqa: E402
+import re as _re  # noqa: E402
+
+_URL_RE = _re.compile(r"(https?://[^\s<]+)")
+
+
+def linkify_plain(text: str) -> str:
+    """Comment bodies: escape as plain text (no markdown, no HTML), then
+    auto-link bare URLs with rel="nofollow ugc". Safe to mark |safe."""
+    escaped = _htmlmod.escape(text or "")
+
+    def _repl(m: "_re.Match") -> str:
+        url = m.group(1)
+        return f'<a href="{url}" rel="nofollow ugc noopener noreferrer">{url}</a>'
+
+    return _URL_RE.sub(_repl, escaped).replace("\n", "<br>")
