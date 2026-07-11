@@ -157,6 +157,7 @@
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="refresh()">↻ Refresh</button>
+                <button class="btn" id="admin2faBtn" onclick="toggleAdminTotp()" title="Require TOTP two-factor for admin logins">🔐 Admin 2FA: …</button>
                 <button class="btn" onclick="showModal('import-modal')">⬆️ Import</button>
                 <button class="btn" onclick="exportUsers()">⬇️ Export</button>
                 <button class="btn primary" onclick="showModal('add-user-modal')">➕ Add User</button>
@@ -407,6 +408,9 @@
                     '<span class="created">' + esc(created) + '</span>' +
                     '<span class="actions">' +
                         '<button class="btn sm" data-act="edit" data-username="' + esc(u.username) + '">✏️ Edit</button>' +
+                        ((u.totp_enabled || u.totp || u.mfa_enabled)
+                            ? '<button class="btn sm" data-act="reset-2fa" data-username="' + esc(u.username) + '" title="Clear this user\'s TOTP enrollment">🔑 Reset 2FA</button>'
+                            : '') +
                         '<button class="btn sm" data-act="sync" data-username="' + esc(u.username) + '">🔄 Sync</button>' +
                         '<button class="btn sm danger" data-act="delete" data-username="' + esc(u.username) + '">🗑️ Delete</button>' +
                     '</span>' +
@@ -454,6 +458,7 @@
             if (act === 'edit') showEditUser(username);
             else if (act === 'sync') syncUser(username);
             else if (act === 'delete') deleteUser(username);
+            else if (act === 'reset-2fa') resetTotp(username);
         });
         document.getElementById('sessionList').addEventListener('click', e => {
             const t = e.target.closest('[data-act]');
@@ -546,6 +551,54 @@
             }
         }
 
+        async function resetTotp(username) {
+            if (!confirm('Reset (clear) two-factor for "' + username + '"?\nThey will log in with password only until they re-enroll.')) return;
+            const result = await api('/user/' + encodeURIComponent(username) + '/totp/disable', { method: 'POST' });
+            if (result && (result.ok || result.success || result.status === 'ok' || result.disabled)) {
+                toast('🔑 2FA reset for ' + username);
+                refresh();
+            } else if (result) {
+                toast('❌ ' + (result.detail || 'Failed to reset 2FA'), true);
+            }
+        }
+
+        // ── Admin-TOTP requirement toggle (auth module, not users) ──────────
+        let _adminTotpOn = null;
+        async function authSettings(opts) {
+            opts = opts || {};
+            try {
+                const res = await fetch('/api/v1/auth/settings', Object.assign({}, opts, {
+                    headers: authHeaders(Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {}))
+                }));
+                if (res.status === 401) { toast('🔒 Login required', true); return null; }
+                if (res.status === 403) { toast('🔒 Admin required to change 2FA policy', true); return null; }
+                let data = null; try { data = await res.json(); } catch (e) {}
+                return data;
+            } catch (e) { toast('❌ ' + e.message, true); return null; }
+        }
+        function renderAdminTotp() {
+            const btn = document.getElementById('admin2faBtn');
+            if (!btn) return;
+            if (_adminTotpOn === null) { btn.textContent = '🔐 Admin 2FA: …'; return; }
+            btn.textContent = '🔐 Admin 2FA: ' + (_adminTotpOn ? 'ON' : 'OFF');
+            btn.classList.toggle('primary', !!_adminTotpOn);
+        }
+        async function loadAuthSettings() {
+            const data = await authSettings();
+            _adminTotpOn = data ? !!data.require_admin_totp : null;
+            renderAdminTotp();
+        }
+        async function toggleAdminTotp() {
+            const next = !_adminTotpOn;
+            if (next && !confirm('Require TOTP for ALL admin logins?\nAdmins without an enrolled authenticator will be forced to enrol on next login.')) return;
+            const data = await authSettings({ method: 'POST', body: JSON.stringify({ require_admin_totp: next }) });
+            if (data) {
+                _adminTotpOn = !!data.require_admin_totp;
+                renderAdminTotp();
+                toast(_adminTotpOn ? '🔐 Admin 2FA now required' : '🔓 Admin 2FA now optional');
+            }
+        }
+
         async function exportUsers() {
             const data = await api('/export');
             if (!data) return;
@@ -621,6 +674,7 @@
             loadServices();
             loadUsers();
             loadSessions();
+            loadAuthSettings();
         }
 
         refresh();
