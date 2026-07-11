@@ -52,6 +52,8 @@ from webhook import (
     verify_signature,
     _record_deploy,
 )
+from routers.publish import router as publish_router
+app.include_router(publish_router)
 
 logger = logging.getLogger("metablogizer")
 
