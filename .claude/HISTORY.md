@@ -3,6 +3,27 @@
 
 ---
 
+## 2026-07-11 — Admin-TOTP toggle from webui + per-user 2FA reset (default OFF)
+
+User: "totp disableable by options from webui and default absent ok" / "or permit totp reset from webui".
+Two iPhone login failures traced to admin accounts being unconditionally forced into TOTP while
+`login.html` has no TOTP UI. Immediate unblock was a non-admin `operator` account; the durable fix
+makes the requirement **opt-in**.
+
+**secubox-auth 1.0.4** — `require_admin_totp` now defaults **OFF** so a node stays reachable. New
+admin-gated `GET/POST /api/v1/auth/settings` persist the flag to `/etc/secubox/auth-runtime.json`.
+Login enforcement reads `_get_require_admin_totp()` (runtime file > `[auth]` config > default False) and
+is **fail-open** — a config read error no longer locks admins out. Verified live on gk2: default-off admin
+login returns `access_token`; toggle on→enrollment_required, off→session; non-admin POST 403. Tests
+realigned from the old default-ON/fail-secure contract to the reachability-first one, fixture isolates the
+config + runtime paths (10 passing).
+
+**secubox-users 1.4.3** — `/users/` gained an "Admin 2FA: ON/OFF" toolbar toggle (wired to the auth
+`/settings` endpoint) and a per-user "🔑 Reset 2FA" button (POST `/user/<u>/totp/disable`), shown only for
+TOTP-enrolled users. Deployed live.
+
+---
+
 ## 2026-07-10 — wg-toolbox VPN surf blackhole after reboot (nft drop-in aborted every boot)
 
 User: "surf stopped when wg-toolbox VPN activated". Root cause was NOT the peer prune (restored the 540
