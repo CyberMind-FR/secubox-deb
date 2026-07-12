@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox · SpiderFoot OSINT</title>
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <style>
+        :root {
+            --cyan: #00d4ff; --cyan-dim: #0090b3;
+            --bg-dark: #0a0f14; --bg-card: #111823; --bg-inset: #0c121a;
+            --border: #1e2b3a; --text: #d6e6f0; --text-dim: #6b8394;
+            --green: #33ff66; --yellow: #ffb347; --red: #ff4466; --purple: #8b5cf6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', 'Courier New', monospace; background: var(--bg-dark);
+               color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: 1100px; }
+        .header { display: flex; justify-content: space-between; align-items: center;
+                  margin-bottom: 0.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--cyan); text-shadow: 0 0 8px rgba(0,212,255,0.4); }
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+               background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem;
+               font-family: inherit; transition: all 0.2s; text-decoration: none; display: inline-block; }
+        .btn:hover { border-color: var(--cyan-dim); }
+        .btn.primary { background: rgba(0,212,255,0.1); border-color: var(--cyan); color: var(--cyan); }
+        .btn.primary:hover { background: rgba(0,212,255,0.2); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+                padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .subhead { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.75rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                      gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+                     padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.6rem; font-weight: bold; color: var(--cyan); }
+        .stat-card .label { font-size: 0.72rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .actions-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .pill { display: inline-flex; align-items: center; gap: .4rem; padding: 4px 12px;
+                border-radius: 12px; font-size: .8rem; border: 1px solid var(--border); }
+        .pill.ok { background: rgba(51,255,102,0.15); color: var(--green); border-color: var(--green); }
+        .pill.warn { background: rgba(255,179,71,0.15); color: var(--yellow); border-color: var(--yellow); }
+        .pill.error { background: rgba(255,68,102,0.15); color: var(--red); border-color: var(--red); }
+        .pill.muted { background: rgba(107,131,148,0.12); color: var(--text-dim); border-color: var(--border); }
+        .open-ui { background: rgba(139,92,246,0.12); border-color: var(--purple); color: #c4b5fd;
+                   font-size: 1rem; padding: 0.6rem 1.2rem; }
+        .open-ui:hover { background: rgba(139,92,246,0.25); border-color: var(--purple); }
+        .toast { position: fixed; bottom: 1.2rem; right: 1.2rem; padding: .7rem 1.1rem; border-radius: 10px;
+                 background: var(--bg-card); border: 1px solid var(--border); color: var(--text); opacity: 0;
+                 transform: translateY(8px); transition: all .2s; z-index: 50; max-width: min(90vw,360px); }
+        .toast.show { opacity: 1; transform: none; }
+        .toast.success { border-color: var(--green); } .toast.error { border-color: var(--red); }
+        .muted { color: var(--text-dim); font-size: .8rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>🌀 SpiderFoot OSINT</h1>
+            <div class="header-actions">
+                <span class="pill muted" id="status-pill">Loading…</span>
+                <button class="btn" id="btn-refresh">Refresh</button>
+            </div>
+        </header>
+        <div class="muted" style="margin:0 0 1.25rem">
+            Sandbox: <span id="sf-ip">—</span> · 200+ passive OSINT modules + correlation graph
+            (interim Maltego-style hub). Scans run inside SpiderFoot's own UI.
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><div class="value" id="statSandbox">-</div><div class="label">Sandbox</div></div>
+            <div class="stat-card"><div class="value" id="statUi">-</div><div class="label">SpiderFoot UI</div></div>
+            <div class="stat-card"><div class="value" id="statPort">-</div><div class="label">Port</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Open SpiderFoot</h2>
+            <p class="subhead">The full SpiderFoot web UI (scan wizard, correlation graph, REST) runs
+               inside the sandbox and is reachable only through this WAF/SecuBox-auth-fronted proxy.
+               Available once the UI is up.</p>
+            <a class="btn open-ui" id="btn-open-ui" href="/spiderfoot-ui/" target="_blank" rel="noopener"
+               style="display:none">🌀 Open SpiderFoot</a>
+            <span class="muted" id="ui-hint">Waiting for the SpiderFoot UI to come up…</span>
+        </div>
+
+        <div class="card">
+            <h2>Sandbox lifecycle</h2>
+            <p class="subhead">Build and control the SpiderFoot LXC container. Install runs debootstrap +
+               git clone + pip install in the background — it can take several minutes.</p>
+            <div class="actions-row">
+                <button class="btn primary" id="btn-install" style="display:none">Install sandbox</button>
+                <button class="btn primary" id="btn-start" style="display:none">Start</button>
+                <button class="btn danger" id="btn-stop" style="display:none">Stop</button>
+                <button class="btn" id="btn-restart-ui" style="display:none">Restart UI</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API = '/api/v1/spiderfoot';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json',
+            ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function toast(msg, kind) {
+            let t = document.getElementById('toast');
+            if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+            t.textContent = msg;
+            t.className = 'toast ' + (kind || 'info') + ' show';
+            clearTimeout(window.__toastT);
+            window.__toastT = setTimeout(() => t.classList.remove('show'), 3500);
+        }
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
+                const ct = res.headers.get('content-type') || '';
+                const body = ct.includes('json') ? await res.json().catch(() => ({})) : await res.text();
+                if (!res.ok) throw new Error((body && body.detail) || ('HTTP ' + res.status));
+                return body;
+            } catch (e) {
+                return { __error: e.message || 'request failed' };
+            }
+        }
+
+        let installing = false, pollTimer = null;
+
+        function show(id, on) { document.getElementById(id).style.display = on ? '' : 'none'; }
+
+        async function loadStatus() {
+            const s = await api('/status');
+            const pill = document.getElementById('status-pill');
+            if (!s || s.__error) {
+                pill.textContent = 'error'; pill.className = 'pill error';
+                document.getElementById('statSandbox').textContent = '-';
+                document.getElementById('statUi').textContent = '-';
+                document.getElementById('statPort').textContent = '-';
+                document.getElementById('sf-ip').textContent = '—';
+                ['btn-install','btn-start','btn-stop','btn-restart-ui','btn-open-ui'].forEach(id => show(id, false));
+                document.getElementById('ui-hint').style.display = '';
+                return;
+            }
+            document.getElementById('sf-ip').textContent = esc(s.ip || '—');
+            document.getElementById('statPort').textContent = s.port != null ? esc(s.port) : '-';
+            const uiUp = !!s.ui_up;
+            document.getElementById('statUi').textContent = uiUp ? 'up' : (s.running ? 'starting' : 'down');
+
+            // Sandbox state → which controls to show
+            if (!s.installed) {
+                document.getElementById('statSandbox').textContent = installing ? 'installing' : 'not installed';
+                pill.textContent = installing ? 'installing…' : 'not installed';
+                pill.className = 'pill ' + (installing ? 'warn' : 'muted');
+                show('btn-install', !installing);
+                show('btn-start', false); show('btn-stop', false); show('btn-restart-ui', false);
+            } else if (s.running) {
+                document.getElementById('statSandbox').textContent = 'running';
+                pill.textContent = uiUp ? 'running · UI up' : 'running'; pill.className = 'pill ' + (uiUp ? 'ok' : 'warn');
+                show('btn-install', false); show('btn-start', false);
+                show('btn-stop', true); show('btn-restart-ui', true);
+                if (installing && uiUp) { installing = false; stopPoll(); toast('SpiderFoot sandbox ready', 'success'); }
+            } else {
+                document.getElementById('statSandbox').textContent = 'stopped';
+                pill.textContent = 'installed (stopped)'; pill.className = 'pill warn';
+                show('btn-install', false); show('btn-start', true);
+                show('btn-stop', false); show('btn-restart-ui', false);
+            }
+
+            // "Open SpiderFoot" shown ONLY when the real UI answers
+            show('btn-open-ui', uiUp);
+            document.getElementById('ui-hint').style.display = uiUp ? 'none' : '';
+
+            // keep polling while a transient state is in play
+            const transient = installing || (s.installed && s.running && !uiUp);
+            if (transient) startPoll(); else stopPoll();
+        }
+
+        function startPoll() { if (!pollTimer) pollTimer = setInterval(loadStatus, 8000); }
+        function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+        async function post(path, okMsg) {
+            const r = await api(path, { method: 'POST' });
+            if (!r || r.__error) { toast((r && r.__error) || 'action failed', 'error'); return false; }
+            toast(okMsg, 'success');
+            loadStatus();
+            return true;
+        }
+
+        async function doInstall() {
+            const r = await api('/install', { method: 'POST' });
+            if (!r || r.__error) { toast((r && r.__error) || 'install failed', 'error'); return; }
+            installing = true;
+            toast('Installing SpiderFoot sandbox — this can take several minutes', 'success');
+            loadStatus(); startPoll();
+        }
+
+        document.getElementById('btn-refresh').addEventListener('click', loadStatus);
+        document.getElementById('btn-install').addEventListener('click', doInstall);
+        document.getElementById('btn-start').addEventListener('click', () => post('/start', 'Starting sandbox'));
+        document.getElementById('btn-stop').addEventListener('click', () => post('/stop', 'Stopping sandbox'));
+        document.getElementById('btn-restart-ui').addEventListener('click', () => post('/restart-ui', 'Restarting SpiderFoot UI'));
+
+        loadStatus();
+    </script>
+</body>
+</html>
