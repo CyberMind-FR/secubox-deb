@@ -3,59 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>📮 Billets — SecuBox</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<title>SecuBox — Billets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shared/hybrid-dark.css">
 <style>
-  :root{ --b1:#00d4ff; --b2:#4488ff; --b3:#00d4ff; --b4:#c9a84c; --ink:#e8e6d9; }
-  body{font-family:'Courier Prime',monospace}
-  .billets-wrap{max-width:1000px;margin:0 auto;padding:1rem 1rem 4rem}
-  /* HERO */
-  .hero{position:relative;overflow:hidden;border-radius:22px;padding:2.4rem 2rem;
-    background:linear-gradient(120deg,#0d1b28,#10222f 40%,#0d1420);
-    border:1px solid rgba(110,64,201,.4);box-shadow:0 20px 60px rgba(0,0,0,.45)}
-  .hero h1{margin:0;font-size:2.9rem;font-weight:800;letter-spacing:-.02em;
-    background:linear-gradient(90deg,#7fe9ff,#00d4ff 40%,#4488ff);-webkit-background-clip:text;
-    background-clip:text;color:transparent}
-  .hero p{margin:.4rem 0 0;color:#8fb3c8;font-size:1.05rem}
-  .emoji-strip{margin-top:1rem;font-size:1.7rem;letter-spacing:.35rem}
-  .emoji-strip span{display:inline-block;animation:bob 3s ease-in-out infinite}
-  .emoji-strip span:nth-child(2n){animation-delay:.4s}
-  .emoji-strip span:nth-child(3n){animation-delay:.8s}
-  @keyframes bob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-9px) rotate(-6deg)}}
-  .hero .blob{position:absolute;border-radius:50%;filter:blur(42px);opacity:.5;z-index:0}
-  .hero .blob.a{width:220px;height:220px;background:#00d4ff;top:-70px;right:-40px}
-  .hero .blob.b{width:180px;height:180px;background:#00d4ff;bottom:-70px;left:20%}
-  .hero>*{position:relative;z-index:1}
-  /* STAT CARDS */
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9rem;margin:1.4rem 0}
-  .card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;
-    padding:1.1rem;text-align:center;transition:transform .18s,border-color .18s}
-  .card:hover{transform:translateY(-4px);border-color:rgba(0,212,255,.5)}
-  .card .big{font-size:2.2rem;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
-  .card .lab{color:#7fa8c0;font-size:.82rem;margin-top:.2rem}
-  .card .em{font-size:1.5rem}
-  /* REACTION BAR */
-  .reacts{display:flex;flex-wrap:wrap;gap:.5rem;margin:.2rem 0 1.4rem}
-  .reacts .chip{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
-    border-radius:999px;padding:.35rem .8rem;font-size:1.05rem}
-  .reacts .chip b{color:var(--b3);font-variant-numeric:tabular-nums;margin-left:.2rem}
-  /* ACTIONS */
-  .actions{display:flex;flex-wrap:wrap;gap:.7rem;margin:1.2rem 0}
-  .btn{display:inline-flex;align-items:center;gap:.5rem;text-decoration:none;font-weight:700;
-    padding:.7rem 1.15rem;border-radius:12px;border:1px solid transparent;cursor:pointer;font-size:.98rem}
-  .btn.p{background:linear-gradient(120deg,#00d4ff,#4488ff);color:#0d1117}
-  .btn.s{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);color:var(--ink)}
-  .btn:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(110,64,201,.35)}
-  /* LATEST */
-  .latest h2{font-size:1.15rem;color:var(--ink);margin:1.4rem 0 .6rem}
-  .latest a{display:flex;justify-content:space-between;gap:1rem;text-decoration:none;
-    padding:.7rem .9rem;border-radius:12px;border:1px solid rgba(255,255,255,.07);
-    background:rgba(255,255,255,.02);margin-bottom:.5rem;color:var(--ink);transition:border-color .15s}
-  .latest a:hover{border-color:rgba(0,212,255,.5)}
-  .latest .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .latest .d{color:#8a83a8;font-size:.8rem;flex:none}
-  .muted{color:#8a83a8}
+  :root{
+    --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
+    --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
+    --cyan:#00d4ff; --red:#ff4466; --orange:#ff9944; --yellow:#ffcc00;
+    --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
+  }
+  body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
+  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
+  .header h1{font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
+  .header .sub{font-size:.72rem;color:var(--p31-dim);letter-spacing:.05em;margin-top:.25rem}
+  .btn-group{display:flex;flex-wrap:wrap;gap:.4rem}
+  .btn{font-family:inherit;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;
+    text-decoration:none;color:var(--text);background:var(--bg-row);border:1px solid var(--border);
+    border-radius:6px;padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+  .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
+  .btn.primary{border-color:var(--cyan);color:var(--cyan)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1rem}
+  .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+    padding:.7rem;text-align:center;backdrop-filter:blur(10px)}
+  .stat-card .value{font-size:1.5rem;font-weight:bold;text-shadow:0 0 10px currentColor;font-variant-numeric:tabular-nums;color:var(--text)}
+  .stat-card .label{font-size:.6rem;color:var(--p31-dim);letter-spacing:.1em;margin-top:.2rem;text-transform:uppercase}
+  .stat-card.cyan .value{color:var(--cyan)} .stat-card.yellow .value{color:var(--yellow)}
+  .stat-card.blue .value{color:var(--blue)} .stat-card.purple .value{color:var(--purple)}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+    padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
+  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.7rem}
+  .reacts{display:flex;flex-wrap:wrap;gap:.5rem}
+  .chip{background:var(--bg-row);border:1px solid var(--border);border-radius:999px;
+    padding:.3rem .7rem;font-size:.95rem}
+  .chip b{color:var(--cyan);font-variant-numeric:tabular-nums;margin-left:.3rem;font-size:.85rem}
+  .item{display:flex;justify-content:space-between;gap:1rem;align-items:center;
+    background:var(--bg-row);border-left:3px solid var(--cyan);border-radius:4px;
+    padding:.55rem .7rem;margin-bottom:.4rem;text-decoration:none;color:var(--text);
+    transition:transform .12s,background .12s}
+  .item:hover{background:rgba(0,212,255,.08);transform:translateX(2px)}
+  .item .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.85rem}
+  .item .d{color:var(--p31-dim);font-size:.7rem;flex:none;font-variant-numeric:tabular-nums}
+  .muted{color:var(--p31-dim);font-size:.8rem}
+  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;
+    padding:.6rem 1rem;border-radius:6px;font-size:.8rem;opacity:0;pointer-events:none;
+    transition:opacity .2s;z-index:50}
+  .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
+  @media(max-width:768px){.main{margin-left:0}}
 </style>
 </head>
 <body class="hybrid-dark">
@@ -63,51 +58,46 @@
 <script src="/shared/sidebar.js"></script>
 
 <main class="main">
-<div class="billets-wrap">
-
-  <section class="hero">
-    <span class="blob a"></span><span class="blob b"></span>
-    <h1>📮 Billets</h1>
-    <p>Micro-blog <b>gateway</b> inter-médias sociaux — publie court, embarque, republie 🌍</p>
-    <div class="emoji-strip" aria-hidden="true">
-      <span>👍</span><span>❤️</span><span>😂</span><span>😮</span><span>😢</span><span>🔥</span>
-      <span>✨</span><span>📮</span><span>🚀</span>
+  <header class="header">
+    <div>
+      <h1>📮 Billets</h1>
+      <div class="sub" id="sub">micro-blog gateway inter-médias · chargement…</div>
     </div>
-  </section>
+    <div class="btn-group">
+      <button class="btn" onclick="refresh()">↻ Refresh</button>
+      <a class="btn primary" id="a-new" target="_blank" rel="noopener">✍️ Nouveau</a>
+      <a class="btn" id="a-open" target="_blank" rel="noopener">🚀 Blog</a>
+      <a class="btn" id="a-admin" target="_blank" rel="noopener">🔐 Admin</a>
+      <a class="btn" id="a-feed" target="_blank" rel="noopener">📡 Flux</a>
+    </div>
+  </header>
 
-  <div class="cards" id="cards">
-    <div class="card"><div class="em">📝</div><div class="big" data-k="billets_published">–</div><div class="lab">Billets publiés</div></div>
-    <div class="card"><div class="em">📄</div><div class="big" data-k="billets_drafts">–</div><div class="lab">Brouillons</div></div>
-    <div class="card"><div class="em">💬</div><div class="big" data-k="comments_approved">–</div><div class="lab">Commentaires</div></div>
-    <div class="card"><div class="em">✨</div><div class="big" data-k="reactions_total">–</div><div class="lab">Réactions</div></div>
+  <div class="grid" id="cards">
+    <div class="stat-card cyan"><div class="value" data-k="billets_published">–</div><div class="label">📝 Publiés</div></div>
+    <div class="stat-card yellow"><div class="value" data-k="billets_drafts">–</div><div class="label">📄 Brouillons</div></div>
+    <div class="stat-card blue"><div class="value" data-k="comments_approved">–</div><div class="label">💬 Commentaires</div></div>
+    <div class="stat-card purple"><div class="value" data-k="reactions_total">–</div><div class="label">✨ Réactions</div></div>
   </div>
 
-  <div class="reacts" id="reacts"></div>
-
-  <div class="actions" id="actions">
-    <a class="btn p" id="a-open" target="_blank" rel="noopener">🚀 Ouvrir le blog</a>
-    <a class="btn s" id="a-new" target="_blank" rel="noopener">✍️ Nouveau billet</a>
-    <a class="btn s" id="a-admin" target="_blank" rel="noopener">🔐 Admin</a>
-    <a class="btn s" id="a-feed" target="_blank" rel="noopener">📡 Flux Atom</a>
+  <div class="card">
+    <h3>✨ Réactions</h3>
+    <div class="reacts" id="reacts"><span class="muted">…</span></div>
   </div>
 
-  <section class="latest">
-    <h2>🕒 Derniers billets</h2>
+  <div class="card">
+    <h3>🕒 Derniers billets</h3>
     <div id="latest"><p class="muted">Chargement… ⏳</p></div>
-  </section>
-
-</div>
+  </div>
 </main>
+
+<div class="toast" id="toast"></div>
 
 <script>
 (function(){
   var FALLBACK = "https://billets.gk2.secubox.in";
   var EMOJI_ORDER = ["👍","❤️","😂","😮","😢","🔥"];
-  function bump(el, to){ // count-up animation
-    var from=0, t0=performance.now(), dur=700;
-    function step(t){ var k=Math.min(1,(t-t0)/dur); el.textContent=Math.round(from+(to-from)*(k*(2-k))); if(k<1)requestAnimationFrame(step); }
-    requestAnimationFrame(step);
-  }
+  function esc(s){return String(s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});}
+  function toast(msg,err){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(err?' error':'');setTimeout(function(){t.className='toast';},2600);}
   function links(site){
     document.getElementById('a-open').href = site + "/";
     document.getElementById('a-new').href = site + "/admin/billets/new";
@@ -115,25 +105,32 @@
     document.getElementById('a-feed').href = site + "/feed.xml";
   }
   links(FALLBACK);
-  fetch(FALLBACK + "/stats.json", {mode:"cors"}).then(function(r){return r.json();}).then(function(s){
-    var site = (s.site_url||FALLBACK+"/").replace(/\/$/,"");
-    links(site);
-    document.querySelectorAll('.card .big[data-k]').forEach(function(el){
-      var v = s[el.getAttribute('data-k')]; if(typeof v==='number') bump(el, v); else el.textContent = v||0;
+  function refresh(){
+    fetch(FALLBACK + "/stats.json", {mode:"cors", cache:"no-store"}).then(function(r){return r.json();}).then(function(s){
+      var site = (s.site_url||FALLBACK+"/").replace(/\/$/,""); links(site);
+      document.querySelectorAll('.stat-card .value[data-k]').forEach(function(el){
+        var v = s[el.getAttribute('data-k')]; el.textContent = (typeof v==='number')? v : (v||0);
+      });
+      var rb = s.reactions_by||{};
+      document.getElementById('reacts').innerHTML = EMOJI_ORDER.map(function(e){
+        return '<span class="chip">'+e+'<b>'+(rb[e]||0)+'</b></span>'; }).join('');
+      document.getElementById('sub').textContent = 'micro-blog gateway inter-médias · '+(s.billets_published||0)+' publiés';
+      var lt = document.getElementById('latest');
+      if(s.latest && s.latest.length){
+        lt.innerHTML = s.latest.map(function(b){
+          return '<a class="item" href="'+esc(b.url)+'" target="_blank" rel="noopener">'+
+                 '<span class="t">'+esc(b.title||'billet')+'</span>'+
+                 '<span class="d">'+esc(b.date||'')+'</span></a>'; }).join('');
+      } else { lt.innerHTML = '<p class="muted">Aucun billet publié — clique ✍️ Nouveau.</p>'; }
+    }).catch(function(){
+      document.getElementById('latest').innerHTML = '<p class="muted">Blog injoignable pour l\'instant 😴 — <a class="btn" href="'+FALLBACK+'" target="_blank" rel="noopener">ouvrir</a>.</p>';
+      document.getElementById('reacts').innerHTML = EMOJI_ORDER.map(function(e){return '<span class="chip">'+e+'</span>';}).join('');
+      toast('Blog injoignable', true);
     });
-    var rb = s.reactions_by||{}, rc=document.getElementById('reacts');
-    rc.innerHTML = EMOJI_ORDER.map(function(e){ return '<span class="chip">'+e+'<b>'+(rb[e]||0)+'</b></span>'; }).join('');
-    var lt = document.getElementById('latest');
-    if(s.latest && s.latest.length){
-      lt.innerHTML = s.latest.map(function(b){
-        var t=(b.title||'billet').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});
-        return '<a href="'+b.url+'" target="_blank" rel="noopener"><span class="t">'+t+'</span><span class="d">'+(b.date||'')+'</span></a>';
-      }).join('');
-    } else { lt.innerHTML = '<p class="muted">Aucun billet publié — clique ✍️ Nouveau billet.</p>'; }
-  }).catch(function(){
-    document.getElementById('latest').innerHTML = '<p class="muted">Blog injoignable pour l\'instant 😴 — <a href="'+FALLBACK+'" target="_blank" rel="noopener">ouvrir le blog</a>.</p>';
-    document.getElementById('reacts').innerHTML = EMOJI_ORDER.map(function(e){return '<span class="chip">'+e+'</span>';}).join('');
-  });
+  }
+  window.refresh = refresh;
+  refresh();
+  setInterval(refresh, 60000);
 })();
 </script>
 </body>
