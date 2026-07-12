@@ -246,6 +246,7 @@
                 <td>${fmtDate(l.started_at)}</td>
                 <td>
                     <button class="btn lk-act" style="padding:0.25rem 0.5rem;font-size:0.72rem" data-id="${esc(l.id)}" data-op="view">View</button>
+                    ${l.status === 'completed' ? `<button class="btn lk-act" style="padding:0.25rem 0.5rem;font-size:0.72rem" data-id="${esc(l.id)}" data-op="pdf">📄 PDF</button>` : ''}
                     <button class="btn danger lk-act" style="padding:0.25rem 0.5rem;font-size:0.72rem" data-id="${esc(l.id)}" data-op="delete">Delete</button>
                 </td>
             </tr>`;
@@ -264,13 +265,34 @@
                 : '<tr><td colspan="5" class="muted">No lookups yet</td></tr>';
             document.querySelectorAll('.lk-act').forEach(b => b.addEventListener('click', () => {
                 const id = b.dataset.id, op = b.dataset.op;
-                if (op === 'view') viewLookup(id); else if (op === 'delete') deleteLookup(id);
+                if (op === 'view') viewLookup(id);
+                else if (op === 'delete') deleteLookup(id);
+                else if (op === 'pdf') downloadPdf(id);
             }));
             const active = items.some(l => l.status === 'pending' || l.status === 'running');
             if (active) startListPoll(); else stopListPoll();
         }
         function startListPoll() { if (!listPollTimer) listPollTimer = setInterval(loadLookups, 5000); }
         function stopListPoll() { if (listPollTimer) { clearInterval(listPollTimer); listPollTimer = null; } }
+
+        async function downloadPdf(id) {
+            // The report endpoint is JWT-gated, so fetch with the bearer header
+            // then trigger a client-side download of the returned PDF blob.
+            toast('Generating PDF report…');
+            try {
+                const res = await fetch(API + '/lookup/' + encodeURIComponent(id) + '/report.pdf',
+                    { headers: { 'Authorization': token() ? 'Bearer ' + token() : '' } });
+                if (res.status === 401) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
+                if (!res.ok) { toast('PDF failed: HTTP ' + res.status, 'error'); return; }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'maigret-' + id + '.pdf';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 4000);
+                toast('PDF report downloaded', 'success');
+            } catch (e) { toast('PDF error: ' + e.message, 'error'); }
+        }
 
         async function viewLookup(id) {
             document.getElementById('resultTitle').textContent = 'Lookup ' + id;
