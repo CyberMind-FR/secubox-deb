@@ -1,0 +1,12 @@
+# /etc/secubox/spiderfoot.toml — cp from this example.
+enabled = true
+container_name = "spiderfoot"
+lxc_ip = "10.100.0.43"
+# Port SpiderFoot's own web UI + REST binds to INSIDE the container. It binds to
+# the container LAN IP (lxc_ip) so the host nginx can reverse-proxy it behind
+# the SecuBox WAF/auth front — never a host port, never 0.0.0.0.
+sf_port = 5001
+
+# SpiderFoot drives its OWN scans from its OWN UI (200+ passive modules,
+# correlation graph). This module only manages the LXC lifecycle + status
+# probe, so there are no scan-tuning knobs here.

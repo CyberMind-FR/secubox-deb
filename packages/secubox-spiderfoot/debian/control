@@ -1,0 +1,22 @@
+Source: secubox-spiderfoot
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-spiderfoot
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), debootstrap, lxc, jq
+Description: SpiderFoot OSINT automation engine (LXC-sandboxed)
+ Runs the SpiderFoot OSINT automation engine inside a dedicated
+ debootstrap/LXC sandbox — 200+ passive modules and a correlation graph,
+ the interim Maltego-style correlation hub. SpiderFoot ships its own web
+ UI and REST API bound to the container's LAN IP; this module handles the
+ LXC lifecycle, a status probe, and reverse-proxies the container UI behind
+ the SecuBox WAF/auth front. Features include:
+  - 200+ passive OSINT modules with a correlation graph
+  - Sandboxed execution in a dedicated LXC container
+  - SpiderFoot's own UI/REST reachable ONLY via the WAF-fronted proxy
+  - JWT-gated lifecycle API with append-only audit logging
+  - Detached install/lifecycle model (never blocks the aggregator loop)

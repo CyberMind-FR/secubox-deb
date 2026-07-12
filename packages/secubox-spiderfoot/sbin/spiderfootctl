@@ -1,0 +1,143 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox SpiderFoot controller — privileged LXC lifecycle control plane.
+# The ONLY privileged surface for the spiderfoot module (invoked via sudo).
+# SpiderFoot ships its own web UI + REST API bound to the container LAN IP;
+# this ctl only does LXC lifecycle + a HOST-side UI status probe. No user
+# target ever reaches a shell (scans are driven inside SpiderFoot's own UI).
+set -uo pipefail
+
+CONFIG_FILE="/etc/secubox/spiderfoot.toml"
+LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+CONTAINER="${SECUBOX_LXC_NAME:-spiderfoot}"
+LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
+LXC_IP="${SECUBOX_LXC_IP:-10.100.0.43}"
+LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
+SF_PORT="${SECUBOX_SF_PORT:-5001}"
+
+err() { echo "[ERROR] $*" >&2; }
+
+# ---- lxc helpers (mirror openclawctl / maigretctl) ----
+lxc_running() { local _s; _s=$(lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null); [[ "$_s" == *"State:"*"RUNNING"* ]]; }
+lxc_exists()  { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
+# Run a command in the container. Extra args after the command string are
+# passed as positional $1.. to `sh -c` — NEVER interpolate values into the
+# command string.
+lxc_attach()  { local cmd="$1"; shift; lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "$cmd" _ "$@"; }
+
+# SpiderFoot's own HTTP UI answers on the container IP. Probe it from the HOST
+# with a bounded curl — this is the source of truth for `ui_up` (NOT lxc-info).
+_ui_up() { curl -fsS --max-time 3 -o /dev/null "http://$LXC_IP:$SF_PORT/" 2>/dev/null; }
+
+cmd_status() {
+    local running=false installed=false ui_up=false
+    # installed = rootfs exists AND the SpiderFoot checkout exists.
+    if lxc_exists && [ -d "$LXC_PATH/$CONTAINER/rootfs/opt/spiderfoot" ]; then installed=true; fi
+    lxc_running && running=true
+    if [ "$running" = true ]; then _ui_up && ui_up=true; fi
+    printf '{"running":%s,"installed":%s,"ip":"%s","port":%s,"ui_up":%s}\n' \
+        "$running" "$installed" "$LXC_IP" "$SF_PORT" "$ui_up"
+}
+
+cmd_start() { lxc_exists || { err "not installed"; return 1; }; lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; sleep 1; lxc_running; }
+cmd_stop()  { lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; ! lxc_running; }
+cmd_restart_ui() { lxc_running || { err "container not running"; return 1; }; lxc_attach 'systemctl restart spiderfoot.service'; }
+cmd_selftest() { _ui_up && echo "spiderfoot UI up on $LXC_IP:$SF_PORT" || { err "UI not answering on $LXC_IP:$SF_PORT"; return 1; }; }
+
+_write_lxc_config() {
+    cat > "$LXC_PATH/$CONTAINER/config" <<EOF
+lxc.include = /usr/share/lxc/config/debian.common.conf
+lxc.arch = linux64
+lxc.uts.name = $CONTAINER
+lxc.rootfs.path = dir:$LXC_PATH/$CONTAINER/rootfs
+lxc.net.0.type = veth
+lxc.net.0.link = $LXC_BRIDGE
+lxc.net.0.flags = up
+lxc.net.0.name = eth0
+lxc.net.0.ipv4.address = $LXC_IP/24
+lxc.net.0.ipv4.gateway = $LXC_GW
+lxc.start.auto = 1
+lxc.start.delay = 5
+lxc.cgroup2.memory.max = 1536M
+EOF
+}
+
+cmd_install() {
+    [ "$(id -u)" -eq 0 ] || { err "root required"; return 1; }
+    mkdir -p "$LXC_PATH/$CONTAINER"
+    if [ ! -x "$LXC_PATH/$CONTAINER/rootfs/bin/bash" ]; then
+        echo "[spiderfoot] debootstrapping bookworm rootfs…"
+        debootstrap --variant=minbase \
+            --include=systemd,systemd-sysv,dbus,ca-certificates,iproute2,python3,python3-venv,python3-pip,git \
+            bookworm "$LXC_PATH/$CONTAINER/rootfs" http://deb.debian.org/debian || { err "debootstrap failed"; return 1; }
+    fi
+    echo "$CONTAINER" > "$LXC_PATH/$CONTAINER/rootfs/etc/hostname"
+    printf 'nameserver %s\nnameserver 1.1.1.1\n' "$LXC_GW" > "$LXC_PATH/$CONTAINER/rootfs/etc/resolv.conf"
+    _write_lxc_config
+    lxc_running || lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null
+    sleep 2
+
+    # Idempotent: only clone + build the venv if the checkout is absent.
+    if [ ! -d "$LXC_PATH/$CONTAINER/rootfs/opt/spiderfoot/.git" ]; then
+        echo "[spiderfoot] cloning SpiderFoot + building venv (this can take a while)…"
+        lxc_attach 'set -e
+            export DEBIAN_FRONTEND=noninteractive
+            rm -rf /opt/spiderfoot
+            git clone --depth 1 https://github.com/smicallef/spiderfoot /opt/spiderfoot
+            python3 -m venv /opt/spiderfoot/venv
+            /opt/spiderfoot/venv/bin/pip install --upgrade pip >/dev/null 2>&1 || true
+            /opt/spiderfoot/venv/bin/pip install -r /opt/spiderfoot/requirements.txt' \
+            || { err "spiderfoot install failed"; return 1; }
+    fi
+
+    # In-container systemd unit. SpiderFoot MUST bind to the container IP so the
+    # host nginx can reach it — never a host port. $1=IP $2=port are passed
+    # positionally to sh -c and expanded inside the (unquoted) heredoc; no value
+    # is interpolated into the command string itself.
+    echo "[spiderfoot] installing in-container systemd unit…"
+    lxc_attach 'cat > /etc/systemd/system/spiderfoot.service <<UNIT
+[Unit]
+Description=SpiderFoot OSINT
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/spiderfoot
+ExecStart=/opt/spiderfoot/venv/bin/python /opt/spiderfoot/sf.py -l $1:$2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        systemctl daemon-reload
+        systemctl enable spiderfoot.service >/dev/null 2>&1
+        systemctl restart spiderfoot.service' "$LXC_IP" "$SF_PORT" \
+        || { err "failed to start in-container spiderfoot unit"; return 1; }
+
+    # Verify the UI answers before reporting success.
+    echo "[spiderfoot] waiting for the UI to come up on $LXC_IP:$SF_PORT…"
+    local i
+    for i in $(seq 1 40); do
+        if _ui_up; then
+            echo "[spiderfoot] install complete — UI up on $LXC_IP:$SF_PORT"
+            return 0
+        fi
+        sleep 3
+    done
+    err "spiderfoot UI did not answer on $LXC_IP:$SF_PORT after install"
+    return 1
+}
+
+usage() { echo "usage: spiderfootctl {install|start|stop|restart-ui|status [--json]|selftest}" >&2; }
+
+case "${1:-}" in
+    status)     shift; cmd_status ;;
+    start)      cmd_start ;;
+    stop)       cmd_stop ;;
+    restart-ui) cmd_restart_ui ;;
+    selftest)   cmd_selftest ;;
+    install)    cmd_install ;;
+    *) usage; exit 2 ;;
+esac

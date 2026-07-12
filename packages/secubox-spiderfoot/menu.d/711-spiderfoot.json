@@ -1,0 +1,9 @@
+{
+  "id": "spiderfoot",
+  "name": "SpiderFoot OSINT",
+  "category": "auth",
+  "icon": "🌀",
+  "path": "/spiderfoot/",
+  "order": 711,
+  "description": "OSINT automation — 200+ passive modules, correlation graph (interim Maltego-style hub)"
+}
