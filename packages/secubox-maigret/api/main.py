@@ -205,6 +205,27 @@ def get_lookup(lookup_id: str):
         raise HTTPException(404, "not found")
     return json.loads(f.read_text())
 
+@app.get("/lookup/{lookup_id}/report.pdf", dependencies=[Depends(require_jwt)])
+def lookup_report(lookup_id: str):
+    """Render a completed lookup into a styled, SecuBox-branded PDF dossier.
+    Plain `def` → FastAPI threadpools it, so the (sync) fpdf render never blocks
+    the shared aggregator loop."""
+    if not _valid_id(lookup_id):
+        raise HTTPException(400, "invalid lookup id")
+    f = LOOKUPS_DIR / f"{lookup_id}.json"
+    if not f.exists():
+        raise HTTPException(404, "not found")
+    record = json.loads(f.read_text())
+    from . import report as _report
+    try:
+        pdf = _report.build_pdf(record)
+    except Exception as e:  # noqa: BLE001 — never 500 the panel over a render glitch
+        raise HTTPException(500, f"report render failed: {e}")
+    safe = _re.sub(r"[^A-Za-z0-9._-]", "_", str(record.get("username", "report")))[:40] or "report"
+    from fastapi.responses import Response
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="maigret-{safe}.pdf"'})
+
 @app.delete("/lookup/{lookup_id}", dependencies=[Depends(require_jwt)])
 def delete_lookup(lookup_id: str, claims: dict = Depends(require_jwt)):
     if not _valid_id(lookup_id):
