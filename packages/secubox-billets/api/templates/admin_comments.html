@@ -1,27 +1,32 @@
 <!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>billets — modération</title><link rel="stylesheet" href="/static/billets.css">
+<title>SecuBox — Billets · modération</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/billets-admin.css?v=1">
 </head><body>
-<header class="site-header"><a class="site-title" href="/admin">billets</a>
-  <span class="tagline">modération · {{ pending|length }} en attente</span></header>
-<main>
-<p><a href="/admin">← tableau de bord</a></p>
-{% for c in pending %}
-<article class="comment mod">
-  <p class="c-meta"><strong>{{ c.author_name }}</strong>
-    <time datetime="{{ c.created_at }}">{{ c.created_at[:19]|replace('T',' ') }}</time></p>
-  <p class="c-body">{{ c.body }}</p>
-  <div class="mod-actions">
-    <form method="post" action="/admin/comments/{{ c.id }}/moderate">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button type="submit" name="decision" value="approve">Approuver</button>
-    </form>
-    <form method="post" action="/admin/comments/{{ c.id }}/moderate">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button type="submit" name="decision" value="reject" class="danger">Rejeter</button>
-    </form>
+<div class="wrap">
+  <header class="header">
+    <div><h1>💬 Modération</h1><div class="sub">📮 billets · {{ pending|length }} en attente ⏳</div></div>
+    <div class="btn-group"><a class="btn" href="/admin">← Tableau de bord</a></div>
+  </header>
+  <div class="card">
+    {% for c in pending %}
+    <article class="comment">
+      <p class="c-meta">🙂 <strong>{{ c.author_name }}</strong>
+        · <time datetime="{{ c.created_at }}">{{ c.created_at[:19]|replace('T',' ') }}</time></p>
+      <p class="c-body">{{ c.body }}</p>
+      <div class="mod-actions">
+        <form method="post" action="/admin/comments/{{ c.id }}/moderate">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" name="decision" value="approve" class="btn good">✅ Approuver</button></form>
+        <form method="post" action="/admin/comments/{{ c.id }}/moderate">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" name="decision" value="reject" class="btn danger">🚫 Rejeter</button></form>
+      </div>
+    </article>
+    {% else %}<p class="muted">🎉 Aucun commentaire en attente.</p>{% endfor %}
   </div>
-</article>
-{% else %}<p class="empty">Aucun commentaire en attente.</p>{% endfor %}
-</main></body></html>
+</div>
+</body></html>

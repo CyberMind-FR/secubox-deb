@@ -4,25 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>📮 Billets — SecuBox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shared/hybrid-dark.css">
 <style>
-  :root{ --b1:#6e40c9; --b2:#e63946; --b3:#00d4ff; --b4:#c9a84c; --ink:#e8e6d9; }
+  :root{ --b1:#00d4ff; --b2:#4488ff; --b3:#00d4ff; --b4:#c9a84c; --ink:#e8e6d9; }
+  body{font-family:'Courier Prime',monospace}
   .billets-wrap{max-width:1000px;margin:0 auto;padding:1rem 1rem 4rem}
   /* HERO */
   .hero{position:relative;overflow:hidden;border-radius:22px;padding:2.4rem 2rem;
-    background:linear-gradient(120deg,#1b1030,#241436 40%,#101b28);
+    background:linear-gradient(120deg,#0d1b28,#10222f 40%,#0d1420);
     border:1px solid rgba(110,64,201,.4);box-shadow:0 20px 60px rgba(0,0,0,.45)}
   .hero h1{margin:0;font-size:2.9rem;font-weight:800;letter-spacing:-.02em;
-    background:linear-gradient(90deg,#b98bff,#6e40c9 40%,#00d4ff);-webkit-background-clip:text;
+    background:linear-gradient(90deg,#7fe9ff,#00d4ff 40%,#4488ff);-webkit-background-clip:text;
     background-clip:text;color:transparent}
-  .hero p{margin:.4rem 0 0;color:#b8b0d8;font-size:1.05rem}
+  .hero p{margin:.4rem 0 0;color:#8fb3c8;font-size:1.05rem}
   .emoji-strip{margin-top:1rem;font-size:1.7rem;letter-spacing:.35rem}
   .emoji-strip span{display:inline-block;animation:bob 3s ease-in-out infinite}
   .emoji-strip span:nth-child(2n){animation-delay:.4s}
   .emoji-strip span:nth-child(3n){animation-delay:.8s}
   @keyframes bob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-9px) rotate(-6deg)}}
   .hero .blob{position:absolute;border-radius:50%;filter:blur(42px);opacity:.5;z-index:0}
-  .hero .blob.a{width:220px;height:220px;background:#6e40c9;top:-70px;right:-40px}
+  .hero .blob.a{width:220px;height:220px;background:#00d4ff;top:-70px;right:-40px}
   .hero .blob.b{width:180px;height:180px;background:#00d4ff;bottom:-70px;left:20%}
   .hero>*{position:relative;z-index:1}
   /* STAT CARDS */
@@ -31,7 +33,7 @@
     padding:1.1rem;text-align:center;transition:transform .18s,border-color .18s}
   .card:hover{transform:translateY(-4px);border-color:rgba(0,212,255,.5)}
   .card .big{font-size:2.2rem;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
-  .card .lab{color:#9a93b8;font-size:.82rem;margin-top:.2rem}
+  .card .lab{color:#7fa8c0;font-size:.82rem;margin-top:.2rem}
   .card .em{font-size:1.5rem}
   /* REACTION BAR */
   .reacts{display:flex;flex-wrap:wrap;gap:.5rem;margin:.2rem 0 1.4rem}
@@ -42,7 +44,7 @@
   .actions{display:flex;flex-wrap:wrap;gap:.7rem;margin:1.2rem 0}
   .btn{display:inline-flex;align-items:center;gap:.5rem;text-decoration:none;font-weight:700;
     padding:.7rem 1.15rem;border-radius:12px;border:1px solid transparent;cursor:pointer;font-size:.98rem}
-  .btn.p{background:linear-gradient(120deg,#6e40c9,#8b5cf6);color:#fff}
+  .btn.p{background:linear-gradient(120deg,#00d4ff,#4488ff);color:#0d1117}
   .btn.s{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);color:var(--ink)}
   .btn:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(110,64,201,.35)}
   /* LATEST */

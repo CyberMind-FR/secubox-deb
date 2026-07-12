@@ -21,7 +21,7 @@ _DIGEST_SIZE = 32
 EVENT_TYPES = frozenset({
     "billet.published", "billet.edited", "billet.deleted",
     "comment.approved", "comment.rejected", "comment.created",
-    "author.login", "author.login_failed",
+    "author.login", "author.login_failed", "author.password_changed",
 })
 
 

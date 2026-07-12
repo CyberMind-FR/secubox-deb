@@ -23,7 +23,8 @@
 |---------|-------------|------------|
 | `docs/TOOLS.md` | Référence outils build/génération | Pour builder |
 | `.claude/QUICKSHEET-REFERENCE.md` | Quick ref commandes | Pour commandes |
-| `.claude/DESIGN-CHARTER.md` | Charte UI/UX | Pour frontend |
+| `.claude/DESIGN-CHARTER.md` | Charte UI/UX (C3BOX hermétique) | Pour frontend |
+| `.claude/WEBUI-PANEL-GUIDELINES.md` | **Look & feel DÉFAUT des webui de gestion des modules** (cyan hybrid-dark, Courier Prime, emoji ; réf. `/certs/`) | Avant tout panel/admin webui |
 | `.claude/WIKI-STYLE-GUIDE.md` | Style documentation | Pour docs |
 | `.claude/NOTES.md` | Notes de session | Pour contexte additionnel |
 

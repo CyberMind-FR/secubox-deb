@@ -1,15 +1,28 @@
 # SecuBox WebUI Panel Guidelines
 
-*Version 1.0 — 2026-07-10 · reference implementations: `/certs/` and `/wireguard/`*
+*Version 1.1 — 2026-07-12 · reference implementations: `/certs/`, `/wireguard/`, `/billets/`*
 
-The look-and-feel every admin panel (`admin.gk2.secubox.in/<module>/`) must follow.
-This is the **cyan "hybrid-dark" terminal** convention — a single self-contained
-`index.html` per module, dark glass + Courier Prime + emoji-guided density. It is
-distinct from the C3BOX hermetic charter (`DESIGN-CHARTER.md`, Cinzel/gold): admin
-panels use THIS.
+**This is the canonical, DEFAULT look-and-feel for all SecuBox webui module
+management.** Every admin panel (`admin.gk2.secubox.in/<module>/`) and every
+module's own admin interface MUST follow it: the **cyan "hybrid-dark" terminal**
+convention — dark glass + **Courier Prime** + **cyan `#00d4ff`** as the single
+accent + emoji-guided density. It is distinct from the C3BOX hermetic charter
+(`DESIGN-CHARTER.md`, Cinzel/gold): admin panels use THIS.
 
 Canonical examples to copy from: `packages/secubox-certs/www/certs/index.html`
-and `packages/secubox-wireguard/www/wireguard/index.html`.
+(the reference), `packages/secubox-wireguard/www/wireguard/index.html`, and
+`packages/secubox-billets/` (`www/billets/index.html` panel + `api/static/billets-admin.css`).
+
+### Two variants (same palette/typography/emoji)
+
+- **Aggregator-hosted panel** (`admin.gk2/<module>/`): link `/shared/hybrid-dark.css`
+  + `/shared/sidebar.js`, body `class="hybrid-dark"`, then the `:root` palette
+  from §2 (e.g. `/billets/` panel).
+- **Self-contained module vhost** (a module served on its OWN vhost, no `/shared/`,
+  e.g. `billets.gk2/admin`): inline the SAME `:root` palette + Courier Prime + the
+  component classes in a local stylesheet (`billets-admin.css`), no shared sidebar
+  — the module supplies its own top nav in the same style. **Same tokens, same
+  emoji, same components — just self-hosted.**
 
 ---
 

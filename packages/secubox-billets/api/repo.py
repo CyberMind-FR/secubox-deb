@@ -124,6 +124,11 @@ async def get_author_by_id(conn: aiosqlite.Connection, author_id: str) -> Option
         return await cur.fetchone()
 
 
+async def update_password(conn: aiosqlite.Connection, author_id: str, password_hash: str) -> None:
+    await conn.execute("UPDATE author SET password_hash=? WHERE id=?", (password_hash, author_id))
+    await conn.commit()
+
+
 # ── admin billet mutations ─────────────────────────────────────────────────
 async def list_all(conn: aiosqlite.Connection, *, status: Optional[str] = None,
                    limit: int = 100) -> list[aiosqlite.Row]:

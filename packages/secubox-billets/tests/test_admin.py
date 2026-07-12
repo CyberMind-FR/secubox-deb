@@ -190,3 +190,36 @@ async def test_totp_enforced_when_enrolled(admin, conn):
     # right password + right code -> success
     r2 = await _login(c, totp=pyotp.TOTP(secret).now())
     assert r2.headers["location"] == "/admin"
+
+
+async def test_change_password_forces_relogin(admin):
+    c, conn, _ = admin
+    await _login(c)
+    csrf = c.cookies.get("billets_csrf")
+    r = await c.post("/admin/password", data={"current": PW, "new_password": "NewSecret-2026x",
+                                              "confirm": "NewSecret-2026x", "csrf": csrf})
+    assert r.status_code == 303 and "pw=changed" in r.headers["location"]
+    assert not c.cookies.get("billets_session")           # logged out
+    assert (await _login(c, password=PW)).headers["location"].endswith("error=bad")   # old ko
+    assert (await _login(c, password="NewSecret-2026x")).headers["location"] == "/admin"  # new ok
+    async with conn.execute("SELECT COUNT(*) FROM event_log WHERE event_type='author.password_changed'") as cur:
+        assert (await cur.fetchone())[0] == 1
+
+
+async def test_change_password_wrong_current(admin):
+    c, conn, _ = admin
+    await _login(c)
+    csrf = c.cookies.get("billets_csrf")
+    r = await c.post("/admin/password", data={"current": "nope", "new_password": "NewSecret-2026x",
+                                              "confirm": "NewSecret-2026x", "csrf": csrf})
+    assert "pw=bad" in r.headers["location"]
+    assert c.cookies.get("billets_session")               # still logged in
+
+
+async def test_change_password_mismatch_rejected(admin):
+    c, conn, _ = admin
+    await _login(c)
+    csrf = c.cookies.get("billets_csrf")
+    r = await c.post("/admin/password", data={"current": PW, "new_password": "NewSecret-2026x",
+                                              "confirm": "different", "csrf": csrf})
+    assert "pw=invalid" in r.headers["location"]
