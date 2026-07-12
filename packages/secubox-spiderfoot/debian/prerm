@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+# No dedicated host systemd unit is shipped (aggregator serves in-process, and
+# SpiderFoot itself runs under an in-container unit), so there is nothing to
+# stop/disable on the host here. Kept for dpkg maintainer-script symmetry.
+#DEBHELPER#
+exit 0

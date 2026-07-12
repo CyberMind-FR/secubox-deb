@@ -1,0 +1,3 @@
+# The aggregator (user secubox) drives the SpiderFoot LXC through spiderfootctl.
+# This is the ONLY privileged surface for the module.
+secubox ALL=(root) NOPASSWD: /usr/sbin/spiderfootctl

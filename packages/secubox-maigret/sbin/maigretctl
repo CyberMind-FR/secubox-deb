@@ -1,0 +1,143 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox Maigret controller — privileged LXC tool-runner control plane.
+# The ONLY privileged surface for the maigret module (invoked via sudo).
+# Wraps the Maigret username/identity OSINT CLI inside a sandboxed container.
+set -uo pipefail
+
+CONFIG_FILE="/etc/secubox/maigret.toml"
+LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+CONTAINER="${SECUBOX_LXC_NAME:-maigret}"
+LXC_BRIDGE="${SECUBOX_LXC_BRIDGE:-br-lxc}"
+LXC_IP="${SECUBOX_LXC_IP:-10.100.0.42}"
+LXC_GW="${SECUBOX_LXC_GW:-10.100.0.1}"
+LOOKUPS_DIR="${SECUBOX_MAIGRET_LOOKUPS:-/var/lib/secubox/maigret/lookups}"
+
+err() { echo "[ERROR] $*" >&2; }
+
+# ---- injection guards (defense in depth; API validates too) ----
+# Require an alphanumeric first char so a leading '-' can never be parsed as a
+# flag by maigret (flag-injection). Usernames are the only user-controlled arg.
+_valid_username() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]]; }
+_valid_id()       { [[ "$1" =~ ^[a-f0-9]{8}$ ]]; }
+
+# ---- lxc helpers (mirror openclawctl / nextcloudctl) ----
+lxc_running() { local _s; _s=$(lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null); [[ "$_s" == *"State:"*"RUNNING"* ]]; }
+lxc_exists()  { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
+# Run a command in the container. Extra args after the command string are
+# passed as positional $1.. to `sh -c` — NEVER interpolate targets into the
+# command string.
+lxc_attach()  { local cmd="$1"; shift; lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "$cmd" _ "$@"; }
+
+has_tool() { lxc_running && lxc_attach 'command -v "$1" >/dev/null' "$1"; }
+
+cmd_status() {
+    local running=false installed=false
+    lxc_exists && installed=true
+    lxc_running && running=true
+    local maigret=false
+    if [ "$running" = true ]; then
+        has_tool maigret && maigret=true
+    fi
+    printf '{"running":%s,"installed":%s,"ip":"%s","tools":{"maigret":%s}}\n' \
+        "$running" "$installed" "$LXC_IP" "$maigret"
+}
+
+cmd_start() { lxc_exists || { err "not installed"; return 1; }; lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; sleep 1; lxc_running; }
+cmd_stop()  { lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; ! lxc_running; }
+cmd_selftest() { lxc_running || { err "container not running"; return 1; }; lxc_attach 'maigret --version 2>&1 | head -1'; }
+
+_write_lxc_config() {
+    cat > "$LXC_PATH/$CONTAINER/config" <<EOF
+lxc.include = /usr/share/lxc/config/debian.common.conf
+lxc.arch = linux64
+lxc.uts.name = $CONTAINER
+lxc.rootfs.path = dir:$LXC_PATH/$CONTAINER/rootfs
+lxc.net.0.type = veth
+lxc.net.0.link = $LXC_BRIDGE
+lxc.net.0.flags = up
+lxc.net.0.name = eth0
+lxc.net.0.ipv4.address = $LXC_IP/24
+lxc.net.0.ipv4.gateway = $LXC_GW
+lxc.start.auto = 1
+lxc.start.delay = 5
+lxc.cgroup2.memory.max = 1024M
+EOF
+}
+
+cmd_install() {
+    [ "$(id -u)" -eq 0 ] || { err "root required"; return 1; }
+    mkdir -p "$LXC_PATH/$CONTAINER" "$LOOKUPS_DIR"
+    if [ ! -x "$LXC_PATH/$CONTAINER/rootfs/bin/bash" ]; then
+        echo "[maigret] debootstrapping bookworm rootfs…"
+        debootstrap --variant=minbase \
+            --include=systemd,systemd-sysv,dbus,ca-certificates,iproute2,python3,python3-venv,python3-pip \
+            bookworm "$LXC_PATH/$CONTAINER/rootfs" http://deb.debian.org/debian || { err "debootstrap failed"; return 1; }
+    fi
+    echo "$CONTAINER" > "$LXC_PATH/$CONTAINER/rootfs/etc/hostname"
+    printf 'nameserver %s\nnameserver 1.1.1.1\n' "$LXC_GW" > "$LXC_PATH/$CONTAINER/rootfs/etc/resolv.conf"
+    _write_lxc_config
+    lxc_running || lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null
+    sleep 2
+    echo "[maigret] installing maigret (pip)…"
+    # Prefer a system-wide pip install; fall back to a dedicated venv and expose
+    # a /usr/local/bin/maigret wrapper so `command -v maigret` resolves either way.
+    lxc_attach 'export DEBIAN_FRONTEND=noninteractive
+        if pip3 install --break-system-packages maigret >/dev/null 2>&1; then
+            exit 0
+        fi
+        python3 -m venv /opt/maigret >/dev/null 2>&1 \
+            && /opt/maigret/bin/pip install --upgrade pip >/dev/null 2>&1 \
+            && /opt/maigret/bin/pip install maigret >/dev/null 2>&1 || exit 1
+        printf "#!/bin/sh\nexec /opt/maigret/bin/maigret \"\$@\"\n" > /usr/local/bin/maigret
+        chmod 0755 /usr/local/bin/maigret'
+    lxc_attach 'command -v maigret >/dev/null' \
+        && echo "[maigret] install complete" || { err "maigret missing after install"; return 1; }
+}
+
+# jq is available on the HOST (SecuBox base). Build the record on the host from
+# captured container stdout; never let the username reach a shell unquoted.
+_lookup_write() { # $1=id $2=json-object-of-record
+    local f="$LOOKUPS_DIR/$1.json"; mkdir -p "$LOOKUPS_DIR"; printf '%s\n' "$2" > "$f"; chmod 640 "$f"
+}
+
+cmd_lookup() {
+    local username="${1:-}" id="${2:-}"
+    _valid_username "$username" || { err "bad username"; return 2; }
+    _valid_id "$id"             || { err "bad id"; return 2; }
+    lxc_running || { local now; now="$(date -u +%FT%TZ)"; _lookup_write "$id" "$(jq -nc --arg i "$id" --arg u "$username" --arg n "$now" '{id:$i,username:$u,status:"failed",started_at:$n,finished_at:$n,results:null,error:"container not running"}')"; return 1; }
+    local started; started="$(date -u +%FT%TZ)"
+    # Run maigret in the container with the username as positional $1. maigret
+    # writes a report_<username>_simple.json under the temp folderoutput; we cat
+    # it back to the host, then clean up. maigret's own noise goes to /dev/null.
+    local raw
+    raw="$(lxc_attach 'd=$(mktemp -d 2>/dev/null || echo /tmp/maigret.$$)
+        mkdir -p "$d"
+        maigret "$1" --json simple --folderoutput "$d" --no-progressbar --timeout 20 --retries 1 >/dev/null 2>&1
+        f=$(ls "$d"/report_*_simple.json 2>/dev/null | head -1)
+        [ -n "$f" ] && cat "$f"
+        rm -rf "$d"' "$username" 2>/dev/null)"
+    local status="completed"; [ -z "$raw" ] && status="failed"
+    _lookup_write "$id" "$(jq -nc --arg i "$id" --arg u "$username" --arg s "$status" \
+        --arg st "$started" --arg fi "$(date -u +%FT%TZ)" --arg raw "$raw" \
+        '{id:$i,username:$u,status:$s,started_at:$st,finished_at:$fi,results:{raw:$raw},error:(if $s=="failed" then "no report produced" else null end)}')"
+    [ "$status" = completed ]
+}
+
+usage() { echo "usage: maigretctl {install|start|stop|status [--json]|lookup <username> <id>|selftest}" >&2; }
+
+case "${1:-}" in
+    __guard) # hidden: validate a value, exit 0/1 (for tests)
+        case "${2:-}" in
+            username) _valid_username "${3:-}";;
+            id)       _valid_id "${3:-}";;
+            *) exit 2;;
+        esac ;;
+    status)   shift; cmd_status ;;
+    start)    cmd_start ;;
+    stop)     cmd_stop ;;
+    selftest) cmd_selftest ;;
+    install)  cmd_install ;;
+    lookup)   shift; cmd_lookup "$@" ;;
+    *) usage; exit 2 ;;
+esac

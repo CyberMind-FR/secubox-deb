@@ -1,0 +1,15 @@
+secubox-spiderfoot (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * SpiderFoot OSINT automation engine (LXC-sandboxed)
+  * 200+ passive OSINT modules with a correlation graph — interim
+    Maltego-style correlation hub
+  * Dedicated debootstrap/LXC sandbox (spiderfoot container, 10.100.0.43)
+  * SpiderFoot's own UI/REST bound to the container IP, reachable only
+    through the WAF/auth-fronted nginx reverse-proxy location
+  * JWT-gated lifecycle REST API (install/start/stop/restart-ui) with a
+    detached install worker and a HOST-side UI status probe
+  * Append-only audit logging of every lifecycle action
+  * WebUI Panel Guidelines (hybrid-dark cyan) management panel
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 11 Jul 2026 10:00:00 +0200

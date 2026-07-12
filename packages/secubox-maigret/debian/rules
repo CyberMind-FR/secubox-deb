@@ -1,0 +1,29 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# The aggregator serves this module in-process (imports api/main.py as user
+# secubox). No dedicated systemd unit is shipped — binding maigret.sock is the
+# aggregator's job, so there is nothing for dh_installsystemd to enable.
+override_dh_auto_install:
+	install -d debian/secubox-maigret/usr/lib/secubox/maigret
+	cp -r api debian/secubox-maigret/usr/lib/secubox/maigret/
+	install -d debian/secubox-maigret/usr/share/secubox/www/maigret
+	cp -r www/maigret/. debian/secubox-maigret/usr/share/secubox/www/maigret/
+	install -d debian/secubox-maigret/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-maigret/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-maigret/etc/nginx/secubox.d
+	[ -d nginx ] && cp -r nginx/. debian/secubox-maigret/etc/nginx/secubox.d/ || true
+
+	install -d debian/secubox-maigret/usr/sbin
+	install -m 755 sbin/maigretctl debian/secubox-maigret/usr/sbin/maigretctl
+
+	# Sudoers drop-in: lets the aggregator (user secubox) drive maigretctl
+	# as root without a password — the ONLY privileged surface for the module.
+	install -d debian/secubox-maigret/etc/sudoers.d
+	install -m 440 debian/secubox-maigret.sudoers debian/secubox-maigret/etc/sudoers.d/secubox-maigret
+
+	# Operator config example. Shipped to /etc/secubox/ so operators can
+	# `cp maigret.toml.example maigret.toml` without hunting for keys.
+	install -d debian/secubox-maigret/etc/secubox
+	install -m 644 conf/maigret.toml.example debian/secubox-maigret/etc/secubox/maigret.toml.example
