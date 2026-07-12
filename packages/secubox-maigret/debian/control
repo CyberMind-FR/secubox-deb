@@ -7,7 +7,8 @@ Standards-Version: 4.6.2
 
 Package: secubox-maigret
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), debootstrap, lxc, jq
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), debootstrap, lxc, jq,
+         python3-fpdf2
 Description: Maigret identity/username OSINT collector (LXC-sandboxed)
  Wraps the Maigret CLI OSINT tool inside a dedicated debootstrap/LXC
  sandbox. Given a username, Maigret searches 3000+ sites for matching
