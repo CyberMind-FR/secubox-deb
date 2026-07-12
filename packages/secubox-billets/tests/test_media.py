@@ -118,6 +118,7 @@ async def test_invalid_upload_is_skipped_not_fatal(client):
                      data={"body": "texte seul survit", "action": "publish", "csrf": csrf},
                      files={"media_files": ("bad.png", b"junk-not-image", "image/png")})
     assert r.status_code == 303                       # publish still succeeds
+    assert "media_skipped=1" in r.headers["location"]  # operator is told
     bid = (await repo.list_all(conn))[0]["id"]
     assert await repo.list_media(conn, bid) == []      # bad file dropped
 

@@ -243,6 +243,15 @@ async def test_override_generates_password_with_operator_secret(admin):
         assert (await cur.fetchone())[0] == 1
 
 
+async def test_override_rejects_non_ascii_secret_without_500(admin):
+    c, conn, _ = admin
+    await c.get("/admin/override")
+    csrf = c.cookies.get("billets_csrf")
+    r = await c.post("/admin/override",
+                     data={"operator_secret": "café-señor-λ", "csrf": csrf})
+    assert r.status_code == 303 and "error=bad" in r.headers["location"]  # not a 500
+
+
 async def test_override_rejects_wrong_secret(admin):
     c, conn, _ = admin
     await c.get("/admin/override")
