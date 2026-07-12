@@ -129,6 +129,15 @@ async def update_password(conn: aiosqlite.Connection, author_id: str, password_h
     await conn.commit()
 
 
+async def first_author(conn: aiosqlite.Connection) -> Optional[aiosqlite.Row]:
+    """The primary (earliest) author — billets is single-author; used by the
+    operator password-override path where there is no session."""
+    async with conn.execute(
+        "SELECT id, username, password_hash, totp_secret, created_at FROM author "
+        "ORDER BY created_at, id LIMIT 1") as cur:
+        return await cur.fetchone()
+
+
 # ── admin billet mutations ─────────────────────────────────────────────────
 async def list_all(conn: aiosqlite.Connection, *, status: Optional[str] = None,
                    limit: int = 100) -> list[aiosqlite.Row]:
