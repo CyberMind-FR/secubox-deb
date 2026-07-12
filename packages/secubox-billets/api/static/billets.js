@@ -58,3 +58,72 @@
     }
   });
 })();
+
+// Lightbox: click a gallery vignette to view the full image, zoomable, with
+// keyboard/arrow navigation within the same billet's gallery. With JS disabled
+// the .gallery-item links open the full image directly (graceful degradation).
+(function () {
+  "use strict";
+  var overlay = null, imgEl = null, items = [], idx = 0;
+
+  function build() {
+    overlay = document.createElement("div");
+    overlay.className = "lightbox";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.innerHTML =
+      '<button class="lb-close" aria-label="Fermer">✕</button>' +
+      '<button class="lb-nav lb-prev" aria-label="Précédente">‹</button>' +
+      '<img class="lb-img" alt="">' +
+      '<button class="lb-nav lb-next" aria-label="Suivante">›</button>';
+    document.body.appendChild(overlay);
+    imgEl = overlay.querySelector(".lb-img");
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay || e.target.classList.contains("lb-close")) close();
+      else if (e.target.classList.contains("lb-prev")) step(-1);
+      else if (e.target.classList.contains("lb-next")) step(1);
+      else if (e.target === imgEl) imgEl.classList.toggle("zoomed");
+    });
+  }
+
+  function show() {
+    var it = items[idx];
+    if (!it) return;
+    imgEl.classList.remove("zoomed");
+    imgEl.src = it.getAttribute("data-full");
+    imgEl.alt = it.getAttribute("data-alt") || "";
+    var multi = items.length > 1;
+    overlay.querySelector(".lb-prev").style.display = multi ? "" : "none";
+    overlay.querySelector(".lb-next").style.display = multi ? "" : "none";
+  }
+  function step(d) { idx = (idx + d + items.length) % items.length; show(); }
+  function open(gallery, start) {
+    if (!overlay) build();
+    items = Array.prototype.slice.call(gallery.querySelectorAll(".gallery-item"));
+    idx = start; show();
+    overlay.classList.add("open");
+    document.body.classList.add("lb-lock");
+  }
+  function close() {
+    if (!overlay) return;
+    overlay.classList.remove("open");
+    document.body.classList.remove("lb-lock");
+    imgEl.src = "";
+  }
+
+  document.addEventListener("click", function (e) {
+    var link = e.target.closest && e.target.closest(".gallery-item");
+    if (!link) return;
+    var gallery = link.closest("[data-lightbox]");
+    if (!gallery) return;
+    e.preventDefault();
+    var all = Array.prototype.slice.call(gallery.querySelectorAll(".gallery-item"));
+    open(gallery, all.indexOf(link));
+  });
+  document.addEventListener("keydown", function (e) {
+    if (!overlay || !overlay.classList.contains("open")) return;
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") step(-1);
+    else if (e.key === "ArrowRight") step(1);
+  });
+})();

@@ -6,16 +6,18 @@ commits a Gitea revision (content + style) off the event loop."""
 from __future__ import annotations
 
 import asyncio
+import base64
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from .. import repo
+from ..ids import new_ulid
 from ..models import BilletIn
-from ..services import eventlog, linkcard, revisions
+from ..services import eventlog, linkcard, media, revisions
 from ..services import security as sec
 from ..services import ssrf as ssrf_mod
 
@@ -171,10 +173,36 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             return None, None
         return (None, url) if url_kind == "embed" else (url, None)
 
+    async def _save_uploads(request: Request, billet_id: str,
+                            files: list[UploadFile]) -> int:
+        """Process + store each valid uploaded image as a media attachment.
+        Invalid/oversized files are skipped (non-fatal); returns the count of
+        files that were rejected so the caller can flash a warning."""
+        conn = request.app.state.conn
+        skipped = 0
+        for up in files or []:
+            if up is None or not (up.filename or "").strip():
+                continue
+            raw = await up.read()
+            if not raw:
+                continue
+            try:
+                processed = await asyncio.to_thread(media.process, raw)
+            except media.MediaError:
+                skipped += 1
+                continue
+            mid = new_ulid()
+            fn, thumb = await asyncio.to_thread(media.store, mid, processed)
+            await repo.add_media(conn, billet_id, filename=fn, thumb=thumb,
+                                 mime=processed["mime"], width=processed["width"],
+                                 height=processed["height"], alt="",
+                                 now=_now(request), ulid=mid)
+        return skipped
+
     @app.post("/admin/billets")
     async def create(request: Request, body: str = Form(...), url: str = Form(""),
                      url_kind: str = Form("ref"), action: str = Form("draft"),
-                     csrf: str = Form("")):
+                     csrf: str = Form(""), media_files: list[UploadFile] = File(default=[])):
         author = await _current_author(request)
         if author is None:
             return _redirect("/admin/login")
@@ -190,6 +218,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
                  "csrf": request.cookies.get(CSRF_COOKIE) or ""})
             return resp
         billet_id = await repo.create_billet(request.app.state.conn, data, now=_now(request))
+        await _save_uploads(request, billet_id, media_files)
         await _resolve_and_store_embed(request, billet_id, data.embed_url)
         row = await repo.get_by_id(request.app.state.conn, billet_id)
         event = "billet.published" if data.publish else "billet.edited"
@@ -204,16 +233,19 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         row = await repo.get_by_id(request.app.state.conn, billet_id)
         if row is None:
             return _redirect("/admin")
+        media_rows = await repo.list_media(request.app.state.conn, billet_id)
         token = _csrf_token(request)
         resp = templates.TemplateResponse(request, "admin_edit.html",
-                                          {"billet": dict(row), "error": None, "csrf": token})
+                                          {"billet": dict(row), "error": None, "csrf": token,
+                                           "media": [dict(m) for m in media_rows]})
         _set_csrf(resp, request, token)
         return resp
 
     @app.post("/admin/billets/{billet_id}")
     async def update(request: Request, billet_id: str, body: str = Form(...),
                      url: str = Form(""), url_kind: str = Form("ref"),
-                     action: str = Form("save"), csrf: str = Form("")):
+                     action: str = Form("save"), csrf: str = Form(""),
+                     media_files: list[UploadFile] = File(default=[])):
         author = await _current_author(request)
         if author is None:
             return _redirect("/admin/login")
@@ -233,6 +265,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             return resp
         await repo.update_billet(conn, billet_id, body=body, ref_url=ref_url,
                                  embed_url=embed_url, now=_now(request))
+        await _save_uploads(request, billet_id, media_files)
         if action in ("publish", "archive"):
             await repo.set_status(conn, billet_id,
                                   "published" if action == "publish" else "archived",
@@ -265,11 +298,53 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         conn = request.app.state.conn
         row = await repo.get_by_id(conn, billet_id)
         if row is not None:
+            for m in await repo.list_media(conn, billet_id):
+                await asyncio.to_thread(media.delete_files, m["filename"], m["thumb"])
             await eventlog.append_event(conn, "billet.deleted",
                                         {"id": billet_id, "slug": row["slug"],
                                          "by": author["username"]}, ts=_now(request))
-            await repo.delete_billet(conn, billet_id)
+            await repo.delete_billet(conn, billet_id)   # media rows cascade
         return _redirect("/admin")
+
+    @app.post("/admin/media/{media_id}/delete")
+    async def delete_media_route(request: Request, media_id: str, csrf: str = Form("")):
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        if not sec.csrf_ok(request.cookies.get(CSRF_COOKIE), csrf):
+            return _redirect("/admin/login?error=csrf")
+        conn = request.app.state.conn
+        row = await repo.get_media(conn, media_id)
+        if row is None:
+            return _redirect("/admin")
+        billet_id = row["billet_id"]
+        await asyncio.to_thread(media.delete_files, row["filename"], row["thumb"])
+        await repo.delete_media(conn, media_id)
+        return _redirect(f"/admin/billets/{billet_id}/edit")
+
+    @app.get("/admin/export.sbxsite")
+    async def export_site(request: Request):
+        """Portable single-file backup: every billet + its media inlined as
+        base64. Re-importable elsewhere; the media travels with the file."""
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        conn = request.app.state.conn
+        billets = [dict(r) for r in await repo.list_all(conn)]
+        media_out = []
+        for m in await repo.all_media(conn):
+            md = dict(m)
+            try:
+                raw = await asyncio.to_thread(media.read_bytes, m["filename"])
+                md["b64"] = base64.b64encode(raw).decode("ascii")
+            except OSError:
+                md["b64"] = None
+            media_out.append(md)
+        payload = {"format": "sbxsite/billets", "version": 1,
+                   "exported_at": _now(request), "billets": billets, "media": media_out}
+        resp = JSONResponse(payload)
+        resp.headers["Content-Disposition"] = 'attachment; filename="billets.sbxsite"'
+        return resp
 
     @app.get("/admin/comments", response_class=HTMLResponse)
     async def comments_queue(request: Request):

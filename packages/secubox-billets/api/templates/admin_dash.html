@@ -11,6 +11,7 @@
     <div><h1>📮 Billets</h1><div class="sub">🔐 admin · {{ author.username }}</div></div>
     <div class="btn-group">
       <a class="btn" href="/" target="_blank">🌐 Voir le blog</a>
+      <a class="btn" href="/admin/export.sbxsite">💾 Backup .sbxsite</a>
       <form method="post" action="/admin/logout"><input type="hidden" name="csrf" value="{{ csrf }}">
         <button type="submit" class="btn danger">⏻ Déconnexion</button></form>
     </div>
