@@ -1,34 +1,46 @@
 <!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>billets — {{ 'éditer' if billet else 'nouveau' }}</title>
-<link rel="stylesheet" href="/static/billets.css">
+<title>SecuBox — Billets · {{ 'éditer' if billet else 'nouveau' }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/billets-admin.css?v=1">
 </head><body>
-<header class="site-header"><a class="site-title" href="/admin">billets</a><span class="tagline">éditeur</span></header>
-<main>
-{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-<form method="post" action="{{ '/admin/billets/' ~ billet.id if billet else '/admin/billets' }}" class="admin-form">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <label>Billet (markdown restreint)
-    <textarea name="body" rows="8" required>{{ billet.body if billet else '' }}</textarea></label>
-  <label>URL (référence ou embed)
-    <input name="url" type="url" placeholder="https://…"
-           value="{{ (billet.embed_url or billet.ref_url) if billet else '' }}"></label>
-  <fieldset class="url-kind">
-    <label><input type="radio" name="url_kind" value="ref"
-      {{ 'checked' if not billet or not billet.embed_url else '' }}> référence</label>
-    <label><input type="radio" name="url_kind" value="embed"
-      {{ 'checked' if billet and billet.embed_url else '' }}> embed</label>
-  </fieldset>
-  <div class="editor-actions">
-    {% if billet %}
-      <button type="submit" name="action" value="save">Enregistrer</button>
-      <button type="submit" name="action" value="publish">Publier</button>
-      <button type="submit" name="action" value="archive">Archiver</button>
-    {% else %}
-      <button type="submit" name="action" value="draft">Brouillon</button>
-      <button type="submit" name="action" value="publish">Publier</button>
-    {% endif %}
+<div class="wrap">
+  <header class="header">
+    <div><h1>{{ '✏️ Éditer' if billet else '✍️ Nouveau billet' }}</h1>
+      <div class="sub">📮 billets · éditeur</div></div>
+    <div class="btn-group"><a class="btn" href="/admin">← Tableau de bord</a></div>
+  </header>
+  {% if error %}<p class="flash err">❌ {{ error }}</p>{% endif %}
+  <div class="card">
+    <form method="post" action="{{ '/admin/billets/' ~ billet.id if billet else '/admin/billets' }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="form-group"><label>📝 Billet (markdown restreint)</label>
+        <textarea name="body" rows="8" required>{{ billet.body if billet else '' }}</textarea></div>
+      <div class="form-group"><label>🔗 URL (référence ou embed)</label>
+        <input name="url" type="url" placeholder="https://…"
+               value="{{ (billet.embed_url or billet.ref_url) if billet else '' }}"></div>
+      <div class="form-group"><label>Type de lien</label>
+        <div class="form-actions">
+          <label class="muted"><input type="radio" name="url_kind" value="ref"
+            {{ 'checked' if not billet or not billet.embed_url else '' }}> 🌐 référence</label>
+          <label class="muted"><input type="radio" name="url_kind" value="embed"
+            {{ 'checked' if billet and billet.embed_url else '' }}> 🎬 embed média</label>
+        </div></div>
+      <div class="form-actions">
+        {% if billet %}
+          <button type="submit" name="action" value="save" class="btn">💾 Enregistrer</button>
+          <button type="submit" name="action" value="publish" class="btn primary">🚀 Publier</button>
+          <button type="submit" name="action" value="archive" class="btn">🗄️ Archiver</button>
+          {% if billet.embed_url %}
+          <button type="submit" name="action" value="save" class="btn" formaction="/admin/billets/{{ billet.id }}/refetch">🔄 Re-fetch embed</button>{% endif %}
+        {% else %}
+          <button type="submit" name="action" value="draft" class="btn">📄 Brouillon</button>
+          <button type="submit" name="action" value="publish" class="btn primary">🚀 Publier</button>
+        {% endif %}
+      </div>
+    </form>
   </div>
-</form>
-</main></body></html>
+</div>
+</body></html>

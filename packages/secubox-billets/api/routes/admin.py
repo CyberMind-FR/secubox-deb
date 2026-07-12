@@ -295,3 +295,27 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
                 conn, "comment.approved" if decision == "approve" else "comment.rejected",
                 {"id": comment_id, "by": author["username"]}, ts=_now(request))
         return _redirect("/admin/comments")
+
+    @app.post("/admin/password")
+    async def change_password(request: Request, current: str = Form(...),
+                              new_password: str = Form(...), confirm: str = Form(""),
+                              csrf: str = Form("")):
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        if not sec.csrf_ok(request.cookies.get(CSRF_COOKIE), csrf):
+            return _redirect("/admin/login?error=csrf")
+        if len(new_password) < 10 or new_password != confirm:
+            return _redirect("/admin?pw=invalid")
+        ok = await asyncio.to_thread(sec.verify_password, author["password_hash"], current)
+        if not ok:
+            return _redirect("/admin?pw=bad")
+        new_hash = await asyncio.to_thread(sec.hash_password, new_password)
+        await repo.update_password(request.app.state.conn, author["id"], new_hash)
+        await eventlog.append_event(request.app.state.conn, "author.password_changed",
+                                    {"id": author["id"]}, ts=_now(request))
+        # Force re-login with the new password (this device); other sessions
+        # expire at the 12h cap.
+        resp = _redirect("/admin/login?pw=changed")
+        resp.delete_cookie(SESSION_COOKIE, path="/")
+        return resp
