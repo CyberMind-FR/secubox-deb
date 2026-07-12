@@ -11,6 +11,7 @@
     <div><h1>📮 Billets</h1><div class="sub">🔐 admin · {{ author.username }}</div></div>
     <div class="btn-group">
       <a class="btn" href="/" target="_blank">🌐 Voir le blog</a>
+      <a class="btn" href="/admin/export.sbxsite">💾 Backup .sbxsite</a>
       <form method="post" action="/admin/logout"><input type="hidden" name="csrf" value="{{ csrf }}">
         <button type="submit" class="btn danger">⏻ Déconnexion</button></form>
     </div>
@@ -19,6 +20,8 @@
   {% set pw = request.query_params.get('pw') %}
   {% if pw == 'bad' %}<p class="flash err">❌ Mot de passe actuel incorrect.</p>
   {% elif pw == 'invalid' %}<p class="flash err">❌ Nouveau mot de passe trop court (min 10) ou non confirmé.</p>{% endif %}
+  {% set skipped = request.query_params.get('media_skipped') %}
+  {% if skipped and skipped != '0' %}<p class="flash err">⚠️ {{ skipped }} image(s) ignorée(s) — format non supporté (png/jpeg/webp/gif) ou &gt; 5 Mo.</p>{% endif %}
 
   <div class="grid">
     <div class="stat-card green"><div class="value">{{ billets|selectattr('status','equalto','published')|list|length }}</div><div class="label">📝 Publiés</div></div>

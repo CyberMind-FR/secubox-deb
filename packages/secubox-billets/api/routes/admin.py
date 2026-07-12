@@ -6,16 +6,21 @@ commits a Gitea revision (content + style) off the event loop."""
 from __future__ import annotations
 
 import asyncio
+import base64
+import hmac
+import json
+import secrets as _secrets
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from .. import repo
+from ..ids import new_ulid
 from ..models import BilletIn
-from ..services import eventlog, linkcard, revisions
+from ..services import eventlog, linkcard, media, revisions
 from ..services import security as sec
 from ..services import ssrf as ssrf_mod
 
@@ -141,6 +146,52 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         resp.delete_cookie(SESSION_COOKIE, path="/")
         return resp
 
+    # Operator password OVERRIDE — the forgotten-password path. No session; gated
+    # by the module operator secret (/etc/secubox/secrets/billets, root-only).
+    # Generates a fresh strong password and shows it once. Linked from the
+    # SecuBox /billets/ operator panel.
+    override_limiter = sec.RateLimiter(max_events=5, window_s=3600)
+
+    @app.get("/admin/override", response_class=HTMLResponse)
+    async def override_form(request: Request, error: str | None = None):
+        token = _csrf_token(request)
+        resp = templates.TemplateResponse(request, "admin_override.html",
+            {"error": error, "csrf": token, "new_password": None, "username": None})
+        _set_csrf(resp, request, token)
+        return resp
+
+    @app.post("/admin/override")
+    async def override_password(request: Request, operator_secret: str = Form(...),
+                                csrf: str = Form("")):
+        conn = request.app.state.conn
+        if not sec.csrf_ok(request.cookies.get(CSRF_COOKIE), csrf):
+            return _redirect("/admin/override?error=csrf")
+        ip_hash = sec.hash_ip(_client_ip(request), request.app.state.secret)
+        if not override_limiter.check_and_add(ip_hash):
+            return _redirect("/admin/override?error=ratelimit")
+        secret = request.app.state.secret or ""
+        # Compare on bytes: hmac.compare_digest raises TypeError on non-ASCII str.
+        supplied = (operator_secret or "").strip().encode("utf-8")
+        if not secret or not hmac.compare_digest(supplied, secret.encode("utf-8")):
+            await eventlog.append_event(conn, "author.override_failed", {}, ts=_now(request))
+            return _redirect("/admin/override?error=bad")
+        author = await repo.first_author(conn)
+        if author is None:
+            return _redirect("/admin/override?error=bad")
+        new_pw = _secrets.token_urlsafe(15)
+        new_hash = await asyncio.to_thread(sec.hash_password, new_pw)
+        await repo.update_password(conn, author["id"], new_hash)
+        await eventlog.append_event(conn, "author.password_overridden",
+                                    {"id": author["id"]}, ts=_now(request))
+        # Render the password directly (not a redirect) so it never lands in a
+        # URL / browser history.
+        token = _csrf_token(request)
+        resp = templates.TemplateResponse(request, "admin_override.html",
+            {"error": None, "csrf": token, "new_password": new_pw,
+             "username": author["username"]})
+        _set_csrf(resp, request, token)
+        return resp
+
     @app.get("/admin", response_class=HTMLResponse)
     async def dashboard(request: Request, status: str | None = None):
         author = await _current_author(request)
@@ -171,10 +222,36 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             return None, None
         return (None, url) if url_kind == "embed" else (url, None)
 
+    async def _save_uploads(request: Request, billet_id: str,
+                            files: list[UploadFile]) -> int:
+        """Process + store each valid uploaded image as a media attachment.
+        Invalid/oversized files are skipped (non-fatal); returns the count of
+        files that were rejected so the caller can flash a warning."""
+        conn = request.app.state.conn
+        skipped = 0
+        for up in files or []:
+            if up is None or not (up.filename or "").strip():
+                continue
+            raw = await up.read()
+            if not raw:
+                continue
+            try:
+                processed = await asyncio.to_thread(media.process, raw)
+            except media.MediaError:
+                skipped += 1
+                continue
+            mid = new_ulid()
+            fn, thumb = await asyncio.to_thread(media.store, mid, processed)
+            await repo.add_media(conn, billet_id, filename=fn, thumb=thumb,
+                                 mime=processed["mime"], width=processed["width"],
+                                 height=processed["height"], alt="",
+                                 now=_now(request), ulid=mid)
+        return skipped
+
     @app.post("/admin/billets")
     async def create(request: Request, body: str = Form(...), url: str = Form(""),
                      url_kind: str = Form("ref"), action: str = Form("draft"),
-                     csrf: str = Form("")):
+                     csrf: str = Form(""), media_files: list[UploadFile] = File(default=[])):
         author = await _current_author(request)
         if author is None:
             return _redirect("/admin/login")
@@ -190,11 +267,12 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
                  "csrf": request.cookies.get(CSRF_COOKIE) or ""})
             return resp
         billet_id = await repo.create_billet(request.app.state.conn, data, now=_now(request))
+        skipped = await _save_uploads(request, billet_id, media_files)
         await _resolve_and_store_embed(request, billet_id, data.embed_url)
         row = await repo.get_by_id(request.app.state.conn, billet_id)
         event = "billet.published" if data.publish else "billet.edited"
         await _log_and_revision(request, event, row, actor=author["username"])
-        return _redirect("/admin")
+        return _redirect(f"/admin?media_skipped={skipped}" if skipped else "/admin")
 
     @app.get("/admin/billets/{billet_id}/edit", response_class=HTMLResponse)
     async def edit_form(request: Request, billet_id: str):
@@ -204,16 +282,19 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         row = await repo.get_by_id(request.app.state.conn, billet_id)
         if row is None:
             return _redirect("/admin")
+        media_rows = await repo.list_media(request.app.state.conn, billet_id)
         token = _csrf_token(request)
         resp = templates.TemplateResponse(request, "admin_edit.html",
-                                          {"billet": dict(row), "error": None, "csrf": token})
+                                          {"billet": dict(row), "error": None, "csrf": token,
+                                           "media": [dict(m) for m in media_rows]})
         _set_csrf(resp, request, token)
         return resp
 
     @app.post("/admin/billets/{billet_id}")
     async def update(request: Request, billet_id: str, body: str = Form(...),
                      url: str = Form(""), url_kind: str = Form("ref"),
-                     action: str = Form("save"), csrf: str = Form("")):
+                     action: str = Form("save"), csrf: str = Form(""),
+                     media_files: list[UploadFile] = File(default=[])):
         author = await _current_author(request)
         if author is None:
             return _redirect("/admin/login")
@@ -233,6 +314,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             return resp
         await repo.update_billet(conn, billet_id, body=body, ref_url=ref_url,
                                  embed_url=embed_url, now=_now(request))
+        skipped = await _save_uploads(request, billet_id, media_files)
         if action in ("publish", "archive"):
             await repo.set_status(conn, billet_id,
                                   "published" if action == "publish" else "archived",
@@ -241,7 +323,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         row = await repo.get_by_id(conn, billet_id)
         event = "billet.published" if action == "publish" else "billet.edited"
         await _log_and_revision(request, event, row, actor=author["username"])
-        return _redirect("/admin")
+        return _redirect(f"/admin?media_skipped={skipped}" if skipped else "/admin")
 
     @app.post("/admin/billets/{billet_id}/refetch")
     async def refetch(request: Request, billet_id: str, csrf: str = Form("")):
@@ -265,11 +347,59 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         conn = request.app.state.conn
         row = await repo.get_by_id(conn, billet_id)
         if row is not None:
+            for m in await repo.list_media(conn, billet_id):
+                await asyncio.to_thread(media.delete_files, m["filename"], m["thumb"])
             await eventlog.append_event(conn, "billet.deleted",
                                         {"id": billet_id, "slug": row["slug"],
                                          "by": author["username"]}, ts=_now(request))
-            await repo.delete_billet(conn, billet_id)
+            await repo.delete_billet(conn, billet_id)   # media rows cascade
         return _redirect("/admin")
+
+    @app.post("/admin/media/{media_id}/delete")
+    async def delete_media_route(request: Request, media_id: str, csrf: str = Form("")):
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        if not sec.csrf_ok(request.cookies.get(CSRF_COOKIE), csrf):
+            return _redirect("/admin/login?error=csrf")
+        conn = request.app.state.conn
+        row = await repo.get_media(conn, media_id)
+        if row is None:
+            return _redirect("/admin")
+        billet_id = row["billet_id"]
+        await asyncio.to_thread(media.delete_files, row["filename"], row["thumb"])
+        await repo.delete_media(conn, media_id)
+        return _redirect(f"/admin/billets/{billet_id}/edit")
+
+    @app.get("/admin/export.sbxsite")
+    async def export_site(request: Request):
+        """Portable single-file backup: every billet + its media inlined as
+        base64. Re-importable elsewhere; the media travels with the file."""
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        conn = request.app.state.conn
+        billets = [dict(r) for r in await repo.list_all(conn)]
+        media_rows = [dict(m) for m in await repo.all_media(conn)]
+        now = _now(request)
+
+        def _serialize() -> str:
+            # File reads + base64 + json.dumps are all CPU/IO — keep them OFF the
+            # shared event loop (a photo-heavy export would otherwise stall it).
+            out = []
+            for md in media_rows:
+                try:
+                    md = {**md, "b64": base64.b64encode(
+                        media.read_bytes(md["filename"])).decode("ascii")}
+                except OSError:
+                    md = {**md, "b64": None}
+                out.append(md)
+            return json.dumps({"format": "sbxsite/billets", "version": 1,
+                               "exported_at": now, "billets": billets, "media": out})
+
+        body = await asyncio.to_thread(_serialize)
+        return Response(content=body, media_type="application/json",
+                        headers={"Content-Disposition": 'attachment; filename="billets.sbxsite"'})
 
     @app.get("/admin/comments", response_class=HTMLResponse)
     async def comments_queue(request: Request):
