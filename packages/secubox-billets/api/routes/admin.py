@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hmac
+import secrets as _secrets
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -141,6 +143,50 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
     async def logout(request: Request, csrf: str = Form("")):
         resp = _redirect("/admin/login")
         resp.delete_cookie(SESSION_COOKIE, path="/")
+        return resp
+
+    # Operator password OVERRIDE — the forgotten-password path. No session; gated
+    # by the module operator secret (/etc/secubox/secrets/billets, root-only).
+    # Generates a fresh strong password and shows it once. Linked from the
+    # SecuBox /billets/ operator panel.
+    override_limiter = sec.RateLimiter(max_events=5, window_s=3600)
+
+    @app.get("/admin/override", response_class=HTMLResponse)
+    async def override_form(request: Request, error: str | None = None):
+        token = _csrf_token(request)
+        resp = templates.TemplateResponse(request, "admin_override.html",
+            {"error": error, "csrf": token, "new_password": None, "username": None})
+        _set_csrf(resp, request, token)
+        return resp
+
+    @app.post("/admin/override")
+    async def override_password(request: Request, operator_secret: str = Form(...),
+                                csrf: str = Form("")):
+        conn = request.app.state.conn
+        if not sec.csrf_ok(request.cookies.get(CSRF_COOKIE), csrf):
+            return _redirect("/admin/override?error=csrf")
+        ip_hash = sec.hash_ip(_client_ip(request), request.app.state.secret)
+        if not override_limiter.check_and_add(ip_hash):
+            return _redirect("/admin/override?error=ratelimit")
+        secret = request.app.state.secret or ""
+        if not secret or not hmac.compare_digest((operator_secret or "").strip(), secret):
+            await eventlog.append_event(conn, "author.override_failed", {}, ts=_now(request))
+            return _redirect("/admin/override?error=bad")
+        author = await repo.first_author(conn)
+        if author is None:
+            return _redirect("/admin/override?error=bad")
+        new_pw = _secrets.token_urlsafe(15)
+        new_hash = await asyncio.to_thread(sec.hash_password, new_pw)
+        await repo.update_password(conn, author["id"], new_hash)
+        await eventlog.append_event(conn, "author.password_overridden",
+                                    {"id": author["id"]}, ts=_now(request))
+        # Render the password directly (not a redirect) so it never lands in a
+        # URL / browser history.
+        token = _csrf_token(request)
+        resp = templates.TemplateResponse(request, "admin_override.html",
+            {"error": None, "csrf": token, "new_password": new_pw,
+             "username": author["username"]})
+        _set_csrf(resp, request, token)
         return resp
 
     @app.get("/admin", response_class=HTMLResponse)

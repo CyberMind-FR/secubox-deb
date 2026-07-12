@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SecuBox — Billets · réinitialisation opérateur</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/billets-admin.css?v=1">
+</head><body>
+<div class="login-wrap">
+  <div class="card">
+    <div class="header"><div><h1>🔑 Réinitialisation opérateur</h1>
+      <div class="sub">📮 billets · override mot de passe admin</div></div></div>
+
+    {% if new_password %}
+      <p class="flash good">✅ Nouveau mot de passe généré pour <strong>{{ username }}</strong>.
+        Notez-le maintenant — il ne sera plus affiché.</p>
+      <div class="form-group">
+        <label>🔐 Mot de passe (usage unique)</label>
+        <input type="text" value="{{ new_password }}" readonly onclick="this.select()"
+               style="font-weight:700;color:var(--cyan)">
+      </div>
+      <div class="form-actions">
+        <a class="btn primary" href="/admin/login">🔐 Se connecter</a>
+      </div>
+      <p class="muted">Connectez-vous puis changez-le depuis le tableau de bord (🔑 Changer le mot de passe).</p>
+    {% else %}
+      {% if error == 'bad' %}<p class="flash err">❌ Secret opérateur invalide.</p>{% endif %}
+      {% if error == 'csrf' %}<p class="flash err">❌ Jeton CSRF invalide, réessayez.</p>{% endif %}
+      {% if error == 'ratelimit' %}<p class="flash err">⏳ Trop de tentatives — réessayez plus tard.</p>{% endif %}
+      <p class="muted">Réinitialise le mot de passe admin <em>sans</em> connaître l'actuel.
+        Réservé à l'opérateur : le secret est
+        <code>/etc/secubox/secrets/billets</code> (lisible par root uniquement).
+        Un nouveau mot de passe fort est généré et affiché une seule fois.</p>
+      <form method="post" action="/admin/override">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <div class="form-group">
+          <label>🗝️ Secret opérateur</label>
+          <input name="operator_secret" type="password" required autocomplete="off"
+                 placeholder="contenu de /etc/secubox/secrets/billets">
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn danger">🔁 Générer un nouveau mot de passe</button>
+          <a class="btn" href="/admin/login">← Connexion</a>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</div>
+</body></html>
