@@ -8,11 +8,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import hmac
+import json
 import secrets as _secrets
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
@@ -169,7 +170,9 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         if not override_limiter.check_and_add(ip_hash):
             return _redirect("/admin/override?error=ratelimit")
         secret = request.app.state.secret or ""
-        if not secret or not hmac.compare_digest((operator_secret or "").strip(), secret):
+        # Compare on bytes: hmac.compare_digest raises TypeError on non-ASCII str.
+        supplied = (operator_secret or "").strip().encode("utf-8")
+        if not secret or not hmac.compare_digest(supplied, secret.encode("utf-8")):
             await eventlog.append_event(conn, "author.override_failed", {}, ts=_now(request))
             return _redirect("/admin/override?error=bad")
         author = await repo.first_author(conn)
@@ -264,12 +267,12 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
                  "csrf": request.cookies.get(CSRF_COOKIE) or ""})
             return resp
         billet_id = await repo.create_billet(request.app.state.conn, data, now=_now(request))
-        await _save_uploads(request, billet_id, media_files)
+        skipped = await _save_uploads(request, billet_id, media_files)
         await _resolve_and_store_embed(request, billet_id, data.embed_url)
         row = await repo.get_by_id(request.app.state.conn, billet_id)
         event = "billet.published" if data.publish else "billet.edited"
         await _log_and_revision(request, event, row, actor=author["username"])
-        return _redirect("/admin")
+        return _redirect(f"/admin?media_skipped={skipped}" if skipped else "/admin")
 
     @app.get("/admin/billets/{billet_id}/edit", response_class=HTMLResponse)
     async def edit_form(request: Request, billet_id: str):
@@ -311,7 +314,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             return resp
         await repo.update_billet(conn, billet_id, body=body, ref_url=ref_url,
                                  embed_url=embed_url, now=_now(request))
-        await _save_uploads(request, billet_id, media_files)
+        skipped = await _save_uploads(request, billet_id, media_files)
         if action in ("publish", "archive"):
             await repo.set_status(conn, billet_id,
                                   "published" if action == "publish" else "archived",
@@ -320,7 +323,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         row = await repo.get_by_id(conn, billet_id)
         event = "billet.published" if action == "publish" else "billet.edited"
         await _log_and_revision(request, event, row, actor=author["username"])
-        return _redirect("/admin")
+        return _redirect(f"/admin?media_skipped={skipped}" if skipped else "/admin")
 
     @app.post("/admin/billets/{billet_id}/refetch")
     async def refetch(request: Request, billet_id: str, csrf: str = Form("")):
@@ -377,20 +380,26 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             return _redirect("/admin/login")
         conn = request.app.state.conn
         billets = [dict(r) for r in await repo.list_all(conn)]
-        media_out = []
-        for m in await repo.all_media(conn):
-            md = dict(m)
-            try:
-                raw = await asyncio.to_thread(media.read_bytes, m["filename"])
-                md["b64"] = base64.b64encode(raw).decode("ascii")
-            except OSError:
-                md["b64"] = None
-            media_out.append(md)
-        payload = {"format": "sbxsite/billets", "version": 1,
-                   "exported_at": _now(request), "billets": billets, "media": media_out}
-        resp = JSONResponse(payload)
-        resp.headers["Content-Disposition"] = 'attachment; filename="billets.sbxsite"'
-        return resp
+        media_rows = [dict(m) for m in await repo.all_media(conn)]
+        now = _now(request)
+
+        def _serialize() -> str:
+            # File reads + base64 + json.dumps are all CPU/IO — keep them OFF the
+            # shared event loop (a photo-heavy export would otherwise stall it).
+            out = []
+            for md in media_rows:
+                try:
+                    md = {**md, "b64": base64.b64encode(
+                        media.read_bytes(md["filename"])).decode("ascii")}
+                except OSError:
+                    md = {**md, "b64": None}
+                out.append(md)
+            return json.dumps({"format": "sbxsite/billets", "version": 1,
+                               "exported_at": now, "billets": billets, "media": out})
+
+        body = await asyncio.to_thread(_serialize)
+        return Response(content=body, media_type="application/json",
+                        headers={"Content-Disposition": 'attachment; filename="billets.sbxsite"'})
 
     @app.get("/admin/comments", response_class=HTMLResponse)
     async def comments_queue(request: Request):
