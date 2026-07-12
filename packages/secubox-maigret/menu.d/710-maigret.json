@@ -1,0 +1,9 @@
+{
+  "id": "maigret",
+  "name": "Maigret OSINT",
+  "category": "auth",
+  "icon": "🔎",
+  "path": "/maigret/",
+  "order": 710,
+  "description": "Username/identity OSINT — accounts across 3000+ sites"
+}

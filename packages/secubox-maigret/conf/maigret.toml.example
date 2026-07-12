@@ -1,0 +1,12 @@
+# /etc/secubox/maigret.toml — cp from this example.
+enabled = true
+container_name = "maigret"
+lxc_ip = "10.100.0.42"
+# Maigret lookups are passive (account discovery only). Optional tuning knobs
+# below are read by future maigretctl versions — uncomment to override defaults.
+# lookup_timeout = 20     # per-site request timeout (seconds)
+# lookup_retries = 1      # retries per site
+# rate_limit_per_min = 6  # max lookups accepted per operator per minute
+
+# Max lookups running at once (each maigret run scans 3000+ sites).
+max_concurrent_lookups = 3

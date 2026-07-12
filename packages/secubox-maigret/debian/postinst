@@ -1,0 +1,34 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    if [ -f /etc/sudoers.d/secubox-maigret ]; then
+        visudo -cf /etc/sudoers.d/secubox-maigret >/dev/null || {
+            echo "secubox-maigret: invalid sudoers, removing" >&2
+            rm -f /etc/sudoers.d/secubox-maigret
+        }
+    fi
+
+    # Create data directories. The maigret FastAPI module touches
+    # /var/lib/secubox/maigret/lookups at import time, so the user that
+    # loads it MUST be able to traverse the parent dir. Under the
+    # secubox-aggregator the loader runs as `secubox`, not root — so the
+    # parent dir is 0755 and owned by `secubox:secubox`.
+    mkdir -p /var/lib/secubox/maigret/lookups
+    mkdir -p /var/cache/secubox/maigret
+    if getent passwd secubox >/dev/null; then
+        chown -R secubox:secubox /var/lib/secubox/maigret /var/cache/secubox/maigret
+    fi
+    chmod 0755 /var/lib/secubox/maigret
+    chmod 0750 /var/lib/secubox/maigret/lookups
+
+    # The aggregator serves this module in-process (imports api/main.py as
+    # user secubox) — no dedicated unit to enable.
+    systemctl daemon-reload
+
+    # Reload nginx if available
+    if systemctl is-active --quiet nginx; then
+        systemctl reload nginx || true
+    fi
+fi
+#DEBHELPER#
+exit 0

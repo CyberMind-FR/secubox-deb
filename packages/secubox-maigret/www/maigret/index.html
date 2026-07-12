@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox · Maigret OSINT</title>
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <style>
+        :root {
+            --cyan: #00d4ff; --cyan-dim: #0090b3;
+            --bg-dark: #0a0f14; --bg-card: #111823; --bg-inset: #0c121a;
+            --border: #1e2b3a; --text: #d6e6f0; --text-dim: #6b8394;
+            --green: #33ff66; --yellow: #ffb347; --red: #ff4466; --purple: #8b5cf6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', 'Courier New', monospace; background: var(--bg-dark);
+               color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; max-width: 1100px; }
+        .header { display: flex; justify-content: space-between; align-items: center;
+                  margin-bottom: 0.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--cyan); text-shadow: 0 0 8px rgba(0,212,255,0.4); }
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+               background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem;
+               font-family: inherit; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan-dim); }
+        .btn.primary { background: rgba(0,212,255,0.1); border-color: var(--cyan); color: var(--cyan); }
+        .btn.primary:hover { background: rgba(0,212,255,0.2); }
+        .btn.danger { background: rgba(255,68,102,0.1); border-color: var(--red); color: var(--red); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+                padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .subhead { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.75rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                      gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+                     padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--cyan); }
+        .stat-card .label { font-size: 0.72rem; color: var(--text-dim); margin-top: 0.25rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 0.65rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; }
+        tr:hover { background: rgba(0,212,255,0.04); }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.72rem; }
+        .badge.completed { background: rgba(51,255,102,0.15); color: var(--green); }
+        .badge.pending { background: rgba(255,179,71,0.15); color: var(--yellow); }
+        .badge.running { background: rgba(0,212,255,0.15); color: var(--cyan); }
+        .badge.failed { background: rgba(255,68,102,0.15); color: var(--red); }
+        .lookup-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .lookup-form input { flex: 1; min-width: 220px; padding: 0.75rem; border-radius: 6px;
+               border: 1px solid var(--border); background: var(--bg-inset); color: var(--text);
+               font-size: 1rem; font-family: inherit; }
+        .lookup-form input:focus { outline: none; border-color: var(--cyan); }
+        .pill { display: inline-flex; align-items: center; gap: .4rem; padding: 4px 12px;
+                border-radius: 12px; font-size: .8rem; border: 1px solid var(--border); }
+        .pill.ok { background: rgba(51,255,102,0.15); color: var(--green); border-color: var(--green); }
+        .pill.warn { background: rgba(255,179,71,0.15); color: var(--yellow); border-color: var(--yellow); }
+        .pill.error { background: rgba(255,68,102,0.15); color: var(--red); border-color: var(--red); }
+        .pill.muted { background: rgba(107,131,148,0.12); color: var(--text-dim); border-color: var(--border); }
+        .toast { position: fixed; bottom: 1.2rem; right: 1.2rem; padding: .7rem 1.1rem; border-radius: 10px;
+                 background: var(--bg-card); border: 1px solid var(--border); color: var(--text); opacity: 0;
+                 transform: translateY(8px); transition: all .2s; z-index: 50; max-width: min(90vw,360px); }
+        .toast.show { opacity: 1; transform: none; }
+        .toast.success { border-color: var(--green); } .toast.error { border-color: var(--red); }
+        .err { color: var(--red); font-size: .8rem; } .muted { color: var(--text-dim); font-size: .8rem; }
+        pre.log-out { background: var(--bg-inset); border: 1px solid var(--border); border-radius: 6px;
+                 padding: .75rem; max-height: 460px; overflow: auto; white-space: pre-wrap;
+                 word-break: break-all; font-size: .78rem; margin: 0; color: var(--text); }
+        .loader { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border);
+                  border-top-color: var(--cyan); border-radius: 50%; animation: spin 1s linear infinite;
+                  vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+                    z-index: 1000; align-items: center; justify-content: center; }
+        .modal { background: var(--bg-card); border: 1px solid var(--cyan); border-radius: 8px;
+                 padding: 1.5rem; width: 90%; max-width: 760px; max-height: 82vh; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <h1>🔎 Maigret OSINT</h1>
+            <div class="header-actions">
+                <span class="pill muted" id="status-pill">Loading…</span>
+                <button class="btn primary" id="btn-install" style="display:none">Install sandbox</button>
+                <button class="btn" id="btn-refresh">Refresh</button>
+            </div>
+        </header>
+        <div class="muted" style="margin:0 0 1.25rem">
+            Sandbox IP: <span id="mg-ip">—</span> · account discovery across 3000+ sites (passive)
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><div class="value" id="statTotal">-</div><div class="label">Total Lookups</div></div>
+            <div class="stat-card"><div class="value" id="statTool">-</div><div class="label">Maigret</div></div>
+            <div class="stat-card"><div class="value" id="statSandbox">-</div><div class="label">Sandbox</div></div>
+        </div>
+
+        <div class="card">
+            <h2>New Lookup</h2>
+            <p class="subhead">Enter a username / handle. Maigret searches thousands of sites for matching
+               accounts. Lookups are passive — no active probing of the target.</p>
+            <div class="lookup-form">
+                <input type="text" id="usernameInput" placeholder="e.g. johndoe" autocomplete="off"
+                       maxlength="64" spellcheck="false">
+                <button class="btn primary" id="btn-lookup">🔎 Lookup</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Lookups</h2>
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>Username</th><th>Status</th><th>Started</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="lookupTable"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+            </table>
+        </div>
+    </main>
+
+    <div class="modal-bg" id="resultModal">
+        <div class="modal">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <h3 id="resultTitle" style="color:var(--cyan);">Lookup Result</h3>
+                <button class="btn" id="btn-close-result">Close</button>
+            </div>
+            <div id="resultContent"><div class="loader"></div> Loading…</div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/v1/maigret';
+        const token = () => localStorage.getItem('sbx_token');
+        const headers = () => ({ 'Content-Type': 'application/json',
+            ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function toast(msg, kind) {
+            let t = document.getElementById('toast');
+            if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+            t.textContent = msg;
+            t.className = 'toast ' + (kind || 'info') + ' show';
+            clearTimeout(window.__toastT);
+            window.__toastT = setTimeout(() => t.classList.remove('show'), 3500);
+        }
+        function confirmTyped(word) {
+            return prompt('Type "' + word + '" to confirm this action:') === word;
+        }
+
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, { ...opts, headers: headers() });
+                if (res.status === 401) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
+                const ct = res.headers.get('content-type') || '';
+                const body = ct.includes('json') ? await res.json().catch(() => ({})) : await res.text();
+                if (!res.ok) throw new Error((body && body.detail) || ('HTTP ' + res.status));
+                return body;
+            } catch (e) {
+                return { __error: e.message || 'request failed' };
+            }
+        }
+
+        function statusBadge(s) { return `<span class="badge ${esc(s || 'pending')}">${esc(s || 'pending')}</span>`; }
+        function fmtDate(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            return isNaN(d.getTime()) ? esc(iso) : d.toLocaleString();
+        }
+
+        // --- status / install ------------------------------------------------
+        let installing = false, installPollTimer = null;
+
+        async function loadStatus() {
+            const s = await api('/status');
+            const pill = document.getElementById('status-pill');
+            const installBtn = document.getElementById('btn-install');
+            if (!s || s.__error) {
+                pill.textContent = 'error'; pill.className = 'pill error';
+                document.getElementById('statTool').textContent = '-';
+                document.getElementById('statSandbox').textContent = '-';
+                document.getElementById('mg-ip').textContent = '—';
+                installBtn.style.display = 'none';
+                return;
+            }
+            document.getElementById('statTotal').textContent = s.total_lookups != null ? s.total_lookups : 0;
+            document.getElementById('mg-ip').textContent = esc(s.ip || '—');
+            const tools = s.tools || {};
+            document.getElementById('statTool').textContent = tools.maigret ? 'ready' : 'missing';
+
+            if (!s.installed) {
+                document.getElementById('statSandbox').textContent = installing ? 'installing' : 'not installed';
+                pill.textContent = installing ? 'installing…' : 'not installed';
+                pill.className = 'pill ' + (installing ? 'warn' : 'muted');
+                installBtn.style.display = installing ? 'none' : '';
+            } else if (s.running) {
+                document.getElementById('statSandbox').textContent = 'running';
+                pill.textContent = 'running'; pill.className = 'pill ok';
+                installBtn.style.display = 'none';
+                if (installing) { installing = false; stopInstallPoll(); toast('Maigret sandbox installed', 'success'); }
+            } else {
+                document.getElementById('statSandbox').textContent = 'stopped';
+                pill.textContent = 'installed (stopped)'; pill.className = 'pill warn';
+                installBtn.style.display = 'none';
+            }
+        }
+
+        async function doInstall() {
+            const r = await api('/install', { method: 'POST' });
+            if (!r || r.__error) { toast((r && r.__error) || 'install failed', 'error'); return; }
+            installing = true;
+            toast('Installing Maigret sandbox — this can take several minutes', 'success');
+            loadStatus(); startInstallPoll();
+        }
+        function startInstallPoll() { if (!installPollTimer) installPollTimer = setInterval(loadStatus, 8000); }
+        function stopInstallPoll() { if (installPollTimer) { clearInterval(installPollTimer); installPollTimer = null; } }
+
+        // --- lookups ---------------------------------------------------------
+        let listPollTimer = null;
+
+        async function startLookup() {
+            const el = document.getElementById('usernameInput');
+            const username = el.value.trim();
+            if (!username) { toast('Enter a username', 'error'); return; }
+            if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(username)) {
+                toast('Invalid username (letters/digits first, then . _ - allowed)', 'error'); return;
+            }
+            const r = await api('/lookup', { method: 'POST', body: JSON.stringify({ username }) });
+            if (!r || r.__error) { toast((r && r.__error) || 'lookup failed', 'error'); return; }
+            toast('Lookup started: ' + r.lookup_id, 'success');
+            el.value = '';
+            loadLookups();
+        }
+
+        function renderRow(l) {
+            return `<tr>
+                <td><code>${esc(l.id)}</code></td>
+                <td><code>${esc(l.username)}</code></td>
+                <td>${statusBadge(l.status)}</td>
+                <td>${fmtDate(l.started_at)}</td>
+                <td>
+                    <button class="btn lk-act" style="padding:0.25rem 0.5rem;font-size:0.72rem" data-id="${esc(l.id)}" data-op="view">View</button>
+                    <button class="btn danger lk-act" style="padding:0.25rem 0.5rem;font-size:0.72rem" data-id="${esc(l.id)}" data-op="delete">Delete</button>
+                </td>
+            </tr>`;
+        }
+
+        async function loadLookups() {
+            const d = await api('/lookups');
+            const el = document.getElementById('lookupTable');
+            if (!d || d.__error) {
+                el.innerHTML = `<tr><td colspan="5" class="err">${esc((d && d.__error) || 'error')}</td></tr>`;
+                stopListPoll(); return;
+            }
+            const items = d.lookups || [];
+            el.innerHTML = items.length
+                ? items.map(renderRow).join('')
+                : '<tr><td colspan="5" class="muted">No lookups yet</td></tr>';
+            document.querySelectorAll('.lk-act').forEach(b => b.addEventListener('click', () => {
+                const id = b.dataset.id, op = b.dataset.op;
+                if (op === 'view') viewLookup(id); else if (op === 'delete') deleteLookup(id);
+            }));
+            const active = items.some(l => l.status === 'pending' || l.status === 'running');
+            if (active) startListPoll(); else stopListPoll();
+        }
+        function startListPoll() { if (!listPollTimer) listPollTimer = setInterval(loadLookups, 5000); }
+        function stopListPoll() { if (listPollTimer) { clearInterval(listPollTimer); listPollTimer = null; } }
+
+        async function viewLookup(id) {
+            document.getElementById('resultTitle').textContent = 'Lookup ' + id;
+            document.getElementById('resultContent').innerHTML = '<div class="loader"></div> Loading…';
+            document.getElementById('resultModal').style.display = 'flex';
+            const d = await api('/lookup/' + encodeURIComponent(id));
+            const content = document.getElementById('resultContent');
+            if (!d || d.__error) { content.innerHTML = `<p class="err">${esc((d && d.__error) || 'failed to load')}</p>`; return; }
+            const raw = (d.results && d.results.raw) || '';
+            let pretty = raw;
+            try { pretty = JSON.stringify(JSON.parse(raw), null, 2); } catch (e) { /* leave raw */ }
+            content.innerHTML = `
+                <div style="margin-bottom:1rem;padding:1rem;background:var(--bg-inset);border-radius:6px;">
+                    <div><strong>ID:</strong> <code>${esc(d.id)}</code></div>
+                    <div><strong>Username:</strong> <code>${esc(d.username)}</code></div>
+                    <div><strong>Status:</strong> ${statusBadge(d.status)}</div>
+                    <div><strong>Started:</strong> ${fmtDate(d.started_at)}</div>
+                    <div><strong>Finished:</strong> ${fmtDate(d.finished_at)}</div>
+                    ${d.error ? `<div class="err"><strong>Error:</strong> ${esc(d.error)}</div>` : ''}
+                </div>
+                <h4 style="color:var(--cyan);margin-bottom:0.5rem;">Report</h4>
+                <pre class="log-out">${pretty ? esc(pretty) : '<span class="muted">(no output yet)</span>'}</pre>`;
+        }
+
+        async function deleteLookup(id) {
+            if (!confirmTyped(id)) return;
+            const r = await api('/lookup/' + encodeURIComponent(id), { method: 'DELETE' });
+            toast(r && !r.__error ? 'Lookup deleted' : ((r && r.__error) || 'delete failed'), r && !r.__error ? 'success' : 'error');
+            loadLookups();
+        }
+
+        // --- wiring ----------------------------------------------------------
+        document.getElementById('btn-refresh').addEventListener('click', refresh);
+        document.getElementById('btn-install').addEventListener('click', doInstall);
+        document.getElementById('btn-lookup').addEventListener('click', startLookup);
+        document.getElementById('usernameInput').addEventListener('keydown', e => { if (e.key === 'Enter') startLookup(); });
+        document.getElementById('btn-close-result').addEventListener('click', () => {
+            document.getElementById('resultModal').style.display = 'none';
+        });
+
+        function refresh() { loadStatus(); loadLookups(); }
+        refresh();
+    </script>
+</body>
+</html>
