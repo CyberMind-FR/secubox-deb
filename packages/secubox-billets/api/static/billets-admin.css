@@ -1,0 +1,100 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 */
+/* billets admin — SecuBox WebUI Panel Guidelines (cyan hybrid-dark terminal).
+   Self-contained (the billets vhost has no /shared/); palette copied verbatim
+   from .claude/WEBUI-PANEL-GUIDELINES.md §2. */
+:root{
+  --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
+  --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
+  --cyan:#00d4ff; --red:#ff4466; --orange:#ff9944; --yellow:#ffcc00;
+  --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
+}
+*{box-sizing:border-box}
+body{font-family:'Courier Prime',monospace;background:var(--bg-dark);color:var(--text);
+  margin:0;min-height:100vh;
+  background-image:linear-gradient(135deg,rgba(10,15,25,.96),rgba(15,25,40,.92))}
+.wrap{max-width:60rem;margin:0 auto;padding:1.4rem 1.2rem 4rem}
+a{color:var(--cyan);text-decoration:none}
+
+/* header */
+.header{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;
+  padding:.8rem 0 1rem;border-bottom:1px solid var(--border);margin-bottom:1.2rem}
+.header h1{margin:0;font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);font-weight:700}
+.header .sub{color:var(--p31-dim);font-size:.72rem;letter-spacing:.06em}
+.header .btn-group{margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap}
+.nav{display:flex;gap:.5rem;flex-wrap:wrap;margin:.2rem 0 1.2rem}
+
+/* buttons */
+.btn{font-family:'Courier Prime',monospace;text-transform:uppercase;font-size:.72rem;
+  letter-spacing:.05em;padding:.45rem .85rem;border-radius:6px;border:1px solid var(--border);
+  background:var(--bg-card);color:var(--text);cursor:pointer;transition:all .18s;text-decoration:none;
+  display:inline-flex;align-items:center;gap:.35rem}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.3)}
+.btn.primary{background:rgba(0,212,255,.15);border-color:var(--cyan);color:var(--cyan)}
+.btn.danger{background:rgba(255,68,102,.15);border-color:var(--red);color:var(--red)}
+.btn.danger:hover{box-shadow:0 0 8px rgba(255,68,102,.35)}
+.btn.good{background:rgba(0,221,68,.13);border-color:var(--green);color:var(--green)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* cards */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+  padding:1.1rem 1.2rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
+.card h3{margin:0 0 .7rem;color:var(--cyan);font-size:.95rem;letter-spacing:.03em}
+
+/* stat grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem;margin-bottom:1.2rem}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+  padding:.7rem;text-align:center;backdrop-filter:blur(5px)}
+.stat-card .value{font-size:1.7rem;font-weight:700;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 10px currentColor}
+.stat-card .label{font-size:.6rem;color:var(--p31-dim);letter-spacing:.1em;text-transform:uppercase;margin-top:.2rem}
+.stat-card.cyan .value{color:var(--cyan)} .stat-card.green .value{color:var(--green)}
+.stat-card.orange .value{color:var(--orange)} .stat-card.purple .value{color:var(--purple)}
+.stat-card.blue .value{color:var(--blue)}
+
+/* forms */
+.form-group{display:flex;flex-direction:column;gap:.3rem;margin-bottom:.8rem}
+label{font-size:.68rem;color:var(--p31-dim);letter-spacing:.06em;text-transform:uppercase}
+input,textarea,select{font-family:'Courier Prime',monospace;background:var(--bg-row);
+  border:1px solid var(--border);border-radius:6px;color:var(--text);padding:.55rem .65rem;font-size:.85rem}
+input:focus,textarea:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 6px rgba(0,212,255,.25)}
+.form-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem}
+
+/* lists (billets / comments) */
+.item{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.6rem;
+  padding:.5rem .7rem;background:var(--bg-row);border-radius:5px;margin-bottom:.45rem;
+  border-left:3px solid var(--border);transition:all .15s}
+.item:hover{background:rgba(0,212,255,.08);transform:translateX(2px)}
+.item.published{border-left-color:var(--green)}
+.item.draft{border-left-color:var(--p31-dim)}
+.item.archived{border-left-color:var(--orange)}
+.item .title{color:var(--cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .meta{color:var(--p31-dim);font-size:.7rem}
+.item .row-actions{display:flex;gap:.35rem;align-items:center}
+.pill{font-size:.6rem;padding:.12rem .5rem;border-radius:999px;border:1px solid var(--border);
+  text-transform:uppercase;letter-spacing:.06em}
+.pill.published{color:var(--green);border-color:var(--green)}
+.pill.draft{color:var(--p31-dim)} .pill.archived{color:var(--orange);border-color:var(--orange)}
+
+/* comment blocks */
+.comment{background:var(--bg-row);border:1px solid var(--border);border-radius:6px;
+  border-left:3px solid var(--yellow);padding:.6rem .8rem;margin-bottom:.6rem}
+.comment .c-meta{font-size:.72rem;color:var(--p31-dim);margin:0 0 .3rem}
+.comment .c-body{margin:0;font-size:.85rem}
+.mod-actions{display:flex;gap:.5rem;margin-top:.4rem}
+
+/* flashes */
+.flash{padding:.55rem .9rem;border-radius:6px;margin-bottom:1rem;font-size:.8rem;
+  border:1px solid var(--border);background:var(--bg-card)}
+.flash.ok{border-color:var(--green);color:var(--green)}
+.flash.err{border-color:var(--red);color:var(--red)}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.muted{color:var(--p31-dim)}
+
+/* login */
+.login-wrap{max-width:24rem;margin:6vh auto 0}
+.login-wrap .brand{text-align:center;margin-bottom:1.4rem}
+.login-wrap .brand .logo{font-size:2.4rem}
+.login-wrap .brand h1{color:var(--cyan);text-shadow:0 0 12px var(--cyan);font-size:1.5rem;margin:.3rem 0 0}
+.login-wrap .brand .sub{color:var(--p31-dim);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase}
+
+@media(max-width:600px){.wrap{padding:1rem .7rem}.item{grid-template-columns:auto 1fr}.item .row-actions{grid-column:1/-1;justify-content:flex-end}}
