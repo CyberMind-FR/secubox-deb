@@ -1,0 +1,31 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# The aggregator serves this module in-process (imports api/main.py as user
+# secubox). No dedicated systemd unit is shipped on the host — binding
+# spiderfoot.sock is the aggregator's job, and SpiderFoot itself runs under an
+# in-CONTAINER systemd unit created at install time — so there is nothing for
+# dh_installsystemd to enable on the host.
+override_dh_auto_install:
+	install -d debian/secubox-spiderfoot/usr/lib/secubox/spiderfoot
+	cp -r api debian/secubox-spiderfoot/usr/lib/secubox/spiderfoot/
+	install -d debian/secubox-spiderfoot/usr/share/secubox/www/spiderfoot
+	cp -r www/spiderfoot/. debian/secubox-spiderfoot/usr/share/secubox/www/spiderfoot/
+	install -d debian/secubox-spiderfoot/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-spiderfoot/usr/share/secubox/menu.d/ || true
+	install -d debian/secubox-spiderfoot/etc/nginx/secubox.d
+	[ -d nginx ] && cp -r nginx/. debian/secubox-spiderfoot/etc/nginx/secubox.d/ || true
+
+	install -d debian/secubox-spiderfoot/usr/sbin
+	install -m 755 sbin/spiderfootctl debian/secubox-spiderfoot/usr/sbin/spiderfootctl
+
+	# Sudoers drop-in: lets the aggregator (user secubox) drive spiderfootctl
+	# as root without a password — the ONLY privileged surface for the module.
+	install -d debian/secubox-spiderfoot/etc/sudoers.d
+	install -m 440 debian/secubox-spiderfoot.sudoers debian/secubox-spiderfoot/etc/sudoers.d/secubox-spiderfoot
+
+	# Operator config example. Shipped to /etc/secubox/ so operators can
+	# `cp spiderfoot.toml.example spiderfoot.toml` without hunting for keys.
+	install -d debian/secubox-spiderfoot/etc/secubox
+	install -m 644 conf/spiderfoot.toml.example debian/secubox-spiderfoot/etc/secubox/spiderfoot.toml.example

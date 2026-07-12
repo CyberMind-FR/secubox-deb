@@ -1,0 +1,11 @@
+secubox-maigret (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release
+  * Maigret identity/username OSINT collector (LXC-sandboxed)
+  * Username account discovery across 3000+ sites via the Maigret CLI
+  * Dedicated debootstrap/LXC sandbox (maigret container, 10.100.0.42)
+  * JWT-gated REST API with detached worker model
+  * Append-only audit logging of every lookup
+  * WebUI Panel Guidelines (hybrid-dark cyan) management panel
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 11 Jul 2026 10:00:00 +0200
