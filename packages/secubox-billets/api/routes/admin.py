@@ -33,6 +33,11 @@ def _now(request: Request) -> str:
 
 
 def _client_ip(request: Request) -> str:
+    # Honour X-Forwarded-For (set by the nginx→sbxwaf→HAProxy chain) so the
+    # login rate-limit keys on the real client, not the shared proxy IP.
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
     return request.client.host if request.client else "0.0.0.0"
 
 
