@@ -8,15 +8,28 @@
 <meta property="og:title" content="{{ og.title }}">
 <meta property="og:description" content="{{ og.desc }}">
 <meta property="og:url" content="{{ og.url }}">
-<meta name="twitter:card" content="summary">
+{% if og.image %}<meta property="og:image" content="{{ og.image }}">{% endif %}
+<meta name="twitter:card" content="{{ 'summary_large_image' if og.image else 'summary' }}">
 <meta name="twitter:title" content="{{ og.title }}">
 <meta name="twitter:description" content="{{ og.desc }}">
+{% if og.image %}<meta name="twitter:image" content="{{ og.image }}">{% endif %}
 {% endif %}
 {% if oembed_url %}<link rel="alternate" type="application/json+oembed" href="{{ oembed_url }}">{% endif %}
 {% endblock %}
 {% block content %}
 <article class="h-entry billet billet-full">
   <div class="e-content">{{ billet.body_html|safe }}</div>
+  {% if billet.media %}
+  <div class="gallery" data-lightbox>
+    {% for m in billet.media %}
+    <a class="gallery-item" href="/media/{{ m.filename }}" data-full="/media/{{ m.filename }}"
+       data-alt="{{ m.alt }}" aria-label="Agrandir l'image">
+      <img src="/media/{{ m.thumb }}" alt="{{ m.alt }}" loading="lazy"
+           width="{{ m.width }}" height="{{ m.height }}">
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
   {% if billet.ref_host %}<a class="ref-chip u-url" href="{{ billet.ref_url }}" target="_blank" rel="noopener nofollow ugc">{{ billet.ref_host }}</a>{% endif %}
   {% if billet.embed_html %}<div class="embed">{{ billet.embed_html|safe }}</div>{% endif %}
   <footer class="billet-meta">
