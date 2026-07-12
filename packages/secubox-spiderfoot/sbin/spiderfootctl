@@ -80,13 +80,22 @@ cmd_install() {
     # Idempotent: only clone + build the venv if the checkout is absent.
     if [ ! -d "$LXC_PATH/$CONTAINER/rootfs/opt/spiderfoot/.git" ]; then
         echo "[spiderfoot] cloning SpiderFoot + building venv (this can take a while)…"
+        # SpiderFoot's requirements pull C-extension deps (lxml, cryptography,
+        # netaddr, …) with no stock arm64 wheels — a minbase container can't
+        # build them. piwheels supplies prebuilt aarch64 wheels; dev headers are
+        # the fallback. Egress via the host masquerade requires ip_forward=1
+        # (99-secubox-zz-lxc-forward.conf). Log is visible (not /dev/null).
+        lxc_attach 'export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq >/dev/null 2>&1
+            apt-get install -y --no-install-recommends \
+                build-essential python3-dev libxml2-dev libxslt1-dev libjpeg-dev zlib1g-dev libssl-dev libffi-dev \
+                >/dev/null 2>&1 || echo "[spiderfoot] warn: build-deps apt failed (piwheels may still cover it)"'
         lxc_attach 'set -e
-            export DEBIAN_FRONTEND=noninteractive
             rm -rf /opt/spiderfoot
             git clone --depth 1 https://github.com/smicallef/spiderfoot /opt/spiderfoot
             python3 -m venv /opt/spiderfoot/venv
-            /opt/spiderfoot/venv/bin/pip install --upgrade pip >/dev/null 2>&1 || true
-            /opt/spiderfoot/venv/bin/pip install -r /opt/spiderfoot/requirements.txt' \
+            /opt/spiderfoot/venv/bin/pip install --upgrade pip || true
+            /opt/spiderfoot/venv/bin/pip install --extra-index-url https://www.piwheels.org/simple -r /opt/spiderfoot/requirements.txt' \
             || { err "spiderfoot install failed"; return 1; }
     fi
 
