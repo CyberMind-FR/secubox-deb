@@ -14,13 +14,18 @@
   </header>
   {% if error %}<p class="flash err">❌ {{ error }}</p>{% endif %}
   <div class="card">
-    <form method="post" action="{{ '/admin/billets/' ~ billet.id if billet else '/admin/billets' }}">
+    <form method="post" enctype="multipart/form-data"
+          action="{{ '/admin/billets/' ~ billet.id if billet else '/admin/billets' }}">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <div class="form-group"><label>📝 Billet (markdown restreint)</label>
         <textarea name="body" rows="8" required>{{ billet.body if billet else '' }}</textarea></div>
       <div class="form-group"><label>🔗 URL (référence ou embed)</label>
         <input name="url" type="url" placeholder="https://…"
                value="{{ (billet.embed_url or billet.ref_url) if billet else '' }}"></div>
+      <div class="form-group"><label>🖼️ Images (png · jpeg · webp · gif · ≤ 5 Mo)</label>
+        <input name="media_files" type="file" multiple
+               accept="image/png,image/jpeg,image/webp,image/gif">
+        <small class="muted">Vignettes cliquables + zoom sur le blog. EXIF supprimé automatiquement.</small></div>
       <div class="form-group"><label>Type de lien</label>
         <div class="form-actions">
           <label class="muted"><input type="radio" name="url_kind" value="ref"
@@ -42,5 +47,24 @@
       </div>
     </form>
   </div>
+
+  {% if billet and media %}
+  <div class="card">
+    <h3 style="color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;font-size:.8rem;margin-bottom:.7rem">🖼️ Images ({{ media|length }})</h3>
+    <div class="media-grid">
+      {% for m in media %}
+      <figure class="media-cell">
+        <img src="/media/{{ m.thumb }}" alt="{{ m.alt }}" loading="lazy"
+             width="120" height="120">
+        <form method="post" action="/admin/media/{{ m.id }}/delete"
+              onsubmit="return confirm('Supprimer cette image ?')">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" class="btn danger sm">🗑️</button>
+        </form>
+      </figure>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 </body></html>

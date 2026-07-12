@@ -21,7 +21,7 @@ from . import repo
 from .routes.admin import register_admin
 from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
                             register_public, _visitor)
-from .services import antispam, feeds
+from .services import antispam, feeds, media
 from .services import security as sec
 from .services.render import linkify_plain, render_markdown
 
@@ -106,7 +106,7 @@ _SECURITY_HEADERS = {
 }
 
 
-def _billet_view(row: aiosqlite.Row, base: str = "") -> dict:
+def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None) -> dict:
     from urllib.parse import urlparse
     d = dict(row)
     d["body_html"] = render_markdown(d["body"])
@@ -115,6 +115,7 @@ def _billet_view(row: aiosqlite.Row, base: str = "") -> dict:
     d["title"] = title
     d["permalink"] = f"{base}/b/{d['slug']}" if base else f"/b/{d['slug']}"
     d["share"] = _share_intents(d["permalink"], title) if base else {}
+    d["media"] = [dict(m) for m in (media_rows or [])]
     return d
 
 
@@ -137,6 +138,14 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    # User-uploaded media (re-encoded, EXIF-stripped in services.media). In prod
+    # nginx serves /media/ directly; this mount is the in-process fallback.
+    try:
+        media_root = media.media_dir()
+        media_root.mkdir(parents=True, exist_ok=True)
+        app.mount("/media", StaticFiles(directory=str(media_root)), name="media")
+    except OSError:
+        pass
     register_admin(app, templates)
     register_public(app, templates)
 
@@ -155,9 +164,11 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
     async def feed(request: Request, cursor: str | None = None):
         rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE, cursor=cursor)
         base = _base(request)
+        media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
         resp = templates.TemplateResponse(request, "feed.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billets": [_billet_view(r, base) for r in rows], "next_cursor": next_cursor,
+            "billets": [_billet_view(r, base, media_map.get(r["id"])) for r in rows],
+            "next_cursor": next_cursor,
         })
         # Embeds render inline in the feed too; allow any self-hosted embed hosts
         # of the shown billets in frame-src (static providers already covered).
@@ -179,13 +190,15 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         comment_views = [{**dict(c), "body_html": linkify_plain(c["body"])} for c in comments]
         base = _base(request)
         permalink_url = f"{base}/b/{row['slug']}"
+        media_rows = await repo.list_media(app.state.conn, row["id"])
         resp = templates.TemplateResponse(request, "billet.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billet": _billet_view(row, base), "reactions": rctx,
+            "billet": _billet_view(row, base, media_rows), "reactions": rctx,
             "comments": comment_views, "pcsrf": pcsrf,
             "ts_token": ts_token, "flash": request.query_params.get("c"),
             "og": {"title": feeds.billet_title(row["body"]),
-                   "desc": feeds.excerpt(row["body"]), "url": permalink_url},
+                   "desc": feeds.excerpt(row["body"]), "url": permalink_url,
+                   "image": (f"{base}/media/{media_rows[0]['filename']}" if media_rows else None)},
             "oembed_url": f"{base}/oembed?url={permalink_url}&format=json",
             "share": _share_intents(permalink_url, feeds.billet_title(row["body"])),
         })

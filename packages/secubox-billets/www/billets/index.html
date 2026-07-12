@@ -34,6 +34,8 @@
   .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
     padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
   .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.7rem}
+  .admin-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.5rem}
+  .admin-links .btn{text-align:center}
   .reacts{display:flex;flex-wrap:wrap;gap:.5rem}
   .chip{background:var(--bg-row);border:1px solid var(--border);border-radius:999px;
     padding:.3rem .7rem;font-size:.95rem}
@@ -65,10 +67,7 @@
     </div>
     <div class="btn-group">
       <button class="btn" onclick="refresh()">↻ Refresh</button>
-      <a class="btn primary" id="a-new" target="_blank" rel="noopener">✍️ Nouveau</a>
-      <a class="btn" id="a-open" target="_blank" rel="noopener">🚀 Blog</a>
-      <a class="btn" id="a-admin" target="_blank" rel="noopener">🔐 Admin</a>
-      <a class="btn" id="a-feed" target="_blank" rel="noopener">📡 Flux</a>
+      <a class="btn primary" id="a-open" target="_blank" rel="noopener">🚀 Voir le blog</a>
     </div>
   </header>
 
@@ -77,6 +76,20 @@
     <div class="stat-card yellow"><div class="value" data-k="billets_drafts">–</div><div class="label">📄 Brouillons</div></div>
     <div class="stat-card blue"><div class="value" data-k="comments_approved">–</div><div class="label">💬 Commentaires</div></div>
     <div class="stat-card purple"><div class="value" data-k="reactions_total">–</div><div class="label">✨ Réactions</div></div>
+  </div>
+
+  <div class="card">
+    <h3>🔐 Administration</h3>
+    <div class="admin-links">
+      <a class="btn primary" id="a-admin" target="_blank" rel="noopener">🔐 Connexion / Tableau de bord</a>
+      <a class="btn" id="a-new" target="_blank" rel="noopener">✍️ Nouveau billet</a>
+      <a class="btn" id="a-comments" target="_blank" rel="noopener">💬 Modération commentaires</a>
+      <a class="btn" id="a-pw" target="_blank" rel="noopener">🔑 Changer le mot de passe</a>
+      <a class="btn" id="a-backup">💾 Backup .sbxsite</a>
+      <a class="btn" id="a-feed" target="_blank" rel="noopener">📡 Flux Atom</a>
+      <a class="btn danger" id="a-override" target="_blank" rel="noopener">🔑 Reset mot de passe (opérateur)</a>
+    </div>
+    <p class="muted" style="margin-top:.6rem">🔑 Mot de passe oublié ? « Reset opérateur » génère un nouveau mot de passe (secret <code>/etc/secubox/secrets/billets</code>, root only).</p>
   </div>
 
   <div class="card">
@@ -99,10 +112,12 @@
   function esc(s){return String(s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});}
   function toast(msg,err){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(err?' error':'');setTimeout(function(){t.className='toast';},2600);}
   function links(site){
-    document.getElementById('a-open').href = site + "/";
-    document.getElementById('a-new').href = site + "/admin/billets/new";
-    document.getElementById('a-admin').href = site + "/admin";
-    document.getElementById('a-feed').href = site + "/feed.xml";
+    var m = {
+      'a-open': "/", 'a-admin': "/admin", 'a-new': "/admin/billets/new",
+      'a-comments': "/admin/comments", 'a-pw': "/admin", 'a-backup': "/admin/export.sbxsite",
+      'a-override': "/admin/override", 'a-feed': "/feed.xml"
+    };
+    for (var id in m){ var el = document.getElementById(id); if (el) el.href = site + m[id]; }
   }
   links(FALLBACK);
   function refresh(){

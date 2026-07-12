@@ -4,6 +4,17 @@
   {% for b in billets %}
   <article class="h-entry billet">
     <div class="e-content">{{ b.body_html|safe }}</div>
+    {% if b.media %}
+    <div class="gallery" data-lightbox>
+      {% for m in b.media %}
+      <a class="gallery-item" href="/media/{{ m.filename }}" data-full="/media/{{ m.filename }}"
+         data-alt="{{ m.alt }}" aria-label="Agrandir l'image">
+        <img src="/media/{{ m.thumb }}" alt="{{ m.alt }}" loading="lazy"
+             width="{{ m.width }}" height="{{ m.height }}">
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% if b.ref_host %}<a class="ref-chip u-url" href="{{ b.ref_url }}" target="_blank" rel="noopener nofollow ugc">{{ b.ref_host }}</a>{% endif %}
     {% if b.embed_html %}<div class="embed">{{ b.embed_html|safe }}</div>{% endif %}
     {% with share=b.share, permalink=b.permalink, title=b.title %}{% include "_share_quick.html" %}{% endwith %}

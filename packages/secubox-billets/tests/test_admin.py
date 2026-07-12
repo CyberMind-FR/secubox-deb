@@ -223,3 +223,43 @@ async def test_change_password_mismatch_rejected(admin):
     r = await c.post("/admin/password", data={"current": PW, "new_password": "NewSecret-2026x",
                                               "confirm": "different", "csrf": csrf})
     assert "pw=invalid" in r.headers["location"]
+
+
+async def test_override_generates_password_with_operator_secret(admin):
+    c, conn, _ = admin
+    await c.get("/admin/override")
+    csrf = c.cookies.get("billets_csrf")
+    r = await c.post("/admin/override",
+                     data={"operator_secret": "test-secret-xyz", "csrf": csrf})
+    assert r.status_code == 200 and "Nouveau mot de passe généré" in r.text
+    # the shown password must actually work as the new login
+    import re
+    m = re.search(r'value="([A-Za-z0-9_\-]{16,})" readonly', r.text)
+    assert m, "generated password not rendered"
+    new_pw = m.group(1)
+    r2 = await _login(c, password=new_pw)
+    assert r2.headers["location"] == "/admin"
+    async with conn.execute("SELECT COUNT(*) FROM event_log WHERE event_type='author.password_overridden'") as cur:
+        assert (await cur.fetchone())[0] == 1
+
+
+async def test_override_rejects_non_ascii_secret_without_500(admin):
+    c, conn, _ = admin
+    await c.get("/admin/override")
+    csrf = c.cookies.get("billets_csrf")
+    r = await c.post("/admin/override",
+                     data={"operator_secret": "café-señor-λ", "csrf": csrf})
+    assert r.status_code == 303 and "error=bad" in r.headers["location"]  # not a 500
+
+
+async def test_override_rejects_wrong_secret(admin):
+    c, conn, _ = admin
+    await c.get("/admin/override")
+    csrf = c.cookies.get("billets_csrf")
+    r = await c.post("/admin/override",
+                     data={"operator_secret": "not-the-secret", "csrf": csrf})
+    assert r.status_code == 303 and "error=bad" in r.headers["location"]
+    # original password still valid — no reset happened
+    assert (await _login(c)).headers["location"] == "/admin"
+    async with conn.execute("SELECT COUNT(*) FROM event_log WHERE event_type='author.override_failed'") as cur:
+        assert (await cur.fetchone())[0] == 1

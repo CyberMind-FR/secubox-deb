@@ -129,6 +129,15 @@ async def update_password(conn: aiosqlite.Connection, author_id: str, password_h
     await conn.commit()
 
 
+async def first_author(conn: aiosqlite.Connection) -> Optional[aiosqlite.Row]:
+    """The primary (earliest) author — billets is single-author; used by the
+    operator password-override path where there is no session."""
+    async with conn.execute(
+        "SELECT id, username, password_hash, totp_secret, created_at FROM author "
+        "ORDER BY created_at, id LIMIT 1") as cur:
+        return await cur.fetchone()
+
+
 # ── admin billet mutations ─────────────────────────────────────────────────
 async def list_all(conn: aiosqlite.Connection, *, status: Optional[str] = None,
                    limit: int = 100) -> list[aiosqlite.Row]:
@@ -179,6 +188,66 @@ async def set_embed(conn: aiosqlite.Connection, billet_id: str, *, html: str,
         (html or None, provider, fetched_at, billet_id),
     )
     await conn.commit()
+
+
+# ── media ───────────────────────────────────────────────────────────────────
+async def add_media(conn: aiosqlite.Connection, billet_id: str, *, filename: str,
+                    thumb: str, mime: str, width: int, height: int, alt: str,
+                    now: str, position: Optional[int] = None,
+                    ulid: Optional[str] = None) -> str:
+    """Attach a processed image to a billet. `position` defaults to append."""
+    mid = ulid or new_ulid()
+    if position is None:
+        async with conn.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM media WHERE billet_id=?",
+            (billet_id,)) as cur:
+            position = (await cur.fetchone())[0]
+    await conn.execute(
+        "INSERT INTO media(id,billet_id,filename,thumb,mime,width,height,alt,"
+        "position,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (mid, billet_id, filename, thumb, mime, width, height, alt or "", position, now),
+    )
+    await conn.commit()
+    return mid
+
+
+async def list_media(conn: aiosqlite.Connection, billet_id: str) -> list[aiosqlite.Row]:
+    async with conn.execute(
+        "SELECT * FROM media WHERE billet_id=? ORDER BY position, created_at, id",
+        (billet_id,)) as cur:
+        return list(await cur.fetchall())
+
+
+async def list_media_for(conn: aiosqlite.Connection,
+                         billet_ids: list[str]) -> dict[str, list[aiosqlite.Row]]:
+    """Batch-fetch media for many billets (avoids N+1 on the feed)."""
+    out: dict[str, list[aiosqlite.Row]] = {bid: [] for bid in billet_ids}
+    if not billet_ids:
+        return out
+    placeholders = ",".join("?" for _ in billet_ids)
+    async with conn.execute(
+        f"SELECT * FROM media WHERE billet_id IN ({placeholders}) "
+        "ORDER BY position, created_at, id", billet_ids) as cur:
+        for row in await cur.fetchall():
+            out[row["billet_id"]].append(row)
+    return out
+
+
+async def get_media(conn: aiosqlite.Connection, media_id: str) -> Optional[aiosqlite.Row]:
+    async with conn.execute("SELECT * FROM media WHERE id=?", (media_id,)) as cur:
+        return await cur.fetchone()
+
+
+async def delete_media(conn: aiosqlite.Connection, media_id: str) -> None:
+    await conn.execute("DELETE FROM media WHERE id=?", (media_id,))
+    await conn.commit()
+
+
+async def all_media(conn: aiosqlite.Connection) -> list[aiosqlite.Row]:
+    """Every attachment (portable export)."""
+    async with conn.execute(
+        "SELECT * FROM media ORDER BY billet_id, position, created_at, id") as cur:
+        return list(await cur.fetchall())
 
 
 # ── comments ────────────────────────────────────────────────────────────────
