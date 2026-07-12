@@ -14,8 +14,14 @@ override_dh_auto_install:
 	cp -r www/spiderfoot/. debian/secubox-spiderfoot/usr/share/secubox/www/spiderfoot/
 	install -d debian/secubox-spiderfoot/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-spiderfoot/usr/share/secubox/menu.d/ || true
+	# secubox.d/ holds LOCATION snippets (included inside a server block).
 	install -d debian/secubox-spiderfoot/etc/nginx/secubox.d
-	[ -d nginx ] && cp -r nginx/. debian/secubox-spiderfoot/etc/nginx/secubox.d/ || true
+	install -m 644 nginx/spiderfoot.conf debian/secubox-spiderfoot/etc/nginx/secubox.d/spiderfoot.conf
+	# spiderfoot-lan.conf is a full server{} block → sites-available/ (operator
+	# enables it with a symlink into sites-enabled/, see the file header).
+	install -d debian/secubox-spiderfoot/etc/nginx/sites-available
+	install -m 644 nginx/spiderfoot-lan.conf debian/secubox-spiderfoot/etc/nginx/sites-available/spiderfoot-lan.conf
+	install -m 644 nginx/spiderfoot.gk2.conf debian/secubox-spiderfoot/etc/nginx/sites-available/spiderfoot.gk2.conf
 
 	install -d debian/secubox-spiderfoot/usr/sbin
 	install -m 755 sbin/spiderfootctl debian/secubox-spiderfoot/usr/sbin/spiderfootctl
