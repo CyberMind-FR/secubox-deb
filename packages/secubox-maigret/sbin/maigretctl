@@ -79,16 +79,26 @@ cmd_install() {
     _write_lxc_config
     lxc_running || lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null
     sleep 2
-    echo "[maigret] installing maigret (pip)…"
-    # Prefer a system-wide pip install; fall back to a dedicated venv and expose
-    # a /usr/local/bin/maigret wrapper so `command -v maigret` resolves either way.
+    echo "[maigret] installing build deps + maigret (pip via piwheels)…"
+    # maigret pulls C-extension deps (lxml, pandas, …) with no stock arm64
+    # wheels on PyPI, so a minbase container can't `pip install` it without a
+    # toolchain. Two-pronged: (1) piwheels supplies prebuilt aarch64 wheels
+    # (fast, no compile); (2) dev headers as a fallback for anything piwheels
+    # lacks. Log goes to the caller's stdout (the install log), not /dev/null,
+    # so a failure is diagnosable.
+    local PIW="--extra-index-url https://www.piwheels.org/simple"
     lxc_attach 'export DEBIAN_FRONTEND=noninteractive
-        if pip3 install --break-system-packages maigret >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1
+        apt-get install -y --no-install-recommends \
+            build-essential python3-dev libxml2-dev libxslt1-dev libjpeg-dev zlib1g-dev \
+            >/dev/null 2>&1 || echo "[maigret] warn: build-deps apt failed (piwheels may still cover it)"'
+    lxc_attach 'export DEBIAN_FRONTEND=noninteractive
+        if pip3 install --break-system-packages '"$PIW"' maigret; then
             exit 0
         fi
-        python3 -m venv /opt/maigret >/dev/null 2>&1 \
-            && /opt/maigret/bin/pip install --upgrade pip >/dev/null 2>&1 \
-            && /opt/maigret/bin/pip install maigret >/dev/null 2>&1 || exit 1
+        python3 -m venv /opt/maigret \
+            && /opt/maigret/bin/pip install --upgrade pip \
+            && /opt/maigret/bin/pip install '"$PIW"' maigret || exit 1
         printf "#!/bin/sh\nexec /opt/maigret/bin/maigret \"\$@\"\n" > /usr/local/bin/maigret
         chmod 0755 /usr/local/bin/maigret'
     lxc_attach 'command -v maigret >/dev/null' \
