@@ -7,11 +7,60 @@ case "$1" in
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
+
+    # #817 Task 9: module state dir for the SQLite device store
+    # (devices.db). The unit runs with UMask=0000, so if the app were
+    # left to mkdir() this itself at import time it would land 0777 —
+    # pre-create it here with the correct perms so `exist_ok=True` just
+    # no-ops in the app. `devices.db` itself (and its idempotent
+    # migrate_legacy() import of the mac-guard/device-intel/iot-guard
+    # legacy stores) is created lazily by the app's first
+    # `DeviceStore(...)` at FastAPI startup / first collector cycle —
+    # NOT here. Postinst does no DB/schema work, only directory perms.
+    install -d -o secubox -g secubox -m 750 /var/lib/secubox/nac
+
     systemctl daemon-reload
     systemctl enable secubox-nac.service
     systemctl start  secubox-nac.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
+
+    # Ensure nac's own nft table + zone sets exist so operator "move to zone"
+    # works on a fresh install — including `lxc_zone` for the LXC Containers
+    # zone — and so the mac-guard element migration below has its destination
+    # sets present. Set names mirror `ZONES[*].nft_set` in api/main.py plus the
+    # `blocked` deny set. Every `nft add` is idempotent (a no-op if the object
+    # already exists) and best-effort: a missing `nft` or a pre-existing table
+    # must never abort configure.
+    if command -v nft >/dev/null 2>&1; then
+      nft add table inet secubox_nac 2>/dev/null || true
+      for _set in blocked lan_allowed lxc_zone iot_zone guest_zone quarantine_zone; do
+        nft add set inet secubox_nac "$_set" '{ type ether_addr; }' 2>/dev/null || true
+      done
+    fi
+
+    # #817 Task 9: one-shot, idempotent, best-effort nft element migration.
+    # mac-guard's separate `inet secubox_mac_guard` table is being retired
+    # (Task 7 reduced its API to redirect stubs); fold its allow/deny
+    # elements into nac's own `inet secubox_nac` sets so existing
+    # block/allow decisions survive the cutover:
+    #   mac_blacklist -> blocked      (deny)
+    #   mac_whitelist -> lan_allowed  (allow)
+    # Adding an already-present nft element is a no-op, so this is safe
+    # to run on every upgrade. If mac-guard was never installed (table/
+    # set missing) or `nft` is unavailable, every step degrades to a
+    # silent no-op — this must never abort the package configure step.
+    if command -v nft >/dev/null 2>&1; then
+      for _pair in "mac_blacklist:blocked" "mac_whitelist:lan_allowed"; do
+        _src_set="${_pair%%:*}"
+        _dst_set="${_pair##*:}"
+        nft list set inet secubox_mac_guard "$_src_set" 2>/dev/null \
+          | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' \
+          | while IFS= read -r _mac; do
+              nft add element inet secubox_nac "$_dst_set" "{ $_mac }" 2>/dev/null || true
+            done
+      done
+    fi
     ;;
 esac
 #DEBHELPER#

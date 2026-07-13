@@ -52,6 +52,40 @@ function getDeviceIcon(hostname, mac) {
 	return '🔌';
 }
 
+// #817 Task 8 — vendor/type/risk rendering helpers. All values below come
+// straight from the enriched /clients response (oui_vendor, device_type,
+// risk_level, risk_score, is_openwrt, is_secubox, is_router) and are
+// attacker-influenceable (a device announces its own hostname/vendor via
+// DHCP), so they are ALWAYS passed as E()/textContent children below,
+// never concatenated into innerHTML.
+
+function fmtOrDash(value) {
+	if (value === null || value === undefined || value === '') return '—';
+	return String(value);
+}
+
+function fmtDeviceType(type) {
+	if (!type || type === 'unknown') return 'unknown';
+	return String(type);
+}
+
+function riskBadgeClass(level) {
+	switch (String(level || '').toLowerCase()) {
+		case 'low': return 'kiss-badge kiss-badge-green';
+		case 'medium': return 'kiss-badge kiss-badge-yellow';
+		case 'high': return 'kiss-badge kiss-badge-red';
+		default: return 'kiss-badge kiss-badge-blue';
+	}
+}
+
+function renderFingerprintBadges(client) {
+	var badges = [];
+	if (client.is_openwrt) badges.push(E('span', { 'class': 'kiss-badge kiss-badge-blue', 'title': _('OpenWrt device') }, '🐧 OpenWrt'));
+	if (client.is_secubox) badges.push(E('span', { 'class': 'kiss-badge kiss-badge-green', 'title': _('SecuBox device') }, '🛡️ SecuBox'));
+	if (client.is_router) badges.push(E('span', { 'class': 'kiss-badge kiss-badge-blue', 'title': _('Router') }, '📡 Router'));
+	return badges;
+}
+
 return view.extend({
 	load: function() {
 		return Promise.all([
@@ -73,10 +107,18 @@ return view.extend({
 					E('h2', { 'style': 'margin: 0 0 4px 0;' }, 'Gestion des Clients'),
 					E('div', { 'style': 'color: var(--kiss-muted);' }, 'Client Guardian')
 				]),
-				E('button', {
-					'class': 'kiss-btn kiss-btn-green',
-					'click': L.bind(this.handleRefresh, this)
-				}, 'Actualiser')
+				E('div', { 'style': 'display: flex; gap: 8px;' }, [
+					E('a', {
+						'class': 'kiss-btn',
+						'href': '/api/v1/nac/export/csv',
+						'target': '_blank',
+						'rel': 'noopener'
+					}, '⬇️ Export CSV'),
+					E('button', {
+						'class': 'kiss-btn kiss-btn-green',
+						'click': L.bind(this.handleRefresh, this)
+					}, 'Actualiser')
+				])
 			]),
 
 			CgNav.renderTabs('clients'),
@@ -149,6 +191,19 @@ return view.extend({
 				])
 			]),
 			E('span', { 'class': 'cg-client-zone ' + zoneClass }, client.zone || 'unknown'),
+			E('div', { 'class': 'cg-client-vendor-info', 'style': 'min-width: 130px; font-size: 12px;' }, [
+				E('div', { 'style': 'color: var(--kiss-muted);', 'title': _('OUI vendor') }, fmtOrDash(client.oui_vendor)),
+				E('div', { 'title': _('Device type') }, fmtDeviceType(client.device_type)),
+				E('div', { 'style': 'margin-top: 4px;' }, [
+					E('span', {
+						'class': riskBadgeClass(client.risk_level),
+						'title': _('Risk score') + ': ' + fmtOrDash(client.risk_score)
+					}, fmtOrDash(client.risk_level))
+				])
+			]),
+			E('div', { 'class': 'cg-client-fingerprint', 'style': 'display: flex; flex-direction: column; gap: 4px; min-width: 100px;' },
+				renderFingerprintBadges(client)
+			),
 			E('div', { 'class': 'cg-client-traffic' }, [
 				E('div', { 'class': 'cg-client-traffic-value' }, '↓ ' + formatBytes(client.rx_bytes || 0)),
 				E('div', { 'class': 'cg-client-traffic-label' }, '↑ ' + formatBytes(client.tx_bytes || 0))

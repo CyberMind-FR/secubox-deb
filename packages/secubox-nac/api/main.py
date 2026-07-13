@@ -4,22 +4,35 @@ Port of luci-app-client-guardian with production features.
 Manages client zones, parental controls, and network policies.
 """
 from __future__ import annotations
+import csv
+import http.client
+import io
+import ipaddress
+import os
+import re
+import socket
 import subprocess
 import json
 import threading
 import time
+import uuid
 import asyncio
 import hashlib
 import hmac
 import httpx
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+
+from .collector import Collector
+from .enrich import classify_device_type, load_oui, openwrt_fingerprint, oui_vendor, risk_score
+from .store import DeviceStore, canon_mac, migrate_legacy
 
 app = FastAPI(title="secubox-nac", version="2.0.0", root_path="/api/v1/nac")
 
@@ -48,6 +61,13 @@ PARENTAL_FILE = Path("/etc/secubox/nac-parental.json")
 
 NFT_TABLE = "inet secubox_nac"
 
+# #817 Task 4: canonical SQLite device store + legacy migration sources.
+DEVICES_DB_PATH = str(DATA_DIR / "devices.db")
+MACGUARD_DEVICES_JSON = "/var/lib/secubox/mac-guard/devices.json"
+DEVICEINTEL_DEVICES_JSON = "/var/lib/secubox/device-intel/devices.json"
+IOTGUARD_DEVICES_DB = "/var/lib/secubox/iot-guard/devices.db"
+COLLECTOR_INTERVAL = 30
+
 # Zones → nftables set names
 ZONES = {
     "lan": {"nft_set": "lan_allowed", "desc": "LAN principal", "color": "green"},
@@ -57,11 +77,12 @@ ZONES = {
     "quarantine": {"nft_set": "quarantine_zone", "desc": "Quarantaine", "color": "red"},
 }
 
-# Auto-classify discovered clients into a zone by the interface they were seen
-# on, so e.g. every container on the LXC bridge lands in the `lxc` zone without
-# manual assignment. Operator moves (which write the nft sets) still win; this
-# only fills the gap for clients not explicitly placed. Overridable via nac
-# config `interface_zones` (a {iface: zone} table).
+# Auto-classify a device into a zone by the interface it was seen on, so e.g.
+# every container on the LXC bridge lands in the `lxc` zone without manual
+# assignment. Operator moves (which write the nft sets) still win; this only
+# fills the gap for devices not explicitly placed. Overridable via nac config
+# `interface_zones` (a {iface: zone} table). The interface is recorded by the
+# ARP discovery pass and persisted on the device row (store `interface` column).
 _DEFAULT_IFACE_ZONES = {"br-lxc": "lxc"}
 
 
@@ -159,7 +180,36 @@ class WebhookConfig(BaseModel):
 
 # State
 _monitoring_task: Optional[asyncio.Task] = None
-_known_clients: set = set()
+
+# #817 Task 5 (finishing #808): the main event loop, captured at
+# `startup`, so plain `def` action handlers — threadpooled off that loop
+# by FastAPI — can fire-and-forget `_notify_webhooks` via
+# `asyncio.run_coroutine_threadsafe` instead of `await`ing it (which
+# would be a SyntaxError in a non-async function).
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+# #817 Task 4: canonical store + background collector (replaces
+# `_discover_clients()`-per-request + `_monitor_clients()`). Populated at
+# `startup`; `status`/`clients`/`client/{mac}` read them as plain `def`
+# handlers — never re-run discovery inline (that was the aggregator
+# SPOF, #808).
+store: Optional[DeviceStore] = None
+collector: Optional[Collector] = None
+
+# #817 Task 6: OUI vendor map, also exposed at module level (not just
+# captured in the Collector's closure) so `/vendors` can read it directly.
+oui_map: Optional[Dict[str, str]] = None
+
+# #817 whole-branch fix (C1): on the board, `/api/v1/nac` is served by the
+# AGGREGATOR in-process (nac is in aggregator.toml; its own service is
+# inactive). The aggregator does NOT run mounted sub-apps'
+# `@app.on_event("startup")`, so the store/collector/migration would never
+# init and the whole feature would be inert. These two flags let an
+# idempotent lazy initializer (`_do_init`) + an HTTP middleware bring the
+# feature up on the first request under EITHER mount (aggregator or nac's
+# own uvicorn), without double-initializing.
+_initialized: bool = False
+_collector_started: bool = False
 
 
 def _load_json(filepath: Path, default=None):
@@ -267,30 +317,13 @@ def _parse_leases() -> list[dict]:
     return clients
 
 
-# Interfaces to scan for ARP entries. Defaults cover the DSA switch LAN ports,
-# common bridges, and the secubox LXC bridge (br-lxc — its containers are
-# managed clients). A board whose clients reach it on another interface (e.g.
-# gk2 sits transparently on the upstream 192.168.1.0/24 via eth2) extends this
-# via nac config `lan_interfaces` (list or comma string) — WITHOUT this, ARP
-# discovery filters every neighbour out and the dashboard shows no clients.
-_DEFAULT_LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "br-lxc", "eth0", "eth1"}
-
-
-def _lan_interfaces() -> set:
-    try:
-        cfg = get_config("nac") or {}
-        extra = cfg.get("lan_interfaces") or []
-        if isinstance(extra, str):
-            extra = [x.strip() for x in extra.split(",") if x.strip()]
-        return _DEFAULT_LAN_INTERFACES | set(extra)
-    except Exception:
-        return _DEFAULT_LAN_INTERFACES
+# Interfaces to scan for ARP entries (LAN interfaces only)
+LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "eth0", "eth1"}
 
 
 def _parse_arp() -> list[dict]:
     """Parse ARP table for network clients (fallback when DHCP leases unavailable)."""
     clients = []
-    lan_ifs = _lan_interfaces()
     try:
         # Use ip neigh for more reliable ARP parsing
         r = subprocess.run(
@@ -324,7 +357,7 @@ def _parse_arp() -> list[dict]:
                 continue
 
             # Only include clients from LAN interfaces
-            if iface and iface not in lan_ifs:
+            if iface and iface not in LAN_INTERFACES:
                 continue
 
             # Skip IPv6 link-local
@@ -444,9 +477,9 @@ def _get_client_zone(mac: str, iface: str = "") -> str:
     """Resolve a client's zone.
 
     Order: explicit operator assignment (nft set membership) > interface
-    auto-classification (e.g. br-lxc → lxc) > legacy JSON assignment > default.
-    Passing the interface the client was seen on lets containers on the LXC
-    bridge populate the `lxc` zone automatically.
+    auto-classification (e.g. br-lxc → lxc) > legacy JSON assignment >
+    quarantine. Passing the interface the client was seen on lets containers
+    on the LXC bridge populate the `lxc` zone automatically.
     """
     mac_lower = mac.lower()
 
@@ -457,8 +490,7 @@ def _get_client_zone(mac: str, iface: str = "") -> str:
 
     # 2. Auto-classify by interface (br-lxc → lxc, etc.)
     if iface:
-        izmap = _interface_zones()
-        z = izmap.get(iface)
+        z = _interface_zones().get(iface)
         if z in ZONES:
             return z
 
@@ -468,6 +500,53 @@ def _get_client_zone(mac: str, iface: str = "") -> str:
         return assignments[mac_lower]
 
     return "quarantine"
+
+
+def _resolve_zone(mac: str, iface: str, zmap: Dict[str, str]) -> str:
+    """Batched-path twin of `_get_client_zone`: resolve one device's zone from
+    a prebuilt `_zone_map()` (nft + JSON), then fall back to interface
+    auto-classification, then quarantine. Keeps the O(devices) list endpoints
+    off the per-device nft subprocess path while still honouring `interface_zones`.
+    """
+    z = zmap.get(mac.lower())
+    if z:
+        return z
+    if iface:
+        z = _interface_zones().get(iface)
+        if z in ZONES:
+            return z
+    return "quarantine"
+
+
+def _zone_map() -> Dict[str, str]:
+    """Build a `mac -> zone` dict by listing each of the 4 zone nft sets
+    ONCE (+ the JSON fallback read once), instead of the per-device
+    `_get_client_zone` (which lists every set for every device).
+
+    #817 whole-branch fix (I3): `status`/`clients`/`list_quarantine` iterate
+    the whole store (~280 devices on the merged board). Calling
+    `_get_client_zone(mac)` per device meant ~280×4 ≈ 1120 `nft list set`
+    subprocesses per request. This lists each set once (4 subprocesses)
+    and resolves every device's zone from the resulting dict.
+
+    Resolution order matches `_get_client_zone`: an nft-set membership wins
+    over the JSON fallback, and among nft sets the first zone in `ZONES`
+    order wins (so the map never disagrees with the per-device helper).
+    Devices absent from every set/assignment default to "quarantine" at
+    lookup time (`.get(mac, "quarantine")`).
+    """
+    nft_assigned: Dict[str, str] = {}
+    for zone_id, zone_info in ZONES.items():
+        for mac in _nft_list_set(zone_info["nft_set"]):
+            m = mac.lower()
+            if m not in nft_assigned:  # first zone in ZONES order wins
+                nft_assigned[m] = zone_id
+
+    mapping: Dict[str, str] = {}
+    for mac, zone in _load_zone_assignments().items():
+        mapping[mac.lower()] = zone
+    mapping.update(nft_assigned)  # nft wins over JSON fallback
+    return mapping
 
 
 def _set_client_zone(mac: str, zone: str):
@@ -488,48 +567,124 @@ def _set_client_zone(mac: str, zone: str):
     _save_zone_assignments(assignments)
 
 
-async def _monitor_clients():
-    """Background task to monitor new clients."""
-    global _known_clients
+def _fire_collector_webhook(event: str, dev: Dict[str, Any]) -> None:
+    """`Collector._emit` override: schedule the existing async webhook
+    fire-and-forget without blocking `cycle_once()` (which is sync and
+    may run outside a request context). Only called from within
+    `run_forever()`, which is always executing on the running loop, so
+    `asyncio.create_task` is safe here.
+    """
+    payload = {"mac": dev.get("mac"), "ip": dev.get("ip"), "hostname": dev.get("hostname")}
+    try:
+        asyncio.create_task(_notify_webhooks(event, payload))
+    except RuntimeError:
+        # No running loop (e.g. collector driven outside FastAPI) — drop.
+        pass
 
-    while True:
-        try:
-            clients = _discover_clients()
-            current_macs = {c["mac"].lower() for c in clients}
 
-            # Check for new clients
-            new_clients = current_macs - _known_clients
-            for mac in new_clients:
-                client = next((c for c in clients if c["mac"].lower() == mac), None)
-                if client:
-                    _record_event("client_joined", {
-                        "mac": mac,
-                        "ip": client.get("ip"),
-                        "hostname": client.get("hostname")
-                    })
-                    await _notify_webhooks("client_joined", {
-                        "mac": mac,
-                        "ip": client.get("ip"),
-                        "hostname": client.get("hostname")
-                    })
+def _fire_webhook_sync(event: str, data: Dict[str, Any]) -> None:
+    """Fire `_notify_webhooks` from a plain `def` action handler (#817
+    Task 5, finishing #808).
 
-            _known_clients = current_macs
+    Plain `def` handlers are threadpooled off the main event loop by
+    FastAPI, so there is no running loop in the calling thread to
+    `await` on — only `asyncio.run_coroutine_threadsafe` against the
+    loop captured at `startup` is safe here. Fire-and-forget, mirrors
+    `_fire_collector_webhook`; never blocks the handler nor raises.
+    """
+    if _main_loop is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_notify_webhooks(event, data), _main_loop)
+    except RuntimeError:
+        pass
 
-        except Exception:
-            pass
 
-        await asyncio.sleep(30)
+def _do_init() -> None:
+    """Idempotent, synchronous feature init (#817 whole-branch fix C1).
+
+    Builds the canonical device store, runs the one-shot legacy migration
+    (wrapped so a corrupt/missing source never aborts), loads the OUI map,
+    and constructs the background `Collector`. Guarded by `_initialized`
+    so it is a no-op after the first successful call — safe to invoke from
+    `startup()` (nac's own uvicorn) AND from the HTTP middleware (the
+    in-aggregator mount, whose `startup` event never fires). Does NOT
+    start the collector task: that needs the running loop and is done by
+    whichever entrypoint holds it (`startup`/middleware).
+    """
+    global store, collector, oui_map, _initialized
+    if _initialized:
+        return
+
+    store = DeviceStore(DEVICES_DB_PATH)
+
+    try:
+        migration = migrate_legacy(
+            store,
+            macguard_json=MACGUARD_DEVICES_JSON,
+            deviceintel_json=DEVICEINTEL_DEVICES_JSON,
+            iot_db=IOTGUARD_DEVICES_DB,
+        )
+        log.info(
+            "NAC init: legacy migration imported=%d skipped=%d",
+            migration.get("imported", 0), migration.get("skipped", 0),
+        )
+    except Exception:
+        # Migration must never abort boot — a corrupt/missing legacy
+        # source is logged and the collector still starts.
+        log.exception("NAC init: legacy migration failed (non-fatal)")
+
+    oui_map = load_oui()
+    collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL)
+    collector._emit = _fire_collector_webhook
+
+    _initialized = True
+    log.info("NAC init: device store at %s, %d device(s) known", DEVICES_DB_PATH, store.count())
+
+
+def _ensure_collector_started() -> None:
+    """Capture the running loop and start the collector task exactly once.
+
+    #817 whole-branch fix (C1): MUST be called from the loop thread (the
+    `startup` coroutine or the HTTP middleware) — `asyncio.get_running_loop`
+    and `asyncio.create_task` are invalid in the threadpool threads that
+    run the plain-`def` handlers. Guarded by `_collector_started`.
+    """
+    global _monitoring_task, _main_loop, _collector_started
+    if _collector_started or collector is None:
+        return
+    _main_loop = asyncio.get_running_loop()
+    _monitoring_task = asyncio.create_task(collector.run_forever())
+    _collector_started = True
+
+
+@app.middleware("http")
+async def _lazy_init_middleware(request, call_next):
+    """Initialize the feature on the first request (#817 whole-branch C1).
+
+    Under the aggregator's in-process mount, `@app.on_event("startup")`
+    never fires, so without this the store/collector/migration would never
+    init and every handler would return empty. This middleware runs on the
+    loop thread, so it can both `_do_init()` (idempotent) and start the
+    collector task via `_ensure_collector_started()`. Under nac's own
+    uvicorn, `startup()` already did both and both are no-ops here.
+    """
+    if not _initialized:
+        _do_init()
+    _ensure_collector_started()
+    return await call_next(request)
 
 
 @app.on_event("startup")
 async def startup():
-    """Start background monitoring."""
-    global _monitoring_task, _known_clients
-    # Initialize known clients from all discovery sources
-    clients = _discover_clients()
-    _known_clients = {c["mac"].lower() for c in clients}
-    log.info("NAC startup: discovered %d clients", len(_known_clients))
-    _monitoring_task = asyncio.create_task(_monitor_clients())
+    """Own-service path: init the feature + start the collector (#817 Task 4).
+
+    Delegates to the shared idempotent `_do_init()` / `_ensure_collector_started()`
+    so nac's own uvicorn and the in-aggregator mount take the exact same
+    code path (the latter via `_lazy_init_middleware`).
+    """
+    _do_init()
+    _ensure_collector_started()
 
 
 @app.on_event("shutdown")
@@ -547,13 +702,20 @@ async def health():
 
 
 @router.get("/status")
-async def status(user=Depends(require_jwt)):
-    """Get NAC status."""
+def status(user=Depends(require_jwt)):
+    """Get NAC status.
+
+    #817 Task 4: reads the SQLite store + the collector's double-cache
+    instead of calling `_discover_clients()` inline — that blocking
+    subprocess-heavy scan on every request was the aggregator SPOF
+    (#808). Plain `def` so FastAPI threadpools it.
+    """
     cached = stats_cache.get("status")
     if cached:
         return cached
 
-    clients_list = _discover_clients()
+    devices = store.list(limit=5000) if store else []
+    online_macs = {d["mac"] for d in (collector.snapshot() if collector else [])}
 
     try:
         nft_ok = subprocess.run(
@@ -571,18 +733,20 @@ async def status(user=Depends(require_jwt)):
     except Exception:
         dnsmasq_ok = False
 
-    # Count by zone
+    # Count by zone — #817 whole-branch fix (I3): one batched `_zone_map()`
+    # (4 `nft list set` calls) instead of `_get_client_zone` per device.
+    zmap = _zone_map()
     by_zone: Dict[str, int] = {z: 0 for z in ZONES}
-    for client in clients_list:
-        zone = _get_client_zone(client["mac"], client.get("interface", ""))
+    for device in devices:
+        zone = _resolve_zone(device["mac"], device.get("interface", ""), zmap)
         by_zone[zone] = by_zone.get(zone, 0) + 1
 
-    # Count online clients
-    online_count = sum(1 for c in clients_list if c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT"))
+    # Count online clients (present in the latest completed collector cycle)
+    online_count = sum(1 for d in devices if d["mac"] in online_macs)
 
     result = {
-        "client_count": len(clients_list),
-        "total_clients": len(clients_list),  # Alias for frontend compatibility
+        "client_count": len(devices),
+        "total_clients": len(devices),  # Alias for frontend compatibility
         "online_count": online_count,
         "online": online_count,  # Alias for frontend compatibility
         "nftables_ok": nft_ok,
@@ -599,22 +763,43 @@ async def status(user=Depends(require_jwt)):
 
 
 @router.get("/clients")
-async def clients(user=Depends(require_jwt)):
-    """Get all clients with zone info."""
-    cached = stats_cache.get("clients")
-    if cached:
-        return cached
+def clients(
+    device_type: Optional[str] = None,
+    risk_min: Optional[int] = None,
+    user=Depends(require_jwt),
+):
+    """Get all known clients with zone info.
 
-    discovered = _discover_clients()
+    #817 Task 4: reads the SQLite store (populated by the background
+    `Collector`) instead of scanning DHCP leases/ARP inline on every
+    request. Plain `def` so FastAPI threadpools it.
+
+    #817 Task 6: `?device_type=`/`?risk_min=` are forwarded straight to
+    `store.list()`'s indexed filters (device-intel/iot-guard absorption).
+    The 15s stats cache is keyed on the unfiltered call only — a filtered
+    request always re-queries the store (still a short indexed SQLite
+    query, not a rescan) so two different filters never collide on one
+    cache slot.
+    """
+    use_cache = device_type is None and risk_min is None
+    if use_cache:
+        cached = stats_cache.get("clients")
+        if cached:
+            return cached
+
+    devices = store.list(device_type=device_type, risk_min=risk_min, limit=5000) if store else []
+    online_macs = {d["mac"] for d in (collector.snapshot() if collector else [])}
     meta = _load_clients_meta()
+    # #817 whole-branch fix (I3): batched zone lookup, once per request.
+    zmap = _zone_map()
     result = []
 
-    for c in discovered:
-        mac = c["mac"].lower()
-        zone = _get_client_zone(mac, c.get("interface", ""))
+    for d in devices:
+        mac = d["mac"]
+        zone = _resolve_zone(mac, d.get("interface", ""), zmap)
         client_meta = meta.get(mac, {})
 
-        is_online = c.get("state") in ("REACHABLE", "DELAY", "PROBE", "PERMANENT")
+        is_online = mac in online_macs
         # Status for frontend badge
         if zone == "quarantine":
             status = "quarantine"
@@ -624,14 +809,13 @@ async def clients(user=Depends(require_jwt)):
             status = zone
 
         result.append({
-            **c,
+            **d,
             "zone": zone,
             "zone_color": ZONES[zone]["color"],
             "zone_name": ZONES[zone]["desc"],
             "custom_hostname": client_meta.get("hostname", ""),
-            "notes": client_meta.get("notes", ""),
-            "first_seen": client_meta.get("first_seen"),
-            "last_seen": datetime.now().isoformat(),
+            "notes": client_meta.get("notes") or d.get("notes") or "",
+            "first_seen": client_meta.get("first_seen") or d.get("first_seen"),
             "online": is_online,
             "status": status,  # For frontend badge
         })
@@ -642,76 +826,74 @@ async def clients(user=Depends(require_jwt)):
         "by_zone": {z: sum(1 for c in result if c["zone"] == z) for z in ZONES}
     }
 
-    stats_cache.set("clients", response)
+    if use_cache:
+        stats_cache.set("clients", response)
     return response
 
 
 @router.get("/client/{mac}")
-async def get_client(mac: str, user=Depends(require_jwt)):
-    """Get details for a specific client."""
-    discovered = _discover_clients()
+def get_client(mac: str, user=Depends(require_jwt)):
+    """Get details for a specific client.
+
+    #817 Task 4: reads the SQLite store instead of re-scanning
+    `_discover_clients()` inline. Plain `def` so FastAPI threadpools it.
+    """
+    mac_lower = canon_mac(mac) or mac.lower()
+    d = store.get(mac_lower) if store else None
+    if not d:
+        raise HTTPException(404, "Client not found")
+
+    zone = _get_client_zone(mac_lower, d.get("interface", ""))
     meta = _load_clients_meta()
-    mac_lower = mac.lower()
+    client_meta = meta.get(mac_lower, {})
 
-    for c in discovered:
-        if c["mac"].lower() == mac_lower:
-            zone = _get_client_zone(mac_lower)
-            client_meta = meta.get(mac_lower, {})
+    # Recent history: merge the JSON event log (client_moved/banned/etc,
+    # still written by `_record_event`) with the SQLite `device_history`
+    # events the collector writes directly (`client_joined`, see Task 4
+    # Collector.cycle_once) — #817 Minor fix 2, so a device's join event
+    # shows up here again instead of being silently dropped.
+    history = _load_history()
+    json_events = [
+        h for h in history[-200:]
+        if h.get("details", {}).get("mac", "").lower() == mac_lower
+    ]
+    sqlite_events = [
+        {
+            "timestamp": datetime.fromtimestamp(h["ts"]).isoformat(),
+            "event": h["event"],
+            "details": {"mac": mac_lower, "detail": h.get("detail", "")},
+        }
+        for h in (store.history(mac_lower, limit=20) if store else [])
+    ]
+    client_history = sorted(
+        json_events + sqlite_events,
+        key=lambda h: h.get("timestamp", ""),
+        reverse=True,
+    )[:10]
 
-            # Get recent history
-            history = _load_history()
-            client_history = [
-                h for h in history[-100:]
-                if h.get("details", {}).get("mac", "").lower() == mac_lower
-            ][-10:]
-
-            return {
-                **c,
-                "zone": zone,
-                "zone_color": ZONES[zone]["color"],
-                "zone_name": ZONES[zone]["desc"],
-                "custom_hostname": client_meta.get("hostname", ""),
-                "notes": client_meta.get("notes", ""),
-                "first_seen": client_meta.get("first_seen"),
-                "recent_events": client_history
-            }
-
-    raise HTTPException(404, "Client not found")
+    return {
+        **d,
+        "zone": zone,
+        "zone_color": ZONES[zone]["color"],
+        "zone_name": ZONES[zone]["desc"],
+        "custom_hostname": client_meta.get("hostname", ""),
+        "notes": client_meta.get("notes") or d.get("notes") or "",
+        "first_seen": client_meta.get("first_seen") or d.get("first_seen"),
+        "recent_events": client_history
+    }
 
 
 @router.get("/zones")
-async def zones(user=Depends(require_jwt)):
-    """Get all zones with their members.
+def zones(user=Depends(require_jwt)):
+    """Get all zones with members.
 
-    Members are the DISCOVERED clients grouped by their resolved zone, not just
-    the raw nftables set — a client discovered by ARP defaults to a zone (via
-    JSON assignment / nft set / fallback) but may not be in the nft set, so
-    reporting only nft members left every zone showing 0 and the dashboard's
-    Zones tab looked empty. The nft sets + assignments are fetched once, not per
-    client, to keep this cheap on the shared aggregator loop.
+    #817 Task 5 fix (#808): converted from `async def` — `_nft_list_set`
+    is a blocking `subprocess.run` call; plain `def` lets FastAPI
+    threadpool it off the shared aggregator loop.
     """
-    nft_members = {zid: set(_nft_list_set(info["nft_set"])) for zid, info in ZONES.items()}
-    assignments = _load_zone_assignments()
-    izmap = _interface_zones()
-
-    def _resolve(mac: str, iface: str) -> str:
-        # Same order as _get_client_zone, but with the nft sets pre-fetched.
-        for zid in ZONES:
-            if mac in nft_members[zid]:
-                return zid
-        z = izmap.get(iface)
-        if z in ZONES:
-            return z
-        return assignments.get(mac, "quarantine")
-
-    by_zone: dict[str, list[str]] = {zid: [] for zid in ZONES}
-    for c in _discover_clients():
-        mac = c["mac"].lower()
-        by_zone[_resolve(mac, c.get("interface", ""))].append(mac)
-
     result = []
     for zone_id, info in ZONES.items():
-        members = by_zone.get(zone_id, [])
+        members = _nft_list_set(info["nft_set"])
         result.append({
             "id": zone_id,
             "name": info["desc"],
@@ -724,13 +906,23 @@ async def zones(user=Depends(require_jwt)):
 
 
 @router.post("/add_to_zone")
-async def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
-    """Move a client to a zone."""
+def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
+    """Move a client to a zone.
+
+    #817 Task 5 fix (#808): converted from `async def` — `_get_client_zone`
+    / `_set_client_zone` are blocking `subprocess.run` calls; plain `def`
+    lets FastAPI threadpool it off the shared aggregator loop. The
+    webhook notify can no longer be `await`ed from a non-async function,
+    so it is fired via `_fire_webhook_sync` (schedules onto the main
+    loop captured at startup, fire-and-forget — same event, same
+    payload, just no longer blocking the handler on the HTTP POST).
+    """
     if req.zone not in ZONES:
         raise HTTPException(400, f"Zone invalide: {req.zone}")
 
     mac_lower = req.mac.lower()
-    old_zone = _get_client_zone(mac_lower)
+    _dev = store.get(mac_lower) if store else None
+    old_zone = _get_client_zone(mac_lower, (_dev or {}).get("interface", ""))
 
     # Set client zone (handles both nft and JSON fallback)
     _set_client_zone(mac_lower, req.zone)
@@ -742,7 +934,7 @@ async def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
         "to_zone": req.zone,
         "by": user.get("sub", "unknown")
     })
-    await _notify_webhooks("client_moved", {
+    _fire_webhook_sync("client_moved", {
         "mac": mac_lower,
         "from_zone": old_zone,
         "to_zone": req.zone
@@ -753,10 +945,16 @@ async def add_to_zone(req: ZoneRequest, user=Depends(require_jwt)):
 
 
 @router.post("/remove_from_zone")
-async def remove_from_zone(mac: str, user=Depends(require_jwt)):
-    """Remove client from all zones (to quarantine)."""
+def remove_from_zone(mac: str, user=Depends(require_jwt)):
+    """Remove client from all zones (to quarantine).
+
+    #817 Task 5 fix (#808): converted from `async def` — `_get_client_zone`
+    / `_nft_*` are blocking `subprocess.run` calls; plain `def` lets
+    FastAPI threadpool it off the shared aggregator loop.
+    """
     mac_lower = mac.lower()
-    old_zone = _get_client_zone(mac_lower)
+    _dev = store.get(mac_lower) if store else None
+    old_zone = _get_client_zone(mac_lower, (_dev or {}).get("interface", ""))
 
     for info in ZONES.values():
         _nft_delete_element(info["nft_set"], mac_lower)
@@ -770,14 +968,25 @@ async def remove_from_zone(mac: str, user=Depends(require_jwt)):
 
 
 @router.post("/approve_client")
-async def approve_client(mac: str, zone: str = "lan", user=Depends(require_jwt)):
-    """Approve a client (move from quarantine)."""
-    return await add_to_zone(ZoneRequest(mac=mac, zone=zone), user)
+def approve_client(mac: str, zone: str = "lan", user=Depends(require_jwt)):
+    """Approve a client (move from quarantine).
+
+    #817 Task 5 fix (#808): converted from `async def` — it only delegates
+    to `add_to_zone`, which is now plain `def` too, so the `await` on it
+    is no longer valid (or needed).
+    """
+    return add_to_zone(ZoneRequest(mac=mac, zone=zone), user)
 
 
 @router.post("/ban_client")
-async def ban_client(mac: str, user=Depends(require_jwt)):
-    """Ban a client completely."""
+def ban_client(mac: str, user=Depends(require_jwt)):
+    """Ban a client completely.
+
+    #817 Task 5 fix (#808): converted from `async def` — the body is all
+    blocking `subprocess.run`/`_nft_*` calls; plain `def` lets FastAPI
+    threadpool it off the shared aggregator loop. The webhook notify is
+    fired via `_fire_webhook_sync` instead of `await`ed (see `add_to_zone`).
+    """
     mac_lower = mac.lower()
 
     for info in ZONES.values():
@@ -793,7 +1002,7 @@ async def ban_client(mac: str, user=Depends(require_jwt)):
 
     log.info("Client banned: %s", mac_lower)
     _record_event("client_banned", {"mac": mac_lower, "by": user.get("sub", "unknown")})
-    await _notify_webhooks("client_banned", {"mac": mac_lower})
+    _fire_webhook_sync("client_banned", {"mac": mac_lower})
     stats_cache.clear()
 
     return {"success": True, "mac": mac_lower, "status": "banned"}
@@ -819,9 +1028,64 @@ def unban_client(mac: str, user=Depends(require_jwt)):
     return {"success": True, "mac": mac_lower, "status": "quarantine"}
 
 
+@router.post("/deny/{mac}")
+def deny(mac: str, user=Depends(require_jwt)):
+    """Deny a client — mac-guard `allow_state` absorption (#817 Task 5).
+
+    Sets `allow_state="deny"` in the canonical SQLite store and mirrors
+    it into nft on nac's existing `inet secubox_nac` table: add the MAC
+    to `blocked` and remove it from `lan_allowed`. Reuses `_nft_add_element`
+    / `_nft_delete_element` — mac-guard's separate `inet secubox_mac_guard`
+    table is retired; migrating its elements into `secubox_nac` is
+    Task 9, not here. Plain `def` (#808): all work below is blocking
+    subprocess/SQLite, threadpooled off the shared aggregator loop.
+    """
+    mac_lower = canon_mac(mac) or mac.lower()
+
+    _nft_add_element("blocked", mac_lower)
+    _nft_delete_element("lan_allowed", mac_lower)
+
+    if store:
+        store.upsert({"mac": mac_lower, "allow_state": "deny"})
+        store.record_event(mac_lower, "client_denied")
+
+    _record_event("client_denied", {"mac": mac_lower, "by": user.get("sub", "unknown")})
+    stats_cache.clear()
+
+    return {"success": True, "mac": mac_lower, "allow_state": "deny"}
+
+
+@router.post("/allow/{mac}")
+def allow(mac: str, user=Depends(require_jwt)):
+    """Allow a client — mac-guard `allow_state` absorption (#817 Task 5).
+
+    Sets `allow_state="allow"` in the canonical SQLite store and mirrors
+    it into nft: remove the MAC from `blocked` and add it to `lan_allowed`.
+    Reverse of `deny`; see its docstring for the nft-table/migration notes.
+    """
+    mac_lower = canon_mac(mac) or mac.lower()
+
+    _nft_delete_element("blocked", mac_lower)
+    _nft_add_element("lan_allowed", mac_lower)
+
+    if store:
+        store.upsert({"mac": mac_lower, "allow_state": "allow"})
+        store.record_event(mac_lower, "client_allowed")
+
+    _record_event("client_allowed", {"mac": mac_lower, "by": user.get("sub", "unknown")})
+    stats_cache.clear()
+
+    return {"success": True, "mac": mac_lower, "allow_state": "allow"}
+
+
 @router.post("/update_client")
-async def update_client(req: UpdateClientRequest, user=Depends(require_jwt)):
-    """Update client metadata."""
+def update_client(req: UpdateClientRequest, user=Depends(require_jwt)):
+    """Update client metadata.
+
+    #817 Task 5 fix (#808): converted from `async def` — it delegates to
+    `add_to_zone`, which is now plain `def` too, so the `await` on it is
+    no longer valid (or needed).
+    """
     mac_lower = req.mac.lower()
     meta = _load_clients_meta()
 
@@ -836,7 +1100,7 @@ async def update_client(req: UpdateClientRequest, user=Depends(require_jwt)):
     _save_clients_meta(meta)
 
     if req.zone:
-        await add_to_zone(ZoneRequest(mac=req.mac, zone=req.zone), user)
+        add_to_zone(ZoneRequest(mac=req.mac, zone=req.zone), user)
 
     _record_event("client_updated", {"mac": mac_lower})
     stats_cache.clear()
@@ -878,21 +1142,29 @@ async def delete_parental_rule(mac: str, user=Depends(require_jwt)):
 
 # Alerts
 @router.get("/alerts")
-async def alerts(user=Depends(require_jwt)):
-    """Get current alerts."""
+def alerts(user=Depends(require_jwt)):
+    """Get current alerts.
+
+    #817 Task 4 fix (#808): converted from `async def` — the previous
+    body called blocking `_discover_clients()` inline on the shared
+    aggregator loop. Now reads the SQLite store (populated by the
+    background `Collector`) and is a plain `def`, so FastAPI threadpools
+    it off the loop.
+    """
     quarantine = _nft_list_set("quarantine_zone")
-    discovered = _discover_clients()
+    devices = store.list(limit=5000) if store else []
     alerts_list = []
 
-    for c in discovered:
-        if c["mac"].lower() in quarantine:
+    for d in devices:
+        mac = d["mac"]
+        if mac in quarantine:
             alerts_list.append({
                 "type": "new_client",
                 "severity": "warning",
-                "mac": c["mac"],
-                "ip": c["ip"],
-                "hostname": c["hostname"],
-                "message": f"New client in quarantine: {c['hostname'] or c['mac']}"
+                "mac": mac,
+                "ip": d.get("ip"),
+                "hostname": d.get("hostname"),
+                "message": f"New client in quarantine: {d.get('hostname') or mac}"
             })
 
     return {"alerts": alerts_list, "count": len(alerts_list)}
@@ -975,10 +1247,16 @@ async def delete_webhook(webhook_id: str, user=Depends(require_jwt)):
 
 
 @router.get("/summary")
-async def summary(user=Depends(require_jwt)):
-    """Get NAC summary."""
-    status_info = await status(user)
-    alerts_info = await alerts(user)
+def summary(user=Depends(require_jwt)):
+    """Get NAC summary.
+
+    #817 Task 4 fix (#808): converted from `async def` to plain `def` —
+    it only calls other now-`def` handlers (`status`, `alerts`), which
+    FastAPI threadpools off the shared aggregator loop, so no `await` is
+    needed (or valid) here anymore.
+    """
+    status_info = status(user)
+    alerts_info = alerts(user)
 
     return {
         "clients": {
@@ -1018,20 +1296,29 @@ async def parental(user=Depends(require_jwt)):
 
 
 @router.get("/quarantine")
-async def list_quarantine(user=Depends(require_jwt)):
-    """List all quarantined clients (frontend compatibility endpoint)."""
-    discovered = _discover_clients()
+def list_quarantine(user=Depends(require_jwt)):
+    """List all quarantined clients (frontend compatibility endpoint).
+
+    #817 Task 4 fix (#808): converted from `async def` — the previous
+    body called blocking `_discover_clients()` inline on the shared
+    aggregator loop. Now reads the SQLite store instead and is a plain
+    `def`, so FastAPI threadpools it off the loop.
+    """
+    devices = store.list(limit=5000) if store else []
     meta = _load_clients_meta()
+    # #817 whole-branch fix (I3): batched zone lookup, once per request.
+    zmap = _zone_map()
 
     clients = []
-    for c in discovered:
-        zone = _get_client_zone(c["mac"], c.get("interface", ""))
+    for d in devices:
+        mac = d["mac"]
+        zone = _resolve_zone(mac, d.get("interface", ""), zmap)
         if zone == "quarantine":
-            client_meta = meta.get(c["mac"].lower(), {})
+            client_meta = meta.get(mac, {})
             clients.append({
-                "mac": c["mac"],
-                "ip": c.get("ip", ""),
-                "hostname": c.get("hostname", "") or client_meta.get("hostname", ""),
+                "mac": mac,
+                "ip": d.get("ip", ""),
+                "hostname": d.get("hostname", "") or client_meta.get("hostname", ""),
                 "reason": "New device" if not client_meta.get("first_seen") else "Quarantined",
                 "since": client_meta.get("first_seen", datetime.now().isoformat()),
             })
@@ -1040,8 +1327,10 @@ async def list_quarantine(user=Depends(require_jwt)):
 
 
 @router.post("/quarantine_client")
-async def quarantine_client(mac: str, user=Depends(require_jwt)):
-    return await add_to_zone(ZoneRequest(mac=mac, zone="quarantine"), user)
+def quarantine_client(mac: str, user=Depends(require_jwt)):
+    """#817 Task 5 fix (#808): converted from `async def` — delegates to
+    the now-`def` `add_to_zone`, so `await` is no longer valid (or needed)."""
+    return add_to_zone(ZoneRequest(mac=mac, zone="quarantine"), user)
 
 
 class MacRequest(BaseModel):
@@ -1049,14 +1338,18 @@ class MacRequest(BaseModel):
 
 
 @router.post("/unquarantine")
-async def unquarantine(req: MacRequest, user=Depends(require_jwt)):
-    """Move client from quarantine to LAN (frontend compatibility endpoint)."""
-    return await add_to_zone(ZoneRequest(mac=req.mac, zone="lan"), user)
+def unquarantine(req: MacRequest, user=Depends(require_jwt)):
+    """Move client from quarantine to LAN (frontend compatibility endpoint).
+
+    #817 Task 5 fix (#808): converted from `async def` — delegates to the
+    now-`def` `add_to_zone`, so `await` is no longer valid (or needed).
+    """
+    return add_to_zone(ZoneRequest(mac=req.mac, zone="lan"), user)
 
 
 @router.get("/get_client")
 async def get_client_compat(mac: str, user=Depends(require_jwt)):
-    return await get_client(mac, user)
+    return get_client(mac, user)  # plain def (#817 Task 4) — no await
 
 
 @router.get("/get_policy")
@@ -1111,6 +1404,595 @@ async def send_test_alert(user=Depends(require_jwt)):
 async def update_zone(req: UpdateZoneRequest, user=Depends(require_jwt)):
     log.info("update_zone: %s", req.zone_id)
     return {"success": True, "zone": req.zone_id}
+
+
+# ══════════════════════════════════════════════════════════════════
+# #817 Task 6 — absorbed endpoints: vendors, scan, probe, mDNS, groups, export
+#
+# mac-guard (`/scan`, `/vendors`) and device-intel (`_probe_luci`,
+# `_discover_mdns_services`, groups CRUD, `/export/*`) are folded in here.
+# Every handler below is plain `def`; the actual subprocess call in each
+# is factored into its own module-level function so tests can
+# monkeypatch it and never shell out for real (#808 constraint: nothing
+# heavy runs inline on the aggregator's shared loop — `def` handlers are
+# already threadpooled by FastAPI, and bounded `ThreadPoolExecutor`s are
+# used where a single request fans out to many subprocess calls).
+# ══════════════════════════════════════════════════════════════════
+
+# --- /vendors (mac-guard absorption) ---
+
+
+@router.get("/vendors")
+def vendors(mac: Optional[str] = None, user=Depends(require_jwt)):
+    """OUI vendor lookup. With no `?mac=`, report the loaded OUI map size."""
+    om = oui_map or {}
+    if mac:
+        mac_c = canon_mac(mac) or mac.lower()
+        return {"mac": mac_c, "vendor": oui_vendor(mac_c, om)}
+    return {"oui_entries": len(om)}
+
+
+# --- /scan (mac-guard absorption) ---
+
+DEFAULT_SCAN_SUBNET = "192.168.1.0/24"
+
+
+def _scan_subprocess(subnet: str = DEFAULT_SCAN_SUBNET) -> str:
+    """Run `nmap -sn -PR` (ARP ping sweep) and return its grepable stdout,
+    or "" if nmap isn't installed / fails. Factored out so tests
+    monkeypatch this instead of shelling out for real.
+    """
+    try:
+        result = subprocess.run(
+            ["nmap", "-sn", "-PR", subnet, "-oG", "-"],
+            capture_output=True, text=True, timeout=60,
+        )
+        return result.stdout
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return ""
+
+
+def _parse_nmap_hosts(output: str) -> List[str]:
+    """Extract the IPs from nmap `-oG` `Host: <ip> (...)` lines."""
+    ips = []
+    for line in output.splitlines():
+        if line.startswith("Host:"):
+            parts = line.split()
+            if len(parts) >= 2:
+                ips.append(parts[1])
+    return ips
+
+
+def _scan_devices(subnet: str = DEFAULT_SCAN_SUBNET) -> List[Dict[str, Any]]:
+    """On-demand active scan: nmap ARP sweep to find live IPs, then
+    cross-reference the ARP/neighbor table (`_parse_arp`, already blocking
+    subprocess) for the MAC — nmap's grepable output doesn't reliably
+    carry it. No nmap / no hits at all -> fall back to whatever's already
+    in the ARP table (mac-guard's original fallback behaviour).
+    """
+    stdout = _scan_subprocess(subnet)
+    found_ips = set(_parse_nmap_hosts(stdout))
+    arp = _parse_arp()
+
+    if not found_ips:
+        return arp
+
+    by_ip = {c["ip"]: c for c in arp}
+    return [by_ip[ip] for ip in found_ips if ip in by_ip]
+
+
+@router.post("/scan")
+def scan(subnet: str = DEFAULT_SCAN_SUBNET, user=Depends(require_jwt)):
+    """Trigger an on-demand network scan and merge findings into the store.
+
+    #817 Task 6 (mac-guard absorption): plain `def` — FastAPI threadpools
+    the blocking nmap/ARP subprocess calls below off the shared aggregator
+    loop (#808); this never runs on the passive collector's own loop.
+
+    #817 Task 6 review fix 1: enriches each discovered device (oui_vendor,
+    device_type, risk_score/risk_level, is_router/is_openwrt) before
+    `store.upsert()` — mirrors `Collector.cycle_once`'s enrichment block —
+    so scan-only devices no longer land with NULL device_type/risk columns
+    (`upsert` binds `None` for every listed column, and the SQLite
+    `DEFAULT` never fires on an explicit `NULL`).
+
+    #817 Task 6 review fix 2: `subnet` is validated as an IP network
+    (`ipaddress.ip_network`) before it ever reaches the `nmap` argv — an
+    authenticated caller could otherwise pass an argv-injection token
+    (e.g. `--script=...`) or an arbitrary external range.
+    """
+    try:
+        ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        raise HTTPException(400, "invalid subnet")
+
+    devices = _scan_devices(subnet)
+    now = int(time.time())
+    merged = 0
+
+    for d in devices:
+        mac = canon_mac(d.get("mac", ""))
+        if not mac:
+            continue
+        if store:
+            hostname = d.get("hostname") or ""
+            vendor = oui_vendor(mac, oui_map or {})
+            device_type = classify_device_type(hostname, vendor)
+            fp = openwrt_fingerprint(hostname, mac)
+
+            # #817 addendum (Part B): mirrors the same reclassification in
+            # `Collector.cycle_once` — a router-vendor MAC (tp-link/asus/
+            # linksys/d-link/gl.inet/xiaomi/huawei/... in `ROUTER_VENDORS`)
+            # with a hostname that misses `classify_device_type`'s much
+            # smaller "router" keyword list would otherwise stay "unknown"
+            # and skip risk scoring below (the omit-unknown guard), so the
+            # rogue-AP HIGH signal would never fire for the most common
+            # case. Reclassify it as "router" so it reaches `risk_score`.
+            if device_type == "unknown" and fp["is_router"]:
+                device_type = "router"
+
+            # #817 addendum (Task 10): a device already in the store, or
+            # explicitly allow-listed, is "known" -> trusted; a
+            # never-before-seen device is unknown. For a router this is
+            # the known-router-vs-rogue-AP signal risk_score() acts on.
+            existing_row = store.get(mac)
+            is_known = (existing_row is not None) or (
+                bool(existing_row) and existing_row.get("allow_state") == "allow"
+            )
+
+            # #817 whole-branch fix (I4): OMIT fields the enricher couldn't
+            # determine (None vendor, "unknown" device_type + its derived
+            # risk) so a re-scanned migrated device isn't clobbered by a
+            # sentinel through `upsert`'s best-value merge; a brand-new
+            # device still gets the column DEFAULT.
+            upsert_dev = {
+                "mac": mac,
+                "ip": d.get("ip"),
+                "hostname": hostname or None,
+                "last_seen": now,
+                "source": "scan",
+                "is_router": int(fp["is_router"]),
+                "is_openwrt": int(fp["is_openwrt"]),
+            }
+            if vendor:
+                upsert_dev["oui_vendor"] = vendor
+            if device_type != "unknown":
+                score, level = risk_score(device_type, fp["is_router"], is_known)
+                upsert_dev["device_type"] = device_type
+                upsert_dev["risk_score"] = score
+                upsert_dev["risk_level"] = level
+
+            store.upsert(upsert_dev)
+            merged += 1
+
+    stats_cache.clear()
+    return {"success": True, "devices_found": len(devices), "merged": merged}
+
+
+# --- /probe/openwrt[/{ip}] (device-intel `_probe_luci` absorption) ---
+
+_SECUBOX_MARKERS = (
+    "data-secubox-theme", "luci-static/secubox", "secubox-auth-hook",
+    "secubox-portal", "secubox-public", "luci-app-secubox",
+    "/luci/admin/secubox", "secubox-dashboard",
+)
+
+
+def _curl_body(url: str, timeout: float) -> str:
+    """Blocking `curl` GET, returns the response body (or "" on any
+    failure/timeout). Factored so `_probe_ip` tests can monkeypatch this
+    single function instead of touching subprocess/network.
+    """
+    try:
+        r = subprocess.run(
+            ["curl", "-s", "--connect-timeout", str(max(1, int(timeout))), "-k", url],
+            capture_output=True, text=True, timeout=timeout + 1,
+        )
+        return r.stdout or ""
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+
+def _probe_ip(ip: str, timeout: float = 2.0) -> Dict[str, Any]:
+    """Active LuCI/OpenWrt/SecuBox fingerprint of a single IP (device-intel
+    `_probe_luci` absorption, synchronous form). Tests monkeypatch this
+    function directly to avoid any real curl/network call.
+    """
+    result: Dict[str, Any] = {
+        "luci_detected": False, "secubox_detected": False,
+        "version": None, "model": None,
+    }
+
+    for scheme in ("http", "https"):
+        if result["luci_detected"]:
+            break
+        body = _curl_body(f"{scheme}://{ip}/cgi-bin/luci", timeout)
+        if not body:
+            continue
+
+        result["luci_detected"] = True
+        body_lower = body.lower()
+
+        model_match = re.search(r"<title>([^<]+)</title>", body, re.IGNORECASE)
+        if model_match:
+            title = model_match.group(1)
+            if " - " in title:
+                result["model"] = title.split(" - ")[0].strip()
+
+        ver_match = re.search(r"git-[\d.]+-[a-f0-9]+", body)
+        if ver_match:
+            result["version"] = ver_match.group(0)
+        elif "luci.js?v=" in body:
+            alt_ver = re.search(r"luci\.js\?v=([\d.~a-f0-9-]+)", body)
+            if alt_ver:
+                result["version"] = alt_ver.group(1)
+
+        for marker in _SECUBOX_MARKERS:
+            if marker in body_lower:
+                result["secubox_detected"] = True
+                break
+
+    return result
+
+
+def _apply_probe_result(mac: str, probe: Dict[str, Any]) -> None:
+    """Persist a positive probe result's fingerprint columns into the store."""
+    if not store or not probe.get("luci_detected"):
+        return
+    store.upsert({
+        "mac": mac,
+        "is_openwrt": 1,
+        "is_secubox": int(bool(probe.get("secubox_detected"))),
+        "model": probe.get("model"),
+        "luci_version": probe.get("version"),
+    })
+    store.record_event(mac, "openwrt_probed")
+
+
+@router.post("/probe/openwrt")
+def probe_openwrt(user=Depends(require_jwt)):
+    """Probe every known device with an IP for LuCI/OpenWrt (bounded
+    concurrency), updating the store's fingerprint columns for matches.
+
+    #817 Task 6 (device-intel absorption): plain `def`; the
+    `ThreadPoolExecutor` bounds concurrency across many IPs within this
+    one request — it never runs on the collector's own async loop.
+    """
+    devices = store.list(limit=5000) if store else []
+    targets = [d for d in devices if d.get("ip")]
+    results: List[Dict[str, Any]] = []
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_probe_ip, d["ip"], 3.0): d for d in targets}
+        for fut in as_completed(futures):
+            d = futures[fut]
+            probe = fut.result()
+            _apply_probe_result(d["mac"], probe)
+            results.append({"ip": d["ip"], "mac": d["mac"], **probe})
+
+    stats_cache.clear()
+    return {
+        "success": True,
+        "total_probed": len(results),
+        "openwrt_detected": sum(1 for r in results if r.get("luci_detected")),
+        "secubox_detected": sum(1 for r in results if r.get("secubox_detected")),
+        "results": results,
+    }
+
+
+@router.post("/probe/openwrt/{ip}")
+def probe_openwrt_single(ip: str, user=Depends(require_jwt)):
+    """Probe a single IP for LuCI/OpenWrt/SecuBox and update the matching
+    device's fingerprint columns, if a device with that IP is known.
+
+    #817 Task 6 review fix 3 (SSRF): `ip` is validated as an IP literal
+    (`ipaddress.ip_address`) before it reaches `_probe_ip` -> `curl` — a
+    non-IP value (a hostname, or an argv-like token) is rejected with 400
+    rather than handed to the subprocess.
+    """
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        raise HTTPException(400, "invalid ip")
+
+    probe = _probe_ip(ip, 5.0)
+
+    mac = None
+    for d in (store.list(limit=5000) if store else []):
+        if d.get("ip") == ip:
+            mac = d["mac"]
+            break
+
+    if mac:
+        _apply_probe_result(mac, probe)
+        stats_cache.clear()
+
+    return {"ip": ip, "mac": mac, **probe}
+
+
+# --- /mdns (device-intel `_discover_mdns_services` absorption) ---
+
+
+def _mdns_subprocess() -> str:
+    """Blocking `avahi-browse` call, returns stdout (or "" on any
+    failure/timeout/missing binary). Factored so tests monkeypatch this
+    instead of shelling out for real.
+    """
+    try:
+        r = subprocess.run(
+            ["avahi-browse", "-t", "-r", "-p", "_http._tcp"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return r.stdout or ""
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+
+def _parse_mdns(output: str) -> List[Dict[str, Any]]:
+    """Parse `avahi-browse -p` machine-readable lines (`=;iface;proto;
+    name;type;domain;hostname;address;port;txt`) into service dicts."""
+    services = []
+    for line in output.split("\n"):
+        if not line.startswith("="):
+            continue
+        parts = line.split(";")
+        if len(parts) >= 8:
+            services.append({
+                "name": parts[3],
+                "type": parts[4],
+                "hostname": parts[6],
+                "ip": parts[7],
+                "port": int(parts[8]) if parts[8].isdigit() else 80,
+            })
+    return services
+
+
+@router.get("/mdns")
+def mdns(user=Depends(require_jwt)):
+    """Discover devices/services via mDNS/Avahi."""
+    services = _parse_mdns(_mdns_subprocess())
+    return {"services": services, "total": len(services)}
+
+
+# --- /groups CRUD (device-intel absorption, simplified) ---
+
+
+class GroupRequest(BaseModel):
+    name: str
+    description: str = ""
+    color: str = "#3498db"
+    icon: str = "devices"
+
+
+class GroupMemberRequest(BaseModel):
+    mac: str
+
+
+@router.get("/groups")
+def list_groups(user=Depends(require_jwt)):
+    """List all device groups with their members.
+
+    #817 Task 6: simplified to one group per device (the `devices.group_id`
+    column already reserved in the schema) rather than device-intel's
+    many-to-many membership list — see `store.py`'s device-groups section.
+    """
+    groups = store.list_groups() if store else []
+    result = []
+    for g in groups:
+        members = [d["mac"] for d in (store.group_members(g["id"]) if store else [])]
+        result.append({**g, "members": members, "member_count": len(members)})
+    return {"groups": result, "count": len(result)}
+
+
+@router.post("/groups")
+def create_group(req: GroupRequest, user=Depends(require_jwt)):
+    """Create a new device group."""
+    group_id = uuid.uuid4().hex[:8]
+    group = store.create_group(group_id, req.name, req.description, req.color, req.icon) if store else {}
+    return {"success": True, "group": group}
+
+
+@router.delete("/groups/{group_id}")
+def delete_group(group_id: str, user=Depends(require_jwt)):
+    """Delete a device group; member devices are unassigned, not deleted."""
+    if store:
+        store.delete_group(group_id)
+    return {"success": True}
+
+
+@router.post("/groups/{group_id}/members")
+def add_group_member(group_id: str, req: GroupMemberRequest, user=Depends(require_jwt)):
+    """Assign a device (by MAC) to a group."""
+    mac = canon_mac(req.mac) or req.mac.lower()
+    if store:
+        store.assign_group(mac, group_id)
+    return {"success": True, "mac": mac, "group_id": group_id}
+
+
+# --- /export/json + /export/csv (device-intel absorption) ---
+
+_EXPORT_COLUMNS = [
+    "mac", "ip", "hostname", "oui_vendor", "device_type", "risk_level",
+    "risk_score", "zone", "allow_state", "is_router", "is_openwrt",
+    "model", "luci_version", "first_seen", "last_seen", "source",
+]
+
+# #817 Task 6 review fix 4: hostname/model/oui_vendor are attacker-influenceable
+# (a device can announce any hostname). A leading =/+/-/@ (or tab/CR) is how
+# spreadsheet apps (Excel, LibreOffice, Google Sheets) trigger formula
+# evaluation on CSV import — prefix such cells with a single quote so they
+# import as inert text instead.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe_cell(value: Any) -> Any:
+    """Neutralize a CSV cell that would otherwise be interpreted as a
+    spreadsheet formula on import."""
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
+@router.get("/export/json")
+def export_json(user=Depends(require_jwt)):
+    """Export the full device store as JSON."""
+    devices = store.list(limit=100000) if store else []
+    return {
+        "exported_at": datetime.now().isoformat(),
+        "device_count": len(devices),
+        "devices": devices,
+    }
+
+
+@router.get("/export/csv")
+def export_csv(user=Depends(require_jwt)):
+    """Export the full device store as CSV (header row + one row per device)."""
+    devices = store.list(limit=100000) if store else []
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(_EXPORT_COLUMNS)
+    for d in devices:
+        writer.writerow([_csv_safe_cell(d.get(c, "")) for c in _EXPORT_COLUMNS])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=devices.csv"},
+    )
+
+
+# ══════════════════════════════════════════════════════════════════
+# #817 addendum Part A — mesh-sync (iot-guard P2P mesh absorption)
+#
+# The Device Guardian consolidation spec listed "mesh-sync" as absorbed
+# from `secubox-iot-guard` but it was missed in Task 6/9. iot-guard's
+# `/mesh/peers` + `/mesh/sync` (`packages/secubox-iot-guard/api/main.py`,
+# now retired to a 308-redirect shim whose catch-all already forwards
+# `/mesh/*` here) read live peers from the P2P daemon over its Unix
+# socket (`fetch_p2p_peers`: HTTP-over-UDS `GET /peers` on
+# `/run/secubox/p2p.sock`) and synthesize one device per peer, keyed by
+# a `sb:`-prefixed MAC hashed from the peer id
+# (`sync_p2p_peers_to_devices`). Folded in verbatim here.
+# ══════════════════════════════════════════════════════════════════
+
+P2P_SOCKET = "/run/secubox/p2p.sock"
+
+
+class _UnixHTTPConnection(http.client.HTTPConnection):
+    """`http.client.HTTPConnection` over a Unix domain socket instead of
+    TCP — same shape as iot-guard's private helper of the same name."""
+
+    def __init__(self, path: str, timeout: float = 2.0):
+        super().__init__("localhost", timeout=timeout)
+        self._unix_path = path
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self._unix_path)
+
+
+def _fetch_mesh_peers() -> List[Dict[str, Any]]:
+    """`GET /peers` from the P2P daemon over `P2P_SOCKET`.
+
+    Factored into its own module-level function so tests can monkeypatch
+    this single call point instead of touching a real socket. Fail-safe:
+    a missing socket file, connection refusal, timeout, or any other
+    error yields `[]` — never raises (mirrors iot-guard's
+    `fetch_p2p_peers`, which is likewise best-effort).
+    """
+    if not os.path.exists(P2P_SOCKET):
+        return []
+    try:
+        conn = _UnixHTTPConnection(P2P_SOCKET, timeout=2.0)
+        try:
+            conn.request("GET", "/peers")
+            response = conn.getresponse()
+            if response.status != 200:
+                return []
+            data = json.loads(response.read().decode())
+            return data.get("peers", [])
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
+def _peer_synthetic_mac(peer_id: str) -> str:
+    """`sb:xx:xx:xx:xx:xx` synthetic MAC hashed from the peer id — the
+    exact scheme from iot-guard's `sync_p2p_peers_to_devices` (md5 hex
+    digest, first 10 hex chars, colon-paired)."""
+    peer_hash = hashlib.md5(peer_id.encode()).hexdigest()[:10]
+    return f"sb:{peer_hash[0:2]}:{peer_hash[2:4]}:{peer_hash[4:6]}:{peer_hash[6:8]}:{peer_hash[8:10]}"
+
+
+@router.get("/mesh/peers")
+def mesh_peers(user=Depends(require_jwt)):
+    """List the mesh peers already synced into the device store.
+
+    Reads the store's `source="mesh"` devices (populated by `/mesh/sync`)
+    rather than re-hitting the P2P socket on every read — simpler than
+    iot-guard's live-only read, and consistent with every other absorbed
+    listing endpoint here (`/clients`, `/vendors`, ...) reading the
+    canonical store.
+    """
+    devices = store.list(limit=5000) if store else []
+    peers = [d for d in devices if d.get("source") == "mesh"]
+    return {"peers": peers, "count": len(peers)}
+
+
+@router.post("/mesh/sync")
+def mesh_sync(user=Depends(require_jwt)):
+    """Sync P2P mesh peers into the device store as synthetic devices.
+
+    Reads live peers via `_fetch_mesh_peers()` (fail-safe: `[]` on any
+    error, including a monkeypatched replacement that raises — the `try`
+    below is belt-and-braces on top of that function's own internal
+    fail-safety) and `store.upsert()`s one synthetic device per peer:
+    `mac` is the `sb:`-prefixed hash of the peer id, `hostname` is the
+    peer's name/did, `device_type="mesh_node"`, `source="mesh"`. The
+    local node and any peer without an id are skipped. Trusted mesh
+    peers are marked `allow_state="allow"` (SecuBox nodes, not
+    rogue/unknown devices). Plain `def`: the socket read is blocking,
+    threadpooled off the shared aggregator loop (#808 constraint).
+    """
+    try:
+        peers = _fetch_mesh_peers()
+    except Exception:
+        peers = []
+
+    now = int(time.time())
+    synced = 0
+
+    for peer in peers:
+        if not isinstance(peer, dict) or peer.get("is_local"):
+            continue
+        peer_id = peer.get("id") or peer.get("peer_id") or ""
+        if not peer_id:
+            continue
+
+        mac = _peer_synthetic_mac(peer_id)
+        hostname = peer.get("name") or peer.get("did") or peer_id
+        address = peer.get("address") or peer.get("endpoint") or peer.get("ip")
+        if address in (None, "", "unknown"):
+            address = None
+
+        if store:
+            store.upsert({
+                "mac": mac,
+                "ip": address,
+                "hostname": hostname,
+                "device_type": "mesh_node",
+                "source": "mesh",
+                "allow_state": "allow",
+                "last_seen": now,
+            })
+            store.record_event(mac, "mesh_synced", peer_id)
+        synced += 1
+
+    stats_cache.clear()
+    return {"synced": synced}
 
 
 app.include_router(router)
