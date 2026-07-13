@@ -3,6 +3,44 @@
 
 ---
 
+## 2026-07-12 — metalogue: Maltego-style OSINT suite as LXC modules (#845)
+
+Wanted Maltego-style OSINT (collect → correlate → dossier). Maltego is commercial/cloud →
+built the FOSS stack as SecuBox LXC modules, wired collectors → hub. Analyzed
+`github.com/topics/osint`; picked **Maigret** (identity collector) + **SpiderFoot** (automation +
+correlation graph) for gk2, deferred **OpenCTI** (the true graph hub) to a beefier node (its
+Elasticsearch/Redis/RabbitMQ/MinIO stack would OOM the arm64 board, ~1.5 GB free). Built
+subagent-driven (implementer → adversarial review → fix per module), following the openclaw LXC
+pattern. Merged #846–#850, deployed **and installed** on gk2.
+
+- **secubox-maigret** — username → dossier across 3000+ sites. LXC 10.100.0.42, CLI wrapped by a
+  host FastAPI (async job+poll, concurrency cap 3 → 429, passive-only, JWT + append-only audit).
+  `maigretctl` privileged control plane: username passed ONLY positionally to `lxc_attach` (no shell
+  interpolation), flag-injection guards, `__guard` test verb. Installed + functional (a real
+  `torvalds` lookup returned GitHub/Instagram/Telegram/Facebook).
+- **secubox-spiderfoot** — SpiderFoot (200+ passive modules + correlation graph = interim
+  Maltego-style hub) in an LXC (10.100.0.43), in-container systemd unit binding `sf.py` to the
+  container LAN IP only. Its UI emits absolute `/static` paths so it can't live under a portal
+  subpath (`admin.gk2/spiderfoot-ui/` → the SPA's "module not found"); served **at root** on its own
+  vhost **https://spiderfoot.gk2.secubox.in/** (zigbee/lyrion pattern: nginx :9080 vhost + sbxwaf
+  route + HAProxy ACL → mitmproxy_inspector + LAN-gated exposure snippet, wildcard `*.gk2` cert) +
+  a `:9043` LAN-direct fallback. Review HIGH fixed: SpiderFoot has no native auth → every nginx
+  location auth-gated (`auth_request /__sbx_auth_verify`, peer pattern).
+- **Stylized PDF report** (maigret) — raw `--json simple` → a FORMAL SecuBox dossier (`api/report.py`,
+  fpdf2): dark masthead, document metadata block (REFERENCE/SUBJECT/CLASSIFICATION), §1 Summary,
+  §2 Findings as a coherent results table (#/platform/category/profile/details, zebra rows, category
+  colour-coding, paginated). `GET /lookup/{id}/report.pdf` (JWT, plain `def` → threadpooled so the
+  render never blocks the aggregator loop) + 📄 PDF panel button (authed fetch → blob). 12 tests.
+- **Two root causes fixed during install:** (1) `net.ipv4.ip_forward` had drifted to `0` on gk2 →
+  every LXC (incl. openclaw) had zero internet egress; restored via `sysctl --system` (the
+  `99-secubox-zz-lxc-forward.conf` drop-in intends 1). (2) maigret/SpiderFoot deps (lxml, pandas,
+  cryptography…) have no stock arm64 wheels → minbase LXC can't compile → **piwheels**
+  (`--extra-index-url`) + dev-header fallback; 17-min-fail → ~2-3 min. Backported to both `<mod>ctl`.
+- All handlers plain `def`, workers detached — no board-wide loop-blocking SPOF. Aggregator registry
+  (`aggregator.toml`) hand-edited (like openclaw); package self-registration remains a follow-up.
+
+---
+
 ## 2026-07-11 — MetaBlogizer Publisher Wizard (#832): publish is fixed end-to-end
 
 The publish ecosystem was broken: `zem.gk2` answered a bare 421, droplet PermissionError'd on

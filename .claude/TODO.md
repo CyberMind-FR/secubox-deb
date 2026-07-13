@@ -1,5 +1,27 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-07-04*
+*Mis à jour : 2026-07-13*
+
+---
+
+## 🕸️ MIND — metalogue OSINT suite (#845, suivis 2026-07-12)
+
+> Maigret + SpiderFoot **live/installés** sur gk2 ; OpenCTI différé. Voir [[Metalogue]] wiki + HISTORY 07-12.
+
+- [ ] **P3 — OpenCTI** (hub graphe Maltego) sur nœud amd64 (192.168.1.9) ou hardware dédié :
+  LXC OpenCTI (ES+Redis+RabbitMQ+MinIO), connecteurs depuis Maigret/SpiderFoot/openclaw, route
+  WAF cross-mesh vers la navbar gk2. Migrer le rôle hub de SpiderFoot → OpenCTI. Trop lourd pour
+  gk2 (~1.5 Go libre).
+- [ ] **ip_forward reset au runtime** : la valeur dérive à `0` après boot malgré
+  `99-secubox-zz-lxc-forward.conf` (=1) → coupe la sortie internet de TOUS les LXC. Trouver le
+  service/script qui remet `ip_forward=0` et le neutraliser (récurrent).
+- [ ] **Self-registration `aggregator.toml`** : maigret/spiderfoot ajoutés à la main dans
+  `modules=[]` (comme openclaw). Un postinst devrait s'auto-enregistrer (idempotent, sans race
+  sur le fichier partagé) — sinon une image neuve perd les modules.
+- [ ] **Re-enable SpiderFoot public sur image neuve** : l'expo `spiderfoot.gk2` (vhost + route
+  sbxwaf + ACL HAProxy + nft :9043 + snippet exposure) a été câblée **live**. Idéalement via
+  `secubox-exposure emancipate spiderfoot 5001 spiderfoot.gk2.secubox.in` (le tool documenté).
+- [ ] **Bridge collecteurs → hub** : pousser les findings Maigret/openclaw dans SpiderFoot (import
+  API) en attendant OpenCTI ; stub `metalogue-bridge` pour le connecteur OpenCTI P3.
 
 ---
 
