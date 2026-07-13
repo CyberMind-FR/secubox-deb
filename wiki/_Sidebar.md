@@ -44,6 +44,7 @@
 * [[ToolBox]] 👁️ cabine numérique · rapport vie privée
 * [[Anti-Track]] 🛡️ bloque · empoisonne · anonymise
 * [[Billets]] 📮 micro-blog gateway · média vignette zoomable
+* [[Metalogue]] 🕸️ OSINT suite · Maigret + SpiderFoot (Maltego-style)
 * [[ThreatMesh]] 🛰️ blocklist souveraine (feeds + mesh, sans CAPI) | [FR](ThreatMesh-FR)
 * [[Modules|MODULES-EN]] 🇬🇧
 * [[MODULES-FR]] 🇫🇷

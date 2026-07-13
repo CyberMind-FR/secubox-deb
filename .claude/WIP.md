@@ -1,5 +1,22 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-10*
+*Mis à jour : 2026-07-13*
+
+---
+
+## ✅ 2026-07-12 : metalogue — suite OSINT Maltego-style en modules LXC (#845)
+
+Deux modules OSINT construits (subagent-driven + revue adversariale), déployés **et installés** sur gk2, mergés (#846–#850). Détail complet dans HISTORY.md. Voir [[Metalogue]] wiki.
+
+- **secubox-maigret** 🔎 — collecteur d'identité (pseudo → comptes sur 3000+ sites). LXC 10.100.0.42, CLI wrappé par une API host (job async, cap 3 lookups, 429), passif-only, JWT + audit. **Installé + fonctionnel** (lookup `torvalds` = vrais comptes).
+- **secubox-spiderfoot** 🌀 — moteur d'automatisation (200+ modules passifs + graphe corrélation = hub Maltego intérimaire). LXC 10.100.0.43. **Installé, UI live à https://spiderfoot.gk2.secubox.in/** (proxy à la racine, LAN-gated ; le subpath `/spiderfoot-ui/` heurtait le SPA portail → vhost dédié zigbee/lyrion pattern + route sbxwaf + ACL HAProxy).
+- **Rapport PDF stylisé** (maigret) — raw → dossier formel SecuBox (masthead, bloc métadonnées CONFIDENTIAL, §1 Résumé, §2 Findings en table cohérente zébrée/colorée par catégorie). `GET /lookup/{id}/report.pdf` (JWT, off-loop) + bouton 📄 PDF. fpdf2.
+- **2 root-causes corrigés (install)** : (1) `ip_forward` dérivé à 0 → aucune sortie internet des LXC (tous, openclaw inclus) ; restauré `sysctl --system`. (2) deps arm64 sans wheels → **piwheels** (17min-fail → 2min-ok). Backportés dans les `<mod>ctl`.
+
+### ⬜ Next / follow-ups
+- **P3 OpenCTI** (hub graphe Maltego) — différé sur nœud amd64/dédié (stack ES trop lourde pour gk2, ~1.5 Go libre).
+- **ip_forward reset runtime** : qqch remet `ip_forward=0` après boot malgré le drop-in zz — investiguer (récurrent, casse la sortie des conteneurs).
+- **Ré-activation sur image neuve** : l'expo publique SpiderFoot (route sbxwaf + ACL HAProxy + nft :9043 + snippet exposure) a été câblée **live** ; le paquet livre les vhosts mais un re-enable opérateur est requis au flash.
+- **Self-registration aggregator.toml** : maigret/spiderfoot ajoutés à la main dans `modules=[]` (comme openclaw) ; le paquet ne s'auto-enregistre pas.
 
 ---
 
