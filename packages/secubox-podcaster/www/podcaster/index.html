@@ -61,7 +61,12 @@
   .muted{color:var(--text-muted)}.empty{color:var(--text-muted);padding:40px;text-align:center}
   dialog{background:var(--panel);color:var(--text-primary);border:1px solid var(--void-purple);border-radius:12px;padding:20px;width:min(520px,92vw)}
   dialog label{display:block;margin:10px 0 4px;color:var(--text-muted);font-size:12px}dialog input{width:100%}
-  .toast{position:fixed;bottom:18px;right:18px;background:#13131c;border:1px solid var(--cyber-cyan);color:var(--cyber-cyan);padding:10px 14px;border-radius:8px;opacity:0;transition:.2s;font-size:12px}.toast.on{opacity:1}
+  .toast{position:fixed;bottom:18px;right:18px;background:#13131c;border:1px solid var(--cyber-cyan);color:var(--cyber-cyan);padding:10px 14px;border-radius:8px;opacity:0;transition:.2s;font-size:12px;display:flex;gap:10px;align-items:center;max-width:min(90vw,420px);pointer-events:none}.toast.on{opacity:1;pointer-events:auto}
+  /* fatal errors persist until dismissed (guideline): red, with a ✕ */
+  .toast.err{border-color:var(--cinnabar);color:var(--cinnabar);background:#1c1113}
+  .toast .toast-x{flex:none;background:none;border:none;color:inherit;font-size:14px;line-height:1;padding:0 2px;cursor:pointer;opacity:.75}
+  .toast .toast-x:hover{opacity:1}
+  .toast .toast-msg{flex:1;word-break:break-word}
 </style>
 </head>
 <body>
@@ -126,7 +131,14 @@ async function api(p,opt={}){
   if(!r.ok) throw new Error(await r.text());
   const ct=r.headers.get("content-type")||""; return ct.includes("json")?r.json():r.text();
 }
-function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._);t._=setTimeout(()=>t.classList.remove("on"),3000)}
+// Transient status: progress + success auto-hide after 3s.
+function toast(m){const t=document.getElementById("toast");clearTimeout(t._);t.classList.remove("err");t.textContent=m;t.classList.add("on");t._=setTimeout(()=>t.classList.remove("on"),3000)}
+// Fatal (API error / missing): stays until the user dismisses it (guideline).
+function errorToast(m){const t=document.getElementById("toast");clearTimeout(t._);
+  t.textContent="";const s=document.createElement("span");s.className="toast-msg";s.textContent=m;
+  const x=document.createElement("button");x.className="toast-x";x.title="dismiss";x.textContent="✕";
+  x.onclick=()=>{t.classList.remove("on","err")};
+  t.append(s,x);t.classList.add("on","err")}
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 async function loadStatus(){
   try{const s=await fetch(API+"/status").then(r=>r.json());
@@ -166,14 +178,14 @@ async function addFeed(){const u=document.getElementById("feedUrl").value.trim()
   try{const r=await api("/feeds",{method:"POST",body:JSON.stringify({url:u,auto_dl:ad})});
     document.getElementById("feedUrl").value="";
     toast(`Added ${r.title||u} (${r.episodes} eps${r.queued?', '+r.queued+' queued':''})`);loadAll()}
-  catch(e){toast("Add failed: "+e.message.slice(0,60))}}
+  catch(e){errorToast("Add failed: "+e.message.slice(0,60))}}
 async function toggleAd(id,on){try{const r=await api(`/feeds/${id}/autodl?on=${on?'true':'false'}`,{method:"POST"});
-    toast(on?`auto-download on${r.queued?' · '+r.queued+' queued':''}`:"auto-download off");loadAll()}catch(e){toast("toggle failed")}}
+    toast(on?`auto-download on${r.queued?' · '+r.queued+' queued':''}`:"auto-download off");loadAll()}catch(e){errorToast("toggle failed")}}
 async function delFeed(id){if(!confirm("Remove this feed?"))return;await api("/feeds/"+id,{method:"DELETE"});if(SEL===id)SEL=null;loadAll()}
-async function dl(id){try{await api(`/episodes/${id}/download`,{method:"POST"});toast("Queued");loadEps()}catch(e){toast("Queue failed")}}
+async function dl(id){try{await api(`/episodes/${id}/download`,{method:"POST"});toast("Queued");loadEps()}catch(e){errorToast("Queue failed")}}
 async function importOpml(inp){const f=inp.files[0];if(!f)return;const opml=await f.text();
-  try{const r=await api("/feeds/import-opml",{method:"POST",body:JSON.stringify({opml})});toast(`Imported ${r.added}/${r.total}`);loadAll()}catch(e){toast("OPML import failed")}inp.value=""}
-function stickyToast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._)}
+  try{const r=await api("/feeds/import-opml",{method:"POST",body:JSON.stringify({opml})});toast(`Imported ${r.added}/${r.total}`);loadAll()}catch(e){errorToast("OPML import failed")}inp.value=""}
+function stickyToast(m){const t=document.getElementById("toast");clearTimeout(t._);t.classList.remove("err");t.textContent=m;t.classList.add("on")}
 function uploadZip(inp){const f=inp.files[0];if(!f)return;
   const title=prompt("Audiobook title:",f.name.replace(/\.zip$/i,""));if(title===null){inp.value="";return}
   const xhr=new XMLHttpRequest();
@@ -188,8 +200,8 @@ function uploadZip(inp){const f=inp.files[0];if(!f)return;
     if(xhr.status===401){window.location="/login.html";return}
     if(xhr.status>=200&&xhr.status<300){ let r={}; try{r=JSON.parse(xhr.responseText)}catch(_){}
       toast(`Published "${r.title||title}" — ${r.tracks||0} tracks`); loadAll(); }
-    else toast("Upload failed: "+((xhr.responseText||("HTTP "+xhr.status)).slice(0,80))); };
-  xhr.onerror=()=>{ inp.value=""; toast("Upload failed: network error"); };
+    else errorToast("Upload failed: "+((xhr.responseText||("HTTP "+xhr.status)).slice(0,80))); };
+  xhr.onerror=()=>{ inp.value=""; errorToast("Upload failed: network error"); };
   stickyToast(`Uploading ${f.name} — 0%`);
   xhr.send(f);
 }
@@ -198,7 +210,7 @@ async function openCfg(){const d=await api("/config").then(r=>r.config).catch(()
   document.getElementById("svc").innerHTML=`service <b style="color:var(--matrix-green)">${s.service||'?'}</b> · worker ${s.worker?'on':'off'} · ${s.downloaded||0} local`;
   if(d){c_media.value=d.media_path||"";c_par.value=d.max_parallel||2;c_ref.value=d.refresh_minutes||60;c_pub.value=d.public_base||"";c_title.value=d.share_title||""}
   document.getElementById("cfg").showModal()}
-async function saveCfg(){try{await api("/config",{method:"POST",body:JSON.stringify({media_path:c_media.value,max_parallel:+c_par.value,refresh_minutes:+c_ref.value,public_base:c_pub.value,share_title:c_title.value})});toast("Saved — restart to apply");document.getElementById("cfg").close()}catch(e){toast("Save failed")}}
+async function saveCfg(){try{await api("/config",{method:"POST",body:JSON.stringify({media_path:c_media.value,max_parallel:+c_par.value,refresh_minutes:+c_ref.value,public_base:c_pub.value,share_title:c_title.value})});toast("Saved — restart to apply");document.getElementById("cfg").close()}catch(e){errorToast("Save failed")}}
 function loadAll(){loadStatus();loadFeeds();loadEps()}
 loadAll();setInterval(()=>{loadStatus();loadEps()},4000);
 </script>
