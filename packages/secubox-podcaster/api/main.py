@@ -70,6 +70,10 @@ router = APIRouter()
 # ── download queue (in-process, persisted state in SQLite) ──────────
 _queue: "asyncio.Queue[int]" = asyncio.Queue()
 _worker_started = False
+# Episodes with a live download task, keyed by id. Used to (a) dedup: never run
+# two _download_one for the same episode (they share deterministic tmp/dest
+# paths → file corruption); (b) let a manual restart cancel a wedged download.
+_inflight: "dict[int, asyncio.Task]" = {}
 
 # A stalled server must not hang a slot forever. connect/write are short;
 # read is per-chunk (aiter_bytes), so a server that opens the socket then goes
@@ -229,6 +233,12 @@ async def _download_one(ep_id: int) -> None:
         store.set_episode(ep_id, state="done", progress=100, error=None, attempts=0,
                           local_path=str(dest), bytes=dest.stat().st_size)
         log.info(f"downloaded ep {ep_id} -> {dest}")
+    except asyncio.CancelledError:
+        # Manual restart cancelled us; drop the partial file and let the
+        # re-queue (done by the caller) start a fresh attempt. Do NOT count
+        # this as a failed attempt.
+        tmp.unlink(missing_ok=True)
+        raise
     except Exception as e:
         tmp.unlink(missing_ok=True)
         attempts = store.bump_attempts(ep_id)
@@ -260,7 +270,15 @@ async def _worker() -> None:
 
     while True:
         ep_id = await _queue.get()
-        asyncio.create_task(run(ep_id))
+        cur = _inflight.get(ep_id)
+        if cur is not None and not cur.done():
+            continue  # dedup: an identical download is already running
+        t = asyncio.create_task(run(ep_id))
+        _inflight[ep_id] = t
+        # Drop from the registry once finished, but only if we're still the
+        # registered task (a later restart may have replaced us).
+        t.add_done_callback(
+            lambda done, e=ep_id: _inflight.get(e) is done and _inflight.pop(e, None))
 
 
 async def _refresher() -> None:
@@ -538,6 +556,16 @@ async def download(ep_id: int):
     ep = store.get_episode(ep_id)
     if not ep:
         raise HTTPException(404, "no such episode")
+    # Cancel any live download for this episode first, and wait for it to
+    # unwind, so the fresh re-queue can never race the old task (which would
+    # otherwise be deduped away or collide on the temp file).
+    cur = _inflight.get(ep_id)
+    if cur is not None and not cur.done():
+        cur.cancel()
+        try:
+            await cur
+        except BaseException:  # noqa: BLE001 — CancelledError or any unwind error
+            pass
     # Manual (re)download resets the auto-retry budget so a wedged/failed
     # episode gets a fresh set of tries.
     store.set_episode(ep_id, state="queued", progress=0, error=None, attempts=0)
