@@ -33,6 +33,14 @@
           <label class="muted"><input type="radio" name="url_kind" value="embed"
             {{ 'checked' if billet and billet.embed_url else '' }}> 🎬 embed média</label>
         </div></div>
+      <div class="form-group"><label>Style d'affichage</label>
+        <div class="form-actions">
+          <label class="muted"><input type="radio" name="style" value="default"
+            {{ 'checked' if not billet or billet.style != 'communique' else '' }}> 🗒️ Default</label>
+          <label class="muted"><input type="radio" name="style" value="communique"
+            {{ 'checked' if billet and billet.style == 'communique' else '' }}> 📡 Communiqué</label>
+        </div>
+        <small class="muted">Communiqué = look affiche/poster avec vignette de l'embed (capture ou og:image).</small></div>
       <div class="form-actions">
         {% if billet %}
           <button type="submit" name="action" value="save" class="btn">💾 Enregistrer</button>
@@ -40,6 +48,7 @@
           <button type="submit" name="action" value="archive" class="btn">🗄️ Archiver</button>
           {% if billet.embed_url %}
           <button type="submit" name="action" value="save" class="btn" formaction="/admin/billets/{{ billet.id }}/refetch">🔄 Re-fetch embed</button>{% endif %}
+          <a class="btn" href="/admin/billets/{{ billet.id }}/archive.html">💾 Archive HTML</a>
         {% else %}
           <button type="submit" name="action" value="draft" class="btn">📄 Brouillon</button>
           <button type="submit" name="action" value="publish" class="btn primary">🚀 Publier</button>

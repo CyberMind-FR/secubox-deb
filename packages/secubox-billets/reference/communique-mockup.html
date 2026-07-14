@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COMMUNIQUÉ · CyberMind / SecuBox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFFFFF; --surf:#FAFAF8; --surf2:#F4F3EF; --border:#E2E0D8;
+    --text:#1A1A18; --muted:#6B6963;
+    --auth:#C04E24; --wall:#9A6010; --boot:#803018;
+    --mind:#3D35A0; --root:#0A5840; --mesh:#104A88;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:var(--surf);color:var(--text);
+    font-family:'Space Grotesk',sans-serif;-webkit-font-smoothing:antialiased}
+  body{position:relative;min-height:100vh;padding-left:6px}
+  /* bande latérale ROOT→MESH→MIND */
+  body::before{content:"";position:fixed;left:0;top:0;bottom:0;width:6px;
+    background:linear-gradient(180deg,var(--root),var(--mesh),var(--mind));z-index:10}
+
+  .wrap{max-width:720px;margin:0 auto;padding:48px 24px 64px}
+
+  /* en-tête communiqué */
+  .stamp{display:inline-block;border:2px solid var(--auth);color:var(--auth);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    letter-spacing:.28em;text-transform:uppercase;padding:6px 14px;
+    transform:rotate(-2deg);margin-bottom:24px}
+  h1{font-size:clamp(30px,6vw,52px);font-weight:700;line-height:1.02;
+    letter-spacing:-.02em;text-transform:uppercase;margin-bottom:12px}
+  h1 .accent{color:var(--mind)}
+  .kicker{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);
+    letter-spacing:.14em;text-transform:uppercase;margin-bottom:40px}
+  .kicker b{color:var(--root);font-weight:700}
+
+  /* cadre affiche autour de l'embed */
+  .frame{background:var(--bg);border:1px solid var(--border);
+    padding:14px;position:relative;
+    box-shadow:8px 8px 0 var(--surf2), 8px 8px 0 1px var(--border)}
+  .frame::before{content:"TRANSMISSION · CANAL PUBLIC";
+    position:absolute;top:-9px;left:16px;background:var(--surf);
+    padding:0 8px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    letter-spacing:.2em;color:var(--mesh);font-weight:700}
+  .frame iframe{display:block;width:100%;max-width:504px;height:1149px;
+    margin:0 auto;border:0}
+
+  /* pied de propagande */
+  .slogans{margin-top:40px;display:grid;gap:0;border-top:1px solid var(--border)}
+  .slogans p{font-family:'JetBrains Mono',monospace;font-size:12px;
+    padding:12px 0;border-bottom:1px solid var(--border);
+    letter-spacing:.06em;color:var(--muted)}
+  .slogans p::before{content:"▸ ";font-weight:700}
+  .slogans p:nth-child(1)::before{color:var(--auth)}
+  .slogans p:nth-child(2)::before{color:var(--wall)}
+  .slogans p:nth-child(3)::before{color:var(--boot)}
+  .slogans p:nth-child(4)::before{color:var(--mind)}
+  .slogans p:nth-child(5)::before{color:var(--root)}
+  .slogans p:nth-child(6)::before{color:var(--mesh)}
+  .slogans p strong{color:var(--text)}
+
+  footer{margin-top:32px;font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  @media (max-width:560px){
+    .frame iframe{height:1149px}
+    .wrap{padding:32px 14px 48px}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .frame{transition:transform .25s ease}
+    .frame:hover{transform:translate(-2px,-2px)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stamp">Communiqué officiel</div>
+  <h1>La transmission<br>est <span class="accent">en ligne</span></h1>
+  <p class="kicker">CYBERMIND · SECUBOX-DEB · <b>SOUVERAINETÉ PAR CONSTRUCTION</b></p>
+
+  <div class="frame">
+    <iframe src="https://www.linkedin.com/embed/feed/update/urn:li:ugcPost:7480024356081938432"
+            height="1149" width="504" frameborder="0" allowfullscreen
+            title="Embedded post"></iframe>
+  </div>
+
+  <div class="slogans">
+    <p><strong>AUTH</strong> — l'identité ne se délègue pas.</p>
+    <p><strong>WALL</strong> — la défense agit hors du chemin.</p>
+    <p><strong>BOOT</strong> — la confiance commence au démarrage.</p>
+    <p><strong>MIND</strong> — l'appareil observe, l'humain décide.</p>
+    <p><strong>ROOT</strong> — le socle est disclosed, jamais dilué.</p>
+    <p><strong>MESH</strong> — chaque nœud tient la ligne.</p>
+  </div>
+
+  <footer>
+    <span>CYBERMIND — NOTRE-DAME-DU-CRUET · SAVOIE</span>
+    <span>CMSD-1.0 · SOURCE DISCLOSED</span>
+  </footer>
+</div>
+</body>
+</html>
