@@ -71,6 +71,15 @@ router = APIRouter()
 _queue: "asyncio.Queue[int]" = asyncio.Queue()
 _worker_started = False
 
+# A stalled server must not hang a slot forever. connect/write are short;
+# read is per-chunk (aiter_bytes), so a server that opens the socket then goes
+# silent aborts with httpx.ReadTimeout instead of blocking the queue for ever.
+_DL_TIMEOUT = httpx.Timeout(connect=30.0, read=120.0, write=30.0, pool=30.0)
+# Auto-retry budget: total attempts per episode before it rests in 'error'.
+_MAX_ATTEMPTS = 3
+# Backoff (seconds) before re-queuing a failed attempt; index by attempt number.
+_RETRY_BACKOFF = (10, 30, 60)
+
 
 # ════════════════════════════════════════════════════════════════════
 # Models
@@ -204,7 +213,7 @@ async def _download_one(ep_id: int) -> None:
     dest = fdir / _safe_name(f"{ep_id}_{ep.get('title','')}", ext)
     tmp = dest.with_suffix(dest.suffix + ".part")
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=None) as cli:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=_DL_TIMEOUT) as cli:
             async with cli.stream("GET", ep["enclosure"],
                                   headers={"User-Agent": "SecuBox-Podcaster/1.0"}) as r:
                 r.raise_for_status()
@@ -217,13 +226,29 @@ async def _download_one(ep_id: int) -> None:
                         if total:
                             store.set_episode(ep_id, progress=min(99, got * 100 // total))
         tmp.rename(dest)
-        store.set_episode(ep_id, state="done", progress=100,
+        store.set_episode(ep_id, state="done", progress=100, error=None, attempts=0,
                           local_path=str(dest), bytes=dest.stat().st_size)
         log.info(f"downloaded ep {ep_id} -> {dest}")
     except Exception as e:
         tmp.unlink(missing_ok=True)
-        store.set_episode(ep_id, state="error", error=str(e)[:200])
-        log.error(f"download ep {ep_id} failed: {e}")
+        attempts = store.bump_attempts(ep_id)
+        if attempts < _MAX_ATTEMPTS:
+            delay = _RETRY_BACKOFF[min(attempts, len(_RETRY_BACKOFF)) - 1]
+            store.set_episode(ep_id, state="queued", progress=0,
+                              error=f"retry {attempts}/{_MAX_ATTEMPTS}: {str(e)[:150]}")
+            log.warning(f"download ep {ep_id} failed (try {attempts}), "
+                        f"re-queue in {delay}s: {e}")
+            asyncio.create_task(_requeue_later(ep_id, delay))
+        else:
+            store.set_episode(ep_id, state="error",
+                              error=f"gave up after {attempts} tries: {str(e)[:170]}")
+            log.error(f"download ep {ep_id} failed permanently after {attempts}: {e}")
+
+
+async def _requeue_later(ep_id: int, delay: float) -> None:
+    """Sleep then push the episode back onto the download queue (bounded retry)."""
+    await asyncio.sleep(delay)
+    await _queue.put(ep_id)
 
 
 async def _worker() -> None:
@@ -256,6 +281,13 @@ def _ensure_worker() -> None:
     _worker_started = True
     store.init()
     MEDIA.mkdir(parents=True, exist_ok=True)
+    # Recover downloads orphaned by a previous run: episodes left in
+    # downloading/queued are reset to queued and re-fed to the in-memory queue.
+    stuck = store.requeue_stuck()
+    for ep_id in stuck:
+        _queue.put_nowait(ep_id)
+    if stuck:
+        log.info(f"requeued {len(stuck)} orphaned download(s) on start")
     asyncio.create_task(_worker())
     asyncio.create_task(_refresher())
 
@@ -506,7 +538,9 @@ async def download(ep_id: int):
     ep = store.get_episode(ep_id)
     if not ep:
         raise HTTPException(404, "no such episode")
-    store.set_episode(ep_id, state="queued", progress=0, error=None)
+    # Manual (re)download resets the auto-retry budget so a wedged/failed
+    # episode gets a fresh set of tries.
+    store.set_episode(ep_id, state="queued", progress=0, error=None, attempts=0)
     await _queue.put(ep_id)
     return {"ok": True, "queued": ep_id}
 
