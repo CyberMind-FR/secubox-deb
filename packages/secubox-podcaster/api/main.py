@@ -431,6 +431,17 @@ async def media(ep_id: int):
                         filename=p.name)
 
 
+@router.get("/feeds/{fid}/cover")
+async def feed_cover(fid: int):
+    """Public: the feed's artwork extracted from its media (audiobooks). Podcasts
+    keep their RSS image URL; this only serves locally-extracted covers."""
+    p = MEDIA / str(fid) / "cover.jpg"
+    if not p.exists():
+        raise HTTPException(404, "no cover")
+    return FileResponse(p, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
 # ════════════════════════════════════════════════════════════════════
 # Authenticated endpoints (manage)
 # ════════════════════════════════════════════════════════════════════
@@ -534,6 +545,41 @@ async def audiobook_upload(request: Request, title: str = "Audiobook"):
         tmp.unlink(missing_ok=True)
 
 
+def _extract_cover(audio_path: Path, dest: Path) -> bool:
+    """Pull embedded cover art (ID3 APIC / MP4 'covr' / FLAC picture) from an
+    audio file, downscale it, and write it to `dest` as JPEG. Returns True on
+    success, False if there's no art or anything goes wrong (best-effort)."""
+    try:
+        import io
+        from mutagen import File as MutagenFile
+        mf = MutagenFile(str(audio_path))
+        if mf is None:
+            return False
+        data = None
+        tags = getattr(mf, "tags", None)
+        if tags:
+            for k in list(tags.keys()):
+                if k.startswith("APIC"):                 # ID3 (mp3)
+                    data = tags[k].data
+                    break
+            if data is None and "covr" in tags:          # MP4 (m4a/m4b)
+                covr = tags["covr"]
+                if covr:
+                    data = bytes(covr[0])
+        if data is None and getattr(mf, "pictures", None):  # FLAC / Ogg
+            data = mf.pictures[0].data
+        if not data:
+            return False
+        from PIL import Image
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        img.thumbnail((600, 600))
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        img.save(dest, "JPEG", quality=85)
+        return True
+    except Exception:  # noqa: BLE001 — cover art is optional, never break upload
+        return False
+
+
 def _publish_audiobook_zip(tmp: Path, title: str) -> dict:
     """Blocking: validate the ZIP, create a synthetic feed and extract its audio
     tracks as already-'done' episodes. On ANY failure the partial feed is
@@ -553,10 +599,13 @@ def _publish_audiobook_zip(tmp: Path, title: str) -> dict:
                      and not n.endswith("/")]
             names.sort()  # chapter order
             base = int(time.time())
+            first_dest: Optional[Path] = None
             for i, n in enumerate(names):
                 ext = os.path.splitext(n)[1].lower()
                 tname = _safe_name(f"{i+1:03d}_{os.path.basename(n)}", ext)
                 dest = fdir / tname
+                if first_dest is None:
+                    first_dest = dest
                 with z.open(n) as src, open(dest, "wb") as out:
                     shutil.copyfileobj(src, out, 1024 * 256)
                 store.upsert_episode(fid, {
@@ -576,6 +625,10 @@ def _publish_audiobook_zip(tmp: Path, title: str) -> dict:
         if not tracks:
             store.delete_feed(fid)
             raise HTTPException(400, "no audio files found in ZIP")
+        # Extract the embedded cover (ID3 APIC / MP4 covr / FLAC picture) from the
+        # first track → the feed's artwork, served at /feeds/<fid>/cover.
+        if first_dest and _extract_cover(first_dest, fdir / "cover.jpg"):
+            store.update_feed_meta(fid, {"image": f"/api/v1/podcaster/feeds/{fid}/cover"})
         log.info(f"audiobook '{title}' -> feed {fid}, {tracks} tracks")
         return {"title": title, "feed_id": fid, "tracks": tracks}
     except HTTPException:
