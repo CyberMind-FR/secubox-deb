@@ -3,6 +3,12 @@
    (page-specific <link>), so body-level rules here are safe. Palette + layout
    mirror reference/communique-mockup.html: ROOT→MESH→MIND side-band, poster
    frame labelled "TRANSMISSION · CANAL PUBLIC", stamp/kicker/slogans/footer. */
+/* The communiqué is an unconditionally-light press-release: it extends the
+   blog base template, whose billets.css flips to a dark palette under
+   @media(prefers-color-scheme:dark). Pin light here so a dark-mode viewer
+   still sees the poster as designed. */
+:root{color-scheme:light}
+html,body{background:#FAFAF8 !important;color:#1A1A18 !important}
 :root{
   --c-bg:#FFFFFF; --c-surf:#FAFAF8; --c-surf2:#F4F3EF; --c-border:#E2E0D8;
   --c-text:#1A1A18; --c-muted:#6B6963;
