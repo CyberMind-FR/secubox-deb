@@ -77,11 +77,18 @@ def _frame_src(extra_hosts: tuple[str, ...] = ()) -> str:
     return " ".join(parts)
 
 
-def _csp(frame_src: str) -> str:
+def _csp(frame_src: str, *, fonts: bool = False) -> str:
+    # style-src allows 'unsafe-inline': the SecuBox health-banner is injected by
+    # the WAF (sbxmitm sub_filter) and self-styles via a dynamic <style> element;
+    # a strict style-src blocked it, so the banner fell to the page bottom
+    # unstyled. script-src stays 'self' (the real XSS lever); user content is
+    # nh3-sanitized. `fonts` also adds Google Fonts for the communiqué permalink.
+    style_src = "style-src 'self' 'unsafe-inline'" + (" https://fonts.googleapis.com" if fonts else "")
+    font_src = " font-src https://fonts.gstatic.com;" if fonts else ""
     return (
         "default-src 'self'; img-src 'self' https: data:; "
-        "style-src 'self'; script-src 'self'; base-uri 'none'; "
-        f"form-action 'self'; frame-ancestors 'none'; frame-src {frame_src}"
+        f"{style_src}; script-src 'self'; base-uri 'none'; "
+        f"form-action 'self'; frame-ancestors 'none';{font_src} frame-src {frame_src}"
     )
 
 
@@ -116,6 +123,9 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None) -> dict:
     d["permalink"] = f"{base}/b/{d['slug']}" if base else f"/b/{d['slug']}"
     d["share"] = _share_intents(d["permalink"], title) if base else {}
     d["media"] = [dict(m) for m in (media_rows or [])]
+    d["style"] = d.get("style") or "default"
+    snap = d.get("embed_snapshot")
+    d["embed_snapshot_url"] = f"/media/{snap}" if snap else None
     return d
 
 
@@ -191,7 +201,8 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         base = _base(request)
         permalink_url = f"{base}/b/{row['slug']}"
         media_rows = await repo.list_media(app.state.conn, row["id"])
-        resp = templates.TemplateResponse(request, "billet.html", {
+        tmpl = "billet_communique.html" if row["style"] == "communique" else "billet.html"
+        resp = templates.TemplateResponse(request, tmpl, {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
             "billet": _billet_view(row, base, media_rows), "reactions": rctx,
             "comments": comment_views, "pcsrf": pcsrf,
@@ -210,12 +221,17 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
                             secure=(request.headers.get("x-forwarded-proto", request.url.scheme) == "https"),
                             max_age=31536000, path="/")
         # A self-hosted embed (Mastodon/PeerTube) needs its instance host in
-        # frame-src; add it for this page only.
+        # frame-src; add it for this page only. The communiqué look also needs
+        # Google Fonts in style-src/font-src (page-scoped relaxation).
+        is_comm = row["style"] == "communique"
+        extra_hosts: tuple[str, ...] = ()
         if row["embed_html"] and row["embed_url"]:
             from urllib.parse import urlparse
             host = urlparse(row["embed_url"]).hostname
             if host and not any(host == d or host.endswith("." + d) for d in _FRAME_HOSTS):
-                resp.headers["Content-Security-Policy"] = _csp(_frame_src((host,)))
+                extra_hosts = (host,)
+        if extra_hosts or is_comm:
+            resp.headers["Content-Security-Policy"] = _csp(_frame_src(extra_hosts), fonts=is_comm)
         return resp
 
     async def _feed_rows() -> list[aiosqlite.Row]:

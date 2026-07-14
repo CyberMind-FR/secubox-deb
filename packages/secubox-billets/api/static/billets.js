@@ -59,6 +59,27 @@
   });
 })();
 
+// Communiqué embed: the poster shows a still snapshot vignette; clicking it
+// swaps in the real (already-sanitized) embed iframe held in a <template>. CSP
+// is script-src 'self' — this delegated handler lives here, no inline JS. With
+// JS off the vignette stays (still a valid poster); the permalink still links out.
+(function () {
+  "use strict";
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-load-embed]");
+    if (!btn) return;
+    e.preventDefault();
+    var frame = btn.closest(".comm-embed");
+    if (!frame) return;
+    var tpl = frame.querySelector("template.comm-embed-html");
+    if (!tpl || !("content" in tpl)) return;
+    var holder = document.createElement("div");
+    holder.className = "comm-embed-live";
+    holder.appendChild(tpl.content.cloneNode(true));
+    btn.replaceWith(holder);
+  });
+})();
+
 // Lightbox: click a gallery vignette to view the full image, zoomable, with
 // keyboard/arrow navigation within the same billet's gallery. With JS disabled
 // the .gallery-item links open the full image directly (graceful degradation).

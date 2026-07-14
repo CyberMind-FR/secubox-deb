@@ -76,6 +76,20 @@ async def fetch_card(url: str, *, client: httpx.AsyncClient, resolver=ssrf._defa
     return {"provider": "link", "html": html, "kind": "linkcard"}
 
 
+async def fetch_og_image(url: str, *, client: httpx.AsyncClient,
+                         resolver=ssrf._default_resolver) -> str | None:
+    """Return the page's og:image (an https URL) or None. SSRF-guarded, never
+    raises — used to seed the embed-snapshot fallback vignette."""
+    try:
+        _, ctype, body = await ssrf.fetch(url, client=client, resolver=resolver)
+    except ssrf.SSRFError:
+        return None
+    if "html" not in ctype and body[:1] != b"<":
+        return None
+    og = _og(body.decode("utf-8", "replace"))
+    return _https(og.get("og:image") or og.get("twitter:image"))
+
+
 async def resolve_embed(url: str, *, client: httpx.AsyncClient, resolver=ssrf._default_resolver
                         ) -> dict:
     """Full pipeline: oEmbed (allowlist/discovery) then link-card fallback.

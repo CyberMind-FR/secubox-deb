@@ -1,0 +1,69 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 */
+/* billets :: communiqué (affiche) look — loaded ONLY on communiqué permalinks
+   (page-specific <link>), so body-level rules here are safe. Palette + layout
+   mirror reference/communique-mockup.html: ROOT→MESH→MIND side-band, poster
+   frame labelled "TRANSMISSION · CANAL PUBLIC", stamp/kicker/slogans/footer. */
+:root{
+  --c-bg:#FFFFFF; --c-surf:#FAFAF8; --c-surf2:#F4F3EF; --c-border:#E2E0D8;
+  --c-text:#1A1A18; --c-muted:#6B6963;
+  --c-auth:#C04E24; --c-wall:#9A6010; --c-boot:#803018;
+  --c-mind:#3D35A0; --c-root:#0A5840; --c-mesh:#104A88;
+  --c-sans:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --c-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+body{background:var(--c-surf);color:var(--c-text);font-family:var(--c-sans);
+  position:relative;padding-left:6px;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;left:0;top:0;bottom:0;width:6px;
+  background:linear-gradient(180deg,var(--c-root),var(--c-mesh),var(--c-mind));z-index:10}
+.site-header,.site-footer{background:transparent;border-color:var(--c-border)}
+.site-title{color:var(--c-text)}
+.tagline{color:var(--c-muted);font-family:var(--c-mono)}
+
+.communique{max-width:720px;margin:0 auto;padding:24px 8px 8px}
+.communique .stamp{display:inline-block;border:2px solid var(--c-auth);color:var(--c-auth);
+  font-family:var(--c-mono);font-size:11px;font-weight:700;letter-spacing:.28em;
+  text-transform:uppercase;padding:6px 14px;transform:rotate(-2deg);margin-bottom:24px}
+.communique h1{font-size:clamp(28px,5.5vw,48px);font-weight:700;line-height:1.04;
+  letter-spacing:-.02em;text-transform:uppercase;margin-bottom:12px;color:var(--c-text)}
+.communique .kicker{font-family:var(--c-mono);font-size:12px;color:var(--c-muted);
+  letter-spacing:.14em;text-transform:uppercase;margin-bottom:28px}
+.communique .kicker b{color:var(--c-root);font-weight:700}
+.communique .comm-body{font-size:17px;line-height:1.6;margin-bottom:28px;color:var(--c-text)}
+.communique .comm-body a{color:var(--c-mesh)}
+
+/* poster frame around the embed / vignette */
+.communique .frame{background:var(--c-bg);border:1px solid var(--c-border);
+  padding:14px;position:relative;margin:8px 0 8px;
+  box-shadow:8px 8px 0 var(--c-surf2),8px 8px 0 1px var(--c-border)}
+.communique .frame-legend{position:absolute;top:-9px;left:16px;background:var(--c-surf);
+  padding:0 8px;font-family:var(--c-mono);font-size:10px;letter-spacing:.2em;
+  color:var(--c-mesh);font-weight:700}
+.communique .frame iframe{display:block;width:100%;max-width:504px;margin:0 auto;border:0}
+.communique .comm-vignette-btn{display:block;width:100%;padding:0;border:0;
+  background:none;cursor:pointer;position:relative;line-height:0}
+.communique .comm-vignette{display:block;width:100%;height:auto;margin:0 auto}
+.communique .comm-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-family:var(--c-mono);font-size:12px;font-weight:700;letter-spacing:.14em;
+  color:#fff;background:rgba(16,74,136,.88);padding:10px 16px;line-height:1.2}
+.communique .comm-vignette-btn:hover .comm-play{background:rgba(61,53,160,.92)}
+.communique .comm-embed-live iframe{display:block;width:100%;max-width:504px;margin:0 auto;border:0}
+
+.communique .slogans{margin-top:36px;display:grid;gap:0;border-top:1px solid var(--c-border)}
+.communique .slogans p{font-family:var(--c-mono);font-size:12px;padding:12px 0;
+  border-bottom:1px solid var(--c-border);letter-spacing:.06em;color:var(--c-muted)}
+.communique .slogans p::before{content:"▸ ";font-weight:700}
+.communique .slogans p:nth-child(1)::before{color:var(--c-auth)}
+.communique .slogans p:nth-child(2)::before{color:var(--c-wall)}
+.communique .slogans p:nth-child(3)::before{color:var(--c-boot)}
+.communique .slogans p:nth-child(4)::before{color:var(--c-mind)}
+.communique .slogans p:nth-child(5)::before{color:var(--c-root)}
+.communique .slogans p:nth-child(6)::before{color:var(--c-mesh)}
+.communique .slogans p strong{color:var(--c-text)}
+.communique .comm-footer{margin-top:28px;font-family:var(--c-mono);font-size:10px;
+  color:var(--c-muted);letter-spacing:.18em;text-transform:uppercase;display:flex;
+  justify-content:space-between;flex-wrap:wrap;gap:8px}
+.communique .billet-meta{margin-top:16px;font-family:var(--c-mono);font-size:11px}
+.communique .billet-meta a{color:var(--c-mesh)}
+.communique .ref-chip{display:inline-block;font-family:var(--c-mono);font-size:11px;
+  color:var(--c-mesh);border:1px solid var(--c-border);padding:3px 8px;margin:4px 0}
+@media (max-width:560px){.communique{padding:16px 4px 4px}}

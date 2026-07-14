@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}{{ site_title }} — {{ billet.title }}{% endblock %}
+{% block head %}
+<link rel="canonical" href="/b/{{ billet.slug }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/billets-communique.css?v=1">
+{% if og %}
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="{{ site_title }}">
+<meta property="og:title" content="{{ og.title }}">
+<meta property="og:description" content="{{ og.desc }}">
+<meta property="og:url" content="{{ og.url }}">
+{% if og.image %}<meta property="og:image" content="{{ og.image }}">{% endif %}
+<meta name="twitter:card" content="{{ 'summary_large_image' if og.image else 'summary' }}">
+<meta name="twitter:title" content="{{ og.title }}">
+<meta name="twitter:description" content="{{ og.desc }}">
+{% if og.image %}<meta name="twitter:image" content="{{ og.image }}">{% endif %}
+{% endif %}
+{% if oembed_url %}<link rel="alternate" type="application/json+oembed" href="{{ oembed_url }}">{% endif %}
+{% endblock %}
+{% block content %}
+<article class="h-entry billet billet-full communique">
+  <div class="stamp">Communiqué officiel</div>
+  <h1 class="p-name">{{ billet.title }}</h1>
+  <p class="kicker">CYBERMIND · SECUBOX-DEB · <b>SOUVERAINETÉ PAR CONSTRUCTION</b></p>
+
+  <div class="e-content comm-body">{{ billet.body_html|safe }}</div>
+
+  {% if billet.media %}
+  <div class="gallery" data-lightbox>
+    {% for m in billet.media %}
+    <a class="gallery-item" href="/media/{{ m.filename }}" data-full="/media/{{ m.filename }}"
+       data-alt="{{ m.alt }}" aria-label="Agrandir l'image">
+      <img src="/media/{{ m.thumb }}" alt="{{ m.alt }}" loading="lazy"
+           width="{{ m.width }}" height="{{ m.height }}">
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if billet.ref_host %}<a class="ref-chip u-url" href="{{ billet.ref_url }}" target="_blank" rel="noopener nofollow ugc">{{ billet.ref_host }}</a>{% endif %}
+
+  {% if billet.embed_html %}
+    {% if billet.embed_snapshot_url %}
+    <div class="frame comm-embed">
+      <span class="frame-legend">TRANSMISSION · CANAL PUBLIC</span>
+      <button type="button" class="comm-vignette-btn" data-load-embed
+              aria-label="Charger la transmission en direct">
+        <img class="comm-vignette" src="{{ billet.embed_snapshot_url }}"
+             alt="Aperçu de la transmission — cliquer pour charger" loading="lazy">
+        <span class="comm-play">▶ CHARGER LA TRANSMISSION</span>
+      </button>
+      <template class="comm-embed-html">{{ billet.embed_html|safe }}</template>
+    </div>
+    {% else %}
+    <div class="frame comm-embed">
+      <span class="frame-legend">TRANSMISSION · CANAL PUBLIC</span>
+      {{ billet.embed_html|safe }}
+    </div>
+    {% endif %}
+  {% endif %}
+
+  <div class="slogans">
+    <p><strong>AUTH</strong> — l'identité ne se délègue pas.</p>
+    <p><strong>WALL</strong> — la défense agit hors du chemin.</p>
+    <p><strong>BOOT</strong> — la confiance commence au démarrage.</p>
+    <p><strong>MIND</strong> — l'appareil observe, l'humain décide.</p>
+    <p><strong>ROOT</strong> — le socle est disclosed, jamais dilué.</p>
+    <p><strong>MESH</strong> — chaque nœud tient la ligne.</p>
+  </div>
+
+  <footer class="comm-footer">
+    <span>CYBERMIND — NOTRE-DAME-DU-CRUET · SAVOIE</span>
+    {% if billet.published_at %}<span>{{ billet.published_at[:19]|replace('T',' ') }} UTC</span>{% endif %}
+  </footer>
+  <footer class="billet-meta">
+    <a class="u-url" href="/b/{{ billet.slug }}">permalien</a>
+  </footer>
+</article>
+{% if reactions %}{% include "_reactions.html" %}{% endif %}
+
+{% if billet.share %}
+  {% with share=billet.share, permalink=billet.permalink, title=billet.title %}{% include "_share_quick.html" %}{% endwith %}
+{% endif %}
+
+<section id="comments" class="comments">
+  <h2>Commentaires</h2>
+  {% if flash == 'pending' %}<p class="note">Merci — votre commentaire est en attente de modération.</p>{% endif %}
+  {% if flash == 'ok' %}<p class="note">Commentaire publié.</p>{% endif %}
+  {% if flash == 'rate' %}<p class="note err">Trop de commentaires — réessayez plus tard.</p>{% endif %}
+  {% for c in comments %}
+  <article class="comment">
+    <p class="c-meta"><strong>{{ c.author_name }}</strong>
+      <time datetime="{{ c.created_at }}">{{ c.created_at[:10] }}</time></p>
+    <p class="c-body">{{ c.body_html|safe }}</p>
+  </article>
+  {% else %}<p class="empty">Aucun commentaire pour l'instant.</p>{% endfor %}
+
+  <form method="post" action="/b/{{ billet.slug }}/comment" class="comment-form">
+    <input type="hidden" name="csrf" value="{{ pcsrf }}">
+    <input type="hidden" name="ts_token" value="{{ ts_token }}">
+    <p class="hp"><label>Laissez ce champ vide
+      <input name="website" tabindex="-1" autocomplete="off"></label></p>
+    <label>Nom<input name="author_name" required minlength="2" maxlength="40"></label>
+    <label>Email (optionnel, jamais affiché)<input name="author_email" type="email" maxlength="254"></label>
+    <label>Commentaire<textarea name="body" rows="4" required minlength="2" maxlength="2000"></textarea></label>
+    <button type="submit">Envoyer</button>
+  </form>
+</section>
+{% endblock %}

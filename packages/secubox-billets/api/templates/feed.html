@@ -16,7 +16,11 @@
     </div>
     {% endif %}
     {% if b.ref_host %}<a class="ref-chip u-url" href="{{ b.ref_url }}" target="_blank" rel="noopener nofollow ugc">{{ b.ref_host }}</a>{% endif %}
-    {% if b.embed_html %}<div class="embed">{{ b.embed_html|safe }}</div>{% endif %}
+    {% if b.style == 'communique' and b.embed_snapshot_url %}
+    <a class="embed-vignette" href="/b/{{ b.slug }}" aria-label="Voir le communiqué">
+      <img src="{{ b.embed_snapshot_url }}" alt="Aperçu de la transmission" loading="lazy">
+    </a>
+    {% elif b.embed_html %}<div class="embed">{{ b.embed_html|safe }}</div>{% endif %}
     {% with share=b.share, permalink=b.permalink, title=b.title %}{% include "_share_quick.html" %}{% endwith %}
     <footer class="billet-meta">
       {% if b.published_at %}<time class="dt-published" datetime="{{ b.published_at }}">{{ b.published_at[:10] }}</time>{% endif %}

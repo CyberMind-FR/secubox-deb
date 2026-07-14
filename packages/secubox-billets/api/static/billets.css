@@ -157,3 +157,12 @@ body.lb-lock{overflow:hidden}
 .lb-nav{top:50%;transform:translateY(-50%);width:2.8rem;height:3.4rem;font-size:1.8rem}
 .lb-prev{left:1rem}.lb-next{right:1rem}
 @media(max-width:600px){.lb-nav{width:2.2rem;height:2.8rem;font-size:1.4rem}}
+
+/* ── communiqué feed vignette (compact framed snapshot) ───────────────── */
+.embed-vignette{display:block;margin:.75rem 0;padding:10px;line-height:0;
+  border:1px solid rgba(255,255,255,.10);background:#0d1117;border-radius:8px;
+  box-shadow:5px 5px 0 rgba(255,255,255,.04);position:relative;max-width:520px}
+.embed-vignette::before{content:"TRANSMISSION · CANAL PUBLIC";position:absolute;
+  top:-8px;left:14px;background:#0d1117;padding:0 6px;font-size:9px;
+  letter-spacing:.2em;color:#00d4ff;font-weight:700}
+.embed-vignette img{width:100%;height:auto;display:block;border-radius:4px}

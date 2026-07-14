@@ -16,7 +16,8 @@ from .ids import new_ulid
 from .models import BilletIn, slugify
 
 _FEED_COLUMNS = ("id,created_at,updated_at,published_at,body,ref_url,embed_url,"
-                 "embed_html,embed_provider,embed_fetched_at,slug,status,view_count")
+                 "embed_html,embed_provider,embed_fetched_at,slug,status,"
+                 "style,embed_snapshot,view_count")
 
 
 def encode_cursor(published_at: str, billet_id: str) -> str:
@@ -43,9 +44,9 @@ async def create_billet(conn: aiosqlite.Connection, data: BilletIn, *, now: str,
     published_at = now if data.publish else None
     await conn.execute(
         "INSERT INTO billet(id,created_at,updated_at,published_at,body,ref_url,"
-        "embed_url,slug,status) VALUES (?,?,?,?,?,?,?,?,?)",
+        "embed_url,slug,status,style) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (billet_id, now, now, published_at, data.body, data.ref_url,
-         data.embed_url, slug, status),
+         data.embed_url, slug, status, data.style),
     )
     await conn.commit()
     return billet_id
@@ -152,12 +153,21 @@ async def list_all(conn: aiosqlite.Connection, *, status: Optional[str] = None,
 
 
 async def update_billet(conn: aiosqlite.Connection, billet_id: str, *, body: str,
-                        ref_url: Optional[str], embed_url: Optional[str], now: str) -> None:
+                        ref_url: Optional[str], embed_url: Optional[str], now: str,
+                        style: str = "default") -> None:
     """Update content (slug/permalink stays stable) + bump updated_at."""
     await conn.execute(
-        "UPDATE billet SET body=?, ref_url=?, embed_url=?, updated_at=? WHERE id=?",
-        (body, ref_url, embed_url, now, billet_id),
+        "UPDATE billet SET body=?, ref_url=?, embed_url=?, style=?, updated_at=? WHERE id=?",
+        (body, ref_url, embed_url, style, now, billet_id),
     )
+    await conn.commit()
+
+
+async def set_embed_snapshot(conn: aiosqlite.Connection, billet_id: str,
+                             filename: Optional[str]) -> None:
+    """Record (or clear) the captured embed-vignette filename for a billet."""
+    await conn.execute(
+        "UPDATE billet SET embed_snapshot=? WHERE id=?", (filename, billet_id))
     await conn.commit()
 
 
