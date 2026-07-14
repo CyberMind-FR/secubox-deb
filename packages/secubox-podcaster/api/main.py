@@ -29,6 +29,7 @@ from xml.etree import ElementTree as ET
 
 import httpx
 from fastapi import FastAPI, APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from starlette.requests import ClientDisconnect
 from fastapi.responses import Response, FileResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -497,15 +498,33 @@ async def audiobook_upload(request: Request, title: str = "Audiobook"):
     title = (title or "Audiobook").strip() or "Audiobook"
     tmp = Path(tempfile.mkstemp(suffix=".zip", dir="/var/lib/secubox/podcaster")[1])
     try:
-        with open(tmp, "wb") as fh:
-            async for chunk in request.stream():
-                fh.write(chunk)
-        if not zipfile.is_zipfile(tmp):
-            raise HTTPException(400, "not a valid ZIP")
-        # synthetic feed
-        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "audiobook"
-        fid = store.add_feed(f"audiobook:{slug}:{int(time.time())}",
-                             {"title": title, "description": f"Audiobook: {title}"})
+        try:
+            with open(tmp, "wb") as fh:
+                async for chunk in request.stream():
+                    fh.write(chunk)
+        except ClientDisconnect:
+            # Upload aborted / a proxy in front cut the body: no partial feed to
+            # clean up yet (extraction hasn't run), just report it cleanly.
+            raise HTTPException(400, "upload interrupted before completion")
+        # Extraction (zip walk + copy of possibly hundreds of MB) is blocking;
+        # run it OFF the single-worker event loop so a large audiobook cannot
+        # freeze the service (and delay the response past the proxy read
+        # timeout, which was surfacing as a 502).
+        return await asyncio.to_thread(_publish_audiobook_zip, tmp, title)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _publish_audiobook_zip(tmp: Path, title: str) -> dict:
+    """Blocking: validate the ZIP, create a synthetic feed and extract its audio
+    tracks as already-'done' episodes. On ANY failure the partial feed is
+    removed so a broken upload never leaves an orphaned feed behind."""
+    if not zipfile.is_zipfile(tmp):
+        raise HTTPException(400, "not a valid ZIP")
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "audiobook"
+    fid = store.add_feed(f"audiobook:{slug}:{int(time.time())}",
+                         {"title": title, "description": f"Audiobook: {title}"})
+    try:
         fdir = MEDIA / str(fid)
         fdir.mkdir(parents=True, exist_ok=True)
         tracks = 0
@@ -540,8 +559,11 @@ async def audiobook_upload(request: Request, title: str = "Audiobook"):
             raise HTTPException(400, "no audio files found in ZIP")
         log.info(f"audiobook '{title}' -> feed {fid}, {tracks} tracks")
         return {"title": title, "feed_id": fid, "tracks": tracks}
-    finally:
-        tmp.unlink(missing_ok=True)
+    except HTTPException:
+        raise
+    except Exception:
+        store.delete_feed(fid)  # never leave a half-extracted feed behind
+        raise
 
 
 @router.get("/episodes", dependencies=[Depends(require_jwt)])
