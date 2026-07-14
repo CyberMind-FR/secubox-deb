@@ -29,6 +29,7 @@ from xml.etree import ElementTree as ET
 
 import httpx
 from fastapi import FastAPI, APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from starlette.requests import ClientDisconnect
 from fastapi.responses import Response, FileResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -70,6 +71,19 @@ router = APIRouter()
 # ── download queue (in-process, persisted state in SQLite) ──────────
 _queue: "asyncio.Queue[int]" = asyncio.Queue()
 _worker_started = False
+# Episodes with a live download task, keyed by id. Used to (a) dedup: never run
+# two _download_one for the same episode (they share deterministic tmp/dest
+# paths → file corruption); (b) let a manual restart cancel a wedged download.
+_inflight: "dict[int, asyncio.Task]" = {}
+
+# A stalled server must not hang a slot forever. connect/write are short;
+# read is per-chunk (aiter_bytes), so a server that opens the socket then goes
+# silent aborts with httpx.ReadTimeout instead of blocking the queue for ever.
+_DL_TIMEOUT = httpx.Timeout(connect=30.0, read=120.0, write=30.0, pool=30.0)
+# Auto-retry budget: total attempts per episode before it rests in 'error'.
+_MAX_ATTEMPTS = 3
+# Backoff (seconds) before re-queuing a failed attempt; index by attempt number.
+_RETRY_BACKOFF = (10, 30, 60)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -204,7 +218,7 @@ async def _download_one(ep_id: int) -> None:
     dest = fdir / _safe_name(f"{ep_id}_{ep.get('title','')}", ext)
     tmp = dest.with_suffix(dest.suffix + ".part")
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=None) as cli:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=_DL_TIMEOUT) as cli:
             async with cli.stream("GET", ep["enclosure"],
                                   headers={"User-Agent": "SecuBox-Podcaster/1.0"}) as r:
                 r.raise_for_status()
@@ -217,13 +231,35 @@ async def _download_one(ep_id: int) -> None:
                         if total:
                             store.set_episode(ep_id, progress=min(99, got * 100 // total))
         tmp.rename(dest)
-        store.set_episode(ep_id, state="done", progress=100,
+        store.set_episode(ep_id, state="done", progress=100, error=None, attempts=0,
                           local_path=str(dest), bytes=dest.stat().st_size)
         log.info(f"downloaded ep {ep_id} -> {dest}")
+    except asyncio.CancelledError:
+        # Manual restart cancelled us; drop the partial file and let the
+        # re-queue (done by the caller) start a fresh attempt. Do NOT count
+        # this as a failed attempt.
+        tmp.unlink(missing_ok=True)
+        raise
     except Exception as e:
         tmp.unlink(missing_ok=True)
-        store.set_episode(ep_id, state="error", error=str(e)[:200])
-        log.error(f"download ep {ep_id} failed: {e}")
+        attempts = store.bump_attempts(ep_id)
+        if attempts < _MAX_ATTEMPTS:
+            delay = _RETRY_BACKOFF[min(attempts, len(_RETRY_BACKOFF)) - 1]
+            store.set_episode(ep_id, state="queued", progress=0,
+                              error=f"retry {attempts}/{_MAX_ATTEMPTS}: {str(e)[:150]}")
+            log.warning(f"download ep {ep_id} failed (try {attempts}), "
+                        f"re-queue in {delay}s: {e}")
+            asyncio.create_task(_requeue_later(ep_id, delay))
+        else:
+            store.set_episode(ep_id, state="error",
+                              error=f"gave up after {attempts} tries: {str(e)[:170]}")
+            log.error(f"download ep {ep_id} failed permanently after {attempts}: {e}")
+
+
+async def _requeue_later(ep_id: int, delay: float) -> None:
+    """Sleep then push the episode back onto the download queue (bounded retry)."""
+    await asyncio.sleep(delay)
+    await _queue.put(ep_id)
 
 
 async def _worker() -> None:
@@ -235,7 +271,15 @@ async def _worker() -> None:
 
     while True:
         ep_id = await _queue.get()
-        asyncio.create_task(run(ep_id))
+        cur = _inflight.get(ep_id)
+        if cur is not None and not cur.done():
+            continue  # dedup: an identical download is already running
+        t = asyncio.create_task(run(ep_id))
+        _inflight[ep_id] = t
+        # Drop from the registry once finished, but only if we're still the
+        # registered task (a later restart may have replaced us).
+        t.add_done_callback(
+            lambda done, e=ep_id: _inflight.get(e) is done and _inflight.pop(e, None))
 
 
 async def _refresher() -> None:
@@ -256,6 +300,13 @@ def _ensure_worker() -> None:
     _worker_started = True
     store.init()
     MEDIA.mkdir(parents=True, exist_ok=True)
+    # Recover downloads orphaned by a previous run: episodes left in
+    # downloading/queued are reset to queued and re-fed to the in-memory queue.
+    stuck = store.requeue_stuck()
+    for ep_id in stuck:
+        _queue.put_nowait(ep_id)
+    if stuck:
+        log.info(f"requeued {len(stuck)} orphaned download(s) on start")
     asyncio.create_task(_worker())
     asyncio.create_task(_refresher())
 
@@ -445,17 +496,54 @@ async def audiobook_upload(request: Request, title: str = "Audiobook"):
     show in the library + share feed. Raw body (no python-multipart dep)."""
     _ensure_worker()
     title = (title or "Audiobook").strip() or "Audiobook"
-    tmp = Path(tempfile.mkstemp(suffix=".zip", dir="/var/lib/secubox/podcaster")[1])
+    # Stage the upload on the SAME filesystem as the media store (media_path),
+    # not a hardcoded eMMC path: the temp ZIP + the extracted tracks must live
+    # where there's room (e.g. the SSD), and same-FS keeps the writes local.
+    MEDIA.mkdir(parents=True, exist_ok=True)
+    # Reject an upload we physically cannot store BEFORE streaming it: extraction
+    # needs room for the temp ZIP *plus* the extracted tracks (~2x the ZIP), so a
+    # large upload on a near-full store could only fail mid-write (a confusing
+    # 500/502). Give an instant, clear 413 instead.
+    clen = request.headers.get("content-length")
+    if clen and clen.isdigit():
+        need = int(clen) * 2 + (200 << 20)          # zip + extracted + 200MB margin
+        free = shutil.disk_usage(MEDIA).free
+        if need > free:
+            raise HTTPException(
+                413,
+                f"not enough disk space: this upload needs ~{int(clen) * 2 >> 20} MB "
+                f"(ZIP + extracted tracks) but only {free >> 20} MB is free on the "
+                f"media store. Upload smaller per-book ZIPs, or point media_path "
+                f"at larger storage.")
+    tmp = Path(tempfile.mkstemp(suffix=".zip", dir=MEDIA)[1])
     try:
-        with open(tmp, "wb") as fh:
-            async for chunk in request.stream():
-                fh.write(chunk)
-        if not zipfile.is_zipfile(tmp):
-            raise HTTPException(400, "not a valid ZIP")
-        # synthetic feed
-        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "audiobook"
-        fid = store.add_feed(f"audiobook:{slug}:{int(time.time())}",
-                             {"title": title, "description": f"Audiobook: {title}"})
+        try:
+            with open(tmp, "wb") as fh:
+                async for chunk in request.stream():
+                    fh.write(chunk)
+        except ClientDisconnect:
+            # Upload aborted / a proxy in front cut the body: no partial feed to
+            # clean up yet (extraction hasn't run), just report it cleanly.
+            raise HTTPException(400, "upload interrupted before completion")
+        # Extraction (zip walk + copy of possibly hundreds of MB) is blocking;
+        # run it OFF the single-worker event loop so a large audiobook cannot
+        # freeze the service (and delay the response past the proxy read
+        # timeout, which was surfacing as a 502).
+        return await asyncio.to_thread(_publish_audiobook_zip, tmp, title)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _publish_audiobook_zip(tmp: Path, title: str) -> dict:
+    """Blocking: validate the ZIP, create a synthetic feed and extract its audio
+    tracks as already-'done' episodes. On ANY failure the partial feed is
+    removed so a broken upload never leaves an orphaned feed behind."""
+    if not zipfile.is_zipfile(tmp):
+        raise HTTPException(400, "not a valid ZIP")
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "audiobook"
+    fid = store.add_feed(f"audiobook:{slug}:{int(time.time())}",
+                         {"title": title, "description": f"Audiobook: {title}"})
+    try:
         fdir = MEDIA / str(fid)
         fdir.mkdir(parents=True, exist_ok=True)
         tracks = 0
@@ -490,8 +578,11 @@ async def audiobook_upload(request: Request, title: str = "Audiobook"):
             raise HTTPException(400, "no audio files found in ZIP")
         log.info(f"audiobook '{title}' -> feed {fid}, {tracks} tracks")
         return {"title": title, "feed_id": fid, "tracks": tracks}
-    finally:
-        tmp.unlink(missing_ok=True)
+    except HTTPException:
+        raise
+    except Exception:
+        store.delete_feed(fid)  # never leave a half-extracted feed behind
+        raise
 
 
 @router.get("/episodes", dependencies=[Depends(require_jwt)])
@@ -506,7 +597,19 @@ async def download(ep_id: int):
     ep = store.get_episode(ep_id)
     if not ep:
         raise HTTPException(404, "no such episode")
-    store.set_episode(ep_id, state="queued", progress=0, error=None)
+    # Cancel any live download for this episode first, and wait for it to
+    # unwind, so the fresh re-queue can never race the old task (which would
+    # otherwise be deduped away or collide on the temp file).
+    cur = _inflight.get(ep_id)
+    if cur is not None and not cur.done():
+        cur.cancel()
+        # Wait for the cancelled task to unwind WITHOUT re-raising its
+        # CancelledError/exception here (asyncio.wait swallows the awaitee's
+        # outcome but still propagates cancellation of *this* handler).
+        await asyncio.wait({cur})
+    # Manual (re)download resets the auto-retry budget so a wedged/failed
+    # episode gets a fresh set of tries.
+    store.set_episode(ep_id, state="queued", progress=0, error=None, attempts=0)
     await _queue.put(ep_id)
     return {"ok": True, "queued": ep_id}
 
