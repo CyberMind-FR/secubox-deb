@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     state       TEXT DEFAULT 'new',   -- new | queued | downloading | done | error
     progress    INTEGER DEFAULT 0,    -- 0..100
     error       TEXT,
+    attempts    INTEGER DEFAULT 0,    -- download tries so far (auto-retry budget)
     UNIQUE(feed_id, guid)
 );
 CREATE INDEX IF NOT EXISTS idx_ep_feed ON episodes(feed_id);
@@ -63,6 +64,35 @@ def _conn() -> sqlite3.Connection:
 def init() -> None:
     with _conn() as c:
         c.executescript(_SCHEMA)
+        # Idempotent migration for DBs created before the attempts column.
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(episodes)")}
+        if "attempts" not in cols:
+            c.execute("ALTER TABLE episodes ADD COLUMN attempts INTEGER DEFAULT 0")
+
+
+def requeue_stuck() -> list[int]:
+    """Reset episodes orphaned in downloading/queued (e.g. after a restart) back
+    to 'queued' with cleared progress, and return their ids so the caller can
+    feed them to the in-memory download queue."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id FROM episodes WHERE state IN ('downloading','queued')"
+        ).fetchall()
+        ids = [r["id"] for r in rows]
+        if ids:
+            c.execute(
+                "UPDATE episodes SET state='queued', progress=0 "
+                "WHERE state IN ('downloading','queued')"
+            )
+    return ids
+
+
+def bump_attempts(ep_id: int) -> int:
+    """Increment the episode's attempt counter and return the new value."""
+    with _conn() as c:
+        c.execute("UPDATE episodes SET attempts=attempts+1 WHERE id=?", (ep_id,))
+        r = c.execute("SELECT attempts FROM episodes WHERE id=?", (ep_id,)).fetchone()
+        return int(r["attempts"]) if r else 0
 
 
 # ── feeds ──────────────────────────────────────────────────────────
