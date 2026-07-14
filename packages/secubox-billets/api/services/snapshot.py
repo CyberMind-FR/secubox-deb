@@ -52,20 +52,40 @@ def _browser_enabled(explicit: bool | None) -> bool:
     return os.environ.get("BILLETS_SNAPSHOT_BROWSER", "1") != "0"
 
 
-def _screenshot_via_browser(embed_url: str) -> bytes | None:
+def _screenshot_via_browser(embed_url: str, resolver=ssrf._default_resolver) -> bytes | None:
     """Full-page PNG screenshot via headless Chromium, or None if unavailable.
 
     Guarded so a missing `playwright` package OR a missing browser binary OR any
     navigation error simply returns None (the caller then tries og:image)."""
+    # SSRF: the browser path is as dangerous as any server-side fetch — an author
+    # could point embed_url at an internal service (127.0.0.1, RFC1918, ::1,
+    # 169.254.169.254). Validate the target resolves to a PUBLIC IP before we let
+    # Chromium touch it; on rejection return None → the (also-guarded) og:image
+    # fallback runs. (Residual: a *public* URL that server-redirects to an
+    # internal host — mitigated by aborting non-public requests via the route below.)
+    try:
+        ssrf.validate_url(embed_url, resolver=resolver)
+    except ssrf.SSRFError:
+        return None
     try:
         from playwright.sync_api import sync_playwright
     except Exception:  # noqa: BLE001 — ImportError or a broken partial install
         return None
+
+    def _guard(route):
+        # Abort any request (redirect target, sub-resource) to a non-public host.
+        try:
+            ssrf.validate_url(route.request.url, resolver=resolver)
+            route.continue_()
+        except Exception:  # noqa: BLE001
+            route.abort()
+
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             try:
                 page = browser.new_page()
+                page.route("**/*", _guard)
                 page.set_default_timeout(GOTO_TIMEOUT_MS)
                 page.goto(embed_url, timeout=GOTO_TIMEOUT_MS, wait_until="networkidle")
                 page.wait_for_timeout(SETTLE_MS)
@@ -127,7 +147,7 @@ def capture(embed_url: str, og_image_url: str | None, media_id: str, *,
     headless screenshot nor the og:image fallback yielded a usable image."""
     raw: bytes | None = None
     if _browser_enabled(enable_browser):
-        raw = _screenshot_via_browser(embed_url)
+        raw = _screenshot_via_browser(embed_url, resolver=resolver)
     if raw is None and og_image_url:
         raw = _og_image_bytes(og_image_url, client=client, resolver=resolver)
     if not raw:

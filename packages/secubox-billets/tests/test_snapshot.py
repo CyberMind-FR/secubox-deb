@@ -27,7 +27,7 @@ def _resolver(mapping=None):
 
 def test_capture_falls_back_to_og_image(tmp_path, monkeypatch):
     # Simulate playwright absent / no browser binary → screenshot returns None.
-    monkeypatch.setattr(snapshot, "_screenshot_via_browser", lambda url: None)
+    monkeypatch.setattr(snapshot, "_screenshot_via_browser", lambda url, **kw: None)
     png = _png_bytes()
 
     def handler(request):
@@ -48,7 +48,7 @@ def test_capture_falls_back_to_og_image(tmp_path, monkeypatch):
 
 
 def test_capture_returns_none_when_both_fail(tmp_path, monkeypatch):
-    monkeypatch.setattr(snapshot, "_screenshot_via_browser", lambda url: None)
+    monkeypatch.setattr(snapshot, "_screenshot_via_browser", lambda url, **kw: None)
 
     def handler(request):
         return httpx.Response(200, content=b"not an image at all",
@@ -65,7 +65,7 @@ def test_capture_returns_none_when_both_fail(tmp_path, monkeypatch):
 
 
 def test_capture_returns_none_without_og_and_no_browser(tmp_path, monkeypatch):
-    monkeypatch.setattr(snapshot, "_screenshot_via_browser", lambda url: None)
+    monkeypatch.setattr(snapshot, "_screenshot_via_browser", lambda url, **kw: None)
     res = snapshot.capture(
         "https://site.example/post", None, "01SNAP0000000000000000000D",
         resolver=_resolver(), directory=tmp_path, enable_browser=True)
@@ -73,7 +73,7 @@ def test_capture_returns_none_without_og_and_no_browser(tmp_path, monkeypatch):
 
 
 def test_capture_ssrf_rejects_private_og(tmp_path, monkeypatch):
-    monkeypatch.setattr(snapshot, "_screenshot_via_browser", lambda url: None)
+    monkeypatch.setattr(snapshot, "_screenshot_via_browser", lambda url, **kw: None)
     calls = {"n": 0}
 
     def handler(request):
@@ -91,3 +91,15 @@ def test_capture_ssrf_rejects_private_og(tmp_path, monkeypatch):
     assert res is None
     assert calls["n"] == 0          # SSRF blocked BEFORE any network fetch
     assert list(tmp_path.iterdir()) == []
+
+
+def test_browser_path_ssrf_rejects_internal_embed_url(monkeypatch):
+    """The Chromium path must refuse an internal embed_url (SSRF) before launching."""
+    from api.services import snapshot
+    # resolver that maps the target to a private IP
+    monkeypatch.setattr(snapshot.ssrf, "_default_resolver",
+                        lambda host, port: [(0, 0, 0, "", ("127.0.0.1", port))])
+    # if it were to proceed it would try to import/launch playwright; assert it returns None first
+    out = snapshot._screenshot_via_browser("https://internal.example/",
+                                           resolver=lambda h, p: [(0, 0, 0, "", ("10.0.0.5", p))])
+    assert out is None
