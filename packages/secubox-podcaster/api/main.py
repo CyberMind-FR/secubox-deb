@@ -169,8 +169,29 @@ def parse_feed(xml_bytes: bytes) -> tuple[dict, list[dict]]:
     return meta, episodes
 
 
+async def _resolve_apple_podcast(url: str, cli: httpx.AsyncClient) -> str:
+    """Apple Podcasts links wrap a real RSS feed. If `url` is an Apple/iTunes
+    podcast link, look up its numeric id via the iTunes Lookup API and return the
+    underlying `feedUrl`; otherwise return `url` unchanged (best-effort)."""
+    m = re.search(r"(?:podcasts|itunes)\.apple\.com/.*?/id(\d+)", url)
+    if not m:
+        return url
+    try:
+        r = await cli.get(f"https://itunes.apple.com/lookup?id={m.group(1)}&entity=podcast",
+                          headers={"User-Agent": "SecuBox-Podcaster/1.0"})
+        r.raise_for_status()
+        for res in r.json().get("results", []):
+            if res.get("feedUrl"):
+                log.info(f"resolved Apple Podcasts id {m.group(1)} -> {res['feedUrl']}")
+                return res["feedUrl"]
+    except Exception as e:  # noqa: BLE001 — fall back to the original url
+        log.warning(f"apple podcast resolve failed for {url}: {e}")
+    return url
+
+
 async def fetch_and_store(url: str, auto_dl: Optional[bool] = None) -> dict:
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as cli:
+        url = await _resolve_apple_podcast(url, cli)
         r = await cli.get(url, headers={"User-Agent": "SecuBox-Podcaster/1.0"})
         r.raise_for_status()
         meta, eps = parse_feed(r.content)
