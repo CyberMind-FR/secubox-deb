@@ -144,6 +144,17 @@ Emoji are functional glyphs, not decoration — one per concept, consistent:
   public omit it.
 - **Refresh:** poll the cheap status endpoint on an interval (15s for live ops,
   60s for slow stats) via a single `refresh()`; also a manual ↻ button.
+- **Message boxes persist by severity, not by timer.** Transient status
+  (progress, "Saved", "Queued", success) auto-hides after ~3s. **Fatal messages
+  — an API/HTTP error, a failed action, "not found"/missing — MUST stay until
+  the user dismisses them** (a red toast with a ✕), never a 3s flash the user
+  can miss. Keep two helpers: `toast(m)` (transient) and `errorToast(m)`
+  (persistent, dismissable); route every catch/`!ok` path to `errorToast`. A
+  long operation shows a persistent progress indicator (real % when available)
+  that resolves into either a transient success or a persistent error — never
+  a success toast that vanishes before the work is actually done (a proxy
+  timeout can turn a real success into a visible failure, so report the true
+  server outcome).
 - **Never hand-interpolate untrusted values into inline `onclick`.** Escape every
   API value that reaches `innerHTML` with an `esc()` helper, and drive row/card
   actions with `data-*` attributes + one delegated listener (see wireguard). A
@@ -161,6 +172,7 @@ Emoji are functional glyphs, not decoration — one per concept, consistent:
 - [ ] stat grid + glass cards + the shared button/list/toast/modal classes
 - [ ] emoji glyphs from §5, one per concept
 - [ ] `sbx_token` bearer on mutations, 401-toast, `refresh()` loop + ↻
+- [ ] transient `toast()` for progress/success, persistent dismissable `errorToast()` for fatal/API errors
 - [ ] `esc()` on all injected values, `data-*` delegation, no onclick interpolation
 - [ ] responsive `@media (max-width:768px)`, body never scrolls sideways
 - [ ] menu.d entry present (navbar auto-renders it)
