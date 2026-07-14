@@ -8,11 +8,16 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/usr/share/secubox/podcaster
+# Remove any stale socket first, so the ExecStartPost poll below waits for the
+# genuinely-new socket uvicorn binds — not a leftover one it would chown before
+# uvicorn re-creates it root:root (the actual cause of the nginx 502s).
+ExecStartPre=-/bin/rm -f /run/secubox/podcaster.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/podcaster.sock --workers 1
 # #494: only chmod/chown our OWN socket — never the shared /run/secubox parent.
-ExecStartPost=-/bin/sleep 1
-ExecStartPost=-/bin/chmod 660 /run/secubox/podcaster.sock
-ExecStartPost=-/bin/chown secubox:secubox /run/secubox/podcaster.sock
+# Poll for the socket instead of a fixed `sleep 1`: uvicorn can take several
+# seconds to bind the UDS, and a premature chown silently fails (leaving the
+# socket root:root → nginx 502). Wait up to ~15s, then set ownership.
+ExecStartPost=-/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/podcaster.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/podcaster.sock; chown secubox:secubox /run/secubox/podcaster.sock'
 Restart=on-failure
 RestartSec=5
 
