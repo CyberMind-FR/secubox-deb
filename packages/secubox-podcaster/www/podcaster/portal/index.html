@@ -136,6 +136,41 @@
   footer a{color:var(--muted)}
   footer a:hover{color:var(--cyan)}
 
+  /* ---- cover thumb on the kind chip ---- */
+  .ep .n{position:relative;overflow:hidden}
+  .ep .n img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:12px}
+
+  /* ---- now playing sticky bar ---- */
+  #np{
+    position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+    z-index:50;width:calc(100% - 28px);max-width:1000px;
+    display:flex;align-items:center;gap:14px;
+    padding:10px 14px;border-radius:16px;
+    border:1px solid rgba(139,92,246,.5);
+    background:linear-gradient(180deg,rgba(23,23,38,.96),rgba(18,18,29,.96));
+    box-shadow:0 12px 40px -10px rgba(0,212,255,.4), var(--glow);
+    backdrop-filter:blur(10px);
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  #np[hidden]{display:none}
+  #np .npc{
+    position:relative;overflow:hidden;flex-shrink:0;
+    width:52px;height:52px;border-radius:12px;display:grid;place-items:center;
+    font-size:26px;background:rgba(139,92,246,.14);border:1px solid rgba(139,92,246,.3);
+  }
+  #np .npc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:12px}
+  #np .npt{min-width:0;flex:1}
+  #np .npt b{
+    display:block;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #np .npt span{color:var(--muted);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #np .npeq{
+    flex-shrink:0;font-size:12px;font-weight:600;color:#0a0a12;padding:5px 12px;border-radius:999px;
+    background:linear-gradient(92deg,var(--cyan),var(--violet));
+  }
+  @media(max-width:520px){ #np .npeq{display:none} }
+
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important;transition:none !important}
   }
@@ -161,6 +196,12 @@
 </div>
 
 <footer>⚡ SecuBox Podcaster · <a href="https://cybermind.fr" target="_blank" rel="noopener">CyberMind</a></footer>
+
+<div id="np" hidden aria-live="polite">
+  <div class="npc" id="npCover" aria-hidden="true">🎧</div>
+  <div class="npt"><b id="npTitle"></b><span id="npFeed"></span></div>
+  <span class="npeq">▶ Now Playing</span>
+</div>
 
 <script>
 const API="/api/v1/podcaster";
@@ -262,8 +303,10 @@ function render(force){
     const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
     const k=epKind(e);
     const meta=[esc(e.feed),date,e.duration?esc(e.duration):""].filter(Boolean).join(" · ");
-    return `<div class="ep">
-      <div class="n" aria-hidden="true">${k.icon}</div>
+    const cover=e.feed_image||"";
+    const coverImg=cover?`<img src="${esc(cover)}" alt="" loading="lazy" onerror="this.remove()">`:"";
+    return `<div class="ep" data-cover="${esc(cover)}" data-title="${esc(e.title)}" data-feed="${esc(e.feed||"")}" data-icon="${k.icon}">
+      <div class="n" aria-hidden="true">${k.icon}${coverImg}</div>
       <div class="meta">
         <b>${esc(e.title)}</b>
         <div class="sub"><span class="kind ${k.cls}">${k.icon} ${k.label}</span><span>${meta}</span></div>
@@ -275,6 +318,37 @@ function render(force){
 
   RENDER_SIG=sig;                   // remember what we drew
 }
+
+/*
+ * Now-Playing panel.
+ * Read-only w.r.t. the episode list: a single capture-phase delegated listener on
+ * #list (the 'play' event does not bubble, hence capture). It reads the playing
+ * card's data-* attributes and updates a separate #np panel — it NEVER touches
+ * list.innerHTML, so the RENDER_SIG / anyPlaying() playback guard is unaffected.
+ */
+function showNowPlaying(card){
+  const np=document.getElementById("np");
+  const cover=card.dataset.cover||"";
+  const icon=card.dataset.icon||"🎧";
+  const cc=document.getElementById("npCover");
+  cc.textContent=icon;                              // emoji fallback behind the img
+  if(cover){
+    const img=document.createElement("img");
+    img.alt=""; img.loading="lazy";
+    img.onerror=function(){this.remove()};          // broken cover → reveal emoji
+    img.src=cover;
+    cc.appendChild(img);
+  }
+  document.getElementById("npTitle").textContent=card.dataset.title||"";
+  document.getElementById("npFeed").textContent=card.dataset.feed||"";
+  np.hidden=false;
+}
+document.getElementById("list").addEventListener("play",function(ev){
+  const au=ev.target;
+  if(!au||au.tagName!=="AUDIO") return;
+  const card=au.closest(".ep");
+  if(card) showNowPlaying(card);
+},true);
 
 load();
 setInterval(load,15000);           // 15s poll — now guarded, never interrupts playback
