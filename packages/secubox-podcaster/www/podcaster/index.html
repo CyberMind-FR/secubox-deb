@@ -93,6 +93,15 @@
   dialog input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 5px rgba(0,212,255,0.3)}
   #svc{font-size:0.75rem;margin-bottom:0.5rem}
 
+  dialog label.chk{display:flex;gap:0.45rem;align-items:center;text-transform:none;letter-spacing:normal;font-size:0.78rem;color:var(--text);margin:0.5rem 0 0;cursor:pointer}
+  dialog label.chk input{width:auto;padding:0}
+  .imphelp{font-size:0.68rem;color:var(--p31-dim);line-height:1.45;margin:0.75rem 0 0.25rem}
+  #impProg{margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem}
+  #impProg .cur{font-size:0.75rem;color:var(--cyan);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #impProg .bar{width:100%;height:6px;margin:0.5rem 0}
+  #impProg .errline{font-size:0.68rem;color:var(--red);margin-bottom:0.35rem}
+  #impLog{background:#0e0e16;border:1px solid var(--border);border-radius:4px;padding:0.5rem;font-family:'Courier Prime',monospace;font-size:0.68rem;line-height:1.35;color:var(--p31-dim);max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+
   .toast{position:fixed;bottom:70px;right:20px;padding:0.75rem 1rem;background:var(--cyan);color:#000;border-radius:6px;font-size:0.8rem;z-index:2000;opacity:0;transform:translateY(20px);transition:all 0.3s;box-shadow:0 0 20px rgba(0,212,255,0.4);max-width:360px;display:flex;gap:0.6rem;align-items:center}
   .toast.show{opacity:1;transform:translateY(0)}
   .toast.error{background:var(--red);color:#fff;box-shadow:0 0 20px rgba(255,68,102,0.4)}
@@ -137,6 +146,7 @@
         <div class="btn-group" style="margin-bottom:0.6rem">
           <button class="btn sm" onclick="document.getElementById('opml').click()">Import OPML</button>
           <button class="btn sm" onclick="document.getElementById('abzip').click()" title="Upload an audiobook ZIP">📚 Audiobook ZIP</button>
+          <button class="btn sm primary" onclick="openImport()" title="Import from YouTube or any yt-dlp URL">➕ Add from URL</button>
           <button class="btn sm" onclick="loadAll()">↻</button>
         </div>
         <input type="file" id="opml" accept=".opml,.xml" style="display:none" onchange="importOpml(this)">
@@ -165,6 +175,26 @@
     <button class="btn" onclick="document.getElementById('cfg').close()">Close</button>
   </div>
 </dialog>
+
+<dialog id="importDlg">
+  <h3>➕ Add from URL</h3>
+  <label>Source URL</label>
+  <input id="imp_url" placeholder="YouTube video/playlist or any yt-dlp URL…" onkeydown="if(event.key==='Enter')startImport()">
+  <label class="chk"><input type="checkbox" id="imp_mirror" checked> 📺 Mirror videos to PeerTube</label>
+  <label class="chk"><input type="checkbox" id="imp_billets" checked> 📝 Create a billet per item</label>
+  <div class="imphelp">Downloads audio into a podcaster feed; optionally mirrors video to PeerTube and posts a billet per item. Large playlists take a while.</div>
+  <div class="btn-group" style="margin-top:1rem">
+    <button class="btn primary" id="imp_start" onclick="startImport()">Start import</button>
+    <button class="btn" onclick="document.getElementById('importDlg').close()">Close</button>
+  </div>
+  <div id="impProg" style="display:none">
+    <div class="cur" id="impCur">…</div>
+    <div class="bar"><i id="impBar" style="width:0"></i></div>
+    <div class="errline" id="impErr" style="display:none"></div>
+    <pre id="impLog"></pre>
+  </div>
+</dialog>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -269,8 +299,74 @@ async function openCfg(){const d=await api("/config").then(r=>r.config).catch(()
   if(d){c_media.value=d.media_path||"";c_par.value=d.max_parallel||2;c_ref.value=d.refresh_minutes||60;c_pub.value=d.public_base||"";c_title.value=d.share_title||""}
   document.getElementById("cfg").showModal()}
 async function saveCfg(){try{await api("/config",{method:"POST",body:JSON.stringify({media_path:c_media.value,max_parallel:+c_par.value,refresh_minutes:+c_ref.value,public_base:c_pub.value,share_title:c_title.value})});toast("Saved — restart to apply");document.getElementById("cfg").close()}catch(e){errorToast("Save failed")}}
+// ── Add from URL (YouTube / yt-dlp import) ──────────────────────────────
+let IMP_POLL=null;
+function openImport(){document.getElementById("importDlg").showModal();refreshImportView();}
+async function startImport(){
+  const url=document.getElementById("imp_url").value.trim();
+  if(!url){errorToast("Enter a URL to import");return}
+  const mirror_peertube=document.getElementById("imp_mirror").checked;
+  const create_billets=document.getElementById("imp_billets").checked;
+  const btn=document.getElementById("imp_start");btn.disabled=true;
+  try{
+    await api("/import/url",{method:"POST",body:JSON.stringify({url,mirror_peertube,create_billets})});
+    toast("Import started");
+    startImportPoll();
+  }catch(e){
+    const msg=(e&&e.message)||"";
+    if(msg.indexOf("409")>=0||/already running/i.test(msg)) errorToast("An import is already running");
+    else errorToast("Import failed: "+msg.slice(0,120));
+  }finally{btn.disabled=false}
+}
+function startImportPoll(){
+  if(IMP_POLL) return;              // guard against overlapping pollers
+  pollImport();
+  IMP_POLL=setInterval(pollImport,2000);
+}
+function stopImportPoll(){if(IMP_POLL){clearInterval(IMP_POLL);IMP_POLL=null}}
+function renderImport(j){
+  const prog=document.getElementById("impProg");
+  prog.style.display="block";
+  const total=+j.total||0, done=+j.done||0;
+  document.getElementById("impCur").textContent=(j.current?esc(j.current):(j.url?esc(j.url):"…"))+"  ·  "+done+"/"+total;
+  document.getElementById("impBar").style.width=(total>0?Math.round(done/total*100):(j.running?5:0))+"%";
+  const errs=Array.isArray(j.errors)?j.errors:[];
+  const errEl=document.getElementById("impErr");
+  if(errs.length){errEl.style.display="block";errEl.textContent="⚠ "+errs.length+" error"+(errs.length>1?"s":"")}
+  else errEl.style.display="none";
+  const log=Array.isArray(j.log)?j.log:[];
+  document.getElementById("impLog").innerHTML=log.slice(-12).map(l=>esc(l)).join("\n");
+}
+async function pollImport(){
+  let j; try{j=await api("/import/status")}catch(e){return}
+  renderImport(j);
+  if(!j.running){
+    stopImportPoll();
+    const done=+j.done||0, total=+j.total||0;
+    if(done===0){
+      const log=Array.isArray(j.log)?j.log:[];
+      const reason=(log.length?log[log.length-1]:(j.errors&&j.errors.length?j.errors[j.errors.length-1]:"nothing imported"));
+      errorToast("Import finished: "+String(reason).slice(0,120));
+    }else{
+      toast("Imported "+done+"/"+total);
+    }
+    loadAll();
+  }
+}
+function refreshImportView(autoOpen){
+  // If a job is already running (page reload / dialog reopen), attach the poller.
+  api("/import/status").then(j=>{
+    if(j&&j.running){
+      const dlg=document.getElementById("importDlg");
+      if(autoOpen && !dlg.open) dlg.showModal();   // surface progress on page load
+      renderImport(j);
+      startImportPoll();
+    }
+  }).catch(()=>{});
+}
+
 function loadAll(){loadStatus();loadFeeds();if(SEL!=null)loadEps();else showEmpty()}
-loadAll();setInterval(()=>{loadStatus();if(SEL!=null)loadEps()},4000);
+loadAll();refreshImportView(true);setInterval(()=>{loadStatus();if(SEL!=null)loadEps()},4000);
 </script>
 </body>
 </html>
