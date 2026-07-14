@@ -37,6 +37,7 @@ from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
 
 from . import store
+from . import importer
 
 log = get_logger("podcaster")
 
@@ -96,6 +97,12 @@ class FeedIn(BaseModel):
 
 class OPMLIn(BaseModel):
     opml: str
+
+
+class ImportIn(BaseModel):
+    url: str
+    mirror_peertube: bool = True
+    create_billets: bool = True
 
 
 class ConfigIn(BaseModel):
@@ -513,6 +520,29 @@ async def import_opml(body: OPMLIn):
         except Exception as e:
             log.error(f"opml feed {u}: {e}")
     return {"added": added, "total": len(urls)}
+
+
+@router.post("/import/url", dependencies=[Depends(require_jwt)])
+async def import_url(body: ImportIn):
+    """Start a background import of a yt-dlp URL (video/playlist/site) into a
+    podcaster feed, optionally mirroring each video to PeerTube and creating a
+    billet per item. One import at a time; poll /import/status for progress."""
+    _ensure_worker()
+    if importer.JOB.get("running"):
+        raise HTTPException(409, "an import is already running")
+    url = body.url.strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(400, "URL must start with http(s)://")
+    # kick the blocking pipeline onto a worker thread so the loop stays free
+    asyncio.create_task(asyncio.to_thread(
+        importer.run_import, url, str(MEDIA),
+        body.mirror_peertube, body.create_billets))
+    return {"ok": True, "started": url}
+
+
+@router.get("/import/status", dependencies=[Depends(require_jwt)])
+async def import_status():
+    return importer.JOB
 
 
 _AUDIO_EXT = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wav", ".mp4"}
