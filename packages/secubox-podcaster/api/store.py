@@ -155,7 +155,12 @@ def list_episodes(feed_id: Optional[int] = None, state: Optional[str] = None,
         where.append("e.state=?"); args.append(state)
     if where:
         q += " WHERE " + " AND ".join(where)
-    q += " ORDER BY e.pubdate DESC LIMIT ?"; args.append(limit)
+    # Order by container type: an audiobook plays first chapter → last (pubdate
+    # ASC, since the upload stamps chapter i with base+i); a podcast shows the
+    # latest first (pubdate DESC). One CASE handles both, even in a mixed list.
+    q += (" ORDER BY CASE WHEN f.url LIKE 'audiobook:%' "
+          "THEN e.pubdate ELSE -e.pubdate END ASC LIMIT ?")
+    args.append(limit)
     with _conn() as c:
         return [dict(r) for r in c.execute(q, args).fetchall()]
 
@@ -180,7 +185,8 @@ def downloaded_episodes(limit: int = 500) -> list[dict]:
         rows = c.execute(
             "SELECT e.*, f.title AS feed_title FROM episodes e JOIN feeds f ON f.id=e.feed_id "
             "WHERE e.state='done' AND e.local_path IS NOT NULL "
-            "ORDER BY e.pubdate DESC LIMIT ?", (limit,)
+            "ORDER BY CASE WHEN f.url LIKE 'audiobook:%' "
+            "THEN e.pubdate ELSE -e.pubdate END ASC LIMIT ?", (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
 
