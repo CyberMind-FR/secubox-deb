@@ -496,7 +496,26 @@ async def audiobook_upload(request: Request, title: str = "Audiobook"):
     show in the library + share feed. Raw body (no python-multipart dep)."""
     _ensure_worker()
     title = (title or "Audiobook").strip() or "Audiobook"
-    tmp = Path(tempfile.mkstemp(suffix=".zip", dir="/var/lib/secubox/podcaster")[1])
+    # Stage the upload on the SAME filesystem as the media store (media_path),
+    # not a hardcoded eMMC path: the temp ZIP + the extracted tracks must live
+    # where there's room (e.g. the SSD), and same-FS keeps the writes local.
+    MEDIA.mkdir(parents=True, exist_ok=True)
+    # Reject an upload we physically cannot store BEFORE streaming it: extraction
+    # needs room for the temp ZIP *plus* the extracted tracks (~2x the ZIP), so a
+    # large upload on a near-full store could only fail mid-write (a confusing
+    # 500/502). Give an instant, clear 413 instead.
+    clen = request.headers.get("content-length")
+    if clen and clen.isdigit():
+        need = int(clen) * 2 + (200 << 20)          # zip + extracted + 200MB margin
+        free = shutil.disk_usage(MEDIA).free
+        if need > free:
+            raise HTTPException(
+                413,
+                f"not enough disk space: this upload needs ~{int(clen) * 2 >> 20} MB "
+                f"(ZIP + extracted tracks) but only {free >> 20} MB is free on the "
+                f"media store. Upload smaller per-book ZIPs, or point media_path "
+                f"at larger storage.")
+    tmp = Path(tempfile.mkstemp(suffix=".zip", dir=MEDIA)[1])
     try:
         try:
             with open(tmp, "wb") as fh:
