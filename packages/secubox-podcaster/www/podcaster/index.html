@@ -54,6 +54,7 @@
   .badge.downloading{color:var(--cyber-cyan);border-color:var(--cyber-cyan)}
   .badge.error{color:var(--cinnabar);border-color:var(--cinnabar)}
   .bar{height:4px;border-radius:3px;background:#0e0e16;overflow:hidden;width:90px}.bar i{display:block;height:100%;background:var(--cyber-cyan);width:0}
+  button.mini{padding:2px 7px;font-size:12px;line-height:1}
   audio{height:34px}
   .share{margin-top:6px;padding:12px;border:1px dashed var(--void-purple);border-radius:10px;color:var(--text-muted);font-size:12px}
   .share a{color:var(--cyber-cyan)}
@@ -154,7 +155,7 @@ async function loadEps(){
     const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
     let act;
     if(e.state==="done") act=`<audio controls preload="none" src="${API}/media/${e.id}"></audio>`;
-    else if(e.state==="downloading"||e.state==="queued") act=`<span class="badge downloading">${e.state}</span><div class="bar"><i style="width:${e.progress||0}%"></i></div>`;
+    else if(e.state==="downloading"||e.state==="queued") act=`<span class="badge downloading">${e.state}</span><div class="bar"><i style="width:${e.progress||0}%"></i></div><button class="mini" title="restart this download" onclick="dl(${e.id})">↻</button>`;
     else if(e.state==="error") act=`<span class="badge error" title="${esc(e.error)}">error</span><button onclick="dl(${e.id})">retry</button>`;
     else act=`<button onclick="dl(${e.id})">⬇ download</button>`;
     return `<div class="ep"><div class="meta"><b>${esc(e.title)}</b><span>${esc(e.feed_title)} · ${date} ${e.duration?'· '+esc(e.duration):''}</span></div><div class="act">${act}</div></div>`;
@@ -172,13 +173,26 @@ async function delFeed(id){if(!confirm("Remove this feed?"))return;await api("/f
 async function dl(id){try{await api(`/episodes/${id}/download`,{method:"POST"});toast("Queued");loadEps()}catch(e){toast("Queue failed")}}
 async function importOpml(inp){const f=inp.files[0];if(!f)return;const opml=await f.text();
   try{const r=await api("/feeds/import-opml",{method:"POST",body:JSON.stringify({opml})});toast(`Imported ${r.added}/${r.total}`);loadAll()}catch(e){toast("OPML import failed")}inp.value=""}
-async function uploadZip(inp){const f=inp.files[0];if(!f)return;
+function stickyToast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._)}
+function uploadZip(inp){const f=inp.files[0];if(!f)return;
   const title=prompt("Audiobook title:",f.name.replace(/\.zip$/i,""));if(title===null){inp.value="";return}
-  toast("Uploading "+f.name+" …");
-  try{const r=await api("/audiobook/upload?title="+encodeURIComponent(title),
-        {method:"POST",headers:{"Content-Type":"application/zip"},body:f});
-    toast(`Published "${r.title}" — ${r.tracks} tracks`);loadAll()}
-  catch(e){toast("Upload failed: "+e.message.slice(0,60))}inp.value=""}
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST",API+"/audiobook/upload?title="+encodeURIComponent(title));
+  const t=tok(); if(t) xhr.setRequestHeader("Authorization","Bearer "+t);
+  xhr.setRequestHeader("Content-Type","application/zip");
+  xhr.upload.onprogress=e=>{ stickyToast(e.lengthComputable
+      ? `Uploading ${f.name} — ${Math.round(e.loaded*100/e.total)}%`
+      : `Uploading ${f.name} …`); };
+  xhr.upload.onload=()=>stickyToast(`Uploading ${f.name} — processing…`);
+  xhr.onload=()=>{ inp.value="";
+    if(xhr.status===401){window.location="/login.html";return}
+    if(xhr.status>=200&&xhr.status<300){ let r={}; try{r=JSON.parse(xhr.responseText)}catch(_){}
+      toast(`Published "${r.title||title}" — ${r.tracks||0} tracks`); loadAll(); }
+    else toast("Upload failed: "+((xhr.responseText||("HTTP "+xhr.status)).slice(0,80))); };
+  xhr.onerror=()=>{ inp.value=""; toast("Upload failed: network error"); };
+  stickyToast(`Uploading ${f.name} — 0%`);
+  xhr.send(f);
+}
 async function openCfg(){const d=await api("/config").then(r=>r.config).catch(()=>null);
   const s=await fetch(API+"/status").then(r=>r.json()).catch(()=>({}));
   document.getElementById("svc").innerHTML=`service <b style="color:var(--matrix-green)">${s.service||'?'}</b> · worker ${s.worker?'on':'off'} · ${s.downloaded||0} local`;
