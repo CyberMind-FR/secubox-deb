@@ -562,10 +562,10 @@ async def download(ep_id: int):
     cur = _inflight.get(ep_id)
     if cur is not None and not cur.done():
         cur.cancel()
-        try:
-            await cur
-        except BaseException:  # noqa: BLE001 — CancelledError or any unwind error
-            pass
+        # Wait for the cancelled task to unwind WITHOUT re-raising its
+        # CancelledError/exception here (asyncio.wait swallows the awaitee's
+        # outcome but still propagates cancellation of *this* handler).
+        await asyncio.wait({cur})
     # Manual (re)download resets the auto-retry budget so a wedged/failed
     # episode gets a fresh set of tries.
     store.set_episode(ep_id, state="queued", progress=0, error=None, attempts=0)
