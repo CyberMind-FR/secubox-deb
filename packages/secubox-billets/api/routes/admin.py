@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from .. import repo
 from ..ids import new_ulid
 from ..models import BilletIn
-from ..services import eventlog, linkcard, media, revisions
+from ..services import archive, eventlog, linkcard, media, revisions, snapshot
 from ..services import security as sec
 from ..services import ssrf as ssrf_mod
 
@@ -81,7 +81,7 @@ async def _log_and_revision(request: Request, event_type: str, billet_row, *, ac
         "created_at": billet_row["created_at"], "updated_at": billet_row["updated_at"],
         "published_at": billet_row["published_at"], "ref_url": billet_row["ref_url"],
         "embed_url": billet_row["embed_url"], "embed_provider": billet_row["embed_provider"],
-        "style": "default",
+        "style": billet_row["style"],
     }
     msg = f"{event_type} {billet_row['slug']} by {actor}"
     await asyncio.to_thread(revisions.commit_revision, repo_dir, billet_row["id"],
@@ -98,6 +98,38 @@ async def _resolve_and_store_embed(request: Request, billet_id: str, embed_url: 
     res = await linkcard.resolve_embed(embed_url, client=client, resolver=resolver)
     await repo.set_embed(request.app.state.conn, billet_id, html=res["html"],
                          provider=res["provider"], fetched_at=_now(request))
+
+
+async def _maybe_capture_snapshot(request: Request, billet_id: str, embed_url: str | None,
+                                  style: str, *, prev_embed_url: str | None = None,
+                                  prev_snapshot: str | None = None) -> None:
+    """Capture a still vignette of the embed for communiqué billets, OFF-loop.
+
+    Only communiqué-styled billets with an embed need the poster vignette. The
+    capture (headless Chromium, else the SSRF-guarded og:image) is CPU/IO + a
+    browser, so it runs via `asyncio.to_thread`; the fetch of the og:image URL
+    also happens in that thread inside `snapshot.capture`. Cache: skip when the
+    embed_url is unchanged and a snapshot already exists. Never raises — a
+    snapshot must not break a save."""
+    if style != "communique" or not embed_url:
+        return
+    if prev_snapshot and prev_embed_url == embed_url:
+        return
+    try:
+        conn = request.app.state.conn
+        client = request.app.state.http_client
+        resolver = getattr(request.app.state, "resolver", ssrf_mod._default_resolver)
+        og_image = await linkcard.fetch_og_image(embed_url, client=client, resolver=resolver)
+        media_id = new_ulid()
+        result = await asyncio.to_thread(snapshot.capture, embed_url, og_image,
+                                         media_id, resolver=resolver)
+        if result:
+            await repo.set_embed_snapshot(conn, billet_id, result[0])
+        elif prev_embed_url != embed_url:
+            # Embed changed but capture failed → drop any now-stale vignette.
+            await repo.set_embed_snapshot(conn, billet_id, None)
+    except Exception:  # noqa: BLE001 — embedding/snapshot must not break a publish
+        pass
 
 
 def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
@@ -250,7 +282,8 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
 
     @app.post("/admin/billets")
     async def create(request: Request, body: str = Form(...), url: str = Form(""),
-                     url_kind: str = Form("ref"), action: str = Form("draft"),
+                     url_kind: str = Form("ref"), style: str = Form("default"),
+                     action: str = Form("draft"),
                      csrf: str = Form(""), media_files: list[UploadFile] = File(default=[])):
         author = await _current_author(request)
         if author is None:
@@ -260,7 +293,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         ref_url, embed_url = _urls(url, url_kind)
         try:
             data = BilletIn(body=body, ref_url=ref_url, embed_url=embed_url,
-                            publish=(action == "publish"))
+                            style=style, publish=(action == "publish"))
         except ValidationError:
             resp = templates.TemplateResponse(request, "admin_edit.html",
                 {"billet": None, "error": "Entrée invalide (corps ou URL https).",
@@ -269,6 +302,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         billet_id = await repo.create_billet(request.app.state.conn, data, now=_now(request))
         skipped = await _save_uploads(request, billet_id, media_files)
         await _resolve_and_store_embed(request, billet_id, data.embed_url)
+        await _maybe_capture_snapshot(request, billet_id, data.embed_url, data.style)
         row = await repo.get_by_id(request.app.state.conn, billet_id)
         event = "billet.published" if data.publish else "billet.edited"
         await _log_and_revision(request, event, row, actor=author["username"])
@@ -293,6 +327,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
     @app.post("/admin/billets/{billet_id}")
     async def update(request: Request, billet_id: str, body: str = Form(...),
                      url: str = Form(""), url_kind: str = Form("ref"),
+                     style: str = Form("default"),
                      action: str = Form("save"), csrf: str = Form(""),
                      media_files: list[UploadFile] = File(default=[])):
         author = await _current_author(request)
@@ -304,22 +339,26 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         row = await repo.get_by_id(conn, billet_id)
         if row is None:
             return _redirect("/admin")
+        prev_embed_url = row["embed_url"]
+        prev_snapshot = row["embed_snapshot"]
         ref_url, embed_url = _urls(url, url_kind)
         try:
-            BilletIn(body=body, ref_url=ref_url, embed_url=embed_url)
+            data = BilletIn(body=body, ref_url=ref_url, embed_url=embed_url, style=style)
         except ValidationError:
             resp = templates.TemplateResponse(request, "admin_edit.html",
                 {"billet": dict(row), "error": "Entrée invalide.",
                  "csrf": request.cookies.get(CSRF_COOKIE) or ""})
             return resp
         await repo.update_billet(conn, billet_id, body=body, ref_url=ref_url,
-                                 embed_url=embed_url, now=_now(request))
+                                 embed_url=embed_url, style=data.style, now=_now(request))
         skipped = await _save_uploads(request, billet_id, media_files)
         if action in ("publish", "archive"):
             await repo.set_status(conn, billet_id,
                                   "published" if action == "publish" else "archived",
                                   now=_now(request))
         await _resolve_and_store_embed(request, billet_id, embed_url)
+        await _maybe_capture_snapshot(request, billet_id, embed_url, data.style,
+                                      prev_embed_url=prev_embed_url, prev_snapshot=prev_snapshot)
         row = await repo.get_by_id(conn, billet_id)
         event = "billet.published" if action == "publish" else "billet.edited"
         await _log_and_revision(request, event, row, actor=author["username"])
@@ -400,6 +439,26 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         body = await asyncio.to_thread(_serialize)
         return Response(content=body, media_type="application/json",
                         headers={"Content-Disposition": 'attachment; filename="billets.sbxsite"'})
+
+    @app.get("/admin/billets/{billet_id}/archive.html")
+    async def archive_html(request: Request, billet_id: str):
+        """Portable single-file .html of one billet in the communiqué layout:
+        CSS inlined, media + embed vignette inlined as data: URIs, embed rendered
+        as its snapshot image linking to the original (no live iframe → offline).
+        The base64/render is CPU/IO — kept OFF the shared loop."""
+        author = await _current_author(request)
+        if author is None:
+            return _redirect("/admin/login")
+        conn = request.app.state.conn
+        row = await repo.get_by_id(conn, billet_id)
+        if row is None:
+            return _redirect("/admin")
+        billet = dict(row)
+        media_rows = [dict(m) for m in await repo.list_media(conn, billet_id)]
+        html = await asyncio.to_thread(archive.render, billet, media_rows)
+        fname = f"billet-{billet['slug']}.html"
+        return Response(content=html, media_type="text/html",
+                        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
     @app.get("/admin/comments", response_class=HTMLResponse)
     async def comments_queue(request: Request):

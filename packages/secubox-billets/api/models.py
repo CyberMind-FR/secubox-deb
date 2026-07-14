@@ -10,7 +10,7 @@ from __future__ import annotations
 import enum
 import re
 import unicodedata
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
@@ -73,6 +73,7 @@ class BilletIn(BaseModel):
     body: Annotated[str, StringConstraints(min_length=1, max_length=BODY_MAX)]
     ref_url: Optional[_HttpsUrl] = None
     embed_url: Optional[_HttpsUrl] = None
+    style: Literal["default", "communique"] = "default"
     publish: bool = False
 
     @field_validator("ref_url", "embed_url")
@@ -120,6 +121,8 @@ class Billet(BaseModel):
     embed_fetched_at: Optional[str] = None
     slug: str
     status: BilletStatus
+    style: str = "default"
+    embed_snapshot: Optional[str] = None
     view_count: int = 0
 
 

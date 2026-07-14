@@ -58,6 +58,35 @@ HAProxy (TLS 1.3) → sbxwaf → nginx → the socket.
 | `BILLETS_SECRET_FILE` | `/etc/secubox/secrets/billets` | signing secret (0600 secubox) |
 | `BILLETS_SECRET` | — | secret override (takes precedence) |
 | `BILLETS_SITE_URL` | derived from request | absolute origin for feeds/oEmbed |
+| `BILLETS_MEDIA_DIR` | `/var/lib/secubox/billets/media` | re-encoded media + embed snapshots |
+| `BILLETS_SNAPSHOT_BROWSER` | `1` | set `0` to disable the headless-Chromium capture |
+
+## Communiqué style + embed snapshot
+
+Each billet has a `style`: **`default`** (feed look) or **`communique`** (a
+poster/affiche layout — ROOT→MESH→MIND side-band, a framed "TRANSMISSION · CANAL
+PUBLIC" embed, stamp/kicker/slogans/footer). Pick it in the editor.
+
+For communiqué billets with an embed, the module captures a still **vignette** of
+the embed (stored like any media file, shown in the poster frame as a
+click-to-load thumbnail and in the feed as a compact framed image):
+
+1. **Headless Chromium** (a real full-page screenshot) — **OPTIONAL**. Enable it
+   with `pip install playwright && playwright install chromium` (or install the
+   `snapshot` extra). Any missing package / browser / timeout degrades silently.
+2. **og:image fallback** — the page's `og:image` fetched through the same SSRF
+   guard (https-only, must resolve to a public IP, redirects re-validated,
+   size-capped). This is the default path when Chromium is not installed, so the
+   feature works fully without a browser.
+
+The capture runs OFF the shared event loop (`asyncio.to_thread`) and only
+re-captures when the `embed_url` changes.
+
+**`GET /admin/billets/{id}/archive.html`** (JWT-gated) exports a portable,
+fully self-contained single `.html` of a billet in the communiqué layout: CSS
+inlined, system fonts (no network), media + the embed vignette inlined as
+`data:` URIs, and the embed rendered as its snapshot image **linking to the
+original** (no live iframe, so it opens offline). Button: "💾 Archive HTML".
 
 To push revisions to Gitea, add an `origin` remote in the revisions repo as the
 `secubox` user (else commits stay local — still a full history).
