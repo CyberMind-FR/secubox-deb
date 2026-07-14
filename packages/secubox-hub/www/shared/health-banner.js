@@ -21,6 +21,14 @@
     if (window.__SBX_HEALTH_BANNER__) return;
     window.__SBX_HEALTH_BANNER__ = true;
 
+    // A page can opt out of the operator health banner with
+    // <meta name="sbx-no-health-banner"> in its <head> (e.g. a public-facing
+    // blog where the operator banner is noise). This runs reliably because the
+    // WAF injects the banner loader AFTER the page <head>, so the meta is
+    // already parsed; and it is CSP-safe (no inline script needed on the
+    // opting-out page, unlike a window flag).
+    if (document.querySelector('meta[name="sbx-no-health-banner"]')) return;
+
     const VERSION = '1.4.7';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
