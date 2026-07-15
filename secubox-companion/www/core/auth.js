@@ -12,17 +12,20 @@ import { el, toast } from './ui.js';
 // The box login endpoint. Adjust to the real AUTH route if it differs.
 const LOGIN_PATH = '/api/v1/auth/login';   // TODO(api): confirm exact AUTH login route/shape
 
-async function fetchToken(url, username, password) {
+async function login(url, username, password) {
   const base = url.replace(/\/+$/, '');
   const r = await fetch(base + LOGIN_PATH, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    credentials: 'omit', body: JSON.stringify({ username, password }),
+    credentials: 'include', body: JSON.stringify({ username, password }),
   });
   if (!r.ok) throw new Error(r.status === 401 ? 'Invalid credentials' : `Login failed (HTTP ${r.status})`);
+  // secubox-auth is SSO-cookie based (#400): on success it sets the parent-domain
+  // `secubox_session` cookie, which require_jwt accepts on every module — so no
+  // bearer token is needed. Some builds ALSO return a token in the body; keep it
+  // if present, otherwise rely on the cookie (the browser sends it, credentials:
+  // 'include'). "No token" is NOT an error here.
   const d = await r.json().catch(() => ({}));
-  const token = d.token || d.access_token || d.jwt || d.sbx_token;
-  if (!token) throw new Error('No token in AUTH response — check LOGIN_PATH / response shape');
-  return token;
+  return d.token || d.access_token || d.jwt || d.sbx_token || '';
 }
 
 function field(label, input) { return el('div', {}, [el('label', { text: label }), input]); }
@@ -30,7 +33,7 @@ function field(label, input) { return el('div', {}, [el('label', { text: label }
 /** Render the pairing screen; resolves with {url, token} once sealed. */
 export function pairingScreen(root) {
   return new Promise((resolve) => {
-    const url = el('input', { type: 'url', placeholder: 'https://box.example.in', value: store.pairedUrl() || '', inputmode: 'url' });
+    const url = el('input', { type: 'url', placeholder: 'https://box.example.in', value: store.pairedUrl() || location.origin, inputmode: 'url' });
     const user = el('input', { type: 'text', placeholder: 'username', autocomplete: 'username' });
     const pass = el('input', { type: 'password', placeholder: 'password', autocomplete: 'current-password' });
     const pin = el('input', { type: 'password', placeholder: 'choose a local PIN (unlocks this app)', inputmode: 'numeric', autocomplete: 'off' });
@@ -44,7 +47,7 @@ export function pairingScreen(root) {
         if (store.hasCrypto() && (pin.value || '').length < 4) return toast('PIN must be ≥ 4 characters', 'err');
         btn.disabled = true; btn.textContent = 'Pairing…';
         try {
-          const token = await fetchToken(url.value, user.value, pass.value);
+          const token = await login(url.value, user.value, pass.value);
           await store.pair({ url: url.value.replace(/\/+$/, ''), token, pin: pin.value });
           toast('Paired ✓');
           resolve({ url: url.value.replace(/\/+$/, ''), token });
