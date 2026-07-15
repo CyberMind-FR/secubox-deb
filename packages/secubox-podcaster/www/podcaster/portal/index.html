@@ -5,104 +5,353 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Podcasts · SecuBox</title>
+<title>🎙️ Podcasts · SecuBox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --cosmos-black:#0a0a0f; --gold-hermetic:#c9a84c; --void-purple:#6e40c9;
-    --cyber-cyan:#00d4ff; --matrix-green:#00ff41; --text-primary:#e8e6d9;
-    --text-muted:#6b6b7a; --panel:#13131c; --line:#23232f;
+    --bg:#07070d; --panel:#12121d; --panel-2:#171726; --line:#262636;
+    --ink:#eceafd; --muted:#8a8aa6;
+    --cyan:#00d4ff; --violet:#8b5cf6; --pink:#ff5cc8; --lime:#7CFF6B; --gold:#f5c451;
+    --glow:0 0 0 1px rgba(139,92,246,.25), 0 10px 40px -12px rgba(0,212,255,.28);
   }
   *{box-sizing:border-box}
-  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#15101f,#0a0a0f 60%);
-    color:var(--text-primary);font-family:'JetBrains Mono',ui-monospace,Menlo,monospace}
-  header{max-width:1000px;margin:0 auto;padding:38px 20px 18px;text-align:center}
-  header .em{font-size:42px}
-  header h1{margin:8px 0 4px;font-size:30px;letter-spacing:2px;color:var(--gold-hermetic)}
-  header p{color:var(--text-muted);margin:0}
-  .subs{display:inline-flex;gap:10px;margin-top:16px;flex-wrap:wrap;justify-content:center}
-  .subs a{color:var(--cyber-cyan);text-decoration:none;border:1px solid var(--cyber-cyan);
-    padding:8px 14px;border-radius:24px;font-size:13px}
-  .subs a:hover{background:rgba(0,212,255,.1)}
-  .filters{max-width:1000px;margin:18px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap}
-  .chip{font-size:12px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);
-    color:var(--text-muted);cursor:pointer}
-  .chip.on{color:var(--void-purple);border-color:var(--void-purple);background:rgba(110,64,201,.12)}
-  main{max-width:1000px;margin:18px auto 60px;padding:0 20px}
-  .ep{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--line);
-    border-radius:12px;margin-bottom:12px;background:var(--panel)}
-  .ep .n{font-size:20px;color:var(--void-purple);width:30px;text-align:center}
-  .ep .meta{flex:1;min-width:0}
-  .ep .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
-  .ep .meta span{color:var(--text-muted);font-size:12px}
-  audio{height:38px;max-width:300px}
-  .ep a.dl{color:var(--matrix-green);text-decoration:none;border:1px solid var(--matrix-green);
-    border-radius:8px;padding:7px 10px;font-size:13px;white-space:nowrap}
-  .ep a.dl:hover{background:rgba(0,255,65,.1)}
-  .zipbar{max-width:1000px;margin:14px auto 0;padding:0 20px}
-  .zipbar a{color:var(--gold-hermetic);text-decoration:none;border:1px solid var(--gold-hermetic);
-    border-radius:24px;padding:8px 16px;font-size:13px}
-  .zipbar a:hover{background:rgba(201,168,76,.12)}
-  .empty{text-align:center;color:var(--text-muted);padding:60px}
-  footer{text-align:center;color:var(--text-muted);font-size:11px;padding:24px}
-  footer a{color:var(--text-muted)}
-  @media(max-width:680px){.ep{flex-wrap:wrap}audio{max-width:100%;width:100%}}
+  html,body{overflow-x:hidden}
+  body{
+    margin:0; color:var(--ink);
+    font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    background:
+      radial-gradient(900px 480px at 12% -8%, rgba(139,92,246,.22), transparent 60%),
+      radial-gradient(900px 520px at 92% 4%, rgba(0,212,255,.16), transparent 55%),
+      radial-gradient(700px 500px at 50% 120%, rgba(255,92,200,.12), transparent 60%),
+      var(--bg);
+    min-height:100vh;
+  }
+  a{color:inherit}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+
+  /* ---- header ---- */
+  header{padding:46px 20px 20px;text-align:center}
+  .badge{
+    font-size:52px;line-height:1;display:inline-block;
+    filter:drop-shadow(0 6px 18px rgba(0,212,255,.45));
+    animation:float 5s ease-in-out infinite;
+  }
+  @keyframes float{50%{transform:translateY(-8px)}}
+  header h1{
+    margin:14px 0 6px;font-family:'Space Grotesk',sans-serif;font-weight:700;
+    font-size:clamp(28px,6vw,44px);letter-spacing:.5px;
+    background:linear-gradient(92deg,var(--cyan),var(--violet) 45%,var(--pink));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  header p{color:var(--muted);margin:0;font-size:14px}
+  .subs{display:inline-flex;gap:10px;margin-top:18px;flex-wrap:wrap;justify-content:center}
+  .subs a{
+    text-decoration:none;font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;
+    border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--ink);
+    transition:transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .subs a:hover{transform:translateY(-2px);border-color:var(--cyan);background:rgba(0,212,255,.10)}
+  .subs a:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+  /* ---- filter chips ---- */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:26px auto 0}
+  .chip{
+    font-size:12px;font-weight:600;padding:7px 14px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--line);color:var(--muted);background:rgba(255,255,255,.02);
+    transition:all .15s ease;user-select:none;
+  }
+  .chip:hover{color:var(--ink);border-color:var(--violet)}
+  .chip:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+  .chip.on{
+    color:#0a0a12;border-color:transparent;
+    background:linear-gradient(92deg,var(--cyan),var(--violet));
+    box-shadow:0 6px 20px -8px rgba(0,212,255,.6);
+  }
+
+  /* ---- zip bar ---- */
+  .zipbar{margin:14px auto 0}
+  .zipbar a{
+    display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-size:13px;font-weight:600;
+    padding:9px 16px;border-radius:999px;color:var(--gold);
+    border:1px solid rgba(245,196,81,.4);background:rgba(245,196,81,.07);
+    transition:all .15s ease;
+  }
+  .zipbar a:hover{background:rgba(245,196,81,.16);transform:translateY(-2px)}
+  .zipbar a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .zipbar:empty{display:none}
+
+  /* ---- list ---- */
+  main{margin:22px auto 70px}
+  .ep{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    grid-template-areas:"n meta dl" "aud aud aud";
+    gap:12px 14px;align-items:center;
+    padding:16px;border:1px solid var(--line);border-radius:16px;margin-bottom:14px;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    transition:border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  }
+  .ep:hover{border-color:rgba(139,92,246,.5);transform:translateY(-2px);box-shadow:var(--glow)}
+  .ep .n{
+    grid-area:n;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+    font-size:22px;background:rgba(139,92,246,.14);border:1px solid rgba(139,92,246,.3);
+  }
+  .ep .meta{grid-area:meta;min-width:0}
+  .ep .meta b{
+    display:block;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .ep .meta .sub{color:var(--muted);font-size:12px;margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .ep .meta .kind{
+    font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;
+    border:1px solid var(--line);color:var(--ink);white-space:nowrap;
+  }
+  .ep .meta .kind.book{color:var(--lime);border-color:rgba(124,255,107,.35);background:rgba(124,255,107,.08)}
+  .ep .meta .kind.cast{color:var(--cyan);border-color:rgba(0,212,255,.35);background:rgba(0,212,255,.08)}
+  .ep audio{grid-area:aud;width:100%;height:40px;border-radius:10px}
+  .ep a.dl{
+    grid-area:dl;text-decoration:none;font-size:16px;font-weight:600;
+    width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+    color:var(--lime);border:1px solid rgba(124,255,107,.35);background:rgba(124,255,107,.06);
+    transition:all .15s ease;
+  }
+  .ep a.dl:hover{background:rgba(124,255,107,.16);transform:translateY(-1px)}
+  .ep a.dl:focus-visible{outline:2px solid var(--lime);outline-offset:2px}
+
+  @media(min-width:720px){
+    .ep{grid-template-columns:auto 1fr minmax(240px,320px) auto;
+        grid-template-areas:"n meta aud dl";}
+    .ep audio{width:100%;max-width:320px}
+  }
+
+  .empty{
+    text-align:center;color:var(--muted);padding:70px 20px;font-size:14px;
+    border:1px dashed var(--line);border-radius:16px;
+  }
+  .empty .big{font-size:40px;display:block;margin-bottom:12px}
+
+  footer{text-align:center;color:var(--muted);font-size:11px;padding:26px 20px 40px}
+  footer a{color:var(--muted)}
+  footer a:hover{color:var(--cyan)}
+
+  /* ---- cover thumb on the kind chip ---- */
+  .ep .n{position:relative;overflow:hidden}
+  .ep .n img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:12px}
+
+  /* ---- now playing sticky bar ---- */
+  #np{
+    position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+    z-index:50;width:calc(100% - 28px);max-width:1000px;
+    display:flex;align-items:center;gap:14px;
+    padding:10px 14px;border-radius:16px;
+    border:1px solid rgba(139,92,246,.5);
+    background:linear-gradient(180deg,rgba(23,23,38,.96),rgba(18,18,29,.96));
+    box-shadow:0 12px 40px -10px rgba(0,212,255,.4), var(--glow);
+    backdrop-filter:blur(10px);
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  #np[hidden]{display:none}
+  #np .npc{
+    position:relative;overflow:hidden;flex-shrink:0;
+    width:52px;height:52px;border-radius:12px;display:grid;place-items:center;
+    font-size:26px;background:rgba(139,92,246,.14);border:1px solid rgba(139,92,246,.3);
+  }
+  #np .npc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:12px}
+  #np .npt{min-width:0;flex:1}
+  #np .npt b{
+    display:block;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #np .npt span{color:var(--muted);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #np .npeq{
+    flex-shrink:0;font-size:12px;font-weight:600;color:#0a0a12;padding:5px 12px;border-radius:999px;
+    background:linear-gradient(92deg,var(--cyan),var(--violet));
+  }
+  @media(max-width:520px){ #np .npeq{display:none} }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important}
+  }
 </style>
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
 </head>
-<body class="hybrid-dark">
+<body>
 <header>
-  <div class="em">🎙️</div>
-  <h1 id="title">Podcasts</h1>
-  <p id="sub">Relayed locally by SecuBox · listen freely</p>
-  <div class="subs">
-    <a id="rss" href="/api/v1/podcaster/share/feed.xml" target="_blank">📡 Subscribe (RSS)</a>
-    <a id="copy" href="#" onclick="copyRss(event)">🔗 Copy feed URL</a>
+  <div class="wrap">
+    <div class="badge">🎙️</div>
+    <h1 id="title">Podcasts</h1>
+    <p id="sub">📻 Relayed locally by SecuBox · listen freely 🎧</p>
+    <div class="subs">
+      <a id="rss" href="/api/v1/podcaster/share/feed.xml" target="_blank" rel="noopener">📡 Subscribe (RSS)</a>
+      <a id="copy" href="#" onclick="copyRss(event)">🔗 Copy feed URL</a>
+    </div>
   </div>
 </header>
-<div class="filters" id="filters"></div>
-<div class="zipbar" id="zipbar"></div>
-<main><div id="list" class="empty">Loading…</div></main>
-<footer>SecuBox Podcaster · <a href="https://cybermind.fr" target="_blank">CyberMind</a></footer>
+
+<div class="wrap">
+  <div class="filters" id="filters"></div>
+  <div class="zipbar" id="zipbar"></div>
+  <main><div id="list" class="empty">🎧 Loading…</div></main>
+</div>
+
+<footer>⚡ SecuBox Podcaster · <a href="https://cybermind.fr" target="_blank" rel="noopener">CyberMind</a></footer>
+
+<div id="np" hidden aria-live="polite">
+  <div class="npc" id="npCover" aria-hidden="true">🎧</div>
+  <div class="npt"><b id="npTitle"></b><span id="npFeed"></span></div>
+  <span class="npeq">▶ Now Playing</span>
+</div>
 
 <script>
 const API="/api/v1/podcaster";
 let DATA={episodes:[],feeds:{}}, FILT=null;
+let RENDER_SIG=null;               // signature of the currently-rendered episode set
+
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function rssUrl(){return location.origin+API+"/share/feed.xml"}
-function copyRss(e){e.preventDefault();navigator.clipboard.writeText(rssUrl()).then(()=>{
-  const a=document.getElementById("copy");a.textContent="✓ Copied";setTimeout(()=>a.textContent="🔗 Copy feed URL",1800)})}
+function copyRss(e){
+  e.preventDefault();
+  navigator.clipboard.writeText(rssUrl()).then(()=>{
+    const a=document.getElementById("copy");
+    a.textContent="✓ Copied";
+    setTimeout(()=>a.textContent="🔗 Copy feed URL",1800);
+  });
+}
+
+/* Best-effort audiobook vs podcast classification from available hints. */
+function epKind(e){
+  const t=((e.feed_title||"")+" "+(e.feed||"")+" "+(e.title||"")).toLowerCase();
+  if(/audio ?book|livre ?audio|chapt(er|re)?\b|\bbook\b/.test(t))
+    return {cls:"book",icon:"📚",label:"Audiobook"};
+  return {cls:"cast",icon:"🎙️",label:"Podcast"};
+}
+
+/* Any per-episode <audio> currently playing? If so we must not tear down the DOM. */
+function anyPlaying(){
+  const list=document.getElementById("list");
+  return Array.prototype.some.call(list.querySelectorAll("audio"),a=>!a.paused && !a.ended);
+}
+
 async function load(){
-  let d; try{d=await fetch(API+"/public/library").then(r=>r.json())}
-  catch(e){document.getElementById("list").innerHTML='<div class="empty">Portal unavailable.</div>';return}
+  let d;
+  try{ d=await fetch(API+"/public/library").then(r=>r.json()); }
+  catch(e){
+    // Only replace the list if nothing is playing, to avoid killing audio on a transient error.
+    if(!anyPlaying()){
+      document.getElementById("list").className="empty";
+      document.getElementById("list").innerHTML='<span class="big">📡</span>Portal unavailable.';
+    }
+    return;
+  }
   DATA=d;
   document.getElementById("title").textContent=d.title||"Podcasts";
   document.getElementById("rss").href=API+"/share/feed.xml";
+
+  // Filter chips (no <audio> here — always safe to rebuild).
   const fl=document.getElementById("filters");
   const feeds=Object.keys(d.feeds||{});
-  fl.innerHTML=(feeds.length>1?[`<span class="chip ${FILT===null?'on':''}" onclick="setF(null)">All</span>`]:[])
-    .concat(feeds.map(f=>`<span class="chip ${FILT===f?'on':''}" onclick="setF('${esc(f).replace(/'/g,"")}')">${esc(f)} · ${d.feeds[f]}</span>`)).join("");
-  render();
+  fl.innerHTML=(feeds.length>1?[`<span class="chip ${FILT===null?'on':''}" tabindex="0" role="button" onclick="setF(null)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setF(null)}">✨ All</span>`]:[])
+    .concat(feeds.map(f=>{
+      const fk=esc(f).replace(/'/g,"");
+      return `<span class="chip ${FILT===f?'on':''}" tabindex="0" role="button" onclick="setF('${fk}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setF('${fk}')}">${esc(f)} · ${d.feeds[f]}</span>`;
+    })).join("");
+
+  render();                        // poll path — guarded (force=false)
 }
-function setF(f){FILT=f;load._render?render():render()}
-function render(){
+
+/* User-initiated filter change may always rebuild. */
+function setF(f){ FILT=f; render(true); }
+
+/*
+ * render(force)
+ *  - Computes a signature of the visible episode set (ordered id:state per active filter).
+ *  - Poll path (force falsy):
+ *      • signature UNCHANGED  → return early, never touch list.innerHTML.
+ *      • signature CHANGED but something is PLAYING → defer, return without rebuild.
+ *        The next poll (or a filter change) rebuilds once nothing is playing.
+ *  - force=true (setF) always rebuilds.
+ * Net effect: a playing episode is NEVER interrupted by the background poll.
+ */
+function render(force){
   const list=document.getElementById("list");
   let eps=DATA.episodes||[];
   if(FILT) eps=eps.filter(e=>e.feed===FILT);
-  // ZIP-all button when a single feed is in view
+
+  const sig=(FILT===null?"*":FILT)+"|"+eps.map(e=>e.id+":"+(e.state||"")).join(",");
+
+  if(!force){
+    if(sig===RENDER_SIG) return;    // nothing changed → leave the DOM (and audio) alone
+    if(anyPlaying()) return;        // changed, but defer so we don't kill playback
+  }
+
+  // ZIP-all button when a single feed is in view.
   const zb=document.getElementById("zipbar");
   const fid=eps.length?eps[0].feed_id:null;
   zb.innerHTML=(FILT&&fid!=null)
     ? `<a href="${API}/public/feed/${fid}/zip">⬇ Download all (ZIP) · ${esc(FILT)}</a>` : "";
-  if(!eps.length){list.innerHTML='<div class="empty">No episodes published yet.</div>';return}
+
+  if(!eps.length){
+    list.className="empty";
+    list.innerHTML='<span class="big">🎙️</span>No episodes published yet.';
+    RENDER_SIG=sig;
+    return;
+  }
+
+  list.className="";
   list.innerHTML=eps.map((e,i)=>{
     const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
-    return `<div class="ep"><div class="n">${i+1}</div>
-      <div class="meta"><b>${esc(e.title)}</b><span>${esc(e.feed)} · ${date} ${e.duration?'· '+esc(e.duration):''}</span></div>
+    const k=epKind(e);
+    const meta=[esc(e.feed),date,e.duration?esc(e.duration):""].filter(Boolean).join(" · ");
+    const cover=e.feed_image||"";
+    const coverImg=cover?`<img src="${esc(cover)}" alt="" loading="lazy" onerror="this.remove()">`:"";
+    return `<div class="ep" data-cover="${esc(cover)}" data-title="${esc(e.title)}" data-feed="${esc(e.feed||"")}" data-icon="${k.icon}">
+      <div class="n" aria-hidden="true">${k.icon}${coverImg}</div>
+      <div class="meta">
+        <b>${esc(e.title)}</b>
+        <div class="sub"><span class="kind ${k.cls}">${k.icon} ${k.label}</span><span>${meta}</span></div>
+      </div>
       <audio controls preload="none" src="${API}/media/${e.id}"></audio>
-      <a class="dl" href="${API}/media/${e.id}" download title="Download">⬇</a></div>`;
+      <a class="dl" href="${API}/media/${e.id}" download title="Download episode" aria-label="Download episode">⬇</a>
+    </div>`;
   }).join("");
+
+  RENDER_SIG=sig;                   // remember what we drew
 }
-load();setInterval(load,15000);
+
+/*
+ * Now-Playing panel.
+ * Read-only w.r.t. the episode list: a single capture-phase delegated listener on
+ * #list (the 'play' event does not bubble, hence capture). It reads the playing
+ * card's data-* attributes and updates a separate #np panel — it NEVER touches
+ * list.innerHTML, so the RENDER_SIG / anyPlaying() playback guard is unaffected.
+ */
+function showNowPlaying(card){
+  const np=document.getElementById("np");
+  const cover=card.dataset.cover||"";
+  const icon=card.dataset.icon||"🎧";
+  const cc=document.getElementById("npCover");
+  cc.textContent=icon;                              // emoji fallback behind the img
+  if(cover){
+    const img=document.createElement("img");
+    img.alt=""; img.loading="lazy";
+    img.onerror=function(){this.remove()};          // broken cover → reveal emoji
+    img.src=cover;
+    cc.appendChild(img);
+  }
+  document.getElementById("npTitle").textContent=card.dataset.title||"";
+  document.getElementById("npFeed").textContent=card.dataset.feed||"";
+  np.hidden=false;
+}
+document.getElementById("list").addEventListener("play",function(ev){
+  const au=ev.target;
+  if(!au||au.tagName!=="AUDIO") return;
+  const card=au.closest(".ep");
+  if(card) showNowPlaying(card);
+},true);
+
+load();
+setInterval(load,15000);           // 15s poll — now guarded, never interrupts playback
 </script>
 </body>
 </html>
