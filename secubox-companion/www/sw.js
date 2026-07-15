@@ -7,7 +7,7 @@
 // Same-origin app assets → stale-while-revalidate. Box API (cross-origin) →
 // passthrough (the page handles offline reads/queue).
 
-const VERSION = 'sbx-companion-v4';
+const VERSION = 'sbx-companion-v5';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './styles/charte.css', './styles/fonts.css',
@@ -40,14 +40,17 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;     // box API: let the page handle it
 
-  // stale-while-revalidate for app assets (incl. lazily-loaded module folders)
+  // NETWORK-FIRST for app assets: always serve fresh code when online (a deploy
+  // takes effect on the next load, not two loads later), fall back to cache only
+  // when offline. Avoids the stale-serving that made every fix need reloads.
   e.respondWith((async () => {
     const cache = await caches.open(VERSION);
-    const cached = await cache.match(req);
-    const network = fetch(req).then(res => {
+    try {
+      const res = await fetch(req);
       if (res && res.ok) cache.put(req, res.clone());
       return res;
-    }).catch(() => cached);
-    return cached || network;
+    } catch {
+      return (await cache.match(req)) || Response.error();
+    }
   })());
 });
