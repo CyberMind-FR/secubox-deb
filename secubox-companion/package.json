@@ -1,0 +1,21 @@
+{
+  "name": "secubox-companion",
+  "version": "0.1.0",
+  "description": "Remote modular companion for SecuBox-Deb (PWA + Capacitor).",
+  "license": "LicenseRef-CMSD-1.0",
+  "private": true,
+  "author": "Gerald KERMA <devel@cybermind.fr>",
+  "scripts": {
+    "serve": "python3 -m http.server 8080 --directory www",
+    "cap:init": "cap add android || true",
+    "apk": "npm run cap:sync && cd android && ./gradlew assembleDebug && echo 'APK → android/app/build/outputs/apk/debug/app-debug.apk'",
+    "cap:sync": "cap sync",
+    "ios:init": "cap add ios || true"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/ios": "^6.0.0"
+  }
+}
