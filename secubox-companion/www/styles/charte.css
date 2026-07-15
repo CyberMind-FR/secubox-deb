@@ -1,9 +1,8 @@
 /* SPDX-License-Identifier: LicenseRef-CMSD-1.0 */
 /* SecuBox Companion — SecuBox_Charte_Light_3
- * Fonts are referenced by family name with self-contained fallback stacks
- * (no external font CDN — the app talks only to the box). Bundle the real
- * Space Grotesk / JetBrains Mono woff2 into styles/fonts/ to pixel-match.
- * TODO(fonts): drop woff2 + @font-face here for exact charte rendering.
+ * Charte fonts (Space Grotesk + JetBrains Mono) are self-hosted latin woff2,
+ * declared in styles/fonts.css — no external font CDN, fully offline. The
+ * family names below resolve to those @font-face rules, with system fallbacks.
  */
 :root {
   --font-ui:   'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
