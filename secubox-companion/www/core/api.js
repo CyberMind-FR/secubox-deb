@@ -34,7 +34,7 @@ export const api = {
   async get(path, { cache = true } = {}) {
     const url = BASE + path;
     try {
-      const r = await fetch(url, { headers: this.headers(), credentials: 'omit' });
+      const r = await fetch(url, { headers: this.headers(), credentials: 'include' });
       if (r.status === 401) throw new ApiError('unauthorized', 401);
       if (!r.ok) throw new ApiError(await safeText(r), r.status);
       const data = await r.json().catch(() => ({}));
@@ -59,7 +59,7 @@ export const api = {
     const send = async () => {
       const headers = form ? this.headers() : this.headers({ 'Content-Type': 'application/json' });
       const r = await fetch(BASE + path, {
-        method, headers, credentials: 'omit',
+        method, headers, credentials: 'include',
         body: body == null ? undefined : (form ? body : JSON.stringify(body)),
       });
       if (r.status === 401) throw new ApiError('unauthorized', 401);
@@ -88,7 +88,7 @@ export const api = {
       try {
         const r = await fetch(BASE + op.path, {
           method: op.method, headers: this.headers({ 'Content-Type': 'application/json' }),
-          credentials: 'omit', body: op.body == null ? undefined : JSON.stringify(op.body),
+          credentials: 'include', body: op.body == null ? undefined : JSON.stringify(op.body),
         });
         if (r.ok || (r.status >= 400 && r.status < 500)) { await store.dequeue(op.id); sent++; }
         else failed++;
