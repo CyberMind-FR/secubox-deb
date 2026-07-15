@@ -1,0 +1,11 @@
+{
+  "id": "wireguard",
+  "name": "WireGuard",
+  "module": "MESH",
+  "icon": "🔗",
+  "description": "VPN tunnels: peers, handshakes, transfer.",
+  "api_base": "/api/v1/wireguard",
+  "status_endpoint": "/api/v1/wireguard/status",
+  "capabilities": ["read"],
+  "routes": [{ "path": "", "label": "Peers" }]
+}

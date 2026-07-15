@@ -1,0 +1,11 @@
+{
+  "id": "exposure",
+  "name": "Exposure",
+  "module": "ROOT",
+  "icon": "🚀",
+  "description": "Punk Exposure: peek / poke / emancipate services (Tor · DNS · Mesh).",
+  "api_base": "/api/v1/exposure",
+  "status_endpoint": "/api/v1/exposure/status",
+  "capabilities": ["read", "write"],
+  "routes": [{ "path": "", "label": "Services" }]
+}
