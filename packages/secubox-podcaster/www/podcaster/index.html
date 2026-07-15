@@ -3,118 +3,204 @@
 <!-- SecuBox-Deb :: Podcaster admin WebUI — CyberMind https://cybermind.fr -->
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecuBox · Podcaster</title>
-<link rel="stylesheet" href="/shared/crt-light.css">
-<link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Podcaster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
   :root{
-    --cosmos-black:#0a0a0f; --gold-hermetic:#c9a84c; --cinnabar:#e63946;
-    --matrix-green:#00ff41; --void-purple:#6e40c9; --cyber-cyan:#00d4ff;
-    --text-primary:#e8e6d9; --text-muted:#6b6b7a; --panel:#13131c; --line:#23232f;
+    --p31-dim:#6b7b8b;
+    --bg-dark:#0d1117;
+    --bg-card:rgba(30,40,55,0.8);
+    --bg-row:rgba(20,30,45,0.6);
+    --border:rgba(100,150,200,0.2);
+    --text:#e8e6d9;
+    --cyan:#00d4ff;
+    --red:#ff4466; --orange:#ff9944; --yellow:#ffcc00;
+    --green:#00dd44; --blue:#4488ff; --purple:#a371f7;
   }
-  body{margin:0;background:var(--cosmos-black);color:var(--text-primary);
-    font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:14px;display:flex}
-  .main{flex:1;margin-left:220px;min-height:100vh}
-  @media(max-width:900px){.sidebar{display:none}.main{margin-left:0}}
-  .topbar{display:flex;align-items:center;gap:14px;padding:14px 20px;
-    border-bottom:1px solid var(--line);background:linear-gradient(90deg,#0a0a0f,#13131c)}
-  .topbar h1{font-size:18px;margin:0;letter-spacing:1px;color:var(--gold-hermetic)}
-  .topbar .em{font-size:22px}
-  .stats{margin-left:auto;display:flex;gap:16px;color:var(--text-muted);font-size:12px}
-  .stats b{color:var(--cyber-cyan)}
-  .wrap{display:grid;grid-template-columns:300px 1fr;gap:0;min-height:calc(100vh - 58px)}
-  aside.feeds{border-right:1px solid var(--line);background:var(--panel);padding:14px;overflow:auto}
-  section.eps{padding:18px 22px;overflow:auto}
-  @media(max-width:760px){.wrap{grid-template-columns:1fr}aside.feeds{border-right:0;border-bottom:1px solid var(--line)}}
-  .row{display:flex;gap:8px;margin-bottom:12px}
-  input,button,select{font-family:inherit;font-size:13px;border-radius:8px;border:1px solid var(--line)}
-  input{flex:1;background:#0e0e16;color:var(--text-primary);padding:9px 11px}
-  button{background:#1a1a26;color:var(--text-primary);padding:9px 13px;cursor:pointer;transition:.15s}
-  button:hover{border-color:var(--cyber-cyan);color:var(--cyber-cyan)}
-  button.go{background:var(--void-purple);border-color:var(--void-purple);color:#fff}
-  a.portal{color:var(--cyber-cyan);text-decoration:none;font-size:12px;border:1px solid var(--cyber-cyan);
-    padding:7px 11px;border-radius:8px}
-  .feed{display:flex;gap:10px;align-items:center;padding:9px;border-radius:8px;cursor:pointer;border:1px solid transparent}
-  .feed:hover{background:#0e0e16}.feed.sel{background:#0e0e16;border-color:var(--void-purple)}
-  .feed img{width:40px;height:40px;border-radius:6px;object-fit:cover;background:#222}
-  .feed .t{flex:1;min-width:0}.feed .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
-  .feed .t span{color:var(--text-muted);font-size:11px}
-  .feed .x{color:var(--text-muted);opacity:0;font-size:16px}.feed:hover .x{opacity:1}
-  .feed .ad{font-size:14px;cursor:pointer;opacity:.5}.feed .ad.on{opacity:1;color:var(--matrix-green)}
-  label.autodl{display:flex;gap:7px;align-items:center;color:var(--text-muted);font-size:12px;margin:-4px 0 12px;cursor:pointer}
-  h2{font-size:15px;color:var(--gold-hermetic);border-bottom:1px solid var(--line);padding-bottom:8px;margin:0 0 14px}
-  .ep{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:var(--panel)}
-  .ep .meta{flex:1;min-width:0}.ep .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ep .meta span{color:var(--text-muted);font-size:11px}
-  .ep .act{display:flex;gap:6px;align-items:center}
-  .badge{font-size:10px;padding:2px 7px;border-radius:20px;border:1px solid var(--line);color:var(--text-muted)}
-  .badge.downloading{color:var(--cyber-cyan);border-color:var(--cyber-cyan)}
-  .badge.error{color:var(--cinnabar);border-color:var(--cinnabar)}
-  .bar{height:4px;border-radius:3px;background:#0e0e16;overflow:hidden;width:90px}.bar i{display:block;height:100%;background:var(--cyber-cyan);width:0}
-  audio{height:34px}
-  .share{margin-top:6px;padding:12px;border:1px dashed var(--void-purple);border-radius:10px;color:var(--text-muted);font-size:12px}
-  .share a{color:var(--cyber-cyan)}
-  .muted{color:var(--text-muted)}.empty{color:var(--text-muted);padding:40px;text-align:center}
-  dialog{background:var(--panel);color:var(--text-primary);border:1px solid var(--void-purple);border-radius:12px;padding:20px;width:min(520px,92vw)}
-  dialog label{display:block;margin:10px 0 4px;color:var(--text-muted);font-size:12px}dialog input{width:100%}
-  .toast{position:fixed;bottom:18px;right:18px;background:#13131c;border:1px solid var(--cyber-cyan);color:var(--cyber-cyan);padding:10px 14px;border-radius:8px;opacity:0;transition:.2s;font-size:12px}.toast.on{opacity:1}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Courier Prime',monospace;background:var(--bg-dark);color:var(--text);display:flex;min-height:100vh}
+  .sidebar{width:220px;position:fixed;height:100vh;overflow-y:auto}
+  .main{flex:1;margin-left:220px;padding:1.5rem;padding-top:60px;background:linear-gradient(135deg,rgba(10,15,25,0.95),rgba(15,25,40,0.9));min-height:100vh}
+  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem}
+  .header h1{font-size:1.4rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
+  .btn{padding:0.4rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);cursor:pointer;font-size:0.8rem;font-family:'Courier Prime',monospace;text-transform:uppercase;transition:all 0.2s;text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem}
+  .btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,0.3)}
+  .btn.primary{background:rgba(0,212,255,0.15);border-color:var(--cyan);color:var(--cyan)}
+  .btn.danger{background:rgba(255,68,102,0.15);border-color:var(--red);color:var(--red)}
+  .btn.sm{padding:0.2rem 0.5rem;font-size:0.7rem}
+  .btn.mini{padding:0.15rem 0.4rem;font-size:0.7rem;line-height:1;text-transform:none}
+  .btn:disabled{opacity:0.5;cursor:not-allowed}
+  .btn-group{display:flex;gap:0.5rem;flex-wrap:wrap}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.75rem;margin-bottom:1rem}
+  .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:0.6rem;text-align:center;backdrop-filter:blur(5px)}
+  .stat-card .value{font-size:1.4rem;font-weight:bold;text-shadow:0 0 10px currentColor}
+  .stat-card .label{font-size:0.6rem;color:var(--p31-dim);letter-spacing:0.1em;margin-top:0.2rem}
+  .stat-card.cyan .value{color:var(--cyan)}
+  .stat-card.green .value{color:var(--green)}
+  .stat-card.blue .value{color:var(--blue)}
+  .stat-card.orange .value{color:var(--orange)}
+
+  .panes{display:grid;grid-template-columns:340px 1fr;gap:1rem;align-items:start}
+
+  .addrow{display:flex;gap:0.5rem;margin-bottom:0.6rem}
+  .addrow input{flex:1;padding:0.45rem;background:var(--bg-row);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'Courier Prime',monospace;font-size:0.8rem}
+  .addrow input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 5px rgba(0,212,255,0.3)}
+  label.autodl{display:flex;gap:0.4rem;align-items:center;color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.6rem;cursor:pointer}
+
+  .feed{display:flex;gap:0.6rem;align-items:center;padding:0.4rem 0.5rem;background:var(--bg-row);border-radius:4px;border-left:3px solid var(--border);cursor:pointer;transition:all 0.15s;margin-bottom:0.25rem}
+  .feed:hover{background:rgba(0,212,255,0.1);transform:translateX(2px)}
+  .feed:hover .x{opacity:1}
+  .feed.sel{border-left-color:var(--cyan);background:rgba(0,212,255,0.12)}
+  .feed img{width:36px;height:36px;border-radius:6px;object-fit:cover;background:#222;flex-shrink:0}
+  .feed .t{flex:1;min-width:0}
+  .feed .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.8rem;color:var(--cyan)}
+  .feed .t span{color:var(--p31-dim);font-size:0.65rem}
+  .feed .ad{font-size:0.95rem;cursor:pointer;opacity:0.45}
+  .feed .ad.on{opacity:1;color:var(--green)}
+  .feed .x{color:var(--p31-dim);opacity:0;font-size:1rem;cursor:pointer}
+
+  h2#title{font-size:1rem;color:var(--cyan);border-bottom:1px solid var(--border);padding-bottom:0.5rem;margin-bottom:0.75rem}
+
+  .ep{display:flex;gap:0.75rem;align-items:center;padding:0.5rem 0.6rem;background:var(--bg-row);border-radius:4px;border-left:3px solid var(--border);margin-bottom:0.4rem}
+  .ep .cov{position:relative;overflow:hidden;flex-shrink:0;width:32px;height:32px;border-radius:5px;display:grid;place-items:center;font-size:0.95rem;background:#1a2432;border:1px solid var(--border)}
+  .ep .cov img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:5px}
+  .ep .meta{flex:1;min-width:0}
+  .ep .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.8rem}
+  .ep .meta span{color:var(--p31-dim);font-size:0.65rem}
+  .ep .act{display:flex;gap:0.4rem;align-items:center}
+  .badge{font-size:0.6rem;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--p31-dim);text-transform:uppercase}
+  .badge.downloading{color:var(--cyan);border-color:var(--cyan)}
+  .badge.error{color:var(--red);border-color:var(--red)}
+  .bar{height:4px;border-radius:3px;background:#0e0e16;overflow:hidden;width:80px}
+  .bar i{display:block;height:100%;background:var(--cyan);width:0}
+  audio{height:34px;max-width:220px}
+
+  .share{font-size:0.7rem;color:var(--p31-dim);word-break:break-all;line-height:1.5}
+  .share a{color:var(--cyan);text-decoration:none}
+  .muted{color:var(--p31-dim)}
+  .empty{color:var(--p31-dim);padding:40px;text-align:center}
+
+  dialog{background:rgba(20,30,45,0.97);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:1.5rem;width:min(520px,92vw)}
+  dialog::backdrop{background:rgba(0,0,0,0.85)}
+  dialog h3{color:var(--cyan);margin-bottom:1rem}
+  dialog label{display:block;margin:0.6rem 0 0.2rem;color:var(--p31-dim);font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em}
+  dialog input{width:100%;padding:0.45rem;background:var(--bg-row);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'Courier Prime',monospace;font-size:0.8rem}
+  dialog input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 5px rgba(0,212,255,0.3)}
+  #svc{font-size:0.75rem;margin-bottom:0.5rem}
+
+  dialog label.chk{display:flex;gap:0.45rem;align-items:center;text-transform:none;letter-spacing:normal;font-size:0.78rem;color:var(--text);margin:0.5rem 0 0;cursor:pointer}
+  dialog label.chk input{width:auto;padding:0}
+  .imphelp{font-size:0.68rem;color:var(--p31-dim);line-height:1.45;margin:0.75rem 0 0.25rem}
+  #impProg{margin-top:1rem;border-top:1px solid var(--border);padding-top:0.75rem}
+  #impProg .cur{font-size:0.75rem;color:var(--cyan);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #impProg .bar{width:100%;height:6px;margin:0.5rem 0}
+  #impProg .errline{font-size:0.68rem;color:var(--red);margin-bottom:0.35rem}
+  #impLog{background:#0e0e16;border:1px solid var(--border);border-radius:4px;padding:0.5rem;font-family:'Courier Prime',monospace;font-size:0.68rem;line-height:1.35;color:var(--p31-dim);max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+
+  .toast{position:fixed;bottom:70px;right:20px;padding:0.75rem 1rem;background:var(--cyan);color:#000;border-radius:6px;font-size:0.8rem;z-index:2000;opacity:0;transform:translateY(20px);transition:all 0.3s;box-shadow:0 0 20px rgba(0,212,255,0.4);max-width:360px;display:flex;gap:0.6rem;align-items:center}
+  .toast.show{opacity:1;transform:translateY(0)}
+  .toast.error{background:var(--red);color:#fff;box-shadow:0 0 20px rgba(255,68,102,0.4)}
+  .toast .tclose{cursor:pointer;font-weight:bold;margin-left:auto}
+
+  ::-webkit-scrollbar{width:5px}
+  ::-webkit-scrollbar-track{background:rgba(20,30,45,0.5)}
+  ::-webkit-scrollbar-thumb{background:var(--p31-dim);border-radius:3px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--cyan)}
+
+  @media(max-width:768px){.main{margin-left:0;padding-top:60px}.panes{grid-template-columns:1fr}}
 </style>
 </head>
-<body>
+<body class="hybrid-dark">
 <nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
 <main class="main">
-  <div class="topbar">
-    <span class="em">🎙️</span><h1>PODCASTER</h1>
-    <div class="stats" id="stats"></div>
-    <a class="portal" href="/podcaster/portal/" target="_blank">🌐 Public portal</a>
-    <button onclick="openCfg()" title="Config & status">⚙️</button>
+  <header class="header">
+    <h1>🎙️ Podcaster</h1>
+    <div class="btn-group">
+      <a class="btn" href="/podcaster/portal/" target="_blank">🌐 Portal</a>
+      <button class="btn" onclick="openCfg()" title="Config &amp; status">⚙️ Config</button>
+      <button class="btn primary" onclick="loadAll()">↻ Refresh</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="stat-card cyan"><div class="value" id="st_feeds">-</div><div class="label">📻 Containers</div></div>
+    <div class="stat-card"><div class="value" id="st_eps">-</div><div class="label">🎞️ Episodes</div></div>
+    <div class="stat-card green"><div class="value" id="st_local">-</div><div class="label">💾 Local</div></div>
+    <div class="stat-card orange"><div class="value" id="st_queue">-</div><div class="label">⏳ Queue</div></div>
   </div>
-  <div class="wrap">
-    <aside class="feeds">
-      <div class="row">
-        <input id="feedUrl" placeholder="RSS feed URL…" onkeydown="if(event.key==='Enter')addFeed()">
-        <button class="go" onclick="addFeed()">＋</button>
+
+  <div class="panes">
+    <div>
+      <div class="card">
+        <div class="addrow">
+          <input id="feedUrl" placeholder="RSS feed URL…" onkeydown="if(event.key==='Enter')addFeed()">
+          <button class="btn primary" onclick="addFeed()">＋</button>
+        </div>
+        <label class="autodl"><input type="checkbox" id="autodl" checked> auto-download new episodes</label>
+        <div class="btn-group" style="margin-bottom:0.6rem">
+          <button class="btn sm" onclick="document.getElementById('opml').click()">Import OPML</button>
+          <button class="btn sm" onclick="document.getElementById('abzip').click()" title="Upload an audiobook ZIP">📚 Audiobook ZIP</button>
+          <button class="btn sm primary" onclick="openImport()" title="Import from YouTube or any yt-dlp URL">➕ Add from URL</button>
+          <button class="btn sm" onclick="loadAll()">↻</button>
+        </div>
+        <input type="file" id="opml" accept=".opml,.xml" style="display:none" onchange="importOpml(this)">
+        <input type="file" id="abzip" accept=".zip" style="display:none" onchange="uploadZip(this)">
+        <div id="feeds"></div>
       </div>
-      <label class="autodl"><input type="checkbox" id="autodl" checked> auto-download new episodes</label>
-      <div class="row">
-        <button onclick="document.getElementById('opml').click()">Import OPML</button>
-        <button onclick="document.getElementById('abzip').click()" title="Upload an audiobook ZIP">📚 Audiobook ZIP</button>
-        <button onclick="loadAll()">↻</button>
-      </div>
-      <input type="file" id="opml" accept=".opml,.xml" style="display:none" onchange="importOpml(this)">
-      <input type="file" id="abzip" accept=".zip" style="display:none" onchange="uploadZip(this)">
-      <div id="feeds"></div>
-      <div class="share" id="share"></div>
-    </aside>
-    <section class="eps">
-      <h2 id="title">Latest episodes</h2>
-      <div id="eps"><div class="empty">Loading…</div></div>
-    </section>
+      <div class="card"><div class="share" id="share"></div></div>
+    </div>
+    <div class="card">
+      <h2 id="title">Select a container</h2>
+      <div id="eps"><div class="empty">📻 Select a container to view its episodes</div></div>
+    </div>
   </div>
 </main>
 
 <dialog id="cfg">
-  <h2>Config &amp; status</h2>
+  <h3>⚙️ Config &amp; status</h3>
   <div id="svc" class="muted"></div>
   <label>Media path</label><input id="c_media">
   <label>Max parallel downloads</label><input id="c_par" type="number">
   <label>Refresh minutes</label><input id="c_ref" type="number">
   <label>Public base URL (for shareable feed — leave empty for LAN)</label><input id="c_pub">
   <label>Share feed title</label><input id="c_title">
-  <div class="row" style="margin-top:16px">
-    <button class="go" onclick="saveCfg()">Save</button>
-    <button onclick="document.getElementById('cfg').close()">Close</button>
+  <div class="btn-group" style="margin-top:1rem">
+    <button class="btn primary" onclick="saveCfg()">Save</button>
+    <button class="btn" onclick="document.getElementById('cfg').close()">Close</button>
   </div>
 </dialog>
+
+<dialog id="importDlg">
+  <h3>➕ Add from URL</h3>
+  <label>Source URL</label>
+  <input id="imp_url" placeholder="YouTube video/playlist or any yt-dlp URL…" onkeydown="if(event.key==='Enter')startImport()">
+  <label class="chk"><input type="checkbox" id="imp_mirror" checked> 📺 Mirror videos to PeerTube</label>
+  <label class="chk"><input type="checkbox" id="imp_billets" checked> 📝 Create a billet per item</label>
+  <div class="imphelp">Downloads audio into a podcaster feed; optionally mirrors video to PeerTube and posts a billet per item. Large playlists take a while.</div>
+  <div class="btn-group" style="margin-top:1rem">
+    <button class="btn primary" id="imp_start" onclick="startImport()">Start import</button>
+    <button class="btn" onclick="document.getElementById('importDlg').close()">Close</button>
+  </div>
+  <div id="impProg" style="display:none">
+    <div class="cur" id="impCur">…</div>
+    <div class="bar"><i id="impBar" style="width:0"></i></div>
+    <div class="errline" id="impErr" style="display:none"></div>
+    <pre id="impLog"></pre>
+  </div>
+</dialog>
+
 <div class="toast" id="toast"></div>
 
-<script src="/shared/sidebar.js"></script>
 <script>
 const API="/api/v1/podcaster";
 let SEL=null;
+let FEEDS=[];
 function tok(){return localStorage.getItem("sbx_token")||""}
 async function api(p,opt={}){
   opt.headers=Object.assign({},opt.headers||{});
@@ -125,39 +211,56 @@ async function api(p,opt={}){
   if(!r.ok) throw new Error(await r.text());
   const ct=r.headers.get("content-type")||""; return ct.includes("json")?r.json():r.text();
 }
-function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._);t._=setTimeout(()=>t.classList.remove("on"),3000)}
+function toast(m){const t=document.getElementById("toast");clearTimeout(t._);t.className="toast show";t.textContent=m;t._=setTimeout(()=>t.classList.remove("show"),3000)}
+function stickyToast(m){const t=document.getElementById("toast");clearTimeout(t._);t.className="toast show";t.textContent=m}
+function errorToast(m){const t=document.getElementById("toast");clearTimeout(t._);t.className="toast show error";t.textContent="";
+  const s=document.createElement("span");s.textContent=m;
+  const x=document.createElement("span");x.className="tclose";x.textContent="✕";x.onclick=()=>t.classList.remove("show");
+  t.appendChild(s);t.appendChild(x)}
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 async function loadStatus(){
   try{const s=await fetch(API+"/status").then(r=>r.json());
-    document.getElementById("stats").innerHTML=`feeds <b>${s.feeds}</b> · eps <b>${s.episodes}</b> · local <b>${s.downloaded}</b> · queue <b>${s.queued}</b>`;
+    document.getElementById("st_feeds").textContent=s.feeds;
+    document.getElementById("st_eps").textContent=s.episodes;
+    document.getElementById("st_local").textContent=s.downloaded;
+    document.getElementById("st_queue").textContent=s.queued;
     const base=(s.public_base||location.origin);
     document.getElementById("share").innerHTML=`🔗 Share feed:<br><a href="${API}/share/feed.xml" target="_blank">${esc(base)}/api/v1/podcaster/share/feed.xml</a>`;
   }catch(e){}
 }
 async function loadFeeds(){
   let d; try{d=await api("/feeds")}catch(e){return}
+  FEEDS=d.feeds;
   const el=document.getElementById("feeds");
-  if(!d.feeds.length){el.innerHTML='<div class="muted" style="padding:12px">No feeds yet — add one above.</div>';return}
+  if(!d.feeds.length){el.innerHTML='<div class="muted" style="padding:12px">No containers yet — add one above.</div>';return}
   el.innerHTML=d.feeds.map(f=>`<div class="feed ${SEL===f.id?'sel':''}" onclick="selFeed(${f.id})">
     <img src="${esc(f.image||'')}" onerror="this.style.visibility='hidden'">
     <div class="t"><b>${esc(f.title||f.url)}</b><span>${f.downloaded}/${f.episodes} local</span></div>
     <span class="ad ${f.auto_dl?'on':''}" title="auto-download ${f.auto_dl?'on':'off'}" onclick="event.stopPropagation();toggleAd(${f.id},${f.auto_dl?0:1})">⏬</span>
     <span class="x" onclick="event.stopPropagation();delFeed(${f.id})">✕</span></div>`).join("");
 }
-async function selFeed(id){SEL=id;loadFeeds();loadEps()}
+function showEmpty(){
+  document.getElementById("title").textContent="Select a container";
+  document.getElementById("eps").innerHTML='<div class="empty">📻 Select a container to view its episodes</div>';
+}
+async function selFeed(id){if(SEL===id){SEL=null;loadFeeds();showEmpty();return}SEL=id;loadFeeds();loadEps()}
 async function loadEps(){
-  const el=document.getElementById("eps");const q=SEL?`?feed_id=${SEL}`:"";
-  document.getElementById("title").textContent=SEL?"Episodes":"Latest episodes";
+  if(SEL==null){showEmpty();return}
+  const el=document.getElementById("eps");const q=`?feed_id=${SEL}`;
+  const f=FEEDS.find(x=>x.id===SEL);
+  document.getElementById("title").textContent=f?(f.title||f.url):"Episodes";
   let d; try{d=await api("/episodes"+q)}catch(e){return}
   if(!d.episodes.length){el.innerHTML='<div class="empty">No episodes.</div>';return}
   el.innerHTML=d.episodes.map(e=>{
     const date=e.pubdate?new Date(e.pubdate*1000).toLocaleDateString():"";
     let act;
     if(e.state==="done") act=`<audio controls preload="none" src="${API}/media/${e.id}"></audio>`;
-    else if(e.state==="downloading"||e.state==="queued") act=`<span class="badge downloading">${e.state}</span><div class="bar"><i style="width:${e.progress||0}%"></i></div>`;
-    else if(e.state==="error") act=`<span class="badge error" title="${esc(e.error)}">error</span><button onclick="dl(${e.id})">retry</button>`;
-    else act=`<button onclick="dl(${e.id})">⬇ download</button>`;
-    return `<div class="ep"><div class="meta"><b>${esc(e.title)}</b><span>${esc(e.feed_title)} · ${date} ${e.duration?'· '+esc(e.duration):''}</span></div><div class="act">${act}</div></div>`;
+    else if(e.state==="downloading"||e.state==="queued") act=`<span class="badge downloading">${e.state}</span><div class="bar"><i style="width:${e.progress||0}%"></i></div><button class="btn sm mini" title="restart" onclick="dl(${e.id})">↻</button>`;
+    else if(e.state==="error") act=`<span class="badge error" title="${esc(e.error)}">error</span><button class="btn sm" onclick="dl(${e.id})">retry</button>`;
+    else act=`<button class="btn sm" onclick="dl(${e.id})">⬇ download</button>`;
+    const cover=e.feed_image||"";
+    const coverImg=cover?`<img src="${esc(cover)}" alt="" loading="lazy" onerror="this.remove()">`:"";
+    return `<div class="ep"><div class="cov" aria-hidden="true">🎧${coverImg}</div><div class="meta"><b>${esc(e.title)}</b><span>${esc(e.feed_title)} · ${date} ${e.duration?'· '+esc(e.duration):''}</span></div><div class="act">${act}</div></div>`;
   }).join("");
 }
 async function addFeed(){const u=document.getElementById("feedUrl").value.trim();if(!u)return;
@@ -165,28 +268,105 @@ async function addFeed(){const u=document.getElementById("feedUrl").value.trim()
   try{const r=await api("/feeds",{method:"POST",body:JSON.stringify({url:u,auto_dl:ad})});
     document.getElementById("feedUrl").value="";
     toast(`Added ${r.title||u} (${r.episodes} eps${r.queued?', '+r.queued+' queued':''})`);loadAll()}
-  catch(e){toast("Add failed: "+e.message.slice(0,60))}}
+  catch(e){errorToast("Add failed: "+e.message.slice(0,60))}}
 async function toggleAd(id,on){try{const r=await api(`/feeds/${id}/autodl?on=${on?'true':'false'}`,{method:"POST"});
-    toast(on?`auto-download on${r.queued?' · '+r.queued+' queued':''}`:"auto-download off");loadAll()}catch(e){toast("toggle failed")}}
+    toast(on?`auto-download on${r.queued?' · '+r.queued+' queued':''}`:"auto-download off");loadAll()}catch(e){errorToast("toggle failed")}}
 async function delFeed(id){if(!confirm("Remove this feed?"))return;await api("/feeds/"+id,{method:"DELETE"});if(SEL===id)SEL=null;loadAll()}
-async function dl(id){try{await api(`/episodes/${id}/download`,{method:"POST"});toast("Queued");loadEps()}catch(e){toast("Queue failed")}}
+async function dl(id){try{await api(`/episodes/${id}/download`,{method:"POST"});toast("Queued");loadEps()}catch(e){errorToast("Queue failed")}}
 async function importOpml(inp){const f=inp.files[0];if(!f)return;const opml=await f.text();
-  try{const r=await api("/feeds/import-opml",{method:"POST",body:JSON.stringify({opml})});toast(`Imported ${r.added}/${r.total}`);loadAll()}catch(e){toast("OPML import failed")}inp.value=""}
-async function uploadZip(inp){const f=inp.files[0];if(!f)return;
+  try{const r=await api("/feeds/import-opml",{method:"POST",body:JSON.stringify({opml})});toast(`Imported ${r.added}/${r.total}`);loadAll()}catch(e){errorToast("OPML import failed")}inp.value=""}
+function uploadZip(inp){const f=inp.files[0];if(!f)return;
   const title=prompt("Audiobook title:",f.name.replace(/\.zip$/i,""));if(title===null){inp.value="";return}
-  toast("Uploading "+f.name+" …");
-  try{const r=await api("/audiobook/upload?title="+encodeURIComponent(title),
-        {method:"POST",headers:{"Content-Type":"application/zip"},body:f});
-    toast(`Published "${r.title}" — ${r.tracks} tracks`);loadAll()}
-  catch(e){toast("Upload failed: "+e.message.slice(0,60))}inp.value=""}
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST",API+"/audiobook/upload?title="+encodeURIComponent(title));
+  const t=tok();if(t)xhr.setRequestHeader("Authorization","Bearer "+t);
+  xhr.setRequestHeader("Content-Type","application/zip");
+  xhr.upload.onprogress=ev=>{if(ev.lengthComputable)stickyToast("Uploading "+Math.round(ev.loaded/ev.total*100)+"%")};
+  xhr.onload=()=>{
+    if(xhr.status===401){window.location="/login.html";return}
+    if(xhr.status>=200&&xhr.status<300){
+      try{const r=JSON.parse(xhr.responseText);toast(`Published "${r.title}" — ${r.tracks} tracks`)}catch(_){toast("Published")}
+      loadAll();
+    }else{errorToast("Upload failed: "+String(xhr.responseText||xhr.status).slice(0,120))}
+  };
+  xhr.onerror=()=>errorToast("Upload failed: network error");
+  stickyToast("Uploading "+f.name+" …");
+  xhr.send(f);
+  inp.value="";}
 async function openCfg(){const d=await api("/config").then(r=>r.config).catch(()=>null);
   const s=await fetch(API+"/status").then(r=>r.json()).catch(()=>({}));
-  document.getElementById("svc").innerHTML=`service <b style="color:var(--matrix-green)">${s.service||'?'}</b> · worker ${s.worker?'on':'off'} · ${s.downloaded||0} local`;
+  document.getElementById("svc").innerHTML=`service <b style="color:var(--green)">${s.service||'?'}</b> · worker ${s.worker?'on':'off'} · ${s.downloaded||0} local`;
   if(d){c_media.value=d.media_path||"";c_par.value=d.max_parallel||2;c_ref.value=d.refresh_minutes||60;c_pub.value=d.public_base||"";c_title.value=d.share_title||""}
   document.getElementById("cfg").showModal()}
-async function saveCfg(){try{await api("/config",{method:"POST",body:JSON.stringify({media_path:c_media.value,max_parallel:+c_par.value,refresh_minutes:+c_ref.value,public_base:c_pub.value,share_title:c_title.value})});toast("Saved — restart to apply");document.getElementById("cfg").close()}catch(e){toast("Save failed")}}
-function loadAll(){loadStatus();loadFeeds();loadEps()}
-loadAll();setInterval(()=>{loadStatus();loadEps()},4000);
+async function saveCfg(){try{await api("/config",{method:"POST",body:JSON.stringify({media_path:c_media.value,max_parallel:+c_par.value,refresh_minutes:+c_ref.value,public_base:c_pub.value,share_title:c_title.value})});toast("Saved — restart to apply");document.getElementById("cfg").close()}catch(e){errorToast("Save failed")}}
+// ── Add from URL (YouTube / yt-dlp import) ──────────────────────────────
+let IMP_POLL=null;
+function openImport(){document.getElementById("importDlg").showModal();refreshImportView();}
+async function startImport(){
+  const url=document.getElementById("imp_url").value.trim();
+  if(!url){errorToast("Enter a URL to import");return}
+  const mirror_peertube=document.getElementById("imp_mirror").checked;
+  const create_billets=document.getElementById("imp_billets").checked;
+  const btn=document.getElementById("imp_start");btn.disabled=true;
+  try{
+    await api("/import/url",{method:"POST",body:JSON.stringify({url,mirror_peertube,create_billets})});
+    toast("Import started");
+    startImportPoll();
+  }catch(e){
+    const msg=(e&&e.message)||"";
+    if(msg.indexOf("409")>=0||/already running/i.test(msg)) errorToast("An import is already running");
+    else errorToast("Import failed: "+msg.slice(0,120));
+  }finally{btn.disabled=false}
+}
+function startImportPoll(){
+  if(IMP_POLL) return;              // guard against overlapping pollers
+  pollImport();
+  IMP_POLL=setInterval(pollImport,2000);
+}
+function stopImportPoll(){if(IMP_POLL){clearInterval(IMP_POLL);IMP_POLL=null}}
+function renderImport(j){
+  const prog=document.getElementById("impProg");
+  prog.style.display="block";
+  const total=+j.total||0, done=+j.done||0;
+  document.getElementById("impCur").textContent=(j.current?esc(j.current):(j.url?esc(j.url):"…"))+"  ·  "+done+"/"+total;
+  document.getElementById("impBar").style.width=(total>0?Math.round(done/total*100):(j.running?5:0))+"%";
+  const errs=Array.isArray(j.errors)?j.errors:[];
+  const errEl=document.getElementById("impErr");
+  if(errs.length){errEl.style.display="block";errEl.textContent="⚠ "+errs.length+" error"+(errs.length>1?"s":"")}
+  else errEl.style.display="none";
+  const log=Array.isArray(j.log)?j.log:[];
+  document.getElementById("impLog").innerHTML=log.slice(-12).map(l=>esc(l)).join("\n");
+}
+async function pollImport(){
+  let j; try{j=await api("/import/status")}catch(e){return}
+  renderImport(j);
+  if(!j.running){
+    stopImportPoll();
+    const done=+j.done||0, total=+j.total||0;
+    if(done===0){
+      const log=Array.isArray(j.log)?j.log:[];
+      const reason=(log.length?log[log.length-1]:(j.errors&&j.errors.length?j.errors[j.errors.length-1]:"nothing imported"));
+      errorToast("Import finished: "+String(reason).slice(0,120));
+    }else{
+      toast("Imported "+done+"/"+total);
+    }
+    loadAll();
+  }
+}
+function refreshImportView(autoOpen){
+  // If a job is already running (page reload / dialog reopen), attach the poller.
+  api("/import/status").then(j=>{
+    if(j&&j.running){
+      const dlg=document.getElementById("importDlg");
+      if(autoOpen && !dlg.open) dlg.showModal();   // surface progress on page load
+      renderImport(j);
+      startImportPoll();
+    }
+  }).catch(()=>{});
+}
+
+function loadAll(){loadStatus();loadFeeds();if(SEL!=null)loadEps();else showEmpty()}
+loadAll();refreshImportView(true);setInterval(()=>{loadStatus();if(SEL!=null)loadEps()},4000);
 </script>
 </body>
 </html>
