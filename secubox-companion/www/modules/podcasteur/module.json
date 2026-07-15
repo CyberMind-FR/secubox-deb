@@ -1,0 +1,14 @@
+{
+  "id": "podcasteur",
+  "name": "Podcasteur",
+  "module": "MIND",
+  "icon": "🎙️",
+  "description": "Podcasts & audiobooks: browse containers, episodes, publish/download.",
+  "api_base": "/api/v1/podcaster",
+  "status_endpoint": "/api/v1/podcaster/status",
+  "capabilities": ["read", "write"],
+  "routes": [
+    { "path": "", "label": "Containers" },
+    { "path": "add", "label": "Add" }
+  ]
+}

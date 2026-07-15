@@ -1,0 +1,11 @@
+{
+  "id": "waf",
+  "name": "WAF",
+  "module": "WALL",
+  "icon": "🛡️",
+  "description": "Web firewall: traffic, threats, MITM filters.",
+  "api_base": "/api/v1/waf",
+  "status_endpoint": "/api/v1/waf/status",
+  "capabilities": ["read"],
+  "routes": [{ "path": "", "label": "Overview" }]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "auth",
+  "name": "Auth",
+  "module": "AUTH",
+  "icon": "🔑",
+  "description": "Identities, sessions, access.",
+  "api_base": "/api/v1/auth",
+  "status_endpoint": "/api/v1/auth/status",
+  "capabilities": ["read"],
+  "routes": [{ "path": "", "label": "Identities" }]
+}

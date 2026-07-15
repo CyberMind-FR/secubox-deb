@@ -1,0 +1,11 @@
+{
+  "id": "system",
+  "name": "System",
+  "module": "BOOT",
+  "icon": "⚙️",
+  "description": "Services, health, resources.",
+  "api_base": "/api/v1/system",
+  "status_endpoint": "/api/v1/system/status",
+  "capabilities": ["read"],
+  "routes": [{ "path": "", "label": "Health" }]
+}

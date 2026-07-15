@@ -1,0 +1,12 @@
+{
+  "appId": "in.secubox.companion",
+  "appName": "SecuBox Companion",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": { "androidScheme": "https", "iosScheme": "https" },
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "always" },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}

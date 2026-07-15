@@ -1,0 +1,11 @@
+{
+  "id": "_template",
+  "name": "Template",
+  "module": "MESH",
+  "icon": "🧩",
+  "description": "Copy this folder to create a new Companion module in < 30 min.",
+  "api_base": "/api/v1/EXAMPLE",
+  "status_endpoint": "/api/v1/EXAMPLE/health",
+  "capabilities": ["read"],
+  "routes": [{ "path": "", "label": "Overview" }]
+}
