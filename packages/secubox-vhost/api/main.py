@@ -11,6 +11,8 @@ import subprocess
 import os
 import json
 import re
+import asyncio
+import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
@@ -26,6 +28,17 @@ config = get_config("vhost")
 NGINX_VHOST_DIR = Path(config.get("nginx_vhost_dir", "/etc/nginx/sites-available") if config else "/etc/nginx/sites-available")
 NGINX_ENABLED_DIR = Path(config.get("nginx_enabled_dir", "/etc/nginx/sites-enabled") if config else "/etc/nginx/sites-enabled")
 ACME_DIR = Path(config.get("acme_dir", "/etc/acme") if config else "/etc/acme")
+# The real cert store is the combined HAProxy PEMs (same source the certs module
+# reads); the legacy acme.sh /etc/acme layout is empty on this platform.
+CERTS_PEM_DIR = Path(config.get("certs_pem_dir", "/data/haproxy/certs")
+                     if config else "/data/haproxy/certs")
+
+
+def _pem_cert_count() -> int:
+    try:
+        return len(list(CERTS_PEM_DIR.glob("*.pem"))) if CERTS_PEM_DIR.exists() else 0
+    except Exception:
+        return 0
 DATA_PATH = Path(config.get("data_path", "/srv/vhost") if config else "/srv/vhost")
 
 
@@ -81,9 +94,7 @@ async def status():
         enabled_count = len([f for f in NGINX_ENABLED_DIR.glob("*.conf") if f.is_symlink() or f.is_file()])
 
     # Count certificates
-    cert_count = 0
-    if ACME_DIR.exists():
-        cert_count = len([d for d in ACME_DIR.iterdir() if d.is_dir() and (d / "fullchain.cer").exists()])
+    cert_count = _pem_cert_count()
 
     return {
         "module": "vhost",
@@ -134,9 +145,7 @@ async def get_components():
     if NGINX_VHOST_DIR.exists():
         vhost_count = len(list(NGINX_VHOST_DIR.glob("*.conf")))
 
-    cert_count = 0
-    if ACME_DIR.exists():
-        cert_count = len([d for d in ACME_DIR.iterdir() if d.is_dir() and (d / "fullchain.cer").exists()])
+    cert_count = _pem_cert_count()
 
     return {
         "components": [
@@ -593,39 +602,67 @@ async def delete_vhost(domain: str):
 
 @app.get("/certificates")
 async def list_certificates():
-    """List all certificates (public)"""
-    certs = []
-
-    if ACME_DIR.exists():
-        for cert_dir in ACME_DIR.iterdir():
-            if not cert_dir.is_dir():
-                continue
-            cert_file = cert_dir / "fullchain.cer"
-            if not cert_file.exists():
-                continue
-
-            domain = cert_dir.name
-            expires = ""
-            issuer = ""
-
-            success, out, _ = run_cmd([
-                "openssl", "x509", "-in", str(cert_file), "-noout", "-enddate", "-issuer"
-            ])
-            if success:
-                for line in out.split("\n"):
-                    if "notAfter" in line:
-                        expires = line.split("=")[-1]
-                    if "issuer" in line.lower():
-                        issuer = line.split("=", 1)[-1]
-
-            certs.append({
-                "domain": domain,
-                "expires": expires,
-                "issuer": issuer,
-                "cert_file": str(cert_file),
-            })
-
+    """List all certificates from the combined HAProxy PEM store (the real cert
+    source, same as the certs module). Parsing shells out to openssl once per
+    PEM — dozens of blocking subprocesses — so it runs OFF the event loop and is
+    cached; otherwise it would freeze the shared aggregator loop (board-wide)."""
+    now = time.time()
+    if _CERT_CACHE["data"] is not None and now - _CERT_CACHE["ts"] < 60:
+        certs = _CERT_CACHE["data"]
+    else:
+        certs = await asyncio.to_thread(_read_pem_certs)
+        _CERT_CACHE.update(ts=now, data=certs)
     return {"certificates": certs, "count": len(certs)}
+
+
+_CERT_CACHE: dict = {"ts": 0.0, "data": None}
+
+
+def _read_pem_certs() -> list:
+    """Blocking: parse every PEM in the store IN-PROCESS via cryptography (no
+    per-cert subprocess — dozens of openssl spawns would exhaust the box). Run
+    via to_thread + cached by the caller."""
+    certs = []
+    if not CERTS_PEM_DIR.exists():
+        return certs
+    try:
+        from cryptography import x509
+    except Exception:
+        x509 = None
+    for cert_file in sorted(CERTS_PEM_DIR.glob("*.pem")):
+        stem = cert_file.stem
+        # _wildcard_.example.com.pem  ->  *.example.com
+        domain = (f"*.{stem[len('_wildcard_.'):]}"
+                  if stem.startswith("_wildcard_.") else stem)
+        expires = ""
+        issuer = ""
+        try:
+            data = cert_file.read_bytes()
+            leaf = None
+            if x509 is not None:
+                # combined PEM = key + leaf + chain; take the first certificate.
+                if hasattr(x509, "load_pem_x509_certificates"):
+                    parsed = x509.load_pem_x509_certificates(data)
+                    leaf = parsed[0] if parsed else None
+                else:
+                    leaf = x509.load_pem_x509_certificate(data)
+            if leaf is not None:
+                dt = getattr(leaf, "not_valid_after_utc", None) or leaf.not_valid_after
+                # match the OpenSSL notAfter format the webui's new Date() parses
+                expires = dt.strftime("%b %e %H:%M:%S %Y GMT").replace("  ", " ")
+                try:
+                    issuer = leaf.issuer.rfc4514_string()
+                except Exception:
+                    issuer = ""
+        except Exception:
+            pass
+        certs.append({
+            "domain": domain,
+            "expires": expires,
+            "issuer": issuer,
+            "cert_file": str(cert_file),
+        })
+    return certs
 
 
 class CertRequest(BaseModel):
