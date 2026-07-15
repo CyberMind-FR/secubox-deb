@@ -1,0 +1,4 @@
+{
+  "_comment": "The module registry. Add a module: drop a folder in modules/<id>/ (module.json + view.js) and append its id here. The core never changes.",
+  "modules": ["billets", "podcasteur"]
+}
