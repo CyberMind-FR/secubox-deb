@@ -26,6 +26,17 @@ config = get_config("vhost")
 NGINX_VHOST_DIR = Path(config.get("nginx_vhost_dir", "/etc/nginx/sites-available") if config else "/etc/nginx/sites-available")
 NGINX_ENABLED_DIR = Path(config.get("nginx_enabled_dir", "/etc/nginx/sites-enabled") if config else "/etc/nginx/sites-enabled")
 ACME_DIR = Path(config.get("acme_dir", "/etc/acme") if config else "/etc/acme")
+# The real cert store is the combined HAProxy PEMs (same source the certs module
+# reads); the legacy acme.sh /etc/acme layout is empty on this platform.
+CERTS_PEM_DIR = Path(config.get("certs_pem_dir", "/data/haproxy/certs")
+                     if config else "/data/haproxy/certs")
+
+
+def _pem_cert_count() -> int:
+    try:
+        return len(list(CERTS_PEM_DIR.glob("*.pem"))) if CERTS_PEM_DIR.exists() else 0
+    except Exception:
+        return 0
 DATA_PATH = Path(config.get("data_path", "/srv/vhost") if config else "/srv/vhost")
 
 
@@ -81,9 +92,7 @@ async def status():
         enabled_count = len([f for f in NGINX_ENABLED_DIR.glob("*.conf") if f.is_symlink() or f.is_file()])
 
     # Count certificates
-    cert_count = 0
-    if ACME_DIR.exists():
-        cert_count = len([d for d in ACME_DIR.iterdir() if d.is_dir() and (d / "fullchain.cer").exists()])
+    cert_count = _pem_cert_count()
 
     return {
         "module": "vhost",
@@ -134,9 +143,7 @@ async def get_components():
     if NGINX_VHOST_DIR.exists():
         vhost_count = len(list(NGINX_VHOST_DIR.glob("*.conf")))
 
-    cert_count = 0
-    if ACME_DIR.exists():
-        cert_count = len([d for d in ACME_DIR.iterdir() if d.is_dir() and (d / "fullchain.cer").exists()])
+    cert_count = _pem_cert_count()
 
     return {
         "components": [
@@ -593,31 +600,27 @@ async def delete_vhost(domain: str):
 
 @app.get("/certificates")
 async def list_certificates():
-    """List all certificates (public)"""
+    """List all certificates from the combined HAProxy PEM store (the real cert
+    source, same as the certs module)."""
     certs = []
 
-    if ACME_DIR.exists():
-        for cert_dir in ACME_DIR.iterdir():
-            if not cert_dir.is_dir():
-                continue
-            cert_file = cert_dir / "fullchain.cer"
-            if not cert_file.exists():
-                continue
-
-            domain = cert_dir.name
+    if CERTS_PEM_DIR.exists():
+        for cert_file in sorted(CERTS_PEM_DIR.glob("*.pem")):
+            stem = cert_file.stem
+            # _wildcard_.example.com.pem  ->  *.example.com
+            domain = (f"*.{stem[len('_wildcard_.'):]}"
+                      if stem.startswith("_wildcard_.") else stem)
             expires = ""
             issuer = ""
-
             success, out, _ = run_cmd([
                 "openssl", "x509", "-in", str(cert_file), "-noout", "-enddate", "-issuer"
             ])
             if success:
                 for line in out.split("\n"):
                     if "notAfter" in line:
-                        expires = line.split("=")[-1]
-                    if "issuer" in line.lower():
-                        issuer = line.split("=", 1)[-1]
-
+                        expires = line.split("=", 1)[-1].strip()
+                    elif line.lower().startswith("issuer"):
+                        issuer = line.split("=", 1)[-1].strip()
             certs.append({
                 "domain": domain,
                 "expires": expires,
