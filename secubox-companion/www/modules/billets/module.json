@@ -1,0 +1,15 @@
+{
+  "id": "billets",
+  "name": "Billets",
+  "module": "MIND",
+  "icon": "📝",
+  "description": "Micro-blog: write & publish billets, moderate comments.",
+  "api_base": "/api/v1/billets",
+  "status_endpoint": "/api/v1/billets/health",
+  "capabilities": ["read", "write", "moderate"],
+  "routes": [
+    { "path": "", "label": "Billets" },
+    { "path": "new", "label": "New" },
+    { "path": "comments", "label": "Comments" }
+  ]
+}

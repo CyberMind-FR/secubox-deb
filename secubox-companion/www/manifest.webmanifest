@@ -1,0 +1,19 @@
+{
+  "name": "SecuBox Companion",
+  "short_name": "SecuBox",
+  "description": "Remote modular companion for SecuBox-Deb — module by module.",
+  "id": "/secubox-companion/",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0A5840",
+  "lang": "fr",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    { "src": "./assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
