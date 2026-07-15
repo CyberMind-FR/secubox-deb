@@ -24,7 +24,11 @@ export const registry = {
         const m = await (await fetch(`${base}/${id}/module.json`, { cache: 'no-cache' })).json();
         m.id = m.id || id;
         m.module = (m.module || 'MESH').toUpperCase();
-        m._path = `${base}/${id}`;
+        // Absolute URL (resolved against the PAGE), so dynamic import() — which
+        // otherwise resolves relative to this module in /core/ — loads the right
+        // file. Without this, import('./modules/x/view.js') → /core/modules/…
+        // → 404 → index.html (HTML) → "not a valid JS MIME".
+        m._path = new URL(`${base}/${id}`, document.baseURI).href;
         _mods.set(m.id, m);
       } catch (e) { console.warn(`[registry] module ${id} failed`, e); }
     }));
