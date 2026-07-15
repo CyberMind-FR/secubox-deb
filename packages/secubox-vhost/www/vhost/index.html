@@ -148,7 +148,6 @@
             <div class="tab" onclick="showTab('access')">🔗 Access</div>
             <div class="tab" onclick="showTab('vhosts')">🌐 VHosts</div>
             <div class="tab" onclick="showTab('certs')">🔐 Certificates</div>
-            <div class="tab" onclick="showTab('actions')">⚙️ Actions</div>
         </div>
 
         <!-- COMPONENTS TAB -->
@@ -245,23 +244,6 @@
         </div>
 
         <!-- ACTIONS TAB -->
-        <div class="tab-content" id="tab-actions">
-            <div class="card">
-                <h2>Service Control</h2>
-                <div class="btn-group">
-                    <button class="btn" onclick="reloadNginx()">↻ Reload Nginx</button>
-                    <button class="btn" onclick="testConfig()">✓ Test Config</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Migration</h2>
-                <p style="margin-bottom:1rem;color:var(--dim);font-size:0.8rem">
-                    Import vhosts and certificates from existing OpenWrt SecuBox installation.
-                </p>
-                <button class="btn warning" onclick="showMigrate()">Migrate from OpenWrt</button>
-            </div>
-        </div>
     </main>
 
     <!-- Add VHost Modal -->
