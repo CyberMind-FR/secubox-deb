@@ -10,7 +10,10 @@
 const VERSION = 'sbx-companion-v1';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
-  './styles/charte.css',
+  './styles/charte.css', './styles/fonts.css',
+  './styles/fonts/space-grotesk-400.woff2', './styles/fonts/space-grotesk-500.woff2',
+  './styles/fonts/space-grotesk-700.woff2', './styles/fonts/jetbrains-mono-400.woff2',
+  './styles/fonts/jetbrains-mono-700.woff2',
   './core/app.js', './core/api.js', './core/store.js',
   './core/registry.js', './core/auth.js', './core/ui.js',
   './modules/index.json',
