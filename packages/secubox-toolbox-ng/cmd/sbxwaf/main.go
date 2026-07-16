@@ -577,6 +577,9 @@ func main() {
 		"path to file containing the CrowdSec LAPI JWT/API key (read once at startup)")
 	crowdsecBanDuration := flag.String("crowdsec-ban-duration", "4h",
 		"ban duration forwarded to CrowdSec decisions (e.g. 4h, 24h)")
+	crowdsecCscli := flag.String("crowdsec-cscli", "cscli",
+		"cscli binary used to inject ban decisions when no --crowdsec-jwt-file is set "+
+			"(the proven path the WAF dashboard's manual ban uses); empty disables the cscli fallback")
 	// Task 5.1: RGPD Set-Cookie ledger.
 	cookieAuditLog := flag.String("cookie-audit-log", DefaultCookieAuditLog,
 		"path for RGPD cookie audit JSONL ledger (one record per Set-Cookie); empty disables")
@@ -681,8 +684,15 @@ func main() {
 		srv.crowdsec = NewCrowdSecClient(*crowdsecURL, jwt, *crowdsecBanDuration)
 		log.Printf("sbxwaf: CrowdSec LAPI bridge enabled → %s (ban-duration=%s)",
 			*crowdsecURL, *crowdsecBanDuration)
+	} else if *crowdsecURL != "" && *crowdsecCscli != "" {
+		// No JWT file: use the cscli fallback (the LAPI /v1/alerts path 500s on
+		// this build and JWTs expire hourly). This is the path that actually
+		// creates a bouncer-enforced nft drop, so auto-bans finally take effect.
+		srv.crowdsec = NewCscliReporter(*crowdsecCscli, *crowdsecBanDuration)
+		log.Printf("sbxwaf: CrowdSec bridge enabled via cscli %q (ban-duration=%s)",
+			*crowdsecCscli, *crowdsecBanDuration)
 	} else if *crowdsecURL != "" || *crowdsecJWTFile != "" {
-		log.Printf("sbxwaf: crowdsec bridge disabled — both --crowdsec-url and --crowdsec-jwt-file required")
+		log.Printf("sbxwaf: crowdsec bridge disabled — set --crowdsec-url (+ --crowdsec-cscli or --crowdsec-jwt-file)")
 	}
 
 	// Wire in the WAF rules engine when --rules is provided.
