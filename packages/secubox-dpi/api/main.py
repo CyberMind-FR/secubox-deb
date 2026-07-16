@@ -69,17 +69,46 @@ async def health_check():
 def exfil_state():
     """#687 Phase 2 — per-device cloud-exfiltration state produced by the Go
     collector (secubox-dpi-flowcap → secubox-dpi-collector). Fail-empty so the
-    dashboard never errors before the first capture window completes."""
+    dashboard never errors before the first capture window completes.
+
+    The device list comes from the CUMULATIVE rollup (cumulative.json), which is
+    the set of devices observed across the window — not state.json, which is only
+    the current live window and goes empty whenever the wg-toolbox tunnel is idle
+    (that made the dashboard read "no devices on R3" despite real history). We
+    overlay state.json's active_flows so the live view still updates."""
     import json as _json
     from pathlib import Path as _P
-    p = _P("/var/lib/secubox/dpi/state.json")
+    base = {"generated_at": 0, "devices": [], "alerts": [], "alert_count": 0,
+            "top_apps": [], "top_protocols": [], "active_flows": []}
+    cumulative = _P("/var/lib/secubox/dpi/cumulative.json")
+    live = _P("/var/lib/secubox/dpi/state.json")
     try:
-        if p.exists():
-            return _json.loads(p.read_text())
+        if cumulative.exists():
+            base.update(_json.loads(cumulative.read_text()))
     except Exception as e:  # pragma: no cover
-        return {"generated_at": 0, "devices": [], "alerts": [], "error": str(e)}
-    return {"generated_at": 0, "devices": [], "alerts": [], "alert_count": 0,
-            "note": "no capture window completed yet (or wg-toolbox idle)"}
+        base["error"] = str(e)
+    live_ts = 0
+    try:
+        if live.exists():
+            st = _json.loads(live.read_text())
+            base["active_flows"] = st.get("active_flows", []) or []
+            live_ts = st.get("generated_at", 0) or 0
+    except Exception:
+        pass
+    if not base.get("devices"):
+        base["note"] = "no devices observed yet (or wg-toolbox idle since first capture)"
+    # R3 engine liveness — the collector rewrites state.json every ~60s, so a
+    # recent window means secubox-dpi-flowcap is capturing. Privilege-free (this
+    # API runs unprivileged as `secubox`); netifyd is NOT the engine here.
+    import time as _time
+    age = int(_time.time() - live_ts) if live_ts else None
+    base["engine"] = {
+        "name": "ndpiReader · R3 exfil",
+        "service": "secubox-dpi-flowcap",
+        "alive": bool(age is not None and age < 180),
+        "last_window_s": age,
+    }
+    return base
 
 
 @app.get("/history")
@@ -961,29 +990,35 @@ async def save_settings(req: DpiSettingsRequest, user=Depends(require_jwt)):
     return {"success": True}
 
 
+# The R3 DPI engine is the Go flow collector, NOT netifyd (which is dormant on
+# this platform — see project memory). Service control targets it via a scoped
+# sudoers grant (this API runs unprivileged as `secubox`).
+_ENGINE_UNIT = "secubox-dpi-flowcap"
+
+
 @router.post("/restart")
 def restart(user=Depends(require_jwt)):
-    """Redémarrer netifyd."""
-    r = subprocess.run(["systemctl", "restart", "netifyd"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
+    """Redémarrer le moteur DPI R3 (secubox-dpi-flowcap)."""
+    r = subprocess.run(["sudo", "-n", "systemctl", "restart", _ENGINE_UNIT], capture_output=True, text=True)
+    return {"success": r.returncode == 0, "error": r.stderr.strip() or None}
 
 
 @router.post("/start")
 def start(user=Depends(require_jwt)):
-    r = subprocess.run(["systemctl", "start", "netifyd"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
+    r = subprocess.run(["sudo", "-n", "systemctl", "start", _ENGINE_UNIT], capture_output=True, text=True)
+    return {"success": r.returncode == 0, "error": r.stderr.strip() or None}
 
 
 @router.post("/stop")
 def stop(user=Depends(require_jwt)):
-    r = subprocess.run(["systemctl", "stop", "netifyd"], capture_output=True, text=True)
-    return {"success": r.returncode == 0}
+    r = subprocess.run(["sudo", "-n", "systemctl", "stop", _ENGINE_UNIT], capture_output=True, text=True)
+    return {"success": r.returncode == 0, "error": r.stderr.strip() or None}
 
 
 @router.get("/logs")
 def logs(lines: int = 100, user=Depends(require_jwt)):
     r = subprocess.run(
-        ["journalctl", "-u", "netifyd", "-n", str(lines), "--no-pager"],
+        ["journalctl", "-u", _ENGINE_UNIT, "-n", str(lines), "--no-pager"],
         capture_output=True, text=True, timeout=10
     )
     return {"lines": r.stdout.splitlines()}
