@@ -1,5 +1,24 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-13*
+*Mis à jour : 2026-07-16*
+
+---
+
+## ✅ 2026-07-16 : Mail overhaul + fix auth systémique + DPI exfil/regen (PR #865 mergée, #862–#864)
+
+Session multi-fix, **live-vérifiée sur gk2**, portable mergé (PR #865). Détail dans HISTORY.md.
+
+- **Auth (systémique, fleet-wide)** 🔑 — `require_jwt` : un Bearer périmé (vieux `sbx_token` localStorage) shadowait le cookie session valide → **boucle login sur tous les panels**. Fix : Bearer **puis** cookie. Prouvé (Bearer périmé + cookie valide → 200).
+- **Mail** 📧 — reset gk2-only ; **mailbox réparée** (ownership idmap → host `105000`) ; **submission 587/465** (SASL dovecot + vrai cert) ; **status TCP-probe** (fini les "Stopped" faux) ; domaine → `gk2.secubox.in` ; **webui reskin cyan** ; **`/user/password`** réparé (écrivait un fichier non lu) ; Roundcube **`password`** (self-service) + **`ident_switch`** (Gmail externe, vendored).
+- **DPI** 🔍 — `/exfil` sert le cumulatif (**7 devices**, "no devices" corrigé) ; moteur = `secubox-dpi-flowcap` (plus netifyd) ; **webui régénéré cyan**.
+- **openclaw** 🕷️ — CT lookup fallback certSpotter.
+- **ACME HTTP-01** 🔒 — câblé live (nginx `:8880` + route HAProxy) ; émission LE marchait pour aucun vhost WAF-routé.
+
+### ⬜ Next / follow-ups
+- **WAF webui rework** 🛡️ — en cours (sbxwaf, cyan hybrid-skin, live 198k threats) ; + **analyse efficacité triggers/control** demandée.
+- **#862** provisioning mail (submission SASL, chown idmap 105000, users.sh maildir brace/path, helper self-service password) — backport paquet.
+- **#863** ACME wiring (nginx `:8880` + route HAProxy + certs webroot) — backport paquet.
+- **#864** vendorer `ident_switch` + schéma SQLite dans `secubox-mail`.
+- Rappel : mot de passe mailbox gk2 = `Gk24@SECUBOX;001`.
 
 ---
 

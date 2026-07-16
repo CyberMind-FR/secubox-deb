@@ -3,6 +3,20 @@
 
 ---
 
+## 2026-07-16 — Mail stack overhaul + systemic auth fix + DPI exfil/regen (PR #865, #862–#864)
+
+Session multi-fix, tout **live-vérifié sur gk2**, portable committé et mergé via **PR #865**.
+
+- **Auth (systémique, fleet-wide)** — `secubox_core.auth.require_jwt` utilisait un Bearer *présent-mais-périmé* exclusivement, ignorant un cookie de session valide → 401 → **boucle login sur chaque panel** (le "comme à chaque fois"). Fix : tenter Bearer **puis** cookie ; 401 seulement si aucun ne valide (strictement plus permissif, zéro régression). Prouvé : Bearer périmé + cookie valide → 200. Un seul fichier partagé, tout le fleet au prochain restart.
+- **Mail** — reset à **gk2-only** (3 users cassés + maildirs `{cur,new,tmp}` littéraux supprimés) ; **mailbox réparée** = ownership idmap (maildir host-`5000` → `nobody` dans le conteneur ; `chown 105000`, base idmap 100000) ; **submission 587/465** activée (SASL dovecot + vrai cert `/etc/ssl/mail`) → webmail peut envoyer ; **dashboard status** via probes TCP (lxc-info lisait le mauvais `lxc_path` → "Stopped" faux ; storage lisait `/mail` au lieu de `/vmail`) ; **domaine** `secubox.local` → `gk2.secubox.in` (config dans `secubox.conf [mail]`, pas le `mail.toml` vestigial) ; **webui reskin** cyan hybrid-skin (stat-cards emoji, pulse live, onglet External, plus de scanlines) ; **`/user/password`** corrigé (écrivait une copie host non lue par dovecot → reset admin no-op) ; Roundcube : plugin **`password`** self-service (helper chpasswd → passwd-file + sudoers) + **`ident_switch`** vendored (Gecka-Apps) pour comptes externes Gmail/IMAP.
+- **DPI** — `/exfil` sert le **rollup cumulatif** (7 devices) au lieu du `state.json` live vide → "no devices in R3" corrigé ; bloc engine-liveness ; **contrôle service** repointé de netifyd dormant vers le vrai collecteur Go **`secubox-dpi-flowcap`** (sudoers scellé, postinst) ; **webui régénéré** cyan, cruft netifyd/mirred/block-rules retiré, rendu media-buffer XSS-safe préservé.
+- **openclaw** — CT lookup : fallback **certSpotter** quand crt.sh est down (dumpait du HTML brut) ; whois résout le domaine registrable pour les sous-domaines.
+- **ACME HTTP-01** — câblé **live** (nginx `:8880` activé + route HAProxy `/.well-known/acme-challenge/` → backend acme) ; l'émission LE ne marchait pour **aucun** vhost WAF-routé. Certs émis pour `live.maegia.tv` + `mail.maegia.tv`.
+
+Follow-ups tracés : **#862** (provisioning mail : submission SASL, chown idmap, users.sh maildir, self-service helper), **#863** (ACME backport nginx/HAProxy/certs-webroot), **#864** (vendorer ident_switch dans le paquet). WAF webui rework + analyse triggers/control en cours.
+
+---
+
 ## 2026-07-12 — metalogue: Maltego-style OSINT suite as LXC modules (#845)
 
 Wanted Maltego-style OSINT (collect → correlate → dossier). Maltego is commercial/cloud →
