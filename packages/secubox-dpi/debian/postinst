@@ -11,6 +11,14 @@ case "$1" in
     # dpi API (secubox) reads it; keep 0755 so secubox can traverse.
     install -d -o root -g root -m 0755 /var/lib/secubox/dpi
     install -d -o root -g root -m 0755 /run/secubox/dpi
+    # The dpi API runs unprivileged as `secubox` but the webui's service
+    # controls (Restart R3 Engine) must (re)start the Go flow collector. Grant a
+    # tightly-scoped sudoers rule for exactly that unit — nothing else.
+    cat > /etc/sudoers.d/secubox-dpi-engine <<'SUDOERS'
+secubox ALL=(root) NOPASSWD: /usr/bin/systemctl restart secubox-dpi-flowcap, /usr/bin/systemctl start secubox-dpi-flowcap, /usr/bin/systemctl stop secubox-dpi-flowcap
+SUDOERS
+    chmod 0440 /etc/sudoers.d/secubox-dpi-engine
+    visudo -cf /etc/sudoers.d/secubox-dpi-engine >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-dpi-engine
     systemctl daemon-reload
     systemctl enable secubox-dpi.service
     systemctl start  secubox-dpi.service || true

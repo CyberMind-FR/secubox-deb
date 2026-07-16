@@ -3,612 +3,208 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - DPI Dashboard</title>
+    <title>SecuBox — DPI (R3 Exfil Engine)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
+            --text-dim: #6b7b8b;
             --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
             --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --cyan: #00d4ff;
+            --amber: #ffb347;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); }
-        .logo { font-weight: bold; font-size: 1.2rem; }
-        .logo span:nth-child(1) { color: var(--cyan); } .logo span:nth-child(2) { color: var(--red); } .logo span:nth-child(3) { color: var(--green); } .logo span:nth-child(4) { color: var(--yellow); }
-        .nav-section { padding: 0.5rem 0; }
-        .nav-section-title { padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.9rem; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
-        .nav-item.active { background: rgba(88,166,255,0.1); color: var(--primary); border-left-color: var(--primary); }
-        .nav-item .icon { width: 20px; text-align: center; }
-        .main { flex: 1; margin-left: 220px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg-card); }
-        .header-title { display: flex; align-items: center; gap: 1rem; }
-        .header-title h1 { font-size: 1.5rem; font-weight: 600; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; }
-        .badge.active { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.inactive { background: rgba(248,81,73,0.2); color: var(--red); }
-        .header-actions { display: flex; gap: 0.75rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.875rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .content { padding: 1.5rem; }
-        .status-bar { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
+        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+        .live-dot.idle { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: none; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.25rem 0.5rem; font-size: 0.72rem; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .badge { padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--border); }
+        .badge-green { background: rgba(0,221,68,0.12); border-color: var(--green); color: var(--green); }
+        .badge-red { background: rgba(255,68,102,0.12); border-color: var(--red); color: var(--red); }
+        .badge-amber, .badge-yellow { background: rgba(255,179,71,0.12); border-color: var(--amber); color: var(--amber); }
+        .badge-cyan { background: rgba(0,212,255,0.12); border-color: var(--cyan); color: var(--cyan); }
+        .badge-blue { background: rgba(68,136,255,0.12); border-color: var(--blue); color: var(--blue); }
+        .badge-purple { background: rgba(163,113,247,0.12); border-color: var(--purple); color: var(--purple); }
+
+        .status-bar { display: flex; gap: 1.5rem; margin-bottom: 1rem; padding: 0.7rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; flex-wrap: wrap; font-size: 0.8rem; }
         .status-item { display: flex; align-items: center; gap: 0.5rem; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
-        .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
-        .status-dot.inactive { background: var(--red); }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; margin-bottom: 0.25rem; }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); }
+        .status-item .k { color: var(--text-dim); }
+        .status-item .v { color: var(--cyan); }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; }
+        .stat-card .value { font-size: 1.6rem; font-weight: bold; text-shadow: 0 0 10px currentColor; color: var(--cyan); }
+        .stat-card .label { font-size: 0.62rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; }
+        .stat-card.yellow .value { color: var(--amber); }
         .stat-card.green .value { color: var(--green); }
-        .stat-card.yellow .value { color: var(--yellow); }
-        .stat-card.purple .value { color: var(--purple); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .card-header h2 { font-size: 1rem; font-weight: 600; }
-        .app-list { max-height: 280px; overflow-y: auto; }
-        .app-item { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; border-bottom: 1px solid var(--border); }
-        .app-item:hover { background: rgba(255,255,255,0.02); }
+        .stat-card.red .value { color: var(--red); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.4rem; }
+        .card-header h2 { font-size: 0.9rem; color: var(--cyan); }
+        .card-header h2 .sub { color: var(--text-dim); font-size: 0.7rem; }
+        .app-list { max-height: 300px; overflow-y: auto; }
+        .app-item { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
         .app-item:last-child { border-bottom: none; }
-        .bytes { font-family: monospace; color: var(--green); }
-        .input-group { display: flex; gap: 0.5rem; margin-top: 1rem; }
-        .input-group input, .input-group select { flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: var(--bg-dark); color: var(--text); border-radius: 6px; }
-        .rule-item { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 0.5rem; }
-        @media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
+        .app-item:hover { background: rgba(0,212,255,0.04); }
+        .bytes { font-family: 'Courier Prime', monospace; color: var(--green); font-size: 0.75rem; }
+        .empty { color: var(--p31-dim); padding: 0.6rem; }
 
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
-
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        /* #812 — Media Buffer gallery (live captures, admin-gated replay/download) */
-        .media-gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-            gap: 0.75rem;
-            margin-top: 0.5rem;
-        }
-        .media-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            border-radius: 8px;
-            padding: 0.75rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-        }
-        .media-card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.08);
-        }
+        .media-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; margin-top: 0.5rem; }
+        .media-card { background: var(--bg-row); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
+        .media-card:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.08); }
         .media-card.expired { opacity: 0.55; filter: grayscale(70%); }
         .media-card-head { display: flex; justify-content: space-between; align-items: center; font-size: 1.15rem; }
-        .media-host {
-            font-family: 'JetBrains Mono', 'Courier Prime', monospace;
-            font-size: 0.82rem;
-            color: var(--p31-mid);
-            word-break: break-all;
-        }
-        .media-meta-row {
-            display: flex;
-            justify-content: space-between;
-            font-family: 'JetBrains Mono', 'Courier Prime', monospace;
-            font-size: 0.72rem;
-            color: var(--text-dim);
-        }
+        .media-host { font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--cyan); word-break: break-all; }
+        .media-meta-row { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); }
         .media-actions { display: flex; gap: 0.5rem; margin-top: 0.35rem; }
-        .media-actions .btn {
-            flex: 1;
-            padding: 0.35rem 0.5rem;
-            font-size: 0.72rem;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .media-expired-label {
-            font-size: 0.72rem;
-            color: var(--text-dim);
-            font-style: italic;
-        }
-        .media-note {
-            font-size: 0.68rem;
-            color: var(--text-dim);
-            font-style: italic;
-            margin-top: 0.15rem;
-        }
+        .media-actions .btn { flex: 1; padding: 0.35rem 0.5rem; font-size: 0.7rem; text-align: center; text-decoration: none; display: inline-block; }
+        .media-expired-label { font-size: 0.7rem; color: var(--text-dim); font-style: italic; }
+        .media-note { font-size: 0.66rem; color: var(--text-dim); font-style: italic; margin-top: 0.15rem; }
         .media-note.warn { color: var(--red); }
-        .media-actions .btn.disabled {
-            opacity: 0.45;
-            pointer-events: none;
-            cursor: default;
-        }
+        .media-actions .btn.disabled { opacity: 0.45; pointer-events: none; cursor: default; }
 
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.7rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; box-shadow: 0 0 20px rgba(0,212,255,0.4); }
+        .toast.error { background: var(--red); color: #fff; }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) { .main { margin-left: 0; } }
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
 
     <main class="main">
         <header class="header">
-            <div class="header-title">
-                <h1>🔍 Deep Packet Inspection</h1>
-                <span class="badge" id="netifyd-badge">-</span>
-            </div>
-            <div class="header-actions">
-                <button class="btn" onclick="refreshAll()">🔄 Refresh</button>
-                <button class="btn primary" onclick="restartNetifyd()">♻️ Restart netifyd</button>
+            <h1><span class="live-dot" id="engine-dot"></span>🔍 Deep Packet Inspection</h1>
+            <div class="btn-group">
+                <span class="badge" id="engine-badge">—</span>
+                <button class="btn" onclick="refreshAll()">↻ Refresh</button>
+                <button class="btn primary" onclick="restartEngine()">♻️ Restart R3 Engine</button>
             </div>
         </header>
 
-        <div class="content">
-            <div class="status-bar">
-                <div class="status-item">
-                    <div class="status-dot" id="netifyd-status"></div>
-                    <span>netifyd</span>
-                </div>
-                <div class="status-item">
-                    <span>Mode:</span>
-                    <span id="dpi-mode" style="color: var(--cyan);">-</span>
-                </div>
-                <div class="status-item">
-                    <span>Interface:</span>
-                    <span id="dpi-interface" style="color: var(--cyan);">-</span>
-                </div>
-                <div class="status-item">
-                    <span>Mirred:</span>
-                    <span id="mirred-status" style="color: var(--text-dim);">-</span>
-                </div>
-            </div>
+        <div class="status-bar">
+            <div class="status-item"><span class="k">🛰️ Engine:</span><span class="v" id="engine-name">ndpiReader · R3 exfil</span></div>
+            <div class="status-item"><span class="k">⚙️ Service:</span><span class="v" id="engine-service">secubox-dpi-flowcap</span></div>
+            <div class="status-item"><span class="k">🔌 Source:</span><span class="v">wg-toolbox tunnel (R3)</span></div>
+            <div class="status-item"><span class="k">⏱️ Last window:</span><span class="v" id="engine-window">—</span></div>
+        </div>
 
-            <!-- #693 headline metrics driven by the R3 exfil engine (/exfil) -->
-            <div class="stats-row">
-                <div class="stat-card yellow">
-                    <div class="value" id="exfil-devices-count">0</div>
-                    <div class="label">📟 R3 Devices</div>
-                </div>
-                <div class="stat-card cyan">
-                    <div class="value" id="exfil-flows-count">0</div>
-                    <div class="label">🌐 Flows (60s)</div>
-                </div>
-                <div class="stat-card green">
-                    <div class="value" id="exfil-cats-count">0</div>
-                    <div class="label">🏷️ Categories</div>
-                </div>
-                <div class="stat-card red">
-                    <div class="value" id="exfil-alert-count">0</div>
-                    <div class="label">🛰️ Exfil Alerts</div>
-                </div>
-            </div>
+        <!-- headline metrics from the R3 exfil engine (/exfil) -->
+        <div class="grid">
+            <div class="stat-card yellow"><div class="value" id="exfil-devices-count">0</div><div class="label">📟 R3 Devices</div></div>
+            <div class="stat-card"><div class="value" id="exfil-flows-count">0</div><div class="label">🌐 Flows</div></div>
+            <div class="stat-card green"><div class="value" id="exfil-cats-count">0</div><div class="label">🏷️ Categories</div></div>
+            <div class="stat-card red"><div class="value" id="exfil-alert-count">0</div><div class="label">🛰️ Exfil Alerts</div></div>
+        </div>
 
-            <!-- #687 — per-device cloud exfiltration watch (R3 DPI) -->
-            <div class="card" id="exfil-card" style="border-color: var(--p31-decay);">
-                <div class="card-header">
-                    <h2>🛰️ Cloud Exfiltration Watch <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— per-device egress on R3 (wg-toolbox)</span></h2>
-                    <span class="badge" id="exfil-badge">-</span>
-                </div>
-                <div id="exfil-alerts" style="margin-bottom: 1rem;"></div>
-                <div id="exfil-devices">
-                    <p class="empty">Loading…</p>
-                </div>
-                <p id="exfil-foot" style="color: var(--text-dim); font-size: 0.7rem; margin-top: 0.75rem;"></p>
+        <!-- per-device cloud exfiltration watch -->
+        <div class="card" id="exfil-card">
+            <div class="card-header">
+                <h2>🛰️ Cloud Exfiltration Watch <span class="sub">— per-device egress on R3 (wg-toolbox)</span></h2>
+                <span class="badge" id="exfil-badge">—</span>
             </div>
+            <div id="exfil-alerts" style="margin-bottom:1rem;"></div>
+            <div id="exfil-devices"><p class="empty">Loading…</p></div>
+            <p id="exfil-foot" style="color:var(--text-dim);font-size:0.7rem;margin-top:0.75rem;"></p>
+        </div>
 
-            <!-- #785 — services aggregated by category (up/down bytes board-wide) -->
+        <div class="grid-2">
             <div class="card">
-                <div class="card-header"><h2>🏷️ Types de services captés <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— octets par catégorie (SNI)</span></h2></div>
+                <div class="card-header"><h2>🏷️ Types de services captés <span class="sub">— octets par catégorie (SNI)</span></h2></div>
                 <div class="app-list" id="svc-categories"><p class="empty">Loading…</p></div>
             </div>
-
-            <!-- #785 — MIME media types captured by sbxmitm R4 -->
             <div class="card">
-                <div class="card-header"><h2>🎬 Types de médias captés <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— Content-Type réels (MITM R4)</span></h2></div>
+                <div class="card-header"><h2>🎬 Types de médias captés <span class="sub">— Content-Type réels (MITM R4)</span></h2></div>
                 <div class="app-list" id="media-types"><p class="empty">Loading…</p></div>
             </div>
+        </div>
 
-            <!-- #812 — Media Buffer gallery: live whole-file captures (R3/R4), replay/download
-                 while the bytes are still on /data; greys to "métatag seul" after eviction. -->
-            <div class="card">
-                <div class="card-header">
-                    <h2>🎥 Media Buffer <span style="color: var(--text-dim); text-transform:none; letter-spacing:0; font-size:0.7rem;">— captures live, replay avant expiration (admin)</span></h2>
-                    <span class="badge" id="media-buffer-badge">-</span>
-                </div>
-                <div class="media-gallery" id="media-buffer-gallery"><p class="empty">Loading…</p></div>
+        <div class="card">
+            <div class="card-header">
+                <h2>🎥 Media Buffer <span class="sub">— captures live, replay avant expiration (admin)</span></h2>
+                <span class="badge" id="media-buffer-badge">—</span>
             </div>
+            <div class="media-gallery" id="media-buffer-gallery"><p class="empty">Loading…</p></div>
+        </div>
 
-            <!-- #720 — per-day timeline (board-wide) -->
-            <div class="card">
-                <div class="card-header"><h2>📈 Timeline — flux/jour (14 j)</h2></div>
-                <div id="dpi-timeline" style="display:flex; align-items:flex-end; gap:4px; height:90px; padding-top:8px;">
-                    <p class="empty">Loading…</p>
-                </div>
-            </div>
+        <div class="card">
+            <div class="card-header"><h2>📈 Timeline <span class="sub">— flux/jour (14 j)</span></h2></div>
+            <div id="dpi-timeline" style="display:flex;align-items:flex-end;gap:4px;height:90px;padding-top:8px;"><p class="empty">Loading…</p></div>
+        </div>
 
-            <div class="grid-2">
-                <div class="card">
-                    <div class="card-header"><h2>📊 Top Applications</h2></div>
-                    <div class="app-list" id="top-apps">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>📡 Top Protocols</h2></div>
-                    <div class="app-list" id="top-protocols">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>💻 Bandwidth by Device</h2></div>
-                    <div class="app-list" id="bandwidth-devices">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>🌐 Active Flows</h2></div>
-                    <div class="app-list" id="active-flows">
-                        <p style="color: var(--text-dim);">Loading...</p>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>🚫 Block Rules</h2></div>
-                    <div class="app-list" id="block-rules">
-                        <p style="color: var(--text-dim);">No rules</p>
-                    </div>
-                    <div class="input-group">
-                        <input type="text" id="new-rule-app" placeholder="Application or category">
-                        <select id="new-rule-action">
-                            <option value="block">Block</option>
-                            <option value="limit">Limit</option>
-                            <option value="mark">Mark</option>
-                        </select>
-                        <button class="btn primary" onclick="addBlockRule()">Add</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header"><h2>⚙️ Controls</h2></div>
-                    <button class="btn success" onclick="setupMirred()" style="width: 100%; margin-bottom: 0.5rem;">Setup Mirred</button>
-                    <button class="btn danger" onclick="removeMirred()" style="width: 100%; margin-bottom: 0.5rem;">Remove Mirred</button>
-                    <button class="btn" onclick="restartNetifyd()" style="width: 100%; margin-bottom: 0.5rem;">Restart netifyd</button>
-                    <button class="btn primary" onclick="refreshAll()" style="width: 100%;">🔄 Refresh All</button>
-                </div>
-            </div>
+        <div class="grid-2">
+            <div class="card"><div class="card-header"><h2>📊 Top Applications</h2></div><div class="app-list" id="top-apps"><p class="empty">Loading…</p></div></div>
+            <div class="card"><div class="card-header"><h2>📡 Top Protocols</h2></div><div class="app-list" id="top-protocols"><p class="empty">Loading…</p></div></div>
+            <div class="card"><div class="card-header"><h2>💻 Bandwidth by Device</h2></div><div class="app-list" id="bandwidth-devices"><p class="empty">Loading…</p></div></div>
+            <div class="card"><div class="card-header"><h2>🌐 Active Flows <span class="sub">— live window</span></h2></div><div class="app-list" id="active-flows"><p class="empty">Loading…</p></div></div>
         </div>
     </main>
 
     <script>
         const API = '/api/v1/dpi';
 
+        function toast(msg, err) {
+            const t = document.createElement('div');
+            t.className = 'toast' + (err ? ' error' : '');
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
         async function api(endpoint, method = 'GET', data = null) {
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
             if (data) opts.body = JSON.stringify(data);
             try { const res = await fetch(API + endpoint, opts); return res.json(); } catch (e) { return {}; }
         }
-
         function formatBytes(bytes) {
             if (!bytes) return '0 B';
-            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
+            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
         }
-
-        async function loadStatus() {
-            const data = await api('/status');
-            document.getElementById('netifyd-status').className = 'status-dot ' + (data.running ? 'active' : 'inactive');
-            document.getElementById('netifyd-badge').className = 'badge ' + (data.running ? 'active' : 'inactive');
-            document.getElementById('netifyd-badge').textContent = data.running ? 'Running' : 'Stopped';
-            document.getElementById('dpi-mode').textContent = data.mode || '-';
-            document.getElementById('dpi-interface').textContent = data.interface || '-';
-            document.getElementById('mirred-status').textContent = data.mirred_active ? 'Active' : 'Inactive';
-            document.getElementById('mirred-status').style.color = data.mirred_active ? 'var(--green)' : 'var(--text-dim)';
-        }
-
-        async function loadTopApps() {
-            const data = await api('/top_apps?limit=10');
-            const container = document.getElementById('top-apps');
-            const apps = Array.isArray(data) ? data : [];
-
-            container.innerHTML = apps.length > 0 ? apps.map(app => `
-                <div class="app-item">
-                    <span>${app.app}</span>
-                    <span class="bytes">${formatBytes(app.bytes)}</span>
-                </div>
-            `).join('') : '<p style="color: var(--text-dim);">No data</p>';
-        }
-
-        async function loadTopProtocols() {
-            const data = await api('/top_protocols?limit=10');
-            const container = document.getElementById('top-protocols');
-            const protocols = Array.isArray(data) ? data : [];
-
-            container.innerHTML = protocols.length > 0 ? protocols.map(proto => `
-                <div class="app-item">
-                    <span>${proto.protocol}</span>
-                    <span class="bytes">${formatBytes(proto.bytes)}</span>
-                </div>
-            `).join('') : '<p style="color: var(--text-dim);">No data</p>';
-        }
-
-        async function loadBandwidthDevices() {
-            const data = await api('/bandwidth_by_device');
-            const container = document.getElementById('bandwidth-devices');
-            const devices = Array.isArray(data) ? data : [];
-
-            container.innerHTML = devices.length > 0 ? devices.map(dev => `
-                <div class="app-item">
-                    <span style="font-family: monospace;">${dev.mac}</span>
-                    <span class="bytes">${formatBytes(dev.bytes)}</span>
-                </div>
-            `).join('') : '<p style="color: var(--text-dim);">No data</p>';
-        }
-
-        async function loadActiveFlows() {
-            const data = await api('/active_flows');
-            const container = document.getElementById('active-flows');
-            const flows = data.flows || [];
-
-            container.innerHTML = flows.length > 0 ? flows.slice(0, 15).map(f => `
-                <div class="app-item">
-                    <span>${f.detected_application_name || 'unknown'}</span>
-                    <span class="bytes">${formatBytes(f.bytes || 0)}</span>
-                </div>
-            `).join('') : '<p style="color: var(--text-dim);">No active flows</p>';
-        }
-
-        async function loadBlockRules() {
-            const data = await api('/block_rules');
-            const container = document.getElementById('block-rules');
-            const rules = Array.isArray(data) ? data : [];
-
-            container.innerHTML = rules.length > 0 ? rules.map(rule => `
-                <div class="rule-item">
-                    <span>${rule.app_or_category} <span style="color: var(--text-dim);">(${rule.action})</span></span>
-                    <button class="btn danger" onclick="deleteBlockRule('${rule.app_or_category}')">🗑️</button>
-                </div>
-            `).join('') : '<p style="color: var(--text-dim);">No rules</p>';
+        function shortDev(d) { return d ? d.slice(0, 8) + '…' : 'unknown'; }
+        function agoStr(ts) {
+            if (!ts) return '';
+            const s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+            if (s < 90) return s + 's ago';
+            if (s < 5400) return Math.round(s / 60) + 'm ago';
+            return Math.round(s / 3600) + 'h ago';
         }
 
         const EXFIL_KINDS = {
-            exfil_volume:           { label: 'BULK UPLOAD',   cls: 'badge-red',    icon: '⬆️' },
-            new_cloud:              { label: 'NEW DEST',      cls: 'badge-yellow', icon: '☁️' },
-            beaconing:              { label: 'BEACONING',     cls: 'badge-purple', icon: '📡' },
-            unclassified_external:  { label: 'UNCLASSIFIED',  cls: 'badge-amber',  icon: '❔' },
+            exfil_volume:          { label: 'BULK UPLOAD', cls: 'badge-red',    icon: '⬆️' },
+            new_cloud:             { label: 'NEW DEST',    cls: 'badge-yellow', icon: '☁️' },
+            beaconing:             { label: 'BEACONING',   cls: 'badge-purple', icon: '📡' },
+            unclassified_external: { label: 'UNCLASSIFIED',cls: 'badge-amber',  icon: '❔' },
         };
-
-        // service category → icon + badge class (exfil-relevant cats are warm/red)
         const CATEGORY = {
             cloud:     { icon: '☁️', cls: 'badge-red',    exfil: true  },
             filehost:  { icon: '📦', cls: 'badge-red',    exfil: true  },
@@ -621,13 +217,19 @@
         };
         function catMeta(c) { return CATEGORY[c] || { icon: '🌐', cls: 'badge-cyan', exfil: false }; }
 
-        function shortDev(d) { return d ? d.slice(0, 8) + '…' : 'unknown'; }
-        function agoStr(ts) {
-            if (!ts) return '';
-            const s = Math.max(0, Math.floor(Date.now()/1000 - ts));
-            if (s < 90) return s + 's ago';
-            if (s < 5400) return Math.round(s/60) + 'm ago';
-            return Math.round(s/3600) + 'h ago';
+        function updateEngine(engine, generated_at, deviceCount, alertCount) {
+            const dot = document.getElementById('engine-dot');
+            const badge = document.getElementById('engine-badge');
+            const win = document.getElementById('engine-window');
+            const e = engine || {};
+            const alive = !!e.alive;
+            dot.className = 'live-dot' + (alive ? '' : ' idle');
+            badge.textContent = alive ? '● R3 LIVE' : '○ R3 IDLE';
+            badge.className = 'badge ' + (alive ? 'badge-green' : 'badge-amber');
+            document.getElementById('engine-name').textContent = e.name || 'ndpiReader · R3 exfil';
+            document.getElementById('engine-service').textContent = e.service || 'secubox-dpi-flowcap';
+            win.textContent = (e.last_window_s != null) ? (e.last_window_s + 's ago')
+                : (generated_at ? agoStr(generated_at) : 'no capture yet');
         }
 
         async function loadExfil() {
@@ -642,11 +244,12 @@
             const devices = Array.isArray(data.devices) ? data.devices : [];
             const count = data.alert_count || alerts.length;
 
+            updateEngine(data.engine, data.generated_at, devices.length, count);
+
             badge.textContent = count > 0 ? (count + ' ALERT' + (count > 1 ? 'S' : '')) : 'CLEAR';
             badge.className = 'badge ' + (count > 0 ? 'badge-red' : 'badge-green');
-            card.style.borderColor = count > 0 ? '#ff4466' : 'var(--p31-decay)';
+            card.style.borderColor = count > 0 ? 'var(--red)' : 'var(--border)';
 
-            // #693 headline stat cards from the real DPI engine
             const totalFlows = devices.reduce((n, d) => n + (d.flows || 0), 0);
             const cats = new Set();
             devices.forEach(d => Object.keys(d.by_category || {}).forEach(c => cats.add(c)));
@@ -656,54 +259,45 @@
             setCard('exfil-cats-count', cats.size);
             setCard('exfil-alert-count', count);
 
-            // alert feed (severity-first)
             alertsBox.innerHTML = alerts.length ? alerts.map(a => {
                 const k = EXFIL_KINDS[a.kind] || { label: (a.kind || '?').toUpperCase(), cls: 'badge-amber', icon: '⚠️' };
                 const svc = a.service || a.cloud;
                 const cm = catMeta(a.category);
                 const dest = svc ? `${cm.icon} ${svc} (${a.dst})` : a.dst;
-                return `<div class="app-item" style="border-left:3px solid #ff4466; padding-left:0.6rem;">
+                return `<div class="app-item" style="border-left:3px solid var(--red);padding-left:0.6rem;">
                     <span><span class="badge ${k.cls}" style="margin-right:0.5rem;">${k.icon} ${k.label}</span>
-                        <span style="font-family:monospace;">${shortDev(a.device)}</span>
-                        → ${dest}
-                        <span style="color: var(--text-dim);"> · ${a.detail || ''}</span></span>
-                    <span class="bytes">↑${formatBytes(a.up_bytes)} ${agoStr(a.ts)}</span>
-                </div>`;
-            }).join('') : '<p class="empty" style="color: var(--green);">✓ No exfiltration detected</p>';
+                        <span style="font-family:monospace;">${shortDev(a.device)}</span> → ${dest}
+                        <span style="color:var(--text-dim);"> · ${a.detail || ''}</span></span>
+                    <span class="bytes">↑${formatBytes(a.up_bytes)} ${agoStr(a.ts)}</span></div>`;
+            }).join('') : '<p class="empty" style="color:var(--green);">✓ No exfiltration detected</p>';
 
-            // per-device egress rollup — grouped by service category
             devBox.innerHTML = devices.length ? devices.map(d => {
                 const svcs = d.services || d.clouds || [];
                 const rows = svcs.map(c => {
                     const m = catMeta(c.category);
                     const name = c.service || c.cloud || c.dst;
-                    return `<div class="app-item" style="padding:0.35rem 0.6rem; font-size:0.85rem;${m.exfil ? 'border-left:2px solid #ff4466; padding-left:0.5rem;' : ''}">
-                        <span><span title="${c.category || 'other'}">${m.icon}</span> ${name}
-                            <span style="color:var(--text-dim);">${c.proto || ''}</span></span>
-                        <span class="bytes">↑${formatBytes(c.up_bytes)} ↓${formatBytes(c.down_bytes)}</span>
-                    </div>`;
+                    return `<div class="app-item" style="padding:0.35rem 0.6rem;font-size:0.82rem;${m.exfil ? 'border-left:2px solid var(--red);padding-left:0.5rem;' : ''}">
+                        <span><span title="${c.category || 'other'}">${m.icon}</span> ${name} <span style="color:var(--text-dim);">${c.proto || ''}</span></span>
+                        <span class="bytes">↑${formatBytes(c.up_bytes)} ↓${formatBytes(c.down_bytes)}</span></div>`;
                 }).join('') || '<p class="empty" style="padding:0.35rem 0.6rem;">no classified egress</p>';
-                // category summary chips
-                const cats = d.by_category || {};
-                const chips = Object.keys(cats).sort((a,b)=>cats[b]-cats[a]).map(c => {
+                const bycat = d.by_category || {};
+                const chips = Object.keys(bycat).sort((a, b) => bycat[b] - bycat[a]).map(c => {
                     const m = catMeta(c);
-                    return `<span class="badge ${m.cls}" style="margin-left:0.3rem; font-size:0.65rem;">${m.icon} ${c} ${cats[c]}</span>`;
+                    return `<span class="badge ${m.cls}" style="margin-left:0.3rem;font-size:0.62rem;">${m.icon} ${c} ${bycat[c]}</span>`;
                 }).join('');
                 const hot = (d.alerts && d.alerts.length) ? `<span class="badge badge-red" style="margin-left:0.5rem;">${d.alerts.length}⚠️</span>` : '';
-                return `<div style="margin-bottom:0.75rem; border:1px solid var(--tube-soft); border-radius:6px;">
-                    <div class="app-item" style="background:rgba(255,179,71,0.06); flex-wrap:wrap;">
-                        <span style="font-family:monospace; color:var(--p31-decay);">📟 ${shortDev(d.device)}${hot} ${chips}</span>
-                        <span class="bytes">${d.flows} flows · ↑${formatBytes(d.up_bytes)}</span>
-                    </div>
-                    ${rows}
-                </div>`;
+                return `<div style="margin-bottom:0.75rem;border:1px solid var(--border);border-radius:6px;">
+                    <div class="app-item" style="background:rgba(255,179,71,0.06);flex-wrap:wrap;">
+                        <span style="font-family:monospace;color:var(--amber);">📟 ${shortDev(d.device)}${hot} ${chips}</span>
+                        <span class="bytes">${d.flows} flows · ↑${formatBytes(d.up_bytes)}</span></div>
+                    ${rows}</div>`;
             }).join('') : '<p class="empty">No devices observed on R3 yet (tunnel idle, or first capture window pending).</p>';
 
             foot.textContent = data.generated_at
-                ? `Last capture: ${agoStr(data.generated_at)} · ${devices.length} device(s) · ${alerts.length} alert(s)`
+                ? `Last rollup: ${agoStr(data.generated_at)} · ${devices.length} device(s) · ${alerts.length} alert(s)`
                 : (data.note || 'no capture window completed yet');
 
-            // #785 Card A — services aggregated by category (bytes, board-wide)
+            // service categories (bytes board-wide)
             const byCat = {};
             devices.forEach(d => (d.services || d.clouds || []).forEach(c => {
                 const cat = c.category || 'other';
@@ -715,56 +309,32 @@
                 const catRows = Object.keys(byCat).sort((a, b) => (byCat[b].up + byCat[b].down) - (byCat[a].up + byCat[a].down));
                 svcBox.innerHTML = catRows.length ? catRows.map(cat => {
                     const m = catMeta(cat); const e = byCat[cat];
-                    return `<div class="app-item"${m.exfil ? ' style="border-left:2px solid #ff4466; padding-left:0.5rem;"' : ''}>
+                    return `<div class="app-item"${m.exfil ? ' style="border-left:2px solid var(--red);padding-left:0.5rem;"' : ''}>
                         <span><span class="badge ${m.cls}" style="margin-right:0.4rem;">${m.icon} ${cat}</span>
                             <span style="color:var(--text-dim);">${e.flows}f</span></span>
-                        <span class="bytes">↑${formatBytes(e.up)} ↓${formatBytes(e.down)}</span>
-                    </div>`;
+                        <span class="bytes">↑${formatBytes(e.up)} ↓${formatBytes(e.down)}</span></div>`;
                 }).join('') : '<p class="empty">no classified egress yet</p>';
             }
 
-            // #695 fill the list cards from the same /exfil rollups (real DPI engine)
             const fillList = (id, rows, render, empty) => {
                 const el = document.getElementById(id); if (!el) return;
-                el.innerHTML = (rows && rows.length) ? rows.map(render).join('')
-                    : `<p style="color: var(--text-dim);">${empty}</p>`;
+                el.innerHTML = (rows && rows.length) ? rows.map(render).join('') : `<p class="empty">${empty}</p>`;
             };
-            fillList('top-apps', data.top_apps, a => `
-                <div class="app-item"><span>${a.name}</span>
-                    <span class="bytes">${formatBytes(a.bytes)} · ${a.flows}f</span></div>`,
-                'No data');
-            fillList('top-protocols', data.top_protocols, p => `
-                <div class="app-item"><span>${p.name}</span>
-                    <span class="bytes">${formatBytes(p.bytes)} · ${p.flows}f</span></div>`,
-                'No data');
-            fillList('bandwidth-devices', devices, d => `
-                <div class="app-item"><span style="font-family:monospace;">📟 ${shortDev(d.device)}</span>
-                    <span class="bytes">↑${formatBytes(d.up_bytes)} ↓${formatBytes(d.down_bytes||0)}</span></div>`,
-                'No data');
+            fillList('top-apps', data.top_apps, a => `<div class="app-item"><span>${a.name}</span><span class="bytes">${formatBytes(a.bytes)} · ${a.flows}f</span></div>`, 'No data');
+            fillList('top-protocols', data.top_protocols, p => `<div class="app-item"><span>${p.name}</span><span class="bytes">${formatBytes(p.bytes)} · ${p.flows}f</span></div>`, 'No data');
+            fillList('bandwidth-devices', devices, d => `<div class="app-item"><span style="font-family:monospace;">📟 ${shortDev(d.device)}</span><span class="bytes">↑${formatBytes(d.up_bytes)} ↓${formatBytes(d.down_bytes || 0)}</span></div>`, 'No data');
             fillList('active-flows', data.active_flows, f => {
                 const m = catMeta(f.category); const name = f.service || f.dst;
-                return `<div class="app-item"><span><span title="${f.category||'other'}">${m.icon}</span> ${name}
-                    <span style="color:var(--text-dim);">${f.proto||''}</span></span>
-                    <span class="bytes">↑${formatBytes(f.up_bytes)} ↓${formatBytes(f.down_bytes)}</span></div>`;
-            }, 'No active flows');
+                return `<div class="app-item"><span><span title="${f.category || 'other'}">${m.icon}</span> ${name} <span style="color:var(--text-dim);">${f.proto || ''}</span></span><span class="bytes">↑${formatBytes(f.up_bytes)} ↓${formatBytes(f.down_bytes)}</span></div>`;
+            }, 'No active flows (live window idle)');
         }
 
-        async function setupMirred() { const r = await api('/setup_mirred', 'POST'); alert(r.error ? 'Error: ' + r.error : 'Mirred configured'); loadStatus(); }
-        async function removeMirred() { await api('/remove_mirred', 'POST'); alert('Mirred removed'); loadStatus(); }
-        async function restartNetifyd() { await api('/restart', 'POST'); alert('netifyd restarted'); loadStatus(); }
-
-        async function addBlockRule() {
-            const app = document.getElementById('new-rule-app').value;
-            const action = document.getElementById('new-rule-action').value;
-            if (!app) return alert('Enter an application');
-            await api('/add_block_rule', 'POST', { app_or_category: app, action: action });
-            document.getElementById('new-rule-app').value = '';
-            loadBlockRules();
-        }
-
-        async function deleteBlockRule(app) {
-            await api('/delete_block_rule?app_or_category=' + encodeURIComponent(app), 'POST');
-            loadBlockRules();
+        async function restartEngine() {
+            if (!confirm('Restart the R3 DPI engine (secubox-dpi-flowcap)?')) return;
+            toast('Restarting R3 engine…');
+            const r = await api('/restart', 'POST');
+            toast(r.success ? '♻️ R3 engine restarted' : ('Failed: ' + (r.error || 'permission?')), !r.success);
+            setTimeout(loadExfil, 2500);
         }
 
         async function loadMediaTypes() {
@@ -779,33 +349,23 @@
                 box.innerHTML = '<p class="empty">Aucun média capté (tunnel R3/R4 requis + lecture vidéo/audio).</p>';
                 return;
             }
-            const kindRows = kinds.map(k =>
-                `<div class="app-item"><span>${KIND_ICON[k.label] || '🎬'} ${k.label}</span><span class="bytes">${k.count}</span></div>`).join('');
-            const ctypeRows = ctypes.slice(0, 6).map(c =>
-                `<div class="app-item"><span style="font-family:monospace; font-size:0.78rem;">${c.label}</span><span class="bytes">${c.count}</span></div>`).join('');
-            const hostRows = hosts.slice(0, 6).map(h =>
-                `<div class="app-item"><span>${KIND_ICON[h.kind] || '🎬'} <span style="font-family:monospace; font-size:0.78rem;">${(h.host || '').slice(0, 32)}</span></span><span class="bytes">${formatBytes(h.bytes)}</span></div>`).join('');
+            const kindRows = kinds.map(k => `<div class="app-item"><span>${KIND_ICON[k.label] || '🎬'} ${k.label}</span><span class="bytes">${k.count}</span></div>`).join('');
+            const ctypeRows = ctypes.slice(0, 6).map(c => `<div class="app-item"><span style="font-family:monospace;font-size:0.76rem;">${c.label}</span><span class="bytes">${c.count}</span></div>`).join('');
+            const hostRows = hosts.slice(0, 6).map(h => `<div class="app-item"><span>${KIND_ICON[h.kind] || '🎬'} <span style="font-family:monospace;font-size:0.76rem;">${(h.host || '').slice(0, 32)}</span></span><span class="bytes">${formatBytes(h.bytes)}</span></div>`).join('');
             box.innerHTML =
-                `<div style="color:var(--text-dim); font-size:0.7rem; margin-bottom:0.3rem;">Types</div>${kindRows}` +
-                `<div style="color:var(--text-dim); font-size:0.7rem; margin:0.5rem 0 0.3rem;">Content-Type (MIME)</div>${ctypeRows}` +
-                (hostRows ? `<div style="color:var(--text-dim); font-size:0.7rem; margin:0.5rem 0 0.3rem;">Top hôtes</div>${hostRows}` : '');
+                `<div style="color:var(--text-dim);font-size:0.68rem;margin-bottom:0.3rem;">Types</div>${kindRows}` +
+                `<div style="color:var(--text-dim);font-size:0.68rem;margin:0.5rem 0 0.3rem;">Content-Type (MIME)</div>${ctypeRows}` +
+                (hostRows ? `<div style="color:var(--text-dim);font-size:0.68rem;margin:0.5rem 0 0.3rem;">Top hôtes</div>${hostRows}` : '');
         }
 
-        // #812 — Media Buffer gallery. `host`/`url`/`mac_hash` are ATTACKER-CONTROLLED
-        // (they come from captured live traffic — a malicious page can cause any
-        // hostname/URL to be observed). Every card is built with createElement +
-        // textContent (or the `.title` IDL property, which is never HTML-parsed) —
-        // never innerHTML string-concatenation of these fields — so a captured
-        // value like `<img onerror=...>` renders as inert text.
+        // #812 — Media Buffer: host/url/mac_hash are ATTACKER-CONTROLLED (captured
+        // live traffic). Every card is built with createElement + textContent (or
+        // the .title IDL property, never HTML-parsed) — never innerHTML of these
+        // fields — so a captured `<img onerror=...>` renders as inert text.
         const MEDIA_KIND_ICON = { video: '📺', audio: '🎵', manifest: '🎞️', file: '📄' };
         function mediaKindIcon(k) { return MEDIA_KIND_ICON[k] || '📄'; }
         function mediaDirArrow(d) { return d === 'up' ? '⬆' : (d === 'down' ? '⬇' : '↔'); }
 
-        // Dedicated authed fetch: the media-buffer endpoints require a JWT (unlike
-        // most other /api/v1/dpi/* routes on this page, which currently ride the
-        // SSO-lite session cookie only). Reads the CANONICAL token key `sbx_token`
-        // (ref #810 — `jwt_token`/`token` cause a login loop) and redirects to
-        // /login.html on 401, matching sibling dashboards (e.g. crowdsec's api()).
         async function apiAuthed(path) {
             const token = localStorage.getItem('sbx_token');
             const opts = { headers: {} };
@@ -821,139 +381,62 @@
         function buildMediaCard(item) {
             const card = document.createElement('div');
             card.className = 'media-card' + (item.expired ? ' expired' : '');
-
             const head = document.createElement('div');
             head.className = 'media-card-head';
-            const kindSpan = document.createElement('span');
-            kindSpan.textContent = mediaKindIcon(item.kind);
-            const dirSpan = document.createElement('span');
-            dirSpan.textContent = mediaDirArrow(item.direction);
-            head.appendChild(kindSpan);
-            head.appendChild(dirSpan);
-            card.appendChild(head);
-
-            const hostEl = document.createElement('div');
-            hostEl.className = 'media-host';
+            const kindSpan = document.createElement('span'); kindSpan.textContent = mediaKindIcon(item.kind);
+            const dirSpan = document.createElement('span'); dirSpan.textContent = mediaDirArrow(item.direction);
+            head.appendChild(kindSpan); head.appendChild(dirSpan); card.appendChild(head);
+            const hostEl = document.createElement('div'); hostEl.className = 'media-host';
             hostEl.textContent = item.host || '(unknown host)';
-            if (item.url) hostEl.title = item.url; // IDL property assignment — not HTML-parsed, safe
+            if (item.url) hostEl.title = item.url;
             card.appendChild(hostEl);
-
-            const metaRow1 = document.createElement('div');
-            metaRow1.className = 'media-meta-row';
-            const devSpan = document.createElement('span');
-            devSpan.textContent = '📟 ' + shortDev(item.mac_hash);
-            const kindLabel = document.createElement('span');
-            kindLabel.textContent = item.kind || 'file';
-            metaRow1.appendChild(devSpan);
-            metaRow1.appendChild(kindLabel);
-            card.appendChild(metaRow1);
-
-            const metaRow2 = document.createElement('div');
-            metaRow2.className = 'media-meta-row';
-            const sizeSpan = document.createElement('span');
-            sizeSpan.textContent = formatBytes(item.bytes || 0);
-            const ageSpan = document.createElement('span');
-            ageSpan.textContent = agoStr(item.first_ts);
-            metaRow2.appendChild(sizeSpan);
-            metaRow2.appendChild(ageSpan);
-            card.appendChild(metaRow2);
-
-            // #812 Phase 2: manifest segment-count hint. `item.segments` is a
-            // display hint set by the replay-time join (hls.py/media_replay),
-            // not authoritative — never rendered except as plain text.
+            const m1 = document.createElement('div'); m1.className = 'media-meta-row';
+            const dev = document.createElement('span'); dev.textContent = '📟 ' + shortDev(item.mac_hash);
+            const kl = document.createElement('span'); kl.textContent = item.kind || 'file';
+            m1.appendChild(dev); m1.appendChild(kl); card.appendChild(m1);
+            const m2 = document.createElement('div'); m2.className = 'media-meta-row';
+            const sz = document.createElement('span'); sz.textContent = formatBytes(item.bytes || 0);
+            const ag = document.createElement('span'); ag.textContent = agoStr(item.first_ts);
+            m2.appendChild(sz); m2.appendChild(ag); card.appendChild(m2);
             if (item.kind === 'manifest' && typeof item.segments === 'number' && item.segments > 0) {
-                const segRow = document.createElement('div');
-                segRow.className = 'media-meta-row';
-                const segSpan = document.createElement('span');
-                segSpan.textContent = '🧩 ' + item.segments + ' segment' + (item.segments === 1 ? '' : 's');
-                segRow.appendChild(segSpan);
-                card.appendChild(segRow);
+                const seg = document.createElement('div'); seg.className = 'media-meta-row';
+                const ss = document.createElement('span'); ss.textContent = '🧩 ' + item.segments + ' segment' + (item.segments === 1 ? '' : 's');
+                seg.appendChild(ss); card.appendChild(seg);
             }
-
-            const actions = document.createElement('div');
-            actions.className = 'media-actions';
+            const actions = document.createElement('div'); actions.className = 'media-actions';
             if (item.expired) {
-                const label = document.createElement('span');
-                label.className = 'media-expired-label';
-                label.textContent = 'métatag seul (expiré)';
-                actions.appendChild(label);
+                const label = document.createElement('span'); label.className = 'media-expired-label';
+                label.textContent = 'métatag seul (expiré)'; actions.appendChild(label);
             } else if (item.id) {
-                // `id` is hex-validated server-side, but encodeURIComponent defensively
-                // anyway — never build this URL by string-concatenating raw input.
                 const replayUrl = API + '/media/replay/' + encodeURIComponent(item.id);
-                if (item.kind === 'manifest') {
-                    buildManifestActions(card, actions, replayUrl);
-                } else {
-                    const playBtn = document.createElement('a');
-                    playBtn.className = 'btn primary';
-                    playBtn.href = replayUrl;
-                    playBtn.target = '_blank';
-                    playBtn.rel = 'noopener';
-                    playBtn.textContent = '▶ Play';
-                    const dlBtn = document.createElement('a');
-                    dlBtn.className = 'btn';
-                    dlBtn.href = replayUrl;
-                    dlBtn.setAttribute('download', '');
-                    dlBtn.textContent = '⬇ Download';
-                    actions.appendChild(playBtn);
-                    actions.appendChild(dlBtn);
+                if (item.kind === 'manifest') { buildManifestActions(card, actions, replayUrl); }
+                else {
+                    const play = document.createElement('a'); play.className = 'btn primary'; play.href = replayUrl; play.target = '_blank'; play.rel = 'noopener'; play.textContent = '▶ Play';
+                    const dl = document.createElement('a'); dl.className = 'btn'; dl.href = replayUrl; dl.setAttribute('download', ''); dl.textContent = '⬇ Download';
+                    actions.appendChild(play); actions.appendChild(dl);
                 }
             }
             card.appendChild(actions);
             return card;
         }
 
-        // #812 Phase 2 — a manifest's Play action targets the rewritten playlist
-        // (`/media/replay/{id}`, the manifest branch of the replay endpoint).
-        // No external hls.js is bundled here (self-contained CSP, no CDN scripts
-        // allowed), so a native <video>/in-tab HLS view only works reliably on
-        // Safari; every other browser gets a Download link for the rewritten
-        // .m3u8 plus a short hint. The Play button also best-effort probes the
-        // response for the `X-SecuBox-Media: unsupported-variant` header (set
-        // by the backend when the manifest is master/ABR or AES-encrypted and
-        // therefore cannot be reassembled) and, if present, disables further
-        // inline play attempts while leaving the raw-manifest Download intact.
         function buildManifestActions(card, actions, replayUrl) {
-            const playBtn = document.createElement('a');
-            playBtn.className = 'btn primary';
-            playBtn.href = replayUrl;
-            playBtn.target = '_blank';
-            playBtn.rel = 'noopener';
-            playBtn.textContent = '🎞️ Ouvrir (Safari/HLS)';
-
-            const dlBtn = document.createElement('a');
-            dlBtn.className = 'btn';
-            dlBtn.href = replayUrl;
-            dlBtn.setAttribute('download', '');
-            dlBtn.textContent = '⬇ Download';
-
-            const note = document.createElement('div');
-            note.className = 'media-note';
+            const play = document.createElement('a'); play.className = 'btn primary'; play.href = replayUrl; play.target = '_blank'; play.rel = 'noopener'; play.textContent = '🎞️ Ouvrir (Safari/HLS)';
+            const dl = document.createElement('a'); dl.className = 'btn'; dl.href = replayUrl; dl.setAttribute('download', ''); dl.textContent = '⬇ Download';
+            const note = document.createElement('div'); note.className = 'media-note';
             note.textContent = 'Lecture HLS native limitée à Safari — sinon, téléchargez le manifeste réécrit.';
-
-            let checked = false; // avoid re-probing on every click once resolved
-            playBtn.addEventListener('click', function (ev) {
-                if (checked) return;
-                ev.preventDefault();
-                checked = true;
+            let checked = false;
+            play.addEventListener('click', function (ev) {
+                if (checked) return; ev.preventDefault(); checked = true;
                 fetch(replayUrl).then(function (res) {
                     if (res.headers.get('X-SecuBox-Media') === 'unsupported-variant') {
-                        playBtn.classList.add('disabled');
-                        playBtn.removeAttribute('href');
+                        play.classList.add('disabled'); play.removeAttribute('href');
                         note.classList.add('warn');
                         note.textContent = 'Flux non réassemblable (ABR/chiffré) — téléchargement du manifeste brut uniquement.';
-                    } else {
-                        window.open(replayUrl, '_blank', 'noopener');
-                    }
-                }).catch(function () {
-                    // network hiccup on the probe — fall back to opening it directly
-                    window.open(replayUrl, '_blank', 'noopener');
-                });
+                    } else { window.open(replayUrl, '_blank', 'noopener'); }
+                }).catch(function () { window.open(replayUrl, '_blank', 'noopener'); });
             });
-
-            actions.appendChild(playBtn);
-            actions.appendChild(dlBtn);
-            card.appendChild(note);
+            actions.appendChild(play); actions.appendChild(dl); card.appendChild(note);
         }
 
         async function loadMediaBuffer() {
@@ -962,21 +445,13 @@
             if (!box) return;
             const data = await apiAuthed(API + '/media/buffer');
             const allItems = (data && Array.isArray(data.items)) ? data.items : [];
-            // #812 Phase 2: HLS segments are join fodder for manifest replay,
-            // never a gallery entry on their own — hide them here, not server-side,
-            // so the count badge below still reflects the API's raw total.
             const items = allItems.filter(item => item.kind !== 'segment');
-            if (badge) {
-                badge.textContent = (data && typeof data.count === 'number')
-                    ? (data.count + ' capture' + (data.count === 1 ? '' : 's')) : '-';
-            }
+            if (badge) badge.textContent = (data && typeof data.count === 'number') ? (data.count + ' capture' + (data.count === 1 ? '' : 's')) : '—';
             box.innerHTML = '';
             if (!items.length) {
-                const p = document.createElement('p');
-                p.className = 'empty';
+                const p = document.createElement('p'); p.className = 'empty';
                 p.textContent = 'Aucune capture média en tampon (R3/R4 requis, admin uniquement).';
-                box.appendChild(p);
-                return;
+                box.appendChild(p); return;
             }
             items.forEach(item => box.appendChild(buildMediaCard(item)));
         }
@@ -989,28 +464,23 @@
             const max = Math.max(1, ...days.map(d => d.flows || 0));
             box.innerHTML = days.map(d => {
                 const h = Math.round(6 + 78 * (d.flows || 0) / max);
-                const dd = (d.day || '').slice(5);  // MM-DD
-                return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; min-width:0;">
-                    <span style="font-size:0.6rem; color:var(--p31-mid);">${d.flows||0}</span>
-                    <span title="${d.day}: ${d.flows||0} flux · ${d.alerts||0} alertes" style="display:block; width:100%; max-width:18px; height:${h}px; border-radius:3px 3px 0 0; background:${(d.alerts||0)>0 ? '#ff4466' : 'var(--p31-peak)'};"></span>
-                    <span style="font-size:0.55rem; color:var(--text-dim); white-space:nowrap;">${dd}</span>
-                </div>`;
+                const dd = (d.day || '').slice(5);
+                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:0;">
+                    <span style="font-size:0.6rem;color:var(--cyan);">${d.flows || 0}</span>
+                    <span title="${d.day}: ${d.flows || 0} flux · ${d.alerts || 0} alertes" style="display:block;width:100%;max-width:18px;height:${h}px;border-radius:3px 3px 0 0;background:${(d.alerts || 0) > 0 ? 'var(--red)' : 'var(--cyan)'};"></span>
+                    <span style="font-size:0.55rem;color:var(--text-dim);white-space:nowrap;">${dd}</span></div>`;
             }).join('');
         }
 
         function refreshAll() {
-            loadStatus();
-            loadExfil();   // #695: also fills Top Apps/Protocols/Bandwidth/Active-Flows from the exfil engine
-            loadMediaTypes();  // #785: MIME media types captured by sbxmitm R4
-            loadMediaBuffer(); // #812: live media-buffer gallery (replay/download)
+            loadExfil();       // engine status + devices + stats + top apps/protocols/bw/flows + service cats
+            loadMediaTypes();
+            loadMediaBuffer();
             loadTimeline();
-            loadBlockRules();
         }
-
         refreshAll();
-        setInterval(refreshAll, 10000);
-        setInterval(loadMediaBuffer, 15000); // #812: dedicated ~15s cadence per the buffer's own churn
+        setInterval(() => { loadExfil(); loadMediaTypes(); loadTimeline(); }, 10000);
+        setInterval(loadMediaBuffer, 15000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
