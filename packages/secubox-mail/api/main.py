@@ -10,6 +10,7 @@ SecuBox is an appliance and network model - distributed peer applications.
 import subprocess
 import os
 import json
+import socket
 import uuid
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -31,7 +32,7 @@ app.include_router(_legacy_router.router)
 # Canonical config keys (Phase 1 rev. 2). Legacy keys are accepted as
 # fallback for one release so deploys mid-upgrade don't break.
 DATA_PATH = Path(config.get("data_path", "/data/volumes/mail"))
-LXC_PATH = Path(config.get("lxc_path", "/var/lib/lxc"))
+LXC_PATH = Path(config.get("lxc_path", "/data/lxc"))
 CONTAINER = config.get("container", config.get("mail_container", "mail"))
 # Legacy alias retained for callers that still reference WEBMAIL_CONTAINER —
 # webmail is now in the same single LXC.
@@ -44,8 +45,16 @@ LXC_BRIDGE = config.get("lxc_bridge", "br-lxc")
 LXC_GATEWAY = config.get("lxc_gateway", "10.100.0.1")
 # Webmail is on standard HTTP inside the LXC; host nginx proxies via :443.
 WEBMAIL_PORT = 80
+# Roundcube nginx answers on its own container IP (may differ from the mail IP).
+WEBMAIL_IP = config.get("webmail_ip", "10.100.0.12")
 # Back-compat alias for any caller still reading MAIL_IP.
 MAIL_IP = LXC_IP
+
+# The mail service ports we surface in the dashboard (label + purpose).
+MAIL_PORTS = [
+    (25, "SMTP"), (587, "Submission"), (465, "SMTPS"),
+    (143, "IMAP"), (993, "IMAPS"), (110, "POP3"), (995, "POP3S"),
+]
 
 
 def run_cmd(cmd: list, timeout: int = 30) -> tuple:
@@ -76,6 +85,33 @@ def lxc_attach(name: str, command: str, timeout: int = 30) -> tuple:
     return run_cmd(cmd, timeout)
 
 
+def port_open(host: str, port: int, timeout: float = 1.5) -> bool:
+    """True if a TCP connection to host:port succeeds. This is the source of
+    truth for 'is the service up' — it needs no privilege and does not depend on
+    the LXC path/name, so it stays correct across container-layout changes (the
+    lxc-info path drifted to /var/lib/lxc and made everything read 'Stopped')."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def probe_mail_ports() -> Dict[int, bool]:
+    """Live status of every mail port, by direct TCP probe."""
+    return {p: port_open(LXC_IP, p) for p, _ in MAIL_PORTS}
+
+
+def mail_server_up() -> bool:
+    """Mail server is up if it answers on SMTP or IMAP."""
+    return port_open(LXC_IP, 25) or port_open(LXC_IP, 143)
+
+
+def webmail_up() -> bool:
+    """Webmail is up if Roundcube's HTTP answers."""
+    return port_open(WEBMAIL_IP, WEBMAIL_PORT)
+
+
 # =============================================================================
 # STATUS - Module state and health
 # =============================================================================
@@ -83,9 +119,11 @@ def lxc_attach(name: str, command: str, timeout: int = 30) -> tuple:
 @app.get("/status")
 async def status():
     """Get unified mail status (public endpoint)"""
-    mail_running = lxc_running(MAIL_CONTAINER)
+    # Running state comes from live TCP probes, not lxc-info (which silently
+    # broke when lxc_path drifted to /var/lib/lxc). Installed = rootfs present.
+    mail_running = mail_server_up()
     mail_installed = lxc_exists(MAIL_CONTAINER)
-    webmail_running = lxc_running(WEBMAIL_CONTAINER)
+    webmail_running = webmail_up()
     webmail_installed = lxc_exists(WEBMAIL_CONTAINER)
 
     # Count users
@@ -94,20 +132,16 @@ async def status():
     if users_file.exists():
         user_count = sum(1 for line in users_file.read_text().splitlines() if line.strip())
 
-    # Storage usage
+    # Storage usage — virtual mailboxes live under DATA_PATH/vmail.
     storage = "0"
-    if (DATA_PATH / "mail").exists():
-        success, out, _ = run_cmd(["du", "-sh", str(DATA_PATH / "mail")])
-        if success:
+    vmail_dir = DATA_PATH / "vmail"
+    if vmail_dir.exists():
+        success, out, _ = run_cmd(["du", "-sh", str(vmail_dir)])
+        if success and out:
             storage = out.split()[0]
 
-    # Check ports
-    ports_status = {}
-    if mail_running:
-        success, out, _ = lxc_attach(MAIL_CONTAINER, "netstat -tln")
-        if success:
-            for port in [25, 587, 465, 143, 993, 110, 995]:
-                ports_status[port] = f":{port} " in out
+    # Live per-port status via direct TCP probe (always evaluated).
+    ports_status = {p: up for p, up in probe_mail_ports().items()}
 
     return {
         "module": "mail",
@@ -140,8 +174,8 @@ async def status():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    mail_ok = lxc_running(MAIL_CONTAINER)
-    webmail_ok = lxc_running(WEBMAIL_CONTAINER)
+    mail_ok = mail_server_up()
+    webmail_ok = webmail_up()
     return {
         "status": "ok" if (mail_ok and webmail_ok) else "degraded",
         "mail_server": "ok" if mail_ok else "down",
@@ -164,7 +198,7 @@ async def get_components():
                 "container": MAIL_CONTAINER,
                 "description": "Postfix + Dovecot mail server",
                 "installed": lxc_exists(MAIL_CONTAINER),
-                "running": lxc_running(MAIL_CONTAINER),
+                "running": mail_server_up(),
                 "ports": [25, 587, 465, 143, 993, 110, 995],
                 "ip": MAIL_IP,
             },
@@ -174,7 +208,7 @@ async def get_components():
                 "container": WEBMAIL_CONTAINER,
                 "description": "Roundcube webmail interface",
                 "installed": lxc_exists(WEBMAIL_CONTAINER),
-                "running": lxc_running(WEBMAIL_CONTAINER),
+                "running": webmail_up(),
                 "port": WEBMAIL_PORT,
             },
             {
