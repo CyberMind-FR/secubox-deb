@@ -125,37 +125,59 @@ def _decode_token(token: str) -> Dict[str, Any]:
         )
 
 
+def _validate_token(token: str) -> Optional[Dict[str, Any]]:
+    """Decode + session/enabled checks. Returns the payload if the token is
+    fully valid, else None — never raises. Used to try multiple credential
+    sources (Bearer, cookie) without the first failure aborting the request."""
+    try:
+        payload = jwt.decode(token, _secret(), algorithms=["HS256"])
+    except JWTError:
+        return None
+    if not payload.get("sub"):
+        return None
+    jti = payload.get("jti")
+    if not jti or not _session_validator(jti):
+        return None
+    if not user_store.is_enabled(payload["sub"]):
+        return None
+    return payload
+
+
 async def require_jwt(
     request: Request,
     creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> Dict[str, Any]:
     # SSO-lite (#400): accept the Bearer token OR the parent-domain session
-    # cookie. Additive — existing Bearer clients are unaffected; the cookie lets
-    # one SecuBox login cover every module without re-auth. The cookie is
-    # SameSite=Lax (CSRF-mitigated); cross-site POSTs from other origins won't
-    # carry it.
-    token = creds.credentials if creds is not None else request.cookies.get(SESSION_COOKIE)
-    if not token:
+    # cookie. The cookie lets one SecuBox login cover every module without
+    # re-auth (SameSite=Lax, CSRF-mitigated).
+    #
+    # Shadowing fix: try BOTH sources, Bearer first then cookie, and accept the
+    # first that fully validates. Previously a present-but-STALE Bearer (an old
+    # localStorage sbx_token the webui still sent) was used exclusively and its
+    # failure 401'd the request even when the session cookie was perfectly
+    # valid — which hard-redirected the panel to /login.html in a loop. A stale
+    # token must never shadow a live session.
+    candidates = []
+    if creds is not None and creds.credentials:
+        candidates.append(creds.credentials)
+    cookie_tok = request.cookies.get(SESSION_COOKIE)
+    if cookie_tok:
+        candidates.append(cookie_tok)
+    if not candidates:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token Bearer ou session manquant",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    payload = _decode_token(token)
-    jti = payload.get("jti")
-    if not jti or not _session_validator(jti):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session révoquée",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user_store.is_enabled(payload["sub"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Compte désactivé",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return payload
+    for token in candidates:
+        payload = _validate_token(token)
+        if payload is not None:
+            return payload
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token invalide ou expiré",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 # Password verification ─────────────────────────────────────────────────
