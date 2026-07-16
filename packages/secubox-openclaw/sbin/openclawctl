@@ -31,6 +31,17 @@ lxc_attach()  { local cmd="$1"; shift; lxc-attach -n "$CONTAINER" -P "$LXC_PATH"
 
 has_tool() { lxc_running && lxc_attach 'command -v "$1" >/dev/null' "$1"; }
 
+# CT-log lookup, run INSIDE the container with the domain as $1. certSpotter
+# first (reliable JSON), crt.sh as fallback, then a clean one-line message.
+# crt.sh is frequently down and answers 502/404 *HTML*; without this guard that
+# raw HTML leaked straight into the scan result. Never emits non-JSON garbage.
+readonly CT_REMOTE='d="$1"; j="$(curl -sS -L --max-time 25 -A "SecuBox-OpenClaw" "https://api.certspotter.com/v1/issuances?domain=$d&include_subdomains=true&expand=dns_names&expand=issuer&expand=not_before&expand=not_after" 2>/dev/null)"; case "$j" in \[*) printf "%s" "$j";; *) c="$(curl -sS -L --max-time 25 "https://crt.sh/?q=$d&output=json" 2>/dev/null)"; case "$c" in \[*) printf "%s" "$c";; *) printf "Certificate Transparency lookup unavailable — certSpotter and crt.sh both returned no JSON (services down or rate-limited). Retry later.";; esac;; esac'
+
+# Registrable domain (last two labels): whois answers for the registrable
+# domain, not sub-domains (a sub-domain query returns nothing). Heuristic —
+# imperfect for multi-label ccTLDs (co.uk), acceptable for OSINT triage.
+_registrable() { printf '%s' "$1" | awk -F. 'NF>=2{print $(NF-1)"."$NF} NF<2{print $0}'; }
+
 cmd_status() {
     local running=false installed=false
     lxc_exists && installed=true
@@ -104,13 +115,15 @@ cmd_scan() {
     local raw rc
     case "$type" in
         dns)    raw="$(lxc_attach 'dig +noall +answer ANY "$1"' "$target" 2>&1)"; rc=$? ;;
-        whois)  raw="$(lxc_attach 'whois -- "$1"' "$target" 2>&1)"; rc=$? ;;
-        certs)  raw="$(lxc_attach 'curl -s --max-time 20 "https://crt.sh/?q=$1&output=json"' "$target" 2>&1)"; rc=$? ;;
+        whois)  local reg; reg="$(_registrable "$target")"
+                raw="$(lxc_attach 'if [ "$1" != "$2" ]; then printf "note: %s is a sub-domain; showing whois for the registrable domain %s\n\n" "$1" "$2"; fi; whois -- "$2"' "$target" "$reg" 2>&1)"; rc=$? ;;
+        certs)  raw="$(lxc_attach "$CT_REMOTE" "$target" 2>&1)"; rc=$? ;;
         ports)  raw="$(lxc_attach 'nmap -Pn -T4 --top-ports 100 -oG - "$1"' "$target" 2>&1)"; rc=$? ;;
         ip)     raw="$(lxc_attach 'nmap -Pn -T4 -sV --top-ports 200 "$1"' "$target" 2>&1)"; rc=$? ;;
         # domain/email are OSINT aggregates: partial data is expected and the
         # trailing head/grep would mask the real tool rc, so always report done.
-        domain) raw="$(lxc_attach 'echo "== DNS =="; dig +noall +answer ANY "$1"; echo "== WHOIS =="; whois -- "$1" 2>/dev/null | head -40; echo "== CERTS =="; curl -s --max-time 20 "https://crt.sh/?q=$1&output=json" | head -c 20000' "$target" 2>&1)"; rc=0 ;;
+        domain) local reg; reg="$(_registrable "$target")"
+                raw="$(lxc_attach 'echo "== DNS =="; dig +noall +answer ANY "$1"; echo "== WHOIS =="; [ "$1" != "$2" ] && echo "(sub-domain — registrable: $2)"; whois -- "$2" 2>/dev/null | head -40; echo "== CERTS =="; '"$CT_REMOTE"' | head -c 20000' "$target" "$reg" 2>&1)"; rc=0 ;;
         # Derive the post-@ domain ON THE HOST and re-validate it: _valid_target
         # anchors only the first char of the whole string, so 'a@-f/etc/hostname'
         # passes as an email but its domain '-f/etc/hostname' would be a dig flag.
