@@ -1,534 +1,190 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Web Application Firewall</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <title>SecuBox — Web Application Firewall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: var(--font-display);
-            background: var(--bg-deep);
-            color: var(--text-dark);
-            min-height: 100vh;
-            line-height: 1.5;
+        :root {
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
+            --red: #ff4466;
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
+            --purple: #a371f7;
+            --cyan: #00d4ff;
+            /* legacy vars referenced by inline JS-generated styles — remapped to the cyan skin */
+            --muted-dark: #6b7b8b;
+            --text-dark: #e8e6d9;
+            --wall-light: #00d4ff;
+            --boot-light: #a371f7;
+            --root-light: #00d4ff;
+            --font-mono: 'Courier Prime', monospace;
         }
-        .layout { display: flex; min-height: 100vh; }
-        .sidebar { width: 180px; }
-        .main {
-            flex: 1;
-            margin-left: 180px;
-            padding: var(--space-l);
-            background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-dark) 100%);
-            min-height: 100vh;
-        }
-        /* Live Attack Banner */
-        .live-attack-banner {
-            background: linear-gradient(90deg, rgba(239,68,68,0.15) 0%, rgba(17,23,32,0.9) 100%);
-            border: 1px solid rgba(239,68,68,0.3);
-            border-radius: var(--radius-lg);
-            padding: var(--space-m);
-            margin-bottom: var(--space-l);
-            display: flex;
-            align-items: center;
-            gap: var(--space-l);
-        }
-        .live-attack-banner.secure {
-            background: linear-gradient(90deg, rgba(34,197,94,0.1) 0%, rgba(17,23,32,0.9) 100%);
-            border-color: rgba(34,197,94,0.3);
-        }
-        .live-indicator {
-            display: flex;
-            align-items: center;
-            gap: var(--space-xs);
-        }
-        .live-dot {
-            width: 10px;
-            height: 10px;
-            background: #ef4444;
-            border-radius: 50%;
-            animation: livePulse 1s infinite;
-        }
-        .live-attack-banner.secure .live-dot { background: #22c55e; animation: none; }
-        .live-label {
-            font-size: 0.7rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            color: #ef4444;
-        }
-        .live-attack-banner.secure .live-label { color: #22c55e; }
-        .last-attack {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            gap: var(--space-m);
-        }
-        .last-attack-ip {
-            font-family: var(--font-mono);
-            font-size: 1.2rem;
-            color: var(--text-dark);
-        }
-        .last-attack-cat {
-            display: flex;
-            align-items: center;
-            gap: var(--space-xs);
-            background: rgba(239,68,68,0.2);
-            padding: 4px 10px;
-            border-radius: var(--radius-sm);
-            font-size: 0.8rem;
-        }
-        .last-attack-time {
-            color: var(--muted-dark);
-            font-size: 0.75rem;
-            font-family: var(--font-mono);
-        }
-        @keyframes livePulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.3); }
-        }
-        /* Stats Cards with Emoji Categories */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: var(--space-m);
-            margin-bottom: var(--space-l);
-        }
-        .stat-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-m);
-            text-align: center;
-            transition: all 0.2s;
-        }
-        .stat-card:hover { border-color: var(--glass-highlight); transform: translateY(-2px); }
-        .stat-card .emoji {
-            font-size: 1.5rem;
-            margin-bottom: var(--space-xs);
-        }
-        .stat-card .value {
-            font-size: 1.8rem;
-            font-weight: 700;
-            font-family: var(--font-mono);
-            color: var(--text-dark);
-        }
-        .stat-card .label {
-            font-size: 0.65rem;
-            color: var(--muted-dark);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .stat-card.critical .value { color: #ef4444; }
-        .stat-card.high .value { color: #f97316; }
-        .stat-card.medium .value { color: #eab308; }
-        .stat-card.low .value { color: #22c55e; }
-        /* Main Content */
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            padding: var(--space-l);
-            margin-bottom: var(--space-m);
-        }
-        .glass-card h2 {
-            font-size: 0.85rem;
-            color: var(--muted-dark);
-            margin-bottom: var(--space-m);
-            display: flex;
-            align-items: center;
-            gap: var(--space-s);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-m); }
-        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-m); }
-        /* Security Events Table (combined alerts/bans) */
-        .events-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .events-table th, .events-table td {
-            padding: var(--space-s) var(--space-m);
-            text-align: left;
-            border-bottom: 1px solid var(--glass-border);
-        }
-        .events-table th {
-            color: var(--muted-dark);
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            background: rgba(255,255,255,0.02);
-        }
-        .events-table td {
-            font-family: var(--font-mono);
-            font-size: 0.85rem;
-        }
-        .events-table tr:hover {
-            background: rgba(255,255,255,0.02);
-        }
-        .event-type {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            border-radius: var(--radius-sm);
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-        .event-type.alert { background: rgba(234,179,8,0.2); color: #eab308; }
-        .event-type.ban { background: rgba(239,68,68,0.2); color: #ef4444; }
-        .event-type.blocked { background: rgba(168,85,247,0.2); color: #a855f7; }
-        .severity-badge {
-            padding: 2px 6px;
-            border-radius: var(--radius-sm);
-            font-size: 0.65rem;
-            font-weight: 600;
-        }
-        .severity-badge.critical { background: rgba(239,68,68,0.2); color: #ef4444; }
-        .severity-badge.high { background: rgba(249,115,22,0.2); color: #f97316; }
-        .severity-badge.medium { background: rgba(234,179,8,0.2); color: #eab308; }
-        .severity-badge.low { background: rgba(34,197,94,0.2); color: #22c55e; }
-        /* Category Pills */
-        .category-pills {
-            display: flex;
-            flex-wrap: wrap;
-            gap: var(--space-s);
-        }
-        .cat-pill {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 14px;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-        .cat-pill:hover { border-color: var(--root-light); transform: translateY(-2px); }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
+        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+        .live-dot.paused { background: var(--orange); box-shadow: 0 0 8px var(--orange); animation: none; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.success { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
+
+        /* Header circular quick actions */
+        .quick-btn { position: relative; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg-card); display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; transition: all 0.2s; }
+        .quick-btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); transform: scale(1.08); }
+        .quick-btn:active { transform: scale(0.95); }
+        .quick-btn.active { border-color: var(--green); background: rgba(0,221,68,0.15); box-shadow: 0 0 8px rgba(0,221,68,0.35); }
+        .quick-btn.paused { border-color: var(--orange); background: rgba(255,153,68,0.15); }
+        .quick-btn.danger:hover { border-color: var(--red); box-shadow: 0 0 8px rgba(255,68,102,0.3); }
+        .quick-btn .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .quick-btn-tooltip { position: absolute; bottom: -26px; left: 50%; transform: translateX(-50%); background: #000; color: #fff; font-size: 0.6rem; padding: 3px 8px; border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10; }
+        .quick-btn:hover .quick-btn-tooltip { opacity: 1; }
+
+        /* Live attack banner */
+        .live-attack-banner { display: flex; align-items: center; gap: 1rem; padding: 0.7rem 1rem; margin-bottom: 1rem; border-radius: 8px; background: linear-gradient(90deg, rgba(255,68,102,0.12), var(--bg-card)); border: 1px solid var(--red); backdrop-filter: blur(10px); }
+        .live-attack-banner.secure { background: linear-gradient(90deg, rgba(0,221,68,0.1), var(--bg-card)); border-color: var(--green); }
+        .live-attack-banner .live-indicator { display: flex; align-items: center; gap: 0.4rem; }
+        .live-attack-banner .live-dot { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 1s infinite; }
+        .live-attack-banner.secure .live-dot { background: var(--green); box-shadow: 0 0 8px var(--green); animation: none; }
+        .live-label { font-size: 0.62rem; letter-spacing: 2px; text-transform: uppercase; color: var(--red); }
+        .live-attack-banner.secure .live-label { color: var(--green); }
+        .last-attack { flex: 1; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .last-attack-ip { font-family: 'Courier Prime', monospace; font-size: 1rem; color: var(--text); }
+        .last-attack-cat { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,68,102,0.15); padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; }
+        .last-attack-time { color: var(--p31-dim); font-size: 0.68rem; }
+
+        /* Stat cards */
+        .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); transition: all 0.2s; }
+        .stat-card:hover { border-color: var(--cyan); transform: translateY(-2px); }
+        .stat-card .emoji { font-size: 1.3rem; margin-bottom: 0.15rem; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; color: var(--cyan); font-family: 'Courier Prime', monospace; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; text-transform: uppercase; }
+        .stat-card.critical .value { color: var(--red); }
+        .stat-card.high .value { color: var(--orange); }
+        .stat-card.medium .value { color: var(--yellow); }
+        .stat-card.low .value { color: var(--green); }
+
+        /* Tabs */
+        .waf-tabs { display: flex; gap: 0.3rem; margin-bottom: 1rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+        .waf-tab { background: transparent; color: var(--p31-dim); border: none; border-bottom: 2px solid transparent; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .waf-tab:hover { color: var(--cyan); }
+        .waf-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+        /* Cards */
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h2 { font-size: 0.9rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+        .muted { color: var(--p31-dim); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+
+        /* Security events table */
+        .events-table { width: 100%; border-collapse: collapse; }
+        .events-table th, .events-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); }
+        .events-table th { color: var(--p31-dim); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .events-table td { font-family: 'Courier Prime', monospace; font-size: 0.78rem; }
+        .events-table tbody tr:hover { background: rgba(0,212,255,0.05); }
+        .event-type { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 0.66rem; font-weight: bold; }
+        .event-type.alert { background: rgba(255,204,0,0.15); color: var(--yellow); }
+        .event-type.ban { background: rgba(255,68,102,0.15); color: var(--red); }
+        .event-type.blocked { background: rgba(163,113,247,0.15); color: var(--purple); }
+        .severity-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; font-weight: bold; }
+        .severity-badge.critical { background: rgba(255,68,102,0.15); color: var(--red); }
+        .severity-badge.high { background: rgba(255,153,68,0.15); color: var(--orange); }
+        .severity-badge.medium { background: rgba(255,204,0,0.15); color: var(--yellow); }
+        .severity-badge.low { background: rgba(68,136,255,0.15); color: var(--blue); }
+
+        /* Category pills */
+        .category-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .cat-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg-row); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .cat-pill:hover { border-color: var(--cyan); transform: translateY(-2px); }
         .cat-pill.disabled { opacity: 0.4; }
-        .cat-pill .cat-emoji { font-size: 1.4rem; }
+        .cat-pill .cat-emoji { font-size: 1.3rem; }
         .cat-pill .cat-info { display: flex; flex-direction: column; }
-        .cat-pill .cat-name { font-weight: 600; font-size: 0.85rem; }
-        .cat-pill .cat-count { font-size: 0.7rem; color: var(--muted-dark); }
-        /* Donut Charts */
-        .donut-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-        /* Eyemote Concentric Donuts */
-        .eyemote-container {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: var(--space-l);
-            background: linear-gradient(180deg, #000a0f 0%, #0a1520 100%);
-            border-radius: var(--radius-md);
-            padding: var(--space-l);
-            min-height: 320px;
-        }
-        .eyemote-visual {
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .eyemote-svg { width: 300px; height: 300px; }
-        .eyemote-svg .ring-fill { transition: stroke-dasharray 0.8s ease-out; }
-        .eyemote-svg .eyemote-pupil { animation: pupilPulse 2s infinite; }
-        @keyframes pupilPulse {
-            0%, 100% { r: 12; opacity: 1; }
-            50% { r: 15; opacity: 0.8; }
-        }
-        .eyemote-total {
-            position: absolute;
-            font-family: var(--font-mono);
-            font-size: 2rem;
-            font-weight: 700;
-            color: #00ff41;
-            text-shadow: 0 0 20px rgba(0,255,65,0.5);
-        }
-        .eyemote-legend {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: var(--space-s);
-        }
-        .legend-ring {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            background: rgba(255,255,255,0.03);
-            border-radius: var(--radius-sm);
-            border-left: 4px solid;
-        }
-        .legend-ring[data-ring="1"] { border-color: #DF0024; }
-        .legend-ring[data-ring="2"] { border-color: #0085C7; }
-        .legend-ring[data-ring="3"] { border-color: #F4C300; }
-        .legend-ring[data-ring="4"] { border-color: #009F3D; }
-        .legend-ring[data-ring="5"] { border-color: #666666; }
-        .ring-dot {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            box-shadow: 0 0 8px currentColor;
-        }
-        .ring-val {
-            font-family: var(--font-mono);
-            font-size: 1.1rem;
-            font-weight: 700;
-            min-width: 60px;
-        }
-        .legend-ring[title] {
-            cursor: help;
-        }
-        .legend-ring[title]:hover {
-            background: rgba(255,255,255,0.06);
-        }
-        /* Mini Eyemote Cards */
-        .eyemote-card {
-            display: flex;
-            flex-direction: column;
-        }
-        .eyemote-mini {
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: var(--space-m) 0;
-        }
-        .eyemote-svg-mini {
-            width: 180px;
-            height: 180px;
-        }
+        .cat-pill .cat-name { font-weight: bold; font-size: 0.8rem; color: var(--text); }
+        .cat-pill .cat-count { font-size: 0.66rem; color: var(--p31-dim); }
+
+        /* Donut charts */
+        .donut-container { display: flex; justify-content: center; align-items: center; flex-direction: column; }
+
+        /* Eyemote concentric donuts */
+        .eyemote-card { display: flex; flex-direction: column; }
+        .eyemote-mini { position: relative; display: flex; justify-content: center; align-items: center; padding: 0.5rem 0; }
+        .eyemote-svg-mini { width: 180px; height: 180px; }
         .eyemote-svg-mini .ring-fill { transition: stroke-dasharray 0.8s ease-out; }
         .eyemote-svg-mini .eyemote-pupil { animation: pupilPulse 2s infinite; }
-        .eyemote-total-mini {
-            position: absolute;
-            font-family: var(--font-mono);
-            font-size: 1.4rem;
-            font-weight: 700;
-            color: #00ff41;
-            text-shadow: 0 0 15px rgba(0,255,65,0.5);
-        }
-        .eyemote-total-mini.visitor { color: #00d4ff; text-shadow: 0 0 15px rgba(0,212,255,0.5); }
-        .eyemote-total-mini.vhost { color: #f97316; text-shadow: 0 0 15px rgba(249,115,22,0.5); }
-        .eyemote-legend-mini {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            padding: 0 var(--space-s);
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        .legend-row-mini {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 8px;
-            background: rgba(255,255,255,0.03);
-            border-radius: var(--radius-sm);
-            border-left: 3px solid;
-        }
-        .legend-row-mini .row-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-        .legend-row-mini .row-val {
-            font-family: var(--font-mono);
-            font-size: 0.85rem;
-            font-weight: 600;
-            min-width: 50px;
-        }
-        .legend-row-mini .row-flags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-            flex: 1;
-        }
-        .flag-mini {
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            border: 2px solid;
-            position: relative;
-        }
-        .flag-mini .fm-count {
-            position: absolute;
-            bottom: -3px;
-            right: -3px;
-            font-size: 0.5rem;
-            background: #000;
-            color: #fff;
-            padding: 1px 2px;
-            border-radius: 4px;
-            font-family: var(--font-mono);
-        }
-        .vhost-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 3px 8px;
-            background: rgba(255,255,255,0.05);
-            border-radius: var(--radius-sm);
-            font-size: 0.7rem;
-            font-family: var(--font-mono);
-            border: 1px solid;
-        }
-        .vhost-badge .vb-count {
-            font-weight: 700;
-        }
-        .ring-flags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            flex: 1;
-        }
-        .flag-circle {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-            border: 2px solid;
-            position: relative;
-        }
-        .flag-circle .fc-count {
-            position: absolute;
-            bottom: -4px;
-            right: -4px;
-            font-size: 0.55rem;
-            background: #000;
-            color: #fff;
-            padding: 1px 3px;
-            border-radius: 6px;
-            font-family: var(--font-mono);
-        }
-        .legend-ring[data-ring="1"] .flag-circle { border-color: #DF0024; }
-        .legend-ring[data-ring="2"] .flag-circle { border-color: #0085C7; }
-        .legend-ring[data-ring="3"] .flag-circle { border-color: #F4C300; }
-        .legend-ring[data-ring="4"] .flag-circle { border-color: #009F3D; }
-        .legend-ring[data-ring="5"] .flag-circle { border-color: #666666; }
-        @media (max-width: 768px) {
-            .eyemote-container { grid-template-columns: 1fr; }
-            .eyemote-visual { margin-bottom: var(--space-m); }
-        }
-        /* Button */
-        .btn {
-            padding: var(--space-xs) var(--space-m);
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--glass-border);
-            background: var(--glass-bg);
-            color: var(--text-dark);
-            cursor: pointer;
-            font-size: 0.75rem;
-            font-family: var(--font-mono);
-            transition: all 0.2s;
-        }
-        .btn:hover { background: rgba(255,255,255,0.1); }
-        .btn.danger { border-color: #ef4444; color: #ef4444; }
-        .btn.danger:hover { background: rgba(239,68,68,0.1); }
-        .btn.success { border-color: #22c55e; color: #22c55e; }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.9; }
-            50% { transform: scale(1.3); opacity: 0.6; }
-        }
-        /* Quick Action Buttons */
-        .quick-actions {
-            display: flex;
-            gap: 8px;
-            margin-left: auto;
-        }
-        .quick-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border: 1px solid var(--glass-border);
-            background: var(--glass-bg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-        }
-        .quick-btn:hover {
-            border-color: var(--root-light);
-            background: rgba(20, 140, 102, 0.1);
-            transform: scale(1.1);
-        }
-        .quick-btn:active { transform: scale(0.95); }
-        .quick-btn.active {
-            border-color: #22c55e;
-            background: rgba(34, 197, 94, 0.15);
-            box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
-        }
-        .quick-btn.danger:hover {
-            border-color: #ef4444;
-            background: rgba(239, 68, 68, 0.1);
-        }
-        .quick-btn.paused {
-            border-color: #f97316;
-            background: rgba(249, 115, 22, 0.15);
-        }
-        .quick-btn .spinner {
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .quick-btn-tooltip {
-            position: absolute;
-            bottom: -28px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #000;
-            color: #fff;
-            font-size: 0.65rem;
-            padding: 3px 8px;
-            border-radius: 4px;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s;
-            z-index: 10;
-        }
-        .quick-btn:hover .quick-btn-tooltip { opacity: 1; }
+        @keyframes pupilPulse { 0%,100% { r: 8; opacity: 1; } 50% { r: 11; opacity: 0.8; } }
+        .eyemote-total-mini { position: absolute; font-family: 'Courier Prime', monospace; font-size: 1.4rem; font-weight: bold; color: var(--green); text-shadow: 0 0 15px rgba(0,221,68,0.5); }
+        .eyemote-total-mini.visitor { color: var(--cyan); text-shadow: 0 0 15px rgba(0,212,255,0.5); }
+        .eyemote-total-mini.vhost { color: var(--orange); text-shadow: 0 0 15px rgba(255,153,68,0.5); }
+        .eyemote-legend-mini { display: flex; flex-direction: column; gap: 4px; padding: 0 0.4rem; max-height: 200px; overflow-y: auto; }
+        .legend-row-mini { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--bg-row); border-radius: 6px; border-left: 3px solid; }
+        .legend-row-mini .row-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .legend-row-mini .row-val { font-family: 'Courier Prime', monospace; font-size: 0.8rem; font-weight: bold; min-width: 50px; }
+        .legend-row-mini .row-flags { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+        .flag-mini { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; border: 2px solid; position: relative; }
+        .flag-mini .fm-count { position: absolute; bottom: -3px; right: -3px; font-size: 0.5rem; background: #000; color: #fff; padding: 1px 2px; border-radius: 4px; font-family: 'Courier Prime', monospace; }
+        .vhost-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; background: var(--bg-row); border-radius: 4px; font-size: 0.68rem; font-family: 'Courier Prime', monospace; border: 1px solid; }
+        .vhost-badge .vb-count { font-weight: bold; }
+
+        /* Tracked attackers table */
+        .table-wrap { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th, .data-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.76rem; }
+        .data-table th { color: var(--p31-dim); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .data-table tbody tr:hover { background: rgba(0,212,255,0.05); }
+        .data-table code { font-family: 'Courier Prime', monospace; color: var(--cyan); }
+
+        /* Horizontal bars (top vhosts / visits) */
+        .vbars { display: flex; flex-direction: column; gap: 0.35rem; }
+        .vbar { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: center; font-size: 0.78rem; }
+        .vbar .vlabel { white-space: nowrap; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
+        .vbar .vtrack { height: 0.55rem; border-radius: 0.3rem; background: rgba(255,255,255,0.07); overflow: hidden; }
+        .vbar .vfill { height: 100%; border-radius: 0.3rem; background: linear-gradient(90deg, var(--cyan), var(--purple)); }
+        .vbar .vcount { font-variant-numeric: tabular-nums; color: var(--cyan); }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.7rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; box-shadow: 0 0 20px rgba(0,212,255,0.4); animation: slideIn 0.3s; }
+        .toast.error { background: var(--red); color: #fff; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+
         @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 768px) { .main { margin-left: 0; } .grid-2, .grid-3 { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
     </style>
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
 </head>
 <body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
-        <!-- Live Attack Banner -->
-        <div class="live-attack-banner secure" id="liveBanner">
-            <div class="live-indicator">
-                <div class="live-dot"></div>
-                <span class="live-label">LIVE</span>
-            </div>
-            <div class="last-attack" id="lastAttack">
-                <span style="font-size:1.5rem;">✅</span>
-                <span class="last-attack-ip">All Clear</span>
-                <span class="last-attack-time">No recent attacks</span>
-            </div>
-            <div class="quick-actions">
+        <header class="header">
+            <h1><span class="live-dot" id="live-dot"></span>🛡️ Web Application Firewall</h1>
+            <div class="btn-group">
                 <button class="quick-btn" id="btnRefresh" onclick="refresh()" title="Refresh">
                     🔄
                     <span class="quick-btn-tooltip">Refresh</span>
@@ -550,6 +206,19 @@
                     <span class="quick-btn-tooltip">Settings</span>
                 </button>
             </div>
+        </header>
+
+        <!-- Live Attack Banner -->
+        <div class="live-attack-banner secure" id="liveBanner">
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                <span class="live-label">LIVE</span>
+            </div>
+            <div class="last-attack" id="lastAttack">
+                <span style="font-size:1.5rem;">✅</span>
+                <span class="last-attack-ip">All Clear</span>
+                <span class="last-attack-time">No recent attacks</span>
+            </div>
         </div>
 
         <!-- Emoji Stats Cards -->
@@ -568,22 +237,10 @@
             <button class="waf-tab" data-tab="attackers" onclick="switchTab('attackers')">🎯 Attaquants suivis</button>
             <button class="waf-tab" data-tab="visits" onclick="switchTab('visits')">👁️ Visites</button>
         </div>
-        <style>
-          .waf-tabs{display:flex;gap:.4rem;margin:.4rem 0 1rem;flex-wrap:wrap}
-          .waf-tab{background:rgba(110,64,201,.08);color:#c9b8ff;border:1px solid #2a2a3f;border-radius:.5rem;
-                   padding:.45rem 1rem;cursor:pointer;font-size:.88rem;font-weight:600}
-          .waf-tab.active{background:linear-gradient(90deg,#00d4ff22,#6e40c944);color:#fff;border-color:#6e40c9}
-          .vbars{display:flex;flex-direction:column;gap:.35rem}
-          .vbar{display:grid;grid-template-columns:auto 1fr auto;gap:.6rem;align-items:center;font-size:.82rem}
-          .vbar .vlabel{white-space:nowrap;max-width:16rem;overflow:hidden;text-overflow:ellipsis}
-          .vbar .vtrack{height:.6rem;border-radius:.3rem;background:rgba(255,255,255,.07);overflow:hidden}
-          .vbar .vfill{height:100%;border-radius:.3rem;background:linear-gradient(90deg,#00d4ff,#6e40c9)}
-          .vbar .vcount{font-variant-numeric:tabular-nums;color:#c9a84c}
-        </style>
 
         <div class="grid-2">
             <!-- Security Events (combined alerts/bans) -->
-            <div class="glass-card">
+            <div class="card">
                 <h2>🛡️ Security Events</h2>
                 <div style="max-height: 400px; overflow-y: auto;">
                     <table class="events-table">
@@ -591,14 +248,14 @@
                             <tr><th>Type</th><th>🌍</th><th>IP/Target</th><th>Category</th><th>Severity</th><th>Action</th></tr>
                         </thead>
                         <tbody id="eventsTable">
-                            <tr><td colspan="6" style="color:var(--muted-dark);text-align:center;">Loading...</td></tr>
+                            <tr><td colspan="6" class="muted" style="text-align:center;">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
             <!-- Category Pills with Emojis -->
-            <div class="glass-card">
+            <div class="card">
                 <h2>📁 Protection Categories</h2>
                 <div class="category-pills" id="categoryPills">Loading...</div>
             </div>
@@ -606,19 +263,19 @@
 
         <div class="grid-3">
             <!-- Severity Donut -->
-            <div class="glass-card">
+            <div class="card">
                 <h2>📊 By Severity</h2>
                 <div class="donut-container" id="severityDonut">Loading...</div>
             </div>
 
             <!-- Category Donut -->
-            <div class="glass-card">
+            <div class="card">
                 <h2>🏷️ By Category</h2>
                 <div class="donut-container" id="categoryDonut">Loading...</div>
             </div>
 
             <!-- Top Attacked Sites -->
-            <div class="glass-card">
+            <div class="card">
                 <h2>🎯 Top Attacked Sites</h2>
                 <div id="topVhosts">Loading...</div>
             </div>
@@ -627,7 +284,7 @@
         <!-- Triple Eyemote Sensors -->
         <div class="grid-3">
             <!-- Eyemote 1: Attack Origin by Continent -->
-            <div class="glass-card eyemote-card">
+            <div class="card eyemote-card">
                 <h2>👁️ Attack Origin</h2>
                 <div class="eyemote-mini">
                     <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgOrigin">
@@ -651,7 +308,7 @@
             </div>
 
             <!-- Eyemote 2: Visitors by Country -->
-            <div class="glass-card eyemote-card">
+            <div class="card eyemote-card">
                 <h2>👤 Visitors</h2>
                 <div class="eyemote-mini">
                     <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVisitors">
@@ -675,7 +332,7 @@
             </div>
 
             <!-- Eyemote 3: Target Vhosts -->
-            <div class="glass-card eyemote-card">
+            <div class="card eyemote-card">
                 <h2>🎯 Target Vhosts</h2>
                 <div class="eyemote-mini">
                     <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVhosts">
@@ -699,7 +356,7 @@
             </div>
 
             <!-- Phase 7 (#498) — silenced-but-tracked attackers (24 h) -->
-            <div class="glass-card" id="trackedAttackersCard" style="grid-column: span 2;">
+            <div class="card" id="trackedAttackersCard" style="grid-column: span 2;">
                 <h2>🎯 Tracked Attackers <span class="muted" style="font-size:0.8rem;">— silenced, still tracked (24 h)</span></h2>
                 <div class="table-wrap">
                     <table class="data-table" id="trackedAttackersTable">
@@ -722,14 +379,14 @@
             </div>
 
             <!-- #747 — non-attacker visit statistics (shown in the Visites tab) -->
-            <div class="glass-card" id="visitsCard" style="grid-column: 1 / -1;">
+            <div class="card" id="visitsCard" style="grid-column: 1 / -1;">
                 <h2>👁️ Visites — trafic légitime <span class="muted" style="font-size:0.8rem;">— total <b id="visitsTotal">—</b> requêtes vues par le WAF</span></h2>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-top:0.6rem">
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">🧭 Type de client</h3><div id="visitsClientType" class="vbars"><span class="muted">…</span></div></div>
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">💻 Système</h3><div id="visitsOS" class="vbars"><span class="muted">…</span></div></div>
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">🌍 Pays</h3><div id="visitsCountries" class="vbars"><span class="muted">…</span></div></div>
-                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem">📊 Statut</h3><div id="visitsStatus" class="vbars"><span class="muted">…</span></div></div>
-                    <div style="grid-column:1/-1"><h3 style="font-size:0.85rem;margin:0 0 .4rem">🎯 Sites les plus visités</h3><div id="visitsVhosts" class="vbars"><span class="muted">…</span></div></div>
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🧭 Type de client</h3><div id="visitsClientType" class="vbars"><span class="muted">…</span></div></div>
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">💻 Système</h3><div id="visitsOS" class="vbars"><span class="muted">…</span></div></div>
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🌍 Pays</h3><div id="visitsCountries" class="vbars"><span class="muted">…</span></div></div>
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">📊 Statut</h3><div id="visitsStatus" class="vbars"><span class="muted">…</span></div></div>
+                    <div style="grid-column:1/-1"><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🎯 Sites les plus visités</h3><div id="visitsVhosts" class="vbars"><span class="muted">…</span></div></div>
                 </div>
             </div>
 
@@ -741,15 +398,25 @@
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
-        // Category Emojis
+        // Category Emojis (substring-matched by getCatEmoji, exact-matched by loadTrackedAttackers)
         const CAT_EMOJI = {
-            'sqli': '💉', 'xss': '🔥', 'rce': '💀', 'lfi': '📂', 'rfi': '🌐',
-            'scanner': '🔍', 'bot': '🤖', 'router': '📡', 'cve': '🐛', 'dos': '💥',
-            'traversal': '🔗', 'injection': '💉', 'command': '⌨️', 'default': '⚠️'
+            'sqli': '💉', 'sql': '💉', 'injection': '💉',
+            'xss': '🔥',
+            'rce': '💥', 'command': '💥', 'dos': '💥',
+            'lfi': '📂', 'rfi': '🌐', 'traversal': '📂', 'path': '📂',
+            'recon_crawler': '🕷️', 'recon': '🕷️', 'crawler': '🕷️', 'scanner': '🕷️', 'scan': '🕷️', 'bot': '🤖',
+            'honeypot': '🍯',
+            'credential_harvest': '🔓', 'credential': '🔓', 'brute': '🔓',
+            'api_abuse': '🎣', 'api': '🎣',
+            'waf_fingerprint': '🖐️', 'fingerprint': '🖐️',
+            'cve_2024': '🧬', 'cve': '🧬',
+            'webmail': '📧', 'mail': '📧',
+            'router': '📡',
+            'default': '⚠️'
         };
 
-        const SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
-        const SEV_EMOJI = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
+        const SEV_COLORS = { critical: '#ff4466', high: '#ff9944', medium: '#ffcc00', low: '#4488ff' };
+        const SEV_EMOJI = { critical: '🔴', high: '🟠', medium: '🟡', low: '🔵' };
         const CAT_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#0ea5e9', '#14b8a6'];
         const ARC_COLORS = ['#ff0044', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00ff44', '#00ffcc', '#0088ff', '#4400ff', '#cc00ff'];
 
@@ -1016,8 +683,8 @@
                 const typeLabel = e.type === 'ban' ? '🚫 BAN' : (e.type === 'blocked' ? '🛡️ BLOCK' : '⚠️ ALERT');
                 const sevClass = (e.severity || 'medium').toLowerCase();
                 const actionBtn = e.type === 'ban'
-                    ? '<button class="btn success" onclick="unbanIp(\'' + e.ip + '\')">Unban</button>'
-                    : '<button class="btn danger" onclick="banIp(\'' + e.ip + '\')">Ban</button>';
+                    ? '<button class="btn success sm" onclick="unbanIp(\'' + e.ip + '\')">Unban</button>'
+                    : '<button class="btn danger sm" onclick="banIp(\'' + e.ip + '\')">Ban</button>';
                 return '<tr>' +
                     '<td><span class="event-type ' + typeClass + '">' + typeLabel + '</span></td>' +
                     '<td>' + countryToFlag(e.country) + '</td>' +
@@ -1275,6 +942,12 @@
             if (name === 'attackers') loadTrackedAttackers();
         }
 
+        // Reflect WAF on/off on the header live-dot (presentational only)
+        function setLiveDot(active) {
+            const d = document.getElementById('live-dot');
+            if (d) d.className = 'live-dot' + (active ? '' : ' paused');
+        }
+
         // WAF Toggle
         let wafActive = true;
         async function toggleWaf() {
@@ -1297,6 +970,7 @@
                 btn.classList.add('paused');
                 tooltip.textContent = 'WAF Paused';
             }
+            setLiveDot(wafActive);
         }
 
         // Clear All Bans
@@ -1344,6 +1018,7 @@
         }
 
         switchTab('overview');
+        setLiveDot(wafActive);
         refresh();
         setInterval(refresh, 30000);
         // More frequent live updates
