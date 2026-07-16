@@ -16,11 +16,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -187,4 +190,75 @@ func (c *CrowdSecClient) postAlert(ip, cat, sev string) error {
 	log.Printf("sbxwaf: crowdsec bridge BAN %s ← %s (sev=%s, dur=%s)",
 		ip, cat, sev, c.duration)
 	return nil
+}
+
+// CscliReporter implements CrowdSecReporter by shelling out to `cscli decisions
+// add`, the SAME path the WAF dashboard's manual "ban" button uses (and the only
+// one proven to create a real, bouncer-enforced nft drop on this platform).
+//
+// Why not the LAPI /v1/alerts POST above: that path requires a machine JWT that
+// expires hourly (fragile as a static file) AND our alert schema is rejected by
+// the LAPI with a 500 on this CrowdSec build. cscli reads the local API creds
+// directly and always works when sbxwaf runs as root. Report is invoked from a
+// goroutine (see main.go), so the ~sub-second exec never touches the hot path.
+type CscliReporter struct {
+	cscliPath string
+	duration  string
+	cooldown  time.Duration
+
+	mu     sync.Mutex
+	recent map[string]time.Time // ip → last ban-reported time (dedup)
+}
+
+// NewCscliReporter builds a reporter that runs `cscliPath decisions add …`.
+// A per-IP cooldown collapses the storm caused by the graduated ban firing
+// Report on EVERY banned request (not just the threshold transition): a rapid
+// attacker would otherwise spawn dozens of concurrent cscli processes for the
+// same IP before its nft drop takes effect, contending until they time out.
+func NewCscliReporter(cscliPath, duration string) *CscliReporter {
+	return &CscliReporter{
+		cscliPath: cscliPath,
+		duration:  duration,
+		cooldown:  5 * time.Minute,
+		recent:    make(map[string]time.Time),
+	}
+}
+
+// Report adds a ban decision for ip via cscli, at most once per cooldown per IP.
+// ip/cat are passed as discrete argv elements (never a shell string) so an
+// attacker-influenced value cannot inject arguments; ip is already a validated
+// client address.
+func (r *CscliReporter) Report(ip, cat, sev string) {
+	now := time.Now()
+	r.mu.Lock()
+	if last, ok := r.recent[ip]; ok && now.Sub(last) < r.cooldown {
+		r.mu.Unlock()
+		return // already reported this IP recently — skip the storm
+	}
+	r.recent[ip] = now
+	if len(r.recent) > 4096 { // opportunistic GC of expired entries
+		for k, t := range r.recent {
+			if now.Sub(t) > r.cooldown {
+				delete(r.recent, k)
+			}
+		}
+	}
+	r.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	reason := fmt.Sprintf("secubox-waf/%s", cat)
+	cmd := exec.CommandContext(ctx, r.cscliPath, "decisions", "add",
+		"--ip", ip, "--duration", r.duration, "--reason", reason, "--type", "ban")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("sbxwaf: crowdsec cscli ban failed for %s (%s): %v: %s",
+			ip, cat, err, strings.TrimSpace(string(out)))
+		// let the next hit past the cooldown retry rather than pinning a failure
+		r.mu.Lock()
+		delete(r.recent, ip)
+		r.mu.Unlock()
+		return
+	}
+	log.Printf("sbxwaf: crowdsec cscli BAN %s ← %s (sev=%s, dur=%s)",
+		ip, cat, sev, r.duration)
 }
