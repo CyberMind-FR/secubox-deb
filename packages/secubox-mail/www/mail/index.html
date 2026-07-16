@@ -3,370 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Mail</title>
+    <title>SecuBox — Mail Server</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
             --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
             --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --cyan: #00d4ff;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; font-size: 0.85rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.15); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.15); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.15); border-color: var(--red); color: var(--red); }
-        .btn.warning { background: rgba(210,153,34,0.15); border-color: var(--yellow); color: var(--yellow); }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
+        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+        .live-dot.stale { background: var(--red); box-shadow: 0 0 8px var(--red); }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.success { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.warning { background: rgba(255,204,0,0.15); border-color: var(--yellow); color: var(--yellow); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
-        .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 1.75rem; font-weight: bold; color: var(--mail); }
-        .stat-card .label { font-size: 0.7rem; color: var(--text-dim); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
-        .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
-        .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
-        .status-badge.installing { background: rgba(88,166,255,0.15); color: var(--primary); }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
-        .mono { font-family: monospace; font-size: 0.85rem; }
-        .component { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 6px; margin-bottom: 0.5rem; }
-        .component-icon { font-size: 1.5rem; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h2 { font-size: 0.9rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; backdrop-filter: blur(5px); }
+        .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor; color: var(--cyan); }
+        .stat-card .value.sm { font-size: 0.95rem; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; }
+        .stat-card.dead .value { color: var(--red); }
+        .stat-card.warning .value { color: var(--yellow); }
+        .stat-card.healthy .value { color: var(--green); }
+        .stat-card.blue .value { color: var(--blue); }
+
+        .status-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 3px 10px; border-radius: 12px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--border); }
+        .status-badge.running { background: rgba(0,221,68,0.12); color: var(--green); border-color: var(--green); }
+        .status-badge.stopped { background: rgba(255,68,102,0.12); color: var(--red); border-color: var(--red); }
+        .status-badge.installing { background: rgba(0,212,255,0.12); color: var(--cyan); border-color: var(--cyan); }
+
+        .component { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.7rem; background: var(--bg-row); border-radius: 6px; margin-bottom: 0.5rem; border-left: 3px solid var(--border); }
+        .component.up { border-left-color: var(--green); }
+        .component.down { border-left-color: var(--red); }
+        .component-icon { font-size: 1.4rem; }
         .component-info { flex: 1; }
-        .component-name { font-weight: bold; font-size: 0.9rem; }
-        .component-detail { font-size: 0.75rem; color: var(--text-dim); }
+        .component-name { font-weight: bold; font-size: 0.85rem; color: var(--text); }
+        .component-detail { font-size: 0.7rem; color: var(--p31-dim); }
         .component-actions { display: flex; gap: 0.25rem; }
-        .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.5rem; }
-        .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
-        .port-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
-        .port-item { background: var(--bg-dark); padding: 0.5rem; border-radius: 4px; text-align: center; }
-        .port-item .num { font-family: monospace; font-weight: bold; }
-        .port-item .name { font-size: 0.65rem; color: var(--text-dim); }
-        .port-item.active .num { color: var(--green); }
+
+        .port-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 0.5rem; }
+        .port-item { background: var(--bg-row); padding: 0.5rem; border-radius: 6px; text-align: center; border: 1px solid var(--border); }
+        .port-item .icon { font-size: 0.9rem; }
+        .port-item .num { font-weight: bold; font-size: 0.95rem; }
+        .port-item .name { font-size: 0.6rem; color: var(--p31-dim); text-transform: uppercase; }
+        .port-item.active { border-color: rgba(0,221,68,0.4); }
+        .port-item.active .num { color: var(--green); text-shadow: 0 0 8px rgba(0,221,68,0.5); }
         .port-item.inactive .num { color: var(--red); }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 450px; max-width: 90vw; max-height: 90vh; overflow-y: auto; }
-        .modal-content h3 { margin-bottom: 1rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
-        .form-group small { font-size: 0.7rem; color: var(--text-dim); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
-        .tab { padding: 0.75rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); font-size: 0.9rem; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .install-banner { background: linear-gradient(135deg, rgba(88,166,255,0.1), rgba(163,113,247,0.1)); border: 1px solid var(--primary); border-radius: 8px; padding: 2rem; text-align: center; margin-bottom: 1.5rem; }
-        .install-banner h2 { font-size: 1.25rem; margin-bottom: 0.5rem; }
-        .install-banner p { color: var(--text-dim); margin-bottom: 1rem; }
-        .install-progress { background: var(--bg-dark); border-radius: 4px; height: 8px; overflow: hidden; margin: 1rem 0; }
-        .install-progress-bar { height: 100%; background: var(--primary); transition: width 0.3s; }
-        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .alert { padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem; }
-        .alert.info { background: rgba(88,166,255,0.1); border: 1px solid var(--primary); color: var(--primary); }
-        .alert.success { background: rgba(63,185,80,0.1); border: 1px solid var(--green); color: var(--green); }
-        .alert.warning { background: rgba(210,153,34,0.1); border: 1px solid var(--yellow); color: var(--yellow); }
-        /* Security features */
-        .security-card { background: var(--bg-dark); border-radius: 6px; padding: 1rem; }
-        .security-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
-        .security-title { font-weight: bold; display: flex; align-items: center; gap: 0.5rem; }
-        .security-desc { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.75rem; }
-        .security-status { display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.75rem; }
-        .security-status span { padding: 2px 8px; border-radius: 4px; background: var(--bg-card); }
+
+        .security-card { background: var(--bg-row); border-radius: 6px; padding: 0.75rem; border: 1px solid var(--border); }
+        .security-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .security-title { font-weight: bold; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem; color: var(--text); }
+        .security-desc { font-size: 0.68rem; color: var(--p31-dim); margin-bottom: 0.5rem; }
+        .security-status { display: flex; gap: 0.4rem; flex-wrap: wrap; font-size: 0.68rem; }
+        .security-status span { padding: 2px 7px; border-radius: 4px; background: var(--bg-card); }
         .security-status .ok { color: var(--green); }
         .security-status .warn { color: var(--yellow); }
         .security-status .err { color: var(--red); }
-        .toggle { position: relative; width: 44px; height: 24px; }
+        .toggle { position: relative; width: 42px; height: 22px; }
         .toggle input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 24px; cursor: pointer; transition: 0.3s; }
-        .toggle-slider:before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
+        .toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 22px; cursor: pointer; transition: 0.3s; }
+        .toggle-slider:before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.3s; }
         .toggle input:checked + .toggle-slider { background: var(--green); }
         .toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
-        /* Queue */
-        .queue-item { display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-dark); border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.8rem; }
-        /* Toast */
-        .toast { position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; border-radius: 8px; color: #fff; font-weight: 500; z-index: 200; animation: slideIn 0.3s ease; }
-        .toast.success { background: var(--green); }
-        .toast.error { background: var(--red); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
 
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
+        .url-label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; margin: 0.5rem 0 0.2rem; letter-spacing: 0.05em; }
+        .url-box { background: var(--bg-row); padding: 0.55rem; border-radius: 6px; font-size: 0.78rem; border: 1px solid var(--border); word-break: break-all; }
+        .url-box a { color: var(--cyan); }
 
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
+        .tab { padding: 0.5rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.72rem; text-transform: uppercase; transition: all 0.2s; }
+        .tab:hover { color: var(--cyan); }
+        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
 
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+        th { color: var(--p31-dim); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        tbody tr:hover { background: rgba(0,212,255,0.05); }
+        .mono { font-family: 'Courier Prime', monospace; }
 
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
+        .form-group { margin-bottom: 0.7rem; }
+        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; }
+        .form-group input, .form-group select { width: 100%; padding: 0.45rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
+        .alert { padding: 0.7rem 0.9rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.78rem; }
+        .alert.info { background: rgba(0,212,255,0.08); border: 1px solid var(--cyan); color: var(--cyan); }
+        .alert.warning { background: rgba(255,204,0,0.08); border: 1px solid var(--yellow); color: var(--yellow); }
 
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
+        .install-banner { background: rgba(0,212,255,0.08); border: 1px solid var(--cyan); border-radius: 8px; padding: 2rem; text-align: center; margin-bottom: 1rem; }
+        .install-banner h2 { color: var(--cyan); margin-bottom: 0.5rem; }
+        .install-banner p { color: var(--p31-dim); margin-bottom: 1rem; }
+        .install-progress { background: var(--bg-row); border-radius: 4px; height: 8px; overflow: hidden; margin: 1rem 0; }
+        .install-progress-bar { height: 100%; background: var(--cyan); transition: width 0.3s; }
 
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
+        .provider-card { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.7rem; background: var(--bg-row); border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid var(--border); }
+        .provider-card .pico { font-size: 1.4rem; }
+        .provider-card .pinfo { flex: 1; }
+        .provider-card .pname { font-weight: bold; font-size: 0.85rem; }
+        .provider-card .pdetail { font-size: 0.68rem; color: var(--p31-dim); }
 
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: rgba(20,30,45,0.97); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 480px; max-width: 90vw; max-height: 88vh; overflow-y: auto; backdrop-filter: blur(10px); }
+        .modal-content h3 { margin-bottom: 1rem; color: var(--cyan); }
 
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.7rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; box-shadow: 0 0 20px rgba(0,212,255,0.4); animation: slideIn 0.3s; }
+        .toast.error { background: var(--red); color: #fff; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) { .main { margin-left: 0; } .grid-2, .settings-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <header class="header">
-            <h1>📧 Mail Server</h1>
-            <div>
-                <span class="status-badge" id="status-badge">Loading...</span>
-                <button class="btn primary" id="btn-install" onclick="showInstallModal()" style="display:none">Install</button>
-                <button class="btn success" id="btn-start" onclick="startServices()" style="display:none">Start</button>
-                <button class="btn danger" id="btn-stop" onclick="stopServices()" style="display:none">Stop</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+            <h1><span class="live-dot" id="live-dot"></span>📧 Mail Server</h1>
+            <div class="btn-group">
+                <span class="status-badge" id="status-badge">Loading…</span>
+                <button class="btn primary" id="btn-install" onclick="showModal('install-modal')" style="display:none">⬇ Install</button>
+                <button class="btn success" id="btn-start" onclick="startServices()" style="display:none">▶ Start</button>
+                <button class="btn danger" id="btn-stop" onclick="stopServices()" style="display:none">■ Stop</button>
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
             </div>
         </header>
 
-        <!-- Install Banner -->
         <div class="install-banner" id="install-banner" style="display:none">
-            <h2>Mail Server Not Installed</h2>
-            <p>Install Postfix + Dovecot mail server and Roundcube webmail in LXC containers.</p>
-            <button class="btn primary" onclick="showInstallModal()" style="font-size:1rem;padding:0.75rem 2rem">Install Mail Server</button>
+            <h2>📭 Mail Server Not Installed</h2>
+            <p>Install Postfix + Dovecot and Roundcube webmail in an LXC container.</p>
+            <button class="btn primary" onclick="showModal('install-modal')" style="font-size:1rem;padding:0.7rem 2rem">Install Mail Server</button>
         </div>
 
-        <!-- Main Content -->
         <div id="main-content">
-            <div class="stats-row">
-                <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
-                <div class="stat-card"><div class="value" id="storage">-</div><div class="label">Storage</div></div>
-                <div class="stat-card"><div class="value" id="domain" style="font-size:1rem">-</div><div class="label">Domain</div></div>
-                <div class="stat-card"><div class="value" id="ssl-status">-</div><div class="label">SSL</div></div>
-                <div class="stat-card"><div class="value" id="security-score">-</div><div class="label">Security</div></div>
+            <!-- Stat grid -->
+            <div class="grid">
+                <div class="stat-card blue"><div class="value" id="user-count">-</div><div class="label">📮 Users</div></div>
+                <div class="stat-card"><div class="value" id="storage">-</div><div class="label">💾 Storage</div></div>
+                <div class="stat-card"><div class="value sm" id="domain">-</div><div class="label">🌐 Domain</div></div>
+                <div class="stat-card"><div class="value" id="ssl-status">-</div><div class="label">🔒 SSL</div></div>
+                <div class="stat-card"><div class="value" id="security-score">-</div><div class="label">🛡️ Security</div></div>
+                <div class="stat-card healthy"><div class="value" id="ports-up">-</div><div class="label">🔌 Ports</div></div>
             </div>
 
-            <!-- Components -->
+            <!-- Components + Ports -->
             <div class="grid-2">
                 <div class="card">
-                    <h2>Components</h2>
+                    <h2>🧩 Components</h2>
                     <div class="component" id="comp-mail">
                         <span class="component-icon">📬</span>
                         <div class="component-info">
@@ -374,11 +193,11 @@
                             <div class="component-detail">Postfix + Dovecot (LXC)</div>
                         </div>
                         <div class="component-actions">
-                            <button class="btn btn-sm success" id="mail-start" onclick="startMail()" style="display:none">Start</button>
-                            <button class="btn btn-sm danger" id="mail-stop" onclick="stopMail()" style="display:none">Stop</button>
-                            <button class="btn btn-sm primary" id="mail-install" onclick="installMail()" style="display:none">Install</button>
+                            <button class="btn sm success" id="mail-start" onclick="startMail()" style="display:none">▶</button>
+                            <button class="btn sm danger" id="mail-stop" onclick="stopMail()" style="display:none">■</button>
+                            <button class="btn sm primary" id="mail-install" onclick="installMail()" style="display:none">⬇</button>
                         </div>
-                        <span class="status-badge stopped" id="mail-badge">Stopped</span>
+                        <span class="status-badge stopped" id="mail-badge">…</span>
                     </div>
                     <div class="component" id="comp-webmail">
                         <span class="component-icon">🌐</span>
@@ -387,84 +206,74 @@
                             <div class="component-detail">Roundcube (LXC)</div>
                         </div>
                         <div class="component-actions">
-                            <button class="btn btn-sm success" id="webmail-start" onclick="startWebmail()" style="display:none">Start</button>
-                            <button class="btn btn-sm danger" id="webmail-stop" onclick="stopWebmail()" style="display:none">Stop</button>
-                            <button class="btn btn-sm primary" id="webmail-install" onclick="installWebmail()" style="display:none">Install</button>
+                            <button class="btn sm success" id="webmail-start" onclick="startWebmail()" style="display:none">▶</button>
+                            <button class="btn sm danger" id="webmail-stop" onclick="stopWebmail()" style="display:none">■</button>
+                            <button class="btn sm primary" id="webmail-install" onclick="installWebmail()" style="display:none">⬇</button>
                         </div>
-                        <span class="status-badge stopped" id="webmail-badge">Stopped</span>
+                        <span class="status-badge stopped" id="webmail-badge">…</span>
                     </div>
                 </div>
                 <div class="card">
-                    <h2>Ports</h2>
-                    <div class="port-grid" id="port-grid">
-                        <div class="port-item"><div class="num">25</div><div class="name">SMTP</div></div>
-                        <div class="port-item"><div class="num">587</div><div class="name">Submit</div></div>
-                        <div class="port-item"><div class="num">465</div><div class="name">SMTPS</div></div>
-                        <div class="port-item"><div class="num">993</div><div class="name">IMAPS</div></div>
-                        <div class="port-item"><div class="num">995</div><div class="name">POP3S</div></div>
-                    </div>
+                    <h2>🔌 Ports</h2>
+                    <div class="port-grid" id="port-grid">Loading…</div>
                 </div>
             </div>
 
-            <!-- Security Features -->
+            <!-- Security -->
             <div class="card">
-                <h2>Security Features</h2>
+                <h2>🛡️ Security Features</h2>
                 <div class="grid-4" id="security-grid">
-                    <!-- DKIM -->
                     <div class="security-card" id="sec-dkim">
                         <div class="security-header">
                             <span class="security-title">🔐 DKIM</span>
                             <label class="toggle"><input type="checkbox" id="toggle-dkim" onchange="toggleDKIM(this)"><span class="toggle-slider"></span></label>
                         </div>
                         <div class="security-desc">Email signing for authenticity</div>
-                        <div class="security-status" id="dkim-status">Loading...</div>
+                        <div class="security-status" id="dkim-status">…</div>
                     </div>
-                    <!-- SpamAssassin -->
                     <div class="security-card" id="sec-spam">
                         <div class="security-header">
-                            <span class="security-title">🛡️ SpamAssassin</span>
+                            <span class="security-title">🚫 SpamAssassin</span>
                             <label class="toggle"><input type="checkbox" id="toggle-spam" onchange="toggleSpam(this)"><span class="toggle-slider"></span></label>
                         </div>
                         <div class="security-desc">Spam filtering</div>
-                        <div class="security-status" id="spam-status">Loading...</div>
+                        <div class="security-status" id="spam-status">…</div>
                     </div>
-                    <!-- Greylisting -->
                     <div class="security-card" id="sec-grey">
                         <div class="security-header">
                             <span class="security-title">⏳ Greylisting</span>
                             <label class="toggle"><input type="checkbox" id="toggle-grey" onchange="toggleGrey(this)"><span class="toggle-slider"></span></label>
                         </div>
-                        <div class="security-desc">Delay new senders</div>
-                        <div class="security-status" id="grey-status">Loading...</div>
+                        <div class="security-desc">Delay unknown senders</div>
+                        <div class="security-status" id="grey-status">…</div>
                     </div>
-                    <!-- ClamAV -->
                     <div class="security-card" id="sec-av">
                         <div class="security-header">
                             <span class="security-title">🦠 ClamAV</span>
                             <label class="toggle"><input type="checkbox" id="toggle-av" onchange="toggleAV(this)"><span class="toggle-slider"></span></label>
                         </div>
                         <div class="security-desc">Virus scanning</div>
-                        <div class="security-status" id="av-status">Loading...</div>
+                        <div class="security-status" id="av-status">…</div>
                     </div>
                 </div>
             </div>
 
             <!-- Access -->
             <div class="card">
-                <h2>Access</h2>
+                <h2>🔗 Access</h2>
                 <div class="grid-2">
                     <div>
-                        <div class="url-label">Webmail</div>
-                        <div class="url-box"><a id="webmail-url" href="#" target="_blank" style="color:var(--primary)">-</a></div>
-                        <div class="url-label">IMAP Server</div>
+                        <div class="url-label">📬 Webmail</div>
+                        <div class="url-box"><a id="webmail-url" href="#" target="_blank">-</a></div>
+                        <div class="url-label">📥 IMAP Server</div>
                         <div class="url-box" id="imap-url">-</div>
-                        <div class="url-label">SMTP Server</div>
+                        <div class="url-label">📤 SMTP Server</div>
                         <div class="url-box" id="smtp-url">-</div>
                     </div>
                     <div>
-                        <div class="url-label">Thunderbird Autoconfig</div>
+                        <div class="url-label">🐦 Thunderbird Autoconfig</div>
                         <div class="url-box" id="autoconfig-url">-</div>
-                        <div class="url-label">Outlook Autodiscover</div>
+                        <div class="url-label">📧 Outlook Autodiscover</div>
                         <div class="url-box" id="autodiscover-url">-</div>
                     </div>
                 </div>
@@ -473,81 +282,75 @@
             <!-- Tabs -->
             <div class="card">
                 <div class="tabs">
-                    <div class="tab active" onclick="showTab('users')">Users</div>
-                    <div class="tab" onclick="showTab('aliases')">Aliases</div>
-                    <div class="tab" onclick="showTab('logs')">Logs</div>
-                    <div class="tab" onclick="showTab('settings')">Settings</div>
-                    <div class="tab" onclick="showTab('actions')">Actions</div>
+                    <div class="tab active" onclick="showTab('users')">👤 Users</div>
+                    <div class="tab" onclick="showTab('aliases')">🔀 Aliases</div>
+                    <div class="tab" onclick="showTab('external')">📥 External</div>
+                    <div class="tab" onclick="showTab('logs')">📜 Logs</div>
+                    <div class="tab" onclick="showTab('settings')">⚙️ Settings</div>
+                    <div class="tab" onclick="showTab('actions')">🛠️ Actions</div>
                 </div>
 
                 <div class="tab-content active" id="tab-users">
-                    <div style="margin-bottom:1rem">
-                        <button class="btn success" onclick="showModal('user-modal')">+ Add User</button>
-                    </div>
+                    <div style="margin-bottom:1rem"><button class="btn success" onclick="showModal('user-modal')">➕ Add User</button></div>
                     <table>
-                        <thead><tr><th>Email</th><th>Size</th><th>Actions</th></tr></thead>
-                        <tbody id="user-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                        <thead><tr><th>📧 Email</th><th>💾 Size</th><th>Actions</th></tr></thead>
+                        <tbody id="user-list"><tr><td colspan="3">Loading…</td></tr></tbody>
                     </table>
                 </div>
 
                 <div class="tab-content" id="tab-aliases">
-                    <div style="margin-bottom:1rem">
-                        <button class="btn success" onclick="showModal('alias-modal')">+ Add Alias</button>
-                    </div>
+                    <div style="margin-bottom:1rem"><button class="btn success" onclick="showModal('alias-modal')">➕ Add Alias</button></div>
                     <table>
-                        <thead><tr><th>Alias</th><th>Target</th><th></th></tr></thead>
-                        <tbody id="alias-list"><tr><td colspan="3">Loading...</td></tr></tbody>
+                        <thead><tr><th>🔀 Alias</th><th>🎯 Target</th><th></th></tr></thead>
+                        <tbody id="alias-list"><tr><td colspan="3">Loading…</td></tr></tbody>
                     </table>
+                </div>
+
+                <div class="tab-content" id="tab-external">
+                    <div class="alert info" id="external-status">📥 External mailboxes let each user pull their Gmail / Outlook / IMAP account into SecuBox Webmail.</div>
+                    <div id="external-providers"></div>
+                    <div style="margin-top:1rem">
+                        <a class="btn primary" id="external-open" href="#" target="_blank">🌐 Open Webmail → add account</a>
+                    </div>
+                    <p style="font-size:0.72rem;color:var(--p31-dim);margin-top:0.75rem">
+                        Users add external mailboxes from <strong>Webmail → Settings → Accounts → Add</strong>. Credentials are stored per-user (encrypted) inside Roundcube; the box never holds them.
+                    </p>
                 </div>
 
                 <div class="tab-content" id="tab-logs">
                     <div style="margin-bottom:1rem">
-                        <button class="btn" onclick="loadLogs()">Refresh Logs</button>
-                        <select id="log-lines" onchange="loadLogs()" style="padding:0.4rem;background:var(--bg-dark);color:var(--text);border:1px solid var(--border);border-radius:4px;">
+                        <button class="btn" onclick="loadLogs()">↻ Refresh Logs</button>
+                        <select id="log-lines" onchange="loadLogs()" style="padding:0.4rem;background:var(--bg-row);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:'Courier Prime',monospace">
                             <option value="50">50 lines</option>
                             <option value="100" selected>100 lines</option>
                             <option value="200">200 lines</option>
                         </select>
                     </div>
-                    <pre id="log-content" style="background:var(--bg-dark);padding:1rem;border-radius:6px;font-size:0.75rem;max-height:400px;overflow:auto;white-space:pre-wrap;">Loading...</pre>
+                    <pre id="log-content" style="background:var(--bg-row);padding:1rem;border-radius:6px;font-size:0.72rem;max-height:400px;overflow:auto;white-space:pre-wrap;color:var(--green)">Loading…</pre>
                 </div>
 
                 <div class="tab-content" id="tab-settings">
                     <div class="settings-grid">
-                        <div class="form-group">
-                            <label>Mail Domain</label>
-                            <input type="text" id="cfg-domain" placeholder="example.com">
-                        </div>
-                        <div class="form-group">
-                            <label>Hostname</label>
-                            <input type="text" id="cfg-hostname" placeholder="mail">
-                        </div>
-                        <div class="form-group">
-                            <label>Mail Server IP</label>
-                            <input type="text" id="cfg-mail-ip" placeholder="192.168.255.30">
-                        </div>
-                        <div class="form-group">
-                            <label>Webmail Port</label>
-                            <input type="number" id="cfg-webmail-port" placeholder="8027">
-                        </div>
+                        <div class="form-group"><label>Mail Domain</label><input type="text" id="cfg-domain" placeholder="example.com"></div>
+                        <div class="form-group"><label>Hostname</label><input type="text" id="cfg-hostname" placeholder="mail"></div>
+                        <div class="form-group"><label>Mail Server IP</label><input type="text" id="cfg-mail-ip" placeholder="10.100.0.10"></div>
+                        <div class="form-group"><label>Webmail Port</label><input type="number" id="cfg-webmail-port" placeholder="80"></div>
                     </div>
-                    <div style="margin-top:1rem">
-                        <button class="btn primary" onclick="saveSettings()">Save Settings</button>
-                    </div>
+                    <div style="margin-top:1rem"><button class="btn primary" onclick="saveSettings()">💾 Save Settings</button></div>
                 </div>
 
                 <div class="tab-content" id="tab-actions">
-                    <div class="alert info">Configure DNS records for proper mail delivery. DKIM keys should be generated and added to DNS.</div>
+                    <div class="alert info">Configure DNS records for delivery. Generate DKIM keys and add them to DNS.</div>
                     <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-                        <button class="btn primary" onclick="showDNSSetup()">DNS Setup</button>
-                        <button class="btn primary" onclick="setupACME()">Get SSL (Let's Encrypt)</button>
-                        <button class="btn" onclick="setupSelfSignedSSL()">Self-Signed SSL</button>
-                        <button class="btn" onclick="setupDKIM()">Generate DKIM</button>
-                        <button class="btn" onclick="setupSpam()">Setup SpamAssassin</button>
-                        <button class="btn" onclick="setupGrey()">Setup Greylisting</button>
-                        <button class="btn" onclick="setupAV()">Setup ClamAV</button>
-                        <button class="btn" onclick="createBackup()">Backup</button>
-                        <button class="btn warning" onclick="restartServices()">Restart</button>
+                        <button class="btn primary" onclick="showDNSSetup()">🌐 DNS Setup</button>
+                        <button class="btn primary" onclick="setupACME()">🔒 Get SSL (Let's Encrypt)</button>
+                        <button class="btn" onclick="setupSelfSignedSSL()">🔏 Self-Signed SSL</button>
+                        <button class="btn" onclick="setupDKIM()">🔐 Generate DKIM</button>
+                        <button class="btn" onclick="setupSpam()">🚫 Setup SpamAssassin</button>
+                        <button class="btn" onclick="setupGrey()">⏳ Setup Greylisting</button>
+                        <button class="btn" onclick="setupAV()">🦠 Setup ClamAV</button>
+                        <button class="btn" onclick="createBackup()">💾 Backup</button>
+                        <button class="btn warning" onclick="restartServices()">🔄 Restart</button>
                     </div>
                 </div>
             </div>
@@ -557,14 +360,14 @@
     <!-- Modals -->
     <div class="modal" id="install-modal">
         <div class="modal-content">
-            <h3>Install Mail Server</h3>
-            <p style="color:var(--text-dim);margin-bottom:1rem">Install Postfix + Dovecot and Roundcube webmail in LXC containers.</p>
+            <h3>⬇ Install Mail Server</h3>
+            <p style="color:var(--p31-dim);margin-bottom:1rem;font-size:0.8rem">Postfix + Dovecot and Roundcube webmail in an LXC container.</p>
             <div class="form-group"><label>Mail Domain</label><input type="text" id="install-domain" placeholder="example.com"></div>
             <div class="form-group"><label>Hostname</label><input type="text" id="install-hostname" value="mail"></div>
-            <div class="form-group"><label><input type="checkbox" id="install-webmail" checked> Install Webmail (Roundcube)</label></div>
+            <div class="form-group"><label><input type="checkbox" id="install-webmail" checked style="width:auto"> Install Webmail (Roundcube)</label></div>
             <div id="install-status" style="display:none">
                 <div class="install-progress"><div class="install-progress-bar" id="install-progress" style="width:0%"></div></div>
-                <p id="install-message" style="font-size:0.85rem;color:var(--text-dim);text-align:center">Installing...</p>
+                <p id="install-message" style="font-size:0.8rem;color:var(--p31-dim);text-align:center">Installing…</p>
             </div>
             <div class="form-actions" id="install-actions">
                 <button class="btn" onclick="hideModal('install-modal')">Cancel</button>
@@ -575,7 +378,7 @@
 
     <div class="modal" id="user-modal">
         <div class="modal-content">
-            <h3>Add Mail User</h3>
+            <h3>➕ Add Mail User</h3>
             <div class="form-group"><label>Email Address</label><input type="email" id="user-email" placeholder="user@example.com"></div>
             <div class="form-group"><label>Password</label><input type="password" id="user-password" placeholder="Password"></div>
             <div class="form-actions">
@@ -587,7 +390,7 @@
 
     <div class="modal" id="alias-modal">
         <div class="modal-content">
-            <h3>Add Email Alias</h3>
+            <h3>➕ Add Email Alias</h3>
             <div class="form-group"><label>Alias Address</label><input type="email" id="alias-from" placeholder="alias@example.com"></div>
             <div class="form-group"><label>Target Address</label><input type="email" id="alias-to" placeholder="user@example.com"></div>
             <div class="form-actions">
@@ -598,16 +401,16 @@
     </div>
 
     <div class="modal" id="dns-modal">
-        <div class="modal-content" style="min-width:650px">
-            <h3>DNS Records Setup</h3>
-            <p style="color:var(--text-dim);margin-bottom:1rem">Add these records to your DNS provider:</p>
+        <div class="modal-content" style="width:650px">
+            <h3>🌐 DNS Records Setup</h3>
+            <p style="color:var(--p31-dim);margin-bottom:1rem;font-size:0.8rem">Add these records to your DNS provider:</p>
             <table>
                 <thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead>
                 <tbody id="dns-records"></tbody>
             </table>
             <div id="dkim-record" style="margin-top:1rem;display:none">
-                <h4 style="margin-bottom:0.5rem">DKIM Record</h4>
-                <pre style="background:var(--bg-dark);padding:0.75rem;border-radius:4px;font-size:0.75rem;word-break:break-all" id="dkim-txt"></pre>
+                <h4 style="margin-bottom:0.5rem;color:var(--cyan)">DKIM Record</h4>
+                <pre style="background:var(--bg-row);padding:0.75rem;border-radius:4px;font-size:0.72rem;word-break:break-all" id="dkim-txt"></pre>
             </div>
             <div class="form-actions"><button class="btn" onclick="hideModal('dns-modal')">Close</button></div>
         </div>
@@ -615,12 +418,12 @@
 
     <script>
         const API = '/api/v1/mail';
-        const token = () => localStorage.getItem('sbx_token') || localStorage.getItem('jwt_token');
+        const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
         function toast(msg, type = 'success') {
             const t = document.createElement('div');
-            t.className = `toast ${type}`;
+            t.className = `toast ${type === 'error' ? 'error' : ''}`;
             t.textContent = msg;
             document.body.appendChild(t);
             setTimeout(() => t.remove(), 3000);
@@ -629,15 +432,22 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
-                return res.json();
+                if (res.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
+                return await res.json();
             } catch { return {}; }
         }
 
         let status = {};
+        const PORT_META = { 25: ['📨','SMTP'], 587: ['✉️','Submit'], 465: ['🔐','SMTPS'], 143: ['📥','IMAP'], 993: ['📬','IMAPS'], 110: ['📪','POP3'], 995: ['🔒','POP3S'] };
+
+        function setLive(ok) {
+            document.getElementById('live-dot').className = 'live-dot' + (ok ? '' : ' stale');
+        }
 
         async function loadStatus() {
             status = await api('/status');
+            if (!status || !status.components) { setLive(false); return; }
+            setLive(true);
             const badge = document.getElementById('status-badge');
             const mailInstalled = status.components?.mail_server?.installed || false;
 
@@ -645,46 +455,46 @@
                 document.getElementById('install-banner').style.display = 'block';
                 document.getElementById('main-content').style.display = 'none';
                 document.getElementById('btn-install').style.display = 'inline-block';
-                document.getElementById('btn-start').style.display = 'none';
-                document.getElementById('btn-stop').style.display = 'none';
                 badge.textContent = 'Not Installed';
                 badge.className = 'status-badge stopped';
                 return;
             }
-
             document.getElementById('install-banner').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
             document.getElementById('btn-install').style.display = 'none';
 
             const running = status.running;
-            badge.textContent = running ? 'Running' : 'Stopped';
+            badge.textContent = running ? '● Running' : '○ Stopped';
             badge.className = `status-badge ${running ? 'running' : 'stopped'}`;
             document.getElementById('btn-start').style.display = running ? 'none' : 'inline-block';
             document.getElementById('btn-stop').style.display = running ? 'inline-block' : 'none';
 
-            document.getElementById('user-count').textContent = status.user_count || 0;
+            document.getElementById('user-count').textContent = status.user_count ?? 0;
             document.getElementById('storage').textContent = status.storage || '0';
             document.getElementById('domain').textContent = status.domain || '-';
 
-            // Components
             updateComponent('mail', status.components?.mail_server);
             updateComponent('webmail', status.components?.webmail);
 
             // Ports
             const ports = status.ports || {};
-            const portMap = {25: 'SMTP', 587: 'Submit', 465: 'SMTPS', 993: 'IMAPS', 995: 'POP3S'};
-            document.getElementById('port-grid').innerHTML = Object.entries(portMap).map(([p, n]) =>
-                `<div class="port-item ${ports[p] ? 'active' : 'inactive'}"><div class="num">${p}</div><div class="name">${n}</div></div>`
-            ).join('');
+            let up = 0, tot = 0;
+            document.getElementById('port-grid').innerHTML = Object.entries(PORT_META).map(([p, meta]) => {
+                const active = !!ports[p]; tot++; if (active) up++;
+                return `<div class="port-item ${active ? 'active' : 'inactive'}"><div class="icon">${active ? '🟢' : '🔴'}</div><div class="num">${p}</div><div class="name">${meta[1]}</div></div>`;
+            }).join('');
+            const pe = document.getElementById('ports-up');
+            pe.textContent = `${up}/${tot}`;
+            document.querySelector('#ports-up').parentElement.className = 'stat-card ' + (up === tot ? 'healthy' : up === 0 ? 'dead' : 'warning');
         }
 
         function updateComponent(name, comp) {
             const installed = comp?.installed || false;
             const running = comp?.running || false;
             const badge = document.getElementById(`${name}-badge`);
-
+            document.getElementById(`comp-${name}`).className = 'component ' + (running ? 'up' : installed ? 'down' : '');
             if (installed) {
-                badge.textContent = running ? 'Running' : 'Stopped';
+                badge.textContent = running ? '● Running' : '○ Stopped';
                 badge.className = `status-badge ${running ? 'running' : 'stopped'}`;
                 document.getElementById(`${name}-install`).style.display = 'none';
                 document.getElementById(`${name}-start`).style.display = running ? 'none' : 'inline-block';
@@ -699,106 +509,59 @@
         }
 
         async function loadSecurity() {
-            // Load all security statuses in parallel
             const [dkim, spam, grey, av] = await Promise.all([
-                api('/dkim/status'),
-                api('/spam/status'),
-                api('/grey/status'),
-                api('/av/status')
+                api('/dkim/status'), api('/spam/status'), api('/grey/status'), api('/av/status')
             ]);
+            const mk = (ok, warn) => `<span class="${ok ? 'ok' : (warn ? 'warn' : 'err')}">${ok ? '✅' : (warn ? '⚠️' : '❌')}</span>`;
 
-            // DKIM
-            const dkimEl = document.getElementById('dkim-status');
-            const dkimToggle = document.getElementById('toggle-dkim');
-            dkimToggle.checked = dkim.opendkim_running || false;
-            dkimEl.innerHTML = `
-                <span class="${dkim.key_exists ? 'ok' : 'err'}">Key: ${dkim.key_exists ? '✓' : '✗'}</span>
-                <span class="${dkim.opendkim_running ? 'ok' : 'warn'}">Service: ${dkim.opendkim_running ? '✓' : '✗'}</span>
-            `;
+            document.getElementById('toggle-dkim').checked = dkim.opendkim_running || false;
+            document.getElementById('dkim-status').innerHTML =
+                `<span class="${dkim.key_exists ? 'ok' : 'err'}">Key ${dkim.key_exists ? '✅' : '❌'}</span><span class="${dkim.opendkim_running ? 'ok' : 'warn'}">Svc ${dkim.opendkim_running ? '✅' : '⚠️'}</span>`;
 
-            // SpamAssassin
-            const spamEl = document.getElementById('spam-status');
-            const spamToggle = document.getElementById('toggle-spam');
-            spamToggle.checked = spam.enabled || false;
-            spamEl.innerHTML = `
-                <span class="${spam.installed ? 'ok' : 'err'}">Installed: ${spam.installed ? '✓' : '✗'}</span>
-                <span class="${spam.running ? 'ok' : 'warn'}">Running: ${spam.running ? '✓' : '✗'}</span>
-            `;
+            document.getElementById('toggle-spam').checked = spam.enabled || false;
+            document.getElementById('spam-status').innerHTML =
+                `<span class="${spam.installed ? 'ok' : 'err'}">Inst ${spam.installed ? '✅' : '❌'}</span><span class="${spam.running ? 'ok' : 'warn'}">Run ${spam.running ? '✅' : '⚠️'}</span>`;
 
-            // Greylisting
-            const greyEl = document.getElementById('grey-status');
-            const greyToggle = document.getElementById('toggle-grey');
-            greyToggle.checked = grey.enabled || false;
-            greyEl.innerHTML = `
-                <span class="${grey.installed ? 'ok' : 'err'}">Installed: ${grey.installed ? '✓' : '✗'}</span>
-                <span class="${grey.running ? 'ok' : 'warn'}">Running: ${grey.running ? '✓' : '✗'}</span>
-            `;
+            document.getElementById('toggle-grey').checked = grey.enabled || false;
+            document.getElementById('grey-status').innerHTML =
+                `<span class="${grey.installed ? 'ok' : 'err'}">Inst ${grey.installed ? '✅' : '❌'}</span><span class="${grey.running ? 'ok' : 'warn'}">Run ${grey.running ? '✅' : '⚠️'}</span>`;
 
-            // ClamAV
-            const avEl = document.getElementById('av-status');
-            const avToggle = document.getElementById('toggle-av');
-            avToggle.checked = av.enabled || false;
-            avEl.innerHTML = `
-                <span class="${av.installed ? 'ok' : 'err'}">Installed: ${av.installed ? '✓' : '✗'}</span>
-                <span class="${av.running ? 'ok' : 'warn'}">Running: ${av.running ? '✓' : '✗'}</span>
-            `;
+            document.getElementById('toggle-av').checked = av.enabled || false;
+            document.getElementById('av-status').innerHTML =
+                `<span class="${av.installed ? 'ok' : 'err'}">Inst ${av.installed ? '✅' : '❌'}</span><span class="${av.running ? 'ok' : 'warn'}">Run ${av.running ? '✅' : '⚠️'}</span>`;
 
-            // Security score
             let score = 0;
             if (dkim.opendkim_running) score++;
             if (spam.enabled) score++;
             if (grey.enabled) score++;
             if (av.enabled) score++;
-            document.getElementById('security-score').textContent = `${score}/4`;
-            document.getElementById('security-score').style.color = score >= 3 ? 'var(--green)' : score >= 2 ? 'var(--yellow)' : 'var(--red)';
+            const se = document.getElementById('security-score');
+            se.textContent = `${score}/4`;
+            se.style.color = score >= 3 ? 'var(--green)' : score >= 2 ? 'var(--yellow)' : 'var(--red)';
         }
 
-        async function toggleDKIM(el) {
-            const action = el.checked ? 'enable' : 'disable';
-            // DKIM doesn't have enable/disable, it's either setup or not
-            if (el.checked) {
-                const r = await api('/dkim/setup', { method: 'POST' });
-                toast(r.success ? 'DKIM setup started' : 'Failed', r.success ? 'success' : 'error');
-            }
-            setTimeout(loadSecurity, 2000);
-        }
+        async function toggleDKIM(el) { if (el.checked) { const r = await api('/dkim/setup', { method: 'POST' }); toast(r.success ? 'DKIM setup started' : 'Failed', r.success ? 'success' : 'error'); } setTimeout(loadSecurity, 2000); }
+        async function toggleSpam(el) { const a = el.checked ? 'enable' : 'disable'; const r = await api(`/spam/${a}`, { method: 'POST' }); toast(r.success ? `SpamAssassin ${a}d` : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 1000); }
+        async function toggleGrey(el) { const a = el.checked ? 'enable' : 'disable'; const r = await api(`/grey/${a}`, { method: 'POST' }); toast(r.success ? `Greylisting ${a}d` : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 1000); }
+        async function toggleAV(el) { const a = el.checked ? 'enable' : 'disable'; const r = await api(`/av/${a}`, { method: 'POST' }); toast(r.success ? `ClamAV ${a}d` : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 1000); }
 
-        async function toggleSpam(el) {
-            const action = el.checked ? 'enable' : 'disable';
-            const r = await api(`/spam/${action}`, { method: 'POST' });
-            toast(r.success ? `SpamAssassin ${action}d` : 'Failed', r.success ? 'success' : 'error');
-            setTimeout(loadSecurity, 1000);
-        }
-
-        async function toggleGrey(el) {
-            const action = el.checked ? 'enable' : 'disable';
-            const r = await api(`/grey/${action}`, { method: 'POST' });
-            toast(r.success ? `Greylisting ${action}d` : 'Failed', r.success ? 'success' : 'error');
-            setTimeout(loadSecurity, 1000);
-        }
-
-        async function toggleAV(el) {
-            const action = el.checked ? 'enable' : 'disable';
-            const r = await api(`/av/${action}`, { method: 'POST' });
-            toast(r.success ? `ClamAV ${action}d` : 'Failed', r.success ? 'success' : 'error');
-            setTimeout(loadSecurity, 1000);
-        }
-
+        let accessData = {};
         async function loadAccess() {
             const d = await api('/access');
+            accessData = d;
             const domain = d.domain || 'example.com';
             const host = d.mail_server || `mail.${domain}`;
-
             document.getElementById('webmail-url').textContent = d.webmail?.url || `https://webmail.${domain}`;
-            document.getElementById('webmail-url').href = d.webmail?.local_url || '#';
-            document.getElementById('imap-url').textContent = `${host}:993 (SSL)`;
-            document.getElementById('smtp-url').textContent = `${host}:587 (STARTTLS)`;
+            document.getElementById('webmail-url').href = d.webmail?.local_url || d.webmail?.url || '#';
+            document.getElementById('external-open').href = d.webmail?.url || d.webmail?.local_url || '#';
+            document.getElementById('imap-url').textContent = `${host}:993 (SSL) · ${host}:143 (STARTTLS)`;
+            document.getElementById('smtp-url').textContent = `${host}:587 (STARTTLS) · ${host}:465 (SSL)`;
             document.getElementById('autoconfig-url').textContent = d.apps?.thunderbird || '-';
             document.getElementById('autodiscover-url').textContent = d.apps?.outlook || '-';
 
             const ssl = await api('/ssl');
             const sslEl = document.getElementById('ssl-status');
-            sslEl.textContent = ssl.installed ? '✓' : '✗';
+            sslEl.textContent = ssl.installed ? '✅' : '❌';
             sslEl.style.color = ssl.installed ? 'var(--green)' : 'var(--red)';
         }
 
@@ -806,34 +569,51 @@
             const d = await api('/users');
             const list = document.getElementById('user-list');
             const users = d.users || [];
-            if (!users.length) {
-                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No users</td></tr>';
-                return;
-            }
+            if (!users.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--p31-dim)">No users</td></tr>'; return; }
             list.innerHTML = users.map(u => `<tr>
-                <td class="mono">${u.email}</td>
-                <td>${u.size}</td>
+                <td class="mono">📧 ${u.email}</td>
+                <td>${u.size || '-'}</td>
                 <td>
-                    <button class="btn btn-sm" onclick="changePassword('${u.email}')">Password</button>
-                    <button class="btn btn-sm" onclick="repairMailbox('${u.email}')">Repair</button>
-                    <button class="btn btn-sm danger" onclick="deleteUser('${u.email}')">Delete</button>
-                </td>
-            </tr>`).join('');
+                    <button class="btn sm" onclick="changePassword('${u.email}')">🔑 Password</button>
+                    <button class="btn sm" onclick="repairMailbox('${u.email}')">🔧 Repair</button>
+                    <button class="btn sm danger" onclick="deleteUser('${u.email}')">🗑️ Delete</button>
+                </td></tr>`).join('');
         }
 
         async function loadAliases() {
             const d = await api('/aliases');
             const list = document.getElementById('alias-list');
             const aliases = d.aliases || [];
-            if (!aliases.length) {
-                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No aliases</td></tr>';
-                return;
-            }
+            if (!aliases.length) { list.innerHTML = '<tr><td colspan="3" style="color:var(--p31-dim)">No aliases</td></tr>'; return; }
             list.innerHTML = aliases.map(a => `<tr>
-                <td class="mono">${a.alias}</td>
-                <td class="mono">${a.target}</td>
-                <td><button class="btn btn-sm danger" onclick="deleteAlias('${a.alias}')">Delete</button></td>
+                <td class="mono">🔀 ${a.alias}</td>
+                <td class="mono">🎯 ${a.target}</td>
+                <td><button class="btn sm danger" onclick="deleteAlias('${a.alias}')">🗑️</button></td>
             </tr>`).join('');
+        }
+
+        async function loadExternal() {
+            const d = await api('/external/status');
+            const statusEl = document.getElementById('external-status');
+            const provEl = document.getElementById('external-providers');
+            if (d && d.plugin_enabled) {
+                statusEl.className = 'alert info';
+                statusEl.innerHTML = `✅ External mailboxes are <strong>enabled</strong> (ident_switch)` +
+                    (d.account_count != null ? ` — ${d.account_count} account(s) configured across users.` : '.');
+                const provs = d.providers || [];
+                provEl.innerHTML = provs.map(p => `<div class="provider-card">
+                    <span class="pico">${p.icon || '📧'}</span>
+                    <div class="pinfo"><div class="pname">${p.name}</div><div class="pdetail">IMAP ${p.imap || '?'} · SMTP ${p.smtp || '?'}</div></div>
+                </div>`).join('') || '';
+            } else if (d && d.plugin_installed === false) {
+                statusEl.className = 'alert warning';
+                statusEl.innerHTML = '⚠️ The <strong>ident_switch</strong> plugin is not installed yet — external mailboxes are unavailable. Install it from the mail package.';
+                provEl.innerHTML = '';
+            } else {
+                statusEl.className = 'alert info';
+                statusEl.innerHTML = '📥 External mailboxes let each user pull their Gmail / Outlook / IMAP account into SecuBox Webmail.';
+                provEl.innerHTML = '';
+            }
         }
 
         async function loadLogs() {
@@ -847,175 +627,100 @@
             document.getElementById('cfg-domain').value = d.domain || '';
             document.getElementById('cfg-hostname').value = d.hostname || 'mail';
             document.getElementById('cfg-mail-ip').value = d.mail_ip || '';
-            document.getElementById('cfg-webmail-port').value = d.webmail_port || 8027;
+            document.getElementById('cfg-webmail-port').value = d.webmail_port || 80;
         }
 
         function showTab(name) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabs = ['users', 'aliases', 'logs', 'settings', 'actions'];
+            const tabs = ['users', 'aliases', 'external', 'logs', 'settings', 'actions'];
             const idx = tabs.indexOf(name) + 1;
             document.querySelector(`.tab:nth-child(${idx})`).classList.add('active');
             document.getElementById(`tab-${name}`).classList.add('active');
             if (name === 'settings') loadSettings();
             if (name === 'logs') loadLogs();
+            if (name === 'external') loadExternal();
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
         function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showInstallModal() { showModal('install-modal'); }
 
         async function doInstall() {
             const domain = document.getElementById('install-domain').value.trim();
-            if (!domain) { alert('Domain required'); return; }
-
+            if (!domain) { toast('Domain required', 'error'); return; }
             document.getElementById('install-actions').style.display = 'none';
             document.getElementById('install-status').style.display = 'block';
             document.getElementById('install-progress').style.width = '20%';
-            document.getElementById('install-message').textContent = 'Installing mail server...';
-
+            document.getElementById('install-message').textContent = 'Installing mail server…';
             await api('/install', { method: 'POST' });
             document.getElementById('install-progress').style.width = '60%';
-
             if (document.getElementById('install-webmail').checked) {
-                document.getElementById('install-message').textContent = 'Installing webmail...';
+                document.getElementById('install-message').textContent = 'Installing webmail…';
                 await api('/webmail/install', { method: 'POST' });
             }
-
             document.getElementById('install-progress').style.width = '100%';
-            document.getElementById('install-message').textContent = 'Installation started. Check logs for progress.';
+            document.getElementById('install-message').textContent = 'Installation started. Check logs.';
             setTimeout(() => { hideModal('install-modal'); refresh(); }, 2000);
         }
 
-        // Actions
-        async function startMail() { await api('/start', { method: 'POST' }); toast('Starting...'); setTimeout(refresh, 2000); }
+        async function startMail() { await api('/start', { method: 'POST' }); toast('Starting…'); setTimeout(refresh, 2000); }
         async function stopMail() { await api('/stop', { method: 'POST' }); toast('Stopped'); setTimeout(refresh, 1000); }
         async function installMail() { await api('/install', { method: 'POST' }); toast('Installation started'); }
-        async function startWebmail() { await api('/webmail/start', { method: 'POST' }); toast('Starting...'); setTimeout(refresh, 2000); }
+        async function startWebmail() { await api('/webmail/start', { method: 'POST' }); toast('Starting…'); setTimeout(refresh, 2000); }
         async function stopWebmail() { await api('/webmail/stop', { method: 'POST' }); toast('Stopped'); setTimeout(refresh, 1000); }
         async function installWebmail() { await api('/webmail/install', { method: 'POST' }); toast('Installation started'); }
-        async function startServices() { await api('/start', { method: 'POST' }); toast('Starting...'); setTimeout(refresh, 2000); }
+        async function startServices() { await api('/start', { method: 'POST' }); toast('Starting…'); setTimeout(refresh, 2000); }
         async function stopServices() { await api('/stop', { method: 'POST' }); toast('Stopped'); setTimeout(refresh, 1000); }
-        async function restartServices() { await api('/restart', { method: 'POST' }); toast('Restarting...'); setTimeout(refresh, 3000); }
+        async function restartServices() { await api('/restart', { method: 'POST' }); toast('Restarting…'); setTimeout(refresh, 3000); }
 
         async function addUser() {
             const email = document.getElementById('user-email').value.trim();
             const password = document.getElementById('user-password').value;
-            if (!email || !password) { alert('Email and password required'); return; }
+            if (!email || !password) { toast('Email and password required', 'error'); return; }
             const r = await api('/user', { method: 'POST', body: JSON.stringify({ email, password }) });
-            if (r.success) { hideModal('user-modal'); toast('User created'); refresh(); } else toast(r.detail || 'Failed', 'error');
+            if (r.success) { hideModal('user-modal'); document.getElementById('user-email').value=''; document.getElementById('user-password').value=''; toast('✅ User created'); refresh(); } else toast(r.detail || 'Failed', 'error');
         }
-
-        async function deleteUser(email) {
-            if (!confirm(`Delete ${email}?`)) return;
-            await api(`/user/${encodeURIComponent(email)}`, { method: 'DELETE' });
-            toast('Deleted'); refresh();
-        }
-
-        async function changePassword(email) {
-            const password = prompt(`New password for ${email}:`);
-            if (!password) return;
-            const r = await api('/user/password', { method: 'POST', body: JSON.stringify({ email, password }) });
-            toast(r.success ? 'Password changed' : 'Failed', r.success ? 'success' : 'error');
-        }
-
-        async function repairMailbox(email) {
-            const r = await api(`/user/repair/${encodeURIComponent(email)}`, { method: 'POST' });
-            toast(r.success ? 'Mailbox repaired' : 'Failed', r.success ? 'success' : 'error');
-        }
+        async function deleteUser(email) { if (!confirm(`Delete ${email}?`)) return; await api(`/user/${encodeURIComponent(email)}`, { method: 'DELETE' }); toast('🗑️ Deleted'); refresh(); }
+        async function changePassword(email) { const password = prompt(`New password for ${email}:`); if (!password) return; const r = await api('/user/password', { method: 'POST', body: JSON.stringify({ email, password }) }); toast(r.success ? '🔑 Password changed' : 'Failed', r.success ? 'success' : 'error'); }
+        async function repairMailbox(email) { const r = await api(`/user/repair/${encodeURIComponent(email)}`, { method: 'POST' }); toast(r.success ? '🔧 Mailbox repaired' : 'Failed', r.success ? 'success' : 'error'); }
 
         async function addAlias() {
             const alias = document.getElementById('alias-from').value.trim();
             const target = document.getElementById('alias-to').value.trim();
-            if (!alias || !target) { alert('Both addresses required'); return; }
+            if (!alias || !target) { toast('Both addresses required', 'error'); return; }
             const r = await api('/alias', { method: 'POST', body: JSON.stringify({ alias, target }) });
-            if (r.success) { hideModal('alias-modal'); toast('Alias created'); refresh(); } else toast(r.detail || 'Failed', 'error');
+            if (r.success) { hideModal('alias-modal'); toast('✅ Alias created'); refresh(); } else toast(r.detail || 'Failed', 'error');
         }
-
-        async function deleteAlias(alias) {
-            if (!confirm(`Delete alias ${alias}?`)) return;
-            await api(`/alias/${encodeURIComponent(alias)}`, { method: 'DELETE' });
-            toast('Deleted'); refresh();
-        }
+        async function deleteAlias(alias) { if (!confirm(`Delete alias ${alias}?`)) return; await api(`/alias/${encodeURIComponent(alias)}`, { method: 'DELETE' }); toast('🗑️ Deleted'); refresh(); }
 
         async function saveSettings() {
-            const settings = {
-                domain: document.getElementById('cfg-domain').value,
-                hostname: document.getElementById('cfg-hostname').value,
-                mail_ip: document.getElementById('cfg-mail-ip').value,
-                webmail_port: parseInt(document.getElementById('cfg-webmail-port').value) || 8027
-            };
-            const r = await api('/settings', { method: 'POST', body: JSON.stringify(settings) });
-            toast(r.success ? 'Settings saved' : 'Failed', r.success ? 'success' : 'error');
+            const s = { domain: document.getElementById('cfg-domain').value, hostname: document.getElementById('cfg-hostname').value, mail_ip: document.getElementById('cfg-mail-ip').value, webmail_port: parseInt(document.getElementById('cfg-webmail-port').value) || 80 };
+            const r = await api('/settings', { method: 'POST', body: JSON.stringify(s) });
+            toast(r.success ? '💾 Settings saved' : 'Failed', r.success ? 'success' : 'error');
         }
 
-        async function setupACME() {
-            const email = prompt('Email for Let\'s Encrypt notifications (optional):');
-            const r = await api('/acme/issue', { method: 'POST', body: JSON.stringify({ email }) });
-            toast(r.success ? 'ACME certificate request started' : 'Failed', r.success ? 'success' : 'error');
-        }
-
-        async function setupSelfSignedSSL() {
-            const r = await api('/ssl/setup', { method: 'POST' });
-            toast(r.success ? 'Self-signed SSL setup started' : 'Failed', r.success ? 'success' : 'error');
-        }
-
-        async function setupDKIM() {
-            const r = await api('/dkim/setup', { method: 'POST' });
-            toast(r.success ? 'DKIM setup started. Check DNS Setup for the record.' : 'Failed', r.success ? 'success' : 'error');
-            setTimeout(loadSecurity, 2000);
-        }
-
-        async function setupSpam() {
-            const r = await api('/spam/setup', { method: 'POST' });
-            toast(r.success ? 'SpamAssassin setup started' : 'Failed', r.success ? 'success' : 'error');
-            setTimeout(loadSecurity, 3000);
-        }
-
-        async function setupGrey() {
-            const r = await api('/grey/setup', { method: 'POST' });
-            toast(r.success ? 'Greylisting setup started' : 'Failed', r.success ? 'success' : 'error');
-            setTimeout(loadSecurity, 2000);
-        }
-
-        async function setupAV() {
-            const r = await api('/av/setup', { method: 'POST' });
-            toast(r.success ? 'ClamAV setup started (this may take several minutes)' : 'Failed', r.success ? 'success' : 'error');
-            setTimeout(loadSecurity, 5000);
-        }
-
-        async function createBackup() {
-            const r = await api('/backup', { method: 'POST' });
-            toast(r.success ? `Backup created: ${r.file}` : 'Failed', r.success ? 'success' : 'error');
-        }
+        async function setupACME() { const email = prompt("Email for Let's Encrypt (optional):"); const r = await api('/acme/issue', { method: 'POST', body: JSON.stringify({ email }) }); toast(r.success ? '🔒 ACME request started' : 'Failed', r.success ? 'success' : 'error'); }
+        async function setupSelfSignedSSL() { const r = await api('/ssl/setup', { method: 'POST' }); toast(r.success ? '🔏 Self-signed SSL setup' : 'Failed', r.success ? 'success' : 'error'); }
+        async function setupDKIM() { const r = await api('/dkim/setup', { method: 'POST' }); toast(r.success ? '🔐 DKIM setup started' : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 2000); }
+        async function setupSpam() { const r = await api('/spam/setup', { method: 'POST' }); toast(r.success ? '🚫 SpamAssassin setup' : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 3000); }
+        async function setupGrey() { const r = await api('/grey/setup', { method: 'POST' }); toast(r.success ? '⏳ Greylisting setup' : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 2000); }
+        async function setupAV() { const r = await api('/av/setup', { method: 'POST' }); toast(r.success ? '🦠 ClamAV setup (may take minutes)' : 'Failed', r.success ? 'success' : 'error'); setTimeout(loadSecurity, 5000); }
+        async function createBackup() { const r = await api('/backup', { method: 'POST' }); toast(r.success ? `💾 Backup: ${r.file}` : 'Failed', r.success ? 'success' : 'error'); }
 
         async function showDNSSetup() {
             const d = await api('/dns-setup');
             document.getElementById('dns-records').innerHTML = (d.records || []).map(r =>
-                `<tr><td><strong>${r.type}</strong></td><td class="mono">${r.name}</td><td class="mono" style="word-break:break-all">${r.value}</td></tr>`
-            ).join('');
-
-            // Load DKIM record if exists
+                `<tr><td><strong>${r.type}</strong></td><td class="mono">${r.name}</td><td class="mono" style="word-break:break-all">${r.value}</td></tr>`).join('');
             const dkim = await api('/dkim/record');
-            if (dkim.exists) {
-                document.getElementById('dkim-record').style.display = 'block';
-                document.getElementById('dkim-txt').textContent = dkim.record || '';
-            } else {
-                document.getElementById('dkim-record').style.display = 'none';
-            }
+            if (dkim.exists) { document.getElementById('dkim-record').style.display = 'block'; document.getElementById('dkim-txt').textContent = dkim.record || ''; }
+            else document.getElementById('dkim-record').style.display = 'none';
             showModal('dns-modal');
         }
 
-        function refresh() {
-            loadStatus();
-            loadAccess();
-            loadUsers();
-            loadAliases();
-            loadSecurity();
-        }
-
+        // Full refresh (data + status). Live status pulse runs more often.
+        function refresh() { loadStatus(); loadAccess(); loadSecurity(); loadUsers(); loadAliases(); }
         refresh();
+        setInterval(() => { loadStatus(); loadSecurity(); }, 15000);  // reactive live pulse
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
