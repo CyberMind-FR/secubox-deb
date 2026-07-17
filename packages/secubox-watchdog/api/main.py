@@ -33,7 +33,11 @@ from secubox_core.config import get_config
 app = FastAPI(title="SecuBox Watchdog API", version="2.0.0")
 
 # Configuration
-LXC_PATH = Path("/srv/lxc")
+LXC_PATH = Path(get_config("watchdog").get("lxc_path", "/data/lxc"))
+# The watchdog runs as `secubox`; LXC control is via the scoped secubox-lxc
+# sudoers (lxc-info/ls/start/stop). The unit needs NoNewPrivileges=false or sudo
+# is blocked. Full paths match the sudoers entries.
+SUDO = ["sudo", "-n"]
 DATA_DIR = Path("/var/lib/secubox/watchdog")
 LOG_FILE = Path("/var/log/secubox/watchdog.log")
 CONFIG_FILE = Path("/etc/secubox/watchdog.json")
@@ -204,8 +208,15 @@ def add_event(event_type: EventType, target: str, details: Dict = None):
     save_history(history)
     log_event(f"{event_type.value}: {target}", "INFO" if "up" in event_type.value.lower() else "WARNING")
 
-    # Trigger webhooks
-    asyncio.create_task(trigger_webhooks(event))
+    # Trigger webhooks — but only when there's a running event loop. add_event
+    # is also called from _auto_revive running in a worker thread (asyncio.
+    # to_thread), where create_task would raise "no running event loop"; the
+    # event is already logged + persisted to history, so skip the webhook there.
+    try:
+        asyncio.get_running_loop()
+        asyncio.create_task(trigger_webhooks(event))
+    except RuntimeError:
+        pass
     return event
 
 
@@ -247,7 +258,7 @@ async def trigger_webhooks(event: Dict):
 
 def lxc_running(name: str) -> tuple:
     """Check if LXC container is running, returns (running, pid)"""
-    success, out, _ = run_cmd(["lxc-info", "-P", str(LXC_PATH), "-n", name, "-s", "-p"])
+    success, out, _ = run_cmd(SUDO + ["/usr/bin/lxc-info", "-P", str(LXC_PATH), "-n", name, "-s", "-p"])
     running = success and "RUNNING" in out
     pid = 0
     if running:
@@ -391,6 +402,68 @@ async def perform_health_check() -> Dict:
     }
 
 
+# ── Auto-revive: the 502→revival trigger ────────────────────────────────────
+# Managed containers that fall over are brought back with lxc-start. The
+# AUTOSTART flag (lxc.start.auto=1) is the "should be up" signal — this
+# deliberately EXCLUDES scale-to-zero sleepers (streamlit et al. are NO-AUTO on
+# purpose), so revival never fights the on-demand sleeper/awakener pattern.
+_revive_state: Dict[str, dict] = {}
+REVIVE_COOLDOWN = 120        # min seconds between revive attempts per container
+REVIVE_MAX_ATTEMPTS = 5      # back off after N consecutive failures
+
+
+def _discover_containers() -> List[dict]:
+    """[{name, state, autostart}] for every LXC, via `sudo lxc-ls -f`."""
+    ok, out, _ = run_cmd(SUDO + ["/usr/bin/lxc-ls", "-P", str(LXC_PATH), "-f"], timeout=15)
+    rows = []
+    if not ok:
+        return rows
+    lines = [l for l in out.splitlines() if l.strip()]
+    for l in lines[1:]:  # skip the header row
+        parts = l.split()
+        if len(parts) >= 3:
+            rows.append({
+                "name": parts[0],
+                "state": parts[1].upper(),
+                "autostart": parts[2] in ("1", "YES", "true", "True"),
+            })
+    return rows
+
+
+def _auto_revive() -> List[str]:
+    """lxc-start managed (AUTOSTART) containers that are down. Returns revived."""
+    cfg = load_config()
+    if not cfg.get("auto_recovery", True):
+        return []
+    now = time.time()
+    revived = []
+    for c in _discover_containers():
+        if not c["autostart"]:
+            continue                              # sleepers / on-demand — never force-wake
+        if c["state"] == "RUNNING":
+            _revive_state.pop(c["name"], None)
+            continue
+        if c["state"] not in ("STOPPED", "FROZEN"):
+            continue                              # STARTING/STOPPING — leave it be
+        st = _revive_state.setdefault(c["name"], {"last": 0.0, "attempts": 0})
+        if now - st["last"] < REVIVE_COOLDOWN or st["attempts"] >= REVIVE_MAX_ATTEMPTS:
+            continue
+        st["last"] = now
+        st["attempts"] += 1
+        add_event(EventType.RECOVERY_ATTEMPTED, c["name"],
+                  {"action": "auto-revive", "attempt": st["attempts"]})
+        ok, _o, err = run_cmd(SUDO + ["/usr/bin/lxc-start", "-P", str(LXC_PATH),
+                                      "-n", c["name"], "-d"], timeout=30)
+        if ok:
+            add_event(EventType.RECOVERY_SUCCESS, c["name"], {"action": "auto-revive"})
+            log_event(f"auto-revived down container {c['name']}", "INFO")
+            revived.append(c["name"])
+        else:
+            add_event(EventType.RECOVERY_FAILED, c["name"],
+                      {"action": "auto-revive", "error": (err or "")[:200]})
+    return revived
+
+
 async def monitor_loop():
     """Background monitoring loop."""
     global _monitor_running
@@ -441,6 +514,16 @@ async def monitor_loop():
                     else:
                         add_event(EventType.ENDPOINT_DOWN, e["name"])
                 previous_states[key] = current
+
+            # 502→revival: bring managed (autostart) containers that fell over
+            # back up. Blocking subprocess work → off the event loop.
+            try:
+                revived = await asyncio.to_thread(_auto_revive)
+                if revived:
+                    stats_cache.set("last_revive", {"at": datetime.utcnow().isoformat() + "Z",
+                                                    "containers": revived})
+            except Exception as e:
+                log_event(f"auto-revive error: {e}", "ERROR")
 
             interval = config.get("interval", 60)
             await asyncio.sleep(interval)
@@ -656,7 +739,7 @@ async def restart_container(req: ContainerRestart):
     run_cmd(["lxc-stop", "-P", str(LXC_PATH), "-n", req.name], timeout=30)
     await asyncio.sleep(1)
 
-    success, out, err = run_cmd(["lxc-start", "-P", str(LXC_PATH), "-n", req.name], timeout=30)
+    success, out, err = run_cmd(SUDO + ["/usr/bin/lxc-start", "-P", str(LXC_PATH), "-n", req.name, "-d"], timeout=30)
     await asyncio.sleep(2)
 
     running, pid = lxc_running(req.name)
