@@ -260,13 +260,21 @@ def _check_scope(authorization: Optional[str], expected_scope: str) -> dict:
     return payload
 
 
-@_login_router.post("/login")
-def _login_v2(req: _LoginIn, request: _Request, response: _Response):
-    """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
+def _client_meta(request: _Request) -> tuple:
+    """(ip, user_agent) of the caller. nginx/HAProxy front every login, so the
+    real client is in X-Forwarded-For; request.client.host would just be the
+    proxy. Every login path MUST record these — a session row without them is
+    unauditable (who logged in from where)."""
     ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
           or request.headers.get("X-Real-IP", "")
           or (request.client.host if request.client else ""))
-    ua = request.headers.get("User-Agent", "")[:100]
+    return ip, request.headers.get("User-Agent", "")[:100]
+
+
+@_login_router.post("/login")
+def _login_v2(req: _LoginIn, request: _Request, response: _Response):
+    """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
+    ip, ua = _client_meta(request)
     user = user_store.get_user(req.username)
 
     if not user or not user.get("enabled"):
@@ -329,7 +337,10 @@ async def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
     _set_session_cookie(response, tok)  # SSO-lite (#400)
-    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
+    ip, ua = _client_meta(request)
+    _on_session_event("login_success", username, {
+        "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
+    })
     _users_engine.touch_last_login(username)
     return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
 
@@ -365,7 +376,10 @@ def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
     _set_session_cookie(response, tok)  # SSO-lite (#400)
-    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
+    ip, ua = _client_meta(request)
+    _on_session_event("login_success", username, {
+        "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
+    })
     return {
         "access_token": tok, "token_type": "bearer", "expires_in": 86400,
         "backup_codes": backup_plain,
