@@ -15,6 +15,8 @@ Sessions became auditable, the two stub Companion modules became real, and bille
 - **`GET /admin/api/billets`** — the authoring list. The public feed can't serve it: its item `id` is a permalink URL (**why Edit/Delete 404'd**) and it hides drafts.
 - **Companion 401 re-login** 🔓 — box tokens live 24h but the Companion seals one at pairing and reuses it forever → a day later every authed call 401'd with no escape but unpairing ("Failed: unauthorized" in billets + podcaster). `api.js` now triggers re-auth and **replays the request once**, single-flight (one prompt, not one per request), so an in-flight write survives. SW v10.
 
+**APK rebuilt + republished** 📱 — the shipped APK (16/07) bundled pre-fix code (SW v5, the `/feed` 404, no upload, no peertube); Capacitor **bundles** `www`, so no service worker could ever refresh it. Rebuilt with the tracked `android/` scaffold (JAVA_HOME=Android Studio JBR — the system JDK has no `jlink`; `cap copy` not `cap sync`; gradle **8.9-bin**, not the default 8.7-all; TLS was not MITM-intercepted this run so no truststore needed). Debug signer digest is **unchanged** (`5e6163f9…`) → installs over the old app, no uninstall. Live at `https://companion.gk2.secubox.in/secubox-companion.apk` (3.9 MB, carries SW v11 + peertube). Previous APK kept as `.apk.prev`.
+
 Follow-ups: rebuild the billets `.deb` (migration 0004 + tags.py); consider a token refresh so re-login isn't needed every 24h.
 
 ---
