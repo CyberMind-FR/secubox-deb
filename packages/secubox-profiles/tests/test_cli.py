@@ -76,14 +76,35 @@ def test_apply_is_not_a_command_in_phase_1(root):
         main(["--root", str(root), "apply"])
 
 
-def test_scan_survives_unreadable_routes_file(root, monkeypatch):
+def test_scan_survives_unreadable_routes_file(root, capsys, monkeypatch):
     # load_routes() renvoie None quand le fichier de routes est présent mais
     # illisible/corrompu (indéterminable, distinct de "aucune route"). scan
     # doit rester lecture seule et ne pas planter dans ce cas plutôt que de
-    # propager le None jusqu'à `for r in sorted(routes)`.
+    # propager le None jusqu'à `for r in sorted(routes)` — mais il ne doit
+    # PAS non plus retomber silencieusement sur "aucune route" : ça dégrade
+    # exposure (public -> lan/internal) pour tout module routé sans que
+    # l'opérateur ne le sache, et un manifeste écrit fait ensuite autorité
+    # (scan n'écrase pas sans --force). L'opérateur doit être prévenu.
     monkeypatch.setattr("api.cli.load_routes", lambda: None)
     monkeypatch.setattr("api.cli._run", lambda argv: (
         (0, "secubox-lyrion.service enabled\n") if argv[0:2] == ["systemctl", "list-unit-files"]
         else (0, "")))
     rc = main(["--root", str(root), "scan"])
+    err = capsys.readouterr().err
     assert rc == 0
+    assert "illisible" in err or "corrompu" in err
+    assert "exposure" in err.lower()
+
+
+def test_scan_stays_silent_when_routes_file_genuinely_absent(root, capsys, monkeypatch):
+    # Fichier absent = aucune route, c'est le cas normal (box sans WAF routé).
+    # Aucun avertissement ne doit être émis dans ce cas — sinon l'opérateur
+    # ne peut plus distinguer "rien à signaler" de "attention, dégradé".
+    monkeypatch.setattr("api.cli.load_routes", lambda: set())
+    monkeypatch.setattr("api.cli._run", lambda argv: (
+        (0, "secubox-lyrion.service enabled\n") if argv[0:2] == ["systemctl", "list-unit-files"]
+        else (0, "")))
+    rc = main(["--root", str(root), "scan"])
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert err == ""

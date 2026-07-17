@@ -59,7 +59,7 @@ def _load_profile_or_none(root: Path, name: str | None):
 
 def _cmd_status(args) -> int:
     root = Path(args.root)
-    mod_dir, _, pins_file, _ = _paths(root)
+    mod_dir, _, _, _ = _paths(root)
     manifests = load_all(mod_dir)
     routes = load_routes()
     actuals = _observe_all(manifests, routes)
@@ -113,10 +113,22 @@ def _cmd_scan(args) -> int:
     rc, out = _run(["lxc-ls", "-1"])
     lxc_names = {n.strip() for n in out.splitlines() if n.strip()}
     # load_routes() renvoie None quand le fichier de routes existe mais est
-    # illisible/corrompu (indéterminable) — discover() attend un set() ferme,
-    # donc on retombe sur "aucune route connue" plutôt que de propager le None
-    # (qui ferait planter `for r in sorted(routes)` dans scan._route_for).
-    manifests = discover(units=units, lxc_names=lxc_names, routes=load_routes() or set())
+    # illisible/corrompu (indéterminable, distinct de "aucune route" = set()).
+    # discover() attend un set() ferme (voir scan._route_for) donc on retombe
+    # sur "aucune route connue" pour ne pas planter — MAIS ce repli fait
+    # dériver `exposure` vers le bas (public -> lan/internal) pour tout module
+    # routé, silencieusement, et scan n'écrase pas sans --force : la valeur
+    # dégradée resterait autoritaire. On prévient donc l'opérateur sur stderr
+    # dans ce seul cas (fichier présent mais illisible), jamais quand le
+    # fichier est simplement absent (cas normal, routes = set()).
+    routes = load_routes()
+    if routes is None:
+        print("⚠️  fichier de routes WAF illisible/corrompu — exposure peut être "
+              "sous-évaluée pour les modules routés (public -> lan/internal). "
+              "Corrigez le fichier de routes puis relancez `scan --force`.",
+              file=sys.stderr)
+        routes = set()
+    manifests = discover(units=units, lxc_names=lxc_names, routes=routes)
     written = write_drafts(manifests, mod_dir, force=args.force)
     skipped = len(manifests) - len(written)
     print(f"{len(manifests)} module(s) découvert(s) — {len(written)} manifeste(s) écrit(s), "
