@@ -351,6 +351,7 @@ def _get_threat_stats() -> dict:
     if state.get("today_iso") != today:
         state["today_iso"] = today
         state["threats_today"] = 0
+        state["observed_today"] = 0   # detect-mode matches seen today (not blocked)
 
     counters = state.get("counters", {})
     by_category = defaultdict(int, counters.get("by_category", {}))
@@ -360,6 +361,12 @@ def _get_threat_stats() -> dict:
     top_vhosts = defaultdict(int, counters.get("top_vhosts", {}))
     total_threats = counters.get("total_threats", 0)
     threats_today = state.get("threats_today", 0)
+    # detect-mode matches: seen and logged but NOT blocked — kept apart from the
+    # block counters so blocked_24h stays truthful. Persisted like the rest
+    # because the reader is incremental (byte_position) and would otherwise
+    # only count the newest lines.
+    observed_threats = counters.get("observed_threats", 0)
+    observed_today = state.get("observed_today", 0)
     ip_countries: Dict[str, str] = dict(state.get("ip_countries", {}))
 
     log_path = Path(THREATS_LOG)
@@ -368,6 +375,7 @@ def _get_threat_stats() -> dict:
         return _finalize_stats(
             total_threats, threats_today, by_category, by_severity,
             top_ips, top_countries, top_vhosts, ip_countries,
+            observed_threats, observed_today,
         )
 
     geoip_reader = _get_geoip_reader()
@@ -382,6 +390,8 @@ def _get_threat_stats() -> dict:
             top_countries.clear(); top_vhosts.clear()
             total_threats = 0
             threats_today = 0
+            observed_threats = 0
+            observed_today = 0
             byte_position = 0
             ip_countries.clear()
 
@@ -391,6 +401,18 @@ def _get_threat_stats() -> dict:
                 for line in f:
                     try:
                         entry = json.loads(line.strip())
+
+                        # A "detect" record was MATCHED but let through — the
+                        # request was NOT blocked. Counting it as a block would
+                        # conflate "blocked" with "would have blocked" and make
+                        # blocked_24h a lie the moment an operator arms a detect
+                        # category. It gets its own observed-only counter.
+                        if entry.get("action") == "detect":
+                            observed_threats += 1
+                            if entry.get("timestamp", "").startswith(today):
+                                observed_today += 1
+                            continue
+
                         total_threats += 1
 
                         if entry.get("timestamp", "").startswith(today):
@@ -425,9 +447,11 @@ def _get_threat_stats() -> dict:
     _save_stats_disk_cache({
         "today_iso": today,
         "threats_today": threats_today,
+        "observed_today": observed_today,
         "byte_position": byte_position,
         "counters": {
             "total_threats": total_threats,
+            "observed_threats": observed_threats,
             "by_category": dict(by_category),
             "by_severity": dict(by_severity),
             "top_ips": dict(top_ips),
@@ -441,6 +465,7 @@ def _get_threat_stats() -> dict:
     return _finalize_stats(
         total_threats, threats_today, by_category, by_severity,
         top_ips, top_countries, top_vhosts, ip_countries,
+        observed_threats, observed_today,
     )
 
 
@@ -448,12 +473,16 @@ def _finalize_stats(
     total_threats: int, threats_today: int,
     by_category, by_severity, top_ips, top_countries, top_vhosts,
     ip_countries: dict,
+    observed_threats: int = 0, observed_today: int = 0,
 ) -> dict:
     """Shape the dashboard-friendly result : top-10 lists + plain dicts."""
     top_ips_sorted = sorted(top_ips.items(), key=lambda x: -x[1])[:10]
     return {
         "total_threats": total_threats,
         "threats_today": threats_today,
+        # detect-mode: matched but let through. Separate from the block counts.
+        "observed_threats": observed_threats,
+        "observed_today": observed_today,
         "by_category": dict(by_category),
         "by_severity": dict(by_severity),
         "top_ips": {ip: count for ip, count in top_ips_sorted},
