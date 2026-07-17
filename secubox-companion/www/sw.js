@@ -7,7 +7,7 @@
 // Same-origin app assets → stale-while-revalidate. Box API (cross-origin) →
 // passthrough (the page handles offline reads/queue).
 
-const VERSION = 'sbx-companion-v8';
+const VERSION = 'sbx-companion-v10';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './styles/charte.css', './styles/fonts.css',
@@ -15,7 +15,7 @@ const SHELL = [
   './styles/fonts/space-grotesk-700.woff2', './styles/fonts/jetbrains-mono-400.woff2',
   './styles/fonts/jetbrains-mono-700.woff2',
   './core/app.js', './core/api.js', './core/store.js',
-  './core/registry.js', './core/auth.js', './core/ui.js',
+  './core/registry.js', './core/auth.js', './core/ui.js', './core/metrics.js',
   './modules/index.json',
 ];
 

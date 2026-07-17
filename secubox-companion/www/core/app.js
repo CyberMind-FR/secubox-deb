@@ -121,6 +121,20 @@ function route() {
 
 // ── boot ──────────────────────────────────────────────────────────
 async function boot(forceLock = false) {
+  // Box tokens live 24h; the sealed one goes stale and every authed call then
+  // 401s. Re-login in place (the URL is prefilled) and re-render, so an expired
+  // session is a prompt rather than a dead end — api.js replays the request that
+  // hit the 401, so an in-progress write is not lost.
+  api.onUnauthorized(async () => {
+    const creds = await pairingScreen(app);
+    if (!creds || !creds.token) return false;
+    api.init(creds);
+    chrome();
+    await registry.discover();
+    route();
+    return true;
+  });
+
   if (!store.isPaired()) {
     const creds = await pairingScreen(app);
     api.init(creds);

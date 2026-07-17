@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
 // SecuBox Companion :: billets — write/publish billets + moderate comments.
 //
-// Endpoints below are the clean interface the Companion consumes. Where the
-// exact box route/shape is unconfirmed it is marked TODO(api); the box may need
-// a JWT-authed admin API for billets (its web admin is session-based). Reads use
-// the public feed and work today; writes go through these paths + auto-queue.
-// All routes below are served by billets' JWT/SSO admin surface (routes/jwt_admin.py),
-// which trusts the SecuBox session — reads use the public JSON Feed.
+// Every route below is served by billets' JWT/SSO admin surface
+// (routes/jwt_admin.py), which trusts the SecuBox session.
+//
+// The list deliberately uses the ADMIN route, not the public JSON Feed: the
+// feed's item `id` is a permalink URL rather than the billet id (so edit/delete
+// could not address a row) and the feed omits drafts, which an authoring client
+// must see.
 const EP = {
-  feed:     (b) => `${b}/feed.json`,                          // public JSON Feed (jsonfeed.org)
+  list:     (b) => `${b}/admin/api/billets`,                  // GET  {billets:[{id,summary,status,tags[]}]}
+  tags:     (b) => `${b}/admin/api/tags`,                     // GET  {tags:[{slug,emoji,count}]}
   create:   (b) => `${b}/admin/api/billets`,                 // POST {body,ref_url,embed_url,style,status}
   update:   (b, id) => `${b}/admin/api/billets/${id}`,        // PUT
   remove:   (b, id) => `${b}/admin/api/billets/${id}`,        // DELETE
@@ -43,24 +45,59 @@ export default async function mount(ctx) {
   }
 
   // ── list ────────────────────────────────────────────────────────
+  let tagFilter = '';   // '' = all; otherwise a tag slug (the quick view)
+
   async function list() {
     const host = clear(body);
     host.append(el('p.muted', { text: 'Loading…' }));
     try {
-      const d = await api.get(EP.feed(base));
-      const items = d.billets || d.items || d.feed || (Array.isArray(d) ? d : []);
+      const d = await api.get(EP.list(base));
+      const items = d.billets || [];
       clear(host);
       if (d.__cached) host.append(el('div.badge.warn', { text: 'cached (offline)' }));
-      if (!items.length) return host.append(el('div.empty', { text: 'No billets yet.' }));
-      for (const b of items) {
-        const title = (b.title || b.body || '').replace(/\s+/g, ' ').slice(0, 70) || '(untitled)';
+
+      // Quick-view chip bar. Tags come from the #hashtags authors type in the
+      // body; failing to load them must not hide the billets themselves.
+      const td = await api.get(EP.tags(base)).catch(() => null);
+      const tags = (td && td.tags) || [];
+      if (tags.length) {
+        const bar = el('div.row', { style: 'gap:6px;margin-bottom:12px;flex-wrap:wrap' });
+        const chip = (label, slug) => el(`button.btn.sm${tagFilter === slug ? '.primary' : ''}`, {
+          text: label,
+          onclick: () => { tagFilter = tagFilter === slug ? '' : slug; list(); },
+        });
+        bar.append(chip('🌀 All', ''));
+        for (const t of tags) bar.append(chip(`${t.emoji} #${t.slug} ${t.count}`, t.slug));
+        host.append(bar);
+      }
+
+      const shown = tagFilter
+        ? items.filter(b => (b.tags || []).some(t => t.slug === tagFilter))
+        : items;
+      if (!shown.length) {
+        return host.append(el('div.empty', {
+          text: tagFilter ? `No billets tagged #${tagFilter}.` : 'No billets yet.',
+        }));
+      }
+
+      for (const b of shown) {
+        // Show a few words, not the whole billet — `summary` is the box-side
+        // excerpt; fall back to a clipped body if it is ever absent.
+        const excerpt = b.summary || (b.body || '').replace(/\s+/g, ' ').slice(0, 140) || '(empty)';
+        const chips = el('span', { style: 'margin-left:6px' });
+        for (const t of (b.tags || []))
+          chips.append(el('span.badge', { text: `${t.emoji} ${t.slug}`, style: 'margin-right:4px' }));
+        const draft = b.status === 'draft';
         host.append(el('div.item', {}, [
           el('div.meta', {}, [
-            el('b', { text: title }),
-            el('span', { text: `${b.status || 'published'} · ${ago(b.date_published || b.published_at || b.created_at)} · ${b.style || 'default'}` }),
+            el('b', { text: excerpt }),
+            el('span', {}, [
+              el('span', { text: `${draft ? '📝 draft' : '✅ published'} · ${ago(b.published_at || b.created_at)}${b.style === 'communique' ? ' · 📢 communiqué' : ''}` }),
+              chips,
+            ]),
           ]),
           el('div.actions', {}, [
-            el('button.btn.sm', { text: 'Edit', onclick: () => { active = 'edit:' + (b.id || b.slug); renderTabs(); editor(b.id || b.slug, b); } }),
+            el('button.btn.sm', { text: 'Edit', onclick: () => { active = 'edit:' + b.id; renderTabs(); editor(b.id, b); } }),
             el('button.btn.sm.danger', { text: 'Del', onclick: () => remove(b) }),
           ]),
         ]));
@@ -71,7 +108,7 @@ export default async function mount(ctx) {
   async function remove(b) {
     if (!confirmAction('Delete this billet?')) return;
     try {
-      const r = await api.del(EP.remove(base, b.id || b.slug));
+      const r = await api.del(EP.remove(base, b.id));
       toast(r.queued ? 'Delete queued (offline)' : 'Deleted');
       list();
     } catch (e) { toast('Delete failed: ' + e.message, 'err'); }
