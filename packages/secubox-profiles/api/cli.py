@@ -22,7 +22,7 @@ from pathlib import Path
 
 from .diff import ProtectedViolation, plan_changes
 from .manifest import ManifestError, load_all
-from .observe import Actual, is_on, load_routes, observe
+from .observe import Actual, is_on, load_routes, observe_all
 from .scan import discover, write_drafts
 from .state import StateError, load_pins, load_profile
 
@@ -35,7 +35,13 @@ def _paths(root: Path):
 
 
 def _observe_all(manifests, routes):
-    return {mid: observe(m, routes=routes) for mid, m in manifests.items()}
+    """Point d'entrée partagé par `status`/`diff` (CLI) et par le calcul de
+    cache de l'API web (voir api/web.py) — batché (observe.observe_all), pas
+    une boucle observe() par module : sur 187 modules, la boucle coûtait
+    ~46s (560 sous-process) contre <1s batché (mesuré sur la board). observe()
+    module par module reste la référence (tests, sondage d'un seul module) ;
+    ce wrapper n'en change pas le contrat, seulement le coût."""
+    return observe_all(manifests, routes=routes)
 
 
 def _active_profile_name(root: Path, override: str | None) -> str | None:

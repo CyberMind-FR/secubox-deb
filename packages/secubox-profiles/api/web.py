@@ -29,9 +29,12 @@ Deux règles structurelles, indépendantes de diff.plan_changes :
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import tempfile
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -120,6 +123,140 @@ def _write_pins(path: Path, pins: dict) -> None:
     _atomic_write(path, "\n".join(lines) + "\n")
 
 
+def _build_status_payload(manifests: dict, actuals: dict) -> dict:
+    modules = []
+    totals = {"count": 0, "on": 0, "off": 0, "unknown": 0, "rss_kb": 0, "exposed_public": 0}
+    by_category: dict = {}
+    by_runtime: dict = {}
+    by_exposure: dict = {}
+
+    def bump(bucket: dict, key: str, state: str, rss: Optional[int]) -> None:
+        b = bucket.setdefault(key, {"count": 0, "on": 0, "off": 0, "unknown": 0, "rss_kb": 0})
+        b["count"] += 1
+        b[state] += 1
+        if rss:
+            b["rss_kb"] += rss
+
+    for mid, m in sorted(manifests.items()):
+        a = actuals.get(mid, Actual())
+        st = _tri_state(a)
+        modules.append({
+            "id": mid, "category": m.category, "runtime": m.runtime,
+            "exposure": m.exposure, "priority": m.priority,
+            "protected": m.protected, "on": st, "rss_kb": a.rss_kb,
+        })
+        totals["count"] += 1
+        totals[st] += 1
+        if a.rss_kb:
+            totals["rss_kb"] += a.rss_kb
+        if m.exposure == "public":
+            totals["exposed_public"] += 1
+        bump(by_category, m.category, st, a.rss_kb)
+        bump(by_runtime, m.runtime, st, a.rss_kb)
+        bump(by_exposure, m.exposure, st, a.rss_kb)
+
+    return {
+        "modules": modules,
+        "totals": totals,
+        "by_category": by_category,
+        "by_runtime": by_runtime,
+        "by_exposure": by_exposure,
+    }
+
+
+# ---------------------------------------------------------------------------
+# /status cache — pattern "double caching" imposé par le CLAUDE.md du projet
+# (Performance Patterns) : le calcul (observe_all -> systemctl/lxc-ls) tourne
+# hors de la boucle asyncio (asyncio.to_thread), jamais dessus. Ce service
+# tourne sur son propre socket, mais la board a déjà vu un appel bloquant sur
+# une boucle PARTAGÉE geler ~110 modules (voir aggregator) : même seul,
+# `observe_all` reste hors-loop par prudence/cohérence avec le reste du parc.
+#
+# TTL 60s. Clé = racine de config (str(root)) plutôt qu'une clé globale
+# unique : chaque test utilise un tmp_path distinct comme racine, donc chaque
+# test obtient naturellement un cache froid et recalcule sur ses propres
+# doubles — aucune fuite d'état entre tests, sans changer un seul test
+# existant. En production il n'y a qu'une racine (/etc/secubox), donc un seul
+# slot de cache actif.
+# ---------------------------------------------------------------------------
+
+_STATUS_CACHE_TTL_S = 60.0
+
+
+class _StatusCacheEntry:
+    __slots__ = ("payload", "computed_at")
+
+    def __init__(self, payload: dict, computed_at: float):
+        self.payload = payload
+        self.computed_at = computed_at
+
+
+_status_cache: dict[str, _StatusCacheEntry] = {}
+_status_locks: dict[str, asyncio.Lock] = {}
+
+
+def _status_lock(key: str) -> asyncio.Lock:
+    lock = _status_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _status_locks[key] = lock
+    return lock
+
+
+def _compute_status_payload(root: Path) -> dict:
+    """Bloquant (subprocess via observe_all) — appeler uniquement via
+    asyncio.to_thread, jamais directement dans une coroutine d'endpoint."""
+    mod_dir, _prof_dir, _pins_file, _active_file = _cli._paths(root)
+    manifests = _load_manifests_or_500(mod_dir)
+    routes = load_routes()
+    actuals = _cli._observe_all(manifests, routes)
+    return _build_status_payload(manifests, actuals)
+
+
+def _with_freshness(entry: _StatusCacheEntry) -> dict:
+    age_s = max(0.0, time.time() - entry.computed_at)
+    return {
+        **entry.payload,
+        "cached_at": datetime.fromtimestamp(entry.computed_at, tz=timezone.utc).isoformat(),
+        "age_s": round(age_s, 1),
+    }
+
+
+async def _get_status_cached(root: Path) -> dict:
+    key = str(root)
+    entry = _status_cache.get(key)
+    if entry is not None and (time.time() - entry.computed_at) < _STATUS_CACHE_TTL_S:
+        return _with_freshness(entry)
+
+    async with _status_lock(key):
+        # Un autre appel concurrent a pu rafraîchir pendant l'attente du lock.
+        entry = _status_cache.get(key)
+        if entry is not None and (time.time() - entry.computed_at) < _STATUS_CACHE_TTL_S:
+            return _with_freshness(entry)
+        # Cache froid : on calcule une fois plutôt que de renvoyer une
+        # erreur — /status doit toujours répondre, même au tout premier appel.
+        payload = await asyncio.to_thread(_compute_status_payload, root)
+        entry = _StatusCacheEntry(payload=payload, computed_at=time.time())
+        _status_cache[key] = entry
+        return _with_freshness(entry)
+
+
+async def _status_cache_refresher() -> None:
+    """Rafraîchissement proactif en arrière-plan (motif CLAUDE.md) : une
+    requête ne devrait quasiment jamais payer le coût du calcul, seulement le
+    tout premier appel après démarrage. Une erreur de rafraîchissement ne
+    doit ni planter le service ni effacer un cache encore valide — on
+    réessaiera au tour suivant."""
+    while True:
+        try:
+            root = _root()
+            payload = await asyncio.to_thread(_compute_status_payload, root)
+            _status_cache[str(root)] = _StatusCacheEntry(payload=payload, computed_at=time.time())
+        except Exception:
+            pass
+        await asyncio.sleep(_STATUS_CACHE_TTL_S)
+
+
 def _load_manifests_or_500(mod_dir: Path) -> dict:
     try:
         return load_all(mod_dir)
@@ -153,52 +290,18 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
 
+    @app.on_event("startup")
+    async def _start_status_refresher() -> None:
+        # Fire-and-forget background task (motif CLAUDE.md « Performance
+        # Patterns — Double Caching »). N'est pas nécessaire à la correction
+        # de /status (voir _get_status_cached : cache froid = calcul direct,
+        # jamais d'erreur) — seulement à garder le cache chaud en continu sur
+        # le service réel.
+        asyncio.create_task(_status_cache_refresher())
+
     @app.get("/api/v1/profiles/status")
     async def get_status(_claims=Depends(require_jwt)):
-        root = _root()
-        mod_dir, _prof_dir, _pins_file, _active_file = _cli._paths(root)
-        manifests = _load_manifests_or_500(mod_dir)
-        routes = load_routes()
-        actuals = _cli._observe_all(manifests, routes)
-
-        modules = []
-        totals = {"count": 0, "on": 0, "off": 0, "unknown": 0, "rss_kb": 0, "exposed_public": 0}
-        by_category: dict = {}
-        by_runtime: dict = {}
-        by_exposure: dict = {}
-
-        def bump(bucket: dict, key: str, state: str, rss: Optional[int]) -> None:
-            b = bucket.setdefault(key, {"count": 0, "on": 0, "off": 0, "unknown": 0, "rss_kb": 0})
-            b["count"] += 1
-            b[state] += 1
-            if rss:
-                b["rss_kb"] += rss
-
-        for mid, m in sorted(manifests.items()):
-            a = actuals.get(mid, Actual())
-            st = _tri_state(a)
-            modules.append({
-                "id": mid, "category": m.category, "runtime": m.runtime,
-                "exposure": m.exposure, "priority": m.priority,
-                "protected": m.protected, "on": st, "rss_kb": a.rss_kb,
-            })
-            totals["count"] += 1
-            totals[st] += 1
-            if a.rss_kb:
-                totals["rss_kb"] += a.rss_kb
-            if m.exposure == "public":
-                totals["exposed_public"] += 1
-            bump(by_category, m.category, st, a.rss_kb)
-            bump(by_runtime, m.runtime, st, a.rss_kb)
-            bump(by_exposure, m.exposure, st, a.rss_kb)
-
-        return {
-            "modules": modules,
-            "totals": totals,
-            "by_category": by_category,
-            "by_runtime": by_runtime,
-            "by_exposure": by_exposure,
-        }
+        return await _get_status_cached(_root())
 
     @app.get("/api/v1/profiles/profiles")
     async def list_profiles(_claims=Depends(require_jwt)):
