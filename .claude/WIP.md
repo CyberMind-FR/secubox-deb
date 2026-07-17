@@ -3,6 +3,25 @@
 
 ---
 
+## ✅ 2026-07-17 : Sessions auditables + Companion auth/system/metrics + billets hashtags emoji (branche feat/sessions-companion-emoji)
+
+Sessions traçables, les 2 modules Companion stubs deviennent réels, billets gagne les vues rapides par hashtag emoji. Live-vérifié gk2. Détail dans HISTORY.md.
+
+- **Sessions (root-cause)** 🔑 — `/login/mfa` + `/totp/confirm` codaient en dur `"ip": ""` (et pas d'UA) ; seul le chemin mot-de-passe les captait. **admin est forcé TOTP ⇒ tout login admin réel passait par MFA** → lignes de session non auditables, onglet Sessions de la webui users (déjà complet) affichait du vide. Fix `_client_meta(request)` (X-Forwarded-For d'abord : nginx/HAProxy sont devant, `request.client.host` = le proxy). Prouvé en pilotant le vrai handler `/login/mfa` en-process (fichier sessions temporaire) : `ip=192.168.1.77` + UA complet.
+- **Companion auth + system** ⚙️ — 2 stubs de 34 lignes qui devinaient les routes (`/api/v1/auth/users` → **404** ; les identités sont sous `/api/v1/users`). Reconstruits sur les routes lues dans le source. auth = identités + **sessions (qui/IP/device/âge/courante)** ; system = status/metrics/resources/health_score/network/security, chaque section dégradant indépendamment.
+- **Metrics emoji** 📊 — `core/metrics.js` : seuils **par type** (disk le plus strict, cpu tolérant) ⇒ disk 94.5% = 🔴 / cpu 10% = 🟢 ; langage simple ("Memory 75% — 5.5 GB of 7.7 GB used").
+- **Billets hashtags emoji** 🏷️ — migration 0004 (`tag`+`billet_tag` indexés) ; tags **extraits du corps** (`#secu`) ⇒ zéro effort auteur + rétroactif : le backfill a taggé **37/46** billets. Slugs sans accents (#Réseau==#reseau), emoji stocké (pas de restyle silencieux), ancres d'URL non taggées, tag inconnu = badge neutre. Vues rapides `?tag=` sur `/` + `/feed.json` (EXISTS, pas JOIN → pagination keyset non dupliquée ; le pager garde le tag).
+- **Résumés du feed** 📄 — billets longs = extrait court + "Lire la suite" ; courts = entiers (16/20 résumés en live).
+- **`GET /admin/api/billets`** — liste d'authoring : le feed public ne peut pas la servir (son `id` est une URL permalien → **cause des 404 Edit/Delete**, et il masque les drafts).
+- **Companion re-login 401** 🔓 — les tokens box vivent 24h mais le Companion scelle le sien au pairing et le réutilise → le lendemain tout 401 sans issue ("Failed: unauthorized" billets + podcaster). `api.js` déclenche la ré-auth et **rejoue la requête une fois**, single-flight (1 prompt), donc un write en cours (un billet tapé) n'est pas perdu. SW v10.
+
+### ⬜ Next / follow-ups
+- **Rebuild `.deb` billets** (migration 0004 + `services/tags.py` + postinst .pth).
+- **Refresh token** : éviter la re-login toutes les 24h sur le Companion.
+- **APK périmé** : l'APK publié (16/07) embarque le vieux code (SW v5, `/feed`) — rebuild nécessaire.
+
+---
+
 ## ✅ 2026-07-17 : Billets — API admin JWT + authoring/upload Companion (branche fix/companion-billets-feed)
 
 Companion devient un vrai client d'écriture pour le micro-blog billets. Live-vérifié gk2. Détail dans HISTORY.md.
