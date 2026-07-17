@@ -63,6 +63,20 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reload"
 )
 
+// Rule evaluation modes for a category.
+//
+//	modeBlock  — a match blocks the request (the historical, only behaviour).
+//	modeDetect — a match is counted and logged, the request PASSES, and nothing
+//	             is banned. Lets an operator try a rule against real traffic
+//	             before arming it.
+//
+// A category with no "mode" is modeBlock. A detect default would silently turn
+// the whole WAF into an observer — a mute security outage.
+const (
+	modeBlock  = "block"
+	modeDetect = "detect"
+)
+
 // compiledPattern holds a compiled regex and its metadata.
 type compiledPattern struct {
 	id      string
@@ -76,6 +90,7 @@ type compiledPattern struct {
 type compiledCategory struct {
 	name     string
 	severity string
+	mode     string // modeBlock | modeDetect — never empty after loadFile
 	patterns []compiledPattern
 }
 
@@ -142,6 +157,7 @@ func loadRulesJSON(path string) *rulesData {
 		Name     string        `json:"name"`
 		Severity string        `json:"severity"`
 		Enabled  *bool         `json:"enabled"` // pointer: nil means absent (default true)
+		Mode     *string       `json:"mode"`    // pointer: nil means absent (default block)
 		Patterns []patternJSON `json:"patterns"`
 	}
 
@@ -185,9 +201,27 @@ func loadRulesJSON(path string) *rulesData {
 			sev = "medium"
 		}
 
+		// Resolve the evaluation mode. Absent, null or "" ⇒ block: the 17
+		// shipped categories carry no "mode" and must keep blocking.
+		//
+		// An UNKNOWN value also ⇒ block, loudly. Fail closed: a typo like
+		// "monitor" must never silently drop a protection nor downgrade it to
+		// observation. This is the same instinct as Enabled's pointer default.
+		mode := modeBlock
+		if cat.Mode != nil && *cat.Mode != "" {
+			switch *cat.Mode {
+			case modeBlock, modeDetect:
+				mode = *cat.Mode
+			default:
+				log.Printf("sbxwaf/rules: category %q has unknown mode %q — falling back to %q (known modes: %q, %q)",
+					catID, *cat.Mode, modeBlock, modeBlock, modeDetect)
+			}
+		}
+
 		cc := compiledCategory{
 			name:     cat.Name,
 			severity: sev,
+			mode:     mode,
 		}
 		if cc.name == "" {
 			cc.name = catID
