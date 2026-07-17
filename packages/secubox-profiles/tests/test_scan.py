@@ -64,11 +64,30 @@ def test_discover_protects_the_core_set(tmp_path):
 
 
 def test_discover_maps_unknown_menu_category_to_infra(tmp_path):
-    # menu.d utilise ses propres catégories UI ("mesh") : on ne les recopie
-    # pas aveuglément dans la taxonomie de déploiement.
+    # menu.d utilise ses propres catégories UI : une catégorie inconnue de
+    # la table de correspondance retombe exactement sur "infra", pas juste
+    # "une catégorie valide quelconque".
     m = discover(units=["secubox-lyrion.service"], lxc_names=set(), routes=set(),
                  menu_dir=menu(tmp_path, "lyrion", category="n-importe-quoi"))[0]
-    assert m.category in ("media", "security", "network", "infra", "dev", "mesh")
+    assert m.category == "infra"
+
+
+def test_discover_maps_mind_menu_category_to_media(tmp_path):
+    m = discover(units=["secubox-lyrion.service"], lxc_names=set(), routes=set(),
+                 menu_dir=menu(tmp_path, "lyrion", category="mind"))[0]
+    assert m.category == "media"
+
+
+def test_discover_maps_mesh_menu_category_to_infra_not_deployment_mesh(tmp_path):
+    # Régression pour la collision de jeton : menu.d/peertube et menu.d/lyrion
+    # déclarent tous deux category="mesh" (fourre-tout UI), alors que ce sont
+    # des serveurs media, pas du réseau P2P. La taxonomie de déploiement a
+    # elle aussi une catégorie "mesh" (réseau), mais c'est une coïncidence de
+    # nommage : la correspondance ne doit PAS confondre les deux.
+    m = discover(units=["secubox-peertube.service"], lxc_names=set(), routes=set(),
+                 menu_dir=menu(tmp_path, "peertube", category="mesh"))[0]
+    assert m.category == "infra"
+    assert m.category != "mesh"
 
 
 def test_to_toml_roundtrips_through_the_loader(tmp_path):
@@ -86,6 +105,28 @@ def test_to_toml_roundtrips_through_the_loader(tmp_path):
 def test_to_toml_roundtrips_minimal_manifest(tmp_path):
     src = Manifest(id="lyrion", category="media", runtime="native", exposure="lan",
                    units=("secubox-lyrion.service",))
+    p = tmp_path / "lyrion.toml"
+    p.write_text(to_toml(src))
+    assert load_manifest(p) == src
+
+
+def test_to_toml_roundtrips_quote_and_backslash_in_field(tmp_path):
+    # _toml_str est écrit à la main : verrouille l'échappement de " et \.
+    src = Manifest(id="lyrion", category="media", runtime="native", exposure="lan",
+                   units=("secubox-lyrion.service",), lxc=None,
+                   portal_domain='weird"name\\value')
+    p = tmp_path / "lyrion.toml"
+    p.write_text(to_toml(src))
+    assert load_manifest(p) == src
+
+
+def test_to_toml_roundtrips_control_characters_in_field(tmp_path):
+    # Un \n littéral dans une chaîne TOML basique produit un fichier que
+    # tomllib refuse de reparser ("Illegal character '\n'") ; _toml_str doit
+    # échapper les caractères de contrôle plutôt que les recopier tels quels.
+    src = Manifest(id="lyrion", category="media", runtime="native", exposure="lan",
+                   units=("secubox-lyrion.service",), lxc=None,
+                   portal_domain="line1\nline2\ttabbed\rcr")
     p = tmp_path / "lyrion.toml"
     p.write_text(to_toml(src))
     assert load_manifest(p) == src
