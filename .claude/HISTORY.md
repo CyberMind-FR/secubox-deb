@@ -3,6 +3,19 @@
 
 ---
 
+## 2026-07-17 — WAF webui + autoban-to-firewall fix + efficiency analysis + Nextcloud rework (PR #866, #867)
+
+Reworked two dashboards to the cyan hybrid-skin, fixed a major WAF control gap, and repaired the Nextcloud module — all live-verified on gk2.
+
+- **WAF webui rework** (merged earlier to master) — sbxwaf dashboard restyled to the `/certs/` cyan hybrid-skin (emoji cards, live pulse, 30s/10s reactive), netifyd/crt-light cruft dropped; every endpoint preserved. Renders the live 198K-threat data.
+- **WAF efficiency analysis** — detection strong (198K threats, 17 categories) but CONTROL weak: only 2 IPs actually banned. Bans were app-level (403 page) not firewall-level, so offenders kept hammering (one IP 36,881×; top /24 = 26% of volume). ~26% of pattern-matching (voip/xmpp/cve_voip/cve_xmpp = 39/149) is dead weight on HTTP. Ranked fixes presented.
+- **WAF autoban→firewall fix** (PR #866) — the CrowdSec bridge was silently OFF: the unit passes `--crowdsec-url` but no `--crowdsec-jwt-file`, so main.go hit the 'disabled' branch and `Report()` was never called; the LAPI `/v1/alerts` path is doubly broken (hourly JWT + 500 on our schema). Added `CscliReporter` — the proven path the manual dashboard ban uses (`cscli decisions add` → real bouncer nft drop) — engaging when `--crowdsec-url` is set without a JWT file (new `--crowdsec-cscli` flag). Per-IP 5-min dedup collapses the storm (graduated ban fires Report on every banned request → dozens of concurrent cscli procs `signal: killed`). Rebuilt arm64 + deployed (mv over /usr/sbin/sbxwaf, `systemctl restart secubox-waf-ng`). Verified: 5 honeypot hits from a test IP → exactly 1 decision, no storm; a live honeypot offender got a real `secubox-waf/honeypot` decision.
+- **Nextcloud rework** (PR #867) — the `/nextcloud/` webui showed Stopped/empty because the status probe was fully broken (same unprivileged-LXC pattern as mail/dpi): ran `lxc-info`/`occ` WITHOUT sudo + `lxc_path` `/srv/lxc` vs real `/data/lxc` (fixing the path alone then 500'd on a PermissionError); the only privileged surface is `sudo nextcloudctl`; and **`NoNewPrivileges=yes` blocked sudo** (the wireguard gotcha). Fix: privilege-free TCP port probe for liveness, PermissionError-tolerant installed, all container ops via `sudo nextcloudctl` (occ passthrough), a **daemon-thread 60s cache** for the slow occ fields (`@app.on_event("startup")` wouldn't fire under uvicorn --uds), real data_path + public web_url. Webui restyled to cyan hybrid-skin (subagent, 361 lines, endpoints preserved). Verified: running, v32.0.10, 2 users, 5.8G, nc.gk2.secubox.in. Board drift: NNP drop-in + `[nextcloud] domain` in secubox.conf.
+
+Follow-ups: WAF efficiency #2–4 (subnet/ASN bans, skip voip/xmpp on HTTP, stop logging banned IPs); backport the Nextcloud NNP drop-in + secubox.conf domain; #862–#864 still open.
+
+---
+
 ## 2026-07-16 — Mail stack overhaul + systemic auth fix + DPI exfil/regen (PR #865, #862–#864)
 
 Session multi-fix, tout **live-vérifié sur gk2**, portable committé et mergé via **PR #865**.

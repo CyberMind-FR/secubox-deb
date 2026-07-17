@@ -1,5 +1,21 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-16*
+*Mis à jour : 2026-07-17*
+
+---
+
+## ✅ 2026-07-17 : WAF (webui + autoban→firewall + analyse) + Nextcloud rework (PR #866, #867 mergées)
+
+Deux dashboards refaits cyan, un gros trou de contrôle WAF colmaté, module Nextcloud réparé. Live-vérifié gk2. Détail dans HISTORY.md.
+
+- **WAF webui** 🛡️ — dashboard sbxwaf restylé cyan hybrid-skin (cartes emoji, pulse live, refresh réactif) ; endpoints préservés ; rend la donnée live (198k threats).
+- **WAF autoban→firewall** 🔥 (PR #866) — le bridge CrowdSec était **silencieusement OFF** (unit passe `--crowdsec-url` mais pas `--crowdsec-jwt-file` → branche 'disabled' → `Report()` jamais appelé). 198k threats, ~0 ban réel (un IP a tapé 36 881×). Ajout `CscliReporter` (`cscli decisions add` = vrai drop nft bouncer, le chemin du ban manuel qui marche) + dedup 5-min par IP (anti-storm `signal: killed`). Rebuild arm64 + deploy. Prouvé : 5 hits honeypot → 1 seule décision.
+- **WAF analyse efficacité** 📊 — détection forte / contrôle faible (2 bans seulement) ; ~26% du pattern-matching (voip/xmpp = 39/149) inutile en HTTP ; top /24 = 26% du volume. Fixes classés.
+- **Nextcloud** ☁️ (PR #867) — `/nextcloud/` montrait Stopped/vide : probe status cassé (lxc-info/occ **sans sudo** + lxc_path `/srv/lxc` vs `/data/lxc` ; seul `sudo nextcloudctl` est permis ; **`NoNewPrivileges=yes` bloquait sudo** — gotcha wireguard). Fix : port-probe privilege-free + ops via `sudo nextcloudctl` (occ passthrough) + **cache daemon-thread 60s** (le startup uvicorn ne firait pas) + web_url public. Webui restylé cyan. Vérifié : running v32.0.10, 2 users, 5.8G.
+
+### ⬜ Next / follow-ups
+- **WAF efficacité #2–4** : bans subnet/ASN (le /24 = 26%), skip voip/xmpp en HTTP (26% de regex), ne plus logguer les IP déjà bannies.
+- **Backport Nextcloud** : drop-in `NoNewPrivileges=false` + `[nextcloud] domain="nc.gk2.secubox.in"` dans le paquet (secubox.conf/unit).
+- **#862–#864** toujours ouverts (provisioning mail, ACME wiring, vendorer ident_switch).
 
 ---
 
