@@ -1,0 +1,13 @@
+Source: secubox-profiles
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-profiles
+Architecture: all
+Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core
+Description: SecuBox — inventaire et profils de modules (phase 1, lecture seule)
+ Manifestes de modules, profiler de configuration, état et diff.
+ Phase 1 n'applique aucun changement : scan/status/diff uniquement.
