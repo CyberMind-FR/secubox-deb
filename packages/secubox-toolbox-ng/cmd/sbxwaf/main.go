@@ -423,10 +423,15 @@ func (s *Server) handler() http.Handler {
 						// No counter → observe like detect, never ban.
 						s.logEscalate(r, ip, rawPath, cat, sev, "detect")
 						hit = false
-					} else if _, banned := s.escalateBan.Record(ip, time.Now().Unix()); banned {
+					} else if count, banned := s.escalateBan.Record(ip, time.Now().Unix()); banned {
 						// Threshold crossed: ban for real, exactly as the block
 						// path's ban branch does — but gated on escalateBan.
 						s.logEscalate(r, ip, rawPath, cat, sev, "banned")
+						// Mirror the block path's journald line so an operator
+						// tailing `journalctl -u secubox-waf-ng` for THREAT sees
+						// escalate bans too — otherwise a banned scanner is
+						// visible in the dashboard JSON but silent in the logs.
+						log.Printf("sbxwaf: THREAT [%s] %s (escalate %d): %s", sev, ip, count, cat)
 						if s.crowdsec != nil {
 							go s.crowdsec.Report(ip, cat, sev)
 						}
