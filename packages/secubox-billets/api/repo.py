@@ -14,6 +14,7 @@ import aiosqlite
 
 from .ids import new_ulid
 from .models import BilletIn, slugify
+from .services.tags import extract as tags_extract
 
 _FEED_COLUMNS = ("id,created_at,updated_at,published_at,body,ref_url,embed_url,"
                  "embed_html,embed_provider,embed_fetched_at,slug,status,"
@@ -49,6 +50,7 @@ async def create_billet(conn: aiosqlite.Connection, data: BilletIn, *, now: str,
          data.embed_url, slug, status, data.style),
     )
     await conn.commit()
+    await sync_tags(conn, billet_id, data.body)
     return billet_id
 
 
@@ -67,11 +69,21 @@ async def get_by_id(conn: aiosqlite.Connection, billet_id: str) -> Optional[aios
 
 
 async def list_published(conn: aiosqlite.Connection, *, limit: int = 20,
-                         cursor: Optional[str] = None) -> tuple[list[aiosqlite.Row], Optional[str]]:
-    """Return (rows, next_cursor). `next_cursor` is None on the last page."""
+                         cursor: Optional[str] = None,
+                         tag: Optional[str] = None) -> tuple[list[aiosqlite.Row], Optional[str]]:
+    """Return (rows, next_cursor). `next_cursor` is None on the last page.
+
+    `tag` restricts the feed to one emoji-hashtag (the quick view). It uses an
+    EXISTS against the indexed billet_tag rather than a JOIN, so keyset paging
+    stays correct — a JOIN could duplicate a row per matching tag.
+    """
     limit = max(1, min(limit, 100))
     params: list[Any] = []
     where = "status = 'published'"
+    if tag:
+        where += (" AND EXISTS (SELECT 1 FROM billet_tag bt WHERE bt.billet_id = billet.id "
+                  "AND bt.tag_slug = ?)")
+        params.append(tag)
     if cursor:
         decoded = decode_cursor(cursor)
         if decoded:
@@ -161,6 +173,7 @@ async def update_billet(conn: aiosqlite.Connection, billet_id: str, *, body: str
         (body, ref_url, embed_url, style, now, billet_id),
     )
     await conn.commit()
+    await sync_tags(conn, billet_id, body)   # a #tag removed from the body loses its chip
 
 
 async def set_embed_snapshot(conn: aiosqlite.Connection, billet_id: str,
@@ -363,3 +376,60 @@ async def stats(conn: aiosqlite.Connection) -> dict:
         "reactions_total": await _one("SELECT COUNT(*) FROM reaction"),
         "reactions_by": reactions_by,
     }
+
+
+# Tags (emoji hashtags) ──────────────────────────────────────────────────
+async def sync_tags(conn: aiosqlite.Connection, billet_id: str, body: str) -> list[tuple[str, str]]:
+    """Re-extract the body's #hashtags and make billet_tag match it exactly.
+
+    Called on every create/update, so removing a #tag from the body removes the
+    chip. The tag row itself is upserted (never deleted here) — other billets may
+    still point at it, and an orphan tag is harmless.
+    """
+    pairs = tags_extract(body)
+    for slug, emoji in pairs:
+        # Keep the stored emoji stable once a tag exists: a later curation change
+        # must not silently restyle billets that already published with it.
+        await conn.execute(
+            "INSERT INTO tag(slug,emoji,label) VALUES (?,?,?) ON CONFLICT(slug) DO NOTHING",
+            (slug, emoji, slug),
+        )
+    await conn.execute("DELETE FROM billet_tag WHERE billet_id = ?", (billet_id,))
+    if pairs:
+        await conn.executemany(
+            "INSERT OR IGNORE INTO billet_tag(billet_id,tag_slug) VALUES (?,?)",
+            [(billet_id, slug) for slug, _ in pairs],
+        )
+    await conn.commit()
+    return pairs
+
+
+async def tags_for_many(conn: aiosqlite.Connection,
+                        billet_ids: list[str]) -> dict[str, list[dict]]:
+    """{billet_id: [{slug, emoji}]} for a whole page in ONE query — the feed
+    renders chips for every row, so a per-row lookup would be an N+1."""
+    if not billet_ids:
+        return {}
+    marks = ",".join("?" * len(billet_ids))
+    q = (f"SELECT bt.billet_id, t.slug, t.emoji FROM billet_tag bt "
+         f"JOIN tag t ON t.slug = bt.tag_slug "
+         f"WHERE bt.billet_id IN ({marks}) ORDER BY t.slug")
+    out: dict[str, list[dict]] = {}
+    async with conn.execute(q, billet_ids) as cur:
+        for row in await cur.fetchall():
+            out.setdefault(row["billet_id"], []).append(
+                {"slug": row["slug"], "emoji": row["emoji"]})
+    return out
+
+
+async def list_tags(conn: aiosqlite.Connection) -> list[dict]:
+    """Every tag that has at least one PUBLISHED billet, with its count —
+    this is the quick-view chip bar, so drafts must not leak into it."""
+    q = ("SELECT t.slug, t.emoji, COUNT(*) AS n FROM billet_tag bt "
+         "JOIN tag t ON t.slug = bt.tag_slug "
+         "JOIN billet b ON b.id = bt.billet_id "
+         "WHERE b.status = 'published' "
+         "GROUP BY t.slug, t.emoji ORDER BY n DESC, t.slug")
+    async with conn.execute(q) as cur:
+        return [{"slug": r["slug"], "emoji": r["emoji"], "count": r["n"]}
+                for r in await cur.fetchall()]

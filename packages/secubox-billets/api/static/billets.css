@@ -166,3 +166,28 @@ body.lb-lock{overflow:hidden}
   top:-8px;left:14px;background:#0d1117;padding:0 6px;font-size:9px;
   letter-spacing:.2em;color:#00d4ff;font-weight:700}
 .embed-vignette img{width:100%;height:auto;display:block;border-radius:4px}
+
+/* ── emoji hashtags ─────────────────────────────────────────────────────
+   Tags come from the #hashtags authors type in the body. The bar is the
+   quick view: each chip is a real link (/?tag=slug), so a filtered view is
+   shareable and works with JS off. */
+.tagbar{display:flex;flex-wrap:wrap;gap:.4rem;margin:0 0 1.2rem}
+.tag-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .7rem;
+  border-radius:999px;font-size:.82rem;font-weight:600;text-decoration:none;
+  color:var(--fg);background:var(--card);border:1px solid var(--border);
+  transition:transform .12s ease,border-color .12s ease}
+.tag-chip:hover{transform:translateY(-1px);border-color:var(--link)}
+/* The active chip is the one state that must survive a squint — give it the
+   site's gradient rather than another subtle border tint. */
+.tag-chip.on{background:var(--grad);color:#fff;border-color:transparent}
+.tag-chip.sm{font-size:.75rem;padding:.2rem .55rem}
+.tag-n{opacity:.6;font-variant-numeric:tabular-nums}
+.tag-chip.on .tag-n{opacity:.85}
+.tag-row{display:flex;flex-wrap:wrap;gap:.35rem;margin:.6rem 0 .2rem}
+.tag-active{font-size:.9rem;color:var(--muted);margin:0 0 1rem}
+@media (prefers-reduced-motion:reduce){.tag-chip{transition:none}.tag-chip:hover{transform:none}}
+/* Feed resumes: long billets show a few words + a link to the full permalink. */
+.resume{font-size:1rem;line-height:1.55;color:var(--fg);margin:.2rem 0 .5rem}
+.read-more{display:inline-block;font-size:.85rem;font-weight:600;text-decoration:none;
+  color:var(--link)}
+.read-more:hover{text-decoration:underline}
