@@ -87,3 +87,13 @@ func (b *Ban) Record(ip string, nowUnix int64) (count int, banned bool) {
 	banned = count >= b.threshold
 	return count, banned
 }
+
+// Count reports the number of recorded hits currently stored for ip, without
+// pruning or mutating state. It exists so tests (and diagnostics) can assert
+// that a code path never called Record for a given IP — a detect-mode match
+// must leave this at zero.
+func (b *Ban) Count(ip string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.hits[ip])
+}

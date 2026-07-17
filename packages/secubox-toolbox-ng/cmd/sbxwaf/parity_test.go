@@ -199,7 +199,7 @@ func runDecision(rules *Rules, ban *Ban, fx parityFixture, now int64) string {
 	// Step 4: WAF rule matching.
 	// rawPath and rawQuery are passed as-is; Rules.Match applies unquote_plus
 	// internally (matches Python urllib.parse.unquote_plus in check_request).
-	_, _, hit := rules.Match(fx.Method, fx.Path, fx.Query, fx.Body, fx.UA)
+	_, _, _, hit := rules.Match(fx.Method, fx.Path, fx.Query, fx.Body, fx.UA)
 	if !hit {
 		return "allow"
 	}
@@ -276,13 +276,13 @@ func TestWAFParityRulesLoad(t *testing.T) {
 	rules := LoadRules(rulesPath)
 
 	// Probe with a known-good payload to confirm the rules are live.
-	_, _, hit := rules.Match("GET", "/search", "q=union+select+1,2,3", "", "")
+	_, _, _, hit := rules.Match("GET", "/search", "q=union+select+1,2,3", "", "")
 	if !hit {
 		t.Errorf("rules loaded from %q but union+select did not match — check waf-rules.json", rulesPath)
 	}
 
 	// Probe with a benign request to confirm no false positive on load.
-	_, _, fp := rules.Match("GET", "/", "q=hello+world", "", "Mozilla/5.0")
+	_, _, _, fp := rules.Match("GET", "/", "q=hello+world", "", "Mozilla/5.0")
 	if fp {
 		t.Errorf("false positive on benign request after loading %q", rulesPath)
 	}
