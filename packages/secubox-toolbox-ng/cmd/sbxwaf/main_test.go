@@ -298,6 +298,134 @@ func TestAbsentModeStillBlocks(t *testing.T) {
 	}
 }
 
+// ─── escalate mode (Task 2) ─────────────────────────────────────────────────
+
+// escalate observes the first N-1 probes: they PASS (like detect) and do NOT
+// ban. Only the Nth probe from the same IP bans.
+func TestEscalateObservesThenBansAtThreshold(t *testing.T) {
+	rulesPath := writeRulesFile(t, `{"probes":{"name":"P","severity":"high","mode":"escalate",
+		"patterns":[{"id":"f5-1","pattern":"/mgmt/tm/util/bash","desc":"F5 probe"}]}}`)
+
+	backendHits := 0
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backendHits++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	s := newDetectTestServer(t, backend.URL, rulesPath)
+	s.escalateBan = NewBan(time.Hour, 3) // threshold 3
+	handler := s.handler()
+
+	// Probes 1 and 2: observed, pass through, backend reached.
+	for i := 1; i <= 2; i++ {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, detectTestReq("203.0.113.60"))
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("probe %d: got 403, escalate must observe (pass) before the threshold", i)
+		}
+	}
+	if backendHits != 2 {
+		t.Fatalf("expected 2 observed probes to reach the backend, got %d", backendHits)
+	}
+	if s.escalateBan.Count("203.0.113.60") < 2 {
+		t.Fatal("escalate did not count the observed probes")
+	}
+
+	// Probe 3: threshold reached → ban (403).
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, detectTestReq("203.0.113.60"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("probe 3 (threshold): got %d, want 403 (ban)", rec.Code)
+	}
+}
+
+// escalate must NOT touch the block counter (s.ban): the two signals are
+// separate. Probing an escalate category must not advance s.ban.
+func TestEscalateUsesItsOwnCounterNotTheBlockBan(t *testing.T) {
+	rulesPath := writeRulesFile(t, `{"probes":{"name":"P","severity":"high","mode":"escalate",
+		"patterns":[{"id":"f5-1","pattern":"/mgmt/tm/util/bash","desc":"F5 probe"}]}}`)
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	s := newDetectTestServer(t, backend.URL, rulesPath)
+	s.escalateBan = NewBan(time.Hour, 3)
+	handler := s.handler()
+
+	handler.ServeHTTP(httptest.NewRecorder(), detectTestReq("203.0.113.61"))
+	handler.ServeHTTP(httptest.NewRecorder(), detectTestReq("203.0.113.61"))
+
+	if s.ban != nil && s.ban.Count("203.0.113.61") != 0 {
+		t.Fatalf("escalate advanced the block counter s.ban (%d); the counters must be separate",
+			s.ban.Count("203.0.113.61"))
+	}
+	if s.escalateBan.Count("203.0.113.61") != 2 {
+		t.Fatalf("escalate counter = %d, want 2", s.escalateBan.Count("203.0.113.61"))
+	}
+}
+
+// With no escalate counter, an escalate category behaves like detect: it
+// observes and never bans — never like block.
+func TestEscalateWithNilCounterBehavesLikeDetect(t *testing.T) {
+	rulesPath := writeRulesFile(t, `{"probes":{"name":"P","severity":"high","mode":"escalate",
+		"patterns":[{"id":"f5-1","pattern":"/mgmt/tm/util/bash","desc":"F5 probe"}]}}`)
+	reached := false
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	s := newDetectTestServer(t, backend.URL, rulesPath)
+	s.escalateBan = nil // no counter
+	handler := s.handler()
+
+	for i := 0; i < 5; i++ {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, detectTestReq("203.0.113.62"))
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("nil escalate counter must observe (pass), never ban; got 403 on probe %d", i+1)
+		}
+	}
+	if !reached {
+		t.Fatal("nil escalate counter: request was swallowed")
+	}
+}
+
+// The ban at threshold logs action="banned" (counted as a block); the observed
+// probes log action="detect" (excluded from the block counters).
+func TestEscalateLogsDetectWhileObservingAndBannedAtThreshold(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "threats.jsonl")
+	rulesPath := writeRulesFile(t, `{"probes":{"name":"P","severity":"high","mode":"escalate",
+		"patterns":[{"id":"f5-1","pattern":"/mgmt/tm/util/bash","desc":"F5 probe"}]}}`)
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	s := newDetectTestServer(t, backend.URL, rulesPath)
+	s.escalateBan = NewBan(time.Hour, 2) // threshold 2 for a short test
+	s.threatLog = NewThreatLog(logPath)
+	handler := s.handler()
+
+	handler.ServeHTTP(httptest.NewRecorder(), detectTestReq("203.0.113.63")) // observe → "detect"
+	handler.ServeHTTP(httptest.NewRecorder(), detectTestReq("203.0.113.63")) // threshold → "banned"
+
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("threat log not written: %v", err)
+	}
+	if !strings.Contains(string(raw), `"detect"`) {
+		t.Fatalf("observed probe must log action=detect, got: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"banned"`) {
+		t.Fatalf("threshold probe must log action=banned, got: %s", raw)
+	}
+}
+
 // The threat record must say "detect" — otherwise stats conflate "blocked" with
 // "would have blocked" and the 198k threat counter becomes a lie.
 func TestDetectModeLogsActionDetect(t *testing.T) {
