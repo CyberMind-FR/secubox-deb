@@ -50,33 +50,54 @@ def test_defaults_are_applied(tmp_path):
     assert m.priority == 50 and m.protected is False and m.needs == ()
 
 
-@pytest.mark.parametrize("field,bad", [
-    ("runtime", '"docker"'),
-    ("exposure", '"world"'),
-    ("category", '"divers"'),
+@pytest.mark.parametrize("field,original,bad", [
+    ("runtime", 'runtime  = "native"', 'runtime  = "docker"'),
+    ("exposure", 'exposure = "lan"', 'exposure = "world"'),
+    ("category", 'category = "media"', 'category = "divers"'),
 ])
-def test_rejects_unknown_enum(tmp_path, field, bad):
+def test_rejects_unknown_enum(tmp_path, field, original, bad):
     # Une valeur inconnue doit échouer bruyamment : un manifeste mal typé
     # deviendrait une décision d'extinction erronée en Phase 3.
-    src = MINIMAL.replace(f'{field} = "' + {"runtime": "native", "exposure": "lan",
-                                            "category": "media"}[field] + '"',
-                          f"{field} = {bad}")
-    p = tmp_path / "bad.toml"
+    src = MINIMAL.replace(original, bad)
+    # Sanity check: the substitution must actually have happened, otherwise
+    # this test would silently exercise the unchanged MINIMAL fixture.
+    assert src != MINIMAL
+    # The filename must match MINIMAL's id ("lyrion") so the id-vs-filename
+    # check passes and the enum validator is the one actually reached.
+    p = tmp_path / "lyrion.toml"
     p.write_text(src)
     with pytest.raises(ManifestError):
         load_manifest(p)
 
 
 def test_rejects_lxc_runtime_without_lxc_name(tmp_path):
-    p = tmp_path / "bad.toml"
+    p = tmp_path / "lyrion.toml"
     p.write_text(MINIMAL.replace('runtime  = "native"', 'runtime  = "lxc"'))
     with pytest.raises(ManifestError):
         load_manifest(p)
 
 
 def test_rejects_priority_out_of_range(tmp_path):
-    p = tmp_path / "bad.toml"
+    p = tmp_path / "lyrion.toml"
     p.write_text(MINIMAL + "\npriority = 101\n")
+    with pytest.raises(ManifestError):
+        load_manifest(p)
+
+
+def test_rejects_needs_as_bare_string(tmp_path):
+    # `needs = "auth"` (forgotten brackets) must not silently explode into
+    # ('a', 'u', 't', 'h') via tuple(str) — it must fail loudly.
+    p = tmp_path / "lyrion.toml"
+    p.write_text(MINIMAL + '\nneeds = "auth"\n')
+    with pytest.raises(ManifestError):
+        load_manifest(p)
+
+
+def test_rejects_protected_as_string(tmp_path):
+    # `protected = "false"` must not be coerced by Python truthiness into
+    # True — protected gates whether a module may ever be shut down.
+    p = tmp_path / "lyrion.toml"
+    p.write_text(MINIMAL + '\nprotected = "false"\n')
     with pytest.raises(ManifestError):
         load_manifest(p)
 
