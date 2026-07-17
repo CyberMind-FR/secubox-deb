@@ -128,6 +128,12 @@ type Server struct {
 	// Nil means no ban tracking (legacy: plain 403 on WAF hit).
 	ban *Ban
 
+	// escalateBan counts hits on `escalate`-mode categories in a SEPARATE
+	// sliding window (long, e.g. 24h) from `ban`. escalate observes (passes,
+	// logs "detect") until this counter says banned, then bans via crowdsec.
+	// Nil means escalate behaves like detect (observe, never ban).
+	escalateBan *Ban
+
 	// threatLog appends one JSON line per WAF hit to the threats log file.
 	// Wired in main() via NewThreatLog(--threat-log); tests can inject.
 	// Nil means no threat logging.
@@ -407,6 +413,36 @@ func (s *Server) handler() http.Handler {
 					}
 					hit = false // fall through to the normal proxy path
 				}
+				if hit && mode == modeEscalate {
+					// Observe first, ban a persistent scanner. Uses a SEPARATE
+					// counter (escalateBan) so probes for absent products never
+					// mix with the block-mode ban signal. Self-contained: it does
+					// NOT fall through to the block path below, which would double
+					// count into s.ban.
+					if s.escalateBan == nil {
+						// No counter → observe like detect, never ban.
+						s.logEscalate(r, ip, rawPath, cat, sev, "detect")
+						hit = false
+					} else if count, banned := s.escalateBan.Record(ip, time.Now().Unix()); banned {
+						// Threshold crossed: ban for real, exactly as the block
+						// path's ban branch does — but gated on escalateBan.
+						s.logEscalate(r, ip, rawPath, cat, sev, "banned")
+						// Mirror the block path's journald line so an operator
+						// tailing `journalctl -u secubox-waf-ng` for THREAT sees
+						// escalate bans too — otherwise a banned scanner is
+						// visible in the dashboard JSON but silent in the logs.
+						log.Printf("sbxwaf: THREAT [%s] %s (escalate %d): %s", sev, ip, count, cat)
+						if s.crowdsec != nil {
+							go s.crowdsec.Report(ip, cat, sev)
+						}
+						writeBan(w)
+						return
+					} else {
+						// Still observing: log and let it through.
+						s.logEscalate(r, ip, rawPath, cat, sev, "detect")
+						hit = false
+					}
+				}
 				if hit {
 					// Task 3.2 — graduated WARNING/BAN response.
 					//
@@ -539,6 +575,25 @@ func (s *Server) handler() http.Handler {
 	})
 }
 
+// logEscalate writes one threat record for an escalate-mode hit. `action` is
+// "detect" while observing and "banned" once the threshold is crossed.
+func (s *Server) logEscalate(r *http.Request, ip, rawPath, cat, sev, action string) {
+	if s.threatLog == nil {
+		return
+	}
+	s.threatLog.Record(ThreatRecord{
+		ClientIP: ip,
+		Host:     r.Host,
+		Method:   r.Method,
+		Path:     rawPath,
+		Category: cat,
+		Severity: sev,
+		RuleID:   "",
+		Action:   action,
+		UA:       r.Header.Get("User-Agent"),
+	})
+}
+
 // parseTrustedHosts parses a comma-separated list of hostnames into a set.
 // Empty entries are silently skipped.
 func parseTrustedHosts(csv string) map[string]struct{} {
@@ -634,6 +689,13 @@ func main() {
 	wafSkipHosts := flag.String("waf-skip-hosts",
 		"git.gk2.secubox.in,git.secubox.in,admin.gk2.secubox.in,10.100.0.1:9080",
 		"comma-separated hostnames to bypass WAF inspection entirely (mirrors Python trusted-host list)")
+	// escalate mode: separate long-window counter (a slow scanner probing over
+	// hours/days must still trip a ban even though each individual probe is
+	// only observed, not blocked).
+	escalateWindow := flag.Duration("escalate-window", 24*time.Hour,
+		"sliding window for escalate-mode categories (a slow scanner needs a long window)")
+	escalateThreshold := flag.Int("escalate-threshold", 3,
+		"probes within the escalate window before an IP is banned")
 	flag.Parse()
 
 	// rules is consumed below when --rules is provided.
@@ -679,6 +741,8 @@ func main() {
 		// Task 3.2: graduated ban (window=300s, threshold=3, matches Python
 		// BAN_WINDOW=300 / BAN_THRESHOLD=3 from secubox_waf.py lines 82-83).
 		ban: NewBan(300*time.Second, 3),
+		// escalate mode: separate long-window counter (default 24h/3).
+		escalateBan: NewBan(*escalateWindow, *escalateThreshold),
 		// Task 3.2: append-only threat log.
 		threatLog: NewThreatLog(*threatLog),
 		// crowdsec: wired below when --crowdsec-url and --crowdsec-jwt-file are set.
