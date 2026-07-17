@@ -1,0 +1,15 @@
+{
+  "id": "peertube",
+  "name": "PeerTube",
+  "module": "MIND",
+  "icon": "🎬",
+  "description": "Video instance: library, channels, transcoding, federation.",
+  "api_base": "/api/v1/peertube",
+  "status_endpoint": "/api/v1/peertube/status",
+  "capabilities": ["read"],
+  "routes": [
+    { "path": "", "label": "Overview" },
+    { "path": "videos", "label": "Videos" },
+    { "path": "federation", "label": "Federation" }
+  ]
+}
