@@ -86,6 +86,7 @@ def test_scan_survives_unreadable_routes_file(root, capsys, monkeypatch):
     # l'opérateur ne le sache, et un manifeste écrit fait ensuite autorité
     # (scan n'écrase pas sans --force). L'opérateur doit être prévenu.
     monkeypatch.setattr("api.cli.load_routes", lambda: None)
+    monkeypatch.setattr("api.cli._running_as_root", lambda: True)
     monkeypatch.setattr("api.cli._run", lambda argv: (
         (0, "secubox-lyrion.service enabled\n") if argv[0:2] == ["systemctl", "list-unit-files"]
         else (0, "")))
@@ -101,6 +102,7 @@ def test_scan_stays_silent_when_routes_file_genuinely_absent(root, capsys, monke
     # Aucun avertissement ne doit être émis dans ce cas — sinon l'opérateur
     # ne peut plus distinguer "rien à signaler" de "attention, dégradé".
     monkeypatch.setattr("api.cli.load_routes", lambda: set())
+    monkeypatch.setattr("api.cli._running_as_root", lambda: True)
     monkeypatch.setattr("api.cli._run", lambda argv: (
         (0, "secubox-lyrion.service enabled\n") if argv[0:2] == ["systemctl", "list-unit-files"]
         else (0, "")))
@@ -108,3 +110,60 @@ def test_scan_stays_silent_when_routes_file_genuinely_absent(root, capsys, monke
     err = capsys.readouterr().err
     assert rc == 0
     assert err == ""
+
+
+def test_scan_aborts_when_lxc_ls_did_not_execute(root, capsys, monkeypatch):
+    # rc=None (OSError/timeout) sur lxc-ls est indéterminé, PAS "aucun
+    # conteneur". Sur une box avec des conteneurs LXC, retomber sur out=""
+    # dériverait silencieusement tous les modules LXC en runtime="native"
+    # dans un manifeste qui fait ensuite autorité — c'est le C2 du review.
+    # scan doit refuser d'écrire plutôt que de produire cet inventaire faux.
+    monkeypatch.setattr("api.cli._running_as_root", lambda: True)
+
+    def fake_run(argv):
+        if argv[0:2] == ["systemctl", "list-unit-files"]:
+            return 0, "secubox-lyrion.service enabled\n"
+        if argv[0] == "lxc-ls":
+            return None, ""  # n'a pas pu s'exécuter
+        return 0, ""
+
+    monkeypatch.setattr("api.cli._run", fake_run)
+    rc = main(["--root", str(root), "scan"])
+    err = capsys.readouterr().err
+    assert rc != 0
+    assert "lxc-ls" in err
+    mod_dir = root / "modules.d"
+    # Aucun nouveau manifeste dérivé n'a été écrit sur cette découverte ratée
+    # (le seul fichier présent est celui déjà posé par la fixture `root`).
+    assert sorted(p.name for p in mod_dir.glob("*.toml")) == ["lyrion.toml"]
+
+
+def test_scan_handles_genuinely_empty_lxc_ls_without_false_alarm(root, capsys, monkeypatch):
+    # rc=0 et sortie vide, en root, c'est le cas normal d'une box sans
+    # conteneur LXC — ne doit PAS être traité comme une erreur.
+    monkeypatch.setattr("api.cli._running_as_root", lambda: True)
+    monkeypatch.setattr("api.cli._run", lambda argv: (
+        (0, "secubox-lyrion.service enabled\n") if argv[0:2] == ["systemctl", "list-unit-files"]
+        else (0, "")))
+    rc = main(["--root", str(root), "scan", "--force"])
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert "lxc-ls" not in err
+    from api.manifest import load_manifest
+    m = load_manifest(root / "modules.d" / "lyrion.toml")
+    assert m.runtime == "native"
+
+
+def test_scan_refuses_when_not_root(root, capsys, monkeypatch):
+    # lxc-ls non-root répond rc=0 avec une sortie vide, indistinguable d'une
+    # box sans conteneur : sur les 24 conteneurs de cette box, ça dériverait
+    # silencieusement tout en runtime="native". scan doit refuser plutôt que
+    # d'écrire un inventaire qu'il sait potentiellement faux.
+    monkeypatch.setattr("api.cli._running_as_root", lambda: False)
+    monkeypatch.setattr("api.cli._run", lambda argv: (
+        (0, "secubox-lyrion.service enabled\n") if argv[0:2] == ["systemctl", "list-unit-files"]
+        else (0, "")))
+    rc = main(["--root", str(root), "scan"])
+    err = capsys.readouterr().err
+    assert rc != 0
+    assert "root" in err.lower()

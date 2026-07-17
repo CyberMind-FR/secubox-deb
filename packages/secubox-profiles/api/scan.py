@@ -21,13 +21,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .manifest import CATEGORIES, Manifest
+from .manifest import CATEGORIES, PROTECTED_IDS, Manifest
 
 MENU_DIR = Path("/usr/share/secubox/menu.d")
 
-# Le noyau protégé : éteindre l'un de ceux-là retire à l'utilisateur le moyen
-# de rallumer quoi que ce soit. Le premier scan doit déjà les marquer.
-PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles"})
+# PROTECTED_IDS vit désormais dans api.manifest (c'est une propriété du
+# schéma, appliquée aussi au chargement — voir load_manifest) : réimporté ici
+# pour que discover() continue de marquer le premier scan sans changement de
+# comportement.
 
 UNIT_PREFIX = "secubox-"
 UNIT_SUFFIX = ".service"

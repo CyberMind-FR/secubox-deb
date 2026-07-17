@@ -5,7 +5,7 @@
 import pytest
 
 from api.diff import Change, ProtectedViolation, plan_changes
-from api.manifest import Manifest
+from api.manifest import Manifest, load_manifest
 from api.observe import Actual
 from api.state import Profile
 
@@ -82,6 +82,28 @@ def test_protected_module_off_is_started_not_refused():
 
 def test_pin_off_on_protected_module_is_refused():
     ms = {"auth": mk("auth", protected=True)}
+    prof = Profile(name="p", label="p", on=frozenset())
+    with pytest.raises(ProtectedViolation):
+        plan_changes(ms, prof, {"auth": "off"}, {"auth": on()})
+
+
+def test_pin_off_on_core_module_with_sloppy_manifest_is_still_refused(tmp_path):
+    # C3 review: un paquet secubox-auth qui shippe protected=false ne doit
+    # pas pouvoir désarmer la protection — load_manifest() force déjà True
+    # pour les PROTECTED_IDS, et plan_changes doit continuer d'en tenir
+    # compte end-to-end (chargement réel, pas juste le dataclass à la main).
+    p = tmp_path / "auth.toml"
+    p.write_text(
+        'id        = "auth"\n'
+        'category  = "security"\n'
+        'runtime   = "native"\n'
+        'exposure  = "internal"\n'
+        'units     = ["secubox-auth.service"]\n'
+        'protected = false\n'
+    )
+    m = load_manifest(p)
+    assert m.protected is True  # sanity: la garde de chargement a bien joué
+    ms = {"auth": m}
     prof = Profile(name="p", label="p", on=frozenset())
     with pytest.raises(ProtectedViolation):
         plan_changes(ms, prof, {"auth": "off"}, {"auth": on()})

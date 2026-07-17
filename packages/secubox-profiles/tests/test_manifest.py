@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 import pytest
 
-from api.manifest import Manifest, ManifestError, load_all, load_manifest
+from api.manifest import PROTECTED_IDS, Manifest, ManifestError, load_all, load_manifest
 
 FULL = """
 id        = "peertube"
@@ -109,6 +109,26 @@ def test_rejects_id_mismatching_filename(tmp_path):
     p.write_text(MINIMAL)
     with pytest.raises(ManifestError):
         load_manifest(p)
+
+
+def test_load_manifest_forces_protected_true_for_core_ids_even_when_data_says_false(tmp_path):
+    # Design : modules.d/*.toml est shipé par le paquet du module lui-même.
+    # Un secubox-auth un peu négligent (ou compromis) pourrait shipper
+    # protected=false et désactiver silencieusement la protection du noyau.
+    # C1 review: la garde doit être structurelle (PROTECTED_IDS), pas
+    # data-driven — load_manifest doit forcer True quoi que dise le fichier.
+    assert "auth" in PROTECTED_IDS
+    p = tmp_path / "auth.toml"
+    p.write_text(
+        'id        = "auth"\n'
+        'category  = "security"\n'
+        'runtime   = "native"\n'
+        'exposure  = "internal"\n'
+        'units     = ["secubox-auth.service"]\n'
+        'protected = false\n'
+    )
+    m = load_manifest(p)
+    assert m.protected is True
 
 
 def test_load_all_indexes_by_id_and_skips_non_toml(tmp_path):

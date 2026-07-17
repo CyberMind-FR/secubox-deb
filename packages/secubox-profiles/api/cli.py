@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -104,13 +105,57 @@ def _cmd_diff(args) -> int:
     return 0
 
 
+def _running_as_root() -> bool:
+    return os.geteuid() == 0
+
+
 def _cmd_scan(args) -> int:
     root = Path(args.root)
     mod_dir, _, _, _ = _paths(root)
+
     rc, out = _run(["systemctl", "list-unit-files", "secubox-*.service",
                     "--no-legend", "--plain"])
+    # rc=None (n'a pas pu s'exécuter) ou rc!=0 (a répondu par un échec) sont
+    # tous deux des cas indéterminés : on ne peut pas distinguer "aucune unit
+    # secubox-*" (out="", rc=0, cas normal) de "systemctl a échoué" sans
+    # regarder rc. Continuer sur out="" écrirait silencieusement zéro
+    # manifeste en laissant croire que le scan a réussi.
+    if rc != 0:
+        print(f"⚠️  systemctl list-unit-files a échoué (rc={rc!r}) — impossible "
+              "d'énumérer les units secubox-*.service. scan ne peut pas "
+              "produire un inventaire fiable dans cet état ; corrigez systemd "
+              "puis relancez `scan`.", file=sys.stderr)
+        return 1
     units = [line.split()[0] for line in out.splitlines() if line.strip()]
+
+    # lxc-ls non-root répond rc=0 avec une sortie vide (silencieuse) plutôt
+    # qu'une erreur — indistinguable d'une box sans conteneur. Sur cette box
+    # (24 conteneurs LXC), ça déclasserait silencieusement tous les modules
+    # LXC en runtime="native" dans un manifeste qui fait ensuite autorité :
+    # Phase 3 ne lancerait alors jamais `lxc-stop` sur eux. On refuse plutôt
+    # que d'écrire un inventaire qu'on sait potentiellement faux.
+    if not _running_as_root():
+        print("⚠️  scan doit être lancé en root : sans privilèges, `lxc-ls` "
+              "renvoie une liste vide (rc=0, pas une erreur) et scan "
+              "dériverait à tort tous les conteneurs LXC en runtime=\"native\" "
+              "dans un manifeste qui fait ensuite autorité (Phase 3 ne "
+              "lancerait alors jamais `lxc-stop` sur ces modules). Relancez "
+              "`scan` en root (sudo).", file=sys.stderr)
+        return 1
+
     rc, out = _run(["lxc-ls", "-1"])
+    # Même raisonnement que ci-dessus pour list-unit-files : rc=None ou
+    # rc!=0 est indéterminé, jamais silencieusement traité comme "aucun
+    # conteneur". La conséquence d'un mauvais repli ici est sévère (tous les
+    # modules LXC dérivés en "native") : on abandonne plutôt que d'écrire.
+    if rc != 0:
+        print(f"⚠️  lxc-ls a échoué (rc={rc!r}) — impossible de déterminer "
+              "quels modules tournent en conteneur LXC. Continuer "
+              "dériverait tous les modules LXC en runtime=\"native\" dans un "
+              "manifeste qui fait ensuite autorité (Phase 3 ne lancerait "
+              "alors jamais `lxc-stop`). Corrigez lxc-ls (paquet lxc "
+              "installé ? PATH ?) puis relancez `scan`.", file=sys.stderr)
+        return 1
     lxc_names = {n.strip() for n in out.splitlines() if n.strip()}
     # load_routes() renvoie None quand le fichier de routes existe mais est
     # illisible/corrompu (indéterminable, distinct de "aucune route" = set()).
@@ -136,12 +181,17 @@ def _cmd_scan(args) -> int:
     return 0
 
 
-def _run(argv: list[str]) -> tuple[int, str]:
+def _run(argv: list[str]) -> tuple[int | None, str]:
+    """rc=None signale que la commande n'a PAS pu s'exécuter (OSError, timeout) —
+    à distinguer d'un rc non-nul qui est une réponse authentique de la commande.
+    Même contrat que observe._run_cmd : un (1, "") fabriqué ici serait
+    indistinguable d'une vraie réponse "non" de la commande (voir _cmd_scan,
+    qui a besoin de cette distinction pour ne pas écrire un manifeste faux)."""
     try:
         p = subprocess.run(argv, capture_output=True, text=True, timeout=15)
         return p.returncode, p.stdout
     except (OSError, subprocess.SubprocessError):
-        return 1, ""
+        return None, ""
 
 
 def main(argv: list[str] | None = None) -> int:
