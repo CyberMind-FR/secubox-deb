@@ -7,7 +7,7 @@
 // Same-origin app assets → stale-while-revalidate. Box API (cross-origin) →
 // passthrough (the page handles offline reads/queue).
 
-const VERSION = 'sbx-companion-v7';
+const VERSION = 'sbx-companion-v8';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './styles/charte.css', './styles/fonts.css',
@@ -46,7 +46,11 @@ self.addEventListener('fetch', (e) => {
   e.respondWith((async () => {
     const cache = await caches.open(VERSION);
     try {
-      const res = await fetch(req);
+      // `cache: 'reload'` bypasses the BROWSER HTTP cache so a deploy is live on
+      // the next load — a plain fetch(req) can hand back a heuristically-cached
+      // old view.js (JS carries no Cache-Control here), which is what made every
+      // fix appear to need repeated hard refreshes.
+      const res = await fetch(new Request(req, { cache: 'reload' }));
       if (res && res.ok) cache.put(req, res.clone());
       return res;
     } catch {
