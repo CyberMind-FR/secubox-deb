@@ -241,6 +241,13 @@ func (s *Server) handler() http.Handler {
 		if s.routes != nil {
 			s.routes.Maybe()
 		}
+		// Same for the rules file: an operator flipping a category to detect (or
+		// editing any rule) must take effect without restarting the WAF that
+		// fronts every vhost. Match takes an RLock, Apply takes the Lock — the
+		// swap is race-safe (go test -race clean). Same one-stat cost as routes.
+		if s.rules != nil {
+			s.rules.Maybe()
+		}
 
 		// Strip port from Host header to get the bare hostname for lookup.
 		host, _, err := net.SplitHostPort(r.Host)

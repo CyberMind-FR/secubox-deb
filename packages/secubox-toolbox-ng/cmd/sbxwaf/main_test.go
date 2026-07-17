@@ -326,3 +326,54 @@ func TestDetectModeLogsActionDetect(t *testing.T) {
 		t.Fatalf("detect must not be logged as warning/banned, got: %s", raw)
 	}
 }
+
+// A live edit to the rules file must take effect through ServeHTTP WITHOUT a
+// restart — the whole point of wiring s.rules.Maybe() into the request path.
+// Without it, an operator flipping a category to detect would see no change
+// until the WAF that fronts every vhost is restarted.
+func TestServerHotReloadsRuleModeWithoutRestart(t *testing.T) {
+	// Start in block mode.
+	rulesPath := writeRulesFile(t, `{"cve_2024":{"name":"CVE","severity":"critical","mode":"block",
+		"patterns":[{"id":"cve-1","pattern":"/mgmt/tm/util/bash","desc":"F5 RCE"}]}}`)
+
+	reached := false
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	s := newDetectTestServer(t, backend.URL, rulesPath)
+
+	// First request: block mode → 403, backend not reached.
+	handler := s.handler()
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, detectTestReq("203.0.113.50"))
+	if rec1.Code != http.StatusForbidden {
+		t.Fatalf("before reload (block): got %d, want 403", rec1.Code)
+	}
+	if reached {
+		t.Fatal("before reload: backend reached in block mode")
+	}
+
+	// Operator flips the same category to detect on disk.
+	if err := os.WriteFile(rulesPath, []byte(`{"_meta":{"version":"t"},"categories":{"cve_2024":{"name":"CVE","severity":"critical","mode":"detect","patterns":[{"id":"cve-1","pattern":"/mgmt/tm/util/bash","desc":"F5 RCE"}]}}}`), 0o644); err != nil {
+		t.Fatalf("rewrite rules: %v", err)
+	}
+	// Bump mtime past filesystem granularity so the watcher notices.
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(rulesPath, future, future); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	// Second request through ServeHTTP (which now calls s.rules.Maybe()):
+	// detect mode → passes through, backend reached, no restart.
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, detectTestReq("203.0.113.51"))
+	if rec2.Code == http.StatusForbidden {
+		t.Fatalf("after reload (detect): got 403; the live edit did not take effect without a restart")
+	}
+	if !reached {
+		t.Fatal("after reload: backend not reached; detect mode did not apply")
+	}
+}
