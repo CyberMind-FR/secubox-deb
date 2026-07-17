@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -49,7 +50,7 @@ func TestRulesMatchSQLi(t *testing.T) {
 	r := LoadRules(path)
 
 	// Hit: query contains "union select" (Match decodes raw inputs internally)
-	cat, sev, hit := r.Match("GET", "/x", "id=1+union+select", "", "")
+	cat, sev, _, hit := r.Match("GET", "/x", "id=1+union+select", "", "")
 	if !hit {
 		t.Fatal("expected hit for UNION SELECT in query, got miss")
 	}
@@ -61,13 +62,13 @@ func TestRulesMatchSQLi(t *testing.T) {
 	}
 
 	// Hit: uppercase variant (case-insensitive)
-	_, _, hit = r.Match("GET", "/x", "id=1+UNION+SELECT", "", "")
+	_, _, _, hit = r.Match("GET", "/x", "id=1+UNION+SELECT", "", "")
 	if !hit {
 		t.Fatal("expected hit for uppercase UNION SELECT")
 	}
 
 	// Miss: benign request
-	cat, sev, hit = r.Match("GET", "/", "q=hello", "", "Mozilla/5.0")
+	cat, sev, _, hit = r.Match("GET", "/", "q=hello", "", "Mozilla/5.0")
 	if hit {
 		t.Fatalf("expected miss for benign request, got hit cat=%q sev=%q", cat, sev)
 	}
@@ -88,7 +89,7 @@ func TestRulesDisabledCategory(t *testing.T) {
 	path := writeRulesJSON(t, doc)
 	r := LoadRules(path)
 
-	_, _, hit := r.Match("GET", "/x", "id=1 union select", "", "")
+	_, _, _, hit := r.Match("GET", "/x", "id=1 union select", "", "")
 	if hit {
 		t.Fatal("disabled category must never match")
 	}
@@ -115,7 +116,7 @@ func TestRulesUncompilablePatternSkipped(t *testing.T) {
 	r := LoadRules(path)
 
 	// Good pattern must still fire
-	_, _, hit := r.Match("GET", "/x", "id=1 union select", "", "")
+	_, _, _, hit := r.Match("GET", "/x", "id=1 union select", "", "")
 	if !hit {
 		t.Fatal("good pattern after a skipped bad one must still match")
 	}
@@ -137,7 +138,7 @@ func TestRulesMatchInPath(t *testing.T) {
 	r := LoadRules(path)
 
 	// URL-encoded path: /..%2Fetc%2Fpasswd — after unquote_plus → /../etc/passwd
-	_, _, hit := r.Match("GET", "/..%2Fetc%2Fpasswd", "", "", "")
+	_, _, _, hit := r.Match("GET", "/..%2Fetc%2Fpasswd", "", "", "")
 	if !hit {
 		t.Fatal("expected hit for URL-encoded etc/passwd in path")
 	}
@@ -158,7 +159,7 @@ func TestRulesMatchInBody(t *testing.T) {
 	path := writeRulesJSON(t, doc)
 	r := LoadRules(path)
 
-	_, _, hit := r.Match("POST", "/submit", "", "data=eval(base64_decode(xyz))", "")
+	_, _, _, hit := r.Match("POST", "/submit", "", "data=eval(base64_decode(xyz))", "")
 	if !hit {
 		t.Fatal("expected hit for eval( in body")
 	}
@@ -179,7 +180,7 @@ func TestRulesMatchInUA(t *testing.T) {
 	path := writeRulesJSON(t, doc)
 	r := LoadRules(path)
 
-	_, _, hit := r.Match("GET", "/", "", "", "sqlmap/1.7")
+	_, _, _, hit := r.Match("GET", "/", "", "", "sqlmap/1.7")
 	if !hit {
 		t.Fatal("expected hit for sqlmap in User-Agent")
 	}
@@ -201,7 +202,7 @@ func TestRulesDefaultEnabledTrue(t *testing.T) {
 	path := writeRulesJSON(t, doc)
 	r := LoadRules(path)
 
-	_, _, hit := r.Match("GET", "/x", "id=1 union select", "", "")
+	_, _, _, hit := r.Match("GET", "/x", "id=1 union select", "", "")
 	if !hit {
 		t.Fatal("category without explicit 'enabled' must default to enabled=true")
 	}
@@ -221,7 +222,7 @@ func TestRulesDefaultSeverityMedium(t *testing.T) {
 	path := writeRulesJSON(t, doc)
 	r := LoadRules(path)
 
-	_, sev, hit := r.Match("GET", "/evil", "", "", "")
+	_, sev, _, hit := r.Match("GET", "/evil", "", "", "")
 	if !hit {
 		t.Fatal("expected hit")
 	}
@@ -236,7 +237,7 @@ func TestRulesEmptyFile(t *testing.T) {
 	r := LoadRules("/tmp/nonexistent-waf-rules-12345.json")
 
 	// Must not panic; must return miss for everything.
-	_, _, hit := r.Match("GET", "/", "id=1 union select 1,2,3", "", "")
+	_, _, _, hit := r.Match("GET", "/", "id=1 union select 1,2,3", "", "")
 	if hit {
 		t.Fatal("LoadRules on missing file: Match should always miss")
 	}
@@ -266,13 +267,13 @@ func TestRulesHotReload(t *testing.T) {
 	r := LoadRules(path)
 
 	// SQLi should miss before reload.
-	_, _, hit := r.Match("GET", "/", "id=1 union select", "", "")
+	_, _, _, hit := r.Match("GET", "/", "id=1 union select", "", "")
 	if hit {
 		t.Fatal("before reload: union select should miss (no sqli rules loaded)")
 	}
 
 	// XSS should fire.
-	_, _, hit = r.Match("GET", "/<script>", "", "", "")
+	_, _, _, hit = r.Match("GET", "/<script>", "", "", "")
 	if !hit {
 		t.Fatal("before reload: script tag in path should hit xss")
 	}
@@ -311,7 +312,7 @@ func TestRulesHotReload(t *testing.T) {
 	r.Maybe()
 
 	// Now sqli should fire.
-	cat, sev, hit := r.Match("GET", "/", "id=1 union select", "", "")
+	cat, sev, _, hit := r.Match("GET", "/", "id=1 union select", "", "")
 	if !hit {
 		t.Fatal("after reload: union select should hit sqli")
 	}
@@ -320,5 +321,96 @@ func TestRulesHotReload(t *testing.T) {
 	}
 	if sev != "critical" {
 		t.Fatalf("after reload: expected sev='critical', got %q", sev)
+	}
+}
+
+// writeRulesFile writes a waf-rules.json with the given categories body and returns its path.
+func writeRulesFile(t *testing.T, categories string) string {
+	t.Helper()
+	dir := t.TempDir()
+	p := filepath.Join(dir, "waf-rules.json")
+	body := `{"_meta":{"version":"test"},"categories":` + categories + `}`
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatalf("write rules: %v", err)
+	}
+	return p
+}
+
+// catMode returns the compiled mode for category id, or "" if absent.
+func catMode(r *Rules, id string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, c := range r.current.cats {
+		if c.id == id {
+			return c.data.mode
+		}
+	}
+	return ""
+}
+
+// A category with no "mode" MUST block. This is the most important test in the
+// file: a detect default would silently disarm all 17 existing categories.
+func TestModeAbsentDefaultsToBlock(t *testing.T) {
+	p := writeRulesFile(t, `{"sqli":{"name":"SQLi","severity":"critical",
+		"patterns":[{"id":"sqli-001","pattern":"union select","desc":"x"}]}}`)
+	r := LoadRules(p)
+	if got := catMode(r, "sqli"); got != modeBlock {
+		t.Fatalf("absent mode: got %q, want %q", got, modeBlock)
+	}
+}
+
+func TestModeBlockExplicit(t *testing.T) {
+	p := writeRulesFile(t, `{"sqli":{"name":"SQLi","mode":"block",
+		"patterns":[{"id":"sqli-001","pattern":"union select","desc":"x"}]}}`)
+	if got := catMode(LoadRules(p), "sqli"); got != modeBlock {
+		t.Fatalf("got %q, want %q", got, modeBlock)
+	}
+}
+
+func TestModeDetectIsParsed(t *testing.T) {
+	p := writeRulesFile(t, `{"cve_2024":{"name":"CVE","mode":"detect",
+		"patterns":[{"id":"cve-1","pattern":"/mgmt/tm/util/bash","desc":"x"}]}}`)
+	if got := catMode(LoadRules(p), "cve_2024"); got != modeDetect {
+		t.Fatalf("got %q, want %q", got, modeDetect)
+	}
+}
+
+// A typo must NOT disarm the category and must NOT become detect: fail closed.
+func TestModeUnknownFailsClosedToBlock(t *testing.T) {
+	for _, bad := range []string{"monitor", "dryrun", "BLOCK ", "xyz"} {
+		p := writeRulesFile(t, `{"sqli":{"name":"SQLi","mode":"`+bad+`",
+			"patterns":[{"id":"sqli-001","pattern":"union select","desc":"x"}]}}`)
+		r := LoadRules(p)
+		if got := catMode(r, "sqli"); got != modeBlock {
+			t.Fatalf("mode %q: got %q, want %q (must fail closed)", bad, got, modeBlock)
+		}
+		// And the category must still be evaluated — a typo must not remove protection.
+		if _, _, _, hit := r.Match("GET", "/x", "q=union+select", "", ""); !hit {
+			t.Fatalf("mode %q: category was dropped; a typo must not disable a rule", bad)
+		}
+	}
+}
+
+// "" and null are "absent", not errors.
+func TestModeEmptyAndNullDefaultToBlock(t *testing.T) {
+	for _, body := range []string{`"mode":"",`, `"mode":null,`} {
+		p := writeRulesFile(t, `{"sqli":{"name":"SQLi",`+body+`
+			"patterns":[{"id":"sqli-001","pattern":"union select","desc":"x"}]}}`)
+		if got := catMode(LoadRules(p), "sqli"); got != modeBlock {
+			t.Fatalf("%s got %q, want %q", body, got, modeBlock)
+		}
+	}
+}
+
+// enabled:false wins over mode — the category is not evaluated at all.
+func TestEnabledFalseWinsOverMode(t *testing.T) {
+	p := writeRulesFile(t, `{"sqli":{"name":"SQLi","enabled":false,"mode":"detect",
+		"patterns":[{"id":"sqli-001","pattern":"union select","desc":"x"}]}}`)
+	r := LoadRules(p)
+	if got := catMode(r, "sqli"); got != "" {
+		t.Fatalf("disabled category should not be loaded at all, got mode %q", got)
+	}
+	if _, _, _, hit := r.Match("GET", "/x", "q=union+select", "", ""); hit {
+		t.Fatal("disabled category must not match")
 	}
 }

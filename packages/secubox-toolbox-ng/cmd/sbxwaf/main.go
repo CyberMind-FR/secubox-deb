@@ -241,6 +241,13 @@ func (s *Server) handler() http.Handler {
 		if s.routes != nil {
 			s.routes.Maybe()
 		}
+		// Same for the rules file: an operator flipping a category to detect (or
+		// editing any rule) must take effect without restarting the WAF that
+		// fronts every vhost. Match takes an RLock, Apply takes the Lock — the
+		// swap is race-safe (go test -race clean). Same one-stat cost as routes.
+		if s.rules != nil {
+			s.rules.Maybe()
+		}
 
 		// Strip port from Host header to get the bare hostname for lookup.
 		host, _, err := net.SplitHostPort(r.Host)
@@ -373,13 +380,33 @@ func (s *Server) handler() http.Handler {
 					}
 				}
 
-				cat, sev, hit := s.rules.Match(
+				cat, sev, mode, hit := s.rules.Match(
 					r.Method,
 					rawPath,
 					r.URL.RawQuery,
 					string(bodyBytes),
 					r.Header.Get("User-Agent"),
 				)
+				if hit && mode == modeDetect {
+					// Observe only: log it, let it through. A detect category
+					// must be as harmless as enabled:false, minus the log line
+					// — so NO ban, NO CrowdSec report, NO nft decision, NO
+					// ban-counter increment.
+					if s.threatLog != nil {
+						s.threatLog.Record(ThreatRecord{
+							ClientIP: ip,
+							Host:     r.Host,
+							Method:   r.Method,
+							Path:     rawPath,
+							Category: cat,
+							Severity: sev,
+							RuleID:   "",
+							Action:   "detect",
+							UA:       r.Header.Get("User-Agent"),
+						})
+					}
+					hit = false // fall through to the normal proxy path
+				}
 				if hit {
 					// Task 3.2 — graduated WARNING/BAN response.
 					//
