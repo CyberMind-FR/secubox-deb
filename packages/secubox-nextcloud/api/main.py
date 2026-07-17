@@ -1,6 +1,11 @@
 """SecuBox Nextcloud API - File Sync & Cloud Storage with LXC"""
 import subprocess
 import os
+import re
+import json
+import socket
+import time
+import threading
 from pathlib import Path
 from typing import Optional, List
 from fastapi import FastAPI, Depends, HTTPException
@@ -12,9 +17,18 @@ app = FastAPI(title="SecuBox Nextcloud")
 config = get_config("nextcloud")
 
 LXC_NAME = config.get("container_name", "nextcloud")
-LXC_PATH = Path(config.get("lxc_path", "/srv/lxc"))
-DATA_PATH = Path(config.get("data_path", "/srv/nextcloud"))
+LXC_PATH = Path(config.get("lxc_path", "/data/lxc"))
+DATA_PATH = Path(config.get("data_path", "/data/volumes/nextcloud"))
 LXC_ROOTFS = LXC_PATH / LXC_NAME / "rootfs"
+NC_IP = config.get("lxc_ip", "10.100.0.21")
+NC_INTERNAL_PORT = 80
+
+# This API runs UNPRIVILEGED (user `secubox`). Its ONLY privileged surface is
+# `sudo nextcloudctl` (see /etc/sudoers.d/secubox-nextcloud) — direct lxc-info /
+# lxc-attach / du on /data/lxc all fail with permission errors. So: probe the
+# container's port for liveness (privilege-free) and route every container op
+# through nextcloudctl (which has an `occ` passthrough and runs as root).
+NCTL = ["sudo", "-n", "/usr/sbin/nextcloudctl"]
 
 
 def run_cmd(cmd: list, timeout: int = 30) -> tuple:
@@ -28,68 +42,108 @@ def run_cmd(cmd: list, timeout: int = 30) -> tuple:
         return False, "", str(e)
 
 
+def _port_open(host: str, port: int, timeout: float = 1.5) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def lxc_running() -> bool:
-    """Check if LXC container is running"""
-    success, out, _ = run_cmd(["lxc-info", "-n", LXC_NAME, "-s"])
-    return success and "RUNNING" in out
+    """Privilege-free liveness: the container's web server answers on its port."""
+    return _port_open(NC_IP, NC_INTERNAL_PORT)
 
 
 def lxc_installed() -> bool:
-    """Check if LXC container exists"""
-    config_file = LXC_PATH / LXC_NAME / "config"
-    return config_file.exists() and LXC_ROOTFS.exists()
+    """Container dir present. As `secubox` we can't traverse /data/lxc, so a
+    PermissionError means the path IS there (installed); FileNotFound = not."""
+    try:
+        return (LXC_PATH / LXC_NAME / "config").exists()
+    except PermissionError:
+        return True
 
 
-def lxc_attach(command: str, timeout: int = 30) -> tuple:
-    """Execute command inside LXC container"""
-    cmd = ["lxc-attach", "-n", LXC_NAME, "--", "sh", "-c", command]
-    return run_cmd(cmd, timeout)
+def nctl(*args, timeout: int = 60) -> tuple:
+    """Run `sudo nextcloudctl <args>` — the only privileged container surface."""
+    return run_cmd(NCTL + [str(a) for a in args], timeout)
 
 
 def occ_cmd(command: str, timeout: int = 60) -> tuple:
-    """Run Nextcloud OCC command"""
-    full_cmd = f"su -s /bin/bash www-data -c 'php /var/www/nextcloud/occ {command}'"
-    return lxc_attach(full_cmd, timeout)
+    """OCC passthrough via nextcloudctl (runs as root inside the container)."""
+    return nctl("occ", *command.split(), timeout=timeout)
+
+
+def lxc_attach(command: str, timeout: int = 30) -> tuple:
+    """Legacy shim: the only in-container ops the API needs are OCC commands, so
+    route them through the nextcloudctl occ passthrough. Non-occ callers were
+    already broken under the unprivileged user."""
+    return nctl("occ", *command.split(), timeout=timeout)
+
+
+# Background-refreshed cache for the slow, root-only fields (occ --version,
+# occ user:list, container-side du). /status is polled every ~30s by the webui,
+# so it must NOT run these inline (each occ call is ~5s and blocks the loop);
+# it reads this cache, filled every 60s by _refresh_cache() below.
+_nc_cache = {"version": "", "user_count": 0, "disk_used": "0", "ts": 0}
+
+
+def _compute_nc_cache() -> dict:
+    out_cache = {"version": "", "user_count": 0, "disk_used": "0", "ts": time.time()}
+    if not lxc_running():
+        return out_cache
+    ok, out, _ = occ_cmd("--version", timeout=30)
+    if ok:
+        m = re.search(r'(\d+\.\d+\.\d+)', out)
+        if m:
+            out_cache["version"] = m.group(1)
+    ok, out, _ = occ_cmd("user:list --output=json", timeout=30)
+    if ok and out.strip():
+        try:
+            out_cache["user_count"] = len(json.loads(out.strip().splitlines()[-1]))
+        except Exception:
+            pass
+    # Storage: only root (nextcloudctl) can read the data volume; parse the
+    # "Storage: <size>" line from `nextcloudctl status`.
+    ok, out, _ = nctl("status", timeout=30)
+    if ok:
+        m = re.search(r'Storage:\s*(\S+)', out)
+        if m:
+            out_cache["disk_used"] = m.group(1)
+    return out_cache
+
+
+def _cache_worker():
+    """Refresh the cache every 60s in a daemon thread. Deliberately NOT an
+    asyncio startup task: uvicorn's lifespan startup didn't fire reliably here,
+    leaving the cache empty. A module-load daemon thread always runs and does its
+    blocking subprocess work off the event loop."""
+    global _nc_cache
+    while True:
+        try:
+            _nc_cache = _compute_nc_cache()
+        except Exception:
+            pass
+        time.sleep(60)
+
+
+threading.Thread(target=_cache_worker, daemon=True, name="nc-cache").start()
 
 
 # Public endpoints
 @app.get("/status")
 async def status():
-    """Get Nextcloud service status"""
+    """Get Nextcloud service status (fast: live port probe + cached occ fields)."""
     running = lxc_running()
     installed = lxc_installed()
 
-    version = ""
-    user_count = 0
-    disk_used = "0"
-
-    if running:
-        # Get Nextcloud version
-        success, out, _ = occ_cmd("-V")
-        if success:
-            import re
-            match = re.search(r'(\d+\.\d+\.\d+)', out)
-            if match:
-                version = match.group(1)
-
-        # Get user count
-        success, out, _ = occ_cmd("user:list --output=json")
-        if success:
-            try:
-                import json
-                users = json.loads(out)
-                user_count = len(users)
-            except:
-                pass
-
-    # Get disk usage
-    data_dir = DATA_PATH / "data"
-    if data_dir.exists():
-        success, out, _ = run_cmd(["du", "-sh", str(data_dir)])
-        if success:
-            disk_used = out.split()[0]
+    c = _nc_cache
+    version = c["version"] if running else ""
+    user_count = c["user_count"] if running else 0
+    disk_used = c["disk_used"]
 
     http_port = config.get("http_port", 8080)
+    domain = config.get("domain", "cloud.local")
 
     return {
         "module": "nextcloud",
@@ -99,10 +153,13 @@ async def status():
         "version": version,
         "http_port": http_port,
         "data_path": str(DATA_PATH),
-        "domain": config.get("domain", "cloud.local"),
+        "domain": domain,
         "user_count": user_count,
         "disk_used": disk_used,
-        "web_url": f"http://localhost:{http_port}",
+        # Public URL from the real domain (not localhost) so the dashboard links
+        # somewhere reachable; falls back to the container port for a bare host.
+        "web_url": f"https://{domain}" if "." in domain and domain != "cloud.local"
+                   else f"http://localhost:{http_port}",
         "ssl_enabled": config.get("ssl_enabled", False),
         "container_name": LXC_NAME,
     }
@@ -154,7 +211,7 @@ async def start_service():
     if not lxc_installed():
         raise HTTPException(400, "Container not installed")
 
-    success, _, err = run_cmd(["lxc-start", "-n", LXC_NAME, "-d"])
+    success, _, err = nctl("start")
     if success:
         return {"success": True, "message": "Service started"}
     raise HTTPException(500, f"Failed to start: {err}")
@@ -166,7 +223,7 @@ async def stop_service():
     if not lxc_running():
         raise HTTPException(400, "Service is not running")
 
-    success, _, err = run_cmd(["lxc-stop", "-n", LXC_NAME])
+    success, _, err = nctl("stop")
     if success:
         return {"success": True, "message": "Service stopped"}
     raise HTTPException(500, f"Failed to stop: {err}")
@@ -175,9 +232,7 @@ async def stop_service():
 @app.post("/restart", dependencies=[Depends(require_jwt)])
 async def restart_service():
     """Restart Nextcloud container"""
-    if lxc_running():
-        run_cmd(["lxc-stop", "-n", LXC_NAME])
-    success, _, err = run_cmd(["lxc-start", "-n", LXC_NAME, "-d"])
+    success, _, err = nctl("restart")
     if success:
         return {"success": True, "message": "Service restarted"}
     raise HTTPException(500, f"Restart failed: {err}")
@@ -190,7 +245,7 @@ def install():
         raise HTTPException(400, "Already installed")
 
     subprocess.Popen(
-        ["/usr/sbin/nextcloudctl", "install"],
+        [*NCTL, "install"],
         stdout=open("/var/log/nextcloud-install.log", "w"),
         stderr=subprocess.STDOUT
     )
@@ -204,7 +259,7 @@ def install():
 @app.post("/uninstall", dependencies=[Depends(require_jwt)])
 async def uninstall():
     """Uninstall Nextcloud (preserves data)"""
-    success, _, err = run_cmd(["/usr/sbin/nextcloudctl", "uninstall"])
+    success, _, err = run_cmd([*NCTL, "uninstall"])
     if success:
         return {"success": True, "message": "Uninstalled (data preserved)"}
     raise HTTPException(500, f"Uninstall failed: {err}")
@@ -214,7 +269,7 @@ async def uninstall():
 def update():
     """Update Nextcloud"""
     subprocess.Popen(
-        ["/usr/sbin/nextcloudctl", "update"],
+        [*NCTL, "update"],
         stdout=open("/var/log/nextcloud-update.log", "w"),
         stderr=subprocess.STDOUT
     )
@@ -348,7 +403,7 @@ class BackupRequest(BaseModel):
 @app.post("/backup", dependencies=[Depends(require_jwt)])
 async def create_backup(req: BackupRequest):
     """Create a backup"""
-    cmd = ["/usr/sbin/nextcloudctl", "backup"]
+    cmd = [*NCTL, "backup"]
     if req.name:
         cmd.append(req.name)
 
@@ -377,7 +432,7 @@ async def delete_backup(name: str):
 def restore_backup(name: str):
     """Restore from backup"""
     subprocess.Popen(
-        ["/usr/sbin/nextcloudctl", "restore", name],
+        [*NCTL, "restore", name],
         stdout=open("/var/log/nextcloud-restore.log", "w"),
         stderr=subprocess.STDOUT
     )
@@ -446,7 +501,7 @@ class SSLEnable(BaseModel):
 async def ssl_enable(req: SSLEnable):
     """Enable SSL for domain"""
     success, _, err = run_cmd(
-        ["/usr/sbin/nextcloudctl", "ssl-enable", req.domain]
+        [*NCTL, "ssl-enable", req.domain]
     )
     if success:
         return {"success": True, "message": f"SSL enabled for {req.domain}"}
@@ -456,7 +511,7 @@ async def ssl_enable(req: SSLEnable):
 @app.post("/ssl/disable", dependencies=[Depends(require_jwt)])
 async def ssl_disable():
     """Disable SSL"""
-    success, _, err = run_cmd(["/usr/sbin/nextcloudctl", "ssl-disable"])
+    success, _, err = run_cmd([*NCTL, "ssl-disable"])
     if success:
         return {"success": True, "message": "SSL disabled"}
     raise HTTPException(500, f"SSL disable failed: {err}")

@@ -3,340 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox - Nextcloud</title>
+    <title>SecuBox — Nextcloud</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
             --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
             --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --cyan: #00d4ff;
+            --nextcloud: #0082c9;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar { width: 220px; background: var(--bg-sidebar); border-right: 1px solid var(--border); position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(0,130,201,0.1); border-color: var(--nextcloud); color: var(--nextcloud); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--nextcloud); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
-        .status-badge.running { background: rgba(63,185,80,0.15); color: var(--green); }
-        .status-badge.stopped { background: rgba(248,81,73,0.15); color: var(--red); }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); display: flex; align-items: center; gap: 0.5rem; }
+        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+        .live-dot.stale { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+        .live-dot.dead { background: var(--red); box-shadow: 0 0 8px var(--red); }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.success { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.warning { background: rgba(255,204,0,0.15); border-color: var(--yellow); color: var(--yellow); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h2 { font-size: 0.9rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); }
+        .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor; color: var(--cyan); }
+        .stat-card .value.sm { font-size: 0.95rem; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; }
+        .stat-card.dead .value { color: var(--red); }
+        .stat-card.warning .value { color: var(--yellow); }
+        .stat-card.healthy .value { color: var(--green); }
+        .stat-card.blue .value { color: var(--blue); }
+        .stat-card.purple .value { color: var(--purple); }
+
+        .status-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 3px 10px; border-radius: 12px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--border); }
+        .status-badge.running { background: rgba(0,221,68,0.12); color: var(--green); border-color: var(--green); }
+        .status-badge.stopped { background: rgba(255,68,102,0.12); color: var(--red); border-color: var(--red); }
+        .status-badge.installing { background: rgba(0,212,255,0.12); color: var(--cyan); border-color: var(--cyan); }
+
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
-        .url-box { background: var(--bg-dark); padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-bottom: 0.75rem; word-break: break-all; }
-        .url-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.25rem; }
-        .storage-bar { width: 100%; height: 24px; background: var(--bg-dark); border-radius: 6px; overflow: hidden; margin-top: 0.5rem; }
-        .storage-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--nextcloud)); display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 0.75rem; }
-        .app-links { display: flex; gap: 1rem; margin-top: 1rem; }
-        .app-link { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--bg-dark); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.9rem; }
-        .app-link:hover { background: var(--border); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
+        th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+        th { color: var(--p31-dim); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        tbody tr:hover { background: rgba(0,212,255,0.05); }
+        .mono { font-family: 'Courier Prime', monospace; }
 
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
+        .url-label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; margin: 0.5rem 0 0.2rem; letter-spacing: 0.05em; }
+        .url-box { background: var(--bg-row); padding: 0.55rem; border-radius: 6px; font-size: 0.78rem; border: 1px solid var(--border); word-break: break-all; margin-bottom: 0.5rem; }
+        .url-box a { color: var(--cyan); }
 
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+        .app-links { display: flex; gap: 0.75rem; margin-top: 0.75rem; flex-wrap: wrap; }
+        .app-link { display: flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.9rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.8rem; transition: all 0.2s; }
+        .app-link:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
 
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
+        .storage-bar { width: 100%; height: 26px; background: var(--bg-row); border-radius: 6px; overflow: hidden; margin-top: 0.5rem; border: 1px solid var(--border); }
+        .storage-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--cyan)); display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 0.72rem; color: #001018; font-weight: bold; transition: width 0.4s; min-width: 2.2rem; }
 
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
+        .install-banner { background: rgba(0,212,255,0.08); border: 1px solid var(--cyan); border-radius: 8px; padding: 2rem; text-align: center; margin-bottom: 1rem; }
+        .install-banner h2 { color: var(--cyan); margin-bottom: 0.5rem; }
+        .install-banner p { color: var(--p31-dim); margin-bottom: 1rem; }
 
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.7rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; box-shadow: 0 0 20px rgba(0,212,255,0.4); animation: slideIn 0.3s; }
+        .toast.error { background: var(--red); color: #fff; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) { .main { margin-left: 0; } .grid-2 { grid-template-columns: 1fr; } }
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <header class="header">
-            <h1>☁️ Nextcloud</h1>
-            <div>
-                <span class="status-badge" id="status-badge">Loading...</span>
-                <button class="btn success" id="btn-start" onclick="startService()" style="display:none">Start</button>
-                <button class="btn danger" id="btn-stop" onclick="stopService()" style="display:none">Stop</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+            <h1><span class="live-dot" id="live-dot"></span>☁️ Nextcloud</h1>
+            <div class="btn-group">
+                <span class="status-badge" id="status-badge">Loading…</span>
+                <button class="btn success" id="btn-start" onclick="startService()" style="display:none">▶ Start</button>
+                <button class="btn danger" id="btn-stop" onclick="stopService()" style="display:none">■ Stop</button>
+                <button class="btn primary" id="btn-install" onclick="installNextcloud()" style="display:none">⬇ Install</button>
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
             </div>
         </header>
 
-        <div class="stats-row">
-            <div class="stat-card"><div class="value" id="user-count">-</div><div class="label">Users</div></div>
-            <div class="stat-card"><div class="value" id="data-size">-</div><div class="label">Data Size</div></div>
-            <div class="stat-card"><div class="value" id="disk-free">-</div><div class="label">Free Space</div></div>
-            <div class="stat-card"><div class="value" id="version">-</div><div class="label">Version</div></div>
+        <!-- Stat grid -->
+        <div class="grid">
+            <div class="stat-card blue"><div class="value" id="user-count">-</div><div class="label">👤 Users</div></div>
+            <div class="stat-card"><div class="value sm" id="data-size">-</div><div class="label">💾 Data Size</div></div>
+            <div class="stat-card healthy"><div class="value sm" id="disk-free">-</div><div class="label">📀 Free Space</div></div>
+            <div class="stat-card purple"><div class="value sm" id="version">-</div><div class="label">🏷️ Version</div></div>
         </div>
 
+        <!-- Storage -->
         <div class="card">
-            <h2>Storage</h2>
+            <h2>💾 Storage</h2>
             <div class="storage-bar">
                 <div class="storage-fill" id="storage-fill" style="width:0%">0%</div>
             </div>
-            <p style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-dim)">
+            <p style="margin-top:0.6rem;font-size:0.78rem;color:var(--p31-dim)">
                 <span id="disk-used">-</span> used of <span id="disk-total">-</span>
             </p>
         </div>
 
+        <!-- Connection URLs -->
         <div class="card">
-            <h2>Connection URLs</h2>
-            <div class="url-label">Web Interface</div>
-            <div class="url-box"><a id="web-url" href="#" target="_blank" style="color:var(--nextcloud)">-</a></div>
-            <div class="url-label">WebDAV</div>
-            <div class="url-box" id="webdav-url">-</div>
-            <div class="url-label">CalDAV (Calendar)</div>
-            <div class="url-box" id="caldav-url">-</div>
-            <div class="url-label">CardDAV (Contacts)</div>
-            <div class="url-box" id="carddav-url">-</div>
+            <h2>🔗 Connection URLs</h2>
+            <div class="url-label">🌐 Web Interface</div>
+            <div class="url-box"><a id="web-url" href="#" target="_blank">-</a></div>
+            <div class="url-label">📁 WebDAV</div>
+            <div class="url-box mono" id="webdav-url">-</div>
+            <div class="url-label">📅 CalDAV (Calendar)</div>
+            <div class="url-box mono" id="caldav-url">-</div>
+            <div class="url-label">👥 CardDAV (Contacts)</div>
+            <div class="url-box mono" id="carddav-url">-</div>
             <div class="app-links">
                 <a href="#" id="ios-link" class="app-link" target="_blank">📱 iOS App</a>
                 <a href="#" id="android-link" class="app-link" target="_blank">🤖 Android App</a>
             </div>
         </div>
 
-        <div class="card">
-            <h2>Users</h2>
-            <table>
-                <thead><tr><th>Username</th><th>Display Name</th><th></th></tr></thead>
-                <tbody id="user-list"><tr><td colspan="3">Loading...</td></tr></tbody>
-            </table>
+        <div class="grid-2">
+            <!-- Users -->
+            <div class="card">
+                <h2>👤 Users</h2>
+                <table>
+                    <thead><tr><th>Username</th><th>Display Name</th><th></th></tr></thead>
+                    <tbody id="user-list"><tr><td colspan="3">Loading…</td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- Backups -->
+            <div class="card">
+                <h2>💿 Backups</h2>
+                <table>
+                    <thead><tr><th>Name</th><th>Size</th><th>Date</th><th></th></tr></thead>
+                    <tbody id="backup-list"><tr><td colspan="4">Loading…</td></tr></tbody>
+                </table>
+                <button class="btn primary" onclick="createBackup()" style="margin-top:1rem">➕ Create Backup</button>
+            </div>
         </div>
 
+        <!-- Actions -->
         <div class="card">
-            <h2>Backups</h2>
-            <table>
-                <thead><tr><th>Name</th><th>Size</th><th>Date</th><th></th></tr></thead>
-                <tbody id="backup-list"><tr><td colspan="4">Loading...</td></tr></tbody>
-            </table>
-            <button class="btn primary" onclick="createBackup()" style="margin-top:1rem">Create Backup</button>
-        </div>
-
-        <div class="card">
-            <h2>Actions</h2>
-            <button class="btn" onclick="restartService()">Restart Container</button>
-            <button class="btn primary" id="btn-install" onclick="installNextcloud()" style="display:none">Install Nextcloud</button>
+            <h2>🛠️ Actions</h2>
+            <div class="btn-group">
+                <button class="btn warning" onclick="restartService()">🔄 Restart Container</button>
+                <button class="btn primary" id="btn-install2" onclick="installNextcloud()" style="display:none">⬇ Install Nextcloud</button>
+            </div>
         </div>
     </main>
 
@@ -344,6 +180,18 @@
         const API = '/api/v1/nextcloud';
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        function toast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = `toast ${type === 'error' ? 'error' : ''}`;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+
+        function setLive(state) {
+            document.getElementById('live-dot').className = 'live-dot' + (state === 'running' ? '' : state === 'stopped' ? ' stale' : ' dead');
+        }
 
         async function api(path, opts = {}) {
             try {
@@ -365,18 +213,24 @@
                 document.getElementById('btn-start').style.display = 'none';
                 document.getElementById('btn-stop').style.display = 'inline-block';
                 document.getElementById('btn-install').style.display = 'none';
+                document.getElementById('btn-install2').style.display = 'none';
+                setLive('running');
             } else if (status.installed) {
                 badge.textContent = '○ Stopped';
                 badge.className = 'status-badge stopped';
                 document.getElementById('btn-start').style.display = 'inline-block';
                 document.getElementById('btn-stop').style.display = 'none';
                 document.getElementById('btn-install').style.display = 'none';
+                document.getElementById('btn-install2').style.display = 'none';
+                setLive('stopped');
             } else {
                 badge.textContent = '○ Not Installed';
                 badge.className = 'status-badge stopped';
                 document.getElementById('btn-start').style.display = 'none';
                 document.getElementById('btn-stop').style.display = 'none';
                 document.getElementById('btn-install').style.display = 'inline-block';
+                document.getElementById('btn-install2').style.display = 'inline-block';
+                setLive('dead');
             }
 
             document.getElementById('user-count').textContent = status.user_count || 0;
@@ -413,13 +267,13 @@
             const list = document.getElementById('user-list');
             const users = d.users || [];
             if (!users.length) {
-                list.innerHTML = '<tr><td colspan="3" style="color:var(--text-dim)">No users</td></tr>';
+                list.innerHTML = '<tr><td colspan="3" style="color:var(--p31-dim)">No users</td></tr>';
                 return;
             }
             list.innerHTML = users.map(u => `<tr>
-                <td><strong>${u.uid}</strong></td>
+                <td class="mono"><strong>${u.uid}</strong></td>
                 <td>${u.displayname}</td>
-                <td><button class="btn" style="padding:2px 8px;font-size:0.7rem" onclick="resetPassword('${u.uid}')">Reset Password</button></td>
+                <td><button class="btn sm" onclick="resetPassword('${u.uid}')">🔑 Reset Password</button></td>
             </tr>`).join('');
         }
 
@@ -428,32 +282,35 @@
             const list = document.getElementById('backup-list');
             const backups = d.backups || [];
             if (!backups.length) {
-                list.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No backups</td></tr>';
+                list.innerHTML = '<tr><td colspan="4" style="color:var(--p31-dim)">No backups</td></tr>';
                 return;
             }
             list.innerHTML = backups.map(b => `<tr>
-                <td><strong>${b.name}</strong></td>
+                <td class="mono"><strong>${b.name}</strong></td>
                 <td>${b.size}</td>
                 <td>${new Date(b.timestamp * 1000).toLocaleDateString()}</td>
                 <td>
-                    <button class="btn" style="padding:2px 8px;font-size:0.7rem" onclick="restoreBackup('${b.name}')">Restore</button>
-                    <button class="btn danger" style="padding:2px 8px;font-size:0.7rem" onclick="deleteBackup('${b.name}')">Delete</button>
+                    <button class="btn sm" onclick="restoreBackup('${b.name}')">↩️ Restore</button>
+                    <button class="btn sm danger" onclick="deleteBackup('${b.name}')">🗑️ Delete</button>
                 </td>
             </tr>`).join('');
         }
 
         async function startService() {
             await api('/start', { method: 'POST' });
+            toast('▶ Starting…');
             setTimeout(refresh, 2000);
         }
 
         async function stopService() {
             await api('/stop', { method: 'POST' });
+            toast('■ Stopped');
             setTimeout(refresh, 1000);
         }
 
         async function restartService() {
             await api('/restart', { method: 'POST' });
+            toast('🔄 Restarting…');
             setTimeout(refresh, 3000);
         }
 
@@ -466,23 +323,24 @@
         async function createBackup() {
             const r = await api('/backup', { method: 'POST' });
             if (r.success) {
-                alert('Backup created');
+                toast('💿 Backup created');
                 loadBackups();
             } else {
-                alert('Backup failed');
+                toast('Backup failed', 'error');
             }
         }
 
         async function deleteBackup(name) {
             if (!confirm(`Delete backup "${name}"?`)) return;
             await api(`/backup/${name}`, { method: 'DELETE' });
+            toast('🗑️ Deleted');
             loadBackups();
         }
 
         async function restoreBackup(name) {
             if (!confirm(`Restore from backup "${name}"? This will overwrite current data.`)) return;
             await api(`/restore/${name}`, { method: 'POST' });
-            alert('Restore started in background');
+            toast('↩️ Restore started in background');
         }
 
         async function resetPassword(uid) {
@@ -492,12 +350,12 @@
                 method: 'POST',
                 body: JSON.stringify({ uid, password })
             });
-            alert(r.success ? 'Password reset' : 'Failed: ' + (r.detail || 'Error'));
+            toast(r.success ? '🔑 Password reset' : 'Failed: ' + (r.detail || 'Error'), r.success ? 'success' : 'error');
         }
 
         function refresh() { loadStatus(); loadStorage(); loadConnections(); loadUsers(); loadBackups(); }
         refresh();
+        setInterval(refresh, 30000);
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
