@@ -28,6 +28,15 @@ case "$1" in
     "$PREFIX/venv/bin/pip" install --upgrade pip >/dev/null 2>&1 || true
     "$PREFIX/venv/bin/pip" install -r "$PREFIX/requirements.txt" \
       || echo "billets: pip install failed — install deps into $PREFIX/venv then 'systemctl restart secubox-billets'" >&2
+
+    # Expose the system-installed secubox_core (shared lib, .deb-managed) to the
+    # isolated venv so the JWT admin surface (api/routes/jwt_admin.py) can import
+    # require_jwt. A sorted-last .pth APPENDS dist-packages: venv wheels keep
+    # precedence (fastapi/pydantic are NOT shadowed by the older system copies).
+    SITEPKG="$("$PREFIX/venv/bin/python" -c 'import site; print(site.getsitepackages()[0])' 2>/dev/null)"
+    if [ -n "$SITEPKG" ] && [ -d "$SITEPKG" ]; then
+      echo /usr/lib/python3/dist-packages > "$SITEPKG/zz-secubox-system.pth"
+    fi
     chown -R secubox:secubox "$PREFIX"
 
     # nginx must read the uvicorn socket (group secubox).
