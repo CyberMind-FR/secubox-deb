@@ -23,7 +23,7 @@ from pydantic import BaseModel, ValidationError
 from .. import repo
 from ..ids import new_ulid
 from ..models import BilletIn
-from ..services import media
+from ..services import feeds, media
 
 try:
     from secubox_core.auth import require_jwt
@@ -43,18 +43,22 @@ class BilletPayload(BaseModel):
     status: str = "published"  # "published" | "draft"
 
 
-def _view(row) -> dict:
+def _view(row, tags: Optional[list] = None) -> dict:
     d = dict(row)
     return {
         "id": d.get("id"),
         "slug": d.get("slug"),
         "body": d.get("body"),
+        # A short excerpt so list views can show a few words instead of the whole
+        # billet; `body` stays available for the editor.
+        "summary": feeds.excerpt(d.get("body") or "", max_len=140),
         "status": d.get("status"),
         "style": d.get("style"),
         "ref_url": d.get("ref_url"),
         "embed_url": d.get("embed_url"),
         "published_at": d.get("published_at"),
         "created_at": d.get("created_at"),
+        "tags": tags or [],
     }
 
 
@@ -69,6 +73,29 @@ def register_jwt_admin(app: FastAPI) -> None:
                             style=p.style, publish=(p.status == "published"))
         except ValidationError as exc:
             raise HTTPException(422, f"invalid billet: {exc.errors()}")
+
+    @app.get("/admin/api/billets")
+    async def api_list(request: Request, status: Optional[str] = None,
+                       tag: Optional[str] = None, limit: int = 100,
+                       user=Depends(require_jwt)):
+        """Authoring list — REAL billet ids, and drafts included.
+
+        The public JSON Feed cannot serve this: its item `id` is a permalink URL
+        (not the billet id, so edit/delete could not address a row) and it omits
+        drafts entirely, which an authoring client must see.
+        """
+        conn = request.app.state.conn
+        rows = await repo.list_all(conn, status=status, limit=max(1, min(limit, 200)))
+        tag_map = await repo.tags_for_many(conn, [r["id"] for r in rows])   # batched, no N+1
+        out = [_view(r, tag_map.get(r["id"], [])) for r in rows]
+        if tag:
+            out = [b for b in out if any(t["slug"] == tag for t in b["tags"])]
+        return {"billets": out, "count": len(out)}
+
+    @app.get("/admin/api/tags")
+    async def api_tags(request: Request, user=Depends(require_jwt)):
+        """Emoji hashtags in use (published), most-used first — the chip bar."""
+        return {"tags": await repo.list_tags(request.app.state.conn)}
 
     @app.post("/admin/api/billets")
     async def api_create(request: Request, payload: BilletPayload, user=Depends(require_jwt)):

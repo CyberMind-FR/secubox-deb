@@ -114,10 +114,17 @@ _SECURITY_HEADERS = {
 }
 
 
-def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None) -> dict:
+def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None) -> dict:
     from urllib.parse import urlparse
     d = dict(row)
     d["body_html"] = render_markdown(d["body"])
+    d["tags"] = tags or []
+    # A few words for list/preview contexts; body_html keeps the full billet.
+    d["summary"] = feeds.excerpt(d["body"], max_len=140)
+    # Only long billets get resumed in the feed — `excerpt` collapses markdown, so
+    # compare against IT, not len(body): a short billet padded with link syntax
+    # would otherwise be "resumed" to a copy of itself followed by "Lire la suite".
+    d["is_long"] = len(feeds.excerpt(d["body"], max_len=10_000)) > 140
     d["ref_host"] = (urlparse(d["ref_url"]).hostname if d.get("ref_url") else None)
     title = feeds.billet_title(d["body"])
     d["title"] = title
@@ -173,14 +180,20 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         return {"status": "ok", "module": "billets"}
 
     @app.get("/", response_class=HTMLResponse)
-    async def feed(request: Request, cursor: str | None = None):
-        rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE, cursor=cursor)
+    async def feed(request: Request, cursor: str | None = None, tag: str | None = None):
+        rows, next_cursor = await repo.list_published(app.state.conn, limit=PAGE_SIZE,
+                                                      cursor=cursor, tag=tag)
         base = _base(request)
         media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
+        # One batched lookup for the page's chips + the whole-site chip bar.
+        tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
         resp = templates.TemplateResponse(request, "feed.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billets": [_billet_view(r, base, media_map.get(r["id"])) for r in rows],
+            "billets": [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]))
+                        for r in rows],
             "next_cursor": next_cursor,
+            "all_tags": await repo.list_tags(app.state.conn),
+            "active_tag": tag,
         })
         # Embeds render inline in the feed too; allow any self-hosted embed hosts
         # of the shown billets in frame-src (static providers already covered).
@@ -256,18 +269,33 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
                                self_url=f"{base}/feed.xml", entries=entries, updated=updated)
         return Response(xml, media_type="application/atom+xml")
 
+    @app.get("/tags.json")
+    async def tags_json():
+        """The quick-view chip bar: every emoji hashtag in use, most-used first."""
+        return {"tags": await repo.list_tags(app.state.conn)}
+
     @app.get("/feed.json")
-    async def feed_json(request: Request):
+    async def feed_json(request: Request, tag: str | None = None):
         base = _base(request)
-        rows = await _feed_rows()
+        rows, _ = await repo.list_published(app.state.conn, limit=30, tag=tag)
+        # One batched lookup for the whole page — never per-item (N+1).
+        tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
         items = [{
             "id": f"{base}/b/{r['slug']}", "url": f"{base}/b/{r['slug']}",
             "title": feeds.billet_title(r["body"]),
+            # Short excerpt so list views can show a few words instead of a wall
+            # of text; content_html still carries the full billet.
+            "summary": feeds.excerpt(r["body"], max_len=140),
             "content_html": render_markdown(r["body"]),
             "date_published": r["published_at"] or r["updated_at"],
+            "tags": tag_map.get(r["id"], []),
         } for r in rows]
-        return feeds.build_jsonfeed(site_title=SITE_TITLE, base_url=base,
+        feed = feeds.build_jsonfeed(site_title=SITE_TITLE, base_url=base,
                                     feed_url=f"{base}/feed.json", items=items)
+        if tag:
+            feed["feed_url"] = f"{base}/feed.json?tag={tag}"
+            feed["title"] = f"{SITE_TITLE} · #{tag}"
+        return feed
 
     @app.get("/stats.json")
     async def stats_json(request: Request):
