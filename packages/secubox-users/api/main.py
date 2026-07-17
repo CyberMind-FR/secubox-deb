@@ -39,6 +39,8 @@ config = get_config("users") if callable(get_config) else {}
 USERSCTL = "/usr/sbin/usersctl"
 USERS_FILE = os.environ.get("USERS_FILE", "/etc/secubox/users.json")
 ROLES_FILE = os.environ.get("ROLES_FILE", "/etc/secubox/roles.json")
+from .redact import redact_user  # expurgation des secrets (module dédié, testable seul)
+
 SERVICES = ["nextcloud", "gitea", "email", "matrix", "jellyfin", "peertube", "jabber"]
 # YaCy has a single admin account (no per-user accounts), so its password is
 # synced from exactly one SecuBox user: the master "admin". Changing that user's
@@ -502,12 +504,10 @@ async def get_access():
 
 @app.get("/users", dependencies=[Depends(require_jwt)])
 async def list_users():
-    """List all users."""
+    """List all users (redacted — never ships hashes or TOTP secrets)."""
     data = load_users()
-    return {
-        "users": data.get("users", []),
-        "total": len(data.get("users", []))
-    }
+    users = [redact_user(u) for u in data.get("users", [])]
+    return {"users": users, "total": len(users)}
 
 @app.get("/user/{username}", dependencies=[Depends(require_jwt)])
 async def get_user(username: str):
@@ -515,11 +515,12 @@ async def get_user(username: str):
     data = load_users()
     for user in data.get("users", []):
         if user.get("username") == username:
+            out = redact_user(user)
             # Add service status
-            user["service_status"] = {}
+            out["service_status"] = {}
             for svc in user.get("services", []):
-                user["service_status"][svc] = check_service(svc)
-            return user
+                out["service_status"][svc] = check_service(svc)
+            return out
     raise HTTPException(status_code=404, detail="User not found")
 
 @app.post("/user", dependencies=[Depends(require_jwt)])
@@ -1064,14 +1065,20 @@ async def validate_acl(entries: List[ACLEntry]):
 
 @app.get("/export", dependencies=[Depends(require_jwt)])
 async def export_users():
-    """Export all users."""
+    """Export all users (redacted).
+
+    This route previously claimed to "remove sensitive data" while dropping only
+    `provision_results` — it shipped every password hash and TOTP secret into a
+    downloadable file. A comment asserting a guarantee the code does not provide
+    is worse than no comment: it stops reviewers from looking. The guarantee now
+    lives in redact_user(), which is the single place that decides what a client
+    may see.
+    """
     data = load_users()
-    # Remove sensitive data
-    export_data = {"users": [], "groups": data.get("groups", [])}
-    for user in data.get("users", []):
-        export_user = {k: v for k, v in user.items() if k != "provision_results"}
-        export_data["users"].append(export_user)
-    return export_data
+    return {
+        "users": [redact_user(u) for u in data.get("users", [])],
+        "groups": data.get("groups", []),
+    }
 
 @app.post("/import", dependencies=[Depends(require_permission("system.import"))])
 async def import_users(file: UploadFile = File(...)):
