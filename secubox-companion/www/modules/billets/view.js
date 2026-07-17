@@ -5,14 +5,17 @@
 // exact box route/shape is unconfirmed it is marked TODO(api); the box may need
 // a JWT-authed admin API for billets (its web admin is session-based). Reads use
 // the public feed and work today; writes go through these paths + auto-queue.
+// All routes below are served by billets' JWT/SSO admin surface (routes/jwt_admin.py),
+// which trusts the SecuBox session — reads use the public JSON Feed.
 const EP = {
-  feed:     (b) => `${b}/feed.json`,                     // public JSON Feed (jsonfeed.org)
-  create:   (b) => `${b}/admin/api/billets`,             // TODO(api): confirm JWT create route
-  update:   (b, id) => `${b}/admin/api/billets/${id}`,   // TODO(api)
-  remove:   (b, id) => `${b}/admin/api/billets/${id}`,   // TODO(api)
-  comments: (b) => `${b}/admin/api/comments?status=pending`, // TODO(api)
-  cApprove: (b, id) => `${b}/admin/api/comments/${id}/approve`, // TODO(api)
-  cDelete:  (b, id) => `${b}/admin/api/comments/${id}`,   // TODO(api)
+  feed:     (b) => `${b}/feed.json`,                          // public JSON Feed (jsonfeed.org)
+  create:   (b) => `${b}/admin/api/billets`,                 // POST {body,ref_url,embed_url,style,status}
+  update:   (b, id) => `${b}/admin/api/billets/${id}`,        // PUT
+  remove:   (b, id) => `${b}/admin/api/billets/${id}`,        // DELETE
+  media:    (b, id) => `${b}/admin/api/billets/${id}/media`,  // POST multipart file (EXIF-stripped server-side)
+  comments: (b) => `${b}/admin/api/comments?status=pending`,  // GET
+  cApprove: (b, id) => `${b}/admin/api/comments/${id}/approve`, // POST
+  cDelete:  (b, id) => `${b}/admin/api/comments/${id}`,        // DELETE
 };
 
 export default async function mount(ctx) {
@@ -84,6 +87,8 @@ export default async function mount(ctx) {
     styleIn.value = seed.style || 'default';
     const statusIn = el('select', {}, [opt('published', 'Publish'), opt('draft', 'Save as draft')]);
     statusIn.value = seed.status || 'published';
+    // Image attachment — the box re-encodes + strips EXIF server-side (services.media).
+    const imgIn = el('input', { type: 'file', accept: 'image/*' });
 
     const save = el('button.btn.primary', {
       text: id ? 'Update billet' : 'Publish billet',
@@ -93,6 +98,15 @@ export default async function mount(ctx) {
         save.disabled = true;
         try {
           const r = id ? await api.put(EP.update(base, id), payload) : await api.post(EP.create(base), payload);
+          const bid = id || r.id || (r.billet && r.billet.id);
+          // Upload the image AFTER the billet exists (media attaches to a billet id).
+          const file = imgIn.files && imgIn.files[0];
+          if (file && bid) {
+            try {
+              const fd = new FormData(); fd.append('file', file);
+              await api.post(EP.media(base, bid), fd, { form: true });
+            } catch (e) { toast('Billet saved — image upload failed: ' + e.message, 'err'); }
+          }
           toast(r.queued ? 'Saved offline — will sync' : (id ? 'Updated ✓' : 'Published ✓'));
           active = ''; renderTabs(); list();
         } catch (e) { toast('Save failed: ' + e.message, 'err'); save.disabled = false; }
@@ -104,6 +118,7 @@ export default async function mount(ctx) {
       el('label', { text: 'Body' }), bodyIn,
       el('label', { text: 'Source URL' }), refIn,
       el('label', { text: 'Embed URL' }), embedIn,
+      el('label', { text: 'Image (optional)' }), imgIn,
       el('div.row', { style: 'gap:12px' }, [
         el('div.stack', { style: 'flex:1' }, [el('label', { text: 'Style' }), styleIn]),
         el('div.stack', { style: 'flex:1' }, [el('label', { text: 'Status' }), statusIn]),
