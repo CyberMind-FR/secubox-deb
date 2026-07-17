@@ -49,11 +49,36 @@ def _menu_index(menu_dir: Path) -> dict[str, dict]:
     return out
 
 
+# menu.d (voir CATEGORY_META de secubox-hub) porte une taxonomie UI —
+# auth, wall, boot, mind, root, mesh — distincte de la taxonomie de
+# déploiement (api.manifest.CATEGORIES). Les deux partagent le jeton
+# "mesh", mais le "mesh" de menu.d est un fourre-tout UI, PAS la
+# catégorie réseau/P2P de déploiement : PeerTube et Lyrion (media)
+# déclarent tous deux category="mesh" dans leur menu.d/, et un simple
+# `cat in CATEGORIES` les classerait à tort en "mesh" de déploiement,
+# corrompant les statistiques par catégorie que cette fonctionnalité
+# doit produire. On mappe donc explicitement, jeton par jeton — ne
+# jamais laisser passer une chaîne menu.d seulement parce qu'elle est
+# orthographiée comme une catégorie de déploiement.
+#
+# mesh -> infra plutôt que -> network : une catégorie fausse mais valide
+# est pire qu'une catégorie neutre, car elle a l'air d'une décision
+# prise alors que ce n'en est pas une, et ne sera pas relue par
+# l'opérateur. "infra" est le choix neutre, à corriger à la main.
+MENU_CATEGORY_MAP: dict[str, str] = {
+    "auth": "security",
+    "wall": "security",
+    "boot": "infra",
+    "mind": "media",
+    "root": "infra",
+    "mesh": "infra",
+}
+
+
 def _category(menu: dict | None) -> str:
-    # menu.d porte des catégories UI qui ne sont pas la taxonomie de
-    # déploiement ; on ne recopie que celles qui coïncident, sinon infra.
-    cat = (menu or {}).get("category")
-    return cat if cat in CATEGORIES else "infra"
+    cat = MENU_CATEGORY_MAP.get((menu or {}).get("category"), "infra")
+    assert cat in CATEGORIES  # invariant : ne jamais émettre hors taxonomie
+    return cat
 
 
 def _route_for(mid: str, routes: set[str]) -> str | None:
@@ -93,8 +118,31 @@ def discover(*, units: list[str], lxc_names: set[str], routes: set[str],
     return out
 
 
+_TOML_BASIC_ESCAPES = {
+    "\\": "\\\\",
+    '"': '\\"',
+    "\b": "\\b",
+    "\t": "\\t",
+    "\n": "\\n",
+    "\f": "\\f",
+    "\r": "\\r",
+}
+
+
 def _toml_str(s: str) -> str:
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    # Chaîne basique TOML : \\ et " en premier (évite un double-échappement),
+    # puis les autres caractères de contrôle par leur échappement nommé,
+    # et le reste par \\uXXXX — un \n ou un \t littéral non échappé produit
+    # un fichier que tomllib refuse de relire ("Illegal character").
+    out = []
+    for ch in s:
+        if ch in _TOML_BASIC_ESCAPES:
+            out.append(_TOML_BASIC_ESCAPES[ch])
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append(f"\\u{ord(ch):04x}")
+        else:
+            out.append(ch)
+    return '"' + "".join(out) + '"'
 
 
 def _toml_list(items) -> str:
