@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Module Profiles</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <style>
+        :root {
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
+            --red: #ff4466;
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
+            --purple: #a371f7;
+            --cyan: #00d4ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,0.18); }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1.2rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.25rem; text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.red .value { color: var(--red); }
+        .stat-card.blue .value { color: var(--blue); }
+        .stat-card.purple .value { color: var(--purple); }
+        .stat-card.orange .value { color: var(--orange); }
+        .stat-card.dim .value { color: var(--p31-dim); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h3 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+        .card h3 .note { font-size: 0.62rem; color: var(--p31-dim); text-transform: none; font-weight: normal; letter-spacing: 0; }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.2rem; }
+        .tab { padding: 0.4rem 0.7rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.68rem; text-transform: uppercase; transition: all 0.2s; }
+        .tab:hover { color: var(--cyan); }
+        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .agg-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+        .agg-table th { text-align: left; color: var(--p31-dim); text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.06em; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); }
+        .agg-table td { padding: 0.3rem 0.4rem; border-bottom: 1px solid rgba(100,150,200,0.08); }
+        .agg-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .agg-table .on { color: var(--green); }
+        .agg-table .off { color: var(--p31-dim); }
+        .agg-table .unknown { color: var(--orange); }
+
+        select, .profile-select { padding: 0.4rem 0.6rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.75rem; color: var(--text); }
+        select:focus { outline: none; border-color: var(--cyan); }
+
+        .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
+        .filter-bar input { flex: 1; min-width: 150px; padding: 0.4rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+
+        .mod-list { display: flex; flex-direction: column; gap: 0.28rem; max-height: 560px; overflow-y: auto; }
+        .mod-row { display: grid; grid-template-columns: 1.4em 1fr auto auto auto auto auto auto; align-items: center; gap: 0.55rem; padding: 0.45rem 0.6rem; background: var(--bg-row); border-radius: 4px; font-size: 0.73rem; border-left: 3px solid var(--border); transition: background 0.15s; }
+        .mod-row:hover { background: rgba(0,212,255,0.06); }
+        .mod-row.on { border-left-color: var(--green); }
+        .mod-row.off { border-left-color: var(--p31-dim); }
+        .mod-row.unknown { border-left-color: var(--orange); }
+        .mod-row .glyph { text-align: center; font-size: 0.95em; }
+        .mod-row .id { color: var(--cyan); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mod-row .id .lock { margin-left: 0.3em; }
+        .mod-row .meta { font-size: 0.62rem; color: var(--p31-dim); white-space: nowrap; }
+        .mod-row .prio { font-size: 0.65rem; color: var(--p31-dim); text-align: right; white-space: nowrap; }
+        .mod-row .rss { font-size: 0.65rem; color: var(--blue); text-align: right; white-space: nowrap; min-width: 3.5em; }
+        .mod-row .member { display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+        .mod-row .member input { accent-color: var(--cyan); cursor: pointer; }
+        .mod-row .pins { display: flex; gap: 0.15rem; }
+        .mod-row .pins .btn.sm { padding: 0.15rem 0.4rem; font-size: 0.62rem; }
+        .exposure-badge { font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border: 1px solid var(--border); }
+        .exposure-badge.public { color: var(--red); border-color: var(--red); }
+        .exposure-badge.lan { color: var(--blue); border-color: var(--blue); }
+        .exposure-badge.internal { color: var(--p31-dim); }
+
+        .diff-banner { background: rgba(255,153,68,0.08); border: 1px dashed var(--orange); border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.7rem; color: var(--orange); margin-bottom: 0.75rem; }
+        .diff-list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 340px; overflow-y: auto; }
+        .diff-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 0.6rem; padding: 0.4rem 0.55rem; background: var(--bg-row); border-radius: 4px; font-size: 0.72rem; border-left: 3px solid var(--border); }
+        .diff-row.start { border-left-color: var(--green); }
+        .diff-row.stop { border-left-color: var(--red); }
+        .diff-row .action { font-size: 0.62rem; text-transform: uppercase; padding: 0.12rem 0.45rem; border-radius: 999px; white-space: nowrap; }
+        .diff-row .action.start { color: var(--green); border: 1px solid var(--green); }
+        .diff-row .action.stop { color: var(--red); border: 1px solid var(--red); }
+        .diff-row .id { color: var(--cyan); font-weight: bold; }
+        .diff-row .reason { color: var(--p31-dim); font-size: 0.65rem; }
+        .diff-row .prio { color: var(--p31-dim); font-size: 0.65rem; text-align: right; }
+        .empty-note { padding: 1rem; text-align: center; color: var(--p31-dim); font-size: 0.75rem; }
+
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 360px; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
+        .toast .close { float: right; margin-left: 0.6rem; cursor: pointer; font-weight: bold; }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+            .mod-row { grid-template-columns: 1.2em 1fr auto; }
+            .mod-row .meta, .mod-row .prio, .mod-row .rss, .mod-row .member { display: none; }
+            .diff-row { grid-template-columns: auto 1fr; }
+            .diff-row .reason, .diff-row .prio { display: none; }
+        }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>🧩 Module Profiles</h1>
+                <div class="sub" id="subline">Phase 1 — inventory &amp; desired state · read-only, no actuation</div>
+            </div>
+            <div class="btn-group">
+                <button class="btn" id="refreshBtn">↻ Refresh</button>
+            </div>
+        </header>
+
+        <div class="grid" id="statGrid">
+            <div class="stat-card cyan"><div class="value" id="sTotal">–</div><div class="label">📦 Modules</div></div>
+            <div class="stat-card green"><div class="value" id="sOn">–</div><div class="label">🟢 On</div></div>
+            <div class="stat-card dim"><div class="value" id="sOff">–</div><div class="label">⚫ Off</div></div>
+            <div class="stat-card orange"><div class="value" id="sUnknown">–</div><div class="label">❓ Unknown</div></div>
+            <div class="stat-card blue"><div class="value" id="sRam">–</div><div class="label">💾 RAM (known)</div></div>
+            <div class="stat-card red"><div class="value" id="sExposed">–</div><div class="label">🌐 Exposed Public</div></div>
+        </div>
+
+        <div class="card">
+            <h3>📊 Cost &amp; state by taxonomy</h3>
+            <div class="tabs">
+                <div class="tab active" data-tab="agg-category">Category</div>
+                <div class="tab" data-tab="agg-runtime">Runtime</div>
+                <div class="tab" data-tab="agg-exposure">Exposure</div>
+            </div>
+            <div id="agg-category" class="tab-content active"><table class="agg-table" id="aggCategoryTable"></table></div>
+            <div id="agg-runtime" class="tab-content"><table class="agg-table" id="aggRuntimeTable"></table></div>
+            <div id="agg-exposure" class="tab-content"><table class="agg-table" id="aggExposureTable"></table></div>
+        </div>
+
+        <div class="card">
+            <h3>🗂 Profile
+                <span class="note">membership checkbox &amp; diff below apply to the selected profile</span>
+            </h3>
+            <div class="btn-group">
+                <select id="profileSelect"></select>
+                <span id="profileLabel" style="font-size:0.72rem;color:var(--p31-dim)"></span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📦 Modules <span class="note" id="modCount"></span></h3>
+            <div class="filter-bar">
+                <input type="text" id="searchInput" placeholder="🔍 Filter by id / category…">
+                <select id="stateFilter">
+                    <option value="">All states</option>
+                    <option value="on">🟢 On</option>
+                    <option value="off">⚫ Off</option>
+                    <option value="unknown">❓ Unknown</option>
+                </select>
+            </div>
+            <div class="mod-list" id="modList">Loading…</div>
+        </div>
+
+        <div class="card">
+            <h3>🧮 Diff — <span id="diffProfileName">–</span></h3>
+            <div class="diff-banner">⚠️ NOT APPLIED — Phase 1 has no <code>apply</code>. This is a preview of what
+                the selected profile would change if actuated; nothing here starts or stops anything. Actuation
+                arrives in Phase 3 with 4R snapshots and audit.</div>
+            <div class="diff-list" id="diffList">Loading…</div>
+        </div>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '/api/v1/profiles';
+        let statusData = null;
+        let profilesData = null;
+        let pinsData = {};
+        let selectedProfile = null;
+        let searchTerm = '';
+        let stateFilterVal = '';
+
+        function token() {
+            try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
+        }
+        function authHeaders(extra) {
+            const h = Object.assign({}, extra || {});
+            const t = token();
+            if (t) h['Authorization'] = 'Bearer ' + t;
+            return h;
+        }
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function fmtKb(kb) {
+            if (kb == null) return '—';
+            const mb = kb / 1024;
+            return (mb >= 10 ? mb.toFixed(0) : mb.toFixed(1)) + ' MB';
+        }
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = esc(msg);
+            t.className = 'toast show';
+            clearTimeout(t._hideTimer);
+            t._hideTimer = setTimeout(() => { t.className = 'toast'; }, 3000);
+        }
+        function errorToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = esc(msg) + '<span class="close" data-act="dismiss-toast">✕</span>';
+            t.className = 'toast show error';
+            clearTimeout(t._hideTimer);
+        }
+        document.getElementById('toast').addEventListener('click', e => {
+            if (e.target.closest('[data-act="dismiss-toast"]')) {
+                const t = document.getElementById('toast');
+                t.className = 'toast';
+            }
+        });
+
+        async function api(path, opts) {
+            const res = await fetch(API + path, Object.assign({}, opts, { headers: authHeaders((opts && opts.headers) || {}) }));
+            if (res.status === 401) { errorToast('🔒 Login required'); throw new Error('401'); }
+            let data = null;
+            try { data = await res.json(); } catch (e) { /* no body */ }
+            if (!res.ok) {
+                const detail = (data && data.detail) ? data.detail : ('HTTP ' + res.status);
+                throw new Error(detail);
+            }
+            return data;
+        }
+
+        async function refresh() {
+            try {
+                const [status, profiles, pins] = await Promise.all([
+                    api('/status'),
+                    api('/profiles'),
+                    api('/pins'),
+                ]);
+                statusData = status;
+                profilesData = profiles;
+                pinsData = (pins && pins.pins) || {};
+                if (!selectedProfile) selectedProfile = profiles.active || (profiles.profiles[0] && profiles.profiles[0].name) || null;
+                renderStats();
+                renderAggregates();
+                renderProfileSelect();
+                renderModules();
+                await loadDiff();
+            } catch (e) {
+                if (e.message !== '401') errorToast('⚠️ Failed to load: ' + e.message);
+            }
+        }
+
+        function renderStats() {
+            const t = (statusData && statusData.totals) || {};
+            document.getElementById('sTotal').textContent = t.count != null ? t.count : '–';
+            document.getElementById('sOn').textContent = t.on != null ? t.on : '–';
+            document.getElementById('sOff').textContent = t.off != null ? t.off : '–';
+            document.getElementById('sUnknown').textContent = t.unknown != null ? t.unknown : '–';
+            document.getElementById('sRam').textContent = fmtKb(t.rss_kb);
+            document.getElementById('sExposed').textContent = t.exposed_public != null ? t.exposed_public : '–';
+            document.getElementById('subline').textContent =
+                (t.count || 0) + ' modules · ' + (t.on || 0) + ' on · ' + (t.unknown || 0) + ' unknown · read-only inventory';
+        }
+
+        function renderAggTable(elId, bucket) {
+            const el = document.getElementById(elId);
+            const keys = Object.keys(bucket || {}).sort();
+            if (!keys.length) { el.innerHTML = '<tr><td class="empty-note">No data</td></tr>'; return; }
+            let html = '<tr><th>Key</th><th class="num">Count</th><th class="num">On</th><th class="num">Off</th><th class="num">Unknown</th><th class="num">RAM</th></tr>';
+            keys.forEach(k => {
+                const b = bucket[k];
+                html += '<tr><td>' + esc(k) + '</td>' +
+                    '<td class="num">' + b.count + '</td>' +
+                    '<td class="num on">' + b.on + '</td>' +
+                    '<td class="num off">' + b.off + '</td>' +
+                    '<td class="num unknown">' + b.unknown + '</td>' +
+                    '<td class="num">' + fmtKb(b.rss_kb) + '</td></tr>';
+            });
+            el.innerHTML = html;
+        }
+
+        function renderAggregates() {
+            if (!statusData) return;
+            renderAggTable('aggCategoryTable', statusData.by_category);
+            renderAggTable('aggRuntimeTable', statusData.by_runtime);
+            renderAggTable('aggExposureTable', statusData.by_exposure);
+        }
+
+        function renderProfileSelect() {
+            const sel = document.getElementById('profileSelect');
+            const list = (profilesData && profilesData.profiles) || [];
+            sel.innerHTML = list.map(p =>
+                '<option value="' + esc(p.name) + '"' + (p.name === selectedProfile ? ' selected' : '') + '>' +
+                esc(p.label) + (p.name === profilesData.active ? ' (active)' : '') + '</option>'
+            ).join('') || '<option value="">No profile</option>';
+            const cur = list.find(p => p.name === selectedProfile);
+            document.getElementById('profileLabel').textContent = cur ? cur.on.length + ' module(s) listed' : '';
+            document.getElementById('diffProfileName').textContent = selectedProfile || '(none active)';
+        }
+
+        function pinGlyph(id) {
+            const p = pinsData[id];
+            if (p === 'on') return { cls: 'on', label: '📌 ON' };
+            if (p === 'off') return { cls: 'off', label: '📌 OFF' };
+            return { cls: 'follow', label: '⟳ follows profile' };
+        }
+
+        function renderModules() {
+            const el = document.getElementById('modList');
+            let mods = (statusData && statusData.modules) || [];
+            const cur = (profilesData && profilesData.profiles || []).find(p => p.name === selectedProfile);
+            const memberSet = new Set(cur ? cur.on : []);
+
+            if (searchTerm) {
+                const s = searchTerm.toLowerCase();
+                mods = mods.filter(m => m.id.toLowerCase().includes(s) || m.category.toLowerCase().includes(s));
+            }
+            if (stateFilterVal) {
+                mods = mods.filter(m => m.on === stateFilterVal);
+            }
+            mods = mods.slice().sort((a, b) => (b.priority - a.priority) || a.id.localeCompare(b.id));
+
+            document.getElementById('modCount').textContent = '(' + mods.length + ' shown)';
+
+            if (!mods.length) {
+                el.innerHTML = '<div class="empty-note">No modules match the current filter.</div>';
+                return;
+            }
+
+            el.innerHTML = mods.map(m => {
+                const glyph = m.on === 'on' ? '🟢' : m.on === 'unknown' ? '❓' : '⚫';
+                const isMember = memberSet.has(m.id);
+                const pin = pinGlyph(m.id);
+                const pinOffDisabled = m.protected;
+                return '<div class="mod-row ' + m.on + '">' +
+                    '<span class="glyph">' + glyph + '</span>' +
+                    '<span class="id">' + esc(m.id) + (m.protected ? '<span class="lock" title="protected — always on">🔒</span>' : '') + '</span>' +
+                    '<span class="meta">' + esc(m.category) + ' · ' + esc(m.runtime) + '</span>' +
+                    '<span class="exposure-badge ' + esc(m.exposure) + '">' + esc(m.exposure) + '</span>' +
+                    '<span class="prio">prio ' + m.priority + '</span>' +
+                    '<span class="rss">' + fmtKb(m.rss_kb) + '</span>' +
+                    '<label class="member" title="add/remove from ' + esc(selectedProfile || '') + '">' +
+                    '<input type="checkbox" data-act="member" data-id="' + esc(m.id) + '"' + (isMember ? ' checked' : '') +
+                    (selectedProfile ? '' : ' disabled') + '> in profile</label>' +
+                    '<span class="pins">' +
+                    '<button class="btn sm' + (pin.cls === 'follow' ? ' active' : '') + '" data-act="pin" data-id="' + esc(m.id) + '" data-pin="clear" title="follow profile">⟳</button>' +
+                    '<button class="btn sm' + (pin.cls === 'on' ? ' active' : '') + '" data-act="pin" data-id="' + esc(m.id) + '" data-pin="on" title="pin on">📌ON</button>' +
+                    '<button class="btn sm' + (pin.cls === 'off' ? ' active' : '') + '" data-act="pin" data-id="' + esc(m.id) + '" data-pin="off"' + (pinOffDisabled ? ' disabled' : '') + ' title="' + (pinOffDisabled ? 'protected — cannot pin off' : 'pin off') + '">📌OFF</button>' +
+                    '</span>' +
+                    '</div>';
+            }).join('');
+        }
+
+        async function loadDiff() {
+            const el = document.getElementById('diffList');
+            if (!selectedProfile) { el.innerHTML = '<div class="empty-note">No active/selected profile.</div>'; return; }
+            el.innerHTML = 'Loading…';
+            try {
+                const data = await api('/diff?profile=' + encodeURIComponent(selectedProfile));
+                const changes = data.changes || [];
+                if (!changes.length) {
+                    el.innerHTML = '<div class="empty-note">✅ Nothing to change — reality already matches this profile.</div>';
+                    return;
+                }
+                el.innerHTML = changes.map(c =>
+                    '<div class="diff-row ' + esc(c.action) + '">' +
+                    '<span class="action ' + esc(c.action) + '">' + (c.action === 'start' ? '▶ start' : '⛔ stop') + '</span>' +
+                    '<span class="id">' + esc(c.id) + '</span>' +
+                    '<span class="reason">' + esc(c.reason) + '</span>' +
+                    '<span class="prio">prio ' + c.priority + '</span>' +
+                    '</div>'
+                ).join('');
+            } catch (e) {
+                el.innerHTML = '<div class="empty-note">⚠️ ' + esc(e.message) + '</div>';
+            }
+        }
+
+        async function toggleMember(id, on) {
+            if (!selectedProfile) return;
+            try {
+                await api('/profiles/' + encodeURIComponent(selectedProfile) + '/members', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, on: on }),
+                });
+                toast((on ? '✅ Added ' : '🗑️ Removed ') + id + (on ? ' to ' : ' from ') + selectedProfile);
+                await refresh();
+            } catch (e) {
+                errorToast('❌ ' + e.message);
+                renderModules(); // revert the optimistic checkbox state
+            }
+        }
+
+        async function setPin(id, pin) {
+            try {
+                await api('/pins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, pin: pin }),
+                });
+                toast(pin === null ? ('⟳ ' + id + ' now follows the profile') : ('📌 ' + id + ' pinned ' + pin));
+                await refresh();
+            } catch (e) {
+                errorToast('❌ ' + e.message);
+            }
+        }
+
+        document.getElementById('modList').addEventListener('click', e => {
+            const t = e.target.closest('[data-act="pin"]');
+            if (!t || t.disabled) return;
+            const id = t.getAttribute('data-id');
+            const pinVal = t.getAttribute('data-pin');
+            setPin(id, pinVal === 'clear' ? null : pinVal);
+        });
+        document.getElementById('modList').addEventListener('change', e => {
+            const t = e.target.closest('[data-act="member"]');
+            if (!t) return;
+            toggleMember(t.getAttribute('data-id'), t.checked);
+        });
+
+        document.querySelectorAll('.tabs .tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const scope = tab.closest('.card');
+                scope.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+                scope.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
+            });
+        });
+
+        document.getElementById('profileSelect').addEventListener('change', e => {
+            selectedProfile = e.target.value || null;
+            renderProfileSelect();
+            renderModules();
+            loadDiff();
+        });
+        document.getElementById('searchInput').addEventListener('input', e => {
+            searchTerm = e.target.value;
+            renderModules();
+        });
+        document.getElementById('stateFilter').addEventListener('change', e => {
+            stateFilterVal = e.target.value;
+            renderModules();
+        });
+        document.getElementById('refreshBtn').addEventListener('click', refresh);
+
+        refresh();
+        setInterval(refresh, 45000);
+    </script>
+</body>
+</html>

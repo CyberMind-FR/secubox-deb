@@ -1,0 +1,29 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create secubox system user/group if missing (idempotent, matches
+        # sibling packages — see secubox-users/debian/postinst).
+        getent group secubox >/dev/null || groupadd --system secubox
+        getent passwd secubox >/dev/null || useradd --system --gid secubox \
+            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
+
+        install -d -o secubox -g secubox -m 755 /etc/secubox
+        # The only directory this module ever writes to (profiles/*.toml +
+        # pins.toml) — see api/web.py _atomic_write. modules.d/ belongs to
+        # Phase 1 (scan) and is left untouched here.
+        install -d -o secubox -g secubox -m 755 /etc/secubox/profiles
+
+        # Own dedicated socket, own service — never served by the aggregator
+        # (the profile engine must not depend on something it may later
+        # restart). Restart (not just enable) so an upgrade picks up new code.
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable secubox-profiles.service 2>/dev/null || true
+        systemctl restart secubox-profiles.service 2>/dev/null || true
+        systemctl reload nginx 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
