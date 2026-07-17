@@ -54,15 +54,32 @@ def build_atom(*, site_title: str, base_url: str, self_url: str,
 
 def build_jsonfeed(*, site_title: str, base_url: str, feed_url: str,
                    items: list[dict]) -> dict:
-    """items: {id, url, title, content_html, date_published}."""
+    """items: {id, url, title, content_html, date_published}, plus optional
+    `summary` (short excerpt) and `tags` [{slug, emoji}].
+
+    `summary` and `tags` are JSON Feed 1.1 standard fields, so generic readers
+    understand them; the emoji has no standard home, so it rides in the
+    `_secubox` extension (the spec reserves `_`-prefixed keys for exactly this).
+    Optional keys are OMITTED rather than emitted as null — the spec asks for
+    absence, and a null `summary` would render as the string "null" in naive
+    readers.
+    """
+    out_items = []
+    for it in items:
+        entry = {"id": it["id"], "url": it["url"], "title": it["title"],
+                 "content_html": it["content_html"],
+                 "date_published": it["date_published"]}
+        if it.get("summary"):
+            entry["summary"] = it["summary"]
+        tags = it.get("tags") or []
+        if tags:
+            entry["tags"] = [t["slug"] for t in tags]          # spec: array of strings
+            entry["_secubox"] = {"tags": tags}                 # spec-legal extension: slug + emoji
+        out_items.append(entry)
     return {
         "version": "https://jsonfeed.org/version/1.1",
         "title": site_title,
         "home_page_url": f"{base_url}/",
         "feed_url": feed_url,
-        "items": [
-            {"id": it["id"], "url": it["url"], "title": it["title"],
-             "content_html": it["content_html"], "date_published": it["date_published"]}
-            for it in items
-        ],
+        "items": out_items,
     }

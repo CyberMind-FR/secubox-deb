@@ -151,6 +151,15 @@ body.offline .offline-bar { display: block; }
 .queued-bar { display: none; background: var(--mind); color: #fff; font-size: .74rem; text-align: center; padding: 4px; }
 body.has-queue .queued-bar { display: block; }
 
+/* ── emoji gauges (core/metrics.js) ────────────────────────────────
+ * Bar colour mirrors the .badge severity classes so a gauge and its
+ * matching badge always agree at a glance. */
+.gauge-bar { height: 5px; border-radius: 4px; background: var(--surf-2); margin-top: 8px; overflow: hidden; }
+.gauge-fill { height: 100%; border-radius: 4px; background: var(--muted); transition: width .3s; }
+.gauge-fill.ok   { background: var(--root); }
+.gauge-fill.warn { background: var(--wall); }
+.gauge-fill.err  { background: var(--boot); }
+
 .empty { color: var(--muted); text-align: center; padding: 40px 16px; font-size: .85rem; }
 .muted { color: var(--muted); }
 .mono-sm { font-family: var(--font-mono); font-size: .72rem; }

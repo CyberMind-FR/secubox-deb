@@ -12,6 +12,25 @@ let BASE = '';        // e.g. https://box.example.in
 let TOKEN = '';
 const listeners = new Set();
 
+// Box tokens expire (24h). The Companion seals one at pairing and reuses it, so
+// without this the app dead-ends on "unauthorized" a day later with no way back
+// except unpairing. On a 401 we ask the app to re-authenticate, then retry the
+// request once — single-flight, so a screenful of concurrent 401s produces ONE
+// login prompt, not one per request.
+let _onUnauthorized = null;
+let _reauthInFlight = null;
+
+async function reauthenticate() {
+  if (!_onUnauthorized) return false;
+  if (!_reauthInFlight) {
+    _reauthInFlight = Promise.resolve()
+      .then(() => _onUnauthorized())
+      .catch(() => false)
+      .finally(() => { _reauthInFlight = null; });
+  }
+  return await _reauthInFlight;
+}
+
 function emit() { for (const fn of listeners) try { fn(state()); } catch {} }
 function state() { return { online: navigator.onLine, base: BASE }; }
 
@@ -24,6 +43,10 @@ export const api = {
   isReady() { return !!BASE && !!TOKEN; },
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
+  /** Register the app's re-login flow. It must return truthy once fresh
+   *  credentials have been passed to api.init(), falsy if the user cancelled. */
+  onUnauthorized(fn) { _onUnauthorized = fn; },
+
   headers(extra = {}) {
     const h = { 'Accept': 'application/json', ...extra };
     if (TOKEN) h['Authorization'] = 'Bearer ' + TOKEN;
@@ -31,11 +54,15 @@ export const api = {
   },
 
   /** GET with cache fallback. `path` is absolute on the box (e.g. /api/v1/billets/feed). */
-  async get(path, { cache = true } = {}) {
+  async get(path, { cache = true, _retried = false } = {}) {
     const url = BASE + path;
     try {
       const r = await fetch(url, { headers: this.headers(), credentials: 'include' });
-      if (r.status === 401) throw new ApiError('unauthorized', 401);
+      if (r.status === 401) {
+        // Expired/rotated token → re-login once, then replay this read.
+        if (!_retried && await reauthenticate()) return this.get(path, { cache, _retried: true });
+        throw new ApiError('unauthorized', 401);
+      }
       if (!r.ok) throw new ApiError(await safeText(r), r.status);
       const data = await r.json().catch(() => ({}));
       if (cache) store.cachePut('GET ' + path, data).catch(() => {});
@@ -56,13 +83,18 @@ export const api = {
   /** Send a write, or queue it if offline / the network drops.
    *  Returns { queued:true, id } when deferred, otherwise the parsed response. */
   async _write(method, path, body, { form = false } = {}) {
-    const send = async () => {
+    const send = async (retried = false) => {
       const headers = form ? this.headers() : this.headers({ 'Content-Type': 'application/json' });
       const r = await fetch(BASE + path, {
         method, headers, credentials: 'include',
         body: body == null ? undefined : (form ? body : JSON.stringify(body)),
       });
-      if (r.status === 401) throw new ApiError('unauthorized', 401);
+      if (r.status === 401) {
+        // Re-login and replay ONCE — losing a billet the author just wrote to an
+        // expired token would be the worst possible outcome here.
+        if (!retried && await reauthenticate()) return send(true);
+        throw new ApiError('unauthorized', 401);
+      }
       if (!r.ok) throw new ApiError(await safeText(r), r.status);
       return r.json().catch(() => ({}));
     };
