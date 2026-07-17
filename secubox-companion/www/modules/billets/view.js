@@ -6,7 +6,7 @@
 // a JWT-authed admin API for billets (its web admin is session-based). Reads use
 // the public feed and work today; writes go through these paths + auto-queue.
 const EP = {
-  feed:     (b) => `${b}/feed?limit=50`,                 // public feed (works today)
+  feed:     (b) => `${b}/feed.json`,                     // public JSON Feed (jsonfeed.org)
   create:   (b) => `${b}/admin/api/billets`,             // TODO(api): confirm JWT create route
   update:   (b, id) => `${b}/admin/api/billets/${id}`,   // TODO(api)
   remove:   (b, id) => `${b}/admin/api/billets/${id}`,   // TODO(api)
@@ -50,11 +50,11 @@ export default async function mount(ctx) {
       if (d.__cached) host.append(el('div.badge.warn', { text: 'cached (offline)' }));
       if (!items.length) return host.append(el('div.empty', { text: 'No billets yet.' }));
       for (const b of items) {
-        const title = (b.body || b.title || '').replace(/\s+/g, ' ').slice(0, 70) || '(untitled)';
+        const title = (b.title || b.body || '').replace(/\s+/g, ' ').slice(0, 70) || '(untitled)';
         host.append(el('div.item', {}, [
           el('div.meta', {}, [
             el('b', { text: title }),
-            el('span', { text: `${b.status || 'published'} · ${ago(b.published_at || b.created_at)} · ${b.style || 'default'}` }),
+            el('span', { text: `${b.status || 'published'} · ${ago(b.date_published || b.published_at || b.created_at)} · ${b.style || 'default'}` }),
           ]),
           el('div.actions', {}, [
             el('button.btn.sm', { text: 'Edit', onclick: () => { active = 'edit:' + (b.id || b.slug); renderTabs(); editor(b.id || b.slug, b); } }),
