@@ -22,6 +22,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from .manifest import Manifest
+
 PROC = Path("/proc")
 ROUTES_FILE = Path("/etc/secubox/waf/haproxy-routes.json")
 
@@ -38,23 +40,26 @@ class Actual:
     rss_kb: int | None = None
 
 
-def _run_cmd(argv: list[str]) -> tuple[int, str]:
+def _run_cmd(argv: list[str]) -> tuple[int | None, str]:
+    """rc=None signale que la commande n'a PAS pu s'exécuter (OSError, timeout) —
+    à distinguer d'un rc non-nul qui est une réponse authentique de la commande."""
     try:
         p = subprocess.run(argv, capture_output=True, text=True, timeout=_TIMEOUT)
         return p.returncode, p.stdout
     except (OSError, subprocess.SubprocessError):
-        return 1, ""
+        return None, ""
 
 
-def load_routes(path: Path = ROUTES_FILE) -> set[str]:
-    """Domaines routés par le WAF. Fichier absent = aucune route (pas une erreur)."""
+def load_routes(path: Path = ROUTES_FILE) -> set[str] | None:
+    """Domaines routés par le WAF. Fichier absent = aucune route (pas une erreur).
+    Fichier présent mais illisible/corrompu = indéterminable → None, pas set()."""
     path = Path(path)
     if not path.exists():
         return set()
     try:
         return set(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
-        return set()
+        return None
 
 
 def _rss_kb(pid: str) -> int | None:
@@ -69,16 +74,19 @@ def _rss_kb(pid: str) -> int | None:
     return None
 
 
-def observe(m, *, run=_run_cmd, routes: set[str] | None = None) -> Actual:
+def observe(m: Manifest, *, run=_run_cmd, routes: set[str] | None = None) -> Actual:
     """État réel d'un module. Tout ce qui n'est pas déterminable reste None —
     jamais False : un False inventé produirait une fausse décision."""
     unit = m.units[0] if m.units else None
     enabled = active = rss = None
     if unit:
         rc, _ = run(["systemctl", "is-enabled", unit])
-        enabled = rc == 0
+        # rc=None : la commande n'a pas pu s'exécuter (échec d'exécution/timeout),
+        # indistinguable d'un rc!=0 authentique si on ne le traite pas à part —
+        # rester None, jamais fabriquer un False.
+        enabled = None if rc is None else (rc == 0)
         rc, _ = run(["systemctl", "is-active", unit])
-        active = rc == 0
+        active = None if rc is None else (rc == 0)
         rc, out = run(["systemctl", "show", unit, "-p", "MainPID", "--value"])
         if rc == 0:
             rss = _rss_kb(out.strip())
@@ -96,7 +104,9 @@ def observe(m, *, run=_run_cmd, routes: set[str] | None = None) -> Actual:
 
     portal_routed = None
     if m.portal_domain is not None:
-        portal_routed = m.portal_domain in (routes if routes is not None else load_routes())
+        resolved_routes = routes if routes is not None else load_routes()
+        if resolved_routes is not None:
+            portal_routed = m.portal_domain in resolved_routes
 
     return Actual(enabled=enabled, active=active, lxc_running=lxc_running,
                   lxc_autostart=lxc_autostart, portal_routed=portal_routed, rss_kb=rss)
