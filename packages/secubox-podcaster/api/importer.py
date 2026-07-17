@@ -223,7 +223,14 @@ def run_import(url: str, media_dir: str, mirror_peertube: bool, create_billets: 
     JOB.update({"running": True, "url": url, "total": 0, "done": 0, "current": "",
                 "errors": [], "feed_id": None, "started": int(time.time()),
                 "finished": 0, "log": []})
-    workdir = Path(media_dir).parent / "youtube-import"
+    # Stage on the SAME real filesystem as the media store. media_dir is usually
+    # a symlink onto the SSD (…/media -> /data/secubox/podcaster/media); taking
+    # .parent BEFORE resolving lands the staging back on the eMMC root — which is
+    # exactly how a large YouTube import filled the root fs to 99% and stalled
+    # (staging on eMMC, store on SSD). .resolve() follows the symlink so staging
+    # and store share the SSD. Durable: it derives from the real path, so a
+    # package reinstall that re-lays the symlink cannot revert it.
+    workdir = Path(media_dir).resolve().parent / "youtube-import"
     try:
         entries = _enumerate(url)
         if not entries:
