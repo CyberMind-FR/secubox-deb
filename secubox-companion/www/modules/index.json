@@ -1,4 +1,13 @@
 {
   "_comment": "The module registry. Add a module: drop a folder in modules/<id>/ (module.json + view.js) and append its id here. The core never changes. The dashboard orders them AUTH→WALL→BOOT→MIND→ROOT→MESH automatically.",
-  "modules": ["auth", "waf", "system", "billets", "podcasteur", "exposure", "wireguard"]
+  "modules": [
+    "auth",
+    "waf",
+    "system",
+    "billets",
+    "podcasteur",
+    "peertube",
+    "exposure",
+    "wireguard"
+  ]
 }
