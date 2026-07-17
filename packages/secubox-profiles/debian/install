@@ -1,0 +1,2 @@
+api/*.py               usr/lib/secubox/profiles/api/
+sbin/secubox-profilectl usr/sbin/

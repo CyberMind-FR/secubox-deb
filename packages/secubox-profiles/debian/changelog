@@ -1,0 +1,5 @@
+secubox-profiles (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 1 : manifestes, profiler scan, status, diff (lecture seule).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 17 Jul 2026 12:00:00 +0200
