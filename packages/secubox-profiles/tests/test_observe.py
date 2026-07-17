@@ -164,3 +164,20 @@ def test_observe_portal_routed_none_when_routes_undeterminable(monkeypatch):
     })
     a = observe(LXC, run=run)
     assert a.portal_routed is None
+
+
+def test_load_routes_untraversable_parent_is_none_not_crash(tmp_path):
+    """Cas RÉEL de la board : /etc/secubox/waf est 0750 root:root alors que
+    haproxy-routes.json est 0644 — le fichier est lisible, le répertoire non
+    traversable. `.exists()` lève alors PermissionError. Le laisser hors du try
+    remontait un 500 sur GET /status. Inconnu ne doit ni mentir ni planter."""
+    import os
+    waf = tmp_path / "waf"
+    waf.mkdir()
+    routes = waf / "haproxy-routes.json"
+    routes.write_text(json.dumps({"peertube.gk2.secubox.in": ["127.0.0.1", 9000]}))
+    os.chmod(waf, 0o000)          # parent non traversable
+    try:
+        assert load_routes(routes) is None    # indéterminable, pas set(), pas d'exception
+    finally:
+        os.chmod(waf, 0o755)      # sinon tmp_path n'est pas nettoyable

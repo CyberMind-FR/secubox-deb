@@ -52,11 +52,17 @@ def _run_cmd(argv: list[str]) -> tuple[int | None, str]:
 
 def load_routes(path: Path = ROUTES_FILE) -> set[str] | None:
     """Domaines routés par le WAF. Fichier absent = aucune route (pas une erreur).
+
+    `.exists()` est DANS le try : il lève PermissionError quand un parent n'est
+    pas traversable, et c'est le cas réel sur la board — /etc/secubox/waf est
+    0750 root:root alors que haproxy-routes.json est 0644. Le laisser dehors
+    faisait remonter un 500 sur /status au lieu d'un « indéterminable ».
+    Inconnu ne doit ni mentir NI planter.
     Fichier présent mais illisible/corrompu = indéterminable → None, pas set()."""
     path = Path(path)
-    if not path.exists():
-        return set()
     try:
+        if not path.exists():
+            return set()
         return set(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
         return None
