@@ -373,13 +373,33 @@ func (s *Server) handler() http.Handler {
 					}
 				}
 
-				cat, sev, hit := s.rules.Match(
+				cat, sev, mode, hit := s.rules.Match(
 					r.Method,
 					rawPath,
 					r.URL.RawQuery,
 					string(bodyBytes),
 					r.Header.Get("User-Agent"),
 				)
+				if hit && mode == modeDetect {
+					// Observe only: log it, let it through. A detect category
+					// must be as harmless as enabled:false, minus the log line
+					// — so NO ban, NO CrowdSec report, NO nft decision, NO
+					// ban-counter increment.
+					if s.threatLog != nil {
+						s.threatLog.Record(ThreatRecord{
+							ClientIP: ip,
+							Host:     r.Host,
+							Method:   r.Method,
+							Path:     rawPath,
+							Category: cat,
+							Severity: sev,
+							RuleID:   "",
+							Action:   "detect",
+							UA:       r.Header.Get("User-Agent"),
+						})
+					}
+					hit = false // fall through to the normal proxy path
+				}
 				if hit {
 					// Task 3.2 — graduated WARNING/BAN response.
 					//

@@ -316,9 +316,11 @@ func unquotePlus(s string) string {
 // calls urllib.parse.unquote_plus inside the function).  body and ua are
 // already plain text (no additional decoding applied).
 //
-// Returns: cat (category ID), sev (severity string), hit (true on first match).
-// Returns "", "", false when no rule fires.
-func (r *Rules) Match(method, rawPath, rawQuery, body, ua string) (cat, sev string, hit bool) {
+// Returns: cat (category ID), sev (severity string), mode (modeBlock or
+// modeDetect — only meaningful when hit is true; the caller decides what to
+// do with it), hit (true on first match). Returns "", "", "", false when no
+// rule fires.
+func (r *Rules) Match(method, rawPath, rawQuery, body, ua string) (cat, sev, mode string, hit bool) {
 	// Decode path and query (unquote_plus semantics: '+' → space, then %XX).
 	decodedPath := unquotePlus(rawPath)
 	decodedQuery := unquotePlus(rawQuery)
@@ -335,15 +337,15 @@ func (r *Rules) Match(method, rawPath, rawQuery, body, ua string) (cat, sev stri
 	r.mu.RUnlock()
 
 	if cur == nil {
-		return "", "", false
+		return "", "", "", false
 	}
 
 	for _, c := range cur.cats {
 		for _, p := range c.data.patterns {
 			if p.re.MatchString(scanText) {
-				return c.id, p.severity, true
+				return c.id, p.severity, c.data.mode, true
 			}
 		}
 	}
-	return "", "", false
+	return "", "", "", false
 }

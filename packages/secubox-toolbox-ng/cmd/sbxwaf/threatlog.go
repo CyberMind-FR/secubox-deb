@@ -20,7 +20,7 @@
 //	category   — WAF category ID (e.g. "sqli", "xss")
 //	severity   — "low"|"medium"|"high"|"critical"
 //	rule_id    — matched rule ID (empty string when Match() did not return one)
-//	action     — "warning" | "banned"
+//	action     — "detect" | "warning" | "banned"
 //	user_agent — User-Agent header
 package main
 
@@ -43,7 +43,7 @@ type ThreatRecord struct {
 	Category string
 	Severity string
 	RuleID   string
-	Action   string // "warning" | "banned"
+	Action   string // "detect" | "warning" | "banned"
 	UA       string
 }
 
