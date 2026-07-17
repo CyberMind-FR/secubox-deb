@@ -3,6 +3,20 @@
 
 ---
 
+## ✅ 2026-07-17 : Billets — API admin JWT + authoring/upload Companion (branche fix/companion-billets-feed)
+
+Companion devient un vrai client d'écriture pour le micro-blog billets. Live-vérifié gk2. Détail dans HISTORY.md.
+
+- **API admin JWT** 📝 — nouveau `api/routes/jwt_admin.py` : surface JSON JWT-authed (`require_jwt` : Bearer OU cookie `secubox_session`), parallèle à l'admin HTML session, **réutilise le même repo/media**. `POST/PUT/DELETE /admin/api/billets`, `POST /admin/api/billets/{id}/media` (multipart, EXIF-strip), `GET /admin/api/comments` + approve/delete. No-op si `secubox_core` absent.
+- **Fix venv (packagé)** — le venv isolé billets ne pouvait pas importer le `secubox_core` géré par `.deb` ; postinst pose un `zz-secubox-system.pth` trié-dernier (append dist-packages, wheels venv prioritaires — fastapi/pydantic non shadowés). Backport du hotfix board.
+- **Module Companion billets** — EP → `/feed.json` + `/admin/api/*` ; éditeur gagne un champ image uploadé après création du billet ; SW v6→v7.
+- **Vérifié live gk2** — JWT minté en user `secubox` (résolution `_secret()` identique au service) : create → feed (30 items), upload PNG valide → `{url, thumb}` (PNG corrompu correctement 415), delete — tous 200.
+
+### ⬜ Next / follow-ups
+- **Merger** `fix/companion-billets-feed` ; rebuild `.deb` billets pour livrer le postinst .pth aux installs neuves.
+
+---
+
 ## ✅ 2026-07-17 : WAF (webui + autoban→firewall + analyse) + Nextcloud rework (PR #866, #867 mergées)
 
 Deux dashboards refaits cyan, un gros trou de contrôle WAF colmaté, module Nextcloud réparé. Live-vérifié gk2. Détail dans HISTORY.md.

@@ -3,6 +3,19 @@
 
 ---
 
+## 2026-07-17 — Billets JWT admin surface + Companion authoring & image upload (branch fix/companion-billets-feed)
+
+Made the SecuBox Companion a working authoring client for the billets micro-blog — the last gap ("New billet missing upload", comment moderation 404).
+
+- **billets JWT admin API** — new `packages/secubox-billets/api/routes/jwt_admin.py`: a JWT-authed JSON surface (`secubox_core.auth.require_jwt` — Bearer OR `secubox_session` cookie) parallel to the session HTML admin, reusing the SAME repo/media layer. `POST/PUT/DELETE /admin/api/billets`, `POST /admin/api/billets/{id}/media` (multipart, EXIF-strip via `services.media`), `GET /admin/api/comments`, approve/delete moderation. No-op if `secubox_core` is absent (isolated tests). Wired into `api/main.py` via `register_jwt_admin`.
+- **venv import fix (packaged)** — the isolated billets venv couldn't import the `.deb`-managed `secubox_core`; postinst now drops a sorted-last `zz-secubox-system.pth` appending `/usr/lib/python3/dist-packages` (venv wheels keep precedence — fastapi/pydantic NOT shadowed). Backports the live board hotfix.
+- **Companion billets module** — EP map repointed at `/feed.json` + `/admin/api/*`; editor gained an image file input that uploads after billet creation (multipart to `/admin/api/billets/{id}/media`); SW bumped v6→v7.
+- **Verified live on gk2** — minted a JWT as the `secubox` user (matching the service's `_secret()` config resolution) and ran the full round-trip: create → feed (30 items), valid PNG upload → `{url, thumb}` (a corrupt PNG was correctly 415'd, proving `media.process` runs), delete — all 200. Route probes: `/admin/api/billets` 405 (POST-only), `/admin/api/comments` 401 (JWT-gated) = both registered.
+
+Follow-ups: merge `fix/companion-billets-feed`; rebuild the billets `.deb` to ship the postinst .pth on fresh installs.
+
+---
+
 ## 2026-07-17 — WAF webui + autoban-to-firewall fix + efficiency analysis + Nextcloud rework (PR #866, #867)
 
 Reworked two dashboards to the cyan hybrid-skin, fixed a major WAF control gap, and repaired the Nextcloud module — all live-verified on gk2.

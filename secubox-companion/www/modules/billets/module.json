@@ -5,7 +5,7 @@
   "icon": "📝",
   "description": "Micro-blog: write & publish billets, moderate comments.",
   "api_base": "/api/v1/billets",
-  "status_endpoint": "/api/v1/billets/health",
+  "status_endpoint": "/api/v1/billets/healthz",
   "capabilities": ["read", "write", "moderate"],
   "routes": [
     { "path": "", "label": "Billets" },

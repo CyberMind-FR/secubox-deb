@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import repo
 from .routes.admin import register_admin
+from .routes.jwt_admin import register_jwt_admin
 from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
                             register_public, _visitor)
 from .services import antispam, feeds, media
@@ -157,6 +158,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
     except OSError:
         pass
     register_admin(app, templates)
+    register_jwt_admin(app)  # JWT/SSO JSON surface for the SecuBox Companion
     register_public(app, templates)
 
     @app.middleware("http")
