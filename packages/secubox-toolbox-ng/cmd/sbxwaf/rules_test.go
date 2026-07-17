@@ -414,3 +414,26 @@ func TestEnabledFalseWinsOverMode(t *testing.T) {
 		t.Fatal("disabled category must not match")
 	}
 }
+
+func TestModeEscalateIsParsed(t *testing.T) {
+	p := writeRulesFile(t, `{"probes":{"name":"Absent-product probes","severity":"high","mode":"escalate",
+		"patterns":[{"id":"f5-1","pattern":"/mgmt/tm/util/bash","desc":"F5 RCE probe"}]}}`)
+	if got := catMode(LoadRules(p), "probes"); got != modeEscalate {
+		t.Fatalf("got %q, want %q", got, modeEscalate)
+	}
+}
+
+// escalate must be a first-class known mode — an unknown value still fails
+// closed to block, and "escalate" must NOT be treated as unknown.
+func TestModeEscalateIsNotTreatedAsUnknown(t *testing.T) {
+	p := writeRulesFile(t, `{"probes":{"name":"P","mode":"escalate",
+		"patterns":[{"id":"f5-1","pattern":"/mgmt/tm/util/bash","desc":"x"}]}}`)
+	r := LoadRules(p)
+	if got := catMode(r, "probes"); got == modeBlock {
+		t.Fatal("escalate fell through to block — it must be recognised, not treated as an unknown value")
+	}
+	// The category is still evaluated (a probe hits).
+	if _, _, _, hit := r.Match("GET", "/mgmt/tm/util/bash", "", "", ""); !hit {
+		t.Fatal("escalate category was dropped")
+	}
+}
