@@ -2,4 +2,4 @@ api/*.py               usr/lib/secubox/profiles/api/
 sbin/secubox-profilectl usr/sbin/
 www/profiles/index.html usr/share/secubox/www/profiles/
 menu.d/11-profiles.json usr/share/secubox/menu.d/
-nginx/profiles.conf    etc/nginx/secubox.d/
+nginx/profiles.conf    etc/nginx/secubox-routes.d/
