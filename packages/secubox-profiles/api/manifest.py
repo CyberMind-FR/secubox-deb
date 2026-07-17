@@ -26,6 +26,17 @@ CATEGORIES = ("media", "security", "network", "infra", "dev", "mesh")
 
 DEFAULT_PRIORITY = 50
 
+# Le noyau protégé : éteindre l'un de ceux-là retire à l'utilisateur le moyen
+# de rallumer quoi que ce soit (auth coupée = plus aucun login ; aggregator
+# coupé = plus aucun webui de gestion ; etc.). C'est une propriété du SCHÉMA,
+# pas une donnée que chaque manifeste peut librement déclarer : le design
+# prévoit que modules.d/*.toml est shipé par le paquet du module lui-même
+# (voir docs de conception), donc un `secubox-auth` un peu négligent pourrait
+# shipper un manifeste avec `protected = false` et désactiver silencieusement
+# la protection du cœur. On refuse de laisser la donnée décider de ça :
+# load_manifest() force protected=True pour ces id, quoi que dise le fichier.
+PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles"})
+
 
 class ManifestError(Exception):
     """Manifeste illisible ou invalide."""
@@ -90,6 +101,13 @@ def load_manifest(path: Path) -> Manifest:
     protected = d.get("protected", False)
     if not isinstance(protected, bool):
         raise ManifestError(f"{path}: protected={protected!r} doit être un booléen (true/false)")
+    # Structurel, pas data-driven (voir PROTECTED_IDS ci-dessus) : un paquet
+    # module qui shippe modules.d/auth.toml avec protected=false ne doit pas
+    # pouvoir désarmer la protection du noyau. On force à True plutôt que de
+    # lever ManifestError — un manifeste sloppy ne doit pas casser tout
+    # l'inventaire, mais il ne doit pas non plus pouvoir déprotéger le cœur.
+    if mid in PROTECTED_IDS:
+        protected = True
 
     needs = d.get("needs", [])
     if not isinstance(needs, list) or not all(isinstance(n, str) for n in needs):
