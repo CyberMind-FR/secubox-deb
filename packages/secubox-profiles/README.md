@@ -21,6 +21,28 @@ Inventaire et profils des modules SecuBox. **Phase 1 : lecture seule.**
 
 `menu.d/` reste la source UI (path, ordre, icône) et n'est pas dupliqué ici.
 
+## API web (`/profiles/`, socket dédié)
+
+Service systemd propre (`secubox-profiles.service`, `/run/secubox/profiles.sock`)
+— **jamais servi par l'aggregator** : le moteur de profils ne doit pas dépendre
+de quelque chose qu'il pourrait plus tard redémarrer. JWT obligatoire sur
+toutes les routes (`Depends(require_jwt)`).
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/v1/profiles/status` | inventaire (état tri-state on/off/unknown, coût RAM, agrégats catégorie/runtime/exposure) |
+| GET | `/api/v1/profiles/profiles` | liste des profils + profil actif |
+| GET | `/api/v1/profiles/pins` | pins courants |
+| GET | `/api/v1/profiles/diff?profile=<nom>` | plan de changements (**n'applique rien**) — 404 si profil inconnu, 409 si `ProtectedViolation` |
+| POST | `/api/v1/profiles/profiles/{name}/members` | `{"id","on"}` — ajoute/retire un module de la liste `on` d'un profil (404 id/profil inconnu) |
+| POST | `/api/v1/profiles/pins` | `{"id","pin":"on"\|"off"\|null}` — pose/lève un pin ; **409 et rien d'écrit** si `pin="off"` sur un module protégé |
+
+Écritures limitées à `/etc/secubox/profiles/<nom>.toml` et `pins.toml`
+(atomique : fichier temporaire + `os.replace`) — c'est ce qui rend Phase 1
+sûre : rien ne lit ces fichiers pour agir avant Phase 3.
+
+Panel webui : `/profiles/` (hybrid-dark, cf. `.claude/WEBUI-PANEL-GUIDELINES.md`).
+
 ## Manifeste
 
     id        = "peertube"

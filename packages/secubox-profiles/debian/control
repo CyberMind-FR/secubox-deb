@@ -7,7 +7,16 @@ Standards-Version: 4.6.2
 
 Package: secubox-profiles
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11), secubox-core
+Depends: ${misc:Depends},
+ ${python3:Depends},
+ python3 (>= 3.11),
+ python3-fastapi,
+ python3-uvicorn,
+ python3-pydantic,
+ secubox-core
 Description: SecuBox — inventaire et profils de modules (phase 1, lecture seule)
- Manifestes de modules, profiler de configuration, état et diff.
- Phase 1 n'applique aucun changement : scan/status/diff uniquement.
+ Manifestes de modules, profiler de configuration, état et diff — CLI
+ secubox-profilectl et API web (webui /profiles/, socket dédié, jamais
+ servi par l'aggregator).
+ Phase 1 n'applique aucun changement : scan/status/diff + écriture de l'état
+ désiré (profils, pins) uniquement. `apply` n'existe pas encore.

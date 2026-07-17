@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Installed as /etc/systemd/system/secubox-profiles.service (own socket, own
+# service — NEVER served by the aggregator: the profile engine must not
+# depend on something it may later restart).
+[Unit]
+Description=SecuBox Profiles API — module inventory and desired-state (Phase 1, read-only)
+After=network.target secubox-core.service
+Requires=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/profiles
+ExecStart=/usr/bin/python3 -m uvicorn api.asgi:app --uds /run/secubox/profiles.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+UMask=0007
+
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+RuntimeDirectoryMode=0775
+
+# ProtectSystem=strict makes / read-only by default (reads of modules.d/*.toml
+# and the WAF routes file still work); the only two paths this module is
+# allowed to WRITE are /run/secubox (the socket) and /etc/secubox/profiles
+# (profiles/*.toml + pins.toml — the only writes api/web.py performs).
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/secubox /etc/secubox/profiles
+
+[Install]
+WantedBy=multi-user.target

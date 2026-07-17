@@ -1,0 +1,9 @@
+{
+  "id": "profiles",
+  "name": "Profiles",
+  "category": "root",
+  "icon": "🧩",
+  "path": "/profiles/",
+  "order": 11,
+  "description": "Module inventory, RAM cost and desired-state profiles (Phase 1: read-only)"
+}

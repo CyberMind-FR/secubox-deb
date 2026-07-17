@@ -1,3 +1,29 @@
+secubox-profiles (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * perf : /status batché — une seule commande `systemctl show` pour toutes
+    les units natives + une seule énumération `lxc-ls -f`, au lieu de 3
+    sous-process par module (observe.observe_all, mesuré 46s -> <1s sur 187
+    modules). Cache TTL 60s hors-loop (asyncio.to_thread) côté API, avec
+    rafraîchissement en arrière-plan ; cache froid = calcul direct, jamais
+    d'erreur. /status expose désormais `cached_at`/`age_s`.
+  * observe() module par module reste la référence ; observe_all() est le
+    chemin rapide, pas un remplacement — unit/conteneur absent du batch
+    reste enabled/active/lxc_running/lxc_autostart=None (jamais un False
+    fabriqué), y compris pour les units *@.service (templates) qui feraient
+    échouer tout le batch si elles y entraient.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 17 Jul 2026 12:00:00 +0200
+
+secubox-profiles (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * webui : API web (socket dédié /run/secubox/profiles.sock, service propre,
+    jamais servi par l'aggregator) + panel /profiles/ (hybrid-dark).
+  * status/profiles/pins/diff en lecture ; écriture limitée aux membres de
+    profil et aux pins (jamais d'apply — Phase 3). Pin protégé->off refusé
+    en HTTP 409 avant toute écriture disque.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 17 Jul 2026 12:00:00 +0200
+
 secubox-profiles (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 1 : manifestes, profiler scan, status, diff (lecture seule).
