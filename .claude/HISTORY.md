@@ -3,6 +3,22 @@
 
 ---
 
+## 2026-07-17 — Session auditing + Companion auth/system/metrics + billets emoji hashtags (branch feat/sessions-companion-emoji)
+
+Sessions became auditable, the two stub Companion modules became real, and billets gained emoji-hashtag quick views. All live-verified on gk2.
+
+- **Session logging (root-caused)** 🔑 — `/login/mfa` and `/totp/confirm` hardcoded `"ip": ""` and dropped `user_agent`; only the password path captured them. **admin is forced-TOTP, so every real admin login took the MFA path** → every session row was unauditable and the users webui sessions tab (which already existed, fully built) rendered blanks. Fix: `_client_meta(request)` (X-Forwarded-For first — nginx/HAProxy front every login, so `request.client.host` is only ever the proxy) on all three paths. Proven by driving the real `/login/mfa` handler in-process with `SECUBOX_AUTH_SESSIONS` on a temp file: records `ip=192.168.1.77` (first XFF hop) + full UA.
+- **Companion auth + system** ⚙️ — both were 34-line stubs guessing routes (`/api/v1/auth/users` → **404**; identities are under `/api/v1/users`). Rebuilt against routes read from handler source. auth shows identities + **sessions (who/IP/device/age/current)**; system shows status/metrics/resources/health_score/network/security, each section degrading independently.
+- **Emoji metrics** 📊 — `core/metrics.js`: per-kind severity thresholds (disk strictest, cpu tolerant) so gk2's disk 94.5% reads 🔴 while cpu 10% reads 🟢; plain language ("Memory 75% — 5.5 GB of 7.7 GB used") + byte/uptime formatters.
+- **Billets emoji hashtags** 🏷️ — migration 0004 (`tag` + `billet_tag`, indexed); tags **extracted from the body** (`#secu`) so authoring costs nothing and applies retroactively — the backfill tagged **37 of 46** existing billets. Accent-folded slugs (#Réseau==#reseau); emoji stored (no silent restyling of published billets); URL anchors don't become tags; unknown tags get a neutral badge. Quick views via `?tag=` on `/` + `/feed.json` (EXISTS not JOIN, so keyset paging can't duplicate rows; pager carries the tag). feed.json gains standard `summary`+`tags` with emoji in the `_secubox` extension.
+- **Feed resumes** 📄 — long billets show a short excerpt + "Lire la suite"; short ones render whole (`is_long` measured on markdown-collapsed text). 16/20 resumed on the live feed.
+- **`GET /admin/api/billets`** — the authoring list. The public feed can't serve it: its item `id` is a permalink URL (**why Edit/Delete 404'd**) and it hides drafts.
+- **Companion 401 re-login** 🔓 — box tokens live 24h but the Companion seals one at pairing and reuses it forever → a day later every authed call 401'd with no escape but unpairing ("Failed: unauthorized" in billets + podcaster). `api.js` now triggers re-auth and **replays the request once**, single-flight (one prompt, not one per request), so an in-flight write survives. SW v10.
+
+Follow-ups: rebuild the billets `.deb` (migration 0004 + tags.py); consider a token refresh so re-login isn't needed every 24h.
+
+---
+
 ## 2026-07-17 — Billets JWT admin surface + Companion authoring & image upload (branch fix/companion-billets-feed)
 
 Made the SecuBox Companion a working authoring client for the billets micro-blog — the last gap ("New billet missing upload", comment moderation 404).
