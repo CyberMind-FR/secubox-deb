@@ -18,7 +18,7 @@ Sessions traçables, les 2 modules Companion stubs deviennent réels, billets ga
 ### ⬜ Next / follow-ups
 - **Rebuild `.deb` billets** (migration 0004 + `services/tags.py` + postinst .pth).
 - **Refresh token** : éviter la re-login toutes les 24h sur le Companion.
-- **APK périmé** : l'APK publié (16/07) embarque le vieux code (SW v5, `/feed`) — rebuild nécessaire.
+- ✅ **APK rebuild fait** : republié le 17/07 (SW v11, peertube, upload, re-login 401). Recette : `JAVA_HOME`=JBR Android Studio (le JDK système n'a pas `jlink`), `cap copy` (pas `sync`), gradle **8.9-bin**. Signer debug **inchangé** (`5e6163f9…`) → install par-dessus sans désinstaller. Ancien APK conservé en `.apk.prev`. `android/` est désormais versionné → build reproductible ailleurs.
 
 ---
 
