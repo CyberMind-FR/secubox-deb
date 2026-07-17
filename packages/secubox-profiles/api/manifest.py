@@ -87,6 +87,14 @@ def load_manifest(path: Path) -> Manifest:
     if not isinstance(portal, dict):
         raise ManifestError(f"{path}: portal doit être une table")
 
+    protected = d.get("protected", False)
+    if not isinstance(protected, bool):
+        raise ManifestError(f"{path}: protected={protected!r} doit être un booléen (true/false)")
+
+    needs = d.get("needs", [])
+    if not isinstance(needs, list) or not all(isinstance(n, str) for n in needs):
+        raise ManifestError(f"{path}: needs doit être une liste de chaînes")
+
     return Manifest(
         id=mid,
         category=_enum(_require(d, "category", path), CATEGORIES, "category", path),
@@ -96,8 +104,8 @@ def load_manifest(path: Path) -> Manifest:
         lxc=lxc,
         portal_domain=portal.get("domain"),
         priority=priority,
-        protected=bool(d.get("protected", False)),
-        needs=tuple(d.get("needs", ())),
+        protected=protected,
+        needs=tuple(needs),
     )
 
 
