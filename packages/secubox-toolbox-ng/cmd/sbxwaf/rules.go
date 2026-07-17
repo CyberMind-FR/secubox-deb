@@ -69,12 +69,17 @@ import (
 //	modeDetect — a match is counted and logged, the request PASSES, and nothing
 //	             is banned. Lets an operator try a rule against real traffic
 //	             before arming it.
+//	modeEscalate — a match is observed first; after N occurrences from the same
+//	              source within a time window, the source is banned. Intermediate
+//	              protection: observe persistent scanners, block them, but allow
+//	              transient false positives.
 //
 // A category with no "mode" is modeBlock. A detect default would silently turn
 // the whole WAF into an observer — a mute security outage.
 const (
-	modeBlock  = "block"
-	modeDetect = "detect"
+	modeBlock    = "block"
+	modeDetect   = "detect"
+	modeEscalate = "escalate"
 )
 
 // compiledPattern holds a compiled regex and its metadata.
@@ -210,11 +215,11 @@ func loadRulesJSON(path string) *rulesData {
 		mode := modeBlock
 		if cat.Mode != nil && *cat.Mode != "" {
 			switch *cat.Mode {
-			case modeBlock, modeDetect:
+			case modeBlock, modeDetect, modeEscalate:
 				mode = *cat.Mode
 			default:
-				log.Printf("sbxwaf/rules: category %q has unknown mode %q — falling back to %q (known modes: %q, %q)",
-					catID, *cat.Mode, modeBlock, modeBlock, modeDetect)
+				log.Printf("sbxwaf/rules: category %q has unknown mode %q — falling back to %q (known modes: %q, %q, %q)",
+					catID, *cat.Mode, modeBlock, modeBlock, modeDetect, modeEscalate)
 			}
 		}
 
