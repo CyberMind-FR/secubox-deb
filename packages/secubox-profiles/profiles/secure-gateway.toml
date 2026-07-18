@@ -1,0 +1,7 @@
+name  = "secure-gateway"
+label = "Secure Gateway — appliance durcie"
+on = [
+  "aggregator", "auth", "certs", "core", "crowdsec", "dns",
+  "dns-guard", "dns-provider", "exposure", "haproxy", "hardening", "ipblock",
+  "users", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
+]

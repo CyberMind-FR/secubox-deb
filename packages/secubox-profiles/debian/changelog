@@ -1,3 +1,14 @@
+secubox-profiles (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Ship four functional profile tiers: full, lite, secure-gateway, media-lab
+    (seeded into /etc/secubox/profiles on install, never overwriting edits).
+  * New read-only CLI: secubox-profilectl export <profile> [--format
+    pkglist|apt|json] — the Debian package list of a profile's active modules,
+    for building a slim installer/image. Unresolved modules are surfaced, never
+    silently dropped.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 18 Jul 2026 12:00:00 +0200
+
 secubox-profiles (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * perf : /status batché — une seule commande `systemctl show` pour toutes
