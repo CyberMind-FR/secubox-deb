@@ -20,7 +20,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import export
 from .diff import ProtectedViolation, plan_changes
+from .export import format_apt, format_json, format_pkglist, resolve_packages
 from .manifest import ManifestError, load_all
 from .observe import Actual, is_on, load_routes, observe_all
 from .scan import discover, write_drafts
@@ -108,6 +110,28 @@ def _cmd_diff(args) -> int:
     print(f"{len(changes)} changement(s) — Phase 1 n'applique rien :")
     for c in changes:
         print(f"  {'⛔ stop ' if c.action == 'stop' else '▶️  start'} {c.id:<20} ({c.reason})")
+    return 0
+
+
+def _cmd_export(args) -> int:
+    root = Path(args.root)
+    mod_dir, _, pins_file, _ = _paths(root)
+    manifests = load_all(mod_dir)
+    profile = _load_profile_or_none(root, args.profile)  # StateError -> rc 2 if unknown
+    pins = load_pins(pins_file)
+    actuals = _observe_all(manifests, load_routes())
+    rss_kb = {mid: (a.rss_kb or 0) for mid, a in actuals.items()}
+    # run=export._run (attribut, pas la valeur par défaut de resolve_packages)
+    # pour que le monkeypatch de export._run dans les tests (et un futur run
+    # alternatif) soit bien pris en compte : le défaut de resolve_packages a
+    # été figé à l'import de export.py, une réaffectation de export._run après
+    # coup ne le changerait pas si on ne passait pas explicitement l'attribut.
+    result = resolve_packages(manifests, profile, pins, run=export._run, rss_kb=rss_kb)
+    if result.unresolved:
+        print("⚠️  paquet introuvable pour: " + ", ".join(result.unresolved)
+              + " — exclus de la liste (installateur incomplet).", file=sys.stderr)
+    fmt = {"pkglist": format_pkglist, "apt": format_apt, "json": format_json}[args.format]
+    print(fmt(result))
     return 0
 
 
@@ -221,6 +245,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--force", action="store_true",
                     help="écraser les manifestes existants (ils font autorité par défaut)")
     sp.set_defaults(func=_cmd_scan)
+
+    sp = sub.add_parser("export", help="liste des paquets des modules actifs d'un profil")
+    sp.add_argument("profile", help="nom du profil à exporter")
+    sp.add_argument("--format", choices=["pkglist", "apt", "json"], default="pkglist")
+    sp.set_defaults(func=_cmd_export)
 
     args = p.parse_args(argv)
     try:

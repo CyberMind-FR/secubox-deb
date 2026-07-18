@@ -154,6 +154,44 @@ def test_scan_handles_genuinely_empty_lxc_ls_without_false_alarm(root, capsys, m
     assert m.runtime == "native"
 
 
+def test_export_pkglist_from_tmp_root(tmp_path, monkeypatch, capsys):
+    import api.cli as cli
+    import api.export as export
+    root = tmp_path / "etc-secubox"
+    (root / "modules.d").mkdir(parents=True)
+    (root / "profiles").mkdir(parents=True)
+    (root / "modules.d" / "waf.toml").write_text(
+        'id="waf"\ncategory="security"\nruntime="native"\nexposure="lan"\n'
+        'units=["secubox-waf.service"]\nprotected=false\n')
+    (root / "modules.d" / "auth.toml").write_text(
+        'id="auth"\ncategory="security"\nruntime="native"\nexposure="lan"\n'
+        'units=["secubox-auth.service"]\nprotected=true\n')
+    (root / "profiles" / "p.toml").write_text('name="p"\non=["waf"]\n')
+
+    def fake_run(argv):
+        if argv[:2] == ["dpkg", "-S"]:
+            if "secubox-waf.service" in argv[2]:
+                return 0, "secubox-waf: " + argv[2] + "\n"
+            if "secubox-auth.service" in argv[2]:
+                return 0, "secubox-auth: " + argv[2] + "\n"
+            return 1, ""
+        return None, ""
+    monkeypatch.setattr(export, "_run", fake_run)
+
+    rc = cli.main(["--root", str(root), "export", "p", "--format", "pkglist"])
+    out = capsys.readouterr().out.strip().splitlines()
+    assert rc == 0
+    assert out == ["secubox-auth", "secubox-waf"]   # protected auth + listed waf
+
+
+def test_export_unknown_profile_errors(tmp_path):
+    import api.cli as cli
+    root = tmp_path / "etc-secubox"
+    (root / "modules.d").mkdir(parents=True)
+    (root / "profiles").mkdir(parents=True)
+    assert cli.main(["--root", str(root), "export", "nope"]) == 2  # StateError -> rc 2
+
+
 def test_scan_refuses_when_not_root(root, capsys, monkeypatch):
     # lxc-ls non-root répond rc=0 avec une sortie vide, indistinguable d'une
     # box sans conteneur : sur les 24 conteneurs de cette box, ça dériverait
