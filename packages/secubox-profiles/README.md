@@ -7,8 +7,40 @@ Inventaire et profils des modules SecuBox. **Phase 1 : lecture seule.**
     secubox-profilectl scan [--force]   # dérive les manifestes du réel
     secubox-profilectl status [--json]  # état, taxonomie et coût RAM par module
     secubox-profilectl diff --profile <nom> [--json]   # ce qu'un profil changerait
+    secubox-profilectl export <nom> [--format pkglist|apt|json]  # paquets d'un profil
 
 `apply` n'existe pas encore (Phase 3) : rien n'est jamais allumé ni éteint ici.
+`export` aussi est lecture seule : il lit dpkg + la config, ne touche à rien.
+
+## Profils & export
+
+Quatre tiers livrés (seedés dans `/etc/secubox/profiles/` à l'install, sans
+jamais écraser un fichier déjà édité par l'opérateur) :
+
+| Profil | Usage |
+|---|---|
+| `full` | tous les modules |
+| `lite` | socle minimal (sécurité + admin) |
+| `secure-gateway` | passerelle durcie (firewall/WAF/IDS, pas de media) |
+| `media-lab` | modules media (peertube, lyrion, photoprism…) en plus du socle |
+
+**Piège pins** : un module pinné `off` reste listé par `diff` (le pin est une
+surcharge d'état désiré, pas une suppression du module de l'inventaire) — il
+n'apparaît simplement plus dans le futur état ON. Ne pas confondre "absent du
+profil" et "pinné off" en lisant une sortie `diff`.
+
+`export <nom>` résout l'ensemble ON du profil (profil + pins, comme `diff`),
+mappe chaque module vers son paquet Debian (`dpkg -S` sur les units, repli
+`secubox-<id>`), et imprime :
+
+| `--format` | Sortie |
+|---|---|
+| `pkglist` (défaut) | un paquet par ligne, triés |
+| `apt` | `apt-get install -y <pkg> <pkg> …` prêt à coller |
+| `json` | `{profile, on_ids, packages, unresolved, rss_estimate_mo}` |
+
+Un module dont le paquet reste introuvable part dans `unresolved` (imprimé sur
+stderr, `⚠️`) — jamais silencieusement omis de l'installateur.
 
 ## Fichiers
 

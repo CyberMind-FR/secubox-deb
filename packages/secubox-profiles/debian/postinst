@@ -15,6 +15,16 @@ case "$1" in
         # Phase 1 (scan) and is left untouched here.
         install -d -o secubox -g secubox -m 755 /etc/secubox/profiles
 
+        # Seed reference profiles into the operator-editable dir on first
+        # install only — never overwrite an edited profile on upgrade.
+        for f in /usr/share/secubox/profiles/*.toml; do
+            [ -e "$f" ] || continue
+            dest="/etc/secubox/profiles/$(basename "$f")"
+            if [ ! -e "$dest" ]; then
+                install -o secubox -g secubox -m 644 "$f" "$dest"
+            fi
+        done
+
         # Own dedicated socket, own service — never served by the aggregator
         # (the profile engine must not depend on something it may later
         # restart). Restart (not just enable) so an upgrade picks up new code.

@@ -1,0 +1,24 @@
+name  = "full"
+label = "Full — loadout courant (baseline)"
+on = [
+  "ad-guard", "admin", "aggregator", "annuaire", "appstore", "auth",
+  "avatar", "backup", "billets", "c3box", "cdn", "certs",
+  "cloner", "config-advisor", "cookies", "core", "crowdsec", "cs-bridge",
+  "cve-triage", "cyberfeed", "dns", "dns-guard", "dns-provider", "dpi",
+  "dpi-flowcap", "droplet", "exposure", "eye-remote", "eye-remote-dhcp", "fmrelay",
+  "frigate", "gitea", "glances", "grafana", "haproxy", "hardening",
+  "health-doctor", "health-prober", "hub", "identity", "interceptor", "ipblock",
+  "ksm", "led-heartbeat", "led-trigger", "leds", "localrecall", "lyrion",
+  "mail", "mcp-server", "mesh", "meshname", "metablogizer", "metabolizer",
+  "metacatalog", "metoblizer", "metrics", "mirror", "mitmproxy", "modem",
+  "module-prober", "mqtt", "nac", "ndpid", "netboot", "netdata",
+  "netdiag", "netifyd", "netmodes", "nettweak", "network-anomaly", "network-ready",
+  "nextcloud", "p2p", "peertube", "photoprism", "podcaster", "portal",
+  "proxypac", "publish", "qos", "reality", "repo", "reporter",
+  "rezapp", "roadmap", "routes", "rtty", "runtime", "rustdesk",
+  "saas-relay", "security-posture", "soc", "streamforge", "streamlit", "streamlit-routes",
+  "system", "threat-analyst", "threatmesh", "threats", "toolbox", "toolbox-mitm",
+  "tor", "traffic", "turn", "users", "vault", "vhost",
+  "vm", "vortex-dns", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
+  "watchdog", "wireguard", "yacy", "zigbee", "zkp",
+]
