@@ -1,4 +1,5 @@
 api/*.py               usr/lib/secubox/profiles/api/
+profiles/*.toml        usr/share/secubox/profiles/
 sbin/secubox-profilectl usr/sbin/
 www/profiles/index.html usr/share/secubox/www/profiles/
 menu.d/11-profiles.json usr/share/secubox/menu.d/

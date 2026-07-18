@@ -1,0 +1,22 @@
+name  = "media-lab"
+label = "Media Lab — box maison-média"
+on = [
+  "ad-guard", "admin", "aggregator", "annuaire", "appstore", "auth",
+  "avatar", "backup", "billets", "c3box", "cdn", "certs",
+  "cloner", "config-advisor", "cookies", "core", "crowdsec", "cs-bridge",
+  "cyberfeed", "dns", "dns-guard", "dns-provider", "dpi", "dpi-flowcap",
+  "droplet", "exposure", "eye-remote", "eye-remote-dhcp", "fmrelay", "frigate",
+  "gitea", "glances", "grafana", "haproxy", "hardening", "health-doctor",
+  "health-prober", "hub", "identity", "ipblock", "ksm", "led-heartbeat",
+  "led-trigger", "leds", "localrecall", "lyrion", "mail", "mcp-server",
+  "mesh", "meshname", "metablogizer", "metacatalog", "metrics", "mirror",
+  "mitmproxy", "modem", "module-prober", "mqtt", "nac", "ndpid",
+  "netboot", "netdata", "netdiag", "netifyd", "netmodes", "nettweak",
+  "network-ready", "nextcloud", "p2p", "peertube", "photoprism", "podcaster",
+  "portal", "proxypac", "publish", "qos", "reality", "repo",
+  "reporter", "rezapp", "roadmap", "routes", "rtty", "runtime",
+  "rustdesk", "saas-relay", "streamforge", "streamlit", "streamlit-routes", "system",
+  "threats", "tor", "traffic", "turn", "users", "vault",
+  "vhost", "vm", "vortex-dns", "vortex-firewall", "waf", "waf-ng",
+  "waf-ratelimit", "watchdog", "wireguard", "yacy", "zigbee", "zkp",
+]
