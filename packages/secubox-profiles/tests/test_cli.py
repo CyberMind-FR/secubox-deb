@@ -309,3 +309,25 @@ def test_scan_refuses_when_not_root(root, capsys, monkeypatch):
     err = capsys.readouterr().err
     assert rc != 0
     assert "root" in err.lower()
+
+
+def test_apply_error_maps_to_rc3_not_traceback(tmp_path, monkeypatch):
+    # apply_plan's belt-and-suspenders ApplyError (STOP of a protected module)
+    # must surface as a clean rc 3, never an uncaught traceback on the board.
+    import api.cli as cli
+    import api.apply as apply_mod
+    monkeypatch.setattr(cli, "_running_as_root", lambda: True)
+    root = tmp_path / "etc"
+    (root / "modules.d").mkdir(parents=True)
+    (root / "profiles").mkdir(parents=True)
+    (root / "modules.d" / "x.toml").write_text(
+        'id="x"\ncategory="infra"\nruntime="native"\nexposure="lan"\n'
+        'units=["x.service"]\nprotected=false\n')
+    from api.observe import Actual
+    monkeypatch.setattr(cli, "_observe_all",
+                        lambda mans, routes: {"x": Actual(enabled=True, active=True)})
+
+    def boom(*a, **k):
+        raise apply_mod.ApplyError("x est protégé — un STOP est refusé")
+    monkeypatch.setattr(apply_mod, "apply_plan", boom)
+    assert cli.main(["--root", str(root), "apply", "--yes"]) == 3

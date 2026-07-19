@@ -336,7 +336,10 @@ def main(argv: list[str] | None = None) -> int:
     except (ManifestError, StateError) as exc:
         print(f"erreur: {exc}", file=sys.stderr)
         return 2
-    except ProtectedViolation as exc:
+    except (ProtectedViolation, apply.ApplyError) as exc:
+        # apply.ApplyError = refus ceinture-bretelles d'apply_plan (STOP d'un
+        # protégé) — même classe « décision de sécurité refusée » que
+        # ProtectedViolation ; un rc propre, jamais un traceback brut sur la board.
         print(f"refusé: {exc}", file=sys.stderr)
         return 3
 
