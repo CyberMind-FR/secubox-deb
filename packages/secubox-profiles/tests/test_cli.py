@@ -138,6 +138,29 @@ def test_apply_only_filters_plan(tmp_path, monkeypatch):
     assert captured["ids"] == {"x"}
 
 
+def test_apply_json_emits_report(tmp_path, monkeypatch, capsys):
+    import api.apply as ap
+    import api.cli as cli
+    from api.apply import ApplyReport
+    from api.observe import Actual
+
+    monkeypatch.setattr(cli, "_running_as_root", lambda: True)
+    root = tmp_path / "etc"
+    (root / "modules.d").mkdir(parents=True)
+    (root / "profiles").mkdir(parents=True)
+    (root / "modules.d" / "x.toml").write_text(
+        'id="x"\ncategory="infra"\nruntime="native"\nexposure="lan"\n'
+        'units=["x.service"]\nprotected=false\n')
+    monkeypatch.setattr(cli, "_observe_all",
+                        lambda mans, routes: {"x": Actual(enabled=True, active=True)})
+    monkeypatch.setattr(ap, "apply_plan",
+                        lambda *a, **k: ApplyReport(status="applied", changed=["x"]))
+    rc = cli.main(["--root", str(root), "apply", "--yes", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["status"] == "applied" and out["changed"] == ["x"]
+
+
 def test_rollback_requires_root(tmp_path, monkeypatch):
     import api.cli as cli
     monkeypatch.setattr(cli, "_running_as_root", lambda: False)
@@ -178,6 +201,28 @@ def test_rollback_dry_run_default_acts_on_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(ap, "rollback_to", spy)
     rc = cli.main(["--root", str(root), "rollback"])  # no --yes → dry-run
     assert rc == 0 and called["n"] == 1
+
+
+def test_rollback_json_emits_report(tmp_path, monkeypatch, capsys):
+    # Mirrors test_apply_json_emits_report for `rollback --json` — the
+    # report dict must also carry "target" (the apply report itself has no
+    # notion of which snapshot was targeted).
+    import api.apply as ap
+    import api.cli as cli
+    from api.apply import ApplyReport
+
+    monkeypatch.setattr(cli, "_running_as_root", lambda: True)
+    root = tmp_path / "etc"
+    (root / "modules.d").mkdir(parents=True)
+    (root / "profiles").mkdir(parents=True)
+    monkeypatch.setattr(cli, "read_snapshot",
+                        lambda target, root: {"ts": "2026-07-19T00:00:00Z", "modules": {}})
+    monkeypatch.setattr(ap, "rollback_to",
+                        lambda *a, **k: ApplyReport(status="applied", changed=["x"]))
+    rc = cli.main(["--root", str(root), "rollback", "--target", "R2", "--yes", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["status"] == "applied" and out["changed"] == ["x"] and out["target"] == "R2"
 
 
 def test_scan_survives_unreadable_routes_file(root, capsys, monkeypatch):
