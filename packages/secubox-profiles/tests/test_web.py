@@ -310,8 +310,9 @@ def test_set_active_writes_file(client, root):
 
 def test_apply_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
     def fake_run(argv, **kw):
-        assert argv[:3] == ["sudo", "-n", "/usr/sbin/secubox-profilectl"]
-        assert argv[3:] == ["apply", "--yes", "--json"]
+        assert argv == ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+                        "--collect", "--quiet", "/usr/sbin/secubox-profilectl",
+                        "apply", "--yes", "--json"]
 
         class P:
             returncode = 0
@@ -337,8 +338,9 @@ def test_apply_route_protected_refusal_409(client, monkeypatch):
 
 def test_rollback_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
     def fake_run(argv, **kw):
-        assert argv[:3] == ["sudo", "-n", "/usr/sbin/secubox-profilectl"]
-        assert argv[3:] == ["rollback", "--yes", "--json"]
+        assert argv == ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+                        "--collect", "--quiet", "/usr/sbin/secubox-profilectl",
+                        "rollback", "--yes", "--json"]
 
         class P:
             returncode = 0

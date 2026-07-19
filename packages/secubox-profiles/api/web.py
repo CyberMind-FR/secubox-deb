@@ -310,12 +310,23 @@ def _ctl_run(argv, **kw):
 
 
 async def _run_ctl_json(verb: str):
-    """Délègue au helper root via sudo (webui→ctl). Fixe, exact-command
-    (voir /etc/sudoers.d/secubox-profiles). Bloquant → to_thread pour ne pas
-    figer la boucle du service pendant un apply long."""
+    """Délègue au helper root (webui→ctl), FIXE + exact-command (voir
+    /etc/sudoers.d/secubox-profiles). Bloquant → to_thread.
+
+    IMPORTANT — on lance le CLI via `systemd-run`, PAS un simple `sudo …ctl` :
+    ce service tourne en ProtectSystem=strict avec un ReadWritePaths réduit, et
+    un enfant `sudo` HÉRITE de ce namespace de montage → le CLI verrait
+    /var/lib/secubox/profiles/rollback (snapshot), /var/log/secubox (audit),
+    /etc/secubox/waf (routes) et /data/lxc en READ-ONLY (EROFS observé). Une
+    unité transitoire `systemd-run` s'exécute dans le contexte de PID 1, HORS
+    du sandbox, avec tous les accès nécessaires pour piloter systemd/LXC et
+    écrire ces chemins. `--wait` = synchrone, `--pipe` = on récupère le JSON du
+    CLI sur stdout, `--collect --quiet` = nettoyage + pas de bruit systemd-run."""
     import asyncio as _a
     import json as _json
-    argv = ["sudo", "-n", "/usr/sbin/secubox-profilectl", verb, "--yes", "--json"]
+    argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+            "--collect", "--quiet",
+            "/usr/sbin/secubox-profilectl", verb, "--yes", "--json"]
     proc = await _a.to_thread(_ctl_run, argv)
     # Parse the report FIRST: apply/rollback emit a --json report even when they
     # end in `rolled_back` (CLI rc=2). Surfacing that report (which modules

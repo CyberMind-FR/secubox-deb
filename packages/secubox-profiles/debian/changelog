@@ -1,3 +1,13 @@
+secubox-profiles (0.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Fix apply/rollback from the panel: the service runs ProtectSystem=strict, so a
+    sudo child inherited the read-only mount namespace (EROFS on the snapshot dir).
+    The panel now delegates via `systemd-run --wait --pipe` so the root CLI runs in
+    PID 1's context, OUTSIDE the sandbox, able to write snapshot/audit/routes and
+    drive systemd/LXC. Sudoers grants updated to the systemd-run-wrapped commands.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 13:00:00 +0200
+
 secubox-profiles (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Task 3: apply/rollback API + panel now sudo -> secubox-profilectl
