@@ -1,3 +1,10 @@
+secubox-saas-relay (1.1.0-1~bookworm2) bookworm; urgency=medium
+
+  * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
+    (remove the hard cascade-stop when secubox-core restarts/fails).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 12:00:00 +0200
+
 secubox-saas-relay (1.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

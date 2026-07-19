@@ -467,7 +467,7 @@ exit 0
 [Unit]
 Description=SecuBox <Module> API
 After=network.target secubox-core.service
-Wants=secubox-core.service
+Wants=secubox-core.service   # NOT Requires= — see note below
 
 [Service]
 UMask=0007
@@ -491,6 +491,14 @@ ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Depend on `secubox-core` with `Wants=`, never `Requires=`.** `secubox-core.service`
+is a `Type=oneshot`/`RemainAfterExit=yes` that just does `mkdir -p`/`chown` for the
+shared runtime dirs. `After=` gives the ordering; `Wants=` gives the soft dependency.
+A hard `Requires=secubox-core.service` cascade-STOPS a module whenever core restarts
+or fails — and a single `secubox-core` package upgrade would then take down every
+module at once (thundering herd). Phase 2 (2026-07-19) converted the ~108 units that
+had drifted to `Requires=` back to `Wants=`; the scaffolds emit `Wants=`.
 
 Board-specific units (Pi/MOCHAbin I2C/LED) **must** gate on `ConditionArchitecture=arm64` to skip silently on x86_64 (see #226).
 

@@ -1,7 +1,7 @@
 [Unit]
 Description=SecuBox Mesh DNS API
 After=network.target
-Requires=secubox-core.service
+Wants=secubox-core.service
 
 [Service]
 Type=simple
