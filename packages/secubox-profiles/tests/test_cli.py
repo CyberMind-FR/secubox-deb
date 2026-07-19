@@ -311,6 +311,75 @@ def test_scan_refuses_when_not_root(root, capsys, monkeypatch):
     assert "root" in err.lower()
 
 
+def test_apply_passes_route_value_dict_not_set_derived_empty_dict(tmp_path, monkeypatch):
+    # Regression for the routes-set-discarded-as-{} bug (Phase 3a review
+    # finding 1): load_routes() returns a set of domain NAMES (used by
+    # _observe_all for portal_routed membership) — it never carried the
+    # [host, port] VALUE. _cmd_apply used to derive routes_map from that same
+    # set (`routes if isinstance(routes, dict) else {}`), which is always {}
+    # on the real board, so snapshot.capture recorded route=None for every
+    # portal module and rollback could never restore it. _cmd_apply must
+    # instead pass load_route_values()'s dict (domain -> [host, port]) as
+    # apply_plan's routes= kwarg.
+    import api.cli as cli
+    import api.apply as ap
+    from api.apply import ApplyReport
+    from api.observe import Actual
+
+    monkeypatch.setattr(cli, "_running_as_root", lambda: True)
+    root = tmp_path / "etc"
+    (root / "modules.d").mkdir(parents=True)
+    (root / "profiles").mkdir(parents=True)
+    (root / "modules.d" / "lyrion.toml").write_text(
+        'id="lyrion"\ncategory="media"\nruntime="native"\nexposure="public"\n'
+        'units=["secubox-lyrion.service"]\nprotected=false\n'
+        '[portal]\ndomain="lyrion.gk2.secubox.in"\n')
+    monkeypatch.setattr(cli, "_observe_all",
+                        lambda mans, routes: {"lyrion": Actual(enabled=True, active=True)})
+    # load_routes() (the SET, used above only to observe portal_routed) still
+    # reports the domain as routed; load_route_values() (the DICT, used for
+    # apply_plan's snapshot) carries the real [host, port] — the two must not
+    # be conflated.
+    monkeypatch.setattr(cli, "load_routes", lambda: {"lyrion.gk2.secubox.in"})
+    monkeypatch.setattr(cli, "load_route_values",
+                        lambda: {"lyrion.gk2.secubox.in": ["127.0.0.1", 9000]})
+
+    captured = {}
+
+    def spy(plan, *a, **k):
+        captured["routes"] = k.get("routes")
+        return ApplyReport(status="planned", changed=[c.id for c in plan])
+
+    monkeypatch.setattr(ap, "apply_plan", spy)
+    rc = cli.main(["--root", str(root), "apply"])  # dry-run, no --yes needed to reach apply_plan
+    assert rc == 0
+    assert captured["routes"] == {"lyrion.gk2.secubox.in": ["127.0.0.1", 9000]}
+
+
+def test_main_maps_valueerror_to_rc2_not_traceback(tmp_path, monkeypatch):
+    # Phase 3a review finding 2: json.JSONDecodeError is a ValueError, not an
+    # OSError — a corrupt routes/snapshot JSON hit during the apply pipeline
+    # (e.g. snapshot.capture's json.loads) must surface as a clean rc 2 with
+    # a stderr message, never an uncaught traceback on the board.
+    import api.cli as cli
+    import api.apply as apply_mod
+    monkeypatch.setattr(cli, "_running_as_root", lambda: True)
+    root = tmp_path / "etc"
+    (root / "modules.d").mkdir(parents=True)
+    (root / "profiles").mkdir(parents=True)
+    (root / "modules.d" / "x.toml").write_text(
+        'id="x"\ncategory="infra"\nruntime="native"\nexposure="lan"\n'
+        'units=["x.service"]\nprotected=false\n')
+    from api.observe import Actual
+    monkeypatch.setattr(cli, "_observe_all",
+                        lambda mans, routes: {"x": Actual(enabled=True, active=True)})
+
+    def boom(*a, **k):
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")
+    monkeypatch.setattr(apply_mod, "apply_plan", boom)
+    assert cli.main(["--root", str(root), "apply", "--yes"]) == 2
+
+
 def test_apply_error_maps_to_rc3_not_traceback(tmp_path, monkeypatch):
     # apply_plan's belt-and-suspenders ApplyError (STOP of a protected module)
     # must surface as a clean rc 3, never an uncaught traceback on the board.

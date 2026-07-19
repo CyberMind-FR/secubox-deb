@@ -25,7 +25,7 @@ from .audit import AUDIT_LOG
 from .diff import ProtectedViolation, plan_changes
 from .export import format_apt, format_json, format_pkglist, resolve_packages
 from .manifest import ManifestError, load_all
-from .observe import Actual, is_on, load_routes, observe, observe_all
+from .observe import Actual, is_on, load_route_values, load_routes, observe, observe_all
 from .scan import discover, write_drafts
 from .snapshot import SNAP_DIR
 from .snapshot import read as read_snapshot
@@ -137,7 +137,11 @@ def _cmd_apply(args) -> int:
     if args.only:
         keep = set(args.only)
         plan = [c for c in plan if c.id in keep]
-    routes_map = routes if isinstance(routes, dict) else {}
+    # load_route_values() (dict domaine -> [host, port]), PAS `routes` (le set
+    # de load_routes() utilisé ci-dessus pour observer portal_routed) : le
+    # snapshot doit capturer la vraie valeur de route pour qu'un rollback
+    # puisse la restaurer (voir observe.load_route_values).
+    routes_map = load_route_values()
     # run=apply.apply_plan (attribut du module, pas le nom importé) — même
     # raison que export._run plus haut : un monkeypatch de api.apply.apply_plan
     # après l'import ne changerait pas un nom lié via `from .apply import
@@ -173,8 +177,11 @@ def _cmd_rollback(args) -> int:
     # ci-dessus : `rollback_to` n'était même pas importé ici avant ce correctif
     # (NameError garanti au premier `rollback --yes` réel, non couvert par les
     # tests CLI actuels qui ne testent que `apply`).
+    # routes= doit être le dict domaine -> [host, port] (load_route_values), pas
+    # le set de load_routes() utilisé ci-dessus pour observer portal_routed —
+    # sinon rollback_to ne peut jamais restaurer la route d'un module portail.
     report = apply.rollback_to(snap, manifests, actuals, run=_run, observe=observe,
-                               now=_now_iso(), routes=routes if isinstance(routes, dict) else {},
+                               now=_now_iso(), routes=load_route_values(),
                                snap_root=SNAP_DIR, audit_path=AUDIT_LOG, apply=args.yes)
     print(f"rollback[{args.target}]: {report.status} — changed={report.changed}")
     return 0 if report.status in ("applied", "planned") else 2
@@ -342,6 +349,13 @@ def main(argv: list[str] | None = None) -> int:
         # ProtectedViolation ; un rc propre, jamais un traceback brut sur la board.
         print(f"refusé: {exc}", file=sys.stderr)
         return 3
+    except (OSError, ValueError) as exc:
+        # Route/snapshot JSON corrompu ou illisible en pré-flight (avant la
+        # boucle apply/rollback, ex. snapshot.capture) : json.JSONDecodeError
+        # est un ValueError, pas un OSError — sans ce handler ça remontait en
+        # traceback brut sur la board au lieu d'un rc propre.
+        print(f"erreur: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

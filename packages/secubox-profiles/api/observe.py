@@ -89,6 +89,19 @@ def load_routes(path: Path = ROUTES_FILE) -> set[str] | None:
         return None
 
 
+def load_route_values(path: Path = ROUTES_FILE) -> dict:
+    """Le mapping COMPLET domaine → valeur ([host, port]) de haproxy-routes.json.
+    Utilisé par apply/rollback pour capturer et restaurer la route d'un module
+    portail (load_routes() ne renvoie QUE les noms de domaine). Best-effort :
+    fichier absent/illisible/corrompu → {} (apply tourne en root, le dir 0750
+    est traversable ; on ne veut pas planter l'apply pour ça)."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def _rss_kb(pid: str) -> int | None:
     if not pid or pid == "0":
         return None
