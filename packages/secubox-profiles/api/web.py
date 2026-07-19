@@ -281,6 +281,34 @@ class PinUpdate(BaseModel):
     pin: Optional[str] = None
 
 
+class ActiveUpdate(BaseModel):
+    name: str
+
+
+def _ctl_run(argv, **kw):
+    import subprocess
+    return subprocess.run(argv, capture_output=True, text=True, timeout=1800, **kw)
+
+
+async def _run_ctl_json(verb: str):
+    """Délègue au helper root via sudo (webui→ctl). Fixe, exact-command
+    (voir /etc/sudoers.d/secubox-profiles). Bloquant → to_thread pour ne pas
+    figer la boucle du service pendant un apply long."""
+    import asyncio as _a
+    import json as _json
+    argv = ["sudo", "-n", "/usr/sbin/secubox-profilectl", verb, "--yes", "--json"]
+    proc = await _a.to_thread(_ctl_run, argv)
+    if proc.returncode == 3:
+        raise HTTPException(status_code=409, detail=(proc.stderr or proc.stdout).strip()[:300])
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500,
+                            detail=f"{verb} échoué: {(proc.stderr or proc.stdout).strip()[:300]}")
+    try:
+        return _json.loads(proc.stdout)
+    except ValueError:
+        raise HTTPException(status_code=500, detail=f"{verb}: sortie CLI malformée")
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="SecuBox Profiles API",
@@ -402,6 +430,23 @@ def create_app() -> FastAPI:
             pins[body.id] = body.pin
         _write_pins(Path(pins_file), pins)
         return {"pins": pins}
+
+    @app.post("/api/v1/profiles/active")
+    async def set_active(body: ActiveUpdate, _claims=Depends(require_jwt)):
+        root = _root()
+        _mod, prof_dir, _pins, active_file = _cli._paths(root)
+        if not (Path(prof_dir) / f"{body.name}.toml").exists():
+            raise HTTPException(status_code=404, detail=f"profil inconnu: {body.name}")
+        _atomic_write(Path(active_file), body.name + "\n")
+        return {"active": body.name}
+
+    @app.post("/api/v1/profiles/apply")
+    async def apply_active(_claims=Depends(require_jwt)):
+        return await _run_ctl_json("apply")
+
+    @app.post("/api/v1/profiles/rollback")
+    async def rollback_active(_claims=Depends(require_jwt)):
+        return await _run_ctl_json("rollback")
 
     return app
 
