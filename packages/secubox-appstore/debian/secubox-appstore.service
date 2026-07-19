@@ -1,7 +1,7 @@
 [Unit]
 Description=SecuBox App Store — module catalog API
 After=network.target secubox-core.service
-Requires=secubox-core.service
+Wants=secubox-core.service
 
 [Service]
 Type=simple

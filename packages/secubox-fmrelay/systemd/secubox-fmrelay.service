@@ -2,7 +2,7 @@
 Description=SecuBox FM Relay — host control plane API (issue #377)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/377
 After=network.target
-Requires=secubox-core.service
+Wants=secubox-core.service
 # Soft dep: icecast2 must be up before any /start call can succeed,
 # but the API itself runs without it (it'll report `red` overall).
 Wants=icecast2.service
