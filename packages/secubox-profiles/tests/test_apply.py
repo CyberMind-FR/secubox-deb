@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-from api.apply import apply_plan
+from api.apply import apply_plan, rollback_to
 from api.diff import START, STOP, Change
 from api.manifest import Manifest
 from api.observe import Actual
@@ -91,3 +91,88 @@ def test_failure_at_module_k_rolls_back_prior(tmp_path):
     assert "b" in rep.failed
     # a was rolled back → re-enabled (started again)
     assert ["systemctl", "enable", "--now", "a.service"] in calls
+
+
+def test_rollback_never_stops_a_protected_module(tmp_path):
+    # plan: start protected "auth" (pre-state off, converges immediately),
+    # then stop "b" whose wait never converges (wait_timeout=0) → failure.
+    # Rollback must reverse "auth" toward its pre-state (off) WITHOUT ever
+    # issuing a STOP against it — a protected module must never be stopped,
+    # not even on the rollback path.
+    calls = []
+    manifests = {"auth": _m("auth", protected=True), "b": _m("b")}
+    plan = [Change("auth", START, "", 90), Change("b", STOP, "", 20)]
+
+    def observe(m):
+        if m.id == "auth":
+            # is_on() needs enabled AND active — both True reads as "on",
+            # so the forward START converges on the very first probe.
+            return Actual(enabled=True, active=True)
+        # "b" never turns off → wait_state times out (wait_timeout=0).
+        return Actual(enabled=True, active=True)
+
+    rep = apply_plan(plan, manifests,
+                     {"auth": Actual(enabled=True, active=False),
+                      "b": Actual(enabled=True, active=True)},
+                     run=_run_ok(calls), observe=observe, now="t", routes={},
+                     snap_root=tmp_path, audit_path=tmp_path / "audit.log",
+                     apply=True, wait_timeout=0)
+    assert rep.status == "rolled_back"
+    assert "b" in rep.failed
+    assert ["systemctl", "disable", "--now", "auth.service"] not in calls
+    assert not any(c[0] == "lxc-stop" and "auth" in c for c in calls)
+    # the forward START itself is untouched (left running is always safe)
+    assert ["systemctl", "enable", "--now", "auth.service"] in calls
+
+
+def test_rollback_timeout_not_counted_as_success(tmp_path):
+    # plan: stop "a" (succeeds), then stop "b" whose wait never converges
+    # (wait_timeout=0) → failure. Rollback reverses "a" toward START, but
+    # its own wait_state never converges either → must NOT be recorded as
+    # a successful rollback.
+    calls = []
+    manifests = {"a": _m("a"), "b": _m("b")}
+    plan = [Change("a", STOP, "", 10), Change("b", STOP, "", 20)]
+
+    def observe(m):
+        if m.id == "a":
+            # always reads "off": forward STOP converges immediately, but
+            # the rollback START (want_on=True) never converges → timeout.
+            return Actual(enabled=True, active=False)
+        return Actual(enabled=True, active=True)  # "b" never turns off
+
+    rep = apply_plan(plan, manifests,
+                     {"a": Actual(enabled=True, active=True),
+                      "b": Actual(enabled=True, active=True)},
+                     run=_run_ok(calls), observe=observe, now="t", routes={},
+                     snap_root=tmp_path, audit_path=tmp_path / "audit.log",
+                     apply=True, wait_timeout=0)
+    assert rep.status == "rolled_back"
+    assert "b" in rep.failed
+    assert "a" not in rep.rolled_back
+    # the rollback START was attempted even though it timed out
+    assert ["systemctl", "enable", "--now", "a.service"] in calls
+
+
+def test_rollback_to_restores_snapshot_state(tmp_path):
+    # snapshot says "a" should be on, but "a" is currently observed off →
+    # rollback_to must build/apply a plan that starts it.
+    manifests = {"a": _m("a")}
+    snap = {"ts": "t0", "modules": {"a": {"on": True}}}
+
+    calls = []
+    rep = rollback_to(snap, manifests, {"a": Actual(enabled=True, active=False)},
+                      run=_run_ok(calls), observe=lambda m: Actual(enabled=True, active=True),
+                      now="t", routes={}, snap_root=tmp_path / "applied",
+                      audit_path=tmp_path / "audit.log", apply=True)
+    assert rep.status == "applied"
+    assert ["systemctl", "enable", "--now", "a.service"] in calls
+
+    # dry-run must actuate nothing.
+    dry_calls = []
+    dry_rep = rollback_to(snap, manifests, {"a": Actual(enabled=True, active=False)},
+                          run=_run_ok(dry_calls), observe=lambda m: Actual(enabled=True, active=True),
+                          now="t", routes={}, snap_root=tmp_path / "dry",
+                          audit_path=tmp_path / "audit-dry.log", apply=False)
+    assert dry_rep.status == "planned"
+    assert dry_calls == []
