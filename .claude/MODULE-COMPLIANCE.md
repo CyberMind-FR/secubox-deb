@@ -218,6 +218,26 @@ aggregator startup — after deploying new/changed routes you MUST
 `systemctl restart secubox-aggregator` for them to appear (a stale aggregator
 returns 404 on new routes). Modules on their own socket restart independently.
 
+**System-driving ops from a `ProtectSystem=strict` service → `systemd-run`, not
+plain `sudo`.** A `sudo` child INHERITS the caller service's mount namespace: if
+the service runs `ProtectSystem=strict` with a reduced `ReadWritePaths`, the root
+`ctl` sees every path outside `ReadWritePaths` as READ-ONLY (`EROFS`) and cannot
+drive systemd/LXC — even as root. When the `ctl` writes state (snapshots, audit,
+config) or actuates the system, wrap it in `systemd-run` so it runs in PID 1's
+context, OUTSIDE the sandbox:
+
+```python
+argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe", "--collect",
+        "--quiet", "/usr/sbin/secubox-<module>ctl", verb, "--apply", "--json"]
+```
+
+`--wait` = synchronous, `--pipe` = the `ctl`'s `--json` stdout comes back to the
+route, `--collect --quiet` = auto-cleanup, no `systemd-run` noise. The sudoers
+grant matches this FULL fixed argv (exact-command). Only needed for a hardened
+service; a lightly-sandboxed one (e.g. the aggregator) can `sudo` the `ctl`
+directly. Reference: `secubox-profiles` (0.6.1) — plain `sudo profilectl apply`
+EROFS'd on its 4R snapshot dir; `systemd-run` fixed it.
+
 ---
 
 ## Debian Package Requirements
