@@ -1,162 +1,189 @@
-# Task 4 report — Toolbox API: exit-country + Tor-VPN-client + obfs4-bridge CRUD
+# Task 4 report — profiles Phase 3a: CLI `apply`/`rollback` (root-only) + version + tests
 
 **Status:** DONE
-**Branch:** feature/tor-enhancement-phase1 (verified, not switched)
-**Commit:** `c848b7c6` — feat(toolbox): exit-country + Tor-VPN-client + obfs4-bridge API (validated, audited, reconcile-triggered)
+**Branch:** feat/profiles-apply-phase3a (already checked out, not switched)
+**Commit:** `c9690a52` — feat(profiles): secubox-profilectl apply/rollback (root-only, dry-run default) — 0.4.0
 
-## Module found + style
+## Starting state found
 
-`packages/secubox-toolbox/secubox_toolbox/api.py` (4333→4557 lines) — the
-toolbox FastAPI app, `router = APIRouter(...)` included by
-`secubox_toolbox/app.py`. Read the whole file first: essentially every route
-is `async def` (grepped — the handful of apparent non-async hits were just
-stacked `@router.get(...)` decorators above one `async def`), including the
-closest analogues, `admin_tor_on` / `admin_tor_off` (#683), which don't
-shell out synchronously — they just flip a flag via `filters.set_filters()`
-(open/write/os.replace, all fast local I/O) inside an `async def`. New
-endpoints mirror that exactly: `async def`, no subprocess calls.
+`packages/secubox-profiles/api/cli.py` and `tests/test_cli.py` already carried
+an **uncommitted** implementation of `apply`/`rollback` in the working tree
+(from an earlier, interrupted session on this same branch) — imports,
+`_cmd_apply`, `_cmd_rollback`, subparser registration, and the brief's first
+two apply tests plus a concretized `test_apply_only_filters_plan` were
+already present, matching the brief closely. `debian/changelog` had **not**
+been bumped yet. I verified this against committed `HEAD` via `git stash`
+(HEAD's `cli.py`/`test_cli.py` are still Phase-1 read-only, with the old
+`test_apply_is_not_a_command_in_phase_1` guard test — 12 passed), so the
+delta below is real, not a no-op.
 
-## Trigger mechanism mirrored (not invented)
+## Bug found and fixed (in `cli.py`, not test code)
 
-`secubox-toolbox-tor.path` (systemd Path unit) watches
-`PathModified=/etc/secubox/toolbox/filters.json` and fires
-`secubox-toolbox-tor.service` → `sbin/secubox-toolbox-tor-reconcile` (root,
-oneshot). `admin_tor_on`/`off` trigger it by calling
-`filters.set_filters(...)`, which rewrites `filters.json`. My
-`_trigger_reconcile()` calls `set_filters({})` (empty patch — same
-tmp+rename/fallback write path, so it "touches" the file and fires the
-watcher) without touching `tor_mode` or any other flag. The portal never
-escalates privilege; the reconciler does all the nft/tor work as root,
-exactly as before.
+`_cmd_rollback` called the bare name `rollback_to(...)`, but `rollback_to`
+was **never imported anywhere** in `cli.py` (only `from . import apply,
+export` at the top, and `apply.apply_plan` used via attribute access in
+`_cmd_apply` for the documented monkeypatch reason). This is a guaranteed
+`NameError` on the very first real `rollback` invocation, and nothing in the
+existing test suite exercised the `rollback` subcommand at all, so it was
+invisible. Fixed by switching to `apply.rollback_to(...)` — same
+attribute-access pattern as `apply.apply_plan`, same rationale (a test that
+monkeypatches `api.apply.rollback_to` after import must be seen through the
+module attribute, not a name bound at import time).
 
-**Known limitation, not introduced by this task, flagged for awareness:**
-`secubox-toolbox-tor-reconcile`'s `arm()` no-ops when the `toolbox_tor` nft
-table already exists (`table_present && log "already armed — no-op"`). So
-if Tor is already armed and an operator adds/removes an exit-country or
-VPN-client entry, the reconcile fires but is a no-op — the new selector
-won't apply until the next disarm→arm cycle. This is pre-existing reconciler
-behavior; the brief scoped this task to `api.py` + tests only, so I did not
-touch `sbin/secubox-toolbox-tor-reconcile`. Worth a follow-up issue if the
-operator flow expects live-apply while armed.
+## Test coverage added beyond the brief
 
-## Endpoints added (all in `secubox_toolbox/api.py`, admin-gated via the
-existing `_require_tor_admin()` — blocks the public `kbin.*` vhost, same as
-`admin_tor_on/off`)
+The brief's Step 1 only specified `apply` tests (`test_apply_requires_root`,
+`test_apply_dry_run_default_acts_on_nothing`, and the placeholder
+`test_apply_only_filters_plan`, already concretized in the working tree with
+two native modules `x`/`y`, both observed on via a monkeypatched
+`_observe_all`, `--only x` asserted to leave `{"x"}` as the only id in the
+plan passed to a spied `apply.apply_plan`). It said nothing about testing
+`rollback`. Since the NameError bug above was only reachable through
+`rollback`, I added two tests mirroring the apply ones:
+`test_rollback_requires_root` (root gate → rc 1) and
+`test_rollback_dry_run_default_acts_on_nothing` (monkeypatches
+`cli.read_snapshot` and spies `api.apply.rollback_to`, asserting `apply=False`
+was passed and the call happened exactly once). Both would have failed
+against the pre-fix `cli.py` (NameError, not just a wrong return value).
 
-- `GET/POST /exit_country` → `/etc/secubox/toolbox/tor-exit-country.txt`
-  (one validated ISO cc per line, uppercased, deduped; POST replaces the
-  whole list; 400 + **no partial write** on any bad code).
-- `GET /vpn/clients`, `POST /vpn/client`, `DELETE /vpn/client` →
-  `/etc/secubox/toolbox/tor-vpn-clients.txt` (`kind:selector` lines,
-  kind ∈ ip/cidr/mac; add/remove one at a time, dedup).
-- `GET /tor/bridges`, `POST /tor/bridge`, `DELETE /tor/bridge` →
-  `/etc/secubox/toolbox/tor-bridges.txt` (each line must fullmatch
-  `^Bridge obfs4 [][A-Za-z0-9:._=+/, -]+$`, else 400).
+## Verification
 
-All three state files already existed as consumption targets in
-`sbin/secubox-toolbox-tor-reconcile` (`EXIT_CC_STATE`, `VPN_CLIENTS_STATE`)
-— I reused those exact paths (bridges is new, following the same
-`/etc/secubox/toolbox/tor-*.txt` convention) via
-`SECUBOX_TOR_*_PATH` env-overridable module constants (same override
-pattern as `filters.FILTERS_PATH`), which is also what the test suite
-monkeypatches.
-
-Validators are exactly the brief's spec (`_valid_cc`, `_valid_selector`)
-plus `_valid_bridge` (added `[]` to the bridge charset since real obfs4
-lines carry `iat-mode=` etc. but never brackets in practice — kept the
-brief's given regex verbatim, no deviation).
-
-State writes use the same atomic-tmp-then-in-place-fallback pattern as
-`filters.set_filters` (`/etc/secubox/toolbox` is 0750; the aggregator user
-may not be able to create a tmp file in the parent dir). No parent
-directory permissions are touched — `Path.mkdir(parents=True, exist_ok=True)`
-is a no-op when `/etc/secubox/toolbox` already exists (which it always does
-once `filters.json` has been written once).
-
-## Audit trail
-
-`_tor_audit(action, target, request)` appends
-`{ts RFC3339} secubox-toolbox operator={ip} action={action} target={target}`
-to `/var/log/secubox/audit.log`, mirroring the existing local pattern in
-`secubox_toolbox/escalate.py`'s `_audit()` (append-only, `mkdir(parents=True,
-exist_ok=True)` on the log's parent only, never chmod). The toolbox module
-has no JWT/user-identity plumbing on this router (auth happens upstream at
-nginx/aggregator level) — no existing "operator" identity is extracted
-anywhere else in `api.py` either, so `operator=` uses `request.client.host`
-as the best available identifier, falling back to `"admin"` if unavailable
-(e.g. under TestClient with no real peer).
-
-## Tests
-
-`packages/secubox-toolbox/tests/test_tor_vpn_api.py` — 12 tests: the
-brief's 2 validator tests verbatim (`_valid_cc`, `_valid_selector`) + 1 more
-for `_valid_bridge`, plus `TestClient(app)` endpoint-behavior tests (get
-empty, post replaces, reject-bad-code leaves no partial write, reject
-non-list, vpn add/dedup/remove round-trip, bad selector, bridge
-add/remove round-trip, bad bridge line, audit-line-written). All state
-paths and `_trigger_reconcile` are monkeypatched per-test via the brief's
-`_load()` fixture (extended with `TOR_BRIDGES` + `_TOR_AUDIT_LOG`).
-
+Step 2 (must fail) — replayed by checking out committed `HEAD`'s `cli.py`
+against the new/extended `test_cli.py`:
 ```
-cd packages/secubox-toolbox && python3 -m pytest tests/test_tor_vpn_api.py -q
-→ 12 passed
+$ .venv/bin/python -m pytest packages/secubox-profiles/tests/test_cli.py -q
+5 failed, 11 passed in 0.54s
+FAILED test_apply_requires_root — SystemExit (argparse: invalid choice 'apply')
+FAILED test_apply_dry_run_default_acts_on_nothing
+FAILED test_apply_only_filters_plan
+FAILED test_rollback_requires_root — SystemExit (argparse: invalid choice 'rollback')
+FAILED test_rollback_dry_run_default_acts_on_nothing — AttributeError: no attribute 'read_snapshot'
 ```
 
-Full suite:
+Step 4 (must pass) — current `cli.py` (with the `rollback_to` fix) + full
+test file:
 ```
-cd packages/secubox-toolbox && python3 -m pytest tests/ -q
-→ 3 failed, 264 passed
-   FAILED tests/test_bypass_sources.py::test_load_bypass_tagged_missing_source_skipped
-   FAILED tests/test_media_stats.py::test_media_stats_shapes_donuts
-   FAILED tests/test_media_stats.py::test_media_stats_fail_empty
+$ .venv/bin/python -m pytest packages/secubox-profiles/tests/test_cli.py -q
+16 passed in 0.12s
 ```
-Verified these 3 are pre-existing and unrelated: stashed `api.py` (keeping
-the new test file aside) and reran — same 3 failures, 252 passed (252 + the
-12 new = 264, exact match, confirming zero regressions from this change).
 
-TDD discipline: wrote the test file first with all endpoints/validators
-referenced but not yet implemented, confirmed collection-time `AttributeError`
-(red) against the pre-change `api.py`, then added the implementation and
-reran to green.
+Full module suite:
+```
+$ .venv/bin/python -m pytest packages/secubox-profiles/tests -q
+142 passed, 3 warnings in 0.66s
+```
+(warnings are pre-existing FastAPI `on_event` deprecation notices in
+`api/web.py`, unrelated to this task.)
+
+AST check:
+```
+$ python3 -c "import ast; ast.parse(open('packages/secubox-profiles/api/cli.py').read()); print('cli OK')"
+cli OK
+```
+
+## Invariants verified
+
+- **Root-only**: `test_apply_requires_root` and `test_rollback_requires_root`
+  both assert rc 1 when `_running_as_root()` is False, without touching
+  anything else.
+- **Dry-run default**: `test_apply_dry_run_default_acts_on_nothing` and
+  `test_rollback_dry_run_default_acts_on_nothing` spy on
+  `apply.apply_plan`/`apply.rollback_to` and assert `apply=False` was passed
+  when `--yes` is omitted, and that exactly one call happened (rc 0).
+- **`--only` filter**: `test_apply_only_filters_plan` builds two native
+  modules (`x`, `y`), both observed on with no active profile (desired off
+  for both → an unfiltered plan would stop both), and asserts the plan
+  object handed to the spied `apply.apply_plan` contains only `{"x"}` when
+  `--only x` is given — proving the filter is applied to the plan itself,
+  before the dry-run print and before the (spied) actuation call.
+
+## Files changed
+
+- `packages/secubox-profiles/api/cli.py` — `rollback_to` → `apply.rollback_to`
+  fix (the rest of the apply/rollback wiring was already present).
+- `packages/secubox-profiles/tests/test_cli.py` — kept the existing apply
+  tests as-is, added `test_rollback_requires_root` and
+  `test_rollback_dry_run_default_acts_on_nothing`.
+- `packages/secubox-profiles/debian/changelog` — prepended the 0.4.0 entry
+  from the brief verbatim.
 
 ## Concerns
 
-1. **Reconcile no-op-while-armed** (above) — pre-existing, out of this
-   task's file scope, flagged for a follow-up issue rather than silently
-   fixed.
-2. **Audit `operator=` is an IP, not an authenticated identity** — the
-   module has no JWT layer on this router; this is consistent with the
-   rest of `api.py`'s Tor-admin endpoints (none extract a user identity),
-   not a regression introduced here.
-3. No board deployment performed — pure code + local unit tests, as
-   instructed.
+1. No board deployment performed — pure code + local unit tests, as scoped.
+2. Boot-time reconciliation and the API/panel surfaces for apply/rollback are
+   explicitly out of scope for this task (noted in the changelog entry as a
+   follow-up), consistent with the plan's stated Phase 3a boundary.
+3. The `.superpowers/sdd/task-4-report.md` file this report replaces held
+   unrelated content from a different task (a `secubox-cve-triage`
+   product-absent-probes emitter) — overwritten per this task's explicit
+   report-writing instruction; that content is preserved in git history if
+   needed.
 
----
+## Final-review fix wave (2026-07-19)
 
-## Review fix (2026-07-09) — reject IPv6 VPN selectors
+Two review findings fixed on `feat/profiles-apply-phase3a`:
 
-**Commit:** `6b1c7625` — fix(toolbox): reject IPv6 VPN selectors (backend is v4-only) — no false-success
+1. **Route-value set/dict conflation** — `observe.load_routes()` returns a
+   `set[str]` of domain names (used for `portal_routed` membership);
+   `_cmd_apply`/`_cmd_rollback` were deriving `routes_map` from that same set
+   via `routes if isinstance(routes, dict) else {}`, which is always `{}` on
+   the real board. `snapshot.capture` therefore recorded `route: None` for
+   every portal module, so `rollback` could stop+restart a portal module but
+   never re-add its WAF route. Fix: added `observe.load_route_values()` (a
+   new best-effort dict loader, domain -> `[host, port]`, `{}` on
+   absent/corrupt file) and wired `_cmd_apply`/`_cmd_rollback` to pass
+   `load_route_values()` — not the set-derived expression — as `apply_plan`'s
+   / `rollback_to`'s `routes=` kwarg. `load_routes()` itself is untouched and
+   still feeds `_observe_all`.
+2. **Corrupt-JSON traceback escape** — `json.JSONDecodeError` is a
+   `ValueError`, not caught by `apply_plan`'s forward-loop
+   `except (ActuationError, OSError)` nor by `_rollback_applied`'s per-step
+   except. Fix: added `ValueError` to both tuples in `api/apply.py`, and
+   added a `except (OSError, ValueError)` handler in `cli.main()` (after the
+   existing `ManifestError`/`StateError` and `ProtectedViolation`/
+   `ApplyError` handlers) so a pre-flight corrupt-JSON failure (e.g.
+   `snapshot.capture`) prints `erreur: ...` and returns rc 2 instead of a raw
+   traceback.
 
-Coordinator review found one real `api.py` bug (the other two findings —
-bridge-wiring + arm-noop reapply — are Task 8 reconcile work, not touched
-here).
+Tests added in `test_cli.py`:
 
-**Bug:** `_valid_selector("ip"/"cidr", ...)` used bare
-`ipaddress.ip_address`/`ip_network`, which accept IPv6 (`2001:db8::1`,
-`2001:db8::/32`). But the backend `tor_vpn_src` nft set is `type ipv4_addr`
-and `populate_vpn_clients` silently skips non-v4 — so an operator POSTing an
-IPv6 client got `200 OK` + an audit line implying success while nothing was
-enforced (false success). Tightened the validator to IPv4-only
-(`.version == 4`), so v6 selectors now → 400 with no state write (honest,
-matches the Phase-1 v4-only backend).
+- `test_apply_passes_route_value_dict_not_set_derived_empty_dict` — spies on
+  `apply.apply_plan`, monkeypatches `load_routes` (set) and
+  `load_route_values` (dict) separately, asserts the `routes=` kwarg received
+  is the dict with real `[host, port]` values, not `{}`.
+- `test_main_maps_valueerror_to_rc2_not_traceback` — makes `apply.apply_plan`
+  raise a bare `ValueError` and asserts `cli.main()` returns rc 2.
 
-Added 2 tests: `test_vpn_selector_rejects_ipv6` (validator: v6 ip/cidr →
-False) and `test_vpn_client_rejects_ipv6` (`POST /vpn/client` with v6 ip and
-v6 cidr → 400, no state file created).
+Mutation checks performed (both reverted after confirming):
 
-```
-cd packages/secubox-toolbox && python3 -m pytest tests/test_tor_vpn_api.py -q
-→ 14 passed
-cd packages/secubox-toolbox && python3 -m pytest tests/ -q
-→ 3 failed, 266 passed   (same 3 pre-existing failures, zero new)
-```
+1. Reverted `cli.py`'s `routes_map` to the old set-derived expression → new
+   test failed with `assert {} == {'lyrion.gk2...': [...]}`. Confirms the
+   test pins the fix.
+2. Removed `ValueError` from `apply_plan`'s forward `except` tuple and drove
+   `apply_plan` directly (manual script, not committed) with a
+   `_do_change` raising `json.JSONDecodeError` — confirmed it escapes
+   uncaught (`ESCAPED as JSONDecodeError: bad: line 1 column 1 (char 0)`).
+   Restored the tuple; `cli.main()`'s rc-2 handler remains the primary guard
+   for the pre-flight case covered by the added unit test.
+
+Full suite: `145 passed` (`.venv/bin/python -m pytest
+packages/secubox-profiles/tests -q`).
+
+Files touched this wave: `packages/secubox-profiles/api/observe.py`,
+`packages/secubox-profiles/api/cli.py`, `packages/secubox-profiles/api/apply.py`,
+`packages/secubox-profiles/tests/test_cli.py`.
+
+## Concerns (fix wave)
+
+1. `load_route_values()` reads the fixed `ROUTES_FILE` path directly (same
+   pattern as `load_routes()`) rather than accepting a `routes_path=`
+   parameter from the CLI — consistent with existing conventions in
+   `observe.py`, but means CLI-level route-path overrides (if ever added)
+   would need to thread through both loaders symmetrically.
+2. No board deployment performed for this wave — pure code + local unit
+   tests, as scoped by the review brief. The route-value round-trip
+   (`apply --only <a portal module> --yes`, then `rollback --yes`) should be
+   verified live before this branch merges, per the finding's own board-observed
+   failure mode.
+   needed.
+   needed.

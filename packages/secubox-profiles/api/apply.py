@@ -75,7 +75,7 @@ def apply_plan(plan, manifests, actuals, *, run, observe, now, routes,
             _audit.record({"ts": now, "module": c.id, "action": c.action,
                            "result": "ok", "reason": c.reason}, path=audit_path)
             applied.append(c)
-        except (ActuationError, OSError) as exc:
+        except (ActuationError, OSError, ValueError) as exc:
             _audit.record({"ts": now, "module": c.id, "action": c.action,
                            "result": "fail", "error": str(exc)}, path=audit_path)
             rolled = _rollback_applied(applied, manifests, snap, run=run,
@@ -117,7 +117,7 @@ def _rollback_applied(applied, manifests, snap, *, run, observe, sleep, clock,
             else:
                 _audit.record({"ts": now, "module": c.id, "action": rev.action,
                                "result": "rollback-timeout"}, path=audit_path)
-        except (ActuationError, OSError) as exc:
+        except (ActuationError, OSError, ValueError) as exc:
             _audit.record({"ts": now, "module": c.id, "action": "rollback",
                            "result": "fail", "error": str(exc)}, path=audit_path)
     return rolled
