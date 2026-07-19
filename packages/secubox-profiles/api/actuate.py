@@ -75,13 +75,60 @@ def _portal_add(domain: str, value, routes_path: Path) -> None:
     _write_routes_atomic(routes_path, data)
 
 
-def _lxc_autostart(lxc: str, on: bool, run) -> None:
-    _must(run, ["lxc-update-config", "-n", lxc, "-x",
-                f"lxc.start.auto={'1' if on else '0'}"])
+def _write_text_atomic(path: Path, text: str) -> None:
+    path = Path(path)
+    orig_mode = os.stat(path).st_mode
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".sbxcfg-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.chmod(tmp, stat.S_IMODE(orig_mode))
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _lxc_root(run) -> Path:
+    """Le lxcpath configuré du système. `lxc-config lxc.lxcpath` renvoie /data/lxc
+    sur gk2 (pas le défaut /var/lib/lxc). Repli sur le défaut si indéterminable."""
+    rc, out = run(["lxc-config", "lxc.lxcpath"])
+    if rc == 0 and out.strip():
+        return Path(out.strip())
+    return Path("/var/lib/lxc")
+
+
+def _lxc_autostart(lxc: str, on: bool, run, lxc_root: Path | None = None) -> None:
+    """Règle lxc.start.auto en ÉDITANT le fichier config du conteneur
+    (<lxcpath>/<lxc>/config), atomiquement. `lxc-update-config` N'EST PAS l'outil
+    (c'est un migrateur de format de config, il n'accepte ni -n ni -x) — éditer le
+    fichier est la seule voie fiable, vérifiée sur la board."""
+    root = lxc_root if lxc_root is not None else _lxc_root(run)
+    cfg = Path(root) / lxc / "config"
+    want = f"lxc.start.auto = {'1' if on else '0'}"
+    try:
+        lines = cfg.read_text(encoding="utf-8").splitlines()
+        out, seen = [], False
+        for ln in lines:
+            if ln.split("#", 1)[0].strip().startswith("lxc.start.auto"):
+                if not seen:
+                    out.append(want)
+                    seen = True
+                # ligne(s) autostart en double : on garde une seule ligne canonique
+            else:
+                out.append(ln)
+        if not seen:
+            out.append(want)
+        _write_text_atomic(cfg, "\n".join(out) + "\n")
+    except OSError as exc:
+        raise ActuationError(f"lxc.start.auto {lxc}={'1' if on else '0'}: {exc}") from exc
 
 
 def actuate(change: Change, m: Manifest, *, run, route_value=None,
-            routes_path: Path = ROUTES_FILE) -> list[str]:
+            routes_path: Path = ROUTES_FILE, lxc_root: Path | None = None) -> list[str]:
     """Exécute UN changement. Retourne la liste ordonnée des labels d'action
     (pour l'audit + les tests). Lève ActuationError au premier échec."""
     done: list[str] = []
@@ -93,7 +140,7 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
             # réelle : is_on() ne reflète que l'unité hôte. On démarre donc le
             # conteneur d'abord, puis l'API hôte qui en dépend.
             _must(run, ["lxc-start", "-n", m.lxc]); done.append("lxc:start")
-            _lxc_autostart(m.lxc, True, run); done.append("lxc:autostart:1")
+            _lxc_autostart(m.lxc, True, run, lxc_root); done.append("lxc:autostart:1")
             for u in m.units:
                 _must(run, ["systemctl", "enable", "--now", u])
             done.append("systemd:enable")
@@ -109,8 +156,11 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
             for u in m.units:
                 _must(run, ["systemctl", "disable", "--now", u])
             done.append("systemd:disable")
+            # autostart=0 AVANT lxc-stop : sinon secubox-watchdog voit un conteneur
+            # arrêté encore marqué autostart=1 et le relance (course observée sur
+            # la board). On coupe l'autostart d'abord, puis on arrête.
+            _lxc_autostart(m.lxc, False, run, lxc_root); done.append("lxc:autostart:0")
             _must(run, ["lxc-stop", "-n", m.lxc]); done.append("lxc:stop")
-            _lxc_autostart(m.lxc, False, run); done.append("lxc:autostart:0")
         else:
             for u in m.units:
                 _must(run, ["systemctl", "disable", "--now", u])
