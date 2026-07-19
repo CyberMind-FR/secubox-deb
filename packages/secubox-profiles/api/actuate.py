@@ -89,8 +89,14 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
 
     def runtime_start():
         if m.runtime == "lxc" and m.lxc:
+            # Le conteneur et l'unité systemd hôte sont DÉCOUPLÉS sur la board
+            # réelle : is_on() ne reflète que l'unité hôte. On démarre donc le
+            # conteneur d'abord, puis l'API hôte qui en dépend.
             _must(run, ["lxc-start", "-n", m.lxc]); done.append("lxc:start")
             _lxc_autostart(m.lxc, True, run); done.append("lxc:autostart:1")
+            for u in m.units:
+                _must(run, ["systemctl", "enable", "--now", u])
+            done.append("systemd:enable")
         else:
             for u in m.units:
                 _must(run, ["systemctl", "enable", "--now", u])
@@ -98,6 +104,11 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
 
     def runtime_stop():
         if m.runtime == "lxc" and m.lxc:
+            # On éteint l'API hôte d'abord (sinon is_on() reste True alors que
+            # le conteneur qu'elle sert est mort → wait_state ne converge jamais).
+            for u in m.units:
+                _must(run, ["systemctl", "disable", "--now", u])
+            done.append("systemd:disable")
             _must(run, ["lxc-stop", "-n", m.lxc]); done.append("lxc:stop")
             _lxc_autostart(m.lxc, False, run); done.append("lxc:autostart:0")
         else:
