@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 from . import audit as _audit
 from . import snapshot as _snapshot
-from .actuate import ActuationError, actuate, wait_state
+from .actuate import ActuationError, actuate, condition_failed, wait_state
 from .diff import START, STOP, Change
 from .manifest import Manifest
 
@@ -41,6 +41,12 @@ def _want_on(action: str) -> bool:
 def _do_change(c: Change, m: Manifest, *, run, observe, routes_value, sleep, now,
                wait_timeout) -> None:
     actuate(c, m, run=run, route_value=routes_value)
+    # Un START d'une unité dont la Condition= de démarrage échoue ne deviendra
+    # JAMAIS active (enable --now a réussi, systemd la laisse inactive par
+    # design). On ne l'attend pas (ça timeout) et on ne la traite PAS comme un
+    # échec : le module est délibérément off ici.
+    if c.action == START and condition_failed(m, run):
+        return
     if not wait_state(m, _want_on(c.action), observe=observe, sleep=sleep, now=now,
                       timeout=wait_timeout):
         raise ActuationError(f"{c.id}: état non atteint (timeout)")
@@ -109,8 +115,12 @@ def _rollback_applied(applied, manifests, snap, *, run, observe, sleep, clock,
             continue
         try:
             actuate(rev, m, run=run, route_value=rv)
-            if wait_state(m, want_on, observe=observe, sleep=sleep, now=clock,
-                         timeout=wait_timeout):
+            # Même règle que le forward : re-démarrer une unité condition-gated
+            # ne la rend jamais active — c'est un succès, pas un timeout.
+            reached = (rev.action == START and condition_failed(m, run)) or \
+                wait_state(m, want_on, observe=observe, sleep=sleep, now=clock,
+                           timeout=wait_timeout)
+            if reached:
                 _audit.record({"ts": now, "module": c.id, "action": rev.action,
                                "result": "rollback"}, path=audit_path)
                 rolled.append(c.id)
