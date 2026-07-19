@@ -331,67 +331,70 @@ func (s *Server) handler() http.Handler {
 				rawPath = r.URL.Path
 			}
 
-			skip := privateCIDR(ip) || staticAsset(rawPath) || ncBypass(rawPath)
+			// Static-asset PATHS are NOT fully skipped: a scanner probing a
+			// static-extension path (e.g. /global-protect/.../bootstrap.min.css on
+			// a box with no PAN-OS) must still be fingerprinted. On a static asset
+			// we run only detect/escalate categories on path+query+ua (no body);
+			// block categories stay skipped so a legit asset is never newly blocked
+			// (preserves the old fast-path's zero-FP property — see
+			// TestInspectStaticAssetSkip). Private-IP / NC-bypass / trusted-host
+			// remain FULL skips (LAN + NC mobile tokens are never fingerprinted).
+			skip := privateCIDR(ip) || ncBypass(rawPath)
 
-			// Trusted-host skip: bypass WAF inspection for known internal hosts
-			// (matches Python check_request whitelist in secubox_waf.py:761-763).
-			// Checked AFTER privateCIDR/static/NC so that the cheap skips run first.
 			if !skip && s.isTrustedHost(r.Host) {
 				skip = true
 			}
 
-			if !skip {
-				// Read up to s.maxBodyInspect bytes for WAF inspection, then
-				// restore the FULL body (prefix + remaining stream) so the
-				// upstream proxy receives every byte intact.
-				//
-				// Streaming approach: we buffer at most maxBodyInspect bytes (the
-				// inspection window), then forward a MultiReader of that buffer +
-				// the unconsumed tail of r.Body. This keeps memory bounded even
-				// for multi-GB uploads (PeerTube / Nextcloud file uploads).
-				//
-				// PARITY GAP: only the first maxBodyInspect bytes are inspected.
-				// A payload appended after that offset is NOT detected. When a body
-				// exceeds the cap, an AUDIT log line is emitted so truncation is
-				// operator-visible (action="body-inspect-truncated"). See
-				// docs/CUTOVER.md for the documented detection gap.
-				cap := s.maxBodyInspect
-				if cap <= 0 {
-					cap = defaultMaxBodyInspect
-				}
-				var bodyBytes []byte
-				if r.Body != nil {
-					prefix, _ := io.ReadAll(io.LimitReader(r.Body, cap))
-					bodyBytes = prefix
-					// Restore: prefix already read + remaining stream not yet consumed.
-					r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), r.Body))
+			isStatic := staticAsset(rawPath)
 
-					// Emit audit log when inspection was truncated (Content-Length known
-					// or body read returned exactly cap bytes → likely more data follows).
-					if int64(len(prefix)) == cap {
-						if s.threatLog != nil {
-							s.threatLog.Record(ThreatRecord{
-								ClientIP: ip,
-								Host:     r.Host,
-								Method:   r.Method,
-								Path:     rawPath,
-								Category: "body-inspect-truncated",
-								Severity: "audit",
-								Action:   "body-inspect-truncated",
-								UA:       r.Header.Get("User-Agent"),
-							})
+			if !skip {
+				var bodyBytes []byte
+				includeBlock := true
+				if isStatic {
+					// Fingerprint-only pass: detect/escalate on path+query+ua, no
+					// body read, no block evaluation.
+					includeBlock = false
+				} else {
+					// Read up to s.maxBodyInspect bytes for WAF inspection, then
+					// restore the FULL body (prefix + remaining stream) so the
+					// upstream proxy receives every byte intact. PARITY GAP: only
+					// the first maxBodyInspect bytes are inspected; a payload
+					// appended after that offset is NOT detected (see docs/CUTOVER.md).
+					cap := s.maxBodyInspect
+					if cap <= 0 {
+						cap = defaultMaxBodyInspect
+					}
+					if r.Body != nil {
+						prefix, _ := io.ReadAll(io.LimitReader(r.Body, cap))
+						bodyBytes = prefix
+						r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), r.Body))
+
+						if int64(len(prefix)) == cap {
+							if s.threatLog != nil {
+								s.threatLog.Record(ThreatRecord{
+									ClientIP: ip,
+									Host:     r.Host,
+									Method:   r.Method,
+									Path:     rawPath,
+									Category: "body-inspect-truncated",
+									Severity: "audit",
+									Action:   "body-inspect-truncated",
+									UA:       r.Header.Get("User-Agent"),
+								})
+							}
+							log.Printf("sbxwaf: AUDIT body-inspect-truncated host=%s path=%s ip=%s cap=%d",
+								r.Host, rawPath, ip, cap)
 						}
-						log.Printf("sbxwaf: AUDIT body-inspect-truncated host=%s path=%s ip=%s cap=%d",
-							r.Host, rawPath, ip, cap)
 					}
 				}
 
-				cat, sev, mode, hit := s.rules.Match(
+				cat, sev, mode, hit := s.rules.MatchModes(
 					r.Method,
 					rawPath,
 					r.URL.RawQuery,
 					string(bodyBytes),
 					r.Header.Get("User-Agent"),
+					includeBlock,
 				)
 				if hit && mode == modeDetect {
 					// Observe only: log it, let it through. A detect category
