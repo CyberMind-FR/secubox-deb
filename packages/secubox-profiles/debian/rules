@@ -1,3 +1,10 @@
 #!/usr/bin/make -f
 %:
 	dh $@
+
+# Sudoers drop-in so the panel (User=secubox) can sudo -> secubox-profilectl
+# for apply/rollback (webui->ctl). debian/install still handles the regular
+# file listing via dh_install; this override only adds the sudoers file.
+override_dh_auto_install:
+	install -d debian/secubox-profiles/etc/sudoers.d
+	install -m 0440 sudoers.d/secubox-profiles debian/secubox-profiles/etc/sudoers.d/secubox-profiles
