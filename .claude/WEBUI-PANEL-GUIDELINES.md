@@ -164,6 +164,15 @@ Emoji are functional glyphs, not decoration — one per concept, consistent:
   rows. Cache/stale-while-revalidate on the server for expensive endpoints.
 - **Destructive actions confirm()** — and warn explicitly when an action can cut
   the operator's own access (see wireguard admin/mesh bring-down guard).
+- **Privileged actions delegate to the module `ctl` — never do them in-process.**
+  The panel runs unprivileged (`secubox`); anything that writes root-owned config
+  or drives systemd/LXC/an app must POST to a route that shells out to
+  `sudo -n /usr/sbin/secubox-<module>ctl …` (scoped exact-command sudoers), which
+  performs and **audits** the change as root and returns a `--json` payload the
+  panel renders. In-process privileged work raises `PermissionError` → a 500 the
+  user sees as "request error"/empty panel. Full contract (sudoers, `ctl`
+  responsibilities, aggregator-restart caveat): **`.claude/MODULE-COMPLIANCE.md`
+  → Privileged Operations**. Reference: `cve-triage` / `secubox-cvectl`.
 
 ## 7. Checklist for a new/reskinned panel
 
@@ -176,6 +185,7 @@ Emoji are functional glyphs, not decoration — one per concept, consistent:
 - [ ] `esc()` on all injected values, `data-*` delegation, no onclick interpolation
 - [ ] responsive `@media (max-width:768px)`, body never scrolls sideways
 - [ ] menu.d entry present (navbar auto-renders it)
+- [ ] privileged actions routed through `sudo secubox-<module>ctl` (scoped sudoers shipped), never done in-process
 
 ---
 
