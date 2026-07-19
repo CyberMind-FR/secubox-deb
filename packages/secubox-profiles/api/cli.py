@@ -151,15 +151,21 @@ def _cmd_apply(args) -> int:
                               now=_now_iso(), routes=routes_map, snap_root=SNAP_DIR,
                               audit_path=AUDIT_LOG, apply=args.yes)
     if not args.yes:
-        if not plan:
+        if args.json:
+            print(json.dumps({"status": "planned", "changed": [c.id for c in plan]}))
+        elif not plan:
             print("✅ rien à changer.")
         else:
             print(f"{len(plan)} changement(s) — dry-run (ajoutez --yes pour appliquer) :")
             for c in plan:
                 print(f"  {'⛔ stop ' if c.action == 'stop' else '▶️  start'} {c.id:<20} ({c.reason})")
         return 0
-    print(f"apply: {report.status} — changed={report.changed} "
-          f"failed={report.failed} rolled_back={report.rolled_back}")
+    if args.json:
+        print(json.dumps({"status": report.status, "changed": report.changed,
+                          "failed": report.failed, "rolled_back": report.rolled_back}))
+    else:
+        print(f"apply: {report.status} — changed={report.changed} "
+              f"failed={report.failed} rolled_back={report.rolled_back}")
     return 0 if report.status == "applied" else 2
 
 
@@ -183,7 +189,12 @@ def _cmd_rollback(args) -> int:
     report = apply.rollback_to(snap, manifests, actuals, run=_run, observe=observe,
                                now=_now_iso(), routes=load_route_values(),
                                snap_root=SNAP_DIR, audit_path=AUDIT_LOG, apply=args.yes)
-    print(f"rollback[{args.target}]: {report.status} — changed={report.changed}")
+    if args.json:
+        print(json.dumps({"status": report.status, "changed": report.changed,
+                          "failed": report.failed, "rolled_back": report.rolled_back,
+                          "target": args.target}))
+    else:
+        print(f"rollback[{args.target}]: {report.status} — changed={report.changed}")
     return 0 if report.status in ("applied", "planned") else 2
 
 
@@ -330,11 +341,13 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--only", action="append", default=[],
                     help="restreindre aux modules nommés (répétable) — validation module par module")
     sp.add_argument("--yes", action="store_true", help="agir réellement")
+    sp.add_argument("--json", action="store_true", help="rapport JSON sur stdout")
     sp.set_defaults(func=_cmd_apply)
 
     sp = sub.add_parser("rollback", help="restaure un snapshot (R1..R4 ; --yes pour agir)")
     sp.add_argument("--target", default="R1", choices=["R1", "R2", "R3", "R4"])
     sp.add_argument("--yes", action="store_true")
+    sp.add_argument("--json", action="store_true", help="rapport JSON sur stdout")
     sp.set_defaults(func=_cmd_rollback)
 
     args = p.parse_args(argv)
