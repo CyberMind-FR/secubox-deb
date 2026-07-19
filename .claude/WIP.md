@@ -3,6 +3,21 @@
 
 ---
 
+## ✅ 2026-07-19 : Profils Phase 2 — `Requires=secubox-core` → `Wants=` (branche feat/profiles-phase2-core-wants)
+
+Retrait de la cascade dure sur `secubox-core.service` (Type=oneshot mkdir+chown, RemainAfterExit) : un `Requires=` sur ~108 units les cascade-stoppait tous si core redémarre/échoue (ex. upgrade du paquet secubox-core) = thundering-herd. `After=` garde l'ordre, `Wants=` garde la dépendance souple **sans** la cascade. Prérequis de l'apply de masse natif (Phase 3).
+
+- **Source** : 91 units (`packages/*/{debian,systemd}/*.service`) + 2 scaffolds (`new-module.sh`/`new-package.sh`) convertis → les futurs modules naissent en `Wants=`. Chaque ligne `Requires=` était core-only ⇒ sed 1-ligne sûr.
+- **Live (Option A, sans herd)** : 162 units installés sed en place + `systemctl daemon-reload` — **aucun restart**. Board saine (admin/billets 200). Cascade retirée immédiatement.
+- **Release** : bump minor sur les 87 paquets affectés → CI build + publish apt.secubox.in.
+
+### ⬜ Next
+- **Phase 3 native mass-apply** désormais débloqué (le cascade-stop ne peut plus entraîner d'autres units).
+- **Réconciliation boot** (`secubox-profile-apply.service`, décidée enforce/auto-apply).
+- **Surfaces API/panel/Companion profiles** + sudoers scopé (guideline webui→ctl).
+
+---
+
 ## ✅ 2026-07-17 : Sessions auditables + Companion auth/system/metrics + billets hashtags emoji (branche feat/sessions-companion-emoji)
 
 Sessions traçables, les 2 modules Companion stubs deviennent réels, billets gagne les vues rapides par hashtag emoji. Live-vérifié gk2. Détail dans HISTORY.md.
