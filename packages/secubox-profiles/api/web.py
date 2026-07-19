@@ -281,6 +281,60 @@ class PinUpdate(BaseModel):
     pin: Optional[str] = None
 
 
+class ActiveUpdate(BaseModel):
+    name: str
+
+
+class ApplyRequest(BaseModel):
+    profile: str
+
+
+# Sérialise TOUTE écriture du fichier `active` partagé + toute actuation
+# (apply/rollback) en un seul verrou async, dans ce process. Corrige un TOCTOU
+# structurel : entre la préview d'un opérateur (GET /diff) et sa confirmation
+# (POST /apply), un second onglet/admin pouvait réécrire `active` avec un
+# AUTRE profil — l'apply exécuté ensuite par `secubox-profilectl apply --yes`
+# recalculait alors son plan à partir de CE profil différent, silencieusement.
+# Le remède : /apply prend désormais le profil à actuer en paramètre, réécrit
+# `active` avec CE profil précis puis actue, le tout sous le même verrou que
+# /active et /rollback — aucune de ces routes ne peut plus s'entrelacer.
+# NB : verrou PROCESS-LOCAL — correct uniquement parce que le service tourne en
+# un seul worker uvicorn (ExecStart sans --workers). Ne PAS ajouter --workers>1
+# sans passer à un verrou inter-process (flock), sinon la sérialisation saute.
+_apply_lock = asyncio.Lock()
+
+
+def _ctl_run(argv, **kw):
+    import subprocess
+    return subprocess.run(argv, capture_output=True, text=True, timeout=1800, **kw)
+
+
+async def _run_ctl_json(verb: str):
+    """Délègue au helper root via sudo (webui→ctl). Fixe, exact-command
+    (voir /etc/sudoers.d/secubox-profiles). Bloquant → to_thread pour ne pas
+    figer la boucle du service pendant un apply long."""
+    import asyncio as _a
+    import json as _json
+    argv = ["sudo", "-n", "/usr/sbin/secubox-profilectl", verb, "--yes", "--json"]
+    proc = await _a.to_thread(_ctl_run, argv)
+    # Parse the report FIRST: apply/rollback emit a --json report even when they
+    # end in `rolled_back` (CLI rc=2). Surfacing that report (which modules
+    # changed / were rolled back) is far more useful to the operator than a raw
+    # truncated error string — the panel classifies applied-vs-failed itself.
+    try:
+        report = _json.loads(proc.stdout)
+    except ValueError:
+        report = None
+    if isinstance(report, dict) and "status" in report:
+        return report
+    # No parseable report → a genuine failure. rc=3 is the protected-STOP
+    # refusal (no JSON report is emitted on that path).
+    if proc.returncode == 3:
+        raise HTTPException(status_code=409, detail=(proc.stderr or proc.stdout).strip()[:300])
+    raise HTTPException(status_code=500,
+                        detail=f"{verb} échoué: {(proc.stderr or proc.stdout).strip()[:300]}")
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="SecuBox Profiles API",
@@ -402,6 +456,38 @@ def create_app() -> FastAPI:
             pins[body.id] = body.pin
         _write_pins(Path(pins_file), pins)
         return {"pins": pins}
+
+    @app.post("/api/v1/profiles/active")
+    async def set_active(body: ActiveUpdate, _claims=Depends(require_jwt)):
+        root = _root()
+        _mod, prof_dir, _pins, active_file = _cli._paths(root)
+        async with _apply_lock:
+            if not (Path(prof_dir) / f"{body.name}.toml").exists():
+                raise HTTPException(status_code=404, detail=f"profil inconnu: {body.name}")
+            _atomic_write(Path(active_file), body.name + "\n")
+            return {"active": body.name}
+
+    @app.post("/api/v1/profiles/apply")
+    async def apply_active(body: ApplyRequest, _claims=Depends(require_jwt)):
+        # Actue TOUJOURS le profil demandé par CET appel, jamais « whatever is
+        # active at execution time » : on réécrit `active` avec `body.profile`
+        # puis on lance le CLI, sous le même verrou — un /active ou /apply
+        # concurrent (autre onglet) ne peut pas s'intercaler entre les deux.
+        # L'argv sudo reste FIXE (`apply --yes --json`) : le profil est
+        # transmis via le fichier `active`, jamais via la commande sudo —
+        # sudoers exact-command inchangé.
+        root = _root()
+        _mod, prof_dir, _pins, active_file = _cli._paths(root)
+        async with _apply_lock:
+            if not (Path(prof_dir) / f"{body.profile}.toml").exists():
+                raise HTTPException(status_code=404, detail=f"profil inconnu: {body.profile}")
+            _atomic_write(Path(active_file), body.profile + "\n")
+            return await _run_ctl_json("apply")
+
+    @app.post("/api/v1/profiles/rollback")
+    async def rollback_active(_claims=Depends(require_jwt)):
+        async with _apply_lock:
+            return await _run_ctl_json("rollback")
 
     return app
 
