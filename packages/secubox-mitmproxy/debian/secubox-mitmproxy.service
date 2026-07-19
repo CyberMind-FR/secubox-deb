@@ -1,7 +1,7 @@
 [Unit]
 Description=SecuBox Mitmproxy WAF API
 After=network.target secubox-core.service lxc.service
-Requires=secubox-core.service
+Wants=secubox-core.service
 
 [Service]
 Type=simple

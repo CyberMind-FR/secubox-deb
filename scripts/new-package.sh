@@ -250,7 +250,7 @@ cat > "$PKG_DIR/debian/${PKG}.service" <<SVC
 [Unit]
 Description=SecuBox ${NAME^} API
 After=network.target secubox-core.service
-Requires=secubox-core.service
+Wants=secubox-core.service
 
 [Service]
 Type=simple

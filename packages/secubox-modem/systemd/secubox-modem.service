@@ -1,7 +1,7 @@
 [Unit]
 Description=SecuBox Modem API
 After=network.target secubox-core.service ModemManager.service
-Requires=secubox-core.service
+Wants=secubox-core.service
 Wants=ModemManager.service
 
 [Service]

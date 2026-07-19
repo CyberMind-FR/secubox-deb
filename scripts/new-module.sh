@@ -218,7 +218,7 @@ cat > "$PKG/debian/secubox-$NAME.service" << EOF
 [Unit]
 Description=SecuBox $NAME_UPPER API
 After=network.target secubox-core.service
-Requires=secubox-core.service
+Wants=secubox-core.service
 
 [Service]
 Type=simple
