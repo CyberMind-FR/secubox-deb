@@ -111,6 +111,11 @@
         .diff-row .prio { color: var(--p31-dim); font-size: 0.65rem; text-align: right; }
         .empty-note { padding: 1rem; text-align: center; color: var(--p31-dim); font-size: 0.75rem; }
 
+        .report-banner { border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.7rem; margin-top: 0.6rem; border: 1px dashed var(--border); }
+        .report-banner.ok { border-color: var(--green); color: var(--green); }
+        .report-banner.fail { border-color: var(--red); color: var(--red); }
+        .report-banner .id-list { color: var(--text); }
+
         .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 360px; }
         .toast.show { opacity: 1; transform: translateY(0); }
         .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
@@ -136,7 +141,7 @@
         <header class="header">
             <div>
                 <h1>🧩 Module Profiles</h1>
-                <div class="sub" id="subline">Phase 1 — inventory &amp; desired state · read-only, no actuation</div>
+                <div class="sub" id="subline">Inventory &amp; desired state · preview then apply via Bascule</div>
             </div>
             <div class="btn-group">
                 <button class="btn" id="refreshBtn">↻ Refresh</button>
@@ -175,6 +180,19 @@
         </div>
 
         <div class="card">
+            <h3>🔀 Bascule
+                <span class="note">preview the plan for the selected profile, then apply/rollback on the box (webui→ctl)</span>
+            </h3>
+            <div class="btn-group">
+                <button class="btn primary" id="previewBtn">👁 Prévisualiser</button>
+                <button class="btn good" id="applyBtn" style="display:none">✅ Appliquer</button>
+                <button class="btn danger" id="rollbackBtn">⏪ Rollback</button>
+            </div>
+            <div id="basculeStatus" style="font-size:0.72rem;color:var(--p31-dim);margin-top:0.5rem"></div>
+            <div id="applyReport"></div>
+        </div>
+
+        <div class="card">
             <h3>📦 Modules <span class="note" id="modCount"></span></h3>
             <div class="filter-bar">
                 <input type="text" id="searchInput" placeholder="🔍 Filter by id / category…">
@@ -190,9 +208,9 @@
 
         <div class="card">
             <h3>🧮 Diff — <span id="diffProfileName">–</span></h3>
-            <div class="diff-banner">⚠️ NOT APPLIED — Phase 1 has no <code>apply</code>. This is a preview of what
-                the selected profile would change if actuated; nothing here starts or stops anything. Actuation
-                arrives in Phase 3 with 4R snapshots and audit.</div>
+            <div class="diff-banner">🔍 PREVIEW ONLY — this is what the selected profile would change; nothing
+                here starts or stops anything by itself. Use the <strong>Bascule</strong> card above to preview and,
+                after confirmation, actually apply (or roll back) on the box.</div>
             <div class="diff-list" id="diffList">Loading…</div>
         </div>
     </main>
@@ -207,6 +225,8 @@
         let selectedProfile = null;
         let searchTerm = '';
         let stateFilterVal = '';
+        let basculePreviewedFor = null;   // profile name for which a preview was just shown (gates Apply)
+        let basculeLastChanges = [];      // last previewed change list (for the confirm() count)
 
         function token() {
             try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
@@ -288,7 +308,7 @@
             document.getElementById('sRam').textContent = fmtKb(t.rss_kb);
             document.getElementById('sExposed').textContent = t.exposed_public != null ? t.exposed_public : '–';
             document.getElementById('subline').textContent =
-                (t.count || 0) + ' modules · ' + (t.on || 0) + ' on · ' + (t.unknown || 0) + ' unknown · read-only inventory';
+                (t.count || 0) + ' modules · ' + (t.on || 0) + ' on · ' + (t.unknown || 0) + ' unknown · preview then apply via Bascule';
         }
 
         function renderAggTable(elId, bucket) {
@@ -380,27 +400,143 @@
             }).join('');
         }
 
+        // Shared diff-list markup — reused by the read-only diff card and by
+        // the Bascule preview (both render the same {id,action,reason,priority}
+        // change shape returned by GET /diff). Every field is esc()'d.
+        function renderDiffRows(changes) {
+            if (!changes.length) {
+                return '<div class="empty-note">✅ Nothing to change — reality already matches this profile.</div>';
+            }
+            return changes.map(c =>
+                '<div class="diff-row ' + esc(c.action) + '">' +
+                '<span class="action ' + esc(c.action) + '">' + (c.action === 'start' ? '▶ start' : '⛔ stop') + '</span>' +
+                '<span class="id">' + esc(c.id) + '</span>' +
+                '<span class="reason">' + esc(c.reason) + '</span>' +
+                '<span class="prio">prio ' + esc(c.priority) + '</span>' +
+                '</div>'
+            ).join('');
+        }
+
         async function loadDiff() {
             const el = document.getElementById('diffList');
             if (!selectedProfile) { el.innerHTML = '<div class="empty-note">No active/selected profile.</div>'; return; }
             el.innerHTML = 'Loading…';
             try {
                 const data = await api('/diff?profile=' + encodeURIComponent(selectedProfile));
-                const changes = data.changes || [];
-                if (!changes.length) {
-                    el.innerHTML = '<div class="empty-note">✅ Nothing to change — reality already matches this profile.</div>';
-                    return;
-                }
-                el.innerHTML = changes.map(c =>
-                    '<div class="diff-row ' + esc(c.action) + '">' +
-                    '<span class="action ' + esc(c.action) + '">' + (c.action === 'start' ? '▶ start' : '⛔ stop') + '</span>' +
-                    '<span class="id">' + esc(c.id) + '</span>' +
-                    '<span class="reason">' + esc(c.reason) + '</span>' +
-                    '<span class="prio">prio ' + c.priority + '</span>' +
-                    '</div>'
-                ).join('');
+                el.innerHTML = renderDiffRows(data.changes || []);
             } catch (e) {
                 el.innerHTML = '<div class="empty-note">⚠️ ' + esc(e.message) + '</div>';
+            }
+        }
+
+        function showApplyButton(show) {
+            document.getElementById('applyBtn').style.display = show ? '' : 'none';
+        }
+
+        function setBasculeStatus(msg) {
+            document.getElementById('basculeStatus').textContent = msg || '';
+        }
+
+        function resetBasculePreview() {
+            basculePreviewedFor = null;
+            basculeLastChanges = [];
+            showApplyButton(false);
+            setBasculeStatus('');
+        }
+
+        function renderApplyReport(label, report) {
+            const el = document.getElementById('applyReport');
+            const failed = report.failed || [];
+            const cls = failed.length ? 'fail' : 'ok';
+            const fmt = ids => ids.length ? ids.map(esc).join(', ') : '—';
+            el.innerHTML =
+                '<div class="report-banner ' + cls + '">' +
+                '<strong>' + esc(label) + ':</strong> ' + esc(report.status) + '<br>' +
+                'changed: <span class="id-list">' + fmt(report.changed || []) + '</span><br>' +
+                'failed: <span class="id-list">' + fmt(failed) + '</span><br>' +
+                'rolled back: <span class="id-list">' + fmt(report.rolled_back || []) + '</span>' +
+                '</div>';
+        }
+
+        // "Prévisualiser" commits the dropdown's selection as the active
+        // profile (POST /active), then fetches its plan (GET /diff) and
+        // renders it into the SAME diff-list the read-only card already
+        // uses. Only after this succeeds is Apply revealed — the operator
+        // must see the plan before actuating anything.
+        async function previewBascule() {
+            if (!selectedProfile) { errorToast('⚠️ Select a profile first'); return; }
+            const btn = document.getElementById('previewBtn');
+            btn.disabled = true;
+            resetBasculePreview();
+            setBasculeStatus('⏳ Prévisualisation…');
+            try {
+                await api('/active', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: selectedProfile }),
+                });
+                const data = await api('/diff?profile=' + encodeURIComponent(selectedProfile));
+                basculeLastChanges = data.changes || [];
+                document.getElementById('diffProfileName').textContent = selectedProfile;
+                document.getElementById('diffList').innerHTML = renderDiffRows(basculeLastChanges);
+                basculePreviewedFor = selectedProfile;
+                setBasculeStatus(basculeLastChanges.length + ' changement(s) prévu(s) pour « ' + selectedProfile + ' ».');
+                showApplyButton(true);
+                if (profilesData) profilesData.active = selectedProfile;
+                renderProfileSelect();
+            } catch (e) {
+                setBasculeStatus('');
+                if (e.message !== '401') errorToast('❌ Prévisualisation échouée : ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Apply is gated behind a preview shown for the CURRENTLY selected
+        // profile (basculePreviewedFor === selectedProfile) plus an explicit
+        // confirm() naming the change count from that preview.
+        async function applyBascule() {
+            if (!selectedProfile || basculePreviewedFor !== selectedProfile) {
+                errorToast('⚠️ Prévisualisez le plan avant d’appliquer');
+                return;
+            }
+            const n = basculeLastChanges.length;
+            if (!confirm('Ceci va démarrer/arrêter ' + n + ' module(s) sur la box. Continuer ?')) return;
+            const btn = document.getElementById('applyBtn');
+            btn.disabled = true;
+            setBasculeStatus('⏳ Application en cours sur la box… (peut prendre plusieurs minutes)');
+            try {
+                const report = await api('/apply', { method: 'POST' });
+                renderApplyReport('Apply', report);
+                setBasculeStatus('');
+                toast('✅ Apply: ' + report.status);
+                resetBasculePreview();
+                await refresh();
+            } catch (e) {
+                setBasculeStatus('');
+                if (e.message !== '401') errorToast('❌ Apply échoué : ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function rollbackBascule() {
+            if (!confirm('Ceci va restaurer le dernier snapshot (rollback) sur la box. Continuer ?')) return;
+            const btn = document.getElementById('rollbackBtn');
+            btn.disabled = true;
+            setBasculeStatus('⏳ Rollback en cours sur la box…');
+            try {
+                const report = await api('/rollback', { method: 'POST' });
+                renderApplyReport('Rollback', report);
+                setBasculeStatus('');
+                toast('✅ Rollback: ' + report.status);
+                resetBasculePreview();
+                await refresh();
+            } catch (e) {
+                setBasculeStatus('');
+                if (e.message !== '401') errorToast('❌ Rollback échoué : ' + e.message);
+            } finally {
+                btn.disabled = false;
             }
         }
 
@@ -459,10 +595,14 @@
 
         document.getElementById('profileSelect').addEventListener('change', e => {
             selectedProfile = e.target.value || null;
+            resetBasculePreview(); // a stale preview must not gate Apply for a different profile
             renderProfileSelect();
             renderModules();
             loadDiff();
         });
+        document.getElementById('previewBtn').addEventListener('click', previewBascule);
+        document.getElementById('applyBtn').addEventListener('click', applyBascule);
+        document.getElementById('rollbackBtn').addEventListener('click', rollbackBascule);
         document.getElementById('searchInput').addEventListener('input', e => {
             searchTerm = e.target.value;
             renderModules();
