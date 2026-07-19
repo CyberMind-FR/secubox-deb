@@ -319,7 +319,7 @@ def test_apply_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
             stderr = ""
         return P()
     monkeypatch.setattr(web, "_ctl_run", fake_run)
-    r = client.post("/api/v1/profiles/apply", json={})
+    r = client.post("/api/v1/profiles/apply", json={"profile": "media"})
     assert r.status_code == 200 and r.json()["status"] == "applied"
 
 
@@ -331,7 +331,7 @@ def test_apply_route_protected_refusal_409(client, monkeypatch):
             stderr = "refusé: protégé"
         return P()
     monkeypatch.setattr(web, "_ctl_run", fake_run)
-    r = client.post("/api/v1/profiles/apply", json={})
+    r = client.post("/api/v1/profiles/apply", json={"profile": "media"})
     assert r.status_code == 409
 
 
@@ -358,7 +358,7 @@ def test_apply_route_generic_failure_500(client, monkeypatch):
             stderr = "boum"
         return P()
     monkeypatch.setattr(web, "_ctl_run", fake_run)
-    r = client.post("/api/v1/profiles/apply", json={})
+    r = client.post("/api/v1/profiles/apply", json={"profile": "media"})
     assert r.status_code == 500
 
 
@@ -370,5 +370,56 @@ def test_apply_route_malformed_json_500(client, monkeypatch):
             stderr = ""
         return P()
     monkeypatch.setattr(web, "_ctl_run", fake_run)
-    r = client.post("/api/v1/profiles/apply", json={})
+    r = client.post("/api/v1/profiles/apply", json={"profile": "media"})
     assert r.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# Finding 1 (TOCTOU) — apply must actuate the REQUESTED profile, not whatever
+# happens to be in the shared `active` file at execution time. `active`
+# stays at "media" (the root fixture's default) throughout these tests; the
+# apply call must still flip it to the body's profile BEFORE shelling out.
+# ---------------------------------------------------------------------------
+
+def test_apply_writes_requested_profile_before_calling_ctl(client, root, monkeypatch):
+    (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
+    assert (root / "profiles" / "active").read_text().strip() == "media"
+
+    seen = {}
+
+    def fake_run(argv, **kw):
+        # The active file must already read "lite" by the time the ctl is
+        # invoked — proves apply sets it BEFORE actuating, not after, and
+        # regardless of what was active when the request was made.
+        seen["active_at_ctl_time"] = (root / "profiles" / "active").read_text().strip()
+
+        class P:
+            returncode = 0
+            stdout = '{"status":"applied","changed":["lyrion"],"failed":[],"rolled_back":[]}'
+            stderr = ""
+        return P()
+
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
+    assert r.status_code == 200
+    assert seen["active_at_ctl_time"] == "lite"
+    assert (root / "profiles" / "active").read_text().strip() == "lite"
+
+
+def test_apply_unknown_profile_404_and_ctl_not_called(client, root, monkeypatch):
+    called = []
+
+    def fake_run(argv, **kw):
+        called.append(argv)
+        class P:
+            returncode = 0
+            stdout = '{"status":"applied","changed":[],"failed":[],"rolled_back":[]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/apply", json={"profile": "fantome"})
+    assert r.status_code == 404
+    assert called == []
+    # The shared active file must be untouched by a rejected request.
+    assert (root / "profiles" / "active").read_text().strip() == "media"

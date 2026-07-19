@@ -189,6 +189,7 @@
                 <button class="btn danger" id="rollbackBtn">⏪ Rollback</button>
             </div>
             <div id="basculeStatus" style="font-size:0.72rem;color:var(--p31-dim);margin-top:0.5rem"></div>
+            <div class="diff-list" id="basculeDiffList" style="margin-top:0.5rem"></div>
             <div id="applyReport"></div>
         </div>
 
@@ -442,6 +443,7 @@
             basculeLastChanges = [];
             showApplyButton(false);
             setBasculeStatus('');
+            document.getElementById('basculeDiffList').innerHTML = '';
         }
 
         function renderApplyReport(label, report) {
@@ -458,11 +460,25 @@
                 '</div>';
         }
 
+        // Successful terminal status per verb — anything else (rolled_back,
+        // an unexpected status, or a non-empty `failed` list) is a failure
+        // that must stay on screen via the PERSISTENT errorToast, never the
+        // transient ✅ toast (see renderApplyReport for the full banner).
+        function isReportFailure(report, kind) {
+            if ((report.failed || []).length) return true;
+            if (kind === 'rollback') return report.status !== 'applied' && report.status !== 'planned';
+            return report.status !== 'applied';
+        }
+
         // "Prévisualiser" commits the dropdown's selection as the active
         // profile (POST /active), then fetches its plan (GET /diff) and
-        // renders it into the SAME diff-list the read-only card already
-        // uses. Only after this succeeds is Apply revealed — the operator
-        // must see the plan before actuating anything.
+        // renders it into the Bascule card's OWN container (#basculeDiffList)
+        // — deliberately NOT the read-only card's #diffList, which the 45s
+        // background refresh() repaints independently. Sharing one element
+        // let a background poll silently replace the previewed plan while an
+        // operator was still reading it, before confirm(). Only after this
+        // succeeds is Apply revealed — the operator must see the plan before
+        // actuating anything.
         async function previewBascule() {
             if (!selectedProfile) { errorToast('⚠️ Select a profile first'); return; }
             const btn = document.getElementById('previewBtn');
@@ -477,8 +493,7 @@
                 });
                 const data = await api('/diff?profile=' + encodeURIComponent(selectedProfile));
                 basculeLastChanges = data.changes || [];
-                document.getElementById('diffProfileName').textContent = selectedProfile;
-                document.getElementById('diffList').innerHTML = renderDiffRows(basculeLastChanges);
+                document.getElementById('basculeDiffList').innerHTML = renderDiffRows(basculeLastChanges);
                 basculePreviewedFor = selectedProfile;
                 setBasculeStatus(basculeLastChanges.length + ' changement(s) prévu(s) pour « ' + selectedProfile + ' ».');
                 showApplyButton(true);
@@ -493,23 +508,51 @@
         }
 
         // Apply is gated behind a preview shown for the CURRENTLY selected
-        // profile (basculePreviewedFor === selectedProfile) plus an explicit
-        // confirm() naming the change count from that preview.
+        // profile (basculePreviewedFor === selectedProfile). Before asking
+        // for confirmation we re-fetch the diff for that exact profile so N
+        // reflects current reality (not a possibly-stale count from whenever
+        // "Prévisualiser" was clicked) — the apply itself now re-asserts this
+        // profile as active under a server-side lock (see POST /apply), so
+        // the actuated plan is guaranteed to match what's confirmed here.
         async function applyBascule() {
             if (!selectedProfile || basculePreviewedFor !== selectedProfile) {
                 errorToast('⚠️ Prévisualisez le plan avant d’appliquer');
                 return;
             }
-            const n = basculeLastChanges.length;
-            if (!confirm('Ceci va démarrer/arrêter ' + n + ' module(s) sur la box. Continuer ?')) return;
             const btn = document.getElementById('applyBtn');
             btn.disabled = true;
+            setBasculeStatus('⏳ Vérification du plan…');
+            let n;
+            try {
+                const fresh = await api('/diff?profile=' + encodeURIComponent(selectedProfile));
+                basculeLastChanges = fresh.changes || [];
+                document.getElementById('basculeDiffList').innerHTML = renderDiffRows(basculeLastChanges);
+                n = basculeLastChanges.length;
+            } catch (e) {
+                setBasculeStatus('');
+                btn.disabled = false;
+                if (e.message !== '401') errorToast('❌ Impossible de rafraîchir le plan avant application : ' + e.message);
+                return;
+            }
+            setBasculeStatus('');
+            if (!confirm('Ceci va démarrer/arrêter ' + n + ' module(s) sur la box. Continuer ?')) {
+                btn.disabled = false;
+                return;
+            }
             setBasculeStatus('⏳ Application en cours sur la box… (peut prendre plusieurs minutes)');
             try {
-                const report = await api('/apply', { method: 'POST' });
+                const report = await api('/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile: selectedProfile }),
+                });
                 renderApplyReport('Apply', report);
                 setBasculeStatus('');
-                toast('✅ Apply: ' + report.status);
+                if (isReportFailure(report, 'apply')) {
+                    errorToast('⚠️ Apply: ' + report.status);
+                } else {
+                    toast('✅ Apply: ' + report.status);
+                }
                 resetBasculePreview();
                 await refresh();
             } catch (e) {
@@ -529,7 +572,11 @@
                 const report = await api('/rollback', { method: 'POST' });
                 renderApplyReport('Rollback', report);
                 setBasculeStatus('');
-                toast('✅ Rollback: ' + report.status);
+                if (isReportFailure(report, 'rollback')) {
+                    errorToast('⚠️ Rollback: ' + report.status);
+                } else {
+                    toast('✅ Rollback: ' + report.status);
+                }
                 resetBasculePreview();
                 await refresh();
             } catch (e) {

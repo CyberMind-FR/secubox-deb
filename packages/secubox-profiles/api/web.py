@@ -285,6 +285,22 @@ class ActiveUpdate(BaseModel):
     name: str
 
 
+class ApplyRequest(BaseModel):
+    profile: str
+
+
+# Sérialise TOUTE écriture du fichier `active` partagé + toute actuation
+# (apply/rollback) en un seul verrou async, dans ce process. Corrige un TOCTOU
+# structurel : entre la préview d'un opérateur (GET /diff) et sa confirmation
+# (POST /apply), un second onglet/admin pouvait réécrire `active` avec un
+# AUTRE profil — l'apply exécuté ensuite par `secubox-profilectl apply --yes`
+# recalculait alors son plan à partir de CE profil différent, silencieusement.
+# Le remède : /apply prend désormais le profil à actuer en paramètre, réécrit
+# `active` avec CE profil précis puis actue, le tout sous le même verrou que
+# /active et /rollback — aucune de ces routes ne peut plus s'entrelacer.
+_apply_lock = asyncio.Lock()
+
+
 def _ctl_run(argv, **kw):
     import subprocess
     return subprocess.run(argv, capture_output=True, text=True, timeout=1800, **kw)
@@ -435,18 +451,33 @@ def create_app() -> FastAPI:
     async def set_active(body: ActiveUpdate, _claims=Depends(require_jwt)):
         root = _root()
         _mod, prof_dir, _pins, active_file = _cli._paths(root)
-        if not (Path(prof_dir) / f"{body.name}.toml").exists():
-            raise HTTPException(status_code=404, detail=f"profil inconnu: {body.name}")
-        _atomic_write(Path(active_file), body.name + "\n")
-        return {"active": body.name}
+        async with _apply_lock:
+            if not (Path(prof_dir) / f"{body.name}.toml").exists():
+                raise HTTPException(status_code=404, detail=f"profil inconnu: {body.name}")
+            _atomic_write(Path(active_file), body.name + "\n")
+            return {"active": body.name}
 
     @app.post("/api/v1/profiles/apply")
-    async def apply_active(_claims=Depends(require_jwt)):
-        return await _run_ctl_json("apply")
+    async def apply_active(body: ApplyRequest, _claims=Depends(require_jwt)):
+        # Actue TOUJOURS le profil demandé par CET appel, jamais « whatever is
+        # active at execution time » : on réécrit `active` avec `body.profile`
+        # puis on lance le CLI, sous le même verrou — un /active ou /apply
+        # concurrent (autre onglet) ne peut pas s'intercaler entre les deux.
+        # L'argv sudo reste FIXE (`apply --yes --json`) : le profil est
+        # transmis via le fichier `active`, jamais via la commande sudo —
+        # sudoers exact-command inchangé.
+        root = _root()
+        _mod, prof_dir, _pins, active_file = _cli._paths(root)
+        async with _apply_lock:
+            if not (Path(prof_dir) / f"{body.profile}.toml").exists():
+                raise HTTPException(status_code=404, detail=f"profil inconnu: {body.profile}")
+            _atomic_write(Path(active_file), body.profile + "\n")
+            return await _run_ctl_json("apply")
 
     @app.post("/api/v1/profiles/rollback")
     async def rollback_active(_claims=Depends(require_jwt)):
-        return await _run_ctl_json("rollback")
+        async with _apply_lock:
+            return await _run_ctl_json("rollback")
 
     return app
 
