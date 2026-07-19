@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.37-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf: fingerprint scanners on static-asset paths. Previously any path
+    ending in .js/.css/.png/... fully skipped WAF inspection, so a probe for an
+    absent product served on a static-asset path (e.g. the PAN-OS
+    /global-protect/.../bootstrap.min.css) evaded detection entirely. Now
+    static-asset paths run detect/escalate categories (path+query+ua, no body);
+    block categories stay skipped so a legitimate asset is never newly blocked.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 19 Jul 2026 10:00:00 +0200
+
 secubox-toolbox-ng (0.1.36-1~bookworm1) bookworm; urgency=medium
 
   * #826 move browser-ja4.txt to /etc/secubox/sentinel (a conffile, like
