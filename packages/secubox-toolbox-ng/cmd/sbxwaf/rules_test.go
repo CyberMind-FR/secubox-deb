@@ -437,3 +437,33 @@ func TestModeEscalateIsNotTreatedAsUnknown(t *testing.T) {
 		t.Fatal("escalate category was dropped")
 	}
 }
+
+func TestMatchModesSkipsBlockWhenExcluded(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "waf-rules.json")
+	// A block category and a detect category, each matching a distinct path.
+	os.WriteFile(path, []byte(`{"categories":{
+		"blk":{"mode":"block","patterns":[{"id":"b","pattern":"/mgmt/tm/util/bash"}]},
+		"det":{"mode":"detect","patterns":[{"id":"d","pattern":"/global-protect/portal/css/bootstrap\\.min\\.css"}]}
+	}}`), 0o644)
+	r := LoadRules(path)
+
+	// includeBlock=false: the block category is skipped → a path only the block
+	// category covers does NOT hit.
+	if _, _, _, hit := r.MatchModes("GET", "/mgmt/tm/util/bash", "", "", "", false); hit {
+		t.Fatalf("block category must be skipped when includeBlock=false")
+	}
+	// includeBlock=false: the detect category still fires.
+	cat, _, mode, hit := r.MatchModes("GET", "/global-protect/portal/css/bootstrap.min.css", "", "", "", false)
+	if !hit || cat != "det" || mode != "detect" {
+		t.Fatalf("detect category must fire when includeBlock=false; got cat=%q mode=%q hit=%v", cat, mode, hit)
+	}
+	// includeBlock=true: block category fires (parity with Match).
+	if _, _, mode, hit := r.MatchModes("GET", "/mgmt/tm/util/bash", "", "", "", true); !hit || mode != "block" {
+		t.Fatalf("block category must fire when includeBlock=true")
+	}
+	// Match delegates to includeBlock=true.
+	if _, _, _, hit := r.Match("GET", "/mgmt/tm/util/bash", "", "", ""); !hit {
+		t.Fatalf("Match must still see block categories")
+	}
+}
