@@ -1,3 +1,14 @@
+secubox-profiles (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 3a: apply actuator. `secubox-profilectl apply [--profile X] [--only ID]
+    [--yes]` (dry-run by default) and `rollback [--target R1..R4] [--yes]` — root
+    only. Actuates systemd/LXC/portal one module at a time (stops before starts),
+    waits for state, snapshots pre-state (4R, with portal route values), audits
+    each decision, and rolls back on any failure. Boot reconciliation and the
+    API/panel surfaces come in a follow-up.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 16:00:00 +0200
+
 secubox-profiles (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Ship four functional profile tiers: full, lite, secure-gateway, media-lab

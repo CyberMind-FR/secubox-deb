@@ -7,9 +7,9 @@
 SecuBox-Deb :: profiles — CLI secubox-profilectl
 CyberMind — https://cybermind.fr
 
-Phase 1 : LECTURE SEULE. `scan`, `status`, `diff` — et rien d'autre. `apply`
-n'existe pas encore : il arrive en Phase 3, avec snapshot 4R, application
-séquentielle et audit.
+Phase 1 : `scan`, `status`, `diff` — lecture seule. Phase 3a ajoute `apply` et
+`rollback` : root-only, dry-run par défaut (--yes pour agir réellement),
+snapshot 4R avant toute action, un module à la fois, audit de chaque décision.
 """
 from __future__ import annotations
 
@@ -20,12 +20,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import export
+from . import apply, export
+from .audit import AUDIT_LOG
 from .diff import ProtectedViolation, plan_changes
 from .export import format_apt, format_json, format_pkglist, resolve_packages
 from .manifest import ManifestError, load_all
-from .observe import Actual, is_on, load_routes, observe_all
+from .observe import Actual, is_on, load_routes, observe, observe_all
 from .scan import discover, write_drafts
+from .snapshot import SNAP_DIR
+from .snapshot import read as read_snapshot
 from .state import StateError, load_pins, load_profile
 
 DEFAULT_ROOT = Path("/etc/secubox")
@@ -111,6 +114,70 @@ def _cmd_diff(args) -> int:
     for c in changes:
         print(f"  {'⛔ stop ' if c.action == 'stop' else '▶️  start'} {c.id:<20} ({c.reason})")
     return 0
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _cmd_apply(args) -> int:
+    if not _running_as_root():
+        print("apply doit être lancé en root (il pilote systemd/LXC/haproxy).",
+              file=sys.stderr)
+        return 1
+    root = Path(args.root)
+    mod_dir, _, pins_file, _ = _paths(root)
+    manifests = load_all(mod_dir)
+    profile = _load_profile_or_none(root, _active_profile_name(root, args.profile))
+    pins = load_pins(pins_file)
+    routes = load_routes()
+    actuals = _observe_all(manifests, routes)
+    plan = plan_changes(manifests, profile, pins, actuals)
+    if args.only:
+        keep = set(args.only)
+        plan = [c for c in plan if c.id in keep]
+    routes_map = routes if isinstance(routes, dict) else {}
+    # run=apply.apply_plan (attribut du module, pas le nom importé) — même
+    # raison que export._run plus haut : un monkeypatch de api.apply.apply_plan
+    # après l'import ne changerait pas un nom lié via `from .apply import
+    # apply_plan` (référence figée à l'import), donc les tests qui patchent
+    # l'attribut du module ne seraient jamais vus par ce module.
+    report = apply.apply_plan(plan, manifests, actuals, run=_run, observe=observe,
+                              now=_now_iso(), routes=routes_map, snap_root=SNAP_DIR,
+                              audit_path=AUDIT_LOG, apply=args.yes)
+    if not args.yes:
+        if not plan:
+            print("✅ rien à changer.")
+        else:
+            print(f"{len(plan)} changement(s) — dry-run (ajoutez --yes pour appliquer) :")
+            for c in plan:
+                print(f"  {'⛔ stop ' if c.action == 'stop' else '▶️  start'} {c.id:<20} ({c.reason})")
+        return 0
+    print(f"apply: {report.status} — changed={report.changed} "
+          f"failed={report.failed} rolled_back={report.rolled_back}")
+    return 0 if report.status == "applied" else 2
+
+
+def _cmd_rollback(args) -> int:
+    if not _running_as_root():
+        print("rollback doit être lancé en root.", file=sys.stderr)
+        return 1
+    root = Path(args.root)
+    mod_dir, _, _, _ = _paths(root)
+    manifests = load_all(mod_dir)
+    snap = read_snapshot(args.target, root=SNAP_DIR)
+    routes = load_routes()
+    actuals = _observe_all(manifests, routes)
+    # apply.rollback_to (attribut du module) — même raison que apply.apply_plan
+    # ci-dessus : `rollback_to` n'était même pas importé ici avant ce correctif
+    # (NameError garanti au premier `rollback --yes` réel, non couvert par les
+    # tests CLI actuels qui ne testent que `apply`).
+    report = apply.rollback_to(snap, manifests, actuals, run=_run, observe=observe,
+                               now=_now_iso(), routes=routes if isinstance(routes, dict) else {},
+                               snap_root=SNAP_DIR, audit_path=AUDIT_LOG, apply=args.yes)
+    print(f"rollback[{args.target}]: {report.status} — changed={report.changed}")
+    return 0 if report.status in ("applied", "planned") else 2
 
 
 def _cmd_export(args) -> int:
@@ -227,7 +294,7 @@ def _run(argv: list[str]) -> tuple[int | None, str]:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="secubox-profilectl",
-        description="Inventaire et diff des modules SecuBox (Phase 1 : lecture seule).")
+        description="Inventaire, diff et application des profils de modules SecuBox.")
     p.add_argument("--root", default=str(DEFAULT_ROOT),
                    help="racine de config (défaut: /etc/secubox)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -250,6 +317,18 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("profile", help="nom du profil à exporter")
     sp.add_argument("--format", choices=["pkglist", "apt", "json"], default="pkglist")
     sp.set_defaults(func=_cmd_export)
+
+    sp = sub.add_parser("apply", help="applique un profil (dry-run par défaut ; --yes pour agir)")
+    sp.add_argument("--profile", default=None)
+    sp.add_argument("--only", action="append", default=[],
+                    help="restreindre aux modules nommés (répétable) — validation module par module")
+    sp.add_argument("--yes", action="store_true", help="agir réellement")
+    sp.set_defaults(func=_cmd_apply)
+
+    sp = sub.add_parser("rollback", help="restaure un snapshot (R1..R4 ; --yes pour agir)")
+    sp.add_argument("--target", default="R1", choices=["R1", "R2", "R3", "R4"])
+    sp.add_argument("--yes", action="store_true")
+    sp.set_defaults(func=_cmd_rollback)
 
     args = p.parse_args(argv)
     try:
