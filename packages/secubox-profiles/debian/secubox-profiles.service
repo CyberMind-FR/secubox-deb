@@ -17,7 +17,10 @@ Restart=on-failure
 RestartSec=5
 UMask=0007
 
-NoNewPrivileges=true
+# false (not true): the apply/rollback routes must sudo → secubox-profilectl
+# (webui→ctl); NNP=true would neutralize sudo. The rest of the hardening
+# (User=secubox, restricted ReadWritePaths) stays.
+NoNewPrivileges=false
 RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
