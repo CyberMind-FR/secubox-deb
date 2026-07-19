@@ -176,3 +176,24 @@ def test_rollback_to_restores_snapshot_state(tmp_path):
                           audit_path=tmp_path / "audit-dry.log", apply=False)
     assert dry_rep.status == "planned"
     assert dry_calls == []
+
+
+def test_start_of_condition_gated_native_module_is_not_a_failure(tmp_path):
+    # hexo-like: START issued, but its systemd start-condition fails so it never
+    # goes active. enable --now succeeded → not an actuation failure → no rollback.
+    calls = []
+    manifests = {"hexo": _m("hexo")}
+    plan = [Change("hexo", START, "", 50)]
+
+    def run(argv):
+        calls.append(argv)
+        if argv[:2] == ["systemctl", "show"] and "ConditionResult" in argv:
+            return 0, "no\n"
+        return 0, ""
+
+    rep = apply_plan(plan, manifests, {"hexo": Actual(enabled=False, active=False)},
+                     run=run, observe=lambda m: Actual(enabled=True, active=False),
+                     now="t", routes={}, snap_root=tmp_path,
+                     audit_path=tmp_path / "audit.log", apply=True, wait_timeout=0)
+    assert rep.status == "applied"          # NOT rolled_back
+    assert rep.changed == ["hexo"] and rep.failed == []

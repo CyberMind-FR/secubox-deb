@@ -1,3 +1,13 @@
+secubox-profiles (0.6.2-1~bookworm1) bookworm; urgency=medium
+
+  * Fix apply on condition-gated modules: a unit whose systemd start-condition
+    fails (e.g. hexo — ConditionResult=no) can never become active, so `enable
+    --now` succeeds but wait_state timed out → the whole apply spuriously
+    rolled back. Now a START of a condition-failed native unit is treated as
+    reached (the module is deliberately off in this environment), not a failure.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 14:00:00 +0200
+
 secubox-profiles (0.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Fix apply/rollback from the panel: the service runs ProtectSystem=strict, so a

@@ -190,3 +190,19 @@ def wait_state(m: Manifest, want_on: bool, *, observe=_observe,
         if now() - start >= timeout:
             return False
         sleep(poll)
+
+
+def condition_failed(m: Manifest, run) -> bool:
+    """True si l'unité systemd du module a une Condition= de démarrage qui
+    ÉCHOUE : `systemctl enable --now` réussit, mais systemd laisse alors l'unité
+    inactive VOLONTAIREMENT (le module ne doit pas tourner dans cet
+    environnement — arch, présence d'un chemin, etc.). Ce n'est PAS un échec
+    d'actionnement : attendre `active` sur une telle unité timeout à l'infini.
+    Ne concerne que les modules natifs (LXC/portail n'ont pas de Condition=)."""
+    if m.runtime != "native":
+        return False
+    for u in m.units:
+        rc, out = run(["systemctl", "show", u, "-p", "ConditionResult", "--value"])
+        if rc == 0 and out.strip() == "no":
+            return True
+    return False

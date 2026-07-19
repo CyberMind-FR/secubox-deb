@@ -140,3 +140,26 @@ def test_wait_state_times_out():
                     sleep=lambda s: None, now=iter([0, 10, 20, 31]).__next__,
                     timeout=30, poll=10)
     assert ok is False
+
+
+def test_condition_failed_detects_gated_native_unit():
+    from api.actuate import condition_failed
+
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"] and "ConditionResult" in argv:
+            return 0, "no\n"   # systemd start-condition failed
+        return 0, ""
+    assert condition_failed(_m("hexo"), run) is True
+
+
+def test_condition_failed_false_when_condition_ok():
+    from api.actuate import condition_failed
+    assert condition_failed(_m("x"), lambda a: (0, "yes\n")) is False
+
+
+def test_condition_failed_false_for_lxc():
+    from api.actuate import condition_failed
+    # LXC/portal modules have no systemd start-condition; never gated.
+    called = []
+    condition_failed(_m("l", runtime="lxc", lxc="l"), lambda a: (called.append(a), (0, "no"))[1])
+    assert not called  # short-circuits on runtime != native
