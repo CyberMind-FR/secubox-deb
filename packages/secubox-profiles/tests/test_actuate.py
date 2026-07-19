@@ -38,11 +38,27 @@ def test_native_stop_disables_now():
 
 def test_lxc_stop_stops_and_clears_autostart():
     calls = []
-    actuate(Change("l", STOP, "", 50), _m("l", runtime="lxc", lxc="lyrion"),
+    actuate(Change("l", STOP, "", 50),
+            _m("l", runtime="lxc", lxc="lyrion", units=("secubox-lyrion.service",)),
             run=_ok_run(calls))
     assert ["lxc-stop", "-n", "lyrion"] in calls
     # autostart cleared via lxc-update-config (0) — exact tool checked by impl
     assert any("lxc" in " ".join(c) and "0" in " ".join(c) for c in calls)
+    # host API unit stopped too — decoupled from the container on the real board,
+    # so is_on() (host-unit-based) must reflect the STOP.
+    assert ["systemctl", "disable", "--now", "secubox-lyrion.service"] in calls
+
+
+def test_lxc_start_starts_container_then_host_unit():
+    calls = []
+    order = actuate(Change("l", START, "", 50),
+                    _m("l", runtime="lxc", lxc="lyrion", units=("secubox-lyrion.service",)),
+                    run=_ok_run(calls))
+    assert ["lxc-start", "-n", "lyrion"] in calls
+    assert any("lxc" in " ".join(c) and "1" in " ".join(c) for c in calls)
+    assert ["systemctl", "enable", "--now", "secubox-lyrion.service"] in calls
+    # container up BEFORE the host API that depends on it
+    assert order.index("lxc:start") < order.index("systemd:enable")
 
 
 def test_portal_stop_removes_route_before_backend(tmp_path):
@@ -56,8 +72,8 @@ def test_portal_stop_removes_route_before_backend(tmp_path):
     # route removed
     left = json.loads(routes.read_text())
     assert "lyrion.gk2.secubox.in" not in left and "other.example" in left
-    # portal removed BEFORE the lxc backend stopped
-    assert order.index("portal:remove") < order.index("lxc:stop")
+    # portal removed BEFORE the runtime is torn down (host API first, then lxc)
+    assert order.index("portal:remove") < order.index("systemd:disable")
 
 
 def test_portal_start_restores_route_from_value(tmp_path):
