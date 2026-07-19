@@ -126,6 +126,33 @@ POST /api/v1/<module>/<method>   # Action
 
 Authentification JWT obligatoire sur tous les endpoints via `Depends(auth.require_jwt)`.
 
+### Opérations privilégiées — le webui sous-traite au `ctl` confiné et audité (REQUIRED)
+
+L'API/webui tourne **sans privilège** (`User=secubox`, et servie in-process par
+l'aggregator elle partage son contexte `secubox`). Elle ne peut donc ni lire/écrire
+la config root (ex. `/etc/secubox/waf` est `0750 root:root`), ni piloter
+systemd/LXC/une app en direct.
+
+> **Principe.** Toute opération qui touche un fichier root ou qui **cause au
+> système / à une app** (start/stop/reload d'une unit, écriture d'une config live,
+> exécution d'un binaire privilégié) est **déléguée au helper root
+> `secubox-<module>ctl`**. Le webui devient un client JWT léger ; le **`ctl` est la
+> surface privilégiée unique** — confinée (sudoers scopé, commande exacte),
+> **auditée** (`/var/log/secubox/audit.log`), et c'est elle qui pilote réellement.
+
+Chaîne : `panel (JWT) → route def → sudo -n secubox-<module>ctl <verbe> --json →`
+le `ctl` (root) valide, agit, audite, renvoie un payload `--json` que le panel rend.
+Le grant sudoers (`/etc/sudoers.d/secubox-<module>`, `0440`, commande exacte, sans
+wildcard) est **livré par le paquet** et documenté. Symptôme si absent :
+`PermissionError` → 500 (« request error » / panneau vide).
+
+Note aggregator : une route servie in-process par l'aggregator n'apparaît qu'après
+`systemctl restart secubox-aggregator` (le code module est importé au démarrage).
+
+Réf. d'implémentation : `secubox-cvectl` (génération de règles WAF),
+`secubox-profilectl` (bascule on/off des modules). Contrat complet :
+[`.claude/MODULE-COMPLIANCE.md`](../.claude/MODULE-COMPLIANCE.md) → *Privileged Operations*.
+
 ### Dual-vhost split — REQUIRED pour les modules avec UI applicative
 
 Un module qui embarque une application avec sa propre interface web

@@ -509,6 +509,34 @@ The `build-image.sh` slipstream loop (`cp /tmp/secubox-debs/secubox-*.deb`) pick
 Read first: [`docs/grammar.md`](grammar.md) (canonical verbs table) +
 [`HOWTO-grammar.md`](../HOWTO-grammar.md) (recipe for adding a verb).
 
+### Privilege & delegation — the `ctl` is the single privileged, audited surface
+
+The WebUI/API runs **unprivileged** (`User=secubox`; aggregator-served modules
+share that context). It cannot touch root-owned config (e.g. `/etc/secubox/waf`
+is `0750 root:root`) and must not drive systemd/LXC/apps in-process. Every
+privileged operation — anything that **causes the system or an app to change**,
+or reads/writes root-owned state — is **delegated to `<module>ctl`**, which runs
+as root, validates its inputs, performs the change, and **audits** each
+security-relevant decision (`/var/log/secubox/audit.log`).
+
+The panel reaches it over `sudo -n`, gated by a **scoped, exact-command** grant
+the package ships (`sudoers.d/secubox-<module>`, installed `0440` to
+`/etc/sudoers.d/secubox-<module>` — no wildcards, no flag escapes, one line per
+allowed invocation, each documented). The `ctl` offers a `--json` output for the
+panel and a **dry-run default / explicit `--apply`** for any state change.
+
+```text
+# sudoers.d/secubox-<module>  (0440, exact-command; validated with visudo -c)
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-<module>ctl <verb> --json
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-<module>ctl <verb> --apply --json
+```
+
+A missing grant is a compliance failure: the panel then does the work
+in-process, hits `PermissionError` → HTTP 500 (operator sees "request error" /
+an empty panel) and bypasses the audit trail. Full contract:
+[`.claude/MODULE-COMPLIANCE.md`](../.claude/MODULE-COMPLIANCE.md) → *Privileged
+Operations*. Reference: `secubox-cvectl`, `secubox-profilectl`.
+
 ### Mandatory three-fold
 
 Every `<module>ctl` exposes:

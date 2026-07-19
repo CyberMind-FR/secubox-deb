@@ -154,6 +154,72 @@ API MUST listen on Unix socket: `/run/secubox/<module>.sock`
 
 ---
 
+## Privileged Operations — webui delegates to a confined, audited `ctl` (Required)
+
+**Principle.** The webui/API runs **unprivileged** — `User=secubox`, and when
+aggregator-served it shares the aggregator's `secubox` context. It therefore
+**cannot** read/write root-owned config (e.g. `/etc/secubox/waf` is `0750
+root:root`), and **must not** drive systemd / LXC / applications in-process.
+
+Every operation that (a) touches root-owned files, or (b) pilots the system or
+another app (start/stop/reload a unit, edit a live config, run a privileged
+CLI) **MUST be delegated to the module's root helper** `secubox-<module>ctl`.
+The webui becomes a thin JWT client; the **`ctl` is the single privileged
+surface** — confined (scoped sudoers), auditable (it logs each action to
+`/var/log/secubox/audit.log` for security-relevant changes), and it is what
+actually causes the system/apps to change. Doing the privileged work in-process
+raises `PermissionError` → HTTP 500 ("request error" / empty panel) and
+bypasses the audit trail.
+
+**Sudoers grant (ship it — a missing grant is a compliance failure).**
+Ship `sudoers.d/secubox-<module>` and install it `0440` to
+`/etc/sudoers.d/secubox-<module>` from `debian/rules`. Every grant is an
+**exact-command** match — no wildcards, no shell, no flag escapes — and each is
+**documented** (which route uses it, why root):
+
+```
+# secubox ALL=(root) NOPASSWD: <absolute-path> <exact args...>
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-cvectl waf-rules generate --json
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-cvectl waf-rules generate --apply --json
+```
+
+Validate with `visudo -c -f sudoers.d/secubox-<module>` in CI/before deploy.
+
+**Panel side.** Call the helper over `sudo -n` from a **plain `def`** handler
+(so the blocking subprocess runs in FastAPI's threadpool, off the shared
+aggregator loop), and map the `ctl` exit code to an HTTP status:
+
+```python
+def _run_ctl(*args):
+    import subprocess
+    return subprocess.run(["sudo", "-n", "/usr/sbin/secubox-<module>ctl", *args],
+                          capture_output=True, text=True, timeout=120)
+
+@app.post("/<action>", dependencies=[Depends(require_jwt)])
+def do_action():
+    import json
+    p = _run_ctl("<verb>", "--apply", "--json")
+    if p.returncode == 3:            # module-defined fail-safe refusal
+        raise HTTPException(status_code=409, detail="…")
+    if p.returncode != 0:
+        raise HTTPException(status_code=500, detail=(p.stderr or p.stdout).strip()[:500])
+    return json.loads(p.stdout)      # ctl emits a --json payload the panel renders
+```
+
+**The `ctl` contract.** Runs as root; validates its own inputs; performs the
+privileged action; supports a **dry-run default** and an explicit `--apply` for
+any state change; offers a machine-readable `--json` output for the panel;
+appends an audit line for each security-relevant decision. Reference
+implementations: `secubox-cvectl` (WAF rule generation), `secubox-profilectl`
+(module on/off actuation).
+
+**Aggregator note.** An aggregator-served module's route code is imported at
+aggregator startup — after deploying new/changed routes you MUST
+`systemctl restart secubox-aggregator` for them to appear (a stale aggregator
+returns 404 on new routes). Modules on their own socket restart independently.
+
+---
+
 ## Debian Package Requirements
 
 ### debian/control
