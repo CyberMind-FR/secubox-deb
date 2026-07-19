@@ -3,6 +3,16 @@
 
 ---
 
+## 2026-07-19 — Profiles Phase 2: Requires=secubox-core → Wants= (branch feat/profiles-phase2-core-wants)
+
+Removed the hard cascade coupling to `secubox-core.service` (a Type=oneshot mkdir+chown with RemainAfterExit). A hard `Requires=` on ~108 units cascade-stops them all when core restarts or fails (e.g. a secubox-core package upgrade) — a thundering-herd outage. `After=` keeps the boot ordering; `Wants=` keeps the soft dependency without the cascade. Prerequisite for the Phase-3 native mass-apply.
+
+- **Source**: 91 units (`packages/*/{debian,systemd}/*.service`) + both scaffolds converted (every `Requires=` line was core-only → safe 1-line sed); future modules are scaffolded with `Wants=`.
+- **Live (no herd)**: 162 installed units sed'd in place + `systemctl daemon-reload` only — no service restarts (Requires/Wants is a start-time dependency). Board stayed healthy.
+- **Release**: minor bump on the 87 affected packages → CI build + publish to apt.secubox.in.
+
+---
+
 ## 2026-07-17 — Session auditing + Companion auth/system/metrics + billets emoji hashtags (branch feat/sessions-companion-emoji)
 
 Sessions became auditable, the two stub Companion modules became real, and billets gained emoji-hashtag quick views. All live-verified on gk2.
