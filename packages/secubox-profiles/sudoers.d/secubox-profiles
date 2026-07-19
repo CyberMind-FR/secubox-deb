@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox Profiles — the /profiles/ panel (User=secubox) delegates apply/rollback
+# to the root helper secubox-profilectl (webui→ctl pattern, see
+# .claude/MODULE-COMPLIANCE.md → Privileged Operations). Exact-command grants
+# (no wildcards): the panel always calls the FIXED `apply --yes --json` /
+# `rollback --yes --json` (--only stays a root-CLI-only affordance).
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-profilectl apply --yes --json
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-profilectl rollback --yes --json
