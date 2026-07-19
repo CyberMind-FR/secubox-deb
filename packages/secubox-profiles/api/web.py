@@ -298,6 +298,9 @@ class ApplyRequest(BaseModel):
 # Le remède : /apply prend désormais le profil à actuer en paramètre, réécrit
 # `active` avec CE profil précis puis actue, le tout sous le même verrou que
 # /active et /rollback — aucune de ces routes ne peut plus s'entrelacer.
+# NB : verrou PROCESS-LOCAL — correct uniquement parce que le service tourne en
+# un seul worker uvicorn (ExecStart sans --workers). Ne PAS ajouter --workers>1
+# sans passer à un verrou inter-process (flock), sinon la sérialisation saute.
 _apply_lock = asyncio.Lock()
 
 
@@ -314,15 +317,22 @@ async def _run_ctl_json(verb: str):
     import json as _json
     argv = ["sudo", "-n", "/usr/sbin/secubox-profilectl", verb, "--yes", "--json"]
     proc = await _a.to_thread(_ctl_run, argv)
+    # Parse the report FIRST: apply/rollback emit a --json report even when they
+    # end in `rolled_back` (CLI rc=2). Surfacing that report (which modules
+    # changed / were rolled back) is far more useful to the operator than a raw
+    # truncated error string — the panel classifies applied-vs-failed itself.
+    try:
+        report = _json.loads(proc.stdout)
+    except ValueError:
+        report = None
+    if isinstance(report, dict) and "status" in report:
+        return report
+    # No parseable report → a genuine failure. rc=3 is the protected-STOP
+    # refusal (no JSON report is emitted on that path).
     if proc.returncode == 3:
         raise HTTPException(status_code=409, detail=(proc.stderr or proc.stdout).strip()[:300])
-    if proc.returncode != 0:
-        raise HTTPException(status_code=500,
-                            detail=f"{verb} échoué: {(proc.stderr or proc.stdout).strip()[:300]}")
-    try:
-        return _json.loads(proc.stdout)
-    except ValueError:
-        raise HTTPException(status_code=500, detail=f"{verb}: sortie CLI malformée")
+    raise HTTPException(status_code=500,
+                        detail=f"{verb} échoué: {(proc.stderr or proc.stdout).strip()[:300]}")
 
 
 def create_app() -> FastAPI:
