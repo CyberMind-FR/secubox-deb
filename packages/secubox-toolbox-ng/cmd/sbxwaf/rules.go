@@ -313,27 +313,21 @@ func unquotePlus(s string) string {
 	return decoded
 }
 
-// Match checks the request against all compiled WAF rules.
-//
-// Inputs: method (unused in pattern matching, reserved for future per-method
-// rules), rawPath and rawQuery are RAW (URL-encoded) strings — Match applies
-// unquote_plus-equivalent decoding internally (matches Python check_request which
-// calls urllib.parse.unquote_plus inside the function).  body and ua are
-// already plain text (no additional decoding applied).
-//
-// Returns: cat (category ID), sev (severity string), mode (modeBlock or
-// modeDetect — only meaningful when hit is true; the caller decides what to
-// do with it), hit (true on first match). Returns "", "", "", false when no
-// rule fires.
+// Match checks the request against all compiled WAF rules (all modes). See the
+// package doc for scan-target and iteration semantics. Equivalent to
+// MatchModes(..., includeBlock=true).
 func (r *Rules) Match(method, rawPath, rawQuery, body, ua string) (cat, sev, mode string, hit bool) {
-	// Decode path and query (unquote_plus semantics: '+' → space, then %XX).
+	return r.MatchModes(method, rawPath, rawQuery, body, ua, true)
+}
+
+// MatchModes is Match with a category-mode filter. When includeBlock is false,
+// categories in modeBlock are skipped entirely — used by the static-asset fast
+// path, where only detect/escalate (path-fingerprint) categories run so a
+// legitimate static asset can never be newly blocked. Otherwise identical to
+// Match (same decoding, same scan target, first-match-wins in category order).
+func (r *Rules) MatchModes(method, rawPath, rawQuery, body, ua string, includeBlock bool) (cat, sev, mode string, hit bool) {
 	decodedPath := unquotePlus(rawPath)
 	decodedQuery := unquotePlus(rawQuery)
-
-	// Build the scan target: decoded_path + " " + decoded_query + " " + body + " " + ua.
-	// Lowercased to match Python's scan_text = f"{path} {query} {body} {ua}".lower().
-	// Note: patterns are already compiled with (?i) so lowercasing is redundant
-	// for the regex match, but we keep it to be faithful to the Python source.
 	scanParts := []string{decodedPath, decodedQuery, body, ua}
 	scanText := strings.ToLower(strings.Join(scanParts, " "))
 
@@ -346,6 +340,9 @@ func (r *Rules) Match(method, rawPath, rawQuery, body, ua string) (cat, sev, mod
 	}
 
 	for _, c := range cur.cats {
+		if !includeBlock && c.data.mode == modeBlock {
+			continue
+		}
 		for _, p := range c.data.patterns {
 			if p.re.MatchString(scanText) {
 				return c.id, p.severity, c.data.mode, true
