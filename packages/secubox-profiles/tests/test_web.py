@@ -87,13 +87,17 @@ def client(root, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# apply must not exist anywhere
+# apply/rollback exist but delegate to the root CLI via sudo — the web
+# process itself never actuates anything in-process (webui→ctl pattern).
 # ---------------------------------------------------------------------------
 
-def test_apply_route_does_not_exist(client):
+def test_apply_route_never_actuates_in_process(client):
     paths = {getattr(r, "path", "") for r in client.app.routes}
-    assert not any("apply" in p for p in paths)
-    # Also: no route accepts an action verb that would actuate anything.
+    assert "/api/v1/profiles/apply" in paths
+    assert "/api/v1/profiles/rollback" in paths
+    # No route accepts a direct actuation verb — apply/rollback only ever
+    # shell out to the fixed `sudo -n secubox-profilectl <verb> --yes --json`
+    # command (see test_apply_route_delegates_to_ctl_and_returns_report).
     for p in paths:
         assert "start" not in p and "stop" not in p and "restart" not in p
 
@@ -101,7 +105,8 @@ def test_apply_route_does_not_exist(client):
 def test_web_module_has_no_actuation_helper():
     # Grep-level guard: nothing in web.py calls systemctl/lxc-* directly —
     # only read helpers (_cli._observe_all -> observe.py) are used, and those
-    # are read-only by construction (see observe.py docstring).
+    # are read-only by construction (see observe.py docstring). apply/rollback
+    # delegate exclusively to `_ctl_run` -> `sudo -n secubox-profilectl`.
     src = Path(web.__file__).read_text(encoding="utf-8")
     for forbidden in ("systemctl start", "systemctl stop", "systemctl enable",
                       "systemctl disable", "lxc-start", "lxc-stop"):
@@ -282,3 +287,88 @@ def test_diff_after_pin_reflects_refusal_not_partial_state(client, root):
     resp = client.get("/api/v1/profiles/diff", params={"profile": "media"})
     assert resp.status_code == 200
     assert resp.json()["changes"] == []
+
+
+# ---------------------------------------------------------------------------
+# active / apply / rollback (write path #3) — webui→ctl: apply/rollback never
+# actuate in-process, they only shell out to the fixed root CLI via sudo (see
+# _ctl_run/_run_ctl_json in web.py). `root` here is this file's own tmp_path
+# fixture (the brief's `tmp_root` — same tmp dir, real fixture name).
+# ---------------------------------------------------------------------------
+
+def test_set_active_unknown_profile_404(client, root):
+    r = client.post("/api/v1/profiles/active", json={"name": "nope"})
+    assert r.status_code == 404
+
+
+def test_set_active_writes_file(client, root):
+    (root / "profiles" / "lite.toml").write_text('name="lite"\non=["core"]\n')
+    r = client.post("/api/v1/profiles/active", json={"name": "lite"})
+    assert r.status_code == 200 and r.json()["active"] == "lite"
+    assert (root / "profiles" / "active").read_text().strip() == "lite"
+
+
+def test_apply_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
+    def fake_run(argv, **kw):
+        assert argv[:3] == ["sudo", "-n", "/usr/sbin/secubox-profilectl"]
+        assert argv[3:] == ["apply", "--yes", "--json"]
+
+        class P:
+            returncode = 0
+            stdout = '{"status":"applied","changed":["x"],"failed":[],"rolled_back":[]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/apply", json={})
+    assert r.status_code == 200 and r.json()["status"] == "applied"
+
+
+def test_apply_route_protected_refusal_409(client, monkeypatch):
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 3
+            stdout = ""
+            stderr = "refusé: protégé"
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/apply", json={})
+    assert r.status_code == 409
+
+
+def test_rollback_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
+    def fake_run(argv, **kw):
+        assert argv[:3] == ["sudo", "-n", "/usr/sbin/secubox-profilectl"]
+        assert argv[3:] == ["rollback", "--yes", "--json"]
+
+        class P:
+            returncode = 0
+            stdout = '{"status":"applied","changed":["x"],"failed":[],"rolled_back":["x"]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/rollback", json={})
+    assert r.status_code == 200 and r.json()["rolled_back"] == ["x"]
+
+
+def test_apply_route_generic_failure_500(client, monkeypatch):
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 2
+            stdout = ""
+            stderr = "boum"
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/apply", json={})
+    assert r.status_code == 500
+
+
+def test_apply_route_malformed_json_500(client, monkeypatch):
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 0
+            stdout = "not json"
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/apply", json={})
+    assert r.status_code == 500
