@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -141,6 +143,91 @@ func TestInspectStaticAssetSkip(t *testing.T) {
 	body, _ := io.ReadAll(rec.Result().Body)
 	if string(body) != wantBody {
 		t.Fatalf("expected backend body %q, got %q", wantBody, string(body))
+	}
+}
+
+// buildDetectStaticRulesFile writes a rules file with a detect category whose
+// pattern matches a static-asset probe path.
+func buildDetectStaticRulesFile(t *testing.T) string {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "waf-rules*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(`{"categories":{"probe":{"mode":"detect","severity":"high",` +
+		`"patterns":[{"id":"panos","pattern":"/global-protect/portal/css/bootstrap\\.min\\.css"}]}}}`)
+	f.Close()
+	return f.Name()
+}
+
+// A detect rule on a static-asset path now fires (logged) and the request still
+// passes through — the core of the fix. Before Option B the .css path skipped
+// inspection entirely.
+func TestInspectStaticAssetDetectFires(t *testing.T) {
+	const wantBody = "css ok"
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, wantBody)
+	}))
+	defer backend.Close()
+
+	rulesPath := buildDetectStaticRulesFile(t)
+	srv := newInspectServer(t, rulesPath, backend.URL[len("http://"):])
+	// Route a threat log to a temp file so we can assert the detect record.
+	logPath := filepath.Join(t.TempDir(), "threats.log")
+	srv.threatLog = NewThreatLog(logPath)
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet,
+		"http://app.example.com/global-protect/portal/css/bootstrap.min.css", nil)
+	req.Host = "app.example.com"
+	req.RemoteAddr = "1.2.3.4:12345" // public IP
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// detect = observe: request passes through to backend, NOT blocked.
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("detect must not block; got 403")
+	}
+	body, _ := io.ReadAll(rec.Result().Body)
+	if string(body) != wantBody {
+		t.Fatalf("expected backend body %q, got %q", wantBody, string(body))
+	}
+	// And it was logged as action=detect.
+	logged, _ := os.ReadFile(logPath)
+	if !strings.Contains(string(logged), `"action":"detect"`) ||
+		!strings.Contains(string(logged), `"category":"probe"`) {
+		t.Fatalf("expected a detect record for category probe; log=%s", logged)
+	}
+}
+
+// A legit static asset that matches NO rule still passes with no detect log.
+func TestInspectStaticAssetNoMatchPassthrough(t *testing.T) {
+	const wantBody = "css ok"
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, wantBody)
+	}))
+	defer backend.Close()
+
+	rulesPath := buildDetectStaticRulesFile(t)
+	srv := newInspectServer(t, rulesPath, backend.URL[len("http://"):])
+	logPath := filepath.Join(t.TempDir(), "threats.log")
+	srv.threatLog = NewThreatLog(logPath)
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet,
+		"http://app.example.com/static/css/site.min.css", nil) // different path
+	req.Host = "app.example.com"
+	req.RemoteAddr = "1.2.3.4:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("legit static asset should pass; got %d", rec.Code)
+	}
+	logged, _ := os.ReadFile(logPath)
+	if strings.Contains(string(logged), `"action":"detect"`) {
+		t.Fatalf("no detect record expected for a non-matching static asset; log=%s", logged)
 	}
 }
 
