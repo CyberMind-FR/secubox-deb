@@ -423,3 +423,23 @@ def test_apply_unknown_profile_404_and_ctl_not_called(client, root, monkeypatch)
     assert called == []
     # The shared active file must be untouched by a rejected request.
     assert (root / "profiles" / "active").read_text().strip() == "media"
+
+
+def test_apply_rolled_back_returns_report_not_500(client, root, monkeypatch):
+    # A rolled_back apply (CLI rc=2) still emits a --json report; the route must
+    # surface it (200) so the panel shows which modules changed/rolled back,
+    # not a raw truncated error string (final-review finding 1).
+    import api.web as web
+    (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 2
+            stdout = '{"status":"rolled_back","changed":[],"failed":["x"],"rolled_back":["y"]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "rolled_back" and body["failed"] == ["x"]
