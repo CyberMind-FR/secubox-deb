@@ -98,13 +98,25 @@ def _rollback_applied(applied, manifests, snap, *, run, observe, sleep, clock,
         m = manifests[c.id]
         rev = Change(c.id, START if want_on else STOP, "rollback", c.priority)
         rv = pre.get("route") if want_on else None
+        # Un protégé ne doit JAMAIS être stoppé — même en rollback. Le
+        # forward-plan guard ne couvre que le plan entrant ; le rollback
+        # inverse vers l'état PRÉ-apply, qui peut être 'off' pour un protégé
+        # démarré entre-temps par ce même apply (drift). Le laisser tourner
+        # reste toujours sûr ; l'éteindre ne l'est jamais.
+        if rev.action == STOP and m.protected:
+            _audit.record({"ts": now, "module": c.id, "action": rev.action,
+                           "result": "skipped-protected"}, path=audit_path)
+            continue
         try:
             actuate(rev, m, run=run, route_value=rv)
-            wait_state(m, want_on, observe=observe, sleep=sleep, now=clock,
-                       timeout=wait_timeout)
-            _audit.record({"ts": now, "module": c.id, "action": rev.action,
-                           "result": "rollback"}, path=audit_path)
-            rolled.append(c.id)
+            if wait_state(m, want_on, observe=observe, sleep=sleep, now=clock,
+                         timeout=wait_timeout):
+                _audit.record({"ts": now, "module": c.id, "action": rev.action,
+                               "result": "rollback"}, path=audit_path)
+                rolled.append(c.id)
+            else:
+                _audit.record({"ts": now, "module": c.id, "action": rev.action,
+                               "result": "rollback-timeout"}, path=audit_path)
         except (ActuationError, OSError) as exc:
             _audit.record({"ts": now, "module": c.id, "action": "rollback",
                            "result": "fail", "error": str(exc)}, path=audit_path)
