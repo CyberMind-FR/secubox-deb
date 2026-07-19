@@ -1,3 +1,14 @@
+secubox-profiles (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Fix LXC autostart actuation (found in lyrion board validation): lxc.start.auto
+    is now set by EDITING the container config file at <lxcpath>/<name>/config
+    (lxcpath from `lxc-config lxc.lxcpath` = /data/lxc on gk2) — the previous
+    `lxc-update-config -n -x` is not a config-set tool and failed rc=1, leaving a
+    module partly stopped. Also: set autostart=0 BEFORE lxc-stop so secubox-watchdog
+    does not revive the container mid-stop.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 11:00:00 +0200
+
 secubox-profiles (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 3a: apply actuator. `secubox-profilectl apply [--profile X] [--only ID]
