@@ -36,39 +36,64 @@ def test_native_stop_disables_now():
     assert ["systemctl", "disable", "--now", "u.service"] in calls
 
 
-def test_lxc_stop_stops_and_clears_autostart():
+def _lxc_root_with_config(tmp_path, name, autostart="1"):
+    """Prépare <tmp>/<name>/config avec une ligne lxc.start.auto — mime le vrai
+    fichier de conteneur (/data/lxc/<name>/config sur la board)."""
+    d = tmp_path / name
+    d.mkdir()
+    (d / "config").write_text(
+        f"lxc.uts.name = {name}\nlxc.start.auto = {autostart}\nlxc.net.0.type = veth\n")
+    return tmp_path
+
+
+def test_lxc_stop_stops_and_clears_autostart(tmp_path):
     calls = []
-    actuate(Change("l", STOP, "", 50),
-            _m("l", runtime="lxc", lxc="lyrion", units=("secubox-lyrion.service",)),
-            run=_ok_run(calls))
+    root = _lxc_root_with_config(tmp_path, "lyrion", autostart="1")
+    order = actuate(Change("l", STOP, "", 50),
+                    _m("l", runtime="lxc", lxc="lyrion", units=("secubox-lyrion.service",)),
+                    run=_ok_run(calls), lxc_root=root)
     assert ["lxc-stop", "-n", "lyrion"] in calls
-    # autostart cleared via lxc-update-config (0) — exact tool checked by impl
-    assert any("lxc" in " ".join(c) and "0" in " ".join(c) for c in calls)
-    # host API unit stopped too — decoupled from the container on the real board,
-    # so is_on() (host-unit-based) must reflect the STOP.
+    # autostart cleared by EDITING the container config file (not lxc-update-config).
+    assert "lxc.start.auto = 0" in (root / "lyrion" / "config").read_text()
+    # host API unit stopped too — decoupled from the container on the real board.
     assert ["systemctl", "disable", "--now", "secubox-lyrion.service"] in calls
+    # autostart=0 BEFORE lxc-stop — else secubox-watchdog revives the container.
+    assert order.index("lxc:autostart:0") < order.index("lxc:stop")
 
 
-def test_lxc_start_starts_container_then_host_unit():
+def test_lxc_start_starts_container_then_host_unit(tmp_path):
     calls = []
+    root = _lxc_root_with_config(tmp_path, "lyrion", autostart="0")
     order = actuate(Change("l", START, "", 50),
                     _m("l", runtime="lxc", lxc="lyrion", units=("secubox-lyrion.service",)),
-                    run=_ok_run(calls))
+                    run=_ok_run(calls), lxc_root=root)
     assert ["lxc-start", "-n", "lyrion"] in calls
-    assert any("lxc" in " ".join(c) and "1" in " ".join(c) for c in calls)
+    assert "lxc.start.auto = 1" in (root / "lyrion" / "config").read_text()
     assert ["systemctl", "enable", "--now", "secubox-lyrion.service"] in calls
     # container up BEFORE the host API that depends on it
     assert order.index("lxc:start") < order.index("systemd:enable")
+
+
+def test_lxc_autostart_edit_preserves_other_config_lines(tmp_path):
+    calls = []
+    root = _lxc_root_with_config(tmp_path, "lyrion", autostart="1")
+    actuate(Change("l", STOP, "", 50),
+            _m("l", runtime="lxc", lxc="lyrion", units=("secubox-lyrion.service",)),
+            run=_ok_run(calls), lxc_root=root)
+    cfg = (root / "lyrion" / "config").read_text()
+    assert "lxc.uts.name = lyrion" in cfg and "lxc.net.0.type = veth" in cfg
+    assert cfg.count("lxc.start.auto") == 1  # single canonical line, no dup
 
 
 def test_portal_stop_removes_route_before_backend(tmp_path):
     routes = tmp_path / "haproxy-routes.json"
     routes.write_text(json.dumps({"lyrion.gk2.secubox.in": ["127.0.0.1", 9000],
                                   "other.example": ["10.0.0.1", 80]}))
+    root = _lxc_root_with_config(tmp_path, "lyrion", autostart="1")
     calls = []
     order = actuate(Change("l", STOP, "", 50),
                     _m("l", runtime="lxc", lxc="lyrion", portal="lyrion.gk2.secubox.in"),
-                    run=_ok_run(calls), route_value=None, routes_path=routes)
+                    run=_ok_run(calls), route_value=None, routes_path=routes, lxc_root=root)
     # route removed
     left = json.loads(routes.read_text())
     assert "lyrion.gk2.secubox.in" not in left and "other.example" in left
@@ -79,9 +104,10 @@ def test_portal_stop_removes_route_before_backend(tmp_path):
 def test_portal_start_restores_route_from_value(tmp_path):
     routes = tmp_path / "haproxy-routes.json"
     routes.write_text(json.dumps({"other.example": ["10.0.0.1", 80]}))
+    root = _lxc_root_with_config(tmp_path, "lyrion", autostart="0")
     actuate(Change("l", START, "", 50),
             _m("l", runtime="lxc", lxc="lyrion", portal="lyrion.gk2.secubox.in"),
-            run=_ok_run([]), route_value=["127.0.0.1", 9000], routes_path=routes)
+            run=_ok_run([]), route_value=["127.0.0.1", 9000], routes_path=routes, lxc_root=root)
     got = json.loads(routes.read_text())
     assert got["lyrion.gk2.secubox.in"] == ["127.0.0.1", 9000]
 
