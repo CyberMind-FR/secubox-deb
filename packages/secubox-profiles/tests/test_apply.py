@@ -197,3 +197,28 @@ def test_start_of_condition_gated_native_module_is_not_a_failure(tmp_path):
                      audit_path=tmp_path / "audit.log", apply=True, wait_timeout=0)
     assert rep.status == "applied"          # NOT rolled_back
     assert rep.changed == ["hexo"] and rep.failed == []
+
+
+def test_slow_stop_that_reaches_state_within_derived_timeout_is_success(tmp_path):
+    # metrics-like: its stop command "times out" (systemd TimeoutStopSec long),
+    # but the observed state reaches OFF within the derived timeout -> success,
+    # NO rollback. The command rc is irrelevant; wait_state arbitrates.
+    from api.observe import Actual
+    calls = []
+
+    def run(argv):
+        calls.append(argv)
+        # derived_timeout asks for TimeoutStopUSec -> report a generous 90s so
+        # the (single, immediate) observation below is well inside the window.
+        if argv[:2] == ["systemctl", "show"] and "TimeoutStopUSec" in argv:
+            return 0, "1min 30s\n"
+        return 0, ""
+
+    manifests = {"metrics": _m("metrics")}
+    plan = [Change("metrics", STOP, "", 50)]
+    rep = apply_plan(plan, manifests, {"metrics": Actual(enabled=True, active=True)},
+                     run=run, observe=lambda m: Actual(enabled=False, active=False),
+                     now="t", routes={}, snap_root=tmp_path,
+                     audit_path=tmp_path / "audit.log", apply=True)
+    assert rep.status == "applied"
+    assert rep.changed == ["metrics"] and rep.failed == []
