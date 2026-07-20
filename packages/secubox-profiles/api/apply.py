@@ -140,7 +140,7 @@ def _rollback_applied(applied, manifests, snap, *, run, observe, sleep, clock,
 
 
 def rollback_to(snap, manifests, actuals, *, run, observe, now, routes,
-                snap_root, audit_path, apply=False, wait_timeout=30.0) -> ApplyReport:
+                snap_root, audit_path, apply=False, wait_timeout=300.0) -> ApplyReport:
     """Restaure l'état d'un snapshot : construit un plan (start/stop) vers
     snap['modules'][id]['on'] et l'applique avec la même sûreté que apply_plan."""
     from .observe import is_on

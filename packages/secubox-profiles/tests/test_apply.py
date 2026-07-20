@@ -222,3 +222,29 @@ def test_slow_stop_that_reaches_state_within_derived_timeout_is_success(tmp_path
                      audit_path=tmp_path / "audit.log", apply=True)
     assert rep.status == "applied"
     assert rep.changed == ["metrics"] and rep.failed == []
+
+
+def test_apply_uses_derived_timeout_not_flat_30(tmp_path):
+    # A stop that only reaches OFF after the monotonic clock passes 30s must
+    # still SUCCEED, because the module's derived timeout (TimeoutStopUSec 90s
+    # + 15 margin = 105) exceeds 30. With the OLD flat wait_timeout=30 this
+    # would time out and roll back. The injected clock proves wait_state waited
+    # past 30 — the load-bearing proof the happy-path test can't give.
+    from api.observe import Actual
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"] and "TimeoutStopUSec" in argv:
+            return 0, "1min 30s\n"          # -> derived_timeout = 105
+        return 0, ""
+    probes = {"n": 0}
+    def observe(m):
+        probes["n"] += 1
+        on = probes["n"] < 4                # ON for 3 probes, then OFF at the 4th
+        return Actual(enabled=on, active=on)
+    ticks = iter([0.0, 10.0, 20.0, 30.0, 40.0, 50.0])  # monotonic clock
+    manifests = {"metrics": _m("metrics")}
+    plan = [Change("metrics", STOP, "", 50)]
+    rep = apply_plan(plan, manifests, {"metrics": Actual(enabled=True, active=True)},
+                     run=run, observe=observe, now="t", routes={},
+                     snap_root=tmp_path, audit_path=tmp_path / "audit.log",
+                     apply=True, sleep=lambda s: None, clock=lambda: next(ticks))
+    assert rep.status == "applied"          # converged at t=30<105; flat-30 would have rolled_back
