@@ -89,7 +89,15 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("wake")
     sp.add_argument("module")
     sp.add_argument("--json", action="store_true")
+    sp2 = sub.add_parser("nginx-sync")
+    sp2.add_argument("--out", default="/etc/nginx/secubox-waker.d")
     args = p.parse_args(argv)
+    if args.cmd == "nginx-sync":
+        from . import nginxgen
+        doms = nginxgen.sync_snippets(manifests=load_all(Path(args.root) / "modules.d"),
+                                      out_dir=Path(args.out))
+        print(f"nginx-sync: {len(doms)} vhost(s) — {', '.join(doms) or 'aucun'}")
+        return 0
     if not _running_as_root():
         print("wake doit être lancé en root (il pilote systemd/LXC).", file=sys.stderr)
         return 1
