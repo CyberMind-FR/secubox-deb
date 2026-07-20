@@ -22,6 +22,14 @@ PAS varier ces chemins selon --root ; un futur déploiement multi-root réel
 (ex. cellule-in-a-box #843, un --root par tenant) romprait cette symétrie —
 il faudra alors aligner cli.py de la même façon (suivi #896), pas dans cette
 tâche.
+
+`remember_path_for` (mémoire durable des routes portail, portal_routes.py) suit
+la MÊME règle. ATTENTION test : `actuate()` écrit cette mémoire à son défaut
+codé en dur (REMEMBER_FILE), NON câblé à travers apply_plan — exactement comme
+`routes_path`. Tout test qui STOP un module portail via apply_plan/run_once/
+_rollback_applied SANS remplacer `actuate.__kwdefaults__["remember_path"]`
+écrira le vrai /var/lib/secubox/profiles/portal-routes.json (dossier writable
+en dev = fuite silencieuse). Le multi-root réel (#843) devra aussi aligner ça.
 """
 from __future__ import annotations
 
