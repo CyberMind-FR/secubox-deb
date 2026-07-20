@@ -25,16 +25,16 @@ case "$1" in
             fi
         done
 
-        # secubox-sleeper.service runs ProtectSystem=strict with an explicit
-        # ReadWritePaths= (see debian/secubox-sleeper.service) — every
-        # directory it lists MUST already exist before the unit's first
-        # start, or systemd's sandbox will not make it writable. Pre-create
-        # this package's own two leaves here (shared parents /var/lib/secubox
-        # and /var/log/secubox themselves come from secubox-core, 0755
-        # secubox:secubox — reasserted here matching the repo-wide
-        # shared-parent convention, never narrowed to 0750). /run/secubox
-        # comes from RuntimeDirectory=secubox; /data/lxc and /etc/secubox/waf
-        # are provisioned by lxc/secubox-waf-ng respectively, not here.
+        # The actuator (api/actuate.py + snapshot.py + audit.py, driven both
+        # by secubox-profilectl apply/rollback and by secubox-sleeper's
+        # in-process STOPs) writes snapshot.SNAP_DIR and audit.AUDIT_LOG —
+        # pre-create both here so a fresh board has them before the first
+        # apply/sleep, regardless of unit sandboxing (secubox-sleeper.service
+        # is deliberately NOT ProtectSystem=strict, see its unit file, but
+        # these two leaves are needed either way). Shared parent
+        # /var/log/secubox comes from secubox-core (0755 secubox:secubox) —
+        # reasserted here matching the repo-wide shared-parent convention,
+        # never narrowed to 0750.
         install -d -o secubox -g secubox -m 0755 /var/log/secubox
         install -d -o root -g root -m 0750 /var/lib/secubox/profiles/rollback
 
