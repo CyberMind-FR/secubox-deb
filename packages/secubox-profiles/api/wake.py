@@ -21,39 +21,13 @@ from pathlib import Path
 
 from . import apply as _apply
 from .actuate import TIMED_OUT
-from .audit import AUDIT_LOG
+from .actuate_paths import DEFAULT_ROOT
+from .actuate_paths import audit_path_for as _audit_path_for
+from .actuate_paths import snap_root_for as _snap_root_for
 from .diff import START, Change
 from .lifecycle import effective_lifecycle
 from .manifest import load_all
 from .observe import is_on, observe as _observe
-from .snapshot import SNAP_DIR
-
-DEFAULT_ROOT = Path("/etc/secubox")
-
-
-def _snap_root_for(root: Path) -> Path:
-    """SNAP_DIR (/var/lib/secubox/...) est le chemin réel, PARTAGÉ avec
-    `secubox-profilectl apply/rollback` — un wake doit rejoindre la même
-    chaîne 4R qu'un apply normal. Ce n'est vrai que pour la racine par
-    défaut ; un --root explicite (tests, sandboxes) reste confiné sous lui,
-    pour ne jamais faire tourner R1..R4 d'un vrai système via un test.
-
-    Le confinement non-défaut est UNIQUEMENT une isolation de test (garder
-    le test non-mocké — test_wake_starts_a_down_on_demand_module — hors de
-    la vraie chaîne 4R). En production, wakectl utilise le même
-    SNAP_DIR/AUDIT_LOG que `secubox-profilectl` — identique à
-    `cli.py._cmd_apply`/`_cmd_rollback`, qui eux ne font PAS varier ces
-    chemins selon --root. Un futur déploiement multi-root réel (ex.
-    cellule-in-a-box #843, un --root par tenant) romprait cette symétrie :
-    wakectl et profilectl écriraient alors dans des chaînes rollback/audit
-    DIFFÉRENTES pour une même racine. Le jour où --root varie en
-    production, il faudra aligner cli.py pour dériver ces chemins de la
-    même façon (suivi #896) — ne PAS le faire dans cette tâche."""
-    return SNAP_DIR if root == DEFAULT_ROOT else root / "profiles" / "rollback"
-
-
-def _audit_path_for(root: Path) -> Path:
-    return AUDIT_LOG if root == DEFAULT_ROOT else root / "audit.log"
 
 
 def wake(module: str, *, root: Path = DEFAULT_ROOT, run, observe=_observe,
