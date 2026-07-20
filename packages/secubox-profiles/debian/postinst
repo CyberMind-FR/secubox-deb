@@ -25,12 +25,48 @@ case "$1" in
             fi
         done
 
+        # secubox-sleeper.service runs ProtectSystem=strict with an explicit
+        # ReadWritePaths= (see debian/secubox-sleeper.service) — every
+        # directory it lists MUST already exist before the unit's first
+        # start, or systemd's sandbox will not make it writable. Pre-create
+        # this package's own two leaves here (shared parents /var/lib/secubox
+        # and /var/log/secubox themselves come from secubox-core, 0755
+        # secubox:secubox — reasserted here matching the repo-wide
+        # shared-parent convention, never narrowed to 0750). /run/secubox
+        # comes from RuntimeDirectory=secubox; /data/lxc and /etc/secubox/waf
+        # are provisioned by lxc/secubox-waf-ng respectively, not here.
+        install -d -o secubox -g secubox -m 0755 /var/log/secubox
+        install -d -o root -g root -m 0750 /var/lib/secubox/profiles/rollback
+
         # Own dedicated socket, own service — never served by the aggregator
         # (the profile engine must not depend on something it may later
         # restart). Restart (not just enable) so an upgrade picks up new code.
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable secubox-profiles.service 2>/dev/null || true
         systemctl restart secubox-profiles.service 2>/dev/null || true
+
+        # secubox-waker + secubox-sleeper (ref #896, scale-to-zero): `enable
+        # --now` is safe/idempotent (no-op if already enabled+running — the
+        # first-install case starts them), `try-restart` afterwards is a
+        # no-op if inactive and gracefully restarts (not a hard kill) an
+        # ALREADY-running instance so an upgrade picks up new code without
+        # forcibly disrupting an in-flight wake/sleep decision.
+        systemctl enable --now secubox-waker.service secubox-sleeper.service 2>/dev/null || true
+        systemctl try-restart secubox-waker.service secubox-sleeper.service 2>/dev/null || true
+
+        # Config sync for the sbxwaf-side wake trigger + the health monitor
+        # (ref #896 — supersedes the nginx-sync path of Task 7, PIVOT
+        # 2026-07-20): waf-sync writes the on-demand vhost list sbxwaf reads
+        # to decide "proxy to the waker instead of 421"; health-sync writes
+        # the sleepable-module-id set secubox-hub reads to distinguish
+        # "voluntarily asleep" from "down". Both are idempotent, best-effort
+        # (an empty modules.d before the first `scan` just yields an empty
+        # list — never a postinst failure).
+        [ -d /etc/secubox/waf ] || install -d -m 0750 /etc/secubox/waf
+        install -d -o root -g root -m 0755 /etc/secubox/health
+        /usr/sbin/secubox-wakectl waf-sync 2>/dev/null || true
+        /usr/sbin/secubox-wakectl health-sync 2>/dev/null || true
+
         systemctl reload nginx 2>/dev/null || true
         ;;
 esac

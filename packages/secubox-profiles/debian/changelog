@@ -1,3 +1,36 @@
+secubox-profiles (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Scale-to-zero (ref #896): ships the lifecycle/wake_class manifest policy
+    (always-on/eager/on-demand/manual; normal/urgent — api/lifecycle.py),
+    the secubox-waker activator (wake-on-access splash + one-wake lock,
+    webui->ctl via systemd-run) and the secubox-sleeper idle daemon (idle
+    detection off sbxwaf per-vhost signals, apply_plan-driven STOP, never
+    sleeps on an indeterminate signal).
+  * sbxwaf-side wake trigger (packages/secubox-toolbox-ng, packages/secubox-waf-ng):
+    on-demand vhosts without an active route now proxy to the waker instead
+    of 421 — supersedes the nginx `@waker` path (Task 7, now unwired;
+    api/nginxgen.py stays in the tree, dead code, for a possible future
+    dual-front-end). New `secubox-wakectl waf-sync`/`health-sync` write
+    /etc/secubox/waf/on-demand-vhosts.json and
+    /etc/secubox/health/sleepable-modules.json — run at postinst so sbxwaf
+    and the health monitor have their lists from first install.
+  * webui: `/profiles/` panel gains manual sleep/wake buttons (POST
+    /wake, /sleep) alongside the existing lifecycle column in `/status`.
+  * secubox-watchdog awareness: a sleeping eager/on-demand module is a
+    DELIBERATE state, never auto-revived (watchdog_should_manage).
+  * Packaging: new `secubox-waker.service` + `secubox-sleeper.service` units
+    (enable --now + try-restart in postinst, preserving runtime state on
+    upgrade), new `secubox-wakectl` entry point (/usr/sbin), templates/
+    now ships (waking.html — the splash the waker serves). Sudoers grants
+    for the waker/sleeper's webui->ctl calls were already shipped in 0.7.x.
+    secubox-sleeper.service (the one unit that drives the actuator
+    in-process, unlike waker/profiles which delegate via systemd-run) now
+    runs ProtectSystem=strict with an explicit ReadWritePaths= covering the
+    actuator's real write set (snapshot 4R, audit log, LXC autostart config,
+    HAProxy portal routes) instead of an unconfined root process.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 20 Jul 2026 17:03:19 +0200
+
 secubox-profiles (0.7.0-1~bookworm1) bookworm; urgency=medium
 
   * apply: observed state (not command return code) arbitrates STOP/START —

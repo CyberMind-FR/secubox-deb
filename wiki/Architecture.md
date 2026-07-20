@@ -173,6 +173,38 @@ Détails complets : [`docs/MODULE-GUIDELINES.md`](../docs/MODULE-GUIDELINES.md) 
 
 ---
 
+## Scale-to-zero — cycle de vie des modules (ref #896)
+
+`secubox-profiles` porte, en plus de l'inventaire/apply déjà décrits, une
+politique de cycle de vie par module (`lifecycle` dans son manifeste
+`/etc/secubox/modules.d/<id>.toml`) : `always-on` (jamais éteint — un
+`protected` l'est toujours, quoi qu'il déclare), `eager` (démarre au boot,
+peut se rendormir), `on-demand` (éteint par défaut, réveillé sur accès) et
+`manual` (opérateur uniquement).
+
+Deux services dédiés pilotent le sommeil/réveil :
+
+- **`secubox-sleeper.service`** (root, tick 30s) — endort tout module
+  `eager`/`on-demand` observé idle (aucune connexion active depuis le seuil
+  configuré, aucun réveil en cours) via le même actionneur `apply_plan` que
+  `secubox-profilectl apply` (snapshot 4R, audit, rollback si échec). Ne dort
+  jamais sur un signal indéterminé.
+- **`secubox-waker.service`** (`User=secubox`, non privilégié) — reçoit du
+  trafic **sbxwaf** (le WAF Go, `packages/secubox-toolbox-ng`/`secubox-waf-ng`) :
+  un vhost on-demand sans route active est proxifié vers `/_wake/<vhost>` au
+  lieu d'un 421. Le waker sert un splash 503 (`templates/waking.html`) et
+  déclenche le réveil via `sudo→systemd-run→secubox-wakectl` (webui→ctl,
+  jamais en direct — même patron que les autres `ctl` confinés).
+
+Ce mécanisme **remplace** le déclencheur nginx `@waker` envisagé initialement
+(PIVOT 2026-07-20) : `sbxwaf` est le point d'entrée du trafic public sur ce
+dépôt, c'est donc lui qui détecte l'accès à un vhost éteint, pas nginx.
+
+Détails complets (table lifecycle, format manifeste, procédure pilote) :
+[`packages/secubox-profiles/README.md`](../packages/secubox-profiles/README.md#scale-to-zero--lifecycle-waker-sleeper-ref-896).
+
+---
+
 ## Contraintes ANSSI CSPN
 
 Le projet vise la certification ANSSI CSPN à horizon 2027. Contraintes respectées :
