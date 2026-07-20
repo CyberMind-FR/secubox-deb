@@ -468,6 +468,26 @@ def test_apply_rolled_back_reverts_active_to_prior(client, root, monkeypatch):
     assert (root / "profiles" / "active").read_text().strip() == "media"  # reverted
 
 
+def test_apply_rolled_back_no_prior_active_removes_file(client, root, monkeypatch):
+    # First-ever apply with NO prior `active` file: on rolled_back the route must
+    # REMOVE the file it created (nothing to restore), not leave `active` pointing
+    # at a target profile that never took.
+    (root / "profiles" / "active").unlink()   # drop the fixture's default active
+    (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 2
+            stdout = '{"status":"rolled_back","changed":[],"failed":["x"],"rolled_back":["y"]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
+    assert r.status_code == 200 and r.json()["status"] == "rolled_back"
+    assert not (root / "profiles" / "active").exists()   # created-then-removed
+
+
 def test_apply_applied_keeps_active_at_target(client, root, monkeypatch):
     (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
 
