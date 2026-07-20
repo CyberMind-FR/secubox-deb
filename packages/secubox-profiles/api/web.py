@@ -503,8 +503,24 @@ def create_app() -> FastAPI:
 
     @app.post("/api/v1/profiles/rollback")
     async def rollback_active(_claims=Depends(require_jwt)):
+        # A rollback restores an ARBITRARY point-in-time snapshot, which has no
+        # associated profile name — unlike /apply, there is no "prior profile"
+        # to revert `active` to. On a SUCCESSFUL rollback the honest state
+        # afterward is "no named profile / custom": clear the pointer rather
+        # than leave it naming whatever profile the last /apply set, which no
+        # longer matches the (rolled-back) board state. Success predicate
+        # mirrors the CLI's own (see api/cli.py _cmd_rollback: rc 0 iff
+        # status in ("applied", "planned")) — "planned" is not structurally
+        # reachable here (the ctl is always invoked with --yes) but matching
+        # the CLI's exact predicate beats an ad-hoc single-value check.
+        root = _root()
+        _mod, _prof_dir, _pins, active_file = _cli._paths(root)
+        active_path = Path(active_file)
         async with _apply_lock:
-            return await _run_ctl_json("rollback")
+            report = await _run_ctl_json("rollback")
+            if isinstance(report, dict) and report.get("status") in ("applied", "planned"):
+                active_path.unlink(missing_ok=True)
+            return report
 
     return app
 
