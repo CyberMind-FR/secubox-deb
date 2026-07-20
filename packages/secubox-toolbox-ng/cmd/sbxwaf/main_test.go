@@ -6,6 +6,7 @@ package main
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -84,6 +85,94 @@ func TestProxyUnmapped(t *testing.T) {
 
 	if rec.Code != http.StatusMisdirectedRequest {
 		t.Fatalf("expected 421, got %d", rec.Code)
+	}
+}
+
+// TestOnDemandProxiesToWaker verifies that a request for a host with no
+// route, but present in the on-demand vhosts set, is reverse-proxied to the
+// waker (unix socket) instead of getting a 421 — and that the Director
+// rewrites the path to /_wake/<host>.
+func TestOnDemandProxiesToWaker(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "waker.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix %s: %v", sockPath, err)
+	}
+	defer ln.Close()
+
+	var gotPath string
+	waker := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "waking up…")
+		}),
+	}
+	go waker.Serve(ln) //nolint:errcheck
+	defer waker.Close()
+
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) { return "", 0, false },
+		onDemand:    &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		wakerSocket: sockPath,
+	}
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet, "http://sleepy.example.com/", nil)
+	req.Host = "sleepy.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from waker splash, got %d", rec.Code)
+	}
+	if gotPath != "/_wake/sleepy.example.com" {
+		t.Fatalf("expected waker path /_wake/sleepy.example.com, got %q", gotPath)
+	}
+
+	// TestProxyUnmapped (above) already proves a host NOT in the on-demand set
+	// still gets 421 from this same handler code path.
+}
+
+// TestOnDemandVisitsExcluded verifies that a request served by the waker
+// splash is NOT tallied into the legitimate visit-stats (mirrors the existing
+// 403/421 exclusion).
+func TestOnDemandVisitsExcluded(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "waker2.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix %s: %v", sockPath, err)
+	}
+	defer ln.Close()
+
+	waker := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "waking up…")
+		}),
+	}
+	go waker.Serve(ln) //nolint:errcheck
+	defer waker.Close()
+
+	visits := NewVisitStats("") // no on-disk flush, just the in-memory counter
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) { return "", 0, false },
+		onDemand:    &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		wakerSocket: sockPath,
+		visits:      visits,
+	}
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet, "http://sleepy.example.com/", nil)
+	req.Host = "sleepy.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from waker splash, got %d", rec.Code)
+	}
+	if got := visits.Total(); got != 0 {
+		t.Fatalf("waker splash must not be tallied as a legitimate visit; total = %d", got)
 	}
 }
 
