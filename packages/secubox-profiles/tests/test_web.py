@@ -502,3 +502,47 @@ def test_apply_applied_keeps_active_at_target(client, root, monkeypatch):
     r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
     assert r.status_code == 200
     assert (root / "profiles" / "active").read_text().strip() == "lite"  # kept
+
+
+# ---------------------------------------------------------------------------
+# rollback clears `active` — a standalone rollback restores an ARBITRARY
+# point-in-time snapshot that has no associated profile name; leaving `active`
+# unchanged would have it keep naming whatever profile the last /apply set,
+# which no longer matches the (rolled-back) board state. Mirrors the
+# apply_active revert-on-rolled_back fix above, but for the separate
+# /rollback route: on a successful rollback (CLI status "applied"/"planned",
+# see api/cli.py _cmd_rollback's own success predicate) the honest state is
+# "no named profile" -> clear the pointer.
+# ---------------------------------------------------------------------------
+
+def test_rollback_clears_active_pointer(client, root, monkeypatch):
+    assert (root / "profiles" / "active").read_text().strip() == "media"
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 0
+            stdout = ('{"status":"applied","changed":["x"],"failed":[],'
+                      '"rolled_back":["x"],"target":"R1"}')
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/rollback", json={})
+    assert r.status_code == 200
+    assert not (root / "profiles" / "active").exists()
+
+
+def test_rollback_failure_leaves_active_untouched(client, root, monkeypatch):
+    assert (root / "profiles" / "active").read_text().strip() == "media"
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 2
+            stdout = ""
+            stderr = "boum"
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/rollback", json={})
+    assert r.status_code == 500
+    assert (root / "profiles" / "active").read_text().strip() == "media"
