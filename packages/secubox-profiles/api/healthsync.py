@@ -49,6 +49,12 @@ def _write_atomic(path: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
+        # mkstemp() creates 0600 (owner-only) — but this file is PUBLIC (a
+        # module-id set, not a secret) and MUST be readable by secubox-hub,
+        # which runs as a different unprivileged user (secubox). Without
+        # this chmod, the health-distinction is silently inert on install
+        # (#896 review).
+        os.chmod(tmp, 0o644)
         os.replace(tmp, path)
     except BaseException:
         try:

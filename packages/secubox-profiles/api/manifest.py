@@ -122,6 +122,14 @@ def load_manifest(path: Path) -> Manifest:
     lifecycle = _enum(d.get("lifecycle", DEFAULT_LIFECYCLE), LIFECYCLES, "lifecycle", path)
     wake_class = _enum(d.get("wake_class", DEFAULT_WAKE_CLASS), WAKE_CLASSES, "wake_class", path)
 
+    # Lowercase at the source: the whole front pipeline (waker._resolve
+    # exact-match, sleeper's per-vhost keys, wafsync's on-demand-vhosts.json)
+    # compares domains verbatim. A hand-edited mixed-case domain in TOML
+    # would otherwise silently never wake (waker misses) nor sleep (sleeper
+    # key misses) — see #896 final review, Fix 3.
+    raw_domain = portal.get("domain")
+    portal_domain = raw_domain.lower() if isinstance(raw_domain, str) else None
+
     return Manifest(
         id=mid,
         category=_enum(_require(d, "category", path), CATEGORIES, "category", path),
@@ -129,7 +137,7 @@ def load_manifest(path: Path) -> Manifest:
         exposure=_enum(_require(d, "exposure", path), EXPOSURES, "exposure", path),
         units=tuple(units),
         lxc=lxc,
-        portal_domain=portal.get("domain"),
+        portal_domain=portal_domain,
         priority=priority,
         protected=protected,
         needs=tuple(needs),

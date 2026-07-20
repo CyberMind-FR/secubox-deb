@@ -131,6 +131,17 @@ def test_load_manifest_forces_protected_true_for_core_ids_even_when_data_says_fa
     assert m.protected is True
 
 
+def test_portal_domain_is_lowercased_at_source(tmp_path):
+    # waker._resolve/sleeper/wafsync all compare domains verbatim (the whole
+    # front pipeline is lowercase) — a hand-edited mixed-case domain must be
+    # normalized here, at load time, or it silently never wakes/sleeps
+    # (#896 final review, Fix 3).
+    p = tmp_path / "lyrion.toml"
+    p.write_text(MINIMAL + '\nportal = { domain = "Dashboard.Example.COM" }\n')
+    m = load_manifest(p)
+    assert m.portal_domain == "dashboard.example.com"
+
+
 def test_load_all_indexes_by_id_and_skips_non_toml(tmp_path):
     (tmp_path / "lyrion.toml").write_text(MINIMAL)
     (tmp_path / "peertube.toml").write_text(FULL)

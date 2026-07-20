@@ -38,6 +38,24 @@ def test_write_sleepable_atomic(tmp_path):
     assert list(tmp_path.glob("*.tmp")) == []
 
 
+def test_write_sleepable_output_is_world_readable(tmp_path):
+    """secubox-hub runs as a different unprivileged user (secubox) than
+    secubox-profiles. tempfile.mkstemp() defaults to 0600 owner-only —
+    without an explicit chmod, secubox-hub can never read this PUBLIC
+    module-id set and the health-distinction is silently inert (#896
+    review, Fix 1)."""
+    import stat
+
+    from api.healthsync import write_sleepable
+    from api.manifest import Manifest
+    ms = {"a": Manifest(id="a", category="infra", runtime="native", exposure="lan",
+          units=("a.service",), lifecycle="on-demand")}
+    out = tmp_path / "sleepable-modules.json"
+    write_sleepable(manifests=ms, out_path=out)
+    mode = stat.S_IMODE(out.stat().st_mode)
+    assert oct(mode) == "0o644"
+
+
 def test_write_sleepable_prunes_nothing_but_overwrites(tmp_path):
     from api.healthsync import write_sleepable
     from api.manifest import Manifest

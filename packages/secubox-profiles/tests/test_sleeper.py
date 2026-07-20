@@ -258,6 +258,52 @@ def test_sleeper_daemon_signal_reader_feeds_wall_clock_idle_decision(monkeypatch
     assert should_sleep(m, sig, hint_idle=None, now_up=True) is True
 
 
+def test_sleeper_daemon_signal_reader_merges_per_worker_snapshots(monkeypatch, tmp_path):
+    """secubox-waf-ng-worker@1 and @2 each hold their OWN in-memory Begin/End
+    vhost state and (since #896 final review, Fix 2) each flush their OWN
+    file (vhost-signals.@1.json / @2.json) instead of clobbering a shared
+    path. The reader must glob and merge: last_request_ts=max, active_conns
+    =sum — a vhost fresh/active on ONE worker must never be judged idle
+    just because the OTHER worker's snapshot is stale/zero (this was the
+    pre-fix last-writer-wins bug: a service kept fresh on @1 could be seen
+    stale in @2's snapshot -> wrong STOP of a live service)."""
+    import api.sleeper_daemon as daemon
+
+    base = tmp_path / "vhost-signals.json"  # legacy path itself absent
+    (tmp_path / "vhost-signals.@1.json").write_text(json.dumps({
+        "v.gk2": {"last_request_ts": 5000.0, "active_conns": 2},
+    }), encoding="utf-8")
+    (tmp_path / "vhost-signals.@2.json").write_text(json.dumps({
+        "v.gk2": {"last_request_ts": 1000.0, "active_conns": 1},
+    }), encoding="utf-8")
+    monkeypatch.setattr(daemon, "VHOST_SIGNALS_PATH", base)
+
+    got = daemon._signal_reader()
+
+    # max(5000, 1000)=5000 ; sum(2, 1)=3 — proves both max-pick AND
+    # summation, not just "use the freshest worker's whole record".
+    assert got == {"v.gk2": {"last_request_ts": 5000.0, "active_conns": 3}}
+
+
+def test_sleeper_daemon_signal_reader_falls_back_to_legacy_path_when_no_per_worker_files(
+    monkeypatch, tmp_path,
+):
+    """No @N per-worker files on disk (mono-worker deploy, or sbxwaf not yet
+    restarted with the new per-instance flag) must fall back to the old
+    plain path, unchanged — back-compat for #896 final review Fix 2."""
+    import api.sleeper_daemon as daemon
+
+    path = tmp_path / "vhost-signals.json"
+    path.write_text(json.dumps({
+        "legacy.gk2": {"last_request_ts": 42.0, "active_conns": 1},
+    }), encoding="utf-8")
+    monkeypatch.setattr(daemon, "VHOST_SIGNALS_PATH", path)
+
+    assert daemon._signal_reader() == {
+        "legacy.gk2": {"last_request_ts": 42.0, "active_conns": 1},
+    }
+
+
 def test_sleeper_daemon_hint_probe_stub_is_safe_none():
     """Documented stub: no per-module /idle route exists yet. None must
     never veto/allow a sleep decision by accident."""
