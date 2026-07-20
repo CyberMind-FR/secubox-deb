@@ -93,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     sp2.add_argument("--out", default="/etc/nginx/secubox-waker.d")
     sp3 = sub.add_parser("waf-sync")
     sp3.add_argument("--out", default="/etc/secubox/waf/on-demand-vhosts.json")
+    sp4 = sub.add_parser("health-sync")
+    sp4.add_argument("--out", default="/etc/secubox/health/sleepable-modules.json")
     args = p.parse_args(argv)
     if args.cmd == "nginx-sync":
         from . import nginxgen
@@ -105,6 +107,12 @@ def main(argv: list[str] | None = None) -> int:
         doms = wafsync.write_ondemand(manifests=load_all(Path(args.root) / "modules.d"),
                                        out_path=Path(args.out))
         print(f"waf-sync: {len(doms)} vhost(s) — {', '.join(doms) or 'aucun'}")
+        return 0
+    if args.cmd == "health-sync":
+        from . import healthsync
+        ids = healthsync.write_sleepable(manifests=load_all(Path(args.root) / "modules.d"),
+                                          out_path=Path(args.out))
+        print(f"health-sync: {len(ids)} module(s) sleepable — {', '.join(ids) or 'aucun'}")
         return 0
     if not _running_as_root():
         print("wake doit être lancé en root (il pilote systemd/LXC).", file=sys.stderr)
