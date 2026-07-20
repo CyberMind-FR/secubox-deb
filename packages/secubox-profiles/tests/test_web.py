@@ -445,3 +445,40 @@ def test_apply_rolled_back_returns_report_not_500(client, root, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "rolled_back" and body["failed"] == ["x"]
+
+
+def test_apply_rolled_back_reverts_active_to_prior(client, root, monkeypatch):
+    # A rolled_back apply must leave `active` pointing at the PRIOR profile
+    # (state was reverted), not at the target that never took — otherwise the
+    # pointer lies. Fixture default active="media"; we apply "lite" -> rolled_back.
+    (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
+    assert (root / "profiles" / "active").read_text().strip() == "media"
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 2
+            stdout = '{"status":"rolled_back","changed":[],"failed":["x"],"rolled_back":["y"]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "rolled_back"
+    assert (root / "profiles" / "active").read_text().strip() == "media"  # reverted
+
+
+def test_apply_applied_keeps_active_at_target(client, root, monkeypatch):
+    (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 0
+            stdout = '{"status":"applied","changed":["lyrion"],"failed":[],"rolled_back":[]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
+    assert r.status_code == 200
+    assert (root / "profiles" / "active").read_text().strip() == "lite"  # kept
