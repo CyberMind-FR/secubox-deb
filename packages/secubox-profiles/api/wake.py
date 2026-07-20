@@ -20,9 +20,11 @@ import sys
 from pathlib import Path
 
 from . import apply as _apply
+from . import portal_routes as _portal_routes
 from .actuate import TIMED_OUT
 from .actuate_paths import DEFAULT_ROOT
 from .actuate_paths import audit_path_for as _audit_path_for
+from .actuate_paths import remember_path_for as _remember_path_for
 from .actuate_paths import snap_root_for as _snap_root_for
 from .diff import START, Change
 from .lifecycle import effective_lifecycle
@@ -49,8 +51,17 @@ def wake(module: str, *, root: Path = DEFAULT_ROOT, run, observe=_observe,
         return {"status": "already-up", "module": module}
     plan = [Change(module, START, "wake-on-access", m.priority)]
     actuals = {module: observe(m)}
+    # Route WAF d'un module portail : disparue du fichier vivant depuis
+    # l'endormissement, on la relit dans la mémoire durable (remember au STOP).
+    # apply_plan la capture dans le snapshot → l'actionneur la restaure au START.
+    routes = {}
+    if m.portal_domain:
+        remembered = _portal_routes.recall(m.portal_domain,
+                                           path=_remember_path_for(root))
+        if remembered is not None:
+            routes[m.portal_domain] = remembered
     report = _apply.apply_plan(plan, manifests, actuals, run=run, observe=observe,
-                               now=now, routes={}, snap_root=_snap_root_for(root),
+                               now=now, routes=routes, snap_root=_snap_root_for(root),
                                audit_path=_audit_path_for(root), apply=apply)
     if report.status == "applied" and module in report.changed:
         return {"status": "woken", "module": module}

@@ -28,6 +28,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .audit import AUDIT_LOG
+from .portal_routes import REMEMBER_FILE
 from .snapshot import SNAP_DIR
 
 DEFAULT_ROOT = Path("/etc/secubox")
@@ -39,3 +40,7 @@ def snap_root_for(root: Path) -> Path:
 
 def audit_path_for(root: Path) -> Path:
     return AUDIT_LOG if root == DEFAULT_ROOT else root / "audit.log"
+
+
+def remember_path_for(root: Path) -> Path:
+    return REMEMBER_FILE if root == DEFAULT_ROOT else root / "profiles" / "portal-routes.json"

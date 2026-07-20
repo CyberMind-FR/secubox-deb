@@ -24,6 +24,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from . import portal_routes as _portal_routes
 from .diff import START, STOP, Change
 from .manifest import Manifest
 from .observe import ROUTES_FILE, is_on, observe as _observe
@@ -75,6 +76,17 @@ def _write_routes_atomic(routes_path: Path, data: dict) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def _current_route(domain: str, routes_path: Path):
+    """La valeur de route ([host, port]) actuellement dans haproxy-routes.json
+    pour `domaine`, ou None si absente/illisible. Lue AVANT retrait pour la
+    confier à la mémoire durable (le réveil la relira)."""
+    try:
+        data = json.loads(Path(routes_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data.get(domain) if isinstance(data, dict) else None
 
 
 def _portal_remove(domain: str, routes_path: Path) -> None:
@@ -150,7 +162,8 @@ def _lxc_autostart(lxc: str, on: bool, run, lxc_root: Path | None = None) -> Non
 
 
 def actuate(change: Change, m: Manifest, *, run, route_value=None,
-            routes_path: Path = ROUTES_FILE, lxc_root: Path | None = None) -> list[str]:
+            routes_path: Path = ROUTES_FILE, lxc_root: Path | None = None,
+            remember_path: Path = _portal_routes.REMEMBER_FILE) -> list[str]:
     """Exécute UN changement. Retourne la liste ordonnée des labels d'action
     (pour l'audit + les tests). Lève ActuationError au premier échec."""
     done: list[str] = []
@@ -199,6 +212,11 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
             done.append("portal:add")
     else:
         if m.portal_domain:
+            # Mémorise la route AVANT de la retirer : le réveil (potentiellement
+            # bien plus tard, snapshot 4R déjà tourné) n'a plus d'autre source.
+            _portal_routes.remember(m.portal_domain,
+                                    _current_route(m.portal_domain, routes_path),
+                                    path=remember_path)
             _portal_remove(m.portal_domain, routes_path)
             done.append("portal:remove")
         runtime_stop()

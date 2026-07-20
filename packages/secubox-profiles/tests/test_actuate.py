@@ -105,16 +105,32 @@ def test_portal_stop_removes_route_before_backend(tmp_path):
     routes = tmp_path / "haproxy-routes.json"
     routes.write_text(json.dumps({"lyrion.gk2.secubox.in": ["127.0.0.1", 9000],
                                   "other.example": ["10.0.0.1", 80]}))
+    remembered = tmp_path / "portal-routes.json"
     root = _lxc_root_with_config(tmp_path, "lyrion", autostart="1")
     calls = []
     order = actuate(Change("l", STOP, "", 50),
                     _m("l", runtime="lxc", lxc="lyrion", portal="lyrion.gk2.secubox.in"),
-                    run=_ok_run(calls), route_value=None, routes_path=routes, lxc_root=root)
+                    run=_ok_run(calls), route_value=None, routes_path=routes, lxc_root=root,
+                    remember_path=remembered)
     # route removed
     left = json.loads(routes.read_text())
     assert "lyrion.gk2.secubox.in" not in left and "other.example" in left
     # portal removed BEFORE the runtime is torn down (host API first, then lxc)
     assert order.index("portal:remove") < order.index("systemd:disable")
+
+
+def test_portal_stop_remembers_route_value_for_later_wake(tmp_path):
+    from api import portal_routes as pr
+    routes = tmp_path / "haproxy-routes.json"
+    routes.write_text(json.dumps({"lyrion.gk2.secubox.in": ["127.0.0.1", 9000]}))
+    remembered = tmp_path / "portal-routes.json"
+    root = _lxc_root_with_config(tmp_path, "lyrion", autostart="1")
+    actuate(Change("l", STOP, "", 50),
+            _m("l", runtime="lxc", lxc="lyrion", portal="lyrion.gk2.secubox.in"),
+            run=_ok_run([]), route_value=None, routes_path=routes, lxc_root=root,
+            remember_path=remembered)
+    # the route the STOP removed is durably remembered so a wake can restore it
+    assert pr.recall("lyrion.gk2.secubox.in", path=remembered) == ["127.0.0.1", 9000]
 
 
 def test_portal_start_restores_route_from_value(tmp_path):
