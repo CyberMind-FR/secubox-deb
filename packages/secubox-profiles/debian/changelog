@@ -1,3 +1,17 @@
+secubox-profiles (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * apply: observed state (not command return code) arbitrates STOP/START —
+    non-blocking systemctl (--no-block) + best-effort lxc, wait_state is the
+    sole arbiter and now checks the container (lxc-info) for LXC modules.
+  * apply: wait_state timeout is derived per-module from systemd
+    TimeoutStop/StartUSec (margin-added, safety-capped), replacing the flat 30s.
+  * _run distinguishes a command timeout (still working, deferred) from a
+    could-not-run (hard fail).
+  * web: /apply reverts the `active` pointer when the ctl rolls back.
+  * Fixes the spurious mass-apply rollback (ref #893).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 20 Jul 2026 09:13:20 +0200
+
 secubox-profiles (0.6.2-1~bookworm1) bookworm; urgency=medium
 
   * Fix apply on condition-gated modules: a unit whose systemd start-condition
