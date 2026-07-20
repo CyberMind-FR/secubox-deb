@@ -1,3 +1,11 @@
+secubox-profiles (0.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * default lifecycle is now always-on (fleet-safe; sleep is an explicit
+    opt-in via eager/on-demand) — a module is never auto-slept unless its
+    manifest declares it (ref #896).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 20 Jul 2026 18:09:33 +0200
+
 secubox-profiles (0.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Scale-to-zero (ref #896): ships the lifecycle/wake_class manifest policy

@@ -34,12 +34,13 @@ from api.manifest import PROTECTED_IDS  # noqa: E402
 from api.state import load_profile, load_pins  # noqa: E402
 
 MANIFEST_LYRION = """
-id       = "lyrion"
-category = "media"
-runtime  = "native"
-exposure = "lan"
-units    = ["secubox-lyrion.service"]
-priority = 30
+id        = "lyrion"
+category  = "media"
+runtime   = "native"
+exposure  = "lan"
+units     = ["secubox-lyrion.service"]
+priority  = 30
+lifecycle = "eager"
 """
 
 MANIFEST_AUTH = """
@@ -280,11 +281,14 @@ def test_set_pin_invalid_value_400(client):
 # lifecycle / wake_class / sleep_state (Task 10) — status payload extension.
 # `auth` is protected (PROTECTED_IDS) => effective_lifecycle forces
 # "always-on" regardless of its declared value => sleep_state "n/a". `lyrion`
-# declares no lifecycle/wake_class => defaults "eager"/"normal", observed on
-# (client fixture) => sleep_state "up". A third module declared "on-demand"/
-# "urgent" and left UNOBSERVED by the client fixture's _observe_all stub
-# proves the None -> False -> "asleep" coalescing (same philosophy as
-# observe.is_on, see its docstring).
+# declares lifecycle="eager" explicitly (the fleet-safe default is now
+# "always-on" — see test_manifest.test_lifecycle_defaults_always_on_normal —
+# so this test opts lyrion into "eager" on purpose to exercise the sleepable
+# path) with no wake_class => defaults "normal", observed on (client
+# fixture) => sleep_state "up". A third module declared "on-demand"/"urgent"
+# and left UNOBSERVED by the client fixture's _observe_all stub proves the
+# None -> False -> "asleep" coalescing (same philosophy as observe.is_on,
+# see its docstring).
 # ---------------------------------------------------------------------------
 
 def test_status_includes_lifecycle_wake_class_and_sleep_state(client, root):

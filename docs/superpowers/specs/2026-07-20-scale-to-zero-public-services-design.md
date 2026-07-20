@@ -62,8 +62,14 @@ parsed by the existing `secubox-profiles` manifest loader:
 
 | Field | Values | Default | Meaning |
 |-------|--------|---------|---------|
-| `lifecycle` | `always-on` \| `eager` \| `on-demand` \| `manual` | `eager` | see below |
+| `lifecycle` | `always-on` \| `eager` \| `on-demand` \| `manual` | `always-on` | see below |
 | `wake_class` | `normal` \| `urgent` | `normal` | wake priority / idle grace |
+
+> **Default changed post-pilot (#896 follow-up):** the original design below
+> defaulted `lifecycle` to `eager`, which on the real 184-module fleet made
+> every existing module — including ones with no manifest opinion at all —
+> idle-sleep eligible. Default `always-on` is fleet-safe; `eager`/`on-demand`
+> are explicit opt-ins.
 
 - **`always-on`** — never sleeps; excluded from the sleeper. Core/gateway/auth/
   aggregator/WAF, and anything `protected`. (A `protected` module is treated as

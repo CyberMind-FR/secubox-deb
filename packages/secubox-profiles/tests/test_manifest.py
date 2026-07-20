@@ -158,9 +158,14 @@ def _write(tmp_path, body):
     return p
 
 
-def test_lifecycle_defaults_eager_normal(tmp_path):
+def test_lifecycle_defaults_always_on_normal(tmp_path):
+    # Fleet-safe default (#896 follow-up): a manifest that declares no
+    # lifecycle must NEVER become sleep-eligible by accident — on a
+    # 184-module fleet, "eager" as the silent default would eventually idle
+    # out core services (admin, gitea, nextcloud...) that never opted in to
+    # sleep. Sleep is an explicit opt-in via eager/on-demand.
     m = load_manifest(_write(tmp_path, ""))
-    assert m.lifecycle == "eager" and m.wake_class == "normal"
+    assert m.lifecycle == "always-on" and m.wake_class == "normal"
 
 
 def test_lifecycle_and_wake_class_parse(tmp_path):
