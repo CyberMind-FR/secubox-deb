@@ -28,27 +28,24 @@ RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 
-# ProtectSystem=strict makes / read-only by default; the actuator's actual
-# write set (traced through api/actuate.py, api/snapshot.py, api/audit.py —
-# apply_plan's STOP path is the only one the sleeper ever drives) is listed
-# explicitly below so this sandbox stays FUNCTIONAL, not just hardened:
-#   - /run/secubox            — the socket dir + api.sleeper.WAKE_LOCK_FILE
-#     (read, but ReadWritePaths is directory-granular) and waker-active.json
-#   - /var/lib/secubox/profiles/rollback — snapshot.SNAP_DIR, the 4R chain
-#     shared with secubox-profilectl/secubox-wakectl (actuate_paths.py)
-#   - /var/log/secubox        — audit.AUDIT_LOG (append-only audit.log)
-#   - /data/lxc                — actuate.py::_lxc_autostart edits
-#     <lxcpath>/<container>/config (lxc.start.auto) before lxc-stop
-#   - /etc/secubox/waf         — actuate.py::ROUTES_FILE
-#     (haproxy-routes.json): a STOP on a routed module calls
-#     _portal_remove, which rewrites this file (temp+rename in the SAME
-#     directory) — omitting it here would reproduce, one layer up, the
-#     exact EROFS lesson that motivated wrapping the OTHER two ctls in
-#     systemd-run in the first place (secubox-profilectl 0.6.1).
-ProtectSystem=strict
+# Deliberately NOT ProtectSystem=strict (ref #896 T12 review). This daemon
+# drives lxc-start/lxc-stop + systemctl IN-PROCESS as root — unlike the
+# panel/waker, which escape their own sandbox via systemd-run into PID1's
+# context before touching systemd/LXC. lxc-start/lxc-stop write LXC-internal
+# runtime/lock paths (/run/lxc/, /run/lock/lxc/, cgroup + mount-namespace
+# setup) that are no part of this codebase's stable contract to enumerate;
+# under ProtectSystem=strict everything under /run outside an explicit
+# ReadWritePaths entry is read-only, so those writes would EROFS — silently,
+# since api/actuate.py::_issue only hard-fails on rc is None, meaning
+# auto-sleep for every LXC-backed on-demand module would quietly stop
+# working (the whole RAM-savings target of ref #896). A root daemon that
+# drives LXC in-process without ProtectSystem is at this codebase's normal
+# floor (many root daemons here have no sandboxing) — dropping strict here
+# is a fix, not a regression. ProtectHome/PrivateTmp stay: the actuator
+# needs neither /home nor a shared /tmp (its atomic writes are all
+# temp-file-in-target-dir, not /tmp).
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/run/secubox /var/lib/secubox/profiles/rollback /var/log/secubox /data/lxc /etc/secubox/waf
 
 [Install]
 WantedBy=multi-user.target
