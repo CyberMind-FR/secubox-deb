@@ -109,3 +109,19 @@ def test_main_nginx_sync_writes_snippet_without_root(tmp_path):
     rc = w.main(["--root", str(tmp_path), "nginx-sync", "--out", str(out)])
     assert rc == 0
     assert (out / "demo.gk2.waker.conf").exists()
+
+
+def test_main_waf_sync_writes_json_without_root(tmp_path):
+    # waf-sync est un aller-retour config->fichier, pas un pilotage
+    # systemd/LXC : il ne doit pas exiger root (comme nginx-sync).
+    import api.wake as w
+    import json
+    (tmp_path / "modules.d").mkdir()
+    (tmp_path / "modules.d" / "demo.toml").write_text(
+        'id="demo"\ncategory="infra"\nruntime="native"\nexposure="public"\n'
+        'units=["demo.service"]\nlifecycle="on-demand"\n'
+        'portal.domain="demo.gk2"\n')
+    out = tmp_path / "on-demand-vhosts.json"
+    rc = w.main(["--root", str(tmp_path), "waf-sync", "--out", str(out)])
+    assert rc == 0
+    assert json.loads(out.read_text()) == ["demo.gk2"]
