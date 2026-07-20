@@ -90,7 +90,7 @@ def test_failure_at_module_k_rolls_back_prior(tmp_path):
     assert rep.status == "rolled_back"
     assert "b" in rep.failed
     # a was rolled back → re-enabled (started again)
-    assert ["systemctl", "enable", "--now", "a.service"] in calls
+    assert ["systemctl", "enable", "a.service"] in calls
 
 
 def test_rollback_never_stops_a_protected_module(tmp_path):
@@ -119,10 +119,10 @@ def test_rollback_never_stops_a_protected_module(tmp_path):
                      apply=True, wait_timeout=0)
     assert rep.status == "rolled_back"
     assert "b" in rep.failed
-    assert ["systemctl", "disable", "--now", "auth.service"] not in calls
+    assert ["systemctl", "disable", "auth.service"] not in calls
     assert not any(c[0] == "lxc-stop" and "auth" in c for c in calls)
     # the forward START itself is untouched (left running is always safe)
-    assert ["systemctl", "enable", "--now", "auth.service"] in calls
+    assert ["systemctl", "enable", "auth.service"] in calls
 
 
 def test_rollback_timeout_not_counted_as_success(tmp_path):
@@ -151,7 +151,7 @@ def test_rollback_timeout_not_counted_as_success(tmp_path):
     assert "b" in rep.failed
     assert "a" not in rep.rolled_back
     # the rollback START was attempted even though it timed out
-    assert ["systemctl", "enable", "--now", "a.service"] in calls
+    assert ["systemctl", "enable", "a.service"] in calls
 
 
 def test_rollback_to_restores_snapshot_state(tmp_path):
@@ -166,7 +166,7 @@ def test_rollback_to_restores_snapshot_state(tmp_path):
                       now="t", routes={}, snap_root=tmp_path / "applied",
                       audit_path=tmp_path / "audit.log", apply=True)
     assert rep.status == "applied"
-    assert ["systemctl", "enable", "--now", "a.service"] in calls
+    assert ["systemctl", "enable", "a.service"] in calls
 
     # dry-run must actuate nothing.
     dry_calls = []

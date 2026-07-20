@@ -48,6 +48,18 @@ def _must(run, argv: list[str]) -> None:
         raise ActuationError(f"{' '.join(argv)} → rc={rc!r} {out.strip()[:200]}")
 
 
+def _issue(run, argv: list[str]) -> None:
+    """Émet une commande de transition d'état en best-effort : son succès est
+    jugé par wait_state (état observé), PAS par son code retour. Seul un
+    « n'a pas pu s'exécuter » (rc is None = OSError) est un échec dur. Un rc
+    non-nul (« conteneur déjà arrêté/démarré ») ou TIMED_OUT (encore en cours /
+    tué à mi-course) est délégué à wait_state. Utilisé pour lxc-start/lxc-stop,
+    qui n'ont pas de --no-block."""
+    rc, _ = run(argv)
+    if rc is None:
+        raise ActuationError(f"{' '.join(argv)} → n'a pas pu s'exécuter")
+
+
 def _write_routes_atomic(routes_path: Path, data: dict) -> None:
     routes_path = Path(routes_path)
     orig_mode = os.stat(routes_path).st_mode
@@ -146,34 +158,38 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
 
     def runtime_start():
         if m.runtime == "lxc" and m.lxc:
-            # Le conteneur et l'unité systemd hôte sont DÉCOUPLÉS sur la board
-            # réelle : is_on() ne reflète que l'unité hôte. On démarre donc le
-            # conteneur d'abord, puis l'API hôte qui en dépend.
-            _must(run, ["lxc-start", "-n", m.lxc]); done.append("lxc:start")
+            # Conteneur et unité hôte DÉCOUPLÉS : on démarre le conteneur
+            # (best-effort, wait_state confirme lxc_running), puis l'API hôte.
+            _issue(run, ["lxc-start", "-n", m.lxc]); done.append("lxc:start")
             _lxc_autostart(m.lxc, True, run, lxc_root); done.append("lxc:autostart:1")
             for u in m.units:
-                _must(run, ["systemctl", "enable", "--now", u])
+                _must(run, ["systemctl", "enable", u])
+                _must(run, ["systemctl", "start", "--no-block", u])
             done.append("systemd:enable")
         else:
             for u in m.units:
-                _must(run, ["systemctl", "enable", "--now", u])
+                _must(run, ["systemctl", "enable", u])
+                _must(run, ["systemctl", "start", "--no-block", u])
             done.append("systemd:enable")
 
     def runtime_stop():
         if m.runtime == "lxc" and m.lxc:
-            # On éteint l'API hôte d'abord (sinon is_on() reste True alors que
-            # le conteneur qu'elle sert est mort → wait_state ne converge jamais).
+            # On éteint l'API hôte d'abord (sinon is_on reste True alors que
+            # le conteneur qu'elle sert va mourir). enable/disable = opérations
+            # synchrones rapides (rc vérifié) ; start/stop = --no-block, l'état
+            # est confirmé par wait_state.
             for u in m.units:
-                _must(run, ["systemctl", "disable", "--now", u])
+                _must(run, ["systemctl", "disable", u])
+                _must(run, ["systemctl", "stop", "--no-block", u])
             done.append("systemd:disable")
-            # autostart=0 AVANT lxc-stop : sinon secubox-watchdog voit un conteneur
-            # arrêté encore marqué autostart=1 et le relance (course observée sur
-            # la board). On coupe l'autostart d'abord, puis on arrête.
+            # autostart=0 AVANT lxc-stop : sinon secubox-watchdog relance le
+            # conteneur (course observée sur la board).
             _lxc_autostart(m.lxc, False, run, lxc_root); done.append("lxc:autostart:0")
-            _must(run, ["lxc-stop", "-n", m.lxc]); done.append("lxc:stop")
+            _issue(run, ["lxc-stop", "-n", m.lxc]); done.append("lxc:stop")
         else:
             for u in m.units:
-                _must(run, ["systemctl", "disable", "--now", u])
+                _must(run, ["systemctl", "disable", u])
+                _must(run, ["systemctl", "stop", "--no-block", u])
             done.append("systemd:disable")
 
     if starting:
