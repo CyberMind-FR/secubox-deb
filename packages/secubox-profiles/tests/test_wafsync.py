@@ -30,3 +30,21 @@ def test_write_ondemand_atomic(tmp_path):
     assert write_ondemand(manifests=ms, out_path=out) == ["a.gk2"]
     assert json.loads(out.read_text()) == ["a.gk2"]
     assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_write_ondemand_output_is_world_readable(tmp_path):
+    """sbxwaf runs as a different unprivileged user (secubox-waf) than
+    secubox-profiles (secubox). tempfile.mkstemp() defaults to 0600
+    owner-only — without an explicit chmod, sbxwaf can never read this
+    PUBLIC vhost list and the wake trigger is silently inert (#896 review,
+    Fix 1)."""
+    import stat
+
+    from api.wafsync import write_ondemand
+    from api.manifest import Manifest
+    ms = {"a": Manifest(id="a", category="infra", runtime="native", exposure="public",
+          units=("a.service",), portal_domain="a.gk2", lifecycle="on-demand")}
+    out = tmp_path / "on-demand-vhosts.json"
+    write_ondemand(manifests=ms, out_path=out)
+    mode = stat.S_IMODE(out.stat().st_mode)
+    assert oct(mode) == "0o644"

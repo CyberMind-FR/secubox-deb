@@ -39,6 +39,11 @@ def _write_atomic(path: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
+        # mkstemp() creates 0600 (owner-only) — but this file is PUBLIC (a
+        # vhost list, not a secret) and MUST be readable by sbxwaf, which
+        # runs as a different unprivileged user (secubox-waf). Without this
+        # chmod, the wake trigger is silently inert on install (#896 review).
+        os.chmod(tmp, 0o644)
         os.replace(tmp, path)
     except BaseException:
         try:

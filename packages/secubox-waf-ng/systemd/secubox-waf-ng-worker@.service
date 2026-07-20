@@ -17,6 +17,15 @@
 # unit restart wipes /run/secubox and kills every sibling's socket → board-wide
 # 502 cascade (#741, fixed 2026-06-25 on the board; Preserve=yes mandatory
 # in every new unit touching RuntimeDirectory=secubox).
+#
+# CRITICAL — --vhost-signals is PER-WORKER (vhost-signals.@%i.json):
+# each of @1/@2 holds its OWN in-memory Begin/End vhost state; the two
+# workers writing to the SAME shared path would last-writer-wins clobber
+# each other's flush every ~5s, letting secubox-sleeper read a stale
+# snapshot and STOP a service that is actually live on the other worker
+# (#896 final review, Fix 2). api/sleeper_daemon.py._signal_reader globs
+# vhost-signals.@*.json and merges (max ts / sum conns) across workers —
+# do NOT drop the %i here without updating that reader.
 
 [Unit]
 Description=SecuBox WAF-NG Go reverse-proxy worker %i (port 808%i)
@@ -36,7 +45,7 @@ ExecStart=/usr/sbin/sbxwaf \
   --routes /etc/secubox/waf/haproxy-routes.json \
   --rules /etc/secubox/waf/waf-rules.json \
   --on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json \
-  --vhost-signals /var/cache/secubox/waf/vhost-signals.json \
+  --vhost-signals /var/cache/secubox/waf/vhost-signals.@%i.json \
   --threat-log /var/log/secubox/waf/waf-threats.log \
   --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
   --media-cache-dir /var/cache/secubox/waf/media \
