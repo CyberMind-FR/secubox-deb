@@ -36,3 +36,32 @@ secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quie
 # So the wildcard only ever resolves to "a manifest id known to this system,
 # plus --json" — never to arbitrary code execution or an arbitrary argv.
 secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --collect --quiet /usr/sbin/secubox-wakectl wake *
+
+# Task 10 (#896) — manual sleep/wake buttons on the /profiles/ panel itself
+# (api/web.py POST /wake, POST /sleep). Two MORE grants, distinct from both
+# sections above:
+#
+#   * /wake — same secubox-wakectl binary as the waker's fire-and-forget
+#     grant just above, but SYNCHRONOUS (--wait --pipe): the panel waits for
+#     and displays the wake report to the operator, unlike the waker (which
+#     never blocks a public, unauthenticated HTTP request on the wake's
+#     outcome). The extra --wait --pipe flags make this a DIFFERENT command
+#     line that does not match the fire-and-forget grant above, hence its
+#     own line here. Same wildcard-safety argument as above applies
+#     verbatim: execve (no shell) + secubox-wakectl re-validates the module
+#     id itself (refuses unknown/manual/always-on before touching
+#     systemd/LXC).
+#
+#   * /sleep — reuses the EXISTING `apply` actuator (no new binary, no new
+#     privileged code path), restricted to one module via `--only <id>`:
+#     plan_changes already computes a STOP for any sleepable module that is
+#     currently up and not desired ON (absent from the active profile /
+#     not pinned on), so `--only` simply narrows apply's effect to that one
+#     module — if the module IS desired ON, the filtered plan is empty
+#     (safe no-op). The wildcard is bounded the same way as the two grants
+#     above: sudo matches argv directly (execve, no shell), and
+#     secubox-profilectl's own plan_changes only ever acts on a module id it
+#     recognizes from modules.d — an unknown id just filters the plan down
+#     to nothing, never arbitrary execution.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-wakectl wake *
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-profilectl apply --only * --yes --json

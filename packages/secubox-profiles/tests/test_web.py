@@ -276,6 +276,129 @@ def test_set_pin_invalid_value_400(client):
     assert resp.status_code == 400
 
 
+# ---------------------------------------------------------------------------
+# lifecycle / wake_class / sleep_state (Task 10) — status payload extension.
+# `auth` is protected (PROTECTED_IDS) => effective_lifecycle forces
+# "always-on" regardless of its declared value => sleep_state "n/a". `lyrion`
+# declares no lifecycle/wake_class => defaults "eager"/"normal", observed on
+# (client fixture) => sleep_state "up". A third module declared "on-demand"/
+# "urgent" and left UNOBSERVED by the client fixture's _observe_all stub
+# proves the None -> False -> "asleep" coalescing (same philosophy as
+# observe.is_on, see its docstring).
+# ---------------------------------------------------------------------------
+
+def test_status_includes_lifecycle_wake_class_and_sleep_state(client, root):
+    (root / "modules.d" / "podcast.toml").write_text(
+        'id       = "podcast"\n'
+        'category = "media"\n'
+        'runtime  = "native"\n'
+        'exposure = "lan"\n'
+        'units    = ["secubox-podcast.service"]\n'
+        'priority = 20\n'
+        'lifecycle  = "on-demand"\n'
+        'wake_class = "urgent"\n')
+    resp = client.get("/api/v1/profiles/status")
+    assert resp.status_code == 200
+    data = {m["id"]: m for m in resp.json()["modules"]}
+
+    assert data["lyrion"]["lifecycle"] == "eager"
+    assert data["lyrion"]["wake_class"] == "normal"
+    assert data["lyrion"]["sleep_state"] == "up"
+    assert data["lyrion"]["wake_budget_s"] == pytest.approx(45.0)
+
+    assert data["auth"]["lifecycle"] == "always-on"    # protected overrides declared value
+    assert data["auth"]["wake_class"] == "normal"
+    assert data["auth"]["sleep_state"] == "n/a"
+    assert data["auth"]["wake_budget_s"] is None
+
+    assert data["podcast"]["lifecycle"] == "on-demand"
+    assert data["podcast"]["wake_class"] == "urgent"
+    assert data["podcast"]["sleep_state"] == "asleep"   # unobserved -> is_on() False
+    assert data["podcast"]["wake_budget_s"] == pytest.approx(15.0)
+
+
+# ---------------------------------------------------------------------------
+# manual wake/sleep (Task 10) — webui->ctl: both routes only ever shell out to
+# a FIXED sudo argv (see sudoers.d/secubox-profiles), gated by JWT and
+# _apply_lock, exactly like apply/rollback. An unknown module is 404 and a
+# non-sleepable one (always-on/manual, incl. protected-forced) is 409 —
+# BOTH refused locally, before any sudo call is attempted (structural
+# refusal, same posture as the pin protected-off check).
+# ---------------------------------------------------------------------------
+
+def test_wake_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
+    def fake_run(argv, **kw):
+        assert argv == ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+                        "--collect", "--quiet", "/usr/sbin/secubox-wakectl",
+                        "wake", "lyrion", "--json"]
+
+        class P:
+            returncode = 0
+            stdout = '{"status":"woken","module":"lyrion"}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/wake", json={"module": "lyrion"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "woken"
+
+
+def test_wake_route_unknown_module_404_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/wake", json={"module": "fantome"})
+    assert r.status_code == 404
+    assert called == []
+
+
+def test_wake_route_not_sleepable_409_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/wake", json={"module": "auth"})  # protected -> always-on
+    assert r.status_code == 409
+    assert called == []
+
+
+def test_sleep_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
+    def fake_run(argv, **kw):
+        assert argv == ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+                        "--collect", "--quiet", "/usr/sbin/secubox-profilectl",
+                        "apply", "--only", "lyrion", "--yes", "--json"]
+
+        class P:
+            returncode = 0
+            stdout = '{"status":"applied","changed":["lyrion"],"failed":[],"rolled_back":[]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/sleep", json={"module": "lyrion"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "applied"
+    assert r.json()["changed"] == ["lyrion"]
+
+
+def test_sleep_route_unknown_module_404_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/sleep", json={"module": "fantome"})
+    assert r.status_code == 404
+    assert called == []
+
+
+def test_sleep_route_not_sleepable_409_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/sleep", json={"module": "auth"})  # protected -> always-on
+    assert r.status_code == 409
+    assert called == []
+
+
+def test_wake_and_sleep_require_jwt_when_not_overridden(root):
+    c = TestClient(web.app)
+    assert c.post("/api/v1/profiles/wake", json={"module": "lyrion"}).status_code == 401
+    assert c.post("/api/v1/profiles/sleep", json={"module": "lyrion"}).status_code == 401
+
+
 def test_diff_after_pin_reflects_refusal_not_partial_state(client, root):
     # Belt-and-braces: even if the write-path refusal were somehow bypassed,
     # plan_changes() itself raises ProtectedViolation independently — but the
