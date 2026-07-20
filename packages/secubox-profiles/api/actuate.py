@@ -192,10 +192,19 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
 def wait_state(m: Manifest, want_on: bool, *, observe=_observe,
                sleep=time.sleep, now=time.monotonic,
                timeout: float = 30.0, poll: float = 1.0) -> bool:
-    """Sonde observe(m) jusqu'à is_on == want_on, ou expiration. Injectable."""
+    """Sonde observe(m) jusqu'à ce que l'ÉTAT OBSERVÉ corresponde à want_on, ou
+    expiration. C'est le SEUL arbitre du succès d'un start/stop (le code retour
+    de la commande ne l'est pas). Pour un module LXC, l'état complet inclut le
+    conteneur (lxc_running), pas seulement l'unité hôte : sinon un conteneur qui
+    refuse de mourir passerait inaperçu (is_on ne regarde que l'unité hôte).
+    Injectable."""
     start = now()
     while True:
-        if is_on(observe(m)) == want_on:
+        a = observe(m)
+        reached = is_on(a) == want_on
+        if m.runtime == "lxc" and m.lxc:
+            reached = reached and (a.lxc_running == want_on)
+        if reached:
             return True
         if now() - start >= timeout:
             return False

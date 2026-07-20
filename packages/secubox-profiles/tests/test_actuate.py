@@ -142,6 +142,44 @@ def test_wait_state_times_out():
     assert ok is False
 
 
+def test_wait_state_lxc_requires_container_state_for_start():
+    # Host unit is up (is_on True) but the container is NOT running yet →
+    # a START must NOT be considered reached until lxc_running is True too.
+    from api.actuate import wait_state
+    from api.observe import Actual
+    m = _m("l", runtime="lxc", lxc="l", units=("secubox-l.service",))
+    seq = iter([
+        Actual(enabled=True, active=True, lxc_running=False),  # unit up, container not yet
+        Actual(enabled=True, active=True, lxc_running=True),   # now fully up
+    ])
+    ok = wait_state(m, True, observe=lambda mm: next(seq),
+                    sleep=lambda s: None, now=iter([0, 1, 2]).__next__,
+                    timeout=30, poll=1)
+    assert ok is True
+
+
+def test_wait_state_lxc_stop_not_reached_while_container_runs():
+    # Host unit is down (is_on False) but the container refuses to die
+    # (lxc_running stays True) → a STOP must report NOT reached (zombie guard).
+    from api.actuate import wait_state
+    from api.observe import Actual
+    m = _m("l", runtime="lxc", lxc="l", units=("secubox-l.service",))
+    ok = wait_state(m, False, observe=lambda mm: Actual(enabled=False, active=False,
+                                                        lxc_running=True),
+                    sleep=lambda s: None, now=iter([0, 10, 20, 31]).__next__,
+                    timeout=30, poll=10)
+    assert ok is False
+
+
+def test_wait_state_native_unaffected_by_container_predicate():
+    # A native module has lxc_running=None; the container clause must not apply.
+    from api.actuate import wait_state
+    from api.observe import Actual
+    ok = wait_state(_m("x"), True, observe=lambda mm: Actual(enabled=True, active=True),
+                    sleep=lambda s: None, now=iter([0, 1]).__next__, timeout=30, poll=1)
+    assert ok is True
+
+
 def test_condition_failed_detects_gated_native_unit():
     from api.actuate import condition_failed
 
