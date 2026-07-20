@@ -195,6 +195,14 @@ type Server struct {
 	// feature entirely: an unmapped host always gets 421, exactly as before.
 	onDemand *OnDemand
 
+	// vhostSignals is the #896 Task 15 per-vhost last-request/active-conns
+	// emitter the profiles-side sleeper reads to decide idleness. Nil
+	// disables it entirely (--vhost-signals=""). Only ever Begin/End'd for
+	// on-demand vhosts (see the handler() call site) — recording every
+	// public vhost is unnecessary (the sleeper only cares about the
+	// on-demand set) and would defeat the "map stays tiny" property.
+	vhostSignals *VhostSignals
+
 	// wakerSocket overrides the unix socket path dialled by wakerProxy().
 	// Empty means the production default (see wakerproxy.go's
 	// defaultWakerSocket). Tests inject a stub socket path here.
@@ -306,6 +314,22 @@ func (s *Server) handler() http.Handler {
 			http.Error(w, "421 Misdirected Request: no route for host "+host,
 				http.StatusMisdirectedRequest)
 			return
+		}
+
+		// #896 Task 15 — bracket this request in the per-vhost signal emitter.
+		// Reached ONLY when routeLookup found a live route (ok == true) and we
+		// did NOT take the waker branch above (that branch already returned) —
+		// so this is exactly "a real request is about to be proxied to a real
+		// backend". Gated to on-demand vhosts: those are the only ones the
+		// sleeper ever acts on, so recording anything else would just grow the
+		// map for no benefit. A single placement here (rather than one at each
+		// of the two proxy.ServeHTTP call sites below — the media-cache-miss
+		// path and the plain path) covers both: `defer` fires whichever one the
+		// function returns through, so one Begin always pairs with exactly one
+		// End regardless of which branch handles the request.
+		if s.vhostSignals != nil && s.onDemand != nil && s.onDemand.Contains(host) {
+			s.vhostSignals.Begin(host)
+			defer s.vhostSignals.End(host)
 		}
 
 		// Use the cached proxy from Routes when available (Task 1.2 perf goal:
@@ -693,6 +717,11 @@ func main() {
 	// (the sleeper stopped them) are proxied to the waker splash instead of 421.
 	onDemandVhosts := flag.String("on-demand-vhosts", "",
 		"path to on-demand-vhosts.json (JSON array of vhosts; hot-reloaded); empty disables the waker branch")
+	// #896 Task 15: per-vhost last-request/active-conns signal the
+	// profiles-side sleeper (api/sleeper.py) reads to decide idleness.
+	// Only ever populated for on-demand vhosts (see handler()); empty disables.
+	vhostSignalsFile := flag.String("vhost-signals", "/var/cache/secubox/waf/vhost-signals.json",
+		"path for the per-vhost last-request/active-conns JSON snapshot (scale-to-zero signal source); empty disables")
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
 	threatLog := flag.String("threat-log", "/var/log/secubox/waf/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
@@ -779,6 +808,14 @@ func main() {
 		log.Printf("sbxwaf: visit-stats enabled → %s (flush %s)", *visitsStats, visitFlushInterval)
 	}
 
+	// #896 Task 15: per-vhost scale-to-zero signal emitter. Disabled when
+	// --vhost-signals is empty.
+	var vhostSignals *VhostSignals
+	if *vhostSignalsFile != "" {
+		vhostSignals = NewVhostSignals(*vhostSignalsFile)
+		log.Printf("sbxwaf: vhost-signals enabled → %s (flush %s)", *vhostSignalsFile, vhostSignalsFlushInterval)
+	}
+
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
@@ -796,6 +833,8 @@ func main() {
 		mediaCache: mediaCache,
 		// #747: non-attacker visit statistics.
 		visits: visits,
+		// #896 Task 15: per-vhost scale-to-zero signal emitter.
+		vhostSignals: vhostSignals,
 		// #747: first-party host suffixes + Hub origin for the injected health banner.
 		widgetHosts:  splitCSV(*widgetHosts),
 		bannerOrigin: strings.TrimSpace(*bannerOrigin),

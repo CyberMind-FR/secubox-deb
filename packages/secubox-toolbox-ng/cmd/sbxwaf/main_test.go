@@ -223,6 +223,97 @@ func TestOnDemandVisitsExcluded(t *testing.T) {
 	}
 }
 
+// TestVhostSignalsRecordedForRealOnDemandRequest verifies the handler()
+// Begin/End hook (#896 Task 15): a request to an on-demand vhost that DOES
+// have a live route is bracketed — active_conns is back to 0 (End ran) and
+// last_request_ts is set once the request completes.
+func TestVhostSignalsRecordedForRealOnDemandRequest(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+	backendAddr := strings.TrimPrefix(backend.URL, "http://")
+
+	vs := NewVhostSignals("") // no on-disk flush, inspect state directly
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) {
+			h, p, err := splitHostPort(backendAddr)
+			if err != nil {
+				return "", 0, false
+			}
+			return h, p, true
+		},
+		onDemand:     &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		vhostSignals: vs,
+	}
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet, "http://sleepy.example.com/", nil)
+	req.Host = "sleepy.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from the real backend, got %d", rec.Code)
+	}
+
+	snap := vs.snapshot()
+	entry, ok := snap["sleepy.example.com"]
+	if !ok {
+		t.Fatal("expected sleepy.example.com to be recorded in vhost signals")
+	}
+	if entry.ActiveConns != 0 {
+		t.Fatalf("expected active_conns=0 once the (synchronous) request completed, got %d", entry.ActiveConns)
+	}
+	if entry.LastRequestTS == 0 {
+		t.Fatal("expected a non-zero last_request_ts")
+	}
+}
+
+// TestVhostSignalsExcludedForWakerBranch verifies that a request served by
+// the waker splash (the vhost is asleep, no live route) is NOT recorded into
+// vhost signals — recording it would make a sleeping vhost look like it just
+// received a real hit, defeating the idle check (mirrors the analogous
+// TestOnDemandVisitsExcluded for the #747 visit-stats aggregator).
+func TestVhostSignalsExcludedForWakerBranch(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "waker-vhostsignals.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix %s: %v", sockPath, err)
+	}
+	defer ln.Close()
+
+	waker := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "waking up…")
+		}),
+	}
+	go waker.Serve(ln) //nolint:errcheck
+	defer waker.Close()
+
+	vs := NewVhostSignals("")
+	srv := &Server{
+		routeLookup:  func(host string) (string, int, bool) { return "", 0, false },
+		onDemand:     &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		wakerSocket:  sockPath,
+		vhostSignals: vs,
+	}
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet, "http://sleepy.example.com/", nil)
+	req.Host = "sleepy.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from waker splash, got %d", rec.Code)
+	}
+	if snap := vs.snapshot(); len(snap) != 0 {
+		t.Fatalf("waker splash must not be recorded in vhost signals; got %+v", snap)
+	}
+}
+
 // TestTrustedHostSkipsWAF verifies that a request to a trusted host is NOT
 // blocked even when the payload would normally trigger the WAF.
 // Mirrors Python check_request whitelist (secubox_waf.py:761-763).
