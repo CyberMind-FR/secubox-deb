@@ -101,3 +101,35 @@ def test_run_once_skips_wake_locked(tmp_path):
                        run=lambda a: (0, ""), observe=lambda m: Actual(enabled=False, active=False),
                        now="t", wake_locked=frozenset({"idle1"}))
     assert stopped == []
+
+
+def test_serve_one_tick_stops_idle(tmp_path, monkeypatch):
+    import asyncio
+    from api.sleeper import serve
+    from api.observe import Actual
+    (tmp_path / "modules.d").mkdir()
+    (tmp_path / "modules.d" / "d.toml").write_text(
+        'id="d"\ncategory="infra"\nruntime="native"\nexposure="public"\n'
+        'units=["d.service"]\nlifecycle="on-demand"\n[portal]\ndomain="d.gk2"\n')
+    # actuate() STOPs a portal-routed module by editing the WAF routes file
+    # DIRECTLY (real Path I/O, bypassing the injected `run`) at a hardcoded
+    # default (api.actuate.ROUTES_FILE) — apply_plan/run_once do not thread a
+    # routes_path override through. Keep this test off the real system path
+    # by retargeting actuate()'s own bound default (a plain dict, restored by
+    # monkeypatch on teardown) rather than touching /etc/secubox.
+    import api.actuate as _actuate
+    routes_file = tmp_path / "routes.json"
+    routes_file.write_text("{}")
+    monkeypatch.setitem(_actuate.actuate.__kwdefaults__, "routes_path", routes_file)
+    calls = []
+
+    async def go():
+        await serve(root=tmp_path, interval=0, sleep=lambda s: asyncio.sleep(0),
+                    observe_all=lambda ms, routes=None: {"d": Actual(enabled=True, active=True)},
+                    signal_reader=lambda: {"d.gk2": {"last_request_ts": 0.0, "active_conns": 0}},
+                    hint_probe=lambda mid, m: None,
+                    run=lambda a: (calls.append(a), (0, ""))[1],
+                    observe=lambda m: Actual(enabled=False, active=False),
+                    now=lambda: 100000.0, tick_limit=1)
+    asyncio.run(go())
+    assert any(c[:2] == ["systemctl", "disable"] for c in calls)
