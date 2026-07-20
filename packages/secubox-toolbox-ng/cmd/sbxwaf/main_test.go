@@ -134,6 +134,53 @@ func TestOnDemandProxiesToWaker(t *testing.T) {
 	// still gets 421 from this same handler code path.
 }
 
+// TestOnDemandProxiesWithMixedCaseHost verifies that a mixed/upper-case Host
+// header — which OnDemand.Contains already matches case-insensitively — is
+// normalized to lowercase by the waker Director too, so the wake key sent to
+// the waker matches the lowercase portal_domain stored in on-demand-vhosts.json.
+// Without this normalization the waker's exact-match lookup on the mixed-case
+// path would miss and the wake would never fire (permanent splash).
+func TestOnDemandProxiesWithMixedCaseHost(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "waker3.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix %s: %v", sockPath, err)
+	}
+	defer ln.Close()
+
+	var gotPath string
+	waker := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "waking up…")
+		}),
+	}
+	go waker.Serve(ln) //nolint:errcheck
+	defer waker.Close()
+
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) { return "", 0, false },
+		// Stored lowercase, exactly as the on-demand-vhosts.json generator emits it.
+		onDemand:    &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		wakerSocket: sockPath,
+	}
+
+	handler := srv.handler()
+	// Mixed-case Host header — a hand-typed URL or script caller.
+	req := httptest.NewRequest(http.MethodGet, "http://Sleepy.Example.COM/", nil)
+	req.Host = "Sleepy.Example.COM"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from waker splash, got %d", rec.Code)
+	}
+	if gotPath != "/_wake/sleepy.example.com" {
+		t.Fatalf("expected canonical lowercase waker path /_wake/sleepy.example.com, got %q", gotPath)
+	}
+}
+
 // TestOnDemandVisitsExcluded verifies that a request served by the waker
 // splash is NOT tallied into the legitimate visit-stats (mirrors the existing
 // 403/421 exclusion).
