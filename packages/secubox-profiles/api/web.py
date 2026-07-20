@@ -53,8 +53,9 @@ except ImportError:  # pragma: no cover - dev sans secubox_core installé
 
 from . import cli as _cli
 from .diff import ProtectedViolation, plan_changes
+from .lifecycle import effective_lifecycle, is_sleepable, wake_budget
 from .manifest import ManifestError, load_all
-from .observe import Actual, load_routes
+from .observe import Actual, is_on, load_routes
 from .scan import _toml_list, _toml_str
 from .state import OFF, ON, Profile, StateError, load_pins, load_profile
 
@@ -140,10 +141,30 @@ def _build_status_payload(manifests: dict, actuals: dict) -> dict:
     for mid, m in sorted(manifests.items()):
         a = actuals.get(mid, Actual())
         st = _tri_state(a)
+        # sleep_state ("up"/"asleep"/"n/a") is a SEPARATE axis from the
+        # observation tri-state `st` above: `st` can be "unknown" (probe
+        # failed) while sleep_state still has an actionable answer, because
+        # it reuses is_on()'s None -> False coalescing (same posture as
+        # observe.is_on's own docstring: correct for a DECISION, wrong for an
+        # inventory view — which is exactly what this field is for, a
+        # manual-action affordance, not a status display of doubt).
+        # "waking" (mid-wake-up) is deliberately NOT modeled here: the only
+        # candidate signal (waker-active.json, api/waker.py) is a best-effort
+        # anti-storm lock, not a reliable "in progress" probe — surfacing it
+        # as a third state would be a fragile guess. Deferred.
+        eff = effective_lifecycle(m)
+        if eff in ("always-on", "manual"):
+            sleep_state = "n/a"
+            budget = None
+        else:
+            sleep_state = "up" if is_on(a) else "asleep"
+            budget = wake_budget(m)
         modules.append({
             "id": mid, "category": m.category, "runtime": m.runtime,
             "exposure": m.exposure, "priority": m.priority,
             "protected": m.protected, "on": st, "rss_kb": a.rss_kb,
+            "lifecycle": eff, "wake_class": m.wake_class,
+            "sleep_state": sleep_state, "wake_budget_s": budget,
         })
         totals["count"] += 1
         totals[st] += 1
@@ -289,6 +310,10 @@ class ApplyRequest(BaseModel):
     profile: str
 
 
+class ModuleAction(BaseModel):
+    module: str
+
+
 # Sérialise TOUTE écriture du fichier `active` partagé + toute actuation
 # (apply/rollback) en un seul verrou async, dans ce process. Corrige un TOCTOU
 # structurel : entre la préview d'un opérateur (GET /diff) et sa confirmation
@@ -309,9 +334,10 @@ def _ctl_run(argv, **kw):
     return subprocess.run(argv, capture_output=True, text=True, timeout=1800, **kw)
 
 
-async def _run_ctl_json(verb: str):
-    """Délègue au helper root (webui→ctl), FIXE + exact-command (voir
-    /etc/sudoers.d/secubox-profiles). Bloquant → to_thread.
+async def _run_ctl_json_argv(argv: list[str]) -> dict:
+    """Corps partagé par tout appel webui→ctl synchrone (--wait --pipe) :
+    exécute l'argv FIXE (voir /etc/sudoers.d/secubox-profiles) via
+    `_ctl_run`, hors-loop (to_thread), et parse le rapport JSON s'il existe.
 
     IMPORTANT — on lance le CLI via `systemd-run`, PAS un simple `sudo …ctl` :
     ce service tourne en ProtectSystem=strict avec un ReadWritePaths réduit, et
@@ -321,17 +347,18 @@ async def _run_ctl_json(verb: str):
     unité transitoire `systemd-run` s'exécute dans le contexte de PID 1, HORS
     du sandbox, avec tous les accès nécessaires pour piloter systemd/LXC et
     écrire ces chemins. `--wait` = synchrone, `--pipe` = on récupère le JSON du
-    CLI sur stdout, `--collect --quiet` = nettoyage + pas de bruit systemd-run."""
+    CLI sur stdout, `--collect --quiet` = nettoyage + pas de bruit systemd-run.
+
+    Le rapport est parsé EN PREMIER, avant tout regard sur le rc : apply/
+    rollback/wake émettent tous un --json report même quand ils se replient
+    (apply rolled_back, wake refused) — le surfacer est bien plus utile à
+    l'opérateur/panel qu'une chaîne d'erreur tronquée ; c'est l'appelant HTTP
+    qui classe applied/refused/rolled_back, pas cette fonction. Ce n'est
+    qu'à défaut de JSON parseable qu'on retombe sur un échec HTTP (409 pour
+    le rc=3 conventionnel de refus protégé, 500 sinon)."""
     import asyncio as _a
     import json as _json
-    argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
-            "--collect", "--quiet",
-            "/usr/sbin/secubox-profilectl", verb, "--yes", "--json"]
     proc = await _a.to_thread(_ctl_run, argv)
-    # Parse the report FIRST: apply/rollback emit a --json report even when they
-    # end in `rolled_back` (CLI rc=2). Surfacing that report (which modules
-    # changed / were rolled back) is far more useful to the operator than a raw
-    # truncated error string — the panel classifies applied-vs-failed itself.
     try:
         report = _json.loads(proc.stdout)
     except ValueError:
@@ -343,7 +370,43 @@ async def _run_ctl_json(verb: str):
     if proc.returncode == 3:
         raise HTTPException(status_code=409, detail=(proc.stderr or proc.stdout).strip()[:300])
     raise HTTPException(status_code=500,
-                        detail=f"{verb} échoué: {(proc.stderr or proc.stdout).strip()[:300]}")
+                        detail=f"ctl échoué: {(proc.stderr or proc.stdout).strip()[:300]}")
+
+
+async def _run_ctl_json(verb: str) -> dict:
+    argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+            "--collect", "--quiet",
+            "/usr/sbin/secubox-profilectl", verb, "--yes", "--json"]
+    return await _run_ctl_json_argv(argv)
+
+
+async def _run_wake_ctl(module: str) -> dict:
+    """Réveil manuel (panel) — synchrone (--wait --pipe), DIFFÉRENT du réveil
+    fire-and-forget du waker (api/waker.py::_fire_wake, pas de --wait/--pipe) :
+    le panel attend et affiche le report, le waker rend la main tout de suite
+    pour ne jamais bloquer une requête HTTP publique sur l'issue du réveil.
+    Deux argv distincts => deux grants sudoers distincts (voir
+    sudoers.d/secubox-profiles)."""
+    argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+            "--collect", "--quiet",
+            "/usr/sbin/secubox-wakectl", "wake", module, "--json"]
+    return await _run_ctl_json_argv(argv)
+
+
+async def _run_sleep_ctl(module: str) -> dict:
+    """Sommeil manuel (panel) — réutilise l'actionneur `apply` du profilectl
+    déjà grant-é, restreint à CE module via `--only` : plan_changes calcule
+    déjà un STOP pour tout module sleepable actuellement up et non désiré ON
+    (absent du profil actif / non épinglé on), donc `--only <module>` isole
+    correctement l'effet à ce seul module sans réimplémenter d'actionneur
+    dédié. Si le module EST désiré ON (listé dans le profil actif / épinglé
+    on), le plan filtré est vide et l'appel est un no-op sûr — le panel/
+    l'opérateur voit alors `changed: []` plutôt qu'un module qui se
+    rendormirait aussitôt reconverge."""
+    argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+            "--collect", "--quiet",
+            "/usr/sbin/secubox-profilectl", "apply", "--only", module, "--yes", "--json"]
+    return await _run_ctl_json_argv(argv)
 
 
 def create_app() -> FastAPI:
@@ -521,6 +584,38 @@ def create_app() -> FastAPI:
             if isinstance(report, dict) and report.get("status") in ("applied", "planned"):
                 active_path.unlink(missing_ok=True)
             return report
+
+    def _sleepable_module_or_error(mod_dir, module: str):
+        """Refus STRUCTUREL, comme la refus-avant-écriture des pins (voir
+        set_pin) : un module inconnu ou non-endormable (always-on/manual, y
+        compris protected forcé always-on) ne doit JAMAIS déclencher un appel
+        sudo — il est rejeté ICI, avant que /wake ou /sleep ne shell out."""
+        manifests = _load_manifests_or_500(mod_dir)
+        m = manifests.get(module)
+        if m is None:
+            raise HTTPException(status_code=404, detail=f"module inconnu: {module}")
+        if not is_sleepable(m):
+            raise HTTPException(
+                status_code=409,
+                detail=f"{module} n'est pas endormable (lifecycle={effective_lifecycle(m)})",
+            )
+        return m
+
+    @app.post("/api/v1/profiles/wake")
+    async def wake_module(body: ModuleAction, _claims=Depends(require_jwt)):
+        root = _root()
+        mod_dir, _prof_dir, _pins_file, _active = _cli._paths(root)
+        _sleepable_module_or_error(mod_dir, body.module)
+        async with _apply_lock:
+            return await _run_wake_ctl(body.module)
+
+    @app.post("/api/v1/profiles/sleep")
+    async def sleep_module(body: ModuleAction, _claims=Depends(require_jwt)):
+        root = _root()
+        mod_dir, _prof_dir, _pins_file, _active = _cli._paths(root)
+        _sleepable_module_or_error(mod_dir, body.module)
+        async with _apply_lock:
+            return await _run_sleep_ctl(body.module)
 
     return app
 
