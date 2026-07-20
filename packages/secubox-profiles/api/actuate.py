@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import tempfile
 import time
@@ -215,3 +216,51 @@ def condition_failed(m: Manifest, run) -> bool:
         if rc == 0 and out.strip() == "no":
             return True
     return False
+
+
+_TS_UNITS = {"us": 1e-6, "ms": 1e-3, "s": 1.0, "min": 60.0, "h": 3600.0, "d": 86400.0}
+# Longest-first alternation so "min"/"ms"/"us" win over "s" at the same position.
+_TS_TOKEN = re.compile(r"(\d+)\s*(us|ms|min|h|d|s)")
+
+
+def _parse_systemd_timespan(text: str) -> float | None:
+    """Convertit un timespan systemd (« 1min 30s », « 90s », « 500ms ») en
+    secondes. « infinity » ou une chaîne non-parsable -> None (l'appelant
+    retombe sur le plafond de sûreté). `systemctl show -p TimeoutStopUSec
+    --value` imprime la forme humaine, pas des microsecondes brutes — d'où ce
+    parseur (vérifié sur la board : « 1min 30s »)."""
+    t = text.strip().lower()
+    if not t or t == "infinity":
+        return None
+    total = 0.0
+    matched = False
+    for m in _TS_TOKEN.finditer(t):
+        total += int(m.group(1)) * _TS_UNITS[m.group(2)]
+        matched = True
+    return total if matched else None
+
+
+def derived_timeout(m: Manifest, want_on: bool, run, *, floor: float = 10.0,
+                    margin: float = 15.0, cap: float = 300.0) -> float:
+    """Combien de temps wait_state doit patienter pour que `m` atteigne
+    `want_on`. Natif : dérivé du propre TimeoutStart/StopUSec de l'unité (+
+    marge), borné [floor, cap] ; « infinity »/illisible -> cap. LXC : cap (la
+    montée/descente d'un conteneur n'a pas de timeout d'unité systemd ;
+    wait_state rend la main dès convergence, le cap n'est qu'un plafond)."""
+    if m.runtime == "lxc":
+        return cap
+    prop = "TimeoutStartUSec" if want_on else "TimeoutStopUSec"
+    best = 0.0
+    seen = False
+    for u in m.units:
+        rc, out = run(["systemctl", "show", u, "-p", prop, "--value"])
+        if rc != 0:
+            return cap          # unreadable -> be safe, wait the cap
+        parsed = _parse_systemd_timespan(out)
+        if parsed is None:
+            return cap          # infinity/unparseable -> cap
+        best = max(best, parsed)
+        seen = True
+    if not seen:
+        return cap              # no units at all -> cap
+    return min(cap, max(floor, best + margin))

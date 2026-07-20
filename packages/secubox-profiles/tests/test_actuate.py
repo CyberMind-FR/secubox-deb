@@ -163,3 +163,59 @@ def test_condition_failed_false_for_lxc():
     called = []
     condition_failed(_m("l", runtime="lxc", lxc="l"), lambda a: (called.append(a), (0, "no"))[1])
     assert not called  # short-circuits on runtime != native
+
+
+def test_parse_systemd_timespan_forms():
+    from api.actuate import _parse_systemd_timespan
+    assert _parse_systemd_timespan("90s") == 90.0
+    assert _parse_systemd_timespan("1min 30s") == 90.0
+    assert _parse_systemd_timespan("2min") == 120.0
+    assert _parse_systemd_timespan("1h 30min") == 5400.0
+    assert _parse_systemd_timespan("500ms") == 0.5
+    assert _parse_systemd_timespan("infinity") is None
+    assert _parse_systemd_timespan("") is None
+    assert _parse_systemd_timespan("garbage") is None
+
+
+def test_derived_timeout_native_uses_stop_timeout_plus_margin():
+    from api.actuate import derived_timeout
+    # STOP -> reads TimeoutStopUSec; 90s + 15s margin = 105, within [10, 300].
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"] and "TimeoutStopUSec" in argv:
+            return 0, "1min 30s\n"
+        return 0, ""
+    assert derived_timeout(_m("metrics"), False, run, margin=15.0) == 105.0
+
+
+def test_derived_timeout_native_start_reads_start_timeout():
+    from api.actuate import derived_timeout
+    seen = {}
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"]:
+            seen["prop"] = argv[argv.index("-p") + 1]
+            return 0, "5s\n"
+        return 0, ""
+    derived_timeout(_m("x"), True, run)          # START
+    assert seen["prop"] == "TimeoutStartUSec"
+
+
+def test_derived_timeout_infinity_and_unreadable_use_cap():
+    from api.actuate import derived_timeout
+    assert derived_timeout(_m("x"), False, lambda a: (0, "infinity\n"), cap=300.0) == 300.0
+    assert derived_timeout(_m("x"), False, lambda a: (1, ""), cap=300.0) == 300.0   # show failed
+    assert derived_timeout(_m("x"), False, lambda a: (None, ""), cap=300.0) == 300.0  # couldn't run
+
+
+def test_derived_timeout_lxc_returns_cap():
+    from api.actuate import derived_timeout
+    called = []
+    m = _m("l", runtime="lxc", lxc="l")
+    assert derived_timeout(m, False, lambda a: (called.append(a), (0, "9s"))[1], cap=250.0) == 250.0
+    assert not called   # short-circuits: no systemctl show for an LXC module
+
+
+def test_derived_timeout_clamps_to_floor_and_cap():
+    from api.actuate import derived_timeout
+    # tiny unit timeout -> floor wins; huge -> cap wins.
+    assert derived_timeout(_m("x"), False, lambda a: (0, "1s"), floor=10.0, margin=0.0) == 10.0
+    assert derived_timeout(_m("x"), False, lambda a: (0, "10min"), cap=120.0, margin=0.0) == 120.0
