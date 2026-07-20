@@ -50,3 +50,42 @@ def test_waker_unknown_vhost_404(monkeypatch, tmp_path):
     (tmp_path / "modules.d").mkdir()
     c = TestClient(waker.app)
     assert c.get("/_wake/nope.gk2").status_code == 404
+
+
+def test_fire_wake_reaps_child_no_zombie(monkeypatch):
+    """`_fire_wake` must not leak a <defunct> zombie: without a `.wait()`
+    somewhere, the child process it Popen()s is never reaped. This asserts
+    the reaper daemon thread is built with target=<popen>.wait, started, and
+    that invoking that target actually reaps (via a fake Popen whose .wait()
+    flips a flag) — real coverage of the fix, not just an argv assertion."""
+    import api.waker as waker
+
+    class FakePopen:
+        def __init__(self):
+            self.waited = False
+
+        def wait(self):
+            self.waited = True
+
+    fake = FakePopen()
+    monkeypatch.setattr(waker.subprocess, "Popen", lambda *a, **k: fake)
+
+    started: dict = {}
+
+    class FakeThread:
+        def __init__(self, target=None, daemon=None):
+            started["target"] = target
+            started["daemon"] = daemon
+
+        def start(self):
+            started["started"] = True
+            started["target"]()  # simulate the reaper thread running
+
+    monkeypatch.setattr(waker.threading, "Thread", FakeThread)
+
+    waker._fire_wake("demo")
+
+    assert started["target"] == fake.wait
+    assert started["daemon"] is True
+    assert started["started"] is True
+    assert fake.waited is True  # reaped — no zombie left behind
