@@ -36,7 +36,19 @@ def _snap_root_for(root: Path) -> Path:
     `secubox-profilectl apply/rollback` — un wake doit rejoindre la même
     chaîne 4R qu'un apply normal. Ce n'est vrai que pour la racine par
     défaut ; un --root explicite (tests, sandboxes) reste confiné sous lui,
-    pour ne jamais faire tourner R1..R4 d'un vrai système via un test."""
+    pour ne jamais faire tourner R1..R4 d'un vrai système via un test.
+
+    Le confinement non-défaut est UNIQUEMENT une isolation de test (garder
+    le test non-mocké — test_wake_starts_a_down_on_demand_module — hors de
+    la vraie chaîne 4R). En production, wakectl utilise le même
+    SNAP_DIR/AUDIT_LOG que `secubox-profilectl` — identique à
+    `cli.py._cmd_apply`/`_cmd_rollback`, qui eux ne font PAS varier ces
+    chemins selon --root. Un futur déploiement multi-root réel (ex.
+    cellule-in-a-box #843, un --root par tenant) romprait cette symétrie :
+    wakectl et profilectl écriraient alors dans des chaînes rollback/audit
+    DIFFÉRENTES pour une même racine. Le jour où --root varie en
+    production, il faudra aligner cli.py pour dériver ces chemins de la
+    même façon (suivi #896) — ne PAS le faire dans cette tâche."""
     return SNAP_DIR if root == DEFAULT_ROOT else root / "profiles" / "rollback"
 
 
@@ -68,6 +80,10 @@ def wake(module: str, *, root: Path = DEFAULT_ROOT, run, observe=_observe,
                                audit_path=_audit_path_for(root), apply=apply)
     if report.status == "applied" and module in report.changed:
         return {"status": "woken", "module": module}
+    if report.status == "planned":
+        # apply=False (dry-run) : apply_plan n'a rien exécuté, ce n'est pas
+        # un échec — rien n'a été tenté.
+        return {"status": "planned", "module": module}
     return {"status": "failed", "module": module,
             "failed": report.failed, "rolled_back": report.rolled_back}
 
@@ -88,6 +104,10 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _running_as_root() -> bool:
+    return os.geteuid() == 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="secubox-wakectl")
     p.add_argument("--root", default=str(DEFAULT_ROOT))
@@ -96,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("module")
     sp.add_argument("--json", action="store_true")
     args = p.parse_args(argv)
-    if os.geteuid() != 0:
+    if not _running_as_root():
         print("wake doit être lancé en root (il pilote systemd/LXC).", file=sys.stderr)
         return 1
     rep = wake(args.module, root=Path(args.root), run=_run, now=_now_iso())

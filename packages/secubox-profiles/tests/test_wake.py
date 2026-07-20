@@ -57,3 +57,40 @@ def test_wake_starts_a_down_on_demand_module(tmp_path):
     r = wake("demo", root=root, run=run, observe=obs, now="t")
     assert r["status"] == "woken"
     assert any(c[:2] == ["systemctl", "enable"] for c in calls)
+
+
+def test_wake_dry_run_reports_planned_not_failed(tmp_path):
+    from api.wake import wake
+    from api.observe import Actual
+    root = tmp_path
+    (root / "modules.d").mkdir()
+    (root / "modules.d" / "demo.toml").write_text(
+        'id="demo"\ncategory="infra"\nruntime="native"\nexposure="lan"\n'
+        'units=["demo.service"]\nlifecycle="on-demand"\n')
+    r = wake("demo", root=root, run=lambda a: (0, ""),
+              observe=lambda m: Actual(enabled=False, active=False), now="t",
+              apply=False)
+    assert r["status"] == "planned"
+
+
+def test_main_requires_root(monkeypatch):
+    import api.wake as w
+    monkeypatch.setattr(w, "_running_as_root", lambda: False)
+    assert w.main(["wake", "demo"]) == 1
+
+
+def test_main_refused_exit_3(monkeypatch, tmp_path, capsys):
+    import api.wake as w
+    monkeypatch.setattr(w, "_running_as_root", lambda: True)
+    monkeypatch.setattr(w, "wake", lambda *a, **k: {"status": "refused", "module": "demo", "reason": "manual"})
+    rc = w.main(["--root", str(tmp_path), "wake", "demo", "--json"])
+    out = capsys.readouterr().out
+    import json as _j
+    assert rc == 3 and _j.loads(out)["status"] == "refused"
+
+
+def test_main_woken_exit_0(monkeypatch, tmp_path):
+    import api.wake as w
+    monkeypatch.setattr(w, "_running_as_root", lambda: True)
+    monkeypatch.setattr(w, "wake", lambda *a, **k: {"status": "woken", "module": "demo"})
+    assert w.main(["--root", str(tmp_path), "wake", "demo"]) == 0
