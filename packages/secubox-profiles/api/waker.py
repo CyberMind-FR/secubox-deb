@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -30,7 +31,12 @@ from .observe import is_on
 from .observe import observe as _observe_one
 
 DEFAULT_ROOT = Path("/etc/secubox")
-_TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "waking.html"
+# Lu UNE fois au chargement du module, pas à chaque 503 : le splash s'auto-
+# recharge (meta refresh) donc un client qui attend le réveil tape ce chemin
+# en boucle — relire le fichier à chaque requête est de l'I/O disque inutile
+# dans un chemin chaud.
+_TEMPLATE_TEXT = (Path(__file__).resolve().parent.parent / "templates"
+                 / "waking.html").read_text(encoding="utf-8")
 _WAKE_MIN_INTERVAL_S = 20.0
 
 _locks: dict[str, asyncio.Lock] = {}
@@ -60,13 +66,18 @@ def _resolve(vhost: str, manifests: dict[str, Manifest]) -> str | None:
 
 def _fire_wake(mid: str) -> None:
     # webui->ctl : le réveil privilégié passe par le ctl root, jamais en process.
-    subprocess.Popen(["sudo", "-n", "/usr/sbin/secubox-wakectl", "wake", mid, "--json"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    p = subprocess.Popen(["sudo", "-n", "/usr/sbin/secubox-wakectl", "wake", mid, "--json"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Reaper : sans .wait(), l'enfant devient un zombie <defunct> permanent
+    # (personne n'appelle waitpid) — sur un service long-vécu qui réveille
+    # potentiellement des dizaines de modules, ça accumule sans borne (même
+    # défaut que l'avalanche perf WireGuard déjà rencontrée sur ce dépôt). Un
+    # thread daemon court-vif attend la fin sans bloquer la boucle asyncio.
+    threading.Thread(target=p.wait, daemon=True).start()
 
 
 def _splash(module: str, budget: float, retry: int) -> HTMLResponse:
-    html = _TEMPLATE.read_text(encoding="utf-8").format(
-        module=module, budget=int(budget), retry=retry)
+    html = _TEMPLATE_TEXT.format(module=module, budget=int(budget), retry=retry)
     return HTMLResponse(html, status_code=503,
                         headers={"Retry-After": str(retry), "Cache-Control": "no-store"})
 
