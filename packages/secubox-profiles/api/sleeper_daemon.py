@@ -14,19 +14,28 @@ sudo->systemd-run->wakectl), le sleeper EST l'actionneur privilégié — il
 appelle apply.apply_plan directement (même chemin que secubox-wakectl et
 secubox-profilectl apply/rollback), pas de sudo/systemd-run ici.
 
-Deux dépendances restent des STUBS documentés — le sleeper ne bloque JAMAIS
-dessus (should_sleep n'endort que sur un signal connu, jamais sur
-l'indéterminé) :
+`_signal_reader` (Task 15, #896) lit désormais le vrai fichier émis par
+sbxwaf (packages/secubox-toolbox-ng/cmd/sbxwaf/vhostsignals.go) :
+/var/cache/secubox/waf/vhost-signals.json, rafraîchi ~5s, UNIQUEMENT pour
+les vhosts on-demand (Begin/End bracketent chaque requête réelle proxyée —
+jamais la branche waker). Lecture au mieux-effort, exactement comme
+`_read_wake_locked` dans sleeper.py : fichier absent/illisible/corrompu =>
+{}, jamais une exception qui ferait mourir la boucle. {} => vhost_signals()
+ne produit aucun Signal => should_sleep() n'agit jamais dessus (Signal
+non-None requis) — donc un fichier absent reste sûr par construction, comme
+avant que ce reader existe.
 
-  - `_signal_reader` (api/front_signals.py) : la source réelle des stats
-    sbxwaf par vhost (last_request_ts/active_conns) n'est pas stabilisée —
-    le WAF interim (secubox-toolbox-ng/cmd/sbxwaf, Go) n'écrit pas encore de
-    waf-stats.json exploitable ("waf-stats.json gap", suivi projet #896).
-    Tant que ce format n'existe pas côté sbxwaf, ce stub renvoie {} :
-    vhost_signals() ne produit alors aucun Signal, et should_sleep() exige
-    un Signal non-None pour agir — donc AUCUN module n'est jamais endormi
-    par ce stub. Sûr par construction. NEEDS_CONTEXT pour T12/follow-up :
-    brancher le vrai fichier/format dès qu'il existe.
+CORRECTNESS CRITIQUE : sbxwaf écrit last_request_ts en HORLOGE MURALE unix
+(time.Now().Unix() côté Go). front_signals.vhost_signals(reader, now)
+calcule l'âge comme now() - last_request_ts — `now` DOIT donc être
+l'horloge MURALE (time.time), PAS monotone (time.monotonic, dont l'epoch
+n'a aucun rapport avec un timestamp unix mural — un âge calculé contre elle
+serait un nombre sans rapport avec la réalité, jamais "idle depuis N
+secondes"). Voir le câblage de `now=time.time` dans main_async ci-dessous.
+Le `stamp` (chaîne ISO pour l'audit apply_plan) reste un rôle SÉPARÉ et
+n'est pas concerné.
+
+Un STUB documenté subsiste — le sleeper ne bloque JAMAIS dessus :
 
   - `_hint_probe` (sonde /idle optionnelle par module) : aucun module
     n'expose encore cette route. Renvoie toujours None (indéterminé — ni
@@ -35,6 +44,7 @@ l'indéterminé) :
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import subprocess
@@ -58,6 +68,12 @@ DEFAULT_ROOT = Path("/etc/secubox")
 DEFAULT_INTERVAL_S = 30.0
 _RUN_TIMEOUT_S = 30
 
+# Chemin partagé avec sbxwaf (packages/secubox-toolbox-ng/cmd/sbxwaf, flag
+# --vhost-signals, même valeur littérale par défaut — voir
+# secubox-waf-ng-worker@.service). Module-level pour rester monkeypatchable
+# en test (même motif que api.waker._WAKE_ACTIVE_PATH).
+VHOST_SIGNALS_PATH = Path("/var/cache/secubox/waf/vhost-signals.json")
+
 
 def _root() -> Path:
     """Racine de config — surchargeable en test via SECUBOX_PROFILES_ROOT
@@ -80,12 +96,23 @@ def _run(argv: list[str]) -> tuple[int | None, str]:
 
 
 def _signal_reader() -> dict[str, dict[str, Any]]:
-    """STUB documenté (voir docstring de module) : la source réelle des
-    stats sbxwaf par vhost n'est pas encore stabilisée. {} => aucun Signal
-    par vhost => should_sleep() ne peut jamais décider d'endormir un module
-    à partir de ce stub (sig is None => False). NEEDS_CONTEXT : brancher le
-    vrai fichier/format dès que sbxwaf l'écrit (T12/#896 follow-up)."""
-    return {}
+    """Lit le snapshot per-vhost écrit par sbxwaf (VHOST_SIGNALS_PATH) au
+    mieux-effort — même contrat que `_read_wake_locked` dans sleeper.py :
+    fichier absent, illisible, ou JSON corrompu/de forme inattendue => {},
+    JAMAIS une exception qui ferait mourir la boucle du sleeper. {} produit
+    zéro Signal par vhost côté front_signals.vhost_signals(), donc
+    should_sleep() n'agit jamais dessus (Signal non-None requis) — un
+    fichier absent reste aussi sûr qu'avant que ce reader existe."""
+    try:
+        data = json.loads(VHOST_SIGNALS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        vhost: raw for vhost, raw in data.items()
+        if isinstance(vhost, str) and isinstance(raw, dict)
+    }
 
 
 def _hint_probe(mid: str, m: Manifest) -> bool | None:
@@ -110,7 +137,13 @@ async def main_async(*, root: Path | None = None, interval: float = DEFAULT_INTE
         hint_probe=_hint_probe,
         run=_run,
         observe=observe,
-        now=time.monotonic,
+        # HORLOGE MURALE, pas monotone : sbxwaf écrit last_request_ts en
+        # unix wall-clock (time.Now().Unix()) et
+        # front_signals.vhost_signals(reader, now) calcule l'âge comme
+        # now() - last_request_ts. time.monotonic() a une epoch arbitraire
+        # sans rapport avec un timestamp unix — voir la docstring de module
+        # ci-dessus pour le détail.
+        now=time.time,
         stamp=_now_iso,
         tick_limit=tick_limit,
     )

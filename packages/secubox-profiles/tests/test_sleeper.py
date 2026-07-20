@@ -9,6 +9,8 @@ CyberMind — https://cybermind.fr
 """
 from __future__ import annotations
 
+import json
+
 from api.sleeper import should_sleep
 from api.front_signals import Signal
 from api.manifest import Manifest
@@ -162,17 +164,98 @@ def test_sleeper_daemon_wires_serve_with_production_deps(monkeypatch, tmp_path):
     assert captured["signal_reader"] is daemon._signal_reader
     assert captured["hint_probe"] is daemon._hint_probe
     assert captured["run"] is daemon._run
-    assert captured["now"] is daemon.time.monotonic
+    assert captured["now"] is daemon.time.time
     assert captured["stamp"] is daemon._now_iso
     assert asyncio.iscoroutinefunction(captured["sleep"]) or callable(captured["sleep"])
 
 
-def test_sleeper_daemon_signal_reader_stub_is_safe_empty():
-    """Documented stub (real sbxwaf-stats source unknown/not yet written —
-    see module docstring): must return {} so should_sleep() never gets a
-    fabricated signal and therefore never sleeps a module on this stub."""
+def test_sleeper_daemon_signal_reader_missing_file_is_safe_empty(monkeypatch, tmp_path):
+    """No sbxwaf snapshot on disk yet (fresh boot, sbxwaf not started, or
+    --vhost-signals disabled) must return {} so should_sleep() never gets a
+    fabricated signal and therefore never sleeps a module on a missing
+    file — same best-effort contract as sleeper._read_wake_locked."""
     import api.sleeper_daemon as daemon
+    monkeypatch.setattr(daemon, "VHOST_SIGNALS_PATH", tmp_path / "nope.json")
     assert daemon._signal_reader() == {}
+
+
+def test_sleeper_daemon_signal_reader_corrupt_json_is_safe_empty(monkeypatch, tmp_path):
+    """Half-written/corrupt JSON (read racing sbxwaf's flush) must never
+    raise — best-effort => {}."""
+    import api.sleeper_daemon as daemon
+    path = tmp_path / "vhost-signals.json"
+    path.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(daemon, "VHOST_SIGNALS_PATH", path)
+    assert daemon._signal_reader() == {}
+
+
+def test_sleeper_daemon_signal_reader_unexpected_shape_is_safe_empty(monkeypatch, tmp_path):
+    """Valid JSON but not the expected {vhost: {...}} object shape (e.g. a
+    bare list, or a non-dict value under a vhost key) must not blow up and
+    must not smuggle a bogus Signal through."""
+    import api.sleeper_daemon as daemon
+    path = tmp_path / "vhost-signals.json"
+    path.write_text(json.dumps(["not", "a", "dict"]), encoding="utf-8")
+    monkeypatch.setattr(daemon, "VHOST_SIGNALS_PATH", path)
+    assert daemon._signal_reader() == {}
+
+    # A mix of a malformed entry (value is not a dict) and a well-formed one:
+    # the malformed entry is dropped, the well-formed one still passes through
+    # (front_signals.vhost_signals does its own per-field validation on the
+    # rest — this reader only guards the outer {vhost: {...}} shape).
+    path.write_text(json.dumps({"a.gk2": "not-a-dict", "b.gk2": {"x": 1}}), encoding="utf-8")
+    assert daemon._signal_reader() == {"b.gk2": {"x": 1}}
+
+
+def test_sleeper_daemon_signal_reader_reads_real_snapshot(monkeypatch, tmp_path):
+    """Reads exactly the shape sbxwaf's vhostsignals.go writes and passes
+    the raw per-vhost dict straight through (front_signals.vhost_signals
+    does its own field validation) — this is the wiring this task adds."""
+    import api.sleeper_daemon as daemon
+    path = tmp_path / "vhost-signals.json"
+    path.write_text(json.dumps({
+        "sleepy.gk2": {"last_request_ts": 1000.0, "active_conns": 0},
+        "busy.gk2": {"last_request_ts": 2000.0, "active_conns": 2},
+    }), encoding="utf-8")
+    monkeypatch.setattr(daemon, "VHOST_SIGNALS_PATH", path)
+
+    got = daemon._signal_reader()
+
+    assert got == {
+        "sleepy.gk2": {"last_request_ts": 1000.0, "active_conns": 0},
+        "busy.gk2": {"last_request_ts": 2000.0, "active_conns": 2},
+    }
+
+
+def test_sleeper_daemon_signal_reader_feeds_wall_clock_idle_decision(monkeypatch, tmp_path):
+    """End-to-end wall-clock correctness (this task's critical property):
+    an old last_request_ts written as unix wall-clock seconds, read through
+    _signal_reader and fed through front_signals.vhost_signals with a real
+    wall-clock `now` (time.time-shaped), must compute a large positive age
+    — proving the reader's output is NOT monotonic-clock-relative and that
+    should_sleep() would call this vhost idle."""
+    import time as time_mod
+
+    import api.sleeper_daemon as daemon
+    from api.front_signals import vhost_signals
+    from api.sleeper import should_sleep
+    from api.manifest import Manifest
+
+    path = tmp_path / "vhost-signals.json"
+    old_ts = time_mod.time() - 1000.0
+    path.write_text(json.dumps({
+        "sleepy.gk2": {"last_request_ts": old_ts, "active_conns": 0},
+    }), encoding="utf-8")
+    monkeypatch.setattr(daemon, "VHOST_SIGNALS_PATH", path)
+
+    sig = vhost_signals(reader=daemon._signal_reader, now=time_mod.time)["sleepy.gk2"]
+
+    assert sig.last_request_age is not None and sig.last_request_age >= 999.0
+    assert sig.active_conns == 0
+
+    m = Manifest(id="sleepy", category="infra", runtime="native", exposure="public",
+                units=("sleepy.service",), lifecycle="on-demand")
+    assert should_sleep(m, sig, hint_idle=None, now_up=True) is True
 
 
 def test_sleeper_daemon_hint_probe_stub_is_safe_none():
