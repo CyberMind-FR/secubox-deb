@@ -1,3 +1,26 @@
+secubox-profiles (0.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * awake-level setter in the /profiles/ panel (ref #896): per-module
+    lifecycle + wake_class selector (webui->ctl). New profilectl `set-lifecycle`
+    verb writes the manifest + resyncs on-demand-vhosts/sleepable; POST
+    /api/v1/profiles/lifecycle validates enum (422) + known non-protected module
+    (404/409) before delegating. api/manifest_edit.py does the targeted,
+    comment-preserving, atomic (fsync) manifest edit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 20 Jul 2026 20:05:00 +0200
+
+secubox-profiles (0.8.2-1~bookworm1) bookworm; urgency=medium
+
+  * wake now restores the WAF route of a woken portal module (ref #896).
+    Durable per-domain route memory (api/portal_routes.py,
+    /var/lib/secubox/profiles/portal-routes.json): the actuator remembers a
+    portal route's value just before removing it on STOP; wake recalls it and
+    feeds it to apply_plan so the existing snapshot->START->portal_add path
+    re-adds it. Fixes the pilot round-trip gap (container woke but its vhost
+    stayed routed to the waker because the route was never restored).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 20 Jul 2026 19:10:00 +0200
+
 secubox-profiles (0.8.1-1~bookworm1) bookworm; urgency=medium
 
   * default lifecycle is now always-on (fleet-safe; sleep is an explicit
