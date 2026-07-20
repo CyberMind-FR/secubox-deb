@@ -35,6 +35,7 @@ ExecStart=/usr/sbin/sbxwaf \
   --ca-key /etc/secubox/waf/ca/ca.pem \
   --routes /etc/secubox/waf/haproxy-routes.json \
   --rules /etc/secubox/waf/waf-rules.json \
+  --on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json \
   --threat-log /var/log/secubox/waf/waf-threats.log \
   --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
   --media-cache-dir /var/cache/secubox/waf/media \

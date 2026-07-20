@@ -51,6 +51,10 @@
   /var/cache/secubox/waf/**   rw,
 
   # ── Runtime (Unix sockets, PID files) ────────────────────────────────────
+  # #896: the blanket /run/secubox/** rw below already covers egress to
+  # /run/secubox/waker.sock (the on-demand scale-to-zero waker) — no separate
+  # rule was needed; verified against the shipped profile before this feature
+  # was added.
   /run/secubox/               rw,
   /run/secubox/**             rw,
 
