@@ -544,3 +544,15 @@ def test_set_lifecycle_rejects_bad_enum_via_argparse(lc_root):
     with pytest.raises(SystemExit):
         main(["--root", str(lc_root), "set-lifecycle", "yacy",
               "--lifecycle", "turbo", "--wake-class", "normal", "--json"])
+
+
+def test_set_lifecycle_protected_module_refused(lc_root, capsys):
+    (lc_root / "modules.d" / "auth.toml").write_text(
+        'id="auth"\ncategory="security"\nruntime="native"\nexposure="lan"\n'
+        'units=["secubox-auth.service"]\nlifecycle="always-on"\n')
+    rc = main(["--root", str(lc_root), "set-lifecycle", "auth",
+               "--lifecycle", "on-demand", "--wake-class", "normal", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 3 and out["status"] == "refused" and out["reason"] == "protected"
+    # manifest NOT rewritten
+    assert 'lifecycle="always-on"' in (lc_root / "modules.d" / "auth.toml").read_text()

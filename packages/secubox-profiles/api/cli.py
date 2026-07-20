@@ -341,9 +341,17 @@ def _cmd_set_lifecycle(args) -> int:
     # lifecycle/wake_class sont déjà bornés par argparse (choices=) + revalidés
     # dans manifest_edit.set_lifecycle ; ici seul le module (positionnel libre)
     # peut être inconnu.
-    if args.module not in manifests:
-        refused = {"status": "refused", "module": args.module, "reason": "unknown"}
-        print(json.dumps(refused) if args.json else "refusé: module inconnu",
+    m0 = manifests.get(args.module)
+    reason = None
+    if m0 is None:
+        reason = "unknown"
+    elif m0.protected:
+        # Défense en profondeur (le panel refuse déjà 409) : ne pas réécrire le
+        # manifeste d'un module protégé, forcé always-on de toute façon.
+        reason = "protected"
+    if reason is not None:
+        refused = {"status": "refused", "module": args.module, "reason": reason}
+        print(json.dumps(refused) if args.json else f"refusé: {reason}",
               file=sys.stdout if args.json else sys.stderr)
         return 3
 
