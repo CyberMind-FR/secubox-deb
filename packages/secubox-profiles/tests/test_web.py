@@ -673,3 +673,70 @@ def test_rollback_failure_leaves_active_untouched(client, root, monkeypatch):
     r = client.post("/api/v1/profiles/rollback", json={})
     assert r.status_code == 500
     assert (root / "profiles" / "active").read_text().strip() == "media"
+
+
+# --- POST /lifecycle (niveau d'éveil, webui->ctl) ---------------------------
+
+def test_lifecycle_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
+    def fake_run(argv, **kw):
+        assert argv == ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+                        "--collect", "--quiet", "/usr/sbin/secubox-profilectl",
+                        "set-lifecycle", "lyrion", "--lifecycle", "on-demand",
+                        "--wake-class", "urgent", "--json"]
+
+        class P:
+            returncode = 0
+            stdout = ('{"status":"set","module":"lyrion","lifecycle":"on-demand",'
+                      '"wake_class":"urgent","effective_lifecycle":"on-demand",'
+                      '"ondemand_vhosts":[],"sleepable":["lyrion"]}')
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "lyrion", "lifecycle": "on-demand", "wake_class": "urgent"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "set" and r.json()["lifecycle"] == "on-demand"
+
+
+def test_lifecycle_route_defaults_wake_class_to_normal(client, monkeypatch):
+    seen = {}
+    def fake_run(argv, **kw):
+        seen["argv"] = argv
+        class P:
+            returncode = 0
+            stdout = '{"status":"set","module":"lyrion","lifecycle":"eager","wake_class":"normal"}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "lyrion", "lifecycle": "eager"})
+    assert r.status_code == 200
+    assert "--wake-class" in seen["argv"]
+    assert seen["argv"][seen["argv"].index("--wake-class") + 1] == "normal"
+
+
+def test_lifecycle_route_bad_lifecycle_422_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "lyrion", "lifecycle": "turbo", "wake_class": "normal"})
+    assert r.status_code == 422
+    assert called == []
+
+
+def test_lifecycle_route_bad_wake_class_422_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "lyrion", "lifecycle": "on-demand", "wake_class": "panic"})
+    assert r.status_code == 422
+    assert called == []
+
+
+def test_lifecycle_route_unknown_module_404_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "fantome", "lifecycle": "on-demand", "wake_class": "normal"})
+    assert r.status_code == 404
+    assert called == []

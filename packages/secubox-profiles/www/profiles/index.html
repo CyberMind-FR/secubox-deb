@@ -73,6 +73,8 @@
 
         select, .profile-select { padding: 0.4rem 0.6rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.75rem; color: var(--text); }
         select:focus { outline: none; border-color: var(--cyan); }
+        .life-set { display: inline-flex; gap: 0.2rem; margin-left: 0.35rem; align-items: center; }
+        select.life-sel { padding: 0.1rem 0.2rem; font-size: 0.62rem; border-radius: 3px; }
 
         .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
         .filter-bar input { flex: 1; min-width: 150px; padding: 0.4rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
@@ -363,24 +365,47 @@
             return { cls: 'follow', label: '⟳ follows profile' };
         }
 
+        // The per-module "awake level" selector (#896 follow-up): two <select>s
+        // (lifecycle + wake_class) POSTing /lifecycle, which delegates to the
+        // root ctl (webui->ctl). Protected modules are forced always-on, so we
+        // show a 🔒 instead of an editable control. m.lifecycle from /status is
+        // the EFFECTIVE lifecycle; for a non-protected module that equals the
+        // manifest value, so it is the correct current selection.
+        function lifeSelect(m) {
+            if (m.protected) {
+                return '<span class="life-set" title="protected — always on, not settable">🔒</span>';
+            }
+            const lcOpts = ['always-on', 'eager', 'on-demand', 'manual'].map(v =>
+                '<option value="' + v + '"' + (m.lifecycle === v ? ' selected' : '') + '>' + v + '</option>').join('');
+            const wcOpts = ['normal', 'urgent'].map(v =>
+                '<option value="' + v + '"' + (m.wake_class === v ? ' selected' : '') + '>' + v + '</option>').join('');
+            return '<span class="life-set">' +
+                '<select class="life-sel" data-act="lifecycle" data-kind="lifecycle" data-id="' + esc(m.id) + '" title="awake level">' + lcOpts + '</select>' +
+                '<select class="life-sel" data-act="lifecycle" data-kind="wake_class" data-id="' + esc(m.id) + '" title="wake class (urgent = longer idle grace)">' + wcOpts + '</select>' +
+                '</span>';
+        }
+
         // sleep_state ('up'/'asleep'/'n/a') + lifecycle/wake_class/wake_budget_s
         // come straight from GET /status (Task 10, #896) — this renders the
         // pill + the one manual action (Sleep when up, Wake when asleep, no
-        // button at all for n/a always-on/manual modules).
+        // button at all for n/a always-on/manual modules) + the awake-level
+        // selector (always, so an always-on/manual module can be made on-demand).
         function lifeStateCell(m) {
             const st = m.sleep_state;
+            let inner;
             if (st === 'n/a') {
-                return '<span class="life-state"><span class="life-pill na" title="lifecycle: ' +
-                    esc(m.lifecycle) + '">' + esc(m.lifecycle) + '</span></span>';
+                inner = '<span class="life-pill na" title="lifecycle: ' + esc(m.lifecycle) + '">' + esc(m.lifecycle) + '</span>';
+            } else {
+                const pill = st === 'up'
+                    ? '<span class="life-pill up" title="lifecycle: ' + esc(m.lifecycle) + '">🟢 up</span>'
+                    : '<span class="life-pill asleep" title="lifecycle: ' + esc(m.lifecycle) + '">🌙 asleep</span>';
+                const budget = m.wake_budget_s != null ? Math.round(m.wake_budget_s) + 's' : '?';
+                const btn = st === 'up'
+                    ? '<button class="btn sm sleep" data-act="sleep" data-id="' + esc(m.id) + '" title="put ' + esc(m.id) + ' to sleep now">💤 Sleep</button>'
+                    : '<button class="btn sm wake" data-act="wake" data-id="' + esc(m.id) + '" title="wake ' + esc(m.id) + ' now (~' + budget + ')">⚡ Wake</button>';
+                inner = pill + btn;
             }
-            const pill = st === 'up'
-                ? '<span class="life-pill up" title="lifecycle: ' + esc(m.lifecycle) + '">🟢 up</span>'
-                : '<span class="life-pill asleep" title="lifecycle: ' + esc(m.lifecycle) + '">🌙 asleep</span>';
-            const budget = m.wake_budget_s != null ? Math.round(m.wake_budget_s) + 's' : '?';
-            const btn = st === 'up'
-                ? '<button class="btn sm sleep" data-act="sleep" data-id="' + esc(m.id) + '" title="put ' + esc(m.id) + ' to sleep now">💤 Sleep</button>'
-                : '<button class="btn sm wake" data-act="wake" data-id="' + esc(m.id) + '" title="wake ' + esc(m.id) + ' now (~' + budget + ')">⚡ Wake</button>';
-            return '<span class="life-state">' + pill + btn + '</span>';
+            return '<span class="life-state">' + inner + lifeSelect(m) + '</span>';
         }
 
         function renderModules() {
@@ -688,7 +713,38 @@
             const pinVal = t.getAttribute('data-pin');
             setPin(id, pinVal === 'clear' ? null : pinVal);
         });
+        // Awake-level change (#896 follow-up) — same webui->ctl posture: POST
+        // /lifecycle, await the ctl's JSON report, refresh() so the pill and the
+        // Sleep/Wake button reflect the new lifecycle. Reads BOTH selects of the
+        // row so lifecycle + wake_class are always sent together (one fixed argv,
+        // one sudoers grant).
+        async function setLifecycle(id, lifecycle, wake_class) {
+            try {
+                const report = await api('/lifecycle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ module: id, lifecycle: lifecycle, wake_class: wake_class }),
+                });
+                if (report && report.status === 'set') {
+                    toast('🎚️ ' + id + ': ' + report.lifecycle + '/' + report.wake_class);
+                } else if (report && report.status === 'refused') {
+                    errorToast('⚠️ ' + id + ': refused (' + (report.reason || '?') + ')');
+                }
+                await refresh();
+            } catch (e) {
+                if (e.message !== '401') errorToast('❌ ' + id + ' lifecycle échoué : ' + e.message);
+            }
+        }
+
         document.getElementById('modList').addEventListener('change', e => {
+            const lc = e.target.closest('[data-act="lifecycle"]');
+            if (lc) {
+                const row = lc.closest('.mod-row');
+                const lifecycle = row.querySelector('[data-kind="lifecycle"]').value;
+                const wake_class = row.querySelector('[data-kind="wake_class"]').value;
+                setLifecycle(lc.getAttribute('data-id'), lifecycle, wake_class);
+                return;
+            }
             const t = e.target.closest('[data-act="member"]');
             if (!t) return;
             toggleMember(t.getAttribute('data-id'), t.checked);

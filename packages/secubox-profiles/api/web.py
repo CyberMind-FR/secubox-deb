@@ -54,7 +54,7 @@ except ImportError:  # pragma: no cover - dev sans secubox_core installé
 from . import cli as _cli
 from .diff import ProtectedViolation, plan_changes
 from .lifecycle import effective_lifecycle, is_sleepable, wake_budget
-from .manifest import ManifestError, load_all
+from .manifest import LIFECYCLES, WAKE_CLASSES, ManifestError, load_all
 from .observe import Actual, is_on, load_routes
 from .scan import _toml_list, _toml_str
 from .state import OFF, ON, Profile, StateError, load_pins, load_profile
@@ -314,6 +314,12 @@ class ModuleAction(BaseModel):
     module: str
 
 
+class LifecycleUpdate(BaseModel):
+    module: str
+    lifecycle: str
+    wake_class: str = "normal"
+
+
 # Sérialise TOUTE écriture du fichier `active` partagé + toute actuation
 # (apply/rollback) en un seul verrou async, dans ce process. Corrige un TOCTOU
 # structurel : entre la préview d'un opérateur (GET /diff) et sa confirmation
@@ -390,6 +396,19 @@ async def _run_wake_ctl(module: str) -> dict:
     argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
             "--collect", "--quiet",
             "/usr/sbin/secubox-wakectl", "wake", module, "--json"]
+    return await _run_ctl_json_argv(argv)
+
+
+async def _run_setlifecycle_ctl(module: str, lifecycle: str, wake_class: str) -> dict:
+    """Fixe le niveau d'éveil d'un module — écrit le manifeste root:root, d'où
+    la délégation au ctl root (webui→ctl + systemd-run, comme apply/rollback).
+    L'appelant a DÉJÀ validé module connu + lifecycle/wake_class ∈ énum (422/404)
+    avant d'arriver ici, donc l'argv construit est toujours (module, valeur
+    d'énum, valeur d'énum) — le ctl revalide malgré tout (argparse choices=)."""
+    argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+            "--collect", "--quiet",
+            "/usr/sbin/secubox-profilectl", "set-lifecycle", module,
+            "--lifecycle", lifecycle, "--wake-class", wake_class, "--json"]
     return await _run_ctl_json_argv(argv)
 
 
@@ -616,6 +635,26 @@ def create_app() -> FastAPI:
         _sleepable_module_or_error(mod_dir, body.module)
         async with _apply_lock:
             return await _run_sleep_ctl(body.module)
+
+    @app.post("/api/v1/profiles/lifecycle")
+    async def set_lifecycle_route(body: LifecycleUpdate, _claims=Depends(require_jwt)):
+        """Fixe le niveau d'éveil (lifecycle + wake_class) d'un module. Refus
+        STRUCTUREL avant tout sudo (comme /wake, /sleep, set_pin) : valeur hors
+        énum -> 422, module inconnu -> 404. L'écriture du manifeste + resync est
+        déléguée au ctl root."""
+        if body.lifecycle not in LIFECYCLES:
+            raise HTTPException(status_code=422,
+                                detail=f"lifecycle invalide: {body.lifecycle} (attendu {list(LIFECYCLES)})")
+        if body.wake_class not in WAKE_CLASSES:
+            raise HTTPException(status_code=422,
+                                detail=f"wake_class invalide: {body.wake_class} (attendu {list(WAKE_CLASSES)})")
+        root = _root()
+        mod_dir, _prof_dir, _pins_file, _active = _cli._paths(root)
+        manifests = _load_manifests_or_500(mod_dir)
+        if body.module not in manifests:
+            raise HTTPException(status_code=404, detail=f"module inconnu: {body.module}")
+        async with _apply_lock:
+            return await _run_setlifecycle_ctl(body.module, body.lifecycle, body.wake_class)
 
     return app
 
