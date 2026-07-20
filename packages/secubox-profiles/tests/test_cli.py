@@ -466,3 +466,81 @@ def test_run_distinguishes_timeout_from_could_not_run(monkeypatch):
         raise OSError("no such binary")
     monkeypatch.setattr(cli.subprocess, "run", raise_oserror)
     assert cli._run(["whatever"]) == (None, "")
+
+
+# --- set-lifecycle (niveau d'éveil, webui->ctl) -----------------------------
+
+_LC_MANIFEST = (
+    'id        = "yacy"\n'
+    'category  = "infra"\n'
+    'runtime   = "native"\n'
+    'exposure  = "public"\n'
+    'units     = ["secubox-yacy.service"]\n'
+    'portal    = { domain = "yacy.gk2.secubox.in" }\n'
+    'priority  = 50\n'
+    'lifecycle = "always-on"\n'
+)
+
+
+@pytest.fixture()
+def lc_root(tmp_path, monkeypatch):
+    (tmp_path / "modules.d").mkdir()
+    (tmp_path / "modules.d" / "yacy.toml").write_text(_LC_MANIFEST)
+    (tmp_path / "profiles").mkdir()
+    monkeypatch.setattr("api.cli._running_as_root", lambda: True)
+    return tmp_path
+
+
+def test_set_lifecycle_writes_manifest_and_resyncs(lc_root, capsys):
+    rc = main(["--root", str(lc_root), "set-lifecycle", "yacy",
+               "--lifecycle", "on-demand", "--wake-class", "urgent", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["status"] == "set"
+    assert out["lifecycle"] == "on-demand" and out["wake_class"] == "urgent"
+    assert out["effective_lifecycle"] == "on-demand"
+    # manifest actually edited
+    from api.manifest import load_manifest
+    m = load_manifest(lc_root / "modules.d" / "yacy.toml")
+    assert m.lifecycle == "on-demand" and m.wake_class == "urgent"
+    # resynced: yacy now an on-demand vhost + sleepable
+    assert out["ondemand_vhosts"] == ["yacy.gk2.secubox.in"]
+    assert out["sleepable"] == ["yacy"]
+    import json as _j
+    assert _j.loads((lc_root / "waf" / "on-demand-vhosts.json").read_text())
+    assert "yacy" in _j.loads((lc_root / "health" / "sleepable-modules.json").read_text())
+
+
+def test_set_lifecycle_to_always_on_clears_sleepable(lc_root, capsys):
+    # first make it on-demand
+    main(["--root", str(lc_root), "set-lifecycle", "yacy",
+          "--lifecycle", "on-demand", "--wake-class", "normal", "--json"])
+    capsys.readouterr()
+    # then back to always-on: no longer on-demand / sleepable
+    rc = main(["--root", str(lc_root), "set-lifecycle", "yacy",
+               "--lifecycle", "always-on", "--wake-class", "normal", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ondemand_vhosts"] == [] and out["sleepable"] == []
+
+
+def test_set_lifecycle_unknown_module_refused(lc_root, capsys):
+    rc = main(["--root", str(lc_root), "set-lifecycle", "ghost",
+               "--lifecycle", "on-demand", "--wake-class", "normal", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 3 and out["status"] == "refused" and out["reason"] == "unknown"
+
+
+def test_set_lifecycle_requires_root(lc_root, capsys, monkeypatch):
+    monkeypatch.setattr("api.cli._running_as_root", lambda: False)
+    rc = main(["--root", str(lc_root), "set-lifecycle", "yacy",
+               "--lifecycle", "on-demand", "--wake-class", "normal", "--json"])
+    assert rc == 1
+
+
+def test_set_lifecycle_rejects_bad_enum_via_argparse(lc_root):
+    # argparse choices= is the hard gate: invalid value exits (SystemExit) before
+    # any manifest write.
+    with pytest.raises(SystemExit):
+        main(["--root", str(lc_root), "set-lifecycle", "yacy",
+              "--lifecycle", "turbo", "--wake-class", "normal", "--json"])

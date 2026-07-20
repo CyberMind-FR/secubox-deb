@@ -65,3 +65,21 @@ secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --collect --quiet /usr/sbin/se
 #     to nothing, never arbitrary execution.
 secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-wakectl wake *
 secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-profilectl apply --only * --yes --json
+
+# Lifecycle setter (#896) — the /profiles/ panel's per-module "awake level"
+# selector (api/web.py POST /lifecycle) writes the module manifest
+# (/etc/secubox/modules.d/<id>.toml, root:root) and resyncs the derived files,
+# so it too delegates to the root ctl via systemd-run. THREE wildcards (module,
+# lifecycle value, wake_class value), each a genuine per-call variable — bounded
+# exactly like the grants above:
+#   - sudo executes the matched argv directly (execve, no shell): metacharacters
+#     in any wildcard match are inert literal bytes in one argv element;
+#   - the panel pre-validates ALL THREE against CLOSED sets before building this
+#     fixed argv — lifecycle ∈ LIFECYCLES, wake_class ∈ WAKE_CLASSES (422), and
+#     module ∈ load_all() (404) — so it never emits an out-of-set value;
+#   - secubox-profilectl re-validates independently: argparse `choices=` rejects
+#     any non-enum lifecycle/wake_class (exit before any write), and set-lifecycle
+#     refuses a module id absent from modules.d (status=refused) before writing.
+# So the wildcards only ever resolve to "a known module id + two enum values +
+# --json" — never arbitrary code or an arbitrary argv.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-profilectl set-lifecycle * --lifecycle * --wake-class * --json
