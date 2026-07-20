@@ -32,6 +32,15 @@ class ActuationError(Exception):
     """Une commande d'actionnement a échoué (rc non-nul) ou n'a pas pu tourner (rc=None)."""
 
 
+# Sentinel returncode for a command that RAN but did not return within the
+# deadline (subprocess.TimeoutExpired), as opposed to one that could not run at
+# all (OSError -> rc is None). The actuator fast-fails only on the latter; a
+# timeout on lxc-start/lxc-stop is deferred to wait_state (observed state
+# decides). 1000 is outside every real returncode (exit codes 0-255, signal
+# codes negative), so `rc != 0` still reads it as "not success".
+TIMED_OUT = 1000
+
+
 def _must(run, argv: list[str]) -> None:
     rc, out = run(argv)
     if rc != 0:

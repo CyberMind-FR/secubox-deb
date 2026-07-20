@@ -445,3 +445,24 @@ def test_apply_error_maps_to_rc3_not_traceback(tmp_path, monkeypatch):
         raise apply_mod.ApplyError("x est protégé — un STOP est refusé")
     monkeypatch.setattr(apply_mod, "apply_plan", boom)
     assert cli.main(["--root", str(root), "apply", "--yes"]) == 3
+
+
+def test_run_distinguishes_timeout_from_could_not_run(monkeypatch):
+    # cli._run must return the actuate.TIMED_OUT sentinel on a subprocess
+    # timeout (the command RAN, still working) and None only on OSError
+    # (the command could not run at all) — the actuator relies on this
+    # distinction to fast-fail only on genuine could-not-run.
+    import subprocess
+
+    import api.cli as cli
+    from api.actuate import TIMED_OUT
+
+    def raise_timeout(*a, **k):
+        raise subprocess.TimeoutExpired(cmd="x", timeout=1)
+    monkeypatch.setattr(cli.subprocess, "run", raise_timeout)
+    assert cli._run(["whatever"]) == (TIMED_OUT, "")
+
+    def raise_oserror(*a, **k):
+        raise OSError("no such binary")
+    monkeypatch.setattr(cli.subprocess, "run", raise_oserror)
+    assert cli._run(["whatever"]) == (None, "")
