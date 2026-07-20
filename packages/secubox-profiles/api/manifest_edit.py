@@ -46,6 +46,11 @@ def _write_atomic(path: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
+            # Le manifeste est source de vérité (pas un dérivé régénérable) : on
+            # fsync avant le rename, comme web._atomic_write, pour qu'une coupure
+            # ne puisse pas laisser un manifeste vide/tronqué.
+            f.flush()
+            os.fsync(f.fileno())
         os.chmod(tmp, stat.S_IMODE(orig_mode))
         os.replace(tmp, path)
     except BaseException:

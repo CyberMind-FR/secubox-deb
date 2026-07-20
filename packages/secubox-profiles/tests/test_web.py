@@ -740,3 +740,12 @@ def test_lifecycle_route_unknown_module_404_and_ctl_not_called(client, monkeypat
                     json={"module": "fantome", "lifecycle": "on-demand", "wake_class": "normal"})
     assert r.status_code == 404
     assert called == []
+
+
+def test_lifecycle_route_protected_409_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "auth", "lifecycle": "on-demand", "wake_class": "normal"})
+    assert r.status_code == 409
+    assert called == []

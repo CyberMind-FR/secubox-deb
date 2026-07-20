@@ -100,3 +100,25 @@ def test_preserves_file_mode(tmp_path):
     p.chmod(0o644)
     set_lifecycle(p, lifecycle="eager", wake_class="normal")
     assert stat.S_IMODE(p.stat().st_mode) == 0o644
+
+
+def test_collapses_duplicate_same_key(tmp_path):
+    from api.manifest_edit import set_lifecycle
+    p = tmp_path / "m.toml"
+    p.write_text('id="m"\ncategory="infra"\nruntime="native"\nexposure="lan"\nunits=["m.service"]\n'
+                 'lifecycle = "manual"\nlifecycle = "eager"\n')
+    set_lifecycle(p, lifecycle="on-demand", wake_class="normal")
+    assert p.read_text().count("lifecycle") == 1
+    m = _load(p)
+    assert m.lifecycle == "on-demand"
+
+
+def test_handles_no_trailing_newline(tmp_path):
+    from api.manifest_edit import set_lifecycle
+    p = tmp_path / "m.toml"
+    p.write_text('id="m"\ncategory="infra"\nruntime="native"\nexposure="lan"\nunits=["m.service"]\n'
+                 'lifecycle = "manual"')  # no trailing newline
+    set_lifecycle(p, lifecycle="eager", wake_class="urgent")
+    m = _load(p)
+    assert m.lifecycle == "eager" and m.wake_class == "urgent"
+    assert p.read_text().endswith("\n")

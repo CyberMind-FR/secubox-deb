@@ -651,8 +651,16 @@ def create_app() -> FastAPI:
         root = _root()
         mod_dir, _prof_dir, _pins_file, _active = _cli._paths(root)
         manifests = _load_manifests_or_500(mod_dir)
-        if body.module not in manifests:
+        m = manifests.get(body.module)
+        if m is None:
             raise HTTPException(status_code=404, detail=f"module inconnu: {body.module}")
+        # Refus STRUCTUREL comme set_pin : un module protégé est forcé always-on
+        # (effective_lifecycle), fixer son niveau d'éveil n'aurait aucun effet et
+        # ne ferait que salir un manifeste du cœur — jamais de sudo pour ça.
+        if m.protected:
+            raise HTTPException(status_code=409,
+                                detail=f"{body.module} est protégé (toujours actif) — "
+                                       "niveau d'éveil non modifiable")
         async with _apply_lock:
             return await _run_setlifecycle_ctl(body.module, body.lifecycle, body.wake_class)
 
