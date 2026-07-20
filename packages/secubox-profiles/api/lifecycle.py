@@ -35,3 +35,34 @@ def wake_budget(m: Manifest, *, history_median: float | None = None,
     if history_median is not None:
         return history_median
     return urgent if m.wake_class == "urgent" else normal
+
+
+def boot_should_start(m: Manifest) -> bool:
+    """Politique de démarrage au boot (ref #896).
+
+    always-on et eager démarrent immédiatement — le noyau protégé et les
+    modules « toujours chauds » ne doivent jamais dépendre d'un premier
+    accès pour être disponibles. on-demand et manual restent éteints tant
+    qu'une requête réelle (ou un opérateur, pour manual) ne les réveille
+    pas : les redémarrer par défaut annulerait tout l'intérêt du
+    scale-to-zero dès le premier reboot. `effective_lifecycle` fait déjà
+    gagner `protected` sur toute déclaration de manifeste (même règle que
+    is_sleepable) : un module protégé est toujours démarré au boot, quoi
+    que dise son `lifecycle` déclaré."""
+    return effective_lifecycle(m) in ("always-on", "eager")
+
+
+def watchdog_should_manage(m: Manifest) -> bool:
+    """secubox-watchdog ne doit JAMAIS forcer la remise en route d'un module
+    sleepable (eager/on-demand, ref #896) — c'est le même invariant que
+    l'exclusion des « streamlit sleepers » déjà en place aujourd'hui : dans
+    les deux cas, le mécanisme réel de non-relance n'est pas une liste
+    séparée mais l'ABSENCE de `lxc.start.auto=1` pendant le sommeil.
+    `api/actuate.py::runtime_stop` remet explicitement `lxc.start.auto=0`
+    AVANT `lxc-stop` pour cette raison précise (course avec le watchdog
+    observée sur la board — voir son commentaire). Cette fonction n'est
+    donc pas un générateur de fichier d'exclusion : c'est la politique pure
+    qui documente/teste l'invariant — un module sleepable n'est jamais géré
+    par le watchdog pendant qu'il dort, un module always-on/manual/protégé
+    l'est toujours."""
+    return not is_sleepable(m)
