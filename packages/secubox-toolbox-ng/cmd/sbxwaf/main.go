@@ -316,22 +316,6 @@ func (s *Server) handler() http.Handler {
 			return
 		}
 
-		// #896 Task 15 — bracket this request in the per-vhost signal emitter.
-		// Reached ONLY when routeLookup found a live route (ok == true) and we
-		// did NOT take the waker branch above (that branch already returned) —
-		// so this is exactly "a real request is about to be proxied to a real
-		// backend". Gated to on-demand vhosts: those are the only ones the
-		// sleeper ever acts on, so recording anything else would just grow the
-		// map for no benefit. A single placement here (rather than one at each
-		// of the two proxy.ServeHTTP call sites below — the media-cache-miss
-		// path and the plain path) covers both: `defer` fires whichever one the
-		// function returns through, so one Begin always pairs with exactly one
-		// End regardless of which branch handles the request.
-		if s.vhostSignals != nil && s.onDemand != nil && s.onDemand.Contains(host) {
-			s.vhostSignals.Begin(host)
-			defer s.vhostSignals.End(host)
-		}
-
 		// Use the cached proxy from Routes when available (Task 1.2 perf goal:
 		// no per-request *httputil.ReverseProxy allocation).
 		var proxy *httputil.ReverseProxy
@@ -561,6 +545,29 @@ func (s *Server) handler() http.Handler {
 					return
 				}
 			}
+		}
+
+		// #896 Task 15 — bracket this request in the per-vhost signal emitter.
+		// Placed here, AFTER the entire WAF-inspection block above (all its
+		// escalate-ban/warning/ban early `return`s at lines ~502-545 have
+		// already happened by this point) and after the earlier on-demand/
+		// waker + 421 checks — so reaching this line means the request is
+		// getting a REAL response for this vhost: either a media-cache hit
+		// just below (genuine content served to the client — counts as
+		// activity) or a proxied backend response (media-cache-miss path or
+		// the plain path further down). A WAF 403/warning/ban, a graduated
+		// or escalate ban, or the waker/421 branch never reaches this line,
+		// so scanner/bot traffic that trips a block-mode rule can no longer
+		// refresh last_request_ts and defeat auto-sleep on a public vhost
+		// (the bug this placement fixes — see TestVhostSignalsExcludedForWAFBlock).
+		// Gated to on-demand vhosts: those are the only ones the sleeper ever
+		// acts on. A single placement here (rather than one at each of the
+		// two proxy.ServeHTTP call sites, plus the cache-hit return) covers
+		// all three: `defer` fires whichever exit path the function takes
+		// from here on, so one Begin always pairs with exactly one End.
+		if s.vhostSignals != nil && s.onDemand != nil && s.onDemand.Contains(host) {
+			s.vhostSignals.Begin(host)
+			defer s.vhostSignals.End(host)
 		}
 
 		// Task 6.1 — media cache hit: serve from disk, bypass upstream.

@@ -314,6 +314,61 @@ func TestVhostSignalsExcludedForWakerBranch(t *testing.T) {
 	}
 }
 
+// TestVhostSignalsExcludedForWAFBlock is the regression test for a Task 15
+// review finding: an on-demand vhost WITH a live backend that the WAF blocks
+// (403 warning/ban) must NOT update its vhost signal. Public on-demand
+// vhosts sit under near-constant internet scanning (masscan/shodan/bots)
+// that trips block-mode rules; if that blocked traffic kept refreshing
+// last_request_ts, last_request_age would never cross idle_threshold and
+// auto-sleep would never fire for the vhost — defeating the feature for its
+// primary deployment. The fix moves the Begin/End hook to AFTER the WAF-
+// inspection block's 403 early-returns (see the placement comment in
+// handler()); before the fix, this test failed because Begin ran before
+// s.rules.MatchModes/writeWarning ever had a chance to return early.
+func TestVhostSignalsExcludedForWAFBlock(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "backend ok")
+	}))
+	defer backend.Close()
+	backendAddr := strings.TrimPrefix(backend.URL, "http://")
+
+	rulesPath := buildSQLiRulesFile(t) // reuse helper from inspect_test.go
+	vs := NewVhostSignals("")
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) {
+			h, p, err := splitHostPort(backendAddr)
+			if err != nil {
+				return "", 0, false
+			}
+			return h, p, true
+		},
+		rules:        LoadRules(rulesPath),
+		ban:          NewBan(300*time.Second, 3),
+		onDemand:     &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		vhostSignals: vs,
+	}
+
+	handler := srv.handler()
+	// UNION SELECT in the query → triggers the sqli rule (same payload as
+	// TestHandlerWarningThenBan) against an on-demand vhost that DOES have a
+	// live route — the WAF must still block it before ever reaching the
+	// backend or touching the vhost signal.
+	req := httptest.NewRequest(http.MethodGet,
+		"http://sleepy.example.com/?q=1+union+select+1,2,3", nil)
+	req.Host = "sleepy.example.com"
+	req.RemoteAddr = "203.0.113.42:12345" // public IP (TEST-NET-3, non-RFC1918)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected the WAF to block this SQLi payload with 403, got %d", rec.Code)
+	}
+	if snap := vs.snapshot(); len(snap) != 0 {
+		t.Fatalf("a WAF-blocked (warning/ban) request must not update vhost signals; got %+v", snap)
+	}
+}
+
 // TestTrustedHostSkipsWAF verifies that a request to a trusted host is NOT
 // blocked even when the payload would normally trigger the WAF.
 // Mirrors Python check_request whitelist (secubox_waf.py:761-763).
