@@ -480,25 +480,47 @@ def create_app() -> FastAPI:
 
     @app.post("/api/v1/profiles/apply")
     async def apply_active(body: ApplyRequest, _claims=Depends(require_jwt)):
-        # Actue TOUJOURS le profil demandé par CET appel, jamais « whatever is
-        # active at execution time » : on réécrit `active` avec `body.profile`
-        # puis on lance le CLI, sous le même verrou — un /active ou /apply
-        # concurrent (autre onglet) ne peut pas s'intercaler entre les deux.
-        # L'argv sudo reste FIXE (`apply --yes --json`) : le profil est
-        # transmis via le fichier `active`, jamais via la commande sudo —
-        # sudoers exact-command inchangé.
+        # Actue TOUJOURS le profil demandé par CET appel : on réécrit `active`
+        # avec body.profile puis on lance le CLI, sous le même verrou. Si le CLI
+        # se replie (rolled_back), l'état système est revenu au profil PRÉCÉDENT
+        # — `active` doit donc repointer dessus, sinon le pointeur ment (il
+        # nommerait un profil qui n'a jamais pris). L'argv sudo reste FIXE.
         root = _root()
         _mod, prof_dir, _pins, active_file = _cli._paths(root)
+        active_path = Path(active_file)
         async with _apply_lock:
             if not (Path(prof_dir) / f"{body.profile}.toml").exists():
                 raise HTTPException(status_code=404, detail=f"profil inconnu: {body.profile}")
-            _atomic_write(Path(active_file), body.profile + "\n")
-            return await _run_ctl_json("apply")
+            prior = active_path.read_text(encoding="utf-8") if active_path.exists() else None
+            _atomic_write(active_path, body.profile + "\n")
+            report = await _run_ctl_json("apply")
+            if isinstance(report, dict) and report.get("status") == "rolled_back":
+                if prior is None:
+                    active_path.unlink(missing_ok=True)
+                else:
+                    _atomic_write(active_path, prior)
+            return report
 
     @app.post("/api/v1/profiles/rollback")
     async def rollback_active(_claims=Depends(require_jwt)):
+        # A rollback restores an ARBITRARY point-in-time snapshot, which has no
+        # associated profile name — unlike /apply, there is no "prior profile"
+        # to revert `active` to. On a SUCCESSFUL rollback the honest state
+        # afterward is "no named profile / custom": clear the pointer rather
+        # than leave it naming whatever profile the last /apply set, which no
+        # longer matches the (rolled-back) board state. Success predicate
+        # mirrors the CLI's own (see api/cli.py _cmd_rollback: rc 0 iff
+        # status in ("applied", "planned")) — "planned" is not structurally
+        # reachable here (the ctl is always invoked with --yes) but matching
+        # the CLI's exact predicate beats an ad-hoc single-value check.
+        root = _root()
+        _mod, _prof_dir, _pins, active_file = _cli._paths(root)
+        active_path = Path(active_file)
         async with _apply_lock:
-            return await _run_ctl_json("rollback")
+            report = await _run_ctl_json("rollback")
+            if isinstance(report, dict) and report.get("status") in ("applied", "planned"):
+                active_path.unlink(missing_ok=True)
+            return report
 
     return app
 

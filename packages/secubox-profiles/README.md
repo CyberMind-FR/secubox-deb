@@ -73,6 +73,11 @@ toutes les routes (`Depends(require_jwt)`).
 (atomique : fichier temporaire + `os.replace`) — c'est ce qui rend Phase 1
 sûre : rien ne lit ces fichiers pour agir avant Phase 3.
 
+Actuation is **observed-state-arbitrated**: a STOP/START succeeds only when the
+module's real state (systemd unit, and the container for LXC) reaches the target
+within a timeout derived from the unit's own systemd `TimeoutStop/StartUSec` — a
+slow-but-successful transition is never mistaken for a failure.
+
 Panel webui : `/profiles/` (hybrid-dark, cf. `.claude/WEBUI-PANEL-GUIDELINES.md`).
 
 ## Manifeste

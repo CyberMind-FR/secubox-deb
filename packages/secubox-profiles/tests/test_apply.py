@@ -90,7 +90,7 @@ def test_failure_at_module_k_rolls_back_prior(tmp_path):
     assert rep.status == "rolled_back"
     assert "b" in rep.failed
     # a was rolled back → re-enabled (started again)
-    assert ["systemctl", "enable", "--now", "a.service"] in calls
+    assert ["systemctl", "enable", "a.service"] in calls
 
 
 def test_rollback_never_stops_a_protected_module(tmp_path):
@@ -119,10 +119,10 @@ def test_rollback_never_stops_a_protected_module(tmp_path):
                      apply=True, wait_timeout=0)
     assert rep.status == "rolled_back"
     assert "b" in rep.failed
-    assert ["systemctl", "disable", "--now", "auth.service"] not in calls
+    assert ["systemctl", "disable", "auth.service"] not in calls
     assert not any(c[0] == "lxc-stop" and "auth" in c for c in calls)
     # the forward START itself is untouched (left running is always safe)
-    assert ["systemctl", "enable", "--now", "auth.service"] in calls
+    assert ["systemctl", "enable", "auth.service"] in calls
 
 
 def test_rollback_timeout_not_counted_as_success(tmp_path):
@@ -151,7 +151,7 @@ def test_rollback_timeout_not_counted_as_success(tmp_path):
     assert "b" in rep.failed
     assert "a" not in rep.rolled_back
     # the rollback START was attempted even though it timed out
-    assert ["systemctl", "enable", "--now", "a.service"] in calls
+    assert ["systemctl", "enable", "a.service"] in calls
 
 
 def test_rollback_to_restores_snapshot_state(tmp_path):
@@ -166,7 +166,7 @@ def test_rollback_to_restores_snapshot_state(tmp_path):
                       now="t", routes={}, snap_root=tmp_path / "applied",
                       audit_path=tmp_path / "audit.log", apply=True)
     assert rep.status == "applied"
-    assert ["systemctl", "enable", "--now", "a.service"] in calls
+    assert ["systemctl", "enable", "a.service"] in calls
 
     # dry-run must actuate nothing.
     dry_calls = []
@@ -197,3 +197,54 @@ def test_start_of_condition_gated_native_module_is_not_a_failure(tmp_path):
                      audit_path=tmp_path / "audit.log", apply=True, wait_timeout=0)
     assert rep.status == "applied"          # NOT rolled_back
     assert rep.changed == ["hexo"] and rep.failed == []
+
+
+def test_slow_stop_that_reaches_state_within_derived_timeout_is_success(tmp_path):
+    # metrics-like: its stop command "times out" (systemd TimeoutStopSec long),
+    # but the observed state reaches OFF within the derived timeout -> success,
+    # NO rollback. The command rc is irrelevant; wait_state arbitrates.
+    from api.observe import Actual
+    calls = []
+
+    def run(argv):
+        calls.append(argv)
+        # derived_timeout asks for TimeoutStopUSec -> report a generous 90s so
+        # the (single, immediate) observation below is well inside the window.
+        if argv[:2] == ["systemctl", "show"] and "TimeoutStopUSec" in argv:
+            return 0, "1min 30s\n"
+        return 0, ""
+
+    manifests = {"metrics": _m("metrics")}
+    plan = [Change("metrics", STOP, "", 50)]
+    rep = apply_plan(plan, manifests, {"metrics": Actual(enabled=True, active=True)},
+                     run=run, observe=lambda m: Actual(enabled=False, active=False),
+                     now="t", routes={}, snap_root=tmp_path,
+                     audit_path=tmp_path / "audit.log", apply=True)
+    assert rep.status == "applied"
+    assert rep.changed == ["metrics"] and rep.failed == []
+
+
+def test_apply_uses_derived_timeout_not_flat_30(tmp_path):
+    # A stop that only reaches OFF after the monotonic clock passes 30s must
+    # still SUCCEED, because the module's derived timeout (TimeoutStopUSec 90s
+    # + 15 margin = 105) exceeds 30. With the OLD flat wait_timeout=30 this
+    # would time out and roll back. The injected clock proves wait_state waited
+    # past 30 — the load-bearing proof the happy-path test can't give.
+    from api.observe import Actual
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"] and "TimeoutStopUSec" in argv:
+            return 0, "1min 30s\n"          # -> derived_timeout = 105
+        return 0, ""
+    probes = {"n": 0}
+    def observe(m):
+        probes["n"] += 1
+        on = probes["n"] < 4                # ON for 3 probes, then OFF at the 4th
+        return Actual(enabled=on, active=on)
+    ticks = iter([0.0, 10.0, 20.0, 30.0, 40.0, 50.0])  # monotonic clock
+    manifests = {"metrics": _m("metrics")}
+    plan = [Change("metrics", STOP, "", 50)]
+    rep = apply_plan(plan, manifests, {"metrics": Actual(enabled=True, active=True)},
+                     run=run, observe=observe, now="t", routes={},
+                     snap_root=tmp_path, audit_path=tmp_path / "audit.log",
+                     apply=True, sleep=lambda s: None, clock=lambda: next(ticks))
+    assert rep.status == "applied"          # converged at t=30<105; flat-30 would have rolled_back

@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from . import apply, export
+from .actuate import TIMED_OUT
 from .audit import AUDIT_LOG
 from .diff import ProtectedViolation, plan_changes
 from .export import format_apt, format_json, format_pkglist, resolve_packages
@@ -296,16 +297,24 @@ def _cmd_scan(args) -> int:
     return 0
 
 
+_RUN_TIMEOUT_S = 30  # was 15: --no-block native commands return at once; the
+# extra headroom is for lxc-start/lxc-stop (no --no-block flag) so the container
+# CLI usually finishes before we give up and defer to wait_state.
+
+
 def _run(argv: list[str]) -> tuple[int | None, str]:
-    """rc=None signale que la commande n'a PAS pu s'exécuter (OSError, timeout) —
-    à distinguer d'un rc non-nul qui est une réponse authentique de la commande.
-    Même contrat que observe._run_cmd : un (1, "") fabriqué ici serait
-    indistinguable d'une vraie réponse "non" de la commande (voir _cmd_scan,
-    qui a besoin de cette distinction pour ne pas écrire un manifeste faux)."""
+    """rc=None = la commande n'a PAS pu s'exécuter (OSError) — jamais un faux
+    succès. rc=TIMED_OUT = elle a bien démarré mais n'a pas répondu dans le
+    délai (subprocess.TimeoutExpired) : pour lxc-start/lxc-stop (sans --no-block)
+    ce n'est PAS un échec, c'est wait_state qui tranche sur l'état observé.
+    Même contrat de lecture-seule côté observe._run_cmd (qui, lui, garde
+    timeout->None : une sonde qui traîne reste indéterminée)."""
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=15)
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=_RUN_TIMEOUT_S)
         return p.returncode, p.stdout
-    except (OSError, subprocess.SubprocessError):
+    except subprocess.TimeoutExpired:
+        return TIMED_OUT, ""
+    except OSError:
         return None, ""
 
 
