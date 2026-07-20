@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 )
 
 // defaultWakerSocket is the production path to the waker's unix socket.
@@ -56,6 +57,14 @@ func (s *Server) wakerProxy() *httputil.ReverseProxy {
 				if err != nil {
 					host = req.Host
 				}
+				// Normalize exactly like OnDemand.Contains / Routes.Lookup
+				// (lowercase + trim) so the wake key sent to the waker matches
+				// the lowercase portal_domain stored in on-demand-vhosts.json
+				// regardless of the casing a client sent in its Host header.
+				// Without this, a mixed-case Host would pass the on-demand
+				// gate (case-insensitive) but miss the waker's exact-match
+				// lookup, leaving the service permanently unwoken.
+				host = strings.ToLower(strings.TrimSpace(host))
 				// Dummy scheme/host: the Transport ignores them and always
 				// dials the unix socket above; only the rewritten path
 				// carries the information the waker needs.
