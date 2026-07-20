@@ -23,8 +23,12 @@ from pathlib import Path
 RUNTIMES = ("native", "lxc")
 EXPOSURES = ("public", "lan", "internal")
 CATEGORIES = ("media", "security", "network", "infra", "dev", "mesh")
+LIFECYCLES = ("always-on", "eager", "on-demand", "manual")
+WAKE_CLASSES = ("normal", "urgent")
 
 DEFAULT_PRIORITY = 50
+DEFAULT_LIFECYCLE = "eager"
+DEFAULT_WAKE_CLASS = "normal"
 
 # Le noyau protégé : éteindre l'un de ceux-là retire à l'utilisateur le moyen
 # de rallumer quoi que ce soit (auth coupée = plus aucun login ; aggregator
@@ -54,6 +58,8 @@ class Manifest:
     priority: int = DEFAULT_PRIORITY
     protected: bool = False
     needs: tuple[str, ...] = ()
+    lifecycle: str = DEFAULT_LIFECYCLE
+    wake_class: str = DEFAULT_WAKE_CLASS
 
 
 def _require(d: dict, key: str, path: Path):
@@ -113,6 +119,9 @@ def load_manifest(path: Path) -> Manifest:
     if not isinstance(needs, list) or not all(isinstance(n, str) for n in needs):
         raise ManifestError(f"{path}: needs doit être une liste de chaînes")
 
+    lifecycle = _enum(d.get("lifecycle", DEFAULT_LIFECYCLE), LIFECYCLES, "lifecycle", path)
+    wake_class = _enum(d.get("wake_class", DEFAULT_WAKE_CLASS), WAKE_CLASSES, "wake_class", path)
+
     return Manifest(
         id=mid,
         category=_enum(_require(d, "category", path), CATEGORIES, "category", path),
@@ -124,6 +133,8 @@ def load_manifest(path: Path) -> Manifest:
         priority=priority,
         protected=protected,
         needs=tuple(needs),
+        lifecycle=lifecycle,
+        wake_class=wake_class,
     )
 
 

@@ -138,3 +138,30 @@ def test_load_all_indexes_by_id_and_skips_non_toml(tmp_path):
     all_m = load_all(tmp_path)
     assert sorted(all_m) == ["lyrion", "peertube"]
     assert all_m["peertube"].runtime == "lxc"
+
+
+def _write(tmp_path, body):
+    p = tmp_path / "x.toml"
+    p.write_text('id="x"\ncategory="infra"\nruntime="native"\nexposure="lan"\n'
+                 'units=["x.service"]\n' + body)
+    return p
+
+
+def test_lifecycle_defaults_eager_normal(tmp_path):
+    m = load_manifest(_write(tmp_path, ""))
+    assert m.lifecycle == "eager" and m.wake_class == "normal"
+
+
+def test_lifecycle_and_wake_class_parse(tmp_path):
+    m = load_manifest(_write(tmp_path, 'lifecycle="on-demand"\nwake_class="urgent"\n'))
+    assert m.lifecycle == "on-demand" and m.wake_class == "urgent"
+
+
+def test_invalid_lifecycle_raises(tmp_path):
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, 'lifecycle="hibernate"\n'))
+
+
+def test_invalid_wake_class_raises(tmp_path):
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, 'wake_class="asap"\n'))
