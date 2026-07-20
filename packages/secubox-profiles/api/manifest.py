@@ -27,7 +27,13 @@ LIFECYCLES = ("always-on", "eager", "on-demand", "manual")
 WAKE_CLASSES = ("normal", "urgent")
 
 DEFAULT_PRIORITY = 50
-DEFAULT_LIFECYCLE = "eager"
+# Fleet-safe default (#896 follow-up): a manifest that declares no lifecycle
+# must never become sleep-eligible by accident. On a 184-module fleet,
+# `eager` as the silent default made EVERY existing module idle-sleep
+# eligible, including core services with no manifest opinion of their own
+# (admin, gitea, nextcloud...). Sleep is now strictly opt-in: a module only
+# idles/wakes if its manifest explicitly declares `eager` or `on-demand`.
+DEFAULT_LIFECYCLE = "always-on"
 DEFAULT_WAKE_CLASS = "normal"
 
 # Le noyau protégé : éteindre l'un de ceux-là retire à l'utilisateur le moyen

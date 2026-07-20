@@ -99,7 +99,7 @@ Panel webui : `/profiles/` (hybrid-dark, cf. `.claude/WEBUI-PANEL-GUIDELINES.md`
     priority   = 40          # 0-100
     protected  = false       # true = jamais éteignable
     needs      = ["auth"]
-    lifecycle  = "on-demand" # always-on|eager|on-demand|manual (défaut: eager)
+    lifecycle  = "on-demand" # always-on|eager|on-demand|manual (défaut: always-on)
     wake_class = "normal"    # normal|urgent (défaut: normal)
 
 Un manifeste corrigé à la main fait autorité : `scan` ne l'écrase pas sans `--force`.
@@ -111,10 +111,16 @@ Chaque module déclare un `lifecycle` dans son manifeste
 
 | `lifecycle` | Démarre au boot ? | Rendormi si idle ? | Réveillé sur accès ? |
 |---|---|---|---|
-| `always-on` | oui, toujours | jamais | — (jamais éteint) |
+| `always-on` **(défaut)** | oui, toujours | jamais | — (jamais éteint) |
 | `eager` | oui | oui (si idle et sans réponse `/idle`) | oui (déjà up en général) |
 | `on-demand` | non | oui | oui — `sbxwaf` proxy vers le waker |
 | `manual` | non | non | non — opérateur uniquement (`/wake` panel) |
+
+Le défaut est `always-on`, pas `eager` : sur une flotte de 184 modules, un
+manifeste sans opinion propre (donc la majorité) ne doit jamais devenir
+sleep-eligible par accident. Le sommeil est un **opt-in explicite** —
+`eager` ou `on-demand` doit être déclaré à la main dans le manifeste pour
+qu'un module participe au sleeper/waker.
 
 Un module `protected = true` est **toujours** `always-on`, quoi que déclare
 son `lifecycle` (`effective_lifecycle`, `api/lifecycle.py`) — le cœur ne dort

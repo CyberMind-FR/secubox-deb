@@ -96,8 +96,9 @@ packages/secubox-<module>/
 Every module known to `secubox-profiles` (its manifest under
 `/etc/secubox/modules.d/<id>.toml`) declares a `lifecycle`: `always-on`
 (never stopped — forced for any `protected` module regardless of what it
-declares), `eager` (starts at boot, may be idled), `on-demand` (off by
-default, woken on first access), or `manual` (operator-only, via the
+declares, and the **default** when a manifest omits the field, fleet-safe on
+a 184-module install), `eager` (starts at boot, may be idled), `on-demand`
+(off by default, woken on first access), or `manual` (operator-only, via the
 `/profiles/` panel). An optional `wake_class` (`normal`/`urgent`) tunes the
 idle threshold and the wake-splash budget. This is a **module-wide**
 guideline, not a `secubox-profiles`-internal detail: a module choosing
