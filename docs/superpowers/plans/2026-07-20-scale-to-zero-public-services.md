@@ -1209,6 +1209,70 @@ Co-Authored-By: Gerald KERMA <devel@cybermind.fr>"
 
 ---
 
+## PIVOT (2026-07-20): wake trigger = sbxwaf, not nginx
+
+**Task 7 (nginx `@waker`) is SUPERSEDED** — `api/nginxgen.py`/`nginx-sync` stay in
+the tree but are NOT wired. The sleeper's route-removing stop (T5/T8) is CORRECT.
+Two new tasks replace the nginx path; T12 wires them (not nginx).
+
+---
+
+## Task 13: `waf-sync` — on-demand-vhost-list generator (secubox-profiles)
+
+**Files:** Create `packages/secubox-profiles/api/wafsync.py`; modify `api/wake.py` `main()` (add `waf-sync` subcommand); Test `tests/test_wafsync.py`.
+
+**Interfaces:**
+- Produces: `ondemand_vhosts(manifests: dict[str, Manifest]) -> list[str]` — sorted `portal_domain`s whose module has `effective_lifecycle(m) ∈ {eager, on-demand}`. `write_ondemand(*, manifests, out_path: Path) -> list[str]` — atomically writes the JSON array to `out_path` (default production `/etc/secubox/waf/on-demand-vhosts.json`), returns the list. `secubox-wakectl waf-sync [--out PATH]` verb (read-config→write, un-root-gated like `nginx-sync`).
+
+- [ ] **Step 1: failing tests** (`tests/test_wafsync.py`, WITH SPDX header):
+```python
+def test_ondemand_vhosts_selects_sleepable_portals():
+    from api.wafsync import ondemand_vhosts
+    from api.manifest import Manifest
+    def m(mid, lc, dom):
+        return Manifest(id=mid, category="infra", runtime="native", exposure="public",
+                        units=(f"{mid}.service",), portal_domain=dom, lifecycle=lc)
+    ms = {"a": m("a","on-demand","a.gk2"), "b": m("b","always-on","b.gk2"),
+          "c": m("c","eager","c.gk2"), "d": m("d","on-demand",None)}
+    assert ondemand_vhosts(ms) == ["a.gk2", "c.gk2"]   # sorted; b=always-on, d=no portal
+
+def test_write_ondemand_atomic(tmp_path):
+    from api.wafsync import write_ondemand
+    from api.manifest import Manifest
+    import json
+    ms = {"a": Manifest(id="a", category="infra", runtime="native", exposure="public",
+          units=("a.service",), portal_domain="a.gk2", lifecycle="on-demand")}
+    out = tmp_path / "on-demand-vhosts.json"
+    assert write_ondemand(manifests=ms, out_path=out) == ["a.gk2"]
+    assert json.loads(out.read_text()) == ["a.gk2"]
+    assert list(tmp_path.glob("*.tmp")) == []
+```
+
+- [ ] **Step 2-4:** implement `api/wafsync.py` mirroring `api/nginxgen.py`'s atomic-write style (`effective_lifecycle` gate, `sorted`, temp+rename); add the `waf-sync` subcommand to `wake.py` `main()` (same shape as `nginx-sync`, default `--out /etc/secubox/waf/on-demand-vhosts.json`). RED→GREEN; full suite + mypy-vs-baseline.
+- [ ] **Step 5: Commit** `feat(profiles): waf-sync — on-demand-vhost list for sbxwaf wake trigger (ref #896)`.
+
+---
+
+## Task 14: sbxwaf on-demand → waker branch (secubox-toolbox-ng, Go)
+
+**Files:** in `packages/secubox-toolbox-ng/cmd/sbxwaf/`: create `ondemand.go`; modify `main.go` (`handler()` 421 site + `--on-demand-vhosts` flag + per-request `Maybe()` + wire `srv.onDemand`); modify the visit-stats exclusion; create `wakerproxy.go` (cached unix-socket reverse proxy); Test: `ondemand_test.go` + extend `main_test.go`. Also `packages/secubox-waf-ng/debian/secubox-waf-ng.apparmor` (egress to `/run/secubox/waker.sock`) + the worker unit ExecStart (`--on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json`).
+
+**Interfaces (mirror the existing `Routes`/`Rules` pattern — READ `routes.go` first):**
+- `OnDemand` type: `sync.RWMutex` + `map[string]bool`; `LoadOnDemand(path) *OnDemand` using `reload.NewWatcher(0, target)` + `loadOnDemandJSON(path) map[string]bool` (JSON array of vhosts); `(*OnDemand).Maybe()`; `(*OnDemand).Contains(host string) bool` (lowercase+trim like `Routes.Lookup`).
+- `wakerProxy()`: a single lazily-built, cached `*httputil.ReverseProxy` whose `Transport.DialContext` dials `net.Dial("unix", "/run/secubox/waker.sock")` and whose Director rewrites `req.URL.Path = "/_wake/" + host` (scheme http, dummy Host). Build once, reuse (per the codebase's "build-once" discipline).
+- Handler branch at the 421 site (`main.go`, after `ip, port, ok := s.routeLookup(host); if !ok {`): `if s.onDemand != nil && s.onDemand.Contains(host) { s.wakerProxy().ServeHTTP(w, r); return }` BEFORE the existing `http.Error(...421...)`.
+
+- [ ] **Step 1: failing Go tests** (`ondemand_test.go`): `TestOnDemandContains` (load a JSON set, Contains true/false, case-insensitive); extend `main_test.go` with `TestOnDemandProxiesToWaker` — a request for a host in the on-demand set but absent from routes reverse-proxies to a stub unix-socket server (not 421); and confirm `TestProxyUnmapped` still 421s for a host NOT in the on-demand set.
+- [ ] **Step 2: run** `cd packages/secubox-toolbox-ng && go test ./cmd/sbxwaf/ -run 'OnDemand|Unmapped|Waker' -v` → RED.
+- [ ] **Step 3: implement** `ondemand.go` + `wakerproxy.go` + the `main.go` branch + flag + `Maybe()` wiring + exclude the waker-splash status from the legitimate-visit tally (the `sr.status != 403 && sr.status != 421` site — add the splash status or exclude the waker path). Keep the unix-socket proxy built-once/cached.
+- [ ] **Step 4: run** `cd packages/secubox-toolbox-ng && go test ./cmd/sbxwaf/ -v` (all green, incl. existing route/rule tests) + `go vet ./cmd/sbxwaf/`. (Note: `debian/rules` skips dh_auto_test for the arm64 cross-build; run `go test` on the host arch manually.)
+- [ ] **Step 5:** AppArmor egress rule for `/run/secubox/waker.sock` in `secubox-waf-ng.apparmor`; add `--on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json` to `secubox-waf-ng-worker@.service` ExecStart.
+- [ ] **Step 6: Commit** `feat(waf-ng): sbxwaf routes on-demand vhosts to the waker instead of 421 (ref #896)`.
+
+**Implementer note:** READ `routes.go` (Routes/reload pattern), `main.go` `handler()` (the 421 site + stats recorder), and `rules.go` (the Rules mirror) BEFORE coding — match their exact idioms. If the unix-socket reverse-proxy or the `reload.Watcher` wiring differs from this sketch, follow the REAL code and note the adaptation. Deploy: rebuild `sbxwaf`, restart BOTH `secubox-waf-ng-worker@1` + `@2` (never SIGHUP).
+
+---
+
 ## Post-implementation (controller)
 
 1. Ensure PR #894 (0.7.0) is merged so this branch has the actuator; rebase if needed.
