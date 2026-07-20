@@ -123,6 +123,11 @@ def test_serve_one_tick_stops_idle(tmp_path, monkeypatch):
     routes_file = tmp_path / "routes.json"
     routes_file.write_text("{}")
     monkeypatch.setitem(_actuate.actuate.__kwdefaults__, "routes_path", routes_file)
+    # actuate() also persists the removed route to a durable store at a hardcoded
+    # default (portal_routes.REMEMBER_FILE) not threaded through apply_plan —
+    # retarget it too, same technique, to keep the test off /var/lib/secubox.
+    monkeypatch.setitem(_actuate.actuate.__kwdefaults__, "remember_path",
+                        tmp_path / "portal-routes.json")
     calls = []
 
     async def go():
