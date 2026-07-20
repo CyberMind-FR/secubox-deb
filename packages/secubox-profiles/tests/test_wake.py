@@ -94,3 +94,18 @@ def test_main_woken_exit_0(monkeypatch, tmp_path):
     monkeypatch.setattr(w, "_running_as_root", lambda: True)
     monkeypatch.setattr(w, "wake", lambda *a, **k: {"status": "woken", "module": "demo"})
     assert w.main(["--root", str(tmp_path), "wake", "demo"]) == 0
+
+
+def test_main_nginx_sync_writes_snippet_without_root(tmp_path):
+    # nginx-sync est un aller-retour config->fichiers, pas un pilotage
+    # systemd/LXC : il ne doit pas exiger root (contrairement à `wake`).
+    import api.wake as w
+    (tmp_path / "modules.d").mkdir()
+    (tmp_path / "modules.d" / "demo.toml").write_text(
+        'id="demo"\ncategory="infra"\nruntime="native"\nexposure="public"\n'
+        'units=["demo.service"]\nlifecycle="on-demand"\n'
+        'portal.domain="demo.gk2"\n')
+    out = tmp_path / "snips"
+    rc = w.main(["--root", str(tmp_path), "nginx-sync", "--out", str(out)])
+    assert rc == 0
+    assert (out / "demo.gk2.waker.conf").exists()
