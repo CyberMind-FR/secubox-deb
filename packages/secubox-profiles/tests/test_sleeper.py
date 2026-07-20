@@ -133,3 +133,53 @@ def test_serve_one_tick_stops_idle(tmp_path, monkeypatch):
                     now=lambda: 100000.0, tick_limit=1)
     asyncio.run(go())
     assert any(c[:2] == ["systemctl", "disable"] for c in calls)
+
+
+def test_sleeper_daemon_wires_serve_with_production_deps(monkeypatch, tmp_path):
+    """api.sleeper_daemon.main_async must forward to sleeper.serve with a
+    kwarg set matching serve()'s signature (root/interval/sleep/observe_all/
+    signal_reader/hint_probe/run/observe/now/stamp/tick_limit) — a stray
+    rename on either side would only blow up at runtime (no static check
+    across the two modules), so this test locks the wiring."""
+    import asyncio
+
+    import api.sleeper_daemon as daemon
+
+    captured: dict = {}
+
+    async def fake_serve(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(daemon.sleeper, "serve", fake_serve)
+
+    asyncio.run(daemon.main_async(root=tmp_path, interval=5.0, tick_limit=1))
+
+    assert captured["root"] == tmp_path
+    assert captured["interval"] == 5.0
+    assert captured["tick_limit"] == 1
+    assert captured["observe_all"] is daemon.observe_all
+    assert captured["observe"] is daemon.observe
+    assert captured["signal_reader"] is daemon._signal_reader
+    assert captured["hint_probe"] is daemon._hint_probe
+    assert captured["run"] is daemon._run
+    assert captured["now"] is daemon.time.monotonic
+    assert captured["stamp"] is daemon._now_iso
+    assert asyncio.iscoroutinefunction(captured["sleep"]) or callable(captured["sleep"])
+
+
+def test_sleeper_daemon_signal_reader_stub_is_safe_empty():
+    """Documented stub (real sbxwaf-stats source unknown/not yet written —
+    see module docstring): must return {} so should_sleep() never gets a
+    fabricated signal and therefore never sleeps a module on this stub."""
+    import api.sleeper_daemon as daemon
+    assert daemon._signal_reader() == {}
+
+
+def test_sleeper_daemon_hint_probe_stub_is_safe_none():
+    """Documented stub: no per-module /idle route exists yet. None must
+    never veto/allow a sleep decision by accident."""
+    import api.sleeper_daemon as daemon
+    from api.manifest import Manifest
+    m = Manifest(id="x", category="infra", runtime="native", exposure="lan",
+                units=("x.service",), lifecycle="on-demand")
+    assert daemon._hint_probe("x", m) is None
