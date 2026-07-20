@@ -1,6 +1,54 @@
 # Task 15 report — per-vhost signal source for scale-to-zero AUTO-sleep (#896)
 
-## Summary
+## Fix — review-found Critical bug: WAF-blocked/banned traffic counted as activity
+
+Review caught a Critical correctness bug in the original hook placement: the
+`Begin`/`defer End` bracket sat right after the on-demand/waker/421 checks but
+**before** the entire WAF-inspection block (rules match → detect/escalate/
+block → graduated warning/ban, main.go's ~lines 373-548). So a request the
+WAF blocked with 403 — never reaching the real backend — still called
+`Begin`, refreshing `lastSeen[host]` to "now". Public on-demand vhosts sit
+under near-constant internet scanning (masscan/shodan/bots) that trips
+block-mode rules, so `last_request_ts` kept getting refreshed by BLOCKED
+traffic and `should_sleep()`'s `last_request_age >= idle_threshold` never
+passed — defeating auto-sleep for exactly the deployment this feature exists
+for (public on-demand vhosts). The sibling visit-stats recorder in the same
+function already excludes 403/421/waker from its tally (via a deferred
+status check) but the vhostsignals hook had only excluded the waker/421
+branch, not the WAF-block/ban early-returns.
+
+**Fix**: moved the `Begin`/`defer End` bracket from its original spot (right
+after the on-demand/waker + 421 checks, before WAF inspection) to
+immediately after the WAF-inspection block closes — right before the
+"Task 6.1 — media cache hit" comment. All of the WAF-inspection block's
+early `return`s (escalate-ban at ~line 502, plain 403 at ~521, graduated
+ban at ~557, graduated warning at ~559) now execute, if they're going to,
+*before* reaching the hook. A single placement there still covers three
+exit paths via the one `defer`: the media-cache-hit `return` just below it,
+the media-cache-miss `proxy.ServeHTTP` further down, and the plain
+`proxy.ServeHTTP` at the very end of the handler. I judged the media-cache
+hit to count as legitimate vhost activity per the coordinator's guidance —
+the client gets a genuine response for that vhost's content, same as a
+backend-served response — so it is included, not excluded.
+
+Regression test `TestVhostSignalsExcludedForWAFBlock` (in `main_test.go`,
+next to `TestVhostSignalsExcludedForWakerBranch`): sends an on-demand vhost
+*with a live route* a SQLi payload (same fixture/payload as
+`TestHandlerWarningThenBan`) and asserts the vhost snapshot stays empty
+after the 403. Verified RED against the pre-fix placement (`git stash` on
+just `main.go` to isolate the placement regression, confirmed the test
+failed with the vhost recorded — `map[sleepy.example.com:{LastRequestTS:...
+ActiveConns:0}]` — then `git stash pop` to restore the fix) and GREEN after.
+
+Re-verified after the fix: `go build ./...` clean, `go vet ./cmd/sbxwaf/`
+clean, `go test ./cmd/sbxwaf/ -count=1 -v` → **110 PASS / 0 FAIL** (whole
+package, one more than the original 109 for this new test), `go test
+./cmd/sbxwaf/ -race -run 'TestVhostSignals|TestOnDemand' -count=1 -v` → all
+PASS. Fixed in a follow-up commit
+`fix(waf-ng): vhost signal excludes WAF-blocked/banned traffic (real
+activity only) (ref #896)`.
+
+## Summary (original implementation)
 
 Two independent changes, one per package:
 
