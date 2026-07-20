@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 if [ "$1" = "remove" ]; then
-    systemctl stop secubox-profiles.service || true
-    systemctl disable secubox-profiles.service || true
+    systemctl stop secubox-profiles.service secubox-waker.service secubox-sleeper.service || true
+    systemctl disable secubox-profiles.service secubox-waker.service secubox-sleeper.service || true
     systemctl reload nginx 2>/dev/null || true
 fi
 #DEBHELPER#

@@ -22,19 +22,33 @@ UMask=0027
 # hands each idle module straight to api.apply.apply_plan, the SAME code
 # path as secubox-wakectl/secubox-profilectl apply/rollback — same trust
 # level, just driven by a timer loop instead of an operator or a wake
-# request. No ProtectSystem=strict either: apply_plan drives
-# systemctl/lxc-start/lxc-stop AND edits /data/lxc/<container>/config
-# (lxc.start.auto) and /etc/secubox/waf/haproxy-routes.json directly (see
-# api/actuate.py) — sandboxing this service would just reproduce, one layer
-# up, the exact EROFS lesson that motivated wrapping the OTHER two ctls in
-# systemd-run in the first place.
+# request.
 NoNewPrivileges=true
 RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 
+# ProtectSystem=strict makes / read-only by default; the actuator's actual
+# write set (traced through api/actuate.py, api/snapshot.py, api/audit.py —
+# apply_plan's STOP path is the only one the sleeper ever drives) is listed
+# explicitly below so this sandbox stays FUNCTIONAL, not just hardened:
+#   - /run/secubox            — the socket dir + api.sleeper.WAKE_LOCK_FILE
+#     (read, but ReadWritePaths is directory-granular) and waker-active.json
+#   - /var/lib/secubox/profiles/rollback — snapshot.SNAP_DIR, the 4R chain
+#     shared with secubox-profilectl/secubox-wakectl (actuate_paths.py)
+#   - /var/log/secubox        — audit.AUDIT_LOG (append-only audit.log)
+#   - /data/lxc                — actuate.py::_lxc_autostart edits
+#     <lxcpath>/<container>/config (lxc.start.auto) before lxc-stop
+#   - /etc/secubox/waf         — actuate.py::ROUTES_FILE
+#     (haproxy-routes.json): a STOP on a routed module calls
+#     _portal_remove, which rewrites this file (temp+rename in the SAME
+#     directory) — omitting it here would reproduce, one layer up, the
+#     exact EROFS lesson that motivated wrapping the OTHER two ctls in
+#     systemd-run in the first place (secubox-profilectl 0.6.1).
+ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+ReadWritePaths=/run/secubox /var/lib/secubox/profiles/rollback /var/log/secubox /data/lxc /etc/secubox/waf
 
 [Install]
 WantedBy=multi-user.target
