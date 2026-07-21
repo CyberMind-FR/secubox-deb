@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Installed as /etc/systemd/system/secubox-sleeper.service — the idle-daemon
+# half of scale-to-zero (ref #896): the waker (secubox-waker.service) wakes a
+# module on access, this service puts it back to sleep after inactivity.
+[Unit]
+Description=SecuBox Sleeper — idles on-demand modules after inactivity (scale-to-zero)
+After=network.target secubox-core.service secubox-profiles.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/lib/secubox/profiles
+ExecStart=/usr/bin/python3 -m api.sleeper_daemon
+Restart=on-failure
+RestartSec=10
+UMask=0027
+
+# Runs as root DIRECTLY — no sudo, no systemd-run wrapper. Unlike the waker
+# (a request-serving frontend that must stay unprivileged and delegate via
+# webui->ctl), this service IS the privileged actuator: api.sleeper.run_once
+# hands each idle module straight to api.apply.apply_plan, the SAME code
+# path as secubox-wakectl/secubox-profilectl apply/rollback — same trust
+# level, just driven by a timer loop instead of an operator or a wake
+# request.
+NoNewPrivileges=true
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+RuntimeDirectoryMode=0775
+
+# Deliberately NOT ProtectSystem=strict (ref #896 T12 review). This daemon
+# drives lxc-start/lxc-stop + systemctl IN-PROCESS as root — unlike the
+# panel/waker, which escape their own sandbox via systemd-run into PID1's
+# context before touching systemd/LXC. lxc-start/lxc-stop write LXC-internal
+# runtime/lock paths (/run/lxc/, /run/lock/lxc/, cgroup + mount-namespace
+# setup) that are no part of this codebase's stable contract to enumerate;
+# under ProtectSystem=strict everything under /run outside an explicit
+# ReadWritePaths entry is read-only, so those writes would EROFS — silently,
+# since api/actuate.py::_issue only hard-fails on rc is None, meaning
+# auto-sleep for every LXC-backed on-demand module would quietly stop
+# working (the whole RAM-savings target of ref #896). A root daemon that
+# drives LXC in-process without ProtectSystem is at this codebase's normal
+# floor (many root daemons here have no sandboxing) — dropping strict here
+# is a fix, not a regression. ProtectHome/PrivateTmp stay: the actuator
+# needs neither /home nor a shared /tmp (its atomic writes are all
+# temp-file-in-target-dir, not /tmp).
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -23,8 +23,18 @@ from pathlib import Path
 RUNTIMES = ("native", "lxc")
 EXPOSURES = ("public", "lan", "internal")
 CATEGORIES = ("media", "security", "network", "infra", "dev", "mesh")
+LIFECYCLES = ("always-on", "eager", "on-demand", "manual")
+WAKE_CLASSES = ("normal", "urgent")
 
 DEFAULT_PRIORITY = 50
+# Fleet-safe default (#896 follow-up): a manifest that declares no lifecycle
+# must never become sleep-eligible by accident. On a 184-module fleet,
+# `eager` as the silent default made EVERY existing module idle-sleep
+# eligible, including core services with no manifest opinion of their own
+# (admin, gitea, nextcloud...). Sleep is now strictly opt-in: a module only
+# idles/wakes if its manifest explicitly declares `eager` or `on-demand`.
+DEFAULT_LIFECYCLE = "always-on"
+DEFAULT_WAKE_CLASS = "normal"
 
 # Le noyau protégé : éteindre l'un de ceux-là retire à l'utilisateur le moyen
 # de rallumer quoi que ce soit (auth coupée = plus aucun login ; aggregator
@@ -54,6 +64,8 @@ class Manifest:
     priority: int = DEFAULT_PRIORITY
     protected: bool = False
     needs: tuple[str, ...] = ()
+    lifecycle: str = DEFAULT_LIFECYCLE
+    wake_class: str = DEFAULT_WAKE_CLASS
 
 
 def _require(d: dict, key: str, path: Path):
@@ -113,6 +125,17 @@ def load_manifest(path: Path) -> Manifest:
     if not isinstance(needs, list) or not all(isinstance(n, str) for n in needs):
         raise ManifestError(f"{path}: needs doit être une liste de chaînes")
 
+    lifecycle = _enum(d.get("lifecycle", DEFAULT_LIFECYCLE), LIFECYCLES, "lifecycle", path)
+    wake_class = _enum(d.get("wake_class", DEFAULT_WAKE_CLASS), WAKE_CLASSES, "wake_class", path)
+
+    # Lowercase at the source: the whole front pipeline (waker._resolve
+    # exact-match, sleeper's per-vhost keys, wafsync's on-demand-vhosts.json)
+    # compares domains verbatim. A hand-edited mixed-case domain in TOML
+    # would otherwise silently never wake (waker misses) nor sleep (sleeper
+    # key misses) — see #896 final review, Fix 3.
+    raw_domain = portal.get("domain")
+    portal_domain = raw_domain.lower() if isinstance(raw_domain, str) else None
+
     return Manifest(
         id=mid,
         category=_enum(_require(d, "category", path), CATEGORIES, "category", path),
@@ -120,10 +143,12 @@ def load_manifest(path: Path) -> Manifest:
         exposure=_enum(_require(d, "exposure", path), EXPOSURES, "exposure", path),
         units=tuple(units),
         lxc=lxc,
-        portal_domain=portal.get("domain"),
+        portal_domain=portal_domain,
         priority=priority,
         protected=protected,
         needs=tuple(needs),
+        lifecycle=lifecycle,
+        wake_class=wake_class,
     )
 
 

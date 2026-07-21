@@ -8,3 +8,15 @@
 override_dh_auto_install:
 	install -d debian/secubox-profiles/etc/sudoers.d
 	install -m 0440 sudoers.d/secubox-profiles debian/secubox-profiles/etc/sudoers.d/secubox-profiles
+
+# Three distinct units ship in this package (own socket each — see
+# debian/secubox-profiles.service, debian/secubox-waker.service,
+# debian/secubox-sleeper.service): dh_installsystemd's default naming only
+# auto-picks up debian/<pkgname>.service, so the other two need an explicit
+# --name= each. Default enable+start (no --no-enable) matches how
+# secubox-profiles.service already behaves (postinst also enables/restarts
+# it manually — same, deliberately redundant-but-safe pattern kept below).
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-profiles
+	dh_installsystemd --name=secubox-waker
+	dh_installsystemd --name=secubox-sleeper

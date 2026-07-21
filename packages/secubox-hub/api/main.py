@@ -379,6 +379,28 @@ def _refresh_services_cache():
         log.warning("Cache refresh failed: %s", e)
 
 
+# Set of module ids allowed to sleep (eager/on-demand — scale-to-zero, ref
+# #896), produced by `secubox-wakectl health-sync` (secubox-profiles) from
+# the module manifests. A module in this set that's observed inactive/dead is
+# an EXPECTED state (it's asleep, not down) — never alarm or count it against
+# "warn" here. Read fresh every refresh (not cached at import time) so a
+# profile change takes effect on the next tick without restarting hub.
+SLEEPABLE_MODULES_CACHE = Path("/etc/secubox/health/sleepable-modules.json")
+
+
+def _load_sleepable_modules() -> set:
+    """Best-effort read of the sleepable-module-ids export. Missing, unreadable,
+    or malformed => empty set (never raises — an absent file just means no
+    module gets the "asleep" treatment, same as before this existed)."""
+    try:
+        data = json.loads(SLEEPABLE_MODULES_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    if not isinstance(data, list):
+        return set()
+    return {x for x in data if isinstance(x, str)}
+
+
 def _refresh_health_batch():
     """Build the sidebar health snapshot in ONE systemctl list-units call.
 
@@ -387,6 +409,7 @@ def _refresh_health_batch():
     the request never makes its own (3.3 s) synchronous systemctl call.
     """
     modules = {}
+    sleepable = _load_sleepable_modules()
     try:
         result = subprocess.run(
             ["systemctl", "list-units", "--type=service",
@@ -407,7 +430,12 @@ def _refresh_health_batch():
                     elif active == "active":
                         modules[mod_id] = {"status": "warn", "msg": f"Active ({sub})"}
                     elif active == "failed":
+                        # A crash is a real alarm even for a sleepable module —
+                        # intentional sleep goes through disable+stop (inactive/
+                        # dead), never "failed".
                         modules[mod_id] = {"status": "error", "msg": "Failed"}
+                    elif mod_id in sleepable:
+                        modules[mod_id] = {"status": "ok", "msg": "Asleep (on-demand)"}
                     else:
                         modules[mod_id] = {"status": "warn", "msg": f"{active}/{sub}"}
     except Exception as e:

@@ -20,11 +20,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import apply, export
+from . import apply, export, healthsync, manifest_edit, nginxgen, wafsync
+from .actuate import TIMED_OUT
 from .audit import AUDIT_LOG
 from .diff import ProtectedViolation, plan_changes
 from .export import format_apt, format_json, format_pkglist, resolve_packages
-from .manifest import ManifestError, load_all
+from .lifecycle import effective_lifecycle
+from .manifest import LIFECYCLES, WAKE_CLASSES, ManifestError, load_all
 from .observe import Actual, is_on, load_route_values, load_routes, observe, observe_all
 from .scan import discover, write_drafts
 from .snapshot import SNAP_DIR
@@ -296,17 +298,96 @@ def _cmd_scan(args) -> int:
     return 0
 
 
+_RUN_TIMEOUT_S = 30  # was 15: --no-block native commands return at once; the
+# extra headroom is for lxc-start/lxc-stop (no --no-block flag) so the container
+# CLI usually finishes before we give up and defer to wait_state.
+
+
 def _run(argv: list[str]) -> tuple[int | None, str]:
-    """rc=None signale que la commande n'a PAS pu s'exécuter (OSError, timeout) —
-    à distinguer d'un rc non-nul qui est une réponse authentique de la commande.
-    Même contrat que observe._run_cmd : un (1, "") fabriqué ici serait
-    indistinguable d'une vraie réponse "non" de la commande (voir _cmd_scan,
-    qui a besoin de cette distinction pour ne pas écrire un manifeste faux)."""
+    """rc=None = la commande n'a PAS pu s'exécuter (OSError) — jamais un faux
+    succès. rc=TIMED_OUT = elle a bien démarré mais n'a pas répondu dans le
+    délai (subprocess.TimeoutExpired) : pour lxc-start/lxc-stop (sans --no-block)
+    ce n'est PAS un échec, c'est wait_state qui tranche sur l'état observé.
+    Même contrat de lecture-seule côté observe._run_cmd (qui, lui, garde
+    timeout->None : une sonde qui traîne reste indéterminée)."""
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=15)
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=_RUN_TIMEOUT_S)
         return p.returncode, p.stdout
-    except (OSError, subprocess.SubprocessError):
+    except subprocess.TimeoutExpired:
+        return TIMED_OUT, ""
+    except OSError:
         return None, ""
+
+
+def _cmd_set_lifecycle(args) -> int:
+    """Fixe le niveau d'éveil (lifecycle + wake_class) d'UN module dans son
+    manifeste, puis resynchronise les fichiers dérivés (on-demand-vhosts pour
+    sbxwaf, sleepable-modules pour health/sleeper) afin que le changement
+    prenne effet. Écrit /etc/secubox/modules.d/<mod>.toml (root) — d'où le
+    besoin de root (délégué par le panel via webui→ctl). Refuse module
+    inconnu / valeur hors énum (rc=3, report JSON) sans rien écrire.
+
+    Les chemins de resync sont dérivés de --root (root/waf/on-demand-vhosts.json,
+    root/health/sleepable-modules.json) : en prod root=/etc/secubox donne
+    exactement les chemins réels ; sous un --root de test ils sont isolés (comme
+    modules.d/profiles), sans toucher /etc/secubox."""
+    if not _running_as_root():
+        print("set-lifecycle doit être lancé en root (il écrit le manifeste + resync).",
+              file=sys.stderr)
+        return 1
+    root = Path(args.root)
+    mod_dir, _prof_dir, _pins, _active = _paths(root)
+    manifests = load_all(mod_dir)
+    # lifecycle/wake_class sont déjà bornés par argparse (choices=) + revalidés
+    # dans manifest_edit.set_lifecycle ; ici seul le module (positionnel libre)
+    # peut être inconnu.
+    m0 = manifests.get(args.module)
+    reason = None
+    if m0 is None:
+        reason = "unknown"
+    elif m0.protected:
+        # Défense en profondeur (le panel refuse déjà 409) : ne pas réécrire le
+        # manifeste d'un module protégé, forcé always-on de toute façon.
+        reason = "protected"
+    if reason is not None:
+        refused = {"status": "refused", "module": args.module, "reason": reason}
+        print(json.dumps(refused) if args.json else f"refusé: {reason}",
+              file=sys.stdout if args.json else sys.stderr)
+        return 3
+
+    manifest_edit.set_lifecycle(mod_dir / f"{args.module}.toml",
+                                lifecycle=args.lifecycle, wake_class=args.wake_class)
+    # Recharge avec les nouvelles valeurs, puis resync les fichiers dérivés.
+    manifests = load_all(mod_dir)
+    ondemand = wafsync.write_ondemand(manifests=manifests,
+                                      out_path=root / "waf" / "on-demand-vhosts.json")
+    sleepable = healthsync.write_sleepable(manifests=manifests,
+                                           out_path=root / "health" / "sleepable-modules.json")
+    # Câble le splash phase-2 dans le vhost nginx des on-demand (best-effort :
+    # un échec nginx -t ne doit pas faire échouer le changement de niveau
+    # d'éveil, qui a déjà réussi — la ligne d'include reste rejouable via
+    # `secubox-wakectl nginx-sync`). Chemins de test dérivés de --root.
+    nginx_wired: list[str] = []
+    if root == DEFAULT_ROOT:
+        try:
+            nrep = nginxgen.sync_and_reload(
+                manifests=manifests, sites_dir=Path("/etc/nginx/sites-available"), run=_run)
+            nginx_wired = nrep["wired"]
+        except OSError:
+            pass
+    m = manifests[args.module]
+    report = {"status": "set", "module": args.module,
+              "lifecycle": m.lifecycle, "wake_class": m.wake_class,
+              "effective_lifecycle": effective_lifecycle(m),
+              "ondemand_vhosts": ondemand, "sleepable": sleepable,
+              "nginx_wired": nginx_wired}
+    if args.json:
+        print(json.dumps(report))
+    else:
+        print(f"set-lifecycle[{args.module}]: {m.lifecycle}/{m.wake_class} "
+              f"(effectif {effective_lifecycle(m)}) — {len(ondemand)} on-demand, "
+              f"{len(sleepable)} sleepable")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -349,6 +430,14 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--yes", action="store_true")
     sp.add_argument("--json", action="store_true", help="rapport JSON sur stdout")
     sp.set_defaults(func=_cmd_rollback)
+
+    sp = sub.add_parser("set-lifecycle",
+                        help="fixe le niveau d'éveil d'un module (lifecycle + wake_class) + resync")
+    sp.add_argument("module")
+    sp.add_argument("--lifecycle", required=True, choices=list(LIFECYCLES))
+    sp.add_argument("--wake-class", dest="wake_class", required=True, choices=list(WAKE_CLASSES))
+    sp.add_argument("--json", action="store_true", help="rapport JSON sur stdout")
+    sp.set_defaults(func=_cmd_set_lifecycle)
 
     args = p.parse_args(argv)
     try:

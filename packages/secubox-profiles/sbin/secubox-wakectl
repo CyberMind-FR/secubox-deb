@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-wakectl (ref #896) — réveille un module on-demand
+# (wake), ou (re)génère les listes de config consommées par sbxwaf/health
+# (nginx-sync, waf-sync, health-sync). Même motif que secubox-profilectl :
+# wrapper mince, toute la logique vit dans api/wake.py.
+set -euo pipefail
+readonly MODULE="profiles"
+readonly VERSION="0.8.0"
+cd /usr/lib/secubox/profiles
+exec /usr/bin/python3 -m api.wake "$@"

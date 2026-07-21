@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Installed as /etc/systemd/system/secubox-waker.service (own socket, own
+# service — the nginx wake-on-access route @waker points at this Unix
+# socket directly, never at the aggregator).
+[Unit]
+Description=SecuBox Waker — wake-on-access activator for on-demand modules (splash + one-wake lock)
+After=network.target secubox-core.service secubox-profiles.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/profiles
+ExecStart=/usr/bin/python3 -m uvicorn api.waker:app --uds /run/secubox/waker.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+UMask=0007
+
+# false (not true): /_wake/<vhost> fires _fire_wake, which sudos ->
+# systemd-run -> secubox-wakectl (webui->ctl, see sudoers.d/secubox-profiles).
+# NNP=true would neutralize sudo. The rest of the hardening below stays.
+NoNewPrivileges=false
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+RuntimeDirectoryMode=0775
+
+# ProtectSystem=strict makes / read-only; the only path this service writes
+# is /run/secubox (the socket + waker-active.json, see
+# api/waker.py::_write_wake_active — the wake-in-flight lock the sleeper
+# reads). The privileged wake itself never runs inside this sandbox:
+# systemd-run escapes it into PID 1's context (MODULE-COMPLIANCE.md,
+# "systemd-run" section) precisely so a sandboxed frontend like this one can
+# still trigger a fully-privileged actuation without being loosened itself.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/secubox
+
+[Install]
+WantedBy=multi-user.target

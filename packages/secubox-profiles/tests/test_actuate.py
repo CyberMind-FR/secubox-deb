@@ -24,16 +24,30 @@ def _ok_run(calls):
     return run
 
 
-def test_native_start_enables_now(tmp_path):
+def test_native_start_enables_then_starts_no_block():
     calls = []
     actuate(Change("x", START, "", 50), _m("x"), run=_ok_run(calls))
-    assert ["systemctl", "enable", "--now", "u.service"] in calls
+    assert ["systemctl", "enable", "u.service"] in calls
+    assert ["systemctl", "start", "--no-block", "u.service"] in calls
+    # enable (symlink) before start (transition)
+    assert calls.index(["systemctl", "enable", "u.service"]) < \
+           calls.index(["systemctl", "start", "--no-block", "u.service"])
 
 
-def test_native_stop_disables_now():
+def test_native_stop_disables_then_stops_no_block():
     calls = []
     actuate(Change("x", STOP, "", 50), _m("x"), run=_ok_run(calls))
-    assert ["systemctl", "disable", "--now", "u.service"] in calls
+    assert ["systemctl", "disable", "u.service"] in calls
+    assert ["systemctl", "stop", "--no-block", "u.service"] in calls
+
+
+def test_issue_raises_only_on_could_not_run():
+    from api.actuate import _issue, ActuationError, TIMED_OUT
+    _issue(lambda a: (0, ""), ["lxc-stop", "-n", "c"])          # ok
+    _issue(lambda a: (1, "already stopped"), ["lxc-stop", "-n", "c"])  # non-zero deferred
+    _issue(lambda a: (TIMED_OUT, ""), ["lxc-stop", "-n", "c"])  # timeout deferred
+    with pytest.raises(ActuationError):
+        _issue(lambda a: (None, ""), ["lxc-stop", "-n", "c"])   # could-not-run fails
 
 
 def _lxc_root_with_config(tmp_path, name, autostart="1"):
@@ -56,7 +70,8 @@ def test_lxc_stop_stops_and_clears_autostart(tmp_path):
     # autostart cleared by EDITING the container config file (not lxc-update-config).
     assert "lxc.start.auto = 0" in (root / "lyrion" / "config").read_text()
     # host API unit stopped too — decoupled from the container on the real board.
-    assert ["systemctl", "disable", "--now", "secubox-lyrion.service"] in calls
+    assert ["systemctl", "disable", "secubox-lyrion.service"] in calls
+    assert ["systemctl", "stop", "--no-block", "secubox-lyrion.service"] in calls
     # autostart=0 BEFORE lxc-stop — else secubox-watchdog revives the container.
     assert order.index("lxc:autostart:0") < order.index("lxc:stop")
 
@@ -69,7 +84,8 @@ def test_lxc_start_starts_container_then_host_unit(tmp_path):
                     run=_ok_run(calls), lxc_root=root)
     assert ["lxc-start", "-n", "lyrion"] in calls
     assert "lxc.start.auto = 1" in (root / "lyrion" / "config").read_text()
-    assert ["systemctl", "enable", "--now", "secubox-lyrion.service"] in calls
+    assert ["systemctl", "enable", "secubox-lyrion.service"] in calls
+    assert ["systemctl", "start", "--no-block", "secubox-lyrion.service"] in calls
     # container up BEFORE the host API that depends on it
     assert order.index("lxc:start") < order.index("systemd:enable")
 
@@ -89,16 +105,32 @@ def test_portal_stop_removes_route_before_backend(tmp_path):
     routes = tmp_path / "haproxy-routes.json"
     routes.write_text(json.dumps({"lyrion.gk2.secubox.in": ["127.0.0.1", 9000],
                                   "other.example": ["10.0.0.1", 80]}))
+    remembered = tmp_path / "portal-routes.json"
     root = _lxc_root_with_config(tmp_path, "lyrion", autostart="1")
     calls = []
     order = actuate(Change("l", STOP, "", 50),
                     _m("l", runtime="lxc", lxc="lyrion", portal="lyrion.gk2.secubox.in"),
-                    run=_ok_run(calls), route_value=None, routes_path=routes, lxc_root=root)
+                    run=_ok_run(calls), route_value=None, routes_path=routes, lxc_root=root,
+                    remember_path=remembered)
     # route removed
     left = json.loads(routes.read_text())
     assert "lyrion.gk2.secubox.in" not in left and "other.example" in left
     # portal removed BEFORE the runtime is torn down (host API first, then lxc)
     assert order.index("portal:remove") < order.index("systemd:disable")
+
+
+def test_portal_stop_remembers_route_value_for_later_wake(tmp_path):
+    from api import portal_routes as pr
+    routes = tmp_path / "haproxy-routes.json"
+    routes.write_text(json.dumps({"lyrion.gk2.secubox.in": ["127.0.0.1", 9000]}))
+    remembered = tmp_path / "portal-routes.json"
+    root = _lxc_root_with_config(tmp_path, "lyrion", autostart="1")
+    actuate(Change("l", STOP, "", 50),
+            _m("l", runtime="lxc", lxc="lyrion", portal="lyrion.gk2.secubox.in"),
+            run=_ok_run([]), route_value=None, routes_path=routes, lxc_root=root,
+            remember_path=remembered)
+    # the route the STOP removed is durably remembered so a wake can restore it
+    assert pr.recall("lyrion.gk2.secubox.in", path=remembered) == ["127.0.0.1", 9000]
 
 
 def test_portal_start_restores_route_from_value(tmp_path):
@@ -142,6 +174,44 @@ def test_wait_state_times_out():
     assert ok is False
 
 
+def test_wait_state_lxc_requires_container_state_for_start():
+    # Host unit is up (is_on True) but the container is NOT running yet →
+    # a START must NOT be considered reached until lxc_running is True too.
+    from api.actuate import wait_state
+    from api.observe import Actual
+    m = _m("l", runtime="lxc", lxc="l", units=("secubox-l.service",))
+    seq = iter([
+        Actual(enabled=True, active=True, lxc_running=False),  # unit up, container not yet
+        Actual(enabled=True, active=True, lxc_running=True),   # now fully up
+    ])
+    ok = wait_state(m, True, observe=lambda mm: next(seq),
+                    sleep=lambda s: None, now=iter([0, 1, 2]).__next__,
+                    timeout=30, poll=1)
+    assert ok is True
+
+
+def test_wait_state_lxc_stop_not_reached_while_container_runs():
+    # Host unit is down (is_on False) but the container refuses to die
+    # (lxc_running stays True) → a STOP must report NOT reached (zombie guard).
+    from api.actuate import wait_state
+    from api.observe import Actual
+    m = _m("l", runtime="lxc", lxc="l", units=("secubox-l.service",))
+    ok = wait_state(m, False, observe=lambda mm: Actual(enabled=False, active=False,
+                                                        lxc_running=True),
+                    sleep=lambda s: None, now=iter([0, 10, 20, 31]).__next__,
+                    timeout=30, poll=10)
+    assert ok is False
+
+
+def test_wait_state_native_unaffected_by_container_predicate():
+    # A native module has lxc_running=None; the container clause must not apply.
+    from api.actuate import wait_state
+    from api.observe import Actual
+    ok = wait_state(_m("x"), True, observe=lambda mm: Actual(enabled=True, active=True),
+                    sleep=lambda s: None, now=iter([0, 1]).__next__, timeout=30, poll=1)
+    assert ok is True
+
+
 def test_condition_failed_detects_gated_native_unit():
     from api.actuate import condition_failed
 
@@ -163,3 +233,59 @@ def test_condition_failed_false_for_lxc():
     called = []
     condition_failed(_m("l", runtime="lxc", lxc="l"), lambda a: (called.append(a), (0, "no"))[1])
     assert not called  # short-circuits on runtime != native
+
+
+def test_parse_systemd_timespan_forms():
+    from api.actuate import _parse_systemd_timespan
+    assert _parse_systemd_timespan("90s") == 90.0
+    assert _parse_systemd_timespan("1min 30s") == 90.0
+    assert _parse_systemd_timespan("2min") == 120.0
+    assert _parse_systemd_timespan("1h 30min") == 5400.0
+    assert _parse_systemd_timespan("500ms") == 0.5
+    assert _parse_systemd_timespan("infinity") is None
+    assert _parse_systemd_timespan("") is None
+    assert _parse_systemd_timespan("garbage") is None
+
+
+def test_derived_timeout_native_uses_stop_timeout_plus_margin():
+    from api.actuate import derived_timeout
+    # STOP -> reads TimeoutStopUSec; 90s + 15s margin = 105, within [10, 300].
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"] and "TimeoutStopUSec" in argv:
+            return 0, "1min 30s\n"
+        return 0, ""
+    assert derived_timeout(_m("metrics"), False, run, margin=15.0) == 105.0
+
+
+def test_derived_timeout_native_start_reads_start_timeout():
+    from api.actuate import derived_timeout
+    seen = {}
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"]:
+            seen["prop"] = argv[argv.index("-p") + 1]
+            return 0, "5s\n"
+        return 0, ""
+    derived_timeout(_m("x"), True, run)          # START
+    assert seen["prop"] == "TimeoutStartUSec"
+
+
+def test_derived_timeout_infinity_and_unreadable_use_cap():
+    from api.actuate import derived_timeout
+    assert derived_timeout(_m("x"), False, lambda a: (0, "infinity\n"), cap=300.0) == 300.0
+    assert derived_timeout(_m("x"), False, lambda a: (1, ""), cap=300.0) == 300.0   # show failed
+    assert derived_timeout(_m("x"), False, lambda a: (None, ""), cap=300.0) == 300.0  # couldn't run
+
+
+def test_derived_timeout_lxc_returns_cap():
+    from api.actuate import derived_timeout
+    called = []
+    m = _m("l", runtime="lxc", lxc="l")
+    assert derived_timeout(m, False, lambda a: (called.append(a), (0, "9s"))[1], cap=250.0) == 250.0
+    assert not called   # short-circuits: no systemctl show for an LXC module
+
+
+def test_derived_timeout_clamps_to_floor_and_cap():
+    from api.actuate import derived_timeout
+    # tiny unit timeout -> floor wins; huge -> cap wins.
+    assert derived_timeout(_m("x"), False, lambda a: (0, "1s"), floor=10.0, margin=0.0) == 10.0
+    assert derived_timeout(_m("x"), False, lambda a: (0, "10min"), cap=120.0, margin=0.0) == 120.0

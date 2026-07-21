@@ -34,12 +34,13 @@ from api.manifest import PROTECTED_IDS  # noqa: E402
 from api.state import load_profile, load_pins  # noqa: E402
 
 MANIFEST_LYRION = """
-id       = "lyrion"
-category = "media"
-runtime  = "native"
-exposure = "lan"
-units    = ["secubox-lyrion.service"]
-priority = 30
+id        = "lyrion"
+category  = "media"
+runtime   = "native"
+exposure  = "lan"
+units     = ["secubox-lyrion.service"]
+priority  = 30
+lifecycle = "eager"
 """
 
 MANIFEST_AUTH = """
@@ -276,6 +277,132 @@ def test_set_pin_invalid_value_400(client):
     assert resp.status_code == 400
 
 
+# ---------------------------------------------------------------------------
+# lifecycle / wake_class / sleep_state (Task 10) — status payload extension.
+# `auth` is protected (PROTECTED_IDS) => effective_lifecycle forces
+# "always-on" regardless of its declared value => sleep_state "n/a". `lyrion`
+# declares lifecycle="eager" explicitly (the fleet-safe default is now
+# "always-on" — see test_manifest.test_lifecycle_defaults_always_on_normal —
+# so this test opts lyrion into "eager" on purpose to exercise the sleepable
+# path) with no wake_class => defaults "normal", observed on (client
+# fixture) => sleep_state "up". A third module declared "on-demand"/"urgent"
+# and left UNOBSERVED by the client fixture's _observe_all stub proves the
+# None -> False -> "asleep" coalescing (same philosophy as observe.is_on,
+# see its docstring).
+# ---------------------------------------------------------------------------
+
+def test_status_includes_lifecycle_wake_class_and_sleep_state(client, root):
+    (root / "modules.d" / "podcast.toml").write_text(
+        'id       = "podcast"\n'
+        'category = "media"\n'
+        'runtime  = "native"\n'
+        'exposure = "lan"\n'
+        'units    = ["secubox-podcast.service"]\n'
+        'priority = 20\n'
+        'lifecycle  = "on-demand"\n'
+        'wake_class = "urgent"\n')
+    resp = client.get("/api/v1/profiles/status")
+    assert resp.status_code == 200
+    data = {m["id"]: m for m in resp.json()["modules"]}
+
+    assert data["lyrion"]["lifecycle"] == "eager"
+    assert data["lyrion"]["wake_class"] == "normal"
+    assert data["lyrion"]["sleep_state"] == "up"
+    assert data["lyrion"]["wake_budget_s"] == pytest.approx(45.0)
+
+    assert data["auth"]["lifecycle"] == "always-on"    # protected overrides declared value
+    assert data["auth"]["wake_class"] == "normal"
+    assert data["auth"]["sleep_state"] == "n/a"
+    assert data["auth"]["wake_budget_s"] is None
+
+    assert data["podcast"]["lifecycle"] == "on-demand"
+    assert data["podcast"]["wake_class"] == "urgent"
+    assert data["podcast"]["sleep_state"] == "asleep"   # unobserved -> is_on() False
+    assert data["podcast"]["wake_budget_s"] == pytest.approx(15.0)
+
+
+# ---------------------------------------------------------------------------
+# manual wake/sleep (Task 10) — webui->ctl: both routes only ever shell out to
+# a FIXED sudo argv (see sudoers.d/secubox-profiles), gated by JWT and
+# _apply_lock, exactly like apply/rollback. An unknown module is 404 and a
+# non-sleepable one (always-on/manual, incl. protected-forced) is 409 —
+# BOTH refused locally, before any sudo call is attempted (structural
+# refusal, same posture as the pin protected-off check).
+# ---------------------------------------------------------------------------
+
+def test_wake_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
+    def fake_run(argv, **kw):
+        assert argv == ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+                        "--collect", "--quiet", "/usr/sbin/secubox-wakectl",
+                        "wake", "lyrion", "--json"]
+
+        class P:
+            returncode = 0
+            stdout = '{"status":"woken","module":"lyrion"}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/wake", json={"module": "lyrion"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "woken"
+
+
+def test_wake_route_unknown_module_404_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/wake", json={"module": "fantome"})
+    assert r.status_code == 404
+    assert called == []
+
+
+def test_wake_route_not_sleepable_409_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/wake", json={"module": "auth"})  # protected -> always-on
+    assert r.status_code == 409
+    assert called == []
+
+
+def test_sleep_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
+    def fake_run(argv, **kw):
+        assert argv == ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+                        "--collect", "--quiet", "/usr/sbin/secubox-profilectl",
+                        "apply", "--only", "lyrion", "--yes", "--json"]
+
+        class P:
+            returncode = 0
+            stdout = '{"status":"applied","changed":["lyrion"],"failed":[],"rolled_back":[]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/sleep", json={"module": "lyrion"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "applied"
+    assert r.json()["changed"] == ["lyrion"]
+
+
+def test_sleep_route_unknown_module_404_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/sleep", json={"module": "fantome"})
+    assert r.status_code == 404
+    assert called == []
+
+
+def test_sleep_route_not_sleepable_409_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/sleep", json={"module": "auth"})  # protected -> always-on
+    assert r.status_code == 409
+    assert called == []
+
+
+def test_wake_and_sleep_require_jwt_when_not_overridden(root):
+    c = TestClient(web.app)
+    assert c.post("/api/v1/profiles/wake", json={"module": "lyrion"}).status_code == 401
+    assert c.post("/api/v1/profiles/sleep", json={"module": "lyrion"}).status_code == 401
+
+
 def test_diff_after_pin_reflects_refusal_not_partial_state(client, root):
     # Belt-and-braces: even if the write-path refusal were somehow bypassed,
     # plan_changes() itself raises ProtectedViolation independently — but the
@@ -445,3 +572,180 @@ def test_apply_rolled_back_returns_report_not_500(client, root, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "rolled_back" and body["failed"] == ["x"]
+
+
+def test_apply_rolled_back_reverts_active_to_prior(client, root, monkeypatch):
+    # A rolled_back apply must leave `active` pointing at the PRIOR profile
+    # (state was reverted), not at the target that never took — otherwise the
+    # pointer lies. Fixture default active="media"; we apply "lite" -> rolled_back.
+    (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
+    assert (root / "profiles" / "active").read_text().strip() == "media"
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 2
+            stdout = '{"status":"rolled_back","changed":[],"failed":["x"],"rolled_back":["y"]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "rolled_back"
+    assert (root / "profiles" / "active").read_text().strip() == "media"  # reverted
+
+
+def test_apply_rolled_back_no_prior_active_removes_file(client, root, monkeypatch):
+    # First-ever apply with NO prior `active` file: on rolled_back the route must
+    # REMOVE the file it created (nothing to restore), not leave `active` pointing
+    # at a target profile that never took.
+    (root / "profiles" / "active").unlink()   # drop the fixture's default active
+    (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 2
+            stdout = '{"status":"rolled_back","changed":[],"failed":["x"],"rolled_back":["y"]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
+    assert r.status_code == 200 and r.json()["status"] == "rolled_back"
+    assert not (root / "profiles" / "active").exists()   # created-then-removed
+
+
+def test_apply_applied_keeps_active_at_target(client, root, monkeypatch):
+    (root / "profiles" / "lite.toml").write_text('name="lite"\nlabel="Lite"\non=["lyrion"]\n')
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 0
+            stdout = '{"status":"applied","changed":["lyrion"],"failed":[],"rolled_back":[]}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/apply", json={"profile": "lite"})
+    assert r.status_code == 200
+    assert (root / "profiles" / "active").read_text().strip() == "lite"  # kept
+
+
+# ---------------------------------------------------------------------------
+# rollback clears `active` — a standalone rollback restores an ARBITRARY
+# point-in-time snapshot that has no associated profile name; leaving `active`
+# unchanged would have it keep naming whatever profile the last /apply set,
+# which no longer matches the (rolled-back) board state. Mirrors the
+# apply_active revert-on-rolled_back fix above, but for the separate
+# /rollback route: on a successful rollback (CLI status "applied"/"planned",
+# see api/cli.py _cmd_rollback's own success predicate) the honest state is
+# "no named profile" -> clear the pointer.
+# ---------------------------------------------------------------------------
+
+def test_rollback_clears_active_pointer(client, root, monkeypatch):
+    assert (root / "profiles" / "active").read_text().strip() == "media"
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 0
+            stdout = ('{"status":"applied","changed":["x"],"failed":[],'
+                      '"rolled_back":["x"],"target":"R1"}')
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/rollback", json={})
+    assert r.status_code == 200
+    assert not (root / "profiles" / "active").exists()
+
+
+def test_rollback_failure_leaves_active_untouched(client, root, monkeypatch):
+    assert (root / "profiles" / "active").read_text().strip() == "media"
+
+    def fake_run(argv, **kw):
+        class P:
+            returncode = 2
+            stdout = ""
+            stderr = "boum"
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+
+    r = client.post("/api/v1/profiles/rollback", json={})
+    assert r.status_code == 500
+    assert (root / "profiles" / "active").read_text().strip() == "media"
+
+
+# --- POST /lifecycle (niveau d'éveil, webui->ctl) ---------------------------
+
+def test_lifecycle_route_delegates_to_ctl_and_returns_report(client, monkeypatch):
+    def fake_run(argv, **kw):
+        assert argv == ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+                        "--collect", "--quiet", "/usr/sbin/secubox-profilectl",
+                        "set-lifecycle", "lyrion", "--lifecycle", "on-demand",
+                        "--wake-class", "urgent", "--json"]
+
+        class P:
+            returncode = 0
+            stdout = ('{"status":"set","module":"lyrion","lifecycle":"on-demand",'
+                      '"wake_class":"urgent","effective_lifecycle":"on-demand",'
+                      '"ondemand_vhosts":[],"sleepable":["lyrion"]}')
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "lyrion", "lifecycle": "on-demand", "wake_class": "urgent"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "set" and r.json()["lifecycle"] == "on-demand"
+
+
+def test_lifecycle_route_defaults_wake_class_to_normal(client, monkeypatch):
+    seen = {}
+    def fake_run(argv, **kw):
+        seen["argv"] = argv
+        class P:
+            returncode = 0
+            stdout = '{"status":"set","module":"lyrion","lifecycle":"eager","wake_class":"normal"}'
+            stderr = ""
+        return P()
+    monkeypatch.setattr(web, "_ctl_run", fake_run)
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "lyrion", "lifecycle": "eager"})
+    assert r.status_code == 200
+    assert "--wake-class" in seen["argv"]
+    assert seen["argv"][seen["argv"].index("--wake-class") + 1] == "normal"
+
+
+def test_lifecycle_route_bad_lifecycle_422_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "lyrion", "lifecycle": "turbo", "wake_class": "normal"})
+    assert r.status_code == 422
+    assert called == []
+
+
+def test_lifecycle_route_bad_wake_class_422_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "lyrion", "lifecycle": "on-demand", "wake_class": "panic"})
+    assert r.status_code == 422
+    assert called == []
+
+
+def test_lifecycle_route_unknown_module_404_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "fantome", "lifecycle": "on-demand", "wake_class": "normal"})
+    assert r.status_code == 404
+    assert called == []
+
+
+def test_lifecycle_route_protected_409_and_ctl_not_called(client, monkeypatch):
+    called = []
+    monkeypatch.setattr(web, "_ctl_run", lambda argv, **kw: called.append(argv))
+    r = client.post("/api/v1/profiles/lifecycle",
+                    json={"module": "auth", "lifecycle": "on-demand", "wake_class": "normal"})
+    assert r.status_code == 409
+    assert called == []

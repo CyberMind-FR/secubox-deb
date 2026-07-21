@@ -6,6 +6,7 @@ package main
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -84,6 +85,287 @@ func TestProxyUnmapped(t *testing.T) {
 
 	if rec.Code != http.StatusMisdirectedRequest {
 		t.Fatalf("expected 421, got %d", rec.Code)
+	}
+}
+
+// TestOnDemandProxiesToWaker verifies that a request for a host with no
+// route, but present in the on-demand vhosts set, is reverse-proxied to the
+// waker (unix socket) instead of getting a 421 — and that the Director
+// rewrites the path to /_wake/<host>.
+func TestOnDemandProxiesToWaker(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "waker.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix %s: %v", sockPath, err)
+	}
+	defer ln.Close()
+
+	var gotPath string
+	waker := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "waking up…")
+		}),
+	}
+	go waker.Serve(ln) //nolint:errcheck
+	defer waker.Close()
+
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) { return "", 0, false },
+		onDemand:    &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		wakerSocket: sockPath,
+	}
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet, "http://sleepy.example.com/", nil)
+	req.Host = "sleepy.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from waker splash, got %d", rec.Code)
+	}
+	if gotPath != "/_wake/sleepy.example.com" {
+		t.Fatalf("expected waker path /_wake/sleepy.example.com, got %q", gotPath)
+	}
+
+	// TestProxyUnmapped (above) already proves a host NOT in the on-demand set
+	// still gets 421 from this same handler code path.
+}
+
+// TestOnDemandProxiesWithMixedCaseHost verifies that a mixed/upper-case Host
+// header — which OnDemand.Contains already matches case-insensitively — is
+// normalized to lowercase by the waker Director too, so the wake key sent to
+// the waker matches the lowercase portal_domain stored in on-demand-vhosts.json.
+// Without this normalization the waker's exact-match lookup on the mixed-case
+// path would miss and the wake would never fire (permanent splash).
+func TestOnDemandProxiesWithMixedCaseHost(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "waker3.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix %s: %v", sockPath, err)
+	}
+	defer ln.Close()
+
+	var gotPath string
+	waker := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "waking up…")
+		}),
+	}
+	go waker.Serve(ln) //nolint:errcheck
+	defer waker.Close()
+
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) { return "", 0, false },
+		// Stored lowercase, exactly as the on-demand-vhosts.json generator emits it.
+		onDemand:    &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		wakerSocket: sockPath,
+	}
+
+	handler := srv.handler()
+	// Mixed-case Host header — a hand-typed URL or script caller.
+	req := httptest.NewRequest(http.MethodGet, "http://Sleepy.Example.COM/", nil)
+	req.Host = "Sleepy.Example.COM"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from waker splash, got %d", rec.Code)
+	}
+	if gotPath != "/_wake/sleepy.example.com" {
+		t.Fatalf("expected canonical lowercase waker path /_wake/sleepy.example.com, got %q", gotPath)
+	}
+}
+
+// TestOnDemandVisitsExcluded verifies that a request served by the waker
+// splash is NOT tallied into the legitimate visit-stats (mirrors the existing
+// 403/421 exclusion).
+func TestOnDemandVisitsExcluded(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "waker2.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix %s: %v", sockPath, err)
+	}
+	defer ln.Close()
+
+	waker := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "waking up…")
+		}),
+	}
+	go waker.Serve(ln) //nolint:errcheck
+	defer waker.Close()
+
+	visits := NewVisitStats("") // no on-disk flush, just the in-memory counter
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) { return "", 0, false },
+		onDemand:    &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		wakerSocket: sockPath,
+		visits:      visits,
+	}
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet, "http://sleepy.example.com/", nil)
+	req.Host = "sleepy.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from waker splash, got %d", rec.Code)
+	}
+	if got := visits.Total(); got != 0 {
+		t.Fatalf("waker splash must not be tallied as a legitimate visit; total = %d", got)
+	}
+}
+
+// TestVhostSignalsRecordedForRealOnDemandRequest verifies the handler()
+// Begin/End hook (#896 Task 15): a request to an on-demand vhost that DOES
+// have a live route is bracketed — active_conns is back to 0 (End ran) and
+// last_request_ts is set once the request completes.
+func TestVhostSignalsRecordedForRealOnDemandRequest(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+	backendAddr := strings.TrimPrefix(backend.URL, "http://")
+
+	vs := NewVhostSignals("") // no on-disk flush, inspect state directly
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) {
+			h, p, err := splitHostPort(backendAddr)
+			if err != nil {
+				return "", 0, false
+			}
+			return h, p, true
+		},
+		onDemand:     &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		vhostSignals: vs,
+	}
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet, "http://sleepy.example.com/", nil)
+	req.Host = "sleepy.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from the real backend, got %d", rec.Code)
+	}
+
+	snap := vs.snapshot()
+	entry, ok := snap["sleepy.example.com"]
+	if !ok {
+		t.Fatal("expected sleepy.example.com to be recorded in vhost signals")
+	}
+	if entry.ActiveConns != 0 {
+		t.Fatalf("expected active_conns=0 once the (synchronous) request completed, got %d", entry.ActiveConns)
+	}
+	if entry.LastRequestTS == 0 {
+		t.Fatal("expected a non-zero last_request_ts")
+	}
+}
+
+// TestVhostSignalsExcludedForWakerBranch verifies that a request served by
+// the waker splash (the vhost is asleep, no live route) is NOT recorded into
+// vhost signals — recording it would make a sleeping vhost look like it just
+// received a real hit, defeating the idle check (mirrors the analogous
+// TestOnDemandVisitsExcluded for the #747 visit-stats aggregator).
+func TestVhostSignalsExcludedForWakerBranch(t *testing.T) {
+	sockPath := filepath.Join(t.TempDir(), "waker-vhostsignals.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix %s: %v", sockPath, err)
+	}
+	defer ln.Close()
+
+	waker := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, "waking up…")
+		}),
+	}
+	go waker.Serve(ln) //nolint:errcheck
+	defer waker.Close()
+
+	vs := NewVhostSignals("")
+	srv := &Server{
+		routeLookup:  func(host string) (string, int, bool) { return "", 0, false },
+		onDemand:     &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		wakerSocket:  sockPath,
+		vhostSignals: vs,
+	}
+
+	handler := srv.handler()
+	req := httptest.NewRequest(http.MethodGet, "http://sleepy.example.com/", nil)
+	req.Host = "sleepy.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 from waker splash, got %d", rec.Code)
+	}
+	if snap := vs.snapshot(); len(snap) != 0 {
+		t.Fatalf("waker splash must not be recorded in vhost signals; got %+v", snap)
+	}
+}
+
+// TestVhostSignalsExcludedForWAFBlock is the regression test for a Task 15
+// review finding: an on-demand vhost WITH a live backend that the WAF blocks
+// (403 warning/ban) must NOT update its vhost signal. Public on-demand
+// vhosts sit under near-constant internet scanning (masscan/shodan/bots)
+// that trips block-mode rules; if that blocked traffic kept refreshing
+// last_request_ts, last_request_age would never cross idle_threshold and
+// auto-sleep would never fire for the vhost — defeating the feature for its
+// primary deployment. The fix moves the Begin/End hook to AFTER the WAF-
+// inspection block's 403 early-returns (see the placement comment in
+// handler()); before the fix, this test failed because Begin ran before
+// s.rules.MatchModes/writeWarning ever had a chance to return early.
+func TestVhostSignalsExcludedForWAFBlock(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "backend ok")
+	}))
+	defer backend.Close()
+	backendAddr := strings.TrimPrefix(backend.URL, "http://")
+
+	rulesPath := buildSQLiRulesFile(t) // reuse helper from inspect_test.go
+	vs := NewVhostSignals("")
+	srv := &Server{
+		routeLookup: func(host string) (string, int, bool) {
+			h, p, err := splitHostPort(backendAddr)
+			if err != nil {
+				return "", 0, false
+			}
+			return h, p, true
+		},
+		rules:        LoadRules(rulesPath),
+		ban:          NewBan(300*time.Second, 3),
+		onDemand:     &OnDemand{entries: map[string]bool{"sleepy.example.com": true}},
+		vhostSignals: vs,
+	}
+
+	handler := srv.handler()
+	// UNION SELECT in the query → triggers the sqli rule (same payload as
+	// TestHandlerWarningThenBan) against an on-demand vhost that DOES have a
+	// live route — the WAF must still block it before ever reaching the
+	// backend or touching the vhost signal.
+	req := httptest.NewRequest(http.MethodGet,
+		"http://sleepy.example.com/?q=1+union+select+1,2,3", nil)
+	req.Host = "sleepy.example.com"
+	req.RemoteAddr = "203.0.113.42:12345" // public IP (TEST-NET-3, non-RFC1918)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected the WAF to block this SQLi payload with 403, got %d", rec.Code)
+	}
+	if snap := vs.snapshot(); len(snap) != 0 {
+		t.Fatalf("a WAF-blocked (warning/ban) request must not update vhost signals; got %+v", snap)
 	}
 }
 

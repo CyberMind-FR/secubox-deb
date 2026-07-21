@@ -14,3 +14,72 @@
 # this FIXED argv (--only stays a root-CLI-only affordance):
 secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-profilectl apply --yes --json
 secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-profilectl rollback --yes --json
+
+# secubox-waker (User=secubox, ProtectSystem=strict) — same webui->ctl +
+# systemd-run pattern for its own privileged operation: waking a single
+# on-demand module (api/waker.py::_fire_wake). Fire-and-forget (no --wait/
+# --pipe: the waker never blocks an HTTP request on the wake's outcome,
+# unlike the panel's apply/rollback above which DOES wait for the result).
+#
+# The trailing `*` is a deliberate, bounded exception to the "no wildcards"
+# rule above: the module id is a genuine per-call variable (one wake per
+# vhost), so it cannot be a fixed string like apply/rollback's argv. This is
+# still safe because:
+#   - sudo never invokes a shell here — the matched argv is executed
+#     directly (execve), so shell metacharacters in the glob match (;, |,
+#     $(), ..) are inert, they are just literal bytes in one argv element;
+#   - secubox-wakectl's own argparse treats `module` as a single positional
+#     value, never re-parsed as flags or re-shelled;
+#   - secubox-wakectl further validates that value against load_all() and
+#     REFUSES anything that isn't a known module id (status="refused",
+#     reason="unknown") before it drives systemd/LXC.
+# So the wildcard only ever resolves to "a manifest id known to this system,
+# plus --json" — never to arbitrary code execution or an arbitrary argv.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --collect --quiet /usr/sbin/secubox-wakectl wake *
+
+# Task 10 (#896) — manual sleep/wake buttons on the /profiles/ panel itself
+# (api/web.py POST /wake, POST /sleep). Two MORE grants, distinct from both
+# sections above:
+#
+#   * /wake — same secubox-wakectl binary as the waker's fire-and-forget
+#     grant just above, but SYNCHRONOUS (--wait --pipe): the panel waits for
+#     and displays the wake report to the operator, unlike the waker (which
+#     never blocks a public, unauthenticated HTTP request on the wake's
+#     outcome). The extra --wait --pipe flags make this a DIFFERENT command
+#     line that does not match the fire-and-forget grant above, hence its
+#     own line here. Same wildcard-safety argument as above applies
+#     verbatim: execve (no shell) + secubox-wakectl re-validates the module
+#     id itself (refuses unknown/manual/always-on before touching
+#     systemd/LXC).
+#
+#   * /sleep — reuses the EXISTING `apply` actuator (no new binary, no new
+#     privileged code path), restricted to one module via `--only <id>`:
+#     plan_changes already computes a STOP for any sleepable module that is
+#     currently up and not desired ON (absent from the active profile /
+#     not pinned on), so `--only` simply narrows apply's effect to that one
+#     module — if the module IS desired ON, the filtered plan is empty
+#     (safe no-op). The wildcard is bounded the same way as the two grants
+#     above: sudo matches argv directly (execve, no shell), and
+#     secubox-profilectl's own plan_changes only ever acts on a module id it
+#     recognizes from modules.d — an unknown id just filters the plan down
+#     to nothing, never arbitrary execution.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-wakectl wake *
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-profilectl apply --only * --yes --json
+
+# Lifecycle setter (#896) — the /profiles/ panel's per-module "awake level"
+# selector (api/web.py POST /lifecycle) writes the module manifest
+# (/etc/secubox/modules.d/<id>.toml, root:root) and resyncs the derived files,
+# so it too delegates to the root ctl via systemd-run. THREE wildcards (module,
+# lifecycle value, wake_class value), each a genuine per-call variable — bounded
+# exactly like the grants above:
+#   - sudo executes the matched argv directly (execve, no shell): metacharacters
+#     in any wildcard match are inert literal bytes in one argv element;
+#   - the panel pre-validates ALL THREE against CLOSED sets before building this
+#     fixed argv — lifecycle ∈ LIFECYCLES, wake_class ∈ WAKE_CLASSES (422), and
+#     module ∈ load_all() (404) — so it never emits an out-of-set value;
+#   - secubox-profilectl re-validates independently: argparse `choices=` rejects
+#     any non-enum lifecycle/wake_class (exit before any write), and set-lifecycle
+#     refuses a module id absent from modules.d (status=refused) before writing.
+# So the wildcards only ever resolve to "a known module id + two enum values +
+# --json" — never arbitrary code or an arbitrary argv.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-profilectl set-lifecycle * --lifecycle * --wake-class * --json

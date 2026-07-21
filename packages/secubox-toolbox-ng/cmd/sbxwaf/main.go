@@ -45,6 +45,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
@@ -188,6 +189,30 @@ type Server struct {
 	// https://admin.gk2.secubox.in) the injected health-banner loads its asset +
 	// metrics APIs from (CDN-injected mode). Empty disables injection.
 	bannerOrigin string
+
+	// onDemand is the SecuBox scale-to-zero (#896) hot-reloadable set of
+	// on-demand vhosts, loaded from --on-demand-vhosts. Nil disables the
+	// feature entirely: an unmapped host always gets 421, exactly as before.
+	onDemand *OnDemand
+
+	// vhostSignals is the #896 Task 15 per-vhost last-request/active-conns
+	// emitter the profiles-side sleeper reads to decide idleness. Nil
+	// disables it entirely (--vhost-signals=""). Only ever Begin/End'd for
+	// on-demand vhosts (see the handler() call site) — recording every
+	// public vhost is unnecessary (the sleeper only cares about the
+	// on-demand set) and would defeat the "map stays tiny" property.
+	vhostSignals *VhostSignals
+
+	// wakerSocket overrides the unix socket path dialled by wakerProxy().
+	// Empty means the production default (see wakerproxy.go's
+	// defaultWakerSocket). Tests inject a stub socket path here.
+	wakerSocket string
+
+	// wakerProxyOnce/wakerProxyInst cache the *httputil.ReverseProxy built by
+	// wakerProxy() — built once per Server instance, reused for every
+	// on-demand request afterwards (never per-request allocation).
+	wakerProxyOnce sync.Once
+	wakerProxyInst *httputil.ReverseProxy
 }
 
 // handler returns an http.Handler that:
@@ -231,11 +256,17 @@ func (s *Server) handler() http.Handler {
 		// defer records every LEGITIMATE response (excludes the WAF-block 403 and
 		// the unmapped-host 421) into the visit-stats aggregator.
 		var visitHost string
+		// viaWaker is set when this request is reverse-proxied to the on-demand
+		// waker splash (#896) instead of a real backend. The waker's response
+		// (typically 503 while it wakes the service) is no more a "legitimate
+		// visit" than the 403/421 it stands in for — it must not be tallied
+		// into the visit-stats aggregator.
+		var viaWaker bool
 		if s.visits != nil {
 			sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			w = sr
 			defer func() {
-				if sr.status != http.StatusForbidden && sr.status != http.StatusMisdirectedRequest {
+				if !viaWaker && sr.status != http.StatusForbidden && sr.status != http.StatusMisdirectedRequest {
 					s.visits.Record(visitHost, r.UserAgent(), clientIP(r), sr.status)
 				}
 			}()
@@ -254,6 +285,12 @@ func (s *Server) handler() http.Handler {
 		if s.rules != nil {
 			s.rules.Maybe()
 		}
+		// #896: same hot-reload check for the on-demand vhosts set — an operator
+		// flipping a service to/from on-demand must take effect without
+		// restarting the WAF. Same one-stat cost as routes/rules.
+		if s.onDemand != nil {
+			s.onDemand.Maybe()
+		}
 
 		// Strip port from Host header to get the bare hostname for lookup.
 		host, _, err := net.SplitHostPort(r.Host)
@@ -266,6 +303,14 @@ func (s *Server) handler() http.Handler {
 
 		ip, port, ok := s.routeLookup(host)
 		if !ok {
+			// #896 scale-to-zero: a known on-demand vhost with no live route
+			// (the sleeper stopped it) is reverse-proxied to the waker splash
+			// instead of getting a 421 — the vhost is real, just asleep.
+			if s.onDemand != nil && s.onDemand.Contains(host) {
+				viaWaker = true
+				s.wakerProxy().ServeHTTP(w, r)
+				return
+			}
 			http.Error(w, "421 Misdirected Request: no route for host "+host,
 				http.StatusMisdirectedRequest)
 			return
@@ -502,6 +547,29 @@ func (s *Server) handler() http.Handler {
 			}
 		}
 
+		// #896 Task 15 — bracket this request in the per-vhost signal emitter.
+		// Placed here, AFTER the entire WAF-inspection block above (all its
+		// escalate-ban/warning/ban early `return`s at lines ~502-545 have
+		// already happened by this point) and after the earlier on-demand/
+		// waker + 421 checks — so reaching this line means the request is
+		// getting a REAL response for this vhost: either a media-cache hit
+		// just below (genuine content served to the client — counts as
+		// activity) or a proxied backend response (media-cache-miss path or
+		// the plain path further down). A WAF 403/warning/ban, a graduated
+		// or escalate ban, or the waker/421 branch never reaches this line,
+		// so scanner/bot traffic that trips a block-mode rule can no longer
+		// refresh last_request_ts and defeat auto-sleep on a public vhost
+		// (the bug this placement fixes — see TestVhostSignalsExcludedForWAFBlock).
+		// Gated to on-demand vhosts: those are the only ones the sleeper ever
+		// acts on. A single placement here (rather than one at each of the
+		// two proxy.ServeHTTP call sites, plus the cache-hit return) covers
+		// all three: `defer` fires whichever exit path the function takes
+		// from here on, so one Begin always pairs with exactly one End.
+		if s.vhostSignals != nil && s.onDemand != nil && s.onDemand.Contains(host) {
+			s.vhostSignals.Begin(host)
+			defer s.vhostSignals.End(host)
+		}
+
 		// Task 6.1 — media cache hit: serve from disk, bypass upstream.
 		// Only for GET requests; cache is nil-safe.
 		//
@@ -652,6 +720,15 @@ func main() {
 	caKey := flag.String("ca-key", "", "path to CA private key PEM file (or combined cert+key bundle)")
 	routesFile := flag.String("routes", "", "path to haproxy-routes.json (hot-reloaded on mtime change)")
 	rules := flag.String("rules", "", "path to rules file (loaded by Task 2.1)")
+	// #896: SecuBox scale-to-zero — vhosts in this set that have no live route
+	// (the sleeper stopped them) are proxied to the waker splash instead of 421.
+	onDemandVhosts := flag.String("on-demand-vhosts", "",
+		"path to on-demand-vhosts.json (JSON array of vhosts; hot-reloaded); empty disables the waker branch")
+	// #896 Task 15: per-vhost last-request/active-conns signal the
+	// profiles-side sleeper (api/sleeper.py) reads to decide idleness.
+	// Only ever populated for on-demand vhosts (see handler()); empty disables.
+	vhostSignalsFile := flag.String("vhost-signals", "/var/cache/secubox/waf/vhost-signals.json",
+		"path for the per-vhost last-request/active-conns JSON snapshot (scale-to-zero signal source); empty disables")
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
 	threatLog := flag.String("threat-log", "/var/log/secubox/waf/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
@@ -738,6 +815,14 @@ func main() {
 		log.Printf("sbxwaf: visit-stats enabled → %s (flush %s)", *visitsStats, visitFlushInterval)
 	}
 
+	// #896 Task 15: per-vhost scale-to-zero signal emitter. Disabled when
+	// --vhost-signals is empty.
+	var vhostSignals *VhostSignals
+	if *vhostSignalsFile != "" {
+		vhostSignals = NewVhostSignals(*vhostSignalsFile)
+		log.Printf("sbxwaf: vhost-signals enabled → %s (flush %s)", *vhostSignalsFile, vhostSignalsFlushInterval)
+	}
+
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
@@ -755,6 +840,8 @@ func main() {
 		mediaCache: mediaCache,
 		// #747: non-attacker visit statistics.
 		visits: visits,
+		// #896 Task 15: per-vhost scale-to-zero signal emitter.
+		vhostSignals: vhostSignals,
 		// #747: first-party host suffixes + Hub origin for the injected health banner.
 		widgetHosts:  splitCSV(*widgetHosts),
 		bannerOrigin: strings.TrimSpace(*bannerOrigin),
@@ -815,6 +902,14 @@ func main() {
 		srv.routeLookup = func(host string) (string, int, bool) {
 			return "", 0, false
 		}
+	}
+
+	// #896: wire the on-demand vhosts set when --on-demand-vhosts is provided.
+	// Disabled (nil) means the handler's waker branch never triggers — an
+	// unmapped host always gets 421, exactly as before this feature existed.
+	if *onDemandVhosts != "" {
+		srv.onDemand = LoadOnDemand(*onDemandVhosts)
+		log.Printf("sbxwaf: on-demand vhosts loaded from %s", *onDemandVhosts)
 	}
 
 	// CA load is lazy: skip if flags are empty (dev mode / no TLS forging needed).
