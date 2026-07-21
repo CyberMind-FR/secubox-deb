@@ -4,34 +4,111 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """
-SecuBox-Deb :: profiles — tests génération snippets nginx @waker
+SecuBox-Deb :: profiles — tests câblage nginx phase-2 (nginx-sync)
 CyberMind — https://cybermind.fr
 """
 from __future__ import annotations
 
-
-def test_render_only_for_sleepable_portal(tmp_path):
-    from api.nginxgen import render_snippet
-    from api.manifest import Manifest
-    on_demand = Manifest(id="d", category="infra", runtime="native", exposure="public",
-                         units=("d.service",), portal_domain="d.gk2", lifecycle="on-demand")
-    always = Manifest(id="a", category="infra", runtime="native", exposure="public",
-                      units=("a.service",), portal_domain="a.gk2", lifecycle="always-on")
-    noportal = Manifest(id="n", category="infra", runtime="native", exposure="lan",
-                        units=("n.service",), lifecycle="on-demand")
-    assert render_snippet(on_demand) is not None and "@waker" in render_snippet(on_demand)
-    assert render_snippet(always) is None
-    assert render_snippet(noportal) is None
+from api.manifest import Manifest
 
 
-def test_sync_writes_and_prunes(tmp_path):
-    from api.nginxgen import sync_snippets
-    from api.manifest import Manifest
-    out = tmp_path / "snips"; out.mkdir()
-    (out / "stale.gk2.waker.conf").write_text("old")   # should be pruned
-    manifests = {"d": Manifest(id="d", category="infra", runtime="native", exposure="public",
-                 units=("d.service",), portal_domain="d.gk2", lifecycle="on-demand")}
-    written = sync_snippets(manifests=manifests, out_dir=out)
-    assert written == ["d.gk2"]
-    assert (out / "d.gk2.waker.conf").exists()
-    assert not (out / "stale.gk2.waker.conf").exists()
+def _vhost(dom):
+    return (f"server {{\n    listen 0.0.0.0:9080;\n    server_name {dom};\n"
+            f"    location / {{\n        proxy_pass http://10.100.0.80:8090/;\n    }}\n}}\n")
+
+
+def _m(mid, dom, lc="on-demand"):
+    return Manifest(id=mid, category="infra", runtime="native", exposure="public",
+                    units=(f"{mid}.service",), portal_domain=dom, lifecycle=lc)
+
+
+def test_find_config_matches_server_name_ignores_bak(tmp_path):
+    from api import nginxgen
+    (tmp_path / "yacy.conf").write_text(_vhost("yacy.gk2.secubox.in"))
+    (tmp_path / "yacy.conf.bak").write_text(_vhost("yacy.gk2.secubox.in"))
+    p = nginxgen.find_config("yacy.gk2.secubox.in", tmp_path)
+    assert p is not None and p.name == "yacy.conf"
+    assert nginxgen.find_config("nope.gk2", tmp_path) is None
+
+
+def test_wire_injects_after_server_name_and_is_idempotent(tmp_path):
+    from api import nginxgen
+    p = tmp_path / "yacy.conf"
+    p.write_text(_vhost("yacy.gk2.secubox.in"))
+    assert nginxgen.wire(p, "yacy.gk2.secubox.in") is True
+    text = p.read_text()
+    lines = text.splitlines()
+    i = next(n for n, l in enumerate(lines) if "server_name" in l)
+    assert "secubox-waking.conf" in lines[i + 1]
+    assert nginxgen.wire(p, "yacy.gk2.secubox.in") is False
+    assert text == p.read_text()
+    assert text.count("secubox-waking.conf") == 1
+
+
+def test_wire_targets_the_right_block_in_multi_server_file(tmp_path):
+    from api import nginxgen
+    p = tmp_path / "multi.conf"
+    p.write_text(_vhost("other.gk2") + _vhost("yacy.gk2.secubox.in"))
+    nginxgen.wire(p, "yacy.gk2.secubox.in")
+    lines = p.read_text().splitlines()
+    yi = next(n for n, l in enumerate(lines) if "server_name yacy.gk2.secubox.in" in l)
+    assert "secubox-waking.conf" in lines[yi + 1]
+    oi = next(n for n, l in enumerate(lines) if "server_name other.gk2" in l)
+    assert "secubox-waking.conf" not in lines[oi + 1]
+
+
+def test_wire_no_matching_server_name_leaves_file_untouched(tmp_path):
+    from api import nginxgen
+    p = tmp_path / "x.conf"
+    orig = _vhost("other.gk2")
+    p.write_text(orig)
+    assert nginxgen.wire(p, "yacy.gk2.secubox.in") is False
+    assert p.read_text() == orig
+
+
+def test_unwire_removes_the_include(tmp_path):
+    from api import nginxgen
+    p = tmp_path / "yacy.conf"
+    p.write_text(_vhost("yacy.gk2.secubox.in"))
+    nginxgen.wire(p, "yacy.gk2.secubox.in")
+    assert nginxgen.unwire(p) is True
+    assert "secubox-waking.conf" not in p.read_text()
+    assert nginxgen.unwire(p) is False
+
+
+def test_sync_and_reload_wires_ondemand_and_reloads(tmp_path):
+    from api import nginxgen
+    (tmp_path / "yacy.conf").write_text(_vhost("yacy.gk2.secubox.in"))
+    (tmp_path / "podcaster.conf").write_text(_vhost("podcaster.gk2"))
+    mans = {"yacy": _m("yacy", "yacy.gk2.secubox.in"),
+            "podcaster": _m("podcaster", "podcaster.gk2"),
+            "lyrion": _m("lyrion", "lyrion.gk2", lc="always-on")}
+    calls = []
+    def run(argv):
+        calls.append(argv); return 0, ""
+    rep = nginxgen.sync_and_reload(manifests=mans, sites_dir=tmp_path, run=run)
+    assert sorted(rep["wired"]) == ["podcaster.gk2", "yacy.gk2.secubox.in"]
+    assert rep["reloaded"] is True and rep["rolled_back"] is False
+    assert ["nginx", "-t"] in calls and ["systemctl", "reload", "nginx"] in calls
+    assert "secubox-waking.conf" in (tmp_path / "yacy.conf").read_text()
+
+
+def test_sync_and_reload_rolls_back_when_nginx_test_fails(tmp_path):
+    from api import nginxgen
+    orig = _vhost("yacy.gk2.secubox.in")
+    (tmp_path / "yacy.conf").write_text(orig)
+    mans = {"yacy": _m("yacy", "yacy.gk2.secubox.in")}
+    def run(argv):
+        return (1, "bad") if argv == ["nginx", "-t"] else (0, "")
+    rep = nginxgen.sync_and_reload(manifests=mans, sites_dir=tmp_path, run=run)
+    assert rep["rolled_back"] is True and rep["reloaded"] is False
+    assert (tmp_path / "yacy.conf").read_text() == orig
+
+
+def test_sync_reports_ondemand_vhost_with_no_nginx_config(tmp_path):
+    from api import nginxgen
+    mans = {"ghost": _m("ghost", "ghost.gk2")}
+    def run(argv): return 0, ""
+    rep = nginxgen.sync_and_reload(manifests=mans, sites_dir=tmp_path, run=run)
+    assert rep["no_config"] == ["ghost.gk2"] and rep["wired"] == []
+    assert rep["reloaded"] is False

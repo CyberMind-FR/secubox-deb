@@ -67,6 +67,12 @@ case "$1" in
         /usr/sbin/secubox-wakectl waf-sync 2>/dev/null || true
         /usr/sbin/secubox-wakectl health-sync 2>/dev/null || true
 
+        # Phase-2 wake splash: add `include snippets/secubox-waking.conf;` to
+        # every on-demand vhost so a booting backend's 502/503/504 shows the
+        # terminal splash instead of a raw gateway error. Idempotent + rolls
+        # back if nginx -t fails; itself reloads nginx on success.
+        /usr/sbin/secubox-wakectl nginx-sync 2>/dev/null || true
+
         systemctl reload nginx 2>/dev/null || true
         ;;
 esac
