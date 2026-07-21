@@ -112,3 +112,21 @@ def test_sync_reports_ondemand_vhost_with_no_nginx_config(tmp_path):
     rep = nginxgen.sync_and_reload(manifests=mans, sites_dir=tmp_path, run=run)
     assert rep["no_config"] == ["ghost.gk2"] and rep["wired"] == []
     assert rep["reloaded"] is False
+
+
+def test_wire_covers_multiple_ondemand_blocks_in_one_file(tmp_path):
+    # #1 fix: file-wide marker used to skip the 2nd+ on-demand block; per-block
+    # idempotency wires EACH domain's block.
+    from api import nginxgen
+    p = tmp_path / "multi.conf"
+    p.write_text(_vhost("a.gk2") + _vhost("b.gk2"))
+    assert nginxgen.wire(p, "a.gk2") is True
+    assert nginxgen.wire(p, "b.gk2") is True          # 2nd block also wired now
+    assert p.read_text().count("secubox-waking.conf") == 2
+    # idempotent per block
+    assert nginxgen.wire(p, "a.gk2") is False
+    assert nginxgen.wire(p, "b.gk2") is False
+    lines = p.read_text().splitlines()
+    ai = next(n for n, l in enumerate(lines) if "server_name a.gk2" in l)
+    bi = next(n for n, l in enumerate(lines) if "server_name b.gk2" in l)
+    assert "secubox-waking.conf" in lines[ai + 1] and "secubox-waking.conf" in lines[bi + 1]
