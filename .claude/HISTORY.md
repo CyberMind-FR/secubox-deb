@@ -3,6 +3,20 @@
 
 ---
 
+## 2026-07-21 — Scale-to-zero for public services (#896) + two-phase wake UX (branch feat/scale-to-zero-public-services)
+
+Public on-demand services now **sleep when idle and wake on access**, with a per-module lifecycle policy, and a graceful two-phase "waking" UX. Culmination of a multi-day effort (also folds in #893 profiles-actuation robustness).
+
+- **Policy (secubox-profiles)**: manifest `lifecycle` (always-on/eager/on-demand/manual, DEFAULT always-on = fleet-safe) + `wake_class` (normal/urgent); `protected`⇒always-on. `api/lifecycle.py`.
+- **Sleep/Wake actuator (0.7.0→0.9.x)**: observed-state arbitration (#893); **durable portal-route memory** (`api/portal_routes.py`) so a woken vhost's WAF route is restored (route-restoration round-trip PROVEN live on yacy); `secubox-waker` (phase-1 splash + one-wake lock) + `secubox-sleeper` (idle daemon off sbxwaf per-vhost signals).
+- **sbxwaf-side wake trigger**: on-demand vhost with no route → sbxwaf reverse-proxies to the waker (instead of 421); route restored on wake.
+- **Awake-level setter (webui→ctl)**: per-module lifecycle/wake_class selector in the /profiles/ panel → `profilectl set-lifecycle` writes the manifest + resyncs; POST /api/v1/profiles/lifecycle (enum/known/protected gated before sudo).
+- **Two-phase wake UX**: pseudo-terminal "virtual screen" splash (auto-executing boot log, CRT, elapsed, repair-after-90s). Phase 1 = waker; **Phase 2 = nginx `error_page 502/503/504`** intercepts a still-booting backend → same splash. Generalized via `secubox-wakectl nginx-sync` (idempotent per-block include injector, nginx -t + rollback) to ALL on-demand vhosts (5 wired live).
+- **Board infra fix**: crash-looping `secubox-waf-ng-worker@1/@2` were re-chowning the shared `/run/secubox` to `secubox-waf` → broke any `secubox`-user service on restart; disabled (not in traffic path; interim `:8085` unit serves). WAF-drift reconcile (cookie-audit perms + drop RuntimeDirectory) tracked as follow-up.
+- **Reviews**: every task two-stage reviewed; opus whole-branch + focused reviews clean after fixes. Tests green across the package.
+
+---
+
 ## 2026-07-19 — Profiles Phase 2: Requires=secubox-core → Wants= (branch feat/profiles-phase2-core-wants)
 
 Removed the hard cascade coupling to `secubox-core.service` (a Type=oneshot mkdir+chown with RemainAfterExit). A hard `Requires=` on ~108 units cascade-stops them all when core restarts or fails (e.g. a secubox-core package upgrade) — a thundering-herd outage. `After=` keeps the boot ordering; `Wants=` keeps the soft dependency without the cascade. Prerequisite for the Phase-3 native mass-apply.

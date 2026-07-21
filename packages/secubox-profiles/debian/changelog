@@ -1,3 +1,16 @@
+secubox-profiles (0.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * Terminal wake splash + two-phase UX (ref #896): pseudo-terminal "virtual
+    screen" splash served by BOTH the waker (phase 1, container down) and nginx
+    (phase 2, error_page 502/503/504 while an on-demand backend boots).
+  * nginx-sync generalizes the phase-2 splash to ALL on-demand vhosts: idempotent
+    per-block `include snippets/secubox-waking.conf;` injector with nginx -t +
+    in-memory rollback; run by set-lifecycle (best-effort) and postinst.
+  * Awake-level setter in the /profiles/ panel (lifecycle + wake_class, webui->ctl).
+  * Durable portal-route memory so wake restores a woken vhost's WAF route.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 21 Jul 2026 08:30:00 +0200
+
 secubox-profiles (0.9.0-1~bookworm1) bookworm; urgency=medium
 
   * awake-level setter in the /profiles/ panel (ref #896): per-module
