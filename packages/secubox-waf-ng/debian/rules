@@ -52,16 +52,14 @@ override_dh_auto_clean:
 	rm -rf _gocache _gopath
 
 override_dh_installsystemd:
-	# Install the worker template unit manually (dh_installsystemd expects the
-	# unit file at debian/<package>.<unitname>.service or debian/<unitname>.service;
-	# ours lives in systemd/ so we install it explicitly, mirroring the toolbox
-	# package pattern for override_dh_installsystemd).
+	# #896 reconcile: ship the SINGLE hardened unit (secubox-waf-ng.service,
+	# :8085) — it replaces the crash-looping worker@ fan-out template, which is
+	# NO LONGER installed (a reinstall must not resurrect the re-chown landmine;
+	# the postinst disables + removes any leftover worker@ units on the board).
 	install -d debian/secubox-waf-ng/lib/systemd/system
-	install -m 0644 systemd/secubox-waf-ng-worker@.service \
+	install -m 0644 systemd/secubox-waf-ng.service \
 	  debian/secubox-waf-ng/lib/systemd/system/
-	# Let dh_installsystemd generate the enable helpers for @1 and @2.
-	# The postinst's `systemctl enable --now` handles activation.
-	dh_installsystemd --name=secubox-waf-ng-worker@
+	dh_installsystemd --name=secubox-waf-ng
 
 execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/sbin

@@ -59,6 +59,20 @@ case "$1" in
     mkdir -p /var/log/secubox/cookie-audit
     chown secubox-waf:secubox-waf /var/log/secubox/cookie-audit
     chmod 0750 /var/log/secubox/cookie-audit
+    # The ledger FILE must be writable by the non-root sbxwaf that appends to it.
+    # A pre-existing file owned by another user (e.g. secubox from an old addon)
+    # makes sbxwaf panic on open → crash-loop (#896 reconcile). Chown if present.
+    if [ -e /var/log/secubox/cookie-audit/server.jsonl ]; then
+      chown secubox-waf:secubox-waf /var/log/secubox/cookie-audit/server.jsonl || true
+    fi
+
+    # haproxy-routes.json must be READABLE by the non-root sbxwaf (#896 reconcile):
+    # root-only 0600 makes it load 0 routes → 421 everything. Routes are
+    # [host,port] pairs, not secret → 0644 (the norm; the profiles actuator
+    # preserves this mode on its atomic writes).
+    if [ -e /etc/secubox/waf/haproxy-routes.json ]; then
+      chmod 0644 /etc/secubox/waf/haproxy-routes.json || true
+    fi
 
     # ── 4. Cache directories ──────────────────────────────────────────────────
     # Same shared-parent pattern: /var/cache/secubox must stay 0755.
@@ -81,32 +95,32 @@ case "$1" in
       aa-enforce /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null || true
     fi
 
-    # ── 6. Systemd: enable and start workers ─────────────────────────────────
+    # ── 6. Systemd: single hardened unit (#896 reconcile) ────────────────────
+    # The crash-looping worker@ fan-out is retired. Retire any leftover worker@
+    # instances, drop the hand-created /etc override that shadowed the packaged
+    # unit, then enable + (re)start the single hardened secubox-waf-ng.service.
     if [ -d /run/systemd/system ]; then
+      # Disable + stop any surviving worker@ instances (they re-chowned the
+      # shared /run/secubox and broke sibling sockets — see the unit header).
+      for unit in secubox-waf-ng-worker@1.service secubox-waf-ng-worker@2.service; do
+        systemctl disable --now "$unit" 2>/dev/null || true
+      done
+
+      # A previous cutover left a hand-created override at
+      # /etc/systemd/system/secubox-waf-ng.service that shadows this packaged
+      # /lib unit. Remove it so the packaged (hardened) unit takes effect. Only
+      # a plain file (not a symlink an operator may have set deliberately).
+      if [ -f /etc/systemd/system/secubox-waf-ng.service ] && \
+         [ ! -L /etc/systemd/system/secubox-waf-ng.service ]; then
+        rm -f /etc/systemd/system/secubox-waf-ng.service
+      fi
+
       systemctl daemon-reload || true
-
-      # Enable + start both worker instances.
-      # Guard: only when dpkg is not in --simulate / no-systemd build env.
-      for instance in 1 2; do
-        unit="secubox-waf-ng-worker@${instance}.service"
-        systemctl enable "$unit" 2>/dev/null || true
-        systemctl start  "$unit" 2>/dev/null || true
-      done
-    fi
-
-    # ── 7. On UPGRADE: restart any running enabled workers ───────────────────
-    # dpkg upgrade SIGTERMs the units BEFORE this postinst runs, so
-    # `try-restart` (a no-op on a stopped unit) would leave workers DEAD.
-    # Mirror the toolbox postinst fix: ENABLED units get a full `restart`.
-    if [ -n "${2:-}" ] && [ -d /run/systemd/system ]; then
-      for unit in secubox-waf-ng-worker@1.service \
-                  secubox-waf-ng-worker@2.service; do
-        if systemctl is-enabled --quiet "$unit" 2>/dev/null; then
-          systemctl restart "$unit" 2>/dev/null || true
-        else
-          systemctl try-restart "$unit" 2>/dev/null || true
-        fi
-      done
+      systemctl enable secubox-waf-ng.service 2>/dev/null || true
+      # Fresh install starts it; upgrade restarts it (dpkg SIGTERMs the unit
+      # before this postinst runs, so `restart` — not `try-restart` — is needed
+      # to bring it back). HAProxy srv0 → 127.0.0.1:8085 keeps pointing at it.
+      systemctl restart secubox-waf-ng.service 2>/dev/null || true
     fi
 
     ;;

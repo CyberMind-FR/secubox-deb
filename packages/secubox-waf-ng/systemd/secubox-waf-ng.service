@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-waf-ng — Go WAF single reverse-proxy unit (#896 reconcile)
+#
+# Reconcile of the WAF-ng drift (2026-07-21): the board ran a HAND-CREATED,
+# UNHARDENED root unit on :8085 (HAProxy srv0 -> 127.0.0.1:8085) while the
+# package shipped only a worker@ fan-out template that crash-looped (it panicked
+# on the cookie-audit log — writable only by root — and, running as secubox-waf
+# with RuntimeDirectory=secubox, each crash-restart re-chowned the SHARED
+# /run/secubox, breaking every secubox-user service's socket bind). This single
+# unit REPLACES both: one hardened, non-root sbxwaf on :8085, reproducible from
+# source. See docs / issue #896.
+#
+# KEY DIFFERENCES from the (retired) worker@ template:
+#   * single instance on :8085 (matches the live HAProxy backend), NOT an
+#     nft-DNAT fan-out to :8081/:8082 (that never actually ran);
+#   * single --vhost-signals file (secubox-sleeper's reader falls back to the
+#     legacy non-@ path);
+#   * NO RuntimeDirectory=secubox — sbxwaf only CONNECTS to the waker socket
+#     (/run/secubox/waker.sock) as a client; it creates nothing under
+#     /run/secubox, so it must not take ownership of the shared dir. /run/secubox
+#     stays in ReadWritePaths so the client connect works under ProtectSystem.
+#
+# PREREQUISITES the postinst asserts (so a non-root sbxwaf can read them):
+#   * /etc/secubox/waf/haproxy-routes.json readable (0644 — [host,port] pairs,
+#     not secret); root-only 0600 makes sbxwaf load 0 routes -> 421 everything;
+#   * /var/log/secubox/cookie-audit/server.jsonl writable by secubox-waf.
+
+[Unit]
+Description=SecuBox WAF-NG Go reverse-proxy (single instance, port 8085)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/896
+After=network.target
+ConditionPathExists=/usr/sbin/sbxwaf
+
+[Service]
+Type=simple
+User=secubox-waf
+Group=secubox-waf
+
+ExecStart=/usr/sbin/sbxwaf \
+  --listen 127.0.0.1:8085 \
+  --routes /etc/secubox/waf/haproxy-routes.json \
+  --rules /etc/secubox/waf/waf-rules.json \
+  --on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json \
+  --vhost-signals /var/cache/secubox/waf/vhost-signals.json \
+  --threat-log /var/log/secubox/waf/waf-threats.log \
+  --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
+  --media-cache-dir /var/cache/secubox/waf/media \
+  --crowdsec-url http://10.100.0.1:8080
+
+# --crowdsec-url is the real CrowdSec LAPI (LXC-bridge gateway 10.100.0.1:8080),
+# NOT 127.0.0.1:8080 (the nft DNAT VIP that would self-loop into this proxy).
+
+Restart=on-failure
+RestartSec=5
+
+# ── Hardening ─────────────────────────────────────────────────────────────────
+# Same posture as the worker@ template (secubox-mesh convention, §6 CSPN), minus
+# RuntimeDirectory (see header). /run/secubox is READ-WRITE so the client connect
+# to waker.sock works under ProtectSystem=strict.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadOnlyPaths=/etc/secubox
+ReadWritePaths=/var/log/secubox/waf /var/log/secubox/cookie-audit /var/cache/secubox/waf /run/secubox
+
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+MemoryDenyWriteExecute=yes
+
+MemoryHigh=256M
+MemoryMax=384M
+TasksMax=512
+RuntimeMaxSec=12h
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,18 @@
+secubox-waf-ng (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * #896 WAF-drift reconcile: ship a SINGLE HARDENED unit (secubox-waf-ng.service,
+    :8085, User=secubox-waf, full sandbox) that replaces BOTH the crash-looping
+    worker@ fan-out template (retired — it panicked on the root-only cookie-audit
+    log and, via RuntimeDirectory=secubox as secubox-waf, re-chowned the shared
+    /run/secubox and broke every secubox-user socket bind) AND the hand-created
+    unhardened root :8085 override the board was running.
+  * NO RuntimeDirectory=secubox (sbxwaf only CONNECTS to waker.sock) → kills the
+    re-chown landmine. postinst asserts perms a non-root sbxwaf needs
+    (haproxy-routes.json 0644, cookie-audit ledger writable by secubox-waf),
+    disables leftover worker@ units, and drops the /etc override.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 21 Jul 2026 10:00:00 +0200
+
 secubox-waf-ng (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial packaging of the Go WAF reverse-proxy engine (#744 Task 8.1).
