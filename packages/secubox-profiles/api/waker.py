@@ -121,8 +121,12 @@ def _write_wake_active() -> None:
 
 
 def _splash(module: str, budget: float, retry: int) -> HTMLResponse:
-    html = _TEMPLATE_TEXT.format(module=module, budget=int(budget), retry=retry)
-    return HTMLResponse(html, status_code=503,
+    # The splash is static + JS-driven (service name from the vhost hostname,
+    # elapsed time from sessionStorage) — the SAME page nginx serves for phase-2
+    # (backend up but still booting) — so it needs no server-side substitution.
+    # module/budget stay in the signature: `retry` drives the Retry-After header
+    # (derived from the wake budget by the caller); the body is served verbatim.
+    return HTMLResponse(_TEMPLATE_TEXT, status_code=503,
                         headers={"Retry-After": str(retry), "Cache-Control": "no-store"})
 
 

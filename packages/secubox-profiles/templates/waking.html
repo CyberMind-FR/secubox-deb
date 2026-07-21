@@ -2,11 +2,164 @@
 <!-- Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
 <!-- Source-Disclosed License — All rights reserved except as expressly granted. -->
 <!-- See LICENCE-CMSD-1.0.md for terms. -->
-<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta http-equiv="refresh" content="{retry}">
-<title>Démarrage — {module}</title>
-<style>body{{background:#0a0a0f;color:#00d4ff;font-family:"Courier Prime",monospace;
-text-align:center;padding-top:20vh}}.b{{color:#c9a84c}}</style></head>
-<body><h1>⏳ {module} se réveille…</h1>
-<p>Budget estimé : <span class="b">~{budget}s</span>. Cette page se recharge seule.</p>
-</body></html>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SecuBox — réveil du service…</title>
+<style>
+  :root{
+    --bg:#05060a; --panel:#0a0d14; --edge:#12303a;
+    --cyan:#00d4ff; --green:#00ff41; --gold:#c9a84c; --red:#e63946;
+    --dim:#5a6b73; --txt:#cfe9f2;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:radial-gradient(ellipse at 50% 30%,#0b1622 0%,var(--bg) 70%);
+    color:var(--txt);
+    font-family:"JetBrains Mono","Courier Prime",ui-monospace,monospace;
+    display:flex;align-items:center;justify-content:center;padding:4vmin;
+    overflow:hidden;
+  }
+  /* CRT virtual screen */
+  .crt{
+    position:relative;width:min(760px,94vw);
+    background:linear-gradient(180deg,#0a0f16 0%,#070a10 100%);
+    border:1px solid var(--edge);border-radius:10px;
+    box-shadow:0 0 0 1px #0d1a20, 0 0 60px rgba(0,212,255,.10), inset 0 0 90px rgba(0,60,80,.18);
+    padding:0;overflow:hidden;
+    animation:flick 5.5s infinite steps(60);
+  }
+  @keyframes flick{0%,97%{opacity:1}98%{opacity:.93}99%{opacity:.98}100%{opacity:1}}
+  .crt::after{ /* scanlines */
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.22) 2px 3px);
+    mix-blend-mode:multiply;
+  }
+  .crt::before{ /* corner vignette */
+    content:"";position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 120px rgba(0,0,0,.7);border-radius:10px;
+  }
+  .bar{
+    display:flex;align-items:center;gap:.55rem;
+    padding:.55rem .8rem;border-bottom:1px solid var(--edge);
+    background:linear-gradient(180deg,#0e1620,#0a0f16);
+    font-size:.72rem;color:var(--dim);letter-spacing:.06em;
+  }
+  .dot{width:.62rem;height:.62rem;border-radius:50%;box-shadow:0 0 6px currentColor}
+  .dot.r{color:#ff5f57;background:#ff5f57}.dot.y{color:#febc2e;background:#febc2e}.dot.g{color:#28c840;background:#28c840}
+  .bar .who{margin-left:auto;color:var(--cyan);text-shadow:0 0 8px rgba(0,212,255,.5)}
+  .screen{padding:1.1rem 1.15rem 1.35rem;min-height:340px;position:relative;z-index:1}
+  h1{margin:.1rem 0 1rem;font-size:1.02rem;font-weight:700;color:var(--cyan);
+     text-shadow:0 0 12px rgba(0,212,255,.45);letter-spacing:.02em}
+  h1 .svc{color:var(--gold);text-shadow:0 0 12px rgba(201,168,76,.5)}
+  #log{font-size:.82rem;line-height:1.6;white-space:pre-wrap;margin:0;min-height:190px}
+  #log .ln{opacity:0;animation:show .18s forwards}
+  @keyframes show{to{opacity:1}}
+  .ok{color:var(--green);text-shadow:0 0 8px rgba(0,255,65,.35)}
+  .wait{color:var(--gold)}
+  .mut{color:var(--dim)}
+  .cmd{color:var(--cyan)}
+  .cur::after{content:"▋";color:var(--cyan);animation:blink 1s steps(1) infinite;margin-left:1px}
+  @keyframes blink{50%{opacity:0}}
+  .foot{
+    display:flex;align-items:center;gap:.6rem;margin-top:1.1rem;
+    padding-top:.7rem;border-top:1px dashed var(--edge);font-size:.75rem;color:var(--dim);
+  }
+  .spin{display:inline-block;width:1.05em;color:var(--cyan)}
+  .bars{display:inline-flex;gap:3px;margin-left:auto;align-items:flex-end;height:1em}
+  .bars i{width:3px;background:var(--cyan);box-shadow:0 0 5px var(--cyan);animation:eq 1s ease-in-out infinite}
+  .bars i:nth-child(2){animation-delay:.15s}.bars i:nth-child(3){animation-delay:.3s}
+  .bars i:nth-child(4){animation-delay:.45s}.bars i:nth-child(5){animation-delay:.6s}
+  @keyframes eq{0%,100%{height:.35em;opacity:.5}50%{height:1em;opacity:1}}
+  /* repair state (took too long) */
+  #repair{display:none;margin-top:1rem;padding:.8rem .9rem;border:1px solid var(--red);
+    border-radius:6px;background:rgba(230,57,70,.07);font-size:.8rem;color:#f2b8bd}
+  #repair b{color:var(--red)}
+  #repair a{color:var(--cyan);text-decoration:none;border-bottom:1px dotted var(--cyan)}
+  .elapsed{color:var(--gold)}
+  @media (prefers-reduced-motion:reduce){.crt{animation:none}.bars i{animation:none}}
+</style>
+</head>
+<body>
+  <div class="crt" role="status" aria-live="polite">
+    <div class="bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span>secubox // on-demand activator</span>
+      <span class="who" id="who">tty0</span>
+    </div>
+    <div class="screen">
+      <h1>⏻ réveil du service <span class="svc" id="svc">…</span></h1>
+      <pre id="log"></pre>
+      <div class="foot">
+        <span class="spin" id="spin">◜</span>
+        <span>en cours — recharge auto dans <span id="cd">3</span>s · actif depuis <span class="elapsed" id="el">0s</span></span>
+        <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </div>
+      <div id="repair">
+        <b>⚠ le démarrage prend plus de temps que prévu.</b><br>
+        Le conteneur est réveillé mais le service met du temps à répondre. La page
+        continue de vérifier. Vous pouvez <a href="" onclick="location.reload();return false">réessayer maintenant</a>,
+        ou consulter le <a href="https://admin.gk2.secubox.in/profiles/">panneau des profils</a> si cela persiste.
+      </div>
+    </div>
+  </div>
+<script>
+(function(){
+  // Service name from the vhost host (yacy.gk2.secubox.in -> yacy).
+  var host = location.hostname || "service";
+  var svc = host.split(".")[0] || host;
+  document.getElementById("svc").textContent = svc;
+  document.getElementById("who").textContent = host;
+
+  // Elapsed across auto-reloads (per-host, survives the meta refresh).
+  var key = "sbxwake:" + host, t0 = +sessionStorage.getItem(key);
+  if(!t0){ t0 = Date.now(); try{ sessionStorage.setItem(key, t0); }catch(e){} }
+  function secs(){ return Math.max(0, Math.round((Date.now()-t0)/1000)); }
+  var el = document.getElementById("el");
+
+  // Auto-executing boot log — typed line by line.
+  var now = secs();
+  var lines = [
+    ['cmd',  '$ secubox wake ' + svc],
+    ['ok',   '[  ok  ] on-demand vhost résolu : ' + host],
+    ['ok',   '[  ok  ] conteneur ' + svc + ' : démarré'],
+    ['ok',   '[  ok  ] route WAF restaurée → backend'],
+    ['wait', '[ .... ] attente du service applicatif…'],
+    ['mut',  '         sonde HTTP · nouvelle tentative auto'],
+  ];
+  var log = document.getElementById("log"), i = 0;
+  (function type(){
+    if(i < lines.length){
+      var d = document.createElement("span");
+      d.className = "ln " + lines[i][0];
+      d.style.animationDelay = (i*0.12) + "s";
+      d.textContent = lines[i][1] + "\n";
+      log.appendChild(d); i++;
+      setTimeout(type, 180);
+    } else {
+      var c = document.createElement("span");
+      c.className = "ln cur mut"; c.textContent = "         ";
+      log.appendChild(c);
+    }
+  })();
+
+  // Spinner + elapsed + countdown, then reload.
+  var frames = "◜◠◝◞◡◟", f = 0, spin = document.getElementById("spin");
+  var cd = document.getElementById("cd"), left = 3;
+  el.textContent = now + "s";
+  setInterval(function(){ spin.textContent = frames[f=(f+1)%frames.length]; }, 130);
+  setInterval(function(){
+    el.textContent = secs() + "s";
+    left--; if(left<0) left=0; cd.textContent = left;
+    if(secs() > 90) document.getElementById("repair").style.display = "block";
+  }, 1000);
+  // Hard reload (bypass bfcache) — re-probes the backend through nginx.
+  setTimeout(function(){ location.reload(); }, 3000);
+})();
+</script>
+</body>
+</html>

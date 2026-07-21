@@ -6,3 +6,5 @@ sbin/secubox-wakectl   usr/sbin/
 www/profiles/index.html usr/share/secubox/www/profiles/
 menu.d/11-profiles.json usr/share/secubox/menu.d/
 nginx/profiles.conf    etc/nginx/secubox-routes.d/
+templates/waking.html  usr/share/secubox/www/waking/
+nginx/secubox-waking.conf  etc/nginx/snippets/
