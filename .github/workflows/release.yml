@@ -18,6 +18,13 @@ on:
         description: 'Publish to APT repo'
         type: boolean
         default: true
+  # Callable as a reusable workflow (sync-all.yml references it). Without this,
+  # `uses: ./.github/workflows/release.yml` makes the CALLER fail to parse at
+  # startup ("workflow file issue") — which is why sync-all was red at 0s. The
+  # tag-push and workflow_dispatch paths above are unchanged; sync-all's release
+  # job is guarded to tags only and sync-all runs on branch pushes, so this
+  # callable path is not exercised today — it only restores a valid reference.
+  workflow_call:
 
 jobs:
   # Build all packages
