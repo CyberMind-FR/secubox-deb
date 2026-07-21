@@ -140,6 +140,33 @@ def test_handler_with_bg_refresh_task_is_compliant(tmp_path):
     assert not unjustified
 
 
+def test_handler_with_thread_refresh_is_compliant(tmp_path):
+    """``threading.Thread(target=refresh_cache).start()`` — the SYNC background
+    refresh idiom (sync FastAPI handler + daemon thread, e.g. secubox-frigate) —
+    covers all hot routes just like the async create_task pattern."""
+    pkg = make_fake_packages(tmp_path, {
+        "secubox-thread": """
+            import threading
+            from fastapi import FastAPI
+            app = FastAPI()
+
+            def refresh_cache():
+                pass
+
+            @app.on_event("startup")
+            def startup():
+                threading.Thread(target=refresh_cache, daemon=True).start()
+
+            @app.get("/stats")
+            def get_stats():
+                from pathlib import Path
+                return Path("/var/cache/foo.json").read_text()
+        """,
+    })
+    _, unjustified = cdc.run(pkg, Path("/nonexistent"))
+    assert not unjustified
+
+
 def test_non_hot_route_is_not_audited(tmp_path):
     """``/health`` is NOT in HOT_ROUTES — even with I/O it should not flag."""
     pkg = make_fake_packages(tmp_path, {

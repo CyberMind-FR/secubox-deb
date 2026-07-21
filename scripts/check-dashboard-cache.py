@@ -188,10 +188,20 @@ def _module_signals(tree: ast.Module) -> tuple[bool, bool]:
 
     - has_cache_instance: a module-level assignment whose target is a
       Name ending in ``_cache`` (e.g. ``stats_cache = StatsCache(...)``).
-    - has_bg_refresh: any ``asyncio.create_task(refresh_*())`` or
-      ``@app.on_event("startup")`` that spawns a coroutine whose name
-      contains ``refresh`` / ``cache`` / ``poll`` / ``loop``.
+    - has_bg_refresh: a background refresh spawner, either
+        * ``asyncio.create_task(refresh_*())`` (async idiom), or
+        * ``threading.Thread(target=refresh_*)`` / ``Thread(target=refresh_*)``
+          (the sync idiom — a daemon thread refreshing a module-level cache,
+          used by sync FastAPI handlers, e.g. secubox-frigate),
+      where the spawned callable's name contains ``refresh`` / ``cache`` /
+      ``poll`` / ``loop`` / ``periodic``.
     """
+    _BG_KW = ("refresh", "cache", "poll", "loop", "periodic")
+
+    def _name_of(n) -> str:
+        return (n.id if isinstance(n, ast.Name)
+                else n.attr if isinstance(n, ast.Attribute) else "")
+
     has_cache = False
     has_bg = False
 
@@ -204,23 +214,25 @@ def _module_signals(tree: ast.Module) -> tuple[bool, bool]:
         # Background refresh detection
         if isinstance(node, ast.Call):
             func = node.func
+            # (a) asyncio.create_task(refresh_*())
             if (
                 isinstance(func, ast.Attribute)
                 and func.attr == "create_task"
                 and isinstance(func.value, ast.Name)
                 and func.value.id == "asyncio"
             ):
-                # Inspect the argument: is it a refresh-style coroutine?
                 if node.args and isinstance(node.args[0], ast.Call):
-                    inner = node.args[0].func
-                    inner_name = (
-                        inner.id if isinstance(inner, ast.Name)
-                        else inner.attr if isinstance(inner, ast.Attribute)
-                        else ""
-                    )
-                    if any(kw in inner_name.lower()
-                           for kw in ("refresh", "cache", "poll", "loop", "periodic")):
+                    inner_name = _name_of(node.args[0].func)
+                    if any(kw in inner_name.lower() for kw in _BG_KW):
                         has_bg = True
+            # (b) threading.Thread(target=refresh_*) or Thread(target=refresh_*)
+            if (isinstance(func, ast.Attribute) and func.attr == "Thread") or \
+               (isinstance(func, ast.Name) and func.id == "Thread"):
+                for kw in node.keywords:
+                    if kw.arg == "target":
+                        tgt_name = _name_of(kw.value)
+                        if any(k in tgt_name.lower() for k in _BG_KW):
+                            has_bg = True
 
     return has_cache, has_bg
 
