@@ -1,3 +1,14 @@
+secubox-profiles (0.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-sleeper ships DISABLED by default (--no-enable + postinst no longer
+    enables it). It STOPS idle sleepable modules; until a deployment's lifecycle
+    assignments are audited (a security service like crowdsec must be always-on,
+    never on-demand) auto-enabling it fleet-wide could sleep something that must
+    stay up. The operator enables it deliberately once verified. secubox-waker
+    stays enabled (it only serves the splash + fires wakes, never stops anything).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 21 Jul 2026 09:15:00 +0200
+
 secubox-profiles (0.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Terminal wake splash + two-phase UX (ref #896): pseudo-terminal "virtual

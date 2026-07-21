@@ -45,14 +45,23 @@ case "$1" in
         systemctl enable secubox-profiles.service 2>/dev/null || true
         systemctl restart secubox-profiles.service 2>/dev/null || true
 
-        # secubox-waker + secubox-sleeper (ref #896, scale-to-zero): `enable
-        # --now` is safe/idempotent (no-op if already enabled+running — the
-        # first-install case starts them), `try-restart` afterwards is a
-        # no-op if inactive and gracefully restarts (not a hard kill) an
-        # ALREADY-running instance so an upgrade picks up new code without
-        # forcibly disrupting an in-flight wake/sleep decision.
-        systemctl enable --now secubox-waker.service secubox-sleeper.service 2>/dev/null || true
-        systemctl try-restart secubox-waker.service secubox-sleeper.service 2>/dev/null || true
+        # secubox-waker (ref #896, scale-to-zero): safe to enable+run — it only
+        # serves the wake splash and fires a single wake per vhost; it never
+        # stops anything. `enable --now` is idempotent; `try-restart` is a no-op
+        # if inactive and gracefully restarts (not a hard kill) a running
+        # instance so an upgrade picks up new code.
+        systemctl enable --now secubox-waker.service 2>/dev/null || true
+        systemctl try-restart secubox-waker.service 2>/dev/null || true
+
+        # secubox-sleeper ships DISABLED (pilot): it STOPS idle sleepable
+        # modules, and until each deployment's lifecycle assignments are audited
+        # (a security service like crowdsec must be always-on, NEVER on-demand),
+        # auto-enabling it fleet-wide could sleep something that must stay up.
+        # The operator enables it deliberately, once the sleepable set is
+        # verified: `systemctl enable --now secubox-sleeper.service`. We only
+        # try-restart it here so an UPGRADE refreshes an operator who ALREADY
+        # opted in (no-op when it is inactive/disabled — never starts it).
+        systemctl try-restart secubox-sleeper.service 2>/dev/null || true
 
         # Config sync for the sbxwaf-side wake trigger + the health monitor
         # (ref #896 — supersedes the nginx-sync path of Task 7, PIVOT
