@@ -131,6 +131,17 @@ def test_load_manifest_forces_protected_true_for_core_ids_even_when_data_says_fa
     assert m.protected is True
 
 
+def test_portal_domain_is_lowercased_at_source(tmp_path):
+    # waker._resolve/sleeper/wafsync all compare domains verbatim (the whole
+    # front pipeline is lowercase) — a hand-edited mixed-case domain must be
+    # normalized here, at load time, or it silently never wakes/sleeps
+    # (#896 final review, Fix 3).
+    p = tmp_path / "lyrion.toml"
+    p.write_text(MINIMAL + '\nportal = { domain = "Dashboard.Example.COM" }\n')
+    m = load_manifest(p)
+    assert m.portal_domain == "dashboard.example.com"
+
+
 def test_load_all_indexes_by_id_and_skips_non_toml(tmp_path):
     (tmp_path / "lyrion.toml").write_text(MINIMAL)
     (tmp_path / "peertube.toml").write_text(FULL)
@@ -138,3 +149,35 @@ def test_load_all_indexes_by_id_and_skips_non_toml(tmp_path):
     all_m = load_all(tmp_path)
     assert sorted(all_m) == ["lyrion", "peertube"]
     assert all_m["peertube"].runtime == "lxc"
+
+
+def _write(tmp_path, body):
+    p = tmp_path / "x.toml"
+    p.write_text('id="x"\ncategory="infra"\nruntime="native"\nexposure="lan"\n'
+                 'units=["x.service"]\n' + body)
+    return p
+
+
+def test_lifecycle_defaults_always_on_normal(tmp_path):
+    # Fleet-safe default (#896 follow-up): a manifest that declares no
+    # lifecycle must NEVER become sleep-eligible by accident — on a
+    # 184-module fleet, "eager" as the silent default would eventually idle
+    # out core services (admin, gitea, nextcloud...) that never opted in to
+    # sleep. Sleep is an explicit opt-in via eager/on-demand.
+    m = load_manifest(_write(tmp_path, ""))
+    assert m.lifecycle == "always-on" and m.wake_class == "normal"
+
+
+def test_lifecycle_and_wake_class_parse(tmp_path):
+    m = load_manifest(_write(tmp_path, 'lifecycle="on-demand"\nwake_class="urgent"\n'))
+    assert m.lifecycle == "on-demand" and m.wake_class == "urgent"
+
+
+def test_invalid_lifecycle_raises(tmp_path):
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, 'lifecycle="hibernate"\n'))
+
+
+def test_invalid_wake_class_raises(tmp_path):
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, 'wake_class="asap"\n'))

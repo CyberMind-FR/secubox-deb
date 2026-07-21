@@ -18,11 +18,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import tempfile
 import time
 from pathlib import Path
 
+from . import portal_routes as _portal_routes
 from .diff import START, STOP, Change
 from .manifest import Manifest
 from .observe import ROUTES_FILE, is_on, observe as _observe
@@ -32,10 +34,31 @@ class ActuationError(Exception):
     """Une commande d'actionnement a échoué (rc non-nul) ou n'a pas pu tourner (rc=None)."""
 
 
+# Sentinel returncode for a command that RAN but did not return within the
+# deadline (subprocess.TimeoutExpired), as opposed to one that could not run at
+# all (OSError -> rc is None). The actuator fast-fails only on the latter; a
+# timeout on lxc-start/lxc-stop is deferred to wait_state (observed state
+# decides). 1000 is outside every real returncode (exit codes 0-255, signal
+# codes negative), so `rc != 0` still reads it as "not success".
+TIMED_OUT = 1000
+
+
 def _must(run, argv: list[str]) -> None:
     rc, out = run(argv)
     if rc != 0:
         raise ActuationError(f"{' '.join(argv)} → rc={rc!r} {out.strip()[:200]}")
+
+
+def _issue(run, argv: list[str]) -> None:
+    """Émet une commande de transition d'état en best-effort : son succès est
+    jugé par wait_state (état observé), PAS par son code retour. Seul un
+    « n'a pas pu s'exécuter » (rc is None = OSError) est un échec dur. Un rc
+    non-nul (« conteneur déjà arrêté/démarré ») ou TIMED_OUT (encore en cours /
+    tué à mi-course) est délégué à wait_state. Utilisé pour lxc-start/lxc-stop,
+    qui n'ont pas de --no-block."""
+    rc, _ = run(argv)
+    if rc is None:
+        raise ActuationError(f"{' '.join(argv)} → n'a pas pu s'exécuter")
 
 
 def _write_routes_atomic(routes_path: Path, data: dict) -> None:
@@ -53,6 +76,17 @@ def _write_routes_atomic(routes_path: Path, data: dict) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def _current_route(domain: str, routes_path: Path):
+    """La valeur de route ([host, port]) actuellement dans haproxy-routes.json
+    pour `domaine`, ou None si absente/illisible. Lue AVANT retrait pour la
+    confier à la mémoire durable (le réveil la relira)."""
+    try:
+        data = json.loads(Path(routes_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data.get(domain) if isinstance(data, dict) else None
 
 
 def _portal_remove(domain: str, routes_path: Path) -> None:
@@ -128,7 +162,8 @@ def _lxc_autostart(lxc: str, on: bool, run, lxc_root: Path | None = None) -> Non
 
 
 def actuate(change: Change, m: Manifest, *, run, route_value=None,
-            routes_path: Path = ROUTES_FILE, lxc_root: Path | None = None) -> list[str]:
+            routes_path: Path = ROUTES_FILE, lxc_root: Path | None = None,
+            remember_path: Path = _portal_routes.REMEMBER_FILE) -> list[str]:
     """Exécute UN changement. Retourne la liste ordonnée des labels d'action
     (pour l'audit + les tests). Lève ActuationError au premier échec."""
     done: list[str] = []
@@ -136,34 +171,38 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
 
     def runtime_start():
         if m.runtime == "lxc" and m.lxc:
-            # Le conteneur et l'unité systemd hôte sont DÉCOUPLÉS sur la board
-            # réelle : is_on() ne reflète que l'unité hôte. On démarre donc le
-            # conteneur d'abord, puis l'API hôte qui en dépend.
-            _must(run, ["lxc-start", "-n", m.lxc]); done.append("lxc:start")
+            # Conteneur et unité hôte DÉCOUPLÉS : on démarre le conteneur
+            # (best-effort, wait_state confirme lxc_running), puis l'API hôte.
+            _issue(run, ["lxc-start", "-n", m.lxc]); done.append("lxc:start")
             _lxc_autostart(m.lxc, True, run, lxc_root); done.append("lxc:autostart:1")
             for u in m.units:
-                _must(run, ["systemctl", "enable", "--now", u])
+                _must(run, ["systemctl", "enable", u])
+                _must(run, ["systemctl", "start", "--no-block", u])
             done.append("systemd:enable")
         else:
             for u in m.units:
-                _must(run, ["systemctl", "enable", "--now", u])
+                _must(run, ["systemctl", "enable", u])
+                _must(run, ["systemctl", "start", "--no-block", u])
             done.append("systemd:enable")
 
     def runtime_stop():
         if m.runtime == "lxc" and m.lxc:
-            # On éteint l'API hôte d'abord (sinon is_on() reste True alors que
-            # le conteneur qu'elle sert est mort → wait_state ne converge jamais).
+            # On éteint l'API hôte d'abord (sinon is_on reste True alors que
+            # le conteneur qu'elle sert va mourir). enable/disable = opérations
+            # synchrones rapides (rc vérifié) ; start/stop = --no-block, l'état
+            # est confirmé par wait_state.
             for u in m.units:
-                _must(run, ["systemctl", "disable", "--now", u])
+                _must(run, ["systemctl", "disable", u])
+                _must(run, ["systemctl", "stop", "--no-block", u])
             done.append("systemd:disable")
-            # autostart=0 AVANT lxc-stop : sinon secubox-watchdog voit un conteneur
-            # arrêté encore marqué autostart=1 et le relance (course observée sur
-            # la board). On coupe l'autostart d'abord, puis on arrête.
+            # autostart=0 AVANT lxc-stop : sinon secubox-watchdog relance le
+            # conteneur (course observée sur la board).
             _lxc_autostart(m.lxc, False, run, lxc_root); done.append("lxc:autostart:0")
-            _must(run, ["lxc-stop", "-n", m.lxc]); done.append("lxc:stop")
+            _issue(run, ["lxc-stop", "-n", m.lxc]); done.append("lxc:stop")
         else:
             for u in m.units:
-                _must(run, ["systemctl", "disable", "--now", u])
+                _must(run, ["systemctl", "disable", u])
+                _must(run, ["systemctl", "stop", "--no-block", u])
             done.append("systemd:disable")
 
     if starting:
@@ -173,6 +212,11 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
             done.append("portal:add")
     else:
         if m.portal_domain:
+            # Mémorise la route AVANT de la retirer : le réveil (potentiellement
+            # bien plus tard, snapshot 4R déjà tourné) n'a plus d'autre source.
+            _portal_routes.remember(m.portal_domain,
+                                    _current_route(m.portal_domain, routes_path),
+                                    path=remember_path)
             _portal_remove(m.portal_domain, routes_path)
             done.append("portal:remove")
         runtime_stop()
@@ -182,10 +226,19 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
 def wait_state(m: Manifest, want_on: bool, *, observe=_observe,
                sleep=time.sleep, now=time.monotonic,
                timeout: float = 30.0, poll: float = 1.0) -> bool:
-    """Sonde observe(m) jusqu'à is_on == want_on, ou expiration. Injectable."""
+    """Sonde observe(m) jusqu'à ce que l'ÉTAT OBSERVÉ corresponde à want_on, ou
+    expiration. C'est le SEUL arbitre du succès d'un start/stop (le code retour
+    de la commande ne l'est pas). Pour un module LXC, l'état complet inclut le
+    conteneur (lxc_running), pas seulement l'unité hôte : sinon un conteneur qui
+    refuse de mourir passerait inaperçu (is_on ne regarde que l'unité hôte).
+    Injectable."""
     start = now()
     while True:
-        if is_on(observe(m)) == want_on:
+        a = observe(m)
+        reached = is_on(a) == want_on
+        if m.runtime == "lxc" and m.lxc:
+            reached = reached and (a.lxc_running == want_on)
+        if reached:
             return True
         if now() - start >= timeout:
             return False
@@ -206,3 +259,51 @@ def condition_failed(m: Manifest, run) -> bool:
         if rc == 0 and out.strip() == "no":
             return True
     return False
+
+
+_TS_UNITS = {"us": 1e-6, "ms": 1e-3, "s": 1.0, "min": 60.0, "h": 3600.0, "d": 86400.0}
+# Longest-first alternation so "min"/"ms"/"us" win over "s" at the same position.
+_TS_TOKEN = re.compile(r"(\d+)\s*(us|ms|min|h|d|s)")
+
+
+def _parse_systemd_timespan(text: str) -> float | None:
+    """Convertit un timespan systemd (« 1min 30s », « 90s », « 500ms ») en
+    secondes. « infinity » ou une chaîne non-parsable -> None (l'appelant
+    retombe sur le plafond de sûreté). `systemctl show -p TimeoutStopUSec
+    --value` imprime la forme humaine, pas des microsecondes brutes — d'où ce
+    parseur (vérifié sur la board : « 1min 30s »)."""
+    t = text.strip().lower()
+    if not t or t == "infinity":
+        return None
+    total = 0.0
+    matched = False
+    for m in _TS_TOKEN.finditer(t):
+        total += int(m.group(1)) * _TS_UNITS[m.group(2)]
+        matched = True
+    return total if matched else None
+
+
+def derived_timeout(m: Manifest, want_on: bool, run, *, floor: float = 10.0,
+                    margin: float = 15.0, cap: float = 300.0) -> float:
+    """Combien de temps wait_state doit patienter pour que `m` atteigne
+    `want_on`. Natif : dérivé du propre TimeoutStart/StopUSec de l'unité (+
+    marge), borné [floor, cap] ; « infinity »/illisible -> cap. LXC : cap (la
+    montée/descente d'un conteneur n'a pas de timeout d'unité systemd ;
+    wait_state rend la main dès convergence, le cap n'est qu'un plafond)."""
+    if m.runtime == "lxc":
+        return cap
+    prop = "TimeoutStartUSec" if want_on else "TimeoutStopUSec"
+    best = 0.0
+    seen = False
+    for u in m.units:
+        rc, out = run(["systemctl", "show", u, "-p", prop, "--value"])
+        if rc != 0:
+            return cap          # unreadable -> be safe, wait the cap
+        parsed = _parse_systemd_timespan(out)
+        if parsed is None:
+            return cap          # infinity/unparseable -> cap
+        best = max(best, parsed)
+        seen = True
+    if not seen:
+        return cap              # no units at all -> cap
+    return min(cap, max(floor, best + margin))

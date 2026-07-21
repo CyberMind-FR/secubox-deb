@@ -91,6 +91,25 @@ packages/secubox-<module>/
 └── README.md                # Module documentation
 ```
 
+### Lifecycle Policy — scale-to-zero (ref #896)
+
+Every module known to `secubox-profiles` (its manifest under
+`/etc/secubox/modules.d/<id>.toml`) declares a `lifecycle`: `always-on`
+(never stopped — forced for any `protected` module regardless of what it
+declares, and the **default** when a manifest omits the field, fleet-safe on
+a 184-module install), `eager` (starts at boot, may be idled), `on-demand`
+(off by default, woken on first access), or `manual` (operator-only, via the
+`/profiles/` panel). An optional `wake_class` (`normal`/`urgent`) tunes the
+idle threshold and the wake-splash budget. This is a **module-wide**
+guideline, not a `secubox-profiles`-internal detail: a module choosing
+`on-demand`/`eager` is opting into being stopped by `secubox-sleeper.service`
+and woken via `secubox-waker.service` (fronted by `sbxwaf`, which proxies a
+request for a routeless on-demand vhost to the waker instead of returning
+421). See `packages/secubox-profiles/README.md` (§ Scale-to-zero) and
+`wiki/Architecture.md` (§ Scale-to-zero) for the full policy table, the
+wake/sleep mechanism, and the pilot procedure for switching a module to
+`on-demand`.
+
 ### Web UI Requirements (Pattern 12)
 
 All module frontends MUST include:

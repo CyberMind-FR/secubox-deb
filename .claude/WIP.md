@@ -1,5 +1,19 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-17*
+*Mis à jour : 2026-07-21*
+
+---
+
+## ✅ 2026-07-21 : Scale-to-zero services publics (#896) + UX de réveil 2-phases (branche feat/scale-to-zero-public-services → master)
+
+Services on-demand : **sommeil si inactif, réveil à l'accès**, politique lifecycle par module, splash "terminal virtuel". Intègre aussi #893 (robustesse actionneur profils).
+
+- **Fait** : lifecycle/wake_class (manifeste + setter panel webui→ctl), actionneur état-observé, **mémoire durable des routes portail** (réveil restaure la route WAF — round-trip prouvé live sur yacy), waker (phase 1) + sleeper (idle), déclencheur sbxwaf-side, **splash phase-2 nginx** (`error_page` sur backend qui boote) généralisé à tous les vhosts on-demand via `nginx-sync` (5 câblés live). Fix infra : worker@ WAF crash-loop re-chownait `/run/secubox` → désactivés.
+- **Merge + release** : branche mergée sur master, issues #896/#893 fermées, bump + artefacts CI, sync debs → gk2, image rpi400.
+
+### ⬜ Next / follow-ups
+- **WAF-drift reconcile** : perms cookie-audit (workers crashent) + retirer `RuntimeDirectory=secubox` du unit WAF ; **décision cutover** (fan-out worker@ hardened vs formaliser l'unité intérimaire). Board workers désactivés.
+- **Ré-activer secubox-sleeper** sur un service on-demand opt-in + observer un cycle idle→sleep→wake réel.
+- Backport du câblage phase-2 par-vhost dans l'outillage vhost ; #895 (DNS via vortex).
 
 ---
 

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 from . import audit as _audit
 from . import snapshot as _snapshot
-from .actuate import ActuationError, actuate, condition_failed, wait_state
+from .actuate import ActuationError, actuate, condition_failed, derived_timeout, wait_state
 from .diff import START, STOP, Change
 from .manifest import Manifest
 
@@ -47,13 +47,17 @@ def _do_change(c: Change, m: Manifest, *, run, observe, routes_value, sleep, now
     # échec : le module est délibérément off ici.
     if c.action == START and condition_failed(m, run):
         return
-    if not wait_state(m, _want_on(c.action), observe=observe, sleep=sleep, now=now,
-                      timeout=wait_timeout):
+    want = _want_on(c.action)
+    # L'ÉTAT OBSERVÉ tranche, pas le code retour de la commande. Le délai est
+    # dérivé du propre timeout systemd du module (wait_timeout = plafond de
+    # sûreté), pas un plat 30s trop court pour une unité au TimeoutStopSec long.
+    timeout = derived_timeout(m, want, run, cap=wait_timeout)
+    if not wait_state(m, want, observe=observe, sleep=sleep, now=now, timeout=timeout):
         raise ActuationError(f"{c.id}: état non atteint (timeout)")
 
 
 def apply_plan(plan, manifests, actuals, *, run, observe, now, routes,
-               snap_root, audit_path, apply=False, wait_timeout=30.0,
+               snap_root, audit_path, apply=False, wait_timeout=300.0,
                sleep=None, clock=None) -> ApplyReport:
     import time
     sleep = sleep if sleep is not None else time.sleep
@@ -116,10 +120,12 @@ def _rollback_applied(applied, manifests, snap, *, run, observe, sleep, clock,
         try:
             actuate(rev, m, run=run, route_value=rv)
             # Même règle que le forward : re-démarrer une unité condition-gated
-            # ne la rend jamais active — c'est un succès, pas un timeout.
+            # ne la rend jamais active — succès, pas timeout. Sinon l'état
+            # observé tranche, avec le même délai dérivé (cap = wait_timeout).
+            timeout = derived_timeout(m, want_on, run, cap=wait_timeout)
             reached = (rev.action == START and condition_failed(m, run)) or \
                 wait_state(m, want_on, observe=observe, sleep=sleep, now=clock,
-                           timeout=wait_timeout)
+                           timeout=timeout)
             if reached:
                 _audit.record({"ts": now, "module": c.id, "action": rev.action,
                                "result": "rollback"}, path=audit_path)
@@ -134,7 +140,7 @@ def _rollback_applied(applied, manifests, snap, *, run, observe, sleep, clock,
 
 
 def rollback_to(snap, manifests, actuals, *, run, observe, now, routes,
-                snap_root, audit_path, apply=False, wait_timeout=30.0) -> ApplyReport:
+                snap_root, audit_path, apply=False, wait_timeout=300.0) -> ApplyReport:
     """Restaure l'état d'un snapshot : construit un plan (start/stop) vers
     snap['modules'][id]['on'] et l'applique avec la même sûreté que apply_plan."""
     from .observe import is_on

@@ -60,6 +60,44 @@ def test_refresh_health_batch_parses_units(monkeypatch):
     assert main._cache["health_batch_ts"] > 0
 
 
+def test_refresh_health_batch_reports_sleepable_as_asleep_not_warn(monkeypatch):
+    # A module in the sleepable-modules.json export (eager/on-demand,
+    # scale-to-zero ref #896) that's inactive/dead is EXPECTED — it's
+    # asleep, not down. Must stay in the "ok" bucket, never "warn"/"error".
+    _reset_cache()
+
+    class R:
+        stdout = (
+            "secubox-peertube.service loaded inactive dead PeerTube\n"
+            "secubox-otherapp.service loaded inactive dead OtherApp\n"
+        )
+
+    monkeypatch.setattr(main.subprocess, "run", lambda *a, **k: R())
+    monkeypatch.setattr(main, "_load_sleepable_modules", lambda: {"peertube"})
+    main._refresh_health_batch()
+    hb = main._cache["health_batch"]
+    assert hb["modules"]["peertube"]["status"] == "ok"
+    assert hb["modules"]["peertube"]["msg"] == "Asleep (on-demand)"
+    # A module NOT in the sleepable set with the same inactive/dead state
+    # keeps today's behavior (an unexpected stop is still a "warn").
+    assert hb["modules"]["otherapp"]["status"] == "warn"
+
+
+def test_refresh_health_batch_failed_beats_sleepable(monkeypatch):
+    # A crash (failed) is a real alarm even for a sleepable module —
+    # intentional sleep goes through disable+stop, never "failed".
+    _reset_cache()
+
+    class R:
+        stdout = "secubox-peertube.service loaded failed failed PeerTube\n"
+
+    monkeypatch.setattr(main.subprocess, "run", lambda *a, **k: R())
+    monkeypatch.setattr(main, "_load_sleepable_modules", lambda: {"peertube"})
+    main._refresh_health_batch()
+    hb = main._cache["health_batch"]
+    assert hb["modules"]["peertube"]["status"] == "error"
+
+
 def test_health_batch_serves_cache_without_subprocess(monkeypatch):
     _reset_cache()
     main._cache["health_batch"] = {"modules": {"hub": {"status": "ok", "msg": "Running"}}, "count": 1}
