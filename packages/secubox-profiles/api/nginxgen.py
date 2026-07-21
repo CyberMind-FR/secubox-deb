@@ -58,19 +58,23 @@ def find_config(domain: str, sites_dir: Path) -> Path | None:
 
 
 def wire(path: Path, domain: str) -> bool:
-    """Ajoute l'include phase-2 dans le bloc server de `domain`, après sa ligne
-    `server_name`. Idempotent (no-op si le marqueur est déjà là). Retourne True
-    si le fichier a changé, False s'il était déjà câblé ou si aucune ligne
-    server_name du domaine n'a été trouvée (on ne touche alors à rien)."""
+    """Ajoute l'include phase-2 juste APRÈS la ligne `server_name` DE CE domaine.
+    Idempotence PAR BLOC (pas fichier-large) : si la ligne suivant le server_name
+    du domaine est déjà l'include, on ne touche à rien — ainsi un fichier
+    contenant plusieurs blocs server on-demand voit CHACUN câblé (le check
+    fichier-large sautait à tort tous les blocs après le premier). Retourne True
+    si le fichier a changé, False s'il était déjà câblé pour ce domaine ou si
+    aucune ligne server_name du domaine n'existe."""
     path = Path(path)
-    text = path.read_text(encoding="utf-8")
-    if MARKER in text:
-        return False
+    lines = path.read_text(encoding="utf-8").splitlines()
     out: list[str] = []
     done = False
-    for line in text.splitlines():
+    for idx, line in enumerate(lines):
         out.append(line)
         if not done and _is_server_name_line(line, domain):
+            nxt = lines[idx + 1] if idx + 1 < len(lines) else ""
+            if MARKER in nxt:
+                return False        # ce bloc a déjà l'include
             out.append(_INCLUDE)
             done = True
     if not done:
