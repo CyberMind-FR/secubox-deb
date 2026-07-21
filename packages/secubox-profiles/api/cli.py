@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import apply, export, healthsync, manifest_edit, wafsync
+from . import apply, export, healthsync, manifest_edit, nginxgen, wafsync
 from .actuate import TIMED_OUT
 from .audit import AUDIT_LOG
 from .diff import ProtectedViolation, plan_changes
@@ -363,11 +363,24 @@ def _cmd_set_lifecycle(args) -> int:
                                       out_path=root / "waf" / "on-demand-vhosts.json")
     sleepable = healthsync.write_sleepable(manifests=manifests,
                                            out_path=root / "health" / "sleepable-modules.json")
+    # Câble le splash phase-2 dans le vhost nginx des on-demand (best-effort :
+    # un échec nginx -t ne doit pas faire échouer le changement de niveau
+    # d'éveil, qui a déjà réussi — la ligne d'include reste rejouable via
+    # `secubox-wakectl nginx-sync`). Chemins de test dérivés de --root.
+    nginx_wired: list[str] = []
+    if root == DEFAULT_ROOT:
+        try:
+            nrep = nginxgen.sync_and_reload(
+                manifests=manifests, sites_dir=Path("/etc/nginx/sites-available"), run=_run)
+            nginx_wired = nrep["wired"]
+        except OSError:
+            pass
     m = manifests[args.module]
     report = {"status": "set", "module": args.module,
               "lifecycle": m.lifecycle, "wake_class": m.wake_class,
               "effective_lifecycle": effective_lifecycle(m),
-              "ondemand_vhosts": ondemand, "sleepable": sleepable}
+              "ondemand_vhosts": ondemand, "sleepable": sleepable,
+              "nginx_wired": nginx_wired}
     if args.json:
         print(json.dumps(report))
     else:
