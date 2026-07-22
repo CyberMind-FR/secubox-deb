@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Installed as /etc/systemd/system/secubox-meshtasticd.service — own socket,
+# own service (never served by the aggregator: a radio/serial-attached daemon
+# must not depend on something it may later restart, and the aggregator loop
+# must not block on serial I/O).
+[Unit]
+Description=SecuBox Meshtastic — LoRa mesh node daemon (radio/cache/passive/bridge)
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-meshtastic
+Group=secubox-meshtastic
+# Serial device access (/dev/ttyUSB*, /dev/ttyACM*) is granted via the
+# dialout group PLUS the explicit DeviceAllow rules below (belt+braces:
+# some udev rulesets restrict ttyUSB/ttyACM perms to group dialout only,
+# others rely on the cgroup device controller).
+SupplementaryGroups=dialout
+WorkingDirectory=/usr/lib/secubox/meshtastic
+ExecStart=/usr/sbin/secubox-meshtasticd
+Restart=on-failure
+RestartSec=5
+UMask=0007
+
+# NB (ref #896): do NOT set `RuntimeDirectory=secubox` here. Any unit that
+# declares RuntimeDirectory=secubox has systemd chown the SHARED /run/secubox
+# directory to *this unit's* user on every (re)start — which breaks every
+# other secubox-* service's socket bind the next time this unit restarts.
+# /run/secubox is provided 1777 root:root by tmpfiles (secubox-core), i.e.
+# world-writable + sticky, so this daemon creates its own
+# /run/secubox/meshtastic.sock there directly, with no RuntimeDirectory at
+# all. If a private scratch dir is ever needed, use
+# `RuntimeDirectory=secubox-meshtastic` (this unit's OWN dir) — never
+# `=secubox`.
+NoNewPrivileges=yes
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/run/secubox /var/cache/secubox/meshtastic /var/log/secubox/meshtastic
+
+# Serial radio access — PrivateDevices=yes would hide /dev/ttyUSB*/ttyACM*
+# entirely, so it is deliberately NOT set here.
+DeviceAllow=char-ttyUSB rw
+DeviceAllow=char-ttyACM rw
+
+[Install]
+WantedBy=multi-user.target
