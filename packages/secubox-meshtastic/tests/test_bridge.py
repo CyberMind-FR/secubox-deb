@@ -36,3 +36,17 @@ def test_on_channel_publishes_only_when_enabled():
     made={}
     b=Bridge(_cfg(["off","on"], on=True), lambda k: made.setdefault(k, FakeMqtt())); b.start(); b.publish("fam", _p())
     assert "on" in made and made["on"].conn==("mqtt.x.org",8883)
+
+
+class RefusingMqtt(FakeMqtt):
+    def connect(self, host, port):
+        raise ConnectionRefusedError("broker down")
+
+
+def test_start_tolerates_unreachable_broker():
+    # A configured broker that is DOWN at startup must not crash Bridge.start()
+    # (the daemon's #897 deploy bug: opt-in mosquitto not running).
+    from api.bridge import Bridge
+    b = Bridge(_cfg(["off", "shared"]), lambda k: RefusingMqtt())
+    b.start()                          # must not raise
+    b.publish("fam", _p())             # no client registered → no-op, no crash
