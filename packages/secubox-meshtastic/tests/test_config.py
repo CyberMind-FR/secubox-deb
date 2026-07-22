@@ -53,3 +53,19 @@ def test_missing_file_yields_safe_default(tmp_path):
     from api import config
     c = config.load(tmp_path / "nope.toml")
     assert c.mode == "active-node" and c.channels == [] and c.on_grid is None
+
+
+def test_rejects_channel_without_name(tmp_path):
+    from api import config
+    p = tmp_path / "m.toml"
+    p.write_text('mode="active-node"\n[[channel]]\ngrid=["off"]\npsk_secret="x"\n')
+    with pytest.raises(config.ConfigError, match="missing required field 'name'"):
+        config.load(p)
+
+
+def test_rejects_broker_section_without_broker(tmp_path):
+    from api import config
+    p = tmp_path / "m.toml"
+    p.write_text('mode="active-node"\n[shared_grid]\nenabled=true\n')
+    with pytest.raises(config.ConfigError, match="missing required field 'broker'"):
+        config.load(p)

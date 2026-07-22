@@ -2,10 +2,12 @@ Source: secubox-meshtastic
 Section: net
 Priority: optional
 Maintainer: Gérald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 Homepage: https://secubox.in
 Vcs-Git: https://github.com/CyberMind-FR/secubox-deb.git
 Vcs-Browser: https://github.com/CyberMind-FR/secubox-deb/tree/master/packages/secubox-meshtastic
+Rules-Requires-Root: no
 
 Package: secubox-meshtastic
 Architecture: all

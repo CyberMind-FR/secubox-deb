@@ -60,6 +60,8 @@ def load(path: Path) -> Config:
         raise ConfigError(f"mode invalide: {mode!r} (attendu {MODES})")
     channels = []
     for ch in d.get("channel", []):
+        if "name" not in ch:
+            raise ConfigError("[[channel]] section missing required field 'name'")
         grid = tuple(ch.get("grid", ()))
         bad = [g for g in grid if g not in GRIDS]
         if bad:
@@ -73,6 +75,8 @@ def load(path: Path) -> Config:
     def _broker(sec):
         if not sec:
             return None
+        if "broker" not in sec:
+            raise ConfigError("broker section missing required field 'broker'")
         return BrokerCfg(sec["broker"], bool(sec.get("enabled", False)))
 
     return Config(
