@@ -19,9 +19,11 @@
 #     $(), ..) are inert, just literal bytes in one argv element;
 #   - secubox-meshtasticctl's own argparse re-parses every value, never
 #     re-shells it;
-#   - `mode`/`role`/`grid` values are bounded by argparse `choices=`
-#     (config.MODES / config.ROLES / config.GRIDS) — anything outside the
-#     enum exits before any write (SystemExit(2));
+#   - `mode`/`role` values are bounded by argparse `choices=`
+#     (config.MODES / config.ROLES) — anything outside the enum exits before
+#     any write (SystemExit(2));
+#   - `grid` is validated manually per token in set-grid (each element checked
+#     ∈ config.GRIDS, returns rc=2 before write on a bad value);
 #   - `channel` and `region`/`secret` are genuine free-form per-call values
 #     (channel name, radio region string, secret reference name) with no
 #     closed set to restrict them to; the ctl still refuses an unknown
