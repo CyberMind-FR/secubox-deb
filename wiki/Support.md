@@ -16,13 +16,6 @@ Plusieurs options sont disponibles selon vos préférences. Tous les montants so
 | **Revolut** | [Payer par carte](https://checkout.revolut.com/pay/a5c1d404-af8c-4add-8096-a75b8655059c) | Don one-shot immédiat, sans compte |
 | **Liberapay** | [liberapay.com/cybermind](https://liberapay.com/cybermind) | Dons récurrents, sans commission |
 | **GitHub Sponsors** | [github.com/sponsors/gkerma](https://github.com/sponsors/gkerma) | Intégré à GitHub |
-| **Open Collective** | [opencollective.com/secubox](https://opencollective.com/secubox) | Transparent, traçable |
-| **Stripe** | Sur demande | Paiement one-shot par carte |
-| **Virement SEPA** | Sur demande par email | IBAN fourni sur demande |
-| **Bitcoin** | `bc1q...` (à venir) | Adresse publique |
-| **Lightning** | (à venir) | Micropaiements instantanés |
-
-Pour les options "sur demande", contactez : `devel@cybermind.fr`
 
 ---
 
