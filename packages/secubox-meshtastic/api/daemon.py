@@ -2,7 +2,9 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """SecuBox-Deb :: meshtastic — daemon engine (wires radio/cache/passive/bridge)."""
 from __future__ import annotations
+import json
 import logging
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -109,6 +111,45 @@ class _NullMqtt:
         pass
 
 
+def _ctl_cb(verb: str, **kwargs) -> dict:
+    """webui -> ctl delegate for `web.create_app`'s `ctl_cb` (see
+    secubox-profiles/api/web.py's `_run_ctl_json_argv` for the pattern this
+    mirrors — same `sudo -n systemd-run --wait --pipe --collect --quiet`
+    shape, run synchronously since daemon.main() has no asyncio loop to
+    offload onto). `secubox-meshtasticctl` argv is positional-argument based
+    (see api/ctl.py argparse: `set-mode <mode>`, `set-grid <channel> --grid
+    <csv>`) and today prints plain text, not a `--json` report — so a
+    successful (rc=0) run is reported as `{"status": "applied", ...}` from
+    stdout, and only a genuine JSON report (if the ctl ever grows one) short-
+    circuits that. Web-side validation (config.MODES / config.GRIDS, see
+    api/web.py) has already refused bad values before this is ever called."""
+    argv = ["sudo", "-n", "/usr/bin/systemd-run", "--wait", "--pipe",
+            "--collect", "--quiet", "/usr/sbin/secubox-meshtasticctl", verb]
+    if verb == "set-mode":
+        argv.append(str(kwargs["mode"]))
+    elif verb == "set-grid":
+        argv.append(str(kwargs["channel"]))
+        argv += ["--grid", ",".join(kwargs["grid"])]
+    else:
+        return {"status": "error", "stderr": f"ctl verb inconnu: {verb}"}
+
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=30)
+    except Exception as exc:  # sudo/systemd-run itself missing, timeout, ...
+        return {"status": "error", "stderr": str(exc)}
+
+    try:
+        report = json.loads(proc.stdout)
+        if isinstance(report, dict) and "status" in report:
+            return report
+    except ValueError:
+        pass
+
+    if proc.returncode == 0:
+        return {"status": "applied", "verb": verb, "output": proc.stdout.strip()}
+    return {"status": "error", "stderr": (proc.stderr or proc.stdout).strip()[:300]}
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
@@ -139,25 +180,29 @@ def main() -> None:
     stop = threading.Event()
 
     try:
-        from . import web  # Task 10: replace with uvicorn UDS serve of api.web
+        from . import web
+        import uvicorn
     except ImportError:
         web = None
 
     if web is not None:
-        # Task 10: replace with uvicorn UDS serve of api.web
-        import uvicorn
-        app = web.create_app(engine)
+        def send_cb(channel: int, text: str) -> dict:
+            if engine.radio is None:
+                return {"status": "radio-absent"}
+            engine.radio.send_text(text, channel)
+            return {"status": "sent", "channel": channel}
+
+        app = web.create_app(engine.cache, send_cb, _ctl_cb)
         cache.start_refresh(engine.snapshot, CACHE_REFRESH_INTERVAL, stop)
         try:
-            uvicorn.run(app, uds=SOCKET_PATH, log_level="info")
+            uvicorn.run(app, uds=SOCKET_PATH, log_level="warning")
         finally:
             stop.set()
             bridge.stop()
             if radio is not None:
                 radio.close()
     else:
-        # Task 10: replace with uvicorn UDS serve of api.web
-        log.info("api.web not available yet — running cache-refresh only, no webui")
+        log.info("api.web/uvicorn not available — running cache-refresh only, no webui")
         cache.start_refresh(engine.snapshot, CACHE_REFRESH_INTERVAL, stop)
         try:
             threading.Event().wait()
