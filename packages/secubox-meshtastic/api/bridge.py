@@ -20,8 +20,12 @@ class Bridge:
             if bc is None or (tgt == "on" and not bc.enabled):
                 continue
             host, _, port = bc.broker.partition(":")
+            try:
+                port_num = int(port) if port else 1883
+            except ValueError:
+                port_num = 1883
             cli = self._factory(tgt)
-            cli.connect(host, int(port or "1883"))
+            cli.connect(host, port_num)
             self._clients[tgt] = cli
 
     def publish(self, channel_name: str, p: Packet) -> None:

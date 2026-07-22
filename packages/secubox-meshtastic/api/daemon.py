@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 
 from .model import MeshState, parse_packet
-from .gridpolicy import nft_egress_rules  # noqa: F401  (used by ctl; re-export locus)
 
 log = logging.getLogger("secubox.meshtastic.daemon")
 
