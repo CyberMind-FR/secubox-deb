@@ -1,67 +1,76 @@
-# Task 2 Report — Global Tor exit-country drop-in
+# Task 2: Meshtastic mesh data model + packet parser — Report
 
-## Status: DONE
+## Status: COMPLETE ✓
 
-## Commit
-`5bdf2cd5` — feat(toolbox): global Tor exit-country drop-in (ExitNodes/StrictNodes from state file)
+## TDD Workflow: RED → GREEN → COMMIT
 
-## What was implemented
+### RED: Failing Tests (Step 1-2)
 
-`packages/secubox-toolbox/sbin/secubox-toolbox-tor-reconcile`:
-- New state/dropin path constants: `EXIT_CC_STATE=/etc/secubox/toolbox/tor-exit-country.txt`,
-  `EXIT_CC_DROPIN=/etc/tor/torrc.d/11-secubox-exit-country.conf`.
-- New `_emit_exit_country()` helper: reads a CC-per-line file, lowercases + strips whitespace
-  each line, validates against `^[a-z]{2}$`, drops invalid codes, joins valid ones as
-  `{cc},{cc},…`, emits `ExitNodes {list}\nStrictNodes 1\n` to stdout. Missing file or empty
-  result → prints nothing, returns 0. Stays `set -euo pipefail`-safe: the `while read` loop
-  reading via `< "$f"` redirection (not a pipe) never trips `-e` on EOF, and the final
-  `[ -n "$list" ] || return 0` handles the empty case explicitly rather than relying on an
-  implicit non-zero exit.
-- Hidden dispatch arm in `main()`'s case, placed before the `*)` catch-all:
-  `__emit_exit_country) _emit_exit_country "${2:-}"; exit 0 ;;`
-- `arm()`: after the existing egress torrc/unbound install block, computes
-  `cc_stanza="$(_emit_exit_country "$EXIT_CC_STATE")"`; writes `# SecuBox exit-country\n<stanza>`
-  to `$EXIT_CC_DROPIN` if non-empty, else `rm -f "$EXIT_CC_DROPIN"` (idempotent cleanup if the
-  state file was emptied between arms).
-- `disarm()`: added `rm -f "$EXIT_CC_DROPIN"` alongside the existing `rm -f "$TORRC_DROPIN"`.
+Created `tests/test_model.py` with 4 test cases per brief specification:
+- `test_parse_packet_fields`: parse_packet() conversion
+- `test_meshstate_census_updates_last_heard`: temporal tracking (first_heard/last_heard)
+- `test_text_message_lands_in_channel_log`: TEXT_MESSAGE_APP channel logging
+- `test_nodeinfo_sets_names_and_role`: node metadata merge
 
-New test file `packages/secubox-toolbox/tests/test_exit_country.py` — drives the helper via
-`bash <reconcile> __emit_exit_country <file>` per the brief, with one fix (see Concerns below).
-
-## Test output
-
-```
-$ python3 -m pytest tests/test_exit_country.py -q
-...                                                                      [100%]
-3 passed in 0.06s
-
-$ bash -n sbin/secubox-toolbox-tor-reconcile
-(no output — syntax OK)
+```bash
+$ python -m pytest tests/test_model.py -q
+FFFF                                                                     [100%]
+4 failed in 0.07s
 ```
 
-Full suite delta:
+### GREEN: Implementation Complete (Step 3-4)
+
+Implemented `api/model.py` with:
+- `_nid(n)` — Hex ID normalization (0x11 → "!00000011")
+- `Packet` dataclass — 9 fields: from_id, to_id, channel, portnum, decoded, rssi, snr, hop, ts
+- `parse_packet(pkt: dict)` — Meshtastic pubsub dict consumer
+- `Node` dataclass — Mesh participant census with temporal tracking
+- `MeshState` class — State machine with apply_packet(), apply_nodeinfo(), to_dict()
+
+```bash
+$ python -m pytest tests/test_model.py -q
+....                                                                     [100%]
+4 passed in 0.06s
 ```
-$ python3 -m pytest tests/ -q
-FAILED tests/test_bypass_sources.py::test_load_bypass_tagged_missing_source_skipped
-FAILED tests/test_media_stats.py::test_media_stats_shapes_donuts - ModuleNotFoundError: secubox_core
-FAILED tests/test_media_stats.py::test_media_stats_fail_empty - ModuleNotFoundError: secubox_core
-3 failed, 249 passed, 437 warnings in 7.25s
+
+Full package test suite (4 model + 6 config tests):
+```bash
+$ python -m pytest tests/ -q
+..........                                                               [100%]
+10 passed in 0.07s
 ```
-Same 3 pre-existing/unrelated failures as before this change (2× `secubox_core` import in
-`test_media_stats`, 1× editable-drift in `test_bypass_sources`) — no new failures introduced.
-The +3 passing tests are the new `test_exit_country.py` file (246 → 249 passed).
+
+## Commits
+
+| SHA | Subject |
+|-----|---------|
+| `8adb9cd3` | `feat(meshtastic): mesh state model + packet parser` |
+
+## Files Created
+
+| Path | Size |
+|------|------|
+| `api/model.py` | 98 lines |
+| `tests/test_model.py` | 43 lines |
+
+## Design Compliance
+
+✓ Plain dataclasses (Packet, Node) — enables `vars()` serialization for downstream bridge task
+✓ MeshState.to_dict() returns `nodes` as `[vars(n) for n in ...]` list
+✓ No meshtastic import in tests — tests construct raw dicts directly
+✓ Parser consumes meshtastic pubsub shape: `{"from":int, "to":int, "channel":int, "decoded":dict, "rxRssi":int, "rxSnr":float, "hopLimit":int, "rxTime":float}`
+✓ SPDX header: LicenseRef-CMSD-1.0, (c) 2026 CyberMind — Gérald Kerma
+
+## Key Patterns
+
+| Pattern | Implementation |
+|---------|-----------------|
+| ID normalization | `_nid()` handles int/str, produces "!XXXXXXXX" format |
+| Channel logging | `dict[int, list[dict]]` — TEXT_MESSAGE_APP packets appended with from/text/ts |
+| Signal tracking | RSSI/SNR updated per packet; positions (POSITION_APP), battery (TELEMETRY_APP) cached |
+| Temporal audit | first_heard on node creation, last_heard on every apply_packet() |
+| Nullability | decoded, pos, battery, rssi, snr, hop all optional per meshtastic spec |
 
 ## Concerns
 
-- **Brief's Step-1 test had a case-sensitivity bug**: the brief specifies
-  `assert "ExitNodes {de},{fr}" in r.stdout.lower()` — comparing a mixed-case literal
-  (`ExitNodes`) against an already-lowercased haystack (`r.stdout.lower()`). This can never
-  match (`"ExitNodes..."` is not a substring of an all-lowercase string), so copying it verbatim
-  would leave the test permanently red regardless of implementation correctness. Fixed by
-  lowercasing the literal too: `assert "exitnodes {de},{fr}" in r.stdout.lower()`. The
-  `StrictNodes 1` assertion (checked against raw, non-lowered `r.stdout`) was left as-is since
-  the implementation emits it literally as `StrictNodes 1` and that assertion is internally
-  consistent. No other changes to the brief's test body (kept the unused `import os`, harmless).
-- Did not deploy to a board, per instructions. Only `sbin/secubox-toolbox-tor-reconcile` and the
-  new test file were touched — no other files modified as part of this task (the working tree
-  had pre-existing unrelated modifications from earlier tasks, left untouched and unstaged).
+None. Brief code transcribed verbatim, all tests pass, no deviations required.
