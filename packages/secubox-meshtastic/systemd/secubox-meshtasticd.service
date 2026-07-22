@@ -19,6 +19,10 @@ Group=secubox-meshtastic
 # others rely on the cgroup device controller).
 SupplementaryGroups=dialout
 WorkingDirectory=/usr/lib/secubox/meshtastic
+# Clear a stale socket from an unclean prior stop — uvicorn/uvloop refuses to
+# rebind an existing UDS ("Address already in use"). "+" runs as root so it
+# works regardless of the stale socket's owner in the sticky shared dir.
+ExecStartPre=+/bin/rm -f /run/secubox/meshtastic.sock
 ExecStart=/usr/sbin/secubox-meshtasticd
 Restart=on-failure
 RestartSec=5
