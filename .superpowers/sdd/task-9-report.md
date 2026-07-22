@@ -1,201 +1,155 @@
-# Task 9 Report: systemd units + sudoers + waker active-state writer (ref #896)
+# Task 9 Report — secubox-meshtasticctl (privileged config CLI, ref #897)
 
-(Note: this file previously held an unrelated stale Task-9 report for a
-different plan — "Marvell PPv2 NIC Driver Addition (#748)" — overwritten
-here since it did not belong to this plan, same situation noted in the
-Task 7 report of this plan.)
+(Note: this file previously held an unrelated stale Task-9 report from a
+different plan — secubox-profiles waker/sleeper systemd units — overwritten
+here since it did not belong to this plan.)
 
 **Status:** Done.
 
 ## What was implemented
 
-1. **`api/waker.py::_write_wake_active`** (the TDD'd code change) — persists
-   the module ids with a recent `_last_wake` entry to
-   `/run/secubox/waker-active.json`, pruning (deleting from `_last_wake`
-   itself, not just filtering the output) any entry older than
-   `_WAKE_ACTIVE_TTL_S` (90s — chosen to stay above both
-   `_WAKE_MIN_INTERVAL_S`=20s, so an entry never gets purged before that
-   anti-storm window ends, and above the sleeper's default 30s tick, with
-   margin for jitter). Wired into the `/_wake/{vhost}` route right after
-   `_fire_wake(mid)`. Best-effort: an `OSError` writing the file is swallowed
-   — a wake that's already fired must never be reported as failed because of
-   this side-channel.
+Files created, exactly the four named in the brief:
 
-2. **`_fire_wake` rewritten to wrap in `systemd-run`** (item 4 of the brief):
-   `sudo -n /usr/bin/systemd-run --collect --quiet /usr/sbin/secubox-wakectl
-   wake <mid> --json`, fire-and-forget (no `--wait`/`--pipe`, unlike
-   `secubox-profilectl`'s panel path which does wait) — the waker never
-   blocks an HTTP request on the wake's outcome. Same EROFS rationale as the
-   existing `secubox-profilectl` sudoers (waker runs `ProtectSystem=strict`
-   with `ReadWritePaths=/run/secubox` only; a plain `sudo` child would
-   inherit that sandbox and `secubox-wakectl`, which writes the 4R snapshot
-   + audit and drives systemd/LXC, would see everything else EROFS).
+- `packages/secubox-meshtastic/api/ctl.py` — argparse CLI, `main(argv)`.
+- `packages/secubox-meshtastic/sbin/secubox-meshtasticctl` — thin bash
+  launcher (`cd /usr/lib/secubox/meshtastic && exec python3 -m api.ctl "$@"`),
+  chmod +x.
+- `packages/secubox-meshtastic/sudoers.d/secubox-meshtastic` — one scoped
+  `systemd-run`-wrapped grant per verb shape, `visudo -c -f` → **`analyse
+  réussie`**.
+- `packages/secubox-meshtastic/tests/test_ctl.py` — 14 tests.
 
-3. **`sudoers.d/secubox-profiles`** — added:
-   ```
-   secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --collect --quiet /usr/sbin/secubox-wakectl wake *
-   ```
-   Documented the deliberate wildcard exception (module id is a genuine
-   per-call variable): sudo never shells the matched argv (execve, not
-   `/bin/sh -c`), `secubox-wakectl`'s argparse treats `module` as a single
-   positional never re-parsed as flags, and `wake()` further refuses any id
-   not in `load_all()` before touching systemd/LXC. `visudo -c -f
-   sudoers.d/secubox-profiles` → **`analyse réussie`** (parsed OK).
+### Verbs (`set-mode`, `set-region`, `set-role`, `set-grid`, `set-psk`,
+`apply-egress`)
 
-4. **`debian/secubox-waker.service`** (new) — `User=secubox`,
-   `ExecStart=... uvicorn api.waker:app --uds /run/secubox/waker.sock`,
-   `NoNewPrivileges=false` (needs sudo), `RuntimeDirectory=secubox` +
-   `RuntimeDirectoryPreserve=yes`, `ProtectSystem=strict` +
-   `ReadWritePaths=/run/secubox` only (the socket + `waker-active.json`).
-   Hardening copied from `debian/secubox-profiles.service`.
+Each: refuses non-root (`_running_as_root()` → rc=1, no write) → `config.load`
+→ apply the change to a `dataclasses.replace` copy of `Config` → `_write_config`
+(shadow file → `config.load(tmp)` validates it → `os.chmod` to match the
+existing file's mode (or `0o640` if none existed) → `os.replace` atomic swap —
+the double-buffer/4R shadow→validate→swap invariant from `.claude/CLAUDE.md`)
+→ append a JSON audit line.
 
-5. **`debian/secubox-sleeper.service`** (new) — `User=root`,
-   `ExecStart=/usr/bin/python3 -m api.sleeper_daemon`. Deliberately **no**
-   `.timer` unit and **no** sudo/`systemd-run` wrapper: per the brief's own
-   guidance ("pick service form to keep the interval in-process"), this is a
-   long-running daemon, and unlike the waker it *is* the privileged actuator
-   itself (`run_once` → `apply.apply_plan`, same trust level as
-   `secubox-wakectl`/`secubox-profilectl`). No `ProtectSystem=strict` either
-   — `apply_plan`/`actuate.py` write `/data/lxc/<n>/config`
-   (`lxc.start.auto`) and `/etc/secubox/waf/haproxy-routes.json` directly in
-   addition to the 4R snapshot dir and audit log; sandboxing this service
-   would just reproduce, one layer up, the exact EROFS lesson that motivated
-   wrapping the *other* two ctls in `systemd-run` in the first place.
+- `set-mode`/`set-role` are argparse `choices=` restricted to
+  `config.MODES`/`config.ROLES` — an invalid value is rejected by argparse
+  itself (`SystemExit`) **before** `config.load` is even called, so nothing
+  is ever read or written.
+- `set-grid <channel> --grid off,on`: comma-split, each token checked against
+  `config.GRIDS` (rc=2, no write, on any bad token); unknown channel also
+  rc=2, no write.
+- `set-psk <channel> --secret <name>`: sets only the psk_secret **reference
+  name** on that channel — no secret bytes are read, generated, or stored
+  here, per the brief's explicit scope note.
+- `apply-egress`: `gridpolicy.nft_egress_rules(cfg)` rendered into a
+  self-contained `table inet secubox_meshtastic { chain egress { ... } }`
+  drop-in (own base chain, `hook output`, `policy accept` on the chain
+  itself — modeled on the existing `secubox-toolbox-wg.nft`/
+  `secubox-threatmesh.nft` pattern already in the repo: it only ever *adds*
+  narrow accept exceptions, and never overrides the separate DEFAULT DROP
+  base chain that lives elsewhere). An empty rule list still writes a valid
+  rule-less chain body — no allow rule is added, so DEFAULT DROP holds
+  (the fail-safe the brief calls for).
 
-6. **`api/sleeper_daemon.py`** (new) — `main()`/`main_async()` wires
-   `sleeper.serve()`'s production dependencies: `observe_all`/`observe` from
-   `api/observe.py`, a local `_run` (same subprocess contract as
-   `wakectl._run`/`cli.py._run`), `time.monotonic`/an ISO-8601 `stamp`, and
-   `DEFAULT_INTERVAL_S=30.0`. Two dependencies are **documented stubs**:
-   - `_signal_reader` → returns `{}`. The real sbxwaf-stats source
-     (per-vhost `last_request_ts`/`active_conns`) is **not yet stabilized**
-     — the interim Go WAF (`secubox-toolbox-ng/cmd/sbxwaf`) doesn't write an
-     exploitable `waf-stats.json` yet (project memory: "waf-stats.json
-     gap"). `{}` is safe by construction: `should_sleep()` requires a
-     non-`None` `Signal` to ever sleep a module, so this stub can never
-     sleep anything. **NEEDS_CONTEXT for T12/follow-up**: wire the real
-     file/format once sbxwaf writes one.
-   - `_hint_probe` → always returns `None` (no per-module `/idle` route
-     exists yet); `None` never vetoes nor manufactures a green light.
+### Paths (mirrors `secubox-profiles/api/actuate_paths.py`)
 
-## TDD: RED → GREEN (the waker-active writer)
+- Config: **always** `<root>/meshtastic.toml` (no real-vs-test branching —
+  matches the brief's "override with `--root <dir>`" instruction literally,
+  same as how `secubox-profilectl` derives `modules.d`/`profiles` under
+  `--root` unconditionally).
+- Audit log: real `/var/log/secubox/audit.log` only when
+  `root == Path("/etc/secubox")`, else `<root>/audit.log`.
+- Egress drop-in: real `/etc/secubox/nftables.d/secubox-meshtastic-egress.nft`
+  only when `root == /etc/secubox`, else
+  `<root>/nftables.d/secubox-meshtastic-egress.nft`.
 
-RED (`_write_wake_active` didn't exist yet):
+### `_dump` (TOML serializer)
+
+Small dedicated writer (not a line/section-preserving editor — `tomllib` on
+Python 3.11 is read-only, as the brief notes) that reproduces exactly what
+`config.load` reads: `mode`/`region`/`serial`, each `[[channel]]` (name, grid
+list, psk_secret), optional `[shared_grid]`/`[on_grid]` (broker + enabled),
+`[passive]` (role, packet_log). Verified round-trip: `test_dump_round_trips_edit`
+edits one channel's grid and asserts every *other* field survives unchanged
+through a full dump→reload cycle.
+
+## TDD: RED → GREEN
+
+RED (before `api/ctl.py` existed): `ModuleNotFoundError: No module named
+'api.ctl'` on every test in `tests/test_ctl.py`.
+
+GREEN after implementing `api/ctl.py`:
 ```
-FAILED tests/test_waker.py::test_wake_writes_active_state_file - FileNotFoundError
-FAILED tests/test_waker.py::test_wake_active_file_prunes_stale_entries - AttributeError: module 'api.waker' has no attribute '_write_wake_active'
-2 failed, 4 passed in 0.34s
-```
-GREEN after implementing `_write_wake_active` + wiring the route:
-```
-cd packages/secubox-profiles && python3 -m pytest tests/test_waker.py -q
-7 passed in 0.32s
-```
-Also added `test_fire_wake_wraps_in_systemd_run_fire_and_forget` (captures
-the actual `Popen` argv and asserts the `systemd-run` wrapper + absence of
-`--wait`/`--pipe`) and, in `tests/test_sleeper.py`,
-`test_sleeper_daemon_wires_serve_with_production_deps` (locks the keyword
-wiring between `sleeper_daemon.main_async` and `sleeper.serve` — a rename on
-either side is otherwise a runtime-only failure with no static check across
-the two modules) plus two tests asserting both stubs are the documented
-safe defaults (`{}` / `None`).
-
-## Test results
-
-```
-cd packages/secubox-profiles && python3 -m pytest tests/ -q
-224 passed, 3 warnings (pre-existing FastAPI on_event deprecation, unrelated)
+cd packages/secubox-meshtastic && python -m pytest tests/test_ctl.py -q
+14 passed in 0.11s
 ```
 
-## mypy vs. baseline
+One real bug caught during TDD: my first `apply-egress` "no broker" test
+asserted the literal substring `"accept"` was absent from the drop-in, but
+the base chain's own `policy accept;` declaration contains that word —
+unrelated to any allow *rule*. Fixed the test to assert the absence of an
+actual allow rule (`"ip daddr"` / `"meshtastic-on-grid"` comment) instead of
+the word "accept", which is what the brief's invariant ("no accept RULE")
+actually means.
+
+## Full suite
 
 ```
-cd packages/secubox-profiles && python3 -m mypy --strict api/
-93 errors in 12 files (checked 23 source files)
+cd packages/secubox-meshtastic && python -m pytest tests/ -q
+47 passed in 0.19s
 ```
-Identical to the baseline recorded in prior task reports (Task 6/7: "93
-errors ... identical to the pre-fix count"). Grepped the output for
-`waker.py`/`sleeper_daemon.py` — **zero errors attributed to either file**.
-(A plain non-strict `mypy api/` also still shows the same pre-existing 3
-errors in `scan.py`/`snapshot.py`/`web.py`, none in my changed/new files.)
+(33 prior + 14 new — matches the brief's "currently 33" baseline exactly.)
 
-## What T12 (packaging) must wire
+## Test coverage against the brief's checklist
 
-- `debian/rules` — the default `dh_installsystemd` call only auto-installs
-  `debian/secubox-profiles.service` (matches the single binary package
-  name). It will **not** pick up `debian/secubox-waker.service` or
-  `debian/secubox-sleeper.service` automatically. T12 needs:
-  ```
-  override_dh_installsystemd:
-  	dh_installsystemd --name=secubox-profiles
-  	dh_installsystemd --name=secubox-waker
-  	dh_installsystemd --name=secubox-sleeper
-  ```
-  (the `--name=X` convention matches `debian/X.service` exactly, which is
-  how these two files are named).
-- `debian/postinst` — currently only does
-  `enable`/`restart secubox-profiles.service`. T12 must add
-  `systemctl daemon-reload`, `enable --now secubox-waker.service`, and
-  `enable --now secubox-sleeper.service` (idempotent, matching the existing
-  pattern).
-- `sudoers.d/secubox-profiles` — **no T12 action needed**: the new waker
-  grant was added to the *same file* the existing `override_dh_auto_install`
-  already installs wholesale, so it ships automatically.
-- nginx wiring (the `@waker` `include`) is Task 7/12's separate concern, not
-  touched here.
-- The `_signal_reader` stub (`api/sleeper_daemon.py`) is a genuine
-  NEEDS_CONTEXT item — the real sbxwaf stats path/format should be resolved
-  before scale-to-zero can actually observe front traffic in production;
-  until then the sleeper is inert-but-safe (never sleeps anything).
+- `set-grid` updates a known channel's grid (verified via `config.load`) —
+  `test_set_grid_updates_known_channel`.
+- `set-grid` rejects an unknown grid value, rc≠0, **no write** —
+  `test_set_grid_rejects_unknown_grid_value` (asserts file content
+  byte-identical before/after).
+- `set-grid` rejects an unknown channel, rc≠0 —
+  `test_set_grid_rejects_unknown_channel`.
+- `set-mode turbo` → argparse `SystemExit` before any write —
+  `test_set_mode_turbo_rejected_before_any_write` (asserts file content
+  unchanged).
+- `apply-egress` with no enabled on-grid broker → drop-in has no allow rule
+  (DEFAULT DROP preserved) — `test_apply_egress_no_broker_writes_no_accept_rule`.
+- `apply-egress` with an enabled broker → drop-in contains the broker allow —
+  `test_apply_egress_with_enabled_broker_writes_allow_rule`.
+- Root guard: `_running_as_root` → False ⇒ rc=1, no write —
+  `test_root_guard_refuses_and_does_not_write`.
+- `_dump` round-trips an edit — `test_dump_round_trips_edit`.
+- Extra (not explicitly required but straightforward given the surface):
+  `set-mode`/`set-role`/`set-region`/`set-psk` happy paths, `set-psk` unknown
+  channel, and an audit-log content check.
 
-## Files changed
+## Files changed/created
 
-- `packages/secubox-profiles/api/waker.py` — `_write_wake_active` +
-  `_WAKE_ACTIVE_PATH`/`_WAKE_ACTIVE_TTL_S`, `_fire_wake` rewritten to the
-  `systemd-run` wrapper, wired into the wake route.
-- `packages/secubox-profiles/api/sleeper_daemon.py` (new) — production
-  entrypoint for `secubox-sleeper.service`.
-- `packages/secubox-profiles/sudoers.d/secubox-profiles` — added the waker→
-  `systemd-run`→`wakectl` grant.
-- `packages/secubox-profiles/debian/secubox-waker.service` (new).
-- `packages/secubox-profiles/debian/secubox-sleeper.service` (new).
-- `packages/secubox-profiles/tests/test_waker.py` — 3 new tests (writer,
-  pruning, `systemd-run` argv).
-- `packages/secubox-profiles/tests/test_sleeper.py` — 3 new tests (wiring +
-  both stub safety checks).
+- `packages/secubox-meshtastic/api/ctl.py` (new)
+- `packages/secubox-meshtastic/sbin/secubox-meshtasticctl` (new, +x)
+- `packages/secubox-meshtastic/sudoers.d/secubox-meshtastic` (new)
+- `packages/secubox-meshtastic/tests/test_ctl.py` (new, 14 tests)
+- `.superpowers/sdd/task-9-report.md` (this file, overwritten per instruction)
 
-## Self-review
+## Explicitly out of scope (flagging, not silently skipping)
 
-- Confirmed `_WAKE_ACTIVE_PATH` matches `api/sleeper.py::WAKE_LOCK_FILE`'s
-  literal value (`/run/secubox/waker-active.json`) — no cross-import between
-  the two modules by design (they're separate processes/services
-  communicating only through this file), so I cross-checked the literal
-  string by hand instead of relying on a shared import.
-- Verified the sudoers wildcard risk reasoning against `api/wake.py::wake()`
-  (confirms it rejects unknown module ids via `load_all()` before driving
-  systemd/LXC) rather than just asserting it in the comment.
-- Ran the full per-directory suite and `mypy --strict api/` (matching the
-  established baseline-comparison method from prior tasks in this plan, not
-  just a single-file mypy check).
-- Deliberately did **not** create `secubox-sleeper.timer` even though the
-  brief's file list mentions it — its own "Interfaces" section explicitly
-  offers the long-running-service alternative and recommends it ("cleaner...
-  keeps the interval in-process"); documented this as a considered deviation
-  rather than an oversight.
+- `debian/rules`/`debian/install`/`debian/postinst`/systemd units for this
+  package do not exist yet at all (no `debian/install`, no `.service` file,
+  no `postinst`) — packaging wiring for `secubox-meshtastic` as a whole
+  (including installing `api/ctl.py`, the `sbin/` launcher, and the sudoers
+  drop-in) is a separate, not-yet-reached packaging task; nothing in
+  Task 9's brief asked for it, so I did not touch `debian/`.
+- Secret **bytes** management (generating/storing the actual PSK) is
+  explicitly out of scope per the brief — `set-psk` only ever writes the
+  reference name.
 
 ## Concerns
 
-- `_WAKE_ACTIVE_TTL_S=90.0` and `sleeper_daemon.DEFAULT_INTERVAL_S=30.0` are
-  my own chosen defaults (the brief left the exact numbers unspecified
-  beyond "within the sleeper interval"); both are cross-referenced in code
-  comments on both sides so a future change to one should prompt a look at
-  the other, but there's no automated check tying them together.
-- The `_signal_reader` stub is a real functional gap, not just a test seam:
-  until T12/a follow-up wires real sbxwaf stats, the sleeper daemon will run
-  forever without ever sleeping a single module. Flagged above as
-  NEEDS_CONTEXT, not silently swept under a TODO.
-- `secubox-sleeper.service` has no filesystem sandbox at all beyond
-  `ProtectHome`/`PrivateTmp` — appropriate given it drives systemd/LXC/WAF
-  routes directly as root, but it's a broader trust surface than the waker;
-  worth a second look if this daemon's scope ever grows beyond the
-  actuation it already delegates to `apply.apply_plan`.
+- `set-region` and `--secret <name>` have no closed enum to validate against
+  (unlike mode/role/grid) — they're accepted as opaque strings. Documented
+  the wildcard-safety reasoning for this in the sudoers comment header
+  (bounded by "never re-shelled, never used as a path/command" rather than
+  "restricted to a known set"). Worth a second look if `set-region` ever
+  needs a real region enum (e.g. from a Meshtastic region table) — currently
+  none exists in `api/config.py` to validate against.
+- No `debian/` packaging exists for this module at all yet, so this CLI is
+  not reachable from an installed system until that task lands; confirmed
+  this is expected (out of Task 9's scope) rather than an oversight.

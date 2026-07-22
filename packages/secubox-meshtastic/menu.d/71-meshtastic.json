@@ -1,0 +1,9 @@
+{
+  "id": "meshtastic",
+  "name": "Meshtastic",
+  "category": "mesh",
+  "icon": "📡",
+  "path": "/meshtastic/",
+  "order": 71,
+  "description": "Meshtastic LoRa mesh node — radio status, channels and grid bridging"
+}

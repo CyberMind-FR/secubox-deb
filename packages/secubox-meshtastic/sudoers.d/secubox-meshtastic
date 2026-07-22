@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox Meshtastic — secubox-meshtasticd (User=secubox-meshtastic) serves
+# the /meshtastic/ webui IN-PROCESS (daemon.main() -> uvicorn.run(app, ...))
+# and delegates every config write from that webui to the root helper
+# secubox-meshtasticctl (webui->ctl pattern, see .claude/MODULE-COMPLIANCE.md
+# -> Privileged Operations), mirroring sudoers.d/secubox-profiles.
+#
+# The CLI is launched via `systemd-run`, NOT plain sudo: the daemon service
+# runs under ProtectSystem=strict with a reduced ReadWritePaths, and a `sudo`
+# child inherits that mount namespace — the CLI would see
+# /etc/secubox/meshtastic.toml, /etc/secubox/nftables.d and
+# /var/log/secubox/audit.log as READ-ONLY (EROFS) and could not write the
+# config, the egress drop-in, or the audit log. A transient `systemd-run`
+# unit runs in PID 1's context, OUTSIDE the sandbox, with the access the ctl
+# needs.
+#
+# Wildcard-safety (applies to every line below that has one):
+#   - sudo never invokes a shell here — the matched argv is executed
+#     directly (execve), so shell metacharacters in a wildcard match (;, |,
+#     $(), ..) are inert, just literal bytes in one argv element;
+#   - secubox-meshtasticctl's own argparse re-parses every value, never
+#     re-shells it;
+#   - `mode`/`role` values are bounded by argparse `choices=`
+#     (config.MODES / config.ROLES) — anything outside the enum exits before
+#     any write (SystemExit(2));
+#   - `grid` is validated manually per token in set-grid (each element checked
+#     ∈ config.GRIDS, returns rc=2 before write on a bad value);
+#   - `channel` and `region`/`secret` are genuine free-form per-call values
+#     (channel name, radio region string, secret reference name) with no
+#     closed set to restrict them to; the ctl still refuses an unknown
+#     `channel` (status="refused", rc=2) before writing, and never treats
+#     `region`/`secret` as anything but an opaque TOML string value (it is
+#     never interpolated into a shell command or file path).
+# So every wildcard below only ever resolves to "one argparse-validated
+# positional/flag value, plus --root" — never arbitrary code execution or an
+# arbitrary argv.
+
+secubox-meshtastic ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-meshtasticctl set-mode *
+secubox-meshtastic ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-meshtasticctl set-region *
+secubox-meshtastic ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-meshtasticctl set-role *
+secubox-meshtastic ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-meshtasticctl set-grid * --grid *
+secubox-meshtastic ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-meshtasticctl set-psk * --secret *
+secubox-meshtastic ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-meshtasticctl apply-egress

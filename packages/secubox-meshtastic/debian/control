@@ -1,0 +1,34 @@
+Source: secubox-meshtastic
+Section: net
+Priority: optional
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Vcs-Git: https://github.com/CyberMind-FR/secubox-deb.git
+Vcs-Browser: https://github.com/CyberMind-FR/secubox-deb/tree/master/packages/secubox-meshtastic
+Rules-Requires-Root: no
+
+Package: secubox-meshtastic
+Architecture: all
+Depends: ${misc:Depends},
+ ${python3:Depends},
+ python3 (>= 3.11),
+ python3-fastapi,
+ python3-uvicorn,
+ python3-pydantic,
+ python3-paho-mqtt,
+ secubox-core,
+ sudo
+Recommends: mosquitto
+Description: SecuBox-Deb Meshtastic LoRa node integration
+ Native Python module for managing Meshtastic LoRa mesh nodes: radio/cache/
+ passive-listener/MQTT-bridge daemon (secubox-meshtasticd), privileged CLI
+ (secubox-meshtasticctl) and webui panel (/meshtastic/, own dedicated
+ socket — never served by the aggregator).
+ .
+ The upstream `meshtastic` Python library (device/BLE/serial protocol) is
+ NOT packaged for Debian and is intentionally NOT a dependency here: the
+ daemon runs fine with `radio: absent` (cache/passive/bridge only) without
+ it, and it is only required once a physical Meshtastic device is attached.
+ See README.md for the pip/venv install note.

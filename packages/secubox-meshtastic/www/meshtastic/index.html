@@ -1,0 +1,652 @@
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<!-- Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
+<!-- Source-Disclosed License — All rights reserved except as expressly granted. -->
+<!-- See LICENCE-CMSD-1.0.md for terms. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Meshtastic</title>
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <style>
+        :root {
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
+            --red: #ff4466;
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
+            --purple: #a371f7;
+            --cyan: #00d4ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', 'Courier New', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', 'Courier New', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,0.18); }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1.2rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.25rem; text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.red .value { color: var(--red); }
+        .stat-card.blue .value { color: var(--blue); }
+        .stat-card.purple .value { color: var(--purple); }
+        .stat-card.orange .value { color: var(--orange); }
+        .stat-card.dim .value { color: var(--p31-dim); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h3 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+        .card h3 .note { font-size: 0.62rem; color: var(--p31-dim); text-transform: none; font-weight: normal; letter-spacing: 0; }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.2rem; }
+        .tab { padding: 0.45rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; transition: all 0.2s; }
+        .tab:hover { color: var(--cyan); }
+        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .banner { border-radius: 6px; padding: 0.7rem 0.9rem; font-size: 0.75rem; margin-bottom: 1rem; border: 1px dashed var(--border); }
+        .banner.warn { border-color: var(--orange); color: var(--orange); background: rgba(255,153,68,0.08); }
+        .banner.bad { border-color: var(--red); color: var(--red); background: rgba(255,68,102,0.08); }
+        .banner.ok { border-color: var(--green); color: var(--green); background: rgba(0,221,68,0.08); }
+
+        .agg-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+        .agg-table th { text-align: left; color: var(--p31-dim); text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.06em; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); }
+        .agg-table td { padding: 0.3rem 0.4rem; border-bottom: 1px solid rgba(100,150,200,0.08); }
+        .agg-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+        select { padding: 0.4rem 0.6rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', 'Courier New', monospace; font-size: 0.75rem; color: var(--text); }
+        select:focus { outline: none; border-color: var(--cyan); }
+        input[type=text], input[type=number], textarea { padding: 0.4rem 0.6rem; background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', 'Courier New', monospace; font-size: 0.78rem; color: var(--text); }
+        input:focus, textarea:focus { outline: none; border-color: var(--cyan); }
+
+        .row-list { display: flex; flex-direction: column; gap: 0.28rem; }
+        .node-row { display: grid; grid-template-columns: 1.6em 1fr auto auto auto auto auto; align-items: center; gap: 0.55rem; padding: 0.45rem 0.6rem; background: var(--bg-row); border-radius: 4px; font-size: 0.73rem; border-left: 3px solid var(--border); }
+        .node-row .glyph { text-align: center; }
+        .node-row .id { color: var(--cyan); font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .node-row .meta { font-size: 0.62rem; color: var(--p31-dim); white-space: nowrap; }
+        .node-row .num { font-size: 0.68rem; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .empty-note { padding: 1rem; text-align: center; color: var(--p31-dim); font-size: 0.75rem; }
+
+        .map-wrap { position: relative; background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        #nodeMap { width: 100%; height: 320px; display: block; }
+        .map-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.65rem; color: var(--p31-dim); align-items: center; }
+        .map-legend .dot { display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%; margin-right: 0.3em; vertical-align: middle; }
+
+        .channel-card { background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px; padding: 0.7rem 0.9rem; margin-bottom: 0.6rem; }
+        .channel-card .name { color: var(--cyan); font-weight: bold; font-size: 0.8rem; }
+        .grid-toggle-set { display: flex; gap: 0.4rem; margin-top: 0.5rem; align-items: center; flex-wrap: wrap; }
+        .grid-toggle { padding: 0.25rem 0.65rem; border-radius: 999px; border: 1px solid var(--border); font-size: 0.65rem; text-transform: uppercase; cursor: pointer; color: var(--p31-dim); background: transparent; letter-spacing: 0.04em; }
+        .grid-toggle.selected.off { color: var(--p31-dim); border-color: var(--p31-dim); background: rgba(107,123,139,0.15); }
+        .grid-toggle.selected.shared { color: var(--blue); border-color: var(--blue); background: rgba(68,136,255,0.15); }
+        .grid-toggle.selected.on { color: var(--green); border-color: var(--green); background: rgba(0,221,68,0.15); }
+
+        .msg-panel { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .msg-channels { min-width: 160px; display: flex; flex-direction: column; gap: 0.25rem; }
+        .msg-chan-btn { text-align: left; padding: 0.35rem 0.55rem; border-radius: 4px; background: var(--bg-row); border: 1px solid var(--border); color: var(--text); font-size: 0.72rem; cursor: pointer; }
+        .msg-chan-btn.active { border-color: var(--cyan); color: var(--cyan); }
+        .msg-body { flex: 1; min-width: 260px; }
+        .msg-list { display: flex; flex-direction: column; gap: 0.35rem; max-height: 320px; overflow-y: auto; margin-bottom: 0.75rem; }
+        .msg-item { background: var(--bg-row); border-radius: 4px; padding: 0.4rem 0.6rem; font-size: 0.73rem; border-left: 3px solid var(--border); }
+        .msg-item .from { color: var(--cyan); font-weight: bold; margin-right: 0.4em; }
+        .msg-item .ts { float: right; color: var(--p31-dim); font-size: 0.62rem; }
+        .send-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .send-form input[type=number] { width: 5em; }
+        .send-form input[type=text] { flex: 1; min-width: 180px; }
+
+        .bar-row { display: grid; grid-template-columns: 5em 1fr 4em; gap: 0.6rem; align-items: center; margin-bottom: 0.4rem; font-size: 0.7rem; }
+        .bar-track { background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; height: 0.9rem; }
+        .bar-fill { background: var(--cyan); height: 100%; }
+        .bar-count { text-align: right; color: var(--p31-dim); font-variant-numeric: tabular-nums; }
+
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 360px; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
+        .toast .close { float: right; margin-left: 0.6rem; cursor: pointer; font-weight: bold; }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+            .node-row { grid-template-columns: 1.4em 1fr auto; }
+            .node-row .meta, .node-row .num { display: none; }
+            .msg-panel { flex-direction: column; }
+        }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>📡 Meshtastic</h1>
+                <div class="sub" id="subline">Loading…</div>
+            </div>
+            <div class="btn-group">
+                <button class="btn" id="refreshBtn">↻ Refresh</button>
+            </div>
+        </header>
+
+        <div id="authBanner" class="banner bad" style="display:none">🔒 Not authenticated — log in to view the Meshtastic panel.</div>
+        <div id="radioBanner" class="banner warn" style="display:none">📴 Radio absent — no Meshtastic device detected. Values below reflect the last known/cached state.</div>
+
+        <div class="grid" id="statGrid">
+            <div class="stat-card cyan"><div class="value" id="sRadio">–</div><div class="label">📻 Radio</div></div>
+            <div class="stat-card blue"><div class="value" id="sMode">–</div><div class="label">🎛 Mode</div></div>
+            <div class="stat-card green"><div class="value" id="sNodes">–</div><div class="label">🛰 Nodes</div></div>
+            <div class="stat-card purple"><div class="value" id="sChannels">–</div><div class="label">📶 Channels</div></div>
+            <div class="stat-card orange"><div class="value" id="sMessages">–</div><div class="label">💬 Messages</div></div>
+            <div class="stat-card dim"><div class="value" id="sCensus">–</div><div class="label">👂 Heard (sniffer)</div></div>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" data-tab="tab-nodes">🛰 Nodes</div>
+                <div class="tab" data-tab="tab-messages">💬 Messages</div>
+                <div class="tab" data-tab="tab-channels">📶 Channels</div>
+                <div class="tab" data-tab="tab-sniffer">👂 Sniffer</div>
+                <div class="tab" data-tab="tab-grid">📻 Grid</div>
+            </div>
+
+            <!-- Nodes tab -->
+            <div id="tab-nodes" class="tab-content active">
+                <h3 style="margin-bottom:0.5rem">🗺 Node map <span class="note">offline canvas — no external tiles, normalized to positioned nodes</span></h3>
+                <div class="map-wrap"><canvas id="nodeMap"></canvas></div>
+                <div class="map-legend">
+                    <span><span class="dot" style="background:var(--green)"></span>SNR ≥ 5 (good)</span>
+                    <span><span class="dot" style="background:var(--yellow)"></span>0 ≤ SNR &lt; 5 (fair)</span>
+                    <span><span class="dot" style="background:var(--red)"></span>SNR &lt; 0 (poor)</span>
+                    <span><span class="dot" style="background:var(--p31-dim)"></span>SNR unknown</span>
+                </div>
+
+                <h3 style="margin:1rem 0 0.5rem">📍 Positioned nodes <span class="note" id="posCount"></span></h3>
+                <div class="row-list" id="posNodeList"><div class="empty-note">Loading…</div></div>
+
+                <h3 style="margin:1rem 0 0.5rem">📭 Nodes without a fix <span class="note" id="noPosCount"></span></h3>
+                <div class="row-list" id="noPosNodeList"><div class="empty-note">Loading…</div></div>
+            </div>
+
+            <!-- Messages tab -->
+            <div id="tab-messages" class="tab-content">
+                <div class="msg-panel">
+                    <div class="msg-channels" id="msgChannelList"><div class="empty-note">No channels heard yet.</div></div>
+                    <div class="msg-body">
+                        <div class="msg-list" id="msgList"><div class="empty-note">Select a channel.</div></div>
+                        <div class="send-form">
+                            <input type="number" id="sendChannel" min="0" value="0" title="channel index">
+                            <input type="text" id="sendText" placeholder="Message text…" maxlength="228">
+                            <button class="btn primary" id="sendBtn">📤 Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channels tab -->
+            <div id="tab-channels" class="tab-content">
+                <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.75rem">Toggle which grids each configured channel bridges to (off / shared / on), then Save. Changes are delegated to the privileged ctl (never applied in-process).</p>
+                <div id="channelList"><div class="empty-note">Loading…</div></div>
+            </div>
+
+            <!-- Sniffer tab -->
+            <div id="tab-sniffer" class="tab-content">
+                <h3 style="margin-bottom:0.5rem">📊 Channel activity</h3>
+                <div id="channelBars"><div class="empty-note">Loading…</div></div>
+
+                <h3 style="margin:1rem 0 0.5rem">👂 Census — every node heard passively</h3>
+                <table class="agg-table" id="censusTable"></table>
+            </div>
+
+            <!-- Grid (radio/mode) tab -->
+            <div id="tab-grid" class="tab-content">
+                <div id="gridRadioBanner" class="banner" style="margin-bottom:1rem"></div>
+                <h3 style="margin-bottom:0.5rem">🎛 Operating mode</h3>
+                <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.75rem">Current mode: <strong id="curModeLabel">–</strong>. Switching mode is delegated to the privileged ctl.</p>
+                <div class="btn-group">
+                    <select id="modeSelect">
+                        <option value="active-node">active-node</option>
+                        <option value="passive-listener">passive-listener</option>
+                        <option value="both">both</option>
+                    </select>
+                    <button class="btn primary" id="modeApplyBtn">✅ Apply mode</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '/api/v1/meshtastic';
+        let statusData = null;
+        let authFailed = false;
+        let selectedMsgChannel = null;
+        let channelDraft = {}; // channel name -> Set of selected grid values, pending save
+
+        function token() {
+            try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
+        }
+        function authHeaders(extra) {
+            const h = Object.assign({}, extra || {});
+            const t = token();
+            if (t) h['Authorization'] = 'Bearer ' + t;
+            return h;
+        }
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function fmtTs(ts) {
+            if (!ts) return '–';
+            try { return new Date(ts * 1000).toLocaleString(); } catch (e) { return String(ts); }
+        }
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = esc(msg);
+            t.className = 'toast show';
+            clearTimeout(t._hideTimer);
+            t._hideTimer = setTimeout(() => { t.className = 'toast'; }, 3000);
+        }
+        function errorToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = esc(msg) + '<span class="close" data-act="dismiss-toast">✕</span>';
+            t.className = 'toast show error';
+            clearTimeout(t._hideTimer);
+        }
+        document.getElementById('toast').addEventListener('click', e => {
+            if (e.target.closest('[data-act="dismiss-toast"]')) {
+                document.getElementById('toast').className = 'toast';
+            }
+        });
+
+        async function api(path, opts) {
+            const res = await fetch(API + path, Object.assign({}, opts, { headers: authHeaders(Object.assign({ 'Content-Type': 'application/json' }, (opts && opts.headers) || {})) }));
+            if (res.status === 401) {
+                authFailed = true;
+                renderAuthState();
+                throw new Error('401');
+            }
+            let data = null;
+            try { data = await res.json(); } catch (e) { /* no body */ }
+            if (!res.ok) {
+                const detail = (data && data.detail) ? data.detail : ('HTTP ' + res.status);
+                throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+            }
+            return data;
+        }
+
+        function renderAuthState() {
+            document.getElementById('authBanner').style.display = authFailed ? '' : 'none';
+        }
+
+        async function refresh() {
+            try {
+                const data = await api('/status');
+                authFailed = false;
+                renderAuthState();
+                statusData = data;
+                renderAll();
+            } catch (e) {
+                if (e.message !== '401') errorToast('⚠️ Failed to load status: ' + e.message);
+            }
+        }
+
+        function renderAll() {
+            if (!statusData) return;
+            renderStats();
+            renderRadioBanners();
+            renderNodes();
+            renderMessages();
+            renderChannels();
+            renderSniffer();
+            renderGridTab();
+        }
+
+        function renderStats() {
+            const s = statusData || {};
+            const nodes = s.nodes || [];
+            const msgsByChan = s.messages_by_channel || {};
+            const msgCount = Object.values(msgsByChan).reduce((a, l) => a + (l ? l.length : 0), 0);
+            const grids = s.grids || {};
+            document.getElementById('sRadio').textContent = s.radio === 'present' ? '🟢' : '📴';
+            document.getElementById('sMode').textContent = s.mode || '–';
+            document.getElementById('sNodes').textContent = nodes.length;
+            document.getElementById('sChannels').textContent = Object.keys(grids).length;
+            document.getElementById('sMessages').textContent = msgCount;
+            document.getElementById('sCensus').textContent = (s.census || []).length;
+            document.getElementById('subline').textContent =
+                (s.radio === 'present' ? 'Radio present' : 'Radio absent') + ' · mode ' + (s.mode || '?') +
+                ' · ' + nodes.length + ' node(s) · ' + msgCount + ' message(s)';
+        }
+
+        function renderRadioBanners() {
+            const absent = statusData && statusData.radio !== 'present';
+            document.getElementById('radioBanner').style.display = absent ? '' : 'none';
+        }
+
+        // --- Nodes tab -------------------------------------------------------
+
+        function snrColor(snr) {
+            if (snr == null) return '#6b7b8b';
+            if (snr >= 5) return '#00dd44';
+            if (snr >= 0) return '#ffcc00';
+            return '#ff4466';
+        }
+
+        function drawNodeMap() {
+            const canvas = document.getElementById('nodeMap');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.clientWidth || canvas.parentElement.clientWidth || 300;
+            const h = canvas.height = 320;
+            ctx.clearRect(0, 0, w, h);
+
+            const nodes = ((statusData && statusData.nodes) || []).filter(n => Array.isArray(n.pos) && n.pos.length === 2);
+            if (!nodes.length) {
+                ctx.fillStyle = '#6b7b8b';
+                ctx.font = '13px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('No positioned nodes yet', w / 2, h / 2);
+                return;
+            }
+
+            const pad = 30;
+            let lats = nodes.map(n => n.pos[0]);
+            let lons = nodes.map(n => n.pos[1]);
+            let minLat = Math.min(...lats), maxLat = Math.max(...lats);
+            let minLon = Math.min(...lons), maxLon = Math.max(...lons);
+            if (maxLat === minLat) { maxLat += 0.001; minLat -= 0.001; }
+            if (maxLon === minLon) { maxLon += 0.001; minLon -= 0.001; }
+
+            // faint grid
+            ctx.strokeStyle = 'rgba(100,150,200,0.12)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = pad + (i / 4) * (h - 2 * pad);
+                ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
+                const x = pad + (i / 4) * (w - 2 * pad);
+                ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h - pad); ctx.stroke();
+            }
+
+            nodes.forEach(n => {
+                const [lat, lon] = n.pos;
+                const x = pad + ((lon - minLon) / (maxLon - minLon)) * (w - 2 * pad);
+                const y = h - pad - ((lat - minLat) / (maxLat - minLat)) * (h - 2 * pad);
+                const color = snrColor(n.snr);
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.stroke();
+                ctx.fillStyle = '#e8e6d9';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText(n.short || n.id || '?', x + 9, y + 3);
+            });
+        }
+
+        function renderNodes() {
+            const nodes = (statusData && statusData.nodes) || [];
+            const withPos = nodes.filter(n => Array.isArray(n.pos) && n.pos.length === 2);
+            const noPos = nodes.filter(n => !(Array.isArray(n.pos) && n.pos.length === 2));
+
+            drawNodeMap();
+
+            document.getElementById('posCount').textContent = '(' + withPos.length + ')';
+            document.getElementById('noPosCount').textContent = '(' + noPos.length + ')';
+
+            const rowHtml = n => {
+                const glyph = n.snr == null ? '⚪' : (n.snr >= 5 ? '🟢' : (n.snr >= 0 ? '🟡' : '🔴'));
+                return '<div class="node-row">' +
+                    '<span class="glyph">' + glyph + '</span>' +
+                    '<span class="id" title="' + esc(n.id) + '">' + esc(n.long || n.short || n.id) + '</span>' +
+                    '<span class="meta">' + esc(n.role || '–') + '</span>' +
+                    '<span class="num" title="battery">🔋 ' + (n.battery != null ? n.battery + '%' : '–') + '</span>' +
+                    '<span class="num" title="RSSI">📶 ' + (n.rssi != null ? n.rssi : '–') + '</span>' +
+                    '<span class="num" title="SNR">〰 ' + (n.snr != null ? n.snr : '–') + '</span>' +
+                    '<span class="meta" title="last heard">' + fmtTs(n.last_heard) + '</span>' +
+                    '</div>';
+            };
+
+            document.getElementById('posNodeList').innerHTML = withPos.length
+                ? withPos.map(rowHtml).join('')
+                : '<div class="empty-note">No nodes with a position fix yet.</div>';
+            document.getElementById('noPosNodeList').innerHTML = noPos.length
+                ? noPos.map(rowHtml).join('')
+                : '<div class="empty-note">Every known node has a position fix.</div>';
+        }
+
+        // --- Messages tab ------------------------------------------------------
+
+        function renderMessages() {
+            const byChan = (statusData && statusData.messages_by_channel) || {};
+            const keys = Object.keys(byChan).sort((a, b) => Number(a) - Number(b));
+            const listEl = document.getElementById('msgChannelList');
+
+            if (!keys.length) {
+                listEl.innerHTML = '<div class="empty-note">No channels heard yet.</div>';
+            } else {
+                if (selectedMsgChannel == null || keys.indexOf(String(selectedMsgChannel)) === -1) {
+                    selectedMsgChannel = keys[0];
+                }
+                listEl.innerHTML = keys.map(k =>
+                    '<div class="msg-chan-btn' + (String(k) === String(selectedMsgChannel) ? ' active' : '') + '" data-act="msg-chan" data-ch="' + esc(k) + '">' +
+                    '# ' + esc(k) + ' <span style="color:var(--p31-dim);font-size:0.62rem">(' + (byChan[k] || []).length + ')</span></div>'
+                ).join('');
+            }
+
+            const msgs = (selectedMsgChannel != null && byChan[selectedMsgChannel]) || [];
+            const msgListEl = document.getElementById('msgList');
+            msgListEl.innerHTML = msgs.length
+                ? msgs.slice().reverse().map(m =>
+                    '<div class="msg-item"><span class="ts">' + fmtTs(m.ts) + '</span>' +
+                    '<span class="from">' + esc(m.from) + '</span>' + esc(m.text) + '</div>'
+                ).join('')
+                : '<div class="empty-note">No messages on this channel yet.</div>';
+        }
+
+        document.getElementById('msgChannelList').addEventListener('click', e => {
+            const t = e.target.closest('[data-act="msg-chan"]');
+            if (!t) return;
+            selectedMsgChannel = t.getAttribute('data-ch');
+            renderMessages();
+        });
+
+        async function sendMessage() {
+            const channelEl = document.getElementById('sendChannel');
+            const textEl = document.getElementById('sendText');
+            const channel = parseInt(channelEl.value, 10) || 0;
+            const text = textEl.value.trim();
+            if (!text) { errorToast('⚠️ Message text required'); return; }
+            const btn = document.getElementById('sendBtn');
+            btn.disabled = true;
+            try {
+                await api('/send', { method: 'POST', body: JSON.stringify({ channel: channel, text: text }) });
+                toast('📤 Sent on channel ' + channel);
+                textEl.value = '';
+                await refresh();
+            } catch (e) {
+                if (e.message !== '401') errorToast('❌ Send failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        document.getElementById('sendBtn').addEventListener('click', sendMessage);
+        document.getElementById('sendText').addEventListener('keydown', e => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // --- Channels tab (grid policy) ----------------------------------------
+
+        const GRID_VALUES = ['off', 'shared', 'on'];
+
+        function renderChannels() {
+            const grids = (statusData && statusData.grids) || {};
+            const names = Object.keys(grids).sort();
+            const el = document.getElementById('channelList');
+            if (!names.length) {
+                el.innerHTML = '<div class="empty-note">No configured channels found.</div>';
+                return;
+            }
+            el.innerHTML = names.map(name => {
+                if (!channelDraft[name]) channelDraft[name] = new Set(grids[name] || []);
+                const sel = channelDraft[name];
+                const toggles = GRID_VALUES.map(v =>
+                    '<span class="grid-toggle ' + v + (sel.has(v) ? ' selected' : '') + '" data-act="grid-toggle" data-ch="' + esc(name) + '" data-val="' + v + '">' + v + '</span>'
+                ).join('');
+                return '<div class="channel-card">' +
+                    '<span class="name">' + esc(name) + '</span>' +
+                    '<div class="grid-toggle-set">' + toggles +
+                    '<button class="btn sm primary" data-act="grid-save" data-ch="' + esc(name) + '">💾 Save</button>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        document.getElementById('channelList').addEventListener('click', e => {
+            const toggle = e.target.closest('[data-act="grid-toggle"]');
+            if (toggle) {
+                const ch = toggle.getAttribute('data-ch');
+                const val = toggle.getAttribute('data-val');
+                const set = channelDraft[ch] || (channelDraft[ch] = new Set());
+                if (set.has(val)) set.delete(val); else set.add(val);
+                renderChannels();
+                return;
+            }
+            const save = e.target.closest('[data-act="grid-save"]');
+            if (save) {
+                const ch = save.getAttribute('data-ch');
+                saveGrid(ch);
+            }
+        });
+
+        async function saveGrid(channel) {
+            const grid = Array.from(channelDraft[channel] || []);
+            try {
+                await api('/grid', { method: 'POST', body: JSON.stringify({ channel: channel, grid: grid }) });
+                toast('💾 Grid saved for ' + channel + ': ' + (grid.join(', ') || '(none)'));
+                await refresh();
+            } catch (e) {
+                if (e.message !== '401') errorToast('❌ Grid save failed for ' + channel + ': ' + e.message);
+            }
+        }
+
+        // --- Sniffer tab ---------------------------------------------------------
+
+        function renderSniffer() {
+            const stats = (statusData && statusData.channel_stats) || {};
+            const keys = Object.keys(stats).sort((a, b) => Number(a) - Number(b));
+            const barsEl = document.getElementById('channelBars');
+            if (!keys.length) {
+                barsEl.innerHTML = '<div class="empty-note">No packet activity recorded yet.</div>';
+            } else {
+                const max = Math.max(...keys.map(k => (stats[k] && stats[k].packets) || (stats[k] && stats[k].count) || 0), 1);
+                barsEl.innerHTML = keys.map(k => {
+                    const st = stats[k] || {};
+                    const count = st.packets != null ? st.packets : (st.count != null ? st.count : 0);
+                    const pct = Math.round((count / max) * 100);
+                    return '<div class="bar-row"><span>ch ' + esc(k) + '</span>' +
+                        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+                        '<span class="bar-count">' + count + '</span></div>';
+                }).join('');
+            }
+
+            const census = (statusData && statusData.census) || [];
+            const tbl = document.getElementById('censusTable');
+            if (!census.length) {
+                tbl.innerHTML = '<tr><td class="empty-note">No nodes heard passively yet.</td></tr>';
+                return;
+            }
+            let html = '<tr><th>Node</th><th class="num">Packets</th><th class="num">RSSI</th><th class="num">SNR</th><th>First heard</th><th>Last heard</th></tr>';
+            census.slice().sort((a, b) => (b.last_heard || 0) - (a.last_heard || 0)).forEach(c => {
+                html += '<tr><td>' + esc(c.id) + '</td>' +
+                    '<td class="num">' + (c.packets != null ? c.packets : '–') + '</td>' +
+                    '<td class="num">' + (c.rssi != null ? c.rssi : '–') + '</td>' +
+                    '<td class="num">' + (c.snr != null ? c.snr : '–') + '</td>' +
+                    '<td>' + fmtTs(c.first_heard) + '</td>' +
+                    '<td>' + fmtTs(c.last_heard) + '</td></tr>';
+            });
+            tbl.innerHTML = html;
+        }
+
+        // --- Grid (radio/mode) tab -----------------------------------------------
+
+        function renderGridTab() {
+            const s = statusData || {};
+            const banner = document.getElementById('gridRadioBanner');
+            if (s.radio === 'present') {
+                banner.className = 'banner ok';
+                banner.textContent = '🟢 Radio present — device online.';
+            } else {
+                banner.className = 'banner warn';
+                banner.textContent = '📴 Radio absent — no Meshtastic device detected. Mode can still be pre-configured.';
+            }
+            document.getElementById('curModeLabel').textContent = s.mode || '–';
+            const modeSel = document.getElementById('modeSelect');
+            if (s.mode && modeSel.value !== s.mode) modeSel.value = s.mode;
+        }
+
+        async function applyMode() {
+            const mode = document.getElementById('modeSelect').value;
+            const btn = document.getElementById('modeApplyBtn');
+            btn.disabled = true;
+            try {
+                await api('/mode', { method: 'POST', body: JSON.stringify({ mode: mode }) });
+                toast('🎛 Mode set: ' + mode);
+                await refresh();
+            } catch (e) {
+                if (e.message !== '401') errorToast('❌ Mode change failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        document.getElementById('modeApplyBtn').addEventListener('click', applyMode);
+
+        // --- Tabs ------------------------------------------------------------------
+
+        document.querySelectorAll('.tabs .tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const scope = tab.closest('.card');
+                scope.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+                scope.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
+                if (tab.getAttribute('data-tab') === 'tab-nodes') drawNodeMap();
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            const nodesTab = document.getElementById('tab-nodes');
+            if (nodesTab && nodesTab.classList.contains('active')) drawNodeMap();
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', refresh);
+
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>
