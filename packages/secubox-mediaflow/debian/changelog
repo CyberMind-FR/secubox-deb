@@ -1,3 +1,12 @@
+secubox-mediaflow (2.3.0-1~bookworm3) bookworm; urgency=medium
+
+  * Fix postinst syntax error: a comment contained the literal #DEBHELPER#
+    token, which dh_installsystemd substituted textually, orphaning the rest
+    of the line ("; kick one refresh") and breaking `configure` on every
+    install. Reword the comment; the real token stays on its own line.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 22 Jul 2026 12:00:00 +0200
+
 secubox-mediaflow (2.3.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
