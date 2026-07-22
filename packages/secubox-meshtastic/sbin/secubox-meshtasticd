@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: secubox-meshtastic :: daemon launcher.
+set -euo pipefail
+cd /usr/lib/secubox/meshtastic
+exec /usr/bin/python3 -m api.daemon "$@"
