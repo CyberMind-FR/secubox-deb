@@ -1,0 +1,5 @@
+secubox-meshtastic (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: package scaffold + config loader (ref #897)
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 22 Jul 2026 00:00:00 +0000

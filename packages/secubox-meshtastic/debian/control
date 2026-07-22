@@ -1,0 +1,15 @@
+Source: secubox-meshtastic
+Section: net
+Priority: optional
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Vcs-Git: https://github.com/CyberMind-FR/secubox-deb.git
+Vcs-Browser: https://github.com/CyberMind-FR/secubox-deb/tree/master/packages/secubox-meshtastic
+
+Package: secubox-meshtastic
+Architecture: all
+Depends: python3, python3-paho-mqtt, secubox-core
+Description: SecuBox-Deb Meshtastic LoRa node integration
+ Native Python module for managing Meshtastic LoRa mesh nodes
+ with MQTT broker integration and multi-channel support.
