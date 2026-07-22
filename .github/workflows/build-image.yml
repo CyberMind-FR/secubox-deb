@@ -35,6 +35,11 @@ on:
         description: 'Image size (empty = use board default)'
         required: false
         default: ''
+      kiosk:
+        description: 'rpi400/rpi4 only: include GUI kiosk (chromium fullscreen dashboard)'
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
@@ -126,12 +131,20 @@ jobs:
             SIZE_OPT="--size ${{ inputs.size || github.event.inputs.size }}"
           fi
 
+          # rpi400/rpi4 GUI kiosk (chromium fullscreen dashboard). Ignored by
+          # non-rpi boards (build-image.sh only forwards it to build-rpi-usb.sh).
+          KIOSK_OPT=""
+          if [ "${{ inputs.kiosk || github.event.inputs.kiosk }}" = "true" ]; then
+            KIOSK_OPT="--kiosk"
+          fi
+
           sudo -E bash image/build-image.sh \
             --board ${{ matrix.board }} \
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
             $SIZE_OPT \
-            $SLIPSTREAM_OPT
+            $SLIPSTREAM_OPT \
+            $KIOSK_OPT
           sudo chown -R $(id -u):$(id -g) output/
         timeout-minutes: 90
 
