@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """SecuBox-Deb :: meshtastic — double-cache (in-mem + state.json + bg thread)."""
 from __future__ import annotations
-import json, os, tempfile, threading
+import copy, json, os, tempfile, threading
 from pathlib import Path
 from typing import Callable
 
@@ -15,13 +15,13 @@ class StateCache:
 
     def update(self, state: dict) -> None:
         with self._lock:
-            self._mem = dict(state)
-        self._write_atomic(state)
+            self._mem = copy.deepcopy(state)
+            self._write_atomic(self._mem)
 
     def get(self) -> dict:
         with self._lock:
             if self._mem:
-                return dict(self._mem)
+                return copy.deepcopy(self._mem)
         try:
             return json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
