@@ -2,6 +2,9 @@
 
 SecuBox-Deb est libre, complet, sans limitation. Si vous trouvez le projet utile, voici comment vous pouvez contribuer.
 
+> 💳 **Paiement rapide par carte — [Faire un don via Revolut](https://checkout.revolut.com/pay/a5c1d404-af8c-4add-8096-a75b8655059c)**
+> Le moyen le plus simple pour un don one-shot, sans compte requis.
+
 ---
 
 ## Canaux de don
@@ -10,6 +13,7 @@ Plusieurs options sont disponibles selon vos préférences. Tous les montants so
 
 | Canal | Lien | Notes |
 |-------|------|-------|
+| **Revolut** | [Payer par carte](https://checkout.revolut.com/pay/a5c1d404-af8c-4add-8096-a75b8655059c) | Don one-shot immédiat, sans compte |
 | **Liberapay** | [liberapay.com/cybermind](https://liberapay.com/cybermind) | Dons récurrents, sans commission |
 | **GitHub Sponsors** | [github.com/sponsors/gkerma](https://github.com/sponsors/gkerma) | Intégré à GitHub |
 | **Open Collective** | [opencollective.com/secubox](https://opencollective.com/secubox) | Transparent, traçable |
