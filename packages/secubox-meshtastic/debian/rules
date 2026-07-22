@@ -4,3 +4,20 @@
 
 %:
 	dh $@
+
+# Sudoers drop-in so the panel (User=secubox) can sudo -> secubox-meshtasticctl
+# for set-mode/set-region/set-role/set-grid/set-psk/apply-egress (webui->ctl,
+# mirrors packages/secubox-profiles/debian/rules). debian/install still
+# handles the regular file listing via dh_install; this override only adds
+# the sudoers file, with the 0440 mode `install` in debian/install cannot set.
+override_dh_auto_install:
+	dh_auto_install
+	install -d debian/secubox-meshtastic/etc/sudoers.d
+	install -m 0440 sudoers.d/secubox-meshtastic debian/secubox-meshtastic/etc/sudoers.d/secubox-meshtastic
+
+# Own dedicated socket, own service (never served by the aggregator — see
+# systemd/secubox-meshtasticd.service header). dh_installsystemd's default
+# naming only auto-picks up debian/<pkgname>.service; this package's unit is
+# debian/secubox-meshtasticd.service, so it needs an explicit --name=.
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-meshtasticd

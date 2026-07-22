@@ -1,0 +1,8 @@
+api/*.py                             usr/lib/secubox/meshtastic/api/
+sbin/secubox-meshtasticd             usr/sbin/
+sbin/secubox-meshtasticctl           usr/sbin/
+www/meshtastic/*                     usr/share/secubox/www/meshtastic/
+nginx/meshtastic.conf                etc/nginx/secubox-routes.d/
+menu.d/71-meshtastic.json            usr/share/secubox/menu.d/
+conf/meshtastic.toml.example         usr/share/secubox/meshtastic/
+conf/mosquitto-secubox-meshtastic.conf usr/share/secubox/meshtastic/

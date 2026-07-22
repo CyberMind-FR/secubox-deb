@@ -1,5 +1,14 @@
 secubox-meshtastic (0.1.0-1~bookworm1) bookworm; urgency=medium
 
-  * Initial release: package scaffold + config loader (ref #897)
+  * Initial release: multi-grid Meshtastic LoRa node integration (ref #897).
+    Config loader, state model, StateCache double-cache, RadioInterface
+    (MockRadio + lazy real-serial), grid policy + nft egress allow-list,
+    host-side MQTT bridge, passive capture pipeline, daemon engine,
+    secubox-meshtasticctl (webui->ctl, sudoers), FastAPI webui backend +
+    panel, systemd unit (own socket, never aggregator-served), nginx route,
+    menu entry, private "shared_grid" mosquitto broker topology.
+  * Debian packaging finalized: install list, postinst (user creation,
+    0755-shared-parent / restricted-leaf-dir perms, default config seed,
+    enable+start), prerm, README.
 
- -- Gérald Kerma <devel@cybermind.fr>  Tue, 22 Jul 2026 00:00:00 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 22 Jul 2026 12:00:00 +0000
