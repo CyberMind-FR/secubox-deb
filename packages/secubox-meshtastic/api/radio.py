@@ -58,7 +58,13 @@ class _SerialRadio:
         topic = {"receive": "meshtastic.receive",
                  "node": "meshtastic.node.updated",
                  "connection": "meshtastic.connection.established"}[event]
-        self._pub.subscribe(lambda packet=None, interface=None, **kw: cb(packet or {}), topic)
+        if event == "receive":
+            handler = lambda packet=None, interface=None, **kw: cb(packet or {})
+        elif event == "node":
+            handler = lambda node=None, interface=None, **kw: cb(node or {})
+        else:  # "connection"
+            handler = lambda interface=None, **kw: cb(interface or {})
+        self._pub.subscribe(handler, topic)
 
     def send_text(self, text: str, channel: int = 0) -> None:
         self._iface.sendText(text, channelIndex=channel)
