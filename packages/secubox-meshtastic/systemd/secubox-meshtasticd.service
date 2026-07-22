@@ -34,7 +34,13 @@ UMask=0007
 # all. If a private scratch dir is ever needed, use
 # `RuntimeDirectory=secubox-meshtastic` (this unit's OWN dir) — never
 # `=secubox`.
-NoNewPrivileges=yes
+# false (not true): this daemon serves the /meshtastic/ webui in-process
+# (uvicorn.run(app, ...) inside daemon.main()) and its POST /mode + POST
+# /grid handlers sudo -> systemd-run -> secubox-meshtasticctl set-mode/
+# set-grid (webui->ctl, see sudoers.d/secubox-meshtastic). NNP=true would
+# neutralize sudo (setuid can't escalate). Same posture as secubox-profiles'
+# panel. The rest of the hardening below stays.
+NoNewPrivileges=no
 
 ProtectSystem=strict
 ProtectHome=yes
