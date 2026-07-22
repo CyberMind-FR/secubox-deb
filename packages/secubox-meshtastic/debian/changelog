@@ -1,3 +1,14 @@
+secubox-meshtastic (0.1.2-1~bookworm1) bookworm; urgency=high
+
+  * SECURITY/regression fix: the postinst used `install -d -o root -g root` on
+    the SHARED parents, which (a) chowned /etc/secubox to root:root — breaking
+    the auth/users engine's atomic users.json write → OTP login failed with a
+    500 (JSON.parse error), and (b) set /etc/secubox/secrets to 0755, exposing
+    all modules' secrets. Now: chmod-only (never chown) on existing shared
+    parents, create-if-absent; /etc/secubox/secrets left 0700 (never re-moded).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Jul 2026 13:30:00 +0200
+
 secubox-meshtastic (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Fix daemon crash-loop when a configured MQTT broker is down at startup

@@ -17,14 +17,20 @@ case "$1" in
         adduser secubox-meshtastic dialout >/dev/null 2>&1 || true
 
         # Shared parents MUST stay 0755 traversable-by-all (ref #511/#474 —
-        # narrowing a shared parent like /etc/secubox, /var/log/secubox or
-        # /var/cache/secubox to 0750 breaks every OTHER secubox-* daemon's
-        # access to its own leaf dir under it). Only the leaf dirs below are
-        # restricted to this module's own user.
-        install -d -o root -g root -m 0755 /etc/secubox
-        install -d -o root -g root -m 0755 /var/log/secubox
-        install -d -o root -g root -m 0755 /var/cache/secubox
-        install -d -o root -g root -m 0755 /etc/secubox/secrets
+        # narrowing one breaks every OTHER secubox-* daemon's access to its own
+        # leaf dir). But we must NEVER chown them: other daemons OWN them — e.g.
+        # /etc/secubox is secubox:secubox so the auth/users engine can atomically
+        # write users.json; chowning it to root:root breaks OTP login. So:
+        # chmod-only (mode, never owner) on an existing parent; create only if
+        # wholly absent.
+        for _d in /etc/secubox /var/log/secubox /var/cache/secubox; do
+            [ -d "$_d" ] || install -d -m 0755 "$_d"
+            chmod 0755 "$_d" 2>/dev/null || true
+        done
+        # /etc/secubox/secrets stays 0700 (core-managed, holds ALL modules'
+        # secrets — must NOT be world-traversable). Never re-mode or chown an
+        # existing one; create it (0700) only if wholly absent.
+        [ -d /etc/secubox/secrets ] || install -d -m 0700 /etc/secubox/secrets
 
         # Leaf dirs owned by secubox-meshtastic.
         install -d -o secubox-meshtastic -g secubox-meshtastic -m 0700 /etc/secubox/secrets/meshtastic
