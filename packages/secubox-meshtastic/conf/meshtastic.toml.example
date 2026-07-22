@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Example configuration for SecuBox-Deb Meshtastic module
+# Copy to /etc/secubox/meshtastic.toml and customize
+
+mode = "both"
+region = "EU_868"
+serial = "auto"
+
+[[channel]]
+name = "family"
+grid = ["off", "shared"]
+psk_secret = "family-psk"
+
+[shared_grid]
+broker = "10.10.0.1:1883"
+
+[on_grid]
+broker = "mqtt.example.org:8883"
+enabled = false
+
+[passive]
+role = "CLIENT_MUTE"
+packet_log = "/var/log/secubox/meshtastic/packets.jsonl"
