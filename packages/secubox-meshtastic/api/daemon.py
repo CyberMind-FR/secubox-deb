@@ -70,7 +70,10 @@ class _PahoAdapter:
         self._client = client
 
     def connect(self, host: str, port: int) -> None:
-        self._client.connect(host, port)
+        # connect_async (not connect): a broker that is DOWN at startup must not
+        # raise/crash the daemon — loop_start's background thread establishes and
+        # auto-reconnects the connection when the broker becomes reachable.
+        self._client.connect_async(host, port)
         self._client.loop_start()
 
     def publish(self, topic: str, payload: str) -> None:

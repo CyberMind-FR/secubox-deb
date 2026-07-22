@@ -3,10 +3,13 @@
 """SecuBox-Deb :: meshtastic — host-side serial↔MQTT bridge (grid-policy driven)."""
 from __future__ import annotations
 import json
+import logging
 from typing import Callable
 from .config import Config
 from .gridpolicy import targets_for
 from .model import Packet
+
+_log = logging.getLogger("secubox.meshtastic.bridge")
 
 
 class Bridge:
@@ -25,7 +28,15 @@ class Bridge:
             except ValueError:
                 port_num = 1883
             cli = self._factory(tgt)
-            cli.connect(host, port_num)
+            try:
+                cli.connect(host, port_num)
+            except Exception as exc:
+                # A configured broker that is DOWN at startup (e.g. the opt-in
+                # private mosquitto not yet running) must NOT crash the daemon —
+                # skip this target; it can be reconnected when the broker is up.
+                _log.warning("bridge: %s broker %s:%s unreachable at start (%s); skipping",
+                             tgt, host, port_num, exc)
+                continue
             self._clients[tgt] = cli
 
     def publish(self, channel_name: str, p: Packet) -> None:
