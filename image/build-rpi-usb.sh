@@ -135,6 +135,10 @@ INCLUDE_PKGS+=",python3-fastapi,python3-uvicorn,python3-httpx,python3-psutil"
 INCLUDE_PKGS+=",python3-aiosqlite,python3-jinja2,python3-jwt"
 INCLUDE_PKGS+=",python3-aiofiles,python3-pil,python3-tomli,python3-pydantic"
 INCLUDE_PKGS+=",python3-jose,python3-toml,python3-netifaces"
+# Auth/users engine runtime deps — WITHOUT these secubox-auth crashes at import
+# (import pyotp / import qrcode) → nginx 502 → no login. Pure-Python, apt-safe.
+# argon2 (compiled cffi) goes via the pip step below, mirroring cryptography.
+INCLUDE_PKGS+=",python3-pyotp,python3-qrcode"
 
 # Network and security tools
 INCLUDE_PKGS+=",bridge-utils,dnsutils,iputils-arping,avahi-daemon,avahi-utils"
@@ -679,7 +683,7 @@ log "Installing Python dependencies via pip..."
 chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   fastapi uvicorn[standard] python-jose[cryptography] httpx \
   jinja2 tomli toml pyroute2 psutil pydantic \
-  aiofiles aiosqlite authlib cryptography \
+  aiofiles aiosqlite authlib cryptography argon2-cffi \
   python-multipart websockets netifaces email-validator \
   2>&1 | tail -10 || true
 ok "Python dependencies installed"
