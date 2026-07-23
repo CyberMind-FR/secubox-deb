@@ -102,6 +102,13 @@ cmd_install() {
         return 1
     fi
 
+    _ensure_cert || { err "génération du certificat échouée"; return 1; }
+    _emit_nginx_config > "$LXC_PATH/$CONTAINER/rootfs/etc/nginx/sites-available/picobrew"
+    lxc_attach 'ln -sf /etc/nginx/sites-available/picobrew /etc/nginx/sites-enabled/picobrew
+                rm -f /etc/nginx/sites-enabled/default
+                nginx -t >/dev/null 2>&1 && systemctl enable --now nginx' \
+        || { err "configuration nginx invalide"; return 1; }
+
     _install_service_unit
     lxc_attach 'systemctl daemon-reload && systemctl enable --now picobrew' \
         || { err "démarrage du service picobrew échoué"; return 1; }
@@ -147,6 +154,42 @@ cmd_update() {
     echo "[picobrew] mis à jour vers $sha"
 }
 
+_emit_nginx_config() {
+    cat <<'EOF'
+# SecuBox-Deb :: PicoBrew — terminaison TLS pour la série Z.
+#
+# picobrew_pico écoute déjà en clair sur :80 — c'est le comportement upstream,
+# et c'est ce que les Pico/Zymatic attendent. nginx ne prend donc QUE le 443 :
+# le faire écouter aussi sur :80 tout en proxifiant vers 127.0.0.1:80 le ferait
+# se parler à lui-même (boucle infinie). Les appareils non-Z continuent de
+# joindre Flask directement en :80.
+server {
+    listen 443 ssl;
+    server_name picobrew.com _;
+    client_max_body_size 32m;
+    ssl_certificate     /etc/picobrew/tls/cert.pem;
+    ssl_certificate_key /etc/picobrew/tls/key.pem;
+    location / {
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+}
+EOF
+}
+
+_ensure_cert() {
+    lxc_attach 'set -e
+        mkdir -p /etc/picobrew/tls
+        [ -s /etc/picobrew/tls/cert.pem ] && exit 0
+        openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+            -subj "/CN=picobrew.com" \
+            -addext "subjectAltName=DNS:picobrew.com,DNS:*.picobrew.com" \
+            -keyout /etc/picobrew/tls/key.pem \
+            -out /etc/picobrew/tls/cert.pem >/dev/null 2>&1
+        chmod 600 /etc/picobrew/tls/key.pem'
+}
+
 usage() { echo "usage: picobrewctl {install|start|stop|status [--json]|update <sha>|logs}" >&2; }
 
 case "${1:-}" in
@@ -156,6 +199,7 @@ case "${1:-}" in
                  *)       exit 1 ;;
              esac ;;
     __emit-config) _emit_lxc_config ;;
+    __emit-nginx) _emit_nginx_config ;;
     status)  shift; cmd_status "${1:-}" ;;
     start)   cmd_start ;;
     stop)    cmd_stop ;;
