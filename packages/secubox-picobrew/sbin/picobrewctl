@@ -44,6 +44,24 @@ cmd_start() { lxc_exists || { err "not installed"; return 1; }; lxc-start -n "$C
 cmd_stop()  { lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; ! lxc_running; }
 cmd_logs()  { lxc_running || { err "container not running"; return 1; }; lxc_attach 'journalctl -u picobrew --no-pager -n 100'; }
 
+_emit_lxc_config() {
+    cat <<EOF
+lxc.include = /usr/share/lxc/config/debian.common.conf
+lxc.arch = linux64
+lxc.uts.name = $CONTAINER
+lxc.rootfs.path = dir:$LXC_PATH/$CONTAINER/rootfs
+lxc.net.0.type = veth
+lxc.net.0.link = $LXC_BRIDGE
+lxc.net.0.flags = up
+lxc.net.0.name = eth0
+lxc.net.0.ipv4.address = $LXC_IP/24
+lxc.net.0.ipv4.gateway = $LXC_GW
+lxc.start.auto = 1
+lxc.start.delay = 5
+lxc.cgroup2.memory.max = 1024M
+EOF
+}
+
 usage() { echo "usage: picobrewctl {install|start|stop|status [--json]|update <sha>|logs}" >&2; }
 
 case "${1:-}" in
@@ -52,6 +70,7 @@ case "${1:-}" in
                  session) _session_active ;;
                  *)       exit 1 ;;
              esac ;;
+    __emit-config) _emit_lxc_config ;;
     status)  shift; cmd_status "${1:-}" ;;
     start)   cmd_start ;;
     stop)    cmd_stop ;;
