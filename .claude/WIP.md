@@ -1,5 +1,38 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-21*
+*Mis à jour : 2026-07-23*
+
+---
+
+## ✅ 2026-07-23 : Image rpi400 — deps auth, `--kiosk` en CI, postinst mediaflow (branche fix/rpi400-auth-deps-and-kiosk → master)
+
+L'image Pi 400 livrait un webui sur lequel on ne pouvait **pas se connecter**, et **pas de kiosk**. Les deux causes racines trouvées, plus deux bugs de packaging latents révélés au passage.
+
+- **Login** : l'image rpi installe les debs en `dpkg -i --force-depends`, ce qui **court-circuite les Depends déclarés**. `secubox-auth`/`secubox-users` importent `argon2`/`pyotp`/`qrcode` au chargement → le daemon mourait à l'import → 502 nginx → `JSON.parse: unexpected character`. Fix : `pyotp`+`qrcode` dans `INCLUDE_PKGS`, `argon2-cffi` dans l'étape pip du chroot. **Seul le chemin force-depends est exposé** (mochabin va bien, apt y résout les Depends).
+- **Kiosk** : `--kiosk` n'était pas atteignable depuis la CI → booléen `workflow_dispatch` → `build-image.sh --kiosk` → transmis à `build-rpi-usb.sh`.
+- **Postinst mediaflow cassé sur CHAQUE install** : un commentaire contenait le token littéral `#DEBHELPER#`, que `dh_installsystemd` substitue **textuellement partout où il apparaît** → bloc systemd expansé au milieu du commentaire, `; kick one refresh` orphelin → `syntax error near ';'`. Masqué par le `|| true` de l'image, mais fatal dès que l'apt-get strict du kiosk fait une passe de configure. Bump `2.3.0-1~bookworm3`. **Règle : jamais le token debhelper dans un commentaire.**
+- **Prompts conffile** : `DEBIAN_FRONTEND=noninteractive` gouverne debconf, **pas** le prompt conffile de dpkg → `/etc/secubox/mesh.toml` préexistant faisait EOF sur stdin fermé et avortait le build. Ajout `--force-confdef/--force-confold`.
+- **Carte flashée et vérifiée** : chromium, openbox, `boot-mode=kiosk`, argon2, pyotp, mediaflow `bookworm3` — tous confirmés sur la carte (bit-exact + inspection contenu).
+
+### ⬜ Next / bloqué
+- **⚠ Le Pi n'a toujours pas de réseau** : il boote sur une console, affiche une IP mais ne pingue pas. **Piste n°1** : l'IP affichée est probablement celle du bridge isolé `eye-br0` (10.55.0.1/24, secubox-eye-remote) alors qu'`eth0` n'a jamais eu de bail DHCP → trancher avec `ip -br a; ip r` en console (root/secubox). **Piste n°2** (kiosk qui ne s'affiche pas) : `config.txt` a `gpu_mem=64` et **pas** de `dtoverlay=vc4-kms-v3d` → X n'a peut-être aucun driver d'affichage utilisable.
+- **Restaurer `cmdline.txt.bak`** sur la partition boot de la carte : j'y ai retiré `quiet splash` (+ `loglevel=7`) pour diagnostiquer.
+- Propager le fix mediaflow vers apt.secubox.in / gk2 (le bug touche toutes les installs, pas seulement l'image rpi).
+
+---
+
+## ✅ 2026-07-22 : secubox-meshtastic — nœud LoRa multi-grilles + écoute passive (#897, PR #898, v2.15.0)
+
+Nouveau module natif-hôte faisant de SecuBox un nœud Meshtastic multi-grilles. Construit en subagent-driven development (13 tâches, revue 2 étages chacune + revue opus de branche). Mergé, taggé **v2.15.0**, déployé sur gk2.
+
+- **Trois grilles composables par canal** : off-grid RF (P2P + relais), shared-grid privée via MirrorNet/WireGuard, on-grid MQTT public opt-in — toutes **bridgées côté hôte**, donc le daemon (et non le firmware) maîtrise l'egress, le WAF et la politique.
+- **Écoute passive CLIENT_MUTE** : journal de paquets, recensement des nœuds entendus, stats de canal ; payload retenu si non déchiffré.
+- **Webui** `admin.gk2/meshtastic/` (5 onglets, carte canvas offline-clean) ; API `/api/v1/meshtastic/*` sous JWT.
+- **Bloqué matériel (#897)** : pas encore de radio → `radio: absent` géré proprement ; 61 tests 100 % mock. RAK4631 WisBlock EU868 recommandé.
+- **Trois bugs de déploiement trouvés en live** : broker injoignable faisait crash-looper le daemon (0.1.1) ; **le postinst chownait `/etc/secubox` en root:root et cassait le login OTP** (0.1.2 — chmod uniquement, *jamais* chown les parents partagés) ; socket UDS obsolète bloquait le restart (0.1.3).
+
+### ⬜ Next
+- **Différé** : l'egress on-grid n'est pas réellement contenu (OUTPUT en `policy accept` à l'échelle du dépôt) → approche à base de DROP nécessaire ; réconcilier le port broker par défaut (8883 vs 1883). Voir spec §11.
+- Validation RF réelle EU868 à l'arrivée du matériel (#897).
 
 ---
 
