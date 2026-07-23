@@ -77,6 +77,7 @@ while [[ $# -gt 0 ]]; do
     --local-cache) USE_LOCAL_CACHE=1;  shift   ;;
     --slipstream)  SLIPSTREAM_DEBS=1;  shift   ;;
     --keep-rootfs) KEEP_ROOTFS=1;      shift   ;;
+    --kiosk)       INCLUDE_KIOSK=1;    shift   ;;
     --help|-h)     usage ;;
     *) err "Argument inconnu: $1" ;;
   esac
@@ -95,7 +96,8 @@ source "${BOARD_DIR}/config.mk" 2>/dev/null || true
 if [[ "${USE_RPI_SCRIPT:-0}" == "1" ]] || [[ "$BOARD" == "rpi400" ]] || [[ "$BOARD" == "rpi4" ]]; then
   log "Raspberry Pi board detected - using build-rpi-usb.sh"
   RPI_ARGS="--out ${OUT_DIR}"
-  [[ $SLIPSTREAM_DEBS -eq 1 ]] && RPI_ARGS="$RPI_ARGS --slipstream"
+  [[ ${SLIPSTREAM_DEBS:-0} -eq 1 ]] && RPI_ARGS="$RPI_ARGS --slipstream"
+  [[ ${INCLUDE_KIOSK:-0} -eq 1 ]] && RPI_ARGS="$RPI_ARGS --kiosk"
   exec bash "${SCRIPT_DIR}/build-rpi-usb.sh" $RPI_ARGS
 fi
 

@@ -14,8 +14,10 @@ case "$1" in
     systemctl start  secubox-mediaflow.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
-    # R4 cloner (#736): the .timer is enabled via #DEBHELPER#; kick one refresh
-    # now so yt-dlp is current on first install (best-effort, never fails).
+    # R4 cloner (#736): the .timer is enabled by the dh_installsystemd block
+    # below; kick one refresh now so yt-dlp is current on first install
+    # (best-effort, never fails). NB: never write the debhelper token in a
+    # comment — dh substitutes it textually and orphans the rest of the line.
     systemctl start secubox-yt-dlp-refresh.service 2>/dev/null || true
     ;;
 esac
