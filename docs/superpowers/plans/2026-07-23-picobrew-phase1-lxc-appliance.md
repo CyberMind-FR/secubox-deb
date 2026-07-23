@@ -774,13 +774,14 @@ def test_nginx_terminates_tls_on_443():
     assert "ssl_certificate" in cfg and "ssl_certificate_key" in cfg
 
 def test_nginx_proxies_to_the_local_flask_app():
-    """Flask reste en clair en loopback : il ne doit jamais être exposé nu."""
     cfg = _emit()
     assert "proxy_pass http://127.0.0.1:80" in cfg
 
-def test_plain_http_stays_available_for_non_z_devices():
-    """Pico/Zymatic parlent en clair : couper :80 les briquerait."""
-    assert "listen 80" in _emit()
+def test_nginx_does_not_bind_80_which_would_loop_onto_itself():
+    """Flask occupe déjà :80 (comportement upstream attendu par Pico/Zymatic).
+    Faire écouter nginx sur :80 tout en proxifiant vers 127.0.0.1:80 le ferait
+    se parler à lui-même — boucle infinie. nginx ne prend QUE le 443."""
+    assert "listen 80" not in _emit()
 ```
 
 - [ ] **Step 2 : lancer, vérifier l'échec**
@@ -796,17 +797,12 @@ Ajouter avant `usage()` dans `sbin/picobrewctl` :
 _emit_nginx_config() {
     cat <<'EOF'
 # SecuBox-Deb :: PicoBrew — terminaison TLS pour la série Z.
-# Flask écoute en clair sur 127.0.0.1:80 et n'est jamais exposé directement.
-server {
-    listen 80;
-    server_name picobrew.com _;
-    client_max_body_size 32m;
-    location / {
-        proxy_pass http://127.0.0.1:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $remote_addr;
-    }
-}
+#
+# picobrew_pico écoute déjà en clair sur :80 — c'est le comportement upstream,
+# et c'est ce que les Pico/Zymatic attendent. nginx ne prend donc QUE le 443 :
+# le faire écouter aussi sur :80 tout en proxifiant vers 127.0.0.1:80 le ferait
+# se parler à lui-même (boucle infinie). Les appareils non-Z continuent de
+# joindre Flask directement en :80.
 server {
     listen 443 ssl;
     server_name picobrew.com _;
