@@ -11,21 +11,29 @@
            padding:.45rem .9rem; margin-right:.5rem; cursor:pointer; }
   button:hover { border-color:#00d4ff; }
   .warn { color:#c9a84c; font-size:.82rem; margin-top:1rem; }
+  .err { color:#e63946; font-size:.82rem; margin-top:.6rem; }
+  a.device-link { display:inline-block; margin-top:1rem; color:#00d4ff; }
 </style>
 <h1>🍺 PicoBrew</h1>
 <div id="state"><div class="kv"><span class="k">chargement…</span></div></div>
+<div id="device-link"></div>
 <div style="margin-top:1rem">
   <button onclick="act('start')">Démarrer</button>
   <button onclick="act('stop')">Arrêter</button>
   <button onclick="load()">Rafraîchir</button>
 </div>
 <div class="warn" id="warn"></div>
+<div class="err" id="err"></div>
 <script>
 const API = '/api/v1/picobrew';
 async function load() {
   const el = document.getElementById('state');
+  const linkEl = document.getElementById('device-link');
+  const errEl = document.getElementById('err');
   try {
-    const d = await (await fetch(API + '/status', {credentials:'same-origin'})).json();
+    const resp = await fetch(API + '/status', {credentials:'same-origin'});
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const d = await resp.json();
     const b = (x) => x ? '<span class="on">oui</span>' : '<span class="off">non</span>';
     el.innerHTML =
       `<div class="kv"><span class="k">Conteneur installé</span><span class="v">${b(d.installed)}</span></div>` +
@@ -36,10 +44,28 @@ async function load() {
     document.getElementById('warn').textContent = d.session_active
       ? 'Session active : les mises à jour sont refusées tant qu\'elle dure.'
       : (d.error || '');
-  } catch (e) { el.innerHTML = '<div class="kv"><span class="k off">panel injoignable</span></div>'; }
+    // Le lien vers l'interface PicoBrew elle-même n'a de sens que si le
+    // conteneur tourne réellement — sinon il ne mènerait nulle part.
+    linkEl.innerHTML = (d.running && d.ip)
+      ? `<a class="device-link" href="https://${d.ip}/" target="_blank" rel="noopener">→ Ouvrir l'interface PicoBrew (${d.ip})</a>`
+      : '';
+    errEl.textContent = '';
+  } catch (e) {
+    el.innerHTML = '<div class="kv"><span class="k off">panel injoignable</span></div>';
+    linkEl.innerHTML = '';
+    errEl.textContent = 'Erreur de chargement : ' + e.message;
+  }
 }
 async function act(a) {
-  await fetch(API + '/' + a, {method:'POST', credentials:'same-origin'});
+  const errEl = document.getElementById('err');
+  try {
+    const resp = await fetch(API + '/' + a, {method:'POST', credentials:'same-origin'});
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const d = await resp.json();
+    errEl.textContent = d.ok === false ? `Action "${a}" refusée par picobrewctl.` : '';
+  } catch (e) {
+    errEl.textContent = `Action "${a}" échouée : ` + e.message;
+  }
   setTimeout(load, 1200);
 }
 load();

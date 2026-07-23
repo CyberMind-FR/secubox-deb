@@ -32,7 +32,7 @@ def _ctl(args: list[str], timeout: int = 20) -> tuple[int, str]:
 
 
 @router.get("/status")
-async def status() -> dict:
+def status() -> dict:
     rc, out = _ctl(["status", "--json"])
     if rc != 0 or not out:
         return {"installed": False, "running": False, "ip": "", "pinned_sha": "none",
@@ -45,13 +45,13 @@ async def status() -> dict:
 
 
 @router.post("/start")
-async def start() -> dict:
+def start() -> dict:
     rc, _ = _ctl(["start"])
     return {"ok": rc == 0}
 
 
 @router.post("/stop")
-async def stop() -> dict:
+def stop() -> dict:
     rc, _ = _ctl(["stop"])
     return {"ok": rc == 0}
 

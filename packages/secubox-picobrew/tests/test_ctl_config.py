@@ -12,7 +12,7 @@ def _emit() -> str:
 def test_config_pins_the_allocated_ip_and_bridge():
     """Une IP erronée ici = conteneur injoignable, sans erreur visible."""
     cfg = _emit()
-    assert "lxc.net.0.ipv4.address = 10.100.0.140/24" in cfg
+    assert "lxc.net.0.ipv4.address = 10.100.0.150/24" in cfg
     assert "lxc.net.0.ipv4.gateway = 10.100.0.1" in cfg
     assert "lxc.net.0.link = br-lxc" in cfg
 

@@ -27,7 +27,11 @@ case "$1" in
     install -d -m 755 /etc/secubox
     # Enable and start service
     systemctl daemon-reload
-    systemctl enable secubox-picobrew.service
+    # Une unit masquée (ex: héritée d'une install précédente) ferait échouer
+    # `enable` avec `set -e` actif et laisserait le paquet en état `iF`.
+    # Démasquer explicitement, puis tolérer l'échec comme pour `start`.
+    systemctl unmask secubox-picobrew.service 2>/dev/null || true
+    systemctl enable secubox-picobrew.service || true
     systemctl start  secubox-picobrew.service || true
     # Reload nginx to pick up new location
     systemctl reload nginx 2>/dev/null || true
