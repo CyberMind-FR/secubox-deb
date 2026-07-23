@@ -1,5 +1,36 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-07-13*
+*Mis à jour : 2026-07-23*
+
+---
+
+## 🖥️ Afficheurs & appliances (en pause, 2026-07-23)
+
+> Trois sujets suspendus explicitement par l'utilisateur. Contexte complet : HISTORY/WIP 07-22→23.
+
+- [ ] **rpi400 — pas de réseau** (bloquant). L'image kiosk boote sur une console mais n'a pas de
+  réseau utilisable : IP affichée, aucun ping. **Piste n°1** : l'IP visible est probablement celle
+  du bridge isolé `eye-br0` (10.55.0.1/24, `secubox-eye-remote`) alors qu'`eth0` n'a jamais obtenu
+  de bail DHCP — trancher en console (root/secubox) avec `ip -br a; ip r`. `10-eth.network` est
+  pourtant correct (`Match eth* en*`, `DHCP=yes`, non bridgé). **Piste n°2** (kiosk qui ne
+  s'affiche pas) : `config.txt` porte `gpu_mem=64` et **aucun** `dtoverlay=vc4-kms-v3d` → X n'a
+  peut-être pas de driver d'affichage exploitable.
+- [ ] **rpi400 — restaurer `cmdline.txt.bak`** sur la partition boot de la carte (j'y ai retiré
+  `quiet splash` et ajouté `loglevel=7` pour diagnostiquer). À faire avant toute mise en service.
+- [ ] **Propager le fix postinst mediaflow** (`#DEBHELPER#` dans un commentaire, `~bookworm3`) vers
+  apt.secubox.in et gk2 : le bug cassait le `configure` de **toutes** les installs, pas seulement
+  l'image rpi.
+- [ ] **Round eye gadget — à reflasher** (« bugge dernièrement »). ⚠ Ne pas reflasher à l'aveugle :
+  identifier d'abord le symptôme (écran figé ? plus de données ? gadget USB non détecté ? boucle de
+  reboot ?), sinon on re-livre proprement le même défaut — leçon du rpi400. Outillage :
+  `remote-ui/round/build-eye-remote-image.sh`, `deploy.sh`, CI `.github/workflows/build-eye-remote.yml`.
+- [ ] **Console double écran carré (Pepper's ghost)** — brainstorming suspendu au choix des dalles.
+  **Acté** : 2 écrans = 2 couches de *profondeur* (pas maître/détail) ; composition optique par
+  demi-miroir 45° ; rôle = console de contrôle SecuBox (fond = santé globale, avant = module en
+  focus + actions) ; commande **au geste sans contact** (ToF/IR) car aucun écran n'est touchable en
+  Pepper's ghost. **Contrainte de design à honorer** : les actions destructives (restart/ban)
+  exigent une confirmation explicite, le capteur étant imprécis. **Point de reprise** : échelle des
+  dalles + SBC (l'utilisateur penche « small » ; ⚠ le demi-miroir divise la luminosité par ~2, ce
+  qui est le critère décisif contre du petit SPI).
 
 ---
 

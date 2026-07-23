@@ -3,6 +3,32 @@
 
 ---
 
+## 2026-07-23 — rpi400 image: auth runtime deps, `--kiosk` in CI, and a postinst bug that broke every install (branch fix/rpi400-auth-deps-and-kiosk)
+
+The Pi 400 image shipped a webui nobody could log into, and no kiosk. Both root-caused; two latent packaging bugs surfaced along the way.
+
+- **Login (root cause)**: the rpi image installs SecuBox debs with `dpkg -i --force-depends`, which **bypasses declared Depends**. `secubox-auth`/`secubox-users` import `argon2`/`pyotp`/`qrcode` at module load, so the daemon died at import → nginx 502 → `JSON.parse: unexpected character` at login. Fix: `pyotp`+`qrcode` into `INCLUDE_PKGS`, `argon2-cffi` into the chroot pip step (mirroring why `cryptography` is pip-not-apt here — apt configure fails under QEMU). Works on mochabin because normal apt resolves Depends; **only the force-depends path is exposed**.
+- **Kiosk**: `--kiosk` was never reachable from CI. Added a `kiosk` workflow_dispatch boolean → `build-image.sh --kiosk` → forwarded to `build-rpi-usb.sh`.
+- **mediaflow postinst syntax error — affected EVERY install**: a comment contained the literal `#DEBHELPER#` token. `dh_installsystemd` substitutes that token **textually wherever it appears**, expanding the systemd block mid-comment and orphaning `; kick one refresh` onto its own line → `syntax error near ';'`. Silently swallowed by the image's `|| true`, but fatal once the kiosk apt-get ran a strict configure pass. Reworded; bumped to `2.3.0-1~bookworm3`. **Rule: never write the debhelper token in a comment.**
+- **Conffile prompts**: the kiosk apt-get trusted `DEBIAN_FRONTEND=noninteractive`, which governs debconf and **not** dpkg's conffile prompt — a pre-existing `/etc/secubox/mesh.toml` EOF'd on the closed chroot stdin and aborted the build. Added `--force-confdef/--force-confold`.
+- **Two ops traps that each cost a wasted flash**: `gh run download --dir DIR` **skips files that already exist**, so a stale `.img.gz` in the target dir is silently kept (kiosk img.gz ≈ 2.1 GB vs non-kiosk ≈ 664 MB — check the size). And right after `dd`-ing a card, mounting it returns **stale page-cache reads from the previous filesystem**; the raw `dd` bit-verify is trustworthy, mounted-fs reads are not — loop-mount the source `.img` or extract the `.deb` instead.
+- **Status**: image rebuilt with kiosk, flashed and bit-verified; chromium, openbox, `boot-mode=kiosk`, argon2, pyotp and mediaflow `bookworm3` all confirmed on the card. **The Pi still has no working network** (boots to console, shows an IP but no ping) — parked, see TODO.
+
+## 2026-07-22 — secubox-meshtastic: multi-grid LoRa node + passive listener (#897, PR #898, v2.15.0)
+
+New native-host module turning SecuBox into a multi-grid Meshtastic node. Built with subagent-driven development (13 tasks, each two-stage reviewed, plus a whole-branch opus review). Merged, tagged **v2.15.0**, deployed to gk2.
+
+- **Three composable grids per channel**: off-grid RF (P2P + relay), private shared-grid over MirrorNet/WireGuard, and opt-in public on-grid MQTT — all **bridged host-side**, so the daemon (not the device firmware) owns egress, WAF and policy.
+- **Passive CLIENT_MUTE listener**: packet log, heard-node census, channel stats; payload withheld when not decrypted.
+- **Webui** `admin.gk2/meshtastic/` (5 tabs, offline-clean canvas map); API `/api/v1/meshtastic/{status,nodes,messages,packets}` + POST `{send,mode,grid}`, JWT-gated.
+- **Hardware-gated (#897)**: no radio yet → daemon runs `radio: absent` gracefully; 61 tests are 100 % mock-driven (MockRadio/FakeMqtt). RAK4631 WisBlock EU868 recommended.
+- **Three deploy bugs caught live**: 0.1.1 daemon crash-looped against an unreachable broker (→ `connect_async` + skip-on-unreachable); **0.1.2 postinst chowned `/etc/secubox` to root:root and broke OTP login** (→ chmod-only, *never* chown shared parents); 0.1.3 a stale UDS blocked restart (→ `ExecStartPre=+/bin/rm`).
+- **Deferred**: on-grid egress isn't actually contained (OUTPUT is `policy accept` repo-wide) — needs a drop-based approach; reconcile broker default port (8883 vs 1883). See spec §11.
+
+## 2026-07-22 — Wiki Support: Revolut payment link + trimmed donation channels
+
+Added a Revolut card-payment callout at the top of the Support page (plus a table row), then trimmed the channels to **Revolut / Liberapay / GitHub Sponsors** — Open Collective, Stripe, SEPA, Bitcoin and Lightning removed, along with the now-orphaned "sur demande" contact note. Published to the live `.wiki` repo and mirrored in `wiki/Support.md`.
+
 ## 2026-07-21 — Scale-to-zero for public services (#896) + two-phase wake UX (branch feat/scale-to-zero-public-services)
 
 Public on-demand services now **sleep when idle and wake on access**, with a per-module lifecycle policy, and a graceful two-phase "waking" UX. Culmination of a multi-day effort (also folds in #893 profiles-actuation robustness).
