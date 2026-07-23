@@ -37,8 +37,16 @@ case "$1" in
     systemctl reload nginx 2>/dev/null || true
     # Le drop-in DNS est actif par défaut : le cloud PicoBrew est éteint
     # depuis 2020, la réécriture locale ne peut donc rien casser.
-    if command -v unbound-checkconf >/dev/null 2>&1; then
-        unbound-checkconf >/dev/null 2>&1 && systemctl reload unbound 2>/dev/null || true
+    # NB: `systemctl reload unbound` (SIGHUP) NE recharge PAS les local-zone —
+    # seul `unbound-control reload` (ou un restart) applique le drop-in. On
+    # préfère unbound-control quand il est configuré, sinon on retombe sur un
+    # try-restart, sinon un reload en dernier recours (best-effort, jamais fatal).
+    if command -v unbound-checkconf >/dev/null 2>&1 && unbound-checkconf >/dev/null 2>&1; then
+        if command -v unbound-control >/dev/null 2>&1 && unbound-control status >/dev/null 2>&1; then
+            unbound-control reload >/dev/null 2>&1 || true
+        else
+            systemctl try-restart unbound 2>/dev/null || systemctl reload unbound 2>/dev/null || true
+        fi
     fi
     ;;
 esac
