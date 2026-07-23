@@ -66,6 +66,36 @@ NEVER_LEARN = _NEVER_LEARN_SEED | {
 def _never_learn(host: str) -> bool:
     h = (host or "").lower().strip(".")
     return bool(h) and (h in NEVER_LEARN or (registrable(h) or h) in NEVER_LEARN)
+
+# NEVER-SPLICE guard: ad/tracker networks must stay MITM'd, never passthrough.
+# Splicing is the exact opposite of what the #662 ad auto-learn loop needs: the
+# candidate feed only fires on the allow/mitm path ("never the block 204 /
+# splice paths"), so a spliced ad network can never be observed and the loop
+# silently starves. Ad endpoints serve no HTML and are high-traffic, so they
+# match the splice heuristic (hits >= SPLICE_MIN_HITS AND html_hits == 0)
+# perfectly — which is how they ended up in splice-learned.txt and froze ad
+# learning for 9 days. Checked against the host AND its registrable.
+_NEVER_SPLICE_SEED = {
+    "doubleclick.net", "googlesyndication.com", "googletagmanager.com",
+    "googletagservices.com", "google-analytics.com", "googleadservices.com",
+    "adform.net", "amazon-adsystem.com", "rubiconproject.com", "indexww.com",
+    "smartadserver.com", "socdm.com", "spot.im", "fwmrm.net", "criteo.com",
+    "criteo.net", "pubmatic.com", "openx.net", "taboola.com", "outbrain.com",
+    "adnxs.com", "adsrvr.org", "casalemedia.com", "sitescout.com", "lijit.com",
+    "permutive.com", "amplitude.com", "segment.io", "segment.com", "mixpanel.com",
+    "scorecardresearch.com", "quantserve.com", "hotjar.com", "branch.io",
+    "appsflyer.com", "adjust.com", "bytedance.com", "byteintlapi.com",
+    "tiktokv.eu", "tiktokv.com", "digiteka.com", "sharethrough.com", "teads.tv",
+}
+NEVER_SPLICE = _NEVER_SPLICE_SEED | {
+    d.strip().lower()
+    for d in os.environ.get("SECUBOX_NEVER_SPLICE", "").split(",") if d.strip()
+}
+
+
+def _never_splice(host: str) -> bool:
+    h = (host or "").lower().strip(".")
+    return bool(h) and (h in NEVER_SPLICE or (registrable(h) or h) in NEVER_SPLICE)
 COOKIE_XSITE_TOP_N = int(os.environ.get("SECUBOX_COOKIE_XSITE_TOP_N", "5"))
 
 sys.path.insert(0, os.environ.get("SECUBOX_TOOLBOX_LIB", "/usr/lib/secubox/toolbox"))
@@ -152,7 +182,8 @@ def _splice_feed() -> int:
     except Exception as e:
         sys.stderr.write(f"autolearn: splice query failed: {e}\n")
         return -1
-    hosts = sorted({(r[0] or "").lower().strip(".") for r in rows if r[0]})[:SPLICE_MAX]
+    hosts = sorted({(r[0] or "").lower().strip(".") for r in rows if r[0]
+                    and not _never_splice(r[0])})[:SPLICE_MAX]
     try:
         os.makedirs(os.path.dirname(SPLICE_LEARNED_OUT), exist_ok=True)
         tmp = SPLICE_LEARNED_OUT + ".tmp"

@@ -1,3 +1,16 @@
+secubox-toolbox (2.8.6-1~bookworm2) bookworm; urgency=medium
+
+  * autolearn: NEVER-SPLICE guard so ad/tracker networks are never promoted to
+    passthrough. Splicing is the opposite of what the #662 ad auto-learn loop
+    needs — the candidate feed only fires on the allow/mitm path, so a spliced
+    ad network can never be observed and the loop silently starves. Ad endpoints
+    serve no HTML and are high-traffic, matching the splice heuristic perfectly,
+    which is how the regies reached splice-learned.txt and froze ad learning for
+    9 days. Seeded with the major ad/analytics networks, extensible via
+    SECUBOX_NEVER_SPLICE (mirrors the #685 NEVER_LEARN pattern).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 23 Jul 2026 13:05:00 +0200
+
 secubox-toolbox (2.8.5-1~bookworm2) bookworm; urgency=medium
 
   * #ads: surface the ad-candidate BACKLOG when the window is empty. ad_candidates
