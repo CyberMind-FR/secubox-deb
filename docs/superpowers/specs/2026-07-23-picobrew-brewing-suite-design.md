@@ -27,7 +27,8 @@ Les deux ne partagent que le nom. Ce design réaligne le paquet Debian sur son i
 ### Faits d'environnement
 
 - LXC existants sur gk2 ; motif des appliances en `10.100.0.1x0` (lyrion .100, mqtt .110,
-  peertube .120, photoprism .130) → **`10.100.0.140` libre et cohérent** pour picobrew.
+  peertube .120, photoprism .130, frigate .140 — vérifié : `/data/lxc/frigate/config`)
+  → **`10.100.0.150` libre et cohérente** pour picobrew.
 - Upstream retenu : **`chiefwigms/picobrew_pico`** (Flask, actif 05/2026, 155 ★) — couvre
   **Pico S/C/Pro, Z Series, Zymatic**. Le fork `CyberMind-FR/picobrew-server` est écarté : Zymatic
   uniquement, dernier commit 01/2026.
@@ -55,7 +56,7 @@ Les deux ne partagent que le nom. Ce design réaligne le paquet Debian sur son i
 ## Architecture
 
 ```text
-Appareil PicoBrew ──"picobrew.com"──► Unbound ──► LXC picobrew (10.100.0.140)
+Appareil PicoBrew ──"picobrew.com"──► Unbound ──► LXC picobrew (10.100.0.150)
                                    (drop-in actif)   │
                                                      ├─ picobrew_pico  : l'appareil (Flask + TLS série Z)
                                                      ├─ CraftBeerPi 4  : fermentation (recettes, relais)
@@ -76,7 +77,7 @@ sudoers à commande exacte (règle du dépôt : panel non privilégié → ctl r
 | `api/main.py` | **Réécrit** : API de gestion fine, délègue au ctl ; expose l'état agrégé |
 | `www/picobrew/index.html` | Panel : état des 3 services, actions, capteurs, coupes |
 | `nginx/picobrew.conf` | Reverse-proxy du panel + vhosts vers les UI tierces |
-| `conf/unbound-picobrew.conf` | Drop-in DNS `picobrew.com` → `10.100.0.140` (actif par défaut) |
+| `conf/unbound-picobrew.conf` | Drop-in DNS `picobrew.com` → `10.100.0.150` (actif par défaut) |
 | `sudoers.d/secubox-picobrew` | Grant exact panel → `picobrewctl` |
 
 ### `sbx-stillwatch` — la seule brique que nous écrivons

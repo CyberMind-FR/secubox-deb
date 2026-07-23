@@ -4,7 +4,7 @@
 
 **Goal :** faire revivre un appareil PicoBrew dont le cloud constructeur est éteint, via un LXC Debian hébergeant `picobrew_pico`, piloté par un ctl root audité et un panel SecuBox.
 
-**Architecture :** un LXC Debian (`picobrew`, `10.100.0.140`) provisionné par `picobrewctl` (debootstrap + venv Python + unit systemd interne). Un drop-in Unbound réécrit `picobrew.com` vers ce LXC. Le panel non privilégié délègue toute action root à `picobrewctl` via un sudoers à commande exacte.
+**Architecture :** un LXC Debian (`picobrew`, `10.100.0.150`) provisionné par `picobrewctl` (debootstrap + venv Python + unit systemd interne). Un drop-in Unbound réécrit `picobrew.com` vers ce LXC. Le panel non privilégié délègue toute action root à `picobrewctl` via un sudoers à commande exacte.
 
 **Tech Stack :** Bash (ctl), Python 3.11 + FastAPI (API de gestion), LXC + debootstrap bookworm, Unbound, nginx, pytest.
 
@@ -12,11 +12,11 @@
 
 ## Global Constraints
 
-- Conteneur `picobrew`, IP `10.100.0.140/24`, `LXC_PATH=/data/lxc`, bridge `br-lxc`, passerelle `10.100.0.1`.
+- Conteneur `picobrew`, IP `10.100.0.150/24`, `LXC_PATH=/data/lxc`, bridge `br-lxc`, passerelle `10.100.0.1`.
 - Upstream : `https://github.com/chiefwigms/picobrew_pico` — cloné **latest à l'installation**, puis **SHA figé** dans `/var/lib/secubox/picobrew/pinned-sha`.
 - **Aucune mise à jour implicite.** `update` est explicite et **refusé si une session est active**.
 - **Natif, jamais Docker** : venv Python + unit systemd dans le LXC.
-- Drop-in DNS `picobrew.com` → `10.100.0.140` **actif par défaut**.
+- Drop-in DNS `picobrew.com` → `10.100.0.150` **actif par défaut**.
 - Le panel n'exécute **jamais** d'action privilégiée : tout passe par `sudo /usr/sbin/picobrewctl`.
 - **Ne JAMAIS chown les parents partagés** : `/run/secubox` reste `1777 root:root`, `/etc/secubox` et `/var/log/secubox` restent `0755`. Créer un sous-répertoire dédié, jamais toucher le parent.
 - Tout script shell : `set -uo pipefail` (pas `-e` : il masque les codes de retour des helpers LXC).
@@ -94,7 +94,7 @@ set -uo pipefail
 readonly CONTAINER="picobrew"
 readonly LXC_PATH="/data/lxc"
 readonly LXC_BRIDGE="br-lxc"
-readonly LXC_IP="10.100.0.140"
+readonly LXC_IP="10.100.0.150"
 readonly LXC_GW="10.100.0.1"
 readonly STATE_DIR="/var/lib/secubox/picobrew"
 readonly PIN_FILE="$STATE_DIR/pinned-sha"
@@ -195,14 +195,14 @@ client = TestClient(app)
 
 def test_status_reflects_ctl_output():
     """L'API ne devine rien : elle relaie le verdict du ctl."""
-    payload = json.dumps({"installed": True, "running": False, "ip": "10.100.0.140",
+    payload = json.dumps({"installed": True, "running": False, "ip": "10.100.0.150",
                           "pinned_sha": "0123456789abcdef0123456789abcdef01234567",
                           "session_active": False})
     with patch("api.main._ctl", return_value=(0, payload)):
         r = client.get("/status")
     assert r.status_code == 200
     assert r.json()["installed"] is True and r.json()["running"] is False
-    assert r.json()["ip"] == "10.100.0.140"
+    assert r.json()["ip"] == "10.100.0.150"
 
 def test_status_degrades_cleanly_when_ctl_fails():
     """Un ctl indisponible ne doit pas 500 le panel : état inconnu, pas de crash."""
@@ -335,7 +335,7 @@ def _emit() -> str:
 def test_config_pins_the_allocated_ip_and_bridge():
     """Une IP erronée ici = conteneur injoignable, sans erreur visible."""
     cfg = _emit()
-    assert "lxc.net.0.ipv4.address = 10.100.0.140/24" in cfg
+    assert "lxc.net.0.ipv4.address = 10.100.0.150/24" in cfg
     assert "lxc.net.0.ipv4.gateway = 10.100.0.1" in cfg
     assert "lxc.net.0.link = br-lxc" in cfg
 
@@ -626,7 +626,7 @@ CONF = Path(__file__).resolve().parents[1] / "conf" / "unbound-picobrew.conf"
 def test_dropin_redirects_picobrew_com_to_the_lxc():
     t = CONF.read_text()
     assert "local-zone:" in t and '"picobrew.com."' in t
-    assert "10.100.0.140" in t
+    assert "10.100.0.150" in t
 
 def test_dropin_is_scoped_to_picobrew_only():
     """Une zone trop large casserait d'autres résolutions."""
@@ -653,7 +653,7 @@ Expected: FAIL — `FileNotFoundError`.
 # Portée volontairement étroite : SEULE picobrew.com est redirigée.
 server:
     local-zone: "picobrew.com." redirect
-    local-data: "picobrew.com. IN A 10.100.0.140"
+    local-data: "picobrew.com. IN A 10.100.0.150"
 ```
 
 - [ ] **Step 4 : relancer**
@@ -774,13 +774,14 @@ def test_nginx_terminates_tls_on_443():
     assert "ssl_certificate" in cfg and "ssl_certificate_key" in cfg
 
 def test_nginx_proxies_to_the_local_flask_app():
-    """Flask reste en clair en loopback : il ne doit jamais être exposé nu."""
     cfg = _emit()
     assert "proxy_pass http://127.0.0.1:80" in cfg
 
-def test_plain_http_stays_available_for_non_z_devices():
-    """Pico/Zymatic parlent en clair : couper :80 les briquerait."""
-    assert "listen 80" in _emit()
+def test_nginx_does_not_bind_80_which_would_loop_onto_itself():
+    """Flask occupe déjà :80 (comportement upstream attendu par Pico/Zymatic).
+    Faire écouter nginx sur :80 tout en proxifiant vers 127.0.0.1:80 le ferait
+    se parler à lui-même — boucle infinie. nginx ne prend QUE le 443."""
+    assert "listen 80" not in _emit()
 ```
 
 - [ ] **Step 2 : lancer, vérifier l'échec**
@@ -796,17 +797,12 @@ Ajouter avant `usage()` dans `sbin/picobrewctl` :
 _emit_nginx_config() {
     cat <<'EOF'
 # SecuBox-Deb :: PicoBrew — terminaison TLS pour la série Z.
-# Flask écoute en clair sur 127.0.0.1:80 et n'est jamais exposé directement.
-server {
-    listen 80;
-    server_name picobrew.com _;
-    client_max_body_size 32m;
-    location / {
-        proxy_pass http://127.0.0.1:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $remote_addr;
-    }
-}
+#
+# picobrew_pico écoute déjà en clair sur :80 — c'est le comportement upstream,
+# et c'est ce que les Pico/Zymatic attendent. nginx ne prend donc QUE le 443 :
+# le faire écouter aussi sur :80 tout en proxifiant vers 127.0.0.1:80 le ferait
+# se parler à lui-même (boucle infinie). Les appareils non-Z continuent de
+# joindre Flask directement en :80.
 server {
     listen 443 ssl;
     server_name picobrew.com _;
@@ -1004,12 +1000,23 @@ Le provisionnement réel n'est pas testable en unitaire. Après déploiement :
 ```bash
 sudo picobrewctl install          # debootstrap + clone + venv + service
 sudo picobrewctl status --json    # installed:true, running:true, pinned_sha renseigné
-dig +short picobrew.com @127.0.0.1   # doit répondre 10.100.0.140
-curl -s -o /dev/null -w '%{http_code}\n' http://10.100.0.140/   # attendu : 200
+dig +short picobrew.com @127.0.0.1   # doit répondre 10.100.0.150
+curl -s -o /dev/null -w '%{http_code}\n' http://10.100.0.150/   # attendu : 200
 ```
 
 Puis mettre l'appareil PicoBrew sous tension et vérifier qu'il s'enregistre dans les journaux :
 `sudo picobrewctl logs`.
+
+**Chemin réseau appareil → LXC :** l'appareil PicoBrew est sur le LAN, le
+conteneur sur `br-lxc` (`10.100.0.0/24`) derrière une politique nftables
+DEFAULT DROP. Le forwarding LAN → `br-lxc` (et le NAT/routage éventuel entre
+les deux) doit être vérifié explicitement avant de brancher l'appareil réel —
+si ce forwarding n'est pas ouvert, l'appareil ne pourra jamais joindre le
+LXC même si `curl` en local (depuis le board) répond 200. **Le premier test
+avec l'appareil réel est donc AUSSI le premier test de ce chemin réseau**,
+pas seulement du serveur picobrew_pico : ne pas conclure à un problème
+applicatif avant d'avoir confirmé le forwarding (`nft list ruleset | grep -i
+br-lxc`, ou un test depuis une machine du LAN vers `10.100.0.150`).
 
 ## Hors périmètre de cette phase
 

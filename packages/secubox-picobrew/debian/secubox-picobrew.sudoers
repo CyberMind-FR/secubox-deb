@@ -1,0 +1,3 @@
+# Le panel (utilisateur secubox) pilote le LXC PicoBrew via picobrewctl.
+# C'est la SEULE surface privilégiée du module.
+secubox ALL=(root) NOPASSWD: /usr/sbin/picobrewctl
