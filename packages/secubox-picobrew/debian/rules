@@ -3,21 +3,25 @@
 	dh $@
 
 override_dh_auto_install:
-	# API files (to /usr/share/secubox/picobrew for service WorkingDirectory)
 	install -d debian/secubox-picobrew/usr/share/secubox/picobrew/
 	cp -r api debian/secubox-picobrew/usr/share/secubox/picobrew/
-	# Static www files
 	install -d debian/secubox-picobrew/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-picobrew/usr/share/secubox/www/ || true
-	# Menu definitions
 	install -d debian/secubox-picobrew/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-picobrew/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
 	install -d debian/secubox-picobrew/etc/nginx/secubox.d
 	[ -f nginx/picobrew.conf ] && cp nginx/picobrew.conf debian/secubox-picobrew/etc/nginx/secubox.d/ || true
-	# Systemd service
 	install -d debian/secubox-picobrew/usr/lib/systemd/system
 	cp debian/secubox-picobrew.service debian/secubox-picobrew/usr/lib/systemd/system/
+
+	install -d debian/secubox-picobrew/usr/sbin
+	install -m 755 sbin/picobrewctl debian/secubox-picobrew/usr/sbin/picobrewctl
+
+	install -d debian/secubox-picobrew/etc/sudoers.d
+	install -m 440 debian/secubox-picobrew.sudoers debian/secubox-picobrew/etc/sudoers.d/secubox-picobrew
+
+	install -d debian/secubox-picobrew/etc/unbound/unbound.conf.d
+	install -m 644 conf/unbound-picobrew.conf debian/secubox-picobrew/etc/unbound/unbound.conf.d/secubox-picobrew.conf
 
 override_dh_installsystemd:
 	# Skip dh_installsystemd since we handle it manually

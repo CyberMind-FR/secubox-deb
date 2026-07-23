@@ -7,7 +7,10 @@ case "$1" in
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     # Create runtime directories
-    install -d -o root -g root -m 1777 /run/secubox
+    # NE JAMAIS chown un parent partagé : d'autres démons en dépendent.
+    # On se contente de garantir le mode si le répertoire existe déjà.
+    if [ -d /run/secubox ]; then chmod 1777 /run/secubox 2>/dev/null || true
+    else install -d -m 1777 /run/secubox; fi
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
     # Create data directories for picobrew
     install -d -o secubox -g secubox -m 755 /var/lib/secubox/picobrew
@@ -28,6 +31,11 @@ case "$1" in
     systemctl start  secubox-picobrew.service || true
     # Reload nginx to pick up new location
     systemctl reload nginx 2>/dev/null || true
+    # Le drop-in DNS est actif par défaut : le cloud PicoBrew est éteint
+    # depuis 2020, la réécriture locale ne peut donc rien casser.
+    if command -v unbound-checkconf >/dev/null 2>&1; then
+        unbound-checkconf >/dev/null 2>&1 && systemctl reload unbound 2>/dev/null || true
+    fi
     ;;
 esac
 #DEBHELPER#
