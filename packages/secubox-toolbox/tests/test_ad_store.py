@@ -37,3 +37,32 @@ def test_candidates_capture_and_sites(tmp_path, monkeypatch):
     rows = store.ad_candidate_sites(min_sites=2)
     assert "ad.x.io" in rows                    # seen on 2 distinct sites
     assert store.ad_candidate_sites(min_sites=3) == []
+
+
+def test_candidates_fall_back_to_cumulative_when_window_empty(tmp_path, monkeypatch):
+    """A stalled learning feed must stay VISIBLE, not look like 'nothing detected'.
+
+    ad_candidates is a backlog awaiting promotion, not a time series: when the
+    window holds nothing, ad_stats falls back to the cumulative backlog and flags
+    it so the panel can label it instead of implying recent detection.
+    """
+    _fresh(tmp_path, monkeypatch)
+    store.record_ad_candidates([("stale.tracker.io", "cnn.com", 4)])
+    # Age the row well past the window (10 days), leaving the backlog non-empty.
+    import sqlite3
+    with sqlite3.connect(store.DB_PATH) as c:
+        c.execute("UPDATE ad_candidates SET last_seen = last_seen - ?", (10 * 86400,))
+
+    s = store.ad_stats(hours=24)
+    assert s["candidates_cumulative"] is True
+    assert s["total_candidates"] == 1
+    assert s["top_candidates"][0]["host"] == "stale.tracker.io"
+
+
+def test_candidates_in_window_are_not_flagged_cumulative(tmp_path, monkeypatch):
+    """Fresh detections keep the windowed semantics (no cumulative label)."""
+    _fresh(tmp_path, monkeypatch)
+    store.record_ad_candidates([("fresh.tracker.io", "cnn.com", 2)])
+    s = store.ad_stats(hours=24)
+    assert not s.get("candidates_cumulative")
+    assert s["top_candidates"][0]["host"] == "fresh.tracker.io"
