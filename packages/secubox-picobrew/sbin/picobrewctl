@@ -14,7 +14,7 @@ readonly LXC_IP="10.100.0.140"
 readonly LXC_GW="10.100.0.1"
 readonly STATE_DIR="/var/lib/secubox/picobrew"
 readonly PIN_FILE="$STATE_DIR/pinned-sha"
-readonly SESSION_FILE="$STATE_DIR/session.active"
+readonly SESSION_FILE="${PICOBREW_SESSION_FILE:-$STATE_DIR/session.active}"
 readonly UPSTREAM="https://github.com/chiefwigms/picobrew_pico"
 
 err() { echo "[ERROR] $*" >&2; }
@@ -126,6 +126,27 @@ WantedBy=multi-user.target
 EOF
 }
 
+cmd_update() {
+    local sha="${1:-}"
+    [ -n "$sha" ] || { err "SHA requis : picobrewctl update <sha>"; return 1; }
+    _valid_sha "$sha" || { err "SHA invalide (40 hex minuscules attendus)"; return 1; }
+    if _session_active; then
+        err "session de brassage active — mise à jour refusée"
+        return 1
+    fi
+    [ "$(id -u)" -eq 0 ] || { err "root requis"; return 1; }
+    lxc_running || { err "conteneur arrêté"; return 1; }
+    lxc_attach 'set -e
+        cd /opt/picobrew_pico
+        git fetch --depth 1 origin "$1"
+        git checkout --detach "$1"
+        .venv/bin/pip install --quiet -r requirements.txt' _ "$sha" \
+        || { err "mise à jour échouée"; return 1; }
+    printf '%s\n' "$sha" > "$PIN_FILE"
+    lxc_attach 'systemctl restart picobrew'
+    echo "[picobrew] mis à jour vers $sha"
+}
+
 usage() { echo "usage: picobrewctl {install|start|stop|status [--json]|update <sha>|logs}" >&2; }
 
 case "${1:-}" in
@@ -140,5 +161,6 @@ case "${1:-}" in
     stop)    cmd_stop ;;
     logs)    cmd_logs ;;
     install) cmd_install ;;
+    update)  shift; cmd_update "${1:-}" ;;
     *)       usage; exit 1 ;;
 esac
