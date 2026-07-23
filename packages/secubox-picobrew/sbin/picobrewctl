@@ -62,6 +62,70 @@ lxc.cgroup2.memory.max = 1024M
 EOF
 }
 
+cmd_install() {
+    [ "$(id -u)" -eq 0 ] || { err "root requis"; return 1; }
+    mkdir -p "$LXC_PATH/$CONTAINER" "$STATE_DIR"
+
+    if [ ! -x "$LXC_PATH/$CONTAINER/rootfs/bin/bash" ]; then
+        echo "[picobrew] debootstrap bookworm…"
+        debootstrap --variant=minbase \
+            --include=systemd,systemd-sysv,dbus,ca-certificates,iproute2,python3,python3-venv,python3-pip,git,nginx,openssl \
+            bookworm "$LXC_PATH/$CONTAINER/rootfs" http://deb.debian.org/debian \
+            || { err "debootstrap a échoué"; return 1; }
+    fi
+
+    echo "$CONTAINER" > "$LXC_PATH/$CONTAINER/rootfs/etc/hostname"
+    printf 'nameserver %s\nnameserver 1.1.1.1\n' "$LXC_GW" > "$LXC_PATH/$CONTAINER/rootfs/etc/resolv.conf"
+    _emit_lxc_config > "$LXC_PATH/$CONTAINER/config"
+
+    lxc_running || lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null
+    sleep 3
+
+    echo "[picobrew] clonage de picobrew_pico (latest)…"
+    lxc_attach 'set -e
+        [ -d /opt/picobrew_pico/.git ] || git clone --depth 1 '"$UPSTREAM"' /opt/picobrew_pico
+        cd /opt/picobrew_pico
+        [ -d .venv ] || python3 -m venv .venv
+        .venv/bin/pip install --quiet --upgrade pip
+        .venv/bin/pip install --quiet -r requirements.txt' \
+        || { err "installation de picobrew_pico échouée"; return 1; }
+
+    # Figer le SHA : une mise à jour upstream ne doit JAMAIS survenir toute
+    # seule sur une machine qui chauffe du moût.
+    local sha
+    sha=$(lxc_attach 'git -C /opt/picobrew_pico rev-parse HEAD' 2>/dev/null | tr -d '\r\n')
+    if _valid_sha "$sha"; then
+        printf '%s\n' "$sha" > "$PIN_FILE"
+        echo "[picobrew] SHA figé : $sha"
+    else
+        err "SHA upstream illisible — installation abandonnée"
+        return 1
+    fi
+
+    _install_service_unit
+    lxc_attach 'systemctl daemon-reload && systemctl enable --now picobrew' \
+        || { err "démarrage du service picobrew échoué"; return 1; }
+    echo "[picobrew] installation terminée"
+}
+
+_install_service_unit() {
+    cat > "$LXC_PATH/$CONTAINER/rootfs/etc/systemd/system/picobrew.service" <<'EOF'
+[Unit]
+Description=PicoBrew server (picobrew_pico)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/picobrew_pico
+ExecStart=/opt/picobrew_pico/.venv/bin/python server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
 usage() { echo "usage: picobrewctl {install|start|stop|status [--json]|update <sha>|logs}" >&2; }
 
 case "${1:-}" in
@@ -75,5 +139,6 @@ case "${1:-}" in
     start)   cmd_start ;;
     stop)    cmd_stop ;;
     logs)    cmd_logs ;;
+    install) cmd_install ;;
     *)       usage; exit 1 ;;
 esac
