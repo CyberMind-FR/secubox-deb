@@ -10,10 +10,16 @@ set -uo pipefail
 readonly CONTAINER="picobrew"
 readonly LXC_PATH="/data/lxc"
 readonly LXC_BRIDGE="br-lxc"
-readonly LXC_IP="10.100.0.140"
+readonly LXC_IP="10.100.0.150"
 readonly LXC_GW="10.100.0.1"
 readonly STATE_DIR="/var/lib/secubox/picobrew"
 readonly PIN_FILE="$STATE_DIR/pinned-sha"
+# PICOBREW_SESSION_FILE n'existe QUE pour les tests : c'est le fichier-garde
+# qui interdit `update` pendant un brassage (cmd_update / _session_active).
+# Le rendre surchargeable par l'environnement permet aux tests d'exercer les
+# deux états (session active / inactive) sans toucher à /var/lib/secubox. En
+# production, ne JAMAIS positionner cette variable — le chemin par défaut
+# ($STATE_DIR/session.active) est la seule source de vérité.
 readonly SESSION_FILE="${PICOBREW_SESSION_FILE:-$STATE_DIR/session.active}"
 readonly UPSTREAM="https://github.com/chiefwigms/picobrew_pico"
 
@@ -26,11 +32,29 @@ lxc_exists()  { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
 lxc_running() { local s; s=$(lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null); [[ "$s" == *"State:"*"RUNNING"* ]]; }
 lxc_attach()  { local cmd="$1"; shift; lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "$cmd" _ "$@"; }
 
+# Attente conditionnelle courte : un debootstrap frais dépasse régulièrement
+# un `sleep` fixe de quelques secondes. On teste l'état réel du conteneur au
+# lieu de parier sur une durée, avec un plafond explicite en cas d'échec.
+_wait_running() {
+    local timeout="${1:-30}" waited=0
+    while ! lxc_running; do
+        [ "$waited" -ge "$timeout" ] && return 1
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 0
+}
+
 cmd_status() {
-    local installed=false running=false sha="none"
+    local installed=false running=false sha="none" raw_sha
     lxc_exists   && installed=true
     lxc_running  && running=true
-    [ -r "$PIN_FILE" ] && sha=$(cat "$PIN_FILE")
+    if [ -r "$PIN_FILE" ]; then
+        raw_sha=$(cat "$PIN_FILE")
+        # Un PIN_FILE corrompu ne doit jamais produire un JSON invalide :
+        # on ne réimprime le SHA lu du disque qu'après validation stricte.
+        _valid_sha "$raw_sha" && sha="$raw_sha"
+    fi
     if [ "${1:-}" = "--json" ]; then
         printf '{"installed":%s,"running":%s,"ip":"%s","pinned_sha":"%s","session_active":%s}\n' \
             "$installed" "$running" "$LXC_IP" "$sha" \
@@ -79,7 +103,7 @@ cmd_install() {
     _emit_lxc_config > "$LXC_PATH/$CONTAINER/config"
 
     lxc_running || lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null
-    sleep 3
+    _wait_running 30 || { err "conteneur non démarré après 30s (debootstrap frais ?)"; return 1; }
 
     echo "[picobrew] clonage de picobrew_pico (latest)…"
     lxc_attach 'set -e
@@ -154,7 +178,7 @@ cmd_update() {
         cd /opt/picobrew_pico
         git fetch --depth 1 origin "$1"
         git checkout --detach "$1"
-        .venv/bin/pip install --quiet -r requirements.txt' _ "$sha" \
+        .venv/bin/pip install --quiet -r requirements.txt' "$sha" \
         || { err "mise à jour échouée"; return 1; }
     printf '%s\n' "$sha" > "$PIN_FILE"
     lxc_attach 'systemctl restart picobrew'
