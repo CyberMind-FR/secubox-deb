@@ -104,9 +104,16 @@ cmd_install() {
 
     _ensure_cert || { err "génération du certificat échouée"; return 1; }
     _emit_nginx_config > "$LXC_PATH/$CONTAINER/rootfs/etc/nginx/sites-available/picobrew"
+    # nginx (paquet Debian) auto-active son unit via preset au debootstrap :
+    # sur un conteneur frais, il tourne déjà avec le vhost `default` stock
+    # avant même qu'on écrive la config TLS ci-dessus. `enable --now` sur une
+    # unit DÉJÀ active est un no-op côté (re)démarrage — la nouvelle config
+    # ne serait jamais chargée et nginx resterait planté sur :80, bloquant le
+    # bind ultérieur de picobrew.service. `restart` couvre les deux cas
+    # (unit arrêtée ou déjà active) : ne PAS revenir à `enable --now` ici.
     lxc_attach 'ln -sf /etc/nginx/sites-available/picobrew /etc/nginx/sites-enabled/picobrew
                 rm -f /etc/nginx/sites-enabled/default
-                nginx -t >/dev/null 2>&1 && systemctl enable --now nginx' \
+                nginx -t >/dev/null 2>&1 && systemctl enable nginx && systemctl restart nginx' \
         || { err "configuration nginx invalide"; return 1; }
 
     _install_service_unit
