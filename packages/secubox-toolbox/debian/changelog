@@ -1,3 +1,14 @@
+secubox-toolbox (2.8.5-1~bookworm2) bookworm; urgency=medium
+
+  * #ads: surface the ad-candidate BACKLOG when the window is empty. ad_candidates
+    is a backlog awaiting promotion at AD_MIN_SITES, not a time series: windowing
+    it to `hours` reported "aucun tracker détecté" while 67 real hosts sat in the
+    table, making a starved learning feed invisible instead of obvious. ad_stats()
+    now falls back to the cumulative backlog and flags it (candidates_cumulative)
+    so the panel labels it rather than implying recent detection.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 23 Jul 2026 11:20:00 +0200
+
 secubox-toolbox (2.8.4-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

@@ -1217,9 +1217,13 @@ async function loadAds() {
       : '';
     // #802 — detected candidates (observed, awaiting promotion to active blocking)
     const candRows = (d.top_candidates||[]).slice(0, 15).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td></tr>`).join('');
+    const candCumul = !!d.candidates_cumulative;
+    const candHdr = candCumul
+      ? `${d.total_candidates||0} hôtes en attente de promotion <span style="opacity:.75">(cumul — rien de neuf dans la fenêtre)</span>`
+      : `${d.total_candidates||0} hôtes détectés dans la fenêtre`;
     document.getElementById('ads-candidates').innerHTML = candRows
-      ? `<div style="font-size:.78rem;opacity:.7;margin-bottom:.4rem">${d.total_candidates||0} hôtes détectés dans la fenêtre</div><table><thead><tr><th>Hôte détecté</th><th>observations</th></tr></thead><tbody>${candRows}</tbody></table>`
-      : '<div class="empty">aucun tracker/pub détecté dans la fenêtre</div>';
+      ? `<div style="font-size:.78rem;opacity:.7;margin-bottom:.4rem">${candHdr}</div><table><thead><tr><th>Hôte détecté</th><th>observations</th></tr></thead><tbody>${candRows}</tbody></table>`
+      : '<div class="empty">aucun tracker/pub détecté (backlog vide)</div>';
     const visRows = (d.top_visitors||[]).slice(0, 5).map(r=>{
         const mh = esc(r.mac_hash);
         return `<tr><td><a href="#" onclick="loadAdsClient('${mh}');return false;"><code>${mh}</code></a></td><td>${r.hits}</td></tr>`;

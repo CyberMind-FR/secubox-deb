@@ -204,6 +204,20 @@ def ad_stats(hours: int = 24, top: int = 25) -> dict:
                 r = c.execute("SELECT COUNT(DISTINCT host) FROM ad_candidates WHERE last_seen>=?",
                               (cutoff,)).fetchone()
                 out["total_candidates"] = int((r and r[0]) or 0)
+                # ad_candidates is a BACKLOG (upserted host+site awaiting promotion
+                # at AD_MIN_SITES), not a time series: a host observed days ago is
+                # still pending. Windowing it to `hours` therefore reports "nothing
+                # detected" while a real backlog sits in the table — which is how a
+                # stalled learning feed became invisible instead of obvious. When
+                # the window is empty, fall back to the cumulative backlog and say
+                # so, so the panel can label it rather than imply recent detection.
+                if not out["top_candidates"]:
+                    out["top_candidates"] = [{"host": h, "hits": int(n)} for h, n in c.execute(
+                        "SELECT host, SUM(hits) FROM ad_candidates "
+                        "GROUP BY host ORDER BY SUM(hits) DESC LIMIT ?", (top,))]
+                    r = c.execute("SELECT COUNT(DISTINCT host) FROM ad_candidates").fetchone()
+                    out["total_candidates"] = int((r and r[0]) or 0)
+                    out["candidates_cumulative"] = bool(out["top_candidates"])
             except sqlite3.Error:
                 pass
             # #755 — trackers detected/poisoned by the MITM in the window: distinct
