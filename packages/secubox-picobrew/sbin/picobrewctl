@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: picobrewctl — cycle de vie du LXC PicoBrew.
+#
+# `set -e` est volontairement absent : les helpers LXC renvoient des codes non
+# nuls attendus (conteneur arrêté, absent), et -e les transformerait en abandon.
+set -uo pipefail
+
+readonly CONTAINER="picobrew"
+readonly LXC_PATH="/data/lxc"
+readonly LXC_BRIDGE="br-lxc"
+readonly LXC_IP="10.100.0.140"
+readonly LXC_GW="10.100.0.1"
+readonly STATE_DIR="/var/lib/secubox/picobrew"
+readonly PIN_FILE="$STATE_DIR/pinned-sha"
+readonly SESSION_FILE="$STATE_DIR/session.active"
+readonly UPSTREAM="https://github.com/chiefwigms/picobrew_pico"
+
+err() { echo "[ERROR] $*" >&2; }
+
+_valid_sha()     { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+_session_active() { [ -e "$SESSION_FILE" ]; }
+
+lxc_exists()  { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
+lxc_running() { local s; s=$(lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null); [[ "$s" == *"State:"*"RUNNING"* ]]; }
+lxc_attach()  { local cmd="$1"; shift; lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "$cmd" _ "$@"; }
+
+cmd_status() {
+    local installed=false running=false sha="none"
+    lxc_exists   && installed=true
+    lxc_running  && running=true
+    [ -r "$PIN_FILE" ] && sha=$(cat "$PIN_FILE")
+    if [ "${1:-}" = "--json" ]; then
+        printf '{"installed":%s,"running":%s,"ip":"%s","pinned_sha":"%s","session_active":%s}\n' \
+            "$installed" "$running" "$LXC_IP" "$sha" \
+            "$(_session_active && echo true || echo false)"
+    else
+        echo "installed=$installed running=$running ip=$LXC_IP sha=$sha"
+    fi
+}
+
+cmd_start() { lxc_exists || { err "not installed"; return 1; }; lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; sleep 1; lxc_running; }
+cmd_stop()  { lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; ! lxc_running; }
+cmd_logs()  { lxc_running || { err "container not running"; return 1; }; lxc_attach 'journalctl -u picobrew --no-pager -n 100'; }
+
+usage() { echo "usage: picobrewctl {install|start|stop|status [--json]|update <sha>|logs}" >&2; }
+
+case "${1:-}" in
+    __guard) shift; case "${1:-}" in
+                 sha)     _valid_sha "${2:-}" ;;
+                 session) _session_active ;;
+                 *)       exit 1 ;;
+             esac ;;
+    status)  shift; cmd_status "${1:-}" ;;
+    start)   cmd_start ;;
+    stop)    cmd_stop ;;
+    logs)    cmd_logs ;;
+    *)       usage; exit 1 ;;
+esac
