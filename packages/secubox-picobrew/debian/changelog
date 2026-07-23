@@ -1,3 +1,17 @@
+secubox-picobrew (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 1 : le module devient un LXC Debian hébergeant picobrew_pico, qui
+    redonne vie à un appareil dont le cloud constructeur est éteint depuis 2020.
+    Ajoute picobrewctl (seule surface root, auditée via sudoers à commande
+    exacte), un drop-in DNS Unbound actif par défaut redirigeant picobrew.com
+    vers le LXC, et un panel d'état. La version upstream est figée par SHA à
+    l'installation et n'est mise à jour que sur demande explicite, jamais
+    pendant une session de brassage.
+  * Le contrôleur de fermentation à capteurs est PRÉSERVÉ intact dans
+    lib/stillwatch/ ; il sera réactivé dans le LXC en phase 2.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 23 Jul 2026 15:00:00 +0200
+
 secubox-picobrew (1.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

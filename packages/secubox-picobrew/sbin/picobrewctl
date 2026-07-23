@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: picobrewctl — cycle de vie du LXC PicoBrew.
+#
+# `set -e` est volontairement absent : les helpers LXC renvoient des codes non
+# nuls attendus (conteneur arrêté, absent), et -e les transformerait en abandon.
+set -uo pipefail
+
+readonly CONTAINER="picobrew"
+readonly LXC_PATH="/data/lxc"
+readonly LXC_BRIDGE="br-lxc"
+readonly LXC_IP="10.100.0.150"
+readonly LXC_GW="10.100.0.1"
+readonly STATE_DIR="/var/lib/secubox/picobrew"
+readonly PIN_FILE="$STATE_DIR/pinned-sha"
+# PICOBREW_SESSION_FILE n'existe QUE pour les tests : c'est le fichier-garde
+# qui interdit `update` pendant un brassage (cmd_update / _session_active).
+# Le rendre surchargeable par l'environnement permet aux tests d'exercer les
+# deux états (session active / inactive) sans toucher à /var/lib/secubox. En
+# production, ne JAMAIS positionner cette variable — le chemin par défaut
+# ($STATE_DIR/session.active) est la seule source de vérité.
+readonly SESSION_FILE="${PICOBREW_SESSION_FILE:-$STATE_DIR/session.active}"
+readonly UPSTREAM="https://github.com/chiefwigms/picobrew_pico"
+
+err() { echo "[ERROR] $*" >&2; }
+
+_valid_sha()     { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+_session_active() { [ -e "$SESSION_FILE" ]; }
+
+lxc_exists()  { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
+lxc_running() { local s; s=$(lxc-info -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null); [[ "$s" == *"State:"*"RUNNING"* ]]; }
+lxc_attach()  { local cmd="$1"; shift; lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "$cmd" _ "$@"; }
+
+# Attente conditionnelle courte : un debootstrap frais dépasse régulièrement
+# un `sleep` fixe de quelques secondes. On teste l'état réel du conteneur au
+# lieu de parier sur une durée, avec un plafond explicite en cas d'échec.
+_wait_running() {
+    local timeout="${1:-30}" waited=0
+    while ! lxc_running; do
+        [ "$waited" -ge "$timeout" ] && return 1
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 0
+}
+
+cmd_status() {
+    local installed=false running=false sha="none" raw_sha
+    lxc_exists   && installed=true
+    lxc_running  && running=true
+    if [ -r "$PIN_FILE" ]; then
+        raw_sha=$(cat "$PIN_FILE")
+        # Un PIN_FILE corrompu ne doit jamais produire un JSON invalide :
+        # on ne réimprime le SHA lu du disque qu'après validation stricte.
+        _valid_sha "$raw_sha" && sha="$raw_sha"
+    fi
+    if [ "${1:-}" = "--json" ]; then
+        printf '{"installed":%s,"running":%s,"ip":"%s","pinned_sha":"%s","session_active":%s}\n' \
+            "$installed" "$running" "$LXC_IP" "$sha" \
+            "$(_session_active && echo true || echo false)"
+    else
+        echo "installed=$installed running=$running ip=$LXC_IP sha=$sha"
+    fi
+}
+
+cmd_start() { lxc_exists || { err "not installed"; return 1; }; lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; sleep 1; lxc_running; }
+cmd_stop()  { lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; ! lxc_running; }
+cmd_logs()  { lxc_running || { err "container not running"; return 1; }; lxc_attach 'journalctl -u picobrew --no-pager -n 100'; }
+
+_emit_lxc_config() {
+    cat <<EOF
+lxc.include = /usr/share/lxc/config/debian.common.conf
+lxc.arch = linux64
+lxc.uts.name = $CONTAINER
+lxc.rootfs.path = dir:$LXC_PATH/$CONTAINER/rootfs
+lxc.net.0.type = veth
+lxc.net.0.link = $LXC_BRIDGE
+lxc.net.0.flags = up
+lxc.net.0.name = eth0
+lxc.net.0.ipv4.address = $LXC_IP/24
+lxc.net.0.ipv4.gateway = $LXC_GW
+lxc.start.auto = 1
+lxc.start.delay = 5
+lxc.cgroup2.memory.max = 1024M
+EOF
+}
+
+cmd_install() {
+    [ "$(id -u)" -eq 0 ] || { err "root requis"; return 1; }
+    mkdir -p "$LXC_PATH/$CONTAINER" "$STATE_DIR"
+
+    if [ ! -x "$LXC_PATH/$CONTAINER/rootfs/bin/bash" ]; then
+        echo "[picobrew] debootstrap bookworm…"
+        debootstrap --variant=minbase \
+            --include=systemd,systemd-sysv,dbus,ca-certificates,iproute2,python3,python3-venv,python3-pip,git,nginx,openssl \
+            bookworm "$LXC_PATH/$CONTAINER/rootfs" http://deb.debian.org/debian \
+            || { err "debootstrap a échoué"; return 1; }
+    fi
+
+    echo "$CONTAINER" > "$LXC_PATH/$CONTAINER/rootfs/etc/hostname"
+    printf 'nameserver %s\nnameserver 1.1.1.1\n' "$LXC_GW" > "$LXC_PATH/$CONTAINER/rootfs/etc/resolv.conf"
+    _emit_lxc_config > "$LXC_PATH/$CONTAINER/config"
+
+    lxc_running || lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null
+    _wait_running 30 || { err "conteneur non démarré après 30s (debootstrap frais ?)"; return 1; }
+
+    echo "[picobrew] clonage de picobrew_pico (latest)…"
+    lxc_attach 'set -e
+        [ -d /opt/picobrew_pico/.git ] || git clone --depth 1 '"$UPSTREAM"' /opt/picobrew_pico
+        cd /opt/picobrew_pico
+        [ -d .venv ] || python3 -m venv .venv
+        .venv/bin/pip install --quiet --upgrade pip
+        .venv/bin/pip install --quiet -r requirements.txt' \
+        || { err "installation de picobrew_pico échouée"; return 1; }
+
+    # Figer le SHA : une mise à jour upstream ne doit JAMAIS survenir toute
+    # seule sur une machine qui chauffe du moût.
+    local sha
+    sha=$(lxc_attach 'git -C /opt/picobrew_pico rev-parse HEAD' 2>/dev/null | tr -d '\r\n')
+    if _valid_sha "$sha"; then
+        printf '%s\n' "$sha" > "$PIN_FILE"
+        echo "[picobrew] SHA figé : $sha"
+    else
+        err "SHA upstream illisible — installation abandonnée"
+        return 1
+    fi
+
+    _ensure_cert || { err "génération du certificat échouée"; return 1; }
+    _emit_nginx_config > "$LXC_PATH/$CONTAINER/rootfs/etc/nginx/sites-available/picobrew"
+    # nginx (paquet Debian) auto-active son unit via preset au debootstrap :
+    # sur un conteneur frais, il tourne déjà avec le vhost `default` stock
+    # avant même qu'on écrive la config TLS ci-dessus. `enable --now` sur une
+    # unit DÉJÀ active est un no-op côté (re)démarrage — la nouvelle config
+    # ne serait jamais chargée et nginx resterait planté sur :80, bloquant le
+    # bind ultérieur de picobrew.service. `restart` couvre les deux cas
+    # (unit arrêtée ou déjà active) : ne PAS revenir à `enable --now` ici.
+    lxc_attach 'ln -sf /etc/nginx/sites-available/picobrew /etc/nginx/sites-enabled/picobrew
+                rm -f /etc/nginx/sites-enabled/default
+                nginx -t >/dev/null 2>&1 && systemctl enable nginx && systemctl restart nginx' \
+        || { err "configuration nginx invalide"; return 1; }
+
+    _install_service_unit
+    lxc_attach 'systemctl daemon-reload && systemctl enable --now picobrew' \
+        || { err "démarrage du service picobrew échoué"; return 1; }
+    echo "[picobrew] installation terminée"
+}
+
+_install_service_unit() {
+    cat > "$LXC_PATH/$CONTAINER/rootfs/etc/systemd/system/picobrew.service" <<'EOF'
+[Unit]
+Description=PicoBrew server (picobrew_pico)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/picobrew_pico
+ExecStart=/opt/picobrew_pico/.venv/bin/python server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+cmd_update() {
+    local sha="${1:-}"
+    [ -n "$sha" ] || { err "SHA requis : picobrewctl update <sha>"; return 1; }
+    _valid_sha "$sha" || { err "SHA invalide (40 hex minuscules attendus)"; return 1; }
+    if _session_active; then
+        err "session de brassage active — mise à jour refusée"
+        return 1
+    fi
+    [ "$(id -u)" -eq 0 ] || { err "root requis"; return 1; }
+    lxc_running || { err "conteneur arrêté"; return 1; }
+    lxc_attach 'set -e
+        cd /opt/picobrew_pico
+        git fetch --depth 1 origin "$1"
+        git checkout --detach "$1"
+        .venv/bin/pip install --quiet -r requirements.txt' "$sha" \
+        || { err "mise à jour échouée"; return 1; }
+    printf '%s\n' "$sha" > "$PIN_FILE"
+    lxc_attach 'systemctl restart picobrew'
+    echo "[picobrew] mis à jour vers $sha"
+}
+
+_emit_nginx_config() {
+    cat <<'EOF'
+# SecuBox-Deb :: PicoBrew — terminaison TLS pour la série Z.
+#
+# picobrew_pico écoute déjà en clair sur :80 — c'est le comportement upstream,
+# et c'est ce que les Pico/Zymatic attendent. nginx ne prend donc QUE le 443 :
+# le faire écouter aussi sur :80 tout en proxifiant vers 127.0.0.1:80 le ferait
+# se parler à lui-même (boucle infinie). Les appareils non-Z continuent de
+# joindre Flask directement en :80.
+server {
+    listen 443 ssl;
+    server_name picobrew.com _;
+    client_max_body_size 32m;
+    ssl_certificate     /etc/picobrew/tls/cert.pem;
+    ssl_certificate_key /etc/picobrew/tls/key.pem;
+    location / {
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+}
+EOF
+}
+
+_ensure_cert() {
+    lxc_attach 'set -e
+        mkdir -p /etc/picobrew/tls
+        [ -s /etc/picobrew/tls/cert.pem ] && exit 0
+        openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+            -subj "/CN=picobrew.com" \
+            -addext "subjectAltName=DNS:picobrew.com,DNS:*.picobrew.com" \
+            -keyout /etc/picobrew/tls/key.pem \
+            -out /etc/picobrew/tls/cert.pem >/dev/null 2>&1
+        chmod 600 /etc/picobrew/tls/key.pem'
+}
+
+usage() { echo "usage: picobrewctl {install|start|stop|status [--json]|update <sha>|logs}" >&2; }
+
+case "${1:-}" in
+    __guard) shift; case "${1:-}" in
+                 sha)     _valid_sha "${2:-}" ;;
+                 session) _session_active ;;
+                 *)       exit 1 ;;
+             esac ;;
+    __emit-config) _emit_lxc_config ;;
+    __emit-nginx) _emit_nginx_config ;;
+    status)  shift; cmd_status "${1:-}" ;;
+    start)   cmd_start ;;
+    stop)    cmd_stop ;;
+    logs)    cmd_logs ;;
+    install) cmd_install ;;
+    update)  shift; cmd_update "${1:-}" ;;
+    *)       usage; exit 1 ;;
+esac
