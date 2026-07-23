@@ -8,17 +8,23 @@ Standards-Version: 4.6.2
 Package: secubox-picobrew
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip,
+         python3-fastapi | python3-pip,
          lxc, debootstrap, sudo
 Recommends: unbound
-Description: Homebrew/Fermentation Controller for SecuBox
- SecuBox-DEB Phase 9 IoT module for homebrewing and fermentation.
- Provides FastAPI backend on /api/v1/picobrew/ via Unix socket.
+Description: PicoBrew appliance host (LXC) for SecuBox — phase 1
+ Ports "secubox-app-picobrew" from OpenWrt: hosts an LXC container running
+ the upstream picobrew_pico server, giving a second life to PicoBrew
+ appliances (Pico S/C/Pro, Z Series, Zymatic) whose manufacturer cloud has
+ been shut down since 2020.
  .
- Features:
-  - Temperature monitoring via GPIO/I2C/USB sensors (DS18B20, DHT22, BME280)
-  - Fermentation profile management with temperature schedules
-  - Brew session logging with continuous temperature tracking
-  - Recipe management and library
-  - Temperature deviation alerts
-  - Support for Tilt/iSpindel hydrometers
-  - CRT-light P31 phosphor theme with amber accents frontend
+ Phase 1 scope:
+  - picobrewctl: root-audited lifecycle (install/start/stop/status/update/logs)
+    for the LXC, delegated to via sudo from an unprivileged FastAPI panel
+  - Local DNS rewrite of picobrew.com to the LXC (device otherwise unreachable)
+  - TLS termination in front of the picobrew_pico server for the Z series
+  - Admin panel exposing container state and start/stop controls
+ .
+ Fermentation/temperature tracking (sensors, profiles, recipes, Tilt/
+ iSpindel, alerts) is out of scope for this phase and will ship in a later
+ phase; the existing sensor controller code is preserved untouched in
+ lib/stillwatch/ for that purpose.

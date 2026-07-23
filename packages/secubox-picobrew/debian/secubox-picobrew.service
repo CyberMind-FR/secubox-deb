@@ -2,27 +2,26 @@
 Description=SecuBox PicoBrew Fermentation Controller API
 After=network.target secubox-runtime.service
 Requires=secubox-runtime.service
-# Skip silently on non-arm64 (no Pi 1-Wire/I2C fermentation sensors) — issue #226
-ConditionArchitecture=arm64
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=secubox
+Group=secubox
 WorkingDirectory=/usr/share/secubox/picobrew
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/picobrew.sock --workers 1
-ExecStartPost=-/bin/sleep 1
-ExecStartPost=-/bin/chmod 660 /run/secubox/picobrew.sock
-ExecStartPost=-/bin/chown secubox:secubox /run/secubox/picobrew.sock
 Restart=on-failure
 RestartSec=5
 
 # Security hardening
+# NoNewPrivileges=no est requis ICI : le sudoers (debian/secubox-picobrew.sudoers)
+# accorde au user secubox un sudo NOPASSWD vers picobrewctl. Avec
+# NoNewPrivileges=yes, sudo serait neutralisé et cette seule surface
+# privilégiée du module cesserait de fonctionner.
 NoNewPrivileges=no
 
 ProtectHome=read-only
 
-ReadWritePaths=/run/secubox /var/lib/secubox /var/cache/secubox /etc/secubox /sys/bus/w1
+ReadWritePaths=/run/secubox /var/lib/secubox /var/cache/secubox /etc/secubox
 
 [Install]
 WantedBy=multi-user.target

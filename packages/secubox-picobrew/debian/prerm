@@ -1,14 +1,21 @@
 #!/bin/bash
 set -e
 case "$1" in
-  remove|upgrade)
-    # Remove nginx location config
+  remove|purge)
+    # /etc/nginx/secubox.d/picobrew.conf est un CONFFILE : ne JAMAIS le
+    # supprimer sur un simple `upgrade`, sinon dpkg ne le réinstalle pas et
+    # la route nginx/API disparaît (404 sur le panel et l'API) après mise à
+    # jour. Seule une désinstallation réelle (remove/purge) le retire.
     rm -f /etc/nginx/secubox.d/picobrew.conf
+    ;;
+esac
+case "$1" in
+  remove|upgrade)
     # Stop and disable service
     systemctl stop    secubox-picobrew.service 2>/dev/null || true
     systemctl disable secubox-picobrew.service 2>/dev/null || true
-    # Reload nginx to remove location
-    systemctl reload nginx 2>/dev/null || true
     ;;
 esac
+# Reload nginx to pick up whatever changed above
+systemctl reload nginx 2>/dev/null || true
 #DEBHELPER#

@@ -9,14 +9,14 @@ client = TestClient(app)
 
 def test_status_reflects_ctl_output():
     """L'API ne devine rien : elle relaie le verdict du ctl."""
-    payload = json.dumps({"installed": True, "running": False, "ip": "10.100.0.140",
+    payload = json.dumps({"installed": True, "running": False, "ip": "10.100.0.150",
                           "pinned_sha": "0123456789abcdef0123456789abcdef01234567",
                           "session_active": False})
     with patch("api.main._ctl", return_value=(0, payload)):
         r = client.get("/status")
     assert r.status_code == 200
     assert r.json()["installed"] is True and r.json()["running"] is False
-    assert r.json()["ip"] == "10.100.0.140"
+    assert r.json()["ip"] == "10.100.0.150"
 
 def test_status_degrades_cleanly_when_ctl_fails():
     """Un ctl indisponible ne doit pas 500 le panel : état inconnu, pas de crash."""
