@@ -3,6 +3,23 @@
 
 ---
 
+## 📧 Vie privée mail & traceurs (en pause, 2026-07-23)
+
+- [ ] **Pixels de suivi email — plan d'implémentation**. Spec **validé et commité** :
+  `docs/superpowers/specs/2026-07-23-email-tracking-pixel-detection-design.md` (`fc8e0f9d`).
+  Reste à faire : ouvrir l'issue GitHub, puis dérouler writing-plans. Aucun code écrit.
+  Rappel des décisions : `data:` URI 1×1 inline (zéro requête émise), archive du brut DKIM-intact,
+  heuristique conservatrice, intégrité du courrier non négociable (exception ⇒ original intact).
+  Cœur = `pixelscan.py`, fonction pure testable sur de vrais `.eml` sans Postfix ni LXC.
+- [ ] **⚠ rspamd ne filtre rien** (anomalie constatée 2026-07-23, hors périmètre du spec) :
+  `rspamd` est `active` dans le LXC `mail` mais `smtpd_milters` est **vide** → aucun milter Postfix
+  ne l'appelle. L'antispam est vraisemblablement inopérant depuis un moment. Issue à ouvrir.
+- [ ] **Suivi #ads** : vérifier après quelques heures d'usage réel via wg-toolbox que
+  `total_candidates` progresse et que `candidates_cumulative` repasse à `false`. Si rien ne bouge,
+  un filtre subsiste en amont → reprendre l'enquête depuis cette preuve.
+
+---
+
 ## 🖥️ Afficheurs & appliances (en pause, 2026-07-23)
 
 > Trois sujets suspendus explicitement par l'utilisateur. Contexte complet : HISTORY/WIP 07-22→23.
