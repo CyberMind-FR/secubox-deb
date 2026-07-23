@@ -186,7 +186,7 @@ $ cd packages/secubox-picobrew && /home/reepost/CyberMindStudio/secubox-deb/secu
 
 ### Commit
 
-Hash : voir en tête de rapport / message de commit `fix(picobrew): tests _ctl→OS pour argv sudo, dégradation OS et garde JSON (ref revue tâche 2)`.
+Hash : `b2163fb3` — `fix(picobrew): tests _ctl→OS pour argv sudo, dégradation OS et garde JSON (ref revue tâche 2)`.
 
 ### Préoccupations pour le relecteur
 
