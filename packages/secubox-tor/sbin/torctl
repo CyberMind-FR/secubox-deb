@@ -3,10 +3,31 @@
 # SecuBox-Deb :: torctl — pilote les endpoints Tor (SOCKS LAN + transparent).
 set -euo pipefail
 SHARE=/usr/share/secubox/tor
-TORRC_D=/etc/tor/torrc.d
-UNBOUND_D=/etc/unbound/unbound.conf.d
-NFT_D=/etc/nftables.d
+# Env overrides for tests: TORCTL_TORRC_D / TORCTL_UNBOUND_D / TORCTL_NFT_D / TORCTL_DRYRUN
+TORRC_D="${TORCTL_TORRC_D:-/etc/tor/torrc.d}"
+UNBOUND_D="${TORCTL_UNBOUND_D:-/etc/unbound/unbound.conf.d}"
+NFT_D="${TORCTL_NFT_D:-/etc/nftables.d}"
+DRYRUN="${TORCTL_DRYRUN:-0}"
 lan_ip() { /usr/sbin/tor-lan-ip; }
+
+_reload() { [ "$DRYRUN" = "1" ] && return 0; "$@" || true; }
+
+# Copie un template packagé ($SHARE) vers sa destination. En environnement de
+# test (TORCTL_DRYRUN=1), $SHARE n'existe pas (pas de paquet installé) : on
+# tolère l'absence de la source sans faire échouer le script — seule la
+# logique observable (présence/absence des dropins pilotés) est sous test.
+# Hors dry-run, un template manquant est une vraie erreur de packaging.
+_install_tpl() {
+  local src="$1" dst="$2"
+  if [ -f "$src" ]; then
+    cp "$src" "$dst"
+  elif [ "$DRYRUN" = "1" ]; then
+    :
+  else
+    echo "template manquant: $src" >&2
+    return 1
+  fi
+}
 
 socks_lan_ensure() {
   local ip; ip="$(lan_ip)"; [ -n "$ip" ] || { echo "pas d'IP LAN détectée" >&2; return 1; }
@@ -15,8 +36,42 @@ socks_lan_ensure() {
   echo "SocksPort LAN $ip:9050"
 }
 
+transport_already_declared() {
+  grep -rqiE '^[[:space:]]*TransPort[[:space:]]+127\.0\.0\.1:9040' "$TORRC_D"/*.conf 2>/dev/null
+}
+
+transparent_on() {
+  if transport_already_declared; then
+    echo "TransPort 9040 déjà déclaré (toolbox) — réutilisé, pas de dropin dupliqué"
+  else
+    _install_tpl "$SHARE/60-secubox-transparent.conf" "$TORRC_D/60-secubox-transparent.conf"
+  fi
+  _install_tpl "$SHARE/secubox-onion-forward.conf" "$UNBOUND_D/secubox-onion-forward.conf"
+  _install_tpl "$SHARE/secubox-tor-transparent.nft" "$NFT_D/secubox-tor-transparent.nft"
+  _reload sysctl -q -w net.ipv4.conf.all.route_localnet=1
+  _reload systemctl reload tor@default
+  _reload systemctl restart unbound
+  _reload nft -f "$NFT_D/secubox-tor-transparent.nft"
+  echo "transparent on"
+}
+
+transparent_off() {
+  rm -f "$TORRC_D/60-secubox-transparent.conf" "$UNBOUND_D/secubox-onion-forward.conf" "$NFT_D/secubox-tor-transparent.nft"
+  _reload systemctl reload tor@default
+  _reload systemctl restart unbound
+  _reload nft delete table inet secubox-tor-transparent 2>/dev/null
+  echo "transparent off"
+}
+
+transparent_status() {
+  local on=false
+  [ -f "$UNBOUND_D/secubox-onion-forward.conf" ] && [ -f "$NFT_D/secubox-tor-transparent.nft" ] && on=true
+  echo "{\"transparent\": $on}"
+}
+
 case "${1:-}" in
   detect-lan-ip) lan_ip ;;
   socks-lan) [ "${2:-}" = "ensure" ] && socks_lan_ensure ;;
+  transparent) case "${2:-}" in on) transparent_on;; off) transparent_off;; status) transparent_status;; esac ;;
   *) echo "usage: torctl {detect-lan-ip|socks-lan ensure|transparent {on|off|status}}" >&2; exit 2 ;;
 esac
