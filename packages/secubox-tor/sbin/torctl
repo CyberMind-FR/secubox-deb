@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # SecuBox-Deb :: torctl — pilote les endpoints Tor (SOCKS LAN + transparent).
 set -euo pipefail
-SHARE=/usr/share/secubox/tor
-# Env overrides for tests: TORCTL_TORRC_D / TORCTL_UNBOUND_D / TORCTL_NFT_D / TORCTL_DRYRUN
+SHARE="${TORCTL_SHARE_D:-/usr/share/secubox/tor}"
+# Env overrides for tests: TORCTL_SHARE_D / TORCTL_TORRC_D / TORCTL_UNBOUND_D / TORCTL_NFT_D / TORCTL_DRYRUN
 TORRC_D="${TORCTL_TORRC_D:-/etc/tor/torrc.d}"
 UNBOUND_D="${TORCTL_UNBOUND_D:-/etc/unbound/unbound.conf.d}"
 NFT_D="${TORCTL_NFT_D:-/etc/nftables.d}"
@@ -37,7 +37,7 @@ socks_lan_ensure() {
 }
 
 transport_already_declared() {
-  grep -rqiE '^[[:space:]]*TransPort[[:space:]]+127\.0\.0\.1:9040' "$TORRC_D"/*.conf 2>/dev/null
+  grep -rqiE '^[[:space:]]*TransPort[[:space:]]+([0-9.]+:)?9040\b' "$TORRC_D"/*.conf 2>/dev/null
 }
 
 transparent_on() {
