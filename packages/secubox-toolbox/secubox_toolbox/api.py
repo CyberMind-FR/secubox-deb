@@ -3980,6 +3980,248 @@ async def admin_sentinel_c2_allow(host: str = Form(...)) -> dict:
     return {"ok": sentinel_link.c2_allow(host)}
 
 
+# ───────────────── /rlevel — per-peer wg-toolbox MITM R-level (#rlevel-per-peer, task 6) ─────────────────
+#
+# Modes, increasing intrusion: off(0) < passive(1) < active(2) < reel(3).
+# Effective = forced ?? clamp(chosen, floor, reel) — mirrors cmd/sbxmitm/rlevel.go
+# effective() and sbxmitm-policyctl's bash re-implementation, kept in lockstep
+# here so the admin/self-service list can compute it WITHOUT asking the ctl a
+# second time. No in-process root: every mutation is delegated to
+# `sudo -n /usr/sbin/sbxmitm-policyctl` (mirrors the proxypac API's `_ctl`
+# pattern) — this module only ever READS peer-rlevel.json (via `ctl list`)
+# and wg-peers.json.
+_RLEVEL_MODES = ("off", "passive", "active", "reel")
+_RLEVEL_RANK = {m: i for i, m in enumerate(_RLEVEL_MODES)}
+_RLEVEL_POLICYCTL = "/usr/sbin/sbxmitm-policyctl"
+_RLEVEL_WG_PEERS = Path("/var/lib/secubox/toolbox/wg-peers.json")
+
+
+def _rlevel_valid_mode(mode: str) -> bool:
+    return mode in _RLEVEL_RANK
+
+
+def _rlevel_clamp(value: str, floor: str, ceiling: str = "reel") -> str:
+    r = _RLEVEL_RANK.get(value, _RLEVEL_RANK["passive"])
+    lo = _RLEVEL_RANK.get(floor, _RLEVEL_RANK["passive"])
+    hi = _RLEVEL_RANK.get(ceiling, _RLEVEL_RANK["reel"])
+    r = max(lo, min(hi, r))
+    return _RLEVEL_MODES[r]
+
+
+def _rlevel_effective(chosen: str, forced: str | None, floor: str) -> str:
+    if forced:
+        return forced
+    return _rlevel_clamp(chosen, floor)
+
+
+def _rlevel_ctl(args: list[str], timeout: int = 15):
+    """Delegate a privileged rlevel action to sbxmitm-policyctl via `sudo -n`.
+    Never raises — returns (returncode, stdout, stderr); a transport failure
+    (sudo missing, timeout, ctl absent) yields rc=1 so callers fail closed."""
+    import subprocess
+    try:
+        p = subprocess.run(
+            ["sudo", "-n", _RLEVEL_POLICYCTL, *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        return p.returncode, p.stdout.strip(), p.stderr.strip()
+    except (OSError, subprocess.SubprocessError) as e:
+        return 1, "", str(e)[:200]
+
+
+def _rlevel_load_wg_peers() -> dict:
+    """{pubkey: {ip, label, ...}} from wg-peers.json — best-effort, {} on error."""
+    import json as _json
+    try:
+        return (_json.loads(_RLEVEL_WG_PEERS.read_text()).get("peers") or {})
+    except Exception:
+        return {}
+
+
+def _rlevel_load_policy() -> dict:
+    """Whole peer-rlevel.json document via `sbxmitm-policyctl list` (read-only —
+    the ctl owns the file; this module never touches it directly)."""
+    import json as _json
+    rc, out, _err = _rlevel_ctl(["list"])
+    if rc != 0 or not out:
+        return {"defaults": {"mode": "passive", "floor": "passive"}, "peers": {}}
+    try:
+        doc = _json.loads(out)
+    except Exception:
+        return {"defaults": {"mode": "passive", "floor": "passive"}, "peers": {}}
+    doc.setdefault("defaults", {"mode": "passive", "floor": "passive"})
+    doc.setdefault("peers", {})
+    return doc
+
+
+def _rlevel_wg_live(pubkeys: set) -> dict:
+    """Best-effort {pubkey: bool} — True if wg-toolbox reports a handshake in
+    the last 180s for that peer. Never raises; unavailable wg → {} (UI treats
+    missing as unknown, never as a false 'live')."""
+    import subprocess
+    live: dict = {}
+    if not pubkeys:
+        return live
+    try:
+        out = subprocess.run(
+            ["wg", "show", "wg-toolbox", "dump"],
+            capture_output=True, text=True, timeout=2, check=False,
+        ).stdout
+    except Exception:
+        return live
+    now = time.time()
+    for line in out.splitlines()[1:]:  # skip the interface header line
+        cols = line.split("\t")
+        if len(cols) < 5:
+            continue
+        pk = cols[0]
+        if pk not in pubkeys:
+            continue
+        try:
+            hs = int(cols[4])
+        except (ValueError, IndexError):
+            hs = 0
+        live[pk] = bool(hs) and (now - hs) < 180
+    return live
+
+
+def _rlevel_peer_entry(doc: dict, pubkey: str) -> tuple[str, str | None, str]:
+    """(chosen, forced, floor) for pubkey, falling back to doc['defaults']."""
+    defaults = doc.get("defaults") or {}
+    def_mode = defaults.get("mode", "passive")
+    def_floor = defaults.get("floor", "passive")
+    p = (doc.get("peers") or {}).get(pubkey) or {}
+    chosen = p.get("chosen") or def_mode
+    forced = p.get("forced")
+    floor = p.get("floor") or def_floor
+    return chosen, forced, floor
+
+
+def _rlevel_peer_for_ip(ip: str | None) -> str | None:
+    """Resolve a wg-toolbox tunnel source IP to its pubkey — the self-service
+    auth identity. None if the IP is not a known wg-toolbox peer."""
+    if not ip:
+        return None
+    for pk, meta in _rlevel_load_wg_peers().items():
+        if meta.get("ip") == ip:
+            return pk
+    return None
+
+
+@router.get("/rlevel/peers")
+async def rlevel_peers() -> dict:
+    """Admin — every wg-toolbox peer's rlevel status (chosen/forced/floor/
+    effective + best-effort live handshake). Read-only: sourced from
+    wg-peers.json (identity) + `sbxmitm-policyctl list` (policy)."""
+    wg_peers = _rlevel_load_wg_peers()
+    doc = _rlevel_load_policy()
+    live = _rlevel_wg_live(set(wg_peers.keys()))
+    peers = []
+    for pk, meta in wg_peers.items():
+        chosen, forced, floor = _rlevel_peer_entry(doc, pk)
+        peers.append({
+            "pubkey": pk,
+            "label": meta.get("label"),
+            "chosen": chosen,
+            "forced": forced,
+            "floor": floor,
+            "effective": _rlevel_effective(chosen, forced, floor),
+            "live": live.get(pk),
+        })
+    return {"peers": peers, "defaults": doc.get("defaults")}
+
+
+@router.post("/rlevel/peer/{pubkey}")
+async def rlevel_peer_set(pubkey: str, request: Request) -> dict:
+    """Admin — set a peer's floor and/or forced mode. Body: {"floor"?: mode,
+    "forced"?: mode|null}. Every write is delegated to sbxmitm-policyctl
+    (no in-process root)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    floor = body.get("floor")
+    forced_present = "forced" in body
+    forced = body.get("forced")
+
+    if floor is not None and not _rlevel_valid_mode(floor):
+        raise HTTPException(status_code=400, detail=f"invalid floor mode: {floor}")
+    if forced_present and forced is not None and not _rlevel_valid_mode(forced):
+        raise HTTPException(status_code=400, detail=f"invalid forced mode: {forced}")
+
+    results = {}
+    if floor is not None:
+        rc, out, err = _rlevel_ctl(["set-floor", pubkey, floor])
+        if rc != 0:
+            raise HTTPException(status_code=502, detail=err or "set-floor failed")
+        results["floor"] = floor
+    if forced_present:
+        mode = forced if forced is not None else "none"
+        rc, out, err = _rlevel_ctl(["force", pubkey, mode])
+        if rc != 0:
+            raise HTTPException(status_code=502, detail=err or "force failed")
+        results["forced"] = forced
+
+    if not results:
+        raise HTTPException(status_code=400, detail="nothing to set (expected floor and/or forced)")
+    return {"ok": True, "pubkey": pubkey, **results}
+
+
+@router.get("/rlevel/me")
+async def rlevel_me(request: Request) -> dict:
+    """Peer self-service — identity is the wg-toolbox tunnel source IP itself
+    (10.99.1.x), resolved to a pubkey via wg-peers.json. 403 if the source IP
+    is not a known wg-toolbox peer (tunnel-auth, no token/JWT involved)."""
+    ip = _client_ip(request)
+    pubkey = _rlevel_peer_for_ip(ip)
+    if not pubkey:
+        raise HTTPException(status_code=403, detail="source IP is not a known wg-toolbox peer")
+    doc = _rlevel_load_policy()
+    chosen, forced, floor = _rlevel_peer_entry(doc, pubkey)
+    return {
+        "chosen": chosen,
+        "forced": forced,
+        "floor": floor,
+        "effective": _rlevel_effective(chosen, forced, floor),
+    }
+
+
+@router.post("/rlevel/me")
+async def rlevel_me_set(request: Request) -> dict:
+    """Peer self-service — set own `chosen` mode, bounded: a peer can never
+    descend below its own floor nor lift a `forced` (409 either way). Delegates
+    to `sbxmitm-policyctl set-chosen` (which re-clamps server-side too)."""
+    ip = _client_ip(request)
+    pubkey = _rlevel_peer_for_ip(ip)
+    if not pubkey:
+        raise HTTPException(status_code=403, detail="source IP is not a known wg-toolbox peer")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    chosen = body.get("chosen")
+    if not chosen or not _rlevel_valid_mode(chosen):
+        raise HTTPException(status_code=400, detail=f"invalid chosen mode: {chosen}")
+
+    doc = _rlevel_load_policy()
+    _cur_chosen, forced, floor = _rlevel_peer_entry(doc, pubkey)
+    if forced:
+        raise HTTPException(status_code=409, detail=f"mode is forced to '{forced}' by admin")
+    if _RLEVEL_RANK[chosen] < _RLEVEL_RANK[floor]:
+        raise HTTPException(status_code=409, detail=f"below floor '{floor}'")
+
+    rc, out, err = _rlevel_ctl(["set-chosen", pubkey, chosen])
+    if rc != 0:
+        raise HTTPException(status_code=502, detail=err or "set-chosen failed")
+    return {"ok": True, "chosen": chosen, "floor": floor,
+            "effective": _rlevel_effective(chosen, None, floor)}
+
+
 @router.get("/admin/filters/ui", response_class=HTMLResponse)
 async def admin_filters_ui() -> HTMLResponse:
     """#566 — minimal filter toggle panel for the toolbox WebUI."""
