@@ -1,3 +1,18 @@
+secubox-toolbox-ng (0.1.38-1~bookworm1) bookworm; urgency=medium
+
+  * sbxmitm: per-peer R-level MITM policy (rlevel-per-peer, task 8). The
+    worker fleet (cmd/sbxmitm/rlevel.go) now loads/hot-reloads
+    /var/lib/secubox/toolbox/peer-rlevel.json (written by the new
+    sbxmitm-policyctl in secubox-toolbox) and computes each peer's effective
+    inspection level (off < passive < active < reel = forced ?? clamp(chosen,
+    floor, reel)). Companion secubox-toolbox package seeds
+    defaults.mode="reel" on first install to preserve today's fleet-wide
+    behaviour (no silent downgrade); operators opt individual peers down via
+    the /rlevel panel or the ctl. No control/rules change here — rlevel.go
+    builds into the existing sbxmitm binary (same package, no new file).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 24 Jul 2026 09:00:00 +0200
+
 secubox-toolbox-ng (0.1.37-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf: fingerprint scanners on static-asset paths. Previously any path
