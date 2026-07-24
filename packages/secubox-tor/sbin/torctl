@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: torctl — pilote les endpoints Tor (SOCKS LAN + transparent).
+set -euo pipefail
+SHARE=/usr/share/secubox/tor
+TORRC_D=/etc/tor/torrc.d
+UNBOUND_D=/etc/unbound/unbound.conf.d
+NFT_D=/etc/nftables.d
+lan_ip() { /usr/sbin/tor-lan-ip; }
+
+socks_lan_ensure() {
+  local ip; ip="$(lan_ip)"; [ -n "$ip" ] || { echo "pas d'IP LAN détectée" >&2; return 1; }
+  sed "s/__LAN_IP__/$ip/g" "$SHARE/50-secubox-socks-lan.conf" > "$TORRC_D/50-secubox-socks-lan.conf"
+  systemctl reload tor@default 2>/dev/null || systemctl restart tor@default || true
+  echo "SocksPort LAN $ip:9050"
+}
+
+case "${1:-}" in
+  detect-lan-ip) lan_ip ;;
+  socks-lan) [ "${2:-}" = "ensure" ] && socks_lan_ensure ;;
+  *) echo "usage: torctl {detect-lan-ip|socks-lan ensure|transparent {on|off|status}}" >&2; exit 2 ;;
+esac
