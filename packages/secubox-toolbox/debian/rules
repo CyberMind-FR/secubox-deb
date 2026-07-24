@@ -21,13 +21,25 @@ override_dh_auto_install:
 	# WebUI
 	install -d debian/secubox-toolbox/usr/share/secubox/www/toolbox
 	cp -r www/toolbox/. debian/secubox-toolbox/usr/share/secubox/www/toolbox/
+	# rlevel-per-peer (task 8) : panel is served alongside the toolbox WebUI.
+	install -d debian/secubox-toolbox/usr/share/secubox/www/rlevel
+	cp -r www/rlevel/. debian/secubox-toolbox/usr/share/secubox/www/rlevel/
 	# Menu
 	install -d debian/secubox-toolbox/usr/share/secubox/menu.d
 	install -m 0644 menu.d/26-toolbox.json debian/secubox-toolbox/usr/share/secubox/menu.d/
+	install -m 0644 menu.d/27-rlevel.json  debian/secubox-toolbox/usr/share/secubox/menu.d/
 	# Helpers
 	install -d debian/secubox-toolbox/usr/sbin
 	install -m 0755 scripts/toolbox-up debian/secubox-toolbox/usr/sbin/
 	install -m 0755 scripts/ca-init    debian/secubox-toolbox/usr/sbin/secubox-toolbox-ca-init
+	# rlevel-per-peer (task 4/8) : root-scoped ctl owning peer-rlevel.json +
+	# the @rlevel_off nft set (see sbin/sbxmitm-policyctl header).
+	install -m 0755 sbin/sbxmitm-policyctl debian/secubox-toolbox/usr/sbin/
+	# Scoped sudoers: the portal (User=secubox-toolbox) may only invoke the
+	# 5 fixed policyctl subcommands — no wildcard, no arbitrary root command.
+	install -d debian/secubox-toolbox/etc/sudoers.d
+	install -m 0440 debian/secubox-toolbox.sudoers \
+	  debian/secubox-toolbox/etc/sudoers.d/secubox-toolbox
 	# sbin/ helpers (Phase 5 LXC, Phase 6 R3 WG, Phase 9 fanout, Phase 11 social).
 	# Pre-2.6.0 only db-tune + lxc-provision shipped — the mitm-wg-launch
 	# wrapper had to be hand-installed on the board.  This block ships them
