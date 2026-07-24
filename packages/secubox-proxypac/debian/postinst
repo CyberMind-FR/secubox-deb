@@ -9,5 +9,6 @@ if [ "$1" = "configure" ]; then
     systemctl enable --now secubox-proxypac-gen.path || true
     systemctl enable --now secubox-proxypac-gen.timer || true
     nginx -t && systemctl reload nginx || true
+    /usr/sbin/proxypac-wpad apply || true
 fi
 #DEBHELPER#

@@ -18,3 +18,7 @@ override_dh_auto_install:
 	cp -r www/. debian/secubox-proxypac/usr/share/secubox/www/
 	install -d debian/secubox-proxypac/usr/share/secubox/menu.d
 	cp menu.d/*.json debian/secubox-proxypac/usr/share/secubox/menu.d/
+
+	install -D -m 644 conf/proxypac.toml debian/secubox-proxypac/etc/secubox/proxypac/proxypac.toml
+	install -D -m 755 sbin/proxypac-wpad debian/secubox-proxypac/usr/sbin/proxypac-wpad
+	install -D -m 440 debian/secubox-proxypac.sudoers debian/secubox-proxypac/etc/sudoers.d/secubox-proxypac

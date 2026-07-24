@@ -13,3 +13,16 @@ override_dh_auto_install:
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-tor/etc/nginx/secubox.d
 	install -m 644 nginx/tor.conf $(CURDIR)/debian/secubox-tor/etc/nginx/secubox.d/tor.conf
+
+	# Helpers (torctl copies templates below from /usr/share/secubox/tor/)
+	install -D -m 755 sbin/tor-lan-ip debian/secubox-tor/usr/sbin/tor-lan-ip
+	install -D -m 755 sbin/torctl debian/secubox-tor/usr/sbin/torctl
+	install -d debian/secubox-tor/usr/share/secubox/tor
+	install -m 644 conf/torrc.d/50-secubox-socks-lan.conf conf/torrc.d/60-secubox-transparent.conf debian/secubox-tor/usr/share/secubox/tor/
+	install -m 644 conf/unbound/secubox-onion-forward.conf debian/secubox-tor/usr/share/secubox/tor/
+	install -m 644 nft.d/secubox-tor-transparent.nft debian/secubox-tor/usr/share/secubox/tor/
+
+	# route_localnet reboot-persistence: conf.all inherited by ifaces created
+	# after boot (wg-toolbox); torctl already sets it live per-iface at
+	# `transparent on` time, this dropin covers ifaces recreated later.
+	install -D -m 644 debian/secubox-tor-route-localnet.sysctl debian/secubox-tor/etc/sysctl.d/60-secubox-route-localnet.conf

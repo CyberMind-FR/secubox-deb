@@ -1,0 +1,2 @@
+# L'API proxypac (user secubox) délègue les actions privilégiées à des ctl audités.
+secubox ALL=(root) NOPASSWD: /usr/sbin/proxypac-wpad apply, /usr/sbin/proxypac-wpad state, /usr/sbin/torctl transparent on, /usr/sbin/torctl transparent off
