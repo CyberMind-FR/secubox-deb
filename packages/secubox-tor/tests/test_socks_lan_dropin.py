@@ -5,7 +5,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_socks_lan_template_has_no_socks_policy():
     tpl = (ROOT / "conf/torrc.d/50-secubox-socks-lan.conf").read_text()
     assert "SocksPort" in tpl
-    assert "SocksPolicy" not in tpl, "SocksPolicy est GLOBALE — casserait le port mesh"
+    # Cible une DIRECTIVE en début de ligne (pas le mot dans un commentaire),
+    # pour que le template puisse documenter POURQUOI on n'en met pas.
+    assert not re.search(r"(?m)^\s*SocksPolicy\b", tpl), \
+        "SocksPolicy est GLOBALE — casserait le port mesh"
     assert "__LAN_IP__" in tpl, "l'IP doit être un placeholder substitué au postinst"
     assert "0.0.0.0" not in tpl
 
