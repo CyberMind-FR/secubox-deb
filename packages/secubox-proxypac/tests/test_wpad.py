@@ -32,3 +32,17 @@ def test_idempotent(tmp_path):
     _run(e, "apply"); a = (tmp_path/"dnsmasq"/"secubox-wpad.conf").read_text()
     _run(e, "apply"); b = (tmp_path/"dnsmasq"/"secubox-wpad.conf").read_text()
     assert a == b
+
+def test_role_switch_cleans_previous_tier(tmp_path):
+    # Bascule master -> slave-dns SUR LES MÊMES répertoires : le dropin de
+    # l'ancien tier DOIT disparaître (pas d'accumulation des deux).
+    (tmp_path/"dnsmasq").mkdir(); (tmp_path/"unbound").mkdir()
+    dnsmasq = tmp_path/"dnsmasq"/"secubox-wpad.conf"
+    unbound = tmp_path/"unbound"/"secubox-wpad.conf"
+    _run(_env(tmp_path, "master"), "apply")
+    assert dnsmasq.exists() and not unbound.exists()
+    _run(_env(tmp_path, "slave-dns"), "apply")
+    assert unbound.exists() and not dnsmasq.exists(), "l'ancien dropin master doit être nettoyé"
+    # et retour à tier3 (slave) : plus aucun dropin
+    _run(_env(tmp_path, "slave"), "apply")
+    assert not dnsmasq.exists() and not unbound.exists()
