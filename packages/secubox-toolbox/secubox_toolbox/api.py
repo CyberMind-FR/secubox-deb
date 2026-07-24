@@ -4108,11 +4108,34 @@ def _rlevel_peer_for_ip(ip: str | None) -> str | None:
     return None
 
 
+def _is_wg_peer_source(request: Request) -> bool:
+    """True if the request's source IP is itself a known wg-toolbox tunnel
+    peer. uvicorn binds 0.0.0.0:8088 and the wg-toolbox nft DNAT forwards a
+    peer's tunnel traffic straight to it at L3/L4 — bypassing nginx/SSO
+    entirely — so a peer can otherwise reach the ADMIN routes directly with
+    nothing but its own tunnel IP. A peer cannot spoof this source (the DNAT
+    preserves the real 10.99.1.x address), so "source is a known peer" is a
+    sound negative test for "this is NOT an admin call"."""
+    return _rlevel_peer_for_ip(_client_ip(request)) is not None
+
+
+def _require_admin_source(request: Request) -> None:
+    """Gate for the admin rlevel routes. Rejects 403 when the caller's source
+    IP is a wg-toolbox tunnel peer: an admin acts through the admin vhost
+    (nginx-proxied, so the source is loopback / a non-peer address), while a
+    tunnel connection IS a peer connection by construction — never an admin
+    one. Keeps the self-service /rlevel/me routes untouched (they require the
+    OPPOSITE : the caller MUST be a tunnel peer)."""
+    if _is_wg_peer_source(request):
+        raise HTTPException(status_code=403, detail="tunnel-peer source cannot call admin rlevel routes")
+
+
 @router.get("/rlevel/peers")
-async def rlevel_peers() -> dict:
+async def rlevel_peers(request: Request) -> dict:
     """Admin — every wg-toolbox peer's rlevel status (chosen/forced/floor/
     effective + best-effort live handshake). Read-only: sourced from
     wg-peers.json (identity) + `sbxmitm-policyctl list` (policy)."""
+    _require_admin_source(request)
     wg_peers = _rlevel_load_wg_peers()
     doc = _rlevel_load_policy()
     live = _rlevel_wg_live(set(wg_peers.keys()))
@@ -4131,17 +4154,28 @@ async def rlevel_peers() -> dict:
     return {"peers": peers, "defaults": doc.get("defaults")}
 
 
-@router.post("/rlevel/peer/{pubkey}")
-async def rlevel_peer_set(pubkey: str, request: Request) -> dict:
-    """Admin — set a peer's floor and/or forced mode. Body: {"floor"?: mode,
-    "forced"?: mode|null}. Every write is delegated to sbxmitm-policyctl
-    (no in-process root)."""
+@router.post("/rlevel/peer")
+async def rlevel_peer_set(request: Request) -> dict:
+    """Admin — set a peer's floor and/or forced mode. Body: {"pubkey": str,
+    "floor"?: mode, "forced"?: mode|null}. Every write is delegated to
+    sbxmitm-policyctl (no in-process root).
+
+    The pubkey travels in the JSON body, not the URL path : WireGuard
+    pubkeys are standard base64 and routinely contain '/' (and '+'), which
+    Starlette rejects in a path segment (even %2F-encoded) — a path param
+    made roughly half of real pubkeys unaddressable."""
+    _require_admin_source(request)
     try:
         body = await request.json()
     except Exception:
         body = {}
     if not isinstance(body, dict):
         body = {}
+    pubkey = body.get("pubkey")
+    if not pubkey or not isinstance(pubkey, str):
+        raise HTTPException(status_code=400, detail="pubkey required")
+    if pubkey not in _rlevel_load_wg_peers():
+        raise HTTPException(status_code=404, detail="unknown wg-toolbox pubkey")
     floor = body.get("floor")
     forced_present = "forced" in body
     forced = body.get("forced")
