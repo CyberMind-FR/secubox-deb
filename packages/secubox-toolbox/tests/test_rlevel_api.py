@@ -8,12 +8,16 @@ to `sudo -n sbxmitm-policyctl` (task 4). Tests stub `_rlevel_ctl` directly for
 behavioral assertions, and stub `subprocess.run` once to prove the real
 delegation command line is well-formed.
 
-Admin routes (GET /rlevel/peers, POST /rlevel/peer) require the caller's
-source IP to NOT be a known wg-toolbox tunnel peer (`_require_admin_source`) —
-the nft DNAT forwards a peer's tunnel traffic straight to uvicorn at L3/L4,
-bypassing nginx/SSO, so without this gate a peer could call the admin routes
-directly. The pubkey for POST /rlevel/peer travels in the JSON body (not the
-URL path) because WireGuard base64 pubkeys routinely contain '/'.
+Admin routes (GET /rlevel/peers, POST /rlevel/peer) are double-gated:
+1. `_is_public_kbin` — refused on the public kbin.gk2.secubox.in vhost
+   (HAProxy routes it straight to uvicorn, no SSO), same as the 8 sibling
+   admin-write routes in this file.
+2. `_require_admin_source` — the caller's source IP must NOT be a known
+   wg-toolbox tunnel peer; the nft DNAT forwards a peer's tunnel traffic
+   straight to uvicorn at L3/L4, bypassing nginx/SSO, so without this gate
+   a peer could call the admin routes directly.
+The pubkey for POST /rlevel/peer travels in the JSON body (not the URL
+path) because WireGuard base64 pubkeys routinely contain '/'.
 """
 import json
 
@@ -84,17 +88,48 @@ def test_peer_source_cannot_mutate_admin_peer(tmp_path, monkeypatch):
 
 def test_admin_source_not_a_peer_can_list_and_mutate(tmp_path, monkeypatch):
     """Sanity: a caller whose source IP is NOT in wg-peers.json (loopback via
-    the admin vhost) is unaffected by the gate."""
+    the admin vhost, NOT kbin) is unaffected by the gates."""
     _write_wg_peers(tmp_path, monkeypatch, {PK1: {"ip": "10.99.1.5", "label": "phone-A"}})
     calls = _stub_ctl(monkeypatch, doc={
         "defaults": {"mode": "passive", "floor": "passive"},
         "peers": {PK1: {"chosen": "passive", "forced": None, "floor": "passive"}},
     })
-    r = client.get("/rlevel/peers")  # no X-R3-Peer header -> not a tunnel peer
+    # Explicit admin vhost host header — not kbin, not a tunnel peer.
+    admin_headers = {"host": "admin.gk2.secubox.in"}
+    r = client.get("/rlevel/peers", headers=admin_headers)  # no X-R3-Peer -> not a tunnel peer
     assert r.status_code == 200
-    r2 = client.post("/rlevel/peer", json={"pubkey": PK1, "floor": "active"})
+    r2 = client.post("/rlevel/peer", headers=admin_headers, json={"pubkey": PK1, "floor": "active"})
     assert r2.status_code == 200, r2.text
     assert ["set-floor", PK1, "active"] in calls
+
+
+# ── CRITICAL — public kbin vhost must NOT reach admin rlevel writes ─────
+# HAProxy routes the public kbin.gk2.secubox.in vhost straight to uvicorn
+# with no SSO in front of it. `_require_admin_source` only rejects known
+# wg-toolbox tunnel peers — a public kbin visitor is neither, so without a
+# dedicated kbin guard it sailed straight through to the admin routes
+# (bypass inspection on a peer, or force a peer into cleartext). Every
+# other admin-write route in this file guards with `_is_public_kbin` first;
+# these two are the ones that had been missed.
+
+def test_public_kbin_cannot_list_admin_peers(tmp_path, monkeypatch):
+    _write_wg_peers(tmp_path, monkeypatch, {
+        PK1: {"ip": "10.99.1.5", "label": "phone-A"},
+    })
+    _stub_ctl(monkeypatch)
+    r = client.get("/rlevel/peers", headers={"host": "kbin.gk2.secubox.in"})
+    assert r.status_code == 403
+
+
+def test_public_kbin_cannot_mutate_admin_peer(tmp_path, monkeypatch):
+    _write_wg_peers(tmp_path, monkeypatch, {
+        PK1: {"ip": "10.99.1.5", "label": "phone-A"},
+    })
+    calls = _stub_ctl(monkeypatch)
+    r = client.post("/rlevel/peer", headers={"host": "kbin.gk2.secubox.in"},
+                     json={"pubkey": PK1, "forced": "off"})
+    assert r.status_code == 403
+    assert not calls  # never reached the ctl at all
 
 
 # ── admin: GET /rlevel/peers ────────────────────────────────────────────

@@ -4135,6 +4135,8 @@ async def rlevel_peers(request: Request) -> dict:
     """Admin — every wg-toolbox peer's rlevel status (chosen/forced/floor/
     effective + best-effort live handshake). Read-only: sourced from
     wg-peers.json (identity) + `sbxmitm-policyctl list` (policy)."""
+    if _is_public_kbin(request):
+        raise HTTPException(status_code=403, detail="rlevel admin disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
     _require_admin_source(request)
     wg_peers = _rlevel_load_wg_peers()
     doc = _rlevel_load_policy()
@@ -4164,6 +4166,8 @@ async def rlevel_peer_set(request: Request) -> dict:
     pubkeys are standard base64 and routinely contain '/' (and '+'), which
     Starlette rejects in a path segment (even %2F-encoded) — a path param
     made roughly half of real pubkeys unaddressable."""
+    if _is_public_kbin(request):
+        raise HTTPException(status_code=403, detail="rlevel admin disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
     _require_admin_source(request)
     try:
         body = await request.json()

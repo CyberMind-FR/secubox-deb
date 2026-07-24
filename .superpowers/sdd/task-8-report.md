@@ -147,3 +147,77 @@ Aucun `.deb`, `.buildinfo`, `.changes`, `debian/secubox-toolbox*/` de staging,
    `sudo -n` avant chaque appel ctl, vérification bypass nft "off") reste à
    exécuter manuellement sur le board — hors périmètre de cette tâche de
    packaging (cf. section « Recette de déploiement » du brief).
+
+## Fix CRITIQUE final — kbin public guard
+
+**Statut :** Terminé.
+
+**Finding** : le vhost public `kbin.gk2.secubox.in` est routé par HAProxy
+directement vers uvicorn, sans SSO (`app.py:31-34`). Les deux routes admin
+`GET /rlevel/peers` et `POST /rlevel/peer` (`secubox_toolbox/api.py`) ne
+posaient que `_require_admin_source(request)` — un garde qui rejette
+uniquement les sources qui SONT des peers tunnel `wg-toolbox` (10.99.1.x).
+Un client public via kbin n'est ni un peer tunnel ni bloqué par ce garde :
+il passait donc directement l'écriture admin (`POST /rlevel/peer
+{pubkey, forced:"off"}` pour bypasser l'inspection MITM d'un peer, ou
+`forced:"reel"` pour forcer le déchiffrement d'un peer). Les 8 autres
+routes d'écriture admin du même fichier (filter-control add/remove/
+toggle/delete, tor on/off/newnym/leak-check, clients/reset-all) posent
+toutes `if _is_public_kbin(request): raise HTTPException(403, ...)` en
+tête — les deux routes rlevel avaient été oubliées lors de leur ajout
+(task 6).
+
+**Fix** — `packages/secubox-toolbox/secubox_toolbox/api.py` :
+ajout, en tête de `rlevel_peers` (GET /rlevel/peers, ~L4133) et
+`rlevel_peer_set` (POST /rlevel/peer, ~L4159), AVANT `_require_admin_source`,
+du même garde que les 8 routes sœurs :
+```python
+if _is_public_kbin(request):
+    raise HTTPException(status_code=403, detail="rlevel admin disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+```
+`_require_admin_source` reste juste après (défense en profondeur : public
+kbin bloqué par le kbin-guard, peer tunnel bloqué par admin-source ; seul
+l'admin via vhost admin — source non-kbin, non-peer — passe). Les routes
+peer self-service `/rlevel/me` (GET/POST) sont inchangées : leur auth reste
+l'identité tunnel + les bornes floor/forced, elles DOIVENT rester
+atteignables par un peer.
+
+**Tests** (`tests/test_rlevel_api.py`) — TDD red→green :
+- Ajout de `test_public_kbin_cannot_list_admin_peers` et
+  `test_public_kbin_cannot_mutate_admin_peer` (header `host:
+  kbin.gk2.secubox.in` via `TestClient`, comme lu par `_is_public_kbin`) →
+  **403** attendu.
+  - **RED** confirmé : `git stash` du fix seul (api.py), les deux
+    nouveaux tests échouent avec `200 == 403` (l'écriture publique passe).
+  - **GREEN** : fix restauré, les deux tests passent.
+- `test_admin_source_not_a_peer_can_list_and_mutate` adapté : passe
+  désormais explicitement `headers={"host": "admin.gk2.secubox.in"}` sur
+  les deux appels (au lieu de laisser le host `TestClient` par défaut
+  passer implicitement `_is_public_kbin` à False) — la source simulée est
+  maintenant explicitement admin (non-kbin, non-peer), pas seulement
+  « non-peer », donc le test n'entérine plus le trou.
+- Docstring du module mise à jour pour documenter le double-gate
+  (`_is_public_kbin` puis `_require_admin_source`).
+- Tous les autres tests rlevel (self-service borné, escalade tunnel
+  bloquée, pubkey en body, etc.) restent verts, inchangés.
+
+**Vérification** :
+```
+cd packages/secubox-toolbox && python3 -m pytest tests/test_rlevel_api.py -q
+# 25 passed
+```
+Non-régression vérifiée : `python3 -m pytest tests/test_tor_switch.py -q -k kbin`
+→ 1 passed (garde `_is_public_kbin` sœur toujours correcte). Suite complète
+`pytest tests/` → 337 passed, 3 failed — les 3 échecs sont les mêmes
+préexistants déjà documentés plus haut (`test_bypass_sources.py` +
+`test_media_stats.py` ×2, `ModuleNotFoundError: secubox_core`), confirmés
+indépendants de ce fix (mêmes échecs avec le fix stashé).
+
+**Commit** : `fix(toolbox): /rlevel admin — bloque l'écriture depuis le
+vhost public kbin (_is_public_kbin, comme les 8 routes sœurs)`.
+
+**Préoccupations** :
+- Aucune action root in-process ajoutée ou modifiée (le fix n'ajoute que
+  des `raise HTTPException` avant les gardes/appels existants).
+- Les 3 échecs pytest préexistants (hors scope) restent à corriger
+  séparément, cf. section précédente.
