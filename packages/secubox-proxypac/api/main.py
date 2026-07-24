@@ -4,6 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """SecuBox-Deb :: proxypac API — override CRUD + candidates."""
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,9 @@ except Exception:  # test/stub fallback
 from proxypac.pac_template import directive
 from proxypac.rules import parse_rules_dir
 from proxypac.generator import run_once
+from proxypac import role, config as _cfg
+
+config = _cfg  # alias so tests can monkeypatch api.main.config.load
 
 RULES_DIR = Path(os.environ.get("PROXYPAC_RULES_DIR", "/etc/secubox/proxypac/rules.d"))
 WEBUI_FILE = RULES_DIR / "50-webui.rules"
@@ -119,3 +123,50 @@ def reject_candidate(host: str, user=Depends(require_jwt)):
 @app.get("/health")
 def health():
     return {"status": "ok", "module": "proxypac"}
+
+
+def _ctl(args, timeout=25):
+    """Délègue une action privilégiée à un ctl scopé via sudo -n. Ne lève jamais."""
+    try:
+        p = subprocess.run(["sudo", "-n", *args], capture_output=True,
+                            text=True, timeout=timeout)
+        return p.returncode, p.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return 1, ""
+
+
+@app.get("/status")
+def status(_=Depends(require_jwt)):
+    r = role.detect()
+    c = config.load()
+    dom = c.get("wpad_domain") or ""
+    return {"role": r["role"], "tier": r["tier"], "dns_resolver": r.get("dns_resolver", False),
+            "lan_ip": r.get("lan_ip", ""), "socks_endpoint": c["socks_endpoint"],
+            "transparent": bool(c.get("transparent", True)),
+            "pac_url": c.get("pac_url") or (f"http://wpad.{dom}/wpad.dat" if dom else "")}
+
+
+@app.post("/wpad/apply")
+def wpad_apply(_=Depends(require_jwt)):
+    rc, out = _ctl(["/usr/sbin/proxypac-wpad", "apply"])
+    return {"ok": rc == 0, "detail": out}
+
+
+@app.get("/wpad/state")
+def wpad_state(_=Depends(require_jwt)):
+    import json as _j
+    rc, out = _ctl(["/usr/sbin/proxypac-wpad", "state"])
+    try:
+        return _j.loads(out) if rc == 0 else {"error": "ctl indisponible"}
+    except Exception:
+        return {"error": "réponse illisible"}
+
+
+class Toggle(BaseModel):
+    on: bool
+
+
+@app.post("/transparent")
+def transparent(t: Toggle, _=Depends(require_jwt)):
+    rc, out = _ctl(["/usr/sbin/torctl", "transparent", "on" if t.on else "off"])
+    return {"ok": rc == 0, "detail": out}
