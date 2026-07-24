@@ -1,0 +1,6 @@
+# SecuBox ProxyPAC — configuration (conffile). Tout est optionnel.
+role = "auto"          # auto | master | slave | off
+wpad_domain = ""       # ex: gk2.secubox.in (vide = auto depuis le hostname)
+pac_url = ""           # override de l'URL PAC affichée (vide = auto)
+# socks_endpoint = "192.168.1.200:9050"   # override ; sinon IP LAN détectée:9050
+transparent = true      # .onion transparent pour clients force-routés (wg-toolbox+LAN)
