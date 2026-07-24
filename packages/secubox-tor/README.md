@@ -34,6 +34,23 @@ Configuration file: `/etc/secubox/tor.toml`
 - `GET /api/v1/tor/status` - Module status
 - `GET /api/v1/tor/health` - Health check
 
+## PAC .onion → Tor (client)
+
+Configure le navigateur/OS en « URL de configuration automatique du proxy » :
+
+    http://<box>/tor.pac
+
+Le PAC dévie les `.onion` vers le SOCKS Tor du box (`192.168.1.200:9050`), tout
+le reste passe en DIRECT.
+
+**Firefox :** active `network.proxy.socks_remote_dns = true` (`about:config`),
+sinon Firefox tente de résoudre le `.onion` en DNS local et échoue avant
+d'atteindre Tor. Chrome fait le remote DNS pour un SOCKS5 issu d'un PAC par
+défaut.
+
+Le SOCKS est **fermé à l'extérieur** (`SocksPolicy` : LAN + wg-toolbox
+uniquement) : ce n'est jamais un relais SOCKS ouvert.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

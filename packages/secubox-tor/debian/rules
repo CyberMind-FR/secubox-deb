@@ -13,3 +13,8 @@ override_dh_auto_install:
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-tor/etc/nginx/secubox.d
 	install -m 644 nginx/tor.conf $(CURDIR)/debian/secubox-tor/etc/nginx/secubox.d/tor.conf
+
+	# Dropin torrc : SOCKS LAN confiné pour le PAC .onion -> Tor.
+	install -d $(CURDIR)/debian/secubox-tor/etc/tor/torrc.d
+	install -m 644 conf/torrc.d/50-secubox-socks-lan.conf \
+		$(CURDIR)/debian/secubox-tor/etc/tor/torrc.d/50-secubox-socks-lan.conf
