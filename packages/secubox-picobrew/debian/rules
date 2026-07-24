@@ -13,6 +13,7 @@ override_dh_auto_install:
 	[ -f nginx/picobrew.conf ] && cp nginx/picobrew.conf debian/secubox-picobrew/etc/nginx/secubox.d/ || true
 	install -d debian/secubox-picobrew/usr/lib/systemd/system
 	cp debian/secubox-picobrew.service debian/secubox-picobrew/usr/lib/systemd/system/
+	cp systemd/secubox-picobrew-provision.service debian/secubox-picobrew/usr/lib/systemd/system/
 
 	install -d debian/secubox-picobrew/usr/sbin
 	install -m 755 sbin/picobrewctl debian/secubox-picobrew/usr/sbin/picobrewctl

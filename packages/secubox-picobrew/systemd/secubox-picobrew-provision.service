@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: PicoBrew — provisionnement initial du conteneur (une seule fois).
+#
+# Lancé --no-block par le postinst : « installer le paquet » suffit à activer
+# l'appareil. Le provisionnement (debootstrap + clone picobrew_pico + venv +
+# nginx/TLS) est lourd (~5-8 min) et dépend du réseau, donc il tourne EN
+# ARRIÈRE-PLAN plutôt que de bloquer dpkg.
+[Unit]
+Description=SecuBox PicoBrew — provisionnement initial du conteneur (idempotent, une fois)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network-online.target
+Wants=network-online.target
+# picobrewctl install écrit pinned-sha à la toute fin, en cas de succès complet.
+# On ne (re)provisionne donc QUE tant que ce marqueur est absent : le service
+# est un no-op après un provisionnement réussi (relance sûre au boot / upgrade).
+ConditionPathExists=!/var/lib/secubox/picobrew/pinned-sha
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/picobrewctl install
+# Provisionnement lourd : ne pas le tuer prématurément (debootstrap + pip).
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

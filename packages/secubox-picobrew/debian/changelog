@@ -1,3 +1,13 @@
+secubox-picobrew (2.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Installer le paquet ACTIVE l'appareil : nouveau service oneshot
+    secubox-picobrew-provision.service qui provisionne le conteneur
+    (debootstrap + clone picobrew_pico + venv + nginx/TLS) automatiquement.
+    Lancé --no-block par le postinst (ne bloque pas dpkg) et gardé par
+    ConditionPathExists=!pinned-sha (provisionne une seule fois, no-op ensuite).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 23 Jul 2026 22:30:00 +0200
+
 secubox-picobrew (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 1 : le module devient un LXC Debian hébergeant picobrew_pico, qui
