@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  SecuBox-Deb :: ToolBoX — /rlevel panel (per-peer MITM inspection level,
+  #rlevel-per-peer task 7). Admin table (floor/force via sbxmitm-policyctl,
+  task 4/6) + peer self-service (chosen, bounded by floor/forced).
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — R-Level (ToolBoX)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <style>
+        :root {
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
+            --red: #ff4466;
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
+            --purple: #a371f7;
+            --cyan: #00d4ff;
+            --grey: #8a97a3;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.2rem; backdrop-filter: blur(10px); }
+        .card h2 { font-size: 0.95rem; color: var(--cyan); margin-bottom: 0.75rem; }
+        .muted { color: var(--p31-dim); font-size: 0.8rem; }
+
+        /* mode badges — 4 distinct colours, one glyph-free pill each */
+        .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid currentColor; background: rgba(255,255,255,0.03); }
+        .badge-off{color:var(--grey);}
+        .badge-passive{color:var(--cyan);}
+        .badge-active{color:var(--orange);}
+        .badge-reel{color:var(--purple);}
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        th { color: var(--cyan); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; }
+        tr:hover td { background: rgba(0,212,255,0.04); }
+        .peer-label { color: var(--text); font-weight: bold; }
+        .peer-key { color: var(--p31-dim); font-size: 0.65rem; }
+        .sel { background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: 'Courier Prime', monospace; font-size: 0.72rem; padding: 0.25rem 0.35rem; }
+        .sel:focus { outline: none; border-color: var(--cyan); }
+        .empty { color: var(--p31-dim); font-style: italic; text-align: center; padding: 1rem !important; }
+        .live { text-align: center; }
+
+        .me-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+        .me-row .k { color: var(--p31-dim); font-size: 0.75rem; min-width: 6.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 340px; cursor: pointer; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) {
+            .main { margin-left: 0; }
+            table, thead, tbody, th, td, tr { display: block; }
+            thead { display: none; }
+            td { border-bottom: none; }
+            tr { border-bottom: 1px solid var(--border); padding: 0.4rem 0; }
+        }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>🎚️ R-Level — inspection MITM par peer</h1>
+                <div class="sub" id="subline">chosen / floor / forced / effective — sbxmitm-policyctl</div>
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="loadPeers()">↻ Refresh</button>
+            </div>
+        </header>
+
+        <section class="card" id="meCard-wrap">
+            <h2>🙋 Mon niveau (self-service)</h2>
+            <div id="meCard"><p class="muted">Loading…</p></div>
+        </section>
+
+        <section class="card">
+            <h2>👥 Peers — vue admin</h2>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Peer</th>
+                            <th>Chosen</th>
+                            <th>Floor</th>
+                            <th>Forced</th>
+                            <th>Effective</th>
+                            <th>Live</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="peersBody">
+                        <tr><td colspan="7" class="empty">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '/api/v1/toolbox';
+        const MODES = ['off', 'passive', 'active', 'reel'];
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function shortKey(pk) {
+            pk = String(pk || '');
+            return pk.length > 18 ? pk.slice(0, 8) + '…' + pk.slice(-6) : pk;
+        }
+
+        function badge(mode) {
+            const m = MODES.includes(mode) ? mode : 'off';
+            return '<span class="badge badge-' + m + '">' + m.toUpperCase() + '</span>';
+        }
+
+        function modeOptions(selected) {
+            return MODES.map(m => '<option value="' + m + '"' + (m === selected ? ' selected' : '') + '>' + m.toUpperCase() + '</option>').join('');
+        }
+
+        // Every rlevel call carries the fleet-standard bearer token + rides
+        // the same-origin session cookie (see WEBUI-PANEL-GUIDELINES §6).
+        async function api(path, opts) {
+            opts = opts || {};
+            const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+            headers['Authorization'] = 'Bearer ' + (localStorage.getItem('sbx_token') || '');
+            return fetch(API + path, Object.assign({}, opts, { headers, credentials: 'same-origin' }));
+        }
+
+        function toast(msg, isError) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show' + (isError ? ' error' : '');
+            t.onclick = () => { t.className = 'toast'; };
+            if (!isError) setTimeout(() => { t.className = 'toast'; }, 3000);
+        }
+
+        // ── Admin: GET /rlevel/peers + POST /rlevel/peer ──────────────────
+
+        async function loadPeers() {
+            const tbody = document.getElementById('peersBody');
+            try {
+                const res = await api('/rlevel/peers');
+                if (res.status === 403) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty">🔒 Admin view unavailable from this vantage (tunnel-peer source).</td></tr>';
+                    return;
+                }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                renderPeers((data && data.peers) || []);
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty">⚠️ ' + esc(e.message) + '</td></tr>';
+            }
+        }
+
+        function renderPeers(list) {
+            const tbody = document.getElementById('peersBody');
+            if (!list.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty">No wg-toolbox peers registered.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(p => {
+                const pk = esc(p.pubkey);
+                const label = esc(p.label || '(unlabeled)');
+                const short = esc(shortKey(p.pubkey));
+                const forcedVal = p.forced || '';
+                const live = p.live ? '🟢' : '⚪';
+                return '' +
+                    '<tr data-pubkey="' + pk + '">' +
+                    '<td><div class="peer-label">' + label + '</div><div class="peer-key" title="' + pk + '">' + short + '</div></td>' +
+                    '<td>' + badge(p.chosen) + '</td>' +
+                    '<td><select class="sel floor-sel" data-pubkey="' + pk + '">' + modeOptions(p.floor) + '</select></td>' +
+                    '<td><select class="sel forced-sel" data-pubkey="' + pk + '"><option value="">(none)</option>' + modeOptions(forcedVal) + '</select></td>' +
+                    '<td>' + badge(p.effective) + '</td>' +
+                    '<td class="live">' + live + '</td>' +
+                    '<td>' +
+                    '<button class="btn sm primary" data-action="apply" data-pubkey="' + pk + '">Apply</button> ' +
+                    '<button class="btn sm" data-action="unlock" data-pubkey="' + pk + '">Unlock</button>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        async function setPeer(body) {
+            try {
+                const res = await api('/rlevel/peer', { method: 'POST', body: JSON.stringify(body) });
+                const d = await res.json().catch(() => ({}));
+                if (!res.ok) { toast('❌ ' + (d.detail || ('HTTP ' + res.status)), true); return; }
+                toast('✅ Updated ' + shortKey(body.pubkey));
+                loadPeers();
+            } catch (e) { toast('❌ ' + e.message, true); }
+        }
+
+        // Delegated listener — pubkey/label never touch an inline handler
+        // string (proxypac XSS lesson): actions carry data-action/data-pubkey,
+        // read back here via .dataset, never interpolated into onclick="...".
+        document.getElementById('peersBody').addEventListener('click', e => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const pubkey = btn.dataset.pubkey;
+            const action = btn.dataset.action;
+            const row = btn.closest('tr');
+            if (action === 'apply') {
+                const floor = row.querySelector('.floor-sel').value;
+                const forcedRaw = row.querySelector('.forced-sel').value;
+                const body = { pubkey: pubkey, floor: floor };
+                if (forcedRaw !== '') body.forced = forcedRaw;
+                setPeer(body);
+            } else if (action === 'unlock') {
+                setPeer({ pubkey: pubkey, forced: null });
+            }
+        });
+
+        // ── Self-service: GET/POST /rlevel/me ──────────────────────────────
+
+        async function loadMe() {
+            const card = document.getElementById('meCard');
+            try {
+                const res = await api('/rlevel/me');
+                if (res.status === 403) {
+                    card.innerHTML = '<p class="muted">Not reachable as a wg-toolbox tunnel peer from this vantage — self-service unavailable.</p>';
+                    return;
+                }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const me = await res.json();
+                renderMe(me);
+            } catch (e) {
+                card.innerHTML = '<p class="muted">⚠️ ' + esc(e.message) + '</p>';
+            }
+        }
+
+        function renderMe(me) {
+            const card = document.getElementById('meCard');
+            const locked = me.forced != null;
+            card.innerHTML =
+                '<div class="me-row"><span class="k">Effective</span>' + badge(me.effective) + '</div>' +
+                '<div class="me-row"><span class="k">Chosen</span>' + badge(me.chosen) + '</div>' +
+                '<div class="me-row"><span class="k">Floor</span>' + badge(me.floor) + '</div>' +
+                (locked
+                    ? '<p class="muted">🔒 Forcé à <b>' + esc(me.forced) + '</b> par l\'admin — self-service désactivé.</p>'
+                    : '<div class="me-row"><span class="k">Régler</span><select class="sel" id="meChosenSel">' + modeOptions(me.chosen) + '</select> ' +
+                      '<button class="btn sm primary" id="meApplyBtn">Apply</button></div>');
+            if (!locked) {
+                document.getElementById('meApplyBtn').addEventListener('click', applyMe);
+            }
+        }
+
+        async function applyMe() {
+            const sel = document.getElementById('meChosenSel');
+            if (!sel) return;
+            try {
+                const res = await api('/rlevel/me', { method: 'POST', body: JSON.stringify({ chosen: sel.value }) });
+                const d = await res.json().catch(() => ({}));
+                if (!res.ok) { toast('❌ ' + (d.detail || ('HTTP ' + res.status)), true); return; }
+                toast('✅ Set to ' + sel.value);
+                loadMe();
+            } catch (e) { toast('❌ ' + e.message, true); }
+        }
+
+        loadPeers();
+        loadMe();
+        setInterval(loadPeers, 20000);
+        setInterval(loadMe, 20000);
+    </script>
+</body>
+</html>
