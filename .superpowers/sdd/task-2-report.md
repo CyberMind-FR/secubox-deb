@@ -1,194 +1,265 @@
-# Task 2 — Rapport d'implémentation
+# Task 2 Report — transparent `.onion` (Unbound forward + tor TransPort + nft redirect + `torctl transparent`)
 
-Module : `secubox-picobrew`
-Branche : `feat/picobrew-phase1-lxc`
-Commit : `391612bb7de6f488ceabe0c8b3fc06c7ccc844d2`
+**Module:** `secubox-tor`
+**Branche:** `feat/proxypac-wpad-autodetect`
+**Commit Hash:** `b61b5aa1`
 
-(Note relecteur : ce fichier contenait précédemment un rapport pour une tâche `secubox-meshtastic` sans rapport avec ce module — probablement un rapport d'une session antérieure resté au même chemin. Il a été intégralement remplacé par le rapport ci-dessous, propre à cette tâche.)
+## Files Created
 
-## Fichiers déplacés / créés
+- `packages/secubox-tor/conf/torrc.d/60-secubox-transparent.conf`
+- `packages/secubox-tor/conf/unbound/secubox-onion-forward.conf`
+- `packages/secubox-tor/nft.d/secubox-tor-transparent.nft`
+- `packages/secubox-tor/tests/test_torctl_transparent.py`
+- `packages/secubox-tor/tests/test_onion_forward.py`
+- `packages/secubox-tor/tests/test_nft_transparent.py`
 
-- **Déplacé** (git mv, contenu inchangé) :
-  `packages/secubox-picobrew/api/main.py` → `packages/secubox-picobrew/lib/stillwatch/legacy_controller.py`
-  Vérification d'intégrité : `diff` entre le blob `HEAD:packages/secubox-picobrew/api/main.py` (avant déplacement) et le fichier final `lib/stillwatch/legacy_controller.py` → **exit code 0** (identique octet pour octet, 992 lignes, aucune modification).
-  Note : dans le commit final, git n'affiche plus ce fichier comme "renamed" — il apparaît en `new file` pour `legacy_controller.py` et `modified` pour `api/main.py`. C'est un artefact normal : une fois `api/main.py` recréé avec un contenu très différent (la nouvelle API mince), git ne retrouve plus de similarité suffisante pour détecter un rename pur. L'historique de commande (`git mv` exécuté en premier, avant toute autre modification) et la vérification byte-à-byte ci-dessus confirment qu'il s'agit bien d'un déplacement sans altération du contenu original.
+## Files Modified
 
-- **Créé** : `packages/secubox-picobrew/api/main.py` — nouvelle API de gestion mince (65 lignes), reprise verbatim du brief. En-tête SPDX `LicenseRef-CMSD-1.0` + ligne Copyright CyberMind présents.
+- `packages/secubox-tor/sbin/torctl` — ajout des variables d'env overridables
+  (`TORCTL_TORRC_D` / `TORCTL_UNBOUND_D` / `TORCTL_NFT_D` / `TORCTL_DRYRUN`),
+  des fonctions `transport_already_declared` / `transparent_on` /
+  `transparent_off` / `transparent_status`, et de l'entrée `transparent)`
+  dans le `case` existant. `detect-lan-ip` et `socks-lan` inchangés
+  (non-régression vérifiée manuellement, cf. plus bas). `chmod +x` conservé
+  (755).
 
-- **Créé** : `packages/secubox-picobrew/tests/test_api_management.py` — 3 tests, repris verbatim du brief. En-tête SPDX présent ; pas de ligne Copyright sur ce fichier, conformément au snippet du brief (qui n'en porte pas).
+## Test Output — BEFORE (échec attendu, Step 2)
 
-Le fichier `packages/secubox-picobrew/api/__init__.py` existant n'a pas été touché.
-
-Aucun autre fichier du paquet n'a été modifié (README, debian/*, sbin/picobrewctl, nginx/, www/, menu.d/). Le répertoire `packages/secubox-picobrew/debian/secubox-picobrew/` est un artefact de build **non suivi par git** (absent de `git ls-files`) contenant une ancienne copie build-time de `api/main.py` — non touché, non pertinent pour ce commit (sera régénéré au prochain `dpkg-buildpackage`).
-
-## Méthode TDD — preuve d'échec puis de succès
-
-Commande de test (depuis le répertoire du paquet, avec le venv racine du dépôt — `fastapi`/`httpx` absents de l'environnement global) :
 ```
-cd packages/secubox-picobrew && /home/reepost/CyberMindStudio/secubox-deb/secubox-deb/.venv/bin/python3 -m pytest tests/test_api_management.py -q
-```
-
-### AVANT implémentation (après le seul `git mv`, avant création du nouveau `api/main.py`)
-
-Sortie exacte :
-```
-==================================== ERRORS ====================================
-___ ERROR collecting packages/secubox-picobrew/tests/test_api_management.py ____
-ImportError while importing test module '/home/reepost/CyberMindStudio/secubox-deb/secubox-deb/packages/secubox-picobrew/tests/test_api_management.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-/usr/lib/python3.12/importlib/__init__.py:90: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-tests/test_api_management.py:5: in <module>
-    from api.main import app
-E   ModuleNotFoundError: No module named 'api.main'
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+____________ test_on_skips_transport_dropin_when_one_already_exists ____________
+E       AssertionError: assert 2 == 0
+E        +  where 2 = CompletedProcess(... 'transparent', 'on'], returncode=2,
+             stderr='usage: torctl {detect-lan-ip|socks-lan ensure|transparent {on|off|status}}\n')
+_______________________ test_off_removes_only_our_files ________________________
+E       AssertionError: assert not True
+________ test_onion_forward_targets_tor_dnsport_and_keeps_automap_range ________
+E       FileNotFoundError: .../conf/unbound/secubox-onion-forward.conf
+______________ test_nft_redirects_only_automap_range_to_transport ______________
+E       FileNotFoundError: .../nft.d/secubox-tor-transparent.nft
 =========================== short test summary info ============================
-ERROR tests/test_api_management.py
-!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
-1 error in 0.34s
-```
-Conforme à l'attendu du brief (`ModuleNotFoundError` / `app` introuvable, l'ancien `main.py` ayant été déplacé).
-
-### APRÈS implémentation (nouveau `api/main.py` créé)
-
-Sortie exacte :
-```
-...                                                                      [100%]
-3 passed in 0.29s
+4 failed in 0.11s
 ```
 
-Vérification complémentaire — suite complète du répertoire `tests/` du paquet (inclut aussi `test_picobrewctl_guards.sh`, un test shell non collecté par pytest car ce n'est pas un fichier `.py`) :
-```
-...                                                                      [100%]
-3 passed in 0.30s
-```
-Aucune régression détectée, aucun test additionnel silencieusement ignoré (le script shell est un test distinct, hors du scope pytest, non exécuté ni modifié dans cette tâche).
-
-## Conformité aux contraintes du dépôt
-
-- SPDX + Copyright CyberMind présents en tête de `api/main.py` (fichier créé). Absents de `legacy_controller.py` (fichier déplacé, non modifié — conforme à la consigne explicite de ne pas y toucher) et de `test_api_management.py` (le snippet du brief ne porte que le SPDX, sans ligne Copyright — reproduit verbatim, sans ajout de ma part).
-- L'API ne fait aucune action privilégiée elle-même : `_ctl()` est l'unique point d'exécution externe dans `api/main.py`, via `sudo -n /usr/sbin/picobrewctl <args>`. Aucun autre appel `subprocess`/`os.system` dans le fichier.
-- Dégradation propre : `_ctl()` capture `OSError` et `subprocess.SubprocessError` (ctl absent, timeout, etc.) et retourne toujours `(1, "")` plutôt que de lever une exception — `/status` répond alors `200` avec `installed: false` et une clé `error`, jamais de `500`. Comportement vérifié explicitement par `test_status_degrades_cleanly_when_ctl_fails`.
-- `POST /start` et `POST /stop` délèguent strictement à `_ctl(["start"])` / `_ctl(["stop"])` — vérifié par `test_start_delegates_to_ctl_and_never_runs_privileged_itself`, qui inspecte l'argument exact passé au mock.
-
-## Doutes / points d'attention pour le relecteur
-
-1. **Rename non détecté par git dans le commit final** : voir explication détaillée ci-dessus (section "Fichiers déplacés / créés"). Preuve d'intégrité fournie par diff byte-à-byte contre le blob pré-déplacement, pas seulement par affirmation.
-2. **`lib/stillwatch/` sans `__init__.py`** : le brief demande uniquement un emplacement de dépôt pour la phase 2 (le fichier déplacé n'est importé nulle part dans ce commit). Aucun `__init__.py` n'a donc été ajouté, pour rester strictement dans le périmètre de la tâche. Si une phase ultérieure doit importer ce module comme package Python, il faudra l'ajouter alors.
-3. Le paramètre `timeout=20` de `_ctl()` est repris verbatim du brief ; aucun test ne couvre spécifiquement un dépassement de timeout (le brief n'en demandait pas).
-4. Je n'ai pas touché à `debian/control` ni à `debian/rules` pour refléter la nouvelle arborescence `lib/stillwatch/` — ce n'était pas dans le périmètre de la tâche 2 (uniquement API + déplacement du contrôleur). Une phase ultérieure de packaging devra vraisemblablement inclure ce nouveau chemin dans les règles d'installation Debian si la phase 2 en a besoin côté paquet livré.
-5. Ce fichier de rapport (`task-2-report.md`) existait déjà avant cette tâche avec un contenu concernant `secubox-meshtastic` (module distinct, sans rapport avec `secubox-picobrew`). Il a été entièrement remplacé — signalé ici par transparence, au cas où ce contenu antérieur avait une valeur que je n'ai pas perçue.
-
----
-
-## Correctif post-revue — filet de test insuffisant sur `_ctl`
-
-**Constat de la revue** (vérifié empiriquement par le relecteur) : les 3 tests
-initiaux patchaient `api.main._ctl` en entier — le corps de `_ctl` (délégation
-sudo exacte, capture d'exceptions OS, garde JSON) n'était donc jamais exécuté.
-Le relecteur a démontré qu'on pouvait retirer `"sudo", "-n"` de l'argv réel, OU
-supprimer tout le `try/except`, OU supprimer la garde `json.JSONDecodeError` —
-les 3 tests passaient quand même.
-
-**`api/main.py` non modifié** : confirmé par `git diff --stat -- packages/secubox-picobrew/api/main.py`
-→ vide (aucune sortie), avant et après cette tâche.
-
-### Tests ajoutés (fichier `tests/test_api_management.py`, 5 nouveaux tests, patchant `subprocess.run` et non plus `_ctl`)
-
-1. `test_ctl_invokes_exact_privileged_argv` — vérifie que `_ctl(["start"])`
-   appelle `subprocess.run` avec l'argv exact
-   `["sudo", "-n", "/usr/sbin/picobrewctl", "start"]`.
-2. `test_ctl_survives_missing_binary` — `subprocess.run` lève `FileNotFoundError`
-   → `_ctl` ne lève jamais, renvoie `(1, "")`.
-3. `test_ctl_survives_timeout` — `subprocess.run` lève
-   `subprocess.TimeoutExpired(cmd="x", timeout=20)` → `_ctl` ne lève jamais,
-   renvoie `(1, "")`.
-4. `test_status_route_survives_empty_ctl_output` — route `/status`, rc=0 mais
-   stdout vide → 200 avec `installed: false`, `running: false` et un champ
-   `error` exploitable.
-5. `test_status_route_survives_invalid_json` — route `/status`, rc=0 mais
-   stdout non-JSON (`"ceci n'est pas du json"`) → 200 avec `installed: false`
-   et un champ `error` exploitable (garde `JSONDecodeError`).
-
-Les 3 tests existants (routeur→`_ctl`) sont conservés intacts.
-
-### Méthode imposée — casser puis restaurer, un défaut à la fois
-
-Commande de test (depuis le répertoire du paquet) :
-```
-cd packages/secubox-picobrew && /home/reepost/CyberMindStudio/secubox-deb/secubox-deb/.venv/bin/python3 -m pytest tests/ -q
-```
-
-**Baseline (code correct, avant tout correctif)** : `3 passed in 0.27s`.
-**Après ajout des 5 nouveaux tests (code toujours correct)** : `8 passed in 0.29s`.
-
-#### Casse 1 — retrait de `"sudo", "-n"` de l'argv réel
-
-`api/main.py` : `subprocess.run(["sudo", "-n", CTL, *args], ...)` →
-`subprocess.run([CTL, *args], ...)`.
-
-Test ciblé, sortie obtenue :
-```
-$ pytest tests/test_api_management.py::test_ctl_invokes_exact_privileged_argv -q
-F
-AssertionError: assert ['/usr/sbin/picobrewctl', 'start'] == ['sudo', '-n', '/usr/sbin/picobrewctl', 'start']
-  At index 0 diff: '/usr/sbin/picobrewctl' != 'sudo'
-1 failed in 0.28s
-```
-Suite complète : `1 failed, 7 passed in 0.30s` (seul le test ciblé échoue).
-
-Restauration de `api/main.py` à l'identique → suite complète : `8 passed in 0.30s`.
-
-#### Casse 2 — suppression du `try/except (OSError, subprocess.SubprocessError)` dans `_ctl`
-
-Sortie obtenue (les deux tests de dégradation échouent, avec l'exception réelle qui remonte au lieu d'être absorbée) :
-```
-$ pytest tests/test_api_management.py::test_ctl_survives_missing_binary tests/test_api_management.py::test_ctl_survives_timeout -q
-FF
-FileNotFoundError
-...
-subprocess.TimeoutExpired: Command 'x' timed out after 20 seconds
-2 failed in 0.38s
-```
-Suite complète : `2 failed, 6 passed in 0.40s`.
-
-Restauration de `api/main.py` à l'identique → suite complète : `8 passed in 0.31s`.
-
-#### Casse 3 — suppression de la garde `except json.JSONDecodeError` dans `/status`
-
-Sortie obtenue (l'exception JSON remonte jusqu'au client de test — `500` implicite au lieu d'un repli `200`) :
-```
-$ pytest tests/test_api_management.py::test_status_route_survives_invalid_json -q
-F
-...
-api/main.py:40: in status
-    return json.loads(out)
-json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
-1 failed in 0.47s
-```
-Suite complète : `1 failed, 7 passed in 0.47s`.
-
-Restauration de `api/main.py` à l'identique → suite complète : `8 passed in 0.30s`.
-
-### Vérification finale
+## Test Output — AFTER (Step 7)
 
 ```
-$ git diff --stat -- packages/secubox-picobrew/api/main.py
-```
-→ aucune sortie : `api/main.py` strictement identique à son état avant ce correctif.
-
-```
-$ cd packages/secubox-picobrew && /home/reepost/CyberMindStudio/secubox-deb/secubox-deb/.venv/bin/python3 -m pytest tests/ -q
-........                                                                 [100%]
-8 passed in 0.30s
+$ cd packages/secubox-tor && python3 -m pytest tests/test_torctl_transparent.py tests/test_onion_forward.py tests/test_nft_transparent.py -q
+....                                                                     [100%]
+4 passed in 0.07s
 ```
 
-### Commit
+Suite complète du paquet (non-régression) :
 
-Hash : `b2163fb3` — `fix(picobrew): tests _ctl→OS pour argv sudo, dégradation OS et garde JSON (ref revue tâche 2)`.
+```
+$ cd packages/secubox-tor && python3 -m pytest tests/ -q
+........................                                                 [100%]
+24 passed, 1 warning in 0.70s
+```
 
-### Préoccupations pour le relecteur
+## Gestion du `cp`/`$SHARE` en dry-run (point crucial du brief)
 
-- Les tests 2 (binaire absent) et 3 (timeout) appellent `_ctl` directement plutôt que de passer par une route HTTP ; c'est volontaire (le point de défaillance est dans `_ctl`, indépendant du routeur), mais je le signale car la consigne mentionnait `/status` explicitement pour les deux derniers cas seulement.
-- `test_ctl_invokes_exact_privileged_argv` hardcode le chemin littéral `/usr/sbin/picobrewctl` plutôt que d'importer `api.main.CTL`, précisément pour que le test reste discriminant si `CTL` lui-même est modifié à la légère.
+Le pseudo-code du brief fait un `cp "$SHARE/…"` inconditionnel même quand le
+dropin torrc est réutilisé (branche "déjà déclaré"), pour les templates
+unbound et nft. Or `$SHARE` (`/usr/share/secubox/tor`) n'existe pas en
+environnement de test (paquet non installé), et le script tourne avec
+`set -euo pipefail` : un `cp` sur une source absente aurait fait échouer tout
+le script (`returncode != 0`), cassant `test_on_skips_transport_dropin_when_one_already_exists`
+qui exige `r.returncode == 0`.
+
+**Décision retenue** : au lieu de contourner la sémantique de `_reload`
+(réservée aux actions systemctl/nft/sysctl selon le brief), j'ai introduit un
+troisième garde-fou dédié aux copies de templates, `_install_tpl(src, dst)` :
+
+```bash
+_install_tpl() {
+  local src="$1" dst="$2"
+  if [ -f "$src" ]; then
+    cp "$src" "$dst"
+  elif [ "$DRYRUN" = "1" ]; then
+    :
+  else
+    echo "template manquant: $src" >&2
+    return 1
+  fi
+}
+```
+
+- Hors dry-run (production réelle, paquet installé) : un template manquant
+  sous `$SHARE` est une vraie erreur de packaging → le script échoue bruyamment
+  (comportement inchangé par rapport au brief).
+- En dry-run (`TORCTL_DRYRUN=1`, utilisé uniquement par les tests) : l'absence
+  de la source est tolérée silencieusement — la seule chose sous test est le
+  comportement observable demandé par le brief (présence/absence du dropin
+  `60-secubox-transparent.conf` selon détection de `TransPort` existant, et
+  non-suppression des fichiers d'un autre paquet par `off`), pas l'exécution
+  réelle d'une copie de template qui n'a pas de sens hors paquet installé.
+
+Je n'ai pas introduit de variable d'env `TORCTL_SHARE_D` : ni le brief ni les
+tests fournis n'en définissent une, et cela aurait ajouté une surface non
+testée. `SHARE` reste donc le chemin de production unique
+`/usr/share/secubox/tor` (cohérent avec `socks_lan_ensure`, déjà en place
+depuis Task 1).
+
+## Invariants vérifiés
+
+1. **Coordination de ports** — `transport_already_declared()` grep les
+   `*.conf` de `$TORRC_D` pour `TransPort 127.0.0.1:9040` ; si un dropin
+   externe (ex. `torrc-toolbox-egress.conf`) le déclare déjà, `60-secubox-transparent.conf`
+   n'est jamais posé (`test_on_skips_transport_dropin_when_one_already_exists`).
+2. **`off` ne retire que nos 3 fichiers** — `rm -f` cible nommément
+   `60-secubox-transparent.conf` / `secubox-onion-forward.conf` /
+   `secubox-tor-transparent.nft`, jamais un glob ; le dropin d'un autre
+   paquet (`torrc-toolbox-egress.conf`) est préservé
+   (`test_off_removes_only_our_files`).
+3. **Dry-run** — `_reload()` court-circuite `sysctl`/`systemctl`/`nft` ;
+   `_install_tpl()` tolère l'absence de `$SHARE` en dry-run (cf. ci-dessus).
+4. **nft scope strict** — `nft.d/secubox-tor-transparent.nft` : table isolée
+   `inet secubox-tor-transparent`, chaîne `prerouting` hook `dstnat`,
+   `iifname { "wg-toolbox", "eth2" }`, `ip daddr 10.192.0.0/10` uniquement,
+   DNAT explicite vers `127.0.0.1:9040` (pas de `redirect`, cf. note du
+   brief sur `route_localnet=1`).
+5. **Unbound** — `secubox-onion-forward.conf` contient bien
+   `private-domain: "onion."` (anti-strip du range automap privé) et
+   `forward-zone: name: "onion." forward-addr: 127.0.0.1@9053`.
+
+## Non-régression manuelle
+
+```
+$ bash sbin/torctl
+usage: torctl {detect-lan-ip|socks-lan ensure|transparent {on|off|status}}
+rc=2
+
+$ bash sbin/torctl detect-lan-ip
+sbin/torctl: ligne 11: /usr/sbin/tor-lan-ip: Aucun fichier ou dossier de ce nom
+rc=127   # inchangé — /usr/sbin/tor-lan-ip non installé sur cette machine dev,
+         # pas une régression introduite par ce patch.
+```
+
+`socks-lan ensure` non exercé manuellement (dépend de `tor-lan-ip` non
+installé ici) mais son code n'a pas été touché — seule la déclaration de
+`TORRC_D`/`SHARE` en amont a changé de forme (valeur par défaut identique via
+`${TORCTL_TORRC_D:-/etc/tor/torrc.d}`), sans impact fonctionnel.
+
+## Concerns
+
+- Un IDE-linter a signalé `UNBOUND_D`/`NFT_D` comme "unused" en ligne 7-8 ;
+  faux positif — les deux variables sont utilisées dans
+  `transparent_on`/`transparent_off`/`transparent_status` plus bas dans le
+  fichier (vérifié par grep).
+- `debian/rules` (override_dh_auto_install) ne copie actuellement AUCUN
+  fichier de `conf/` ni `nft.d/` vers `/usr/share/secubox/tor` (pas plus pour
+  les templates Task 1 que pour ceux de cette tâche) — le packaging Debian de
+  ces trois nouveaux templates reste à faire dans une tâche ultérieure du
+  plan (probablement la tâche de packaging/postinst, Task 8 mentionnée dans
+  le brief pour `route_localnet`). Signalé mais hors périmètre de Task 2 qui
+  ne demandait que le code + tests TDD.
+- `packages/secubox-tor/api/main.py` référence déjà un
+  `ONION_FORWARD_ZONE = /etc/unbound/unbound.conf.d/48-secubox-onion.conf`
+  (Task 6, préexistant sur cette branche) — nom de fichier différent de
+  `secubox-onion-forward.conf` posé par `torctl transparent on`. Les deux
+  coexistent sans collision de test, mais une réconciliation de nommage
+  sera probablement nécessaire dans une tâche future pour que
+  `GET /onion_dns` observe le bon chemin. Non modifié ici (hors périmètre
+  du brief Task 2, qui fixe explicitement le nom `secubox-onion-forward.conf`).
+
+## Fix Important — SHARE surchargeable
+
+**Constat de la revue (confirmé par mutation)** : `SHARE=/usr/share/secubox/tor`
+était codée en dur dans `sbin/torctl`. En environnement de test,
+`/usr/share/secubox/tor` n'existe jamais (paquet non installé) ; `_install_tpl`
+tolère alors silencieusement l'absence de source en dry-run, donc **aucun**
+`cp` de template n'était jamais réellement exercé par les tests — y compris
+`60-secubox-transparent.conf`, qui n'était donc jamais créé, que le dropin
+toolbox soit présent ou non. `test_on_skips_transport_dropin_when_one_already_exists`
+passait pour la mauvaise raison (absence de source, pas logique de
+déduplication `TransPort`) et ne discriminait pas les deux branches du `if`.
+L'invariant de sécurité « pas de double déclaration `TransPort 9040` » n'avait
+donc aucun filet automatisé réel.
+
+### Correctifs appliqués
+
+1. **`sbin/torctl`** — `SHARE` devient surchargeable :
+   ```bash
+   SHARE="${TORCTL_SHARE_D:-/usr/share/secubox/tor}"
+   ```
+   Comportement de production (`TORCTL_DRYRUN=0`, `TORCTL_SHARE_D` non défini)
+   inchangé : chemin `/usr/share/secubox/tor` par défaut, `_install_tpl` échoue
+   toujours bruyamment (`echo "template manquant: …" >&2; return 1`) si un
+   template source manque — vérifié manuellement :
+   ```
+   $ TORCTL_SHARE_D=/nonexistent-share TORCTL_DRYRUN=0 bash sbin/torctl transparent on
+   template manquant: /nonexistent-share/60-secubox-transparent.conf
+   rc=1
+   ```
+   `detect-lan-ip` et `socks-lan ensure` non affectés (SHARE toujours résolu
+   avant tout usage, seule la source de la valeur par défaut change de forme).
+   `chmod +x` (755) conservé.
+
+2. **`tests/test_torctl_transparent.py`** — réécrit pour être réellement
+   discriminant :
+   - `_make_share(tmp_path)` : crée un répertoire share temporaire et y copie
+     (à plat, comme le fait le packaging) les 3 VRAIS templates du dépôt :
+     `conf/torrc.d/60-secubox-transparent.conf`,
+     `conf/unbound/secubox-onion-forward.conf`, `nft.d/secubox-tor-transparent.nft`.
+   - `TORCTL_SHARE_D=<share>` ajouté à l'`env` du subprocess dans tous les
+     tests, en plus de `TORCTL_TORRC_D/UNBOUND_D/NFT_D/DRYRUN=1` déjà présents.
+     `TORCTL_DRYRUN=1` reste actif pour court-circuiter les reload
+     `systemctl`/`nft`/`sysctl`, mais les `cp` de templates s'exécutent
+     désormais réellement (source présente).
+   - `test_on_skips_transport_dropin_when_one_already_exists` : renforcé —
+     vérifie maintenant en plus que les templates unbound/nft sont bien posés
+     (preuve que la copie a réellement eu lieu, pas juste tolérée en absence
+     de source).
+   - **Nouveau test** `test_on_installs_transport_dropin_when_none_exists` :
+     sans dropin toolbox préexistant → `60-secubox-transparent.conf` DOIT être
+     créé avec le contenu attendu. C'est le cas positif qui manquait pour
+     prouver la discrimination réelle des deux branches.
+   - **Nouveau test** `test_detects_transport_bound_without_ip` (durcissement
+     point 3) : `TransPort 9040` sans IP explicite doit aussi être détecté
+     comme déjà déclaré.
+
+3. **Durcissement `transport_already_declared`** — regex élargie pour matcher
+   `TransPort` sur le port 9040 quelle que soit l'adresse de bind, ancrée
+   début de ligne :
+   ```bash
+   grep -rqiE '^[[:space:]]*TransPort[[:space:]]+([0-9.]+:)?9040\b' "$TORRC_D"/*.conf 2>/dev/null
+   ```
+
+### TDD — preuve du red → green
+
+**AVANT le fix SHARE** (nouveaux tests ajoutés, `SHARE` encore codée en dur) :
+```
+FAILED tests/test_torctl_transparent.py::test_on_skips_transport_dropin_when_one_already_exists
+  AssertionError: assert False
+   +  where False = exists()
+   +    where exists = ((.../u) / 'secubox-onion-forward.conf').exists
+FAILED tests/test_torctl_transparent.py::test_on_installs_transport_dropin_when_none_exists
+  AssertionError: sans TransPort préexistant, torctl DOIT poser son propre dropin
+2 failed, 2 passed in 0.09s
+```
+
+**APRÈS le fix SHARE** (commande demandée) :
+```
+$ cd packages/secubox-tor && python3 -m pytest tests/test_torctl_transparent.py tests/test_onion_forward.py tests/test_nft_transparent.py -q
+......                                                                   [100%]
+6 passed in 0.08s
+```
+
+Suite complète du paquet (non-régression) :
+```
+$ cd packages/secubox-tor && python3 -m pytest tests/ -q
+..........................                                               [100%]
+26 passed, 1 warning in 0.65s
+```
+
+### Concerns
+
+- Le point signalé dans « Concerns » ci-dessus (packaging `debian/rules` ne
+  copie encore aucun fichier vers `/usr/share/secubox/tor`) reste
+  d'actualité — hors périmètre de ce fix, qui ne portait que sur la
+  surchargeabilité de `SHARE` et la discrimination réelle des tests.
+- Le durcissement regex du point 3 n'a pas été demandé comme bloquant par la
+  revue mais est appliqué « tant qu'on y est » comme précisé dans la
+  consigne ; testé isolément par `test_detects_transport_bound_without_ip`.
