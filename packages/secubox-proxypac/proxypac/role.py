@@ -17,8 +17,10 @@ def _live_probe():
         ss = subprocess.run(["ss", "-ulnp"], capture_output=True, text=True, timeout=5).stdout
     except Exception:
         pass
-    dhcp = bool(lan_ip) and (f"{lan_ip}:67" in ss or "0.0.0.0:67" in ss)
-    dns = bool(lan_ip) and (f"{lan_ip}:53" in ss)
+    # Espace de fin : la colonne Local Address:Port de `ss` est suivie d'espaces,
+    # donc `:53 ` matche le port 53 mais PAS 5300/5353 (faux positif sinon).
+    dhcp = bool(lan_ip) and (f"{lan_ip}:67 " in ss or "0.0.0.0:67 " in ss)
+    dns = bool(lan_ip) and (f"{lan_ip}:53 " in ss)
     return {"lan_ip": lan_ip, "dhcp_on_lan": dhcp, "dns_on_lan": dns}
 
 
