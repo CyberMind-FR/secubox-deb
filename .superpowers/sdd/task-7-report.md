@@ -1,92 +1,98 @@
-# Task 7 Report — MetaBlogizer Publish Wizard UI
+# Task 7 Report — Panel /rlevel (table peers + badges + self-service + navbar)
 
 **Status:** Done.
 
-(Note: this file previously held an unrelated stale Task-7 report for a
-different plan — "Tor enhancement Phase 1 — webui #tor tab" — overwritten
-here since it did not belong to this plan.)
+(Note: this file previously held a stale Task-7 report for an unrelated plan —
+overwritten here as instructed.)
 
-## What was added
+## Fichiers
 
-- `packages/secubox-metablogizer/www/metablogizer/index.html`:
-  - New `<section class="card" id="publish-wizard">` placed right after the
-    existing Sites card, inside `<main>` (before `</main>`), with the
-    5-step stepper (`#wiz-steps`), name/domain/file inputs, Publish +
-    Download-backup buttons, and a `<pre id="wiz-result" class="result">`
-    output area.
-  - New CSS block appended inside the page's existing `<style>` (after the
-    touch-friendly-buttons media query): `.wizard-steps`, `.wizard-steps
-    span.ok/.fail`, `#wiz-result.result`. Colors for ok/fail reuse the
-    page's existing `var(--green)` / `var(--red)` tokens (the CRT phosphor
-    palette) instead of the brief's hardcoded hex (`#148C66` / `#C04E24`),
-    which would have clashed visually with the rest of the page.
-  - New `<script>` block placed after the page's main `<script>` (which
-    declares `token()` / `API` / `headers()` / `refresh()`) and before
-    `crt-engine.js`. It is an IIFE that:
-    - Reuses the page's real `token()` helper (reads both `sbx_token` and
-      `secubox_token`) instead of the brief's illustrative `tok()` that
-      only reads `sbx_token`.
-    - Reuses the page's `API` constant (`/api/v1/metablogizer`) for the
-      wizard/export URLs rather than hardcoding the full path.
-    - Mirrors the exact multipart-fetch + 401-retry-without-header +
-      redirect-to-login pattern already used by `uploadSiteContent()`
-      elsewhere in the same file, for consistency.
-    - Renders the JSON result via `out.textContent = JSON.stringify(...)`
-      (never `innerHTML`) — safe against XSS from server data.
-    - Calls the page's existing `refresh()` on successful publish so the
-      Sites table picks up the new/updated site immediately.
-  - Inputs use the page's existing bare `<input>` inside `.form-group`
-    (no invented `form-input` class — the file's existing CSS rule
-    `.form-group input { ... }` already styles any `<input>` inside a
-    `.form-group`, so adding an unused class would have been dead weight).
+- `packages/secubox-toolbox/www/rlevel/index.html` (nouveau) — panneau webui.
+- `packages/secubox-toolbox/menu.d/27-rlevel.json` (nouveau) — entrée navbar.
+- `packages/secubox-toolbox/tests/test_rlevel_panel.py` (nouveau) — 13 tests.
 
-## Endpoint contract verified against source (read-only, no `.py` touched)
+## Contrat API respecté (task 6, déjà déployée)
 
-Confirmed field names/response shape against
-`packages/secubox-metablogizer/api/routers/publish.py`:
-- `POST {API}/publish/wizard` — multipart fields `name`, `domain` (optional),
-  `file`; JWT via `Depends(require_jwt)` (accepts Bearer **or** SSO session
-  cookie, per `common/secubox_core/auth.py`). Response:
-  `{ok, domain, steps: {content: {index_present}, version, route: {route_ok},
-  cert}}` — matches the JS's `d.steps.content.index_present` /
-  `d.steps.route.route_ok` reads exactly.
-- `GET {API}/publish/export/{name}` — also JWT-gated but accepts the SSO
-  session cookie, so the plain `window.location = ...` navigation (no
-  Authorization header possible on a top-level nav) works because the
-  browser sends the session cookie automatically.
+Vérifié directement contre `secubox_toolbox/api.py` (routes `/rlevel/*`, lignes
+~4133-4260) et `tests/test_rlevel_api.py` avant d'écrire le panneau :
+- `GET /rlevel/peers` (admin) → `{peers:[{pubkey,label,chosen,forced,floor,
+  effective,live}], defaults}`.
+- `POST /rlevel/peer` (admin) → body `{pubkey, floor?, forced?}` — pubkey
+  **dans le body**, jamais dans l'URL (base64 avec `/`).
+- `GET /rlevel/me` / `POST /rlevel/me {chosen}` (peer, identité = IP tunnel).
+- Préfixe de montage confirmé sur `www/toolbox/index.html` (`const API =
+  '/api/v1/toolbox'`) — repris tel quel : `API + '/rlevel/peers'` etc.
 
-## Validation
+## TDD
 
-- Extracted the new `<script>` block (the one containing `wiz-go`) via a
-  small Python regex script into a standalone `.js` file and ran
-  `node --check` (node v22.20.0, available in this environment) —
-  **no syntax error**.
-- Also checked: no duplicate `id=` attributes introduced anywhere in the
-  file; `<section>`, `<script>`, `<style>` tag counts balanced
-  (open == close) after the edit.
-- Did not run the app live (Task 11 is the manual/live verification step
-  per the brief); this task's scope is UI-only markup/JS/CSS, and the API
-  side (Task 6) was not modified.
+1. Test écrit en premier (13 cas) → **RED** : 13 FAILED (fichiers absents).
+2. Implémentation : `menu.d/27-rlevel.json` + `www/rlevel/index.html`.
+3. Un aller-retour : les 4 badges de mode avaient une règle CSS sans `;` final
+   avant `}`, ce qui faisait déborder le regex de test `[^;]+;` du garde
+   badges dans les règles suivantes → corrigé (`;` ajouté).
+4. **GREEN** : `python3 -m pytest tests/test_rlevel_panel.py -q` → `13 passed`.
+5. Suite complète du paquet : `335 passed`, 3 échecs **pré-existants sans
+   rapport** (`test_bypass_sources.py`, `test_media_stats.py` — `ModuleNotFoundError:
+   secubox_core`, confirmé identique hors branche via `git stash`).
 
-## Helpers reused (per the "match existing conventions" instruction)
+## Ce qui a été construit
 
-- `token()` — the page's real dual-key localStorage reader (`sbx_token` /
-  `secubox_token`), not the brief's single-key illustrative `tok()`.
-- `API` constant and the existing `refresh()` function.
-- The `uploadSiteContent()` multipart-fetch/401-retry/login-redirect idiom.
-- Existing `.card` / `.btn` / `.btn.primary` / `.form-group` classes; no new
-  classes introduced beyond the wizard-specific `.wizard-steps` / `.result`
-  that the brief itself calls for.
+- **Navbar** : `<nav class="sidebar" id="sidebar">` + `<script src="/shared/
+  sidebar.js">`, `hybrid-skin.css` + `hybrid-dark.css`, `body class=
+  "hybrid-dark"`, palette cyan verbatim (§2 WEBUI-PANEL-GUIDELINES), Courier
+  Prime — modèle `/certs/` + `/wireguard/`.
+- **Auth** : chaque appel passe par un wrapper `api(path, opts)` unique qui
+  pose systématiquement `Authorization: 'Bearer ' + (localStorage.getItem(
+  'sbx_token') || '')` **et** `credentials: 'same-origin'` — GET comme POST,
+  aucun fetch direct en dehors de ce wrapper.
+- **Badges 4 modes** (`.badge-off/passive/active/reel`), 4 couleurs
+  distinctes : gris (`--grey`), cyan, orange, violet.
+- **Table admin** (`GET /rlevel/peers`) : label + pubkey tronquée (titre =
+  pubkey complète, `esc()`'d), badge chosen, `<select>` floor, `<select>`
+  forced (`(none)` = déverrouillé), badge effective, pastille live, boutons
+  **Apply** (`POST /rlevel/peer` avec `{pubkey, floor, forced?}`) et
+  **Unlock** (`{pubkey, forced: null}`).
+- **Self-service** (`GET/POST /rlevel/me`) : carte dédiée, badges
+  effective/chosen/floor ; si `forced` actif → message verrouillé (pas de
+  contrôle) ; sinon `<select>` + bouton Apply lié par `addEventListener`
+  (pas d'inline).
+- **Délégation d'événements (garde XSS)** : un seul listener sur `#peersBody`
+  lisant `e.target.closest('[data-action]')` puis `.dataset.pubkey` /
+  `.dataset.action` — **aucun** `onclick="...${pubkey}..."`. Les deux
+  `onclick` statiques restants (`loadPeers()` sur le bouton Refresh) ne
+  contiennent aucune interpolation de donnée API.
+- **`esc()`** appliqué à `label`, `pubkey` (texte ET attribut `title`/
+  `data-pubkey`) et `forced` avant toute injection `innerHTML`.
+- **Dégradation propre** : chaque chemin réseau est dans un `try/catch` ;
+  403 (source non-admin / non-peer) affiche un message dédié au lieu de
+  planter ; erreurs réseau → texte `⚠️` dans le tableau ou toast rouge
+  persistant (clic pour fermer).
 
-## Concerns
+## Garde XSS — vérification explicite
 
-- None blocking. Two intentional, documented deviations from the brief's
-  literal snippet (both strict improvements for matching the page's real
-  conventions, not functional gaps): `var(--green)`/`var(--red)` instead of
-  hardcoded hex, and reuse of the page's `API` constant instead of a
-  hardcoded absolute path.
-- The wizard's `content`/`route`/`cert` step markers assume the response
-  shapes from `publish/routing.py` / `publish/certs.py` always include the
-  keys the JS reads (`index_present`, `route_ok`); this mirrors the brief's
-  own snippet verbatim and was cross-checked against the actual
-  `publish_wizard()` handler in `api/routers/publish.py`, so no gap found.
+Le test `test_no_inline_handler_interpolates_api_data` applique le regex du
+brief (`on\w+\s*=\s*["'][^"']*["']` puis filtre `${` dans le match) sur le
+HTML final : **aucun** handler inline n'interpole de donnée. Toutes les
+actions par ligne utilisent `data-*` + délégation.
+
+## Vérification
+
+```
+cd packages/secubox-toolbox && python3 -m pytest tests/test_rlevel_panel.py -q
+# 13 passed
+node --check <script extrait>   # OK, pas d'erreur de syntaxe
+python3 -c "import json; json.load(open('menu.d/27-rlevel.json'))"  # OK
+```
+
+## Préoccupations
+
+- Le montage réel de `/rlevel/` (nginx alias ou `app.mount` côté FastAPI,
+  ainsi que l'entrée `debian/rules`/`.install`) est **hors périmètre de cette
+  tâche** — confirmé dans le plan (`docs/superpowers/plans/
+  2026-07-24-rlevel-per-peer.md`, Task 8 : "Packaging + cross-build") : c'est
+  la tâche 8 qui installera le panneau + menu.d dans le `.deb`. Le panneau et
+  son test sont livrés ; le wiring paquet reste à faire par task 8.
+- Deux fichiers de suivi non liés à cette tâche
+  (`.superpowers/sdd/task-2-report.md`, `task-5-report.md`) apparaissent
+  modifiés dans l'arbre de travail au moment de cette tâche (pas mon fait —
+  aucune modification de ma part) ; laissés intacts, non ajoutés au commit.
