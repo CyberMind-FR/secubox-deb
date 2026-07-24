@@ -12,29 +12,36 @@
   :root{
     --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
     --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
-    --cyan:#00d4ff; --red:#ff4466; --green:#00dd44;
+    --cyan:#00d4ff; --red:#ff4466; --green:#00dd44; --yellow:#ffcc00;
   }
   body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
-  .main{display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
-  .bar{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;
-    padding:.55rem .8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;margin-bottom:.6rem}
-  .bar h1{font-size:1.05rem;color:var(--cyan);text-shadow:0 0 8px var(--cyan);margin:0}
-  .bar .st{font-size:.72rem;color:var(--p31-dim);margin-left:.6rem}
-  .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--p31-dim);margin-right:.3rem;vertical-align:middle}
+  .header{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
+  .header h1{font-size:1.3rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
+  .header .sub{font-size:.72rem;color:var(--p31-dim);margin-top:.2rem}
+  .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--p31-dim);margin-right:.35rem;vertical-align:middle}
   .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)} .dot.off{background:var(--red)}
   .btns{display:flex;flex-wrap:wrap;gap:.4rem}
   .btn{font-family:inherit;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;
     color:var(--text);background:var(--bg-row);border:1px solid var(--border);border-radius:6px;
-    padding:.4rem .75rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+    padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
   .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
   .btn.primary{border-color:var(--cyan);color:var(--cyan)}
   .btn[disabled]{opacity:.4;cursor:not-allowed}
-  .frame-wrap{flex:1;position:relative;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff}
-  iframe{width:100%;height:100%;border:0;display:block}
-  .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    text-align:center;color:var(--p31-dim);font-size:.9rem;background:var(--bg-dark);padding:2rem}
-  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;padding:.6rem 1rem;
-    border-radius:6px;font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1rem}
+  .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.7rem;text-align:center;backdrop-filter:blur(10px)}
+  .stat-card .value{font-size:1.25rem;font-weight:bold;text-shadow:0 0 10px currentColor;color:var(--text)}
+  .stat-card .label{font-size:.6rem;color:var(--p31-dim);letter-spacing:.1em;margin-top:.2rem;text-transform:uppercase}
+  .stat-card.ok .value{color:var(--green)} .stat-card.off .value{color:var(--red)} .stat-card.cyan .value{color:var(--cyan)}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
+  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
+  .row{display:flex;justify-content:space-between;gap:1rem;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.84rem}
+  .row:last-child{border-bottom:0}
+  .row .k{color:var(--p31-dim)} .row .v{font-variant-numeric:tabular-nums;text-align:right}
+  code{color:var(--cyan);font-size:.78rem}
+  pre#logs{margin:0;max-height:16rem;overflow:auto;background:#07101a;border:1px solid var(--border);border-radius:6px;
+    padding:.6rem;font-size:.72rem;line-height:1.35;color:#b9c6d3;white-space:pre-wrap;word-break:break-word}
+  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;padding:.6rem 1rem;border-radius:6px;
+    font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
   .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
   @media(max-width:768px){.main{margin-left:0}}
 </style>
@@ -44,31 +51,47 @@
 <script src="/shared/sidebar.js"></script>
 
 <main class="main">
-  <div class="bar">
+  <header class="header">
     <div>
-      <h1 style="display:inline">🍺 PicoBrew</h1>
-      <span class="st" id="st"><span class="dot" id="dot"></span>chargement…</span>
+      <h1>🍺 PicoBrew</h1>
+      <div class="sub" id="sub"><span class="dot" id="dot"></span>chargement…</div>
     </div>
     <div class="btns">
       <button class="btn" id="b-start" onclick="act('start','Démarrage')">▶ Démarrer</button>
       <button class="btn" id="b-stop" onclick="act('stop','Arrêt')">⏹ Arrêter</button>
+      <button class="btn" id="b-restart" onclick="act('restart','Redémarrage')">🔄 Redémarrer</button>
       <button class="btn" onclick="load()">↻ Rafraîchir</button>
-      <a class="btn primary" id="a-open" href="https://picobrew.gk2.secubox.in/" target="_blank" rel="noopener">↗ Plein écran</a>
     </div>
+  </header>
+
+  <div class="grid">
+    <div class="stat-card" id="c-running"><div class="value">–</div><div class="label">⚙️ État</div></div>
+    <div class="stat-card cyan"><div class="value" id="c-sha" style="font-size:.9rem">–</div><div class="label">🔖 Version</div></div>
+    <div class="stat-card" id="c-session"><div class="value">–</div><div class="label">🔥 Session</div></div>
+    <div class="stat-card cyan"><div class="value" id="c-mem">–</div><div class="label">💾 Mémoire</div></div>
   </div>
 
-  <div class="frame-wrap">
-    <iframe id="app" title="Interface PicoBrew" referrerpolicy="no-referrer"></iframe>
-    <div class="placeholder" id="ph">Conteneur à l'arrêt — démarre-le pour afficher l'interface PicoBrew.</div>
+  <div class="card">
+    <h3>Accès distant</h3>
+    <div class="row">
+      <span class="k">🌐 Interface complète (LAN)</span>
+      <span class="v"><a class="btn primary" id="a-open" href="https://picobrew.gk2.secubox.in/" target="_blank" rel="noopener">Ouvrir ↗</a></span>
+    </div>
+    <div class="row"><span class="k">🖥 Adresse directe du conteneur</span><span class="v"><code id="d-lan">—</code></span></div>
+    <div class="row"><span class="k">🔎 Mode zoom</span><span class="v" style="color:var(--p31-dim)">disponible dans l'interface complète</span></div>
+    <div class="row"><span class="k">📡 Appareil PicoBrew</span><span class="v" style="color:var(--p31-dim)">redirigé localement (DNS) → ce nœud</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Journal <span style="font-weight:400;color:var(--p31-dim);font-size:.7rem">— picobrew_pico (conteneur)</span>
+      <button class="btn" style="float:right;padding:.25rem .6rem" onclick="loadLogs()">↻</button></h3>
+    <pre id="logs">—</pre>
   </div>
 </main>
 
 <div class="toast" id="toast"></div>
 
 <script>
-// L'interface complète de picobrew_pico est embarquée via son sous-domaine
-// LAN-confiné (même domaine parent → cert wildcard valide, pas de mixed-content).
-const APP_URL = 'https://picobrew.gk2.secubox.in/';
 const API = '/api/v1/picobrew';
 const $ = (id) => document.getElementById(id);
 
@@ -82,34 +105,43 @@ async function J(path, opts) {
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
+function badge(el, on, onT, offT) { el.className = 'stat-card ' + (on?'ok':'off'); el.querySelector('.value').textContent = on ? onT : offT; }
+
 async function load() {
   try {
     const d = await J('/status');
     const running = !!d.running;
-    $('dot').className = 'dot ' + (running ? 'on' : 'off');
-    const sha = (d.pinned_sha && d.pinned_sha !== 'none') ? d.pinned_sha.slice(0,8) : '—';
-    $('st').innerHTML = '<span class="dot ' + (running?'on':'off') + '"></span>' +
-      (d.error ? d.error : (running ? 'en marche' : 'à l\'arrêt')) +
-      ' · ' + (d.ip || '—') + ' · v' + sha;
-    $('b-start').disabled = running; $('b-stop').disabled = !running;
-    const app = $('app'), ph = $('ph');
-    if (running) {
-      if (app.getAttribute('src') !== APP_URL) app.setAttribute('src', APP_URL);
-      ph.style.display = 'none';
-    } else {
-      app.removeAttribute('src'); ph.style.display = 'flex';
-    }
+    $('dot').className = 'dot ' + (running?'on':'off');
+    $('sub').innerHTML = '<span class="dot '+(running?'on':'off')+'"></span>' +
+      (d.error ? d.error : (running ? 'en marche' : 'à l\'arrêt')) + (d.ip ? (' · ' + d.ip) : '');
+    badge($('c-running'), running, 'en marche', 'arrêté');
+    badge($('c-session'), !!d.session_active, '🔥 oui', 'non');
+    const sha = (d.pinned_sha && d.pinned_sha !== 'none') ? d.pinned_sha : null;
+    $('c-sha').textContent = sha ? sha.slice(0,10) : '—';
+    $('c-mem').textContent = (running && d.mem_mb != null) ? (d.mem_mb + ' Mo') : '—';
+    $('d-lan').textContent = d.ip ? ('http://' + d.ip + '/') : '—';
+    const open = $('a-open');
+    if (running) { open.style.pointerEvents=''; open.style.opacity=''; } else { open.style.pointerEvents='none'; open.style.opacity='.4'; }
+    $('b-start').disabled = running; $('b-stop').disabled = !running; $('b-restart').disabled = !running;
+    if (running) loadLogs();
   } catch (e) {
-    $('st').innerHTML = '<span class="dot off"></span>panel injoignable (' + e.message + ')';
+    $('sub').innerHTML = '<span class="dot off"></span>panel injoignable (' + e.message + ')';
     toast('Statut indisponible : ' + e.message, true);
   }
+}
+async function loadLogs() {
+  try {
+    const d = await J('/logs');
+    $('logs').textContent = (d.lines && d.lines.length) ? d.lines.join('\n') : (d.error || 'aucun journal');
+    $('logs').scrollTop = $('logs').scrollHeight;
+  } catch (e) { $('logs').textContent = 'journal indisponible (' + e.message + ')'; }
 }
 async function act(verb, label) {
   try {
     const d = await J('/' + verb, {method:'POST'});
     toast(d && d.ok === false ? (label + ' a échoué') : (label + ' demandé'), d && d.ok === false);
   } catch (e) { toast(label + ' impossible : ' + e.message, true); }
-  setTimeout(load, 1500);
+  setTimeout(load, verb === 'restart' ? 3000 : 1500);
 }
 load();
 </script>
