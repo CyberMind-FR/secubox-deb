@@ -226,12 +226,25 @@ async function loadRules(){
     const rules = d.rules || [];
     $('rules').innerHTML = rules.length ? rules.map(r =>
       `<li><span>${esc(r.host)} → ${esc(r.directive)}</span>` +
-      `<button class="btn danger" onclick="delOverride('${esc(r.host)}')">✕</button></li>`
+      `<button class="btn danger" data-action="del-override" data-host="${esc(r.host)}">✕</button></li>`
     ).join('') : '<li class="empty">aucune règle</li>';
   } catch (e) {
     $('rules').innerHTML = '<li class="empty">règles indisponibles (' + esc(e.message) + ')</li>';
   }
 }
+
+// Délégation d'événements : aucune donnée d'API n'est jamais interpolée dans un
+// attribut d'événement inline (onclick/onchange/...). Les valeurs dynamiques sont
+// portées par des data-* attributs (échappés HTML via esc()) et lues ici via
+// `dataset`, qui renvoie la valeur décodée en tant que STRING JS — jamais
+// réinterprétée comme du code. Empêche toute évasion de chaîne (XSS stockée).
+$('rules').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  if (btn.dataset.action === 'del-override') {
+    delOverride(btn.dataset.host);
+  }
+});
 
 async function loadCandidates(){
   try {
