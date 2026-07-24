@@ -33,6 +33,19 @@ def test_idempotent(tmp_path):
     _run(e, "apply"); b = (tmp_path/"dnsmasq"/"secubox-wpad.conf").read_text()
     assert a == b
 
+def test_toml_role_master_override_forces_master(tmp_path):
+    (tmp_path/"dnsmasq").mkdir(); (tmp_path/"unbound").mkdir()
+    toml = tmp_path/"proxypac.toml"; toml.write_text('role = "master"\n')
+    env = {k:v for k,v in os.environ.items()}
+    env.update({"WPAD_DRYRUN":"1","WPAD_DNSMASQ_D":str(tmp_path/"dnsmasq"),
+                "WPAD_UNBOUND_D":str(tmp_path/"unbound"),"WPAD_DOMAIN":"gk2.secubox.in",
+                "WPAD_LAN_IP":"192.168.1.200","WPAD_CONFIG":str(toml)})
+    # PAS de WPAD_ROLE -> doit lire le toml
+    env.pop("WPAD_ROLE", None)
+    r = _run(env, "apply")
+    assert r.returncode == 0
+    assert (tmp_path/"dnsmasq"/"secubox-wpad.conf").exists(), "role=master du toml doit forcer l'échelon master"
+
 def test_role_switch_cleans_previous_tier(tmp_path):
     # Bascule master -> slave-dns SUR LES MÊMES répertoires : le dropin de
     # l'ancien tier DOIT disparaître (pas d'accumulation des deux).

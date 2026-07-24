@@ -184,7 +184,7 @@ async function loadStatus(){
     $('d-pac').textContent = d.pac_url || 'http://' + (d.lan_ip || '<box>') + '/proxy.pac';
   } catch (e) {
     $('dot').className = 'dot off';
-    $('sub').innerHTML = '<span class="dot off"></span>statut indisponible (' + e.message + ')';
+    $('sub').innerHTML = '<span class="dot off"></span>statut indisponible (' + esc(e.message) + ')';
     toast('Statut indisponible : ' + e.message, true);
   }
 }

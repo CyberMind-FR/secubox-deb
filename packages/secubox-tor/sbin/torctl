@@ -36,13 +36,18 @@ socks_lan_ensure() {
   echo "SocksPort LAN $ip:9050"
 }
 
+# "Déjà déclaré" exige TransPort 9040 ET DNSPort 9053 tous les deux présents :
+# si un seul des deux existe (ex: TransPort posé par un autre paquet sans son
+# DNSPort), on pose quand même notre dropin — sinon Unbound forwarderait vers
+# un DNSPort mort.
 transport_already_declared() {
-  grep -rqiE '^[[:space:]]*TransPort[[:space:]]+([0-9.]+:)?9040\b' "$TORRC_D"/*.conf 2>/dev/null
+  grep -rqiE '^[[:space:]]*TransPort[[:space:]]+([0-9.]+:)?9040\b' "$TORRC_D"/*.conf 2>/dev/null \
+    && grep -rqiE '^[[:space:]]*DNSPort[[:space:]]+([0-9.]+:)?9053\b' "$TORRC_D"/*.conf 2>/dev/null
 }
 
 transparent_on() {
   if transport_already_declared; then
-    echo "TransPort 9040 déjà déclaré (toolbox) — réutilisé, pas de dropin dupliqué"
+    echo "TransPort 9040 + DNSPort 9053 déjà déclarés (toolbox) — réutilisés, pas de dropin dupliqué"
   else
     _install_tpl "$SHARE/60-secubox-transparent.conf" "$TORRC_D/60-secubox-transparent.conf"
   fi

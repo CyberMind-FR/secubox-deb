@@ -60,6 +60,17 @@ def test_off_removes_only_our_files(tmp_path):
     assert not (torrc/"60-secubox-transparent.conf").exists()
     assert ext.exists(), "off ne doit jamais retirer le dropin d'un autre paquet"
 
+def test_on_installs_dropin_when_transport_exists_but_dnsport_missing(tmp_path):
+    share = _make_share(tmp_path)
+    env, torrc = _base_env(tmp_path, share)
+    # TransPort seul, SANS DNSPort : ne doit PAS être traité comme "déjà
+    # déclaré", sinon Unbound forwarderait vers un DNSPort inexistant.
+    (torrc/"torrc-toolbox-egress.conf").write_text("TransPort 127.0.0.1:9040\n")
+    r = _run(env, "transparent", "on")
+    assert r.returncode == 0, r.stderr
+    assert (torrc/"60-secubox-transparent.conf").exists(), \
+        "TransPort sans DNSPort ne doit pas être réutilisé — notre dropin doit être posé"
+
 def test_detects_transport_bound_without_ip(tmp_path):
     share = _make_share(tmp_path)
     env, torrc = _base_env(tmp_path, share)
