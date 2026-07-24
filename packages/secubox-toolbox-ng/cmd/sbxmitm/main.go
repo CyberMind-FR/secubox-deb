@@ -406,6 +406,21 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		return
 	}
 
+	// WebSocket upgrade: the http.Client below cannot carry a 101 Switching
+	// Protocols, so a wss:// on a MITM'd host would hang/fail (Socket.IO,
+	// zigbee2mqtt, any real-time app behind wg-toolbox). Hand the flow to a raw
+	// bidirectional pipe after forwarding the handshake. Done BEFORE
+	// anonymize/DPI/inject: an upgrade is a control channel, not an inspectable
+	// request, and the client's Sec-WebSocket-* handshake headers must reach
+	// upstream untouched. `br` (the reader over tconn) may already hold buffered
+	// client frames, so proxyWebSocket copies the client→upstream direction from
+	// it, not from tconn.
+	if isWebSocketUpgrade(req) {
+		target, sni := wsDialTarget(req, dialHost, host)
+		px.proxyWebSocket(tconn, br, req, target, sni)
+		return
+	}
+
 	// ── verdict ∈ {"allow","mitm"} → intercept normally ──────────────────────
 	//
 	// allow  → own-infra / allowlist: clean MITM, apply NO block/poison.
