@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: proxypac-wpad — applique l'échelon WPAD selon le rôle détecté.
+set -euo pipefail
+DRYRUN="${WPAD_DRYRUN:-0}"
+DNSMASQ_D="${WPAD_DNSMASQ_D:-/etc/dnsmasq.d}"
+UNBOUND_D="${WPAD_UNBOUND_D:-/etc/unbound/unbound.conf.d}"
+DOMAIN="${WPAD_DOMAIN:-$(hostname -d 2>/dev/null || echo local)}"
+LAN_IP="${WPAD_LAN_IP:-$(/usr/sbin/tor-lan-ip 2>/dev/null || echo 127.0.0.1)}"
+# rôle : override explicite (WPAD_ROLE) sinon détection python
+role() {
+  if [ -n "${WPAD_ROLE:-}" ]; then echo "$WPAD_ROLE"; return; fi
+  python3 - <<'PY'
+import sys; sys.path.insert(0, "/usr/lib/secubox/proxypac")
+from proxypac.role import detect
+r = detect()
+print("master" if r["tier"]==1 else ("slave-dns" if r["tier"]==2 else "slave"))
+PY
+}
+_reload(){ [ "$DRYRUN" = "1" ] && return 0; "$@" || true; }
+
+apply() {
+  local r; r="$(role)"
+  # nettoyage : on retire nos deux dropins puis on repose celui du tier courant
+  rm -f "$DNSMASQ_D/secubox-wpad.conf" "$UNBOUND_D/secubox-wpad.conf"
+  case "$r" in
+    master)
+      printf '# secubox-proxypac WPAD (auto)\ndhcp-option=252,"http://wpad.%s/wpad.dat"\n' "$DOMAIN" > "$DNSMASQ_D/secubox-wpad.conf"
+      _reload systemctl reload dnsmasq ;;
+    slave-dns)
+      printf '# secubox-proxypac WPAD via DNS (auto)\nserver:\n    local-data: "wpad.%s. A %s"\n' "$DOMAIN" "$LAN_IP" > "$UNBOUND_D/secubox-wpad.conf"
+      _reload unbound-control reload ;;
+    *) : ;;  # tier3 : no-op réseau
+  esac
+  echo "wpad applied role=$r domain=$DOMAIN"
+}
+state() {
+  local r; r="$(role)"
+  printf '{"role":"%s","domain":"%s","lan_ip":"%s","pac_url":"http://wpad.%s/wpad.dat"}\n' "$r" "$DOMAIN" "$LAN_IP" "$DOMAIN"
+}
+case "${1:-}" in apply) apply;; state) state;; *) echo "usage: proxypac-wpad {apply|state}" >&2; exit 2;; esac
