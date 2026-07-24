@@ -112,6 +112,16 @@ func newUchromeTransport(dialAddr, sni string) *uchromeTransport {
 // cert is REJECTED, never used. Returns the live uTLS conn and the negotiated
 // ALPN protocol ("h2", "http/1.1", or "").
 func dialUChrome(ctx context.Context, target, sni string, rootCAs *x509.CertPool) (*utls.UConn, string, error) {
+	// Default ALPN mirrors what Chrome offers (h2 preferred, http/1.1 fallback).
+	return dialUChromeALPN(ctx, target, sni, rootCAs, []string{"h2", "http/1.1"})
+}
+
+// dialUChromeALPN is dialUChrome with an explicit ALPN offer. A WebSocket
+// upgrade is HTTP/1.1 semantics (Connection: Upgrade), so the WS path forces
+// []string{"http/1.1"} — negotiating h2 upstream would make the 101 handshake
+// impossible. Every other property (Chrome ClientHello, manual verification,
+// timeouts) is identical.
+func dialUChromeALPN(ctx context.Context, target, sni string, rootCAs *x509.CertPool, alpn []string) (*utls.UConn, string, error) {
 	d := &net.Dialer{Timeout: upstreamDialTimeout}
 	raw, err := d.DialContext(ctx, "tcp", target)
 	if err != nil {
@@ -126,7 +136,7 @@ func dialUChrome(ctx context.Context, target, sni string, rootCAs *x509.CertPool
 	cfg := &utls.Config{
 		ServerName:         sni,
 		InsecureSkipVerify: true, // we verify manually below — NOT a weakening
-		NextProtos:         []string{"h2", "http/1.1"},
+		NextProtos:         alpn,
 		RootCAs:            rootCAs, // nil → uTLS uses system roots in our manual check
 	}
 	uconn := utls.UClient(raw, cfg, chromeHello)
