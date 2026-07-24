@@ -99,11 +99,22 @@ def test_no_inline_handler_interpolates_api_data():
     label) must never be spliced into an inline event-handler string. Row/card
     actions must use data-* attributes + a delegated listener instead."""
     html = _html()
+    # On retire d'abord les commentaires (HTML + JS de ligne) pour ne pas
+    # flaguer une DOC qui mentionne onclick="..." ; le (?<!:) préserve http://.
+    stripped = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    stripped = re.sub(r"(?<!:)//[^\n]*", "", stripped)
+    # Whitelist des SEULS handlers inline statiques autorisés (aucune donnée
+    # d'API). Tout autre handler inline — interpolation `${...}` OU concaténation
+    # `'`+var+`'` OU toute variable — est un offender : les actions de ligne
+    # DOIVENT passer par data-* + un listener délégué. (Garde renforcé après la
+    # leçon XSS proxypac : l'ancien garde ne détectait que `${`.)
+    ALLOWED_STATIC = {"loadPeers()"}
     offenders = [
-        m.group(0) for m in re.finditer(r'on\w+\s*=\s*["\'][^"\']*["\']', html)
-        if '${' in m.group(0)
+        m.group(0)
+        for m in re.finditer(r'\son\w+\s*=\s*"([^"]*)"', stripped)
+        if m.group(1).strip() not in ALLOWED_STATIC
     ]
-    assert offenders == [], f"inline handler interpolates data: {offenders}"
+    assert offenders == [], f"inline handler non-statique (utilise data-*+délégation): {offenders}"
 
 
 def test_uses_event_delegation_with_dataset():
