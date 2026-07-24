@@ -56,6 +56,23 @@ def stop() -> dict:
     return {"ok": rc == 0}
 
 
+@router.post("/restart")
+def restart() -> dict:
+    # restart peut prendre quelques secondes (stop + start du conteneur).
+    rc, _ = _ctl(["restart"], timeout=60)
+    return {"ok": rc == 0}
+
+
+@router.get("/logs")
+def logs() -> dict:
+    # Journal du service picobrew DANS le conteneur (best-effort ; conteneur à
+    # l'arrêt → le ctl renvoie rc!=0, on rend une liste vide plutôt qu'une 500).
+    rc, out = _ctl(["logs"], timeout=30)
+    if rc != 0:
+        return {"lines": [], "error": "conteneur à l'arrêt ou logs indisponibles"}
+    return {"lines": out.splitlines()[-200:]}
+
+
 @router.get("/health")
 async def health() -> dict:
     return {"status": "ok"}

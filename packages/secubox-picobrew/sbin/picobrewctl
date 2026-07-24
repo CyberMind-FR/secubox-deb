@@ -45,10 +45,18 @@ _wait_running() {
     return 0
 }
 
+# Mémoire résidente du conteneur en Mo (best-effort, cgroup). Renvoie toujours
+# un entier — 0 si indisponible — pour ne JAMAIS casser le JSON de status.
+_mem_mb() {
+    local b
+    b=$(lxc-cgroup -n "$CONTAINER" -P "$LXC_PATH" memory.current 2>/dev/null)
+    if [[ "$b" =~ ^[0-9]+$ ]]; then echo $(( b / 1048576 )); else echo 0; fi
+}
+
 cmd_status() {
-    local installed=false running=false sha="none" raw_sha
+    local installed=false running=false sha="none" raw_sha mem_mb=0
     lxc_exists   && installed=true
-    lxc_running  && running=true
+    lxc_running  && { running=true; mem_mb=$(_mem_mb); }
     if [ -r "$PIN_FILE" ]; then
         raw_sha=$(cat "$PIN_FILE")
         # Un PIN_FILE corrompu ne doit jamais produire un JSON invalide :
@@ -56,16 +64,19 @@ cmd_status() {
         _valid_sha "$raw_sha" && sha="$raw_sha"
     fi
     if [ "${1:-}" = "--json" ]; then
-        printf '{"installed":%s,"running":%s,"ip":"%s","pinned_sha":"%s","session_active":%s}\n' \
+        printf '{"installed":%s,"running":%s,"ip":"%s","pinned_sha":"%s","session_active":%s,"mem_mb":%s}\n' \
             "$installed" "$running" "$LXC_IP" "$sha" \
-            "$(_session_active && echo true || echo false)"
+            "$(_session_active && echo true || echo false)" "$mem_mb"
     else
-        echo "installed=$installed running=$running ip=$LXC_IP sha=$sha"
+        echo "installed=$installed running=$running ip=$LXC_IP sha=$sha mem_mb=$mem_mb"
     fi
 }
 
 cmd_start() { lxc_exists || { err "not installed"; return 1; }; lxc-start -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; sleep 1; lxc_running; }
 cmd_stop()  { lxc-stop -n "$CONTAINER" -P "$LXC_PATH" 2>/dev/null; ! lxc_running; }
+# restart = stop puis start (l'appareil n'a pas de notion de session côté ctl ;
+# la garde de session ne concerne que `update`, jamais un simple redémarrage).
+cmd_restart() { lxc_exists || { err "not installed"; return 1; }; cmd_stop; sleep 1; cmd_start; }
 cmd_logs()  { lxc_running || { err "container not running"; return 1; }; lxc_attach 'journalctl -u picobrew --no-pager -n 100'; }
 
 _emit_lxc_config() {
@@ -221,7 +232,7 @@ _ensure_cert() {
         chmod 600 /etc/picobrew/tls/key.pem'
 }
 
-usage() { echo "usage: picobrewctl {install|start|stop|status [--json]|update <sha>|logs}" >&2; }
+usage() { echo "usage: picobrewctl {install|start|stop|restart|status [--json]|update <sha>|logs}" >&2; }
 
 case "${1:-}" in
     __guard) shift; case "${1:-}" in
@@ -234,6 +245,7 @@ case "${1:-}" in
     status)  shift; cmd_status "${1:-}" ;;
     start)   cmd_start ;;
     stop)    cmd_stop ;;
+    restart) cmd_restart ;;
     logs)    cmd_logs ;;
     install) cmd_install ;;
     update)  shift; cmd_update "${1:-}" ;;
