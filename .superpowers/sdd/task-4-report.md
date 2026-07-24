@@ -78,3 +78,62 @@ l'état ; `set-floor PK1 bogus` échoue (rc=1) sans toucher au JSON existant.
   seed par défaut de `peer-rlevel.json`) — prévu Task 8 du plan.
 - L'intégration nft réelle (application effective par le worker Go du dropin
   généré, contre du vrai trafic) reste à vérifier en Task 5/e2e board.
+
+## Fix CRITIQUE off-bypass nft
+
+**Bug confirmé (revue noyau)** : `sbxmitm-policyctl` générait le off-bypass
+dans une table nat séparée (`table inet secubox-toolbox-rlevel`, `return`
+sans nat). En nftables, un `return` émis depuis une chaîne d'une AUTRE table
+nat ne fige pas la décision pour la chaîne DNAT de `table inet wg-toolbox`
+(priorité `dstnat` = **-100**, pas 0) — le noyau évalue toutes les chaînes
+nat par priorité et ne s'arrête que sur une vraie décision (`dnat`/`accept`/
+`return` **dans la même chaîne**). Le fanout continuait donc à DNAT le
+trafic des peers "off" vers le moteur mitm → invariant « off = jamais
+déchiffré » violé.
+
+**Fix appliqué** :
+- `nftables.d/secubox-toolbox-wg.nft` et `secubox-toolbox-wg-fanout.nft` :
+  déclarent chacun un named set `rlevel_off { type ipv4_addr; flags
+  interval; }` dans `table inet wg-toolbox`, et prépendent
+  `ip saddr @rlevel_off return` comme **première règle** de leur `chain
+  prerouting` (même chaîne que le DNAT — le fanout flush+remplace
+  intégralement `chain prerouting`, donc le bypass doit y être répété pour
+  rester actif quand le fanout multi-worker est chargé).
+- `sbin/sbxmitm-policyctl` : suppression totale de la génération de la table
+  séparée (`NFT_DROPIN`/`table inet secubox-toolbox-rlevel`). `regen_nft`
+  fait maintenant `nft flush set inet wg-toolbox rlevel_off` puis
+  `nft add element inet wg-toolbox rlevel_off { <ips off> }` ; en DRYRUN=1
+  ces commandes sont écrites (shadow+rename) dans `$RLEVEL_NFT_OUT`
+  (nouvel env, verrouillé au même titre que les autres en prod root) au lieu
+  d'être exécutées, pour rester observables en test. Si le set/table
+  n'existe pas encore (dropins nftables.d pas encore chargés), la fonction
+  logue via `err` et retourne 0 (`return 0`, pas de `set -e` qui casse
+  l'appelant) — comportement best-effort, non bloquant.
+- Commentaire de priorité inexact corrigé partout où il apparaissait dans
+  `sbxmitm-policyctl` : `dstnat == 0` → `dstnat == -100` (le nouveau design
+  n'a d'ailleurs plus besoin d'arithmétique de priorité puisque le bypass
+  est dans la même chaîne).
+- `tests/test_policyctl.py` : les 3 tests nft historiques sont réécrits pour
+  vérifier le contenu de `RLEVEL_NFT_OUT` (`flush set inet wg-toolbox
+  rlevel_off` / `add element ... { 10.99.1.6 }`, IP active absente, set vide
+  → flush seul sans `add element`). Ajout de 2 tests structurels (finding
+  Important) : `test_ctl_writes_rlevel_json_via_shadow_then_rename` (grep du
+  pattern shadow+`mv -f` dans le script — les tests comportementaux
+  d'atomicité existaient déjà : `test_no_shadow_file_left_behind`,
+  `test_invalid_mode_*_leaves_it_untouched`) et
+  `test_nft_dropins_place_off_bypass_in_same_chain_as_dnat` (les deux
+  fichiers `.nft` déclarent le set et le `return` précède le `dnat` dans la
+  même chaîne, plus aucune trace de l'ancienne table séparée).
+
+**Vérifications** : `python3 -m pytest tests/test_policyctl.py -q` → 23
+passed ; `bash -n sbin/sbxmitm-policyctl` → OK. `nft -c -f` non exécutable
+dans ce sandbox (pas de `CAP_NET_ADMIN`/netlink) — validation limitée à
+l'inspection textuelle contre la syntaxe déjà en usage dans ces mêmes
+fichiers.
+
+**Limite connue** : le fix suppose que `nftables.d/secubox-toolbox-wg.nft`
+et/ou `-wg-fanout.nft` ont été chargés (boot / `nft -f`) avant tout appel à
+`sbxmitm-policyctl` en prod — sinon le set `wg-toolbox rlevel_off` n'existe
+pas encore et la mise à jour est silencieusement différée (loggée, non
+fatale). Non testé end-to-end contre un vrai noyau/dropin chargé (Task 5/e2e
+board, comme déjà noté plus haut dans ce rapport).

@@ -19,9 +19,19 @@
 #   1. shadow-writes peer-rlevel.json (<file>.shadow) then atomically renames
 #      it over the live file — the Go workers hot-reload on mtime change, so
 #      the rename itself IS the signal; there is no separate IPC step.
-#   2. regenerates the nft off-bypass drop-in (table inet
-#      secubox-toolbox-rlevel) from the peers whose effective mode is off,
-#      and applies it with `nft -f` (skipped under DRYRUN).
+#   2. pushes the peers whose effective mode is off into the named set
+#      `@rlevel_off` inside `table inet wg-toolbox` (nft flush set + add
+#      element), skipped under DRYRUN. That set is declared, and matched by
+#      a same-chain `ip saddr @rlevel_off return`, INSIDE the very nat
+#      prerouting chain that performs the wg-toolbox DNAT fanout (see
+#      nftables.d/secubox-toolbox-wg.nft + secubox-toolbox-wg-fanout.nft).
+#      A `return` issued from a separate nat table does NOT stop another
+#      table's dnat rules — nftables walks every nat base chain by
+#      priority and only a same-chain return/dnat/accept decision fixes a
+#      packet's fate — so the off-bypass MUST live in that same chain, not
+#      in a policyctl-owned standalone table (that was the #rlevel-per-peer
+#      task-4 review CRITICAL: peers marked "off" were still being DNAT'd
+#      to the mitm engine and inspected).
 #   3. appends one JSON line to the CSPN audit log (append-only, never
 #      truncated).
 #
@@ -32,17 +42,25 @@
 # /var/log/secubox) — only the leaf files/dirs it owns.
 #
 # Env overrides (tests only — see below for the production lockdown):
-#   RLEVEL_FILE   default /var/lib/secubox/toolbox/peer-rlevel.json
-#   WG_PEERS      default /var/lib/secubox/toolbox/wg-peers.json
-#   NFT_D         default /etc/nftables.d
-#   AUDIT_FILE    default /var/log/secubox/audit.log
-#   DRYRUN=1      skip `nft -f` (the JSON/audit/dropin-file writes still run)
+#   RLEVEL_FILE     default /var/lib/secubox/toolbox/peer-rlevel.json
+#   WG_PEERS        default /var/lib/secubox/toolbox/wg-peers.json
+#   NFT_D           default /etc/nftables.d (unused for the off-bypass
+#                   itself now — kept for callers/tooling that still expect
+#                   it; nft objects are addressed by table/set name, not by
+#                   a drop-in path)
+#   AUDIT_FILE      default /var/log/secubox/audit.log
+#   RLEVEL_NFT_OUT  default /var/lib/secubox/toolbox/rlevel-off.elements —
+#                   under DRYRUN=1, the planned `nft flush set` / `add
+#                   element` commands are written here instead of being run,
+#                   so tests can assert on their content.
+#   DRYRUN=1        skip the real `nft` mutation (JSON/audit writes still run)
 set -euo pipefail
 
 RLEVEL_FILE="${RLEVEL_FILE:-/var/lib/secubox/toolbox/peer-rlevel.json}"
 WG_PEERS="${WG_PEERS:-/var/lib/secubox/toolbox/wg-peers.json}"
 NFT_D="${NFT_D:-/etc/nftables.d}"
 AUDIT_FILE="${AUDIT_FILE:-/var/log/secubox/audit.log}"
+RLEVEL_NFT_OUT="${RLEVEL_NFT_OUT:-/var/lib/secubox/toolbox/rlevel-off.elements}"
 DRYRUN="${DRYRUN:-0}"
 
 # In production (root, no test env) ignore env overrides so a sudoers entry
@@ -53,9 +71,15 @@ if [ "$(id -u)" -eq 0 ] && [ -z "${SBXMITM_POLICYCTL_TEST:-}" ]; then
     WG_PEERS="/var/lib/secubox/toolbox/wg-peers.json"
     NFT_D="/etc/nftables.d"
     AUDIT_FILE="/var/log/secubox/audit.log"
+    RLEVEL_NFT_OUT="/var/lib/secubox/toolbox/rlevel-off.elements"
 fi
 
-NFT_DROPIN="$NFT_D/secubox-toolbox-rlevel.nft"
+# nft object addressed for the off-bypass — a named set INSIDE the same
+# `inet wg-toolbox` table/prerouting chain that performs the DNAT fanout
+# (nftables.d/secubox-toolbox-wg.nft + secubox-toolbox-wg-fanout.nft). Not
+# env-overridable: it names a fixed system object, not a path.
+readonly RLEVEL_NFT_TABLE="wg-toolbox"
+readonly RLEVEL_NFT_SET="rlevel_off"
 readonly MODES="off passive active reel"
 
 err() { printf 'sbxmitm-policyctl: ERROR: %s\n' "$*" >&2; }
@@ -176,34 +200,50 @@ compute_off_ips() {
     '
 }
 
-# regen_nft — rewrite the off-bypass drop-in from compute_off_ips and apply
-# it (unless DRYRUN). Priority is ONE LESS than the toolbox DNAT fanout's
-# `priority dstnat` (== 0) so this drop-in's `return` is evaluated first — an
-# empty off-set yields a near-empty table (no `ip saddr` line at all).
+# regen_nft — push compute_off_ips into the named set `@rlevel_off` living
+# INSIDE `table inet wg-toolbox` (the same table+chain that performs the
+# DNAT fanout — see nftables.d/secubox-toolbox-wg.nft and
+# secubox-toolbox-wg-fanout.nft). This is NOT priority-ordering trickery
+# against a separate table: a `return` issued from a distinct nat table
+# does not stop another table's dnat rules on the same hook (nftables
+# walks every nat base chain by priority and only a same-chain
+# return/dnat/accept decision fixes a packet's fate), so the bypass must be
+# a set matched by a same-chain rule, which is what the .nft files declare.
+#
+# Under DRYRUN, nothing is actually mutated in the kernel: the equivalent
+# `nft` commands are written to RLEVEL_NFT_OUT so tests can assert on their
+# content. In production, a missing set (fanout drop-in not loaded yet, or
+# board freshly booted before nftables.d ran) is logged and treated as a
+# soft failure — fail-safe posture stays "still inspected", never crashes
+# the caller (peer-rlevel.json + audit are already committed by then).
 regen_nft() {
     local ips_json ips_csv
     ips_json="$(compute_off_ips)"
     ips_csv="$(printf '%s' "$ips_json" | jq -r 'join(", ")')"
-    mkdir -p "$NFT_D"
-    local shadow="$NFT_DROPIN.shadow"
-    {
-        printf '# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n'
-        printf '# Auto-generated by sbxmitm-policyctl — do not edit by hand.\n'
-        printf '# Off-bypass for peers whose effective R-level is "off": excluded\n'
-        printf '# from the wg-toolbox DNAT->mitm fanout before it is reached.\n'
-        printf 'table inet secubox-toolbox-rlevel {\n'
-        printf '    chain prerouting {\n'
-        printf '        type nat hook prerouting priority dstnat - 1;\n'
-        if [ -n "$ips_csv" ]; then
-            printf '        ip saddr { %s } return\n' "$ips_csv"
-        fi
-        printf '    }\n'
-        printf '}\n'
-    } > "$shadow"
-    mv -f "$shadow" "$NFT_DROPIN"
-    if [ "$DRYRUN" != "1" ]; then
-        nft -f "$NFT_DROPIN" 2>/dev/null || true
+
+    if [ "$DRYRUN" = "1" ]; then
+        mkdir -p "$(dirname "$RLEVEL_NFT_OUT")"
+        local shadow="$RLEVEL_NFT_OUT.shadow"
+        {
+            printf 'flush set inet %s %s\n' "$RLEVEL_NFT_TABLE" "$RLEVEL_NFT_SET"
+            if [ -n "$ips_csv" ]; then
+                printf 'add element inet %s %s { %s }\n' \
+                    "$RLEVEL_NFT_TABLE" "$RLEVEL_NFT_SET" "$ips_csv"
+            fi
+        } > "$shadow"
+        mv -f "$shadow" "$RLEVEL_NFT_OUT"
+        return 0
     fi
+
+    if ! nft flush set inet "$RLEVEL_NFT_TABLE" "$RLEVEL_NFT_SET" 2>/dev/null; then
+        err "nft set inet $RLEVEL_NFT_TABLE $RLEVEL_NFT_SET not present (wg-toolbox nftables.d drop-ins not loaded yet?) — off-bypass not applied this run"
+        return 0
+    fi
+    if [ -n "$ips_csv" ]; then
+        nft add element inet "$RLEVEL_NFT_TABLE" "$RLEVEL_NFT_SET" "{ $ips_csv }" 2>/dev/null \
+            || err "failed to add elements to inet $RLEVEL_NFT_TABLE $RLEVEL_NFT_SET"
+    fi
+    return 0
 }
 
 # upsert_peer_field <pubkey> <field> <json-value> — read-modify-write

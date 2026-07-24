@@ -24,6 +24,7 @@ def sandbox(tmp_path):
     nft_d = tmp_path / "nftables.d"
     nft_d.mkdir()
     audit = tmp_path / "audit.log"
+    nft_out = tmp_path / "rlevel-off.elements"
     wg_peers.write_text(json.dumps({
         "peers": {
             PK1: {"ip": "10.99.1.5"},
@@ -35,12 +36,13 @@ def sandbox(tmp_path):
         "WG_PEERS": str(wg_peers),
         "NFT_D": str(nft_d),
         "AUDIT_FILE": str(audit),
+        "RLEVEL_NFT_OUT": str(nft_out),
         "DRYRUN": "1",
         "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
     }
     return {
         "rlevel": rlevel, "wg_peers": wg_peers, "nft_d": nft_d,
-        "audit": audit, "env": env,
+        "audit": audit, "nft_out": nft_out, "env": env,
     }
 
 
@@ -56,8 +58,8 @@ def rlevel_json(sandbox):
 
 
 def nft_text(sandbox):
-    dropin = sandbox["nft_d"] / "secubox-toolbox-rlevel.nft"
-    return dropin.read_text() if dropin.exists() else ""
+    out = sandbox["nft_out"]
+    return out.read_text() if out.exists() else ""
 
 
 # ── mutation correctness ──────────────────────────────────────────────────
@@ -138,18 +140,62 @@ def test_idempotent_force_twice_same_content(sandbox):
     assert first == second
 
 
-# ── nft off-bypass drop-in ────────────────────────────────────────────────
+def test_ctl_writes_rlevel_json_via_shadow_then_rename():
+    """Structural guard (task-4 review, Important finding): peer-rlevel.json
+    must never be written in place — a crash mid-write must never leave a
+    torn/partial file readable by the Go workers. Grep the real script for
+    the shadow-write-then-atomic-rename pattern rather than relying only on
+    the behavioral before/after tests above."""
+    src = CTL.read_text()
+    assert '$RLEVEL_FILE.shadow"' in src
+    assert 'mv -f "$shadow" "$RLEVEL_FILE"' in src
 
-def test_force_off_adds_ip_to_nft_dropin(sandbox):
+
+def test_nft_dropins_place_off_bypass_in_same_chain_as_dnat():
+    """Structural guard (task-4 review, CRITICAL finding): the off-bypass
+    `return` must live in the SAME nat chain as the DNAT it is meant to
+    short-circuit — a `return` from a separate nat table does not stop
+    another table's dnat on the same hook/priority. Assert both shipped
+    drop-ins declare the named set and reference it before any `dnat`."""
+    nft_dir = Path(__file__).resolve().parents[1] / "nftables.d"
+    for fname in ("secubox-toolbox-wg.nft", "secubox-toolbox-wg-fanout.nft"):
+        raw = (nft_dir / fname).read_text()
+        assert "set rlevel_off" in raw
+        assert "type ipv4_addr" in raw
+        # Strip full-line comments so header prose (which mentions the old
+        # single-target `dnat ip to ...` for context) can't shadow the real
+        # rule lines below when locating statement order.
+        code = "\n".join(
+            ln for ln in raw.splitlines() if not ln.strip().startswith("#")
+        )
+        return_idx = code.index("ip saddr @rlevel_off return")
+        dnat_idx = code.index("dnat ip to")
+        assert return_idx < dnat_idx, f"{fname}: off-bypass must precede dnat in the same chain"
+        assert "table inet secubox-toolbox-rlevel" not in raw
+
+
+# ── nft off-bypass named set ───────────────────────────────────────────────
+#
+# The fix for the task-4 CRITICAL finding: the off-bypass is no longer a
+# separate `table inet secubox-toolbox-rlevel` (a `return` from a distinct
+# nat table does not stop another table's dnat on the same hook — the
+# wg-toolbox fanout DNAT'd "off" peers regardless). It is now a named set
+# `@rlevel_off` inside `table inet wg-toolbox` itself — the SAME table+chain
+# that performs the DNAT — updated via `nft flush set` / `add element`.
+# Under DRYRUN those commands are written to RLEVEL_NFT_OUT so we can
+# assert on their content without a live nft/kernel.
+
+def test_force_off_updates_rlevel_off_set(sandbox):
     run(sandbox, "force", PK2, "off")
     text = nft_text(sandbox)
     assert "10.99.1.6" in text
     assert "10.99.1.5" not in text
-    assert "table inet secubox-toolbox-rlevel" in text
-    assert "priority dstnat - 1" in text
+    assert "inet wg-toolbox rlevel_off" in text
+    assert "flush set inet wg-toolbox rlevel_off" in text
+    assert "add element inet wg-toolbox rlevel_off" in text
 
 
-def test_force_none_removes_ip_from_nft_dropin(sandbox):
+def test_force_none_removes_ip_from_rlevel_off_set(sandbox):
     run(sandbox, "force", PK2, "off")
     assert "10.99.1.6" in nft_text(sandbox)
     run(sandbox, "force", PK2, "none")
@@ -157,11 +203,11 @@ def test_force_none_removes_ip_from_nft_dropin(sandbox):
     assert "10.99.1.6" not in text
 
 
-def test_empty_off_set_yields_no_saddr_line(sandbox):
+def test_empty_off_set_yields_flush_only_no_add_element(sandbox):
     run(sandbox, "set-floor", PK1, "active")  # any non-off mutation
     text = nft_text(sandbox)
-    assert "ip saddr" not in text
-    assert "table inet secubox-toolbox-rlevel" in text
+    assert "flush set inet wg-toolbox rlevel_off" in text
+    assert "add element" not in text
 
 
 # ── validation ─────────────────────────────────────────────────────────────
