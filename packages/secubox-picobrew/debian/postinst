@@ -33,6 +33,13 @@ case "$1" in
     systemctl unmask secubox-picobrew.service 2>/dev/null || true
     systemctl enable secubox-picobrew.service || true
     systemctl start  secubox-picobrew.service || true
+    # « Installer le paquet » active l'appareil : le provisionnement du conteneur
+    # (debootstrap + clone picobrew_pico + venv + nginx/TLS, ~5-8 min, réseau)
+    # est lancé EN ARRIÈRE-PLAN via --no-block pour ne PAS bloquer dpkg. Le
+    # service oneshot est gardé par ConditionPathExists=!pinned-sha : il ne
+    # provisionne qu'une fois, et devient un no-op ensuite.
+    systemctl enable secubox-picobrew-provision.service 2>/dev/null || true
+    systemctl start --no-block secubox-picobrew-provision.service 2>/dev/null || true
     # Reload nginx to pick up new location
     systemctl reload nginx 2>/dev/null || true
     # Le drop-in DNS est actif par défaut : le cloud PicoBrew est éteint

@@ -298,6 +298,73 @@ esac
 #DEBHELPER#
 ```
 
+### Install activates — LXC / external-service modules (Recommended)
+
+**Principle.** For a module whose runtime is an **LXC container** or an
+**external service** (a cloned upstream, a pulled image, a downloaded runtime),
+**installing the package MUST fully activate the appliance** — `apt install
+secubox-<module>` leaves a *usable* module, not a stub awaiting a manual
+`ctl install`. The webui is then just the **frontend of the control script over
+the API** (see *Privileged Operations* above): the panel drives the already-live
+backend; it does not bootstrap it.
+
+**The provisioning is heavy and MUST NOT block `dpkg`.** debootstrap, a git
+clone, a `pip install`, an image pull — each takes minutes and needs the
+network. Running it synchronously in the postinst blocks `apt`, and a network
+hiccup leaves the package in state `iF`. Instead:
+
+1. Ship a **oneshot provision unit** `secubox-<module>-provision.service` that
+   runs the module's `ctl install` (the full bring-up), guarded so it runs
+   **exactly once**:
+
+   ```ini
+   [Unit]
+   Description=SecuBox <Module> — initial container provisioning (idempotent, once)
+   After=network-online.target
+   Wants=network-online.target
+   # The ctl writes this marker ONLY on a fully successful bring-up, so the
+   # guard makes the unit a safe no-op afterwards (re-install, reboot, upgrade).
+   ConditionPathExists=!/var/lib/secubox/<module>/.provisioned
+
+   [Service]
+   Type=oneshot
+   RemainAfterExit=yes
+   ExecStart=/usr/sbin/secubox-<module>ctl install
+   TimeoutStartSec=1800
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+2. From the postinst, **start it `--no-block`** so `dpkg` returns immediately
+   while provisioning proceeds in the background:
+
+   ```bash
+   systemctl enable secubox-<module>-provision.service 2>/dev/null || true
+   systemctl start --no-block secubox-<module>-provision.service 2>/dev/null || true
+   ```
+
+**`ctl install` contract.** Runs as root; **idempotent** (re-running on an
+already-provisioned host is a no-op on the expensive steps — guard the
+debootstrap / clone / pull); pins the upstream version (record a SHA/tag) so a
+later change can never land mid-operation; writes its **completion marker only
+on full success**; never leaves a half-provisioned container marked ready.
+
+**Pins, never floats.** Clone/pull *latest at install*, then **freeze** the
+version. Updates happen only on an explicit `ctl update`, and a module with a
+live operation (a brew in progress, a job running) **refuses** the update.
+
+**Routing caveat (gk2).** The real admin vhost (`sites-enabled/webui.conf`,
+exact `server_name`) serves panels statically from `root` and routes `/api/` to
+the aggregator; it does **not** include `secubox.d/`. A **dedicated-socket**
+module therefore needs an explicit `location /api/v1/<module>/ { rewrite … ;
+proxy_pass http://unix:/run/secubox/<module>.sock; }` added to `webui.conf`
+(the `waf` pattern) — the package's own `secubox.d` drop-in is inert there.
+Prefer **aggregator-serving** unless the module genuinely needs its own socket.
+
+Reference implementation: **secubox-picobrew** (LXC + `picobrewctl install`
+provision oneshot + panel-over-API).
+
 ---
 
 ## Compliance Verification
