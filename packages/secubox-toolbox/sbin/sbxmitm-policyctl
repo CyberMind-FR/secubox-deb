@@ -1,0 +1,324 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: toolbox :: sbxmitm-policyctl (#rlevel-per-peer, task 4)
+#
+# Root-scoped ctl that owns /var/lib/secubox/toolbox/peer-rlevel.json — the
+# per-peer wg-toolbox MITM R-level policy consumed by the Go sbxmitm workers
+# (secubox-toolbox-ng-worker@1..4, cf. cmd/sbxmitm/rlevel.go PeerPolicy).
+#
+# Modes, increasing intrusion: off(0) < passive(1) < active(2) < reel(3).
+# Effective mode = forced ?? clamp(chosen, floor, reel) — mirrored here from
+# the Go effective() so the ctl can compute which peers are effectively off
+# (nft bypass) without asking the workers.
+#
+# Every mutation:
+#   1. shadow-writes peer-rlevel.json (<file>.shadow) then atomically renames
+#      it over the live file — the Go workers hot-reload on mtime change, so
+#      the rename itself IS the signal; there is no separate IPC step.
+#   2. regenerates the nft off-bypass drop-in (table inet
+#      secubox-toolbox-rlevel) from the peers whose effective mode is off,
+#      and applies it with `nft -f` (skipped under DRYRUN).
+#   3. appends one JSON line to the CSPN audit log (append-only, never
+#      truncated).
+#
+# Validation happens BEFORE any write: an invalid mode or an unknown pubkey
+# aborts with rc != 0 and leaves peer-rlevel.json byte-for-byte untouched.
+#
+# Never touches the shared parents (/run/secubox, /etc/secubox,
+# /var/log/secubox) — only the leaf files/dirs it owns.
+#
+# Env overrides (tests only — see below for the production lockdown):
+#   RLEVEL_FILE   default /var/lib/secubox/toolbox/peer-rlevel.json
+#   WG_PEERS      default /var/lib/secubox/toolbox/wg-peers.json
+#   NFT_D         default /etc/nftables.d
+#   AUDIT_FILE    default /var/log/secubox/audit.log
+#   DRYRUN=1      skip `nft -f` (the JSON/audit/dropin-file writes still run)
+set -euo pipefail
+
+RLEVEL_FILE="${RLEVEL_FILE:-/var/lib/secubox/toolbox/peer-rlevel.json}"
+WG_PEERS="${WG_PEERS:-/var/lib/secubox/toolbox/wg-peers.json}"
+NFT_D="${NFT_D:-/etc/nftables.d}"
+AUDIT_FILE="${AUDIT_FILE:-/var/log/secubox/audit.log}"
+DRYRUN="${DRYRUN:-0}"
+
+# In production (root, no test env) ignore env overrides so a sudoers entry
+# scoped to this binary cannot be turned into an arbitrary-file-write via
+# env-injection — mirrors the secubox-macroctl posture.
+if [ "$(id -u)" -eq 0 ] && [ -z "${SBXMITM_POLICYCTL_TEST:-}" ]; then
+    RLEVEL_FILE="/var/lib/secubox/toolbox/peer-rlevel.json"
+    WG_PEERS="/var/lib/secubox/toolbox/wg-peers.json"
+    NFT_D="/etc/nftables.d"
+    AUDIT_FILE="/var/log/secubox/audit.log"
+fi
+
+NFT_DROPIN="$NFT_D/secubox-toolbox-rlevel.nft"
+readonly MODES="off passive active reel"
+
+err() { printf 'sbxmitm-policyctl: ERROR: %s\n' "$*" >&2; }
+
+usage() {
+    cat >&2 <<'EOF'
+usage: sbxmitm-policyctl <command> [args]
+  set-floor <pubkey> <mode>          set a peer's floor
+  force <pubkey> <mode|none>         force (or "none" to unforce) a peer's mode
+  set-chosen <pubkey> <mode>         set a peer's self-service choice (clamped to its floor)
+  set-default <mode> <floor>         set the global default mode/floor
+  list                               print peer-rlevel.json
+mode in: off passive active reel
+EOF
+    exit 2
+}
+
+is_valid_mode() {
+    local m="$1"
+    for x in $MODES; do [ "$x" = "$m" ] && return 0; done
+    return 1
+}
+
+rank() {
+    case "$1" in
+        off) echo 0 ;;
+        passive) echo 1 ;;
+        active) echo 2 ;;
+        reel) echo 3 ;;
+        *) return 1 ;;
+    esac
+}
+
+mode_from_rank() {
+    case "$1" in
+        0) echo off ;;
+        1) echo passive ;;
+        2) echo active ;;
+        3) echo reel ;;
+    esac
+}
+
+# clamp_mode <value> <floor> <ceiling> -> mode name, bounded to [floor, ceiling]
+clamp_mode() {
+    local v lo hi
+    v=$(rank "$1") lo=$(rank "$2") hi=$(rank "$3")
+    [ "$v" -lt "$lo" ] && v=$lo
+    [ "$v" -gt "$hi" ] && v=$hi
+    mode_from_rank "$v"
+}
+
+ensure_rlevel_file() {
+    if [ ! -f "$RLEVEL_FILE" ]; then
+        mkdir -p "$(dirname "$RLEVEL_FILE")"
+        printf '{"defaults":{"mode":"passive","floor":"passive"},"peers":{}}' > "$RLEVEL_FILE"
+    fi
+}
+
+peer_exists() {
+    local pk="$1"
+    [ -f "$WG_PEERS" ] || return 1
+    jq -e --arg pk "$pk" '(.peers // {})[$pk] != null' "$WG_PEERS" >/dev/null 2>&1
+}
+
+# atomic_write_rlevel <new-json> — shadow-write then rename over the live
+# file (same directory => same filesystem => atomic rename). The Go workers
+# poll peer-rlevel.json's mtime, so this rename alone is the hot-reload
+# signal; DRYRUN does not skip it (only `nft -f` is skipped under DRYRUN).
+atomic_write_rlevel() {
+    local new_json="$1"
+    local shadow="$RLEVEL_FILE.shadow"
+    mkdir -p "$(dirname "$RLEVEL_FILE")"
+    printf '%s' "$new_json" > "$shadow"
+    mv -f "$shadow" "$RLEVEL_FILE"
+}
+
+audit() {
+    local action="$1" pubkey="$2" old="$3" new="$4"
+    local ts
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    mkdir -p "$(dirname "$AUDIT_FILE")" 2>/dev/null || true
+    jq -nc --arg ts "$ts" --arg module "sbxmitm-policyctl" --arg action "$action" \
+        --arg pubkey "$pubkey" --arg old "$old" --arg new "$new" \
+        '{ts:$ts, module:$module, action:$action, pubkey:$pubkey, old:$old, new:$new}' \
+        >> "$AUDIT_FILE" 2>/dev/null || true
+}
+
+# compute_off_ips — the IPs of every wg-peers.json peer whose EFFECTIVE mode
+# (forced ?? clamp(chosen, floor, reel)) is "off", mirroring cmd/sbxmitm/
+# rlevel.go's effective()/rebuildLocked(). Empty/missing wg-peers.json =>
+# empty list (no bypass rule emitted — fail-safe posture stays inspected).
+compute_off_ips() {
+    local rl="{}" wg="{}"
+    [ -f "$RLEVEL_FILE" ] && rl="$(cat "$RLEVEL_FILE")"
+    [ -f "$WG_PEERS" ] && wg="$(cat "$WG_PEERS")"
+    jq -n --argjson rl "$rl" --argjson wg "$wg" '
+        def rank: {"off":0,"passive":1,"active":2,"reel":3}[.];
+        def clampr(lo; hi): if . < lo then lo elif . > hi then hi else . end;
+        ($rl.defaults.mode // "passive") as $defmode
+        | ($rl.defaults.floor // "passive") as $deffloor
+        | ($rl.peers // {}) as $peers
+        | ($wg.peers // {}) as $wgpeers
+        | [ $wgpeers
+            | to_entries[]
+            | . as $e
+            | ($peers[$e.key] // {}) as $p
+            | ($p.chosen // $defmode) as $chosen
+            | ($p.floor // $deffloor) as $floor
+            | ($p.forced // null) as $forced
+            | (if $forced != null
+               then ($forced | rank)
+               else (($chosen | rank) | clampr($floor | rank; ("reel" | rank)))
+               end) as $eff
+            | select($eff == 0)
+            | $e.value.ip
+            | select(. != null)
+          ]
+    '
+}
+
+# regen_nft — rewrite the off-bypass drop-in from compute_off_ips and apply
+# it (unless DRYRUN). Priority is ONE LESS than the toolbox DNAT fanout's
+# `priority dstnat` (== 0) so this drop-in's `return` is evaluated first — an
+# empty off-set yields a near-empty table (no `ip saddr` line at all).
+regen_nft() {
+    local ips_json ips_csv
+    ips_json="$(compute_off_ips)"
+    ips_csv="$(printf '%s' "$ips_json" | jq -r 'join(", ")')"
+    mkdir -p "$NFT_D"
+    local shadow="$NFT_DROPIN.shadow"
+    {
+        printf '# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n'
+        printf '# Auto-generated by sbxmitm-policyctl — do not edit by hand.\n'
+        printf '# Off-bypass for peers whose effective R-level is "off": excluded\n'
+        printf '# from the wg-toolbox DNAT->mitm fanout before it is reached.\n'
+        printf 'table inet secubox-toolbox-rlevel {\n'
+        printf '    chain prerouting {\n'
+        printf '        type nat hook prerouting priority dstnat - 1;\n'
+        if [ -n "$ips_csv" ]; then
+            printf '        ip saddr { %s } return\n' "$ips_csv"
+        fi
+        printf '    }\n'
+        printf '}\n'
+    } > "$shadow"
+    mv -f "$shadow" "$NFT_DROPIN"
+    if [ "$DRYRUN" != "1" ]; then
+        nft -f "$NFT_DROPIN" 2>/dev/null || true
+    fi
+}
+
+# upsert_peer_field <pubkey> <field> <json-value> — read-modify-write
+# peer-rlevel.json, creating the peer entry (seeded from defaults) if absent.
+# Prints the resulting whole-file JSON on stdout; does not write anything.
+upsert_peer_field() {
+    local pk="$1" field="$2" value_json="$3"
+    jq -c --arg pk "$pk" --arg field "$field" --argjson value "$value_json" '
+        .peers = (.peers // {})
+        | .peers[$pk] = ((.peers[$pk] // {
+              chosen: (.defaults.mode // "passive"),
+              forced: null,
+              floor: (.defaults.floor // "passive")
+          }) | .[$field] = $value)
+    ' "$RLEVEL_FILE"
+}
+
+get_peer_field() {
+    local pk="$1" field="$2" fallback="$3"
+    jq -r --arg pk "$pk" --arg field "$field" --arg fb "$fallback" \
+        '(.peers[$pk][$field] // $fb)' "$RLEVEL_FILE"
+}
+
+cmd_set_floor() {
+    local pk="${1:-}" mode="${2:-}"
+    [ -n "$pk" ] && [ -n "$mode" ] || usage
+    is_valid_mode "$mode" || { err "invalid mode: $mode"; return 1; }
+    ensure_rlevel_file
+    peer_exists "$pk" || { err "unknown pubkey (not in wg-peers.json): $pk"; return 1; }
+    local old
+    old="$(get_peer_field "$pk" floor "$(jq -r '.defaults.floor // "passive"' "$RLEVEL_FILE")")"
+    local new_json
+    new_json="$(upsert_peer_field "$pk" floor "\"$mode\"")"
+    atomic_write_rlevel "$new_json"
+    regen_nft
+    audit "set-floor" "$pk" "$old" "$mode"
+}
+
+cmd_force() {
+    local pk="${1:-}" mode="${2:-}"
+    [ -n "$pk" ] && [ -n "$mode" ] || usage
+    if [ "$mode" != "none" ]; then
+        is_valid_mode "$mode" || { err "invalid mode: $mode"; return 1; }
+    fi
+    ensure_rlevel_file
+    peer_exists "$pk" || { err "unknown pubkey (not in wg-peers.json): $pk"; return 1; }
+    local old
+    old="$(get_peer_field "$pk" forced "none")"
+    [ "$old" = "null" ] && old="none"
+    local value_json new_json
+    if [ "$mode" = "none" ]; then
+        value_json="null"
+    else
+        value_json="\"$mode\""
+    fi
+    new_json="$(upsert_peer_field "$pk" forced "$value_json")"
+    atomic_write_rlevel "$new_json"
+    regen_nft
+    audit "force" "$pk" "$old" "$mode"
+}
+
+cmd_set_chosen() {
+    local pk="${1:-}" mode="${2:-}"
+    [ -n "$pk" ] && [ -n "$mode" ] || usage
+    is_valid_mode "$mode" || { err "invalid mode: $mode"; return 1; }
+    ensure_rlevel_file
+    peer_exists "$pk" || { err "unknown pubkey (not in wg-peers.json): $pk"; return 1; }
+    local floor old clamped
+    floor="$(get_peer_field "$pk" floor "$(jq -r '.defaults.floor // "passive"' "$RLEVEL_FILE")")"
+    old="$(get_peer_field "$pk" chosen "$(jq -r '.defaults.mode // "passive"' "$RLEVEL_FILE")")"
+    # Server-side guard mirrors the peer-facing API: chosen can never be
+    # stored below the peer's own floor (it CAN exceed it, up to reel).
+    clamped="$(clamp_mode "$mode" "$floor" "reel")"
+    local new_json
+    new_json="$(upsert_peer_field "$pk" chosen "\"$clamped\"")"
+    atomic_write_rlevel "$new_json"
+    regen_nft
+    audit "set-chosen" "$pk" "$old" "$clamped"
+}
+
+cmd_set_default() {
+    local mode="${1:-}" floor="${2:-}"
+    [ -n "$mode" ] && [ -n "$floor" ] || usage
+    is_valid_mode "$mode" || { err "invalid mode: $mode"; return 1; }
+    is_valid_mode "$floor" || { err "invalid floor: $floor"; return 1; }
+    ensure_rlevel_file
+    local old_mode old_floor
+    old_mode="$(jq -r '.defaults.mode // "passive"' "$RLEVEL_FILE")"
+    old_floor="$(jq -r '.defaults.floor // "passive"' "$RLEVEL_FILE")"
+    local new_json
+    new_json="$(jq -c --arg mode "$mode" --arg floor "$floor" \
+        '.defaults = {mode: $mode, floor: $floor}' "$RLEVEL_FILE")"
+    atomic_write_rlevel "$new_json"
+    regen_nft
+    audit "set-default" "-" "${old_mode}/${old_floor}" "${mode}/${floor}"
+}
+
+cmd_list() {
+    ensure_rlevel_file
+    cat "$RLEVEL_FILE"
+}
+
+main() {
+    local cmd="${1:-}"
+    [ -n "$cmd" ] || usage
+    shift || true
+    case "$cmd" in
+        set-floor) cmd_set_floor "$@" ;;
+        force) cmd_force "$@" ;;
+        set-chosen) cmd_set_chosen "$@" ;;
+        set-default) cmd_set_default "$@" ;;
+        list) cmd_list "$@" ;;
+        -h|--help) usage ;;
+        *) err "unknown command: $cmd"; usage ;;
+    esac
+}
+
+main "$@"
