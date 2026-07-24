@@ -3,4 +3,9 @@ role = "auto"          # auto | master | slave | off
 wpad_domain = ""       # ex: gk2.secubox.in (vide = auto depuis le hostname)
 pac_url = ""           # override de l'URL PAC affichée (vide = auto)
 # socks_endpoint = "192.168.1.200:9050"   # override ; sinon IP LAN détectée:9050
+# ATTENTION : seul le PORT 9050 est supporté pour le SocksPort LAN — le
+# template secubox-tor (conf/torrc.d/50-secubox-socks-lan.conf) applique
+# `torctl socks-lan ensure` avec 9050 câblé en dur (seule l'IP y est
+# substituée). Si tu changes socks_endpoint ici, garde ":9050" — un autre
+# port serait reflété dans le PAC mais PAS dans le SocksPort Tor réel.
 transparent = true      # .onion transparent pour clients force-routés (wg-toolbox+LAN)
