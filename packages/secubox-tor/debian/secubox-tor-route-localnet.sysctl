@@ -1,0 +1,7 @@
+# SecuBox-Deb :: secubox-tor — route_localnet reboot-persistence
+# DNAT vers 127.0.0.1 (transparent .onion) exige route_localnet=1 sur
+# l'iface entrante. conf.all ne s'applique qu'aux ifaces créées APRES ce
+# réglage : ce dropin le pose sur conf.all au boot (sysctl.d), avant que
+# les ifaces dynamiques (wg-toolbox) ne soient recréées, pour qu'elles en
+# héritent. torctl pose déjà la valeur live par-iface à `transparent on`.
+net.ipv4.conf.all.route_localnet=1
