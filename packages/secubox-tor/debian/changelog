@@ -1,3 +1,13 @@
+secubox-tor (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * PAC .onion -> Tor : nouveau /tor.pac (dévie les .onion vers le SOCKS Tor
+    local en SOCKS5, reste en DIRECT), servi en application/x-ns-proxy-autoconfig
+    LAN-only. Dropin torrc ajoutant un SocksPort LAN confiné (192.168.1.200:9050,
+    SocksPolicy accept LAN+wg reject *, jamais open-relay). README : runbook
+    client + network.proxy.socks_remote_dns.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Jul 2026 16:00:00 +0200
+
 secubox-tor (1.1.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
