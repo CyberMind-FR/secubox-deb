@@ -3,6 +3,33 @@
 
 ---
 
+## 📺 Intégration webui LXC — frigate + hexo (2026-07-24)
+
+> Motif validé (réf. secubox-picobrew) : service à webui complète → sous-domaine
+> `<mod>.gk2` LAN-confiné (patron lyrion : snippet exposure allow-privé/deny-all,
+> nginx:9080 → LXC:port, TLS par HAProxy, route dans haproxy-routes.json, upgrade
+> WebSocket) + page admin = COCKPIT (contrôle + statut + accès + logs), PAS une
+> iframe pleine page. Le fix WebSocket sbxmitm (déployé) profite à tous.
+
+- [ ] **frigate — BLOQUÉ au provisionnement.** LXC provisionné (10.100.0.140,
+  systemd PID 1 OK) mais `frigate.service` échoue : `Failed to locate executable
+  /usr/bin/podman` — frigate tourne en conteneur **podman DANS le LXC**, podman
+  absent. `frigatectl` a déjà `PUBLIC_HOSTNAME=frigate.gk2` + `HTTP_PORT=5000`
+  (prêt pour le sous-domaine). À TRANCHER d'abord (systematic-debugging) :
+  installer podman+pull l'image frigate DANS le LXC, OU réécrire frigate en natif
+  (cf. [[feedback_lxc_native_over_docker_package]] : le dépôt préfère natif). Une
+  fois frigate qui SERT sur :5000 → appliquer sous-domaine + cockpit comme picobrew.
+  Nécessitera aussi une config caméras pour être utile. NB race frigatectl : `svc
+  start` juste après lxc-start échoue (systemd du conteneur pas encore booté) —
+  attendre. LXC laissé STOPPED (état antérieur restauré).
+- [ ] **hexo — cas DIFFÉRENT (pas un LXC).** secubox-hexo = api/ + www/ +
+  nginx dropin secubox.d (aggregator-served, générateur de blog host). Le patron
+  « sous-domaine iframe LXC » ne s'applique pas tel quel : évaluer d'abord ce
+  qu'est la « webui complète » de hexo (admin blog ? blog généré ?) et l'intégrer
+  en conséquence.
+
+---
+
 ## 📧 Vie privée mail & traceurs (en pause, 2026-07-23)
 
 - [ ] **Pixels de suivi email — plan d'implémentation**. Spec **validé et commité** :
