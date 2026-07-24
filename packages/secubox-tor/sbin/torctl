@@ -48,7 +48,16 @@ transparent_on() {
   fi
   _install_tpl "$SHARE/secubox-onion-forward.conf" "$UNBOUND_D/secubox-onion-forward.conf"
   _install_tpl "$SHARE/secubox-tor-transparent.nft" "$NFT_D/secubox-tor-transparent.nft"
+  # DNAT vers 127.0.0.1 depuis une iface non-lo exige route_localnet=1 SUR
+  # L'IFACE ENTRANTE : conf.all ne s'applique PAS rétroactivement aux ifaces
+  # déjà créées (wg-toolbox/eth2). On le pose donc par iface, dérivées du set
+  # iifname du dropin nft pour rester synchrones.
   _reload sysctl -q -w net.ipv4.conf.all.route_localnet=1
+  local ifaces
+  ifaces=$(sed -n 's/.*iifname[[:space:]]*{\([^}]*\)}.*/\1/p' "$NFT_D/secubox-tor-transparent.nft" 2>/dev/null | tr ',"' '  ')
+  for i in $ifaces; do
+    [ -e "/sys/class/net/$i" ] && _reload sysctl -q -w "net.ipv4.conf.$i.route_localnet=1"
+  done
   _reload systemctl reload tor@default
   _reload systemctl restart unbound
   _reload nft -f "$NFT_D/secubox-tor-transparent.nft"
