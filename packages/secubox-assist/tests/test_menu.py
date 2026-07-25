@@ -24,3 +24,23 @@ def test_panel_uses_sbx_token_and_no_inline_onclick():
     assert "sbx_token" in html
     assert "/shared/sidebar.js" in html
     assert "onclick=" not in html  # event delegation only
+
+
+def test_panel_has_marketplace_tab_hooks():
+    html = (ROOT / "www" / "assist" / "index.html").read_text()
+    # no inline handlers anywhere, even in the new tabs
+    assert "onclick=" not in html
+    assert "onsubmit=" not in html
+    # event-delegated data-act hooks for the 5 marketplace tabs: static buttons
+    # carry a literal data-act="..." attribute; per-item (dynamic) buttons are
+    # built in JS and assigned dataset.act from a matching string literal.
+    for act in ("offer", "offer-revoke", "request-open", "match-accept", "joinlink"):
+        assert f'data-act="{act}"' in html or f"'{act}'" in html
+    # endpoints reachable from the panel
+    for path in ("/api/v1/assist/offers", "/api/v1/assist/requests/open",
+                 "/api/v1/assist/matches", "/api/v1/assist/offer",
+                 "/api/v1/assist/request/open", "/api/v1/assist/match/accept",
+                 "/api/v1/assist/joinlink"):
+        assert path in html
+    # XSS guard: dynamic rendering must never use innerHTML string building
+    assert "innerHTML" not in html

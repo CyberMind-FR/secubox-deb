@@ -12,6 +12,15 @@
   .btn.warn { border-color:#ffcc00; color:#ffcc00; }
   input,select { background:#111a24; color:#e8e6d9; border:1px solid rgba(100,150,200,.2); padding:.35rem; border-radius:5px; }
   #log { white-space:pre-wrap; font-size:.8rem; max-height:40vh; overflow:auto; }
+  .tabs { display:flex; gap:.4rem; margin-bottom:1rem; flex-wrap:wrap; }
+  .tab { padding:.4rem .9rem; border-radius:6px 6px 0 0; border:1px solid rgba(100,150,200,.2); background:transparent; color:#e8e6d9; cursor:pointer; }
+  .tab.active { background:rgba(0,212,255,.15); border-color:#00d4ff; color:#00d4ff; }
+  .pane { display:none; }
+  .pane.active { display:block; }
+  .row { display:flex; gap:.4rem; align-items:center; margin:.3rem 0; flex-wrap:wrap; }
+  .item { border:1px solid rgba(100,150,200,.2); border-radius:6px; padding:.5rem; margin-bottom:.5rem; }
+  .item .muted { color:#8a94a6; font-size:.8rem; }
+  .note { color:#8a94a6; font-style:italic; }
 </style></head>
 <body class="hybrid-dark">
 <nav class="sidebar" id="sidebar"></nav>
@@ -22,19 +31,142 @@
     <button class="btn warn" data-act="console-grant" disabled title="canal pty en cours">Escalade console (à venir)</button>
     <button class="btn" data-act="console-revoke" disabled title="canal pty en cours">Révoquer console (à venir)</button>
   </div>
-  <div class="card"><h2>Demander de l'assistance</h2>
+  <div class="card"><h2>Demander de l'assistance (ciblée)</h2>
     <div><input id="center" placeholder="did:plc:…" size="48"></div>
     <div><select id="mode"><option>per-incident</option><option>standing</option></select>
       <input id="scope" placeholder="scope (ex. dns)"> <input id="dur" type="number" value="1800">
       <input id="reason" placeholder="motif"></div>
     <button class="btn" data-act="request">Demander</button>
   </div>
+
+  <div class="card">
+    <div class="tabs" id="mtabs">
+      <button class="tab active" data-tab="offer">Disponibilité</button>
+      <button class="tab" data-tab="reqopen">Demander</button>
+      <button class="tab" data-tab="matches">Matches</button>
+      <button class="tab" data-tab="invite">Inviter</button>
+      <button class="tab" data-tab="join">Rejoindre</button>
+    </div>
+
+    <div class="pane active" id="pane-offer">
+      <h2>Disponibilité</h2>
+      <div class="row">
+        <input id="offer-tags" placeholder="tags (ex. dns,waf)">
+        <input id="offer-scope" placeholder="scope (optionnel)">
+        <input id="offer-ttl" type="number" value="3600" title="ttl (s)">
+        <button class="btn" data-act="offer">Publier disponibilité</button>
+      </div>
+      <div id="offer-list"></div>
+    </div>
+
+    <div class="pane" id="pane-reqopen">
+      <h2>Demander (ouverte)</h2>
+      <div class="row">
+        <input id="reqopen-tags" placeholder="tags (ex. dns,waf)">
+        <input id="reqopen-scope" placeholder="scope (optionnel)">
+        <input id="reqopen-ttl" type="number" value="3600" title="ttl (s)">
+        <input id="reqopen-reason" placeholder="motif">
+        <button class="btn" data-act="request-open">Publier demande</button>
+      </div>
+      <div id="reqopen-list"></div>
+    </div>
+
+    <div class="pane" id="pane-matches">
+      <h2>Matches</h2>
+      <div id="matches-list"></div>
+    </div>
+
+    <div class="pane" id="pane-invite">
+      <h2>Inviter</h2>
+      <div class="row">
+        <input id="invite-ref" placeholder="ref (offer_id / req_id)">
+        <input id="invite-ttl" type="number" value="900" title="ttl (s)">
+        <button class="btn" data-act="joinlink">Générer le lien</button>
+      </div>
+      <div class="row">
+        <input id="invite-url" readonly size="60">
+        <button class="btn" data-act="invite-copy">Copier</button>
+      </div>
+    </div>
+
+    <div class="pane" id="pane-join">
+      <h2>Rejoindre</h2>
+      <div class="row">
+        <input id="join-url" placeholder="coller le lien reçu" size="60">
+        <button class="btn" data-act="join" disabled title="escalade — à venir">Rejoindre (à venir)</button>
+      </div>
+      <p class="note">L'escalade depuis un lien reçu est un suivi documenté — non câblée dans cette version.</p>
+    </div>
+  </div>
+
   <div class="card"><h2>Journal de session</h2><div id="log"></div></div>
 </div>
 <script src="/shared/sidebar.js"></script>
 <script>
 const T = () => localStorage.getItem('sbx_token') || '';
 const H = () => ({'Authorization':'Bearer '+T(),'Content-Type':'application/json'});
+
+function fmtTags(tags) { return Array.isArray(tags) ? tags.join(', ') : ''; }
+
+function itemEl(fields, actions) {
+  const div = document.createElement('div'); div.className = 'item';
+  fields.forEach(([label, value]) => {
+    const p = document.createElement('div');
+    if (label) p.appendChild(document.createTextNode(label + ': '));
+    const span = document.createElement('span');
+    span.className = 'muted';
+    span.textContent = value == null ? '' : String(value);
+    p.appendChild(span);
+    div.appendChild(p);
+  });
+  if (actions && actions.length) {
+    const row = document.createElement('div'); row.className = 'row';
+    actions.forEach(({label, act, data}) => {
+      const b = document.createElement('button');
+      b.className = 'btn'; b.dataset.act = act; b.textContent = label;
+      Object.entries(data || {}).forEach(([k, v]) => { b.dataset[k] = v; });
+      row.appendChild(b);
+    });
+    div.appendChild(row);
+  }
+  return div;
+}
+
+function renderList(el, items) {
+  el.textContent = '';
+  items.forEach(item => el.appendChild(item));
+}
+
+async function refreshOffers() {
+  const r = await fetch('/api/v1/assist/offers', {headers:H()});
+  const list = document.getElementById('offer-list');
+  if (!r.ok) { list.textContent = 'auth requise'; return; }
+  const offers = await r.json();
+  renderList(list, offers.map(o => itemEl(
+    [['offer', o.offer_id], ['tags', fmtTags(o.tags)], ['scope', o.scope || '—']],
+    [{label:'Révoquer', act:'offer-revoke', data:{offerId: o.offer_id}}])));
+}
+
+async function refreshOpenRequests() {
+  const r = await fetch('/api/v1/assist/requests/open', {headers:H()});
+  const list = document.getElementById('reqopen-list');
+  if (!r.ok) { list.textContent = 'auth requise'; return; }
+  const reqs = await r.json();
+  renderList(list, reqs.map(q => itemEl(
+    [['req', q.req_id], ['tags', fmtTags(q.tags)], ['scope', q.scope || '—'], ['motif', q.reason || '—']], [])));
+}
+
+async function refreshMatches() {
+  const r = await fetch('/api/v1/assist/matches', {headers:H()});
+  const list = document.getElementById('matches-list');
+  if (!r.ok) { list.textContent = 'auth requise'; return; }
+  const matches = await r.json();
+  renderList(list, matches.map(m => itemEl(
+    [['match', m.match_id], ['offer', m.offer_id], ['req', m.req_id], ['offerer', m.offerer_did]],
+    [{label:'Accepter (offer)', act:'match-accept', data:{offerId: m.offer_id, reqId: m.req_id, side:'offer'}},
+     {label:'Accepter (request)', act:'match-accept', data:{offerId: m.offer_id, reqId: m.req_id, side:'request'}}])));
+}
+
 async function refresh() {
   const r = await fetch('/api/v1/assist/sessions', {headers:H()});
   if (!r.ok) { document.getElementById('active').textContent = 'auth requise'; return; }
@@ -42,7 +174,17 @@ async function refresh() {
   document.getElementById('active').textContent =
     d.active_session ? JSON.stringify(d.active_session) : 'aucune';
   document.getElementById('log').textContent = JSON.stringify(d.pending, null, 2);
+  refreshOffers(); refreshOpenRequests(); refreshMatches();
 }
+
+document.getElementById('mtabs').addEventListener('click', (ev) => {
+  const t = ev.target.closest('[data-tab]'); if (!t) return;
+  document.querySelectorAll('#mtabs .tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('pane-' + t.dataset.tab).classList.add('active');
+});
+
 document.addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
@@ -53,10 +195,47 @@ document.addEventListener('click', async (ev) => {
       scope: document.getElementById('scope').value,
       duration_s: parseInt(document.getElementById('dur').value, 10),
       reason: document.getElementById('reason').value })});
+  } else if (act === 'offer') {
+    const tags = document.getElementById('offer-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    await fetch('/api/v1/assist/offer', {method:'POST', headers:H(), body: JSON.stringify({
+      tags, scope: document.getElementById('offer-scope').value || null,
+      ttl_s: parseInt(document.getElementById('offer-ttl').value, 10) })});
+    refreshOffers();
+  } else if (act === 'offer-revoke') {
+    await fetch('/api/v1/assist/offer/revoke', {method:'POST', headers:H(), body: JSON.stringify({
+      offer_id: b.dataset.offerId })});
+    refreshOffers();
+  } else if (act === 'request-open') {
+    const tags = document.getElementById('reqopen-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    await fetch('/api/v1/assist/request/open', {method:'POST', headers:H(), body: JSON.stringify({
+      tags, scope: document.getElementById('reqopen-scope').value || null,
+      ttl_s: parseInt(document.getElementById('reqopen-ttl').value, 10),
+      reason: document.getElementById('reqopen-reason').value })});
+    refreshOpenRequests();
+  } else if (act === 'match-accept') {
+    await fetch('/api/v1/assist/match/accept', {method:'POST', headers:H(), body: JSON.stringify({
+      offer_id: b.dataset.offerId, req_id: b.dataset.reqId, side: b.dataset.side })});
+    refreshMatches();
+  } else if (act === 'joinlink') {
+    const r = await fetch('/api/v1/assist/joinlink', {method:'POST', headers:H(), body: JSON.stringify({
+      ref: document.getElementById('invite-ref').value,
+      ttl_s: parseInt(document.getElementById('invite-ttl').value, 10) })});
+    if (r.ok) {
+      const d = await r.json();
+      document.getElementById('invite-url').value = d.url || '';
+    }
+    return;
+  } else if (act === 'invite-copy') {
+    const f = document.getElementById('invite-url');
+    f.select();
+    try { await navigator.clipboard.writeText(f.value); } catch (e) { /* clipboard optional */ }
+    return;
+  } else if (act === 'join') {
+    return; // escalation flow not wired yet — informational tab only
   } else {
     const sid = (await (await fetch('/api/v1/assist/sessions', {headers:H()})).json())
       .active_session?.session_id;
-    if (!sid && act !== 'request') return;
+    if (!sid) return;
     const ep = {'close':'/api/v1/assist/close','console-grant':'/api/v1/assist/console/grant',
                 'console-revoke':'/api/v1/assist/console/revoke'}[act];
     await fetch(ep, {method:'POST', headers:H(), body: JSON.stringify({session_id: sid})});
