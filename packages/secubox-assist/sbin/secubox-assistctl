@@ -370,8 +370,12 @@ def cmd_join(a) -> int:
         return 1  # unreachable
     # Real p2p wiring (exec under sudo via secubox-p2pctl) is a documented
     # follow-up — secubox-p2pctl does not exist yet. Print the plan so the
-    # redeem path is fully testable without a live exec.
-    print(json.dumps({"identity": identity, "peer_argv": peer_argv}))
+    # redeem path is fully testable without a live exec. NEVER print the raw
+    # ephemeral private key (priv_hex) — it must not land in shell history,
+    # journald, or any stdout capture; only non-secret identity fields are
+    # surfaced here.
+    safe_identity = {k: v for k, v in identity.items() if k != "priv_hex"}
+    print(json.dumps({"identity": safe_identity, "peer_argv": peer_argv}))
     return 0
 
 
@@ -496,7 +500,7 @@ def main(argv=None) -> int:
     ma = sub.add_parser("match-accept", help="signed acceptance of a proposed match")
     ma.add_argument("offer_id")
     ma.add_argument("req_id")
-    ma.add_argument("side", choices=["offer", "request"])
+    ma.add_argument("side")  # validated by AssistMatchAccept (verbs) -> {"error":...}
     ma.set_defaults(fn=cmd_match_accept)
 
     sub.add_parser("matches", help="ready matches for our own open requests").set_defaults(
